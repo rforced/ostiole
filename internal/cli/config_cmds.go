@@ -365,7 +365,7 @@ func newCountersCmd(g *globals) *cobra.Command {
 
 func newGatewaysCmd(g *globals) *cobra.Command {
 	var count int
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "gateways",
 		Short: "Probe the configured gateways and show the result",
 		Long: `Probes each enabled gateway the same way the daemon's monitor does.
@@ -407,11 +407,8 @@ moves the default route off a gateway that stops answering.`,
 			}
 			return w.Flush()
 		},
-		PreRunE: func(_ *cobra.Command, _ []string) error {
-			if count == 0 {
-				count = gateway.RiseAfter
-			}
-			return nil
-		},
 	}
+	cmd.Flags().IntVar(&count, "probes", gateway.RiseAfter,
+		"how many probes to send before reporting; the daemon needs three losses to call a gateway down")
+	return cmd
 }
