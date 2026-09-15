@@ -6,21 +6,44 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/nft/nfttest"
 	"github.com/rforced/ostiole/internal/store"
 )
 
+const testPassword = "correct horse battery"
+
+// newTestServer returns a server whose client is already logged in as
+// "admin" and sends the CSRF header.
 func newTestServer(t *testing.T) (*httptest.Server, *nfttest.Fake) {
 	t.Helper()
+	srv, fake := newUnauthenticatedServer(t)
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/setup", credentials{Username: "admin", Password: testPassword})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("setup: %d %s", resp.StatusCode, raw)
+	}
+	return srv, fake
+}
+
+func newUnauthenticatedServer(t *testing.T) (*httptest.Server, *nfttest.Fake) {
+	t.Helper()
+	dir := t.TempDir()
 	fake := &nfttest.Fake{TableJSON: `{"nftables":[{"rule":{"chain":"zone_lan","comment":"id:allow-lan","expr":[{"counter":{"packets":1,"bytes":2}}]}}]}`}
-	eng := engine.New(store.New(t.TempDir()), fake, nil, slog.New(slog.DiscardHandler))
-	srv := httptest.NewServer(Handler(Deps{Engine: eng}))
+	eng := engine.New(store.New(dir), fake, nil, slog.New(slog.DiscardHandler))
+	as, err := auth.NewService(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(Handler(Deps{Engine: eng, Auth: as}))
+	jar, _ := cookiejar.New(nil)
+	srv.Client().Jar = jar
 	t.Cleanup(srv.Close)
 	return srv, fake
 }
@@ -39,6 +62,7 @@ func do(t *testing.T, srv *httptest.Server, method, path string, body any) (*htt
 	if err != nil {
 		t.Fatal(err)
 	}
+	req.Header.Set(RequestHeader, RequestHeaderValue)
 	resp, err := srv.Client().Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -90,13 +114,141 @@ func TestUnknownAPIRouteIsJSON404(t *testing.T) {
 	}
 }
 
-func TestEngineEndpointsWithoutEngine(t *testing.T) {
+func TestEngineEndpointsWithoutDeps(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(Handler(Deps{}))
 	defer srv.Close()
 	resp, _ := do(t, srv, http.MethodGet, "/api/v1/status", nil)
 	if resp.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", resp.StatusCode)
+	}
+	resp, _ = do(t, srv, http.MethodGet, "/api/v1/setup", nil)
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("setup = %d, want 503", resp.StatusCode)
+	}
+}
+
+func TestAuthFlow(t *testing.T) {
+	t.Parallel()
+	srv, _ := newUnauthenticatedServer(t)
+
+	resp, raw := do(t, srv, http.MethodGet, "/api/v1/setup", nil)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), `"needed":true`) {
+		t.Fatalf("setup status: %d %s", resp.StatusCode, raw)
+	}
+	if resp, _ := do(t, srv, http.MethodGet, "/api/v1/status", nil); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status without session: %d, want 401", resp.StatusCode)
+	}
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/auth/login", credentials{Username: "admin", Password: testPassword}); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("login before setup: %d, want 401", resp.StatusCode)
+	}
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/setup", credentials{Username: "admin", Password: "short"}); resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("weak password: %d, want 422", resp.StatusCode)
+	}
+	resp, _ = do(t, srv, http.MethodPost, "/api/v1/setup", credentials{Username: "admin", Password: testPassword})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("setup: %d", resp.StatusCode)
+	}
+	var cookie *http.Cookie
+	for _, c := range resp.Cookies() {
+		if c.Name == SessionCookie {
+			cookie = c
+		}
+	}
+	if cookie == nil || !cookie.HttpOnly || cookie.SameSite != http.SameSiteStrictMode || cookie.Path != "/" {
+		t.Fatalf("session cookie = %+v", cookie)
+	}
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/setup", credentials{Username: "x", Password: testPassword}); resp.StatusCode != http.StatusConflict {
+		t.Errorf("second setup: %d, want 409", resp.StatusCode)
+	}
+
+	resp, raw = do(t, srv, http.MethodGet, "/api/v1/auth/me", nil)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), `"username":"admin"`) {
+		t.Fatalf("me: %d %s", resp.StatusCode, raw)
+	}
+	if resp, _ := do(t, srv, http.MethodGet, "/api/v1/status", nil); resp.StatusCode != http.StatusOK {
+		t.Fatalf("status with session: %d", resp.StatusCode)
+	}
+
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/auth/logout", nil); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("logout: %d", resp.StatusCode)
+	}
+	if resp, _ := do(t, srv, http.MethodGet, "/api/v1/status", nil); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status after logout: %d, want 401", resp.StatusCode)
+	}
+
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/auth/login", credentials{Username: "admin", Password: "wrong password!"}); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("bad login: %d", resp.StatusCode)
+	}
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/auth/login", credentials{Username: "admin", Password: testPassword}); resp.StatusCode != http.StatusOK {
+		t.Errorf("good login: %d", resp.StatusCode)
+	}
+	if resp, _ := do(t, srv, http.MethodGet, "/api/v1/status", nil); resp.StatusCode != http.StatusOK {
+		t.Errorf("status after login: %d", resp.StatusCode)
+	}
+}
+
+func TestLoginRateLimit(t *testing.T) {
+	t.Parallel()
+	srv, _ := newTestServer(t)
+	for range auth.MaxFailures {
+		do(t, srv, http.MethodPost, "/api/v1/auth/login", credentials{Username: "admin", Password: "wrong password!"})
+	}
+	resp, _ := do(t, srv, http.MethodPost, "/api/v1/auth/login", credentials{Username: "admin", Password: testPassword})
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want 429", resp.StatusCode)
+	}
+}
+
+func TestCSRFGuard(t *testing.T) {
+	t.Parallel()
+	srv, _ := newTestServer(t)
+	body := func() io.Reader { return strings.NewReader(`{"username":"admin","password":"` + testPassword + `"}`) }
+
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/v1/auth/login", body())
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("no header: %d, want 403", resp.StatusCode)
+	}
+
+	req, _ = http.NewRequest(http.MethodPost, srv.URL+"/api/v1/auth/login", body())
+	req.Header.Set(RequestHeader, RequestHeaderValue)
+	req.Header.Set("Origin", "https://evil.example")
+	resp, _ = srv.Client().Do(req)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("foreign origin: %d, want 403", resp.StatusCode)
+	}
+
+	req, _ = http.NewRequest(http.MethodPost, srv.URL+"/api/v1/auth/login", body())
+	req.Header.Set(RequestHeader, RequestHeaderValue)
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	resp, _ = srv.Client().Do(req)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("cross-site: %d, want 403", resp.StatusCode)
+	}
+
+	req, _ = http.NewRequest(http.MethodPost, srv.URL+"/api/v1/auth/login", body())
+	req.Header.Set(RequestHeader, RequestHeaderValue)
+	req.Header.Set("Origin", srv.URL)
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	resp, _ = srv.Client().Do(req)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("same origin: %d, want 200", resp.StatusCode)
+	}
+
+	// GETs are never blocked by the guard.
+	req, _ = http.NewRequest(http.MethodGet, srv.URL+"/api/v1/health", nil)
+	resp, _ = srv.Client().Do(req)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("GET without header: %d", resp.StatusCode)
 	}
 }
 
@@ -206,6 +358,7 @@ func TestApplyValidationAndBadRequests(t *testing.T) {
 
 	for _, body := range []string{`{}`, `not json`, `{"config":{},"bogus":1}`, `{"config":{"version":1},"confirmTimeoutSeconds":-1}`} {
 		req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/v1/apply", strings.NewReader(body))
+		req.Header.Set(RequestHeader, RequestHeaderValue)
 		resp, err := srv.Client().Do(req)
 		if err != nil {
 			t.Fatal(err)

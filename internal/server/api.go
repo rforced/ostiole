@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
@@ -19,9 +20,11 @@ const maxBodyBytes = 1 << 20
 
 type api struct {
 	engine *engine.Engine
+	auth   *auth.Service
 }
 
 func (a *api) register(mux *http.ServeMux) {
+	a.registerAuth(mux)
 	mux.HandleFunc("GET /api/v1/status", a.guard(a.status))
 	mux.HandleFunc("GET /api/v1/config", a.guard(a.getConfig))
 	mux.HandleFunc("GET /api/v1/config/revisions", a.guard(a.revisions))
@@ -35,19 +38,45 @@ func (a *api) register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/apply/revert", a.guard(a.revert))
 }
 
-// guard turns handler errors into JSON responses and refuses requests
-// when the engine is not wired (tests of the static handler).
+// guard requires a valid session and a wired engine, and turns handler
+// errors into JSON responses.
 func (a *api) guard(h func(w http.ResponseWriter, r *http.Request) error) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+	return a.protect(func(w http.ResponseWriter, r *http.Request) error {
 		if a.engine == nil {
-			writeError(w, http.StatusServiceUnavailable, errors.New("engine not available"))
-			return
+			return &unavailable{errors.New("engine not available")}
 		}
+		return h(w, r)
+	})
+}
+
+// protect requires a valid session cookie.
+func (a *api) protect(h func(w http.ResponseWriter, r *http.Request) error) http.HandlerFunc {
+	return a.public(func(w http.ResponseWriter, r *http.Request) error {
+		if a.auth == nil {
+			return &unavailable{errors.New("authentication not available")}
+		}
+		if _, ok := a.session(r); !ok {
+			return errUnauthorized
+		}
+		return h(w, r)
+	})
+}
+
+// public wraps a handler that needs no session.
+func (a *api) public(h func(w http.ResponseWriter, r *http.Request) error) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		if err := h(w, r); err != nil {
 			writeError(w, statusFor(err), err)
 		}
 	}
 }
+
+var errUnauthorized = errors.New("authentication required")
+
+type unavailable struct{ err error }
+
+func (u *unavailable) Error() string { return u.err.Error() }
+func (u *unavailable) Unwrap() error { return u.err }
 
 type errorResponse struct {
 	Error  string        `json:"error"`
@@ -68,9 +97,20 @@ func statusFor(err error) int {
 	var ve *model.ValidationError
 	var ne *nft.Error
 	var be *badRequest
+	var ua *unavailable
 	switch {
 	case errors.As(err, &be):
 		return http.StatusBadRequest
+	case errors.As(err, &ua):
+		return http.StatusServiceUnavailable
+	case errors.Is(err, errUnauthorized), errors.Is(err, auth.ErrInvalidCredentials):
+		return http.StatusUnauthorized
+	case errors.Is(err, auth.ErrRateLimited):
+		return http.StatusTooManyRequests
+	case errors.Is(err, auth.ErrSetupDone):
+		return http.StatusConflict
+	case errors.Is(err, auth.ErrWeakPassword), errors.Is(err, auth.ErrInvalidUsername):
+		return http.StatusUnprocessableEntity
 	case errors.As(err, &ve), errors.As(err, &ne):
 		return http.StatusUnprocessableEntity
 	case errors.Is(err, engine.ErrPending), errors.Is(err, engine.ErrNothingPending):

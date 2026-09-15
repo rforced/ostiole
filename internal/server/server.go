@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/version"
 	"github.com/rforced/ostiole/internal/web"
@@ -20,20 +21,22 @@ type Config struct {
 	Listen string
 }
 
-// Deps are the services the API exposes.
+// Deps are the services the API exposes. Both are required for the
+// engine routes; without Auth every protected route answers 503.
 type Deps struct {
 	Engine *engine.Engine
+	Auth   *auth.Service
 }
 
 // Handler builds the full HTTP handler: API routes plus the SPA.
 func Handler(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/health", handleHealth)
-	api := &api{engine: d.Engine}
+	api := &api{engine: d.Engine, auth: d.Auth}
 	api.register(mux)
 	mux.HandleFunc("/api/", handleAPINotFound)
 	mux.Handle("/", web.Handler())
-	return securityHeaders(requestLog(mux))
+	return securityHeaders(requestLog(csrfGuard(mux)))
 }
 
 // Run serves until ctx is cancelled, then shuts down gracefully.

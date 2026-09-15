@@ -85,6 +85,7 @@ func newRootCmd() *cobra.Command {
 		newStatusCmd(g),
 		newRevisionsCmd(g),
 		newCountersCmd(g),
+		newResetPasswordCmd(g),
 		newVersionCmd(),
 	)
 	return cmd
