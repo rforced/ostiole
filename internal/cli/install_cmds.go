@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -54,12 +55,56 @@ firewalld, ufw, and friends.`,
 			out := cmd.OutOrStdout()
 			fmt.Fprintf(out, "installed %s and %s\n", rep.Binary, strings.Join(rep.Units, ", "))
 			printCompetitors(out, rep.Competitors)
-			fmt.Fprintf(out, "\nnext:\n  1. ostiole reset-password        (or open https://<this-host>%s/ and create the account there)\n  2. run the setup wizard in the web UI, or: ostiole init --lan ... && ostiole apply\n  3. ostiole takeover              (disables competing firewalls once your ruleset is confirmed)\n  4. ostiole takeover --network    (hands addressing to systemd-networkd; optional but needed for interface edits)\n", opts.Listen)
+			if rep.OpenedIn != "" {
+				fmt.Fprintf(out, "\nallowed the UI port in %s until takeover\n", rep.OpenedIn)
+			}
+			fmt.Fprintf(out, "\nweb UI (self-signed certificate):\n")
+			for _, u := range uiURLs(opts.Listen) {
+				fmt.Fprintf(out, "  %s\n", u)
+			}
+			fmt.Fprintf(out, "\nnext:\n  1. create the admin account in the web UI, or: ostiole reset-password\n  2. run the setup wizard in the web UI, or: ostiole init --lan ... && ostiole apply\n  3. ostiole takeover              (disables competing firewalls once your ruleset is confirmed)\n  4. ostiole takeover --network    (hands addressing to systemd-networkd; needed for interface edits)\n")
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&opts.Listen, "listen", ":443", "address the web UI listens on")
 	return cmd
+}
+
+// uiURLs lists https URLs for every global address on the box.
+func uiURLs(listen string) []string {
+	_, port, err := net.SplitHostPort(listen)
+	if err != nil {
+		port = "443"
+	}
+	suffix := ""
+	if port != "443" {
+		suffix = ":" + port
+	}
+	var urls []string
+	links, err := network.Discover()
+	if err != nil {
+		return []string{"https://<this-host>" + suffix + "/"}
+	}
+	for _, l := range links {
+		if l.Kind == "loopback" {
+			continue
+		}
+		for _, a := range l.Addresses {
+			p, err := netip.ParsePrefix(a)
+			if err != nil || !p.Addr().IsGlobalUnicast() {
+				continue
+			}
+			host := p.Addr().String()
+			if p.Addr().Is6() {
+				host = "[" + host + "]"
+			}
+			urls = append(urls, "https://"+host+suffix+"/")
+		}
+	}
+	if len(urls) == 0 {
+		urls = []string{"https://<this-host>" + suffix + "/"}
+	}
+	return urls
 }
 
 func printCompetitors(out interface{ Write([]byte) (int, error) }, comp []install.Service) {

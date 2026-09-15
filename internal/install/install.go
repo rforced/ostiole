@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -70,6 +71,8 @@ type Options struct {
 	Source string
 	// Listen is the daemon's listen address, e.g. ":443".
 	Listen string
+	// Run executes helper commands (firewall-cmd, ufw); nil means real ones.
+	Run Runner
 }
 
 // Report describes what Install did and found.
@@ -77,6 +80,9 @@ type Report struct {
 	Binary      string
 	Units       []string
 	Competitors []Service
+	// OpenedIn names the competing firewall that was told to allow the UI
+	// port until takeover retires it, or "".
+	OpenedIn string
 }
 
 // Install copies the binary, writes the units, and enables them. It never
@@ -136,7 +142,56 @@ func Install(ctx context.Context, sc Systemctl, lay Layout, opts Options, log *s
 		return rep, err
 	}
 	rep.Competitors = comp
+
+	// Until takeover, the old firewall still filters: let the UI through it.
+	run := opts.Run
+	if run == nil {
+		run = ExecRunner{}
+	}
+	if port := listenPort(opts.Listen); port != "" {
+		opened, err := OpenUIPort(ctx, run, comp, port, log)
+		if err != nil {
+			log.Warn("could not open the UI port in the existing firewall; open it by hand or run takeover", "err", err)
+		}
+		rep.OpenedIn = opened
+	}
 	return rep, nil
+}
+
+// listenPort extracts the port from a listen address.
+func listenPort(listen string) string {
+	_, port, err := net.SplitHostPort(listen)
+	if err != nil {
+		return ""
+	}
+	return port
+}
+
+// OpenUIPort allows tcp/port in whichever competing firewall is active so
+// the web UI is reachable before takeover. Returns the firewall's name.
+func OpenUIPort(ctx context.Context, run Runner, comp []Service, port string, log *slog.Logger) (string, error) {
+	for _, c := range comp {
+		if c.Kind != "firewall" || c.Active != "active" {
+			continue
+		}
+		switch c.Name {
+		case "firewalld":
+			for _, args := range [][]string{{"--add-port=" + port + "/tcp"}, {"--permanent", "--add-port=" + port + "/tcp"}} {
+				if out, err := run.Run(ctx, "firewall-cmd", args...); err != nil {
+					return "", fmt.Errorf("firewall-cmd %s: %w: %s", strings.Join(args, " "), err, tail(out))
+				}
+			}
+			log.Info("allowed the UI port in firewalld until takeover", "port", port)
+			return "firewalld", nil
+		case "ufw":
+			if out, err := run.Run(ctx, "ufw", "allow", port+"/tcp"); err != nil {
+				return "", fmt.Errorf("ufw allow: %w: %s", err, tail(out))
+			}
+			log.Info("allowed the UI port in ufw until takeover", "port", port)
+			return "ufw", nil
+		}
+	}
+	return "", nil
 }
 
 // Units renders the systemd units for the layout and options.
