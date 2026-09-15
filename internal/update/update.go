@@ -256,15 +256,20 @@ func (c *Client) Download(ctx context.Context, rel *Release, dir string, progres
 	}
 
 	progress("downloading", 0, tarball.Size)
+	tmp, err := os.CreateTemp(dir, ".ostiole-update-*.tar.gz")
+	if err != nil {
+		if errors.Is(err, os.ErrPermission) || strings.Contains(err.Error(), "read-only") {
+			return "", fmt.Errorf("cannot write to %s from the service (unit lacks write access; run `ostiole install` once to refresh the unit, or update with `ostiole update` on the command line): %w", dir, err)
+		}
+		return "", err
+	}
 	resp, err := c.get(ctx, tarball.URL, "application/octet-stream")
 	if err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
 		return "", err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	tmp, err := os.CreateTemp(dir, ".ostiole-update-*.tar.gz")
-	if err != nil {
-		return "", err
-	}
 	tmpName := tmp.Name()
 	defer func() { _ = os.Remove(tmpName) }()
 	h := sha256.New()
@@ -409,7 +414,9 @@ func (i *Installer) Install(ctx context.Context, newBinary string) error {
 	// The restart runs detached so the daemon can answer the request that
 	// triggered it. If the new binary does not come up healthy, the
 	// previous one is put back.
-	script := fmt.Sprintf(`sleep 1; systemctl restart %[1]s; sleep 4;
+	// `install` first, so unit files written by the new version (hardening,
+	// paths) are in place before the restart; it is idempotent.
+	script := fmt.Sprintf(`sleep 1; %[2]s install >/dev/null 2>&1; systemctl restart %[1]s; sleep 4;
 if %[2]s update --probe %[3]s; then rm -f %[4]s; else mv -f %[4]s %[2]s && systemctl restart %[1]s; fi`,
 		i.Unit, i.Binary, i.HealthURL, previous)
 	_, _ = i.Run.Run(ctx, "systemctl", "reset-failed", "ostiole-update-restart.service")

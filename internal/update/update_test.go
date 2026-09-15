@@ -155,7 +155,7 @@ func TestCheckDownloadInstall(t *testing.T) {
 		t.Error("previous binary not kept")
 	}
 	last := strings.Join(run.calls[len(run.calls)-1], " ")
-	if !strings.Contains(last, "systemd-run") || !strings.Contains(last, "systemctl restart ostiole.service") || !strings.Contains(last, "update --probe") || !strings.Contains(last, ".previous") {
+	if !strings.Contains(last, "systemd-run") || !strings.Contains(last, " install >/dev/null") || !strings.Contains(last, "systemctl restart ostiole.service") || !strings.Contains(last, "update --probe") || !strings.Contains(last, ".previous") {
 		t.Errorf("restart command = %q", last)
 	}
 }

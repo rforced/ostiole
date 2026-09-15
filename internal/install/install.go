@@ -228,7 +228,8 @@ func Units(lay Layout, opts Options) map[string]string {
 	// The auto backend drives systemd-networkd once it is running and stays
 	// out of the way before the network takeover.
 	backend := "auto"
-	rw := cfg + " " + NetworkdUnitDir
+	// The daemon needs to write its own binary directory for self-updates.
+	rw := cfg + " " + NetworkdUnitDir + " " + lay.BinDir
 	firewall := fmt.Sprintf(`[Unit]
 Description=Ostiole firewall ruleset (loaded before networking)
 Documentation=https://github.com/rforced/ostiole

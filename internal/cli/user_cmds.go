@@ -73,3 +73,39 @@ func readPassword(fromStdin bool, prompt io.Writer) (string, error) {
 	}
 	return string(first), nil
 }
+
+func newUsersCmd(g *globals) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "users",
+		Short: "List or delete admin accounts",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			svc, err := auth.NewService(g.configDir)
+			if err != nil {
+				return err
+			}
+			for _, u := range svc.Usernames() {
+				fmt.Fprintln(cmd.OutOrStdout(), u)
+			}
+			return nil
+		},
+	}
+	del := &cobra.Command{
+		Use:   "delete <username>",
+		Short: "Delete an admin account and end its sessions",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			svc, err := auth.NewService(g.configDir)
+			if err != nil {
+				return err
+			}
+			if err := svc.DeleteUser(args[0]); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "deleted %s\n", args[0])
+			return nil
+		},
+	}
+	cmd.AddCommand(del)
+	return cmd
+}
