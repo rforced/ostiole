@@ -14,6 +14,7 @@ import (
 	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/server"
+	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/sysctl"
 	"github.com/rforced/ostiole/internal/update"
 	"github.com/rforced/ostiole/internal/version"
@@ -66,7 +67,11 @@ at your own.`,
 			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return server.Run(ctx, cfg, server.Deps{Engine: eng, Auth: as, Updater: newUpdater(cfg)}, slog.Default())
+			deps := server.Deps{Engine: eng, Auth: as, Updater: newUpdater(cfg)}
+			if os.Geteuid() == 0 {
+				deps.Services = services.New()
+			}
+			return server.Run(ctx, cfg, deps, slog.Default())
 		},
 	}
 	cmd.Flags().StringVar(&cfg.Listen, "listen", "127.0.0.1:8080", "address to listen on")

@@ -12,20 +12,25 @@ import (
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
+	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/store"
 )
 
-// fakeNet is an in-memory network backend.
+// fakeNet is an in-memory backend; render picks network or services output.
 type fakeNet struct {
 	mu       sync.Mutex
 	files    network.Files
 	applies  []network.Files
 	applyErr error
+	services bool
 }
 
 func (f *fakeNet) Name() string { return "fake" }
 
 func (f *fakeNet) Render(cfg *model.Config) (network.Files, error) {
+	if f.services {
+		return (&services.Dnsmasq{}).Render(cfg)
+	}
 	return (&network.Networkd{}).Render(cfg)
 }
 
@@ -347,5 +352,45 @@ func TestCheckSurfacesNetworkErrors(t *testing.T) {
 	c.Routes = []model.StaticRoute{{ID: "orphan", Enabled: true, Destination: "10.9.0.0/16", Gateway: "203.0.113.1"}}
 	if _, err := e.Check(context.Background(), c); err == nil || !strings.Contains(err.Error(), "orphan") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestServicesAppliedAndRevertedWithTheRest(t *testing.T) {
+	t.Parallel()
+	st := store.New(t.TempDir())
+	fr := &fakeRunner{}
+	fn := &fakeNet{files: network.Files{}}
+	svc := &fakeNet{files: network.Files{}, services: true}
+	e := New(st, fr, fn, slog.New(slog.DiscardHandler)).WithServices(svc)
+
+	first := cfg("first")
+	first.Services.DNS = model.DNSServer{Enabled: true, Upstreams: []string{"1.1.1.1"}}
+	if _, err := e.Apply(context.Background(), first, ApplyOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	before := svc.current().String()
+
+	second := cfg("second")
+	second.Services.DNS = model.DNSServer{Enabled: true, Upstreams: []string{"9.9.9.9"}}
+	if _, err := e.Apply(context.Background(), second, ApplyOptions{ConfirmTimeout: time.Minute}); err != nil {
+		t.Fatal(err)
+	}
+	if svc.current().String() == before {
+		t.Fatal("services files unchanged after second apply")
+	}
+	if err := e.Revert(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if svc.current().String() != before {
+		t.Error("services not reverted")
+	}
+
+	svc.applyErr = errors.New("dnsmasq refused")
+	_, err := e.Apply(context.Background(), second, ApplyOptions{})
+	if err == nil || !strings.Contains(err.Error(), "dnsmasq refused") {
+		t.Fatalf("err = %v", err)
+	}
+	if fn.current().String() != (func() string { f, _ := (&network.Networkd{}).Render(first); return f.String() })() {
+		t.Error("network not rolled back after services failure")
 	}
 }

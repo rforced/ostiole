@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/netip"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/rforced/ostiole/internal/auth"
@@ -13,6 +16,7 @@ import (
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
+	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/store"
 	"github.com/rforced/ostiole/internal/update"
 )
@@ -20,9 +24,10 @@ import (
 const maxBodyBytes = 1 << 20
 
 type api struct {
-	engine  *engine.Engine
-	auth    *auth.Service
-	updater *update.Manager
+	engine   *engine.Engine
+	auth     *auth.Service
+	updater  *update.Manager
+	services *services.Dnsmasq
 }
 
 func (a *api) register(mux *http.ServeMux) {
@@ -39,9 +44,43 @@ func (a *api) register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/apply", a.guard(a.apply))
 	mux.HandleFunc("POST /api/v1/apply/confirm", a.guard(a.confirm))
 	mux.HandleFunc("POST /api/v1/apply/revert", a.guard(a.revert))
+	mux.HandleFunc("GET /api/v1/services/status", a.protect(a.servicesStatus))
+	mux.HandleFunc("GET /api/v1/dhcp/leases", a.protect(a.dhcpLeases))
 	mux.HandleFunc("GET /api/v1/update/check", a.protect(a.updateCheck))
 	mux.HandleFunc("GET /api/v1/update/status", a.protect(a.updateStatus))
 	mux.HandleFunc("POST /api/v1/update/apply", a.protect(a.updateApply))
+}
+
+type servicesStatus struct {
+	SetUp   bool `json:"setUp"`
+	Running bool `json:"running"`
+	Leases  int  `json:"leases"`
+}
+
+func (a *api) servicesStatus(w http.ResponseWriter, r *http.Request) error {
+	st := servicesStatus{}
+	if a.services != nil {
+		st.SetUp = a.services.Installed(r.Context())
+		st.Running = a.services.Active(r.Context())
+		if leases, err := a.services.ReadLeases(); err == nil {
+			st.Leases = len(leases)
+		}
+	}
+	writeJSON(w, http.StatusOK, st)
+	return nil
+}
+
+func (a *api) dhcpLeases(w http.ResponseWriter, _ *http.Request) error {
+	if a.services == nil {
+		writeJSON(w, http.StatusOK, []services.Lease{})
+		return nil
+	}
+	leases, err := a.services.ReadLeases()
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, leases)
+	return nil
 }
 
 func channelFrom(s string) (update.Channel, error) {
@@ -283,12 +322,34 @@ func (a *api) liveInterfaces(w http.ResponseWriter, _ *http.Request) error {
 	return nil
 }
 
+// currentResolvers reads the nameservers the box uses today so the DNS
+// service forwards to the same place. Loopback entries are skipped.
+func currentResolvers() []string {
+	raw, err := os.ReadFile("/etc/resolv.conf")
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, line := range strings.Split(string(raw), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 2 && fields[0] == "nameserver" {
+			if ip, err := netip.ParseAddr(fields[1]); err == nil && !ip.IsLoopback() {
+				out = append(out, ip.String())
+			}
+		}
+	}
+	return out
+}
+
 type starterRequest struct {
 	Hostname          string `json:"hostname"`
 	LAN               string `json:"lan"`
 	LANAddress        string `json:"lanAddress"`
 	WAN               string `json:"wan"`
 	ManagementFromWAN bool   `json:"managementFromWan"`
+	// Services enables DHCP and DNS on the LAN with a pool derived from
+	// the LAN address; upstreams default to the box's current resolvers.
+	Services bool `json:"services"`
 }
 
 // starter builds (but does not save) a first configuration from the
@@ -307,6 +368,8 @@ func (a *api) starter(w http.ResponseWriter, r *http.Request) error {
 		LANAddress:        req.LANAddress,
 		WAN:               req.WAN,
 		ManagementFromWAN: req.ManagementFromWAN,
+		Services:          req.Services,
+		DNSUpstreams:      currentResolvers(),
 	})
 	if err := cfg.Validate(); err != nil {
 		return err

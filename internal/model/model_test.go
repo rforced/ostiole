@@ -178,3 +178,75 @@ func TestValidateRejectsNoZones(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestStarterServicesAndDefaultPool(t *testing.T) {
+	t.Parallel()
+	cfg := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0", Services: true})
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("starter with services invalid: %v", err)
+	}
+	sc := cfg.Services.DHCP.Scopes
+	if len(sc) != 1 || sc[0].RangeStart != "192.168.1.100" || sc[0].RangeEnd != "192.168.1.199" {
+		t.Errorf("scope = %+v", sc)
+	}
+	if !cfg.Services.DNS.Enabled || len(cfg.Services.DNS.Upstreams) != 2 {
+		t.Errorf("dns = %+v", cfg.Services.DNS)
+	}
+	cases := map[string][2]string{
+		"10.0.0.1/16":      {"10.0.0.100", "10.0.0.199"},
+		"192.168.5.1/26":   {"192.168.5.32", "192.168.5.62"},
+		"192.168.5.1/28":   {"192.168.5.8", "192.168.5.14"},
+		"192.168.5.150/24": {"", ""}, // the box sits inside the pool
+		"192.168.5.1/30":   {"", ""},
+		"2001:db8::1/64":   {"", ""},
+	}
+	for in, want := range cases {
+		s, e, ok := DefaultPool(in)
+		if ok != (want[0] != "") || s != want[0] || e != want[1] {
+			t.Errorf("DefaultPool(%q) = %q, %q, %v; want %v", in, s, e, ok, want)
+		}
+	}
+}
+
+func TestValidateServices(t *testing.T) {
+	t.Parallel()
+	cfg := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0"})
+	cfg.Services = Services{
+		DHCP: DHCPServer{Enabled: true,
+			Scopes: []DHCPScope{
+				{Interface: "eth1", Enabled: true, RangeStart: "192.168.2.10", RangeEnd: "192.168.1.5", LeaseTime: "soon", Gateway: "10.0.0.1", DNS: []string{"bad"}, Domain: "-x"},
+				{Interface: "eth0", Enabled: true, RangeStart: "1.1.1.1", RangeEnd: "1.1.1.2"},
+				{Interface: "ghost", Enabled: true},
+			},
+			StaticLeases: []StaticLease{{MAC: "nope", IP: "2001:db8::1", Hostname: "bad host"}, {MAC: "AA:bb:cc:dd:ee:ff", IP: "192.168.1.9"}, {MAC: "aa:bb:cc:dd:ee:ff", IP: "192.168.1.10"}},
+		},
+		DNS: DNSServer{Enabled: true, Interfaces: []string{"nope"}, Upstreams: []string{"x"}, Domain: "bad domain", HostOverrides: []HostOverride{{Hostname: "a", IP: "1.1.1.1"}, {Hostname: "A", IP: "x"}, {Hostname: "-", IP: "1.1.1.1"}}},
+	}
+	err := cfg.Validate()
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("err = %v", err)
+	}
+	got := map[string]bool{}
+	for _, i := range ve.Issues {
+		got[i.Path] = true
+	}
+	for _, p := range []string{
+		"services.dhcp.scopes[0].rangeStart", "services.dhcp.scopes[0].leaseTime", "services.dhcp.scopes[0].gateway",
+		"services.dhcp.scopes[0].dns[0]", "services.dhcp.scopes[0].domain",
+		"services.dhcp.scopes[1].interface", "services.dhcp.scopes[2].interface",
+		"services.dhcp.staticLeases[0].mac", "services.dhcp.staticLeases[0].ip", "services.dhcp.staticLeases[0].hostname",
+		"services.dhcp.staticLeases[2].mac",
+		"services.dns.interfaces[0]", "services.dns.upstreams[0]", "services.dns.domain",
+		"services.dns.hostOverrides[1].hostname", "services.dns.hostOverrides[1].ip", "services.dns.hostOverrides[2].hostname",
+	} {
+		if !got[p] {
+			t.Errorf("missing issue at %s (have %v)", p, ve.Issues)
+		}
+	}
+	cfg.Services.DNS = DNSServer{Enabled: true}
+	cfg.Services.DHCP = DHCPServer{}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "upstream") {
+		t.Errorf("dns without upstreams accepted: %v", err)
+	}
+}

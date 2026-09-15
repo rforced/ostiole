@@ -68,6 +68,7 @@ type Config struct {
 	Rules      []Rule        `json:"rules"`
 	NAT        NAT           `json:"nat"`
 	Routes     []StaticRoute `json:"routes,omitempty"`
+	Services   Services      `json:"services"`
 }
 
 // System holds box-level settings.
@@ -255,4 +256,58 @@ func (c *Config) ZoneInterfaces(zone string) []string {
 		}
 	}
 	return names
+}
+
+// Services are the LAN-side services Ostiole runs through dnsmasq.
+type Services struct {
+	DHCP DHCPServer `json:"dhcp"`
+	DNS  DNSServer  `json:"dns"`
+}
+
+// DHCPServer hands out IPv4 addresses on selected interfaces.
+type DHCPServer struct {
+	Enabled      bool          `json:"enabled"`
+	Scopes       []DHCPScope   `json:"scopes,omitempty"`
+	StaticLeases []StaticLease `json:"staticLeases,omitempty"`
+}
+
+// DHCPScope is a pool on one interface, which must carry a static IPv4
+// address. Empty Gateway and DNS default to this box's address on the
+// interface (DNS only when the DNS service is enabled; otherwise the
+// system DNS servers).
+type DHCPScope struct {
+	Interface  string   `json:"interface"`
+	Enabled    bool     `json:"enabled"`
+	RangeStart string   `json:"rangeStart"`
+	RangeEnd   string   `json:"rangeEnd"`
+	LeaseTime  string   `json:"leaseTime,omitempty"` // dnsmasq syntax: 12h, 2d, infinite
+	Gateway    string   `json:"gateway,omitempty"`
+	DNS        []string `json:"dns,omitempty"`
+	Domain     string   `json:"domain,omitempty"`
+}
+
+// StaticLease pins an address to a MAC.
+type StaticLease struct {
+	MAC         string `json:"mac"`
+	IP          string `json:"ip"`
+	Hostname    string `json:"hostname,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+// DNSServer answers local names and forwards the rest upstream.
+type DNSServer struct {
+	Enabled bool `json:"enabled"`
+	// Interfaces to listen on; empty means every interface that is not in
+	// an external zone.
+	Interfaces    []string       `json:"interfaces,omitempty"`
+	Upstreams     []string       `json:"upstreams,omitempty"`
+	Domain        string         `json:"domain,omitempty"`
+	HostOverrides []HostOverride `json:"hostOverrides,omitempty"`
+}
+
+// HostOverride is a local name answered by this box.
+type HostOverride struct {
+	Hostname    string `json:"hostname"`
+	IP          string `json:"ip"`
+	Description string `json:"description,omitempty"`
 }

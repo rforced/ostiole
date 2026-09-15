@@ -150,9 +150,51 @@ func (r *renderer) chainInput() {
 			"destination-unreachable, packet-too-big, time-exceeded, parameter-problem, " +
 			"mld-listener-query, mld-listener-report, mld-listener-done } accept")
 		r.antiLockout()
+		r.serviceRules()
 		r.zoneDispatch()
 		r.defaultDrop("input")
 	})
+}
+
+// serviceRules lets DHCP and DNS clients reach the services this box runs,
+// regardless of zone rules, on the interfaces that serve them.
+func (r *renderer) serviceRules() {
+	svc := r.cfg.Services
+	if svc.DHCP.Enabled {
+		var ifs []string
+		for _, sc := range svc.DHCP.Scopes {
+			if in, ok := r.cfg.Interface(sc.Interface); ok && sc.Enabled && in.Enabled {
+				ifs = append(ifs, sc.Interface)
+			}
+		}
+		if len(ifs) > 0 {
+			r.line(fmt.Sprintf(`iifname %s udp dport 67 counter accept comment "service:dhcp"`, ifnameSet(ifs)))
+		}
+	}
+	if svc.DNS.Enabled {
+		ifs := DNSInterfaces(r.cfg)
+		if len(ifs) > 0 {
+			r.line(fmt.Sprintf(`iifname %s meta l4proto { tcp, udp } th dport 53 fib daddr type local counter accept comment "service:dns"`, ifnameSet(ifs)))
+		}
+	}
+}
+
+// DNSInterfaces lists where the DNS service listens: the configured list,
+// or every enabled interface outside external zones.
+func DNSInterfaces(cfg *model.Config) []string {
+	if len(cfg.Services.DNS.Interfaces) > 0 {
+		return cfg.Services.DNS.Interfaces
+	}
+	var ifs []string
+	for _, in := range cfg.Interfaces {
+		if !in.Enabled || in.Zone == "" {
+			continue
+		}
+		if z, ok := cfg.Zone(in.Zone); ok && !z.External {
+			ifs = append(ifs, in.Name)
+		}
+	}
+	return ifs
 }
 
 func (r *renderer) chainForward() {

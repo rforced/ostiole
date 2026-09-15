@@ -34,6 +34,7 @@ type Engine struct {
 	store  *store.Store
 	nft    nft.Runner
 	net    network.Backend // nil when network management is disabled
+	svc    network.Backend // dnsmasq services; nil when not managed
 	sysctl sysctl.Applier  // nil in tests without a kernel
 	log    *slog.Logger
 	revert time.Duration // time budget for an automatic revert
@@ -48,6 +49,7 @@ type pendingApply struct {
 	ruleset     string
 	previous    string
 	previousNet network.Files
+	previousSvc network.Files
 	since       time.Time
 	deadline    time.Time
 	timer       *time.Timer
@@ -60,6 +62,13 @@ func New(st *store.Store, runner nft.Runner, net network.Backend, log *slog.Logg
 		log = slog.Default()
 	}
 	return &Engine{store: st, nft: runner, net: net, log: log, revert: 15 * time.Second}
+}
+
+// WithServices adds the DHCP/DNS backend, applied after the network and
+// reverted with it.
+func (e *Engine) WithServices(b network.Backend) *Engine {
+	e.svc = b
+	return e
 }
 
 // WithSysctl makes every apply and load also turn on router kernel
@@ -80,8 +89,9 @@ func (e *Engine) applySysctl() {
 
 // Plan is everything rendered from a configuration.
 type Plan struct {
-	Ruleset string        `json:"ruleset"`
-	Network network.Files `json:"network,omitempty"`
+	Ruleset  string        `json:"ruleset"`
+	Network  network.Files `json:"network,omitempty"`
+	Services network.Files `json:"services,omitempty"`
 }
 
 // Store exposes the underlying store for read-only callers.
@@ -101,6 +111,13 @@ func (e *Engine) Check(ctx context.Context, cfg *model.Config) (*Plan, error) {
 			return nil, fmt.Errorf("network: %w", err)
 		}
 		plan.Network = files
+	}
+	if e.svc != nil {
+		files, err := e.svc.Render(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("services: %w", err)
+		}
+		plan.Services = files
 	}
 	if err := e.nft.Check(ctx, ruleset); err != nil {
 		return nil, err
@@ -144,10 +161,15 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 	} else if err != nil {
 		return nil, fmt.Errorf("load previous ruleset: %w", err)
 	}
-	var previousNet network.Files
+	var previousNet, previousSvc network.Files
 	if e.net != nil {
 		if previousNet, err = e.net.Snapshot(); err != nil {
 			return nil, fmt.Errorf("network snapshot: %w", err)
+		}
+	}
+	if e.svc != nil {
+		if previousSvc, err = e.svc.Snapshot(); err != nil {
+			return nil, fmt.Errorf("services snapshot: %w", err)
 		}
 	}
 
@@ -162,6 +184,16 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 				return nil, fmt.Errorf("network apply failed (%w) and firewall revert failed (%w)", err, rerr)
 			}
 			return nil, fmt.Errorf("network apply failed, firewall reverted: %w", err)
+		}
+	}
+	if e.svc != nil {
+		if err := e.svc.Apply(ctx, plan.Services); err != nil {
+			rollback := &pendingApply{previous: previous, previousNet: previousNet, previousSvc: previousSvc}
+			if rerr := e.restore(ctx, rollback); rerr != nil {
+				e.log.Error("services apply failed and rollback failed too", "servicesErr", err, "err", rerr)
+				return nil, fmt.Errorf("services apply failed (%w) and rollback failed (%w)", err, rerr)
+			}
+			return nil, fmt.Errorf("services apply failed, firewall and network reverted: %w", err)
 		}
 	}
 	e.log.Info("configuration applied", "rules", len(cfg.Rules), "networkUnits", len(plan.Network), "confirmTimeout", opts.ConfirmTimeout)
@@ -181,6 +213,7 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 		ruleset:     plan.Ruleset,
 		previous:    previous,
 		previousNet: previousNet,
+		previousSvc: previousSvc,
 		since:       now,
 		deadline:    now.Add(opts.ConfirmTimeout),
 	}
@@ -236,6 +269,11 @@ func (e *Engine) restore(ctx context.Context, p *pendingApply) error {
 	if e.net != nil {
 		if err := e.net.Apply(ctx, p.previousNet); err != nil {
 			errs = append(errs, fmt.Errorf("network: %w", err))
+		}
+	}
+	if e.svc != nil && p.previousSvc != nil {
+		if err := e.svc.Apply(ctx, p.previousSvc); err != nil {
+			errs = append(errs, fmt.Errorf("services: %w", err))
 		}
 	}
 	return errors.Join(errs...)

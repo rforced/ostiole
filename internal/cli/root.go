@@ -12,6 +12,7 @@ import (
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
+	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/store"
 	"github.com/rforced/ostiole/internal/sysctl"
 	"github.com/rforced/ostiole/internal/version"
@@ -60,6 +61,10 @@ func (g *globals) engine() (*engine.Engine, error) {
 	eng := engine.New(g.store(), &nft.Exec{Bin: g.nftBin}, net, slog.Default())
 	if os.Geteuid() == 0 {
 		eng.WithSysctl(sysctl.Proc{})
+		if net != nil {
+			// Services need root and a managed box; dev runs stay firewall-only.
+			eng.WithServices(services.New())
+		}
 	}
 	return eng, nil
 }
@@ -98,6 +103,7 @@ func newRootCmd() *cobra.Command {
 		newTakeoverCmd(g),
 		newUninstallCmd(g),
 		newUpdateCmd(g),
+		newServicesCmd(g),
 		newVersionCmd(),
 	)
 	return cmd

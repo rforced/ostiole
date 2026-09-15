@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"net/netip"
+	"regexp"
 	"strings"
 )
 
@@ -213,10 +214,125 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	v.services(c, ifaces)
+
 	if len(v.issues) == 0 {
 		return nil
 	}
 	return &ValidationError{Issues: v.issues}
+}
+
+var (
+	macRe       = regexp.MustCompile(`^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$`)
+	leaseTimeRe = regexp.MustCompile(`^([0-9]+[smhdw]|infinite)$`)
+	domainRe    = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$`)
+)
+
+func (v *validator) services(c *Config, ifaces map[string]bool) {
+	seen := map[string]bool{}
+	for i, sc := range c.Services.DHCP.Scopes {
+		path := fmt.Sprintf("services.dhcp.scopes[%d]", i)
+		in, ok := c.Interface(sc.Interface)
+		if !ok || !ifaces[sc.Interface] {
+			v.add(path+".interface", "unknown interface %q", sc.Interface)
+			continue
+		}
+		if seen[sc.Interface] {
+			v.add(path+".interface", "interface %q already has a scope", sc.Interface)
+		}
+		seen[sc.Interface] = true
+		if in.IPv4.Mode != AddrStatic {
+			v.add(path+".interface", "interface %q needs a static IPv4 address to serve DHCP", sc.Interface)
+			continue
+		}
+		subnet, err := netip.ParsePrefix(in.IPv4.Address)
+		if err != nil {
+			continue // reported on the interface
+		}
+		subnet = subnet.Masked()
+		start, serr := ParseIP(sc.RangeStart)
+		end, eerr := ParseIP(sc.RangeEnd)
+		if serr != nil {
+			v.add(path+".rangeStart", "%v", serr)
+		} else if !start.Is4() || !subnet.Contains(start) {
+			v.add(path+".rangeStart", "%s is not inside %s", start, subnet)
+		}
+		if eerr != nil {
+			v.add(path+".rangeEnd", "%v", eerr)
+		} else if !end.Is4() || !subnet.Contains(end) {
+			v.add(path+".rangeEnd", "%s is not inside %s", end, subnet)
+		}
+		if serr == nil && eerr == nil && start.Compare(end) > 0 {
+			v.add(path+".rangeEnd", "range end is before its start")
+		}
+		if sc.LeaseTime != "" && !leaseTimeRe.MatchString(sc.LeaseTime) {
+			v.add(path+".leaseTime", "%q must look like 12h, 2d, or infinite", sc.LeaseTime)
+		}
+		if sc.Gateway != "" {
+			if gw, err := ParseIP(sc.Gateway); err != nil {
+				v.add(path+".gateway", "%v", err)
+			} else if !subnet.Contains(gw) {
+				v.add(path+".gateway", "%s is not inside %s", gw, subnet)
+			}
+		}
+		for j, d := range sc.DNS {
+			if _, err := ParseIP(d); err != nil {
+				v.add(fmt.Sprintf("%s.dns[%d]", path, j), "%v", err)
+			}
+		}
+		if sc.Domain != "" && !domainRe.MatchString(sc.Domain) {
+			v.add(path+".domain", "%q is not a valid domain", sc.Domain)
+		}
+	}
+	macs := map[string]bool{}
+	for i, l := range c.Services.DHCP.StaticLeases {
+		path := fmt.Sprintf("services.dhcp.staticLeases[%d]", i)
+		mac := strings.ToLower(l.MAC)
+		if !macRe.MatchString(l.MAC) {
+			v.add(path+".mac", "%q is not a MAC address like aa:bb:cc:dd:ee:ff", l.MAC)
+		} else if macs[mac] {
+			v.add(path+".mac", "duplicate MAC %s", l.MAC)
+		}
+		macs[mac] = true
+		if ip, err := ParseIP(l.IP); err != nil {
+			v.add(path+".ip", "%v", err)
+		} else if !ip.Is4() {
+			v.add(path+".ip", "static leases are IPv4 only")
+		}
+		if l.Hostname != "" && !hostnameRe.MatchString(l.Hostname) {
+			v.add(path+".hostname", "%q is not a valid hostname", l.Hostname)
+		}
+	}
+	dns := c.Services.DNS
+	for i, name := range dns.Interfaces {
+		if !ifaces[name] {
+			v.add(fmt.Sprintf("services.dns.interfaces[%d]", i), "unknown interface %q", name)
+		}
+	}
+	for i, u := range dns.Upstreams {
+		if _, err := ParseIP(u); err != nil {
+			v.add(fmt.Sprintf("services.dns.upstreams[%d]", i), "%v", err)
+		}
+	}
+	if dns.Enabled && len(dns.Upstreams) == 0 && len(c.System.DNSServers) == 0 {
+		v.add("services.dns.upstreams", "at least one upstream DNS server is required (or set system.dnsServers)")
+	}
+	if dns.Domain != "" && !domainRe.MatchString(dns.Domain) {
+		v.add("services.dns.domain", "%q is not a valid domain", dns.Domain)
+	}
+	names := map[string]bool{}
+	for i, h := range dns.HostOverrides {
+		path := fmt.Sprintf("services.dns.hostOverrides[%d]", i)
+		if !hostnameRe.MatchString(h.Hostname) {
+			v.add(path+".hostname", "%q is not a valid hostname", h.Hostname)
+		} else if names[strings.ToLower(h.Hostname)] {
+			v.add(path+".hostname", "duplicate host %q", h.Hostname)
+		}
+		names[strings.ToLower(h.Hostname)] = true
+		if _, err := ParseIP(h.IP); err != nil {
+			v.add(path+".ip", "%v", err)
+		}
+	}
 }
 
 func (v *validator) system(s *System) {
