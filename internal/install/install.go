@@ -41,8 +41,12 @@ const (
 // NetworkdUnitDir is where Ostiole writes its networkd units.
 const NetworkdUnitDir = "/etc/systemd/network"
 
-// NetworkdUnit is the service Ostiole hands networking to.
-const NetworkdUnit = "systemd-networkd.service"
+// NetworkdUnit is the service Ostiole hands networking to; NetworkdSocket
+// activates it on demand.
+const (
+	NetworkdUnit   = "systemd-networkd.service"
+	NetworkdSocket = "systemd-networkd.socket"
+)
 
 // Systemctl runs systemctl; swapped for a fake in tests.
 type Systemctl interface {
@@ -409,7 +413,7 @@ func NetworkTakeover(ctx context.Context, sc Systemctl, managers []string, log *
 		}
 		log.Info("network manager disabled and masked", "unit", unit)
 	}
-	if out, err := sc.Run(ctx, "enable", "--now", NetworkdUnit); err != nil {
+	if out, err := sc.Run(ctx, "enable", "--now", NetworkdSocket, NetworkdUnit); err != nil {
 		return fmt.Errorf("enable %s: %w: %s", NetworkdUnit, err, out)
 	}
 	log.Info("systemd-networkd enabled and started")
@@ -467,7 +471,9 @@ func LoadTakeoverRecord(dir string) (*TakeoverRecord, error) {
 // previous managers back. wait-online style units are only re-enabled,
 // never started, because starting them blocks until the network is up.
 func NetworkRevert(ctx context.Context, sc Systemctl, managers []string, log *slog.Logger) error {
-	if out, err := sc.Run(ctx, "disable", "--now", NetworkdUnit); err != nil {
+	// The socket unit would re-activate networkd on the next client
+	// connection, so it has to go down with the service.
+	if out, err := sc.Run(ctx, "disable", "--now", NetworkdSocket, NetworkdUnit); err != nil {
 		log.Warn("stopping systemd-networkd failed", "err", err, "out", out)
 	}
 	var errs []error

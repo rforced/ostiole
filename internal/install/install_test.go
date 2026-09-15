@@ -195,7 +195,7 @@ func TestNetworkTakeover(t *testing.T) {
 	want := [][]string{
 		{"disable", "--now", "NetworkManager.service"}, {"mask", "NetworkManager.service"},
 		{"disable", "--now", "NetworkManager-wait-online.service"}, {"mask", "NetworkManager-wait-online.service"},
-		{"enable", "--now", NetworkdUnit},
+		{"enable", "--now", NetworkdSocket, NetworkdUnit},
 	}
 	for i, w := range want {
 		if strings.Join(sc.calls[i], " ") != strings.Join(w, " ") {
@@ -222,7 +222,7 @@ func TestNetworkRevertAndRecord(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := [][]string{
-		{"disable", "--now", NetworkdUnit},
+		{"disable", "--now", NetworkdSocket, NetworkdUnit},
 		{"unmask", "NetworkManager.service"}, {"enable", "--now", "NetworkManager.service"},
 		{"unmask", "NetworkManager-wait-online.service"}, {"enable", "NetworkManager-wait-online.service"},
 	}
