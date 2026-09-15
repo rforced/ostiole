@@ -13,7 +13,8 @@ test('enable DHCP with a scope and DNS with an override, then apply', async ({ p
   await page.getByRole('button', { name: 'Add scope' }).click()
   let dialog = page.getByRole('dialog')
   // Picking the LAN interface (static 192.168.50.1/24) suggests a pool inside it.
-  await dialog.getByLabel('Interface').selectOption({ label: /192\.168\.50\.1\/24/ })
+  const lanOption = dialog.locator('#sc-if option', { hasText: '192.168.50.1/24' })
+  await dialog.getByLabel('Interface').selectOption(await lanOption.getAttribute('value'))
   await expect(dialog.getByLabel('Range start')).toHaveValue('192.168.50.100')
   await expect(dialog.getByLabel('Range end')).toHaveValue('192.168.50.199')
   await dialog.getByLabel('Lease time').fill('1d')
