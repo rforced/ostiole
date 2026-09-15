@@ -1,4 +1,4 @@
-// Command ostiole is a firewall and router appliance manager for Linux nftables.
+// Package main is the ostiole command: a firewall and router appliance manager for Linux nftables.
 package main
 
 import (
