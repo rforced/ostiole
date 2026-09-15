@@ -116,10 +116,40 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	schedules := map[string]bool{}
+	for i, sc := range c.Schedules {
+		path := fmt.Sprintf("schedules[%d]", i)
+		if !nameRe.MatchString(sc.Name) {
+			v.add(path+".name", "%q must match %s", sc.Name, nameRe)
+		} else if schedules[sc.Name] {
+			v.add(path+".name", "duplicate schedule %q", sc.Name)
+		}
+		schedules[sc.Name] = true
+		start, serr := ParseClock(sc.Start)
+		if serr != nil {
+			v.add(path+".start", "%v", serr)
+		}
+		end, eerr := ParseClock(sc.End)
+		if eerr != nil {
+			v.add(path+".end", "%v", eerr)
+		}
+		if serr == nil && eerr == nil && start == end {
+			v.add(path+".end", "start and end are the same, which matches nothing")
+		}
+		for j, d := range sc.Days {
+			if _, ok := Weekday(d); !ok {
+				v.add(fmt.Sprintf("%s.days[%d]", path, j), "%q is not a day of the week", d)
+			}
+		}
+	}
+
 	ids := map[string]bool{}
 	for i, r := range c.Rules {
 		path := fmt.Sprintf("rules[%d]", i)
 		v.id(path+".id", r.ID, ids)
+		if r.Schedule != "" && !schedules[r.Schedule] {
+			v.add(path+".schedule", "unknown schedule %q", r.Schedule)
+		}
 		if !zones[r.Zone] {
 			v.add(path+".zone", "unknown zone %q", r.Zone)
 		}
@@ -191,6 +221,28 @@ func (c *Config) Validate() error {
 			} else if pr.Lo != pr.Hi {
 				v.add(path+".targetPort", "must be a single port")
 			}
+		}
+	}
+
+	oneIDs := map[string]bool{}
+	for i, o := range c.NAT.OneToOne {
+		path := fmt.Sprintf("nat.oneToOne[%d]", i)
+		v.id(path+".id", o.ID, oneIDs)
+		if !zones[o.Zone] {
+			v.add(path+".zone", "unknown zone %q", o.Zone)
+		} else if z, ok := c.Zone(o.Zone); ok && !z.External {
+			v.add(path+".zone", "1:1 NAT belongs on an external zone, and %q is internal", o.Zone)
+		}
+		ext, eerr := ParseIP(o.External)
+		if eerr != nil {
+			v.add(path+".external", "%v", eerr)
+		}
+		in, ierr := ParseIP(o.Internal)
+		if ierr != nil {
+			v.add(path+".internal", "%v", ierr)
+		}
+		if eerr == nil && ierr == nil && ext.Is4() != in.Is4() {
+			v.add(path+".internal", "address family does not match the external address")
 		}
 	}
 

@@ -313,3 +313,72 @@ func TestValidateStaticLeaseAddresses(t *testing.T) {
 		t.Errorf("valid leases rejected: %v", ve.Issues)
 	}
 }
+
+func TestValidateSchedulesAndOneToOne(t *testing.T) {
+	t.Parallel()
+	cfg := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0"})
+	cfg.Schedules = []Schedule{
+		{Name: "work", Days: []string{"monday", "caturday"}, Start: "08:00", End: "17:00"},
+		{Name: "work", Start: "25:00", End: "17:60"},
+		{Name: "same", Start: "09:00", End: "09:00"},
+	}
+	cfg.Rules = append(cfg.Rules, Rule{
+		ID: "scheduled", Enabled: true, Zone: "lan", Action: ActionDrop,
+		Protocol: ProtocolAny, Schedule: "ghost",
+	})
+	cfg.NAT.OneToOne = []OneToOneNAT{
+		{ID: "one", Enabled: true, Zone: "lan", External: "203.0.113.5", Internal: "10.0.0.5"},
+		{ID: "two", Enabled: true, Zone: "ghost", External: "nope", Internal: "10.0.0.6"},
+		{ID: "three", Enabled: true, Zone: "wan", External: "203.0.113.7", Internal: "2001:db8::7"},
+	}
+	var ve *ValidationError
+	if !errors.As(cfg.Validate(), &ve) {
+		t.Fatal("want validation issues")
+	}
+	got := map[string]bool{}
+	for _, i := range ve.Issues {
+		got[i.Path] = true
+	}
+	for _, p := range []string{
+		"schedules[0].days[1]", "schedules[1].name", "schedules[1].start", "schedules[1].end",
+		"schedules[2].end", "rules[1].schedule",
+		"nat.oneToOne[0].zone", "nat.oneToOne[1].zone", "nat.oneToOne[1].external",
+		"nat.oneToOne[2].internal",
+	} {
+		if !got[p] {
+			t.Errorf("missing issue at %s (have %v)", p, ve.Issues)
+		}
+	}
+
+	// A sane schedule, a rule using it, and a 1:1 mapping on the WAN.
+	cfg.Schedules = []Schedule{{Name: "work", Days: []string{"monday"}, Start: "08:00", End: "17:00"}}
+	cfg.Rules[len(cfg.Rules)-1].Schedule = "work"
+	cfg.NAT.OneToOne = []OneToOneNAT{{ID: "one", Enabled: true, Zone: "wan", External: "203.0.113.5", Internal: "10.0.0.5"}}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("valid schedule and mapping rejected: %v", err)
+	}
+}
+
+func TestParseClock(t *testing.T) {
+	t.Parallel()
+	for in, want := range map[string]int{"00:00": 0, "08:30": 510, "23:59": 1439} {
+		got, err := ParseClock(in)
+		if err != nil || got != want {
+			t.Errorf("ParseClock(%q) = %d, %v; want %d", in, got, err, want)
+		}
+		if back := Clock(want); back != in {
+			t.Errorf("Clock(%d) = %q, want %q", want, back, in)
+		}
+	}
+	for _, in := range []string{"", "8", "24:00", "08:60", "-1:00", "aa:bb"} {
+		if _, err := ParseClock(in); err == nil {
+			t.Errorf("ParseClock(%q) succeeded", in)
+		}
+	}
+	if d, ok := Weekday("  MONDAY "); !ok || d != "Monday" {
+		t.Errorf("Weekday = %q, %v", d, ok)
+	}
+	if _, ok := Weekday("caturday"); ok {
+		t.Error("Weekday accepted a nonsense day")
+	}
+}

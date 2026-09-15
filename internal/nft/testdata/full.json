@@ -149,7 +149,8 @@
       },
       "destination": {
         "portAlias": "web"
-      }
+      },
+      "schedule": "workday"
     },
     {
       "id": "block-smtp",
@@ -165,7 +166,8 @@
           "25",
           "465-587"
         ]
-      }
+      },
+      "schedule": "overnight"
     },
     {
       "id": "dns-to-self",
@@ -325,7 +327,8 @@
           "80",
           "443"
         ],
-        "target": "10.10.0.5"
+        "target": "10.10.0.5",
+        "reflection": true
       },
       {
         "id": "pf-ssh",
@@ -346,7 +349,8 @@
         "ports": [
           "27015-27020"
         ],
-        "target": "192.168.1.50"
+        "target": "192.168.1.50",
+        "reflection": true
       },
       {
         "id": "pf-v6",
@@ -378,6 +382,30 @@
           "2"
         ],
         "target": "10.0.0.1"
+      }
+    ],
+    "oneToOne": [
+      {
+        "id": "one-mail",
+        "description": "Mail server",
+        "enabled": true,
+        "zone": "wan",
+        "external": "203.0.113.10",
+        "internal": "10.10.0.25"
+      },
+      {
+        "id": "one-v6",
+        "enabled": true,
+        "zone": "wan",
+        "external": "2001:db8:2::25",
+        "internal": "2001:db8:2::125"
+      },
+      {
+        "id": "one-off",
+        "enabled": false,
+        "zone": "wan",
+        "external": "203.0.113.11",
+        "internal": "10.10.0.26"
       }
     ]
   },
@@ -449,5 +477,26 @@
         }
       ]
     }
-  }
+  },
+  "schedules": [
+    {
+      "name": "workday",
+      "description": "Office hours",
+      "days": [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday"
+      ],
+      "start": "08:30",
+      "end": "17:30"
+    },
+    {
+      "name": "overnight",
+      "description": "Runs past midnight",
+      "start": "22:00",
+      "end": "06:00"
+    }
+  ]
 }

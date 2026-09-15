@@ -38,6 +38,7 @@ function blank() {
     action: 'accept',
     protocol: 'any',
     log: false,
+    schedule: '',
     source: endpointForm(),
     destination: endpointForm(),
   }
@@ -87,6 +88,7 @@ function save() {
   }
   if (f.destZone) out.destZone = f.destZone
   if (f.log) out.log = true
+  if (f.schedule) out.schedule = f.schedule
   if (!out.description) delete out.description
   config.upsertRule(out)
   open.value = false
@@ -128,6 +130,19 @@ function save() {
           <select id="rule-destzone" v-model="form.destZone" class="input">
             <option value="">Any</option>
             <option v-for="z in config.zones" :key="z.name" :value="z.name">{{ z.name }}</option>
+          </select>
+        </FormField>
+        <FormField
+          v-if="config.schedules.length"
+          id="rule-schedule"
+          label="Schedule"
+          hint="Outside the window the rule does not match."
+        >
+          <select id="rule-schedule" v-model="form.schedule" class="input">
+            <option value="">Always</option>
+            <option v-for="s in config.schedules" :key="s.name" :value="s.name">
+              {{ s.name }} ({{ s.start }}–{{ s.end }})
+            </option>
           </select>
         </FormField>
       </div>

@@ -133,6 +133,7 @@ function toggle(rule) {
                 >{{ r.action }}</span
               >
               <span v-if="r.log" class="badge ml-1">log</span>
+              <span v-if="r.schedule" class="badge ml-1">{{ r.schedule }}</span>
             </td>
             <td class="font-mono text-xs">{{ r.protocol }}</td>
             <td class="font-mono text-xs">{{ describe(r.source, true) }}</td>

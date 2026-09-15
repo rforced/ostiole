@@ -84,3 +84,32 @@ func ParseIP(s string) (netip.Addr, error) {
 	}
 	return a, nil
 }
+
+// ParseClock reads "HH:MM" and returns minutes since midnight.
+func ParseClock(s string) (int, error) {
+	hh, mm, found := strings.Cut(strings.TrimSpace(s), ":")
+	h, herr := strconv.Atoi(hh)
+	m, merr := strconv.Atoi(mm)
+	if !found || herr != nil || merr != nil || h < 0 || h > 23 || m < 0 || m > 59 {
+		return 0, fmt.Errorf("invalid time %q: want HH:MM", s)
+	}
+	return h*60 + m, nil
+}
+
+// Clock renders minutes since midnight back as "HH:MM".
+func Clock(minutes int) string {
+	return fmt.Sprintf("%02d:%02d", minutes/60%24, minutes%60)
+}
+
+// weekdays maps the names a schedule may use to the capitalised form
+// nftables expects.
+var weekdays = map[string]string{
+	"monday": "Monday", "tuesday": "Tuesday", "wednesday": "Wednesday",
+	"thursday": "Thursday", "friday": "Friday", "saturday": "Saturday", "sunday": "Sunday",
+}
+
+// Weekday canonicalises a day name for nftables, case insensitively.
+func Weekday(s string) (string, bool) {
+	day, ok := weekdays[strings.ToLower(strings.TrimSpace(s))]
+	return day, ok
+}

@@ -24,6 +24,7 @@ function blank() {
     ports: '',
     target: '',
     targetPort: '',
+    reflection: false,
   }
 }
 
@@ -51,6 +52,7 @@ function save() {
   }
   if (f.description) out.description = f.description
   if (f.targetPort) out.targetPort = String(f.targetPort).trim()
+  if (f.reflection) out.reflection = true
   config.upsertPortForward(out)
   open.value = false
 }
@@ -107,6 +109,17 @@ function save() {
           />
         </FormField>
       </div>
+      <label class="flex items-start gap-2 text-sm">
+        <input
+          v-model="form.reflection"
+          type="checkbox"
+          class="mt-0.5 size-4 rounded border-neutral-300"
+        />
+        <span
+          ><span class="font-medium">NAT reflection</span> — internal hosts reach this service
+          through the firewall's own outside address, so one name works from both sides.</span
+        >
+      </label>
       <label class="flex items-center gap-2 text-sm">
         <input v-model="form.enabled" type="checkbox" class="size-4 rounded border-neutral-300" />
         Enabled

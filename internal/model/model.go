@@ -65,6 +65,7 @@ type Config struct {
 	Zones      []Zone        `json:"zones"`
 	Interfaces []Interface   `json:"interfaces"`
 	Aliases    []Alias       `json:"aliases,omitempty"`
+	Schedules  []Schedule    `json:"schedules,omitempty"`
 	Rules      []Rule        `json:"rules"`
 	NAT        NAT           `json:"nat"`
 	Routes     []StaticRoute `json:"routes,omitempty"`
@@ -158,6 +159,22 @@ type Rule struct {
 	Source      Endpoint `json:"source"`
 	Destination Endpoint `json:"destination"`
 	Log         bool     `json:"log,omitempty"`
+	// Schedule names a Schedule; outside it the rule does not match and
+	// evaluation carries on with the next one.
+	Schedule string `json:"schedule,omitempty"`
+}
+
+// Schedule is a recurring window in the firewall's local time. Rules that
+// name it only match inside it.
+type Schedule struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	// Days of the week, lower case ("monday"); empty means every day.
+	Days []string `json:"days,omitempty"`
+	// Start and End are "HH:MM". An End before Start means the window runs
+	// over midnight.
+	Start string `json:"start"`
+	End   string `json:"end"`
 }
 
 // Endpoint constrains one side of a rule. Empty means any. Addresses and
@@ -171,10 +188,24 @@ type Endpoint struct {
 	Self      bool     `json:"self,omitempty"`
 }
 
-// NAT holds outbound NAT and port forwards.
+// NAT holds outbound NAT, port forwards, and 1:1 mappings.
 type NAT struct {
 	Outbound     OutboundNAT   `json:"outbound"`
 	PortForwards []PortForward `json:"portForwards,omitempty"`
+	OneToOne     []OneToOneNAT `json:"oneToOne,omitempty"`
+}
+
+// OneToOneNAT maps one external address onto one internal host, both
+// directions: traffic to External is translated to Internal, and traffic
+// the host sends out of Zone leaves as External.
+type OneToOneNAT struct {
+	ID          string `json:"id"`
+	Description string `json:"description,omitempty"`
+	Enabled     bool   `json:"enabled"`
+	// Zone is the external zone the address belongs to.
+	Zone     string `json:"zone"`
+	External string `json:"external"`
+	Internal string `json:"internal"`
 }
 
 // OutboundNAT configures source NAT for traffic leaving external zones.
@@ -204,6 +235,9 @@ type PortForward struct {
 	Ports       []string `json:"ports"`
 	Target      string   `json:"target"`
 	TargetPort  string   `json:"targetPort,omitempty"`
+	// Reflection forwards connections that internal hosts make to the
+	// firewall's own outside address, so one name works from both sides.
+	Reflection bool `json:"reflection,omitempty"`
 }
 
 // StaticRoute sends Destination via Gateway, optionally pinned to Interface.
@@ -221,6 +255,16 @@ func (c *Config) Zone(name string) (*Zone, bool) {
 	for i := range c.Zones {
 		if c.Zones[i].Name == name {
 			return &c.Zones[i], true
+		}
+	}
+	return nil, false
+}
+
+// Schedule returns the schedule with the given name.
+func (c *Config) Schedule(name string) (*Schedule, bool) {
+	for i := range c.Schedules {
+		if c.Schedules[i].Name == name {
+			return &c.Schedules[i], true
 		}
 	}
 	return nil, false

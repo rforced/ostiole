@@ -293,6 +293,36 @@ func (r *renderer) zoneChains() {
 	}
 }
 
+// scheduleMatch turns a schedule into nftables meta matches. A window that
+// ends before it starts runs over midnight, which nft cannot express as a
+// range, so it is matched as "outside the daytime window" instead.
+// Times are the firewall's local time: nft converts them to UTC when the
+// ruleset is loaded, so a change of offset needs a reload.
+func scheduleMatch(sc model.Schedule) []string {
+	var out []string
+	if len(sc.Days) > 0 {
+		days := make([]string, 0, len(sc.Days))
+		for _, d := range sc.Days {
+			if day, ok := model.Weekday(d); ok {
+				days = append(days, fmt.Sprintf("%q", day))
+			}
+		}
+		if len(days) > 0 {
+			out = append(out, "meta day "+setOrSingle(days))
+		}
+	}
+	start, serr := model.ParseClock(sc.Start)
+	end, eerr := model.ParseClock(sc.End)
+	switch {
+	case serr != nil || eerr != nil || start == end:
+	case start < end:
+		out = append(out, fmt.Sprintf("meta hour %q-%q", model.Clock(start), model.Clock(end)))
+	default:
+		out = append(out, fmt.Sprintf("meta hour != %q-%q", model.Clock(end), model.Clock(start)))
+	}
+	return out
+}
+
 // famExpr is the address match for one endpoint. any means unconstrained;
 // both is a family-agnostic expression (e.g. "fib daddr type local");
 // otherwise v4/v6 hold per-family expressions and nil means the endpoint
@@ -359,6 +389,14 @@ func (r *renderer) endpointAddr(dir string, e model.Endpoint) famExpr {
 
 func (r *renderer) rule(rule *model.Rule) {
 	var prefix []string
+	if rule.Schedule != "" {
+		sc, ok := r.cfg.Schedule(rule.Schedule)
+		if !ok {
+			r.line(fmt.Sprintf("# rule %s skipped: unknown schedule %q", rule.ID, rule.Schedule))
+			return
+		}
+		prefix = append(prefix, scheduleMatch(*sc)...)
+	}
 	if rule.DestZone != "" {
 		ifs := r.cfg.ZoneInterfaces(rule.DestZone)
 		if len(ifs) == 0 {
@@ -477,9 +515,16 @@ func (r *renderer) ports(kind string, e model.Endpoint) string {
 
 // ---- NAT ------------------------------------------------------------------
 
+// hasPortForwards reports whether anything gets DNATed, which is what the
+// forward chain's "accept what NAT redirected" rule keys on.
 func (r *renderer) hasPortForwards() bool {
 	for _, pf := range r.cfg.NAT.PortForwards {
 		if pf.Enabled && len(r.cfg.ZoneInterfaces(pf.Zone)) > 0 {
+			return true
+		}
+	}
+	for _, o := range r.cfg.NAT.OneToOne {
+		if o.Enabled && len(r.cfg.ZoneInterfaces(o.Zone)) > 0 {
 			return true
 		}
 	}
@@ -498,23 +543,124 @@ func (r *renderer) chainNATPrerouting() {
 				r.line(fmt.Sprintf("# port forward %s skipped: zone %q has no enabled interfaces", pf.ID, pf.Zone))
 				continue
 			}
-			ports := make([]string, 0, len(pf.Ports))
-			for _, p := range pf.Ports {
-				pr, _ := model.ParsePortRange(p)
-				ports = append(ports, pr.String())
-			}
-			var match string
-			switch pf.Protocol {
-			case model.ProtocolTCPUDP:
-				match = "meta l4proto { tcp, udp } th dport " + setOrSingle(ports)
-			default:
-				match = string(pf.Protocol) + " dport " + setOrSingle(ports)
-			}
+			match := portMatch(pf.Protocol, pf.Ports)
 			target, _ := model.ParseIP(pf.Target)
 			r.line(fmt.Sprintf("iifname %s %s counter dnat %s comment \"id:%s\"",
 				ifnameSet(ifs), match, dnatTarget(target, pf.TargetPort), pf.ID))
+			if pf.Reflection {
+				r.reflectDNAT(pf, match, target)
+			}
 		}
+		r.oneToOneDNAT()
 	})
+}
+
+// reflectDNAT forwards connections internal hosts make to the firewall's
+// own outside address. The destination is any local address except the
+// firewall's own internal ones, so reaching the web UI from the LAN keeps
+// working even when a forward uses the same port.
+func (r *renderer) reflectDNAT(pf model.PortForward, match string, target netip.Addr) {
+	fam := 4
+	if !target.Is4() {
+		fam = 6
+	}
+	ifs := r.internalInterfaces()
+	if len(ifs) == 0 {
+		r.line(fmt.Sprintf("# reflection for %s skipped: no internal interfaces", pf.ID))
+		return
+	}
+	var except string
+	if own := r.internalAddresses(fam); len(own) > 0 {
+		except = fmt.Sprintf("%s daddr != %s ", famPrefix(fam), setOrSingle(own))
+	}
+	r.line(fmt.Sprintf("iifname %s %sfib daddr type local %s counter dnat %s comment \"reflect:%s\"",
+		ifnameSet(ifs), except, match, dnatTarget(target, pf.TargetPort), pf.ID))
+}
+
+// oneToOneDNAT maps each external address onto its internal host.
+func (r *renderer) oneToOneDNAT() {
+	for _, o := range r.cfg.NAT.OneToOne {
+		if !o.Enabled {
+			continue
+		}
+		ifs := r.cfg.ZoneInterfaces(o.Zone)
+		if len(ifs) == 0 {
+			r.line(fmt.Sprintf("# 1:1 nat %s skipped: zone %q has no enabled interfaces", o.ID, o.Zone))
+			continue
+		}
+		ext, _ := model.ParseIP(o.External)
+		in, _ := model.ParseIP(o.Internal)
+		fam := 4
+		if !ext.Is4() {
+			fam = 6
+		}
+		r.line(fmt.Sprintf("iifname %s %s daddr %s counter dnat %s comment \"id:%s\"",
+			ifnameSet(ifs), famPrefix(fam), ext, dnatTarget(in, ""), o.ID))
+	}
+}
+
+// internalInterfaces lists enabled interfaces in zones that are not
+// external, where reflected traffic comes from.
+func (r *renderer) internalInterfaces() []string {
+	var out []string
+	for _, z := range r.cfg.Zones {
+		if z.External {
+			continue
+		}
+		out = append(out, r.cfg.ZoneInterfaces(z.Name)...)
+	}
+	return out
+}
+
+// internalAddresses lists the firewall's own static addresses on internal
+// interfaces, in the given family.
+func (r *renderer) internalAddresses(fam int) []string {
+	var out []string
+	for _, in := range r.cfg.Interfaces {
+		if !in.Enabled || in.Zone == "" {
+			continue
+		}
+		if z, ok := r.cfg.Zone(in.Zone); !ok || z.External {
+			continue
+		}
+		addr := in.IPv4.Address
+		if fam == 6 {
+			addr = in.IPv6.Address
+		}
+		if p, err := netip.ParsePrefix(addr); err == nil && (p.Addr().Is4() == (fam == 4)) {
+			out = append(out, p.Addr().String())
+		}
+	}
+	return out
+}
+
+// internalNetworks lists the networks behind internal interfaces, which is
+// who may be sent through the hairpin.
+func (r *renderer) internalNetworks(fam int) []string {
+	var out []string
+	for _, in := range r.cfg.Interfaces {
+		if !in.Enabled || in.Zone == "" {
+			continue
+		}
+		if z, ok := r.cfg.Zone(in.Zone); !ok || z.External {
+			continue
+		}
+		addr := in.IPv4.Address
+		if fam == 6 {
+			addr = in.IPv6.Address
+		}
+		if p, err := netip.ParsePrefix(addr); err == nil && (p.Addr().Is4() == (fam == 4)) {
+			out = append(out, p.Masked().String())
+		}
+	}
+	return out
+}
+
+func famPrefix(fam int) string {
+	if fam == 6 {
+		return "ip6"
+	}
+	return "ip"
 }
 
 func dnatTarget(ip netip.Addr, port string) string {
@@ -570,7 +716,80 @@ func (r *renderer) chainNATPostrouting() {
 				}
 			}
 		}
+		r.oneToOneSNAT()
+		r.reflectSNAT()
 	})
+}
+
+// oneToOneSNAT sends the mapped host out as its external address. It comes
+// after outbound NAT so the explicit mapping wins over a masquerade.
+func (r *renderer) oneToOneSNAT() {
+	for _, o := range r.cfg.NAT.OneToOne {
+		if !o.Enabled {
+			continue
+		}
+		ifs := r.cfg.ZoneInterfaces(o.Zone)
+		if len(ifs) == 0 {
+			continue
+		}
+		ext, _ := model.ParseIP(o.External)
+		in, _ := model.ParseIP(o.Internal)
+		fam := 4
+		if !ext.Is4() {
+			fam = 6
+		}
+		r.line(fmt.Sprintf("oifname %s %s saddr %s counter snat %s comment \"id:%s\"",
+			ifnameSet(ifs), famPrefix(fam), in, snatTarget(ext), o.ID))
+	}
+}
+
+// reflectSNAT makes the reflected connection come back through the
+// firewall: without it the server would answer the client directly and the
+// client would drop the reply as unrelated.
+func (r *renderer) reflectSNAT() {
+	for _, pf := range r.cfg.NAT.PortForwards {
+		if !pf.Enabled || !pf.Reflection {
+			continue
+		}
+		target, err := model.ParseIP(pf.Target)
+		if err != nil {
+			continue
+		}
+		fam := 4
+		if !target.Is4() {
+			fam = 6
+		}
+		nets := r.internalNetworks(fam)
+		if len(nets) == 0 {
+			continue
+		}
+		ports := pf.Ports
+		if pf.TargetPort != "" {
+			ports = []string{pf.TargetPort}
+		}
+		r.line(fmt.Sprintf("%s saddr %s %s daddr %s %s counter masquerade comment \"reflect:%s\"",
+			famPrefix(fam), setOrSingle(nets), famPrefix(fam), target, portMatch(pf.Protocol, ports), pf.ID))
+	}
+}
+
+// portMatch renders the protocol and port part shared by NAT rules.
+func portMatch(proto model.Protocol, ports []string) string {
+	list := make([]string, 0, len(ports))
+	for _, p := range ports {
+		pr, _ := model.ParsePortRange(p)
+		list = append(list, pr.String())
+	}
+	if proto == model.ProtocolTCPUDP {
+		return "meta l4proto { tcp, udp } th dport " + setOrSingle(list)
+	}
+	return string(proto) + " dport " + setOrSingle(list)
+}
+
+func snatTarget(ip netip.Addr) string {
+	if ip.Is4() {
+		return "ip to " + ip.String()
+	}
+	return "ip6 to " + ip.String()
 }
 
 // ---- helpers ---------------------------------------------------------------

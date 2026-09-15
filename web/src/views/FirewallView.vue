@@ -8,6 +8,7 @@ import AliasesTab from '@/views/firewall/AliasesTab.vue'
 import LogTab from '@/views/firewall/LogTab.vue'
 import NatTab from '@/views/firewall/NatTab.vue'
 import RulesTab from '@/views/firewall/RulesTab.vue'
+import SchedulesTab from '@/views/firewall/SchedulesTab.vue'
 
 const config = useConfigStore()
 const tab = ref('rules')
@@ -30,12 +31,14 @@ onMounted(() => config.load())
       :tabs="[
         { value: 'rules', label: 'Rules' },
         { value: 'aliases', label: 'Aliases' },
+        { value: 'schedules', label: 'Schedules' },
         { value: 'nat', label: 'NAT' },
         { value: 'log', label: 'Log' },
       ]"
     >
       <TabsContent value="rules"><RulesTab /></TabsContent>
       <TabsContent value="aliases"><AliasesTab /></TabsContent>
+      <TabsContent value="schedules"><SchedulesTab /></TabsContent>
       <TabsContent value="nat"><NatTab /></TabsContent>
       <TabsContent value="log"><LogTab /></TabsContent>
     </AppTabs>

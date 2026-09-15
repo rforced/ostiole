@@ -92,6 +92,7 @@ export const useConfigStore = defineStore('config', () => {
     }
     for (const pf of draft.value.nat?.portForwards ?? []) if (pf.zone === from) pf.zone = to
     for (const o of draft.value.nat?.outbound?.rules ?? []) if (o.zone === from) o.zone = to
+    for (const o of draft.value.nat?.oneToOne ?? []) if (o.zone === from) o.zone = to
   }
 
   /** Names of things that reference a zone; empty when it can be deleted. */
@@ -104,6 +105,8 @@ export const useConfigStore = defineStore('config', () => {
       if (pf.zone === name) refs.push(`port forward ${pf.id}`)
     for (const o of draft.value.nat?.outbound?.rules ?? [])
       if (o.zone === name) refs.push(`outbound NAT ${o.id}`)
+    for (const o of draft.value.nat?.oneToOne ?? [])
+      if (o.zone === name) refs.push(`1:1 NAT ${o.id}`)
     return refs
   }
 
@@ -198,6 +201,19 @@ export const useConfigStore = defineStore('config', () => {
     n.portForwards = (n.portForwards ?? []).filter((x) => x.id !== id)
   }
 
+  function upsertOneToOne(entry) {
+    const n = ensureNat()
+    const list = n.oneToOne ?? (n.oneToOne = [])
+    const idx = list.findIndex((x) => x.id === entry.id)
+    if (idx === -1) list.push(clone(entry))
+    else list[idx] = clone(entry)
+  }
+
+  function removeOneToOne(id) {
+    const n = ensureNat()
+    n.oneToOne = (n.oneToOne ?? []).filter((x) => x.id !== id)
+  }
+
   function upsertOutboundRule(rule) {
     const n = ensureNat()
     const list = n.outbound.rules ?? (n.outbound.rules = [])
@@ -209,6 +225,28 @@ export const useConfigStore = defineStore('config', () => {
   function removeOutboundRule(id) {
     const n = ensureNat()
     n.outbound.rules = (n.outbound.rules ?? []).filter((x) => x.id !== id)
+  }
+
+  // ---- schedules -------------------------------------------------------
+
+  const schedules = computed(() => draft.value?.schedules ?? [])
+
+  function upsertSchedule(schedule, previousName = schedule.name) {
+    const list = draft.value.schedules ?? (draft.value.schedules = [])
+    const idx = list.findIndex((s) => s.name === previousName)
+    if (idx === -1) list.push(clone(schedule))
+    else list[idx] = clone(schedule)
+    if (previousName !== schedule.name) {
+      for (const r of rules.value) if (r.schedule === previousName) r.schedule = schedule.name
+    }
+  }
+
+  function scheduleReferences(name) {
+    return rules.value.filter((r) => r.schedule === name).map((r) => `rule ${r.id}`)
+  }
+
+  function removeSchedule(name) {
+    draft.value.schedules = schedules.value.filter((s) => s.name !== name)
   }
 
   // ---- services --------------------------------------------------------
@@ -325,6 +363,12 @@ export const useConfigStore = defineStore('config', () => {
     setOutboundMode,
     upsertPortForward,
     removePortForward,
+    upsertOneToOne,
+    removeOneToOne,
+    schedules,
+    upsertSchedule,
+    scheduleReferences,
+    removeSchedule,
     upsertOutboundRule,
     removeOutboundRule,
     routes,

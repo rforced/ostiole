@@ -108,3 +108,65 @@ test('add a static route', async ({ page }) => {
   await page.screenshot({ path: shot('23-routing'), fullPage: true })
   await applyAndConfirm(page)
 })
+
+test('schedule a rule, reflect a port forward, and map an address 1:1', async ({ page }) => {
+  await login(page)
+  await page.goto('/firewall')
+
+  await page.getByRole('tab', { name: 'Schedules' }).click()
+  await page.getByRole('button', { name: 'Add schedule' }).click()
+  let dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Name').fill('workday')
+  await dialog.getByLabel('Description').fill('Office hours')
+  await dialog.getByLabel('From').fill('08:30')
+  await dialog.getByLabel('To').fill('17:30')
+  for (const day of ['monday', 'tuesday']) {
+    await dialog.getByRole('checkbox', { name: day }).check()
+  }
+  await dialog.getByRole('button', { name: 'Save to draft' }).click()
+  const scheduleRow = page.getByRole('row').filter({ hasText: 'workday' })
+  await expect(scheduleRow).toContainText('mon, tue')
+
+  // A rule that only matches inside the window.
+  await page.getByRole('tab', { name: 'Rules' }).click()
+  await page.getByRole('button', { name: 'Add rule' }).click()
+  dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Description').fill('Streaming during work')
+  await dialog.getByLabel('Action').selectOption('drop')
+  await dialog.getByLabel('Schedule').selectOption('workday')
+  await dialog.getByRole('button', { name: 'Save to draft' }).click()
+  await expect(page.getByRole('row').filter({ hasText: 'Streaming during work' })).toContainText(
+    'workday',
+  )
+
+  // NAT reflection and a 1:1 mapping.
+  await page.getByRole('tab', { name: 'NAT' }).click()
+  await page
+    .getByRole('row')
+    .filter({ hasText: 'Web server' })
+    .getByRole('button', { name: 'Edit' })
+    .click()
+  dialog = page.getByRole('dialog')
+  await dialog.getByRole('checkbox', { name: /NAT reflection/ }).check()
+  await dialog.getByRole('button', { name: 'Save to draft' }).click()
+  await expect(page.getByRole('row').filter({ hasText: 'Web server' })).toContainText('reflection')
+
+  await page.getByRole('button', { name: 'Add 1:1 NAT' }).click()
+  dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Description').fill('Mail server')
+  await dialog.getByLabel('External address').fill('203.0.113.10')
+  await dialog.getByLabel('Internal address').fill('10.0.0.25')
+  await dialog.getByRole('button', { name: 'Save to draft' }).click()
+  await expect(page.getByRole('row').filter({ hasText: 'Mail server' })).toContainText('10.0.0.25')
+  await page.screenshot({ path: shot('34-nat-one-to-one'), fullPage: true })
+
+  await applyAndConfirm(page)
+
+  // The rendered ruleset carries all three.
+  await page.goto('/system')
+  await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
+  const ruleset = page.locator('pre')
+  await expect(ruleset).toContainText('meta day { "Monday", "Tuesday" } meta hour "08:30"-"17:30"')
+  await expect(ruleset).toContainText('reflect:')
+  await expect(ruleset).toContainText('snat ip to 203.0.113.10')
+})
