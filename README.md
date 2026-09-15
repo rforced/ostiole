@@ -6,7 +6,20 @@ dependencies beyond `nft` and systemd, runs on any distro that has nftables.
 
 The goal is pfSense-style management, not pfSense feature parity.
 
-**Status: pre-alpha.** Scaffolding only. Nothing here manages a firewall yet.
+**Status: alpha.** It runs real boxes, but expect rough edges.
+
+## Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rforced/ostiole/main/scripts/install.sh | sudo sh
+```
+
+That downloads the latest release into `/usr/local/bin`, verifies its checksum, and runs
+`ostiole install`, which writes the systemd units and starts the web UI on `https://<host>/`.
+Packages (deb, rpm, apk, Arch) are attached to every release; after installing one, run
+`ostiole install` yourself. Then create the admin account in the UI, run the setup wizard,
+and use `ostiole takeover` and `ostiole takeover --network` to retire the previous firewall
+and network manager. Updates are a click away under System, verified against signed checksums.
 
 ## Design in one paragraph
 

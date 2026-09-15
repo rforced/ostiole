@@ -14,13 +14,15 @@ import (
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/store"
+	"github.com/rforced/ostiole/internal/update"
 )
 
 const maxBodyBytes = 1 << 20
 
 type api struct {
-	engine *engine.Engine
-	auth   *auth.Service
+	engine  *engine.Engine
+	auth    *auth.Service
+	updater *update.Manager
 }
 
 func (a *api) register(mux *http.ServeMux) {
@@ -37,7 +39,73 @@ func (a *api) register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/apply", a.guard(a.apply))
 	mux.HandleFunc("POST /api/v1/apply/confirm", a.guard(a.confirm))
 	mux.HandleFunc("POST /api/v1/apply/revert", a.guard(a.revert))
+	mux.HandleFunc("GET /api/v1/update/check", a.protect(a.updateCheck))
+	mux.HandleFunc("GET /api/v1/update/status", a.protect(a.updateStatus))
+	mux.HandleFunc("POST /api/v1/update/apply", a.protect(a.updateApply))
 }
+
+func channelFrom(s string) (update.Channel, error) {
+	switch update.Channel(s) {
+	case "", update.Stable:
+		return update.Stable, nil
+	case update.Beta:
+		return update.Beta, nil
+	}
+	return "", &badRequest{fmt.Errorf("unknown channel %q", s)}
+}
+
+func (a *api) updateCheck(w http.ResponseWriter, r *http.Request) error {
+	if a.updater == nil {
+		return &unavailable{errors.New("updates not available")}
+	}
+	ch, err := channelFrom(r.URL.Query().Get("channel"))
+	if err != nil {
+		return err
+	}
+	chk, err := a.updater.Check(r.Context(), ch)
+	if err != nil {
+		return &upstream{err}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"check": chk, "status": a.updater.Status()})
+	return nil
+}
+
+func (a *api) updateStatus(w http.ResponseWriter, _ *http.Request) error {
+	if a.updater == nil {
+		return &unavailable{errors.New("updates not available")}
+	}
+	writeJSON(w, http.StatusOK, a.updater.Status())
+	return nil
+}
+
+func (a *api) updateApply(w http.ResponseWriter, r *http.Request) error {
+	if a.updater == nil {
+		return &unavailable{errors.New("updates not available")}
+	}
+	var req struct {
+		Channel string `json:"channel"`
+	}
+	if r.ContentLength != 0 {
+		if err := decodeJSON(r, &req); err != nil {
+			return err
+		}
+	}
+	ch, err := channelFrom(req.Channel)
+	if err != nil {
+		return err
+	}
+	if err := a.updater.Start(ch); err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusAccepted, a.updater.Status())
+	return nil
+}
+
+// upstream marks failures talking to GitHub.
+type upstream struct{ err error }
+
+func (u *upstream) Error() string { return u.err.Error() }
+func (u *upstream) Unwrap() error { return u.err }
 
 // guard requires a valid session and a wired engine, and turns handler
 // errors into JSON responses.
@@ -99,11 +167,18 @@ func statusFor(err error) int {
 	var ne *nft.Error
 	var be *badRequest
 	var ua *unavailable
+	var up *upstream
 	switch {
 	case errors.As(err, &be):
 		return http.StatusBadRequest
 	case errors.As(err, &ua):
 		return http.StatusServiceUnavailable
+	case errors.As(err, &up):
+		return http.StatusBadGateway
+	case errors.Is(err, update.ErrBusy):
+		return http.StatusConflict
+	case errors.Is(err, update.ErrPackageManaged):
+		return http.StatusUnprocessableEntity
 	case errors.Is(err, errUnauthorized), errors.Is(err, auth.ErrInvalidCredentials):
 		return http.StatusUnauthorized
 	case errors.Is(err, auth.ErrRateLimited):

@@ -1,0 +1,232 @@
+package update
+
+import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
+	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+type fakeRun struct{ calls [][]string }
+
+func (f *fakeRun) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+	f.calls = append(f.calls, append([]string{name}, args...))
+	return nil, nil
+}
+
+// fakeGitHub serves one release with a signed tarball.
+func fakeGitHub(t *testing.T, version string, prerelease bool, tamper string) (*httptest.Server, ed25519.PublicKey) {
+	t.Helper()
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tarBuf bytes.Buffer
+	gz := gzip.NewWriter(&tarBuf)
+	tw := tar.NewWriter(gz)
+	body := []byte("#!/bin/sh\necho ostiole " + version + "\n")
+	_ = tw.WriteHeader(&tar.Header{Name: "ostiole", Mode: 0o755, Size: int64(len(body)), Typeflag: tar.TypeReg})
+	_, _ = tw.Write(body)
+	_ = tw.Close()
+	_ = gz.Close()
+	tarball := tarBuf.Bytes()
+	name := AssetName(version)
+	sum := sha256.Sum256(tarball)
+	sums := fmt.Sprintf("%s  %s\n", hex.EncodeToString(sum[:]), name)
+	if tamper == "sum" {
+		sums = strings.Repeat("0", 64) + "  " + name + "\n"
+	}
+	sig := Sign(priv, []byte(sums))
+	if tamper == "sig" {
+		sig = Sign(priv, []byte("something else"))
+	}
+
+	mux := http.NewServeMux()
+	var srv *httptest.Server
+	mux.HandleFunc("/repos/rforced/ostiole/releases", func(w http.ResponseWriter, _ *http.Request) {
+		base := srv.URL + "/dl/"
+		rel := []map[string]any{{
+			"tag_name": "v" + version, "draft": false, "prerelease": prerelease, "published_at": "2026-09-15T00:00:00Z",
+			"body": "notes", "html_url": "https://example/release",
+			"assets": []map[string]any{
+				{"name": name, "browser_download_url": base + name, "size": len(tarball)},
+				{"name": "checksums.txt", "browser_download_url": base + "checksums.txt", "size": len(sums)},
+				{"name": "checksums.txt.sig", "browser_download_url": base + "checksums.txt.sig", "size": len(sig)},
+			},
+		}, {
+			"tag_name": "v0.0.1", "draft": false, "prerelease": false, "published_at": "2026-01-01T00:00:00Z", "assets": []any{},
+		}, {
+			"tag_name": "not-a-version", "draft": false, "prerelease": false, "assets": []any{},
+		}}
+		_ = json.NewEncoder(w).Encode(rel)
+	})
+	mux.HandleFunc("/dl/", func(w http.ResponseWriter, r *http.Request) {
+		switch filepath.Base(r.URL.Path) {
+		case name:
+			_, _ = w.Write(tarball)
+		case "checksums.txt":
+			_, _ = w.Write([]byte(sums))
+		case "checksums.txt.sig":
+			_, _ = w.Write([]byte(sig))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	srv = httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv, pub
+}
+
+func TestNewer(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		cur, cand string
+		want      bool
+	}{
+		{"0.1.0", "0.1.1", true}, {"v0.1.0", "0.1.1", true}, {"0.1.1", "0.1.1", false}, {"0.2.0", "0.1.9", false},
+		{"dev", "0.1.0", true}, {"abc1234-dirty", "0.1.0", true}, {"0.1.0", "junk", false}, {"0.1.0", "0.2.0-beta.1", true},
+	}
+	for _, c := range cases {
+		if got := Newer(c.cur, c.cand); got != c.want {
+			t.Errorf("Newer(%q, %q) = %v", c.cur, c.cand, got)
+		}
+	}
+}
+
+func TestCheckDownloadInstall(t *testing.T) {
+	t.Parallel()
+	srv, pub := fakeGitHub(t, "0.2.0", false, "")
+	c := &Client{Repo: "rforced/ostiole", BaseURL: srv.URL, PublicKey: pub}
+
+	chk, err := c.Check(context.Background(), "0.1.0", Stable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !chk.Available || chk.Latest != "0.2.0" || chk.Asset == nil {
+		t.Fatalf("check = %+v", chk)
+	}
+	if chk, _ := c.Check(context.Background(), "0.2.0", Stable); chk.Available {
+		t.Error("same version reported as available")
+	}
+
+	dir := t.TempDir()
+	var stages []string
+	path, err := c.Download(context.Background(), chk.Release, dir, func(stage string, _, _ int64) { stages = append(stages, stage) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(path)
+	if !strings.Contains(string(raw), "ostiole 0.2.0") {
+		t.Errorf("extracted binary = %q", raw)
+	}
+	if info, _ := os.Stat(path); info.Mode().Perm()&0o111 == 0 {
+		t.Error("extracted binary not executable")
+	}
+	if strings.Join(stages, ",") == "" || stages[0] != "verifying" {
+		t.Errorf("stages = %v", stages)
+	}
+
+	// Install: previous kept, new in place, restart scheduled with a probe and rollback.
+	bin := filepath.Join(dir, "ostiole")
+	if err := os.WriteFile(bin, []byte("old"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run := &fakeRun{}
+	inst := &Installer{Binary: bin, Unit: "ostiole.service", HealthURL: "https://127.0.0.1:443/api/v1/health", Run: run}
+	if err := inst.Install(context.Background(), path); err != nil {
+		t.Fatal(err)
+	}
+	if raw, _ := os.ReadFile(bin); !strings.Contains(string(raw), "0.2.0") {
+		t.Error("new binary not in place")
+	}
+	if raw, _ := os.ReadFile(bin + ".previous"); string(raw) != "old" {
+		t.Error("previous binary not kept")
+	}
+	last := strings.Join(run.calls[len(run.calls)-1], " ")
+	if !strings.Contains(last, "systemd-run") || !strings.Contains(last, "systemctl restart ostiole.service") || !strings.Contains(last, "update --probe") || !strings.Contains(last, ".previous") {
+		t.Errorf("restart command = %q", last)
+	}
+}
+
+func TestDownloadRejectsTampering(t *testing.T) {
+	t.Parallel()
+	for _, tamper := range []string{"sig", "sum"} {
+		srv, pub := fakeGitHub(t, "0.2.0", false, tamper)
+		c := &Client{Repo: "rforced/ostiole", BaseURL: srv.URL, PublicKey: pub}
+		chk, err := c.Check(context.Background(), "0.1.0", Stable)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.Download(context.Background(), chk.Release, t.TempDir(), nil); err == nil {
+			t.Errorf("tampered %s accepted", tamper)
+		}
+	}
+	// Wrong key.
+	srv, _ := fakeGitHub(t, "0.2.0", false, "")
+	other, _, _ := ed25519.GenerateKey(rand.Reader)
+	c := &Client{Repo: "rforced/ostiole", BaseURL: srv.URL, PublicKey: other}
+	chk, _ := c.Check(context.Background(), "0.1.0", Stable)
+	if _, err := c.Download(context.Background(), chk.Release, t.TempDir(), nil); err == nil {
+		t.Error("signature from another key accepted")
+	}
+}
+
+func TestChannels(t *testing.T) {
+	t.Parallel()
+	srv, pub := fakeGitHub(t, "0.3.0-beta.1", true, "")
+	c := &Client{Repo: "rforced/ostiole", BaseURL: srv.URL, PublicKey: pub}
+	stable, _ := c.Check(context.Background(), "0.1.0", Stable)
+	if stable.Available || stable.Latest != "0.0.1" {
+		t.Errorf("stable saw the prerelease: %+v", stable)
+	}
+	beta, _ := c.Check(context.Background(), "0.1.0", Beta)
+	if !beta.Available || beta.Latest != "0.3.0-beta.1" {
+		t.Errorf("beta missed the prerelease: %+v", beta)
+	}
+}
+
+func TestManagerRunsToRestart(t *testing.T) {
+	t.Parallel()
+	srv, pub := fakeGitHub(t, "0.2.0", false, "")
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "ostiole")
+	_ = os.WriteFile(bin, []byte("old"), 0o755)
+	m := &Manager{
+		Client:    &Client{Repo: "rforced/ostiole", BaseURL: srv.URL, PublicKey: pub},
+		Installer: &Installer{Binary: bin, Unit: "ostiole.service", HealthURL: "x", Run: &fakeRun{}},
+		Current:   "0.1.0",
+	}
+	if m.Status().State != Idle {
+		t.Fatal("not idle")
+	}
+	if err := m.Start(Stable); err != nil {
+		t.Fatal(err)
+	}
+	deadline := 50
+	for m.Status().State != Restarting && m.Status().State != Failed && deadline > 0 {
+		deadline--
+		<-timeAfter()
+	}
+	if st := m.Status(); st.State != Restarting || st.Version != "0.2.0" {
+		t.Fatalf("status = %+v", st)
+	}
+	if err := m.Start(Stable); err == nil {
+		t.Error("second start while restarting should be refused")
+	}
+	pm := &Manager{PackageManaged: true}
+	if err := pm.Start(Stable); err == nil {
+		t.Error("package-managed start should be refused")
+	}
+}

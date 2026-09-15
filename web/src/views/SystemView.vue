@@ -6,6 +6,7 @@ import ManagementSection from '@/views/system/ManagementSection.vue'
 import PasswordSection from '@/views/system/PasswordSection.vue'
 import RevisionsSection from '@/views/system/RevisionsSection.vue'
 import RulesetSection from '@/views/system/RulesetSection.vue'
+import UpdatesSection from '@/views/system/UpdatesSection.vue'
 
 const config = useConfigStore()
 onMounted(() => config.load())
@@ -19,6 +20,7 @@ onMounted(() => config.load())
     </p>
     <ManagementSection v-if="config.draft" />
     <PasswordSection />
+    <UpdatesSection />
     <RevisionsSection v-if="config.draft" />
     <RulesetSection />
   </div>

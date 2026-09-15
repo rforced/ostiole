@@ -11,6 +11,7 @@ import (
 
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/engine"
+	"github.com/rforced/ostiole/internal/update"
 	"github.com/rforced/ostiole/internal/version"
 	"github.com/rforced/ostiole/internal/web"
 )
@@ -29,15 +30,16 @@ func (c Config) TLS() bool { return c.TLSCert != "" && c.TLSKey != "" }
 // Deps are the services the API exposes. Both are required for the
 // engine routes; without Auth every protected route answers 503.
 type Deps struct {
-	Engine *engine.Engine
-	Auth   *auth.Service
+	Engine  *engine.Engine
+	Auth    *auth.Service
+	Updater *update.Manager // optional; nil disables the update endpoints
 }
 
 // Handler builds the full HTTP handler: API routes plus the SPA.
 func Handler(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/health", handleHealth)
-	api := &api{engine: d.Engine, auth: d.Auth}
+	api := &api{engine: d.Engine, auth: d.Auth, updater: d.Updater}
 	api.register(mux)
 	mux.HandleFunc("/api/", handleAPINotFound)
 	mux.Handle("/", web.Handler())

@@ -1,0 +1,10 @@
+Ostiole: firewall and router appliance manager for Linux nftables.
+
+After installing the package run, as root:
+
+    ostiole install
+
+That writes the systemd units, starts the web UI on https://<host>/, and
+explains the next steps (admin account, setup wizard, takeover).
+Updates for package installs come from your package manager; the built-in
+updater is for tarball installs in /usr/local/bin.

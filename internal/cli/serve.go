@@ -2,6 +2,7 @@ package cli
 
 import (
 	"log/slog"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -10,8 +11,11 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/rforced/ostiole/internal/auth"
+	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/server"
+	"github.com/rforced/ostiole/internal/update"
+	"github.com/rforced/ostiole/internal/version"
 )
 
 func newServeCmd(g *globals) *cobra.Command {
@@ -55,7 +59,7 @@ at your own.`,
 			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return server.Run(ctx, cfg, server.Deps{Engine: eng, Auth: as}, slog.Default())
+			return server.Run(ctx, cfg, server.Deps{Engine: eng, Auth: as, Updater: newUpdater(cfg)}, slog.Default())
 		},
 	}
 	cmd.Flags().StringVar(&cfg.Listen, "listen", "127.0.0.1:8080", "address to listen on")
@@ -91,4 +95,33 @@ func splitCIDR(s string) (ip, prefix string, ok bool) {
 		}
 	}
 	return s, "", false
+}
+
+// newUpdater builds the update manager for the daemon. Updates go
+// through the installed service binary and restart the unit.
+func newUpdater(cfg server.Config) *update.Manager {
+	bin, err := install.ServiceBinary(install.DefaultLayout())
+	if err != nil {
+		return nil
+	}
+	return &update.Manager{
+		Client:         update.NewClient(),
+		Installer:      &update.Installer{Binary: bin, Unit: install.DaemonUnit, HealthURL: healthURL(cfg), Run: install.ExecRunner{}},
+		Current:        version.Version,
+		PackageManaged: install.PackageManaged(bin),
+		Log:            slog.Default(),
+	}
+}
+
+// healthURL is where the post-update probe reaches this daemon.
+func healthURL(cfg server.Config) string {
+	scheme := "http"
+	if cfg.TLS() {
+		scheme = "https"
+	}
+	_, port, err := net.SplitHostPort(cfg.Listen)
+	if err != nil || port == "" {
+		port = "443"
+	}
+	return scheme + "://127.0.0.1:" + port + "/api/v1/health"
 }

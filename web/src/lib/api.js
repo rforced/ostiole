@@ -107,4 +107,10 @@ export const api = {
   interfaces: {
     live: () => get('/interfaces/live'),
   },
+  update: {
+    /** @returns {Promise<{check: object, status: object}>} */
+    check: (channel = 'stable') => get(`/update/check?channel=${encodeURIComponent(channel)}`),
+    status: () => get('/update/status'),
+    apply: (channel = 'stable') => post('/update/apply', { channel }),
+  },
 }

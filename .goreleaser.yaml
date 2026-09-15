@@ -1,0 +1,99 @@
+# https://goreleaser.com
+version: 2
+project_name: ostiole
+
+before:
+  hooks:
+    - sh -c "cd web && bun install --frozen-lockfile && bun run build"
+    - go mod tidy
+
+builds:
+  - id: ostiole
+    main: ./cmd/ostiole
+    binary: ostiole
+    env:
+      - CGO_ENABLED=0
+    goos: [linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w
+      - -X github.com/rforced/ostiole/internal/version.Version={{ .Version }}
+      - -X github.com/rforced/ostiole/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/rforced/ostiole/internal/version.Date={{ .Date }}
+
+archives:
+  - id: tarballs
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+# checksums.txt is signed with the release ed25519 key; the binary embeds
+# the public half and refuses updates that do not verify.
+signs:
+  - id: checksums
+    artifacts: checksum
+    cmd: go
+    args: ["run", "./cmd/ostiole-sign", "-in", "${artifact}", "-out", "${signature}"]
+    signature: "${artifact}.sig"
+    env:
+      - OSTIOLE_SIGNING_KEY={{ .Env.OSTIOLE_SIGNING_KEY }}
+
+sboms:
+  - artifacts: archive
+
+nfpms:
+  - id: packages
+    package_name: ostiole
+    vendor: Ostiole
+    homepage: https://github.com/rforced/ostiole
+    maintainer: Josh <4663874+rforced@users.noreply.github.com>
+    description: Firewall and router appliance manager for Linux nftables
+    license: AGPL-3.0-or-later
+    formats: [deb, rpm, apk, archlinux]
+    bindir: /usr/bin
+    dependencies:
+      - nftables
+    recommends:
+      - systemd
+    contents:
+      - src: LICENSE
+        dst: /usr/share/doc/ostiole/LICENSE
+      - src: packaging/README.packages
+        dst: /usr/share/doc/ostiole/README
+    scripts:
+      postinstall: packaging/postinstall.sh
+    rpm:
+      summary: Firewall and router appliance manager for Linux nftables
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: git
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+release:
+  github:
+    owner: rforced
+    name: ostiole
+  prerelease: auto
+  footer: |
+    ## Install
+
+    ```sh
+    curl -fsSL https://raw.githubusercontent.com/rforced/ostiole/main/scripts/install.sh | sudo sh
+    ```
+
+    Packages above can be installed with `dpkg -i`, `rpm -i`, `apk add --allow-untrusted`, or `pacman -U`,
+    then run `ostiole install`.

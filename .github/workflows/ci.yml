@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
 
 permissions:
@@ -99,3 +99,50 @@ jobs:
           name: playwright-report
           path: web/playwright-report
           retention-days: 7
+
+  packages:
+    name: Packages (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    needs: web
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:12
+            install: apt-get update -qq && apt-get install -y -qq ./dist/*_linux_amd64.deb
+          - image: ubuntu:24.04
+            install: apt-get update -qq && apt-get install -y -qq ./dist/*_linux_amd64.deb
+          - image: fedora:42
+            install: dnf install -y -q ./dist/*_linux_amd64.rpm
+          - image: rockylinux/rockylinux:10
+            install: dnf install -y -q ./dist/*_linux_amd64.rpm
+          - image: alpine:3.21
+            install: apk add --allow-untrusted ./dist/*_linux_amd64.apk
+          - image: archlinux:latest
+            install: pacman -Sy --noconfirm && pacman -U --noconfirm ./dist/*_linux_amd64.pkg.tar.zst
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: internal/web/dist
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --snapshot --clean --skip=sign,publish,sbom,before
+      - name: Install the package and run the binary
+        run: |
+          docker run --rm -v "$PWD/dist:/dist" -v "$PWD/internal/nft/testdata:/testdata:ro" -w / ${{ matrix.image }} sh -c '
+            set -e
+            ${{ matrix.install }}
+            ostiole version
+            ostiole render --file /testdata/full.json | head -3
+            ostiole check --file /testdata/full.json --nft /bin/true 2>&1 | head -1 || true
+          '

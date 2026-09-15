@@ -1,0 +1,141 @@
+package update
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"path/filepath"
+	"sync"
+	"time"
+)
+
+// State of an update run.
+type State string
+
+// States.
+const (
+	Idle        State = "idle"
+	Checking    State = "checking"
+	Downloading State = "downloading"
+	Verifying   State = "verifying"
+	Installing  State = "installing"
+	Restarting  State = "restarting"
+	Failed      State = "failed"
+)
+
+// Status is the observable progress of an update.
+type Status struct {
+	State          State     `json:"state"`
+	Version        string    `json:"version,omitempty"`
+	Message        string    `json:"message,omitempty"`
+	Done           int64     `json:"done,omitempty"`
+	Total          int64     `json:"total,omitempty"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+	PackageManaged bool      `json:"packageManaged"`
+}
+
+// ErrBusy means an update is already running.
+var ErrBusy = errors.New("an update is already in progress")
+
+// ErrPackageManaged means the binary belongs to a distro package.
+var ErrPackageManaged = errors.New("this binary was installed from a package; update it with your package manager")
+
+// Manager runs updates in the background for the API.
+type Manager struct {
+	Client         *Client
+	Installer      *Installer
+	Current        string
+	PackageManaged bool
+	Log            *slog.Logger
+
+	mu     sync.Mutex
+	status Status
+}
+
+// Status returns the current progress.
+func (m *Manager) Status() Status {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	st := m.status
+	if st.State == "" {
+		st.State = Idle
+	}
+	st.PackageManaged = m.PackageManaged
+	return st
+}
+
+func (m *Manager) set(st State, version, msg string, done, total int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.status = Status{State: st, Version: version, Message: msg, Done: done, Total: total, UpdatedAt: time.Now()}
+}
+
+// Check looks for a newer release on the channel.
+func (m *Manager) Check(ctx context.Context, ch Channel) (*Check, error) {
+	return m.Client.Check(ctx, m.Current, ch)
+}
+
+// Start begins downloading and installing the latest release on the
+// channel. It returns once the work is running in the background.
+func (m *Manager) Start(ch Channel) error {
+	if m.PackageManaged {
+		return ErrPackageManaged
+	}
+	m.mu.Lock()
+	switch m.status.State {
+	case Checking, Downloading, Verifying, Installing, Restarting:
+		m.mu.Unlock()
+		return ErrBusy
+	}
+	m.status = Status{State: Checking, UpdatedAt: time.Now()}
+	m.mu.Unlock()
+
+	go m.run(ch)
+	return nil
+}
+
+func (m *Manager) run(ch Channel) {
+	log := m.Log
+	if log == nil {
+		log = slog.Default()
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	defer cancel()
+
+	chk, err := m.Client.Check(ctx, m.Current, ch)
+	if err != nil {
+		m.set(Failed, "", "check failed: "+err.Error(), 0, 0)
+		return
+	}
+	if !chk.Available {
+		m.set(Failed, chk.Latest, "no newer release on the "+string(ch)+" channel", 0, 0)
+		return
+	}
+	version := chk.Release.Version
+	m.set(Downloading, version, "", 0, chk.Asset.Size)
+	dir := filepath.Dir(m.Installer.Binary)
+	path, err := m.Client.Download(ctx, chk.Release, dir, func(stage string, done, total int64) {
+		switch stage {
+		case "downloading":
+			m.set(Downloading, version, "", done, total)
+		case "verifying":
+			m.set(Verifying, version, "", 0, 0)
+		case "extracting":
+			m.set(Installing, version, "", 0, 0)
+		}
+	})
+	if err != nil {
+		log.Error("update download failed", "version", version, "err", err)
+		m.set(Failed, version, err.Error(), 0, 0)
+		return
+	}
+	m.set(Installing, version, "", 0, 0)
+	if err := m.Installer.Install(ctx, path); err != nil {
+		log.Error("update install failed", "version", version, "err", err)
+		m.set(Failed, version, err.Error(), 0, 0)
+		return
+	}
+	log.Info("update installed; restarting", "from", m.Current, "to", version)
+	m.set(Restarting, version, fmt.Sprintf("restarting into %s", version), 0, 0)
+}
