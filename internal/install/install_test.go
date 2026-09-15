@@ -19,6 +19,11 @@ func (f *fakeSystemctl) Run(_ context.Context, args ...string) (string, error) {
 	f.calls = append(f.calls, args)
 	if len(args) == 2 {
 		switch args[0] {
+		case "cat":
+			if f.enabled[args[1]] == "" {
+				return "No files found for " + args[1], os.ErrNotExist
+			}
+			return "[Unit]", nil
 		case "is-enabled":
 			v, ok := f.enabled[args[1]]
 			if !ok {
@@ -80,7 +85,7 @@ func TestInstallAndUninstall(t *testing.T) {
 		}
 	}
 	daemon, _ := os.ReadFile(filepath.Join(lay.UnitDir, DaemonUnit))
-	if !strings.Contains(string(daemon), "--network-backend none") || !strings.Contains(string(daemon), "--listen :8443") {
+	if !strings.Contains(string(daemon), "--network-backend auto") || !strings.Contains(string(daemon), "--listen :8443") {
 		t.Errorf("daemon unit flags wrong:\n%s", daemon)
 	}
 	if !sc.has("daemon-reload") || !sc.has("enable", FirewallUnit) || !sc.has("enable", "--now", DaemonUnit) {
@@ -117,11 +122,11 @@ func TestInstallAndUninstall(t *testing.T) {
 	}
 }
 
-func TestUnitsWithNetwork(t *testing.T) {
+func TestUnits(t *testing.T) {
 	t.Parallel()
-	units := Units(DefaultLayout(), Options{Listen: ":443", ManageNetwork: true})
+	units := Units(DefaultLayout(), Options{Listen: ":443"})
 	d := units[DaemonUnit]
-	if !strings.Contains(d, "--network-backend networkd") || !strings.Contains(d, "ReadWritePaths=/etc/ostiole /etc/systemd/network") {
+	if !strings.Contains(d, "--network-backend auto") || !strings.Contains(d, "ReadWritePaths=/etc/ostiole /etc/systemd/network") {
 		t.Errorf("daemon unit:\n%s", d)
 	}
 	f := units[FirewallUnit]
@@ -139,6 +144,61 @@ func TestTakeover(t *testing.T) {
 	for _, want := range [][]string{{"disable", "--now", "firewalld.service"}, {"mask", "firewalld.service"}, {"disable", "--now", "ufw.service"}, {"mask", "ufw.service"}} {
 		if !sc.has(want...) {
 			t.Errorf("missing call %v in %v", want, sc.calls)
+		}
+	}
+}
+
+type fakeRunner struct {
+	calls [][]string
+	after func()
+}
+
+func (f *fakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+	f.calls = append(f.calls, append([]string{name}, args...))
+	if f.after != nil {
+		f.after()
+	}
+	return nil, nil
+}
+
+func TestEnsureNetworkd(t *testing.T) {
+	t.Parallel()
+	log := slog.New(slog.DiscardHandler)
+
+	present := &fakeSystemctl{enabled: map[string]string{NetworkdUnit: "disabled"}}
+	if err := EnsureNetworkd(context.Background(), present, &fakeRunner{}, "dnf", log); err != nil {
+		t.Fatalf("present: %v", err)
+	}
+
+	missing := &fakeSystemctl{enabled: map[string]string{}}
+	run := &fakeRunner{}
+	run.after = func() { missing.enabled[NetworkdUnit] = "disabled" } // dnf "installs" it
+	if err := EnsureNetworkd(context.Background(), missing, run, "dnf", log); err != nil {
+		t.Fatalf("dnf path: %v", err)
+	}
+	if len(run.calls) != 1 || run.calls[0][0] != "dnf" {
+		t.Errorf("runner calls = %v", run.calls)
+	}
+
+	if err := EnsureNetworkd(context.Background(), &fakeSystemctl{enabled: map[string]string{}}, &fakeRunner{}, "apk", log); err == nil {
+		t.Error("expected error for unsupported package manager")
+	}
+}
+
+func TestNetworkTakeover(t *testing.T) {
+	t.Parallel()
+	sc := &fakeSystemctl{}
+	if err := NetworkTakeover(context.Background(), sc, []string{"NetworkManager", "NetworkManager-wait-online"}, slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatal(err)
+	}
+	want := [][]string{
+		{"disable", "--now", "NetworkManager.service"}, {"mask", "NetworkManager.service"},
+		{"disable", "--now", "NetworkManager-wait-online.service"}, {"mask", "NetworkManager-wait-online.service"},
+		{"enable", "--now", NetworkdUnit},
+	}
+	for i, w := range want {
+		if strings.Join(sc.calls[i], " ") != strings.Join(w, " ") {
+			t.Fatalf("call %d = %v, want %v (all: %v)", i, sc.calls[i], w, sc.calls)
 		}
 	}
 }

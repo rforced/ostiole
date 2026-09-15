@@ -41,12 +41,14 @@ func (g *globals) store() *store.Store {
 
 func (g *globals) network() (network.Backend, error) {
 	switch g.netBackend {
+	case "auto":
+		return network.NewAuto(), nil
 	case "networkd":
 		return network.NewNetworkd(), nil
 	case "none":
 		return nil, nil
 	}
-	return nil, fmt.Errorf("unknown --network-backend %q (networkd or none)", g.netBackend)
+	return nil, fmt.Errorf("unknown --network-backend %q (auto, networkd, or none)", g.netBackend)
 }
 
 func (g *globals) engine() (*engine.Engine, error) {
@@ -73,7 +75,7 @@ func newRootCmd() *cobra.Command {
 	pf.StringVar(&g.logLevel, "log-level", "info", "log level: debug, info, warn, error")
 	pf.StringVar(&g.configDir, "config-dir", store.DefaultDir, "configuration directory")
 	pf.StringVar(&g.nftBin, "nft", "nft", "path to the nft binary")
-	pf.StringVar(&g.netBackend, "network-backend", "networkd", "network backend: networkd or none (firewall only)")
+	pf.StringVar(&g.netBackend, "network-backend", "auto", "network backend: auto (networkd when it is running), networkd, or none")
 	cmd.AddCommand(
 		newInterfacesCmd(),
 		newServeCmd(g),

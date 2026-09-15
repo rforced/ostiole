@@ -255,24 +255,38 @@ func (n *Networkd) Snapshot() (Files, error) {
 // Apply implements Backend: write the files, delete stale owned files,
 // then reload networkd and reconfigure the affected links.
 func (n *Networkd) Apply(ctx context.Context, files Files) error {
+	changed, err := n.Write(files)
+	if err != nil {
+		return err
+	}
+	if !changed {
+		return nil
+	}
+	return n.Reload(ctx, n.linkNames(files))
+}
+
+// Write installs exactly the given files, removing stale owned ones, and
+// reports whether anything changed. It does not talk to networkd, so it
+// is safe before networkd runs (the takeover uses it).
+func (n *Networkd) Write(files Files) (bool, error) {
 	// networkd runs as its own unprivileged user and must read these units.
 	if err := os.MkdirAll(n.dir(), 0o755); err != nil { //nolint:gosec // see above
-		return err
+		return false, err
 	}
 	current, err := n.Snapshot()
 	if err != nil {
-		return err
+		return false, err
 	}
 	changed := false
 	for name, content := range files {
 		if !strings.HasPrefix(name, n.prefix()) || strings.ContainsAny(name, "/\\") {
-			return fmt.Errorf("refusing to write %q: not an ostiole-owned unit name", name)
+			return false, fmt.Errorf("refusing to write %q: not an ostiole-owned unit name", name)
 		}
 		if current[name] == content {
 			continue
 		}
 		if err := writeFile(filepath.Join(n.dir(), name), content); err != nil {
-			return err
+			return false, err
 		}
 		changed = true
 	}
@@ -281,17 +295,18 @@ func (n *Networkd) Apply(ctx context.Context, files Files) error {
 			continue
 		}
 		if err := os.Remove(filepath.Join(n.dir(), name)); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
+			return false, err
 		}
 		changed = true
 	}
-	if !changed {
-		return nil
-	}
+	return changed, nil
+}
+
+// Reload tells networkd to re-read units and reconfigure links.
+func (n *Networkd) Reload(ctx context.Context, links []string) error {
 	if out, err := n.cmd().Run(ctx, "networkctl", "reload"); err != nil {
 		return fmt.Errorf("networkctl reload: %w: %s", err, bytes.TrimSpace(out))
 	}
-	links := n.linkNames(files)
 	if len(links) == 0 {
 		return nil
 	}
@@ -300,6 +315,9 @@ func (n *Networkd) Apply(ctx context.Context, files Files) error {
 	}
 	return nil
 }
+
+// LinkNames lists interfaces that have a .network unit in files.
+func (n *Networkd) LinkNames(files Files) []string { return n.linkNames(files) }
 
 // linkNames lists interfaces that have a .network unit in files.
 func (n *Networkd) linkNames(files Files) []string {

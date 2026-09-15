@@ -36,6 +36,12 @@ const (
 	DaemonUnit   = "ostiole.service"
 )
 
+// NetworkdUnitDir is where Ostiole writes its networkd units.
+const NetworkdUnitDir = "/etc/systemd/network"
+
+// NetworkdUnit is the service Ostiole hands networking to.
+const NetworkdUnit = "systemd-networkd.service"
+
 // Systemctl runs systemctl; swapped for a fake in tests.
 type Systemctl interface {
 	Run(ctx context.Context, args ...string) (string, error)
@@ -56,8 +62,6 @@ type Options struct {
 	Source string
 	// Listen is the daemon's listen address, e.g. ":443".
 	Listen string
-	// ManageNetwork enables the systemd-networkd backend in the daemon unit.
-	ManageNetwork bool
 }
 
 // Report describes what Install did and found.
@@ -131,12 +135,10 @@ func Install(ctx context.Context, sc Systemctl, lay Layout, opts Options, log *s
 func Units(lay Layout, opts Options) map[string]string {
 	bin := lay.Binary()
 	cfg := lay.ConfigDir
-	backend := "none"
-	rw := cfg
-	if opts.ManageNetwork {
-		backend = "networkd"
-		rw += " /etc/systemd/network"
-	}
+	// The auto backend drives systemd-networkd once it is running and stays
+	// out of the way before the network takeover.
+	backend := "auto"
+	rw := cfg + " " + NetworkdUnitDir
 	firewall := fmt.Sprintf(`[Unit]
 Description=Ostiole firewall ruleset (loaded before networking)
 Documentation=https://github.com/rforced/ostiole
@@ -259,6 +261,12 @@ func Uninstall(ctx context.Context, sc Systemctl, lay Layout, purge bool, log *s
 		return fmt.Errorf("systemctl daemon-reload: %w", err)
 	}
 	log.Info("units removed")
+	if owned, _ := filepath.Glob(filepath.Join(NetworkdUnitDir, "10-ostiole-*")); len(owned) > 0 {
+		for _, f := range owned {
+			_ = os.Remove(f)
+		}
+		log.Warn("removed Ostiole networkd units; networking now depends on whatever else manages it", "count", len(owned))
+	}
 	if purge {
 		if err := os.RemoveAll(lay.ConfigDir); err != nil {
 			return err
@@ -326,4 +334,90 @@ func writeFile(path, content string, mode os.FileMode) error {
 		return err
 	}
 	return os.Rename(name, path)
+}
+
+// PackageManager identifies the host's package manager, or "".
+func PackageManager() string {
+	for _, pm := range []string{"dnf", "apt-get", "pacman", "zypper", "apk"} {
+		if _, err := exec.LookPath(pm); err == nil {
+			return pm
+		}
+	}
+	return ""
+}
+
+// Runner runs an arbitrary command; swapped for a fake in tests.
+type Runner interface {
+	Run(ctx context.Context, name string, args ...string) ([]byte, error)
+}
+
+// ExecRunner runs real commands.
+type ExecRunner struct{}
+
+// Run implements Runner.
+func (ExecRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return exec.CommandContext(ctx, name, args...).CombinedOutput()
+}
+
+// HasNetworkd reports whether the systemd-networkd unit exists.
+func HasNetworkd(ctx context.Context, sc Systemctl) bool {
+	_, err := sc.Run(ctx, "cat", NetworkdUnit)
+	return err == nil
+}
+
+// EnsureNetworkd installs systemd-networkd when the unit is missing. Only
+// RHEL-family hosts ship it separately (EPEL); elsewhere it comes with
+// systemd, so a missing unit is reported rather than fixed.
+func EnsureNetworkd(ctx context.Context, sc Systemctl, run Runner, pm string, log *slog.Logger) error {
+	if HasNetworkd(ctx, sc) {
+		return nil
+	}
+	switch pm {
+	case "dnf":
+		log.Info("installing systemd-networkd with dnf (EPEL)")
+		if out, err := run.Run(ctx, "dnf", "-y", "install", "systemd-networkd"); err != nil {
+			return fmt.Errorf("dnf install systemd-networkd failed (is EPEL enabled? `dnf install -y epel-release`): %w: %s", err, tail(out))
+		}
+	default:
+		return errors.New("systemd-networkd is not installed and no supported package manager was found; install it and retry")
+	}
+	if _, err := sc.Run(ctx, "daemon-reload"); err != nil {
+		return err
+	}
+	if !HasNetworkd(ctx, sc) {
+		return errors.New("systemd-networkd still missing after installation")
+	}
+	return nil
+}
+
+// NetworkManagers are the services the network takeover disables.
+var NetworkManagers = []string{"NetworkManager", "NetworkManager-wait-online", "netplan", "dhcpcd", "connman", "wicked", "ifupdown"}
+
+// NetworkTakeover hands networking to systemd-networkd: stops, disables,
+// and masks the listed managers, then enables and starts networkd. The
+// caller must have written the networkd units first.
+func NetworkTakeover(ctx context.Context, sc Systemctl, managers []string, log *slog.Logger) error {
+	for _, name := range managers {
+		unit := name + ".service"
+		if out, err := sc.Run(ctx, "disable", "--now", unit); err != nil {
+			return fmt.Errorf("disable %s: %w: %s", unit, err, out)
+		}
+		if out, err := sc.Run(ctx, "mask", unit); err != nil {
+			return fmt.Errorf("mask %s: %w: %s", unit, err, out)
+		}
+		log.Info("network manager disabled and masked", "unit", unit)
+	}
+	if out, err := sc.Run(ctx, "enable", "--now", NetworkdUnit); err != nil {
+		return fmt.Errorf("enable %s: %w: %s", NetworkdUnit, err, out)
+	}
+	log.Info("systemd-networkd enabled and started")
+	return nil
+}
+
+func tail(out []byte) string {
+	s := strings.TrimSpace(string(out))
+	if len(s) > 400 {
+		s = "…" + s[len(s)-400:]
+	}
+	return s
 }

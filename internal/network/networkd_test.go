@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -75,12 +76,19 @@ func TestRenderRouteNeedsInterface(t *testing.T) {
 }
 
 type fakeCmd struct {
-	calls [][]string
-	err   error
+	calls    [][]string
+	err      error
+	networkd string // reply to `systemctl is-active systemd-networkd.service`
 }
 
 func (f *fakeCmd) Run(_ context.Context, name string, args ...string) ([]byte, error) {
 	f.calls = append(f.calls, append([]string{name}, args...))
+	if name == "systemctl" && len(args) == 2 && args[0] == "is-active" {
+		if f.networkd == "active" {
+			return []byte("active\n"), nil
+		}
+		return []byte("inactive\n"), errors.New("exit 3")
+	}
 	if f.err != nil {
 		return []byte("boom"), f.err
 	}
@@ -182,4 +190,40 @@ func TestDiscoverFindsLoopback(t *testing.T) {
 		}
 	}
 	t.Fatalf("no loopback in %+v", links)
+}
+
+func TestAutoBackendFollowsNetworkd(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cmd := &fakeCmd{networkd: "inactive"}
+	a := &Auto{Networkd: &Networkd{Dir: dir, Cmd: cmd}, Log: slog.New(slog.DiscardHandler)}
+	files, err := a.Render(loadConfig(t, "testdata/minimal.json"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("render = %v, %v", files, err)
+	}
+	if a.Name() != "none" {
+		t.Errorf("Name() = %q while inactive", a.Name())
+	}
+	if err := a.Apply(context.Background(), files); err != nil {
+		t.Fatal(err)
+	}
+	if snap, _ := a.Networkd.Snapshot(); len(snap) != 0 {
+		t.Error("units written while networkd inactive")
+	}
+	for _, c := range cmd.calls {
+		if c[0] == "networkctl" {
+			t.Errorf("networkctl called while inactive: %v", c)
+		}
+	}
+
+	cmd.networkd = "active"
+	if a.Name() != "systemd-networkd" {
+		t.Errorf("Name() = %q while active", a.Name())
+	}
+	if err := a.Apply(context.Background(), files); err != nil {
+		t.Fatal(err)
+	}
+	if snap, _ := a.Networkd.Snapshot(); len(snap) != len(files) {
+		t.Errorf("units not written while active: %v", snap.Names())
+	}
 }

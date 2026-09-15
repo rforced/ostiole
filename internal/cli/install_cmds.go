@@ -5,13 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"os"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/rforced/ostiole/internal/install"
+	"github.com/rforced/ostiole/internal/model"
+	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
 )
 
@@ -48,12 +52,11 @@ firewalld, ufw, and friends.`,
 			out := cmd.OutOrStdout()
 			fmt.Fprintf(out, "installed %s and %s\n", rep.Binary, strings.Join(rep.Units, ", "))
 			printCompetitors(out, rep.Competitors)
-			fmt.Fprintf(out, "\nnext:\n  1. ostiole reset-password        (or open https://<this-host>%s/ and create the account there)\n  2. run the setup wizard in the web UI, or: ostiole init --lan ... && ostiole apply\n  3. ostiole takeover              (disables competing firewalls once your ruleset is confirmed)\n", opts.Listen)
+			fmt.Fprintf(out, "\nnext:\n  1. ostiole reset-password        (or open https://<this-host>%s/ and create the account there)\n  2. run the setup wizard in the web UI, or: ostiole init --lan ... && ostiole apply\n  3. ostiole takeover              (disables competing firewalls once your ruleset is confirmed)\n  4. ostiole takeover --network    (hands addressing to systemd-networkd; optional but needed for interface edits)\n", opts.Listen)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&opts.Listen, "listen", ":443", "address the web UI listens on")
-	cmd.Flags().BoolVar(&opts.ManageNetwork, "manage-network", false, "let Ostiole manage addressing through systemd-networkd (requires networkd on this host)")
 	return cmd
 }
 
@@ -67,14 +70,20 @@ func printCompetitors(out interface{ Write([]byte) (int, error) }, comp []instal
 }
 
 func newTakeoverCmd(g *globals) *cobra.Command {
-	var yes, dryRun bool
+	var yes, dryRun, net bool
 	cmd := &cobra.Command{
 		Use:   "takeover",
 		Short: "Disable competing firewall services so Ostiole is the only firewall",
 		Long: `Stops, disables, and masks firewalld, ufw, nftables.service, iptables, and
 similar. Refuses to run unless a confirmed Ostiole ruleset is loaded in the
-kernel, so the box is never left without a firewall. Network managers are
-reported but left alone.`,
+kernel, so the box is never left without a firewall.
+
+With --network it instead hands addressing to systemd-networkd: installs
+networkd if missing (EPEL on RHEL-family), writes the units rendered from
+the confirmed configuration, stops and masks NetworkManager and friends,
+and starts networkd. Existing addresses persist across the switch; DHCP
+leases are re-acquired. To undo: systemctl disable --now systemd-networkd;
+systemctl unmask NetworkManager; systemctl enable --now NetworkManager.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := requireRoot(); err != nil {
@@ -90,6 +99,9 @@ reported but left alone.`,
 			}
 			if !st.Configured || !st.TableLoaded {
 				return errors.New("refusing: apply and confirm an Ostiole configuration first (ostiole status)")
+			}
+			if net {
+				return networkTakeover(cmd, g, yes, dryRun)
 			}
 			comp, err := install.Competitors(cmd.Context(), install.ExecSystemctl{})
 			if err != nil {
@@ -112,13 +124,8 @@ reported but left alone.`,
 				return nil
 			}
 			if !yes {
-				if !stdinIsTerminal() {
-					return errors.New("not interactive; pass --yes to proceed")
-				}
-				fmt.Fprint(out, "proceed? [y/N] ")
-				line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-				if strings.ToLower(strings.TrimSpace(line)) != "y" {
-					return errors.New("aborted")
+				if err := confirmPrompt(cmd, "proceed?"); err != nil {
+					return err
 				}
 			}
 			if err := install.Takeover(cmd.Context(), install.ExecSystemctl{}, targets, slog.Default()); err != nil {
@@ -141,7 +148,149 @@ reported but left alone.`,
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask for confirmation")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "only report what would change")
+	cmd.Flags().BoolVar(&net, "network", false, "hand addressing to systemd-networkd instead of touching firewalls")
 	return cmd
+}
+
+func confirmPrompt(cmd *cobra.Command, question string) error {
+	if !stdinIsTerminal() {
+		return errors.New("not interactive; pass --yes to proceed")
+	}
+	fmt.Fprint(cmd.OutOrStdout(), question+" [y/N] ")
+	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	if strings.ToLower(strings.TrimSpace(line)) != "y" {
+		return errors.New("aborted")
+	}
+	return nil
+}
+
+func networkTakeover(cmd *cobra.Command, g *globals, yes, dryRun bool) error {
+	ctx := cmd.Context()
+	out := cmd.OutOrStdout()
+	sc := install.ExecSystemctl{}
+	cfg, err := g.store().Load()
+	if err != nil {
+		return err
+	}
+	nd := network.NewNetworkd()
+	files, err := nd.Render(cfg)
+	if err != nil {
+		return fmt.Errorf("render network units: %w", err)
+	}
+
+	// Preflight: compare the configuration with what is live.
+	live, err := network.Discover()
+	if err != nil {
+		return err
+	}
+	liveByName := map[string]network.Link{}
+	for _, l := range live {
+		liveByName[l.Name] = l
+	}
+	managed := map[string]bool{}
+	fmt.Fprintln(out, "\nINTERFACE   CONFIGURED                      LIVE")
+	for _, in := range cfg.Interfaces {
+		managed[in.Name] = true
+		l, ok := liveByName[in.Name]
+		liveAddrs := "absent"
+		if ok {
+			liveAddrs = strings.Join(l.Addresses, " ")
+		}
+		conf := fmt.Sprintf("%s v4=%s", in.Zone, in.IPv4.Mode)
+		if in.IPv4.Address != "" {
+			conf += " " + in.IPv4.Address
+		}
+		conf += " v6=" + string(in.IPv6.Mode)
+		if in.IPv6.Address != "" {
+			conf += " " + in.IPv6.Address
+		}
+		if !in.Enabled {
+			conf += " (disabled)"
+		}
+		fmt.Fprintf(out, "%-11s %-31s %s\n", in.Name, conf, liveAddrs)
+		if in.Enabled && in.IPv4.Mode == model.AddrStatic && ok && !hasAddress(l, in.IPv4.Address) {
+			fmt.Fprintf(out, "  warning: %s does not currently carry %s; the address will change on takeover\n", in.Name, in.IPv4.Address)
+		}
+	}
+	for _, l := range live {
+		if l.Kind == "loopback" || managed[l.Name] || len(l.Addresses) == 0 {
+			continue
+		}
+		fmt.Fprintf(out, "  warning: %s (%s) is not in the configuration; networkd will leave it alone and its DHCP lease, if any, will not be renewed\n", l.Name, strings.Join(l.Addresses, " "))
+	}
+
+	comp, err := install.Competitors(ctx, sc)
+	if err != nil {
+		return err
+	}
+	var managers []string
+	for _, c := range comp {
+		if c.Kind == "network" && c.Conflicts() {
+			managers = append(managers, c.Name)
+		}
+	}
+	for _, extra := range []string{"NetworkManager-wait-online"} {
+		for _, m := range managers {
+			if m == "NetworkManager" {
+				managers = append(managers, extra)
+				break
+			}
+		}
+	}
+	pm := install.PackageManager()
+	fmt.Fprintf(out, "\nplan:\n")
+	if !install.HasNetworkd(ctx, sc) {
+		fmt.Fprintf(out, "  - install systemd-networkd with %s\n", pm)
+	}
+	fmt.Fprintf(out, "  - write %d unit(s) to %s: %s\n", len(files), install.NetworkdUnitDir, strings.Join(files.Names(), ", "))
+	if len(managers) > 0 {
+		fmt.Fprintf(out, "  - stop, disable, and mask: %s\n", strings.Join(managers, ", "))
+	}
+	fmt.Fprintf(out, "  - enable and start systemd-networkd\n")
+	if dryRun {
+		return nil
+	}
+	if !yes {
+		if err := confirmPrompt(cmd, "proceed? Established connections survive; new DHCP leases are re-acquired."); err != nil {
+			return err
+		}
+	}
+
+	if err := install.EnsureNetworkd(ctx, sc, install.ExecRunner{}, pm, slog.Default()); err != nil {
+		return err
+	}
+	if _, err := nd.Write(files); err != nil {
+		return fmt.Errorf("write network units: %w", err)
+	}
+	if err := install.NetworkTakeover(ctx, sc, managers, slog.Default()); err != nil {
+		return err
+	}
+	time.Sleep(3 * time.Second)
+	after, err := network.Discover()
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(out, "\nafter:")
+	for _, l := range after {
+		if managed[l.Name] {
+			fmt.Fprintf(out, "  %-11s %s\n", l.Name, strings.Join(l.Addresses, " "))
+		}
+	}
+	fmt.Fprintln(out, "done: systemd-networkd manages addressing; interface changes in Ostiole now apply live")
+	return nil
+}
+
+func hasAddress(l network.Link, cidr string) bool {
+	want, err := netip.ParsePrefix(cidr)
+	if err != nil {
+		return false
+	}
+	for _, a := range l.Addresses {
+		if p, err := netip.ParsePrefix(a); err == nil && p.Addr() == want.Addr() {
+			return true
+		}
+	}
+	return false
 }
 
 func newUninstallCmd(g *globals) *cobra.Command {
@@ -158,13 +307,8 @@ run for example "systemctl unmask firewalld && systemctl enable --now firewalld"
 				return err
 			}
 			if !yes {
-				if !stdinIsTerminal() {
-					return errors.New("not interactive; pass --yes to proceed")
-				}
-				fmt.Fprint(cmd.OutOrStdout(), "this removes the Ostiole firewall from the kernel; proceed? [y/N] ")
-				line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-				if strings.ToLower(strings.TrimSpace(line)) != "y" {
-					return errors.New("aborted")
+				if err := confirmPrompt(cmd, "this removes the Ostiole firewall from the kernel; proceed?"); err != nil {
+					return err
 				}
 			}
 			lay := install.DefaultLayout()
