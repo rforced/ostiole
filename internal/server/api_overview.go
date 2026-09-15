@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/netip"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/rforced/ostiole/internal/engine"
+	"github.com/rforced/ostiole/internal/gateway"
 	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
@@ -23,14 +25,15 @@ import (
 // engine status, interfaces with live kernel state, the busiest rules,
 // service health, and warnings about anything fighting with Ostiole.
 type Overview struct {
-	Status     StatusSummary  `json:"status"`
-	Interfaces []LinkSummary  `json:"interfaces"`
-	TopRules   []RuleCounter  `json:"topRules"`
-	Blocked    nft.Counter    `json:"blocked"`
-	DHCP       DHCPSummary    `json:"dhcp"`
-	DNS        DNSSummary     `json:"dns"`
-	Services   []ServiceState `json:"services"`
-	Warnings   []Warning      `json:"warnings"`
+	Status     StatusSummary    `json:"status"`
+	Interfaces []LinkSummary    `json:"interfaces"`
+	TopRules   []RuleCounter    `json:"topRules"`
+	Blocked    nft.Counter      `json:"blocked"`
+	DHCP       DHCPSummary      `json:"dhcp"`
+	DNS        DNSSummary       `json:"dns"`
+	Gateways   []gateway.Status `json:"gateways"`
+	Services   []ServiceState   `json:"services"`
+	Warnings   []Warning        `json:"warnings"`
 }
 
 // StatusSummary repeats GET /status, plus a count of what is configured,
@@ -142,6 +145,10 @@ func (a *api) overview(w http.ResponseWriter, r *http.Request) error {
 		TopRules:   []RuleCounter{},
 		Services:   []ServiceState{},
 		Warnings:   []Warning{},
+		Gateways:   []gateway.Status{},
+	}
+	if a.gateways != nil {
+		ov.Gateways = a.gateways.Statuses()
 	}
 
 	cfg, err := a.engine.Store().Load()
@@ -469,6 +476,20 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 			Detail: "The kernel has no " + strings.Join(missing, ", ") + ". Check the cabling or the interface names.",
 		})
 	}
+	for _, g := range a.gatewayStatuses() {
+		if g.Unknown || g.Online {
+			continue
+		}
+		detail := fmt.Sprintf("%s on %s stopped answering", g.Monitor, g.Interface)
+		if g.LastError != "" {
+			detail += " (" + g.LastError + ")"
+		}
+		out = append(out, Warning{
+			Kind: "gateway-down", Level: "warn",
+			Title:  "Gateway " + g.Name + " is down",
+			Detail: detail + ". Traffic uses the next gateway that answers.",
+		})
+	}
 	if routes(cfg) && !forwardingOn() {
 		out = append(out, Warning{
 			Kind: "forwarding-off", Level: "warn",
@@ -477,6 +498,13 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 		})
 	}
 	return out
+}
+
+func (a *api) gatewayStatuses() []gateway.Status {
+	if a.gateways == nil {
+		return nil
+	}
+	return a.gateways.Statuses()
 }
 
 // routes reports whether the configuration expects traffic to be routed,

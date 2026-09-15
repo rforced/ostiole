@@ -1,23 +1,56 @@
 <script setup>
 import { Plus } from 'lucide-vue-next'
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import FormField from '@/components/FormField.vue'
+import { api } from '@/lib/api'
 import { newId } from '@/lib/ids'
 import { useConfigStore } from '@/stores/config'
+import GatewayDialog from '@/views/routing/GatewayDialog.vue'
 
 const config = useConfigStore()
 const open = ref(false)
 const editing = ref(null)
 const form = ref(blank())
+const gwOpen = ref(false)
+const gwEditing = ref(null)
+const live = ref([])
+let timer = null
+
+/** Configured gateways merged with what the monitor sees. */
+const gatewayRows = computed(() =>
+  config.gateways.map((g) => ({ ...g, live: live.value.find((l) => l.name === g.name) ?? null })),
+)
+
+async function refreshGateways() {
+  try {
+    live.value = await api.gateways()
+  } catch {
+    live.value = []
+  }
+}
+
+function addGateway() {
+  gwEditing.value = null
+  gwOpen.value = true
+}
+function editGateway(g) {
+  gwEditing.value = g
+  gwOpen.value = true
+}
 
 function blank() {
   return { id: '', description: '', enabled: true, destination: '', gateway: '', interface: '' }
 }
 
-onMounted(() => config.load())
+onMounted(async () => {
+  await config.load()
+  await refreshGateways()
+  timer = setInterval(refreshGateways, 10_000)
+})
+onUnmounted(() => clearInterval(timer))
 
 watch(
   () => [open.value, editing.value],
@@ -60,10 +93,75 @@ function save() {
       <RouterLink to="/wizard" class="underline">Run the setup wizard</RouterLink> first.
     </p>
     <template v-else-if="config.draft">
-      <p class="text-sm text-neutral-500">
-        Default gateways come from interface settings (DHCP or a static gateway). Static routes go
-        here.
-      </p>
+      <section class="space-y-3" aria-labelledby="gw-title">
+        <div class="flex items-center gap-3">
+          <h2 id="gw-title" class="font-medium">Gateways</h2>
+          <button type="button" class="btn-secondary" @click="addGateway">
+            <Plus class="mr-1 size-4" aria-hidden="true" /> Add gateway
+          </button>
+        </div>
+        <p class="max-w-3xl text-sm text-neutral-500">
+          List every upstream here to get failover: the firewall probes each one and moves the
+          default route off a gateway that stops answering. With no gateways listed, the address
+          from the interface is used as it is.
+        </p>
+        <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Gateway</th>
+                <th>Interface</th>
+                <th>Address</th>
+                <th>Monitor</th>
+                <th>Priority</th>
+                <th>State</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="!gatewayRows.length">
+                <td colspan="7" class="text-neutral-500">
+                  No gateways. One per WAN gives you failover.
+                </td>
+              </tr>
+              <tr v-for="g in gatewayRows" :key="g.name" :class="{ 'opacity-50': !g.enabled }">
+                <td>
+                  <div class="font-mono font-medium">{{ g.name }}</div>
+                  <div class="text-xs text-neutral-500">{{ g.description }}</div>
+                </td>
+                <td class="font-mono text-xs">{{ g.interface }}</td>
+                <td class="font-mono text-xs">{{ g.live?.address || g.address || 'from DHCP' }}</td>
+                <td class="font-mono text-xs">{{ g.monitor || 'the gateway' }}</td>
+                <td class="font-mono text-xs">{{ g.priority ?? 0 }}</td>
+                <td class="text-xs whitespace-nowrap">
+                  <template v-if="g.live && !g.live.unknown">
+                    <span class="badge" :class="g.live.online ? 'badge-ok' : 'badge-warn'">
+                      {{ g.live.online ? 'up' : 'down' }}
+                    </span>
+                    <span v-if="g.live.active" class="badge badge-ok ml-1">active</span>
+                    <div class="mt-1 font-mono text-neutral-500">
+                      {{ g.live.latencyMs.toFixed(1) }}ms · {{ g.live.lossPercent.toFixed(0) }}%
+                      loss
+                    </div>
+                  </template>
+                  <span v-else class="badge">not probed</span>
+                </td>
+                <td class="text-right whitespace-nowrap">
+                  <button type="button" class="link" @click="editGateway(g)">Edit</button>
+                  <ConfirmButton
+                    class="ml-3"
+                    label="Delete"
+                    confirm-label="Delete gateway?"
+                    @confirm="config.removeGateway(g.name)"
+                  />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <h2 class="font-medium">Static routes</h2>
       <button type="button" class="btn-secondary" @click="add">
         <Plus class="mr-1 size-4" aria-hidden="true" /> Add static route
       </button>
@@ -101,6 +199,8 @@ function save() {
         </table>
       </div>
     </template>
+
+    <GatewayDialog v-model:open="gwOpen" :gateway="gwEditing" />
 
     <AppDialog v-model:open="open" :title="editing ? `Route ${editing.id}` : 'New static route'">
       <form class="space-y-4" @submit.prevent="save">

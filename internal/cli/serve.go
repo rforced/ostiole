@@ -12,7 +12,9 @@ import (
 
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/fwlog"
+	"github.com/rforced/ostiole/internal/gateway"
 	"github.com/rforced/ostiole/internal/install"
+	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/server"
@@ -79,6 +81,19 @@ at your own.`,
 			if os.Geteuid() == 0 {
 				deps.Services = services.New()
 				deps.Resolver = services.NewUnbound()
+				// Gateway probes need a raw socket and route changes need
+				// netlink, so multi-WAN failover is a root-only feature.
+				st := g.store()
+				mon := gateway.New(gateway.NewICMPProber(), gateway.NewNetlinkRouter(), slog.Default())
+				mon.Source = func() []model.Gateway {
+					cfg, err := st.Load()
+					if err != nil {
+						return nil
+					}
+					return cfg.Gateways
+				}
+				deps.Gateways = mon
+				go mon.Run(ctx)
 				ring := fwlog.NewRing(2000)
 				deps.Log = ring
 				go func() {

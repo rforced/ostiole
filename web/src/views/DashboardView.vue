@@ -6,6 +6,7 @@ import ApplyPending from '@/components/ApplyPending.vue'
 import { api } from '@/lib/api'
 import { useSystemStore } from '@/stores/system'
 import DashboardWarnings from '@/views/dashboard/DashboardWarnings.vue'
+import GatewaysCard from '@/views/dashboard/GatewaysCard.vue'
 import InterfaceSummary from '@/views/dashboard/InterfaceSummary.vue'
 import ServicesCard from '@/views/dashboard/ServicesCard.vue'
 import TopRulesCard from '@/views/dashboard/TopRulesCard.vue'
@@ -84,6 +85,8 @@ onUnmounted(() => clearInterval(timer))
     <DashboardWarnings :warnings="overview?.warnings ?? []" />
 
     <InterfaceSummary :interfaces="overview?.interfaces ?? []" />
+
+    <GatewaysCard :gateways="overview?.gateways ?? []" />
 
     <div class="grid gap-4 lg:grid-cols-2">
       <TopRulesCard :rules="overview?.topRules ?? []" :blocked="overview?.blocked" />

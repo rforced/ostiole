@@ -68,6 +68,7 @@ type Config struct {
 	Schedules  []Schedule    `json:"schedules,omitempty"`
 	Rules      []Rule        `json:"rules"`
 	NAT        NAT           `json:"nat"`
+	Gateways   []Gateway     `json:"gateways,omitempty"`
 	Routes     []StaticRoute `json:"routes,omitempty"`
 	Services   Services      `json:"services"`
 }
@@ -276,6 +277,37 @@ type PortForward struct {
 	// Reflection forwards connections that internal hosts make to the
 	// firewall's own outside address, so one name works from both sides.
 	Reflection bool `json:"reflection,omitempty"`
+}
+
+// Gateway is an upstream this firewall routes through. Several gateways
+// make a multi-WAN box: the lowest priority that answers its monitor
+// carries the default route, and the rest wait.
+type Gateway struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Enabled     bool   `json:"enabled"`
+	Interface   string `json:"interface"`
+	// Address is the next hop. Empty means whatever DHCP or a router
+	// advertisement gives the interface, which is the usual WAN case.
+	Address string `json:"address,omitempty"`
+	// Priority orders failover, lowest first. Equal priorities are left
+	// to the kernel, which spreads traffic over them.
+	Priority int `json:"priority,omitempty"`
+	// Monitor is the address probed to decide whether this gateway works.
+	// Empty means the gateway address itself, which only tells you the
+	// first hop is alive.
+	Monitor string `json:"monitor,omitempty"`
+}
+
+// GatewayMetric turns a priority into a route metric. The gaps leave room
+// to demote a gateway that fails its monitor without colliding with the
+// next one.
+func (g Gateway) GatewayMetric() int {
+	p := g.Priority
+	if p < 0 {
+		p = 0
+	}
+	return 10 + p*10
 }
 
 // StaticRoute sends Destination via Gateway, optionally pinned to Interface.

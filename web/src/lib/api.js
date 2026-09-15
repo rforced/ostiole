@@ -109,6 +109,8 @@ export const api = {
   interfaces: {
     live: () => get('/interfaces/live'),
   },
+  /** Live gateway health from the multi-WAN monitor. */
+  gateways: () => get('/gateways'),
   log: {
     recent: (limit = 200) => get(`/log/recent?limit=${limit}`),
   },

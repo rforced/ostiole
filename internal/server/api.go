@@ -14,6 +14,7 @@ import (
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/fwlog"
+	"github.com/rforced/ostiole/internal/gateway"
 	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
@@ -35,6 +36,12 @@ type api struct {
 	fwlog    *fwlog.Ring
 	tables   TableLister
 	units    install.Systemctl
+	gateways GatewayStatuser
+}
+
+// GatewayStatuser reports what the gateway monitor knows.
+type GatewayStatuser interface {
+	Statuses() []gateway.Status
 }
 
 func (a *api) register(mux *http.ServeMux) {
@@ -56,6 +63,7 @@ func (a *api) register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/services/status", a.protect(a.servicesStatus))
 	mux.HandleFunc("GET /api/v1/dhcp/leases", a.protect(a.dhcpLeases))
 	mux.HandleFunc("POST /api/v1/wireguard/keys", a.protect(a.wireguardKeys))
+	mux.HandleFunc("GET /api/v1/gateways", a.protect(a.gatewayStatus))
 	mux.HandleFunc("GET /api/v1/update/check", a.protect(a.updateCheck))
 	mux.HandleFunc("GET /api/v1/update/status", a.protect(a.updateStatus))
 	mux.HandleFunc("POST /api/v1/update/apply", a.protect(a.updateApply))
@@ -97,6 +105,17 @@ func (a *api) dhcpLeases(w http.ResponseWriter, _ *http.Request) error {
 		return err
 	}
 	writeJSON(w, http.StatusOK, leases)
+	return nil
+}
+
+// gatewayStatus reports gateway health. Without a monitor (a dev run, or
+// a daemon that is not root) the list is empty rather than an error.
+func (a *api) gatewayStatus(w http.ResponseWriter, _ *http.Request) error {
+	out := []gateway.Status{}
+	if a.gateways != nil {
+		out = a.gateways.Statuses()
+	}
+	writeJSON(w, http.StatusOK, out)
 	return nil
 }
 

@@ -336,6 +336,21 @@ export const useConfigStore = defineStore('config', () => {
     )
   }
 
+  // ---- gateways --------------------------------------------------------
+
+  const gateways = computed(() => draft.value?.gateways ?? [])
+
+  function upsertGateway(gateway, previousName = gateway.name) {
+    const list = draft.value.gateways ?? (draft.value.gateways = [])
+    const idx = list.findIndex((g) => g.name === previousName)
+    if (idx === -1) list.push(clone(gateway))
+    else list[idx] = clone(gateway)
+  }
+
+  function removeGateway(name) {
+    draft.value.gateways = gateways.value.filter((g) => g.name !== name)
+  }
+
   // ---- routes ----------------------------------------------------------
 
   const routes = computed(() => draft.value?.routes ?? [])
@@ -395,6 +410,9 @@ export const useConfigStore = defineStore('config', () => {
     upsertOutboundRule,
     removeOutboundRule,
     routes,
+    gateways,
+    upsertGateway,
+    removeGateway,
     upsertRoute,
     removeRoute,
     ensureServices,

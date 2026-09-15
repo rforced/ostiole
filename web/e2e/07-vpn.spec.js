@@ -66,3 +66,26 @@ test('a bad peer key is rejected by the server', async ({ page }) => {
   await expect(page.getByRole('alert')).toContainText('publicKey')
   await page.getByRole('button', { name: 'Discard' }).click()
 })
+
+test('add a gateway for failover', async ({ page }) => {
+  await login(page)
+  await page.goto('/routing')
+  await page.getByRole('button', { name: 'Add gateway' }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Name').fill('wan1')
+  await dialog.getByLabel('Description').fill('Fibre')
+  await dialog.getByLabel('Monitor address').fill('9.9.9.9')
+  await dialog.getByRole('button', { name: 'Save to draft' }).click()
+
+  const row = page.getByRole('row').filter({ hasText: 'wan1' })
+  await expect(row).toContainText('from DHCP')
+  await expect(row).toContainText('9.9.9.9')
+  // Nothing probes gateways in this test run, so the state stays unknown.
+  await expect(row).toContainText('not probed')
+  await page.screenshot({ path: shot('61-gateways'), fullPage: true })
+
+  await applyAndConfirm(page)
+
+  await page.reload()
+  await expect(page.getByRole('row').filter({ hasText: 'wan1' })).toContainText('Fibre')
+})

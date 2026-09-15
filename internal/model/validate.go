@@ -255,6 +255,42 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	gateways := map[string]bool{}
+	for i, g := range c.Gateways {
+		path := fmt.Sprintf("gateways[%d]", i)
+		if !nameRe.MatchString(g.Name) {
+			v.add(path+".name", "%q must match %s", g.Name, nameRe)
+		} else if gateways[g.Name] {
+			v.add(path+".name", "duplicate gateway %q", g.Name)
+		}
+		gateways[g.Name] = true
+		if !ifaces[g.Interface] {
+			v.add(path+".interface", "unknown interface %q", g.Interface)
+		}
+		var addr netip.Addr
+		if g.Address != "" {
+			a, err := ParseIP(g.Address)
+			if err != nil {
+				v.add(path+".address", "%v", err)
+			}
+			addr = a
+		} else if in, ok := c.Interface(g.Interface); ok &&
+			in.IPv4.Mode != AddrDHCP && in.IPv6.Mode != AddrDHCP && in.IPv6.Mode != AddrSLAAC {
+			v.add(path+".address", "this interface gets no gateway from the network; give one here")
+		}
+		if g.Monitor != "" {
+			m, err := ParseIP(g.Monitor)
+			if err != nil {
+				v.add(path+".monitor", "%v", err)
+			} else if addr.IsValid() && m.Is4() != addr.Is4() {
+				v.add(path+".monitor", "address family does not match the gateway")
+			}
+		}
+		if g.Priority < 0 || g.Priority > 255 {
+			v.add(path+".priority", "%d must be 0-255", g.Priority)
+		}
+	}
+
 	routeIDs := map[string]bool{}
 	for i, r := range c.Routes {
 		path := fmt.Sprintf("routes[%d]", i)

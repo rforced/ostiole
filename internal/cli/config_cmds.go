@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"sort"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/rforced/ostiole/internal/engine"
+	"github.com/rforced/ostiole/internal/gateway"
 	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/nft"
@@ -357,6 +359,59 @@ func newCountersCmd(g *globals) *cobra.Command {
 				fmt.Fprintf(w, "%s\t%d\t%d\n", k, c.Packets, c.Bytes)
 			}
 			return w.Flush()
+		},
+	}
+}
+
+func newGatewaysCmd(g *globals) *cobra.Command {
+	var count int
+	return &cobra.Command{
+		Use:   "gateways",
+		Short: "Probe the configured gateways and show the result",
+		Long: `Probes each enabled gateway the same way the daemon's monitor does.
+Needs root for the raw socket. The daemon keeps watching continuously and
+moves the default route off a gateway that stops answering.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := g.store().Load()
+			if err != nil {
+				return err
+			}
+			if len(cfg.Gateways) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "no gateways configured")
+				return nil
+			}
+			// Probing only: the CLI never moves routes out from under the
+			// daemon.
+			router := gateway.ReadOnlyRouter{Router: gateway.NewNetlinkRouter()}
+			mon := gateway.New(gateway.NewICMPProber(), router, slog.Default())
+			mon.Configure(cfg.Gateways)
+			for i := 0; i < count; i++ {
+				mon.Tick(cmd.Context())
+			}
+			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "NAME\tINTERFACE\tGATEWAY\tMONITOR\tSTATE\tRTT\tLOSS")
+			for _, s := range mon.Statuses() {
+				state := "down"
+				switch {
+				case s.Unknown:
+					state = "unknown"
+				case s.Online:
+					state = "up"
+				}
+				if s.Active {
+					state += " (active)"
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%.1fms\t%.0f%%\n",
+					s.Name, s.Interface, s.Address, s.Monitor, state, s.LatencyMS, s.LossPercent)
+			}
+			return w.Flush()
+		},
+		PreRunE: func(_ *cobra.Command, _ []string) error {
+			if count == 0 {
+				count = gateway.RiseAfter
+			}
+			return nil
 		},
 	}
 }

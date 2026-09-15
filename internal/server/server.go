@@ -42,6 +42,8 @@ type Deps struct {
 	Resolver *services.Unbound
 	// Log is the firewall log ring; nil disables the log endpoints.
 	Log *fwlog.Ring
+	// Gateways reports multi-WAN health; nil means nothing is watching.
+	Gateways GatewayStatuser
 	// Tables lists the nftables tables on the box for the dashboard's
 	// foreign-ruleset warning; nil skips that check.
 	Tables TableLister
@@ -61,6 +63,7 @@ func Handler(d Deps) http.Handler {
 		services: d.Services,
 		resolver: d.Resolver,
 		fwlog:    d.Log,
+		gateways: d.Gateways,
 		tables:   d.Tables,
 		units:    d.Units,
 	}

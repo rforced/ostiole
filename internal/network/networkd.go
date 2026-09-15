@@ -100,7 +100,7 @@ func (n *Networkd) Render(cfg *model.Config) (Files, error) {
 	}
 
 	for _, in := range cfg.Interfaces {
-		files[n.networkFile(in.Name)] = renderNetwork(in, vlansByParent[in.Name], routes[in.Name])
+		files[n.networkFile(in.Name)] = renderNetwork(in, vlansByParent[in.Name], routes[in.Name], gatewaysFor(cfg, in.Name))
 	}
 	// A VLAN parent that is not itself configured still needs a unit so
 	// networkd brings the trunk up and attaches the VLANs.
@@ -177,7 +177,18 @@ func renderTrunk(name string, vlans []string) string {
 	return b.String()
 }
 
-func renderNetwork(in model.Interface, vlans []string, routes []model.StaticRoute) string {
+// gatewaysFor lists the enabled gateways that live on an interface.
+func gatewaysFor(cfg *model.Config, iface string) []model.Gateway {
+	var out []model.Gateway
+	for _, g := range cfg.Gateways {
+		if g.Enabled && g.Interface == iface {
+			out = append(out, g)
+		}
+	}
+	return out
+}
+
+func renderNetwork(in model.Interface, vlans []string, routes []model.StaticRoute, gateways []model.Gateway) string {
 	var b strings.Builder
 	b.WriteString(fileHeader)
 	fmt.Fprintf(&b, "[Match]\nName=%s\n", in.Name)
@@ -225,15 +236,44 @@ func renderNetwork(in model.Interface, vlans []string, routes []model.StaticRout
 	if in.IPv6.Mode == model.AddrStatic {
 		fmt.Fprintf(&b, "Address=%s\n", in.IPv6.Address)
 	}
-	if in.IPv4.Gateway != "" {
+	// A gateway entry owns the default route and gives it a metric, so
+	// failover has something to compare. Without one, the interface's own
+	// gateway is used, and the kernel's default metric is fine.
+	if !hasGateway(gateways, 4) && in.IPv4.Gateway != "" {
 		fmt.Fprintf(&b, "Gateway=%s\n", in.IPv4.Gateway)
 	}
-	if in.IPv6.Gateway != "" {
+	if !hasGateway(gateways, 6) && in.IPv6.Gateway != "" {
 		fmt.Fprintf(&b, "Gateway=%s\n", in.IPv6.Gateway)
+	}
+	for _, g := range gateways {
+		if g.Address != "" {
+			continue
+		}
+		// The address comes from the network, so the metric has to be set
+		// where that route is created.
+		if in.IPv4.Mode == model.AddrDHCP {
+			fmt.Fprintf(&b, "\n[DHCPv4]\nRouteMetric=%d\n", g.GatewayMetric())
+		}
+		if in.IPv6.Mode == model.AddrDHCP {
+			fmt.Fprintf(&b, "\n[DHCPv6]\nRouteMetric=%d\n", g.GatewayMetric())
+		}
+		if in.IPv6.Mode == model.AddrSLAAC {
+			fmt.Fprintf(&b, "\n[IPv6AcceptRA]\nRouteMetric=%d\n", g.GatewayMetric())
+		}
 	}
 	sort.Strings(vlans)
 	for _, v := range vlans {
 		fmt.Fprintf(&b, "VLAN=%s\n", v)
+	}
+	for _, g := range gateways {
+		if g.Address == "" {
+			continue
+		}
+		dst := "0.0.0.0/0"
+		if a, err := model.ParseIP(g.Address); err == nil && !a.Is4() {
+			dst = "::/0"
+		}
+		fmt.Fprintf(&b, "\n[Route]\nDestination=%s\nGateway=%s\nMetric=%d\n", dst, g.Address, g.GatewayMetric())
 	}
 	for _, dst := range wireGuardRoutes(in) {
 		// On-link through the tunnel: WireGuard picks the peer by its
@@ -300,6 +340,21 @@ func wireGuardRoutes(in model.Interface) []string {
 // routesByInterface assigns each enabled static route to an interface:
 // the one named on the route, else the one whose static address covers
 // the gateway.
+// hasGateway reports whether a gateway of the given family is configured
+// on the interface. A gateway without an address follows whatever the
+// network hands out, which covers both families.
+func hasGateway(gateways []model.Gateway, family int) bool {
+	for _, g := range gateways {
+		if g.Address == "" {
+			return true
+		}
+		if a, err := model.ParseIP(g.Address); err == nil && (a.Is4() == (family == 4)) {
+			return true
+		}
+	}
+	return false
+}
+
 func routesByInterface(cfg *model.Config) (map[string][]model.StaticRoute, error) {
 	out := map[string][]model.StaticRoute{}
 	for _, r := range cfg.Routes {
