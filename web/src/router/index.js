@@ -7,11 +7,6 @@ import DashboardView from '@/views/DashboardView.vue'
 /** Session-scoped flag so "Skip for now" is honoured until the tab closes. */
 const SKIP_WIZARD_KEY = 'ostiole.skipWizard'
 
-const placeholder = (title) => ({
-  component: () => import('@/views/PlaceholderView.vue'),
-  props: { title },
-})
-
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -23,7 +18,7 @@ const router = createRouter({
     },
     { path: '/firewall', name: 'firewall', component: () => import('@/views/FirewallView.vue') },
     { path: '/routing', name: 'routing', component: () => import('@/views/RoutingView.vue') },
-    { path: '/services', name: 'services', ...placeholder('Services') },
+    { path: '/services', name: 'services', component: () => import('@/views/ServicesView.vue') },
     { path: '/system', name: 'system', component: () => import('@/views/SystemView.vue') },
     { path: '/wizard', name: 'wizard', component: () => import('@/views/WizardView.vue') },
     {

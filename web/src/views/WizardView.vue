@@ -18,6 +18,7 @@ const lan = ref('')
 const lanAddress = ref('192.168.1.1/24')
 const wan = ref('')
 const managementFromWan = ref(false)
+const services = ref(true)
 const preview = ref(null)
 const applied = ref(null)
 const error = ref('')
@@ -61,6 +62,7 @@ async function buildPreview() {
       lanAddress: lanAddress.value.trim(),
       wan: wan.value,
       managementFromWan: wan.value !== '' && managementFromWan.value,
+      services: services.value,
     })
   } catch (e) {
     preview.value = null
@@ -174,6 +176,20 @@ function reverted() {
           Keeps the web UI and SSH reachable on the WAN interface. Use this when you administer the
           box over its public address, for example a cloud VM. Otherwise WAN drops everything unless
           a rule allows it.
+        </span>
+      </label>
+
+      <label class="flex items-start gap-2 text-sm">
+        <input
+          v-model="services"
+          type="checkbox"
+          class="mt-0.5 size-4 rounded border-neutral-300"
+        />
+        <span>
+          <span class="font-medium">Run DHCP and DNS for the LAN.</span>
+          Hands out addresses from a pool inside the LAN network and resolves names for LAN clients.
+          Needs <code class="font-mono">ostiole services setup</code> on the box first; you can also
+          enable this later under Services.
         </span>
       </label>
 

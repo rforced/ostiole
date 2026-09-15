@@ -211,6 +211,60 @@ export const useConfigStore = defineStore('config', () => {
     n.outbound.rules = (n.outbound.rules ?? []).filter((x) => x.id !== id)
   }
 
+  // ---- services --------------------------------------------------------
+
+  /** Returns the services block, creating defaults in the draft as needed. */
+  function ensureServices() {
+    const d = draft.value
+    if (!d.services) d.services = { dhcp: { enabled: false }, dns: { enabled: false } }
+    if (!d.services.dhcp) d.services.dhcp = { enabled: false }
+    if (!d.services.dns) d.services.dns = { enabled: false }
+    return d.services
+  }
+
+  function upsertScope(scope) {
+    const dhcp = ensureServices().dhcp
+    const list = dhcp.scopes ?? (dhcp.scopes = [])
+    const idx = list.findIndex((s) => s.interface === scope.interface)
+    if (idx === -1) list.push(clone(scope))
+    else list[idx] = clone(scope)
+  }
+
+  function removeScope(iface) {
+    const dhcp = ensureServices().dhcp
+    dhcp.scopes = (dhcp.scopes ?? []).filter((s) => s.interface !== iface)
+  }
+
+  function upsertStaticLease(lease, previousMac = lease.mac) {
+    const dhcp = ensureServices().dhcp
+    const list = dhcp.staticLeases ?? (dhcp.staticLeases = [])
+    const idx = list.findIndex((l) => l.mac.toLowerCase() === previousMac.toLowerCase())
+    if (idx === -1) list.push(clone(lease))
+    else list[idx] = clone(lease)
+  }
+
+  function removeStaticLease(mac) {
+    const dhcp = ensureServices().dhcp
+    dhcp.staticLeases = (dhcp.staticLeases ?? []).filter(
+      (l) => l.mac.toLowerCase() !== mac.toLowerCase(),
+    )
+  }
+
+  function upsertHostOverride(host, previousName = host.hostname) {
+    const dns = ensureServices().dns
+    const list = dns.hostOverrides ?? (dns.hostOverrides = [])
+    const idx = list.findIndex((h) => h.hostname.toLowerCase() === previousName.toLowerCase())
+    if (idx === -1) list.push(clone(host))
+    else list[idx] = clone(host)
+  }
+
+  function removeHostOverride(name) {
+    const dns = ensureServices().dns
+    dns.hostOverrides = (dns.hostOverrides ?? []).filter(
+      (h) => h.hostname.toLowerCase() !== name.toLowerCase(),
+    )
+  }
+
   // ---- routes ----------------------------------------------------------
 
   const routes = computed(() => draft.value?.routes ?? [])
@@ -263,5 +317,12 @@ export const useConfigStore = defineStore('config', () => {
     routes,
     upsertRoute,
     removeRoute,
+    ensureServices,
+    upsertScope,
+    removeScope,
+    upsertStaticLease,
+    removeStaticLease,
+    upsertHostOverride,
+    removeHostOverride,
   }
 })
