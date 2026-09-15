@@ -37,7 +37,7 @@ onMounted(async () => {
       <p
         v-if="status && !status.setUp"
         class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
-        role="status"
+        role="note"
       >
         dnsmasq is not set up on this box yet. Run
         <code class="font-mono">ostiole services setup</code> as root once; until then, enabling

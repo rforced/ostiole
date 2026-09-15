@@ -9,17 +9,21 @@ test('enable DHCP with a scope and DNS with an override, then apply', async ({ p
   await page.goto('/services')
   await expect(page.getByRole('heading', { name: 'Services' })).toBeVisible()
 
-  await page.getByLabel('DHCP server enabled').check()
-  await page.getByRole('button', { name: 'Add scope' }).click()
+  // The wizard enabled DHCP on the LAN with a pool of hosts 100-199; edit that scope.
+  await expect(page.getByLabel('DHCP server enabled')).toBeChecked()
+  const scopeRow = page.getByRole('row').filter({ hasText: '192.168.50.100' })
+  await scopeRow.getByRole('button', { name: 'Edit' }).click()
   let dialog = page.getByRole('dialog')
-  // Picking the LAN interface (static 192.168.50.1/24) suggests a pool inside it.
-  const lanOption = dialog.locator('#sc-if option', { hasText: '192.168.50.1/24' })
-  await dialog.getByLabel('Interface').selectOption(await lanOption.getAttribute('value'))
-  await expect(dialog.getByLabel('Range start')).toHaveValue('192.168.50.100')
   await expect(dialog.getByLabel('Range end')).toHaveValue('192.168.50.199')
   await dialog.getByLabel('Lease time').fill('1d')
   await dialog.getByRole('button', { name: 'Save to draft' }).click()
-  await expect(page.getByRole('row').filter({ hasText: '192.168.50.100' })).toContainText('1d')
+  await expect(scopeRow).toContainText('1d')
+
+  // A second scope offers only interfaces without one; the LAN is excluded.
+  await page.getByRole('button', { name: 'Add scope' }).click()
+  dialog = page.getByRole('dialog')
+  await expect(dialog.locator('#sc-if option', { hasText: '192.168.50.1/24' })).toHaveCount(0)
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
 
   await page.getByRole('button', { name: 'Add static lease' }).click()
   dialog = page.getByRole('dialog')
@@ -31,7 +35,7 @@ test('enable DHCP with a scope and DNS with an override, then apply', async ({ p
   await page.screenshot({ path: shot('40-services-dhcp'), fullPage: true })
 
   await page.getByRole('tab', { name: 'DNS' }).click()
-  await page.getByLabel('DNS service enabled').check()
+  await expect(page.getByLabel('DNS service enabled')).toBeChecked()
   await page.getByLabel('Upstream resolvers').fill('1.1.1.1, 9.9.9.9')
   await page.getByLabel('Local domain').fill('lan')
   await page.getByRole('button', { name: 'Add host' }).click()

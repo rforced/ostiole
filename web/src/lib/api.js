@@ -107,6 +107,9 @@ export const api = {
   interfaces: {
     live: () => get('/interfaces/live'),
   },
+  log: {
+    recent: (limit = 200) => get(`/log/recent?limit=${limit}`),
+  },
   services: {
     status: () => get('/services/status'),
     leases: () => get('/dhcp/leases'),
