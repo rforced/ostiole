@@ -250,3 +250,21 @@ func TestNetworkRevertAndRecord(t *testing.T) {
 		t.Error("cancel reported an armed timer on a fake that never arms one")
 	}
 }
+
+func TestServiceBinaryPrefersInstalled(t *testing.T) {
+	t.Parallel()
+	lay := tempLayout(t)
+	self, _ := os.Executable()
+	if got, err := ServiceBinary(lay); err != nil || got != self {
+		t.Fatalf("without install: %q, %v; want the running executable %q", got, err, self)
+	}
+	if err := os.MkdirAll(lay.BinDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(lay.Binary(), []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := ServiceBinary(lay); err != nil || got != lay.Binary() {
+		t.Fatalf("with install: %q, %v; want %q", got, err, lay.Binary())
+	}
+}

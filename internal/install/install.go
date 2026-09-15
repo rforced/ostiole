@@ -618,3 +618,14 @@ func Detached(ctx context.Context, run Runner, unit string, argv ...string) erro
 	}
 	return nil
 }
+
+// ServiceBinary returns the executable that detached units and timers
+// should run: the installed copy when it exists, because systemd (and
+// SELinux) will not execute a binary sitting in a home directory, else
+// the running executable.
+func ServiceBinary(lay Layout) (string, error) {
+	if info, err := os.Stat(lay.Binary()); err == nil && info.Mode().IsRegular() {
+		return lay.Binary(), nil
+	}
+	return os.Executable()
+}

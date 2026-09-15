@@ -224,7 +224,7 @@ const (
 // detach re-runs this command inside a transient systemd unit so that
 // losing the SSH session mid-switch cannot kill it.
 func detach(ctx context.Context, g *globals, unit string, args ...string) error {
-	exe, err := os.Executable()
+	exe, err := install.ServiceBinary(install.DefaultLayout())
 	if err != nil {
 		return err
 	}
@@ -386,6 +386,11 @@ func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) e
 		// The switch itself runs detached: stopping networkd or a manager can
 		// drop this session's address for a moment, and a hang-up must not
 		// leave the box half-switched.
+		if bin, err := install.ServiceBinary(install.DefaultLayout()); err == nil {
+			if self, err := os.Executable(); err == nil && self != bin {
+				fmt.Fprintf(out, "note: the unit runs the installed binary %s (re-run `install` after upgrading this copy)\n", bin)
+			}
+		}
 		fmt.Fprintf(out, "switching in unit %s; if this session drops, it still completes (journalctl -u %s)\n", takeoverUnit, takeoverUnit)
 		if err := detach(ctx, g, takeoverUnit, "--yes", "--confirm-window", o.window.String()); err != nil {
 			return err
@@ -401,7 +406,7 @@ func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) e
 			return err
 		}
 		if o.window > 0 {
-			exe, err := os.Executable()
+			exe, err := install.ServiceBinary(install.DefaultLayout())
 			if err != nil {
 				return err
 			}
