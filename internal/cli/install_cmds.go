@@ -2,11 +2,13 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -70,7 +72,7 @@ func printCompetitors(out interface{ Write([]byte) (int, error) }, comp []instal
 }
 
 func newTakeoverCmd(g *globals) *cobra.Command {
-	var yes, dryRun, net, confirm, revert bool
+	var yes, dryRun, net, confirm, revert, inUnit bool
 	var window time.Duration
 	cmd := &cobra.Command{
 		Use:   "takeover",
@@ -102,7 +104,7 @@ systemctl unmask NetworkManager; systemctl enable --now NetworkManager.`,
 				return errors.New("refusing: apply and confirm an Ostiole configuration first (ostiole status)")
 			}
 			if net {
-				return networkTakeover(cmd, g, networkTakeoverOptions{yes: yes, dryRun: dryRun, window: window, confirm: confirm, revert: revert})
+				return networkTakeover(cmd, g, networkTakeoverOptions{yes: yes, dryRun: dryRun, window: window, confirm: confirm, revert: revert, inUnit: inUnit})
 			}
 			if confirm || revert {
 				return errors.New("--confirm and --revert only apply with --network")
@@ -156,6 +158,8 @@ systemctl unmask NetworkManager; systemctl enable --now NetworkManager.`,
 	cmd.Flags().DurationVar(&window, "confirm-window", 3*time.Minute, "with --network: restore the previous network manager unless --confirm runs within this time (0 disables)")
 	cmd.Flags().BoolVar(&confirm, "confirm", false, "with --network: keep the handover and disarm the revert timer")
 	cmd.Flags().BoolVar(&revert, "revert", false, "with --network: undo the handover and restore the previous network manager")
+	cmd.Flags().BoolVar(&inUnit, "in-unit", false, "internal: already running inside the detached systemd unit")
+	_ = cmd.Flags().MarkHidden("in-unit")
 	return cmd
 }
 
@@ -163,6 +167,24 @@ type networkTakeoverOptions struct {
 	yes, dryRun     bool
 	window          time.Duration
 	confirm, revert bool
+	inUnit          bool
+}
+
+// Transient unit names for the detached switch.
+const (
+	takeoverUnit = "ostiole-network-takeover"
+	revertUnit   = "ostiole-network-revert-now"
+)
+
+// detach re-runs this command inside a transient systemd unit so that
+// losing the SSH session mid-switch cannot kill it.
+func detach(ctx context.Context, g *globals, unit string, args ...string) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	argv := append([]string{exe, "--config-dir", g.configDir, "--nft", g.nftBin, "--network-backend", g.netBackend, "takeover", "--network", "--in-unit"}, args...)
+	return install.Detached(ctx, install.ExecRunner{}, unit, argv...)
 }
 
 func confirmPrompt(cmd *cobra.Command, question string) error {
@@ -199,11 +221,19 @@ func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) e
 		if rec == nil {
 			return errors.New("no network takeover record found; nothing to revert")
 		}
+		if !o.inUnit {
+			fmt.Fprintf(out, "reverting in unit %s; if this session drops, it still completes (journalctl -u %s)\n", revertUnit, revertUnit)
+			if err := detach(ctx, g, revertUnit, "--revert"); err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "reverted: %s restored, systemd-networkd stopped\n", strings.Join(rec.Managers, ", "))
+			return nil
+		}
 		install.CancelNetworkRevert(ctx, run)
 		if err := install.NetworkRevert(ctx, sc, rec.Managers, slog.Default()); err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "reverted: %s restored, systemd-networkd stopped\n", strings.Join(rec.Managers, ", "))
+		slog.Info("network takeover reverted", "restored", rec.Managers)
 		return nil
 	}
 
@@ -307,30 +337,41 @@ func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) e
 	if err := install.EnsureNetworkd(ctx, sc, run, pm, slog.Default()); err != nil {
 		return err
 	}
-	if _, err := nd.Write(files); err != nil {
-		return fmt.Errorf("write network units: %w", err)
-	}
-	if _, err := install.DisableCloudInitNetwork(slog.Default()); err != nil {
-		return err
-	}
-	if err := install.SaveTakeoverRecord(g.configDir, install.TakeoverRecord{Managers: managers, At: time.Now()}); err != nil {
-		return err
-	}
-	if o.window > 0 {
-		exe, err := os.Executable()
-		if err != nil {
+	if !o.inUnit {
+		// The switch itself runs detached: stopping networkd or a manager can
+		// drop this session's address for a moment, and a hang-up must not
+		// leave the box half-switched.
+		fmt.Fprintf(out, "switching in unit %s; if this session drops, it still completes (journalctl -u %s)\n", takeoverUnit, takeoverUnit)
+		if err := detach(ctx, g, takeoverUnit, "--yes", "--confirm-window", o.window.String()); err != nil {
 			return err
 		}
-		if err := install.ScheduleNetworkRevert(ctx, run, exe, g.configDir, o.window); err != nil {
+	} else {
+		if _, err := nd.Write(files); err != nil {
+			return fmt.Errorf("write network units: %w", err)
+		}
+		if _, err := install.DisableCloudInitNetwork(slog.Default()); err != nil {
 			return err
 		}
-	}
-	if err := install.NetworkTakeover(ctx, sc, managers, slog.Default()); err != nil {
-		return err
-	}
-	// Apply the units now even if networkd was already running (re-runs).
-	if err := nd.Reload(ctx, nd.LinkNames(files)); err != nil {
-		return err
+		if err := install.SaveTakeoverRecord(g.configDir, install.TakeoverRecord{Managers: managers, At: time.Now()}); err != nil {
+			return err
+		}
+		if o.window > 0 {
+			exe, err := os.Executable()
+			if err != nil {
+				return err
+			}
+			if err := install.ScheduleNetworkRevert(ctx, run, exe, g.configDir, o.window); err != nil {
+				return err
+			}
+		}
+		if err := install.NetworkTakeover(ctx, sc, managers, slog.Default()); err != nil {
+			return err
+		}
+		// Apply the units now even if networkd was already running (re-runs).
+		if err := nd.Reload(ctx, nd.LinkNames(files)); err != nil {
+			return err
+		}
+		return nil
 	}
 	time.Sleep(3 * time.Second)
 	after, err := network.Discover()
@@ -384,6 +425,15 @@ run for example "systemctl unmask firewalld && systemctl enable --now firewalld"
 			}
 			lay := install.DefaultLayout()
 			lay.ConfigDir = g.configDir
+			// Undo a network takeover first, detached, so the box keeps its
+			// addressing even if this session drops during the switch.
+			if rec, err := install.LoadTakeoverRecord(g.configDir); err == nil && rec != nil {
+				fmt.Fprintf(cmd.OutOrStdout(), "restoring %s in unit %s\n", strings.Join(rec.Managers, ", "), revertUnit)
+				if err := detach(cmd.Context(), g, revertUnit, "--revert"); err != nil {
+					return err
+				}
+				_ = os.Remove(filepath.Join(g.configDir, install.TakeoverRecordFile))
+			}
 			if err := install.Uninstall(cmd.Context(), install.ExecSystemctl{}, lay, purge, slog.Default()); err != nil {
 				return err
 			}

@@ -269,14 +269,6 @@ func Uninstall(ctx context.Context, sc Systemctl, lay Layout, purge bool, log *s
 		return fmt.Errorf("systemctl daemon-reload: %w", err)
 	}
 	log.Info("units removed")
-	// Undo the network takeover first so the box keeps its addressing.
-	if rec, err := LoadTakeoverRecord(lay.ConfigDir); err == nil && rec != nil {
-		CancelNetworkRevert(ctx, ExecRunner{})
-		if err := NetworkRevert(ctx, sc, rec.Managers, log); err != nil {
-			log.Warn("restoring the previous network manager had errors", "err", err)
-		}
-		_ = os.Remove(filepath.Join(lay.ConfigDir, TakeoverRecordFile))
-	}
 	if owned, _ := filepath.Glob(filepath.Join(NetworkdUnitDir, network.NetworkdPrefix+"*")); len(owned) > 0 {
 		for _, f := range owned {
 			_ = os.Remove(f)
@@ -516,7 +508,7 @@ func ScheduleNetworkRevert(ctx context.Context, run Runner, binary, configDir st
 	// Timers default to one-minute accuracy; the admin is counting seconds.
 	out, err := run.Run(ctx, "systemd-run", "--quiet", "--unit="+RevertTimerUnit,
 		"--on-active="+fmt.Sprint(int(window.Seconds())), "--timer-property=AccuracySec=1s",
-		binary, "--config-dir", configDir, "takeover", "--network", "--revert")
+		binary, "--config-dir", configDir, "takeover", "--network", "--revert", "--in-unit")
 	if err != nil {
 		return fmt.Errorf("arm revert timer: %w: %s", err, tail(out))
 	}
@@ -556,4 +548,18 @@ func RestoreCloudInitNetwork() error {
 		return nil
 	}
 	return err
+}
+
+// Detached runs argv as a transient systemd unit and waits for it. The
+// unit outlives the caller, so an operation that drops the caller's own
+// SSH session (a network manager switch) still runs to completion. Output
+// goes to the journal under the unit's name.
+func Detached(ctx context.Context, run Runner, unit string, argv ...string) error {
+	_, _ = run.Run(ctx, "systemctl", "reset-failed", unit+".service")
+	args := append([]string{"--unit=" + unit, "--wait", "--collect", "--quiet", "--"}, argv...)
+	out, err := run.Run(ctx, "systemd-run", args...)
+	if err != nil {
+		return fmt.Errorf("%s failed: %w: %s (see journalctl -u %s)", unit, err, tail(out), unit)
+	}
+	return nil
 }
