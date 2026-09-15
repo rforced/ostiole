@@ -41,7 +41,7 @@ func Discover() ([]Link, error) {
 			Index:     a.Index,
 			Kind:      kind(l),
 			Up:        a.Flags&net.FlagUp != 0,
-			Carrier:   a.OperState == netlink.OperUp || (a.Flags&net.FlagLoopback != 0 && a.Flags&net.FlagUp != 0),
+			Carrier:   carrier(a),
 			MTU:       a.MTU,
 			Addresses: []string{},
 		}
@@ -66,6 +66,19 @@ func Discover() ([]Link, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Index < out[j].Index })
 	return out, nil
+}
+
+// carrier reports operational up. Tunnels and loopback report an unknown
+// operstate even when usable, so treat unknown-but-admin-up as up, like
+// `ip link` does.
+func carrier(a *netlink.LinkAttrs) bool {
+	switch a.OperState {
+	case netlink.OperUp:
+		return true
+	case netlink.OperUnknown:
+		return a.Flags&net.FlagUp != 0
+	}
+	return false
 }
 
 func kind(l netlink.Link) string {
