@@ -1,0 +1,30 @@
+<script setup>
+import { Shield } from 'lucide-vue-next'
+
+import ThemeToggle from '@/components/ThemeToggle.vue'
+
+defineProps({
+  title: { type: String, required: true },
+  subtitle: { type: String, default: '' },
+})
+</script>
+
+<template>
+  <div class="flex min-h-screen flex-col items-center justify-center p-6">
+    <div class="absolute top-4 right-4">
+      <ThemeToggle />
+    </div>
+    <div
+      class="w-full max-w-sm rounded-xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-900"
+    >
+      <div class="mb-6 flex items-center gap-2">
+        <Shield class="size-6 text-sky-600 dark:text-sky-400" aria-hidden="true" />
+        <div>
+          <h1 class="text-lg font-semibold tracking-tight">{{ title }}</h1>
+          <p v-if="subtitle" class="text-sm text-neutral-500">{{ subtitle }}</p>
+        </div>
+      </div>
+      <slot />
+    </div>
+  </div>
+</template>

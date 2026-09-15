@@ -1,8 +1,13 @@
 <script setup>
-import { Activity, Cog, Network, Route, Server, Shield } from 'lucide-vue-next'
-import { RouterLink, RouterView } from 'vue-router'
+import { Activity, Cog, LogOut, Network, Route, Server, Shield } from 'lucide-vue-next'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 
 import ThemeToggle from '@/components/ThemeToggle.vue'
+import { useAuthStore } from '@/stores/auth'
+
+const auth = useAuthStore()
+const route = useRoute()
+const router = useRouter()
 
 const nav = [
   { to: '/', label: 'Dashboard', icon: Activity },
@@ -12,10 +17,16 @@ const nav = [
   { to: '/services', label: 'Services', icon: Server },
   { to: '/system', label: 'System', icon: Cog },
 ]
+
+async function logout() {
+  await auth.logout()
+  router.push({ name: 'login' })
+}
 </script>
 
 <template>
-  <div class="flex min-h-screen">
+  <RouterView v-if="route.meta.public" />
+  <div v-else class="flex min-h-screen">
     <aside
       class="flex w-56 shrink-0 flex-col border-r border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900"
     >
@@ -40,9 +51,19 @@ const nav = [
 
     <div class="flex min-w-0 flex-1 flex-col">
       <header
-        class="flex h-14 items-center justify-end border-b border-neutral-200 px-4 dark:border-neutral-800"
+        class="flex h-14 items-center justify-end gap-3 border-b border-neutral-200 px-4 dark:border-neutral-800"
       >
+        <span v-if="auth.user" class="text-sm text-neutral-500">{{ auth.user.username }}</span>
         <ThemeToggle />
+        <button
+          type="button"
+          class="rounded-md p-1.5 text-neutral-500 hover:text-neutral-900 focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:outline-none dark:hover:text-neutral-100"
+          title="Sign out"
+          aria-label="Sign out"
+          @click="logout"
+        >
+          <LogOut class="size-4" aria-hidden="true" />
+        </button>
       </header>
       <main class="flex-1 p-6">
         <RouterView />

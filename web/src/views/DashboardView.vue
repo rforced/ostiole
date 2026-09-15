@@ -3,13 +3,13 @@ import { onMounted, ref } from 'vue'
 
 import { api } from '@/lib/api'
 
-/** @type {import('vue').Ref<import('@/lib/api').Health | null>} */
 const health = ref(null)
-const error = ref(null)
+const status = ref(null)
+const error = ref('')
 
 onMounted(async () => {
   try {
-    health.value = await api.health()
+    ;[health.value, status.value] = await Promise.all([api.health(), api.status()])
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
   }
@@ -19,22 +19,42 @@ onMounted(async () => {
 <template>
   <div class="space-y-4">
     <h1 class="text-2xl font-semibold tracking-tight">Dashboard</h1>
+    <p v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
 
-    <section
-      class="rounded-lg border border-neutral-200 p-4 text-sm dark:border-neutral-800"
-      aria-labelledby="backend-status"
-    >
-      <h2 id="backend-status" class="mb-2 font-medium">Backend</h2>
-      <p v-if="error" class="text-red-600 dark:text-red-400">Unreachable: {{ error }}</p>
-      <dl v-else-if="health" class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
-        <dt class="text-neutral-500">Status</dt>
-        <dd>{{ health.status }}</dd>
-        <dt class="text-neutral-500">Version</dt>
-        <dd class="font-mono">{{ health.version }}</dd>
-        <dt class="text-neutral-500">Commit</dt>
-        <dd class="font-mono">{{ health.commit }}</dd>
-      </dl>
-      <p v-else class="text-neutral-500">Loading…</p>
-    </section>
+    <div class="grid gap-4 sm:grid-cols-2">
+      <section class="card" aria-labelledby="fw-status">
+        <h2 id="fw-status" class="card-title">Firewall</h2>
+        <dl v-if="status" class="kv">
+          <dt>Configured</dt>
+          <dd>{{ status.configured ? 'yes' : 'no' }}</dd>
+          <dt>Ruleset loaded</dt>
+          <dd>{{ status.tableLoaded ? 'yes' : 'no' }}</dd>
+          <dt>Network backend</dt>
+          <dd>{{ status.network }}</dd>
+          <dt>Pending apply</dt>
+          <dd>
+            {{
+              status.pending
+                ? `until ${new Date(status.pending.deadline).toLocaleTimeString()}`
+                : 'none'
+            }}
+          </dd>
+        </dl>
+        <p v-else class="text-neutral-500">Loading…</p>
+      </section>
+
+      <section class="card" aria-labelledby="backend-status">
+        <h2 id="backend-status" class="card-title">Backend</h2>
+        <dl v-if="health" class="kv">
+          <dt>Status</dt>
+          <dd>{{ health.status }}</dd>
+          <dt>Version</dt>
+          <dd class="font-mono">{{ health.version }}</dd>
+          <dt>Commit</dt>
+          <dd class="font-mono">{{ health.commit }}</dd>
+        </dl>
+        <p v-else class="text-neutral-500">Loading…</p>
+      </section>
+    </div>
   </div>
 </template>

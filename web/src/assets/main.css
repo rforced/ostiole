@@ -1,9 +1,30 @@
 @import 'tailwindcss';
 
-/* Class-based dark mode driven by the theme store (see stores/theme.ts). */
+/* Class-based dark mode driven by the theme store (see stores/theme.js). */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --font-sans: ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+@layer components {
+  .input {
+    @apply w-full rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm text-neutral-900 shadow-sm placeholder:text-neutral-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/30 focus:outline-none aria-invalid:border-red-500 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-sky-700 focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-neutral-950;
+  }
+  .card {
+    @apply rounded-lg border border-neutral-200 p-4 text-sm dark:border-neutral-800;
+  }
+  .card-title {
+    @apply mb-2 font-medium;
+  }
+  .kv {
+    @apply grid grid-cols-[auto_1fr] gap-x-4 gap-y-1;
+  }
+  .kv dt {
+    @apply text-neutral-500;
+  }
 }

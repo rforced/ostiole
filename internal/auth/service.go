@@ -47,8 +47,10 @@ type Service struct {
 	sessions *sessionStore
 	limiter  *limiter
 
-	mu    sync.RWMutex
-	users map[string]User
+	mu       sync.RWMutex
+	users    map[string]User
+	loadedAt time.Time // mtime of the file when last read
+	loadedSz int64
 }
 
 // NewService loads (or lazily creates) the users file in dir.
@@ -62,11 +64,31 @@ func NewService(dir string) (*Service, error) {
 	return s, nil
 }
 
+// load reads the users file. It is a no-op when the file is unchanged
+// since the last read; when users changed on disk (e.g. `ostiole
+// reset-password` while the daemon runs) their sessions are dropped.
 func (s *Service) load() error {
-	raw, err := os.ReadFile(s.path)
+	info, err := os.Stat(s.path)
 	if errors.Is(err, os.ErrNotExist) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		for name := range s.users {
+			s.sessions.deleteUser(name)
+		}
+		s.users = map[string]User{}
+		s.loadedAt, s.loadedSz = time.Time{}, 0
 		return nil
 	}
+	if err != nil {
+		return err
+	}
+	s.mu.RLock()
+	fresh := info.ModTime().Equal(s.loadedAt) && info.Size() == s.loadedSz && !s.loadedAt.IsZero()
+	s.mu.RUnlock()
+	if fresh {
+		return nil
+	}
+	raw, err := os.ReadFile(s.path)
 	if err != nil {
 		return err
 	}
@@ -76,11 +98,24 @@ func (s *Service) load() error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.users = map[string]User{}
+	next := map[string]User{}
 	for _, u := range f.Users {
-		s.users[u.Username] = u
+		next[u.Username] = u
 	}
+	for name, old := range s.users {
+		if nu, ok := next[name]; !ok || nu.Hash != old.Hash {
+			s.sessions.deleteUser(name)
+		}
+	}
+	s.users = next
+	s.loadedAt, s.loadedSz = info.ModTime(), info.Size()
 	return nil
+}
+
+// refresh reloads the file if it changed, logging nothing on failure so a
+// transient error never locks admins out of a working in-memory state.
+func (s *Service) refresh() {
+	_ = s.load()
 }
 
 func (s *Service) save() error {
@@ -120,11 +155,18 @@ func (s *Service) save() error {
 		_ = os.Remove(name)
 		return err
 	}
-	return os.Rename(name, s.path)
+	if err := os.Rename(name, s.path); err != nil {
+		return err
+	}
+	if info, err := os.Stat(s.path); err == nil {
+		s.loadedAt, s.loadedSz = info.ModTime(), info.Size()
+	}
+	return nil
 }
 
 // NeedsSetup reports whether no account exists yet.
 func (s *Service) NeedsSetup() bool {
+	s.refresh()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.users) == 0
@@ -132,6 +174,7 @@ func (s *Service) NeedsSetup() bool {
 
 // Usernames lists accounts.
 func (s *Service) Usernames() []string {
+	s.refresh()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	names := make([]string, 0, len(s.users))
@@ -159,6 +202,7 @@ func (s *Service) SetPassword(username, password string) error {
 	if err != nil {
 		return err
 	}
+	s.refresh()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.now()
@@ -179,6 +223,7 @@ func (s *Service) SetPassword(username, password string) error {
 // DeleteUser removes an account and its sessions. The last account cannot
 // be removed.
 func (s *Service) DeleteUser(username string) error {
+	s.refresh()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.users[username]; !ok {
@@ -207,6 +252,7 @@ func (s *Service) Login(username, password, remote string) (*Session, error) {
 	if blocked, _ := s.limiter.blocked(remote); blocked {
 		return nil, ErrRateLimited
 	}
+	s.refresh()
 	s.mu.RLock()
 	u, ok := s.users[username]
 	s.mu.RUnlock()
@@ -228,6 +274,7 @@ func (s *Service) Session(id string) (*Session, bool) {
 	if id == "" {
 		return nil, false
 	}
+	s.refresh()
 	return s.sessions.get(id)
 }
 

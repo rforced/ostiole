@@ -171,3 +171,52 @@ func TestDeleteUser(t *testing.T) {
 		t.Error("deleted unknown user")
 	}
 }
+
+func TestReloadsWhenFileChangesOnDisk(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	daemon, err := NewService(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := daemon.Setup("admin", goodPassword); err != nil {
+		t.Fatal(err)
+	}
+	sess, err := daemon.Login("admin", goodPassword, "1.1.1.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A second process (the CLI) rewrites the password.
+	cli, err := NewService(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Ensure a distinguishable mtime even on coarse filesystems.
+	time.Sleep(20 * time.Millisecond)
+	if err := cli.SetPassword("admin", "replaced by the cli!"); err != nil {
+		t.Fatal(err)
+	}
+
+	// The change must be seen on session lookup, not only on login.
+	if _, ok := daemon.Session(sess.ID); ok {
+		t.Error("session lookup did not notice the external password change")
+	}
+	if _, err := daemon.Login("admin", goodPassword, "1.1.1.1"); !errors.Is(err, ErrInvalidCredentials) {
+		t.Errorf("old password still accepted by the daemon: %v", err)
+	}
+	if _, err := daemon.Login("admin", "replaced by the cli!", "1.1.1.1"); err != nil {
+		t.Errorf("new password rejected by the daemon: %v", err)
+	}
+	if _, ok := daemon.Session(sess.ID); ok {
+		t.Error("session survived an external password change")
+	}
+
+	// File removed: everyone is logged out and setup is needed again.
+	if err := os.Remove(filepath.Join(dir, UsersFile)); err != nil {
+		t.Fatal(err)
+	}
+	if !daemon.NeedsSetup() {
+		t.Error("NeedsSetup false after file removal")
+	}
+}
