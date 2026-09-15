@@ -3,7 +3,7 @@ import { expect } from '@playwright/test'
 export const PASSWORD = 'correct horse battery'
 export const shot = (name) => `e2e/screenshots/${name}.png`
 
-/** Signs in as the admin created by first-run.spec.js. */
+/** Signs in as the admin created by 01-first-run.spec.js. */
 export async function login(page) {
   await page.goto('/login')
   await page.getByLabel('Username').fill('admin')

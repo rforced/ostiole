@@ -1,0 +1,120 @@
+<script setup>
+import { ref, watch } from 'vue'
+
+import AppDialog from '@/components/AppDialog.vue'
+import FormField from '@/components/FormField.vue'
+import { newId } from '@/lib/ids'
+import { parseList } from '@/lib/lists'
+import { useConfigStore } from '@/stores/config'
+
+const props = defineProps({ forward: { type: Object, default: null } })
+const open = defineModel('open', { type: Boolean, default: false })
+
+const config = useConfigStore()
+const form = ref(blank())
+
+function blank() {
+  const external = config.zones.find((z) => z.external)?.name ?? config.zones[0]?.name ?? ''
+  return {
+    id: '',
+    description: '',
+    enabled: true,
+    zone: external,
+    protocol: 'tcp',
+    ports: '',
+    target: '',
+    targetPort: '',
+  }
+}
+
+watch(
+  () => [open.value, props.forward],
+  () => {
+    if (!open.value) return
+    const f = props.forward
+    form.value = f
+      ? { ...blank(), ...f, ports: f.ports.join(', '), targetPort: f.targetPort ?? '' }
+      : blank()
+  },
+  { immediate: true },
+)
+
+function save() {
+  const f = form.value
+  const out = {
+    id: f.id || newId('pf'),
+    enabled: f.enabled,
+    zone: f.zone,
+    protocol: f.protocol,
+    ports: parseList(f.ports),
+    target: f.target.trim(),
+  }
+  if (f.description) out.description = f.description
+  if (f.targetPort) out.targetPort = String(f.targetPort).trim()
+  config.upsertPortForward(out)
+  open.value = false
+}
+</script>
+
+<template>
+  <AppDialog
+    v-model:open="open"
+    :title="forward ? `Port forward ${forward.id}` : 'New port forward'"
+    description="Traffic arriving in the zone on these ports is sent to the target. Forwarded traffic is allowed automatically."
+  >
+    <form class="space-y-4" @submit.prevent="save">
+      <FormField id="pf-desc" label="Description">
+        <input id="pf-desc" v-model="form.description" class="input" />
+      </FormField>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <FormField id="pf-zone" label="Arriving in zone">
+          <select id="pf-zone" v-model="form.zone" class="input" required>
+            <option v-for="z in config.zones" :key="z.name" :value="z.name">{{ z.name }}</option>
+          </select>
+        </FormField>
+        <FormField id="pf-proto" label="Protocol">
+          <select id="pf-proto" v-model="form.protocol" class="input">
+            <option value="tcp">TCP</option>
+            <option value="udp">UDP</option>
+            <option value="tcp+udp">TCP + UDP</option>
+          </select>
+        </FormField>
+        <FormField id="pf-ports" label="Ports" hint="e.g. 443 or 27015-27020">
+          <input
+            id="pf-ports"
+            v-model="form.ports"
+            class="input font-mono"
+            required
+            spellcheck="false"
+          />
+        </FormField>
+        <FormField id="pf-target" label="Target address">
+          <input
+            id="pf-target"
+            v-model="form.target"
+            class="input font-mono"
+            required
+            spellcheck="false"
+            placeholder="10.0.0.5"
+          />
+        </FormField>
+        <FormField id="pf-tport" label="Target port" hint="Empty keeps the original port.">
+          <input
+            id="pf-tport"
+            v-model="form.targetPort"
+            class="input w-32 font-mono"
+            spellcheck="false"
+          />
+        </FormField>
+      </div>
+      <label class="flex items-center gap-2 text-sm">
+        <input v-model="form.enabled" type="checkbox" class="size-4 rounded border-neutral-300" />
+        Enabled
+      </label>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+        <button type="submit" class="btn-primary">Save to draft</button>
+      </div>
+    </form>
+  </AppDialog>
+</template>

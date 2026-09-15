@@ -106,6 +106,121 @@ export const useConfigStore = defineStore('config', () => {
     draft.value.zones = zones.value.filter((z) => z.name !== name)
   }
 
+  // ---- rules -----------------------------------------------------------
+
+  function rulesForZone(zone) {
+    return rules.value.filter((r) => r.zone === zone)
+  }
+
+  function upsertRule(rule) {
+    const list = draft.value.rules ?? (draft.value.rules = [])
+    const idx = list.findIndex((r) => r.id === rule.id)
+    if (idx === -1) list.push(clone(rule))
+    else list[idx] = clone(rule)
+  }
+
+  function removeRule(id) {
+    draft.value.rules = rules.value.filter((r) => r.id !== id)
+  }
+
+  /** Moves a rule up (-1) or down (+1) among the rules of its zone. */
+  function moveRule(id, delta) {
+    const list = draft.value.rules
+    const from = list.findIndex((r) => r.id === id)
+    if (from === -1) return
+    const zone = list[from].zone
+    let to = from + delta
+    while (to >= 0 && to < list.length && list[to].zone !== zone) to += delta
+    if (to < 0 || to >= list.length) return
+    ;[list[from], list[to]] = [list[to], list[from]]
+  }
+
+  // ---- aliases ---------------------------------------------------------
+
+  function upsertAlias(alias, previousName = alias.name) {
+    const list = draft.value.aliases ?? (draft.value.aliases = [])
+    const idx = list.findIndex((a) => a.name === previousName)
+    if (idx === -1) list.push(clone(alias))
+    else list[idx] = clone(alias)
+    if (previousName !== alias.name) {
+      for (const r of rules.value) {
+        for (const side of [r.source, r.destination]) {
+          if (side?.alias === previousName) side.alias = alias.name
+          if (side?.portAlias === previousName) side.portAlias = alias.name
+        }
+      }
+    }
+  }
+
+  function aliasReferences(name) {
+    const refs = []
+    for (const r of rules.value) {
+      if (r.source?.alias === name || r.source?.portAlias === name) refs.push(`rule ${r.id} source`)
+      if (r.destination?.alias === name || r.destination?.portAlias === name)
+        refs.push(`rule ${r.id} destination`)
+    }
+    return refs
+  }
+
+  function removeAlias(name) {
+    draft.value.aliases = aliases.value.filter((a) => a.name !== name)
+  }
+
+  // ---- NAT -------------------------------------------------------------
+
+  const nat = computed(() => draft.value?.nat ?? { outbound: { mode: 'automatic' } })
+
+  function ensureNat() {
+    if (!draft.value.nat) draft.value.nat = { outbound: { mode: 'automatic' } }
+    if (!draft.value.nat.outbound) draft.value.nat.outbound = { mode: 'automatic' }
+    return draft.value.nat
+  }
+
+  function setOutboundMode(mode) {
+    ensureNat().outbound.mode = mode
+  }
+
+  function upsertPortForward(pf) {
+    const n = ensureNat()
+    const list = n.portForwards ?? (n.portForwards = [])
+    const idx = list.findIndex((x) => x.id === pf.id)
+    if (idx === -1) list.push(clone(pf))
+    else list[idx] = clone(pf)
+  }
+
+  function removePortForward(id) {
+    const n = ensureNat()
+    n.portForwards = (n.portForwards ?? []).filter((x) => x.id !== id)
+  }
+
+  function upsertOutboundRule(rule) {
+    const n = ensureNat()
+    const list = n.outbound.rules ?? (n.outbound.rules = [])
+    const idx = list.findIndex((x) => x.id === rule.id)
+    if (idx === -1) list.push(clone(rule))
+    else list[idx] = clone(rule)
+  }
+
+  function removeOutboundRule(id) {
+    const n = ensureNat()
+    n.outbound.rules = (n.outbound.rules ?? []).filter((x) => x.id !== id)
+  }
+
+  // ---- routes ----------------------------------------------------------
+
+  const routes = computed(() => draft.value?.routes ?? [])
+
+  function upsertRoute(route) {
+    const list = draft.value.routes ?? (draft.value.routes = [])
+    const idx = list.findIndex((r) => r.id === route.id)
+    if (idx === -1) list.push(clone(route))
+    else list[idx] = clone(route)
+  }
+
+  function removeRoute(id) {
+    draft.value.routes = routes.value.filter((r) => r.id !== id)
+  }
+
   return {
     saved,
     draft,
@@ -126,5 +241,21 @@ export const useConfigStore = defineStore('config', () => {
     upsertZone,
     zoneReferences,
     removeZone,
+    rulesForZone,
+    upsertRule,
+    removeRule,
+    moveRule,
+    upsertAlias,
+    aliasReferences,
+    removeAlias,
+    nat,
+    setOutboundMode,
+    upsertPortForward,
+    removePortForward,
+    upsertOutboundRule,
+    removeOutboundRule,
+    routes,
+    upsertRoute,
+    removeRoute,
   }
 })
