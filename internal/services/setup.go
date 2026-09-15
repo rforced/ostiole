@@ -86,7 +86,7 @@ func Setup(ctx context.Context, d *Dnsmasq, o SetupOptions, log *slog.Logger) er
 	if err := os.MkdirAll(filepath.Dir(d.leases()), 0o755); err != nil { //nolint:gosec // dnsmasq writes leases here
 		return err
 	}
-	if err := os.MkdirAll(d.dir(), 0o700); err != nil {
+	if err := os.MkdirAll(d.dir(), 0o755); err != nil { //nolint:gosec // dnsmasq reads these unprivileged
 		return err
 	}
 	unit := UnitContent(bin, filepath.Join(d.dir(), confName))

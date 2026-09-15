@@ -23,8 +23,10 @@ import (
 
 // Paths and names.
 const (
-	Unit         = "ostiole-dnsmasq.service"
-	DefaultDir   = "/etc/ostiole/generated"
+	Unit = "ostiole-dnsmasq.service"
+	// DefaultDir is world-readable on purpose: dnsmasq drops privileges
+	// before reading the hosts file, so it cannot live under /etc/ostiole.
+	DefaultDir   = "/var/lib/ostiole/dnsmasq"
 	LeaseFile    = "/var/lib/ostiole/dnsmasq.leases"
 	ResolvConf   = "/etc/resolv.conf"
 	confName     = "dnsmasq.conf"
@@ -269,7 +271,7 @@ func (d *Dnsmasq) Snapshot() (network.Files, error) {
 // Apply implements network.Backend: write the files and start, restart,
 // or stop the unit to match.
 func (d *Dnsmasq) Apply(ctx context.Context, files network.Files) error {
-	if err := os.MkdirAll(d.dir(), 0o700); err != nil {
+	if err := os.MkdirAll(d.dir(), 0o755); err != nil { //nolint:gosec // dnsmasq reads these unprivileged
 		return err
 	}
 	current, err := d.Snapshot()

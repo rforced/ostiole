@@ -4,7 +4,7 @@ no-resolv
 no-hosts
 no-poll
 bind-dynamic
-addn-hosts=/etc/ostiole/generated/hosts
+addn-hosts=/var/lib/ostiole/dnsmasq/hosts
 dhcp-leasefile=/var/lib/ostiole/dnsmasq.leases
 domain-needed
 bogus-priv

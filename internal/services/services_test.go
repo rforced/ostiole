@@ -75,7 +75,7 @@ func TestRenderGolden(t *testing.T) {
 		name := strings.TrimSuffix(filepath.Base(in), ".json")
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			d := &Dnsmasq{Dir: "/etc/ostiole/generated", Leases: "/var/lib/ostiole/dnsmasq.leases", Resolv: "/etc/resolv.conf"}
+			d := &Dnsmasq{Dir: DefaultDir, Leases: LeaseFile, Resolv: ResolvConf}
 			files, err := d.Render(loadConfig(t, in))
 			if err != nil {
 				t.Fatal(err)
