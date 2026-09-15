@@ -12,6 +12,7 @@ import (
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/fwlog"
+	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/update"
 	"github.com/rforced/ostiole/internal/version"
@@ -39,13 +40,27 @@ type Deps struct {
 	Services *services.Dnsmasq
 	// Log is the firewall log ring; nil disables the log endpoints.
 	Log *fwlog.Ring
+	// Tables lists the nftables tables on the box for the dashboard's
+	// foreign-ruleset warning; nil skips that check.
+	Tables TableLister
+	// Units answers systemd state queries (service health, competitor
+	// detection) for the dashboard; nil leaves those states unknown.
+	Units install.Systemctl
 }
 
 // Handler builds the full HTTP handler: API routes plus the SPA.
 func Handler(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/health", handleHealth)
-	api := &api{engine: d.Engine, auth: d.Auth, updater: d.Updater, services: d.Services, fwlog: d.Log}
+	api := &api{
+		engine:   d.Engine,
+		auth:     d.Auth,
+		updater:  d.Updater,
+		services: d.Services,
+		fwlog:    d.Log,
+		tables:   d.Tables,
+		units:    d.Units,
+	}
 	api.register(mux)
 	mux.HandleFunc("/api/", handleAPINotFound)
 	mux.Handle("/", web.Handler())

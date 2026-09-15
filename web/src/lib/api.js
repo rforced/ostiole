@@ -90,6 +90,8 @@ export const api = {
   },
   /** @returns {Promise<Status>} */
   status: () => get('/status'),
+  /** Everything the dashboard shows, in one request. */
+  overview: () => get('/overview'),
   config: {
     get: () => get('/config'),
     /** Build (without saving) a first configuration from the wizard answers. */

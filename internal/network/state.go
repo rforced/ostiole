@@ -20,6 +20,11 @@ type Link struct {
 	Parent    string   `json:"parent,omitempty"`
 	VLANID    int      `json:"vlanId,omitempty"`
 	Addresses []string `json:"addresses"`
+	// Traffic counted by the kernel since the link came up.
+	RXBytes   uint64 `json:"rxBytes"`
+	TXBytes   uint64 `json:"txBytes"`
+	RXPackets uint64 `json:"rxPackets"`
+	TXPackets uint64 `json:"txPackets"`
 }
 
 // Discover lists interfaces and their addresses from the kernel. It works
@@ -53,6 +58,10 @@ func Discover() ([]Link, error) {
 		}
 		if v, ok := l.(*netlink.Vlan); ok {
 			li.VLANID = v.VlanId
+		}
+		if s := a.Statistics; s != nil {
+			li.RXBytes, li.TXBytes = s.RxBytes, s.TxBytes
+			li.RXPackets, li.TXPackets = s.RxPackets, s.TxPackets
 		}
 		addrs, err := netlink.AddrList(l, netlink.FAMILY_ALL)
 		if err == nil {

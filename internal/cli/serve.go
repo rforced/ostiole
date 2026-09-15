@@ -14,6 +14,7 @@ import (
 	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/network"
+	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/server"
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/sysctl"
@@ -68,7 +69,13 @@ at your own.`,
 			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			deps := server.Deps{Engine: eng, Auth: as, Updater: newUpdater(cfg)}
+			deps := server.Deps{
+				Engine:  eng,
+				Auth:    as,
+				Updater: newUpdater(cfg),
+				Tables:  &nft.Exec{Bin: g.nftBin},
+				Units:   install.ExecSystemctl{},
+			}
 			if os.Geteuid() == 0 {
 				deps.Services = services.New()
 				ring := fwlog.NewRing(2000)

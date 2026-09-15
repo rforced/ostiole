@@ -1,9 +1,11 @@
 #!/bin/sh
 # Stand-in for nft during UI end-to-end tests: accepts every ruleset and
-# reports one loaded table with a counter, so no kernel access is needed.
+# reports one loaded table with a counter, plus a foreign table so the
+# dashboard has something to warn about. No kernel access needed.
 case "$*" in
   --version) echo "nftables v0.0.0 (e2e stub)" ;;
-  *"list table"*) echo '{"nftables":[{"metainfo":{"version":"stub"}},{"rule":{"family":"inet","table":"ostiole","chain":"zone_lan","comment":"id:allow-lan","expr":[{"counter":{"packets":42,"bytes":4200}}]}}]}' ;;
+  *"list tables"*) echo '{"nftables":[{"table":{"family":"inet","name":"ostiole"}},{"table":{"family":"ip","name":"nat"}}]}' ;;
+  *"list table"*) echo '{"nftables":[{"metainfo":{"version":"stub"}},{"rule":{"family":"inet","table":"ostiole","chain":"zone_lan","comment":"id:allow-lan","expr":[{"counter":{"packets":42,"bytes":4200}}]}},{"rule":{"family":"inet","table":"ostiole","chain":"filter_input","comment":"default-drop","expr":[{"counter":{"packets":9,"bytes":540}}]}}]}' ;;
   *) cat >/dev/null ;;
 esac
 exit 0
