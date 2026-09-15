@@ -47,3 +47,26 @@ go.work.sum
 CLAUDE.md
 ARCHITECTURE.md
 
+
+# AI assistant and planning files (local only, never pushed)
+CLAUDE.local.md
+AGENTS.md
+.claude/
+.cursor/
+.cursorrules
+.cursorignore
+.aider*
+.junie/
+.aiassistant/
+.continue/
+.windsurf/
+.windsurfrules
+.copilot/
+.github/copilot-instructions.md
+.roo/
+.clinerules
+*.plan.md
+PLAN.md
+PLANNING.md
+/plans/
+/notes/

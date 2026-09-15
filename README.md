@@ -4,8 +4,7 @@ Ostiole turns a Linux box into a firewall and router appliance managed from a we
 [nftables](https://netfilter.org/projects/nftables/) underneath. One static binary, no runtime
 dependencies beyond `nft` and systemd, runs on any distro that has nftables.
 
-The goal is pfSense-style management, not pfSense feature parity. See
-[ARCHITECTURE.md](ARCHITECTURE.md) and the [decision records](docs/adr/) for the design.
+The goal is pfSense-style management, not pfSense feature parity.
 
 **Status: pre-alpha.** Scaffolding only. Nothing here manages a firewall yet.
 
@@ -42,7 +41,6 @@ internal/server/    HTTP API and middleware
 internal/web/       embedded SPA (dist/ is generated)
 internal/version/   build metadata
 web/                Vue 3 (JavaScript) + Tailwind v4 + Reka UI
-docs/adr/           architecture decision records
 ```
 
 ## License
