@@ -50,14 +50,12 @@ describe('api', () => {
     expect(await api.config.revert()).toBeUndefined()
     vi.stubGlobal(
       'fetch',
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response('table inet ostiole', {
-            status: 200,
-            headers: { 'Content-Type': 'text/plain' },
-          }),
-        ),
+      vi.fn().mockResolvedValue(
+        new Response('table inet ostiole', {
+          status: 200,
+          headers: { 'Content-Type': 'text/plain' },
+        }),
+      ),
     )
     expect(await api.ruleset()).toBe('table inet ostiole')
   })

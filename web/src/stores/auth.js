@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { ApiError, api } from '@/lib/api'
+import { useSystemStore } from '@/stores/system'
 
 /**
  * Tracks the current session and whether first-run setup is still needed.
@@ -52,12 +53,14 @@ export const useAuthStore = defineStore('auth', () => {
       await api.auth.logout()
     } finally {
       user.value = null
+      useSystemStore().reset()
     }
   }
 
   /** Called when any request comes back 401. */
   function invalidate() {
     user.value = null
+    useSystemStore().reset()
   }
 
   return { user, setupNeeded, ready, loggedIn, bootstrap, login, setup, logout, invalidate }
