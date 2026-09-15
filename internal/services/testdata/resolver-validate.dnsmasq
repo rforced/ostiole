@@ -13,7 +13,7 @@ domain-needed
 bogus-priv
 localise-queries
 listen-address=127.0.0.1
-server=127.0.0.1#5335
+server=127.0.0.53#53
 proxy-dnssec
 domain=lan
 local=/lan/

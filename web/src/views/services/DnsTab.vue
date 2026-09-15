@@ -155,7 +155,7 @@ function save() {
     </div>
 
     <p v-if="resolver !== 'forward'" class="max-w-2xl text-sm text-neutral-500">
-      unbound runs behind dnsmasq on 127.0.0.1:5335 and validates DNSSEC. It has to be installed
+      unbound runs behind dnsmasq on 127.0.0.53 and validates DNSSEC. It has to be installed
       once with <code class="font-mono">ostiole services setup --with-resolver</code>.
     </p>
 

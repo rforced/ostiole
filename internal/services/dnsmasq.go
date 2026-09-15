@@ -151,7 +151,7 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 		if ResolverEnabled(cfg) {
 			// unbound does the resolving and the DNSSEC validation;
 			// proxy-dnssec passes its verdict on to clients.
-			fmt.Fprintf(&b, "server=127.0.0.1#%d\n", UnboundPort)
+			fmt.Fprintf(&b, "server=%s#%d\n", UnboundAddress, UnboundPort)
 			b.WriteString("proxy-dnssec\n")
 		} else {
 			upstreams := svc.DNS.Upstreams

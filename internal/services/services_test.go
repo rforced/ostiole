@@ -167,7 +167,7 @@ func TestBundleRoutesFilesToItsBackends(t *testing.T) {
 	}
 	// dnsmasq must ask unbound, not the upstreams.
 	conf := files["dnsmasq/ostiole.conf"]
-	if !strings.Contains(conf, "server=127.0.0.1#5335") || !strings.Contains(conf, "proxy-dnssec") {
+	if !strings.Contains(conf, "server=127.0.0.53#53") || !strings.Contains(conf, "proxy-dnssec") {
 		t.Errorf("dnsmasq conf = %s", conf)
 	}
 	if strings.Contains(conf, "server=1.1.1.1") {

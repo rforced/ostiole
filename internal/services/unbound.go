@@ -19,9 +19,13 @@ const (
 	// package's own directory so SELinux labels it the way unbound_t
 	// expects, the lesson dnsmasq taught us.
 	UnboundDir = "/etc/unbound"
-	// UnboundPort is where unbound listens on the loopback. It is not 53:
-	// dnsmasq owns that, and not 5353, which is mDNS.
-	UnboundPort = 5335
+	// UnboundAddress and UnboundPort are where unbound listens. dnsmasq
+	// already owns 127.0.0.1:53, so the resolver takes another loopback
+	// address instead of another port: SELinux only lets unbound_t bind
+	// ports its policy knows as DNS, and a high port like 5335 is refused
+	// with "can't bind socket: Permission denied" on an enforcing box.
+	UnboundAddress = "127.0.0.53"
+	UnboundPort    = 53
 	// UnboundAnchor is the DNSSEC root trust anchor, kept up to date by
 	// unbound itself (RFC 5011).
 	UnboundAnchor    = "/var/lib/unbound/root.key"
@@ -118,14 +122,14 @@ func (u *Unbound) render(cfg *model.Config) string {
 	b.WriteString(fileHeader)
 	b.WriteString("server:\n")
 	b.WriteString("    verbosity: 0\n")
-	fmt.Fprintf(&b, "    interface: 127.0.0.1@%d\n", UnboundPort)
-	fmt.Fprintf(&b, "    interface: ::1@%d\n", UnboundPort)
+	fmt.Fprintf(&b, "    interface: %s@%d\n", UnboundAddress, UnboundPort)
+	// It answers over IPv4 on the loopback but queries the internet over
+	// both families.
 	b.WriteString("    do-ip4: yes\n    do-ip6: yes\n    do-udp: yes\n    do-tcp: yes\n")
 	// Only dnsmasq talks to it; everyone else is refused.
 	b.WriteString("    access-control: 0.0.0.0/0 refuse\n")
 	b.WriteString("    access-control: 127.0.0.0/8 allow\n")
 	b.WriteString("    access-control: ::0/0 refuse\n")
-	b.WriteString("    access-control: ::1 allow\n")
 	b.WriteString("    username: \"unbound\"\n")
 	fmt.Fprintf(&b, "    directory: %q\n", u.dir())
 	b.WriteString("    chroot: \"\"\n")
