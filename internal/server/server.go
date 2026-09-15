@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/version"
 	"github.com/rforced/ostiole/internal/web"
 )
@@ -19,20 +20,27 @@ type Config struct {
 	Listen string
 }
 
+// Deps are the services the API exposes.
+type Deps struct {
+	Engine *engine.Engine
+}
+
 // Handler builds the full HTTP handler: API routes plus the SPA.
-func Handler() http.Handler {
+func Handler(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/health", handleHealth)
+	api := &api{engine: d.Engine}
+	api.register(mux)
 	mux.HandleFunc("/api/", handleAPINotFound)
 	mux.Handle("/", web.Handler())
 	return securityHeaders(requestLog(mux))
 }
 
 // Run serves until ctx is cancelled, then shuts down gracefully.
-func Run(ctx context.Context, cfg Config, logger *slog.Logger) error {
+func Run(ctx context.Context, cfg Config, d Deps, logger *slog.Logger) error {
 	srv := &http.Server{
 		Addr:              cfg.Listen,
-		Handler:           Handler(),
+		Handler:           Handler(d),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       120 * time.Second,

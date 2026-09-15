@@ -9,6 +9,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/rforced/ostiole/internal/engine"
+	"github.com/rforced/ostiole/internal/nft"
+	"github.com/rforced/ostiole/internal/store"
 	"github.com/rforced/ostiole/internal/version"
 )
 
@@ -23,12 +26,23 @@ func Main(args []string) int {
 	return 0
 }
 
-type rootOptions struct {
-	logLevel string
+// globals are the persistent flags shared by every command.
+type globals struct {
+	logLevel  string
+	configDir string
+	nftBin    string
+}
+
+func (g *globals) store() *store.Store {
+	return store.New(g.configDir)
+}
+
+func (g *globals) engine() *engine.Engine {
+	return engine.New(g.store(), &nft.Exec{Bin: g.nftBin}, slog.Default())
 }
 
 func newRootCmd() *cobra.Command {
-	opts := &rootOptions{}
+	g := &globals{}
 	cmd := &cobra.Command{
 		Use:           "ostiole",
 		Short:         "Firewall and router appliance manager for Linux nftables",
@@ -36,11 +50,25 @@ func newRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
-			return configureLogging(opts.logLevel)
+			return configureLogging(g.logLevel)
 		},
 	}
-	cmd.PersistentFlags().StringVar(&opts.logLevel, "log-level", "info", "log level: debug, info, warn, error")
-	cmd.AddCommand(newServeCmd(), newVersionCmd())
+	pf := cmd.PersistentFlags()
+	pf.StringVar(&g.logLevel, "log-level", "info", "log level: debug, info, warn, error")
+	pf.StringVar(&g.configDir, "config-dir", store.DefaultDir, "configuration directory")
+	pf.StringVar(&g.nftBin, "nft", "nft", "path to the nft binary")
+	cmd.AddCommand(
+		newServeCmd(g),
+		newInitCmd(g),
+		newCheckCmd(g),
+		newRenderCmd(g),
+		newApplyCmd(g),
+		newLoadCmd(g),
+		newStatusCmd(g),
+		newRevisionsCmd(g),
+		newCountersCmd(g),
+		newVersionCmd(),
+	)
 	return cmd
 }
 

@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -12,7 +11,7 @@ import (
 	"github.com/rforced/ostiole/internal/server"
 )
 
-func newServeCmd() *cobra.Command {
+func newServeCmd(g *globals) *cobra.Command {
 	cfg := server.Config{}
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -21,12 +20,9 @@ func newServeCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return server.Run(ctx, cfg, slog.Default())
+			return server.Run(ctx, cfg, server.Deps{Engine: g.engine()}, slog.Default())
 		},
 	}
 	cmd.Flags().StringVar(&cfg.Listen, "listen", "127.0.0.1:8080", "address to listen on")
 	return cmd
 }
-
-// ensure context import is used even if Run signature changes.
-var _ = context.Background

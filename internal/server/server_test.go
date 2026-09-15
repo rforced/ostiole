@@ -1,28 +1,68 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/rforced/ostiole/internal/engine"
+	"github.com/rforced/ostiole/internal/model"
+	"github.com/rforced/ostiole/internal/nft/nfttest"
+	"github.com/rforced/ostiole/internal/store"
 )
 
-func TestHealth(t *testing.T) {
-	t.Parallel()
-	srv := httptest.NewServer(Handler())
-	defer srv.Close()
+func newTestServer(t *testing.T) (*httptest.Server, *nfttest.Fake) {
+	t.Helper()
+	fake := &nfttest.Fake{TableJSON: `{"nftables":[{"rule":{"chain":"zone_lan","comment":"id:allow-lan","expr":[{"counter":{"packets":1,"bytes":2}}]}}]}`}
+	eng := engine.New(store.New(t.TempDir()), fake, slog.New(slog.DiscardHandler))
+	srv := httptest.NewServer(Handler(Deps{Engine: eng}))
+	t.Cleanup(srv.Close)
+	return srv, fake
+}
 
-	resp, err := http.Get(srv.URL + "/api/v1/health")
+func do(t *testing.T, srv *httptest.Server, method, path string, body any) (*http.Response, []byte) {
+	t.Helper()
+	var rdr io.Reader
+	if body != nil {
+		raw, err := json.Marshal(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rdr = bytes.NewReader(raw)
+	}
+	req, err := http.NewRequest(method, srv.URL+path, rdr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := srv.Client().Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	return resp, raw
+}
 
+func starter() *model.Config {
+	return model.Starter(model.StarterOptions{Hostname: "fw", LAN: "eth1", LANAddress: "10.0.0.1/24", WAN: "eth0"})
+}
+
+func TestHealth(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(Handler(Deps{}))
+	defer srv.Close()
+
+	resp, raw := do(t, srv, http.MethodGet, "/api/v1/health", nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
 	var body healthResponse
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+	if err := json.Unmarshal(raw, &body); err != nil {
 		t.Fatal(err)
 	}
 	if body.Status != "ok" {
@@ -38,19 +78,146 @@ func TestHealth(t *testing.T) {
 
 func TestUnknownAPIRouteIsJSON404(t *testing.T) {
 	t.Parallel()
-	srv := httptest.NewServer(Handler())
+	srv := httptest.NewServer(Handler(Deps{}))
 	defer srv.Close()
 
-	resp, err := http.Get(srv.URL + "/api/v1/nope")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-
+	resp, _ := do(t, srv, http.MethodGet, "/api/v1/nope", nil)
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", resp.StatusCode)
 	}
 	if ct := resp.Header.Get("Content-Type"); ct != "application/json; charset=utf-8" {
 		t.Errorf("content-type = %q", ct)
+	}
+}
+
+func TestEngineEndpointsWithoutEngine(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(Handler(Deps{}))
+	defer srv.Close()
+	resp, _ := do(t, srv, http.MethodGet, "/api/v1/status", nil)
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503", resp.StatusCode)
+	}
+}
+
+func TestApplyImmediateFlow(t *testing.T) {
+	t.Parallel()
+	srv, fake := newTestServer(t)
+
+	resp, _ := do(t, srv, http.MethodGet, "/api/v1/config", nil)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("config before apply: %d, want 404", resp.StatusCode)
+	}
+
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: starter()})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
+	}
+	var res engine.ApplyResult
+	if err := json.Unmarshal(raw, &res); err != nil || res.Pending || res.Ruleset == "" {
+		t.Fatalf("apply result = %+v, %v", res, err)
+	}
+	if fake.Last() != res.Ruleset {
+		t.Error("runner did not receive the ruleset")
+	}
+
+	resp, raw = do(t, srv, http.MethodGet, "/api/v1/config", nil)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), `"hostname":"fw"`) {
+		t.Fatalf("config after apply: %d %s", resp.StatusCode, raw)
+	}
+	resp, raw = do(t, srv, http.MethodGet, "/api/v1/ruleset", nil)
+	if resp.StatusCode != http.StatusOK || string(raw) != res.Ruleset {
+		t.Fatalf("ruleset: %d", resp.StatusCode)
+	}
+	resp, raw = do(t, srv, http.MethodGet, "/api/v1/status", nil)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), `"tableLoaded":true`) {
+		t.Fatalf("status: %d %s", resp.StatusCode, raw)
+	}
+	resp, raw = do(t, srv, http.MethodGet, "/api/v1/counters", nil)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), `"allow-lan"`) {
+		t.Fatalf("counters: %d %s", resp.StatusCode, raw)
+	}
+	resp, raw = do(t, srv, http.MethodGet, "/api/v1/config/revisions", nil)
+	if resp.StatusCode != http.StatusOK || string(bytes.TrimSpace(raw)) != "[]" {
+		t.Fatalf("revisions: %d %s", resp.StatusCode, raw)
+	}
+}
+
+func TestApplyConfirmAndRevertFlow(t *testing.T) {
+	t.Parallel()
+	srv, fake := newTestServer(t)
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: starter()}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("first apply: %d %s", resp.StatusCode, raw)
+	}
+	second := starter()
+	second.System.Hostname = "second"
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: second, ConfirmTimeoutSeconds: 60})
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), `"pending":true`) {
+		t.Fatalf("pending apply: %d %s", resp.StatusCode, raw)
+	}
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: second}); resp.StatusCode != http.StatusConflict {
+		t.Errorf("apply while pending: %d, want 409", resp.StatusCode)
+	}
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply/confirm", nil); resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), `"archived"`) {
+		t.Fatalf("confirm: %d %s", resp.StatusCode, raw)
+	}
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/apply/confirm", nil); resp.StatusCode != http.StatusConflict {
+		t.Errorf("double confirm: %d, want 409", resp.StatusCode)
+	}
+	_, raw = do(t, srv, http.MethodGet, "/api/v1/config/revisions", nil)
+	var revs []store.Revision
+	if err := json.Unmarshal(raw, &revs); err != nil || len(revs) != 1 {
+		t.Fatalf("revisions = %s (%v)", raw, err)
+	}
+	resp, raw = do(t, srv, http.MethodGet, "/api/v1/config/revisions/"+revs[0].ID, nil)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), `"hostname":"fw"`) {
+		t.Fatalf("revision: %d %s", resp.StatusCode, raw)
+	}
+
+	third := starter()
+	third.System.Hostname = "third"
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: third, ConfirmTimeoutSeconds: 60}); resp.StatusCode != http.StatusOK {
+		t.Fatal("third apply")
+	}
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/apply/revert", nil); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("revert: %d", resp.StatusCode)
+	}
+	if !strings.Contains(fake.Last(), "second") && !strings.Contains(fake.Last(), "table inet ostiole {") {
+		t.Error("revert did not restore a full ruleset")
+	}
+	_, raw = do(t, srv, http.MethodGet, "/api/v1/config", nil)
+	if !strings.Contains(string(raw), `"hostname":"second"`) {
+		t.Errorf("config after revert: %s", raw)
+	}
+}
+
+func TestApplyValidationAndBadRequests(t *testing.T) {
+	t.Parallel()
+	srv, _ := newTestServer(t)
+
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: &model.Config{Version: 1}})
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("invalid config: %d %s", resp.StatusCode, raw)
+	}
+	var er errorResponse
+	if err := json.Unmarshal(raw, &er); err != nil || len(er.Issues) == 0 || er.Error != "invalid configuration" {
+		t.Fatalf("error body = %s", raw)
+	}
+
+	for _, body := range []string{`{}`, `not json`, `{"config":{},"bogus":1}`, `{"config":{"version":1},"confirmTimeoutSeconds":-1}`} {
+		req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/v1/apply", strings.NewReader(body))
+		resp, err := srv.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("body %q: %d, want 400", body, resp.StatusCode)
+		}
+	}
+
+	resp, raw = do(t, srv, http.MethodPost, "/api/v1/check", configRequest{Config: starter()})
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), "table inet ostiole") {
+		t.Fatalf("check: %d %s", resp.StatusCode, raw)
 	}
 }
