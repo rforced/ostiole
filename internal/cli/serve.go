@@ -78,6 +78,7 @@ at your own.`,
 			}
 			if os.Geteuid() == 0 {
 				deps.Services = services.New()
+				deps.Resolver = services.NewUnbound()
 				ring := fwlog.NewRing(2000)
 				deps.Log = ring
 				go func() {

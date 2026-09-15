@@ -327,8 +327,29 @@ func (v *validator) services(c *Config, ifaces map[string]bool) {
 			v.add(fmt.Sprintf("services.dns.upstreams[%d]", i), "%v", err)
 		}
 	}
-	if dns.Enabled && len(dns.Upstreams) == 0 && len(c.System.DNSServers) == 0 {
-		v.add("services.dns.upstreams", "at least one upstream DNS server is required (or set system.dnsServers)")
+	switch dns.Resolver {
+	case "", ResolverForward:
+		if dns.Enabled && len(dns.Upstreams) == 0 && len(c.System.DNSServers) == 0 {
+			v.add("services.dns.upstreams", "at least one upstream DNS server is required (or set system.dnsServers)")
+		}
+	case ResolverValidate:
+	case ResolverTLS:
+		if dns.Enabled && len(dns.TLSUpstreams) == 0 {
+			v.add("services.dns.tlsUpstreams", "DNS over TLS needs at least one resolver")
+		}
+	default:
+		v.add("services.dns.resolver", "%q must be forward, validate, or tls", dns.Resolver)
+	}
+	for i, u := range dns.TLSUpstreams {
+		path := fmt.Sprintf("services.dns.tlsUpstreams[%d]", i)
+		if _, err := ParseIP(u.Address); err != nil {
+			v.add(path+".address", "%v", err)
+		}
+		if u.Hostname == "" {
+			v.add(path+".hostname", "a certificate name is required; without it the connection is not verified")
+		} else if !domainRe.MatchString(u.Hostname) {
+			v.add(path+".hostname", "%q is not a valid hostname", u.Hostname)
+		}
 	}
 	if dns.Domain != "" && !domainRe.MatchString(dns.Domain) {
 		v.add("services.dns.domain", "%q is not a valid domain", dns.Domain)

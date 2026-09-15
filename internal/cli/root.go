@@ -63,7 +63,7 @@ func (g *globals) engine() (*engine.Engine, error) {
 		eng.WithSysctl(sysctl.Proc{})
 		if net != nil {
 			// Services need root and a managed box; dev runs stay firewall-only.
-			eng.WithServices(services.New())
+			eng.WithServices(services.NewBundle())
 		}
 	}
 	return eng, nil

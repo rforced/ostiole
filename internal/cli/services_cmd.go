@@ -14,10 +14,11 @@ import (
 func newServicesCmd(_ *globals) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "services",
-		Short: "DHCP and DNS services (dnsmasq)",
+		Short: "DHCP and DNS services (dnsmasq, optionally unbound)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			d := services.New()
+			u := services.NewUnbound()
 			ctx := cmd.Context()
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
 			fmt.Fprintf(w, "set up\t%v\n", d.Installed(ctx))
@@ -26,28 +27,37 @@ func newServicesCmd(_ *globals) *cobra.Command {
 			if err == nil {
 				fmt.Fprintf(w, "leases\t%d\n", len(leases))
 			}
+			fmt.Fprintf(w, "resolver set up\t%v\n", u.Installed(ctx))
+			fmt.Fprintf(w, "resolver running\t%v\n", u.Active(ctx))
 			return w.Flush()
 		},
 	}
+	var withResolver bool
 	setup := &cobra.Command{
 		Use:   "setup",
 		Short: "Install dnsmasq, write its unit, and retire competing resolvers",
 		Long: `Installs dnsmasq with the package manager if needed, writes
 ostiole-dnsmasq.service, masks the distro dnsmasq unit and systemd-resolved
 (both would take port 53), and makes /etc/resolv.conf a regular file that
-Ostiole manages. Then enable DHCP and DNS under Services in the web UI.`,
+Ostiole manages. Then enable DHCP and DNS under Services in the web UI.
+
+With --with-resolver it also installs unbound, bootstraps the DNSSEC root
+trust anchor, and writes ostiole-unbound.service, which the DNS service
+can then use to validate DNSSEC or to speak DNS over TLS.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := requireRoot(); err != nil {
 				return err
 			}
-			if err := services.Setup(cmd.Context(), services.New(), services.SetupOptions{}, slog.Default()); err != nil {
+			opts := services.SetupOptions{Resolver: withResolver}
+			if err := services.Setup(cmd.Context(), services.New(), opts, slog.Default()); err != nil {
 				return err
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "services ready: enable DHCP and DNS in the web UI (Services) or in the configuration, then apply")
 			return nil
 		},
 	}
+	setup.Flags().BoolVar(&withResolver, "with-resolver", false, "also install unbound for DNSSEC validation and DNS over TLS")
 	leases := &cobra.Command{
 		Use:   "leases",
 		Short: "Show DHCP leases",

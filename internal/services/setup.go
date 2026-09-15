@@ -27,6 +27,14 @@ type SetupOptions struct {
 	Run Runner
 	// Binary overrides the dnsmasq path (found on PATH otherwise).
 	Binary string
+	// Resolver also installs unbound and writes its unit, so the DNS
+	// service can validate DNSSEC or speak DNS over TLS.
+	Resolver bool
+	// Unbound is the backend to set up when Resolver is set; nil means
+	// production defaults.
+	Unbound *Unbound
+	// UnboundBinary overrides the unbound path (found on PATH otherwise).
+	UnboundBinary string
 }
 
 // Setup makes the host able to run the services: installs dnsmasq if
@@ -93,14 +101,90 @@ func Setup(ctx context.Context, d *Dnsmasq, o SetupOptions, log *slog.Logger) er
 	if err := os.MkdirAll(unitDir, 0o755); err != nil { //nolint:gosec // systemd unit dir
 		return err
 	}
-	if err := writeFile(filepath.Join(unitDir, Unit), unit, 0o644); err != nil {
+	if err := writeFile(filepath.Join(unitDir, Unit), unit); err != nil {
 		return err
+	}
+	if o.Resolver {
+		if err := setupResolver(ctx, run, o, unitDir, log); err != nil {
+			return err
+		}
 	}
 	if _, err := run.Run(ctx, "systemctl", "daemon-reload"); err != nil {
 		return err
 	}
 	log.Info("services ready", "unit", Unit, "dnsmasq", bin)
 	return nil
+}
+
+// setupResolver installs unbound, bootstraps the DNSSEC trust anchor, and
+// writes the ostiole-unbound unit. The distro's own unbound is masked: it
+// would bind port 53 and fight dnsmasq.
+func setupResolver(ctx context.Context, run Runner, o SetupOptions, unitDir string, log *slog.Logger) error {
+	u := o.Unbound
+	if u == nil {
+		u = NewUnbound()
+	}
+	bin := o.UnboundBinary
+	if bin == "" {
+		bin = lookPath("unbound")
+	}
+	if bin == "" {
+		pm := o.PackageManager
+		if pm == "" {
+			pm = detectPackageManager()
+		}
+		if err := installPackage(ctx, run, pm, "unbound", log); err != nil {
+			return err
+		}
+		if bin = lookPath("unbound"); bin == "" {
+			return errors.New("unbound still not found after installation")
+		}
+	}
+
+	if out, err := run.Run(ctx, "systemctl", "cat", unboundDistroSvc); err == nil && len(out) > 0 {
+		_, _ = run.Run(ctx, "systemctl", "disable", "--now", unboundDistroSvc)
+		_, _ = run.Run(ctx, "systemctl", "mask", unboundDistroSvc)
+		log.Info("masked competing resolver", "unit", unboundDistroSvc)
+	}
+
+	// The trust anchor lives outside our directories and belongs to
+	// unbound, which updates it in place as the root keys roll over.
+	anchorTool := lookPath("unbound-anchor")
+	if err := os.MkdirAll(filepath.Dir(u.anchor()), 0o755); err != nil { //nolint:gosec // unbound reads and writes this
+		return err
+	}
+	if anchorTool != "" {
+		if _, err := run.Run(ctx, anchorTool, "-a", u.anchor()); err != nil {
+			// Exit code 1 means "anchor written but not verified yet",
+			// which is normal on a first run.
+			log.Debug("unbound-anchor reported a problem", "err", err)
+		}
+		_, _ = run.Run(ctx, "chown", "unbound:unbound", u.anchor())
+	}
+	if err := os.MkdirAll(u.dir(), 0o755); err != nil { //nolint:gosec // unbound reads this unprivileged
+		return err
+	}
+	unit := UnboundUnitContent(bin, lookPath("unbound-checkconf"), anchorTool, u.ConfPath(), u.anchor())
+	if err := writeFile(filepath.Join(unitDir, UnboundUnit), unit); err != nil {
+		return err
+	}
+	log.Info("validating resolver ready", "unit", UnboundUnit, "unbound", bin, "port", UnboundPort)
+	return nil
+}
+
+func lookPath(name string) string {
+	if p, err := exec.LookPath(name); err == nil {
+		return p
+	}
+	// Package managers put daemons in sbin, which is not always on PATH
+	// for a service.
+	for _, dir := range []string{"/usr/sbin", "/sbin", "/usr/local/sbin"} {
+		p := filepath.Join(dir, name)
+		if info, err := os.Stat(p); err == nil && !info.IsDir() {
+			return p
+		}
+	}
+	return ""
 }
 
 // UnitContent renders the ostiole-dnsmasq unit.

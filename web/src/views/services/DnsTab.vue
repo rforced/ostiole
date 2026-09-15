@@ -27,6 +27,35 @@ const domain = computed({
   },
 })
 
+/** forward (dnsmasq asks upstreams), validate, or tls (both via unbound). */
+const resolver = computed({
+  get: () => dns.value.resolver ?? 'forward',
+  set: (v) => {
+    if (v === 'forward') delete dns.value.resolver
+    else dns.value.resolver = v
+    if (v === 'tls' && !(dns.value.tlsUpstreams ?? []).length) {
+      dns.value.tlsUpstreams = [
+        { address: '1.1.1.1', hostname: 'cloudflare-dns.com' },
+        { address: '9.9.9.9', hostname: 'dns.quad9.net' },
+      ]
+    }
+  },
+})
+
+/** One "address hostname" pair per line, which is how DoT servers are quoted. */
+const tlsUpstreams = computed({
+  get: () => (dns.value.tlsUpstreams ?? []).map((u) => `${u.address} ${u.hostname}`).join('\n'),
+  set: (v) => {
+    const list = v
+      .split('\n')
+      .map((line) => line.trim().split(/[\s,]+/))
+      .filter((parts) => parts[0])
+      .map(([address, hostname = '']) => ({ address, hostname }))
+    if (list.length) dns.value.tlsUpstreams = list
+    else delete dns.value.tlsUpstreams
+  },
+})
+
 const listenAll = computed({
   get: () => !(dns.value.interfaces ?? []).length,
   set: (all) => {
@@ -80,6 +109,21 @@ function save() {
 
     <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
       <FormField
+        id="dns-resolver"
+        label="Resolver"
+        hint="Who answers names this box does not know."
+      >
+        <select id="dns-resolver" v-model="resolver" class="input">
+          <option value="forward">Forward — ask the upstream resolvers below</option>
+          <option value="validate">Validate — resolve from the root, check DNSSEC</option>
+          <option value="tls">DNS over TLS — encrypted upstreams, check DNSSEC</option>
+        </select>
+      </FormField>
+      <FormField id="dns-domain" label="Local domain" hint="Hosts get this suffix, e.g. lan.">
+        <input id="dns-domain" v-model="domain" class="input font-mono" spellcheck="false" />
+      </FormField>
+      <FormField
+        v-if="resolver === 'forward'"
         id="dns-up"
         label="Upstream resolvers"
         hint="Comma separated. Required when enabled (or set system DNS servers)."
@@ -92,10 +136,28 @@ function save() {
           placeholder="1.1.1.1, 9.9.9.9"
         />
       </FormField>
-      <FormField id="dns-domain" label="Local domain" hint="Hosts get this suffix, e.g. lan.">
-        <input id="dns-domain" v-model="domain" class="input font-mono" spellcheck="false" />
+      <FormField
+        v-if="resolver === 'tls'"
+        id="dns-tls"
+        label="DNS over TLS servers"
+        hint="One per line: address and the name on its certificate."
+        class="sm:col-span-2"
+      >
+        <textarea
+          id="dns-tls"
+          v-model="tlsUpstreams"
+          rows="3"
+          class="input font-mono"
+          spellcheck="false"
+          placeholder="1.1.1.1 cloudflare-dns.com"
+        ></textarea>
       </FormField>
     </div>
+
+    <p v-if="resolver !== 'forward'" class="max-w-2xl text-sm text-neutral-500">
+      unbound runs behind dnsmasq on 127.0.0.1:5335 and validates DNSSEC. It has to be installed
+      once with <code class="font-mono">ostiole services setup --with-resolver</code>.
+    </p>
 
     <fieldset class="space-y-2 text-sm">
       <legend class="font-medium">Listen on</legend>

@@ -30,6 +30,7 @@ type api struct {
 	auth     *auth.Service
 	updater  *update.Manager
 	services *services.Dnsmasq
+	resolver *services.Unbound
 	fwlog    *fwlog.Ring
 	tables   TableLister
 	units    install.Systemctl
@@ -62,6 +63,9 @@ type servicesStatus struct {
 	SetUp   bool `json:"setUp"`
 	Running bool `json:"running"`
 	Leases  int  `json:"leases"`
+	// Resolver is unbound, which only exists once it has been set up.
+	ResolverSetUp   bool `json:"resolverSetUp"`
+	ResolverRunning bool `json:"resolverRunning"`
 }
 
 func (a *api) servicesStatus(w http.ResponseWriter, r *http.Request) error {
@@ -72,6 +76,10 @@ func (a *api) servicesStatus(w http.ResponseWriter, r *http.Request) error {
 		if leases, err := a.services.ReadLeases(); err == nil {
 			st.Leases = len(leases)
 		}
+	}
+	if a.resolver != nil {
+		st.ResolverSetUp = a.resolver.Installed(r.Context())
+		st.ResolverRunning = a.resolver.Active(r.Context())
 	}
 	writeJSON(w, http.StatusOK, st)
 	return nil

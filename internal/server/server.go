@@ -38,6 +38,8 @@ type Deps struct {
 	Updater *update.Manager // optional; nil disables the update endpoints
 	// Services reads dnsmasq state and leases; nil reports "not set up".
 	Services *services.Dnsmasq
+	// Resolver reads unbound's state; nil reports "not set up".
+	Resolver *services.Unbound
 	// Log is the firewall log ring; nil disables the log endpoints.
 	Log *fwlog.Ring
 	// Tables lists the nftables tables on the box for the dashboard's
@@ -57,6 +59,7 @@ func Handler(d Deps) http.Handler {
 		auth:     d.Auth,
 		updater:  d.Updater,
 		services: d.Services,
+		resolver: d.Resolver,
 		fwlog:    d.Log,
 		tables:   d.Tables,
 		units:    d.Units,

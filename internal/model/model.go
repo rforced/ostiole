@@ -339,6 +339,33 @@ type DNSServer struct {
 	Upstreams     []string       `json:"upstreams,omitempty"`
 	Domain        string         `json:"domain,omitempty"`
 	HostOverrides []HostOverride `json:"hostOverrides,omitempty"`
+	// Resolver decides who answers names this box does not know.
+	Resolver ResolverMode `json:"resolver,omitempty"`
+	// TLSUpstreams are the resolvers used in ResolverTLS mode.
+	TLSUpstreams []TLSUpstream `json:"tlsUpstreams,omitempty"`
+}
+
+// ResolverMode selects how queries leave the box.
+type ResolverMode string
+
+// Resolver modes. Anything but ResolverForward runs unbound as a
+// validating resolver behind dnsmasq.
+const (
+	// ResolverForward sends queries straight to Upstreams, in the clear.
+	// It is the default because it needs nothing but dnsmasq.
+	ResolverForward ResolverMode = "forward"
+	// ResolverValidate resolves from the root servers and checks DNSSEC.
+	ResolverValidate ResolverMode = "validate"
+	// ResolverTLS forwards to TLSUpstreams over DNS over TLS and checks
+	// DNSSEC.
+	ResolverTLS ResolverMode = "tls"
+)
+
+// TLSUpstream is one DNS over TLS server. Hostname is the name its
+// certificate must carry, without which the connection is not private.
+type TLSUpstream struct {
+	Address  string `json:"address"`
+	Hostname string `json:"hostname"`
 }
 
 // HostOverride is a local name answered by this box.

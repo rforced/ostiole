@@ -336,6 +336,24 @@ func (a *api) serviceStates(ctx context.Context, cfg *model.Config) []ServiceSta
 		}
 	}
 
+	resolver := ServiceState{
+		Name:  "Validating resolver",
+		Unit:  services.UnboundUnit,
+		State: stateUnknown,
+		Want:  cfg != nil && services.ResolverEnabled(cfg),
+	}
+	if a.resolver != nil {
+		switch {
+		case !a.resolver.Installed(ctx):
+			resolver.State = stateMissing
+			resolver.Detail = "Run `ostiole services setup --with-resolver` to install unbound."
+		case a.resolver.Active(ctx):
+			resolver.State = stateActive
+		default:
+			resolver.State = stateInactive
+		}
+	}
+
 	netd := ServiceState{
 		Name:  "Network",
 		Unit:  install.NetworkdUnit,
@@ -357,7 +375,11 @@ func (a *api) serviceStates(ctx context.Context, cfg *model.Config) []ServiceSta
 	} else {
 		logs.Detail = "The daemon must run as root to read nflog."
 	}
-	return []ServiceState{dnsmasq, netd, logs}
+	states := []ServiceState{dnsmasq}
+	if resolver.Want || resolver.State == stateActive {
+		states = append(states, resolver)
+	}
+	return append(states, netd, logs)
 }
 
 // unitState maps systemctl's answer onto our vocabulary.

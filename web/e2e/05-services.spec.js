@@ -119,3 +119,28 @@ test('advertise IPv6 on the LAN and pin a lease from the prefix', async ({ page 
   await page.getByRole('tab', { name: 'DHCPv6' }).click()
   await expect(page.getByRole('row').filter({ hasText: '::100 – ::1ff' })).toContainText('6h')
 })
+
+test('switch the resolver to DNS over TLS', async ({ page }) => {
+  await login(page)
+  await page.goto('/services')
+  await page.getByRole('tab', { name: 'DNS' }).click()
+
+  // Forwarding is the default and shows plain upstreams.
+  await expect(page.getByLabel('Upstream resolvers')).toBeVisible()
+  await page.getByLabel('Resolver', { exact: true }).selectOption('tls')
+  await expect(page.getByLabel('Upstream resolvers')).toHaveCount(0)
+  const servers = page.getByLabel('DNS over TLS servers')
+  await expect(servers).toHaveValue(/cloudflare-dns\.com/)
+  await servers.fill('9.9.9.9 dns.quad9.net')
+  await expect(page.getByRole('note').filter({ hasText: 'validating resolver' })).toContainText(
+    'setup --with-resolver',
+  )
+  await page.screenshot({ path: shot('43-services-dot'), fullPage: true })
+
+  await applyAndConfirm(page)
+
+  await page.reload()
+  await page.getByRole('tab', { name: 'DNS' }).click()
+  await expect(page.getByLabel('Resolver', { exact: true })).toHaveValue('tls')
+  await expect(page.getByLabel('DNS over TLS servers')).toHaveValue('9.9.9.9 dns.quad9.net')
+})

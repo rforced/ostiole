@@ -148,12 +148,19 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 	if svc.DNS.Enabled {
 		b.WriteString("domain-needed\nbogus-priv\nlocalise-queries\n")
 		b.WriteString("listen-address=127.0.0.1\n")
-		upstreams := svc.DNS.Upstreams
-		if len(upstreams) == 0 {
-			upstreams = cfg.System.DNSServers
-		}
-		for _, u := range upstreams {
-			fmt.Fprintf(&b, "server=%s\n", u)
+		if ResolverEnabled(cfg) {
+			// unbound does the resolving and the DNSSEC validation;
+			// proxy-dnssec passes its verdict on to clients.
+			fmt.Fprintf(&b, "server=127.0.0.1#%d\n", UnboundPort)
+			b.WriteString("proxy-dnssec\n")
+		} else {
+			upstreams := svc.DNS.Upstreams
+			if len(upstreams) == 0 {
+				upstreams = cfg.System.DNSServers
+			}
+			for _, u := range upstreams {
+				fmt.Fprintf(&b, "server=%s\n", u)
+			}
 		}
 		if svc.DNS.Domain != "" {
 			fmt.Fprintf(&b, "domain=%s\nlocal=/%s/\nexpand-hosts\n", svc.DNS.Domain, svc.DNS.Domain)
@@ -408,7 +415,7 @@ func (d *Dnsmasq) Apply(ctx context.Context, files network.Files) error {
 		path := filepath.Join(d.dir(), name)
 		switch {
 		case want && current[name] != content:
-			if err := writeFile(path, content, 0o644); err != nil {
+			if err := writeFile(path, content); err != nil {
 				return err
 			}
 			changed = true
@@ -421,7 +428,7 @@ func (d *Dnsmasq) Apply(ctx context.Context, files network.Files) error {
 	}
 	if d.Resolv != "" {
 		if content, want := files[resolvName]; want && current[resolvName] != content {
-			if err := writeFile(d.Resolv, content, 0o644); err != nil {
+			if err := writeFile(d.Resolv, content); err != nil {
 				return err
 			}
 		}
@@ -465,7 +472,9 @@ func (d *Dnsmasq) Active(ctx context.Context) bool {
 	return err == nil && strings.TrimSpace(string(out)) == "active"
 }
 
-func writeFile(path, content string, mode os.FileMode) error {
+// writeFile replaces path atomically. Generated service files are
+// world-readable: dnsmasq and unbound read them after dropping privileges.
+func writeFile(path, content string) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
 	if err != nil {
 		return err
@@ -476,7 +485,7 @@ func writeFile(path, content string, mode os.FileMode) error {
 		_ = os.Remove(name)
 		return err
 	}
-	if err := tmp.Chmod(mode); err != nil {
+	if err := tmp.Chmod(0o644); err != nil {
 		_ = tmp.Close()
 		_ = os.Remove(name)
 		return err
