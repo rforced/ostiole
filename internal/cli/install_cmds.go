@@ -250,6 +250,9 @@ func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) e
 		if in.Enabled && in.IPv4.Mode == model.AddrStatic && ok && !hasAddress(l, in.IPv4.Address) {
 			fmt.Fprintf(out, "  warning: %s does not currently carry %s; the address will change on takeover\n", in.Name, in.IPv4.Address)
 		}
+		if in.Enabled && ok && in.MTU == 0 && l.MTU != 0 && l.MTU != 1500 {
+			fmt.Fprintf(out, "  warning: %s currently has MTU %d but the configuration sets none; set mtu=%d on it to keep that after a reboot\n", in.Name, l.MTU, l.MTU)
+		}
 	}
 	for _, l := range live {
 		if l.Kind == "loopback" || managed[l.Name] || len(l.Addresses) == 0 {

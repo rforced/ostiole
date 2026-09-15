@@ -146,7 +146,11 @@ function save() {
         </div>
       </fieldset>
 
-      <FormField id="if-mtu" label="MTU" hint="0 keeps the default.">
+      <FormField
+        id="if-mtu"
+        label="MTU"
+        hint="0 leaves the MTU alone (the kernel default, or whatever was set before)."
+      >
         <input
           id="if-mtu"
           v-model.number="form.mtu"
