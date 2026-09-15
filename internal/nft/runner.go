@@ -3,6 +3,7 @@ package nft
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -104,4 +105,31 @@ func (x *Exec) Version(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// ListTables returns every nftables table as "family name", e.g.
+// "inet firewalld", so foreign tables can be reported.
+func (x *Exec) ListTables(ctx context.Context) ([]string, error) {
+	out, err := x.run(ctx, "list tables", "", "-j", "list", "tables")
+	if err != nil {
+		return nil, err
+	}
+	var doc struct {
+		Nftables []struct {
+			Table *struct {
+				Family string `json:"family"`
+				Name   string `json:"name"`
+			} `json:"table"`
+		} `json:"nftables"`
+	}
+	if err := json.Unmarshal(out, &doc); err != nil {
+		return nil, fmt.Errorf("parse nft tables: %w", err)
+	}
+	var tables []string
+	for _, item := range doc.Nftables {
+		if item.Table != nil {
+			tables = append(tables, item.Table.Family+" "+item.Table.Name)
+		}
+	}
+	return tables, nil
 }

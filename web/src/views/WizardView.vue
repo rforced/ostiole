@@ -17,6 +17,7 @@ const hostname = ref('')
 const lan = ref('')
 const lanAddress = ref('192.168.1.1/24')
 const wan = ref('')
+const managementFromWan = ref(false)
 const preview = ref(null)
 const applied = ref(null)
 const error = ref('')
@@ -59,6 +60,7 @@ async function buildPreview() {
       lan: lan.value,
       lanAddress: lanAddress.value.trim(),
       wan: wan.value,
+      managementFromWan: wan.value !== '' && managementFromWan.value,
     })
   } catch (e) {
     preview.value = null
@@ -160,6 +162,20 @@ function reverted() {
           </option>
         </select>
       </FormField>
+
+      <label v-if="wan" class="flex items-start gap-2 text-sm">
+        <input
+          v-model="managementFromWan"
+          type="checkbox"
+          class="mt-0.5 size-4 rounded border-neutral-300"
+        />
+        <span>
+          <span class="font-medium">Allow management from the WAN side too.</span>
+          Keeps the web UI and SSH reachable on the WAN interface. Use this when you administer the
+          box over its public address, for example a cloud VM. Otherwise WAN drops everything unless
+          a rule allows it.
+        </span>
+      </label>
 
       <div v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">
         <p>{{ error }}</p>

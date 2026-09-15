@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/rforced/ostiole/internal/engine"
+	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/store"
@@ -98,6 +100,7 @@ saved as the boot ruleset; run "ostiole apply" to load it now.`,
 	f.StringVar(&opts.LANAddress, "lan-address", "", "LAN IPv4 address in CIDR form, e.g. 192.168.1.1/24 (required)")
 	f.StringVar(&opts.WAN, "wan", "", "WAN interface name (DHCP)")
 	f.StringVar(&opts.Hostname, "hostname", "", "hostname")
+	f.BoolVar(&opts.ManagementFromWAN, "management-from-wan", false, "also allow the web UI and SSH from the WAN zone (boxes managed over their public side)")
 	f.BoolVar(&force, "force", false, "overwrite an existing configuration")
 	_ = cmd.MarkFlagRequired("lan")
 	_ = cmd.MarkFlagRequired("lan-address")
@@ -283,6 +286,24 @@ func newStatusCmd(g *globals) *cobra.Command {
 			fmt.Fprintf(w, "network backend\t%s\n", status.Network)
 			fmt.Fprintf(w, "revisions\t%d\n", len(revs))
 			fmt.Fprintf(w, "nft\t%s\n", nftVersion)
+			if tables, err := (&nft.Exec{Bin: g.nftBin}).ListTables(cmd.Context()); err == nil {
+				var foreign []string
+				for _, t := range tables {
+					if t != nft.Table {
+						foreign = append(foreign, t)
+					}
+				}
+				fmt.Fprintf(w, "other nft tables\t%s\n", strings.Join(foreign, ", "))
+			}
+			if comp, err := install.Competitors(cmd.Context(), install.ExecSystemctl{}); err == nil {
+				var names []string
+				for _, c := range comp {
+					if c.Conflicts() {
+						names = append(names, fmt.Sprintf("%s (%s, %s)", c.Name, c.Active, c.Enabled))
+					}
+				}
+				fmt.Fprintf(w, "conflicting services\t%s\n", strings.Join(names, ", "))
+			}
 			return w.Flush()
 		},
 	}

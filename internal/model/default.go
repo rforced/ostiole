@@ -6,6 +6,9 @@ type StarterOptions struct {
 	LAN        string // interface name, required
 	LANAddress string // CIDR, e.g. 192.168.1.1/24
 	WAN        string // interface name, optional
+	// ManagementFromWAN also allows the management ports from the wan
+	// zone (anti-lockout), for boxes administered over their public side.
+	ManagementFromWAN bool
 }
 
 // Starter returns a sane first configuration: a lan zone with anti-lockout
@@ -42,6 +45,9 @@ func Starter(o StarterOptions) *Config {
 			IPv4:    IPv4{Mode: AddrStatic, Address: o.LANAddress},
 			IPv6:    IPv6{Mode: AddrNone},
 		})
+	}
+	if o.ManagementFromWAN {
+		cfg.Zones[0].AntiLockout = true
 	}
 	if o.WAN != "" {
 		cfg.Interfaces = append(cfg.Interfaces, Interface{

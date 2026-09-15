@@ -23,11 +23,15 @@ test('a fresh box asks for an admin account, then runs the wizard', async ({ pag
   const lan = page.getByLabel('LAN interface')
   await lan.selectOption({ index: 1 })
   await page.getByLabel('LAN address').fill('192.168.50.1/24')
-  await page.getByLabel('WAN interface').selectOption({ index: 0 })
+  await page.getByLabel('WAN interface', { exact: true }).selectOption({ index: 2 })
+  await page.getByRole('checkbox', { name: /Allow management from the WAN/ }).check()
   await page.getByRole('button', { name: 'Preview' }).click()
 
   await expect(page.getByRole('heading', { name: 'What will be applied' })).toBeVisible()
   await expect(page.getByText('192.168.50.1/24')).toBeVisible()
+  await expect(page.getByRole('listitem').filter({ hasText: /Zone wan/ })).toContainText(
+    'anti-lockout on',
+  )
   await page.screenshot({ path: shot('03-wizard-preview'), fullPage: true })
 
   await page.getByRole('button', { name: /Apply with 90s confirmation/ }).click()

@@ -209,10 +209,11 @@ func (a *api) liveInterfaces(w http.ResponseWriter, _ *http.Request) error {
 }
 
 type starterRequest struct {
-	Hostname   string `json:"hostname"`
-	LAN        string `json:"lan"`
-	LANAddress string `json:"lanAddress"`
-	WAN        string `json:"wan"`
+	Hostname          string `json:"hostname"`
+	LAN               string `json:"lan"`
+	LANAddress        string `json:"lanAddress"`
+	WAN               string `json:"wan"`
+	ManagementFromWAN bool   `json:"managementFromWan"`
 }
 
 // starter builds (but does not save) a first configuration from the
@@ -226,10 +227,11 @@ func (a *api) starter(w http.ResponseWriter, r *http.Request) error {
 		return &badRequest{errors.New("lan and lanAddress are required")}
 	}
 	cfg := model.Starter(model.StarterOptions{
-		Hostname:   req.Hostname,
-		LAN:        req.LAN,
-		LANAddress: req.LANAddress,
-		WAN:        req.WAN,
+		Hostname:          req.Hostname,
+		LAN:               req.LAN,
+		LANAddress:        req.LANAddress,
+		WAN:               req.WAN,
+		ManagementFromWAN: req.ManagementFromWAN,
 	})
 	if err := cfg.Validate(); err != nil {
 		return err

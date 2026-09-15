@@ -86,6 +86,9 @@ func newRootCmd() *cobra.Command {
 		newRevisionsCmd(g),
 		newCountersCmd(g),
 		newResetPasswordCmd(g),
+		newInstallCmd(g),
+		newTakeoverCmd(g),
+		newUninstallCmd(g),
 		newVersionCmd(),
 	)
 	return cmd
