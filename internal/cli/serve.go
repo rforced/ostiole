@@ -14,6 +14,7 @@ import (
 	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/server"
+	"github.com/rforced/ostiole/internal/sysctl"
 	"github.com/rforced/ostiole/internal/update"
 	"github.com/rforced/ostiole/internal/version"
 )
@@ -49,6 +50,12 @@ at your own.`,
 			eng, err := g.engine()
 			if err != nil {
 				return err
+			}
+			if os.Geteuid() == 0 {
+				// A router must forward from the moment the daemon is up.
+				if err := (sysctl.Proc{}).Apply(); err != nil {
+					slog.Warn("could not apply router sysctls", "err", err)
+				}
 			}
 			as, err := auth.NewService(g.configDir)
 			if err != nil {

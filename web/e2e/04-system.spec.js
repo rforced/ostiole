@@ -7,7 +7,7 @@ test.describe.configure({ mode: 'serial' })
 test('system settings, ruleset view, and rollback via revisions', async ({ page }) => {
   await login(page)
   await page.goto('/system')
-  await expect(page.getByRole('heading', { name: 'System' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'System', exact: true })).toBeVisible()
 
   await page.getByLabel('Hostname').fill('edge2')
   await expect(page.getByText('Unapplied changes.')).toBeVisible()

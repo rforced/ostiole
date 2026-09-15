@@ -151,6 +151,10 @@ func Install(ctx context.Context, sc Systemctl, lay Layout, opts Options, log *s
 				rep.Sysctl = sysctl.ConfFile
 			}
 		}
+		// Take effect now as well, not only after the next boot or apply.
+		if err := (sysctl.Proc{}).Apply(); err != nil {
+			log.Warn("could not apply router sysctls now", "err", err)
+		}
 	}
 	if out, err := sc.Run(ctx, "enable", FirewallUnit); err != nil {
 		return nil, fmt.Errorf("enable %s: %w: %s", FirewallUnit, err, out)
