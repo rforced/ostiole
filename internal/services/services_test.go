@@ -188,19 +188,30 @@ func TestApplyNeedsSetup(t *testing.T) {
 
 func TestParseLeases(t *testing.T) {
 	t.Parallel()
-	in := strings.NewReader("1758000000 aa:bb:cc:dd:ee:ff 192.168.1.101 laptop 01:aa:bb:cc:dd:ee:ff\n0 11:22:33:44:55:66 192.168.1.50 nas *\nduid 00:01:00:01\ngarbage\n")
+	in := strings.NewReader("1758000000 aa:bb:cc:dd:ee:ff 192.168.1.101 laptop 01:aa:bb:cc:dd:ee:ff\n" +
+		"0 11:22:33:44:55:66 192.168.1.50 nas *\n" +
+		"duid 00:01:00:01\n" +
+		"1758000100 123456 2001:db8:1::abc phone 00:01:00:01:2f:aa:bb\n" +
+		"garbage\n")
 	leases, err := ParseLeases(in)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(leases) != 2 {
+	if len(leases) != 3 {
 		t.Fatalf("leases = %+v", leases)
 	}
-	if leases[0].IP != "192.168.1.101" || leases[0].Hostname != "laptop" || leases[0].Static || leases[0].Expires.IsZero() {
+	// Sorted by family, then numerically: .50 before .101, IPv6 last.
+	if !leases[0].Static || leases[0].IP != "192.168.1.50" || leases[0].ClientID != "" || leases[0].Family != 4 {
 		t.Errorf("lease 0 = %+v", leases[0])
 	}
-	if !leases[1].Static || leases[1].ClientID != "" {
+	if leases[1].IP != "192.168.1.101" || leases[1].Hostname != "laptop" || leases[1].Static || leases[1].Expires.IsZero() {
 		t.Errorf("lease 1 = %+v", leases[1])
+	}
+	// IPv6 leases carry an IAID where a MAC would be, and a DUID at the end.
+	v6 := leases[2]
+	if v6.Family != 6 || v6.IP != "2001:db8:1::abc" || v6.MAC != "" || v6.Hostname != "phone" ||
+		v6.ClientID != "00:01:00:01:2f:aa:bb" {
+		t.Errorf("lease 2 = %+v", v6)
 	}
 	d := &Dnsmasq{Leases: filepath.Join(t.TempDir(), "none")}
 	if l, err := d.ReadLeases(); err != nil || len(l) != 0 {

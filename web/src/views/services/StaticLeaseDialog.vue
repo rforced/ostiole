@@ -8,19 +8,28 @@ import { useConfigStore } from '@/stores/config'
 const props = defineProps({ lease: { type: Object, default: null } })
 const open = defineModel('open', { type: Boolean, default: false })
 const config = useConfigStore()
-const form = ref({ mac: '', ip: '', hostname: '', description: '' })
+const form = ref({ mac: '', ip: '', ipv6: '', hostname: '', description: '' })
 
 watch(
   () => [open.value, props.lease],
   () => {
     if (open.value)
-      form.value = { mac: '', ip: '', hostname: '', description: '', ...(props.lease ?? {}) }
+      form.value = {
+        mac: '',
+        ip: '',
+        ipv6: '',
+        hostname: '',
+        description: '',
+        ...(props.lease ?? {}),
+      }
   },
   { immediate: true },
 )
 
 function save() {
-  const out = { mac: form.value.mac.trim().toLowerCase(), ip: form.value.ip.trim() }
+  const out = { mac: form.value.mac.trim().toLowerCase() }
+  if (form.value.ip) out.ip = form.value.ip.trim()
+  if (form.value.ipv6) out.ipv6 = form.value.ipv6.trim()
   if (form.value.hostname) out.hostname = form.value.hostname.trim()
   if (form.value.description) out.description = form.value.description
   config.upsertStaticLease(out, props.lease?.mac ?? out.mac)
@@ -43,7 +52,14 @@ function save() {
           />
         </FormField>
         <FormField id="sl-ip" label="IPv4 address">
-          <input id="sl-ip" v-model="form.ip" class="input font-mono" required spellcheck="false" />
+          <input id="sl-ip" v-model="form.ip" class="input font-mono" spellcheck="false" />
+        </FormField>
+        <FormField
+          id="sl-ip6"
+          label="IPv6 address"
+          hint="Optional. ::20 means host 20 of the interface's prefix. Needs DHCPv6 in managed mode, and only reaches clients whose identifier carries their MAC."
+        >
+          <input id="sl-ip6" v-model="form.ipv6" class="input font-mono" spellcheck="false" />
         </FormField>
         <FormField id="sl-host" label="Hostname" hint="Also resolvable by the DNS service.">
           <input id="sl-host" v-model="form.hostname" class="input font-mono" spellcheck="false" />

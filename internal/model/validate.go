@@ -284,6 +284,7 @@ func (v *validator) services(c *Config, ifaces map[string]bool) {
 			v.add(path+".domain", "%q is not a valid domain", sc.Domain)
 		}
 	}
+	v.dhcpv6(c, ifaces)
 	macs := map[string]bool{}
 	for i, l := range c.Services.DHCP.StaticLeases {
 		path := fmt.Sprintf("services.dhcp.staticLeases[%d]", i)
@@ -294,10 +295,22 @@ func (v *validator) services(c *Config, ifaces map[string]bool) {
 			v.add(path+".mac", "duplicate MAC %s", l.MAC)
 		}
 		macs[mac] = true
-		if ip, err := ParseIP(l.IP); err != nil {
-			v.add(path+".ip", "%v", err)
-		} else if !ip.Is4() {
-			v.add(path+".ip", "static leases are IPv4 only")
+		if l.IP == "" && l.IPv6 == "" {
+			v.add(path+".ip", "a static lease needs an IPv4 or an IPv6 address")
+		}
+		if l.IP != "" {
+			if ip, err := ParseIP(l.IP); err != nil {
+				v.add(path+".ip", "%v", err)
+			} else if !ip.Is4() {
+				v.add(path+".ip", "%s is not an IPv4 address; use the ipv6 field", l.IP)
+			}
+		}
+		if l.IPv6 != "" {
+			if ip, err := ParseIP(l.IPv6); err != nil {
+				v.add(path+".ipv6", "%v", err)
+			} else if ip.Is4() {
+				v.add(path+".ipv6", "%s is not an IPv6 address", l.IPv6)
+			}
 		}
 		if l.Hostname != "" && !hostnameRe.MatchString(l.Hostname) {
 			v.add(path+".hostname", "%q is not a valid hostname", l.Hostname)
@@ -331,6 +344,65 @@ func (v *validator) services(c *Config, ifaces map[string]bool) {
 		names[strings.ToLower(h.Hostname)] = true
 		if _, err := ParseIP(h.IP); err != nil {
 			v.add(path+".ip", "%v", err)
+		}
+	}
+}
+
+// dhcpv6 checks the router advertisement scopes. The prefix itself is not
+// configured here: dnsmasq takes it from the interface at run time, so an
+// interface only needs IPv6 to be switched on.
+func (v *validator) dhcpv6(c *Config, ifaces map[string]bool) {
+	seen := map[string]bool{}
+	for i, sc := range c.Services.DHCP.V6 {
+		path := fmt.Sprintf("services.dhcp.v6[%d]", i)
+		in, ok := c.Interface(sc.Interface)
+		if !ok || !ifaces[sc.Interface] {
+			v.add(path+".interface", "unknown interface %q", sc.Interface)
+			continue
+		}
+		if seen[sc.Interface] {
+			v.add(path+".interface", "interface %q already advertises IPv6", sc.Interface)
+		}
+		seen[sc.Interface] = true
+		if in.IPv6.Mode == AddrNone {
+			v.add(path+".interface", "interface %q has IPv6 switched off", sc.Interface)
+		}
+		switch sc.Mode {
+		case RASLAAC, RAStateless:
+			if sc.RangeStart != "" || sc.RangeEnd != "" {
+				v.add(path+".mode", "%q hands out no addresses, so it takes no range", sc.Mode)
+			}
+		case RAManaged:
+			start, serr := ParseIP(sc.RangeStart)
+			end, eerr := ParseIP(sc.RangeEnd)
+			if serr != nil {
+				v.add(path+".rangeStart", "%v", serr)
+			} else if start.Is4() {
+				v.add(path+".rangeStart", "%s is not an IPv6 address", sc.RangeStart)
+			}
+			if eerr != nil {
+				v.add(path+".rangeEnd", "%v", eerr)
+			} else if end.Is4() {
+				v.add(path+".rangeEnd", "%s is not an IPv6 address", sc.RangeEnd)
+			}
+			if serr == nil && eerr == nil && start.Compare(end) > 0 {
+				v.add(path+".rangeEnd", "range end is before its start")
+			}
+		default:
+			v.add(path+".mode", "%q must be slaac, stateless, or managed", sc.Mode)
+		}
+		if sc.LeaseTime != "" && !leaseTimeRe.MatchString(sc.LeaseTime) {
+			v.add(path+".leaseTime", "%q must look like 12h, 2d, or infinite", sc.LeaseTime)
+		}
+		for j, d := range sc.DNS {
+			if ip, err := ParseIP(d); err != nil {
+				v.add(fmt.Sprintf("%s.dns[%d]", path, j), "%v", err)
+			} else if ip.Is4() {
+				v.add(fmt.Sprintf("%s.dns[%d]", path, j), "%s is not an IPv6 address", d)
+			}
+		}
+		if sc.Domain != "" && !domainRe.MatchString(sc.Domain) {
+			v.add(path+".domain", "%q is not a valid domain", sc.Domain)
 		}
 	}
 }

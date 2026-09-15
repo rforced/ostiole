@@ -97,7 +97,8 @@ function editLease(l) {
           <thead>
             <tr>
               <th>MAC</th>
-              <th>IP</th>
+              <th>IPv4</th>
+              <th>IPv6</th>
               <th>Hostname</th>
               <th>Description</th>
               <th></th>
@@ -105,11 +106,12 @@ function editLease(l) {
           </thead>
           <tbody>
             <tr v-if="!(dhcp.staticLeases ?? []).length">
-              <td colspan="5" class="text-neutral-500">No static leases.</td>
+              <td colspan="6" class="text-neutral-500">No static leases.</td>
             </tr>
             <tr v-for="l in dhcp.staticLeases" :key="l.mac">
               <td class="font-mono text-xs">{{ l.mac }}</td>
-              <td class="font-mono text-xs">{{ l.ip }}</td>
+              <td class="font-mono text-xs">{{ l.ip || '—' }}</td>
+              <td class="font-mono text-xs">{{ l.ipv6 || '—' }}</td>
               <td class="font-mono text-xs">{{ l.hostname }}</td>
               <td>{{ l.description }}</td>
               <td class="text-right whitespace-nowrap">

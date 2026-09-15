@@ -250,3 +250,66 @@ func TestValidateServices(t *testing.T) {
 		t.Errorf("dns without upstreams accepted: %v", err)
 	}
 }
+
+func TestValidateDHCPv6(t *testing.T) {
+	t.Parallel()
+	cfg := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0"})
+	cfg.Interfaces[0].IPv6 = IPv6{Mode: AddrStatic, Address: "2001:db8::1/64"}
+	cfg.Services.DHCP = DHCPServer{Enabled: true, V6: []DHCPv6Scope{
+		{Interface: "eth1", Enabled: true, Mode: RAManaged, RangeStart: "::1ff", RangeEnd: "::100", LeaseTime: "soon", DNS: []string{"192.168.1.1"}, Domain: "-x"},
+		{Interface: "eth1", Enabled: true, Mode: RASLAAC, RangeStart: "::100"},
+		{Interface: "eth0", Enabled: true, Mode: RASLAAC},
+		{Interface: "ghost", Enabled: true, Mode: RASLAAC},
+		{Interface: "eth1", Enabled: true, Mode: "wat"},
+	}}
+	var ve *ValidationError
+	if !errors.As(cfg.Validate(), &ve) {
+		t.Fatal("want validation issues")
+	}
+	got := map[string]bool{}
+	for _, i := range ve.Issues {
+		got[i.Path] = true
+	}
+	for _, p := range []string{
+		"services.dhcp.v6[0].rangeEnd", "services.dhcp.v6[0].leaseTime", "services.dhcp.v6[0].dns[0]",
+		"services.dhcp.v6[0].domain", "services.dhcp.v6[1].interface", "services.dhcp.v6[1].mode",
+		"services.dhcp.v6[3].interface", "services.dhcp.v6[4].mode",
+	} {
+		if !got[p] {
+			t.Errorf("missing issue at %s (have %v)", p, ve.Issues)
+		}
+	}
+
+	// eth0 (the WAN, SLAAC) raised nothing: advertising there is legal, if
+	// unusual. A single sane scope must validate too.
+	cfg.Services.DHCP.V6 = []DHCPv6Scope{{Interface: "eth1", Enabled: true, Mode: RAManaged, RangeStart: "::100", RangeEnd: "::1ff"}}
+	cfg.Services.DNS = DNSServer{Enabled: true, Upstreams: []string{"1.1.1.1"}}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("valid IPv6 scope rejected: %v", err)
+	}
+}
+
+func TestValidateStaticLeaseAddresses(t *testing.T) {
+	t.Parallel()
+	cfg := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24"})
+	cfg.Services.DHCP = DHCPServer{Enabled: true, StaticLeases: []StaticLease{
+		{MAC: "aa:bb:cc:dd:ee:01"},
+		{MAC: "aa:bb:cc:dd:ee:02", IPv6: "::20"},
+		{MAC: "aa:bb:cc:dd:ee:03", IPv6: "192.168.1.9"},
+		{MAC: "aa:bb:cc:dd:ee:04", IP: "192.168.1.9", IPv6: "2001:db8::9"},
+	}}
+	var ve *ValidationError
+	if !errors.As(cfg.Validate(), &ve) {
+		t.Fatal("want validation issues")
+	}
+	got := map[string]bool{}
+	for _, i := range ve.Issues {
+		got[i.Path] = true
+	}
+	if !got["services.dhcp.staticLeases[0].ip"] || !got["services.dhcp.staticLeases[2].ipv6"] {
+		t.Errorf("issues = %v", ve.Issues)
+	}
+	if got["services.dhcp.staticLeases[1].ipv6"] || got["services.dhcp.staticLeases[3].ipv6"] {
+		t.Errorf("valid leases rejected: %v", ve.Issues)
+	}
+}

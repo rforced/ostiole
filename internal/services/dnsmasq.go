@@ -138,13 +138,15 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 	fmt.Fprintf(&b, "addn-hosts=%s\n", filepath.Join(d.dir(), hostsName))
 	fmt.Fprintf(&b, "dhcp-leasefile=%s\n", d.leases())
 
+	// bind-dynamic serves only the listed interfaces, so every interface
+	// that needs DNS, DHCP, or router advertisements has to appear here.
+	for _, name := range listenInterfaces(cfg) {
+		fmt.Fprintf(&b, "interface=%s\n", name)
+	}
+
 	// ---- DNS ----
 	if svc.DNS.Enabled {
 		b.WriteString("domain-needed\nbogus-priv\nlocalise-queries\n")
-		ifs := nft.DNSInterfaces(cfg)
-		for _, name := range ifs {
-			fmt.Fprintf(&b, "interface=%s\n", name)
-		}
 		b.WriteString("listen-address=127.0.0.1\n")
 		upstreams := svc.DNS.Upstreams
 		if len(upstreams) == 0 {
@@ -158,14 +160,6 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 		}
 	} else {
 		b.WriteString("port=0\n")
-		if svc.DHCP.Enabled {
-			// dnsmasq only serves DHCP on interfaces it listens on.
-			for _, sc := range svc.DHCP.Scopes {
-				if sc.Enabled {
-					fmt.Fprintf(&b, "interface=%s\n", sc.Interface)
-				}
-			}
-		}
 	}
 
 	// ---- DHCP ----
@@ -214,12 +208,19 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 				fmt.Fprintf(&b, "dhcp-option=tag:%s,option:domain-name,%s\n", tag, domain)
 			}
 		}
+		renderV6(&b, cfg)
 		for _, l := range svc.DHCP.StaticLeases {
-			line := "dhcp-host=" + strings.ToLower(l.MAC) + "," + l.IP
-			if l.Hostname != "" {
-				line += "," + l.Hostname
+			parts := []string{strings.ToLower(l.MAC)}
+			if l.IP != "" {
+				parts = append(parts, l.IP)
 			}
-			b.WriteString(line + "\n")
+			if l.IPv6 != "" {
+				parts = append(parts, "["+l.IPv6+"]")
+			}
+			if l.Hostname != "" {
+				parts = append(parts, l.Hostname)
+			}
+			fmt.Fprintf(&b, "dhcp-host=%s\n", strings.Join(parts, ","))
 		}
 	}
 
@@ -231,13 +232,125 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 	for _, o := range overrides {
 		fmt.Fprintf(&h, "%s %s\n", o.IP, o.Hostname)
 	}
-	// Static leases with hostnames resolve locally too.
+	// Static leases with hostnames resolve locally too. An IPv6 host part
+	// like ::20 is only meaningful next to a prefix, so it is left out.
 	for _, l := range svc.DHCP.StaticLeases {
-		if l.Hostname != "" {
+		if l.Hostname == "" {
+			continue
+		}
+		if l.IP != "" {
 			fmt.Fprintf(&h, "%s %s\n", l.IP, l.Hostname)
+		}
+		if ip, err := netip.ParseAddr(l.IPv6); err == nil && !hostPartOnly(ip) {
+			fmt.Fprintf(&h, "%s %s\n", ip, l.Hostname)
 		}
 	}
 	return b.String(), h.String(), nil
+}
+
+// hostPartOnly reports an address written as a bare host part, like ::20,
+// which dnsmasq combines with the interface's prefix.
+func hostPartOnly(ip netip.Addr) bool {
+	if !ip.Is6() || ip.Is4In6() {
+		return false
+	}
+	b := ip.As16()
+	for _, x := range b[:8] {
+		if x != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// listenInterfaces is every interface dnsmasq must bind: the DNS
+// interfaces plus any that hand out addresses or advertise IPv6.
+func listenInterfaces(cfg *model.Config) []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(name string) {
+		if name != "" && !seen[name] {
+			seen[name] = true
+			out = append(out, name)
+		}
+	}
+	if cfg.Services.DNS.Enabled {
+		for _, name := range nft.DNSInterfaces(cfg) {
+			add(name)
+		}
+	}
+	if cfg.Services.DHCP.Enabled {
+		for _, sc := range cfg.Services.DHCP.Scopes {
+			if sc.Enabled {
+				add(sc.Interface)
+			}
+		}
+		for _, sc := range EnabledV6(cfg) {
+			add(sc.Interface)
+		}
+	}
+	return out
+}
+
+// EnabledV6 lists the IPv6 scopes that are on and whose interface is on.
+func EnabledV6(cfg *model.Config) []model.DHCPv6Scope {
+	var out []model.DHCPv6Scope
+	if !cfg.Services.DHCP.Enabled {
+		return nil
+	}
+	for _, sc := range cfg.Services.DHCP.V6 {
+		if in, ok := cfg.Interface(sc.Interface); ok && sc.Enabled && in.Enabled {
+			out = append(out, sc)
+		}
+	}
+	return out
+}
+
+// renderV6 writes the router advertisement and DHCPv6 configuration. The
+// prefix is never written out: constructor: tells dnsmasq to take it from
+// the interface, so SLAAC or a delegated prefix keeps working.
+func renderV6(b *strings.Builder, cfg *model.Config) {
+	scopes := EnabledV6(cfg)
+	if len(scopes) == 0 {
+		return
+	}
+	svc := cfg.Services
+	b.WriteString("enable-ra\n")
+	for _, sc := range scopes {
+		tag := "s6_" + sanitizeTag(sc.Interface)
+		lease := sc.LeaseTime
+		if lease == "" {
+			lease = "12h"
+		}
+		switch sc.Mode {
+		case model.RASLAAC:
+			fmt.Fprintf(b, "dhcp-range=set:%s,::,constructor:%s,ra-only,64,%s\n", tag, sc.Interface, lease)
+		case model.RAStateless:
+			fmt.Fprintf(b, "dhcp-range=set:%s,::,constructor:%s,ra-stateless,ra-names,64,%s\n", tag, sc.Interface, lease)
+		case model.RAManaged:
+			fmt.Fprintf(b, "dhcp-range=set:%s,%s,%s,constructor:%s,ra-names,64,%s\n",
+				tag, sc.RangeStart, sc.RangeEnd, sc.Interface, lease)
+		}
+		dns := sc.DNS
+		if len(dns) == 0 && svc.DNS.Enabled {
+			// [::] is dnsmasq shorthand for this box on that interface.
+			dns = []string{"::"}
+		}
+		if len(dns) > 0 {
+			addrs := make([]string, 0, len(dns))
+			for _, d := range dns {
+				addrs = append(addrs, "["+d+"]")
+			}
+			fmt.Fprintf(b, "dhcp-option=tag:%s,option6:dns-server,%s\n", tag, strings.Join(addrs, ","))
+		}
+		domain := sc.Domain
+		if domain == "" {
+			domain = svc.DNS.Domain
+		}
+		if domain != "" {
+			fmt.Fprintf(b, "dhcp-option=tag:%s,option6:domain-search,%s\n", tag, domain)
+		}
+	}
 }
 
 func sanitizeTag(s string) string {

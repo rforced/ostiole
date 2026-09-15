@@ -6,8 +6,8 @@ no-poll
 bind-dynamic
 addn-hosts=/etc/dnsmasq.d/ostiole.hosts
 dhcp-leasefile=/var/lib/dnsmasq/ostiole.leases
-port=0
 interface=eth1
+port=0
 dhcp-authoritative
 dhcp-range=set:s_eth1,10.0.0.50,10.0.0.99,255.255.255.0,12h
 dhcp-option=tag:s_eth1,option:router,10.0.0.254

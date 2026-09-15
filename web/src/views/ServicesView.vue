@@ -5,6 +5,7 @@ import { onMounted, ref } from 'vue'
 import AppTabs from '@/components/AppTabs.vue'
 import { api } from '@/lib/api'
 import { useConfigStore } from '@/stores/config'
+import Dhcp6Tab from '@/views/services/Dhcp6Tab.vue'
 import DhcpTab from '@/views/services/DhcpTab.vue'
 import DnsTab from '@/views/services/DnsTab.vue'
 import LeasesTab from '@/views/services/LeasesTab.vue'
@@ -50,11 +51,13 @@ onMounted(async () => {
         v-model="tab"
         :tabs="[
           { value: 'dhcp', label: 'DHCP' },
+          { value: 'dhcp6', label: 'DHCPv6' },
           { value: 'dns', label: 'DNS' },
           { value: 'leases', label: 'Leases' },
         ]"
       >
         <TabsContent value="dhcp"><DhcpTab /></TabsContent>
+        <TabsContent value="dhcp6"><Dhcp6Tab /></TabsContent>
         <TabsContent value="dns"><DnsTab /></TabsContent>
         <TabsContent value="leases"><LeasesTab /></TabsContent>
       </AppTabs>

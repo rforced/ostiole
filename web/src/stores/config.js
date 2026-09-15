@@ -235,6 +235,19 @@ export const useConfigStore = defineStore('config', () => {
     dhcp.scopes = (dhcp.scopes ?? []).filter((s) => s.interface !== iface)
   }
 
+  function upsertV6Scope(scope) {
+    const dhcp = ensureServices().dhcp
+    const list = dhcp.v6 ?? (dhcp.v6 = [])
+    const idx = list.findIndex((s) => s.interface === scope.interface)
+    if (idx === -1) list.push(clone(scope))
+    else list[idx] = clone(scope)
+  }
+
+  function removeV6Scope(iface) {
+    const dhcp = ensureServices().dhcp
+    dhcp.v6 = (dhcp.v6 ?? []).filter((s) => s.interface !== iface)
+  }
+
   function upsertStaticLease(lease, previousMac = lease.mac) {
     const dhcp = ensureServices().dhcp
     const list = dhcp.staticLeases ?? (dhcp.staticLeases = [])
@@ -320,6 +333,8 @@ export const useConfigStore = defineStore('config', () => {
     ensureServices,
     upsertScope,
     removeScope,
+    upsertV6Scope,
+    removeV6Scope,
     upsertStaticLease,
     removeStaticLease,
     upsertHostOverride,

@@ -67,7 +67,7 @@
         "address": "192.168.20.1/24"
       },
       "ipv6": {
-        "mode": "none"
+        "mode": "slaac"
       }
     },
     {
@@ -413,6 +413,25 @@
           "mac": "aa:bb:cc:dd:ee:ff",
           "ip": "192.168.1.50",
           "hostname": "nas"
+        }
+      ],
+      "v6": [
+        {
+          "interface": "eth1",
+          "enabled": true,
+          "mode": "managed",
+          "rangeStart": "::100",
+          "rangeEnd": "::1ff"
+        },
+        {
+          "interface": "eth1.20",
+          "enabled": true,
+          "mode": "slaac"
+        },
+        {
+          "interface": "eth0",
+          "enabled": false,
+          "mode": "stateless"
         }
       ]
     },

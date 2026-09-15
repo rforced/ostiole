@@ -174,6 +174,17 @@ func (r *renderer) serviceRules() {
 		if len(ifs) > 0 {
 			r.line(fmt.Sprintf(`iifname %s udp dport 67 counter accept comment "service:dhcp"`, ifnameSet(ifs)))
 		}
+		// Router advertisements need no rule (ICMPv6 is in the baseline and
+		// output is open), but stateful and stateless DHCPv6 do.
+		var v6 []string
+		for _, sc := range svc.DHCP.V6 {
+			if in, ok := r.cfg.Interface(sc.Interface); ok && sc.Enabled && in.Enabled && sc.Mode != model.RASLAAC {
+				v6 = append(v6, sc.Interface)
+			}
+		}
+		if len(v6) > 0 {
+			r.line(fmt.Sprintf(`iifname %s udp dport 547 counter accept comment "service:dhcpv6"`, ifnameSet(v6)))
+		}
 	}
 	if svc.DNS.Enabled {
 		ifs := DNSInterfaces(r.cfg)

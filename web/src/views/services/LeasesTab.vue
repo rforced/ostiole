@@ -28,8 +28,8 @@ onMounted(refresh)
       <table class="table">
         <thead>
           <tr>
-            <th>IP</th>
-            <th>MAC</th>
+            <th>Address</th>
+            <th>Client</th>
             <th>Hostname</th>
             <th>Expires</th>
           </tr>
@@ -38,9 +38,13 @@ onMounted(refresh)
           <tr v-if="!leases.length">
             <td colspan="4" class="text-neutral-500">No leases yet.</td>
           </tr>
-          <tr v-for="l in leases" :key="l.ip + l.mac">
-            <td class="font-mono text-xs">{{ l.ip }}</td>
-            <td class="font-mono text-xs">{{ l.mac }}</td>
+          <tr v-for="l in leases" :key="l.ip + (l.mac || l.clientId)">
+            <td class="font-mono text-xs">
+              {{ l.ip }}
+              <span v-if="l.family === 6" class="badge ml-1">v6</span>
+            </td>
+            <!-- DHCPv6 identifies clients by DUID, so there is no MAC. -->
+            <td class="font-mono text-xs">{{ l.mac || l.clientId || '—' }}</td>
             <td class="font-mono text-xs">{{ l.hostname }}</td>
             <td class="text-xs">
               {{ l.static ? 'static' : new Date(l.expires).toLocaleString() }}

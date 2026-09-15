@@ -264,11 +264,44 @@ type Services struct {
 	DNS  DNSServer  `json:"dns"`
 }
 
-// DHCPServer hands out IPv4 addresses on selected interfaces.
+// DHCPServer hands out IPv4 addresses on selected interfaces, and with V6
+// also advertises IPv6 prefixes and serves DHCPv6.
 type DHCPServer struct {
 	Enabled      bool          `json:"enabled"`
 	Scopes       []DHCPScope   `json:"scopes,omitempty"`
 	StaticLeases []StaticLease `json:"staticLeases,omitempty"`
+	V6           []DHCPv6Scope `json:"v6,omitempty"`
+}
+
+// RAMode says how hosts on an interface configure IPv6.
+type RAMode string
+
+// Router advertisement modes.
+const (
+	// RASLAAC advertises the prefix and lets hosts pick their own address.
+	RASLAAC RAMode = "slaac"
+	// RAStateless keeps SLAAC addressing but answers DHCPv6 information
+	// requests, which is how clients learn DNS servers and the domain.
+	RAStateless RAMode = "stateless"
+	// RAManaged hands out addresses from a pool over DHCPv6.
+	RAManaged RAMode = "managed"
+)
+
+// DHCPv6Scope serves IPv6 on one interface. The prefix is taken from the
+// interface at run time, so it follows a static address, SLAAC, or a
+// delegated prefix without being repeated here.
+type DHCPv6Scope struct {
+	Interface string `json:"interface"`
+	Enabled   bool   `json:"enabled"`
+	Mode      RAMode `json:"mode"`
+	// RangeStart and RangeEnd are host parts of that prefix, written like
+	// ::100 and ::1ff. Required when Mode is managed, ignored otherwise.
+	RangeStart string `json:"rangeStart,omitempty"`
+	RangeEnd   string `json:"rangeEnd,omitempty"`
+	// LeaseTime is also the lifetime advertised in router advertisements.
+	LeaseTime string   `json:"leaseTime,omitempty"`
+	DNS       []string `json:"dns,omitempty"`
+	Domain    string   `json:"domain,omitempty"`
 }
 
 // DHCPScope is a pool on one interface, which must carry a static IPv4
@@ -286,10 +319,13 @@ type DHCPScope struct {
 	Domain     string   `json:"domain,omitempty"`
 }
 
-// StaticLease pins an address to a MAC.
+// StaticLease pins addresses to a MAC. IPv6 may be a host part of the
+// interface's prefix, written like ::20, and only reaches clients whose
+// DHCPv6 identifier the server can tie to the MAC.
 type StaticLease struct {
 	MAC         string `json:"mac"`
-	IP          string `json:"ip"`
+	IP          string `json:"ip,omitempty"`
+	IPv6        string `json:"ipv6,omitempty"`
 	Hostname    string `json:"hostname,omitempty"`
 	Description string `json:"description,omitempty"`
 }
