@@ -333,8 +333,17 @@ func renderV6(b *strings.Builder, cfg *model.Config) {
 		}
 		dns := sc.DNS
 		if len(dns) == 0 && svc.DNS.Enabled {
-			// [::] is dnsmasq shorthand for this box on that interface.
+			// dnsmasq puts a DNS server into the router advertisement only
+			// when it is a literal address: its [::] shorthand for "this
+			// box" reaches DHCPv6 replies but is dropped from the RDNSS
+			// option, which is all a SLAAC-only client ever sees. Use the
+			// interface's own address when the configuration names one.
 			dns = []string{"::"}
+			if in, ok := cfg.Interface(sc.Interface); ok && in.IPv6.Mode == model.AddrStatic {
+				if p, err := netip.ParsePrefix(in.IPv6.Address); err == nil {
+					dns = []string{p.Addr().String()}
+				}
+			}
 		}
 		if len(dns) > 0 {
 			addrs := make([]string, 0, len(dns))
