@@ -75,13 +75,27 @@ nfpms:
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
 
+# Commit subjects here are prose, so the groups key off the verb that
+# starts them rather than a conventional-commit prefix.
 changelog:
   use: git
   sort: asc
+  abbrev: 8
+  groups:
+    - title: Added
+      regexp: '(?i)^[0-9a-f]+ (add|introduce|implement|serve|watch|show|support)'
+      order: 0
+    - title: Fixed
+      regexp: '(?i)^[0-9a-f]+ (fix|correct|stop|prevent|repair|restore|keep|refuse|guard)'
+      order: 1
+    - title: Other changes
+      order: 2
   filters:
     exclude:
       - "^docs:"
       - "^test:"
+      - '(?i)^[0-9a-f]+ (chore|typo|wip|bump|merge|revert)'
+      - "^Merge "
 
 release:
   github:
@@ -99,3 +113,23 @@ release:
 
     Packages above can be installed with `dpkg -i`, `rpm -i`, `apk add --allow-untrusted`, or `pacman -U`,
     then run `ostiole install`.
+
+    ## Verifying
+
+    `checksums.txt` is signed with the release ed25519 key that every Ostiole binary embeds, so the
+    built-in updater and `install.sh` both check it. To check by hand:
+
+    ```sh
+    curl -fsSLO https://github.com/rforced/ostiole/releases/download/{{ .Tag }}/checksums.txt
+    curl -fsSLO https://github.com/rforced/ostiole/releases/download/{{ .Tag }}/checksums.txt.sig
+    printf -- "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA4a3rf0bCdQNTKO3KODxqMrdT1+T1nq9t+KNN2f9DJ0U=\n-----END PUBLIC KEY-----\n" > ostiole.pem
+    base64 -d < checksums.txt.sig > checksums.sig
+    openssl pkeyutl -verify -pubin -inkey ostiole.pem -rawin -in checksums.txt -sigfile checksums.sig
+    sha256sum --ignore-missing -c checksums.txt
+    ```
+
+    Every artifact also carries a signed build provenance attestation from GitHub:
+
+    ```sh
+    gh attestation verify ostiole_{{ .Version }}_linux_amd64.tar.gz --repo rforced/ostiole
+    ```

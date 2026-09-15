@@ -108,7 +108,7 @@ func TestNewer(t *testing.T) {
 func TestCheckDownloadInstall(t *testing.T) {
 	t.Parallel()
 	srv, pub := fakeGitHub(t, "0.2.0", false, "")
-	c := &Client{Repo: "rforced/ostiole", BaseURL: srv.URL, PublicKey: pub}
+	c := &Client{Repo: "rforced/ostiole", BaseURL: srv.URL, PublicKeys: []ed25519.PublicKey{pub}}
 
 	chk, err := c.Check(context.Background(), "0.1.0", Stable)
 	if err != nil {
@@ -164,7 +164,7 @@ func TestDownloadRejectsTampering(t *testing.T) {
 	t.Parallel()
 	for _, tamper := range []string{"sig", "sum"} {
 		srv, pub := fakeGitHub(t, "0.2.0", false, tamper)
-		c := &Client{Repo: "rforced/ostiole", BaseURL: srv.URL, PublicKey: pub}
+		c := &Client{Repo: "rforced/ostiole", BaseURL: srv.URL, PublicKeys: []ed25519.PublicKey{pub}}
 		chk, err := c.Check(context.Background(), "0.1.0", Stable)
 		if err != nil {
 			t.Fatal(err)
@@ -176,7 +176,7 @@ func TestDownloadRejectsTampering(t *testing.T) {
 	// Wrong key.
 	srv, _ := fakeGitHub(t, "0.2.0", false, "")
 	other, _, _ := ed25519.GenerateKey(rand.Reader)
-	c := &Client{Repo: "rforced/ostiole", BaseURL: srv.URL, PublicKey: other}
+	c := &Client{Repo: "rforced/ostiole", BaseURL: srv.URL, PublicKeys: []ed25519.PublicKey{other}}
 	chk, _ := c.Check(context.Background(), "0.1.0", Stable)
 	if _, err := c.Download(context.Background(), chk.Release, t.TempDir(), nil); err == nil {
 		t.Error("signature from another key accepted")
@@ -186,7 +186,7 @@ func TestDownloadRejectsTampering(t *testing.T) {
 func TestChannels(t *testing.T) {
 	t.Parallel()
 	srv, pub := fakeGitHub(t, "0.3.0-beta.1", true, "")
-	c := &Client{Repo: "rforced/ostiole", BaseURL: srv.URL, PublicKey: pub}
+	c := &Client{Repo: "rforced/ostiole", BaseURL: srv.URL, PublicKeys: []ed25519.PublicKey{pub}}
 	stable, _ := c.Check(context.Background(), "0.1.0", Stable)
 	if stable.Available || stable.Latest != "0.0.1" {
 		t.Errorf("stable saw the prerelease: %+v", stable)
@@ -204,7 +204,7 @@ func TestManagerRunsToRestart(t *testing.T) {
 	bin := filepath.Join(dir, "ostiole")
 	_ = os.WriteFile(bin, []byte("old"), 0o755)
 	m := &Manager{
-		Client:    &Client{Repo: "rforced/ostiole", BaseURL: srv.URL, PublicKey: pub},
+		Client:    &Client{Repo: "rforced/ostiole", BaseURL: srv.URL, PublicKeys: []ed25519.PublicKey{pub}},
 		Installer: &Installer{Binary: bin, Unit: "ostiole.service", HealthURL: "x", Run: &fakeRun{}},
 		Current:   "0.1.0",
 	}
@@ -228,5 +228,54 @@ func TestManagerRunsToRestart(t *testing.T) {
 	pm := &Manager{PackageManaged: true}
 	if err := pm.Start(Stable); err == nil {
 		t.Error("package-managed start should be refused")
+	}
+}
+
+func TestRotationAcceptsEitherKey(t *testing.T) {
+	t.Parallel()
+	srv, pub := fakeGitHub(t, "0.2.0", false, "")
+	other, _, _ := ed25519.GenerateKey(rand.Reader)
+
+	// During a rotation both keys are trusted and the release is signed by
+	// one of them; order must not matter.
+	for _, keys := range [][]ed25519.PublicKey{{pub, other}, {other, pub}} {
+		c := &Client{Repo: "rforced/ostiole", BaseURL: srv.URL, PublicKeys: keys}
+		rel, err := c.Latest(context.Background(), Stable)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.Download(context.Background(), rel, t.TempDir(), nil); err != nil {
+			t.Errorf("download with keys %d: %v", len(keys), err)
+		}
+	}
+
+	// A build that trusts neither key refuses the release.
+	c := &Client{Repo: "rforced/ostiole", BaseURL: srv.URL, PublicKeys: []ed25519.PublicKey{other}}
+	rel, err := c.Latest(context.Background(), Stable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Download(context.Background(), rel, t.TempDir(), nil); err == nil {
+		t.Error("download accepted a signature from an untrusted key")
+	}
+
+	// A build with no key at all says so rather than trusting anything.
+	empty := &Client{Repo: "rforced/ostiole", BaseURL: srv.URL}
+	if _, err := empty.Download(context.Background(), rel, t.TempDir(), nil); err == nil ||
+		!strings.Contains(err.Error(), "signing key") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestTrustedKeysDecodesTheEmbeddedKey(t *testing.T) {
+	t.Parallel()
+	keys := TrustedKeys()
+	if len(keys) != len(TrustedKeysHex) {
+		t.Fatalf("decoded %d of %d embedded keys", len(keys), len(TrustedKeysHex))
+	}
+	for i, k := range keys {
+		if len(k) != ed25519.PublicKeySize {
+			t.Errorf("key %d has %d bytes", i, len(k))
+		}
 	}
 }

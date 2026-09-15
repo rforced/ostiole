@@ -16,3 +16,45 @@ You should hear back within seven days.
 ## Supported versions
 
 Pre-alpha: only the `dev` branch. Once releases exist, the latest stable release is supported.
+
+## Release integrity
+
+Every release publishes `checksums.txt` signed with an ed25519 key. The public half is compiled
+into every Ostiole binary, so the built-in updater refuses anything it cannot verify, and
+`install.sh` checks the same signature with `openssl` when it is available.
+
+Verify a release by hand:
+
+```sh
+curl -fsSLO https://github.com/rforced/ostiole/releases/latest/download/checksums.txt
+curl -fsSLO https://github.com/rforced/ostiole/releases/latest/download/checksums.txt.sig
+printf -- "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA4a3rf0bCdQNTKO3KODxqMrdT1+T1nq9t+KNN2f9DJ0U=\n-----END PUBLIC KEY-----\n" > ostiole.pem
+base64 -d < checksums.txt.sig > checksums.sig
+openssl pkeyutl -verify -pubin -inkey ostiole.pem -rawin -in checksums.txt -sigfile checksums.sig
+sha256sum --ignore-missing -c checksums.txt
+```
+
+Artifacts also carry GitHub build provenance, signed through Sigstore with the release workflow's
+own identity rather than a stored key:
+
+```sh
+gh attestation verify ostiole_<version>_linux_amd64.tar.gz --repo rforced/ostiole
+```
+
+### Rotating the signing key
+
+A box updates by verifying the *next* release with the key it already has, so a new key has to
+arrive before it is used:
+
+1. `ostiole-sign -genkey` prints a new pair. Add the public half to `TrustedKeysHex` in
+   `internal/update/update.go` and to `OSTIOLE_RELEASE_KEYS` in `scripts/install.sh`, keeping the
+   old key first. Release. Boxes that update now trust both keys.
+2. Once that release is the oldest one still in use, replace the `OSTIOLE_SIGNING_KEY` repository
+   secret with the new secret and release again, signed by the new key.
+3. A release later, drop the old public key from both lists.
+
+`ostiole-sign -public` prints the public half of the configured secret, which is the quickest way
+to check that the key a release will be signed with is one that binaries trust.
+
+If a key is believed to be compromised, skip the staged rotation: publish an advisory, rotate
+immediately, and expect boxes on older releases to need a manual reinstall with `install.sh`.

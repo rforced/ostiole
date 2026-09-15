@@ -46,6 +46,44 @@ else
 fi
 [ "$GOT" = "$WANT" ] || { echo "checksum mismatch for $TARBALL" >&2; exit 1; }
 
+# The checksums file is signed with the release ed25519 key, the same one
+# the built-in updater trusts. Verifying it here means a tampered
+# checksums.txt cannot hand you a tampered tarball. Rotation: add the new
+# key to the list, keep the old one for a release.
+OSTIOLE_RELEASE_KEYS="MCowBQYDK2VwAyEA4a3rf0bCdQNTKO3KODxqMrdT1+T1nq9t+KNN2f9DJ0U="
+verify_signature() {
+  if ! command -v openssl >/dev/null 2>&1 || ! command -v base64 >/dev/null 2>&1; then
+    echo "note: openssl or base64 missing, skipping the signature check" >&2
+    return 0
+  fi
+  if ! curl -fsSL -o "$TMP/checksums.txt.sig" "$BASE/checksums.txt.sig"; then
+    echo "warning: this release publishes no signature" >&2
+    return 0
+  fi
+  base64 -d < "$TMP/checksums.txt.sig" > "$TMP/sig.bin" 2>/dev/null ||
+    { echo "malformed signature" >&2; exit 1; }
+  for key in $OSTIOLE_RELEASE_KEYS; do
+    {
+      echo "-----BEGIN PUBLIC KEY-----"
+      echo "$key"
+      echo "-----END PUBLIC KEY-----"
+    } > "$TMP/pub.pem"
+    if openssl pkeyutl -verify -pubin -inkey "$TMP/pub.pem" -rawin \
+        -in "$TMP/checksums.txt" -sigfile "$TMP/sig.bin" >"$TMP/openssl.out" 2>&1; then
+      echo "signature verified"
+      return 0
+    fi
+    # An openssl too old for ed25519 cannot tell us anything either way.
+    if grep -qiE "unknown option|unsupported|not supported|usage" "$TMP/openssl.out"; then
+      echo "note: this openssl cannot check ed25519, skipping the signature check" >&2
+      return 0
+    fi
+  done
+  echo "signature check failed for checksums.txt" >&2
+  exit 1
+}
+verify_signature
+
 tar -xzf "$TMP/$TARBALL" -C "$TMP" ostiole
 install -m 0755 "$TMP/ostiole" "$BIN_DIR/ostiole"
 echo "installed $BIN_DIR/ostiole ($("$BIN_DIR/ostiole" version))"

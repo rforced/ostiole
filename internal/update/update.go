@@ -29,9 +29,21 @@ import (
 const DefaultRepo = "rforced/ostiole"
 
 // PublicKeyHex is the ed25519 key that signs checksums.txt of every
-// release. Rotating it means shipping a release signed by the old key
-// that carries the new one.
+// release today.
 const PublicKeyHex = "e1adeb7f46c275035328edca383c6a32b753d7e4f59eaf6df8a34dd9ff432745"
+
+// TrustedKeysHex are all the keys whose signature this binary accepts.
+//
+// Rotation, which has to work for boxes that update from an old release:
+//  1. Add the new key here, keep signing with the old one, and release.
+//     Every box that updates now trusts both.
+//  2. Once that release is the oldest one still in the field, switch the
+//     signing secret to the new key and release again.
+//  3. A release later, drop the old key from this list.
+//
+// Skipping step 1 strands every box that has not updated yet, because it
+// cannot verify the release that would teach it the new key.
+var TrustedKeysHex = []string{PublicKeyHex}
 
 // Channel selects which releases count.
 type Channel string
@@ -62,16 +74,31 @@ type Asset struct {
 
 // Client talks to the GitHub Releases API.
 type Client struct {
-	Repo      string
-	BaseURL   string // default https://api.github.com
-	HTTP      *http.Client
-	PublicKey ed25519.PublicKey
+	Repo    string
+	BaseURL string // default https://api.github.com
+	HTTP    *http.Client
+	// PublicKeys are accepted signers of checksums.txt; any one of them
+	// verifying is enough, which is what makes rotation possible.
+	PublicKeys []ed25519.PublicKey
 }
 
-// NewClient returns a client for DefaultRepo with the embedded key.
+// NewClient returns a client for DefaultRepo with the embedded keys.
 func NewClient() *Client {
-	key, _ := hex.DecodeString(PublicKeyHex)
-	return &Client{Repo: DefaultRepo, HTTP: &http.Client{Timeout: 60 * time.Second}, PublicKey: ed25519.PublicKey(key)}
+	return &Client{Repo: DefaultRepo, HTTP: &http.Client{Timeout: 60 * time.Second}, PublicKeys: TrustedKeys()}
+}
+
+// TrustedKeys decodes the embedded public keys, skipping anything
+// malformed rather than failing the whole binary.
+func TrustedKeys() []ed25519.PublicKey {
+	var keys []ed25519.PublicKey
+	for _, h := range TrustedKeysHex {
+		raw, err := hex.DecodeString(h)
+		if err != nil || len(raw) != ed25519.PublicKeySize {
+			continue
+		}
+		keys = append(keys, ed25519.PublicKey(raw))
+	}
+	return keys
 }
 
 func (c *Client) base() string {
@@ -247,7 +274,7 @@ func (c *Client) Download(ctx context.Context, rel *Release, dir string, progres
 	if err != nil {
 		return "", err
 	}
-	if err := VerifySignature(c.PublicKey, sumsRaw, sigRaw); err != nil {
+	if err := VerifyAny(c.PublicKeys, sumsRaw, sigRaw); err != nil {
 		return "", err
 	}
 	want, err := expectedSum(sumsRaw, tarball.Name)
@@ -316,6 +343,23 @@ func (c *Client) fetchSmall(ctx context.Context, url string, limit int64) ([]byt
 	}
 	defer func() { _ = resp.Body.Close() }()
 	return io.ReadAll(io.LimitReader(resp.Body, limit))
+}
+
+// VerifyAny accepts the signature when any trusted key verifies it, so a
+// release signed by either side of a rotation is installable.
+func VerifyAny(keys []ed25519.PublicKey, data, sig []byte) error {
+	if len(keys) == 0 {
+		return errors.New("no release signing key is embedded in this build")
+	}
+	var lastErr error
+	for _, k := range keys {
+		err := VerifySignature(k, data, sig)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+	}
+	return lastErr
 }
 
 // VerifySignature checks a base64 ed25519 signature over data.

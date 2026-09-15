@@ -6,6 +6,10 @@ on:
 
 permissions:
   contents: write
+  # Build provenance is signed through Sigstore with a short-lived
+  # workflow identity, so nothing else has to hold a key.
+  id-token: write
+  attestations: write
 
 jobs:
   goreleaser:
@@ -31,3 +35,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OSTIOLE_SIGNING_KEY: ${{ secrets.OSTIOLE_SIGNING_KEY }}
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.deb
+            dist/*.rpm
+            dist/*.apk
+            dist/*.pkg.tar.zst
+            dist/checksums.txt
