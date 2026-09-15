@@ -88,11 +88,13 @@ release:
     owner: rforced
     name: ostiole
   prerelease: auto
+  extra_files:
+    - glob: scripts/install.sh
   footer: |
     ## Install
 
     ```sh
-    curl -fsSL https://raw.githubusercontent.com/rforced/ostiole/main/scripts/install.sh | sudo sh
+    curl -fsSL https://github.com/rforced/ostiole/releases/latest/download/install.sh | sudo sh
     ```
 
     Packages above can be installed with `dpkg -i`, `rpm -i`, `apk add --allow-untrusted`, or `pacman -U`,

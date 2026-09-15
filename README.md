@@ -11,7 +11,7 @@ The goal is pfSense-style management, not pfSense feature parity.
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/rforced/ostiole/main/scripts/install.sh | sudo sh
+curl -fsSL https://github.com/rforced/ostiole/releases/latest/download/install.sh | sudo sh
 ```
 
 That downloads the latest release into `/usr/local/bin`, verifies its checksum, and runs

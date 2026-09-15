@@ -8,6 +8,7 @@ import { useSystemStore } from '@/stores/system'
 const system = useSystemStore()
 const health = ref(null)
 const error = ref('')
+const update = ref(null)
 const status = computed(() => system.status)
 
 onMounted(async () => {
@@ -15,6 +16,15 @@ onMounted(async () => {
     ;[health.value] = await Promise.all([api.health(), system.refresh()])
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
+  }
+  // Best effort: a quiet hint when a newer release exists.
+  try {
+    const res = await api.update.check(
+      localStorage.getItem('ostiole.updateChannel') === 'beta' ? 'beta' : 'stable',
+    )
+    if (res.check?.available) update.value = res.check
+  } catch {
+    /* offline or updates unavailable */
   }
 })
 </script>
@@ -73,6 +83,13 @@ onMounted(async () => {
           <dd class="font-mono">{{ health.version }}</dd>
           <dt>Commit</dt>
           <dd class="font-mono">{{ health.commit }}</dd>
+          <template v-if="update">
+            <dt>Update</dt>
+            <dd>
+              <span class="font-mono">{{ update.latest }}</span> available ·
+              <RouterLink to="/system" class="link">install under System</RouterLink>
+            </dd>
+          </template>
         </dl>
         <p v-else class="text-neutral-500">Loading…</p>
       </section>

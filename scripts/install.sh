@@ -1,7 +1,7 @@
 #!/bin/sh
 # Installs the latest Ostiole release into /usr/local/bin and runs
 # `ostiole install`. Usage:
-#   curl -fsSL https://raw.githubusercontent.com/rforced/ostiole/main/scripts/install.sh | sudo sh
+#   curl -fsSL https://github.com/rforced/ostiole/releases/latest/download/install.sh | sudo sh
 # Environment: OSTIOLE_VERSION=v0.1.0 pins a version; OSTIOLE_NO_INSTALL=1 only places the binary.
 set -eu
 
