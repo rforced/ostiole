@@ -20,6 +20,11 @@ const router = createRouter({
     { path: '/routing', name: 'routing', component: () => import('@/views/RoutingView.vue') },
     { path: '/services', name: 'services', component: () => import('@/views/ServicesView.vue') },
     { path: '/vpn', name: 'vpn', component: () => import('@/views/VpnView.vue') },
+    {
+      path: '/diagnostics',
+      name: 'diagnostics',
+      component: () => import('@/views/DiagnosticsView.vue'),
+    },
     { path: '/system', name: 'system', component: () => import('@/views/SystemView.vue') },
     { path: '/wizard', name: 'wizard', component: () => import('@/views/WizardView.vue') },
     {

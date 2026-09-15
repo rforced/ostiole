@@ -47,6 +47,7 @@ type GatewayStatuser interface {
 func (a *api) register(mux *http.ServeMux) {
 	a.registerAuth(mux)
 	a.registerLog(mux)
+	a.registerDiag(mux)
 	mux.HandleFunc("GET /api/v1/status", a.guard(a.status))
 	mux.HandleFunc("GET /api/v1/overview", a.guard(a.overview))
 	mux.HandleFunc("GET /api/v1/config", a.guard(a.getConfig))

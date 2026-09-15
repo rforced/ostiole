@@ -111,6 +111,38 @@ export const api = {
   },
   /** Live gateway health from the multi-WAN monitor. */
   gateways: () => get('/gateways'),
+  diagnostics: {
+    ping: (body) => post('/diagnostics/ping', body),
+    traceroute: (body) => post('/diagnostics/traceroute', body),
+    journal: (params = {}) => {
+      const q = new URLSearchParams(
+        Object.entries(params).filter(([, v]) => v !== '' && v !== undefined && v !== null),
+      )
+      return get(`/diagnostics/journal?${q}`)
+    },
+    /** Downloads a pcap; returns the blob and the name the server chose. */
+    capture: async (body) => {
+      const res = await fetch('/api/v1/diagnostics/capture', {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'ostiole', 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        let message = res.statusText
+        try {
+          message = (await res.json())?.error ?? message
+        } catch {
+          /* not JSON */
+        }
+        throw new ApiError(res.status, message)
+      }
+      const name =
+        /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ??
+        'capture.pcap'
+      return { blob: await res.blob(), name }
+    },
+  },
   log: {
     recent: (limit = 200) => get(`/log/recent?limit=${limit}`),
   },
