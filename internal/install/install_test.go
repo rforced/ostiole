@@ -272,3 +272,15 @@ func TestServiceBinaryPrefersInstalled(t *testing.T) {
 		t.Fatalf("with install: %q, %v; want %q", got, err, lay.Binary())
 	}
 }
+
+func TestInSystemBinDirAndPackageManaged(t *testing.T) {
+	t.Parallel()
+	for path, want := range map[string]bool{"/usr/bin/ostiole": true, "/usr/local/bin/ostiole": true, "/root/ostiole": false, "/tmp/x/ostiole": false} {
+		if got := InSystemBinDir(path); got != want {
+			t.Errorf("InSystemBinDir(%q) = %v", path, got)
+		}
+	}
+	if !PackageManaged("/usr/bin/ostiole") || PackageManaged("/usr/local/bin/ostiole") {
+		t.Error("PackageManaged wrong")
+	}
+}

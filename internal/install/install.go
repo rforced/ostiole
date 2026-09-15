@@ -114,7 +114,14 @@ func Install(ctx context.Context, sc Systemctl, lay Layout, opts Options, log *s
 	if err := os.MkdirAll(lay.BinDir, 0o755); err != nil { //nolint:gosec // system bin dir must be world-readable
 		return nil, err
 	}
-	if same, err := sameFile(src, lay.Binary()); err != nil {
+	// A binary that a package manager already placed in a system bin
+	// directory is used where it is; anything else (a downloaded copy in
+	// $HOME, say) is copied into place so systemd and SELinux accept it.
+	if InSystemBinDir(src) {
+		lay.BinDir = filepath.Dir(src)
+		rep.Binary = lay.Binary()
+		log.Info("using package-installed binary", "path", src)
+	} else if same, err := sameFile(src, lay.Binary()); err != nil {
 		return nil, err
 	} else if !same {
 		if err := copyFile(src, lay.Binary(), 0o755); err != nil {
@@ -635,13 +642,40 @@ func Detached(ctx context.Context, run Runner, unit string, argv ...string) erro
 	return nil
 }
 
-// ServiceBinary returns the executable that detached units and timers
-// should run: the installed copy when it exists, because systemd (and
-// SELinux) will not execute a binary sitting in a home directory, else
-// the running executable.
+// SystemBinDirs are places a package manager or install puts the binary.
+var SystemBinDirs = []string{"/usr/local/bin", "/usr/bin", "/usr/local/sbin", "/usr/sbin"}
+
+// InSystemBinDir reports whether path lives in a system bin directory.
+func InSystemBinDir(path string) bool {
+	dir := filepath.Dir(filepath.Clean(path))
+	for _, d := range SystemBinDirs {
+		if dir == d {
+			return true
+		}
+	}
+	return false
+}
+
+// ServiceBinary returns the executable that units, timers, and the updater
+// should use: the installed copy when one exists (systemd and SELinux will
+// not run a binary sitting in a home directory), else the running one.
 func ServiceBinary(lay Layout) (string, error) {
-	if info, err := os.Stat(lay.Binary()); err == nil && info.Mode().IsRegular() {
-		return lay.Binary(), nil
+	candidates := []string{lay.Binary()}
+	for _, d := range SystemBinDirs {
+		candidates = append(candidates, filepath.Join(d, "ostiole"))
+	}
+	for _, c := range candidates {
+		if info, err := os.Stat(c); err == nil && info.Mode().IsRegular() {
+			return c, nil
+		}
 	}
 	return os.Executable()
+}
+
+// PackageManaged reports whether the service binary came from a distro
+// package (lives in /usr/bin or /usr/sbin), in which case the built-in
+// updater should defer to the package manager.
+func PackageManaged(binary string) bool {
+	dir := filepath.Dir(filepath.Clean(binary))
+	return dir == "/usr/bin" || dir == "/usr/sbin"
 }
