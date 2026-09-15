@@ -1,5 +1,5 @@
 <script setup>
-import { Activity, Cog, LogOut, Network, Route, Server, Shield } from 'lucide-vue-next'
+import { Activity, Cog, Lock, LogOut, Network, Route, Server, Shield } from 'lucide-vue-next'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 
 import ApplyBar from '@/components/ApplyBar.vue'
@@ -16,6 +16,7 @@ const nav = [
   { to: '/firewall', label: 'Firewall', icon: Shield },
   { to: '/routing', label: 'Routing', icon: Route },
   { to: '/services', label: 'Services', icon: Server },
+  { to: '/vpn', label: 'VPN', icon: Lock },
   { to: '/system', label: 'System', icon: Cog },
 ]
 

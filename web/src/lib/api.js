@@ -116,6 +116,12 @@ export const api = {
     status: () => get('/services/status'),
     leases: () => get('/dhcp/leases'),
   },
+  wireguard: {
+    /** @returns {Promise<{privateKey: string, publicKey: string}>} */
+    keys: () => post('/wireguard/keys', { kind: 'pair' }),
+    /** @returns {Promise<{presharedKey: string}>} */
+    psk: () => post('/wireguard/keys', { kind: 'psk' }),
+  },
   update: {
     /** @returns {Promise<{check: object, status: object}>} */
     check: (channel = 'stable') => get(`/update/check?channel=${encodeURIComponent(channel)}`),

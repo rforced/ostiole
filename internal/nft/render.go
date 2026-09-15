@@ -192,6 +192,35 @@ func (r *renderer) serviceRules() {
 			r.line(fmt.Sprintf(`iifname %s meta l4proto { tcp, udp } th dport 53 fib daddr type local counter accept comment "service:dns"`, ifnameSet(ifs)))
 		}
 	}
+	r.wireguardRules()
+}
+
+// wireguardRules open the listening ports of tunnels on external zones,
+// where peers dial in from. A tunnel nobody can reach is not a tunnel.
+func (r *renderer) wireguardRules() {
+	var ports []string
+	seen := map[uint16]bool{}
+	for _, in := range r.cfg.Interfaces {
+		if in.WireGuard == nil || !in.Enabled || in.WireGuard.ListenPort == 0 || seen[in.WireGuard.ListenPort] {
+			continue
+		}
+		seen[in.WireGuard.ListenPort] = true
+		ports = append(ports, fmt.Sprint(in.WireGuard.ListenPort))
+	}
+	if len(ports) == 0 {
+		return
+	}
+	var ifs []string
+	for _, z := range r.cfg.Zones {
+		if z.External {
+			ifs = append(ifs, r.cfg.ZoneInterfaces(z.Name)...)
+		}
+	}
+	if len(ifs) == 0 {
+		return
+	}
+	r.line(fmt.Sprintf(`iifname %s udp dport %s counter accept comment "service:wireguard"`,
+		ifnameSet(ifs), setOrSingle(ports)))
 }
 
 // DNSInterfaces lists where the DNS service listens: the configured list,

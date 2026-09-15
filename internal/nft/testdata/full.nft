@@ -35,12 +35,13 @@ table inet ostiole {
 		ct state invalid drop
 		icmp type { destination-unreachable, time-exceeded, parameter-problem } accept
 		icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit, nd-router-advert, destination-unreachable, packet-too-big, time-exceeded, parameter-problem, mld-listener-query, mld-listener-report, mld-listener-done } accept
-		iifname { "eth1", "eth1.20" } tcp dport { 8443, 22 } counter accept comment "anti-lockout:lan"
+		iifname { "eth1", "eth1.20", "wg0" } tcp dport { 8443, 22 } counter accept comment "anti-lockout:lan"
 		iifname "eth1" udp dport 67 counter accept comment "service:dhcp"
 		iifname "eth1" udp dport 547 counter accept comment "service:dhcpv6"
-		iifname { "eth1", "eth1.20", "eth2" } meta l4proto { tcp, udp } th dport 53 fib daddr type local counter accept comment "service:dns"
+		iifname { "eth1", "eth1.20", "eth2", "wg0" } meta l4proto { tcp, udp } th dport 53 fib daddr type local counter accept comment "service:dns"
+		iifname "eth0" udp dport 51820 counter accept comment "service:wireguard"
 		iifname "eth0" jump zone_wan
-		iifname { "eth1", "eth1.20" } jump zone_lan
+		iifname { "eth1", "eth1.20", "wg0" } jump zone_lan
 		iifname "eth2" jump zone_dmz
 		counter log prefix "ostiole:input:drop: " group 1 comment "default-drop"
 	}
@@ -50,7 +51,7 @@ table inet ostiole {
 		ct state invalid drop
 		ct status dnat counter accept comment "port-forwards"
 		iifname "eth0" jump zone_wan
-		iifname { "eth1", "eth1.20" } jump zone_lan
+		iifname { "eth1", "eth1.20", "wg0" } jump zone_lan
 		iifname "eth2" jump zone_dmz
 		counter log prefix "ostiole:forward:drop: " group 1 comment "default-drop"
 	}
@@ -81,10 +82,10 @@ table inet ostiole {
 	chain nat_prerouting {
 		type nat hook prerouting priority dstnat; policy accept;
 		iifname "eth0" tcp dport { 80, 443 } counter dnat ip to 10.10.0.5 comment "id:pf-web"
-		iifname { "eth1", "eth1.20", "eth2" } ip daddr != { 192.168.1.1, 192.168.20.1, 10.10.0.1 } fib daddr type local tcp dport { 80, 443 } counter dnat ip to 10.10.0.5 comment "reflect:pf-web"
+		iifname { "eth1", "eth1.20", "wg0", "eth2" } ip daddr != { 192.168.1.1, 192.168.20.1, 10.10.0.1, 10.66.0.1 } fib daddr type local tcp dport { 80, 443 } counter dnat ip to 10.10.0.5 comment "reflect:pf-web"
 		iifname "eth0" tcp dport 2222 counter dnat ip to 10.10.0.6:22 comment "id:pf-ssh"
 		iifname "eth0" meta l4proto { tcp, udp } th dport 27015-27020 counter dnat ip to 192.168.1.50 comment "id:pf-game"
-		iifname { "eth1", "eth1.20", "eth2" } ip daddr != { 192.168.1.1, 192.168.20.1, 10.10.0.1 } fib daddr type local meta l4proto { tcp, udp } th dport 27015-27020 counter dnat ip to 192.168.1.50 comment "reflect:pf-game"
+		iifname { "eth1", "eth1.20", "wg0", "eth2" } ip daddr != { 192.168.1.1, 192.168.20.1, 10.10.0.1, 10.66.0.1 } fib daddr type local meta l4proto { tcp, udp } th dport 27015-27020 counter dnat ip to 192.168.1.50 comment "reflect:pf-game"
 		iifname "eth0" udp dport 5000 counter dnat ip6 to [2001:db8:2::10]:5001 comment "id:pf-v6"
 		# port forward pf-guest skipped: zone "guest" has no enabled interfaces
 		iifname "eth0" ip daddr 203.0.113.10 counter dnat ip to 10.10.0.25 comment "id:one-mail"
@@ -98,7 +99,7 @@ table inet ostiole {
 		# outbound nat nat-guest skipped: zone "guest" has no enabled interfaces
 		oifname "eth0" ip saddr 10.10.0.25 counter snat ip to 203.0.113.10 comment "id:one-mail"
 		oifname "eth0" ip6 saddr 2001:db8:2::125 counter snat ip6 to 2001:db8:2::25 comment "id:one-v6"
-		ip saddr { 192.168.1.0/24, 192.168.20.0/24, 10.10.0.0/24 } ip daddr 10.10.0.5 tcp dport { 80, 443 } counter masquerade comment "reflect:pf-web"
-		ip saddr { 192.168.1.0/24, 192.168.20.0/24, 10.10.0.0/24 } ip daddr 192.168.1.50 meta l4proto { tcp, udp } th dport 27015-27020 counter masquerade comment "reflect:pf-game"
+		ip saddr { 192.168.1.0/24, 192.168.20.0/24, 10.10.0.0/24, 10.66.0.0/24 } ip daddr 10.10.0.5 tcp dport { 80, 443 } counter masquerade comment "reflect:pf-web"
+		ip saddr { 192.168.1.0/24, 192.168.20.0/24, 10.10.0.0/24, 10.66.0.0/24 } ip daddr 192.168.1.50 meta l4proto { tcp, udp } th dport 27015-27020 counter masquerade comment "reflect:pf-game"
 	}
 }

@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"net/netip"
 	"regexp"
+	"strconv"
 	"strings"
+
+	"github.com/rforced/ostiole/internal/wg"
 )
 
 // Issue is one validation problem, located by a JSON-ish path.
@@ -86,6 +89,12 @@ func (c *Config) Validate() error {
 		}
 		if in.MTU != 0 && (in.MTU < 68 || in.MTU > 65535) {
 			v.add(path+".mtu", "MTU %d must be 68-65535 (or 0 for default)", in.MTU)
+		}
+		if in.WireGuard != nil {
+			if in.VLAN != nil {
+				v.add(path+".wireguard", "an interface is either a VLAN or a WireGuard tunnel, not both")
+			}
+			v.wireguard(path+".wireguard", in)
 		}
 	}
 
@@ -476,6 +485,61 @@ func (v *validator) dhcpv6(c *Config, ifaces map[string]bool) {
 		}
 		if sc.Domain != "" && !domainRe.MatchString(sc.Domain) {
 			v.add(path+".domain", "%q is not a valid domain", sc.Domain)
+		}
+	}
+}
+
+// wireguard checks a tunnel's keys, peers, and addressing.
+func (v *validator) wireguard(path string, in Interface) {
+	w := in.WireGuard
+	if !wg.ValidKey(w.PrivateKey) {
+		v.add(path+".privateKey", "not a WireGuard key: want 32 bytes, base64 encoded")
+	} else if w.PublicKey != "" {
+		if derived, err := wg.PublicKey(w.PrivateKey); err == nil && derived != w.PublicKey {
+			v.add(path+".publicKey", "does not belong to this private key")
+		}
+	}
+	if in.IPv4.Mode == AddrDHCP {
+		v.add(path+".privateKey", "a tunnel has no DHCP server; give it a static address")
+	}
+	if in.IPv6.Mode == AddrDHCP || in.IPv6.Mode == AddrSLAAC {
+		v.add(path+".privateKey", "a tunnel has no router advertisements; give it a static address")
+	}
+	names := map[string]bool{}
+	keys := map[string]bool{}
+	for i, p := range w.Peers {
+		ppath := fmt.Sprintf("%s.peers[%d]", path, i)
+		if !nameRe.MatchString(p.Name) {
+			v.add(ppath+".name", "%q must match %s", p.Name, nameRe)
+		} else if names[p.Name] {
+			v.add(ppath+".name", "duplicate peer %q", p.Name)
+		}
+		names[p.Name] = true
+		if !wg.ValidKey(p.PublicKey) {
+			v.add(ppath+".publicKey", "not a WireGuard key: want 32 bytes, base64 encoded")
+		} else if keys[p.PublicKey] {
+			v.add(ppath+".publicKey", "duplicate peer key")
+		}
+		keys[p.PublicKey] = true
+		if p.PresharedKey != "" && !wg.ValidKey(p.PresharedKey) {
+			v.add(ppath+".presharedKey", "not a WireGuard key: want 32 bytes, base64 encoded")
+		}
+		if len(p.AllowedIPs) == 0 {
+			v.add(ppath+".allowedIps", "at least one address or network is required")
+		}
+		for j, a := range p.AllowedIPs {
+			if _, err := ParseAddress(a); err != nil {
+				v.add(fmt.Sprintf("%s.allowedIps[%d]", ppath, j), "%v", err)
+			}
+		}
+		if p.Endpoint != "" {
+			host, port, found := strings.Cut(p.Endpoint, ":")
+			if n, err := strconv.Atoi(port); !found || host == "" || err != nil || n < 1 || n > 65535 {
+				v.add(ppath+".endpoint", "%q must be host:port", p.Endpoint)
+			}
+		}
+		if p.Keepalive < 0 || p.Keepalive > 65535 {
+			v.add(ppath+".keepalive", "%d must be 0-65535 seconds", p.Keepalive)
 		}
 	}
 }

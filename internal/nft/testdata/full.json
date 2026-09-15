@@ -92,6 +92,56 @@
       "ipv6": {
         "mode": "none"
       }
+    },
+    {
+      "name": "wg0",
+      "zone": "lan",
+      "description": "Road warriors",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "10.66.0.1/24"
+      },
+      "ipv6": {
+        "mode": "none"
+      },
+      "mtu": 1420,
+      "wireguard": {
+        "privateKey": "yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=",
+        "publicKey": "HIgo9xNzJMWLKASShiTqIybxZ0U3wGLiUeJ1PKf8ykw=",
+        "listenPort": 51820,
+        "peers": [
+          {
+            "name": "laptop",
+            "enabled": true,
+            "publicKey": "xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=",
+            "presharedKey": "FpCyhws9cxwWoV4xELtfJvjJN+zQVRPISllRWgeopVE=",
+            "allowedIps": [
+              "10.66.0.2/32"
+            ],
+            "keepalive": 25
+          },
+          {
+            "name": "branch",
+            "enabled": true,
+            "publicKey": "TrMvSoP4jYQlY6RIzBgbssQqY3vxI2Pi+y71lOWWXX0=",
+            "allowedIps": [
+              "10.66.0.3/32",
+              "192.168.99.0/24"
+            ],
+            "endpoint": "branch.example.net:51820",
+            "keepalive": 25
+          },
+          {
+            "name": "retired",
+            "enabled": false,
+            "publicKey": "qrgPmY/H7JXcqLsFj4hWKHl5XVJxzVMkPwhZmVm6L0c=",
+            "allowedIps": [
+              "10.66.0.9/32"
+            ]
+          }
+        ]
+      }
     }
   ],
   "aliases": [

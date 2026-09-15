@@ -8,8 +8,10 @@ import (
 	"net/netip"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/rforced/ostiole/internal/model"
@@ -68,6 +70,12 @@ func (n *Networkd) Name() string { return "systemd-networkd" }
 func (n *Networkd) networkFile(iface string) string { return n.prefix() + iface + ".network" }
 func (n *Networkd) netdevFile(iface string) string  { return n.prefix() + iface + ".netdev" }
 
+// keyFile is where a WireGuard secret lives. Keys stay out of the .netdev
+// so the unit itself can remain world-readable like the others.
+func (n *Networkd) keyFile(iface, name string) string {
+	return n.prefix() + iface + "-" + name + ".key"
+}
+
 // Render implements Backend.
 func (n *Networkd) Render(cfg *model.Config) (Files, error) {
 	if err := cfg.Validate(); err != nil {
@@ -80,6 +88,9 @@ func (n *Networkd) Render(cfg *model.Config) (Files, error) {
 		if in.VLAN != nil {
 			vlansByParent[in.VLAN.Parent] = append(vlansByParent[in.VLAN.Parent], in.Name)
 			files[n.netdevFile(in.Name)] = renderNetdev(in)
+		}
+		if in.WireGuard != nil {
+			files[n.netdevFile(in.Name)] = n.renderWireGuardNetdev(in, files)
 		}
 	}
 
@@ -109,6 +120,49 @@ func renderNetdev(in model.Interface) string {
 		fmt.Fprintf(&b, "MTUBytes=%d\n", in.MTU)
 	}
 	fmt.Fprintf(&b, "\n[VLAN]\nId=%d\n", in.VLAN.ID)
+	return b.String()
+}
+
+// renderWireGuardNetdev writes the tunnel unit and, as a side effect, the
+// key files it points at.
+func (n *Networkd) renderWireGuardNetdev(in model.Interface, files Files) string {
+	w := in.WireGuard
+	var b strings.Builder
+	b.WriteString(fileHeader)
+	fmt.Fprintf(&b, "[NetDev]\nName=%s\nKind=wireguard\n", in.Name)
+	if in.Description != "" {
+		fmt.Fprintf(&b, "Description=%s\n", sanitizeValue(in.Description))
+	}
+	if in.MTU != 0 {
+		fmt.Fprintf(&b, "MTUBytes=%d\n", in.MTU)
+	}
+	privName := n.keyFile(in.Name, "private")
+	files[privName] = w.PrivateKey + "\n"
+	fmt.Fprintf(&b, "\n[WireGuard]\nPrivateKeyFile=%s\n", filepath.Join(n.dir(), privName))
+	if w.ListenPort != 0 {
+		fmt.Fprintf(&b, "ListenPort=%d\n", w.ListenPort)
+	}
+	for _, p := range w.Peers {
+		if !p.Enabled {
+			continue
+		}
+		fmt.Fprintf(&b, "\n[WireGuardPeer]\n# %s\n", sanitizeValue(p.Name))
+		fmt.Fprintf(&b, "PublicKey=%s\n", p.PublicKey)
+		if p.PresharedKey != "" {
+			psk := n.keyFile(in.Name, "peer-"+sanitizeValue(p.Name)+"-psk")
+			files[psk] = p.PresharedKey + "\n"
+			fmt.Fprintf(&b, "PresharedKeyFile=%s\n", filepath.Join(n.dir(), psk))
+		}
+		if len(p.AllowedIPs) > 0 {
+			fmt.Fprintf(&b, "AllowedIPs=%s\n", strings.Join(p.AllowedIPs, " "))
+		}
+		if p.Endpoint != "" {
+			fmt.Fprintf(&b, "Endpoint=%s\n", sanitizeValue(p.Endpoint))
+		}
+		if p.Keepalive > 0 {
+			fmt.Fprintf(&b, "PersistentKeepalive=%d\n", p.Keepalive)
+		}
+	}
 	return b.String()
 }
 
@@ -181,10 +235,66 @@ func renderNetwork(in model.Interface, vlans []string, routes []model.StaticRout
 	for _, v := range vlans {
 		fmt.Fprintf(&b, "VLAN=%s\n", v)
 	}
+	for _, dst := range wireGuardRoutes(in) {
+		// On-link through the tunnel: WireGuard picks the peer by its
+		// allowed addresses, so no gateway is involved.
+		fmt.Fprintf(&b, "\n[Route]\nDestination=%s\nScope=link\n", dst)
+	}
 	for _, r := range routes {
 		fmt.Fprintf(&b, "\n[Route]\nDestination=%s\nGateway=%s\n", r.Destination, r.Gateway)
 	}
 	return b.String()
+}
+
+// wireGuardRoutes lists the peer networks that the interface's own
+// addresses do not already cover. Default routes are left out: sending
+// everything down a tunnel is a deliberate act, not a side effect of
+// adding a peer.
+func wireGuardRoutes(in model.Interface) []string {
+	if in.WireGuard == nil {
+		return nil
+	}
+	var own []netip.Prefix
+	for _, addr := range []string{in.IPv4.Address, in.IPv6.Address} {
+		if p, err := netip.ParsePrefix(addr); err == nil {
+			own = append(own, p.Masked())
+		}
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, p := range in.WireGuard.Peers {
+		if !p.Enabled {
+			continue
+		}
+		for _, a := range p.AllowedIPs {
+			pre, err := netip.ParsePrefix(a)
+			if err != nil {
+				if addr, aerr := netip.ParseAddr(a); aerr == nil {
+					pre = netip.PrefixFrom(addr, addr.BitLen())
+				} else {
+					continue
+				}
+			}
+			pre = pre.Masked()
+			if pre.Bits() == 0 || seen[pre.String()] {
+				continue
+			}
+			covered := false
+			for _, o := range own {
+				if o.Overlaps(pre) && o.Bits() <= pre.Bits() {
+					covered = true
+					break
+				}
+			}
+			if covered {
+				continue
+			}
+			seen[pre.String()] = true
+			out = append(out, pre.String())
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // routesByInterface assigns each enabled static route to an interface:
@@ -333,6 +443,10 @@ func (n *Networkd) linkNames(files Files) []string {
 	return names
 }
 
+// networkdUser is who systemd-networkd drops to; key files are readable
+// by that group and nobody else.
+const networkdUser = "systemd-network"
+
 func writeFile(path, content string) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
 	if err != nil {
@@ -344,7 +458,16 @@ func writeFile(path, content string) error {
 		_ = os.Remove(name)
 		return err
 	}
-	if err := tmp.Chmod(0o644); err != nil {
+	mode := os.FileMode(0o644)
+	if strings.HasSuffix(path, ".key") {
+		mode = 0o640
+		if gid, err := networkdGID(); err == nil {
+			// Ignore failures: without the group the file stays root-only,
+			// which networkd reports clearly if it cannot read it.
+			_ = tmp.Chown(0, gid)
+		}
+	}
+	if err := tmp.Chmod(mode); err != nil {
 		_ = tmp.Close()
 		_ = os.Remove(name)
 		return err
@@ -354,6 +477,14 @@ func writeFile(path, content string) error {
 		return err
 	}
 	return os.Rename(name, path)
+}
+
+func networkdGID() (int, error) {
+	g, err := user.LookupGroup(networkdUser)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(g.Gid)
 }
 
 type execCommander struct{}

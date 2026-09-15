@@ -112,7 +112,11 @@ type Interface struct {
 	IPv4        IPv4   `json:"ipv4"`
 	IPv6        IPv6   `json:"ipv6"`
 	VLAN        *VLAN  `json:"vlan,omitempty"`
-	MTU         int    `json:"mtu,omitempty"`
+	// WireGuard turns this interface into a VPN tunnel. It is exclusive
+	// with VLAN, and the interface is created by Ostiole rather than found
+	// on the hardware.
+	WireGuard *WireGuard `json:"wireguard,omitempty"`
+	MTU       int        `json:"mtu,omitempty"`
 }
 
 // IPv4 addressing for an interface. Address is CIDR notation.
@@ -133,6 +137,40 @@ type IPv6 struct {
 type VLAN struct {
 	Parent string `json:"parent"`
 	ID     uint16 `json:"id"`
+}
+
+// WireGuard configures a tunnel interface. Its addresses, zone, and
+// firewall rules come from the interface it belongs to, like any other
+// link.
+type WireGuard struct {
+	// PrivateKey is this firewall's key, base64 as wg(8) prints it.
+	PrivateKey string `json:"privateKey"`
+	// PublicKey is what peers must configure. It is derived from the
+	// private key and stored so the UI can show it.
+	PublicKey string `json:"publicKey,omitempty"`
+	// ListenPort accepts incoming tunnels; 0 picks a random source port
+	// and accepts nothing, which suits a client-only tunnel.
+	ListenPort uint16          `json:"listenPort,omitempty"`
+	Peers      []WireGuardPeer `json:"peers,omitempty"`
+}
+
+// WireGuardPeer is one other end of a tunnel.
+type WireGuardPeer struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Enabled     bool   `json:"enabled"`
+	PublicKey   string `json:"publicKey"`
+	// PresharedKey adds a symmetric layer, which is what keeps the tunnel
+	// safe from a future quantum attacker.
+	PresharedKey string `json:"presharedKey,omitempty"`
+	// AllowedIPs are the addresses this peer may use and that are routed
+	// to it.
+	AllowedIPs []string `json:"allowedIps"`
+	// Endpoint is host:port for peers this firewall dials; leave it empty
+	// for peers that connect inwards.
+	Endpoint string `json:"endpoint,omitempty"`
+	// Keepalive in seconds keeps a NAT binding open, usually 25.
+	Keepalive int `json:"keepalive,omitempty"`
 }
 
 // Alias is a named, reusable list of hosts/networks or ports. Host aliases

@@ -74,6 +74,26 @@ export const useConfigStore = defineStore('config', () => {
     draft.value.interfaces = interfaces.value.filter((i) => i.name !== name)
   }
 
+  // ---- WireGuard -------------------------------------------------------
+
+  /** Tunnels are interfaces with a wireguard block. */
+  const tunnels = computed(() => interfaces.value.filter((i) => i.wireguard))
+
+  function upsertPeer(tunnelName, peer, previousName = peer.name) {
+    const t = findInterface(tunnelName)
+    if (!t?.wireguard) return
+    const list = t.wireguard.peers ?? (t.wireguard.peers = [])
+    const idx = list.findIndex((p) => p.name === previousName)
+    if (idx === -1) list.push(clone(peer))
+    else list[idx] = clone(peer)
+  }
+
+  function removePeer(tunnelName, peerName) {
+    const t = findInterface(tunnelName)
+    if (!t?.wireguard) return
+    t.wireguard.peers = (t.wireguard.peers ?? []).filter((p) => p.name !== peerName)
+  }
+
   // ---- zones -----------------------------------------------------------
 
   function upsertZone(zone, previousName = zone.name) {
@@ -349,6 +369,9 @@ export const useConfigStore = defineStore('config', () => {
     findInterface,
     upsertInterface,
     removeInterface,
+    tunnels,
+    upsertPeer,
+    removePeer,
     upsertZone,
     zoneReferences,
     removeZone,

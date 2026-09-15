@@ -21,6 +21,7 @@ import (
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/store"
 	"github.com/rforced/ostiole/internal/update"
+	"github.com/rforced/ostiole/internal/wg"
 )
 
 const maxBodyBytes = 1 << 20
@@ -54,6 +55,7 @@ func (a *api) register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/apply/revert", a.guard(a.revert))
 	mux.HandleFunc("GET /api/v1/services/status", a.protect(a.servicesStatus))
 	mux.HandleFunc("GET /api/v1/dhcp/leases", a.protect(a.dhcpLeases))
+	mux.HandleFunc("POST /api/v1/wireguard/keys", a.protect(a.wireguardKeys))
 	mux.HandleFunc("GET /api/v1/update/check", a.protect(a.updateCheck))
 	mux.HandleFunc("GET /api/v1/update/status", a.protect(a.updateStatus))
 	mux.HandleFunc("POST /api/v1/update/apply", a.protect(a.updateApply))
@@ -95,6 +97,42 @@ func (a *api) dhcpLeases(w http.ResponseWriter, _ *http.Request) error {
 		return err
 	}
 	writeJSON(w, http.StatusOK, leases)
+	return nil
+}
+
+// wireguardKeys mints a key pair for a new tunnel, or a preshared key for
+// a peer. Generating them here keeps the browser out of the crypto and
+// gives every box the same well-seeded source.
+func (a *api) wireguardKeys(w http.ResponseWriter, r *http.Request) error {
+	var req struct {
+		// Kind is "pair" (default) or "psk".
+		Kind string `json:"kind"`
+	}
+	if r.ContentLength != 0 {
+		if err := decodeJSON(r, &req); err != nil {
+			return err
+		}
+	}
+	switch req.Kind {
+	case "", "pair":
+		priv, err := wg.GenerateKey()
+		if err != nil {
+			return err
+		}
+		pub, err := wg.PublicKey(priv)
+		if err != nil {
+			return err
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"privateKey": priv, "publicKey": pub})
+	case "psk":
+		psk, err := wg.GeneratePSK()
+		if err != nil {
+			return err
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"presharedKey": psk})
+	default:
+		return &badRequest{fmt.Errorf("unknown kind %q", req.Kind)}
+	}
 	return nil
 }
 
