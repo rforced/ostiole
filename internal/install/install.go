@@ -5,6 +5,7 @@ package install
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // Layout says where things go. Tests point it at temp directories.
@@ -420,4 +422,91 @@ func tail(out []byte) string {
 		s = "…" + s[len(s)-400:]
 	}
 	return s
+}
+
+// RevertTimerUnit is the transient timer that undoes a network takeover
+// unless it is confirmed in time.
+const RevertTimerUnit = "ostiole-network-revert"
+
+// TakeoverRecord remembers what the network takeover replaced so it can
+// be undone. It lives in the config directory.
+type TakeoverRecord struct {
+	Managers []string  `json:"managers"`
+	At       time.Time `json:"at"`
+}
+
+// TakeoverRecordFile is the record's name inside the config directory.
+const TakeoverRecordFile = "network-takeover.json"
+
+// SaveTakeoverRecord writes the record.
+func SaveTakeoverRecord(dir string, rec TakeoverRecord) error {
+	raw, err := json.MarshalIndent(rec, "", "  ")
+	if err != nil {
+		return err
+	}
+	return writeFile(filepath.Join(dir, TakeoverRecordFile), string(raw)+"\n", 0o600)
+}
+
+// LoadTakeoverRecord reads the record, or returns nil when none exists.
+func LoadTakeoverRecord(dir string) (*TakeoverRecord, error) {
+	raw, err := os.ReadFile(filepath.Join(dir, TakeoverRecordFile))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var rec TakeoverRecord
+	if err := json.Unmarshal(raw, &rec); err != nil {
+		return nil, err
+	}
+	return &rec, nil
+}
+
+// NetworkRevert undoes NetworkTakeover: stops networkd and brings the
+// previous managers back. wait-online style units are only re-enabled,
+// never started, because starting them blocks until the network is up.
+func NetworkRevert(ctx context.Context, sc Systemctl, managers []string, log *slog.Logger) error {
+	if out, err := sc.Run(ctx, "disable", "--now", NetworkdUnit); err != nil {
+		log.Warn("stopping systemd-networkd failed", "err", err, "out", out)
+	}
+	var errs []error
+	for _, name := range managers {
+		unit := name + ".service"
+		if out, err := sc.Run(ctx, "unmask", unit); err != nil {
+			errs = append(errs, fmt.Errorf("unmask %s: %w: %s", unit, err, out))
+			continue
+		}
+		args := []string{"enable", "--now", unit}
+		if strings.Contains(name, "wait-online") {
+			args = []string{"enable", unit}
+		}
+		if out, err := sc.Run(ctx, args...); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w: %s", strings.Join(args, " "), err, out))
+			continue
+		}
+		log.Info("network manager restored", "unit", unit)
+	}
+	return errors.Join(errs...)
+}
+
+// ScheduleNetworkRevert arms a transient systemd timer that runs
+// `ostiole takeover --network --revert` after window unless cancelled.
+func ScheduleNetworkRevert(ctx context.Context, run Runner, binary, configDir string, window time.Duration) error {
+	_, _ = run.Run(ctx, "systemctl", "stop", RevertTimerUnit+".timer")
+	out, err := run.Run(ctx, "systemd-run", "--quiet", "--unit="+RevertTimerUnit,
+		"--on-active="+fmt.Sprint(int(window.Seconds())),
+		binary, "--config-dir", configDir, "takeover", "--network", "--revert")
+	if err != nil {
+		return fmt.Errorf("arm revert timer: %w: %s", err, tail(out))
+	}
+	return nil
+}
+
+// CancelNetworkRevert disarms the timer. It reports whether one was armed.
+func CancelNetworkRevert(ctx context.Context, run Runner) bool {
+	out, err := run.Run(ctx, "systemctl", "is-active", RevertTimerUnit+".timer")
+	armed := err == nil && strings.TrimSpace(string(out)) == "active"
+	_, _ = run.Run(ctx, "systemctl", "stop", RevertTimerUnit+".timer")
+	return armed
 }

@@ -70,7 +70,8 @@ func printCompetitors(out interface{ Write([]byte) (int, error) }, comp []instal
 }
 
 func newTakeoverCmd(g *globals) *cobra.Command {
-	var yes, dryRun, net bool
+	var yes, dryRun, net, confirm, revert bool
+	var window time.Duration
 	cmd := &cobra.Command{
 		Use:   "takeover",
 		Short: "Disable competing firewall services so Ostiole is the only firewall",
@@ -101,7 +102,10 @@ systemctl unmask NetworkManager; systemctl enable --now NetworkManager.`,
 				return errors.New("refusing: apply and confirm an Ostiole configuration first (ostiole status)")
 			}
 			if net {
-				return networkTakeover(cmd, g, yes, dryRun)
+				return networkTakeover(cmd, g, networkTakeoverOptions{yes: yes, dryRun: dryRun, window: window, confirm: confirm, revert: revert})
+			}
+			if confirm || revert {
+				return errors.New("--confirm and --revert only apply with --network")
 			}
 			comp, err := install.Competitors(cmd.Context(), install.ExecSystemctl{})
 			if err != nil {
@@ -149,7 +153,16 @@ systemctl unmask NetworkManager; systemctl enable --now NetworkManager.`,
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask for confirmation")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "only report what would change")
 	cmd.Flags().BoolVar(&net, "network", false, "hand addressing to systemd-networkd instead of touching firewalls")
+	cmd.Flags().DurationVar(&window, "confirm-window", 3*time.Minute, "with --network: restore the previous network manager unless --confirm runs within this time (0 disables)")
+	cmd.Flags().BoolVar(&confirm, "confirm", false, "with --network: keep the handover and disarm the revert timer")
+	cmd.Flags().BoolVar(&revert, "revert", false, "with --network: undo the handover and restore the previous network manager")
 	return cmd
+}
+
+type networkTakeoverOptions struct {
+	yes, dryRun     bool
+	window          time.Duration
+	confirm, revert bool
 }
 
 func confirmPrompt(cmd *cobra.Command, question string) error {
@@ -164,10 +177,36 @@ func confirmPrompt(cmd *cobra.Command, question string) error {
 	return nil
 }
 
-func networkTakeover(cmd *cobra.Command, g *globals, yes, dryRun bool) error {
+func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) error {
 	ctx := cmd.Context()
 	out := cmd.OutOrStdout()
 	sc := install.ExecSystemctl{}
+	run := install.ExecRunner{}
+
+	if o.confirm {
+		if install.CancelNetworkRevert(ctx, run) {
+			fmt.Fprintln(out, "confirmed: systemd-networkd stays in charge; revert timer disarmed")
+		} else {
+			fmt.Fprintln(out, "no revert timer was armed; nothing to confirm")
+		}
+		return nil
+	}
+	if o.revert {
+		rec, err := install.LoadTakeoverRecord(g.configDir)
+		if err != nil {
+			return err
+		}
+		if rec == nil {
+			return errors.New("no network takeover record found; nothing to revert")
+		}
+		install.CancelNetworkRevert(ctx, run)
+		if err := install.NetworkRevert(ctx, sc, rec.Managers, slog.Default()); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "reverted: %s restored, systemd-networkd stopped\n", strings.Join(rec.Managers, ", "))
+		return nil
+	}
+
 	cfg, err := g.store().Load()
 	if err != nil {
 		return err
@@ -247,20 +286,35 @@ func networkTakeover(cmd *cobra.Command, g *globals, yes, dryRun bool) error {
 		fmt.Fprintf(out, "  - stop, disable, and mask: %s\n", strings.Join(managers, ", "))
 	}
 	fmt.Fprintf(out, "  - enable and start systemd-networkd\n")
-	if dryRun {
+	if o.window > 0 {
+		fmt.Fprintf(out, "  - arm a timer that restores the old manager after %s unless `ostiole takeover --network --confirm` runs\n", o.window)
+	}
+	if o.dryRun {
 		return nil
 	}
-	if !yes {
+	if !o.yes {
 		if err := confirmPrompt(cmd, "proceed? Established connections survive; new DHCP leases are re-acquired."); err != nil {
 			return err
 		}
 	}
 
-	if err := install.EnsureNetworkd(ctx, sc, install.ExecRunner{}, pm, slog.Default()); err != nil {
+	if err := install.EnsureNetworkd(ctx, sc, run, pm, slog.Default()); err != nil {
 		return err
 	}
 	if _, err := nd.Write(files); err != nil {
 		return fmt.Errorf("write network units: %w", err)
+	}
+	if err := install.SaveTakeoverRecord(g.configDir, install.TakeoverRecord{Managers: managers, At: time.Now()}); err != nil {
+		return err
+	}
+	if o.window > 0 {
+		exe, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		if err := install.ScheduleNetworkRevert(ctx, run, exe, g.configDir, o.window); err != nil {
+			return err
+		}
 	}
 	if err := install.NetworkTakeover(ctx, sc, managers, slog.Default()); err != nil {
 		return err
@@ -275,6 +329,10 @@ func networkTakeover(cmd *cobra.Command, g *globals, yes, dryRun bool) error {
 		if managed[l.Name] {
 			fmt.Fprintf(out, "  %-11s %s\n", l.Name, strings.Join(l.Addresses, " "))
 		}
+	}
+	if o.window > 0 {
+		fmt.Fprintf(out, "done, pending: confirm within %s with `ostiole takeover --network --confirm`, or the previous manager is restored automatically\n", o.window)
+		return nil
 	}
 	fmt.Fprintln(out, "done: systemd-networkd manages addressing; interface changes in Ostiole now apply live")
 	return nil

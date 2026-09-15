@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 type fakeSystemctl struct {
@@ -200,5 +201,45 @@ func TestNetworkTakeover(t *testing.T) {
 		if strings.Join(sc.calls[i], " ") != strings.Join(w, " ") {
 			t.Fatalf("call %d = %v, want %v (all: %v)", i, sc.calls[i], w, sc.calls)
 		}
+	}
+}
+
+func TestNetworkRevertAndRecord(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if rec, err := LoadTakeoverRecord(dir); err != nil || rec != nil {
+		t.Fatalf("empty record = %v, %v", rec, err)
+	}
+	if err := SaveTakeoverRecord(dir, TakeoverRecord{Managers: []string{"NetworkManager", "NetworkManager-wait-online"}}); err != nil {
+		t.Fatal(err)
+	}
+	rec, err := LoadTakeoverRecord(dir)
+	if err != nil || len(rec.Managers) != 2 {
+		t.Fatalf("record = %v, %v", rec, err)
+	}
+	sc := &fakeSystemctl{}
+	if err := NetworkRevert(context.Background(), sc, rec.Managers, slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatal(err)
+	}
+	want := [][]string{
+		{"disable", "--now", NetworkdUnit},
+		{"unmask", "NetworkManager.service"}, {"enable", "--now", "NetworkManager.service"},
+		{"unmask", "NetworkManager-wait-online.service"}, {"enable", "NetworkManager-wait-online.service"},
+	}
+	for i, w := range want {
+		if strings.Join(sc.calls[i], " ") != strings.Join(w, " ") {
+			t.Fatalf("call %d = %v, want %v", i, sc.calls[i], w)
+		}
+	}
+	run := &fakeRunner{}
+	if err := ScheduleNetworkRevert(context.Background(), run, "/usr/local/bin/ostiole", "/etc/ostiole", 3*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	last := strings.Join(run.calls[len(run.calls)-1], " ")
+	if !strings.Contains(last, "systemd-run") || !strings.Contains(last, "--on-active=180") || !strings.HasSuffix(last, "takeover --network --revert") {
+		t.Errorf("systemd-run call = %q", last)
+	}
+	if CancelNetworkRevert(context.Background(), &fakeRunner{}) {
+		t.Error("cancel reported an armed timer on a fake that never arms one")
 	}
 }
