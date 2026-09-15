@@ -285,6 +285,9 @@ func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) e
 		fmt.Fprintf(out, "  - install systemd-networkd with %s\n", pm)
 	}
 	fmt.Fprintf(out, "  - write %d unit(s) to %s: %s\n", len(files), install.NetworkdUnitDir, strings.Join(files.Names(), ", "))
+	if _, err := os.Stat("/etc/cloud"); err == nil {
+		fmt.Fprintf(out, "  - disable cloud-init network rendering (%s)\n", install.CloudInitDropIn)
+	}
 	if len(managers) > 0 {
 		fmt.Fprintf(out, "  - stop, disable, and mask: %s\n", strings.Join(managers, ", "))
 	}
@@ -307,6 +310,9 @@ func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) e
 	if _, err := nd.Write(files); err != nil {
 		return fmt.Errorf("write network units: %w", err)
 	}
+	if _, err := install.DisableCloudInitNetwork(slog.Default()); err != nil {
+		return err
+	}
 	if err := install.SaveTakeoverRecord(g.configDir, install.TakeoverRecord{Managers: managers, At: time.Now()}); err != nil {
 		return err
 	}
@@ -320,6 +326,10 @@ func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) e
 		}
 	}
 	if err := install.NetworkTakeover(ctx, sc, managers, slog.Default()); err != nil {
+		return err
+	}
+	// Apply the units now even if networkd was already running (re-runs).
+	if err := nd.Reload(ctx, nd.LinkNames(files)); err != nil {
 		return err
 	}
 	time.Sleep(3 * time.Second)

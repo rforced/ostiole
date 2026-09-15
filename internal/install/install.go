@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/rforced/ostiole/internal/network"
 )
 
 // Layout says where things go. Tests point it at temp directories.
@@ -267,11 +269,19 @@ func Uninstall(ctx context.Context, sc Systemctl, lay Layout, purge bool, log *s
 		return fmt.Errorf("systemctl daemon-reload: %w", err)
 	}
 	log.Info("units removed")
-	if owned, _ := filepath.Glob(filepath.Join(NetworkdUnitDir, "10-ostiole-*")); len(owned) > 0 {
+	// Undo the network takeover first so the box keeps its addressing.
+	if rec, err := LoadTakeoverRecord(lay.ConfigDir); err == nil && rec != nil {
+		CancelNetworkRevert(ctx, ExecRunner{})
+		if err := NetworkRevert(ctx, sc, rec.Managers, log); err != nil {
+			log.Warn("restoring the previous network manager had errors", "err", err)
+		}
+		_ = os.Remove(filepath.Join(lay.ConfigDir, TakeoverRecordFile))
+	}
+	if owned, _ := filepath.Glob(filepath.Join(NetworkdUnitDir, network.NetworkdPrefix+"*")); len(owned) > 0 {
 		for _, f := range owned {
 			_ = os.Remove(f)
 		}
-		log.Warn("removed Ostiole networkd units; networking now depends on whatever else manages it", "count", len(owned))
+		log.Info("removed Ostiole networkd units", "count", len(owned))
 	}
 	if purge {
 		if err := os.RemoveAll(lay.ConfigDir); err != nil {
@@ -471,6 +481,9 @@ func LoadTakeoverRecord(dir string) (*TakeoverRecord, error) {
 // previous managers back. wait-online style units are only re-enabled,
 // never started, because starting them blocks until the network is up.
 func NetworkRevert(ctx context.Context, sc Systemctl, managers []string, log *slog.Logger) error {
+	if err := RestoreCloudInitNetwork(); err != nil {
+		log.Warn("could not remove the cloud-init drop-in", "err", err)
+	}
 	// The socket unit would re-activate networkd on the next client
 	// connection, so it has to go down with the service.
 	if out, err := sc.Run(ctx, "disable", "--now", NetworkdSocket, NetworkdUnit); err != nil {
@@ -516,4 +529,31 @@ func CancelNetworkRevert(ctx context.Context, run Runner) bool {
 	armed := err == nil && strings.TrimSpace(string(out)) == "active"
 	_, _ = run.Run(ctx, "systemctl", "stop", RevertTimerUnit+".timer")
 	return armed
+}
+
+// CloudInitDropIn stops cloud-init from rendering network configuration
+// on later boots, which would otherwise compete with Ostiole's units.
+const CloudInitDropIn = "/etc/cloud/cloud.cfg.d/99-ostiole-network.cfg"
+
+// DisableCloudInitNetwork writes the drop-in when cloud-init is present.
+// It reports whether it did.
+func DisableCloudInitNetwork(log *slog.Logger) (bool, error) {
+	if _, err := os.Stat(filepath.Dir(CloudInitDropIn)); err != nil {
+		return false, nil
+	}
+	content := "# Written by ostiole: networking is managed through systemd-networkd by Ostiole.\nnetwork: {config: disabled}\n"
+	if err := writeFile(CloudInitDropIn, content, 0o644); err != nil {
+		return false, err
+	}
+	log.Info("disabled cloud-init network rendering", "file", CloudInitDropIn)
+	return true, nil
+}
+
+// RestoreCloudInitNetwork removes the drop-in.
+func RestoreCloudInitNetwork() error {
+	err := os.Remove(CloudInitDropIn)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
 }

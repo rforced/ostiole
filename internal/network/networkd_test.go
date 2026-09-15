@@ -102,7 +102,7 @@ func TestApplyWritesRemovesAndReloads(t *testing.T) {
 	n := &Networkd{Dir: dir, Cmd: cmd}
 
 	// Pre-existing: one stale owned file, one foreign file that must survive.
-	if err := os.WriteFile(filepath.Join(dir, "10-ostiole-old.network"), []byte("stale"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "00-ostiole-old.network"), []byte("stale"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "20-wired.network"), []byte("foreign"), 0o644); err != nil {
@@ -124,7 +124,7 @@ func TestApplyWritesRemovesAndReloads(t *testing.T) {
 	if snap.String() != files.String() {
 		t.Errorf("snapshot after apply differs:\n%s", snap.String())
 	}
-	if _, err := os.Stat(filepath.Join(dir, "10-ostiole-old.network")); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(filepath.Join(dir, "00-ostiole-old.network")); !errors.Is(err, os.ErrNotExist) {
 		t.Error("stale owned file not removed")
 	}
 	if raw, _ := os.ReadFile(filepath.Join(dir, "20-wired.network")); string(raw) != "foreign" {
@@ -159,7 +159,7 @@ func TestApplyWritesRemovesAndReloads(t *testing.T) {
 func TestApplyRefusesForeignNames(t *testing.T) {
 	t.Parallel()
 	n := &Networkd{Dir: t.TempDir(), Cmd: &fakeCmd{}}
-	for _, name := range []string{"20-wired.network", "../10-ostiole-x.network", "10-ostiole-../x"} {
+	for _, name := range []string{"20-wired.network", "../00-ostiole-x.network", "00-ostiole-../x"} {
 		if err := n.Apply(context.Background(), Files{name: "x"}); err == nil {
 			t.Errorf("Apply accepted %q", name)
 		}
@@ -169,7 +169,7 @@ func TestApplyRefusesForeignNames(t *testing.T) {
 func TestApplyReportsReloadFailure(t *testing.T) {
 	t.Parallel()
 	n := &Networkd{Dir: t.TempDir(), Cmd: &fakeCmd{err: errors.New("exit 1")}}
-	err := n.Apply(context.Background(), Files{"10-ostiole-eth0.network": "x"})
+	err := n.Apply(context.Background(), Files{"00-ostiole-eth0.network": "x"})
 	if err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Fatalf("err = %v", err)
 	}
