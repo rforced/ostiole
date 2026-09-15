@@ -87,6 +87,8 @@ export const api = {
   status: () => get('/status'),
   config: {
     get: () => get('/config'),
+    /** Build (without saving) a first configuration from the wizard answers. */
+    starter: (opts) => post('/config/starter', opts),
     revisions: () => get('/config/revisions'),
     revision: (id) => get(`/config/revisions/${encodeURIComponent(id)}`),
     check: (config) => post('/check', { config }),

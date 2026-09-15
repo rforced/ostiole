@@ -70,3 +70,32 @@ jobs:
         with:
           name: ostiole-linux-amd64
           path: bin/ostiole
+
+  e2e:
+    name: Browser
+    runs-on: ubuntu-latest
+    needs: go
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ostiole-linux-amd64
+          path: bin
+      - run: chmod +x ../bin/ostiole
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run e2e
+        env:
+          OSTIOLE_BIN: ../bin/ostiole
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: web/playwright-report
+          retention-days: 7

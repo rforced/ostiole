@@ -2,3 +2,6 @@ node_modules
 dist
 ../internal/web/dist
 bun.lock
+test-results
+playwright-report
+e2e/screenshots

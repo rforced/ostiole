@@ -70,6 +70,15 @@ tasks:
     cmds:
       - bun run test
 
+  web:e2e:
+    desc: Run Playwright end-to-end tests against the built binary
+    dir: web
+    deps: [web:install]
+    cmds:
+      - bun run e2e
+    env:
+      OSTIOLE_BIN: ../bin/ostiole
+
   # ---- go --------------------------------------------------------------
 
   go:build:
@@ -126,6 +135,12 @@ tasks:
   test:
     desc: Test everything
     deps: [go:test, web:test]
+
+  e2e:
+    desc: Build, then run the browser end-to-end tests
+    deps: [build]
+    cmds:
+      - task: web:e2e
 
   vuln:
     desc: Dependency vulnerability scans

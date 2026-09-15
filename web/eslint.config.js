@@ -24,8 +24,8 @@ export default defineConfig(
     },
   },
   {
-    name: 'app/node-config-files',
-    files: ['vite.config.js', 'eslint.config.js'],
+    name: 'app/node-files',
+    files: ['vite.config.js', 'eslint.config.js', 'playwright.config.js', 'e2e/**/*.js'],
     languageOptions: {
       globals: { ...globals.node },
     },

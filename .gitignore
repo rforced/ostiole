@@ -35,6 +35,9 @@ go.work.sum
 /bin/
 /web/node_modules/
 /web/dist/
+/web/test-results/
+/web/playwright-report/
+/web/e2e/screenshots/
 /internal/web/dist/*
 !/internal/web/dist/.gitkeep
 *.tsbuildinfo
