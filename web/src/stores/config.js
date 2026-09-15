@@ -46,6 +46,11 @@ export const useConfigStore = defineStore('config', () => {
     saved.value = clone(draft.value)
   }
 
+  /** Replace the draft wholesale, e.g. with an archived revision. */
+  function replaceDraft(cfg) {
+    draft.value = clone(cfg)
+  }
+
   function reset() {
     saved.value = null
     draft.value = null
@@ -234,6 +239,7 @@ export const useConfigStore = defineStore('config', () => {
     load,
     discard,
     markSaved,
+    replaceDraft,
     reset,
     findInterface,
     upsertInterface,

@@ -18,6 +18,7 @@ func (a *api) registerAuth(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/auth/login", a.public(a.login))
 	mux.HandleFunc("POST /api/v1/auth/logout", a.protect(a.logout))
 	mux.HandleFunc("GET /api/v1/auth/me", a.protect(a.me))
+	mux.HandleFunc("POST /api/v1/auth/password", a.protect(a.changePassword))
 }
 
 // session resolves the request's session cookie.
@@ -131,5 +132,36 @@ func (a *api) logout(w http.ResponseWriter, r *http.Request) error {
 func (a *api) me(w http.ResponseWriter, r *http.Request) error {
 	sess, _ := a.session(r)
 	writeJSON(w, http.StatusOK, sess)
+	return nil
+}
+
+type passwordChange struct {
+	Current string `json:"current"`
+	New     string `json:"new"`
+}
+
+// changePassword verifies the current password (rate limited like a
+// login), sets the new one, and re-issues the caller's session since the
+// change ends every session for the account.
+func (a *api) changePassword(w http.ResponseWriter, r *http.Request) error {
+	sess, _ := a.session(r)
+	var req passwordChange
+	if err := decodeJSON(r, &req); err != nil {
+		return err
+	}
+	check, err := a.auth.Login(sess.Username, req.Current, remoteIP(r))
+	if err != nil {
+		return err
+	}
+	a.auth.Logout(check.ID)
+	if err := a.auth.SetPassword(sess.Username, req.New); err != nil {
+		return err
+	}
+	fresh, err := a.auth.Login(sess.Username, req.New, remoteIP(r))
+	if err != nil {
+		return err
+	}
+	setSessionCookie(w, r, fresh)
+	writeJSON(w, http.StatusOK, sessionResponse{Username: fresh.Username, Expires: fresh.Expires})
 	return nil
 }

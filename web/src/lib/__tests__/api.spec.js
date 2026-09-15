@@ -36,11 +36,17 @@ describe('api', () => {
     expect(err.issues).toHaveLength(1)
   })
 
-  it('dispatches the unauthorized event on 401', async () => {
+  it('dispatches the unauthorized event on 401, except for credential endpoints', async () => {
     mockFetch(401, { error: 'authentication required' })
     const handler = vi.fn()
     window.addEventListener(UNAUTHORIZED_EVENT, handler)
     await expect(api.status()).rejects.toMatchObject({ status: 401 })
+    expect(handler).toHaveBeenCalledOnce()
+    mockFetch(401, { error: 'invalid username or password' })
+    await expect(api.auth.login('admin', 'wrong')).rejects.toMatchObject({ status: 401 })
+    await expect(api.auth.changePassword('wrong', 'new one that is long')).rejects.toMatchObject({
+      status: 401,
+    })
     expect(handler).toHaveBeenCalledOnce()
     window.removeEventListener(UNAUTHORIZED_EVENT, handler)
   })

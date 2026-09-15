@@ -22,6 +22,9 @@ export class ApiError extends Error {
   }
 }
 
+/** Endpoints where a 401 means "wrong credentials", not "session expired". */
+const CREDENTIAL_PATHS = ['/auth/login', '/auth/password', '/setup']
+
 /**
  * @template T
  * @param {string} method
@@ -39,7 +42,7 @@ async function request(method, path, body) {
     init.body = JSON.stringify(body)
   }
   const res = await fetch(`/api/v1${path}`, init)
-  if (res.status === 401) {
+  if (res.status === 401 && !CREDENTIAL_PATHS.includes(path)) {
     window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT, { detail: { path } }))
   }
   if (!res.ok) {
@@ -82,6 +85,8 @@ export const api = {
     logout: () => post('/auth/logout'),
     /** @returns {Promise<Session>} */
     me: () => get('/auth/me'),
+    /** @returns {Promise<Session>} */
+    changePassword: (current, next) => post('/auth/password', { current, new: next }),
   },
   /** @returns {Promise<Status>} */
   status: () => get('/status'),

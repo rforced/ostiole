@@ -423,3 +423,28 @@ func TestHSTSOnlyOverTLS(t *testing.T) {
 		t.Error("HSTS missing over TLS")
 	}
 }
+
+func TestChangePassword(t *testing.T) {
+	t.Parallel()
+	srv, _ := newTestServer(t)
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/auth/password", passwordChange{Current: "wrong password!", New: "a completely new one"}); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("wrong current: %d %s", resp.StatusCode, raw)
+	}
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/auth/password", passwordChange{Current: testPassword, New: "short"}); resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("weak new: %d", resp.StatusCode)
+	}
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/auth/password", passwordChange{Current: testPassword, New: "a completely new one"})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("change: %d %s", resp.StatusCode, raw)
+	}
+	// Still logged in with the re-issued session.
+	if resp, _ := do(t, srv, http.MethodGet, "/api/v1/auth/me", nil); resp.StatusCode != http.StatusOK {
+		t.Errorf("me after change: %d", resp.StatusCode)
+	}
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/auth/login", credentials{Username: "admin", Password: testPassword}); resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("old password still works: %d", resp.StatusCode)
+	}
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/auth/login", credentials{Username: "admin", Password: "a completely new one"}); resp.StatusCode != http.StatusOK {
+		t.Errorf("new password rejected: %d", resp.StatusCode)
+	}
+}
