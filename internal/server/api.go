@@ -13,6 +13,7 @@ import (
 
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/engine"
+	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
@@ -28,10 +29,12 @@ type api struct {
 	auth     *auth.Service
 	updater  *update.Manager
 	services *services.Dnsmasq
+	fwlog    *fwlog.Ring
 }
 
 func (a *api) register(mux *http.ServeMux) {
 	a.registerAuth(mux)
+	a.registerLog(mux)
 	mux.HandleFunc("GET /api/v1/status", a.guard(a.status))
 	mux.HandleFunc("GET /api/v1/config", a.guard(a.getConfig))
 	mux.HandleFunc("GET /api/v1/config/revisions", a.guard(a.revisions))

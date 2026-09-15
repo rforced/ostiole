@@ -41,7 +41,7 @@ table inet ostiole {
 		iifname "eth0" jump zone_wan
 		iifname { "eth1", "eth1.20" } jump zone_lan
 		iifname "eth2" jump zone_dmz
-		counter log prefix "ostiole:input:drop: " comment "default-drop"
+		counter log prefix "ostiole:input:drop: " group 1 comment "default-drop"
 	}
 	chain forward {
 		type filter hook forward priority filter; policy drop;
@@ -51,7 +51,7 @@ table inet ostiole {
 		iifname "eth0" jump zone_wan
 		iifname { "eth1", "eth1.20" } jump zone_lan
 		iifname "eth2" jump zone_dmz
-		counter log prefix "ostiole:forward:drop: " comment "default-drop"
+		counter log prefix "ostiole:forward:drop: " group 1 comment "default-drop"
 	}
 	chain output {
 		type filter hook output priority filter; policy accept;
@@ -62,12 +62,12 @@ table inet ostiole {
 	}
 	chain zone_lan {
 		counter accept comment "id:allow-lan"
-		oifname "eth0" tcp dport { 25, 465-587 } counter log prefix "ostiole:block-smtp: " reject with tcp reset comment "id:block-smtp"
+		oifname "eth0" tcp dport { 25, 465-587 } counter log prefix "ostiole:block-smtp: " group 1 reject with tcp reset comment "id:block-smtp"
 		# rule v6-only-dest skipped: source and destination cannot match the same address family (empty alias, or IPv4 on one side and IPv6 on the other)
 		# rule empty-alias skipped: source and destination cannot match the same address family (empty alias, or IPv4 on one side and IPv6 on the other)
 		# rule to-guest skipped: destination zone "guest" has no enabled interfaces
 		meta l4proto udp counter reject comment "id:reject-udp"
-		counter log prefix "ostiole:lan:drop: " drop comment "zone-default"
+		counter log prefix "ostiole:lan:drop: " group 1 drop comment "zone-default"
 	}
 	chain zone_dmz {
 		ip saddr @alias_servers_v4 meta l4proto { tcp, udp } th dport @alias_web_ports counter accept comment "id:web-from-servers"

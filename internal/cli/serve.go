@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/rforced/ostiole/internal/auth"
+	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/server"
@@ -70,6 +71,13 @@ at your own.`,
 			deps := server.Deps{Engine: eng, Auth: as, Updater: newUpdater(cfg)}
 			if os.Geteuid() == 0 {
 				deps.Services = services.New()
+				ring := fwlog.NewRing(2000)
+				deps.Log = ring
+				go func() {
+					if err := (&fwlog.Listener{Ring: ring, Log: slog.Default()}).Run(ctx); err != nil {
+						slog.Warn("firewall log listener stopped", "err", err)
+					}
+				}()
 			}
 			return server.Run(ctx, cfg, deps, slog.Default())
 		},

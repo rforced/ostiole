@@ -10,9 +10,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/engine"
+	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/nft/nfttest"
 	"github.com/rforced/ostiole/internal/store"
@@ -446,5 +448,64 @@ func TestChangePassword(t *testing.T) {
 	}
 	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/auth/login", credentials{Username: "admin", Password: "a completely new one"}); resp.StatusCode != http.StatusOK {
 		t.Errorf("new password rejected: %d", resp.StatusCode)
+	}
+}
+
+func TestFirewallLogEndpoints(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	fake := &nfttest.Fake{}
+	eng := engine.New(store.New(dir), fake, nil, slog.New(slog.DiscardHandler))
+	as, _ := auth.NewService(dir)
+	ring := fwlog.NewRing(10)
+	srv := httptest.NewServer(Handler(Deps{Engine: eng, Auth: as, Log: ring}))
+	jar, _ := cookiejar.New(nil)
+	srv.Client().Jar = jar
+	t.Cleanup(srv.Close)
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/setup", credentials{Username: "admin", Password: testPassword}); resp.StatusCode != http.StatusCreated {
+		t.Fatal("setup")
+	}
+
+	ring.Add(fwlog.Entry{Prefix: "ostiole:lan:drop: ", Kind: "zone-drop", Zone: "lan", Proto: "tcp", Src: "10.0.0.5", Dst: "10.0.0.1", DstPort: 22})
+	resp, raw := do(t, srv, http.MethodGet, "/api/v1/log/recent?limit=5", nil)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), `"zone":"lan"`) {
+		t.Fatalf("recent: %d %s", resp.StatusCode, raw)
+	}
+	if resp, _ := do(t, srv, http.MethodGet, "/api/v1/log/recent?limit=0", nil); resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("bad limit: %d", resp.StatusCode)
+	}
+
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/v1/log/stream", nil)
+	resp2, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp2.Body.Close()
+	if ct := resp2.Header.Get("Content-Type"); ct != "text/event-stream" {
+		t.Fatalf("content-type = %q", ct)
+	}
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		ring.Add(fwlog.Entry{Prefix: "ostiole:web-in: ", Kind: "rule", RuleID: "web-in", Proto: "tcp", DstPort: 443})
+	}()
+	buf := make([]byte, 4096)
+	var got string
+	deadline := time.Now().Add(3 * time.Second)
+	for !strings.Contains(got, `"ruleId":"web-in"`) && time.Now().Before(deadline) {
+		n, err := resp2.Body.Read(buf)
+		got += string(buf[:n])
+		if err != nil {
+			break
+		}
+	}
+	if !strings.Contains(got, "data: ") || !strings.Contains(got, `"ruleId":"web-in"`) {
+		t.Errorf("stream = %q", got)
+	}
+
+	plain := httptest.NewServer(Handler(Deps{Engine: eng, Auth: as}))
+	defer plain.Close()
+	plain.Client().Jar = jar
+	if resp, _ := do(t, plain, http.MethodGet, "/api/v1/log/recent", nil); resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("without ring: %d, want 503", resp.StatusCode)
 	}
 }

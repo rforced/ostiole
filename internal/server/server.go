@@ -11,6 +11,7 @@ import (
 
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/engine"
+	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/update"
 	"github.com/rforced/ostiole/internal/version"
@@ -36,13 +37,15 @@ type Deps struct {
 	Updater *update.Manager // optional; nil disables the update endpoints
 	// Services reads dnsmasq state and leases; nil reports "not set up".
 	Services *services.Dnsmasq
+	// Log is the firewall log ring; nil disables the log endpoints.
+	Log *fwlog.Ring
 }
 
 // Handler builds the full HTTP handler: API routes plus the SPA.
 func Handler(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/health", handleHealth)
-	api := &api{engine: d.Engine, auth: d.Auth, updater: d.Updater, services: d.Services}
+	api := &api{engine: d.Engine, auth: d.Auth, updater: d.Updater, services: d.Services, fwlog: d.Log}
 	api.register(mux)
 	mux.HandleFunc("/api/", handleAPINotFound)
 	mux.Handle("/", web.Handler())
