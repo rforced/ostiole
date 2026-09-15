@@ -16,7 +16,11 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     { path: '/', name: 'dashboard', component: DashboardView },
-    { path: '/interfaces', name: 'interfaces', ...placeholder('Interfaces') },
+    {
+      path: '/interfaces',
+      name: 'interfaces',
+      component: () => import('@/views/InterfacesView.vue'),
+    },
     { path: '/firewall', name: 'firewall', ...placeholder('Firewall') },
     { path: '/routing', name: 'routing', ...placeholder('Routing') },
     { path: '/services', name: 'services', ...placeholder('Services') },

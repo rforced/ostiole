@@ -30,4 +30,28 @@
   .kv dt {
     @apply text-neutral-500;
   }
+  .table {
+    @apply w-full text-left text-sm;
+  }
+  .table thead th {
+    @apply border-b border-neutral-200 bg-neutral-50 px-3 py-2 text-xs font-medium tracking-wide text-neutral-500 uppercase dark:border-neutral-800 dark:bg-neutral-900;
+  }
+  .table tbody td {
+    @apply border-b border-neutral-100 px-3 py-2 align-top dark:border-neutral-800/60;
+  }
+  .table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+  .badge {
+    @apply inline-block rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300;
+  }
+  .badge-ok {
+    @apply bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300;
+  }
+  .badge-warn {
+    @apply bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300;
+  }
+  .link {
+    @apply text-sm text-sky-700 underline-offset-2 hover:underline dark:text-sky-400;
+  }
 }

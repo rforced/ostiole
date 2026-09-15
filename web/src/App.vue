@@ -2,6 +2,7 @@
 import { Activity, Cog, LogOut, Network, Route, Server, Shield } from 'lucide-vue-next'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 
+import ApplyBar from '@/components/ApplyBar.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import { useAuthStore } from '@/stores/auth'
 
@@ -65,6 +66,7 @@ async function logout() {
           <LogOut class="size-4" aria-hidden="true" />
         </button>
       </header>
+      <ApplyBar />
       <main class="flex-1 p-6">
         <RouterView />
       </main>

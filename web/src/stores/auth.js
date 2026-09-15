@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { ApiError, api } from '@/lib/api'
+import { useConfigStore } from '@/stores/config'
 import { useSystemStore } from '@/stores/system'
 
 /**
@@ -54,6 +55,7 @@ export const useAuthStore = defineStore('auth', () => {
     } finally {
       user.value = null
       useSystemStore().reset()
+      useConfigStore().reset()
     }
   }
 
@@ -61,6 +63,7 @@ export const useAuthStore = defineStore('auth', () => {
   function invalidate() {
     user.value = null
     useSystemStore().reset()
+    useConfigStore().reset()
   }
 
   return { user, setupNeeded, ready, loggedIn, bootstrap, login, setup, logout, invalidate }
