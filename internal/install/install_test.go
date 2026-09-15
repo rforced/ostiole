@@ -67,12 +67,16 @@ func TestInstallAndUninstall(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 
 	run := &fakeRunner{}
-	rep, err := Install(context.Background(), sc, lay, Options{Source: src, Listen: ":8443", Run: run}, log)
+	sysctlFile := filepath.Join(t.TempDir(), "90-ostiole.conf")
+	rep, err := Install(context.Background(), sc, lay, Options{Source: src, Listen: ":8443", Run: run, SysctlFile: sysctlFile}, log)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if rep.OpenedIn != "firewalld" {
 		t.Errorf("OpenedIn = %q, want firewalld", rep.OpenedIn)
+	}
+	if raw, err := os.ReadFile(sysctlFile); err != nil || !strings.Contains(string(raw), "ip_forward = 1") {
+		t.Errorf("sysctl file = %q, %v", raw, err)
 	}
 	if len(run.calls) != 2 || strings.Join(run.calls[0], " ") != "firewall-cmd --add-port=8443/tcp" || strings.Join(run.calls[1], " ") != "firewall-cmd --permanent --add-port=8443/tcp" {
 		t.Errorf("firewall-cmd calls = %v", run.calls)
@@ -113,7 +117,7 @@ func TestInstallAndUninstall(t *testing.T) {
 	}
 
 	// Re-install from the installed path is a no-op copy.
-	if _, err := Install(context.Background(), sc, lay, Options{Source: lay.Binary(), Run: &fakeRunner{}}, log); err != nil {
+	if _, err := Install(context.Background(), sc, lay, Options{Source: lay.Binary(), Run: &fakeRunner{}, SysctlFile: "-"}, log); err != nil {
 		t.Fatal(err)
 	}
 

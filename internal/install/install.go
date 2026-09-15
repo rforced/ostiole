@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/rforced/ostiole/internal/network"
+	"github.com/rforced/ostiole/internal/sysctl"
 )
 
 // Layout says where things go. Tests point it at temp directories.
@@ -73,6 +74,9 @@ type Options struct {
 	Listen string
 	// Run executes helper commands (firewall-cmd, ufw); nil means real ones.
 	Run Runner
+	// SysctlFile is where router sysctls are persisted; empty means the
+	// default, "-" skips it (tests).
+	SysctlFile string
 }
 
 // Report describes what Install did and found.
@@ -83,6 +87,8 @@ type Report struct {
 	// OpenedIn names the competing firewall that was told to allow the UI
 	// port until takeover retires it, or "".
 	OpenedIn string
+	// Sysctl is the persisted sysctl file, or "".
+	Sysctl string
 }
 
 // Install copies the binary, writes the units, and enables them. It never
@@ -128,6 +134,16 @@ func Install(ctx context.Context, sc Systemctl, lay Layout, opts Options, log *s
 	}
 	if _, err := sc.Run(ctx, "daemon-reload"); err != nil {
 		return nil, fmt.Errorf("systemctl daemon-reload: %w", err)
+	}
+	if opts.SysctlFile != "-" {
+		if err := sysctl.Persist(opts.SysctlFile); err != nil {
+			log.Warn("could not persist router sysctls", "err", err)
+		} else {
+			rep.Sysctl = opts.SysctlFile
+			if rep.Sysctl == "" {
+				rep.Sysctl = sysctl.ConfFile
+			}
+		}
 	}
 	if out, err := sc.Run(ctx, "enable", FirewallUnit); err != nil {
 		return nil, fmt.Errorf("enable %s: %w: %s", FirewallUnit, err, out)

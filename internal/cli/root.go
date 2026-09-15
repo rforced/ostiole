@@ -13,6 +13,7 @@ import (
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/store"
+	"github.com/rforced/ostiole/internal/sysctl"
 	"github.com/rforced/ostiole/internal/version"
 )
 
@@ -56,7 +57,11 @@ func (g *globals) engine() (*engine.Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	return engine.New(g.store(), &nft.Exec{Bin: g.nftBin}, net, slog.Default()), nil
+	eng := engine.New(g.store(), &nft.Exec{Bin: g.nftBin}, net, slog.Default())
+	if os.Geteuid() == 0 {
+		eng.WithSysctl(sysctl.Proc{})
+	}
+	return eng, nil
 }
 
 func newRootCmd() *cobra.Command {

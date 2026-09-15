@@ -17,6 +17,7 @@ import (
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/store"
+	"github.com/rforced/ostiole/internal/sysctl"
 )
 
 // Errors returned by the engine.
@@ -33,6 +34,7 @@ type Engine struct {
 	store  *store.Store
 	nft    nft.Runner
 	net    network.Backend // nil when network management is disabled
+	sysctl sysctl.Applier  // nil in tests without a kernel
 	log    *slog.Logger
 	revert time.Duration // time budget for an automatic revert
 
@@ -58,6 +60,22 @@ func New(st *store.Store, runner nft.Runner, net network.Backend, log *slog.Logg
 		log = slog.Default()
 	}
 	return &Engine{store: st, nft: runner, net: net, log: log, revert: 15 * time.Second}
+}
+
+// WithSysctl makes every apply and load also turn on router kernel
+// settings (IP forwarding and friends).
+func (e *Engine) WithSysctl(a sysctl.Applier) *Engine {
+	e.sysctl = a
+	return e
+}
+
+func (e *Engine) applySysctl() {
+	if e.sysctl == nil {
+		return
+	}
+	if err := e.sysctl.Apply(); err != nil {
+		e.log.Warn("could not set router sysctls; forwarding may not work", "err", err)
+	}
 }
 
 // Plan is everything rendered from a configuration.
@@ -136,6 +154,7 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 	if err := e.nft.Apply(ctx, plan.Ruleset); err != nil {
 		return nil, err
 	}
+	e.applySysctl()
 	if e.net != nil {
 		if err := e.net.Apply(ctx, plan.Network); err != nil {
 			if rerr := e.nft.Apply(ctx, previous); rerr != nil {
@@ -259,7 +278,11 @@ func (e *Engine) Load(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return e.nft.Apply(ctx, ruleset)
+	if err := e.nft.Apply(ctx, ruleset); err != nil {
+		return err
+	}
+	e.applySysctl()
+	return nil
 }
 
 // PendingStatus describes an unconfirmed apply.
