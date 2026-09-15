@@ -114,10 +114,6 @@ func Install(ctx context.Context, sc Systemctl, lay Layout, opts Options, log *s
 	if err := os.MkdirAll(lay.BinDir, 0o755); err != nil { //nolint:gosec // system bin dir must be world-readable
 		return nil, err
 	}
-	// ReadWritePaths entries must exist for the unit to start.
-	if err := os.MkdirAll("/var/lib/ostiole", 0o755); err != nil && !os.IsPermission(err) { //nolint:gosec // dnsmasq reads here unprivileged
-		return nil, err
-	}
 	// A binary that a package manager already placed in a system bin
 	// directory is used where it is; anything else (a downloaded copy in
 	// $HOME, say) is copied into place so systemd and SELinux accept it.
@@ -233,9 +229,10 @@ func Units(lay Layout, opts Options) map[string]string {
 	// out of the way before the network takeover.
 	backend := "auto"
 	// The daemon needs to write its own binary directory for self-updates.
-	// /var/lib/ostiole holds dnsmasq's generated files and leases;
-	// -/etc/resolv.conf is managed by the DNS service (ignored if absent).
-	rw := cfg + " " + NetworkdUnitDir + " " + lay.BinDir + " /var/lib/ostiole -/etc/resolv.conf"
+	// -/etc/dnsmasq.d receives the DNS/DHCP configuration once dnsmasq is
+	// set up; -/etc/resolv.conf is managed by the DNS service. Both are
+	// ignored while absent.
+	rw := cfg + " " + NetworkdUnitDir + " " + lay.BinDir + " -/etc/dnsmasq.d -/etc/resolv.conf"
 	firewall := fmt.Sprintf(`[Unit]
 Description=Ostiole firewall ruleset (loaded before networking)
 Documentation=https://github.com/rforced/ostiole

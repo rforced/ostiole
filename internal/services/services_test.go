@@ -162,8 +162,8 @@ func TestApplyStartsStopsAndReverts(t *testing.T) {
 	if !cmd.has("systemctl", "disable", "--now", Unit) {
 		t.Errorf("unit not stopped: %v", cmd.calls)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "dnsmasq.conf")); !errors.Is(err, os.ErrNotExist) {
-		t.Error("dnsmasq.conf left behind")
+	if _, err := os.Stat(filepath.Join(dir, "ostiole.conf")); !errors.Is(err, os.ErrNotExist) {
+		t.Error("ostiole.conf left behind")
 	}
 
 	// Revert to the snapshot restarts the unit.
@@ -232,7 +232,7 @@ func TestSetupWritesUnitAndMasksCompetitors(t *testing.T) {
 		t.Fatal(err)
 	}
 	unit, err := os.ReadFile(filepath.Join(root, "units", Unit))
-	if err != nil || !strings.Contains(string(unit), "--conf-file="+filepath.Join(root, "generated", "dnsmasq.conf")) {
+	if err != nil || !strings.Contains(string(unit), "--conf-file="+filepath.Join(root, "generated", "ostiole.conf")) {
 		t.Errorf("unit = %s, %v", unit, err)
 	}
 	if info, err := os.Lstat(resolv); err != nil || info.Mode()&os.ModeSymlink != 0 {
