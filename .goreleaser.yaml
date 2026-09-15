@@ -42,8 +42,8 @@ signs:
     cmd: go
     args: ["run", "./cmd/ostiole-sign", "-in", "${artifact}", "-out", "${signature}"]
     signature: "${artifact}.sig"
-    env:
-      - OSTIOLE_SIGNING_KEY={{ .Env.OSTIOLE_SIGNING_KEY }}
+    # The command inherits the process environment, including
+    # OSTIOLE_SIGNING_KEY from the workflow secret.
 
 sboms:
   - artifacts: archive
