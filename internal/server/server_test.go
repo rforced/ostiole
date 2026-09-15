@@ -383,3 +383,43 @@ func TestLiveInterfaces(t *testing.T) {
 		t.Fatalf("live interfaces: %d %s", resp.StatusCode, raw)
 	}
 }
+
+func TestStarter(t *testing.T) {
+	t.Parallel()
+	srv, _ := newTestServer(t)
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/config/starter", starterRequest{Hostname: "fw", LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0"})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("starter: %d %s", resp.StatusCode, raw)
+	}
+	var cfg model.Config
+	if err := json.Unmarshal(raw, &cfg); err != nil || len(cfg.Interfaces) != 2 || cfg.System.Hostname != "fw" {
+		t.Fatalf("starter config = %s (%v)", raw, err)
+	}
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/config/starter", starterRequest{LAN: "eth1"}); resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("missing lanAddress: %d, want 400", resp.StatusCode)
+	}
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/config/starter", starterRequest{LAN: "eth1", LANAddress: "not-cidr"}); resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("bad address: %d, want 422", resp.StatusCode)
+	}
+}
+
+func TestHSTSOnlyOverTLS(t *testing.T) {
+	t.Parallel()
+	plain := httptest.NewServer(Handler(Deps{}))
+	defer plain.Close()
+	resp, _ := do(t, plain, http.MethodGet, "/api/v1/health", nil)
+	if resp.Header.Get("Strict-Transport-Security") != "" {
+		t.Error("HSTS sent over plain HTTP")
+	}
+	secure := httptest.NewTLSServer(Handler(Deps{}))
+	defer secure.Close()
+	req, _ := http.NewRequest(http.MethodGet, secure.URL+"/api/v1/health", nil)
+	resp, err := secure.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.Header.Get("Strict-Transport-Security") == "" {
+		t.Error("HSTS missing over TLS")
+	}
+}

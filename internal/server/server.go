@@ -19,7 +19,12 @@ import (
 type Config struct {
 	// Listen is the host:port to bind.
 	Listen string
+	// TLSCert and TLSKey enable HTTPS when both are set.
+	TLSCert, TLSKey string
 }
+
+// TLS reports whether the server will speak HTTPS.
+func (c Config) TLS() bool { return c.TLSCert != "" && c.TLSKey != "" }
 
 // Deps are the services the API exposes. Both are required for the
 // engine routes; without Auth every protected route answers 503.
@@ -52,7 +57,11 @@ func Run(ctx context.Context, cfg Config, d Deps, logger *slog.Logger) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		logger.Info("listening", "addr", cfg.Listen, "version", version.Version)
+		logger.Info("listening", "addr", cfg.Listen, "tls", cfg.TLS(), "version", version.Version)
+		if cfg.TLS() {
+			errCh <- srv.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey)
+			return
+		}
 		errCh <- srv.ListenAndServe()
 	}()
 

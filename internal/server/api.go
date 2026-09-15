@@ -32,6 +32,7 @@ func (a *api) register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/ruleset", a.guard(a.ruleset))
 	mux.HandleFunc("GET /api/v1/counters", a.guard(a.counters))
 	mux.HandleFunc("GET /api/v1/interfaces/live", a.guard(a.liveInterfaces))
+	mux.HandleFunc("POST /api/v1/config/starter", a.guard(a.starter))
 	mux.HandleFunc("POST /api/v1/check", a.guard(a.check))
 	mux.HandleFunc("POST /api/v1/apply", a.guard(a.apply))
 	mux.HandleFunc("POST /api/v1/apply/confirm", a.guard(a.confirm))
@@ -204,6 +205,36 @@ func (a *api) liveInterfaces(w http.ResponseWriter, _ *http.Request) error {
 		return err
 	}
 	writeJSON(w, http.StatusOK, links)
+	return nil
+}
+
+type starterRequest struct {
+	Hostname   string `json:"hostname"`
+	LAN        string `json:"lan"`
+	LANAddress string `json:"lanAddress"`
+	WAN        string `json:"wan"`
+}
+
+// starter builds (but does not save) a first configuration from the
+// wizard's answers, so the UI can show and then apply it.
+func (a *api) starter(w http.ResponseWriter, r *http.Request) error {
+	var req starterRequest
+	if err := decodeJSON(r, &req); err != nil {
+		return err
+	}
+	if req.LAN == "" || req.LANAddress == "" {
+		return &badRequest{errors.New("lan and lanAddress are required")}
+	}
+	cfg := model.Starter(model.StarterOptions{
+		Hostname:   req.Hostname,
+		LAN:        req.LAN,
+		LANAddress: req.LANAddress,
+		WAN:        req.WAN,
+	})
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, cfg)
 	return nil
 }
 
