@@ -494,8 +494,9 @@ func NetworkRevert(ctx context.Context, sc Systemctl, managers []string, log *sl
 // `ostiole takeover --network --revert` after window unless cancelled.
 func ScheduleNetworkRevert(ctx context.Context, run Runner, binary, configDir string, window time.Duration) error {
 	_, _ = run.Run(ctx, "systemctl", "stop", RevertTimerUnit+".timer")
+	// Timers default to one-minute accuracy; the admin is counting seconds.
 	out, err := run.Run(ctx, "systemd-run", "--quiet", "--unit="+RevertTimerUnit,
-		"--on-active="+fmt.Sprint(int(window.Seconds())),
+		"--on-active="+fmt.Sprint(int(window.Seconds())), "--timer-property=AccuracySec=1s",
 		binary, "--config-dir", configDir, "takeover", "--network", "--revert")
 	if err != nil {
 		return fmt.Errorf("arm revert timer: %w: %s", err, tail(out))

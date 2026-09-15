@@ -236,7 +236,7 @@ func TestNetworkRevertAndRecord(t *testing.T) {
 		t.Fatal(err)
 	}
 	last := strings.Join(run.calls[len(run.calls)-1], " ")
-	if !strings.Contains(last, "systemd-run") || !strings.Contains(last, "--on-active=180") || !strings.HasSuffix(last, "takeover --network --revert") {
+	if !strings.Contains(last, "systemd-run") || !strings.Contains(last, "--on-active=180") || !strings.Contains(last, "AccuracySec=1s") || !strings.HasSuffix(last, "takeover --network --revert") {
 		t.Errorf("systemd-run call = %q", last)
 	}
 	if CancelNetworkRevert(context.Background(), &fakeRunner{}) {
