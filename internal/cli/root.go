@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/rforced/ostiole/internal/engine"
+	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/store"
 	"github.com/rforced/ostiole/internal/version"
@@ -28,17 +29,32 @@ func Main(args []string) int {
 
 // globals are the persistent flags shared by every command.
 type globals struct {
-	logLevel  string
-	configDir string
-	nftBin    string
+	logLevel   string
+	configDir  string
+	nftBin     string
+	netBackend string
 }
 
 func (g *globals) store() *store.Store {
 	return store.New(g.configDir)
 }
 
-func (g *globals) engine() *engine.Engine {
-	return engine.New(g.store(), &nft.Exec{Bin: g.nftBin}, slog.Default())
+func (g *globals) network() (network.Backend, error) {
+	switch g.netBackend {
+	case "networkd":
+		return network.NewNetworkd(), nil
+	case "none":
+		return nil, nil
+	}
+	return nil, fmt.Errorf("unknown --network-backend %q (networkd or none)", g.netBackend)
+}
+
+func (g *globals) engine() (*engine.Engine, error) {
+	net, err := g.network()
+	if err != nil {
+		return nil, err
+	}
+	return engine.New(g.store(), &nft.Exec{Bin: g.nftBin}, net, slog.Default()), nil
 }
 
 func newRootCmd() *cobra.Command {
@@ -57,7 +73,9 @@ func newRootCmd() *cobra.Command {
 	pf.StringVar(&g.logLevel, "log-level", "info", "log level: debug, info, warn, error")
 	pf.StringVar(&g.configDir, "config-dir", store.DefaultDir, "configuration directory")
 	pf.StringVar(&g.nftBin, "nft", "nft", "path to the nft binary")
+	pf.StringVar(&g.netBackend, "network-backend", "networkd", "network backend: networkd or none (firewall only)")
 	cmd.AddCommand(
+		newInterfacesCmd(),
 		newServeCmd(g),
 		newInitCmd(g),
 		newCheckCmd(g),

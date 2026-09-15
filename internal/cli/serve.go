@@ -18,9 +18,13 @@ func newServeCmd(g *globals) *cobra.Command {
 		Short: "Run the web UI and API server",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			eng, err := g.engine()
+			if err != nil {
+				return err
+			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return server.Run(ctx, cfg, server.Deps{Engine: g.engine()}, slog.Default())
+			return server.Run(ctx, cfg, server.Deps{Engine: eng}, slog.Default())
 		},
 	}
 	cmd.Flags().StringVar(&cfg.Listen, "listen", "127.0.0.1:8080", "address to listen on")

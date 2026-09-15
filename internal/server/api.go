@@ -10,6 +10,7 @@ import (
 
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/model"
+	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/store"
 )
@@ -27,6 +28,7 @@ func (a *api) register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/config/revisions/{id}", a.guard(a.revision))
 	mux.HandleFunc("GET /api/v1/ruleset", a.guard(a.ruleset))
 	mux.HandleFunc("GET /api/v1/counters", a.guard(a.counters))
+	mux.HandleFunc("GET /api/v1/interfaces/live", a.guard(a.liveInterfaces))
 	mux.HandleFunc("POST /api/v1/check", a.guard(a.check))
 	mux.HandleFunc("POST /api/v1/apply", a.guard(a.apply))
 	mux.HandleFunc("POST /api/v1/apply/confirm", a.guard(a.confirm))
@@ -156,6 +158,15 @@ func (a *api) counters(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+func (a *api) liveInterfaces(w http.ResponseWriter, _ *http.Request) error {
+	links, err := network.Discover()
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, links)
+	return nil
+}
+
 type configRequest struct {
 	Config *model.Config `json:"config"`
 }
@@ -174,11 +185,11 @@ func (a *api) check(w http.ResponseWriter, r *http.Request) error {
 	if req.Config == nil {
 		return &badRequest{errors.New("config is required")}
 	}
-	ruleset, err := a.engine.Check(r.Context(), req.Config)
+	plan, err := a.engine.Check(r.Context(), req.Config)
 	if err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"ruleset": ruleset})
+	writeJSON(w, http.StatusOK, plan)
 	return nil
 }
 

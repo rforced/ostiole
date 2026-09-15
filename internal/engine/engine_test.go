@@ -10,9 +10,51 @@ import (
 	"time"
 
 	"github.com/rforced/ostiole/internal/model"
+	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/store"
 )
+
+// fakeNet is an in-memory network backend.
+type fakeNet struct {
+	mu       sync.Mutex
+	files    network.Files
+	applies  []network.Files
+	applyErr error
+}
+
+func (f *fakeNet) Name() string { return "fake" }
+
+func (f *fakeNet) Render(cfg *model.Config) (network.Files, error) {
+	return (&network.Networkd{}).Render(cfg)
+}
+
+func (f *fakeNet) Snapshot() (network.Files, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := network.Files{}
+	for k, v := range f.files {
+		out[k] = v
+	}
+	return out, nil
+}
+
+func (f *fakeNet) Apply(_ context.Context, files network.Files) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.applyErr != nil {
+		return f.applyErr
+	}
+	f.files = files
+	f.applies = append(f.applies, files)
+	return nil
+}
+
+func (f *fakeNet) current() network.Files {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.files
+}
 
 // fakeRunner records rulesets and can be told to fail.
 type fakeRunner struct {
@@ -65,7 +107,15 @@ func newEngine(t *testing.T) (*Engine, *fakeRunner, *store.Store) {
 	st := store.New(t.TempDir())
 	fr := &fakeRunner{}
 	log := slog.New(slog.DiscardHandler)
-	return New(st, fr, log), fr, st
+	return New(st, fr, nil, log), fr, st
+}
+
+func newEngineWithNet(t *testing.T) (*Engine, *fakeRunner, *fakeNet) {
+	t.Helper()
+	st := store.New(t.TempDir())
+	fr := &fakeRunner{}
+	fn := &fakeNet{files: network.Files{}}
+	return New(st, fr, fn, slog.New(slog.DiscardHandler)), fr, fn
 }
 
 func cfg(hostname string) *model.Config {
@@ -231,5 +281,71 @@ func TestLoad(t *testing.T) {
 	}
 	if fr.count() != 2 || fr.last() != res.Ruleset {
 		t.Errorf("Load applied wrong ruleset")
+	}
+}
+
+func TestNetworkAppliedAndRevertedTogether(t *testing.T) {
+	t.Parallel()
+	e, fr, fn := newEngineWithNet(t)
+
+	res, err := e.Apply(context.Background(), cfg("first"), ApplyOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Network) == 0 || len(fn.current()) != len(res.Network) {
+		t.Fatalf("network files not applied: %v", fn.current().Names())
+	}
+	firstFiles := fn.current()
+
+	second := cfg("second")
+	second.Interfaces[0].IPv4.Address = "10.9.9.1/24"
+	if _, err := e.Apply(context.Background(), second, ApplyOptions{ConfirmTimeout: time.Minute}); err != nil {
+		t.Fatal(err)
+	}
+	if fn.current().String() == firstFiles.String() {
+		t.Fatal("second apply did not change network files")
+	}
+	if err := e.Revert(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if fn.current().String() != firstFiles.String() {
+		t.Error("revert did not restore the previous network files")
+	}
+	if fr.count() != 3 {
+		t.Errorf("nft applies = %d, want 3", fr.count())
+	}
+	st, _ := e.Status(context.Background())
+	if st.Network != "fake" {
+		t.Errorf("status.Network = %q", st.Network)
+	}
+}
+
+func TestNetworkFailureRevertsFirewall(t *testing.T) {
+	t.Parallel()
+	e, fr, fn := newEngineWithNet(t)
+	if _, err := e.Apply(context.Background(), cfg("first"), ApplyOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	first := fr.last()
+	fn.applyErr = errors.New("networkctl exploded")
+	_, err := e.Apply(context.Background(), cfg("second"), ApplyOptions{})
+	if err == nil || !strings.Contains(err.Error(), "networkctl exploded") {
+		t.Fatalf("err = %v", err)
+	}
+	if fr.last() != first {
+		t.Error("firewall not reverted after network failure")
+	}
+	if st, _ := e.Status(context.Background()); st.Pending != nil {
+		t.Error("pending left behind")
+	}
+}
+
+func TestCheckSurfacesNetworkErrors(t *testing.T) {
+	t.Parallel()
+	e, _, _ := newEngineWithNet(t)
+	c := cfg("x")
+	c.Routes = []model.StaticRoute{{ID: "orphan", Enabled: true, Destination: "10.9.0.0/16", Gateway: "203.0.113.1"}}
+	if _, err := e.Check(context.Background(), c); err == nil || !strings.Contains(err.Error(), "orphan") {
+		t.Fatalf("err = %v", err)
 	}
 }

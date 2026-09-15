@@ -115,12 +115,16 @@ func newCheckCmd(g *globals) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			ruleset, err := g.engine().Check(cmd.Context(), cfg)
+			eng, err := g.engine()
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "ok: %d zones, %d interfaces, %d rules, %d bytes of nftables\n",
-				len(cfg.Zones), len(cfg.Interfaces), len(cfg.Rules), len(ruleset))
+			plan, err := eng.Check(cmd.Context(), cfg)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "ok: %d zones, %d interfaces, %d rules, %d bytes of nftables, %d network units\n",
+				len(cfg.Zones), len(cfg.Interfaces), len(cfg.Rules), len(plan.Ruleset), len(plan.Network))
 			return nil
 		},
 	}
@@ -173,7 +177,10 @@ previous ruleset is restored automatically. Use --yes to commit immediately.`,
 			if timeout > 0 && !stdinIsTerminal() {
 				return errors.New("confirmation needs an interactive terminal; use --yes to commit immediately")
 			}
-			eng := g.engine()
+			eng, err := g.engine()
+			if err != nil {
+				return err
+			}
 			out := cmd.OutOrStdout()
 			res, err := eng.Apply(cmd.Context(), cfg, engine.ApplyOptions{ConfirmTimeout: timeout})
 			if err != nil {
@@ -236,7 +243,11 @@ func newLoadCmd(g *globals) *cobra.Command {
 		Short: "Load the last confirmed ruleset (used at boot)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := g.engine().Load(cmd.Context()); err != nil {
+			eng, err := g.engine()
+			if err != nil {
+				return err
+			}
+			if err := eng.Load(cmd.Context()); err != nil {
 				return err
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "loaded confirmed ruleset")
@@ -252,7 +263,10 @@ func newStatusCmd(g *globals) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			st := g.store()
-			eng := g.engine()
+			eng, err := g.engine()
+			if err != nil {
+				return err
+			}
 			status, err := eng.Status(cmd.Context())
 			if err != nil {
 				return err
@@ -266,6 +280,7 @@ func newStatusCmd(g *globals) *cobra.Command {
 			fmt.Fprintf(w, "config dir\t%s\n", st.Dir)
 			fmt.Fprintf(w, "configured\t%v\n", status.Configured)
 			fmt.Fprintf(w, "table loaded\t%v\n", status.TableLoaded)
+			fmt.Fprintf(w, "network backend\t%s\n", status.Network)
 			fmt.Fprintf(w, "revisions\t%d\n", len(revs))
 			fmt.Fprintf(w, "nft\t%s\n", nftVersion)
 			return w.Flush()
@@ -299,7 +314,11 @@ func newCountersCmd(g *globals) *cobra.Command {
 		Short: "Show live packet and byte counters per rule",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			counters, err := g.engine().Counters(cmd.Context())
+			eng, err := g.engine()
+			if err != nil {
+				return err
+			}
+			counters, err := eng.Counters(cmd.Context())
 			if err != nil {
 				return err
 			}

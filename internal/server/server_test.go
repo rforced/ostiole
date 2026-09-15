@@ -19,7 +19,7 @@ import (
 func newTestServer(t *testing.T) (*httptest.Server, *nfttest.Fake) {
 	t.Helper()
 	fake := &nfttest.Fake{TableJSON: `{"nftables":[{"rule":{"chain":"zone_lan","comment":"id:allow-lan","expr":[{"counter":{"packets":1,"bytes":2}}]}}]}`}
-	eng := engine.New(store.New(t.TempDir()), fake, slog.New(slog.DiscardHandler))
+	eng := engine.New(store.New(t.TempDir()), fake, nil, slog.New(slog.DiscardHandler))
 	srv := httptest.NewServer(Handler(Deps{Engine: eng}))
 	t.Cleanup(srv.Close)
 	return srv, fake
@@ -219,5 +219,14 @@ func TestApplyValidationAndBadRequests(t *testing.T) {
 	resp, raw = do(t, srv, http.MethodPost, "/api/v1/check", configRequest{Config: starter()})
 	if resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), "table inet ostiole") {
 		t.Fatalf("check: %d %s", resp.StatusCode, raw)
+	}
+}
+
+func TestLiveInterfaces(t *testing.T) {
+	t.Parallel()
+	srv, _ := newTestServer(t)
+	resp, raw := do(t, srv, http.MethodGet, "/api/v1/interfaces/live", nil)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), `"name":"lo"`) {
+		t.Fatalf("live interfaces: %d %s", resp.StatusCode, raw)
 	}
 }

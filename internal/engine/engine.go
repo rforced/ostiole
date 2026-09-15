@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rforced/ostiole/internal/model"
+	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/store"
 )
@@ -31,6 +32,7 @@ var (
 type Engine struct {
 	store  *store.Store
 	nft    nft.Runner
+	net    network.Backend // nil when network management is disabled
 	log    *slog.Logger
 	revert time.Duration // time budget for an automatic revert
 
@@ -39,37 +41,53 @@ type Engine struct {
 }
 
 type pendingApply struct {
-	id       string
-	cfg      *model.Config
-	ruleset  string
-	previous string
-	since    time.Time
-	deadline time.Time
-	timer    *time.Timer
+	id          string
+	cfg         *model.Config
+	ruleset     string
+	previous    string
+	previousNet network.Files
+	since       time.Time
+	deadline    time.Time
+	timer       *time.Timer
 }
 
-// New returns an engine over st and runner.
-func New(st *store.Store, runner nft.Runner, log *slog.Logger) *Engine {
+// New returns an engine over st and runner. net may be nil to leave
+// network configuration alone (firewall only).
+func New(st *store.Store, runner nft.Runner, net network.Backend, log *slog.Logger) *Engine {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Engine{store: st, nft: runner, log: log, revert: 15 * time.Second}
+	return &Engine{store: st, nft: runner, net: net, log: log, revert: 15 * time.Second}
+}
+
+// Plan is everything rendered from a configuration.
+type Plan struct {
+	Ruleset string        `json:"ruleset"`
+	Network network.Files `json:"network,omitempty"`
 }
 
 // Store exposes the underlying store for read-only callers.
 func (e *Engine) Store() *store.Store { return e.store }
 
-// Check validates cfg, renders it, and has nft dry-run the result. It
-// returns the rendered ruleset.
-func (e *Engine) Check(ctx context.Context, cfg *model.Config) (string, error) {
+// Check validates cfg, renders the ruleset and network units, and has nft
+// dry-run the ruleset.
+func (e *Engine) Check(ctx context.Context, cfg *model.Config) (*Plan, error) {
 	ruleset, err := nft.Render(cfg)
 	if err != nil {
-		return "", err
+		return nil, err
+	}
+	plan := &Plan{Ruleset: ruleset}
+	if e.net != nil {
+		files, err := e.net.Render(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("network: %w", err)
+		}
+		plan.Network = files
 	}
 	if err := e.nft.Check(ctx, ruleset); err != nil {
-		return "", err
+		return nil, err
 	}
-	return ruleset, nil
+	return plan, nil
 }
 
 // ApplyOptions tunes Apply.
@@ -81,13 +99,14 @@ type ApplyOptions struct {
 
 // ApplyResult describes what Apply did.
 type ApplyResult struct {
-	Ruleset  string          `json:"ruleset"`
+	Plan
 	Pending  bool            `json:"pending"`
 	Deadline time.Time       `json:"deadline,omitempty"`
 	Archived *store.Revision `json:"archived,omitempty"`
 }
 
-// Apply loads cfg into the kernel. With a confirm timeout the change stays
+// Apply loads cfg into the kernel and, when a network backend is present,
+// installs the network units. With a confirm timeout the change stays
 // provisional until Confirm; otherwise it is committed to the store at once.
 func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions) (*ApplyResult, error) {
 	e.mu.Lock()
@@ -96,7 +115,7 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 		return nil, ErrPending
 	}
 
-	ruleset, err := e.Check(ctx, cfg)
+	plan, err := e.Check(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -107,33 +126,49 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 	} else if err != nil {
 		return nil, fmt.Errorf("load previous ruleset: %w", err)
 	}
+	var previousNet network.Files
+	if e.net != nil {
+		if previousNet, err = e.net.Snapshot(); err != nil {
+			return nil, fmt.Errorf("network snapshot: %w", err)
+		}
+	}
 
-	if err := e.nft.Apply(ctx, ruleset); err != nil {
+	if err := e.nft.Apply(ctx, plan.Ruleset); err != nil {
 		return nil, err
 	}
-	e.log.Info("ruleset applied", "rules", len(cfg.Rules), "confirmTimeout", opts.ConfirmTimeout)
+	if e.net != nil {
+		if err := e.net.Apply(ctx, plan.Network); err != nil {
+			if rerr := e.nft.Apply(ctx, previous); rerr != nil {
+				e.log.Error("network apply failed and firewall revert failed too", "networkErr", err, "err", rerr)
+				return nil, fmt.Errorf("network apply failed (%w) and firewall revert failed (%w)", err, rerr)
+			}
+			return nil, fmt.Errorf("network apply failed, firewall reverted: %w", err)
+		}
+	}
+	e.log.Info("configuration applied", "rules", len(cfg.Rules), "networkUnits", len(plan.Network), "confirmTimeout", opts.ConfirmTimeout)
 
 	if opts.ConfirmTimeout <= 0 {
-		archived, err := e.commit(cfg, ruleset)
+		archived, err := e.commit(cfg, plan.Ruleset)
 		if err != nil {
 			return nil, err
 		}
-		return &ApplyResult{Ruleset: ruleset, Archived: archived}, nil
+		return &ApplyResult{Plan: *plan, Archived: archived}, nil
 	}
 
 	now := time.Now()
 	p := &pendingApply{
-		id:       newID(),
-		cfg:      cfg,
-		ruleset:  ruleset,
-		previous: previous,
-		since:    now,
-		deadline: now.Add(opts.ConfirmTimeout),
+		id:          newID(),
+		cfg:         cfg,
+		ruleset:     plan.Ruleset,
+		previous:    previous,
+		previousNet: previousNet,
+		since:       now,
+		deadline:    now.Add(opts.ConfirmTimeout),
 	}
 	id := p.id
 	p.timer = time.AfterFunc(opts.ConfirmTimeout, func() { e.expire(id) })
 	e.pending = p
-	return &ApplyResult{Ruleset: ruleset, Pending: true, Deadline: p.deadline}, nil
+	return &ApplyResult{Plan: *plan, Pending: true, Deadline: p.deadline}, nil
 }
 
 // Confirm commits the pending apply.
@@ -166,11 +201,25 @@ func (e *Engine) Revert(ctx context.Context) error {
 	}
 	p.timer.Stop()
 	e.pending = nil
-	if err := e.nft.Apply(ctx, p.previous); err != nil {
+	if err := e.restore(ctx, p); err != nil {
 		return fmt.Errorf("revert: %w", err)
 	}
 	e.log.Info("apply reverted by request")
 	return nil
+}
+
+// restore puts the previous firewall and network state back.
+func (e *Engine) restore(ctx context.Context, p *pendingApply) error {
+	var errs []error
+	if err := e.nft.Apply(ctx, p.previous); err != nil {
+		errs = append(errs, fmt.Errorf("firewall: %w", err))
+	}
+	if e.net != nil {
+		if err := e.net.Apply(ctx, p.previousNet); err != nil {
+			errs = append(errs, fmt.Errorf("network: %w", err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func (e *Engine) expire(id string) {
@@ -183,8 +232,8 @@ func (e *Engine) expire(id string) {
 	e.pending = nil
 	ctx, cancel := context.WithTimeout(context.Background(), e.revert)
 	defer cancel()
-	if err := e.nft.Apply(ctx, p.previous); err != nil {
-		e.log.Error("automatic revert failed; kernel still has the unconfirmed ruleset", "err", err)
+	if err := e.restore(ctx, p); err != nil {
+		e.log.Error("automatic revert failed; system may still have the unconfirmed configuration", "err", err)
 		return
 	}
 	e.log.Warn("apply not confirmed in time; reverted to previous ruleset",
@@ -224,6 +273,7 @@ type PendingStatus struct {
 type Status struct {
 	Configured  bool           `json:"configured"`
 	TableLoaded bool           `json:"tableLoaded"`
+	Network     string         `json:"network"` // backend name or "none"
 	Pending     *PendingStatus `json:"pending,omitempty"`
 }
 
@@ -237,7 +287,10 @@ func (e *Engine) Status(ctx context.Context) (Status, error) {
 	}
 	e.mu.Unlock()
 
-	st := Status{Configured: e.store.Exists(), Pending: pending}
+	st := Status{Configured: e.store.Exists(), Pending: pending, Network: "none"}
+	if e.net != nil {
+		st.Network = e.net.Name()
+	}
 	_, err := e.nft.ListTableJSON(ctx)
 	switch {
 	case err == nil:
