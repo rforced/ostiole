@@ -98,6 +98,9 @@ type Monitor struct {
 	// Policy, when set, keeps the policy routing tables and ip rules in
 	// step with what the probes just learned.
 	Policy Policy
+	// OnTick, when set, is called after every pass, so the scheduled jobs
+	// page can say when the box last probed.
+	OnTick func()
 
 	mu     sync.Mutex
 	states map[string]*state
@@ -174,6 +177,9 @@ func (m *Monitor) Tick(ctx context.Context) {
 	}
 	m.applyRoutes(states)
 	m.syncPolicy(cfg, states)
+	if m.OnTick != nil {
+		m.OnTick()
+	}
 }
 
 // syncPolicy hands the policy routing installer the gateways as the probes

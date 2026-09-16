@@ -413,6 +413,7 @@ func (c *Config) Validate() error {
 	}
 
 	v.services(c, ifaces)
+	v.crons(c)
 
 	if len(v.issues) == 0 {
 		return nil
@@ -916,6 +917,70 @@ func (v *validator) wireguard(path string, in Interface) {
 		}
 	}
 }
+
+// crons checks the scheduled jobs. The schedule itself is parsed by the
+// cron package at run time; here it is only checked for shape, so the
+// model keeps no dependency on it.
+func (v *validator) crons(c *Config) {
+	ids := map[string]bool{}
+	for i, job := range c.Crons {
+		path := fmt.Sprintf("crons[%d]", i)
+		v.id(path+".id", job.ID, ids)
+		if err := checkCronSchedule(job.Schedule); err != nil {
+			v.add(path+".schedule", "%v", err)
+		}
+		switch job.Job {
+		case CronBackup:
+			if job.Directory == "" {
+				v.add(path+".directory", "say where the backups should go")
+			} else if !strings.HasPrefix(job.Directory, "/") {
+				v.add(path+".directory", "%q must be an absolute path", job.Directory)
+			}
+			if job.Keep < 0 || job.Keep > 1000 {
+				v.add(path+".keep", "%d must be 0-1000 (0 keeps %d)", job.Keep, DefaultBackupsKept)
+			}
+		case CronRefreshAliases:
+		case CronRestartService:
+			if !slices.Contains(CronServices, job.Service) {
+				v.add(path+".service", "%q is not a service this box runs (%s)",
+					job.Service, strings.Join(CronServices, ", "))
+			}
+		case CronCommand:
+			if job.Command == "" {
+				v.add(path+".command", "say what to run")
+			} else if !strings.HasPrefix(job.Command, "/") {
+				v.add(path+".command", "%q must be an absolute path, so it cannot depend on a PATH", job.Command)
+			}
+		default:
+			v.add(path+".job", "unknown job %q", job.Job)
+		}
+		if job.TimeoutSeconds < 0 || job.TimeoutSeconds > 3600 {
+			v.add(path+".timeoutSeconds", "%d must be 0-3600", job.TimeoutSeconds)
+		}
+	}
+}
+
+// checkCronSchedule accepts the shorthands and the five-field form. The
+// fields themselves are checked when the job is scheduled; this catches
+// the mistakes people actually make.
+func checkCronSchedule(expr string) error {
+	expr = strings.TrimSpace(expr)
+	switch {
+	case expr == "":
+		return fmt.Errorf("a schedule is required, like \"0 4 * * *\" or @daily")
+	case strings.HasPrefix(expr, "@"):
+		if !slices.Contains(cronShorthands, strings.ToLower(expr)) {
+			return fmt.Errorf("%q is not a shorthand I know (%s)", expr, strings.Join(cronShorthands, ", "))
+		}
+		return nil
+	}
+	if n := len(strings.Fields(expr)); n != 5 {
+		return fmt.Errorf("a schedule has five fields (minute hour day month weekday), got %d", n)
+	}
+	return nil
+}
+
+var cronShorthands = []string{"@yearly", "@annually", "@monthly", "@weekly", "@daily", "@midnight", "@hourly"}
 
 func (v *validator) system(s *System) {
 	for field, tmpl := range map[string]string{"geoIPv4Url": s.GeoIPv4URL, "geoIPv6Url": s.GeoIPv6URL} {

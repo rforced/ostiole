@@ -379,6 +379,21 @@ export const useConfigStore = defineStore('config', () => {
     return refs
   }
 
+  // ---- scheduled jobs --------------------------------------------------
+
+  const crons = computed(() => draft.value?.crons ?? [])
+
+  function upsertCron(cron) {
+    const list = draft.value.crons ?? (draft.value.crons = [])
+    const idx = list.findIndex((c) => c.id === cron.id)
+    if (idx === -1) list.push(clone(cron))
+    else list[idx] = clone(cron)
+  }
+
+  function removeCron(id) {
+    draft.value.crons = crons.value.filter((c) => c.id !== id)
+  }
+
   // ---- routes ----------------------------------------------------------
 
   const routes = computed(() => draft.value?.routes ?? [])
@@ -438,6 +453,9 @@ export const useConfigStore = defineStore('config', () => {
     upsertOutboundRule,
     removeOutboundRule,
     routes,
+    crons,
+    upsertCron,
+    removeCron,
     gateways,
     upsertGateway,
     removeGateway,

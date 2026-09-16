@@ -33,6 +33,9 @@ type Refresher struct {
 	// Interval is how often the refresher looks for work, not how often a
 	// list is fetched: each alias has its own period.
 	Interval time.Duration
+	// OnTick, when set, is called after every pass, so the scheduled jobs
+	// page can say when the box last looked.
+	OnTick func()
 }
 
 // DefaultTick is how often the refresher wakes up.
@@ -81,6 +84,9 @@ func (r *Refresher) Tick(ctx context.Context, force bool) {
 	}
 	if changed {
 		r.push(ctx, cfg)
+	}
+	if r.OnTick != nil {
+		r.OnTick()
 	}
 }
 

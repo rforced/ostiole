@@ -54,6 +54,8 @@ type Deps struct {
 	// Feeds refreshes aliases fetched from a URL or a country list; nil
 	// leaves them to whatever is cached.
 	Feeds *feeds.Refresher
+	// Crons reports and runs the scheduled jobs; nil reports none.
+	Crons CronRunner
 	// CertHosts lists the names a regenerated self-signed certificate
 	// should cover.
 	CertHosts func() []string
@@ -84,6 +86,7 @@ func Handler(d Deps) http.Handler {
 		tokens:    d.Tokens,
 		feedCache: feedCacheOf(d.Feeds),
 		feeds:     feedRefresherOf(d.Feeds),
+		crons:     d.Crons,
 		certHosts: d.CertHosts,
 		fwlog:     d.Log,
 		gateways:  d.Gateways,

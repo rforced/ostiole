@@ -201,6 +201,10 @@ export const api = {
     refresh: (name) => post(`/aliases/${encodeURIComponent(name)}/refresh`),
     refreshAll: () => post('/aliases/feeds/refresh'),
   },
+  crons: {
+    list: () => get('/crons'),
+    run: (id) => post(`/crons/${encodeURIComponent(id)}/run`),
+  },
   users: {
     list: () => get('/users'),
     setRole: (username, role) => post(`/users/${encodeURIComponent(username)}/role`, { role }),

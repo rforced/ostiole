@@ -1,17 +1,21 @@
 package cli
 
 import (
+	"context"
+	"fmt"
 	"log/slog"
 	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
 
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/certs"
+	"github.com/rforced/ostiole/internal/cron"
 	"github.com/rforced/ostiole/internal/feeds"
 	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/gateway"
@@ -89,6 +93,17 @@ at your own.`,
 				Sets:    &nft.Exec{Bin: g.nftBin},
 				Log:     slog.Default(),
 			}
+			// The scheduled jobs the operator asked for, plus the work
+			// Ostiole does on its own account, reported together.
+			cronJobs := &cron.Jobs{
+				Config:  eng.Effective,
+				Users:   as.Users,
+				Version: version.Version,
+				Refresh: func(ctx context.Context) error { refresher.Tick(ctx, true); return nil },
+				Restart: restartService,
+			}
+			crons := cron.NewRunner(eng.Effective, cronJobs, slog.Default())
+			refresher.OnTick = func() { crons.Note("system:aliases") }
 			deps := server.Deps{
 				Engine:  eng,
 				Auth:    as,
@@ -98,11 +113,13 @@ at your own.`,
 				Tokens:  tokens,
 				Certs:   certManager,
 				Feeds:   refresher,
+				Crons:   crons,
 				// The names are looked up fresh, so a certificate made
 				// after the box moved covers where it moved to.
 				CertHosts: certHosts,
 			}
 			go refresher.Run(ctx)
+			go crons.Run(ctx)
 			if os.Geteuid() == 0 {
 				deps.Services = services.New()
 				deps.Resolver = services.NewUnbound()
@@ -115,6 +132,7 @@ at your own.`,
 				// window and undone when the window expires.
 				mon.Source = eng.Effective
 				mon.Policy = policy.NewInstaller(slog.Default())
+				mon.OnTick = func() { crons.Note("system:gateways") }
 				deps.Gateways = mon
 				go mon.Run(ctx)
 				ring := fwlog.NewRing(2000)
@@ -190,4 +208,24 @@ func healthURL(cfg server.Config) string {
 		port = "443"
 	}
 	return scheme + "://127.0.0.1:" + port + "/api/v1/health"
+}
+
+// restartService restarts one of the units Ostiole owns. The names the
+// UI offers are mapped here, so a configuration can never name a unit
+// that was not meant to be restartable.
+func restartService(ctx context.Context, name string) error {
+	units := map[string]string{
+		"dnsmasq": services.Unit,
+		"unbound": services.UnboundUnit,
+		"ostiole": install.DaemonUnit,
+	}
+	unit, ok := units[name]
+	if !ok {
+		return fmt.Errorf("%q is not a service this box runs", name)
+	}
+	out, err := install.ExecRunner{}.Run(ctx, "systemctl", "restart", unit)
+	if err != nil {
+		return fmt.Errorf("restart %s: %w: %s", unit, err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }

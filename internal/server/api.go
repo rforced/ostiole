@@ -41,6 +41,7 @@ type api struct {
 	tokens    *auth.Tokens
 	feeds     FeedRefresher
 	feedCache *feeds.Cache
+	crons     CronRunner
 	// routes is the router the handlers were registered on, which the
 	// OpenAPI description is generated from.
 	routes *router
@@ -65,6 +66,7 @@ func (a *api) register(mux *router) {
 	a.registerCerts(mux)
 	a.registerTokens(mux)
 	a.registerFeeds(mux)
+	a.registerCrons(mux)
 	a.registerMetrics(mux)
 	a.registerOpenAPI(mux)
 	mux.HandleFunc("GET /api/v1/status", a.read(a.status))

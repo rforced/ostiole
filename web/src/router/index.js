@@ -20,6 +20,7 @@ const router = createRouter({
     { path: '/routing', name: 'routing', component: () => import('@/views/RoutingView.vue') },
     { path: '/services', name: 'services', component: () => import('@/views/ServicesView.vue') },
     { path: '/vpn', name: 'vpn', component: () => import('@/views/VpnView.vue') },
+    { path: '/crons', name: 'crons', component: () => import('@/views/CronsView.vue') },
     {
       path: '/diagnostics',
       name: 'diagnostics',

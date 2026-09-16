@@ -85,6 +85,72 @@ type Config struct {
 	GatewayGroups []GatewayGroup `json:"gatewayGroups,omitempty"`
 	Routes        []StaticRoute  `json:"routes,omitempty"`
 	Services      Services       `json:"services"`
+	// Crons are the jobs this box runs on a schedule of the operator's
+	// choosing, alongside the work Ostiole does on its own account.
+	Crons []Cron `json:"crons,omitempty"`
+}
+
+// CronJobKind is what a scheduled job does.
+type CronJobKind string
+
+// Job kinds. Each one is something an appliance genuinely needs doing on
+// a timer; Command is the escape hatch for everything else.
+const (
+	// CronBackup writes a configuration backup into a directory and keeps
+	// the last few, which is the backup nobody remembers to take.
+	CronBackup CronJobKind = "backup"
+	// CronRefreshAliases fetches the blocklists and country ranges now.
+	CronRefreshAliases CronJobKind = "refresh-aliases"
+	// CronRestartService restarts one of the services Ostiole runs.
+	CronRestartService CronJobKind = "restart-service"
+	// CronCommand runs a command line. It is as powerful as the box, which
+	// is the point and also the warning.
+	CronCommand CronJobKind = "command"
+)
+
+// CronJobKinds lists them in the order the UI offers them.
+var CronJobKinds = []CronJobKind{CronBackup, CronRefreshAliases, CronRestartService, CronCommand}
+
+// CronServices are the units a restart job may name.
+var CronServices = []string{"dnsmasq", "unbound", "ostiole"}
+
+// Cron is one scheduled job.
+type Cron struct {
+	ID          string `json:"id"`
+	Description string `json:"description,omitempty"`
+	Enabled     bool   `json:"enabled"`
+	// Schedule is a five-field cron expression, or a shorthand like
+	// @daily.
+	Schedule string      `json:"schedule"`
+	Job      CronJobKind `json:"job"`
+	// Directory is where a backup job writes.
+	Directory string `json:"directory,omitempty"`
+	// Keep is how many backups to leave behind; zero keeps ten.
+	Keep int `json:"keep,omitempty"`
+	// WithUsers includes the accounts in a backup.
+	WithUsers bool `json:"withUsers,omitempty"`
+	// Service is the unit a restart job acts on.
+	Service string `json:"service,omitempty"`
+	// Command and Args are what a command job runs. The command is not
+	// passed through a shell, so there is nothing to quote and nothing to
+	// inject.
+	Command string   `json:"command,omitempty"`
+	Args    []string `json:"args,omitempty"`
+	// TimeoutSeconds bounds a command; zero means five minutes.
+	TimeoutSeconds int `json:"timeoutSeconds,omitempty"`
+}
+
+// DefaultBackupsKept is how many backups a backup job leaves behind.
+const DefaultBackupsKept = 10
+
+// Cron returns the job with the given id.
+func (c *Config) Cron(id string) (*Cron, bool) {
+	for i := range c.Crons {
+		if c.Crons[i].ID == id {
+			return &c.Crons[i], true
+		}
+	}
+	return nil, false
 }
 
 // System holds box-level settings.
