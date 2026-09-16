@@ -3,6 +3,7 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rforced/ostiole/internal/auth"
+	"github.com/rforced/ostiole/internal/certs"
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/install"
@@ -43,6 +45,12 @@ type Deps struct {
 	// PPPoE reports whether a dialled session can be run here; nil reports
 	// "not set up".
 	PPPoE *services.PPPoE
+	// Certs manages the certificate the UI serves; nil hides the
+	// certificate endpoints and serves whatever the files hold.
+	Certs *certs.Manager
+	// CertHosts lists the names a regenerated self-signed certificate
+	// should cover.
+	CertHosts func() []string
 	// Log is the firewall log ring; nil disables the log endpoints.
 	Log *fwlog.Ring
 	// Gateways reports multi-WAN health; nil means nothing is watching.
@@ -60,16 +68,18 @@ func Handler(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/health", handleHealth)
 	api := &api{
-		engine:   d.Engine,
-		auth:     d.Auth,
-		updater:  d.Updater,
-		services: d.Services,
-		resolver: d.Resolver,
-		pppoe:    d.PPPoE,
-		fwlog:    d.Log,
-		gateways: d.Gateways,
-		tables:   d.Tables,
-		units:    d.Units,
+		engine:    d.Engine,
+		auth:      d.Auth,
+		updater:   d.Updater,
+		services:  d.Services,
+		resolver:  d.Resolver,
+		pppoe:     d.PPPoE,
+		certs:     d.Certs,
+		certHosts: d.CertHosts,
+		fwlog:     d.Log,
+		gateways:  d.Gateways,
+		tables:    d.Tables,
+		units:     d.Units,
 	}
 	api.register(mux)
 	mux.HandleFunc("/api/", handleAPINotFound)
@@ -88,10 +98,21 @@ func Run(ctx context.Context, cfg Config, d Deps, logger *slog.Logger) error {
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelError),
 	}
 
+	// A certificate manager serves the certificate through a callback, so
+	// replacing it takes effect on the next connection rather than the
+	// next restart.
+	if cfg.TLS() && d.Certs != nil {
+		srv.TLSConfig = &tls.Config{GetCertificate: d.Certs.GetCertificate, MinVersion: tls.VersionTLS12}
+	}
+
 	errCh := make(chan error, 1)
 	go func() {
 		logger.Info("listening", "addr", cfg.Listen, "tls", cfg.TLS(), "version", version.Version)
 		if cfg.TLS() {
+			if srv.TLSConfig != nil {
+				errCh <- srv.ListenAndServeTLS("", "")
+				return
+			}
 			errCh <- srv.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey)
 			return
 		}

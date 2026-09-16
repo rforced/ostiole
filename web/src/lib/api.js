@@ -189,6 +189,11 @@ export const api = {
   log: {
     recent: (limit = 200) => get(`/log/recent?limit=${limit}`),
   },
+  certificate: {
+    get: () => get('/certificate'),
+    install: (certificate, key) => post('/certificate', { certificate, key }),
+    regenerate: (hosts) => post('/certificate/self-signed', hosts ? { hosts } : {}),
+  },
   services: {
     status: () => get('/services/status'),
     leases: () => get('/dhcp/leases'),

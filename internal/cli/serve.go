@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/rforced/ostiole/internal/auth"
+	"github.com/rforced/ostiole/internal/certs"
 	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/gateway"
 	"github.com/rforced/ostiole/internal/install"
@@ -35,6 +36,7 @@ under <config-dir>/tls on first use unless --tls-cert and --tls-key point
 at your own.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			var certManager *certs.Manager
 			if useTLS {
 				if cfg.TLSCert == "" {
 					cfg.TLSCert = filepath.Join(g.configDir, "tls", "cert.pem")
@@ -42,7 +44,8 @@ at your own.`,
 				if cfg.TLSKey == "" {
 					cfg.TLSKey = filepath.Join(g.configDir, "tls", "key.pem")
 				}
-				created, err := server.EnsureCert(cfg.TLSCert, cfg.TLSKey, certHosts())
+				certManager = certs.New(cfg.TLSCert, cfg.TLSKey)
+				created, err := certManager.EnsureSelfSigned(certHosts())
 				if err != nil {
 					return err
 				}
@@ -77,6 +80,10 @@ at your own.`,
 				Updater: newUpdater(cfg),
 				Tables:  &nft.Exec{Bin: g.nftBin},
 				Units:   install.ExecSystemctl{},
+				Certs:   certManager,
+				// The names are looked up fresh, so a certificate made
+				// after the box moved covers where it moved to.
+				CertHosts: certHosts,
 			}
 			if os.Geteuid() == 0 {
 				deps.Services = services.New()

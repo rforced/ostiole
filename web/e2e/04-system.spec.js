@@ -66,3 +66,11 @@ test('change password and sign in with it', async ({ page }) => {
   await page.getByRole('button', { name: 'Change password' }).click()
   await expect(page.getByText('Password changed.')).toBeVisible()
 })
+
+test('the certificate section says there is nothing to manage without HTTPS', async ({ page }) => {
+  await login(page)
+  await page.goto('/system')
+  const section = page.getByRole('region', { name: 'Certificate' })
+  await expect(section).toContainText('not serving HTTPS')
+  await expect(section.getByRole('button', { name: 'Regenerate self-signed' })).toHaveCount(0)
+})

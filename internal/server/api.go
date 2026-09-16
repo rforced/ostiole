@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rforced/ostiole/internal/auth"
+	"github.com/rforced/ostiole/internal/certs"
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/gateway"
@@ -35,10 +36,13 @@ type api struct {
 	services *services.Dnsmasq
 	resolver *services.Unbound
 	pppoe    *services.PPPoE
-	fwlog    *fwlog.Ring
-	tables   TableLister
-	units    install.Systemctl
-	gateways GatewayStatuser
+	certs    *certs.Manager
+	// certHosts lists the names a regenerated certificate should cover.
+	certHosts func() []string
+	fwlog     *fwlog.Ring
+	tables    TableLister
+	units     install.Systemctl
+	gateways  GatewayStatuser
 }
 
 // GatewayStatuser reports what the gateway monitor knows.
@@ -51,6 +55,7 @@ func (a *api) register(mux *http.ServeMux) {
 	a.registerLog(mux)
 	a.registerDiag(mux)
 	a.registerBackup(mux)
+	a.registerCerts(mux)
 	mux.HandleFunc("GET /api/v1/status", a.guard(a.status))
 	mux.HandleFunc("GET /api/v1/overview", a.guard(a.overview))
 	mux.HandleFunc("GET /api/v1/config", a.guard(a.getConfig))
