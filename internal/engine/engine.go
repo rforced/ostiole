@@ -306,6 +306,25 @@ func (e *Engine) commit(cfg *model.Config, ruleset string) (*store.Revision, err
 	return e.store.Save(cfg, ruleset)
 }
 
+// Effective returns the configuration the kernel is actually running: the
+// pending one while an apply awaits confirmation, otherwise the last saved
+// one. Watchers like the gateway monitor follow it, so a change can be
+// judged inside the confirmation window instead of only after it, and an
+// expiry puts the old one back on the next pass.
+func (e *Engine) Effective() *model.Config {
+	e.mu.Lock()
+	pending := e.pending
+	e.mu.Unlock()
+	if pending != nil {
+		return pending.cfg
+	}
+	cfg, err := e.store.Load()
+	if err != nil {
+		return nil
+	}
+	return cfg
+}
+
 // Load applies the last confirmed ruleset without touching the store. It
 // is the early-boot path.
 func (e *Engine) Load(ctx context.Context) error {

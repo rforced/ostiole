@@ -394,3 +394,33 @@ func TestServicesAppliedAndRevertedWithTheRest(t *testing.T) {
 		t.Error("network not rolled back after services failure")
 	}
 }
+
+// Watchers such as the gateway monitor follow the effective configuration,
+// so a change is acted on inside its confirmation window and undone with it.
+func TestEffectiveFollowsThePendingApply(t *testing.T) {
+	t.Parallel()
+	e, _, _ := newEngine(t)
+	if got := e.Effective(); got != nil {
+		t.Errorf("Effective before anything = %+v, want nil", got)
+	}
+	if _, err := e.Apply(context.Background(), cfg("saved"), ApplyOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.Effective(); got == nil || got.System.Hostname != "saved" {
+		t.Fatalf("Effective = %+v, want the saved configuration", got)
+	}
+
+	if _, err := e.Apply(context.Background(), cfg("pending"), ApplyOptions{ConfirmTimeout: time.Minute}); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.Effective(); got == nil || got.System.Hostname != "pending" {
+		t.Fatalf("Effective while pending = %+v, want the unconfirmed configuration", got)
+	}
+
+	if err := e.Revert(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.Effective(); got == nil || got.System.Hostname != "saved" {
+		t.Errorf("Effective after a revert = %+v, want the saved configuration back", got)
+	}
+}

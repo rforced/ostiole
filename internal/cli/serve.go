@@ -14,7 +14,6 @@ import (
 	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/gateway"
 	"github.com/rforced/ostiole/internal/install"
-	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/policy"
@@ -84,15 +83,11 @@ at your own.`,
 				deps.Resolver = services.NewUnbound()
 				// Gateway probes need a raw socket and route changes need
 				// netlink, so multi-WAN failover is a root-only feature.
-				st := g.store()
 				mon := gateway.New(gateway.NewICMPProber(), gateway.NewNetlinkRouter(), slog.Default())
-				mon.Source = func() *model.Config {
-					cfg, err := st.Load()
-					if err != nil {
-						return nil
-					}
-					return cfg
-				}
+				// The monitor follows the engine rather than the store, so a
+				// gateway change is probed and routed during its confirmation
+				// window and undone when the window expires.
+				mon.Source = eng.Effective
 				mon.Policy = policy.NewInstaller(slog.Default())
 				deps.Gateways = mon
 				go mon.Run(ctx)
