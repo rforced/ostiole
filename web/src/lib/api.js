@@ -163,6 +163,13 @@ export const api = {
       )
       return get(`/diagnostics/journal?${q}`)
     },
+    states: (params = {}) => {
+      const q = new URLSearchParams(
+        Object.entries(params).filter(([, v]) => v !== '' && v !== undefined && v !== null),
+      )
+      return get(`/diagnostics/states?${q}`)
+    },
+    neighbours: () => get('/diagnostics/neighbours'),
     /** Downloads a pcap; returns the blob and the name the server chose. */
     capture: async (body) => {
       const res = await fetch('/api/v1/diagnostics/capture', {

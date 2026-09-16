@@ -52,3 +52,30 @@ test('a capture needs an interface and rejects a silly port', async ({ page }) =
   await expect(page.getByLabel('Interface')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Capture' })).toBeEnabled()
 })
+
+test('the connections and neighbour tables read the kernel', async ({ page }) => {
+  await login(page)
+  await page.goto('/diagnostics')
+
+  await page.getByRole('tab', { name: 'Connections' }).click()
+  // The dev box tracks connections; a machine without the module says so
+  // rather than showing an empty table with no explanation.
+  const states = page.getByRole('tabpanel')
+  await expect(states).toContainText(
+    /connection\(s\) tracked|connection table|tracking no connections/,
+  )
+  await page.getByLabel('Protocol').selectOption('tcp')
+  await page.getByRole('button', { name: 'Refresh' }).click()
+  // Either a table or an explanation, never a silently empty panel.
+  await expect(states).toContainText(
+    /connection\(s\) tracked|connection table|tracking no connections/,
+  )
+  await page.screenshot({ path: shot('45-states'), fullPage: true })
+
+  await page.getByRole('tab', { name: 'ARP and NDP' }).click()
+  const neigh = page.getByRole('tabpanel')
+  await expect(neigh).toContainText(/ of \d+/)
+  await page.getByPlaceholder('address, MAC, or interface').fill('zzz-nothing')
+  await expect(neigh).toContainText('Nothing to show.')
+  await page.screenshot({ path: shot('46-neighbours'), fullPage: true })
+})

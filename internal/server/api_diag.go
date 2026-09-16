@@ -18,6 +18,54 @@ func (a *api) registerDiag(mux *router) {
 	mux.HandleFunc("POST /api/v1/diagnostics/traceroute", a.write(a.diagTraceroute))
 	mux.HandleFunc("POST /api/v1/diagnostics/capture", a.write(a.diagCapture))
 	mux.HandleFunc("GET /api/v1/diagnostics/journal", a.readNoEngine(a.diagJournal))
+	mux.HandleFunc("GET /api/v1/diagnostics/states", a.readNoEngine(a.diagStates))
+	mux.HandleFunc("GET /api/v1/diagnostics/neighbours", a.readNoEngine(a.diagNeighbours))
+}
+
+// diagStates reports the connections the kernel is tracking: what the
+// firewall's established rules are matching, and where NAT is happening.
+func (a *api) diagStates(w http.ResponseWriter, r *http.Request) error {
+	q := r.URL.Query()
+	opts := diag.StatesOptions{
+		Address:  strings.TrimSpace(q.Get("address")),
+		Protocol: strings.TrimSpace(q.Get("protocol")),
+	}
+	switch opts.Protocol {
+	case "", "tcp", "udp", "icmp", "icmpv6":
+	default:
+		return &badRequest{fmt.Errorf("unknown protocol %q", opts.Protocol)}
+	}
+	if v := q.Get("port"); v != "" {
+		port, err := strconv.ParseUint(v, 10, 16)
+		if err != nil || port == 0 {
+			return &badRequest{fmt.Errorf("port %q is not a port", v)}
+		}
+		opts.Port = uint16(port)
+	}
+	if v := q.Get("limit"); v != "" {
+		limit, err := strconv.Atoi(v)
+		if err != nil || limit < 1 || limit > 5000 {
+			return &badRequest{errors.New("limit must be 1-5000")}
+		}
+		opts.Limit = limit
+	}
+	res, err := diag.States(opts)
+	if err != nil {
+		return &unavailable{err}
+	}
+	writeJSON(w, http.StatusOK, res)
+	return nil
+}
+
+// diagNeighbours reports the ARP and NDP tables: which address is behind
+// which hardware address, and on which interface.
+func (a *api) diagNeighbours(w http.ResponseWriter, _ *http.Request) error {
+	out, err := diag.Neighbours()
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, out)
+	return nil
 }
 
 type pingRequest struct {

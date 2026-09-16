@@ -6,7 +6,9 @@ import AppTabs from '@/components/AppTabs.vue'
 import { useConfigStore } from '@/stores/config'
 import CaptureTab from '@/views/diagnostics/CaptureTab.vue'
 import JournalTab from '@/views/diagnostics/JournalTab.vue'
+import NeighboursTab from '@/views/diagnostics/NeighboursTab.vue'
 import ReachabilityTab from '@/views/diagnostics/ReachabilityTab.vue'
+import StatesTab from '@/views/diagnostics/StatesTab.vue'
 
 const config = useConfigStore()
 const tab = ref('reachability')
@@ -25,11 +27,15 @@ onMounted(() => config.load())
       v-model="tab"
       :tabs="[
         { value: 'reachability', label: 'Ping and traceroute' },
+        { value: 'states', label: 'Connections' },
+        { value: 'neighbours', label: 'ARP and NDP' },
         { value: 'capture', label: 'Packet capture' },
         { value: 'journal', label: 'Logs' },
       ]"
     >
       <TabsContent value="reachability"><ReachabilityTab /></TabsContent>
+      <TabsContent value="states"><StatesTab /></TabsContent>
+      <TabsContent value="neighbours"><NeighboursTab /></TabsContent>
       <TabsContent value="capture"><CaptureTab /></TabsContent>
       <TabsContent value="journal"><JournalTab /></TabsContent>
     </AppTabs>
