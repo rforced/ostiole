@@ -25,6 +25,11 @@ const candidates = computed(() =>
 
 const managed = computed(() => form.value.mode === 'managed')
 
+/** True when the chosen interface takes its prefix from an upstream. */
+const delegated = computed(
+  () => config.findInterface(form.value.interface)?.ipv6?.mode === 'delegated',
+)
+
 function blank() {
   return {
     interface: '',
@@ -128,7 +133,11 @@ function save() {
         <FormField
           id="v6-dns"
           label="DNS servers"
-          hint="Empty: this box when the DNS service is on."
+          :hint="
+            delegated
+              ? 'This interface takes its prefix from upstream, so its address is not known in advance and hosts using SLAAC alone will not learn a resolver. Name one here.'
+              : 'Empty: this box when the DNS service is on.'
+          "
         >
           <input id="v6-dns" v-model="form.dns" class="input font-mono" spellcheck="false" />
         </FormField>

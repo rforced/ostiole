@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "system": {
+    "hostname": "delegated",
+    "management": {
+      "webPort": 443,
+      "sshPort": 22
+    }
+  },
+  "zones": [
+    {
+      "name": "wan",
+      "external": true
+    },
+    {
+      "name": "lan",
+      "antiLockout": true
+    },
+    {
+      "name": "iot"
+    }
+  ],
+  "interfaces": [
+    {
+      "name": "wan0",
+      "zone": "wan",
+      "description": "Fibre",
+      "enabled": true,
+      "ipv4": {
+        "mode": "dhcp"
+      },
+      "ipv6": {
+        "mode": "dhcp",
+        "prefixHint": "::/56"
+      }
+    },
+    {
+      "name": "lan0",
+      "zone": "lan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "192.168.1.1/24"
+      },
+      "ipv6": {
+        "mode": "delegated",
+        "delegatedFrom": "wan0",
+        "subnetId": 1
+      }
+    },
+    {
+      "name": "lan0.20",
+      "zone": "iot",
+      "enabled": true,
+      "vlan": {
+        "parent": "lan0",
+        "id": 20
+      },
+      "ipv4": {
+        "mode": "static",
+        "address": "192.168.20.1/24"
+      },
+      "ipv6": {
+        "mode": "delegated",
+        "delegatedFrom": "wan0",
+        "subnetId": 2
+      }
+    }
+  ],
+  "rules": [
+    {
+      "id": "lan-out",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    }
+  ],
+  "nat": {
+    "outbound": {
+      "mode": "automatic"
+    }
+  },
+  "gateways": [
+    {
+      "name": "wan1",
+      "enabled": true,
+      "interface": "wan0",
+      "priority": 0
+    }
+  ],
+  "services": {
+    "dhcp": {
+      "enabled": true,
+      "scopes": [
+        {
+          "interface": "lan0",
+          "enabled": true,
+          "rangeStart": "192.168.1.100",
+          "rangeEnd": "192.168.1.199"
+        }
+      ],
+      "v6": [
+        {
+          "interface": "lan0",
+          "enabled": true,
+          "mode": "slaac"
+        },
+        {
+          "interface": "lan0.20",
+          "enabled": true,
+          "mode": "stateless"
+        }
+      ]
+    },
+    "dns": {
+      "enabled": true,
+      "domain": "lan",
+      "upstreams": [
+        "1.1.1.1",
+        "2606:4700:4700::1111"
+      ]
+    }
+  }
+}

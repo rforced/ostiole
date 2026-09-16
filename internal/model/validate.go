@@ -100,6 +100,7 @@ func (c *Config) Validate() error {
 		}
 	}
 	v.enslaved(c, ifaces)
+	v.delegation(c)
 
 	aliases := map[string]AliasType{}
 	for i, a := range c.Aliases {
@@ -699,6 +700,52 @@ func (v *validator) enslaved(c *Config, ifaces map[string]bool) {
 	_ = ifaces
 }
 
+// delegation checks that everything taking a delegated prefix has an
+// upstream asking for one, and that two interfaces do not claim the same
+// piece of it.
+func (v *validator) delegation(c *Config) {
+	claimed := map[string]map[int]string{} // upstream -> subnet -> interface
+	for i, in := range c.Interfaces {
+		if in.IPv6.Mode != AddrDelegated {
+			continue
+		}
+		path := fmt.Sprintf("interfaces[%d].ipv6", i)
+		from := in.IPv6.DelegatedFrom
+		up, ok := c.Interface(from)
+		switch {
+		case from == "":
+			v.add(path+".delegatedFrom", "name the interface whose delegated prefix this one uses")
+			continue
+		case from == in.Name:
+			v.add(path+".delegatedFrom", "an interface cannot take a prefix from itself")
+			continue
+		case !ok:
+			v.add(path+".delegatedFrom", "unknown interface %q", from)
+			continue
+		case up.IPv6.PrefixHint == "":
+			v.add(path+".delegatedFrom", "%q is not asking the upstream for a prefix; give it an IPv6 prefix hint first", from)
+			continue
+		}
+		// A /56 leaves eight bits of subnet, so subnet 300 would fall
+		// outside anything the upstream handed over.
+		if p, err := netip.ParsePrefix(up.IPv6.PrefixHint); err == nil && p.Bits() <= 64 {
+			if room := 64 - p.Bits(); room < 16 && in.IPv6.SubnetID >= 1<<room {
+				v.add(path+".subnetId", "%d does not fit in a %s prefix, which has %d subnets",
+					in.IPv6.SubnetID, up.IPv6.PrefixHint, 1<<room)
+			}
+		}
+		if claimed[from] == nil {
+			claimed[from] = map[int]string{}
+		}
+		if other, dup := claimed[from][in.IPv6.SubnetID]; dup {
+			v.add(path+".subnetId", "%q already takes subnet %d of the prefix from %q",
+				other, in.IPv6.SubnetID, from)
+			continue
+		}
+		claimed[from][in.IPv6.SubnetID] = in.Name
+	}
+}
+
 func (v *validator) bond(path string, b Bond) {
 	known := false
 	for _, m := range BondModes {
@@ -824,7 +871,7 @@ func (v *validator) addr4(path string, a IPv4) {
 
 func (v *validator) addr6(path string, a IPv6) {
 	switch a.Mode {
-	case AddrNone, AddrDHCP, AddrSLAAC:
+	case AddrNone, AddrDHCP, AddrSLAAC, AddrDelegated:
 		if a.Address != "" {
 			v.add(path+".address", "address is only valid in static mode")
 		}
@@ -832,6 +879,25 @@ func (v *validator) addr6(path string, a IPv6) {
 		v.prefix(path+".address", a.Address, false)
 	default:
 		v.add(path+".mode", "unknown IPv6 mode %q", a.Mode)
+	}
+	if a.PrefixHint != "" {
+		p, err := netip.ParsePrefix(a.PrefixHint)
+		switch {
+		case err != nil:
+			v.add(path+".prefixHint", "%v (write it like ::/56)", err)
+		case p.Addr().Is4():
+			v.add(path+".prefixHint", "a delegated prefix is IPv6, so write it like ::/56")
+		case p.Bits() < 1 || p.Bits() > 64:
+			v.add(path+".prefixHint", "/%d must be between /1 and /64", p.Bits())
+		case a.Mode != AddrDHCP:
+			v.add(path+".prefixHint", "asking for a prefix needs IPv6 mode dhcp, not %q", a.Mode)
+		}
+	}
+	if a.SubnetID < 0 || a.SubnetID > 0xffff {
+		v.add(path+".subnetId", "%d must be 0-65535", a.SubnetID)
+	}
+	if a.Mode != AddrDelegated && a.DelegatedFrom != "" {
+		v.add(path+".delegatedFrom", "only an interface in delegated mode takes a prefix from another")
 	}
 	if a.Gateway != "" {
 		if ip, err := ParseIP(a.Gateway); err != nil {

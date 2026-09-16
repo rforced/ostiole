@@ -22,7 +22,14 @@ function blank() {
     zone: '',
     enabled: true,
     ipv4: { mode: 'none', address: '', gateway: '' },
-    ipv6: { mode: 'none', address: '', gateway: '' },
+    ipv6: {
+      mode: 'none',
+      address: '',
+      gateway: '',
+      prefixHint: '',
+      delegatedFrom: '',
+      subnetId: 0,
+    },
     mtu: 0,
   }
 }
@@ -36,7 +43,15 @@ watch(
       ...blank(),
       ...JSON.parse(JSON.stringify(src)),
       ipv4: { mode: 'none', address: '', gateway: '', ...src.ipv4 },
-      ipv6: { mode: 'none', address: '', gateway: '', ...src.ipv6 },
+      ipv6: {
+        mode: 'none',
+        address: '',
+        gateway: '',
+        prefixHint: '',
+        delegatedFrom: '',
+        subnetId: 0,
+        ...src.ipv6,
+      },
     }
   },
   { immediate: true },
@@ -44,14 +59,28 @@ watch(
 
 const title = computed(() => `Interface ${form.value.name}`)
 
+/** Interfaces that ask an upstream for a prefix, which this one can share. */
+const upstreams = computed(() =>
+  config.interfaces.filter((i) => i.name !== form.value.name && i.ipv6?.prefixHint),
+)
+
 function save() {
   const out = JSON.parse(JSON.stringify(form.value))
   if (out.ipv4.mode !== 'static') out.ipv4.address = ''
   if (out.ipv6.mode !== 'static') out.ipv6.address = ''
+  if (out.ipv6.mode !== 'dhcp') out.ipv6.prefixHint = ''
+  if (out.ipv6.mode !== 'delegated') {
+    out.ipv6.delegatedFrom = ''
+    out.ipv6.subnetId = 0
+  }
   for (const fam of ['ipv4', 'ipv6']) {
     if (!out[fam].address) delete out[fam].address
     if (!out[fam].gateway) delete out[fam].gateway
   }
+  if (!out.ipv6.prefixHint) delete out.ipv6.prefixHint
+  if (!out.ipv6.delegatedFrom) delete out.ipv6.delegatedFrom
+  out.ipv6.subnetId = Number(out.ipv6.subnetId) || 0
+  if (!out.ipv6.subnetId) delete out.ipv6.subnetId
   if (!out.zone) delete out.zone
   if (!out.description) delete out.description
   if (!out.mtu) delete out.mtu
@@ -123,8 +152,49 @@ function save() {
             <option value="static">Static</option>
             <option value="slaac">SLAAC (router advertisements)</option>
             <option value="dhcp">DHCPv6</option>
+            <option value="delegated" :disabled="!upstreams.length">
+              Delegated (a subnet of an upstream prefix)
+            </option>
           </select>
         </FormField>
+        <FormField
+          v-if="form.ipv6.mode === 'dhcp'"
+          id="if-v6-hint"
+          label="Ask for a prefix"
+          hint="On a WAN: the size to request from the ISP, so the networks behind this box get real addresses. Leave empty to ask for nothing."
+        >
+          <input
+            id="if-v6-hint"
+            v-model="form.ipv6.prefixHint"
+            class="input font-mono"
+            placeholder="::/56"
+            spellcheck="false"
+          />
+        </FormField>
+        <div v-if="form.ipv6.mode === 'delegated'" class="grid gap-3 sm:grid-cols-2">
+          <FormField id="if-v6-from" label="Prefix from">
+            <select id="if-v6-from" v-model="form.ipv6.delegatedFrom" class="input" required>
+              <option value="" disabled>Choose</option>
+              <option v-for="u in upstreams" :key="u.name" :value="u.name">
+                {{ u.name }} ({{ u.ipv6.prefixHint }})
+              </option>
+            </select>
+          </FormField>
+          <FormField
+            id="if-v6-subnet"
+            label="Subnet"
+            hint="Which /64 of that prefix this interface takes. Each one needs its own."
+          >
+            <input
+              id="if-v6-subnet"
+              v-model.number="form.ipv6.subnetId"
+              type="number"
+              min="0"
+              max="65535"
+              class="input w-32 font-mono"
+            />
+          </FormField>
+        </div>
         <div v-if="form.ipv6.mode === 'static'" class="grid gap-3 sm:grid-cols-2">
           <FormField id="if-v6-addr" label="Address (CIDR)">
             <input

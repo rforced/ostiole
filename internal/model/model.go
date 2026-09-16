@@ -33,12 +33,16 @@ const (
 // AddrMode says how an interface obtains an address for one family.
 type AddrMode string
 
-// Address modes. SLAAC applies to IPv6 only.
+// Address modes. SLAAC and delegated apply to IPv6 only.
 const (
 	AddrNone   AddrMode = "none"
 	AddrStatic AddrMode = "static"
 	AddrDHCP   AddrMode = "dhcp"
 	AddrSLAAC  AddrMode = "slaac"
+	// AddrDelegated takes a /64 out of a prefix another interface was
+	// delegated, which is how an ISP hands out addressable space for the
+	// networks behind the router.
+	AddrDelegated AddrMode = "delegated"
 )
 
 // AliasType is the kind of entries an alias holds.
@@ -247,6 +251,16 @@ type IPv6 struct {
 	Mode    AddrMode `json:"mode"`
 	Address string   `json:"address,omitempty"`
 	Gateway string   `json:"gateway,omitempty"`
+	// PrefixHint asks the upstream to delegate a prefix of this size,
+	// written like "::/56". It belongs on a WAN in dhcp mode; the
+	// interfaces behind it then take their own /64 out of it.
+	PrefixHint string `json:"prefixHint,omitempty"`
+	// DelegatedFrom names the interface that requested the prefix this one
+	// takes a subnet of. It is required in delegated mode.
+	DelegatedFrom string `json:"delegatedFrom,omitempty"`
+	// SubnetID picks which /64 of the delegated prefix to use. Each
+	// interface behind one upstream needs its own.
+	SubnetID int `json:"subnetId,omitempty"`
 }
 
 // VLAN makes the interface an 802.1Q sub-interface of Parent.

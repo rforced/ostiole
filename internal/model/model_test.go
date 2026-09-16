@@ -593,3 +593,80 @@ func keysOf(m map[string]string) []string {
 	sort.Strings(out)
 	return out
 }
+
+func delegationConfig() *Config {
+	return &Config{
+		Version: SchemaVersion,
+		Zones:   []Zone{{Name: "wan", External: true}, {Name: "lan"}},
+		Interfaces: []Interface{
+			{Name: "wan0", Zone: "wan", Enabled: true,
+				IPv4: IPv4{Mode: AddrDHCP}, IPv6: IPv6{Mode: AddrDHCP, PrefixHint: "::/56"}},
+			{Name: "lan0", Zone: "lan", Enabled: true,
+				IPv4: IPv4{Mode: AddrStatic, Address: "192.168.1.1/24"},
+				IPv6: IPv6{Mode: AddrDelegated, DelegatedFrom: "wan0", SubnetID: 1}},
+		},
+		NAT: NAT{Outbound: OutboundNAT{Mode: OutboundAutomatic}},
+	}
+}
+
+func TestValidateAcceptsPrefixDelegation(t *testing.T) {
+	t.Parallel()
+	if err := delegationConfig().Validate(); err != nil {
+		t.Fatalf("prefix delegation rejected: %v", err)
+	}
+}
+
+func TestValidateCatchesDelegationMistakes(t *testing.T) {
+	t.Parallel()
+	cfg := delegationConfig()
+	// Two interfaces cannot take the same piece of one prefix, and subnet
+	// 500 does not exist in a /56.
+	cfg.Interfaces = append(cfg.Interfaces,
+		Interface{Name: "lan1", Enabled: true, IPv4: IPv4{Mode: AddrNone},
+			IPv6: IPv6{Mode: AddrDelegated, DelegatedFrom: "wan0", SubnetID: 1}},
+		Interface{Name: "lan2", Enabled: true, IPv4: IPv4{Mode: AddrNone},
+			IPv6: IPv6{Mode: AddrDelegated, DelegatedFrom: "wan0", SubnetID: 500}},
+		// Nothing upstream is asking for a prefix.
+		Interface{Name: "lan3", Enabled: true, IPv4: IPv4{Mode: AddrNone},
+			IPv6: IPv6{Mode: AddrDelegated, DelegatedFrom: "lan0"}},
+		Interface{Name: "lan4", Enabled: true, IPv4: IPv4{Mode: AddrNone},
+			IPv6: IPv6{Mode: AddrDelegated}},
+		// A hint on an interface that is not asking anyone for anything.
+		Interface{Name: "lan5", Enabled: true, IPv4: IPv4{Mode: AddrNone},
+			IPv6: IPv6{Mode: AddrStatic, Address: "2001:db8::1/64", PrefixHint: "::/56"}},
+		// A hint that is not a prefix at all.
+		Interface{Name: "lan6", Enabled: true, IPv4: IPv4{Mode: AddrNone},
+			IPv6: IPv6{Mode: AddrDHCP, PrefixHint: "10.0.0.0/8"}},
+		// Delegation settings on an interface that is not delegated.
+		Interface{Name: "lan7", Enabled: true, IPv4: IPv4{Mode: AddrNone},
+			IPv6: IPv6{Mode: AddrSLAAC, DelegatedFrom: "wan0"}},
+	)
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation errors")
+	}
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("error type %T", err)
+	}
+	got := map[string]string{}
+	for _, i := range ve.Issues {
+		got[i.Path] = i.Message
+	}
+	for _, p := range []string{
+		"interfaces[2].ipv6.subnetId",
+		"interfaces[3].ipv6.subnetId",
+		"interfaces[4].ipv6.delegatedFrom",
+		"interfaces[5].ipv6.delegatedFrom",
+		"interfaces[6].ipv6.prefixHint",
+		"interfaces[7].ipv6.prefixHint",
+		"interfaces[8].ipv6.delegatedFrom",
+	} {
+		if _, ok := got[p]; !ok {
+			t.Errorf("missing issue at %s (got %v)", p, keysOf(got))
+		}
+	}
+	if msg := got["interfaces[3].ipv6.subnetId"]; !strings.Contains(msg, "256") {
+		t.Errorf("subnet out of range = %q, want the count of subnets a /56 has", msg)
+	}
+}

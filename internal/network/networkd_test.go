@@ -280,3 +280,58 @@ func TestRenderEnslavesMembers(t *testing.T) {
 		t.Errorf("bond0 unit:\n%s", bond)
 	}
 }
+
+// Every plain key in a .network file belongs to the section above it, so
+// a VLAN written after [DHCPv6] opens would be read as a DHCP setting and
+// rejected. This caught exactly that.
+func TestRenderKeepsKeysInTheirSection(t *testing.T) {
+	t.Parallel()
+	files, err := (&Networkd{}).Render(loadConfig(t, "testdata/delegated.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, unit := range files {
+		if !strings.HasSuffix(name, ".network") {
+			continue
+		}
+		section := ""
+		for _, line := range strings.Split(unit, "\n") {
+			switch {
+			case strings.HasPrefix(line, "["):
+				section = strings.Trim(line, "[]")
+			case strings.HasPrefix(line, "VLAN=") && section != "Network":
+				t.Errorf("%s: VLAN belongs in [Network], found it in [%s]", name, section)
+			case strings.HasPrefix(line, "Address=") && section != "Network":
+				t.Errorf("%s: Address belongs in [Network], found it in [%s]", name, section)
+			}
+		}
+	}
+}
+
+// A WAN asks its ISP for a prefix and the inside interfaces each take a
+// piece of it, without networkd also advertising it: dnsmasq does that.
+func TestRenderPrefixDelegation(t *testing.T) {
+	t.Parallel()
+	files, err := (&Networkd{}).Render(loadConfig(t, "testdata/delegated.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wan := files["00-ostiole-wan0.network"]
+	for _, want := range []string{"PrefixDelegationHint=::/56", "WithoutRA=solicit", "UseDelegatedPrefix=yes"} {
+		if !strings.Contains(wan, want) {
+			t.Errorf("wan0 unit is missing %q:\n%s", want, wan)
+		}
+	}
+	for unit, subnet := range map[string]string{
+		"00-ostiole-lan0.network":    "SubnetId=0x1",
+		"00-ostiole-lan0.20.network": "SubnetId=0x2",
+	} {
+		got := files[unit]
+		if !strings.Contains(got, "DHCPPrefixDelegation=yes") || !strings.Contains(got, subnet) {
+			t.Errorf("%s:\n%s", unit, got)
+		}
+		if !strings.Contains(got, "Announce=no") {
+			t.Errorf("%s should leave advertisements to dnsmasq:\n%s", unit, got)
+		}
+	}
+}

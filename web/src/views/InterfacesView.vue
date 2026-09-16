@@ -88,8 +88,21 @@ function describeAddressing(c) {
   const parts = []
   if (c.ipv4?.mode && c.ipv4.mode !== 'none')
     parts.push(c.ipv4.mode === 'static' ? c.ipv4.address : 'DHCP')
-  if (c.ipv6?.mode && c.ipv6.mode !== 'none')
-    parts.push(c.ipv6.mode === 'static' ? c.ipv6.address : c.ipv6.mode.toUpperCase())
+  const v6 = c.ipv6 ?? {}
+  switch (v6.mode) {
+    case 'static':
+      parts.push(v6.address)
+      break
+    case 'delegated':
+      parts.push(`subnet ${v6.subnetId ?? 0} of ${v6.delegatedFrom}`)
+      break
+    case 'dhcp':
+      parts.push(v6.prefixHint ? `DHCPv6 + ${v6.prefixHint}` : 'DHCPv6')
+      break
+    case 'slaac':
+      parts.push('SLAAC')
+      break
+  }
   return parts.length ? parts.join(', ') : 'no address'
 }
 

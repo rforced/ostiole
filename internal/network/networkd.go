@@ -338,7 +338,12 @@ func renderNetwork(in model.Interface, vlans []string, routes []model.StaticRout
 	if in.IPv6.Mode == model.AddrSLAAC || in.IPv6.Mode == model.AddrDHCP {
 		b.WriteString("IPv6AcceptRA=yes\n")
 	} else {
+		// An interface handing out addresses is the router on its segment,
+		// so it listens to nobody else's advertisements.
 		b.WriteString("IPv6AcceptRA=no\n")
+	}
+	if in.IPv6.Mode == model.AddrDelegated {
+		b.WriteString("DHCPPrefixDelegation=yes\n")
 	}
 	if in.IPv4.Mode == model.AddrStatic {
 		fmt.Fprintf(&b, "Address=%s\n", in.IPv4.Address)
@@ -355,26 +360,13 @@ func renderNetwork(in model.Interface, vlans []string, routes []model.StaticRout
 	if !hasGateway(gateways, 6) && in.IPv6.Gateway != "" {
 		fmt.Fprintf(&b, "Gateway=%s\n", in.IPv6.Gateway)
 	}
-	for _, g := range gateways {
-		if g.Address != "" {
-			continue
-		}
-		// The address comes from the network, so the metric has to be set
-		// where that route is created.
-		if in.IPv4.Mode == model.AddrDHCP {
-			fmt.Fprintf(&b, "\n[DHCPv4]\nRouteMetric=%d\n", g.GatewayMetric())
-		}
-		if in.IPv6.Mode == model.AddrDHCP {
-			fmt.Fprintf(&b, "\n[DHCPv6]\nRouteMetric=%d\n", g.GatewayMetric())
-		}
-		if in.IPv6.Mode == model.AddrSLAAC {
-			fmt.Fprintf(&b, "\n[IPv6AcceptRA]\nRouteMetric=%d\n", g.GatewayMetric())
-		}
-	}
+	// Every plain key belongs to [Network], so the VLANs have to be written
+	// before the first sub-section opens.
 	sort.Strings(vlans)
 	for _, v := range vlans {
 		fmt.Fprintf(&b, "VLAN=%s\n", v)
 	}
+	b.WriteString(delegationSections(in, gateways))
 	for _, g := range gateways {
 		if g.Address == "" {
 			continue
@@ -392,6 +384,57 @@ func renderNetwork(in model.Interface, vlans []string, routes []model.StaticRout
 	}
 	for _, r := range routes {
 		fmt.Fprintf(&b, "\n[Route]\nDestination=%s\nGateway=%s\n", r.Destination, r.Gateway)
+	}
+	return b.String()
+}
+
+// delegationSections writes the DHCP and router-advertisement blocks: the
+// route metrics a gateway needs, the prefix an upstream should ask for,
+// and which piece of it an inside interface takes.
+func delegationSections(in model.Interface, gateways []model.Gateway) string {
+	var dhcp4, dhcp6, ra []string
+	for _, g := range gateways {
+		if g.Address != "" {
+			continue
+		}
+		// The address comes from the network, so the metric has to be set
+		// where that route is created.
+		metric := fmt.Sprintf("RouteMetric=%d", g.GatewayMetric())
+		if in.IPv4.Mode == model.AddrDHCP {
+			dhcp4 = append(dhcp4, metric)
+		}
+		if in.IPv6.Mode == model.AddrDHCP {
+			dhcp6 = append(dhcp6, metric)
+		}
+		if in.IPv6.Mode == model.AddrSLAAC {
+			ra = append(ra, metric)
+		}
+	}
+	if in.IPv6.PrefixHint != "" {
+		dhcp6 = append(dhcp6,
+			"PrefixDelegationHint="+in.IPv6.PrefixHint,
+			// Plenty of ISPs never set the managed flag in their router
+			// advertisements but still delegate on request, so ask anyway.
+			"WithoutRA=solicit",
+			"UseDelegatedPrefix=yes")
+	}
+
+	var b strings.Builder
+	section := func(name string, lines []string) {
+		if len(lines) == 0 {
+			return
+		}
+		fmt.Fprintf(&b, "\n[%s]\n%s\n", name, strings.Join(lines, "\n"))
+	}
+	section("DHCPv4", dhcp4)
+	section("DHCPv6", dhcp6)
+	section("IPv6AcceptRA", ra)
+	if in.IPv6.Mode == model.AddrDelegated {
+		// Ostiole advertises the prefix through dnsmasq, which follows
+		// whatever address ends up on the interface, so networkd must not
+		// also send router advertisements for it.
+		fmt.Fprintf(&b, "\n[DHCPPrefixDelegation]\nUplinkInterface=%s\nSubnetId=0x%x\nAnnounce=no\n",
+			in.IPv6.DelegatedFrom, in.IPv6.SubnetID)
 	}
 	return b.String()
 }
