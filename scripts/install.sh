@@ -50,7 +50,7 @@ fi
 # the built-in updater trusts. Verifying it here means a tampered
 # checksums.txt cannot hand you a tampered tarball. Rotation: add the new
 # key to the list, keep the old one for a release.
-OSTIOLE_RELEASE_KEYS="MCowBQYDK2VwAyEA4a3rf0bCdQNTKO3KODxqMrdT1+T1nq9t+KNN2f9DJ0U="
+OSTIOLE_RELEASE_KEYS="MCowBQYDK2VwAyEA4a3rf0bCdQNTKO3KODxqMrdT1+T1nq9t+KNN2f9DJ0U=" # gitleaks:allow (public key)
 verify_signature() {
   if ! command -v openssl >/dev/null 2>&1 || ! command -v base64 >/dev/null 2>&1; then
     echo "note: openssl or base64 missing, skipping the signature check" >&2
