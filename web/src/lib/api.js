@@ -66,6 +66,20 @@ async function request(method, path, body) {
 const get = (path) => request('GET', path)
 const post = (path, body) => request('POST', path, body)
 
+/** Turns a failed response into an ApiError, for the calls that fetch directly. */
+async function apiError(res) {
+  let message = res.statusText || `HTTP ${res.status}`
+  let issues = []
+  try {
+    const err = await res.json()
+    if (err?.error) message = err.error
+    if (Array.isArray(err?.issues)) issues = err.issues
+  } catch {
+    /* non-JSON error body */
+  }
+  return new ApiError(res.status, message, issues)
+}
+
 /** @typedef {{ status: string, version: string, commit: string }} Health */
 /** @typedef {{ username: string, expires: string }} Session */
 /** @typedef {{ configured: boolean, tableLoaded: boolean, network: string, pending?: { since: string, deadline: string, remaining: number } }} Status */
@@ -103,6 +117,34 @@ export const api = {
       post('/apply', { config, confirmTimeoutSeconds }),
     confirm: () => post('/apply/confirm'),
     revert: () => post('/apply/revert'),
+    /** Compares two configurations; each side is a revision id, 'current', or inline. */
+    diff: (body) => post('/config/diff', body),
+    /** Downloads a backup; returns the file and the name the server chose. */
+    backup: async ({ users = false, note = '' } = {}) => {
+      const q = new URLSearchParams()
+      if (users) q.set('users', 'true')
+      if (note) q.set('note', note)
+      const res = await fetch(`/api/v1/config/backup?${q}`, {
+        headers: { 'X-Requested-With': 'ostiole' },
+        credentials: 'same-origin',
+      })
+      if (!res.ok) throw await apiError(res)
+      const name =
+        /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ??
+        'ostiole-backup.json'
+      return { blob: await res.blob(), name }
+    },
+    /** Parses an uploaded backup and reports what it would change. */
+    restore: async (file) => {
+      const res = await fetch('/api/v1/config/restore', {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'ostiole', 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: file,
+      })
+      if (!res.ok) throw await apiError(res)
+      return res.json()
+    },
   },
   ruleset: () => get('/ruleset'),
   counters: () => get('/counters'),

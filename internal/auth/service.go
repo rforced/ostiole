@@ -185,6 +185,44 @@ func (s *Service) Usernames() []string {
 	return names
 }
 
+// Users returns every account, password hashes included, sorted by name.
+// It exists for backups; nothing that answers a request should use it.
+func (s *Service) Users() []User {
+	s.refresh()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]User, 0, len(s.users))
+	for _, u := range s.users {
+		out = append(out, u)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Username < out[j].Username })
+	return out
+}
+
+// Restore replaces every account with the given set, which is how a
+// backup brings its administrators back. An empty list is refused: that
+// would lock everyone out with no way in but the CLI.
+func (s *Service) Restore(users []User) error {
+	if len(users) == 0 {
+		return errors.New("a restore needs at least one account")
+	}
+	for _, u := range users {
+		if !usernameRe.MatchString(u.Username) {
+			return ErrInvalidUsername
+		}
+		if u.Hash == "" {
+			return fmt.Errorf("account %q has no password", u.Username)
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.users = make(map[string]User, len(users))
+	for _, u := range users {
+		s.users[u.Username] = u
+	}
+	return s.save()
+}
+
 // Setup creates the first account. It fails once any account exists.
 func (s *Service) Setup(username, password string) error {
 	if !s.NeedsSetup() {
