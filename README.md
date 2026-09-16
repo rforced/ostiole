@@ -4,9 +4,7 @@ Ostiole turns a Linux box into a firewall and router appliance managed from a we
 [nftables](https://netfilter.org/projects/nftables/) underneath. One static binary, no runtime
 dependencies beyond `nft` and systemd, runs on any distro that has nftables.
 
-The goal is pfSense-style management, not pfSense feature parity.
-
-**Status: alpha.** It runs real boxes, but expect rough edges.
+**Status: alpha.** It runs, but expect bugs.
 
 ## Install
 
@@ -42,8 +40,6 @@ task lint         # golangci-lint, eslint, prettier
 task test         # go test -race, vitest
 task ci           # lint + test + build, same as GitHub Actions
 ```
-
-Web tooling is bun only. Do not use npm or yarn in `web/`.
 
 ## Layout
 
