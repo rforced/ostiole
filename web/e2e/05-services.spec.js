@@ -48,10 +48,12 @@ test('enable DHCP with a scope and DNS with an override, then apply', async ({ p
 
   await applyAndConfirm(page)
 
+  // The tab lives in the URL, so a reload comes back to DNS, not to DHCP.
   await page.reload()
-  await expect(page.getByLabel('DHCP server enabled')).toBeChecked()
-  await page.getByRole('tab', { name: 'DNS' }).click()
+  await expect(page).toHaveURL(/#dns$/)
   await expect(page.getByLabel('Upstream resolvers')).toHaveValue('1.1.1.1, 9.9.9.9')
+  await page.getByRole('tab', { name: 'DHCP', exact: true }).click()
+  await expect(page.getByLabel('DHCP server enabled')).toBeChecked()
   await page.getByRole('tab', { name: 'Leases' }).click()
   await expect(page.getByText('No leases yet.')).toBeVisible()
 })

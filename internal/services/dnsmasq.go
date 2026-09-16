@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
@@ -472,8 +473,9 @@ func (d *Dnsmasq) Active(ctx context.Context) bool {
 	return err == nil && strings.TrimSpace(string(out)) == "active"
 }
 
-// writeFile replaces path atomically. Generated service files are
-// world-readable: dnsmasq and unbound read them after dropping privileges.
+// writeFile replaces path, atomically where the filesystem allows it.
+// Generated service files are world-readable: dnsmasq and unbound read them
+// after dropping privileges.
 func writeFile(path, content string) error { return writeMode(path, content, 0o644) }
 
 // writeSecretFile does the same for a file nobody but root should read,
@@ -481,6 +483,25 @@ func writeFile(path, content string) error { return writeMode(path, content, 0o6
 func writeSecretFile(path, content string) error { return writeMode(path, content, 0o600) }
 
 func writeMode(path, content string, mode os.FileMode) error {
+	err := writeAtomic(path, content, mode)
+	if err == nil || !sealedDir(err) {
+		return err
+	}
+	// The directory takes no new entries. That is how the daemon's own
+	// sandbox looks from in here: ProtectSystem=strict leaves /etc
+	// read-only and ReadWritePaths=/etc/resolv.conf mounts just that file
+	// read-write, so the file can only be rewritten where it lies. Writing
+	// through the file also keeps whatever SELinux label it already has,
+	// which a fresh file in /etc would not inherit.
+	if _, statErr := os.Stat(path); statErr != nil {
+		return err
+	}
+	return writeInPlace(path, content, mode)
+}
+
+// writeAtomic writes a temporary file beside path and renames it over the
+// top, so a reader sees either the whole old file or the whole new one.
+func writeAtomic(path, content string, mode os.FileMode) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
 	if err != nil {
 		return err
@@ -500,7 +521,44 @@ func writeMode(path, content string, mode os.FileMode) error {
 		_ = os.Remove(name)
 		return err
 	}
-	return os.Rename(name, path)
+	if err := os.Rename(name, path); err != nil {
+		_ = os.Remove(name)
+		return err
+	}
+	return nil
+}
+
+// writeInPlace rewrites an existing file through its own inode: the new
+// content goes over the old bytes and the file is then cut to length. A
+// resolver that reads the file mid-write sees the new nameservers, at worst
+// with a stale line still hanging off the end, and never an empty file.
+func writeInPlace(path, content string, mode os.FileMode) error {
+	f, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		return err
+	}
+	if _, err := f.WriteString(content); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Truncate(int64(len(content))); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if info, err := f.Stat(); err == nil && info.Mode().Perm() != mode.Perm() {
+		if err := f.Chmod(mode); err != nil {
+			_ = f.Close()
+			return err
+		}
+	}
+	return f.Close()
+}
+
+// sealedDir reports whether the error says the directory holding the file
+// refuses the entries an atomic replace needs: read-only or unwritable for
+// the temporary file, busy for a rename over a mount point.
+func sealedDir(err error) bool {
+	return errors.Is(err, syscall.EROFS) || errors.Is(err, syscall.EBUSY) || errors.Is(err, os.ErrPermission)
 }
 
 type execCommander struct{}

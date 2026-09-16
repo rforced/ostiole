@@ -158,6 +158,69 @@ func TestApplyWritesRemovesAndReloads(t *testing.T) {
 	}
 }
 
+// networkd creates the device a .netdev describes but never removes it, so
+// a tunnel or VLAN dropped from the configuration keeps running, with its
+// addresses, until Ostiole deletes the link itself.
+func TestApplyDeletesDevicesThatLostTheirNetdev(t *testing.T) {
+	t.Parallel()
+	var deleted []string
+	n := &Networkd{Dir: t.TempDir(), Cmd: &fakeCmd{}, DelLink: func(name string) error {
+		deleted = append(deleted, name)
+		return nil
+	}}
+
+	files, err := n.Render(loadConfig(t, "testdata/full.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := n.Apply(context.Background(), files); err != nil {
+		t.Fatal(err)
+	}
+	if len(deleted) != 0 {
+		t.Fatalf("first apply deleted %v", deleted)
+	}
+
+	// Drop the WireGuard tunnel and the VLAN, keeping everything else.
+	without := func(files Files, ifaces ...string) Files {
+		out := Files{}
+		for name, content := range files {
+			keep := true
+			for _, iface := range ifaces {
+				if strings.HasPrefix(name, n.prefix()+iface+".") || strings.HasPrefix(name, n.prefix()+iface+"-") {
+					keep = false
+				}
+			}
+			if keep {
+				out[name] = content
+			}
+		}
+		return out
+	}
+	next := without(files, "wg0", "eth1.20")
+	if err := n.Apply(context.Background(), next); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(deleted, ","); got != "eth1.20,wg0" {
+		t.Errorf("deleted %q, want eth1.20,wg0", got)
+	}
+	// The tunnel's key file goes with it.
+	for name := range next {
+		if strings.HasSuffix(name, ".key") {
+			t.Errorf("key file %s outlived its tunnel", name)
+		}
+	}
+
+	// A plain NIC has no .netdev, so dropping its unit must leave the link
+	// alone: it is the kernel's, not ours.
+	deleted = nil
+	if err := n.Apply(context.Background(), without(next, "eth2")); err != nil {
+		t.Fatal(err)
+	}
+	if len(deleted) != 0 {
+		t.Errorf("deleted %v for a physical interface", deleted)
+	}
+}
+
 func TestApplyRefusesForeignNames(t *testing.T) {
 	t.Parallel()
 	n := &Networkd{Dir: t.TempDir(), Cmd: &fakeCmd{}}

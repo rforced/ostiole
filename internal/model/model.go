@@ -581,6 +581,17 @@ type Endpoint struct {
 	Ports     []string `json:"ports,omitempty"`
 	PortAlias string   `json:"portAlias,omitempty"`
 	Self      bool     `json:"self,omitempty"`
+	// NotAddresses inverts the address half: the rule matches every
+	// address except the ones named. It needs something to invert, so it
+	// is only valid alongside Addresses, Alias, or Self.
+	//
+	// Inverting covers both address families even when the addresses name
+	// only one of them: every IPv6 packet is "not in this IPv4 set". The
+	// renderer emits the other family in full rather than leaving it out,
+	// which would quietly let half the internet past.
+	NotAddresses bool `json:"notAddresses,omitempty"`
+	// NotPorts inverts the port half in the same way.
+	NotPorts bool `json:"notPorts,omitempty"`
 }
 
 // NAT holds outbound NAT, port forwards, and 1:1 mappings.

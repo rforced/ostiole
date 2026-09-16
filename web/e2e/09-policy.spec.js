@@ -109,13 +109,14 @@ test('deleting a gateway warns that a group uses it', async ({ page }) => {
 test('a default route the kernel already has is offered as a gateway', async ({ page }) => {
   await login(page)
   await page.goto('/routing')
-  const gateways = page.getByRole('region', { name: 'Gateways', exact: true })
+  const section = page.getByRole('region', { name: 'Gateways', exact: true })
+  const gateways = section.getByRole('table', { name: 'Gateways' })
+  const detected = section.getByRole('table', { name: 'Detected routes' })
 
   // This machine has a default route of its own; no configured gateway
-  // covers it, so the page offers to adopt it.
-  const offer = gateways.getByRole('note')
-  await expect(offer).toContainText('no gateway here covers')
-  const adopt = offer.getByRole('button', { name: /^Add as gw_/ }).first()
+  // covers it, so it is listed unwatched with an offer to adopt it.
+  await expect(detected.getByText('not watched').first()).toBeVisible()
+  const adopt = detected.getByRole('button', { name: /^Add as gw_/ }).first()
   const name = (await adopt.innerText()).replace('Add as ', '').trim()
   await page.screenshot({ path: shot('73-detected-gateway'), fullPage: true })
   await adopt.click()
@@ -124,7 +125,8 @@ test('a default route the kernel already has is offered as a gateway', async ({ 
   // new gateway now claims it.
   const row = gateways.getByRole('row').filter({ hasText: name })
   await expect(row).toBeVisible()
-  await expect(offer.getByRole('button', { name: `Add as ${name}` })).toHaveCount(0)
+  await expect(detected.getByRole('button', { name: `Add as ${name}` })).toHaveCount(0)
+  await expect(detected.getByText(name).first()).toBeVisible()
 
   // Adopted from DHCP, so no address is pinned: the next lease would
   // otherwise break it.

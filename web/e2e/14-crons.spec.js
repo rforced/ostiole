@@ -7,7 +7,7 @@ test.describe.configure({ mode: 'serial' })
 test('schedule a nightly backup and see what the box does by itself', async ({ page }) => {
   await login(page)
   await page.goto('/crons')
-  await expect(page.getByRole('heading', { name: 'Scheduled jobs' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Crons' })).toBeVisible()
 
   // The work Ostiole does on its own account is listed whether or not
   // anyone has configured a job.

@@ -68,13 +68,16 @@ test('add an alias, a rule using it, and a port forward, then apply', async ({ p
 
   await applyAndConfirm(page)
 
+  // The tab lives in the URL, so a reload comes back to NAT, not to Rules.
   await page.reload()
+  await expect(page).toHaveURL(/#nat$/)
+  await expect(page.getByRole('row').filter({ hasText: 'Web server' })).toBeVisible()
+
+  await page.getByRole('tab', { name: 'Rules' }).click()
   await page.getByRole('group', { name: 'Zone' }).getByRole('button', { name: 'wan' }).click()
   const after = page.getByRole('row').filter({ hasText: /Admin HTTPS|Ping/ })
   await expect(after.nth(0)).toContainText('Ping')
   await expect(after.nth(1)).toContainText('Admin HTTPS')
-  await page.getByRole('tab', { name: 'NAT' }).click()
-  await expect(page.getByRole('row').filter({ hasText: 'Web server' })).toBeVisible()
 })
 
 test('an alias in use cannot be deleted; a rule can be disabled', async ({ page }) => {

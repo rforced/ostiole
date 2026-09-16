@@ -6,6 +6,7 @@ import { computed, onMounted, ref } from 'vue'
 import AppTabs from '@/components/AppTabs.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import { api } from '@/lib/api'
+import { useTabHash } from '@/lib/tabs'
 import { useConfigStore } from '@/stores/config'
 import AggregateDialog from '@/views/interfaces/AggregateDialog.vue'
 import InterfaceDialog from '@/views/interfaces/InterfaceDialog.vue'
@@ -14,7 +15,7 @@ import VlanDialog from '@/views/interfaces/VlanDialog.vue'
 import ZoneDialog from '@/views/interfaces/ZoneDialog.vue'
 
 const config = useConfigStore()
-const tab = ref('interfaces')
+const tab = useTabHash(['interfaces', 'zones'])
 const links = ref([])
 const liveError = ref('')
 

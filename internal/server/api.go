@@ -24,6 +24,7 @@ import (
 	"github.com/rforced/ostiole/internal/policy"
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/store"
+	"github.com/rforced/ostiole/internal/sysstat"
 	"github.com/rforced/ostiole/internal/update"
 	"github.com/rforced/ostiole/internal/wg"
 )
@@ -51,6 +52,9 @@ type api struct {
 	tables    TableLister
 	units     install.Systemctl
 	gateways  GatewayStatuser
+	// sysstat samples CPU, memory and disk for the dashboard; nil hides
+	// the endpoint.
+	sysstat *sysstat.Sampler
 }
 
 // GatewayStatuser reports what the gateway monitor knows.
@@ -70,6 +74,7 @@ func (a *api) register(mux *router) {
 	a.registerMetrics(mux)
 	a.registerOpenAPI(mux)
 	mux.HandleFunc("GET /api/v1/status", a.read(a.status))
+	mux.HandleFunc("GET /api/v1/system/stats", a.readNoEngine(a.systemStats))
 	mux.HandleFunc("GET /api/v1/overview", a.read(a.overview))
 	mux.HandleFunc("GET /api/v1/config", a.read(a.getConfig))
 	mux.HandleFunc("GET /api/v1/config/revisions", a.read(a.revisions))
@@ -438,6 +443,21 @@ func decodeJSON(r *http.Request, v any) error {
 
 func (a *api) status(w http.ResponseWriter, r *http.Request) error {
 	st, err := a.engine.Status(r.Context())
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, st)
+	return nil
+}
+
+// systemStats reports CPU, memory and disk for the dashboard card. The CPU
+// figure covers the time since the previous request, so the first answer
+// after a restart has none.
+func (a *api) systemStats(w http.ResponseWriter, _ *http.Request) error {
+	if a.sysstat == nil {
+		return &unavailable{errors.New("this box does not report system statistics")}
+	}
+	st, err := a.sysstat.Read()
 	if err != nil {
 		return err
 	}

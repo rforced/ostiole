@@ -23,6 +23,24 @@ export function formatBytes(n) {
 }
 
 /**
+ * A span of seconds as the two units that matter, e.g. 93784 -> "1d 2h".
+ * Uptime is read at a glance; the seconds never are.
+ *
+ * @param {number} seconds
+ * @returns {string}
+ */
+export function formatDuration(seconds) {
+  const total = Math.floor(Number(seconds))
+  if (!Number.isFinite(total) || total < 0) return '—'
+  const days = Math.floor(total / 86400)
+  const hours = Math.floor((total % 86400) / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  if (days > 0) return `${days}d ${hours}h`
+  if (hours > 0) return `${hours}h ${minutes}m`
+  return `${minutes}m`
+}
+
+/**
  * Packet and lease counts with thousands separators.
  *
  * @param {number} n

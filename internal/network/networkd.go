@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/vishvananda/netlink"
+
 	"github.com/rforced/ostiole/internal/model"
 )
 
@@ -28,6 +30,9 @@ type Networkd struct {
 	Prefix string
 	// Cmd runs networkctl; default execs it.
 	Cmd Commander
+	// DelLink removes a virtual device Ostiole created; default uses
+	// netlink. Deleting a link that is already gone is not an error.
+	DelLink func(name string) error
 }
 
 // Defaults for Networkd.
@@ -598,8 +603,13 @@ func (n *Networkd) Snapshot() (Files, error) {
 }
 
 // Apply implements Backend: write the files, delete stale owned files,
-// then reload networkd and reconfigure the affected links.
+// then reload networkd, reconfigure the affected links, and take down the
+// devices that are no longer configured.
 func (n *Networkd) Apply(ctx context.Context, files Files) error {
+	gone, err := n.staleDevices(files)
+	if err != nil {
+		return err
+	}
 	changed, err := n.Write(files)
 	if err != nil {
 		return err
@@ -607,7 +617,53 @@ func (n *Networkd) Apply(ctx context.Context, files Files) error {
 	if !changed {
 		return nil
 	}
-	return n.Reload(ctx, n.linkNames(files))
+	if err := n.Reload(ctx, n.linkNames(files)); err != nil {
+		return err
+	}
+	// networkd creates the device a .netdev describes but never removes it
+	// again: delete the unit and the tunnel or VLAN keeps running, keeps its
+	// addresses, and comes back after a reboot as an interface nobody
+	// configured. Only devices Ostiole made are touched here, which is
+	// exactly what a vanished ostiole-owned .netdev proves — a physical NIC
+	// never has one.
+	for _, name := range gone {
+		if err := n.delLink(name); err != nil {
+			return fmt.Errorf("delete link %s: %w", name, err)
+		}
+	}
+	return nil
+}
+
+// staleDevices names the virtual devices whose .netdev is about to go away.
+func (n *Networkd) staleDevices(files Files) ([]string, error) {
+	current, err := n.Snapshot()
+	if err != nil {
+		return nil, err
+	}
+	var gone []string
+	for name := range current {
+		if _, keep := files[name]; keep || !strings.HasSuffix(name, ".netdev") {
+			continue
+		}
+		gone = append(gone, strings.TrimSuffix(strings.TrimPrefix(name, n.prefix()), ".netdev"))
+	}
+	sort.Strings(gone)
+	return gone, nil
+}
+
+func (n *Networkd) delLink(name string) error {
+	if n.DelLink != nil {
+		return n.DelLink(name)
+	}
+	link, err := netlink.LinkByName(name)
+	if err != nil {
+		var missing netlink.LinkNotFoundError
+		if errors.As(err, &missing) {
+			return nil
+		}
+		return err
+	}
+	return netlink.LinkDel(link)
 }
 
 // Write installs exactly the given files, removing stale owned ones, and

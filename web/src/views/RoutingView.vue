@@ -59,25 +59,19 @@ async function refreshGateways() {
 }
 
 /**
- * A gateway in the draft claims a detected route when it is on the same
- * interface and either names that address or names none at all, which
- * means "whatever the network gives us".
+ * The gateway watching a detected route, if any. A gateway claims a route
+ * when it is on the same interface and either names that address or names
+ * none at all, which means "whatever the network gives us". The draft is
+ * what is checked, not the saved configuration the server answers from: a
+ * gateway you have just added stops being offered straight away, rather
+ * than after you apply.
  */
-function claimedInDraft(d) {
-  return config.gateways.some(
+function coveredBy(d) {
+  const g = config.gateways.find(
     (g) => g.interface === d.interface && (!g.address || g.address === d.address),
   )
+  return g?.name ?? ''
 }
-
-/**
- * Default routes the kernel has that nothing claims. The server answers
- * from the saved configuration, so the draft is checked here too: a
- * gateway you have just added should stop being offered straight away,
- * not after you apply.
- */
-const unclaimed = computed(() =>
-  detected.value.filter((d) => !d.configured && d.suggested && !claimedInDraft(d)),
-)
 
 /** Adds a detected route as a gateway, ready to apply. */
 function adopt(d) {
@@ -190,31 +184,8 @@ function save() {
           from the interface is used as it is.
         </p>
 
-        <div
-          v-if="unclaimed.length"
-          role="note"
-          class="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/40"
-        >
-          <p class="text-sm">
-            This box already has
-            {{ unclaimed.length === 1 ? 'a default route' : 'default routes' }} that no gateway here
-            covers. Adding one lets Ostiole watch it and fail over.
-          </p>
-          <ul class="space-y-1">
-            <li v-for="d in unclaimed" :key="`${d.interface}-${d.address}`" class="text-sm">
-              <span class="font-mono">{{ d.address }}</span>
-              on <span class="font-mono">{{ d.interface }}</span>
-              <span class="text-neutral-500">
-                · {{ d.family }} · metric {{ d.metric }} · from {{ d.protocol }}
-              </span>
-              <button type="button" class="link ml-2" @click="adopt(d)">
-                Add as {{ d.suggested.name }}
-              </button>
-            </li>
-          </ul>
-        </div>
         <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
-          <table class="table">
+          <table class="table" aria-labelledby="gw-title">
             <thead>
               <tr>
                 <th>Gateway</th>
@@ -272,6 +243,56 @@ function save() {
                     "
                     @confirm="config.removeGateway(g.name)"
                   />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="detected-title" class="pt-2 text-sm font-medium">Detected routes</h3>
+        <p class="max-w-3xl text-sm text-neutral-500">
+          The default routes this box has right now, whether Ostiole put them there or not. Adding
+          one as a gateway is what lets the firewall probe it and fail over; leaving it alone
+          changes nothing.
+        </p>
+        <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
+          <table class="table" aria-labelledby="detected-title">
+            <thead>
+              <tr>
+                <th>Next hop</th>
+                <th>Interface</th>
+                <th>Family</th>
+                <th>Metric</th>
+                <th>From</th>
+                <th>Gateway</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="!detected.length">
+                <td colspan="7" class="text-neutral-500">No default route on this box yet.</td>
+              </tr>
+              <tr v-for="d in detected" :key="`${d.interface}-${d.address}-${d.family}`">
+                <td class="font-mono text-xs">{{ d.address }}</td>
+                <td class="font-mono text-xs">{{ d.interface }}</td>
+                <td class="text-xs">{{ d.family }}</td>
+                <td class="font-mono text-xs">{{ d.metric }}</td>
+                <td class="text-xs">{{ d.protocol }}</td>
+                <td class="text-xs">
+                  <span v-if="coveredBy(d)" class="font-mono text-neutral-500">
+                    {{ coveredBy(d) }}
+                  </span>
+                  <span v-else class="badge">not watched</span>
+                </td>
+                <td class="text-right whitespace-nowrap">
+                  <button
+                    v-if="!coveredBy(d) && d.suggested"
+                    type="button"
+                    class="link"
+                    @click="adopt(d)"
+                  >
+                    Add as {{ d.suggested.name }}
+                  </button>
                 </td>
               </tr>
             </tbody>

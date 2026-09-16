@@ -70,6 +70,7 @@ var routeDocs = map[string]routeDoc{
 	"POST /api/v1/auth/password": {summary: "Change the signed-in account's password.", role: auth.RoleViewer},
 
 	"GET /api/v1/status":                 {summary: "Whether a configuration is saved, loaded, and confirmed.", role: auth.RoleViewer},
+	"GET /api/v1/system/stats":           {summary: "CPU, memory, swap, load and disk space on this box.", role: auth.RoleViewer},
 	"GET /api/v1/overview":               {summary: "Everything the dashboard shows, in one request.", role: auth.RoleViewer},
 	"GET /api/v1/config":                 {summary: "The saved configuration.", role: auth.RoleViewer},
 	"GET /api/v1/config/revisions":       {summary: "List archived configurations.", role: auth.RoleViewer},

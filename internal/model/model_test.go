@@ -400,6 +400,62 @@ func policyConfig() *Config {
 	}
 }
 
+func TestValidateInvertedEndpoints(t *testing.T) {
+	t.Parallel()
+	cfg := policyConfig()
+	cfg.Aliases = []Alias{
+		{Name: "office", Type: AliasHosts, Entries: []string{"203.0.113.0/24"}},
+		{Name: "dns_ports", Type: AliasPorts, Entries: []string{"53", "853"}},
+	}
+	cfg.Rules = []Rule{
+		{
+			ID: "not-office", Enabled: true, Zone: "wan", Action: ActionDrop, Protocol: ProtocolAny,
+			Source: Endpoint{Alias: "office", NotAddresses: true},
+		},
+		{
+			// The rule that forces LAN clients onto this resolver.
+			ID: "local-dns", Enabled: true, Zone: "lan", Action: ActionReject, Protocol: ProtocolTCPUDP,
+			Destination: Endpoint{Self: true, NotAddresses: true, PortAlias: "dns_ports"},
+		},
+		{
+			ID: "not-ports", Enabled: true, Zone: "lan", Action: ActionAccept, Protocol: ProtocolTCP,
+			Destination: Endpoint{Ports: []string{"25"}, NotPorts: true},
+		},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("inverted rules rejected: %v", err)
+	}
+
+	// An inversion with nothing behind it would quietly match everything.
+	cfg.Rules = []Rule{
+		{
+			ID: "empty-addr", Enabled: true, Zone: "wan", Action: ActionDrop, Protocol: ProtocolAny,
+			Source: Endpoint{NotAddresses: true},
+		},
+		{
+			ID: "empty-ports", Enabled: true, Zone: "wan", Action: ActionDrop, Protocol: ProtocolTCP,
+			Destination: Endpoint{NotPorts: true},
+		},
+	}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("an inversion with nothing to invert was accepted")
+	}
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("error type %T, want *ValidationError", err)
+	}
+	got := map[string]bool{}
+	for _, i := range ve.Issues {
+		got[i.Path] = true
+	}
+	for _, p := range []string{"rules[0].source.notAddresses", "rules[1].destination.notPorts"} {
+		if !got[p] {
+			t.Errorf("missing issue for %s; got %v", p, ve.Issues)
+		}
+	}
+}
+
 func TestValidateAcceptsPolicyRouting(t *testing.T) {
 	t.Parallel()
 	cfg := policyConfig()

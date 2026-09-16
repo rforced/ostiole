@@ -28,7 +28,7 @@ const nav = [
   { to: '/routing', label: 'Routing', icon: Route },
   { to: '/services', label: 'Services', icon: Server },
   { to: '/vpn', label: 'VPN', icon: Lock },
-  { to: '/crons', label: 'Scheduled jobs', icon: CalendarClock },
+  { to: '/crons', label: 'Crons', icon: CalendarClock },
   { to: '/diagnostics', label: 'Diagnostics', icon: Stethoscope },
   { to: '/system', label: 'System', icon: Cog },
 ]

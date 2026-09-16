@@ -63,6 +63,45 @@ watch(
 
 const title = computed(() => `Interface ${form.value.name}`)
 
+/**
+ * A zone is the unit firewall rules match on, so interfaces sharing one
+ * share a single rule list. That is worth saying out loud here: a VLAN
+ * dropped into "lan" silently inherits the LAN rules and can never have its
+ * own, which is rarely what someone adding a guest or IOT VLAN wants.
+ *
+ * NEW_ZONE marks the "New zone…" choice while it is still pending. A real
+ * zone name is [a-z][a-z0-9_]*, so the plus can never collide with one.
+ */
+const NEW_ZONE = '+new'
+const newZone = ref('')
+const zoneError = ref('')
+const creatingZone = computed(() => form.value.zone === NEW_ZONE)
+const zoneMates = computed(() =>
+  config.interfaces
+    .filter((i) => i.name !== form.value.name && i.zone && i.zone === form.value.zone)
+    .map((i) => i.name),
+)
+
+/** Turns the pending "New zone…" choice into a real zone in the draft. */
+function commitZone() {
+  if (!creatingZone.value) return true
+  const name = newZone.value.trim()
+  if (!/^[a-z][a-z0-9_]{0,30}$/.test(name)) {
+    zoneError.value =
+      'Name must be lowercase letters, digits, or underscores and start with a letter.'
+    return false
+  }
+  if (config.zones.some((z) => z.name === name)) {
+    zoneError.value = `Zone ${name} already exists; pick it from the list.`
+    return false
+  }
+  config.upsertZone({ name })
+  form.value.zone = name
+  newZone.value = ''
+  zoneError.value = ''
+  return true
+}
+
 /** What the system setting does when an interface says nothing. */
 const systemLogsDrops = computed(() => config.draft?.system?.management?.logDefaultDrops ?? false)
 
@@ -84,6 +123,7 @@ const upstreams = computed(() =>
 )
 
 function save() {
+  if (!commitZone()) return
   const out = JSON.parse(JSON.stringify(form.value))
   if (out.logDrops === 'inherit') delete out.logDrops
   else out.logDrops = out.logDrops === 'on'
@@ -124,13 +164,42 @@ function save() {
         <FormField id="if-desc" label="Description">
           <input id="if-desc" v-model="form.description" class="input" />
         </FormField>
-        <FormField id="if-zone" label="Zone">
+        <FormField
+          id="if-zone"
+          label="Zone"
+          hint="Firewall rules match on zones. Interfaces in the same zone share one rule list; give this one a zone of its own to write rules just for it."
+        >
           <select id="if-zone" v-model="form.zone" class="input">
             <option value="">Unassigned (traffic dropped)</option>
             <option v-for="z in config.zones" :key="z.name" :value="z.name">{{ z.name }}</option>
+            <option :value="NEW_ZONE">New zone…</option>
           </select>
         </FormField>
       </div>
+      <template v-if="creatingZone">
+        <FormField
+          id="if-new-zone"
+          label="New zone name"
+          hint="Lowercase letters, digits, and underscores, e.g. guest or iot."
+        >
+          <input
+            id="if-new-zone"
+            v-model="newZone"
+            class="input font-mono"
+            autocapitalize="none"
+            spellcheck="false"
+            required
+          />
+        </FormField>
+        <p v-if="zoneError" role="alert" class="text-sm text-red-600 dark:text-red-400">
+          {{ zoneError }}
+        </p>
+      </template>
+      <p v-else-if="zoneMates.length" class="text-sm text-neutral-500">
+        Shares zone <span class="font-mono">{{ form.zone }}</span> with
+        <span class="font-mono">{{ zoneMates.join(', ') }}</span
+        >, so they are all matched by the same rules.
+      </p>
 
       <label class="flex items-center gap-2 text-sm">
         <input v-model="form.enabled" type="checkbox" class="size-4 rounded border-neutral-300" />

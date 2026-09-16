@@ -22,9 +22,11 @@ function endpointForm(ep = {}) {
     mode: ep.self ? 'self' : ep.alias ? 'alias' : ep.addresses?.length ? 'addresses' : 'any',
     addresses: joinList(ep.addresses),
     alias: ep.alias ?? '',
+    notAddresses: Boolean(ep.notAddresses),
     portMode: ep.portAlias ? 'alias' : ep.ports?.length ? 'ports' : 'any',
     ports: (ep.ports ?? []).join(', '),
     portAlias: ep.portAlias ?? '',
+    notPorts: Boolean(ep.notPorts),
   }
 }
 
@@ -82,6 +84,10 @@ function endpointOut(f, allowPorts) {
   if (f.mode === 'self') out.self = true
   if (allowPorts && f.portMode === 'ports') out.ports = parseList(f.ports)
   if (allowPorts && f.portMode === 'alias') out.portAlias = f.portAlias
+  // An inversion only travels with something to invert; "not anything" is
+  // rejected by the server rather than silently meaning "everything".
+  if (f.notAddresses && f.mode !== 'any') out.notAddresses = true
+  if (allowPorts && f.notPorts && f.portMode !== 'any') out.notPorts = true
   return out
 }
 

@@ -80,7 +80,7 @@ function describe(c) {
 
 <template>
   <div class="space-y-4">
-    <h1 class="text-2xl font-semibold tracking-tight">Scheduled jobs</h1>
+    <h1 class="text-2xl font-semibold tracking-tight">Crons</h1>
     <p class="max-w-3xl text-sm text-neutral-500">
       What this box does while nobody is watching. Your own jobs are below, and under them the work
       Ostiole does on its own account, so the whole answer is on one page.

@@ -1,8 +1,9 @@
 <script setup>
 import { TabsContent } from 'reka-ui'
-import { onMounted, ref } from 'vue'
+import { onMounted } from 'vue'
 
 import AppTabs from '@/components/AppTabs.vue'
+import { useTabHash } from '@/lib/tabs'
 import { useConfigStore } from '@/stores/config'
 import CaptureTab from '@/views/diagnostics/CaptureTab.vue'
 import JournalTab from '@/views/diagnostics/JournalTab.vue'
@@ -11,7 +12,7 @@ import ReachabilityTab from '@/views/diagnostics/ReachabilityTab.vue'
 import StatesTab from '@/views/diagnostics/StatesTab.vue'
 
 const config = useConfigStore()
-const tab = ref('reachability')
+const tab = useTabHash(['reachability', 'states', 'neighbours', 'capture', 'journal'])
 
 onMounted(() => config.load())
 </script>

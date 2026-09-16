@@ -15,7 +15,9 @@ const props = defineProps({
 const model = defineModel({ type: Object, required: true })
 
 const config = useConfigStore()
-const hostAliases = computed(() => config.aliases.filter((a) => a.type === 'hosts'))
+// geoip aliases resolve to address sets too, so they belong here beside the
+// hand-written ones; only port aliases are a different kind of thing.
+const hostAliases = computed(() => config.aliases.filter((a) => a.type !== 'ports'))
 const portAliases = computed(() => config.aliases.filter((a) => a.type === 'ports'))
 const id = (name) => `${props.side}-${name}`
 const label = computed(() => (props.side === 'source' ? 'Source' : 'Destination'))
@@ -47,9 +49,24 @@ const label = computed(() => (props.side === 'source' ? 'Source' : 'Destination'
     </FormField>
     <FormField v-if="model.mode === 'alias'" :id="id('alias')" label="Alias">
       <select :id="id('alias')" v-model="model.alias" class="input" required>
-        <option v-for="a in hostAliases" :key="a.name" :value="a.name">{{ a.name }}</option>
+        <option v-for="a in hostAliases" :key="a.name" :value="a.name">
+          {{ a.name }}<template v-if="a.type === 'geoip'"> (geoip)</template>
+        </option>
       </select>
     </FormField>
+    <label v-if="model.mode !== 'any'" class="flex items-start gap-2 text-sm">
+      <input
+        :id="id('not')"
+        v-model="model.notAddresses"
+        type="checkbox"
+        class="mt-0.5 size-4 rounded border-neutral-300"
+      />
+      <span>
+        <span class="font-medium">Invert</span> — match everything <em>except</em> this. Both
+        address families are covered: inverting a list that names only IPv4 still matches every IPv6
+        packet, because none of them is in it.
+      </span>
+    </label>
     <template v-if="portsAllowed">
       <FormField :id="id('portmode')" label="Ports">
         <select :id="id('portmode')" v-model="model.portMode" class="input">
@@ -77,6 +94,17 @@ const label = computed(() => (props.side === 'source' ? 'Source' : 'Destination'
           <option v-for="a in portAliases" :key="a.name" :value="a.name">{{ a.name }}</option>
         </select>
       </FormField>
+      <label v-if="model.portMode !== 'any'" class="flex items-start gap-2 text-sm">
+        <input
+          :id="id('notports')"
+          v-model="model.notPorts"
+          type="checkbox"
+          class="mt-0.5 size-4 rounded border-neutral-300"
+        />
+        <span>
+          <span class="font-medium">Invert ports</span> — match every port <em>except</em> these.
+        </span>
+      </label>
     </template>
   </fieldset>
 </template>

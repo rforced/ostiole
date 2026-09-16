@@ -26,6 +26,7 @@ import (
 	"github.com/rforced/ostiole/internal/server"
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/sysctl"
+	"github.com/rforced/ostiole/internal/sysstat"
 	"github.com/rforced/ostiole/internal/update"
 	"github.com/rforced/ostiole/internal/version"
 )
@@ -114,6 +115,9 @@ at your own.`,
 				Certs:   certManager,
 				Feeds:   refresher,
 				Crons:   crons,
+				// /proc and statfs need no privileges, so the dashboard
+				// gets its usage card on a dev run as well as a real box.
+				SysStat: sysstat.New(g.configDir),
 				// The names are looked up fresh, so a certificate made
 				// after the box moved covers where it moved to.
 				CertHosts: certHosts,

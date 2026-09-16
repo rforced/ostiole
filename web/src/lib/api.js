@@ -106,6 +106,11 @@ export const api = {
   status: () => get('/status'),
   /** Everything the dashboard shows, in one request. */
   overview: () => get('/overview'),
+  /**
+   * CPU, memory and disk. The CPU figure covers the time since the previous
+   * request, so the first one after a restart has none.
+   */
+  systemStats: () => get('/system/stats'),
   config: {
     get: () => get('/config'),
     /** Build (without saving) a first configuration from the wizard answers. */

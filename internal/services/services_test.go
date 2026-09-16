@@ -332,6 +332,45 @@ func TestParseLeases(t *testing.T) {
 	}
 }
 
+// Under ProtectSystem=strict the daemon gets /etc/resolv.conf as a
+// read-write bind mount inside a read-only /etc, so it cannot lay down a
+// temporary file next to it or rename over it. A directory that takes no new
+// entries stands in for that here.
+func TestWriteFileRewritesInPlaceWhenTheDirectoryIsSealed(t *testing.T) {
+	t.Parallel()
+	if os.Geteuid() == 0 {
+		t.Skip("root writes to an unwritable directory regardless")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "resolv.conf")
+	if err := os.WriteFile(path, []byte("nameserver 9.9.9.9\nsearch stale.example\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+
+	const want = "nameserver 127.0.0.1\n"
+	if err := writeFile(path, want); err != nil {
+		t.Fatalf("writeFile = %v", err)
+	}
+	if raw, err := os.ReadFile(path); err != nil || string(raw) != want {
+		t.Errorf("resolv.conf = %q, %v", raw, err)
+	}
+	// The old content was longer: nothing of it may survive the truncate,
+	// and no temporary file may be left behind.
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 1 {
+		t.Errorf("directory holds %v, %v", entries, err)
+	}
+	// A file that does not exist yet still cannot be created there, and the
+	// error says so rather than being swallowed.
+	if err := writeFile(filepath.Join(dir, "new.conf"), want); err == nil {
+		t.Error("writing a new file in a sealed directory reported success")
+	}
+}
+
 type fakeRunner struct{ calls [][]string }
 
 func (f *fakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {

@@ -573,8 +573,15 @@ func (f famExpr) expr(fam int) (string, bool) {
 }
 
 func (r *renderer) endpointAddr(dir string, e model.Endpoint) famExpr {
+	op := " "
+	if e.NotAddresses {
+		op = " != "
+	}
 	if e.Self {
 		s := "fib daddr type local"
+		if e.NotAddresses {
+			s = "fib daddr type != local"
+		}
 		return famExpr{both: &s}
 	}
 	if e.Alias != "" {
@@ -582,14 +589,14 @@ func (r *renderer) endpointAddr(dir string, e model.Endpoint) famExpr {
 		v4, v6 := splitFamilies(r.entriesOf(*a))
 		var f famExpr
 		if len(v4) > 0 || a.Fetched() {
-			s := fmt.Sprintf("ip %s @%s", dir, aliasSet(a.Name, 4))
+			s := fmt.Sprintf("ip %s%s@%s", dir, op, aliasSet(a.Name, 4))
 			f.v4 = &s
 		}
 		if len(v6) > 0 || a.Fetched() {
-			s := fmt.Sprintf("ip6 %s @%s", dir, aliasSet(a.Name, 6))
+			s := fmt.Sprintf("ip6 %s%s@%s", dir, op, aliasSet(a.Name, 6))
 			f.v6 = &s
 		}
-		return f
+		return coverBothFamilies(f, e.NotAddresses)
 	}
 	if len(e.Addresses) == 0 {
 		return famExpr{any: true}
@@ -597,11 +604,34 @@ func (r *renderer) endpointAddr(dir string, e model.Endpoint) famExpr {
 	v4, v6 := splitFamilies(e.Addresses)
 	var f famExpr
 	if len(v4) > 0 {
-		s := fmt.Sprintf("ip %s %s", dir, setOrSingle(v4))
+		s := fmt.Sprintf("ip %s%s%s", dir, op, setOrSingle(v4))
 		f.v4 = &s
 	}
 	if len(v6) > 0 {
-		s := fmt.Sprintf("ip6 %s %s", dir, setOrSingle(v6))
+		s := fmt.Sprintf("ip6 %s%s%s", dir, op, setOrSingle(v6))
+		f.v6 = &s
+	}
+	return coverBothFamilies(f, e.NotAddresses)
+}
+
+// coverBothFamilies fills in the family an inverted endpoint says nothing
+// about. "Not in this IPv4 set" is true of every IPv6 packet, so the family
+// the addresses do not name has to match in full rather than be left out:
+// a v4-only "block everything except my country" rule that emitted no IPv6
+// rule would let every IPv6 packet through, and say nothing about it.
+//
+// The filled-in side still names its family, because a rule with no address
+// expression at all would match the other one too.
+func coverBothFamilies(f famExpr, inverted bool) famExpr {
+	if !inverted {
+		return f
+	}
+	if f.v4 == nil && f.v6 != nil {
+		s := "meta nfproto ipv4"
+		f.v4 = &s
+	}
+	if f.v6 == nil && f.v4 != nil {
+		s := "meta nfproto ipv6"
 		f.v6 = &s
 	}
 	return f
@@ -823,14 +853,19 @@ func portExpr(proto, expr string) string {
 	return proto + " " + expr
 }
 
-// ports renders "dport { … }" style operand for an endpoint, or "".
+// ports renders "dport { … }" style operand for an endpoint, or "". An
+// inverted endpoint matches every port but the ones named.
 func (r *renderer) ports(kind string, e model.Endpoint) string {
+	op := " "
+	if e.NotPorts {
+		op = " != "
+	}
 	if e.PortAlias != "" {
 		a, _ := r.cfg.Alias(e.PortAlias)
 		if len(r.entriesOf(*a)) == 0 && !a.Fetched() {
 			return ""
 		}
-		return kind + " @" + aliasPortSet(a.Name)
+		return kind + op + "@" + aliasPortSet(a.Name)
 	}
 	if len(e.Ports) == 0 {
 		return ""
@@ -840,7 +875,7 @@ func (r *renderer) ports(kind string, e model.Endpoint) string {
 		pr, _ := model.ParsePortRange(p)
 		ps = append(ps, pr.String())
 	}
-	return kind + " " + setOrSingle(ps)
+	return kind + op + setOrSingle(ps)
 }
 
 // ---- NAT ------------------------------------------------------------------

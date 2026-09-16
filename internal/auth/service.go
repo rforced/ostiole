@@ -60,6 +60,10 @@ type Service struct {
 	sessions *sessionStore
 	limiter  *limiter
 
+	// SessionLoadError says why the stored sessions could not be read, if
+	// they could not. Everyone logs in again; nothing else breaks.
+	SessionLoadError error
+
 	mu       sync.RWMutex
 	users    map[string]User
 	loadedAt time.Time // mtime of the file when last read
@@ -69,11 +73,26 @@ type Service struct {
 // NewService loads (or lazily creates) the users file in dir.
 func NewService(dir string) (*Service, error) {
 	s := &Service{path: filepath.Join(dir, UsersFile), now: time.Now, users: map[string]User{}}
-	s.sessions = newSessionStore(func() time.Time { return s.now() })
+	s.sessions = newSessionStore(dir, func() time.Time { return s.now() })
 	s.limiter = newLimiter(func() time.Time { return s.now() })
 	if err := s.load(); err != nil {
 		return nil, err
 	}
+	// Sessions outlive a restart so an update does not log everybody out.
+	// A file that will not load is not fatal: the worst it costs is a
+	// round of logins, which is better than a daemon that will not start.
+	if err := s.sessions.load(); err != nil {
+		s.SessionLoadError = err
+	}
+	// Anyone whose account went away while the daemon was down loses their
+	// session with it.
+	s.mu.RLock()
+	known := make(map[string]bool, len(s.users))
+	for name := range s.users {
+		known[name] = true
+	}
+	s.mu.RUnlock()
+	s.sessions.keepOnly(known)
 	return s, nil
 }
 

@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 
 import AppTabs from '@/components/AppTabs.vue'
 import { api } from '@/lib/api'
+import { useTabHash } from '@/lib/tabs'
 import { useConfigStore } from '@/stores/config'
 import Dhcp6Tab from '@/views/services/Dhcp6Tab.vue'
 import DhcpTab from '@/views/services/DhcpTab.vue'
@@ -11,7 +12,7 @@ import DnsTab from '@/views/services/DnsTab.vue'
 import LeasesTab from '@/views/services/LeasesTab.vue'
 
 const config = useConfigStore()
-const tab = ref('dhcp')
+const tab = useTabHash(['dhcp', 'dhcp6', 'dns', 'leases'])
 const status = ref(null)
 
 /** The draft asks for unbound (DNSSEC validation or DNS over TLS). */

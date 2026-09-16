@@ -17,6 +17,7 @@ import (
 	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/services"
+	"github.com/rforced/ostiole/internal/sysstat"
 	"github.com/rforced/ostiole/internal/update"
 	"github.com/rforced/ostiole/internal/version"
 	"github.com/rforced/ostiole/internal/web"
@@ -69,6 +70,9 @@ type Deps struct {
 	// Units answers systemd state queries (service health, competitor
 	// detection) for the dashboard; nil leaves those states unknown.
 	Units install.Systemctl
+	// SysStat samples CPU, memory and disk for the dashboard; nil hides
+	// that endpoint.
+	SysStat *sysstat.Sampler
 }
 
 // Handler builds the full HTTP handler: API routes plus the SPA.
@@ -92,6 +96,7 @@ func Handler(d Deps) http.Handler {
 		gateways:  d.Gateways,
 		tables:    d.Tables,
 		units:     d.Units,
+		sysstat:   d.SysStat,
 	}
 	api.routes = mux
 	api.register(mux)

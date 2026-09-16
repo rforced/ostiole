@@ -1,0 +1,59 @@
+import { flushPromises, mount } from '@vue/test-utils'
+import { describe, expect, it } from 'vitest'
+import { defineComponent, h } from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
+
+import { useTabHash } from '@/lib/tabs'
+
+const TABS = ['rules', 'aliases', 'nat']
+
+const Host = defineComponent({
+  setup() {
+    return { tab: useTabHash(TABS) }
+  },
+  render() {
+    return h('span', this.tab)
+  },
+})
+
+async function mountAt(path) {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/firewall', component: Host }],
+  })
+  router.push(path)
+  await router.isReady()
+  return { wrapper: mount(Host, { global: { plugins: [router] } }), router }
+}
+
+describe('useTabHash', () => {
+  it('reads the tab from the hash', async () => {
+    const { wrapper } = await mountAt('/firewall#nat')
+    expect(wrapper.text()).toBe('nat')
+  })
+
+  it('falls back to the first tab without a hash, or with one nobody knows', async () => {
+    expect((await mountAt('/firewall')).wrapper.text()).toBe('rules')
+    expect((await mountAt('/firewall#nonsense')).wrapper.text()).toBe('rules')
+  })
+
+  it('writes the hash when the tab changes, and clears it for the default', async () => {
+    const { wrapper, router } = await mountAt('/firewall')
+    wrapper.vm.tab = 'aliases'
+    await flushPromises()
+    expect(router.currentRoute.value.hash).toBe('#aliases')
+    expect(wrapper.text()).toBe('aliases')
+
+    wrapper.vm.tab = 'rules'
+    await flushPromises()
+    expect(router.currentRoute.value.hash).toBe('')
+    expect(router.currentRoute.value.fullPath).toBe('/firewall')
+  })
+
+  it('ignores a value that is not a tab', async () => {
+    const { wrapper, router } = await mountAt('/firewall#nat')
+    wrapper.vm.tab = 'nope'
+    await flushPromises()
+    expect(router.currentRoute.value.hash).toBe('#nat')
+  })
+})

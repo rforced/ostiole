@@ -22,6 +22,15 @@ watch(
 
 const rules = computed(() => config.rulesForZone(zone.value))
 
+/**
+ * Which interfaces the selected zone covers. Worth showing: a VLAN assigned
+ * to an existing zone has no tab of its own here, and without this the only
+ * clue is that the zone list is shorter than the interface list.
+ */
+const members = computed(() =>
+  config.interfaces.filter((i) => i.zone === zone.value).map((i) => i.name),
+)
+
 let poll = 0
 async function refreshCounters() {
   try {
@@ -41,10 +50,12 @@ function describe(ep, ports) {
   if (ep?.self) who = 'this firewall'
   else if (ep?.alias) who = `@${ep.alias}`
   else if (ep?.addresses?.length) who = ep.addresses.join(', ')
+  if (ep?.notAddresses) who = `not ${who}`
   let p = ''
-  if (ep?.portAlias) p = ` : @${ep.portAlias}`
-  else if (ep?.ports?.length) p = ` : ${ep.ports.join(', ')}`
-  return ports ? who + p : who
+  if (ep?.portAlias) p = `@${ep.portAlias}`
+  else if (ep?.ports?.length) p = ep.ports.join(', ')
+  if (p && ep?.notPorts) p = `not ${p}`
+  return ports && p ? `${who} : ${p}` : who
 }
 
 function add() {
@@ -93,6 +104,21 @@ function toggle(rule) {
         >Rules run top to bottom; the first match wins. Anything unmatched is dropped.</span
       >
     </div>
+
+    <p v-if="zone" class="text-xs text-neutral-500">
+      <template v-if="members.length">
+        Zone <span class="font-mono">{{ zone }}</span> covers
+        <span class="font-mono">{{ members.join(', ') }}</span
+        >. These rules match traffic arriving on any of them; to give one interface rules of its
+        own,
+        <RouterLink to="/interfaces" class="underline">move it to a zone of its own</RouterLink>.
+      </template>
+      <template v-else>
+        No interface is in zone <span class="font-mono">{{ zone }}</span
+        >, so these rules match nothing.
+        <RouterLink to="/interfaces" class="underline">Assign one</RouterLink>.
+      </template>
+    </p>
 
     <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
       <table class="table">

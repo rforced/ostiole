@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -127,6 +128,91 @@ func TestSetupLoginAndSessions(t *testing.T) {
 	}
 	if s2.NeedsSetup() || len(s2.Usernames()) != 1 {
 		t.Errorf("reload lost users: %v", s2.Usernames())
+	}
+}
+
+// An update restarts the daemon, so a session that only lived in memory
+// logged everybody out every time.
+func TestSessionsSurviveARestart(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	s, err := NewService(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Setup("admin", goodPassword); err != nil {
+		t.Fatal(err)
+	}
+	sess, err := s.Login("admin", goodPassword, "1.2.3.4")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	restarted, err := NewService(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restarted.SessionLoadError != nil {
+		t.Fatalf("sessions did not load: %v", restarted.SessionLoadError)
+	}
+	got, ok := restarted.Session(sess.ID)
+	if !ok {
+		t.Fatal("session did not survive the restart")
+	}
+	if got.Username != "admin" || got.ID != sess.ID {
+		t.Errorf("session = %+v", got)
+	}
+
+	// The file must not be usable as a cookie: it holds hashes only.
+	raw, err := os.ReadFile(filepath.Join(dir, SessionsFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), sess.ID) {
+		t.Error("the session file contains the session ID itself")
+	}
+	if info, err := os.Stat(filepath.Join(dir, SessionsFile)); err != nil || info.Mode().Perm() != 0o600 {
+		t.Errorf("sessions file mode = %v, %v", info.Mode().Perm(), err)
+	}
+
+	// Logging out on one instance clears it for the next one too.
+	restarted.Logout(sess.ID)
+	again, err := NewService(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := again.Session(sess.ID); ok {
+		t.Error("a logged-out session came back after a restart")
+	}
+}
+
+// A session whose account is gone must not come back with the file.
+func TestRestartDropsSessionsOfDeletedAccounts(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	s, err := NewService(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Setup("admin", goodPassword); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetPassword("temp", goodPassword); err != nil {
+		t.Fatal(err)
+	}
+	sess, err := s.Login("temp", goodPassword, "1.2.3.4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteUser("temp"); err != nil {
+		t.Fatal(err)
+	}
+	restarted, err := NewService(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := restarted.Session(sess.ID); ok {
+		t.Error("session of a deleted account survived the restart")
 	}
 }
 

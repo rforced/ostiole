@@ -51,6 +51,15 @@
   .badge-warn {
     @apply bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300;
   }
+  /* A ratio against a limit. The track takes a light step of the same hue
+     as the fill, passed in by the caller, so the severity reads across the
+     whole bar rather than only the filled part. */
+  .meter {
+    @apply h-1.5 w-full overflow-hidden rounded-full;
+  }
+  .meter-fill {
+    @apply h-full rounded-full transition-[width] duration-700 ease-out;
+  }
   .icon-btn {
     @apply inline-flex rounded p-1 text-neutral-500 hover:text-neutral-900 focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:outline-none disabled:opacity-30 dark:hover:text-neutral-100;
   }

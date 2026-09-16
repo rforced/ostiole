@@ -1193,4 +1193,12 @@ func (v *validator) endpoint(path string, e Endpoint, aliases map[string]AliasTy
 			v.add(path+".self", "self cannot be combined with addresses or an alias")
 		}
 	}
+	// An inversion with nothing to invert would match everything, which is
+	// never what someone ticking the box meant.
+	if e.NotAddresses && len(e.Addresses) == 0 && e.Alias == "" && !e.Self {
+		v.add(path+".notAddresses", "nothing to invert: give addresses, an alias, or self")
+	}
+	if e.NotPorts && len(e.Ports) == 0 && e.PortAlias == "" {
+		v.add(path+".notPorts", "nothing to invert: give ports or a port alias")
+	}
 }

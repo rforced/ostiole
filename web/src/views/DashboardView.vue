@@ -9,18 +9,35 @@ import DashboardWarnings from '@/views/dashboard/DashboardWarnings.vue'
 import GatewaysCard from '@/views/dashboard/GatewaysCard.vue'
 import InterfaceSummary from '@/views/dashboard/InterfaceSummary.vue'
 import ServicesCard from '@/views/dashboard/ServicesCard.vue'
+import SystemLoadCard from '@/views/dashboard/SystemLoadCard.vue'
 import TopRulesCard from '@/views/dashboard/TopRulesCard.vue'
 
 /** Live enough for counters and carrier, quiet enough for a router. */
 const REFRESH_MS = 10_000
+/**
+ * Usage is sampled faster, because a meter that only moves every ten
+ * seconds does not read as live. It is two small file reads on the box.
+ */
+const STATS_MS = 3_000
 
 const system = useSystemStore()
 const health = ref(null)
 const overview = ref(null)
+const stats = ref(null)
 const error = ref('')
 const update = ref(null)
 const status = computed(() => system.status)
 let timer = null
+let statsTimer = null
+
+/** Usage failing is never worth an error banner over the whole dashboard. */
+async function refreshStats() {
+  try {
+    stats.value = await api.systemStats()
+  } catch {
+    stats.value = null
+  }
+}
 
 async function refresh() {
   try {
@@ -40,6 +57,8 @@ onMounted(async () => {
   }
   await refresh()
   timer = setInterval(refresh, REFRESH_MS)
+  await refreshStats()
+  statsTimer = setInterval(refreshStats, STATS_MS)
   // Best effort: a quiet hint when a newer release exists.
   try {
     const res = await api.update.check(
@@ -51,7 +70,10 @@ onMounted(async () => {
   }
 })
 
-onUnmounted(() => clearInterval(timer))
+onUnmounted(() => {
+  clearInterval(timer)
+  clearInterval(statsTimer)
+})
 </script>
 
 <template>
@@ -83,6 +105,8 @@ onUnmounted(() => clearInterval(timer))
     </p>
 
     <DashboardWarnings :warnings="overview?.warnings ?? []" />
+
+    <SystemLoadCard :stats="stats" />
 
     <InterfaceSummary :interfaces="overview?.interfaces ?? []" />
 

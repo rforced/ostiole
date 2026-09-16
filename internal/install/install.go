@@ -229,13 +229,15 @@ func Units(lay Layout, opts Options) map[string]string {
 	// out of the way before the network takeover.
 	backend := "auto"
 	// The daemon needs to write its own binary directory for self-updates.
-	// -/etc/dnsmasq.d receives the DNS/DHCP configuration once dnsmasq is
-	// set up; -/etc/resolv.conf is managed by the DNS service. Both are
-	// ignored while absent.
-	// The leading dash means "only if it exists": a box that never sets up
-	// dnsmasq or PPPoE still starts.
+	// -/etc/dnsmasq.d takes the DHCP and DNS configuration once dnsmasq is
+	// set up, -/etc/unbound the validating resolver's, and -/etc/resolv.conf
+	// is managed by the DNS service. The leading dash means "only if it
+	// exists": a box that never sets up dnsmasq or PPPoE still starts.
+	// resolv.conf is a file, not a directory, so systemd mounts that one
+	// file read-write and leaves /etc around it read-only; it can be
+	// rewritten but never replaced, which services.writeMode handles.
 	rw := cfg + " " + NetworkdUnitDir + " " + lay.BinDir +
-		" -/etc/dnsmasq.d -/etc/resolv.conf -/etc/ppp"
+		" -/etc/dnsmasq.d -/etc/unbound -/etc/resolv.conf -/etc/ppp"
 	firewall := fmt.Sprintf(`[Unit]
 Description=Ostiole firewall ruleset (loaded before networking)
 Documentation=https://github.com/rforced/ostiole
