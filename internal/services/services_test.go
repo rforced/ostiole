@@ -435,3 +435,43 @@ func TestPeerFileQuotesTheSecret(t *testing.T) {
 		t.Errorf("the default route has no metric:\n%s", peer)
 	}
 }
+
+// A box that dials no PPPoE must not have /etc/ppp created under it. The
+// daemon runs with ProtectSystem=strict, so an apply that has nothing to
+// do with PPPoE used to fail with "mkdir /etc/ppp: read-only file
+// system" — and so did the rollback, which is worse.
+func TestPPPoEApplyTouchesNothingWithoutSessions(t *testing.T) {
+	t.Parallel()
+	dir := filepath.Join(t.TempDir(), "never", "created")
+	cmd := &fakeCmd{}
+	p := &PPPoE{Dir: dir, Cmd: cmd}
+
+	cfg := loadConfig(t, "testdata/full.json")
+	files, err := p.Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 0 {
+		t.Fatalf("rendered %v for a configuration with no sessions", files.Names())
+	}
+	if err := p.Apply(context.Background(), files); err != nil {
+		t.Fatalf("Apply with nothing to do: %v", err)
+	}
+	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the directory was created anyway: %v", err)
+	}
+	if len(cmd.calls) != 0 {
+		t.Errorf("it talked to systemd for nothing: %v", cmd.calls)
+	}
+}
+
+// And the same on the way back: a rollback after an unrelated failure
+// must not be the thing that takes the box down.
+func TestPPPoERollbackToNothingIsQuiet(t *testing.T) {
+	t.Parallel()
+	dir := filepath.Join(t.TempDir(), "gone")
+	p := &PPPoE{Dir: dir, Cmd: &fakeCmd{}}
+	if err := p.Apply(context.Background(), network.Files{}); err != nil {
+		t.Fatalf("rollback to no sessions: %v", err)
+	}
+}

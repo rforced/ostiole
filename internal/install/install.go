@@ -232,7 +232,10 @@ func Units(lay Layout, opts Options) map[string]string {
 	// -/etc/dnsmasq.d receives the DNS/DHCP configuration once dnsmasq is
 	// set up; -/etc/resolv.conf is managed by the DNS service. Both are
 	// ignored while absent.
-	rw := cfg + " " + NetworkdUnitDir + " " + lay.BinDir + " -/etc/dnsmasq.d -/etc/resolv.conf"
+	// The leading dash means "only if it exists": a box that never sets up
+	// dnsmasq or PPPoE still starts.
+	rw := cfg + " " + NetworkdUnitDir + " " + lay.BinDir +
+		" -/etc/dnsmasq.d -/etc/resolv.conf -/etc/ppp"
 	firewall := fmt.Sprintf(`[Unit]
 Description=Ostiole firewall ruleset (loaded before networking)
 Documentation=https://github.com/rforced/ostiole

@@ -201,11 +201,20 @@ func (p *PPPoE) Apply(ctx context.Context, files network.Files) error {
 	if err != nil {
 		return err
 	}
+	// A box that dials nothing, and never has, must not so much as create
+	// a directory: the daemon runs under ProtectSystem=strict, and an
+	// apply that has nothing to do with PPPoE cannot be allowed to fail
+	// on it.
+	if len(files) == 0 && len(current) == 0 {
+		return nil
+	}
 	if len(files) > 0 && !p.Installed(ctx) {
 		return errors.New("PPPoE is not set up on this box: run `ostiole services setup --with-pppoe` once as root")
 	}
-	if err := os.MkdirAll(p.dir(), 0o700); err != nil {
-		return err
+	if len(files) > 0 {
+		if err := os.MkdirAll(p.dir(), 0o700); err != nil {
+			return err
+		}
 	}
 
 	// Stop what has gone away first, so a session cannot be left dialling
