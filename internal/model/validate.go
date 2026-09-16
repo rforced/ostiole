@@ -100,6 +100,20 @@ func (c *Config) Validate() error {
 		} else if in.IPv4.Mode == AddrPPP || in.IPv6.Mode == AddrPPP {
 			v.add(path+".ipv4.mode", "only a PPPoE interface takes its address from a dialled session")
 		}
+		if in.BlockPrivate || in.BlockBogons {
+			// These drop traffic by source address, so an interface that is
+			// itself on such a network would cut itself off.
+			if in.BlockPrivate && isPrivatePrefix(in.IPv4.Address) {
+				v.add(path+".blockPrivate",
+					"%s is itself a private address, so blocking private sources here would cut this network off",
+					in.IPv4.Address)
+			}
+			if z, ok := c.Zone(in.Zone); in.Zone != "" && ok && !z.External {
+				v.add(path+".blockPrivate",
+					"zone %q is internal; blocking sources by address belongs on an interface facing the internet",
+					in.Zone)
+			}
+		}
 		if kinds := builtFrom(in); len(kinds) > 1 {
 			v.add(path+".kind", "an interface is one thing at a time, and this one is %s",
 				strings.Join(kinds, " and "))
@@ -652,6 +666,25 @@ func (v *validator) dhcpv6(c *Config, ifaces map[string]bool) {
 }
 
 // wireguard checks a tunnel's keys, peers, and addressing.
+// isPrivatePrefix reports whether a configured address sits in one of the
+// ranges the private block would drop.
+func isPrivatePrefix(addr string) bool {
+	p, err := netip.ParsePrefix(addr)
+	if err != nil {
+		return false
+	}
+	for _, s := range PrivateSources {
+		block, err := netip.ParsePrefix(s)
+		if err != nil {
+			continue
+		}
+		if block.Contains(p.Addr()) {
+			return true
+		}
+	}
+	return false
+}
+
 // builtFrom names every kind an interface claims to be. More than one is
 // a contradiction.
 func builtFrom(in Interface) []string {
@@ -1013,6 +1046,14 @@ func (v *validator) system(s *System) {
 			v.add("system."+field, "%q must be an http or https URL", tmpl)
 		} else if !strings.Contains(tmpl, "{country}") {
 			v.add("system."+field, "the URL needs {country} in it, which is replaced with the code")
+		}
+	}
+	for field, u := range map[string]string{"bogonV4Url": s.BogonV4URL, "bogonV6Url": s.BogonV6URL} {
+		if u == "" {
+			continue
+		}
+		if parsed, err := url.Parse(u); err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" {
+			v.add("system."+field, "%q must be an http or https URL", u)
 		}
 	}
 	if s.Hostname != "" && !hostnameRe.MatchString(s.Hostname) {

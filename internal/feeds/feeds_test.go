@@ -253,3 +253,85 @@ func TestRefreshPeriodFloor(t *testing.T) {
 		t.Errorf("period = %v", got)
 	}
 }
+
+// The bogon list is fetched like any other feed, but nobody writes it as
+// an alias: an interface asks for it by turning its block on.
+func TestBogonListIsFetchedWhenAnInterfaceAsks(t *testing.T) {
+	t.Parallel()
+	hits := map[string]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits[r.URL.Path]++
+		if strings.Contains(r.URL.Path, "v6") {
+			_, _ = w.Write([]byte("2001:db8::/32\n"))
+			return
+		}
+		_, _ = w.Write([]byte("192.0.2.0/24\n198.51.100.0/24\n"))
+	}))
+	defer srv.Close()
+
+	cfg := config()
+	cfg.System.BogonV4URL = srv.URL + "/v4.txt"
+	cfg.System.BogonV6URL = srv.URL + "/v6.txt"
+
+	// Nothing blocks bogons yet, so nothing is fetched.
+	r := &Refresher{
+		Cache:   NewCache(t.TempDir()),
+		Fetcher: NewFetcher("test"),
+		Source:  func() *model.Config { return cfg },
+		Log:     slog.New(slog.DiscardHandler),
+	}
+	r.Tick(context.Background(), true)
+	if len(hits) != 0 {
+		t.Fatalf("fetched %v with nothing asking for it", hits)
+	}
+
+	cfg.Interfaces[0].BlockBogons = true
+	r.Tick(context.Background(), true)
+	if hits["/v4.txt"] != 1 || hits["/v6.txt"] != 1 {
+		t.Fatalf("hits = %v, want one per family", hits)
+	}
+	got := r.Cache.Entries()[BogonAlias]
+	if len(got) != 3 {
+		t.Errorf("cached %v, want both families", got)
+	}
+
+	// It is reported beside the aliases, so the page can say when it was
+	// last updated.
+	found := false
+	for _, s := range r.Cache.Statuses(cfg) {
+		if s.Alias == BogonAlias {
+			found = true
+			if s.Entries != 3 || s.Stale || len(s.Sources) != 2 {
+				t.Errorf("status = %+v", s)
+			}
+		}
+	}
+	if !found {
+		t.Error("the bogon list is not reported")
+	}
+
+	// Turning the block off again drops the cached list.
+	cfg.Interfaces[0].BlockBogons = false
+	r.Tick(context.Background(), true)
+	if got := r.Cache.Entries()[BogonAlias]; len(got) != 0 {
+		t.Errorf("the list outlived the block: %v", got)
+	}
+}
+
+// A refreshed bogon list has to reach the sets the rules already match
+// on, without rebuilding the ruleset.
+func TestSetFragmentCarriesTheBogons(t *testing.T) {
+	t.Parallel()
+	cfg := config()
+	cfg.Interfaces[0].BlockBogons = true
+	got := SetFragment(cfg, map[string][]string{BogonAlias: {"192.0.2.0/24", "2001:db8::/32"}})
+	for _, want := range []string{
+		"flush set inet ostiole bogons_v4",
+		"add element inet ostiole bogons_v4 { 192.0.2.0/24 }",
+		"add element inet ostiole bogons_v6 { 2001:db8::/32 }",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("fragment is missing %q:\n%s", want, got)
+		}
+	}
+}

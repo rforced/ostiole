@@ -174,6 +174,10 @@ type System struct {
 	// uses the defaults.
 	GeoIPv4URL string `json:"geoIPv4Url,omitempty"`
 	GeoIPv6URL string `json:"geoIPv6Url,omitempty"`
+	// BogonV4URL and BogonV6URL are where the list of unallocated
+	// prefixes comes from; empty uses the defaults.
+	BogonV4URL string `json:"bogonV4Url,omitempty"`
+	BogonV6URL string `json:"bogonV6Url,omitempty"`
 }
 
 // Default sources for country address lists.
@@ -236,6 +240,65 @@ type Interface struct {
 	// and some fibre services are delivered.
 	PPPoE *PPPoE `json:"pppoe,omitempty"`
 	MTU   int    `json:"mtu,omitempty"`
+
+	// LogDrops overrides system.management.logDefaultDrops for traffic
+	// arriving here: a WAN worth watching can log while a busy LAN stays
+	// quiet. Unset follows the system setting.
+	LogDrops *bool `json:"logDrops,omitempty"`
+	// BlockPrivate drops traffic arriving here from addresses that cannot
+	// legitimately come from the internet: RFC 1918, RFC 4193 unique local
+	// addresses, and loopback. Turn it on for a WAN, and off if the
+	// provider addresses that WAN privately.
+	BlockPrivate bool `json:"blockPrivate,omitempty"`
+	// BlockBogons drops traffic from prefixes IANA has not allocated,
+	// which have no business being a source address. The list is fetched
+	// and refreshed like a blocklist. It belongs on a WAN only.
+	BlockBogons bool `json:"blockBogons,omitempty"`
+}
+
+// LogsDrops reports whether packets dropped by the default policy on this
+// interface should be logged, given the system default.
+func (i Interface) LogsDrops(def bool) bool {
+	if i.LogDrops != nil {
+		return *i.LogDrops
+	}
+	return def
+}
+
+// PrivateSources are the addresses that cannot legitimately be the source
+// of traffic arriving from the internet: RFC 1918, RFC 4193, and
+// loopback. Link-local is deliberately absent — IPv6 needs fe80::/10 for
+// neighbour discovery and for the router advertisements that carry the
+// default route, and blocking it would take the WAN down.
+var PrivateSources = []string{
+	"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8",
+	"fc00::/7", "::1/128",
+}
+
+// Default sources for the bogon list: prefixes IANA has not allocated.
+const (
+	DefaultBogonV4URL = "https://www.team-cymru.org/Services/Bogons/fullbogons-ipv4.txt"
+	DefaultBogonV6URL = "https://www.team-cymru.org/Services/Bogons/fullbogons-ipv6.txt"
+)
+
+// BogonTemplates returns the URLs the bogon list is fetched from.
+func (s System) BogonTemplates() (v4, v6 string) {
+	v4, v6 = s.BogonV4URL, s.BogonV6URL
+	if v4 == "" && v6 == "" {
+		return DefaultBogonV4URL, DefaultBogonV6URL
+	}
+	return v4, v6
+}
+
+// BlocksBogons reports whether any enabled interface asks for the bogon
+// list, which is what decides whether it is worth fetching.
+func (c *Config) BlocksBogons() bool {
+	for _, in := range c.Interfaces {
+		if in.Enabled && in.BlockBogons {
+			return true
+		}
+	}
+	return false
 }
 
 // PPPoE is a dialled session over Ethernet. The address, the default

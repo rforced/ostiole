@@ -89,6 +89,17 @@ function editAggregate(cfg) {
   aggOpen.value = true
 }
 
+/** The per-interface guards worth seeing at a glance. */
+function guards(c) {
+  if (!c) return []
+  const out = []
+  if (c.blockPrivate) out.push('blocks private')
+  if (c.blockBogons) out.push('blocks bogons')
+  if (c.logDrops === true) out.push('logs drops')
+  if (c.logDrops === false) out.push('drops quietly')
+  return out
+}
+
 /** A one-line description of what an interface is made of. */
 function describeKind(row) {
   const c = row.cfg
@@ -219,6 +230,9 @@ function editZone(z) {
                   }}<span v-if="row.cfg && !row.cfg.enabled" class="ml-1 text-neutral-500"
                     >(disabled)</span
                   >
+                  <div v-if="guards(row.cfg).length" class="mt-1 space-x-1">
+                    <span v-for="g in guards(row.cfg)" :key="g" class="badge">{{ g }}</span>
+                  </div>
                 </td>
                 <td class="text-right whitespace-nowrap">
                   <button

@@ -93,6 +93,17 @@ func aliasPortSet(name string) string {
 	return "alias_" + name + "_ports"
 }
 
+// Sets Ostiole defines itself rather than from an alias.
+const (
+	privateSetV4 = "private_v4"
+	privateSetV6 = "private_v6"
+	bogonSetV4   = "bogons_v4"
+	bogonSetV6   = "bogons_v6"
+	// BogonFeed is the key the fetched bogon list is cached under. It is
+	// not an alias: nobody writes it, and nothing references it by name.
+	BogonFeed = "__bogons"
+)
+
 // splitFamilies partitions parsed addresses by IP family, preserving order.
 func splitFamilies(addrs []string) (v4, v6 []string) {
 	for _, a := range addrs {
@@ -132,6 +143,38 @@ func (r *renderer) sets() {
 		for _, set := range AliasSets(a, r.entriesOf(a)) {
 			r.set(set.Name, set.Type, set.Elements, a.Description)
 		}
+	}
+	r.blockSets()
+}
+
+// blockSets defines the address sets the per-interface blocks match
+// against: a fixed list for private and loopback, and a fetched one for
+// the prefixes IANA has not allocated.
+func (r *renderer) blockSets() {
+	if len(r.interfacesBlocking(func(in model.Interface) bool { return in.BlockPrivate })) > 0 {
+		v4, v6 := splitFamilies(model.PrivateSources)
+		r.set(privateSetV4, "ipv4_addr", v4, "private and loopback addresses")
+		r.set(privateSetV6, "ipv6_addr", v6, "unique local and loopback addresses")
+	}
+	if len(r.interfacesBlocking(func(in model.Interface) bool { return in.BlockBogons })) > 0 {
+		v4, v6 := splitFamilies(r.feeds[BogonFeed])
+		// Both sets exist whether or not today's list fills them, so a
+		// refresh has somewhere to put tomorrow's.
+		r.set(bogonSetV4, "ipv4_addr", v4, "prefixes IANA has not allocated")
+		r.set(bogonSetV6, "ipv6_addr", v6, "prefixes IANA has not allocated")
+	}
+}
+
+// BlockSets lists the sets the bogon list fills, so a refresh can replace
+// their contents without rebuilding the ruleset.
+func BlockSets(cfg *model.Config, entries []string) []Set {
+	if !cfg.BlocksBogons() {
+		return nil
+	}
+	v4, v6 := splitFamilies(entries)
+	return []Set{
+		{Name: bogonSetV4, Type: "ipv4_addr", Elements: v4},
+		{Name: bogonSetV6, Type: "ipv6_addr", Elements: v6},
 	}
 }
 
@@ -201,6 +244,7 @@ func (r *renderer) chainInput() {
 		r.line(`iifname "lo" accept`)
 		r.line("ct state established,related accept")
 		r.line("ct state invalid drop")
+		r.blockedSources("input")
 		// Error messages that IPv4 needs to function (no echo: that is a user rule).
 		r.line("icmp type { destination-unreachable, time-exceeded, parameter-problem } accept")
 		// Neighbour discovery, MLD, and error messages that IPv6 cannot work without.
@@ -300,6 +344,7 @@ func (r *renderer) chainForward() {
 		r.line("type filter hook forward priority filter; policy drop;")
 		r.line("ct state established,related accept")
 		r.line("ct state invalid drop")
+		r.blockedSources("forward")
 		if r.hasPortForwards() {
 			r.line(`ct status dnat counter accept comment "port-forwards"`)
 		}
@@ -349,12 +394,104 @@ func (r *renderer) zoneDispatch() {
 	}
 }
 
+// defaultDrop ends a base chain. Every interface can decide for itself
+// whether a packet dropped here is logged, so the common case stays one
+// rule and only a box with an exception pays for two.
+//
+// The log line carries no interface name because it does not need one:
+// the kernel tells the log listener which interface a packet arrived on.
 func (r *renderer) defaultDrop(chain string) {
-	if r.cfg.System.Management.LogDefaultDrops {
-		r.line(fmt.Sprintf(`counter log prefix "ostiole:%s:drop: " group %d comment "default-drop"`, chain, LogGroup))
+	logging := fmt.Sprintf(`counter log prefix "ostiole:%s:drop: " group %d comment "default-drop"`, chain, LogGroup)
+	quiet := `counter comment "default-drop"`
+
+	def := r.cfg.System.Management.LogDefaultDrops
+	var exceptions []string
+	for _, in := range r.cfg.Interfaces {
+		if in.Enabled && in.LogDrops != nil && *in.LogDrops != def {
+			exceptions = append(exceptions, in.Name)
+		}
+	}
+	if len(exceptions) == 0 {
+		if def {
+			r.line(logging)
+			return
+		}
+		r.line(quiet)
 		return
 	}
-	r.line(`counter comment "default-drop"`)
+
+	// The exceptions get an explicit verdict so they stop here; everything
+	// else, including traffic on an interface Ostiole knows nothing about,
+	// falls through to the chain's own behaviour.
+	if def {
+		r.line(fmt.Sprintf(`iifname %s counter drop comment "default-drop:quiet"`, ifnameSet(exceptions)))
+		r.line(logging)
+		return
+	}
+	r.line(fmt.Sprintf(`iifname %s counter log prefix "ostiole:%s:drop: " group %d drop comment "default-drop:logged"`,
+		ifnameSet(exceptions), chain, LogGroup))
+	r.line(quiet)
+}
+
+// blockedSources drops traffic whose source address has no business
+// arriving on this interface. It sits after the state check, so a flow
+// that is already up is not cut, and before everything that accepts, so
+// no later rule can let a spoofed source in.
+func (r *renderer) blockedSources(chain string) {
+	private := r.interfacesBlocking(func(in model.Interface) bool { return in.BlockPrivate })
+	bogons := r.interfacesBlocking(func(in model.Interface) bool { return in.BlockBogons })
+	if len(private) == 0 && len(bogons) == 0 {
+		return
+	}
+	def := r.cfg.System.Management.LogDefaultDrops
+
+	emit := func(ifs []string, kind, set4, set6 string) {
+		if len(ifs) == 0 {
+			return
+		}
+		// Interfaces that log their drops log these too; the rest are split
+		// out so one noisy WAN does not make every other interface chatty.
+		var loud, quiet []string
+		for _, name := range ifs {
+			in, _ := r.cfg.Interface(name)
+			if in.LogsDrops(def) {
+				loud = append(loud, name)
+			} else {
+				quiet = append(quiet, name)
+			}
+		}
+		for _, fam := range []struct {
+			prefix string
+			set    string
+		}{{"ip", set4}, {"ip6", set6}} {
+			if fam.set == "" {
+				continue
+			}
+			if len(loud) > 0 {
+				r.line(fmt.Sprintf(`iifname %s %s saddr @%s counter log prefix "ostiole:%s:%s: " group %d drop comment "%s"`,
+					ifnameSet(loud), fam.prefix, fam.set, chain, kind, LogGroup, kind))
+			}
+			if len(quiet) > 0 {
+				r.line(fmt.Sprintf(`iifname %s %s saddr @%s counter drop comment "%s"`,
+					ifnameSet(quiet), fam.prefix, fam.set, kind))
+			}
+		}
+	}
+	emit(private, "block-private", privateSetV4, privateSetV6)
+	// Both families are always matched: the sets exist whether or not
+	// today's list filled them, so a refresh needs no new rules.
+	emit(bogons, "block-bogons", bogonSetV4, bogonSetV6)
+}
+
+// interfacesBlocking lists the enabled interfaces that want a block.
+func (r *renderer) interfacesBlocking(want func(model.Interface) bool) []string {
+	var out []string
+	for _, in := range r.cfg.Interfaces {
+		if in.Enabled && want(in) {
+			out = append(out, in.Name)
+		}
+	}
+	return out
 }
 
 // ---- zone chains ---------------------------------------------------------

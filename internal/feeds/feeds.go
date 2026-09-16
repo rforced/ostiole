@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/rforced/ostiole/internal/model"
+	"github.com/rforced/ostiole/internal/nft"
 )
 
 // Limits on what a feed may be. A blocklist with a million entries is
@@ -154,10 +155,8 @@ func (c *Cache) Forget(alias string) {
 // Prune removes cached feeds for aliases the configuration no longer has.
 func (c *Cache) Prune(cfg *model.Config) {
 	keep := map[string]bool{}
-	for _, a := range cfg.Aliases {
-		if IsFeed(a) {
-			keep[a.Name] = true
-		}
+	for _, a := range Wanted(cfg) {
+		keep[a.Name] = true
 	}
 	c.mu.RLock()
 	var gone []string
@@ -192,10 +191,7 @@ func (c *Cache) Statuses(cfg *model.Config) []Status {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	now := time.Now()
-	for _, a := range cfg.Aliases {
-		if !IsFeed(a) {
-			continue
-		}
+	for _, a := range Wanted(cfg) {
 		st := Status{Alias: a.Name, Sources: Sources(cfg, a)}
 		if f, ok := c.loaded[a.Name]; ok {
 			st.Entries = len(f.Entries)
@@ -215,9 +211,40 @@ func (c *Cache) Statuses(cfg *model.Config) []Status {
 	return out
 }
 
+// BogonAlias is the name the bogon list is cached under. Nobody writes
+// it as an alias: interfaces ask for it by turning on their bogon block.
+const BogonAlias = nft.BogonFeed
+
+// BogonFeed describes the bogon list in the same shape as an alias, so
+// one fetcher, one cache, and one status list cover it too. Its sources
+// are filled in by Sources, which knows it has one per family.
+func BogonFeed() model.Alias {
+	return model.Alias{
+		Name:         BogonAlias,
+		Type:         model.AliasHosts,
+		Description:  "prefixes IANA has not allocated",
+		RefreshHours: 24,
+	}
+}
+
+// Wanted lists everything this configuration needs fetched: the aliases
+// that name a source, and the bogon list when an interface blocks it.
+func Wanted(cfg *model.Config) []model.Alias {
+	var out []model.Alias
+	for _, a := range cfg.Aliases {
+		if IsFeed(a) {
+			out = append(out, a)
+		}
+	}
+	if cfg.BlocksBogons() {
+		out = append(out, BogonFeed())
+	}
+	return out
+}
+
 // IsFeed reports whether an alias takes its entries from elsewhere.
 func IsFeed(a model.Alias) bool {
-	return a.URL != "" || a.Type == model.AliasGeoIP
+	return a.URL != "" || a.Type == model.AliasGeoIP || a.Name == BogonAlias
 }
 
 // RefreshPeriod is how often a feed should be fetched.
@@ -235,6 +262,16 @@ func RefreshPeriod(a model.Alias) time.Duration {
 // Sources lists the URLs an alias is built from: its own, or one per
 // country and address family for a GeoIP alias.
 func Sources(cfg *model.Config, a model.Alias) []string {
+	if a.Name == BogonAlias {
+		v4, v6 := cfg.System.BogonTemplates()
+		var out []string
+		for _, u := range []string{v4, v6} {
+			if u != "" {
+				out = append(out, u)
+			}
+		}
+		return out
+	}
 	if a.Type != model.AliasGeoIP {
 		if a.URL == "" {
 			return nil

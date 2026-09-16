@@ -31,6 +31,9 @@ function blank() {
       subnetId: 0,
     },
     mtu: 0,
+    logDrops: 'inherit',
+    blockPrivate: false,
+    blockBogons: false,
   }
 }
 
@@ -42,6 +45,7 @@ watch(
     form.value = {
       ...blank(),
       ...JSON.parse(JSON.stringify(src)),
+      logDrops: src.logDrops === undefined ? 'inherit' : src.logDrops ? 'on' : 'off',
       ipv4: { mode: 'none', address: '', gateway: '', ...src.ipv4 },
       ipv6: {
         mode: 'none',
@@ -59,6 +63,21 @@ watch(
 
 const title = computed(() => `Interface ${form.value.name}`)
 
+/** What the system setting does when an interface says nothing. */
+const systemLogsDrops = computed(() => config.draft?.system?.management?.logDefaultDrops ?? false)
+
+/** Blocking by source address belongs on an interface facing the internet. */
+const external = computed(
+  () => config.zones.find((z) => z.name === form.value.zone)?.external ?? false,
+)
+
+/** An interface on a private network would cut itself off. */
+const privateItself = computed(() => {
+  const addr = form.value.ipv4.address
+  if (form.value.ipv4.mode !== 'static' || !addr) return false
+  return /^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(addr)
+})
+
 /** Interfaces that ask an upstream for a prefix, which this one can share. */
 const upstreams = computed(() =>
   config.interfaces.filter((i) => i.name !== form.value.name && i.ipv6?.prefixHint),
@@ -66,6 +85,10 @@ const upstreams = computed(() =>
 
 function save() {
   const out = JSON.parse(JSON.stringify(form.value))
+  if (out.logDrops === 'inherit') delete out.logDrops
+  else out.logDrops = out.logDrops === 'on'
+  if (!out.blockPrivate) delete out.blockPrivate
+  if (!out.blockBogons) delete out.blockBogons
   if (out.ipv4.mode !== 'static') out.ipv4.address = ''
   if (out.ipv6.mode !== 'static') out.ipv6.address = ''
   if (out.ipv6.mode !== 'dhcp') out.ipv6.prefixHint = ''
@@ -230,6 +253,71 @@ function save() {
           class="input w-32"
         />
       </FormField>
+
+      <fieldset class="space-y-3 rounded-md border border-neutral-200 p-3 dark:border-neutral-800">
+        <legend class="px-1 text-sm font-medium">Traffic arriving here</legend>
+        <FormField
+          id="if-logdrops"
+          label="Log packets dropped by the default policy"
+          hint="A WAN worth watching can log while a busy LAN stays quiet. The log already records which interface a packet arrived on."
+        >
+          <select id="if-logdrops" v-model="form.logDrops" class="input">
+            <option value="inherit">
+              Follow the system setting ({{ systemLogsDrops ? 'on' : 'off' }})
+            </option>
+            <option value="on">Always log</option>
+            <option value="off">Never log</option>
+          </select>
+        </FormField>
+
+        <label class="flex items-start gap-2 text-sm">
+          <input
+            v-model="form.blockPrivate"
+            type="checkbox"
+            class="mt-0.5 size-4 rounded border-neutral-300"
+          />
+          <span>
+            Block private and loopback sources
+            <span class="block text-neutral-500">
+              Drops traffic arriving here from 10/8, 172.16/12, 192.168/16, 127/8, and fc00::/7.
+              Those cannot legitimately come from the internet, so on a WAN they are spoofed or
+              misconfigured. Link-local is not blocked: IPv6 needs it for neighbour discovery and
+              for the default route.
+            </span>
+          </span>
+        </label>
+        <p
+          v-if="form.blockPrivate && privateItself"
+          role="note"
+          class="text-sm text-amber-700 dark:text-amber-400"
+        >
+          This interface is itself on a private network, so blocking private sources here would cut
+          it off.
+        </p>
+
+        <label class="flex items-start gap-2 text-sm">
+          <input
+            v-model="form.blockBogons"
+            type="checkbox"
+            class="mt-0.5 size-4 rounded border-neutral-300"
+          />
+          <span>
+            Block bogon sources
+            <span class="block text-neutral-500">
+              Drops traffic from prefixes nobody has been allocated, which should never appear as a
+              source address. The list is fetched and refreshed daily, like a blocklist.
+            </span>
+          </span>
+        </label>
+        <p
+          v-if="(form.blockPrivate || form.blockBogons) && form.zone && !external"
+          role="note"
+          class="text-sm text-amber-700 dark:text-amber-400"
+        >
+          Zone {{ form.zone }} is internal. Blocking by source address belongs on an interface
+          facing the internet; here it can drop traffic you need.
+        </p>
+      </fieldset>
 
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" class="btn-secondary" @click="open = false">Cancel</button>

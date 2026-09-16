@@ -55,13 +55,20 @@ const dns = computed({
         />
       </FormField>
     </div>
-    <label class="flex items-center gap-2 text-sm">
+    <label class="flex items-start gap-2 text-sm">
       <input
         v-model="management.logDefaultDrops"
         type="checkbox"
-        class="size-4 rounded border-neutral-300"
+        class="mt-0.5 size-4 rounded border-neutral-300"
       />
-      Log packets dropped by the default policy
+      <span>
+        Log packets dropped by the default policy
+        <span class="block text-neutral-500">
+          The default for every interface. Any one of them can say otherwise under
+          <RouterLink to="/interfaces" class="underline">Interfaces</RouterLink>, which is how a WAN
+          is watched without a busy LAN filling the log.
+        </span>
+      </span>
     </label>
   </section>
 </template>

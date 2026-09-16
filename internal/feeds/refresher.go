@@ -68,10 +68,7 @@ func (r *Refresher) Tick(ctx context.Context, force bool) {
 	}
 	r.Cache.Prune(cfg)
 	changed := false
-	for _, a := range cfg.Aliases {
-		if !IsFeed(a) {
-			continue
-		}
+	for _, a := range Wanted(cfg) {
 		if !force && !r.due(a) {
 			continue
 		}
@@ -97,14 +94,17 @@ func (r *Refresher) RefreshOne(ctx context.Context, name string) (int, error) {
 	if cfg == nil {
 		return 0, fmt.Errorf("nothing is configured yet")
 	}
-	a, ok := cfg.Alias(name)
-	if !ok {
-		return 0, fmt.Errorf("no alias called %q", name)
+	var want *model.Alias
+	for _, a := range Wanted(cfg) {
+		if a.Name == name {
+			want = &a
+			break
+		}
 	}
-	if !IsFeed(*a) {
-		return 0, fmt.Errorf("alias %q has nothing to fetch", name)
+	if want == nil {
+		return 0, fmt.Errorf("nothing called %q is fetched from anywhere", name)
 	}
-	if _, err := r.refresh(ctx, cfg, *a); err != nil {
+	if _, err := r.refresh(ctx, cfg, *want); err != nil {
 		return 0, err
 	}
 	r.push(ctx, cfg)
@@ -168,6 +168,15 @@ func SetFragment(cfg *model.Config, entries map[string][]string) string {
 	var b strings.Builder
 	b.WriteString(nft.Header + "\n")
 	wrote := false
+	replace := func(sets []nft.Set) {
+		for _, set := range sets {
+			fmt.Fprintf(&b, "flush set %s %s\n", nft.Table, set.Name)
+			if len(set.Elements) > 0 {
+				fmt.Fprintf(&b, "add element %s %s { %s }\n", nft.Table, set.Name, strings.Join(set.Elements, ", "))
+			}
+			wrote = true
+		}
+	}
 	for _, a := range cfg.Aliases {
 		if !IsFeed(a) {
 			continue
@@ -176,14 +185,10 @@ func SetFragment(cfg *model.Config, entries map[string][]string) string {
 		if a.Type != model.AliasGeoIP {
 			list = append(append([]string{}, a.Entries...), list...)
 		}
-		for _, set := range nft.AliasSets(a, list) {
-			fmt.Fprintf(&b, "flush set %s %s\n", nft.Table, set.Name)
-			if len(set.Elements) > 0 {
-				fmt.Fprintf(&b, "add element %s %s { %s }\n", nft.Table, set.Name, strings.Join(set.Elements, ", "))
-			}
-			wrote = true
-		}
+		replace(nft.AliasSets(a, list))
 	}
+	// The bogon list fills sets of its own, not an alias's.
+	replace(nft.BlockSets(cfg, entries[BogonAlias]))
 	if !wrote {
 		return ""
 	}
