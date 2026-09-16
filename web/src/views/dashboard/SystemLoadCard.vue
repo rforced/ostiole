@@ -17,24 +17,29 @@ const WARN = 75
 const CRITICAL = 90
 
 /**
- * Severity colours the fill, and the track takes a light step of the same
- * hue so the state reads across the whole bar. The percentage beside it is
- * always visible and stays in ordinary ink: the colour repeats what the
- * number already says rather than being the only way to read it, which is
- * what makes the card safe for a colour-blind reader and in print.
+ * Severity colours the fill, and the track takes a washed-out step of the
+ * same hue so the state reads across the whole bar. Dark mode gets its own
+ * track rather than a flipped one: the 950 step of a ramp is still a
+ * saturated colour against a near-black surface, and at this height it
+ * reads as a full bar.
+ *
+ * The percentage beside the meter is always visible and stays in ordinary
+ * ink: the colour repeats what the number already says rather than being
+ * the only way to read it, which is what keeps the card legible to a
+ * colour-blind reader and in print.
  */
 const LEVELS = {
   ok: {
     fill: 'bg-sky-600 dark:bg-sky-500',
-    track: 'bg-sky-100 dark:bg-sky-950',
+    track: 'bg-sky-100 dark:bg-sky-500/20',
   },
   warn: {
     fill: 'bg-amber-500 dark:bg-amber-400',
-    track: 'bg-amber-100 dark:bg-amber-950',
+    track: 'bg-amber-100 dark:bg-amber-400/20',
   },
   critical: {
     fill: 'bg-red-600 dark:bg-red-500',
-    track: 'bg-red-100 dark:bg-red-950',
+    track: 'bg-red-100 dark:bg-red-500/20',
   },
 }
 
@@ -55,45 +60,52 @@ function meter(label, percent, detail) {
   return { label, percent: pct, detail, level: levelOf(pct) }
 }
 
+/** The filesystem the meter shows: the root one, or whatever came first. */
+const rootDisk = computed(() => {
+  const all = (props.stats?.filesystems ?? []).filter((fs) => fs.total)
+  return all.find((fs) => fs.path === '/') ?? all[0] ?? null
+})
+
+/**
+ * A second filesystem, when the configuration lives on one of its own. It
+ * goes in the list below rather than the row: three meters is the shape of
+ * the card, and a fourth one wrapping onto its own line reads as a fault.
+ */
+const otherDisk = computed(
+  () =>
+    (props.stats?.filesystems ?? []).filter((fs) => fs.total && fs !== rootDisk.value)[0] ?? null,
+)
+
 const meters = computed(() => {
   const s = props.stats
   if (!s) return [blank('CPU'), blank('Memory'), blank('Disk')]
-  const out = []
 
-  out.push(
+  const cpu =
     s.cpuPercent === null || s.cpuPercent === undefined
       ? blank('CPU')
-      : meter('CPU', s.cpuPercent, `${s.cores || '?'} core${s.cores === 1 ? '' : 's'}`),
-  )
+      : meter('CPU', s.cpuPercent, `${s.cores || '?'} core${s.cores === 1 ? '' : 's'}`)
 
+  let memory = blank('Memory')
   if (s.memTotal) {
     const used = s.memTotal - s.memAvailable
-    out.push(
-      meter(
-        'Memory',
-        (used / s.memTotal) * 100,
-        `${formatBytes(used)} of ${formatBytes(s.memTotal)}`,
-      ),
+    memory = meter(
+      'Memory',
+      (used / s.memTotal) * 100,
+      `${formatBytes(used)} of ${formatBytes(s.memTotal)}`,
     )
-  } else {
-    out.push(blank('Memory'))
   }
 
-  // The root filesystem is the one that matters; a box that keeps /etc
-  // apart gets that meter too.
-  for (const fs of s.filesystems ?? []) {
-    if (!fs.total) continue
+  let disk = blank('Disk')
+  const fs = rootDisk.value
+  if (fs) {
     const used = fs.total - fs.free
-    out.push(
-      meter(
-        fs.path === '/' ? 'Disk' : `Disk ${fs.path}`,
-        (used / fs.total) * 100,
-        `${formatBytes(used)} of ${formatBytes(fs.total)}`,
-      ),
+    disk = meter(
+      'Disk',
+      (used / fs.total) * 100,
+      `${formatBytes(used)} of ${formatBytes(fs.total)}`,
     )
   }
-  if (out.length === 2) out.push(blank('Disk'))
-  return out
+  return [cpu, memory, disk]
 })
 
 const swap = computed(() => {
@@ -163,6 +175,14 @@ const swap = computed(() => {
       <template v-if="swap">
         <dt>Swap</dt>
         <dd>{{ swap }}</dd>
+      </template>
+
+      <template v-if="otherDisk">
+        <dt class="font-mono">{{ otherDisk.path }}</dt>
+        <dd>
+          {{ formatBytes(otherDisk.total - otherDisk.free) }} of
+          {{ formatBytes(otherDisk.total) }} used
+        </dd>
       </template>
     </dl>
   </section>
