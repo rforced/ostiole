@@ -111,6 +111,7 @@ export const api = {
   },
   /** Live gateway health from the multi-WAN monitor. */
   gateways: () => get('/gateways'),
+  policy: () => get('/policy'),
   diagnostics: {
     ping: (body) => post('/diagnostics/ping', body),
     traceroute: (body) => post('/diagnostics/traceroute', body),

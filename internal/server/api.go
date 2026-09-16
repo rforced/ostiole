@@ -19,6 +19,7 @@ import (
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
+	"github.com/rforced/ostiole/internal/policy"
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/store"
 	"github.com/rforced/ostiole/internal/update"
@@ -65,6 +66,7 @@ func (a *api) register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/dhcp/leases", a.protect(a.dhcpLeases))
 	mux.HandleFunc("POST /api/v1/wireguard/keys", a.protect(a.wireguardKeys))
 	mux.HandleFunc("GET /api/v1/gateways", a.protect(a.gatewayStatus))
+	mux.HandleFunc("GET /api/v1/policy", a.protect(a.policyStatus))
 	mux.HandleFunc("GET /api/v1/update/check", a.protect(a.updateCheck))
 	mux.HandleFunc("GET /api/v1/update/status", a.protect(a.updateStatus))
 	mux.HandleFunc("POST /api/v1/update/apply", a.protect(a.updateApply))
@@ -115,6 +117,63 @@ func (a *api) gatewayStatus(w http.ResponseWriter, _ *http.Request) error {
 	out := []gateway.Status{}
 	if a.gateways != nil {
 		out = a.gateways.Statuses()
+	}
+	writeJSON(w, http.StatusOK, out)
+	return nil
+}
+
+// policyTarget is one gateway or group as policy routing sees it: the
+// mark the firewall sets, the table that answers it, and where that table
+// currently points.
+type policyTarget struct {
+	policy.Target
+	// Rules counts the enabled firewall rules routing through this target.
+	Rules int `json:"rules"`
+	// NextHops are the addresses traffic goes to right now; empty means
+	// the target has nothing to offer and traffic falls back or is
+	// blocked.
+	NextHops []string `json:"nextHops"`
+}
+
+// policyStatus explains where marked traffic goes. It reads the saved
+// configuration rather than the draft, because that is what the kernel is
+// acting on.
+func (a *api) policyStatus(w http.ResponseWriter, _ *http.Request) error {
+	out := []policyTarget{}
+	cfg, err := a.engine.Store().Load()
+	if err != nil {
+		writeJSON(w, http.StatusOK, out)
+		return nil //nolint:nilerr // nothing saved yet is not an error here
+	}
+	hops := map[string]policy.Hop{}
+	if a.gateways != nil {
+		for _, s := range a.gateways.Statuses() {
+			hops[s.Name] = policy.Hop{
+				Gateway:   s.Name,
+				Address:   s.Address,
+				Interface: s.Interface,
+				Online:    s.Online || s.Unknown,
+			}
+		}
+	}
+	for _, t := range policy.Plan(cfg, hops) {
+		pt := policyTarget{Target: t, NextHops: []string{}}
+		for _, r := range cfg.Rules {
+			if r.Enabled && r.Gateway == t.Name {
+				pt.Rules++
+			}
+		}
+		for _, tier := range t.Tiers {
+			for _, h := range tier {
+				if h.Online && h.Address != "" {
+					pt.NextHops = append(pt.NextHops, h.Address)
+				}
+			}
+			if len(pt.NextHops) > 0 {
+				break
+			}
+		}
+		out = append(out, pt)
 	}
 	writeJSON(w, http.StatusOK, out)
 	return nil

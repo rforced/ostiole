@@ -138,7 +138,12 @@ function toggle(rule) {
             <td class="font-mono text-xs">{{ r.protocol }}</td>
             <td class="font-mono text-xs">{{ describe(r.source, true) }}</td>
             <td class="font-mono text-xs">{{ describe(r.destination, true) }}</td>
-            <td class="font-mono text-xs">{{ r.destZone ?? '' }}</td>
+            <td class="font-mono text-xs">
+              <span v-if="r.gateway" class="badge" :title="`Routed through ${r.gateway}`"
+                >→ {{ r.gateway }}</span
+              >
+              <template v-else>{{ r.destZone ?? '' }}</template>
+            </td>
             <td>{{ r.description }}</td>
             <td class="text-right font-mono text-xs tabular-nums">
               {{ counters[r.id]?.packets ?? '' }}

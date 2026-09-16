@@ -9,6 +9,7 @@ import { api } from '@/lib/api'
 import { newId } from '@/lib/ids'
 import { useConfigStore } from '@/stores/config'
 import GatewayDialog from '@/views/routing/GatewayDialog.vue'
+import GatewayGroupDialog from '@/views/routing/GatewayGroupDialog.vue'
 
 const config = useConfigStore()
 const open = ref(false)
@@ -16,7 +17,10 @@ const editing = ref(null)
 const form = ref(blank())
 const gwOpen = ref(false)
 const gwEditing = ref(null)
+const groupOpen = ref(false)
+const groupEditing = ref(null)
 const live = ref([])
+const policy = ref([])
 let timer = null
 
 /** Configured gateways merged with what the monitor sees. */
@@ -24,11 +28,27 @@ const gatewayRows = computed(() =>
   config.gateways.map((g) => ({ ...g, live: live.value.find((l) => l.name === g.name) ?? null })),
 )
 
+/** Groups merged with where the kernel currently sends their traffic. */
+const groupRows = computed(() =>
+  config.gatewayGroups.map((g) => ({
+    ...g,
+    policy: policy.value.find((p) => p.name === g.name) ?? null,
+  })),
+)
+
+/** Rules that pick a gateway, which is what policy routing exists for. */
+const policyRules = computed(() => config.rules.filter((r) => r.gateway))
+
 async function refreshGateways() {
   try {
     live.value = await api.gateways()
   } catch {
     live.value = []
+  }
+  try {
+    policy.value = await api.policy()
+  } catch {
+    policy.value = []
   }
 }
 
@@ -39,6 +59,27 @@ function addGateway() {
 function editGateway(g) {
   gwEditing.value = g
   gwOpen.value = true
+}
+function addGroup() {
+  groupEditing.value = null
+  groupOpen.value = true
+}
+function editGroup(g) {
+  groupEditing.value = g
+  groupOpen.value = true
+}
+
+/** Summarises a group's members as the tiers they fail over through. */
+function tierSummary(group) {
+  const tiers = new Map()
+  for (const m of group.members ?? []) {
+    const tier = m.tier ?? 0
+    tiers.set(tier, [...(tiers.get(tier) ?? []), m.gateway])
+  }
+  return [...tiers.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, names]) => names.join(' + '))
+    .join(' → ')
 }
 
 function blank() {
@@ -151,7 +192,11 @@ function save() {
                   <ConfirmButton
                     class="ml-3"
                     label="Delete"
-                    confirm-label="Delete gateway?"
+                    :confirm-label="
+                      config.gatewayReferences(g.name).length
+                        ? `Used by ${config.gatewayReferences(g.name).join(', ')}. Delete anyway?`
+                        : 'Delete gateway?'
+                    "
                     @confirm="config.removeGateway(g.name)"
                   />
                 </td>
@@ -159,6 +204,90 @@ function save() {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section class="space-y-3" aria-labelledby="gg-title">
+        <div class="flex items-center gap-3">
+          <h2 id="gg-title" class="font-medium">Gateway groups</h2>
+          <button
+            type="button"
+            class="btn-secondary"
+            :disabled="!config.gateways.length"
+            @click="addGroup"
+          >
+            <Plus class="mr-1 size-4" aria-hidden="true" /> Add group
+          </button>
+        </div>
+        <p class="max-w-3xl text-sm text-neutral-500">
+          A group is what a firewall rule points at when it should not follow the default route: the
+          lowest tier that is up carries the traffic, and gateways in the same tier share it.
+        </p>
+        <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Group</th>
+                <th>Members</th>
+                <th>When all are down</th>
+                <th>Rules</th>
+                <th>Next hop</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="!groupRows.length">
+                <td colspan="6" class="text-neutral-500">
+                  <template v-if="config.gateways.length">
+                    No groups. Add one to route some rules over a different line.
+                  </template>
+                  <template v-else> Add a gateway first; a group is made of them. </template>
+                </td>
+              </tr>
+              <tr v-for="g in groupRows" :key="g.name" :class="{ 'opacity-50': !g.enabled }">
+                <td>
+                  <div class="font-mono font-medium">{{ g.name }}</div>
+                  <div class="text-xs text-neutral-500">{{ g.description }}</div>
+                </td>
+                <td class="font-mono text-xs">{{ tierSummary(g) || '—' }}</td>
+                <td class="text-xs">
+                  <span v-if="g.onDown === 'block'" class="badge badge-warn">drop</span>
+                  <span v-else class="text-neutral-500">default route</span>
+                </td>
+                <td class="font-mono text-xs">{{ g.policy?.rules ?? 0 }}</td>
+                <td class="font-mono text-xs">
+                  <template v-if="g.policy?.nextHops?.length">
+                    {{ g.policy.nextHops.join(', ') }}
+                  </template>
+                  <span v-else-if="g.onDown === 'block'" class="badge badge-warn"
+                    >blocking traffic</span
+                  >
+                  <span v-else class="text-neutral-500">default route</span>
+                </td>
+                <td class="text-right whitespace-nowrap">
+                  <button type="button" class="link" @click="editGroup(g)">Edit</button>
+                  <ConfirmButton
+                    class="ml-3"
+                    label="Delete"
+                    :confirm-label="
+                      config.gatewayReferences(g.name).length
+                        ? `Used by ${config.gatewayReferences(g.name).join(', ')}. Delete anyway?`
+                        : 'Delete group?'
+                    "
+                    @confirm="config.removeGatewayGroup(g.name)"
+                  />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p v-if="policyRules.length" class="text-sm text-neutral-500">
+          <span class="font-medium">Policy routing is in use:</span>
+          <template v-for="(r, i) in policyRules" :key="r.id">
+            <span v-if="i">,</span>
+            <RouterLink to="/firewall" class="underline"> {{ r.id }}</RouterLink>
+            → {{ r.gateway }}
+          </template>
+        </p>
       </section>
 
       <h2 class="font-medium">Static routes</h2>
@@ -201,6 +330,7 @@ function save() {
     </template>
 
     <GatewayDialog v-model:open="gwOpen" :gateway="gwEditing" />
+    <GatewayGroupDialog v-model:open="groupOpen" :group="groupEditing" />
 
     <AppDialog v-model:open="open" :title="editing ? `Route ${editing.id}` : 'New static route'">
       <form class="space-y-4" @submit.prevent="save">

@@ -152,12 +152,33 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	// Rules may name a gateway or a group, so both sets are collected
+	// before the rules are walked.
+	routeTargets := map[string]bool{}
+	for _, g := range c.Gateways {
+		routeTargets[g.Name] = true
+	}
+	for _, g := range c.GatewayGroups {
+		routeTargets[g.Name] = true
+	}
+
 	ids := map[string]bool{}
 	for i, r := range c.Rules {
 		path := fmt.Sprintf("rules[%d]", i)
 		v.id(path+".id", r.ID, ids)
 		if r.Schedule != "" && !schedules[r.Schedule] {
 			v.add(path+".schedule", "unknown schedule %q", r.Schedule)
+		}
+		if r.Gateway != "" {
+			switch {
+			case !routeTargets[r.Gateway]:
+				v.add(path+".gateway", "unknown gateway or gateway group %q", r.Gateway)
+			case r.Action != ActionAccept:
+				v.add(path+".gateway", "only an accept rule can choose a gateway")
+			case r.DestZone != "":
+				v.add(path+".gateway", "a rule cannot pick both a gateway and a destination zone: "+
+					"the outgoing interface is decided by the gateway")
+			}
 		}
 		if !zones[r.Zone] {
 			v.add(path+".zone", "unknown zone %q", r.Zone)
@@ -289,6 +310,57 @@ func (c *Config) Validate() error {
 		if g.Priority < 0 || g.Priority > 255 {
 			v.add(path+".priority", "%d must be 0-255", g.Priority)
 		}
+	}
+
+	groups := map[string]bool{}
+	for i, g := range c.GatewayGroups {
+		path := fmt.Sprintf("gatewayGroups[%d]", i)
+		switch {
+		case !nameRe.MatchString(g.Name):
+			v.add(path+".name", "%q must match %s", g.Name, nameRe)
+		case groups[g.Name]:
+			v.add(path+".name", "duplicate gateway group %q", g.Name)
+		case gateways[g.Name]:
+			v.add(path+".name", "%q is already a gateway; a group needs its own name", g.Name)
+		}
+		groups[g.Name] = true
+		switch g.OnDown {
+		case "", OnDownFallback, OnDownBlock:
+		default:
+			v.add(path+".onDown", "unknown mode %q (fallback or block)", g.OnDown)
+		}
+		if len(g.Members) == 0 {
+			v.add(path+".members", "a group needs at least one gateway")
+		}
+		members := map[string]bool{}
+		for j, m := range g.Members {
+			mpath := fmt.Sprintf("%s.members[%d]", path, j)
+			if !gateways[m.Gateway] {
+				v.add(mpath+".gateway", "unknown gateway %q", m.Gateway)
+			} else if members[m.Gateway] {
+				v.add(mpath+".gateway", "gateway %q is in this group twice", m.Gateway)
+			}
+			members[m.Gateway] = true
+			if m.Tier < 0 || m.Tier > 255 {
+				v.add(mpath+".tier", "%d must be 0-255", m.Tier)
+			}
+		}
+	}
+
+	enabled := 0
+	for _, g := range c.Gateways {
+		if g.Enabled {
+			enabled++
+		}
+	}
+	for _, g := range c.GatewayGroups {
+		if g.Enabled {
+			enabled++
+		}
+	}
+	if enabled > MaxPolicyTargets {
+		v.add("gateways", "at most %d gateways and gateway groups can be enabled at once, found %d",
+			MaxPolicyTargets, enabled)
 	}
 
 	routeIDs := map[string]bool{}

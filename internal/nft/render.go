@@ -38,6 +38,7 @@ func Render(cfg *model.Config) (string, error) {
 	r.chainForward()
 	r.chainOutput()
 	r.zoneChains()
+	r.policyChains()
 	r.chainNATPrerouting()
 	r.chainNATPostrouting()
 	r.indent--
@@ -416,28 +417,84 @@ func (r *renderer) endpointAddr(dir string, e model.Endpoint) famExpr {
 	return f
 }
 
-func (r *renderer) rule(rule *model.Rule) {
-	var prefix []string
+// match is the part of a rule that selects packets, kept apart from the
+// verdict so the filter chains and the policy routing chains can act on
+// the same conditions.
+type match struct {
+	prefix   []string
+	src, dst famExpr
+	l4       string
+}
+
+// buildMatch renders a rule's conditions. It reports false when the rule
+// cannot be expressed, having written a comment saying why. withDestZone
+// is false in prerouting, where the outgoing interface is not known yet.
+func (r *renderer) buildMatch(rule *model.Rule, withDestZone bool) (match, bool) {
+	var m match
 	if rule.Schedule != "" {
 		sc, ok := r.cfg.Schedule(rule.Schedule)
 		if !ok {
 			r.line(fmt.Sprintf("# rule %s skipped: unknown schedule %q", rule.ID, rule.Schedule))
-			return
+			return m, false
 		}
-		prefix = append(prefix, scheduleMatch(*sc)...)
+		m.prefix = append(m.prefix, scheduleMatch(*sc)...)
 	}
-	if rule.DestZone != "" {
+	if withDestZone && rule.DestZone != "" {
 		ifs := r.cfg.ZoneInterfaces(rule.DestZone)
 		if len(ifs) == 0 {
 			r.line(fmt.Sprintf("# rule %s skipped: destination zone %q has no enabled interfaces", rule.ID, rule.DestZone))
-			return
+			return m, false
 		}
-		prefix = append(prefix, "oifname "+ifnameSet(ifs))
+		m.prefix = append(m.prefix, "oifname "+ifnameSet(ifs))
 	}
+	m.src = r.endpointAddr("saddr", rule.Source)
+	m.dst = r.endpointAddr("daddr", rule.Destination)
+	m.l4 = r.l4(rule)
+	return m, true
+}
 
-	src := r.endpointAddr("saddr", rule.Source)
-	dst := r.endpointAddr("daddr", rule.Destination)
-	l4 := r.l4(rule)
+// emit writes the rule once, or once per address family when the two ends
+// need different expressions.
+func (r *renderer) emit(id string, m match, verdict []string) {
+	one := func(addr ...string) {
+		parts := append([]string{}, m.prefix...)
+		for _, a := range addr {
+			if a != "" {
+				parts = append(parts, a)
+			}
+		}
+		if m.l4 != "" {
+			parts = append(parts, m.l4)
+		}
+		parts = append(parts, verdict...)
+		r.line(strings.Join(parts, " "))
+	}
+	if !m.src.split() && !m.dst.split() {
+		s, _ := m.src.expr(4)
+		d, _ := m.dst.expr(4)
+		one(s, d)
+		return
+	}
+	emitted := false
+	for _, fam := range []int{4, 6} {
+		s, sok := m.src.expr(fam)
+		d, dok := m.dst.expr(fam)
+		if !sok || !dok {
+			continue
+		}
+		one(s, d)
+		emitted = true
+	}
+	if !emitted {
+		r.line(fmt.Sprintf("# rule %s skipped: source and destination cannot match the same address family (empty alias, or IPv4 on one side and IPv6 on the other)", id))
+	}
+}
+
+func (r *renderer) rule(rule *model.Rule) {
+	m, ok := r.buildMatch(rule, true)
+	if !ok {
+		return
+	}
 
 	verdict := []string{"counter"}
 	if rule.Log {
@@ -455,41 +512,95 @@ func (r *renderer) rule(rule *model.Rule) {
 			verdict = append(verdict, "reject")
 		}
 	}
-	comment := fmt.Sprintf("comment \"id:%s\"", rule.ID)
+	verdict = append(verdict, fmt.Sprintf("comment \"id:%s\"", rule.ID))
+	r.emit(rule.ID, m, verdict)
+}
 
-	emit := func(addr ...string) {
-		parts := append([]string{}, prefix...)
-		for _, a := range addr {
-			if a != "" {
-				parts = append(parts, a)
-			}
-		}
-		if l4 != "" {
-			parts = append(parts, l4)
-		}
-		parts = append(parts, verdict...)
-		parts = append(parts, comment)
-		r.line(strings.Join(parts, " "))
-	}
+// ---- policy routing --------------------------------------------------------
 
-	if !src.split() && !dst.split() {
-		s, _ := src.expr(4)
-		d, _ := dst.expr(4)
-		emit(s, d)
+// policyChains mark traffic before the kernel decides where to send it, so
+// rules that pick a gateway are routed through it. Nothing is rendered
+// unless a rule asks for one.
+func (r *renderer) policyChains() {
+	zones := r.policyZones()
+	if len(zones) == 0 {
 		return
 	}
-	emitted := false
-	for _, fam := range []int{4, 6} {
-		s, sok := src.expr(fam)
-		d, dok := dst.expr(fam)
-		if !sok || !dok {
+	r.block("chain policy_prerouting", func() {
+		r.line("type filter hook prerouting priority mangle; policy accept;")
+		// An established flow keeps the gateway it started on: changing
+		// lines halfway through would break the connection.
+		r.line(`ct mark != 0x0 meta mark set ct mark counter accept comment "policy:established"`)
+		// Traffic addressed to the firewall itself is never policy routed.
+		r.line(`fib daddr type local counter accept comment "policy:local"`)
+		for _, z := range zones {
+			r.line(fmt.Sprintf("iifname %s jump policy_%s", ifnameSet(r.cfg.ZoneInterfaces(z)), z))
+		}
+	})
+	for _, z := range zones {
+		r.block("chain policy_"+z, func() { r.policyZoneRules(z) })
+	}
+}
+
+// policyZones lists the zones that need a marking chain: those with an
+// enabled rule that picks a gateway, and with somewhere for it to arrive.
+func (r *renderer) policyZones() []string {
+	var out []string
+	for _, z := range r.cfg.Zones {
+		if len(r.cfg.ZoneInterfaces(z.Name)) == 0 {
 			continue
 		}
-		emit(s, d)
-		emitted = true
+		for i := range r.cfg.Rules {
+			if rule := &r.cfg.Rules[i]; rule.Enabled && rule.Zone == z.Name && rule.Gateway != "" {
+				out = append(out, z.Name)
+				break
+			}
+		}
 	}
-	if !emitted {
-		r.line(fmt.Sprintf("# rule %s skipped: source and destination cannot match the same address family (empty alias, or IPv4 on one side and IPv6 on the other)", rule.ID))
+	return out
+}
+
+// policyZoneRules mirrors the zone's filter rules up to the last one that
+// picks a gateway. Rules without one are emitted as bare accepts: they end
+// the chain in the filter path, so they have to end it here too, or a
+// later rule would mark traffic the earlier one already decided.
+func (r *renderer) policyZoneRules(zone string) {
+	last := -1
+	for i := range r.cfg.Rules {
+		if rule := &r.cfg.Rules[i]; rule.Enabled && rule.Zone == zone && rule.Gateway != "" {
+			last = i
+		}
+	}
+	for i := 0; i <= last; i++ {
+		rule := &r.cfg.Rules[i]
+		if !rule.Enabled || rule.Zone != zone {
+			continue
+		}
+		if rule.Gateway == "" && rule.DestZone != "" {
+			// The exit interface is not known before the routing decision,
+			// so this rule cannot stand in the way here.
+			r.line(fmt.Sprintf("# rule %s not mirrored: it matches on the destination zone, which prerouting cannot see", rule.ID))
+			continue
+		}
+		m, ok := r.buildMatch(rule, false)
+		if !ok {
+			continue
+		}
+		target, marked := r.cfg.PolicyTarget(rule.Gateway)
+		switch {
+		case rule.Gateway == "":
+			r.emit(rule.ID, m, []string{"counter", "accept", fmt.Sprintf("comment %q", "no-policy:"+rule.ID)})
+		case !marked:
+			r.line(fmt.Sprintf("# rule %s: gateway %q is disabled, so its traffic follows the default route", rule.ID, rule.Gateway))
+			r.emit(rule.ID, m, []string{"counter", "accept", fmt.Sprintf("comment %q", "no-policy:"+rule.ID)})
+		default:
+			r.emit(rule.ID, m, []string{
+				fmt.Sprintf("meta mark set 0x%x", target.Mark),
+				"ct mark set meta mark",
+				"counter", "accept",
+				fmt.Sprintf("comment %q", "policy:"+rule.ID),
+			})
+		}
 	}
 }
 

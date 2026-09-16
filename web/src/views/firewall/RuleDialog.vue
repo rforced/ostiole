@@ -39,6 +39,7 @@ function blank() {
     protocol: 'any',
     log: false,
     schedule: '',
+    gateway: '',
     source: endpointForm(),
     destination: endpointForm(),
   }
@@ -54,6 +55,7 @@ watch(
           ...blank(),
           ...r,
           destZone: r.destZone ?? '',
+          gateway: r.gateway ?? '',
           source: endpointForm(r.source),
           destination: endpointForm(r.destination),
         }
@@ -63,6 +65,15 @@ watch(
 )
 
 const portsAllowed = computed(() => ['tcp', 'udp', 'tcp+udp'].includes(form.value.protocol))
+
+// A gateway decides where the traffic leaves, so it cannot be combined
+// with a rule that matches on the zone it leaves by, and only an accept
+// rule sends anything anywhere.
+const gatewayAllowed = computed(() => form.value.action === 'accept' && !form.value.destZone)
+
+watch(gatewayAllowed, (ok) => {
+  if (!ok) form.value.gateway = ''
+})
 
 function endpointOut(f, allowPorts) {
   const out = {}
@@ -89,6 +100,7 @@ function save() {
   if (f.destZone) out.destZone = f.destZone
   if (f.log) out.log = true
   if (f.schedule) out.schedule = f.schedule
+  if (f.gateway && gatewayAllowed.value) out.gateway = f.gateway
   if (!out.description) delete out.description
   config.upsertRule(out)
   open.value = false
@@ -142,6 +154,29 @@ function save() {
             <option value="">Always</option>
             <option v-for="s in config.schedules" :key="s.name" :value="s.name">
               {{ s.name }} ({{ s.start }}–{{ s.end }})
+            </option>
+          </select>
+        </FormField>
+        <FormField
+          v-if="config.routeTargets.length"
+          id="rule-gateway"
+          label="Route through"
+          :hint="
+            gatewayAllowed
+              ? 'Sends matching traffic out this gateway instead of the default route.'
+              : 'Only an accept rule that does not pick a leaving zone can choose a gateway.'
+          "
+        >
+          <select
+            id="rule-gateway"
+            v-model="form.gateway"
+            class="input"
+            :disabled="!gatewayAllowed"
+          >
+            <option value="">Default route</option>
+            <option v-for="t in config.routeTargets" :key="t.name" :value="t.name">
+              {{ t.name }}{{ t.kind === 'group' ? ' (group)' : ''
+              }}{{ t.enabled ? '' : ' — disabled' }}
             </option>
           </select>
         </FormField>

@@ -22,6 +22,7 @@ import (
 	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/nft"
+	"github.com/rforced/ostiole/internal/policy"
 	"github.com/rforced/ostiole/internal/store"
 )
 
@@ -361,6 +362,82 @@ func newCountersCmd(g *globals) *cobra.Command {
 			return w.Flush()
 		},
 	}
+}
+
+func newPolicyCmd(g *globals) *cobra.Command {
+	return &cobra.Command{
+		Use:   "policy",
+		Short: "Show where rules that pick a gateway send their traffic",
+		Long: `Lists every gateway and gateway group that firewall rules can route
+through, with the packet mark the firewall sets, the routing table that
+answers it, and what the kernel currently has in that table.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := g.store().Load()
+			if err != nil {
+				return err
+			}
+			targets := policy.Plan(cfg, policyHops(cmd.Context(), cfg))
+			if len(targets) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "no gateways or gateway groups configured")
+				return nil
+			}
+			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "NAME\tKIND\tMARK\tTABLE\tRULES\tNEXT HOP")
+			for _, t := range targets {
+				kind := "gateway"
+				if t.Group {
+					kind = "group"
+				}
+				rules := 0
+				for _, r := range cfg.Rules {
+					if r.Enabled && r.Gateway == t.Name {
+						rules++
+					}
+				}
+				fmt.Fprintf(w, "%s\t%s\t0x%x\t%d\t%d\t%s\n",
+					t.Name, kind, t.Mark, t.Table, rules, policyNextHop(t))
+			}
+			return w.Flush()
+		},
+	}
+}
+
+// policyHops resolves each gateway's next hop without probing: the CLI
+// reports what the kernel is doing, it does not decide anything. Gateways
+// count as usable so the plan shows where traffic would go.
+func policyHops(_ context.Context, cfg *model.Config) map[string]policy.Hop {
+	router := gateway.ReadOnlyRouter{Router: gateway.NewNetlinkRouter()}
+	hops := map[string]policy.Hop{}
+	for _, gw := range cfg.Gateways {
+		if !gw.Enabled {
+			continue
+		}
+		h := policy.Hop{Gateway: gw.Name, Address: gw.Address, Interface: gw.Interface, Online: true}
+		if addr, ok := router.Resolve(gateway.Status{Name: gw.Name, Interface: gw.Interface, Address: gw.Address}); ok {
+			h.Address = addr
+		}
+		hops[gw.Name] = h
+	}
+	return hops
+}
+
+func policyNextHop(t policy.Target) string {
+	for _, tier := range t.Tiers {
+		var hops []string
+		for _, h := range tier {
+			if h.Address != "" {
+				hops = append(hops, h.Address+" dev "+h.Interface)
+			}
+		}
+		if len(hops) > 0 {
+			return strings.Join(hops, ", ")
+		}
+	}
+	if t.Block {
+		return "blackhole (group is set to block)"
+	}
+	return "none (traffic follows the default route)"
 }
 
 func newGatewaysCmd(g *globals) *cobra.Command {

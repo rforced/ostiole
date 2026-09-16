@@ -98,6 +98,7 @@ func newRootCmd() *cobra.Command {
 		newRevisionsCmd(g),
 		newCountersCmd(g),
 		newGatewaysCmd(g),
+		newPolicyCmd(g),
 		newResetPasswordCmd(g),
 		newUsersCmd(g),
 		newInstallCmd(g),

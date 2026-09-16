@@ -3,6 +3,8 @@
 // truth; nftables and network configuration are rendered from it.
 package model
 
+import "sort"
+
 // SchemaVersion is bumped when the on-disk JSON shape changes incompatibly.
 const SchemaVersion = 1
 
@@ -60,17 +62,20 @@ const (
 
 // Config is the complete appliance configuration.
 type Config struct {
-	Version    int           `json:"version"`
-	System     System        `json:"system"`
-	Zones      []Zone        `json:"zones"`
-	Interfaces []Interface   `json:"interfaces"`
-	Aliases    []Alias       `json:"aliases,omitempty"`
-	Schedules  []Schedule    `json:"schedules,omitempty"`
-	Rules      []Rule        `json:"rules"`
-	NAT        NAT           `json:"nat"`
-	Gateways   []Gateway     `json:"gateways,omitempty"`
-	Routes     []StaticRoute `json:"routes,omitempty"`
-	Services   Services      `json:"services"`
+	Version    int         `json:"version"`
+	System     System      `json:"system"`
+	Zones      []Zone      `json:"zones"`
+	Interfaces []Interface `json:"interfaces"`
+	Aliases    []Alias     `json:"aliases,omitempty"`
+	Schedules  []Schedule  `json:"schedules,omitempty"`
+	Rules      []Rule      `json:"rules"`
+	NAT        NAT         `json:"nat"`
+	Gateways   []Gateway   `json:"gateways,omitempty"`
+	// GatewayGroups combine gateways into one target rules can route
+	// through, with failover between tiers.
+	GatewayGroups []GatewayGroup `json:"gatewayGroups,omitempty"`
+	Routes        []StaticRoute  `json:"routes,omitempty"`
+	Services      Services       `json:"services"`
 }
 
 // System holds box-level settings.
@@ -201,6 +206,11 @@ type Rule struct {
 	// Schedule names a Schedule; outside it the rule does not match and
 	// evaluation carries on with the next one.
 	Schedule string `json:"schedule,omitempty"`
+	// Gateway sends matching traffic through a named gateway or gateway
+	// group instead of the default route. It only makes sense on an accept
+	// rule, and cannot be combined with DestZone: the outgoing interface is
+	// not known yet when the routing decision is made.
+	Gateway string `json:"gateway,omitempty"`
 }
 
 // Schedule is a recurring window in the firewall's local time. Rules that
@@ -308,6 +318,123 @@ func (g Gateway) GatewayMetric() int {
 		p = 0
 	}
 	return 10 + p*10
+}
+
+// GatewayGroup is several gateways used as one policy routing target. The
+// lowest tier that has an online member carries the traffic; members that
+// share a tier are used together and the kernel spreads connections over
+// them.
+type GatewayGroup struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Enabled     bool            `json:"enabled"`
+	Members     []GatewayMember `json:"members"`
+	// OnDown decides what happens when no member answers its monitor.
+	OnDown OnDownMode `json:"onDown,omitempty"`
+}
+
+// GatewayMember is one gateway in a group.
+type GatewayMember struct {
+	Gateway string `json:"gateway"`
+	// Tier orders failover, lowest first.
+	Tier int `json:"tier,omitempty"`
+}
+
+// OnDownMode is what a group does when every member is down.
+type OnDownMode string
+
+// Group behaviour when nothing is online.
+const (
+	// OnDownFallback sends the traffic out the ordinary default route,
+	// which keeps a box working when its preferred line dies.
+	OnDownFallback OnDownMode = "fallback"
+	// OnDownBlock drops it instead, so a tunnel that is meant to carry
+	// everything cannot leak onto the WAN while it is down.
+	OnDownBlock OnDownMode = "block"
+)
+
+// Policy routing numbering. Marks occupy bits 16-23, clear of the low
+// values other software puts in the packet mark, and table ids sit above
+// the classic 8-bit ones.
+const (
+	PolicyMarkShift = 16
+	PolicyMarkMask  = 0xff << PolicyMarkShift
+	PolicyTableBase = 2200
+	// MaxPolicyTargets is how many gateways and groups can be marked; the
+	// mark has one byte for them.
+	MaxPolicyTargets = 255
+)
+
+// PolicyTarget is a gateway or gateway group that rules can route through.
+// Its mark and routing table are derived from the configuration, so the
+// firewall and the routing tables agree without sharing state.
+type PolicyTarget struct {
+	Name  string `json:"name"`
+	Group bool   `json:"group,omitempty"`
+	Mark  uint32 `json:"mark"`
+	Table int    `json:"table"`
+}
+
+// PolicyTargets lists every enabled gateway and gateway group, sorted by
+// name and numbered from one.
+func (c *Config) PolicyTargets() []PolicyTarget {
+	names := make([]string, 0, len(c.Gateways)+len(c.GatewayGroups))
+	group := make(map[string]bool, len(c.GatewayGroups))
+	for _, g := range c.Gateways {
+		if g.Enabled {
+			names = append(names, g.Name)
+		}
+	}
+	for _, g := range c.GatewayGroups {
+		if g.Enabled {
+			names = append(names, g.Name)
+			group[g.Name] = true
+		}
+	}
+	sort.Strings(names)
+	if len(names) > MaxPolicyTargets {
+		names = names[:MaxPolicyTargets]
+	}
+	out := make([]PolicyTarget, 0, len(names))
+	for i, name := range names {
+		out = append(out, PolicyTarget{
+			Name:  name,
+			Group: group[name],
+			Mark:  uint32(i+1) << PolicyMarkShift,
+			Table: PolicyTableBase + i + 1,
+		})
+	}
+	return out
+}
+
+// PolicyTarget returns the marking assigned to a gateway or group name.
+func (c *Config) PolicyTarget(name string) (PolicyTarget, bool) {
+	for _, t := range c.PolicyTargets() {
+		if t.Name == name {
+			return t, true
+		}
+	}
+	return PolicyTarget{}, false
+}
+
+// Gateway returns the gateway with the given name.
+func (c *Config) Gateway(name string) (*Gateway, bool) {
+	for i := range c.Gateways {
+		if c.Gateways[i].Name == name {
+			return &c.Gateways[i], true
+		}
+	}
+	return nil, false
+}
+
+// GatewayGroup returns the group with the given name.
+func (c *Config) GatewayGroup(name string) (*GatewayGroup, bool) {
+	for i := range c.GatewayGroups {
+		if c.GatewayGroups[i].Name == name {
+			return &c.GatewayGroups[i], true
+		}
+	}
+	return nil, false
 }
 
 // StaticRoute sends Destination via Gateway, optionally pinned to Interface.

@@ -17,6 +17,7 @@ import (
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
+	"github.com/rforced/ostiole/internal/policy"
 	"github.com/rforced/ostiole/internal/server"
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/sysctl"
@@ -85,13 +86,14 @@ at your own.`,
 				// netlink, so multi-WAN failover is a root-only feature.
 				st := g.store()
 				mon := gateway.New(gateway.NewICMPProber(), gateway.NewNetlinkRouter(), slog.Default())
-				mon.Source = func() []model.Gateway {
+				mon.Source = func() *model.Config {
 					cfg, err := st.Load()
 					if err != nil {
 						return nil
 					}
-					return cfg.Gateways
+					return cfg
 				}
+				mon.Policy = policy.NewInstaller(slog.Default())
 				deps.Gateways = mon
 				go mon.Run(ctx)
 				ring := fwlog.NewRing(2000)

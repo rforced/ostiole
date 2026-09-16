@@ -351,6 +351,34 @@ export const useConfigStore = defineStore('config', () => {
     draft.value.gateways = gateways.value.filter((g) => g.name !== name)
   }
 
+  const gatewayGroups = computed(() => draft.value?.gatewayGroups ?? [])
+
+  /** Everything rules can route through: gateways first, then groups. */
+  const routeTargets = computed(() => [
+    ...gateways.value.map((g) => ({ name: g.name, kind: 'gateway', enabled: g.enabled })),
+    ...gatewayGroups.value.map((g) => ({ name: g.name, kind: 'group', enabled: g.enabled })),
+  ])
+
+  function upsertGatewayGroup(group, previousName = group.name) {
+    const list = draft.value.gatewayGroups ?? (draft.value.gatewayGroups = [])
+    const idx = list.findIndex((g) => g.name === previousName)
+    if (idx === -1) list.push(clone(group))
+    else list[idx] = clone(group)
+  }
+
+  function removeGatewayGroup(name) {
+    draft.value.gatewayGroups = gatewayGroups.value.filter((g) => g.name !== name)
+  }
+
+  /** Where a gateway or group is used, so deleting it cannot go unnoticed. */
+  function gatewayReferences(name) {
+    const refs = rules.value.filter((r) => r.gateway === name).map((r) => `rule ${r.id}`)
+    for (const g of gatewayGroups.value) {
+      if ((g.members ?? []).some((m) => m.gateway === name)) refs.push(`group ${g.name}`)
+    }
+    return refs
+  }
+
   // ---- routes ----------------------------------------------------------
 
   const routes = computed(() => draft.value?.routes ?? [])
@@ -413,6 +441,11 @@ export const useConfigStore = defineStore('config', () => {
     gateways,
     upsertGateway,
     removeGateway,
+    gatewayGroups,
+    routeTargets,
+    upsertGatewayGroup,
+    removeGatewayGroup,
+    gatewayReferences,
     upsertRoute,
     removeRoute,
     ensureServices,

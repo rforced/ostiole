@@ -1,0 +1,241 @@
+{
+  "version": 1,
+  "system": {
+    "hostname": "policy",
+    "management": {
+      "webPort": 443,
+      "sshPort": 22
+    }
+  },
+  "zones": [
+    {
+      "name": "wan",
+      "description": "Primary line",
+      "external": true
+    },
+    {
+      "name": "wan2",
+      "description": "Backup line",
+      "external": true
+    },
+    {
+      "name": "lan",
+      "antiLockout": true
+    },
+    {
+      "name": "guest"
+    }
+  ],
+  "interfaces": [
+    {
+      "name": "eth0",
+      "zone": "wan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "dhcp"
+      },
+      "ipv6": {
+        "mode": "none"
+      }
+    },
+    {
+      "name": "eth1",
+      "zone": "wan2",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "198.51.100.2/24",
+        "gateway": "198.51.100.1"
+      },
+      "ipv6": {
+        "mode": "none"
+      }
+    },
+    {
+      "name": "eth2",
+      "zone": "lan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "192.168.1.1/24"
+      },
+      "ipv6": {
+        "mode": "static",
+        "address": "2001:db8:1::1/64"
+      }
+    },
+    {
+      "name": "eth3",
+      "zone": "guest",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "192.168.9.1/24"
+      },
+      "ipv6": {
+        "mode": "none"
+      }
+    }
+  ],
+  "aliases": [
+    {
+      "name": "torrents",
+      "type": "hosts",
+      "entries": [
+        "192.168.1.40",
+        "192.168.1.41"
+      ]
+    }
+  ],
+  "schedules": [
+    {
+      "name": "nights",
+      "start": "22:00",
+      "end": "06:00"
+    }
+  ],
+  "rules": [
+    {
+      "id": "lan-to-guest",
+      "description": "Barrier: decided before any gateway rule",
+      "enabled": true,
+      "zone": "lan",
+      "destZone": "guest",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    },
+    {
+      "id": "lan-dns",
+      "description": "Barrier without a destination zone",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "udp",
+      "source": {},
+      "destination": {
+        "self": true,
+        "ports": [
+          "53"
+        ]
+      }
+    },
+    {
+      "id": "torrents-out-backup",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {
+        "alias": "torrents"
+      },
+      "destination": {},
+      "gateway": "backup",
+      "schedule": "nights"
+    },
+    {
+      "id": "lan-default",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {},
+      "gateway": "balanced"
+    },
+    {
+      "id": "lan-tail",
+      "description": "After the last gateway rule, so it is not mirrored",
+      "enabled": true,
+      "zone": "lan",
+      "action": "reject",
+      "protocol": "udp",
+      "source": {},
+      "destination": {}
+    },
+    {
+      "id": "guest-out-parked",
+      "description": "Names a disabled gateway",
+      "enabled": true,
+      "zone": "guest",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {},
+      "gateway": "parked"
+    },
+    {
+      "id": "wan-ping",
+      "enabled": true,
+      "zone": "wan",
+      "action": "accept",
+      "protocol": "icmp",
+      "source": {},
+      "destination": {}
+    }
+  ],
+  "nat": {
+    "outbound": {
+      "mode": "automatic"
+    }
+  },
+  "gateways": [
+    {
+      "name": "primary",
+      "enabled": true,
+      "interface": "eth0",
+      "priority": 0,
+      "monitor": "9.9.9.9"
+    },
+    {
+      "name": "backup",
+      "enabled": true,
+      "interface": "eth1",
+      "address": "198.51.100.1",
+      "priority": 1
+    },
+    {
+      "name": "parked",
+      "enabled": false,
+      "interface": "eth1",
+      "address": "198.51.100.254"
+    }
+  ],
+  "gatewayGroups": [
+    {
+      "name": "balanced",
+      "description": "Primary, falling back to the backup line",
+      "enabled": true,
+      "onDown": "fallback",
+      "members": [
+        {
+          "gateway": "primary",
+          "tier": 0
+        },
+        {
+          "gateway": "backup",
+          "tier": 1
+        }
+      ]
+    },
+    {
+      "name": "unused",
+      "enabled": true,
+      "onDown": "block",
+      "members": [
+        {
+          "gateway": "backup"
+        }
+      ]
+    }
+  ],
+  "services": {
+    "dhcp": {
+      "enabled": false
+    },
+    "dns": {
+      "enabled": false
+    }
+  }
+}

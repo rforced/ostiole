@@ -382,3 +382,110 @@ func TestParseClock(t *testing.T) {
 		t.Error("Weekday accepted a nonsense day")
 	}
 }
+
+func policyConfig() *Config {
+	return &Config{
+		Version: SchemaVersion,
+		Zones:   []Zone{{Name: "lan"}, {Name: "wan", External: true}},
+		Interfaces: []Interface{
+			{Name: "eth0", Zone: "wan", Enabled: true, IPv4: IPv4{Mode: AddrDHCP}, IPv6: IPv6{Mode: AddrNone}},
+			{Name: "eth1", Zone: "lan", Enabled: true, IPv4: IPv4{Mode: AddrStatic, Address: "192.168.1.1/24"}, IPv6: IPv6{Mode: AddrNone}},
+		},
+		Gateways: []Gateway{{Name: "wan1", Enabled: true, Interface: "eth0"}},
+		GatewayGroups: []GatewayGroup{
+			{Name: "both", Enabled: true, Members: []GatewayMember{{Gateway: "wan1"}}},
+		},
+		NAT: NAT{Outbound: OutboundNAT{Mode: OutboundAutomatic}},
+	}
+}
+
+func TestValidateAcceptsPolicyRouting(t *testing.T) {
+	t.Parallel()
+	cfg := policyConfig()
+	cfg.Rules = []Rule{
+		{ID: "r1", Enabled: true, Zone: "lan", Action: ActionAccept, Protocol: ProtocolAny, Gateway: "wan1"},
+		{ID: "r2", Enabled: true, Zone: "lan", Action: ActionAccept, Protocol: ProtocolAny, Gateway: "both"},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("policy routing config rejected: %v", err)
+	}
+}
+
+func TestValidateCatchesPolicyRoutingMistakes(t *testing.T) {
+	t.Parallel()
+	cfg := policyConfig()
+	cfg.Rules = []Rule{
+		{ID: "unknown", Enabled: true, Zone: "lan", Action: ActionAccept, Protocol: ProtocolAny, Gateway: "ghost"},
+		{ID: "dropped", Enabled: true, Zone: "lan", Action: ActionDrop, Protocol: ProtocolAny, Gateway: "wan1"},
+		{ID: "destzone", Enabled: true, Zone: "lan", DestZone: "wan", Action: ActionAccept, Protocol: ProtocolAny, Gateway: "wan1"},
+	}
+	cfg.GatewayGroups = append(cfg.GatewayGroups,
+		GatewayGroup{Name: "both", Enabled: true, Members: []GatewayMember{{Gateway: "wan1"}, {Gateway: "wan1"}}},
+		GatewayGroup{Name: "wan1", Members: []GatewayMember{{Gateway: "ghost", Tier: 999}}},
+		GatewayGroup{Name: "empty", OnDown: "maybe"},
+	)
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation errors")
+	}
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("error type %T, want *ValidationError", err)
+	}
+	got := map[string]string{}
+	for _, i := range ve.Issues {
+		got[i.Path] = i.Message
+	}
+	for _, p := range []string{
+		"rules[0].gateway",
+		"rules[1].gateway",
+		"rules[2].gateway",
+		"gatewayGroups[1].name",
+		"gatewayGroups[1].members[1].gateway",
+		"gatewayGroups[2].name",
+		"gatewayGroups[2].members[0].gateway",
+		"gatewayGroups[2].members[0].tier",
+		"gatewayGroups[3].members",
+		"gatewayGroups[3].onDown",
+	} {
+		if _, ok := got[p]; !ok {
+			t.Errorf("missing issue at %s", p)
+		}
+	}
+	if msg := got["rules[1].gateway"]; !strings.Contains(msg, "accept") {
+		t.Errorf("drop rule message = %q, want it to mention accept", msg)
+	}
+}
+
+func TestPolicyTargetsAreStableAndSkipDisabled(t *testing.T) {
+	t.Parallel()
+	cfg := policyConfig()
+	cfg.Gateways = append(cfg.Gateways, Gateway{Name: "alpha", Enabled: true, Interface: "eth0"},
+		Gateway{Name: "zulu", Interface: "eth0"})
+
+	targets := cfg.PolicyTargets()
+	var names []string
+	for _, tg := range targets {
+		names = append(names, tg.Name)
+	}
+	if strings.Join(names, ",") != "alpha,both,wan1" {
+		t.Fatalf("targets = %v, want the enabled ones sorted by name", names)
+	}
+	for i, tg := range targets {
+		if want := uint32(i+1) << PolicyMarkShift; tg.Mark != want {
+			t.Errorf("%s mark = 0x%x, want 0x%x", tg.Name, tg.Mark, want)
+		}
+		if want := PolicyTableBase + i + 1; tg.Table != want {
+			t.Errorf("%s table = %d, want %d", tg.Name, tg.Table, want)
+		}
+		if tg.Mark&uint32(PolicyMarkMask) != tg.Mark {
+			t.Errorf("%s mark 0x%x escapes the mask", tg.Name, tg.Mark)
+		}
+	}
+	if tg, ok := cfg.PolicyTarget("both"); !ok || !tg.Group {
+		t.Errorf("PolicyTarget(both) = %+v, %v; want a group", tg, ok)
+	}
+	if _, ok := cfg.PolicyTarget("zulu"); ok {
+		t.Error("a disabled gateway must not get a mark")
+	}
+}

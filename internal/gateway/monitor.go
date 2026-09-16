@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rforced/ostiole/internal/model"
+	"github.com/rforced/ostiole/internal/policy"
 )
 
 // Defaults for the probe loop. They are deliberately unhurried: a router
@@ -41,6 +42,12 @@ type Router interface {
 	// Resolve fills in the next hop of a gateway that takes its address
 	// from the network, and reports whether one exists yet.
 	Resolve(g Status) (string, bool)
+}
+
+// Policy installs the routing tables and ip rules that make per-rule
+// gateway selection work.
+type Policy interface {
+	Sync(targets []policy.Target) error
 }
 
 // Status is what the UI and the failover logic see.
@@ -87,7 +94,10 @@ type Monitor struct {
 	// Source, when set, is read before every tick so the monitor follows
 	// the saved configuration however it was changed: the API, the CLI, or
 	// a rollback.
-	Source func() []model.Gateway
+	Source func() *model.Config
+	// Policy, when set, keeps the policy routing tables and ip rules in
+	// step with what the probes just learned.
+	Policy Policy
 
 	mu     sync.Mutex
 	states map[string]*state
@@ -142,8 +152,11 @@ func (m *Monitor) Run(ctx context.Context) {
 
 // Tick probes every gateway once and applies the routing decision.
 func (m *Monitor) Tick(ctx context.Context) {
+	var cfg *model.Config
 	if m.Source != nil {
-		m.Configure(m.Source())
+		if cfg = m.Source(); cfg != nil {
+			m.Configure(cfg.Gateways)
+		}
 	}
 	m.mu.Lock()
 	states := make([]*state, 0, len(m.order))
@@ -160,6 +173,34 @@ func (m *Monitor) Tick(ctx context.Context) {
 		m.probe(ctx, st, timeout)
 	}
 	m.applyRoutes(states)
+	m.syncPolicy(cfg, states)
+}
+
+// syncPolicy hands the policy routing installer the gateways as the probes
+// have just found them. A gateway the monitor has no verdict on yet counts
+// as usable: a box that has only just booted should still route.
+func (m *Monitor) syncPolicy(cfg *model.Config, states []*state) {
+	if m.Policy == nil || cfg == nil {
+		return
+	}
+	hops := make(map[string]policy.Hop, len(states))
+	m.mu.Lock()
+	for _, st := range states {
+		h := policy.Hop{
+			Gateway:   st.gw.Name,
+			Address:   st.address,
+			Interface: st.gw.Interface,
+			Online:    st.online || st.unknown,
+		}
+		if h.Address == "" {
+			h.Address = st.gw.Address
+		}
+		hops[h.Gateway] = h
+	}
+	m.mu.Unlock()
+	if err := m.Policy.Sync(policy.Plan(cfg, hops)); err != nil {
+		m.Log.Warn("could not update policy routing", "err", err)
+	}
 }
 
 func (m *Monitor) probe(ctx context.Context, st *state, timeout time.Duration) {
