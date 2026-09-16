@@ -189,6 +189,15 @@ export const api = {
   log: {
     recent: (limit = 200) => get(`/log/recent?limit=${limit}`),
   },
+  users: {
+    list: () => get('/users'),
+    setRole: (username, role) => post(`/users/${encodeURIComponent(username)}/role`, { role }),
+  },
+  tokens: {
+    list: () => get('/tokens'),
+    create: (body) => post('/tokens', body),
+    remove: (id) => request('DELETE', `/tokens/${encodeURIComponent(id)}`),
+  },
   certificate: {
     get: () => get('/certificate'),
     install: (certificate, key) => post('/certificate', { certificate, key }),

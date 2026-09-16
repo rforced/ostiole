@@ -69,6 +69,10 @@ at your own.`,
 			if err != nil {
 				return err
 			}
+			tokens, err := auth.NewTokens(g.configDir)
+			if err != nil {
+				return err
+			}
 			if as.NeedsSetup() {
 				slog.Warn("no admin account yet; open the web UI to create one or run `ostiole reset-password`")
 			}
@@ -80,6 +84,7 @@ at your own.`,
 				Updater: newUpdater(cfg),
 				Tables:  &nft.Exec{Bin: g.nftBin},
 				Units:   install.ExecSystemctl{},
+				Tokens:  tokens,
 				Certs:   certManager,
 				// The names are looked up fresh, so a certificate made
 				// after the box moved covers where it moved to.

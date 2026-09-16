@@ -37,6 +37,10 @@ type api struct {
 	resolver *services.Unbound
 	pppoe    *services.PPPoE
 	certs    *certs.Manager
+	tokens   *auth.Tokens
+	// routes is the router the handlers were registered on, which the
+	// OpenAPI description is generated from.
+	routes *router
 	// certHosts lists the names a regenerated certificate should cover.
 	certHosts func() []string
 	fwlog     *fwlog.Ring
@@ -50,33 +54,36 @@ type GatewayStatuser interface {
 	Statuses() []gateway.Status
 }
 
-func (a *api) register(mux *http.ServeMux) {
+func (a *api) register(mux *router) {
 	a.registerAuth(mux)
 	a.registerLog(mux)
 	a.registerDiag(mux)
 	a.registerBackup(mux)
 	a.registerCerts(mux)
-	mux.HandleFunc("GET /api/v1/status", a.guard(a.status))
-	mux.HandleFunc("GET /api/v1/overview", a.guard(a.overview))
-	mux.HandleFunc("GET /api/v1/config", a.guard(a.getConfig))
-	mux.HandleFunc("GET /api/v1/config/revisions", a.guard(a.revisions))
-	mux.HandleFunc("GET /api/v1/config/revisions/{id}", a.guard(a.revision))
-	mux.HandleFunc("GET /api/v1/ruleset", a.guard(a.ruleset))
-	mux.HandleFunc("GET /api/v1/counters", a.guard(a.counters))
-	mux.HandleFunc("GET /api/v1/interfaces/live", a.guard(a.liveInterfaces))
-	mux.HandleFunc("POST /api/v1/config/starter", a.guard(a.starter))
-	mux.HandleFunc("POST /api/v1/check", a.guard(a.check))
-	mux.HandleFunc("POST /api/v1/apply", a.guard(a.apply))
-	mux.HandleFunc("POST /api/v1/apply/confirm", a.guard(a.confirm))
-	mux.HandleFunc("POST /api/v1/apply/revert", a.guard(a.revert))
-	mux.HandleFunc("GET /api/v1/services/status", a.protect(a.servicesStatus))
-	mux.HandleFunc("GET /api/v1/dhcp/leases", a.protect(a.dhcpLeases))
-	mux.HandleFunc("POST /api/v1/wireguard/keys", a.protect(a.wireguardKeys))
-	mux.HandleFunc("GET /api/v1/gateways", a.protect(a.gatewayStatus))
-	mux.HandleFunc("GET /api/v1/policy", a.protect(a.policyStatus))
-	mux.HandleFunc("GET /api/v1/update/check", a.protect(a.updateCheck))
-	mux.HandleFunc("GET /api/v1/update/status", a.protect(a.updateStatus))
-	mux.HandleFunc("POST /api/v1/update/apply", a.protect(a.updateApply))
+	a.registerTokens(mux)
+	a.registerMetrics(mux)
+	a.registerOpenAPI(mux)
+	mux.HandleFunc("GET /api/v1/status", a.read(a.status))
+	mux.HandleFunc("GET /api/v1/overview", a.read(a.overview))
+	mux.HandleFunc("GET /api/v1/config", a.read(a.getConfig))
+	mux.HandleFunc("GET /api/v1/config/revisions", a.read(a.revisions))
+	mux.HandleFunc("GET /api/v1/config/revisions/{id}", a.read(a.revision))
+	mux.HandleFunc("GET /api/v1/ruleset", a.read(a.ruleset))
+	mux.HandleFunc("GET /api/v1/counters", a.read(a.counters))
+	mux.HandleFunc("GET /api/v1/interfaces/live", a.readNoEngine(a.liveInterfaces))
+	mux.HandleFunc("POST /api/v1/config/starter", a.write(a.starter))
+	mux.HandleFunc("POST /api/v1/check", a.write(a.check))
+	mux.HandleFunc("POST /api/v1/apply", a.write(a.apply))
+	mux.HandleFunc("POST /api/v1/apply/confirm", a.write(a.confirm))
+	mux.HandleFunc("POST /api/v1/apply/revert", a.write(a.revert))
+	mux.HandleFunc("GET /api/v1/services/status", a.readNoEngine(a.servicesStatus))
+	mux.HandleFunc("GET /api/v1/dhcp/leases", a.readNoEngine(a.dhcpLeases))
+	mux.HandleFunc("POST /api/v1/wireguard/keys", a.write(a.wireguardKeys))
+	mux.HandleFunc("GET /api/v1/gateways", a.readNoEngine(a.gatewayStatus))
+	mux.HandleFunc("GET /api/v1/policy", a.readNoEngine(a.policyStatus))
+	mux.HandleFunc("GET /api/v1/update/check", a.admin(a.updateCheck))
+	mux.HandleFunc("GET /api/v1/update/status", a.readNoEngine(a.updateStatus))
+	mux.HandleFunc("POST /api/v1/update/apply", a.admin(a.updateApply))
 }
 
 type servicesStatus struct {
@@ -291,17 +298,6 @@ type upstream struct{ err error }
 func (u *upstream) Error() string { return u.err.Error() }
 func (u *upstream) Unwrap() error { return u.err }
 
-// guard requires a valid session and a wired engine, and turns handler
-// errors into JSON responses.
-func (a *api) guard(h func(w http.ResponseWriter, r *http.Request) error) http.HandlerFunc {
-	return a.protect(func(w http.ResponseWriter, r *http.Request) error {
-		if a.engine == nil {
-			return &unavailable{errors.New("engine not available")}
-		}
-		return h(w, r)
-	})
-}
-
 // protect requires a valid session cookie.
 func (a *api) protect(h func(w http.ResponseWriter, r *http.Request) error) http.HandlerFunc {
 	return a.public(func(w http.ResponseWriter, r *http.Request) error {
@@ -363,8 +359,13 @@ func statusFor(err error) int {
 		return http.StatusConflict
 	case errors.Is(err, update.ErrPackageManaged):
 		return http.StatusUnprocessableEntity
-	case errors.Is(err, errUnauthorized), errors.Is(err, auth.ErrInvalidCredentials):
+	case errors.Is(err, errUnauthorized), errors.Is(err, auth.ErrInvalidCredentials),
+		errors.Is(err, auth.ErrInvalidToken), errors.Is(err, auth.ErrTokenExpired):
 		return http.StatusUnauthorized
+	case errors.Is(err, errForbidden):
+		return http.StatusForbidden
+	case errors.Is(err, auth.ErrTokenNotFound):
+		return http.StatusNotFound
 	case errors.Is(err, auth.ErrRateLimited):
 		return http.StatusTooManyRequests
 	case errors.Is(err, auth.ErrSetupDone):

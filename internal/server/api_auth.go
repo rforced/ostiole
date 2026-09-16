@@ -12,7 +12,7 @@ import (
 // SessionCookie is the session cookie name.
 const SessionCookie = "ostiole_session"
 
-func (a *api) registerAuth(mux *http.ServeMux) {
+func (a *api) registerAuth(mux *router) {
 	mux.HandleFunc("GET /api/v1/setup", a.public(a.setupStatus))
 	mux.HandleFunc("POST /api/v1/setup", a.public(a.setup))
 	mux.HandleFunc("POST /api/v1/auth/login", a.public(a.login))

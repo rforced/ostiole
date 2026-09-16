@@ -104,11 +104,13 @@ func newRootCmd() *cobra.Command {
 		newDiffCmd(g),
 		newResetPasswordCmd(g),
 		newUsersCmd(g),
+		newTokensCmd(g),
 		newInstallCmd(g),
 		newTakeoverCmd(g),
 		newUninstallCmd(g),
 		newUpdateCmd(g),
 		newServicesCmd(g),
+		newOpenAPICmd(),
 		newVersionCmd(),
 	)
 	return cmd

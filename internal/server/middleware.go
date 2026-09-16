@@ -20,7 +20,9 @@ const RequestHeaderValue = "ostiole"
 // custom header requirement with Origin and Sec-Fetch-Site checks.
 func csrfGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api/") && !safeMethod(r.Method) {
+		// A bearer token is never sent by a browser on its own, so there
+		// is no cross-site request to forge and nothing here to protect.
+		if strings.HasPrefix(r.URL.Path, "/api/") && !safeMethod(r.Method) && !hasBearer(r) {
 			if r.Header.Get(RequestHeader) != RequestHeaderValue {
 				writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing " + RequestHeader + " header"})
 				return
@@ -40,6 +42,9 @@ func csrfGuard(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// hasBearer reports an Authorization header carrying a token.
+func hasBearer(r *http.Request) bool { return bearer(r) != "" }
 
 func safeMethod(m string) bool {
 	return m == http.MethodGet || m == http.MethodHead || m == http.MethodOptions

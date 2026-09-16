@@ -2,6 +2,7 @@
 import { onMounted } from 'vue'
 
 import { useConfigStore } from '@/stores/config'
+import AccessSection from '@/views/system/AccessSection.vue'
 import BackupSection from '@/views/system/BackupSection.vue'
 import CertificateSection from '@/views/system/CertificateSection.vue'
 import ManagementSection from '@/views/system/ManagementSection.vue'
@@ -22,6 +23,7 @@ onMounted(() => config.load())
     </p>
     <ManagementSection v-if="config.draft" />
     <PasswordSection />
+    <AccessSection />
     <CertificateSection />
     <UpdatesSection />
     <BackupSection v-if="config.draft" />

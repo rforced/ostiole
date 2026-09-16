@@ -29,10 +29,23 @@ var (
 
 // User is a local administrator.
 type User struct {
-	Username  string    `json:"username"`
-	Hash      string    `json:"hash"`
+	Username string `json:"username"`
+	Hash     string `json:"hash"`
+	// Role decides what this account may do. An account written before
+	// roles existed has none, and is treated as an administrator: the box
+	// had exactly one kind of user then.
+	Role      Role      `json:"role,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// RoleOf returns the account's role, defaulting to administrator for an
+// account that predates roles.
+func (u User) RoleOf() Role {
+	if u.Role.Valid() {
+		return u.Role
+	}
+	return RoleAdmin
 }
 
 type usersFile struct {
@@ -172,6 +185,30 @@ func (s *Service) NeedsSetup() bool {
 	return len(s.users) == 0
 }
 
+// Role reports what an account may do; an unknown account gets the
+// weakest role rather than an error, so a caller cannot be surprised into
+// granting more than it meant to.
+func (s *Service) Role(username string) Role {
+	s.refresh()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	u, ok := s.users[username]
+	if !ok {
+		return RoleViewer
+	}
+	return u.RoleOf()
+}
+
+// Accounts lists accounts with their roles, for the UI.
+func (s *Service) Accounts() []User {
+	out := s.Users()
+	for i := range out {
+		out[i].Hash = ""
+		out[i].Role = out[i].RoleOf()
+	}
+	return out
+}
+
 // Usernames lists accounts.
 func (s *Service) Usernames() []string {
 	s.refresh()
@@ -258,6 +295,40 @@ func (s *Service) SetPassword(username, password string) error {
 	return nil
 }
 
+// SetRole changes what an account may do. The last administrator keeps
+// the role: a box with nobody who can manage accounts is a box you have
+// to rebuild.
+func (s *Service) SetRole(username string, role Role) error {
+	if !role.Valid() {
+		return fmt.Errorf("unknown role %q", role)
+	}
+	s.refresh()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u, ok := s.users[username]
+	if !ok {
+		return fmt.Errorf("no such user %q", username)
+	}
+	if u.RoleOf() == RoleAdmin && role != RoleAdmin && s.countAdmins() == 1 {
+		return errors.New("this is the only administrator; promote another account first")
+	}
+	u.Role = role
+	u.UpdatedAt = s.now()
+	s.users[username] = u
+	return s.save()
+}
+
+// countAdmins is called with the lock held.
+func (s *Service) countAdmins() int {
+	n := 0
+	for _, u := range s.users {
+		if u.RoleOf() == RoleAdmin {
+			n++
+		}
+	}
+	return n
+}
+
 // DeleteUser removes an account and its sessions. The last account cannot
 // be removed.
 func (s *Service) DeleteUser(username string) error {
@@ -269,6 +340,9 @@ func (s *Service) DeleteUser(username string) error {
 	}
 	if len(s.users) == 1 {
 		return errors.New("cannot delete the last account")
+	}
+	if s.users[username].RoleOf() == RoleAdmin && s.countAdmins() == 1 {
+		return errors.New("this is the only administrator; promote another account first")
 	}
 	delete(s.users, username)
 	if err := s.save(); err != nil {

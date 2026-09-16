@@ -13,11 +13,11 @@ import (
 )
 
 // Diagnostics are root-only: they need raw sockets and the journal.
-func (a *api) registerDiag(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/diagnostics/ping", a.protect(a.diagPing))
-	mux.HandleFunc("POST /api/v1/diagnostics/traceroute", a.protect(a.diagTraceroute))
-	mux.HandleFunc("POST /api/v1/diagnostics/capture", a.protect(a.diagCapture))
-	mux.HandleFunc("GET /api/v1/diagnostics/journal", a.protect(a.diagJournal))
+func (a *api) registerDiag(mux *router) {
+	mux.HandleFunc("POST /api/v1/diagnostics/ping", a.write(a.diagPing))
+	mux.HandleFunc("POST /api/v1/diagnostics/traceroute", a.write(a.diagTraceroute))
+	mux.HandleFunc("POST /api/v1/diagnostics/capture", a.write(a.diagCapture))
+	mux.HandleFunc("GET /api/v1/diagnostics/journal", a.readNoEngine(a.diagJournal))
 }
 
 type pingRequest struct {

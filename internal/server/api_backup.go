@@ -13,10 +13,10 @@ import (
 	"github.com/rforced/ostiole/internal/version"
 )
 
-func (a *api) registerBackup(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/config/backup", a.guard(a.downloadBackup))
-	mux.HandleFunc("POST /api/v1/config/restore", a.guard(a.restoreBackup))
-	mux.HandleFunc("POST /api/v1/config/diff", a.guard(a.diffConfigs))
+func (a *api) registerBackup(mux *router) {
+	mux.HandleFunc("GET /api/v1/config/backup", a.admin(a.downloadBackup))
+	mux.HandleFunc("POST /api/v1/config/restore", a.write(a.restoreBackup))
+	mux.HandleFunc("POST /api/v1/config/diff", a.read(a.diffConfigs))
 }
 
 // downloadBackup hands over the saved configuration as a file. Accounts

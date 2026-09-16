@@ -48,6 +48,8 @@ type Deps struct {
 	// Certs manages the certificate the UI serves; nil hides the
 	// certificate endpoints and serves whatever the files hold.
 	Certs *certs.Manager
+	// Tokens authenticates API tokens; nil leaves the API to sessions.
+	Tokens *auth.Tokens
 	// CertHosts lists the names a regenerated self-signed certificate
 	// should cover.
 	CertHosts func() []string
@@ -65,7 +67,7 @@ type Deps struct {
 
 // Handler builds the full HTTP handler: API routes plus the SPA.
 func Handler(d Deps) http.Handler {
-	mux := http.NewServeMux()
+	mux := &router{mux: http.NewServeMux()}
 	mux.HandleFunc("GET /api/v1/health", handleHealth)
 	api := &api{
 		engine:    d.Engine,
@@ -75,16 +77,18 @@ func Handler(d Deps) http.Handler {
 		resolver:  d.Resolver,
 		pppoe:     d.PPPoE,
 		certs:     d.Certs,
+		tokens:    d.Tokens,
 		certHosts: d.CertHosts,
 		fwlog:     d.Log,
 		gateways:  d.Gateways,
 		tables:    d.Tables,
 		units:     d.Units,
 	}
+	api.routes = mux
 	api.register(mux)
 	mux.HandleFunc("/api/", handleAPINotFound)
 	mux.Handle("/", web.Handler())
-	return securityHeaders(requestLog(csrfGuard(mux)))
+	return securityHeaders(requestLog(csrfGuard(mux.mux)))
 }
 
 // Run serves until ctx is cancelled, then shuts down gracefully.

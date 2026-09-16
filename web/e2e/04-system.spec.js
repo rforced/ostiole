@@ -74,3 +74,44 @@ test('the certificate section says there is nothing to manage without HTTPS', as
   await expect(section).toContainText('not serving HTTPS')
   await expect(section.getByRole('button', { name: 'Regenerate self-signed' })).toHaveCount(0)
 })
+
+test('mint an API token and use it to scrape metrics', async ({ page, request }) => {
+  await login(page)
+  await page.goto('/system')
+  const section = page.getByRole('region', { name: 'Accounts and API tokens' })
+  await expect(section.getByRole('row').filter({ hasText: 'admin' })).toContainText('Admin')
+
+  await section.getByRole('button', { name: 'New token' }).click()
+  await section.getByLabel('Name').fill('monitoring')
+  await section.getByLabel('Role', { exact: true }).selectOption('viewer')
+  await section.getByRole('button', { name: 'Create' }).click()
+
+  const shown = section.getByRole('note')
+  await expect(shown).toContainText('cannot be shown again')
+  const secret = (await shown.locator('code').innerText()).trim()
+  expect(secret).toMatch(/^ost_/)
+  await page.screenshot({ path: shot('50-tokens'), fullPage: true })
+  await shown.getByRole('button', { name: 'Done' }).click()
+
+  // The token works on its own: no cookie, no CSRF header.
+  const metrics = await request.get('/metrics', {
+    headers: { Authorization: `Bearer ${secret}` },
+  })
+  expect(metrics.status()).toBe(200)
+  expect(await metrics.text()).toContain('ostiole_build_info')
+
+  // And it is a viewer, so it cannot change anything.
+  const apply = await request.post('/api/v1/apply/confirm', {
+    headers: { Authorization: `Bearer ${secret}` },
+  })
+  expect(apply.status()).toBe(403)
+
+  // The description of the API is public and lists the roles.
+  const spec = await (await request.get('/api/v1/openapi.json')).json()
+  expect(spec.paths['/api/v1/apply'].post['x-required-role']).toBe('operator')
+
+  const row = section.getByRole('row').filter({ hasText: 'monitoring' })
+  await row.getByRole('button', { name: 'Delete' }).click()
+  await row.getByRole('button', { name: /Delete\?/ }).click()
+  await expect(section.getByRole('row').filter({ hasText: 'monitoring' })).toHaveCount(0)
+})

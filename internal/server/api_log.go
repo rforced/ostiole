@@ -9,9 +9,9 @@ import (
 	"time"
 )
 
-func (a *api) registerLog(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/log/recent", a.protect(a.logRecent))
-	mux.HandleFunc("GET /api/v1/log/stream", a.protect(a.logStream))
+func (a *api) registerLog(mux *router) {
+	mux.HandleFunc("GET /api/v1/log/recent", a.readNoEngine(a.logRecent))
+	mux.HandleFunc("GET /api/v1/log/stream", a.readNoEngine(a.logStream))
 }
 
 func (a *api) logRecent(w http.ResponseWriter, r *http.Request) error {

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -84,10 +85,12 @@ func newUsersCmd(g *globals) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			for _, u := range svc.Usernames() {
-				fmt.Fprintln(cmd.OutOrStdout(), u)
+			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "USERNAME\tROLE")
+			for _, u := range svc.Accounts() {
+				fmt.Fprintf(w, "%s\t%s\n", u.Username, u.Role)
 			}
-			return nil
+			return w.Flush()
 		},
 	}
 	del := &cobra.Command{
@@ -106,6 +109,22 @@ func newUsersCmd(g *globals) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.AddCommand(del)
+	role := &cobra.Command{
+		Use:   "role <username> <admin|operator|viewer>",
+		Short: "Change what an account may do",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			svc, err := auth.NewService(g.configDir)
+			if err != nil {
+				return err
+			}
+			if err := svc.SetRole(args[0], auth.Role(args[1])); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "%s is now %s\n", args[0], args[1])
+			return nil
+		},
+	}
+	cmd.AddCommand(del, role)
 	return cmd
 }

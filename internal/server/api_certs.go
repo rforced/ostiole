@@ -7,10 +7,10 @@ import (
 	"github.com/rforced/ostiole/internal/certs"
 )
 
-func (a *api) registerCerts(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/certificate", a.guard(a.certificate))
-	mux.HandleFunc("POST /api/v1/certificate", a.guard(a.installCertificate))
-	mux.HandleFunc("POST /api/v1/certificate/self-signed", a.guard(a.regenerateCertificate))
+func (a *api) registerCerts(mux *router) {
+	mux.HandleFunc("GET /api/v1/certificate", a.readNoEngine(a.certificate))
+	mux.HandleFunc("POST /api/v1/certificate", a.admin(a.installCertificate))
+	mux.HandleFunc("POST /api/v1/certificate/self-signed", a.admin(a.regenerateCertificate))
 }
 
 // certificateResponse describes what the UI is talking to. Names is what
