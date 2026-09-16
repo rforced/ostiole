@@ -32,7 +32,7 @@ func newServicesCmd(_ *globals) *cobra.Command {
 			return w.Flush()
 		},
 	}
-	var withResolver bool
+	var withResolver, withPPPoE bool
 	setup := &cobra.Command{
 		Use:   "setup",
 		Short: "Install dnsmasq, write its unit, and retire competing resolvers",
@@ -43,13 +43,16 @@ Ostiole manages. Then enable DHCP and DNS under Services in the web UI.
 
 With --with-resolver it also installs unbound, bootstraps the DNSSEC root
 trust anchor, and writes ostiole-unbound.service, which the DNS service
-can then use to validate DNSSEC or to speak DNS over TLS.`,
+can then use to validate DNSSEC or to speak DNS over TLS.
+
+With --with-pppoe it installs pppd and writes ostiole-pppoe@.service, so
+an interface can dial a session over Ethernet the way DSL is delivered.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := requireRoot(); err != nil {
 				return err
 			}
-			opts := services.SetupOptions{Resolver: withResolver}
+			opts := services.SetupOptions{Resolver: withResolver, PPPoE: withPPPoE}
 			if err := services.Setup(cmd.Context(), services.New(), opts, slog.Default()); err != nil {
 				return err
 			}
@@ -58,6 +61,7 @@ can then use to validate DNSSEC or to speak DNS over TLS.`,
 		},
 	}
 	setup.Flags().BoolVar(&withResolver, "with-resolver", false, "also install unbound for DNSSEC validation and DNS over TLS")
+	setup.Flags().BoolVar(&withPPPoE, "with-pppoe", false, "also install pppd so an interface can dial a PPPoE session")
 	leases := &cobra.Command{
 		Use:   "leases",
 		Short: "Show DHCP leases",

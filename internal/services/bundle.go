@@ -19,9 +19,11 @@ type Bundle struct {
 
 var _ network.Backend = (*Bundle)(nil)
 
-// NewBundle returns the production services: unbound first, then dnsmasq.
+// NewBundle returns the production services: the dialled sessions first,
+// because an interface has to exist before anything serves on it, then
+// the resolver, then the forwarder that points at it.
 func NewBundle() *Bundle {
-	return &Bundle{backends: []network.Backend{NewUnbound(), New()}}
+	return &Bundle{backends: []network.Backend{NewPPPoE(), NewUnbound(), New()}}
 }
 
 // NewBundleOf composes the given backends, in apply order.

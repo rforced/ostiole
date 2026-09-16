@@ -103,10 +103,21 @@ func (n *Networkd) Render(cfg *model.Config) (Files, error) {
 		return nil, err
 	}
 	masters := cfg.MasterOf()
+	dialled := cfg.PPPoEParents()
 
 	for _, in := range cfg.Interfaces {
+		if in.Kind() == model.KindPPPoE {
+			// pppd creates the interface and puts the address on it, so
+			// networkd is told to keep its hands off rather than given a
+			// unit that would strip what pppd just configured.
+			continue
+		}
+		// A link that carries a bridge, a bond, or a dialled session is a
+		// port: it comes up, and nothing else.
+		attach := enslavement(cfg, masters[in.Name])
+		port := attach != "" || dialled[in.Name] != ""
 		files[n.networkFile(in.Name)] = renderNetwork(in, vlansByParent[in.Name], routes[in.Name],
-			gatewaysFor(cfg, in.Name), enslavement(cfg, masters[in.Name]))
+			gatewaysFor(cfg, in.Name), port, attach)
 	}
 	// A VLAN parent that is not itself configured still needs a unit so
 	// networkd brings the trunk up and attaches the VLANs.
@@ -121,7 +132,15 @@ func (n *Networkd) Render(cfg *model.Config) (Files, error) {
 		if _, ok := cfg.Interface(member); ok {
 			continue
 		}
-		files[n.networkFile(member)] = renderPort(member, enslavement(cfg, master))
+		files[n.networkFile(member)] = renderPort(member, "Port on "+master, enslavement(cfg, master))
+	}
+	// The link under a dialled session needs a unit only so networkd
+	// brings it up; pppd does the rest over it.
+	for parent, session := range dialled {
+		if _, ok := cfg.Interface(parent); ok {
+			continue
+		}
+		files[n.networkFile(parent)] = renderPort(parent, "Carries the PPPoE session "+session, "")
 	}
 	return files, nil
 }
@@ -190,15 +209,18 @@ func renderBondNetdev(in model.Interface) string {
 	return b.String()
 }
 
-// renderPort is the unit for a link that exists only to be a port on a
-// bridge or bond: no addressing of its own, no link-local address.
-func renderPort(name, master string) string {
+// renderPort is the unit for a link that carries someone else's traffic:
+// a bridge or bond port, or the Ethernet under a dialled session. It gets
+// no addressing of its own, only whatever attaches it to its owner.
+func renderPort(name, description, attach string) string {
 	var b strings.Builder
 	b.WriteString(fileHeader)
-	fmt.Fprintf(&b, "[Match]\nName=%s\n\n[Network]\nDescription=Port on %s (managed by ostiole)\n",
-		name, strings.SplitN(master, "=", 2)[1])
+	fmt.Fprintf(&b, "[Match]\nName=%s\n\n[Network]\nDescription=%s (managed by ostiole)\n",
+		name, sanitizeValue(description))
 	b.WriteString("LinkLocalAddressing=no\n")
-	b.WriteString(master + "\n")
+	if attach != "" {
+		b.WriteString(attach + "\n")
+	}
 	return b.String()
 }
 
@@ -285,7 +307,7 @@ func gatewaysFor(cfg *model.Config, iface string) []model.Gateway {
 	return out
 }
 
-func renderNetwork(in model.Interface, vlans []string, routes []model.StaticRoute, gateways []model.Gateway, master string) string {
+func renderNetwork(in model.Interface, vlans []string, routes []model.StaticRoute, gateways []model.Gateway, port bool, attach string) string {
 	var b strings.Builder
 	b.WriteString(fileHeader)
 	fmt.Fprintf(&b, "[Match]\nName=%s\n", in.Name)
@@ -312,9 +334,12 @@ func renderNetwork(in model.Interface, vlans []string, routes []model.StaticRout
 		b.WriteString("LinkLocalAddressing=no\n")
 		return b.String()
 	}
-	if master != "" {
-		// A port carries nothing of its own; the bridge or bond does.
-		b.WriteString("LinkLocalAddressing=no\n" + master + "\n")
+	if port {
+		// A port carries nothing of its own; whatever sits on top does.
+		b.WriteString("LinkLocalAddressing=no\n")
+		if attach != "" {
+			b.WriteString(attach + "\n")
+		}
 		return b.String()
 	}
 	if in.Kind() == model.KindBridge || in.Kind() == model.KindBond {

@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "system": {
+    "hostname": "dsl",
+    "management": { "webPort": 443, "sshPort": 22 }
+  },
+  "zones": [
+    { "name": "wan", "external": true },
+    { "name": "lan", "antiLockout": true }
+  ],
+  "interfaces": [
+    {
+      "name": "ppp0",
+      "zone": "wan",
+      "description": "The line",
+      "enabled": true,
+      "ipv4": { "mode": "ppp" },
+      "ipv6": { "mode": "ppp" },
+      "pppoe": {
+        "parent": "eth0",
+        "username": "someone@isp.example",
+        "password": "a \"quoted\" secret",
+        "serviceName": "internet",
+        "ipv6": true,
+        "lcpInterval": 5,
+        "lcpFailures": 3
+      }
+    },
+    {
+      "name": "ppp1",
+      "description": "Second line, not dialling yet",
+      "enabled": false,
+      "ipv4": { "mode": "ppp" },
+      "ipv6": { "mode": "none" },
+      "pppoe": {
+        "parent": "eth1",
+        "username": "backup@isp.example",
+        "password": "hunter2"
+      }
+    },
+    {
+      "name": "lan0",
+      "zone": "lan",
+      "enabled": true,
+      "ipv4": { "mode": "static", "address": "192.168.1.1/24" },
+      "ipv6": { "mode": "none" }
+    }
+  ],
+  "rules": [
+    {
+      "id": "lan-out",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    }
+  ],
+  "nat": { "outbound": { "mode": "automatic" } },
+  "gateways": [{ "name": "dsl", "enabled": true, "interface": "ppp0", "priority": 0 }],
+  "services": {
+    "dhcp": {
+      "enabled": true,
+      "scopes": [
+        {
+          "interface": "lan0",
+          "enabled": true,
+          "rangeStart": "192.168.1.100",
+          "rangeEnd": "192.168.1.199"
+        }
+      ]
+    },
+    "dns": { "enabled": true, "domain": "lan", "upstreams": ["1.1.1.1"] }
+  }
+}

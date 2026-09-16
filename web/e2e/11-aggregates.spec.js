@@ -77,3 +77,46 @@ test('build a bridge and a bond from the machine s own links', async ({ page }) 
   await page.getByRole('button', { name: 'Discard' }).click()
   await expect(page.getByText('Unapplied changes.')).toHaveCount(0)
 })
+
+test('configure a PPPoE session over a spare link', async ({ page }) => {
+  await login(page)
+  await page.goto('/interfaces')
+
+  // The same spare link the bridge test used: it is in the wan zone with
+  // nothing else hanging off it.
+  const spare = (
+    await page
+      .getByRole('row')
+      .filter({ hasText: '10.77.0.1/24' })
+      .locator('td')
+      .first()
+      .locator('div')
+      .first()
+      .textContent()
+  ).trim()
+
+  await page.getByRole('button', { name: 'Add PPPoE' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue('ppp0')
+  // The test server is not root, so pppd is reported as missing and the
+  // dialog says so rather than letting the apply fail later.
+  await expect(dialog.getByRole('note')).toContainText('services setup --with-pppoe')
+
+  await dialog.getByLabel('Plugged into').selectOption(spare)
+  await dialog.getByLabel('Username').fill('someone@isp.example')
+  await dialog.getByLabel('Password').fill('a secret')
+  await dialog.getByLabel('Ask for IPv6 as well').check()
+  await page.screenshot({ path: shot('92-pppoe'), fullPage: true })
+  await dialog.getByRole('button', { name: 'Save to draft' }).click()
+
+  const row = page.getByRole('row').filter({ hasText: 'ppp0' }).first()
+  await expect(row).toContainText(`PPPoE over ${spare} as someone@isp.example`)
+
+  // The draft is valid: the server renders it without complaint.
+  await page.getByRole('link', { name: 'System' }).click()
+  await page.getByRole('button', { name: 'Render the draft' }).click()
+  await expect(page.locator('pre')).toContainText('table inet ostiole')
+
+  await page.getByRole('button', { name: 'Discard' }).click()
+  await expect(page.getByText('Unapplied changes.')).toHaveCount(0)
+})

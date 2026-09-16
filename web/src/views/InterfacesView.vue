@@ -9,6 +9,7 @@ import { api } from '@/lib/api'
 import { useConfigStore } from '@/stores/config'
 import AggregateDialog from '@/views/interfaces/AggregateDialog.vue'
 import InterfaceDialog from '@/views/interfaces/InterfaceDialog.vue'
+import PppoeDialog from '@/views/interfaces/PppoeDialog.vue'
 import VlanDialog from '@/views/interfaces/VlanDialog.vue'
 import ZoneDialog from '@/views/interfaces/ZoneDialog.vue'
 
@@ -23,6 +24,9 @@ const vlanOpen = ref(false)
 const aggOpen = ref(false)
 const aggKind = ref('bridge')
 const aggEditing = ref(null)
+const pppOpen = ref(false)
+const pppEditing = ref(null)
+const pppoeReady = ref(true)
 const zoneEditing = ref(null)
 const zoneOpen = ref(false)
 
@@ -37,6 +41,11 @@ async function refreshLive() {
 
 onMounted(async () => {
   await Promise.all([config.load(), refreshLive()])
+  try {
+    pppoeReady.value = (await api.services.status()).pppoeSetUp
+  } catch {
+    pppoeReady.value = true
+  }
 })
 
 /** Live links (minus loopback) merged with draft config by name. */
@@ -64,6 +73,16 @@ function addAggregate(kind) {
   aggOpen.value = true
 }
 
+function addPppoe() {
+  pppEditing.value = null
+  pppOpen.value = true
+}
+
+function editPppoe(cfg) {
+  pppEditing.value = cfg
+  pppOpen.value = true
+}
+
 function editAggregate(cfg) {
   aggKind.value = cfg.bond ? 'bond' : 'bridge'
   aggEditing.value = cfg
@@ -73,6 +92,7 @@ function editAggregate(cfg) {
 /** A one-line description of what an interface is made of. */
 function describeKind(row) {
   const c = row.cfg
+  if (c?.pppoe) return `PPPoE over ${c.pppoe.parent} as ${c.pppoe.username}`
   if (c?.bridge) return `bridge of ${c.bridge.members.join(', ') || 'nothing yet'}`
   if (c?.bond) return `${c.bond.mode} bond of ${c.bond.members.join(', ') || 'nothing yet'}`
   if (c?.vlan) return `VLAN ${c.vlan.id} on ${c.vlan.parent}`
@@ -154,6 +174,9 @@ function editZone(z) {
           <button type="button" class="btn-secondary" @click="addAggregate('bond')">
             <Plus class="mr-1 size-4" aria-hidden="true" /> Add bond
           </button>
+          <button type="button" class="btn-secondary" @click="addPppoe">
+            <Plus class="mr-1 size-4" aria-hidden="true" /> Add PPPoE
+          </button>
           <button type="button" class="btn-secondary" @click="refreshLive">
             <RefreshCw class="mr-1 size-4" aria-hidden="true" /> Refresh
           </button>
@@ -206,7 +229,15 @@ function editZone(z) {
                   >
                     Members
                   </button>
-                  <button type="button" class="link" @click="edit(row)">
+                  <button
+                    v-if="row.cfg?.pppoe"
+                    type="button"
+                    class="link"
+                    @click="editPppoe(row.cfg)"
+                  >
+                    Edit
+                  </button>
+                  <button v-else type="button" class="link" @click="edit(row)">
                     {{ row.cfg ? 'Edit' : 'Configure' }}
                   </button>
                   <ConfirmButton
@@ -280,6 +311,12 @@ function editZone(z) {
 
     <InterfaceDialog v-model:open="editOpen" :iface="editing" />
     <VlanDialog v-model:open="vlanOpen" :parents="vlanParents" />
+    <PppoeDialog
+      v-model:open="pppOpen"
+      :candidates="aggCandidates"
+      :iface="pppEditing"
+      :ready="pppoeReady"
+    />
     <AggregateDialog
       v-model:open="aggOpen"
       :kind="aggKind"

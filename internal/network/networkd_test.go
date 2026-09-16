@@ -335,3 +335,30 @@ func TestRenderPrefixDelegation(t *testing.T) {
 		}
 	}
 }
+
+// A dialled session's interface belongs to pppd; the Ethernet under it is
+// brought up and left bare.
+func TestRenderLeavesPPPoEToPppd(t *testing.T) {
+	t.Parallel()
+	cfg := loadConfig(t, "testdata/delegated.json")
+	cfg.Interfaces = append(cfg.Interfaces, model.Interface{
+		Name: "ppp0", Zone: "wan", Enabled: true,
+		IPv4:  model.IPv4{Mode: model.AddrPPP},
+		IPv6:  model.IPv6{Mode: model.AddrNone},
+		PPPoE: &model.PPPoE{Parent: "eth9", Username: "someone", Password: "secret"},
+	})
+	files, err := (&Networkd{}).Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := files["00-ostiole-ppp0.network"]; ok {
+		t.Error("networkd was given a unit for an interface pppd owns")
+	}
+	parent := files["00-ostiole-eth9.network"]
+	if !strings.Contains(parent, "LinkLocalAddressing=no") || !strings.Contains(parent, "PPPoE session ppp0") {
+		t.Errorf("the link under the session:\n%s", parent)
+	}
+	if strings.Contains(parent, "Address=") || strings.Contains(parent, "DHCP=") {
+		t.Errorf("the link under the session carries addressing:\n%s", parent)
+	}
+}

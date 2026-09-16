@@ -43,6 +43,8 @@ const (
 	// delegated, which is how an ISP hands out addressable space for the
 	// networks behind the router.
 	AddrDelegated AddrMode = "delegated"
+	// AddrPPP takes the address from the other end of a dialled session.
+	AddrPPP AddrMode = "ppp"
 )
 
 // AliasType is the kind of entries an alias holds.
@@ -130,8 +132,36 @@ type Interface struct {
 	Bridge *Bridge `json:"bridge,omitempty"`
 	// Bond joins several links into one.
 	Bond *Bond `json:"bond,omitempty"`
-	MTU  int   `json:"mtu,omitempty"`
+	// PPPoE dials a session over an Ethernet link, which is how most DSL
+	// and some fibre services are delivered.
+	PPPoE *PPPoE `json:"pppoe,omitempty"`
+	MTU   int    `json:"mtu,omitempty"`
 }
+
+// PPPoE is a dialled session over Ethernet. The address, the default
+// route, and the DNS servers all come from the other end, so there is
+// nothing to configure but the credentials.
+type PPPoE struct {
+	// Parent is the Ethernet link the session runs over. It carries no
+	// address of its own.
+	Parent   string `json:"parent"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+	// ServiceName and ACName pick one concentrator when the line offers
+	// more than one. Both are usually empty.
+	ServiceName string `json:"serviceName,omitempty"`
+	ACName      string `json:"acName,omitempty"`
+	// IPv6 asks for an IPv6 session alongside the IPv4 one.
+	IPv6 bool `json:"ipv6,omitempty"`
+	// LCPInterval and LCPFailures decide how quickly a dead line is
+	// noticed: pppd gives up after LCPFailures unanswered echoes.
+	LCPInterval int `json:"lcpInterval,omitempty"`
+	LCPFailures int `json:"lcpFailures,omitempty"`
+}
+
+// PPPoEMTU is what a PPPoE session leaves of an Ethernet frame: eight
+// bytes of header come out of the usual 1500.
+const PPPoEMTU = 1492
 
 // Kind names what an interface is made of, for the UI and for messages.
 type Kind string
@@ -143,6 +173,7 @@ const (
 	KindBridge    Kind = "bridge"
 	KindBond      Kind = "bond"
 	KindWireGuard Kind = "wireguard"
+	KindPPPoE     Kind = "pppoe"
 )
 
 // Kind reports what this interface is.
@@ -156,6 +187,8 @@ func (i Interface) Kind() Kind {
 		return KindBond
 	case i.WireGuard != nil:
 		return KindWireGuard
+	case i.PPPoE != nil:
+		return KindPPPoE
 	}
 	return KindPhysical
 }
@@ -226,6 +259,19 @@ type Bond struct {
 
 // HashPolicies are the transmit hash policies networkd accepts.
 var HashPolicies = []string{"layer2", "layer2+3", "layer3+4", "encap2+3", "encap3+4"}
+
+// PPPoEParents maps each Ethernet link carrying a dialled session to the
+// interface that dials it. Such a link is a port: the session holds the
+// address, not the wire underneath it.
+func (c *Config) PPPoEParents() map[string]string {
+	out := map[string]string{}
+	for _, in := range c.Interfaces {
+		if in.PPPoE != nil && in.PPPoE.Parent != "" {
+			out[in.PPPoE.Parent] = in.Name
+		}
+	}
+	return out
+}
 
 // MasterOf maps each enslaved interface to the bridge or bond that owns
 // it. A member belongs to at most one, which validation enforces.

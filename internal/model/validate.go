@@ -94,6 +94,11 @@ func (c *Config) Validate() error {
 		if in.WireGuard != nil {
 			v.wireguard(path+".wireguard", in)
 		}
+		if in.PPPoE != nil {
+			v.pppoe(path, in)
+		} else if in.IPv4.Mode == AddrPPP || in.IPv6.Mode == AddrPPP {
+			v.add(path+".ipv4.mode", "only a PPPoE interface takes its address from a dialled session")
+		}
 		if kinds := builtFrom(in); len(kinds) > 1 {
 			v.add(path+".kind", "an interface is one thing at a time, and this one is %s",
 				strings.Join(kinds, " and "))
@@ -299,8 +304,7 @@ func (c *Config) Validate() error {
 				v.add(path+".address", "%v", err)
 			}
 			addr = a
-		} else if in, ok := c.Interface(g.Interface); ok &&
-			in.IPv4.Mode != AddrDHCP && in.IPv6.Mode != AddrDHCP && in.IPv6.Mode != AddrSLAAC {
+		} else if in, ok := c.Interface(g.Interface); ok && !learnsGateway(*in) {
 			v.add(path+".address", "this interface gets no gateway from the network; give one here")
 		}
 		if g.Monitor != "" {
@@ -679,6 +683,20 @@ func (v *validator) enslaved(c *Config, ifaces map[string]bool) {
 		}
 	}
 
+	// The Ethernet link under a dialled session is a port too: the session
+	// holds the address, not the wire.
+	for i, in := range c.Interfaces {
+		if in.PPPoE == nil || in.PPPoE.Parent == "" {
+			continue
+		}
+		if other, taken := masters[in.PPPoE.Parent]; taken {
+			v.add(fmt.Sprintf("interfaces[%d].pppoe.parent", i),
+				"%q is already part of %q", in.PPPoE.Parent, other)
+			continue
+		}
+		masters[in.PPPoE.Parent] = in.Name
+	}
+
 	// Anything enslaved must be free of a zone and of addresses: it is a
 	// port on its master, not an interface in its own right.
 	for i, in := range c.Interfaces {
@@ -698,6 +716,55 @@ func (v *validator) enslaved(c *Config, ifaces map[string]bool) {
 		}
 	}
 	_ = ifaces
+}
+
+// pppoe checks a dialled session. The address always comes from the other
+// end, so the only real questions are which link it runs over and who to
+// log in as.
+func (v *validator) pppoe(path string, in Interface) {
+	p := in.PPPoE
+	switch {
+	case !ifaceRe.MatchString(p.Parent):
+		v.add(path+".pppoe.parent", "%q is not a valid interface name", p.Parent)
+	case p.Parent == in.Name:
+		v.add(path+".pppoe.parent", "a session cannot run over itself")
+	}
+	if p.Username == "" {
+		v.add(path+".pppoe.username", "the provider's username is required")
+	}
+	if p.Password == "" {
+		v.add(path+".pppoe.password", "the provider's password is required")
+	}
+	if p.LCPInterval < 0 || p.LCPInterval > 3600 {
+		v.add(path+".pppoe.lcpInterval", "%d seconds must be 0-3600", p.LCPInterval)
+	}
+	if p.LCPFailures < 0 || p.LCPFailures > 100 {
+		v.add(path+".pppoe.lcpFailures", "%d must be 0-100", p.LCPFailures)
+	}
+	if in.IPv4.Mode != AddrPPP && in.IPv4.Mode != AddrNone {
+		v.add(path+".ipv4.mode", "a PPPoE interface takes its IPv4 address from the session, so the mode is ppp")
+	}
+	switch in.IPv6.Mode {
+	case AddrNone, AddrPPP:
+	default:
+		v.add(path+".ipv6.mode", "a PPPoE interface takes its IPv6 address from the session, so the mode is ppp or none")
+	}
+	if in.IPv6.Mode == AddrPPP && !p.IPv6 {
+		v.add(path+".pppoe.ipv6", "turn on IPv6 for this session, or set the interface's IPv6 mode to none")
+	}
+}
+
+// learnsGateway reports whether an interface is told where to send
+// traffic by the other end: DHCP, a router advertisement, or a dialled
+// session all do that, a static address does not.
+func learnsGateway(in Interface) bool {
+	for _, m := range []AddrMode{in.IPv4.Mode, in.IPv6.Mode} {
+		switch m {
+		case AddrDHCP, AddrSLAAC, AddrPPP:
+			return true
+		}
+	}
+	return false
 }
 
 // delegation checks that everything taking a delegated prefix has an
@@ -851,7 +918,7 @@ func (v *validator) id(path, id string, seen map[string]bool) {
 
 func (v *validator) addr4(path string, a IPv4) {
 	switch a.Mode {
-	case AddrNone, AddrDHCP:
+	case AddrNone, AddrDHCP, AddrPPP:
 		if a.Address != "" {
 			v.add(path+".address", "address is only valid in static mode")
 		}
@@ -871,7 +938,7 @@ func (v *validator) addr4(path string, a IPv4) {
 
 func (v *validator) addr6(path string, a IPv6) {
 	switch a.Mode {
-	case AddrNone, AddrDHCP, AddrSLAAC, AddrDelegated:
+	case AddrNone, AddrDHCP, AddrSLAAC, AddrDelegated, AddrPPP:
 		if a.Address != "" {
 			v.add(path+".address", "address is only valid in static mode")
 		}

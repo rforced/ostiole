@@ -40,6 +40,9 @@ type Deps struct {
 	Services *services.Dnsmasq
 	// Resolver reads unbound's state; nil reports "not set up".
 	Resolver *services.Unbound
+	// PPPoE reports whether a dialled session can be run here; nil reports
+	// "not set up".
+	PPPoE *services.PPPoE
 	// Log is the firewall log ring; nil disables the log endpoints.
 	Log *fwlog.Ring
 	// Gateways reports multi-WAN health; nil means nothing is watching.
@@ -62,6 +65,7 @@ func Handler(d Deps) http.Handler {
 		updater:  d.Updater,
 		services: d.Services,
 		resolver: d.Resolver,
+		pppoe:    d.PPPoE,
 		fwlog:    d.Log,
 		gateways: d.Gateways,
 		tables:   d.Tables,

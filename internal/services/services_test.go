@@ -375,3 +375,63 @@ func TestSetupWritesUnitAndMasksCompetitors(t *testing.T) {
 	}
 	var _ network.Backend = d
 }
+
+// The pppd peer files are golden-tested on the inputs that dial; the rest
+// must produce none at all.
+func TestRenderPPPoEGolden(t *testing.T) {
+	t.Parallel()
+	inputs, _ := filepath.Glob("testdata/*.json")
+	for _, in := range inputs {
+		name := strings.TrimSuffix(filepath.Base(in), ".json")
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			cfg := loadConfig(t, in)
+			files, err := (&PPPoE{Dir: PPPoEDir}).Render(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			golden := strings.TrimSuffix(in, ".json") + ".pppoe"
+			if len(Sessions(cfg)) == 0 {
+				if len(files) != 0 {
+					t.Fatalf("no sessions configured but rendered %v", files.Names())
+				}
+				return
+			}
+			got := files.String()
+			if *update {
+				if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			want, err := os.ReadFile(golden)
+			if err != nil {
+				t.Fatalf("missing golden (run with -update): %v", err)
+			}
+			if got != string(want) {
+				t.Errorf("mismatch (run with -update to accept)\n--- got ---\n%s", got)
+			}
+		})
+	}
+}
+
+// A password with a quote in it must not be able to end the option and
+// start another; pppd reads these files as shell-ish words.
+func TestPeerFileQuotesTheSecret(t *testing.T) {
+	t.Parallel()
+	files, err := (&PPPoE{Dir: PPPoEDir}).Render(loadConfig(t, "testdata/pppoe.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer := files[PeerFile("ppp0")]
+	if !strings.Contains(peer, `password "a \"quoted\" secret"`) {
+		t.Errorf("the quote was not escaped:\n%s", peer)
+	}
+	// A session that is switched off is not dialled.
+	if _, ok := files[PeerFile("ppp1")]; ok {
+		t.Error("a disabled session should not be written")
+	}
+	// The gateway metric belongs on the route pppd installs.
+	if !strings.Contains(peer, "defaultroute-metric 10") {
+		t.Errorf("the default route has no metric:\n%s", peer)
+	}
+}

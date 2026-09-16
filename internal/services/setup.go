@@ -35,6 +35,14 @@ type SetupOptions struct {
 	Unbound *Unbound
 	// UnboundBinary overrides the unbound path (found on PATH otherwise).
 	UnboundBinary string
+	// PPPoE also installs pppd and writes the templated unit that dials a
+	// session.
+	PPPoE bool
+	// PPPBinary overrides the pppd path (found on PATH otherwise).
+	PPPBinary string
+	// PPPoEBackend is set up when PPPoE is set; nil means production
+	// defaults.
+	PPPoEBackend *PPPoE
 }
 
 // Setup makes the host able to run the services: installs dnsmasq if
@@ -106,6 +114,11 @@ func Setup(ctx context.Context, d *Dnsmasq, o SetupOptions, log *slog.Logger) er
 	}
 	if o.Resolver {
 		if err := setupResolver(ctx, run, o, unitDir, log); err != nil {
+			return err
+		}
+	}
+	if o.PPPoE {
+		if err := setupPPPoE(ctx, run, o, unitDir, log); err != nil {
 			return err
 		}
 	}
@@ -251,4 +264,51 @@ type execRunner struct{}
 
 func (execRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	return exec.CommandContext(ctx, name, args...).CombinedOutput()
+}
+
+// setupPPPoE installs pppd and writes the templated unit. The rp-pppoe
+// plugin ships with pppd on every distribution that packages it, so there
+// is nothing else to fetch.
+func setupPPPoE(ctx context.Context, run Runner, o SetupOptions, unitDir string, log *slog.Logger) error {
+	p := o.PPPoEBackend
+	if p == nil {
+		p = NewPPPoE()
+	}
+	bin := o.PPPBinary
+	if bin == "" {
+		bin = lookPath("pppd")
+	}
+	if bin == "" {
+		pm := o.PackageManager
+		if pm == "" {
+			pm = detectPackageManager()
+		}
+		for _, pkg := range pppPackages(pm) {
+			if err := installPackage(ctx, run, pm, pkg, log); err != nil {
+				return err
+			}
+		}
+		if bin = lookPath("pppd"); bin == "" {
+			return errors.New("pppd still not found after installation")
+		}
+	}
+	// Peer files carry the provider password, so the directory is
+	// root-only too.
+	if err := os.MkdirAll(p.dir(), 0o700); err != nil {
+		return err
+	}
+	if err := writeFile(filepath.Join(unitDir, PPPoEUnit), PPPoEUnitContent(bin)); err != nil {
+		return err
+	}
+	log.Info("PPPoE ready", "unit", PPPoEUnit, "pppd", bin)
+	return nil
+}
+
+// pppPackages names the ppp daemon and, where it is packaged apart, the
+// rp-pppoe plugin that dials over Ethernet.
+func pppPackages(pm string) []string {
+	if pm == "apk" {
+		return []string{"ppp-daemon", "ppp-pppoe"}
+	}
+	return []string{"ppp"}
 }

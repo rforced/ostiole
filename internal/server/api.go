@@ -34,6 +34,7 @@ type api struct {
 	updater  *update.Manager
 	services *services.Dnsmasq
 	resolver *services.Unbound
+	pppoe    *services.PPPoE
 	fwlog    *fwlog.Ring
 	tables   TableLister
 	units    install.Systemctl
@@ -80,6 +81,9 @@ type servicesStatus struct {
 	// Resolver is unbound, which only exists once it has been set up.
 	ResolverSetUp   bool `json:"resolverSetUp"`
 	ResolverRunning bool `json:"resolverRunning"`
+	// PPPoE reports whether pppd and its unit are in place, which a
+	// dialled line needs before it can be applied.
+	PPPoESetUp bool `json:"pppoeSetUp"`
 }
 
 func (a *api) servicesStatus(w http.ResponseWriter, r *http.Request) error {
@@ -94,6 +98,9 @@ func (a *api) servicesStatus(w http.ResponseWriter, r *http.Request) error {
 	if a.resolver != nil {
 		st.ResolverSetUp = a.resolver.Installed(r.Context())
 		st.ResolverRunning = a.resolver.Active(r.Context())
+	}
+	if a.pppoe != nil {
+		st.PPPoESetUp = a.pppoe.Installed(r.Context())
 	}
 	writeJSON(w, http.StatusOK, st)
 	return nil

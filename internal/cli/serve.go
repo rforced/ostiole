@@ -81,6 +81,7 @@ at your own.`,
 			if os.Geteuid() == 0 {
 				deps.Services = services.New()
 				deps.Resolver = services.NewUnbound()
+				deps.PPPoE = services.NewPPPoE()
 				// Gateway probes need a raw socket and route changes need
 				// netlink, so multi-WAN failover is a root-only feature.
 				mon := gateway.New(gateway.NewICMPProber(), gateway.NewNetlinkRouter(), slog.Default())

@@ -474,7 +474,13 @@ func (d *Dnsmasq) Active(ctx context.Context) bool {
 
 // writeFile replaces path atomically. Generated service files are
 // world-readable: dnsmasq and unbound read them after dropping privileges.
-func writeFile(path, content string) error {
+func writeFile(path, content string) error { return writeMode(path, content, 0o644) }
+
+// writeSecretFile does the same for a file nobody but root should read,
+// like the provider password in a pppd peer file.
+func writeSecretFile(path, content string) error { return writeMode(path, content, 0o600) }
+
+func writeMode(path, content string, mode os.FileMode) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
 	if err != nil {
 		return err
@@ -485,7 +491,7 @@ func writeFile(path, content string) error {
 		_ = os.Remove(name)
 		return err
 	}
-	if err := tmp.Chmod(0o644); err != nil {
+	if err := tmp.Chmod(mode); err != nil {
 		_ = tmp.Close()
 		_ = os.Remove(name)
 		return err
