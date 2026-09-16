@@ -153,6 +153,8 @@ export const api = {
   },
   /** Live gateway health from the multi-WAN monitor. */
   gateways: () => get('/gateways'),
+  /** Default routes the kernel already has, with the gateway each would become. */
+  detectedGateways: () => get('/gateways/detected'),
   policy: () => get('/policy'),
   diagnostics: {
     ping: (body) => post('/diagnostics/ping', body),

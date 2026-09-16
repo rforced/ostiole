@@ -86,6 +86,7 @@ func (a *api) register(mux *router) {
 	mux.HandleFunc("GET /api/v1/dhcp/leases", a.readNoEngine(a.dhcpLeases))
 	mux.HandleFunc("POST /api/v1/wireguard/keys", a.write(a.wireguardKeys))
 	mux.HandleFunc("GET /api/v1/gateways", a.readNoEngine(a.gatewayStatus))
+	mux.HandleFunc("GET /api/v1/gateways/detected", a.read(a.detectedGateways))
 	mux.HandleFunc("GET /api/v1/policy", a.readNoEngine(a.policyStatus))
 	mux.HandleFunc("GET /api/v1/update/check", a.admin(a.updateCheck))
 	mux.HandleFunc("GET /api/v1/update/status", a.readNoEngine(a.updateStatus))
@@ -143,6 +144,35 @@ func (a *api) gatewayStatus(w http.ResponseWriter, _ *http.Request) error {
 	out := []gateway.Status{}
 	if a.gateways != nil {
 		out = a.gateways.Statuses()
+	}
+	writeJSON(w, http.StatusOK, out)
+	return nil
+}
+
+// detectedGateways reports the default routes the kernel already has.
+// Most boxes get one from DHCP before anyone configures anything, and it
+// is the one carrying the traffic, so it belongs on the page whether or
+// not Ostiole put it there.
+func (a *api) detectedGateways(w http.ResponseWriter, _ *http.Request) error {
+	cfg := a.engine.Effective()
+	found, err := gateway.Detect(cfg)
+	if err != nil {
+		return err
+	}
+	type detected struct {
+		gateway.Detected
+		// Suggested is the gateway this route would become, ready for the
+		// UI to put straight into the draft.
+		Suggested *model.Gateway `json:"suggested,omitempty"`
+	}
+	out := make([]detected, 0, len(found))
+	for _, d := range found {
+		row := detected{Detected: d}
+		if d.Configured == "" && cfg != nil {
+			g := gateway.Suggest(cfg, d)
+			row.Suggested = &g
+		}
+		out = append(out, row)
 	}
 	writeJSON(w, http.StatusOK, out)
 	return nil

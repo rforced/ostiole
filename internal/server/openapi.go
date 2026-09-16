@@ -80,6 +80,7 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/services/status":        {summary: "Whether DHCP, DNS, the resolver, and PPPoE are set up and running.", role: auth.RoleViewer},
 	"GET /api/v1/dhcp/leases":            {summary: "Current DHCP leases.", role: auth.RoleViewer},
 	"GET /api/v1/gateways":               {summary: "Gateway health from the multi-WAN monitor.", role: auth.RoleViewer},
+	"GET /api/v1/gateways/detected":      {summary: "Default routes the kernel already has, and the gateway each would become.", role: auth.RoleViewer},
 	"GET /api/v1/policy":                 {summary: "Where policy-routed traffic is being sent.", role: auth.RoleViewer},
 	"GET /api/v1/log/recent":             {summary: "Recent firewall log entries.", role: auth.RoleViewer},
 	"GET /api/v1/log/stream":             {summary: "Firewall log entries as they arrive (server-sent events).", role: auth.RoleViewer},

@@ -96,3 +96,51 @@ test('a country alias asks for codes, not addresses', async ({ page }) => {
   await page.getByRole('button', { name: 'Discard' }).click()
   await expect(page.getByText('Unapplied changes.')).toHaveCount(0)
 })
+
+test('hybrid outbound NAT puts your rules ahead of the automatic one', async ({ page }) => {
+  await login(page)
+  await page.goto('/firewall')
+  await page.getByRole('tab', { name: 'NAT' }).click()
+
+  await page.getByLabel('Mode').selectOption('hybrid')
+  await expect(page.getByText('behaves like automatic')).toBeVisible()
+
+  // A host that keeps its own address on the way out.
+  await page.getByRole('button', { name: 'Add outbound rule' }).click()
+  let dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Description').fill('Mail server keeps its address')
+  await dialog.getByLabel('Source networks').fill('192.168.50.25/32')
+  await dialog.getByLabel('Leave as').fill('203.0.113.25')
+  await dialog.getByRole('button', { name: 'Save to draft' }).click()
+
+  // And one that is kept out of NAT altogether.
+  await page.getByRole('button', { name: 'Add outbound rule' }).click()
+  dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Description').fill('Routed to the partner network')
+  await dialog.getByLabel('Source networks').fill('192.168.50.0/24')
+  await dialog.getByLabel('Destination networks').fill('10.80.0.0/16')
+  await dialog.getByLabel('Do not translate this traffic').check()
+  // Naming an address makes no sense once nothing is translated.
+  await expect(dialog.getByLabel('Leave as')).toHaveCount(0)
+  await dialog.getByRole('button', { name: 'Save to draft' }).click()
+
+  const rows = page.getByRole('row')
+  await expect(rows.filter({ hasText: 'keeps its address' })).toContainText('203.0.113.25')
+  await expect(rows.filter({ hasText: 'partner network' })).toContainText('not translated')
+  await page.screenshot({ path: shot('B0-hybrid-nat'), fullPage: true })
+
+  await applyAndConfirm(page)
+
+  // The rules land above the automatic masquerade, which is what makes
+  // hybrid different from adding rules to automatic.
+  await page.goto('/system')
+  await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
+  const text = await page.locator('pre').innerText()
+  const mail = text.indexOf('snat ip to 203.0.113.25')
+  const noNat = text.indexOf('counter return')
+  const auto = text.indexOf('auto-nat:')
+  expect(mail).toBeGreaterThan(-1)
+  expect(noNat).toBeGreaterThan(-1)
+  expect(auto).toBeGreaterThan(mail)
+  expect(auto).toBeGreaterThan(noNat)
+})

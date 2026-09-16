@@ -364,6 +364,28 @@ func newCountersCmd(g *globals) *cobra.Command {
 	}
 }
 
+// printDetected lists the default routes the kernel already has. Most
+// boxes get one from DHCP before anyone configures anything, and it is
+// the one carrying the traffic.
+func printDetected(cmd *cobra.Command, cfg *model.Config) {
+	found, err := gateway.Detect(cfg)
+	if err != nil || len(found) == 0 {
+		return
+	}
+	out := cmd.OutOrStdout()
+	fmt.Fprintln(out, "\ndefault routes this box already has:")
+	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "GATEWAY\tINTERFACE\tFAMILY\tMETRIC\tFROM\tCONFIGURED AS")
+	for _, d := range found {
+		as := d.Configured
+		if as == "" {
+			as = "not configured (" + gateway.Suggest(cfg, d).Name + " would cover it)"
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\n", d.Address, d.Interface, d.Family, d.Metric, d.Protocol, as)
+	}
+	_ = w.Flush()
+}
+
 func newPolicyCmd(g *globals) *cobra.Command {
 	return &cobra.Command{
 		Use:   "policy",
@@ -454,6 +476,7 @@ moves the default route off a gateway that stops answering.`,
 			if err != nil {
 				return err
 			}
+			defer printDetected(cmd, cfg)
 			if len(cfg.Gateways) == 0 {
 				fmt.Fprintln(cmd.OutOrStdout(), "no gateways configured")
 				return nil

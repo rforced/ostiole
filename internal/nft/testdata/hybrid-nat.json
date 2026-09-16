@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "system": {
+    "hostname": "hybrid",
+    "management": {
+      "webPort": 443,
+      "sshPort": 22
+    }
+  },
+  "zones": [
+    {
+      "name": "wan",
+      "external": true,
+      "antiLockout": true
+    },
+    {
+      "name": "lan",
+      "antiLockout": true
+    }
+  ],
+  "interfaces": [
+    {
+      "name": "eth0",
+      "zone": "wan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "203.0.113.2/24",
+        "gateway": "203.0.113.1"
+      },
+      "ipv6": {
+        "mode": "none"
+      }
+    },
+    {
+      "name": "eth1",
+      "zone": "lan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "10.130.0.1/24"
+      },
+      "ipv6": {
+        "mode": "static",
+        "address": "2001:db8:130::1/64"
+      }
+    }
+  ],
+  "rules": [
+    {
+      "id": "lan-out",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    }
+  ],
+  "nat": {
+    "outbound": {
+      "mode": "hybrid",
+      "rules": [
+        {
+          "id": "mail-out",
+          "description": "The mail server keeps its own address",
+          "enabled": true,
+          "zone": "wan",
+          "source": [
+            "10.130.0.101/32"
+          ],
+          "address": "203.0.113.25"
+        },
+        {
+          "id": "voip-out",
+          "description": "Second host, second address",
+          "enabled": true,
+          "zone": "wan",
+          "source": [
+            "10.130.0.11/32"
+          ],
+          "address": "203.0.113.26"
+        },
+        {
+          "id": "no-nat-vpn",
+          "description": "Traffic to the partner network is routed, not translated",
+          "enabled": true,
+          "zone": "wan",
+          "source": [
+            "10.130.0.0/24"
+          ],
+          "destination": [
+            "192.168.50.0/24"
+          ],
+          "noNat": true
+        },
+        {
+          "id": "v6-out",
+          "description": "IPv6 source, so only the v6 line is written",
+          "enabled": true,
+          "zone": "wan",
+          "source": [
+            "2001:db8:130::/64"
+          ]
+        },
+        {
+          "id": "off",
+          "enabled": false,
+          "zone": "wan"
+        }
+      ]
+    }
+  },
+  "services": {
+    "dhcp": {
+      "enabled": false
+    },
+    "dns": {
+      "enabled": false
+    }
+  }
+}

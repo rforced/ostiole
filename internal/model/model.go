@@ -64,10 +64,20 @@ type OutboundMode string
 
 // Outbound NAT modes.
 const (
-	OutboundAutomatic OutboundMode = "automatic" // masquerade IPv4 leaving every external zone
-	OutboundManual    OutboundMode = "manual"    // only the listed rules
-	OutboundDisabled  OutboundMode = "disabled"
+	// OutboundAutomatic masquerades IPv4 leaving every external zone.
+	OutboundAutomatic OutboundMode = "automatic"
+	// OutboundHybrid applies the listed rules first and then the automatic
+	// ones, which is how one host is given a different address, or kept
+	// out of NAT, without writing out the rules for everything else.
+	OutboundHybrid OutboundMode = "hybrid"
+	// OutboundManual applies only the listed rules.
+	OutboundManual OutboundMode = "manual"
+	// OutboundDisabled translates nothing.
+	OutboundDisabled OutboundMode = "disabled"
 )
+
+// OutboundModes lists them in the order the UI offers them.
+var OutboundModes = []OutboundMode{OutboundAutomatic, OutboundHybrid, OutboundManual, OutboundDisabled}
 
 // Config is the complete appliance configuration.
 type Config struct {
@@ -536,14 +546,26 @@ type OutboundNAT struct {
 	Rules []OutboundRule `json:"rules,omitempty"`
 }
 
-// OutboundRule masquerades traffic leaving Zone, optionally only from the
-// listed source addresses.
+// OutboundRule translates traffic leaving Zone. With nothing else set it
+// masquerades, which is what most rules want; the rest of the fields are
+// for the cases that need something particular.
 type OutboundRule struct {
 	ID          string   `json:"id"`
 	Description string   `json:"description,omitempty"`
 	Enabled     bool     `json:"enabled"`
 	Zone        string   `json:"zone"`
 	Source      []string `json:"source,omitempty"`
+	// Destination restricts the rule to traffic headed somewhere in
+	// particular; empty means anywhere.
+	Destination []string `json:"destination,omitempty"`
+	// Address sends the traffic out as this address instead of whichever
+	// one the interface happens to have. It has to be an address the box
+	// actually answers to.
+	Address string `json:"address,omitempty"`
+	// NoNAT leaves matching traffic alone. In hybrid mode this is how a
+	// host is kept out of NAT that the automatic rules would otherwise
+	// translate.
+	NoNAT bool `json:"noNat,omitempty"`
 }
 
 // PortForward redirects traffic arriving in Zone on Ports to Target. An

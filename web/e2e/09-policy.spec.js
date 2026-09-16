@@ -105,3 +105,34 @@ test('deleting a gateway warns that a group uses it', async ({ page }) => {
   await expect(row.getByRole('button', { name: /Used by group failover/ })).toBeVisible()
   await page.keyboard.press('Escape')
 })
+
+test('a default route the kernel already has is offered as a gateway', async ({ page }) => {
+  await login(page)
+  await page.goto('/routing')
+  const gateways = page.getByRole('region', { name: 'Gateways', exact: true })
+
+  // This machine has a default route of its own; no configured gateway
+  // covers it, so the page offers to adopt it.
+  const offer = gateways.getByRole('note')
+  await expect(offer).toContainText('no gateway here covers')
+  const adopt = offer.getByRole('button', { name: /^Add as gw_/ }).first()
+  const name = (await adopt.innerText()).replace('Add as ', '').trim()
+  await page.screenshot({ path: shot('73-detected-gateway'), fullPage: true })
+  await adopt.click()
+
+  // It lands in the draft, and the route stops being offered because the
+  // new gateway now claims it.
+  const row = gateways.getByRole('row').filter({ hasText: name })
+  await expect(row).toBeVisible()
+  await expect(offer.getByRole('button', { name: `Add as ${name}` })).toHaveCount(0)
+
+  // Adopted from DHCP, so no address is pinned: the next lease would
+  // otherwise break it.
+  await row.getByRole('button', { name: 'Edit' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByLabel('Gateway address')).toHaveValue('')
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+
+  await page.getByRole('button', { name: 'Discard' }).click()
+  await expect(page.getByText('Unapplied changes.')).toHaveCount(0)
+})

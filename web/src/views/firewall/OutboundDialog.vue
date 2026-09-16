@@ -15,7 +15,16 @@ const form = ref(blank())
 
 function blank() {
   const external = config.zones.find((z) => z.external)?.name ?? config.zones[0]?.name ?? ''
-  return { id: '', description: '', enabled: true, zone: external, source: '' }
+  return {
+    id: '',
+    description: '',
+    enabled: true,
+    zone: external,
+    source: '',
+    destination: '',
+    address: '',
+    noNat: false,
+  }
 }
 
 watch(
@@ -23,7 +32,16 @@ watch(
   () => {
     if (!open.value) return
     const r = props.rule
-    form.value = r ? { ...blank(), ...r, source: joinList(r.source) } : blank()
+    form.value = r
+      ? {
+          ...blank(),
+          ...r,
+          source: joinList(r.source),
+          destination: joinList(r.destination),
+          address: r.address ?? '',
+          noNat: r.noNat ?? false,
+        }
+      : blank()
   },
   { immediate: true },
 )
@@ -34,6 +52,10 @@ function save() {
   if (f.description) out.description = f.description
   const source = parseList(f.source)
   if (source.length) out.source = source
+  const destination = parseList(f.destination)
+  if (destination.length) out.destination = destination
+  if (f.noNat) out.noNat = true
+  else if (f.address.trim()) out.address = f.address.trim()
   config.upsertOutboundRule(out)
   open.value = false
 }
@@ -43,7 +65,7 @@ function save() {
   <AppDialog
     v-model:open="open"
     :title="rule ? `Outbound NAT ${rule.id}` : 'New outbound NAT rule'"
-    description="Masquerades traffic leaving the zone, optionally only from the listed sources."
+    description="Translates traffic leaving the zone. With nothing else set it masquerades, which is what most rules want."
   >
     <form class="space-y-4" @submit.prevent="save">
       <FormField id="nat-desc" label="Description">
@@ -54,17 +76,49 @@ function save() {
           <option v-for="z in config.zones" :key="z.name" :value="z.name">{{ z.name }}</option>
         </select>
       </FormField>
-      <FormField
-        id="nat-source"
-        label="Source networks"
-        hint="One per line. Empty means all IPv4 traffic."
-      >
-        <textarea
+      <div class="grid gap-4 sm:grid-cols-2">
+        <FormField
           id="nat-source"
-          v-model="form.source"
-          class="input h-24 font-mono"
+          label="Source networks"
+          hint="One per line. Empty matches anything."
+        >
+          <textarea
+            id="nat-source"
+            v-model="form.source"
+            class="input h-24 font-mono"
+            spellcheck="false"
+          ></textarea>
+        </FormField>
+        <FormField
+          id="nat-dest"
+          label="Destination networks"
+          hint="One per line. Empty matches anywhere."
+        >
+          <textarea
+            id="nat-dest"
+            v-model="form.destination"
+            class="input h-24 font-mono"
+            spellcheck="false"
+          ></textarea>
+        </FormField>
+      </div>
+      <label class="flex items-center gap-2 text-sm">
+        <input v-model="form.noNat" type="checkbox" class="size-4 rounded border-neutral-300" />
+        Do not translate this traffic
+      </label>
+      <FormField
+        v-if="!form.noNat"
+        id="nat-address"
+        label="Leave as"
+        hint="An address this box answers to. Empty uses whichever address the interface has, which is what you want unless it has several."
+      >
+        <input
+          id="nat-address"
+          v-model="form.address"
+          class="input font-mono"
+          placeholder="the interface address"
           spellcheck="false"
-        ></textarea>
+        />
       </FormField>
       <label class="flex items-center gap-2 text-sm">
         <input v-model="form.enabled" type="checkbox" class="size-4 rounded border-neutral-300" />

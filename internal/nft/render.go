@@ -872,46 +872,129 @@ func dnatTarget(ip netip.Addr, port string) string {
 func (r *renderer) chainNATPostrouting() {
 	r.block("chain nat_postrouting", func() {
 		r.line("type nat hook postrouting priority srcnat; policy accept;")
+		// The listed rules come first in hybrid mode, so a host can be
+		// given its own address, or kept out of NAT, without anyone
+		// writing out the rules for everything else.
 		switch r.cfg.NAT.Outbound.Mode {
 		case model.OutboundAutomatic:
-			for _, z := range r.cfg.Zones {
-				if !z.External {
-					continue
-				}
-				ifs := r.cfg.ZoneInterfaces(z.Name)
-				if len(ifs) == 0 {
-					continue
-				}
-				// IPv4 only: masquerading IPv6 would break end-to-end addressing.
-				r.line(fmt.Sprintf("oifname %s meta nfproto ipv4 counter masquerade comment \"auto-nat:%s\"",
-					ifnameSet(ifs), z.Name))
-			}
+			r.outboundAutomatic()
+		case model.OutboundHybrid:
+			r.outboundManual()
+			r.outboundAutomatic()
 		case model.OutboundManual:
-			for _, o := range r.cfg.NAT.Outbound.Rules {
-				if !o.Enabled {
-					continue
-				}
-				ifs := r.cfg.ZoneInterfaces(o.Zone)
-				if len(ifs) == 0 {
-					r.line(fmt.Sprintf("# outbound nat %s skipped: zone %q has no enabled interfaces", o.ID, o.Zone))
-					continue
-				}
-				if len(o.Source) == 0 {
-					r.line(fmt.Sprintf("oifname %s meta nfproto ipv4 counter masquerade comment \"id:%s\"", ifnameSet(ifs), o.ID))
-					continue
-				}
-				v4, v6 := splitFamilies(o.Source)
-				if len(v4) > 0 {
-					r.line(fmt.Sprintf("oifname %s ip saddr %s counter masquerade comment \"id:%s\"", ifnameSet(ifs), setOrSingle(v4), o.ID))
-				}
-				if len(v6) > 0 {
-					r.line(fmt.Sprintf("oifname %s ip6 saddr %s counter masquerade comment \"id:%s\"", ifnameSet(ifs), setOrSingle(v6), o.ID))
-				}
-			}
+			r.outboundManual()
 		}
 		r.oneToOneSNAT()
 		r.reflectSNAT()
 	})
+}
+
+// outboundAutomatic masquerades everything leaving an external zone.
+func (r *renderer) outboundAutomatic() {
+	for _, z := range r.cfg.Zones {
+		if !z.External {
+			continue
+		}
+		ifs := r.cfg.ZoneInterfaces(z.Name)
+		if len(ifs) == 0 {
+			continue
+		}
+		// IPv4 only: masquerading IPv6 would break end-to-end addressing.
+		r.line(fmt.Sprintf("oifname %s meta nfproto ipv4 counter masquerade comment %q",
+			ifnameSet(ifs), "auto-nat:"+z.Name))
+	}
+}
+
+// outboundManual writes the rules as configured, one line per address
+// family the rule can match.
+func (r *renderer) outboundManual() {
+	for _, o := range r.cfg.NAT.Outbound.Rules {
+		if !o.Enabled {
+			continue
+		}
+		ifs := r.cfg.ZoneInterfaces(o.Zone)
+		if len(ifs) == 0 {
+			r.line(fmt.Sprintf("# outbound nat %s skipped: zone %q has no enabled interfaces", o.ID, o.Zone))
+			continue
+		}
+		r.outboundRule(o, ifnameSet(ifs))
+	}
+}
+
+func (r *renderer) outboundRule(o model.OutboundRule, ifs string) {
+	comment := fmt.Sprintf("comment %q", "id:"+o.ID)
+	// A rule that names an address translates to it; one that names none
+	// masquerades, which follows whatever the interface has today. NoNAT
+	// returns from the chain, leaving the traffic untranslated.
+	verdict := "counter masquerade"
+	family := 0
+	switch {
+	case o.NoNAT:
+		verdict = "counter return"
+	case o.Address != "":
+		addr, err := model.ParseIP(o.Address)
+		if err != nil {
+			r.line(fmt.Sprintf("# outbound nat %s skipped: %v", o.ID, err))
+			return
+		}
+		verdict = "counter snat " + snatTarget(addr)
+		family = 4
+		if !addr.Is4() {
+			family = 6
+		}
+	}
+
+	emit := func(fam int, match string) {
+		parts := []string{"oifname " + ifs}
+		if match != "" {
+			parts = append(parts, match)
+		} else if fam == 4 && !o.NoNAT && o.Address == "" {
+			// Masquerading with no address match still has to say which
+			// family it means, or it would catch IPv6 too.
+			parts = append(parts, "meta nfproto ipv4")
+		}
+		parts = append(parts, verdict, comment)
+		r.line(strings.Join(parts, " "))
+	}
+
+	src4, src6 := splitFamilies(o.Source)
+	dst4, dst6 := splitFamilies(o.Destination)
+	for _, fam := range []int{4, 6} {
+		if family != 0 && fam != family {
+			// Translating to an IPv4 address can only apply to IPv4.
+			continue
+		}
+		src, dst := src4, dst4
+		prefix := "ip"
+		if fam == 6 {
+			src, dst, prefix = src6, dst6, "ip6"
+		}
+		// A rule that names addresses in one family only does not apply to
+		// the other.
+		if len(o.Source) > 0 && len(src) == 0 {
+			continue
+		}
+		if len(o.Destination) > 0 && len(dst) == 0 {
+			continue
+		}
+		var match []string
+		if len(src) > 0 {
+			match = append(match, fmt.Sprintf("%s saddr %s", prefix, setOrSingle(src)))
+		}
+		if len(dst) > 0 {
+			match = append(match, fmt.Sprintf("%s daddr %s", prefix, setOrSingle(dst)))
+		}
+		if len(match) == 0 {
+			// Nothing to match on: one rule covers it, and for masquerade
+			// that rule is IPv4 only.
+			if fam == 6 && family == 0 && !o.NoNAT {
+				continue
+			}
+			emit(fam, "")
+			continue
+		}
+		emit(fam, strings.Join(match, " "))
+	}
 }
 
 // oneToOneSNAT sends the mapped host out as its external address. It comes

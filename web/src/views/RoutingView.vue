@@ -21,6 +21,7 @@ const groupOpen = ref(false)
 const groupEditing = ref(null)
 const live = ref([])
 const policy = ref([])
+const detected = ref([])
 let timer = null
 
 /** Configured gateways merged with what the monitor sees. */
@@ -50,6 +51,37 @@ async function refreshGateways() {
   } catch {
     policy.value = []
   }
+  try {
+    detected.value = await api.detectedGateways()
+  } catch {
+    detected.value = []
+  }
+}
+
+/**
+ * A gateway in the draft claims a detected route when it is on the same
+ * interface and either names that address or names none at all, which
+ * means "whatever the network gives us".
+ */
+function claimedInDraft(d) {
+  return config.gateways.some(
+    (g) => g.interface === d.interface && (!g.address || g.address === d.address),
+  )
+}
+
+/**
+ * Default routes the kernel has that nothing claims. The server answers
+ * from the saved configuration, so the draft is checked here too: a
+ * gateway you have just added should stop being offered straight away,
+ * not after you apply.
+ */
+const unclaimed = computed(() =>
+  detected.value.filter((d) => !d.configured && d.suggested && !claimedInDraft(d)),
+)
+
+/** Adds a detected route as a gateway, ready to apply. */
+function adopt(d) {
+  config.upsertGateway(d.suggested)
 }
 
 function addGateway() {
@@ -67,6 +99,17 @@ function addGroup() {
 function editGroup(g) {
   groupEditing.value = g
   groupOpen.value = true
+}
+
+/** The kernel's default route that this gateway is claiming, if any. */
+function detectedFor(g) {
+  return (
+    detected.value.find(
+      (d) =>
+        d.configured === g.name ||
+        (d.interface === g.interface && (!g.address || g.address === d.address)),
+    ) ?? null
+  )
 }
 
 /** Summarises a group's members as the tiers they fail over through. */
@@ -146,6 +189,30 @@ function save() {
           default route off a gateway that stops answering. With no gateways listed, the address
           from the interface is used as it is.
         </p>
+
+        <div
+          v-if="unclaimed.length"
+          role="note"
+          class="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/40"
+        >
+          <p class="text-sm">
+            This box already has
+            {{ unclaimed.length === 1 ? 'a default route' : 'default routes' }} that no gateway here
+            covers. Adding one lets Ostiole watch it and fail over.
+          </p>
+          <ul class="space-y-1">
+            <li v-for="d in unclaimed" :key="`${d.interface}-${d.address}`" class="text-sm">
+              <span class="font-mono">{{ d.address }}</span>
+              on <span class="font-mono">{{ d.interface }}</span>
+              <span class="text-neutral-500">
+                · {{ d.family }} · metric {{ d.metric }} · from {{ d.protocol }}
+              </span>
+              <button type="button" class="link ml-2" @click="adopt(d)">
+                Add as {{ d.suggested.name }}
+              </button>
+            </li>
+          </ul>
+        </div>
         <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
           <table class="table">
             <thead>
@@ -171,7 +238,13 @@ function save() {
                   <div class="text-xs text-neutral-500">{{ g.description }}</div>
                 </td>
                 <td class="font-mono text-xs">{{ g.interface }}</td>
-                <td class="font-mono text-xs">{{ g.live?.address || g.address || 'from DHCP' }}</td>
+                <td class="font-mono text-xs">
+                  {{ g.live?.address || g.address || 'from DHCP' }}
+                  <div v-if="detectedFor(g)" class="text-neutral-500">
+                    kernel: {{ detectedFor(g).address }} · metric {{ detectedFor(g).metric }} ·
+                    {{ detectedFor(g).protocol }}
+                  </div>
+                </td>
                 <td class="font-mono text-xs">{{ g.monitor || 'the gateway' }}</td>
                 <td class="font-mono text-xs">{{ g.priority ?? 0 }}</td>
                 <td class="text-xs whitespace-nowrap">
@@ -283,8 +356,9 @@ function save() {
         <p v-if="policyRules.length" class="text-sm text-neutral-500">
           <span class="font-medium">Policy routing is in use:</span>
           <template v-for="(r, i) in policyRules" :key="r.id">
-            <span v-if="i">,</span>
-            <RouterLink to="/firewall" class="underline"> {{ r.id }}</RouterLink>
+            <span v-if="i">,&nbsp;</span>
+            <span v-else>&nbsp;</span>
+            <RouterLink to="/firewall" class="underline">{{ r.id }}</RouterLink>
             → {{ r.gateway }}
           </template>
         </p>

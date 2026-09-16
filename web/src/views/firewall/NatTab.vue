@@ -20,6 +20,14 @@ const oneOpen = ref(false)
 const forwards = computed(() => config.nat.portForwards ?? [])
 const oneToOne = computed(() => config.nat.oneToOne ?? [])
 const outbound = computed(() => config.nat.outbound)
+
+const MODE_HINTS = {
+  automatic: 'Masquerades IPv4 leaving every external zone. Nothing to configure.',
+  hybrid:
+    'The rules below are applied first, then the automatic one. This is how one host gets its own address, or is kept out of NAT, without writing out the rules for everything else.',
+  manual: 'Only the rules below. Anything they do not match leaves untranslated.',
+  disabled: 'Nothing is translated on the way out.',
+}
 const mode = computed({
   get: () => outbound.value.mode,
   set: (v) => config.setOutboundMode(v),
@@ -148,18 +156,17 @@ function editOb(r) {
 
     <section class="space-y-3" aria-labelledby="ob-title">
       <h2 id="ob-title" class="font-medium">Outbound NAT</h2>
-      <FormField
-        id="ob-mode"
-        label="Mode"
-        hint="Automatic masquerades IPv4 leaving every external zone."
-      >
-        <select id="ob-mode" v-model="mode" class="input max-w-xs">
-          <option value="automatic">Automatic</option>
-          <option value="manual">Manual rules</option>
-          <option value="disabled">Disabled</option>
+      <FormField id="ob-mode" label="Mode" :hint="MODE_HINTS[mode]">
+        <select id="ob-mode" v-model="mode" class="input max-w-lg">
+          <option value="automatic">
+            Automatic — masquerade everything leaving an external zone
+          </option>
+          <option value="hybrid">Hybrid — your rules first, then the automatic one</option>
+          <option value="manual">Manual — only the rules below</option>
+          <option value="disabled">Disabled — translate nothing</option>
         </select>
       </FormField>
-      <template v-if="mode === 'manual'">
+      <template v-if="mode === 'manual' || mode === 'hybrid'">
         <button type="button" class="btn-secondary" @click="addOb">
           <Plus class="mr-1 size-4" aria-hidden="true" /> Add outbound rule
         </button>
@@ -169,14 +176,20 @@ function editOb(r) {
               <tr>
                 <th>Zone</th>
                 <th>Sources</th>
+                <th>Destination</th>
+                <th>Leaves as</th>
                 <th>Description</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="(outbound.rules ?? []).length === 0">
-                <td colspan="4" class="text-neutral-500">
-                  No manual rules: nothing is masqueraded.
+                <td colspan="6" class="text-neutral-500">
+                  {{
+                    mode === 'hybrid'
+                      ? 'No rules of your own yet, so this behaves like automatic.'
+                      : 'No manual rules: nothing is masqueraded.'
+                  }}
                 </td>
               </tr>
               <tr
@@ -185,7 +198,13 @@ function editOb(r) {
                 :class="{ 'opacity-50': !r.enabled }"
               >
                 <td class="font-mono">{{ r.zone }}</td>
-                <td class="font-mono text-xs">{{ r.source?.join(', ') || 'all IPv4' }}</td>
+                <td class="font-mono text-xs">{{ r.source?.join(', ') || 'anything' }}</td>
+                <td class="font-mono text-xs">{{ r.destination?.join(', ') || 'anywhere' }}</td>
+                <td class="font-mono text-xs">
+                  <span v-if="r.noNat" class="badge">not translated</span>
+                  <template v-else-if="r.address">{{ r.address }}</template>
+                  <span v-else class="text-neutral-500">the interface address</span>
+                </td>
                 <td>{{ r.description }}</td>
                 <td class="text-right whitespace-nowrap">
                   <button type="button" class="link" @click="editOb(r)">Edit</button>

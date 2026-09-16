@@ -233,10 +233,17 @@ func (c *Config) Validate() error {
 		v.endpoint(path+".destination", r.Destination, aliases, hasPorts, true)
 	}
 
-	switch c.NAT.Outbound.Mode {
-	case OutboundAutomatic, OutboundManual, OutboundDisabled:
-	default:
+	if !slices.Contains(OutboundModes, c.NAT.Outbound.Mode) {
 		v.add("nat.outbound.mode", "unknown mode %q", c.NAT.Outbound.Mode)
+	}
+	if c.NAT.Outbound.Mode == OutboundAutomatic {
+		for i, r := range c.NAT.Outbound.Rules {
+			if r.Enabled {
+				v.add(fmt.Sprintf("nat.outbound.rules[%d]", i),
+					"automatic mode ignores the rules you write; switch to hybrid to have both")
+				break
+			}
+		}
 	}
 	natIDs := map[string]bool{}
 	for i, r := range c.NAT.Outbound.Rules {
@@ -248,6 +255,21 @@ func (c *Config) Validate() error {
 		for j, s := range r.Source {
 			if _, err := ParseAddress(s); err != nil {
 				v.add(fmt.Sprintf("%s.source[%d]", path, j), "%v", err)
+			}
+		}
+		for j, s := range r.Destination {
+			if _, err := ParseAddress(s); err != nil {
+				v.add(fmt.Sprintf("%s.destination[%d]", path, j), "%v", err)
+			}
+		}
+		if r.Address != "" {
+			switch {
+			case r.NoNAT:
+				v.add(path+".address", "a rule that leaves traffic alone translates it to nothing")
+			default:
+				if _, err := ParseIP(r.Address); err != nil {
+					v.add(path+".address", "%v", err)
+				}
 			}
 		}
 	}
