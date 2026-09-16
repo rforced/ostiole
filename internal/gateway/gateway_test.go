@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -214,15 +215,7 @@ func TestConfigureKeepsStateOfUnchangedGateways(t *testing.T) {
 // has the raw socket capability without being root on the host.
 func TestICMPProbeInNamespace(t *testing.T) {
 	if os.Getenv("OSTIOLE_PROBE_NETNS") == "" {
-		if _, err := exec.LookPath("unshare"); err != nil {
-			t.Skip("unshare not available")
-		}
-		cmd := exec.Command("unshare", "-Urn", os.Args[0], "-test.run", "TestICMPProbeInNamespace", "-test.v")
-		cmd.Env = append(os.Environ(), "OSTIOLE_PROBE_NETNS=1")
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("inside namespace: %v\n%s", err, out)
-		}
+		runInNamespace(t, "OSTIOLE_PROBE_NETNS", "TestICMPProbeInNamespace")
 		return
 	}
 
@@ -254,4 +247,25 @@ func TestICMPProbeInNamespace(t *testing.T) {
 	if waited := time.Since(start); waited > 2*time.Second {
 		t.Errorf("probe waited %v, want the timeout to apply", waited)
 	}
+}
+
+// runInNamespace re-runs the calling test inside a fresh unprivileged user
+// and network namespace, where it has the network capabilities without
+// being root. It skips when the sandbox forbids that, which is what
+// GitHub's runners do.
+func runInNamespace(t *testing.T, env, name string) {
+	t.Helper()
+	if _, err := exec.LookPath("unshare"); err != nil {
+		t.Skip("unshare not installed")
+	}
+	cmd := exec.Command("unshare", "-Urn", os.Args[0], "-test.run", "^"+name+"$", "-test.v")
+	cmd.Env = append(os.Environ(), env+"=1")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return
+	}
+	if strings.Contains(string(out), "uid_map") || strings.Contains(string(out), "Operation not permitted") {
+		t.Skipf("unprivileged namespaces are not allowed here: %s", strings.TrimSpace(string(out)))
+	}
+	t.Fatalf("inside namespace: %v\n%s", err, out)
 }
