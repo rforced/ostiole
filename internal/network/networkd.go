@@ -85,12 +85,16 @@ func (n *Networkd) Render(cfg *model.Config) (Files, error) {
 
 	vlansByParent := map[string][]string{}
 	for _, in := range cfg.Interfaces {
-		if in.VLAN != nil {
+		switch in.Kind() {
+		case model.KindVLAN:
 			vlansByParent[in.VLAN.Parent] = append(vlansByParent[in.VLAN.Parent], in.Name)
 			files[n.netdevFile(in.Name)] = renderNetdev(in)
-		}
-		if in.WireGuard != nil {
+		case model.KindWireGuard:
 			files[n.netdevFile(in.Name)] = n.renderWireGuardNetdev(in, files)
+		case model.KindBridge:
+			files[n.netdevFile(in.Name)] = renderBridgeNetdev(in)
+		case model.KindBond:
+			files[n.netdevFile(in.Name)] = renderBondNetdev(in)
 		}
 	}
 
@@ -98,9 +102,11 @@ func (n *Networkd) Render(cfg *model.Config) (Files, error) {
 	if err != nil {
 		return nil, err
 	}
+	masters := cfg.MasterOf()
 
 	for _, in := range cfg.Interfaces {
-		files[n.networkFile(in.Name)] = renderNetwork(in, vlansByParent[in.Name], routes[in.Name], gatewaysFor(cfg, in.Name))
+		files[n.networkFile(in.Name)] = renderNetwork(in, vlansByParent[in.Name], routes[in.Name],
+			gatewaysFor(cfg, in.Name), enslavement(cfg, masters[in.Name]))
 	}
 	// A VLAN parent that is not itself configured still needs a unit so
 	// networkd brings the trunk up and attaches the VLANs.
@@ -109,7 +115,98 @@ func (n *Networkd) Render(cfg *model.Config) (Files, error) {
 			files[n.networkFile(parent)] = renderTrunk(parent, vlans)
 		}
 	}
+	// Same for a bridge or bond member that is not configured in its own
+	// right, which is the usual case: it is a port, not an interface.
+	for member, master := range masters {
+		if _, ok := cfg.Interface(member); ok {
+			continue
+		}
+		files[n.networkFile(member)] = renderPort(member, enslavement(cfg, master))
+	}
 	return files, nil
+}
+
+// enslavement is the [Network] line that attaches a port to its master,
+// empty when the interface stands alone.
+func enslavement(cfg *model.Config, master string) string {
+	if master == "" {
+		return ""
+	}
+	in, ok := cfg.Interface(master)
+	if !ok {
+		return ""
+	}
+	switch in.Kind() {
+	case model.KindBridge:
+		return "Bridge=" + master
+	case model.KindBond:
+		return "Bond=" + master
+	}
+	return ""
+}
+
+func renderBridgeNetdev(in model.Interface) string {
+	var b strings.Builder
+	b.WriteString(fileHeader)
+	fmt.Fprintf(&b, "[NetDev]\nName=%s\nKind=bridge\n", in.Name)
+	if in.Description != "" {
+		fmt.Fprintf(&b, "Description=%s\n", sanitizeValue(in.Description))
+	}
+	if in.MTU != 0 {
+		fmt.Fprintf(&b, "MTUBytes=%d\n", in.MTU)
+	}
+	b.WriteString("\n[Bridge]\n")
+	fmt.Fprintf(&b, "STP=%s\n", yesNo(in.Bridge.STP))
+	fmt.Fprintf(&b, "VLANFiltering=%s\n", yesNo(in.Bridge.VLANFiltering))
+	return b.String()
+}
+
+func renderBondNetdev(in model.Interface) string {
+	bond := in.Bond
+	var b strings.Builder
+	b.WriteString(fileHeader)
+	fmt.Fprintf(&b, "[NetDev]\nName=%s\nKind=bond\n", in.Name)
+	if in.Description != "" {
+		fmt.Fprintf(&b, "Description=%s\n", sanitizeValue(in.Description))
+	}
+	if in.MTU != 0 {
+		fmt.Fprintf(&b, "MTUBytes=%d\n", in.MTU)
+	}
+	fmt.Fprintf(&b, "\n[Bond]\nMode=%s\n", bond.Mode)
+	if bond.TransmitHashPolicy != "" {
+		fmt.Fprintf(&b, "TransmitHashPolicy=%s\n", bond.TransmitHashPolicy)
+	}
+	if bond.MIIMonitorMS > 0 {
+		fmt.Fprintf(&b, "MIIMonitorSec=%dms\n", bond.MIIMonitorMS)
+	}
+	if bond.Primary != "" && bond.Mode == model.BondActiveBackup {
+		// networkd sets the primary on the member, not the bond; naming it
+		// here as a comment keeps the unit self-explanatory.
+		fmt.Fprintf(&b, "# primary member: %s\n", bond.Primary)
+	}
+	if bond.LACPRate != "" && bond.Mode == model.BondLACP {
+		fmt.Fprintf(&b, "LACPTransmitRate=%s\n", bond.LACPRate)
+	}
+	return b.String()
+}
+
+// renderPort is the unit for a link that exists only to be a port on a
+// bridge or bond: no addressing of its own, no link-local address.
+func renderPort(name, master string) string {
+	var b strings.Builder
+	b.WriteString(fileHeader)
+	fmt.Fprintf(&b, "[Match]\nName=%s\n\n[Network]\nDescription=Port on %s (managed by ostiole)\n",
+		name, strings.SplitN(master, "=", 2)[1])
+	b.WriteString("LinkLocalAddressing=no\n")
+	b.WriteString(master + "\n")
+	return b.String()
+}
+
+func yesNo(b bool) string {
+	if b {
+		return "yes"
+	}
+	return "no"
 }
 
 func renderNetdev(in model.Interface) string {
@@ -188,7 +285,7 @@ func gatewaysFor(cfg *model.Config, iface string) []model.Gateway {
 	return out
 }
 
-func renderNetwork(in model.Interface, vlans []string, routes []model.StaticRoute, gateways []model.Gateway) string {
+func renderNetwork(in model.Interface, vlans []string, routes []model.StaticRoute, gateways []model.Gateway, master string) string {
 	var b strings.Builder
 	b.WriteString(fileHeader)
 	fmt.Fprintf(&b, "[Match]\nName=%s\n", in.Name)
@@ -197,7 +294,10 @@ func renderNetwork(in model.Interface, vlans []string, routes []model.StaticRout
 	if !in.Enabled {
 		link = append(link, "ActivationPolicy=down")
 	}
-	if in.MTU != 0 && in.VLAN == nil {
+	// The .netdev of a virtual interface sets its MTU at creation; setting
+	// it here too is what makes a later change take effect, because
+	// networkd reconfigures a link without recreating the device.
+	if in.MTU != 0 {
 		link = append(link, fmt.Sprintf("MTUBytes=%d", in.MTU))
 	}
 	if len(link) > 0 {
@@ -211,6 +311,16 @@ func renderNetwork(in model.Interface, vlans []string, routes []model.StaticRout
 	if !in.Enabled {
 		b.WriteString("LinkLocalAddressing=no\n")
 		return b.String()
+	}
+	if master != "" {
+		// A port carries nothing of its own; the bridge or bond does.
+		b.WriteString("LinkLocalAddressing=no\n" + master + "\n")
+		return b.String()
+	}
+	if in.Kind() == model.KindBridge || in.Kind() == model.KindBond {
+		// A bridge with every port unplugged, or a bond waiting for its
+		// switch, should still come up with its address.
+		b.WriteString("ConfigureWithoutCarrier=yes\n")
 	}
 
 	dhcp4 := in.IPv4.Mode == model.AddrDHCP

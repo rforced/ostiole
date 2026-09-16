@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vishvananda/netlink"
+
 	"github.com/rforced/ostiole/internal/model"
 )
 
@@ -225,5 +227,56 @@ func TestAutoBackendFollowsNetworkd(t *testing.T) {
 	}
 	if snap, _ := a.Networkd.Snapshot(); len(snap) != len(files) {
 		t.Errorf("units not written while active: %v", snap.Names())
+	}
+}
+
+// The bond modes and hash policies Ostiole offers have to be the names the
+// kernel itself uses, or networkd writes a value the driver rejects at
+// link-up rather than at apply.
+func TestBondSettingsUseKernelNames(t *testing.T) {
+	t.Parallel()
+	for _, mode := range model.BondModes {
+		if got := netlink.StringToBondMode(string(mode)); got == netlink.BOND_MODE_UNKNOWN {
+			t.Errorf("bond mode %q is not a mode the kernel knows", mode)
+		}
+	}
+	for _, policy := range model.HashPolicies {
+		if got := netlink.StringToBondXmitHashPolicy(policy); got == netlink.BOND_XMIT_HASH_POLICY_UNKNOWN {
+			t.Errorf("transmit hash policy %q is not one the kernel knows", policy)
+		}
+	}
+}
+
+// A bridge or bond member must end up attached to its master, and never
+// carry addressing of its own.
+func TestRenderEnslavesMembers(t *testing.T) {
+	t.Parallel()
+	files, err := (&Networkd{}).Render(loadConfig(t, "testdata/aggregated.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for member, want := range map[string]string{
+		"eth0": "Bond=bond0",
+		"eth1": "Bond=bond0",
+		"eth2": "Bridge=br0",
+		"eth3": "Bridge=br0",
+		"eth4": "Bond=bond1",
+	} {
+		unit := files["00-ostiole-"+member+".network"]
+		if !strings.Contains(unit, want) {
+			t.Errorf("%s is not attached to its master:\n%s", member, unit)
+		}
+		if strings.Contains(unit, "Address=") || strings.Contains(unit, "DHCP=") {
+			t.Errorf("%s carries addressing of its own:\n%s", member, unit)
+		}
+		if !strings.Contains(unit, "LinkLocalAddressing=no") {
+			t.Errorf("%s should have no link-local address:\n%s", member, unit)
+		}
+	}
+	// The bond itself keeps the addressing and comes up without carrier,
+	// so a switch that is not ready yet does not leave it unconfigured.
+	bond := files["00-ostiole-bond0.network"]
+	if !strings.Contains(bond, "ConfigureWithoutCarrier=yes") || !strings.Contains(bond, "DHCP=ipv4") {
+		t.Errorf("bond0 unit:\n%s", bond)
 	}
 }

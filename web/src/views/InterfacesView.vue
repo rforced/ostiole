@@ -7,6 +7,7 @@ import AppTabs from '@/components/AppTabs.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import { api } from '@/lib/api'
 import { useConfigStore } from '@/stores/config'
+import AggregateDialog from '@/views/interfaces/AggregateDialog.vue'
 import InterfaceDialog from '@/views/interfaces/InterfaceDialog.vue'
 import VlanDialog from '@/views/interfaces/VlanDialog.vue'
 import ZoneDialog from '@/views/interfaces/ZoneDialog.vue'
@@ -19,6 +20,9 @@ const liveError = ref('')
 const editing = ref(null)
 const editOpen = ref(false)
 const vlanOpen = ref(false)
+const aggOpen = ref(false)
+const aggKind = ref('bridge')
+const aggEditing = ref(null)
 const zoneEditing = ref(null)
 const zoneOpen = ref(false)
 
@@ -47,7 +51,37 @@ const rows = computed(() => {
   return [...byName.values()].sort((a, b) => (a.live?.index ?? 1e9) - (b.live?.index ?? 1e9))
 })
 
-const vlanParents = computed(() => links.value.filter((l) => l.kind === 'ethernet'))
+const vlanParents = computed(() =>
+  links.value.filter((l) => ['ethernet', 'bridge', 'bond'].includes(l.kind)),
+)
+
+/** Every link that could be a bridge or bond member. */
+const aggCandidates = computed(() => links.value.filter((l) => l.kind !== 'loopback'))
+
+function addAggregate(kind) {
+  aggKind.value = kind
+  aggEditing.value = null
+  aggOpen.value = true
+}
+
+function editAggregate(cfg) {
+  aggKind.value = cfg.bond ? 'bond' : 'bridge'
+  aggEditing.value = cfg
+  aggOpen.value = true
+}
+
+/** A one-line description of what an interface is made of. */
+function describeKind(row) {
+  const c = row.cfg
+  if (c?.bridge) return `bridge of ${c.bridge.members.join(', ') || 'nothing yet'}`
+  if (c?.bond) return `${c.bond.mode} bond of ${c.bond.members.join(', ') || 'nothing yet'}`
+  if (c?.vlan) return `VLAN ${c.vlan.id} on ${c.vlan.parent}`
+  const l = row.live
+  if (!l) return 'not present on this system'
+  if (l.master) return `port on ${l.master}`
+  if (l.vlanId) return `VLAN ${l.vlanId} on ${l.parent}`
+  return l.kind
+}
 
 function describeAddressing(c) {
   if (!c) return '—'
@@ -101,6 +135,12 @@ function editZone(z) {
           <button type="button" class="btn-secondary" @click="vlanOpen = true">
             <Plus class="mr-1 size-4" aria-hidden="true" /> Add VLAN
           </button>
+          <button type="button" class="btn-secondary" @click="addAggregate('bridge')">
+            <Plus class="mr-1 size-4" aria-hidden="true" /> Add bridge
+          </button>
+          <button type="button" class="btn-secondary" @click="addAggregate('bond')">
+            <Plus class="mr-1 size-4" aria-hidden="true" /> Add bond
+          </button>
           <button type="button" class="btn-secondary" @click="refreshLive">
             <RefreshCw class="mr-1 size-4" aria-hidden="true" /> Refresh
           </button>
@@ -122,18 +162,8 @@ function editZone(z) {
                 <td>
                   <div class="font-mono font-medium">{{ row.live?.name ?? row.cfg.name }}</div>
                   <div class="text-xs text-neutral-500">
-                    <template v-if="row.live"
-                      >{{
-                        row.live.vlanId
-                          ? `VLAN ${row.live.vlanId} on ${row.live.parent}`
-                          : row.live.kind
-                      }}<span v-if="row.live.mac"> · {{ row.live.mac }}</span></template
-                    >
-                    <template v-else-if="row.cfg.vlan"
-                      >VLAN {{ row.cfg.vlan.id }} on {{ row.cfg.vlan.parent }} · not present
-                      yet</template
-                    >
-                    <template v-else>not present on this system</template>
+                    {{ describeKind(row) }}<span v-if="row.live?.mac"> · {{ row.live.mac }}</span
+                    ><span v-else-if="row.cfg && !row.live"> · not present yet</span>
                   </div>
                 </td>
                 <td>
@@ -155,6 +185,14 @@ function editZone(z) {
                   >
                 </td>
                 <td class="text-right whitespace-nowrap">
+                  <button
+                    v-if="row.cfg?.bridge || row.cfg?.bond"
+                    type="button"
+                    class="link mr-3"
+                    @click="editAggregate(row.cfg)"
+                  >
+                    Members
+                  </button>
                   <button type="button" class="link" @click="edit(row)">
                     {{ row.cfg ? 'Edit' : 'Configure' }}
                   </button>
@@ -229,6 +267,12 @@ function editZone(z) {
 
     <InterfaceDialog v-model:open="editOpen" :iface="editing" />
     <VlanDialog v-model:open="vlanOpen" :parents="vlanParents" />
+    <AggregateDialog
+      v-model:open="aggOpen"
+      :kind="aggKind"
+      :candidates="aggCandidates"
+      :iface="aggEditing"
+    />
     <ZoneDialog v-model:open="zoneOpen" :zone="zoneEditing" />
   </div>
 </template>

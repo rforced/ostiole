@@ -10,14 +10,16 @@ import (
 
 // Link is the live state of one network interface.
 type Link struct {
-	Name      string   `json:"name"`
-	Index     int      `json:"index"`
-	Kind      string   `json:"kind"` // ethernet, loopback, vlan, bridge, bond, tun, wireguard, …
-	MAC       string   `json:"mac,omitempty"`
-	Up        bool     `json:"up"`      // administratively up
-	Carrier   bool     `json:"carrier"` // operationally up
-	MTU       int      `json:"mtu"`
-	Parent    string   `json:"parent,omitempty"`
+	Name    string `json:"name"`
+	Index   int    `json:"index"`
+	Kind    string `json:"kind"` // ethernet, loopback, vlan, bridge, bond, tun, wireguard, …
+	MAC     string `json:"mac,omitempty"`
+	Up      bool   `json:"up"`      // administratively up
+	Carrier bool   `json:"carrier"` // operationally up
+	MTU     int    `json:"mtu"`
+	Parent  string `json:"parent,omitempty"`
+	// Master is the bridge or bond this link is enslaved to, if any.
+	Master    string   `json:"master,omitempty"`
 	VLANID    int      `json:"vlanId,omitempty"`
 	Addresses []string `json:"addresses"`
 	// Traffic counted by the kernel since the link came up.
@@ -55,6 +57,9 @@ func Discover() ([]Link, error) {
 		}
 		if a.ParentIndex != 0 {
 			li.Parent = byIndex[a.ParentIndex]
+		}
+		if a.MasterIndex != 0 {
+			li.Master = byIndex[a.MasterIndex]
 		}
 		if v, ok := l.(*netlink.Vlan); ok {
 			li.VLANID = v.VlanId

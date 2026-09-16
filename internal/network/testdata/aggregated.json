@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "system": {
+    "hostname": "aggregated",
+    "management": { "webPort": 443, "sshPort": 22 }
+  },
+  "zones": [
+    { "name": "wan", "external": true },
+    { "name": "lan", "antiLockout": true },
+    { "name": "guest" }
+  ],
+  "interfaces": [
+    {
+      "name": "bond0",
+      "zone": "wan",
+      "description": "Uplink pair",
+      "enabled": true,
+      "mtu": 9000,
+      "ipv4": { "mode": "dhcp" },
+      "ipv6": { "mode": "slaac" },
+      "bond": {
+        "members": ["eth0", "eth1"],
+        "mode": "802.3ad",
+        "miiMonitorMs": 100,
+        "transmitHashPolicy": "layer3+4",
+        "lacpRate": "fast"
+      }
+    },
+    {
+      "name": "eth1",
+      "description": "Second uplink port, jumbo capable",
+      "enabled": true,
+      "mtu": 9000,
+      "ipv4": { "mode": "none" },
+      "ipv6": { "mode": "none" }
+    },
+    {
+      "name": "br0",
+      "zone": "lan",
+      "description": "Switch ports",
+      "enabled": true,
+      "ipv4": { "mode": "static", "address": "192.168.1.1/24" },
+      "ipv6": { "mode": "static", "address": "2001:db8:1::1/64" },
+      "bridge": {
+        "members": ["eth2", "eth3"],
+        "stp": true,
+        "vlanFiltering": true
+      }
+    },
+    {
+      "name": "br0.30",
+      "zone": "guest",
+      "enabled": true,
+      "vlan": { "parent": "br0", "id": 30 },
+      "ipv4": { "mode": "static", "address": "192.168.30.1/24" },
+      "ipv6": { "mode": "none" }
+    },
+    {
+      "name": "bond1",
+      "zone": "",
+      "description": "Standby pair, not in service",
+      "enabled": false,
+      "ipv4": { "mode": "none" },
+      "ipv6": { "mode": "none" },
+      "bond": {
+        "members": ["eth4"],
+        "mode": "active-backup",
+        "primary": "eth4"
+      }
+    }
+  ],
+  "rules": [
+    {
+      "id": "lan-out",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    }
+  ],
+  "nat": { "outbound": { "mode": "automatic" } },
+  "services": { "dhcp": { "enabled": false }, "dns": { "enabled": false } }
+}

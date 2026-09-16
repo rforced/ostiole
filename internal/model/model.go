@@ -122,7 +122,117 @@ type Interface struct {
 	// with VLAN, and the interface is created by Ostiole rather than found
 	// on the hardware.
 	WireGuard *WireGuard `json:"wireguard,omitempty"`
-	MTU       int        `json:"mtu,omitempty"`
+	// Bridge makes this interface a software switch over its members.
+	Bridge *Bridge `json:"bridge,omitempty"`
+	// Bond joins several links into one.
+	Bond *Bond `json:"bond,omitempty"`
+	MTU  int   `json:"mtu,omitempty"`
+}
+
+// Kind names what an interface is made of, for the UI and for messages.
+type Kind string
+
+// Interface kinds.
+const (
+	KindPhysical  Kind = "physical"
+	KindVLAN      Kind = "vlan"
+	KindBridge    Kind = "bridge"
+	KindBond      Kind = "bond"
+	KindWireGuard Kind = "wireguard"
+)
+
+// Kind reports what this interface is.
+func (i Interface) Kind() Kind {
+	switch {
+	case i.VLAN != nil:
+		return KindVLAN
+	case i.Bridge != nil:
+		return KindBridge
+	case i.Bond != nil:
+		return KindBond
+	case i.WireGuard != nil:
+		return KindWireGuard
+	}
+	return KindPhysical
+}
+
+// Members lists the interfaces this one is built from, if any.
+func (i Interface) Members() []string {
+	switch {
+	case i.Bridge != nil:
+		return i.Bridge.Members
+	case i.Bond != nil:
+		return i.Bond.Members
+	}
+	return nil
+}
+
+// Bridge turns the interface into a software switch. Its members carry no
+// addresses of their own: the bridge holds them for the whole segment.
+type Bridge struct {
+	Members []string `json:"members"`
+	// STP stops a cabling loop from taking the network down. It costs a
+	// few seconds of silence whenever a port comes up, so it is off by
+	// default on an appliance where the ports are known.
+	STP bool `json:"stp,omitempty"`
+	// VLANFiltering lets the bridge keep VLANs apart rather than flooding
+	// every tagged frame to every port.
+	VLANFiltering bool `json:"vlanFiltering,omitempty"`
+}
+
+// BondMode is how a bond spreads traffic over its members.
+type BondMode string
+
+// Bond modes, named as the kernel names them.
+const (
+	// BondActiveBackup uses one member and keeps the rest in reserve. It
+	// needs nothing from the switch, which makes it the safe choice.
+	BondActiveBackup BondMode = "active-backup"
+	// BondLACP negotiates with the switch (802.3ad) and needs it configured
+	// to match.
+	BondLACP       BondMode = "802.3ad"
+	BondRoundRobin BondMode = "balance-rr"
+	BondXOR        BondMode = "balance-xor"
+	BondBroadcast  BondMode = "broadcast"
+	BondTLB        BondMode = "balance-tlb"
+	BondALB        BondMode = "balance-alb"
+)
+
+// BondModes lists every mode, in the order the UI offers them.
+var BondModes = []BondMode{
+	BondActiveBackup, BondLACP, BondRoundRobin, BondXOR, BondBroadcast, BondTLB, BondALB,
+}
+
+// Bond joins several links into one, for throughput or for redundancy.
+type Bond struct {
+	Members []string `json:"members"`
+	Mode    BondMode `json:"mode"`
+	// MIIMonitorMS is how often member links are checked for carrier.
+	// Zero leaves the kernel default, which is no monitoring at all, so
+	// the UI suggests 100.
+	MIIMonitorMS int `json:"miiMonitorMs,omitempty"`
+	// TransmitHashPolicy decides which member a flow takes in the
+	// balancing modes; it is ignored by the others.
+	TransmitHashPolicy string `json:"transmitHashPolicy,omitempty"`
+	// Primary is the member active-backup prefers while it is up.
+	Primary string `json:"primary,omitempty"`
+	// LACPRate is "slow" or "fast" and only applies to 802.3ad.
+	LACPRate string `json:"lacpRate,omitempty"`
+}
+
+// HashPolicies are the transmit hash policies networkd accepts.
+var HashPolicies = []string{"layer2", "layer2+3", "layer3+4", "encap2+3", "encap3+4"}
+
+// MasterOf maps each enslaved interface to the bridge or bond that owns
+// it. A member belongs to at most one, which validation enforces.
+func (c *Config) MasterOf() map[string]string {
+	out := map[string]string{}
+	for _, in := range c.Interfaces {
+		for _, m := range in.Members() {
+			out[m] = in.Name
+		}
+	}
+	return out
 }
 
 // IPv4 addressing for an interface. Address is CIDR notation.

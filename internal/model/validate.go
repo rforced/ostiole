@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/netip"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -91,12 +92,14 @@ func (c *Config) Validate() error {
 			v.add(path+".mtu", "MTU %d must be 68-65535 (or 0 for default)", in.MTU)
 		}
 		if in.WireGuard != nil {
-			if in.VLAN != nil {
-				v.add(path+".wireguard", "an interface is either a VLAN or a WireGuard tunnel, not both")
-			}
 			v.wireguard(path+".wireguard", in)
 		}
+		if kinds := builtFrom(in); len(kinds) > 1 {
+			v.add(path+".kind", "an interface is one thing at a time, and this one is %s",
+				strings.Join(kinds, " and "))
+		}
 	}
+	v.enslaved(c, ifaces)
 
 	aliases := map[string]AliasType{}
 	for i, a := range c.Aliases {
@@ -598,6 +601,131 @@ func (v *validator) dhcpv6(c *Config, ifaces map[string]bool) {
 }
 
 // wireguard checks a tunnel's keys, peers, and addressing.
+// builtFrom names every kind an interface claims to be. More than one is
+// a contradiction.
+func builtFrom(in Interface) []string {
+	var kinds []string
+	if in.VLAN != nil {
+		kinds = append(kinds, "a VLAN")
+	}
+	if in.Bridge != nil {
+		kinds = append(kinds, "a bridge")
+	}
+	if in.Bond != nil {
+		kinds = append(kinds, "a bond")
+	}
+	if in.WireGuard != nil {
+		kinds = append(kinds, "a WireGuard tunnel")
+	}
+	return kinds
+}
+
+// enslaved checks bridge and bond membership across the whole
+// configuration: a link belongs to one master, and a member carries no
+// addressing of its own because the master holds it for the segment.
+func (v *validator) enslaved(c *Config, ifaces map[string]bool) {
+	masters := map[string]string{} // member -> master
+	kinds := map[string]Kind{}
+	for _, in := range c.Interfaces {
+		kinds[in.Name] = in.Kind()
+	}
+
+	for i, in := range c.Interfaces {
+		path := fmt.Sprintf("interfaces[%d]", i)
+		members := in.Members()
+		if in.Bridge == nil && in.Bond == nil {
+			continue
+		}
+		field := path + ".bridge"
+		if in.Bond != nil {
+			field = path + ".bond"
+			v.bond(field, *in.Bond)
+		}
+		if len(members) == 0 {
+			v.add(field+".members", "a %s needs at least one interface", in.Kind())
+		}
+		seen := map[string]bool{}
+		for j, m := range members {
+			mpath := fmt.Sprintf("%s.members[%d]", field, j)
+			switch {
+			case !ifaceRe.MatchString(m):
+				v.add(mpath, "%q is not a valid interface name", m)
+				continue
+			case m == in.Name:
+				v.add(mpath, "an interface cannot contain itself")
+				continue
+			case seen[m]:
+				v.add(mpath, "%q is listed twice", m)
+				continue
+			}
+			seen[m] = true
+			if other, taken := masters[m]; taken {
+				v.add(mpath, "%q is already part of %q", m, other)
+				continue
+			}
+			masters[m] = in.Name
+
+			switch kinds[m] {
+			case KindBridge:
+				v.add(mpath, "a bridge cannot be put inside another interface; bridge its members instead")
+			case KindBond:
+				if in.Bond != nil {
+					v.add(mpath, "a bond cannot contain another bond")
+				}
+			case KindWireGuard:
+				v.add(mpath, "a WireGuard tunnel carries routed traffic and cannot be a member")
+			}
+		}
+	}
+
+	// Anything enslaved must be free of a zone and of addresses: it is a
+	// port on its master, not an interface in its own right.
+	for i, in := range c.Interfaces {
+		master, ok := masters[in.Name]
+		if !ok {
+			continue
+		}
+		path := fmt.Sprintf("interfaces[%d]", i)
+		if in.Zone != "" {
+			v.add(path+".zone", "%q is part of %q, so rules belong on %q instead", in.Name, master, master)
+		}
+		if in.IPv4.Mode != AddrNone && in.IPv4.Mode != "" {
+			v.add(path+".ipv4.mode", "%q is part of %q, which carries the addresses", in.Name, master)
+		}
+		if in.IPv6.Mode != AddrNone && in.IPv6.Mode != "" {
+			v.add(path+".ipv6.mode", "%q is part of %q, which carries the addresses", in.Name, master)
+		}
+	}
+	_ = ifaces
+}
+
+func (v *validator) bond(path string, b Bond) {
+	known := false
+	for _, m := range BondModes {
+		if b.Mode == m {
+			known = true
+			break
+		}
+	}
+	if !known {
+		v.add(path+".mode", "unknown bond mode %q", b.Mode)
+	}
+	if b.MIIMonitorMS < 0 || b.MIIMonitorMS > 10000 {
+		v.add(path+".miiMonitorMs", "%d must be 0-10000", b.MIIMonitorMS)
+	}
+	if b.TransmitHashPolicy != "" && !slices.Contains(HashPolicies, b.TransmitHashPolicy) {
+		v.add(path+".transmitHashPolicy", "unknown policy %q", b.TransmitHashPolicy)
+	}
+	switch b.LACPRate {
+	case "", "slow", "fast":
+	default:
+		v.add(path+".lacpRate", "%q must be slow or fast", b.LACPRate)
+	}
+	if b.Primary != "" && !slices.Contains(b.Members, b.Primary) {
+		v.add(path+".primary", "%q is not one of this bond's interfaces", b.Primary)
+	}
+}
+
 func (v *validator) wireguard(path string, in Interface) {
 	w := in.WireGuard
 	if !wg.ValidKey(w.PrivateKey) {

@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -488,4 +489,107 @@ func TestPolicyTargetsAreStableAndSkipDisabled(t *testing.T) {
 	if _, ok := cfg.PolicyTarget("zulu"); ok {
 		t.Error("a disabled gateway must not get a mark")
 	}
+}
+
+func aggregateConfig() *Config {
+	return &Config{
+		Version: SchemaVersion,
+		Zones:   []Zone{{Name: "lan"}},
+		Interfaces: []Interface{
+			{Name: "br0", Zone: "lan", Enabled: true,
+				IPv4: IPv4{Mode: AddrStatic, Address: "192.168.1.1/24"}, IPv6: IPv6{Mode: AddrNone},
+				Bridge: &Bridge{Members: []string{"eth2", "eth3"}}},
+			{Name: "bond0", Enabled: true, IPv4: IPv4{Mode: AddrNone}, IPv6: IPv6{Mode: AddrNone},
+				Bond: &Bond{Members: []string{"eth0", "eth1"}, Mode: BondActiveBackup, Primary: "eth0", MIIMonitorMS: 100}},
+		},
+		NAT: NAT{Outbound: OutboundNAT{Mode: OutboundDisabled}},
+	}
+}
+
+func TestValidateAcceptsBridgesAndBonds(t *testing.T) {
+	t.Parallel()
+	cfg := aggregateConfig()
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("bridge and bond rejected: %v", err)
+	}
+	br, _ := cfg.Interface("br0")
+	if br.Kind() != KindBridge {
+		t.Errorf("br0 kind = %q", br.Kind())
+	}
+	if got := cfg.MasterOf(); got["eth2"] != "br0" || got["eth0"] != "bond0" {
+		t.Errorf("MasterOf = %v", got)
+	}
+}
+
+// A bond inside a bridge is the normal way to build a resilient LAN, so
+// that combination must keep working.
+func TestValidateAllowsABondInsideABridge(t *testing.T) {
+	t.Parallel()
+	cfg := aggregateConfig()
+	cfg.Interfaces[0].Bridge.Members = []string{"bond0", "eth2"}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("bond inside a bridge rejected: %v", err)
+	}
+}
+
+func TestValidateCatchesAggregationMistakes(t *testing.T) {
+	t.Parallel()
+	cfg := aggregateConfig()
+	cfg.Interfaces = append(cfg.Interfaces,
+		// A port cannot have a zone or an address of its own.
+		Interface{Name: "eth2", Zone: "lan", Enabled: true,
+			IPv4: IPv4{Mode: AddrStatic, Address: "10.0.0.1/24"}, IPv6: IPv6{Mode: AddrNone}},
+		// Two masters cannot claim the same port.
+		Interface{Name: "br1", Enabled: true, IPv4: IPv4{Mode: AddrNone}, IPv6: IPv6{Mode: AddrNone},
+			Bridge: &Bridge{Members: []string{"eth3", "eth3", "br1", "br0"}}},
+		// A bond needs members, a known mode, and sane knobs.
+		Interface{Name: "bond9", Enabled: true, IPv4: IPv4{Mode: AddrNone}, IPv6: IPv6{Mode: AddrNone},
+			Bond: &Bond{Mode: "round-robin-ish", MIIMonitorMS: 99999,
+				TransmitHashPolicy: "layer9", LACPRate: "medium", Primary: "eth7"}},
+		// One interface, two kinds.
+		Interface{Name: "muddle", Enabled: true, IPv4: IPv4{Mode: AddrNone}, IPv6: IPv6{Mode: AddrNone},
+			Bridge: &Bridge{Members: []string{"eth8"}}, VLAN: &VLAN{Parent: "eth9", ID: 5}},
+	)
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation errors")
+	}
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("error type %T", err)
+	}
+	got := map[string]string{}
+	for _, i := range ve.Issues {
+		got[i.Path] = i.Message
+	}
+	for _, p := range []string{
+		"interfaces[2].zone",
+		"interfaces[2].ipv4.mode",
+		"interfaces[3].bridge.members[1]",
+		"interfaces[3].bridge.members[2]",
+		"interfaces[3].bridge.members[3]",
+		"interfaces[4].bond.members",
+		"interfaces[4].bond.mode",
+		"interfaces[4].bond.miiMonitorMs",
+		"interfaces[4].bond.transmitHashPolicy",
+		"interfaces[4].bond.lacpRate",
+		"interfaces[4].bond.primary",
+		"interfaces[5].kind",
+	} {
+		if _, ok := got[p]; !ok {
+			t.Errorf("missing issue at %s (got %v)", p, keysOf(got))
+		}
+	}
+	if msg := got["interfaces[3].bridge.members[3]"]; !strings.Contains(msg, "bridge") {
+		t.Errorf("nesting a bridge = %q", msg)
+	}
+}
+
+func keysOf(m map[string]string) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
