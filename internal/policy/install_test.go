@@ -143,6 +143,18 @@ func TestSyncInstallsAndReconciles(t *testing.T) {
 		t.Errorf("lookup rule mask = %v, want the Ostiole mark mask", rules[lookup].Mask)
 	}
 
+	// The kernel's copy has to compare equal to what the installer would
+	// put there, or every pass would delete and reinstall the route and
+	// leave a gap each time.
+	want := inst.routeFor(group, netlink.FAMILY_V4)
+	if kernel := tableRoutes(t, group.Table); !sameRoute(&kernel[0], want) {
+		t.Errorf("the kernel's route %+v does not match the desired %+v, so policy routes would churn",
+			kernel[0], want)
+	}
+	if kernel := policyRules(t)[lookup]; !sameRule(kernel, rulesFor(group, netlink.FAMILY_V4)[1]) {
+		t.Errorf("the kernel's ip rule %+v does not match the desired one, so rules would churn", kernel)
+	}
+
 	// Running again with the same plan must not disturb anything.
 	before := tableRoutes(t, group.Table)[0]
 	if err := inst.Sync(targets); err != nil {

@@ -228,7 +228,7 @@ func sameRule(a, b netlink.Rule) bool {
 }
 
 func sameRoute(a, b *netlink.Route) bool {
-	if a.Table != b.Table || a.Type != b.Type || !sameDst(a.Dst, b.Dst) {
+	if a.Table != b.Table || routeType(a) != routeType(b) || !sameDst(a.Dst, b.Dst) {
 		return false
 	}
 	if len(a.MultiPath) != len(b.MultiPath) {
@@ -243,6 +243,17 @@ func sameRoute(a, b *netlink.Route) bool {
 		}
 	}
 	return true
+}
+
+// routeType normalises the route type: an ordinary route is asked for with
+// the field left at zero but comes back from the kernel as unicast, and
+// mistaking one for the other would delete and reinstall every route on
+// every pass.
+func routeType(r *netlink.Route) int {
+	if r.Type == 0 {
+		return unix.RTN_UNICAST
+	}
+	return r.Type
 }
 
 // sameDst compares destinations, treating the nil the kernel reports for a

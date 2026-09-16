@@ -135,15 +135,15 @@ type policyTarget struct {
 	NextHops []string `json:"nextHops"`
 }
 
-// policyStatus explains where marked traffic goes. It reads the saved
-// configuration rather than the draft, because that is what the kernel is
-// acting on.
+// policyStatus explains where marked traffic goes. It reads the
+// configuration the kernel is running, which during a confirmation window
+// is the unconfirmed one, rather than the draft in the browser.
 func (a *api) policyStatus(w http.ResponseWriter, _ *http.Request) error {
 	out := []policyTarget{}
-	cfg, err := a.engine.Store().Load()
-	if err != nil {
+	cfg := a.engine.Effective()
+	if cfg == nil {
 		writeJSON(w, http.StatusOK, out)
-		return nil //nolint:nilerr // nothing saved yet is not an error here
+		return nil
 	}
 	hops := map[string]policy.Hop{}
 	if a.gateways != nil {
