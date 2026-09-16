@@ -1,0 +1,127 @@
+package nft
+
+import (
+	"fmt"
+
+	"github.com/rforced/ostiole/internal/model"
+)
+
+// BlockChain holds the rules that keep clients on this box's resolver. It
+// is a chain of its own so an exempt client can return from it and carry on
+// through the rest of the forward chain: returning from a base chain would
+// mean the drop policy, not "carry on".
+const BlockChain = "block_dns"
+
+// DoTPort is DNS over TLS, which is easy to stop because it has a port of
+// its own. DNS over HTTPS has no port of its own — it is https — so only an
+// address list can catch it, which is what DoHAlias is for.
+const DoTPort = 853
+
+// enforcesDNS reports whether the forward chain needs the blocking chain at
+// all.
+func (r *renderer) enforcesDNS() bool {
+	e := r.cfg.Blocking.Enforce
+	return r.cfg.BlockingActive() && (e.BlockDoT || e.DoHAlias != "")
+}
+
+// redirectsDNS reports whether client DNS is being pulled back to this box.
+func (r *renderer) redirectsDNS() bool {
+	return r.cfg.BlockingActive() && r.cfg.Blocking.Enforce.RedirectDNS
+}
+
+// exemptMatches are the "this client is allowed to resolve for itself"
+// matches, one per address family the alias has.
+func (r *renderer) exemptMatches(dir string) []string {
+	name := r.cfg.Blocking.Enforce.ExemptAlias
+	if name == "" {
+		return nil
+	}
+	a, ok := r.cfg.Alias(name)
+	if !ok {
+		return nil
+	}
+	v4, v6 := splitFamilies(r.entriesOf(*a))
+	var out []string
+	if len(v4) > 0 || a.Fetched() {
+		out = append(out, fmt.Sprintf("ip %s @%s", dir, aliasSet(a.Name, 4)))
+	}
+	if len(v6) > 0 || a.Fetched() {
+		out = append(out, fmt.Sprintf("ip6 %s @%s", dir, aliasSet(a.Name, 6)))
+	}
+	return out
+}
+
+// chainBlockDNS drops the encrypted DNS a client would use to go around
+// this box. Plain DNS is not dropped here: it is redirected in
+// nat_prerouting instead, so a client that insists on 8.8.8.8 still gets
+// answers, just this box's answers.
+func (r *renderer) chainBlockDNS() {
+	if !r.enforcesDNS() {
+		return
+	}
+	e := r.cfg.Blocking.Enforce
+	r.block("chain "+BlockChain, func() {
+		for _, m := range r.exemptMatches("saddr") {
+			r.line(fmt.Sprintf(`%s counter return comment "block:exempt"`, m))
+		}
+		if e.BlockDoT {
+			r.line(fmt.Sprintf(`meta l4proto { tcp, udp } th dport %d counter drop comment "block:dot"`, DoTPort))
+		}
+		if e.DoHAlias != "" {
+			if a, ok := r.cfg.Alias(e.DoHAlias); ok {
+				v4, v6 := splitFamilies(r.entriesOf(*a))
+				if len(v4) > 0 || a.Fetched() {
+					r.line(fmt.Sprintf(`ip daddr @%s counter drop comment "block:doh"`, aliasSet(a.Name, 4)))
+				}
+				if len(v6) > 0 || a.Fetched() {
+					r.line(fmt.Sprintf(`ip6 daddr @%s counter drop comment "block:doh"`, aliasSet(a.Name, 6)))
+				}
+			}
+		}
+	})
+}
+
+// blockDNSJump sends traffic leaving internal zones through the blocking
+// chain. Traffic arriving from outside is not this feature's business.
+func (r *renderer) blockDNSJump() {
+	if !r.enforcesDNS() {
+		return
+	}
+	ifs := r.internalInterfaces()
+	if len(ifs) == 0 {
+		return
+	}
+	r.line(fmt.Sprintf("iifname %s jump %s", ifnameSet(ifs), BlockChain))
+}
+
+// dnsRedirect pulls plain DNS from internal zones back to this box,
+// whoever the client meant to ask. It is the last thing in nat_prerouting
+// so that a port forward the operator wrote wins over it.
+//
+// Only traffic addressed elsewhere is redirected: a query already sent to
+// this box needs no translation, and leaving it alone keeps the counter
+// meaning what it says.
+func (r *renderer) dnsRedirect() {
+	if !r.redirectsDNS() {
+		return
+	}
+	ifs := r.internalInterfaces()
+	if len(ifs) == 0 {
+		r.line("# DNS redirect skipped: no internal interfaces")
+		return
+	}
+	set := ifnameSet(ifs)
+	for _, m := range r.exemptMatches("saddr") {
+		r.line(fmt.Sprintf(`iifname %s %s counter return comment "block:dns-exempt"`, set, m))
+	}
+	r.line(fmt.Sprintf(
+		`iifname %s meta l4proto { tcp, udp } th dport 53 fib daddr type != local counter redirect to :53 comment "block:dns-redirect"`,
+		set))
+}
+
+// BlockingUsesAlias reports whether DNS enforcement refers to an alias, so
+// deleting it can say what would break.
+func BlockingUsesAlias(cfg *model.Config, name string) bool {
+	e := cfg.Blocking.Enforce
+	return name != "" && (e.DoHAlias == name || e.ExemptAlias == name)
+}

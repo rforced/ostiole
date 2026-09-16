@@ -449,6 +449,7 @@ func (c *Config) Validate() error {
 	}
 
 	v.services(c, ifaces)
+	v.blocking(c, aliases)
 	v.crons(c)
 
 	if len(v.issues) == 0 {
@@ -464,6 +465,89 @@ var (
 	leaseTimeRe = regexp.MustCompile(`^([0-9]+[smhdw]|infinite)$`)
 	domainRe    = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$`)
 )
+
+// blocking checks the DNS blocking section: the lists, the exceptions to
+// them, and the rules that keep clients on this resolver. The lists are
+// checked whether blocking is on or not, so turning it on later does not
+// fail on something that was wrong all along.
+func (v *validator) blocking(c *Config, aliases map[string]AliasType) {
+	b := &c.Blocking
+	if b.Enabled && !c.Services.DNS.Enabled {
+		v.add("blocking.enabled", "DNS blocking needs the DNS server on: dnsmasq is what refuses the names")
+	}
+	if b.Mode != "" && !slices.Contains(BlockModes, b.Mode) {
+		v.add("blocking.mode", "unknown block mode %q", b.Mode)
+	}
+	names := map[string]bool{}
+	for i, l := range b.Lists {
+		path := fmt.Sprintf("blocking.lists[%d]", i)
+		if !nameRe.MatchString(l.Name) {
+			v.add(path+".name", "%q must match %s", l.Name, nameRe)
+		} else if names[l.Name] {
+			v.add(path+".name", "duplicate list %q", l.Name)
+		}
+		names[l.Name] = true
+		if l.URL != "" {
+			if u, err := url.Parse(l.URL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+				v.add(path+".url", "%q must be an http or https URL", l.URL)
+			}
+		}
+		if l.Format != "" && !slices.Contains(ListFormats, l.Format) {
+			v.add(path+".format", "unknown list format %q", l.Format)
+		}
+		if l.RefreshHours < 0 || l.RefreshHours > 24*30 {
+			v.add(path+".refreshHours", "%d must be 0-720 (0 means once a day)", l.RefreshHours)
+		}
+	}
+
+	never := map[string]bool{}
+	for _, n := range c.NeverBlocked() {
+		never[n] = true
+	}
+	for i, d := range b.Deny {
+		path := fmt.Sprintf("blocking.deny[%d]", i)
+		v.blockedName(path, d)
+		if never[strings.ToLower(strings.Trim(strings.TrimSpace(d), "."))] {
+			v.add(path, "%q is a name this box answers for; blocking it would take the UI away from anyone reaching it by name", d)
+		}
+	}
+	for i, d := range b.Allow {
+		v.blockedName(fmt.Sprintf("blocking.allow[%d]", i), d)
+	}
+
+	for _, ref := range []struct{ field, name string }{
+		{"dohAlias", b.Enforce.DoHAlias},
+		{"exemptAlias", b.Enforce.ExemptAlias},
+	} {
+		if ref.name == "" {
+			continue
+		}
+		path := "blocking.enforce." + ref.field
+		if t, ok := aliases[ref.name]; !ok {
+			v.add(path, "unknown alias %q", ref.name)
+		} else if t != AliasHosts && t != AliasGeoIP {
+			v.add(path, "alias %q holds ports, not addresses", ref.name)
+		}
+	}
+	if b.QueryLog.Entries < 0 || b.QueryLog.Entries > 100_000 {
+		v.add("blocking.queryLog.entries", "%d must be 0-100000 (0 means %d)", b.QueryLog.Entries, DefaultQueryLogEntries)
+	}
+}
+
+// blockedName checks one name written by hand into the allow or deny list.
+// A trailing dot is accepted and ignored, because that is how a resolver
+// writes a fully qualified name.
+func (v *validator) blockedName(path, name string) {
+	n := strings.Trim(strings.TrimSpace(name), ".")
+	switch {
+	case n == "":
+		v.add(path, "a domain name is needed here")
+	case len(n) > 253:
+		v.add(path, "%q is longer than a domain name may be", name)
+	case !domainRe.MatchString(n):
+		v.add(path, "%q is not a domain name", name)
+	}
+}
 
 func (v *validator) services(c *Config, ifaces map[string]bool) {
 	seen := map[string]bool{}

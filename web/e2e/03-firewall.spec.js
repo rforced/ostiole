@@ -1,16 +1,17 @@
 import { expect, test } from '@playwright/test'
 
-import { applyAndConfirm, login, shot } from './helpers.js'
+import { applyAndConfirm, login, shot, sidebar } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
 test('add an alias, a rule using it, and a port forward, then apply', async ({ page }) => {
   await login(page)
   await page.goto('/firewall')
-  await expect(page.getByRole('heading', { name: 'Firewall' })).toBeVisible()
+  await expect(page).toHaveURL(/\/firewall\/rules$/)
+  await expect(page.getByRole('heading', { name: 'Rules' })).toBeVisible()
 
   // Alias
-  await page.getByRole('tab', { name: 'Aliases' }).click()
+  await sidebar(page, 'Aliases')
   await page.getByRole('button', { name: 'Add alias' }).click()
   let dialog = page.getByRole('dialog')
   await dialog.getByLabel('Name').fill('admins')
@@ -19,7 +20,7 @@ test('add an alias, a rule using it, and a port forward, then apply', async ({ p
   await expect(page.getByRole('row').filter({ hasText: 'admins' })).toContainText('203.0.113.10')
 
   // Rule on wan: allow tcp 443 from the alias to this firewall
-  await page.getByRole('tab', { name: 'Rules' }).click()
+  await sidebar(page, 'Rules')
   await page.getByRole('group', { name: 'Zone' }).getByRole('button', { name: 'wan' }).click()
   await page.getByRole('button', { name: 'Add rule' }).click()
   dialog = page.getByRole('dialog')
@@ -54,7 +55,7 @@ test('add an alias, a rule using it, and a port forward, then apply', async ({ p
   await page.screenshot({ path: shot('21-rules'), fullPage: true })
 
   // Port forward
-  await page.getByRole('tab', { name: 'NAT' }).click()
+  await sidebar(page, 'NAT')
   await page.getByRole('button', { name: 'Add port forward' }).click()
   dialog = page.getByRole('dialog')
   await dialog.getByLabel('Description').fill('Web server')
@@ -68,12 +69,12 @@ test('add an alias, a rule using it, and a port forward, then apply', async ({ p
 
   await applyAndConfirm(page)
 
-  // The tab lives in the URL, so a reload comes back to NAT, not to Rules.
+  // The page has its own URL, so a reload comes back to NAT, not to Rules.
   await page.reload()
-  await expect(page).toHaveURL(/#nat$/)
+  await expect(page).toHaveURL(/\/firewall\/nat$/)
   await expect(page.getByRole('row').filter({ hasText: 'Web server' })).toBeVisible()
 
-  await page.getByRole('tab', { name: 'Rules' }).click()
+  await sidebar(page, 'Rules')
   await page.getByRole('group', { name: 'Zone' }).getByRole('button', { name: 'wan' }).click()
   const after = page.getByRole('row').filter({ hasText: /Admin HTTPS|Ping/ })
   await expect(after.nth(0)).toContainText('Ping')
@@ -83,12 +84,12 @@ test('add an alias, a rule using it, and a port forward, then apply', async ({ p
 test('an alias in use cannot be deleted; a rule can be disabled', async ({ page }) => {
   await login(page)
   await page.goto('/firewall')
-  await page.getByRole('tab', { name: 'Aliases' }).click()
+  await sidebar(page, 'Aliases')
   await expect(
     page.getByRole('row').filter({ hasText: 'admins' }).getByText('in use'),
   ).toBeVisible()
 
-  await page.getByRole('tab', { name: 'Rules' }).click()
+  await sidebar(page, 'Rules')
   await page.getByRole('group', { name: 'Zone' }).getByRole('button', { name: 'wan' }).click()
   const rule = page.getByRole('row').filter({ hasText: 'Ping' })
   await rule.getByRole('checkbox').uncheck()
@@ -116,7 +117,7 @@ test('schedule a rule, reflect a port forward, and map an address 1:1', async ({
   await login(page)
   await page.goto('/firewall')
 
-  await page.getByRole('tab', { name: 'Schedules' }).click()
+  await sidebar(page, 'Schedules')
   await page.getByRole('button', { name: 'Add schedule' }).click()
   let dialog = page.getByRole('dialog')
   await dialog.getByLabel('Name').fill('workday')
@@ -131,7 +132,7 @@ test('schedule a rule, reflect a port forward, and map an address 1:1', async ({
   await expect(scheduleRow).toContainText('mon, tue')
 
   // A rule that only matches inside the window.
-  await page.getByRole('tab', { name: 'Rules' }).click()
+  await sidebar(page, 'Rules')
   await page.getByRole('button', { name: 'Add rule' }).click()
   dialog = page.getByRole('dialog')
   await dialog.getByLabel('Description').fill('Streaming during work')
@@ -143,7 +144,7 @@ test('schedule a rule, reflect a port forward, and map an address 1:1', async ({
   )
 
   // NAT reflection and a 1:1 mapping.
-  await page.getByRole('tab', { name: 'NAT' }).click()
+  await sidebar(page, 'NAT')
   await page
     .getByRole('row')
     .filter({ hasText: 'Web server' })

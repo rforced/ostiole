@@ -1,11 +1,43 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+import { FIREWALL_PAGES, SERVICE_PAGES } from '@/lib/sections'
 import { useAuthStore } from '@/stores/auth'
 import { useSystemStore } from '@/stores/system'
 import DashboardView from '@/views/DashboardView.vue'
 
 /** Session-scoped flag so "Skip for now" is honoured until the tab closes. */
 const SKIP_WIZARD_KEY = 'ostiole.skipWizard'
+
+/**
+ * Entry point for a section that has child pages: the bare path goes to the
+ * first child, and a link written for the old tab bar (`/firewall#aliases`)
+ * goes to the child that replaced that tab, so bookmarks still land.
+ *
+ * @param {string} base section path, e.g. "/firewall"
+ * @param {string[]} children child segments in the order the sidebar lists them
+ * @returns {(to: import('vue-router').RouteLocation) => {path: string}}
+ */
+function sectionEntry(base, children) {
+  return (to) => {
+    const want = to.hash.slice(1)
+    return { path: `${base}/${children.includes(want) ? want : children[0]}` }
+  }
+}
+
+const pagePath = (p) => p.path
+
+/**
+ * Turns a section page into its child route. The title travels in the route so
+ * the section layout can head the page without every page repeating it.
+ *
+ * @param {string} section name prefix, e.g. "firewall"
+ */
+const childRoute = (section) => (p) => ({
+  path: p.path,
+  name: `${section}-${p.path}`,
+  component: p.view,
+  meta: { title: p.label },
+})
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -16,9 +48,23 @@ const router = createRouter({
       name: 'interfaces',
       component: () => import('@/views/InterfacesView.vue'),
     },
-    { path: '/firewall', name: 'firewall', component: () => import('@/views/FirewallView.vue') },
+    {
+      path: '/firewall',
+      component: () => import('@/views/FirewallView.vue'),
+      children: [
+        { path: '', redirect: sectionEntry('/firewall', FIREWALL_PAGES.map(pagePath)) },
+        ...FIREWALL_PAGES.map(childRoute('firewall')),
+      ],
+    },
     { path: '/routing', name: 'routing', component: () => import('@/views/RoutingView.vue') },
-    { path: '/services', name: 'services', component: () => import('@/views/ServicesView.vue') },
+    {
+      path: '/services',
+      component: () => import('@/views/ServicesView.vue'),
+      children: [
+        { path: '', redirect: sectionEntry('/services', SERVICE_PAGES.map(pagePath)) },
+        ...SERVICE_PAGES.map(childRoute('services')),
+      ],
+    },
     { path: '/vpn', name: 'vpn', component: () => import('@/views/VpnView.vue') },
     { path: '/crons', name: 'crons', component: () => import('@/views/CronsView.vue') },
     {

@@ -134,7 +134,7 @@ onUnmounted(() => {
           <dt>Rules</dt>
           <dd>
             {{ overview?.status?.rules ?? 0 }} in {{ overview?.status?.zones ?? 0 }} zones ·
-            <RouterLink to="/firewall" class="link">edit</RouterLink>
+            <RouterLink to="/firewall/rules" class="link">edit</RouterLink>
           </dd>
           <dt>Pending apply</dt>
           <dd>

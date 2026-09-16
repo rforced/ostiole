@@ -13,6 +13,7 @@ import (
 
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/certs"
+	"github.com/rforced/ostiole/internal/dnsblock"
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/feeds"
 	"github.com/rforced/ostiole/internal/fwlog"
@@ -42,7 +43,11 @@ type api struct {
 	tokens    *auth.Tokens
 	feeds     FeedRefresher
 	feedCache *feeds.Cache
-	crons     CronRunner
+	// blocklists refreshes the DNS lists; blockCache reads what they last
+	// gave us.
+	blocklists BlocklistRefresher
+	blockCache *dnsblock.Cache
+	crons      CronRunner
 	// routes is the router the handlers were registered on, which the
 	// OpenAPI description is generated from.
 	routes *router
@@ -70,6 +75,7 @@ func (a *api) register(mux *router) {
 	a.registerCerts(mux)
 	a.registerTokens(mux)
 	a.registerFeeds(mux)
+	a.registerBlocking(mux)
 	a.registerCrons(mux)
 	a.registerMetrics(mux)
 	a.registerOpenAPI(mux)

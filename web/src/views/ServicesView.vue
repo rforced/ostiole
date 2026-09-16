@@ -1,18 +1,12 @@
 <script setup>
-import { TabsContent } from 'reka-ui'
 import { computed, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 
-import AppTabs from '@/components/AppTabs.vue'
 import { api } from '@/lib/api'
-import { useTabHash } from '@/lib/tabs'
 import { useConfigStore } from '@/stores/config'
-import Dhcp6Tab from '@/views/services/Dhcp6Tab.vue'
-import DhcpTab from '@/views/services/DhcpTab.vue'
-import DnsTab from '@/views/services/DnsTab.vue'
-import LeasesTab from '@/views/services/LeasesTab.vue'
 
 const config = useConfigStore()
-const tab = useTabHash(['dhcp', 'dhcp6', 'dns', 'leases'])
+const route = useRoute()
 const status = ref(null)
 
 /** The draft asks for unbound (DNSSEC validation or DNS over TLS). */
@@ -33,7 +27,7 @@ onMounted(async () => {
 
 <template>
   <div class="space-y-4">
-    <h1 class="text-2xl font-semibold tracking-tight">Services</h1>
+    <h1 class="text-2xl font-semibold tracking-tight">{{ route.meta.title }}</h1>
     <p v-if="config.error" role="alert" class="text-sm text-red-600 dark:text-red-400">
       {{ config.error }}
     </p>
@@ -66,20 +60,7 @@ onMounted(async () => {
         <code class="font-mono">ostiole services setup --with-resolver</code> as root once; until
         then, applying this DNS configuration fails.
       </p>
-      <AppTabs
-        v-model="tab"
-        :tabs="[
-          { value: 'dhcp', label: 'DHCP' },
-          { value: 'dhcp6', label: 'DHCPv6' },
-          { value: 'dns', label: 'DNS' },
-          { value: 'leases', label: 'Leases' },
-        ]"
-      >
-        <TabsContent value="dhcp"><DhcpTab /></TabsContent>
-        <TabsContent value="dhcp6"><Dhcp6Tab /></TabsContent>
-        <TabsContent value="dns"><DnsTab /></TabsContent>
-        <TabsContent value="leases"><LeasesTab /></TabsContent>
-      </AppTabs>
+      <RouterView />
     </template>
   </div>
 </template>

@@ -12,6 +12,7 @@ import (
 
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/certs"
+	"github.com/rforced/ostiole/internal/dnsblock"
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/feeds"
 	"github.com/rforced/ostiole/internal/fwlog"
@@ -55,6 +56,9 @@ type Deps struct {
 	// Feeds refreshes aliases fetched from a URL or a country list; nil
 	// leaves them to whatever is cached.
 	Feeds *feeds.Refresher
+	// Blocklists refreshes the DNS blocklists; nil leaves them to
+	// whatever is cached.
+	Blocklists *dnsblock.Refresher
 	// Crons reports and runs the scheduled jobs; nil reports none.
 	Crons CronRunner
 	// CertHosts lists the names a regenerated self-signed certificate
@@ -80,23 +84,25 @@ func Handler(d Deps) http.Handler {
 	mux := &router{mux: http.NewServeMux()}
 	mux.HandleFunc("GET /api/v1/health", handleHealth)
 	api := &api{
-		engine:    d.Engine,
-		auth:      d.Auth,
-		updater:   d.Updater,
-		services:  d.Services,
-		resolver:  d.Resolver,
-		pppoe:     d.PPPoE,
-		certs:     d.Certs,
-		tokens:    d.Tokens,
-		feedCache: feedCacheOf(d.Feeds),
-		feeds:     feedRefresherOf(d.Feeds),
-		crons:     d.Crons,
-		certHosts: d.CertHosts,
-		fwlog:     d.Log,
-		gateways:  d.Gateways,
-		tables:    d.Tables,
-		units:     d.Units,
-		sysstat:   d.SysStat,
+		engine:     d.Engine,
+		auth:       d.Auth,
+		updater:    d.Updater,
+		services:   d.Services,
+		resolver:   d.Resolver,
+		pppoe:      d.PPPoE,
+		certs:      d.Certs,
+		tokens:     d.Tokens,
+		feedCache:  feedCacheOf(d.Feeds),
+		feeds:      feedRefresherOf(d.Feeds),
+		blockCache: blockCacheOf(d.Blocklists),
+		blocklists: blockRefresherOf(d.Blocklists),
+		crons:      d.Crons,
+		certHosts:  d.CertHosts,
+		fwlog:      d.Log,
+		gateways:   d.Gateways,
+		tables:     d.Tables,
+		units:      d.Units,
+		sysstat:    d.SysStat,
 	}
 	api.routes = mux
 	api.register(mux)
@@ -190,6 +196,20 @@ func feedCacheOf(r *feeds.Refresher) *feeds.Cache {
 }
 
 func feedRefresherOf(r *feeds.Refresher) FeedRefresher {
+	if r == nil {
+		return nil
+	}
+	return r
+}
+
+func blockCacheOf(r *dnsblock.Refresher) *dnsblock.Cache {
+	if r == nil {
+		return nil
+	}
+	return r.Cache
+}
+
+func blockRefresherOf(r *dnsblock.Refresher) BlocklistRefresher {
 	if r == nil {
 		return nil
 	}

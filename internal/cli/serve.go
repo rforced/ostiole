@@ -16,6 +16,7 @@ import (
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/certs"
 	"github.com/rforced/ostiole/internal/cron"
+	"github.com/rforced/ostiole/internal/dnsblock"
 	"github.com/rforced/ostiole/internal/feeds"
 	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/gateway"
@@ -96,25 +97,42 @@ at your own.`,
 			}
 			// The scheduled jobs the operator asked for, plus the work
 			// Ostiole does on its own account, reported together.
+			// The DNS blocklists refresh on their own schedule and are
+			// installed straight into dnsmasq's include file, so a list that
+			// moved does not wait for the next apply.
+			blocklists := &dnsblock.Refresher{
+				Cache:   g.blocklists(),
+				Fetcher: dnsblock.NewFetcher(version.Version),
+				Source:  eng.Effective,
+				Log:     slog.Default(),
+			}
+			if os.Geteuid() == 0 {
+				// Writing dnsmasq's directory and restarting its unit needs
+				// root; without it the next apply carries the list.
+				blocklists.Loader = services.NewDNSBlock(g.blocklists())
+			}
 			cronJobs := &cron.Jobs{
-				Config:  eng.Effective,
-				Users:   as.Users,
-				Version: version.Version,
-				Refresh: func(ctx context.Context) error { refresher.Tick(ctx, true); return nil },
-				Restart: restartService,
+				Config:            eng.Effective,
+				Users:             as.Users,
+				Version:           version.Version,
+				Refresh:           func(ctx context.Context) error { refresher.Tick(ctx, true); return nil },
+				RefreshBlocklists: func(ctx context.Context) error { blocklists.Tick(ctx, true); return nil },
+				Restart:           restartService,
 			}
 			crons := cron.NewRunner(eng.Effective, cronJobs, slog.Default())
 			refresher.OnTick = func() { crons.Note("system:aliases") }
+			blocklists.OnTick = func() { crons.Note("system:blocklists") }
 			deps := server.Deps{
-				Engine:  eng,
-				Auth:    as,
-				Updater: newUpdater(cfg),
-				Tables:  &nft.Exec{Bin: g.nftBin},
-				Units:   install.ExecSystemctl{},
-				Tokens:  tokens,
-				Certs:   certManager,
-				Feeds:   refresher,
-				Crons:   crons,
+				Engine:     eng,
+				Auth:       as,
+				Updater:    newUpdater(cfg),
+				Tables:     &nft.Exec{Bin: g.nftBin},
+				Units:      install.ExecSystemctl{},
+				Tokens:     tokens,
+				Certs:      certManager,
+				Feeds:      refresher,
+				Blocklists: blocklists,
+				Crons:      crons,
 				// /proc and statfs need no privileges, so the dashboard
 				// gets its usage card on a dev run as well as a real box.
 				SysStat: sysstat.New(g.configDir),
@@ -123,6 +141,7 @@ at your own.`,
 				CertHosts: certHosts,
 			}
 			go refresher.Run(ctx)
+			go blocklists.Run(ctx)
 			go crons.Run(ctx)
 			if os.Geteuid() == 0 {
 				deps.Services = services.New()

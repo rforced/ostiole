@@ -95,6 +95,9 @@ type Config struct {
 	GatewayGroups []GatewayGroup `json:"gatewayGroups,omitempty"`
 	Routes        []StaticRoute  `json:"routes,omitempty"`
 	Services      Services       `json:"services"`
+	// Blocking is DNS blocking: the lists of names this box refuses to
+	// resolve, and what it does to stop a client going around it.
+	Blocking Blocking `json:"blocking,omitempty"`
 	// Crons are the jobs this box runs on a schedule of the operator's
 	// choosing, alongside the work Ostiole does on its own account.
 	Crons []Cron `json:"crons,omitempty"`
@@ -109,8 +112,13 @@ const (
 	// CronBackup writes a configuration backup into a directory and keeps
 	// the last few, which is the backup nobody remembers to take.
 	CronBackup CronJobKind = "backup"
-	// CronRefreshAliases fetches the blocklists and country ranges now.
+	// CronRefreshAliases fetches the address lists and country ranges now.
 	CronRefreshAliases CronJobKind = "refresh-aliases"
+	// CronRefreshBlocklists fetches the DNS blocklists now. It is separate
+	// from the aliases: one is addresses for the firewall, the other names
+	// for the resolver, and they come from different publishers on
+	// different schedules.
+	CronRefreshBlocklists CronJobKind = "refresh-blocklists"
 	// CronRestartService restarts one of the services Ostiole runs.
 	CronRestartService CronJobKind = "restart-service"
 	// CronCommand runs a command line. It is as powerful as the box, which
@@ -119,7 +127,9 @@ const (
 )
 
 // CronJobKinds lists them in the order the UI offers them.
-var CronJobKinds = []CronJobKind{CronBackup, CronRefreshAliases, CronRestartService, CronCommand}
+var CronJobKinds = []CronJobKind{
+	CronBackup, CronRefreshAliases, CronRefreshBlocklists, CronRestartService, CronCommand,
+}
 
 // CronServices are the units a restart job may name.
 var CronServices = []string{"dnsmasq", "unbound", "ostiole"}

@@ -1,13 +1,14 @@
 import { expect, test } from '@playwright/test'
 
-import { applyAndConfirm, login, shot } from './helpers.js'
+import { applyAndConfirm, login, shot, sidebar } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
 test('enable DHCP with a scope and DNS with an override, then apply', async ({ page }) => {
   await login(page)
   await page.goto('/services')
-  await expect(page.getByRole('heading', { name: 'Services' })).toBeVisible()
+  await expect(page).toHaveURL(/\/services\/dhcp$/)
+  await expect(page.getByRole('heading', { name: 'DHCP', exact: true })).toBeVisible()
 
   // The wizard enabled DHCP on the LAN with a pool of hosts 100-199; edit that scope.
   await expect(page.getByLabel('DHCP server enabled')).toBeChecked()
@@ -34,7 +35,7 @@ test('enable DHCP with a scope and DNS with an override, then apply', async ({ p
   await expect(page.getByRole('row').filter({ hasText: 'aa:bb:cc:dd:ee:01' })).toContainText('nas')
   await page.screenshot({ path: shot('40-services-dhcp'), fullPage: true })
 
-  await page.getByRole('tab', { name: 'DNS' }).click()
+  await sidebar(page, 'DNS')
   await expect(page.getByLabel('DNS service enabled')).toBeChecked()
   await page.getByLabel('Upstream resolvers').fill('1.1.1.1, 9.9.9.9')
   await page.getByLabel('Local domain').fill('lan')
@@ -48,13 +49,13 @@ test('enable DHCP with a scope and DNS with an override, then apply', async ({ p
 
   await applyAndConfirm(page)
 
-  // The tab lives in the URL, so a reload comes back to DNS, not to DHCP.
+  // The page has its own URL, so a reload comes back to DNS, not to DHCP.
   await page.reload()
-  await expect(page).toHaveURL(/#dns$/)
+  await expect(page).toHaveURL(/\/services\/dns$/)
   await expect(page.getByLabel('Upstream resolvers')).toHaveValue('1.1.1.1, 9.9.9.9')
-  await page.getByRole('tab', { name: 'DHCP', exact: true }).click()
+  await sidebar(page, 'DHCP')
   await expect(page.getByLabel('DHCP server enabled')).toBeChecked()
-  await page.getByRole('tab', { name: 'Leases' }).click()
+  await sidebar(page, 'Leases')
   await expect(page.getByText('No leases yet.')).toBeVisible()
 })
 
@@ -89,7 +90,7 @@ test('advertise IPv6 on the LAN and pin a lease from the prefix', async ({ page 
 
   // Navigate inside the SPA: a full page load would drop the draft.
   await page.getByRole('link', { name: 'Services' }).click()
-  await page.getByRole('tab', { name: 'DHCPv6' }).click()
+  await sidebar(page, 'DHCPv6')
   await page.getByRole('button', { name: 'Advertise IPv6' }).click()
   dialog = page.getByRole('dialog')
   const lanOption = dialog.locator('#v6-if option', { hasText: 'IPv6 static' }).first()
@@ -104,7 +105,7 @@ test('advertise IPv6 on the LAN and pin a lease from the prefix', async ({ page 
   await page.screenshot({ path: shot('42-services-dhcpv6'), fullPage: true })
 
   // The static lease gains an address from the same prefix.
-  await page.getByRole('tab', { name: 'DHCP', exact: true }).click()
+  await sidebar(page, 'DHCP')
   await page
     .getByRole('row')
     .filter({ hasText: 'nas' })
@@ -118,14 +119,14 @@ test('advertise IPv6 on the LAN and pin a lease from the prefix', async ({ page 
   await applyAndConfirm(page)
 
   await page.reload()
-  await page.getByRole('tab', { name: 'DHCPv6' }).click()
+  await sidebar(page, 'DHCPv6')
   await expect(page.getByRole('row').filter({ hasText: '::100 – ::1ff' })).toContainText('6h')
 })
 
 test('switch the resolver to DNS over TLS', async ({ page }) => {
   await login(page)
   await page.goto('/services')
-  await page.getByRole('tab', { name: 'DNS' }).click()
+  await sidebar(page, 'DNS')
 
   // Forwarding is the default and shows plain upstreams.
   await expect(page.getByLabel('Upstream resolvers')).toBeVisible()
@@ -142,7 +143,7 @@ test('switch the resolver to DNS over TLS', async ({ page }) => {
   await applyAndConfirm(page)
 
   await page.reload()
-  await page.getByRole('tab', { name: 'DNS' }).click()
+  await sidebar(page, 'DNS')
   await expect(page.getByLabel('Resolver', { exact: true })).toHaveValue('tls')
   await expect(page.getByLabel('DNS over TLS servers')).toHaveValue('9.9.9.9 dns.quad9.net')
 })

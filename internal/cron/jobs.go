@@ -28,8 +28,10 @@ type Jobs struct {
 	Config func() *model.Config
 	// Users supplies accounts when a backup asks for them.
 	Users func() []auth.User
-	// Refresh fetches the blocklists and country ranges.
+	// Refresh fetches the address lists and country ranges.
 	Refresh func(ctx context.Context) error
+	// RefreshBlocklists fetches the DNS blocklists.
+	RefreshBlocklists func(ctx context.Context) error
 	// Restart restarts a service unit.
 	Restart func(ctx context.Context, unit string) error
 	// Version is recorded in the backups this takes.
@@ -50,6 +52,11 @@ func (j *Jobs) Run(ctx context.Context, job model.Cron) (string, error) {
 			return "", errors.New("nothing on this box refreshes aliases")
 		}
 		return "refreshed", j.Refresh(ctx)
+	case model.CronRefreshBlocklists:
+		if j.RefreshBlocklists == nil {
+			return "", errors.New("nothing on this box refreshes blocklists")
+		}
+		return "refreshed", j.RefreshBlocklists(ctx)
 	case model.CronRestartService:
 		return j.restart(ctx, job)
 	case model.CronCommand:

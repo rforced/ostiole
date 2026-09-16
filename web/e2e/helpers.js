@@ -12,6 +12,21 @@ export async function login(page) {
   await expect(page).toHaveURL(/\/$/)
 }
 
+/**
+ * Opens pages from the sidebar, in order: `sidebar(page, 'Firewall', 'Aliases')`
+ * from anywhere, or just `sidebar(page, 'Aliases')` when the section is already
+ * open. Navigating in-app keeps the draft that a `page.goto()` would discard.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {...string} pages sidebar labels to click, outermost first
+ */
+export async function sidebar(page, ...pages) {
+  const menu = page.getByRole('navigation', { name: 'Main' })
+  for (const name of pages) {
+    await menu.getByRole('link', { name, exact: true }).click()
+  }
+}
+
 /** Applies the draft from the apply bar and confirms it. */
 export async function applyAndConfirm(page) {
   await page.getByRole('button', { name: /Apply with \d+s confirmation/ }).click()

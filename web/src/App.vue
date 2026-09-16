@@ -15,6 +15,7 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 
 import ApplyBar from '@/components/ApplyBar.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
+import { FIREWALL_PAGES, SERVICE_PAGES } from '@/lib/sections'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -24,14 +25,17 @@ const router = useRouter()
 const nav = [
   { to: '/', label: 'Dashboard', icon: Activity },
   { to: '/interfaces', label: 'Interfaces', icon: Network },
-  { to: '/firewall', label: 'Firewall', icon: Shield },
+  { to: '/firewall', label: 'Firewall', icon: Shield, children: FIREWALL_PAGES },
   { to: '/routing', label: 'Routing', icon: Route },
-  { to: '/services', label: 'Services', icon: Server },
+  { to: '/services', label: 'Services', icon: Server, children: SERVICE_PAGES },
   { to: '/vpn', label: 'VPN', icon: Lock },
   { to: '/crons', label: 'Crons', icon: CalendarClock },
   { to: '/diagnostics', label: 'Diagnostics', icon: Stethoscope },
   { to: '/system', label: 'System', icon: Cog },
 ]
+
+/** A section shows its pages while you are somewhere inside it. */
+const inSection = (item) => route.path === item.to || route.path.startsWith(`${item.to}/`)
 
 async function logout() {
   await auth.logout()
@@ -50,17 +54,26 @@ async function logout() {
         Ostiole
       </div>
       <nav class="flex flex-1 flex-col gap-0.5 px-2" aria-label="Main">
-        <RouterLink
-          v-for="item in nav"
-          :key="item.to"
-          :to="item.to"
-          class="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-neutral-600 hover:bg-neutral-200/60 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
-          active-class="bg-neutral-200/60 font-medium text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
-          exact-active-class=""
-        >
-          <component :is="item.icon" class="size-4" aria-hidden="true" />
-          {{ item.label }}
-        </RouterLink>
+        <template v-for="item in nav" :key="item.to">
+          <RouterLink
+            :to="item.to"
+            class="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-neutral-600 hover:bg-neutral-200/60 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
+            active-class="bg-neutral-200/60 font-medium text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
+            exact-active-class=""
+          >
+            <component :is="item.icon" class="size-4" aria-hidden="true" />
+            {{ item.label }}
+          </RouterLink>
+          <RouterLink
+            v-for="child in inSection(item) ? (item.children ?? []) : []"
+            :key="child.path"
+            :to="`${item.to}/${child.path}`"
+            class="ml-4 flex items-center gap-2 border-l border-neutral-200 py-1 pl-4 text-sm text-neutral-500 hover:border-neutral-400 hover:text-neutral-900 dark:border-neutral-800 dark:text-neutral-400 dark:hover:border-neutral-600 dark:hover:text-neutral-100"
+            active-class="border-sky-600 font-medium text-neutral-900 dark:border-sky-400 dark:text-neutral-100"
+          >
+            {{ child.label }}
+          </RouterLink>
+        </template>
       </nav>
     </aside>
 

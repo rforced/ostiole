@@ -379,7 +379,7 @@ function save() {
           <template v-for="(r, i) in policyRules" :key="r.id">
             <span v-if="i">,&nbsp;</span>
             <span v-else>&nbsp;</span>
-            <RouterLink to="/firewall" class="underline">{{ r.id }}</RouterLink>
+            <RouterLink to="/firewall/rules" class="underline">{{ r.id }}</RouterLink>
             → {{ r.gateway }}
           </template>
         </p>

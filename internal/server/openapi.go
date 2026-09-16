@@ -115,8 +115,15 @@ var routeDocs = map[string]routeDoc{
 	"POST /api/v1/update/apply":            {summary: "Download and install a release.", role: auth.RoleAdmin},
 
 	"GET /api/v1/aliases/feeds":           {summary: "When each fetched alias was last updated, and what went wrong if it did.", role: auth.RoleViewer},
-	"POST /api/v1/aliases/feeds/refresh":  {summary: "Fetch every blocklist and country list now.", role: auth.RoleOperator},
+	"POST /api/v1/aliases/feeds/refresh":  {summary: "Fetch every address list and country list now.", role: auth.RoleOperator},
 	"POST /api/v1/aliases/{name}/refresh": {summary: "Fetch one alias now.", role: auth.RoleOperator},
+
+	"GET /api/v1/blocking":                       {summary: "What DNS blocking is doing: the lists, how many names they hold, and when they were last fetched.", role: auth.RoleViewer},
+	"GET /api/v1/blocking/catalog":               {summary: "The published blocklists Ostiole offers to subscribe to.", role: auth.RoleViewer},
+	"GET /api/v1/blocking/lookup":                {summary: "Whether a name is blocked, and which list blocks it.", role: auth.RoleViewer},
+	"POST /api/v1/blocking/refresh":              {summary: "Fetch every DNS blocklist now.", role: auth.RoleOperator},
+	"POST /api/v1/blocking/lists/{name}/refresh": {summary: "Fetch one DNS blocklist now.", role: auth.RoleOperator},
+	"POST /api/v1/blocking/lists/{name}/import":  {summary: "Load a DNS blocklist from the request body, for a box with no way out to the internet.", role: auth.RoleOperator},
 
 	"GET /api/v1/crons":           {summary: "The scheduled jobs, and the work Ostiole does on its own account.", role: auth.RoleViewer},
 	"POST /api/v1/crons/{id}/run": {summary: "Run a scheduled job now.", role: auth.RoleOperator},

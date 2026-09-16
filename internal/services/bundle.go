@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/rforced/ostiole/internal/dnsblock"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 )
@@ -21,9 +22,12 @@ var _ network.Backend = (*Bundle)(nil)
 
 // NewBundle returns the production services: the dialled sessions first,
 // because an interface has to exist before anything serves on it, then
-// the resolver, then the forwarder that points at it.
-func NewBundle() *Bundle {
-	return &Bundle{backends: []network.Backend{NewPPPoE(), NewUnbound(), New()}}
+// the resolver, then the blocklist, then the forwarder that reads the
+// blocklist and points at the resolver.
+func NewBundle(blocklists *dnsblock.Cache) *Bundle {
+	return &Bundle{backends: []network.Backend{
+		NewPPPoE(), NewUnbound(), NewDNSBlock(blocklists), New(),
+	}}
 }
 
 // NewBundleOf composes the given backends, in apply order.

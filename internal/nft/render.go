@@ -44,6 +44,7 @@ func RenderWithFeeds(cfg *model.Config, feeds map[string][]string) (string, erro
 	r.chainForward()
 	r.chainOutput()
 	r.zoneChains()
+	r.chainBlockDNS()
 	r.policyChains()
 	r.chainNATPrerouting()
 	r.chainNATPostrouting()
@@ -345,6 +346,7 @@ func (r *renderer) chainForward() {
 		r.line("ct state established,related accept")
 		r.line("ct state invalid drop")
 		r.blockedSources("forward")
+		r.blockDNSJump()
 		if r.hasPortForwards() {
 			r.line(`ct status dnat counter accept comment "port-forwards"`)
 		}
@@ -917,6 +919,7 @@ func (r *renderer) chainNATPrerouting() {
 			}
 		}
 		r.oneToOneDNAT()
+		r.dnsRedirect()
 	})
 }
 

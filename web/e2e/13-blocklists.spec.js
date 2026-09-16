@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 
 import { expect, test } from '@playwright/test'
 
-import { applyAndConfirm, login, shot } from './helpers.js'
+import { applyAndConfirm, login, shot, sidebar } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -27,7 +27,7 @@ test.afterAll(() => lists?.close())
 test('a blocklist alias fetches, lands in the ruleset, and refreshes', async ({ page }) => {
   await login(page)
   await page.goto('/firewall')
-  await page.getByRole('tab', { name: 'Aliases' }).click()
+  await sidebar(page, 'Aliases')
 
   await page.getByRole('button', { name: 'Add alias' }).click()
   const dialog = page.getByRole('dialog')
@@ -43,7 +43,7 @@ test('a blocklist alias fetches, lands in the ruleset, and refreshes', async ({ 
   await expect(row).toContainText('not fetched yet')
 
   // A rule that drops what the list names.
-  await page.getByRole('tab', { name: 'Rules' }).click()
+  await sidebar(page, 'Rules')
   await page.getByRole('group', { name: 'Zone' }).getByRole('button', { name: 'wan' }).click()
   await page.getByRole('button', { name: 'Add rule' }).click()
   const rule = page.getByRole('dialog')
@@ -66,7 +66,7 @@ test('a blocklist alias fetches, lands in the ruleset, and refreshes', async ({ 
 
   // Fetch it, and the cached entries show up against the alias.
   await page.goto('/firewall')
-  await page.getByRole('tab', { name: 'Aliases' }).click()
+  await sidebar(page, 'Aliases')
   const listed = page.getByRole('row').filter({ hasText: 'blocklist' })
   await listed.getByRole('button', { name: 'Refresh' }).click()
   // Three from the list; the entry typed in by hand is not "fetched".
@@ -78,7 +78,7 @@ test('a blocklist alias fetches, lands in the ruleset, and refreshes', async ({ 
 test('a country alias asks for codes, not addresses', async ({ page }) => {
   await login(page)
   await page.goto('/firewall')
-  await page.getByRole('tab', { name: 'Aliases' }).click()
+  await sidebar(page, 'Aliases')
 
   await page.getByRole('button', { name: 'Add alias' }).click()
   const dialog = page.getByRole('dialog')
@@ -100,7 +100,7 @@ test('a country alias asks for codes, not addresses', async ({ page }) => {
 test('hybrid outbound NAT puts your rules ahead of the automatic one', async ({ page }) => {
   await login(page)
   await page.goto('/firewall')
-  await page.getByRole('tab', { name: 'NAT' }).click()
+  await sidebar(page, 'NAT')
 
   await page.getByLabel('Mode').selectOption('hybrid')
   await expect(page.getByText('behaves like automatic')).toBeVisible()

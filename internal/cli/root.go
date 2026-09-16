@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/rforced/ostiole/internal/dnsblock"
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/feeds"
 	"github.com/rforced/ostiole/internal/network"
@@ -37,6 +38,10 @@ type globals struct {
 	configDir  string
 	nftBin     string
 	netBackend string
+
+	// blockCache is shared rather than made twice: the refresher and the
+	// service backend have to agree on what was last fetched.
+	blockCache *dnsblock.Cache
 }
 
 func (g *globals) store() *store.Store {
@@ -61,6 +66,17 @@ func (g *globals) feedsDir() string { return filepath.Join(g.configDir, "feeds")
 
 func (g *globals) feeds() *feeds.Cache { return feeds.NewCache(g.feedsDir()) }
 
+// blocklistDir is where the names fetched for DNS blocking are cached,
+// beside the feed cache and just as disposable.
+func (g *globals) blocklistDir() string { return filepath.Join(g.configDir, "dnsblock") }
+
+func (g *globals) blocklists() *dnsblock.Cache {
+	if g.blockCache == nil {
+		g.blockCache = dnsblock.NewCache(g.blocklistDir())
+	}
+	return g.blockCache
+}
+
 func (g *globals) engine() (*engine.Engine, error) {
 	net, err := g.network()
 	if err != nil {
@@ -72,7 +88,7 @@ func (g *globals) engine() (*engine.Engine, error) {
 		eng.WithSysctl(sysctl.Proc{})
 		if net != nil {
 			// Services need root and a managed box; dev runs stay firewall-only.
-			eng.WithServices(services.NewBundle())
+			eng.WithServices(services.NewBundle(g.blocklists()))
 		}
 	}
 	return eng, nil
@@ -109,6 +125,7 @@ func newRootCmd() *cobra.Command {
 		newGatewaysCmd(g),
 		newPolicyCmd(g),
 		newAliasesCmd(g),
+		newDNSBlockCmd(g),
 		newCronsCmd(g),
 		newBackupCmd(g),
 		newRestoreCmd(g),

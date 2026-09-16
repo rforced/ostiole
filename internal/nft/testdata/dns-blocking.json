@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "system": {
+    "hostname": "blocker",
+    "management": {
+      "webPort": 443,
+      "sshPort": 22
+    }
+  },
+  "zones": [
+    {
+      "name": "wan",
+      "external": true,
+      "antiLockout": true
+    },
+    {
+      "name": "lan",
+      "antiLockout": true
+    }
+  ],
+  "interfaces": [
+    {
+      "name": "eth0",
+      "zone": "wan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "dhcp"
+      },
+      "ipv6": {
+        "mode": "slaac"
+      }
+    },
+    {
+      "name": "eth1",
+      "zone": "lan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "192.168.1.1/24"
+      },
+      "ipv6": {
+        "mode": "static",
+        "address": "2001:db8:1::1/64"
+      }
+    }
+  ],
+  "aliases": [
+    {
+      "name": "doh_servers",
+      "type": "hosts",
+      "description": "Public DNS over HTTPS resolvers",
+      "url": "https://example.test/doh-ipv4.txt",
+      "refreshHours": 24,
+      "entries": []
+    },
+    {
+      "name": "resolver_exempt",
+      "type": "hosts",
+      "description": "The one machine allowed to resolve for itself",
+      "entries": [
+        "192.168.1.9",
+        "2001:db8:1::9"
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "lan-out",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    }
+  ],
+  "nat": {
+    "outbound": {
+      "mode": "automatic"
+    }
+  },
+  "services": {
+    "dhcp": {
+      "enabled": false
+    },
+    "dns": {
+      "enabled": true,
+      "domain": "lan",
+      "upstreams": [
+        "1.1.1.1"
+      ]
+    }
+  },
+  "blocking": {
+    "enabled": true,
+    "mode": "nxdomain",
+    "lists": [
+      {
+        "name": "stevenblack",
+        "enabled": true,
+        "url": "https://example.test/hosts",
+        "format": "hosts"
+      }
+    ],
+    "allow": [
+      "example.com"
+    ],
+    "deny": [
+      "tracker.example.net"
+    ],
+    "enforce": {
+      "redirectDns": true,
+      "blockDot": true,
+      "dohAlias": "doh_servers",
+      "firefoxCanary": true,
+      "exemptAlias": "resolver_exempt"
+    }
+  }
+}

@@ -166,6 +166,11 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 		if svc.DNS.Domain != "" {
 			fmt.Fprintf(&b, "domain=%s\nlocal=/%s/\nexpand-hosts\n", svc.DNS.Domain, svc.DNS.Domain)
 		}
+		// The blocklist lives in its own file, written from the cache
+		// rather than from the model. The include is named whenever DNS is
+		// answering, empty or not, so turning blocking on and off does not
+		// rewrite this file and cost a second restart.
+		fmt.Fprintf(&b, "conf-file=%s\n", filepath.Join(d.dir(), BlockConfName))
 	} else {
 		b.WriteString("port=0\n")
 	}

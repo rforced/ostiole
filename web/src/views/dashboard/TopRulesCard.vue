@@ -47,7 +47,7 @@ defineProps({
       Blocked by the default policy: {{ formatCount(blocked?.packets ?? 0) }} packets ({{
         formatBytes(blocked?.bytes ?? 0)
       }}) ·
-      <RouterLink to="/firewall" class="link">see the log</RouterLink>
+      <RouterLink to="/firewall/log" class="link">see the log</RouterLink>
     </p>
   </section>
 </template>
