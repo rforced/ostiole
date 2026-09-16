@@ -36,6 +36,9 @@ type Engine struct {
 	net    network.Backend // nil when network management is disabled
 	svc    network.Backend // dnsmasq services; nil when not managed
 	sysctl sysctl.Applier  // nil in tests without a kernel
+	// feeds supplies the contents of aliases fetched from a URL or a
+	// country list; nil renders them empty.
+	feeds  FeedSource
 	log    *slog.Logger
 	revert time.Duration // time budget for an automatic revert
 
@@ -71,6 +74,26 @@ func (e *Engine) WithServices(b network.Backend) *Engine {
 	return e
 }
 
+// FeedSource supplies the entries of aliases that are fetched rather than
+// written out.
+type FeedSource interface {
+	Entries() map[string][]string
+}
+
+// WithFeeds supplies fetched alias contents to every render.
+func (e *Engine) WithFeeds(f FeedSource) *Engine {
+	e.feeds = f
+	return e
+}
+
+// FeedEntries is what the renderer is given for fetched aliases.
+func (e *Engine) FeedEntries() map[string][]string {
+	if e.feeds == nil {
+		return nil
+	}
+	return e.feeds.Entries()
+}
+
 // WithSysctl makes every apply and load also turn on router kernel
 // settings (IP forwarding and friends).
 func (e *Engine) WithSysctl(a sysctl.Applier) *Engine {
@@ -100,7 +123,7 @@ func (e *Engine) Store() *store.Store { return e.store }
 // Check validates cfg, renders the ruleset and network units, and has nft
 // dry-run the ruleset.
 func (e *Engine) Check(ctx context.Context, cfg *model.Config) (*Plan, error) {
-	ruleset, err := nft.Render(cfg)
+	ruleset, err := nft.RenderWithFeeds(cfg, e.FeedEntries())
 	if err != nil {
 		return nil, err
 	}

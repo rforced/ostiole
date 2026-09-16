@@ -23,11 +23,17 @@ const LogGroup = 1
 
 // Render converts a validated configuration into an nftables ruleset that
 // atomically replaces the Ostiole table when loaded with `nft -f`.
-func Render(cfg *model.Config) (string, error) {
+func Render(cfg *model.Config) (string, error) { return RenderWithFeeds(cfg, nil) }
+
+// RenderWithFeeds is Render with the contents of fetched aliases supplied
+// separately: blocklists and country ranges live in a cache, not in the
+// configuration, so a revision stays readable and a rollback does not
+// carry half a million addresses with it.
+func RenderWithFeeds(cfg *model.Config, feeds map[string][]string) (string, error) {
 	if err := cfg.Validate(); err != nil {
 		return "", err
 	}
-	r := &renderer{cfg: cfg}
+	r := &renderer{cfg: cfg, feeds: feeds}
 	r.line(Header)
 	r.line("table " + Table)
 	r.line("delete table " + Table)
@@ -53,7 +59,10 @@ func EmptyRuleset() string {
 }
 
 type renderer struct {
-	cfg    *model.Config
+	cfg *model.Config
+	// feeds holds the entries of aliases that are fetched rather than
+	// written out.
+	feeds  map[string][]string
 	b      strings.Builder
 	indent int
 }
@@ -104,27 +113,69 @@ func splitFamilies(addrs []string) (v4, v6 []string) {
 	return v4, v6
 }
 
+// entriesOf is what an alias puts in its set: what is written in the
+// configuration, or what was fetched for it. A country alias holds codes,
+// never addresses, so only the fetched side counts.
+func (r *renderer) entriesOf(a model.Alias) []string {
+	if !a.Fetched() {
+		return a.Entries
+	}
+	fetched := r.feeds[a.Name]
+	if a.Type == model.AliasGeoIP {
+		return fetched
+	}
+	return append(append([]string{}, a.Entries...), fetched...)
+}
+
 func (r *renderer) sets() {
 	for _, a := range r.cfg.Aliases {
-		switch a.Type {
-		case model.AliasHosts:
-			v4, v6 := splitFamilies(a.Entries)
-			if len(v4) > 0 {
-				r.set(aliasSet(a.Name, 4), "ipv4_addr", v4, a.Description)
-			}
-			if len(v6) > 0 {
-				r.set(aliasSet(a.Name, 6), "ipv6_addr", v6, a.Description)
-			}
-		case model.AliasPorts:
-			if len(a.Entries) > 0 {
-				ports := make([]string, 0, len(a.Entries))
-				for _, e := range a.Entries {
-					pr, _ := model.ParsePortRange(e)
-					ports = append(ports, pr.String())
-				}
-				r.set(aliasPortSet(a.Name), "inet_service", ports, a.Description)
-			}
+		for _, set := range AliasSets(a, r.entriesOf(a)) {
+			r.set(set.Name, set.Type, set.Elements, a.Description)
 		}
+	}
+}
+
+// Set is one nftables set: its name and the elements it holds. It is
+// exported so a refreshed blocklist can replace the elements without
+// rebuilding the ruleset.
+type Set struct {
+	Name     string
+	Type     string
+	Elements []string
+}
+
+// AliasSets returns the sets an alias renders to, given its entries.
+//
+// An alias written out by hand only gets a set for a family it has
+// entries in; one that is fetched always gets both, even when empty,
+// because tomorrow's list may have addresses this one does not and the
+// rules have to be pointing at somewhere to put them.
+func AliasSets(a model.Alias, entries []string) []Set {
+	always := a.Fetched()
+	switch a.Type {
+	case model.AliasPorts:
+		if len(entries) == 0 && !always {
+			return nil
+		}
+		ports := make([]string, 0, len(entries))
+		for _, e := range entries {
+			pr, err := model.ParsePortRange(e)
+			if err != nil {
+				continue
+			}
+			ports = append(ports, pr.String())
+		}
+		return []Set{{Name: aliasPortSet(a.Name), Type: "inet_service", Elements: ports}}
+	default:
+		v4, v6 := splitFamilies(entries)
+		var out []Set
+		if len(v4) > 0 || always {
+			out = append(out, Set{Name: aliasSet(a.Name, 4), Type: "ipv4_addr", Elements: v4})
+		}
+		if len(v6) > 0 || always {
+			out = append(out, Set{Name: aliasSet(a.Name, 6), Type: "ipv6_addr", Elements: v6})
+		}
+		return out
 	}
 }
 
@@ -136,7 +187,9 @@ func (r *renderer) set(name, typ string, elems []string, comment string) {
 		if comment != "" {
 			r.line(fmt.Sprintf("comment %q", sanitizeComment(comment)))
 		}
-		r.line("elements = { " + strings.Join(elems, ", ") + " }")
+		if len(elems) > 0 {
+			r.line("elements = { " + strings.Join(elems, ", ") + " }")
+		}
 	})
 }
 
@@ -389,13 +442,13 @@ func (r *renderer) endpointAddr(dir string, e model.Endpoint) famExpr {
 	}
 	if e.Alias != "" {
 		a, _ := r.cfg.Alias(e.Alias)
-		v4, v6 := splitFamilies(a.Entries)
+		v4, v6 := splitFamilies(r.entriesOf(*a))
 		var f famExpr
-		if len(v4) > 0 {
+		if len(v4) > 0 || a.Fetched() {
 			s := fmt.Sprintf("ip %s @%s", dir, aliasSet(a.Name, 4))
 			f.v4 = &s
 		}
-		if len(v6) > 0 {
+		if len(v6) > 0 || a.Fetched() {
 			s := fmt.Sprintf("ip6 %s @%s", dir, aliasSet(a.Name, 6))
 			f.v6 = &s
 		}
@@ -637,7 +690,7 @@ func portExpr(proto, expr string) string {
 func (r *renderer) ports(kind string, e model.Endpoint) string {
 	if e.PortAlias != "" {
 		a, _ := r.cfg.Alias(e.PortAlias)
-		if len(a.Entries) == 0 {
+		if len(r.entriesOf(*a)) == 0 && !a.Fetched() {
 			return ""
 		}
 		return kind + " @" + aliasPortSet(a.Name)

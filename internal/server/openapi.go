@@ -110,6 +110,10 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/update/check":             {summary: "Ask GitHub whether a newer release exists.", role: auth.RoleAdmin},
 	"POST /api/v1/update/apply":            {summary: "Download and install a release.", role: auth.RoleAdmin},
 
+	"GET /api/v1/aliases/feeds":           {summary: "When each fetched alias was last updated, and what went wrong if it did.", role: auth.RoleViewer},
+	"POST /api/v1/aliases/feeds/refresh":  {summary: "Fetch every blocklist and country list now.", role: auth.RoleOperator},
+	"POST /api/v1/aliases/{name}/refresh": {summary: "Fetch one alias now.", role: auth.RoleOperator},
+
 	"GET /metrics":             {summary: "Metrics in the Prometheus text format.", role: auth.RoleViewer},
 	"GET /api/v1/openapi.json": {summary: "This description.", public: true},
 }

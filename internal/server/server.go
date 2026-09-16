@@ -13,6 +13,7 @@ import (
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/certs"
 	"github.com/rforced/ostiole/internal/engine"
+	"github.com/rforced/ostiole/internal/feeds"
 	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/services"
@@ -50,6 +51,9 @@ type Deps struct {
 	Certs *certs.Manager
 	// Tokens authenticates API tokens; nil leaves the API to sessions.
 	Tokens *auth.Tokens
+	// Feeds refreshes aliases fetched from a URL or a country list; nil
+	// leaves them to whatever is cached.
+	Feeds *feeds.Refresher
 	// CertHosts lists the names a regenerated self-signed certificate
 	// should cover.
 	CertHosts func() []string
@@ -78,6 +82,8 @@ func Handler(d Deps) http.Handler {
 		pppoe:     d.PPPoE,
 		certs:     d.Certs,
 		tokens:    d.Tokens,
+		feedCache: feedCacheOf(d.Feeds),
+		feeds:     feedRefresherOf(d.Feeds),
 		certHosts: d.CertHosts,
 		fwlog:     d.Log,
 		gateways:  d.Gateways,
@@ -163,4 +169,21 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		slog.Warn("write json response", "err", err)
 	}
+}
+
+// feedCacheOf and feedRefresherOf keep a nil *feeds.Refresher from
+// becoming a non-nil interface, which would make the handlers think
+// something is refreshing when nothing is.
+func feedCacheOf(r *feeds.Refresher) *feeds.Cache {
+	if r == nil {
+		return nil
+	}
+	return r.Cache
+}
+
+func feedRefresherOf(r *feeds.Refresher) FeedRefresher {
+	if r == nil {
+		return nil
+	}
+	return r
 }

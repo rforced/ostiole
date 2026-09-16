@@ -54,6 +54,9 @@ type AliasType string
 const (
 	AliasHosts AliasType = "hosts" // IP addresses and CIDR networks
 	AliasPorts AliasType = "ports" // ports and port ranges
+	// AliasGeoIP holds ISO country codes; the addresses behind them are
+	// fetched, because nobody maintains that list by hand.
+	AliasGeoIP AliasType = "geoip"
 )
 
 // OutboundMode controls outbound NAT.
@@ -89,6 +92,27 @@ type System struct {
 	Hostname   string     `json:"hostname,omitempty"`
 	DNSServers []string   `json:"dnsServers,omitempty"`
 	Management Management `json:"management"`
+	// GeoIPv4URL and GeoIPv6URL are where country address lists come from.
+	// "{country}" is replaced with the lower-case ISO code. They are
+	// settings so an air-gapped box can point at its own mirror; empty
+	// uses the defaults.
+	GeoIPv4URL string `json:"geoIPv4Url,omitempty"`
+	GeoIPv6URL string `json:"geoIPv6Url,omitempty"`
+}
+
+// Default sources for country address lists.
+const (
+	DefaultGeoIPv4URL = "https://www.ipdeny.com/ipblocks/data/aggregated/{country}-aggregated.zone"
+	DefaultGeoIPv6URL = "https://www.ipdeny.com/ipv6/ipaddresses/aggregated/{country}-aggregated.zone"
+)
+
+// GeoIPTemplates returns the URLs country lists are fetched from.
+func (s System) GeoIPTemplates() (v4, v6 string) {
+	v4, v6 = s.GeoIPv4URL, s.GeoIPv6URL
+	if v4 == "" && v6 == "" {
+		return DefaultGeoIPv4URL, DefaultGeoIPv6URL
+	}
+	return v4, v6
 }
 
 // Management describes how the box itself is administered. The ports feed
@@ -355,8 +379,21 @@ type Alias struct {
 	Name        string    `json:"name"`
 	Type        AliasType `json:"type"`
 	Description string    `json:"description,omitempty"`
-	Entries     []string  `json:"entries"`
+	// Entries are the addresses or ports, written here. For a geoip alias
+	// they are ISO country codes instead, and for a URL alias they are
+	// extra entries kept alongside whatever is fetched.
+	Entries []string `json:"entries"`
+	// URL fetches the entries from a published list. The result is cached
+	// on disk, so a box that boots without a working line still has the
+	// list it had yesterday.
+	URL string `json:"url,omitempty"`
+	// RefreshHours is how often to fetch; zero means once a day. Nothing
+	// is fetched more than once an hour.
+	RefreshHours int `json:"refreshHours,omitempty"`
 }
+
+// Fetched reports whether this alias takes its contents from elsewhere.
+func (a Alias) Fetched() bool { return a.URL != "" || a.Type == AliasGeoIP }
 
 // Rule is a filter rule evaluated for traffic entering Zone, whether it is
 // addressed to the firewall itself or forwarded through it (pfSense

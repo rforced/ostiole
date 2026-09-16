@@ -14,6 +14,7 @@ import (
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/certs"
 	"github.com/rforced/ostiole/internal/engine"
+	"github.com/rforced/ostiole/internal/feeds"
 	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/gateway"
 	"github.com/rforced/ostiole/internal/install"
@@ -30,14 +31,16 @@ import (
 const maxBodyBytes = 1 << 20
 
 type api struct {
-	engine   *engine.Engine
-	auth     *auth.Service
-	updater  *update.Manager
-	services *services.Dnsmasq
-	resolver *services.Unbound
-	pppoe    *services.PPPoE
-	certs    *certs.Manager
-	tokens   *auth.Tokens
+	engine    *engine.Engine
+	auth      *auth.Service
+	updater   *update.Manager
+	services  *services.Dnsmasq
+	resolver  *services.Unbound
+	pppoe     *services.PPPoE
+	certs     *certs.Manager
+	tokens    *auth.Tokens
+	feeds     FeedRefresher
+	feedCache *feeds.Cache
 	// routes is the router the handlers were registered on, which the
 	// OpenAPI description is generated from.
 	routes *router
@@ -61,6 +64,7 @@ func (a *api) register(mux *router) {
 	a.registerBackup(mux)
 	a.registerCerts(mux)
 	a.registerTokens(mux)
+	a.registerFeeds(mux)
 	a.registerMetrics(mux)
 	a.registerOpenAPI(mux)
 	mux.HandleFunc("GET /api/v1/status", a.read(a.status))

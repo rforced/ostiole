@@ -12,6 +12,7 @@ import (
 
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/certs"
+	"github.com/rforced/ostiole/internal/feeds"
 	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/gateway"
 	"github.com/rforced/ostiole/internal/install"
@@ -78,6 +79,16 @@ at your own.`,
 			}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
+			// Blocklists and country ranges refresh in the background and
+			// push straight into the loaded sets, so an update never
+			// disturbs the rules that use them.
+			refresher := &feeds.Refresher{
+				Cache:   g.feeds(),
+				Fetcher: feeds.NewFetcher(version.Version),
+				Source:  eng.Effective,
+				Sets:    &nft.Exec{Bin: g.nftBin},
+				Log:     slog.Default(),
+			}
 			deps := server.Deps{
 				Engine:  eng,
 				Auth:    as,
@@ -86,10 +97,12 @@ at your own.`,
 				Units:   install.ExecSystemctl{},
 				Tokens:  tokens,
 				Certs:   certManager,
+				Feeds:   refresher,
 				// The names are looked up fresh, so a certificate made
 				// after the box moved covers where it moved to.
 				CertHosts: certHosts,
 			}
+			go refresher.Run(ctx)
 			if os.Geteuid() == 0 {
 				deps.Services = services.New()
 				deps.Resolver = services.NewUnbound()

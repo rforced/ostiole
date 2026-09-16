@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"net/netip"
+	"net/url"
 	"regexp"
 	"slices"
 	"strconv"
@@ -129,8 +130,28 @@ func (c *Config) Validate() error {
 					v.add(fmt.Sprintf("%s.entries[%d]", path, j), "%v", err)
 				}
 			}
+		case AliasGeoIP:
+			if len(a.Entries) == 0 {
+				v.add(path+".entries", "list the countries as two-letter codes, like de or fr")
+			}
+			for j, e := range a.Entries {
+				if !countryRe.MatchString(e) {
+					v.add(fmt.Sprintf("%s.entries[%d]", path, j), "%q is not a two-letter country code", e)
+				}
+			}
+			if a.URL != "" {
+				v.add(path+".url", "a country alias fetches from the GeoIP source set under System")
+			}
 		default:
 			v.add(path+".type", "unknown alias type %q", a.Type)
+		}
+		if a.URL != "" {
+			if u, err := url.Parse(a.URL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+				v.add(path+".url", "%q must be an http or https URL", a.URL)
+			}
+		}
+		if a.RefreshHours < 0 || a.RefreshHours > 24*30 {
+			v.add(path+".refreshHours", "%d must be 0-720 (0 means once a day)", a.RefreshHours)
 		}
 	}
 
@@ -398,6 +419,8 @@ func (c *Config) Validate() error {
 	}
 	return &ValidationError{Issues: v.issues}
 }
+
+var countryRe = regexp.MustCompile(`^[A-Za-z]{2}$`)
 
 var (
 	macRe       = regexp.MustCompile(`^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$`)
@@ -895,6 +918,16 @@ func (v *validator) wireguard(path string, in Interface) {
 }
 
 func (v *validator) system(s *System) {
+	for field, tmpl := range map[string]string{"geoIPv4Url": s.GeoIPv4URL, "geoIPv6Url": s.GeoIPv6URL} {
+		if tmpl == "" {
+			continue
+		}
+		if u, err := url.Parse(tmpl); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+			v.add("system."+field, "%q must be an http or https URL", tmpl)
+		} else if !strings.Contains(tmpl, "{country}") {
+			v.add("system."+field, "the URL needs {country} in it, which is replaced with the code")
+		}
+	}
 	if s.Hostname != "" && !hostnameRe.MatchString(s.Hostname) {
 		v.add("system.hostname", "%q is not a valid hostname", s.Hostname)
 	}
@@ -1002,8 +1035,8 @@ func (v *validator) endpoint(path string, e Endpoint, aliases map[string]AliasTy
 	if e.Alias != "" {
 		if t, ok := aliases[e.Alias]; !ok {
 			v.add(path+".alias", "unknown alias %q", e.Alias)
-		} else if t != AliasHosts {
-			v.add(path+".alias", "alias %q is not a hosts alias", e.Alias)
+		} else if t != AliasHosts && t != AliasGeoIP {
+			v.add(path+".alias", "alias %q holds ports, not addresses", e.Alias)
 		}
 	}
 	if len(e.Ports) > 0 && e.PortAlias != "" {

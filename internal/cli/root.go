@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/rforced/ostiole/internal/engine"
+	"github.com/rforced/ostiole/internal/feeds"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/services"
@@ -53,12 +55,19 @@ func (g *globals) network() (network.Backend, error) {
 	return nil, fmt.Errorf("unknown --network-backend %q (auto, networkd, or none)", g.netBackend)
 }
 
+// feedsDir is where fetched blocklists and country ranges are cached,
+// beside the configuration but never part of it.
+func (g *globals) feedsDir() string { return filepath.Join(g.configDir, "feeds") }
+
+func (g *globals) feeds() *feeds.Cache { return feeds.NewCache(g.feedsDir()) }
+
 func (g *globals) engine() (*engine.Engine, error) {
 	net, err := g.network()
 	if err != nil {
 		return nil, err
 	}
 	eng := engine.New(g.store(), &nft.Exec{Bin: g.nftBin}, net, slog.Default())
+	eng.WithFeeds(g.feeds())
 	if os.Geteuid() == 0 {
 		eng.WithSysctl(sysctl.Proc{})
 		if net != nil {
@@ -99,6 +108,7 @@ func newRootCmd() *cobra.Command {
 		newCountersCmd(g),
 		newGatewaysCmd(g),
 		newPolicyCmd(g),
+		newAliasesCmd(g),
 		newBackupCmd(g),
 		newRestoreCmd(g),
 		newDiffCmd(g),

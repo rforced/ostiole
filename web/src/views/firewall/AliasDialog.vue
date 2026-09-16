@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
@@ -10,8 +10,23 @@ const props = defineProps({ alias: { type: Object, default: null } })
 const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
-const form = ref({ name: '', type: 'hosts', description: '', entries: '' })
+const form = ref(blank())
 const error = ref('')
+
+function blank() {
+  return { name: '', type: 'hosts', description: '', entries: '', url: '', refreshHours: 24 }
+}
+
+/** A country alias always fetches; a host or port alias may. */
+const fetches = computed(() => form.value.type === 'geoip' || form.value.url.trim() !== '')
+
+const ENTRY_HINTS = {
+  hosts:
+    'One per line: addresses or CIDR networks. With a URL, these are kept alongside whatever is fetched.',
+  ports: 'One per line: ports or ranges like 8000-8100.',
+  geoip:
+    'One per line: two-letter country codes, like de or fr. The addresses behind them are fetched.',
+}
 
 watch(
   () => [open.value, props.alias],
@@ -21,12 +36,15 @@ watch(
     const a = props.alias
     form.value = a
       ? {
+          ...blank(),
           name: a.name,
           type: a.type,
           description: a.description ?? '',
           entries: joinList(a.entries),
+          url: a.url ?? '',
+          refreshHours: a.refreshHours || 24,
         }
-      : { name: '', type: 'hosts', description: '', entries: '' }
+      : blank()
   },
   { immediate: true },
 )
@@ -45,6 +63,10 @@ function save() {
   }
   const out = { name, type: form.value.type, entries: parseList(form.value.entries) }
   if (form.value.description) out.description = form.value.description
+  if (form.value.type !== 'geoip' && form.value.url.trim()) out.url = form.value.url.trim()
+  if (fetches.value && Number(form.value.refreshHours) > 0) {
+    out.refreshHours = Number(form.value.refreshHours)
+  }
   config.upsertAlias(out, previous)
   open.value = false
 }
@@ -72,6 +94,7 @@ function save() {
           <select id="alias-type" v-model="form.type" class="input">
             <option value="hosts">Hosts and networks</option>
             <option value="ports">Ports</option>
+            <option value="geoip">Countries (addresses fetched)</option>
           </select>
         </FormField>
       </div>
@@ -79,14 +102,35 @@ function save() {
         <input id="alias-desc" v-model="form.description" class="input" />
       </FormField>
       <FormField
-        id="alias-entries"
-        label="Entries"
-        :hint="
-          form.type === 'hosts'
-            ? 'One per line: IPs or CIDR networks.'
-            : 'One per line: ports or ranges like 8000-8100.'
-        "
+        v-if="form.type !== 'geoip'"
+        id="alias-url"
+        label="Fetch from"
+        hint="Optional: a published list, one entry per line. It is cached here and refreshed on a schedule."
       >
+        <input
+          id="alias-url"
+          v-model="form.url"
+          class="input font-mono"
+          placeholder="https://www.spamhaus.org/drop/drop.txt"
+          spellcheck="false"
+        />
+      </FormField>
+      <FormField
+        v-if="fetches"
+        id="alias-refresh"
+        label="Refresh every (hours)"
+        hint="Publishers ask not to be fetched more than once an hour."
+      >
+        <input
+          id="alias-refresh"
+          v-model.number="form.refreshHours"
+          type="number"
+          min="1"
+          max="720"
+          class="input w-32 font-mono"
+        />
+      </FormField>
+      <FormField id="alias-entries" label="Entries" :hint="ENTRY_HINTS[form.type]">
         <textarea
           id="alias-entries"
           v-model="form.entries"

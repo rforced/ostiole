@@ -189,6 +189,11 @@ export const api = {
   log: {
     recent: (limit = 200) => get(`/log/recent?limit=${limit}`),
   },
+  aliases: {
+    feeds: () => get('/aliases/feeds'),
+    refresh: (name) => post(`/aliases/${encodeURIComponent(name)}/refresh`),
+    refreshAll: () => post('/aliases/feeds/refresh'),
+  },
   users: {
     list: () => get('/users'),
     setRole: (username, role) => post(`/users/${encodeURIComponent(username)}/role`, { role }),
