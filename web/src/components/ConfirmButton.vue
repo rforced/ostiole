@@ -39,7 +39,7 @@ async function click() {
 <template>
   <button
     type="button"
-    class="text-sm text-neutral-500 underline-offset-2 hover:text-red-600 hover:underline focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:outline-none dark:hover:text-red-400"
+    class="link-action hover:text-red-600 dark:hover:text-red-400"
     @click="click"
   >
     {{ label }}

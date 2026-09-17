@@ -81,6 +81,7 @@ func (a *api) register(mux *router) {
 	a.registerBackup(mux)
 	a.registerCerts(mux)
 	a.registerTokens(mux)
+	a.registerUsers(mux)
 	a.registerFeeds(mux)
 	a.registerBlocking(mux)
 	a.registerCrons(mux)
@@ -452,12 +453,15 @@ func statusFor(err error) int {
 		return http.StatusUnauthorized
 	case errors.Is(err, errForbidden):
 		return http.StatusForbidden
-	case errors.Is(err, auth.ErrTokenNotFound):
+	case errors.Is(err, auth.ErrTokenNotFound), errors.Is(err, auth.ErrNoSuchUser):
 		return http.StatusNotFound
 	case errors.Is(err, auth.ErrRateLimited):
 		return http.StatusTooManyRequests
-	case errors.Is(err, auth.ErrSetupDone):
+	case errors.Is(err, auth.ErrSetupDone), errors.Is(err, auth.ErrUserExists),
+		errors.Is(err, auth.ErrLastAdmin), errors.Is(err, auth.ErrLastAccount):
 		return http.StatusConflict
+	case errors.Is(err, auth.ErrUnknownRole):
+		return http.StatusUnprocessableEntity
 	case errors.Is(err, auth.ErrWeakPassword), errors.Is(err, auth.ErrInvalidUsername):
 		return http.StatusUnprocessableEntity
 	case errors.As(err, &ve), errors.As(err, &ne):

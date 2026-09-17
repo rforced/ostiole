@@ -25,6 +25,11 @@ var (
 	ErrRateLimited        = errors.New("too many failed logins; try again later")
 	ErrSetupDone          = errors.New("an account already exists")
 	ErrInvalidUsername    = errors.New("username must be 1-32 lowercase letters, digits, '_', '.', or '-' and start with a letter")
+	ErrUserExists         = errors.New("an account with that name already exists")
+	ErrNoSuchUser         = errors.New("no such account")
+	ErrLastAdmin          = errors.New("this is the only administrator; promote another account first")
+	ErrLastAccount        = errors.New("cannot delete the last account")
+	ErrUnknownRole        = errors.New("unknown role")
 )
 
 // User is a local administrator.
@@ -218,6 +223,23 @@ func (s *Service) Role(username string) Role {
 	return u.RoleOf()
 }
 
+// Account looks one account up, without its password hash. The second
+// result is false when there is no such account, which is how a caller
+// tells a rename or a password reset for a name that does not exist from
+// one that does.
+func (s *Service) Account(username string) (User, bool) {
+	s.refresh()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	u, ok := s.users[username]
+	if !ok {
+		return User{}, false
+	}
+	u.Hash = ""
+	u.Role = u.RoleOf()
+	return u, true
+}
+
 // Accounts lists accounts with their roles, for the UI.
 func (s *Service) Accounts() []User {
 	out := s.Users()
@@ -279,15 +301,45 @@ func (s *Service) Restore(users []User) error {
 	return s.save()
 }
 
-// Setup creates the first account. It fails once any account exists.
+// Setup creates the first account, as an administrator: the operator
+// running first-run setup has to be able to manage everything afterwards.
+// It fails once any account exists.
 func (s *Service) Setup(username, password string) error {
 	if !s.NeedsSetup() {
 		return ErrSetupDone
 	}
-	return s.SetPassword(username, password)
+	return s.CreateUser(username, password, RoleAdmin)
+}
+
+// CreateUser adds an account. It is separate from SetPassword so that
+// creating an account is never something a typo does: a name that is
+// already taken is an error here, not a silent password reset.
+func (s *Service) CreateUser(username, password string, role Role) error {
+	if !usernameRe.MatchString(username) {
+		return ErrInvalidUsername
+	}
+	if !role.Valid() {
+		return fmt.Errorf("%w %q", ErrUnknownRole, role)
+	}
+	hash, err := HashPassword(password)
+	if err != nil {
+		return err
+	}
+	s.refresh()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, taken := s.users[username]; taken {
+		return ErrUserExists
+	}
+	now := s.now()
+	s.users[username] = User{Username: username, Hash: hash, Role: role, CreatedAt: now, UpdatedAt: now}
+	return s.save()
 }
 
 // SetPassword creates or updates an account and invalidates its sessions.
+// An account it has to create becomes an administrator, because the one
+// caller that reaches this with an unknown name is `ostiole
+// reset-password` at the console, recovering a router nobody can log in to.
 func (s *Service) SetPassword(username, password string) error {
 	if !usernameRe.MatchString(username) {
 		return ErrInvalidUsername
@@ -302,7 +354,7 @@ func (s *Service) SetPassword(username, password string) error {
 	now := s.now()
 	u, ok := s.users[username]
 	if !ok {
-		u = User{Username: username, CreatedAt: now}
+		u = User{Username: username, Role: RoleAdmin, CreatedAt: now}
 	}
 	u.Hash = hash
 	u.UpdatedAt = now
@@ -314,22 +366,54 @@ func (s *Service) SetPassword(username, password string) error {
 	return nil
 }
 
-// SetRole changes what an account may do. The last administrator keeps
-// the role: a router with nobody who can manage accounts is a router you have
-// to rebuild.
-func (s *Service) SetRole(username string, role Role) error {
-	if !role.Valid() {
-		return fmt.Errorf("unknown role %q", role)
+// Rename changes an account's username, keeping its password, its role,
+// and its sessions. Sessions follow the name because renaming yourself is
+// the one change an administrator may make to their own account, and it
+// would be a poor one if it logged them out.
+func (s *Service) Rename(username, next string) error {
+	if !usernameRe.MatchString(next) {
+		return ErrInvalidUsername
 	}
 	s.refresh()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	u, ok := s.users[username]
 	if !ok {
-		return fmt.Errorf("no such user %q", username)
+		return fmt.Errorf("%w %q", ErrNoSuchUser, username)
+	}
+	if next == username {
+		return nil
+	}
+	if _, taken := s.users[next]; taken {
+		return ErrUserExists
+	}
+	delete(s.users, username)
+	u.Username = next
+	u.UpdatedAt = s.now()
+	s.users[next] = u
+	if err := s.save(); err != nil {
+		return err
+	}
+	s.sessions.rename(username, next)
+	return nil
+}
+
+// SetRole changes what an account may do. The last administrator keeps
+// the role: a router with nobody who can manage accounts is a router you have
+// to rebuild.
+func (s *Service) SetRole(username string, role Role) error {
+	if !role.Valid() {
+		return fmt.Errorf("%w %q", ErrUnknownRole, role)
+	}
+	s.refresh()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u, ok := s.users[username]
+	if !ok {
+		return fmt.Errorf("%w %q", ErrNoSuchUser, username)
 	}
 	if u.RoleOf() == RoleAdmin && role != RoleAdmin && s.countAdmins() == 1 {
-		return errors.New("this is the only administrator; promote another account first")
+		return ErrLastAdmin
 	}
 	u.Role = role
 	u.UpdatedAt = s.now()
@@ -355,13 +439,13 @@ func (s *Service) DeleteUser(username string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.users[username]; !ok {
-		return fmt.Errorf("no such user %q", username)
+		return fmt.Errorf("%w %q", ErrNoSuchUser, username)
 	}
 	if len(s.users) == 1 {
-		return errors.New("cannot delete the last account")
+		return ErrLastAccount
 	}
 	if s.users[username].RoleOf() == RoleAdmin && s.countAdmins() == 1 {
-		return errors.New("this is the only administrator; promote another account first")
+		return ErrLastAdmin
 	}
 	delete(s.users, username)
 	if err := s.save(); err != nil {

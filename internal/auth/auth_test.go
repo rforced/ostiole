@@ -253,8 +253,132 @@ func TestDeleteUser(t *testing.T) {
 	if got := s.Usernames(); len(got) != 1 || got[0] != "second" {
 		t.Errorf("users = %v", got)
 	}
-	if err := s.DeleteUser("ghost"); err == nil {
-		t.Error("deleted unknown user")
+	if err := s.DeleteUser("ghost"); !errors.Is(err, ErrNoSuchUser) {
+		t.Errorf("delete unknown user: %v", err)
+	}
+}
+
+// The account first-run setup creates has to be an administrator on disk,
+// not merely one by the default a role-less record falls back to.
+func TestSetupCreatesAnAdministrator(t *testing.T) {
+	t.Parallel()
+	s, _ := newService(t)
+	if err := s.Setup("admin", goodPassword); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Users()[0].Role; got != RoleAdmin {
+		t.Errorf("stored role = %q, want %q", got, RoleAdmin)
+	}
+}
+
+func TestCreateUser(t *testing.T) {
+	t.Parallel()
+	s, _ := newService(t)
+	_ = s.Setup("admin", goodPassword)
+
+	if err := s.CreateUser("watcher", goodPassword, RoleViewer); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Role("watcher"); got != RoleViewer {
+		t.Errorf("role = %q, want %q", got, RoleViewer)
+	}
+	// Creating is not a password reset in disguise.
+	if err := s.CreateUser("watcher", goodPassword+"x", RoleAdmin); !errors.Is(err, ErrUserExists) {
+		t.Errorf("duplicate name: %v", err)
+	}
+	if got := s.Role("watcher"); got != RoleViewer {
+		t.Errorf("refused create changed the role to %q", got)
+	}
+	if _, err := s.Login("watcher", goodPassword, "1.2.3.4"); err != nil {
+		t.Errorf("refused create changed the password: %v", err)
+	}
+
+	if err := s.CreateUser("1bad", goodPassword, RoleViewer); !errors.Is(err, ErrInvalidUsername) {
+		t.Errorf("bad name: %v", err)
+	}
+	if err := s.CreateUser("weak", "short", RoleViewer); !errors.Is(err, ErrWeakPassword) {
+		t.Errorf("weak password: %v", err)
+	}
+	if err := s.CreateUser("wizard", goodPassword, Role("wizard")); !errors.Is(err, ErrUnknownRole) {
+		t.Errorf("bad role: %v", err)
+	}
+	if got := s.Usernames(); len(got) != 2 {
+		t.Errorf("refused creates left accounts behind: %v", got)
+	}
+}
+
+// Renaming is the one change an administrator may make to their own
+// account, so it must keep everything that makes it theirs.
+func TestRenameKeepsRoleAndSession(t *testing.T) {
+	t.Parallel()
+	s, _ := newService(t)
+	_ = s.Setup("admin", goodPassword)
+	_ = s.CreateUser("watcher", goodPassword, RoleViewer)
+	sess, err := s.Login("admin", goodPassword, "1.2.3.4")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Rename("admin", "josh"); err != nil {
+		t.Fatal(err)
+	}
+	got, ok := s.Session(sess.ID)
+	if !ok {
+		t.Fatal("rename signed the account out")
+	}
+	if got.Username != "josh" {
+		t.Errorf("session username = %q, want josh", got.Username)
+	}
+	if role := s.Role("josh"); role != RoleAdmin {
+		t.Errorf("role after rename = %q", role)
+	}
+	if role := s.Role("admin"); role != RoleViewer {
+		t.Error("the old name still resolves to an account")
+	}
+	if _, err := s.Login("josh", goodPassword, "1.2.3.4"); err != nil {
+		t.Errorf("login under the new name: %v", err)
+	}
+
+	if err := s.Rename("josh", "watcher"); !errors.Is(err, ErrUserExists) {
+		t.Errorf("rename onto a taken name: %v", err)
+	}
+	if err := s.Rename("josh", "Nope"); !errors.Is(err, ErrInvalidUsername) {
+		t.Errorf("rename to a bad name: %v", err)
+	}
+	if err := s.Rename("ghost", "spook"); !errors.Is(err, ErrNoSuchUser) {
+		t.Errorf("rename an unknown account: %v", err)
+	}
+	if err := s.Rename("josh", "josh"); err != nil {
+		t.Errorf("rename to the same name: %v", err)
+	}
+}
+
+// Whatever else the service allows, it never reaches a state with no
+// administrator in it.
+func TestAlwaysLeavesAnAdministrator(t *testing.T) {
+	t.Parallel()
+	s, _ := newService(t)
+	_ = s.Setup("admin", goodPassword)
+	_ = s.CreateUser("watcher", goodPassword, RoleViewer)
+
+	if err := s.SetRole("admin", RoleViewer); !errors.Is(err, ErrLastAdmin) {
+		t.Errorf("demoted the only administrator: %v", err)
+	}
+	if err := s.DeleteUser("admin"); !errors.Is(err, ErrLastAdmin) {
+		t.Errorf("deleted the only administrator: %v", err)
+	}
+	if err := s.SetRole("watcher", RoleAdmin); err != nil {
+		t.Fatal(err)
+	}
+	// With a second administrator in place, the first may step down.
+	if err := s.SetRole("admin", RoleOperator); err != nil {
+		t.Errorf("demote with a spare administrator: %v", err)
+	}
+	if err := s.SetRole("watcher", Role("wizard")); !errors.Is(err, ErrUnknownRole) {
+		t.Errorf("unknown role: %v", err)
+	}
+	if err := s.SetRole("ghost", RoleAdmin); !errors.Is(err, ErrNoSuchUser) {
+		t.Errorf("role of an unknown account: %v", err)
 	}
 }
 

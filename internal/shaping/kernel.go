@@ -19,9 +19,6 @@ const (
 	rootParent    = netlink.HANDLE_ROOT
 	ingressParent = netlink.HANDLE_INGRESS
 	ingressHandle = 0xFFFF0000
-	// IFBPrefix marks the helper devices Ostiole creates. A device called
-	// ifb0 belongs to whoever made it and is never touched.
-	IFBPrefix = "ifb-"
 )
 
 // rootHandle is Handle as the kernel stores it.
@@ -175,7 +172,7 @@ func (Netlink) IFBs() ([]string, error) {
 	var out []string
 	for _, link := range links {
 		name := link.Attrs().Name
-		if link.Type() != "ifb" || !strings.HasPrefix(name, IFBPrefix) {
+		if link.Type() != "ifb" || !strings.HasPrefix(name, model.IFBPrefix) {
 			continue
 		}
 		qs, err := netlink.QdiscList(link)

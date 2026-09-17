@@ -185,6 +185,11 @@ func (c *Config) ShapesTraffic() bool {
 	return len(c.BusyZones()) > 0
 }
 
+// IFBPrefix marks the helper devices Ostiole creates to shape the traffic
+// arriving on an interface. A device called ifb0 belongs to whoever made
+// it; one called ifb-something is ours.
+const IFBPrefix = "ifb-"
+
 // IFBName is the intermediate device that carries an interface's shaped
 // ingress. The kernel refuses a name over 15 characters, so a long
 // interface name is cut to its first six and given four hex digits of its
@@ -193,11 +198,10 @@ func (c *Config) ShapesTraffic() bool {
 // It lives here rather than beside the rest of the shaping because
 // validation has to know when two interfaces would land on one device.
 func IFBName(iface string) string {
-	const prefix = "ifb-"
 	if len(iface) <= 11 {
-		return prefix + iface
+		return IFBPrefix + iface
 	}
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(iface))
-	return fmt.Sprintf("%s%s-%04x", prefix, iface[:6], h.Sum32()&0xffff)
+	return fmt.Sprintf("%s%s-%04x", IFBPrefix, iface[:6], h.Sum32()&0xffff)
 }

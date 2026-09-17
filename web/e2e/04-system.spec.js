@@ -123,6 +123,56 @@ test('mint an API token and use it to scrape metrics', async ({ page, request })
   await expect(section.getByRole('row').filter({ hasText: 'monitoring' })).toHaveCount(0)
 })
 
+test('add an operator, rename it, prove what it may do, and remove it', async ({ page }) => {
+  const OPERATOR_PASSWORD = 'a second account here'
+  await login(page)
+  await page.goto('/system/accounts')
+  const section = page.getByRole('region', { name: 'Accounts and API tokens' })
+
+  // Your own row cannot be demoted or deleted, which is the only thing
+  // standing between an admin and a router they can no longer manage.
+  const own = section.getByRole('row').filter({ has: page.getByLabel('Role for admin') })
+  await expect(own.getByLabel('Role for admin')).toBeDisabled()
+  await expect(own.getByRole('button', { name: 'Delete' })).toHaveCount(0)
+
+  await section.getByRole('button', { name: 'New account' }).click()
+  await section.getByLabel('Username').fill('opsy')
+  await section.getByLabel('Password', { exact: true }).fill(OPERATOR_PASSWORD)
+  await section.getByLabel('Role', { exact: true }).first().selectOption('operator')
+  await section.getByRole('button', { name: 'Create' }).first().click()
+  // 'ops' is a prefix of 'opsy', so rows are matched by their exact role
+  // label: a row on its way out would otherwise answer for the new one.
+  const roleOf = (name) => page.getByLabel(`Role for ${name}`, { exact: true })
+  const rowOf = (name) => section.getByRole('row').filter({ has: roleOf(name) })
+  await expect(roleOf('opsy')).toHaveValue('operator')
+  await page.screenshot({ path: shot('51-accounts'), fullPage: true })
+
+  await rowOf('opsy').getByRole('button', { name: 'Rename' }).click()
+  const rename = page.getByRole('dialog')
+  await rename.getByLabel('New username').fill('ops')
+  await rename.getByRole('button', { name: 'Rename' }).click()
+  await expect(roleOf('opsy')).toHaveCount(0)
+  await expect(roleOf('ops')).toHaveValue('operator')
+
+  // The new account is real, and its role is the whole of what it may do:
+  // an operator applies configuration but never sees this section.
+  await page.getByRole('button', { name: 'Sign out' }).click()
+  await page.getByLabel('Username').fill('ops')
+  await page.getByLabel('Password', { exact: true }).fill(OPERATOR_PASSWORD)
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  await expect(page).toHaveURL(/\/$/)
+  await page.goto('/system/accounts')
+  await expect(page.getByRole('region', { name: 'Accounts and API tokens' })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Change password' })).toBeVisible()
+  await page.getByRole('button', { name: 'Sign out' }).click()
+
+  await login(page)
+  await page.goto('/system/accounts')
+  await rowOf('ops').getByRole('button', { name: 'Delete' }).click()
+  await confirmDialog(page, { typed: 'ops' })
+  await expect(roleOf('ops')).toHaveCount(0)
+})
+
 test('choose how this router patches itself, and see why some of it is refused', async ({
   page,
 }) => {

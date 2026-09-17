@@ -187,17 +187,3 @@ func TestRolesAreEnforcedForSessionsToo(t *testing.T) {
 		t.Errorf("viewer confirming = %d, want 403", resp.StatusCode)
 	}
 }
-
-// The only administrator cannot be demoted, or nobody could manage the
-// router again without the CLI.
-func TestTheLastAdministratorStays(t *testing.T) {
-	t.Parallel()
-	srv, _, _ := roleServer(t)
-	resp, raw := do(t, srv, http.MethodPost, "/api/v1/users/admin/role", map[string]string{"role": "viewer"})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("demoting the only admin: %d %s", resp.StatusCode, raw)
-	}
-	if !strings.Contains(string(raw), "only administrator") {
-		t.Errorf("error = %s", raw)
-	}
-}

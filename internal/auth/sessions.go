@@ -153,6 +153,23 @@ func (s *sessionStore) deleteUser(username string) {
 	s.persist()
 }
 
+// rename moves an account's sessions to its new name, so renaming an
+// account does not sign out whoever is using it at the time.
+func (s *sessionStore) rename(username, next string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	changed := false
+	for _, sess := range s.sessions {
+		if sess.Username == username {
+			sess.Username = next
+			changed = true
+		}
+	}
+	if changed {
+		s.persist()
+	}
+}
+
 // keepOnly drops sessions belonging to accounts that no longer exist,
 // which is how a restored or hand-edited users file is honoured on start.
 func (s *sessionStore) keepOnly(usernames map[string]bool) {

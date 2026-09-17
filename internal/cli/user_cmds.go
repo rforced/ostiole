@@ -78,7 +78,7 @@ func readPassword(fromStdin bool, prompt io.Writer) (string, error) {
 func newUsersCmd(g *globals) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "users",
-		Short: "List or delete admin accounts",
+		Short: "Manage local accounts",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			svc, err := auth.NewService(g.configDir)
@@ -93,9 +93,54 @@ func newUsersCmd(g *globals) *cobra.Command {
 			return w.Flush()
 		},
 	}
+	var role string
+	var fromStdin bool
+	create := &cobra.Command{
+		Use:   "create <username>",
+		Short: "Create a local account",
+		Long: `Creates an account with a password read from the terminal, or from stdin
+with --password-stdin. A name that is already taken is an error; use
+reset-password to change an existing account's password.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			svc, err := auth.NewService(g.configDir)
+			if err != nil {
+				return err
+			}
+			password, err := readPassword(fromStdin, cmd.ErrOrStderr())
+			if err != nil {
+				return err
+			}
+			if err := svc.CreateUser(args[0], password, auth.Role(role)); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "created %s as %s\n", args[0], role)
+			return nil
+		},
+	}
+	create.Flags().StringVar(&role, "role", string(auth.RoleViewer), "admin, operator, or viewer")
+	create.Flags().BoolVar(&fromStdin, "password-stdin", false, "read the password from stdin instead of prompting")
+
+	rename := &cobra.Command{
+		Use:   "rename <username> <new-username>",
+		Short: "Rename an account, keeping its role, password, and sessions",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			svc, err := auth.NewService(g.configDir)
+			if err != nil {
+				return err
+			}
+			if err := svc.Rename(args[0], args[1]); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "%s is now %s\n", args[0], args[1])
+			return nil
+		},
+	}
+
 	del := &cobra.Command{
 		Use:   "delete <username>",
-		Short: "Delete an admin account and end its sessions",
+		Short: "Delete an account and end its sessions",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			svc, err := auth.NewService(g.configDir)
@@ -109,7 +154,7 @@ func newUsersCmd(g *globals) *cobra.Command {
 			return nil
 		},
 	}
-	role := &cobra.Command{
+	setRole := &cobra.Command{
 		Use:   "role <username> <admin|operator|viewer>",
 		Short: "Change what an account may do",
 		Args:  cobra.ExactArgs(2),
@@ -125,6 +170,6 @@ func newUsersCmd(g *globals) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.AddCommand(del, role)
+	cmd.AddCommand(create, rename, del, setRole)
 	return cmd
 }

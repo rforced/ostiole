@@ -228,7 +228,13 @@ export const api = {
   },
   users: {
     list: () => get('/users'),
+    create: (body) => post('/users', body),
+    remove: (username) => request('DELETE', `/users/${encodeURIComponent(username)}`),
     setRole: (username, role) => post(`/users/${encodeURIComponent(username)}/role`, { role }),
+    setPassword: (username, password) =>
+      post(`/users/${encodeURIComponent(username)}/password`, { password }),
+    rename: (username, next) =>
+      post(`/users/${encodeURIComponent(username)}/username`, { username: next }),
   },
   tokens: {
     list: () => get('/tokens'),
