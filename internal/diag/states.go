@@ -14,7 +14,7 @@ import (
 
 // State is one connection the kernel is tracking. It is what the
 // firewall's "established" rules are matching against, so it answers
-// "why is this getting through" and "what is this box talking to".
+// "why is this getting through" and "what is this router talking to".
 type State struct {
 	Protocol string `json:"protocol"`
 	// Source and Destination are as the connection was opened.
@@ -80,7 +80,7 @@ func States(opts StatesOptions) (*StatesResult, error) {
 	for _, family := range []netlink.InetFamily{unix.AF_INET, unix.AF_INET6} {
 		flows, err := netlink.ConntrackTableList(netlink.ConntrackTable, family)
 		if err != nil {
-			// A box with no IPv6, or a kernel without the module, answers
+			// A router with no IPv6, or a kernel without the module, answers
 			// for the family it has rather than failing outright.
 			if readErr == nil {
 				readErr = err
@@ -103,7 +103,7 @@ func States(opts StatesOptions) (*StatesResult, error) {
 	if res.Total == 0 {
 		if readErr != nil {
 			// Almost always one of two things: the daemon is not root, or
-			// the box has never had a connection to track.
+			// the router has never had a connection to track.
 			return nil, fmt.Errorf("cannot read the connection table: %w "+
 				"(this needs the daemon to be root, and the conntrack module loaded)", readErr)
 		}

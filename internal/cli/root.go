@@ -18,6 +18,7 @@ import (
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/store"
 	"github.com/rforced/ostiole/internal/sysctl"
+	"github.com/rforced/ostiole/internal/timezone"
 	"github.com/rforced/ostiole/internal/version"
 )
 
@@ -40,7 +41,7 @@ type globals struct {
 	netBackend string
 	// packageManager names the distro package manager instead of looking
 	// for one, which is how a dev run and the end-to-end tests point at
-	// something that is not going to change the box they run on.
+	// something that is not going to change the router they run on.
 	packageManager string
 
 	// blockCache is shared rather than made twice: the refresher and the
@@ -70,7 +71,7 @@ func (g *globals) feedsDir() string { return filepath.Join(g.configDir, "feeds")
 
 func (g *globals) feeds() *feeds.Cache { return feeds.NewCache(g.feedsDir()) }
 
-// updatesDir is where what the box last learned about its own updates is
+// updatesDir is where what the router last learned about its own updates is
 // kept: pending packages, the last run, whether a reboot is waiting.
 func (g *globals) updatesDir() string { return filepath.Join(g.configDir, "updates") }
 
@@ -94,8 +95,9 @@ func (g *globals) engine() (*engine.Engine, error) {
 	eng.WithFeeds(g.feeds())
 	if os.Geteuid() == 0 {
 		eng.WithSysctl(sysctl.Proc{})
+		eng.WithTimezone(timezone.System{})
 		if net != nil {
-			// Services need root and a managed box; dev runs stay firewall-only.
+			// Services need root and a managed router; dev runs stay firewall-only.
 			eng.WithServices(services.NewBundle(g.blocklists()))
 		}
 	}

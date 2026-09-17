@@ -34,7 +34,7 @@ func dnfRunner(t *testing.T) *fakeRunner {
 	}
 }
 
-// withSystemd makes the transient unit look available, whatever the box
+// withSystemd makes the transient unit look available, whatever the router
 // running the tests actually has.
 func withSystemd(t *testing.T, present bool) {
 	t.Helper()
@@ -161,7 +161,7 @@ func TestManagerRefusesSecurityWhereThereIsNone(t *testing.T) {
 func TestManagerWithoutRootExplainsItself(t *testing.T) {
 	m := New(Options{PackageManager: "dnf", StateDir: t.TempDir(), Run: &fakeRunner{}, Root: false})
 	if m.Available() {
-		t.Fatal("an unprivileged daemon claimed it could update the box")
+		t.Fatal("an unprivileged daemon claimed it could update the router")
 	}
 	st := m.Status(false)
 	if !strings.Contains(st.Unavailable, "root") {
@@ -227,7 +227,7 @@ func TestRunScheduledObeysTheMode(t *testing.T) {
 	}
 
 	// Manual still checks, so the page can say what is waiting, but the
-	// box does not change under anyone.
+	// router does not change under anyone.
 	run := dnfRunner(t)
 	m := newManager(run)
 	out, err := m.RunScheduled(t.Context(), ModeManual, nil)
@@ -254,7 +254,7 @@ func TestRunScheduledObeysTheMode(t *testing.T) {
 		t.Errorf("security did not run the security upgrade:\n%s", run.transcript())
 	}
 
-	// Security with nothing security-flagged waiting leaves the box
+	// Security with nothing security-flagged waiting leaves the router
 	// alone rather than upgrading everything.
 	run = dnfRunner(t)
 	run.say("dnf -q --cacheonly check-update --security", "")
@@ -293,7 +293,7 @@ func TestStartClaimsTheBoxBeforeItReturns(t *testing.T) {
 	}
 
 	// Let it finish before the test does: a goroutine still polling
-	// after the box it was told about has been taken away is a data race
+	// after the router it was told about has been taken away is a data race
 	// waiting to be reported against the next test.
 	run.say(showUnit, "LoadState=loaded\nActiveState=active\nSubState=exited\nResult=success\nExecMainStatus=0\nInvocationID=abc123\n")
 	waitUntil(t, func() bool { return !m.Status(false).Running })
@@ -355,6 +355,6 @@ func TestWithoutSystemdCommandsRunDirectly(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !run.ran("dnf -q --refresh check-update") {
-		t.Errorf("a box without systemd-run could not check at all:\n%s", run.transcript())
+		t.Errorf("a router without systemd-run could not check at all:\n%s", run.transcript())
 	}
 }

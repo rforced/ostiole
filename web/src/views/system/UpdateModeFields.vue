@@ -5,7 +5,7 @@ import FormField from '@/components/FormField.vue'
 import { SCHEDULE_PRESETS, presetFor } from '@/lib/schedules'
 
 /**
- * How often a box patches itself, and how much of what it finds it
+ * How often a router patches itself, and how much of what it finds it
  * installs. Both update cards ask the same two questions, so they ask
  * them the same way.
  */

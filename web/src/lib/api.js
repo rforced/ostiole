@@ -111,6 +111,8 @@ export const api = {
    * request, so the first one after a restart has none.
    */
   systemStats: () => get('/system/stats'),
+  /** The zones this router can be set to, and the one its clock reads now. */
+  timezones: () => get('/system/timezones'),
   config: {
     get: () => get('/config'),
     /** Build (without saving) a first configuration from the wizard answers. */

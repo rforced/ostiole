@@ -19,7 +19,7 @@ Pre-alpha: only the `dev` branch. Once releases exist, the latest stable release
 
 ## Marking a release as a security release
 
-A box set to **Automatic (Security)** installs a new Ostiole release only when something published
+A router set to **Automatic (Security)** installs a new Ostiole release only when something published
 since the version it runs is marked as a security fix. The mark is a line in the release notes:
 
 ```
@@ -34,7 +34,7 @@ git tag -a v0.4.1 -m "Security-Release: yes
 Fixes an authentication bypass in the token middleware."
 ```
 
-is enough. Editing the release body on GitHub afterwards works just as well; boxes read the notes at
+is enough. Editing the release body on GitHub afterwards works just as well; routers read the notes at
 check time, not at tag time. Without the line a release still reaches everyone on **Automatic (All)**
 and anyone who presses the button — the mark only decides what gets installed unattended.
 
@@ -64,12 +64,12 @@ gh attestation verify ostiole_<version>_linux_amd64.tar.gz --repo rforced/ostiol
 
 ### Rotating the signing key
 
-A box updates by verifying the *next* release with the key it already has, so a new key has to
+A router updates by verifying the *next* release with the key it already has, so a new key has to
 arrive before it is used:
 
 1. `ostiole-sign -genkey` prints a new pair. Add the public half to `TrustedKeysHex` in
    `internal/update/update.go` and to `OSTIOLE_RELEASE_KEYS` in `scripts/install.sh`, keeping the
-   old key first. Release. Boxes that update now trust both keys.
+   old key first. Release. Routers that update now trust both keys.
 2. Once that release is the oldest one still in use, replace the `OSTIOLE_SIGNING_KEY` repository
    secret with the new secret and release again, signed by the new key.
 3. A release later, drop the old public key from both lists.
@@ -78,4 +78,4 @@ arrive before it is used:
 to check that the key a release will be signed with is one that binaries trust.
 
 If a key is believed to be compromised, skip the staged rotation: publish an advisory, rotate
-immediately, and expect boxes on older releases to need a manual reinstall with `install.sh`.
+immediately, and expect routers on older releases to need a manual reinstall with `install.sh`.

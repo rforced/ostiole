@@ -167,7 +167,7 @@ function reverted() {
         />
         <span>
           <span class="font-medium">Allow management from the WAN side too.</span>
-          Keeps the web UI and SSH reachable on the WAN. For a box administered over its public
+          Keeps the web UI and SSH reachable on the WAN. For a router administered over its public
           address.
         </span>
       </label>
@@ -181,7 +181,7 @@ function reverted() {
         <span>
           <span class="font-medium">Run DHCP and DNS for the LAN.</span>
           Hands out addresses and resolves names for LAN clients. Needs
-          <code class="font-mono">ostiole services setup</code> on the box first.
+          <code class="font-mono">ostiole services setup</code> on the router first.
         </span>
       </label>
 

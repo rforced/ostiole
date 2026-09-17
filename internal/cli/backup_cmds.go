@@ -75,7 +75,7 @@ func newRestoreCmd(g *globals) *cobra.Command {
 		Long: `Reads a backup file and reports how it differs from the running
 configuration. Nothing changes until you pass --apply, which loads it
 through the same confirmation window as a normal apply. With --with-users
-the administrator accounts in the backup replace the ones on this box,
+the administrator accounts in the backup replace the ones on this router,
 which signs everyone out.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

@@ -104,7 +104,7 @@ function count(n, one, many = `${one}s`) {
     >
       <p class="text-sm">
         Backup of
-        <span class="font-mono">{{ pending.summary.hostname || 'an unnamed box' }}</span>
+        <span class="font-mono">{{ pending.summary.hostname || 'an unnamed router' }}</span>
         taken {{ new Date(pending.summary.createdAt).toLocaleString() }}
         <template v-if="pending.summary.ostiole"> by Ostiole {{ pending.summary.ostiole }}</template
         >.

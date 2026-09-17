@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestStarterValidates(t *testing.T) {
@@ -16,6 +17,57 @@ func TestStarterValidates(t *testing.T) {
 	if got := cfg.ZoneInterfaces("lan"); len(got) != 1 || got[0] != "eth1" {
 		t.Errorf("ZoneInterfaces(lan) = %v", got)
 	}
+	// Every router starts in UTC, and says so rather than leaving it to be
+	// inferred from an empty field.
+	if cfg.System.Timezone != "UTC" {
+		t.Errorf("starter timezone = %q, want UTC", cfg.System.Timezone)
+	}
+}
+
+func TestSystemZone(t *testing.T) {
+	t.Parallel()
+	// A configuration written before the setting existed runs in UTC.
+	if got := (System{}).Zone(); got != "UTC" {
+		t.Errorf("Zone() with nothing set = %q", got)
+	}
+	if got := (System{}).Location(); got != time.UTC {
+		t.Errorf("Location() with nothing set = %v", got)
+	}
+	s := System{Timezone: "Europe/Berlin"}
+	if got := s.Zone(); got != "Europe/Berlin" {
+		t.Errorf("Zone() = %q", got)
+	}
+	if got := s.Location().String(); got != "Europe/Berlin" {
+		t.Errorf("Location() = %q", got)
+	}
+}
+
+func TestValidateTimezone(t *testing.T) {
+	t.Parallel()
+	cfg := Starter(StarterOptions{Hostname: "fw", LAN: "eth1", LANAddress: "192.168.1.1/24"})
+	cfg.System.Timezone = "Mars/Olympus"
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("want an error for a zone that does not exist")
+	}
+	var ve *ValidationError
+	if !errors.As(err, &ve) || !hasPath(ve, "system.timezone") {
+		t.Errorf("issues = %v", err)
+	}
+	// Empty is the default rather than a mistake.
+	cfg.System.Timezone = ""
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("empty timezone rejected: %v", err)
+	}
+}
+
+func hasPath(ve *ValidationError, path string) bool {
+	for _, i := range ve.Issues {
+		if i.Path == path {
+			return true
+		}
+	}
+	return false
 }
 
 func TestParsePortRange(t *testing.T) {
@@ -198,7 +250,7 @@ func TestStarterServicesAndDefaultPool(t *testing.T) {
 		"10.0.0.1/16":      {"10.0.0.100", "10.0.0.199"},
 		"192.168.5.1/26":   {"192.168.5.32", "192.168.5.62"},
 		"192.168.5.1/28":   {"192.168.5.8", "192.168.5.14"},
-		"192.168.5.150/24": {"", ""}, // the box sits inside the pool
+		"192.168.5.150/24": {"", ""}, // the router sits inside the pool
 		"192.168.5.1/30":   {"", ""},
 		"2001:db8::1/64":   {"", ""},
 	}

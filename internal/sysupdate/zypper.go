@@ -69,7 +69,7 @@ func (z zypper) Check(ctx context.Context, run Runner) (Pending, error) {
 	case len(patches) == 0 && len(pkgs) > 0:
 		// Tumbleweed publishes no patch metadata at all, so a security
 		// run would faithfully install nothing.
-		out.Note = "this box publishes no patch metadata, so security-only updates would install nothing; choose All"
+		out.Note = "this router publishes no patch metadata, so security-only updates would install nothing; choose All"
 	}
 	sortPackages(out.Packages)
 	return out, nil

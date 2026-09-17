@@ -43,7 +43,7 @@ func (p pacman) Check(ctx context.Context, run Runner) (Pending, error) {
 	}
 
 	// Without it, sync into a throwaway database. A bare `pacman -Sy`
-	// against the real one leaves the box one step from a partial
+	// against the real one leaves the router one step from a partial
 	// upgrade, which is how an Arch install breaks.
 	dir, err := os.MkdirTemp(p.scratch, "pacman-db")
 	if err != nil {

@@ -19,12 +19,12 @@ import (
 )
 
 // scriptedRunner answers the package manager commands from a table, so
-// the API tests never touch the box they run on.
+// the API tests never touch the router they run on.
 type scriptedRunner struct{ out map[string]string }
 
 func (s scriptedRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
 	line := strings.TrimSpace(name + " " + strings.Join(args, " "))
-	// On a box with systemd the commands are run outside the daemon's
+	// On a router with systemd the commands are run outside the daemon's
 	// sandbox, so what they are is after the `--`. Answering both spellings
 	// keeps this test the same wherever it runs.
 	if cmd, _, ok := strings.Cut(line, " -- "); ok && strings.HasPrefix(cmd, "systemd-run") {
@@ -149,7 +149,7 @@ func TestSystemUpdateEndpointsNeedTheirRoles(t *testing.T) {
 			t.Errorf("%s: %d %s, want 403 for a viewer", path, resp.StatusCode, raw)
 		}
 	}
-	// Reading is still allowed: knowing the box is behind is not a
+	// Reading is still allowed: knowing the router is behind is not a
 	// privileged act.
 	if resp, _ := do(t, srv, http.MethodGet, "/api/v1/system/updates", nil); resp.StatusCode != http.StatusOK {
 		t.Errorf("read: %d, want a viewer to see what is waiting", resp.StatusCode)

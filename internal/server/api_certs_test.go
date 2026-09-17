@@ -92,7 +92,7 @@ func TestInstallCertificateEndpoint(t *testing.T) {
 		t.Errorf("installed names = %v", info.Names)
 	}
 
-	// A key that belongs to another certificate is refused, and the box
+	// A key that belongs to another certificate is refused, and the router
 	// keeps serving what it had.
 	_, otherKey, _ := certs.GenerateSelfSigned([]string{"other.example"})
 	resp, raw = do(t, srv, http.MethodPost, "/api/v1/certificate",
@@ -128,7 +128,7 @@ func TestRegenerateCertificateEndpoint(t *testing.T) {
 	if after.Fingerprint == before.Fingerprint {
 		t.Error("the certificate was not replaced")
 	}
-	// It covers every name the box currently answers to, which is the
+	// It covers every name the router currently answers to, which is the
 	// reason to regenerate in the first place.
 	if strings.Join(after.Names, ",") != "10.0.0.1,192.168.1.1,fw.lan" {
 		t.Errorf("names = %v", after.Names)

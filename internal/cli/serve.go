@@ -30,6 +30,7 @@ import (
 	"github.com/rforced/ostiole/internal/sysctl"
 	"github.com/rforced/ostiole/internal/sysstat"
 	"github.com/rforced/ostiole/internal/sysupdate"
+	"github.com/rforced/ostiole/internal/timezone"
 	"github.com/rforced/ostiole/internal/update"
 	"github.com/rforced/ostiole/internal/version"
 )
@@ -73,6 +74,15 @@ at your own.`,
 				if err := (sysctl.Proc{}).Apply(); err != nil {
 					slog.Warn("could not apply router sysctls", "err", err)
 				}
+				// And read its clock in the configured zone from the same
+				// moment, so the first log line is already comparable.
+				zone := timezone.Default
+				if cfg := eng.Effective(); cfg != nil {
+					zone = cfg.System.Zone()
+				}
+				if err := (timezone.System{}).Apply(cmd.Context(), zone); err != nil {
+					slog.Warn("could not set the router's timezone", "zone", zone, "err", err)
+				}
 			}
 			as, err := auth.NewService(g.configDir)
 			if err != nil {
@@ -111,7 +121,7 @@ at your own.`,
 				// root; without it the next apply carries the list.
 				blocklists.Loader = services.NewDNSBlock(g.blocklists())
 			}
-			// The distro package manager, driven from here so a box that
+			// The distro package manager, driven from here so a router that
 			// nobody logs into still gets its security fixes. It exists
 			// even where it cannot be used, so the page can explain why.
 			packages := sysupdate.New(sysupdate.Options{
@@ -159,10 +169,10 @@ at your own.`,
 				Blocklists: blocklists,
 				Crons:      crons,
 				// /proc and statfs need no privileges, so the dashboard
-				// gets its usage card on a dev run as well as a real box.
+				// gets its usage card on a dev run as well as a real router.
 				SysStat: sysstat.New(g.configDir),
 				// The names are looked up fresh, so a certificate made
-				// after the box moved covers where it moved to.
+				// after the router moved covers where it moved to.
 				CertHosts: certHosts,
 			}
 			go refresher.Run(ctx)
@@ -203,7 +213,7 @@ at your own.`,
 }
 
 // certHosts lists names the self-signed certificate should cover: the
-// hostname, localhost, and every address currently on the box.
+// hostname, localhost, and every address currently on the router.
 func certHosts() []string {
 	hosts := []string{"localhost", "127.0.0.1", "::1"}
 	if h, err := os.Hostname(); err == nil && h != "" {
@@ -271,7 +281,7 @@ func restartService(ctx context.Context, name string) error {
 	}
 	unit, ok := units[name]
 	if !ok {
-		return fmt.Errorf("%q is not a service this box runs", name)
+		return fmt.Errorf("%q is not a service this router runs", name)
 	}
 	out, err := install.ExecRunner{}.Run(ctx, "systemctl", "restart", unit)
 	if err != nil {

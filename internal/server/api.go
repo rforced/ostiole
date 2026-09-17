@@ -27,6 +27,7 @@ import (
 	"github.com/rforced/ostiole/internal/store"
 	"github.com/rforced/ostiole/internal/sysstat"
 	"github.com/rforced/ostiole/internal/sysupdate"
+	"github.com/rforced/ostiole/internal/timezone"
 	"github.com/rforced/ostiole/internal/update"
 	"github.com/rforced/ostiole/internal/wg"
 )
@@ -85,6 +86,7 @@ func (a *api) register(mux *router) {
 	a.registerOpenAPI(mux)
 	mux.HandleFunc("GET /api/v1/status", a.read(a.status))
 	mux.HandleFunc("GET /api/v1/system/stats", a.readNoEngine(a.systemStats))
+	mux.HandleFunc("GET /api/v1/system/timezones", a.readNoEngine(a.timezones))
 	mux.HandleFunc("GET /api/v1/overview", a.read(a.overview))
 	mux.HandleFunc("GET /api/v1/config", a.read(a.getConfig))
 	mux.HandleFunc("GET /api/v1/config/revisions", a.read(a.revisions))
@@ -193,7 +195,7 @@ func (a *api) gatewayStatus(w http.ResponseWriter, _ *http.Request) error {
 }
 
 // detectedGateways reports the default routes the kernel already has.
-// Most boxes get one from DHCP before anyone configures anything, and it
+// Most routers get one from DHCP before anyone configures anything, and it
 // is the one carrying the traffic, so it belongs on the page whether or
 // not Ostiole put it there.
 func (a *api) detectedGateways(w http.ResponseWriter, _ *http.Request) error {
@@ -280,7 +282,7 @@ func (a *api) policyStatus(w http.ResponseWriter, _ *http.Request) error {
 
 // wireguardKeys mints a key pair for a new tunnel, or a preshared key for
 // a peer. Generating them here keeps the browser out of the crypto and
-// gives every box the same well-seeded source.
+// gives every router the same well-seeded source.
 func (a *api) wireguardKeys(w http.ResponseWriter, r *http.Request) error {
 	var req struct {
 		// Kind is "pair" (default) or "psk".
@@ -493,13 +495,27 @@ func (a *api) status(w http.ResponseWriter, r *http.Request) error {
 // after a restart has none.
 func (a *api) systemStats(w http.ResponseWriter, _ *http.Request) error {
 	if a.sysstat == nil {
-		return &unavailable{errors.New("this box does not report system statistics")}
+		return &unavailable{errors.New("this router does not report system statistics")}
 	}
 	st, err := a.sysstat.Read()
 	if err != nil {
 		return err
 	}
 	writeJSON(w, http.StatusOK, st)
+	return nil
+}
+
+// timezones is the list the setting's picker offers, and what the clock
+// reads now. Current is the router's own answer rather than the
+// configuration's, so a clock that never took the setting is visible.
+type timezones struct {
+	Zones   []string `json:"zones"`
+	Current string   `json:"current"`
+}
+
+func (a *api) timezones(w http.ResponseWriter, _ *http.Request) error {
+	sys := timezone.System{}
+	writeJSON(w, http.StatusOK, timezones{Zones: sys.Zones(), Current: sys.Current()})
 	return nil
 }
 
@@ -562,7 +578,7 @@ func (a *api) liveInterfaces(w http.ResponseWriter, _ *http.Request) error {
 	return nil
 }
 
-// currentResolvers reads the nameservers the box uses today so the DNS
+// currentResolvers reads the nameservers the router uses today so the DNS
 // service forwards to the same place. Loopback entries are skipped.
 func currentResolvers() []string {
 	raw, err := os.ReadFile("/etc/resolv.conf")
@@ -588,7 +604,7 @@ type starterRequest struct {
 	WAN               string `json:"wan"`
 	ManagementFromWAN bool   `json:"managementFromWan"`
 	// Services enables DHCP and DNS on the LAN with a pool derived from
-	// the LAN address; upstreams default to the box's current resolvers.
+	// the LAN address; upstreams default to the router's current resolvers.
 	Services bool `json:"services"`
 }
 

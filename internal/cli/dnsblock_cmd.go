@@ -20,7 +20,7 @@ func newDNSBlockCmd(g *globals) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "dnsblock",
 		Short: "Show what DNS blocking is doing",
-		Long: `DNS blocking refuses to resolve the names on the lists this box
+		Long: `DNS blocking refuses to resolve the names on the lists this router
 subscribes to. The lists are fetched on a schedule and cached here, so a
 reboot without a working line blocks what it blocked yesterday.
 
@@ -186,7 +186,7 @@ func newDNSBlockWhyCmd(g *globals) *cobra.Command {
 			case f.Reason == dnsblock.ReasonAllow:
 				fmt.Fprintf(out, "%s is not blocked: the allow list has %s\n", f.Name, f.Matched)
 			case f.Reason == dnsblock.ReasonNever:
-				fmt.Fprintf(out, "%s is not blocked: this box answers for %s itself\n", f.Name, f.Matched)
+				fmt.Fprintf(out, "%s is not blocked: this router answers for %s itself\n", f.Name, f.Matched)
 			case f.Reason == dnsblock.ReasonOff:
 				fmt.Fprintf(out, "%s is not blocked: DNS blocking is off\n", f.Name)
 			default:

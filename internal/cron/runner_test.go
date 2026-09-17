@@ -80,6 +80,35 @@ func TestTickRunsWhatIsDue(t *testing.T) {
 	}
 }
 
+// A schedule is read in the router's own timezone, so "0 4 * * *" is four
+// in the morning where the router stands rather than wherever the process
+// that runs it happens to think it is.
+func TestTickReadsSchedulesInTheConfiguredZone(t *testing.T) {
+	t.Parallel()
+	ex := &fakeExec{}
+	cfg := config(model.Cron{ID: "nightly", Enabled: true, Schedule: "0 4 * * *", Kind: model.CronBackup})
+	cfg.System.Timezone = "Europe/Berlin"
+	r := NewRunner(func() *model.Config { return cfg }, ex, slog.New(slog.DiscardHandler))
+
+	// September puts Berlin two hours ahead, so 04:00 UTC is 06:00 there.
+	r.Tick(context.Background(), at(t, "2026-09-16 04:00"))
+	time.Sleep(50 * time.Millisecond)
+	if got := ex.calls(); len(got) != 0 {
+		t.Errorf("ran %v at 06:00 Berlin time", got)
+	}
+	r.Tick(context.Background(), at(t, "2026-09-16 02:00"))
+	waitFor(t, func() bool { return len(ex.calls()) == 1 })
+
+	// And the time it reports next is in that zone too.
+	next := statusOf(r, "nightly").Next
+	if next == nil {
+		t.Fatal("no next time reported")
+	}
+	if h, m, _ := next.Clock(); h != 4 || m != 0 {
+		t.Errorf("next = %s, want 04:00 Berlin time", next)
+	}
+}
+
 // A cron that takes longer than its period must not pile up on itself.
 func TestALongCronIsNotStartedTwice(t *testing.T) {
 	t.Parallel()
@@ -134,9 +163,9 @@ func TestStatusesRecordSuccessAndFailure(t *testing.T) {
 }
 
 // The background work Ostiole does is listed beside the operator's crons,
-// because "what does this box do while I am not looking" is one question.
+// because "what does this router do while I am not looking" is one question.
 // Every timer the daemon starts has to be here, or the page quietly
-// under-reports what the box is doing.
+// under-reports what the router is doing.
 func TestStatusesIncludeTheSystemWork(t *testing.T) {
 	t.Parallel()
 	r := runner(t, &fakeExec{}, model.Cron{ID: "mine", Enabled: true, Schedule: "@daily", Kind: model.CronBackup})
@@ -161,7 +190,7 @@ func TestStatusesIncludeTheSystemWork(t *testing.T) {
 		model.CronIDSystemUpdate, model.CronIDOstioleUpdate,
 	} {
 		if !listed[id] {
-			t.Errorf("%s is not on the page that says what this box does by itself", id)
+			t.Errorf("%s is not on the page that says what this router does by itself", id)
 		}
 	}
 	// Noting that a piece of background work happened shows up.
@@ -328,7 +357,7 @@ func TestUpdateCronsAreReportedAsOstioleOwnWork(t *testing.T) {
 	for _, id := range []string{model.CronIDSystemUpdate, model.CronIDOstioleUpdate} {
 		st, ok := found[id]
 		if !ok {
-			t.Fatalf("%s is not on the page that says what this box does by itself", id)
+			t.Fatalf("%s is not on the page that says what this router does by itself", id)
 		}
 		if st.Schedule != model.DefaultUpdateSchedule {
 			t.Errorf("%s schedule = %q", id, st.Schedule)
@@ -385,10 +414,10 @@ func TestUpdateCronsObeyTheMode(t *testing.T) {
 		t.Errorf("channel = %q", sawChannel)
 	}
 
-	// A box with nothing wired up says so rather than failing obscurely.
+	// A router with nothing wired up says so rather than failing obscurely.
 	bare := &Actions{Config: actions.Config}
 	if _, err := bare.Run(t.Context(), model.Cron{ID: "z", Kind: model.CronSystemUpdate}); err == nil {
-		t.Error("a box with no package manager pretended to update")
+		t.Error("a router with no package manager pretended to update")
 	}
 }
 

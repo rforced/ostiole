@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rforced/ostiole/internal/timezone"
 	"github.com/rforced/ostiole/internal/wg"
 )
 
@@ -506,11 +507,11 @@ func (v *validator) blocking(c *Config, aliases map[string]AliasType) {
 	for i, d := range b.Deny {
 		path := fmt.Sprintf("blocking.deny[%d]", i)
 		v.domainName(path, d)
-		// Blocking is by subtree, so denying a parent of one of this box's
+		// Blocking is by subtree, so denying a parent of one of this router's
 		// own names takes it away just as surely as denying it outright.
 		for _, n := range never {
 			if CoversName(d, n) {
-				v.add(path, "%q covers %q, a name this box answers for; blocking it would take the UI away from anyone reaching it by name", d, n)
+				v.add(path, "%q covers %q, a name this router answers for; blocking it would take the UI away from anyone reaching it by name", d, n)
 				break
 			}
 		}
@@ -712,7 +713,7 @@ func (v *validator) services(c *Config, ifaces map[string]bool) {
 			case domains[name]:
 				v.add(path+".domain", "duplicate domain %q", d.Domain)
 			case name == local:
-				v.add(path+".domain", "%q is the local domain, which this box answers itself; override a name under it instead", d.Domain)
+				v.add(path+".domain", "%q is the local domain, which this router answers itself; override a name under it instead", d.Domain)
 			}
 			domains[name] = true
 		}
@@ -730,7 +731,7 @@ func (v *validator) services(c *Config, ifaces map[string]bool) {
 
 // upnp checks the mapping service. A name that is written down is checked
 // whether or not the service is on, so a typo is not hidden by a switch;
-// what the interfaces have to be is only asked of a box that runs it.
+// what the interfaces have to be is only asked of a router that runs it.
 func (v *validator) upnp(c *Config, ifaces map[string]bool) {
 	u := c.Services.UPnP
 	if u.Enabled && !u.IGD && !u.PCP {
@@ -1179,7 +1180,7 @@ func (v *validator) crons(c *Config) {
 		case CronRefreshAliases, CronRefreshBlocklists:
 		case CronRestartService:
 			if !slices.Contains(CronServices, cr.Service) {
-				v.add(path+".service", "%q is not a service this box runs (%s)",
+				v.add(path+".service", "%q is not a service this router runs (%s)",
 					cr.Service, strings.Join(CronServices, ", "))
 			}
 		case CronCommand:
@@ -1292,6 +1293,9 @@ func (v *validator) system(s *System) {
 	}
 	if s.Hostname != "" && !hostnameRe.MatchString(s.Hostname) {
 		v.add("system.hostname", "%q is not a valid hostname", s.Hostname)
+	}
+	if s.Timezone != "" && !timezone.Valid(s.Timezone) {
+		v.add("system.timezone", "%q is not a timezone; use an IANA name such as Europe/Berlin", s.Timezone)
 	}
 	if s.KeepRevisions < 0 || s.KeepRevisions > MaxKeepRevisions {
 		v.add("system.keepRevisions", "%d must be 0-%d (0 keeps %d)",

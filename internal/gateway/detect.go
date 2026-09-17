@@ -9,7 +9,7 @@ import (
 	"github.com/rforced/ostiole/internal/model"
 )
 
-// Detected is a default route the kernel already has. Most boxes get one
+// Detected is a default route the kernel already has. Most routers get one
 // from DHCP before anyone configures anything, and it is the one carrying
 // the traffic, so it belongs on the gateways page whether or not Ostiole
 // put it there.

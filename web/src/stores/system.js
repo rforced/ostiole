@@ -5,7 +5,7 @@ import { api } from '@/lib/api'
 
 /**
  * Engine status shared by the dashboard, the apply bar, and the router
- * guard that sends an unconfigured box to the setup wizard.
+ * guard that sends an unconfigured router to the setup wizard.
  */
 export const useSystemStore = defineStore('system', () => {
   /** @type {import('vue').Ref<import('@/lib/api').Status | null>} */

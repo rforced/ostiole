@@ -19,6 +19,7 @@ import (
 
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/sysctl"
+	"github.com/rforced/ostiole/internal/timezone"
 )
 
 // Layout says where things go. Tests point it at temp directories.
@@ -77,6 +78,9 @@ type Options struct {
 	// SysctlFile is where router sysctls are persisted; empty means the
 	// default, "-" skips it (tests).
 	SysctlFile string
+	// Timezone is the zone the router is set to; empty means UTC, "-" leaves
+	// the clock alone (tests).
+	Timezone string
 }
 
 // Report describes what Install did and found.
@@ -89,6 +93,8 @@ type Report struct {
 	OpenedIn string
 	// Sysctl is the persisted sysctl file, or "".
 	Sysctl string
+	// Timezone is the zone the clock was set to, or "".
+	Timezone string
 }
 
 // Install copies the binary, writes the units, and enables them. It never
@@ -130,6 +136,10 @@ func Install(ctx context.Context, sc Systemctl, lay Layout, opts Options, log *s
 		log.Info("installed binary", "path", lay.Binary())
 	}
 
+	run := opts.Run
+	if run == nil {
+		run = ExecRunner{}
+	}
 	if err := os.MkdirAll(lay.UnitDir, 0o755); err != nil { //nolint:gosec // systemd unit dir must be world-readable
 		return nil, err
 	}
@@ -156,6 +166,21 @@ func Install(ctx context.Context, sc Systemctl, lay Layout, opts Options, log *s
 			log.Warn("could not apply router sysctls now", "err", err)
 		}
 	}
+	// A firewall's output is timestamps, and they are read next to other
+	// machines' timestamps, so Ostiole takes the clock to UTC along with
+	// everything else it takes over. The configuration can move it later.
+	if opts.Timezone != "-" {
+		zone := opts.Timezone
+		if zone == "" {
+			zone = timezone.Default
+		}
+		if err := (timezone.System{Run: run}).Apply(ctx, zone); err != nil {
+			log.Warn("could not set the timezone; the clock reads as it did before", "zone", zone, "err", err)
+		} else {
+			rep.Timezone = zone
+			log.Info("timezone set", "zone", zone)
+		}
+	}
 	if out, err := sc.Run(ctx, "enable", FirewallUnit); err != nil {
 		return nil, fmt.Errorf("enable %s: %w: %s", FirewallUnit, err, out)
 	}
@@ -171,10 +196,6 @@ func Install(ctx context.Context, sc Systemctl, lay Layout, opts Options, log *s
 	rep.Competitors = comp
 
 	// Until takeover, the old firewall still filters: let the UI through it.
-	run := opts.Run
-	if run == nil {
-		run = ExecRunner{}
-	}
 	if port := listenPort(opts.Listen); port != "" {
 		opened, err := OpenUIPort(ctx, run, comp, port, log)
 		if err != nil {
@@ -232,7 +253,7 @@ func Units(lay Layout, opts Options) map[string]string {
 	// -/etc/dnsmasq.d takes the DHCP and DNS configuration once dnsmasq is
 	// set up, -/etc/unbound the validating resolver's, -/etc/miniupnpd the
 	// mapping service's, and -/etc/resolv.conf is managed by the DNS
-	// service. The leading dash means "only if it exists": a box that never
+	// service. The leading dash means "only if it exists": a router that never
 	// sets up dnsmasq or PPPoE still starts.
 	// resolv.conf is a file, not a directory, so systemd mounts that one
 	// file read-write and leaves /etc around it read-only; it can be

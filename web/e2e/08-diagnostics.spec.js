@@ -36,7 +36,7 @@ test('the log viewer reads the journal', async ({ page }) => {
   await expect(page.getByLabel('Unit')).toBeVisible()
   await page.getByLabel('Since').fill('-5min')
   await page.getByRole('button', { name: /Refresh|Reading/ }).click()
-  // On a box without systemd the call fails cleanly rather than hanging.
+  // On a router without systemd the call fails cleanly rather than hanging.
   await expect(async () => {
     const shown = await page.getByText('Nothing in this window.').isVisible()
     const failed = await page.getByRole('alert').isVisible()
@@ -55,7 +55,7 @@ test('a capture needs an interface and rejects a silly port', async ({ page }) =
 test('the connections and neighbour tables read the kernel', async ({ page }) => {
   await login(page)
   await page.goto('/diagnostics/connections')
-  // The dev box tracks connections; a machine without the module says so
+  // The dev host tracks connections; a machine without the module says so
   // rather than showing an empty table with no explanation.
   const states = page.getByRole('main')
   await expect(states).toContainText(

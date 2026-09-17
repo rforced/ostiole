@@ -103,7 +103,7 @@ saved as the boot ruleset; run "ostiole apply" to load it now.`,
 	f.StringVar(&opts.LANAddress, "lan-address", "", "LAN IPv4 address in CIDR form, e.g. 192.168.1.1/24 (required)")
 	f.StringVar(&opts.WAN, "wan", "", "WAN interface name (DHCP)")
 	f.StringVar(&opts.Hostname, "hostname", "", "hostname")
-	f.BoolVar(&opts.ManagementFromWAN, "management-from-wan", false, "also allow the web UI and SSH from the WAN zone (boxes managed over their public side)")
+	f.BoolVar(&opts.ManagementFromWAN, "management-from-wan", false, "also allow the web UI and SSH from the WAN zone (routers managed over their public side)")
 	f.BoolVar(&opts.Services, "services", false, "enable DHCP and DNS on the LAN (pool derived from the LAN address)")
 	f.StringSliceVar(&opts.DNSUpstreams, "dns-upstream", nil, "upstream resolvers for the DNS service (default 1.1.1.1, 9.9.9.9)")
 	f.BoolVar(&force, "force", false, "overwrite an existing configuration")
@@ -365,7 +365,7 @@ func newCountersCmd(g *globals) *cobra.Command {
 }
 
 // printDetected lists the default routes the kernel already has. Most
-// boxes get one from DHCP before anyone configures anything, and it is
+// routers get one from DHCP before anyone configures anything, and it is
 // the one carrying the traffic.
 func printDetected(cmd *cobra.Command, cfg *model.Config) {
 	found, err := gateway.Detect(cfg)
@@ -373,7 +373,7 @@ func printDetected(cmd *cobra.Command, cfg *model.Config) {
 		return
 	}
 	out := cmd.OutOrStdout()
-	fmt.Fprintln(out, "\ndefault routes this box already has:")
+	fmt.Fprintln(out, "\ndefault routes this router already has:")
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "GATEWAY\tINTERFACE\tFAMILY\tMETRIC\tFROM\tCONFIGURED AS")
 	for _, d := range found {

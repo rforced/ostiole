@@ -40,7 +40,7 @@ func (a *api) feedStatus(w http.ResponseWriter, _ *http.Request) error {
 
 func (a *api) refreshFeeds(w http.ResponseWriter, r *http.Request) error {
 	if a.feeds == nil {
-		return &unavailable{errors.New("nothing is refreshing aliases on this box")}
+		return &unavailable{errors.New("nothing is refreshing aliases on this router")}
 	}
 	a.feeds.Tick(r.Context(), true)
 	return a.feedStatus(w, r)
@@ -48,7 +48,7 @@ func (a *api) refreshFeeds(w http.ResponseWriter, r *http.Request) error {
 
 func (a *api) refreshFeed(w http.ResponseWriter, r *http.Request) error {
 	if a.feeds == nil {
-		return &unavailable{errors.New("nothing is refreshing aliases on this box")}
+		return &unavailable{errors.New("nothing is refreshing aliases on this router")}
 	}
 	name := r.PathValue("name")
 	count, err := a.feeds.RefreshOne(r.Context(), name)

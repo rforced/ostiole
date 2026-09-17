@@ -4,7 +4,7 @@
 // tool that owns the package database should be the one that changes it.
 //
 // Each supported manager has a driver that knows three things — how to
-// list what is waiting, how to install it, and whether the box wants a
+// list what is waiting, how to install it, and whether the router wants a
 // reboot afterwards. Nothing here decides *when* to run; that is the
 // update mode in the configuration and the cron runner.
 package sysupdate
@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-// Swappable so tests can describe a box they are not running on.
+// Swappable so tests can describe a router they are not running on.
 var (
 	environ  = os.Environ
 	lookPath = exec.LookPath
@@ -159,7 +159,7 @@ type Driver interface {
 	// fresh Check, which is what a manager without a security switch of
 	// its own upgrades by name instead.
 	UpgradeArgv(security bool, exclude []string, pending Pending) []string
-	// RebootRequired reports whether the box wants restarting, and why.
+	// RebootRequired reports whether the router wants restarting, and why.
 	RebootRequired(ctx context.Context, run Runner) (bool, string)
 }
 
@@ -169,7 +169,7 @@ func Drivers() []Driver {
 	return []Driver{dnf{}, apt{}, zypper{}, pacman{}, apk{}}
 }
 
-// ErrNoManager means this box has no package manager Ostiole can drive.
+// ErrNoManager means this router has no package manager Ostiole can drive.
 var ErrNoManager = errors.New("no supported package manager was found (dnf, apt-get, zypper, pacman, apk)")
 
 // ErrNoSecurityChannel means the manager has no security-only mode, so
@@ -177,13 +177,13 @@ var ErrNoManager = errors.New("no supported package manager was found (dnf, apt-
 var ErrNoSecurityChannel = errors.New("has no security-only channel")
 
 // SecurityUnavailable explains, in the words the page uses, why security
-// updates cannot be separated out on this box.
+// updates cannot be separated out on this router.
 func SecurityUnavailable(d Driver) string {
 	return d.Name() + " has no security-only channel; choose All or Manual"
 }
 
-// Detect finds the package manager on this box. A name selects one
-// explicitly, for a box with two installed and for tests.
+// Detect finds the package manager on this router. A name selects one
+// explicitly, for a router with two installed and for tests.
 func Detect(name string) (Driver, error) {
 	for _, d := range Drivers() {
 		if name != "" {
@@ -370,6 +370,6 @@ func kernelNumbers(v string) []int {
 // normal; waiting five minutes for it is not.
 const CheckTimeout = 3 * time.Minute
 
-// UpgradeTimeout bounds an install. A distro upgrade on a small box can
+// UpgradeTimeout bounds an install. A distro upgrade on a small router can
 // genuinely take a while.
 const UpgradeTimeout = time.Hour

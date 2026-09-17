@@ -18,7 +18,7 @@ func newAliasesCmd(g *globals) *cobra.Command {
 		Use:   "aliases",
 		Short: "Show the aliases whose contents are fetched",
 		Long: `Blocklists and country address ranges are fetched rather than typed, and
-cached on this box so a reboot without a working line still blocks what
+cached on this router so a reboot without a working line still blocks what
 it blocked yesterday. The daemon refreshes them on a schedule; this shows
 what it has and refreshes on demand.`,
 		Args: cobra.NoArgs,

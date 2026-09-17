@@ -136,7 +136,7 @@ function save() {
           :hint="
             delegated
               ? 'Name one here. The prefix is delegated, so hosts on SLAAC alone learn no resolver otherwise.'
-              : 'Empty: this box when the DNS service is on.'
+              : 'Empty: this router when the DNS service is on.'
           "
         >
           <input id="v6-dns" v-model="form.dns" class="input font-mono" spellcheck="false" />

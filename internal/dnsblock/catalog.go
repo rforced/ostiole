@@ -51,7 +51,7 @@ var catalog = []CatalogEntry{
 	{
 		Name:        "hagezi_light",
 		Title:       "HaGeZi light",
-		Description: "A small list for boxes with little memory, or a first try: the worst offenders only.",
+		Description: "A small list for routers with little memory, or a first try: the worst offenders only.",
 		URL:         "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/light.txt",
 		Format:      model.FormatDomains,
 		Category:    CategoryAds,

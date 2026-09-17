@@ -105,7 +105,7 @@ func stripArch(name string) string {
 	return name
 }
 
-// maxQueryNames bounds the argument list of the version lookup. A box
+// maxQueryNames bounds the argument list of the version lookup. A router
 // with more pending packages than this is mid-distro-upgrade, and the
 // installed column is the least of its worries.
 const maxQueryNames = 200

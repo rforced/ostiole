@@ -100,7 +100,7 @@ function save() {
   <AppDialog
     v-model:open="open"
     :title="list ? `List ${list.name}` : 'New block list'"
-    description="Fetched on a schedule and cached on this box."
+    description="Fetched on a schedule and cached on this router."
   >
     <form class="space-y-4" @submit.prevent="save">
       <FormField
@@ -184,7 +184,7 @@ function save() {
               type="checkbox"
               class="size-4 rounded border-neutral-300"
             />
-            Merge it into what this box blocks
+            Merge it into what this router blocks
           </label>
         </FormField>
       </div>

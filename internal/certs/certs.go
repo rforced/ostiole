@@ -1,4 +1,4 @@
-// Package certs manages the certificate the web UI serves. A box starts
+// Package certs manages the certificate the web UI serves. A router starts
 // with a self-signed one so the first connection is at least encrypted;
 // this package lets that be replaced with a real one, describes whatever
 // is installed, and hands the running server a certificate that can be
@@ -28,7 +28,7 @@ import (
 )
 
 // SelfSignedYears is how long a generated certificate lasts. Nobody
-// renews the certificate on a box they never log into, so it outlives the
+// renews the certificate on a router they never log into, so it outlives the
 // hardware rather than expiring quietly.
 const SelfSignedYears = 10
 
@@ -189,7 +189,7 @@ func Validate(certPEM, keyPEM []byte) (*Info, error) {
 }
 
 // SelfSigned generates a certificate for the given names and installs it.
-// It is what a box starts with, and what the UI offers when the names it
+// It is what a router starts with, and what the UI offers when the names it
 // is reached by have changed.
 func (m *Manager) SelfSigned(hosts []string) (*Info, error) {
 	certPEM, keyPEM, err := GenerateSelfSigned(hosts)

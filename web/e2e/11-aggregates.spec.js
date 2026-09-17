@@ -67,7 +67,7 @@ test('build a bridge and a bond from the machine s own links', async ({ page }) 
 
   // The bridge is part of a draft the server accepts: rendering it is how
   // the System page proves that. This test server manages no network
-  // units, so it says so rather than showing an empty box.
+  // units, so it says so rather than showing an empty pane.
   await sidebar(page, 'System', 'Ruleset')
   await page.getByRole('button', { name: 'Render the draft' }).click()
   await expect(page.locator('pre')).toContainText('table inet ostiole')

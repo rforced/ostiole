@@ -31,7 +31,7 @@ const (
 	// have; it exists to turn an out-of-memory crash into a clear refusal.
 	MaxDomains = 5_000_000
 	// DefaultMaxDomains is the ceiling when the configuration names none.
-	// A million names costs dnsmasq about 90 MB, which a small box can
+	// A million names costs dnsmasq about 90 MB, which a small router can
 	// afford; more than that should be asked for on purpose.
 	DefaultMaxDomains = 1_000_000
 	// BytesPerName is roughly what a blocked name costs in dnsmasq's
@@ -42,7 +42,7 @@ const (
 
 // notNames are the names hosts-format lists carry for the loopback and for
 // IPv6 housekeeping. They are in the file because it is a hosts file, not
-// because anyone wants them blocked, and blocking them breaks the box.
+// because anyone wants them blocked, and blocking them breaks the router.
 var notNames = map[string]bool{
 	"localhost":             true,
 	"localhost.localdomain": true,
@@ -123,7 +123,7 @@ func validName(s string) bool {
 // A published list always names fully qualified hosts, so a single label is
 // rejected here even though Normalize would accept it. That is what stops
 // an HTML error page being read as a hosts file and "Not" of "404 Not
-// Found" becoming a top-level domain this box refuses to resolve. Blocking
+// Found" becoming a top-level domain this router refuses to resolve. Blocking
 // a whole top-level domain is still possible, by writing it in the deny
 // list, where it is unambiguously meant.
 func ParseLine(line string, format model.ListFormat) (string, bool) {

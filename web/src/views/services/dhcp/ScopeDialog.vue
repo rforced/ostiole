@@ -121,13 +121,13 @@ function save() {
             spellcheck="false"
           />
         </FormField>
-        <FormField id="sc-gw" label="Gateway" hint="Empty: this box.">
+        <FormField id="sc-gw" label="Gateway" hint="Empty: this router.">
           <input id="sc-gw" v-model="form.gateway" class="input font-mono" spellcheck="false" />
         </FormField>
         <FormField
           id="sc-dns"
           label="DNS servers"
-          hint="Empty: this box when the DNS service is on, else the system resolvers."
+          hint="Empty: this router when the DNS service is on, else the system resolvers."
         >
           <input id="sc-dns" v-model="form.dns" class="input font-mono" spellcheck="false" />
         </FormField>

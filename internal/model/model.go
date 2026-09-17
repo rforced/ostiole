@@ -3,7 +3,12 @@
 // truth; nftables and network configuration are rendered from it.
 package model
 
-import "sort"
+import (
+	"sort"
+	"time"
+
+	"github.com/rforced/ostiole/internal/timezone"
+)
 
 // SchemaVersion is bumped when the on-disk JSON shape changes incompatibly.
 // Version 2 renamed a cron's "job" field to "kind"; a version 1 file needs
@@ -97,13 +102,13 @@ type Config struct {
 	GatewayGroups []GatewayGroup `json:"gatewayGroups,omitempty"`
 	Routes        []StaticRoute  `json:"routes,omitempty"`
 	Services      Services       `json:"services"`
-	// Blocking is DNS blocking: the lists of names this box refuses to
+	// Blocking is DNS blocking: the lists of names this router refuses to
 	// resolve, and what it does to stop a client going around it.
 	Blocking Blocking `json:"blocking,omitempty"`
-	// Crons are the work this box runs on a schedule of the operator's
+	// Crons are the work this router runs on a schedule of the operator's
 	// choosing, alongside the work Ostiole does on its own account.
 	Crons []Cron `json:"crons,omitempty"`
-	// Updates is how this box keeps itself patched: the distro packages
+	// Updates is how this router keeps itself patched: the distro packages
 	// underneath it and Ostiole's own releases.
 	Updates Updates `json:"updates,omitempty"`
 }
@@ -126,7 +131,7 @@ const (
 	CronRefreshBlocklists CronKind = "refresh-blocklists"
 	// CronRestartService restarts one of the services Ostiole runs.
 	CronRestartService CronKind = "restart-service"
-	// CronCommand runs a command line. It is as powerful as the box, which
+	// CronCommand runs a command line. It is as powerful as the router, which
 	// is the point and also the warning.
 	CronCommand CronKind = "command"
 	// CronSystemUpdate checks the distro package manager and installs what
@@ -196,7 +201,7 @@ type UpdateMode string
 
 // Update modes.
 const (
-	// UpdateManual checks on the schedule and installs nothing, so the box
+	// UpdateManual checks on the schedule and installs nothing, so the router
 	// can say what is waiting without changing itself.
 	UpdateManual UpdateMode = "manual"
 	// UpdateSecurity installs only the updates the publisher marked as
@@ -226,7 +231,7 @@ const (
 	ChannelBeta   = "beta"
 )
 
-// Updates is how the box patches itself. The zero value means the
+// Updates is how the router patches itself. The zero value means the
 // defaults, so a configuration written before this existed gets weekly
 // security updates rather than nothing.
 type Updates struct {
@@ -242,7 +247,7 @@ type PackageUpdates struct {
 	Mode UpdateMode `json:"mode,omitempty"`
 	// Schedule is a cron expression; empty means DefaultUpdateSchedule.
 	Schedule string `json:"schedule,omitempty"`
-	// Exclude names packages this box never upgrades, for the kernel a
+	// Exclude names packages this router never upgrades, for the kernel a
 	// driver is pinned to or anything else that must not move.
 	Exclude []string `json:"exclude,omitempty"`
 }
@@ -313,9 +318,12 @@ func (c *Config) DerivedCrons() []Cron {
 	}
 }
 
-// System holds box-level settings.
+// System holds router-level settings.
 type System struct {
-	Hostname   string     `json:"hostname,omitempty"`
+	Hostname string `json:"hostname,omitempty"`
+	// Timezone is the IANA zone the router reads its clock in, such as
+	// "Europe/Berlin". Empty is UTC, which is what a router ships in.
+	Timezone   string     `json:"timezone,omitempty"`
 	DNSServers []string   `json:"dnsServers,omitempty"`
 	Management Management `json:"management"`
 	// KeepRevisions bounds the configuration history: every apply archives
@@ -324,7 +332,7 @@ type System struct {
 	KeepRevisions int `json:"keepRevisions,omitempty"`
 	// GeoIPv4URL and GeoIPv6URL are where country address lists come from.
 	// "{country}" is replaced with the lower-case ISO code. They are
-	// settings so an air-gapped box can point at its own mirror; empty
+	// settings so an air-gapped router can point at its own mirror; empty
 	// uses the defaults.
 	GeoIPv4URL string `json:"geoIPv4Url,omitempty"`
 	GeoIPv6URL string `json:"geoIPv6Url,omitempty"`
@@ -356,6 +364,19 @@ func (s System) RevisionsKept() int {
 	return s.KeepRevisions
 }
 
+// Zone is the timezone the router runs in, UTC when the setting says nothing.
+func (s System) Zone() string {
+	if s.Timezone == "" {
+		return timezone.Default
+	}
+	return s.Timezone
+}
+
+// Location is Zone as a *time.Location, for the schedules that are read
+// in the router's own time. A zone this build cannot resolve falls back to
+// UTC: validation rejects those, and a cron an hour off still runs.
+func (s System) Location() *time.Location { return timezone.Load(s.Zone()) }
+
 // GeoIPTemplates returns the URLs country lists are fetched from.
 func (s System) GeoIPTemplates() (v4, v6 string) {
 	v4, v6 = s.GeoIPv4URL, s.GeoIPv6URL
@@ -365,7 +386,7 @@ func (s System) GeoIPTemplates() (v4, v6 string) {
 	return v4, v6
 }
 
-// Management describes how the box itself is administered. The ports feed
+// Management describes how the router itself is administered. The ports feed
 // the anti-lockout rule on zones that have AntiLockout set. A zero port
 // disables that entry.
 type Management struct {
@@ -693,7 +714,7 @@ type Alias struct {
 	// extra entries kept alongside whatever is fetched.
 	Entries []string `json:"entries"`
 	// URL fetches the entries from a published list. The result is cached
-	// on disk, so a box that boots without a working line still has the
+	// on disk, so a router that boots without a working line still has the
 	// list it had yesterday.
 	URL string `json:"url,omitempty"`
 	// RefreshHours is how often to fetch; zero means once a day. Nothing
@@ -803,7 +824,7 @@ type OutboundRule struct {
 	// particular; empty means anywhere.
 	Destination []string `json:"destination,omitempty"`
 	// Address sends the traffic out as this address instead of whichever
-	// one the interface happens to have. It has to be an address the box
+	// one the interface happens to have. It has to be an address the router
 	// actually answers to.
 	Address string `json:"address,omitempty"`
 	// NoNAT leaves matching traffic alone. In hybrid mode this is how a
@@ -829,7 +850,7 @@ type PortForward struct {
 }
 
 // Gateway is an upstream this firewall routes through. Several gateways
-// make a multi-WAN box: the lowest priority that answers its monitor
+// make a multi-WAN router: the lowest priority that answers its monitor
 // carries the default route, and the rest wait.
 type Gateway struct {
 	Name        string `json:"name"`
@@ -885,7 +906,7 @@ type OnDownMode string
 // Group behaviour when nothing is online.
 const (
 	// OnDownFallback sends the traffic out the ordinary default route,
-	// which keeps a box working when its preferred line dies.
+	// which keeps a router working when its preferred line dies.
 	OnDownFallback OnDownMode = "fallback"
 	// OnDownBlock drops it instead, so a tunnel that is meant to carry
 	// everything cannot leak onto the WAN while it is down.
@@ -1124,7 +1145,7 @@ type DHCPv6Scope struct {
 }
 
 // DHCPScope is a pool on one interface, which must carry a static IPv4
-// address. Empty Gateway and DNS default to this box's address on the
+// address. Empty Gateway and DNS default to this router's address on the
 // interface (DNS only when the DNS service is enabled; otherwise the
 // system DNS servers).
 type DHCPScope struct {
@@ -1159,13 +1180,13 @@ type DNSServer struct {
 	Domain          string           `json:"domain,omitempty"`
 	HostOverrides   []HostOverride   `json:"hostOverrides,omitempty"`
 	DomainOverrides []DomainOverride `json:"domainOverrides,omitempty"`
-	// Resolver decides who answers names this box does not know.
+	// Resolver decides who answers names this router does not know.
 	Resolver ResolverMode `json:"resolver,omitempty"`
 	// TLSUpstreams are the resolvers used in ResolverTLS mode.
 	TLSUpstreams []TLSUpstream `json:"tlsUpstreams,omitempty"`
 }
 
-// ResolverMode selects how queries leave the box.
+// ResolverMode selects how queries leave the router.
 type ResolverMode string
 
 // Resolver modes. Anything but ResolverForward runs unbound as a
@@ -1188,7 +1209,7 @@ type TLSUpstream struct {
 	Hostname string `json:"hostname"`
 }
 
-// HostOverride is a local name answered by this box.
+// HostOverride is a local name answered by this router.
 type HostOverride struct {
 	Hostname    string `json:"hostname"`
 	IP          string `json:"ip"`

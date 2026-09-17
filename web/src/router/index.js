@@ -99,7 +99,7 @@ router.beforeEach(async (to) => {
   }
   if (to.name === 'login' && auth.loggedIn) return { name: 'dashboard' }
 
-  // A configured-or-not check sends a fresh box to the wizard once.
+  // A configured-or-not check sends a fresh install to the wizard once.
   if (auth.loggedIn && !to.meta.public) {
     const system = useSystemStore()
     if (system.status === null) await system.refresh()

@@ -57,7 +57,7 @@ func main() {
 
 // generate prints a fresh key pair: the secret for the repository, the
 // public half for TrustedKeysHex. Rotating means keeping the old key in
-// that list for a release, so boxes can verify the release that teaches
+// that list for a release, so routers can verify the release that teaches
 // them the new one.
 func generate() {
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)

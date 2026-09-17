@@ -17,11 +17,11 @@ const status = ref([])
 /** The alias being fetched right now, or 'all'; only its own link says so. */
 const refreshing = ref('')
 
-/** What the box has actually fetched, keyed by alias. */
+/** What the router has actually fetched, keyed by alias. */
 const fetched = computed(() => Object.fromEntries(status.value.map((s) => [s.alias, s])))
 const anyFetched = computed(() => config.aliases.some((a) => a.url || a.type === 'geoip'))
 
-// A box that cannot say what it fetched just shows nothing against each alias.
+// A router that cannot say what it fetched just shows nothing against each alias.
 const feeds = useAsync(async () => {
   try {
     status.value = await api.aliases.feeds()

@@ -69,7 +69,7 @@ func (a *api) installCertificate(w http.ResponseWriter, r *http.Request) error {
 }
 
 // regenerateCertificate makes a fresh self-signed certificate for the
-// names this box currently answers to, which is what to do after moving
+// names this router currently answers to, which is what to do after moving
 // it or renaming it.
 func (a *api) regenerateCertificate(w http.ResponseWriter, r *http.Request) error {
 	if a.certs == nil {

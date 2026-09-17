@@ -513,7 +513,7 @@ func TestPeerFileQuotesTheSecret(t *testing.T) {
 	}
 }
 
-// A box that dials no PPPoE must not have /etc/ppp created under it. The
+// A router that dials no PPPoE must not have /etc/ppp created under it. The
 // daemon runs with ProtectSystem=strict, so an apply that has nothing to
 // do with PPPoE used to fail with "mkdir /etc/ppp: read-only file
 // system" — and so did the rollback, which is worse.
@@ -543,7 +543,7 @@ func TestPPPoEApplyTouchesNothingWithoutSessions(t *testing.T) {
 }
 
 // And the same on the way back: a rollback after an unrelated failure
-// must not be the thing that takes the box down.
+// must not be the thing that takes the router down.
 func TestPPPoERollbackToNothingIsQuiet(t *testing.T) {
 	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "gone")

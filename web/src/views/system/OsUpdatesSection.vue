@@ -47,7 +47,7 @@ async function readStatus() {
   try {
     status.value = await api.systemUpdates.status()
   } catch {
-    // The endpoint is missing on a box with nothing to drive; the card
+    // The endpoint is missing on a router with nothing to drive; the card
     // says so from what it already has.
     status.value = null
   }
@@ -70,7 +70,7 @@ async function askInstall() {
   const n = installSecurityOnly.value ? securityCount.value : packages.value.length
   const ok = await confirm.ask({
     question: n ? `Install ${n} ${n === 1 ? 'update' : 'updates'}?` : 'Install updates?',
-    description: 'The box may want a reboot afterwards.',
+    description: 'The router may want a reboot afterwards.',
     confirmLabel: 'Install',
   })
   if (ok) await install.run()
@@ -111,7 +111,7 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
       {{ status.unavailable }}
     </p>
     <p v-else-if="!status" class="text-sm text-neutral-500">
-      Nothing on this box drives a package manager.
+      Nothing on this router drives a package manager.
     </p>
 
     <template v-if="config.draft">
@@ -212,7 +212,7 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
       role="alert"
       class="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/40"
     >
-      <p class="font-medium text-amber-800 dark:text-amber-300">This box wants a reboot</p>
+      <p class="font-medium text-amber-800 dark:text-amber-300">This router wants a reboot</p>
       <p class="text-amber-800/80 dark:text-amber-300/80">{{ status.rebootReason }}</p>
       <ConfirmButton
         class="mt-1"

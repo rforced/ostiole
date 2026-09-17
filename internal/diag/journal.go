@@ -43,7 +43,7 @@ const MaxJournalLines = 2000
 
 // Journal reads recent entries with journalctl. Reading the binary
 // journal format directly would need cgo or a reimplementation; the tool
-// is always there on a systemd box, and it is run without a shell.
+// is always there on a systemd router, and it is run without a shell.
 func Journal(ctx context.Context, o JournalOptions) ([]JournalEntry, error) {
 	lines := o.Lines
 	if lines <= 0 || lines > MaxJournalLines {

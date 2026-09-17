@@ -1,5 +1,5 @@
 <script setup>
-import { ChevronDown, ChevronUp, Plus } from 'lucide-vue-next'
+import { ArrowDown, ArrowUp, Plus } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
@@ -182,23 +182,23 @@ function edit(index) {
               <td class="text-right whitespace-nowrap">
                 <button
                   type="button"
-                  class="link"
+                  class="icon-btn"
                   :disabled="i === 0"
                   :aria-label="`Move entry ${i + 1} up`"
                   @click="config.moveUPnPRule(i, -1)"
                 >
-                  <ChevronUp class="inline size-4" aria-hidden="true" />
+                  <ArrowUp class="size-4" />
                 </button>
                 <button
                   type="button"
-                  class="link ml-1"
+                  class="icon-btn"
                   :disabled="i === acl.length - 1"
                   :aria-label="`Move entry ${i + 1} down`"
                   @click="config.moveUPnPRule(i, 1)"
                 >
-                  <ChevronDown class="inline size-4" aria-hidden="true" />
+                  <ArrowDown class="size-4" />
                 </button>
-                <button type="button" class="link ml-3" @click="edit(i)">Edit</button>
+                <button type="button" class="link ml-2" @click="edit(i)">Edit</button>
                 <ConfirmButton
                   class="ml-3"
                   label="Delete"

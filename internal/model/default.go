@@ -3,6 +3,8 @@ package model
 import (
 	"encoding/binary"
 	"net/netip"
+
+	"github.com/rforced/ostiole/internal/timezone"
 )
 
 // StarterOptions parameterise Starter.
@@ -12,7 +14,7 @@ type StarterOptions struct {
 	LANAddress string // CIDR, e.g. 192.168.1.1/24
 	WAN        string // interface name, optional
 	// ManagementFromWAN also allows the management ports from the wan
-	// zone (anti-lockout), for boxes administered over their public side.
+	// zone (anti-lockout), for routers administered over their public side.
 	ManagementFromWAN bool
 	// Services turns on DHCP and DNS for the LAN with a pool derived from
 	// LANAddress and the given upstream resolvers.
@@ -28,6 +30,7 @@ func Starter(o StarterOptions) *Config {
 		Version: SchemaVersion,
 		System: System{
 			Hostname:   o.Hostname,
+			Timezone:   timezone.Default,
 			Management: Management{WebPort: 443, SSHPort: 22},
 		},
 		Zones: []Zone{

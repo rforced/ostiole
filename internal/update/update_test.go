@@ -338,7 +338,7 @@ func TestCheckFindsSecurityReleasesSinceTheRunningVersion(t *testing.T) {
 	})
 	c := &Client{Repo: DefaultRepo, BaseURL: srv.URL}
 
-	// Three releases behind, one of which was a security fix: the box
+	// Three releases behind, one of which was a security fix: the router
 	// installs the newest, and the marker is why it does so unasked.
 	chk, err := c.Check(t.Context(), "0.2.0", Stable)
 	if err != nil {
@@ -354,7 +354,7 @@ func TestCheckFindsSecurityReleasesSinceTheRunningVersion(t *testing.T) {
 		t.Errorf("securityReleases = %v", chk.SecurityReleases)
 	}
 
-	// Already past it: the older marker is not this box's problem.
+	// Already past it: the older marker is not this router's problem.
 	chk, err = c.Check(t.Context(), "0.3.0", Stable)
 	if err != nil {
 		t.Fatal(err)

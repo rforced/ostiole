@@ -101,7 +101,7 @@ function save() {
   <AppDialog
     v-model:open="open"
     :title="cron ? `Cron ${cron.description || cron.id}` : 'New cron'"
-    description="Runs on this box, as root, on the schedule you give."
+    description="Runs on this router, as root, on the schedule you give."
   >
     <form class="space-y-4" @submit.prevent="save">
       <div class="grid gap-4 sm:grid-cols-2">
@@ -143,7 +143,7 @@ function save() {
 
       <template v-if="form.kind === 'backup'">
         <div class="grid gap-4 sm:grid-cols-2">
-          <FormField id="cron-dir" label="Write to" hint="An absolute path on this box.">
+          <FormField id="cron-dir" label="Write to" hint="An absolute path on this router.">
             <input
               id="cron-dir"
               v-model="form.directory"

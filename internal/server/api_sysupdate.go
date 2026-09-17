@@ -16,7 +16,7 @@ func (a *api) registerSysUpdate(mux *router) {
 }
 
 // updates is the update settings in force, which are the defaults on a
-// box that has never been told otherwise.
+// router that has never been told otherwise.
 func (a *api) updates() model.Updates {
 	if a.engine == nil {
 		return model.Updates{}
@@ -41,7 +41,7 @@ func (a *api) systemUpdateStatus() sysupdate.Status {
 
 func (a *api) systemUpdates(w http.ResponseWriter, _ *http.Request) error {
 	if a.packages == nil {
-		return &unavailable{errors.New("nothing on this box drives a package manager")}
+		return &unavailable{errors.New("nothing on this router drives a package manager")}
 	}
 	writeJSON(w, http.StatusOK, a.systemUpdateStatus())
 	return nil
@@ -51,7 +51,7 @@ func (a *api) systemUpdates(w http.ResponseWriter, _ *http.Request) error {
 // because refreshing metadata is what makes the answer worth having.
 func (a *api) systemUpdateCheck(w http.ResponseWriter, r *http.Request) error {
 	if a.packages == nil {
-		return &unavailable{errors.New("nothing on this box drives a package manager")}
+		return &unavailable{errors.New("nothing on this router drives a package manager")}
 	}
 	if _, err := a.packages.Check(r.Context()); err != nil {
 		return &badRequest{err}
@@ -62,11 +62,11 @@ func (a *api) systemUpdateCheck(w http.ResponseWriter, r *http.Request) error {
 
 // systemUpdateApply starts an update in the background. The body may ask
 // for security fixes alone; without one the configured mode decides, and
-// a box on manual gets everything, because pressing the button is asking
+// a router on manual gets everything, because pressing the button is asking
 // for it.
 func (a *api) systemUpdateApply(w http.ResponseWriter, r *http.Request) error {
 	if a.packages == nil {
-		return &unavailable{errors.New("nothing on this box drives a package manager")}
+		return &unavailable{errors.New("nothing on this router drives a package manager")}
 	}
 	var body struct {
 		Security *bool `json:"security"`
@@ -88,11 +88,11 @@ func (a *api) systemUpdateApply(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// systemReboot restarts the box, which is the only way to finish a
+// systemReboot restarts the router, which is the only way to finish a
 // kernel update.
 func (a *api) systemReboot(w http.ResponseWriter, r *http.Request) error {
 	if a.packages == nil {
-		return &unavailable{errors.New("this box cannot reboot itself from here")}
+		return &unavailable{errors.New("this router cannot reboot itself from here")}
 	}
 	if err := a.packages.Reboot(r.Context()); err != nil {
 		return &badRequest{err}

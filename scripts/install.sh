@@ -17,6 +17,29 @@ for tool in curl tar; do
 done
 command -v nft >/dev/null 2>&1 || echo "warning: nft not found; install the nftables package before running ostiole install" >&2
 
+# Ostiole supports Linux 5.14 and newer, which is RHEL 9 and every current
+# Debian, Ubuntu, Fedora, Alpine, and Arch. A release string this cannot
+# parse is allowed through rather than blocking the install.
+kernel_too_old() {
+  rel="$1"
+  major="${rel%%.*}"
+  rest="${rel#*.}"
+  if [ "$rest" = "$rel" ]; then return 1; fi
+  minor="${rest%%[!0-9]*}"
+  case "$major" in '' | *[!0-9]*) return 1 ;; esac
+  case "$minor" in '' | *[!0-9]*) return 1 ;; esac
+  if [ "$major" -lt 5 ]; then return 0; fi
+  if [ "$major" -eq 5 ] && [ "$minor" -lt 14 ]; then return 0; fi
+  return 1
+}
+if kernel_too_old "$(uname -r)"; then
+  echo "unsupported kernel: $(uname -r) (Ostiole needs Linux 5.14 or newer)" >&2
+  if [ "${OSTIOLE_IGNORE_KERNEL:-0}" != "1" ]; then
+    echo "set OSTIOLE_IGNORE_KERNEL=1 to install anyway" >&2
+    exit 1
+  fi
+fi
+
 case "$(uname -m)" in
   x86_64|amd64) ARCH=amd64 ;;
   aarch64|arm64) ARCH=arm64 ;;

@@ -2,7 +2,7 @@
 // backups nobody remembers to take, the blocklists that go stale, and
 // whatever else the operator wants run at four in the morning. It also
 // reports the work Ostiole does on its own account, so one page answers
-// "what does this box do while I am not looking".
+// "what does this router do while I am not looking".
 package cron
 
 import (

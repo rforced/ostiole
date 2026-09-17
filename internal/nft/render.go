@@ -260,7 +260,7 @@ func (r *renderer) chainInput() {
 	})
 }
 
-// serviceRules lets DHCP and DNS clients reach the services this box runs,
+// serviceRules lets DHCP and DNS clients reach the services this router runs,
 // regardless of zone rules, on the interfaces that serve them.
 func (r *renderer) serviceRules() {
 	svc := r.cfg.Services
@@ -299,7 +299,7 @@ func (r *renderer) serviceRules() {
 // upnpRules let clients reach miniupnpd: SSDP discovery and the device
 // description for IGD, and the NAT-PMP and PCP port for the other half.
 // Unlike DNS there is no "fib daddr type local" here, because SSDP is
-// addressed to a multicast group rather than to this box.
+// addressed to a multicast group rather than to this router.
 func (r *renderer) upnpRules() {
 	if !UPnPEnabled(r.cfg) {
 		return
@@ -489,7 +489,7 @@ func (r *renderer) zoneDispatch() {
 
 // defaultDrop ends a base chain. Every interface can decide for itself
 // whether a packet dropped here is logged, so the common case stays one
-// rule and only a box with an exception pays for two.
+// rule and only a router with an exception pays for two.
 //
 // The log line carries no interface name because it does not need one:
 // the kernel tells the log listener which interface a packet arrived on.

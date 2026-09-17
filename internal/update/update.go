@@ -35,14 +35,14 @@ const PublicKeyHex = "e1adeb7f46c275035328edca383c6a32b753d7e4f59eaf6df8a34dd9ff
 
 // TrustedKeysHex are all the keys whose signature this binary accepts.
 //
-// Rotation, which has to work for boxes that update from an old release:
+// Rotation, which has to work for routers that update from an old release:
 //  1. Add the new key here, keep signing with the old one, and release.
-//     Every box that updates now trusts both.
+//     Every router that updates now trusts both.
 //  2. Once that release is the oldest one still in the field, switch the
 //     signing secret to the new key and release again.
 //  3. A release later, drop the old key from this list.
 //
-// Skipping step 1 strands every box that has not updated yet, because it
+// Skipping step 1 strands every router that has not updated yet, because it
 // cannot verify the release that would teach it the new key.
 var TrustedKeysHex = []string{PublicKeyHex}
 
@@ -65,7 +65,7 @@ type Release struct {
 	URL         string    `json:"url"`
 	Assets      []Asset   `json:"assets"`
 	// Security is set when the notes carry the marker. It is what makes
-	// a box on the security update mode install this one.
+	// a router on the security update mode install this one.
 	Security bool `json:"security,omitempty"`
 }
 
@@ -239,7 +239,7 @@ type Check struct {
 	Release   *Release `json:"release,omitempty"`
 	Asset     *Asset   `json:"asset,omitempty"`
 	// Security is true when anything published since the running version
-	// carries the security marker. A box three releases behind still
+	// carries the security marker. A router three releases behind still
 	// installs the newest one; the marker only decides whether it does so
 	// without being asked.
 	Security bool `json:"security"`

@@ -141,7 +141,7 @@ func (t transient) clear(ctx context.Context) {
 	_, _ = t.systemctl(ctx, "reset-failed", t.unit)
 }
 
-// supported reports whether this box can run a transaction in a unit of
+// supported reports whether this router can run a transaction in a unit of
 // its own. A dev run or a container falls back to a plain child process,
 // where the worst case is an update cut short by a restart nobody is
 // doing anyway.

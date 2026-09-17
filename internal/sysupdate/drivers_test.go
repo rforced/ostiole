@@ -20,7 +20,7 @@ func (f fakeExit) ExitCode() int { return int(f) }
 // whole command line, so a test reads as the transcript of a session.
 type fakeRunner struct {
 	// mu guards the lot: a reattached update reads these from its own
-	// goroutine while the test changes what the box is saying.
+	// goroutine while the test changes what the router is saying.
 	mu    sync.Mutex
 	out   map[string]string
 	code  map[string]int
@@ -56,7 +56,7 @@ func unwrapped(line string) string {
 	return cmd
 }
 
-// say makes the box answer a command with this output from now on.
+// say makes the router answer a command with this output from now on.
 func (f *fakeRunner) say(line, out string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -205,8 +205,8 @@ func TestDNFRebootRequired(t *testing.T) {
 		t.Error("reported a reboot when dnf said none was needed")
 	}
 
-	// A box without the plugin exits 1 as well, so the text is what
-	// keeps it from claiming every box needs rebooting.
+	// A router without the plugin exits 1 as well, so the text is what
+	// keeps it from claiming every router needs rebooting.
 	missing := &fakeRunner{
 		out:  map[string]string{"dnf needs-restarting -r": "No such command: needs-restarting. Please use /usr/bin/dnf --help"},
 		code: map[string]int{"dnf needs-restarting -r": 1},
@@ -347,7 +347,7 @@ func TestPacmanAndAPKRefuseSecurity(t *testing.T) {
 func TestPacmanCheck(t *testing.T) {
 	t.Parallel()
 	p := pacman{}
-	// checkupdates is the tool an Arch box is expected to have, and the
+	// checkupdates is the tool an Arch router is expected to have, and the
 	// one that never touches the real database.
 	restore := lookPath
 	lookPath = func(name string) (string, error) {
@@ -375,7 +375,7 @@ func TestPacmanCheck(t *testing.T) {
 	// Nothing waiting exits 2, which is not a failure.
 	empty := &fakeRunner{code: map[string]int{"checkupdates": 2}}
 	if _, err := p.Check(t.Context(), empty); err != nil {
-		t.Errorf("an up-to-date box reported an error: %v", err)
+		t.Errorf("an up-to-date router reported an error: %v", err)
 	}
 }
 

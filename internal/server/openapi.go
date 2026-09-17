@@ -70,7 +70,8 @@ var routeDocs = map[string]routeDoc{
 	"POST /api/v1/auth/password": {summary: "Change the signed-in account's password.", role: auth.RoleViewer},
 
 	"GET /api/v1/status":                 {summary: "Whether a configuration is saved, loaded, and confirmed.", role: auth.RoleViewer},
-	"GET /api/v1/system/stats":           {summary: "CPU, memory, swap, load and disk space on this box.", role: auth.RoleViewer},
+	"GET /api/v1/system/stats":           {summary: "CPU, memory, swap, load and disk space on this router.", role: auth.RoleViewer},
+	"GET /api/v1/system/timezones":       {summary: "The timezones this router can be set to, and the one its clock reads now.", role: auth.RoleViewer},
 	"GET /api/v1/overview":               {summary: "Everything the dashboard shows, in one request.", role: auth.RoleViewer},
 	"GET /api/v1/config":                 {summary: "The saved configuration.", role: auth.RoleViewer},
 	"GET /api/v1/config/revisions":       {summary: "List archived configurations.", role: auth.RoleViewer},
@@ -101,7 +102,7 @@ var routeDocs = map[string]routeDoc{
 	"POST /api/v1/apply/revert":           {summary: "Undo the pending apply.", role: auth.RoleOperator},
 	"POST /api/v1/config/restore":         {summary: "Read a backup file and report what it would change.", role: auth.RoleOperator},
 	"POST /api/v1/wireguard/keys":         {summary: "Generate a WireGuard key pair or preshared key.", role: auth.RoleOperator},
-	"POST /api/v1/diagnostics/ping":       {summary: "Ping an address from this box.", role: auth.RoleOperator},
+	"POST /api/v1/diagnostics/ping":       {summary: "Ping an address from this router.", role: auth.RoleOperator},
 	"POST /api/v1/diagnostics/traceroute": {summary: "Trace the route to an address.", role: auth.RoleOperator},
 	"POST /api/v1/diagnostics/capture":    {summary: "Capture packets and return a pcap file.", role: auth.RoleOperator},
 	"POST /api/v1/system/updates/check":   {summary: "Ask the distro package manager what is waiting.", role: auth.RoleOperator},
@@ -117,7 +118,7 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/update/check":             {summary: "Ask GitHub whether a newer release exists.", role: auth.RoleAdmin},
 	"POST /api/v1/update/apply":            {summary: "Download and install a release.", role: auth.RoleAdmin},
 	"POST /api/v1/system/updates/apply":    {summary: "Install the distro packages the update mode allows.", role: auth.RoleAdmin},
-	"POST /api/v1/system/reboot":           {summary: "Reboot this box.", role: auth.RoleAdmin},
+	"POST /api/v1/system/reboot":           {summary: "Reboot this router.", role: auth.RoleAdmin},
 
 	"GET /api/v1/aliases/feeds":           {summary: "When each fetched alias was last updated, and what went wrong if it did.", role: auth.RoleViewer},
 	"POST /api/v1/aliases/feeds/refresh":  {summary: "Fetch every address list and country list now.", role: auth.RoleOperator},
@@ -128,7 +129,7 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/blocking/lookup":                {summary: "Whether a name is blocked, and which list blocks it.", role: auth.RoleViewer},
 	"POST /api/v1/blocking/refresh":              {summary: "Fetch every DNS blocklist now.", role: auth.RoleOperator},
 	"POST /api/v1/blocking/lists/{name}/refresh": {summary: "Fetch one DNS blocklist now.", role: auth.RoleOperator},
-	"POST /api/v1/blocking/lists/{name}/import":  {summary: "Load a DNS blocklist from the request body, for a box with no way out to the internet.", role: auth.RoleOperator},
+	"POST /api/v1/blocking/lists/{name}/import":  {summary: "Load a DNS blocklist from the request body, for a router with no way out to the internet.", role: auth.RoleOperator},
 
 	"GET /api/v1/crons":           {summary: "The operator's crons, and the work Ostiole does on its own account.", role: auth.RoleViewer},
 	"POST /api/v1/crons/{id}/run": {summary: "Run a cron now.", role: auth.RoleOperator},

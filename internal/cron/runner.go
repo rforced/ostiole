@@ -14,7 +14,7 @@ import (
 
 // Origin separates the crons Ostiole runs on its own account from the
 // ones an operator asked for. Both are shown together, because "what does
-// this box do while I am not looking" is one question.
+// this router do while I am not looking" is one question.
 type Origin string
 
 // Cron origins.
@@ -93,7 +93,7 @@ const maxOutput = 4000
 
 // NewRunner returns a runner with the standard background work listed.
 // Everything the daemon starts on a timer of its own belongs here: the
-// page is the whole answer to "what does this box do while nobody is
+// page is the whole answer to "what does this router do while nobody is
 // watching", so work missing from this list is work nobody knows about.
 // The ids match what the workers pass to Note.
 func NewRunner(source func() *model.Config, exec Executor, log *slog.Logger) *Runner {
@@ -131,12 +131,22 @@ func (r *Runner) Run(ctx context.Context) {
 	}
 }
 
-// scheduled is everything this box runs on a timer: the operator's crons
+// scheduled is everything this router runs on a timer: the operator's crons
 // and the two the update settings imply.
 func scheduled(cfg *model.Config) []model.Cron {
 	all := make([]model.Cron, 0, len(cfg.Crons)+2)
 	all = append(all, cfg.Crons...)
 	return append(all, cfg.DerivedCrons()...)
+}
+
+// zoned reads an instant in the router's timezone, so "0 4 * * *" fires at
+// four in the morning as the operator's clock has it rather than as the
+// process happened to be started.
+func zoned(cfg *model.Config, t time.Time) time.Time {
+	if cfg == nil {
+		return t
+	}
+	return t.In(cfg.System.Location())
 }
 
 // Tick runs every cron whose schedule matches the given minute.
@@ -145,6 +155,7 @@ func (r *Runner) Tick(ctx context.Context, now time.Time) {
 	if cfg == nil {
 		return
 	}
+	now = zoned(cfg, now)
 	for _, c := range scheduled(cfg) {
 		if !c.Enabled {
 			continue
@@ -233,8 +244,9 @@ func (r *Runner) record(id string, started time.Time, took time.Duration, output
 // together, the operator's first.
 func (r *Runner) Statuses() []Status {
 	out := []Status{}
-	now := time.Now()
-	if cfg := r.config(); cfg != nil {
+	cfg := r.config()
+	now := zoned(cfg, time.Now())
+	if cfg != nil {
 		for _, c := range cfg.Crons {
 			st := Status{
 				ID:          c.ID,
@@ -260,7 +272,7 @@ func (r *Runner) Statuses() []Status {
 
 	// The update crons are Ostiole's own work, but on a schedule the
 	// operator chose, so they are reported with one.
-	if cfg := r.config(); cfg != nil {
+	if cfg != nil {
 		for _, c := range cfg.DerivedCrons() {
 			st := Status{
 				ID:          c.ID,
@@ -315,7 +327,7 @@ func (r *Runner) fill(st *Status) {
 }
 
 // Note records that a piece of background work just happened, so the
-// page can show when the box last did it.
+// page can show when the router last did it.
 func (r *Runner) Note(id string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

@@ -21,7 +21,7 @@ import (
 const DefaultCommandTimeout = 5 * time.Minute
 
 // Actions runs the scheduled work: one method per cron kind. Each
-// dependency is optional, so a box without a feed refresher simply cannot
+// dependency is optional, so a router without a feed refresher simply cannot
 // schedule one, and says so instead of failing obscurely.
 type Actions struct {
 	// Config reads the configuration a backup is taken of.
@@ -55,12 +55,12 @@ func (a *Actions) Run(ctx context.Context, c model.Cron) (string, error) {
 		return a.backup(c)
 	case model.CronRefreshAliases:
 		if a.Refresh == nil {
-			return "", errors.New("nothing on this box refreshes aliases")
+			return "", errors.New("nothing on this router refreshes aliases")
 		}
 		return "refreshed", a.Refresh(ctx)
 	case model.CronRefreshBlocklists:
 		if a.RefreshBlocklists == nil {
-			return "", errors.New("nothing on this box refreshes blocklists")
+			return "", errors.New("nothing on this router refreshes blocklists")
 		}
 		return "refreshed", a.RefreshBlocklists(ctx)
 	case model.CronRestartService:
@@ -80,7 +80,7 @@ func (a *Actions) Run(ctx context.Context, c model.Cron) (string, error) {
 // the page can say what is waiting.
 func (a *Actions) systemUpdate(ctx context.Context) (string, error) {
 	if a.SystemUpdate == nil {
-		return "", errors.New("this box cannot drive a package manager from here")
+		return "", errors.New("this router cannot drive a package manager from here")
 	}
 	updates, err := a.updates()
 	if err != nil {
@@ -92,7 +92,7 @@ func (a *Actions) systemUpdate(ctx context.Context) (string, error) {
 // selfUpdate keeps Ostiole itself current.
 func (a *Actions) selfUpdate(ctx context.Context) (string, error) {
 	if a.SelfUpdate == nil {
-		return "", errors.New("this box cannot update Ostiole from here; run `ostiole update`")
+		return "", errors.New("this router cannot update Ostiole from here; run `ostiole update`")
 	}
 	updates, err := a.updates()
 	if err != nil {
@@ -191,7 +191,7 @@ func prune(dir string, keep int) (int, error) {
 
 func (a *Actions) restart(ctx context.Context, c model.Cron) (string, error) {
 	if a.Restart == nil {
-		return "", errors.New("this box cannot restart services from here")
+		return "", errors.New("this router cannot restart services from here")
 	}
 	if err := a.Restart(ctx, c.Service); err != nil {
 		return "", err

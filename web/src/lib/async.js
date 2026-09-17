@@ -14,7 +14,7 @@ export function errorMessage(e) {
  * it, because the second request may be about something the first read
  * too early: an apply that just landed. A poll pauses while the tab is
  * hidden and runs once more when it is shown again, so a page left open
- * overnight neither hammers the box nor shows it stale.
+ * overnight neither hammers the router nor shows it stale.
  *
  * @template T
  * @param {(...args: any[]) => Promise<T>} fn

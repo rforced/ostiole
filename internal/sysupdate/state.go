@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Snapshot is what the box last learned about its own updates. It is
+// Snapshot is what the router last learned about its own updates. It is
 // written to disk because an update can restart the daemon that started
 // it, and a page that forgets what it just did is no use to anybody.
 type Snapshot struct {
@@ -42,7 +42,7 @@ type State struct {
 	data Snapshot
 }
 
-// NewState reads what is on disk, if anything. A box that has never
+// NewState reads what is on disk, if anything. A router that has never
 // checked simply starts empty.
 func NewState(dir string) *State {
 	s := &State{Dir: dir}

@@ -54,7 +54,7 @@ func TestProcApplyAndPersist(t *testing.T) {
 }
 
 // Ostiole only sets values that mean the same thing on a one-core virtual
-// machine and on a large box. Capacity limits belong to the kernel, which
+// machine and on a large router. Capacity limits belong to the kernel, which
 // sizes them from installed memory; a constant here would starve one end of
 // the range or waste memory on the other.
 func TestNoCapacityLimits(t *testing.T) {

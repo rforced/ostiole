@@ -37,9 +37,9 @@ describe('RevisionsSection retention', () => {
     expect(config.draft.system.keepRevisions).toBe(5)
   })
 
-  // An empty box and the default mean the same thing, and neither belongs
+  // An empty field and the default mean the same thing, and neither belongs
   // in the configuration: "" would not even unmarshal as a number.
-  it('leaves the setting out for the default or an empty box', async () => {
+  it('leaves the setting out for the default or an empty field', async () => {
     const { config, keep } = open({ keepRevisions: 5 })
     await keep.setValue(20)
     expect(config.draft.system.keepRevisions).toBeUndefined()

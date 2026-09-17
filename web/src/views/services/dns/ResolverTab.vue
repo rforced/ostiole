@@ -136,7 +136,7 @@ function saveDomain() {
     <label class="flex items-center gap-2 text-sm">
       <input v-model="dns.enabled" type="checkbox" class="size-4 rounded border-neutral-300" />
       <span class="font-medium">DNS service enabled</span>
-      <span class="text-neutral-500">This box uses it too.</span>
+      <span class="text-neutral-500">This router uses it too.</span>
     </label>
 
     <div class="grid max-w-2xl gap-4 sm:grid-cols-2">

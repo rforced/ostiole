@@ -32,7 +32,7 @@ type User struct {
 	Username string `json:"username"`
 	Hash     string `json:"hash"`
 	// Role decides what this account may do. An account written before
-	// roles existed has none, and is treated as an administrator: the box
+	// roles existed has none, and is treated as an administrator: the router
 	// had exactly one kind of user then.
 	Role      Role      `json:"role,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
@@ -315,7 +315,7 @@ func (s *Service) SetPassword(username, password string) error {
 }
 
 // SetRole changes what an account may do. The last administrator keeps
-// the role: a box with nobody who can manage accounts is a box you have
+// the role: a router with nobody who can manage accounts is a router you have
 // to rebuild.
 func (s *Service) SetRole(username string, role Role) error {
 	if !role.Valid() {

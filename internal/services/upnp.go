@@ -31,7 +31,7 @@ const (
 	// restart invisible to them.
 	UPnPLeaseFile = "/var/lib/misc/ostiole-upnp.leases"
 	// upnpHTTPPort serves the device description clients fetch after they
-	// find this box over SSDP. It is pfSense's port, and the one the
+	// find this router over SSDP. It is pfSense's port, and the one the
 	// firewall rules open.
 	upnpHTTPPort  = 2189
 	upnpConfName  = "ostiole.conf"
@@ -61,7 +61,7 @@ type UPnP struct {
 	// Leases is the mapping file miniupnpd keeps; default UPnPLeaseFile.
 	Leases string
 	// UUID overrides the device id, which is otherwise derived from the
-	// machine id. Tests set it; a box has no reason to.
+	// machine id. Tests set it; a router has no reason to.
 	UUID string
 	// Cmd runs systemctl; default execs it.
 	Cmd network.Commander
@@ -135,7 +135,7 @@ func (u *UPnP) render(cfg *model.Config) string {
 	b.WriteString("secure_mode=yes\n")
 	// IPv6 pinholes are not modelled yet, so they are not offered.
 	b.WriteString("ipv6_disable=yes\n")
-	// Report this box's uptime rather than the daemon's: a client that
+	// Report this router's uptime rather than the daemon's: a client that
 	// sees the gateway restart drops its mappings.
 	b.WriteString("system_uptime=yes\n")
 	// Sweep expired mappings every ten minutes, so a client that went away
@@ -205,9 +205,9 @@ func sourcePrefix(s string) string {
 }
 
 // uuid identifies this gateway to clients. It is derived from the machine
-// id rather than kept in a state file: the same box answers with the same
+// id rather than kept in a state file: the same router answers with the same
 // id after an upgrade or a reinstall of Ostiole, and a golden test does
-// not depend on which box ran it. A box with no machine id gets a fixed
+// not depend on which router ran it. A router with no machine id gets a fixed
 // one, which is worse for a client that meets two of them and better than
 // a new id at every restart.
 func (u *UPnP) uuid() string {
@@ -258,7 +258,7 @@ func (u *UPnP) Apply(ctx context.Context, files network.Files) error {
 		return err
 	}
 	if !wanted {
-		// A box that does not run this, and never has, gets no directory,
+		// A router that does not run this, and never has, gets no directory,
 		// no file and no systemctl. Every apply runs every backend, and
 		// the daemon's sandbox is narrow: work nobody asked for is how an
 		// unrelated apply fails on a path it should never have touched.
@@ -271,7 +271,7 @@ func (u *UPnP) Apply(ctx context.Context, files network.Files) error {
 		return os.Remove(u.ConfPath())
 	}
 	if !u.Installed(ctx) {
-		return errors.New("UPnP is not set up on this box: run `ostiole services setup --with-upnp` once as root")
+		return errors.New("UPnP is not set up on this router: run `ostiole services setup --with-upnp` once as root")
 	}
 	if current[upnpConfName] != conf {
 		if err := os.MkdirAll(u.dir(), 0o755); err != nil { //nolint:gosec // miniupnpd reads this

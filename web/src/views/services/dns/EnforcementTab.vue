@@ -52,9 +52,9 @@ const exemptAlias = aliasField('exemptAlias')
           class="mt-0.5 size-4 rounded border-neutral-300"
         />
         <span>
-          <span class="font-medium">Send all plain DNS to this box</span>
+          <span class="font-medium">Send all plain DNS to this router</span>
           <span class="block text-neutral-500">
-            Queries sent to any other resolver are answered by this box instead.
+            Queries sent to any other resolver are answered by this router instead.
           </span>
         </span>
       </label>

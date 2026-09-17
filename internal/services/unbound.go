@@ -23,7 +23,7 @@ const (
 	// already owns 127.0.0.1:53, so the resolver takes another loopback
 	// address instead of another port: SELinux only lets unbound_t bind
 	// ports its policy knows as DNS, and a high port like 5335 is refused
-	// with "can't bind socket: Permission denied" on an enforcing box.
+	// with "can't bind socket: Permission denied" on an enforcing router.
 	UnboundAddress = "127.0.0.53"
 	UnboundPort    = 53
 	// UnboundAnchor is the DNSSEC root trust anchor, kept up to date by
@@ -185,7 +185,7 @@ func (u *Unbound) Apply(ctx context.Context, files network.Files) error {
 		return os.Remove(u.ConfPath())
 	}
 	if !u.Installed(ctx) {
-		return fmt.Errorf("the validating resolver is not set up on this box: run `ostiole services setup --with-resolver` once as root")
+		return fmt.Errorf("the validating resolver is not set up on this router: run `ostiole services setup --with-resolver` once as root")
 	}
 	if current[unboundConfName] == conf && u.Active(ctx) {
 		return nil
@@ -223,7 +223,7 @@ func UnboundUnitContent(binary, checkconf, anchorTool, conf, anchor string) stri
 	var pre strings.Builder
 	if anchorTool != "" {
 		// A failure here is not fatal: unbound ships a built-in anchor and
-		// the box may be offline at boot.
+		// the router may be offline at boot.
 		fmt.Fprintf(&pre, "ExecStartPre=-%s -a %s\n", anchorTool, anchor)
 	}
 	if checkconf != "" {

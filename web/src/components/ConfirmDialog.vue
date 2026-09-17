@@ -7,7 +7,7 @@ import { useConfirmStore } from '@/stores/confirm'
 
 /**
  * Renders whatever the confirm store is asking. Focus lands on Cancel, or
- * on the box when a name has to be typed, so Enter never confirms by
+ * on the field when a name has to be typed, so Enter never confirms by
  * accident.
  */
 const confirm = useConfirmStore()

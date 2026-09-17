@@ -34,7 +34,7 @@ type Refresher struct {
 	// list is fetched: each alias has its own period.
 	Interval time.Duration
 	// OnTick, when set, is called after every pass, so the crons page can
-	// say when the box last looked.
+	// say when the router last looked.
 	OnTick func()
 }
 

@@ -11,14 +11,14 @@ import (
 // conversation about DNS blocking starts with.
 type Finding struct {
 	Name string `json:"name"`
-	// Blocked is what this box would answer for it now.
+	// Blocked is what this router would answer for it now.
 	Blocked bool            `json:"blocked"`
 	Mode    model.BlockMode `json:"mode,omitempty"`
 	// Matched is the entry that decided it, which is often a parent of the
 	// name that was asked about.
 	Matched string `json:"matched,omitempty"`
 	// Reason is what kind of entry that was: a list, the deny list, the
-	// allow list, a name this box answers for, a domain it has delegated,
+	// allow list, a name this router answers for, a domain it has delegated,
 	// or the Firefox canary.
 	Reason string `json:"reason,omitempty"`
 	// Lists names every enabled list that carries it, so "which one do I
@@ -38,7 +38,7 @@ const (
 	ReasonOff       = "off"
 )
 
-// Lookup works out what this box would do with a name, and why.
+// Lookup works out what this router would do with a name, and why.
 func Lookup(o Options, c *Cache, name string) Finding {
 	f := Finding{Name: name, Mode: o.Mode, Lists: []string{}}
 	target, ok := Normalize(name)
@@ -49,7 +49,7 @@ func Lookup(o Options, c *Cache, name string) Finding {
 	f.Name = target
 	key := reverseLabels(target)
 
-	// What this box answers for itself is never blocked, whatever a list
+	// What this router answers for itself is never blocked, whatever a list
 	// says. Nor is a domain it has handed to resolvers of its own. The
 	// operator's allow list comes next.
 	if m, hit := coveringEntry(o.Never, key); hit {

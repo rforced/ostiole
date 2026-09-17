@@ -144,7 +144,7 @@ func TestValidateRejectsMismatchedAndMalformed(t *testing.T) {
 
 // A rejected upload must leave the working certificate in place: this is
 // the management interface, and there is no console on most of these
-// boxes.
+// routers.
 func TestInstallLeavesAWorkingPairAlone(t *testing.T) {
 	t.Parallel()
 	m := manager(t)
@@ -163,7 +163,7 @@ func TestInstallLeavesAWorkingPairAlone(t *testing.T) {
 		t.Error("the certificate was replaced by one that does not match its key")
 	}
 	if _, err := tls.LoadX509KeyPair(m.CertPath, m.KeyPath); err != nil {
-		t.Errorf("the box is left unable to serve TLS: %v", err)
+		t.Errorf("the router is left unable to serve TLS: %v", err)
 	}
 }
 

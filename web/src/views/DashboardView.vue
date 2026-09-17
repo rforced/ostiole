@@ -17,7 +17,7 @@ import TopRulesCard from '@/views/dashboard/TopRulesCard.vue'
 const REFRESH_MS = 10_000
 /**
  * Usage is sampled faster, because a meter that only moves every ten
- * seconds does not read as live. It is two small file reads on the box.
+ * seconds does not read as live. It is two small file reads on the router.
  */
 const STATS_MS = 3_000
 

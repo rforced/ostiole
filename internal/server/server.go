@@ -75,7 +75,7 @@ type Deps struct {
 	Log *fwlog.Ring
 	// Gateways reports multi-WAN health; nil means nothing is watching.
 	Gateways GatewayStatuser
-	// Tables lists the nftables tables on the box for the dashboard's
+	// Tables lists the nftables tables on the router for the dashboard's
 	// foreign-ruleset warning; nil skips that check.
 	Tables TableLister
 	// Units answers systemd state queries (service health, competitor

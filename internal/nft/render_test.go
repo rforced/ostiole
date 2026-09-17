@@ -113,7 +113,7 @@ func TestParseCounters(t *testing.T) {
 	}
 }
 
-// Per-interface drop logging: the common case stays one rule, and a box
+// Per-interface drop logging: the common case stays one rule, and a router
 // with an exception gets exactly one more.
 func TestDefaultDropLogging(t *testing.T) {
 	t.Parallel()
@@ -190,7 +190,7 @@ func TestBlockedSourcesComeFirst(t *testing.T) {
 		t.Errorf("blocks are in the wrong place (state %d, block %d, icmp %d):\n%s", state, block, icmp, input)
 	}
 	// Both chains: a spoofed source being routed through is the same
-	// problem as one addressed to this box.
+	// problem as one addressed to this router.
 	if !strings.Contains(got[forwardAt:], "block-private") {
 		t.Error("forwarded traffic is not checked")
 	}
@@ -230,6 +230,6 @@ func TestBogonListFillsTheSets(t *testing.T) {
 		t.Errorf("BlockSets = %+v", sets)
 	}
 	if got := BlockSets(loadConfig(t, "testdata/minimal.json"), nil); got != nil {
-		t.Errorf("a box that blocks no bogons has no sets to fill: %+v", got)
+		t.Errorf("a router that blocks no bogons has no sets to fill: %+v", got)
 	}
 }

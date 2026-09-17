@@ -106,7 +106,7 @@ func (m *Manager) RunScheduled(ctx context.Context, mode Mode, ch Channel) (stri
 	waiting := chk.Latest + " is available"
 	switch mode {
 	case ModeManual:
-		return waiting + "; this box installs Ostiole updates by hand", nil
+		return waiting + "; this router installs Ostiole updates by hand", nil
 	case ModeSecurity:
 		if !chk.Security {
 			return waiting + ", and is not marked a security release; nothing installed", nil

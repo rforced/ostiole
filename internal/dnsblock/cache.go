@@ -20,7 +20,7 @@ import (
 
 // Cache keeps what each list last gave us: the names in one plain text file
 // per list, sorted so the merge can stream them, and a little metadata
-// beside it. A box that boots without a working line blocks what it blocked
+// beside it. A router that boots without a working line blocks what it blocked
 // yesterday.
 type Cache struct {
 	Dir string
@@ -63,7 +63,7 @@ type Status struct {
 	LastError   string           `json:"lastError,omitempty"`
 	LastTriedAt *time.Time       `json:"lastTriedAt,omitempty"`
 	// Stale is true when the cache is older than twice the refresh period,
-	// which usually means the box cannot reach the publisher.
+	// which usually means the router cannot reach the publisher.
 	Stale bool `json:"stale"`
 }
 

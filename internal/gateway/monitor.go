@@ -99,7 +99,7 @@ type Monitor struct {
 	// step with what the probes just learned.
 	Policy Policy
 	// OnTick, when set, is called after every pass, so the crons page can
-	// say when the box last probed.
+	// say when the router last probed.
 	OnTick func()
 
 	mu     sync.Mutex
@@ -184,7 +184,7 @@ func (m *Monitor) Tick(ctx context.Context) {
 
 // syncPolicy hands the policy routing installer the gateways as the probes
 // have just found them. A gateway the monitor has no verdict on yet counts
-// as usable: a box that has only just booted should still route.
+// as usable: a router that has only just booted should still route.
 func (m *Monitor) syncPolicy(cfg *model.Config, states []*state) {
 	if m.Policy == nil || cfg == nil {
 		return
@@ -260,7 +260,7 @@ func (m *Monitor) probe(ctx context.Context, st *state, timeout time.Duration) {
 }
 
 // applyRoutes demotes dead gateways and restores recovered ones. The last
-// usable default route is never removed: a box with no route at all is
+// usable default route is never removed: a router with no route at all is
 // worse than one pointing at a gateway that might come back.
 func (m *Monitor) applyRoutes(states []*state) {
 	if m.Router == nil {

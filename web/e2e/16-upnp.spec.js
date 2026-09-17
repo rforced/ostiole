@@ -79,7 +79,9 @@ test('the page is honest about the daemon not being installed', async ({ page })
   await page.goto('/services/upnp')
   // The e2e server is not root and has no miniupnpd, so the warning stands
   // rather than the service claiming to run.
-  await expect(page.getByRole('note')).toContainText('Port mapping is not set up on this box yet')
+  await expect(page.getByRole('note')).toContainText(
+    'Port mapping is not set up on this router yet',
+  )
 
   await page.getByRole('tab', { name: 'Mappings' }).click()
   await expect(page.getByText('No mappings.')).toBeVisible()

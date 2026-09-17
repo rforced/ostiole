@@ -9,6 +9,8 @@ test('system settings, ruleset view, and rollback via revisions', async ({ page 
   await page.goto('/system')
   await expect(page).toHaveURL(/\/system\/general$/)
   await expect(page.getByRole('heading', { name: 'General', exact: true })).toBeVisible()
+  // Every router starts in UTC.
+  await expect(page.getByLabel('Timezone')).toHaveValue('UTC')
 
   await page.getByLabel('Hostname').fill('edge2')
   await expect(page.getByText('Unapplied changes.')).toBeVisible()
@@ -121,7 +123,9 @@ test('mint an API token and use it to scrape metrics', async ({ page, request })
   await expect(section.getByRole('row').filter({ hasText: 'monitoring' })).toHaveCount(0)
 })
 
-test('choose how this box patches itself, and see why some of it is refused', async ({ page }) => {
+test('choose how this router patches itself, and see why some of it is refused', async ({
+  page,
+}) => {
   await login(page)
   await page.goto('/system/updates')
 
@@ -132,7 +136,7 @@ test('choose how this box patches itself, and see why some of it is refused', as
   await expect(os).toContainText('root')
   await expect(os.getByRole('button', { name: 'Check now' })).toBeDisabled()
 
-  // The defaults are what a box gets without being told: security fixes,
+  // The defaults are what a router gets without being told: security fixes,
   // Sunday at four.
   await expect(os.getByLabel('Automatic (Security)')).toBeChecked()
   await expect(os.getByLabel('Schedule', { exact: true })).toHaveValue('0 4 * * 0')
@@ -157,7 +161,7 @@ test('choose how this box patches itself, and see why some of it is refused', as
   await expect(ostiole.getByLabel('Manual')).toBeChecked()
   await expect(ostiole.getByLabel('Channel')).toHaveValue('beta')
 
-  // Both update crons are on the page that says what the box does by itself.
+  // Both update crons are on the page that says what the router does by itself.
   await page.goto('/crons')
   const system = page.getByRole('region', { name: 'What Ostiole does by itself' })
   await expect(system).toContainText('distro package manager')

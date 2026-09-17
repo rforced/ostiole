@@ -327,14 +327,14 @@ func pppPackages(pm string) []string {
 	return []string{"ppp"}
 }
 
-// upnpUnavailable is what a box gets when nobody packages the daemon for
+// upnpUnavailable is what a router gets when nobody packages the daemon for
 // it. The Red Hat family is the case that matters, and the Fedora build
 // runs there unchanged: the sonames it wants are the ones EL ships, and
 // only the RPM's Fedora-only filesystem dependency stops a plain install.
-// A binary already on the box is used wherever it is, so unpacking one is
+// A binary already on the router is used wherever it is, so unpacking one is
 // enough.
 const upnpUnavailable = "miniupnpd is not packaged for this distribution, and there is no EPEL branch for it. " +
-	"The Fedora build runs unchanged on Red Hat family boxes: unpack one with " +
+	"The Fedora build runs unchanged on Red Hat family routers: unpack one with " +
 	"`rpm2cpio miniupnpd-*.fc*.x86_64.rpm | cpio -idmv`, " +
 	"install usr/sbin/miniupnpd into /usr/local/sbin, and run this again"
 
@@ -413,7 +413,7 @@ func nftablesBuild(bin string) error {
 	f, err := elf.Open(bin)
 	if err != nil {
 		// Not an ELF we can read, so take it on trust rather than refuse to
-		// set up a box over a file format.
+		// set up a router over a file format.
 		return nil
 	}
 	defer func() { _ = f.Close() }()

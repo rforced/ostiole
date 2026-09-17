@@ -32,7 +32,7 @@ func (a *api) cronStatus(w http.ResponseWriter, _ *http.Request) error {
 
 func (a *api) runCron(w http.ResponseWriter, r *http.Request) error {
 	if a.crons == nil {
-		return &unavailable{errors.New("nothing is running scheduled crons on this box")}
+		return &unavailable{errors.New("nothing is running scheduled crons on this router")}
 	}
 	id := r.PathValue("id")
 	if err := a.crons.RunNow(r.Context(), id); err != nil {

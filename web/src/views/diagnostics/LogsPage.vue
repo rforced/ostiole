@@ -6,7 +6,7 @@ import FormField from '@/components/FormField.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 
-/** The units an Ostiole box runs, plus everything. */
+/** The units an Ostiole router runs, plus everything. */
 const UNITS = [
   { value: '', label: 'Everything' },
   { value: 'ostiole.service', label: 'ostiole (daemon)' },

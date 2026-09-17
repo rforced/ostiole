@@ -386,6 +386,30 @@ func TestLiveInterfaces(t *testing.T) {
 	}
 }
 
+func TestTimezones(t *testing.T) {
+	t.Parallel()
+	srv, _ := newTestServer(t)
+	resp, raw := do(t, srv, http.MethodGet, "/api/v1/system/timezones", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("timezones: %d %s", resp.StatusCode, raw)
+	}
+	var got struct {
+		Zones   []string `json:"zones"`
+		Current string   `json:"current"`
+	}
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	// UTC leads the list whatever the host has installed, and the clock
+	// always reads as something.
+	if len(got.Zones) == 0 || got.Zones[0] != "UTC" {
+		t.Errorf("zones = %v", got.Zones)
+	}
+	if got.Current == "" {
+		t.Error("current is empty")
+	}
+}
+
 func TestStarter(t *testing.T) {
 	t.Parallel()
 	srv, _ := newTestServer(t)

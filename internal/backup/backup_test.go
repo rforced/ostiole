@@ -76,7 +76,7 @@ func TestCreateTakesTheHostnameFromTheConfig(t *testing.T) {
 	}
 }
 
-// A box with no hostname still gets a sensible filename.
+// A router with no hostname still gets a sensible filename.
 func TestFilenameFallsBack(t *testing.T) {
 	t.Parallel()
 	a := &Archive{CreatedAt: time.Date(2026, 9, 16, 1, 2, 3, 0, time.UTC)}

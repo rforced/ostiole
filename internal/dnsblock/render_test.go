@@ -136,7 +136,7 @@ func TestRenderNeverBlocksThisBoxsOwnNames(t *testing.T) {
 	out, _ := render(t, cfg, c)
 	for _, name := range []string{"local=/lan/", "local=/printer.lan/", "local=/gateway/"} {
 		if strings.Contains(out, name) {
-			t.Errorf("a name this box answers for was blocked (%s):\n%s", name, out)
+			t.Errorf("a name this router answers for was blocked (%s):\n%s", name, out)
 		}
 	}
 	// ...and no carve-out either: the local domain must stay local.

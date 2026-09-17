@@ -1,6 +1,6 @@
 // Package feeds keeps aliases whose contents come from somewhere else:
 // a blocklist published on the internet, or the address ranges of a
-// country. The entries are cached on disk, so a box that boots without a
+// country. The entries are cached on disk, so a router that boots without a
 // working line still loads the list it had, and refreshed on a schedule
 // rather than on every apply.
 package feeds
@@ -25,7 +25,7 @@ import (
 )
 
 // Limits on what a feed may be. A blocklist with a million entries is
-// either a mistake or an attack on this box's memory.
+// either a mistake or an attack on this router's memory.
 const (
 	MaxBytes   = 16 << 20
 	MaxEntries = 500_000
@@ -50,7 +50,7 @@ type Status struct {
 	LastError   string     `json:"lastError,omitempty"`
 	LastTriedAt *time.Time `json:"lastTriedAt,omitempty"`
 	// Stale is true when the cache is older than the refresh period, which
-	// usually means the box cannot reach the publisher.
+	// usually means the router cannot reach the publisher.
 	Stale bool `json:"stale"`
 }
 
@@ -299,7 +299,7 @@ func Sources(cfg *model.Config, a model.Alias) []string {
 type Fetcher struct {
 	Client  *http.Client
 	Timeout time.Duration
-	// UserAgent identifies this box to the publisher, several of whom ask
+	// UserAgent identifies this router to the publisher, several of whom ask
 	// for one.
 	UserAgent string
 }

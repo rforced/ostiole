@@ -1,7 +1,9 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import FormField from '@/components/FormField.vue'
+import { api } from '@/lib/api'
+import { useAsync } from '@/lib/async'
 import { parseList } from '@/lib/lists'
 import { useConfigStore } from '@/stores/config'
 
@@ -10,6 +12,33 @@ const config = useConfigStore()
 if (!config.draft.system.management) config.draft.system.management = { webPort: 443, sshPort: 22 }
 const system = computed(() => config.draft.system)
 const management = computed(() => system.value.management)
+
+/** The zones the router offers and the one its clock reads now. */
+const clock = ref({ zones: ['UTC'], current: 'UTC' })
+const loadClock = useAsync(async () => {
+  clock.value = await api.timezones()
+})
+onMounted(loadClock.run)
+
+// A configuration that says nothing runs in UTC, so that is what the
+// picker shows.
+const zone = computed({
+  get: () => system.value.timezone || 'UTC',
+  set: (v) => {
+    system.value.timezone = v
+  },
+})
+// A zone the router no longer offers stays on the list rather than being
+// swapped for its neighbour behind the operator's back.
+const zones = computed(() => {
+  const list = clock.value.zones?.length ? clock.value.zones : ['UTC']
+  return list.includes(zone.value) ? list : [zone.value, ...list]
+})
+const zoneHint = computed(() =>
+  clock.value.current && clock.value.current !== zone.value
+    ? `The clock reads ${clock.value.current} until you apply.`
+    : 'Log entries and schedules are read in this zone.',
+)
 const dns = computed({
   get: () => (system.value.dnsServers ?? []).join(', '),
   set: (v) => {
@@ -27,7 +56,12 @@ const dns = computed({
       <FormField id="sys-hostname" label="Hostname">
         <input id="sys-hostname" v-model="system.hostname" class="input" spellcheck="false" />
       </FormField>
-      <FormField id="sys-dns" label="DNS servers for this box" hint="Comma separated.">
+      <FormField id="sys-timezone" label="Timezone" :hint="zoneHint">
+        <select id="sys-timezone" v-model="zone" class="input">
+          <option v-for="z in zones" :key="z" :value="z">{{ z }}</option>
+        </select>
+      </FormField>
+      <FormField id="sys-dns" label="DNS servers for this router" hint="Comma separated.">
         <input id="sys-dns" v-model="dns" class="input font-mono" spellcheck="false" />
       </FormField>
       <FormField

@@ -102,7 +102,7 @@ func gatewayMetric(cfg *model.Config, iface string) int {
 
 // renderPeer writes the options pppd reads for one session. The password
 // lives here rather than in the shared pap-secrets and chap-secrets,
-// which belong to whatever else the box runs; the file is root-only.
+// which belong to whatever else the router runs; the file is root-only.
 func renderPeer(in model.Interface, metric int) string {
 	p := in.PPPoE
 	var b strings.Builder
@@ -158,7 +158,7 @@ func renderPeer(in model.Interface, metric int) string {
 	} else {
 		b.WriteString("noipv6\n")
 	}
-	// Ostiole decides what this box resolves with, so the provider's
+	// Ostiole decides what this router resolves with, so the provider's
 	// servers are not written over /etc/resolv.conf.
 	b.WriteString("usepeerdns\n")
 	return b.String()
@@ -201,7 +201,7 @@ func (p *PPPoE) Apply(ctx context.Context, files network.Files) error {
 	if err != nil {
 		return err
 	}
-	// A box that dials nothing, and never has, must not so much as create
+	// A router that dials nothing, and never has, must not so much as create
 	// a directory: the daemon runs under ProtectSystem=strict, and an
 	// apply that has nothing to do with PPPoE cannot be allowed to fail
 	// on it.
@@ -209,7 +209,7 @@ func (p *PPPoE) Apply(ctx context.Context, files network.Files) error {
 		return nil
 	}
 	if len(files) > 0 && !p.Installed(ctx) {
-		return errors.New("PPPoE is not set up on this box: run `ostiole services setup --with-pppoe` once as root")
+		return errors.New("PPPoE is not set up on this router: run `ostiole services setup --with-pppoe` once as root")
 	}
 	if len(files) > 0 {
 		if err := os.MkdirAll(p.dir(), 0o700); err != nil {
@@ -279,7 +279,7 @@ func (p *PPPoE) active(ctx context.Context, unit string) bool {
 
 // PPPoEUnitContent renders the templated unit. The instance name is the
 // interface, which is also the peer file's suffix, so one template covers
-// however many lines a box has.
+// however many lines a router has.
 func PPPoEUnitContent(pppd string) string {
 	return `[Unit]
 Description=Ostiole PPPoE session on %i

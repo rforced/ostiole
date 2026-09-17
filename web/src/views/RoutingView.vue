@@ -265,7 +265,7 @@ function save() {
 
         <h3 id="detected-title" class="subsection-title pt-2">Detected routes</h3>
         <p class="max-w-3xl text-sm text-neutral-500">
-          The default routes this box has right now, whether Ostiole put them there or not.
+          The default routes this router has right now, whether Ostiole put them there or not.
         </p>
         <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
           <table class="table" aria-labelledby="detected-title">
@@ -285,7 +285,7 @@ function save() {
                 <td colspan="7" class="text-neutral-500">
                   {{
                     refresh.updatedAt.value
-                      ? 'No default route on this box yet.'
+                      ? 'No default route on this router yet.'
                       : 'Reading routes…'
                   }}
                 </td>

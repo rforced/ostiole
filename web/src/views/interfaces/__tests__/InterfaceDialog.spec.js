@@ -65,7 +65,7 @@ describe('InterfaceDialog MTU', () => {
 
   // A link already running a jumbo MTU nobody configured loses it on the
   // next reboot. The field is pre-filled with it, so saving pins it.
-  it('pins an MTU the box is running but the configuration does not ask for', async () => {
+  it('pins an MTU the router is running but the configuration does not ask for', async () => {
     const { wrapper, config } = open(iface(), [{ name: 'eth1', mtu: 9000 }])
     expect(wrapper.text()).toContain('is running at 9000')
     await wrapper.get('form').trigger('submit')

@@ -18,6 +18,7 @@ import (
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/store"
 	"github.com/rforced/ostiole/internal/sysctl"
+	"github.com/rforced/ostiole/internal/timezone"
 )
 
 // Errors returned by the engine.
@@ -33,9 +34,10 @@ var (
 type Engine struct {
 	store  *store.Store
 	nft    nft.Runner
-	net    network.Backend // nil when network management is disabled
-	svc    network.Backend // dnsmasq services; nil when not managed
-	sysctl sysctl.Applier  // nil in tests without a kernel
+	net    network.Backend  // nil when network management is disabled
+	svc    network.Backend  // dnsmasq services; nil when not managed
+	sysctl sysctl.Applier   // nil in tests without a kernel
+	clock  timezone.Applier // sets the router's zone; nil leaves it alone
 	// feeds supplies the contents of aliases fetched from a URL or a
 	// country list; nil renders them empty.
 	feeds  FeedSource
@@ -107,6 +109,27 @@ func (e *Engine) applySysctl() {
 	}
 	if err := e.sysctl.Apply(); err != nil {
 		e.log.Warn("could not set router sysctls; forwarding may not work", "err", err)
+	}
+}
+
+// WithTimezone makes every apply set the router's clock to the zone in the
+// configuration.
+func (e *Engine) WithTimezone(a timezone.Applier) *Engine {
+	e.clock = a
+	return e
+}
+
+// applyTimezone puts the router in the configured zone. It is not part of
+// the revert: the zone is persistent state on the router rather than
+// something a bad ruleset can lock anybody out of, and a clock that
+// jumps back on an expiry would only confuse the logs of the attempt.
+func (e *Engine) applyTimezone(ctx context.Context, cfg *model.Config) {
+	if e.clock == nil {
+		return
+	}
+	if err := e.clock.Apply(ctx, cfg.System.Zone()); err != nil {
+		e.log.Warn("could not set the router's timezone; its clock still reads in the old one",
+			"zone", cfg.System.Zone(), "err", err)
 	}
 }
 
@@ -200,6 +223,7 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 		return nil, err
 	}
 	e.applySysctl()
+	e.applyTimezone(ctx, cfg)
 	if e.net != nil {
 		if err := e.net.Apply(ctx, plan.Network); err != nil {
 			if rerr := e.nft.Apply(ctx, previous); rerr != nil {

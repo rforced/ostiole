@@ -19,7 +19,7 @@ import (
 )
 
 // Role decides what an account or a token may do. There are three
-// because an appliance has three kinds of user: whoever owns the box,
+// because an appliance has three kinds of user: whoever owns the router,
 // whoever changes the rules, and whatever is reading the dashboard.
 type Role string
 
@@ -29,7 +29,7 @@ const (
 	// certificates, and updates.
 	RoleAdmin Role = "admin"
 	// RoleOperator can change and apply the configuration, but not the
-	// things that decide who gets in or what the box runs.
+	// things that decide who gets in or what the router runs.
 	RoleOperator Role = "operator"
 	// RoleViewer can look, and nothing else.
 	RoleViewer Role = "viewer"

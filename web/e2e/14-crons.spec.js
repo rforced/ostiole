@@ -4,7 +4,7 @@ import { applyAndConfirm, confirmDialog, login, shot } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
-test('schedule a nightly backup and see what the box does by itself', async ({ page }) => {
+test('schedule a nightly backup and see what the router does by itself', async ({ page }) => {
   await login(page)
   await page.goto('/crons')
   await expect(page.getByRole('heading', { name: 'Crons' })).toBeVisible()

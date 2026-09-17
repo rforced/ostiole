@@ -43,7 +43,7 @@ type Archive struct {
 	Note   string        `json:"note,omitempty"`
 	Config *model.Config `json:"config"`
 	// Users carries administrator accounts, password hashes included, so a
-	// rebuilt box can be signed into. It is left out unless asked for.
+	// rebuilt router can be signed into. It is left out unless asked for.
 	Users []auth.User `json:"users,omitempty"`
 }
 

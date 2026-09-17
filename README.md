@@ -1,10 +1,33 @@
 # Ostiole
 
-Ostiole turns a Linux box into a firewall and router appliance managed from a web UI, with
+Ostiole turns a Linux machine into a firewall and router appliance managed from a web UI, with
 [nftables](https://netfilter.org/projects/nftables/) underneath. One static binary, no runtime
-dependencies beyond `nft` and systemd, runs on any distro that has nftables.
+dependencies beyond `nft` and systemd.
 
 **Status: alpha.** It runs, but expect bugs.
+
+## Requirements
+
+- **Linux 5.14 or newer**, on x86-64 or arm64.
+- **systemd** and **nftables** (the `nft` command).
+
+The kernel floor is where the distributions sit, not where any particular feature does: 5.14 is what
+RHEL 9 and its rebuilds ship, so the line covers every enterprise distribution still in support along
+with current Debian, Ubuntu, Fedora, Alpine, and Arch.
+
+| Distribution | Kernel | |
+| --- | --- | --- |
+| RHEL 9, Rocky 9, AlmaLinux 9 | 5.14 | supported (the floor) |
+| Ubuntu 22.04 LTS | 5.15 | supported |
+| Debian 12 | 6.1 | supported |
+| Ubuntu 24.04 LTS | 6.8 | supported |
+| RHEL 10, Rocky 10, Debian 13, Alpine 3.21 | 6.12 | supported |
+| Fedora, Arch | current | supported |
+| RHEL 8, Debian 11, Ubuntu 20.04 | 4.18–5.10 | not supported |
+
+`ostiole install` refuses to run on an older kernel; `--ignore-kernel-version` overrides it. Ostiole
+never refuses to *filter* over a kernel version, though — a router booted onto an old kernel after
+installation keeps working and says so on the dashboard instead.
 
 ## Install
 

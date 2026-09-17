@@ -67,7 +67,7 @@ func TestInstallAndUninstall(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 
 	run := &fakeRunner{}
-	sysctlFile := filepath.Join(t.TempDir(), "90-ostiole.conf")
+	sysctlFile := filepath.Join(t.TempDir(), "99-ostiole.conf")
 	rep, err := Install(context.Background(), sc, lay, Options{Source: src, Listen: ":8443", Run: run, SysctlFile: sysctlFile}, log)
 	if err != nil {
 		t.Fatal(err)
@@ -78,8 +78,15 @@ func TestInstallAndUninstall(t *testing.T) {
 	if raw, err := os.ReadFile(sysctlFile); err != nil || !strings.Contains(string(raw), "ip_forward = 1") {
 		t.Errorf("sysctl file = %q, %v", raw, err)
 	}
-	if len(run.calls) != 2 || strings.Join(run.calls[0], " ") != "firewall-cmd --add-port=8443/tcp" || strings.Join(run.calls[1], " ") != "firewall-cmd --permanent --add-port=8443/tcp" {
-		t.Errorf("firewall-cmd calls = %v", run.calls)
+	// An install takes the clock to UTC along with everything else it
+	// takes over, before it opens the port in the old firewall.
+	if rep.Timezone != "UTC" {
+		t.Errorf("Timezone = %q, want UTC", rep.Timezone)
+	}
+	if len(run.calls) != 3 || strings.Join(run.calls[0], " ") != "timedatectl set-timezone UTC" ||
+		strings.Join(run.calls[1], " ") != "firewall-cmd --add-port=8443/tcp" ||
+		strings.Join(run.calls[2], " ") != "firewall-cmd --permanent --add-port=8443/tcp" {
+		t.Errorf("commands run = %v", run.calls)
 	}
 	if info, err := os.Stat(lay.Binary()); err != nil || info.Mode().Perm() != 0o755 {
 		t.Fatalf("binary = %v, %v", info, err)
@@ -117,7 +124,7 @@ func TestInstallAndUninstall(t *testing.T) {
 	}
 
 	// Re-install from the installed path is a no-op copy.
-	if _, err := Install(context.Background(), sc, lay, Options{Source: lay.Binary(), Run: &fakeRunner{}, SysctlFile: "-"}, log); err != nil {
+	if _, err := Install(context.Background(), sc, lay, Options{Source: lay.Binary(), Run: &fakeRunner{}, SysctlFile: "-", Timezone: "-"}, log); err != nil {
 		t.Fatal(err)
 	}
 

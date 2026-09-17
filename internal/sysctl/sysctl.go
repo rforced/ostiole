@@ -34,18 +34,20 @@ var Forwarding = map[string]string{
 // Tuning holds host settings that suit an appliance rather than a desktop.
 //
 // Every key here is scale-free on purpose: a policy or a ratio that means
-// the same thing on a one-core virtual machine and on a 32-core box with
-// 64 GB of memory. Capacity limits are deliberately absent, because the
-// kernel already derives them from installed memory and does it better than
-// any constant could:
+// the same thing on a one-core virtual machine and on a 32-core router with
+// 64 GB of memory. Capacity limits are deliberately absent, because something
+// already sizes them from installed memory and does it better than any
+// constant could:
 //
-//   - fs.file-max has been effectively unlimited since kernel 5.x, so any
-//     number written here would be a reduction.
-//   - net.netfilter.nf_conntrack_max scales with memory: 7680 on a 1 GB box
+//   - fs.file-max is raised to LONG_MAX by systemd at boot, not by the
+//     kernel, so on a router running systemd any number written here would
+//     be a reduction.
+//   - net.netfilter.nf_conntrack_max scales with memory: 7680 on a 1 GB router
 //     against 262144 on a 64 GB one. A fixed value either starves the large
-//     box or hands tens of megabytes of the small one to the conntrack
+//     router or hands tens of megabytes of the small one to the conntrack
 //     table. The module is also usually unloaded when sysctls are applied.
-//   - net.core.somaxconn has defaulted to 4096 since kernel 5.4.
+//   - net.core.somaxconn has defaulted to 4096 since kernel 5.4, which is
+//     below the kernel floor in internal/kernel, so it is always already set.
 var Tuning = map[string]string{
 	// Reclaim page cache before swapping. A router's working set is small
 	// and paging a packet path back in adds latency where it hurts most.
@@ -82,7 +84,7 @@ func All() map[string]string {
 const ConfFile = "/etc/sysctl.d/99-ostiole.conf"
 
 // legacyConfFile is where earlier releases wrote the file. Persist removes
-// it so an upgraded box is not left with two copies disagreeing.
+// it so an upgraded router is not left with two copies disagreeing.
 const legacyConfFile = "/etc/sysctl.d/90-ostiole.conf"
 
 // Applier sets kernel parameters; the engine uses it after every apply.
@@ -146,7 +148,7 @@ func section(b *strings.Builder, header string, m map[string]string) {
 func Persist(path string) error {
 	if path == "" {
 		path = ConfFile
-		// Drop the file earlier releases wrote, so an upgraded box does not
+		// Drop the file earlier releases wrote, so an upgraded router does not
 		// keep a stale copy that a later drop-in could still win against.
 		if err := os.Remove(legacyConfFile); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err

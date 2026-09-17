@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/rforced/ostiole/internal/install"
+	"github.com/rforced/ostiole/internal/kernel"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
@@ -31,6 +32,7 @@ func requireRoot() error {
 
 func newInstallCmd(g *globals) *cobra.Command {
 	opts := install.Options{}
+	var ignoreKernel bool
 	cmd := &cobra.Command{
 		Use:   "install",
 		Short: "Install the binary and systemd units and start the service",
@@ -46,6 +48,15 @@ firewalld, ufw, and friends.`,
 			if err := requireRoot(); err != nil {
 				return err
 			}
+			// Refusing here is the last comfortable moment: once the units
+			// are enabled, an unsupported kernel becomes a running firewall's
+			// problem rather than an installer's.
+			if err := kernel.Check(); err != nil {
+				if !ignoreKernel {
+					return fmt.Errorf("%w (pass --ignore-kernel-version to install anyway)", err)
+				}
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v; continuing because --ignore-kernel-version was given\n", err)
+			}
 			lay := install.DefaultLayout()
 			lay.ConfigDir = g.configDir
 			rep, err := install.Install(cmd.Context(), install.ExecSystemctl{}, lay, opts, slog.Default())
@@ -54,6 +65,9 @@ firewalld, ufw, and friends.`,
 			}
 			out := cmd.OutOrStdout()
 			fmt.Fprintf(out, "installed %s and %s\n", rep.Binary, strings.Join(rep.Units, ", "))
+			if rep.Timezone != "" {
+				fmt.Fprintf(out, "clock set to %s\n", rep.Timezone)
+			}
 			printCompetitors(out, rep.Competitors)
 			if rep.OpenedIn != "" {
 				fmt.Fprintf(out, "\nallowed the UI port in %s until takeover\n", rep.OpenedIn)
@@ -67,10 +81,13 @@ firewalld, ufw, and friends.`,
 		},
 	}
 	cmd.Flags().StringVar(&opts.Listen, "listen", ":443", "address the web UI listens on")
+	cmd.Flags().StringVar(&opts.Timezone, "timezone", "", `timezone to set, UTC by default; "-" leaves the clock alone`)
+	cmd.Flags().BoolVar(&ignoreKernel, "ignore-kernel-version", false,
+		fmt.Sprintf("install even if the kernel is older than %s", kernel.Minimum))
 	return cmd
 }
 
-// uiURLs lists https URLs for every global address on the box.
+// uiURLs lists https URLs for every global address on the router.
 func uiURLs(listen string) []string {
 	_, port, err := net.SplitHostPort(listen)
 	if err != nil {
@@ -124,7 +141,7 @@ func newTakeoverCmd(g *globals) *cobra.Command {
 		Short: "Disable competing firewall services so Ostiole is the only firewall",
 		Long: `Stops, disables, and masks firewalld, ufw, nftables.service, iptables, and
 similar. Refuses to run unless a confirmed Ostiole ruleset is loaded in the
-kernel, so the box is never left without a firewall.
+kernel, so the router is never left without a firewall.
 
 With --network it instead hands addressing to systemd-networkd: installs
 networkd if missing (EPEL on RHEL-family), writes the units rendered from
@@ -385,7 +402,7 @@ func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) e
 	if !o.inUnit {
 		// The switch itself runs detached: stopping networkd or a manager can
 		// drop this session's address for a moment, and a hang-up must not
-		// leave the box half-switched.
+		// leave the router half-switched.
 		if bin, err := install.ServiceBinary(install.DefaultLayout()); err == nil {
 			if self, err := os.Executable(); err == nil && self != bin {
 				fmt.Fprintf(out, "note: the unit runs the installed binary %s (re-run `install` after upgrading this copy)\n", bin)
@@ -475,7 +492,7 @@ run for example "systemctl unmask firewalld && systemctl enable --now firewalld"
 			}
 			lay := install.DefaultLayout()
 			lay.ConfigDir = g.configDir
-			// Undo a network takeover first, detached, so the box keeps its
+			// Undo a network takeover first, detached, so the router keeps its
 			// addressing even if this session drops during the switch.
 			if rec, err := install.LoadTakeoverRecord(g.configDir); err == nil && rec != nil {
 				fmt.Fprintf(cmd.OutOrStdout(), "restoring %s in unit %s\n", strings.Join(rec.Managers, ", "), revertUnit)

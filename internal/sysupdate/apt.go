@@ -22,7 +22,7 @@ func (apt) ExcludeSupported(bool) bool { return true }
 var rebootRequiredFile = "/run/reboot-required"
 
 // aptConfirm keeps a package that ships a changed config file from
-// stopping an unattended upgrade with a prompt: keep what is on the box.
+// stopping an unattended upgrade with a prompt: keep what is on the router.
 var aptConfirm = []string{
 	"-o", "Dpkg::Options::=--force-confold",
 	"-o", "Dpkg::Options::=--force-confdef",
@@ -104,7 +104,7 @@ func (a apt) RebootRequired(ctx context.Context, run Runner) (bool, string) {
 	if _, err := os.Stat(rebootRequiredFile); err != nil {
 		return kernelRebootHint(ctx, run)
 	}
-	reason := "a package on this box asked for a reboot"
+	reason := "a package on this router asked for a reboot"
 	if raw, err := os.ReadFile(rebootRequiredFile + ".pkgs"); err == nil {
 		if pkgs := lines(raw); len(pkgs) > 0 {
 			reason = "updated and waiting on a reboot: " + strings.Join(pkgs, ", ")

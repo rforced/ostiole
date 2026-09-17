@@ -127,6 +127,64 @@ func cfg(hostname string) *model.Config {
 	return model.Starter(model.StarterOptions{Hostname: hostname, LAN: "eth1", LANAddress: "10.0.0.1/24", WAN: "eth0"})
 }
 
+// fakeClock records the zones an apply asked for.
+type fakeClock struct {
+	mu    sync.Mutex
+	zones []string
+	err   error
+}
+
+func (f *fakeClock) Apply(_ context.Context, zone string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.zones = append(f.zones, zone)
+	return f.err
+}
+
+func (f *fakeClock) seen() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.zones...)
+}
+
+func TestApplySetsTheTimezone(t *testing.T) {
+	t.Parallel()
+	e, _, _ := newEngine(t)
+	clock := &fakeClock{}
+	e.WithTimezone(clock)
+
+	c := cfg("a")
+	c.System.Timezone = "Europe/Berlin"
+	if _, err := e.Apply(context.Background(), c, ApplyOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := clock.seen(); len(got) != 1 || got[0] != "Europe/Berlin" {
+		t.Errorf("zones applied = %v", got)
+	}
+
+	// A configuration that says nothing still pins the clock to UTC rather
+	// than leaving whatever the box was imaged with.
+	c = cfg("b")
+	c.System.Timezone = ""
+	if _, err := e.Apply(context.Background(), c, ApplyOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := clock.seen(); len(got) != 2 || got[1] != "UTC" {
+		t.Errorf("zones applied = %v", got)
+	}
+}
+
+// The clock is not worth failing an apply over: the rules are what the
+// operator is waiting on.
+func TestApplySurvivesAClockThatWillNotMove(t *testing.T) {
+	t.Parallel()
+	e, _, _ := newEngine(t)
+	e.WithTimezone(&fakeClock{err: errors.New("Failed to connect to bus")})
+	if _, err := e.Apply(context.Background(), cfg("a"), ApplyOptions{}); err != nil {
+		t.Fatalf("apply failed because the clock did: %v", err)
+	}
+}
+
 func TestApplyImmediateCommits(t *testing.T) {
 	t.Parallel()
 	e, fr, st := newEngine(t)

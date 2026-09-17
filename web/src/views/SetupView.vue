@@ -43,7 +43,7 @@ async function submit() {
 </script>
 
 <template>
-  <AuthCard title="Create the admin account" subtitle="This box has no accounts yet.">
+  <AuthCard title="Create the admin account" subtitle="This router has no accounts yet.">
     <form class="space-y-4" @submit.prevent="submit">
       <FormField
         id="username"

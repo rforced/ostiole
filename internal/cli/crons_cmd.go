@@ -23,7 +23,7 @@ func newCronsCmd(g *globals) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "crons",
 		Short: "List the scheduled crons and when they next run",
-		Long: `Shows the crons configured on this box and when each one next runs. The
+		Long: `Shows the crons configured on this router and when each one next runs. The
 daemon is what actually runs them; this reads the same configuration, so
 it works whether or not the daemon is up.`,
 		Args: cobra.NoArgs,
@@ -34,7 +34,7 @@ it works whether or not the daemon is up.`,
 			}
 			// The update crons are not written out anywhere; they come
 			// from the update settings, and this is where somebody looks
-			// to find out when the box next patches itself.
+			// to find out when the router next patches itself.
 			crons := append(append([]model.Cron{}, cfg.Crons...), cfg.DerivedCrons()...)
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
 			fmt.Fprintln(w, "ID\tKIND\tSCHEDULE\tNEXT\tDESCRIPTION")

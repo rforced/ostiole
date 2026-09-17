@@ -15,7 +15,7 @@ func newOpenAPICmd() *cobra.Command {
 		Use:   "openapi",
 		Short: "Print the OpenAPI description of the API",
 		Long: `Writes the OpenAPI description, which is generated from the routes the
-server actually registers. A running box serves the same document at
+server actually registers. A running router serves the same document at
 /api/v1/openapi.json; this prints it without one, for generating a client
 or checking it into a repository.`,
 		Args: cobra.NoArgs,

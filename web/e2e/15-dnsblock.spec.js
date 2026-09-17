@@ -50,7 +50,7 @@ test('subscribe to a blocklist, fetch it, and ask why a name is blocked', async 
   await dialog.getByRole('button', { name: 'Save to draft' }).click()
 
   const row = page.getByRole('row').filter({ hasText: 'house' })
-  // The box only knows about lists that have been applied, so it says that
+  // The router only knows about lists that have been applied, so it says that
   // rather than "not fetched yet", which would invite a pointless refresh.
   await expect(row).toContainText('not applied yet')
   await page.screenshot({ path: shot('50-dnsblock-lists'), fullPage: true })
@@ -91,7 +91,7 @@ test('the lookup says which list blocks a name, and an allow entry beats it', as
   await expect(page.getByText('Not blocked: the allow list has ads.example.com')).toBeVisible()
 })
 
-test('a name this box answers for is never blocked', async ({ page }) => {
+test('a name this router answers for is never blocked', async ({ page }) => {
   await login(page)
   await page.goto('/services/dns#exceptions')
 
@@ -107,7 +107,7 @@ test('enforcement renders firewall rules that keep clients on this resolver', as
   await login(page)
   await page.goto('/services/dns#enforcement')
 
-  await page.getByLabel(/Send all plain DNS to this box/).check()
+  await page.getByLabel(/Send all plain DNS to this router/).check()
   await page.getByLabel(/Drop DNS over TLS/).check()
   await page.getByLabel(/Ask Firefox not to turn on DNS over HTTPS/).check()
   await page.screenshot({ path: shot('52-dnsblock-enforcement'), fullPage: true })

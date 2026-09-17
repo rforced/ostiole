@@ -5,7 +5,7 @@ const shot = (name) => `e2e/screenshots/${name}.png`
 
 test.describe.configure({ mode: 'serial' })
 
-test('a fresh box asks for an admin account, then runs the wizard', async ({ page }) => {
+test('a fresh router asks for an admin account, then runs the wizard', async ({ page }) => {
   await page.goto('/')
   await expect(page).toHaveURL(/\/setup$/)
   await page.screenshot({ path: shot('01-setup'), fullPage: true })

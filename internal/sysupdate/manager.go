@@ -13,7 +13,7 @@ import (
 )
 
 // ErrBusy means an update is already running.
-var ErrBusy = errors.New("an update is already running on this box")
+var ErrBusy = errors.New("an update is already running on this router")
 
 // ErrNotRoot means the daemon cannot drive a package manager from here.
 var ErrNotRoot = errors.New("system updates need root; this daemon is not running as root")
@@ -21,12 +21,12 @@ var ErrNotRoot = errors.New("system updates need root; this daemon is not runnin
 // Status is the whole answer to "what about the operating system", as
 // the page shows it. The mode and schedule are filled in by the caller
 // from the configuration, because those are settings rather than facts
-// about the box.
+// about the router.
 type Status struct {
 	Snapshot
 	// Manager is the package manager found, e.g. "dnf".
 	Manager string `json:"manager,omitempty"`
-	// Distro is what /etc/os-release calls this box.
+	// Distro is what /etc/os-release calls this router.
 	Distro string `json:"distro,omitempty"`
 	// Available says whether updates can be driven from here at all.
 	Available bool `json:"available"`
@@ -45,12 +45,12 @@ type Status struct {
 	Running bool `json:"running"`
 }
 
-// Manager drives the package manager on this box for the API and the
+// Manager drives the package manager on this router for the API and the
 // scheduled cron.
 type Manager struct {
 	// Driver is the package manager found, nil when there is none.
 	Driver Driver
-	// Unavailable explains a nil driver, or a box that cannot install.
+	// Unavailable explains a nil driver, or a router that cannot install.
 	Unavailable string
 	// Distro is the pretty name from /etc/os-release.
 	Distro string
@@ -73,13 +73,13 @@ type Manager struct {
 // Options tune New.
 type Options struct {
 	// PackageManager names the manager instead of looking for one, for a
-	// box with two and for tests.
+	// router with two and for tests.
 	PackageManager string
 	// StateDir is where the snapshot is kept.
 	StateDir string
 	// Run executes commands; nil uses the real ones.
 	Run Runner
-	// Root says whether this daemon can actually install. A box that is
+	// Root says whether this daemon can actually install. A router that is
 	// not root still gets a page, and an explanation on it.
 	Root bool
 	Log  *slog.Logger
@@ -102,7 +102,7 @@ func New(o Options) *Manager {
 		Distro: distroName(),
 		unit:   transient{unit: TransientUnit, run: run},
 	}
-	// Only root can raise a transient unit, and only a box with systemd
+	// Only root can raise a transient unit, and only a router with systemd
 	// has one to raise; everywhere else the command runs as a child and
 	// takes the sandbox with it.
 	if o.Root && m.unit.supported() {
@@ -132,7 +132,7 @@ type scratchUser interface {
 	useScratch(dir string) Driver
 }
 
-// Available reports whether this box can be checked and updated.
+// Available reports whether this router can be checked and updated.
 func (m *Manager) Available() bool { return m.Driver != nil && m.Unavailable == "" }
 
 // Status is what the API returns.
@@ -200,7 +200,7 @@ func (m *Manager) Apply(ctx context.Context, security bool, exclude []string) (s
 	return m.apply(ctx, security, exclude)
 }
 
-// apply is Apply for a caller that has already claimed the box.
+// apply is Apply for a caller that has already claimed the router.
 func (m *Manager) apply(ctx context.Context, security bool, exclude []string) (string, error) {
 	// The list is taken fresh: it decides what an apt or zypper run
 	// names on its command line, and a stale list installs the wrong
@@ -214,7 +214,7 @@ func (m *Manager) apply(ctx context.Context, security bool, exclude []string) (s
 
 // RunScheduled is the scheduled cron: always check, then install only
 // what the mode allows. Manual still checks, so the page can say what is
-// waiting without the box changing under anyone.
+// waiting without the router changing under anyone.
 func (m *Manager) RunScheduled(ctx context.Context, mode Mode, exclude []string) (string, error) {
 	security := mode == ModeSecurity
 	if err := m.begin(security); err != nil {
@@ -230,7 +230,7 @@ func (m *Manager) RunScheduled(ctx context.Context, mode Mode, exclude []string)
 		len(pending.Packages), pending.Security)
 	switch {
 	case mode == ModeManual:
-		return waiting + "; this box installs them by hand", nil
+		return waiting + "; this router installs them by hand", nil
 	case len(pending.Packages) == 0:
 		return "nothing to install", nil
 	case security && pending.Security == 0:
@@ -258,7 +258,7 @@ func (m *Manager) install(ctx context.Context, security bool, exclude []string, 
 
 	out, err := m.run(ctx, argv)
 	m.record(mode, out, err)
-	// What is waiting and whether the box wants a reboot have both
+	// What is waiting and whether the router wants a reboot have both
 	// changed, and the page should not have to be told twice.
 	if _, checkErr := m.Check(context.WithoutCancel(ctx)); checkErr != nil {
 		m.Log.Debug("could not re-check after an update", "err", checkErr)
@@ -266,7 +266,7 @@ func (m *Manager) install(ctx context.Context, security bool, exclude []string, 
 	return out, err
 }
 
-// begin claims the box for one update at a time.
+// begin claims the router for one update at a time.
 func (m *Manager) begin(security bool) error {
 	if !m.Available() {
 		return m.unavailable()
@@ -291,7 +291,7 @@ func (m *Manager) end() {
 
 // Start begins an update in the background and returns once it is
 // going, because the browser cannot wait an hour for a distro upgrade.
-// The box is claimed before this returns, so the status the caller sends
+// The router is claimed before this returns, so the status the caller sends
 // back already says an update is running.
 func (m *Manager) Start(security bool, exclude []string) error {
 	if err := m.begin(security); err != nil {
@@ -366,7 +366,7 @@ func (m *Manager) Reattach(ctx context.Context) {
 	}()
 }
 
-// Reboot restarts the box. It is the one button on this page that is
+// Reboot restarts the router. It is the one button on this page that is
 // worse to press by accident than to forget.
 func (m *Manager) Reboot(ctx context.Context) error {
 	if _, err := m.Run.Run(ctx, "systemctl", "reboot"); err != nil {

@@ -34,7 +34,7 @@ const state = computed(() => {
   return { tone: 'badge-ok', label: 'issued' }
 })
 
-/** Names the box answers to that the certificate does not cover. */
+/** Names the router answers to that the certificate does not cover. */
 const missing = computed(() => {
   if (!cert.value) return []
   const covered = new Set(cert.value.names ?? [])
@@ -105,7 +105,7 @@ async function askInstall() {
       </dl>
 
       <p v-if="missing.length" role="note" class="text-sm text-amber-700 dark:text-amber-300">
-        This box also answers to
+        This router also answers to
         <span class="font-mono">{{ missing.join(', ') }}</span
         >, which the certificate does not cover, so a browser reaching it that way warns.
         Regenerating the self-signed certificate covers every current address.
@@ -131,7 +131,7 @@ async function askInstall() {
         @submit.prevent="askInstall"
       >
         <p class="text-sm text-neutral-500">
-          Intermediates go under the certificate, in the same box.
+          Intermediates go under the certificate, in the same field.
         </p>
         <FormField id="cert-pem" label="Certificate (PEM)">
           <textarea

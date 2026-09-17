@@ -14,7 +14,7 @@ type Blocking struct {
 	Enabled bool `json:"enabled,omitempty"`
 	// Mode decides what a blocked name is answered with.
 	Mode BlockMode `json:"mode,omitempty"`
-	// Lists are the published lists this box subscribes to.
+	// Lists are the published lists this router subscribes to.
 	Lists []BlockList `json:"lists,omitempty"`
 	// Allow is never blocked, whatever a list says. A name here covers
 	// everything under it, so allowing example.com allows its subdomains.
@@ -24,7 +24,7 @@ type Blocking struct {
 	// MaxDomains is the most names the merged list may come to; zero means
 	// the default. It is a memory budget rather than a policy: dnsmasq
 	// holds roughly 90 MB per million names, so raising it is worth doing
-	// deliberately on a box that has the memory, and worth refusing on one
+	// deliberately on a router that has the memory, and worth refusing on one
 	// that does not.
 	MaxDomains int `json:"maxDomains,omitempty"`
 	// Enforce keeps clients on this resolver. Blocking a name achieves
@@ -75,7 +75,7 @@ const (
 var ListFormats = []ListFormat{FormatAuto, FormatHosts, FormatDomains, FormatAdblock, FormatDnsmasq, FormatUnbound}
 
 // BlockList is one subscription. A list with no URL holds only what the
-// operator typed or uploaded, which is how an air-gapped box gets one.
+// operator typed or uploaded, which is how an air-gapped router gets one.
 type BlockList struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
@@ -88,10 +88,10 @@ type BlockList struct {
 	RefreshHours int `json:"refreshHours,omitempty"`
 }
 
-// DNSEnforce keeps clients on this box's resolver. Without it, blocking is
+// DNSEnforce keeps clients on this router's resolver. Without it, blocking is
 // advisory: anything that ships its own resolver address ignores it.
 type DNSEnforce struct {
-	// RedirectDNS sends plain DNS from internal zones to this box, whoever
+	// RedirectDNS sends plain DNS from internal zones to this router, whoever
 	// the client meant to ask.
 	RedirectDNS bool `json:"redirectDns,omitempty"`
 	// BlockDoT drops DNS over TLS on its own port, which is the easy half
@@ -110,7 +110,7 @@ type DNSEnforce struct {
 }
 
 // QueryLog records what clients asked for. It is off by default and kept in
-// memory only: a DNS query log is the most revealing thing this box could
+// memory only: a DNS query log is the most revealing thing this router could
 // write down.
 type QueryLog struct {
 	Enabled bool `json:"enabled,omitempty"`
@@ -169,7 +169,7 @@ func (l BlockList) FormatOrAuto() ListFormat {
 	return l.Format
 }
 
-// NeverBlocked are the names this box refuses to block whatever a list says:
+// NeverBlocked are the names this router refuses to block whatever a list says:
 // its own domain, its own hostname, and every name it answers for locally.
 // A list that blocked one of these would take the UI away from whoever is
 // using it by name.
@@ -223,7 +223,7 @@ func (c *Config) DelegatedDomains() []string {
 }
 
 // CoversName reports whether blocking parent would also block name, which is
-// what makes blocking a parent of this box's own name dangerous: blocking is
+// what makes blocking a parent of this router's own name dangerous: blocking is
 // by subtree.
 func CoversName(parent, name string) bool {
 	parent = strings.ToLower(strings.Trim(strings.TrimSpace(parent), "."))

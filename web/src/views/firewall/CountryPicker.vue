@@ -146,7 +146,7 @@ const allShown = computed(() => matches.value.every((c) => chosen.value.has(c.co
     </div>
 
     <p v-if="unknown.length" class="text-sm text-neutral-500">
-      Also selected, and not a country this box knows:
+      Also selected, and not a country this router knows:
       <span class="font-mono">{{ unknown.join(', ') }}</span>
     </p>
   </div>

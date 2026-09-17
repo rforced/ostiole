@@ -29,7 +29,7 @@ const deny = listField('deny')
 const query = ref('')
 const finding = ref(null)
 
-/** Asks the box what it would do with a name, and why. */
+/** Asks the router what it would do with a name, and why. */
 const lookup = useAsync(async () => {
   const name = query.value.trim()
   if (!name) return
@@ -47,7 +47,7 @@ const verdict = computed(() => {
     case 'allow':
       return `Not blocked: the allow list has ${f.matched}.`
     case 'never':
-      return `Not blocked: this box answers for ${f.matched} itself.`
+      return `Not blocked: this router answers for ${f.matched} itself.`
     case 'delegated':
       return `Not blocked: ${f.matched} is a domain override, answered by its own resolvers.`
     case 'off':
@@ -65,7 +65,7 @@ const verdict = computed(() => {
   }
 })
 
-/** The lookup reflects the box, not the unapplied draft. */
+/** The lookup reflects the router, not the unapplied draft. */
 const stale = computed(() => config.dirty)
 </script>
 
@@ -103,7 +103,7 @@ const stale = computed(() => config.dirty)
     </div>
 
     <p class="max-w-3xl text-sm text-neutral-500">
-      Names this box answers for itself are never blocked, whatever a list says.
+      Names this router answers for itself are never blocked, whatever a list says.
     </p>
 
     <section class="max-w-3xl space-y-3" aria-labelledby="lookup-title">

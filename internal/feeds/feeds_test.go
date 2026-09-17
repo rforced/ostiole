@@ -91,7 +91,7 @@ func TestFetchAndCache(t *testing.T) {
 	}
 
 	// A new cache over the same directory has it, which is what makes a
-	// box that boots without a working line still block what it blocked.
+	// router that boots without a working line still block what it blocked.
 	reopened := NewCache(cache.Dir)
 	if got := reopened.Entries()["drop"]; len(got) != 2 {
 		t.Errorf("reopened cache = %v", got)

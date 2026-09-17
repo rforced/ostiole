@@ -24,7 +24,7 @@ type Hop struct {
 	Address   string
 	Interface string
 	// Online is the monitor's verdict. A gateway it has not probed yet
-	// counts as online: a box that just booted should still route.
+	// counts as online: a router that just booted should still route.
 	Online bool
 }
 

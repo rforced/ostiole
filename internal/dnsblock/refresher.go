@@ -36,7 +36,7 @@ type Refresher struct {
 	// Max is the ceiling on merged names; zero means the default.
 	Max int
 	// OnTick, when set, is called after every pass, so the crons page can
-	// say when the box last looked.
+	// say when the router last looked.
 	OnTick func()
 }
 
@@ -123,7 +123,7 @@ func (r *Refresher) Tick(ctx context.Context, force bool) Report {
 		r.Push(ctx, cfg)
 	}
 	if rep.Attempted() == 0 && rep.Note == "" {
-		rep.Note = "no list on this box has a URL to fetch"
+		rep.Note = "no list on this router has a URL to fetch"
 	}
 	return rep
 }

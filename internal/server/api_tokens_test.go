@@ -189,7 +189,7 @@ func TestRolesAreEnforcedForSessionsToo(t *testing.T) {
 }
 
 // The only administrator cannot be demoted, or nobody could manage the
-// box again without the CLI.
+// router again without the CLI.
 func TestTheLastAdministratorStays(t *testing.T) {
 	t.Parallel()
 	srv, _, _ := roleServer(t)

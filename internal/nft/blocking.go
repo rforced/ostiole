@@ -6,7 +6,7 @@ import (
 	"github.com/rforced/ostiole/internal/model"
 )
 
-// BlockChain holds the rules that keep clients on this box's resolver. It
+// BlockChain holds the rules that keep clients on this router's resolver. It
 // is a chain of its own so an exempt client can return from it and carry on
 // through the rest of the forward chain: returning from a base chain would
 // mean the drop policy, not "carry on".
@@ -24,7 +24,7 @@ func (r *renderer) enforcesDNS() bool {
 	return r.cfg.BlockingActive() && (e.BlockDoT || e.DoHAlias != "")
 }
 
-// redirectsDNS reports whether client DNS is being pulled back to this box.
+// redirectsDNS reports whether client DNS is being pulled back to this router.
 func (r *renderer) redirectsDNS() bool {
 	return r.cfg.BlockingActive() && r.cfg.Blocking.Enforce.RedirectDNS
 }
@@ -52,9 +52,9 @@ func (r *renderer) exemptMatches(dir string) []string {
 }
 
 // chainBlockDNS drops the encrypted DNS a client would use to go around
-// this box. Plain DNS is not dropped here: it is redirected in
+// this router. Plain DNS is not dropped here: it is redirected in
 // nat_prerouting instead, so a client that insists on 8.8.8.8 still gets
-// answers, just this box's answers.
+// answers, just this router's answers.
 func (r *renderer) chainBlockDNS() {
 	if !r.enforcesDNS() {
 		return
@@ -94,12 +94,12 @@ func (r *renderer) blockDNSJump() {
 	r.line(fmt.Sprintf("iifname %s jump %s", ifnameSet(ifs), BlockChain))
 }
 
-// dnsRedirect pulls plain DNS from internal zones back to this box,
+// dnsRedirect pulls plain DNS from internal zones back to this router,
 // whoever the client meant to ask. It is the last thing in nat_prerouting
 // so that a port forward the operator wrote wins over it.
 //
 // Only traffic addressed elsewhere is redirected: a query already sent to
-// this box needs no translation, and leaving it alone keeps the counter
+// this router needs no translation, and leaving it alone keeps the counter
 // meaning what it says.
 func (r *renderer) dnsRedirect() {
 	if !r.redirectsDNS() {

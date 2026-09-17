@@ -23,9 +23,9 @@ const MAX_KEEP = 1000
 
 /**
  * The history bound. It is edited locally rather than straight into the
- * draft so that emptying the box stays empty: a computed that fell back to
+ * draft so that emptying the field stays empty: a computed that fell back to
  * the default would refill it under the cursor. The configuration leaves
- * the setting out when it is the default, so an empty box means the same.
+ * the setting out when it is the default, so an empty field means the same.
  */
 const keep = ref(DEFAULT_KEEP)
 

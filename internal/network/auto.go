@@ -9,7 +9,7 @@ import (
 )
 
 // Auto uses systemd-networkd when it is running and does nothing
-// otherwise. It lets one daemon unit serve both a freshly installed box
+// otherwise. It lets one daemon unit serve both a freshly installed router
 // (still on NetworkManager) and one that has completed the network
 // takeover, without editing the unit in between.
 type Auto struct {

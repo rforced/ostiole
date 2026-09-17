@@ -14,6 +14,7 @@ import (
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/gateway"
 	"github.com/rforced/ostiole/internal/install"
+	"github.com/rforced/ostiole/internal/kernel"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
@@ -112,7 +113,7 @@ type ServiceState struct {
 	Detail string `json:"detail,omitempty"`
 }
 
-// Warning is something on the box that needs the admin's attention.
+// Warning is something on the router that needs the admin's attention.
 type Warning struct {
 	Kind   string `json:"kind"`
 	Level  string `json:"level"` // warn or info
@@ -120,7 +121,7 @@ type Warning struct {
 	Detail string `json:"detail,omitempty"`
 }
 
-// TableLister reports every nftables table on the box so the dashboard can
+// TableLister reports every nftables table on the router so the dashboard can
 // warn about rulesets Ostiole does not own.
 type TableLister interface {
 	ListTables(ctx context.Context) ([]string, error)
@@ -427,7 +428,7 @@ func unitState(ctx context.Context, sc install.Systemctl, unit string) string {
 
 // warnings collects everything the admin should look at: rulesets and
 // services that compete with Ostiole, interfaces that went missing, and
-// services the configuration asks for but the box is not running.
+// services the configuration asks for but the router is not running.
 func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status, svcs []ServiceState, links []LinkSummary) []Warning {
 	out := []Warning{}
 	if st.Configured && !st.TableLoaded {
@@ -515,7 +516,18 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 		out = append(out, Warning{
 			Kind: "forwarding-off", Level: "warn",
 			Title:  "IP forwarding is off",
-			Detail: "This box has interfaces in more than one zone but the kernel will not route between them.",
+			Detail: "This router has interfaces in more than one zone but the kernel will not route between them.",
+		})
+	}
+	// Installing refuses on an old kernel, but a router can be booted onto one
+	// afterwards. Say so and keep filtering: a firewall that stops working
+	// because of its kernel version is worse than an unsupported one.
+	if v, err := kernel.Current(); err == nil && !v.Supported() {
+		out = append(out, Warning{
+			Kind: "kernel-unsupported", Level: "warn",
+			Title: "This kernel is older than Ostiole supports",
+			Detail: "Linux " + v.String() + " is running; Ostiole is tested on " + kernel.Minimum.String() +
+				" and newer. Boot a newer kernel when you can.",
 		})
 	}
 	return out

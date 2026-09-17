@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './e2e',
-  // The tests share one server and walk it from fresh box to configured.
+  // The tests share one server and walk it from fresh router to configured.
   fullyParallel: false,
   workers: 1,
   retries: 0,

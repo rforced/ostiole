@@ -1,4 +1,4 @@
-// Package sysstat reads what the box is doing with its CPU, memory and
+// Package sysstat reads what the router is doing with its CPU, memory and
 // disks. Everything here comes from /proc and statfs, needs no privileges,
 // and costs a few file reads, so the dashboard can poll it.
 package sysstat
@@ -27,12 +27,12 @@ type Stats struct {
 	Load15     float64  `json:"load15"`
 	// Memory in bytes. Available is what the kernel thinks a new process
 	// could get, which is the number worth showing: free alone reads as
-	// alarmingly low on a healthy box that is using its page cache.
+	// alarmingly low on a healthy router that is using its page cache.
 	MemTotal     uint64 `json:"memTotal"`
 	MemAvailable uint64 `json:"memAvailable"`
 	SwapTotal    uint64 `json:"swapTotal"`
 	SwapFree     uint64 `json:"swapFree"`
-	// UptimeSeconds is how long the box has been up.
+	// UptimeSeconds is how long the router has been up.
 	UptimeSeconds int64        `json:"uptimeSeconds"`
 	Filesystems   []Filesystem `json:"filesystems"`
 }
@@ -116,7 +116,7 @@ func (s *Sampler) Read() (Stats, error) {
 }
 
 // disks reports the root filesystem and, when it is a different one, the
-// filesystem the configuration lives on: a box that keeps /etc separate
+// filesystem the configuration lives on: a router that keeps /etc separate
 // runs out of room there first.
 func (s *Sampler) disks() []Filesystem {
 	var out []Filesystem
@@ -144,7 +144,7 @@ func (s *Sampler) disks() []Filesystem {
 }
 
 // cpuTimes returns the busy and total jiffies across all CPUs. Idle and
-// iowait are the not-busy part: a box waiting on a disk is not working.
+// iowait are the not-busy part: a router waiting on a disk is not working.
 func cpuTimes() (busy, all uint64, err error) {
 	f, err := os.Open("/proc/stat")
 	if err != nil {

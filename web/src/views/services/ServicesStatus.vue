@@ -44,12 +44,12 @@ useAsync(
         class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
         role="note"
       >
-        Port mapping is not set up on this box yet. Run
+        Port mapping is not set up on this router yet. Run
         <code class="font-mono">ostiole services setup --with-upnp</code> as root once. Until then,
         applying this fails.
       </p>
       <p v-else-if="!status.upnpSetUp" class="text-sm text-neutral-500">
-        Not set up on this box. Run
+        Not set up on this router. Run
         <code class="font-mono">ostiole services setup --with-upnp</code> as root once.
       </p>
       <p v-else class="text-sm text-neutral-500">
@@ -63,7 +63,7 @@ useAsync(
         class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
         role="note"
       >
-        DHCP and DNS are not set up on this box yet. Run
+        DHCP and DNS are not set up on this router yet. Run
         <code class="font-mono">ostiole services setup</code> as root once. Until then, enabling
         either fails to apply.
       </p>

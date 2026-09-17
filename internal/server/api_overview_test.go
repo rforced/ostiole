@@ -112,7 +112,7 @@ func TestOverviewUnconfigured(t *testing.T) {
 	if len(ov.TopRules) != 0 {
 		t.Errorf("topRules = %+v, want none", ov.TopRules)
 	}
-	// The loopback is never listed, but the box's own links are.
+	// The loopback is never listed, but the router's own links are.
 	for _, l := range ov.Interfaces {
 		if l.Name == "lo" {
 			t.Error("loopback should not appear in the interface summary")
@@ -127,7 +127,7 @@ func TestOverviewUnconfigured(t *testing.T) {
 		t.Errorf("want a conflicting-services warning, got %+v", ov.Warnings)
 	}
 	if w := warning(ov, "table-missing"); w != nil {
-		t.Errorf("unconfigured box should not warn about a missing table: %+v", w)
+		t.Errorf("unconfigured router should not warn about a missing table: %+v", w)
 	}
 }
 

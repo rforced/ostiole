@@ -32,7 +32,7 @@ type Options struct {
 	Lists []string `json:"lists,omitempty"`
 	Allow []string `json:"allow,omitempty"`
 	Deny  []string `json:"deny,omitempty"`
-	// Never is what this box answers for itself. It is filtered out of the
+	// Never is what this router answers for itself. It is filtered out of the
 	// blocklist but never carved out, because sending the local domain
 	// upstream would be worse than blocking it.
 	Never []string `json:"never,omitempty"`
@@ -111,7 +111,7 @@ func Render(w io.Writer, o Options, c *Cache) (Result, error) {
 	}
 
 	// Everything allowed, as reversed keys: what the operator allowed, the
-	// names this box answers for itself, and the domains it has handed to
+	// names this router answers for itself, and the domains it has handed to
 	// resolvers of their own.
 	untouchable := append(normalizeAll(o.Never), normalizeAll(o.Delegated)...)
 	allowed := reducedKeys(append(normalizeAll(o.Allow), untouchable...))
@@ -131,7 +131,7 @@ func Render(w io.Writer, o Options, c *Cache) (Result, error) {
 	// file by hand. dnsmasq takes the most specific match whatever the
 	// order, which is what makes them work under a blocked parent.
 	//
-	// Only what the operator allowed is written out. The names the box
+	// Only what the operator allowed is written out. The names the router
 	// answers for, and the domains it has delegated, are filtered from the
 	// blocklist instead: a carve-out for the local domain would send its
 	// queries upstream, which is the opposite of what it is for, and one

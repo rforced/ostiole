@@ -141,14 +141,14 @@ func (a *api) blockingLookup(w http.ResponseWriter, r *http.Request) error {
 
 // refreshContext detaches the work from the browser's request. Fetching
 // several published lists takes minutes, and a tab closed halfway through
-// should not leave the box with half a blocklist.
+// should not leave the router with half a blocklist.
 func refreshContext(r *http.Request) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Minute)
 }
 
 func (a *api) refreshBlocklists(w http.ResponseWriter, r *http.Request) error {
 	if a.blocklists == nil {
-		return &unavailable{errors.New("nothing is refreshing blocklists on this box")}
+		return &unavailable{errors.New("nothing is refreshing blocklists on this router")}
 	}
 	ctx, cancel := refreshContext(r)
 	defer cancel()
@@ -161,7 +161,7 @@ func (a *api) refreshBlocklists(w http.ResponseWriter, r *http.Request) error {
 
 func (a *api) refreshBlocklist(w http.ResponseWriter, r *http.Request) error {
 	if a.blocklists == nil {
-		return &unavailable{errors.New("nothing is refreshing blocklists on this box")}
+		return &unavailable{errors.New("nothing is refreshing blocklists on this router")}
 	}
 	ctx, cancel := refreshContext(r)
 	defer cancel()
@@ -174,11 +174,11 @@ func (a *api) refreshBlocklist(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// importBlocklist takes a list as the request body, which is how a box with
+// importBlocklist takes a list as the request body, which is how a router with
 // no way out to the internet gets one, and how a hand-written list is kept.
 func (a *api) importBlocklist(w http.ResponseWriter, r *http.Request) error {
 	if a.blocklists == nil {
-		return &unavailable{errors.New("nothing is holding blocklists on this box")}
+		return &unavailable{errors.New("nothing is holding blocklists on this router")}
 	}
 	name := r.PathValue("name")
 	cfg := a.engine.Effective()

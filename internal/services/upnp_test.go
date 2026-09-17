@@ -84,10 +84,10 @@ func TestUPnPConfNamesTheRenderedChains(t *testing.T) {
 	}
 }
 
-// A box that does not run the service, and never has, must be left alone:
+// A router that does not run the service, and never has, must be left alone:
 // every apply runs every backend, and the daemon's sandbox makes /etc
 // read-only apart from the few paths it is given. This is the bug that
-// made an unrelated apply fail on a box with no PPPoE.
+// made an unrelated apply fail on a router with no PPPoE.
 func TestUPnPApplyDoesNothingWhenUnused(t *testing.T) {
 	t.Parallel()
 	cmd := &fakeCmd{}
@@ -97,10 +97,10 @@ func TestUPnPApplyDoesNothingWhenUnused(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(cmd.calls) != 0 {
-		t.Errorf("ran %v on a box that does not use the service", cmd.calls)
+		t.Errorf("ran %v on a router that does not use the service", cmd.calls)
 	}
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
-		t.Errorf("created %s on a box that does not use the service", dir)
+		t.Errorf("created %s on a router that does not use the service", dir)
 	}
 }
 
@@ -232,7 +232,7 @@ nonsense
 }
 
 // A missing lease file is an empty list: miniupnpd writes it when the
-// first mapping is made, so a box with none has no file at all.
+// first mapping is made, so a router with none has no file at all.
 func TestReadMappingsWithoutAFile(t *testing.T) {
 	t.Parallel()
 	got, err := (&UPnP{Leases: filepath.Join(t.TempDir(), "absent.leases")}).ReadMappings()

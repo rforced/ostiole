@@ -28,7 +28,7 @@ const sampleBytes = 64 << 10
 type Fetcher struct {
 	Client  *http.Client
 	Timeout time.Duration
-	// UserAgent identifies this box to the publisher, several of whom ask
+	// UserAgent identifies this router to the publisher, several of whom ask
 	// for one.
 	UserAgent string
 }
@@ -98,7 +98,7 @@ func ParseStream(r io.Reader, format model.ListFormat) ([]string, int, model.Lis
 
 	// Names are collected into a slice rather than a set: duplicates are
 	// dropped by the sort in Reduce anyway, and a map of two and a half
-	// million strings costs several hundred megabytes on a box that has
+	// million strings costs several hundred megabytes on a router that has
 	// under a gigabyte to begin with.
 	out := make([]string, 0, 1024)
 	skipped := 0
@@ -120,7 +120,7 @@ func ParseStream(r io.Reader, format model.ListFormat) ([]string, int, model.Lis
 		}
 		out = append(out, name)
 		if len(out) > MaxListDomains {
-			return nil, 0, "", fmt.Errorf("more than %d names, which is more than this box can hold", MaxListDomains)
+			return nil, 0, "", fmt.Errorf("more than %d names, which is more than this router can hold", MaxListDomains)
 		}
 	}
 	if err := sc.Err(); err != nil {

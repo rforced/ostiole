@@ -6,7 +6,7 @@ import { applyAndConfirm, login, shot, sidebar } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
-test('download a backup, change the box, then restore it', async ({ page }) => {
+test('download a backup, change the router, then restore it', async ({ page }) => {
   await login(page)
   await page.goto('/system/backup')
   await expect(page.getByRole('heading', { name: 'Backup and restore' })).toBeVisible()

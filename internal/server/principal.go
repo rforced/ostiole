@@ -84,7 +84,7 @@ func (a *api) admin(h func(w http.ResponseWriter, r *http.Request) error) http.H
 	return a.requires(auth.RoleAdmin, h)
 }
 
-// readNoEngine is for endpoints that report on the box rather than the
+// readNoEngine is for endpoints that report on the router rather than the
 // configuration, and work before anything is configured.
 func (a *api) readNoEngine(h func(w http.ResponseWriter, r *http.Request) error) http.HandlerFunc {
 	return a.requires(auth.RoleViewer, h)

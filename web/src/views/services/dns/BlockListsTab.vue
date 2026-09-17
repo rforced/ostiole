@@ -31,13 +31,13 @@ const status = ref(null)
 const which = ref('')
 const note = ref('')
 
-/** What the box has actually fetched, keyed by list name. */
+/** What the router has actually fetched, keyed by list name. */
 const fetched = computed(() =>
   Object.fromEntries((status.value?.lists ?? []).map((s) => [s.name, s])),
 )
 
 /**
- * The lists the box knows about. A list added to the draft and not applied
+ * The lists the router knows about. A list added to the draft and not applied
  * yet is not one of them, and refreshing it would only report that it does
  * not exist, so the row says so instead of offering the button.
  */
@@ -194,7 +194,7 @@ function when(s) {
 
     <details :open="overCeiling" class="max-w-2xl text-sm">
       <summary class="cursor-pointer text-neutral-600 dark:text-neutral-400">
-        How many names this box will hold
+        How many names this router will hold
       </summary>
       <div class="mt-2 space-y-2">
         <FormField
@@ -213,8 +213,8 @@ function when(s) {
           />
         </FormField>
         <p class="text-neutral-500">
-          Overlapping lists merge down a long way. Raise this no further than the memory on this box
-          goes.
+          Overlapping lists merge down a long way. Raise this no further than the memory on this
+          router goes.
         </p>
       </div>
     </details>
