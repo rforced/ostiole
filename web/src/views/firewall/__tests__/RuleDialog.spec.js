@@ -70,6 +70,20 @@ describe('RuleDialog priority', () => {
     expect(config.rules[0].priority).toBeUndefined()
   })
 
+  // Setting nothing and setting Normal are next to each other in the same
+  // list and do different things, so they must not read the same.
+  it('tells "not set" apart from Normal', () => {
+    const { wrapper } = open(true)
+    const labels = wrapper
+      .get('#rule-priority')
+      .findAll('option')
+      .map((o) => o.text())
+    expect(labels[0]).toContain('the device')
+    expect(labels[0]).not.toContain('Normal')
+    expect(labels.filter((l) => l.startsWith('Normal'))).toHaveLength(1)
+    expect(wrapper.text()).toContain('Unset leaves it to what the device asks for')
+  })
+
   it('reads an existing tier back', () => {
     const rule = {
       id: 'r1',

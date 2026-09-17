@@ -6,7 +6,7 @@ import FormField from '@/components/FormField.vue'
 import { newId } from '@/lib/ids'
 import { parseList } from '@/lib/lists'
 import { useConfigStore } from '@/stores/config'
-import { TIERS } from '@/views/firewall/shaping/tiers'
+import { PRIORITY_HINT, TIERS, UNSET_LABEL } from '@/views/firewall/shaping/tiers'
 
 const props = defineProps({ forward: { type: Object, default: null } })
 const open = defineModel('open', { type: Boolean, default: false })
@@ -121,10 +121,10 @@ function save() {
           v-if="config.shapedInterfaces.length"
           id="pf-priority"
           label="Priority"
-          hint="Higher goes first when the line is full. Bulk yields to everything."
+          :hint="PRIORITY_HINT"
         >
           <select id="pf-priority" v-model="form.priority" class="input">
-            <option value="">Normal (unset)</option>
+            <option value="">{{ UNSET_LABEL }}</option>
             <option v-for="t in TIERS" :key="t.value" :value="t.value">
               {{ t.label }} — {{ t.hint }}
             </option>

@@ -4,11 +4,26 @@
  * what choosing it costs somebody else.
  */
 export const TIERS = [
-  { value: 'bulk', label: 'Bulk', hint: 'Yields to everything else.' },
-  { value: 'normal', label: 'Normal', hint: 'Where unmarked traffic goes.' },
-  { value: 'high', label: 'High', hint: 'Ahead of ordinary traffic.' },
-  { value: 'realtime', label: 'Realtime', hint: 'Goes first.' },
+  { value: 'bulk', label: 'Bulk', hint: 'yields to everything else' },
+  { value: 'normal', label: 'Normal', hint: 'ordinary, even if the device asks for better' },
+  { value: 'high', label: 'High', hint: 'ahead of ordinary traffic' },
+  { value: 'realtime', label: 'Realtime', hint: 'goes first' },
 ]
+
+/**
+ * Setting no priority is not the same as setting Normal, and the two are
+ * next to each other in the same list, so the difference has to be in the
+ * words. Nothing is written on the packet and the queue reads whatever
+ * marking the device asked for: a call that marks itself urgent is
+ * treated as urgent. Normal overrules that marking; this defers to it.
+ *
+ * It is one string because both dialogs offer it and they must not drift.
+ */
+export const UNSET_LABEL = "Not set — the device's own marking decides"
+
+/** The line under either priority field, for the same reason. */
+export const PRIORITY_HINT =
+  'Unset leaves it to what the device asks for. Anything else overrides that.'
 
 /** The label for a tier the router named, or the raw value if it is new. */
 export function tierLabel(value) {

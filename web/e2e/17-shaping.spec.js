@@ -41,7 +41,9 @@ test('a line speed and a priority reach the kernel', async ({ page }) => {
   // A priority belongs to the rule that admits the traffic, so the tab
   // that lists them is empty until a rule sets one.
   await page.getByRole('tab', { name: 'Priorities' }).click()
-  await expect(page.getByText('No rule sets a priority. All traffic is Normal.')).toBeVisible()
+  await expect(
+    page.getByText('No rule sets a priority, so every flow is sorted by what its device asks for.'),
+  ).toBeVisible()
 
   // In-app, because the speed is only in the draft and a page load would
   // discard it.

@@ -56,7 +56,7 @@ const entries = computed(() => [
   <div class="space-y-3">
     <p class="text-sm text-neutral-500">
       A priority is set on the rule or port forward that admits the traffic, and follows the
-      connection both ways. Everything not listed here is Normal.
+      connection both ways. Anything not listed here keeps whatever marking its device asked for.
     </p>
 
     <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
@@ -73,7 +73,7 @@ const entries = computed(() => [
         <TransitionGroup name="row" tag="tbody">
           <tr v-if="!entries.length" key="empty" class="row-static">
             <td colspan="5" class="text-neutral-500">
-              No rule sets a priority. All traffic is Normal.
+              No rule sets a priority, so every flow is sorted by what its device asks for.
             </td>
           </tr>
           <tr v-for="e in entries" :key="e.key" :class="{ 'opacity-50': !e.enabled }">

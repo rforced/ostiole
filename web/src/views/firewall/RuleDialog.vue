@@ -7,7 +7,7 @@ import { newId } from '@/lib/ids'
 import { joinList, parseList } from '@/lib/lists'
 import { useConfigStore } from '@/stores/config'
 import EndpointFields from '@/views/firewall/EndpointFields.vue'
-import { TIERS } from '@/views/firewall/shaping/tiers'
+import { PRIORITY_HINT, TIERS, UNSET_LABEL } from '@/views/firewall/shaping/tiers'
 
 const props = defineProps({
   rule: { type: Object, default: null },
@@ -198,11 +198,7 @@ function save() {
           v-if="config.shapedInterfaces.length"
           id="rule-priority"
           label="Priority"
-          :hint="
-            priorityAllowed
-              ? 'Higher goes first when the line is full. Bulk yields to everything.'
-              : 'Only an accept rule can set a priority.'
-          "
+          :hint="priorityAllowed ? PRIORITY_HINT : 'Only an accept rule can set a priority.'"
         >
           <select
             id="rule-priority"
@@ -210,7 +206,7 @@ function save() {
             class="input"
             :disabled="!priorityAllowed"
           >
-            <option value="">Normal (unset)</option>
+            <option value="">{{ UNSET_LABEL }}</option>
             <option v-for="t in TIERS" :key="t.value" :value="t.value">
               {{ t.label }} — {{ t.hint }}
             </option>
