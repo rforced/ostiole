@@ -10,6 +10,9 @@ dependencies beyond `nft` and systemd.
 
 - **Linux 5.14 or newer**, on x86-64 or arm64.
 - **systemd** and **nftables** (the `nft` command).
+- **`tc`** (iproute2), only to shape traffic. Red Hat family distributions ship it in a package of
+  its own (`iproute-tc`); `ostiole install` fetches it, and a router that shapes nothing never
+  needs it.
 
 The kernel floor is where the distributions sit, not where any particular feature does: 5.14 is what
 RHEL 9 and its rebuilds ship, so the line covers every enterprise distribution still in support along
