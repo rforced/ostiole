@@ -8,6 +8,7 @@ import { useAsync } from '@/lib/async'
 import { useConfigStore } from '@/stores/config'
 import RuleDialog from '@/views/firewall/RuleDialog.vue'
 import SystemRuleRow from '@/views/firewall/SystemRuleRow.vue'
+import { tierBadge, tierLabel } from '@/views/firewall/shaping/tiers'
 
 /** How long after the last edit the system rules are re-read for the draft. */
 const SYSTEM_DEBOUNCE_MS = 300
@@ -17,6 +18,7 @@ const SETTINGS = {
   zone: '/interfaces#zones',
   interface: '/interfaces',
   dhcp: '/services/dhcp',
+  shaping: '/firewall/shaping',
   dns: '/services/dns',
   enforcement: '/services/dns#enforcement',
   upnp: '/services/upnp',
@@ -231,6 +233,12 @@ function toggle(rule) {
                 >→ {{ r.gateway }}</span
               >
               <template v-else>{{ r.destZone ?? '' }}</template>
+              <span
+                v-if="r.priority"
+                :class="[tierBadge(r.priority), r.gateway || r.destZone ? 'ml-1' : '']"
+                :title="`Priority ${tierLabel(r.priority)}`"
+                >{{ tierLabel(r.priority) }}</span
+              >
             </td>
             <td>{{ r.description }}</td>
             <td class="text-right font-mono text-code tabular-nums">

@@ -388,6 +388,31 @@ export const useConfigStore = defineStore('config', () => {
     })
   }
 
+  // ---- traffic shaping -------------------------------------------------
+
+  /** Interfaces that have been given a line speed, in configuration order. */
+  const shapedInterfaces = computed(() =>
+    interfaces.value.filter((i) => i.shaping && (i.shaping.download || i.shaping.upload)),
+  )
+
+  function setShaping(name, shaping) {
+    const iface = findInterface(name)
+    if (!iface) return
+    iface.shaping = clone(shaping)
+  }
+
+  function clearShaping(name) {
+    const iface = findInterface(name)
+    if (!iface?.shaping) return
+    undoable(`Removed the speed set on ${name}.`, () => {
+      delete findInterface(name).shaping
+    })
+  }
+
+  /** The rules and port forwards that put their traffic in a tier. */
+  const shapedRules = computed(() => rules.value.filter((r) => r.priority))
+  const shapedForwards = computed(() => (nat.value.portForwards ?? []).filter((pf) => pf.priority))
+
   // ---- schedules -------------------------------------------------------
 
   const schedules = computed(() => draft.value?.schedules ?? [])
@@ -758,6 +783,9 @@ export const useConfigStore = defineStore('config', () => {
     const [, key, id] = /^([A-Za-z0-9]+)(?:\[([^\]]*)\])?/.exec(path) ?? []
     switch (key) {
       case 'interfaces': {
+        // A speed lives on the interface but is edited on its own page, so
+        // the change is shown where it was made.
+        if (path.includes('.shaping')) return '/firewall/shaping'
         const i =
           interfaces.value.find((x) => x.name === id) ??
           saved.value?.interfaces?.find((x) => x.name === id)
@@ -816,6 +844,7 @@ export const useConfigStore = defineStore('config', () => {
     refreshChanges,
     hasChanges,
     isChanged,
+    sectionFor,
     interfaceDependents,
     removeTunnel,
     gatewayDependents,
@@ -859,6 +888,11 @@ export const useConfigStore = defineStore('config', () => {
     removePortForward,
     upsertOneToOne,
     removeOneToOne,
+    shapedInterfaces,
+    setShaping,
+    clearShaping,
+    shapedRules,
+    shapedForwards,
     schedules,
     upsertSchedule,
     scheduleReferences,

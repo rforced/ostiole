@@ -7,6 +7,7 @@ import { newId } from '@/lib/ids'
 import { joinList, parseList } from '@/lib/lists'
 import { useConfigStore } from '@/stores/config'
 import EndpointFields from '@/views/firewall/EndpointFields.vue'
+import { TIERS } from '@/views/firewall/shaping/tiers'
 
 const props = defineProps({
   rule: { type: Object, default: null },
@@ -42,6 +43,7 @@ function blank() {
     log: false,
     schedule: '',
     gateway: '',
+    priority: '',
     source: endpointForm(),
     destination: endpointForm(),
   }
@@ -58,6 +60,7 @@ watch(
           ...r,
           destZone: r.destZone ?? '',
           gateway: r.gateway ?? '',
+          priority: r.priority ?? '',
           source: endpointForm(r.source),
           destination: endpointForm(r.destination),
         }
@@ -75,6 +78,14 @@ const gatewayAllowed = computed(() => form.value.action === 'accept' && !form.va
 
 watch(gatewayAllowed, (ok) => {
   if (!ok) form.value.gateway = ''
+})
+
+// A priority decides what a flow yields to, so there has to be a flow: a
+// rule that drops the traffic has nothing to prioritise.
+const priorityAllowed = computed(() => form.value.action === 'accept')
+
+watch(priorityAllowed, (ok) => {
+  if (!ok) form.value.priority = ''
 })
 
 function endpointOut(f, allowPorts) {
@@ -107,6 +118,7 @@ function save() {
   if (f.log) out.log = true
   if (f.schedule) out.schedule = f.schedule
   if (f.gateway && gatewayAllowed.value) out.gateway = f.gateway
+  if (f.priority && priorityAllowed.value) out.priority = f.priority
   if (!out.description) delete out.description
   config.upsertRule(out)
   open.value = false
@@ -179,6 +191,28 @@ function save() {
             <option v-for="t in config.routeTargets" :key="t.name" :value="t.name">
               {{ t.name }}{{ t.kind === 'group' ? ' (group)' : ''
               }}{{ t.enabled ? '' : ' (disabled)' }}
+            </option>
+          </select>
+        </FormField>
+        <FormField
+          v-if="config.shapedInterfaces.length"
+          id="rule-priority"
+          label="Priority"
+          :hint="
+            priorityAllowed
+              ? 'Higher goes first when the line is full. Bulk yields to everything.'
+              : 'Only an accept rule can set a priority.'
+          "
+        >
+          <select
+            id="rule-priority"
+            v-model="form.priority"
+            class="input"
+            :disabled="!priorityAllowed"
+          >
+            <option value="">Normal (unset)</option>
+            <option v-for="t in TIERS" :key="t.value" :value="t.value">
+              {{ t.label }} — {{ t.hint }}
             </option>
           </select>
         </FormField>

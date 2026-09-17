@@ -6,6 +6,7 @@ import FormField from '@/components/FormField.vue'
 import { newId } from '@/lib/ids'
 import { parseList } from '@/lib/lists'
 import { useConfigStore } from '@/stores/config'
+import { TIERS } from '@/views/firewall/shaping/tiers'
 
 const props = defineProps({ forward: { type: Object, default: null } })
 const open = defineModel('open', { type: Boolean, default: false })
@@ -25,6 +26,7 @@ function blank() {
     target: '',
     targetPort: '',
     reflection: false,
+    priority: '',
   }
 }
 
@@ -34,7 +36,13 @@ watch(
     if (!open.value) return
     const f = props.forward
     form.value = f
-      ? { ...blank(), ...f, ports: f.ports.join(', '), targetPort: f.targetPort ?? '' }
+      ? {
+          ...blank(),
+          ...f,
+          ports: f.ports.join(', '),
+          targetPort: f.targetPort ?? '',
+          priority: f.priority ?? '',
+        }
       : blank()
   },
   { immediate: true },
@@ -53,6 +61,7 @@ function save() {
   if (f.description) out.description = f.description
   if (f.targetPort) out.targetPort = String(f.targetPort).trim()
   if (f.reflection) out.reflection = true
+  if (f.priority) out.priority = f.priority
   config.upsertPortForward(out)
   open.value = false
 }
@@ -107,6 +116,19 @@ function save() {
             class="input w-32 font-mono"
             spellcheck="false"
           />
+        </FormField>
+        <FormField
+          v-if="config.shapedInterfaces.length"
+          id="pf-priority"
+          label="Priority"
+          hint="Higher goes first when the line is full. Bulk yields to everything."
+        >
+          <select id="pf-priority" v-model="form.priority" class="input">
+            <option value="">Normal (unset)</option>
+            <option v-for="t in TIERS" :key="t.value" :value="t.value">
+              {{ t.label }} — {{ t.hint }}
+            </option>
+          </select>
         </FormField>
       </div>
       <label class="flex items-start gap-2 text-sm">

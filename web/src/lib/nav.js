@@ -76,6 +76,16 @@ export const NAV = [
         view: () => import('@/views/firewall/SchedulesPage.vue'),
       },
       { path: 'nat', label: 'NAT', view: () => import('@/views/firewall/NatPage.vue') },
+      {
+        path: 'shaping',
+        label: 'Traffic shaping',
+        view: () => import('@/views/firewall/ShapingPage.vue'),
+        tabs: [
+          { value: 'bandwidth', label: 'Bandwidth' },
+          { value: 'priorities', label: 'Priorities' },
+          { value: 'live', label: 'Live' },
+        ],
+      },
       { path: 'log', label: 'Log', view: () => import('@/views/firewall/LogPage.vue') },
     ],
   },

@@ -236,3 +236,51 @@ describe('config store draft changes', () => {
     expect(config.isChanged('interfaces', 'wg0')).toBe(true)
   })
 })
+
+describe('config store traffic shaping', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  function shaped() {
+    const d = draft()
+    d.interfaces[0].shaping = { download: 50_000_000 }
+    d.rules[2].priority = 'realtime'
+    d.rules[2].enabled = true
+    d.nat.portForwards[0].priority = 'high'
+    d.nat.portForwards[0].enabled = true
+    return d
+  }
+
+  it('lists the interfaces with a speed and leaves the rest alone', () => {
+    const config = useConfigStore()
+    config.replaceDraft(shaped())
+    expect(config.shapedInterfaces.map((i) => i.name)).toEqual(['eth1'])
+  })
+
+  it('sets and clears a speed on the interface it belongs to', () => {
+    const config = useConfigStore()
+    config.replaceDraft(draft())
+    config.setShaping('eth0', { download: 200_000_000, upload: 20_000_000 })
+    expect(config.findInterface('eth0').shaping.download).toBe(200_000_000)
+    config.clearShaping('eth0')
+    expect(config.findInterface('eth0').shaping).toBeUndefined()
+    // Removing it is undoable, like every other delete.
+    useToastStore().toasts[0].action.run()
+    expect(config.findInterface('eth0').shaping.download).toBe(200_000_000)
+  })
+
+  it('collects everything that has been given a priority', () => {
+    const config = useConfigStore()
+    config.replaceDraft(shaped())
+    expect(config.shapedRules.map((r) => r.id)).toEqual(['r3'])
+    expect(config.shapedForwards.map((p) => p.id)).toEqual(['pf1'])
+  })
+
+  // A speed is stored on the interface but edited on its own page, so a
+  // change to one has to be shown where it was made.
+  it('files a shaping change under the shaping page', () => {
+    const config = useConfigStore()
+    config.replaceDraft(shaped())
+    expect(config.sectionFor('interfaces[eth1].shaping.download')).toBe('/firewall/shaping')
+    expect(config.sectionFor('interfaces[eth1].ipv4.address')).toBe('/interfaces')
+  })
+})

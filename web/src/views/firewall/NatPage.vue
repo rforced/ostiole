@@ -8,6 +8,7 @@ import { useConfigStore } from '@/stores/config'
 import OneToOneDialog from '@/views/firewall/OneToOneDialog.vue'
 import OutboundDialog from '@/views/firewall/OutboundDialog.vue'
 import PortForwardDialog from '@/views/firewall/PortForwardDialog.vue'
+import { tierBadge, tierLabel } from '@/views/firewall/shaping/tiers'
 
 const config = useConfigStore()
 const pfEditing = ref(null)
@@ -100,6 +101,12 @@ function editOb(r) {
               <td>
                 {{ pf.description }}
                 <span v-if="pf.reflection" class="badge ml-1">reflection</span>
+                <span
+                  v-if="pf.priority"
+                  :class="[tierBadge(pf.priority), 'ml-1']"
+                  :title="`Priority ${tierLabel(pf.priority)}`"
+                  >{{ tierLabel(pf.priority) }}</span
+                >
               </td>
               <td class="text-right whitespace-nowrap">
                 <button type="button" class="link" @click="editPf(pf)">Edit</button>
