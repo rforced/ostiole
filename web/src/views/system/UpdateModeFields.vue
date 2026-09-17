@@ -53,28 +53,34 @@ const preset = computed({
   <div class="space-y-3">
     <fieldset class="space-y-1.5">
       <legend class="mb-1 block text-sm font-medium">Mode</legend>
-      <label
+      <!-- The hint describes the choice rather than naming it, so each
+           radio is called "Manual" and not "Manual, check on the…". -->
+      <div
         v-for="m in MODES"
         :key="m.value"
         class="flex items-start gap-2"
         :class="{ 'opacity-50': m.value === 'security' && !securityCapable }"
       >
         <input
+          :id="`${prefix}-mode-${m.value}`"
           type="radio"
           class="mt-1"
           :name="`${prefix}-mode`"
           :value="m.value"
           :checked="current === m.value"
           :disabled="m.value === 'security' && !securityCapable"
+          :aria-describedby="`${prefix}-mode-${m.value}-hint`"
           @change="emit('update:mode', m.value)"
         />
-        <span>
-          <span class="font-medium">{{ m.label }}</span>
-          <span class="block text-xs text-neutral-500">
+        <div>
+          <label :for="`${prefix}-mode-${m.value}`" class="block text-sm font-medium">
+            {{ m.label }}
+          </label>
+          <p :id="`${prefix}-mode-${m.value}-hint`" class="text-xs text-neutral-500">
             {{ m.value === 'security' && !securityCapable ? securityNote : m.hint }}
-          </span>
-        </span>
-      </label>
+          </p>
+        </div>
+      </div>
     </fieldset>
 
     <div class="flex flex-wrap items-end gap-3">

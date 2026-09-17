@@ -130,7 +130,7 @@ test('choose how this box patches itself, and see why some of it is refused', as
   // The defaults are what a box gets without being told: security fixes,
   // Sunday at four.
   await expect(os.getByLabel('Automatic (Security)')).toBeChecked()
-  await expect(os.getByLabel('Schedule')).toHaveValue('0 4 * * 0')
+  await expect(os.getByLabel('Schedule', { exact: true })).toHaveValue('0 4 * * 0')
 
   await os.getByLabel('Automatic (All)').check()
   await os.getByLabel('When').selectOption('0 4 * * *')
@@ -147,7 +147,7 @@ test('choose how this box patches itself, and see why some of it is refused', as
   // shows them after a reload.
   await page.reload()
   await expect(os.getByLabel('Automatic (All)')).toBeChecked()
-  await expect(os.getByLabel('Schedule')).toHaveValue('0 4 * * *')
+  await expect(os.getByLabel('Schedule', { exact: true })).toHaveValue('0 4 * * *')
   await expect(os.getByLabel('Never upgrade')).toHaveValue('kernel, kernel-core')
   await expect(ostiole.getByLabel('Manual')).toBeChecked()
   await expect(ostiole.getByLabel('Channel')).toHaveValue('beta')

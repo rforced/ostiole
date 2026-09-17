@@ -173,6 +173,11 @@ func (m *Manager) Apply(ctx context.Context, security bool, exclude []string) (s
 		return "", err
 	}
 	defer m.end()
+	return m.apply(ctx, security, exclude)
+}
+
+// apply is Apply for a caller that has already claimed the box.
+func (m *Manager) apply(ctx context.Context, security bool, exclude []string) (string, error) {
 	// The list is taken fresh: it decides what an apt or zypper run
 	// names on its command line, and a stale list installs the wrong
 	// things.
@@ -262,23 +267,17 @@ func (m *Manager) end() {
 
 // Start begins an update in the background and returns once it is
 // going, because the browser cannot wait an hour for a distro upgrade.
+// The box is claimed before this returns, so the status the caller sends
+// back already says an update is running.
 func (m *Manager) Start(security bool, exclude []string) error {
-	if !m.Available() {
-		return m.unavailable()
-	}
-	if security && !m.Driver.SecurityCapable() {
-		return errors.New(SecurityUnavailable(m.Driver))
-	}
-	m.mu.Lock()
-	running := m.running
-	m.mu.Unlock()
-	if running {
-		return ErrBusy
+	if err := m.begin(security); err != nil {
+		return err
 	}
 	go func() {
+		defer m.end()
 		ctx, cancel := context.WithTimeout(context.Background(), UpgradeTimeout+2*CheckTimeout)
 		defer cancel()
-		if _, err := m.Apply(ctx, security, exclude); err != nil {
+		if _, err := m.apply(ctx, security, exclude); err != nil {
 			m.Log.Warn("a system update failed", "err", err)
 		}
 	}()

@@ -17,6 +17,27 @@ You should hear back within seven days.
 
 Pre-alpha: only the `dev` branch. Once releases exist, the latest stable release is supported.
 
+## Marking a release as a security release
+
+A box set to **Automatic (Security)** installs a new Ostiole release only when something published
+since the version it runs is marked as a security fix. The mark is a line in the release notes:
+
+```
+Security-Release: yes
+```
+
+The release workflow lifts the annotated tag's message into the notes, so
+
+```sh
+git tag -a v0.4.1 -m "Security-Release: yes
+
+Fixes an authentication bypass in the token middleware."
+```
+
+is enough. Editing the release body on GitHub afterwards works just as well; boxes read the notes at
+check time, not at tag time. Without the line a release still reaches everyone on **Automatic (All)**
+and anyone who presses the button — the mark only decides what gets installed unattended.
+
 ## Release integrity
 
 Every release publishes `checksums.txt` signed with an ed25519 key. The public half is compiled

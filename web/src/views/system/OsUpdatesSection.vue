@@ -121,14 +121,12 @@ onBeforeUnmount(stopPolling)
       <dd>{{ when(status?.lastCheck) }}</dd>
     </dl>
 
-    <p
-      v-if="status && !status.available"
-      role="status"
-      class="text-sm text-amber-700 dark:text-amber-300"
-    >
+    <!-- These are part of the page rather than announcements, so they are
+         plain text: a live region here would join the apply bar's. -->
+    <p v-if="status && !status.available" class="text-sm text-amber-700 dark:text-amber-300">
       {{ status.unavailable }}
     </p>
-    <p v-else-if="!status" role="status" class="text-sm text-neutral-500">
+    <p v-else-if="!status" class="text-sm text-neutral-500">
       Nothing on this box drives a package manager.
     </p>
 
@@ -185,7 +183,7 @@ onBeforeUnmount(stopPolling)
       </span>
     </div>
 
-    <div v-if="status?.pending" role="status" class="text-sm">
+    <div v-if="status?.pending" class="text-sm">
       <p v-if="!packages.length" class="text-emerald-700 dark:text-emerald-300">
         Everything is up to date.
       </p>

@@ -71,8 +71,10 @@ func (a *api) systemUpdateApply(w http.ResponseWriter, r *http.Request) error {
 	var body struct {
 		Security *bool `json:"security"`
 	}
-	if err := decodeJSON(r, &body); err != nil {
-		return err
+	if r.ContentLength != 0 {
+		if err := decodeJSON(r, &body); err != nil {
+			return err
+		}
 	}
 	updates := a.updates()
 	security := updates.SystemMode() == model.UpdateSecurity

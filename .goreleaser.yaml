@@ -104,6 +104,12 @@ release:
   prerelease: auto
   extra_files:
     - glob: scripts/install.sh
+  # The annotated tag's message becomes the top of the release notes, so a
+  # tag carrying "Security-Release: yes" tells every box on the security
+  # update mode to install this one without being asked. Nothing else
+  # depends on the header, and a lightweight tag leaves it empty.
+  header: |
+    {{ .TagBody }}
   footer: |
     ## Install
 

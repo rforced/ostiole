@@ -1,12 +1,17 @@
 package sysupdate
 
 import (
+	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+// discard keeps a failing update out of the test output.
+func discard() *slog.Logger { return slog.New(slog.DiscardHandler) }
 
 const showUnit = "systemctl show ostiole-sysupdate -p LoadState -p ActiveState -p SubState -p Result -p ExecMainStatus -p InvocationID"
 
@@ -264,5 +269,26 @@ func TestRunScheduledObeysTheMode(t *testing.T) {
 	}
 	if run.ran("systemd-run --unit=ostiole-sysupdate --quiet --property=Type=oneshot --property=RemainAfterExit=yes --property=TimeoutStartSec=3600 --setenv=LC_ALL=C --setenv=LANG=C --setenv=DEBIAN_FRONTEND=noninteractive -- dnf -y upgrade --security") {
 		t.Error("it upgraded anyway")
+	}
+}
+
+func TestStartClaimsTheBoxBeforeItReturns(t *testing.T) {
+	withSystemd(t, true)
+	run := dnfRunner(t)
+	// The unit never finishes, so the update is still going when Start
+	// has returned and the page asks what is happening.
+	run.say(showUnit, "LoadState=loaded\nActiveState=activating\nSubState=start\nResult=success\nExecMainStatus=0\nInvocationID=abc123\n")
+	m := New(Options{PackageManager: "dnf", StateDir: t.TempDir(), Run: run, Root: true, Log: discard()})
+	m.unit.poll = time.Millisecond
+
+	if err := m.Start(false, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !m.Status(false).Running {
+		t.Error("the status the browser gets back does not say an update is running")
+	}
+	// A second press is refused rather than starting a second dnf.
+	if err := m.Start(false, nil); !errors.Is(err, ErrBusy) {
+		t.Errorf("second Start = %v, want ErrBusy", err)
 	}
 }
