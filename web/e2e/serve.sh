@@ -10,5 +10,9 @@ if [ ! -x "$BIN" ]; then
 fi
 DIR="$(mktemp -d)"
 trap 'rm -rf "$DIR"' EXIT INT TERM
+# A named package manager rather than whatever the host happens to have,
+# so the updates card looks the same everywhere. The server is not root,
+# so nothing is ever run through it.
 exec "$BIN" --config-dir "$DIR" --nft "$PWD/e2e/nft-stub.sh" --network-backend none \
+  --package-manager dnf \
   serve --listen 127.0.0.1:18090 --log-level warn

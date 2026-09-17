@@ -726,3 +726,97 @@ func TestValidateCatchesDelegationMistakes(t *testing.T) {
 		t.Errorf("subnet out of range = %q, want the count of subnets a /56 has", msg)
 	}
 }
+
+func TestUpdateDefaults(t *testing.T) {
+	t.Parallel()
+	// A configuration written before updates existed has to come out
+	// patching itself weekly, not doing nothing.
+	var u Updates
+	if got := u.SystemMode(); got != UpdateSecurity {
+		t.Errorf("SystemMode = %q, want %q", got, UpdateSecurity)
+	}
+	if got := u.OstioleMode(); got != UpdateSecurity {
+		t.Errorf("OstioleMode = %q, want %q", got, UpdateSecurity)
+	}
+	if got := u.SystemSchedule(); got != DefaultUpdateSchedule {
+		t.Errorf("SystemSchedule = %q, want %q", got, DefaultUpdateSchedule)
+	}
+	if got := u.OstioleChannel(); got != ChannelStable {
+		t.Errorf("OstioleChannel = %q, want %q", got, ChannelStable)
+	}
+	u.System.Mode = UpdateManual
+	u.System.Schedule = "@daily"
+	if got := u.SystemMode(); got != UpdateManual {
+		t.Errorf("SystemMode = %q, want %q", got, UpdateManual)
+	}
+	if got := u.SystemSchedule(); got != "@daily" {
+		t.Errorf("SystemSchedule = %q, want @daily", got)
+	}
+}
+
+func TestDerivedCronsFollowTheSettings(t *testing.T) {
+	t.Parallel()
+	cfg := &Config{Updates: Updates{
+		System:  PackageUpdates{Schedule: "30 3 * * *"},
+		Ostiole: SelfUpdates{Mode: UpdateManual},
+	}}
+	derived := cfg.DerivedCrons()
+	if len(derived) != 2 {
+		t.Fatalf("derived %d jobs, want 2", len(derived))
+	}
+	if derived[0].ID != CronIDSystemUpdate || derived[0].Schedule != "30 3 * * *" {
+		t.Errorf("system job = %+v", derived[0])
+	}
+	if derived[1].Schedule != DefaultUpdateSchedule {
+		t.Errorf("ostiole schedule = %q, want the default", derived[1].Schedule)
+	}
+	for _, id := range []string{CronIDSystemUpdate, CronIDOstioleUpdate} {
+		job, ok := cfg.Cron(id)
+		if !ok {
+			t.Fatalf("Cron(%q) not found; run-it-now would not work", id)
+		}
+		if !job.Enabled {
+			t.Errorf("%s is not enabled", id)
+		}
+	}
+}
+
+func TestValidateUpdates(t *testing.T) {
+	t.Parallel()
+	cfg := policyConfig()
+	cfg.Updates = Updates{
+		System: PackageUpdates{
+			Mode:     "sometimes",
+			Schedule: "every other tuesday",
+			Exclude:  []string{"kernel", "--assume-yes"},
+		},
+		Ostiole: SelfUpdates{Channel: "nightly"},
+	}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation errors")
+	}
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("error type %T", err)
+	}
+	got := map[string]string{}
+	for _, i := range ve.Issues {
+		got[i.Path] = i.Message
+	}
+	for _, p := range []string{
+		"updates.system.mode",
+		"updates.system.schedule",
+		"updates.system.exclude[1]",
+		"updates.ostiole.channel",
+	} {
+		if _, ok := got[p]; !ok {
+			t.Errorf("missing issue at %s (got %v)", p, keysOf(got))
+		}
+	}
+	// The empty settings are the defaults, not a mistake.
+	cfg.Updates = Updates{}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("empty update settings rejected: %v", err)
+	}
+}

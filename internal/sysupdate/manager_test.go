@@ -1,0 +1,268 @@
+package sysupdate
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+const showUnit = "systemctl show ostiole-sysupdate -p LoadState -p ActiveState -p SubState -p Result -p ExecMainStatus -p InvocationID"
+
+// dnfRunner answers the commands a dnf check makes, so a manager test can
+// concentrate on what the manager does with the answers.
+func dnfRunner(t *testing.T) *fakeRunner {
+	t.Helper()
+	return &fakeRunner{
+		out: map[string]string{
+			"dnf -q --refresh check-update":              fixture(t, "dnf-check-update.txt"),
+			"dnf -q --cacheonly check-update --security": fixture(t, "dnf-check-update-security.txt"),
+			"rpm -q --qf %{NAME} %{EVR}\\n NetworkManager-libnm bash kernel kernel-core openssl-libs tzdata": fixture(t, "rpm-installed.txt"),
+			"dnf needs-restarting -r": "Reboot is required to fully utilize these updates.",
+		},
+		code: map[string]int{
+			"dnf -q --refresh check-update":              dnfPending,
+			"dnf -q --cacheonly check-update --security": dnfPending,
+			"dnf needs-restarting -r":                    1,
+		},
+	}
+}
+
+// withSystemd makes the transient unit look available, whatever the box
+// running the tests actually has.
+func withSystemd(t *testing.T, present bool) {
+	t.Helper()
+	restore := lookPath
+	lookPath = func(name string) (string, error) {
+		if !present && (name == "systemd-run" || name == "systemctl") {
+			return "", os.ErrNotExist
+		}
+		return "/usr/bin/" + name, nil
+	}
+	t.Cleanup(func() { lookPath = restore })
+}
+
+func TestManagerCheckIsRemembered(t *testing.T) {
+	dir := t.TempDir()
+	run := dnfRunner(t)
+	m := New(Options{PackageManager: "dnf", StateDir: dir, Run: run, Root: true})
+	if !m.Available() {
+		t.Fatalf("manager unavailable: %s", m.Unavailable)
+	}
+	if _, err := m.Check(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	st := m.Status(true)
+	if len(st.Pending.Packages) != 6 || st.Pending.Security != 3 {
+		t.Errorf("pending = %+v", st.Pending)
+	}
+	if !st.RebootRequired || st.RebootReason == "" {
+		t.Errorf("reboot = %v %q", st.RebootRequired, st.RebootReason)
+	}
+	if st.LastCheck.IsZero() {
+		t.Error("the check was not dated")
+	}
+
+	// An update restarts the daemon often enough that the page has to
+	// survive it.
+	reloaded := NewState(dir).Snapshot()
+	if len(reloaded.Pending.Packages) != 6 || !reloaded.RebootRequired {
+		t.Errorf("state on disk = %+v", reloaded)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "state.json")); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestManagerApplyRunsInATransientUnit(t *testing.T) {
+	withSystemd(t, true)
+	run := dnfRunner(t)
+	run.out[showUnit] = "LoadState=loaded\nActiveState=active\nSubState=exited\nResult=success\nExecMainStatus=0\nInvocationID=abc123\n"
+	run.out["journalctl --no-pager -o cat _SYSTEMD_INVOCATION_ID=abc123"] = "Upgraded:\n  openssl-libs-1:3.2.2-12.el10.x86_64"
+
+	m := New(Options{PackageManager: "dnf", StateDir: t.TempDir(), Run: run, Root: true})
+	out, err := m.Apply(t.Context(), true, []string{"kernel"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "openssl-libs") {
+		t.Errorf("output = %q, want what the journal held", out)
+	}
+
+	want := "systemd-run --unit=ostiole-sysupdate --quiet --property=Type=oneshot " +
+		"--property=RemainAfterExit=yes --property=TimeoutStartSec=3600 " +
+		"--setenv=LC_ALL=C --setenv=LANG=C --setenv=DEBIAN_FRONTEND=noninteractive " +
+		"-- dnf -y upgrade --security --exclude=kernel"
+	if !run.ran(want) {
+		t.Errorf("the transaction was not started as asked:\n%s", run.transcript())
+	}
+	// The unit name is reused every run, so it has to be given back.
+	if !run.ran("systemctl stop ostiole-sysupdate") {
+		t.Error("the unit was left behind")
+	}
+	st := m.Status(true)
+	if st.LastMode != "security" || st.LastError != "" || st.Running {
+		t.Errorf("status = %+v", st)
+	}
+}
+
+func TestManagerApplyReportsAFailedTransaction(t *testing.T) {
+	withSystemd(t, true)
+	run := dnfRunner(t)
+	run.out[showUnit] = "LoadState=loaded\nActiveState=failed\nSubState=failed\nResult=exit-code\nExecMainStatus=1\nInvocationID=def456\n"
+	run.out["journalctl --no-pager -o cat _SYSTEMD_INVOCATION_ID=def456"] = "Error: Transaction test error"
+
+	m := New(Options{PackageManager: "dnf", StateDir: t.TempDir(), Run: run, Root: true})
+	_, err := m.Apply(t.Context(), false, nil)
+	if err == nil {
+		t.Fatal("a failed transaction was reported as success")
+	}
+	if st := m.Status(false); !strings.Contains(st.LastError, "exit-code") || !strings.Contains(st.LastOutput, "Transaction test error") {
+		t.Errorf("status = %+v", st)
+	}
+}
+
+func TestManagerFallsBackToAChildProcess(t *testing.T) {
+	withSystemd(t, false)
+	run := dnfRunner(t)
+	run.out["dnf -y upgrade"] = "Nothing to do."
+
+	m := New(Options{PackageManager: "dnf", StateDir: t.TempDir(), Run: run, Root: true})
+	out, err := m.Apply(t.Context(), false, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "Nothing to do." {
+		t.Errorf("output = %q", out)
+	}
+}
+
+func TestManagerRefusesSecurityWhereThereIsNone(t *testing.T) {
+	run := &fakeRunner{}
+	m := New(Options{PackageManager: "pacman", StateDir: t.TempDir(), Run: run, Root: true})
+	_, err := m.Apply(t.Context(), true, nil)
+	if err == nil || !strings.Contains(err.Error(), "All or Manual") {
+		t.Fatalf("err = %v, want the explanation the page shows", err)
+	}
+	if run.count() != 0 {
+		t.Errorf("it ran something anyway: %s", run.transcript())
+	}
+	if st := m.Status(true); st.SecurityCapable {
+		t.Error("pacman is reported as able to install security fixes alone")
+	}
+}
+
+func TestManagerWithoutRootExplainsItself(t *testing.T) {
+	m := New(Options{PackageManager: "dnf", StateDir: t.TempDir(), Run: &fakeRunner{}, Root: false})
+	if m.Available() {
+		t.Fatal("an unprivileged daemon claimed it could update the box")
+	}
+	st := m.Status(false)
+	if !strings.Contains(st.Unavailable, "root") {
+		t.Errorf("unavailable = %q", st.Unavailable)
+	}
+	// The manager is still named, so the page can say what it would use.
+	if st.Manager != "dnf" {
+		t.Errorf("manager = %q", st.Manager)
+	}
+	if _, err := m.Check(t.Context()); err == nil {
+		t.Error("checked anyway")
+	}
+}
+
+func TestManagerReattachesToARunningUpdate(t *testing.T) {
+	withSystemd(t, true)
+	run := dnfRunner(t)
+	run.out[showUnit] = "LoadState=loaded\nActiveState=activating\nSubState=start\nResult=success\nExecMainStatus=0\nInvocationID=ghi789\n"
+	run.out["journalctl --no-pager -o cat _SYSTEMD_INVOCATION_ID=ghi789"] = "Upgrading…"
+
+	m := New(Options{PackageManager: "dnf", StateDir: t.TempDir(), Run: run, Root: true})
+	m.unit.poll = time.Millisecond
+	m.Reattach(t.Context())
+	if !m.Status(false).Running {
+		t.Fatal("an update that outlived the daemon is not reported as running")
+	}
+
+	// When it finishes, the result is picked up without anyone asking.
+	run.say(showUnit, "LoadState=loaded\nActiveState=active\nSubState=exited\nResult=success\nExecMainStatus=0\nInvocationID=ghi789\n")
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if st := m.Status(false); !st.Running && !st.LastRun.IsZero() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("the reattached update never reported how it ended")
+}
+
+func TestDistroName(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "os-release")
+	body := "NAME=\"Rocky Linux\"\nVERSION=\"10.0 (Red Quartz)\"\nID=\"rocky\"\nPRETTY_NAME=\"Rocky Linux 10.0 (Red Quartz)\"\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	restore := osRelease
+	osRelease = path
+	defer func() { osRelease = restore }()
+
+	if got := distroName(); got != "Rocky Linux 10.0 (Red Quartz)" {
+		t.Errorf("distroName = %q", got)
+	}
+}
+
+func TestRunScheduledObeysTheMode(t *testing.T) {
+	withSystemd(t, true)
+
+	newManager := func(run *fakeRunner) *Manager {
+		run.say(showUnit, "LoadState=loaded\nActiveState=active\nSubState=exited\nResult=success\nExecMainStatus=0\nInvocationID=abc123\n")
+		run.say("journalctl --no-pager -o cat _SYSTEMD_INVOCATION_ID=abc123", "Complete!")
+		return New(Options{PackageManager: "dnf", StateDir: t.TempDir(), Run: run, Root: true})
+	}
+
+	// Manual still checks, so the page can say what is waiting, but the
+	// box does not change under anyone.
+	run := dnfRunner(t)
+	m := newManager(run)
+	out, err := m.RunScheduled(t.Context(), ModeManual, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "by hand") || !strings.Contains(out, "6 update(s)") {
+		t.Errorf("manual = %q", out)
+	}
+	if run.ran("systemd-run --unit=ostiole-sysupdate --quiet --property=Type=oneshot --property=RemainAfterExit=yes --property=TimeoutStartSec=3600 --setenv=LC_ALL=C --setenv=LANG=C --setenv=DEBIAN_FRONTEND=noninteractive -- dnf -y upgrade") {
+		t.Error("manual mode installed something")
+	}
+	if st := m.Status(false); len(st.Pending.Packages) != 6 {
+		t.Errorf("manual mode did not record what is waiting: %+v", st.Pending)
+	}
+
+	// Security installs, and only the security fixes.
+	run = dnfRunner(t)
+	m = newManager(run)
+	if _, err := m.RunScheduled(t.Context(), ModeSecurity, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !run.ran("systemd-run --unit=ostiole-sysupdate --quiet --property=Type=oneshot --property=RemainAfterExit=yes --property=TimeoutStartSec=3600 --setenv=LC_ALL=C --setenv=LANG=C --setenv=DEBIAN_FRONTEND=noninteractive -- dnf -y upgrade --security") {
+		t.Errorf("security did not run the security upgrade:\n%s", run.transcript())
+	}
+
+	// Security with nothing security-flagged waiting leaves the box
+	// alone rather than upgrading everything.
+	run = dnfRunner(t)
+	run.say("dnf -q --cacheonly check-update --security", "")
+	run.code["dnf -q --cacheonly check-update --security"] = 0
+	m = newManager(run)
+	out, err = m.RunScheduled(t.Context(), ModeSecurity, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "nothing installed") {
+		t.Errorf("security with no fixes = %q", out)
+	}
+	if run.ran("systemd-run --unit=ostiole-sysupdate --quiet --property=Type=oneshot --property=RemainAfterExit=yes --property=TimeoutStartSec=3600 --setenv=LC_ALL=C --setenv=LANG=C --setenv=DEBIAN_FRONTEND=noninteractive -- dnf -y upgrade --security") {
+		t.Error("it upgraded anyway")
+	}
+}

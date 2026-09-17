@@ -451,6 +451,7 @@ func (c *Config) Validate() error {
 	v.services(c, ifaces)
 	v.blocking(c, aliases)
 	v.crons(c)
+	v.updates(&c.Updates)
 
 	if len(v.issues) == 0 {
 		return nil
@@ -500,15 +501,17 @@ func (v *validator) blocking(c *Config, aliases map[string]AliasType) {
 		}
 	}
 
-	never := map[string]bool{}
-	for _, n := range c.NeverBlocked() {
-		never[n] = true
-	}
+	never := c.NeverBlocked()
 	for i, d := range b.Deny {
 		path := fmt.Sprintf("blocking.deny[%d]", i)
 		v.blockedName(path, d)
-		if never[strings.ToLower(strings.Trim(strings.TrimSpace(d), "."))] {
-			v.add(path, "%q is a name this box answers for; blocking it would take the UI away from anyone reaching it by name", d)
+		// Blocking is by subtree, so denying a parent of one of this box's
+		// own names takes it away just as surely as denying it outright.
+		for _, n := range never {
+			if CoversName(d, n) {
+				v.add(path, "%q covers %q, a name this box answers for; blocking it would take the UI away from anyone reaching it by name", d, n)
+				break
+			}
 		}
 	}
 	for i, d := range b.Allow {
@@ -528,6 +531,10 @@ func (v *validator) blocking(c *Config, aliases map[string]AliasType) {
 		} else if t != AliasHosts && t != AliasGeoIP {
 			v.add(path, "alias %q holds ports, not addresses", ref.name)
 		}
+	}
+	if b.MaxDomains < 0 || b.MaxDomains > MaxBlockedDomains {
+		v.add("blocking.maxDomains", "%d must be 0-%d (0 means the default); dnsmasq holds about 90 MB per million names",
+			b.MaxDomains, MaxBlockedDomains)
 	}
 	if b.QueryLog.Entries < 0 || b.QueryLog.Entries > 100_000 {
 		v.add("blocking.queryLog.entries", "%d must be 0-100000 (0 means %d)", b.QueryLog.Entries, DefaultQueryLogEntries)
@@ -1090,6 +1097,9 @@ func (v *validator) crons(c *Config) {
 			} else if !strings.HasPrefix(job.Command, "/") {
 				v.add(path+".command", "%q must be an absolute path, so it cannot depend on a PATH", job.Command)
 			}
+		case CronSystemUpdate, CronOstioleUpdate:
+			// Both are scheduled from the update settings; a job written
+			// out by hand is allowed to name them as well.
 		default:
 			v.add(path+".job", "unknown job %q", job.Job)
 		}
@@ -1120,6 +1130,45 @@ func checkCronSchedule(expr string) error {
 }
 
 var cronShorthands = []string{"@yearly", "@annually", "@monthly", "@weekly", "@daily", "@midnight", "@hourly"}
+
+// packageRe is what a package name may look like. It is deliberately
+// permissive — every distro spells them differently — and exists to keep
+// an argument list free of shell metacharacters and stray flags.
+var packageRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]*$`)
+
+// updates checks the settings the two update jobs read. An empty mode or
+// schedule is the default rather than a mistake.
+func (v *validator) updates(u *Updates) {
+	check := func(path string, mode UpdateMode, schedule string) {
+		if mode != "" && !slices.Contains(UpdateModes, mode) {
+			v.add(path+".mode", "%q is not an update mode (%s)", mode, joinModes())
+		}
+		if schedule != "" {
+			if err := checkCronSchedule(schedule); err != nil {
+				v.add(path+".schedule", "%v", err)
+			}
+		}
+	}
+	check("updates.system", u.System.Mode, u.System.Schedule)
+	check("updates.ostiole", u.Ostiole.Mode, u.Ostiole.Schedule)
+
+	for i, p := range u.System.Exclude {
+		if !packageRe.MatchString(p) {
+			v.add(fmt.Sprintf("updates.system.exclude[%d]", i), "%q does not look like a package name", p)
+		}
+	}
+	if c := u.Ostiole.Channel; c != "" && c != ChannelStable && c != ChannelBeta {
+		v.add("updates.ostiole.channel", "%q must be %s or %s", c, ChannelStable, ChannelBeta)
+	}
+}
+
+func joinModes() string {
+	out := make([]string, 0, len(UpdateModes))
+	for _, m := range UpdateModes {
+		out = append(out, string(m))
+	}
+	return strings.Join(out, ", ")
+}
 
 func (v *validator) system(s *System) {
 	for field, tmpl := range map[string]string{"geoIPv4Url": s.GeoIPv4URL, "geoIPv6Url": s.GeoIPv6URL} {

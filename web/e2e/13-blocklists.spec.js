@@ -75,26 +75,52 @@ test('a blocklist alias fetches, lands in the ruleset, and refreshes', async ({ 
   await page.screenshot({ path: shot('99-blocklist-fetched'), fullPage: true })
 })
 
-test('a country alias asks for codes, not addresses', async ({ page }) => {
+test('a country alias is picked by name, and a preset picks a whole bloc', async ({ page }) => {
   await login(page)
   await page.goto('/firewall')
   await sidebar(page, 'Aliases')
 
   await page.getByRole('button', { name: 'Add alias' }).click()
   const dialog = page.getByRole('dialog')
-  await dialog.getByLabel('Name').fill('countries')
+  await dialog.getByLabel('Name', { exact: true }).fill('countries')
   await dialog.getByLabel('Type').selectOption('geoip')
   // There is no URL to give: the source is a system setting.
   await expect(dialog.getByLabel('Fetch from')).toHaveCount(0)
-  await expect(dialog).toContainText('two-letter country codes')
-  await dialog.getByLabel('Entries').fill('not-a-country')
-  await dialog.getByRole('button', { name: 'Save to draft' }).click()
 
-  // The server catches it, because the browser is not the last word.
-  await page.getByRole('button', { name: /Apply with \d+s confirmation/ }).click()
-  await expect(page.getByRole('alert')).toContainText('two-letter country code')
-  await page.getByRole('button', { name: 'Discard' }).click()
-  await expect(page.getByText('Unapplied changes.')).toHaveCount(0)
+  // Countries are chosen by name; the codes are what gets stored.
+  await dialog.getByLabel('Find a country').fill('german')
+  await dialog.getByRole('checkbox', { name: /Germany/ }).check()
+  await dialog.getByLabel('Find a country').fill('france')
+  await dialog.getByRole('checkbox', { name: /France/ }).check()
+  await expect(dialog).toContainText('2 selected')
+  await expect(dialog).toContainText('France, Germany')
+
+  // One click for a bloc nobody wants to tick 27 times.
+  await dialog.getByLabel('Find a country').fill('')
+  await dialog.getByRole('button', { name: '+ European Union' }).click()
+  await expect(dialog).toContainText('27 selected')
+  await page.screenshot({ path: shot('99-countries'), fullPage: true })
+
+  await dialog.getByRole('button', { name: 'Save to draft' }).click()
+  const row = page.getByRole('row').filter({ hasText: 'countries' })
+  await expect(row).toContainText('27 countries')
+  await expect(row).toContainText('Austria')
+
+  // It is a real alias: a rule can use it, and the ruleset gets both families.
+  await sidebar(page, 'Rules')
+  await page.getByRole('group', { name: 'Zone' }).getByRole('button', { name: 'wan' }).click()
+  await page.getByRole('button', { name: 'Add rule' }).click()
+  const rule = page.getByRole('dialog')
+  await rule.getByLabel('Description').fill('Block the EU')
+  await rule.getByLabel('Action').selectOption('drop')
+  await rule.getByLabel('Match', { exact: true }).first().selectOption('alias')
+  await rule.getByLabel('Alias', { exact: true }).selectOption('countries')
+  await rule.getByRole('button', { name: 'Save to draft' }).click()
+  await expect(page.getByRole('row').filter({ hasText: 'Block the EU' })).toContainText(
+    '@countries',
+  )
+
+  await applyAndConfirm(page)
 })
 
 test('hybrid outbound NAT puts your rules ahead of the automatic one', async ({ page }) => {

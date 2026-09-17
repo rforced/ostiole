@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import { api } from '@/lib/api'
+import { COUNTRIES } from '@/lib/countries'
 import { useConfigStore } from '@/stores/config'
 import AliasDialog from '@/views/firewall/AliasDialog.vue'
 
@@ -40,6 +41,15 @@ async function refreshNow(name) {
   } finally {
     busy.value = ''
   }
+}
+
+const COUNTRY_NAMES = Object.fromEntries(COUNTRIES.map((c) => [c.code, c.name]))
+
+/** Country aliases read better as names than as two-letter codes. */
+function countryNames(codes) {
+  const shown = codes.slice(0, 4).map((c) => COUNTRY_NAMES[c] ?? c)
+  if (codes.length <= 4) return shown.join(', ')
+  return `${shown.join(', ')} … (${codes.length} countries)`
 }
 
 function add() {
@@ -88,7 +98,7 @@ function edit(a) {
             <td class="font-mono font-medium">{{ a.name }}</td>
             <td>{{ a.type }}</td>
             <td class="font-mono text-xs">
-              <template v-if="a.type === 'geoip'">{{ a.entries.join(', ') }}</template>
+              <template v-if="a.type === 'geoip'">{{ countryNames(a.entries) }}</template>
               <template v-else>
                 {{ a.entries.slice(0, 4).join(', ')
                 }}<span v-if="a.entries.length > 4"> … ({{ a.entries.length }})</span>

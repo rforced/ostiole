@@ -96,7 +96,11 @@ func ParseStream(r io.Reader, format model.ListFormat) ([]string, int, model.Lis
 		format = DetectFormat(string(sample))
 	}
 
-	seen := make(map[string]struct{}, 1024)
+	// Names are collected into a slice rather than a set: duplicates are
+	// dropped by the sort in Reduce anyway, and a map of two and a half
+	// million strings costs several hundred megabytes on a box that has
+	// under a gigabyte to begin with.
+	out := make([]string, 0, 1024)
 	skipped := 0
 	read := int64(0)
 	sc := bufio.NewScanner(br)
@@ -114,23 +118,16 @@ func ParseStream(r io.Reader, format model.ListFormat) ([]string, int, model.Lis
 			}
 			continue
 		}
-		if _, dup := seen[name]; dup {
-			continue
-		}
-		seen[name] = struct{}{}
-		if len(seen) > MaxListDomains {
-			return nil, 0, "", fmt.Errorf("more than %d names", MaxListDomains)
+		out = append(out, name)
+		if len(out) > MaxListDomains {
+			return nil, 0, "", fmt.Errorf("more than %d names, which is more than this box can hold", MaxListDomains)
 		}
 	}
 	if err := sc.Err(); err != nil {
 		return nil, 0, "", err
 	}
-	if len(seen) == 0 {
+	if len(out) == 0 {
 		return nil, 0, "", fmt.Errorf("nothing usable in this list (%d unreadable lines); is it really %s?", skipped, format)
-	}
-	out := make([]string, 0, len(seen))
-	for name := range seen {
-		out = append(out, name)
 	}
 	return out, skipped, format, nil
 }

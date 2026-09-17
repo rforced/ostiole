@@ -115,3 +115,49 @@ test('mint an API token and use it to scrape metrics', async ({ page, request })
   await row.getByRole('button', { name: /Delete\?/ }).click()
   await expect(section.getByRole('row').filter({ hasText: 'monitoring' })).toHaveCount(0)
 })
+
+test('choose how this box patches itself, and see why some of it is refused', async ({ page }) => {
+  await login(page)
+  await page.goto('/system')
+
+  const os = page.getByRole('region', { name: 'Operating system updates' })
+  await expect(os).toContainText('dnf')
+  // The end-to-end server is not root, so the card says so rather than
+  // pretending it could install anything.
+  await expect(os).toContainText('root')
+  await expect(os.getByRole('button', { name: 'Check now' })).toBeDisabled()
+
+  // The defaults are what a box gets without being told: security fixes,
+  // Sunday at four.
+  await expect(os.getByLabel('Automatic (Security)')).toBeChecked()
+  await expect(os.getByLabel('Schedule')).toHaveValue('0 4 * * 0')
+
+  await os.getByLabel('Automatic (All)').check()
+  await os.getByLabel('When').selectOption('0 4 * * *')
+  await os.getByLabel('Never upgrade').fill('kernel, kernel-core')
+
+  const ostiole = page.getByRole('region', { name: 'Ostiole updates' })
+  await ostiole.getByLabel('Manual').check()
+  await ostiole.getByLabel('Channel').selectOption('beta')
+
+  await page.screenshot({ path: shot('31-updates'), fullPage: true })
+  await applyAndConfirm(page)
+
+  // Applied, so the daemon is working to these settings and the page
+  // shows them after a reload.
+  await page.reload()
+  await expect(os.getByLabel('Automatic (All)')).toBeChecked()
+  await expect(os.getByLabel('Schedule')).toHaveValue('0 4 * * *')
+  await expect(os.getByLabel('Never upgrade')).toHaveValue('kernel, kernel-core')
+  await expect(ostiole.getByLabel('Manual')).toBeChecked()
+  await expect(ostiole.getByLabel('Channel')).toHaveValue('beta')
+
+  // Both jobs are on the page that says what the box does by itself.
+  await page.goto('/crons')
+  const system = page.getByRole('region', { name: 'What Ostiole does by itself' })
+  await expect(system).toContainText('distro package manager')
+  await expect(system).toContainText('newer Ostiole release')
+  await expect(system.getByRole('row').filter({ hasText: 'distro package manager' })).toContainText(
+    '0 4 * * *',
+  )
+})

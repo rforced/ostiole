@@ -34,6 +34,12 @@ type Jobs struct {
 	RefreshBlocklists func(ctx context.Context) error
 	// Restart restarts a service unit.
 	Restart func(ctx context.Context, unit string) error
+	// SystemUpdate checks the distro package manager and installs what
+	// the mode allows. The mode and the never-upgrade list are read from
+	// the configuration here, so the job has one place to look.
+	SystemUpdate func(ctx context.Context, mode string, exclude []string) (string, error)
+	// SelfUpdate does the same for Ostiole's own releases.
+	SelfUpdate func(ctx context.Context, mode, channel string) (string, error)
 	// Version is recorded in the backups this takes.
 	Version string
 	// Exec runs a command; swapped for a fake in tests.
@@ -61,8 +67,49 @@ func (j *Jobs) Run(ctx context.Context, job model.Cron) (string, error) {
 		return j.restart(ctx, job)
 	case model.CronCommand:
 		return j.command(ctx, job)
+	case model.CronSystemUpdate:
+		return j.systemUpdate(ctx)
+	case model.CronOstioleUpdate:
+		return j.selfUpdate(ctx)
 	}
 	return "", fmt.Errorf("unknown job %q", job.Job)
+}
+
+// systemUpdate patches the Linux underneath Ostiole. The mode decides
+// whether it installs anything at all; the check happens either way, so
+// the page can say what is waiting.
+func (j *Jobs) systemUpdate(ctx context.Context) (string, error) {
+	if j.SystemUpdate == nil {
+		return "", errors.New("this box cannot drive a package manager from here")
+	}
+	updates, err := j.updates()
+	if err != nil {
+		return "", err
+	}
+	return j.SystemUpdate(ctx, string(updates.SystemMode()), updates.System.Exclude)
+}
+
+// selfUpdate keeps Ostiole itself current.
+func (j *Jobs) selfUpdate(ctx context.Context) (string, error) {
+	if j.SelfUpdate == nil {
+		return "", errors.New("this box cannot update Ostiole from here; run `ostiole update`")
+	}
+	updates, err := j.updates()
+	if err != nil {
+		return "", err
+	}
+	return j.SelfUpdate(ctx, string(updates.OstioleMode()), updates.OstioleChannel())
+}
+
+func (j *Jobs) updates() (model.Updates, error) {
+	if j.Config == nil {
+		return model.Updates{}, errors.New("nothing is configured yet")
+	}
+	cfg := j.Config()
+	if cfg == nil {
+		return model.Updates{}, errors.New("nothing is configured yet")
+	}
+	return cfg.Updates, nil
 }
 
 // backup writes a configuration backup and prunes the old ones, so a

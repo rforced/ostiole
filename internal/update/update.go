@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -63,7 +64,23 @@ type Release struct {
 	Notes       string    `json:"notes"`
 	URL         string    `json:"url"`
 	Assets      []Asset   `json:"assets"`
+	// Security is set when the notes carry the marker. It is what makes
+	// a box on the security update mode install this one.
+	Security bool `json:"security,omitempty"`
 }
+
+// SecurityMarker is the line a release carries to say it fixes
+// something. It goes in the release notes, which is the only place both
+// a scripted release and a hand-edited one can put it:
+//
+//	Security-Release: yes
+//
+// The release workflow lifts the annotated tag's message into the notes,
+// so tagging with that line in the message is enough.
+var SecurityMarker = regexp.MustCompile(`(?im)^[\s>*_-]*Security[ -]Release:\s*(yes|true)\b`)
+
+// IsSecurityRelease reports whether release notes carry the marker.
+func IsSecurityRelease(notes string) bool { return SecurityMarker.MatchString(notes) }
 
 // Asset is a downloadable release file.
 type Asset struct {
@@ -163,7 +180,10 @@ func (c *Client) Releases(ctx context.Context) ([]Release, error) {
 		if r.Draft || !semver.IsValid(r.TagName) {
 			continue
 		}
-		rel := Release{Version: strings.TrimPrefix(r.TagName, "v"), Tag: r.TagName, Prerelease: r.Prerelease, PublishedAt: r.PublishedAt, Notes: r.Body, URL: r.HTMLURL}
+		rel := Release{
+			Version: strings.TrimPrefix(r.TagName, "v"), Tag: r.TagName, Prerelease: r.Prerelease,
+			PublishedAt: r.PublishedAt, Notes: r.Body, URL: r.HTMLURL, Security: IsSecurityRelease(r.Body),
+		}
 		for _, a := range r.Assets {
 			rel.Assets = append(rel.Assets, Asset{Name: a.Name, URL: a.URL, Size: a.Size})
 		}
@@ -178,6 +198,10 @@ func (c *Client) Latest(ctx context.Context, ch Channel) (*Release, error) {
 	if err != nil {
 		return nil, err
 	}
+	return latestOf(rels, ch), nil
+}
+
+func latestOf(rels []Release, ch Channel) *Release {
 	var best *Release
 	for i := range rels {
 		r := &rels[i]
@@ -188,7 +212,7 @@ func (c *Client) Latest(ctx context.Context, ch Channel) (*Release, error) {
 			best = r
 		}
 	}
-	return best, nil
+	return best
 }
 
 // Newer reports whether candidate is a newer version than current. A
@@ -214,6 +238,14 @@ type Check struct {
 	Available bool     `json:"available"`
 	Release   *Release `json:"release,omitempty"`
 	Asset     *Asset   `json:"asset,omitempty"`
+	// Security is true when anything published since the running version
+	// carries the security marker. A box three releases behind still
+	// installs the newest one; the marker only decides whether it does so
+	// without being asked.
+	Security bool `json:"security"`
+	// SecurityReleases names those releases, newest first, so the page
+	// can say which one mattered.
+	SecurityReleases []string `json:"securityReleases,omitempty"`
 }
 
 // AssetName is the tarball for this platform.
@@ -223,11 +255,12 @@ func AssetName(version string) string {
 
 // Check compares current with the latest release on the channel.
 func (c *Client) Check(ctx context.Context, current string, ch Channel) (*Check, error) {
-	rel, err := c.Latest(ctx, ch)
+	rels, err := c.Releases(ctx)
 	if err != nil {
 		return nil, err
 	}
 	out := &Check{Current: current, Channel: ch}
+	rel := latestOf(rels, ch)
 	if rel == nil {
 		return out, nil
 	}
@@ -237,6 +270,14 @@ func (c *Client) Check(ctx context.Context, current string, ch Channel) (*Check,
 		out.Asset = a
 	}
 	out.Available = Newer(current, rel.Version) && out.Asset != nil
+	for i := range rels {
+		r := &rels[i]
+		if (r.Prerelease && ch != Beta) || !r.Security || !Newer(current, r.Version) {
+			continue
+		}
+		out.SecurityReleases = append(out.SecurityReleases, r.Tag)
+	}
+	out.Security = out.Available && len(out.SecurityReleases) > 0
 	return out, nil
 }
 

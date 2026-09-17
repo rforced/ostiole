@@ -38,6 +38,10 @@ type globals struct {
 	configDir  string
 	nftBin     string
 	netBackend string
+	// packageManager names the distro package manager instead of looking
+	// for one, which is how a dev run and the end-to-end tests point at
+	// something that is not going to change the box they run on.
+	packageManager string
 
 	// blockCache is shared rather than made twice: the refresher and the
 	// service backend have to agree on what was last fetched.
@@ -65,6 +69,10 @@ func (g *globals) network() (network.Backend, error) {
 func (g *globals) feedsDir() string { return filepath.Join(g.configDir, "feeds") }
 
 func (g *globals) feeds() *feeds.Cache { return feeds.NewCache(g.feedsDir()) }
+
+// updatesDir is where what the box last learned about its own updates is
+// kept: pending packages, the last run, whether a reboot is waiting.
+func (g *globals) updatesDir() string { return filepath.Join(g.configDir, "updates") }
 
 // blocklistDir is where the names fetched for DNS blocking are cached,
 // beside the feed cache and just as disposable.
@@ -111,6 +119,7 @@ func newRootCmd() *cobra.Command {
 	pf.StringVar(&g.configDir, "config-dir", store.DefaultDir, "configuration directory")
 	pf.StringVar(&g.nftBin, "nft", "nft", "path to the nft binary")
 	pf.StringVar(&g.netBackend, "network-backend", "auto", "network backend: auto (networkd when it is running), networkd, or none")
+	pf.StringVar(&g.packageManager, "package-manager", "", "package manager to drive for system updates (dnf, apt-get, zypper, pacman, apk); empty detects one")
 	cmd.AddCommand(
 		newInterfacesCmd(),
 		newServeCmd(g),

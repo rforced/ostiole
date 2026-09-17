@@ -13,6 +13,7 @@ import (
 	"github.com/rforced/ostiole/internal/feeds"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/nft"
+	"github.com/rforced/ostiole/internal/sysupdate"
 	"github.com/rforced/ostiole/internal/version"
 )
 
@@ -29,14 +30,14 @@ it works whether or not the daemon is up.`,
 			if err != nil {
 				return err
 			}
-			if len(cfg.Crons) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "no scheduled jobs")
-				return nil
-			}
+			// The update jobs are not written out anywhere; they come
+			// from the update settings, and this is where somebody looks
+			// to find out when the box next patches itself.
+			jobs := append(append([]model.Cron{}, cfg.Crons...), cfg.DerivedCrons()...)
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
 			fmt.Fprintln(w, "ID\tJOB\tSCHEDULE\tNEXT\tDESCRIPTION")
 			now := time.Now()
-			for _, job := range cfg.Crons {
+			for _, job := range jobs {
 				next := "disabled"
 				if job.Enabled {
 					next = "never"
@@ -87,6 +88,14 @@ it works whether or not the daemon is up.`,
 					return nil
 				},
 				Restart: restartService,
+				SystemUpdate: func(ctx context.Context, mode string, exclude []string) (string, error) {
+					packages := sysupdate.New(sysupdate.Options{
+						PackageManager: g.packageManager,
+						StateDir:       g.updatesDir(),
+						Root:           true,
+					})
+					return packages.RunScheduled(ctx, sysupdate.Mode(mode), exclude)
+				},
 			}
 			out, err := jobs.Run(cmd.Context(), *job)
 			if out != "" {

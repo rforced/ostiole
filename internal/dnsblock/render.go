@@ -6,6 +6,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/rforced/ostiole/internal/model"
 )
@@ -52,6 +53,7 @@ func OptionsFor(cfg *model.Config) Options {
 		Deny:    b.Deny,
 		Never:   cfg.NeverBlocked(),
 		Canary:  b.Enforce.FirefoxCanary,
+		Max:     b.MaxDomains,
 	}
 	for _, l := range b.EnabledLists() {
 		o.Lists = append(o.Lists, l.Name)
@@ -59,15 +61,36 @@ func OptionsFor(cfg *model.Config) Options {
 	return o
 }
 
+// TooManyError says the merged list is bigger than the ceiling allows, and
+// by how much, so the operator can decide what to turn off or how much
+// memory to spend.
+type TooManyError struct {
+	Names   int
+	Ceiling int
+}
+
+func (e *TooManyError) Error() string {
+	return fmt.Sprintf(
+		"the lists come to %d names, over the ceiling of %d; raise the ceiling (about %d MB of dnsmasq) or turn a list off",
+		e.Names, e.Ceiling, e.Names*BytesPerName/(1<<20))
+}
+
 // Result reports what a render came to.
 type Result struct {
 	// Domains is how many names ended up blocked, after the lists were
 	// merged, the redundant subdomains dropped and the allowed ones taken
-	// back out.
-	Domains int
+	// back out. This is the number that costs memory in dnsmasq, and the
+	// one the ceiling applies to — not the sum of the lists, which is
+	// larger by however much they overlap.
+	Domains int `json:"domains"`
 	// Allowed is how many carve-outs were written.
-	Allowed int
+	Allowed int `json:"allowed"`
+	// At is when the merge happened.
+	At time.Time `json:"at,omitempty"`
 }
+
+// EstimatedBytes is roughly what this many names cost dnsmasq.
+func (r Result) EstimatedBytes() int64 { return int64(r.Domains) * BytesPerName }
 
 // Render writes the dnsmasq include file: every name the enabled lists
 // block, plus the operator's own deny list, minus everything allowed.
@@ -131,6 +154,7 @@ func Render(w io.Writer, o Options, c *Cache) (Result, error) {
 
 	mode := o.Mode
 	last := ""
+	over := false
 	for {
 		key, ok := nextKey(srcs)
 		if !ok {
@@ -143,14 +167,20 @@ func Render(w io.Writer, o Options, c *Cache) (Result, error) {
 			continue
 		}
 		last = key
-		name := reverseLabels(key)
-		if err := writeEntry(bw, name, mode); err != nil {
-			return res, err
-		}
 		res.Domains++
 		if res.Domains > ceiling {
-			return res, fmt.Errorf("the lists come to more than %d names; raise the ceiling or turn some off", ceiling)
+			// Keep counting but stop writing: the operator needs the real
+			// total to decide what to turn off, and it costs one more pass
+			// over data that is already open.
+			over = true
+			continue
 		}
+		if err := writeEntry(bw, reverseLabels(key), mode); err != nil {
+			return res, err
+		}
+	}
+	if over {
+		return res, &TooManyError{Names: res.Domains, Ceiling: ceiling}
 	}
 	if err := bw.Flush(); err != nil {
 		return res, err

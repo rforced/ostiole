@@ -125,13 +125,21 @@ func (r *Runner) Run(ctx context.Context) {
 	}
 }
 
+// scheduled is everything this box runs on a timer: the operator's jobs
+// and the two the update settings imply.
+func scheduled(cfg *model.Config) []model.Cron {
+	jobs := make([]model.Cron, 0, len(cfg.Crons)+2)
+	jobs = append(jobs, cfg.Crons...)
+	return append(jobs, cfg.DerivedCrons()...)
+}
+
 // Tick runs every job whose schedule matches the given minute.
 func (r *Runner) Tick(ctx context.Context, now time.Time) {
 	cfg := r.config()
 	if cfg == nil {
 		return
 	}
-	for _, job := range cfg.Crons {
+	for _, job := range scheduled(cfg) {
 		if !job.Enabled {
 			continue
 		}
@@ -243,6 +251,28 @@ func (r *Runner) Statuses() []Status {
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+
+	// The update jobs are Ostiole's own work, but on a schedule the
+	// operator chose, so they are reported with one.
+	if cfg := r.config(); cfg != nil {
+		for _, job := range cfg.DerivedCrons() {
+			st := Status{
+				ID:          job.ID,
+				Kind:        KindSystem,
+				Description: job.Description,
+				Schedule:    job.Schedule,
+				Enabled:     job.Enabled,
+				Job:         string(job.Job),
+			}
+			if s, err := Parse(job.Schedule); err == nil {
+				if next, ok := s.Next(now); ok {
+					st.Next = &next
+				}
+			}
+			r.fill(&st)
+			out = append(out, st)
+		}
+	}
 
 	for _, sys := range r.System {
 		st := Status{

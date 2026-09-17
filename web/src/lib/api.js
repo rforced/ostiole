@@ -208,6 +208,14 @@ export const api = {
     refresh: (name) => post(`/aliases/${encodeURIComponent(name)}/refresh`),
     refreshAll: () => post('/aliases/feeds/refresh'),
   },
+  blocking: {
+    status: () => get('/blocking'),
+    catalog: () => get('/blocking/catalog'),
+    lookup: (name) => get(`/blocking/lookup?name=${encodeURIComponent(name)}`),
+    refresh: (name) => post(`/blocking/lists/${encodeURIComponent(name)}/refresh`),
+    refreshAll: () => post('/blocking/refresh'),
+    import: (name, body) => post(`/blocking/lists/${encodeURIComponent(name)}/import`, body),
+  },
   crons: {
     list: () => get('/crons'),
     run: (id) => post(`/crons/${encodeURIComponent(id)}/run`),
@@ -241,5 +249,18 @@ export const api = {
     check: (channel = 'stable') => get(`/update/check?channel=${encodeURIComponent(channel)}`),
     status: () => get('/update/status'),
     apply: (channel = 'stable') => post('/update/apply', { channel }),
+  },
+  systemUpdates: {
+    /** What the distro package manager has waiting, and the mode in force. */
+    status: () => get('/system/updates'),
+    /** Ask the package manager now; this refreshes metadata, so it is slow. */
+    check: () => post('/system/updates/check'),
+    /**
+     * Install what is waiting. Omit security to follow the configured mode.
+     *
+     * @param {boolean} [security] install only the security fixes
+     */
+    apply: (security) => post('/system/updates/apply', security === undefined ? {} : { security }),
+    reboot: () => post('/system/reboot'),
   },
 }

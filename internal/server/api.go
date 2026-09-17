@@ -26,6 +26,7 @@ import (
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/store"
 	"github.com/rforced/ostiole/internal/sysstat"
+	"github.com/rforced/ostiole/internal/sysupdate"
 	"github.com/rforced/ostiole/internal/update"
 	"github.com/rforced/ostiole/internal/wg"
 )
@@ -36,6 +37,7 @@ type api struct {
 	engine    *engine.Engine
 	auth      *auth.Service
 	updater   *update.Manager
+	packages  *sysupdate.Manager
 	services  *services.Dnsmasq
 	resolver  *services.Unbound
 	pppoe     *services.PPPoE
@@ -77,6 +79,7 @@ func (a *api) register(mux *router) {
 	a.registerFeeds(mux)
 	a.registerBlocking(mux)
 	a.registerCrons(mux)
+	a.registerSysUpdate(mux)
 	a.registerMetrics(mux)
 	a.registerOpenAPI(mux)
 	mux.HandleFunc("GET /api/v1/status", a.read(a.status))

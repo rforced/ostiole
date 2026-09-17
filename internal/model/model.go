@@ -101,6 +101,9 @@ type Config struct {
 	// Crons are the jobs this box runs on a schedule of the operator's
 	// choosing, alongside the work Ostiole does on its own account.
 	Crons []Cron `json:"crons,omitempty"`
+	// Updates is how this box keeps itself patched: the distro packages
+	// underneath it and Ostiole's own releases.
+	Updates Updates `json:"updates,omitempty"`
 }
 
 // CronJobKind is what a scheduled job does.
@@ -124,6 +127,11 @@ const (
 	// CronCommand runs a command line. It is as powerful as the box, which
 	// is the point and also the warning.
 	CronCommand CronJobKind = "command"
+	// CronSystemUpdate checks the distro package manager and installs what
+	// the update mode allows.
+	CronSystemUpdate CronJobKind = "system-update"
+	// CronOstioleUpdate does the same for Ostiole's own releases.
+	CronOstioleUpdate CronJobKind = "ostiole-update"
 )
 
 // CronJobKinds lists them in the order the UI offers them.
@@ -163,14 +171,144 @@ type Cron struct {
 // DefaultBackupsKept is how many backups a backup job leaves behind.
 const DefaultBackupsKept = 10
 
-// Cron returns the job with the given id.
+// Cron returns the job with the given id. The jobs derived from the
+// update settings answer to their ids too, so "run it now" works for
+// them without the operator having to write them out as jobs.
 func (c *Config) Cron(id string) (*Cron, bool) {
 	for i := range c.Crons {
 		if c.Crons[i].ID == id {
 			return &c.Crons[i], true
 		}
 	}
+	derived := c.DerivedCrons()
+	for i := range derived {
+		if derived[i].ID == id {
+			return &derived[i], true
+		}
+	}
 	return nil, false
+}
+
+// UpdateMode says what an update job is allowed to install.
+type UpdateMode string
+
+// Update modes.
+const (
+	// UpdateManual checks on the schedule and installs nothing, so the box
+	// can say what is waiting without changing itself.
+	UpdateManual UpdateMode = "manual"
+	// UpdateSecurity installs only the updates the publisher marked as
+	// security fixes.
+	UpdateSecurity UpdateMode = "security"
+	// UpdateAll installs everything that is newer.
+	UpdateAll UpdateMode = "all"
+)
+
+// UpdateModes lists them in the order the UI offers them.
+var UpdateModes = []UpdateMode{UpdateAll, UpdateSecurity, UpdateManual}
+
+// DefaultUpdateSchedule is when an update job runs if nobody says
+// otherwise: early on a Sunday, when a reboot hurts least.
+const DefaultUpdateSchedule = "0 4 * * 0"
+
+// Update job ids. They are reported as work Ostiole does on its own
+// account rather than as jobs the operator wrote.
+const (
+	CronIDSystemUpdate  = "system:os-updates"
+	CronIDOstioleUpdate = "system:ostiole-updates"
+)
+
+// Update channels for Ostiole's own releases.
+const (
+	ChannelStable = "stable"
+	ChannelBeta   = "beta"
+)
+
+// Updates is how the box patches itself. The zero value means the
+// defaults, so a configuration written before this existed gets weekly
+// security updates rather than nothing.
+type Updates struct {
+	// System is the distro packages underneath Ostiole.
+	System PackageUpdates `json:"system,omitempty"`
+	// Ostiole is Ostiole's own releases.
+	Ostiole SelfUpdates `json:"ostiole,omitempty"`
+}
+
+// PackageUpdates controls the distro package manager.
+type PackageUpdates struct {
+	// Mode is empty for the default, which is security.
+	Mode UpdateMode `json:"mode,omitempty"`
+	// Schedule is a cron expression; empty means DefaultUpdateSchedule.
+	Schedule string `json:"schedule,omitempty"`
+	// Exclude names packages this box never upgrades, for the kernel a
+	// driver is pinned to or anything else that must not move.
+	Exclude []string `json:"exclude,omitempty"`
+}
+
+// SelfUpdates controls Ostiole's own releases.
+type SelfUpdates struct {
+	// Mode is empty for the default, which is security.
+	Mode UpdateMode `json:"mode,omitempty"`
+	// Schedule is a cron expression; empty means DefaultUpdateSchedule.
+	Schedule string `json:"schedule,omitempty"`
+	// Channel is stable or beta; empty means stable.
+	Channel string `json:"channel,omitempty"`
+}
+
+// SystemMode is the mode the distro packages update under.
+func (u Updates) SystemMode() UpdateMode { return modeOr(u.System.Mode) }
+
+// SystemSchedule is when the distro packages are checked.
+func (u Updates) SystemSchedule() string { return scheduleOr(u.System.Schedule) }
+
+// OstioleMode is the mode Ostiole's own releases update under.
+func (u Updates) OstioleMode() UpdateMode { return modeOr(u.Ostiole.Mode) }
+
+// OstioleSchedule is when Ostiole checks for its own releases.
+func (u Updates) OstioleSchedule() string { return scheduleOr(u.Ostiole.Schedule) }
+
+// OstioleChannel is the release channel in force.
+func (u Updates) OstioleChannel() string {
+	if u.Ostiole.Channel == "" {
+		return ChannelStable
+	}
+	return u.Ostiole.Channel
+}
+
+func modeOr(m UpdateMode) UpdateMode {
+	if m == "" {
+		return UpdateSecurity
+	}
+	return m
+}
+
+func scheduleOr(s string) string {
+	if s == "" {
+		return DefaultUpdateSchedule
+	}
+	return s
+}
+
+// DerivedCrons are the jobs the update settings imply. They are not
+// stored, so there is one place to change a mode and no way for the list
+// of jobs and the settings to disagree.
+func (c *Config) DerivedCrons() []Cron {
+	return []Cron{
+		{
+			ID:          CronIDSystemUpdate,
+			Description: "Check the distro package manager and install what the update mode allows",
+			Enabled:     true,
+			Schedule:    c.Updates.SystemSchedule(),
+			Job:         CronSystemUpdate,
+		},
+		{
+			ID:          CronIDOstioleUpdate,
+			Description: "Check for a newer Ostiole release and install what the update mode allows",
+			Enabled:     true,
+			Schedule:    c.Updates.OstioleSchedule(),
+			Job:         CronOstioleUpdate,
+		},
+	}
 }
 
 // System holds box-level settings.

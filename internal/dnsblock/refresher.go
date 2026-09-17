@@ -43,6 +43,21 @@ type Refresher struct {
 // DefaultTick is how often the refresher wakes up.
 const DefaultTick = 15 * time.Minute
 
+// Report says what a refresh pass did. The confusing case is a pass that
+// fetched nothing at all — blocking is off, or the lists have not been
+// applied yet — so it says which, rather than leaving the operator looking
+// at a button that appeared to do nothing.
+type Report struct {
+	Fetched   []string          `json:"fetched"`
+	Unchanged []string          `json:"unchanged"`
+	Failed    map[string]string `json:"failed,omitempty"`
+	// Note explains a pass that attempted nothing.
+	Note string `json:"note,omitempty"`
+}
+
+// Attempted is how many lists were actually fetched.
+func (r Report) Attempted() int { return len(r.Fetched) + len(r.Unchanged) + len(r.Failed) }
+
 // Run refreshes until the context is cancelled.
 func (r *Refresher) Run(ctx context.Context) {
 	interval := r.Interval
@@ -62,18 +77,24 @@ func (r *Refresher) Run(ctx context.Context) {
 }
 
 // Tick fetches whatever is due. With force, every list is fetched whether
-// it is due or not, which is what the "refresh now" button does.
-func (r *Refresher) Tick(ctx context.Context, force bool) {
+// it is due or not, which is what the "refresh now" button does. The report
+// is for callers that have someone to tell; the timer ignores it.
+func (r *Refresher) Tick(ctx context.Context, force bool) Report {
+	rep := Report{Fetched: []string{}, Unchanged: []string{}}
 	cfg := r.config()
 	if cfg == nil {
-		return
+		rep.Note = "nothing is configured yet"
+		return rep
 	}
-	r.Cache.Prune(cfg)
-	if !cfg.Blocking.Enabled {
+	defer func() {
 		if r.OnTick != nil {
 			r.OnTick()
 		}
-		return
+	}()
+	r.Cache.Prune(cfg)
+	if !cfg.Blocking.Enabled {
+		rep.Note = "DNS blocking is off, so no list was fetched"
+		return rep
 	}
 	changed := false
 	for _, l := range cfg.Blocking.EnabledLists() {
@@ -84,18 +105,27 @@ func (r *Refresher) Tick(ctx context.Context, force bool) {
 			continue
 		}
 		updated, err := r.refresh(ctx, l)
-		if err != nil {
+		switch {
+		case err != nil:
 			r.log().Warn("could not refresh a blocklist", "list", l.Name, "err", err)
-			continue
+			if rep.Failed == nil {
+				rep.Failed = map[string]string{}
+			}
+			rep.Failed[l.Name] = err.Error()
+		case updated:
+			rep.Fetched = append(rep.Fetched, l.Name)
+		default:
+			rep.Unchanged = append(rep.Unchanged, l.Name)
 		}
 		changed = changed || updated
 	}
 	if changed {
 		r.Push(ctx, cfg)
 	}
-	if r.OnTick != nil {
-		r.OnTick()
+	if rep.Attempted() == 0 && rep.Note == "" {
+		rep.Note = "no list on this box has a URL to fetch"
 	}
+	return rep
 }
 
 // RefreshOne fetches a single list now and reports how many names it ended
@@ -182,17 +212,24 @@ func (r *Refresher) Push(ctx context.Context, cfg *model.Config) {
 		return
 	}
 	o := OptionsFor(cfg)
-	o.Max = r.Max
+	if r.Max > 0 {
+		o.Max = r.Max
+	}
+	var res Result
 	changed, err := r.Loader.Load(ctx, func(w io.Writer) error {
-		_, rerr := Render(w, o, r.Cache)
+		var rerr error
+		res, rerr = Render(w, o, r.Cache)
 		return rerr
 	})
 	if err != nil {
 		r.log().Warn("could not install the blocklist", "err", err)
 		return
 	}
+	if err := r.Cache.SaveMerged(res); err != nil {
+		r.log().Warn("could not record what the merge came to", "err", err)
+	}
 	if changed {
-		r.log().Info("blocklist installed", "names", r.Cache.Total(cfg))
+		r.log().Info("blocklist installed", "names", res.Domains, "fromLists", r.Cache.Total(cfg))
 	}
 }
 

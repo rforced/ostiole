@@ -6,6 +6,7 @@ import AccessSection from '@/views/system/AccessSection.vue'
 import BackupSection from '@/views/system/BackupSection.vue'
 import CertificateSection from '@/views/system/CertificateSection.vue'
 import ManagementSection from '@/views/system/ManagementSection.vue'
+import OsUpdatesSection from '@/views/system/OsUpdatesSection.vue'
 import PasswordSection from '@/views/system/PasswordSection.vue'
 import RevisionsSection from '@/views/system/RevisionsSection.vue'
 import RulesetSection from '@/views/system/RulesetSection.vue'
@@ -26,6 +27,7 @@ onMounted(() => config.load())
     <AccessSection />
     <CertificateSection />
     <UpdatesSection />
+    <OsUpdatesSection />
     <BackupSection v-if="config.draft" />
     <RevisionsSection v-if="config.draft" />
     <RulesetSection />

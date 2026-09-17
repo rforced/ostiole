@@ -16,19 +16,28 @@ import (
 )
 
 // Limits on what a list may be. These are larger than the address-list
-// limits in internal/feeds because domain lists are: the biggest published
-// ones run to a few hundred thousand names.
+// limits in internal/feeds because domain lists are: an ordinary one runs to
+// a few hundred thousand names, and HaGeZi's threat-intelligence feed is
+// two and a half million on its own.
 const (
-	// MaxBytes is the most one list may be over the wire.
-	MaxBytes = 64 << 20
+	// MaxBytes is the most one list may be over the wire. The largest
+	// published list measured 50 MB in September 2026.
+	MaxBytes = 128 << 20
 	// MaxListDomains is the most one list may contribute.
-	MaxListDomains = 1_000_000
-	// MaxDomains is the most all lists together may come to. A million
-	// names costs dnsmasq about 90 MB, which is real money on an
-	// appliance, so the limit is refused rather than swallowed.
-	MaxDomains = 1_000_000
-	// DefaultMaxDomains is the ceiling until someone raises it.
-	DefaultMaxDomains = 500_000
+	MaxListDomains = MaxDomains
+	// MaxDomains is the hard ceiling on the merged list, whatever the
+	// configuration asks for. At roughly 90 MB of dnsmasq per million
+	// names (ADR-0005) this is already more memory than most appliances
+	// have; it exists to turn an out-of-memory crash into a clear refusal.
+	MaxDomains = 5_000_000
+	// DefaultMaxDomains is the ceiling when the configuration names none.
+	// A million names costs dnsmasq about 90 MB, which a small box can
+	// afford; more than that should be asked for on purpose.
+	DefaultMaxDomains = 1_000_000
+	// BytesPerName is roughly what a blocked name costs in dnsmasq's
+	// resident memory, measured at 250k and 1M names. It is used to tell
+	// the operator what a list will cost before they turn it on.
+	BytesPerName = 90
 )
 
 // notNames are the names hosts-format lists carry for the loopback and for

@@ -19,6 +19,7 @@ import (
 	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/sysstat"
+	"github.com/rforced/ostiole/internal/sysupdate"
 	"github.com/rforced/ostiole/internal/update"
 	"github.com/rforced/ostiole/internal/version"
 	"github.com/rforced/ostiole/internal/web"
@@ -41,6 +42,9 @@ type Deps struct {
 	Engine  *engine.Engine
 	Auth    *auth.Service
 	Updater *update.Manager // optional; nil disables the update endpoints
+	// Packages drives the distro package manager for system updates; nil
+	// hides those endpoints.
+	Packages *sysupdate.Manager
 	// Services reads dnsmasq state and leases; nil reports "not set up".
 	Services *services.Dnsmasq
 	// Resolver reads unbound's state; nil reports "not set up".
@@ -87,6 +91,7 @@ func Handler(d Deps) http.Handler {
 		engine:     d.Engine,
 		auth:       d.Auth,
 		updater:    d.Updater,
+		packages:   d.Packages,
 		services:   d.Services,
 		resolver:   d.Resolver,
 		pppoe:      d.PPPoE,

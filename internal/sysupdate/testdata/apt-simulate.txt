@@ -1,0 +1,15 @@
+NOTE: This is only a simulation!
+      apt-get needs root privileges for real execution.
+Reading package lists...
+Building dependency tree...
+Reading state information...
+Calculating upgrade...
+The following packages will be upgraded:
+  base-files libssl3 linux-image-amd64 tzdata
+4 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.
+Inst base-files [12.4+deb12u5] (12.4+deb12u6 Debian:12.6/stable [amd64])
+Conf base-files (12.4+deb12u6 Debian:12.6/stable [amd64])
+Inst libssl3 [3.0.11-1~deb12u2] (3.0.14-1~deb12u2 Debian-Security:12/stable-security [amd64])
+Inst linux-image-amd64 (6.1.99-1 Debian-Security:12/stable-security, Debian:12/stable [amd64]) []
+Inst tzdata [2024a-0+deb12u1] (2026c-0+deb12u1 Debian:12.6/stable [all])
+Conf tzdata (2026c-0+deb12u1 Debian:12.6/stable [all])

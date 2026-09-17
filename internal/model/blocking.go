@@ -7,7 +7,7 @@ import "strings"
 // awkward for a client to ask someone else instead.
 //
 // Only the definitions live here. The names themselves are fetched, cached
-// under /var/lib/ostiole and rendered into a dnsmasq include file, so a
+// beside the configuration and rendered into a dnsmasq include file, so a
 // revision of this configuration never carries a quarter of a million
 // domains (ADR-0005).
 type Blocking struct {
@@ -21,6 +21,12 @@ type Blocking struct {
 	Allow []string `json:"allow,omitempty"`
 	// Deny is blocked whether a list names it or not, subdomains included.
 	Deny []string `json:"deny,omitempty"`
+	// MaxDomains is the most names the merged list may come to; zero means
+	// the default. It is a memory budget rather than a policy: dnsmasq
+	// holds roughly 90 MB per million names, so raising it is worth doing
+	// deliberately on a box that has the memory, and worth refusing on one
+	// that does not.
+	MaxDomains int `json:"maxDomains,omitempty"`
 	// Enforce keeps clients on this resolver. Blocking a name achieves
 	// nothing if the client simply asks 8.8.8.8 instead.
 	Enforce DNSEnforce `json:"enforce,omitempty"`
@@ -115,6 +121,11 @@ type QueryLog struct {
 // DefaultQueryLogEntries is the ring size when none is given.
 const DefaultQueryLogEntries = 2000
 
+// MaxBlockedDomains is the most the merged blocklist may ever come to,
+// whatever the configuration asks for. It matches dnsblock.MaxDomains,
+// which cannot be imported here: dnsblock is the one that imports model.
+const MaxBlockedDomains = 5_000_000
+
 // BlockingActive reports whether names are actually being blocked: the
 // feature is on, and so is the DNS server that would enforce it.
 func (c *Config) BlockingActive() bool {
@@ -173,16 +184,32 @@ func (c *Config) NeverBlocked() []string {
 		seen[name] = true
 		out = append(out, name)
 	}
-	add(c.Services.DNS.Domain)
-	add(c.System.Hostname)
-	if c.System.Hostname != "" && c.Services.DNS.Domain != "" {
-		add(c.System.Hostname + "." + c.Services.DNS.Domain)
+	domain := strings.ToLower(strings.Trim(strings.TrimSpace(c.Services.DNS.Domain), "."))
+	// A bare name is also answered with the local domain on the end:
+	// dnsmasq is told expand-hosts, so "printer" resolves as "printer.lan"
+	// too, and blocking either one takes the host away.
+	addBoth := func(name string) {
+		add(name)
+		if domain != "" && !strings.Contains(strings.TrimSpace(name), ".") {
+			add(name + "." + domain)
+		}
 	}
+	add(domain)
+	addBoth(c.System.Hostname)
 	for _, o := range c.Services.DNS.HostOverrides {
-		add(o.Hostname)
+		addBoth(o.Hostname)
 	}
 	for _, l := range c.Services.DHCP.StaticLeases {
-		add(l.Hostname)
+		addBoth(l.Hostname)
 	}
 	return out
+}
+
+// CoversName reports whether blocking parent would also block name, which is
+// what makes blocking a parent of this box's own name dangerous: blocking is
+// by subtree.
+func CoversName(parent, name string) bool {
+	parent = strings.ToLower(strings.Trim(strings.TrimSpace(parent), "."))
+	name = strings.ToLower(strings.Trim(strings.TrimSpace(name), "."))
+	return parent != "" && (parent == name || strings.HasSuffix(name, "."+parent))
 }

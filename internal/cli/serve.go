@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -28,6 +29,7 @@ import (
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/sysctl"
 	"github.com/rforced/ostiole/internal/sysstat"
+	"github.com/rforced/ostiole/internal/sysupdate"
 	"github.com/rforced/ostiole/internal/update"
 	"github.com/rforced/ostiole/internal/version"
 )
@@ -111,6 +113,19 @@ at your own.`,
 				// root; without it the next apply carries the list.
 				blocklists.Loader = services.NewDNSBlock(g.blocklists())
 			}
+			// The distro package manager, driven from here so a box that
+			// nobody logs into still gets its security fixes. It exists
+			// even where it cannot be used, so the page can explain why.
+			packages := sysupdate.New(sysupdate.Options{
+				PackageManager: g.packageManager,
+				StateDir:       g.updatesDir(),
+				Root:           os.Geteuid() == 0,
+				Log:            slog.Default(),
+			})
+			// An update that upgraded Ostiole itself restarted this
+			// daemon; pick the transaction back up if it is still going.
+			packages.Reattach(ctx)
+			updater := newUpdater(cfg)
 			cronJobs := &cron.Jobs{
 				Config:            eng.Effective,
 				Users:             as.Users,
@@ -118,6 +133,15 @@ at your own.`,
 				Refresh:           func(ctx context.Context) error { refresher.Tick(ctx, true); return nil },
 				RefreshBlocklists: func(ctx context.Context) error { blocklists.Tick(ctx, true); return nil },
 				Restart:           restartService,
+				SystemUpdate: func(ctx context.Context, mode string, exclude []string) (string, error) {
+					return packages.RunScheduled(ctx, sysupdate.Mode(mode), exclude)
+				},
+				SelfUpdate: func(ctx context.Context, mode, channel string) (string, error) {
+					if updater == nil {
+						return "", errors.New("this binary cannot update itself")
+					}
+					return updater.RunScheduled(ctx, update.Mode(mode), update.Channel(channel))
+				},
 			}
 			crons := cron.NewRunner(eng.Effective, cronJobs, slog.Default())
 			refresher.OnTick = func() { crons.Note("system:aliases") }
@@ -125,7 +149,8 @@ at your own.`,
 			deps := server.Deps{
 				Engine:     eng,
 				Auth:       as,
-				Updater:    newUpdater(cfg),
+				Updater:    updater,
+				Packages:   packages,
 				Tables:     &nft.Exec{Bin: g.nftBin},
 				Units:      install.ExecSystemctl{},
 				Tokens:     tokens,

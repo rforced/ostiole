@@ -187,6 +187,9 @@ export const useConfigStore = defineStore('config', () => {
       if (r.destination?.alias === name || r.destination?.portAlias === name)
         refs.push(`rule ${r.id} destination`)
     }
+    const enforce = draft.value?.blocking?.enforce ?? {}
+    if (enforce.dohAlias === name) refs.push('DNS blocking: DoH servers')
+    if (enforce.exemptAlias === name) refs.push('DNS blocking: exempt clients')
     return refs
   }
 
@@ -379,6 +382,32 @@ export const useConfigStore = defineStore('config', () => {
     return refs
   }
 
+  // ---- updates ---------------------------------------------------------
+
+  /**
+   * The update settings, created on first use. An empty block means the
+   * defaults, which the daemon fills in: security fixes, weekly.
+   */
+  function ensureUpdates() {
+    const d = draft.value
+    if (!d.updates) d.updates = {}
+    if (!d.updates.system) d.updates.system = {}
+    if (!d.updates.ostiole) d.updates.ostiole = {}
+    return d.updates
+  }
+
+  const updates = computed(() => draft.value?.updates ?? {})
+  const systemUpdates = computed(() => updates.value.system ?? {})
+  const ostioleUpdates = computed(() => updates.value.ostiole ?? {})
+
+  /**
+   * @param {"system"|"ostiole"} which
+   * @param {object} patch fields to change
+   */
+  function setUpdates(which, patch) {
+    Object.assign(ensureUpdates()[which], patch)
+  }
+
   // ---- scheduled jobs --------------------------------------------------
 
   const crons = computed(() => draft.value?.crons ?? [])
@@ -407,6 +436,32 @@ export const useConfigStore = defineStore('config', () => {
 
   function removeRoute(id) {
     draft.value.routes = routes.value.filter((r) => r.id !== id)
+  }
+
+  // ---- DNS blocking ----------------------------------------------------
+
+  const blocking = computed(() => draft.value?.blocking ?? { enabled: false })
+
+  function ensureBlocking() {
+    const d = draft.value
+    if (!d.blocking) d.blocking = { enabled: false }
+    if (!d.blocking.enforce) d.blocking.enforce = {}
+    return d.blocking
+  }
+
+  const blockLists = computed(() => draft.value?.blocking?.lists ?? [])
+
+  function upsertBlockList(list, previousName = list.name) {
+    const b = ensureBlocking()
+    const all = b.lists ?? (b.lists = [])
+    const idx = all.findIndex((l) => l.name === previousName)
+    if (idx === -1) all.push(clone(list))
+    else all[idx] = clone(list)
+  }
+
+  function removeBlockList(name) {
+    const b = ensureBlocking()
+    b.lists = (b.lists ?? []).filter((l) => l.name !== name)
   }
 
   return {
@@ -450,12 +505,21 @@ export const useConfigStore = defineStore('config', () => {
     upsertSchedule,
     scheduleReferences,
     removeSchedule,
+    blocking,
+    ensureBlocking,
+    blockLists,
+    upsertBlockList,
+    removeBlockList,
     upsertOutboundRule,
     removeOutboundRule,
     routes,
     crons,
     upsertCron,
     removeCron,
+    updates,
+    systemUpdates,
+    ostioleUpdates,
+    setUpdates,
     gateways,
     upsertGateway,
     removeGateway,

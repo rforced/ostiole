@@ -1,0 +1,88 @@
+package model
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestNeverBlockedCoversTheExpandedNames(t *testing.T) {
+	c := &Config{}
+	c.System.Hostname = "gateway"
+	c.Services.DNS.Domain = "lan"
+	c.Services.DNS.HostOverrides = []HostOverride{{Hostname: "printer", IP: "192.168.1.5"}}
+	c.Services.DHCP.StaticLeases = []StaticLease{{MAC: "aa:bb:cc:dd:ee:01", Hostname: "nas"}}
+
+	got := map[string]bool{}
+	for _, n := range c.NeverBlocked() {
+		got[n] = true
+	}
+	// dnsmasq is told expand-hosts, so both forms answer and both matter.
+	for _, want := range []string{"lan", "gateway", "gateway.lan", "printer", "printer.lan", "nas", "nas.lan"} {
+		if !got[want] {
+			t.Errorf("%q is not protected; have %v", want, c.NeverBlocked())
+		}
+	}
+}
+
+func TestDenyingAParentOfOurOwnNameIsRefused(t *testing.T) {
+	c := starterForBlocking()
+	c.Blocking.Deny = []string{"lan"}
+	if err := c.Validate(); err == nil {
+		t.Fatal("denying the local domain was accepted")
+	}
+	// A name that merely looks similar is fine.
+	c.Blocking.Deny = []string{"notlan"}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("an unrelated name was refused: %v", err)
+	}
+}
+
+func TestBlockingNeedsTheDNSServer(t *testing.T) {
+	c := starterForBlocking()
+	c.Services.DNS.Enabled = false
+	err := c.Validate()
+	if err == nil {
+		t.Fatal("blocking with the DNS server off was accepted")
+	}
+	if !strings.Contains(err.Error(), "dnsmasq is what refuses the names") {
+		t.Errorf("unhelpful error: %v", err)
+	}
+}
+
+// starterForBlocking is the first configuration `ostiole init` writes, with
+// the DNS server on and blocking turned on over it.
+func starterForBlocking() *Config {
+	c := Starter(StarterOptions{Hostname: "gateway"})
+	c.Services.DNS.Enabled = true
+	c.Services.DNS.Domain = "lan"
+	c.Services.DNS.Upstreams = []string{"1.1.1.1"}
+	c.Blocking = Blocking{
+		Enabled: true,
+		Lists:   []BlockList{{Name: "ads", Enabled: true, URL: "https://example.test/hosts"}},
+	}
+	return c
+}
+
+// The UI picks countries from a list now, so this is the only thing standing
+// between a hand-written configuration and a GeoIP alias that fetches 404s.
+func TestCountryAliasRefusesWhatIsNotACode(t *testing.T) {
+	c := starterForBlocking()
+	c.Aliases = []Alias{{Name: "countries", Type: AliasGeoIP, Entries: []string{"de", "not-a-country"}}}
+	err := c.Validate()
+	if err == nil {
+		t.Fatal("a GeoIP alias with junk in it was accepted")
+	}
+	if !strings.Contains(err.Error(), "two-letter country code") {
+		t.Errorf("unhelpful error: %v", err)
+	}
+
+	c.Aliases[0].Entries = []string{"de", "FR"}
+	if err := c.Validate(); err != nil {
+		t.Errorf("real country codes were refused: %v", err)
+	}
+
+	c.Aliases[0].Entries = nil
+	if err := c.Validate(); err == nil {
+		t.Error("a country alias with no countries was accepted")
+	}
+}

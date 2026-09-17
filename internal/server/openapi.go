@@ -90,6 +90,7 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/diagnostics/neighbours": {summary: "The ARP and NDP tables.", role: auth.RoleViewer},
 	"GET /api/v1/certificate":            {summary: "Describe the certificate the web UI serves.", role: auth.RoleViewer},
 	"GET /api/v1/update/status":          {summary: "Progress of an update that is running.", role: auth.RoleViewer},
+	"GET /api/v1/system/updates":         {summary: "What the distro package manager has waiting, and whether a reboot is.", role: auth.RoleViewer},
 	"POST /api/v1/config/diff":           {summary: "Compare two configurations.", role: auth.RoleViewer},
 
 	"POST /api/v1/config/starter":         {summary: "Build a first configuration from the wizard's answers.", role: auth.RoleOperator},
@@ -102,6 +103,7 @@ var routeDocs = map[string]routeDoc{
 	"POST /api/v1/diagnostics/ping":       {summary: "Ping an address from this box.", role: auth.RoleOperator},
 	"POST /api/v1/diagnostics/traceroute": {summary: "Trace the route to an address.", role: auth.RoleOperator},
 	"POST /api/v1/diagnostics/capture":    {summary: "Capture packets and return a pcap file.", role: auth.RoleOperator},
+	"POST /api/v1/system/updates/check":   {summary: "Ask the distro package manager what is waiting.", role: auth.RoleOperator},
 
 	"GET /api/v1/config/backup":            {summary: "Download the configuration as a backup file.", role: auth.RoleAdmin},
 	"POST /api/v1/certificate":             {summary: "Install a certificate and its private key.", role: auth.RoleAdmin},
@@ -113,6 +115,8 @@ var routeDocs = map[string]routeDoc{
 	"POST /api/v1/users/{name}/role":       {summary: "Change what an account may do.", role: auth.RoleAdmin},
 	"GET /api/v1/update/check":             {summary: "Ask GitHub whether a newer release exists.", role: auth.RoleAdmin},
 	"POST /api/v1/update/apply":            {summary: "Download and install a release.", role: auth.RoleAdmin},
+	"POST /api/v1/system/updates/apply":    {summary: "Install the distro packages the update mode allows.", role: auth.RoleAdmin},
+	"POST /api/v1/system/reboot":           {summary: "Reboot this box.", role: auth.RoleAdmin},
 
 	"GET /api/v1/aliases/feeds":           {summary: "When each fetched alias was last updated, and what went wrong if it did.", role: auth.RoleViewer},
 	"POST /api/v1/aliases/feeds/refresh":  {summary: "Fetch every address list and country list now.", role: auth.RoleOperator},

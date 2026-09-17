@@ -5,6 +5,7 @@ import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import { newId } from '@/lib/ids'
 import { parseList } from '@/lib/lists'
+import { SCHEDULE_PRESETS, presetFor } from '@/lib/schedules'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({ cron: { type: Object, default: null } })
@@ -19,16 +20,6 @@ const JOBS = [
   { value: 'refresh-aliases', label: 'Fetch the blocklists and country ranges' },
   { value: 'restart-service', label: 'Restart a service' },
   { value: 'command', label: 'Run a command' },
-]
-
-// The schedules people actually want, so nobody has to remember the
-// field order to get a nightly backup.
-const PRESETS = [
-  { value: '0 4 * * *', label: 'Every night at 04:00' },
-  { value: '0 * * * *', label: 'Every hour' },
-  { value: '*/15 * * * *', label: 'Every 15 minutes' },
-  { value: '0 4 * * 0', label: 'Sunday at 04:00' },
-  { value: '0 4 1 * *', label: 'The first of the month at 04:00' },
 ]
 
 function blank() {
@@ -49,7 +40,7 @@ function blank() {
 }
 
 const preset = computed({
-  get: () => (PRESETS.some((p) => p.value === form.value.schedule) ? form.value.schedule : ''),
+  get: () => presetFor(form.value.schedule),
   set: (v) => {
     if (v) form.value.schedule = v
   },
@@ -128,7 +119,9 @@ function save() {
         <FormField id="cron-preset" label="When">
           <select id="cron-preset" v-model="preset" class="input">
             <option value="">Something else</option>
-            <option v-for="p in PRESETS" :key="p.value" :value="p.value">{{ p.label }}</option>
+            <option v-for="p in SCHEDULE_PRESETS" :key="p.value" :value="p.value">
+              {{ p.label }}
+            </option>
           </select>
         </FormField>
         <FormField

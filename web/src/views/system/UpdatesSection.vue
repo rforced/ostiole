@@ -3,10 +3,10 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import FormField from '@/components/FormField.vue'
 import { ApiError, api } from '@/lib/api'
+import { useConfigStore } from '@/stores/config'
+import UpdateModeFields from '@/views/system/UpdateModeFields.vue'
 
-const CHANNEL_KEY = 'ostiole.updateChannel'
-
-const channel = ref(localStorage.getItem(CHANNEL_KEY) === 'beta' ? 'beta' : 'stable')
+const config = useConfigStore()
 const current = ref('')
 const check = ref(null)
 const status = ref(null)
@@ -16,9 +16,13 @@ const restartedTo = ref('')
 
 let poll = 0
 
+// The channel lives in the configuration rather than in this browser,
+// because the scheduled update has to know which one to follow.
+const settings = computed(() => config.ostioleUpdates)
+const channel = computed(() => settings.value.channel || 'stable')
+
 function setChannel(v) {
-  channel.value = v
-  localStorage.setItem(CHANNEL_KEY, v)
+  config.setUpdates('ostiole', { channel: v })
   check.value = null
 }
 
@@ -119,7 +123,7 @@ onBeforeUnmount(stopPolling)
 
 <template>
   <section class="card space-y-4" aria-labelledby="upd-title">
-    <h2 id="upd-title" class="card-title">Updates</h2>
+    <h2 id="upd-title" class="card-title">Ostiole updates</h2>
     <dl class="kv max-w-md">
       <dt>Installed</dt>
       <dd class="font-mono">{{ current || '…' }}</dd>
@@ -128,8 +132,25 @@ onBeforeUnmount(stopPolling)
     </dl>
 
     <p v-if="status?.packageManaged" class="text-sm text-neutral-500">
-      This binary came from a distro package. Update it with your package manager.
+      This binary came from a distro package, so the operating system updates below are what upgrade
+      it.
     </p>
+
+    <template v-if="config.draft">
+      <UpdateModeFields
+        prefix="ostiole-upd"
+        :mode="settings.mode ?? ''"
+        :schedule="settings.schedule ?? ''"
+        security-note="A release only counts as a security release when its notes say so."
+        @update:mode="config.setUpdates('ostiole', { mode: $event })"
+        @update:schedule="config.setUpdates('ostiole', { schedule: $event })"
+      />
+      <p class="text-xs text-neutral-500">
+        Automatic (Security) installs a release only when something published since this version is
+        marked a security release. The service restarts afterwards and rolls back if the new version
+        fails its health check.
+      </p>
+    </template>
 
     <div class="flex flex-wrap items-end gap-3">
       <FormField id="upd-channel" label="Channel">
@@ -172,6 +193,7 @@ onBeforeUnmount(stopPolling)
     >
       <p class="font-medium">
         {{ check.release.tag }}
+        <span v-if="check.security" class="badge badge-warn ml-1">security release</span>
         <span class="font-normal text-neutral-500"
           >· {{ new Date(check.release.publishedAt).toLocaleDateString() }}</span
         >

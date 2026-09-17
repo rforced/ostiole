@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/rforced/ostiole/internal/dnsblock"
 	"github.com/rforced/ostiole/internal/model"
@@ -15,7 +16,7 @@ import (
 type BlocklistRefresher interface {
 	RefreshOne(ctx context.Context, name string) (int, error)
 	Store(ctx context.Context, name string, domains []string, skipped int, format model.ListFormat) (int, error)
-	Tick(ctx context.Context, force bool)
+	Tick(ctx context.Context, force bool) dnsblock.Report
 }
 
 func (a *api) registerBlocking(mux *router) {
@@ -37,27 +38,60 @@ type blockingState struct {
 	Lists  []dnsblock.Status  `json:"lists"`
 	Totals blockingTotals     `json:"totals"`
 	Limits blockingLimitsInfo `json:"limits"`
+	// Report is filled in by a refresh, so the caller can be told what the
+	// pass did rather than being left to guess from the table.
+	Report *dnsblock.Report `json:"report,omitempty"`
 }
 
 type blockingTotals struct {
-	// Domains is what the enabled lists come to before merging. The number
-	// actually written is smaller, because lists overlap heavily.
+	// Domains is what the enabled lists come to added together, before
+	// merging. Overlapping lists merge down a long way; lists curated not
+	// to overlap, like HaGeZi's, barely move.
 	Domains int `json:"domains"`
-	Lists   int `json:"lists"`
-	Allow   int `json:"allow"`
-	Deny    int `json:"deny"`
+	// Blocked is what the last installed merge actually came to, which is
+	// what costs memory and what the ceiling applies to. It is zero until
+	// a merge has been installed.
+	Blocked int `json:"blocked"`
+	// MergedAt is when that merge happened.
+	MergedAt *time.Time `json:"mergedAt,omitempty"`
+	// EstimatedMemoryMB is roughly what dnsmasq holds for Blocked names.
+	EstimatedMemoryMB int `json:"estimatedMemoryMb"`
+	Lists             int `json:"lists"`
+	Allow             int `json:"allow"`
+	Deny              int `json:"deny"`
 }
 
 type blockingLimitsInfo struct {
+	// MaxDomains is the ceiling in force: what the configuration asks for,
+	// or the default.
 	MaxDomains int `json:"maxDomains"`
+	// HardMax is the most it can be raised to.
+	HardMax int `json:"hardMax"`
+	// DefaultMax is what it is when the configuration names none.
+	DefaultMax int `json:"defaultMax"`
+	// BytesPerName is what one blocked name costs dnsmasq, so the UI can
+	// price a change without asking the server.
+	BytesPerName int `json:"bytesPerName"`
 }
 
 func (a *api) blockingStatus(w http.ResponseWriter, _ *http.Request) error {
-	st := blockingState{Lists: []dnsblock.Status{}, Limits: blockingLimitsInfo{MaxDomains: dnsblock.DefaultMaxDomains}}
+	writeJSON(w, http.StatusOK, a.blockingState())
+	return nil
+}
+
+func (a *api) blockingState() blockingState {
+	st := blockingState{
+		Lists: []dnsblock.Status{},
+		Limits: blockingLimitsInfo{
+			MaxDomains:   dnsblock.DefaultMaxDomains,
+			HardMax:      dnsblock.MaxDomains,
+			DefaultMax:   dnsblock.DefaultMaxDomains,
+			BytesPerName: dnsblock.BytesPerName,
+		},
+	}
 	cfg := a.engine.Effective()
 	if cfg == nil {
-		writeJSON(w, http.StatusOK, st)
-		return nil
+		return st
 	}
 	st.Enabled = cfg.Blocking.Enabled
 	st.Active = cfg.BlockingActive()
@@ -67,12 +101,22 @@ func (a *api) blockingStatus(w http.ResponseWriter, _ *http.Request) error {
 		Allow: len(cfg.Blocking.Allow),
 		Deny:  len(cfg.Blocking.Deny),
 	}
+	if cfg.Blocking.MaxDomains > 0 {
+		st.Limits.MaxDomains = cfg.Blocking.MaxDomains
+	}
 	if a.blockCache != nil {
 		st.Lists = a.blockCache.Statuses(cfg)
 		st.Totals.Domains = a.blockCache.Total(cfg)
+		if merged, ok := a.blockCache.Merged(); ok {
+			st.Totals.Blocked = merged.Domains
+			st.Totals.EstimatedMemoryMB = int(merged.EstimatedBytes() / (1 << 20))
+			if !merged.At.IsZero() {
+				at := merged.At
+				st.Totals.MergedAt = &at
+			}
+		}
 	}
-	writeJSON(w, http.StatusOK, st)
-	return nil
+	return st
 }
 
 func (a *api) blockingCatalog(w http.ResponseWriter, _ *http.Request) error {
@@ -95,20 +139,34 @@ func (a *api) blockingLookup(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// refreshContext detaches the work from the browser's request. Fetching
+// several published lists takes minutes, and a tab closed halfway through
+// should not leave the box with half a blocklist.
+func refreshContext(r *http.Request) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Minute)
+}
+
 func (a *api) refreshBlocklists(w http.ResponseWriter, r *http.Request) error {
 	if a.blocklists == nil {
 		return &unavailable{errors.New("nothing is refreshing blocklists on this box")}
 	}
-	a.blocklists.Tick(r.Context(), true)
-	return a.blockingStatus(w, r)
+	ctx, cancel := refreshContext(r)
+	defer cancel()
+	report := a.blocklists.Tick(ctx, true)
+	st := a.blockingState()
+	st.Report = &report
+	writeJSON(w, http.StatusOK, st)
+	return nil
 }
 
 func (a *api) refreshBlocklist(w http.ResponseWriter, r *http.Request) error {
 	if a.blocklists == nil {
 		return &unavailable{errors.New("nothing is refreshing blocklists on this box")}
 	}
+	ctx, cancel := refreshContext(r)
+	defer cancel()
 	name := r.PathValue("name")
-	count, err := a.blocklists.RefreshOne(r.Context(), name)
+	count, err := a.blocklists.RefreshOne(ctx, name)
 	if err != nil {
 		return &badRequest{fmt.Errorf("refresh %s: %w", name, err)}
 	}

@@ -88,7 +88,9 @@ func (d *DNSBlock) Render(cfg *model.Config) (network.Files, error) {
 		return files, nil
 	}
 	o := dnsblock.OptionsFor(cfg)
-	o.Max = d.Max
+	if d.Max > 0 {
+		o.Max = d.Max
+	}
 	raw, err := json.MarshalIndent(o, "", "  ")
 	if err != nil {
 		return nil, err
@@ -135,11 +137,16 @@ func (d *DNSBlock) Apply(ctx context.Context, files network.Files) error {
 	if err := writeFile(d.statePath(), state); err != nil {
 		return err
 	}
-	_, err := d.Load(ctx, func(w io.Writer) error {
-		_, rerr := dnsblock.Render(w, o, d.Cache)
+	var res dnsblock.Result
+	if _, err := d.Load(ctx, func(w io.Writer) error {
+		var rerr error
+		res, rerr = dnsblock.Render(w, o, d.Cache)
 		return rerr
-	})
-	return err
+	}); err != nil {
+		return err
+	}
+	// What the merge came to is what the UI compares against the ceiling.
+	return d.Cache.SaveMerged(res)
 }
 
 // Load implements dnsblock.Loader: render through fn, and if what dnsmasq

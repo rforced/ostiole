@@ -25,9 +25,10 @@ import (
 type Cache struct {
 	Dir string
 
-	mu   sync.RWMutex
-	meta map[string]Meta
-	errs map[string]cacheError
+	mu     sync.RWMutex
+	meta   map[string]Meta
+	errs   map[string]cacheError
+	merged *Result
 }
 
 // Meta is what is known about one cached list.
@@ -58,7 +59,7 @@ type Status struct {
 	Enabled     bool             `json:"enabled"`
 	Domains     int              `json:"domains"`
 	Skipped     int              `json:"skipped,omitempty"`
-	FetchedAt   time.Time        `json:"fetchedAt,omitempty"`
+	FetchedAt   *time.Time       `json:"fetchedAt,omitempty"`
 	LastError   string           `json:"lastError,omitempty"`
 	LastTriedAt *time.Time       `json:"lastTriedAt,omitempty"`
 	// Stale is true when the cache is older than twice the refresh period,
@@ -93,6 +94,12 @@ func (c *Cache) loadAll() {
 			continue
 		}
 		c.meta[m.Name] = m
+	}
+	if raw, err := os.ReadFile(filepath.Join(c.Dir, mergedName)); err == nil {
+		var res Result
+		if json.Unmarshal(raw, &res) == nil {
+			c.merged = &res
+		}
 	}
 }
 
@@ -157,24 +164,67 @@ func cleanup(f *os.File, name string, err error) error {
 	return err
 }
 
-// Reduce sorts names so a parent comes before everything under it, and
-// drops the ones a parent already covers.
+// Reduce sorts names so a parent comes before everything under it, drops the
+// ones a parent already covers, and drops duplicates.
+//
+// It works in place and leaves the slice it was given rearranged: a second
+// copy of two and a half million names is a hundred megabytes that an
+// appliance would rather keep. Callers must not use the input afterwards.
 func Reduce(domains []string) []string {
-	keys := make([]string, 0, len(domains))
-	for _, d := range domains {
-		keys = append(keys, reverseLabels(d))
+	for i, d := range domains {
+		domains[i] = reverseLabels(d)
 	}
-	sort.Strings(keys)
-	out := make([]string, 0, len(keys))
+	sort.Strings(domains)
+	// Compacting into the same backing array is safe: the write index
+	// never overtakes the read index.
+	out := domains[:0]
 	last := ""
-	for _, k := range keys {
+	for _, k := range domains {
 		if last != "" && covers(last, k) {
 			continue
 		}
 		last = k
-		out = append(out, reverseLabels(k))
+		out = append(out, k)
+	}
+	for i, k := range out {
+		out[i] = reverseLabels(k)
 	}
 	return slices.Clip(out)
+}
+
+// mergedName holds what the last successful merge came to. The UI needs
+// that number to say whether the ceiling is in the way, and re-rendering a
+// few million names to find out would cost a second of CPU every time the
+// page is opened.
+const mergedName = "merged-result.json"
+
+// SaveMerged records the result of the merge that was just installed.
+func (c *Cache) SaveMerged(res Result) error {
+	res.At = time.Now().UTC().Truncate(time.Second)
+	raw, err := json.Marshal(res)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(c.Dir, 0o700); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(c.Dir, mergedName), raw, 0o600); err != nil {
+		return err
+	}
+	c.mu.Lock()
+	c.merged = &res
+	c.mu.Unlock()
+	return nil
+}
+
+// Merged returns what the last installed merge came to.
+func (c *Cache) Merged() (Result, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.merged == nil {
+		return Result{}, false
+	}
+	return *c.merged, true
 }
 
 // Open reads the names of one list, in reversed-label order.
@@ -245,7 +295,10 @@ func (c *Cache) Statuses(cfg *model.Config) []Status {
 		if m, ok := c.meta[l.Name]; ok {
 			st.Domains = m.Domains
 			st.Skipped = m.Skipped
-			st.FetchedAt = m.FetchedAt
+			if !m.FetchedAt.IsZero() {
+				at := m.FetchedAt
+				st.FetchedAt = &at
+			}
 			st.Format = m.Format
 			st.Stale = l.URL != "" && now.Sub(m.FetchedAt) > 2*RefreshPeriod(l)
 		} else {

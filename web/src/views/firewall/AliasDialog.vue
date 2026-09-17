@@ -5,6 +5,7 @@ import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import { joinList, parseList } from '@/lib/lists'
 import { useConfigStore } from '@/stores/config'
+import CountryPicker from '@/views/firewall/CountryPicker.vue'
 
 const props = defineProps({ alias: { type: Object, default: null } })
 const open = defineModel('open', { type: Boolean, default: false })
@@ -14,7 +15,15 @@ const form = ref(blank())
 const error = ref('')
 
 function blank() {
-  return { name: '', type: 'hosts', description: '', entries: '', url: '', refreshHours: 24 }
+  return {
+    name: '',
+    type: 'hosts',
+    description: '',
+    entries: '',
+    countries: [],
+    url: '',
+    refreshHours: 24,
+  }
 }
 
 /** A country alias always fetches; a host or port alias may. */
@@ -24,8 +33,7 @@ const ENTRY_HINTS = {
   hosts:
     'One per line: addresses or CIDR networks. With a URL, these are kept alongside whatever is fetched.',
   ports: 'One per line: ports or ranges like 8000-8100.',
-  geoip:
-    'One per line: two-letter country codes, like de or fr. The addresses behind them are fetched.',
+  geoip: 'The addresses behind each country are fetched from the GeoIP source set under System.',
 }
 
 watch(
@@ -40,7 +48,8 @@ watch(
           name: a.name,
           type: a.type,
           description: a.description ?? '',
-          entries: joinList(a.entries),
+          entries: a.type === 'geoip' ? '' : joinList(a.entries),
+          countries: a.type === 'geoip' ? [...(a.entries ?? [])] : [],
           url: a.url ?? '',
           refreshHours: a.refreshHours || 24,
         }
@@ -61,7 +70,13 @@ function save() {
     error.value = `Alias ${name} already exists.`
     return
   }
-  const out = { name, type: form.value.type, entries: parseList(form.value.entries) }
+  const entries =
+    form.value.type === 'geoip' ? [...form.value.countries] : parseList(form.value.entries)
+  if (form.value.type === 'geoip' && entries.length === 0) {
+    error.value = 'Choose at least one country.'
+    return
+  }
+  const out = { name, type: form.value.type, entries }
   if (form.value.description) out.description = form.value.description
   if (form.value.type !== 'geoip' && form.value.url.trim()) out.url = form.value.url.trim()
   if (fetches.value && Number(form.value.refreshHours) > 0) {
@@ -130,7 +145,15 @@ function save() {
           class="input w-32 font-mono"
         />
       </FormField>
-      <FormField id="alias-entries" label="Entries" :hint="ENTRY_HINTS[form.type]">
+      <FormField
+        v-if="form.type === 'geoip'"
+        id="alias-countries"
+        label="Countries"
+        :hint="ENTRY_HINTS.geoip"
+      >
+        <CountryPicker v-model="form.countries" />
+      </FormField>
+      <FormField v-else id="alias-entries" label="Entries" :hint="ENTRY_HINTS[form.type]">
         <textarea
           id="alias-entries"
           v-model="form.entries"

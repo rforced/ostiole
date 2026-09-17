@@ -267,3 +267,120 @@ func waitFor(t *testing.T, ok func() bool) {
 	}
 	t.Fatal("timed out waiting")
 }
+
+func TestUpdateJobsRunOnTheirOwnSchedule(t *testing.T) {
+	t.Parallel()
+	ex := &fakeExec{}
+	cfg := config()
+	cfg.Updates.System.Schedule = "0 4 * * *"
+	r := NewRunner(func() *model.Config { return cfg }, ex, slog.New(slog.DiscardHandler))
+
+	// Nobody wrote these jobs out; they come from the update settings.
+	// Midweek only the daily system check is due.
+	wednesday := time.Date(2026, 9, 16, 4, 0, 0, 0, time.UTC)
+	if wednesday.Weekday() == time.Sunday {
+		t.Fatalf("16 September 2026 is a %s; pick another date", wednesday.Weekday())
+	}
+	r.Tick(t.Context(), wednesday)
+	waitFor(t, func() bool { return len(ex.calls()) > 0 })
+	if got := ex.calls(); len(got) != 1 || got[0] != model.CronIDSystemUpdate {
+		t.Errorf("ran %v, want only the system update", got)
+	}
+
+	// Sunday at four is when the Ostiole check runs by default.
+	sunday := time.Date(2026, 9, 20, 4, 0, 0, 0, time.UTC)
+	if sunday.Weekday() != time.Sunday {
+		t.Fatalf("20 September 2026 is a %s; pick another date", sunday.Weekday())
+	}
+	r.Tick(t.Context(), sunday)
+	waitFor(t, func() bool { return contains(ex.calls(), model.CronIDOstioleUpdate) })
+}
+
+func TestUpdateJobsAreReportedAsOstioleOwnWork(t *testing.T) {
+	t.Parallel()
+	r := runner(t, &fakeExec{})
+	var system []Status
+	for _, st := range r.Statuses() {
+		if st.Kind == KindSystem {
+			system = append(system, st)
+		}
+	}
+	found := map[string]Status{}
+	for _, st := range system {
+		found[st.ID] = st
+	}
+	for _, id := range []string{model.CronIDSystemUpdate, model.CronIDOstioleUpdate} {
+		st, ok := found[id]
+		if !ok {
+			t.Fatalf("%s is not on the page that says what this box does by itself", id)
+		}
+		if st.Schedule != model.DefaultUpdateSchedule {
+			t.Errorf("%s schedule = %q", id, st.Schedule)
+		}
+		if st.Next == nil {
+			t.Errorf("%s does not say when it next runs", id)
+		}
+	}
+}
+
+func TestRunNowFindsTheUpdateJobs(t *testing.T) {
+	t.Parallel()
+	ex := &fakeExec{}
+	r := runner(t, ex)
+	if err := r.RunNow(t.Context(), model.CronIDSystemUpdate); err != nil {
+		t.Fatal(err)
+	}
+	if got := ex.calls(); len(got) != 1 || got[0] != model.CronIDSystemUpdate {
+		t.Errorf("ran %v", got)
+	}
+}
+
+func TestUpdateJobsObeyTheMode(t *testing.T) {
+	t.Parallel()
+	cfg := config()
+	cfg.Updates = model.Updates{
+		System:  model.PackageUpdates{Mode: model.UpdateManual, Exclude: []string{"kernel"}},
+		Ostiole: model.SelfUpdates{Mode: model.UpdateAll, Channel: model.ChannelBeta},
+	}
+	var sawMode, sawChannel string
+	var sawExclude []string
+	jobs := &Jobs{
+		Config: func() *model.Config { return cfg },
+		SystemUpdate: func(_ context.Context, mode string, exclude []string) (string, error) {
+			sawMode, sawExclude = mode, exclude
+			return "checked", nil
+		},
+		SelfUpdate: func(_ context.Context, mode, channel string) (string, error) {
+			sawChannel = channel
+			return "mode " + mode, nil
+		},
+	}
+	if _, err := jobs.Run(t.Context(), model.Cron{ID: "x", Job: model.CronSystemUpdate}); err != nil {
+		t.Fatal(err)
+	}
+	if sawMode != "manual" || len(sawExclude) != 1 || sawExclude[0] != "kernel" {
+		t.Errorf("mode = %q, exclude = %v", sawMode, sawExclude)
+	}
+	out, err := jobs.Run(t.Context(), model.Cron{ID: "y", Job: model.CronOstioleUpdate})
+	if err != nil || out != "mode all" {
+		t.Errorf("out = %q, err = %v", out, err)
+	}
+	if sawChannel != model.ChannelBeta {
+		t.Errorf("channel = %q", sawChannel)
+	}
+
+	// A box with nothing wired up says so rather than failing obscurely.
+	bare := &Jobs{Config: jobs.Config}
+	if _, err := bare.Run(t.Context(), model.Cron{ID: "z", Job: model.CronSystemUpdate}); err == nil {
+		t.Error("a box with no package manager pretended to update")
+	}
+}
+
+func contains(list []string, want string) bool {
+	for _, s := range list {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}
