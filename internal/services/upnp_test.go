@@ -238,7 +238,7 @@ func TestSetupRestartsTheRunningDaemon(t *testing.T) {
 	root := t.TempDir()
 	run := &activeRunner{}
 	u := &UPnP{Dir: filepath.Join(root, "miniupnpd")}
-	d := &Dnsmasq{Dir: filepath.Join(root, "generated")}
+	d := &Dnsmasq{Dir: filepath.Join(root, "generated"), Leases: filepath.Join(root, "lib", "leases")}
 	opts := SetupOptions{
 		Dnsmasq: true, UnitDir: filepath.Join(root, "units"), Run: run, Binary: "/usr/sbin/dnsmasq",
 		UPnP: true, UPnPBinary: "/usr/sbin/miniupnpd", UPnPBackend: u,
@@ -263,7 +263,7 @@ func TestSetupLeavesAStoppedDaemonAlone(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	run := &fakeRunner{} // answers is-active with nothing
-	d := &Dnsmasq{Dir: filepath.Join(root, "generated")}
+	d := &Dnsmasq{Dir: filepath.Join(root, "generated"), Leases: filepath.Join(root, "lib", "leases")}
 	opts := SetupOptions{Dnsmasq: true, UnitDir: filepath.Join(root, "units"), Run: run, Binary: "/usr/sbin/dnsmasq"}
 	if err := Setup(context.Background(), d, opts, slog.New(slog.DiscardHandler)); err != nil {
 		t.Fatal(err)
