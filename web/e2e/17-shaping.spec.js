@@ -29,14 +29,14 @@ test('a line speed and a priority reach the kernel', async ({ page }) => {
   await dialog.getByLabel('Download', { exact: true }).fill('200')
   await dialog.getByLabel('Upload', { exact: true }).fill('20')
   await dialog.getByLabel('Link type').selectOption('pppoe-ptm')
-  await page.screenshot({ path: shot('80-bandwidth-dialog'), fullPage: true })
+  await page.screenshot({ path: shot('C0-bandwidth-dialog'), fullPage: true })
   await dialog.getByRole('button', { name: 'Save to draft' }).click()
 
   const row = page.getByRole('row').filter({ hasText: wan })
   await expect(row).toContainText('200 Mbit/s')
   await expect(row).toContainText('20 Mbit/s')
   await expect(row).toContainText('VDSL with PPPoE')
-  await page.screenshot({ path: shot('81-bandwidth'), fullPage: true })
+  await page.screenshot({ path: shot('C1-bandwidth'), fullPage: true })
 
   // A priority belongs to the rule that admits the traffic, so the tab
   // that lists them is empty until a rule sets one.
@@ -72,7 +72,7 @@ test('a line speed and a priority reach the kernel', async ({ page }) => {
   const priority = page.getByRole('row').filter({ hasText: 'Calls go first' })
   await expect(priority).toContainText('Realtime')
   await expect(priority).toContainText('udp')
-  await page.screenshot({ path: shot('82-priorities'), fullPage: true })
+  await page.screenshot({ path: shot('C2-priorities'), fullPage: true })
 })
 
 test('the live tab reports the queues', async ({ page }) => {
@@ -89,7 +89,7 @@ test('the live tab reports the queues', async ({ page }) => {
   // The download hangs off a helper device the stub does not pretend to
   // have, so it honestly says nothing is installed.
   await expect(card).toContainText('of 200 Mbit/s')
-  await page.screenshot({ path: shot('83-shaping-live'), fullPage: true })
+  await page.screenshot({ path: shot('C3-shaping-live'), fullPage: true })
 })
 
 test('removing the speed takes the priority field with it', async ({ page }) => {

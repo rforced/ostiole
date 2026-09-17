@@ -60,8 +60,11 @@ test('group two gateways and route a rule through them', async ({ page }) => {
   const ruleset = page.locator('pre')
   await expect(ruleset).toContainText('chain policy_prerouting')
   await expect(ruleset).toContainText('hook prerouting priority mangle')
-  await expect(ruleset).toContainText('meta mark set 0x')
+  // The mark is written into its own byte rather than over the whole
+  // register, so traffic shaping can keep a tier in the same word.
+  await expect(ruleset).toContainText('meta mark set meta mark & 0xff00ffff | 0x')
   await expect(ruleset).toContainText('ct mark set meta mark')
+  await expect(ruleset).toContainText('ct mark & 0x00ff0000 != 0x0')
 
   // The routing page reports what the rule is pointed at.
   await page.goto('/routing')
