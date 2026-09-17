@@ -268,6 +268,10 @@ func (r *renderer) chainInput() {
 // bogons would otherwise drop its gateway's neighbour solicitations and
 // never get an IPv6 address or a default route.
 //
+// Each family is accepted only on the interfaces that have it: an
+// interface whose IPv6 mode is none carries no IPv6 rule, so turning the
+// family off is visible on the rules page and in the kernel alike.
+//
 // Nothing here lets a spoofed source in. Neighbour discovery is untracked
 // by conntrack and the kernel discards it unless the hop limit is 255,
 // so it cannot be routed in from off-link. An ICMP error is either
@@ -275,18 +279,41 @@ func (r *renderer) chainInput() {
 // invalid, which the state rule dropped already. Echo is deliberately
 // absent: whether this firewall answers ping is a zone rule.
 func (r *renderer) linkLocalBaseline() {
-	// Error messages that IPv4 needs to function (no echo: that is a user rule).
-	r.line("icmp type { destination-unreachable, time-exceeded, parameter-problem } accept")
-	// Neighbour discovery, MLD, and error messages that IPv6 cannot work without.
-	r.line("icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit, nd-router-advert, " +
-		"destination-unreachable, packet-too-big, time-exceeded, parameter-problem, " +
-		"mld-listener-query, mld-listener-report, mld-listener-done } accept")
-	r.sys(SystemRule{
-		Chain: "input", Action: "accept", Protocol: string(model.ProtocolICMP),
-		Source: "any", Destination: firewallDest(nil),
-		Description: "ICMP errors and IPv6 neighbour discovery",
-	})
+	if v4 := r.interfacesWith(func(in model.Interface) model.AddrMode { return in.IPv4.Mode }); len(v4) > 0 {
+		// Error messages that IPv4 needs to function (no echo: that is a user rule).
+		r.line(fmt.Sprintf("iifname %s icmp type { destination-unreachable, time-exceeded, parameter-problem } accept",
+			ifnameSet(v4)))
+		r.sysFor(v4, SystemRule{
+			Chain: "input", Action: "accept", Protocol: string(model.ProtocolICMP),
+			Source: "any", Destination: firewallDest(nil),
+			Description: "ICMP errors", Setting: "interface",
+		})
+	}
+	if v6 := r.interfacesWith(func(in model.Interface) model.AddrMode { return in.IPv6.Mode }); len(v6) > 0 {
+		// Neighbour discovery, MLD, and error messages that IPv6 cannot work without.
+		r.line(fmt.Sprintf("iifname %s icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit, nd-router-advert, "+
+			"destination-unreachable, packet-too-big, time-exceeded, parameter-problem, "+
+			"mld-listener-query, mld-listener-report, mld-listener-done } accept", ifnameSet(v6)))
+		r.sysFor(v6, SystemRule{
+			Chain: "input", Action: "accept", Protocol: string(model.ProtocolICMP),
+			Source: "any", Destination: firewallDest(nil),
+			Description: "IPv6 neighbour discovery and errors", Setting: "interface",
+		})
+	}
 	r.dhcpv6ClientRules()
+}
+
+// interfacesWith lists the enabled interfaces on which one address family
+// is turned on, given how to read that family's mode. A mode of none, or
+// none given (a port carries no address of its own), leaves it out.
+func (r *renderer) interfacesWith(mode func(model.Interface) model.AddrMode) []string {
+	var out []string
+	for _, in := range r.cfg.Interfaces {
+		if m := mode(in); in.Enabled && m != model.AddrNone && m != "" {
+			out = append(out, in.Name)
+		}
+	}
+	return out
 }
 
 // dhcpv6ClientRules let the answers to this router's own DHCPv6 requests

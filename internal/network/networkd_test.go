@@ -63,6 +63,30 @@ func TestNetworkdRenderGolden(t *testing.T) {
 	}
 }
 
+// An interface whose IPv6 mode is none gets no link-local address either:
+// left to itself, networkd would keep the kernel's, and "none" would show
+// an IPv6 address in the live state it does not admit to configuring.
+func TestRenderNoneMeansNoLinkLocal(t *testing.T) {
+	t.Parallel()
+	n := &Networkd{}
+	files, err := n.Render(loadConfig(t, "testdata/full.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]bool{
+		"eth0":    false, // slaac
+		"eth1":    false, // static
+		"eth1.20": true,  // none
+		"eth2":    true,  // none
+		"wg0":     true,  // none
+	} {
+		unit := files["00-ostiole-"+name+".network"]
+		if got := strings.Contains(unit, "LinkLocalAddressing=no"); got != want {
+			t.Errorf("%s: LinkLocalAddressing=no present %v, want %v:\n%s", name, got, want, unit)
+		}
+	}
+}
+
 func TestRenderRouteNeedsInterface(t *testing.T) {
 	t.Parallel()
 	cfg := loadConfig(t, "testdata/full.json")

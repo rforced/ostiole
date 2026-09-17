@@ -277,6 +277,66 @@ func TestDHCPv6ClientRule(t *testing.T) {
 	}
 }
 
+// The baseline accepts a family only where it is turned on: an interface
+// whose IPv6 mode is none is left out of the neighbour discovery rule and
+// the DHCPv6 client rule, and a router with no IPv6 at all carries neither.
+func TestBaselineFollowsAddressModes(t *testing.T) {
+	t.Parallel()
+	// blocked-sources: eth0 slaac, eth1 static, eth2 none.
+	got, err := Render(loadConfig(t, "testdata/blocked-sources.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, `iifname { "eth0", "eth1" } icmpv6 type {`) {
+		t.Errorf("neighbour discovery is not scoped to the interfaces with IPv6:\n%s", got)
+	}
+	rows, err := SystemRules(loadConfig(t, "testdata/blocked-sources.json"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zones := func(description string) string {
+		for _, r := range rows {
+			if r.Description == description {
+				return strings.Join(r.Zones, ",")
+			}
+		}
+		return "(no row)"
+	}
+	if got, want := zones("IPv6 neighbour discovery and errors"), "wan,lan"; got != want {
+		t.Errorf("IPv6 row names zones %q, want %q", got, want)
+	}
+	if got, want := zones("ICMP errors"), "wan,lan,iot"; got != want {
+		t.Errorf("IPv4 row names zones %q, want %q", got, want)
+	}
+
+	cfg := loadConfig(t, "testdata/blocked-sources.json")
+	for i := range cfg.Interfaces {
+		cfg.Interfaces[i].IPv6 = model.IPv6{Mode: model.AddrNone}
+	}
+	cfg.Services.DHCP.V6 = nil
+	got, err = Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []string{"icmpv6 type", "client:dhcpv6"} {
+		if strings.Contains(got, s) {
+			t.Errorf("no interface has IPv6, yet the ruleset carries %q:\n%s", s, got)
+		}
+	}
+	if !strings.Contains(got, "icmp type {") {
+		t.Errorf("IPv4 errors went missing with IPv6:\n%s", got)
+	}
+	rows, err = SystemRules(cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rows {
+		if r.Description == "IPv6 neighbour discovery and errors" {
+			t.Error("IPv6 row shown for a router with no IPv6")
+		}
+	}
+}
+
 // A fetched bogon list lands in the sets the rules already match on.
 func TestBogonListFillsTheSets(t *testing.T) {
 	t.Parallel()

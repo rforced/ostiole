@@ -372,6 +372,12 @@ func renderNetwork(in model.Interface, vlans []string, routes []model.StaticRout
 		// so it listens to nobody else's advertisements.
 		b.WriteString("IPv6AcceptRA=no\n")
 	}
+	if in.IPv6.Mode == model.AddrNone {
+		// None means none. Left to itself, networkd keeps the kernel's
+		// link-local address, and the interface stays on IPv6 in a way
+		// nothing in the configuration admits to.
+		b.WriteString("LinkLocalAddressing=no\n")
+	}
 	if in.IPv6.Mode == model.AddrDelegated {
 		b.WriteString("DHCPPrefixDelegation=yes\n")
 	}
