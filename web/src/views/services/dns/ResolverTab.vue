@@ -182,11 +182,6 @@ function saveDomain() {
       </FormField>
     </div>
 
-    <p v-if="resolver !== 'forward'" class="max-w-2xl text-sm text-neutral-500">
-      Set up once with <code class="font-mono">ostiole services setup --with-resolver</code> as
-      root.
-    </p>
-
     <fieldset class="space-y-2 text-sm">
       <legend class="subsection-title">Listen on</legend>
       <label class="flex items-center gap-2">

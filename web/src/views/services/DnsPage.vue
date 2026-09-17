@@ -14,7 +14,7 @@ const { tabs, tab } = usePageTabs()
 
 <template>
   <div class="space-y-4">
-    <ServicesStatus resolver />
+    <ServicesStatus service="dns" />
     <AppTabs v-model="tab" :tabs="tabs">
       <TabsContent value="server"><ResolverTab /></TabsContent>
       <TabsContent value="lists"><BlockListsTab /></TabsContent>

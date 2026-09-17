@@ -5,15 +5,26 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { useConfigStore } from '@/stores/config'
 
-defineProps({
-  /** Report on the validating resolver too, which the DNS page can ask for. */
-  resolver: { type: Boolean, default: false },
-  /** Report on the port mapping service instead of DHCP and DNS. */
-  upnp: { type: Boolean, default: false },
+const props = defineProps({
+  /** Which service the page is about: dhcp, dns, or upnp. */
+  service: { type: String, default: 'dhcp' },
 })
 
 const config = useConfigStore()
 const status = ref(null)
+
+/** The DNS page reports the validating resolver as well. */
+const isDns = computed(() => props.service === 'dns')
+
+/**
+ * One unit answers both DHCP and DNS, so a page reports its own service
+ * alone: off when the saved configuration leaves it off, otherwise
+ * running or stopped with the unit.
+ */
+const state = computed(() => {
+  if (!config.saved?.services?.[props.service]?.enabled) return 'off'
+  return status.value?.running ? 'running' : 'stopped'
+})
 
 /** The draft asks for the validating resolver (DNSSEC or DNS over TLS). */
 const resolverWanted = computed(() => {
@@ -37,8 +48,8 @@ useAsync(
 </script>
 
 <template>
-  <div v-if="status" class="space-y-3">
-    <template v-if="upnp">
+  <div v-if="status && config.loaded" class="space-y-3">
+    <template v-if="service === 'upnp'">
       <p
         v-if="!status.upnpSetUp && upnpWanted"
         class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
@@ -68,14 +79,14 @@ useAsync(
         either fails to apply.
       </p>
       <p v-else class="text-sm text-neutral-500">
-        DHCP and DNS {{ status.running ? 'running' : 'stopped' }}
-        <template v-if="!resolver">· {{ status.leases }} lease(s)</template>
-        <template v-if="resolver && status.resolverSetUp">
-          · validating resolver {{ status.resolverRunning ? 'running' : 'stopped' }}
+        {{ isDns ? 'DNS' : 'DHCP' }} {{ state }}
+        <template v-if="!isDns && state !== 'off'">· {{ status.leases }} lease(s)</template>
+        <template v-if="isDns && status.resolverSetUp">
+          · validating resolver is {{ status.resolverRunning ? 'running' : 'stopped' }}
         </template>
       </p>
       <p
-        v-if="resolver && !status.resolverSetUp && resolverWanted"
+        v-if="isDns && !status.resolverSetUp && resolverWanted"
         class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
         role="note"
       >

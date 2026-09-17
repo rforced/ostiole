@@ -12,7 +12,7 @@ const { tabs, tab } = usePageTabs()
 
 <template>
   <div class="space-y-4">
-    <ServicesStatus upnp />
+    <ServicesStatus service="upnp" />
     <AppTabs v-model="tab" :tabs="tabs">
       <TabsContent value="service"><ServiceTab /></TabsContent>
       <TabsContent value="mappings"><MappingsTab /></TabsContent>

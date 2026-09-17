@@ -13,7 +13,7 @@ const { tabs, tab } = usePageTabs()
 
 <template>
   <div class="space-y-4">
-    <ServicesStatus />
+    <ServicesStatus service="dhcp" />
     <AppTabs v-model="tab" :tabs="tabs">
       <TabsContent value="v4"><Ipv4Tab /></TabsContent>
       <TabsContent value="v6"><Ipv6Tab /></TabsContent>
