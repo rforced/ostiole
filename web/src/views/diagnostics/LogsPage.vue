@@ -38,7 +38,7 @@ onMounted(load.run)
 
 <template>
   <div class="space-y-4">
-    <form class="flex flex-wrap items-end gap-4" @submit.prevent="load.run()">
+    <form class="form-row" @submit.prevent="load.run()">
       <FormField id="jr-unit" label="Unit">
         <select id="jr-unit" v-model="unit" class="input w-56">
           <option v-for="u in UNITS" :key="u.value" :value="u.value">{{ u.label }}</option>

@@ -48,11 +48,7 @@ function endpoint(address, port) {
     </p>
 
     <!-- No submit button, so Enter in a field is wired by hand. -->
-    <form
-      class="flex flex-wrap items-end gap-3"
-      @submit.prevent="load.run()"
-      @keydown.enter.prevent="load.run()"
-    >
+    <form class="form-row" @submit.prevent="load.run()" @keydown.enter.prevent="load.run()">
       <FormField id="st-address" label="Address" hint="An address, or a network like 10.0.0.0/8.">
         <input
           id="st-address"
@@ -86,7 +82,7 @@ function endpoint(address, port) {
         :updated-at="load.updatedAt.value"
         @click="load.run()"
       />
-      <label class="flex items-center gap-2 pb-2 text-sm">
+      <label class="flex items-center gap-2 text-sm">
         <input v-model="auto" type="checkbox" class="size-4 rounded border-neutral-300" />
         Every 5 seconds
       </label>

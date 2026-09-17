@@ -51,7 +51,7 @@ const capture = useAsync(async () => {
     <p class="max-w-3xl text-sm text-neutral-500">
       Records the interface into a pcap file until whichever limit comes first.
     </p>
-    <form class="flex flex-wrap items-end gap-4" @submit.prevent="capture.run()">
+    <form class="form-row" @submit.prevent="capture.run()">
       <FormField id="cp-if" label="Interface">
         <select id="cp-if" v-model="iface" class="input w-48" required>
           <option v-for="i in config.interfaces" :key="i.name" :value="i.name">{{ i.name }}</option>

@@ -145,7 +145,7 @@ onMounted(async () => {
       </p>
     </template>
 
-    <div class="flex flex-wrap items-end gap-3">
+    <div class="form-row">
       <FormField id="upd-channel" label="Channel">
         <select
           id="upd-channel"

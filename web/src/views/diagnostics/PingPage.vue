@@ -47,7 +47,7 @@ async function run(kind) {
 
 <template>
   <div class="space-y-4">
-    <form class="flex flex-wrap items-end gap-4" @submit.prevent="run('ping')">
+    <form class="form-row" @submit.prevent="run('ping')">
       <FormField id="dg-target" label="Target" hint="An address or a name this firewall resolves.">
         <input
           id="dg-target"

@@ -101,6 +101,16 @@
   .skeleton {
     @apply inline-block h-3.5 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800;
   }
+  /* A row of fields. Labels sit at the top, so the inputs line up whether
+     or not a field has a hint under it, and anything in the row that is
+     not a field (a button, a checkbox) is dropped to the input line. */
+  .form-row {
+    @apply flex flex-wrap items-start gap-3;
+  }
+  .form-row > :not(.field) {
+    /* One label line plus the gap under it; then as tall as an input. */
+    @apply mt-6 min-h-[2.125rem];
+  }
   .badge {
     @apply inline-block rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300;
   }

@@ -114,7 +114,7 @@ function save() {
           No gateways yet. A group needs at least one.
         </p>
         <ul class="space-y-2">
-          <li v-for="(m, i) in form.members" :key="i" class="flex items-end gap-2">
+          <li v-for="(m, i) in form.members" :key="i" class="form-row flex-nowrap">
             <FormField :id="`gg-member-${i}`" label="Gateway" class="flex-1">
               <select :id="`gg-member-${i}`" v-model="m.gateway" class="input font-mono">
                 <option v-for="g in config.gateways" :key="g.name" :value="g.name">
@@ -134,7 +134,7 @@ function save() {
             </FormField>
             <button
               type="button"
-              class="link mb-2 text-red-600 dark:text-red-400"
+              class="link inline-flex items-center text-red-600 dark:text-red-400"
               :aria-label="`Remove ${m.gateway}`"
               @click="removeMember(i)"
             >

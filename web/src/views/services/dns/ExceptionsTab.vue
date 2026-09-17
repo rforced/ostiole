@@ -108,7 +108,7 @@ const stale = computed(() => config.dirty)
 
     <section class="max-w-3xl space-y-3" aria-labelledby="lookup-title">
       <h2 id="lookup-title" class="section-title">Is a name blocked?</h2>
-      <form class="flex flex-wrap items-end gap-2" @submit.prevent="lookup.run">
+      <form class="form-row" @submit.prevent="lookup.run">
         <FormField
           id="lookup-name"
           label="Name"
@@ -123,7 +123,7 @@ const stale = computed(() => config.dirty)
             placeholder="ads.doubleclick.net"
           />
         </FormField>
-        <button type="submit" class="btn-secondary mb-1" :disabled="lookup.busy.value">
+        <button type="submit" class="btn-secondary" :disabled="lookup.busy.value">
           <Search class="mr-1 size-4" aria-hidden="true" /> Look up
         </button>
       </form>

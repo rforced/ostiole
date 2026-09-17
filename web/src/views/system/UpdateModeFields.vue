@@ -83,7 +83,7 @@ const preset = computed({
       </div>
     </fieldset>
 
-    <div class="flex flex-wrap items-end gap-3">
+    <div class="form-row">
       <FormField :id="`${prefix}-preset`" label="When">
         <select :id="`${prefix}-preset`" v-model="preset" class="input w-64">
           <option value="">Something else</option>
