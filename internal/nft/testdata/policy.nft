@@ -56,7 +56,7 @@ table inet ostiole {
 	}
 	chain policy_prerouting {
 		type filter hook prerouting priority mangle; policy accept;
-		ct mark != 0x0 meta mark set ct mark counter accept comment "policy:established"
+		ct mark & 0x00ff0000 != 0x0 meta mark set ct mark counter accept comment "policy:established"
 		fib daddr type local counter accept comment "policy:local"
 		iifname "eth2" jump policy_lan
 		iifname "eth3" jump policy_guest
@@ -64,8 +64,8 @@ table inet ostiole {
 	chain policy_lan {
 		# rule lan-to-guest not mirrored: it matches on the destination zone, which prerouting cannot see
 		fib daddr type local udp dport 53 counter accept comment "no-policy:lan-dns"
-		meta hour != "06:00"-"22:00" ip saddr @alias_torrents_v4 meta mark set 0x10000 ct mark set meta mark counter accept comment "policy:torrents-out-backup"
-		meta mark set 0x20000 ct mark set meta mark counter accept comment "policy:lan-default"
+		meta hour != "06:00"-"22:00" ip saddr @alias_torrents_v4 meta mark set meta mark & 0xff00ffff | 0x10000 ct mark set meta mark counter accept comment "policy:torrents-out-backup"
+		meta mark set meta mark & 0xff00ffff | 0x20000 ct mark set meta mark counter accept comment "policy:lan-default"
 	}
 	chain policy_guest {
 		# rule guest-out-parked: gateway "parked" is disabled, so its traffic follows the default route

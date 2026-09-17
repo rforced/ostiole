@@ -269,3 +269,48 @@ func runInNamespace(t *testing.T, env, name string) {
 	}
 	t.Fatalf("inside namespace: %v\n%s", err, out)
 }
+
+// fakeShaping records what the tick handed it and can be told to fail.
+type fakeShaping struct {
+	mu    sync.Mutex
+	calls []string
+	err   error
+}
+
+func (f *fakeShaping) Sync(cfg *model.Config) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, cfg.System.Hostname)
+	return f.err
+}
+
+func (f *fakeShaping) seen() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.calls...)
+}
+
+// The tick puts the queues back as well as the routes, and it does so on a
+// router with no gateways at all: a box that only caps its LAN still has
+// to converge after a reboot or a link coming back.
+func TestTickKeepsShapingInPlace(t *testing.T) {
+	t.Parallel()
+	sh := &fakeShaping{}
+	cfg := &model.Config{Version: model.SchemaVersion, System: model.System{Hostname: "capped"}}
+	m := &Monitor{
+		Prober: &fakeProber{fail: map[string]bool{}}, Router: &fakeRouter{},
+		Log: slog.New(slog.DiscardHandler), Shaping: sh,
+		Source: func() *model.Config { return cfg },
+	}
+	m.Tick(context.Background())
+	if got := sh.seen(); len(got) != 1 || got[0] != "capped" {
+		t.Fatalf("shaping sync calls = %v, want one for the saved configuration", got)
+	}
+
+	// A shaper that cannot do its job must not stop the probes.
+	sh.err = errors.New("tc refused")
+	m.Tick(context.Background())
+	if got := len(sh.seen()); got != 2 {
+		t.Errorf("shaping was called %d times, want 2", got)
+	}
+}

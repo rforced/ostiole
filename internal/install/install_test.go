@@ -68,7 +68,8 @@ func TestInstallAndUninstall(t *testing.T) {
 
 	run := &fakeRunner{}
 	sysctlFile := filepath.Join(t.TempDir(), "99-ostiole.conf")
-	rep, err := Install(context.Background(), sc, lay, Options{Source: src, Listen: ":8443", Run: run, SysctlFile: sysctlFile}, log)
+	rep, err := Install(context.Background(), sc, lay,
+		Options{Source: src, Listen: ":8443", Run: run, SysctlFile: sysctlFile, PackageManager: "-"}, log)
 	if err != nil {
 		t.Fatal(err)
 	}

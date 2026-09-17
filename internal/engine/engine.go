@@ -36,6 +36,7 @@ type Engine struct {
 	nft    nft.Runner
 	net    network.Backend  // nil when network management is disabled
 	svc    network.Backend  // dnsmasq services; nil when not managed
+	shape  network.Backend  // traffic shaping; nil when not managed
 	sysctl sysctl.Applier   // nil in tests without a kernel
 	clock  timezone.Applier // sets the router's zone; nil leaves it alone
 	// feeds supplies the contents of aliases fetched from a URL or a
@@ -49,15 +50,16 @@ type Engine struct {
 }
 
 type pendingApply struct {
-	id          string
-	cfg         *model.Config
-	ruleset     string
-	previous    string
-	previousNet network.Files
-	previousSvc network.Files
-	since       time.Time
-	deadline    time.Time
-	timer       *time.Timer
+	id            string
+	cfg           *model.Config
+	ruleset       string
+	previous      string
+	previousNet   network.Files
+	previousSvc   network.Files
+	previousShape network.Files
+	since         time.Time
+	deadline      time.Time
+	timer         *time.Timer
 }
 
 // New returns an engine over st and runner. net may be nil to leave
@@ -74,6 +76,24 @@ func New(st *store.Store, runner nft.Runner, net network.Backend, log *slog.Logg
 func (e *Engine) WithServices(b network.Backend) *Engine {
 	e.svc = b
 	return e
+}
+
+// WithShaping adds the traffic shaping backend. It goes last, because the
+// queues hang off links that the network and the dialled sessions have to
+// have brought up first, and it is inside the confirmation window like
+// everything else: a line told it runs at 8 kbit/s is a line nobody can
+// reach the UI over.
+func (e *Engine) WithShaping(b network.Backend) *Engine {
+	e.shape = b
+	return e
+}
+
+// Preflighter is a backend that can refuse a plan before anything has
+// been applied. Shaping uses it to say that the command it drives is not
+// installed, which is better learned now than after the configuration has
+// been saved and the queues have quietly not appeared.
+type Preflighter interface {
+	Preflight(ctx context.Context, files network.Files) error
 }
 
 // FeedSource supplies the entries of aliases that are fetched rather than
@@ -138,6 +158,7 @@ type Plan struct {
 	Ruleset  string        `json:"ruleset"`
 	Network  network.Files `json:"network,omitempty"`
 	Services network.Files `json:"services,omitempty"`
+	Shaping  network.Files `json:"shaping,omitempty"`
 }
 
 // Store exposes the underlying store for read-only callers.
@@ -164,6 +185,18 @@ func (e *Engine) Check(ctx context.Context, cfg *model.Config) (*Plan, error) {
 			return nil, fmt.Errorf("services: %w", err)
 		}
 		plan.Services = files
+	}
+	if e.shape != nil {
+		files, err := e.shape.Render(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("shaping: %w", err)
+		}
+		plan.Shaping = files
+		if p, ok := e.shape.(Preflighter); ok {
+			if err := p.Preflight(ctx, files); err != nil {
+				return nil, fmt.Errorf("shaping: %w", err)
+			}
+		}
 	}
 	if err := e.nft.Check(ctx, ruleset); err != nil {
 		return nil, err
@@ -207,7 +240,7 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 	} else if err != nil {
 		return nil, fmt.Errorf("load previous ruleset: %w", err)
 	}
-	var previousNet, previousSvc network.Files
+	var previousNet, previousSvc, previousShape network.Files
 	if e.net != nil {
 		if previousNet, err = e.net.Snapshot(); err != nil {
 			return nil, fmt.Errorf("network snapshot: %w", err)
@@ -216,6 +249,11 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 	if e.svc != nil {
 		if previousSvc, err = e.svc.Snapshot(); err != nil {
 			return nil, fmt.Errorf("services snapshot: %w", err)
+		}
+	}
+	if e.shape != nil {
+		if previousShape, err = e.shape.Snapshot(); err != nil {
+			return nil, fmt.Errorf("shaping snapshot: %w", err)
 		}
 	}
 
@@ -233,14 +271,28 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 			return nil, fmt.Errorf("network apply failed, firewall reverted: %w", err)
 		}
 	}
+	rollback := &pendingApply{
+		previous: previous, previousNet: previousNet,
+		previousSvc: previousSvc, previousShape: previousShape,
+	}
 	if e.svc != nil {
 		if err := e.svc.Apply(ctx, plan.Services); err != nil {
-			rollback := &pendingApply{previous: previous, previousNet: previousNet, previousSvc: previousSvc}
 			if rerr := e.restore(ctx, rollback); rerr != nil {
 				e.log.Error("services apply failed and rollback failed too", "servicesErr", err, "err", rerr)
 				return nil, fmt.Errorf("services apply failed (%w) and rollback failed (%w)", err, rerr)
 			}
 			return nil, fmt.Errorf("services apply failed, firewall and network reverted: %w", err)
+		}
+	}
+	// Shaping comes last: its queues hang off links that the network and
+	// the dialled sessions have only just brought up.
+	if e.shape != nil {
+		if err := e.shape.Apply(ctx, plan.Shaping); err != nil {
+			if rerr := e.restore(ctx, rollback); rerr != nil {
+				e.log.Error("traffic shaping failed and rollback failed too", "shapingErr", err, "err", rerr)
+				return nil, fmt.Errorf("traffic shaping failed (%w) and rollback failed (%w)", err, rerr)
+			}
+			return nil, fmt.Errorf("traffic shaping failed, everything else reverted: %w", err)
 		}
 	}
 	e.log.Info("configuration applied", "rules", len(cfg.Rules), "networkUnits", len(plan.Network), "confirmTimeout", opts.ConfirmTimeout)
@@ -255,14 +307,15 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 
 	now := time.Now()
 	p := &pendingApply{
-		id:          newID(),
-		cfg:         cfg,
-		ruleset:     plan.Ruleset,
-		previous:    previous,
-		previousNet: previousNet,
-		previousSvc: previousSvc,
-		since:       now,
-		deadline:    now.Add(opts.ConfirmTimeout),
+		id:            newID(),
+		cfg:           cfg,
+		ruleset:       plan.Ruleset,
+		previous:      previous,
+		previousNet:   previousNet,
+		previousSvc:   previousSvc,
+		previousShape: previousShape,
+		since:         now,
+		deadline:      now.Add(opts.ConfirmTimeout),
 	}
 	id := p.id
 	p.timer = time.AfterFunc(opts.ConfirmTimeout, func() { e.expire(id) })
@@ -321,6 +374,11 @@ func (e *Engine) restore(ctx context.Context, p *pendingApply) error {
 	if e.svc != nil && p.previousSvc != nil {
 		if err := e.svc.Apply(ctx, p.previousSvc); err != nil {
 			errs = append(errs, fmt.Errorf("services: %w", err))
+		}
+	}
+	if e.shape != nil && p.previousShape != nil {
+		if err := e.shape.Apply(ctx, p.previousShape); err != nil {
+			errs = append(errs, fmt.Errorf("shaping: %w", err))
 		}
 	}
 	return errors.Join(errs...)

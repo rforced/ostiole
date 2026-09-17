@@ -561,6 +561,7 @@ func (r *renderer) upnpChains() {
 func (r *renderer) chainForward() {
 	r.block("chain forward", func() {
 		r.line("type filter hook forward priority filter; policy drop;")
+		r.shapeRestore("forward")
 		r.connectionState("forward")
 		r.blockedSources("forward")
 		r.blockDNSJump()
@@ -589,6 +590,66 @@ func (r *renderer) chainForward() {
 func (r *renderer) chainOutput() {
 	r.block("chain output", func() {
 		r.line("type filter hook output priority filter; policy accept;")
+		r.shapeRestore("output")
+	})
+}
+
+// ---- traffic shaping --------------------------------------------------
+
+// Mark arithmetic for the tier a flow is in. The tier is set inside the
+// rule that admits the flow rather than in a chain of its own: unlike
+// policy routing it does not have to beat the routing decision, so there
+// is nothing to mirror ahead of it.
+const (
+	shapeSet        = "meta mark set meta mark & 0x%08x | 0x%08x"
+	shapeTest       = "ct mark & 0x%08x != 0x0"
+	shapeCopy       = "ct mark set meta mark"
+	shapeRestoreTag = "shaping:restore"
+)
+
+// shapeMark is what a rule does to put its traffic in a tier: the tier
+// goes into the packet mark, leaving the byte policy routing keeps beside
+// it alone, and the whole mark is then copied onto the connection. Later
+// packets and the replies coming back are tiered from that copy without
+// being matched again.
+func shapeMark(t model.Tier) []string {
+	mark, ok := t.Mark()
+	if !ok {
+		return nil
+	}
+	return []string{fmt.Sprintf(shapeSet, ^uint32(model.ShapeMarkMask), mark), shapeCopy}
+}
+
+// shapePrefix is shapeMark for a rule assembled by formatting rather than
+// by joining parts, and empty when the rule sets no tier.
+func shapePrefix(t model.Tier) string {
+	parts := shapeMark(t)
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, " ") + " "
+}
+
+// shapeRestore puts a connection's tier back on the packet before the
+// state rule accepts it, which is what makes one classification cover a
+// whole flow. It sits in forward for traffic passing through and in
+// output for the router's own replies, which are on a shaped interface
+// like anything else.
+func (r *renderer) shapeRestore(chain string) {
+	if !r.cfg.ShapesTraffic() {
+		return
+	}
+	r.line(fmt.Sprintf(shapeTest+" meta mark set ct mark counter comment %q", model.ShapeMarkMask, shapeRestoreTag))
+	if chain != "forward" {
+		return
+	}
+	// Both chains carry the same rule; the row is recorded once, with the
+	// counter keys of both.
+	r.sys(SystemRule{
+		Chain: chain, Action: "continue", Protocol: string(model.ProtocolAny),
+		Source: "any", Destination: "any",
+		Description: "Put a connection's priority back on its later packets",
+		Keys:        []string{"forward/" + shapeRestoreTag, "output/" + shapeRestoreTag}, Setting: "shaping",
 	})
 }
 
@@ -980,6 +1041,9 @@ func (r *renderer) rule(rule *model.Rule) {
 	if rule.Log {
 		verdict = append(verdict, fmt.Sprintf("log prefix \"ostiole:%s: \" group %d", rule.ID, LogGroup))
 	}
+	// The tier goes in beside the verdict, which is the only place that
+	// knows this rule is the one admitting the flow.
+	verdict = append(verdict, shapeMark(rule.Priority)...)
 	switch rule.Action {
 	case model.ActionAccept:
 		verdict = append(verdict, "accept")
@@ -1009,8 +1073,12 @@ func (r *renderer) policyChains() {
 	r.block("chain policy_prerouting", func() {
 		r.line("type filter hook prerouting priority mangle; policy accept;")
 		// An established flow keeps the gateway it started on: changing
-		// lines halfway through would break the connection.
-		r.line(`ct mark != 0x0 meta mark set ct mark counter accept comment "policy:established"`)
+		// lines halfway through would break the connection. Only this
+		// feature's own byte counts: a flow that carries nothing but a
+		// shaping tier was never policy routed and has to go on to the
+		// zone chains like any other.
+		r.line(fmt.Sprintf(`ct mark & 0x%08x != 0x0 meta mark set ct mark counter accept comment "policy:established"`,
+			model.PolicyMarkMask))
 		// Traffic addressed to the firewall itself is never policy routed.
 		r.line(`fib daddr type local counter accept comment "policy:local"`)
 		for _, z := range zones {
@@ -1074,8 +1142,11 @@ func (r *renderer) policyZoneRules(zone string) {
 			r.line(fmt.Sprintf("# rule %s: gateway %q is disabled, so its traffic follows the default route", rule.ID, rule.Gateway))
 			r.emit(rule.ID, m, []string{"counter", "accept", fmt.Sprintf("comment %q", "no-policy:"+rule.ID)})
 		default:
+			// Only this feature's byte is written: the rest of the register
+			// belongs to whoever else marks a packet, and the copy onto the
+			// connection takes the union of both.
 			r.emit(rule.ID, m, []string{
-				fmt.Sprintf("meta mark set 0x%x", target.Mark),
+				fmt.Sprintf("meta mark set meta mark & 0x%08x | 0x%x", ^uint32(model.PolicyMarkMask), target.Mark),
 				"ct mark set meta mark",
 				"counter", "accept",
 				fmt.Sprintf("comment %q", "policy:"+rule.ID),
@@ -1170,8 +1241,10 @@ func (r *renderer) chainNATPrerouting() {
 			}
 			match := portMatch(pf.Protocol, pf.Ports)
 			target, _ := model.ParseIP(pf.Target)
-			r.line(fmt.Sprintf("iifname %s %s counter dnat %s comment \"id:%s\"",
-				ifnameSet(ifs), match, dnatTarget(target, pf.TargetPort), pf.ID))
+			// Only a connection's first packet is translated, which is
+			// exactly the packet worth classifying.
+			r.line(fmt.Sprintf("iifname %s %s counter %sdnat %s comment \"id:%s\"",
+				ifnameSet(ifs), match, shapePrefix(pf.Priority), dnatTarget(target, pf.TargetPort), pf.ID))
 			if pf.Reflection {
 				r.reflectDNAT(pf, match, target)
 			}
@@ -1204,8 +1277,8 @@ func (r *renderer) reflectDNAT(pf model.PortForward, match string, target netip.
 	if own := r.internalAddresses(fam); len(own) > 0 {
 		except = fmt.Sprintf("%s daddr != %s ", famPrefix(fam), setOrSingle(own))
 	}
-	r.line(fmt.Sprintf("iifname %s %sfib daddr type local %s counter dnat %s comment \"reflect:%s\"",
-		ifnameSet(ifs), except, match, dnatTarget(target, pf.TargetPort), pf.ID))
+	r.line(fmt.Sprintf("iifname %s %sfib daddr type local %s counter %sdnat %s comment \"reflect:%s\"",
+		ifnameSet(ifs), except, match, shapePrefix(pf.Priority), dnatTarget(target, pf.TargetPort), pf.ID))
 }
 
 // oneToOneDNAT maps each external address onto its internal host.

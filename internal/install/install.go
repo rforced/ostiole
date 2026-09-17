@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/rforced/ostiole/internal/network"
+	"github.com/rforced/ostiole/internal/shaping"
 	"github.com/rforced/ostiole/internal/sysctl"
 	"github.com/rforced/ostiole/internal/timezone"
 )
@@ -81,6 +82,10 @@ type Options struct {
 	// Timezone is the zone the router is set to; empty means UTC, "-" leaves
 	// the clock alone (tests).
 	Timezone string
+	// PackageManager names the host's package manager so the pieces that
+	// come in packages of their own can be fetched; empty looks for one,
+	// "-" installs nothing (tests).
+	PackageManager string
 }
 
 // Report describes what Install did and found.
@@ -179,6 +184,19 @@ func Install(ctx context.Context, sc Systemctl, lay Layout, opts Options, log *s
 		} else {
 			rep.Timezone = zone
 			log.Info("timezone set", "zone", zone)
+		}
+	}
+	// Traffic shaping needs tc, which Red Hat family distributions ship in
+	// a package of their own. A router with no shaping configured never
+	// misses it, so a failure here is worth a line in the log and nothing
+	// more; the apply that needs it says so itself.
+	if opts.PackageManager != "-" {
+		pm := opts.PackageManager
+		if pm == "" {
+			pm = PackageManager()
+		}
+		if err := EnsureTC(ctx, run, pm, log); err != nil {
+			log.Warn("could not install tc; traffic shaping will not work until it is there", "err", err)
 		}
 	}
 	if out, err := sc.Run(ctx, "enable", FirewallUnit); err != nil {
@@ -509,6 +527,46 @@ func EnsureNetworkd(ctx context.Context, sc Systemctl, run Runner, pm string, lo
 		return errors.New("systemd-networkd still missing after installation")
 	}
 	return nil
+}
+
+// EnsureTC installs the tc command when it is missing. On Red Hat family
+// distributions it is a package of its own, so a router can have a
+// complete iproute2 and still not be able to shape anything; elsewhere it
+// comes with iproute2 and this is a no-op.
+func EnsureTC(ctx context.Context, run Runner, pm string, log *slog.Logger) error {
+	if _, ok := shaping.Available(""); ok {
+		return nil
+	}
+	pkg, known := shaping.TCPackages[pm]
+	if !known {
+		return fmt.Errorf("tc is not installed and no supported package manager was found; install %s and retry",
+			shaping.TCPackage(pm))
+	}
+	log.Info("installing tc for traffic shaping", "packageManager", pm, "package", pkg)
+	args := append(installArgs(pm), pkg)
+	if out, err := run.Run(ctx, pm, args...); err != nil {
+		return fmt.Errorf("%s install %s: %w: %s", pm, pkg, err, tail(out))
+	}
+	if _, ok := shaping.Available(""); !ok {
+		return errors.New("tc still missing after installation")
+	}
+	return nil
+}
+
+// installArgs is how each package manager is told to install something
+// without asking anybody anything.
+func installArgs(pm string) []string {
+	switch pm {
+	case "apt-get":
+		return []string{"install", "-y"}
+	case "pacman":
+		return []string{"-S", "--noconfirm"}
+	case "zypper":
+		return []string{"--non-interactive", "install"}
+	case "apk":
+		return []string{"add", "--no-cache"}
+	}
+	return []string{"-y", "install"} // dnf
 }
 
 // NetworkManagers are the services the network takeover disables.

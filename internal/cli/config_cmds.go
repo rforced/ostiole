@@ -23,6 +23,7 @@ import (
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/policy"
+	"github.com/rforced/ostiole/internal/shaping"
 	"github.com/rforced/ostiole/internal/store"
 )
 
@@ -460,6 +461,76 @@ func policyNextHop(t policy.Target) string {
 		return "blackhole (group is set to block)"
 	}
 	return "none (traffic follows the default route)"
+}
+
+func newShapingCmd(g *globals) *cobra.Command {
+	return &cobra.Command{
+		Use:   "shaping",
+		Short: "Show the speeds interfaces are held to and what the kernel has",
+		Long: `Lists every interface that has been given a line speed, each shaped
+direction, and whether the queue for it is in the kernel. Nothing here
+changes anything: it reports what the last apply put in place.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := g.store().Load()
+			if err != nil {
+				return err
+			}
+			rep, err := g.shaper().Status(cmd.Context(), cfg)
+			if err != nil {
+				return err
+			}
+			out := cmd.OutOrStdout()
+			if rep.Reason != "" {
+				fmt.Fprintln(out, rep.Reason)
+			}
+			if len(rep.Interfaces) == 0 {
+				fmt.Fprintln(out, "no interface has a speed set")
+				return nil
+			}
+			w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "INTERFACE\tZONE\tLINK\tDIRECTION\tSPEED\tSTATE")
+			for _, in := range rep.Interfaces {
+				for _, d := range []struct {
+					name  string
+					state shaping.DirectionStatus
+				}{{"download", in.Download}, {"upload", in.Upload}} {
+					if d.state.Rate == 0 {
+						continue
+					}
+					fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+						in.Name, orDash(in.Zone), in.Link, d.name,
+						formatBits(d.state.Rate), shapeState(in, d.state))
+				}
+			}
+			return w.Flush()
+		},
+	}
+}
+
+// shapeState answers the only question worth asking of a row: is the
+// queue there, and if not, whose fault is that.
+func shapeState(in shaping.InterfaceStatus, d shaping.DirectionStatus) string {
+	switch {
+	case d.Installed:
+		return "in place"
+	case !in.Present:
+		return "waiting for the link"
+	}
+	return "not installed"
+}
+
+// formatBits writes a rate the way a line is sold.
+func formatBits(bits int64) string {
+	switch {
+	case bits >= 1_000_000_000 && bits%1_000_000_000 == 0:
+		return fmt.Sprintf("%d Gbit/s", bits/1_000_000_000)
+	case bits >= 1_000_000 && bits%1_000_000 == 0:
+		return fmt.Sprintf("%d Mbit/s", bits/1_000_000)
+	case bits%1000 == 0:
+		return fmt.Sprintf("%d kbit/s", bits/1000)
+	}
+	return fmt.Sprintf("%d bit/s", bits)
 }
 
 func newGatewaysCmd(g *globals) *cobra.Command {

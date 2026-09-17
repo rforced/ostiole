@@ -120,7 +120,7 @@ func (c *Config) Validate() error {
 				strings.Join(kinds, " and "))
 		}
 	}
-	v.enslaved(c, ifaces)
+	v.shaping(c, v.enslaved(c, ifaces))
 	v.delegation(c)
 
 	aliases := map[string]AliasType{}
@@ -225,6 +225,15 @@ func (c *Config) Validate() error {
 					"the outgoing interface is decided by the gateway")
 			}
 		}
+		if r.Priority != "" {
+			switch {
+			case !r.Priority.Valid():
+				v.add(path+".priority", "unknown priority %q", r.Priority)
+			case r.Action != ActionAccept:
+				v.add(path+".priority", "only an accept rule can set a priority: "+
+					"a dropped connection has no traffic to prioritise")
+			}
+		}
 		if !zones[r.Zone] {
 			v.add(path+".zone", "unknown zone %q", r.Zone)
 		}
@@ -318,6 +327,9 @@ func (c *Config) Validate() error {
 			} else if pr.Lo != pr.Hi {
 				v.add(path+".targetPort", "must be a single port")
 			}
+		}
+		if !pf.Priority.Valid() {
+			v.add(path+".priority", "unknown priority %q", pf.Priority)
 		}
 	}
 
@@ -889,8 +901,10 @@ func builtFrom(in Interface) []string {
 
 // enslaved checks bridge and bond membership across the whole
 // configuration: a link belongs to one master, and a member carries no
-// addressing of its own because the master holds it for the segment.
-func (v *validator) enslaved(c *Config, ifaces map[string]bool) {
+// addressing of its own because the master holds it for the segment. It
+// returns the member-to-master map, which is also what says where the
+// traffic of a port really flows.
+func (v *validator) enslaved(c *Config, ifaces map[string]bool) map[string]string {
 	masters := map[string]string{} // member -> master
 	kinds := map[string]Kind{}
 	for _, in := range c.Interfaces {
@@ -978,6 +992,47 @@ func (v *validator) enslaved(c *Config, ifaces map[string]bool) {
 		}
 	}
 	_ = ifaces
+	return masters
+}
+
+// shaping checks the speeds interfaces are given. A wrong figure here
+// does not break a rule, it makes the whole line feel broken, so the
+// checks are about pointing the shaper at something that can carry a
+// queue at all.
+func (v *validator) shaping(c *Config, masters map[string]string) {
+	devices := map[string]string{} // ifb name -> interface that claimed it
+	for i, in := range c.Interfaces {
+		s := in.Shaping
+		if s == nil {
+			continue
+		}
+		path := fmt.Sprintf("interfaces[%d].shaping", i)
+		for _, dir := range []struct {
+			field string
+			rate  int64
+		}{{"download", s.Download}, {"upload", s.Upload}} {
+			if dir.rate != 0 && (dir.rate < MinRate || dir.rate > MaxRate) {
+				v.add(path+"."+dir.field, "%d bit/s must be between %d and %d", dir.rate, MinRate, MaxRate)
+			}
+		}
+		if !s.Active() {
+			v.add(path, "give a download or an upload speed, or remove shaping")
+		}
+		if !slices.Contains(LinkTypes, s.LinkType()) {
+			v.add(path+".link", "unknown link type %q", s.Link)
+		}
+		if in.Name == "lo" {
+			v.add(path, "loopback traffic never leaves this router, so there is nothing to queue")
+		}
+		if master, ok := masters[in.Name]; ok {
+			v.add(path, "%q is part of %q, which carries the traffic", in.Name, master)
+		}
+		if other, taken := devices[IFBName(in.Name)]; taken {
+			v.add(path, "%q and %q would need the same helper device; rename one of them", in.Name, other)
+			continue
+		}
+		devices[IFBName(in.Name)] = in.Name
+	}
 }
 
 // pppoe checks a dialled session. The address always comes from the other

@@ -13,9 +13,11 @@ import (
 	"github.com/rforced/ostiole/internal/dnsblock"
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/feeds"
+	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/services"
+	"github.com/rforced/ostiole/internal/shaping"
 	"github.com/rforced/ostiole/internal/store"
 	"github.com/rforced/ostiole/internal/sysctl"
 	"github.com/rforced/ostiole/internal/timezone"
@@ -38,6 +40,7 @@ type globals struct {
 	logLevel   string
 	configDir  string
 	nftBin     string
+	tcBin      string
 	netBackend string
 	// packageManager names the distro package manager instead of looking
 	// for one, which is how a dev run and the end-to-end tests point at
@@ -47,6 +50,9 @@ type globals struct {
 	// blockCache is shared rather than made twice: the refresher and the
 	// service backend have to agree on what was last fetched.
 	blockCache *dnsblock.Cache
+	// shapeBackend is shared for the same reason and one more: the engine
+	// and the monitor's tick lock against each other through it.
+	shapeBackend *shaping.Shaper
 }
 
 func (g *globals) store() *store.Store {
@@ -86,6 +92,20 @@ func (g *globals) blocklists() *dnsblock.Cache {
 	return g.blockCache
 }
 
+// shaper is the traffic shaping backend. There is one per process: the
+// engine applies through it and the gateway tick reconciles through it,
+// and they hold the same lock so neither catches the other halfway.
+func (g *globals) shaper() *shaping.Shaper {
+	if g.shapeBackend == nil {
+		pm := g.packageManager
+		if pm == "" {
+			pm = install.PackageManager()
+		}
+		g.shapeBackend = shaping.New(g.configDir, g.tcBin, pm, slog.Default())
+	}
+	return g.shapeBackend
+}
+
 func (g *globals) engine() (*engine.Engine, error) {
 	net, err := g.network()
 	if err != nil {
@@ -96,6 +116,10 @@ func (g *globals) engine() (*engine.Engine, error) {
 	if os.Geteuid() == 0 {
 		eng.WithSysctl(sysctl.Proc{})
 		eng.WithTimezone(timezone.System{})
+		// Shaping needs root but not a managed network: a router whose
+		// interfaces are set up by something else can still have its
+		// queues held here.
+		eng.WithShaping(g.shaper())
 		if net != nil {
 			// Services need root and a managed router; dev runs stay firewall-only.
 			eng.WithServices(services.NewBundle(g.blocklists()))
@@ -120,6 +144,7 @@ func newRootCmd() *cobra.Command {
 	pf.StringVar(&g.logLevel, "log-level", "info", "log level: debug, info, warn, error")
 	pf.StringVar(&g.configDir, "config-dir", store.DefaultDir, "configuration directory")
 	pf.StringVar(&g.nftBin, "nft", "nft", "path to the nft binary")
+	pf.StringVar(&g.tcBin, "tc", "tc", "path to the tc binary, which traffic shaping drives")
 	pf.StringVar(&g.netBackend, "network-backend", "auto", "network backend: auto (networkd when it is running), networkd, or none")
 	pf.StringVar(&g.packageManager, "package-manager", "", "package manager to drive for system updates (dnf, apt-get, zypper, pacman, apk); empty detects one")
 	cmd.AddCommand(
@@ -135,6 +160,7 @@ func newRootCmd() *cobra.Command {
 		newCountersCmd(g),
 		newGatewaysCmd(g),
 		newPolicyCmd(g),
+		newShapingCmd(g),
 		newAliasesCmd(g),
 		newDNSBlockCmd(g),
 		newCronsCmd(g),

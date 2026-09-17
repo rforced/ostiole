@@ -50,6 +50,14 @@ type Policy interface {
 	Sync(targets []policy.Target) error
 }
 
+// Shaping keeps the traffic queues in place between applies. It rides the
+// same tick because it is watching for the same thing: a link that comes
+// and goes. The tick runs whether or not there are gateways to probe, so
+// a router that only caps a LAN converges too.
+type Shaping interface {
+	Sync(cfg *model.Config) error
+}
+
 // Status is what the UI and the failover logic see.
 type Status struct {
 	Name      string `json:"name"`
@@ -98,6 +106,10 @@ type Monitor struct {
 	// Policy, when set, keeps the policy routing tables and ip rules in
 	// step with what the probes just learned.
 	Policy Policy
+	// Shaping, when set, puts back any queue that has gone missing since
+	// the last apply: a dialled session that has only now come up, a link
+	// that was unplugged, a helper device somebody removed by hand.
+	Shaping Shaping
 	// OnTick, when set, is called after every pass, so the crons page can
 	// say when the router last probed.
 	OnTick func()
@@ -177,8 +189,21 @@ func (m *Monitor) Tick(ctx context.Context) {
 	}
 	m.applyRoutes(states)
 	m.syncPolicy(cfg, states)
+	m.syncShaping(cfg)
 	if m.OnTick != nil {
 		m.OnTick()
+	}
+}
+
+// syncShaping puts back anything the queues have lost. It warns rather
+// than failing the tick: the gateways still have to be probed and the
+// routes still have to move, whatever the shaper makes of the kernel.
+func (m *Monitor) syncShaping(cfg *model.Config) {
+	if m.Shaping == nil || cfg == nil {
+		return
+	}
+	if err := m.Shaping.Sync(cfg); err != nil {
+		m.Log.Warn("could not keep traffic shaping in place", "err", err)
 	}
 }
 

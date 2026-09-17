@@ -446,6 +446,9 @@ type Interface struct {
 	// which have no business being a source address. The list is fetched
 	// and refreshed like a blocklist. It belongs on a WAN only.
 	BlockBogons bool `json:"blockBogons,omitempty"`
+	// Shaping holds the queue for this line on the router, given how fast
+	// the line is. Unset leaves the interface as the kernel has it.
+	Shaping *Shaping `json:"shaping,omitempty"`
 }
 
 // LogsDrops reports whether packets dropped by the default policy on this
@@ -756,6 +759,10 @@ type Rule struct {
 	// rule, and cannot be combined with DestZone: the outgoing interface is
 	// not known yet when the routing decision is made.
 	Gateway string `json:"gateway,omitempty"`
+	// Priority puts the flows this rule admits in a tier, which decides
+	// what yields to what on a shaped line. It follows the connection, so
+	// the answers coming back are prioritised too.
+	Priority Tier `json:"priority,omitempty"`
 }
 
 // Schedule is a recurring window in the firewall's local time. Rules that
@@ -855,6 +862,9 @@ type PortForward struct {
 	// Reflection forwards connections that internal hosts make to the
 	// firewall's own outside address, so one name works from both sides.
 	Reflection bool `json:"reflection,omitempty"`
+	// Priority puts the forwarded flows in a tier. Only the first packet of
+	// a connection is translated, which is exactly when it is classified.
+	Priority Tier `json:"priority,omitempty"`
 }
 
 // Gateway is an upstream this firewall routes through. Several gateways
@@ -931,6 +941,15 @@ const (
 	// MaxPolicyTargets is how many gateways and groups can be marked; the
 	// mark has one byte for them.
 	MaxPolicyTargets = 255
+)
+
+// Traffic shaping numbering. The tier occupies bits 24-26, beside policy
+// routing's byte and clear of it, so a flow can be routed through one
+// gateway and prioritised at the same time. Everything that writes either
+// one masks the rest of the register rather than replacing it.
+const (
+	ShapeMarkShift = 24
+	ShapeMarkMask  = 0x7 << ShapeMarkShift // 0x07000000; tier 1..4, 0 = unset
 )
 
 // PolicyTarget is a gateway or gateway group that rules can route through.

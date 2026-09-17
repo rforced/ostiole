@@ -84,6 +84,9 @@ type Deps struct {
 	// SysStat samples CPU, memory and disk for the dashboard; nil hides
 	// that endpoint.
 	SysStat *sysstat.Sampler
+	// Shaping reports the live traffic queues; nil leaves the page with
+	// what is configured and no figures.
+	Shaping Shaper
 }
 
 // Handler builds the full HTTP handler: API routes plus the SPA.
@@ -109,6 +112,7 @@ func Handler(d Deps) http.Handler {
 		certHosts:  d.CertHosts,
 		fwlog:      d.Log,
 		gateways:   d.Gateways,
+		shaping:    d.Shaping,
 		tables:     d.Tables,
 		units:      d.Units,
 		sysstat:    d.SysStat,

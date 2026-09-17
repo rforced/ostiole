@@ -13,6 +13,7 @@ import (
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/services"
+	"github.com/rforced/ostiole/internal/shaping"
 	"github.com/rforced/ostiole/internal/store"
 )
 
@@ -480,5 +481,132 @@ func TestEffectiveFollowsThePendingApply(t *testing.T) {
 	}
 	if got := e.Effective(); got == nil || got.System.Hostname != "saved" {
 		t.Errorf("Effective after a revert = %+v, want the saved configuration back", got)
+	}
+}
+
+// fakeShaper is the traffic shaping backend as the engine sees it: files
+// in, files out, and a preflight it can be told to refuse.
+type fakeShaper struct {
+	fakeNet
+	preflightErr error
+	preflighted  int
+}
+
+func (f *fakeShaper) Render(cfg *model.Config) (network.Files, error) { return shaping.Render(cfg) }
+
+func (f *fakeShaper) Preflight(_ context.Context, files network.Files) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.preflighted++
+	if len(files) == 0 {
+		return nil
+	}
+	return f.preflightErr
+}
+
+// shapedConfig is cfg with a speed on the WAN, which is what makes the
+// shaping backend render anything at all.
+func shapedConfig(hostname string, download int64) *model.Config {
+	c := cfg(hostname)
+	for i := range c.Interfaces {
+		if c.Interfaces[i].Name == "eth0" {
+			c.Interfaces[i].Shaping = &model.Shaping{Download: download, Upload: 20_000_000}
+		}
+	}
+	return c
+}
+
+// Shaping goes in with everything else and comes back out with it: a
+// figure that makes the router unreachable has to be undone by the same
+// window that undoes a bad rule.
+func TestShapingAppliedAndRevertedWithTheRest(t *testing.T) {
+	t.Parallel()
+	st := store.New(t.TempDir())
+	fr := &fakeRunner{}
+	fn := &fakeNet{files: network.Files{}}
+	sh := &fakeShaper{fakeNet: fakeNet{files: network.Files{}}}
+	e := New(st, fr, fn, slog.New(slog.DiscardHandler)).WithShaping(sh)
+
+	if _, err := e.Apply(context.Background(), shapedConfig("first", 200_000_000), ApplyOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	before := sh.current().String()
+	if !strings.Contains(before, "bandwidth 200000000bit") {
+		t.Fatalf("first apply installed %q", before)
+	}
+
+	// The figure a careless operator types: applied, then left to expire.
+	if _, err := e.Apply(context.Background(), shapedConfig("second", 64_000), ApplyOptions{ConfirmTimeout: time.Minute}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sh.current().String(), "bandwidth 64000bit") {
+		t.Fatal("the second apply did not reach the shaper")
+	}
+	if err := e.Revert(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := sh.current().String(); got != before {
+		t.Errorf("revert left %q, want %q", got, before)
+	}
+}
+
+// Shaping is applied last, so a failure there has to undo the firewall,
+// the network, and the services behind it.
+func TestShapingFailureRollsBackEverything(t *testing.T) {
+	t.Parallel()
+	st := store.New(t.TempDir())
+	fr := &fakeRunner{}
+	fn := &fakeNet{files: network.Files{}}
+	svc := &fakeNet{files: network.Files{}, services: true}
+	sh := &fakeShaper{fakeNet: fakeNet{files: network.Files{}}}
+	e := New(st, fr, fn, slog.New(slog.DiscardHandler)).WithServices(svc).WithShaping(sh)
+
+	first := shapedConfig("first", 200_000_000)
+	if _, err := e.Apply(context.Background(), first, ApplyOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	firstRuleset := fr.last()
+	netBefore, svcBefore := fn.current().String(), svc.current().String()
+
+	sh.applyErr = errors.New("tc refused")
+	_, err := e.Apply(context.Background(), shapedConfig("second", 100_000_000), ApplyOptions{})
+	if err == nil || !strings.Contains(err.Error(), "tc refused") {
+		t.Fatalf("err = %v", err)
+	}
+	if fr.last() != firstRuleset {
+		t.Error("the firewall was left with the ruleset of a failed apply")
+	}
+	if fn.current().String() != netBefore {
+		t.Error("the network was not rolled back")
+	}
+	if svc.current().String() != svcBefore {
+		t.Error("the services were not rolled back")
+	}
+}
+
+// A router that cannot shape says so before anything is applied, rather
+// than accepting the configuration and quietly not shaping.
+func TestShapingPreflightRefusesBeforeAnythingIsApplied(t *testing.T) {
+	t.Parallel()
+	st := store.New(t.TempDir())
+	fr := &fakeRunner{}
+	sh := &fakeShaper{fakeNet: fakeNet{files: network.Files{}}, preflightErr: errors.New("tc is not installed")}
+	e := New(st, fr, nil, slog.New(slog.DiscardHandler)).WithShaping(sh)
+
+	_, err := e.Apply(context.Background(), shapedConfig("first", 200_000_000), ApplyOptions{})
+	if err == nil || !strings.Contains(err.Error(), "tc is not installed") {
+		t.Fatalf("err = %v", err)
+	}
+	if fr.count() != 0 {
+		t.Error("the firewall was applied despite a preflight failure")
+	}
+	if len(sh.current()) != 0 {
+		t.Error("the shaper was applied despite its own preflight failure")
+	}
+
+	// A configuration that shapes nothing is allowed through on the same
+	// router: there is nothing for the missing command to do.
+	if _, err := e.Apply(context.Background(), cfg("plain"), ApplyOptions{}); err != nil {
+		t.Fatalf("an unshaped configuration was refused: %v", err)
 	}
 }

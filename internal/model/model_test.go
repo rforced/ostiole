@@ -1032,3 +1032,185 @@ func TestValidateUpdates(t *testing.T) {
 		t.Errorf("empty update settings rejected: %v", err)
 	}
 }
+
+// shapingConfig is a router with a line and a network behind it, ready to
+// be given speeds.
+func shapingConfig() *Config {
+	return &Config{
+		Version: SchemaVersion,
+		Zones:   []Zone{{Name: "lan"}, {Name: "wan", External: true}},
+		Interfaces: []Interface{
+			{Name: "eth0", Zone: "wan", Enabled: true, IPv4: IPv4{Mode: AddrDHCP}, IPv6: IPv6{Mode: AddrNone}},
+			{Name: "eth1", Zone: "lan", Enabled: true, IPv4: IPv4{Mode: AddrStatic, Address: "192.168.1.1/24"}, IPv6: IPv6{Mode: AddrNone}},
+		},
+		NAT: NAT{Outbound: OutboundNAT{Mode: OutboundAutomatic}},
+	}
+}
+
+func TestValidateAcceptsShaping(t *testing.T) {
+	t.Parallel()
+	cfg := shapingConfig()
+	cfg.Interfaces[0].Shaping = &Shaping{Download: 200_000_000, Upload: 20_000_000, Link: LinkPPPoEPTM}
+	cfg.Interfaces[1].Shaping = &Shaping{Download: 50_000_000}
+	cfg.Rules = []Rule{
+		{ID: "voip", Enabled: true, Zone: "lan", Action: ActionAccept, Protocol: ProtocolUDP, Priority: TierRealtime},
+		// A rule may pick a gateway and a priority at once: they write
+		// different bits of the same mark.
+		{ID: "both", Enabled: true, Zone: "lan", DestZone: "wan", Action: ActionAccept, Protocol: ProtocolAny, Priority: TierBulk},
+	}
+	cfg.NAT.PortForwards = []PortForward{
+		{ID: "pf", Enabled: true, Zone: "wan", Protocol: ProtocolTCP, Ports: []string{"443"},
+			Target: "192.168.1.10", Priority: TierHigh},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("shaping config rejected: %v", err)
+	}
+	if got, want := len(cfg.ShapedInterfaces()), 2; got != want {
+		t.Errorf("%d shaped interfaces, want %d", got, want)
+	}
+	if !cfg.ShapesTraffic() {
+		t.Error("rules set a priority, yet nothing is said to be classified")
+	}
+}
+
+// An interface that is shaped but turned off carries no traffic, and a
+// priority on a rule that is turned off classifies nothing.
+func TestShapingIgnoresWhatIsTurnedOff(t *testing.T) {
+	t.Parallel()
+	cfg := shapingConfig()
+	cfg.Interfaces[0].Enabled = false
+	cfg.Interfaces[0].Shaping = &Shaping{Download: 200_000_000}
+	cfg.Rules = []Rule{{ID: "off", Zone: "lan", Action: ActionAccept, Protocol: ProtocolAny, Priority: TierHigh}}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("config rejected: %v", err)
+	}
+	if got := cfg.ShapedInterfaces(); len(got) != 0 {
+		t.Errorf("a disabled interface is shaped: %v", got)
+	}
+	if cfg.ShapesTraffic() {
+		t.Error("a disabled rule was taken to classify traffic")
+	}
+}
+
+func TestValidateCatchesShapingMistakes(t *testing.T) {
+	t.Parallel()
+	cfg := shapingConfig()
+	cfg.Zones = append(cfg.Zones, Zone{Name: "dmz"})
+	cfg.Interfaces = append(cfg.Interfaces,
+		// Speeds nobody can shape to, and a line type that does not exist.
+		Interface{Name: "eth2", Zone: "dmz", Enabled: true, IPv4: IPv4{Mode: AddrNone}, IPv6: IPv6{Mode: AddrNone},
+			Shaping: &Shaping{Download: 10, Upload: MaxRate + 1, Link: "carrier-pigeon"}},
+		// Neither direction given: the interface is listed as shaped and
+		// nothing is shaped.
+		Interface{Name: "eth3", Enabled: true, IPv4: IPv4{Mode: AddrNone}, IPv6: IPv6{Mode: AddrNone},
+			Shaping: &Shaping{}},
+		// A bridge member carries its master's traffic, not its own.
+		Interface{Name: "br0", Enabled: true, IPv4: IPv4{Mode: AddrNone}, IPv6: IPv6{Mode: AddrNone},
+			Bridge: &Bridge{Members: []string{"eth4"}}},
+		Interface{Name: "eth4", Enabled: true, IPv4: IPv4{Mode: AddrNone}, IPv6: IPv6{Mode: AddrNone},
+			Shaping: &Shaping{Download: 1_000_000}},
+		// Two names too long to fit in a device name that happen to be cut
+		// and hashed to the same one.
+		Interface{Name: "enp0s3aaaah9", Enabled: true, IPv4: IPv4{Mode: AddrNone}, IPv6: IPv6{Mode: AddrNone},
+			Shaping: &Shaping{Download: 1_000_000}},
+		Interface{Name: "enp0s3aaac3f", Enabled: true, IPv4: IPv4{Mode: AddrNone}, IPv6: IPv6{Mode: AddrNone},
+			Shaping: &Shaping{Download: 1_000_000}},
+	)
+	cfg.Rules = []Rule{
+		{ID: "dropped", Enabled: true, Zone: "lan", Action: ActionDrop, Protocol: ProtocolAny, Priority: TierHigh},
+		{ID: "unknown", Enabled: true, Zone: "lan", Action: ActionAccept, Protocol: ProtocolAny, Priority: "urgent"},
+	}
+	cfg.NAT.PortForwards = []PortForward{
+		{ID: "pf", Enabled: true, Zone: "wan", Protocol: ProtocolTCP, Ports: []string{"443"},
+			Target: "192.168.1.10", Priority: "urgent"},
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation errors")
+	}
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("error type %T, want *ValidationError", err)
+	}
+	got := map[string]string{}
+	for _, i := range ve.Issues {
+		got[i.Path] = i.Message
+	}
+	for _, p := range []string{
+		"interfaces[2].shaping.download",
+		"interfaces[2].shaping.upload",
+		"interfaces[2].shaping.link",
+		"interfaces[3].shaping",
+		"interfaces[5].shaping",
+		"interfaces[7].shaping",
+		"rules[0].priority",
+		"rules[1].priority",
+		"nat.portForwards[0].priority",
+	} {
+		if _, ok := got[p]; !ok {
+			t.Errorf("missing issue at %s (have %v)", p, got)
+		}
+	}
+	if msg := got["rules[0].priority"]; !strings.Contains(msg, "accept") {
+		t.Errorf("drop rule message = %q, want it to mention accept", msg)
+	}
+	if msg := got["interfaces[5].shaping"]; !strings.Contains(msg, "br0") {
+		t.Errorf("member message = %q, want it to name the master", msg)
+	}
+	if msg := got["interfaces[7].shaping"]; !strings.Contains(msg, "same helper device") {
+		t.Errorf("collision message = %q", msg)
+	}
+}
+
+// The marks are what the firewall writes and the queue reads, so the four
+// tiers have to come out as one, two, three and four in the tier bits and
+// nothing else may touch the byte policy routing keeps beside them.
+func TestTierMarks(t *testing.T) {
+	t.Parallel()
+	for i, tier := range Tiers {
+		mark, ok := tier.Mark()
+		if !ok {
+			t.Fatalf("%s has no mark", tier)
+		}
+		if want := uint32(i+1) << ShapeMarkShift; mark != want {
+			t.Errorf("%s mark = 0x%08x, want 0x%08x", tier, mark, want)
+		}
+		if mark&^uint32(ShapeMarkMask) != 0 {
+			t.Errorf("%s mark 0x%08x reaches outside its own bits", tier, mark)
+		}
+		if mark&PolicyMarkMask != 0 {
+			t.Errorf("%s mark 0x%08x overlaps policy routing", tier, mark)
+		}
+	}
+	if _, ok := Tier("").Mark(); ok {
+		t.Error("the empty tier was given a mark; unclassified traffic is the queue's own business")
+	}
+	if !Tier("").Valid() || Tier("urgent").Valid() {
+		t.Error("Valid does not agree with the four tiers and the empty one")
+	}
+}
+
+// Helper device names have to fit in the kernel's fifteen characters and
+// stay the same across runs, or an apply would leave the last one behind.
+func TestIFBNames(t *testing.T) {
+	t.Parallel()
+	for name, want := range map[string]string{
+		"eth0":        "ifb-eth0",
+		"enp1s0":      "ifb-enp1s0",
+		"eleven-char": "ifb-eleven-char",
+	} {
+		if got := IFBName(name); got != want {
+			t.Errorf("IFBName(%q) = %q, want %q", name, got, want)
+		}
+	}
+	for _, name := range []string{"enp0s31f6.4000", "a-very-long-interface-name", "wg0.vlan.1234"} {
+		got := IFBName(name)
+		if len(got) != 15 {
+			t.Errorf("IFBName(%q) = %q, which is %d characters", name, got, len(got))
+		}
+		if got != IFBName(name) {
+			t.Errorf("IFBName(%q) is not stable", name)
+		}
+	}
+}

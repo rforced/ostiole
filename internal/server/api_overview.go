@@ -519,6 +519,16 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 			Detail: "This router has interfaces in more than one zone but the kernel will not route between them.",
 		})
 	}
+	if a.shaping != nil && len(cfg.ShapedInterfaces()) > 0 {
+		if pkg, missing := a.shaping.Missing(); missing {
+			out = append(out, Warning{
+				Kind: "tc-missing", Level: "warn",
+				Title: "Traffic shaping is not running",
+				Detail: "Interfaces have line speeds set, but the tc command is not installed, so nothing is holding the queue here. " +
+					"Install the " + pkg + " package.",
+			})
+		}
+	}
 	// Installing refuses on an old kernel, but a router can be booted onto one
 	// afterwards. Say so and keep filtering: a firewall that stops working
 	// because of its kernel version is worse than an unsupported one.

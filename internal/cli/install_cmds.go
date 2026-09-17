@@ -59,6 +59,7 @@ firewalld, ufw, and friends.`,
 			}
 			lay := install.DefaultLayout()
 			lay.ConfigDir = g.configDir
+			opts.PackageManager = g.packageManager
 			rep, err := install.Install(cmd.Context(), install.ExecSystemctl{}, lay, opts, slog.Default())
 			if err != nil {
 				return err
@@ -503,6 +504,12 @@ run for example "systemctl unmask firewalld && systemctl enable --now firewalld"
 			}
 			if err := install.Uninstall(cmd.Context(), install.ExecSystemctl{}, lay, purge, slog.Default()); err != nil {
 				return err
+			}
+			// The queues come off before the table does: they hang off the
+			// kernel rather than off anything the uninstall removes, so
+			// nobody else would ever take them away.
+			if err := g.shaper().Clear(cmd.Context()); err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not remove traffic shaping: %v\n", err)
 			}
 			if err := (&nft.Exec{Bin: g.nftBin}).Apply(cmd.Context(), nft.EmptyRuleset()); err != nil {
 				return fmt.Errorf("remove nftables table: %w", err)

@@ -86,6 +86,7 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/gateways":               {summary: "Gateway health from the multi-WAN monitor.", role: auth.RoleViewer},
 	"GET /api/v1/gateways/detected":      {summary: "Default routes the kernel already has, and the gateway each would become.", role: auth.RoleViewer},
 	"GET /api/v1/policy":                 {summary: "Where policy-routed traffic is being sent.", role: auth.RoleViewer},
+	"GET /api/v1/shaping":                {summary: "Line speeds per interface and how the queues are behaving.", role: auth.RoleViewer},
 	"GET /api/v1/log/recent":             {summary: "Recent firewall log entries.", role: auth.RoleViewer},
 	"GET /api/v1/log/stream":             {summary: "Firewall log entries as they arrive (server-sent events).", role: auth.RoleViewer},
 	"GET /api/v1/diagnostics/journal":    {summary: "Read the system journal.", role: auth.RoleViewer},

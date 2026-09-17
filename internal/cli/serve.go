@@ -174,6 +174,9 @@ at your own.`,
 				// The names are looked up fresh, so a certificate made
 				// after the router moved covers where it moved to.
 				CertHosts: certHosts,
+				// The live queue figures need no privileges to read, so a
+				// dev run gets the page too; without tc it says so.
+				Shaping: g.shaper(),
 			}
 			go refresher.Run(ctx)
 			go blocklists.Run(ctx)
@@ -191,6 +194,9 @@ at your own.`,
 				// window and undone when the window expires.
 				mon.Source = eng.Effective
 				mon.Policy = policy.NewInstaller(slog.Default())
+				// The same tick puts back a queue whose link has only just
+				// come up, which is the boot and redial case.
+				mon.Shaping = g.shaper()
 				mon.OnTick = func() { crons.Note("system:gateways") }
 				deps.Gateways = mon
 				go mon.Run(ctx)

@@ -61,6 +61,9 @@ type api struct {
 	tables    TableLister
 	units     install.Systemctl
 	gateways  GatewayStatuser
+	// shaping reports the live traffic queues; nil hides the live figures
+	// and leaves the page showing what is configured.
+	shaping Shaper
 	// sysstat samples CPU, memory and disk for the dashboard; nil hides
 	// the endpoint.
 	sysstat *sysstat.Sampler
@@ -107,6 +110,7 @@ func (a *api) register(mux *router) {
 	mux.HandleFunc("GET /api/v1/gateways", a.readNoEngine(a.gatewayStatus))
 	mux.HandleFunc("GET /api/v1/gateways/detected", a.read(a.detectedGateways))
 	mux.HandleFunc("GET /api/v1/policy", a.readNoEngine(a.policyStatus))
+	mux.HandleFunc("GET /api/v1/shaping", a.read(a.shapingStatus))
 	mux.HandleFunc("GET /api/v1/update/check", a.admin(a.updateCheck))
 	mux.HandleFunc("GET /api/v1/update/status", a.readNoEngine(a.updateStatus))
 	mux.HandleFunc("POST /api/v1/update/apply", a.admin(a.updateApply))
