@@ -548,3 +548,77 @@ func TestRestartDaemonSoonOnlyTouchesARunningDaemon(t *testing.T) {
 		t.Errorf("calls = %v, want one deferred restart in a unit of its own", run.calls)
 	}
 }
+
+func TestRemovalRefusesToTakeWhatOstioleNeeds(t *testing.T) {
+	t.Parallel()
+	protected := []string{"nftables", "dnsmasq", "iproute-tc"}
+	for name, plan := range map[string]string{
+		"dnf table": `Removing:
+ firewalld            noarch   2.4.3-4.el10_2     @baseos   2.2 M
+Removing unused dependencies:
+ nftables             x86_64   1:1.1.5-6.el10_2   @baseos   1.0 M
+ python3-nftables     x86_64   1:1.1.5-6.el10_2   @baseos   0.1 M
+Transaction Summary`,
+		"dnf transaction": "  Erasing          : nftables-1:1.1.5-6.el10_2.x86_64    3/5",
+		"apt":             "Remv firewalld [2.4.3-1]\nRemv nftables [1.1.5-1]\n",
+		"apk":             "(1/2) Purging firewalld (2.4.3-r0)\n(2/2) Purging nftables (1.1.5-r0)",
+		"zypper":          "The following 2 packages are going to be REMOVED:\n  firewalld nftables\n",
+	} {
+		err := refuseRemoval(plan, []string{"firewalld"}, protected)
+		if err == nil || !strings.Contains(err.Error(), "nftables") || strings.Contains(err.Error(), "python3") {
+			t.Errorf("%s: err = %v, want a refusal naming nftables and nothing else", name, err)
+		}
+	}
+
+	for name, plan := range map[string]string{
+		"only the competitor": "Removing:\n firewalld  noarch  2.4.3-4.el10_2  @baseos\n",
+		"a lookalike":         "Removing unused dependencies:\n python3-nftables  x86_64  1:1.1.5-6.el10_2\n",
+		"empty":               "",
+	} {
+		if err := refuseRemoval(plan, []string{"firewalld"}, protected); err != nil {
+			t.Errorf("%s: refused %v", name, err)
+		}
+	}
+
+	rep := Report{Components: []ComponentState{
+		{Key: "nft", Present: false, Packages: []string{"nftables"}},
+		{Key: "dnsmasq", Present: true, Packages: []string{"dnsmasq"}},
+		{Key: "unbound", Present: false, Packages: []string{"unbound"}},
+	}}
+	if got := protectedPackages(rep); strings.Join(got, " ") != "nftables dnsmasq" {
+		t.Errorf("protected = %v", got)
+	}
+}
+
+func TestCompetitorRemovedWhenOnlyTheMaskRemains(t *testing.T) {
+	t.Parallel()
+	units := &fakeUnits{
+		enabled: map[string]string{"firewalld.service": "masked", "nftables.service": "disabled"},
+		active:  map[string]string{},
+	}
+	d := testDeps(t, &model.Config{}, units)
+	run := d.Run.(*fakeCommands)
+	run.out = map[string]string{"rpm -q firewalld": "package firewalld is not installed"}
+	rep := Status(context.Background(), d)
+	for _, c := range rep.Competitors {
+		switch c.Name {
+		case "firewalld":
+			if c.Installed || !c.Removed || c.Conflicts {
+				t.Errorf("firewalld = %+v, want removed and not in conflict", c)
+			}
+		case "nftables":
+			if c.Removed {
+				t.Errorf("nftables = %+v, want not removed", c)
+			}
+		}
+	}
+	if got := stepOf(t, rep, StepFirewall); got.State != StateDone {
+		t.Errorf("firewall step = %+v, want done: a removed competitor is not outstanding", got)
+	}
+	if got := stepOf(t, rep, StepPackages); got.State != StateOutstanding {
+		t.Errorf("packages step = %+v, want outstanding", got)
+	}
+	if rep.Prepared {
+		t.Error("a router with nothing installed was called prepared")
+	}
+}

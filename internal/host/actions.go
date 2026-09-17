@@ -210,6 +210,12 @@ func TakeoverFirewall(ctx context.Context, d Deps) (string, error) {
 // A unit that is still running or still enabled is refused. Removing the
 // package under a running service is how a router ends up with no addresses
 // and no way to get any, and masking it first costs one click.
+//
+// The plan is read before anything is removed, preview or not, and a plan
+// that names a package Ostiole itself needs is refused: firewalld requires
+// nftables, and a package manager that tidies dependencies would take the
+// nft command with the old firewall. The plan is returned with the
+// refusal, so the console can show it.
 func RemovePackages(ctx context.Context, d Deps, units []string, preview bool) (string, error) {
 	if !d.Root {
 		return "", ErrNotRoot
@@ -239,7 +245,85 @@ func RemovePackages(ctx context.Context, d Deps, units []string, preview bool) (
 		}
 		pkgs = append(pkgs, st.Packages...)
 	}
-	return d.Packages.Remove(ctx, pkgs, preview)
+	plan, err := d.Packages.Remove(ctx, pkgs, true)
+	if err != nil {
+		return plan, err
+	}
+	if err := refuseRemoval(plan, units, protectedPackages(rep)); err != nil {
+		return plan, err
+	}
+	if preview {
+		return plan, nil
+	}
+	return d.Packages.Remove(ctx, pkgs, false)
+}
+
+// protectedPackages are the packages a removal must never take: the ones
+// behind every component this router has, and nftables whether or not
+// nft is there right now, because without it nothing can load a ruleset.
+func protectedPackages(rep Report) []string {
+	var out []string
+	for _, c := range rep.Components {
+		if c.Present || c.Key == "nft" {
+			out = append(out, c.Packages...)
+		}
+	}
+	return out
+}
+
+// refuseRemoval reads a package manager's plan for the packages it would
+// take, and refuses when one of them is protected.
+func refuseRemoval(plan string, units, protected []string) error {
+	taken := namedIn(plan, protected)
+	if len(taken) == 0 {
+		return nil
+	}
+	return fmt.Errorf("refusing to remove %s: the package manager would also remove %s, which Ostiole needs",
+		join(units), join(taken))
+}
+
+// namedIn reports which of the names a plan mentions as a package. Every
+// manager prints one package per token — "nftables" on its own line or in
+// a list, or "nftables-1:1.1.5-6.el10" in dnf's transaction — so a token
+// that is the name, or the name followed by a dash and a version, counts.
+// A different package that merely contains the name (python3-nftables)
+// does not.
+func namedIn(plan string, names []string) []string {
+	var out []string
+	for _, name := range names {
+		if name == "" {
+			continue
+		}
+		found := false
+		for _, tok := range strings.Fields(plan) {
+			tok = strings.TrimRight(tok, ",;:)")
+			tok = strings.TrimLeft(tok, "(")
+			if tok == name || versioned(tok, name) {
+				found = true
+				break
+			}
+		}
+		if found && !contains(out, name) {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// versioned reports whether tok is name followed by a version, the way
+// rpm writes a package: nftables-1:1.1.5-6.el10_2.x86_64.
+func versioned(tok, name string) bool {
+	rest, ok := strings.CutPrefix(tok, name+"-")
+	return ok && rest != "" && rest[0] >= '0' && rest[0] <= '9'
+}
+
+func contains(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
 
 // find looks a competitor up by unit name.

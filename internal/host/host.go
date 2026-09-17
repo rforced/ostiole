@@ -159,6 +159,12 @@ type CompetitorState struct {
 	// Installed is whether those packages are actually there, so the
 	// button is not offered for a unit whose package has already gone.
 	Installed bool `json:"installed"`
+	// Removed is a unit systemd still lists only because of the mask
+	// Ostiole left when it retired it: the package is gone. The mask is
+	// worth keeping, since a reinstall then stays off, but the page
+	// should say "removed" rather than list a competitor that is not
+	// there.
+	Removed bool `json:"removed,omitempty"`
 	// Note explains a competitor that is disabled but never removed.
 	Note string `json:"note,omitempty"`
 }
@@ -344,12 +350,19 @@ func competitors(ctx context.Context, d Deps, manager string) []CompetitorState 
 		if len(pkgs) > 0 && d.Packages != nil && d.Root {
 			// One installed package is enough to have something to
 			// remove; asking about the rest only slows the page down.
+			checked := true
 			for _, p := range pkgs {
-				if ok, err := d.Packages.Installed(ctx, p); err == nil && ok {
+				ok, err := d.Packages.Installed(ctx, p)
+				if err != nil {
+					checked = false
+					break
+				}
+				if ok {
 					st.Installed = true
 					break
 				}
 			}
+			st.Removed = checked && !st.Installed && svc.Enabled == "masked"
 		}
 		out = append(out, st)
 	}

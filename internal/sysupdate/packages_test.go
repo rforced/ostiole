@@ -76,9 +76,12 @@ func TestInstallAndRemoveArgv(t *testing.T) {
 		remove  string
 		preview string
 	}{
-		{dnf{}, "dnf -y install dnsmasq", "dnf -y remove firewalld", "dnf --assumeno remove firewalld"},
+		{dnf{}, "dnf -y install dnsmasq",
+			"dnf --setopt=clean_requirements_on_remove=False -y remove firewalld",
+			"dnf --setopt=clean_requirements_on_remove=False --assumeno remove firewalld"},
 		{apt{}, "apt-get -y -q", "apt-get -y -q", "apt-get -q -s remove firewalld"},
-		{pacman{}, "pacman -S --noconfirm --needed dnsmasq", "pacman -R --noconfirm firewalld", "pacman -R --print firewalld"},
+		{pacman{}, "pacman -S --noconfirm --needed dnsmasq", "pacman -R --noconfirm firewalld",
+			"pacman -R --print --print-format %n firewalld"},
 		{zypper{}, "zypper --non-interactive install dnsmasq", "zypper --non-interactive remove firewalld", "zypper --non-interactive remove --dry-run firewalld"},
 		{apk{}, "apk add --no-cache dnsmasq", "apk del firewalld", "apk del --simulate firewalld"},
 	}
@@ -186,5 +189,35 @@ func TestLocateFindsSbin(t *testing.T) {
 	// worth checking: dnsmasq and nft both live there.
 	if got := Locate("definitely-not-a-command-anywhere"); got != "" {
 		t.Errorf("Locate invented %q", got)
+	}
+}
+
+type argvRecorder struct{ calls []string }
+
+func (a *argvRecorder) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+	a.calls = append(a.calls, name+" "+strings.Join(args, " "))
+	return nil, nil
+}
+
+func TestHostRunnerNamesNeverRepeat(t *testing.T) {
+	t.Parallel()
+	rec := &argvRecorder{}
+	a, b := NewHostRunner(rec), NewHostRunner(rec)
+	for _, r := range []Runner{a, b, a} {
+		_, _ = r.Run(context.Background(), "true")
+	}
+	seen := map[string]bool{}
+	for _, call := range rec.calls {
+		if !strings.HasPrefix(call, "systemd-run --unit=") {
+			continue
+		}
+		unit := strings.Fields(call)[1]
+		if seen[unit] {
+			t.Errorf("unit name %s was handed out twice", unit)
+		}
+		seen[unit] = true
+	}
+	if len(seen) != 3 {
+		t.Errorf("saw %d unit names in %v, want 3", len(seen), rec.calls)
 	}
 }

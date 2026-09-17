@@ -234,10 +234,12 @@ Ostiole's, so it is asked first and printed before anything is removed.`,
 			d := g.hostDeps()
 			out := cmd.OutOrStdout()
 			preview, err := host.RemovePackages(cmd.Context(), d, args, true)
+			if preview != "" {
+				fmt.Fprintln(out, strings.TrimSpace(preview))
+			}
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(out, strings.TrimSpace(preview))
 			if dryRun {
 				return nil
 			}

@@ -179,11 +179,16 @@ func (d dnf) RemoveArgv(pkgs []string, preview bool) []string {
 	// run it, which is the closest dnf comes to a dry run that lists what
 	// would come away. It exits 1 having changed nothing, and
 	// previewRefused knows that is the answer rather than a failure.
+	//
+	// clean_requirements_on_remove is on by default, and it is how
+	// removing firewalld took nftables with it: an "unused dependency" as
+	// far as rpm can tell, because Ostiole is not a package that requires
+	// it. Off, only the named packages and what depends on them go.
 	answer := "-y"
 	if preview {
 		answer = "--assumeno"
 	}
-	return append([]string{d.Name(), answer, "remove"}, pkgs...)
+	return append([]string{d.Name(), "--setopt=clean_requirements_on_remove=False", answer, "remove"}, pkgs...)
 }
 
 // rpmInstalled asks the rpm database, which both dnf and zypper routers

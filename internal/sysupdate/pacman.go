@@ -124,7 +124,7 @@ func (p pacman) RemoveArgv(pkgs []string, preview bool) []string {
 	// judgement call, and this is not the place to make it on somebody's
 	// router.
 	if preview {
-		return append([]string{p.Name(), "-R", "--print"}, pkgs...)
+		return append([]string{p.Name(), "-R", "--print", "--print-format", "%n"}, pkgs...)
 	}
 	return append([]string{p.Name(), "-R", "--noconfirm"}, pkgs...)
 }

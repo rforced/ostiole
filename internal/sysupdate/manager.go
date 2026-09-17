@@ -108,7 +108,7 @@ func New(o Options) *Manager {
 	// has one to raise; everywhere else the command runs as a child and
 	// takes the sandbox with it.
 	if o.Root && m.unit.supported() {
-		m.Run = hostRunner{inner: run, seq: new(atomic.Int64)}
+		m.Run = hostRunner{inner: run, seq: &cmdSeq}
 	}
 	driver, err := Detect(o.PackageManager)
 	switch {
@@ -137,8 +137,10 @@ func NewHostRunner(inner Runner) Runner {
 	if inner == nil {
 		inner = ExecRunner{}
 	}
-	return hostRunner{inner: inner, seq: new(atomic.Int64)}
+	return hostRunner{inner: inner, seq: &cmdSeq}
 }
+
+var cmdSeq atomic.Int64
 
 // scratchUser is a driver that writes somewhere while it works.
 type scratchUser interface {

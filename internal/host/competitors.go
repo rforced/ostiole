@@ -70,8 +70,8 @@ var competitorPackages = map[string]map[string][]string{
 
 // nftablesNote is why the one competitor that is never removed is never
 // removed.
-const nftablesNote = "The unit is masked but the package stays: it brings the nft command Ostiole " +
-	"loads its own ruleset with."
+const nftablesNote = "The unit is retired if it competes, since stopping it flushes every ruleset in the " +
+	"kernel; the package stays either way, because it brings the nft command Ostiole loads its own ruleset with."
 
 // CompetitorPackages names what removing a competitor would take off this
 // router, and explains an empty answer. An empty list means the UI offers

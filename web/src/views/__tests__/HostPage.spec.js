@@ -223,6 +223,27 @@ describe('HostPage', () => {
     expect(api.host.skipStep).not.toHaveBeenCalled()
   })
 
+  it('says a competitor whose package is gone is removed, and offers nothing for it', async () => {
+    const wrapper = await page({
+      competitors: [
+        {
+          name: 'firewalld',
+          kind: 'firewall',
+          active: 'inactive',
+          enabled: 'masked',
+          conflicts: false,
+          packages: ['firewalld'],
+          installed: false,
+          removed: true,
+        },
+      ],
+    })
+    expect(wrapper.text()).toContain('removed, mask kept')
+    expect(wrapper.text()).not.toContain('inactive, masked')
+    const labels = wrapper.findAllComponents({ name: 'ConfirmButton' }).map((b) => b.props('label'))
+    expect(labels).not.toContain('Remove packages')
+  })
+
   it('offers no buttons to a daemon that is not root', async () => {
     const wrapper = await page({ root: false })
     expect(wrapper.text()).toContain('not running as root')

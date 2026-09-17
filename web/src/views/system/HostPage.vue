@@ -358,7 +358,7 @@ const stepTitles = {
           <p class="max-w-3xl text-sm text-neutral-500">
             Another firewall filters next to Ostiole's rules, and two sets of rules mean traffic has
             to pass both. Retiring one stops it and leaves a way back; removing its package does
-            not.
+            not. A retired unit stays masked after its package is removed, so a reinstall stays off.
           </p>
         </div>
         <button
@@ -394,7 +394,8 @@ const stepTitles = {
               <td class="font-mono">{{ c.name }}</td>
               <td class="text-sm text-neutral-500">{{ c.kind }}</td>
               <td>
-                <span :class="c.conflicts ? 'badge badge-warn' : 'badge badge-ok'">
+                <span v-if="c.removed" class="badge">removed, mask kept</span>
+                <span v-else :class="c.conflicts ? 'badge badge-warn' : 'badge badge-ok'">
                   {{ c.active }}, {{ c.enabled }}
                 </span>
               </td>
