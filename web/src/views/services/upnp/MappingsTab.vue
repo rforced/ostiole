@@ -20,7 +20,7 @@ onMounted(load.run)
       {{ load.error.value }}
     </p>
     <p class="text-sm text-neutral-500">
-      The list is empty for a moment after an apply, while clients re-open what they had.
+      Clients re-open these after an apply, so the list is empty for a moment.
     </p>
     <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
       <table class="table">
@@ -30,13 +30,11 @@ onMounted(load.run)
             <th>External port</th>
             <th>Client</th>
             <th>Internal port</th>
-            <th>Expires</th>
-            <th>Description</th>
           </tr>
         </thead>
         <TransitionGroup name="row" tag="tbody">
           <tr v-if="!mappings.length" key="empty" class="row-static">
-            <td colspan="6" class="text-neutral-500">
+            <td colspan="4" class="text-neutral-500">
               {{ load.updatedAt.value ? 'No mappings.' : 'Reading mappings…' }}
             </td>
           </tr>
@@ -50,10 +48,6 @@ onMounted(load.run)
             <td class="font-mono text-code">{{ m.externalPort }}</td>
             <td class="font-mono text-code">{{ m.internal }}</td>
             <td class="font-mono text-code">{{ m.internalPort }}</td>
-            <td>
-              {{ m.expires ? new Date(m.expires).toLocaleString() : 'never' }}
-            </td>
-            <td>{{ m.description }}</td>
           </tr>
         </TransitionGroup>
       </table>

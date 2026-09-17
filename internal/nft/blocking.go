@@ -60,21 +60,39 @@ func (r *renderer) chainBlockDNS() {
 		return
 	}
 	e := r.cfg.Blocking.Enforce
+	// The rows are scoped to where forward jumps here from; the exempt
+	// clients return first, so to the reader they are left out of the source.
+	internal := r.internalInterfaces()
 	r.block("chain "+BlockChain, func() {
 		for _, m := range r.exemptMatches("saddr") {
 			r.line(fmt.Sprintf(`%s counter return comment "block:exempt"`, m))
 		}
 		if e.BlockDoT {
 			r.line(fmt.Sprintf(`meta l4proto { tcp, udp } th dport %d counter drop comment "block:dot"`, DoTPort))
+			r.sysFor(internal, SystemRule{
+				Chain: BlockChain, Action: "drop", Protocol: string(model.ProtocolTCPUDP),
+				Source: r.exemptSource(), Destination: fmt.Sprintf("any : %d", DoTPort),
+				Description: "DNS over TLS", Keys: []string{BlockChain + "/block:dot"}, Setting: "enforcement",
+			})
 		}
 		if e.DoHAlias != "" {
 			if a, ok := r.cfg.Alias(e.DoHAlias); ok {
 				v4, v6 := splitFamilies(r.entriesOf(*a))
+				emitted := false
 				if len(v4) > 0 || a.Fetched() {
 					r.line(fmt.Sprintf(`ip daddr @%s counter drop comment "block:doh"`, aliasSet(a.Name, 4)))
+					emitted = true
 				}
 				if len(v6) > 0 || a.Fetched() {
 					r.line(fmt.Sprintf(`ip6 daddr @%s counter drop comment "block:doh"`, aliasSet(a.Name, 6)))
+					emitted = true
+				}
+				if emitted {
+					r.sysFor(internal, SystemRule{
+						Chain: BlockChain, Action: "drop", Protocol: string(model.ProtocolAny),
+						Source: r.exemptSource(), Destination: "@" + a.Name,
+						Description: "DNS over HTTPS servers", Keys: []string{BlockChain + "/block:doh"}, Setting: "enforcement",
+					})
 				}
 			}
 		}
@@ -117,6 +135,12 @@ func (r *renderer) dnsRedirect() {
 	r.line(fmt.Sprintf(
 		`iifname %s meta l4proto { tcp, udp } th dport 53 fib daddr type != local counter redirect to :53 comment "block:dns-redirect"`,
 		set))
+	r.sysFor(ifs, SystemRule{
+		Chain: "nat_prerouting", Action: "redirect", Protocol: string(model.ProtocolTCPUDP),
+		Source: r.exemptSource(), Destination: "not this firewall : 53",
+		Description: "Plain DNS answered by this firewall instead",
+		Keys:        []string{"nat_prerouting/block:dns-redirect"}, Setting: "enforcement",
+	})
 }
 
 // BlockingUsesAlias reports whether DNS enforcement refers to an alias, so

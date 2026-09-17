@@ -511,9 +511,23 @@ func writeMode(path, content string, mode os.FileMode) error {
 	// through the file also keeps whatever SELinux label it already has,
 	// which a fresh file in /etc would not inherit.
 	if _, statErr := os.Stat(path); statErr != nil {
-		return err
+		return sealedDirError(path, err)
 	}
 	return writeInPlace(path, content, mode)
+}
+
+// sealedDirError explains the one version of this that looks like a bug in
+// the unit and is not. A directory created after the daemon started is not
+// in the mount namespace systemd built for it, because ReadWritePaths
+// entries with a leading dash are skipped while their path is missing; the
+// unit can list it and the daemon still cannot write it. Only a restart
+// rebuilds the namespace.
+func sealedDirError(path string, err error) error {
+	if !errors.Is(err, syscall.EROFS) {
+		return err
+	}
+	return fmt.Errorf("%w (%s was not there when the daemon started, so it stayed read-only inside "+
+		"its sandbox: run `systemctl restart ostiole` and apply again)", err, filepath.Dir(path))
 }
 
 // writeAtomic writes a temporary file beside path and renames it over the

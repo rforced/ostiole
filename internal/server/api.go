@@ -93,6 +93,7 @@ func (a *api) register(mux *router) {
 	mux.HandleFunc("GET /api/v1/config/revisions/{id}", a.read(a.revision))
 	mux.HandleFunc("GET /api/v1/ruleset", a.read(a.ruleset))
 	mux.HandleFunc("GET /api/v1/counters", a.read(a.counters))
+	mux.HandleFunc("POST /api/v1/rules/system", a.read(a.systemRules))
 	mux.HandleFunc("GET /api/v1/interfaces/live", a.readNoEngine(a.liveInterfaces))
 	mux.HandleFunc("POST /api/v1/config/starter", a.write(a.starter))
 	mux.HandleFunc("POST /api/v1/check", a.write(a.check))
@@ -146,24 +147,26 @@ func (a *api) servicesStatus(w http.ResponseWriter, r *http.Request) error {
 	if a.upnp != nil {
 		st.UPnPSetUp = a.upnp.Installed(r.Context())
 		st.UPnPRunning = a.upnp.Active(r.Context())
-		if maps, err := a.upnp.ReadMappings(); err == nil {
-			st.Mappings = len(maps)
-		}
+	}
+	// The mappings are in the ruleset, so a router with no table loaded
+	// reports none rather than failing the whole strip.
+	if maps, err := a.engine.Mappings(r.Context()); err == nil {
+		st.Mappings = len(maps)
 	}
 	writeJSON(w, http.StatusOK, st)
 	return nil
 }
 
-// upnpMappings lists the holes clients have opened for themselves. Without
-// miniupnpd the answer is an empty list rather than an error: the page has
-// a line of its own for "not set up".
-func (a *api) upnpMappings(w http.ResponseWriter, _ *http.Request) error {
-	if a.upnp == nil {
-		writeJSON(w, http.StatusOK, []services.Mapping{})
-		return nil
-	}
-	maps, err := a.upnp.ReadMappings()
+// upnpMappings lists the holes clients have opened for themselves, read
+// from the ruleset. A router with no table loaded has none rather than an
+// error: the page has a line of its own for "not set up".
+func (a *api) upnpMappings(w http.ResponseWriter, r *http.Request) error {
+	maps, err := a.engine.Mappings(r.Context())
 	if err != nil {
+		if errors.Is(err, nft.ErrNoTable) {
+			writeJSON(w, http.StatusOK, []nft.Mapping{})
+			return nil
+		}
 		return err
 	}
 	writeJSON(w, http.StatusOK, maps)
@@ -566,6 +569,28 @@ func (a *api) counters(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	writeJSON(w, http.StatusOK, c)
+	return nil
+}
+
+// systemRules describes the rules a configuration makes Ostiole add on its
+// own. It takes the configuration in the body, like check, so the rules
+// page can show them for the draft being edited rather than what is saved.
+func (a *api) systemRules(w http.ResponseWriter, r *http.Request) error {
+	var req configRequest
+	if err := decodeJSON(r, &req); err != nil {
+		return err
+	}
+	if req.Config == nil {
+		return &badRequest{errors.New("config is required")}
+	}
+	rows, err := a.engine.SystemRules(req.Config)
+	if err != nil {
+		return err
+	}
+	if rows == nil {
+		rows = []nft.SystemRule{}
+	}
+	writeJSON(w, http.StatusOK, rows)
 	return nil
 }
 

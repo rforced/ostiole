@@ -2,9 +2,12 @@ package services
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/rforced/ostiole/internal/network"
@@ -21,7 +24,7 @@ func TestRenderUPnPGolden(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			cfg := loadConfig(t, in)
-			u := &UPnP{Dir: UPnPDir, Leases: UPnPLeaseFile, UUID: "00000000-0000-5000-8000-000000000000"}
+			u := &UPnP{Dir: UPnPDir, UUID: "00000000-0000-5000-8000-000000000000"}
 			files, err := u.Render(cfg)
 			if err != nil {
 				t.Fatal(err)
@@ -56,7 +59,7 @@ func TestRenderUPnPGolden(t *testing.T) {
 // every request and no packet would pass.
 func TestUPnPConfNamesTheRenderedChains(t *testing.T) {
 	t.Parallel()
-	u := &UPnP{Dir: UPnPDir, Leases: UPnPLeaseFile}
+	u := &UPnP{Dir: UPnPDir}
 	files, err := u.Render(loadConfig(t, "testdata/upnp.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -92,7 +95,7 @@ func TestUPnPApplyDoesNothingWhenUnused(t *testing.T) {
 	t.Parallel()
 	cmd := &fakeCmd{}
 	dir := filepath.Join(t.TempDir(), "absent")
-	u := &UPnP{Dir: dir, Leases: UPnPLeaseFile, Cmd: cmd}
+	u := &UPnP{Dir: dir, Cmd: cmd}
 	if err := u.Apply(context.Background(), network.Files{}); err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +114,7 @@ func TestUPnPApplyRestartsOnEveryApply(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	cmd := &fakeCmd{installed: true}
-	u := &UPnP{Dir: dir, Leases: UPnPLeaseFile, Cmd: cmd}
+	u := &UPnP{Dir: dir, Cmd: cmd}
 	files, err := u.Render(loadConfig(t, "testdata/upnp.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -145,7 +148,7 @@ func TestUPnPApplyStopsWhenSwitchedOff(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	cmd := &fakeCmd{installed: true}
-	u := &UPnP{Dir: dir, Leases: UPnPLeaseFile, Cmd: cmd}
+	u := &UPnP{Dir: dir, Cmd: cmd}
 	files, err := u.Render(loadConfig(t, "testdata/upnp.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -169,7 +172,7 @@ func TestUPnPApplyStopsWhenSwitchedOff(t *testing.T) {
 // the ruleset would carry chains nothing ever fills in.
 func TestUPnPApplyNeedsTheDaemon(t *testing.T) {
 	t.Parallel()
-	u := &UPnP{Dir: t.TempDir(), Leases: UPnPLeaseFile, Cmd: &fakeCmd{}}
+	u := &UPnP{Dir: t.TempDir(), Cmd: &fakeCmd{}}
 	files, err := u.Render(loadConfig(t, "testdata/upnp.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -196,51 +199,20 @@ func TestUPnPUUIDIsStable(t *testing.T) {
 	}
 }
 
-func TestParseMappings(t *testing.T) {
+// miniupnpd refuses its whole configuration over one option it was not
+// built with, so an option that is compiled in conditionally does not
+// degrade the service, it stops the daemon starting. These two are not in
+// Fedora's build, and both were found by the daemon failing to start.
+func TestUPnPConfNamesNoConditionalOption(t *testing.T) {
 	t.Parallel()
-	// The first line is the short form, the second carries a remote host,
-	// the third a description with a colon in it, the fourth never expires.
-	in := strings.NewReader(`UDP:19132:192.168.1.50:19132:1789000000:Minecraft
-TCP:32400:203.0.113.9:192.168.1.20:32400:1789000123:Plex
-TCP:8443:192.168.1.7:8443:1789000456:Camera: front door
-TCP:9000:192.168.1.8:9000:0:Forever
-nonsense
-`)
-	got, err := ParseMappings(in)
+	files, err := (&UPnP{Dir: UPnPDir}).Render(loadConfig(t, "testdata/upnp.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 4 {
-		t.Fatalf("parsed %d mappings, want 4: %+v", len(got), got)
-	}
-	// Sorted by external port, so the camera comes first.
-	if got[0].ExternalPort != 8443 || got[0].Internal != "192.168.1.7" || got[0].Description != "Camera: front door" {
-		t.Errorf("short form with a colon in the description parsed as %+v", got[0])
-	}
-	if got[1].ExternalPort != 9000 || got[1].Expires != nil {
-		t.Errorf("a mapping that does not expire parsed as %+v", got[1])
-	}
-	if got[2].ExternalPort != 19132 || got[2].Protocol != "UDP" || got[2].InternalPort != 19132 {
-		t.Errorf("short form parsed as %+v", got[2])
-	}
-	if got[3].ExternalPort != 32400 || got[3].Internal != "192.168.1.20" || got[3].Description != "Plex" {
-		t.Errorf("remote-host form parsed as %+v", got[3])
-	}
-	if got[3].Expires == nil {
-		t.Errorf("remote-host form lost its expiry: %+v", got[3])
-	}
-}
-
-// A missing lease file is an empty list: miniupnpd writes it when the
-// first mapping is made, so a router with none has no file at all.
-func TestReadMappingsWithoutAFile(t *testing.T) {
-	t.Parallel()
-	got, err := (&UPnP{Leases: filepath.Join(t.TempDir(), "absent.leases")}).ReadMappings()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) != 0 {
-		t.Errorf("got %v, want none", got)
+	for _, opt := range []string{"lease_file", "friendly_name"} {
+		if strings.Contains(files[upnpConfName], opt) {
+			t.Errorf("configuration names %s, which not every build has:\n%s", opt, files[upnpConfName])
+		}
 	}
 }
 
@@ -255,6 +227,99 @@ func TestUPnPUnitRunsInTheForeground(t *testing.T) {
 	if !strings.Contains(unit, "After=network.target ostiole-firewall.service") {
 		t.Errorf("unit does not wait for the ruleset:\n%s", unit)
 	}
+}
+
+// Setting a service up creates the directory its daemon reads, and a
+// daemon that was already running cannot write a directory that was not
+// there when systemd built its namespace. Setup therefore restarts it, or
+// the first apply after the setup fails on a path the unit lists.
+func TestSetupRestartsTheRunningDaemon(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	run := &activeRunner{}
+	u := &UPnP{Dir: filepath.Join(root, "miniupnpd")}
+	d := &Dnsmasq{Dir: filepath.Join(root, "generated")}
+	opts := SetupOptions{
+		UnitDir: filepath.Join(root, "units"), Run: run, Binary: "/usr/sbin/dnsmasq",
+		UPnP: true, UPnPBinary: "/usr/sbin/miniupnpd", UPnPBackend: u,
+	}
+	if err := Setup(context.Background(), d, opts, slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatal(err)
+	}
+	if !run.has("systemctl", "restart", "ostiole.service") {
+		t.Errorf("did not restart the daemon: %v", run.calls)
+	}
+	// The restart comes after the unit is written, or it rebuilds the
+	// namespace before the directory exists and changes nothing.
+	restart, unit := run.index("systemctl", "restart", "ostiole.service"), run.index("systemctl", "daemon-reload")
+	if restart < unit {
+		t.Errorf("restarted at %d, before daemon-reload at %d", restart, unit)
+	}
+}
+
+// A daemon that is not running needs no restart: whenever it next starts,
+// systemd builds the namespace from the unit as it reads then.
+func TestSetupLeavesAStoppedDaemonAlone(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	run := &fakeRunner{} // answers is-active with nothing
+	d := &Dnsmasq{Dir: filepath.Join(root, "generated")}
+	opts := SetupOptions{UnitDir: filepath.Join(root, "units"), Run: run, Binary: "/usr/sbin/dnsmasq"}
+	if err := Setup(context.Background(), d, opts, slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range run.calls {
+		if strings.Join(c, " ") == "systemctl restart ostiole.service" {
+			t.Errorf("restarted a daemon that was not running: %v", run.calls)
+		}
+	}
+}
+
+// The error a fresh directory gives inside the sandbox reads like a broken
+// unit, so it says what actually fixes it.
+func TestSealedDirectoryErrorNamesTheRestart(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	err := sealedDirError(filepath.Join(dir, "ostiole.conf"),
+		&os.PathError{Op: "open", Path: dir + "/.ostiole.conf.tmp", Err: syscall.EROFS})
+	if err == nil || !strings.Contains(err.Error(), "systemctl restart ostiole") {
+		t.Errorf("error = %v, want the restart in it", err)
+	}
+	if !errors.Is(err, syscall.EROFS) {
+		t.Errorf("error no longer unwraps to EROFS: %v", err)
+	}
+	// Anything else is passed through as it was.
+	other := errors.New("disk on fire")
+	if got := sealedDirError("x", other); !errors.Is(got, other) {
+		t.Errorf("sealedDirError rewrote an unrelated error: %v", got)
+	}
+}
+
+// A runner whose daemon is up, so setup has something to restart.
+type activeRunner struct{ calls [][]string }
+
+func (a *activeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+	a.calls = append(a.calls, append([]string{name}, args...))
+	if name == "systemctl" && len(args) >= 2 {
+		switch args[0] {
+		case "cat":
+			return []byte("[Unit]"), nil
+		case "is-active":
+			return []byte("active\n"), nil
+		}
+	}
+	return nil, nil
+}
+
+func (a *activeRunner) has(parts ...string) bool { return a.index(parts...) >= 0 }
+
+func (a *activeRunner) index(parts ...string) int {
+	for i, c := range a.calls {
+		if strings.Join(c, " ") == strings.Join(parts, " ") {
+			return i
+		}
+	}
+	return -1
 }
 
 // An iptables build answers every request and passes no packet, because

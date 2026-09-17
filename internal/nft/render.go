@@ -30,10 +30,15 @@ func Render(cfg *model.Config) (string, error) { return RenderWithFeeds(cfg, nil
 // configuration, so a revision stays readable and a rollback does not
 // carry half a million addresses with it.
 func RenderWithFeeds(cfg *model.Config, feeds map[string][]string) (string, error) {
-	if err := cfg.Validate(); err != nil {
+	out, err := Build(cfg, feeds)
+	if err != nil {
 		return "", err
 	}
-	r := &renderer{cfg: cfg, feeds: feeds}
+	return out.Ruleset, nil
+}
+
+// render writes the whole table.
+func (r *renderer) render() {
 	r.line(Header)
 	r.line("table " + Table)
 	r.line("delete table " + Table)
@@ -51,7 +56,6 @@ func RenderWithFeeds(cfg *model.Config, feeds map[string][]string) (string, erro
 	r.upnpChains()
 	r.indent--
 	r.line("}")
-	return r.b.String(), nil
 }
 
 // EmptyRuleset removes the Ostiole table entirely, restoring the kernel to
@@ -67,6 +71,9 @@ type renderer struct {
 	feeds  map[string][]string
 	b      strings.Builder
 	indent int
+	// system collects the rules Ostiole adds on its own, recorded as they
+	// are written.
+	system []SystemRule
 }
 
 func (r *renderer) line(s string) {
@@ -244,8 +251,7 @@ func (r *renderer) chainInput() {
 	r.block("chain input", func() {
 		r.line("type filter hook input priority filter; policy drop;")
 		r.line(`iifname "lo" accept`)
-		r.line("ct state established,related accept")
-		r.line("ct state invalid drop")
+		r.connectionState("input")
 		r.blockedSources("input")
 		// Error messages that IPv4 needs to function (no echo: that is a user rule).
 		r.line("icmp type { destination-unreachable, time-exceeded, parameter-problem } accept")
@@ -253,10 +259,36 @@ func (r *renderer) chainInput() {
 		r.line("icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit, nd-router-advert, " +
 			"destination-unreachable, packet-too-big, time-exceeded, parameter-problem, " +
 			"mld-listener-query, mld-listener-report, mld-listener-done } accept")
+		r.sys(SystemRule{
+			Chain: "input", Action: "accept", Protocol: string(model.ProtocolICMP),
+			Source: "any", Destination: firewallDest(nil),
+			Description: "ICMP errors and IPv6 neighbour discovery",
+		})
 		r.antiLockout()
 		r.serviceRules()
 		r.zoneDispatch()
 		r.defaultDrop("input")
+	})
+}
+
+// connectionState opens a base chain: replies to what was allowed pass,
+// packets that belong to no connection do not. Both base chains carry the
+// two rules; the rows are recorded once, from input.
+func (r *renderer) connectionState(chain string) {
+	r.line("ct state established,related accept")
+	r.line("ct state invalid drop")
+	if chain != "input" {
+		return
+	}
+	r.sys(SystemRule{
+		Chain: chain, Action: "accept", Protocol: string(model.ProtocolAny),
+		Source: "any", Destination: "any",
+		Description: "Replies and related traffic of connections already allowed",
+	})
+	r.sys(SystemRule{
+		Chain: chain, Action: "drop", Protocol: string(model.ProtocolAny),
+		Source: "any", Destination: "any",
+		Description: "Packets that belong to no connection",
 	})
 }
 
@@ -273,6 +305,11 @@ func (r *renderer) serviceRules() {
 		}
 		if len(ifs) > 0 {
 			r.line(fmt.Sprintf(`iifname %s udp dport 67 counter accept comment "service:dhcp"`, ifnameSet(ifs)))
+			r.sysFor(ifs, SystemRule{
+				Chain: "input", Action: "accept", Protocol: string(model.ProtocolUDP),
+				Source: "any", Destination: firewallDest([]string{"67"}),
+				Description: "DHCP requests", Keys: []string{"input/service:dhcp"}, Setting: "dhcp",
+			})
 		}
 		// Router advertisements need no rule (ICMPv6 is in the baseline and
 		// output is open), but stateful and stateless DHCPv6 do.
@@ -284,12 +321,22 @@ func (r *renderer) serviceRules() {
 		}
 		if len(v6) > 0 {
 			r.line(fmt.Sprintf(`iifname %s udp dport 547 counter accept comment "service:dhcpv6"`, ifnameSet(v6)))
+			r.sysFor(v6, SystemRule{
+				Chain: "input", Action: "accept", Protocol: string(model.ProtocolUDP),
+				Source: "any", Destination: firewallDest([]string{"547"}),
+				Description: "DHCPv6 requests", Keys: []string{"input/service:dhcpv6"}, Setting: "dhcp",
+			})
 		}
 	}
 	if svc.DNS.Enabled {
 		ifs := DNSInterfaces(r.cfg)
 		if len(ifs) > 0 {
 			r.line(fmt.Sprintf(`iifname %s meta l4proto { tcp, udp } th dport 53 fib daddr type local counter accept comment "service:dns"`, ifnameSet(ifs)))
+			r.sysFor(ifs, SystemRule{
+				Chain: "input", Action: "accept", Protocol: string(model.ProtocolTCPUDP),
+				Source: "any", Destination: firewallDest([]string{"53"}),
+				Description: "DNS queries to this firewall", Keys: []string{"input/service:dns"}, Setting: "dns",
+			})
 		}
 	}
 	r.wireguardRules()
@@ -318,10 +365,17 @@ func (r *renderer) upnpRules() {
 	}
 	r.line(fmt.Sprintf(`iifname %s udp dport %s counter accept comment "service:upnp"`,
 		ifnameSet(ifs), setOrSingle(udp)))
+	ports, proto := udp, model.ProtocolUDP
 	if u.IGD {
 		r.line(fmt.Sprintf(`iifname %s tcp dport %d counter accept comment "service:upnp"`,
 			ifnameSet(ifs), upnpHTTPPort))
+		ports, proto = append(ports, fmt.Sprint(upnpHTTPPort)), model.ProtocolTCPUDP
 	}
+	r.sysFor(ifs, SystemRule{
+		Chain: "input", Action: "accept", Protocol: string(proto),
+		Source: "any", Destination: firewallDest(ports),
+		Description: "UPnP and NAT-PMP requests", Keys: []string{"input/service:upnp"}, Setting: "upnp",
+	})
 }
 
 // wireguardRules open the listening ports of tunnels on external zones,
@@ -350,6 +404,11 @@ func (r *renderer) wireguardRules() {
 	}
 	r.line(fmt.Sprintf(`iifname %s udp dport %s counter accept comment "service:wireguard"`,
 		ifnameSet(ifs), setOrSingle(ports)))
+	r.sysFor(ifs, SystemRule{
+		Chain: "input", Action: "accept", Protocol: string(model.ProtocolUDP),
+		Source: "any", Destination: firewallDest(ports),
+		Description: "WireGuard peers dialling in", Keys: []string{"input/service:wireguard"}, Setting: "wireguard",
+	})
 }
 
 // DNSInterfaces lists where the DNS service listens: the configured list,
@@ -431,15 +490,25 @@ func (r *renderer) upnpChains() {
 func (r *renderer) chainForward() {
 	r.block("chain forward", func() {
 		r.line("type filter hook forward priority filter; policy drop;")
-		r.line("ct state established,related accept")
-		r.line("ct state invalid drop")
+		r.connectionState("forward")
 		r.blockedSources("forward")
 		r.blockDNSJump()
 		if r.hasPortForwards() {
 			r.line(`ct status dnat counter accept comment "port-forwards"`)
+			r.sys(SystemRule{
+				Chain: "forward", Zones: r.forwardedZones(), Action: "accept", Protocol: string(model.ProtocolAny),
+				Source: "any", Destination: "forwarded hosts",
+				Description: "Traffic a port forward or 1:1 mapping sent inside",
+				Keys:        []string{"forward/port-forwards"}, Setting: "nat",
+			})
 		}
 		if UPnPEnabled(r.cfg) {
 			r.line("jump " + UPnPForwardChain)
+			r.sysFor([]string{r.cfg.Services.UPnP.ExternalInterface}, SystemRule{
+				Chain: "forward", Action: "accept", Protocol: string(model.ProtocolAny),
+				Source: "any", Destination: "mapped hosts",
+				Description: "Ports opened by UPnP or NAT-PMP", Setting: "upnp",
+			})
 		}
 		r.zoneDispatch()
 		r.defaultDrop("forward")
@@ -474,6 +543,12 @@ func (r *renderer) antiLockout() {
 		}
 		r.line(fmt.Sprintf("iifname %s tcp dport %s counter accept comment \"anti-lockout:%s\"",
 			ifnameSet(ifs), setOrSingle(ports), z.Name))
+		r.sys(SystemRule{
+			Chain: "input", Zones: []string{z.Name}, Action: "accept", Protocol: string(model.ProtocolTCP),
+			Source: "any", Destination: firewallDest(ports),
+			Description: "Anti-lockout, keeps the web UI and SSH reachable",
+			Keys:        []string{"input/anti-lockout:" + z.Name}, Setting: "zone",
+		})
 	}
 }
 
@@ -538,7 +613,7 @@ func (r *renderer) blockedSources(chain string) {
 	}
 	def := r.cfg.System.Management.LogDefaultDrops
 
-	emit := func(ifs []string, kind, set4, set6 string) {
+	emit := func(ifs []string, kind, what, set4, set6 string) {
 		if len(ifs) == 0 {
 			return
 		}
@@ -552,6 +627,15 @@ func (r *renderer) blockedSources(chain string) {
 			} else {
 				quiet = append(quiet, name)
 			}
+		}
+		// Both base chains carry the same rules; the row is recorded once.
+		if chain == "input" {
+			r.sysFor(ifs, SystemRule{
+				Chain: chain, Action: "drop", Protocol: string(model.ProtocolAny),
+				Source: what + " networks", Destination: "any",
+				Description: "Block " + what + " sources, set on " + strings.Join(ifs, ", "), Log: len(quiet) == 0,
+				Keys: []string{"input/" + kind, "forward/" + kind}, Setting: "interface",
+			})
 		}
 		for _, fam := range []struct {
 			prefix string
@@ -570,10 +654,10 @@ func (r *renderer) blockedSources(chain string) {
 			}
 		}
 	}
-	emit(private, "block-private", privateSetV4, privateSetV6)
+	emit(private, "block-private", "private and loopback", privateSetV4, privateSetV6)
 	// Both families are always matched: the sets exist whether or not
 	// today's list filled them, so a refresh needs no new rules.
-	emit(bogons, "block-bogons", bogonSetV4, bogonSetV6)
+	emit(bogons, "block-bogons", "bogon", bogonSetV4, bogonSetV6)
 }
 
 // interfacesBlocking lists the enabled interfaces that want a block.
@@ -599,9 +683,21 @@ func (r *renderer) zoneChains() {
 				}
 				r.rule(rule)
 			}
+			// The tail counts what no rule matched. A zone that logs drops it
+			// here; the rest hand it back to the base chain, which decides
+			// per interface whether the drop is logged, so they only count.
+			key := "zone-unmatched"
 			if z.LogDrops {
+				key = "zone-default"
 				r.line(fmt.Sprintf(`counter log prefix "ostiole:%s:drop: " group %d drop comment "zone-default"`, z.Name, LogGroup))
+			} else {
+				r.line(`counter comment "zone-unmatched"`)
 			}
+			r.sys(SystemRule{
+				Chain: "zone_" + z.Name, After: true, Zones: []string{z.Name}, Action: "drop", Protocol: string(model.ProtocolAny),
+				Source: "any", Destination: "any", Description: "Everything else", Log: r.zoneLogsDrops(z),
+				Keys: []string{"zone_" + z.Name + "/" + key}, Setting: "zone",
+			})
 		})
 	}
 }

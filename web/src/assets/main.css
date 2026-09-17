@@ -98,6 +98,10 @@
   .table tbody tr.row-changed td:first-child {
     @apply shadow-[inset_3px_0_0_0_var(--color-amber-500)];
   }
+  /* A rule Ostiole adds on its own: there for the order, not for editing. */
+  .table tbody tr.row-system td {
+    @apply bg-neutral-50/70 text-neutral-500 dark:bg-neutral-900/40;
+  }
   .skeleton {
     @apply inline-block h-3.5 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800;
   }

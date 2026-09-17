@@ -1,18 +1,35 @@
 <script setup>
 import { ArrowDown, ArrowUp, Plus } from 'lucide-vue-next'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { useConfigStore } from '@/stores/config'
 import RuleDialog from '@/views/firewall/RuleDialog.vue'
+import SystemRuleRow from '@/views/firewall/SystemRuleRow.vue'
+
+/** How long after the last edit the system rules are re-read for the draft. */
+const SYSTEM_DEBOUNCE_MS = 300
+
+/** Where each system rule is controlled from, by the setting the server names. */
+const SETTINGS = {
+  zone: '/interfaces#zones',
+  interface: '/interfaces',
+  dhcp: '/services/dhcp',
+  dns: '/services/dns',
+  enforcement: '/services/dns#enforcement',
+  upnp: '/services/upnp',
+  wireguard: '/vpn',
+  nat: '/firewall/nat',
+}
 
 const config = useConfigStore()
 const zone = ref(config.zones[0]?.name ?? '')
 const editing = ref(null)
 const open = ref(false)
 const counters = ref({})
+const system = ref([])
 
 watch(
   () => config.zones.map((z) => z.name),
@@ -22,6 +39,49 @@ watch(
 )
 
 const rules = computed(() => config.rulesForZone(zone.value))
+
+/**
+ * The rules Ostiole adds on its own, around the zone's rules and in the
+ * order the kernel meets them. They follow the draft, so a zone that just
+ * got anti-lockout shows it at once. Like the counters they are decoration:
+ * a draft that does not validate yet keeps the rows of the last one that did.
+ */
+function inZone(row) {
+  return !row.zones?.length || row.zones.includes(zone.value)
+}
+const before = computed(() => system.value.filter((s) => !s.after && inZone(s)))
+const after = computed(() => system.value.filter((s) => s.after && inZone(s)))
+
+const systemRules = useAsync(
+  async () => {
+    if (!config.draft) return
+    system.value = await api.systemRules(config.draft)
+  },
+  { immediate: true },
+)
+let systemTimer = 0
+watch(
+  () => config.draft,
+  () => {
+    window.clearTimeout(systemTimer)
+    systemTimer = window.setTimeout(systemRules.run, SYSTEM_DEBOUNCE_MS)
+  },
+  { deep: true },
+)
+onBeforeUnmount(() => window.clearTimeout(systemTimer))
+
+/** A system rule may count under more than one kernel rule; they are summed. */
+function packets(row) {
+  let total = 0
+  let counted = false
+  for (const key of row.keys ?? []) {
+    const c = counters.value[key]
+    if (!c) continue
+    total += c.packets
+    counted = true
+  }
+  return counted ? total : ''
+}
 
 /**
  * Which interfaces the selected zone covers. Worth showing: a VLAN assigned
@@ -130,11 +190,15 @@ function toggle(rule) {
           </tr>
         </thead>
         <TransitionGroup name="row" tag="tbody">
+          <SystemRuleRow
+            v-for="s in before"
+            :key="`system:${s.chain}:${s.description}`"
+            :rule="s"
+            :packets="packets(s)"
+            :to="SETTINGS[s.setting]"
+          />
           <tr v-if="rules.length === 0" key="empty" class="row-static">
-            <td colspan="9" class="text-neutral-500">
-              No rules in this zone. Everything entering it is dropped except the baseline and
-              anti-lockout traffic.
-            </td>
+            <td colspan="9" class="text-neutral-500">No rules of your own in this zone.</td>
           </tr>
           <tr
             v-for="(r, i) in rules"
@@ -201,6 +265,13 @@ function toggle(rule) {
               />
             </td>
           </tr>
+          <SystemRuleRow
+            v-for="s in after"
+            :key="`system:${s.chain}:${s.description}`"
+            :rule="s"
+            :packets="packets(s)"
+            :to="SETTINGS[s.setting]"
+          />
         </TransitionGroup>
       </table>
     </div>

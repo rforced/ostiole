@@ -61,9 +61,11 @@ table inet ostiole {
 		ip saddr @alias_countries_v4 counter drop comment "id:drop-countries"
 		ip6 saddr @alias_countries_v6 counter drop comment "id:drop-countries"
 		ip saddr @alias_admins_v4 fib daddr type local tcp dport 22 counter accept comment "id:admin-ssh"
+		counter comment "zone-unmatched"
 	}
 	chain zone_lan {
 		counter accept comment "id:lan-out"
+		counter comment "zone-unmatched"
 	}
 	chain nat_prerouting {
 		type nat hook prerouting priority dstnat; policy accept;

@@ -54,6 +54,24 @@ test('add an alias, a rule using it, and a port forward, then apply', async ({ p
   await expect(rows.nth(0)).toContainText('Ping')
   await page.screenshot({ path: shot('21-rules'), fullPage: true })
 
+  // The rules Ostiole adds on its own sit around these, in the order the
+  // kernel meets them, and link to their setting instead of being editable.
+  const everything = page.getByRole('row').filter({ hasText: 'Everything else' })
+  await expect(everything).toBeVisible()
+  await expect(everything.getByRole('checkbox')).toHaveCount(0)
+  const order = await page.getByRole('row').allTextContents()
+  const at = (needle) => order.findIndex((t) => t.includes(needle))
+  expect(at('Replies and related traffic')).toBeLessThan(at('Ping'))
+  expect(at('Everything else')).toBeGreaterThan(at('Admin HTTPS'))
+
+  await page.getByRole('group', { name: 'Zone' }).getByRole('button', { name: 'lan' }).click()
+  const lockout = page.getByRole('row').filter({ hasText: 'Anti-lockout' })
+  await expect(lockout).toContainText('this firewall : ')
+  await expect(lockout.getByRole('link', { name: 'Change' })).toBeVisible()
+  await expect(
+    page.getByRole('row').filter({ hasText: 'DNS queries to this firewall' }),
+  ).toBeVisible()
+
   // Port forward
   await sidebar(page, 'NAT')
   await page.getByRole('button', { name: 'Add port forward' }).click()

@@ -155,6 +155,8 @@ export const api = {
   },
   ruleset: () => get('/ruleset'),
   counters: () => get('/counters'),
+  /** The rules Ostiole adds on its own for a configuration, in evaluation order. */
+  systemRules: (config) => post('/rules/system', { config }),
   interfaces: {
     live: () => get('/interfaces/live'),
   },

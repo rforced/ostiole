@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"text/tabwriter"
@@ -8,10 +9,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/services"
 )
 
-func newServicesCmd(_ *globals) *cobra.Command {
+func newServicesCmd(g *globals) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "services",
 		Short: "LAN services (dnsmasq, optionally unbound and miniupnpd)",
@@ -32,9 +34,6 @@ func newServicesCmd(_ *globals) *cobra.Command {
 			p := services.NewUPnP()
 			fmt.Fprintf(w, "upnp set up\t%v\n", p.Installed(ctx))
 			fmt.Fprintf(w, "upnp running\t%v\n", p.Active(ctx))
-			if maps, err := p.ReadMappings(); err == nil {
-				fmt.Fprintf(w, "upnp mappings\t%d\n", len(maps))
-			}
 			return w.Flush()
 		},
 	}
@@ -75,22 +74,28 @@ the nftables one, which is checked before anything is written.`,
 	setup.Flags().BoolVar(&withUPnP, "with-upnp", false, "also install miniupnpd so clients can ask for their own port mappings")
 	mappings := &cobra.Command{
 		Use:   "mappings",
-		Short: "Show the port mappings clients have asked for",
-		Args:  cobra.NoArgs,
+		Short: "Show the port mappings clients have opened for themselves",
+		Long: `Reads the mappings out of the loaded ruleset, which is where they are:
+the daemon that answers UPnP IGD, PCP and NAT-PMP writes into a chain of
+Ostiole's. The description a client sent and the lifetime it asked for stay
+with the daemon and are not shown.`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			maps, err := services.NewUPnP().ReadMappings()
+			raw, err := (&nft.Exec{Bin: g.nftBin}).ListTableJSON(cmd.Context())
+			if errors.Is(err, nft.ErrNoTable) {
+				return errors.New("no ruleset is loaded, so nothing is mapped")
+			}
+			if err != nil {
+				return err
+			}
+			maps, err := nft.ParseMappings(raw)
 			if err != nil {
 				return err
 			}
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "PROTO\tEXTERNAL\tCLIENT\tINTERNAL\tEXPIRES\tDESCRIPTION")
+			fmt.Fprintln(w, "PROTO\tEXTERNAL\tCLIENT\tINTERNAL")
 			for _, m := range maps {
-				exp := "never"
-				if m.Expires != nil {
-					exp = m.Expires.Local().Format(time.RFC3339)
-				}
-				fmt.Fprintf(w, "%s\t%d\t%s\t%d\t%s\t%s\n",
-					m.Protocol, m.ExternalPort, m.Internal, m.InternalPort, exp, m.Description)
+				fmt.Fprintf(w, "%s\t%d\t%s\t%d\n", m.Protocol, m.ExternalPort, m.Internal, m.InternalPort)
 			}
 			return w.Flush()
 		},

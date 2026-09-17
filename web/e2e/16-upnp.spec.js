@@ -83,8 +83,12 @@ test('the page is honest about the daemon not being installed', async ({ page })
     'Port mapping is not set up on this router yet',
   )
 
+  // Mappings are read out of the ruleset, not from a lease file: the stub
+  // answers with one the daemon would have written.
   await page.getByRole('tab', { name: 'Mappings' }).click()
-  await expect(page.getByText('No mappings.')).toBeVisible()
+  const mapping = page.getByRole('row').filter({ hasText: '192.168.50.40' })
+  await expect(mapping).toContainText('UDP')
+  await expect(mapping).toContainText('19132')
   await page.screenshot({ path: shot('101-upnp-mappings'), fullPage: true })
 })
 

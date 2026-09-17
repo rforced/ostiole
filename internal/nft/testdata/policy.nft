@@ -37,8 +37,10 @@ table inet ostiole {
 	}
 	chain zone_wan {
 		meta l4proto { icmp, ipv6-icmp } counter accept comment "id:wan-ping"
+		counter comment "zone-unmatched"
 	}
 	chain zone_wan2 {
+		counter comment "zone-unmatched"
 	}
 	chain zone_lan {
 		oifname "eth3" counter accept comment "id:lan-to-guest"
@@ -46,9 +48,11 @@ table inet ostiole {
 		meta hour != "06:00"-"22:00" ip saddr @alias_torrents_v4 counter accept comment "id:torrents-out-backup"
 		counter accept comment "id:lan-default"
 		meta l4proto udp counter reject comment "id:lan-tail"
+		counter comment "zone-unmatched"
 	}
 	chain zone_guest {
 		counter accept comment "id:guest-out-parked"
+		counter comment "zone-unmatched"
 	}
 	chain policy_prerouting {
 		type filter hook prerouting priority mangle; policy accept;

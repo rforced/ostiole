@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/rforced/ostiole/internal/install"
 )
 
 // Runner runs commands (package managers); swapped for a fake in tests.
@@ -139,6 +141,7 @@ func Setup(ctx context.Context, d *Dnsmasq, o SetupOptions, log *slog.Logger) er
 	if _, err := run.Run(ctx, "systemctl", "daemon-reload"); err != nil {
 		return err
 	}
+	restartDaemon(ctx, run, log)
 	log.Info("services ready", "unit", Unit, "dnsmasq", bin)
 	return nil
 }
@@ -236,6 +239,31 @@ PrivateTmp=yes
 [Install]
 WantedBy=multi-user.target
 `, binary, conf)
+}
+
+// restartDaemon rebuilds the running daemon's mount namespace.
+//
+// systemd builds that namespace once, when the unit starts, and a
+// ReadWritePaths entry written with a leading dash is skipped while its
+// path is missing. Setting a service up is what creates the directory its
+// daemon reads, so a daemon that was already running goes on seeing that
+// directory under a read-only /etc however its unit reads now, and the
+// next apply fails with "read-only file system" on a path the unit plainly
+// lists. Restarting is the only thing that rebuilds it, and it costs
+// nothing visible: sessions are kept on disk, so nobody is signed out.
+func restartDaemon(ctx context.Context, run Runner, log *slog.Logger) {
+	out, err := run.Run(ctx, "systemctl", "is-active", install.DaemonUnit)
+	if err != nil || strings.TrimSpace(string(out)) != "active" {
+		// Not running, so whenever it next starts it builds the namespace
+		// it needs.
+		return
+	}
+	if out, err := run.Run(ctx, "systemctl", "restart", install.DaemonUnit); err != nil {
+		log.Warn("could not restart the daemon: restart it before applying",
+			"unit", install.DaemonUnit, "err", err, "output", strings.TrimSpace(string(out)))
+		return
+	}
+	log.Info("restarted the daemon so it can write the directories this added", "unit", install.DaemonUnit)
 }
 
 func detectPackageManager() string {
@@ -376,9 +404,6 @@ func setupUPnP(ctx context.Context, run Runner, o SetupOptions, unitDir string, 
 		log.Info("masked the distribution's own mapping service", "unit", upnpDistroSvc)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(u.leases()), 0o755); err != nil { //nolint:gosec // miniupnpd writes mappings here
-		return err
-	}
 	if err := os.MkdirAll(u.dir(), 0o755); err != nil { //nolint:gosec // miniupnpd reads this
 		return err
 	}

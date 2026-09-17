@@ -1,18 +1,13 @@
 package services
 
 import (
-	"bufio"
 	"context"
 	"crypto/sha1" //nolint:gosec // a v5 UUID is defined as SHA-1; see uuidV5
 	"errors"
 	"fmt"
-	"net/netip"
 	"os"
 	"path/filepath"
-	"sort"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
@@ -26,10 +21,6 @@ const (
 	// directory for the reason unbound taught us: SELinux labels what is
 	// in there the way the daemon's policy expects.
 	UPnPDir = "/etc/miniupnpd"
-	// UPnPLeaseFile is where miniupnpd records the mappings clients asked
-	// for. It reads the file back at startup, which is what makes a
-	// restart invisible to them.
-	UPnPLeaseFile = "/var/lib/misc/ostiole-upnp.leases"
 	// upnpHTTPPort serves the device description clients fetch after they
 	// find this router over SSDP. It is pfSense's port, and the one the
 	// firewall rules open.
@@ -58,8 +49,6 @@ var upnpNamespace = [16]byte{
 type UPnP struct {
 	// Dir holds the generated configuration; default UPnPDir.
 	Dir string
-	// Leases is the mapping file miniupnpd keeps; default UPnPLeaseFile.
-	Leases string
 	// UUID overrides the device id, which is otherwise derived from the
 	// machine id. Tests set it; a router has no reason to.
 	UUID string
@@ -71,7 +60,7 @@ var _ network.Backend = (*UPnP)(nil)
 
 // NewUPnP returns a backend with production defaults.
 func NewUPnP() *UPnP {
-	return &UPnP{Dir: UPnPDir, Leases: UPnPLeaseFile, Cmd: execCommander{}}
+	return &UPnP{Dir: UPnPDir, Cmd: execCommander{}}
 }
 
 func (u *UPnP) dir() string {
@@ -79,13 +68,6 @@ func (u *UPnP) dir() string {
 		return UPnPDir
 	}
 	return u.Dir
-}
-
-func (u *UPnP) leases() string {
-	if u.Leases == "" {
-		return UPnPLeaseFile
-	}
-	return u.Leases
 }
 
 func (u *UPnP) cmd() network.Commander {
@@ -141,9 +123,20 @@ func (u *UPnP) render(cfg *model.Config) string {
 	// Sweep expired mappings every ten minutes, so a client that went away
 	// without cleaning up does not leave its hole open until a reboot.
 	b.WriteString("clean_ruleset_interval=600\n")
-	fmt.Fprintf(&b, "lease_file=%s\n", u.leases())
 	fmt.Fprintf(&b, "uuid=%s\n", u.uuid())
-	fmt.Fprintf(&b, "friendly_name=%s\n", friendlyName(cfg))
+	// Nothing here may name an option that is not compiled into every
+	// build. miniupnpd refuses its whole configuration over one option it
+	// was not built with, so an extra line does not degrade the service, it
+	// stops the daemon starting at all. Two were learned the hard way
+	// against Fedora's build (ADR-0007):
+	//
+	//   lease_file     needs --leasefile. Without it an apply takes the
+	//                  mappings with it, because the table is rebuilt and
+	//                  there is nothing to reload them from. Clients ask
+	//                  again on their own schedule.
+	//   friendly_name  needs ENABLE_MANUFACTURER_INFO_CONFIGURATION. The
+	//                  daemon falls back to its own name for this router in
+	//                  a client's network list.
 	// Where the rules go. Naming the table and chains is the whole reason
 	// miniupnpd can live inside `table inet ostiole`; without
 	// upnp_nftables_family_split it addresses the inet family, which is
@@ -174,14 +167,6 @@ func yesNo(b bool) string {
 		return "yes"
 	}
 	return "no"
-}
-
-// friendlyName is what clients show in their network list.
-func friendlyName(cfg *model.Config) string {
-	if h := strings.TrimSpace(cfg.System.Hostname); h != "" {
-		return h + " (Ostiole)"
-	}
-	return "Ostiole"
 }
 
 // portRange and sourcePrefix canonicalise what the access list was written
@@ -306,106 +291,5 @@ func (u *UPnP) Active(ctx context.Context) bool {
 	return err == nil && strings.TrimSpace(string(out)) == "active"
 }
 
-// Mapping is one hole a client opened for itself.
-type Mapping struct {
-	// Expires is when the mapping is taken away. It is absent when the
-	// client asked for one with no lifetime, which a zero time.Time could
-	// not say: it would reach the UI as the year 1.
-	Expires      *time.Time `json:"expires,omitempty"`
-	Protocol     string     `json:"protocol"`
-	Internal     string     `json:"internal"`
-	Description  string     `json:"description,omitempty"`
-	ExternalPort int        `json:"externalPort"`
-	InternalPort int        `json:"internalPort"`
-}
-
-// ReadMappings parses the lease file. A missing file is an empty list:
-// miniupnpd writes it when the first mapping is made.
-func (u *UPnP) ReadMappings() ([]Mapping, error) {
-	f, err := os.Open(u.leases())
-	if errors.Is(err, os.ErrNotExist) {
-		return []Mapping{}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = f.Close() }()
-	return ParseMappings(f)
-}
-
-// ParseMappings reads miniupnpd's lease file. A line is
-// "PROTO:eport:iaddr:iport:expiry:description", or the same with the
-// remote host between the external port and the internal address where
-// the build was configured with SUPPORT_REMOTEHOST. Which one it is can be
-// told from the line: in the short form the third field is an address and
-// the fourth a number, and in the long form it is not.
-func ParseMappings(r interface{ Read([]byte) (int, error) }) ([]Mapping, error) {
-	out := []Mapping{}
-	sc := bufio.NewScanner(r)
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		f := strings.Split(line, ":")
-		if len(f) < 5 {
-			continue
-		}
-		off := 0
-		if !isAddr(f[2]) || !isNumber(f[3]) {
-			off = 1 // the remote host is in the way
-		}
-		if len(f) < 5+off {
-			continue
-		}
-		eport, eok := port(f[1])
-		iport, iok := port(f[3+off])
-		if !eok || !iok || !isAddr(f[2+off]) {
-			continue
-		}
-		m := Mapping{
-			Protocol:     strings.ToUpper(f[0]),
-			ExternalPort: eport,
-			Internal:     f[2+off],
-			InternalPort: iport,
-		}
-		// A description may hold colons of its own, so whatever is left of
-		// the line after the timestamp is all of it.
-		if len(f) > 5+off {
-			m.Description = strings.Join(f[5+off:], ":")
-		}
-		if epoch, err := strconv.ParseInt(f[4+off], 10, 64); err == nil && epoch > 0 {
-			exp := time.Unix(epoch, 0).UTC()
-			m.Expires = &exp
-		}
-		out = append(out, m)
-	}
-	if err := sc.Err(); err != nil {
-		return nil, err
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].ExternalPort != out[j].ExternalPort {
-			return out[i].ExternalPort < out[j].ExternalPort
-		}
-		return out[i].Protocol < out[j].Protocol
-	})
-	return out, nil
-}
-
-func isAddr(s string) bool {
-	_, err := netip.ParseAddr(s)
-	return err == nil
-}
-
-func isNumber(s string) bool {
-	_, err := strconv.Atoi(s)
-	return err == nil
-}
-
-func port(s string) (int, bool) {
-	n, err := strconv.Atoi(s)
-	if err != nil || n < 1 || n > 65535 {
-		return 0, false
-	}
-	return n, true
-}
+// Mappings are read from the ruleset rather than from here: see
+// nft.ParseMappings, and ADR-0007 for why there is no lease file.

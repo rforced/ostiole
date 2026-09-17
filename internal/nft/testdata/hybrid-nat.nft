@@ -27,9 +27,11 @@ table inet ostiole {
 		type filter hook output priority filter; policy accept;
 	}
 	chain zone_wan {
+		counter comment "zone-unmatched"
 	}
 	chain zone_lan {
 		counter accept comment "id:lan-out"
+		counter comment "zone-unmatched"
 	}
 	chain nat_prerouting {
 		type nat hook prerouting priority dstnat; policy accept;

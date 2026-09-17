@@ -16,6 +16,7 @@ import (
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/model"
+	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/nft/nfttest"
 	"github.com/rforced/ostiole/internal/store"
 )
@@ -374,6 +375,39 @@ func TestApplyValidationAndBadRequests(t *testing.T) {
 	resp, raw = do(t, srv, http.MethodPost, "/api/v1/check", configRequest{Config: starter()})
 	if resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), "table inet ostiole") {
 		t.Fatalf("check: %d %s", resp.StatusCode, raw)
+	}
+}
+
+// The rules page asks for the system rules of the draft it is editing, so
+// the endpoint takes a configuration rather than reading the saved one.
+func TestSystemRules(t *testing.T) {
+	t.Parallel()
+	srv, _ := newTestServer(t)
+
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/rules/system", configRequest{})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("no config: %d %s", resp.StatusCode, raw)
+	}
+
+	resp, raw = do(t, srv, http.MethodPost, "/api/v1/rules/system", configRequest{Config: starter()})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("system rules: %d %s", resp.StatusCode, raw)
+	}
+	var rows []nft.SystemRule
+	if err := json.Unmarshal(raw, &rows); err != nil {
+		t.Fatal(err)
+	}
+	var lockout, tail bool
+	for _, r := range rows {
+		if strings.HasPrefix(r.Description, "Anti-lockout") && len(r.Zones) == 1 && r.Zones[0] == "lan" {
+			lockout = true
+		}
+		if r.After && r.Action == "drop" {
+			tail = true
+		}
+	}
+	if !lockout || !tail {
+		t.Errorf("rows lack the anti-lockout row for lan or a closing drop: %s", raw)
 	}
 }
 

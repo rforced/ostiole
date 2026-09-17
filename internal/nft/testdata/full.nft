@@ -61,6 +61,7 @@ table inet ostiole {
 	chain zone_wan {
 		meta l4proto { icmp, ipv6-icmp } counter accept comment "id:ping"
 		udp sport 123 udp dport 123 counter accept comment "id:udp-sport"
+		counter comment "zone-unmatched"
 	}
 	chain zone_lan {
 		counter accept comment "id:allow-lan"
@@ -76,8 +77,10 @@ table inet ostiole {
 		meta day { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday" } meta hour "08:30"-"17:30" ip6 saddr @alias_servers_v6 meta l4proto { tcp, udp } th dport @alias_web_ports counter accept comment "id:web-from-servers"
 		fib daddr type local udp dport 53 counter accept comment "id:dns-to-self"
 		ip saddr { 10.0.0.1, 10.1.0.0/16 } ip daddr 192.168.1.0/24 counter drop comment "id:mixed-families"
+		counter comment "zone-unmatched"
 	}
 	chain zone_guest {
+		counter comment "zone-unmatched"
 	}
 	chain nat_prerouting {
 		type nat hook prerouting priority dstnat; policy accept;

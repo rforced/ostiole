@@ -55,9 +55,11 @@ table inet ostiole {
 		type filter hook output priority filter; policy accept;
 	}
 	chain zone_wan {
+		counter comment "zone-unmatched"
 	}
 	chain zone_lan {
 		counter accept comment "id:lan-out"
+		counter comment "zone-unmatched"
 	}
 	chain block_dns {
 		ip saddr @alias_resolver_exempt_v4 counter return comment "block:exempt"

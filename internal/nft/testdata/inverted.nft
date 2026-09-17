@@ -55,11 +55,13 @@ table inet ostiole {
 		meta nfproto ipv6 fib daddr type local tcp dport 22 counter drop comment "id:drop-not-office"
 		ip saddr != 198.51.100.0/24 counter drop comment "id:drop-literal-not"
 		meta nfproto ipv6 counter drop comment "id:drop-literal-not"
+		counter comment "zone-unmatched"
 	}
 	chain zone_lan {
 		fib daddr type != local meta l4proto { tcp, udp } th dport @alias_dns_ports_ports counter reject comment "id:force-local-dns"
 		tcp dport != { 25, 465 } counter accept comment "id:not-these-ports"
 		counter accept comment "id:lan-out"
+		counter comment "zone-unmatched"
 	}
 	chain nat_prerouting {
 		type nat hook prerouting priority dstnat; policy accept;

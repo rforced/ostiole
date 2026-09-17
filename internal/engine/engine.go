@@ -438,6 +438,24 @@ func (e *Engine) Counters(ctx context.Context) (nft.Counters, error) {
 	return nft.ParseCounters(raw)
 }
 
+// SystemRules lists the rules cfg makes Ostiole add on its own, for showing
+// next to the operator's. It only renders: nothing is checked or applied,
+// so it is cheap enough to call as the draft is edited.
+func (e *Engine) SystemRules(cfg *model.Config) ([]nft.SystemRule, error) {
+	return nft.SystemRules(cfg, e.FeedEntries())
+}
+
+// Mappings reads the port mappings clients have opened for themselves. They
+// come from the ruleset because that is where they are: the daemon that
+// answers the mapping protocols writes into a chain of ours.
+func (e *Engine) Mappings(ctx context.Context) ([]nft.Mapping, error) {
+	raw, err := e.nft.ListTableJSON(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return nft.ParseMappings(raw)
+}
+
 func newID() string {
 	var b [8]byte
 	_, _ = rand.Read(b[:])
