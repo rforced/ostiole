@@ -30,7 +30,7 @@ onMounted(load.run)
           </tr>
         </thead>
         <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!leases.length" key="empty">
+          <tr v-if="!leases.length" key="empty" class="row-static">
             <td colspan="4" class="text-neutral-500">
               {{ load.updatedAt.value ? 'No leases yet.' : 'Reading leases…' }}
             </td>

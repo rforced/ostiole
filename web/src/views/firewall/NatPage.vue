@@ -80,7 +80,7 @@ function editOb(r) {
             </tr>
           </thead>
           <TransitionGroup name="row" tag="tbody">
-            <tr v-if="forwards.length === 0" key="empty">
+            <tr v-if="forwards.length === 0" key="empty" class="row-static">
               <td colspan="6" class="text-neutral-500">No port forwards.</td>
             </tr>
             <tr
@@ -136,7 +136,7 @@ function editOb(r) {
             </tr>
           </thead>
           <TransitionGroup name="row" tag="tbody">
-            <tr v-if="oneToOne.length === 0" key="empty">
+            <tr v-if="oneToOne.length === 0" key="empty" class="row-static">
               <td colspan="5" class="text-neutral-500">No 1:1 mappings.</td>
             </tr>
             <tr
@@ -194,7 +194,7 @@ function editOb(r) {
               </tr>
             </thead>
             <TransitionGroup name="row" tag="tbody">
-              <tr v-if="(outbound.rules ?? []).length === 0" key="empty">
+              <tr v-if="(outbound.rules ?? []).length === 0" key="empty" class="row-static">
                 <td colspan="6" class="text-neutral-500">
                   {{
                     mode === 'hybrid'

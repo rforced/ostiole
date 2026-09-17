@@ -44,7 +44,7 @@ function days(schedule) {
           </tr>
         </thead>
         <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!config.schedules.length" key="empty">
+          <tr v-if="!config.schedules.length" key="empty" class="row-static">
             <td colspan="5" class="text-neutral-500">No schedules.</td>
           </tr>
           <tr

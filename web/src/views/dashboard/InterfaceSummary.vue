@@ -37,7 +37,7 @@ function pending(l) {
           </tr>
         </thead>
         <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!interfaces.length" key="empty">
+          <tr v-if="!interfaces.length" key="empty" class="row-static">
             <td colspan="5" class="text-neutral-500">No interfaces yet.</td>
           </tr>
           <tr v-for="l in interfaces" :key="l.name" :class="l.configured ? '' : 'opacity-70'">

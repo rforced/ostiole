@@ -129,7 +129,7 @@ function editPeer(tunnel, peer) {
                 </tr>
               </thead>
               <TransitionGroup name="row" tag="tbody">
-                <tr v-if="!(t.wireguard.peers ?? []).length" key="empty">
+                <tr v-if="!(t.wireguard.peers ?? []).length" key="empty" class="row-static">
                   <td colspan="5" class="text-neutral-500">No peers yet.</td>
                 </tr>
                 <tr

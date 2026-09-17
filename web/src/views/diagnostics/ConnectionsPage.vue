@@ -121,7 +121,7 @@ function endpoint(address, port) {
           </tr>
         </thead>
         <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!result?.states.length" key="empty">
+          <tr v-if="!result?.states.length" key="empty" class="row-static">
             <td colspan="7" class="text-neutral-500">
               {{ load.busy.value && !result ? 'Reading…' : 'Nothing matches.' }}
             </td>

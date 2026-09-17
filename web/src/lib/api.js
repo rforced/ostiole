@@ -238,6 +238,9 @@ export const api = {
     status: () => get('/services/status'),
     leases: () => get('/dhcp/leases'),
   },
+  upnp: {
+    mappings: () => get('/upnp/mappings'),
+  },
   wireguard: {
     /** @returns {Promise<{privateKey: string, publicKey: string}>} */
     keys: () => post('/wireguard/keys', { kind: 'pair' }),

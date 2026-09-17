@@ -37,6 +37,14 @@ const live = useAsync(async () => {
 })
 const refreshLive = () => live.run()
 
+/**
+ * True once both the draft and the live links have been read. Until then
+ * the table shows a placeholder rather than whichever half arrived first:
+ * rows sort by kernel index, so a config-only first paint would reorder
+ * itself a moment later.
+ */
+const ready = ref(false)
+
 // An apply creates and destroys real devices, so the live column has to
 // be read again: a VLAN removed from the draft is gone from the kernel
 // once the apply lands, and should leave this table with it.
@@ -44,6 +52,7 @@ watch(() => config.applied, refreshLive)
 
 onMounted(async () => {
   await Promise.all([config.load(), refreshLive()])
+  ready.value = true
   try {
     pppoeReady.value = (await api.services.status()).pppoeSetUp
   } catch {
@@ -53,6 +62,7 @@ onMounted(async () => {
 
 /** Live links (minus loopback) merged with draft config by name. */
 const rows = computed(() => {
+  if (!ready.value) return []
   const byName = new Map()
   for (const l of links.value) if (l.kind !== 'loopback') byName.set(l.name, { live: l, cfg: null })
   for (const c of config.interfaces) {
@@ -207,9 +217,9 @@ function editZone(z) {
               </tr>
             </thead>
             <TransitionGroup name="row" tag="tbody">
-              <tr v-if="!rows.length" key="empty">
+              <tr v-if="!rows.length" key="empty" class="row-static">
                 <td colspan="6" class="text-neutral-500">
-                  {{ live.busy.value ? 'Reading links…' : 'No links on this system.' }}
+                  {{ ready ? 'No links on this system.' : 'Reading links…' }}
                 </td>
               </tr>
               <tr
@@ -299,7 +309,7 @@ function editZone(z) {
               </tr>
             </thead>
             <TransitionGroup name="row" tag="tbody">
-              <tr v-if="!config.zones.length" key="empty">
+              <tr v-if="!config.zones.length" key="empty" class="row-static">
                 <td colspan="5" class="text-neutral-500">
                   No zones. Every interface needs one before it gets rules.
                 </td>

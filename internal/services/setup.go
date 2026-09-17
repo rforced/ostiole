@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"debug/elf"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -43,6 +44,14 @@ type SetupOptions struct {
 	// PPPoEBackend is set up when PPPoE is set; nil means production
 	// defaults.
 	PPPoEBackend *PPPoE
+	// UPnP also installs miniupnpd and writes its unit, so clients can ask
+	// for their own port mappings.
+	UPnP bool
+	// UPnPBinary overrides the miniupnpd path (found on PATH otherwise).
+	UPnPBinary string
+	// UPnPBackend is set up when UPnP is set; nil means production
+	// defaults.
+	UPnPBackend *UPnP
 }
 
 // Setup makes the host able to run the services: installs dnsmasq if
@@ -119,6 +128,11 @@ func Setup(ctx context.Context, d *Dnsmasq, o SetupOptions, log *slog.Logger) er
 	}
 	if o.PPPoE {
 		if err := setupPPPoE(ctx, run, o, unitDir, log); err != nil {
+			return err
+		}
+	}
+	if o.UPnP {
+		if err := setupUPnP(ctx, run, o, unitDir, log); err != nil {
 			return err
 		}
 	}
@@ -311,4 +325,131 @@ func pppPackages(pm string) []string {
 		return []string{"ppp-daemon", "ppp-pppoe"}
 	}
 	return []string{"ppp"}
+}
+
+// upnpUnavailable is what a box gets when nobody packages the daemon for
+// it. The Red Hat family is the case that matters, and the Fedora build
+// runs there unchanged: the sonames it wants are the ones EL ships, and
+// only the RPM's Fedora-only filesystem dependency stops a plain install.
+// A binary already on the box is used wherever it is, so unpacking one is
+// enough.
+const upnpUnavailable = "miniupnpd is not packaged for this distribution, and there is no EPEL branch for it. " +
+	"The Fedora build runs unchanged on Red Hat family boxes: unpack one with " +
+	"`rpm2cpio miniupnpd-*.fc*.x86_64.rpm | cpio -idmv`, " +
+	"install usr/sbin/miniupnpd into /usr/local/sbin, and run this again"
+
+// setupUPnP installs miniupnpd, masks the distro's own unit, and writes
+// ostiole-miniupnpd.service. Nothing here decides whether the service
+// runs: that is the Enabled switch, applied like everything else.
+func setupUPnP(ctx context.Context, run Runner, o SetupOptions, unitDir string, log *slog.Logger) error {
+	u := o.UPnPBackend
+	if u == nil {
+		u = NewUPnP()
+	}
+	bin := o.UPnPBinary
+	if bin == "" {
+		bin = lookPath("miniupnpd")
+	}
+	if bin == "" {
+		pm := o.PackageManager
+		if pm == "" {
+			pm = detectPackageManager()
+		}
+		pkg, ok := upnpPackage(pm)
+		if !ok {
+			return errors.New(upnpUnavailable)
+		}
+		if err := installPackage(ctx, run, pm, pkg, log); err != nil {
+			return fmt.Errorf("%w\n\n%s", err, upnpUnavailable)
+		}
+		if bin = lookPath("miniupnpd"); bin == "" {
+			return errors.New("miniupnpd still not found after installation")
+		}
+	}
+	if err := nftablesBuild(bin); err != nil {
+		return err
+	}
+
+	if out, err := run.Run(ctx, "systemctl", "cat", upnpDistroSvc); err == nil && len(out) > 0 {
+		_, _ = run.Run(ctx, "systemctl", "disable", "--now", upnpDistroSvc)
+		_, _ = run.Run(ctx, "systemctl", "mask", upnpDistroSvc)
+		log.Info("masked the distribution's own mapping service", "unit", upnpDistroSvc)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(u.leases()), 0o755); err != nil { //nolint:gosec // miniupnpd writes mappings here
+		return err
+	}
+	if err := os.MkdirAll(u.dir(), 0o755); err != nil { //nolint:gosec // miniupnpd reads this
+		return err
+	}
+	if err := writeFile(filepath.Join(unitDir, UPnPUnit), UPnPUnitContent(bin, u.ConfPath())); err != nil {
+		return err
+	}
+	log.Info("mapping service ready", "unit", UPnPUnit, "miniupnpd", bin)
+	return nil
+}
+
+// upnpPackage names the nftables build. Debian and Alpine ship both
+// builds and choose between them by package name; Fedora and openSUSE
+// package only the one. Arch has it in the AUR alone, which is not
+// something to install on anyone's behalf.
+func upnpPackage(pm string) (string, bool) {
+	switch pm {
+	case "apt-get", "apk":
+		return "miniupnpd-nftables", true
+	case "dnf", "zypper":
+		return "miniupnpd", true
+	default:
+		return "", false
+	}
+}
+
+// nftablesBuild checks that the binary is the one that writes nftables.
+// miniupnpd picks its firewall at compile time, and the iptables build
+// would make mappings in tables Ostiole's chains never see: every request
+// would be answered and no packet would pass. The linked libraries say
+// which build it is without running it.
+func nftablesBuild(bin string) error {
+	f, err := elf.Open(bin)
+	if err != nil {
+		// Not an ELF we can read, so take it on trust rather than refuse to
+		// set up a box over a file format.
+		return nil
+	}
+	defer func() { _ = f.Close() }()
+	libs, err := f.ImportedLibraries()
+	if err != nil || len(libs) == 0 {
+		return nil
+	}
+	for _, lib := range libs {
+		if strings.HasPrefix(lib, "libnftnl.so") {
+			return nil
+		}
+	}
+	return fmt.Errorf("%s is the iptables build of miniupnpd and cannot write Ostiole's chains; "+
+		"install the nftables build (Debian and Alpine call it miniupnpd-nftables)", bin)
+}
+
+// UPnPUnitContent renders the ostiole-miniupnpd unit. -d is what keeps
+// the daemon in the foreground, and it is the flag that does so whether
+// or not the build was configured to fork at all.
+func UPnPUnitContent(binary, conf string) string {
+	return fmt.Sprintf(`[Unit]
+Description=Ostiole UPnP IGD, PCP and NAT-PMP (miniupnpd)
+Documentation=https://github.com/rforced/ostiole
+After=network.target ostiole-firewall.service
+Wants=ostiole-firewall.service
+
+[Service]
+Type=simple
+ExecStart=%s -d -f %s
+Restart=on-failure
+RestartSec=2
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
+`, binary, conf)
 }

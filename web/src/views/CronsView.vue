@@ -113,7 +113,7 @@ function describe(c) {
               </tr>
             </thead>
             <TransitionGroup name="row" tag="tbody">
-              <tr v-if="!rows.length" key="empty">
+              <tr v-if="!rows.length" key="empty" class="row-static">
                 <td colspan="5" class="text-neutral-500">No crons yet.</td>
               </tr>
               <tr
@@ -196,7 +196,7 @@ function describe(c) {
             </tr>
           </thead>
           <TransitionGroup name="row" tag="tbody">
-            <tr v-if="!system.length" key="empty">
+            <tr v-if="!system.length" key="empty" class="row-static">
               <td colspan="3" class="text-neutral-500">
                 {{
                   load.busy.value && !load.updatedAt.value

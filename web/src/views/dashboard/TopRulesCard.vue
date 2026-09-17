@@ -23,7 +23,7 @@ defineProps({
           </tr>
         </thead>
         <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!rules.length" key="empty">
+          <tr v-if="!rules.length" key="empty" class="row-static">
             <td colspan="4" class="text-neutral-500">No rules with counters yet.</td>
           </tr>
           <tr v-for="r in rules" :key="r.id">

@@ -41,6 +41,7 @@ type api struct {
 	services  *services.Dnsmasq
 	resolver  *services.Unbound
 	pppoe     *services.PPPoE
+	upnp      *services.UPnP
 	certs     *certs.Manager
 	tokens    *auth.Tokens
 	feeds     FeedRefresher
@@ -98,6 +99,7 @@ func (a *api) register(mux *router) {
 	mux.HandleFunc("POST /api/v1/apply/revert", a.write(a.revert))
 	mux.HandleFunc("GET /api/v1/services/status", a.readNoEngine(a.servicesStatus))
 	mux.HandleFunc("GET /api/v1/dhcp/leases", a.readNoEngine(a.dhcpLeases))
+	mux.HandleFunc("GET /api/v1/upnp/mappings", a.readNoEngine(a.upnpMappings))
 	mux.HandleFunc("POST /api/v1/wireguard/keys", a.write(a.wireguardKeys))
 	mux.HandleFunc("GET /api/v1/gateways", a.readNoEngine(a.gatewayStatus))
 	mux.HandleFunc("GET /api/v1/gateways/detected", a.read(a.detectedGateways))
@@ -117,6 +119,10 @@ type servicesStatus struct {
 	// PPPoE reports whether pppd and its unit are in place, which a
 	// dialled line needs before it can be applied.
 	PPPoESetUp bool `json:"pppoeSetUp"`
+	// UPnP is miniupnpd, which answers the mapping protocols.
+	UPnPSetUp   bool `json:"upnpSetUp"`
+	UPnPRunning bool `json:"upnpRunning"`
+	Mappings    int  `json:"mappings"`
 }
 
 func (a *api) servicesStatus(w http.ResponseWriter, r *http.Request) error {
@@ -135,7 +141,30 @@ func (a *api) servicesStatus(w http.ResponseWriter, r *http.Request) error {
 	if a.pppoe != nil {
 		st.PPPoESetUp = a.pppoe.Installed(r.Context())
 	}
+	if a.upnp != nil {
+		st.UPnPSetUp = a.upnp.Installed(r.Context())
+		st.UPnPRunning = a.upnp.Active(r.Context())
+		if maps, err := a.upnp.ReadMappings(); err == nil {
+			st.Mappings = len(maps)
+		}
+	}
 	writeJSON(w, http.StatusOK, st)
+	return nil
+}
+
+// upnpMappings lists the holes clients have opened for themselves. Without
+// miniupnpd the answer is an empty list rather than an error: the page has
+// a line of its own for "not set up".
+func (a *api) upnpMappings(w http.ResponseWriter, _ *http.Request) error {
+	if a.upnp == nil {
+		writeJSON(w, http.StatusOK, []services.Mapping{})
+		return nil
+	}
+	maps, err := a.upnp.ReadMappings()
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, maps)
 	return nil
 }
 

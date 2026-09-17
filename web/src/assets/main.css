@@ -26,25 +26,26 @@
       opacity: 0;
     }
   }
-  /* The dialog is centred with a translate, so the keyframes carry it. */
+  /* The dialog is centred by Tailwind's `translate` property, which
+     composes with `transform`, so these only scale. */
   @keyframes pop-in {
     from {
       opacity: 0;
-      transform: translate(-50%, -50%) scale(0.97);
+      transform: scale(0.97);
     }
     to {
       opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
+      transform: scale(1);
     }
   }
   @keyframes pop-out {
     from {
       opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
+      transform: scale(1);
     }
     to {
       opacity: 0;
-      transform: translate(-50%, -50%) scale(0.97);
+      transform: scale(0.97);
     }
   }
 }
@@ -126,21 +127,25 @@
   }
 }
 
-/* Vue transition classes. Rows fade and slide; the bar above the page
-   grows and shrinks rather than shoving the content under it. */
+/* Vue transition classes. Rows fade in place and slide only when they
+   change order; the bar above the page grows and shrinks rather than
+   shoving the content under it. */
 .row-enter-active,
 .row-leave-active {
-  transition:
-    opacity 150ms ease-out,
-    transform 150ms ease-out;
+  transition: opacity 150ms ease-out;
 }
 .row-enter-from,
 .row-leave-to {
   opacity: 0;
-  transform: translateY(-4px);
 }
 .row-move {
   transition: transform 200ms ease-out;
+}
+/* A placeholder row ("Reading…", "No rules.") swaps instantly, so the
+   real rows never share the table with it mid-fade. */
+.row-static.row-enter-active,
+.row-static.row-leave-active {
+  transition: none;
 }
 
 .toast-enter-active,

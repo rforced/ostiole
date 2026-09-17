@@ -228,7 +228,7 @@ function saveDomain() {
             </tr>
           </thead>
           <TransitionGroup name="row" tag="tbody">
-            <tr v-if="!(dns.hostOverrides ?? []).length" key="empty">
+            <tr v-if="!(dns.hostOverrides ?? []).length" key="empty" class="row-static">
               <td colspan="4" class="text-neutral-500">
                 No overrides. Static DHCP leases with hostnames resolve automatically.
               </td>
@@ -278,7 +278,7 @@ function saveDomain() {
             </tr>
           </thead>
           <TransitionGroup name="row" tag="tbody">
-            <tr v-if="!(dns.domainOverrides ?? []).length" key="empty">
+            <tr v-if="!(dns.domainOverrides ?? []).length" key="empty" class="row-static">
               <td colspan="4" class="text-neutral-500">
                 No overrides. Every domain goes to the resolver above.
               </td>

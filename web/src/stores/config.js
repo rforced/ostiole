@@ -504,6 +504,38 @@ export const useConfigStore = defineStore('config', () => {
     })
   }
 
+  /** The port mapping block, created in the draft on first use. */
+  function ensureUPnP() {
+    const services = ensureServices()
+    if (!services.upnp) services.upnp = { enabled: false }
+    return services.upnp
+  }
+
+  /**
+   * Access list entries are read in order and have no name, so they are
+   * addressed by position. A negative index appends.
+   */
+  function upsertUPnPRule(rule, index = -1) {
+    const upnp = ensureUPnP()
+    const list = upnp.acl ?? (upnp.acl = [])
+    if (index < 0 || index >= list.length) list.push(clone(rule))
+    else list[index] = clone(rule)
+  }
+
+  function removeUPnPRule(index) {
+    undoable('Deleted the access list entry.', () => {
+      const upnp = ensureUPnP()
+      upnp.acl = (upnp.acl ?? []).filter((_, i) => i !== index)
+    })
+  }
+
+  function moveUPnPRule(index, delta) {
+    const list = ensureUPnP().acl ?? []
+    const to = index + delta
+    if (to < 0 || to >= list.length) return
+    ;[list[index], list[to]] = [list[to], list[index]]
+  }
+
   // ---- gateways --------------------------------------------------------
 
   const gateways = computed(() => draft.value?.gateways ?? [])
@@ -867,5 +899,9 @@ export const useConfigStore = defineStore('config', () => {
     removeHostOverride,
     upsertDomainOverride,
     removeDomainOverride,
+    ensureUPnP,
+    upsertUPnPRule,
+    removeUPnPRule,
+    moveUPnPRule,
   }
 })

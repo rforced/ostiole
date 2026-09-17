@@ -144,7 +144,7 @@ onBeforeUnmount(() => source?.close())
           </tr>
         </thead>
         <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!visible.length" key="empty">
+          <tr v-if="!visible.length" key="empty" class="row-static">
             <td colspan="8" class="text-neutral-500">
               {{
                 load.busy.value

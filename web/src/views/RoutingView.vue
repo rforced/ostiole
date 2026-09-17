@@ -206,7 +206,7 @@ function save() {
               </tr>
             </thead>
             <TransitionGroup name="row" tag="tbody">
-              <tr v-if="!gatewayRows.length" key="empty">
+              <tr v-if="!gatewayRows.length" key="empty" class="row-static">
                 <td colspan="7" class="text-neutral-500">
                   No gateways. The default route from the interface is used as it is.
                 </td>
@@ -281,7 +281,7 @@ function save() {
               </tr>
             </thead>
             <TransitionGroup name="row" tag="tbody">
-              <tr v-if="!detected.length" key="empty">
+              <tr v-if="!detected.length" key="empty" class="row-static">
                 <td colspan="7" class="text-neutral-500">
                   {{
                     refresh.updatedAt.value
@@ -343,7 +343,7 @@ function save() {
               </tr>
             </thead>
             <TransitionGroup name="row" tag="tbody">
-              <tr v-if="!groupRows.length" key="empty">
+              <tr v-if="!groupRows.length" key="empty" class="row-static">
                 <td colspan="6" class="text-neutral-500">
                   <template v-if="config.gateways.length">
                     No groups. Add one to route some rules over a different line.
@@ -421,7 +421,7 @@ function save() {
             </tr>
           </thead>
           <TransitionGroup name="row" tag="tbody">
-            <tr v-if="config.routes.length === 0" key="empty">
+            <tr v-if="config.routes.length === 0" key="empty" class="row-static">
               <td colspan="5" class="text-neutral-500">No static routes.</td>
             </tr>
             <tr

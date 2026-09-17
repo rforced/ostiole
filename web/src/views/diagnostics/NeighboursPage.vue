@@ -73,7 +73,7 @@ function tone(state) {
           </tr>
         </thead>
         <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!shown.length" key="empty">
+          <tr v-if="!shown.length" key="empty" class="row-static">
             <td colspan="5" class="text-neutral-500">
               {{ load.busy.value && !rows.length ? 'Reading…' : 'Nothing to show.' }}
             </td>

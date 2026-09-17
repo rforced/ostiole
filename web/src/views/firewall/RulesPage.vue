@@ -130,7 +130,7 @@ function toggle(rule) {
           </tr>
         </thead>
         <TransitionGroup name="row" tag="tbody">
-          <tr v-if="rules.length === 0" key="empty">
+          <tr v-if="rules.length === 0" key="empty" class="row-static">
             <td colspan="9" class="text-neutral-500">
               No rules in this zone. Everything entering it is dropped except the baseline and
               anti-lockout traffic.

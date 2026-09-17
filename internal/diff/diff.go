@@ -200,7 +200,8 @@ func walkByPosition(path string, a, b []any, out *[]Change) {
 }
 
 // identityKeys are the fields that name an element, in the order they are
-// tried. Every list in the configuration uses one of them.
+// tried. Nearly every list in the configuration uses one of them; the ones
+// that do not, like the UPnP access list, are reported by position.
 var identityKeys = []string{"id", "name", "interface", "mac", "hostname", "gateway", "address"}
 
 // identities returns one key per element, and false when the list has no

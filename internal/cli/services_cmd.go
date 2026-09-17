@@ -14,7 +14,7 @@ import (
 func newServicesCmd(_ *globals) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "services",
-		Short: "DHCP and DNS services (dnsmasq, optionally unbound)",
+		Short: "LAN services (dnsmasq, optionally unbound and miniupnpd)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			d := services.New()
@@ -29,10 +29,16 @@ func newServicesCmd(_ *globals) *cobra.Command {
 			}
 			fmt.Fprintf(w, "resolver set up\t%v\n", u.Installed(ctx))
 			fmt.Fprintf(w, "resolver running\t%v\n", u.Active(ctx))
+			p := services.NewUPnP()
+			fmt.Fprintf(w, "upnp set up\t%v\n", p.Installed(ctx))
+			fmt.Fprintf(w, "upnp running\t%v\n", p.Active(ctx))
+			if maps, err := p.ReadMappings(); err == nil {
+				fmt.Fprintf(w, "upnp mappings\t%d\n", len(maps))
+			}
 			return w.Flush()
 		},
 	}
-	var withResolver, withPPPoE bool
+	var withResolver, withPPPoE, withUPnP bool
 	setup := &cobra.Command{
 		Use:   "setup",
 		Short: "Install dnsmasq, write its unit, and retire competing resolvers",
@@ -46,13 +52,17 @@ trust anchor, and writes ostiole-unbound.service, which the DNS service
 can then use to validate DNSSEC or to speak DNS over TLS.
 
 With --with-pppoe it installs pppd and writes ostiole-pppoe@.service, so
-an interface can dial a session over Ethernet the way DSL is delivered.`,
+an interface can dial a session over Ethernet the way DSL is delivered.
+
+With --with-upnp it installs miniupnpd and writes ostiole-miniupnpd.service,
+so clients on the LAN can open their own port mappings. The build has to be
+the nftables one, which is checked before anything is written.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := requireRoot(); err != nil {
 				return err
 			}
-			opts := services.SetupOptions{Resolver: withResolver, PPPoE: withPPPoE}
+			opts := services.SetupOptions{Resolver: withResolver, PPPoE: withPPPoE, UPnP: withUPnP}
 			if err := services.Setup(cmd.Context(), services.New(), opts, slog.Default()); err != nil {
 				return err
 			}
@@ -62,6 +72,29 @@ an interface can dial a session over Ethernet the way DSL is delivered.`,
 	}
 	setup.Flags().BoolVar(&withResolver, "with-resolver", false, "also install unbound for DNSSEC validation and DNS over TLS")
 	setup.Flags().BoolVar(&withPPPoE, "with-pppoe", false, "also install pppd so an interface can dial a PPPoE session")
+	setup.Flags().BoolVar(&withUPnP, "with-upnp", false, "also install miniupnpd so clients can ask for their own port mappings")
+	mappings := &cobra.Command{
+		Use:   "mappings",
+		Short: "Show the port mappings clients have asked for",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			maps, err := services.NewUPnP().ReadMappings()
+			if err != nil {
+				return err
+			}
+			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "PROTO\tEXTERNAL\tCLIENT\tINTERNAL\tEXPIRES\tDESCRIPTION")
+			for _, m := range maps {
+				exp := "never"
+				if m.Expires != nil {
+					exp = m.Expires.Local().Format(time.RFC3339)
+				}
+				fmt.Fprintf(w, "%s\t%d\t%s\t%d\t%s\t%s\n",
+					m.Protocol, m.ExternalPort, m.Internal, m.InternalPort, exp, m.Description)
+			}
+			return w.Flush()
+		},
+	}
 	leases := &cobra.Command{
 		Use:   "leases",
 		Short: "Show DHCP leases",
@@ -83,6 +116,6 @@ an interface can dial a session over Ethernet the way DSL is delivered.`,
 			return w.Flush()
 		},
 	}
-	cmd.AddCommand(setup, leases)
+	cmd.AddCommand(setup, leases, mappings)
 	return cmd
 }

@@ -360,6 +360,67 @@ func TestValidateStaticLeaseAddresses(t *testing.T) {
 	}
 }
 
+func TestValidateUPnP(t *testing.T) {
+	t.Parallel()
+	cfg := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0"})
+	cfg.Services.UPnP = UPnP{
+		Enabled:           true,
+		ExternalInterface: "eth1", // the LAN: a port opened there reaches nothing
+		Interfaces:        []string{"ghost", "eth1"},
+		ACL: []UPnPRule{
+			{Action: "maybe", ExternalPorts: "nope", Source: "2001:db8::/32", InternalPorts: "70000"},
+			{Action: "allow", ExternalPorts: "1024-65535", Source: "192.168.1.0/24", InternalPorts: "1024-65535"},
+		},
+	}
+	var ve *ValidationError
+	if !errors.As(cfg.Validate(), &ve) {
+		t.Fatal("want validation issues")
+	}
+	got := map[string]bool{}
+	for _, i := range ve.Issues {
+		got[i.Path] = true
+	}
+	for _, p := range []string{
+		"services.upnp.enabled",           // neither protocol switched on
+		"services.upnp.externalInterface", // not in an external zone
+		"services.upnp.interfaces[0]",     // unknown
+		"services.upnp.interfaces[1]",     // is the external interface
+		"services.upnp.acl[0].action", "services.upnp.acl[0].externalPorts",
+		"services.upnp.acl[0].internalPorts", "services.upnp.acl[0].source",
+	} {
+		if !got[p] {
+			t.Errorf("missing issue at %s (have %v)", p, ve.Issues)
+		}
+	}
+	if got["services.upnp.acl[1].source"] {
+		t.Errorf("a valid access list entry was rejected: %v", ve.Issues)
+	}
+
+	// The same configuration made right.
+	cfg.Services.UPnP = UPnP{
+		Enabled: true, IGD: true, PCP: true, ExternalInterface: "eth0",
+		Interfaces: []string{"eth1"}, DefaultDeny: true,
+		ACL: []UPnPRule{{Action: "allow", ExternalPorts: "1024-65535", Source: "192.168.1.0/24", InternalPorts: "1024-65535"}},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("valid mapping service rejected: %v", err)
+	}
+
+	// A typo in an interface name is caught whether or not the service is
+	// switched on, so turning it on later does not fail on something that
+	// was written down long before.
+	cfg.Services.UPnP = UPnP{ExternalInterface: "ghost"}
+	if !errors.As(cfg.Validate(), &ve) {
+		t.Error("an unknown external interface passed while the service was off")
+	}
+
+	// Off and unwritten is the default, and it has to validate.
+	cfg.Services.UPnP = UPnP{}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("the default (off) was rejected: %v", err)
+	}
+}
+
 func TestValidateSchedulesAndOneToOne(t *testing.T) {
 	t.Parallel()
 	cfg := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0"})

@@ -108,7 +108,7 @@ const when = (s, fallback) => (s ? new Date(s).toLocaleDateString() : fallback)
             </tr>
           </thead>
           <TransitionGroup name="row" tag="tbody">
-            <tr v-if="!users.length" key="empty">
+            <tr v-if="!users.length" key="empty" class="row-static">
               <td colspan="2" class="text-neutral-500">
                 {{ load.updatedAt.value ? 'No accounts.' : 'Reading accounts…' }}
               </td>
@@ -201,7 +201,7 @@ const when = (s, fallback) => (s ? new Date(s).toLocaleDateString() : fallback)
             </tr>
           </thead>
           <TransitionGroup name="row" tag="tbody">
-            <tr v-if="!tokens.length" key="empty">
+            <tr v-if="!tokens.length" key="empty" class="row-static">
               <td colspan="6" class="text-neutral-500">
                 {{ load.updatedAt.value ? 'No API tokens.' : 'Reading tokens…' }}
               </td>

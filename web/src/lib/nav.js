@@ -107,6 +107,15 @@ export const NAV = [
           { value: 'enforcement', label: 'Enforcement' },
         ],
       },
+      {
+        path: 'upnp',
+        label: 'Port mapping',
+        view: () => import('@/views/services/UpnpPage.vue'),
+        tabs: [
+          { value: 'service', label: 'Service' },
+          { value: 'mappings', label: 'Mappings' },
+        ],
+      },
     ],
   },
   { to: '/vpn', label: 'VPN', icon: Lock, view: () => import('@/views/VpnView.vue') },

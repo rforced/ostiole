@@ -138,7 +138,7 @@ func TestUnits(t *testing.T) {
 	t.Parallel()
 	units := Units(DefaultLayout(), Options{Listen: ":443"})
 	d := units[DaemonUnit]
-	if !strings.Contains(d, "--network-backend auto") || !strings.Contains(d, "ReadWritePaths=/etc/ostiole /etc/systemd/network /usr/local/bin -/etc/dnsmasq.d -/etc/unbound -/etc/resolv.conf -/etc/ppp") {
+	if !strings.Contains(d, "--network-backend auto") || !strings.Contains(d, "ReadWritePaths=/etc/ostiole /etc/systemd/network /usr/local/bin -/etc/dnsmasq.d -/etc/unbound -/etc/resolv.conf -/etc/ppp -/etc/miniupnpd") {
 		t.Errorf("daemon unit:\n%s", d)
 	}
 	f := units[FirewallUnit]

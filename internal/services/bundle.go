@@ -23,10 +23,11 @@ var _ network.Backend = (*Bundle)(nil)
 // NewBundle returns the production services: the dialled sessions first,
 // because an interface has to exist before anything serves on it, then
 // the resolver, then the blocklist, then the forwarder that reads the
-// blocklist and points at the resolver.
+// blocklist and points at the resolver. The mapping service comes last,
+// because it restarts into a table that has just been rebuilt.
 func NewBundle(blocklists *dnsblock.Cache) *Bundle {
 	return &Bundle{backends: []network.Backend{
-		NewPPPoE(), NewUnbound(), NewDNSBlock(blocklists), New(),
+		NewPPPoE(), NewUnbound(), NewDNSBlock(blocklists), New(), NewUPnP(),
 	}}
 }
 

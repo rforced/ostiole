@@ -232,7 +232,7 @@ function when(s) {
           </tr>
         </thead>
         <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!config.blockLists.length" key="empty">
+          <tr v-if="!config.blockLists.length" key="empty" class="row-static">
             <td colspan="6" class="text-neutral-500">
               No lists yet. "Add list" offers the well-known ones.
             </td>

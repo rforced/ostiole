@@ -1,0 +1,120 @@
+{
+  "version": 2,
+  "system": {
+    "hostname": "upnp-fw",
+    "management": {
+      "webPort": 443,
+      "sshPort": 22
+    }
+  },
+  "zones": [
+    {
+      "name": "wan",
+      "external": true
+    },
+    {
+      "name": "lan",
+      "antiLockout": true
+    },
+    {
+      "name": "guest"
+    }
+  ],
+  "interfaces": [
+    {
+      "name": "eth0",
+      "zone": "wan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "dhcp"
+      },
+      "ipv6": {
+        "mode": "slaac"
+      }
+    },
+    {
+      "name": "eth1",
+      "zone": "lan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "192.168.1.1/24"
+      },
+      "ipv6": {
+        "mode": "none"
+      }
+    },
+    {
+      "name": "eth2",
+      "zone": "guest",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "192.168.5.1/24"
+      },
+      "ipv6": {
+        "mode": "none"
+      }
+    }
+  ],
+  "rules": [
+    {
+      "id": "lan-out",
+      "description": "Allow LAN to any",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    }
+  ],
+  "nat": {
+    "outbound": {
+      "mode": "automatic"
+    },
+    "portForwards": [
+      {
+        "id": "web",
+        "description": "An admin-written forward, which beats any mapping on the same port",
+        "enabled": true,
+        "zone": "wan",
+        "protocol": "tcp",
+        "ports": ["443"],
+        "target": "192.168.1.10",
+        "targetPort": "443"
+      }
+    ]
+  },
+  "services": {
+    "dhcp": {
+      "enabled": false
+    },
+    "dns": {
+      "enabled": false
+    },
+    "upnp": {
+      "enabled": true,
+      "igd": true,
+      "pcp": true,
+      "externalInterface": "eth0",
+      "defaultDeny": true,
+      "acl": [
+        {
+          "action": "allow",
+          "externalPorts": "1024-65535",
+          "source": "192.168.1.0/24",
+          "internalPorts": "1024-65535",
+          "description": "The LAN may map high ports to high ports"
+        },
+        {
+          "action": "deny",
+          "externalPorts": "1-1023",
+          "source": "0.0.0.0/0",
+          "internalPorts": "1-65535",
+          "description": "Nobody maps a privileged port"
+        }
+      ]
+    }
+  }
+}

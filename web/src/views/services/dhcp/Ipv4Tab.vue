@@ -59,7 +59,7 @@ function editLease(l) {
             </tr>
           </thead>
           <TransitionGroup name="row" tag="tbody">
-            <tr v-if="!(dhcp.scopes ?? []).length" key="empty">
+            <tr v-if="!(dhcp.scopes ?? []).length" key="empty" class="row-static">
               <td colspan="6" class="text-neutral-500">
                 No scopes. Add one per interface that should hand out addresses.
               </td>
@@ -112,7 +112,7 @@ function editLease(l) {
             </tr>
           </thead>
           <TransitionGroup name="row" tag="tbody">
-            <tr v-if="!(dhcp.staticLeases ?? []).length" key="empty">
+            <tr v-if="!(dhcp.staticLeases ?? []).length" key="empty" class="row-static">
               <td colspan="6" class="text-neutral-500">No static leases.</td>
             </tr>
             <tr

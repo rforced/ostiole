@@ -20,7 +20,7 @@ defineProps({
           </tr>
         </thead>
         <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!gateways.length" key="empty">
+          <tr v-if="!gateways.length" key="empty" class="row-static">
             <td colspan="5" class="text-neutral-500">No gateways configured.</td>
           </tr>
           <tr v-for="g in gateways" :key="g.name">

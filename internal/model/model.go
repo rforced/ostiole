@@ -142,7 +142,7 @@ var CronKinds = []CronKind{
 }
 
 // CronServices are the units a restart cron may name.
-var CronServices = []string{"dnsmasq", "unbound", "ostiole"}
+var CronServices = []string{"dnsmasq", "unbound", "miniupnpd", "ostiole"}
 
 // Cron is one piece of scheduled work.
 type Cron struct {
@@ -1042,6 +1042,45 @@ func (c *Config) ZoneInterfaces(zone string) []string {
 type Services struct {
 	DHCP DHCPServer `json:"dhcp"`
 	DNS  DNSServer  `json:"dns"`
+	UPnP UPnP       `json:"upnp"`
+}
+
+// UPnP lets a client on the LAN open a hole through the firewall for
+// itself, which is how a console, a torrent client, or a video call
+// reaches the outside without anyone writing a port forward. It is off by
+// default: a host that can ask for a forward can ask for any forward.
+//
+// miniupnpd does the talking (ADR-0007); Ostiole renders its configuration
+// and the chains it fills in.
+type UPnP struct {
+	Enabled bool `json:"enabled"`
+	// IGD is the UPnP Internet Gateway Device protocol: consoles, Windows,
+	// and most peer-to-peer clients.
+	IGD bool `json:"igd,omitempty"`
+	// PCP answers the Port Control Protocol and NAT-PMP, which is what
+	// Apple devices and anything using Bonjour ask with.
+	PCP bool `json:"pcp,omitempty"`
+	// ExternalInterface is where the mapped port is opened, so it has to be
+	// the one facing the internet.
+	ExternalInterface string `json:"externalInterface,omitempty"`
+	// Interfaces are where clients may ask from; empty means every enabled
+	// interface that is not in an external zone.
+	Interfaces []string `json:"interfaces,omitempty"`
+	// DefaultDeny refuses anything the rules below do not allow. Without it
+	// a client may map any port it likes.
+	DefaultDeny bool `json:"defaultDeny,omitempty"`
+	// ACL is read in order; the first entry that matches decides.
+	ACL []UPnPRule `json:"acl,omitempty"`
+}
+
+// UPnPRule is one line of the access list: who may ask for which outside
+// port, and which inside port it may point at.
+type UPnPRule struct {
+	Action        string `json:"action"`        // allow | deny
+	ExternalPorts string `json:"externalPorts"` // "1024-65535"
+	Source        string `json:"source"`        // "192.168.1.0/24"
+	InternalPorts string `json:"internalPorts"`
+	Description   string `json:"description,omitempty"`
 }
 
 // DHCPServer hands out IPv4 addresses on selected interfaces, and with V6

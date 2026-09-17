@@ -53,7 +53,7 @@ function edit(s) {
           </tr>
         </thead>
         <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!(dhcp.v6 ?? []).length" key="empty">
+          <tr v-if="!(dhcp.v6 ?? []).length" key="empty" class="row-static">
             <td colspan="6" class="text-neutral-500">
               No IPv6 advertisements. Add one per interface that should serve IPv6.
             </td>

@@ -132,7 +132,7 @@ defineExpose({ refresh: load.run })
           </tr>
         </thead>
         <TransitionGroup name="row" tag="tbody">
-          <tr v-if="revisions.length === 0" key="empty">
+          <tr v-if="revisions.length === 0" key="empty" class="row-static">
             <td colspan="4" class="text-neutral-500">
               {{ load.updatedAt.value ? 'No archived revisions yet.' : 'Reading revisions…' }}
             </td>

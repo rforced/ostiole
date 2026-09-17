@@ -48,6 +48,7 @@ func RenderWithFeeds(cfg *model.Config, feeds map[string][]string) (string, erro
 	r.policyChains()
 	r.chainNATPrerouting()
 	r.chainNATPostrouting()
+	r.upnpChains()
 	r.indent--
 	r.line("}")
 	return r.b.String(), nil
@@ -292,6 +293,35 @@ func (r *renderer) serviceRules() {
 		}
 	}
 	r.wireguardRules()
+	r.upnpRules()
+}
+
+// upnpRules let clients reach miniupnpd: SSDP discovery and the device
+// description for IGD, and the NAT-PMP and PCP port for the other half.
+// Unlike DNS there is no "fib daddr type local" here, because SSDP is
+// addressed to a multicast group rather than to this box.
+func (r *renderer) upnpRules() {
+	if !UPnPEnabled(r.cfg) {
+		return
+	}
+	ifs := UPnPInterfaces(r.cfg)
+	if len(ifs) == 0 {
+		return
+	}
+	u := r.cfg.Services.UPnP
+	var udp []string
+	if u.IGD {
+		udp = append(udp, fmt.Sprint(ssdpPort))
+	}
+	if u.PCP {
+		udp = append(udp, fmt.Sprint(pcpPort))
+	}
+	r.line(fmt.Sprintf(`iifname %s udp dport %s counter accept comment "service:upnp"`,
+		ifnameSet(ifs), setOrSingle(udp)))
+	if u.IGD {
+		r.line(fmt.Sprintf(`iifname %s tcp dport %d counter accept comment "service:upnp"`,
+			ifnameSet(ifs), upnpHTTPPort))
+	}
 }
 
 // wireguardRules open the listening ports of tunnels on external zones,
@@ -340,6 +370,64 @@ func DNSInterfaces(cfg *model.Config) []string {
 	return ifs
 }
 
+// The chains miniupnpd is pointed at. It creates none of its own: its
+// nftables backend inserts rules into chains it is given the names of,
+// which is how Ostiole keeps every rule inside its own table. They are
+// regular chains, so the family and hook come from whoever jumps to them.
+const (
+	UPnPPreroutingChain  = "upnp_prerouting"
+	UPnPForwardChain     = "upnp_forward"
+	UPnPPostroutingChain = "upnp_postrouting"
+)
+
+// Ports the mapping service answers on. upnpHTTPPort is where miniupnpd
+// serves its device description; it is pfSense's choice, and it matches
+// the http_port the services package configures.
+const (
+	ssdpPort     = 1900
+	pcpPort      = 5351
+	upnpHTTPPort = 2189
+)
+
+// UPnPEnabled reports whether the configuration wants miniupnpd. Enabled
+// on its own does nothing: one of the two protocols has to answer.
+func UPnPEnabled(cfg *model.Config) bool {
+	u := cfg.Services.UPnP
+	return u.Enabled && (u.IGD || u.PCP)
+}
+
+// UPnPInterfaces lists where clients may ask for a mapping: the configured
+// list, or every enabled interface outside external zones, never the
+// external interface itself.
+func UPnPInterfaces(cfg *model.Config) []string {
+	u := cfg.Services.UPnP
+	if len(u.Interfaces) > 0 {
+		return u.Interfaces
+	}
+	var ifs []string
+	for _, in := range cfg.Interfaces {
+		if !in.Enabled || in.Zone == "" || in.Name == u.ExternalInterface {
+			continue
+		}
+		if z, ok := cfg.Zone(in.Zone); ok && !z.External {
+			ifs = append(ifs, in.Name)
+		}
+	}
+	return ifs
+}
+
+// upnpChains renders the three chains miniupnpd fills in, empty. They are
+// rendered whether or not a mapping exists today: the daemon adds to a
+// chain, it does not create one, and every apply rebuilds this table.
+func (r *renderer) upnpChains() {
+	if !UPnPEnabled(r.cfg) {
+		return
+	}
+	for _, name := range []string{UPnPPreroutingChain, UPnPForwardChain, UPnPPostroutingChain} {
+		r.block("chain "+name, func() {})
+	}
+}
+
 func (r *renderer) chainForward() {
 	r.block("chain forward", func() {
 		r.line("type filter hook forward priority filter; policy drop;")
@@ -349,6 +437,9 @@ func (r *renderer) chainForward() {
 		r.blockDNSJump()
 		if r.hasPortForwards() {
 			r.line(`ct status dnat counter accept comment "port-forwards"`)
+		}
+		if UPnPEnabled(r.cfg) {
+			r.line("jump " + UPnPForwardChain)
 		}
 		r.zoneDispatch()
 		r.defaultDrop("forward")
@@ -920,6 +1011,11 @@ func (r *renderer) chainNATPrerouting() {
 		}
 		r.oneToOneDNAT()
 		r.dnsRedirect()
+		// Last, so a forward an admin wrote beats a mapping a client asked
+		// for on the same port.
+		if UPnPEnabled(r.cfg) {
+			r.line("jump " + UPnPPreroutingChain)
+		}
 	})
 }
 
@@ -1047,6 +1143,11 @@ func dnatTarget(ip netip.Addr, port string) string {
 func (r *renderer) chainNATPostrouting() {
 	r.block("chain nat_postrouting", func() {
 		r.line("type nat hook postrouting priority srcnat; policy accept;")
+		// First, so the source translation a mapping asks for is applied
+		// instead of the masquerade everything else gets.
+		if UPnPEnabled(r.cfg) {
+			r.line("jump " + UPnPPostroutingChain)
+		}
 		// The listed rules come first in hybrid mode, so a host can be
 		// given its own address, or kept out of NAT, without anyone
 		// writing out the rules for everything else.

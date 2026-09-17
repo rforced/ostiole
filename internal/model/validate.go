@@ -725,6 +725,67 @@ func (v *validator) services(c *Config, ifaces map[string]bool) {
 			}
 		}
 	}
+	v.upnp(c, ifaces)
+}
+
+// upnp checks the mapping service. A name that is written down is checked
+// whether or not the service is on, so a typo is not hidden by a switch;
+// what the interfaces have to be is only asked of a box that runs it.
+func (v *validator) upnp(c *Config, ifaces map[string]bool) {
+	u := c.Services.UPnP
+	if u.Enabled && !u.IGD && !u.PCP {
+		v.add("services.upnp.enabled", "switch on UPnP IGD, PCP and NAT-PMP, or both; with neither nothing answers")
+	}
+	switch {
+	case u.ExternalInterface == "":
+		if u.Enabled {
+			v.add("services.upnp.externalInterface", "the interface facing the internet is required: it is where a mapped port is opened")
+		}
+	case !ifaces[u.ExternalInterface]:
+		v.add("services.upnp.externalInterface", "unknown interface %q", u.ExternalInterface)
+	case u.Enabled:
+		in, _ := c.Interface(u.ExternalInterface)
+		z, known := c.Zone(in.Zone)
+		switch {
+		case !in.Enabled:
+			v.add("services.upnp.externalInterface", "interface %q is disabled", u.ExternalInterface)
+		case !known || !z.External:
+			v.add("services.upnp.externalInterface",
+				"interface %q is not in an external zone; a port opened anywhere else reaches nothing", u.ExternalInterface)
+		}
+	}
+	for i, name := range u.Interfaces {
+		path := fmt.Sprintf("services.upnp.interfaces[%d]", i)
+		in, known := c.Interface(name)
+		switch {
+		case !known || !ifaces[name]:
+			v.add(path, "unknown interface %q", name)
+		case name == u.ExternalInterface:
+			v.add(path, "%q is the external interface; clients ask for mappings from the inside", name)
+		case u.Enabled && !in.Enabled:
+			v.add(path, "interface %q is disabled", name)
+		}
+	}
+	for i, r := range u.ACL {
+		path := fmt.Sprintf("services.upnp.acl[%d]", i)
+		if r.Action != "allow" && r.Action != "deny" {
+			v.add(path+".action", "%q must be allow or deny", r.Action)
+		}
+		if _, err := ParsePortRange(r.ExternalPorts); err != nil {
+			v.add(path+".externalPorts", "%v", err)
+		}
+		if _, err := ParsePortRange(r.InternalPorts); err != nil {
+			v.add(path+".internalPorts", "%v", err)
+		}
+		// miniupnpd matches an access list entry against the client's own
+		// address, and only ever an IPv4 one: it is what asked for the
+		// mapping, and IPv6 has no mapping to ask for.
+		if p, err := ParseAddress(r.Source); err != nil {
+			v.add(path+".source", "%v", err)
+		} else if !p.Addr().Is4() {
+			v.add(path+".source", "%q is not IPv4; an access list entry does not apply to an IPv6 client", r.Source)
+		}
+	}
 }
 
 // dhcpv6 checks the router advertisement scopes. The prefix itself is not

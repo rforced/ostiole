@@ -361,6 +361,24 @@ func (a *api) serviceStates(ctx context.Context, cfg *model.Config) []ServiceSta
 		}
 	}
 
+	upnp := ServiceState{
+		Name:  "Port mapping",
+		Unit:  services.UPnPUnit,
+		State: stateUnknown,
+		Want:  cfg != nil && nft.UPnPEnabled(cfg),
+	}
+	if a.upnp != nil {
+		switch {
+		case !a.upnp.Installed(ctx):
+			upnp.State = stateMissing
+			upnp.Detail = "Run `ostiole services setup --with-upnp` to install miniupnpd."
+		case a.upnp.Active(ctx):
+			upnp.State = stateActive
+		default:
+			upnp.State = stateInactive
+		}
+	}
+
 	netd := ServiceState{
 		Name:  "Network",
 		Unit:  install.NetworkdUnit,
@@ -385,6 +403,9 @@ func (a *api) serviceStates(ctx context.Context, cfg *model.Config) []ServiceSta
 	states := []ServiceState{dnsmasq}
 	if resolver.Want || resolver.State == stateActive {
 		states = append(states, resolver)
+	}
+	if upnp.Want || upnp.State == stateActive {
+		states = append(states, upnp)
 	}
 	return append(states, netd, logs)
 }

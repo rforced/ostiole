@@ -172,6 +172,7 @@ at your own.`,
 				deps.Services = services.New()
 				deps.Resolver = services.NewUnbound()
 				deps.PPPoE = services.NewPPPoE()
+				deps.UPnP = services.NewUPnP()
 				// Gateway probes need a raw socket and route changes need
 				// netlink, so multi-WAN failover is a root-only feature.
 				mon := gateway.New(gateway.NewICMPProber(), gateway.NewNetlinkRouter(), slog.Default())
@@ -263,9 +264,10 @@ func healthURL(cfg server.Config) string {
 // that was not meant to be restartable.
 func restartService(ctx context.Context, name string) error {
 	units := map[string]string{
-		"dnsmasq": services.Unit,
-		"unbound": services.UnboundUnit,
-		"ostiole": install.DaemonUnit,
+		"dnsmasq":   services.Unit,
+		"unbound":   services.UnboundUnit,
+		"miniupnpd": services.UPnPUnit,
+		"ostiole":   install.DaemonUnit,
 	}
 	unit, ok := units[name]
 	if !ok {

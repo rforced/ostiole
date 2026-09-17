@@ -52,6 +52,9 @@ type Deps struct {
 	// PPPoE reports whether a dialled session can be run here; nil reports
 	// "not set up".
 	PPPoE *services.PPPoE
+	// UPnP reads miniupnpd's state and the mappings clients hold; nil
+	// reports "not set up".
+	UPnP *services.UPnP
 	// Certs manages the certificate the UI serves; nil hides the
 	// certificate endpoints and serves whatever the files hold.
 	Certs *certs.Manager
@@ -95,6 +98,7 @@ func Handler(d Deps) http.Handler {
 		services:   d.Services,
 		resolver:   d.Resolver,
 		pppoe:      d.PPPoE,
+		upnp:       d.UPnP,
 		certs:      d.Certs,
 		tokens:     d.Tokens,
 		feedCache:  feedCacheOf(d.Feeds),
