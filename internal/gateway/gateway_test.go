@@ -170,6 +170,50 @@ func TestMonitorKeepsTheLastRoute(t *testing.T) {
 	}
 }
 
+// A router with one gateway has nowhere to fail over to, so its route is
+// left alone however badly the probes go. The probing itself carries on:
+// the dashboard still wants the latency and loss.
+func TestMonitorLeavesASingleGatewayAlone(t *testing.T) {
+	t.Parallel()
+	p := &fakeProber{fail: map[string]bool{"203.0.113.1": true}}
+	r := &fakeRouter{resolveTo: map[string]string{}}
+	m := New(p, r, slog.New(slog.DiscardHandler))
+	m.Configure([]model.Gateway{
+		{Name: "wan", Enabled: true, Interface: "eth0", Address: "203.0.113.1"},
+		{Name: "off", Enabled: false, Interface: "eth1", Address: "198.51.100.1"},
+	})
+	tick(m, 5)
+
+	if s := m.Statuses()[0]; s.Online || s.Unknown || s.LossPercent == 0 {
+		t.Errorf("the only gateway should still be probed and marked down: %+v", s)
+	}
+	if demoted, _ := r.calls(); len(demoted) != 0 {
+		t.Errorf("demoted = %v, want nothing: there is nowhere to fail over to", demoted)
+	}
+}
+
+// Losing the second gateway must not strand the first one without a
+// default route. Only the demote half is held back on a single gateway, so
+// one demoted while it had a partner is restored when that partner goes.
+func TestRemovingTheSecondGatewayRestoresTheDemotedOne(t *testing.T) {
+	t.Parallel()
+	m, prober, router := newTestMonitor(t)
+	tick(m, 2)
+	prober.setFail("203.0.113.1", true)
+	tick(m, 3)
+	if demoted, _ := router.calls(); len(demoted) != 1 || demoted[0] != "primary" {
+		t.Fatalf("demoted = %v, want the primary once", demoted)
+	}
+
+	m.Configure([]model.Gateway{
+		{Name: "primary", Enabled: true, Interface: "eth0", Address: "203.0.113.1", Priority: 0},
+	})
+	tick(m, 1)
+	if _, restored := router.calls(); len(restored) != 1 || restored[0] != "primary" {
+		t.Errorf("restored = %v, want the primary back: it is the only gateway left", restored)
+	}
+}
+
 func TestMonitorResolvesDynamicGateways(t *testing.T) {
 	t.Parallel()
 	p := &fakeProber{fail: map[string]bool{}}

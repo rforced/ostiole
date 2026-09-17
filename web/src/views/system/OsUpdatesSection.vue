@@ -132,14 +132,14 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
         :hint="
           status && !status.excludeSupported
             ? `${status.manager} cannot hold packages back in this mode, so this list is not applied.`
-            : 'Package names, comma separated, such as a kernel a driver is pinned to.'
+            : 'Package names or globs, comma separated: kernel* holds back every kernel package.'
         "
       >
         <input
           id="os-upd-exclude"
           v-model="excludes"
           class="input max-w-md font-mono"
-          placeholder="kernel, kernel-core"
+          placeholder="kernel*, nvidia*"
         />
       </FormField>
     </template>

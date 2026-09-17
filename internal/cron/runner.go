@@ -57,10 +57,23 @@ type Executor interface {
 type SystemCron struct {
 	ID          string
 	Description string
+	// Describe, when set, replaces Description with one read from the
+	// configuration, so work that only half applies to this router says
+	// which half it is doing.
+	Describe func(cfg *model.Config) string
 	// Every is how often it happens, for the description.
 	Every time.Duration
 	// Note replaces the period when the work is not on a fixed clock.
 	Note string
+}
+
+// describe is Describe where there is one and a configuration to read,
+// and the fixed text otherwise.
+func (s SystemCron) describe(cfg *model.Config) string {
+	if s.Describe != nil && cfg != nil {
+		return s.Describe(cfg)
+	}
+	return s.Description
 }
 
 // Runner ticks once a minute and runs whatever is due.
@@ -106,13 +119,36 @@ func NewRunner(source func() *model.Config, exec Executor, log *slog.Logger) *Ru
 		Log:     log,
 		results: map[string]*result{},
 		System: []SystemCron{
-			{ID: "system:gateways", Description: "Probe each gateway and move the default route off one that stops answering", Every: 5 * time.Second},
+			{
+				ID: "system:gateways",
+				// The probes run whatever the gateway count is, so the
+				// fixed text is the half that is always true.
+				Description: gatewayProbeOnly,
+				Describe:    describeGateways,
+				Every:       5 * time.Second,
+			},
 			{ID: "system:aliases", Description: "Refresh the address lists and country ranges that are due", Every: 15 * time.Minute},
 			{ID: "system:blocklists", Description: "Refresh the DNS blocklists that are due and hand them to the resolver", Every: 15 * time.Minute},
 			{ID: "system:sessions", Description: "Expire idle web sessions", Note: "as they expire"},
 			{ID: "system:firewall-log", Description: "Collect dropped packets from the kernel", Note: "continuously"},
 		},
 	}
+}
+
+// What the gateway probe loop does, with and without a second gateway to
+// move traffic to.
+const (
+	gatewayFailover  = "Probe each gateway and move traffic off one that stops answering"
+	gatewayProbeOnly = "Probe the gateway and report whether it answers"
+)
+
+// describeGateways says what the probe loop is actually doing. One gateway
+// has nowhere to fail over to, so the page promises only the probing.
+func describeGateways(cfg *model.Config) string {
+	if cfg.CanFailover() {
+		return gatewayFailover
+	}
+	return gatewayProbeOnly
 }
 
 // Run ticks until the context is cancelled. It aligns to the start of
@@ -296,7 +332,7 @@ func (r *Runner) Statuses() []Status {
 		st := Status{
 			ID:          sys.ID,
 			Origin:      OriginSystem,
-			Description: sys.Description,
+			Description: sys.describe(cfg),
 			Schedule:    sys.Note,
 			Enabled:     true,
 		}

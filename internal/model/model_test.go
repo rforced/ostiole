@@ -1037,7 +1037,7 @@ func TestValidateUpdates(t *testing.T) {
 			Mode:            "sometimes",
 			CheckSchedule:   "every other tuesday",
 			InstallSchedule: "@fortnightly",
-			Exclude:         []string{"kernel", "--assume-yes"},
+			Exclude:         []string{"kernel", "--assume-yes", "kernel*", "gcc-c++"},
 		},
 		Ostiole: SelfUpdates{Channel: "nightly"},
 	}
@@ -1062,6 +1062,13 @@ func TestValidateUpdates(t *testing.T) {
 	} {
 		if _, ok := got[p]; !ok {
 			t.Errorf("missing issue at %s (got %v)", p, keysOf(got))
+		}
+	}
+	// A glob is a legitimate entry — "kernel*" is how a router holds back
+	// every kernel package — and so is a name with a plus in it.
+	for _, p := range []string{"updates.system.exclude[2]", "updates.system.exclude[3]"} {
+		if msg, ok := got[p]; ok {
+			t.Errorf("%s rejected: %s", p, msg)
 		}
 	}
 	// The empty settings are the defaults, not a mistake.

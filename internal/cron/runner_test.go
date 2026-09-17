@@ -205,6 +205,38 @@ func TestStatusesIncludeTheSystemWork(t *testing.T) {
 	}
 }
 
+// The gateway row promises failover only where there is a second gateway
+// to fail over to, so the page does not advertise work that cannot happen.
+func TestTheGatewayRowOnlyPromisesFailoverWhenItCanHappen(t *testing.T) {
+	t.Parallel()
+	cfg := config()
+	r := NewRunner(func() *model.Config { return cfg }, &fakeExec{}, slog.New(slog.DiscardHandler))
+
+	gateways := func() Status {
+		t.Helper()
+		return statusOf(r, "system:gateways")
+	}
+	if got := gateways().Description; strings.Contains(got, "move traffic") {
+		t.Errorf("description with no gateways = %q, want no promise of failover", got)
+	}
+
+	cfg.Gateways = []model.Gateway{{Name: "wan", Enabled: true, Interface: "eth0", Address: "203.0.113.1"}}
+	if got := gateways().Description; strings.Contains(got, "move traffic") {
+		t.Errorf("description with one gateway = %q, want no promise of failover", got)
+	}
+
+	// A second gateway, but switched off, is still nowhere to fail over to.
+	cfg.Gateways = append(cfg.Gateways, model.Gateway{Name: "backup", Interface: "eth2", Address: "198.51.100.1"})
+	if got := gateways().Description; strings.Contains(got, "move traffic") {
+		t.Errorf("description with a disabled second gateway = %q, want no promise of failover", got)
+	}
+
+	cfg.Gateways[1].Enabled = true
+	if got := gateways().Description; !strings.Contains(got, "move traffic") {
+		t.Errorf("description with two gateways = %q, want the failover promise", got)
+	}
+}
+
 // A schedule that no longer parses is reported against the cron rather
 // than stopping the runner.
 func TestABrokenScheduleIsReported(t *testing.T) {

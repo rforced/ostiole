@@ -187,6 +187,51 @@ func TestDNFUpgradeArgv(t *testing.T) {
 	if want := "dnf -y upgrade --security --exclude=kernel --exclude=kernel-core"; strings.Join(sec, " ") != want {
 		t.Errorf("security = %v", sec)
 	}
+	// A glob is dnf's own spelling, so it is handed over untouched rather
+	// than expanded here — where it would only match what is waiting.
+	glob := d.UpgradeArgv(false, []string{"kernel*"}, Pending{})
+	if want := "dnf -y upgrade --exclude=kernel*"; strings.Join(glob, " ") != want {
+		t.Errorf("glob = %v", glob)
+	}
+}
+
+// The never-upgrade list may hold globs. dnf and pacman match them
+// themselves; for the managers that are told which packages to install,
+// the matching happens here.
+func TestExcludeMatchesGlobs(t *testing.T) {
+	t.Parallel()
+	pending := Pending{Packages: []Package{
+		{Name: "kernel"}, {Name: "kernel-core"}, {Name: "kernel-modules"},
+		{Name: "bash"}, {Name: "openssl-libs"}, {Name: "gcc-c++"},
+	}}
+	kept := names(keepWanted(pending.Packages, false, []string{"kernel*"}))
+	if strings.Join(kept, " ") != "bash openssl-libs gcc-c++" {
+		t.Errorf("kept %v, want every kernel package held back", kept)
+	}
+	// A single character, and a plain name, still mean what they did.
+	if !excluded("gcc-c++", []string{"gcc-c++"}) {
+		t.Error("a name with glob-free punctuation stopped matching itself")
+	}
+	if !excluded("kernel6", []string{"kernel?"}) {
+		t.Error("? did not match one character")
+	}
+	if excluded("kernel-core", []string{"kernel"}) {
+		t.Error("a plain name matched more than itself")
+	}
+	// Nothing is silently dropped: a pattern that will not compile is
+	// compared as the literal it is.
+	if !excluded("kernel[", []string{"kernel["}) {
+		t.Error("a malformed pattern stopped matching itself")
+	}
+	// apt and zypper name what they install, so the glob decides there too.
+	line := strings.Join(apt{}.UpgradeArgv(false, []string{"kernel*"}, pending), " ")
+	if strings.Contains(line, "kernel") {
+		t.Errorf("apt upgraded a kernel package anyway: %q", line)
+	}
+	line = strings.Join(zypper{}.UpgradeArgv(false, []string{"kernel*"}, pending), " ")
+	if strings.Contains(line, "kernel") {
+		t.Errorf("zypper upgraded a kernel package anyway: %q", line)
+	}
 }
 
 func TestDNFRebootRequired(t *testing.T) {
@@ -371,6 +416,11 @@ func TestPacmanCheck(t *testing.T) {
 	}
 	if line := strings.Join(p.UpgradeArgv(false, []string{"linux"}, got), " "); line != "pacman -Syu --noconfirm --ignore linux" {
 		t.Errorf("argv = %q", line)
+	}
+	// --ignore glob-matches the way IgnorePkg does, so a pattern goes
+	// over as written.
+	if line := strings.Join(p.UpgradeArgv(false, []string{"linux*"}, got), " "); line != "pacman -Syu --noconfirm --ignore linux*" {
+		t.Errorf("glob argv = %q", line)
 	}
 	// Nothing waiting exits 2, which is not a failure.
 	empty := &fakeRunner{code: map[string]int{"checkupdates": 2}}

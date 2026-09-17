@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -258,10 +259,17 @@ func names(pkgs []Package) []string {
 	return out
 }
 
-// excluded reports whether a package is on the never-upgrade list.
+// excluded reports whether a package is on the never-upgrade list. An
+// entry may be a glob — "kernel*" holds back every kernel package — which
+// is the spelling dnf's --exclude and pacman's --ignore already accept, so
+// one list means the same thing whoever honours it. A pattern that does
+// not compile is compared as a literal name rather than thrown away.
 func excluded(name string, exclude []string) bool {
 	for _, e := range exclude {
 		if e == name {
+			return true
+		}
+		if ok, err := path.Match(e, name); err == nil && ok {
 			return true
 		}
 	}

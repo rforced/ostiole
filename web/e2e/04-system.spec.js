@@ -194,7 +194,8 @@ test('choose how this router patches itself, and see why some of it is refused',
 
   await os.getByLabel('Automatic (All)').check()
   await os.getByLabel('Install automatically').selectOption('0 4 * * 0')
-  await os.getByLabel('Never upgrade').fill('kernel, kernel-core')
+  // A glob is a legitimate entry, and has to survive validation on apply.
+  await os.getByLabel('Never upgrade').fill('kernel*, dkms')
 
   const ostiole = page.getByRole('region', { name: 'Ostiole updates' })
   await ostiole.getByLabel('Manual').check()
@@ -213,7 +214,7 @@ test('choose how this router patches itself, and see why some of it is refused',
   await expect(os.getByLabel('Automatic (All)')).toBeChecked()
   await expect(os.getByLabel('Check schedule')).toHaveValue('0 4 * * *')
   await expect(os.getByLabel('Install schedule')).toHaveValue('0 4 * * 0')
-  await expect(os.getByLabel('Never upgrade')).toHaveValue('kernel, kernel-core')
+  await expect(os.getByLabel('Never upgrade')).toHaveValue('kernel*, dkms')
   await expect(ostiole.getByLabel('Manual')).toBeChecked()
   await expect(ostiole.getByLabel('Channel')).toHaveValue('beta')
 

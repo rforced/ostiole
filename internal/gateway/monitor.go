@@ -287,6 +287,14 @@ func (m *Monitor) probe(ctx context.Context, st *state, timeout time.Duration) {
 // applyRoutes demotes dead gateways and restores recovered ones. The last
 // usable default route is never removed: a router with no route at all is
 // worse than one pointing at a gateway that might come back.
+//
+// That guard is also what keeps failover off a router with one gateway:
+// demoting needs some other gateway to be online or unknown, and the one
+// being demoted is neither, so two have to be watched before anything
+// moves. Restoring is not held back the same way, so a gateway demoted
+// while it had a partner gets its route back when that partner is disabled
+// or removed. Both ends are held by tests, which is the only thing keeping
+// the single-gateway rule true if this guard is ever reworked.
 func (m *Monitor) applyRoutes(states []*state) {
 	if m.Router == nil {
 		return

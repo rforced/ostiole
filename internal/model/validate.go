@@ -1304,10 +1304,15 @@ func checkCronSchedule(expr string) error {
 
 var cronShorthands = []string{"@yearly", "@annually", "@monthly", "@weekly", "@daily", "@midnight", "@hourly"}
 
-// packageRe is what a package name may look like. It is deliberately
-// permissive — every distro spells them differently — and exists to keep
-// an argument list free of shell metacharacters and stray flags.
-var packageRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]*$`)
+// packageRe is what an entry on the never-upgrade list may look like. It
+// is deliberately permissive — every distro spells package names
+// differently — and exists to keep an argument list free of stray flags,
+// which is why an entry cannot start with a dash.
+//
+// "*" and "?" are allowed so the list can hold globs: "kernel*" holds
+// back every kernel package. Nothing here goes through a shell, so a
+// pattern reaches the package manager as written.
+var packageRe = regexp.MustCompile(`^[A-Za-z0-9*][A-Za-z0-9._+*?-]*$`)
 
 // updates checks the settings the update crons read. An empty mode or
 // schedule is the default rather than a mistake.
@@ -1332,7 +1337,8 @@ func (v *validator) updates(u *Updates) {
 
 	for i, p := range u.System.Exclude {
 		if !packageRe.MatchString(p) {
-			v.add(fmt.Sprintf("updates.system.exclude[%d]", i), "%q does not look like a package name", p)
+			v.add(fmt.Sprintf("updates.system.exclude[%d]", i),
+				"%q does not look like a package name or a glob such as \"kernel*\"", p)
 		}
 	}
 	if c := u.Ostiole.Channel; c != "" && c != ChannelStable && c != ChannelBeta {

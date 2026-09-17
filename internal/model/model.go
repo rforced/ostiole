@@ -1070,6 +1070,22 @@ func (c *Config) Gateway(name string) (*Gateway, bool) {
 	return nil, false
 }
 
+// CanFailover reports whether there is more than one enabled gateway, which
+// is what failover needs: a router with one gateway has nowhere to move the
+// default route to, so the monitor probes it but never touches its route.
+func (c *Config) CanFailover() bool {
+	n := 0
+	for _, g := range c.Gateways {
+		if !g.Enabled {
+			continue
+		}
+		if n++; n > 1 {
+			return true
+		}
+	}
+	return false
+}
+
 // GatewayGroup returns the group with the given name.
 func (c *Config) GatewayGroup(name string) (*GatewayGroup, bool) {
 	for i := range c.GatewayGroups {
