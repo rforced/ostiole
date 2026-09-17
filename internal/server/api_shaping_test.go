@@ -145,3 +145,18 @@ func TestOverviewWarnsWhenTCIsMissing(t *testing.T) {
 		t.Errorf("warned about tc on a router that has it: %+v", w)
 	}
 }
+
+// The dashboard of a router with no configuration at all still answers:
+// there is nothing shaped, so there is nothing to say about the command
+// that would shape it.
+func TestOverviewOnAnUnconfiguredRouterWithAShaper(t *testing.T) {
+	t.Parallel()
+	srv := newShapingServer(t, &fakeShaper{report: &shaping.Report{}, pkg: "iproute-tc", missing: true})
+	ov := getOverview(t, srv)
+	if ov.Status.Configured {
+		t.Fatalf("status = %+v, want unconfigured", ov.Status)
+	}
+	if w := warning(ov, "tc-missing"); w != nil {
+		t.Errorf("warned about tc on a router that shapes nothing: %+v", w)
+	}
+}

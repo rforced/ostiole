@@ -519,7 +519,7 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 			Detail: "This router has interfaces in more than one zone but the kernel will not route between them.",
 		})
 	}
-	if a.shaping != nil && len(cfg.ShapedInterfaces()) > 0 {
+	if cfg != nil && a.shaping != nil && len(cfg.ShapedInterfaces()) > 0 {
 		if pkg, missing := a.shaping.Missing(); missing {
 			out = append(out, Warning{
 				Kind: "tc-missing", Level: "warn",
