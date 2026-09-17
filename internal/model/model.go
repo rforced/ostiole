@@ -409,6 +409,10 @@ type Zone struct {
 	AntiLockout bool `json:"antiLockout,omitempty"`
 	// LogDrops logs packets that reach the end of this zone's rules.
 	LogDrops bool `json:"logDrops,omitempty"`
+	// Busy holds back a host on this zone that is opening a lot of
+	// connections at once, which is what file sharing looks like from
+	// outside. Unset leaves every host alone.
+	Busy *BusyHosts `json:"busy,omitempty"`
 }
 
 // Interface is a network interface Ostiole manages.

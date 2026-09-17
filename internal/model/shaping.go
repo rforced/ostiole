@@ -100,6 +100,50 @@ func (t Tier) Valid() bool {
 	return ok
 }
 
+// BusyHosts holds back a host that is opening a lot of connections at
+// once. That is what peer-to-peer traffic looks like from the outside,
+// whatever port it is on and however well encrypted it is, which is why
+// counting connections beats trying to recognise the protocol: a port
+// list catches almost no modern file sharing, and nothing at all reads
+// inside a TLS session.
+//
+// It is deliberately a demotion rather than a refusal. A limit that
+// dropped connections would be a way to lock somebody out of their own
+// network; a tier only decides what yields to what when the line is
+// already full.
+type BusyHosts struct {
+	// Connections is how many a host may have open before the rest are
+	// put in a lower tier. The tally falls as its connections close, so a
+	// host that settles down stops being held back.
+	Connections int `json:"connections"`
+	// Priority is where the connections over the limit go.
+	Priority Tier `json:"priority"`
+}
+
+// Bounds for the connection count. The floor is low enough to be useful
+// on a network somebody knows well and high enough that one page load
+// cannot trip it; the ceiling is far above any real host.
+const (
+	MinBusyConnections = 10
+	MaxBusyConnections = 100_000
+)
+
+// DefaultBusyConnections is what the UI offers: comfortable for a busy
+// workstation, and well above anything ordinary browsing reaches.
+const DefaultBusyConnections = 200
+
+// BusyZones lists the zones that hold back a busy host, in configuration
+// order.
+func (c *Config) BusyZones() []Zone {
+	var out []Zone
+	for _, z := range c.Zones {
+		if z.Busy != nil {
+			out = append(out, z)
+		}
+	}
+	return out
+}
+
 // Active reports whether either direction is shaped.
 func (s Shaping) Active() bool { return s.Download > 0 || s.Upload > 0 }
 
@@ -125,7 +169,8 @@ func (c *Config) ShapedInterfaces() []Interface {
 
 // ShapesTraffic reports whether anything is classified into a tier, which
 // is what decides whether the ruleset needs the rules that carry a tier
-// from one packet of a flow to the next.
+// from one packet of a flow to the next. A zone that holds back a busy
+// host counts: it classifies traffic no rule mentions.
 func (c *Config) ShapesTraffic() bool {
 	for _, r := range c.Rules {
 		if r.Enabled && r.Priority != "" {
@@ -137,7 +182,7 @@ func (c *Config) ShapesTraffic() bool {
 			return true
 		}
 	}
-	return false
+	return len(c.BusyZones()) > 0
 }
 
 // IFBName is the intermediate device that carries an interface's shaped

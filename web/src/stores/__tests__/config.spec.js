@@ -283,4 +283,24 @@ describe('config store traffic shaping', () => {
     expect(config.sectionFor('interfaces[eth1].shaping.download')).toBe('/firewall/shaping')
     expect(config.sectionFor('interfaces[eth1].ipv4.address')).toBe('/interfaces')
   })
+
+  it('sets and clears a busy host limit on the zone it belongs to', () => {
+    const config = useConfigStore()
+    config.replaceDraft(draft())
+    config.setBusy('lan', { connections: 200, priority: 'bulk' })
+    expect(config.busyZones.map((z) => z.name)).toEqual(['lan'])
+    config.clearBusy('lan')
+    expect(config.busyZones).toEqual([])
+    useToastStore().toasts[0].action.run()
+    expect(config.busyZones[0].busy.connections).toBe(200)
+  })
+
+  // Holding a busy host back is a priority decision, so it is shown where
+  // the other priorities are rather than with the rest of the zone.
+  it('files a busy host change under the shaping page', () => {
+    const config = useConfigStore()
+    config.replaceDraft(draft())
+    expect(config.sectionFor('zones[lan].busy.connections')).toBe('/firewall/shaping')
+    expect(config.sectionFor('zones[lan].antiLockout')).toBe('/interfaces')
+  })
 })

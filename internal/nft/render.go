@@ -172,6 +172,41 @@ func (r *renderer) blockSets() {
 		r.set(bogonSetV4, "ipv4_addr", v4, "prefixes IANA has not allocated")
 		r.set(bogonSetV6, "ipv6_addr", v6, "prefixes IANA has not allocated")
 	}
+	r.busySets()
+}
+
+// busySet names the per-source connection tally of one zone and family.
+func busySet(zone string, family int) string {
+	return fmt.Sprintf("busy_%s_v%d", zone, family)
+}
+
+// busySetSize bounds the tally. The elements are the hosts on the zone, so
+// on any real network this is far more than enough; the kernel collects an
+// element as soon as the host it belongs to has no connections left, so
+// the set does not grow with churn.
+const busySetSize = 65535
+
+// busySets defines the tallies. They are dynamic sets because counting
+// connections per source is something only the kernel can do: it adds an
+// element for each host it sees and keeps the count there, which is what
+// makes `ct count` per host rather than per router.
+func (r *renderer) busySets() {
+	for _, z := range r.cfg.Zones {
+		if z.Busy == nil || len(r.cfg.ZoneInterfaces(z.Name)) == 0 {
+			continue
+		}
+		for _, fam := range []struct{ name, typ string }{
+			{busySet(z.Name, 4), "ipv4_addr"},
+			{busySet(z.Name, 6), "ipv6_addr"},
+		} {
+			r.block("set "+fam.name, func() {
+				r.line("type " + fam.typ)
+				r.line(fmt.Sprintf("size %d", busySetSize))
+				r.line("flags dynamic")
+				r.line(fmt.Sprintf("comment %q", "connections open per host in "+z.Name))
+			})
+		}
+	}
 }
 
 // BlockSets lists the sets the bogon list fills, so a refresh can replace
@@ -630,6 +665,46 @@ func shapePrefix(t model.Tier) string {
 	return strings.Join(parts, " ") + " "
 }
 
+// busyHosts holds back a host that already has a lot of connections open,
+// which is what file sharing looks like from outside whatever port it is
+// on and however well encrypted it is.
+//
+// It comes before the zone's own rules so that a rule which names a
+// priority still wins: a call from a busy host is still a call. The tier
+// is copied onto the connection here rather than left to the rule's
+// verdict, because the rule that accepts the flow may set no tier of its
+// own and the copy is what makes one stick.
+//
+// Only the connections over the limit are marked. The kernel keeps the
+// tally and drops it as the host's connections close, so a host that
+// settles down stops being held back without anything being reset.
+func (r *renderer) busyHosts(z model.Zone) {
+	b := z.Busy
+	if b == nil || len(r.cfg.ZoneInterfaces(z.Name)) == 0 {
+		return
+	}
+	mark, ok := b.Priority.Mark()
+	if !ok {
+		return
+	}
+	set := fmt.Sprintf(shapeSet, ^uint32(model.ShapeMarkMask), mark)
+	for _, fam := range []struct{ set, prefix string }{
+		{busySet(z.Name, 4), "ip"},
+		{busySet(z.Name, 6), "ip6"},
+	} {
+		r.line(fmt.Sprintf(`ct state new add @%s { %s saddr ct count over %d } counter %s %s comment "busy:%s"`,
+			fam.set, fam.prefix, b.Connections, set, shapeCopy, z.Name))
+	}
+	r.sys(SystemRule{
+		Chain: "zone_" + z.Name, Zones: []string{z.Name}, Action: "continue",
+		Protocol:    string(model.ProtocolAny),
+		Source:      fmt.Sprintf("a host past %d connections", b.Connections),
+		Destination: "any",
+		Description: "Hold back a host that is opening a lot of connections at once",
+		Keys:        []string{"zone_" + z.Name + "/busy:" + z.Name}, Setting: "shaping",
+	})
+}
+
 // shapeRestore puts a connection's tier back on the packet before the
 // state rule accepts it, which is what makes one classification cover a
 // whole flow. It sits in forward for traffic passing through and in
@@ -808,6 +883,7 @@ func (r *renderer) interfacesBlocking(want func(model.Interface) bool) []string 
 func (r *renderer) zoneChains() {
 	for _, z := range r.cfg.Zones {
 		r.block("chain zone_"+z.Name, func() {
+			r.busyHosts(z)
 			for i := range r.cfg.Rules {
 				rule := &r.cfg.Rules[i]
 				if rule.Zone != z.Name || !rule.Enabled {

@@ -1214,3 +1214,57 @@ func TestIFBNames(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateAcceptsBusyHosts(t *testing.T) {
+	t.Parallel()
+	cfg := shapingConfig()
+	cfg.Interfaces[1].Shaping = &Shaping{Download: 50_000_000}
+	cfg.Zones[0].Busy = &BusyHosts{Connections: DefaultBusyConnections, Priority: TierBulk}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("busy host config rejected: %v", err)
+	}
+	if got := cfg.BusyZones(); len(got) != 1 || got[0].Name != "lan" {
+		t.Errorf("busy zones = %v", got)
+	}
+	// Holding a busy host back classifies traffic no rule mentions, so the
+	// ruleset still needs the rules that carry a tier between packets.
+	if !cfg.ShapesTraffic() {
+		t.Error("a zone that holds back a busy host does not count as classifying traffic")
+	}
+}
+
+func TestValidateCatchesBusyHostMistakes(t *testing.T) {
+	t.Parallel()
+	cfg := shapingConfig()
+	cfg.Zones[0].Busy = &BusyHosts{Connections: 2}                                      // too few, no tier
+	cfg.Zones[1].Busy = &BusyHosts{Connections: MaxBusyConnections + 1, Priority: "sl"} // and facing the internet
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation errors")
+	}
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("error type %T, want *ValidationError", err)
+	}
+	got := map[string]string{}
+	for _, i := range ve.Issues {
+		got[i.Path] = i.Message
+	}
+	for _, p := range []string{
+		"zones[0].busy.connections",
+		"zones[0].busy.priority",
+		"zones[1].busy.connections",
+		"zones[1].busy.priority",
+		"zones[1].busy",
+	} {
+		if _, ok := got[p]; !ok {
+			t.Errorf("missing issue at %s (have %v)", p, got)
+		}
+	}
+	// The tally is per source address, so it only means anything where the
+	// sources are a known set of hosts.
+	if msg := got["zones[1].busy"]; !strings.Contains(msg, "internet") {
+		t.Errorf("external zone message = %q", msg)
+	}
+}

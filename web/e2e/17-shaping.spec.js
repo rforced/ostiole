@@ -44,6 +44,18 @@ test('a line speed and a priority reach the kernel', async ({ page }) => {
   await expect(
     page.getByText('No rule sets a priority, so every flow is sorted by what its device asks for.'),
   ).toBeVisible()
+  await expect(page.getByText('No zone holds a busy device back.')).toBeVisible()
+
+  // Counting connections catches file sharing that no list of ports can.
+  await page.getByRole('button', { name: 'Hold back busy hosts' }).click()
+  const busy = page.getByRole('dialog')
+  await busy.getByLabel('Zone').selectOption('lan')
+  await busy.getByLabel('Connections').fill('200')
+  await busy.getByLabel('Priority').selectOption('bulk')
+  await busy.getByRole('button', { name: 'Save to draft' }).click()
+  const busyRow = page.getByRole('row').filter({ hasText: '200 connections' })
+  await expect(busyRow).toContainText('lan')
+  await expect(busyRow).toContainText('Bulk')
 
   // In-app, because the speed is only in the draft and a page load would
   // discard it.
@@ -68,6 +80,10 @@ test('a line speed and a priority reach the kernel', async ({ page }) => {
   const ruleset = page.locator('pre')
   await expect(ruleset).toContainText('meta mark set meta mark & 0xf8ffffff | 0x04000000')
   await expect(ruleset).toContainText('ct mark & 0x07000000 != 0x0 meta mark set ct mark')
+  // And the kernel keeps the connection tally, per host, in a set of its own.
+  await expect(ruleset).toContainText('set busy_lan_v4')
+  await expect(ruleset).toContainText('flags dynamic')
+  await expect(ruleset).toContainText('add @busy_lan_v4 { ip saddr ct count over 200 }')
 
   // And the priorities tab now names the rule that did it.
   await page.goto('/firewall/shaping#priorities')

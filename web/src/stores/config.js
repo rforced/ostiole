@@ -409,6 +409,23 @@ export const useConfigStore = defineStore('config', () => {
     })
   }
 
+  /** Zones that hold back a host with a lot of connections open. */
+  const busyZones = computed(() => zones.value.filter((z) => z.busy))
+
+  function setBusy(zone, busy) {
+    const z = zones.value.find((x) => x.name === zone)
+    if (!z) return
+    z.busy = clone(busy)
+  }
+
+  function clearBusy(zone) {
+    const z = zones.value.find((x) => x.name === zone)
+    if (!z?.busy) return
+    undoable(`Stopped holding back busy hosts on ${zone}.`, () => {
+      delete zones.value.find((x) => x.name === zone).busy
+    })
+  }
+
   /** The rules and port forwards that put their traffic in a tier. */
   const shapedRules = computed(() => rules.value.filter((r) => r.priority))
   const shapedForwards = computed(() => (nat.value.portForwards ?? []).filter((pf) => pf.priority))
@@ -792,7 +809,9 @@ export const useConfigStore = defineStore('config', () => {
         return i?.wireguard ? '/vpn' : '/interfaces'
       }
       case 'zones':
-        return '/interfaces'
+        // Holding back a busy host is a priority decision, so it is edited
+        // and shown where the other priorities are.
+        return path.includes('.busy') ? '/firewall/shaping' : '/interfaces'
       case 'rules':
         return '/firewall/rules'
       case 'aliases':
@@ -893,6 +912,9 @@ export const useConfigStore = defineStore('config', () => {
     clearShaping,
     shapedRules,
     shapedForwards,
+    busyZones,
+    setBusy,
+    clearBusy,
     schedules,
     upsertSchedule,
     scheduleReferences,

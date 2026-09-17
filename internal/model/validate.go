@@ -64,6 +64,7 @@ func (c *Config) Validate() error {
 			v.add(path+".name", "duplicate zone %q", z.Name)
 		}
 		zones[z.Name] = true
+		v.busyHosts(path, z)
 	}
 
 	ifaces := map[string]bool{}
@@ -993,6 +994,31 @@ func (v *validator) enslaved(c *Config, ifaces map[string]bool) map[string]strin
 	}
 	_ = ifaces
 	return masters
+}
+
+// busyHosts checks a zone's connection tally. The count is kept per
+// source address, so the zone has to be one whose hosts are a known,
+// bounded set: on a zone facing the internet the sources are the whole
+// of it, and a tally of that says nothing about anybody.
+func (v *validator) busyHosts(path string, z Zone) {
+	b := z.Busy
+	if b == nil {
+		return
+	}
+	if b.Connections < MinBusyConnections || b.Connections > MaxBusyConnections {
+		v.add(path+".busy.connections", "%d must be between %d and %d",
+			b.Connections, MinBusyConnections, MaxBusyConnections)
+	}
+	switch {
+	case b.Priority == "":
+		v.add(path+".busy.priority", "say which priority the connections over the limit go in")
+	case !b.Priority.Valid():
+		v.add(path+".busy.priority", "unknown priority %q", b.Priority)
+	}
+	if z.External {
+		v.add(path+".busy", "zone %q faces the internet, where the hosts are everybody; "+
+			"counting connections belongs on a zone whose hosts are yours", z.Name)
+	}
 }
 
 // shaping checks the speeds interfaces are given. A wrong figure here

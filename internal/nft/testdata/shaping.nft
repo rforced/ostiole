@@ -2,6 +2,18 @@
 table inet ostiole
 delete table inet ostiole
 table inet ostiole {
+	set busy_lan_v4 {
+		type ipv4_addr
+		size 65535
+		flags dynamic
+		comment "connections open per host in lan"
+	}
+	set busy_lan_v6 {
+		type ipv6_addr
+		size 65535
+		flags dynamic
+		comment "connections open per host in lan"
+	}
 	chain input {
 		type filter hook input priority filter; policy drop;
 		iifname "lo" accept
@@ -34,6 +46,8 @@ table inet ostiole {
 		counter comment "zone-unmatched"
 	}
 	chain zone_lan {
+		ct state new add @busy_lan_v4 { ip saddr ct count over 200 } counter meta mark set meta mark & 0xf8ffffff | 0x01000000 ct mark set meta mark comment "busy:lan"
+		ct state new add @busy_lan_v6 { ip6 saddr ct count over 200 } counter meta mark set meta mark & 0xf8ffffff | 0x01000000 ct mark set meta mark comment "busy:lan"
 		udp dport 5060 counter meta mark set meta mark & 0xf8ffffff | 0x04000000 ct mark set meta mark accept comment "id:lan-voip"
 		oifname "eth2" counter meta mark set meta mark & 0xf8ffffff | 0x03000000 ct mark set meta mark accept comment "id:lan-to-dmz"
 		fib daddr type local tcp dport 443 counter meta mark set meta mark & 0xf8ffffff | 0x03000000 ct mark set meta mark accept comment "id:lan-admin"

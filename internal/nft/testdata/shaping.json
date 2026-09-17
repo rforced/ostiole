@@ -15,7 +15,11 @@
     },
     {
       "name": "lan",
-      "antiLockout": true
+      "antiLockout": true,
+      "busy": {
+        "connections": 200,
+        "priority": "bulk"
+      }
     },
     {
       "name": "dmz"
