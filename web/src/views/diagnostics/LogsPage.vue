@@ -4,6 +4,7 @@ import { onMounted, ref } from 'vue'
 
 import FormField from '@/components/FormField.vue'
 import { api } from '@/lib/api'
+import { useAsync } from '@/lib/async'
 
 /** The units an Ostiole box runs, plus everything. */
 const UNITS = [
@@ -20,35 +21,24 @@ const lines = ref(200)
 const priority = ref('')
 const since = ref('-1h')
 const entries = ref([])
-const error = ref('')
-const busy = ref(false)
 
 const LEVELS = ['emerg', 'alert', 'crit', 'err', 'warning', 'notice', 'info', 'debug']
 
-async function refresh() {
-  busy.value = true
-  try {
-    entries.value = await api.diagnostics.journal({
-      unit: unit.value,
-      lines: Number(lines.value) || 200,
-      priority: priority.value,
-      since: since.value,
-    })
-    error.value = ''
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
-    entries.value = []
-  } finally {
-    busy.value = false
-  }
-}
+const load = useAsync(async () => {
+  entries.value = await api.diagnostics.journal({
+    unit: unit.value,
+    lines: Number(lines.value) || 200,
+    priority: priority.value,
+    since: since.value,
+  })
+})
 
-onMounted(refresh)
+onMounted(load.run)
 </script>
 
 <template>
   <div class="space-y-4">
-    <form class="flex flex-wrap items-end gap-4" @submit.prevent="refresh">
+    <form class="flex flex-wrap items-end gap-4" @submit.prevent="load.run()">
       <FormField id="jr-unit" label="Unit">
         <select id="jr-unit" v-model="unit" class="input w-56">
           <option v-for="u in UNITS" :key="u.value" :value="u.value">{{ u.label }}</option>
@@ -74,17 +64,31 @@ onMounted(refresh)
           class="input w-28 font-mono"
         />
       </FormField>
-      <button type="submit" class="btn-secondary" :disabled="busy">
-        <RefreshCw class="mr-1 size-4" aria-hidden="true" /> {{ busy ? 'Reading…' : 'Refresh' }}
+      <button
+        type="submit"
+        class="btn-secondary"
+        :disabled="load.busy.value"
+        :aria-busy="load.busy.value"
+      >
+        <RefreshCw
+          class="mr-1 size-4"
+          :class="{ 'animate-spin': load.busy.value }"
+          aria-hidden="true"
+        />
+        {{ load.busy.value ? 'Reading…' : 'Refresh' }}
       </button>
     </form>
 
-    <p v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+    <p v-if="load.error.value" role="alert" class="text-sm text-red-600 dark:text-red-400">
+      {{ load.error.value }}
+    </p>
 
     <div
-      class="max-h-[32rem] overflow-auto rounded-lg border border-neutral-200 bg-neutral-50 p-3 font-mono text-xs dark:border-neutral-800 dark:bg-neutral-950"
+      class="max-h-[32rem] overflow-auto rounded-lg border border-neutral-200 bg-neutral-50 p-3 font-mono text-code dark:border-neutral-800 dark:bg-neutral-950"
     >
-      <p v-if="!entries.length" class="text-neutral-500">Nothing in this window.</p>
+      <p v-if="!entries.length" class="text-neutral-500">
+        {{ load.busy.value ? 'Reading…' : 'Nothing in this window.' }}
+      </p>
       <p
         v-for="(e, i) in entries"
         :key="i"

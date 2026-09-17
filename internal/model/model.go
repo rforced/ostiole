@@ -318,6 +318,10 @@ type System struct {
 	Hostname   string     `json:"hostname,omitempty"`
 	DNSServers []string   `json:"dnsServers,omitempty"`
 	Management Management `json:"management"`
+	// KeepRevisions bounds the configuration history: every apply archives
+	// the configuration it replaced, and the oldest are deleted once there
+	// are more than this. Zero keeps DefaultKeepRevisions.
+	KeepRevisions int `json:"keepRevisions,omitempty"`
 	// GeoIPv4URL and GeoIPv6URL are where country address lists come from.
 	// "{country}" is replaced with the lower-case ISO code. They are
 	// settings so an air-gapped box can point at its own mirror; empty
@@ -335,6 +339,22 @@ const (
 	DefaultGeoIPv4URL = "https://www.ipdeny.com/ipblocks/data/aggregated/{country}-aggregated.zone"
 	DefaultGeoIPv6URL = "https://www.ipdeny.com/ipv6/ipaddresses/aggregated/{country}-aggregated.zone"
 )
+
+// DefaultKeepRevisions is how much configuration history is kept when the
+// setting says nothing. Enough to roll back through an afternoon's work,
+// not so much that the directory becomes an archive nobody reads.
+const DefaultKeepRevisions = 20
+
+// MaxKeepRevisions bounds the setting.
+const MaxKeepRevisions = 1000
+
+// RevisionsKept is how many archived configurations to hold on to.
+func (s System) RevisionsKept() int {
+	if s.KeepRevisions <= 0 {
+		return DefaultKeepRevisions
+	}
+	return s.KeepRevisions
+}
 
 // GeoIPTemplates returns the URLs country lists are fetched from.
 func (s System) GeoIPTemplates() (v4, v6 string) {

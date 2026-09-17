@@ -1,11 +1,13 @@
 <script setup>
-import { Plus, RefreshCw } from 'lucide-vue-next'
+import { Plus } from 'lucide-vue-next'
 import { TabsContent } from 'reka-ui'
 import { computed, onMounted, ref, watch } from 'vue'
 
 import AppTabs from '@/components/AppTabs.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import RefreshButton from '@/components/RefreshButton.vue'
 import { api } from '@/lib/api'
+import { useAsync } from '@/lib/async'
 import { usePageTabs } from '@/lib/tabs'
 import { useConfigStore } from '@/stores/config'
 import AggregateDialog from '@/views/interfaces/AggregateDialog.vue'
@@ -17,7 +19,6 @@ import ZoneDialog from '@/views/interfaces/ZoneDialog.vue'
 const config = useConfigStore()
 const { tabs, tab } = usePageTabs()
 const links = ref([])
-const liveError = ref('')
 
 const editing = ref(null)
 const editOpen = ref(false)
@@ -31,14 +32,10 @@ const pppoeReady = ref(true)
 const zoneEditing = ref(null)
 const zoneOpen = ref(false)
 
-async function refreshLive() {
-  try {
-    links.value = await api.interfaces.live()
-    liveError.value = ''
-  } catch (e) {
-    liveError.value = e instanceof Error ? e.message : String(e)
-  }
-}
+const live = useAsync(async () => {
+  links.value = await api.interfaces.live()
+})
+const refreshLive = () => live.run()
 
 // An apply creates and destroys real devices, so the live column has to
 // be read again: a VLAN removed from the draft is gone from the kernel
@@ -157,13 +154,6 @@ function editZone(z) {
   zoneEditing.value = z
   zoneOpen.value = true
 }
-
-/** Deleting a zone takes its rules and NAT entries with it; say so first. */
-function zoneConfirm(name) {
-  const n = config.zoneDependents(name).length
-  if (!n) return 'Delete zone?'
-  return `Delete zone and ${n} rule${n === 1 ? '' : 's'} using it?`
-}
 </script>
 
 <template>
@@ -171,8 +161,12 @@ function zoneConfirm(name) {
     <div class="flex items-center justify-between gap-4">
       <h1 class="text-2xl font-semibold tracking-tight">Interfaces</h1>
     </div>
-    <p v-if="config.error || liveError" role="alert" class="text-sm text-red-600 dark:text-red-400">
-      {{ config.error || liveError }}
+    <p
+      v-if="config.error || live.error.value"
+      role="alert"
+      class="text-sm text-red-600 dark:text-red-400"
+    >
+      {{ config.error || live.error.value }}
     </p>
     <p v-if="config.loaded && !config.draft" class="text-sm text-neutral-500">
       No configuration yet.
@@ -181,7 +175,7 @@ function zoneConfirm(name) {
 
     <AppTabs v-else-if="config.draft" v-model="tab" :tabs="tabs">
       <TabsContent value="interfaces" class="space-y-3">
-        <div class="flex gap-2">
+        <div class="flex flex-wrap gap-2">
           <button type="button" class="btn-secondary" @click="vlanOpen = true">
             <Plus class="mr-1 size-4" aria-hidden="true" /> Add VLAN
           </button>
@@ -194,9 +188,11 @@ function zoneConfirm(name) {
           <button type="button" class="btn-secondary" @click="addPppoe">
             <Plus class="mr-1 size-4" aria-hidden="true" /> Add PPPoE
           </button>
-          <button type="button" class="btn-secondary" @click="refreshLive">
-            <RefreshCw class="mr-1 size-4" aria-hidden="true" /> Refresh
-          </button>
+          <RefreshButton
+            :busy="live.busy.value"
+            :updated-at="live.updatedAt.value"
+            @click="refreshLive"
+          />
         </div>
         <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
           <table class="table">
@@ -210,8 +206,17 @@ function zoneConfirm(name) {
                 <th></th>
               </tr>
             </thead>
-            <tbody>
-              <tr v-for="row in rows" :key="row.live?.name ?? row.cfg.name">
+            <TransitionGroup name="row" tag="tbody">
+              <tr v-if="!rows.length" key="empty">
+                <td colspan="6" class="text-neutral-500">
+                  {{ live.busy.value ? 'Reading links…' : 'No links on this system.' }}
+                </td>
+              </tr>
+              <tr
+                v-for="row in rows"
+                :key="row.live?.name ?? row.cfg.name"
+                :class="{ 'row-changed': config.isChanged('interfaces', row.cfg?.name) }"
+              >
                 <td>
                   <div class="font-mono font-medium">{{ row.live?.name ?? row.cfg.name }}</div>
                   <div class="text-xs text-neutral-500">
@@ -225,13 +230,13 @@ function zoneConfirm(name) {
                   <span v-else-if="row.live.up" class="badge badge-warn">no carrier</span>
                   <span v-else class="badge">down</span>
                 </td>
-                <td class="font-mono text-xs">{{ row.live?.addresses.join(' ') || '—' }}</td>
+                <td class="font-mono text-code">{{ row.live?.addresses.join(' ') || '—' }}</td>
                 <td>
                   <span v-if="row.cfg?.zone" class="font-mono">{{ row.cfg.zone }}</span>
                   <span v-else-if="row.cfg" class="text-neutral-500">unassigned</span>
                   <span v-else class="text-neutral-500">not managed</span>
                 </td>
-                <td class="font-mono text-xs">
+                <td class="font-mono text-code">
                   {{ describeAddressing(row.cfg)
                   }}<span v-if="row.cfg && !row.cfg.enabled" class="ml-1 text-neutral-500"
                     >(disabled)</span
@@ -264,12 +269,16 @@ function zoneConfirm(name) {
                     v-if="row.cfg"
                     class="ml-3"
                     label="Remove"
-                    confirm-label="Remove from config?"
+                    :question="`Remove ${row.cfg.name} from the configuration?`"
+                    description="Its addresses, zone, and settings go on the next apply. The device itself stays."
+                    :dependents="config.interfaceDependents(row.cfg.name)"
+                    dependents-label="Also removed"
+                    :typed="row.cfg.name"
                     @confirm="config.removeInterface(row.cfg.name)"
                   />
                 </td>
               </tr>
-            </tbody>
+            </TransitionGroup>
           </table>
         </div>
       </TabsContent>
@@ -289,17 +298,21 @@ function zoneConfirm(name) {
                 <th></th>
               </tr>
             </thead>
-            <tbody>
-              <tr v-for="z in config.zones" :key="z.name">
+            <TransitionGroup name="row" tag="tbody">
+              <tr v-if="!config.zones.length" key="empty">
+                <td colspan="5" class="text-neutral-500">
+                  No zones. Every interface needs one before it gets rules.
+                </td>
+              </tr>
+              <tr
+                v-for="z in config.zones"
+                :key="z.name"
+                :class="{ 'row-changed': config.isChanged('zones', z.name) }"
+              >
                 <td class="font-mono font-medium">{{ z.name }}</td>
                 <td>{{ z.description }}</td>
-                <td class="font-mono text-xs">
-                  {{
-                    config.interfaces
-                      .filter((i) => i.zone === z.name)
-                      .map((i) => i.name)
-                      .join(' ') || '—'
-                  }}
+                <td class="font-mono text-code">
+                  {{ config.zoneInterfaces(z.name).join(' ') || '—' }}
                 </td>
                 <td class="space-x-1">
                   <span v-if="z.external" class="badge">external</span>
@@ -312,25 +325,26 @@ function zoneConfirm(name) {
                     v-if="!config.zoneInterfaces(z.name).length"
                     class="ml-3"
                     label="Delete"
-                    :confirm-label="zoneConfirm(z.name)"
-                    :title="config.zoneDependents(z.name).join(', ')"
+                    :question="`Delete zone ${z.name}?`"
+                    :dependents="config.zoneDependents(z.name)"
+                    :typed="z.name"
                     @confirm="config.removeZone(z.name)"
                   />
-                  <span
-                    v-else
-                    class="ml-3 text-xs text-neutral-500"
-                    :title="`Move ${config.zoneInterfaces(z.name).join(', ')} to another zone first`"
-                    >in use</span
+                  <span v-else class="ml-3 text-sm text-neutral-500"
+                    >in use by
+                    <span class="font-mono">{{
+                      config.zoneInterfaces(z.name).join(', ')
+                    }}</span></span
                   >
                 </td>
               </tr>
-            </tbody>
+            </TransitionGroup>
           </table>
         </div>
       </TabsContent>
     </AppTabs>
 
-    <InterfaceDialog v-model:open="editOpen" :iface="editing" />
+    <InterfaceDialog v-model:open="editOpen" :iface="editing" :links="links" />
     <VlanDialog v-model:open="vlanOpen" :parents="vlanParents" />
     <PppoeDialog
       v-model:open="pppOpen"

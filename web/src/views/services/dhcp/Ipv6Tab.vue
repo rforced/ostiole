@@ -30,12 +30,11 @@ function edit(s) {
 <template>
   <div class="space-y-4">
     <p class="text-sm text-neutral-500">
-      Router advertisements tell hosts a prefix exists and that this box routes for it. They are
-      sent only while the DHCP server is enabled.
+      Router advertisements are sent only while the DHCP server is enabled.
     </p>
 
     <div class="flex items-center gap-3">
-      <h2 id="v6-title" class="font-medium">Interfaces</h2>
+      <h2 id="v6-title" class="section-title">Interfaces</h2>
       <button type="button" class="btn-secondary" @click="add">
         <Plus class="mr-1 size-4" aria-hidden="true" /> Advertise IPv6
       </button>
@@ -53,32 +52,40 @@ function edit(s) {
             <th></th>
           </tr>
         </thead>
-        <tbody>
-          <tr v-if="!(dhcp.v6 ?? []).length">
+        <TransitionGroup name="row" tag="tbody">
+          <tr v-if="!(dhcp.v6 ?? []).length" key="empty">
             <td colspan="6" class="text-neutral-500">
               No IPv6 advertisements. Add one per interface that should serve IPv6.
             </td>
           </tr>
-          <tr v-for="s in dhcp.v6" :key="s.interface" :class="{ 'opacity-50': !s.enabled }">
+          <tr
+            v-for="s in dhcp.v6"
+            :key="s.interface"
+            :class="{
+              'opacity-50': !s.enabled,
+              'row-changed': config.isChanged('services.dhcp.v6', s.interface),
+            }"
+          >
             <td class="font-mono">{{ s.interface }}</td>
             <td>{{ MODES[s.mode] ?? s.mode }}</td>
-            <td class="font-mono text-xs">
+            <td class="font-mono text-code">
               <template v-if="s.mode === 'managed'">{{ s.rangeStart }} – {{ s.rangeEnd }}</template>
               <span v-else class="text-neutral-500">—</span>
             </td>
-            <td class="font-mono text-xs">{{ s.leaseTime || '12h' }}</td>
-            <td class="font-mono text-xs">{{ s.dns?.join(', ') || 'this box' }}</td>
+            <td class="font-mono text-code">{{ s.leaseTime || '12h' }}</td>
+            <td class="font-mono text-code">{{ s.dns?.join(', ') || 'this box' }}</td>
             <td class="text-right whitespace-nowrap">
               <button type="button" class="link" @click="edit(s)">Edit</button>
               <ConfirmButton
                 class="ml-3"
                 label="Delete"
-                confirm-label="Stop advertising?"
+                :question="`Stop advertising IPv6 on ${s.interface}?`"
+                confirm-label="Stop"
                 @confirm="config.removeV6Scope(s.interface)"
               />
             </td>
           </tr>
-        </tbody>
+        </TransitionGroup>
       </table>
     </div>
 

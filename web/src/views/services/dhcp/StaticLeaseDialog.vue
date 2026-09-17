@@ -57,7 +57,7 @@ function save() {
         <FormField
           id="sl-ip6"
           label="IPv6 address"
-          hint="Optional. ::20 means host 20 of the interface's prefix. Needs DHCPv6 in managed mode, and only reaches clients whose identifier carries their MAC."
+          hint="::20 means host 20 of the interface's prefix. Needs DHCPv6 in managed mode."
         >
           <input id="sl-ip6" v-model="form.ipv6" class="input font-mono" spellcheck="false" />
         </FormField>

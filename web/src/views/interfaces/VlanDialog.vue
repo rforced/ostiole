@@ -47,7 +47,7 @@ function create() {
   <AppDialog
     v-model:open="open"
     title="Add VLAN"
-    description="Creates an 802.1Q sub-interface. Give it an address and a zone next — a zone of its own if it should have its own firewall rules."
+    description="Creates an 802.1Q sub-interface on the parent."
   >
     <form class="space-y-4" @submit.prevent="create">
       <FormField id="vlan-parent" label="Parent interface">

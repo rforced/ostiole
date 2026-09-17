@@ -65,8 +65,7 @@ const dns = computed({
         Log packets dropped by the default policy
         <span class="block text-neutral-500">
           The default for every interface. Any one of them can say otherwise under
-          <RouterLink to="/interfaces" class="underline">Interfaces</RouterLink>, which is how a WAN
-          is watched without a busy LAN filling the log.
+          <RouterLink to="/interfaces" class="underline">Interfaces</RouterLink>.
         </span>
       </span>
     </label>

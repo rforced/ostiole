@@ -31,8 +31,8 @@ const fetches = computed(() => form.value.type === 'geoip' || form.value.url.tri
 
 const ENTRY_HINTS = {
   hosts:
-    'One per line: addresses or CIDR networks. With a URL, these are kept alongside whatever is fetched.',
-  ports: 'One per line: ports or ranges like 8000-8100.',
+    'One address or CIDR network per line. With a URL, these are kept alongside what is fetched.',
+  ports: 'One port or range per line, e.g. 8000-8100.',
   geoip: 'The addresses behind each country are fetched from the GeoIP source set under System.',
 }
 
@@ -91,7 +91,7 @@ function save() {
   <AppDialog
     v-model:open="open"
     :title="alias ? `Alias ${alias.name}` : 'New alias'"
-    description="A named list you can reuse in rules. Host aliases become nftables sets."
+    description="Renaming it updates every rule that names it."
   >
     <form class="space-y-4" @submit.prevent="save">
       <div class="grid gap-4 sm:grid-cols-2">
@@ -120,7 +120,7 @@ function save() {
         v-if="form.type !== 'geoip'"
         id="alias-url"
         label="Fetch from"
-        hint="Optional: a published list, one entry per line. It is cached here and refreshed on a schedule."
+        hint="A published list, one entry per line, cached here and refetched on a schedule."
       >
         <input
           id="alias-url"

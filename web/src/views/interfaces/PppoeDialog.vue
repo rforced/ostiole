@@ -134,7 +134,7 @@ function save() {
   <AppDialog
     v-model:open="open"
     :title="iface ? `PPPoE ${iface.name}` : 'New PPPoE session'"
-    description="Dials the provider over an Ethernet link, which is how DSL and some fibre services are delivered. The address, the default route, and the DNS servers all come from the other end."
+    description="The address, the default route, and the DNS servers come from the other end."
   >
     <form class="space-y-4" @submit.prevent="save">
       <p
@@ -142,9 +142,9 @@ function save() {
         role="note"
         class="rounded-md border border-amber-300 bg-amber-50 p-2 text-sm dark:border-amber-800 dark:bg-amber-950/40"
       >
-        pppd is not installed here yet. Run
-        <span class="font-mono">ostiole services setup --with-pppoe</span> once as root, or applying
-        this will fail.
+        PPPoE is not set up on this box yet. Run
+        <span class="font-mono">ostiole services setup --with-pppoe</span> once as root, or the
+        apply will fail.
       </p>
 
       <div class="grid gap-4 sm:grid-cols-2">
@@ -170,7 +170,7 @@ function save() {
               :value="p.name"
               :disabled="!!p.takenBy && p.takenBy !== form.name"
             >
-              {{ p.name }}{{ p.takenBy ? ` — already in ${p.takenBy}` : '' }}
+              {{ p.name }}{{ p.takenBy ? ` (already in ${p.takenBy})` : '' }}
             </option>
           </select>
         </FormField>

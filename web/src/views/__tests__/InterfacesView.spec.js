@@ -51,7 +51,7 @@ describe('InterfacesView', () => {
     expect(api.interfaces.live).toHaveBeenCalledTimes(1)
 
     useConfigStore().markApplied()
-    await nextTick()
-    expect(api.interfaces.live).toHaveBeenCalledTimes(2)
+    // The re-read queues behind the first read if that is still in flight.
+    await vi.waitFor(() => expect(api.interfaces.live).toHaveBeenCalledTimes(2))
   })
 })

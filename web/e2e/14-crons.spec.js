@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { applyAndConfirm, login, shot } from './helpers.js'
+import { applyAndConfirm, confirmDialog, login, shot } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -48,6 +48,7 @@ test('schedule a nightly backup and see what the box does by itself', async ({ p
 
   // Running it now writes a real backup, and the result is reported.
   await applied.getByRole('button', { name: 'Run now' }).click()
+  await confirmDialog(page, { confirm: 'Run' })
   await expect(applied).toContainText('wrote /tmp/ostiole-e2e-backups/')
 })
 

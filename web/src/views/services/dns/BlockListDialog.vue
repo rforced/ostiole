@@ -100,20 +100,20 @@ function save() {
   <AppDialog
     v-model:open="open"
     :title="list ? `List ${list.name}` : 'New block list'"
-    description="A published list of names to refuse. It is fetched on a schedule and cached on this box."
+    description="Fetched on a schedule and cached on this box."
   >
     <form class="space-y-4" @submit.prevent="save">
       <FormField
         v-if="!list"
         id="bl-catalog"
         label="Start from a published list"
-        hint="Or leave this alone and fill the form in yourself."
+        hint="Picking one fills the form in. Everything stays editable."
       >
         <select id="bl-catalog" v-model="chosen" class="input" @change="pick($event.target.value)">
           <option value="">Choose a list…</option>
           <optgroup v-for="[category, entries] in grouped" :key="category" :label="category">
             <option v-for="e in entries" :key="e.name" :value="e.name">
-              {{ e.title }} — about {{ formatCount(e.names) }} names
+              {{ e.title }}, about {{ formatCount(e.names) }} names
             </option>
           </optgroup>
         </select>
@@ -150,11 +150,7 @@ function save() {
         <input id="bl-desc" v-model="form.description" class="input" />
       </FormField>
 
-      <FormField
-        id="bl-url"
-        label="Fetch from"
-        hint="Leave empty for a list you load yourself, which is how a box with no way out to the internet gets one."
-      >
+      <FormField id="bl-url" label="Fetch from" hint="Empty: a list loaded by hand.">
         <input
           id="bl-url"
           v-model="form.url"
@@ -169,7 +165,7 @@ function save() {
           v-if="form.url"
           id="bl-refresh"
           label="Refresh every (hours)"
-          hint="Publishers ask not to be fetched more than once an hour."
+          hint="Default 24, never less than 1."
         >
           <input
             id="bl-refresh"

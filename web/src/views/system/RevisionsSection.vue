@@ -1,40 +1,77 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 
 import ChangeList from '@/components/ChangeList.vue'
+import FormField from '@/components/FormField.vue'
+import RefreshButton from '@/components/RefreshButton.vue'
 import { api } from '@/lib/api'
+import { errorMessage, useAsync } from '@/lib/async'
 import { useConfigStore } from '@/stores/config'
+import { useConfirmStore } from '@/stores/confirm'
 
 const config = useConfigStore()
+const confirm = useConfirmStore()
 const revisions = ref([])
-const error = ref('')
+const actionError = ref('')
 const loadedId = ref('')
 const comparing = ref('')
 const changes = ref([])
 
-onMounted(refresh)
+/** Matches model.DefaultKeepRevisions, which is what an unset setting means. */
+const DEFAULT_KEEP = 20
+const MAX_KEEP = 1000
 
-async function refresh() {
-  try {
-    revisions.value = await api.config.revisions()
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
-  }
-}
+/**
+ * The history bound. It is edited locally rather than straight into the
+ * draft so that emptying the box stays empty: a computed that fell back to
+ * the default would refill it under the cursor. The configuration leaves
+ * the setting out when it is the default, so an empty box means the same.
+ */
+const keep = ref(DEFAULT_KEEP)
+
+// Seeded from the draft, and again when a revision or a restored backup
+// replaces it wholesale.
+watch(
+  () => config.draft,
+  (d) => (keep.value = d?.system?.keepRevisions || DEFAULT_KEEP),
+  {
+    immediate: true,
+  },
+)
+
+watch(keep, (v) => {
+  const n = Number(v)
+  if (!n || n === DEFAULT_KEEP) delete config.draft.system.keepRevisions
+  else config.draft.system.keepRevisions = n
+})
+
+const load = useAsync(async () => {
+  revisions.value = await api.config.revisions()
+})
+onMounted(load.run)
 
 async function loadIntoDraft(id) {
-  error.value = ''
+  if (
+    config.dirty &&
+    !(await confirm.ask({
+      question: 'Replace the current draft?',
+      description: 'Its unapplied changes are lost.',
+      confirmLabel: 'Replace',
+    }))
+  )
+    return
+  actionError.value = ''
   try {
     config.replaceDraft(await api.config.revision(id))
     loadedId.value = id
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    actionError.value = errorMessage(e)
   }
 }
 
 /** Shows what changed between a revision and the configuration in force. */
 async function compare(id) {
-  error.value = ''
+  actionError.value = ''
   if (comparing.value === id) {
     comparing.value = ''
     return
@@ -43,22 +80,43 @@ async function compare(id) {
     changes.value = await api.config.diff({ from: id, to: 'current' })
     comparing.value = id
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    actionError.value = errorMessage(e)
   }
 }
 
-defineExpose({ refresh })
+defineExpose({ refresh: load.run })
 </script>
 
 <template>
   <section class="card space-y-3" aria-labelledby="rev-title">
-    <h2 id="rev-title" class="card-title">Configuration history</h2>
+    <div class="flex items-center justify-between gap-4">
+      <h2 id="rev-title" class="card-title">Configuration history</h2>
+      <RefreshButton :busy="load.busy.value" :updated-at="load.updatedAt.value" @click="load.run" />
+    </div>
     <p class="text-sm text-neutral-500">
-      Every confirmed apply archives the previous configuration. Comparing one shows what has
-      changed since; loading one into the draft lets you review it and roll back through the normal
-      apply and confirm flow.
+      Every confirmed apply archives the configuration it replaced.
     </p>
-    <p v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+    <FormField
+      id="rev-keep"
+      label="Configurations to keep"
+      hint="The oldest is deleted once there are more than this."
+    >
+      <input
+        id="rev-keep"
+        v-model.number="keep"
+        type="number"
+        min="1"
+        :max="MAX_KEEP"
+        class="input w-32"
+      />
+    </FormField>
+    <p
+      v-if="actionError || load.error.value"
+      role="alert"
+      class="text-sm text-red-600 dark:text-red-400"
+    >
+      {{ actionError || load.error.value }}
+    </p>
     <p v-if="loadedId" role="status" class="text-sm text-amber-700 dark:text-amber-300">
       Revision <span class="font-mono">{{ loadedId }}</span> is now the draft. Apply it to roll
       back, or discard.
@@ -73,15 +131,17 @@ defineExpose({ refresh })
             <th></th>
           </tr>
         </thead>
-        <tbody>
-          <tr v-if="revisions.length === 0">
-            <td colspan="4" class="text-neutral-500">No archived revisions yet.</td>
+        <TransitionGroup name="row" tag="tbody">
+          <tr v-if="revisions.length === 0" key="empty">
+            <td colspan="4" class="text-neutral-500">
+              {{ load.updatedAt.value ? 'No archived revisions yet.' : 'Reading revisions…' }}
+            </td>
           </tr>
           <template v-for="r in revisions" :key="r.id">
             <tr>
               <td>{{ new Date(r.time).toLocaleString() }}</td>
-              <td class="font-mono text-xs">{{ r.id }}</td>
-              <td class="font-mono text-xs">{{ r.size }} B</td>
+              <td class="font-mono text-code">{{ r.id }}</td>
+              <td class="font-mono text-code">{{ r.size }} B</td>
               <td class="text-right whitespace-nowrap">
                 <button
                   type="button"
@@ -105,7 +165,7 @@ defineExpose({ refresh })
               </td>
             </tr>
           </template>
-        </tbody>
+        </TransitionGroup>
       </table>
     </div>
   </section>

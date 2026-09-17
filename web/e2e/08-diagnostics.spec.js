@@ -40,7 +40,7 @@ test('the log viewer reads the journal', async ({ page }) => {
   await expect(async () => {
     const shown = await page.getByText('Nothing in this window.').isVisible()
     const failed = await page.getByRole('alert').isVisible()
-    const lines = await page.locator('.font-mono.text-xs p').count()
+    const lines = await page.locator('.font-mono.text-code p').count()
     expect(shown || failed || lines > 0).toBe(true)
   }).toPass()
 })

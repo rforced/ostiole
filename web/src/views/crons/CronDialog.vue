@@ -101,7 +101,7 @@ function save() {
   <AppDialog
     v-model:open="open"
     :title="cron ? `Cron ${cron.description || cron.id}` : 'New cron'"
-    description="Runs on this box, as root, on the schedule you give. It is saved with the rest of the configuration, so it is backed up and rolled back with everything else."
+    description="Runs on this box, as root, on the schedule you give."
   >
     <form class="space-y-4" @submit.prevent="save">
       <div class="grid gap-4 sm:grid-cols-2">
@@ -199,7 +199,7 @@ function save() {
             <textarea
               id="cron-args"
               v-model="form.args"
-              class="input h-24 font-mono text-xs"
+              class="input h-24 font-mono"
               spellcheck="false"
             ></textarea>
           </FormField>

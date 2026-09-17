@@ -1,55 +1,56 @@
 <script setup>
 import { Download, Upload } from 'lucide-vue-next'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import ChangeList from '@/components/ChangeList.vue'
 import FormField from '@/components/FormField.vue'
 import { api } from '@/lib/api'
+import { useAsync } from '@/lib/async'
 import { useConfigStore } from '@/stores/config'
+import { useConfirmStore } from '@/stores/confirm'
 
 const config = useConfigStore()
+const confirm = useConfirmStore()
 const note = ref('')
 const withUsers = ref(false)
-const error = ref('')
-const busy = ref(false)
 const pending = ref(null)
 const fileInput = ref(null)
 
-async function download() {
-  error.value = ''
-  busy.value = true
-  try {
-    const { blob, name } = await api.config.backup({ users: withUsers.value, note: note.value })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = name
-    a.click()
-    URL.revokeObjectURL(url)
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
-  } finally {
-    busy.value = false
-  }
-}
+const download = useAsync(async () => {
+  const { blob, name } = await api.config.backup({ users: withUsers.value, note: note.value })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  a.click()
+  URL.revokeObjectURL(url)
+})
+
+const restore = useAsync(async (file) => {
+  pending.value = null
+  pending.value = await api.config.restore(await file.text())
+})
+
+const busy = computed(() => download.busy.value || restore.busy.value)
+const error = computed(() => download.error.value || restore.error.value)
 
 async function chooseFile(event) {
   const file = event.target.files?.[0]
   if (!file) return
-  error.value = ''
-  pending.value = null
-  busy.value = true
-  try {
-    pending.value = await api.config.restore(await file.text())
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
-  } finally {
-    busy.value = false
-    if (fileInput.value) fileInput.value.value = ''
-  }
+  await restore.run(file)
+  if (fileInput.value) fileInput.value.value = ''
 }
 
-function loadIntoDraft() {
+async function loadIntoDraft() {
+  if (
+    config.dirty &&
+    !(await confirm.ask({
+      question: 'Replace the current draft?',
+      description: 'Its unapplied changes are lost.',
+      confirmLabel: 'Replace',
+    }))
+  )
+    return
   config.replaceDraft(pending.value.config)
   pending.value = null
 }
@@ -64,14 +65,12 @@ function count(n, one, many = `${one}s`) {
   <section class="card space-y-3" aria-labelledby="backup-title">
     <h2 id="backup-title" class="card-title">Backup and restore</h2>
     <p class="text-sm text-neutral-500">
-      A backup is a single JSON file holding the whole configuration. It carries every secret the
-      configuration does, VPN private keys included, so keep it somewhere safe. Restoring loads it
-      as a draft, which you then apply and confirm like any other change.
+      The file carries every secret in the configuration, VPN private keys included.
     </p>
     <p v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
 
     <div class="grid gap-4 sm:grid-cols-2">
-      <FormField id="bk-note" label="Note" hint="Stored in the file, for your own reference.">
+      <FormField id="bk-note" label="Note" hint="Stored in the file.">
         <input id="bk-note" v-model="note" class="input" placeholder="before the VLAN change" />
       </FormField>
       <div class="flex flex-col justify-end gap-2">
@@ -80,7 +79,7 @@ function count(n, one, many = `${one}s`) {
           Include administrator accounts
         </label>
         <div class="flex gap-2">
-          <button type="button" class="btn-primary" :disabled="busy" @click="download">
+          <button type="button" class="btn-primary" :disabled="busy" @click="download.run">
             <Download class="mr-1 size-4" aria-hidden="true" /> Download backup
           </button>
           <button type="button" class="btn-secondary" :disabled="busy" @click="fileInput?.click()">
@@ -118,8 +117,8 @@ function count(n, one, many = `${one}s`) {
         {{ count(pending.summary.aliases, 'alias', 'aliases') }},
         {{ count(pending.summary.gateways, 'gateway') }}.
         <template v-if="pending.summary.users">
-          It also carries {{ count(pending.summary.users, 'account') }}, which the web UI does not
-          restore; use <span class="font-mono">ostiole restore --with-users</span> for those.
+          Also {{ count(pending.summary.users, 'account') }}, which only
+          <span class="font-mono">ostiole restore --with-users</span> restores.
         </template>
       </p>
       <div>

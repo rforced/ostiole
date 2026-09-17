@@ -94,11 +94,11 @@ function save() {
       </FormField>
       <FormField id="v6-mode" label="Mode">
         <select id="v6-mode" v-model="form.mode" class="input">
-          <option value="slaac">SLAAC — advertise the prefix, hosts pick their own address</option>
+          <option value="slaac">SLAAC: hosts pick their own address</option>
           <option value="stateless">
-            Stateless — SLAAC addresses, DHCPv6 for DNS and the domain
+            Stateless: SLAAC addresses, DHCPv6 for DNS and the domain
           </option>
-          <option value="managed">Managed — hand out addresses over DHCPv6</option>
+          <option value="managed">Managed: addresses handed out over DHCPv6</option>
         </select>
       </FormField>
       <div v-if="managed" class="grid gap-4 sm:grid-cols-2">
@@ -135,7 +135,7 @@ function save() {
           label="DNS servers"
           :hint="
             delegated
-              ? 'This interface takes its prefix from upstream, so its address is not known in advance and hosts using SLAAC alone will not learn a resolver. Name one here.'
+              ? 'Name one here. The prefix is delegated, so hosts on SLAAC alone learn no resolver otherwise.'
               : 'Empty: this box when the DNS service is on.'
           "
         >

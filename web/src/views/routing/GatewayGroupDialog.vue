@@ -69,7 +69,7 @@ function save() {
   <AppDialog
     v-model:open="open"
     :title="group ? `Group ${group.name}` : 'New gateway group'"
-    description="Firewall rules can send traffic through a group instead of one gateway. The lowest tier that is up carries it; gateways sharing a tier share the load."
+    description="The lowest tier that is up carries the traffic. Gateways in the same tier share it."
   >
     <form class="space-y-4" @submit.prevent="save">
       <div class="grid gap-4 sm:grid-cols-2">
@@ -100,7 +100,7 @@ function save() {
 
       <section class="space-y-2">
         <div class="flex items-center gap-3">
-          <h3 class="text-sm font-medium">Members</h3>
+          <h3 class="subsection-title">Members</h3>
           <button
             type="button"
             class="btn-secondary"
@@ -142,7 +142,7 @@ function save() {
             </button>
           </li>
         </ul>
-        <p v-if="tiers.length" class="text-xs text-neutral-500">
+        <p v-if="tiers.length" class="text-sm text-neutral-500">
           <template v-for="([tier, count], i) in tiers" :key="tier">
             <span v-if="i">, then </span>tier {{ tier }}
             <template v-if="count > 1">shares {{ count }} gateways</template>

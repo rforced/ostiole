@@ -1,11 +1,13 @@
 <script setup>
 import { Plus } from 'lucide-vue-next'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import FormField from '@/components/FormField.vue'
+import RefreshButton from '@/components/RefreshButton.vue'
 import { api } from '@/lib/api'
+import { useAsync } from '@/lib/async'
 import { newId } from '@/lib/ids'
 import { useConfigStore } from '@/stores/config'
 import GatewayDialog from '@/views/routing/GatewayDialog.vue'
@@ -22,7 +24,6 @@ const groupEditing = ref(null)
 const live = ref([])
 const policy = ref([])
 const detected = ref([])
-let timer = null
 
 /** Configured gateways merged with what the monitor sees. */
 const gatewayRows = computed(() =>
@@ -40,23 +41,27 @@ const groupRows = computed(() =>
 /** Rules that pick a gateway, which is what policy routing exists for. */
 const policyRules = computed(() => config.rules.filter((r) => r.gateway))
 
-async function refreshGateways() {
-  try {
-    live.value = await api.gateways()
-  } catch {
-    live.value = []
-  }
-  try {
-    policy.value = await api.policy()
-  } catch {
-    policy.value = []
-  }
-  try {
-    detected.value = await api.detectedGateways()
-  } catch {
-    detected.value = []
-  }
-}
+/** Each read is on its own: a monitor that is down leaves only its column blank. */
+const refresh = useAsync(
+  async () => {
+    try {
+      live.value = await api.gateways()
+    } catch {
+      live.value = []
+    }
+    try {
+      policy.value = await api.policy()
+    } catch {
+      policy.value = []
+    }
+    try {
+      detected.value = await api.detectedGateways()
+    } catch {
+      detected.value = []
+    }
+  },
+  { interval: 10_000 },
+)
 
 /**
  * The gateway watching a detected route, if any. A gateway claims a route
@@ -125,10 +130,8 @@ function blank() {
 
 onMounted(async () => {
   await config.load()
-  await refreshGateways()
-  timer = setInterval(refreshGateways, 10_000)
+  await refresh.run()
 })
-onUnmounted(() => clearInterval(timer))
 
 watch(
   () => [open.value, editing.value],
@@ -162,7 +165,14 @@ function save() {
 
 <template>
   <div class="space-y-4">
-    <h1 class="text-2xl font-semibold tracking-tight">Routing</h1>
+    <div class="flex items-center justify-between gap-4">
+      <h1 class="text-2xl font-semibold tracking-tight">Routing</h1>
+      <RefreshButton
+        :busy="refresh.busy.value"
+        :updated-at="refresh.updatedAt.value"
+        @click="refresh.run"
+      />
+    </div>
     <p v-if="config.error" role="alert" class="text-sm text-red-600 dark:text-red-400">
       {{ config.error }}
     </p>
@@ -173,15 +183,13 @@ function save() {
     <template v-else-if="config.draft">
       <section class="space-y-3" aria-labelledby="gw-title">
         <div class="flex items-center gap-3">
-          <h2 id="gw-title" class="font-medium">Gateways</h2>
+          <h2 id="gw-title" class="section-title">Gateways</h2>
           <button type="button" class="btn-secondary" @click="addGateway">
             <Plus class="mr-1 size-4" aria-hidden="true" /> Add gateway
           </button>
         </div>
         <p class="max-w-3xl text-sm text-neutral-500">
-          List every upstream here to get failover: the firewall probes each one and moves the
-          default route off a gateway that stops answering. With no gateways listed, the address
-          from the interface is used as it is.
+          Each one is probed, and the default route moves off a gateway that stops answering.
         </p>
 
         <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
@@ -197,34 +205,41 @@ function save() {
                 <th></th>
               </tr>
             </thead>
-            <tbody>
-              <tr v-if="!gatewayRows.length">
+            <TransitionGroup name="row" tag="tbody">
+              <tr v-if="!gatewayRows.length" key="empty">
                 <td colspan="7" class="text-neutral-500">
-                  No gateways. One per WAN gives you failover.
+                  No gateways. The default route from the interface is used as it is.
                 </td>
               </tr>
-              <tr v-for="g in gatewayRows" :key="g.name" :class="{ 'opacity-50': !g.enabled }">
+              <tr
+                v-for="g in gatewayRows"
+                :key="g.name"
+                :class="{
+                  'opacity-50': !g.enabled,
+                  'row-changed': config.isChanged('gateways', g.name),
+                }"
+              >
                 <td>
                   <div class="font-mono font-medium">{{ g.name }}</div>
                   <div class="text-xs text-neutral-500">{{ g.description }}</div>
                 </td>
-                <td class="font-mono text-xs">{{ g.interface }}</td>
-                <td class="font-mono text-xs">
+                <td class="font-mono text-code">{{ g.interface }}</td>
+                <td class="font-mono text-code">
                   {{ g.live?.address || g.address || 'from DHCP' }}
-                  <div v-if="detectedFor(g)" class="text-neutral-500">
+                  <div v-if="detectedFor(g)" class="text-xs text-neutral-500">
                     kernel: {{ detectedFor(g).address }} · metric {{ detectedFor(g).metric }} ·
                     {{ detectedFor(g).protocol }}
                   </div>
                 </td>
-                <td class="font-mono text-xs">{{ g.monitor || 'the gateway' }}</td>
-                <td class="font-mono text-xs">{{ g.priority ?? 0 }}</td>
-                <td class="text-xs whitespace-nowrap">
+                <td class="font-mono text-code">{{ g.monitor || 'the gateway' }}</td>
+                <td class="font-mono text-code">{{ g.priority ?? 0 }}</td>
+                <td class="whitespace-nowrap">
                   <template v-if="g.live && !g.live.unknown">
                     <span class="badge" :class="g.live.online ? 'badge-ok' : 'badge-warn'">
                       {{ g.live.online ? 'up' : 'down' }}
                     </span>
                     <span v-if="g.live.active" class="badge badge-ok ml-1">active</span>
-                    <div class="mt-1 font-mono text-neutral-500">
+                    <div class="mt-1 font-mono text-xs text-neutral-500">
                       {{ g.live.latencyMs.toFixed(1) }}ms · {{ g.live.lossPercent.toFixed(0) }}%
                       loss
                     </div>
@@ -236,24 +251,21 @@ function save() {
                   <ConfirmButton
                     class="ml-3"
                     label="Delete"
-                    :confirm-label="
-                      config.gatewayReferences(g.name).length
-                        ? `Used by ${config.gatewayReferences(g.name).join(', ')}. Delete anyway?`
-                        : 'Delete gateway?'
-                    "
+                    :question="`Delete gateway ${g.name}?`"
+                    :description="g.description"
+                    :dependents="config.gatewayDependents(g.name)"
+                    dependents-label="Also changed"
                     @confirm="config.removeGateway(g.name)"
                   />
                 </td>
               </tr>
-            </tbody>
+            </TransitionGroup>
           </table>
         </div>
 
-        <h3 id="detected-title" class="pt-2 text-sm font-medium">Detected routes</h3>
+        <h3 id="detected-title" class="subsection-title pt-2">Detected routes</h3>
         <p class="max-w-3xl text-sm text-neutral-500">
-          The default routes this box has right now, whether Ostiole put them there or not. Adding
-          one as a gateway is what lets the firewall probe it and fail over; leaving it alone
-          changes nothing.
+          The default routes this box has right now, whether Ostiole put them there or not.
         </p>
         <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
           <table class="table" aria-labelledby="detected-title">
@@ -268,18 +280,24 @@ function save() {
                 <th></th>
               </tr>
             </thead>
-            <tbody>
-              <tr v-if="!detected.length">
-                <td colspan="7" class="text-neutral-500">No default route on this box yet.</td>
+            <TransitionGroup name="row" tag="tbody">
+              <tr v-if="!detected.length" key="empty">
+                <td colspan="7" class="text-neutral-500">
+                  {{
+                    refresh.updatedAt.value
+                      ? 'No default route on this box yet.'
+                      : 'Reading routes…'
+                  }}
+                </td>
               </tr>
               <tr v-for="d in detected" :key="`${d.interface}-${d.address}-${d.family}`">
-                <td class="font-mono text-xs">{{ d.address }}</td>
-                <td class="font-mono text-xs">{{ d.interface }}</td>
-                <td class="text-xs">{{ d.family }}</td>
-                <td class="font-mono text-xs">{{ d.metric }}</td>
-                <td class="text-xs">{{ d.protocol }}</td>
-                <td class="text-xs">
-                  <span v-if="coveredBy(d)" class="font-mono text-neutral-500">
+                <td class="font-mono text-code">{{ d.address }}</td>
+                <td class="font-mono text-code">{{ d.interface }}</td>
+                <td>{{ d.family }}</td>
+                <td class="font-mono text-code">{{ d.metric }}</td>
+                <td>{{ d.protocol }}</td>
+                <td>
+                  <span v-if="coveredBy(d)" class="font-mono text-code text-neutral-500">
                     {{ coveredBy(d) }}
                   </span>
                   <span v-else class="badge">not watched</span>
@@ -295,14 +313,14 @@ function save() {
                   </button>
                 </td>
               </tr>
-            </tbody>
+            </TransitionGroup>
           </table>
         </div>
       </section>
 
       <section class="space-y-3" aria-labelledby="gg-title">
         <div class="flex items-center gap-3">
-          <h2 id="gg-title" class="font-medium">Gateway groups</h2>
+          <h2 id="gg-title" class="section-title">Gateway groups</h2>
           <button
             type="button"
             class="btn-secondary"
@@ -312,12 +330,8 @@ function save() {
             <Plus class="mr-1 size-4" aria-hidden="true" /> Add group
           </button>
         </div>
-        <p class="max-w-3xl text-sm text-neutral-500">
-          A group is what a firewall rule points at when it should not follow the default route: the
-          lowest tier that is up carries the traffic, and gateways in the same tier share it.
-        </p>
         <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
-          <table class="table">
+          <table class="table" aria-labelledby="gg-title">
             <thead>
               <tr>
                 <th>Group</th>
@@ -328,27 +342,34 @@ function save() {
                 <th></th>
               </tr>
             </thead>
-            <tbody>
-              <tr v-if="!groupRows.length">
+            <TransitionGroup name="row" tag="tbody">
+              <tr v-if="!groupRows.length" key="empty">
                 <td colspan="6" class="text-neutral-500">
                   <template v-if="config.gateways.length">
                     No groups. Add one to route some rules over a different line.
                   </template>
-                  <template v-else> Add a gateway first; a group is made of them. </template>
+                  <template v-else> Add a gateway first. A group is made of them. </template>
                 </td>
               </tr>
-              <tr v-for="g in groupRows" :key="g.name" :class="{ 'opacity-50': !g.enabled }">
+              <tr
+                v-for="g in groupRows"
+                :key="g.name"
+                :class="{
+                  'opacity-50': !g.enabled,
+                  'row-changed': config.isChanged('gatewayGroups', g.name),
+                }"
+              >
                 <td>
                   <div class="font-mono font-medium">{{ g.name }}</div>
                   <div class="text-xs text-neutral-500">{{ g.description }}</div>
                 </td>
-                <td class="font-mono text-xs">{{ tierSummary(g) || '—' }}</td>
-                <td class="text-xs">
+                <td class="font-mono text-code">{{ tierSummary(g) || '—' }}</td>
+                <td>
                   <span v-if="g.onDown === 'block'" class="badge badge-warn">drop</span>
                   <span v-else class="text-neutral-500">default route</span>
                 </td>
-                <td class="font-mono text-xs">{{ g.policy?.rules ?? 0 }}</td>
-                <td class="font-mono text-xs">
+                <td class="font-mono text-code">{{ g.policy?.rules ?? 0 }}</td>
+                <td class="font-mono text-code">
                   <template v-if="g.policy?.nextHops?.length">
                     {{ g.policy.nextHops.join(', ') }}
                   </template>
@@ -362,16 +383,15 @@ function save() {
                   <ConfirmButton
                     class="ml-3"
                     label="Delete"
-                    :confirm-label="
-                      config.gatewayReferences(g.name).length
-                        ? `Used by ${config.gatewayReferences(g.name).join(', ')}. Delete anyway?`
-                        : 'Delete group?'
-                    "
+                    :question="`Delete group ${g.name}?`"
+                    :description="g.description"
+                    :dependents="config.groupDependents(g.name)"
+                    dependents-label="Also changed"
                     @confirm="config.removeGatewayGroup(g.name)"
                   />
                 </td>
               </tr>
-            </tbody>
+            </TransitionGroup>
           </table>
         </div>
         <p v-if="policyRules.length" class="text-sm text-neutral-500">
@@ -385,7 +405,7 @@ function save() {
         </p>
       </section>
 
-      <h2 class="font-medium">Static routes</h2>
+      <h2 class="section-title">Static routes</h2>
       <button type="button" class="btn-secondary" @click="add">
         <Plus class="mr-1 size-4" aria-hidden="true" /> Add static route
       </button>
@@ -400,26 +420,31 @@ function save() {
               <th></th>
             </tr>
           </thead>
-          <tbody>
-            <tr v-if="config.routes.length === 0">
+          <TransitionGroup name="row" tag="tbody">
+            <tr v-if="config.routes.length === 0" key="empty">
               <td colspan="5" class="text-neutral-500">No static routes.</td>
             </tr>
-            <tr v-for="r in config.routes" :key="r.id" :class="{ 'opacity-50': !r.enabled }">
-              <td class="font-mono text-xs">{{ r.destination }}</td>
-              <td class="font-mono text-xs">{{ r.gateway }}</td>
-              <td class="font-mono text-xs">{{ r.interface ?? 'auto' }}</td>
+            <tr
+              v-for="r in config.routes"
+              :key="r.id"
+              :class="{ 'opacity-50': !r.enabled, 'row-changed': config.isChanged('routes', r.id) }"
+            >
+              <td class="font-mono text-code">{{ r.destination }}</td>
+              <td class="font-mono text-code">{{ r.gateway }}</td>
+              <td class="font-mono text-code">{{ r.interface ?? 'auto' }}</td>
               <td>{{ r.description }}</td>
               <td class="text-right whitespace-nowrap">
                 <button type="button" class="link" @click="edit(r)">Edit</button>
                 <ConfirmButton
                   class="ml-3"
                   label="Delete"
-                  confirm-label="Delete route?"
+                  :question="`Delete route ${r.id}?`"
+                  :description="r.description"
                   @confirm="config.removeRoute(r.id)"
                 />
               </td>
             </tr>
-          </tbody>
+          </TransitionGroup>
         </table>
       </div>
     </template>
@@ -454,11 +479,7 @@ function save() {
             />
           </FormField>
         </div>
-        <FormField
-          id="rt-if"
-          label="Interface"
-          hint="Optional; otherwise chosen from the gateway's network."
-        >
+        <FormField id="rt-if" label="Interface" hint="Empty picks it from the gateway's network.">
           <select id="rt-if" v-model="form.interface" class="input">
             <option value="">Automatic</option>
             <option v-for="i in config.interfaces" :key="i.name" :value="i.name">

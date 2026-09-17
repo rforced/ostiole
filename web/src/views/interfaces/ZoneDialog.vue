@@ -72,10 +72,12 @@ function save() {
             type="checkbox"
             class="mt-0.5 size-4 rounded border-neutral-300"
           />
-          <span
-            ><span class="font-medium">External</span> — internet-facing; IPv4 leaving it is
-            masqueraded when outbound NAT is automatic.</span
-          >
+          <span>
+            External
+            <span class="block text-neutral-500">
+              IPv4 leaving it is masqueraded when outbound NAT is automatic.
+            </span>
+          </span>
         </label>
         <label class="flex items-start gap-2">
           <input
@@ -83,10 +85,12 @@ function save() {
             type="checkbox"
             class="mt-0.5 size-4 rounded border-neutral-300"
           />
-          <span
-            ><span class="font-medium">Anti-lockout</span> — always allow the management ports from
-            this zone.</span
-          >
+          <span>
+            Anti-lockout
+            <span class="block text-neutral-500">
+              The management ports are always reachable from this zone.
+            </span>
+          </span>
         </label>
         <label class="flex items-start gap-2">
           <input
@@ -94,10 +98,12 @@ function save() {
             type="checkbox"
             class="mt-0.5 size-4 rounded border-neutral-300"
           />
-          <span
-            ><span class="font-medium">Log drops</span> — log packets that match no rule in this
-            zone.</span
-          >
+          <span>
+            Log drops
+            <span class="block text-neutral-500">
+              Packets that match no rule in this zone are logged.
+            </span>
+          </span>
         </label>
       </div>
       <p v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>

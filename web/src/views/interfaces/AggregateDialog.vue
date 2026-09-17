@@ -20,11 +20,11 @@ const error = ref('')
 const form = ref(blank())
 
 const BOND_MODES = [
-  { value: 'active-backup', label: 'Active/backup — one link at a time, no switch setup' },
-  { value: '802.3ad', label: 'LACP (802.3ad) — the switch must be configured to match' },
-  { value: 'balance-rr', label: 'Round robin — packets in turn' },
-  { value: 'balance-xor', label: 'Balance XOR — a flow always takes the same link' },
-  { value: 'broadcast', label: 'Broadcast — everything on every link' },
+  { value: 'active-backup', label: 'Active/backup (one link at a time, no switch setup)' },
+  { value: '802.3ad', label: 'LACP 802.3ad (the switch must be configured to match)' },
+  { value: 'balance-rr', label: 'Round robin (packets in turn)' },
+  { value: 'balance-xor', label: 'Balance XOR (a flow always takes the same link)' },
+  { value: 'broadcast', label: 'Broadcast (everything on every link)' },
   { value: 'balance-tlb', label: 'Adaptive transmit load balancing' },
   { value: 'balance-alb', label: 'Adaptive load balancing' },
 ]
@@ -176,8 +176,8 @@ function save() {
     :title="title"
     :description="
       isBond
-        ? 'A bond makes several links act as one, for redundancy or throughput. Its members give up their own addresses.'
-        : 'A bridge switches traffic between its members, which then share one address and one set of rules.'
+        ? 'Its members give up their own addresses.'
+        : 'Members share one address and one set of rules.'
     "
   >
     <form class="space-y-4" @submit.prevent="save">
@@ -198,7 +198,7 @@ function save() {
       </div>
 
       <fieldset class="space-y-2">
-        <legend class="text-sm font-medium">Interfaces</legend>
+        <legend class="subsection-title">Interfaces</legend>
         <p v-if="!options.length" class="text-sm text-neutral-500">
           No interfaces are available to add.
         </p>
@@ -217,8 +217,8 @@ function save() {
           />
           <span class="font-mono">{{ o.name }}</span>
           <span v-if="o.takenBy" class="text-xs text-neutral-500">already in {{ o.takenBy }}</span>
-          <span v-else-if="o.zone" class="text-xs text-amber-700 dark:text-amber-400">
-            in zone {{ o.zone }}; adding it makes it a port and clears that
+          <span v-else-if="o.zone" class="text-sm text-amber-700 dark:text-amber-400">
+            in zone {{ o.zone }}, cleared when it becomes a port
           </span>
         </label>
       </fieldset>

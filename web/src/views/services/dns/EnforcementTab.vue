@@ -34,22 +34,16 @@ const exemptAlias = aliasField('exemptAlias')
 
 <template>
   <div class="max-w-3xl space-y-6">
-    <p class="text-sm text-neutral-500">
-      Blocking a name achieves nothing if the client asks someone else instead. These keep clients
-      on this box's resolver. They render firewall rules, so they show up in the ruleset like
-      everything else.
-    </p>
-
     <p
       v-if="!blocking.enabled"
       role="note"
       class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
     >
-      DNS blocking is off, so none of this is rendered. Turn it on under Block lists.
+      DNS blocking is off, so none of this applies. Turn it on under Block lists.
     </p>
 
     <fieldset class="space-y-3 text-sm">
-      <legend class="font-medium">Keep clients here</legend>
+      <legend class="subsection-title">Keep clients here</legend>
 
       <label class="flex items-start gap-2">
         <input
@@ -60,8 +54,7 @@ const exemptAlias = aliasField('exemptAlias')
         <span>
           <span class="font-medium">Send all plain DNS to this box</span>
           <span class="block text-neutral-500">
-            A client that insists on 8.8.8.8 still gets answers, just this box's answers. Queries
-            already addressed here are left alone.
+            Queries sent to any other resolver are answered by this box instead.
           </span>
         </span>
       </label>
@@ -74,9 +67,7 @@ const exemptAlias = aliasField('exemptAlias')
         />
         <span>
           <span class="font-medium">Drop DNS over TLS</span>
-          <span class="block text-neutral-500">
-            Port 853 is the easy half of stopping encrypted DNS: it has a port of its own.
-          </span>
+          <span class="block text-neutral-500">Everything to port 853 is dropped.</span>
         </span>
       </label>
 
@@ -89,8 +80,8 @@ const exemptAlias = aliasField('exemptAlias')
         <span>
           <span class="font-medium">Ask Firefox not to turn on DNS over HTTPS</span>
           <span class="block text-neutral-500">
-            Answers <span class="font-mono">use-application-dns.net</span> with NXDOMAIN, which is
-            how Firefox is told this network would rather it did not.
+            Answers <span class="font-mono">use-application-dns.net</span> with NXDOMAIN, and
+            Firefox stays on plain DNS.
           </span>
         </span>
       </label>
@@ -99,7 +90,7 @@ const exemptAlias = aliasField('exemptAlias')
     <FormField
       id="enf-doh"
       label="Drop traffic to DNS over HTTPS servers"
-      hint="DoH hides on port 443, so only an address list catches it. Make a fetched host alias under Firewall → Aliases and name it here."
+      hint="Make a fetched host alias under Firewall → Aliases and name it here."
     >
       <select id="enf-doh" v-model="dohAlias" class="input">
         <option value="">Not blocked</option>
@@ -115,7 +106,7 @@ const exemptAlias = aliasField('exemptAlias')
     <FormField
       id="enf-exempt"
       label="Except these clients"
-      hint="Addresses in this alias are left alone by everything above: the one machine allowed to resolve for itself."
+      hint="Addresses in this alias are left alone by everything above."
     >
       <select id="enf-exempt" v-model="exemptAlias" class="input">
         <option value="">No exceptions</option>
@@ -124,8 +115,7 @@ const exemptAlias = aliasField('exemptAlias')
     </FormField>
 
     <p class="text-sm text-neutral-500">
-      There is no per-client blocking policy: dnsmasq answers every client the same way. A client
-      exempted here is not sent to this resolver at all, so it is not blocked either.
+      A client exempted here is not sent to this resolver, so nothing is blocked for it.
     </p>
   </div>
 </template>

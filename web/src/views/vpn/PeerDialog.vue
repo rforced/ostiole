@@ -4,8 +4,10 @@ import { ref, watch } from 'vue'
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import { api } from '@/lib/api'
+import { errorMessage } from '@/lib/async'
 import { parseList } from '@/lib/lists'
 import { useConfigStore } from '@/stores/config'
+import { useConfirmStore } from '@/stores/confirm'
 
 const props = defineProps({
   tunnel: { type: Object, default: null },
@@ -14,6 +16,7 @@ const props = defineProps({
 const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
+const confirm = useConfirmStore()
 const form = ref(blank())
 const error = ref('')
 
@@ -58,13 +61,24 @@ function suggestAddress() {
   return ''
 }
 
+/** Replacing a key the peer already holds is worth a question first. */
 async function generatePSK() {
+  if (
+    form.value.presharedKey &&
+    !(await confirm.ask({
+      question: `Replace the preshared key of ${form.value.name || 'this peer'}?`,
+      description: 'The peer has to be given the new value.',
+      confirmLabel: 'Replace',
+      danger: false,
+    }))
+  )
+    return
   try {
     const res = await api.wireguard.psk()
     form.value.presharedKey = res.presharedKey
     error.value = ''
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    error.value = errorMessage(e)
   }
 }
 
@@ -90,7 +104,7 @@ function save() {
   <AppDialog
     v-model:open="open"
     :title="peer ? `Peer ${peer.name}` : 'New peer'"
-    :description="`On ${tunnel?.name ?? 'the tunnel'}. The peer's own device generates its key pair; paste its public key here.`"
+    :description="`On ${tunnel?.name ?? 'the tunnel'}. The peer's own device generates its key pair. Paste its public key here.`"
   >
     <form class="space-y-4" @submit.prevent="save">
       <p v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
@@ -112,7 +126,7 @@ function save() {
         <input
           id="pe-pub"
           v-model="form.publicKey"
-          class="input font-mono text-xs"
+          class="input font-mono"
           required
           spellcheck="false"
         />
@@ -154,12 +168,8 @@ function save() {
           />
         </FormField>
       </div>
-      <FormField
-        id="pe-psk"
-        label="Preshared key"
-        hint="Optional second layer; the peer needs the same value."
-      >
-        <input id="pe-psk" v-model="form.presharedKey" class="input font-mono text-xs" />
+      <FormField id="pe-psk" label="Preshared key" hint="Optional. The peer needs the same value.">
+        <input id="pe-psk" v-model="form.presharedKey" class="input font-mono" />
       </FormField>
       <button type="button" class="btn-secondary" @click="generatePSK">
         Generate preshared key

@@ -34,7 +34,7 @@ const MODES = [
   {
     value: 'manual',
     label: 'Manual',
-    hint: 'Check on the schedule and tell you; install nothing.',
+    hint: 'Check on the schedule and install nothing.',
   },
 ]
 

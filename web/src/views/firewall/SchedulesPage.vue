@@ -28,10 +28,7 @@ function days(schedule) {
 
 <template>
   <div class="space-y-3">
-    <p class="text-sm text-neutral-500">
-      A rule with a schedule only matches inside its window; outside it the next rule decides. Times
-      are this firewall's local time.
-    </p>
+    <p class="text-sm text-neutral-500">Times are this firewall's local time.</p>
     <button type="button" class="btn-secondary" @click="add">
       <Plus class="mr-1 size-4" aria-hidden="true" /> Add schedule
     </button>
@@ -46,14 +43,18 @@ function days(schedule) {
             <th></th>
           </tr>
         </thead>
-        <tbody>
-          <tr v-if="!config.schedules.length">
+        <TransitionGroup name="row" tag="tbody">
+          <tr v-if="!config.schedules.length" key="empty">
             <td colspan="5" class="text-neutral-500">No schedules.</td>
           </tr>
-          <tr v-for="s in config.schedules" :key="s.name">
+          <tr
+            v-for="s in config.schedules"
+            :key="s.name"
+            :class="{ 'row-changed': config.isChanged('schedules', s.name) }"
+          >
             <td class="font-mono font-medium">{{ s.name }}</td>
-            <td class="text-xs">{{ days(s) }}</td>
-            <td class="font-mono text-xs">
+            <td>{{ days(s) }}</td>
+            <td class="font-mono text-code">
               {{ s.start }} – {{ s.end }}
               <span v-if="s.end < s.start" class="badge ml-1">over midnight</span>
             </td>
@@ -64,18 +65,16 @@ function days(schedule) {
                 v-if="config.scheduleReferences(s.name).length === 0"
                 class="ml-3"
                 label="Delete"
-                confirm-label="Delete schedule?"
+                :question="`Delete schedule ${s.name}?`"
+                :description="s.description"
                 @confirm="config.removeSchedule(s.name)"
               />
-              <span
-                v-else
-                class="ml-3 text-xs text-neutral-500"
-                :title="config.scheduleReferences(s.name).join(', ')"
-                >in use</span
+              <span v-else class="ml-3 text-sm text-neutral-500"
+                >in use by {{ config.scheduleReferences(s.name).join(', ') }}</span
               >
             </td>
           </tr>
-        </tbody>
+        </TransitionGroup>
       </table>
     </div>
 

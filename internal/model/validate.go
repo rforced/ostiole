@@ -1232,6 +1232,10 @@ func (v *validator) system(s *System) {
 	if s.Hostname != "" && !hostnameRe.MatchString(s.Hostname) {
 		v.add("system.hostname", "%q is not a valid hostname", s.Hostname)
 	}
+	if s.KeepRevisions < 0 || s.KeepRevisions > MaxKeepRevisions {
+		v.add("system.keepRevisions", "%d must be 0-%d (0 keeps %d)",
+			s.KeepRevisions, MaxKeepRevisions, DefaultKeepRevisions)
+	}
 	for i, d := range s.DNSServers {
 		if _, err := ParseIP(d); err != nil {
 			v.add(fmt.Sprintf("system.dnsServers[%d]", i), "%v", err)

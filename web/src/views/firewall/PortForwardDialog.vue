@@ -62,7 +62,7 @@ function save() {
   <AppDialog
     v-model:open="open"
     :title="forward ? `Port forward ${forward.id}` : 'New port forward'"
-    description="Traffic arriving in the zone on these ports is sent to the target. Forwarded traffic is allowed automatically."
+    description="Forwarded traffic is allowed without a rule of its own."
   >
     <form class="space-y-4" @submit.prevent="save">
       <FormField id="pf-desc" label="Description">
@@ -116,8 +116,8 @@ function save() {
           class="mt-0.5 size-4 rounded border-neutral-300"
         />
         <span
-          ><span class="font-medium">NAT reflection</span> — internal hosts reach this service
-          through the firewall's own outside address, so one name works from both sides.</span
+          ><span class="font-medium">NAT reflection</span>: inside hosts reach the target by the
+          outside address too.</span
         >
       </label>
       <label class="flex items-center gap-2 text-sm">

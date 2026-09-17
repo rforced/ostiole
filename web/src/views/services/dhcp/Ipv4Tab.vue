@@ -41,7 +41,7 @@ function editLease(l) {
 
     <section class="space-y-3" aria-labelledby="scopes-title">
       <div class="flex items-center gap-3">
-        <h2 id="scopes-title" class="font-medium">Scopes</h2>
+        <h2 id="scopes-title" class="section-title">Scopes</h2>
         <button type="button" class="btn-secondary" @click="addScope">
           <Plus class="mr-1 size-4" aria-hidden="true" /> Add scope
         </button>
@@ -58,36 +58,43 @@ function editLease(l) {
               <th></th>
             </tr>
           </thead>
-          <tbody>
-            <tr v-if="!(dhcp.scopes ?? []).length">
+          <TransitionGroup name="row" tag="tbody">
+            <tr v-if="!(dhcp.scopes ?? []).length" key="empty">
               <td colspan="6" class="text-neutral-500">
                 No scopes. Add one per interface that should hand out addresses.
               </td>
             </tr>
-            <tr v-for="s in dhcp.scopes" :key="s.interface" :class="{ 'opacity-50': !s.enabled }">
+            <tr
+              v-for="s in dhcp.scopes"
+              :key="s.interface"
+              :class="{
+                'opacity-50': !s.enabled,
+                'row-changed': config.isChanged('services.dhcp.scopes', s.interface),
+              }"
+            >
               <td class="font-mono">{{ s.interface }}</td>
-              <td class="font-mono text-xs">{{ s.rangeStart }} – {{ s.rangeEnd }}</td>
-              <td class="font-mono text-xs">{{ s.leaseTime || '12h' }}</td>
-              <td class="font-mono text-xs">{{ s.gateway || 'this box' }}</td>
-              <td class="font-mono text-xs">{{ s.dns?.join(', ') || 'this box' }}</td>
+              <td class="font-mono text-code">{{ s.rangeStart }} – {{ s.rangeEnd }}</td>
+              <td class="font-mono text-code">{{ s.leaseTime || '12h' }}</td>
+              <td class="font-mono text-code">{{ s.gateway || 'this box' }}</td>
+              <td class="font-mono text-code">{{ s.dns?.join(', ') || 'this box' }}</td>
               <td class="text-right whitespace-nowrap">
                 <button type="button" class="link" @click="editScope(s)">Edit</button>
                 <ConfirmButton
                   class="ml-3"
                   label="Delete"
-                  confirm-label="Delete scope?"
+                  :question="`Delete the DHCP scope on ${s.interface}?`"
                   @confirm="config.removeScope(s.interface)"
                 />
               </td>
             </tr>
-          </tbody>
+          </TransitionGroup>
         </table>
       </div>
     </section>
 
     <section class="space-y-3" aria-labelledby="leases-title">
       <div class="flex items-center gap-3">
-        <h2 id="leases-title" class="font-medium">Static leases</h2>
+        <h2 id="leases-title" class="section-title">Static leases</h2>
         <button type="button" class="btn-secondary" @click="addLease">
           <Plus class="mr-1 size-4" aria-hidden="true" /> Add static lease
         </button>
@@ -104,27 +111,32 @@ function editLease(l) {
               <th></th>
             </tr>
           </thead>
-          <tbody>
-            <tr v-if="!(dhcp.staticLeases ?? []).length">
+          <TransitionGroup name="row" tag="tbody">
+            <tr v-if="!(dhcp.staticLeases ?? []).length" key="empty">
               <td colspan="6" class="text-neutral-500">No static leases.</td>
             </tr>
-            <tr v-for="l in dhcp.staticLeases" :key="l.mac">
-              <td class="font-mono text-xs">{{ l.mac }}</td>
-              <td class="font-mono text-xs">{{ l.ip || '—' }}</td>
-              <td class="font-mono text-xs">{{ l.ipv6 || '—' }}</td>
-              <td class="font-mono text-xs">{{ l.hostname }}</td>
+            <tr
+              v-for="l in dhcp.staticLeases"
+              :key="l.mac"
+              :class="{ 'row-changed': config.isChanged('services.dhcp.staticLeases', l.mac) }"
+            >
+              <td class="font-mono text-code">{{ l.mac }}</td>
+              <td class="font-mono text-code">{{ l.ip || '—' }}</td>
+              <td class="font-mono text-code">{{ l.ipv6 || '—' }}</td>
+              <td class="font-mono text-code">{{ l.hostname }}</td>
               <td>{{ l.description }}</td>
               <td class="text-right whitespace-nowrap">
                 <button type="button" class="link" @click="editLease(l)">Edit</button>
                 <ConfirmButton
                   class="ml-3"
                   label="Delete"
-                  confirm-label="Delete lease?"
+                  :question="`Delete the static lease for ${l.mac}?`"
+                  :description="l.description"
                   @confirm="config.removeStaticLease(l.mac)"
                 />
               </td>
             </tr>
-          </tbody>
+          </TransitionGroup>
         </table>
       </div>
     </section>

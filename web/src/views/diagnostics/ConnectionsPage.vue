@@ -1,43 +1,32 @@
 <script setup>
-import { RefreshCw } from 'lucide-vue-next'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 
 import FormField from '@/components/FormField.vue'
+import RefreshButton from '@/components/RefreshButton.vue'
 import { api } from '@/lib/api'
+import { useAsync } from '@/lib/async'
 import { formatBytes } from '@/lib/format'
 
+const POLL_MS = 5000
+
 const result = ref(null)
-const error = ref('')
-const busy = ref(false)
 const auto = ref(false)
 const filter = ref({ address: '', protocol: '', port: '' })
-let timer = null
 
-onMounted(load)
-onUnmounted(() => clearInterval(timer))
-
-async function load() {
-  busy.value = true
-  error.value = ''
-  try {
+const load = useAsync(
+  async () => {
     result.value = await api.diagnostics.states({
       address: filter.value.address.trim(),
       protocol: filter.value.protocol,
       port: filter.value.port,
     })
-  } catch (e) {
-    result.value = null
-    error.value = e instanceof Error ? e.message : String(e)
-  } finally {
-    busy.value = false
-  }
-}
+  },
+  // The poll is opt-in: the checkbox owns it.
+  { interval: POLL_MS, autostart: false },
+)
 
-function toggleAuto() {
-  auto.value = !auto.value
-  clearInterval(timer)
-  if (auto.value) timer = setInterval(load, 5000)
-}
+onMounted(load.run)
+watch(auto, (on) => (on ? load.start() : load.stop()))
 
 /** Protocol counts across the whole table, not just the rows shown. */
 const protocols = computed(() =>
@@ -55,12 +44,15 @@ function endpoint(address, port) {
 <template>
   <div class="space-y-3">
     <p class="max-w-3xl text-sm text-neutral-500">
-      Every connection the kernel is tracking. This is what the firewall's "established" rules match
-      against, so it answers both "why is this getting through" and "what is this box talking to".
-      Connections that are being translated are marked, with the address they leave as.
+      Every connection the kernel is tracking, which the established rules match against.
     </p>
 
-    <form class="flex flex-wrap items-end gap-3" @submit.prevent="load">
+    <!-- No submit button, so Enter in a field is wired by hand. -->
+    <form
+      class="flex flex-wrap items-end gap-3"
+      @submit.prevent="load.run()"
+      @keydown.enter.prevent="load.run()"
+    >
       <FormField id="st-address" label="Address" hint="An address, or a network like 10.0.0.0/8.">
         <input
           id="st-address"
@@ -89,76 +81,75 @@ function endpoint(address, port) {
           class="input w-28 font-mono"
         />
       </FormField>
-      <button type="submit" class="btn-primary" :disabled="busy">
-        <RefreshCw class="mr-1 size-4" aria-hidden="true" /> Refresh
-      </button>
+      <RefreshButton
+        :busy="load.busy.value"
+        :updated-at="load.updatedAt.value"
+        @click="load.run()"
+      />
       <label class="flex items-center gap-2 pb-2 text-sm">
-        <input
-          type="checkbox"
-          class="size-4 rounded border-neutral-300"
-          :checked="auto"
-          @change="toggleAuto"
-        />
+        <input v-model="auto" type="checkbox" class="size-4 rounded border-neutral-300" />
         Every 5 seconds
       </label>
     </form>
 
-    <p v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+    <p v-if="load.error.value" role="alert" class="text-sm text-red-600 dark:text-red-400">
+      {{ load.error.value }}
+    </p>
 
-    <template v-if="result">
-      <p class="text-sm text-neutral-500">
-        {{ result.total }} connection(s) tracked<span v-if="result.matched !== result.total">
-          · {{ result.matched }} match this filter</span
-        ><span v-if="trimmed"> · showing the {{ result.states.length }} busiest</span>
-        <template v-if="protocols.length">
-          ·
-          <span v-for="([name, count], i) in protocols" :key="name">
-            <span v-if="i">, </span>{{ count }} {{ name }}
-          </span>
-        </template>
-      </p>
-      <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>Protocol</th>
-              <th>From</th>
-              <th>To</th>
-              <th>Leaves as</th>
-              <th>State</th>
-              <th>Traffic</th>
-              <th>Expires in</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="!result.states.length">
-              <td colspan="7" class="text-neutral-500">Nothing matches.</td>
-            </tr>
-            <tr v-for="(s, i) in result.states" :key="i">
-              <td class="font-mono text-xs">{{ s.protocol }}</td>
-              <td class="font-mono text-xs">{{ endpoint(s.source, s.sourcePort) }}</td>
-              <td class="font-mono text-xs">{{ endpoint(s.destination, s.destPort) }}</td>
-              <td class="font-mono text-xs">
-                <template v-if="s.nat">
-                  {{ endpoint(s.replyDest, s.replyDestPort) }}
-                  <span class="badge">NAT</span>
-                </template>
-                <span v-else class="text-neutral-500">not translated</span>
-              </td>
-              <td class="font-mono text-xs">
-                {{ s.state || '—'
-                }}<span v-if="s.mark" class="ml-1 badge" :title="`Packet mark ${s.mark}`">
-                  routed
-                </span>
-              </td>
-              <td class="font-mono text-xs whitespace-nowrap">
-                {{ formatBytes(s.bytes) }} · {{ s.packets }}p
-              </td>
-              <td class="font-mono text-xs">{{ s.ttl }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </template>
+    <p v-if="result" class="text-sm text-neutral-500">
+      {{ result.total }} connection(s) tracked<span v-if="result.matched !== result.total">
+        · {{ result.matched }} match this filter</span
+      ><span v-if="trimmed"> · showing the {{ result.states.length }} busiest</span>
+      <template v-if="protocols.length">
+        ·
+        <span v-for="([name, count], i) in protocols" :key="name">
+          <span v-if="i">, </span>{{ count }} {{ name }}
+        </span>
+      </template>
+    </p>
+    <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Protocol</th>
+            <th>From</th>
+            <th>To</th>
+            <th>Leaves as</th>
+            <th>State</th>
+            <th>Traffic</th>
+            <th>Expires in</th>
+          </tr>
+        </thead>
+        <TransitionGroup name="row" tag="tbody">
+          <tr v-if="!result?.states.length" key="empty">
+            <td colspan="7" class="text-neutral-500">
+              {{ load.busy.value && !result ? 'Reading…' : 'Nothing matches.' }}
+            </td>
+          </tr>
+          <tr v-for="(s, i) in result?.states ?? []" :key="i">
+            <td class="font-mono text-code">{{ s.protocol }}</td>
+            <td class="font-mono text-code">{{ endpoint(s.source, s.sourcePort) }}</td>
+            <td class="font-mono text-code">{{ endpoint(s.destination, s.destPort) }}</td>
+            <td class="font-mono text-code">
+              <template v-if="s.nat">
+                {{ endpoint(s.replyDest, s.replyDestPort) }}
+                <span class="badge">NAT</span>
+              </template>
+              <span v-else class="text-neutral-500">not translated</span>
+            </td>
+            <td class="font-mono text-code">
+              {{ s.state || '—'
+              }}<span v-if="s.mark" class="ml-1 badge" :title="`Packet mark ${s.mark}`">
+                routed
+              </span>
+            </td>
+            <td class="font-mono text-code whitespace-nowrap">
+              {{ formatBytes(s.bytes) }} · {{ s.packets }}p
+            </td>
+            <td class="font-mono text-code">{{ s.ttl }}</td>
+          </tr>
+        </TransitionGroup>
+      </table>
+    </div>
   </div>
 </template>

@@ -1,9 +1,15 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { ApiError, api } from '@/lib/api'
+import { useToastStore } from '@/stores/toast'
 
 const clone = (v) => (v === null || v === undefined ? v : JSON.parse(JSON.stringify(v)))
+
+/** How long the diff waits after the last edit before asking the server. */
+const DIFF_DEBOUNCE_MS = 400
+/** How long Undo stays on offer after a delete. */
+const UNDO_MS = 8000
 
 /**
  * Holds the saved configuration and an editable draft. Pages mutate the
@@ -43,8 +49,24 @@ export const useConfigStore = defineStore('config', () => {
     loaded.value = true
   }
 
+  /**
+   * Runs a mutation and reports it with a way back. Undo puts the draft
+   * back exactly as it was before the mutation, so an edit made in the
+   * few seconds the offer stands goes with it. That is simpler to trust
+   * than a merge, and the toast says what it restores.
+   */
+  function undoable(message, mutate) {
+    const before = clone(draft.value)
+    mutate()
+    useToastStore().show(message, {
+      timeout: UNDO_MS,
+      action: { label: 'Undo', run: () => (draft.value = before) },
+    })
+  }
+
   function discard() {
-    draft.value = clone(saved.value)
+    if (!dirty.value) return
+    undoable('Draft discarded.', () => (draft.value = clone(saved.value)))
   }
 
   /** After a confirmed apply the draft becomes the saved state. */
@@ -81,14 +103,81 @@ export const useConfigStore = defineStore('config', () => {
     else list[idx] = clone(iface)
   }
 
+  /**
+   * What goes with an interface when it is removed, in words, for the
+   * dialog. Anything that names it means nothing without it: a DHCP
+   * scope, a gateway, a route, a DNS listener. A VLAN or PPPoE session on
+   * top of it cannot exist without it. A bridge or bond carries on one
+   * member short unless that was its only one, and an interface delegated
+   * a prefix from it falls back to no IPv6.
+   */
+  function interfaceDependents(name) {
+    const out = []
+    const d = draft.value
+    if (!d) return out
+    for (const i of interfaces.value) {
+      if (i.vlan?.parent === name || i.pppoe?.parent === name) {
+        out.push(`${i.vlan ? 'VLAN' : 'PPPoE'} ${i.name}`, ...interfaceDependents(i.name))
+      }
+      const agg = i.bridge ?? i.bond
+      if (agg?.members?.includes(name)) {
+        if (agg.members.length === 1) {
+          out.push(`${i.bridge ? 'bridge' : 'bond'} ${i.name}, its only member`)
+          out.push(...interfaceDependents(i.name))
+        } else out.push(`${i.name} loses member ${name}`)
+      }
+      if (i.ipv6?.delegatedFrom === name) out.push(`${i.name} loses its delegated IPv6 prefix`)
+    }
+    const dhcp = d.services?.dhcp ?? {}
+    if ((dhcp.scopes ?? []).some((s) => s.interface === name)) out.push(`DHCP scope on ${name}`)
+    if ((dhcp.v6 ?? []).some((s) => s.interface === name)) {
+      out.push(`IPv6 advertisement on ${name}`)
+    }
+    if ((d.services?.dns?.interfaces ?? []).includes(name)) out.push(`DNS listener on ${name}`)
+    for (const g of gateways.value) {
+      if (g.interface === name) out.push(`gateway ${g.name}`, ...gatewayDependents(g.name))
+    }
+    for (const r of routes.value) if (r.interface === name) out.push(`route ${r.id}`)
+    return out
+  }
+
+  /** The mutation behind removeInterface, in the order interfaceDependents lists it. */
+  function dropInterface(name) {
+    const d = draft.value
+    for (const i of [...interfaces.value]) {
+      if (i.vlan?.parent === name || i.pppoe?.parent === name) dropInterface(i.name)
+      const agg = i.bridge ?? i.bond
+      if (agg?.members?.includes(name)) {
+        if (agg.members.length === 1) dropInterface(i.name)
+        else {
+          agg.members = agg.members.filter((m) => m !== name)
+          if (agg.primary === name) delete agg.primary
+        }
+      }
+      if (i.ipv6?.delegatedFrom === name) i.ipv6 = { mode: 'none' }
+    }
+    const dhcp = d.services?.dhcp
+    if (dhcp?.scopes) dhcp.scopes = dhcp.scopes.filter((s) => s.interface !== name)
+    if (dhcp?.v6) dhcp.v6 = dhcp.v6.filter((s) => s.interface !== name)
+    const dns = d.services?.dns
+    if (dns?.interfaces) dns.interfaces = dns.interfaces.filter((n) => n !== name)
+    for (const g of [...gateways.value]) if (g.interface === name) dropGateway(g.name)
+    if (d.routes) d.routes = d.routes.filter((r) => r.interface !== name)
+    d.interfaces = interfaces.value.filter((i) => i.name !== name)
+  }
+
   function removeInterface(name) {
-    draft.value.interfaces = interfaces.value.filter((i) => i.name !== name)
+    undoable(`Removed ${name} from the configuration.`, () => dropInterface(name))
   }
 
   // ---- WireGuard -------------------------------------------------------
 
   /** Tunnels are interfaces with a wireguard block. */
   const tunnels = computed(() => interfaces.value.filter((i) => i.wireguard))
+
+  function removeTunnel(name) {
+    undoable(`Deleted tunnel ${name}.`, () => dropInterface(name))
+  }
 
   function upsertPeer(tunnelName, peer, previousName = peer.name) {
     const t = findInterface(tunnelName)
@@ -102,7 +191,9 @@ export const useConfigStore = defineStore('config', () => {
   function removePeer(tunnelName, peerName) {
     const t = findInterface(tunnelName)
     if (!t?.wireguard) return
-    t.wireguard.peers = (t.wireguard.peers ?? []).filter((p) => p.name !== peerName)
+    undoable(`Deleted peer ${peerName}.`, () => {
+      t.wireguard.peers = (t.wireguard.peers ?? []).filter((p) => p.name !== peerName)
+    })
   }
 
   // ---- zones -----------------------------------------------------------
@@ -160,13 +251,15 @@ export const useConfigStore = defineStore('config', () => {
    * something a delete should do quietly.
    */
   function removeZone(name) {
-    draft.value.zones = zones.value.filter((z) => z.name !== name)
-    draft.value.rules = rules.value.filter((r) => r.zone !== name && r.destZone !== name)
-    const n = draft.value.nat
-    if (!n) return
-    if (n.portForwards) n.portForwards = n.portForwards.filter((pf) => pf.zone !== name)
-    if (n.outbound?.rules) n.outbound.rules = n.outbound.rules.filter((o) => o.zone !== name)
-    if (n.oneToOne) n.oneToOne = n.oneToOne.filter((o) => o.zone !== name)
+    undoable(`Deleted zone ${name}.`, () => {
+      draft.value.zones = zones.value.filter((z) => z.name !== name)
+      draft.value.rules = rules.value.filter((r) => r.zone !== name && r.destZone !== name)
+      const n = draft.value.nat
+      if (!n) return
+      if (n.portForwards) n.portForwards = n.portForwards.filter((pf) => pf.zone !== name)
+      if (n.outbound?.rules) n.outbound.rules = n.outbound.rules.filter((o) => o.zone !== name)
+      if (n.oneToOne) n.oneToOne = n.oneToOne.filter((o) => o.zone !== name)
+    })
   }
 
   // ---- rules -----------------------------------------------------------
@@ -183,7 +276,9 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function removeRule(id) {
-    draft.value.rules = rules.value.filter((r) => r.id !== id)
+    undoable(`Deleted rule ${id}.`, () => {
+      draft.value.rules = rules.value.filter((r) => r.id !== id)
+    })
   }
 
   /** Moves a rule up (-1) or down (+1) among the rules of its zone. */
@@ -229,7 +324,9 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function removeAlias(name) {
-    draft.value.aliases = aliases.value.filter((a) => a.name !== name)
+    undoable(`Deleted alias ${name}.`, () => {
+      draft.value.aliases = aliases.value.filter((a) => a.name !== name)
+    })
   }
 
   // ---- NAT -------------------------------------------------------------
@@ -255,8 +352,10 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function removePortForward(id) {
-    const n = ensureNat()
-    n.portForwards = (n.portForwards ?? []).filter((x) => x.id !== id)
+    undoable(`Deleted port forward ${id}.`, () => {
+      const n = ensureNat()
+      n.portForwards = (n.portForwards ?? []).filter((x) => x.id !== id)
+    })
   }
 
   function upsertOneToOne(entry) {
@@ -268,8 +367,10 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function removeOneToOne(id) {
-    const n = ensureNat()
-    n.oneToOne = (n.oneToOne ?? []).filter((x) => x.id !== id)
+    undoable(`Deleted 1:1 mapping ${id}.`, () => {
+      const n = ensureNat()
+      n.oneToOne = (n.oneToOne ?? []).filter((x) => x.id !== id)
+    })
   }
 
   function upsertOutboundRule(rule) {
@@ -281,8 +382,10 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function removeOutboundRule(id) {
-    const n = ensureNat()
-    n.outbound.rules = (n.outbound.rules ?? []).filter((x) => x.id !== id)
+    undoable(`Deleted outbound rule ${id}.`, () => {
+      const n = ensureNat()
+      n.outbound.rules = (n.outbound.rules ?? []).filter((x) => x.id !== id)
+    })
   }
 
   // ---- schedules -------------------------------------------------------
@@ -304,7 +407,9 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function removeSchedule(name) {
-    draft.value.schedules = schedules.value.filter((s) => s.name !== name)
+    undoable(`Deleted schedule ${name}.`, () => {
+      draft.value.schedules = schedules.value.filter((s) => s.name !== name)
+    })
   }
 
   // ---- services --------------------------------------------------------
@@ -327,8 +432,10 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function removeScope(iface) {
-    const dhcp = ensureServices().dhcp
-    dhcp.scopes = (dhcp.scopes ?? []).filter((s) => s.interface !== iface)
+    undoable(`Deleted the DHCP scope on ${iface}.`, () => {
+      const dhcp = ensureServices().dhcp
+      dhcp.scopes = (dhcp.scopes ?? []).filter((s) => s.interface !== iface)
+    })
   }
 
   function upsertV6Scope(scope) {
@@ -340,8 +447,10 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function removeV6Scope(iface) {
-    const dhcp = ensureServices().dhcp
-    dhcp.v6 = (dhcp.v6 ?? []).filter((s) => s.interface !== iface)
+    undoable(`Stopped advertising IPv6 on ${iface}.`, () => {
+      const dhcp = ensureServices().dhcp
+      dhcp.v6 = (dhcp.v6 ?? []).filter((s) => s.interface !== iface)
+    })
   }
 
   function upsertStaticLease(lease, previousMac = lease.mac) {
@@ -353,10 +462,12 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function removeStaticLease(mac) {
-    const dhcp = ensureServices().dhcp
-    dhcp.staticLeases = (dhcp.staticLeases ?? []).filter(
-      (l) => l.mac.toLowerCase() !== mac.toLowerCase(),
-    )
+    undoable(`Deleted the static lease for ${mac}.`, () => {
+      const dhcp = ensureServices().dhcp
+      dhcp.staticLeases = (dhcp.staticLeases ?? []).filter(
+        (l) => l.mac.toLowerCase() !== mac.toLowerCase(),
+      )
+    })
   }
 
   function upsertHostOverride(host, previousName = host.hostname) {
@@ -368,10 +479,12 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function removeHostOverride(name) {
-    const dns = ensureServices().dns
-    dns.hostOverrides = (dns.hostOverrides ?? []).filter(
-      (h) => h.hostname.toLowerCase() !== name.toLowerCase(),
-    )
+    undoable(`Deleted host override ${name}.`, () => {
+      const dns = ensureServices().dns
+      dns.hostOverrides = (dns.hostOverrides ?? []).filter(
+        (h) => h.hostname.toLowerCase() !== name.toLowerCase(),
+      )
+    })
   }
 
   function upsertDomainOverride(override, previousDomain = override.domain) {
@@ -383,10 +496,12 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function removeDomainOverride(domain) {
-    const dns = ensureServices().dns
-    dns.domainOverrides = (dns.domainOverrides ?? []).filter(
-      (d) => d.domain.toLowerCase() !== domain.toLowerCase(),
-    )
+    undoable(`Deleted domain override ${domain}.`, () => {
+      const dns = ensureServices().dns
+      dns.domainOverrides = (dns.domainOverrides ?? []).filter(
+        (d) => d.domain.toLowerCase() !== domain.toLowerCase(),
+      )
+    })
   }
 
   // ---- gateways --------------------------------------------------------
@@ -400,11 +515,53 @@ export const useConfigStore = defineStore('config', () => {
     else list[idx] = clone(gateway)
   }
 
-  function removeGateway(name) {
+  const gatewayGroups = computed(() => draft.value?.gatewayGroups ?? [])
+
+  /** Rules routed through a group, which lose that when it goes. */
+  function groupDependents(name) {
+    return rules.value
+      .filter((r) => r.gateway === name)
+      .map((r) => `rule ${r.id} loses its gateway`)
+  }
+
+  /**
+   * What changes when a gateway goes: rules routed through it fall back
+   * to the default route, groups carry on without it, and a group it was
+   * the only member of goes too.
+   */
+  function gatewayDependents(name) {
+    const out = rules.value
+      .filter((r) => r.gateway === name)
+      .map((r) => `rule ${r.id} loses its gateway`)
+    for (const g of gatewayGroups.value) {
+      const members = g.members ?? []
+      if (!members.some((m) => m.gateway === name)) continue
+      if (members.length === 1)
+        out.push(`group ${g.name}, its only member`, ...groupDependents(g.name))
+      else out.push(`group ${g.name} loses member ${name}`)
+    }
+    return out
+  }
+
+  function dropGatewayGroup(name) {
+    for (const r of rules.value) if (r.gateway === name) delete r.gateway
+    draft.value.gatewayGroups = gatewayGroups.value.filter((g) => g.name !== name)
+  }
+
+  function dropGateway(name) {
+    for (const r of rules.value) if (r.gateway === name) delete r.gateway
+    for (const g of [...gatewayGroups.value]) {
+      const members = g.members ?? []
+      if (!members.some((m) => m.gateway === name)) continue
+      if (members.length === 1) dropGatewayGroup(g.name)
+      else g.members = members.filter((m) => m.gateway !== name)
+    }
     draft.value.gateways = gateways.value.filter((g) => g.name !== name)
   }
 
-  const gatewayGroups = computed(() => draft.value?.gatewayGroups ?? [])
+  function removeGateway(name) {
+    undoable(`Deleted gateway ${name}.`, () => dropGateway(name))
+  }
 
   /** Everything rules can route through: gateways first, then groups. */
   const routeTargets = computed(() => [
@@ -420,7 +577,7 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function removeGatewayGroup(name) {
-    draft.value.gatewayGroups = gatewayGroups.value.filter((g) => g.name !== name)
+    undoable(`Deleted gateway group ${name}.`, () => dropGatewayGroup(name))
   }
 
   /** Where a gateway or group is used, so deleting it cannot go unnoticed. */
@@ -470,7 +627,9 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function removeCron(id) {
-    draft.value.crons = crons.value.filter((c) => c.id !== id)
+    undoable(`Deleted cron ${id}.`, () => {
+      draft.value.crons = crons.value.filter((c) => c.id !== id)
+    })
   }
 
   // ---- routes ----------------------------------------------------------
@@ -485,7 +644,9 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function removeRoute(id) {
-    draft.value.routes = routes.value.filter((r) => r.id !== id)
+    undoable(`Deleted route ${id}.`, () => {
+      draft.value.routes = routes.value.filter((r) => r.id !== id)
+    })
   }
 
   // ---- DNS blocking ----------------------------------------------------
@@ -510,11 +671,123 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function removeBlockList(name) {
-    const b = ensureBlocking()
-    b.lists = (b.lists ?? []).filter((l) => l.name !== name)
+    undoable(`Deleted block list ${name}.`, () => {
+      const b = ensureBlocking()
+      b.lists = (b.lists ?? []).filter((l) => l.name !== name)
+    })
+  }
+
+  // ---- what the draft changes ------------------------------------------
+
+  /**
+   * The draft compared with the saved configuration, as the server sees
+   * it. Refreshed a moment after the last edit. It is a nicety: the apply
+   * bar works without it, so a failed diff is not an error anyone sees.
+   *
+   * @type {import('vue').Ref<{path: string, kind: string, before?: unknown, after?: unknown}[]>}
+   */
+  const changes = ref([])
+  let diffTimer = 0
+  let diffSeq = 0
+
+  async function refreshChanges() {
+    if (!dirty.value || !saved.value) {
+      changes.value = []
+      return
+    }
+    const seq = ++diffSeq
+    try {
+      const out = await api.config.diff({ from: 'current', toConfig: draft.value })
+      if (seq === diffSeq) changes.value = out
+    } catch {
+      /* see above */
+    }
+  }
+
+  watch(
+    [draft, saved],
+    () => {
+      window.clearTimeout(diffTimer)
+      if (!dirty.value) {
+        changes.value = []
+        return
+      }
+      diffTimer = window.setTimeout(refreshChanges, DIFF_DEBOUNCE_MS)
+    },
+    { deep: true },
+  )
+
+  /**
+   * The sidebar path a change belongs under. Diff paths name the entry
+   * (`rules[web-in].action`), so a tunnel is told from an interface by
+   * looking it up.
+   */
+  function sectionFor(path) {
+    const [, key, id] = /^([A-Za-z0-9]+)(?:\[([^\]]*)\])?/.exec(path) ?? []
+    switch (key) {
+      case 'interfaces': {
+        const i =
+          interfaces.value.find((x) => x.name === id) ??
+          saved.value?.interfaces?.find((x) => x.name === id)
+        return i?.wireguard ? '/vpn' : '/interfaces'
+      }
+      case 'zones':
+        return '/interfaces'
+      case 'rules':
+        return '/firewall/rules'
+      case 'aliases':
+        return '/firewall/aliases'
+      case 'schedules':
+        return '/firewall/schedules'
+      case 'nat':
+        return '/firewall/nat'
+      case 'gateways':
+      case 'gatewayGroups':
+      case 'routes':
+        return '/routing'
+      case 'services':
+        return path.startsWith('services.dns') ? '/services/dns' : '/services/dhcp'
+      case 'blocking':
+        return '/services/dns'
+      case 'crons':
+        return '/crons'
+      case 'updates':
+        return '/system/updates'
+      case 'system':
+        return path.startsWith('system.keepRevisions') ? '/system/backup' : '/system/general'
+      default:
+        return '/system/general'
+    }
+  }
+
+  const changedPaths = computed(() => new Set(changes.value.map((c) => sectionFor(c.path))))
+
+  /** Whether a sidebar item has anything unapplied under it. */
+  function hasChanges(to) {
+    for (const p of changedPaths.value) if (p === to || p.startsWith(`${to}/`)) return true
+    return false
+  }
+
+  /**
+   * Whether the draft touches one entry of a named list, for marking its
+   * row: `isChanged('rules', 'web-in')`, `isChanged('nat.portForwards', id)`.
+   */
+  function isChanged(list, key) {
+    const entry = `${list}[${key}]`
+    return changes.value.some(
+      (c) => c.path === entry || c.path.startsWith(`${entry}.`) || c.path.startsWith(`${entry}[`),
+    )
   }
 
   return {
+    changes,
+    refreshChanges,
+    hasChanges,
+    isChanged,
+    interfaceDependents,
+    removeTunnel,
+    gatewayDependents,
+    groupDependents,
     saved,
     draft,
     loaded,

@@ -1,8 +1,10 @@
 <script setup>
+import { LoaderCircle } from 'lucide-vue-next'
 import { ref } from 'vue'
 
 import FormField from '@/components/FormField.vue'
 import { api } from '@/lib/api'
+import { useAsync } from '@/lib/async'
 import { useConfigStore } from '@/stores/config'
 
 const config = useConfigStore()
@@ -10,39 +12,33 @@ const target = ref('9.9.9.9')
 const iface = ref('')
 const count = ref(4)
 const resolveNames = ref(true)
+/** Which of the two is running: 'ping', 'trace', or nothing. */
 const busy = ref('')
-const error = ref('')
 const ping = ref(null)
 const trace = ref(null)
 
-async function runPing() {
-  busy.value = 'ping'
-  error.value = ''
-  trace.value = null
-  try {
+// One loader for both, so a trace clears a ping's error and the reverse.
+const job = useAsync(async (kind) => {
+  if (kind === 'ping') {
+    trace.value = null
     ping.value = await api.diagnostics.ping({
       target: target.value.trim(),
       interface: iface.value,
       count: Number(count.value) || 4,
     })
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
-  } finally {
-    busy.value = ''
-  }
-}
-
-async function runTrace() {
-  busy.value = 'trace'
-  error.value = ''
-  ping.value = null
-  try {
+  } else {
+    ping.value = null
     trace.value = await api.diagnostics.traceroute({
       target: target.value.trim(),
       resolve: resolveNames.value,
     })
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+  }
+})
+
+async function run(kind) {
+  busy.value = kind
+  try {
+    await job.run(kind)
   } finally {
     busy.value = ''
   }
@@ -51,7 +47,7 @@ async function runTrace() {
 
 <template>
   <div class="space-y-4">
-    <form class="flex flex-wrap items-end gap-4" @submit.prevent="runPing">
+    <form class="flex flex-wrap items-end gap-4" @submit.prevent="run('ping')">
       <FormField id="dg-target" label="Target" hint="An address or a name this firewall resolves.">
         <input
           id="dg-target"
@@ -61,7 +57,7 @@ async function runTrace() {
           spellcheck="false"
         />
       </FormField>
-      <FormField id="dg-if" label="Through interface" hint="Optional; otherwise routing decides.">
+      <FormField id="dg-if" label="Through interface" hint="Empty lets routing decide.">
         <select id="dg-if" v-model="iface" class="input w-48">
           <option value="">Automatic</option>
           <option v-for="i in config.interfaces" :key="i.name" :value="i.name">{{ i.name }}</option>
@@ -77,10 +73,23 @@ async function runTrace() {
           class="input w-24 font-mono"
         />
       </FormField>
-      <button type="submit" class="btn-primary" :disabled="busy !== ''">
+      <button
+        type="submit"
+        class="btn-primary"
+        :disabled="busy !== ''"
+        :aria-busy="busy === 'ping'"
+      >
+        <LoaderCircle v-if="busy === 'ping'" class="mr-1 size-4 animate-spin" aria-hidden="true" />
         {{ busy === 'ping' ? 'Pinging…' : 'Ping' }}
       </button>
-      <button type="button" class="btn-secondary" :disabled="busy !== ''" @click="runTrace">
+      <button
+        type="button"
+        class="btn-secondary"
+        :disabled="busy !== ''"
+        :aria-busy="busy === 'trace'"
+        @click="run('trace')"
+      >
+        <LoaderCircle v-if="busy === 'trace'" class="mr-1 size-4 animate-spin" aria-hidden="true" />
         {{ busy === 'trace' ? 'Tracing…' : 'Traceroute' }}
       </button>
       <label class="flex items-center gap-2 text-sm">
@@ -89,12 +98,14 @@ async function runTrace() {
       </label>
     </form>
 
-    <p v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+    <p v-if="job.error.value" role="alert" class="text-sm text-red-600 dark:text-red-400">
+      {{ job.error.value }}
+    </p>
 
     <section v-if="ping" class="card" aria-label="Ping result">
       <h2 class="card-title">
         <span class="font-mono">{{ ping.address }}</span>
-        <span class="text-neutral-500"> — {{ ping.received }}/{{ ping.sent }} answered</span>
+        <span class="text-neutral-500"> · {{ ping.received }}/{{ ping.sent }} answered</span>
       </h2>
       <dl class="kv text-sm">
         <dt>Loss</dt>
@@ -107,7 +118,7 @@ async function runTrace() {
           </dd>
         </template>
       </dl>
-      <ol class="mt-3 space-y-1 font-mono text-xs">
+      <ol class="mt-3 space-y-1 font-mono text-code">
         <li v-for="p in ping.probes" :key="p.seq">
           seq {{ p.seq }}:
           <span v-if="p.error" class="text-amber-700 dark:text-amber-400">{{ p.error }}</span>
@@ -131,19 +142,19 @@ async function runTrace() {
               <th class="text-right">Round trip</th>
             </tr>
           </thead>
-          <tbody>
+          <TransitionGroup name="row" tag="tbody">
             <tr v-for="h in trace.hops" :key="h.ttl">
-              <td class="font-mono text-xs">{{ h.ttl }}</td>
-              <td class="font-mono text-xs">
+              <td class="font-mono text-code">{{ h.ttl }}</td>
+              <td class="font-mono text-code">
                 {{ h.address || '*' }}
                 <span v-if="h.final" class="badge badge-ok ml-1">target</span>
               </td>
-              <td class="text-xs">{{ h.name }}</td>
-              <td class="text-right font-mono text-xs">
+              <td class="font-mono text-code">{{ h.name }}</td>
+              <td class="text-right font-mono text-code">
                 {{ h.address ? `${h.rttMs.toFixed(1)} ms` : '' }}
               </td>
             </tr>
-          </tbody>
+          </TransitionGroup>
         </table>
       </div>
     </section>

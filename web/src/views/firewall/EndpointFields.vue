@@ -25,7 +25,7 @@ const label = computed(() => (props.side === 'source' ? 'Source' : 'Destination'
 
 <template>
   <fieldset class="space-y-3 rounded-md border border-neutral-200 p-3 dark:border-neutral-800">
-    <legend class="px-1 text-sm font-medium">{{ label }}</legend>
+    <legend class="subsection-title px-1">{{ label }}</legend>
     <FormField :id="id('mode')" label="Match">
       <select :id="id('mode')" v-model="model.mode" class="input">
         <option value="any">Any</option>
@@ -38,7 +38,7 @@ const label = computed(() => (props.side === 'source' ? 'Source' : 'Destination'
       v-if="model.mode === 'addresses'"
       :id="id('addresses')"
       label="Addresses"
-      hint="One per line: IPs or CIDR networks, IPv4 and IPv6."
+      hint="One address or CIDR network per line, IPv4 or IPv6."
     >
       <textarea
         :id="id('addresses')"
@@ -62,9 +62,8 @@ const label = computed(() => (props.side === 'source' ? 'Source' : 'Destination'
         class="mt-0.5 size-4 rounded border-neutral-300"
       />
       <span>
-        <span class="font-medium">Invert</span> — match everything <em>except</em> this. Both
-        address families are covered: inverting a list that names only IPv4 still matches every IPv6
-        packet, because none of them is in it.
+        <span class="font-medium">Invert</span>: match everything <em>except</em> this, IPv6
+        included when the list is IPv4 only.
       </span>
     </label>
     <template v-if="portsAllowed">
@@ -102,7 +101,7 @@ const label = computed(() => (props.side === 'source' ? 'Source' : 'Destination'
           class="mt-0.5 size-4 rounded border-neutral-300"
         />
         <span>
-          <span class="font-medium">Invert ports</span> — match every port <em>except</em> these.
+          <span class="font-medium">Invert ports</span>: match every port <em>except</em> these.
         </span>
       </label>
     </template>

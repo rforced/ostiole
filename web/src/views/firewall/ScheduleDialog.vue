@@ -73,8 +73,8 @@ function save() {
         </FormField>
       </div>
       <fieldset class="space-y-2 text-sm">
-        <legend class="font-medium">Days</legend>
-        <p class="text-xs text-neutral-500">None selected means every day.</p>
+        <legend class="subsection-title">Days</legend>
+        <p class="text-sm text-neutral-500">None selected means every day.</p>
         <div class="flex flex-wrap gap-4">
           <label v-for="d in DAYS" :key="d" class="flex items-center gap-2 capitalize">
             <input

@@ -1,34 +1,31 @@
 <script setup>
-import { Plus, RefreshCw } from 'lucide-vue-next'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { Plus } from 'lucide-vue-next'
+import { computed, onMounted, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import RefreshButton from '@/components/RefreshButton.vue'
 import { api } from '@/lib/api'
+import { useAsync } from '@/lib/async'
 import { useConfigStore } from '@/stores/config'
+import { useConfirmStore } from '@/stores/confirm'
 import CronDialog from '@/views/crons/CronDialog.vue'
 
+const REFRESH_MS = 10_000
+
 const config = useConfigStore()
+const confirm = useConfirmStore()
 const statuses = ref([])
-const error = ref('')
 const open = ref(false)
 const editing = ref(null)
-const running = ref('')
-let timer = null
 
-onMounted(async () => {
-  await Promise.all([config.load(), refresh()])
-  timer = setInterval(refresh, 10_000)
-})
-onUnmounted(() => clearInterval(timer))
-
-async function refresh() {
-  try {
+const load = useAsync(
+  async () => {
     statuses.value = await api.crons.list()
-    error.value = ''
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
-  }
-}
+  },
+  { interval: REFRESH_MS },
+)
+
+onMounted(() => Promise.all([config.load(), load.run()]))
 
 const byID = computed(() => Object.fromEntries(statuses.value.map((s) => [s.id, s])))
 const system = computed(() => statuses.value.filter((s) => s.origin === 'system'))
@@ -38,17 +35,23 @@ const rows = computed(() =>
   (config.crons ?? []).map((c) => ({ ...c, status: byID.value[c.id] ?? null })),
 )
 
-async function runNow(id) {
-  running.value = id
-  try {
-    const res = await api.crons.run(id)
-    if (res?.error) error.value = `${id}: ${res.error}`
-    await refresh()
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
-  } finally {
-    running.value = ''
-  }
+/** One at a time; the outcome lands in the row once the list is read again. */
+const runner = useAsync(async (c) => {
+  const res = await api.crons.run(c.id)
+  if (res?.error) throw new Error(`${c.id}: ${res.error}`)
+  await load.run()
+})
+
+const error = computed(() => load.error.value || runner.error.value)
+
+async function runNow(c) {
+  const ok = await confirm.ask({
+    question: `Run ${c.description || c.id} now?`,
+    description: 'As root, with the saved configuration.',
+    confirmLabel: 'Run',
+  })
+  if (!ok) return
+  await runner.run(c)
 }
 
 function add() {
@@ -83,22 +86,20 @@ function describe(c) {
 <template>
   <div class="space-y-4">
     <h1 class="text-2xl font-semibold tracking-tight">Crons</h1>
-    <p class="max-w-3xl text-sm text-neutral-500">
-      What this box does while nobody is watching. Your own crons are below, and under them the work
-      Ostiole does on its own account, so the whole answer is on one page.
-    </p>
     <p v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
 
     <template v-if="config.draft">
       <section class="space-y-3" aria-labelledby="crons-title">
         <div class="flex items-center gap-3">
-          <h2 id="crons-title" class="font-medium">Your crons</h2>
+          <h2 id="crons-title" class="section-title">Your crons</h2>
           <button type="button" class="btn-secondary" @click="add">
             <Plus class="mr-1 size-4" aria-hidden="true" /> Add cron
           </button>
-          <button type="button" class="btn-secondary" @click="refresh">
-            <RefreshCw class="mr-1 size-4" aria-hidden="true" /> Refresh
-          </button>
+          <RefreshButton
+            :busy="load.busy.value"
+            :updated-at="load.updatedAt.value"
+            @click="load.run"
+          />
         </div>
         <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
           <table class="table">
@@ -111,18 +112,25 @@ function describe(c) {
                 <th></th>
               </tr>
             </thead>
-            <tbody>
-              <tr v-if="!rows.length">
-                <td colspan="5" class="text-neutral-500">
-                  No crons yet. A nightly backup is the one most boxes want.
-                </td>
+            <TransitionGroup name="row" tag="tbody">
+              <tr v-if="!rows.length" key="empty">
+                <td colspan="5" class="text-neutral-500">No crons yet.</td>
               </tr>
-              <tr v-for="c in rows" :key="c.id" :class="{ 'opacity-50': !c.enabled }">
+              <tr
+                v-for="c in rows"
+                :key="c.id"
+                :class="{
+                  'opacity-50': !c.enabled,
+                  'row-changed': config.isChanged('crons', c.id),
+                }"
+              >
                 <td>
                   <div class="font-medium">{{ c.description || c.kind }}</div>
-                  <div class="font-mono text-xs break-all text-neutral-500">{{ describe(c) }}</div>
+                  <div class="font-mono text-code break-all text-neutral-500">
+                    {{ describe(c) }}
+                  </div>
                 </td>
-                <td class="font-mono text-xs">
+                <td class="font-mono text-code">
                   {{ c.schedule }}
                   <span v-if="!c.enabled" class="badge ml-1">off</span>
                 </td>
@@ -135,10 +143,16 @@ function describe(c) {
                     {{ when(c.status.lastRun) }}
                     <span v-if="c.status.lastError" class="badge badge-warn ml-1">failed</span>
                     <div
-                      v-if="c.status.lastError || c.status.lastOutput"
-                      class="mt-1 font-mono text-xs break-all text-neutral-500"
+                      v-if="c.status.lastError"
+                      class="mt-1 font-mono text-code break-all text-red-600 dark:text-red-400"
                     >
-                      {{ c.status.lastError || c.status.lastOutput }}
+                      {{ c.status.lastError }}
+                    </div>
+                    <div
+                      v-else-if="c.status.lastOutput"
+                      class="mt-1 font-mono text-code break-all text-neutral-500"
+                    >
+                      {{ c.status.lastOutput }}
                     </div>
                   </template>
                   <span v-else class="text-neutral-500">never</span>
@@ -147,8 +161,8 @@ function describe(c) {
                   <button
                     type="button"
                     class="link mr-3"
-                    :disabled="running !== ''"
-                    @click="runNow(c.id)"
+                    :disabled="runner.busy.value"
+                    @click="runNow(c)"
                   >
                     Run now
                   </button>
@@ -156,23 +170,22 @@ function describe(c) {
                   <ConfirmButton
                     class="ml-3"
                     label="Delete"
-                    confirm-label="Delete cron?"
+                    :question="`Delete cron ${c.description || c.id}?`"
                     @confirm="config.removeCron(c.id)"
                   />
                 </td>
               </tr>
-            </tbody>
+            </TransitionGroup>
           </table>
         </div>
         <p class="text-sm text-neutral-500">
-          A cron runs as root on this box. "Run now" uses whatever is saved, so apply a new cron
-          before trying it.
+          Run now uses the saved configuration, so apply a new cron before trying it.
         </p>
       </section>
     </template>
 
     <section class="space-y-3" aria-labelledby="system-title">
-      <h2 id="system-title" class="font-medium">What Ostiole does by itself</h2>
+      <h2 id="system-title" class="section-title">What Ostiole does by itself</h2>
       <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
         <table class="table">
           <thead>
@@ -182,18 +195,22 @@ function describe(c) {
               <th>Last seen</th>
             </tr>
           </thead>
-          <tbody>
-            <tr v-if="!system.length">
+          <TransitionGroup name="row" tag="tbody">
+            <tr v-if="!system.length" key="empty">
               <td colspan="3" class="text-neutral-500">
-                Nothing is reporting; this needs the daemon.
+                {{
+                  load.busy.value && !load.updatedAt.value
+                    ? 'Reading…'
+                    : 'Nothing is reporting. This needs the daemon.'
+                }}
               </td>
             </tr>
             <tr v-for="s in system" :key="s.id">
               <td>{{ s.description }}</td>
-              <td class="font-mono text-xs">{{ s.schedule }}</td>
+              <td class="font-mono text-code">{{ s.schedule }}</td>
               <td class="text-xs">{{ when(s.lastRun) }}</td>
             </tr>
-          </tbody>
+          </TransitionGroup>
         </table>
       </div>
     </section>

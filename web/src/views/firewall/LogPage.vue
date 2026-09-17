@@ -3,19 +3,23 @@ import { Pause, Play, Trash2 } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { ApiError, api } from '@/lib/api'
+import { useAsync } from '@/lib/async'
 
 const MAX_ROWS = 500
 
 const entries = ref([])
 const paused = ref(false)
 const filter = ref('')
-const error = ref('')
+const streamError = ref('')
 const connected = ref(false)
 let source = null
 let pending = []
+let seq = 0
 
+/** Newest first, each row keyed once so the table can animate it in and out. */
 function push(list) {
-  entries.value = [...list, ...entries.value].slice(0, MAX_ROWS)
+  const keyed = list.map((e) => ({ ...e, key: ++seq }))
+  entries.value = [...keyed, ...entries.value].slice(0, MAX_ROWS)
 }
 
 function connect() {
@@ -23,7 +27,7 @@ function connect() {
   source = new EventSource('/api/v1/log/stream')
   source.onopen = () => {
     connected.value = true
-    error.value = ''
+    streamError.value = ''
   }
   source.onmessage = (ev) => {
     try {
@@ -37,23 +41,24 @@ function connect() {
   source.onerror = () => {
     connected.value = false
     // The browser retries on its own; a 503/401 will keep failing, so say so.
-    if (!error.value) error.value = 'Stream disconnected; retrying…'
+    if (!streamError.value) streamError.value = 'Stream disconnected, retrying…'
   }
 }
 
-async function load() {
+const load = useAsync(async () => {
+  let recent
   try {
-    const recent = await api.log.recent(200)
-    entries.value = recent.reverse()
-    error.value = ''
-    connect()
+    recent = await api.log.recent(200)
   } catch (e) {
     if (e instanceof ApiError && e.status === 503)
-      error.value =
-        'The firewall log needs the daemon to run as root (it is unavailable in this session).'
-    else error.value = e instanceof Error ? e.message : String(e)
+      throw new Error('The firewall log needs the daemon to run as root.', { cause: e })
+    throw e
   }
-}
+  push(recent.reverse())
+  connect()
+})
+
+const error = computed(() => load.error.value || streamError.value)
 
 function togglePause() {
   paused.value = !paused.value
@@ -71,7 +76,12 @@ function clear() {
 const visible = computed(() => {
   const q = filter.value.trim().toLowerCase()
   if (!q) return entries.value
-  return entries.value.filter((e) => JSON.stringify(e).toLowerCase().includes(q))
+  // The row key is ours, not the packet's, so it is not searched.
+  return entries.value.filter((e) =>
+    JSON.stringify(e, (k, v) => (k === 'key' ? undefined : v))
+      .toLowerCase()
+      .includes(q),
+  )
 })
 
 function label(e) {
@@ -86,7 +96,7 @@ function endpoint(addr, port) {
   return port ? `${addr}:${port}` : addr
 }
 
-onMounted(load)
+onMounted(load.run)
 onBeforeUnmount(() => source?.close())
 </script>
 
@@ -113,9 +123,9 @@ onBeforeUnmount(() => source?.close())
         {{ connected ? 'live' : 'not connected' }} · {{ visible.length }} shown
       </span>
     </div>
-    <p class="text-xs text-neutral-500">
-      Rules with logging on, zones with "log drops", and the default-drop logging under System all
-      appear here. Nothing is written to the kernel log.
+    <p class="text-sm text-neutral-500">
+      Only rules with logging on, zones that log drops, and the default-drop log under System appear
+      here.
     </p>
     <p v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
 
@@ -133,12 +143,20 @@ onBeforeUnmount(() => source?.close())
             <th>Info</th>
           </tr>
         </thead>
-        <tbody>
-          <tr v-if="!visible.length">
-            <td colspan="8" class="text-neutral-500">Nothing logged yet.</td>
+        <TransitionGroup name="row" tag="tbody">
+          <tr v-if="!visible.length" key="empty">
+            <td colspan="8" class="text-neutral-500">
+              {{
+                load.busy.value
+                  ? 'Reading the log…'
+                  : entries.length
+                    ? `Nothing matches "${filter.trim()}".`
+                    : 'Nothing logged yet.'
+              }}
+            </td>
           </tr>
-          <tr v-for="(e, i) in visible" :key="e.time + i">
-            <td class="font-mono text-xs whitespace-nowrap">
+          <tr v-for="e in visible" :key="e.key">
+            <td class="font-mono text-code whitespace-nowrap">
               {{ new Date(e.time).toLocaleTimeString() }}
             </td>
             <td>
@@ -148,18 +166,18 @@ onBeforeUnmount(() => source?.close())
                 >{{ label(e) }}</span
               >
             </td>
-            <td class="font-mono text-xs">{{ e.in }}</td>
-            <td class="font-mono text-xs">{{ e.out }}</td>
-            <td class="font-mono text-xs">{{ e.proto }}</td>
-            <td class="font-mono text-xs">{{ endpoint(e.src, e.srcPort) }}</td>
-            <td class="font-mono text-xs">{{ endpoint(e.dst, e.dstPort) }}</td>
-            <td class="font-mono text-xs text-neutral-500">
+            <td class="font-mono text-code">{{ e.in }}</td>
+            <td class="font-mono text-code">{{ e.out }}</td>
+            <td class="font-mono text-code">{{ e.proto }}</td>
+            <td class="font-mono text-code">{{ endpoint(e.src, e.srcPort) }}</td>
+            <td class="font-mono text-code">{{ endpoint(e.dst, e.dstPort) }}</td>
+            <td class="font-mono text-code text-neutral-500">
               <template v-if="e.tcpFlags">{{ e.tcpFlags }}</template>
               <template v-else-if="e.proto?.startsWith('icmp')">type {{ e.icmpType }}</template>
               <template v-else>{{ e.length }} B</template>
             </td>
           </tr>
-        </tbody>
+        </TransitionGroup>
       </table>
     </div>
   </div>

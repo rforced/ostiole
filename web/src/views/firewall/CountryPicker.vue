@@ -24,7 +24,7 @@ const groups = computed(() =>
 )
 
 /**
- * Codes that are selected but not in the list — a code typed by hand, or one
+ * Codes that are selected but not in the list: a code typed by hand, or one
  * the tz database has since dropped. They are shown so they can be removed,
  * and never quietly discarded.
  */
@@ -99,7 +99,7 @@ const allShown = computed(() => matches.value.every((c) => chosen.value.has(c.co
           }}<span v-if="selected.length > 8"> and {{ selected.length - 8 }} more</span>
         </span>
       </template>
-      <template v-else>No countries yet. The alias matches nothing until one is chosen.</template>
+      <template v-else>No countries yet.</template>
     </p>
 
     <div
@@ -115,7 +115,7 @@ const allShown = computed(() => matches.value.every((c) => chosen.value.has(c.co
           </h3>
           <button
             type="button"
-            class="link text-xs"
+            class="link"
             @click="
               set(
                 g.countries.map((c) => c.code),
@@ -138,7 +138,7 @@ const allShown = computed(() => matches.value.every((c) => chosen.value.has(c.co
               :checked="chosen.has(c.code)"
               @change="set([c.code], $event.target.checked)"
             />
-            <span class="font-mono text-xs text-neutral-500">{{ c.code }}</span>
+            <span class="font-mono text-code text-neutral-500">{{ c.code }}</span>
             <span class="truncate">{{ c.name }}</span>
           </label>
         </div>

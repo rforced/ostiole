@@ -6,6 +6,47 @@
 @theme {
   --font-sans: ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* The one size for monospace output: logs, rulesets, diffs, keys. */
+  --text-code: 0.8125rem;
+  --text-code--line-height: 1.25rem;
+
+  --animate-fade-in: fade-in 150ms ease-out both;
+  --animate-fade-out: fade-out 120ms ease-in both;
+  --animate-pop-in: pop-in 150ms ease-out both;
+  --animate-pop-out: pop-out 120ms ease-in both;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+  /* The dialog is centred with a translate, so the keyframes carry it. */
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+  @keyframes pop-out {
+    from {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.97);
+    }
+  }
 }
 
 @layer components {
@@ -18,11 +59,21 @@
   .btn-secondary {
     @apply inline-flex items-center justify-center rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-800 shadow-sm hover:bg-neutral-50 focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:hover:bg-neutral-800 dark:focus-visible:ring-offset-neutral-950;
   }
+  .btn-danger {
+    @apply inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-red-700 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-neutral-950;
+  }
   .card {
     @apply rounded-lg border border-neutral-200 p-4 text-sm dark:border-neutral-800;
   }
+  /* One size for a section heading, in a card or out of one. */
   .card-title {
-    @apply mb-2 font-medium;
+    @apply mb-2 text-base font-medium;
+  }
+  .section-title {
+    @apply text-base font-medium;
+  }
+  .subsection-title {
+    @apply text-sm font-medium;
   }
   .kv {
     @apply grid grid-cols-[auto_1fr] gap-x-4 gap-y-1;
@@ -41,6 +92,13 @@
   }
   .table tbody tr:last-child td {
     @apply border-b-0;
+  }
+  /* A row the draft adds or changes, until it is applied. */
+  .table tbody tr.row-changed td:first-child {
+    @apply shadow-[inset_3px_0_0_0_var(--color-amber-500)];
+  }
+  .skeleton {
+    @apply inline-block h-3.5 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800;
   }
   .badge {
     @apply inline-block rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300;
@@ -65,5 +123,57 @@
   }
   .link {
     @apply text-sm text-sky-700 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:text-neutral-400 disabled:no-underline dark:text-sky-400 dark:disabled:text-neutral-600;
+  }
+}
+
+/* Vue transition classes. Rows fade and slide; the bar above the page
+   grows and shrinks rather than shoving the content under it. */
+.row-enter-active,
+.row-leave-active {
+  transition:
+    opacity 150ms ease-out,
+    transform 150ms ease-out;
+}
+.row-enter-from,
+.row-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.row-move {
+  transition: transform 200ms ease-out;
+}
+
+.toast-enter-active,
+.toast-leave-active,
+.toast-move {
+  transition:
+    opacity 200ms ease-out,
+    transform 200ms ease-out;
+}
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.bar-enter-active,
+.bar-leave-active {
+  transition: grid-template-rows 200ms ease-out;
+}
+.bar-enter-from,
+.bar-leave-to {
+  grid-template-rows: 0fr;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row-enter-active,
+  .row-leave-active,
+  .row-move,
+  .toast-enter-active,
+  .toast-leave-active,
+  .toast-move,
+  .bar-enter-active,
+  .bar-leave-active {
+    transition: none;
   }
 }

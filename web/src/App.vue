@@ -1,23 +1,53 @@
 <script setup>
 import { LogOut, Shield } from 'lucide-vue-next'
+import { onBeforeUnmount, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 
 import ApplyBar from '@/components/ApplyBar.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
+import ToastStack from '@/components/ToastStack.vue'
 import { NAV } from '@/lib/nav'
 import { useAuthStore } from '@/stores/auth'
+import { useConfigStore } from '@/stores/config'
+import { useConfirmStore } from '@/stores/confirm'
 
 const auth = useAuthStore()
+const config = useConfigStore()
+const confirm = useConfirmStore()
 const route = useRoute()
 const router = useRouter()
 
 /** An item shows its pages while you are somewhere inside it. */
 const inside = (item) => route.path === item.to || route.path.startsWith(`${item.to}/`)
 
+/** Signing out drops the draft, so a dirty one is worth a question. */
 async function logout() {
+  if (
+    config.dirty &&
+    !(await confirm.ask({
+      question: 'Sign out with unapplied changes?',
+      description: 'The draft is kept only in this tab. Signing out throws it away.',
+      confirmLabel: 'Sign out',
+    }))
+  )
+    return
   await auth.logout()
   router.push({ name: 'login' })
 }
+
+// The browser asks before a reload or close would lose the draft.
+function keep(e) {
+  e.preventDefault()
+}
+watch(
+  () => config.dirty,
+  (dirty) => {
+    if (dirty) window.addEventListener('beforeunload', keep)
+    else window.removeEventListener('beforeunload', keep)
+  },
+)
+onBeforeUnmount(() => window.removeEventListener('beforeunload', keep))
 </script>
 
 <template>
@@ -40,6 +70,13 @@ async function logout() {
           >
             <component :is="item.icon" class="size-5" aria-hidden="true" />
             {{ item.label }}
+            <span
+              v-if="config.hasChanges(item.to)"
+              class="ml-auto size-2 rounded-full bg-amber-500"
+              title="Unapplied changes"
+            >
+              <span class="sr-only">(unapplied changes)</span>
+            </span>
           </RouterLink>
           <RouterLink
             v-for="page in inside(item) ? (item.pages ?? []) : []"
@@ -49,6 +86,13 @@ async function logout() {
             active-class="border-sky-600 font-medium text-neutral-900 dark:border-sky-400 dark:text-neutral-100"
           >
             {{ page.label }}
+            <span
+              v-if="config.hasChanges(`${item.to}/${page.path}`)"
+              class="ml-auto size-2 rounded-full bg-amber-500"
+              title="Unapplied changes"
+            >
+              <span class="sr-only">(unapplied changes)</span>
+            </span>
           </RouterLink>
         </template>
       </nav>
@@ -75,5 +119,7 @@ async function logout() {
         <RouterView />
       </main>
     </div>
+    <ConfirmDialog />
+    <ToastStack />
   </div>
 </template>

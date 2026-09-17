@@ -15,6 +15,12 @@ func starter(hostname string) *model.Config {
 	return model.Starter(model.StarterOptions{Hostname: hostname, LAN: "eth1", LANAddress: "192.168.1.1/24"})
 }
 
+func keeping(hostname string, revisions int) *model.Config {
+	cfg := starter(hostname)
+	cfg.System.KeepRevisions = revisions
+	return cfg
+}
+
 func TestSaveLoadAndRevisions(t *testing.T) {
 	t.Parallel()
 	s := New(t.TempDir())
@@ -96,9 +102,8 @@ func TestSaveRejectsInvalid(t *testing.T) {
 func TestPruneKeepsNewest(t *testing.T) {
 	t.Parallel()
 	s := New(t.TempDir())
-	s.KeepRevisions = 3
 	for i := range 6 {
-		if _, err := s.Save(starter("h"+string(rune('a'+i))), "rs"); err != nil {
+		if _, err := s.Save(keeping("h"+string(rune('a'+i)), 3), "rs"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -113,6 +118,29 @@ func TestPruneKeepsNewest(t *testing.T) {
 	newest, err := s.LoadRevision(revs[0].ID)
 	if err != nil || newest.System.Hostname != "he" {
 		t.Fatalf("newest revision = %v, %v", newest, err)
+	}
+}
+
+// Retention is a setting, so lowering it has to take effect with the apply
+// that lowers it rather than only on the one after.
+func TestPruneFollowsConfiguredLimit(t *testing.T) {
+	t.Parallel()
+	s := New(t.TempDir())
+	save := func(keep int) {
+		t.Helper()
+		if _, err := s.Save(keeping("h", keep), "rs"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for range 6 {
+		save(4)
+	}
+	if revs, err := s.Revisions(); err != nil || len(revs) != 4 {
+		t.Fatalf("kept %d revisions, want 4 (%v)", len(revs), err)
+	}
+	save(2)
+	if revs, err := s.Revisions(); err != nil || len(revs) != 2 {
+		t.Fatalf("after lowering the limit kept %d revisions, want 2 (%v)", len(revs), err)
 	}
 }
 

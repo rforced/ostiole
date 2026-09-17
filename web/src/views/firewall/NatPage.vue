@@ -23,8 +23,7 @@ const outbound = computed(() => config.nat.outbound)
 
 const MODE_HINTS = {
   automatic: 'Masquerades IPv4 leaving every external zone. Nothing to configure.',
-  hybrid:
-    'The rules below are applied first, then the automatic one. This is how one host gets its own address, or is kept out of NAT, without writing out the rules for everything else.',
+  hybrid: 'The rules below apply first, then the automatic masquerade.',
   manual: 'Only the rules below. Anything they do not match leaves untranslated.',
   disabled: 'Nothing is translated on the way out.',
 }
@@ -63,7 +62,7 @@ function editOb(r) {
   <div class="space-y-8">
     <section class="space-y-3" aria-labelledby="pf-title">
       <div class="flex items-center gap-3">
-        <h2 id="pf-title" class="font-medium">Port forwards</h2>
+        <h2 id="pf-title" class="section-title">Port forwards</h2>
         <button type="button" class="btn-secondary" @click="addPf">
           <Plus class="mr-1 size-4" aria-hidden="true" /> Add port forward
         </button>
@@ -80,15 +79,22 @@ function editOb(r) {
               <th></th>
             </tr>
           </thead>
-          <tbody>
-            <tr v-if="forwards.length === 0">
+          <TransitionGroup name="row" tag="tbody">
+            <tr v-if="forwards.length === 0" key="empty">
               <td colspan="6" class="text-neutral-500">No port forwards.</td>
             </tr>
-            <tr v-for="pf in forwards" :key="pf.id" :class="{ 'opacity-50': !pf.enabled }">
+            <tr
+              v-for="pf in forwards"
+              :key="pf.id"
+              :class="{
+                'opacity-50': !pf.enabled,
+                'row-changed': config.isChanged('nat.portForwards', pf.id),
+              }"
+            >
               <td class="font-mono">{{ pf.zone }}</td>
-              <td class="font-mono text-xs">{{ pf.protocol }}</td>
-              <td class="font-mono text-xs">{{ pf.ports.join(', ') }}</td>
-              <td class="font-mono text-xs">
+              <td class="font-mono text-code">{{ pf.protocol }}</td>
+              <td class="font-mono text-code">{{ pf.ports.join(', ') }}</td>
+              <td class="font-mono text-code">
                 {{ pf.target }}<span v-if="pf.targetPort">:{{ pf.targetPort }}</span>
               </td>
               <td>
@@ -100,19 +106,20 @@ function editOb(r) {
                 <ConfirmButton
                   class="ml-3"
                   label="Delete"
-                  confirm-label="Delete forward?"
+                  :question="`Delete port forward ${pf.id}?`"
+                  :description="pf.description"
                   @confirm="config.removePortForward(pf.id)"
                 />
               </td>
             </tr>
-          </tbody>
+          </TransitionGroup>
         </table>
       </div>
     </section>
 
     <section class="space-y-3" aria-labelledby="one-title">
       <div class="flex items-center gap-3">
-        <h2 id="one-title" class="font-medium">1:1 NAT</h2>
+        <h2 id="one-title" class="section-title">1:1 NAT</h2>
         <button type="button" class="btn-secondary" @click="addOne">
           <Plus class="mr-1 size-4" aria-hidden="true" /> Add 1:1 NAT
         </button>
@@ -128,42 +135,46 @@ function editOb(r) {
               <th></th>
             </tr>
           </thead>
-          <tbody>
-            <tr v-if="oneToOne.length === 0">
-              <td colspan="5" class="text-neutral-500">
-                No 1:1 mappings. They give one inside host its own outside address.
-              </td>
+          <TransitionGroup name="row" tag="tbody">
+            <tr v-if="oneToOne.length === 0" key="empty">
+              <td colspan="5" class="text-neutral-500">No 1:1 mappings.</td>
             </tr>
-            <tr v-for="o in oneToOne" :key="o.id" :class="{ 'opacity-50': !o.enabled }">
+            <tr
+              v-for="o in oneToOne"
+              :key="o.id"
+              :class="{
+                'opacity-50': !o.enabled,
+                'row-changed': config.isChanged('nat.oneToOne', o.id),
+              }"
+            >
               <td class="font-mono">{{ o.zone }}</td>
-              <td class="font-mono text-xs">{{ o.external }}</td>
-              <td class="font-mono text-xs">{{ o.internal }}</td>
+              <td class="font-mono text-code">{{ o.external }}</td>
+              <td class="font-mono text-code">{{ o.internal }}</td>
               <td>{{ o.description }}</td>
               <td class="text-right whitespace-nowrap">
                 <button type="button" class="link" @click="editOne(o)">Edit</button>
                 <ConfirmButton
                   class="ml-3"
                   label="Delete"
-                  confirm-label="Delete mapping?"
+                  :question="`Delete 1:1 NAT ${o.id}?`"
+                  :description="o.description"
                   @confirm="config.removeOneToOne(o.id)"
                 />
               </td>
             </tr>
-          </tbody>
+          </TransitionGroup>
         </table>
       </div>
     </section>
 
     <section class="space-y-3" aria-labelledby="ob-title">
-      <h2 id="ob-title" class="font-medium">Outbound NAT</h2>
+      <h2 id="ob-title" class="section-title">Outbound NAT</h2>
       <FormField id="ob-mode" label="Mode" :hint="MODE_HINTS[mode]">
         <select id="ob-mode" v-model="mode" class="input max-w-lg">
-          <option value="automatic">
-            Automatic — masquerade everything leaving an external zone
-          </option>
-          <option value="hybrid">Hybrid — your rules first, then the automatic one</option>
-          <option value="manual">Manual — only the rules below</option>
-          <option value="disabled">Disabled — translate nothing</option>
+          <option value="automatic">Automatic</option>
+          <option value="hybrid">Hybrid</option>
+          <option value="manual">Manual</option>
+          <option value="disabled">Disabled</option>
         </select>
       </FormField>
       <template v-if="mode === 'manual' || mode === 'hybrid'">
@@ -182,25 +193,28 @@ function editOb(r) {
                 <th></th>
               </tr>
             </thead>
-            <tbody>
-              <tr v-if="(outbound.rules ?? []).length === 0">
+            <TransitionGroup name="row" tag="tbody">
+              <tr v-if="(outbound.rules ?? []).length === 0" key="empty">
                 <td colspan="6" class="text-neutral-500">
                   {{
                     mode === 'hybrid'
-                      ? 'No rules of your own yet, so this behaves like automatic.'
-                      : 'No manual rules: nothing is masqueraded.'
+                      ? 'No rules yet, so this behaves like automatic.'
+                      : 'No rules yet, so nothing is translated.'
                   }}
                 </td>
               </tr>
               <tr
                 v-for="r in outbound.rules ?? []"
                 :key="r.id"
-                :class="{ 'opacity-50': !r.enabled }"
+                :class="{
+                  'opacity-50': !r.enabled,
+                  'row-changed': config.isChanged('nat.outbound.rules', r.id),
+                }"
               >
                 <td class="font-mono">{{ r.zone }}</td>
-                <td class="font-mono text-xs">{{ r.source?.join(', ') || 'anything' }}</td>
-                <td class="font-mono text-xs">{{ r.destination?.join(', ') || 'anywhere' }}</td>
-                <td class="font-mono text-xs">
+                <td class="font-mono text-code">{{ r.source?.join(', ') || 'anything' }}</td>
+                <td class="font-mono text-code">{{ r.destination?.join(', ') || 'anywhere' }}</td>
+                <td class="font-mono text-code">
                   <span v-if="r.noNat" class="badge">not translated</span>
                   <template v-else-if="r.address">{{ r.address }}</template>
                   <span v-else class="text-neutral-500">the interface address</span>
@@ -211,12 +225,13 @@ function editOb(r) {
                   <ConfirmButton
                     class="ml-3"
                     label="Delete"
-                    confirm-label="Delete rule?"
+                    :question="`Delete outbound rule ${r.id}?`"
+                    :description="r.description"
                     @confirm="config.removeOutboundRule(r.id)"
                   />
                 </td>
               </tr>
-            </tbody>
+            </TransitionGroup>
           </table>
         </div>
       </template>

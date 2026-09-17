@@ -28,22 +28,18 @@ const (
 // DefaultDir is the production location.
 const DefaultDir = "/etc/ostiole"
 
-// DefaultKeepRevisions bounds the history size.
-const DefaultKeepRevisions = 50
-
 // ErrNotFound means the store has no configuration yet.
 var ErrNotFound = errors.New("no configuration found")
 
 // Store is a directory-backed configuration store. It is safe for use from
 // multiple processes when callers hold Lock around read-modify-write.
 type Store struct {
-	Dir           string
-	KeepRevisions int
+	Dir string
 }
 
-// New returns a store rooted at dir with default retention.
+// New returns a store rooted at dir.
 func New(dir string) *Store {
-	return &Store{Dir: dir, KeepRevisions: DefaultKeepRevisions}
+	return &Store{Dir: dir}
 }
 
 // Init creates the directory layout with restrictive permissions.
@@ -119,7 +115,7 @@ func (s *Store) Save(cfg *model.Config, ruleset string) (*Revision, error) {
 	if err := writeAtomic(filepath.Join(s.Dir, RulesetFile), []byte(ruleset)); err != nil {
 		return nil, err
 	}
-	if err := s.prune(); err != nil {
+	if err := s.prune(cfg.System.RevisionsKept()); err != nil {
 		return archived, err
 	}
 	return archived, nil
@@ -212,10 +208,11 @@ func (s *Store) archive(raw []byte) (*Revision, error) {
 	return &Revision{ID: id, Time: ts, Size: int64(len(raw))}, nil
 }
 
-func (s *Store) prune() error {
-	keep := s.KeepRevisions
+// prune deletes the oldest archived configurations beyond keep, which is
+// how many the configuration being saved asks to hold on to.
+func (s *Store) prune(keep int) error {
 	if keep <= 0 {
-		keep = DefaultKeepRevisions
+		keep = model.DefaultKeepRevisions
 	}
 	revs, err := s.Revisions()
 	if err != nil {

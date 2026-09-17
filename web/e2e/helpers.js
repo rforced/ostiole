@@ -37,3 +37,19 @@ export async function applyAndConfirm(page) {
   await expect(page.getByRole('status')).toHaveCount(0, { timeout: 10_000 })
   await expect(page.getByText('Unapplied changes.')).toHaveCount(0)
 }
+
+/**
+ * Answers the shared confirmation dialog that every delete and other
+ * destructive action opens. Types the name back when the dialog asks for
+ * one, then presses the button that says yes.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {{typed?: string, confirm?: string}} [opts]
+ */
+export async function confirmDialog(page, { typed = '', confirm = 'Delete' } = {}) {
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  if (typed) await dialog.getByLabel(`Type ${typed} to confirm`).fill(typed)
+  await dialog.getByRole('button', { name: confirm, exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+}

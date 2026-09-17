@@ -32,7 +32,7 @@ function value(v) {
 
 <template>
   <p v-if="!changes.length" class="text-sm text-neutral-500">{{ emptyLabel }}</p>
-  <ul v-else class="space-y-1 font-mono text-xs">
+  <ul v-else class="space-y-1 font-mono text-code">
     <li v-for="(c, i) in shown" :key="`${c.path}-${i}`" class="flex gap-2">
       <span :class="tones[c.kind]" aria-hidden="true">{{ marks[c.kind] }}</span>
       <span class="min-w-0">

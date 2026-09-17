@@ -48,7 +48,7 @@ async function submit() {
       <FormField
         id="username"
         label="Username"
-        hint="Lowercase letters, digits, '_', '.', or '-'; must start with a letter."
+        hint="Lowercase letters, digits, '_', '.', or '-'. Starts with a letter."
       >
         <input
           id="username"
@@ -86,7 +86,7 @@ async function submit() {
           class="input"
           :aria-invalid="mismatch"
         />
-        <p v-if="mismatch" class="text-xs text-red-600 dark:text-red-400">
+        <p v-if="mismatch" class="text-sm text-red-600 dark:text-red-400">
           Passwords do not match.
         </p>
       </FormField>

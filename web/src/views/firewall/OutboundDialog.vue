@@ -65,7 +65,7 @@ function save() {
   <AppDialog
     v-model:open="open"
     :title="rule ? `Outbound NAT ${rule.id}` : 'New outbound NAT rule'"
-    description="Translates traffic leaving the zone. With nothing else set it masquerades, which is what most rules want."
+    description="With nothing else set it masquerades everything leaving the zone."
   >
     <form class="space-y-4" @submit.prevent="save">
       <FormField id="nat-desc" label="Description">
@@ -110,7 +110,7 @@ function save() {
         v-if="!form.noNat"
         id="nat-address"
         label="Leave as"
-        hint="An address this box answers to. Empty uses whichever address the interface has, which is what you want unless it has several."
+        hint="An address this firewall answers to. Empty uses the interface address."
       >
         <input
           id="nat-address"

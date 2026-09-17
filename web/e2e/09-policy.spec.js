@@ -102,8 +102,10 @@ test('deleting a gateway warns that a group uses it', async ({ page }) => {
     .getByRole('row')
     .filter({ hasText: 'wan2' })
   await row.getByRole('button', { name: 'Delete' }).click()
-  await expect(row.getByRole('button', { name: /Used by group failover/ })).toBeVisible()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toContainText('group failover')
   await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
 })
 
 test('a default route the kernel already has is offered as a gateway', async ({ page }) => {

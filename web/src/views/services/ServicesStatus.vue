@@ -1,30 +1,31 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import { api } from '@/lib/api'
+import { useAsync } from '@/lib/async'
 import { useConfigStore } from '@/stores/config'
 
 defineProps({
-  /** Report on unbound too, the validating resolver the DNS page can ask for. */
+  /** Report on the validating resolver too, which the DNS page can ask for. */
   resolver: { type: Boolean, default: false },
 })
 
 const config = useConfigStore()
 const status = ref(null)
 
-/** The draft asks for unbound (DNSSEC validation or DNS over TLS). */
+/** The draft asks for the validating resolver (DNSSEC or DNS over TLS). */
 const resolverWanted = computed(() => {
   const dns = config.draft?.services?.dns
   return Boolean(dns?.enabled && dns.resolver && dns.resolver !== 'forward')
 })
 
-onMounted(async () => {
-  try {
+/** A failed read leaves the strip empty; the page works without it. */
+useAsync(
+  async () => {
     status.value = await api.services.status()
-  } catch {
-    status.value = null
-  }
-})
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -34,15 +35,15 @@ onMounted(async () => {
       class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
       role="note"
     >
-      dnsmasq is not set up on this box yet. Run
-      <code class="font-mono">ostiole services setup</code> as root once; until then, enabling this
-      service fails to apply.
+      DHCP and DNS are not set up on this box yet. Run
+      <code class="font-mono">ostiole services setup</code> as root once. Until then, enabling
+      either fails to apply.
     </p>
     <p v-else class="text-sm text-neutral-500">
-      dnsmasq {{ status.running ? 'running' : 'stopped' }}
+      DHCP and DNS {{ status.running ? 'running' : 'stopped' }}
       <template v-if="!resolver">· {{ status.leases }} lease(s)</template>
       <template v-if="resolver && status.resolverSetUp">
-        · unbound {{ status.resolverRunning ? 'running' : 'stopped' }}
+        · validating resolver {{ status.resolverRunning ? 'running' : 'stopped' }}
       </template>
     </p>
     <p
@@ -51,7 +52,7 @@ onMounted(async () => {
       role="note"
     >
       The validating resolver is not installed. Run
-      <code class="font-mono">ostiole services setup --with-resolver</code> as root once; until
+      <code class="font-mono">ostiole services setup --with-resolver</code> as root once. Until
       then, applying this DNS configuration fails.
     </p>
   </div>

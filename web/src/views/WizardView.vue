@@ -106,9 +106,7 @@ function reverted() {
     <div>
       <h1 class="text-2xl font-semibold tracking-tight">Set up this firewall</h1>
       <p class="mt-1 text-sm text-neutral-500">
-        Pick the interface facing your network and the one facing the internet. You can change
-        everything later. Nothing is applied until you press Apply, and the change reverts by itself
-        unless you confirm it, so a mistake cannot lock you out.
+        Pick the interface facing your network and the one facing the internet.
       </p>
     </div>
 
@@ -130,7 +128,7 @@ function reverted() {
       <FormField
         id="lan"
         label="LAN interface"
-        hint="The network you manage this firewall from. Anti-lockout keeps the UI and SSH reachable here."
+        hint="Anti-lockout keeps the UI and SSH reachable from here."
       >
         <select id="lan" v-model="lan" class="input" required>
           <option value="" disabled>Choose an interface</option>
@@ -138,11 +136,7 @@ function reverted() {
         </select>
       </FormField>
 
-      <FormField
-        id="lan-address"
-        label="LAN address"
-        hint="IPv4 address and prefix for this firewall on the LAN."
-      >
+      <FormField id="lan-address" label="LAN address" hint="e.g. 192.168.1.1/24">
         <input
           id="lan-address"
           v-model="lanAddress"
@@ -155,7 +149,7 @@ function reverted() {
       <FormField
         id="wan"
         label="WAN interface"
-        hint="Optional. Gets its address by DHCP; outbound traffic is NATed through it."
+        hint="Optional. Takes its address by DHCP and NATs outbound traffic."
       >
         <select id="wan" v-model="wan" class="input">
           <option value="">None for now</option>
@@ -173,9 +167,8 @@ function reverted() {
         />
         <span>
           <span class="font-medium">Allow management from the WAN side too.</span>
-          Keeps the web UI and SSH reachable on the WAN interface. Use this when you administer the
-          box over its public address, for example a cloud VM. Otherwise WAN drops everything unless
-          a rule allows it.
+          Keeps the web UI and SSH reachable on the WAN. For a box administered over its public
+          address.
         </span>
       </label>
 
@@ -187,9 +180,8 @@ function reverted() {
         />
         <span>
           <span class="font-medium">Run DHCP and DNS for the LAN.</span>
-          Hands out addresses from a pool inside the LAN network and resolves names for LAN clients.
-          Needs <code class="font-mono">ostiole services setup</code> on the box first; you can also
-          enable this later under Services.
+          Hands out addresses and resolves names for LAN clients. Needs
+          <code class="font-mono">ostiole services setup</code> on the box first.
         </span>
       </label>
 

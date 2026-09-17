@@ -51,7 +51,7 @@ const BADGE = {
       </dd>
       <dd v-else class="text-neutral-500">off</dd>
     </dl>
-    <p class="mt-3 text-xs">
+    <p class="mt-3">
       <RouterLink to="/services" class="link">Manage DHCP and DNS</RouterLink>
     </p>
   </section>

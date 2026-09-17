@@ -140,11 +140,7 @@ function save() {
             <option value="icmp">ICMP / ICMPv6</option>
           </select>
         </FormField>
-        <FormField
-          id="rule-destzone"
-          label="Leaving via zone"
-          hint="Optional; forwarded traffic only."
-        >
+        <FormField id="rule-destzone" label="Leaving via zone" hint="Forwarded traffic only.">
           <select id="rule-destzone" v-model="form.destZone" class="input">
             <option value="">Any</option>
             <option v-for="z in config.zones" :key="z.name" :value="z.name">{{ z.name }}</option>
@@ -182,7 +178,7 @@ function save() {
             <option value="">Default route</option>
             <option v-for="t in config.routeTargets" :key="t.name" :value="t.name">
               {{ t.name }}{{ t.kind === 'group' ? ' (group)' : ''
-              }}{{ t.enabled ? '' : ' — disabled' }}
+              }}{{ t.enabled ? '' : ' (disabled)' }}
             </option>
           </select>
         </FormField>

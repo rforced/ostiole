@@ -52,7 +52,7 @@ function save() {
   <AppDialog
     v-model:open="open"
     :title="entry ? `1:1 NAT ${entry.id}` : 'New 1:1 NAT'"
-    description="One outside address stands in for one host inside. Traffic to it is translated to the host, and the host leaves as that address."
+    description="One outside address stands in for one host inside."
   >
     <form class="space-y-4" @submit.prevent="save">
       <FormField id="one-desc" label="Description">
@@ -67,7 +67,7 @@ function save() {
         <FormField
           id="one-ext"
           label="External address"
-          hint="Must reach this firewall: a second address on the WAN, or one routed to it."
+          hint="A second address on the WAN, or one routed to this firewall."
         >
           <input
             id="one-ext"

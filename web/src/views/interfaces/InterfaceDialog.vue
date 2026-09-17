@@ -8,6 +8,8 @@ import { useConfigStore } from '@/stores/config'
 const props = defineProps({
   /** Interface config being edited, or a fresh one for an unconfigured link. */
   iface: { type: Object, default: null },
+  /** Live links from the kernel, for the MTU this interface is running at. */
+  links: { type: Array, default: () => [] },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 const emit = defineEmits(['saved'])
@@ -37,6 +39,48 @@ function blank() {
   }
 }
 
+/** What the kernel has for this interface, when it exists yet. */
+const live = computed(() => props.links.find((l) => l.name === form.value.name) ?? null)
+
+/** Plain Ethernet, and what a WireGuard device leaves for its own header. */
+const ETHERNET_MTU = 1500
+const WIREGUARD_MTU = 1420
+
+/**
+ * The MTU this interface would run at with nothing configured: a VLAN
+ * inherits its parent's, a tunnel pays for its encapsulation, and anything
+ * else is a standard Ethernet frame. Configuring exactly this is the same
+ * as configuring nothing, so save() leaves it out.
+ */
+const defaultMtu = computed(() => {
+  const f = form.value
+  if (f.wireguard) return WIREGUARD_MTU
+  if (!f.vlan?.parent) return ETHERNET_MTU
+  const parent = config.interfaces.find((i) => i.name === f.vlan.parent)
+  return parent?.mtu || props.links.find((l) => l.name === f.vlan.parent)?.mtu || ETHERNET_MTU
+})
+
+const mtuHint = computed(() => {
+  const d = defaultMtu.value
+  const parent = form.value.vlan?.parent
+  return parent
+    ? `The default is ${d}, inherited from ${parent}. Lower it only when the path needs it.`
+    : `The default is ${d}. Lower it only when the path needs it.`
+})
+
+/**
+ * The link is running an MTU nothing in the configuration asks for, so a
+ * reboot would lose it. The field is pre-filled with that number, which
+ * means saving is what keeps it.
+ */
+const pinsLiveMtu = computed(
+  () =>
+    !props.iface?.mtu &&
+    live.value !== null &&
+    live.value.mtu !== defaultMtu.value &&
+    form.value.mtu === live.value.mtu,
+)
+
 watch(
   () => [open.value, props.iface],
   () => {
@@ -57,6 +101,9 @@ watch(
         ...src.ipv6,
       },
     }
+    // An unset MTU is whatever the link is running at, which is a number
+    // worth seeing; 0 only ever looked like something was broken.
+    if (!form.value.mtu) form.value.mtu = live.value?.mtu || defaultMtu.value
   },
   { immediate: true },
 )
@@ -92,7 +139,7 @@ function commitZone() {
     return false
   }
   if (config.zones.some((z) => z.name === name)) {
-    zoneError.value = `Zone ${name} already exists; pick it from the list.`
+    zoneError.value = `Zone ${name} already exists. Pick it from the list.`
     return false
   }
   config.upsertZone({ name })
@@ -146,7 +193,8 @@ function save() {
   if (!out.ipv6.subnetId) delete out.ipv6.subnetId
   if (!out.zone) delete out.zone
   if (!out.description) delete out.description
-  if (!out.mtu) delete out.mtu
+  out.mtu = Number(out.mtu) || 0
+  if (!out.mtu || out.mtu === defaultMtu.value) delete out.mtu
   config.upsertInterface(out)
   emit('saved', out)
   open.value = false
@@ -154,11 +202,7 @@ function save() {
 </script>
 
 <template>
-  <AppDialog
-    v-model:open="open"
-    :title="title"
-    description="Changes stay in the draft until you apply them."
-  >
+  <AppDialog v-model:open="open" :title="title">
     <form class="space-y-4" @submit.prevent="save">
       <div class="grid gap-4 sm:grid-cols-2">
         <FormField id="if-desc" label="Description">
@@ -167,7 +211,7 @@ function save() {
         <FormField
           id="if-zone"
           label="Zone"
-          hint="Firewall rules match on zones. Interfaces in the same zone share one rule list; give this one a zone of its own to write rules just for it."
+          hint="Firewall rules match on zones. Interfaces in the same zone share one rule list."
         >
           <select id="if-zone" v-model="form.zone" class="input">
             <option value="">Unassigned (traffic dropped)</option>
@@ -207,7 +251,7 @@ function save() {
       </label>
 
       <fieldset class="space-y-3 rounded-md border border-neutral-200 p-3 dark:border-neutral-800">
-        <legend class="px-1 text-sm font-medium">IPv4</legend>
+        <legend class="subsection-title px-1">IPv4</legend>
         <FormField id="if-v4-mode" label="Mode">
           <select id="if-v4-mode" v-model="form.ipv4.mode" class="input">
             <option value="none">None</option>
@@ -237,7 +281,7 @@ function save() {
       </fieldset>
 
       <fieldset class="space-y-3 rounded-md border border-neutral-200 p-3 dark:border-neutral-800">
-        <legend class="px-1 text-sm font-medium">IPv6</legend>
+        <legend class="subsection-title px-1">IPv6</legend>
         <FormField id="if-v6-mode" label="Mode">
           <select id="if-v6-mode" v-model="form.ipv6.mode" class="input">
             <option value="none">None</option>
@@ -253,7 +297,7 @@ function save() {
           v-if="form.ipv6.mode === 'dhcp'"
           id="if-v6-hint"
           label="Ask for a prefix"
-          hint="On a WAN: the size to request from the ISP, so the networks behind this box get real addresses. Leave empty to ask for nothing."
+          hint="The prefix size to request upstream. Empty asks for nothing."
         >
           <input
             id="if-v6-hint"
@@ -308,27 +352,27 @@ function save() {
         </div>
       </fieldset>
 
-      <FormField
-        id="if-mtu"
-        label="MTU"
-        hint="0 leaves the MTU alone (the kernel default, or whatever was set before)."
-      >
+      <FormField id="if-mtu" label="MTU" :hint="mtuHint">
         <input
           id="if-mtu"
           v-model.number="form.mtu"
           type="number"
-          min="0"
+          min="68"
           max="65535"
           class="input w-32"
         />
       </FormField>
+      <p v-if="pinsLiveMtu" role="note" class="text-sm text-neutral-500">
+        {{ form.name }} is running at {{ live.mtu }}, which nothing in the configuration asks for.
+        Saving this keeps it after a reboot.
+      </p>
 
       <fieldset class="space-y-3 rounded-md border border-neutral-200 p-3 dark:border-neutral-800">
-        <legend class="px-1 text-sm font-medium">Traffic arriving here</legend>
+        <legend class="subsection-title px-1">Traffic arriving here</legend>
         <FormField
           id="if-logdrops"
           label="Log packets dropped by the default policy"
-          hint="A WAN worth watching can log while a busy LAN stays quiet. The log already records which interface a packet arrived on."
+          hint="Overrides the system setting for packets arriving on this interface."
         >
           <select id="if-logdrops" v-model="form.logDrops" class="input">
             <option value="inherit">
@@ -348,10 +392,8 @@ function save() {
           <span>
             Block private and loopback sources
             <span class="block text-neutral-500">
-              Drops traffic arriving here from 10/8, 172.16/12, 192.168/16, 127/8, and fc00::/7.
-              Those cannot legitimately come from the internet, so on a WAN they are spoofed or
-              misconfigured. Link-local is not blocked: IPv6 needs it for neighbour discovery and
-              for the default route.
+              Drops traffic arriving from 10/8, 172.16/12, 192.168/16, 127/8, and fc00::/7, but not
+              link-local.
             </span>
           </span>
         </label>
@@ -373,8 +415,7 @@ function save() {
           <span>
             Block bogon sources
             <span class="block text-neutral-500">
-              Drops traffic from prefixes nobody has been allocated, which should never appear as a
-              source address. The list is fetched and refreshed daily, like a blocklist.
+              Drops traffic from prefixes nobody has been allocated. The list is refreshed daily.
             </span>
           </span>
         </label>
@@ -383,8 +424,8 @@ function save() {
           role="note"
           class="text-sm text-amber-700 dark:text-amber-400"
         >
-          Zone {{ form.zone }} is internal. Blocking by source address belongs on an interface
-          facing the internet; here it can drop traffic you need.
+          Zone {{ form.zone }} is internal, so blocking by source address here drops legitimate
+          traffic.
         </p>
       </fieldset>
 

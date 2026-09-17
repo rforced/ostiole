@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { applyAndConfirm, login, shot, sidebar } from './helpers.js'
+import { applyAndConfirm, confirmDialog, login, shot, sidebar } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -91,7 +91,9 @@ test('add and delete a zone', async ({ page }) => {
   await sidebar(page, 'Interfaces')
   await page.getByRole('tab', { name: 'Zones' }).click()
   await row.getByRole('button', { name: 'Delete' }).click()
-  await row.getByRole('button', { name: 'Delete zone and 1 rule using it?' }).click()
+  // The dialog lists what goes with the zone and wants its name typed back.
+  await expect(page.getByRole('dialog')).toContainText('rule')
+  await confirmDialog(page, { typed: 'dmz' })
   await expect(page.getByRole('row').filter({ hasText: 'dmz' })).toHaveCount(0)
 
   // The zone and its rule are both gone, so the draft matches what is

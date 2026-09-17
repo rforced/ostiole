@@ -22,28 +22,28 @@ defineProps({
             <th class="text-right">Bytes</th>
           </tr>
         </thead>
-        <tbody>
-          <tr v-if="!rules.length">
+        <TransitionGroup name="row" tag="tbody">
+          <tr v-if="!rules.length" key="empty">
             <td colspan="4" class="text-neutral-500">No rules with counters yet.</td>
           </tr>
           <tr v-for="r in rules" :key="r.id">
             <td>
               <div>{{ r.description || r.id }}</div>
-              <div class="text-xs text-neutral-500">
+              <div class="text-neutral-500">
                 <span class="badge" :class="r.action === 'accept' ? 'badge-ok' : 'badge-warn'">{{
                   r.action
                 }}</span>
                 <span v-if="!r.enabled" class="ml-1">disabled</span>
               </div>
             </td>
-            <td class="font-mono text-xs">{{ r.zone }}</td>
-            <td class="text-right font-mono text-xs">{{ formatCount(r.packets) }}</td>
-            <td class="text-right font-mono text-xs">{{ formatBytes(r.bytes) }}</td>
+            <td class="font-mono text-code">{{ r.zone }}</td>
+            <td class="text-right font-mono text-code">{{ formatCount(r.packets) }}</td>
+            <td class="text-right font-mono text-code">{{ formatBytes(r.bytes) }}</td>
           </tr>
-        </tbody>
+        </TransitionGroup>
       </table>
     </div>
-    <p class="mt-3 text-xs text-neutral-500">
+    <p class="mt-3 text-sm text-neutral-500">
       Blocked by the default policy: {{ formatCount(blocked?.packets ?? 0) }} packets ({{
         formatBytes(blocked?.bytes ?? 0)
       }}) ·

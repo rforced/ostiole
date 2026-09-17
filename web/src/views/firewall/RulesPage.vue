@@ -1,9 +1,10 @@
 <script setup>
 import { ArrowDown, ArrowUp, Plus } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import { api } from '@/lib/api'
+import { useAsync } from '@/lib/async'
 import { useConfigStore } from '@/stores/config'
 import RuleDialog from '@/views/firewall/RuleDialog.vue'
 
@@ -31,19 +32,13 @@ const members = computed(() =>
   config.interfaces.filter((i) => i.zone === zone.value).map((i) => i.name),
 )
 
-let poll = 0
-async function refreshCounters() {
-  try {
+// Counters are decoration; a failed read leaves the column blank.
+useAsync(
+  async () => {
     counters.value = await api.counters()
-  } catch {
-    counters.value = {}
-  }
-}
-onMounted(() => {
-  refreshCounters()
-  poll = window.setInterval(refreshCounters, 5000)
-})
-onBeforeUnmount(() => window.clearInterval(poll))
+  },
+  { interval: 5000, immediate: true },
+)
 
 function describe(ep, ports) {
   let who = 'any'
@@ -100,18 +95,17 @@ function toggle(rule) {
       <button type="button" class="btn-secondary" :disabled="!zone" @click="add">
         <Plus class="mr-1 size-4" aria-hidden="true" /> Add rule
       </button>
-      <span class="ml-auto text-xs text-neutral-500"
-        >Rules run top to bottom; the first match wins. Anything unmatched is dropped.</span
+      <span class="ml-auto text-sm text-neutral-500"
+        >First match wins, top to bottom. Unmatched traffic is dropped.</span
       >
     </div>
 
-    <p v-if="zone" class="text-xs text-neutral-500">
+    <p v-if="zone" class="text-sm text-neutral-500">
       <template v-if="members.length">
         Zone <span class="font-mono">{{ zone }}</span> covers
         <span class="font-mono">{{ members.join(', ') }}</span
-        >. These rules match traffic arriving on any of them; to give one interface rules of its
-        own,
-        <RouterLink to="/interfaces" class="underline">move it to a zone of its own</RouterLink>.
+        >. To give one of them rules of its own,
+        <RouterLink to="/interfaces" class="underline">move it to its own zone</RouterLink>.
       </template>
       <template v-else>
         No interface is in zone <span class="font-mono">{{ zone }}</span
@@ -135,14 +129,18 @@ function toggle(rule) {
             <th></th>
           </tr>
         </thead>
-        <tbody>
-          <tr v-if="rules.length === 0">
+        <TransitionGroup name="row" tag="tbody">
+          <tr v-if="rules.length === 0" key="empty">
             <td colspan="9" class="text-neutral-500">
               No rules in this zone. Everything entering it is dropped except the baseline and
               anti-lockout traffic.
             </td>
           </tr>
-          <tr v-for="(r, i) in rules" :key="r.id" :class="{ 'opacity-50': !r.enabled }">
+          <tr
+            v-for="(r, i) in rules"
+            :key="r.id"
+            :class="{ 'opacity-50': !r.enabled, 'row-changed': config.isChanged('rules', r.id) }"
+          >
             <td>
               <input
                 type="checkbox"
@@ -161,17 +159,17 @@ function toggle(rule) {
               <span v-if="r.log" class="badge ml-1">log</span>
               <span v-if="r.schedule" class="badge ml-1">{{ r.schedule }}</span>
             </td>
-            <td class="font-mono text-xs">{{ r.protocol }}</td>
-            <td class="font-mono text-xs">{{ describe(r.source, true) }}</td>
-            <td class="font-mono text-xs">{{ describe(r.destination, true) }}</td>
-            <td class="font-mono text-xs">
+            <td class="font-mono text-code">{{ r.protocol }}</td>
+            <td class="font-mono text-code">{{ describe(r.source, true) }}</td>
+            <td class="font-mono text-code">{{ describe(r.destination, true) }}</td>
+            <td class="font-mono text-code">
               <span v-if="r.gateway" class="badge" :title="`Routed through ${r.gateway}`"
                 >→ {{ r.gateway }}</span
               >
               <template v-else>{{ r.destZone ?? '' }}</template>
             </td>
             <td>{{ r.description }}</td>
-            <td class="text-right font-mono text-xs tabular-nums">
+            <td class="text-right font-mono text-code tabular-nums">
               {{ counters[r.id]?.packets ?? '' }}
             </td>
             <td class="text-right whitespace-nowrap">
@@ -197,12 +195,13 @@ function toggle(rule) {
               <ConfirmButton
                 class="ml-3"
                 label="Delete"
-                confirm-label="Delete rule?"
+                :question="`Delete rule ${r.id}?`"
+                :description="r.description"
                 @confirm="config.removeRule(r.id)"
               />
             </td>
           </tr>
-        </tbody>
+        </TransitionGroup>
       </table>
     </div>
 

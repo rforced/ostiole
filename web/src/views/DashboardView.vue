@@ -1,9 +1,10 @@
 <script setup>
-import { RefreshCw } from 'lucide-vue-next'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import ApplyPending from '@/components/ApplyPending.vue'
+import RefreshButton from '@/components/RefreshButton.vue'
 import { api } from '@/lib/api'
+import { errorMessage, useAsync } from '@/lib/async'
 import { useSystemStore } from '@/stores/system'
 import DashboardWarnings from '@/views/dashboard/DashboardWarnings.vue'
 import GatewaysCard from '@/views/dashboard/GatewaysCard.vue'
@@ -24,41 +25,40 @@ const system = useSystemStore()
 const health = ref(null)
 const overview = ref(null)
 const stats = ref(null)
-const error = ref('')
+const healthError = ref('')
 const update = ref(null)
 const status = computed(() => system.status)
-let timer = null
-let statsTimer = null
 
-/** Usage failing is never worth an error banner over the whole dashboard. */
-async function refreshStats() {
-  try {
-    stats.value = await api.systemStats()
-  } catch {
-    stats.value = null
-  }
-}
-
-async function refresh() {
-  try {
+const load = useAsync(
+  async () => {
     const [ov] = await Promise.all([api.overview(), system.refresh()])
     overview.value = ov
-    error.value = ''
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
-  }
-}
+  },
+  { interval: REFRESH_MS },
+)
+
+/** Usage failing is never worth an error banner over the whole dashboard. */
+const loadStats = useAsync(
+  async () => {
+    try {
+      stats.value = await api.systemStats()
+    } catch {
+      stats.value = null
+    }
+  },
+  { interval: STATS_MS },
+)
+
+const error = computed(() => healthError.value || load.error.value || system.error)
 
 onMounted(async () => {
   try {
     health.value = await api.health()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    healthError.value = errorMessage(e)
   }
-  await refresh()
-  timer = setInterval(refresh, REFRESH_MS)
-  await refreshStats()
-  statsTimer = setInterval(refreshStats, STATS_MS)
+  await load.run()
+  await loadStats.run()
   // Best effort: a quiet hint when a newer release exists.
   try {
     const res = await api.update.check(
@@ -69,31 +69,24 @@ onMounted(async () => {
     /* offline or updates unavailable */
   }
 })
-
-onUnmounted(() => {
-  clearInterval(timer)
-  clearInterval(statsTimer)
-})
 </script>
 
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-4">
       <h1 class="text-2xl font-semibold tracking-tight">Dashboard</h1>
-      <button type="button" class="btn-secondary" @click="refresh">
-        <RefreshCw class="mr-1 size-4" aria-hidden="true" /> Refresh
-      </button>
+      <RefreshButton :busy="load.busy.value" :updated-at="load.updatedAt.value" @click="load.run" />
     </div>
-    <p v-if="error || system.error" role="alert" class="text-sm text-red-600 dark:text-red-400">
-      {{ error || system.error }}
+    <p v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">
+      {{ error }}
     </p>
 
     <ApplyPending
       v-if="status?.pending"
       :key="status.pending.deadline"
       :deadline="status.pending.deadline"
-      @confirmed="refresh()"
-      @reverted="refresh()"
+      @confirmed="load.run()"
+      @reverted="load.run()"
     />
 
     <p

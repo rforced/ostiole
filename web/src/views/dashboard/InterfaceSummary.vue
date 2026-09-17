@@ -36,8 +36,8 @@ function pending(l) {
             <th class="text-right">Traffic</th>
           </tr>
         </thead>
-        <tbody>
-          <tr v-if="!interfaces.length">
+        <TransitionGroup name="row" tag="tbody">
+          <tr v-if="!interfaces.length" key="empty">
             <td colspan="5" class="text-neutral-500">No interfaces yet.</td>
           </tr>
           <tr v-for="l in interfaces" :key="l.name" :class="l.configured ? '' : 'opacity-70'">
@@ -49,7 +49,7 @@ function pending(l) {
               </div>
             </td>
             <td>
-              <span v-if="l.zone" class="font-mono text-xs">{{ l.zone }}</span>
+              <span v-if="l.zone" class="font-mono text-code">{{ l.zone }}</span>
               <span v-else class="text-xs text-neutral-500">unmanaged</span>
               <span v-if="l.external" class="badge ml-1">WAN</span>
             </td>
@@ -60,7 +60,7 @@ function pending(l) {
               <span v-else-if="l.up" class="badge badge-warn">no carrier</span>
               <span v-else class="badge">down</span>
             </td>
-            <td class="font-mono text-xs">
+            <td class="font-mono text-code">
               <div v-for="a in l.addresses" :key="a">{{ a }}</div>
               <div v-for="a in pending(l)" :key="a" class="text-neutral-500">
                 {{ a }} <span class="font-sans">(configured)</span>
@@ -69,7 +69,7 @@ function pending(l) {
                 >—</span
               >
             </td>
-            <td class="text-right font-mono text-xs whitespace-nowrap">
+            <td class="text-right font-mono text-code whitespace-nowrap">
               <div v-if="l.present">
                 <ArrowDown class="inline size-3" aria-hidden="true" />{{ formatBytes(l.rxBytes) }}
                 <span class="sr-only">received,</span>
@@ -81,7 +81,7 @@ function pending(l) {
               <span v-if="!l.present" class="text-neutral-500">—</span>
             </td>
           </tr>
-        </tbody>
+        </TransitionGroup>
       </table>
     </div>
   </section>

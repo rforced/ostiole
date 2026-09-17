@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { PASSWORD, applyAndConfirm, login, shot, sidebar } from './helpers.js'
+import { PASSWORD, applyAndConfirm, confirmDialog, login, shot, sidebar } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -117,7 +117,7 @@ test('mint an API token and use it to scrape metrics', async ({ page, request })
 
   const row = section.getByRole('row').filter({ hasText: 'monitoring' })
   await row.getByRole('button', { name: 'Delete' }).click()
-  await row.getByRole('button', { name: /Delete\?/ }).click()
+  await confirmDialog(page, { typed: 'monitoring' })
   await expect(section.getByRole('row').filter({ hasText: 'monitoring' })).toHaveCount(0)
 })
 

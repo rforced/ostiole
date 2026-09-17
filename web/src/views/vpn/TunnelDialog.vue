@@ -4,12 +4,15 @@ import { ref, watch } from 'vue'
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import { api } from '@/lib/api'
+import { errorMessage } from '@/lib/async'
 import { useConfigStore } from '@/stores/config'
+import { useConfirmStore } from '@/stores/confirm'
 
 const props = defineProps({ tunnel: { type: Object, default: null } })
 const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
+const confirm = useConfirmStore()
 const form = ref(blank())
 const error = ref('')
 
@@ -62,14 +65,29 @@ function nextName() {
   return 'wg0'
 }
 
+/**
+ * A new tunnel gets its pair without asking. Replacing the pair of one
+ * that exists strands every peer until it is handed the new public key.
+ */
 async function generate() {
+  const name = form.value.name
+  if (
+    props.tunnel &&
+    !(await confirm.ask({
+      question: `Replace the key pair of ${name}?`,
+      description: 'Every peer has to be given the new public key.',
+      confirmLabel: 'Replace',
+      typed: name,
+    }))
+  )
+    return
   try {
     const keys = await api.wireguard.keys()
     form.value.privateKey = keys.privateKey
     form.value.publicKey = keys.publicKey
     error.value = ''
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    error.value = errorMessage(e)
   }
 }
 
@@ -99,7 +117,7 @@ function save() {
   <AppDialog
     v-model:open="open"
     :title="tunnel ? `Tunnel ${tunnel.name}` : 'New WireGuard tunnel'"
-    description="The tunnel is an interface: its zone decides which rules apply to the traffic that comes out of it."
+    description="Its zone decides which rules apply to what comes out of it."
   >
     <form class="space-y-4" @submit.prevent="save">
       <p v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
@@ -152,7 +170,7 @@ function save() {
       </div>
 
       <FormField id="wg-pub" label="Public key" hint="Hand this to your peers.">
-        <input id="wg-pub" :value="form.publicKey" class="input font-mono text-xs" readonly />
+        <input id="wg-pub" :value="form.publicKey" class="input font-mono" readonly />
       </FormField>
       <div class="flex items-center gap-3 text-sm">
         <button type="button" class="btn-secondary" @click="generate">Generate new key pair</button>

@@ -120,8 +120,6 @@ export const NAV = [
     to: '/diagnostics',
     label: 'Diagnostics',
     icon: Stethoscope,
-    intro:
-      'These run on the firewall itself, so they see what it sees. They need the daemon to be root, which it is on an installed box.',
     pages: [
       {
         path: 'ping',

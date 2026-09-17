@@ -6,7 +6,7 @@ defineProps({
 </script>
 
 <template>
-  <section v-if="gateways.length" class="card" aria-labelledby="dash-gateways">
+  <section class="card" aria-labelledby="dash-gateways">
     <h2 id="dash-gateways" class="card-title">Gateways</h2>
     <div class="-mx-4 -mb-4 overflow-x-auto">
       <table class="table">
@@ -19,13 +19,16 @@ defineProps({
             <th class="text-right">Loss</th>
           </tr>
         </thead>
-        <tbody>
+        <TransitionGroup name="row" tag="tbody">
+          <tr v-if="!gateways.length" key="empty">
+            <td colspan="5" class="text-neutral-500">No gateways configured.</td>
+          </tr>
           <tr v-for="g in gateways" :key="g.name">
             <td>
               <span class="font-mono font-medium">{{ g.name }}</span>
               <span v-if="g.active" class="badge badge-ok ml-1">active</span>
             </td>
-            <td class="font-mono text-xs">
+            <td class="font-mono text-code">
               {{ g.interface }}<span v-if="g.address"> · {{ g.address }}</span>
             </td>
             <td>
@@ -34,10 +37,10 @@ defineProps({
                 {{ g.online ? 'up' : 'down' }}
               </span>
             </td>
-            <td class="text-right font-mono text-xs">{{ g.latencyMs.toFixed(1) }} ms</td>
-            <td class="text-right font-mono text-xs">{{ g.lossPercent.toFixed(0) }}%</td>
+            <td class="text-right font-mono text-code">{{ g.latencyMs.toFixed(1) }} ms</td>
+            <td class="text-right font-mono text-code">{{ g.lossPercent.toFixed(0) }}%</td>
           </tr>
-        </tbody>
+        </TransitionGroup>
       </table>
     </div>
   </section>

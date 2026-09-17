@@ -1,20 +1,23 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import FormField from '@/components/FormField.vue'
+import RefreshButton from '@/components/RefreshButton.vue'
 import { ApiError, api } from '@/lib/api'
+import { useAsync } from '@/lib/async'
 import { useConfigStore } from '@/stores/config'
+import { useConfirmStore } from '@/stores/confirm'
 import UpdateModeFields from '@/views/system/UpdateModeFields.vue'
 
+/** How often a running update is looked at. */
+const POLL_MS = 1500
+
 const config = useConfigStore()
+const confirm = useConfirmStore()
 const current = ref('')
 const check = ref(null)
 const status = ref(null)
-const error = ref('')
-const busy = ref(false)
 const restartedTo = ref('')
-
-let poll = 0
 
 // The channel lives in the configuration rather than in this browser,
 // because the scheduled update has to know which one to follow.
@@ -43,45 +46,21 @@ async function loadVersion() {
   }
 }
 
-async function runCheck() {
-  error.value = ''
-  busy.value = true
+const checking = useAsync(async () => {
   try {
     const res = await api.update.check(channel.value)
     check.value = res.check
     status.value = res.status
   } catch (e) {
-    error.value =
-      e instanceof ApiError && e.status === 502
-        ? `Could not reach GitHub: ${e.message}`
-        : String(e.message ?? e)
-  } finally {
-    busy.value = false
+    throw e instanceof ApiError && e.status === 502
+      ? new Error(`Could not reach GitHub: ${e.message}`)
+      : e
   }
-}
+})
 
-async function install() {
-  error.value = ''
-  busy.value = true
-  try {
-    status.value = await api.update.apply(channel.value)
-    startPolling()
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
-  } finally {
-    busy.value = false
-  }
-}
-
-function startPolling() {
-  stopPolling()
-  poll = window.setInterval(tick, 1500)
-}
-
-function stopPolling() {
-  if (poll) window.clearInterval(poll)
-  poll = 0
-}
+// Runs only while an update is in flight: started by install, or on mount
+// when one was already running, and stopped by tick at the end.
+const poll = useAsync(tick, { interval: POLL_MS })
 
 async function tick() {
   if (status.value?.state === 'restarting') {
@@ -90,7 +69,7 @@ async function tick() {
       const h = await api.health()
       if (h.version !== current.value) {
         restartedTo.value = h.version
-        stopPolling()
+        poll.stop()
       }
     } catch {
       /* still restarting */
@@ -99,10 +78,27 @@ async function tick() {
   }
   try {
     status.value = await api.update.status()
-    if (status.value.state === 'failed') stopPolling()
+    if (status.value.state === 'failed') poll.stop()
   } catch (e) {
-    if (e instanceof ApiError && e.status === 401) stopPolling()
+    if (e instanceof ApiError && e.status === 401) poll.stop()
   }
+}
+
+const install = useAsync(async () => {
+  status.value = await api.update.apply(channel.value)
+  poll.start()
+})
+
+const busy = computed(() => checking.busy.value || install.busy.value)
+const error = computed(() => checking.error.value || install.error.value)
+
+async function askInstall() {
+  const ok = await confirm.ask({
+    question: `Install ${check.value.latest}?`,
+    description: 'The service restarts once it is in place.',
+    confirmLabel: 'Install',
+  })
+  if (ok) await install.run()
 }
 
 function reload() {
@@ -113,12 +109,11 @@ onMounted(async () => {
   await loadVersion()
   try {
     status.value = await api.update.status()
-    if (running.value) startPolling()
   } catch {
     /* updates unavailable */
   }
+  if (!running.value) poll.stop()
 })
-onBeforeUnmount(stopPolling)
 </script>
 
 <template>
@@ -145,10 +140,8 @@ onBeforeUnmount(stopPolling)
         @update:mode="config.setUpdates('ostiole', { mode: $event })"
         @update:schedule="config.setUpdates('ostiole', { schedule: $event })"
       />
-      <p class="text-xs text-neutral-500">
-        Automatic (Security) installs a release only when something published since this version is
-        marked a security release. The service restarts afterwards and rolls back if the new version
-        fails its health check.
+      <p class="text-sm text-neutral-500">
+        An install restarts the service and rolls back if the new version does not come up.
       </p>
     </template>
 
@@ -165,15 +158,20 @@ onBeforeUnmount(stopPolling)
           <option value="beta">Beta (prereleases)</option>
         </select>
       </FormField>
-      <button type="button" class="btn-secondary" :disabled="busy || running" @click="runCheck">
-        Check for updates
-      </button>
+      <RefreshButton
+        :busy="checking.busy.value"
+        :updated-at="checking.updatedAt.value"
+        :disabled="running"
+        label="Check for updates"
+        busy-label="Checking…"
+        @click="checking.run"
+      />
       <button
         v-if="check?.available && !status?.packageManaged"
         type="button"
         class="btn-primary"
         :disabled="busy || running"
-        @click="install"
+        @click="askInstall"
       >
         Install {{ check.latest }}
       </button>
@@ -205,11 +203,6 @@ onBeforeUnmount(stopPolling)
         v-if="check.release.notes"
         class="mt-2 max-h-48 overflow-auto font-sans whitespace-pre-wrap text-neutral-700 dark:text-neutral-300"
         >{{ check.release.notes }}</pre>
-      <p class="mt-2 text-neutral-500">
-        The download is verified against checksums signed with the key built into this binary. The
-        service restarts afterwards and rolls back automatically if the new version fails its health
-        check.
-      </p>
     </div>
 
     <div v-if="running" role="status" aria-live="polite" class="text-sm">

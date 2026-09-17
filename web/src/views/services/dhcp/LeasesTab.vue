@@ -1,29 +1,24 @@
 <script setup>
-import { RefreshCw } from 'lucide-vue-next'
 import { onMounted, ref } from 'vue'
 
+import RefreshButton from '@/components/RefreshButton.vue'
 import { api } from '@/lib/api'
+import { useAsync } from '@/lib/async'
 
 const leases = ref([])
-const error = ref('')
 
-async function refresh() {
-  try {
-    leases.value = await api.services.leases()
-    error.value = ''
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
-  }
-}
-onMounted(refresh)
+const load = useAsync(async () => {
+  leases.value = await api.services.leases()
+})
+onMounted(load.run)
 </script>
 
 <template>
   <div class="space-y-3">
-    <button type="button" class="btn-secondary" @click="refresh">
-      <RefreshCw class="mr-1 size-4" aria-hidden="true" /> Refresh
-    </button>
-    <p v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+    <RefreshButton :busy="load.busy.value" :updated-at="load.updatedAt.value" @click="load.run" />
+    <p v-if="load.error.value" role="alert" class="text-sm text-red-600 dark:text-red-400">
+      {{ load.error.value }}
+    </p>
     <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
       <table class="table">
         <thead>
@@ -34,23 +29,25 @@ onMounted(refresh)
             <th>Expires</th>
           </tr>
         </thead>
-        <tbody>
-          <tr v-if="!leases.length">
-            <td colspan="4" class="text-neutral-500">No leases yet.</td>
+        <TransitionGroup name="row" tag="tbody">
+          <tr v-if="!leases.length" key="empty">
+            <td colspan="4" class="text-neutral-500">
+              {{ load.updatedAt.value ? 'No leases yet.' : 'Reading leases…' }}
+            </td>
           </tr>
           <tr v-for="l in leases" :key="l.ip + (l.mac || l.clientId)">
-            <td class="font-mono text-xs">
+            <td class="font-mono text-code">
               {{ l.ip }}
               <span v-if="l.family === 6" class="badge ml-1">v6</span>
             </td>
             <!-- DHCPv6 identifies clients by DUID, so there is no MAC. -->
-            <td class="font-mono text-xs">{{ l.mac || l.clientId || '—' }}</td>
-            <td class="font-mono text-xs">{{ l.hostname }}</td>
-            <td class="text-xs">
+            <td class="font-mono text-code">{{ l.mac || l.clientId || '—' }}</td>
+            <td class="font-mono text-code">{{ l.hostname }}</td>
+            <td>
               {{ l.static ? 'static' : new Date(l.expires).toLocaleString() }}
             </td>
           </tr>
-        </tbody>
+        </TransitionGroup>
       </table>
     </div>
   </div>

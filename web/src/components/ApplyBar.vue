@@ -3,11 +3,13 @@ import { AlertTriangle } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 
 import ApplyPending from '@/components/ApplyPending.vue'
+import ChangeList from '@/components/ChangeList.vue'
 import { ApiError, api } from '@/lib/api'
 import { useConfigStore } from '@/stores/config'
 import { useSystemStore } from '@/stores/system'
 
 const CONFIRM_SECONDS = 60
+const SHOWN_CHANGES = 20
 
 const config = useConfigStore()
 const system = useSystemStore()
@@ -16,14 +18,17 @@ const busy = ref(false)
 const error = ref('')
 const issues = ref([])
 const pending = ref(null)
+const showChanges = ref(false)
 
 const visible = computed(() => config.dirty || pending.value !== null)
+const count = computed(() => config.changes.length)
 
 watch(
   () => config.dirty,
-  () => {
+  (dirty) => {
     error.value = ''
     issues.value = []
+    if (!dirty) showChanges.value = false
   },
 )
 
@@ -66,41 +71,62 @@ async function reverted() {
 </script>
 
 <template>
-  <div
-    v-if="visible"
-    class="border-b border-neutral-200 bg-neutral-50 px-6 py-3 dark:border-neutral-800 dark:bg-neutral-900"
-  >
-    <ApplyPending
-      v-if="pending"
-      :deadline="pending.deadline"
-      @confirmed="confirmed"
-      @reverted="reverted"
-    />
-    <div v-else class="space-y-2">
-      <div class="flex flex-wrap items-center gap-3 text-sm">
-        <AlertTriangle class="size-4 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-        <span class="font-medium">Unapplied changes.</span>
-        <span class="text-neutral-500"
-          >Nothing reaches the kernel until you apply and confirm.</span
+  <Transition name="bar">
+    <div v-if="visible" class="grid grid-rows-[1fr]">
+      <div class="min-h-0 overflow-hidden">
+        <div
+          class="border-b border-neutral-200 bg-neutral-50 px-6 py-3 dark:border-neutral-800 dark:bg-neutral-900"
         >
-        <div class="ml-auto flex gap-2">
-          <button type="button" class="btn-secondary" :disabled="busy" @click="config.discard()">
-            Discard
-          </button>
-          <button type="button" class="btn-primary" :disabled="busy" @click="apply">
-            {{ busy ? 'Applying…' : `Apply with ${CONFIRM_SECONDS}s confirmation` }}
-          </button>
+          <ApplyPending
+            v-if="pending"
+            :deadline="pending.deadline"
+            @confirmed="confirmed"
+            @reverted="reverted"
+          />
+          <div v-else class="space-y-2">
+            <div class="flex flex-wrap items-center gap-3 text-sm">
+              <AlertTriangle class="size-4 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+              <span class="font-medium">Unapplied changes.</span>
+              <button
+                v-if="count"
+                type="button"
+                class="link"
+                :aria-expanded="showChanges"
+                @click="showChanges = !showChanges"
+              >
+                {{ showChanges ? 'Hide' : 'Show' }} {{ count }}
+                {{ count === 1 ? 'change' : 'changes' }}
+              </button>
+              <span class="text-neutral-500"
+                >Nothing reaches the kernel until you apply and confirm.</span
+              >
+              <div class="ml-auto flex gap-2">
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  :disabled="busy"
+                  @click="config.discard()"
+                >
+                  Discard
+                </button>
+                <button type="button" class="btn-primary" :disabled="busy" @click="apply">
+                  {{ busy ? 'Applying…' : `Apply with ${CONFIRM_SECONDS}s confirmation` }}
+                </button>
+              </div>
+            </div>
+            <ChangeList v-if="showChanges" :changes="config.changes" :limit="SHOWN_CHANGES" />
+            <div v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">
+              <p>{{ error }}</p>
+              <ul v-if="issues.length" class="mt-1 list-disc pl-5">
+                <li v-for="i in issues" :key="i.path + i.message">
+                  <span class="font-mono">{{ i.path }}</span
+                  >: {{ i.message }}
+                </li>
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
-      <div v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">
-        <p>{{ error }}</p>
-        <ul v-if="issues.length" class="mt-1 list-disc pl-5">
-          <li v-for="i in issues" :key="i.path + i.message">
-            <span class="font-mono">{{ i.path }}</span
-            >: {{ i.message }}
-          </li>
-        </ul>
-      </div>
     </div>
-  </div>
+  </Transition>
 </template>

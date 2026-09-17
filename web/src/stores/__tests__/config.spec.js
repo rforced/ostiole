@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { useConfigStore } from '@/stores/config'
+import { useToastStore } from '@/stores/toast'
 
 /** A draft with a zone that everything else hangs off. */
 function draft() {
@@ -73,5 +74,165 @@ describe('config store zones', () => {
     config.removeZone('spare')
     expect(config.zones.map((z) => z.name)).toEqual(['lan', 'dmz', 'wan'])
     expect(config.rules).toHaveLength(3)
+  })
+})
+
+/** A draft where an interface is named by everything that can name one. */
+function wired() {
+  return {
+    version: 2,
+    zones: [{ name: 'lan' }, { name: 'wan', external: true }],
+    interfaces: [
+      { name: 'eth0', zone: 'wan', ipv4: { mode: 'dhcp' }, ipv6: { mode: 'dhcp', prefixHint: 56 } },
+      {
+        name: 'eth1',
+        zone: 'lan',
+        ipv4: { mode: 'static', address: '10.0.0.1/24' },
+        ipv6: { mode: 'delegated', delegatedFrom: 'eth0' },
+      },
+      { name: 'eth1.10', zone: 'lan', vlan: { id: 10, parent: 'eth1' } },
+      { name: 'br0', zone: 'lan', bridge: { members: ['eth2', 'eth3'] } },
+      { name: 'bond0', bond: { mode: 'active-backup', members: ['eth4'], primary: 'eth4' } },
+      { name: 'wg0', zone: 'lan', wireguard: { peers: [{ name: 'alice' }] } },
+    ],
+    rules: [
+      { id: 'r1', zone: 'lan', gateway: 'wan-gw' },
+      { id: 'r2', zone: 'lan', gateway: 'failover' },
+    ],
+    gateways: [
+      { name: 'wan-gw', interface: 'eth0' },
+      { name: 'other', interface: 'eth5' },
+    ],
+    gatewayGroups: [
+      {
+        name: 'failover',
+        members: [
+          { gateway: 'wan-gw', tier: 1 },
+          { gateway: 'other', tier: 2 },
+        ],
+      },
+      { name: 'solo', members: [{ gateway: 'wan-gw', tier: 1 }] },
+    ],
+    routes: [{ id: 'rt1', interface: 'eth0', destination: '1.2.3.0/24' }],
+    services: {
+      dhcp: {
+        enabled: true,
+        scopes: [{ interface: 'eth1' }, { interface: 'eth1.10' }],
+        v6: [{ interface: 'eth1' }],
+      },
+      dns: { enabled: true, interfaces: ['eth1', 'eth1.10'] },
+    },
+  }
+}
+
+describe('config store interfaces', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('lists what goes with an interface, children first', () => {
+    const config = useConfigStore()
+    config.replaceDraft(wired())
+    expect(config.interfaceDependents('eth1')).toEqual([
+      'VLAN eth1.10',
+      'DHCP scope on eth1.10',
+      'DNS listener on eth1.10',
+      'DHCP scope on eth1',
+      'IPv6 advertisement on eth1',
+      'DNS listener on eth1',
+    ])
+    expect(config.interfaceDependents('eth0')).toEqual([
+      'eth1 loses its delegated IPv6 prefix',
+      'gateway wan-gw',
+      'rule r1 loses its gateway',
+      'group failover loses member wan-gw',
+      'group solo, its only member',
+      'route rt1',
+    ])
+    expect(config.interfaceDependents('eth2')).toEqual(['br0 loses member eth2'])
+    expect(config.interfaceDependents('eth4')).toEqual(['bond bond0, its only member'])
+  })
+
+  it('removes an interface and everything that named it', () => {
+    const config = useConfigStore()
+    config.replaceDraft(wired())
+    config.removeInterface('eth1')
+    expect(config.interfaces.map((i) => i.name)).toEqual(['eth0', 'br0', 'bond0', 'wg0'])
+    expect(config.draft.services.dhcp.scopes).toEqual([])
+    expect(config.draft.services.dhcp.v6).toEqual([])
+    expect(config.draft.services.dns.interfaces).toEqual([])
+  })
+
+  it('drops gateways with their interface and clears what pointed at them', () => {
+    const config = useConfigStore()
+    config.replaceDraft(wired())
+    config.removeInterface('eth0')
+    expect(config.findInterface('eth1').ipv6).toEqual({ mode: 'none' })
+    expect(config.gateways.map((g) => g.name)).toEqual(['other'])
+    expect(config.rules.find((r) => r.id === 'r1').gateway).toBeUndefined()
+    // r2 routes through the group, which still has a member.
+    expect(config.rules.find((r) => r.id === 'r2').gateway).toBe('failover')
+    expect(config.gatewayGroups.map((g) => g.name)).toEqual(['failover'])
+    expect(config.gatewayGroups[0].members.map((m) => m.gateway)).toEqual(['other'])
+    expect(config.routes).toEqual([])
+  })
+
+  it('takes a bridge or bond with its only member', () => {
+    const config = useConfigStore()
+    config.replaceDraft(wired())
+    config.removeInterface('eth2')
+    expect(config.findInterface('br0').bridge.members).toEqual(['eth3'])
+    config.removeInterface('eth4')
+    expect(config.findInterface('bond0')).toBeNull()
+  })
+
+  it('offers undo for a delete and for discard', () => {
+    const config = useConfigStore()
+    const toast = useToastStore()
+    config.replaceDraft(wired())
+    config.markSaved()
+
+    config.removeRule('r1')
+    expect(config.rules.map((r) => r.id)).toEqual(['r2'])
+    expect(toast.toasts.at(-1).message).toBe('Deleted rule r1.')
+    toast.act(toast.toasts.at(-1).id)
+    expect(config.rules.map((r) => r.id)).toEqual(['r1', 'r2'])
+    expect(config.dirty).toBe(false)
+
+    config.removeRule('r2')
+    config.discard()
+    expect(config.dirty).toBe(false)
+    expect(toast.toasts.at(-1).message).toBe('Draft discarded.')
+    toast.act(toast.toasts.at(-1).id)
+    expect(config.rules.map((r) => r.id)).toEqual(['r1'])
+  })
+})
+
+describe('config store draft changes', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('maps change paths to sidebar items and rows', () => {
+    const config = useConfigStore()
+    config.replaceDraft(wired())
+    config.changes = [
+      { path: 'rules[r1].action', kind: 'changed' },
+      { path: 'services.dhcp.scopes[lan]', kind: 'added' },
+      { path: 'interfaces[wg0].wireguard.peers[bob]', kind: 'added' },
+      { path: 'system.keepRevisions', kind: 'changed' },
+    ]
+    expect(config.hasChanges('/firewall')).toBe(true)
+    expect(config.hasChanges('/firewall/rules')).toBe(true)
+    expect(config.hasChanges('/firewall/nat')).toBe(false)
+    expect(config.hasChanges('/services/dhcp')).toBe(true)
+    expect(config.hasChanges('/services/dns')).toBe(false)
+    // A tunnel is an interface, but it lives under VPN.
+    expect(config.hasChanges('/vpn')).toBe(true)
+    expect(config.hasChanges('/interfaces')).toBe(false)
+    expect(config.hasChanges('/system/backup')).toBe(true)
+    expect(config.hasChanges('/')).toBe(false)
+
+    expect(config.isChanged('rules', 'r1')).toBe(true)
+    expect(config.isChanged('rules', 'r2')).toBe(false)
+    expect(config.isChanged('services.dhcp.scopes', 'lan')).toBe(true)
+    expect(config.isChanged('interfaces[wg0].wireguard.peers', 'bob')).toBe(true)
+    expect(config.isChanged('interfaces', 'wg0')).toBe(true)
   })
 })

@@ -136,21 +136,15 @@ function saveDomain() {
     <label class="flex items-center gap-2 text-sm">
       <input v-model="dns.enabled" type="checkbox" class="size-4 rounded border-neutral-300" />
       <span class="font-medium">DNS service enabled</span>
-      <span class="text-neutral-500"
-        >— answers local names and forwards the rest upstream. This box uses it too.</span
-      >
+      <span class="text-neutral-500">This box uses it too.</span>
     </label>
 
     <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
-      <FormField
-        id="dns-resolver"
-        label="Resolver"
-        hint="Who answers names this box does not know."
-      >
+      <FormField id="dns-resolver" label="Resolver">
         <select id="dns-resolver" v-model="resolver" class="input">
-          <option value="forward">Forward — ask the upstream resolvers below</option>
-          <option value="validate">Validate — resolve from the root, check DNSSEC</option>
-          <option value="tls">DNS over TLS — encrypted upstreams, check DNSSEC</option>
+          <option value="forward">Forward: ask the upstream resolvers below</option>
+          <option value="validate">Validate: resolve from the root, check DNSSEC</option>
+          <option value="tls">DNS over TLS: encrypted upstreams, check DNSSEC</option>
         </select>
       </FormField>
       <FormField id="dns-domain" label="Local domain" hint="Hosts get this suffix, e.g. lan.">
@@ -160,7 +154,7 @@ function saveDomain() {
         v-if="resolver === 'forward'"
         id="dns-up"
         label="Upstream resolvers"
-        hint="Comma separated. Required when enabled (or set system DNS servers)."
+        hint="Comma separated. Empty: the system resolvers."
       >
         <input
           id="dns-up"
@@ -189,12 +183,12 @@ function saveDomain() {
     </div>
 
     <p v-if="resolver !== 'forward'" class="max-w-2xl text-sm text-neutral-500">
-      unbound runs behind dnsmasq on 127.0.0.53 and validates DNSSEC. It has to be installed once
-      with <code class="font-mono">ostiole services setup --with-resolver</code>.
+      Set up once with <code class="font-mono">ostiole services setup --with-resolver</code> as
+      root.
     </p>
 
     <fieldset class="space-y-2 text-sm">
-      <legend class="font-medium">Listen on</legend>
+      <legend class="subsection-title">Listen on</legend>
       <label class="flex items-center gap-2">
         <input v-model="listenAll" type="checkbox" class="size-4 rounded border-neutral-300" />
         Every interface outside external zones
@@ -218,7 +212,7 @@ function saveDomain() {
 
     <section class="space-y-3" aria-labelledby="hosts-title">
       <div class="flex items-center gap-3">
-        <h2 id="hosts-title" class="font-medium">Host Overrides</h2>
+        <h2 id="hosts-title" class="section-title">Host Overrides</h2>
         <button type="button" class="btn-secondary" @click="addHost">
           <Plus class="mr-1 size-4" aria-hidden="true" /> Add host
         </button>
@@ -233,44 +227,45 @@ function saveDomain() {
               <th></th>
             </tr>
           </thead>
-          <tbody>
-            <tr v-if="!(dns.hostOverrides ?? []).length">
+          <TransitionGroup name="row" tag="tbody">
+            <tr v-if="!(dns.hostOverrides ?? []).length" key="empty">
               <td colspan="4" class="text-neutral-500">
                 No overrides. Static DHCP leases with hostnames resolve automatically.
               </td>
             </tr>
-            <tr v-for="h in dns.hostOverrides" :key="h.hostname">
-              <td class="font-mono text-xs">{{ h.hostname }}</td>
-              <td class="font-mono text-xs">{{ h.ip }}</td>
+            <tr
+              v-for="h in dns.hostOverrides"
+              :key="h.hostname"
+              :class="{ 'row-changed': config.isChanged('services.dns.hostOverrides', h.hostname) }"
+            >
+              <td class="font-mono text-code">{{ h.hostname }}</td>
+              <td class="font-mono text-code">{{ h.ip }}</td>
               <td>{{ h.description }}</td>
               <td class="text-right whitespace-nowrap">
                 <button type="button" class="link" @click="editHost(h)">Edit</button>
                 <ConfirmButton
                   class="ml-3"
                   label="Delete"
-                  confirm-label="Delete host?"
+                  :question="`Delete the host override for ${h.hostname}?`"
+                  :description="h.description"
                   @confirm="config.removeHostOverride(h.hostname)"
                 />
               </td>
             </tr>
-          </tbody>
+          </TransitionGroup>
         </table>
       </div>
     </section>
 
     <section class="space-y-3" aria-labelledby="domains-title">
       <div class="flex items-center gap-3">
-        <h2 id="domains-title" class="font-medium">Domain Overrides</h2>
+        <h2 id="domains-title" class="section-title">Domain Overrides</h2>
         <button type="button" class="btn-secondary" @click="addDomain">
           <Plus class="mr-1 size-4" aria-hidden="true" /> Add domain
         </button>
       </div>
       <p class="max-w-2xl text-sm text-neutral-500">
-        A domain and everything under it goes to resolvers of its own instead of upstream, which is
-        how a split-horizon zone is reached: a tailnet answers its own
-        <code class="font-mono">ts.net</code> names on
-        <code class="font-mono">100.100.100.100</code>. While those resolvers are out of reach the
-        domain stops answering; it does not fall back upstream.
+        A domain here goes to its own resolvers, and stops answering while they are unreachable.
       </p>
       <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
         <table class="table">
@@ -282,27 +277,32 @@ function saveDomain() {
               <th></th>
             </tr>
           </thead>
-          <tbody>
-            <tr v-if="!(dns.domainOverrides ?? []).length">
+          <TransitionGroup name="row" tag="tbody">
+            <tr v-if="!(dns.domainOverrides ?? []).length" key="empty">
               <td colspan="4" class="text-neutral-500">
                 No overrides. Every domain goes to the resolver above.
               </td>
             </tr>
-            <tr v-for="d in dns.domainOverrides" :key="d.domain">
-              <td class="font-mono text-xs">{{ d.domain }}</td>
-              <td class="font-mono text-xs">{{ (d.servers ?? []).join(', ') }}</td>
+            <tr
+              v-for="d in dns.domainOverrides"
+              :key="d.domain"
+              :class="{ 'row-changed': config.isChanged('services.dns.domainOverrides', d.domain) }"
+            >
+              <td class="font-mono text-code">{{ d.domain }}</td>
+              <td class="font-mono text-code">{{ (d.servers ?? []).join(', ') }}</td>
               <td>{{ d.description }}</td>
               <td class="text-right whitespace-nowrap">
                 <button type="button" class="link" @click="editDomain(d)">Edit</button>
                 <ConfirmButton
                   class="ml-3"
                   label="Delete"
-                  confirm-label="Delete override?"
+                  :question="`Delete the override for ${d.domain}?`"
+                  :description="d.description"
                   @confirm="config.removeDomainOverride(d.domain)"
                 />
               </td>
             </tr>
-          </tbody>
+          </TransitionGroup>
         </table>
       </div>
     </section>
