@@ -91,6 +91,19 @@ test('a line speed and a priority reach the kernel', async ({ page }) => {
   await expect(priority).toContainText('Realtime')
   await expect(priority).toContainText('udp')
   await page.screenshot({ path: shot('C2-priorities'), fullPage: true })
+
+  // The name of the rule is a way back to it: to the zone that holds it,
+  // not to whichever zone the rules page opens with.
+  await priority.getByRole('link').click()
+  await expect(page).toHaveURL(/\/firewall\/rules#lan$/)
+  await expect(
+    page.getByRole('group', { name: 'Zone' }).getByRole('button', { name: 'lan' }),
+  ).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('row').filter({ hasText: 'Calls go first' })).toBeVisible()
+
+  // And it survives the reload, which is what putting it in the URL is for.
+  await page.reload()
+  await expect(page.getByRole('row').filter({ hasText: 'Calls go first' })).toBeVisible()
 })
 
 test('the live tab reports the queues', async ({ page }) => {

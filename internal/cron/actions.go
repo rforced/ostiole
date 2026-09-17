@@ -40,6 +40,11 @@ type Actions struct {
 	SystemUpdate func(ctx context.Context, mode string, exclude []string) (string, error)
 	// SelfUpdate does the same for Ostiole's own releases.
 	SelfUpdate func(ctx context.Context, mode, channel string) (string, error)
+	// SystemCheck asks the package manager what is waiting and records it,
+	// installing none of it.
+	SystemCheck func(ctx context.Context) (string, error)
+	// SelfCheck does the same for Ostiole's own releases.
+	SelfCheck func(ctx context.Context, channel string) (string, error)
 	// Version is recorded in the backups this takes.
 	Version string
 	// Exec runs a command; swapped for a fake in tests.
@@ -71,8 +76,35 @@ func (a *Actions) Run(ctx context.Context, c model.Cron) (string, error) {
 		return a.systemUpdate(ctx)
 	case model.CronOstioleUpdate:
 		return a.selfUpdate(ctx)
+	case model.CronSystemUpdateCheck:
+		return a.systemCheck(ctx)
+	case model.CronOstioleUpdateCheck:
+		return a.selfCheck(ctx)
 	}
 	return "", fmt.Errorf("unknown cron kind %q", c.Kind)
+}
+
+// systemCheck asks the package manager what is waiting. It runs whatever
+// the mode is, and changes nothing, so the page has a fresh answer on a
+// router that installs by hand.
+func (a *Actions) systemCheck(ctx context.Context) (string, error) {
+	if a.SystemCheck == nil {
+		return "", errors.New("this router cannot drive a package manager from here")
+	}
+	return a.SystemCheck(ctx)
+}
+
+// selfCheck asks whether a newer Ostiole release has been published on
+// the channel the configuration names.
+func (a *Actions) selfCheck(ctx context.Context) (string, error) {
+	if a.SelfCheck == nil {
+		return "", errors.New("this router cannot check for Ostiole releases from here")
+	}
+	updates, err := a.updates()
+	if err != nil {
+		return "", err
+	}
+	return a.SelfCheck(ctx, updates.OstioleChannel())
 }
 
 // systemUpdate patches the Linux underneath Ostiole. The mode decides

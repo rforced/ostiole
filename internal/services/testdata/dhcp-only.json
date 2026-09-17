@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "system": { "dnsServers": ["8.8.8.8"], "management": { "webPort": 443, "sshPort": 22 } },
   "zones": [{ "name": "wan", "external": true }, { "name": "lan", "antiLockout": true }],
   "interfaces": [

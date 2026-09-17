@@ -1,16 +1,19 @@
-import { computed } from 'vue'
+import { computed, toValue } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 /**
- * Tab selection kept in the URL hash, so a reload or a pasted link lands on
- * the tab you were looking at. The first value is the default and carries no
- * hash, which keeps the plain page URL clean; an unknown hash falls back to
- * it rather than showing nothing.
+ * A one-of-many choice kept in the URL hash, so a reload or a pasted link
+ * lands on what you were looking at: the tabs of a page, and the zone the
+ * rules page is showing. The first value is the default and carries no hash,
+ * which keeps the plain page URL clean; an unknown hash falls back to it
+ * rather than showing nothing.
  *
- * Switching tabs replaces the history entry instead of pushing one, so Back
- * still means "the page before this one" and not "the tab before this one".
+ * Switching replaces the history entry instead of pushing one, so Back still
+ * means "the page before this one" and not "the tab before this one".
  *
- * @param {string[]} values tab values in the order the page lists them
+ * @param {import('vue').MaybeRefOrGetter<string[]>} values the values in the
+ *   order the page lists them, as a getter when they are configuration that
+ *   arrives after the page does; empty means nothing to choose yet.
  * @returns {import('vue').WritableComputedRef<string>} v-model for AppTabs
  */
 export function useTabHash(values) {
@@ -18,12 +21,14 @@ export function useTabHash(values) {
   const router = useRouter()
   return computed({
     get() {
+      const list = toValue(values)
       const want = route.hash.slice(1)
-      return values.includes(want) ? want : values[0]
+      return (list.includes(want) ? want : list[0]) ?? ''
     },
     set(value) {
-      if (!values.includes(value)) return
-      const hash = value === values[0] ? '' : `#${value}`
+      const list = toValue(values)
+      if (!list.includes(value)) return
+      const hash = value === list[0] ? '' : `#${value}`
       if (hash !== route.hash) router.replace({ hash })
     },
   })

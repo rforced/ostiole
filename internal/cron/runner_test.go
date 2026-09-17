@@ -57,8 +57,10 @@ func runner(t *testing.T, ex Executor, crons ...model.Cron) *Runner {
 func TestTickRunsWhatIsDue(t *testing.T) {
 	t.Parallel()
 	ex := &fakeExec{}
+	// Three in the morning: the update checks Ostiole schedules for itself
+	// run at four, and would be counted here.
 	r := runner(t, ex,
-		model.Cron{ID: "nightly", Enabled: true, Schedule: "0 4 * * *", Kind: model.CronBackup},
+		model.Cron{ID: "nightly", Enabled: true, Schedule: "0 3 * * *", Kind: model.CronBackup},
 		model.Cron{ID: "hourly", Enabled: true, Schedule: "@hourly", Kind: model.CronRefreshAliases},
 		model.Cron{ID: "off", Enabled: false, Schedule: "* * * * *", Kind: model.CronRefreshAliases},
 	)
@@ -69,34 +71,34 @@ func TestTickRunsWhatIsDue(t *testing.T) {
 		t.Errorf("ran %v when nothing was due", got)
 	}
 
-	r.Tick(context.Background(), at(t, "2026-09-16 04:00"))
+	r.Tick(context.Background(), at(t, "2026-09-16 03:00"))
 	waitFor(t, func() bool { return len(ex.calls()) == 2 })
 	got := strings.Join(ex.calls(), ",")
 	if !strings.Contains(got, "nightly") || !strings.Contains(got, "hourly") {
-		t.Errorf("ran %q, want both crons due at 04:00", got)
+		t.Errorf("ran %q, want both crons due at 03:00", got)
 	}
 	if strings.Contains(got, "off") {
 		t.Error("a disabled cron ran")
 	}
 }
 
-// A schedule is read in the router's own timezone, so "0 4 * * *" is four
+// A schedule is read in the router's own timezone, so "0 3 * * *" is three
 // in the morning where the router stands rather than wherever the process
 // that runs it happens to think it is.
 func TestTickReadsSchedulesInTheConfiguredZone(t *testing.T) {
 	t.Parallel()
 	ex := &fakeExec{}
-	cfg := config(model.Cron{ID: "nightly", Enabled: true, Schedule: "0 4 * * *", Kind: model.CronBackup})
+	cfg := config(model.Cron{ID: "nightly", Enabled: true, Schedule: "0 3 * * *", Kind: model.CronBackup})
 	cfg.System.Timezone = "Europe/Berlin"
 	r := NewRunner(func() *model.Config { return cfg }, ex, slog.New(slog.DiscardHandler))
 
-	// September puts Berlin two hours ahead, so 04:00 UTC is 06:00 there.
-	r.Tick(context.Background(), at(t, "2026-09-16 04:00"))
+	// September puts Berlin two hours ahead, so 03:00 UTC is 05:00 there.
+	r.Tick(context.Background(), at(t, "2026-09-16 03:00"))
 	time.Sleep(50 * time.Millisecond)
 	if got := ex.calls(); len(got) != 0 {
-		t.Errorf("ran %v at 06:00 Berlin time", got)
+		t.Errorf("ran %v at 05:00 Berlin time", got)
 	}
-	r.Tick(context.Background(), at(t, "2026-09-16 02:00"))
+	r.Tick(context.Background(), at(t, "2026-09-16 01:00"))
 	waitFor(t, func() bool { return len(ex.calls()) == 1 })
 
 	// And the time it reports next is in that zone too.
@@ -104,8 +106,8 @@ func TestTickReadsSchedulesInTheConfiguredZone(t *testing.T) {
 	if next == nil {
 		t.Fatal("no next time reported")
 	}
-	if h, m, _ := next.Clock(); h != 4 || m != 0 {
-		t.Errorf("next = %s, want 04:00 Berlin time", next)
+	if h, m, _ := next.Clock(); h != 3 || m != 0 {
+		t.Errorf("next = %s, want 03:00 Berlin time", next)
 	}
 }
 
@@ -115,9 +117,9 @@ func TestALongCronIsNotStartedTwice(t *testing.T) {
 	ex := &fakeExec{block: make(chan struct{})}
 	r := runner(t, ex, model.Cron{ID: "slow", Enabled: true, Schedule: "* * * * *", Kind: model.CronRefreshAliases})
 
-	r.Tick(context.Background(), at(t, "2026-09-16 04:00"))
+	r.Tick(context.Background(), at(t, "2026-09-16 04:10"))
 	waitFor(t, func() bool { return len(ex.calls()) == 1 })
-	r.Tick(context.Background(), at(t, "2026-09-16 04:01"))
+	r.Tick(context.Background(), at(t, "2026-09-16 04:11"))
 	time.Sleep(50 * time.Millisecond)
 	if got := ex.calls(); len(got) != 1 {
 		t.Errorf("ran %d times while the first was still going", len(got))
@@ -182,12 +184,13 @@ func TestStatusesIncludeTheSystemWork(t *testing.T) {
 	if origins[OriginUser] != 1 {
 		t.Errorf("origins = %v", origins)
 	}
-	// The ids the daemon's workers report against, plus the two update
+	// The ids the daemon's workers report against, plus the four update
 	// crons the update settings imply.
 	for _, id := range []string{
 		"system:gateways", "system:aliases", "system:blocklists",
 		"system:sessions", "system:firewall-log",
-		model.CronIDSystemUpdate, model.CronIDOstioleUpdate,
+		model.CronIDSystemUpdateCheck, model.CronIDSystemUpdate,
+		model.CronIDOstioleUpdateCheck, model.CronIDOstioleUpdate,
 	} {
 		if !listed[id] {
 			t.Errorf("%s is not on the page that says what this router does by itself", id)
@@ -317,66 +320,92 @@ func TestUpdateCronsRunOnTheirOwnSchedule(t *testing.T) {
 	t.Parallel()
 	ex := &fakeExec{}
 	cfg := config()
-	cfg.Updates.System.Schedule = "0 4 * * *"
 	r := NewRunner(func() *model.Config { return cfg }, ex, slog.New(slog.DiscardHandler))
 
-	// Nobody wrote these out; they come from the update settings.
-	// Midweek only the daily system check is due.
+	// Nobody wrote these out; they come from the update settings. Midweek
+	// both sources are asked what is waiting, and neither installs.
 	wednesday := time.Date(2026, 9, 16, 4, 0, 0, 0, time.UTC)
 	if wednesday.Weekday() == time.Sunday {
 		t.Fatalf("16 September 2026 is a %s; pick another date", wednesday.Weekday())
 	}
 	r.Tick(t.Context(), wednesday)
-	waitFor(t, func() bool { return len(ex.calls()) > 0 })
-	if got := ex.calls(); len(got) != 1 || got[0] != model.CronIDSystemUpdate {
-		t.Errorf("ran %v, want only the system update", got)
+	waitFor(t, func() bool { return len(ex.calls()) == 2 })
+	for _, id := range []string{model.CronIDSystemUpdateCheck, model.CronIDOstioleUpdateCheck} {
+		if !contains(ex.calls(), id) {
+			t.Errorf("ran %v midweek, want both checks", ex.calls())
+		}
+	}
+	if contains(ex.calls(), model.CronIDSystemUpdate) || contains(ex.calls(), model.CronIDOstioleUpdate) {
+		t.Errorf("ran %v midweek, want nothing installed", ex.calls())
 	}
 
-	// Sunday at four is when the Ostiole check runs by default.
-	sunday := time.Date(2026, 9, 20, 4, 0, 0, 0, time.UTC)
+	// Sunday, half an hour after the check, is when they install.
+	sunday := time.Date(2026, 9, 20, 4, 30, 0, 0, time.UTC)
 	if sunday.Weekday() != time.Sunday {
 		t.Fatalf("20 September 2026 is a %s; pick another date", sunday.Weekday())
 	}
 	r.Tick(t.Context(), sunday)
-	waitFor(t, func() bool { return contains(ex.calls(), model.CronIDOstioleUpdate) })
+	waitFor(t, func() bool { return len(ex.calls()) == 4 })
+	for _, id := range []string{model.CronIDSystemUpdate, model.CronIDOstioleUpdate} {
+		if !contains(ex.calls(), id) {
+			t.Errorf("ran %v on Sunday, want both installs", ex.calls())
+		}
+	}
 }
 
 func TestUpdateCronsAreReportedAsOstioleOwnWork(t *testing.T) {
 	t.Parallel()
-	r := runner(t, &fakeExec{})
-	var system []Status
+	cfg := config()
+	// The distro patches itself; Ostiole is installed by hand.
+	cfg.Updates.Ostiole.Mode = model.UpdateManual
+	r := NewRunner(func() *model.Config { return cfg }, &fakeExec{}, slog.New(slog.DiscardHandler))
+	found := map[string]Status{}
 	for _, st := range r.Statuses() {
 		if st.Origin == OriginSystem {
-			system = append(system, st)
+			found[st.ID] = st
 		}
 	}
-	found := map[string]Status{}
-	for _, st := range system {
-		found[st.ID] = st
-	}
-	for _, id := range []string{model.CronIDSystemUpdate, model.CronIDOstioleUpdate} {
-		st, ok := found[id]
+	for _, want := range []struct {
+		id       string
+		schedule string
+		enabled  bool
+	}{
+		{model.CronIDSystemUpdateCheck, model.DefaultUpdateCheckSchedule, true},
+		{model.CronIDSystemUpdate, model.DefaultUpdateSchedule, true},
+		{model.CronIDOstioleUpdateCheck, model.DefaultUpdateCheckSchedule, true},
+		{model.CronIDOstioleUpdate, model.DefaultUpdateSchedule, false},
+	} {
+		st, ok := found[want.id]
 		if !ok {
-			t.Fatalf("%s is not on the page that says what this router does by itself", id)
+			t.Fatalf("%s is not on the page that says what this router does by itself", want.id)
 		}
-		if st.Schedule != model.DefaultUpdateSchedule {
-			t.Errorf("%s schedule = %q", id, st.Schedule)
+		if st.Schedule != want.schedule || st.Enabled != want.enabled {
+			t.Errorf("%s = %+v, want schedule %q, enabled %v", want.id, st, want.schedule, want.enabled)
 		}
-		if st.Next == nil {
-			t.Errorf("%s does not say when it next runs", id)
+		// A cron that is turned off has no next run to promise.
+		if want.enabled && st.Next == nil {
+			t.Errorf("%s does not say when it next runs", want.id)
+		}
+		if !want.enabled && st.Next != nil {
+			t.Errorf("%s is disabled but says it runs at %s", want.id, st.Next)
 		}
 	}
 }
 
 func TestRunNowFindsTheUpdateCrons(t *testing.T) {
 	t.Parallel()
-	ex := &fakeExec{}
-	r := runner(t, ex)
-	if err := r.RunNow(t.Context(), model.CronIDSystemUpdate); err != nil {
-		t.Fatal(err)
-	}
-	if got := ex.calls(); len(got) != 1 || got[0] != model.CronIDSystemUpdate {
-		t.Errorf("ran %v", got)
+	for _, id := range []string{
+		model.CronIDSystemUpdate, model.CronIDSystemUpdateCheck,
+		model.CronIDOstioleUpdate, model.CronIDOstioleUpdateCheck,
+	} {
+		ex := &fakeExec{}
+		r := runner(t, ex)
+		if err := r.RunNow(t.Context(), id); err != nil {
+			t.Fatal(err)
+		}
+		if got := ex.calls(); len(got) != 1 || got[0] != id {
+			t.Errorf("ran %v, want %s", got, id)
+		}
 	}
 }
 
@@ -416,8 +445,45 @@ func TestUpdateCronsObeyTheMode(t *testing.T) {
 
 	// A router with nothing wired up says so rather than failing obscurely.
 	bare := &Actions{Config: actions.Config}
-	if _, err := bare.Run(t.Context(), model.Cron{ID: "z", Kind: model.CronSystemUpdate}); err == nil {
-		t.Error("a router with no package manager pretended to update")
+	for _, kind := range []model.CronKind{
+		model.CronSystemUpdate, model.CronOstioleUpdate,
+		model.CronSystemUpdateCheck, model.CronOstioleUpdateCheck,
+	} {
+		if _, err := bare.Run(t.Context(), model.Cron{ID: "z", Kind: kind}); err == nil {
+			t.Errorf("a router with nothing wired up pretended to run %s", kind)
+		}
+	}
+}
+
+// The checks run whatever the mode is, which is what keeps the answer on
+// the page fresh on a router that installs nothing by itself.
+func TestCheckCronsRunWhateverTheModeIs(t *testing.T) {
+	t.Parallel()
+	cfg := config()
+	cfg.Updates = model.Updates{
+		System:  model.PackageUpdates{Mode: model.UpdateManual},
+		Ostiole: model.SelfUpdates{Mode: model.UpdateManual, Channel: model.ChannelBeta},
+	}
+	var sawChannel string
+	actions := &Actions{
+		Config:      func() *model.Config { return cfg },
+		SystemCheck: func(context.Context) (string, error) { return "3 update(s) waiting", nil },
+		SelfCheck: func(_ context.Context, channel string) (string, error) {
+			sawChannel = channel
+			return "0.4.0 is available", nil
+		},
+	}
+	out, err := actions.Run(t.Context(), model.Cron{ID: "a", Kind: model.CronSystemUpdateCheck})
+	if err != nil || out != "3 update(s) waiting" {
+		t.Errorf("out = %q, err = %v", out, err)
+	}
+	out, err = actions.Run(t.Context(), model.Cron{ID: "b", Kind: model.CronOstioleUpdateCheck})
+	if err != nil || out != "0.4.0 is available" {
+		t.Errorf("out = %q, err = %v", out, err)
+	}
+	// The channel comes from the configuration, not from whoever asked.
+	if sawChannel != model.ChannelBeta {
+		t.Errorf("channel = %q", sawChannel)
 	}
 }
 

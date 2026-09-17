@@ -133,7 +133,7 @@ at your own.`,
 			// An update that upgraded Ostiole itself restarted this
 			// daemon; pick the transaction back up if it is still going.
 			packages.Reattach(ctx)
-			updater := newUpdater(cfg)
+			updater := newUpdater(cfg, g.updatesDir())
 			actions := &cron.Actions{
 				Config:            eng.Effective,
 				Users:             as.Users,
@@ -149,6 +149,13 @@ at your own.`,
 						return "", errors.New("this binary cannot update itself")
 					}
 					return updater.RunScheduled(ctx, update.Mode(mode), update.Channel(channel))
+				},
+				SystemCheck: packages.CheckScheduled,
+				SelfCheck: func(ctx context.Context, channel string) (string, error) {
+					if updater == nil {
+						return "", errors.New("this binary cannot check for its own releases")
+					}
+					return updater.CheckScheduled(ctx, update.Channel(channel))
 				},
 			}
 			// The crons the operator asked for, plus the work Ostiole does
@@ -247,8 +254,10 @@ func splitCIDR(s string) (ip, prefix string, ok bool) {
 }
 
 // newUpdater builds the update manager for the daemon. Updates go
-// through the installed service binary and restart the unit.
-func newUpdater(cfg server.Config) *update.Manager {
+// through the installed service binary and restart the unit. What the
+// last check found is kept beside the package manager's own state, so a
+// page can ask this router rather than GitHub.
+func newUpdater(cfg server.Config, stateDir string) *update.Manager {
 	bin, err := install.ServiceBinary(install.DefaultLayout())
 	if err != nil {
 		return nil
@@ -258,6 +267,7 @@ func newUpdater(cfg server.Config) *update.Manager {
 		Installer:      &update.Installer{Binary: bin, Unit: install.DaemonUnit, HealthURL: healthURL(cfg), Run: install.ExecRunner{}},
 		Current:        version.Version,
 		PackageManaged: install.PackageManaged(bin),
+		Cache:          update.NewCache(stateDir),
 		Log:            slog.Default(),
 	}
 }

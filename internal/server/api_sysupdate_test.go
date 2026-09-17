@@ -75,8 +75,11 @@ func TestSystemUpdatesReportsTheModeInForce(t *testing.T) {
 	if err := json.Unmarshal(raw, &st); err != nil {
 		t.Fatal(err)
 	}
-	if st.Mode != string(model.UpdateSecurity) || st.Schedule != model.DefaultUpdateSchedule {
-		t.Errorf("mode = %q, schedule = %q", st.Mode, st.Schedule)
+	if st.Mode != string(model.UpdateSecurity) {
+		t.Errorf("mode = %q", st.Mode)
+	}
+	if st.CheckSchedule != model.DefaultUpdateCheckSchedule || st.InstallSchedule != model.DefaultUpdateSchedule {
+		t.Errorf("check = %q, install = %q", st.CheckSchedule, st.InstallSchedule)
 	}
 	if st.Manager != "dnf" || !st.Available || !st.SecurityCapable {
 		t.Errorf("status = %+v", st)
@@ -97,10 +100,11 @@ func TestSystemUpdatesReportsTheModeInForce(t *testing.T) {
 		t.Error("a reboot was reported that dnf did not ask for")
 	}
 
-	// A configured mode is what the page shows next.
+	// A configured mode and schedules are what the page shows next.
 	cfg := starter()
 	cfg.Updates.System.Mode = model.UpdateManual
-	cfg.Updates.System.Schedule = "0 3 * * 1"
+	cfg.Updates.System.CheckSchedule = "0 2 * * *"
+	cfg.Updates.System.InstallSchedule = "0 3 * * 1"
 	if _, err := eng.Store().Save(cfg, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -108,8 +112,11 @@ func TestSystemUpdatesReportsTheModeInForce(t *testing.T) {
 	if err := json.Unmarshal(raw, &st); err != nil {
 		t.Fatal(err)
 	}
-	if st.Mode != string(model.UpdateManual) || st.Schedule != "0 3 * * 1" {
-		t.Errorf("mode = %q, schedule = %q", st.Mode, st.Schedule)
+	if st.Mode != string(model.UpdateManual) {
+		t.Errorf("mode = %q", st.Mode)
+	}
+	if st.CheckSchedule != "0 2 * * *" || st.InstallSchedule != "0 3 * * 1" {
+		t.Errorf("check = %q, install = %q", st.CheckSchedule, st.InstallSchedule)
 	}
 }
 

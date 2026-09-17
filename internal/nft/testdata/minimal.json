@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "system": { "hostname": "fw", "management": { "webPort": 443, "sshPort": 22 } },
   "zones": [
     { "name": "wan", "external": true },

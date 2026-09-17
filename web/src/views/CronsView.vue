@@ -207,7 +207,9 @@ function describe(c) {
             </tr>
             <tr v-for="s in system" :key="s.id">
               <td>{{ s.description }}</td>
-              <td class="font-mono text-code">{{ s.schedule }}</td>
+              <!-- An update mode of manual turns its install off; saying
+                   when it would have run would be a lie. -->
+              <td class="font-mono text-code">{{ s.enabled ? s.schedule : 'never' }}</td>
               <td class="text-xs">{{ when(s.lastRun) }}</td>
             </tr>
           </TransitionGroup>

@@ -38,9 +38,11 @@ type Status struct {
 	// ExcludeSupported says whether the never-upgrade list can be
 	// honoured in the mode in force.
 	ExcludeSupported bool `json:"excludeSupported"`
-	// Mode and Schedule come from the configuration.
-	Mode     string `json:"mode,omitempty"`
-	Schedule string `json:"schedule,omitempty"`
+	// Mode and the two schedules come from the configuration: one for
+	// asking what is waiting, one for installing it.
+	Mode            string `json:"mode,omitempty"`
+	CheckSchedule   string `json:"checkSchedule,omitempty"`
+	InstallSchedule string `json:"installSchedule,omitempty"`
 	// Running is true while a transaction is going.
 	Running bool `json:"running"`
 }
@@ -212,6 +214,29 @@ func (m *Manager) apply(ctx context.Context, security bool, exclude []string) (s
 	return m.install(ctx, security, exclude, pending)
 }
 
+// CheckScheduled is the scheduled check: ask what is waiting and record
+// it, installing none of it. It claims the router the way an install
+// does, because no package manager enjoys being asked a question while it
+// is in the middle of a transaction.
+func (m *Manager) CheckScheduled(ctx context.Context) (string, error) {
+	if err := m.begin(false); err != nil {
+		return "", err
+	}
+	defer m.end()
+
+	pending, err := m.Check(ctx)
+	if err != nil {
+		return "", err
+	}
+	return waitingLine(pending), nil
+}
+
+// waitingLine is what a check found, in the words both scheduled runs
+// report it in.
+func waitingLine(p Pending) string {
+	return fmt.Sprintf("%d update(s) waiting, %d of them security fixes", len(p.Packages), p.Security)
+}
+
 // RunScheduled is the scheduled cron: always check, then install only
 // what the mode allows. Manual still checks, so the page can say what is
 // waiting without the router changing under anyone.
@@ -226,8 +251,7 @@ func (m *Manager) RunScheduled(ctx context.Context, mode Mode, exclude []string)
 	if err != nil {
 		return "", err
 	}
-	waiting := fmt.Sprintf("%d update(s) waiting, %d of them security fixes",
-		len(pending.Packages), pending.Security)
+	waiting := waitingLine(pending)
 	switch {
 	case mode == ModeManual:
 		return waiting + "; this router installs them by hand", nil

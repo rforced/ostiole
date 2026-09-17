@@ -260,8 +260,19 @@ export const api = {
     psk: () => post('/wireguard/keys', { kind: 'psk' }),
   },
   update: {
-    /** @returns {Promise<{check: object, status: object}>} */
+    /**
+     * Ask GitHub now. Admin only, and slow enough that a page should
+     * prefer status() unless somebody pressed the button.
+     *
+     * @returns {Promise<{check: object, status: object}>}
+     */
     check: (channel = 'stable') => get(`/update/check?channel=${encodeURIComponent(channel)}`),
+    /**
+     * What the last scheduled check found, and any install running now.
+     * Nothing here reaches GitHub.
+     *
+     * @returns {Promise<{check: object, status: object}>}
+     */
     status: () => get('/update/status'),
     apply: (channel = 'stable') => post('/update/apply', { channel }),
   },

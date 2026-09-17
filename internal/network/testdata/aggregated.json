@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "system": {
     "hostname": "aggregated",
     "management": { "webPort": 443, "sshPort": 22 }

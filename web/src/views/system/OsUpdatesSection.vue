@@ -118,11 +118,13 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
       <UpdateModeFields
         prefix="os-upd"
         :mode="settings.mode ?? ''"
-        :schedule="settings.schedule ?? ''"
+        :check-schedule="settings.checkSchedule ?? ''"
+        :install-schedule="settings.installSchedule ?? ''"
         :security-capable="status?.securityCapable !== false"
         :security-note="`${status?.manager ?? 'This package manager'} has no security-only channel.`"
         @update:mode="config.setUpdates('system', { mode: $event })"
-        @update:schedule="config.setUpdates('system', { schedule: $event })"
+        @update:check-schedule="config.setUpdates('system', { checkSchedule: $event })"
+        @update:install-schedule="config.setUpdates('system', { installSchedule: $event })"
       />
       <FormField
         id="os-upd-exclude"

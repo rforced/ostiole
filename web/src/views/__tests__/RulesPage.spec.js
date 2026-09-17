@@ -1,7 +1,8 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { api } from '@/lib/api'
 import { useConfigStore } from '@/stores/config'
@@ -103,10 +104,16 @@ const system = [
   },
 ]
 
-async function mountPage() {
+async function mountPage(path = '/firewall/rules') {
   api.config.get.mockResolvedValue(structuredClone(config))
   await useConfigStore().load()
-  const wrapper = mount(RulesPage, { global: { stubs } })
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/firewall/rules', component: RulesPage }],
+  })
+  router.push(path)
+  await router.isReady()
+  const wrapper = mount(RulesPage, { global: { plugins: [router], stubs } })
   await vi.waitFor(() => expect(api.systemRules).toHaveBeenCalled())
   await nextTick()
   return wrapper
@@ -156,8 +163,7 @@ describe('RulesPage system rules', () => {
   })
 
   it('sums the counters of a rule both base chains carry', async () => {
-    const wrapper = await mountPage()
-    await wrapper.find('[aria-label="Zone"] button:last-child').trigger('click')
+    const wrapper = await mountPage('/firewall/rules#wan')
     await vi.waitFor(() => expect(api.counters).toHaveBeenCalled())
     await nextTick()
     const bogons = systemRows(wrapper).find((tr) => tr.text().includes('bogon'))
@@ -166,6 +172,32 @@ describe('RulesPage system rules', () => {
     // A rule without a counter shows nothing rather than zero.
     const replies = systemRows(wrapper).find((tr) => tr.text().includes('Replies'))
     expect(replies.find('td.tabular-nums').text()).toBe('')
+  })
+
+  it('opens the zone the hash names, so a reload comes back to it', async () => {
+    const wrapper = await mountPage('/firewall/rules#wan')
+    expect(wrapper.find('[aria-label="Zone"] [aria-pressed="true"]').text()).toBe('wan')
+    expect(rowsText(wrapper).join('\n')).toContain('bogon')
+    // The lan rule belongs to the other zone, and the hash is what says so.
+    expect(rowsText(wrapper).join('\n')).not.toContain('Web UI')
+  })
+
+  it('falls back to the first zone for a hash no zone answers to', async () => {
+    const wrapper = await mountPage('/firewall/rules#nonsense')
+    expect(wrapper.find('[aria-label="Zone"] [aria-pressed="true"]').text()).toBe('lan')
+  })
+
+  it('writes the zone to the hash when you pick one', async () => {
+    const wrapper = await mountPage()
+    expect(wrapper.vm.$route.hash).toBe('')
+    await wrapper.find('[aria-label="Zone"] button:last-child').trigger('click')
+    await flushPromises()
+    expect(wrapper.vm.$route.hash).toBe('#wan')
+    expect(wrapper.find('[aria-label="Zone"] [aria-pressed="true"]').text()).toBe('wan')
+    // Back on the default zone the URL is the plain page again.
+    await wrapper.find('[aria-label="Zone"] button:first-child').trigger('click')
+    await flushPromises()
+    expect(wrapper.vm.$route.fullPath).toBe('/firewall/rules')
   })
 
   it('re-reads the rows for the draft after an edit settles', async () => {

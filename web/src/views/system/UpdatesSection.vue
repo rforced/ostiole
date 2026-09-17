@@ -18,6 +18,10 @@ const current = ref('')
 const check = ref(null)
 const status = ref(null)
 const restartedTo = ref('')
+/** When the latest above was last asked about: by the cron, or by the button. */
+const lastCheck = ref('')
+/** Why the last scheduled check failed, if it did. */
+const checkError = ref('')
 
 // The channel lives in the configuration rather than in this browser,
 // because the scheduled update has to know which one to follow.
@@ -27,6 +31,8 @@ const channel = computed(() => settings.value.channel || 'stable')
 function setChannel(v) {
   config.setUpdates('ostiole', { channel: v })
   check.value = null
+  lastCheck.value = ''
+  checkError.value = ''
 }
 
 const running = computed(() =>
@@ -46,11 +52,15 @@ async function loadVersion() {
   }
 }
 
+// The button is the one thing here that asks GitHub; everything else
+// draws itself from what the nightly check left behind.
 const checking = useAsync(async () => {
   try {
     const res = await api.update.check(channel.value)
     check.value = res.check
     status.value = res.status
+    lastCheck.value = new Date().toISOString()
+    checkError.value = ''
   } catch (e) {
     throw e instanceof ApiError && e.status === 502
       ? new Error(`Could not reach GitHub: ${e.message}`)
@@ -77,7 +87,7 @@ async function tick() {
     return
   }
   try {
-    status.value = await api.update.status()
+    status.value = (await api.update.status()).status
     if (status.value.state === 'failed') poll.stop()
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) poll.stop()
@@ -105,10 +115,21 @@ function reload() {
   window.location.reload()
 }
 
+const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
+
 onMounted(async () => {
   await loadVersion()
   try {
-    status.value = await api.update.status()
+    const res = await api.update.status()
+    status.value = res.status
+    // A router that has never checked, or whose last check failed, says
+    // so rather than claiming to be up to date on an empty answer. A
+    // cached answer about the other channel is nothing to go on either.
+    if (res.check?.lastCheck && res.check.channel === channel.value) {
+      lastCheck.value = res.check.lastCheck
+      checkError.value = res.check.checkError || ''
+      if (!res.check.checkError) check.value = res.check
+    }
   } catch {
     /* updates unavailable */
   }
@@ -124,6 +145,8 @@ onMounted(async () => {
       <dd class="font-mono">{{ current || '…' }}</dd>
       <dt>Latest</dt>
       <dd class="font-mono">{{ check ? check.latest || 'none' : 'not checked' }}</dd>
+      <dt>Last checked</dt>
+      <dd>{{ when(lastCheck) }}</dd>
     </dl>
 
     <p v-if="status?.packageManaged" class="text-sm text-neutral-500">
@@ -135,10 +158,12 @@ onMounted(async () => {
       <UpdateModeFields
         prefix="ostiole-upd"
         :mode="settings.mode ?? ''"
-        :schedule="settings.schedule ?? ''"
+        :check-schedule="settings.checkSchedule ?? ''"
+        :install-schedule="settings.installSchedule ?? ''"
         security-note="A release only counts as a security release when its notes say so."
         @update:mode="config.setUpdates('ostiole', { mode: $event })"
-        @update:schedule="config.setUpdates('ostiole', { schedule: $event })"
+        @update:check-schedule="config.setUpdates('ostiole', { checkSchedule: $event })"
+        @update:install-schedule="config.setUpdates('ostiole', { installSchedule: $event })"
       />
       <p class="text-sm text-neutral-500">
         An install restarts the service and rolls back if the new version does not come up.
@@ -233,6 +258,9 @@ onMounted(async () => {
       class="text-sm text-red-600 dark:text-red-400"
     >
       Update failed: {{ status.message }}
+    </p>
+    <p v-if="checkError" role="alert" class="text-sm text-red-600 dark:text-red-400">
+      The last check failed: {{ checkError }}
     </p>
     <p v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
   </section>

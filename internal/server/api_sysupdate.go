@@ -28,14 +28,15 @@ func (a *api) updates() model.Updates {
 	return cfg.Updates
 }
 
-// systemUpdateStatus is the status with the configured mode and schedule
-// filled in, which is what the page needs to draw itself.
+// systemUpdateStatus is the status with the configured mode and
+// schedules filled in, which is what the page needs to draw itself.
 func (a *api) systemUpdateStatus() sysupdate.Status {
 	updates := a.updates()
 	mode := updates.SystemMode()
 	st := a.packages.Status(mode == model.UpdateSecurity)
 	st.Mode = string(mode)
-	st.Schedule = updates.SystemSchedule()
+	st.CheckSchedule = updates.SystemCheckSchedule()
+	st.InstallSchedule = updates.SystemInstallSchedule()
 	return st
 }
 

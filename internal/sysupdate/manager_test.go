@@ -272,6 +272,35 @@ func TestRunScheduledObeysTheMode(t *testing.T) {
 	}
 }
 
+// The scheduled check asks what is waiting and touches nothing, whatever
+// the mode is, so a router that installs by hand still knows where it
+// stands.
+func TestCheckScheduledInstallsNothing(t *testing.T) {
+	withSystemd(t, true)
+	run := dnfRunner(t)
+	m := New(Options{PackageManager: "dnf", StateDir: t.TempDir(), Run: run, Root: true, Log: discard()})
+
+	out, err := m.CheckScheduled(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "6 update(s) waiting") || !strings.Contains(out, "security fixes") {
+		t.Errorf("out = %q", out)
+	}
+	if run.ran("systemd-run --unit=ostiole-sysupdate --quiet --property=Type=oneshot --property=RemainAfterExit=yes --property=TimeoutStartSec=3600 --setenv=LC_ALL=C --setenv=LANG=C --setenv=DEBIAN_FRONTEND=noninteractive -- dnf -y upgrade") {
+		t.Errorf("a check installed something:\n%s", run.transcript())
+	}
+	// What it found is what the page draws itself from.
+	st := m.Status(false)
+	if len(st.Pending.Packages) != 6 || st.LastCheck.IsZero() {
+		t.Errorf("status = %+v", st)
+	}
+	// And the router is free again afterwards.
+	if st.Running {
+		t.Error("the check did not let go of the router")
+	}
+}
+
 func TestStartClaimsTheBoxBeforeItReturns(t *testing.T) {
 	withSystemd(t, true)
 	run := dnfRunner(t)

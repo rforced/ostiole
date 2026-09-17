@@ -93,7 +93,7 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/diagnostics/states":     {summary: "The connections the kernel is tracking.", role: auth.RoleViewer},
 	"GET /api/v1/diagnostics/neighbours": {summary: "The ARP and NDP tables.", role: auth.RoleViewer},
 	"GET /api/v1/certificate":            {summary: "Describe the certificate the web UI serves.", role: auth.RoleViewer},
-	"GET /api/v1/update/status":          {summary: "Progress of an update that is running.", role: auth.RoleViewer},
+	"GET /api/v1/update/status":          {summary: "What the last check found about Ostiole's own releases, and the progress of an update that is running.", role: auth.RoleViewer},
 	"GET /api/v1/system/updates":         {summary: "What the distro package manager has waiting, and whether a reboot is.", role: auth.RoleViewer},
 	"POST /api/v1/config/diff":           {summary: "Compare two configurations.", role: auth.RoleViewer},
 
@@ -121,7 +121,7 @@ var routeDocs = map[string]routeDoc{
 	"POST /api/v1/users/{name}/role":       {summary: "Change what an account may do; not your own.", role: auth.RoleAdmin},
 	"POST /api/v1/users/{name}/password":   {summary: "Set another account's password, ending its sessions.", role: auth.RoleAdmin},
 	"POST /api/v1/users/{name}/username":   {summary: "Rename an account, keeping its role and sessions.", role: auth.RoleAdmin},
-	"GET /api/v1/update/check":             {summary: "Ask GitHub whether a newer release exists.", role: auth.RoleAdmin},
+	"GET /api/v1/update/check":             {summary: "Ask GitHub now whether a newer release exists, and cache the answer.", role: auth.RoleAdmin},
 	"POST /api/v1/update/apply":            {summary: "Download and install a release.", role: auth.RoleAdmin},
 	"POST /api/v1/system/updates/apply":    {summary: "Install the distro packages the update mode allows.", role: auth.RoleAdmin},
 	"POST /api/v1/system/reboot":           {summary: "Reboot this router.", role: auth.RoleAdmin},

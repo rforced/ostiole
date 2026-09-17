@@ -59,11 +59,11 @@ onMounted(async () => {
   }
   await load.run()
   await loadStats.run()
-  // Best effort: a quiet hint when a newer release exists.
+  // Best effort: a quiet hint when a newer release exists. It comes from
+  // what the router's own nightly check wrote down — on the channel the
+  // configuration names — so opening the dashboard costs GitHub nothing.
   try {
-    const res = await api.update.check(
-      localStorage.getItem('ostiole.updateChannel') === 'beta' ? 'beta' : 'stable',
-    )
+    const res = await api.update.status()
     if (res.check?.available) update.value = res.check
   } catch {
     /* offline or updates unavailable */

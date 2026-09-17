@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, nextTick, ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { usePageTabs, useTabHash } from '@/lib/tabs'
@@ -55,6 +55,34 @@ describe('useTabHash', () => {
     wrapper.vm.tab = 'nope'
     await flushPromises()
     expect(router.currentRoute.value.hash).toBe('#nat')
+  })
+
+  it('honours the hash once a list the configuration supplies arrives', async () => {
+    const zones = ref([])
+    const Late = {
+      setup() {
+        return { zone: useTabHash(() => zones.value) }
+      },
+      render() {
+        return h('span', this.zone)
+      },
+    }
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/firewall/rules', component: Late }],
+    })
+    router.push('/firewall/rules#dmz')
+    await router.isReady()
+    const wrapper = mount(Late, { global: { plugins: [router] } })
+    // Nothing loaded is nothing to choose, rather than a guess at the hash.
+    expect(wrapper.text()).toBe('')
+    zones.value = ['lan', 'wan', 'dmz']
+    await nextTick()
+    expect(wrapper.text()).toBe('dmz')
+    // And a zone that goes away takes you to the first one that is left.
+    zones.value = ['lan', 'wan']
+    await nextTick()
+    expect(wrapper.text()).toBe('lan')
   })
 })
 

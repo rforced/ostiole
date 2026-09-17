@@ -186,17 +186,22 @@ test('choose how this router patches itself, and see why some of it is refused',
   await expect(os).toContainText('root')
   await expect(os.getByRole('button', { name: 'Check now' })).toBeDisabled()
 
-  // The defaults are what a router gets without being told: security fixes,
-  // Sunday at four.
+  // The defaults are what a router gets without being told: security
+  // fixes, asked for nightly and installed on a Sunday.
   await expect(os.getByLabel('Automatic (Security)')).toBeChecked()
-  await expect(os.getByLabel('Schedule', { exact: true })).toHaveValue('0 4 * * 0')
+  await expect(os.getByLabel('Check schedule')).toHaveValue('0 4 * * *')
+  await expect(os.getByLabel('Install schedule')).toHaveValue('30 4 * * 0')
 
   await os.getByLabel('Automatic (All)').check()
-  await os.getByLabel('When').selectOption('0 4 * * *')
+  await os.getByLabel('Install automatically').selectOption('0 4 * * 0')
   await os.getByLabel('Never upgrade').fill('kernel, kernel-core')
 
   const ostiole = page.getByRole('region', { name: 'Ostiole updates' })
   await ostiole.getByLabel('Manual').check()
+  // A router that installs Ostiole by hand has no install to schedule;
+  // it still asks what is waiting.
+  await expect(ostiole.getByLabel('Install schedule')).toHaveCount(0)
+  await expect(ostiole.getByLabel('Check schedule')).toHaveValue('0 4 * * *')
   await ostiole.getByLabel('Channel').selectOption('beta')
 
   await page.screenshot({ path: shot('31-updates'), fullPage: true })
@@ -206,17 +211,19 @@ test('choose how this router patches itself, and see why some of it is refused',
   // shows them after a reload.
   await page.reload()
   await expect(os.getByLabel('Automatic (All)')).toBeChecked()
-  await expect(os.getByLabel('Schedule', { exact: true })).toHaveValue('0 4 * * *')
+  await expect(os.getByLabel('Check schedule')).toHaveValue('0 4 * * *')
+  await expect(os.getByLabel('Install schedule')).toHaveValue('0 4 * * 0')
   await expect(os.getByLabel('Never upgrade')).toHaveValue('kernel, kernel-core')
   await expect(ostiole.getByLabel('Manual')).toBeChecked()
   await expect(ostiole.getByLabel('Channel')).toHaveValue('beta')
 
-  // Both update crons are on the page that says what the router does by itself.
+  // All four update crons are on the page that says what the router does
+  // by itself, and the one the manual mode turned off says so.
   await page.goto('/crons')
   const system = page.getByRole('region', { name: 'What Ostiole does by itself' })
-  await expect(system).toContainText('distro package manager')
-  await expect(system).toContainText('newer Ostiole release')
-  await expect(system.getByRole('row').filter({ hasText: 'distro package manager' })).toContainText(
-    '0 4 * * *',
-  )
+  const row = (text) => system.getByRole('row').filter({ hasText: text })
+  await expect(row('what updates are waiting')).toContainText('0 4 * * *')
+  await expect(row('Install the distro updates')).toContainText('0 4 * * 0')
+  await expect(row('newer Ostiole release has been published')).toContainText('0 4 * * *')
+  await expect(row('Install a newer Ostiole release')).toContainText('never')
 })

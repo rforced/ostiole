@@ -48,7 +48,10 @@ type Manager struct {
 	Installer      *Installer
 	Current        string
 	PackageManaged bool
-	Log            *slog.Logger
+	// Cache holds what the last check found, so the dashboard and the
+	// updates page can draw themselves without a round trip to GitHub.
+	Cache *Cache
+	Log   *slog.Logger
 
 	mu     sync.Mutex
 	status Status
@@ -72,10 +75,33 @@ func (m *Manager) set(st State, version, msg string, done, total int64) {
 	m.status = Status{State: st, Version: version, Message: msg, Done: done, Total: total, UpdatedAt: time.Now()}
 }
 
-// Check looks for a newer release on the channel.
+// Check looks for a newer release on the channel and records what it
+// found. Every check goes through here, so pressing the button on the
+// page warms the same cache the nightly cron does.
 func (m *Manager) Check(ctx context.Context, ch Channel) (*Check, error) {
-	return m.Client.Check(ctx, m.Current, ch)
+	chk, err := m.Client.Check(ctx, m.Current, ch)
+	now := time.Now()
+	if err != nil {
+		// The channel is recorded even here, so a failure is attributable
+		// to the channel it was asked about rather than to nothing.
+		m.Cache.Update(func(s *Snapshot) {
+			s.LastCheck, s.CheckError, s.Channel = now, err.Error(), ch
+		})
+		return nil, err
+	}
+	m.Cache.Update(func(s *Snapshot) {
+		*s = Snapshot{
+			LastCheck: now, Channel: chk.Channel, Current: chk.Current, Latest: chk.Latest,
+			Available: chk.Available, Security: chk.Security, SecurityReleases: chk.SecurityReleases,
+			Release: chk.Release,
+		}
+	})
+	return chk, nil
 }
+
+// Cached is what the last check found, which is what a page shows before
+// anybody asks for a fresh one.
+func (m *Manager) Cached() Snapshot { return m.Cache.Snapshot() }
 
 // Mode is what a scheduled self-update is allowed to install. It mirrors
 // the update mode in the configuration without this package having to
@@ -89,6 +115,33 @@ const (
 	ModeAll      Mode = "all"
 )
 
+// CheckScheduled is the scheduled check: ask GitHub what is out and
+// record it, whatever the mode is. It returns the line the crons page
+// shows.
+func (m *Manager) CheckScheduled(ctx context.Context, ch Channel) (string, error) {
+	chk, err := m.Check(ctx, ch)
+	if err != nil {
+		return "", err
+	}
+	line := checkLine(chk, ch)
+	if chk.Security {
+		line += " and fixes " + strings.Join(chk.SecurityReleases, ", ")
+	}
+	return line, nil
+}
+
+// checkLine says what a check found in one line: what is waiting, or why
+// nothing is.
+func checkLine(chk *Check, ch Channel) string {
+	switch {
+	case chk.Available:
+		return chk.Latest + " is available"
+	case chk.Latest == "":
+		return "no release on the " + string(ch) + " channel"
+	}
+	return "up to date (" + chk.Current + ")"
+}
+
 // RunScheduled is the scheduled cron: always check, then install only
 // what the mode allows. It returns a line describing what it decided,
 // which is what the cron's last result shows.
@@ -97,13 +150,10 @@ func (m *Manager) RunScheduled(ctx context.Context, mode Mode, ch Channel) (stri
 	if err != nil {
 		return "", err
 	}
+	waiting := checkLine(chk, ch)
 	if !chk.Available {
-		if chk.Latest == "" {
-			return "no release on the " + string(ch) + " channel", nil
-		}
-		return "up to date (" + chk.Current + ")", nil
+		return waiting, nil
 	}
-	waiting := chk.Latest + " is available"
 	switch mode {
 	case ModeManual:
 		return waiting + "; this router installs Ostiole updates by hand", nil

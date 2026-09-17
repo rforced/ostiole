@@ -132,9 +132,9 @@ func (r *Runner) Run(ctx context.Context) {
 }
 
 // scheduled is everything this router runs on a timer: the operator's crons
-// and the two the update settings imply.
+// and the ones the update settings imply.
 func scheduled(cfg *model.Config) []model.Cron {
-	all := make([]model.Cron, 0, len(cfg.Crons)+2)
+	all := make([]model.Cron, 0, len(cfg.Crons)+4)
 	all = append(all, cfg.Crons...)
 	return append(all, cfg.DerivedCrons()...)
 }
@@ -282,7 +282,7 @@ func (r *Runner) Statuses() []Status {
 				Enabled:     c.Enabled,
 				Kind:        string(c.Kind),
 			}
-			if s, err := Parse(c.Schedule); err == nil {
+			if s, err := Parse(c.Schedule); err == nil && c.Enabled {
 				if next, ok := s.Next(now); ok {
 					st.Next = &next
 				}

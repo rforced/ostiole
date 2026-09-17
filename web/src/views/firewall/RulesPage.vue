@@ -5,6 +5,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { useTabHash } from '@/lib/tabs'
 import { useConfigStore } from '@/stores/config'
 import RuleDialog from '@/views/firewall/RuleDialog.vue'
 import SystemRuleRow from '@/views/firewall/SystemRuleRow.vue'
@@ -27,18 +28,18 @@ const SETTINGS = {
 }
 
 const config = useConfigStore()
-const zone = ref(config.zones[0]?.name ?? '')
 const editing = ref(null)
 const open = ref(false)
 const counters = ref({})
 const system = ref([])
 
-watch(
-  () => config.zones.map((z) => z.name),
-  (names) => {
-    if (!names.includes(zone.value)) zone.value = names[0] ?? ''
-  },
-)
+/**
+ * The zone lives in the URL hash, like the tabs of a page: a reload comes
+ * back to the rules you were reading, and a link from somewhere that names a
+ * rule can land on the zone holding it. A zone that is deleted while you are
+ * on it takes you to the first one rather than to an empty table.
+ */
+const zone = useTabHash(() => config.zones.map((z) => z.name))
 
 const rules = computed(() => config.rulesForZone(zone.value))
 

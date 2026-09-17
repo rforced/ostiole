@@ -16,6 +16,7 @@ import (
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/sysupdate"
+	"github.com/rforced/ostiole/internal/update"
 	"github.com/rforced/ostiole/internal/version"
 )
 
@@ -104,12 +105,21 @@ it works whether or not the daemon is up.`,
 				},
 				Restart: restartService,
 				SystemUpdate: func(ctx context.Context, mode string, exclude []string) (string, error) {
-					packages := sysupdate.New(sysupdate.Options{
-						PackageManager: g.packageManager,
-						StateDir:       g.updatesDir(),
-						Root:           true,
-					})
-					return packages.RunScheduled(ctx, sysupdate.Mode(mode), exclude)
+					return g.packages().RunScheduled(ctx, sysupdate.Mode(mode), exclude)
+				},
+				SystemCheck: func(ctx context.Context) (string, error) {
+					return g.packages().CheckScheduled(ctx)
+				},
+				// Checking asks GitHub and writes down the answer; it needs
+				// none of the machinery installing a release does, so it
+				// works from here as well as from the daemon.
+				SelfCheck: func(ctx context.Context, channel string) (string, error) {
+					m := &update.Manager{
+						Client:  update.NewClient(),
+						Current: version.Version,
+						Cache:   update.NewCache(g.updatesDir()),
+					}
+					return m.CheckScheduled(ctx, update.Channel(channel))
 				},
 			}
 			out, err := actions.Run(cmd.Context(), *c)
@@ -121,4 +131,14 @@ it works whether or not the daemon is up.`,
 	}
 	cmd.AddCommand(run)
 	return cmd
+}
+
+// packages drives the distro package manager as root, which is what a
+// cron run from the command line is.
+func (g *globals) packages() *sysupdate.Manager {
+	return sysupdate.New(sysupdate.Options{
+		PackageManager: g.packageManager,
+		StateDir:       g.updatesDir(),
+		Root:           true,
+	})
 }

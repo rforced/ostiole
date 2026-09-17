@@ -1270,7 +1270,7 @@ func (v *validator) crons(c *Config) {
 			} else if !strings.HasPrefix(cr.Command, "/") {
 				v.add(path+".command", "%q must be an absolute path, so it cannot depend on a PATH", cr.Command)
 			}
-		case CronSystemUpdate, CronOstioleUpdate:
+		case CronSystemUpdate, CronOstioleUpdate, CronSystemUpdateCheck, CronOstioleUpdateCheck:
 			// Both are scheduled from the update settings; a cron written
 			// out by hand is allowed to name them as well.
 		default:
@@ -1309,21 +1309,26 @@ var cronShorthands = []string{"@yearly", "@annually", "@monthly", "@weekly", "@d
 // an argument list free of shell metacharacters and stray flags.
 var packageRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]*$`)
 
-// updates checks the settings the two update crons read. An empty mode or
+// updates checks the settings the update crons read. An empty mode or
 // schedule is the default rather than a mistake.
 func (v *validator) updates(u *Updates) {
-	check := func(path string, mode UpdateMode, schedule string) {
+	schedule := func(path string, expr string) {
+		if expr == "" {
+			return
+		}
+		if err := checkCronSchedule(expr); err != nil {
+			v.add(path, "%v", err)
+		}
+	}
+	check := func(path string, mode UpdateMode, checkSchedule, installSchedule string) {
 		if mode != "" && !slices.Contains(UpdateModes, mode) {
 			v.add(path+".mode", "%q is not an update mode (%s)", mode, joinModes())
 		}
-		if schedule != "" {
-			if err := checkCronSchedule(schedule); err != nil {
-				v.add(path+".schedule", "%v", err)
-			}
-		}
+		schedule(path+".checkSchedule", checkSchedule)
+		schedule(path+".installSchedule", installSchedule)
 	}
-	check("updates.system", u.System.Mode, u.System.Schedule)
-	check("updates.ostiole", u.Ostiole.Mode, u.Ostiole.Schedule)
+	check("updates.system", u.System.Mode, u.System.CheckSchedule, u.System.InstallSchedule)
+	check("updates.ostiole", u.Ostiole.Mode, u.Ostiole.CheckSchedule, u.Ostiole.InstallSchedule)
 
 	for i, p := range u.System.Exclude {
 		if !packageRe.MatchString(p) {

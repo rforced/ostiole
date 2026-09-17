@@ -12,9 +12,10 @@ import (
 
 // SchemaVersion is bumped when the on-disk JSON shape changes incompatibly.
 // Version 2 renamed a cron's "job" field to "kind"; version 3 renamed DHCP
-// "scopes" to "servers". An older file needs each changed by hand before
-// this build will load it.
-const SchemaVersion = 3
+// "scopes" to "servers"; version 4 split each update source's "schedule"
+// into "checkSchedule" and "installSchedule". An older file needs each
+// changed by hand before this build will load it.
+const SchemaVersion = 4
 
 // Action is a rule verdict.
 type Action string
@@ -140,6 +141,12 @@ const (
 	CronSystemUpdate CronKind = "system-update"
 	// CronOstioleUpdate does the same for Ostiole's own releases.
 	CronOstioleUpdate CronKind = "ostiole-update"
+	// CronSystemUpdateCheck asks the distro package manager what is
+	// waiting and installs none of it, so the answer on the page is a day
+	// old at worst whatever the mode is.
+	CronSystemUpdateCheck CronKind = "system-update-check"
+	// CronOstioleUpdateCheck does the same for Ostiole's own releases.
+	CronOstioleUpdateCheck CronKind = "ostiole-update-check"
 )
 
 // CronKinds lists them in the order the UI offers them.
@@ -215,15 +222,23 @@ const (
 // UpdateModes lists them in the order the UI offers them.
 var UpdateModes = []UpdateMode{UpdateAll, UpdateSecurity, UpdateManual}
 
-// DefaultUpdateSchedule is when an update cron runs if nobody says
-// otherwise: early on a Sunday, when a reboot hurts least.
-const DefaultUpdateSchedule = "0 4 * * 0"
+// DefaultUpdateCheckSchedule is when a router asks what is waiting if
+// nobody says otherwise: every night, because "is there an update?" is
+// worth no more than the last time anybody looked.
+const DefaultUpdateCheckSchedule = "0 4 * * *"
+
+// DefaultUpdateSchedule is when a router installs what the mode allows if
+// nobody says otherwise: early on a Sunday, when a reboot hurts least, and
+// half an hour after the check so the two never land in the same minute.
+const DefaultUpdateSchedule = "30 4 * * 0"
 
 // Update cron ids. They are reported as work Ostiole does on its own
 // account rather than as crons the operator wrote.
 const (
-	CronIDSystemUpdate  = "system:os-updates"
-	CronIDOstioleUpdate = "system:ostiole-updates"
+	CronIDSystemUpdate       = "system:os-updates"
+	CronIDOstioleUpdate      = "system:ostiole-updates"
+	CronIDSystemUpdateCheck  = "system:os-update-check"
+	CronIDOstioleUpdateCheck = "system:ostiole-update-check"
 )
 
 // Update channels for Ostiole's own releases.
@@ -246,8 +261,12 @@ type Updates struct {
 type PackageUpdates struct {
 	// Mode is empty for the default, which is security.
 	Mode UpdateMode `json:"mode,omitempty"`
-	// Schedule is a cron expression; empty means DefaultUpdateSchedule.
-	Schedule string `json:"schedule,omitempty"`
+	// CheckSchedule is when the router asks what is waiting; empty means
+	// DefaultUpdateCheckSchedule.
+	CheckSchedule string `json:"checkSchedule,omitempty"`
+	// InstallSchedule is when it installs what the mode allows; empty means
+	// DefaultUpdateSchedule. It does not run at all on manual.
+	InstallSchedule string `json:"installSchedule,omitempty"`
 	// Exclude names packages this router never upgrades, for the kernel a
 	// driver is pinned to or anything else that must not move.
 	Exclude []string `json:"exclude,omitempty"`
@@ -257,8 +276,12 @@ type PackageUpdates struct {
 type SelfUpdates struct {
 	// Mode is empty for the default, which is security.
 	Mode UpdateMode `json:"mode,omitempty"`
-	// Schedule is a cron expression; empty means DefaultUpdateSchedule.
-	Schedule string `json:"schedule,omitempty"`
+	// CheckSchedule is when the router asks what is waiting; empty means
+	// DefaultUpdateCheckSchedule.
+	CheckSchedule string `json:"checkSchedule,omitempty"`
+	// InstallSchedule is when it installs what the mode allows; empty means
+	// DefaultUpdateSchedule. It does not run at all on manual.
+	InstallSchedule string `json:"installSchedule,omitempty"`
 	// Channel is stable or beta; empty means stable.
 	Channel string `json:"channel,omitempty"`
 }
@@ -266,14 +289,20 @@ type SelfUpdates struct {
 // SystemMode is the mode the distro packages update under.
 func (u Updates) SystemMode() UpdateMode { return modeOr(u.System.Mode) }
 
-// SystemSchedule is when the distro packages are checked.
-func (u Updates) SystemSchedule() string { return scheduleOr(u.System.Schedule) }
+// SystemCheckSchedule is when the distro packages are checked.
+func (u Updates) SystemCheckSchedule() string { return checkScheduleOr(u.System.CheckSchedule) }
+
+// SystemInstallSchedule is when the distro packages are installed.
+func (u Updates) SystemInstallSchedule() string { return scheduleOr(u.System.InstallSchedule) }
 
 // OstioleMode is the mode Ostiole's own releases update under.
 func (u Updates) OstioleMode() UpdateMode { return modeOr(u.Ostiole.Mode) }
 
-// OstioleSchedule is when Ostiole checks for its own releases.
-func (u Updates) OstioleSchedule() string { return scheduleOr(u.Ostiole.Schedule) }
+// OstioleCheckSchedule is when Ostiole looks for its own releases.
+func (u Updates) OstioleCheckSchedule() string { return checkScheduleOr(u.Ostiole.CheckSchedule) }
+
+// OstioleInstallSchedule is when Ostiole installs one.
+func (u Updates) OstioleInstallSchedule() string { return scheduleOr(u.Ostiole.InstallSchedule) }
 
 // OstioleChannel is the release channel in force.
 func (u Updates) OstioleChannel() string {
@@ -297,23 +326,46 @@ func scheduleOr(s string) string {
 	return s
 }
 
+func checkScheduleOr(s string) string {
+	if s == "" {
+		return DefaultUpdateCheckSchedule
+	}
+	return s
+}
+
 // DerivedCrons are the crons the update settings imply. They are not
 // stored, so there is one place to change a mode and no way for the list
-// of crons and the settings to disagree.
+// of crons and the settings to disagree. Each source checks whatever the
+// mode is, because a router that installs nothing still has to be able to
+// say what is waiting; only the installing is turned off on manual.
 func (c *Config) DerivedCrons() []Cron {
 	return []Cron{
 		{
-			ID:          CronIDSystemUpdate,
-			Description: "Check the distro package manager and install what the update mode allows",
+			ID:          CronIDSystemUpdateCheck,
+			Description: "Ask the distro package manager what updates are waiting",
 			Enabled:     true,
-			Schedule:    c.Updates.SystemSchedule(),
+			Schedule:    c.Updates.SystemCheckSchedule(),
+			Kind:        CronSystemUpdateCheck,
+		},
+		{
+			ID:          CronIDSystemUpdate,
+			Description: "Install the distro updates the update mode allows",
+			Enabled:     c.Updates.SystemMode() != UpdateManual,
+			Schedule:    c.Updates.SystemInstallSchedule(),
 			Kind:        CronSystemUpdate,
 		},
 		{
-			ID:          CronIDOstioleUpdate,
-			Description: "Check for a newer Ostiole release and install what the update mode allows",
+			ID:          CronIDOstioleUpdateCheck,
+			Description: "Ask whether a newer Ostiole release has been published",
 			Enabled:     true,
-			Schedule:    c.Updates.OstioleSchedule(),
+			Schedule:    c.Updates.OstioleCheckSchedule(),
+			Kind:        CronOstioleUpdateCheck,
+		},
+		{
+			ID:          CronIDOstioleUpdate,
+			Description: "Install a newer Ostiole release when the update mode allows",
+			Enabled:     c.Updates.OstioleMode() != UpdateManual,
+			Schedule:    c.Updates.OstioleInstallSchedule(),
 			Kind:        CronOstioleUpdate,
 		},
 	}

@@ -10,6 +10,7 @@ export const SCHEDULE_PRESETS = [
   { value: '0 * * * *', label: 'Every hour' },
   { value: '*/15 * * * *', label: 'Every 15 minutes' },
   { value: '0 4 * * 0', label: 'Sunday at 04:00' },
+  { value: '30 4 * * 0', label: 'Sunday at 04:30' },
   { value: '0 4 1 * *', label: 'The first of the month at 04:00' },
 ]
 

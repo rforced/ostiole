@@ -888,7 +888,7 @@ func TestValidateCatchesDelegationMistakes(t *testing.T) {
 func TestUpdateDefaults(t *testing.T) {
 	t.Parallel()
 	// A configuration written before updates existed has to come out
-	// patching itself weekly, not doing nothing.
+	// checking nightly and patching itself weekly, not doing nothing.
 	var u Updates
 	if got := u.SystemMode(); got != UpdateSecurity {
 		t.Errorf("SystemMode = %q, want %q", got, UpdateSecurity)
@@ -896,45 +896,81 @@ func TestUpdateDefaults(t *testing.T) {
 	if got := u.OstioleMode(); got != UpdateSecurity {
 		t.Errorf("OstioleMode = %q, want %q", got, UpdateSecurity)
 	}
-	if got := u.SystemSchedule(); got != DefaultUpdateSchedule {
-		t.Errorf("SystemSchedule = %q, want %q", got, DefaultUpdateSchedule)
+	if got := u.SystemCheckSchedule(); got != DefaultUpdateCheckSchedule {
+		t.Errorf("SystemCheckSchedule = %q, want %q", got, DefaultUpdateCheckSchedule)
+	}
+	if got := u.OstioleCheckSchedule(); got != DefaultUpdateCheckSchedule {
+		t.Errorf("OstioleCheckSchedule = %q, want %q", got, DefaultUpdateCheckSchedule)
+	}
+	if got := u.SystemInstallSchedule(); got != DefaultUpdateSchedule {
+		t.Errorf("SystemInstallSchedule = %q, want %q", got, DefaultUpdateSchedule)
+	}
+	if got := u.OstioleInstallSchedule(); got != DefaultUpdateSchedule {
+		t.Errorf("OstioleInstallSchedule = %q, want %q", got, DefaultUpdateSchedule)
+	}
+	// The two defaults are different minutes on purpose: a check and an
+	// install that collide leave one of them reporting a busy router.
+	if DefaultUpdateCheckSchedule == DefaultUpdateSchedule {
+		t.Error("the check and the install would land in the same minute")
 	}
 	if got := u.OstioleChannel(); got != ChannelStable {
 		t.Errorf("OstioleChannel = %q, want %q", got, ChannelStable)
 	}
 	u.System.Mode = UpdateManual
-	u.System.Schedule = "@daily"
+	u.System.CheckSchedule = "@daily"
+	u.System.InstallSchedule = "@weekly"
 	if got := u.SystemMode(); got != UpdateManual {
 		t.Errorf("SystemMode = %q, want %q", got, UpdateManual)
 	}
-	if got := u.SystemSchedule(); got != "@daily" {
-		t.Errorf("SystemSchedule = %q, want @daily", got)
+	if got := u.SystemCheckSchedule(); got != "@daily" {
+		t.Errorf("SystemCheckSchedule = %q, want @daily", got)
+	}
+	if got := u.SystemInstallSchedule(); got != "@weekly" {
+		t.Errorf("SystemInstallSchedule = %q, want @weekly", got)
 	}
 }
 
 func TestDerivedCronsFollowTheSettings(t *testing.T) {
 	t.Parallel()
 	cfg := &Config{Updates: Updates{
-		System:  PackageUpdates{Schedule: "30 3 * * *"},
+		System:  PackageUpdates{CheckSchedule: "30 3 * * *"},
 		Ostiole: SelfUpdates{Mode: UpdateManual},
 	}}
 	derived := cfg.DerivedCrons()
-	if len(derived) != 2 {
-		t.Fatalf("derived %d crons, want 2", len(derived))
+	if len(derived) != 4 {
+		t.Fatalf("derived %d crons, want 4", len(derived))
 	}
-	if derived[0].ID != CronIDSystemUpdate || derived[0].Schedule != "30 3 * * *" {
-		t.Errorf("system cron = %+v", derived[0])
+	byID := map[string]Cron{}
+	for _, c := range derived {
+		byID[c.ID] = c
 	}
-	if derived[1].Schedule != DefaultUpdateSchedule {
-		t.Errorf("ostiole schedule = %q, want the default", derived[1].Schedule)
-	}
-	for _, id := range []string{CronIDSystemUpdate, CronIDOstioleUpdate} {
-		c, ok := cfg.Cron(id)
+	for _, want := range []struct {
+		id       string
+		kind     CronKind
+		schedule string
+		enabled  bool
+	}{
+		{CronIDSystemUpdateCheck, CronSystemUpdateCheck, "30 3 * * *", true},
+		{CronIDSystemUpdate, CronSystemUpdate, DefaultUpdateSchedule, true},
+		// Ostiole is on manual: it still asks what is out, and installs
+		// none of it.
+		{CronIDOstioleUpdateCheck, CronOstioleUpdateCheck, DefaultUpdateCheckSchedule, true},
+		{CronIDOstioleUpdate, CronOstioleUpdate, DefaultUpdateSchedule, false},
+	} {
+		c, ok := byID[want.id]
 		if !ok {
-			t.Fatalf("Cron(%q) not found; run-it-now would not work", id)
+			t.Fatalf("%s is not derived from the settings", want.id)
 		}
-		if !c.Enabled {
-			t.Errorf("%s is not enabled", id)
+		if c.Kind != want.kind || c.Schedule != want.schedule || c.Enabled != want.enabled {
+			t.Errorf("%s = %+v, want kind %q, schedule %q, enabled %v",
+				want.id, c, want.kind, want.schedule, want.enabled)
+		}
+		found, ok := cfg.Cron(want.id)
+		if !ok {
+			t.Fatalf("Cron(%q) not found; run-it-now would not work", want.id)
+		}
+		if found.Kind != want.kind {
+			t.Errorf("Cron(%q) = %+v", want.id, found)
 		}
 	}
 }
@@ -998,9 +1034,10 @@ func TestValidateUpdates(t *testing.T) {
 	cfg := policyConfig()
 	cfg.Updates = Updates{
 		System: PackageUpdates{
-			Mode:     "sometimes",
-			Schedule: "every other tuesday",
-			Exclude:  []string{"kernel", "--assume-yes"},
+			Mode:            "sometimes",
+			CheckSchedule:   "every other tuesday",
+			InstallSchedule: "@fortnightly",
+			Exclude:         []string{"kernel", "--assume-yes"},
 		},
 		Ostiole: SelfUpdates{Channel: "nightly"},
 	}
@@ -1018,7 +1055,8 @@ func TestValidateUpdates(t *testing.T) {
 	}
 	for _, p := range []string{
 		"updates.system.mode",
-		"updates.system.schedule",
+		"updates.system.checkSchedule",
+		"updates.system.installSchedule",
 		"updates.system.exclude[1]",
 		"updates.ostiole.channel",
 	} {

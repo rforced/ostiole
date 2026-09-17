@@ -45,7 +45,7 @@ const entries = computed(() => [
     key: `rule:${r.id}`,
     id: r.id,
     kind: 'Rule',
-    to: '/firewall/rules',
+    to: `/firewall/rules#${r.zone}`,
     zone: r.destZone ? `${r.zone} → ${r.destZone}` : r.zone,
     match: `${r.protocol} ${describe(r.source, true)} → ${describe(r.destination, true)}`,
     priority: r.priority,

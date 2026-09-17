@@ -350,11 +350,15 @@ func (a *api) updateCheck(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// updateStatus answers both halves of "what about Ostiole itself": what
+// the last scheduled check found, and whatever install is running now.
+// It asks GitHub nothing, which is what lets the dashboard show a waiting
+// release on every page load without an admin session or a round trip.
 func (a *api) updateStatus(w http.ResponseWriter, _ *http.Request) error {
 	if a.updater == nil {
 		return &unavailable{errors.New("updates not available")}
 	}
-	writeJSON(w, http.StatusOK, a.updater.Status())
+	writeJSON(w, http.StatusOK, map[string]any{"check": a.updater.Cached(), "status": a.updater.Status()})
 	return nil
 }
 
