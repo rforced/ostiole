@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/netip"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -104,13 +106,23 @@ func channelFlag(s string) (update.Channel, error) {
 }
 
 // probeHealth is used by the post-update restart script. The daemon's
-// certificate is self-signed, so verification is off; the probe only asks
-// whether the new binary serves at all.
-func probeHealth(ctx context.Context, url string) error {
-	client := &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}} //nolint:gosec // local self-signed probe
+// certificate is self-signed, so verification is off — but only for the
+// loopback address the script probes. Any other host is verified the usual
+// way, so the hidden flag cannot be aimed somewhere else and made to accept
+// whatever answers. The probe only asks whether the new binary serves at all.
+func probeHealth(ctx context.Context, rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("probe %q: %w", rawURL, err)
+	}
+	tr := &http.Transport{}
+	if loopbackHost(u.Hostname()) {
+		tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // self-signed daemon certificate, loopback only
+	}
+	client := &http.Client{Timeout: 5 * time.Second, Transport: tr}
 	var lastErr error
 	for attempt := 0; attempt < 10; attempt++ {
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 		resp, err := client.Do(req)
 		if err == nil {
 			_ = resp.Body.Close()
@@ -123,7 +135,19 @@ func probeHealth(ctx context.Context, url string) error {
 		}
 		time.Sleep(time.Second)
 	}
-	slog.Error("health probe failed", "url", url, "err", lastErr)
+	slog.Error("health probe failed", "url", rawURL, "err", lastErr)
 	os.Exit(1)
 	return nil
+}
+
+// loopbackHost reports whether host names this machine. A literal address is
+// checked as one; the only name accepted is localhost, because any other name
+// would have to be resolved, and what a name resolves to is not what the
+// certificate would have been checked against.
+func loopbackHost(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip, err := netip.ParseAddr(host)
+	return err == nil && ip.IsLoopback()
 }
