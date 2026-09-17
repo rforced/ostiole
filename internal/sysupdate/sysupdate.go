@@ -10,13 +10,16 @@
 package sysupdate
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -75,6 +78,68 @@ func (ExecRunner) Run(ctx context.Context, name string, args ...string) ([]byte,
 // C locale so the output is parseable, and no prompts for apt.
 func commandEnv() []string {
 	return append(environ(), "LC_ALL=C", "LANG=C", "DEBIAN_FRONTEND=noninteractive")
+}
+
+// hostRunner runs a command on the host rather than inside the daemon's
+// sandbox.
+//
+// ostiole.service is hardened: ProtectSystem=strict makes everything
+// outside ReadWritePaths read-only, and PrivateTmp gives it a /tmp of
+// its own. Every package manager needs to write somewhere under /var —
+// dnf to /var/log/dnf.log and /var/cache/dnf, apt to /var/lib/apt/lists,
+// zypper to /var/cache/zypp — so a check run as a child of the daemon
+// fails with "Read-only file system" before it reads a single package.
+// A transient unit has no sandbox, which is where these tools belong.
+//
+// Getting the output back is the awkward part, and two obvious routes
+// are dead ends:
+//
+//   - `systemd-run --pipe` hands our own descriptors to systemd, and when
+//     those are the pipes Go reads a command's output through, the bus
+//     call is dropped: "Failed to start transient service unit:
+//     Connection reset by peer".
+//   - `--property=StandardOutput=file:` cannot write where the daemon can
+//     write. Under SELinux a transient service may open var_lib_t and
+//     var_run_t but not etc_t, which is where /etc/ostiole lives, nor
+//     user_tmp_t. It fails with 209/STDOUT before the command runs.
+//
+// So the command keeps the journal it writes to anyway, tagged with a
+// syslog identifier of our own so that reading it back gets the command's
+// output and not systemd's commentary about the unit. `--wait` returns
+// the command's exit status, which is what tells dnf's "100 means updates
+// are waiting" from a real failure.
+type hostRunner struct {
+	inner Runner
+	// seq keeps unit names apart, because a scheduled check and one
+	// somebody asked for can be in flight at the same time.
+	seq *atomic.Int64
+}
+
+// commandTag marks the journal entries that are a command's own output.
+const commandTag = "ostiole-cmd"
+
+// Run implements Runner.
+func (h hostRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	unit := fmt.Sprintf("%s-%d-%d", commandTag, os.Getpid(), h.seq.Add(1))
+	argv := []string{
+		"--unit=" + unit, "--wait", "--collect", "--quiet",
+		"--property=SyslogIdentifier=" + commandTag,
+		"--setenv=LC_ALL=C", "--setenv=LANG=C", "--setenv=DEBIAN_FRONTEND=noninteractive",
+		"--", name,
+	}
+	said, runErr := h.inner.Run(ctx, "systemd-run", append(argv, args...)...)
+
+	// journald writes when it gets round to it, and the command has
+	// already exited, so ask it to catch up before reading.
+	_, _ = h.inner.Run(ctx, "journalctl", "--sync")
+	out, err := h.inner.Run(ctx, "journalctl", "-u", unit+".service",
+		"SYSLOG_IDENTIFIER="+commandTag, "-o", "cat", "--no-pager")
+	if err != nil || len(bytes.TrimSpace(out)) == 0 {
+		// It printed nothing, or the journal could not be read: whatever
+		// systemd-run itself said is the only account of what happened.
+		return said, runErr
+	}
+	return out, runErr
 }
 
 // Driver is one package manager.

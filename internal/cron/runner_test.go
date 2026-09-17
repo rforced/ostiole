@@ -16,11 +16,11 @@ import (
 	"github.com/rforced/ostiole/internal/model"
 )
 
-func config(jobs ...model.Cron) *model.Config {
+func config(crons ...model.Cron) *model.Config {
 	cfg := model.Starter(model.StarterOptions{
 		Hostname: "gateway", LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0",
 	})
-	cfg.Crons = jobs
+	cfg.Crons = crons
 	return cfg
 }
 
@@ -31,15 +31,15 @@ type fakeExec struct {
 	block chan struct{}
 }
 
-func (f *fakeExec) Run(_ context.Context, job model.Cron) (string, error) {
+func (f *fakeExec) Run(_ context.Context, c model.Cron) (string, error) {
 	f.mu.Lock()
-	f.ran = append(f.ran, job.ID)
+	f.ran = append(f.ran, c.ID)
 	block, err := f.block, f.err
 	f.mu.Unlock()
 	if block != nil {
 		<-block
 	}
-	return "output of " + job.ID, err
+	return "output of " + c.ID, err
 }
 
 func (f *fakeExec) calls() []string {
@@ -48,9 +48,9 @@ func (f *fakeExec) calls() []string {
 	return append([]string(nil), f.ran...)
 }
 
-func runner(t *testing.T, ex Executor, jobs ...model.Cron) *Runner {
+func runner(t *testing.T, ex Executor, crons ...model.Cron) *Runner {
 	t.Helper()
-	cfg := config(jobs...)
+	cfg := config(crons...)
 	return NewRunner(func() *model.Config { return cfg }, ex, slog.New(slog.DiscardHandler))
 }
 
@@ -58,9 +58,9 @@ func TestTickRunsWhatIsDue(t *testing.T) {
 	t.Parallel()
 	ex := &fakeExec{}
 	r := runner(t, ex,
-		model.Cron{ID: "nightly", Enabled: true, Schedule: "0 4 * * *", Job: model.CronBackup},
-		model.Cron{ID: "hourly", Enabled: true, Schedule: "@hourly", Job: model.CronRefreshAliases},
-		model.Cron{ID: "off", Enabled: false, Schedule: "* * * * *", Job: model.CronRefreshAliases},
+		model.Cron{ID: "nightly", Enabled: true, Schedule: "0 4 * * *", Kind: model.CronBackup},
+		model.Cron{ID: "hourly", Enabled: true, Schedule: "@hourly", Kind: model.CronRefreshAliases},
+		model.Cron{ID: "off", Enabled: false, Schedule: "* * * * *", Kind: model.CronRefreshAliases},
 	)
 
 	// Nothing is due at half past one.
@@ -73,18 +73,18 @@ func TestTickRunsWhatIsDue(t *testing.T) {
 	waitFor(t, func() bool { return len(ex.calls()) == 2 })
 	got := strings.Join(ex.calls(), ",")
 	if !strings.Contains(got, "nightly") || !strings.Contains(got, "hourly") {
-		t.Errorf("ran %q, want both jobs due at 04:00", got)
+		t.Errorf("ran %q, want both crons due at 04:00", got)
 	}
 	if strings.Contains(got, "off") {
-		t.Error("a disabled job ran")
+		t.Error("a disabled cron ran")
 	}
 }
 
-// A job that takes longer than its period must not pile up on itself.
-func TestALongJobIsNotStartedTwice(t *testing.T) {
+// A cron that takes longer than its period must not pile up on itself.
+func TestALongCronIsNotStartedTwice(t *testing.T) {
 	t.Parallel()
 	ex := &fakeExec{block: make(chan struct{})}
-	r := runner(t, ex, model.Cron{ID: "slow", Enabled: true, Schedule: "* * * * *", Job: model.CronRefreshAliases})
+	r := runner(t, ex, model.Cron{ID: "slow", Enabled: true, Schedule: "* * * * *", Kind: model.CronRefreshAliases})
 
 	r.Tick(context.Background(), at(t, "2026-09-16 04:00"))
 	waitFor(t, func() bool { return len(ex.calls()) == 1 })
@@ -106,11 +106,11 @@ func TestStatusesRecordSuccessAndFailure(t *testing.T) {
 	ex := &fakeExec{err: errors.New("the disk is full")}
 	r := runner(t, ex, model.Cron{
 		ID: "nightly", Enabled: true, Schedule: "0 4 * * *",
-		Job: model.CronBackup, Description: "Nightly backup",
+		Kind: model.CronBackup, Description: "Nightly backup",
 	})
 
 	if err := r.RunNow(context.Background(), "nightly"); err == nil {
-		t.Fatal("a failing job reported success")
+		t.Fatal("a failing cron reported success")
 	}
 	st := statusOf(r, "nightly")
 	if st.LastError != "the disk is full" {
@@ -125,29 +125,44 @@ func TestStatusesRecordSuccessAndFailure(t *testing.T) {
 	if st.Next == nil {
 		t.Error("the next run should be worked out from the schedule")
 	}
-	if st.Description != "Nightly backup" || st.Kind != KindUser {
+	if st.Description != "Nightly backup" || st.Origin != OriginUser {
 		t.Errorf("status = %+v", st)
 	}
 	if err := r.RunNow(context.Background(), "nope"); err == nil {
-		t.Error("running an unknown job reported success")
+		t.Error("running an unknown cron reported success")
 	}
 }
 
-// The background work Ostiole does is listed beside the operator's jobs,
+// The background work Ostiole does is listed beside the operator's crons,
 // because "what does this box do while I am not looking" is one question.
+// Every timer the daemon starts has to be here, or the page quietly
+// under-reports what the box is doing.
 func TestStatusesIncludeTheSystemWork(t *testing.T) {
 	t.Parallel()
-	r := runner(t, &fakeExec{}, model.Cron{ID: "mine", Enabled: true, Schedule: "@daily", Job: model.CronBackup})
+	r := runner(t, &fakeExec{}, model.Cron{ID: "mine", Enabled: true, Schedule: "@daily", Kind: model.CronBackup})
 	got := r.Statuses()
-	kinds := map[Kind]int{}
+	origins := map[Origin]int{}
+	listed := map[string]bool{}
 	for _, s := range got {
-		kinds[s.Kind]++
+		origins[s.Origin]++
+		listed[s.ID] = true
 		if s.Description == "" || s.Schedule == "" {
-			t.Errorf("a job with nothing to say: %+v", s)
+			t.Errorf("a cron with nothing to say: %+v", s)
 		}
 	}
-	if kinds[KindUser] != 1 || kinds[KindSystem] < 3 {
-		t.Errorf("kinds = %v", kinds)
+	if origins[OriginUser] != 1 {
+		t.Errorf("origins = %v", origins)
+	}
+	// The ids the daemon's workers report against, plus the two update
+	// crons the update settings imply.
+	for _, id := range []string{
+		"system:gateways", "system:aliases", "system:blocklists",
+		"system:sessions", "system:firewall-log",
+		model.CronIDSystemUpdate, model.CronIDOstioleUpdate,
+	} {
+		if !listed[id] {
+			t.Errorf("%s is not on the page that says what this box does by itself", id)
+		}
 	}
 	// Noting that a piece of background work happened shows up.
 	r.Note("system:aliases")
@@ -158,27 +173,27 @@ func TestStatusesIncludeTheSystemWork(t *testing.T) {
 	}
 }
 
-// A schedule that no longer parses is reported against the job rather
+// A schedule that no longer parses is reported against the cron rather
 // than stopping the runner.
 func TestABrokenScheduleIsReported(t *testing.T) {
 	t.Parallel()
-	r := runner(t, &fakeExec{}, model.Cron{ID: "broken", Enabled: true, Schedule: "not a schedule", Job: model.CronBackup})
+	r := runner(t, &fakeExec{}, model.Cron{ID: "broken", Enabled: true, Schedule: "not a schedule", Kind: model.CronBackup})
 	r.Tick(context.Background(), at(t, "2026-09-16 04:00"))
 	if st := statusOf(r, "broken"); !strings.Contains(st.LastError, "schedule") {
 		t.Errorf("status = %+v", st)
 	}
 }
 
-func TestBackupJobWritesAndPrunes(t *testing.T) {
+func TestBackupCronWritesAndPrunes(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	cfg := config()
-	jobs := &Jobs{
+	actions := &Actions{
 		Config:  func() *model.Config { return cfg },
 		Users:   func() []auth.User { return []auth.User{{Username: "admin", Hash: "x"}} },
 		Version: "test",
 	}
-	job := model.Cron{ID: "nightly", Job: model.CronBackup, Directory: dir, Keep: 2, WithUsers: true}
+	c := model.Cron{ID: "nightly", Kind: model.CronBackup, Directory: dir, Keep: 2, WithUsers: true}
 
 	// Three backups, named by the minute, so the oldest can be pruned.
 	for i := 0; i < 3; i++ {
@@ -186,7 +201,7 @@ func TestBackupJobWritesAndPrunes(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	out, err := jobs.Run(context.Background(), job)
+	out, err := actions.Run(context.Background(), c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,16 +224,16 @@ func TestBackupJobWritesAndPrunes(t *testing.T) {
 	}
 }
 
-func TestCommandJobRunsWithoutAShell(t *testing.T) {
+func TestCommandCronRunsWithoutAShell(t *testing.T) {
 	t.Parallel()
 	var gotName string
 	var gotArgs []string
-	jobs := &Jobs{Exec: func(_ context.Context, name string, args ...string) ([]byte, error) {
+	actions := &Actions{Exec: func(_ context.Context, name string, args ...string) ([]byte, error) {
 		gotName, gotArgs = name, args
 		return []byte("  done  \n"), nil
 	}}
-	out, err := jobs.Run(context.Background(), model.Cron{
-		Job: model.CronCommand, Command: "/usr/bin/true", Args: []string{"a b", "; rm -rf /"},
+	out, err := actions.Run(context.Background(), model.Cron{
+		Kind: model.CronCommand, Command: "/usr/bin/true", Args: []string{"a b", "; rm -rf /"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -233,16 +248,17 @@ func TestCommandJobRunsWithoutAShell(t *testing.T) {
 	}
 }
 
-func TestJobsSayWhatIsMissing(t *testing.T) {
+func TestActionsSayWhatIsMissing(t *testing.T) {
 	t.Parallel()
-	jobs := &Jobs{}
-	for _, job := range []model.Cron{
-		{Job: model.CronRefreshAliases},
-		{Job: model.CronRestartService, Service: "dnsmasq"},
-		{Job: "invented"},
+	actions := &Actions{}
+	for _, c := range []model.Cron{
+		{Kind: model.CronRefreshAliases},
+		{Kind: model.CronRefreshBlocklists},
+		{Kind: model.CronRestartService, Service: "dnsmasq"},
+		{Kind: "invented"},
 	} {
-		if _, err := jobs.Run(context.Background(), job); err == nil {
-			t.Errorf("%q reported success with nothing wired up", job.Job)
+		if _, err := actions.Run(context.Background(), c); err == nil {
+			t.Errorf("%q reported success with nothing wired up", c.Kind)
 		}
 	}
 }
@@ -268,14 +284,14 @@ func waitFor(t *testing.T, ok func() bool) {
 	t.Fatal("timed out waiting")
 }
 
-func TestUpdateJobsRunOnTheirOwnSchedule(t *testing.T) {
+func TestUpdateCronsRunOnTheirOwnSchedule(t *testing.T) {
 	t.Parallel()
 	ex := &fakeExec{}
 	cfg := config()
 	cfg.Updates.System.Schedule = "0 4 * * *"
 	r := NewRunner(func() *model.Config { return cfg }, ex, slog.New(slog.DiscardHandler))
 
-	// Nobody wrote these jobs out; they come from the update settings.
+	// Nobody wrote these out; they come from the update settings.
 	// Midweek only the daily system check is due.
 	wednesday := time.Date(2026, 9, 16, 4, 0, 0, 0, time.UTC)
 	if wednesday.Weekday() == time.Sunday {
@@ -296,12 +312,12 @@ func TestUpdateJobsRunOnTheirOwnSchedule(t *testing.T) {
 	waitFor(t, func() bool { return contains(ex.calls(), model.CronIDOstioleUpdate) })
 }
 
-func TestUpdateJobsAreReportedAsOstioleOwnWork(t *testing.T) {
+func TestUpdateCronsAreReportedAsOstioleOwnWork(t *testing.T) {
 	t.Parallel()
 	r := runner(t, &fakeExec{})
 	var system []Status
 	for _, st := range r.Statuses() {
-		if st.Kind == KindSystem {
+		if st.Origin == OriginSystem {
 			system = append(system, st)
 		}
 	}
@@ -323,7 +339,7 @@ func TestUpdateJobsAreReportedAsOstioleOwnWork(t *testing.T) {
 	}
 }
 
-func TestRunNowFindsTheUpdateJobs(t *testing.T) {
+func TestRunNowFindsTheUpdateCrons(t *testing.T) {
 	t.Parallel()
 	ex := &fakeExec{}
 	r := runner(t, ex)
@@ -335,7 +351,7 @@ func TestRunNowFindsTheUpdateJobs(t *testing.T) {
 	}
 }
 
-func TestUpdateJobsObeyTheMode(t *testing.T) {
+func TestUpdateCronsObeyTheMode(t *testing.T) {
 	t.Parallel()
 	cfg := config()
 	cfg.Updates = model.Updates{
@@ -344,7 +360,7 @@ func TestUpdateJobsObeyTheMode(t *testing.T) {
 	}
 	var sawMode, sawChannel string
 	var sawExclude []string
-	jobs := &Jobs{
+	actions := &Actions{
 		Config: func() *model.Config { return cfg },
 		SystemUpdate: func(_ context.Context, mode string, exclude []string) (string, error) {
 			sawMode, sawExclude = mode, exclude
@@ -355,13 +371,13 @@ func TestUpdateJobsObeyTheMode(t *testing.T) {
 			return "mode " + mode, nil
 		},
 	}
-	if _, err := jobs.Run(t.Context(), model.Cron{ID: "x", Job: model.CronSystemUpdate}); err != nil {
+	if _, err := actions.Run(t.Context(), model.Cron{ID: "x", Kind: model.CronSystemUpdate}); err != nil {
 		t.Fatal(err)
 	}
 	if sawMode != "manual" || len(sawExclude) != 1 || sawExclude[0] != "kernel" {
 		t.Errorf("mode = %q, exclude = %v", sawMode, sawExclude)
 	}
-	out, err := jobs.Run(t.Context(), model.Cron{ID: "y", Job: model.CronOstioleUpdate})
+	out, err := actions.Run(t.Context(), model.Cron{ID: "y", Kind: model.CronOstioleUpdate})
 	if err != nil || out != "mode all" {
 		t.Errorf("out = %q, err = %v", out, err)
 	}
@@ -370,8 +386,8 @@ func TestUpdateJobsObeyTheMode(t *testing.T) {
 	}
 
 	// A box with nothing wired up says so rather than failing obscurely.
-	bare := &Jobs{Config: jobs.Config}
-	if _, err := bare.Run(t.Context(), model.Cron{ID: "z", Job: model.CronSystemUpdate}); err == nil {
+	bare := &Actions{Config: actions.Config}
+	if _, err := bare.Run(t.Context(), model.Cron{ID: "z", Kind: model.CronSystemUpdate}); err == nil {
 		t.Error("a box with no package manager pretended to update")
 	}
 }

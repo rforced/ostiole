@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -45,7 +46,7 @@ type Status struct {
 }
 
 // Manager drives the package manager on this box for the API and the
-// scheduled job.
+// scheduled cron.
 type Manager struct {
 	// Driver is the package manager found, nil when there is none.
 	Driver Driver
@@ -53,10 +54,16 @@ type Manager struct {
 	Unavailable string
 	// Distro is the pretty name from /etc/os-release.
 	Distro string
-	Run    Runner
-	State  *State
-	Log    *slog.Logger
+	// Run is how the package manager is run: outside the daemon's
+	// sandbox where that is possible, because none of these tools can
+	// work with a read-only /var.
+	Run   Runner
+	State *State
+	Log   *slog.Logger
 
+	// unit drives systemd itself — systemctl, journalctl, systemd-run —
+	// which works perfectly well from inside the sandbox and must not be
+	// wrapped in another transient unit.
 	unit transient
 
 	mu      sync.Mutex
@@ -95,6 +102,12 @@ func New(o Options) *Manager {
 		Distro: distroName(),
 		unit:   transient{unit: TransientUnit, run: run},
 	}
+	// Only root can raise a transient unit, and only a box with systemd
+	// has one to raise; everywhere else the command runs as a child and
+	// takes the sandbox with it.
+	if o.Root && m.unit.supported() {
+		m.Run = hostRunner{inner: run, seq: new(atomic.Int64)}
+	}
 	driver, err := Detect(o.PackageManager)
 	switch {
 	case err != nil:
@@ -105,7 +118,18 @@ func New(o Options) *Manager {
 	default:
 		m.Driver = driver
 	}
+	// A driver that needs scratch space needs it where the daemon and a
+	// transient unit both see the same directory: PrivateTmp means /tmp
+	// is not that place.
+	if scratch, ok := m.Driver.(scratchUser); ok && o.StateDir != "" {
+		m.Driver = scratch.useScratch(o.StateDir)
+	}
 	return m
+}
+
+// scratchUser is a driver that writes somewhere while it works.
+type scratchUser interface {
+	useScratch(dir string) Driver
 }
 
 // Available reports whether this box can be checked and updated.
@@ -188,7 +212,7 @@ func (m *Manager) apply(ctx context.Context, security bool, exclude []string) (s
 	return m.install(ctx, security, exclude, pending)
 }
 
-// RunScheduled is the scheduled job: always check, then install only
+// RunScheduled is the scheduled cron: always check, then install only
 // what the mode allows. Manual still checks, so the page can say what is
 // waiting without the box changing under anyone.
 func (m *Manager) RunScheduled(ctx context.Context, mode Mode, exclude []string) (string, error) {

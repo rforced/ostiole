@@ -10,9 +10,11 @@ import (
 
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/cron"
+	"github.com/rforced/ostiole/internal/dnsblock"
 	"github.com/rforced/ostiole/internal/feeds"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/nft"
+	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/sysupdate"
 	"github.com/rforced/ostiole/internal/version"
 )
@@ -20,8 +22,8 @@ import (
 func newCronsCmd(g *globals) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "crons",
-		Short: "List the scheduled jobs and when they next run",
-		Long: `Shows the jobs configured on this box and when each one next runs. The
+		Short: "List the scheduled crons and when they next run",
+		Long: `Shows the crons configured on this box and when each one next runs. The
 daemon is what actually runs them; this reads the same configuration, so
 it works whether or not the daemon is up.`,
 		Args: cobra.NoArgs,
@@ -30,24 +32,24 @@ it works whether or not the daemon is up.`,
 			if err != nil {
 				return err
 			}
-			// The update jobs are not written out anywhere; they come
+			// The update crons are not written out anywhere; they come
 			// from the update settings, and this is where somebody looks
 			// to find out when the box next patches itself.
-			jobs := append(append([]model.Cron{}, cfg.Crons...), cfg.DerivedCrons()...)
+			crons := append(append([]model.Cron{}, cfg.Crons...), cfg.DerivedCrons()...)
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "ID\tJOB\tSCHEDULE\tNEXT\tDESCRIPTION")
+			fmt.Fprintln(w, "ID\tKIND\tSCHEDULE\tNEXT\tDESCRIPTION")
 			now := time.Now()
-			for _, job := range jobs {
+			for _, c := range crons {
 				next := "disabled"
-				if job.Enabled {
+				if c.Enabled {
 					next = "never"
-					if s, err := cron.Parse(job.Schedule); err != nil {
+					if s, err := cron.Parse(c.Schedule); err != nil {
 						next = "bad schedule: " + err.Error()
 					} else if when, ok := s.Next(now); ok {
 						next = when.Local().Format(time.RFC3339)
 					}
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", job.ID, job.Job, job.Schedule, next, job.Description)
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", c.ID, c.Kind, c.Schedule, next, c.Description)
 			}
 			return w.Flush()
 		},
@@ -55,7 +57,7 @@ it works whether or not the daemon is up.`,
 
 	run := &cobra.Command{
 		Use:   "run <id>",
-		Short: "Run one job now and print what it did",
+		Short: "Run one cron now and print what it did",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := requireRoot(); err != nil {
@@ -65,24 +67,37 @@ it works whether or not the daemon is up.`,
 			if err != nil {
 				return err
 			}
-			job, ok := cfg.Cron(args[0])
+			c, ok := cfg.Cron(args[0])
 			if !ok {
-				return fmt.Errorf("no job called %q", args[0])
+				return fmt.Errorf("no cron called %q", args[0])
 			}
 			as, err := auth.NewService(g.configDir)
 			if err != nil {
 				return err
 			}
-			jobs := &cron.Jobs{
-				Config:  func() *model.Config { return cfg },
+			source := func() *model.Config { return cfg }
+			actions := &cron.Actions{
+				Config:  source,
 				Users:   as.Users,
 				Version: version.Version,
 				Refresh: func(ctx context.Context) error {
 					r := &feeds.Refresher{
 						Cache:   g.feeds(),
 						Fetcher: feeds.NewFetcher(version.Version),
-						Source:  func() *model.Config { return cfg },
+						Source:  source,
 						Sets:    &nft.Exec{Bin: g.nftBin},
+					}
+					r.Tick(ctx, true)
+					return nil
+				},
+				// This command is root-only, so the refreshed lists can go
+				// straight to the resolver rather than waiting for an apply.
+				RefreshBlocklists: func(ctx context.Context) error {
+					r := &dnsblock.Refresher{
+						Cache:   g.blocklists(),
+						Fetcher: dnsblock.NewFetcher(version.Version),
+						Source:  source,
+						Loader:  services.NewDNSBlock(g.blocklists()),
 					}
 					r.Tick(ctx, true)
 					return nil
@@ -97,7 +112,7 @@ it works whether or not the daemon is up.`,
 					return packages.RunScheduled(ctx, sysupdate.Mode(mode), exclude)
 				},
 			}
-			out, err := jobs.Run(cmd.Context(), *job)
+			out, err := actions.Run(cmd.Context(), *c)
 			if out != "" {
 				fmt.Fprintln(cmd.OutOrStdout(), out)
 			}

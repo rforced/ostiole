@@ -12,30 +12,30 @@ import (
 	"github.com/rforced/ostiole/internal/model"
 )
 
-// Kind separates the jobs Ostiole runs on its own account from the ones
-// an operator asked for. Both are shown together, because "what does this
-// box do while I am not looking" is one question.
-type Kind string
+// Origin separates the crons Ostiole runs on its own account from the
+// ones an operator asked for. Both are shown together, because "what does
+// this box do while I am not looking" is one question.
+type Origin string
 
-// Job kinds.
+// Cron origins.
 const (
-	// KindSystem is work Ostiole does whether or not anyone configures it.
-	KindSystem Kind = "system"
-	// KindUser is a job from the configuration.
-	KindUser Kind = "user"
+	// OriginSystem is work Ostiole does whether or not anyone configures it.
+	OriginSystem Origin = "system"
+	// OriginUser is a cron from the configuration.
+	OriginUser Origin = "user"
 )
 
-// Status is one job as the UI sees it.
+// Status is one cron as the UI sees it.
 type Status struct {
 	ID          string `json:"id"`
-	Kind        Kind   `json:"kind"`
+	Origin      Origin `json:"origin"`
 	Description string `json:"description"`
 	// Schedule is the cron expression, or a plain description like "every
 	// 5 seconds" for the work that is not on a cron at all.
 	Schedule string `json:"schedule"`
 	Enabled  bool   `json:"enabled"`
-	// Job names what it does, for a user job.
-	Job string `json:"job,omitempty"`
+	// Kind names what it does, for a cron from the configuration.
+	Kind string `json:"kind,omitempty"`
 	// Next is when it runs next, empty when that is not a fixed time.
 	Next *time.Time `json:"next,omitempty"`
 	// LastRun, LastError, and LastOutput describe the most recent attempt.
@@ -47,14 +47,14 @@ type Status struct {
 	Running bool `json:"running"`
 }
 
-// Executor runs one job and returns whatever it wants recorded.
+// Executor runs one cron and returns whatever it wants recorded.
 type Executor interface {
-	Run(ctx context.Context, job model.Cron) (string, error)
+	Run(ctx context.Context, c model.Cron) (string, error)
 }
 
-// SystemJob describes background work Ostiole does itself. It is
+// SystemCron describes background work Ostiole does itself. It is
 // reported, not scheduled: the worker that does it keeps its own timer.
-type SystemJob struct {
+type SystemCron struct {
 	ID          string
 	Description string
 	// Every is how often it happens, for the description.
@@ -65,14 +65,15 @@ type SystemJob struct {
 
 // Runner ticks once a minute and runs whatever is due.
 type Runner struct {
-	// Source reads the configuration in force, so a job added through the
+	// Source reads the configuration in force, so a cron added through the
 	// UI starts running without a restart.
 	Source func() *model.Config
-	// Exec runs a job.
+	// Exec runs a cron.
 	Exec Executor
 	Log  *slog.Logger
-	// System lists the background work to report alongside the user jobs.
-	System []SystemJob
+	// System lists the background work to report alongside the operator's
+	// crons.
+	System []SystemCron
 
 	mu      sync.Mutex
 	results map[string]*result
@@ -86,11 +87,15 @@ type result struct {
 	running  bool
 }
 
-// maxOutput is how much of a job's output is kept. Enough to see what
+// maxOutput is how much of a cron's output is kept. Enough to see what
 // went wrong, not enough to fill memory with a chatty script.
 const maxOutput = 4000
 
 // NewRunner returns a runner with the standard background work listed.
+// Everything the daemon starts on a timer of its own belongs here: the
+// page is the whole answer to "what does this box do while nobody is
+// watching", so work missing from this list is work nobody knows about.
+// The ids match what the workers pass to Note.
 func NewRunner(source func() *model.Config, exec Executor, log *slog.Logger) *Runner {
 	if log == nil {
 		log = slog.Default()
@@ -100,9 +105,10 @@ func NewRunner(source func() *model.Config, exec Executor, log *slog.Logger) *Ru
 		Exec:    exec,
 		Log:     log,
 		results: map[string]*result{},
-		System: []SystemJob{
+		System: []SystemCron{
 			{ID: "system:gateways", Description: "Probe each gateway and move the default route off one that stops answering", Every: 5 * time.Second},
-			{ID: "system:aliases", Description: "Refresh the blocklists and country ranges that are due", Every: 15 * time.Minute},
+			{ID: "system:aliases", Description: "Refresh the address lists and country ranges that are due", Every: 15 * time.Minute},
+			{ID: "system:blocklists", Description: "Refresh the DNS blocklists that are due and hand them to the resolver", Every: 15 * time.Minute},
 			{ID: "system:sessions", Description: "Expire idle web sessions", Note: "as they expire"},
 			{ID: "system:firewall-log", Description: "Collect dropped packets from the kernel", Note: "continuously"},
 		},
@@ -125,80 +131,80 @@ func (r *Runner) Run(ctx context.Context) {
 	}
 }
 
-// scheduled is everything this box runs on a timer: the operator's jobs
+// scheduled is everything this box runs on a timer: the operator's crons
 // and the two the update settings imply.
 func scheduled(cfg *model.Config) []model.Cron {
-	jobs := make([]model.Cron, 0, len(cfg.Crons)+2)
-	jobs = append(jobs, cfg.Crons...)
-	return append(jobs, cfg.DerivedCrons()...)
+	all := make([]model.Cron, 0, len(cfg.Crons)+2)
+	all = append(all, cfg.Crons...)
+	return append(all, cfg.DerivedCrons()...)
 }
 
-// Tick runs every job whose schedule matches the given minute.
+// Tick runs every cron whose schedule matches the given minute.
 func (r *Runner) Tick(ctx context.Context, now time.Time) {
 	cfg := r.config()
 	if cfg == nil {
 		return
 	}
-	for _, job := range scheduled(cfg) {
-		if !job.Enabled {
+	for _, c := range scheduled(cfg) {
+		if !c.Enabled {
 			continue
 		}
-		s, err := Parse(job.Schedule)
+		s, err := Parse(c.Schedule)
 		if err != nil {
-			r.record(job.ID, now, 0, "", fmt.Errorf("schedule: %w", err))
+			r.record(c.ID, now, 0, "", fmt.Errorf("schedule: %w", err))
 			continue
 		}
 		if !s.Matches(now) {
 			continue
 		}
-		r.start(ctx, job)
+		r.start(ctx, c)
 	}
 }
 
-// RunNow runs one job immediately, which is the "run it now" button.
+// RunNow runs one cron immediately, which is the "run it now" button.
 func (r *Runner) RunNow(ctx context.Context, id string) error {
 	cfg := r.config()
 	if cfg == nil {
 		return errors.New("nothing is configured yet")
 	}
-	job, ok := cfg.Cron(id)
+	c, ok := cfg.Cron(id)
 	if !ok {
-		return fmt.Errorf("no job called %q", id)
+		return fmt.Errorf("no cron called %q", id)
 	}
-	return r.run(ctx, *job)
+	return r.run(ctx, *c)
 }
 
-// start runs a job in the background, skipping it if the previous run is
+// start runs a cron in the background, skipping it if the previous run is
 // still going: a backup that takes longer than its period should not pile
 // up on itself.
-func (r *Runner) start(ctx context.Context, job model.Cron) {
+func (r *Runner) start(ctx context.Context, c model.Cron) {
 	r.mu.Lock()
-	if res := r.results[job.ID]; res != nil && res.running {
+	if res := r.results[c.ID]; res != nil && res.running {
 		r.mu.Unlock()
-		r.Log.Warn("skipping a scheduled job because the last run has not finished", "job", job.ID)
+		r.Log.Warn("skipping a scheduled cron because the last run has not finished", "cron", c.ID)
 		return
 	}
 	r.mu.Unlock()
 	go func() {
-		if err := r.run(context.WithoutCancel(ctx), job); err != nil {
-			r.Log.Warn("a scheduled job failed", "job", job.ID, "err", err)
+		if err := r.run(context.WithoutCancel(ctx), c); err != nil {
+			r.Log.Warn("a scheduled cron failed", "cron", c.ID, "err", err)
 		}
 	}()
 }
 
-func (r *Runner) run(ctx context.Context, job model.Cron) error {
+func (r *Runner) run(ctx context.Context, c model.Cron) error {
 	r.mu.Lock()
-	res, ok := r.results[job.ID]
+	res, ok := r.results[c.ID]
 	if !ok {
 		res = &result{}
-		r.results[job.ID] = res
+		r.results[c.ID] = res
 	}
 	res.running = true
 	r.mu.Unlock()
 
 	started := time.Now()
-	output, err := r.Exec.Run(ctx, job)
-	r.record(job.ID, started, time.Since(started), output, err)
+	output, err := r.Exec.Run(ctx, c)
+	r.record(c.ID, started, time.Since(started), output, err)
 	return err
 }
 
@@ -223,25 +229,25 @@ func (r *Runner) record(id string, started time.Time, took time.Duration, output
 	}
 }
 
-// Statuses reports the user jobs and the background work together, user
-// jobs first.
+// Statuses reports the operator's crons and the background work
+// together, the operator's first.
 func (r *Runner) Statuses() []Status {
 	out := []Status{}
 	now := time.Now()
 	if cfg := r.config(); cfg != nil {
-		for _, job := range cfg.Crons {
+		for _, c := range cfg.Crons {
 			st := Status{
-				ID:          job.ID,
-				Kind:        KindUser,
-				Description: job.Description,
-				Schedule:    job.Schedule,
-				Enabled:     job.Enabled,
-				Job:         string(job.Job),
+				ID:          c.ID,
+				Origin:      OriginUser,
+				Description: c.Description,
+				Schedule:    c.Schedule,
+				Enabled:     c.Enabled,
+				Kind:        string(c.Kind),
 			}
 			if st.Description == "" {
-				st.Description = string(job.Job)
+				st.Description = string(c.Kind)
 			}
-			if s, err := Parse(job.Schedule); err == nil && job.Enabled {
+			if s, err := Parse(c.Schedule); err == nil && c.Enabled {
 				if next, ok := s.Next(now); ok {
 					st.Next = &next
 				}
@@ -252,19 +258,19 @@ func (r *Runner) Statuses() []Status {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 
-	// The update jobs are Ostiole's own work, but on a schedule the
+	// The update crons are Ostiole's own work, but on a schedule the
 	// operator chose, so they are reported with one.
 	if cfg := r.config(); cfg != nil {
-		for _, job := range cfg.DerivedCrons() {
+		for _, c := range cfg.DerivedCrons() {
 			st := Status{
-				ID:          job.ID,
-				Kind:        KindSystem,
-				Description: job.Description,
-				Schedule:    job.Schedule,
-				Enabled:     job.Enabled,
-				Job:         string(job.Job),
+				ID:          c.ID,
+				Origin:      OriginSystem,
+				Description: c.Description,
+				Schedule:    c.Schedule,
+				Enabled:     c.Enabled,
+				Kind:        string(c.Kind),
 			}
-			if s, err := Parse(job.Schedule); err == nil {
+			if s, err := Parse(c.Schedule); err == nil {
 				if next, ok := s.Next(now); ok {
 					st.Next = &next
 				}
@@ -277,7 +283,7 @@ func (r *Runner) Statuses() []Status {
 	for _, sys := range r.System {
 		st := Status{
 			ID:          sys.ID,
-			Kind:        KindSystem,
+			Origin:      OriginSystem,
 			Description: sys.Description,
 			Schedule:    sys.Note,
 			Enabled:     true,

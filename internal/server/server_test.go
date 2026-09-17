@@ -349,7 +349,7 @@ func TestApplyValidationAndBadRequests(t *testing.T) {
 	t.Parallel()
 	srv, _ := newTestServer(t)
 
-	resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: &model.Config{Version: 1}})
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: &model.Config{Version: model.SchemaVersion}})
 	if resp.StatusCode != http.StatusUnprocessableEntity {
 		t.Fatalf("invalid config: %d %s", resp.StatusCode, raw)
 	}

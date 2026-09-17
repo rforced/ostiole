@@ -97,8 +97,6 @@ at your own.`,
 				Sets:    &nft.Exec{Bin: g.nftBin},
 				Log:     slog.Default(),
 			}
-			// The scheduled jobs the operator asked for, plus the work
-			// Ostiole does on its own account, reported together.
 			// The DNS blocklists refresh on their own schedule and are
 			// installed straight into dnsmasq's include file, so a list that
 			// moved does not wait for the next apply.
@@ -126,7 +124,7 @@ at your own.`,
 			// daemon; pick the transaction back up if it is still going.
 			packages.Reattach(ctx)
 			updater := newUpdater(cfg)
-			cronJobs := &cron.Jobs{
+			actions := &cron.Actions{
 				Config:            eng.Effective,
 				Users:             as.Users,
 				Version:           version.Version,
@@ -143,7 +141,9 @@ at your own.`,
 					return updater.RunScheduled(ctx, update.Mode(mode), update.Channel(channel))
 				},
 			}
-			crons := cron.NewRunner(eng.Effective, cronJobs, slog.Default())
+			// The crons the operator asked for, plus the work Ostiole does
+			// on its own account, reported together.
+			crons := cron.NewRunner(eng.Effective, actions, slog.Default())
 			refresher.OnTick = func() { crons.Note("system:aliases") }
 			blocklists.OnTick = func() { crons.Note("system:blocklists") }
 			deps := server.Deps{

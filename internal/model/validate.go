@@ -1094,53 +1094,53 @@ func (v *validator) wireguard(path string, in Interface) {
 	}
 }
 
-// crons checks the scheduled jobs. The schedule itself is parsed by the
+// crons checks the scheduled work. The schedule itself is parsed by the
 // cron package at run time; here it is only checked for shape, so the
 // model keeps no dependency on it.
 func (v *validator) crons(c *Config) {
 	ids := map[string]bool{}
-	for i, job := range c.Crons {
+	for i, cr := range c.Crons {
 		path := fmt.Sprintf("crons[%d]", i)
-		v.id(path+".id", job.ID, ids)
-		if err := checkCronSchedule(job.Schedule); err != nil {
+		v.id(path+".id", cr.ID, ids)
+		if err := checkCronSchedule(cr.Schedule); err != nil {
 			v.add(path+".schedule", "%v", err)
 		}
-		switch job.Job {
+		switch cr.Kind {
 		case CronBackup:
-			if job.Directory == "" {
+			if cr.Directory == "" {
 				v.add(path+".directory", "say where the backups should go")
-			} else if !strings.HasPrefix(job.Directory, "/") {
-				v.add(path+".directory", "%q must be an absolute path", job.Directory)
+			} else if !strings.HasPrefix(cr.Directory, "/") {
+				v.add(path+".directory", "%q must be an absolute path", cr.Directory)
 			}
-			if job.Keep < 0 || job.Keep > 1000 {
-				v.add(path+".keep", "%d must be 0-1000 (0 keeps %d)", job.Keep, DefaultBackupsKept)
+			if cr.Keep < 0 || cr.Keep > 1000 {
+				v.add(path+".keep", "%d must be 0-1000 (0 keeps %d)", cr.Keep, DefaultBackupsKept)
 			}
-		case CronRefreshAliases:
+		case CronRefreshAliases, CronRefreshBlocklists:
 		case CronRestartService:
-			if !slices.Contains(CronServices, job.Service) {
+			if !slices.Contains(CronServices, cr.Service) {
 				v.add(path+".service", "%q is not a service this box runs (%s)",
-					job.Service, strings.Join(CronServices, ", "))
+					cr.Service, strings.Join(CronServices, ", "))
 			}
 		case CronCommand:
-			if job.Command == "" {
+			if cr.Command == "" {
 				v.add(path+".command", "say what to run")
-			} else if !strings.HasPrefix(job.Command, "/") {
-				v.add(path+".command", "%q must be an absolute path, so it cannot depend on a PATH", job.Command)
+			} else if !strings.HasPrefix(cr.Command, "/") {
+				v.add(path+".command", "%q must be an absolute path, so it cannot depend on a PATH", cr.Command)
 			}
 		case CronSystemUpdate, CronOstioleUpdate:
-			// Both are scheduled from the update settings; a job written
+			// Both are scheduled from the update settings; a cron written
 			// out by hand is allowed to name them as well.
 		default:
-			v.add(path+".job", "unknown job %q", job.Job)
+			v.add(path+".kind", "unknown cron kind %q (%s)", cr.Kind, joinCronKinds())
 		}
-		if job.TimeoutSeconds < 0 || job.TimeoutSeconds > 3600 {
-			v.add(path+".timeoutSeconds", "%d must be 0-3600", job.TimeoutSeconds)
+		if cr.TimeoutSeconds < 0 || cr.TimeoutSeconds > 3600 {
+			v.add(path+".timeoutSeconds", "%d must be 0-3600", cr.TimeoutSeconds)
 		}
 	}
 }
 
 // checkCronSchedule accepts the shorthands and the five-field form. The
-// fields themselves are checked when the job is scheduled; this catches
+// fields themselves are checked when the cron is scheduled; this catches
 // the mistakes people actually make.
 func checkCronSchedule(expr string) error {
 	expr = strings.TrimSpace(expr)
@@ -1166,7 +1166,7 @@ var cronShorthands = []string{"@yearly", "@annually", "@monthly", "@weekly", "@d
 // an argument list free of shell metacharacters and stray flags.
 var packageRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]*$`)
 
-// updates checks the settings the two update jobs read. An empty mode or
+// updates checks the settings the two update crons read. An empty mode or
 // schedule is the default rather than a mistake.
 func (v *validator) updates(u *Updates) {
 	check := func(path string, mode UpdateMode, schedule string) {
@@ -1190,6 +1190,16 @@ func (v *validator) updates(u *Updates) {
 	if c := u.Ostiole.Channel; c != "" && c != ChannelStable && c != ChannelBeta {
 		v.add("updates.ostiole.channel", "%q must be %s or %s", c, ChannelStable, ChannelBeta)
 	}
+}
+
+// joinCronKinds names the kinds an operator may write, so a typo comes
+// back with the list rather than just a refusal.
+func joinCronKinds() string {
+	out := make([]string, 0, len(CronKinds))
+	for _, k := range CronKinds {
+		out = append(out, string(k))
+	}
+	return strings.Join(out, ", ")
 }
 
 func joinModes() string {

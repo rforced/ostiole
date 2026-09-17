@@ -16,14 +16,14 @@ import (
 	"github.com/rforced/ostiole/internal/model"
 )
 
-// DefaultCommandTimeout bounds a command job that names no timeout of its
-// own. A job that has not finished in five minutes is stuck.
+// DefaultCommandTimeout bounds a command cron that names no timeout of
+// its own. A command that has not finished in five minutes is stuck.
 const DefaultCommandTimeout = 5 * time.Minute
 
-// Jobs runs the scheduled work. Each dependency is optional: a box
-// without a feed refresher simply cannot schedule one, and says so
-// instead of failing obscurely.
-type Jobs struct {
+// Actions runs the scheduled work: one method per cron kind. Each
+// dependency is optional, so a box without a feed refresher simply cannot
+// schedule one, and says so instead of failing obscurely.
+type Actions struct {
 	// Config reads the configuration a backup is taken of.
 	Config func() *model.Config
 	// Users supplies accounts when a backup asks for them.
@@ -36,7 +36,7 @@ type Jobs struct {
 	Restart func(ctx context.Context, unit string) error
 	// SystemUpdate checks the distro package manager and installs what
 	// the mode allows. The mode and the never-upgrade list are read from
-	// the configuration here, so the job has one place to look.
+	// the configuration here, so there is one place to look.
 	SystemUpdate func(ctx context.Context, mode string, exclude []string) (string, error)
 	// SelfUpdate does the same for Ostiole's own releases.
 	SelfUpdate func(ctx context.Context, mode, channel string) (string, error)
@@ -46,66 +46,66 @@ type Jobs struct {
 	Exec func(ctx context.Context, name string, args ...string) ([]byte, error)
 }
 
-var _ Executor = (*Jobs)(nil)
+var _ Executor = (*Actions)(nil)
 
 // Run implements Executor.
-func (j *Jobs) Run(ctx context.Context, job model.Cron) (string, error) {
-	switch job.Job {
+func (a *Actions) Run(ctx context.Context, c model.Cron) (string, error) {
+	switch c.Kind {
 	case model.CronBackup:
-		return j.backup(job)
+		return a.backup(c)
 	case model.CronRefreshAliases:
-		if j.Refresh == nil {
+		if a.Refresh == nil {
 			return "", errors.New("nothing on this box refreshes aliases")
 		}
-		return "refreshed", j.Refresh(ctx)
+		return "refreshed", a.Refresh(ctx)
 	case model.CronRefreshBlocklists:
-		if j.RefreshBlocklists == nil {
+		if a.RefreshBlocklists == nil {
 			return "", errors.New("nothing on this box refreshes blocklists")
 		}
-		return "refreshed", j.RefreshBlocklists(ctx)
+		return "refreshed", a.RefreshBlocklists(ctx)
 	case model.CronRestartService:
-		return j.restart(ctx, job)
+		return a.restart(ctx, c)
 	case model.CronCommand:
-		return j.command(ctx, job)
+		return a.command(ctx, c)
 	case model.CronSystemUpdate:
-		return j.systemUpdate(ctx)
+		return a.systemUpdate(ctx)
 	case model.CronOstioleUpdate:
-		return j.selfUpdate(ctx)
+		return a.selfUpdate(ctx)
 	}
-	return "", fmt.Errorf("unknown job %q", job.Job)
+	return "", fmt.Errorf("unknown cron kind %q", c.Kind)
 }
 
 // systemUpdate patches the Linux underneath Ostiole. The mode decides
 // whether it installs anything at all; the check happens either way, so
 // the page can say what is waiting.
-func (j *Jobs) systemUpdate(ctx context.Context) (string, error) {
-	if j.SystemUpdate == nil {
+func (a *Actions) systemUpdate(ctx context.Context) (string, error) {
+	if a.SystemUpdate == nil {
 		return "", errors.New("this box cannot drive a package manager from here")
 	}
-	updates, err := j.updates()
+	updates, err := a.updates()
 	if err != nil {
 		return "", err
 	}
-	return j.SystemUpdate(ctx, string(updates.SystemMode()), updates.System.Exclude)
+	return a.SystemUpdate(ctx, string(updates.SystemMode()), updates.System.Exclude)
 }
 
 // selfUpdate keeps Ostiole itself current.
-func (j *Jobs) selfUpdate(ctx context.Context) (string, error) {
-	if j.SelfUpdate == nil {
+func (a *Actions) selfUpdate(ctx context.Context) (string, error) {
+	if a.SelfUpdate == nil {
 		return "", errors.New("this box cannot update Ostiole from here; run `ostiole update`")
 	}
-	updates, err := j.updates()
+	updates, err := a.updates()
 	if err != nil {
 		return "", err
 	}
-	return j.SelfUpdate(ctx, string(updates.OstioleMode()), updates.OstioleChannel())
+	return a.SelfUpdate(ctx, string(updates.OstioleMode()), updates.OstioleChannel())
 }
 
-func (j *Jobs) updates() (model.Updates, error) {
-	if j.Config == nil {
+func (a *Actions) updates() (model.Updates, error) {
+	if a.Config == nil {
 		return model.Updates{}, errors.New("nothing is configured yet")
 	}
-	cfg := j.Config()
+	cfg := a.Config()
 	if cfg == nil {
 		return model.Updates{}, errors.New("nothing is configured yet")
 	}
@@ -114,17 +114,17 @@ func (j *Jobs) updates() (model.Updates, error) {
 
 // backup writes a configuration backup and prunes the old ones, so a
 // directory of them does not grow without limit on a small disk.
-func (j *Jobs) backup(job model.Cron) (string, error) {
-	if j.Config == nil {
+func (a *Actions) backup(c model.Cron) (string, error) {
+	if a.Config == nil {
 		return "", errors.New("no configuration to back up")
 	}
-	cfg := j.Config()
+	cfg := a.Config()
 	if cfg == nil {
 		return "", errors.New("nothing is configured yet")
 	}
-	opts := backup.Options{Ostiole: j.Version, Note: "scheduled backup " + job.ID}
-	if job.WithUsers && j.Users != nil {
-		opts.Users = j.Users()
+	opts := backup.Options{Ostiole: a.Version, Note: "scheduled backup " + c.ID}
+	if c.WithUsers && a.Users != nil {
+		opts.Users = a.Users()
 	}
 	archive, err := backup.Create(cfg, opts)
 	if err != nil {
@@ -136,14 +136,14 @@ func (j *Jobs) backup(job model.Cron) (string, error) {
 	}
 	// 0700 and 0600: a backup holds tunnel keys, and possibly password
 	// hashes.
-	if err := os.MkdirAll(job.Directory, 0o700); err != nil {
+	if err := os.MkdirAll(c.Directory, 0o700); err != nil {
 		return "", err
 	}
-	path := filepath.Join(job.Directory, archive.Filename())
+	path := filepath.Join(c.Directory, archive.Filename())
 	if err := os.WriteFile(path, raw, 0o600); err != nil {
 		return "", err
 	}
-	removed, err := prune(job.Directory, keepOf(job))
+	removed, err := prune(c.Directory, keepOf(c))
 	if err != nil {
 		return fmt.Sprintf("wrote %s (%d bytes)", path, len(raw)), err
 	}
@@ -154,15 +154,15 @@ func (j *Jobs) backup(job model.Cron) (string, error) {
 	return out, nil
 }
 
-func keepOf(job model.Cron) int {
-	if job.Keep <= 0 {
+func keepOf(c model.Cron) int {
+	if c.Keep <= 0 {
 		return model.DefaultBackupsKept
 	}
-	return job.Keep
+	return c.Keep
 }
 
 // prune removes all but the newest keep backups from a directory. Only
-// files this job could have written are considered.
+// files a backup cron could have written are considered.
 func prune(dir string, keep int) (int, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -189,31 +189,31 @@ func prune(dir string, keep int) (int, error) {
 	return removed, nil
 }
 
-func (j *Jobs) restart(ctx context.Context, job model.Cron) (string, error) {
-	if j.Restart == nil {
+func (a *Actions) restart(ctx context.Context, c model.Cron) (string, error) {
+	if a.Restart == nil {
 		return "", errors.New("this box cannot restart services from here")
 	}
-	if err := j.Restart(ctx, job.Service); err != nil {
+	if err := a.Restart(ctx, c.Service); err != nil {
 		return "", err
 	}
-	return "restarted " + job.Service, nil
+	return "restarted " + c.Service, nil
 }
 
 // command runs a command without a shell, so there is nothing to quote
 // and nothing to inject. It is bounded by a timeout, because a scheduled
-// job that hangs is a job that never runs again.
-func (j *Jobs) command(ctx context.Context, job model.Cron) (string, error) {
-	timeout := time.Duration(job.TimeoutSeconds) * time.Second
+// command that hangs is one that never runs again.
+func (a *Actions) command(ctx context.Context, c model.Cron) (string, error) {
+	timeout := time.Duration(c.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
 		timeout = DefaultCommandTimeout
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	run := j.Exec
+	run := a.Exec
 	if run == nil {
 		run = execRun
 	}
-	out, err := run(ctx, job.Command, job.Args...)
+	out, err := run(ctx, c.Command, c.Args...)
 	text := strings.TrimSpace(string(out))
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return text, fmt.Errorf("gave up after %s", timeout)

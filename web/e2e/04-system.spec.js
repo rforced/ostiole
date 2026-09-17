@@ -157,7 +157,7 @@ test('choose how this box patches itself, and see why some of it is refused', as
   await expect(ostiole.getByLabel('Manual')).toBeChecked()
   await expect(ostiole.getByLabel('Channel')).toHaveValue('beta')
 
-  // Both jobs are on the page that says what the box does by itself.
+  // Both update crons are on the page that says what the box does by itself.
   await page.goto('/crons')
   const system = page.getByRole('region', { name: 'What Ostiole does by itself' })
   await expect(system).toContainText('distro package manager')

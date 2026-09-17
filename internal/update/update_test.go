@@ -389,7 +389,7 @@ func TestRunScheduledObeysTheMode(t *testing.T) {
 		t.Error("manual mode started an update")
 	}
 
-	// A binary the distro owns is upgraded by the system update job, not
+	// A binary the distro owns is upgraded by the system update cron, not
 	// by this one.
 	m.PackageManaged = true
 	if _, err := m.RunScheduled(t.Context(), ModeSecurity, Stable); !errors.Is(err, ErrPackageManaged) {

@@ -291,4 +291,70 @@ func TestStartClaimsTheBoxBeforeItReturns(t *testing.T) {
 	if err := m.Start(false, nil); !errors.Is(err, ErrBusy) {
 		t.Errorf("second Start = %v, want ErrBusy", err)
 	}
+
+	// Let it finish before the test does: a goroutine still polling
+	// after the box it was told about has been taken away is a data race
+	// waiting to be reported against the next test.
+	run.say(showUnit, "LoadState=loaded\nActiveState=active\nSubState=exited\nResult=success\nExecMainStatus=0\nInvocationID=abc123\n")
+	waitUntil(t, func() bool { return !m.Status(false).Running })
+}
+
+// waitUntil spins until something becomes true, or the test fails.
+func waitUntil(t *testing.T, done func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if done() {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("timed out waiting")
+}
+
+// The daemon's unit is hardened: ProtectSystem=strict leaves /var
+// read-only, and every package manager writes there — dnf to
+// /var/log/dnf.log before it reads a single package. So the commands
+// have to leave the sandbox, not just the long upgrade.
+func TestPackageCommandsLeaveTheSandbox(t *testing.T) {
+	withSystemd(t, true)
+	run := dnfRunner(t)
+	m := New(Options{PackageManager: "dnf", StateDir: t.TempDir(), Run: run, Root: true, Log: discard()})
+	if _, err := m.Check(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"-- dnf -q --refresh check-update", "-- dnf needs-restarting -r"} {
+		if !run.ranMatching("systemd-run --unit="+commandTag, "--wait", want) {
+			t.Errorf("%q ran inside the sandbox, where /var is read-only:\n%s", want, run.transcript())
+		}
+	}
+	// Neither our own descriptors nor a file the daemon can write will
+	// do, so the output is read back out of the journal — tagged, so it
+	// is the command's output and not systemd's commentary about it.
+	if !run.ranMatching("journalctl", "SYSLOG_IDENTIFIER="+commandTag, "-o", "cat") {
+		t.Errorf("the output was never read back:\n%s", run.transcript())
+	}
+	if !run.ranMatching("--property=SyslogIdentifier=" + commandTag) {
+		t.Errorf("the output was not tagged, so it cannot be told from systemd's:\n%s", run.transcript())
+	}
+
+	// systemd's own tools work perfectly well from inside the sandbox,
+	// and wrapping them in a second transient unit would be absurd.
+	for _, line := range strings.Split(run.transcript(), "\n") {
+		if strings.Contains(line, "-- systemctl") || strings.Contains(line, "-- journalctl") {
+			t.Errorf("systemd was driven through a transient unit: %q", line)
+		}
+	}
+}
+
+func TestWithoutSystemdCommandsRunDirectly(t *testing.T) {
+	withSystemd(t, false)
+	run := dnfRunner(t)
+	m := New(Options{PackageManager: "dnf", StateDir: t.TempDir(), Run: run, Root: true, Log: discard()})
+	if _, err := m.Check(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if !run.ran("dnf -q --refresh check-update") {
+		t.Errorf("a box without systemd-run could not check at all:\n%s", run.transcript())
+	}
 }

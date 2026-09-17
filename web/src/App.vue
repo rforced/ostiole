@@ -34,18 +34,18 @@ async function logout() {
         <template v-for="item in NAV" :key="item.to">
           <RouterLink
             :to="item.to"
-            class="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-neutral-600 hover:bg-neutral-200/60 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
+            class="flex items-center gap-2.5 rounded-md px-2.5 py-2.5 text-[0.9375rem] text-neutral-600 hover:bg-neutral-200/60 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
             active-class="bg-neutral-200/60 font-medium text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
             exact-active-class=""
           >
-            <component :is="item.icon" class="size-4" aria-hidden="true" />
+            <component :is="item.icon" class="size-5" aria-hidden="true" />
             {{ item.label }}
           </RouterLink>
           <RouterLink
             v-for="page in inside(item) ? (item.pages ?? []) : []"
             :key="page.path"
             :to="`${item.to}/${page.path}`"
-            class="ml-4 flex items-center gap-2 border-l border-neutral-200 py-1 pl-4 text-sm text-neutral-500 hover:border-neutral-400 hover:text-neutral-900 dark:border-neutral-800 dark:text-neutral-400 dark:hover:border-neutral-600 dark:hover:text-neutral-100"
+            class="ml-4 flex items-center gap-2 border-l border-neutral-200 py-2 pl-4 text-[0.9375rem] text-neutral-500 hover:border-neutral-400 hover:text-neutral-900 dark:border-neutral-800 dark:text-neutral-400 dark:hover:border-neutral-600 dark:hover:text-neutral-100"
             active-class="border-sky-600 font-medium text-neutral-900 dark:border-sky-400 dark:text-neutral-100"
           >
             {{ page.label }}

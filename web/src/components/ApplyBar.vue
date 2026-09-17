@@ -34,6 +34,9 @@ async function apply() {
   try {
     await api.config.check(config.draft)
     pending.value = await api.config.apply(config.draft, CONFIRM_SECONDS)
+    // The kernel changed the moment the apply returned, not when it is
+    // confirmed, so anything showing live state is stale from here.
+    config.markApplied()
     await system.refresh()
   } catch (e) {
     if (e instanceof ApiError) {
@@ -56,6 +59,7 @@ async function confirmed() {
 
 async function reverted() {
   // Keep the draft so the admin can fix it and try again.
+  config.markApplied()
   await system.refresh()
   window.setTimeout(() => (pending.value = null), LINGER_MS)
 }

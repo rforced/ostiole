@@ -1,4 +1,4 @@
-// Package cron runs the jobs an appliance needs on a schedule: the
+// Package cron runs the work an appliance needs on a schedule: the
 // backups nobody remembers to take, the blocklists that go stale, and
 // whatever else the operator wants run at four in the morning. It also
 // reports the work Ostiole does on its own account, so one page answers

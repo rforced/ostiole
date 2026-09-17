@@ -10,12 +10,16 @@ test('schedule a nightly backup and see what the box does by itself', async ({ p
   await expect(page.getByRole('heading', { name: 'Crons' })).toBeVisible()
 
   // The work Ostiole does on its own account is listed whether or not
-  // anyone has configured a job.
+  // anyone has configured a cron, and every timer the daemon starts is
+  // on it.
   const system = page.getByRole('region', { name: 'What Ostiole does by itself' })
-  await expect(system).toContainText('Refresh the blocklists')
+  await expect(system).toContainText('Refresh the address lists and country ranges')
+  await expect(system).toContainText('Refresh the DNS blocklists')
   await expect(system).toContainText('Probe each gateway')
+  await expect(system).toContainText('Expire idle web sessions')
+  await expect(system).toContainText('Collect dropped packets')
 
-  await page.getByRole('button', { name: 'Add job' }).click()
+  await page.getByRole('button', { name: 'Add cron' }).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByLabel('Description').fill('Nightly backup')
   await expect(dialog.getByLabel('Schedule')).toHaveValue('0 4 * * *')
@@ -50,7 +54,7 @@ test('schedule a nightly backup and see what the box does by itself', async ({ p
 test('a bad schedule is refused by the server', async ({ page }) => {
   await login(page)
   await page.goto('/crons')
-  await page.getByRole('button', { name: 'Add job' }).click()
+  await page.getByRole('button', { name: 'Add cron' }).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByLabel('Description').fill('Broken')
   await dialog.getByLabel('Schedule').fill('every tuesday please')
@@ -62,10 +66,10 @@ test('a bad schedule is refused by the server', async ({ page }) => {
   await expect(page.getByText('Unapplied changes.')).toHaveCount(0)
 })
 
-test('a command job asks for an absolute path', async ({ page }) => {
+test('a command cron asks for an absolute path', async ({ page }) => {
   await login(page)
   await page.goto('/crons')
-  await page.getByRole('button', { name: 'Add job' }).click()
+  await page.getByRole('button', { name: 'Add cron' }).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByLabel('What it does').selectOption('command')
   await dialog.getByLabel('Command').fill('reboot')

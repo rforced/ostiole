@@ -6,7 +6,9 @@ package model
 import "sort"
 
 // SchemaVersion is bumped when the on-disk JSON shape changes incompatibly.
-const SchemaVersion = 1
+// Version 2 renamed a cron's "job" field to "kind"; a version 1 file needs
+// both changed by hand before this build will load it.
+const SchemaVersion = 2
 
 // Action is a rule verdict.
 type Action string
@@ -98,7 +100,7 @@ type Config struct {
 	// Blocking is DNS blocking: the lists of names this box refuses to
 	// resolve, and what it does to stop a client going around it.
 	Blocking Blocking `json:"blocking,omitempty"`
-	// Crons are the jobs this box runs on a schedule of the operator's
+	// Crons are the work this box runs on a schedule of the operator's
 	// choosing, alongside the work Ostiole does on its own account.
 	Crons []Cron `json:"crons,omitempty"`
 	// Updates is how this box keeps itself patched: the distro packages
@@ -106,60 +108,60 @@ type Config struct {
 	Updates Updates `json:"updates,omitempty"`
 }
 
-// CronJobKind is what a scheduled job does.
-type CronJobKind string
+// CronKind is what a scheduled cron does.
+type CronKind string
 
-// Job kinds. Each one is something an appliance genuinely needs doing on
+// Cron kinds. Each one is something an appliance genuinely needs doing on
 // a timer; Command is the escape hatch for everything else.
 const (
 	// CronBackup writes a configuration backup into a directory and keeps
 	// the last few, which is the backup nobody remembers to take.
-	CronBackup CronJobKind = "backup"
+	CronBackup CronKind = "backup"
 	// CronRefreshAliases fetches the address lists and country ranges now.
-	CronRefreshAliases CronJobKind = "refresh-aliases"
+	CronRefreshAliases CronKind = "refresh-aliases"
 	// CronRefreshBlocklists fetches the DNS blocklists now. It is separate
 	// from the aliases: one is addresses for the firewall, the other names
 	// for the resolver, and they come from different publishers on
 	// different schedules.
-	CronRefreshBlocklists CronJobKind = "refresh-blocklists"
+	CronRefreshBlocklists CronKind = "refresh-blocklists"
 	// CronRestartService restarts one of the services Ostiole runs.
-	CronRestartService CronJobKind = "restart-service"
+	CronRestartService CronKind = "restart-service"
 	// CronCommand runs a command line. It is as powerful as the box, which
 	// is the point and also the warning.
-	CronCommand CronJobKind = "command"
+	CronCommand CronKind = "command"
 	// CronSystemUpdate checks the distro package manager and installs what
 	// the update mode allows.
-	CronSystemUpdate CronJobKind = "system-update"
+	CronSystemUpdate CronKind = "system-update"
 	// CronOstioleUpdate does the same for Ostiole's own releases.
-	CronOstioleUpdate CronJobKind = "ostiole-update"
+	CronOstioleUpdate CronKind = "ostiole-update"
 )
 
-// CronJobKinds lists them in the order the UI offers them.
-var CronJobKinds = []CronJobKind{
+// CronKinds lists them in the order the UI offers them.
+var CronKinds = []CronKind{
 	CronBackup, CronRefreshAliases, CronRefreshBlocklists, CronRestartService, CronCommand,
 }
 
-// CronServices are the units a restart job may name.
+// CronServices are the units a restart cron may name.
 var CronServices = []string{"dnsmasq", "unbound", "ostiole"}
 
-// Cron is one scheduled job.
+// Cron is one piece of scheduled work.
 type Cron struct {
 	ID          string `json:"id"`
 	Description string `json:"description,omitempty"`
 	Enabled     bool   `json:"enabled"`
 	// Schedule is a five-field cron expression, or a shorthand like
 	// @daily.
-	Schedule string      `json:"schedule"`
-	Job      CronJobKind `json:"job"`
-	// Directory is where a backup job writes.
+	Schedule string   `json:"schedule"`
+	Kind     CronKind `json:"kind"`
+	// Directory is where a backup cron writes.
 	Directory string `json:"directory,omitempty"`
 	// Keep is how many backups to leave behind; zero keeps ten.
 	Keep int `json:"keep,omitempty"`
 	// WithUsers includes the accounts in a backup.
 	WithUsers bool `json:"withUsers,omitempty"`
-	// Service is the unit a restart job acts on.
+	// Service is the unit a restart cron acts on.
 	Service string `json:"service,omitempty"`
-	// Command and Args are what a command job runs. The command is not
+	// Command and Args are what a command cron runs. The command is not
 	// passed through a shell, so there is nothing to quote and nothing to
 	// inject.
 	Command string   `json:"command,omitempty"`
@@ -168,12 +170,12 @@ type Cron struct {
 	TimeoutSeconds int `json:"timeoutSeconds,omitempty"`
 }
 
-// DefaultBackupsKept is how many backups a backup job leaves behind.
+// DefaultBackupsKept is how many backups a backup cron leaves behind.
 const DefaultBackupsKept = 10
 
-// Cron returns the job with the given id. The jobs derived from the
+// Cron returns the cron with the given id. The crons derived from the
 // update settings answer to their ids too, so "run it now" works for
-// them without the operator having to write them out as jobs.
+// them without the operator having to write them out.
 func (c *Config) Cron(id string) (*Cron, bool) {
 	for i := range c.Crons {
 		if c.Crons[i].ID == id {
@@ -189,7 +191,7 @@ func (c *Config) Cron(id string) (*Cron, bool) {
 	return nil, false
 }
 
-// UpdateMode says what an update job is allowed to install.
+// UpdateMode says what an update cron is allowed to install.
 type UpdateMode string
 
 // Update modes.
@@ -207,12 +209,12 @@ const (
 // UpdateModes lists them in the order the UI offers them.
 var UpdateModes = []UpdateMode{UpdateAll, UpdateSecurity, UpdateManual}
 
-// DefaultUpdateSchedule is when an update job runs if nobody says
+// DefaultUpdateSchedule is when an update cron runs if nobody says
 // otherwise: early on a Sunday, when a reboot hurts least.
 const DefaultUpdateSchedule = "0 4 * * 0"
 
-// Update job ids. They are reported as work Ostiole does on its own
-// account rather than as jobs the operator wrote.
+// Update cron ids. They are reported as work Ostiole does on its own
+// account rather than as crons the operator wrote.
 const (
 	CronIDSystemUpdate  = "system:os-updates"
 	CronIDOstioleUpdate = "system:ostiole-updates"
@@ -289,9 +291,9 @@ func scheduleOr(s string) string {
 	return s
 }
 
-// DerivedCrons are the jobs the update settings imply. They are not
+// DerivedCrons are the crons the update settings imply. They are not
 // stored, so there is one place to change a mode and no way for the list
-// of jobs and the settings to disagree.
+// of crons and the settings to disagree.
 func (c *Config) DerivedCrons() []Cron {
 	return []Cron{
 		{
@@ -299,14 +301,14 @@ func (c *Config) DerivedCrons() []Cron {
 			Description: "Check the distro package manager and install what the update mode allows",
 			Enabled:     true,
 			Schedule:    c.Updates.SystemSchedule(),
-			Job:         CronSystemUpdate,
+			Kind:        CronSystemUpdate,
 		},
 		{
 			ID:          CronIDOstioleUpdate,
 			Description: "Check for a newer Ostiole release and install what the update mode allows",
 			Enabled:     true,
 			Schedule:    c.Updates.OstioleSchedule(),
-			Job:         CronOstioleUpdate,
+			Kind:        CronOstioleUpdate,
 		},
 	}
 }

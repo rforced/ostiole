@@ -129,8 +129,8 @@ var routeDocs = map[string]routeDoc{
 	"POST /api/v1/blocking/lists/{name}/refresh": {summary: "Fetch one DNS blocklist now.", role: auth.RoleOperator},
 	"POST /api/v1/blocking/lists/{name}/import":  {summary: "Load a DNS blocklist from the request body, for a box with no way out to the internet.", role: auth.RoleOperator},
 
-	"GET /api/v1/crons":           {summary: "The scheduled jobs, and the work Ostiole does on its own account.", role: auth.RoleViewer},
-	"POST /api/v1/crons/{id}/run": {summary: "Run a scheduled job now.", role: auth.RoleOperator},
+	"GET /api/v1/crons":           {summary: "The operator's crons, and the work Ostiole does on its own account.", role: auth.RoleViewer},
+	"POST /api/v1/crons/{id}/run": {summary: "Run a cron now.", role: auth.RoleOperator},
 
 	"GET /metrics":             {summary: "Metrics in the Prometheus text format.", role: auth.RoleViewer},
 	"GET /api/v1/openapi.json": {summary: "This description.", public: true},

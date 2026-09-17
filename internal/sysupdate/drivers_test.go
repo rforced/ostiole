@@ -32,11 +32,28 @@ func (f *fakeRunner) Run(_ context.Context, name string, args ...string) ([]byte
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, line)
-	out := []byte(f.out[line])
-	if code := f.code[line]; code != 0 {
+	// A command that stepped outside the sandbox is answered by what it
+	// runs, so the tables below read as the commands they are about. The
+	// transcript keeps the whole line, for the tests that care how it
+	// got there.
+	key := unwrapped(line)
+	out := []byte(f.out[key])
+	if code := f.code[key]; code != 0 {
 		return out, fakeExit(code)
 	}
 	return out, nil
+}
+
+// unwrapped strips a `systemd-run … -- ` prefix.
+func unwrapped(line string) string {
+	if !strings.HasPrefix(line, "systemd-run ") {
+		return line
+	}
+	_, cmd, ok := strings.Cut(line, " -- ")
+	if !ok {
+		return line
+	}
+	return cmd
 }
 
 // say makes the box answer a command with this output from now on.
@@ -54,6 +71,22 @@ func (f *fakeRunner) ran(line string) bool {
 	defer f.mu.Unlock()
 	for _, c := range f.calls {
 		if c == line {
+			return true
+		}
+	}
+	return false
+}
+
+// ranMatching reports whether one command line contains all of these.
+func (f *fakeRunner) ranMatching(parts ...string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, c := range f.calls {
+		all := true
+		for _, p := range parts {
+			all = all && strings.Contains(c, p)
+		}
+		if all {
 			return true
 		}
 	}

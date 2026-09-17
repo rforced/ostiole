@@ -1,7 +1,7 @@
 <script setup>
 import { Plus, RefreshCw } from 'lucide-vue-next'
 import { TabsContent } from 'reka-ui'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 
 import AppTabs from '@/components/AppTabs.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
@@ -39,6 +39,11 @@ async function refreshLive() {
     liveError.value = e instanceof Error ? e.message : String(e)
   }
 }
+
+// An apply creates and destroys real devices, so the live column has to
+// be read again: a VLAN removed from the draft is gone from the kernel
+// once the apply lands, and should leave this table with it.
+watch(() => config.applied, refreshLive)
 
 onMounted(async () => {
   await Promise.all([config.load(), refreshLive()])
@@ -151,6 +156,13 @@ function edit(row) {
 function editZone(z) {
   zoneEditing.value = z
   zoneOpen.value = true
+}
+
+/** Deleting a zone takes its rules and NAT entries with it; say so first. */
+function zoneConfirm(name) {
+  const n = config.zoneDependents(name).length
+  if (!n) return 'Delete zone?'
+  return `Delete zone and ${n} rule${n === 1 ? '' : 's'} using it?`
 }
 </script>
 
@@ -297,16 +309,17 @@ function editZone(z) {
                 <td class="text-right whitespace-nowrap">
                   <button type="button" class="link" @click="editZone(z)">Edit</button>
                   <ConfirmButton
-                    v-if="config.zoneReferences(z.name).length === 0"
+                    v-if="!config.zoneInterfaces(z.name).length"
                     class="ml-3"
                     label="Delete"
-                    confirm-label="Delete zone?"
+                    :confirm-label="zoneConfirm(z.name)"
+                    :title="config.zoneDependents(z.name).join(', ')"
                     @confirm="config.removeZone(z.name)"
                   />
                   <span
                     v-else
                     class="ml-3 text-xs text-neutral-500"
-                    :title="config.zoneReferences(z.name).join(', ')"
+                    :title="`Move ${config.zoneInterfaces(z.name).join(', ')} to another zone first`"
                     >in use</span
                   >
                 </td>

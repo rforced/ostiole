@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { applyAndConfirm, login, shot } from './helpers.js'
+import { applyAndConfirm, login, shot, sidebar } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -73,12 +73,31 @@ test('add and delete a zone', async ({ page }) => {
   await expect(row).toContainText('log drops')
   await page.screenshot({ path: shot('14-zones'), fullPage: true })
 
-  // lan is referenced by an interface and a rule: not deletable.
+  // lan has an interface in it, and an interface has to live somewhere:
+  // that is the only thing that stops a zone being deleted.
   await expect(page.getByRole('row').filter({ hasText: /^lan/ }).getByText('in use')).toBeVisible()
 
+  // A rule written against dmz does not block the delete; it goes with
+  // the zone, because a rule naming a zone that is gone is not a rule.
+  await sidebar(page, 'Firewall', 'Rules')
+  await page.getByRole('group', { name: 'Zone' }).getByRole('button', { name: 'dmz' }).click()
+  await page.getByRole('button', { name: 'Add rule' }).click()
+  const ruleDialog = page.getByRole('dialog')
+  await ruleDialog.getByLabel('Description').fill('DMZ ping')
+  await ruleDialog.getByLabel('Protocol').selectOption('icmp')
+  await ruleDialog.getByRole('button', { name: 'Save to draft' }).click()
+  await expect(page.getByRole('row').filter({ hasText: 'DMZ ping' })).toBeVisible()
+
+  await sidebar(page, 'Interfaces')
+  await page.getByRole('tab', { name: 'Zones' }).click()
   await row.getByRole('button', { name: 'Delete' }).click()
-  await row.getByRole('button', { name: 'Delete zone?' }).click()
+  await row.getByRole('button', { name: 'Delete zone and 1 rule using it?' }).click()
   await expect(page.getByRole('row').filter({ hasText: 'dmz' })).toHaveCount(0)
+
+  // The zone and its rule are both gone, so the draft matches what is
+  // applied again and there is nothing left to apply.
+  await sidebar(page, 'Firewall', 'Rules')
+  await expect(page.getByRole('row').filter({ hasText: 'DMZ ping' })).toHaveCount(0)
   await expect(page.getByText('Unapplied changes.')).toHaveCount(0)
 })
 

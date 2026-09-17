@@ -89,9 +89,9 @@ const (
 	ModeAll      Mode = "all"
 )
 
-// RunScheduled is the scheduled job: always check, then install only
+// RunScheduled is the scheduled cron: always check, then install only
 // what the mode allows. It returns a line describing what it decided,
-// which is what the job's last result shows.
+// which is what the cron's last result shows.
 func (m *Manager) RunScheduled(ctx context.Context, mode Mode, ch Channel) (string, error) {
 	chk, err := m.Check(ctx, ch)
 	if err != nil {
@@ -115,7 +115,7 @@ func (m *Manager) RunScheduled(ctx context.Context, mode Mode, ch Channel) (stri
 	}
 	if m.PackageManaged {
 		// The distro package manager owns this binary, and the system
-		// update job is what upgrades it.
+		// update cron is what upgrades it.
 		return waiting, ErrPackageManaged
 	}
 	if err := m.Start(ch); err != nil {

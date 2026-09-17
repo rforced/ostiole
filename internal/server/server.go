@@ -63,7 +63,7 @@ type Deps struct {
 	// Blocklists refreshes the DNS blocklists; nil leaves them to
 	// whatever is cached.
 	Blocklists *dnsblock.Refresher
-	// Crons reports and runs the scheduled jobs; nil reports none.
+	// Crons reports and runs the scheduled work; nil reports none.
 	Crons CronRunner
 	// CertHosts lists the names a regenerated self-signed certificate
 	// should cover.

@@ -14,6 +14,12 @@ export const useConfigStore = defineStore('config', () => {
   const draft = ref(null)
   const loaded = ref(false)
   const error = ref('')
+  /**
+   * Bumped every time an apply reaches the kernel. Pages that show live
+   * state watch it and re-read, so a deleted VLAN leaves the interfaces
+   * table without anyone pressing reload.
+   */
+  const applied = ref(0)
 
   const dirty = computed(() => JSON.stringify(saved.value) !== JSON.stringify(draft.value))
   const zones = computed(() => draft.value?.zones ?? [])
@@ -44,6 +50,11 @@ export const useConfigStore = defineStore('config', () => {
   /** After a confirmed apply the draft becomes the saved state. */
   function markSaved() {
     saved.value = clone(draft.value)
+  }
+
+  /** Called whenever the kernel has just been changed, applied or rolled back. */
+  function markApplied() {
+    applied.value++
   }
 
   /** Replace the draft wholesale, e.g. with an archived revision. */
@@ -115,10 +126,22 @@ export const useConfigStore = defineStore('config', () => {
     for (const o of draft.value.nat?.oneToOne ?? []) if (o.zone === from) o.zone = to
   }
 
-  /** Names of things that reference a zone; empty when it can be deleted. */
-  function zoneReferences(name) {
+  /**
+   * Interfaces assigned to a zone. They are the one thing that stops a
+   * zone being deleted: an interface has to be somewhere, and moving it
+   * is a decision only the admin can make.
+   */
+  function zoneInterfaces(name) {
+    return interfaces.value.filter((i) => i.zone === name).map((i) => i.name)
+  }
+
+  /**
+   * Rules and NAT entries written against a zone. They go with it when it
+   * is deleted: none of them mean anything without their zone, and a rule
+   * left pointing at a zone that is gone fails validation.
+   */
+  function zoneDependents(name) {
     const refs = []
-    for (const i of interfaces.value) if (i.zone === name) refs.push(`interface ${i.name}`)
     for (const r of rules.value)
       if (r.zone === name || r.destZone === name) refs.push(`rule ${r.id}`)
     for (const pf of draft.value.nat?.portForwards ?? [])
@@ -130,8 +153,20 @@ export const useConfigStore = defineStore('config', () => {
     return refs
   }
 
+  /**
+   * Deletes a zone and everything written against it. A rule that only
+   * named the zone as its destination goes too rather than losing the
+   * restriction: widening an allow rule to every destination is not
+   * something a delete should do quietly.
+   */
   function removeZone(name) {
     draft.value.zones = zones.value.filter((z) => z.name !== name)
+    draft.value.rules = rules.value.filter((r) => r.zone !== name && r.destZone !== name)
+    const n = draft.value.nat
+    if (!n) return
+    if (n.portForwards) n.portForwards = n.portForwards.filter((pf) => pf.zone !== name)
+    if (n.outbound?.rules) n.outbound.rules = n.outbound.rules.filter((o) => o.zone !== name)
+    if (n.oneToOne) n.oneToOne = n.oneToOne.filter((o) => o.zone !== name)
   }
 
   // ---- rules -----------------------------------------------------------
@@ -423,7 +458,7 @@ export const useConfigStore = defineStore('config', () => {
     Object.assign(ensureUpdates()[which], patch)
   }
 
-  // ---- scheduled jobs --------------------------------------------------
+  // ---- crons -----------------------------------------------------------
 
   const crons = computed(() => draft.value?.crons ?? [])
 
@@ -485,6 +520,7 @@ export const useConfigStore = defineStore('config', () => {
     loaded,
     error,
     dirty,
+    applied,
     zones,
     interfaces,
     aliases,
@@ -492,6 +528,7 @@ export const useConfigStore = defineStore('config', () => {
     load,
     discard,
     markSaved,
+    markApplied,
     replaceDraft,
     reset,
     findInterface,
@@ -501,7 +538,8 @@ export const useConfigStore = defineStore('config', () => {
     upsertPeer,
     removePeer,
     upsertZone,
-    zoneReferences,
+    zoneInterfaces,
+    zoneDependents,
     removeZone,
     rulesForZone,
     upsertRule,

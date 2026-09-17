@@ -98,8 +98,8 @@ type Monitor struct {
 	// Policy, when set, keeps the policy routing tables and ip rules in
 	// step with what the probes just learned.
 	Policy Policy
-	// OnTick, when set, is called after every pass, so the scheduled jobs
-	// page can say when the box last probed.
+	// OnTick, when set, is called after every pass, so the crons page can
+	// say when the box last probed.
 	OnTick func()
 
 	mu     sync.Mutex

@@ -12,11 +12,19 @@ import (
 // archive and no advisories in the package metadata, so there is nothing
 // to install "only the security fixes" from: the honest answer is to
 // refuse and say why.
-type pacman struct{}
+type pacman struct {
+	// scratch is where the throwaway database goes. It cannot be /tmp:
+	// the daemon has a PrivateTmp of its own, and the pacman that reads
+	// the directory runs in a transient unit that would see a different
+	// one.
+	scratch string
+}
 
 func (pacman) Name() string               { return "pacman" }
 func (pacman) SecurityCapable() bool      { return false }
 func (pacman) ExcludeSupported(bool) bool { return true }
+
+func (p pacman) useScratch(dir string) Driver { p.scratch = dir; return p }
 
 // pacmanLocalDB is the installed-package database the check borrows so
 // it can sync fresh repository metadata without touching the real one.
@@ -37,7 +45,7 @@ func (p pacman) Check(ctx context.Context, run Runner) (Pending, error) {
 	// Without it, sync into a throwaway database. A bare `pacman -Sy`
 	// against the real one leaves the box one step from a partial
 	// upgrade, which is how an Arch install breaks.
-	dir, err := os.MkdirTemp("", "ostiole-pacman")
+	dir, err := os.MkdirTemp(p.scratch, "pacman-db")
 	if err != nil {
 		return Pending{}, err
 	}

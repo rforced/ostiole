@@ -806,22 +806,76 @@ func TestDerivedCronsFollowTheSettings(t *testing.T) {
 	}}
 	derived := cfg.DerivedCrons()
 	if len(derived) != 2 {
-		t.Fatalf("derived %d jobs, want 2", len(derived))
+		t.Fatalf("derived %d crons, want 2", len(derived))
 	}
 	if derived[0].ID != CronIDSystemUpdate || derived[0].Schedule != "30 3 * * *" {
-		t.Errorf("system job = %+v", derived[0])
+		t.Errorf("system cron = %+v", derived[0])
 	}
 	if derived[1].Schedule != DefaultUpdateSchedule {
 		t.Errorf("ostiole schedule = %q, want the default", derived[1].Schedule)
 	}
 	for _, id := range []string{CronIDSystemUpdate, CronIDOstioleUpdate} {
-		job, ok := cfg.Cron(id)
+		c, ok := cfg.Cron(id)
 		if !ok {
 			t.Fatalf("Cron(%q) not found; run-it-now would not work", id)
 		}
-		if !job.Enabled {
+		if !c.Enabled {
 			t.Errorf("%s is not enabled", id)
 		}
+	}
+}
+
+func TestValidateCrons(t *testing.T) {
+	t.Parallel()
+	cfg := policyConfig()
+	// Every kind the UI offers has to be accepted here, or a cron that
+	// can be created cannot be applied.
+	for _, kind := range CronKinds {
+		c := Cron{ID: "c1", Enabled: true, Schedule: "@daily", Kind: kind}
+		switch kind {
+		case CronBackup:
+			c.Directory = "/var/backups/ostiole"
+		case CronRestartService:
+			c.Service = "dnsmasq"
+		case CronCommand:
+			c.Command = "/usr/bin/true"
+		}
+		cfg.Crons = []Cron{c}
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("%s rejected: %v", kind, err)
+		}
+	}
+
+	cfg.Crons = []Cron{
+		{ID: "c1", Schedule: "every other tuesday", Kind: "invented"},
+		{ID: "c1", Schedule: "@daily", Kind: CronBackup, Directory: "backups", TimeoutSeconds: -1},
+	}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation errors")
+	}
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("error type %T", err)
+	}
+	got := map[string]string{}
+	for _, i := range ve.Issues {
+		got[i.Path] = i.Message
+	}
+	for _, p := range []string{
+		"crons[0].schedule",
+		"crons[0].kind",
+		"crons[1].id",
+		"crons[1].directory",
+		"crons[1].timeoutSeconds",
+	} {
+		if _, ok := got[p]; !ok {
+			t.Errorf("missing issue at %s (got %v)", p, keysOf(got))
+		}
+	}
+	// The refusal names the kinds that do exist.
+	if msg := got["crons[0].kind"]; !strings.Contains(msg, string(CronRefreshBlocklists)) {
+		t.Errorf("unknown kind message = %q, want the known kinds listed", msg)
 	}
 }
 

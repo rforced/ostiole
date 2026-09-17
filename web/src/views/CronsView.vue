@@ -31,10 +31,10 @@ async function refresh() {
 }
 
 const byID = computed(() => Object.fromEntries(statuses.value.map((s) => [s.id, s])))
-const system = computed(() => statuses.value.filter((s) => s.kind === 'system'))
+const system = computed(() => statuses.value.filter((s) => s.origin === 'system'))
 
-/** Draft jobs merged with what the daemon has actually been doing. */
-const jobs = computed(() =>
+/** Draft crons merged with what the daemon has actually been doing. */
+const rows = computed(() =>
   (config.crons ?? []).map((c) => ({ ...c, status: byID.value[c.id] ?? null })),
 )
 
@@ -62,19 +62,21 @@ function edit(c) {
 
 const when = (s) => (s ? new Date(s).toLocaleString() : '—')
 
-/** What a job does, in the words of whoever has to read the page. */
+/** What a cron does, in the words of whoever has to read the page. */
 function describe(c) {
-  switch (c.job) {
+  switch (c.kind) {
     case 'backup':
       return `Back up the configuration to ${c.directory}, keeping ${c.keep || 10}`
     case 'refresh-aliases':
-      return 'Fetch the blocklists and country ranges'
+      return 'Fetch the address lists and country ranges'
+    case 'refresh-blocklists':
+      return 'Fetch the DNS blocklists'
     case 'restart-service':
       return `Restart ${c.service}`
     case 'command':
       return [c.command, ...(c.args ?? [])].join(' ')
   }
-  return c.job
+  return c.kind
 }
 </script>
 
@@ -82,7 +84,7 @@ function describe(c) {
   <div class="space-y-4">
     <h1 class="text-2xl font-semibold tracking-tight">Crons</h1>
     <p class="max-w-3xl text-sm text-neutral-500">
-      What this box does while nobody is watching. Your own jobs are below, and under them the work
+      What this box does while nobody is watching. Your own crons are below, and under them the work
       Ostiole does on its own account, so the whole answer is on one page.
     </p>
     <p v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
@@ -90,9 +92,9 @@ function describe(c) {
     <template v-if="config.draft">
       <section class="space-y-3" aria-labelledby="crons-title">
         <div class="flex items-center gap-3">
-          <h2 id="crons-title" class="font-medium">Your jobs</h2>
+          <h2 id="crons-title" class="font-medium">Your crons</h2>
           <button type="button" class="btn-secondary" @click="add">
-            <Plus class="mr-1 size-4" aria-hidden="true" /> Add job
+            <Plus class="mr-1 size-4" aria-hidden="true" /> Add cron
           </button>
           <button type="button" class="btn-secondary" @click="refresh">
             <RefreshCw class="mr-1 size-4" aria-hidden="true" /> Refresh
@@ -102,7 +104,7 @@ function describe(c) {
           <table class="table">
             <thead>
               <tr>
-                <th>Job</th>
+                <th>Cron</th>
                 <th>Schedule</th>
                 <th>Next</th>
                 <th>Last run</th>
@@ -110,14 +112,14 @@ function describe(c) {
               </tr>
             </thead>
             <tbody>
-              <tr v-if="!jobs.length">
+              <tr v-if="!rows.length">
                 <td colspan="5" class="text-neutral-500">
-                  No jobs yet. A nightly backup is the one most boxes want.
+                  No crons yet. A nightly backup is the one most boxes want.
                 </td>
               </tr>
-              <tr v-for="c in jobs" :key="c.id" :class="{ 'opacity-50': !c.enabled }">
+              <tr v-for="c in rows" :key="c.id" :class="{ 'opacity-50': !c.enabled }">
                 <td>
-                  <div class="font-medium">{{ c.description || c.job }}</div>
+                  <div class="font-medium">{{ c.description || c.kind }}</div>
                   <div class="font-mono text-xs break-all text-neutral-500">{{ describe(c) }}</div>
                 </td>
                 <td class="font-mono text-xs">
@@ -154,7 +156,7 @@ function describe(c) {
                   <ConfirmButton
                     class="ml-3"
                     label="Delete"
-                    confirm-label="Delete job?"
+                    confirm-label="Delete cron?"
                     @confirm="config.removeCron(c.id)"
                   />
                 </td>
@@ -163,7 +165,7 @@ function describe(c) {
           </table>
         </div>
         <p class="text-sm text-neutral-500">
-          A job runs as root on this box. "Run now" uses whatever is saved, so apply a new job
+          A cron runs as root on this box. "Run now" uses whatever is saved, so apply a new cron
           before trying it.
         </p>
       </section>

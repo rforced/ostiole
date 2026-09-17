@@ -15,9 +15,11 @@ const config = useConfigStore()
 const error = ref('')
 const form = ref(blank())
 
-const JOBS = [
+/** The cron kinds the model offers, in the order model.CronKinds lists them. */
+const KINDS = [
   { value: 'backup', label: 'Back up the configuration' },
-  { value: 'refresh-aliases', label: 'Fetch the blocklists and country ranges' },
+  { value: 'refresh-aliases', label: 'Fetch the address lists and country ranges' },
+  { value: 'refresh-blocklists', label: 'Fetch the DNS blocklists' },
   { value: 'restart-service', label: 'Restart a service' },
   { value: 'command', label: 'Run a command' },
 ]
@@ -28,7 +30,7 @@ function blank() {
     description: '',
     enabled: true,
     schedule: '0 4 * * *',
-    job: 'backup',
+    kind: 'backup',
     directory: '/var/backups/ostiole',
     keep: 10,
     withUsers: false,
@@ -64,10 +66,10 @@ function save() {
     id: f.id || newId('cron'),
     enabled: f.enabled,
     schedule: f.schedule.trim(),
-    job: f.job,
+    kind: f.kind,
   }
   if (f.description) out.description = f.description
-  switch (f.job) {
+  switch (f.kind) {
     case 'backup':
       if (!f.directory.trim().startsWith('/')) {
         error.value = 'The backup directory must be an absolute path.'
@@ -98,7 +100,7 @@ function save() {
 <template>
   <AppDialog
     v-model:open="open"
-    :title="cron ? `Job ${cron.description || cron.id}` : 'New scheduled job'"
+    :title="cron ? `Cron ${cron.description || cron.id}` : 'New cron'"
     description="Runs on this box, as root, on the schedule you give. It is saved with the rest of the configuration, so it is backed up and rolled back with everything else."
   >
     <form class="space-y-4" @submit.prevent="save">
@@ -111,9 +113,9 @@ function save() {
             placeholder="Nightly backup"
           />
         </FormField>
-        <FormField id="cron-job" label="What it does">
-          <select id="cron-job" v-model="form.job" class="input">
-            <option v-for="j in JOBS" :key="j.value" :value="j.value">{{ j.label }}</option>
+        <FormField id="cron-kind" label="What it does">
+          <select id="cron-kind" v-model="form.kind" class="input">
+            <option v-for="k in KINDS" :key="k.value" :value="k.value">{{ k.label }}</option>
           </select>
         </FormField>
         <FormField id="cron-preset" label="When">
@@ -139,7 +141,7 @@ function save() {
         </FormField>
       </div>
 
-      <template v-if="form.job === 'backup'">
+      <template v-if="form.kind === 'backup'">
         <div class="grid gap-4 sm:grid-cols-2">
           <FormField id="cron-dir" label="Write to" hint="An absolute path on this box.">
             <input
@@ -170,7 +172,7 @@ function save() {
         </label>
       </template>
 
-      <FormField v-if="form.job === 'restart-service'" id="cron-service" label="Service">
+      <FormField v-if="form.kind === 'restart-service'" id="cron-service" label="Service">
         <select id="cron-service" v-model="form.service" class="input">
           <option value="dnsmasq">dnsmasq (DHCP and DNS)</option>
           <option value="unbound">unbound (the resolver)</option>
@@ -178,7 +180,7 @@ function save() {
         </select>
       </FormField>
 
-      <template v-if="form.job === 'command'">
+      <template v-if="form.kind === 'command'">
         <FormField
           id="cron-command"
           label="Command"
@@ -204,7 +206,7 @@ function save() {
           <FormField
             id="cron-timeout"
             label="Give up after (seconds)"
-            hint="A job that hangs is a job that never runs again."
+            hint="A command that hangs is one that never runs again."
           >
             <input
               id="cron-timeout"

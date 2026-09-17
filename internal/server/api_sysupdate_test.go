@@ -23,7 +23,14 @@ import (
 type scriptedRunner struct{ out map[string]string }
 
 func (s scriptedRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
-	return []byte(s.out[strings.TrimSpace(name+" "+strings.Join(args, " "))]), nil
+	line := strings.TrimSpace(name + " " + strings.Join(args, " "))
+	// On a box with systemd the commands are run outside the daemon's
+	// sandbox, so what they are is after the `--`. Answering both spellings
+	// keeps this test the same wherever it runs.
+	if cmd, _, ok := strings.Cut(line, " -- "); ok && strings.HasPrefix(cmd, "systemd-run") {
+		_, line, _ = strings.Cut(line, " -- ")
+	}
+	return []byte(s.out[line]), nil
 }
 
 func updateServer(t *testing.T, root bool) (*httptest.Server, *engine.Engine, *auth.Service) {

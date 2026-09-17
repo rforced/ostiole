@@ -35,8 +35,8 @@ type Refresher struct {
 	Interval time.Duration
 	// Max is the ceiling on merged names; zero means the default.
 	Max int
-	// OnTick, when set, is called after every pass, so the scheduled jobs
-	// page can say when the box last looked.
+	// OnTick, when set, is called after every pass, so the crons page can
+	// say when the box last looked.
 	OnTick func()
 }
 

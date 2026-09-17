@@ -19,7 +19,7 @@ func (a *api) registerCrons(mux *router) {
 	mux.HandleFunc("POST /api/v1/crons/{id}/run", a.write(a.runCron))
 }
 
-// cronStatus lists the operator's jobs and the work Ostiole does on its
+// cronStatus lists the operator's crons and the work Ostiole does on its
 // own account, together.
 func (a *api) cronStatus(w http.ResponseWriter, _ *http.Request) error {
 	out := []cron.Status{}
@@ -32,7 +32,7 @@ func (a *api) cronStatus(w http.ResponseWriter, _ *http.Request) error {
 
 func (a *api) runCron(w http.ResponseWriter, r *http.Request) error {
 	if a.crons == nil {
-		return &unavailable{errors.New("nothing is running scheduled jobs on this box")}
+		return &unavailable{errors.New("nothing is running scheduled crons on this box")}
 	}
 	id := r.PathValue("id")
 	if err := a.crons.RunNow(r.Context(), id); err != nil {
