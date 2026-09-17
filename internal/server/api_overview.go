@@ -89,7 +89,7 @@ type RuleCounter struct {
 // DHCPSummary counts what the DHCP server hands out.
 type DHCPSummary struct {
 	Enabled bool `json:"enabled"`
-	Scopes  int  `json:"scopes"`
+	Servers int  `json:"servers"`
 	Static  int  `json:"static"`
 	Leases  int  `json:"leases"`
 	// Capacity is how many addresses the enabled pools hold, 0 when unknown.
@@ -295,11 +295,11 @@ func summarizeServices(cfg *model.Config) (DHCPSummary, DNSSummary) {
 		Enabled: cfg.Services.DHCP.Enabled,
 		Static:  len(cfg.Services.DHCP.StaticLeases),
 	}
-	for _, sc := range cfg.Services.DHCP.Scopes {
+	for _, sc := range cfg.Services.DHCP.Servers {
 		if !sc.Enabled {
 			continue
 		}
-		d.Scopes++
+		d.Servers++
 		d.Capacity += poolSize(sc.RangeStart, sc.RangeEnd)
 	}
 	n := DNSSummary{

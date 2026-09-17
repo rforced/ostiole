@@ -11,9 +11,10 @@ import (
 )
 
 // SchemaVersion is bumped when the on-disk JSON shape changes incompatibly.
-// Version 2 renamed a cron's "job" field to "kind"; a version 1 file needs
-// both changed by hand before this build will load it.
-const SchemaVersion = 2
+// Version 2 renamed a cron's "job" field to "kind"; version 3 renamed DHCP
+// "scopes" to "servers". An older file needs each changed by hand before
+// this build will load it.
+const SchemaVersion = 3
 
 // Action is a rule verdict.
 type Action string
@@ -454,6 +455,13 @@ func (i Interface) LogsDrops(def bool) bool {
 		return *i.LogDrops
 	}
 	return def
+}
+
+// DHCPv6Client reports whether the interface may run a DHCPv6 client: it
+// asks for an address, or it listens to router advertisements, which can
+// tell it to ask. A prefix hint needs dhcp mode, so it is covered.
+func (i Interface) DHCPv6Client() bool {
+	return i.IPv6.Mode == AddrDHCP || i.IPv6.Mode == AddrSLAAC
 }
 
 // PrivateSources are the addresses that cannot legitimately be the source
@@ -1061,9 +1069,9 @@ func (c *Config) ZoneInterfaces(zone string) []string {
 
 // Services are the LAN-side services Ostiole runs through dnsmasq.
 type Services struct {
-	DHCP DHCPServer `json:"dhcp"`
-	DNS  DNSServer  `json:"dns"`
-	UPnP UPnP       `json:"upnp"`
+	DHCP DHCPService `json:"dhcp"`
+	DNS  DNSServer   `json:"dns"`
+	UPnP UPnP        `json:"upnp"`
 }
 
 // UPnP lets a client on the LAN open a hole through the firewall for
@@ -1104,13 +1112,13 @@ type UPnPRule struct {
 	Description   string `json:"description,omitempty"`
 }
 
-// DHCPServer hands out IPv4 addresses on selected interfaces, and with V6
+// DHCPService hands out IPv4 addresses on selected interfaces, and with V6
 // also advertises IPv6 prefixes and serves DHCPv6.
-type DHCPServer struct {
-	Enabled      bool          `json:"enabled"`
-	Scopes       []DHCPScope   `json:"scopes,omitempty"`
-	StaticLeases []StaticLease `json:"staticLeases,omitempty"`
-	V6           []DHCPv6Scope `json:"v6,omitempty"`
+type DHCPService struct {
+	Enabled      bool           `json:"enabled"`
+	Servers      []DHCPServer   `json:"servers,omitempty"`
+	StaticLeases []StaticLease  `json:"staticLeases,omitempty"`
+	V6           []DHCPv6Server `json:"v6,omitempty"`
 }
 
 // RAMode says how hosts on an interface configure IPv6.
@@ -1127,10 +1135,10 @@ const (
 	RAManaged RAMode = "managed"
 )
 
-// DHCPv6Scope serves IPv6 on one interface. The prefix is taken from the
+// DHCPv6Server serves IPv6 on one interface. The prefix is taken from the
 // interface at run time, so it follows a static address, SLAAC, or a
 // delegated prefix without being repeated here.
-type DHCPv6Scope struct {
+type DHCPv6Server struct {
 	Interface string `json:"interface"`
 	Enabled   bool   `json:"enabled"`
 	Mode      RAMode `json:"mode"`
@@ -1144,11 +1152,11 @@ type DHCPv6Scope struct {
 	Domain    string   `json:"domain,omitempty"`
 }
 
-// DHCPScope is a pool on one interface, which must carry a static IPv4
+// DHCPServer is a pool on one interface, which must carry a static IPv4
 // address. Empty Gateway and DNS default to this router's address on the
 // interface (DNS only when the DNS service is enabled; otherwise the
 // system DNS servers).
-type DHCPScope struct {
+type DHCPServer struct {
 	Interface  string   `json:"interface"`
 	Enabled    bool     `json:"enabled"`
 	RangeStart string   `json:"rangeStart"`

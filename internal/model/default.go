@@ -72,7 +72,7 @@ func Starter(o StarterOptions) *Config {
 	}
 	if o.Services && o.LAN != "" {
 		if start, end, ok := DefaultPool(o.LANAddress); ok {
-			cfg.Services.DHCP = DHCPServer{Enabled: true, Scopes: []DHCPScope{{
+			cfg.Services.DHCP = DHCPService{Enabled: true, Servers: []DHCPServer{{
 				Interface: o.LAN, Enabled: true, RangeStart: start, RangeEnd: end, LeaseTime: "12h",
 			}}}
 		}

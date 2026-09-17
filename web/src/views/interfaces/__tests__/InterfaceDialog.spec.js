@@ -13,7 +13,7 @@ const stubs = {
 
 function open(iface, links = []) {
   const config = useConfigStore()
-  config.replaceDraft({ version: 2, zones: [{ name: 'lan' }], interfaces: [], rules: [] })
+  config.replaceDraft({ version: 3, zones: [{ name: 'lan' }], interfaces: [], rules: [] })
   const wrapper = mount(InterfaceDialog, {
     props: { open: true, iface, links },
     global: { stubs },

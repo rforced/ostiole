@@ -6,19 +6,19 @@ import FormField from '@/components/FormField.vue'
 import { parseList } from '@/lib/lists'
 import { useConfigStore } from '@/stores/config'
 
-const props = defineProps({ scope: { type: Object, default: null } })
+const props = defineProps({ server: { type: Object, default: null } })
 const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
 const form = ref(blank())
 
-/** Interfaces with IPv6 switched on and no scope yet (unless editing). */
+/** Interfaces with IPv6 switched on and no server yet (unless editing). */
 const candidates = computed(() =>
   config.interfaces.filter(
     (i) =>
       i.ipv6?.mode &&
       i.ipv6.mode !== 'none' &&
-      (props.scope?.interface === i.name ||
+      (props.server?.interface === i.name ||
         !(config.draft.services?.dhcp?.v6 ?? []).some((s) => s.interface === i.name)),
   ),
 )
@@ -44,10 +44,10 @@ function blank() {
 }
 
 watch(
-  () => [open.value, props.scope],
+  () => [open.value, props.server],
   () => {
     if (!open.value) return
-    const s = props.scope
+    const s = props.server
     form.value = s ? { ...blank(), ...s, dns: (s.dns ?? []).join(', ') } : blank()
     if (!s && candidates.value.length === 1) form.value.interface = candidates.value[0].name
   },
@@ -72,7 +72,7 @@ function save() {
   const dns = parseList(f.dns)
   if (dns.length) out.dns = dns
   if (f.domain) out.domain = f.domain.trim()
-  config.upsertV6Scope(out)
+  config.upsertV6Server(out)
   open.value = false
 }
 </script>
@@ -80,12 +80,12 @@ function save() {
 <template>
   <AppDialog
     v-model:open="open"
-    :title="scope ? `IPv6 on ${scope.interface}` : 'New IPv6 advertisement'"
+    :title="server ? `IPv6 on ${server.interface}` : 'New IPv6 advertisement'"
     description="The prefix comes from the interface itself, so SLAAC or a delegated prefix keeps working."
   >
     <form class="space-y-4" @submit.prevent="save">
       <FormField id="v6-if" label="Interface">
-        <select id="v6-if" v-model="form.interface" class="input" required :disabled="!!scope">
+        <select id="v6-if" v-model="form.interface" class="input" required :disabled="!!server">
           <option value="" disabled>Choose</option>
           <option v-for="i in candidates" :key="i.name" :value="i.name">
             {{ i.name }} (IPv6 {{ i.ipv6.mode }})

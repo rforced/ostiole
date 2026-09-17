@@ -169,8 +169,10 @@ func TestDefaultDropLogging(t *testing.T) {
 	}
 }
 
-// Blocking by source address must happen before anything accepts, and
-// after the state check so a flow already up is not cut.
+// Blocking by source address must happen before anything accepts, after
+// the state check so a flow already up is not cut, and after the
+// link-local baseline: the fetched bogon list contains fe80::/10, and a
+// WAN whose neighbour discovery is dropped never gets an IPv6 address.
 func TestBlockedSourcesComeFirst(t *testing.T) {
 	t.Parallel()
 	got, err := Render(loadConfig(t, "testdata/blocked-sources.json"))
@@ -184,20 +186,25 @@ func TestBlockedSourcesComeFirst(t *testing.T) {
 	}
 	input := got[inputAt:forwardAt]
 	state := strings.Index(input, "ct state invalid drop")
+	icmp := strings.Index(input, "icmpv6 type")
+	dhcp6 := strings.Index(input, "client:dhcpv6")
 	block := strings.Index(input, "block-private")
-	icmp := strings.Index(input, "icmp type")
-	if state < 0 || block < state || icmp < block {
-		t.Errorf("blocks are in the wrong place (state %d, block %d, icmp %d):\n%s", state, block, icmp, input)
+	lockout := strings.Index(input, "anti-lockout")
+	if state < 0 || icmp < state || dhcp6 < icmp || block < dhcp6 || lockout < block {
+		t.Errorf("blocks are in the wrong place (state %d, icmp %d, dhcpv6 %d, block %d, anti-lockout %d):\n%s",
+			state, icmp, dhcp6, block, lockout, input)
 	}
 	// Both chains: a spoofed source being routed through is the same
 	// problem as one addressed to this router.
 	if !strings.Contains(got[forwardAt:], "block-private") {
 		t.Error("forwarded traffic is not checked")
 	}
-	// Link-local is deliberately absent: IPv6 needs it for neighbour
-	// discovery and for the default route on a WAN.
-	if strings.Contains(got, "fe80::") {
-		t.Error("link-local was blocked, which would take IPv6 down")
+	// Link-local is never blocked: IPv6 needs it for neighbour discovery
+	// and for the default route on a WAN.
+	for _, line := range strings.Split(got, "\n") {
+		if strings.Contains(line, "fe80::") && strings.Contains(line, "drop") {
+			t.Errorf("link-local was blocked, which would take IPv6 down: %s", strings.TrimSpace(line))
+		}
 	}
 	// The bogon sets exist before anything is fetched, so a refresh has
 	// somewhere to put the list.
@@ -205,6 +212,68 @@ func TestBlockedSourcesComeFirst(t *testing.T) {
 		if !strings.Contains(got, set) {
 			t.Errorf("missing %q", set)
 		}
+	}
+}
+
+// The answers to this router's own DHCPv6 requests come from the server's
+// link-local address, which conntrack cannot pair with the multicast
+// request, so an interface that may run the client needs a rule of its
+// own. One that cannot run it gets none.
+func TestDHCPv6ClientRule(t *testing.T) {
+	t.Parallel()
+	const rule = `iifname "eth0" ip6 saddr fe80::/10 ip6 daddr fe80::/10 udp sport 547 udp dport 546 counter accept comment "client:dhcpv6"`
+
+	// blocked-sources: eth0 is a WAN in slaac mode, and the only such interface.
+	got, err := Render(loadConfig(t, "testdata/blocked-sources.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, rule) {
+		t.Errorf("slaac WAN has no DHCPv6 client rule:\n%s", got)
+	}
+	rows, err := SystemRules(loadConfig(t, "testdata/blocked-sources.json"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, r := range rows {
+		if len(r.Keys) == 1 && r.Keys[0] == "input/client:dhcpv6" {
+			found = true
+			if got, want := strings.Join(r.Zones, ","), "wan"; got != want {
+				t.Errorf("DHCPv6 client row names zones %q, want %q", got, want)
+			}
+			if r.Setting != "interface" {
+				t.Errorf("DHCPv6 client row is controlled by %q, want interface", r.Setting)
+			}
+		}
+	}
+	if !found {
+		t.Error("no system rule row for the DHCPv6 client rule")
+	}
+
+	// hybrid-nat: no interface listens to router advertisements or asks
+	// for an address.
+	got, err = Render(loadConfig(t, "testdata/hybrid-nat.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(got, "client:dhcpv6") {
+		t.Errorf("DHCPv6 client rule rendered with no client to serve:\n%s", got)
+	}
+
+	// dhcp mode runs the client outright.
+	cfg := loadConfig(t, "testdata/hybrid-nat.json")
+	for i := range cfg.Interfaces {
+		if cfg.Interfaces[i].Name == "eth0" {
+			cfg.Interfaces[i].IPv6.Mode = model.AddrDHCP
+		}
+	}
+	got, err = Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, rule) {
+		t.Errorf("dhcp WAN has no DHCPv6 client rule:\n%s", got)
 	}
 }
 

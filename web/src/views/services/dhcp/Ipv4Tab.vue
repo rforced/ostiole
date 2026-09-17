@@ -4,23 +4,23 @@ import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import { useConfigStore } from '@/stores/config'
-import ScopeDialog from '@/views/services/dhcp/ScopeDialog.vue'
+import ServerDialog from '@/views/services/dhcp/ServerDialog.vue'
 import StaticLeaseDialog from '@/views/services/dhcp/StaticLeaseDialog.vue'
 
 const config = useConfigStore()
 const dhcp = computed(() => config.ensureServices().dhcp)
-const scopeEditing = ref(null)
-const scopeOpen = ref(false)
+const serverEditing = ref(null)
+const serverOpen = ref(false)
 const leaseEditing = ref(null)
 const leaseOpen = ref(false)
 
-function addScope() {
-  scopeEditing.value = null
-  scopeOpen.value = true
+function addServer() {
+  serverEditing.value = null
+  serverOpen.value = true
 }
-function editScope(s) {
-  scopeEditing.value = s
-  scopeOpen.value = true
+function editServer(s) {
+  serverEditing.value = s
+  serverOpen.value = true
 }
 function addLease() {
   leaseEditing.value = null
@@ -39,11 +39,11 @@ function editLease(l) {
       <span class="font-medium">DHCP server enabled</span>
     </label>
 
-    <section class="space-y-3" aria-labelledby="scopes-title">
+    <section class="space-y-3" aria-labelledby="servers-title">
       <div class="flex items-center gap-3">
-        <h2 id="scopes-title" class="section-title">Scopes</h2>
-        <button type="button" class="btn-secondary" @click="addScope">
-          <Plus class="mr-1 size-4" aria-hidden="true" /> Add scope
+        <h2 id="servers-title" class="section-title">Servers</h2>
+        <button type="button" class="btn-secondary" @click="addServer">
+          <Plus class="mr-1 size-4" aria-hidden="true" /> Add server
         </button>
       </div>
       <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
@@ -59,17 +59,17 @@ function editLease(l) {
             </tr>
           </thead>
           <TransitionGroup name="row" tag="tbody">
-            <tr v-if="!(dhcp.scopes ?? []).length" key="empty" class="row-static">
+            <tr v-if="!(dhcp.servers ?? []).length" key="empty" class="row-static">
               <td colspan="6" class="text-neutral-500">
-                No scopes. Add one per interface that should hand out addresses.
+                No servers. Add one per interface that should hand out addresses.
               </td>
             </tr>
             <tr
-              v-for="s in dhcp.scopes"
+              v-for="s in dhcp.servers"
               :key="s.interface"
               :class="{
                 'opacity-50': !s.enabled,
-                'row-changed': config.isChanged('services.dhcp.scopes', s.interface),
+                'row-changed': config.isChanged('services.dhcp.servers', s.interface),
               }"
             >
               <td class="font-mono">{{ s.interface }}</td>
@@ -78,12 +78,12 @@ function editLease(l) {
               <td class="font-mono text-code">{{ s.gateway || 'this router' }}</td>
               <td class="font-mono text-code">{{ s.dns?.join(', ') || 'this router' }}</td>
               <td class="text-right whitespace-nowrap">
-                <button type="button" class="link" @click="editScope(s)">Edit</button>
+                <button type="button" class="link" @click="editServer(s)">Edit</button>
                 <ConfirmButton
                   class="ml-3"
                   label="Delete"
-                  :question="`Delete the DHCP scope on ${s.interface}?`"
-                  @confirm="config.removeScope(s.interface)"
+                  :question="`Delete the DHCP server on ${s.interface}?`"
+                  @confirm="config.removeServer(s.interface)"
                 />
               </td>
             </tr>
@@ -141,7 +141,7 @@ function editLease(l) {
       </div>
     </section>
 
-    <ScopeDialog v-model:open="scopeOpen" :scope="scopeEditing" />
+    <ServerDialog v-model:open="serverOpen" :server="serverEditing" />
     <StaticLeaseDialog v-model:open="leaseOpen" :lease="leaseEditing" />
   </div>
 </template>

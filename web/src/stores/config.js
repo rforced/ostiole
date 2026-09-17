@@ -106,7 +106,7 @@ export const useConfigStore = defineStore('config', () => {
   /**
    * What goes with an interface when it is removed, in words, for the
    * dialog. Anything that names it means nothing without it: a DHCP
-   * scope, a gateway, a route, a DNS listener. A VLAN or PPPoE session on
+   * server, a gateway, a route, a DNS listener. A VLAN or PPPoE session on
    * top of it cannot exist without it. A bridge or bond carries on one
    * member short unless that was its only one, and an interface delegated
    * a prefix from it falls back to no IPv6.
@@ -129,7 +129,7 @@ export const useConfigStore = defineStore('config', () => {
       if (i.ipv6?.delegatedFrom === name) out.push(`${i.name} loses its delegated IPv6 prefix`)
     }
     const dhcp = d.services?.dhcp ?? {}
-    if ((dhcp.scopes ?? []).some((s) => s.interface === name)) out.push(`DHCP scope on ${name}`)
+    if ((dhcp.servers ?? []).some((s) => s.interface === name)) out.push(`DHCP server on ${name}`)
     if ((dhcp.v6 ?? []).some((s) => s.interface === name)) {
       out.push(`IPv6 advertisement on ${name}`)
     }
@@ -157,7 +157,7 @@ export const useConfigStore = defineStore('config', () => {
       if (i.ipv6?.delegatedFrom === name) i.ipv6 = { mode: 'none' }
     }
     const dhcp = d.services?.dhcp
-    if (dhcp?.scopes) dhcp.scopes = dhcp.scopes.filter((s) => s.interface !== name)
+    if (dhcp?.servers) dhcp.servers = dhcp.servers.filter((s) => s.interface !== name)
     if (dhcp?.v6) dhcp.v6 = dhcp.v6.filter((s) => s.interface !== name)
     const dns = d.services?.dns
     if (dns?.interfaces) dns.interfaces = dns.interfaces.filter((n) => n !== name)
@@ -423,30 +423,30 @@ export const useConfigStore = defineStore('config', () => {
     return d.services
   }
 
-  function upsertScope(scope) {
+  function upsertServer(server) {
     const dhcp = ensureServices().dhcp
-    const list = dhcp.scopes ?? (dhcp.scopes = [])
-    const idx = list.findIndex((s) => s.interface === scope.interface)
-    if (idx === -1) list.push(clone(scope))
-    else list[idx] = clone(scope)
+    const list = dhcp.servers ?? (dhcp.servers = [])
+    const idx = list.findIndex((s) => s.interface === server.interface)
+    if (idx === -1) list.push(clone(server))
+    else list[idx] = clone(server)
   }
 
-  function removeScope(iface) {
-    undoable(`Deleted the DHCP scope on ${iface}.`, () => {
+  function removeServer(iface) {
+    undoable(`Deleted the DHCP server on ${iface}.`, () => {
       const dhcp = ensureServices().dhcp
-      dhcp.scopes = (dhcp.scopes ?? []).filter((s) => s.interface !== iface)
+      dhcp.servers = (dhcp.servers ?? []).filter((s) => s.interface !== iface)
     })
   }
 
-  function upsertV6Scope(scope) {
+  function upsertV6Server(server) {
     const dhcp = ensureServices().dhcp
     const list = dhcp.v6 ?? (dhcp.v6 = [])
-    const idx = list.findIndex((s) => s.interface === scope.interface)
-    if (idx === -1) list.push(clone(scope))
-    else list[idx] = clone(scope)
+    const idx = list.findIndex((s) => s.interface === server.interface)
+    if (idx === -1) list.push(clone(server))
+    else list[idx] = clone(server)
   }
 
-  function removeV6Scope(iface) {
+  function removeV6Server(iface) {
     undoable(`Stopped advertising IPv6 on ${iface}.`, () => {
       const dhcp = ensureServices().dhcp
       dhcp.v6 = (dhcp.v6 ?? []).filter((s) => s.interface !== iface)
@@ -889,10 +889,10 @@ export const useConfigStore = defineStore('config', () => {
     upsertRoute,
     removeRoute,
     ensureServices,
-    upsertScope,
-    removeScope,
-    upsertV6Scope,
-    removeV6Scope,
+    upsertServer,
+    removeServer,
+    upsertV6Server,
+    removeV6Server,
     upsertStaticLease,
     removeStaticLease,
     upsertHostOverride,

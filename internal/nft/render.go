@@ -252,22 +252,66 @@ func (r *renderer) chainInput() {
 		r.line("type filter hook input priority filter; policy drop;")
 		r.line(`iifname "lo" accept`)
 		r.connectionState("input")
+		r.linkLocalBaseline()
 		r.blockedSources("input")
-		// Error messages that IPv4 needs to function (no echo: that is a user rule).
-		r.line("icmp type { destination-unreachable, time-exceeded, parameter-problem } accept")
-		// Neighbour discovery, MLD, and error messages that IPv6 cannot work without.
-		r.line("icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit, nd-router-advert, " +
-			"destination-unreachable, packet-too-big, time-exceeded, parameter-problem, " +
-			"mld-listener-query, mld-listener-report, mld-listener-done } accept")
-		r.sys(SystemRule{
-			Chain: "input", Action: "accept", Protocol: string(model.ProtocolICMP),
-			Source: "any", Destination: firewallDest(nil),
-			Description: "ICMP errors and IPv6 neighbour discovery",
-		})
 		r.antiLockout()
 		r.serviceRules()
 		r.zoneDispatch()
 		r.defaultDrop("input")
+	})
+}
+
+// linkLocalBaseline accepts what IP cannot work without, and it does so
+// ahead of the source-address blocks on purpose. Neighbour discovery,
+// router advertisements, and DHCPv6 answers all arrive from fe80::/10,
+// and the fetched bogon list contains that prefix, so a WAN that blocks
+// bogons would otherwise drop its gateway's neighbour solicitations and
+// never get an IPv6 address or a default route.
+//
+// Nothing here lets a spoofed source in. Neighbour discovery is untracked
+// by conntrack and the kernel discards it unless the hop limit is 255,
+// so it cannot be routed in from off-link. An ICMP error is either
+// related to a tracked flow, which the state rule accepted already, or
+// invalid, which the state rule dropped already. Echo is deliberately
+// absent: whether this firewall answers ping is a zone rule.
+func (r *renderer) linkLocalBaseline() {
+	// Error messages that IPv4 needs to function (no echo: that is a user rule).
+	r.line("icmp type { destination-unreachable, time-exceeded, parameter-problem } accept")
+	// Neighbour discovery, MLD, and error messages that IPv6 cannot work without.
+	r.line("icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit, nd-router-advert, " +
+		"destination-unreachable, packet-too-big, time-exceeded, parameter-problem, " +
+		"mld-listener-query, mld-listener-report, mld-listener-done } accept")
+	r.sys(SystemRule{
+		Chain: "input", Action: "accept", Protocol: string(model.ProtocolICMP),
+		Source: "any", Destination: firewallDest(nil),
+		Description: "ICMP errors and IPv6 neighbour discovery",
+	})
+	r.dhcpv6ClientRules()
+}
+
+// dhcpv6ClientRules let the answers to this router's own DHCPv6 requests
+// in, on the interfaces that make them. The request goes to a multicast
+// group and the answer comes back from the server's link-local address,
+// so conntrack never pairs the two and the state rule sees no reply.
+// The server is on the link by definition, which is what the link-local
+// match on both ends says.
+func (r *renderer) dhcpv6ClientRules() {
+	var ifs []string
+	for _, in := range r.cfg.Interfaces {
+		if in.Enabled && in.DHCPv6Client() {
+			ifs = append(ifs, in.Name)
+		}
+	}
+	if len(ifs) == 0 {
+		return
+	}
+	r.line(fmt.Sprintf(`iifname %s ip6 saddr fe80::/10 ip6 daddr fe80::/10 udp sport 547 udp dport 546 counter accept comment "client:dhcpv6"`,
+		ifnameSet(ifs)))
+	r.sysFor(ifs, SystemRule{
+		Chain: "input", Action: "accept", Protocol: string(model.ProtocolUDP),
+		Source: "link-local : 547", Destination: firewallDest([]string{"546"}),
+		Description: "DHCPv6 answers to this firewall's own requests",
+		Keys:        []string{"input/client:dhcpv6"}, Setting: "interface",
 	})
 }
 
@@ -298,7 +342,7 @@ func (r *renderer) serviceRules() {
 	svc := r.cfg.Services
 	if svc.DHCP.Enabled {
 		var ifs []string
-		for _, sc := range svc.DHCP.Scopes {
+		for _, sc := range svc.DHCP.Servers {
 			if in, ok := r.cfg.Interface(sc.Interface); ok && sc.Enabled && in.Enabled {
 				ifs = append(ifs, sc.Interface)
 			}

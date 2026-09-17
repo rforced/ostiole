@@ -7,7 +7,7 @@ import { useToastStore } from '@/stores/toast'
 /** A draft with a zone that everything else hangs off. */
 function draft() {
   return {
-    version: 2,
+    version: 3,
     zones: [{ name: 'lan' }, { name: 'dmz' }, { name: 'wan', external: true }],
     interfaces: [
       { name: 'eth1', zone: 'lan' },
@@ -80,7 +80,7 @@ describe('config store zones', () => {
 /** A draft where an interface is named by everything that can name one. */
 function wired() {
   return {
-    version: 2,
+    version: 3,
     zones: [{ name: 'lan' }, { name: 'wan', external: true }],
     interfaces: [
       { name: 'eth0', zone: 'wan', ipv4: { mode: 'dhcp' }, ipv6: { mode: 'dhcp', prefixHint: 56 } },
@@ -117,7 +117,7 @@ function wired() {
     services: {
       dhcp: {
         enabled: true,
-        scopes: [{ interface: 'eth1' }, { interface: 'eth1.10' }],
+        servers: [{ interface: 'eth1' }, { interface: 'eth1.10' }],
         v6: [{ interface: 'eth1' }],
       },
       dns: { enabled: true, interfaces: ['eth1', 'eth1.10'] },
@@ -133,9 +133,9 @@ describe('config store interfaces', () => {
     config.replaceDraft(wired())
     expect(config.interfaceDependents('eth1')).toEqual([
       'VLAN eth1.10',
-      'DHCP scope on eth1.10',
+      'DHCP server on eth1.10',
       'DNS listener on eth1.10',
-      'DHCP scope on eth1',
+      'DHCP server on eth1',
       'IPv6 advertisement on eth1',
       'DNS listener on eth1',
     ])
@@ -156,7 +156,7 @@ describe('config store interfaces', () => {
     config.replaceDraft(wired())
     config.removeInterface('eth1')
     expect(config.interfaces.map((i) => i.name)).toEqual(['eth0', 'br0', 'bond0', 'wg0'])
-    expect(config.draft.services.dhcp.scopes).toEqual([])
+    expect(config.draft.services.dhcp.servers).toEqual([])
     expect(config.draft.services.dhcp.v6).toEqual([])
     expect(config.draft.services.dns.interfaces).toEqual([])
   })
@@ -214,7 +214,7 @@ describe('config store draft changes', () => {
     config.replaceDraft(wired())
     config.changes = [
       { path: 'rules[r1].action', kind: 'changed' },
-      { path: 'services.dhcp.scopes[lan]', kind: 'added' },
+      { path: 'services.dhcp.servers[lan]', kind: 'added' },
       { path: 'interfaces[wg0].wireguard.peers[bob]', kind: 'added' },
       { path: 'system.keepRevisions', kind: 'changed' },
     ]
@@ -231,7 +231,7 @@ describe('config store draft changes', () => {
 
     expect(config.isChanged('rules', 'r1')).toBe(true)
     expect(config.isChanged('rules', 'r2')).toBe(false)
-    expect(config.isChanged('services.dhcp.scopes', 'lan')).toBe(true)
+    expect(config.isChanged('services.dhcp.servers', 'lan')).toBe(true)
     expect(config.isChanged('interfaces[wg0].wireguard.peers', 'bob')).toBe(true)
     expect(config.isChanged('interfaces', 'wg0')).toBe(true)
   })

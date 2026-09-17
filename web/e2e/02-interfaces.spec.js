@@ -144,17 +144,22 @@ test('per-interface drop logging and source blocking', async ({ page }) => {
 
   await applyAndConfirm(page)
 
-  // The rules land before anything that accepts, and the bogon sets exist
-  // whether or not the list has been fetched.
+  // The rules land after the link-local baseline (the bogon list contains
+  // fe80::/10, and IPv6 needs neighbour discovery to work at all) and
+  // before anything else that accepts. The bogon sets exist whether or
+  // not the list has been fetched.
   await page.goto('/system/ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const text = await page.locator('pre').innerText()
   expect(text).toContain('set private_v4')
   expect(text).toContain('set bogons_v4')
   expect(text).toContain('block-private')
-  // Link-local stays: IPv6 needs it for neighbour discovery.
-  expect(text).not.toContain('fe80::')
-  expect(text.indexOf('block-private')).toBeLessThan(text.indexOf('icmp type'))
+  // Link-local is never dropped: IPv6 needs it for neighbour discovery.
+  for (const line of text.split('\n')) {
+    if (line.includes('fe80::')) expect(line).not.toContain('drop')
+  }
+  expect(text.indexOf('icmpv6 type')).toBeLessThan(text.indexOf('block-private'))
+  expect(text.indexOf('block-private')).toBeLessThan(text.indexOf('anti-lockout'))
 
   // Put it back so the rest of the suite starts where it expects.
   await page.goto('/interfaces')

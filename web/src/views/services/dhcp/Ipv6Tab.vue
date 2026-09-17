@@ -4,7 +4,7 @@ import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import { useConfigStore } from '@/stores/config'
-import V6ScopeDialog from '@/views/services/dhcp/V6ScopeDialog.vue'
+import V6ServerDialog from '@/views/services/dhcp/V6ServerDialog.vue'
 
 const config = useConfigStore()
 const dhcp = computed(() => config.ensureServices().dhcp)
@@ -81,7 +81,7 @@ function edit(s) {
                 label="Delete"
                 :question="`Stop advertising IPv6 on ${s.interface}?`"
                 confirm-label="Stop"
-                @confirm="config.removeV6Scope(s.interface)"
+                @confirm="config.removeV6Server(s.interface)"
               />
             </td>
           </tr>
@@ -89,6 +89,6 @@ function edit(s) {
       </table>
     </div>
 
-    <V6ScopeDialog v-model:open="open" :scope="editing" />
+    <V6ServerDialog v-model:open="open" :server="editing" />
   </div>
 </template>

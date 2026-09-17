@@ -12,7 +12,7 @@ test('build a bridge and a bond from the machine s own links', async ({ page }) 
   await page.goto('/interfaces')
 
   // 02-interfaces.spec.js put a spare link in the wan zone at 10.77.0.1/24.
-  // Using that one keeps the LAN, and the DHCP scope on it, out of this.
+  // Using that one keeps the LAN, and the DHCP server on it, out of this.
   const addressed = page.getByRole('row').filter({ hasText: '10.77.0.1/24' })
   const spare = (await addressed.locator('td').first().locator('div').first().textContent()).trim()
   // Pin the row by name: the address is about to move to the bridge.

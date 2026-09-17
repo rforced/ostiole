@@ -11,7 +11,7 @@ vi.mock('@/lib/api', () => ({
   api: { config: { revisions: vi.fn(), revision: vi.fn(), diff: vi.fn() } },
 }))
 
-const draft = (system = {}) => ({ version: 2, system, zones: [], interfaces: [], rules: [] })
+const draft = (system = {}) => ({ version: 3, system, zones: [], interfaces: [], rules: [] })
 
 function open(system) {
   const config = useConfigStore()

@@ -33,12 +33,13 @@ table inet ostiole {
 		iifname "lo" accept
 		ct state established,related accept
 		ct state invalid drop
+		icmp type { destination-unreachable, time-exceeded, parameter-problem } accept
+		icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit, nd-router-advert, destination-unreachable, packet-too-big, time-exceeded, parameter-problem, mld-listener-query, mld-listener-report, mld-listener-done } accept
+		iifname "eth0" ip6 saddr fe80::/10 ip6 daddr fe80::/10 udp sport 547 udp dport 546 counter accept comment "client:dhcpv6"
 		iifname "eth0" ip saddr @private_v4 counter log prefix "ostiole:input:block-private: " group 1 drop comment "block-private"
 		iifname "eth0" ip6 saddr @private_v6 counter log prefix "ostiole:input:block-private: " group 1 drop comment "block-private"
 		iifname "eth0" ip saddr @bogons_v4 counter log prefix "ostiole:input:block-bogons: " group 1 drop comment "block-bogons"
 		iifname "eth0" ip6 saddr @bogons_v6 counter log prefix "ostiole:input:block-bogons: " group 1 drop comment "block-bogons"
-		icmp type { destination-unreachable, time-exceeded, parameter-problem } accept
-		icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit, nd-router-advert, destination-unreachable, packet-too-big, time-exceeded, parameter-problem, mld-listener-query, mld-listener-report, mld-listener-done } accept
 		iifname "eth0" tcp dport { 443, 22 } counter accept comment "anti-lockout:wan"
 		iifname "eth1" tcp dport { 443, 22 } counter accept comment "anti-lockout:lan"
 		iifname "eth0" jump zone_wan

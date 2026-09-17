@@ -239,9 +239,9 @@ func TestStarterServicesAndDefaultPool(t *testing.T) {
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("starter with services invalid: %v", err)
 	}
-	sc := cfg.Services.DHCP.Scopes
+	sc := cfg.Services.DHCP.Servers
 	if len(sc) != 1 || sc[0].RangeStart != "192.168.1.100" || sc[0].RangeEnd != "192.168.1.199" {
-		t.Errorf("scope = %+v", sc)
+		t.Errorf("server = %+v", sc)
 	}
 	if !cfg.Services.DNS.Enabled || len(cfg.Services.DNS.Upstreams) != 2 {
 		t.Errorf("dns = %+v", cfg.Services.DNS)
@@ -266,8 +266,8 @@ func TestValidateServices(t *testing.T) {
 	t.Parallel()
 	cfg := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0"})
 	cfg.Services = Services{
-		DHCP: DHCPServer{Enabled: true,
-			Scopes: []DHCPScope{
+		DHCP: DHCPService{Enabled: true,
+			Servers: []DHCPServer{
 				{Interface: "eth1", Enabled: true, RangeStart: "192.168.2.10", RangeEnd: "192.168.1.5", LeaseTime: "soon", Gateway: "10.0.0.1", DNS: []string{"bad"}, Domain: "-x"},
 				{Interface: "eth0", Enabled: true, RangeStart: "1.1.1.1", RangeEnd: "1.1.1.2"},
 				{Interface: "ghost", Enabled: true},
@@ -286,9 +286,9 @@ func TestValidateServices(t *testing.T) {
 		got[i.Path] = true
 	}
 	for _, p := range []string{
-		"services.dhcp.scopes[0].rangeStart", "services.dhcp.scopes[0].leaseTime", "services.dhcp.scopes[0].gateway",
-		"services.dhcp.scopes[0].dns[0]", "services.dhcp.scopes[0].domain",
-		"services.dhcp.scopes[1].interface", "services.dhcp.scopes[2].interface",
+		"services.dhcp.servers[0].rangeStart", "services.dhcp.servers[0].leaseTime", "services.dhcp.servers[0].gateway",
+		"services.dhcp.servers[0].dns[0]", "services.dhcp.servers[0].domain",
+		"services.dhcp.servers[1].interface", "services.dhcp.servers[2].interface",
 		"services.dhcp.staticLeases[0].mac", "services.dhcp.staticLeases[0].ip", "services.dhcp.staticLeases[0].hostname",
 		"services.dhcp.staticLeases[2].mac",
 		"services.dns.interfaces[0]", "services.dns.upstreams[0]", "services.dns.domain",
@@ -299,7 +299,7 @@ func TestValidateServices(t *testing.T) {
 		}
 	}
 	cfg.Services.DNS = DNSServer{Enabled: true}
-	cfg.Services.DHCP = DHCPServer{}
+	cfg.Services.DHCP = DHCPService{}
 	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "upstream") {
 		t.Errorf("dns without upstreams accepted: %v", err)
 	}
@@ -353,7 +353,7 @@ func TestValidateDHCPv6(t *testing.T) {
 	t.Parallel()
 	cfg := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0"})
 	cfg.Interfaces[0].IPv6 = IPv6{Mode: AddrStatic, Address: "2001:db8::1/64"}
-	cfg.Services.DHCP = DHCPServer{Enabled: true, V6: []DHCPv6Scope{
+	cfg.Services.DHCP = DHCPService{Enabled: true, V6: []DHCPv6Server{
 		{Interface: "eth1", Enabled: true, Mode: RAManaged, RangeStart: "::1ff", RangeEnd: "::100", LeaseTime: "soon", DNS: []string{"192.168.1.1"}, Domain: "-x"},
 		{Interface: "eth1", Enabled: true, Mode: RASLAAC, RangeStart: "::100"},
 		{Interface: "eth0", Enabled: true, Mode: RASLAAC},
@@ -379,18 +379,18 @@ func TestValidateDHCPv6(t *testing.T) {
 	}
 
 	// eth0 (the WAN, SLAAC) raised nothing: advertising there is legal, if
-	// unusual. A single sane scope must validate too.
-	cfg.Services.DHCP.V6 = []DHCPv6Scope{{Interface: "eth1", Enabled: true, Mode: RAManaged, RangeStart: "::100", RangeEnd: "::1ff"}}
+	// unusual. A single sane server must validate too.
+	cfg.Services.DHCP.V6 = []DHCPv6Server{{Interface: "eth1", Enabled: true, Mode: RAManaged, RangeStart: "::100", RangeEnd: "::1ff"}}
 	cfg.Services.DNS = DNSServer{Enabled: true, Upstreams: []string{"1.1.1.1"}}
 	if err := cfg.Validate(); err != nil {
-		t.Errorf("valid IPv6 scope rejected: %v", err)
+		t.Errorf("valid IPv6 server rejected: %v", err)
 	}
 }
 
 func TestValidateStaticLeaseAddresses(t *testing.T) {
 	t.Parallel()
 	cfg := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24"})
-	cfg.Services.DHCP = DHCPServer{Enabled: true, StaticLeases: []StaticLease{
+	cfg.Services.DHCP = DHCPService{Enabled: true, StaticLeases: []StaticLease{
 		{MAC: "aa:bb:cc:dd:ee:01"},
 		{MAC: "aa:bb:cc:dd:ee:02", IPv6: "::20"},
 		{MAC: "aa:bb:cc:dd:ee:03", IPv6: "192.168.1.9"},

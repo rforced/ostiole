@@ -190,14 +190,14 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 	// ---- DHCP ----
 	if svc.DHCP.Enabled {
 		b.WriteString("dhcp-authoritative\n")
-		for _, sc := range svc.DHCP.Scopes {
+		for _, sc := range svc.DHCP.Servers {
 			if !sc.Enabled {
 				continue
 			}
 			in, _ := cfg.Interface(sc.Interface)
 			prefix, perr := netip.ParsePrefix(in.IPv4.Address)
 			if perr != nil {
-				return "", "", fmt.Errorf("scope %s: %w", sc.Interface, perr)
+				return "", "", fmt.Errorf("server %s: %w", sc.Interface, perr)
 			}
 			maskStr := net.IP(net.CIDRMask(prefix.Bits(), 32)).String()
 			lease := sc.LeaseTime
@@ -305,7 +305,7 @@ func listenInterfaces(cfg *model.Config) []string {
 		}
 	}
 	if cfg.Services.DHCP.Enabled {
-		for _, sc := range cfg.Services.DHCP.Scopes {
+		for _, sc := range cfg.Services.DHCP.Servers {
 			if sc.Enabled {
 				add(sc.Interface)
 			}
@@ -317,9 +317,9 @@ func listenInterfaces(cfg *model.Config) []string {
 	return out
 }
 
-// EnabledV6 lists the IPv6 scopes that are on and whose interface is on.
-func EnabledV6(cfg *model.Config) []model.DHCPv6Scope {
-	var out []model.DHCPv6Scope
+// EnabledV6 lists the IPv6 servers that are on and whose interface is on.
+func EnabledV6(cfg *model.Config) []model.DHCPv6Server {
+	var out []model.DHCPv6Server
 	if !cfg.Services.DHCP.Enabled {
 		return nil
 	}
@@ -335,13 +335,13 @@ func EnabledV6(cfg *model.Config) []model.DHCPv6Scope {
 // prefix is never written out: constructor: tells dnsmasq to take it from
 // the interface, so SLAAC or a delegated prefix keeps working.
 func renderV6(b *strings.Builder, cfg *model.Config) {
-	scopes := EnabledV6(cfg)
-	if len(scopes) == 0 {
+	servers := EnabledV6(cfg)
+	if len(servers) == 0 {
 		return
 	}
 	svc := cfg.Services
 	b.WriteString("enable-ra\n")
-	for _, sc := range scopes {
+	for _, sc := range servers {
 		tag := "s6_" + sanitizeTag(sc.Interface)
 		lease := sc.LeaseTime
 		if lease == "" {

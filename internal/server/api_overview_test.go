@@ -174,8 +174,8 @@ func TestOverviewAfterApply(t *testing.T) {
 		t.Errorf("blocked = %+v, want the default-drop and zone-default sums", ov.Blocked)
 	}
 
-	if !ov.DHCP.Enabled || ov.DHCP.Scopes != 1 || ov.DHCP.Capacity != 100 {
-		t.Errorf("dhcp = %+v, want one scope of 100 addresses", ov.DHCP)
+	if !ov.DHCP.Enabled || ov.DHCP.Servers != 1 || ov.DHCP.Capacity != 100 {
+		t.Errorf("dhcp = %+v, want one server of 100 addresses", ov.DHCP)
 	}
 	if !ov.DNS.Enabled || ov.DNS.Domain != "lan" {
 		t.Errorf("dns = %+v", ov.DNS)

@@ -35,7 +35,7 @@ const BADGE = {
         {{ formatCount(dhcp.leases ?? 0) }}
         <template v-if="dhcp.capacity"> of {{ formatCount(dhcp.capacity) }}</template>
         leases ·
-        {{ dhcp.scopes ?? 0 }} scope{{ (dhcp.scopes ?? 0) === 1 ? '' : 's' }}
+        {{ dhcp.servers ?? 0 }} server{{ (dhcp.servers ?? 0) === 1 ? '' : 's' }}
         <template v-if="dhcp.static"> · {{ dhcp.static }} static</template>
       </dd>
       <dd v-else class="text-neutral-500">off</dd>

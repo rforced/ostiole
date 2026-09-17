@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "system": {
     "hostname": "edge",
     "management": {
@@ -471,7 +471,7 @@
   "services": {
     "dhcp": {
       "enabled": true,
-      "scopes": [
+      "servers": [
         {
           "interface": "eth1",
           "enabled": true,

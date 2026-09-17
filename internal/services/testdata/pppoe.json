@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "system": {
     "hostname": "dsl",
     "management": { "webPort": 443, "sshPort": 22 }
@@ -62,7 +62,7 @@
   "services": {
     "dhcp": {
       "enabled": true,
-      "scopes": [
+      "servers": [
         {
           "interface": "lan0",
           "enabled": true,

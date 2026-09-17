@@ -9,7 +9,7 @@ import ManagementSection from '@/views/system/ManagementSection.vue'
 
 vi.mock('@/lib/api', () => ({ api: { timezones: vi.fn() } }))
 
-const draft = (system = {}) => ({ version: 2, system, zones: [], interfaces: [], rules: [] })
+const draft = (system = {}) => ({ version: 3, system, zones: [], interfaces: [], rules: [] })
 
 async function open(system) {
   const config = useConfigStore()

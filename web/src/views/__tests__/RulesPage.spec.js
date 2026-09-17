@@ -19,7 +19,7 @@ vi.mock('@/lib/api', () => ({
 const stubs = { ConfirmButton: true, RuleDialog: true, RouterLink: true }
 
 const config = {
-  version: 2,
+  version: 3,
   zones: [
     { name: 'lan', antiLockout: true },
     { name: 'wan', external: true },

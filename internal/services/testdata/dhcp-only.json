@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "system": { "dnsServers": ["8.8.8.8"], "management": { "webPort": 443, "sshPort": 22 } },
   "zones": [{ "name": "wan", "external": true }, { "name": "lan", "antiLockout": true }],
   "interfaces": [
@@ -9,7 +9,7 @@
   "rules": [],
   "nat": { "outbound": { "mode": "automatic" } },
   "services": {
-    "dhcp": { "enabled": true, "scopes": [{ "interface": "eth1", "enabled": true, "rangeStart": "10.0.0.50", "rangeEnd": "10.0.0.99", "gateway": "10.0.0.254", "dns": ["9.9.9.9"], "domain": "office" }] },
+    "dhcp": { "enabled": true, "servers": [{ "interface": "eth1", "enabled": true, "rangeStart": "10.0.0.50", "rangeEnd": "10.0.0.99", "gateway": "10.0.0.254", "dns": ["9.9.9.9"], "domain": "office" }] },
     "dns": { "enabled": false }
   }
 }

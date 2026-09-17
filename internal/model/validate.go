@@ -566,15 +566,15 @@ func (v *validator) domainName(path, name string) {
 
 func (v *validator) services(c *Config, ifaces map[string]bool) {
 	seen := map[string]bool{}
-	for i, sc := range c.Services.DHCP.Scopes {
-		path := fmt.Sprintf("services.dhcp.scopes[%d]", i)
+	for i, sc := range c.Services.DHCP.Servers {
+		path := fmt.Sprintf("services.dhcp.servers[%d]", i)
 		in, ok := c.Interface(sc.Interface)
 		if !ok || !ifaces[sc.Interface] {
 			v.add(path+".interface", "unknown interface %q", sc.Interface)
 			continue
 		}
 		if seen[sc.Interface] {
-			v.add(path+".interface", "interface %q already has a scope", sc.Interface)
+			v.add(path+".interface", "interface %q already has a server", sc.Interface)
 		}
 		seen[sc.Interface] = true
 		if in.IPv4.Mode != AddrStatic {
@@ -789,7 +789,7 @@ func (v *validator) upnp(c *Config, ifaces map[string]bool) {
 	}
 }
 
-// dhcpv6 checks the router advertisement scopes. The prefix itself is not
+// dhcpv6 checks the router advertisement servers. The prefix itself is not
 // configured here: dnsmasq takes it from the interface at run time, so an
 // interface only needs IPv6 to be switched on.
 func (v *validator) dhcpv6(c *Config, ifaces map[string]bool) {

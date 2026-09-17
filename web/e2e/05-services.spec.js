@@ -4,24 +4,24 @@ import { applyAndConfirm, login, shot, sidebar } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
-test('enable DHCP with a scope and DNS with an override, then apply', async ({ page }) => {
+test('enable DHCP with a server and DNS with an override, then apply', async ({ page }) => {
   await login(page)
   await page.goto('/services')
   await expect(page).toHaveURL(/\/services\/dhcp$/)
   await expect(page.getByRole('heading', { name: 'DHCP', exact: true })).toBeVisible()
 
-  // The wizard enabled DHCP on the LAN with a pool of hosts 100-199; edit that scope.
+  // The wizard enabled DHCP on the LAN with a pool of hosts 100-199; edit that server.
   await expect(page.getByLabel('DHCP server enabled')).toBeChecked()
-  const scopeRow = page.getByRole('row').filter({ hasText: '192.168.50.100' })
-  await scopeRow.getByRole('button', { name: 'Edit' }).click()
+  const serverRow = page.getByRole('row').filter({ hasText: '192.168.50.100' })
+  await serverRow.getByRole('button', { name: 'Edit' }).click()
   let dialog = page.getByRole('dialog')
   await expect(dialog.getByLabel('Range end')).toHaveValue('192.168.50.199')
   await dialog.getByLabel('Lease time').fill('1d')
   await dialog.getByRole('button', { name: 'Save to draft' }).click()
-  await expect(scopeRow).toContainText('1d')
+  await expect(serverRow).toContainText('1d')
 
-  // A second scope offers only interfaces without one; the LAN is excluded.
-  await page.getByRole('button', { name: 'Add scope' }).click()
+  // A second server offers only interfaces without one; the LAN is excluded.
+  await page.getByRole('button', { name: 'Add server' }).click()
   dialog = page.getByRole('dialog')
   await expect(dialog.locator('#sc-if option', { hasText: '192.168.50.1/24' })).toHaveCount(0)
   await dialog.getByRole('button', { name: 'Cancel' }).click()
@@ -68,7 +68,7 @@ test('enable DHCP with a scope and DNS with an override, then apply', async ({ p
   await expect(page.getByText('No leases yet.')).toBeVisible()
 })
 
-test('a scope outside the interface subnet is rejected by the server', async ({ page }) => {
+test('a pool outside the interface subnet is rejected by the server', async ({ page }) => {
   await login(page)
   await page.goto('/services')
   await page

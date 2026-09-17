@@ -6,19 +6,19 @@ import FormField from '@/components/FormField.vue'
 import { parseList } from '@/lib/lists'
 import { useConfigStore } from '@/stores/config'
 
-const props = defineProps({ scope: { type: Object, default: null } })
+const props = defineProps({ server: { type: Object, default: null } })
 const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
 const form = ref(blank())
 
-/** Interfaces that can serve DHCP: static IPv4 and not already scoped (unless editing). */
+/** Interfaces that can serve DHCP: static IPv4 and without a server yet (unless editing). */
 const candidates = computed(() =>
   config.interfaces.filter(
     (i) =>
       i.ipv4?.mode === 'static' &&
-      (props.scope?.interface === i.name ||
-        !(config.draft.services?.dhcp?.scopes ?? []).some((s) => s.interface === i.name)),
+      (props.server?.interface === i.name ||
+        !(config.draft.services?.dhcp?.servers ?? []).some((s) => s.interface === i.name)),
   ),
 )
 
@@ -36,10 +36,10 @@ function blank() {
 }
 
 watch(
-  () => [open.value, props.scope],
+  () => [open.value, props.server],
   () => {
     if (!open.value) return
-    const s = props.scope
+    const s = props.server
     form.value = s ? { ...blank(), ...s, dns: (s.dns ?? []).join(', ') } : blank()
     if (!s && candidates.value.length === 1) form.value.interface = candidates.value[0].name
   },
@@ -74,7 +74,7 @@ function save() {
   const dns = parseList(f.dns)
   if (dns.length) out.dns = dns
   if (f.domain) out.domain = f.domain.trim()
-  config.upsertScope(out)
+  config.upsertServer(out)
   open.value = false
 }
 </script>
@@ -82,12 +82,12 @@ function save() {
 <template>
   <AppDialog
     v-model:open="open"
-    :title="scope ? `DHCP on ${scope.interface}` : 'New DHCP scope'"
+    :title="server ? `DHCP on ${server.interface}` : 'New DHCP server'"
     description="One pool per interface. The interface needs a static IPv4 address."
   >
     <form class="space-y-4" @submit.prevent="save">
       <FormField id="sc-if" label="Interface">
-        <select id="sc-if" v-model="form.interface" class="input" required :disabled="!!scope">
+        <select id="sc-if" v-model="form.interface" class="input" required :disabled="!!server">
           <option value="" disabled>Choose</option>
           <option v-for="i in candidates" :key="i.name" :value="i.name">
             {{ i.name }} ({{ i.ipv4.address }})
