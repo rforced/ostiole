@@ -4,7 +4,7 @@ import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import { useConfigStore } from '@/stores/config'
-import V6ScopeDialog from '@/views/services/V6ScopeDialog.vue'
+import V6ScopeDialog from '@/views/services/dhcp/V6ScopeDialog.vue'
 
 const config = useConfigStore()
 const dhcp = computed(() => config.ensureServices().dhcp)

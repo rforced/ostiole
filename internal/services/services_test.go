@@ -137,6 +137,44 @@ func TestRenderUnboundGolden(t *testing.T) {
 	}
 }
 
+// The privacy hardening is a requirement, not an accident of the goldens:
+// those can be regenerated with -update, which would quietly accept a
+// dropped directive. Assert the directives on every input that runs unbound.
+func TestUnboundHardening(t *testing.T) {
+	t.Parallel()
+	required := []string{
+		// id.server and hostname.bind are refused.
+		"hide-identity: yes",
+		// version.server and version.bind are refused.
+		"hide-version: yes",
+		// Send upstreams the least of the name they need to answer.
+		"qname-minimisation: yes",
+	}
+	inputs, _ := filepath.Glob("testdata/*.json")
+	var checked int
+	for _, in := range inputs {
+		cfg := loadConfig(t, in)
+		if !ResolverEnabled(cfg) {
+			continue
+		}
+		checked++
+		u := &Unbound{Dir: UnboundDir, Anchor: UnboundAnchor, CertBundle: "/ca.crt"}
+		files, err := u.Render(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := files.String()
+		for _, want := range required {
+			if !strings.Contains(got, want) {
+				t.Errorf("%s: %q missing from the rendered configuration", filepath.Base(in), want)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no input enabled the resolver, so nothing was checked")
+	}
+}
+
 func TestBundleRoutesFilesToItsBackends(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

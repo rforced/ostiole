@@ -167,7 +167,7 @@ test('schedule a rule, reflect a port forward, and map an address 1:1', async ({
   await applyAndConfirm(page)
 
   // The rendered ruleset carries all three.
-  await page.goto('/system')
+  await page.goto('/system/ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const ruleset = page.locator('pre')
   await expect(ruleset).toContainText('meta day { "Monday", "Tuesday" } meta hour "08:30"-"17:30"')

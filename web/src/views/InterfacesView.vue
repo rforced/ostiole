@@ -6,7 +6,7 @@ import { computed, onMounted, ref } from 'vue'
 import AppTabs from '@/components/AppTabs.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import { api } from '@/lib/api'
-import { useTabHash } from '@/lib/tabs'
+import { usePageTabs } from '@/lib/tabs'
 import { useConfigStore } from '@/stores/config'
 import AggregateDialog from '@/views/interfaces/AggregateDialog.vue'
 import InterfaceDialog from '@/views/interfaces/InterfaceDialog.vue'
@@ -15,7 +15,7 @@ import VlanDialog from '@/views/interfaces/VlanDialog.vue'
 import ZoneDialog from '@/views/interfaces/ZoneDialog.vue'
 
 const config = useConfigStore()
-const tab = useTabHash(['interfaces', 'zones'])
+const { tabs, tab } = usePageTabs()
 const links = ref([])
 const liveError = ref('')
 
@@ -167,14 +167,7 @@ function editZone(z) {
       <RouterLink to="/wizard" class="underline">Run the setup wizard</RouterLink> first.
     </p>
 
-    <AppTabs
-      v-else-if="config.draft"
-      v-model="tab"
-      :tabs="[
-        { value: 'interfaces', label: 'Interfaces' },
-        { value: 'zones', label: 'Zones' },
-      ]"
-    >
+    <AppTabs v-else-if="config.draft" v-model="tab" :tabs="tabs">
       <TabsContent value="interfaces" class="space-y-3">
         <div class="flex gap-2">
           <button type="button" class="btn-secondary" @click="vlanOpen = true">

@@ -125,7 +125,7 @@ test('per-interface drop logging and source blocking', async ({ page }) => {
 
   // The rules land before anything that accepts, and the bogon sets exist
   // whether or not the list has been fetched.
-  await page.goto('/system')
+  await page.goto('/system/ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const text = await page.locator('pre').innerText()
   expect(text).toContain('set private_v4')

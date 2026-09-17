@@ -114,7 +114,7 @@ test('enforcement renders firewall rules that keep clients on this resolver', as
 
   await applyAndConfirm(page)
 
-  await page.goto('/system')
+  await page.goto('/system/ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const ruleset = page.locator('pre')
   await expect(ruleset).toContainText('chain block_dns')

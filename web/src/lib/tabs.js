@@ -28,3 +28,15 @@ export function useTabHash(values) {
     },
   })
 }
+
+/**
+ * The tabs the nav tree declares for the current page, and the open one as
+ * a v-model for AppTabs. A page reads them from here so their labels and
+ * order are written once, next to the page's sidebar entry.
+ *
+ * @returns {{tabs: import('./nav').Tab[], tab: import('vue').WritableComputedRef<string>}}
+ */
+export function usePageTabs() {
+  const tabs = useRoute().meta.tabs ?? []
+  return { tabs, tab: useTabHash(tabs.map((t) => t.value)) }
+}

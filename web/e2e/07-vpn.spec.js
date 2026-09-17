@@ -45,7 +45,7 @@ test('create a WireGuard tunnel with a peer and apply it', async ({ page }) => {
   // The tunnel is a real interface: it shows up with its zone and address.
   await page.reload()
   await expect(page.getByRole('region', { name: 'Tunnel wg0' })).toContainText('10.66.0.1/24')
-  await page.goto('/system')
+  await page.goto('/system/ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   await expect(page.locator('pre')).toContainText('service:wireguard')
 })

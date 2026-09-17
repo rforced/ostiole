@@ -55,7 +55,7 @@ test('enable DHCP with a scope and DNS with an override, then apply', async ({ p
   await expect(page.getByLabel('Upstream resolvers')).toHaveValue('1.1.1.1, 9.9.9.9')
   await sidebar(page, 'DHCP')
   await expect(page.getByLabel('DHCP server enabled')).toBeChecked()
-  await sidebar(page, 'Leases')
+  await page.getByRole('tab', { name: 'Leases' }).click()
   await expect(page.getByText('No leases yet.')).toBeVisible()
 })
 
@@ -90,7 +90,7 @@ test('advertise IPv6 on the LAN and pin a lease from the prefix', async ({ page 
 
   // Navigate inside the SPA: a full page load would drop the draft.
   await page.getByRole('link', { name: 'Services' }).click()
-  await sidebar(page, 'DHCPv6')
+  await page.getByRole('tab', { name: 'IPv6' }).click()
   await page.getByRole('button', { name: 'Advertise IPv6' }).click()
   dialog = page.getByRole('dialog')
   const lanOption = dialog.locator('#v6-if option', { hasText: 'IPv6 static' }).first()
@@ -105,7 +105,7 @@ test('advertise IPv6 on the LAN and pin a lease from the prefix', async ({ page 
   await page.screenshot({ path: shot('42-services-dhcpv6'), fullPage: true })
 
   // The static lease gains an address from the same prefix.
-  await sidebar(page, 'DHCP')
+  await page.getByRole('tab', { name: 'IPv4' }).click()
   await page
     .getByRole('row')
     .filter({ hasText: 'nas' })
@@ -119,7 +119,7 @@ test('advertise IPv6 on the LAN and pin a lease from the prefix', async ({ page 
   await applyAndConfirm(page)
 
   await page.reload()
-  await sidebar(page, 'DHCPv6')
+  await page.getByRole('tab', { name: 'IPv6' }).click()
   await expect(page.getByRole('row').filter({ hasText: '::100 – ::1ff' })).toContainText('6h')
 })
 

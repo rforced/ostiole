@@ -162,13 +162,13 @@ onUnmounted(() => {
           <dt>Revisions</dt>
           <dd>
             {{ overview?.status?.revisions ?? 0 }} ·
-            <RouterLink to="/system" class="link">roll back under System</RouterLink>
+            <RouterLink to="/system/backup" class="link">roll back under System</RouterLink>
           </dd>
           <template v-if="update">
             <dt>Update</dt>
             <dd>
               <span class="font-mono">{{ update.latest }}</span> available ·
-              <RouterLink to="/system" class="link">install under System</RouterLink>
+              <RouterLink to="/system/updates" class="link">install under System</RouterLink>
             </dd>
           </template>
         </dl>

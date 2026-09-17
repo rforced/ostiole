@@ -4,8 +4,8 @@ import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import { useConfigStore } from '@/stores/config'
-import ScopeDialog from '@/views/services/ScopeDialog.vue'
-import StaticLeaseDialog from '@/views/services/StaticLeaseDialog.vue'
+import ScopeDialog from '@/views/services/dhcp/ScopeDialog.vue'
+import StaticLeaseDialog from '@/views/services/dhcp/StaticLeaseDialog.vue'
 
 const config = useConfigStore()
 const dhcp = computed(() => config.ensureServices().dhcp)

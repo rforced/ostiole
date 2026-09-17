@@ -1,78 +1,73 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-import { FIREWALL_PAGES, SERVICE_PAGES } from '@/lib/sections'
+import { NAV } from '@/lib/nav'
 import { useAuthStore } from '@/stores/auth'
 import { useSystemStore } from '@/stores/system'
-import DashboardView from '@/views/DashboardView.vue'
 
 /** Session-scoped flag so "Skip for now" is honoured until the tab closes. */
 const SKIP_WIZARD_KEY = 'ostiole.skipWizard'
 
 /**
- * Entry point for a section that has child pages: the bare path goes to the
- * first child, and a link written for the old tab bar (`/firewall#aliases`)
- * goes to the child that replaced that tab, so bookmarks still land.
+ * Entry point for an item that has pages: the bare path goes to the first
+ * page, and a link written for the old tab bar (`/firewall#aliases`) goes to
+ * the page that replaced that tab, so bookmarks still land.
  *
- * @param {string} base section path, e.g. "/firewall"
- * @param {string[]} children child segments in the order the sidebar lists them
+ * @param {import('@/lib/nav').NavItem} item
  * @returns {(to: import('vue-router').RouteLocation) => {path: string}}
  */
-function sectionEntry(base, children) {
+function sectionEntry(item) {
+  const paths = item.pages.map((p) => p.path)
   return (to) => {
     const want = to.hash.slice(1)
-    return { path: `${base}/${children.includes(want) ? want : children[0]}` }
+    return { path: `${item.to}/${paths.includes(want) ? want : paths[0]}` }
   }
 }
 
-const pagePath = (p) => p.path
+/** Pages that became tabs of another page; their old links still land. */
+const MOVED = [
+  { path: '/services/dhcp6', redirect: { path: '/services/dhcp', hash: '#v6' } },
+  { path: '/services/leases', redirect: { path: '/services/dhcp', hash: '#leases' } },
+]
 
 /**
- * Turns a section page into its child route. The title travels in the route so
- * the section layout can head the page without every page repeating it.
+ * The route for a sidebar item: the one page it is, or the section layout
+ * with its pages as children. Titles and tabs travel in the route meta so the
+ * layout can head a page and the page can find its tabs without either
+ * repeating the nav tree.
  *
- * @param {string} section name prefix, e.g. "firewall"
+ * @param {import('@/lib/nav').NavItem} item
+ * @returns {import('vue-router').RouteRecordRaw}
  */
-const childRoute = (section) => (p) => ({
-  path: p.path,
-  name: `${section}-${p.path}`,
-  component: p.view,
-  meta: { title: p.label },
-})
+function itemRoute(item) {
+  const name = item.to === '/' ? 'dashboard' : item.to.slice(1)
+  if (!item.pages) {
+    return { path: item.to, name, component: item.view, meta: { tabs: item.tabs } }
+  }
+  return {
+    path: item.to,
+    component: () => import('@/views/SectionView.vue'),
+    meta: { section: item },
+    children: [
+      { path: '', redirect: sectionEntry(item) },
+      ...item.pages.map((p) => ({
+        path: p.path,
+        name: `${name}-${p.path}`,
+        component: p.view,
+        meta: {
+          title: p.label,
+          tabs: p.tabs,
+          needsConfig: p.needsConfig ?? item.needsConfig ?? false,
+        },
+      })),
+    ],
+  }
+}
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    { path: '/', name: 'dashboard', component: DashboardView },
-    {
-      path: '/interfaces',
-      name: 'interfaces',
-      component: () => import('@/views/InterfacesView.vue'),
-    },
-    {
-      path: '/firewall',
-      component: () => import('@/views/FirewallView.vue'),
-      children: [
-        { path: '', redirect: sectionEntry('/firewall', FIREWALL_PAGES.map(pagePath)) },
-        ...FIREWALL_PAGES.map(childRoute('firewall')),
-      ],
-    },
-    { path: '/routing', name: 'routing', component: () => import('@/views/RoutingView.vue') },
-    {
-      path: '/services',
-      component: () => import('@/views/ServicesView.vue'),
-      children: [
-        { path: '', redirect: sectionEntry('/services', SERVICE_PAGES.map(pagePath)) },
-        ...SERVICE_PAGES.map(childRoute('services')),
-      ],
-    },
-    { path: '/vpn', name: 'vpn', component: () => import('@/views/VpnView.vue') },
-    { path: '/crons', name: 'crons', component: () => import('@/views/CronsView.vue') },
-    {
-      path: '/diagnostics',
-      name: 'diagnostics',
-      component: () => import('@/views/DiagnosticsView.vue'),
-    },
-    { path: '/system', name: 'system', component: () => import('@/views/SystemView.vue') },
+    ...NAV.map(itemRoute),
+    ...MOVED,
     { path: '/wizard', name: 'wizard', component: () => import('@/views/WizardView.vue') },
     {
       path: '/login',

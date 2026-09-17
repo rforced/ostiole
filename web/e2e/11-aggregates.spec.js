@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { login, shot } from './helpers.js'
+import { login, shot, sidebar } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -68,7 +68,7 @@ test('build a bridge and a bond from the machine s own links', async ({ page }) 
   // The bridge is part of a draft the server accepts: rendering it is how
   // the System page proves that. This test server manages no network
   // units, so it says so rather than showing an empty box.
-  await page.getByRole('link', { name: 'System' }).click()
+  await sidebar(page, 'System', 'Ruleset')
   await page.getByRole('button', { name: 'Render the draft' }).click()
   await expect(page.locator('pre')).toContainText('table inet ostiole')
   await page.getByRole('button', { name: 'Render network units' }).click()
@@ -113,7 +113,7 @@ test('configure a PPPoE session over a spare link', async ({ page }) => {
   await expect(row).toContainText(`PPPoE over ${spare} as someone@isp.example`)
 
   // The draft is valid: the server renders it without complaint.
-  await page.getByRole('link', { name: 'System' }).click()
+  await sidebar(page, 'System', 'Ruleset')
   await page.getByRole('button', { name: 'Render the draft' }).click()
   await expect(page.locator('pre')).toContainText('table inet ostiole')
 

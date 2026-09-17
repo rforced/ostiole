@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import { useTabHash } from '@/lib/tabs'
+import { usePageTabs, useTabHash } from '@/lib/tabs'
 
 const TABS = ['rules', 'aliases', 'nat']
 
@@ -55,5 +55,30 @@ describe('useTabHash', () => {
     wrapper.vm.tab = 'nope'
     await flushPromises()
     expect(router.currentRoute.value.hash).toBe('#nat')
+  })
+})
+
+describe('usePageTabs', () => {
+  it('reads the tabs the route declares and opens the one in the hash', async () => {
+    const Page = {
+      setup() {
+        return usePageTabs()
+      },
+      render() {
+        return h('span', `${this.tabs.map((t) => t.label).join(',')}:${this.tab}`)
+      },
+    }
+    const tabs = [
+      { value: 'v4', label: 'IPv4' },
+      { value: 'v6', label: 'IPv6' },
+    ]
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/services/dhcp', component: Page, meta: { tabs } }],
+    })
+    router.push('/services/dhcp#v6')
+    await router.isReady()
+    const wrapper = mount(Page, { global: { plugins: [router] } })
+    expect(wrapper.text()).toBe('IPv4,IPv6:v6')
   })
 })

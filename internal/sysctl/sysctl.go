@@ -5,8 +5,10 @@ package sysctl
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -29,8 +31,59 @@ var Forwarding = map[string]string{
 	"net/ipv4/tcp_syncookies":                "1",
 }
 
-// ConfFile is where the settings are persisted for systemd-sysctl.
-const ConfFile = "/etc/sysctl.d/90-ostiole.conf"
+// Tuning holds host settings that suit an appliance rather than a desktop.
+//
+// Every key here is scale-free on purpose: a policy or a ratio that means
+// the same thing on a one-core virtual machine and on a 32-core box with
+// 64 GB of memory. Capacity limits are deliberately absent, because the
+// kernel already derives them from installed memory and does it better than
+// any constant could:
+//
+//   - fs.file-max has been effectively unlimited since kernel 5.x, so any
+//     number written here would be a reduction.
+//   - net.netfilter.nf_conntrack_max scales with memory: 7680 on a 1 GB box
+//     against 262144 on a 64 GB one. A fixed value either starves the large
+//     box or hands tens of megabytes of the small one to the conntrack
+//     table. The module is also usually unloaded when sysctls are applied.
+//   - net.core.somaxconn has defaulted to 4096 since kernel 5.4.
+var Tuning = map[string]string{
+	// Reclaim page cache before swapping. A router's working set is small
+	// and paging a packet path back in adds latency where it hurts most.
+	"vm/swappiness": "5",
+	// Keep dentry and inode caches against that lower swappiness. This is a
+	// ratio against page cache pressure, so it holds at any memory size.
+	"vm/vfs_cache_pressure": "50",
+	// Fight bufferbloat on forwarded traffic. Distributions disagree here:
+	// systemd's own default is fq_codel, but cloud images often override it
+	// with fq, which paces a host's own sockets rather than managing queues
+	// of traffic passing through. A gateway wants the active queue
+	// management.
+	"net/core/default_qdisc": "fq_codel",
+}
+
+// optional marks keys a kernel may not have. They are persisted with
+// systemd's "-" prefix so a missing qdisc is not an error at boot.
+var optional = map[string]bool{
+	"net/core/default_qdisc": true,
+}
+
+// All returns every setting Ostiole manages, keyed by /proc/sys path.
+func All() map[string]string {
+	all := make(map[string]string, len(Forwarding)+len(Tuning))
+	maps.Copy(all, Forwarding)
+	maps.Copy(all, Tuning)
+	return all
+}
+
+// ConfFile is where the settings are persisted for systemd-sysctl. The 99
+// prefix matters: systemd-sysctl sorts drop-ins by file name across all of
+// its directories and the last one wins, so a 90- file loses to a vendor
+// drop-in like 90-vultr.conf. 99- is the conventional last word.
+const ConfFile = "/etc/sysctl.d/99-ostiole.conf"
+
+// legacyConfFile is where earlier releases wrote the file. Persist removes
+// it so an upgraded box is not left with two copies disagreeing.
+const legacyConfFile = "/etc/sysctl.d/90-ostiole.conf"
 
 // Applier sets kernel parameters; the engine uses it after every apply.
 type Applier interface {
@@ -54,7 +107,7 @@ func (p Proc) root() string {
 // skipped; other errors are reported together.
 func (p Proc) Apply() error {
 	var errs []error
-	for key, value := range Forwarding {
+	for key, value := range All() {
 		path := filepath.Join(p.root(), key)
 		err := os.WriteFile(path, []byte(value+"\n"), 0o644) //nolint:gosec // sysfs files, mode is ignored
 		if errors.Is(err, os.ErrNotExist) {
@@ -69,34 +122,38 @@ func (p Proc) Apply() error {
 
 // Content renders the persisted sysctl.d file.
 func Content() string {
-	keys := make([]string, 0, len(Forwarding))
-	for k := range Forwarding {
-		keys = append(keys, k)
-	}
-	sortStrings(keys)
 	var b strings.Builder
-	b.WriteString("# Written by ostiole: settings a router needs. Overwritten on install.\n")
-	for _, k := range keys {
-		fmt.Fprintf(&b, "%s = %s\n", strings.ReplaceAll(k, "/", "."), Forwarding[k])
-	}
+	b.WriteString("# Written by ostiole. Overwritten on install and on every apply.\n")
+	section(&b, "# Settings a router needs.", Forwarding)
+	section(&b, "# Appliance tuning. Capacity limits are left to the kernel,\n"+
+		"# which sizes them from installed memory.", Tuning)
 	return b.String()
+}
+
+// section writes one commented group of settings, sorted for a stable file.
+func section(b *strings.Builder, header string, m map[string]string) {
+	fmt.Fprintf(b, "\n%s\n", header)
+	for _, k := range slices.Sorted(maps.Keys(m)) {
+		prefix := ""
+		if optional[k] {
+			prefix = "-"
+		}
+		fmt.Fprintf(b, "%s%s = %s\n", prefix, strings.ReplaceAll(k, "/", "."), m[k])
+	}
 }
 
 // Persist writes the sysctl.d file so the settings hold from boot.
 func Persist(path string) error {
 	if path == "" {
 		path = ConfFile
+		// Drop the file earlier releases wrote, so an upgraded box does not
+		// keep a stale copy that a later drop-in could still win against.
+		if err := os.Remove(legacyConfFile); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec // system config dir
 		return err
 	}
 	return os.WriteFile(path, []byte(Content()), 0o644) //nolint:gosec // world-readable like its siblings
-}
-
-func sortStrings(s []string) {
-	for i := 1; i < len(s); i++ {
-		for j := i; j > 0 && s[j] < s[j-1]; j-- {
-			s[j], s[j-1] = s[j-1], s[j]
-		}
-	}
 }

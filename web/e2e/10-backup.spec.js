@@ -2,13 +2,13 @@ import { readFileSync } from 'node:fs'
 
 import { expect, test } from '@playwright/test'
 
-import { applyAndConfirm, login, shot } from './helpers.js'
+import { applyAndConfirm, login, shot, sidebar } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
 test('download a backup, change the box, then restore it', async ({ page }) => {
   await login(page)
-  await page.goto('/system')
+  await page.goto('/system/backup')
   await expect(page.getByRole('heading', { name: 'Backup and restore' })).toBeVisible()
 
   await page.getByLabel('Note').fill('before the hostname change')
@@ -26,10 +26,11 @@ test('download a backup, change the box, then restore it', async ({ page }) => {
   const originalHostname = saved.config.system.hostname
 
   // Change something, apply it, then put the backup back.
+  await sidebar(page, 'General')
   await page.getByLabel('Hostname').fill('renamed-for-the-test')
   await applyAndConfirm(page)
 
-  await page.goto('/system')
+  await page.goto('/system/backup')
   await page.getByLabel('Backup file').setInputFiles(await file.path())
   const summary = page.getByRole('note').filter({ hasText: 'What it would change' })
   await expect(summary).toContainText('before the hostname change')
@@ -38,6 +39,7 @@ test('download a backup, change the box, then restore it', async ({ page }) => {
   await page.screenshot({ path: shot('80-restore'), fullPage: true })
 
   await summary.getByRole('button', { name: 'Load into draft' }).click()
+  await sidebar(page, 'General')
   await expect(page.getByLabel('Hostname')).toHaveValue(originalHostname)
   await applyAndConfirm(page)
   await page.reload()
@@ -46,7 +48,7 @@ test('download a backup, change the box, then restore it', async ({ page }) => {
 
 test('a file that is not a backup is refused', async ({ page }) => {
   await login(page)
-  await page.goto('/system')
+  await page.goto('/system/backup')
   await page.getByLabel('Backup file').setInputFiles({
     name: 'notes.json',
     mimeType: 'application/json',
@@ -57,7 +59,7 @@ test('a file that is not a backup is refused', async ({ page }) => {
 
 test('a revision can be compared with the running configuration', async ({ page }) => {
   await login(page)
-  await page.goto('/system')
+  await page.goto('/system/backup')
   const history = page.getByRole('region', { name: 'Configuration history' })
   const row = history.getByRole('row').nth(1)
 

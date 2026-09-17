@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 import FormField from '@/components/FormField.vue'
 import { api } from '@/lib/api'
@@ -7,7 +7,16 @@ import { formatBytes } from '@/lib/format'
 import { useConfigStore } from '@/stores/config'
 
 const config = useConfigStore()
-const iface = ref(config.interfaces[0]?.name ?? '')
+const iface = ref('')
+// The page can mount before the configuration has arrived, so the default
+// interface follows the list rather than reading it once.
+watch(
+  () => config.interfaces,
+  (list) => {
+    if (!iface.value && list.length) iface.value = list[0].name
+  },
+  { immediate: true },
+)
 const seconds = ref(10)
 const count = ref(200)
 const address = ref('')

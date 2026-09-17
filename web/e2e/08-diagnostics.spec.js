@@ -1,13 +1,14 @@
 import { expect, test } from '@playwright/test'
 
-import { login, shot } from './helpers.js'
+import { login, shot, sidebar } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
 test('the diagnostics page reports what the firewall can reach', async ({ page }) => {
   await login(page)
   await page.goto('/diagnostics')
-  await expect(page.getByRole('heading', { name: 'Diagnostics' })).toBeVisible()
+  await expect(page).toHaveURL(/\/diagnostics\/ping$/)
+  await expect(page.getByRole('heading', { name: 'Ping and traceroute' })).toBeVisible()
 
   // The loopback always answers, so this works even in a test sandbox.
   await page.getByLabel('Target').fill('127.0.0.1')
@@ -31,8 +32,7 @@ test('the diagnostics page reports what the firewall can reach', async ({ page }
 
 test('the log viewer reads the journal', async ({ page }) => {
   await login(page)
-  await page.goto('/diagnostics')
-  await page.getByRole('tab', { name: 'Logs' }).click()
+  await page.goto('/diagnostics/logs')
   await expect(page.getByLabel('Unit')).toBeVisible()
   await page.getByLabel('Since').fill('-5min')
   await page.getByRole('button', { name: /Refresh|Reading/ }).click()
@@ -47,20 +47,17 @@ test('the log viewer reads the journal', async ({ page }) => {
 
 test('a capture needs an interface and rejects a silly port', async ({ page }) => {
   await login(page)
-  await page.goto('/diagnostics')
-  await page.getByRole('tab', { name: 'Packet capture' }).click()
+  await page.goto('/diagnostics/capture')
   await expect(page.getByLabel('Interface')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Capture' })).toBeEnabled()
 })
 
 test('the connections and neighbour tables read the kernel', async ({ page }) => {
   await login(page)
-  await page.goto('/diagnostics')
-
-  await page.getByRole('tab', { name: 'Connections' }).click()
+  await page.goto('/diagnostics/connections')
   // The dev box tracks connections; a machine without the module says so
   // rather than showing an empty table with no explanation.
-  const states = page.getByRole('tabpanel')
+  const states = page.getByRole('main')
   await expect(states).toContainText(
     /connection\(s\) tracked|connection table|tracking no connections/,
   )
@@ -72,8 +69,8 @@ test('the connections and neighbour tables read the kernel', async ({ page }) =>
   )
   await page.screenshot({ path: shot('45-states'), fullPage: true })
 
-  await page.getByRole('tab', { name: 'ARP and NDP' }).click()
-  const neigh = page.getByRole('tabpanel')
+  await sidebar(page, 'ARP and NDP')
+  const neigh = page.getByRole('main')
   await expect(neigh).toContainText(/ of \d+/)
   await page.getByPlaceholder('address, MAC, or interface').fill('zzz-nothing')
   await expect(neigh).toContainText('Nothing to show.')

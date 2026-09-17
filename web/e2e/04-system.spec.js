@@ -1,41 +1,46 @@
 import { expect, test } from '@playwright/test'
 
-import { PASSWORD, applyAndConfirm, login, shot } from './helpers.js'
+import { PASSWORD, applyAndConfirm, login, shot, sidebar } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
 test('system settings, ruleset view, and rollback via revisions', async ({ page }) => {
   await login(page)
   await page.goto('/system')
-  await expect(page.getByRole('heading', { name: 'System', exact: true })).toBeVisible()
+  await expect(page).toHaveURL(/\/system\/general$/)
+  await expect(page.getByRole('heading', { name: 'General', exact: true })).toBeVisible()
 
   await page.getByLabel('Hostname').fill('edge2')
   await expect(page.getByText('Unapplied changes.')).toBeVisible()
+  // The draft renders on its own page; moving in-app keeps it.
+  await sidebar(page, 'Ruleset')
   await page.getByRole('button', { name: 'Render the draft' }).click()
   await expect(page.getByLabel('draft ruleset')).toContainText('table inet ostiole')
   await page.screenshot({ path: shot('30-system'), fullPage: true })
   await applyAndConfirm(page)
 
   // Roll back to the previous revision through the draft.
-  await page.reload()
+  await page.goto('/system/backup')
   const rows = page
     .getByRole('row')
     .filter({ has: page.getByRole('button', { name: 'Load into draft' }) })
   await expect(rows.first()).toBeVisible()
   await rows.first().getByRole('button', { name: 'Load into draft' }).click()
   await expect(page.getByRole('status')).toContainText('is now the draft')
+  await sidebar(page, 'General')
   await expect(page.getByLabel('Hostname')).toHaveValue('edge')
   await expect(page.getByText('Unapplied changes.')).toBeVisible()
   await page.getByRole('button', { name: 'Discard' }).click()
   await expect(page.getByLabel('Hostname')).toHaveValue('edge2')
 
+  await sidebar(page, 'Ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   await expect(page.getByLabel('confirmed ruleset')).toContainText('anti-lockout:lan')
 })
 
 test('change password and sign in with it', async ({ page }) => {
   await login(page)
-  await page.goto('/system')
+  await page.goto('/system/accounts')
   await page.getByLabel('Current password').fill('nope nope nope')
   await page.getByLabel('New password', { exact: true }).fill('a completely new one')
   await page.getByLabel('Repeat new password').fill('a completely new one')
@@ -59,7 +64,7 @@ test('change password and sign in with it', async ({ page }) => {
   await expect(page).toHaveURL(/\/$/)
 
   // Restore the shared password for any later specs.
-  await page.goto('/system')
+  await page.goto('/system/accounts')
   await page.getByLabel('Current password').fill('a completely new one')
   await page.getByLabel('New password', { exact: true }).fill(PASSWORD)
   await page.getByLabel('Repeat new password').fill(PASSWORD)
@@ -69,7 +74,7 @@ test('change password and sign in with it', async ({ page }) => {
 
 test('the certificate section says there is nothing to manage without HTTPS', async ({ page }) => {
   await login(page)
-  await page.goto('/system')
+  await page.goto('/system/general')
   const section = page.getByRole('region', { name: 'Certificate' })
   await expect(section).toContainText('not serving HTTPS')
   await expect(section.getByRole('button', { name: 'Regenerate self-signed' })).toHaveCount(0)
@@ -77,7 +82,7 @@ test('the certificate section says there is nothing to manage without HTTPS', as
 
 test('mint an API token and use it to scrape metrics', async ({ page, request }) => {
   await login(page)
-  await page.goto('/system')
+  await page.goto('/system/accounts')
   const section = page.getByRole('region', { name: 'Accounts and API tokens' })
   await expect(section.getByRole('row').filter({ hasText: 'admin' })).toContainText('Admin')
 
@@ -118,7 +123,7 @@ test('mint an API token and use it to scrape metrics', async ({ page, request })
 
 test('choose how this box patches itself, and see why some of it is refused', async ({ page }) => {
   await login(page)
-  await page.goto('/system')
+  await page.goto('/system/updates')
 
   const os = page.getByRole('region', { name: 'Operating system updates' })
   await expect(os).toContainText('dnf')
