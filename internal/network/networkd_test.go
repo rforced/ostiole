@@ -449,3 +449,55 @@ func TestRenderLeavesPPPoEToPppd(t *testing.T) {
 		t.Errorf("the link under the session carries addressing:\n%s", parent)
 	}
 }
+
+// The device that carries a shaped interface's incoming traffic is
+// Ostiole's own doing, not an interface anybody configured. Leaving it in
+// the list put it on the interfaces page as "not managed" and, worse, in
+// the setup wizard's picker as a candidate LAN.
+func TestDiscoverHidesTheShapingHelpers(t *testing.T) {
+	t.Parallel()
+	attrs := func(name string) netlink.LinkAttrs { return netlink.LinkAttrs{Name: name} }
+	for _, tc := range []struct {
+		link netlink.Link
+		want bool
+	}{
+		{&netlink.Ifb{LinkAttrs: attrs("ifb-enp1s0")}, true},
+		{&netlink.Ifb{LinkAttrs: attrs("ifb-enp0s3-aca3")}, true},
+		// Somebody else's, reported as honestly as any other unmanaged link.
+		{&netlink.Ifb{LinkAttrs: attrs("ifb0")}, false},
+		// The name alone is not enough; the kind has to match too.
+		{&netlink.Dummy{LinkAttrs: attrs("ifb-enp1s0")}, false},
+		{&netlink.Device{LinkAttrs: attrs("enp1s0")}, false},
+	} {
+		if got := helper(tc.link); got != tc.want {
+			t.Errorf("helper(%s %s) = %v, want %v",
+				tc.link.Type(), tc.link.Attrs().Name, got, tc.want)
+		}
+	}
+}
+
+// And the real thing, where a kernel allows it: a helper device the
+// shaper would create is not in what Discover reports.
+func TestDiscoverHidesAHelperInTheKernel(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("creating a link needs root")
+	}
+	name := model.IFBName("ostdisc0")
+	if err := netlink.LinkAdd(&netlink.Ifb{LinkAttrs: netlink.LinkAttrs{Name: name}}); err != nil {
+		t.Skipf("cannot create an ifb here: %v", err)
+	}
+	t.Cleanup(func() {
+		if l, err := netlink.LinkByName(name); err == nil {
+			_ = netlink.LinkDel(l)
+		}
+	})
+	links, err := Discover()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range links {
+		if l.Name == name {
+			t.Fatalf("%s is still reported as an interface: %+v", name, l)
+		}
+	}
+}
