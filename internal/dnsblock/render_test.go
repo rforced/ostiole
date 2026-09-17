@@ -148,6 +148,31 @@ func TestRenderNeverBlocksThisBoxsOwnNames(t *testing.T) {
 	}
 }
 
+// A domain handed to its own resolver is left alone: blocking a name inside
+// it would half-break a delegation the operator asked for, and a carve-out
+// would fight the server= line dnsmasq gets for the same domain.
+func TestRenderNeverBlocksADelegatedDomain(t *testing.T) {
+	cfg := testConfig()
+	cfg.Services.DNS.DomainOverrides = []model.DomainOverride{{Domain: "ts.net", Servers: []string{"100.100.100.100"}}}
+	c := NewCache(t.TempDir())
+	if err := c.Save(Meta{Name: "ads"}, []string{"ts.net", "log.ts.net", "ads.example.com"}); err != nil {
+		t.Fatal(err)
+	}
+	cfg.Blocking.Lists = []model.BlockList{{Name: "ads", Enabled: true}}
+	out, _ := render(t, cfg, c)
+	for _, name := range []string{"local=/ts.net/", "local=/log.ts.net/"} {
+		if strings.Contains(out, name) {
+			t.Errorf("a delegated name was blocked (%s):\n%s", name, out)
+		}
+	}
+	if strings.Contains(out, "server=/ts.net/#") {
+		t.Errorf("a delegated domain was carved out to upstream:\n%s", out)
+	}
+	if !strings.Contains(out, "local=/ads.example.com/") {
+		t.Errorf("an ordinary name stopped being blocked:\n%s", out)
+	}
+}
+
 func TestRenderDenyAndCanary(t *testing.T) {
 	cfg := testConfig()
 	cfg.Blocking.Deny = []string{"typed.example.com"}

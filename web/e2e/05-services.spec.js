@@ -45,6 +45,14 @@ test('enable DHCP with a scope and DNS with an override, then apply', async ({ p
   await dialog.getByLabel('IP address').fill('192.168.50.30')
   await dialog.getByRole('button', { name: 'Save to draft' }).click()
   await expect(page.getByRole('row').filter({ hasText: 'printer' })).toContainText('192.168.50.30')
+
+  // A tailnet answers its own names, so that domain goes straight to it.
+  await page.getByRole('button', { name: 'Add domain' }).click()
+  dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Domain').fill('ts.net')
+  await dialog.getByLabel('Resolvers').fill('100.100.100.100')
+  await dialog.getByRole('button', { name: 'Save to draft' }).click()
+  await expect(page.getByRole('row').filter({ hasText: 'ts.net' })).toContainText('100.100.100.100')
   await page.screenshot({ path: shot('41-services-dns'), fullPage: true })
 
   await applyAndConfirm(page)
@@ -53,6 +61,7 @@ test('enable DHCP with a scope and DNS with an override, then apply', async ({ p
   await page.reload()
   await expect(page).toHaveURL(/\/services\/dns$/)
   await expect(page.getByLabel('Upstream resolvers')).toHaveValue('1.1.1.1, 9.9.9.9')
+  await expect(page.getByRole('row').filter({ hasText: 'ts.net' })).toContainText('100.100.100.100')
   await sidebar(page, 'DHCP')
   await expect(page.getByLabel('DHCP server enabled')).toBeChecked()
   await page.getByRole('tab', { name: 'Leases' }).click()

@@ -454,6 +454,17 @@
           "hostname": "printer",
           "ip": "192.168.1.60"
         }
+      ],
+      "domainOverrides": [
+        {
+          "domain": "ts.net",
+          "servers": ["100.100.100.100"],
+          "description": "tailnet MagicDNS"
+        },
+        {
+          "domain": "corp.example",
+          "servers": ["10.9.0.53", "10.9.0.54#5353"]
+        }
       ]
     }
   }

@@ -57,6 +57,8 @@ const verdict = computed(() => {
       return `Not blocked: the allow list has ${f.matched}.`
     case 'never':
       return `Not blocked: this box answers for ${f.matched} itself.`
+    case 'delegated':
+      return `Not blocked: ${f.matched} is a domain override, answered by its own resolvers.`
     case 'off':
       return 'Not blocked: DNS blocking is off.'
     case 'deny':

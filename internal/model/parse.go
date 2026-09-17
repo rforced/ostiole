@@ -85,6 +85,31 @@ func ParseIP(s string) (netip.Addr, error) {
 	return a, nil
 }
 
+// NormalizeDomain lowercases a domain and drops the space around it and the
+// trailing dot, so the same name written three ways compares equal.
+func NormalizeDomain(s string) string {
+	return strings.ToLower(strings.Trim(strings.TrimSpace(s), "."))
+}
+
+// ParseDNSServer accepts a resolver in dnsmasq's syntax: a bare IP, or an
+// IP and a port joined by a hash, like 10.0.0.1#5353. The hash rather than
+// a colon is what lets an IPv6 address carry a port without brackets.
+func ParseDNSServer(s string) (netip.AddrPort, error) {
+	s = strings.TrimSpace(s)
+	host, port, found := strings.Cut(s, "#")
+	a, err := netip.ParseAddr(strings.TrimSpace(host))
+	if err != nil {
+		return netip.AddrPort{}, fmt.Errorf("invalid DNS server %q: want an IP, optionally with #port", s)
+	}
+	p := uint16(53)
+	if found {
+		if p, err = parsePort(port); err != nil {
+			return netip.AddrPort{}, fmt.Errorf("invalid DNS server %q: %w", s, err)
+		}
+	}
+	return netip.AddrPortFrom(a, p), nil
+}
+
 // ParseClock reads "HH:MM" and returns minutes since midnight.
 func ParseClock(s string) (int, error) {
 	hh, mm, found := strings.Cut(strings.TrimSpace(s), ":")

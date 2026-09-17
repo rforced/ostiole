@@ -163,6 +163,18 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 				fmt.Fprintf(&b, "server=%s\n", u)
 			}
 		}
+		// Domain overrides beat the servers above whatever the order,
+		// because dnsmasq answers from the longest matching domain. That
+		// holds with unbound behind us as well: a delegated domain goes
+		// straight to its own resolver instead of through a recursor that
+		// would never find it, which is the whole point of the override.
+		delegated := append([]model.DomainOverride(nil), svc.DNS.DomainOverrides...)
+		sort.Slice(delegated, func(i, j int) bool { return delegated[i].Domain < delegated[j].Domain })
+		for _, d := range delegated {
+			for _, s := range d.Servers {
+				fmt.Fprintf(&b, "server=/%s/%s\n", model.NormalizeDomain(d.Domain), strings.TrimSpace(s))
+			}
+		}
 		if svc.DNS.Domain != "" {
 			fmt.Fprintf(&b, "domain=%s\nlocal=/%s/\nexpand-hosts\n", svc.DNS.Domain, svc.DNS.Domain)
 		}

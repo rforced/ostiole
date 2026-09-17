@@ -339,6 +339,21 @@ export const useConfigStore = defineStore('config', () => {
     )
   }
 
+  function upsertDomainOverride(override, previousDomain = override.domain) {
+    const dns = ensureServices().dns
+    const list = dns.domainOverrides ?? (dns.domainOverrides = [])
+    const idx = list.findIndex((d) => d.domain.toLowerCase() === previousDomain.toLowerCase())
+    if (idx === -1) list.push(clone(override))
+    else list[idx] = clone(override)
+  }
+
+  function removeDomainOverride(domain) {
+    const dns = ensureServices().dns
+    dns.domainOverrides = (dns.domainOverrides ?? []).filter(
+      (d) => d.domain.toLowerCase() !== domain.toLowerCase(),
+    )
+  }
+
   // ---- gateways --------------------------------------------------------
 
   const gateways = computed(() => draft.value?.gateways ?? [])
@@ -539,5 +554,7 @@ export const useConfigStore = defineStore('config', () => {
     removeStaticLease,
     upsertHostOverride,
     removeHostOverride,
+    upsertDomainOverride,
+    removeDomainOverride,
   }
 })

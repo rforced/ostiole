@@ -36,6 +36,11 @@ type Options struct {
 	// blocklist but never carved out, because sending the local domain
 	// upstream would be worse than blocking it.
 	Never []string `json:"never,omitempty"`
+	// Delegated are the domains handed to resolvers of their own. They are
+	// left alone the same way Never is, and for the same reason a carve-out
+	// would be wrong: dnsmasq already has a server line for the domain, and
+	// a second entry for it would fight that one.
+	Delegated []string `json:"delegated,omitempty"`
 	// Canary answers the name Firefox uses to ask whether it should turn
 	// on DNS over HTTPS by itself.
 	Canary bool `json:"firefoxCanary,omitempty"`
@@ -47,13 +52,14 @@ type Options struct {
 func OptionsFor(cfg *model.Config) Options {
 	b := cfg.Blocking
 	o := Options{
-		Enabled: cfg.BlockingActive(),
-		Mode:    b.BlockMode(),
-		Allow:   b.Allow,
-		Deny:    b.Deny,
-		Never:   cfg.NeverBlocked(),
-		Canary:  b.Enforce.FirefoxCanary,
-		Max:     b.MaxDomains,
+		Enabled:   cfg.BlockingActive(),
+		Mode:      b.BlockMode(),
+		Allow:     b.Allow,
+		Deny:      b.Deny,
+		Never:     cfg.NeverBlocked(),
+		Delegated: cfg.DelegatedDomains(),
+		Canary:    b.Enforce.FirefoxCanary,
+		Max:       b.MaxDomains,
 	}
 	for _, l := range b.EnabledLists() {
 		o.Lists = append(o.Lists, l.Name)
@@ -104,9 +110,11 @@ func Render(w io.Writer, o Options, c *Cache) (Result, error) {
 		ceiling = DefaultMaxDomains
 	}
 
-	// Everything allowed, as reversed keys: what the operator allowed, and
-	// the names this box answers for itself.
-	allowed := reducedKeys(append(normalizeAll(o.Allow), normalizeAll(o.Never)...))
+	// Everything allowed, as reversed keys: what the operator allowed, the
+	// names this box answers for itself, and the domains it has handed to
+	// resolvers of their own.
+	untouchable := append(normalizeAll(o.Never), normalizeAll(o.Delegated)...)
+	allowed := reducedKeys(append(normalizeAll(o.Allow), untouchable...))
 
 	bw := bufio.NewWriterSize(w, 64<<10)
 	if _, err := bw.WriteString(Header); err != nil {
@@ -124,11 +132,12 @@ func Render(w io.Writer, o Options, c *Cache) (Result, error) {
 	// order, which is what makes them work under a blocked parent.
 	//
 	// Only what the operator allowed is written out. The names the box
-	// answers for are filtered from the blocklist instead: a carve-out for
-	// the local domain would send its queries upstream, which is the
-	// opposite of what it is for.
+	// answers for, and the domains it has delegated, are filtered from the
+	// blocklist instead: a carve-out for the local domain would send its
+	// queries upstream, which is the opposite of what it is for, and one
+	// for a delegated domain would fight its own server line.
 	never := map[string]bool{}
-	for _, n := range normalizeAll(o.Never) {
+	for _, n := range untouchable {
 		never[n] = true
 	}
 	for _, a := range reducedKeys(normalizeAll(o.Allow)) {

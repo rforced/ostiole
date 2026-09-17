@@ -15,6 +15,9 @@ localise-queries
 listen-address=127.0.0.1
 server=1.1.1.1
 server=2606:4700:4700::1111
+server=/corp.example/10.9.0.53
+server=/corp.example/10.9.0.54#5353
+server=/ts.net/100.100.100.100
 domain=lan
 local=/lan/
 expand-hosts

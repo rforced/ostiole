@@ -15,6 +15,7 @@ localise-queries
 listen-address=127.0.0.1
 server=127.0.0.53#53
 proxy-dnssec
+server=/ts.net/100.100.100.100
 domain=lan
 local=/lan/
 expand-hosts

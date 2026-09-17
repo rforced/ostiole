@@ -177,14 +177,14 @@ func (c *Config) NeverBlocked() []string {
 	seen := map[string]bool{}
 	var out []string
 	add := func(name string) {
-		name = strings.ToLower(strings.Trim(strings.TrimSpace(name), "."))
+		name = NormalizeDomain(name)
 		if name == "" || seen[name] {
 			return
 		}
 		seen[name] = true
 		out = append(out, name)
 	}
-	domain := strings.ToLower(strings.Trim(strings.TrimSpace(c.Services.DNS.Domain), "."))
+	domain := NormalizeDomain(c.Services.DNS.Domain)
 	// A bare name is also answered with the local domain on the end:
 	// dnsmasq is told expand-hosts, so "printer" resolves as "printer.lan"
 	// too, and blocking either one takes the host away.
@@ -201,6 +201,23 @@ func (c *Config) NeverBlocked() []string {
 	}
 	for _, l := range c.Services.DHCP.StaticLeases {
 		addBoth(l.Hostname)
+	}
+	return out
+}
+
+// DelegatedDomains are the domains handed to resolvers of their own. They
+// are not blocked either: the operator has said who answers them, and a
+// list that took one away would break a delegation that was asked for.
+func (c *Config) DelegatedDomains() []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, d := range c.Services.DNS.DomainOverrides {
+		name := NormalizeDomain(d.Domain)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, name)
 	}
 	return out
 }

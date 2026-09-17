@@ -18,7 +18,8 @@ type Finding struct {
 	// name that was asked about.
 	Matched string `json:"matched,omitempty"`
 	// Reason is what kind of entry that was: a list, the deny list, the
-	// allow list, a name this box answers for, or the Firefox canary.
+	// allow list, a name this box answers for, a domain it has delegated,
+	// or the Firefox canary.
 	Reason string `json:"reason,omitempty"`
 	// Lists names every enabled list that carries it, so "which one do I
 	// turn off" has an answer.
@@ -27,13 +28,14 @@ type Finding struct {
 
 // Reasons a name is or is not blocked.
 const (
-	ReasonList     = "list"
-	ReasonDeny     = "deny"
-	ReasonAllow    = "allow"
-	ReasonNever    = "never"
-	ReasonCanary   = "canary"
-	ReasonNotAName = "not-a-name"
-	ReasonOff      = "off"
+	ReasonList      = "list"
+	ReasonDeny      = "deny"
+	ReasonAllow     = "allow"
+	ReasonNever     = "never"
+	ReasonDelegated = "delegated"
+	ReasonCanary    = "canary"
+	ReasonNotAName  = "not-a-name"
+	ReasonOff       = "off"
 )
 
 // Lookup works out what this box would do with a name, and why.
@@ -48,9 +50,14 @@ func Lookup(o Options, c *Cache, name string) Finding {
 	key := reverseLabels(target)
 
 	// What this box answers for itself is never blocked, whatever a list
-	// says, and the operator's allow list comes next.
+	// says. Nor is a domain it has handed to resolvers of its own. The
+	// operator's allow list comes next.
 	if m, hit := coveringEntry(o.Never, key); hit {
 		f.Reason, f.Matched = ReasonNever, m
+		return f
+	}
+	if m, hit := coveringEntry(o.Delegated, key); hit {
+		f.Reason, f.Matched = ReasonDelegated, m
 		return f
 	}
 	if m, hit := coveringEntry(o.Allow, key); hit {

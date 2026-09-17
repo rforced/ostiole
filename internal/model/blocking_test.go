@@ -37,6 +37,25 @@ func TestDenyingAParentOfOurOwnNameIsRefused(t *testing.T) {
 	}
 }
 
+func TestDenyingADelegatedDomainIsRefused(t *testing.T) {
+	c := starterForBlocking()
+	c.Services.DNS.DomainOverrides = []DomainOverride{{Domain: "ts.net", Servers: []string{"100.100.100.100"}}}
+	c.Blocking.Deny = []string{"net"}
+	err := c.Validate()
+	if err == nil {
+		t.Fatal("denying a parent of a delegated domain was accepted")
+	}
+	if !strings.Contains(err.Error(), "undo the delegation") {
+		t.Errorf("unhelpful error: %v", err)
+	}
+	// A name inside the delegation is not a contradiction in itself; the
+	// render drops it because the whole subtree belongs to another resolver.
+	c.Blocking.Deny = []string{"ads.example.com"}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("an unrelated name was refused: %v", err)
+	}
+}
+
 func TestBlockingNeedsTheDNSServer(t *testing.T) {
 	c := starterForBlocking()
 	c.Services.DNS.Enabled = false

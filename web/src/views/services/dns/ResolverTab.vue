@@ -72,28 +72,62 @@ function toggleInterface(name, on) {
   dns.value.interfaces = [...list]
 }
 
-const editing = ref(null)
-const open = ref(false)
-const form = ref({ hostname: '', ip: '', description: '' })
+const hostEditing = ref(null)
+const hostOpen = ref(false)
+const hostForm = ref({ hostname: '', ip: '', description: '' })
 watch(
-  () => [open.value, editing.value],
+  () => [hostOpen.value, hostEditing.value],
   () => {
-    if (open.value) form.value = { hostname: '', ip: '', description: '', ...(editing.value ?? {}) }
+    if (hostOpen.value)
+      hostForm.value = { hostname: '', ip: '', description: '', ...(hostEditing.value ?? {}) }
   },
 )
-function add() {
-  editing.value = null
-  open.value = true
+function addHost() {
+  hostEditing.value = null
+  hostOpen.value = true
 }
-function edit(h) {
-  editing.value = h
-  open.value = true
+function editHost(h) {
+  hostEditing.value = h
+  hostOpen.value = true
 }
-function save() {
-  const out = { hostname: form.value.hostname.trim(), ip: form.value.ip.trim() }
-  if (form.value.description) out.description = form.value.description
-  config.upsertHostOverride(out, editing.value?.hostname ?? out.hostname)
-  open.value = false
+function saveHost() {
+  const out = { hostname: hostForm.value.hostname.trim(), ip: hostForm.value.ip.trim() }
+  if (hostForm.value.description) out.description = hostForm.value.description
+  config.upsertHostOverride(out, hostEditing.value?.hostname ?? out.hostname)
+  hostOpen.value = false
+}
+
+const domainEditing = ref(null)
+const domainOpen = ref(false)
+const domainForm = ref({ domain: '', servers: '', description: '' })
+watch(
+  () => [domainOpen.value, domainEditing.value],
+  () => {
+    if (!domainOpen.value) return
+    const d = domainEditing.value
+    domainForm.value = {
+      domain: d?.domain ?? '',
+      servers: (d?.servers ?? []).join(', '),
+      description: d?.description ?? '',
+    }
+  },
+)
+function addDomain() {
+  domainEditing.value = null
+  domainOpen.value = true
+}
+function editDomain(d) {
+  domainEditing.value = d
+  domainOpen.value = true
+}
+function saveDomain() {
+  const out = {
+    domain: domainForm.value.domain.trim(),
+    servers: parseList(domainForm.value.servers),
+  }
+  if (domainForm.value.description) out.description = domainForm.value.description
+  config.upsertDomainOverride(out, domainEditing.value?.domain ?? out.domain)
+  domainOpen.value = false
 }
 </script>
 
@@ -184,8 +218,8 @@ function save() {
 
     <section class="space-y-3" aria-labelledby="hosts-title">
       <div class="flex items-center gap-3">
-        <h2 id="hosts-title" class="font-medium">Host overrides</h2>
-        <button type="button" class="btn-secondary" @click="add">
+        <h2 id="hosts-title" class="font-medium">Host Overrides</h2>
+        <button type="button" class="btn-secondary" @click="addHost">
           <Plus class="mr-1 size-4" aria-hidden="true" /> Add host
         </button>
       </div>
@@ -210,7 +244,7 @@ function save() {
               <td class="font-mono text-xs">{{ h.ip }}</td>
               <td>{{ h.description }}</td>
               <td class="text-right whitespace-nowrap">
-                <button type="button" class="link" @click="edit(h)">Edit</button>
+                <button type="button" class="link" @click="editHost(h)">Edit</button>
                 <ConfirmButton
                   class="ml-3"
                   label="Delete"
@@ -224,16 +258,65 @@ function save() {
       </div>
     </section>
 
+    <section class="space-y-3" aria-labelledby="domains-title">
+      <div class="flex items-center gap-3">
+        <h2 id="domains-title" class="font-medium">Domain Overrides</h2>
+        <button type="button" class="btn-secondary" @click="addDomain">
+          <Plus class="mr-1 size-4" aria-hidden="true" /> Add domain
+        </button>
+      </div>
+      <p class="max-w-2xl text-sm text-neutral-500">
+        A domain and everything under it goes to resolvers of its own instead of upstream, which is
+        how a split-horizon zone is reached: a tailnet answers its own
+        <code class="font-mono">ts.net</code> names on
+        <code class="font-mono">100.100.100.100</code>. While those resolvers are out of reach the
+        domain stops answering; it does not fall back upstream.
+      </p>
+      <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Domain</th>
+              <th>Resolvers</th>
+              <th>Description</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="!(dns.domainOverrides ?? []).length">
+              <td colspan="4" class="text-neutral-500">
+                No overrides. Every domain goes to the resolver above.
+              </td>
+            </tr>
+            <tr v-for="d in dns.domainOverrides" :key="d.domain">
+              <td class="font-mono text-xs">{{ d.domain }}</td>
+              <td class="font-mono text-xs">{{ (d.servers ?? []).join(', ') }}</td>
+              <td>{{ d.description }}</td>
+              <td class="text-right whitespace-nowrap">
+                <button type="button" class="link" @click="editDomain(d)">Edit</button>
+                <ConfirmButton
+                  class="ml-3"
+                  label="Delete"
+                  confirm-label="Delete override?"
+                  @confirm="config.removeDomainOverride(d.domain)"
+                />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <AppDialog
-      v-model:open="open"
-      :title="editing ? `Host ${editing.hostname}` : 'New host override'"
+      v-model:open="hostOpen"
+      :title="hostEditing ? `Host ${hostEditing.hostname}` : 'New host override'"
     >
-      <form class="space-y-4" @submit.prevent="save">
+      <form class="space-y-4" @submit.prevent="saveHost">
         <div class="grid gap-4 sm:grid-cols-2">
           <FormField id="ho-name" label="Hostname">
             <input
               id="ho-name"
-              v-model="form.hostname"
+              v-model="hostForm.hostname"
               class="input font-mono"
               required
               spellcheck="false"
@@ -242,7 +325,7 @@ function save() {
           <FormField id="ho-ip" label="IP address">
             <input
               id="ho-ip"
-              v-model="form.ip"
+              v-model="hostForm.ip"
               class="input font-mono"
               required
               spellcheck="false"
@@ -250,10 +333,49 @@ function save() {
           </FormField>
         </div>
         <FormField id="ho-desc" label="Description">
-          <input id="ho-desc" v-model="form.description" class="input" />
+          <input id="ho-desc" v-model="hostForm.description" class="input" />
         </FormField>
         <div class="flex justify-end gap-2 pt-2">
-          <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+          <button type="button" class="btn-secondary" @click="hostOpen = false">Cancel</button>
+          <button type="submit" class="btn-primary">Save to draft</button>
+        </div>
+      </form>
+    </AppDialog>
+
+    <AppDialog
+      v-model:open="domainOpen"
+      :title="domainEditing ? `Domain ${domainEditing.domain}` : 'New domain override'"
+    >
+      <form class="space-y-4" @submit.prevent="saveDomain">
+        <FormField id="do-domain" label="Domain" hint="Subdomains follow it, e.g. ts.net.">
+          <input
+            id="do-domain"
+            v-model="domainForm.domain"
+            class="input font-mono"
+            required
+            spellcheck="false"
+            placeholder="ts.net"
+          />
+        </FormField>
+        <FormField
+          id="do-servers"
+          label="Resolvers"
+          hint="Comma separated. Add #port for anything but 53."
+        >
+          <input
+            id="do-servers"
+            v-model="domainForm.servers"
+            class="input font-mono"
+            required
+            spellcheck="false"
+            placeholder="100.100.100.100"
+          />
+        </FormField>
+        <FormField id="do-desc" label="Description">
+          <input id="do-desc" v-model="domainForm.description" class="input" />
+        </FormField>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" class="btn-secondary" @click="domainOpen = false">Cancel</button>
           <button type="submit" class="btn-primary">Save to draft</button>
         </div>
       </form>

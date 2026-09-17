@@ -252,6 +252,50 @@ func TestValidateServices(t *testing.T) {
 	}
 }
 
+func TestValidateDomainOverrides(t *testing.T) {
+	t.Parallel()
+	cfg := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0"})
+	cfg.Services.DNS = DNSServer{Enabled: true, Upstreams: []string{"1.1.1.1"}, Domain: "lan",
+		DomainOverrides: []DomainOverride{
+			{Domain: "ts.net", Servers: []string{"100.100.100.100"}},
+			{Domain: "TS.net.", Servers: []string{"100.100.100.100"}}, // the same domain, written another way
+			{Domain: "lan", Servers: []string{"10.0.0.53"}},           // ours to answer
+			{Domain: "corp.example", Servers: []string{"10.0.0.53#0"}},
+			{Domain: "no domain at all", Servers: nil},
+		}}
+	err := cfg.Validate()
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("err = %v", err)
+	}
+	got := map[string]bool{}
+	for _, i := range ve.Issues {
+		got[i.Path] = true
+	}
+	for _, p := range []string{
+		"services.dns.domainOverrides[1].domain",
+		"services.dns.domainOverrides[2].domain",
+		"services.dns.domainOverrides[3].servers[0]",
+		"services.dns.domainOverrides[4].domain",
+		"services.dns.domainOverrides[4].servers",
+	} {
+		if !got[p] {
+			t.Errorf("missing issue at %s (have %v)", p, ve.Issues)
+		}
+	}
+
+	// What a tailnet needs, a resolver on another port, and a delegation of
+	// one name under the local domain are all fine.
+	cfg.Services.DNS.DomainOverrides = []DomainOverride{
+		{Domain: "ts.net", Servers: []string{"100.100.100.100"}},
+		{Domain: "corp.example", Servers: []string{"10.0.0.53#5353", "2001:db8::53"}},
+		{Domain: "sub.lan", Servers: []string{"10.0.0.53"}},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("good overrides were refused: %v", err)
+	}
+}
+
 func TestValidateDHCPv6(t *testing.T) {
 	t.Parallel()
 	cfg := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0"})

@@ -1093,10 +1093,11 @@ type DNSServer struct {
 	Enabled bool `json:"enabled"`
 	// Interfaces to listen on; empty means every interface that is not in
 	// an external zone.
-	Interfaces    []string       `json:"interfaces,omitempty"`
-	Upstreams     []string       `json:"upstreams,omitempty"`
-	Domain        string         `json:"domain,omitempty"`
-	HostOverrides []HostOverride `json:"hostOverrides,omitempty"`
+	Interfaces      []string         `json:"interfaces,omitempty"`
+	Upstreams       []string         `json:"upstreams,omitempty"`
+	Domain          string           `json:"domain,omitempty"`
+	HostOverrides   []HostOverride   `json:"hostOverrides,omitempty"`
+	DomainOverrides []DomainOverride `json:"domainOverrides,omitempty"`
 	// Resolver decides who answers names this box does not know.
 	Resolver ResolverMode `json:"resolver,omitempty"`
 	// TLSUpstreams are the resolvers used in ResolverTLS mode.
@@ -1131,4 +1132,15 @@ type HostOverride struct {
 	Hostname    string `json:"hostname"`
 	IP          string `json:"ip"`
 	Description string `json:"description,omitempty"`
+}
+
+// DomainOverride sends one domain, and everything under it, to resolvers of
+// its own instead of the upstreams. That is how a split-horizon zone is
+// reached: a tailnet answers its own ts.net names on 100.100.100.100, and
+// no amount of asking the internet will find them. Servers may carry a
+// port, written 10.0.0.1#5353.
+type DomainOverride struct {
+	Domain      string   `json:"domain"`
+	Servers     []string `json:"servers"`
+	Description string   `json:"description,omitempty"`
 }

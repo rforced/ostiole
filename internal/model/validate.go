@@ -502,9 +502,10 @@ func (v *validator) blocking(c *Config, aliases map[string]AliasType) {
 	}
 
 	never := c.NeverBlocked()
+	delegated := c.DelegatedDomains()
 	for i, d := range b.Deny {
 		path := fmt.Sprintf("blocking.deny[%d]", i)
-		v.blockedName(path, d)
+		v.domainName(path, d)
 		// Blocking is by subtree, so denying a parent of one of this box's
 		// own names takes it away just as surely as denying it outright.
 		for _, n := range never {
@@ -513,9 +514,15 @@ func (v *validator) blocking(c *Config, aliases map[string]AliasType) {
 				break
 			}
 		}
+		for _, n := range delegated {
+			if CoversName(d, n) {
+				v.add(path, "%q covers %q, a domain override; blocking it would undo the delegation", d, n)
+				break
+			}
+		}
 	}
 	for i, d := range b.Allow {
-		v.blockedName(fmt.Sprintf("blocking.allow[%d]", i), d)
+		v.domainName(fmt.Sprintf("blocking.allow[%d]", i), d)
 	}
 
 	for _, ref := range []struct{ field, name string }{
@@ -541,10 +548,10 @@ func (v *validator) blocking(c *Config, aliases map[string]AliasType) {
 	}
 }
 
-// blockedName checks one name written by hand into the allow or deny list.
-// A trailing dot is accepted and ignored, because that is how a resolver
-// writes a fully qualified name.
-func (v *validator) blockedName(path, name string) {
+// domainName checks one name written by hand: an allow or deny entry, or a
+// domain override. A trailing dot is accepted and ignored, because that is
+// how a resolver writes a fully qualified name.
+func (v *validator) domainName(path, name string) {
 	n := strings.Trim(strings.TrimSpace(name), ".")
 	switch {
 	case n == "":
@@ -693,6 +700,29 @@ func (v *validator) services(c *Config, ifaces map[string]bool) {
 		names[strings.ToLower(h.Hostname)] = true
 		if _, err := ParseIP(h.IP); err != nil {
 			v.add(path+".ip", "%v", err)
+		}
+	}
+	local := NormalizeDomain(dns.Domain)
+	domains := map[string]bool{}
+	for i, d := range dns.DomainOverrides {
+		path := fmt.Sprintf("services.dns.domainOverrides[%d]", i)
+		v.domainName(path+".domain", d.Domain)
+		if name := NormalizeDomain(d.Domain); name != "" {
+			switch {
+			case domains[name]:
+				v.add(path+".domain", "duplicate domain %q", d.Domain)
+			case name == local:
+				v.add(path+".domain", "%q is the local domain, which this box answers itself; override a name under it instead", d.Domain)
+			}
+			domains[name] = true
+		}
+		if len(d.Servers) == 0 {
+			v.add(path+".servers", "at least one resolver is required; without one the domain has nowhere to go")
+		}
+		for j, s := range d.Servers {
+			if _, err := ParseDNSServer(s); err != nil {
+				v.add(fmt.Sprintf("%s.servers[%d]", path, j), "%v", err)
+			}
 		}
 	}
 }
