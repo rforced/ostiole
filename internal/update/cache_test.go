@@ -93,7 +93,7 @@ func TestAFailedCheckIsRecorded(t *testing.T) {
 }
 
 // A manager with nowhere to write still works; it simply remembers
-// nothing, which is what a test and a locked-down box both get.
+// nothing, which is what a test and a locked-down router both get.
 func TestACacheLessManagerStillChecks(t *testing.T) {
 	t.Parallel()
 	srv := releaseServer(t, []map[string]any{release("v0.4.0", "")})

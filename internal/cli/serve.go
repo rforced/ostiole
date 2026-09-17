@@ -21,6 +21,7 @@ import (
 	"github.com/rforced/ostiole/internal/feeds"
 	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/gateway"
+	"github.com/rforced/ostiole/internal/host"
 	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
@@ -184,6 +185,18 @@ at your own.`,
 				// The live queue figures need no privileges to read, so a
 				// dev run gets the page too; without tc it says so.
 				Shaping: g.shaper(),
+				// The operating system underneath: which packages it still needs,
+				// what competes with Ostiole on it, and what an older firewall
+				// left in the kernel. Reported everywhere, acted on only
+				// as root, because none of these steps are possible
+				// otherwise.
+				Host: host.Deps{
+					Root:    os.Geteuid() == 0,
+					Backend: g.netBackend,
+					NFT:     g.nftBin,
+					Dir:     g.configDir,
+					Log:     slog.Default(),
+				},
 			}
 			go refresher.Run(ctx)
 			go blocklists.Run(ctx)

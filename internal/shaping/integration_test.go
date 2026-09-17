@@ -142,7 +142,10 @@ func TestMarksLandInTheRightTiers(t *testing.T) {
 		// One ping per tier, marked the way the firewall marks a flow.
 		lines = append(lines, fmt.Sprintf("ping -c 1 -W 1 -m %d 127.0.0.1 >/dev/null", mark))
 	}
-	lines = append(lines, "echo ===QDISCS===", "tc -s -j qdisc show dev lo", "")
+	// Every device, the way the live view asks: `tc ... show dev lo` leaves
+	// the device out of its own JSON on iproute2 6.17, and the parser keys
+	// the queues by device.
+	lines = append(lines, "echo ===QDISCS===", "tc -s -j qdisc show", "")
 	out := inNamespace(t, strings.Join(lines, "\n"))
 
 	stats, err := ParseQdiscs(section(t, out, "QDISCS"))

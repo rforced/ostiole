@@ -689,6 +689,38 @@ export const useConfigStore = defineStore('config', () => {
     Object.assign(ensureUpdates()[which], patch)
   }
 
+  // ---- protection ------------------------------------------------------
+
+  /** The edge defence, or an empty one on a draft that has never had it. */
+  const protection = computed(() => draft.value?.protection ?? {})
+
+  /**
+   * Turn one defence on or off. A limit is an object or nothing at all:
+   * the renderer reads "is it there" rather than an enabled flag, so
+   * switching one off removes it.
+   *
+   * @param {"synFlood"|"icmpFlood"|"portScan"} which
+   * @param {object|null} value the limit, or null to switch it off
+   */
+  function setDefence(which, value) {
+    const p = draft.value.protection ?? (draft.value.protection = {})
+    if (value === null) {
+      delete p[which]
+      return
+    }
+    p[which] = { ...(p[which] ?? {}), ...clone(value) }
+  }
+
+  /** The zones defended; an empty list means every external zone. */
+  function setProtectedZones(names) {
+    const p = draft.value.protection ?? (draft.value.protection = {})
+    if (!names.length) {
+      delete p.zones
+      return
+    }
+    p.zones = [...names]
+  }
+
   // ---- crons -----------------------------------------------------------
 
   const crons = computed(() => draft.value?.crons ?? [])
@@ -812,6 +844,8 @@ export const useConfigStore = defineStore('config', () => {
         // Holding back a busy host is a priority decision, so it is edited
         // and shown where the other priorities are.
         return path.includes('.busy') ? '/firewall/shaping' : '/interfaces'
+      case 'protection':
+        return '/firewall/protection'
       case 'rules':
         return '/firewall/rules'
       case 'aliases':
@@ -878,6 +912,9 @@ export const useConfigStore = defineStore('config', () => {
     interfaces,
     aliases,
     rules,
+    protection,
+    setDefence,
+    setProtectedZones,
     load,
     discard,
     markSaved,

@@ -100,6 +100,34 @@ func (a apt) UpgradeArgv(security bool, exclude []string, pending Pending) []str
 	return append(argv, names(wanted)...)
 }
 
+func (a apt) Installed(ctx context.Context, run Runner, pkg string) (bool, error) {
+	// dpkg keeps a record of packages it has merely heard of, so the
+	// status is what settles it: a removed package still has a row, with
+	// "deinstall ok config-files" in it.
+	out, err := run.Run(ctx, "dpkg-query", "-W", "-f=${Status}", pkg)
+	text := strings.TrimSpace(string(out))
+	if text == "" && err != nil {
+		return false, fmt.Errorf("dpkg-query %s: %w", pkg, err)
+	}
+	return strings.Contains(text, "install ok installed"), nil
+}
+
+func (a apt) InstallArgv(pkgs []string) []string {
+	argv := append([]string{a.Name(), "-y", "-q"}, aptConfirm...)
+	return append(append(argv, "install"), pkgs...)
+}
+
+func (a apt) RemoveArgv(pkgs []string, preview bool) []string {
+	// remove rather than purge: a competitor that is taken off the router
+	// keeps its configuration, so putting it back is a reinstall and not
+	// an afternoon.
+	if preview {
+		return append([]string{a.Name(), "-q", "-s", "remove"}, pkgs...)
+	}
+	argv := append([]string{a.Name(), "-y", "-q"}, aptConfirm...)
+	return append(append(argv, "remove"), pkgs...)
+}
+
 func (a apt) RebootRequired(ctx context.Context, run Runner) (bool, string) {
 	if _, err := os.Stat(rebootRequiredFile); err != nil {
 		return kernelRebootHint(ctx, run)

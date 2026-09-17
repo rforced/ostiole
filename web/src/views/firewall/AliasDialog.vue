@@ -7,7 +7,16 @@ import { joinList, parseList } from '@/lib/lists'
 import { useConfigStore } from '@/stores/config'
 import CountryPicker from '@/views/firewall/CountryPicker.vue'
 
-const props = defineProps({ alias: { type: Object, default: null } })
+const props = defineProps({
+  alias: { type: Object, default: null },
+  /**
+   * The feed statuses the page has already read, so the country picker
+   * can say how much each country held without fetching anything itself.
+   *
+   * @type {import('vue').PropType<object[]>}
+   */
+  feeds: { type: Array, default: () => [] },
+})
 const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
@@ -25,6 +34,22 @@ function blank() {
     refreshHours: 24,
   }
 }
+
+/**
+ * What each country held at the last fetch of this alias, keyed by code.
+ * A country picked but never fetched simply has no number beside it.
+ */
+const countryCounts = computed(() => {
+  const status = props.feeds.find((f) => f.alias === props.alias?.name)
+  const out = {}
+  for (const part of status?.parts ?? []) {
+    if (!part.country) continue
+    // A country has one source per address family, and the ranges of both
+    // are what it costs.
+    out[part.country] = (out[part.country] ?? 0) + part.entries
+  }
+  return out
+})
 
 /** A country alias always fetches; a host or port alias may. */
 const fetches = computed(() => form.value.type === 'geoip' || form.value.url.trim() !== '')
@@ -151,7 +176,7 @@ function save() {
         label="Countries"
         :hint="ENTRY_HINTS.geoip"
       >
-        <CountryPicker v-model="form.countries" />
+        <CountryPicker v-model="form.countries" :counts="countryCounts" />
       </FormField>
       <FormField v-else id="alias-entries" label="Entries" :hint="ENTRY_HINTS[form.type]">
         <textarea

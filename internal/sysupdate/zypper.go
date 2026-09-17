@@ -114,6 +114,22 @@ func (z zypper) UpgradeArgv(security bool, exclude []string, pending Pending) []
 	return append(argv, names(wanted)...)
 }
 
+func (z zypper) Installed(ctx context.Context, run Runner, pkg string) (bool, error) {
+	return rpmInstalled(ctx, run, pkg)
+}
+
+func (z zypper) InstallArgv(pkgs []string) []string {
+	return append([]string{z.Name(), "--non-interactive", "install"}, pkgs...)
+}
+
+func (z zypper) RemoveArgv(pkgs []string, preview bool) []string {
+	argv := []string{z.Name(), "--non-interactive", "remove"}
+	if preview {
+		argv = append(argv, "--dry-run")
+	}
+	return append(argv, pkgs...)
+}
+
 func (z zypper) RebootRequired(ctx context.Context, run Runner) (bool, string) {
 	out, err := run.Run(ctx, z.Name(), "needs-rebooting")
 	text := strings.ToLower(string(out))

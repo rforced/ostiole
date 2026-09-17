@@ -6,6 +6,17 @@ import { COUNTRIES, PRESETS, REGIONS } from '@/lib/countries'
 /** The two-letter codes the alias holds. */
 const selected = defineModel({ type: Array, default: () => [] })
 
+const props = defineProps({
+  /**
+   * What each country held at the last fetch, keyed by lower-case code.
+   * Somebody picking twelve countries is asking how big the answer will
+   * be, and this is the only place that can answer it.
+   *
+   * @type {import('vue').PropType<Record<string, number>>}
+   */
+  counts: { type: Object, default: () => ({}) },
+})
+
 const filter = ref('')
 const chosen = computed(() => new Set(selected.value))
 
@@ -48,6 +59,17 @@ function set(codes, on) {
 }
 
 const allShown = computed(() => matches.value.every((c) => chosen.value.has(c.code)))
+
+/** How many ranges a country held, or null when nothing has been fetched. */
+function count(code) {
+  const n = props.counts[code.toLowerCase()]
+  return typeof n === 'number' ? n : null
+}
+
+/** The ranges the chosen countries came to, before duplicates are dropped. */
+const chosenTotal = computed(() =>
+  selected.value.reduce((sum, code) => sum + (count(code) ?? 0), 0),
+)
 </script>
 
 <template>
@@ -98,6 +120,9 @@ const allShown = computed(() => matches.value.every((c) => chosen.value.has(c.co
               .join(', ')
           }}<span v-if="selected.length > 8"> and {{ selected.length - 8 }} more</span>
         </span>
+        <span v-if="chosenTotal">
+          · about {{ chosenTotal.toLocaleString() }} ranges, from the last fetch
+        </span>
       </template>
       <template v-else>No countries yet.</template>
     </p>
@@ -140,6 +165,12 @@ const allShown = computed(() => matches.value.every((c) => chosen.value.has(c.co
             />
             <span class="font-mono text-code text-neutral-500">{{ c.code }}</span>
             <span class="truncate">{{ c.name }}</span>
+            <span
+              v-if="count(c.code) !== null"
+              class="ml-auto font-mono text-code text-neutral-500"
+            >
+              {{ count(c.code).toLocaleString() }}
+            </span>
           </label>
         </div>
       </div>

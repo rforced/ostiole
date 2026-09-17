@@ -235,6 +235,13 @@ func (c *Config) Validate() error {
 					"a dropped connection has no traffic to prioritise")
 			}
 		}
+		if r.Limit != nil {
+			if r.Action != ActionAccept {
+				v.add(path+".limit", "only an accept rule can hold traffic to a rate: "+
+					"there is no sense in rationing a refusal")
+			}
+			v.rateLimit(path+".limit", *r.Limit)
+		}
 		if !zones[r.Zone] {
 			v.add(path+".zone", "unknown zone %q", r.Zone)
 		}
@@ -270,6 +277,8 @@ func (c *Config) Validate() error {
 			}
 		}
 	}
+	v.protection(c, zones)
+
 	natIDs := map[string]bool{}
 	for i, r := range c.NAT.Outbound.Rules {
 		path := fmt.Sprintf("nat.outbound.rules[%d]", i)
@@ -1534,5 +1543,59 @@ func (v *validator) endpoint(path string, e Endpoint, aliases map[string]AliasTy
 	}
 	if e.NotPorts && len(e.Ports) == 0 && e.PortAlias == "" {
 		v.add(path+".notPorts", "nothing to invert: give ports or a port alias")
+	}
+}
+
+// holdRe is how long a source may be held: a number and a unit
+// nftables counts timeouts in.
+var holdRe = regexp.MustCompile(`^[0-9]+[smhd]$`)
+
+// rateLimit checks one limit. A rate of zero is the one mistake worth
+// spelling out: it reads as "allow none", and a rule that allows none is
+// a drop rule somebody should have written instead.
+func (v *validator) rateLimit(path string, l RateLimit) {
+	switch {
+	case l.Rate == 0:
+		v.add(path+".rate", "a rate of zero allows nothing through; write a drop rule instead")
+	case l.Rate < MinLimitRate || l.Rate > MaxLimitRate:
+		v.add(path+".rate", "%d must be between %d and %d", l.Rate, MinLimitRate, MaxLimitRate)
+	}
+	if !l.Unit.Valid() {
+		v.add(path+".unit", "unknown period %q (second, minute, or hour)", l.Unit)
+	}
+	if l.Burst < 0 || l.Burst > MaxLimitBurst {
+		v.add(path+".burst", "%d must be between 0 and %d", l.Burst, MaxLimitBurst)
+	}
+}
+
+// protection checks the edge defence: the zones it names have to exist,
+// and each limit has to be a limit. A zone that faces the inside can be
+// named deliberately — a guest network is a reasonable place to stop a
+// flood — so unlike the connection tally there is no warning about it.
+func (v *validator) protection(c *Config, zones map[string]bool) {
+	p := c.Protection
+	for i, z := range p.Zones {
+		if !zones[z] {
+			v.add(fmt.Sprintf("protection.zones[%d]", i), "unknown zone %q", z)
+		}
+	}
+	if p.SynFlood != nil {
+		v.rateLimit("protection.synFlood", *p.SynFlood)
+	}
+	if p.ICMPFlood != nil {
+		v.rateLimit("protection.icmpFlood", *p.ICMPFlood)
+	}
+	if p.PortScan != nil {
+		v.rateLimit("protection.portScan", p.PortScan.Limit())
+		if !holdRe.MatchString(p.PortScan.HoldOr()) {
+			v.add("protection.portScan.hold",
+				"%q must be a number and a unit, like 10m, 1h, or 30s", p.PortScan.HoldOr())
+		}
+	}
+	// A defence nobody can reach is worth saying out loud: it is almost
+	// always a zone that was renamed or an interface that moved.
+	if p.On() && len(c.ProtectedZones()) == 0 {
+		v.add("protection", "nothing is defended: no external zone has an interface, "+
+			"and protection.zones names none that does")
 	}
 }

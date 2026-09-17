@@ -162,6 +162,18 @@ type Driver interface {
 	UpgradeArgv(security bool, exclude []string, pending Pending) []string
 	// RebootRequired reports whether the router wants restarting, and why.
 	RebootRequired(ctx context.Context, run Runner) (bool, string)
+	// Installed reports whether a package is in the router's package
+	// database. That is a different question from whether its command is
+	// on PATH: a competing firewall can be installed, masked and idle all
+	// at once, and only the database knows there is something to remove.
+	Installed(ctx context.Context, run Runner, pkg string) (bool, error)
+	// InstallArgv installs packages without asking anybody anything.
+	InstallArgv(pkgs []string) []string
+	// RemoveArgv takes packages off the router. With preview the command
+	// says what it would do and changes nothing, because what else comes
+	// away with a package is the manager's business to answer and the
+	// operator's to agree to.
+	RemoveArgv(pkgs []string, preview bool) []string
 }
 
 // Drivers are the managers Ostiole knows, in the order they are looked

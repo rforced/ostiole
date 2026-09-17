@@ -320,7 +320,7 @@ func (s *Shaper) ingressIsOurs(ctx context.Context, dev string) (bool, error) {
 			redirects = true
 			// tc has named the target device differently between
 			// releases, so any string in the action that is our helper
-			// counts; nothing else on the box carries that name.
+			// counts; nothing else on the router carries that name.
 			for _, v := range action {
 				if name, ok := v.(string); ok && name == ifb {
 					return true, nil

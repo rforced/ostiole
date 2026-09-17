@@ -1,6 +1,7 @@
 <script setup>
 import { Plus } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
@@ -11,6 +12,7 @@ import { useConfigStore } from '@/stores/config'
 import AliasDialog from '@/views/firewall/AliasDialog.vue'
 
 const config = useConfigStore()
+const router = useRouter()
 const editing = ref(null)
 const open = ref(false)
 const status = ref([])
@@ -49,6 +51,24 @@ function countryNames(codes) {
   const shown = codes.slice(0, 4).map((c) => COUNTRY_NAMES[c] ?? c)
   if (codes.length <= 4) return shown.join(', ')
   return `${shown.join(', ')} … (${codes.length} countries)`
+}
+
+/**
+ * Where a rule made from this list would go: the first zone that faces
+ * the internet, which is where a blocklist belongs, and otherwise the
+ * first zone there is.
+ */
+const ruleZone = computed(
+  () => (config.zones.find((z) => z.external) ?? config.zones[0])?.name ?? '',
+)
+
+/**
+ * Hand the list to the rules page, which opens a new rule with it filled
+ * in: an address list becomes the source, a port list becomes the ports.
+ * The rule is a draft like any other until it is applied.
+ */
+function blockWith(a) {
+  router.push({ path: '/firewall/rules', query: { block: a.name }, hash: `#${ruleZone.value}` })
 }
 
 function add() {
@@ -137,6 +157,9 @@ function edit(a) {
               >
                 {{ refreshing === a.name ? 'Refreshing…' : 'Refresh' }}
               </button>
+              <button v-if="ruleZone" type="button" class="link mr-3" @click="blockWith(a)">
+                Make a rule
+              </button>
               <button type="button" class="link" @click="edit(a)">Edit</button>
               <ConfirmButton
                 v-if="config.aliasReferences(a.name).length === 0"
@@ -154,6 +177,6 @@ function edit(a) {
         </TransitionGroup>
       </table>
     </div>
-    <AliasDialog v-model:open="open" :alias="editing" />
+    <AliasDialog v-model:open="open" :alias="editing" :feeds="status" />
   </div>
 </template>

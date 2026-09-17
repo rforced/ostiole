@@ -97,8 +97,11 @@ type Config struct {
 	Aliases    []Alias     `json:"aliases,omitempty"`
 	Schedules  []Schedule  `json:"schedules,omitempty"`
 	Rules      []Rule      `json:"rules"`
-	NAT        NAT         `json:"nat"`
-	Gateways   []Gateway   `json:"gateways,omitempty"`
+	// Protection is the edge defence: what a zone does about traffic that
+	// is too much of itself rather than against the rules.
+	Protection Protection `json:"protection,omitzero"`
+	NAT        NAT        `json:"nat"`
+	Gateways   []Gateway  `json:"gateways,omitempty"`
 	// GatewayGroups combine gateways into one target rules can route
 	// through, with failover between tiers.
 	GatewayGroups []GatewayGroup `json:"gatewayGroups,omitempty"`
@@ -819,6 +822,11 @@ type Rule struct {
 	// what yields to what on a shaped line. It follows the connection, so
 	// the answers coming back are prioritised too.
 	Priority Tier `json:"priority,omitempty"`
+	// Limit holds what this rule admits to a rate. Over it, the packet
+	// falls through to whatever comes next — which on a zone's last rule
+	// is the drop at the end of it. It is only meaningful on an accept:
+	// there is no sense in rationing a refusal.
+	Limit *RateLimit `json:"limit,omitempty"`
 }
 
 // Schedule is a recurring window in the firewall's local time. Rules that

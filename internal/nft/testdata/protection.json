@@ -1,0 +1,52 @@
+{
+  "version": 4,
+  "system": { "hostname": "fw", "management": { "webPort": 443, "sshPort": 22 } },
+  "zones": [
+    { "name": "wan", "external": true },
+    { "name": "lan", "antiLockout": true }
+  ],
+  "interfaces": [
+    { "name": "eth0", "zone": "wan", "enabled": true, "ipv4": { "mode": "dhcp" }, "ipv6": { "mode": "slaac" } },
+    { "name": "eth1", "zone": "lan", "enabled": true, "ipv4": { "mode": "static", "address": "192.168.1.1/24" }, "ipv6": { "mode": "none" } }
+  ],
+  "protection": {
+    "synFlood": { "rate": 30, "unit": "second", "burst": 60, "perSource": true },
+    "icmpFlood": { "rate": 10, "unit": "second", "burst": 20, "perSource": true },
+    "portScan": { "rate": 20, "unit": "minute", "hold": "10m" }
+  },
+  "rules": [
+    {
+      "id": "ssh-in",
+      "description": "SSH from anywhere, three attempts a minute per source",
+      "enabled": true,
+      "zone": "wan",
+      "action": "accept",
+      "protocol": "tcp",
+      "source": {},
+      "destination": { "self": true, "ports": ["22"] },
+      "limit": { "rate": 3, "unit": "minute", "burst": 3, "perSource": true }
+    },
+    {
+      "id": "web-in",
+      "description": "The site behind this router, capped for everybody together",
+      "enabled": true,
+      "zone": "wan",
+      "action": "accept",
+      "protocol": "tcp",
+      "source": {},
+      "destination": { "addresses": ["192.168.1.10"], "ports": ["443"] },
+      "limit": { "rate": 500, "unit": "second", "burst": 1000 }
+    },
+    {
+      "id": "allow-lan",
+      "description": "Allow LAN to any",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    }
+  ],
+  "nat": { "outbound": { "mode": "automatic" } }
+}

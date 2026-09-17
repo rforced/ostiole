@@ -335,7 +335,7 @@ func (f *fakeShaping) seen() []string {
 }
 
 // The tick puts the queues back as well as the routes, and it does so on a
-// router with no gateways at all: a box that only caps its LAN still has
+// router with no gateways at all: a router that only caps its LAN still has
 // to converge after a reboot or a link coming back.
 func TestTickKeepsShapingInPlace(t *testing.T) {
 	t.Parallel()

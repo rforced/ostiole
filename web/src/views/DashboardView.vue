@@ -7,6 +7,7 @@ import { api } from '@/lib/api'
 import { errorMessage, useAsync } from '@/lib/async'
 import { useSystemStore } from '@/stores/system'
 import DashboardWarnings from '@/views/dashboard/DashboardWarnings.vue'
+import BlockingCard from '@/views/dashboard/BlockingCard.vue'
 import GatewaysCard from '@/views/dashboard/GatewaysCard.vue'
 import InterfaceSummary from '@/views/dashboard/InterfaceSummary.vue'
 import ServicesCard from '@/views/dashboard/ServicesCard.vue'
@@ -112,6 +113,7 @@ onMounted(async () => {
         :dhcp="overview?.dhcp ?? {}"
         :dns="overview?.dns ?? {}"
       />
+      <BlockingCard v-if="overview?.blocking?.enabled" :blocking="overview.blocking" />
     </div>
 
     <div class="grid gap-4 sm:grid-cols-2">

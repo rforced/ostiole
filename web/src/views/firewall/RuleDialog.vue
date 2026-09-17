@@ -44,6 +44,11 @@ function blank() {
     schedule: '',
     gateway: '',
     priority: '',
+    limited: false,
+    limitRate: 20,
+    limitUnit: 'minute',
+    limitBurst: 10,
+    limitPerSource: true,
     source: endpointForm(),
     destination: endpointForm(),
   }
@@ -61,6 +66,11 @@ watch(
           destZone: r.destZone ?? '',
           gateway: r.gateway ?? '',
           priority: r.priority ?? '',
+          limited: Boolean(r.limit),
+          limitRate: r.limit?.rate ?? 20,
+          limitUnit: r.limit?.unit ?? 'minute',
+          limitBurst: r.limit?.burst ?? 0,
+          limitPerSource: r.limit ? Boolean(r.limit.perSource) : true,
           source: endpointForm(r.source),
           destination: endpointForm(r.destination),
         }
@@ -86,6 +96,14 @@ const priorityAllowed = computed(() => form.value.action === 'accept')
 
 watch(priorityAllowed, (ok) => {
   if (!ok) form.value.priority = ''
+})
+
+// A limit rations what a rule lets through, so there has to be something
+// let through: a rule that refuses the traffic has already refused it.
+const limitAllowed = computed(() => form.value.action === 'accept')
+
+watch(limitAllowed, (ok) => {
+  if (!ok) form.value.limited = false
 })
 
 function endpointOut(f, allowPorts) {
@@ -119,6 +137,14 @@ function save() {
   if (f.schedule) out.schedule = f.schedule
   if (f.gateway && gatewayAllowed.value) out.gateway = f.gateway
   if (f.priority && priorityAllowed.value) out.priority = f.priority
+  if (f.limited && limitAllowed.value) {
+    out.limit = {
+      rate: Number(f.limitRate) || 1,
+      unit: f.limitUnit,
+      perSource: f.limitPerSource,
+    }
+    if (Number(f.limitBurst) > 0) out.limit.burst = Number(f.limitBurst)
+  }
   if (!out.description) delete out.description
   config.upsertRule(out)
   open.value = false
@@ -128,7 +154,7 @@ function save() {
 <template>
   <AppDialog
     v-model:open="open"
-    :title="rule ? `Rule ${rule.id}` : `New rule in ${zone}`"
+    :title="rule?.id ? `Rule ${rule.id}` : `New rule in ${zone}`"
     description="Rules match traffic entering the zone, whether it is for this firewall or forwarded through it."
   >
     <form class="space-y-4" @submit.prevent="save">
@@ -213,6 +239,67 @@ function save() {
           </select>
         </FormField>
       </div>
+
+      <fieldset class="space-y-3 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+        <legend class="px-1 text-sm font-medium">Rate limit</legend>
+        <label class="flex items-center gap-2 text-sm">
+          <input
+            v-model="form.limited"
+            type="checkbox"
+            class="size-4 rounded border-neutral-300"
+            :disabled="!limitAllowed"
+          />
+          Hold this traffic to a rate
+        </label>
+        <p v-if="!limitAllowed" class="text-sm text-neutral-500">
+          Only an accept rule can hold traffic to a rate.
+        </p>
+        <div v-else-if="form.limited" class="flex flex-wrap items-start gap-4">
+          <FormField id="rule-limit-rate" label="Allowed">
+            <input
+              id="rule-limit-rate"
+              v-model="form.limitRate"
+              class="input w-24"
+              type="number"
+              min="1"
+            />
+          </FormField>
+          <FormField id="rule-limit-unit" label="Period">
+            <select id="rule-limit-unit" v-model="form.limitUnit" class="input w-36">
+              <option value="second">per second</option>
+              <option value="minute">per minute</option>
+              <option value="hour">per hour</option>
+            </select>
+          </FormField>
+          <FormField
+            id="rule-limit-burst"
+            label="Burst"
+            hint="Allowed at once before the rate applies."
+          >
+            <input
+              id="rule-limit-burst"
+              v-model="form.limitBurst"
+              class="input w-24"
+              type="number"
+              min="0"
+            />
+          </FormField>
+          <FormField
+            id="rule-limit-per-source"
+            label="Counted"
+            hint="Per source keeps one busy host from spending everybody's allowance."
+          >
+            <select id="rule-limit-per-source" v-model="form.limitPerSource" class="input w-48">
+              <option :value="true">per source address</option>
+              <option :value="false">everybody together</option>
+            </select>
+          </FormField>
+        </div>
+        <p v-if="form.limited && limitAllowed" class="text-sm text-neutral-500">
+          Over the limit a packet falls through to the next rule, which on the last rule of a zone
+          is the drop at the end of it.
+        </p>
+      </fieldset>
 
       <EndpointFields v-model="form.source" side="source" :ports-allowed="portsAllowed" />
       <EndpointFields v-model="form.destination" side="destination" :ports-allowed="portsAllowed" />

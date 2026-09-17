@@ -70,14 +70,16 @@ func TestSystemRulesMatchRuleset(t *testing.T) {
 						t.Errorf("row %d (%s) names zone %q, which does not exist", i, row.Description, z)
 					}
 				}
+				// A row below a zone's own rules names that one zone. There
+				// can be more than one of them — the port scan tally sits
+				// where refused traffic lands, under the rules — so what is
+				// checked is that the last of them closes the zone.
 				switch {
 				case !row.After:
 				case len(row.Zones) != 1:
-					t.Errorf("row %d (%s) ends a zone but names %v", i, row.Description, row.Zones)
-				case zones[row.Zones[0]]:
-					t.Errorf("zone %s ends twice", row.Zones[0])
+					t.Errorf("row %d (%s) is below a zone's rules but names %v", i, row.Description, row.Zones)
 				default:
-					zones[row.Zones[0]] = true
+					zones[row.Zones[0]] = closesZone(row)
 				}
 				for _, key := range row.Keys {
 					chain, comment, ok := strings.Cut(key, "/")
@@ -99,11 +101,22 @@ func TestSystemRulesMatchRuleset(t *testing.T) {
 			}
 			for z, ended := range zones {
 				if !ended {
-					t.Errorf("zone %s has no closing row", z)
+					t.Errorf("zone %s has no closing row, or something follows it", z)
 				}
 			}
 		})
 	}
+}
+
+// closesZone reports whether a row is the one that counts what no rule
+// matched, which is what has to come last in a zone.
+func closesZone(row SystemRule) bool {
+	for _, key := range row.Keys {
+		if strings.HasSuffix(key, "/zone-unmatched") || strings.HasSuffix(key, "/zone-default") {
+			return true
+		}
+	}
+	return false
 }
 
 func findRow(rows []SystemRule, description string) (SystemRule, bool) {

@@ -44,7 +44,13 @@ type Status struct {
 	Alias string `json:"alias"`
 	// Sources are the URLs it is built from; a GeoIP alias has one per
 	// country and family.
-	Sources     []string   `json:"sources"`
+	Sources []string `json:"sources"`
+	// Parts is what each source contributed at the last fetch. For a
+	// country list it is the answer to "how much of this ruleset is
+	// China", which is the question somebody picking twelve countries is
+	// actually asking. The parts add up to more than Entries: a range
+	// published by two sources is counted by both and kept once.
+	Parts       []Part     `json:"parts,omitempty"`
 	Entries     int        `json:"entries"`
 	FetchedAt   time.Time  `json:"fetchedAt,omitempty"`
 	LastError   string     `json:"lastError,omitempty"`
@@ -54,10 +60,20 @@ type Status struct {
 	Stale bool `json:"stale"`
 }
 
-// cached is the on-disk form.
+// Part is one source of an alias and what it held at the last fetch.
+type Part struct {
+	Source string `json:"source"`
+	// Country is the code the source was expanded for, on a country
+	// list, and empty on an ordinary one.
+	Country string `json:"country,omitempty"`
+	Entries int    `json:"entries"`
+}
+
+// cached is the on-disk form. It is a cache: a file written by an older
+// version simply has no breakdown until the next refresh fills one in.
 type cached struct {
 	Alias     string    `json:"alias"`
-	Sources   []string  `json:"sources"`
+	Parts     []Part    `json:"parts,omitempty"`
 	FetchedAt time.Time `json:"fetchedAt"`
 	Entries   []string  `json:"entries"`
 }
@@ -122,9 +138,9 @@ func (c *Cache) path(alias string) string {
 	return filepath.Join(c.Dir, safeName(alias)+".json")
 }
 
-// Save records fetched entries.
-func (c *Cache) Save(alias string, sources, entries []string, when time.Time) error {
-	f := cached{Alias: alias, Sources: sources, FetchedAt: when.UTC().Truncate(time.Second), Entries: entries}
+// Save records fetched entries and what each source contributed.
+func (c *Cache) Save(alias string, parts []Part, entries []string, when time.Time) error {
+	f := cached{Alias: alias, Parts: parts, FetchedAt: when.UTC().Truncate(time.Second), Entries: entries}
 	raw, err := json.Marshal(f)
 	if err != nil {
 		return err
@@ -194,6 +210,7 @@ func (c *Cache) Statuses(cfg *model.Config) []Status {
 	for _, a := range Wanted(cfg) {
 		st := Status{Alias: a.Name, Sources: Sources(cfg, a)}
 		if f, ok := c.loaded[a.Name]; ok {
+			st.Parts = f.Parts
 			st.Entries = len(f.Entries)
 			st.FetchedAt = f.FetchedAt
 			st.Stale = now.Sub(f.FetchedAt) > 2*RefreshPeriod(a)
@@ -262,12 +279,24 @@ func RefreshPeriod(a model.Alias) time.Duration {
 // Sources lists the URLs an alias is built from: its own, or one per
 // country and address family for a GeoIP alias.
 func Sources(cfg *model.Config, a model.Alias) []string {
+	parts := SourceParts(cfg, a)
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		out = append(out, p.Source)
+	}
+	return out
+}
+
+// SourceParts is Sources with the country each URL was expanded for, so a
+// fetch can report what came from where. Entries are filled in by the
+// fetch; here they are all zero.
+func SourceParts(cfg *model.Config, a model.Alias) []Part {
 	if a.Name == BogonAlias {
 		v4, v6 := cfg.System.BogonTemplates()
-		var out []string
+		var out []Part
 		for _, u := range []string{v4, v6} {
 			if u != "" {
-				out = append(out, u)
+				out = append(out, Part{Source: u})
 			}
 		}
 		return out
@@ -276,20 +305,19 @@ func Sources(cfg *model.Config, a model.Alias) []string {
 		if a.URL == "" {
 			return nil
 		}
-		return []string{a.URL}
+		return []Part{{Source: a.URL}}
 	}
 	v4, v6 := cfg.System.GeoIPTemplates()
-	var out []string
+	var out []Part
 	for _, code := range a.Entries {
 		code = strings.ToLower(strings.TrimSpace(code))
 		if code == "" {
 			continue
 		}
-		if v4 != "" {
-			out = append(out, strings.ReplaceAll(v4, "{country}", code))
-		}
-		if v6 != "" {
-			out = append(out, strings.ReplaceAll(v6, "{country}", code))
+		for _, u := range []string{v4, v6} {
+			if u != "" {
+				out = append(out, Part{Source: strings.ReplaceAll(u, "{country}", code), Country: code})
+			}
 		}
 	}
 	return out
@@ -313,21 +341,25 @@ func NewFetcher(version string) *Fetcher {
 	}
 }
 
-// Fetch downloads every source of an alias and returns the entries, with
-// duplicates removed. One source failing fails the whole alias: half a
-// blocklist is worse than yesterday's whole one.
-func (f *Fetcher) Fetch(ctx context.Context, cfg *model.Config, a model.Alias) ([]string, []string, error) {
-	sources := Sources(cfg, a)
-	if len(sources) == 0 {
+// Fetch downloads every source of an alias and returns the entries with
+// duplicates removed, and what each source held. One source failing fails
+// the whole alias: half a blocklist is worse than yesterday's whole one.
+func (f *Fetcher) Fetch(ctx context.Context, cfg *model.Config, a model.Alias) ([]string, []Part, error) {
+	parts := SourceParts(cfg, a)
+	if len(parts) == 0 {
 		return nil, nil, errors.New("this alias has no source to fetch")
 	}
 	seen := map[string]bool{}
 	var out []string
-	for _, src := range sources {
-		entries, err := f.one(ctx, src, a.Type)
+	for i := range parts {
+		entries, err := f.one(ctx, parts[i].Source, a.Type)
 		if err != nil {
-			return nil, sources, fmt.Errorf("%s: %w", src, err)
+			return nil, parts, fmt.Errorf("%s: %w", parts[i].Source, err)
 		}
+		// What this source held, whether or not another source had it
+		// first: the question is how big this country is, not how much of
+		// it arrived here first.
+		parts[i].Entries = len(entries)
 		for _, e := range entries {
 			if seen[e] {
 				continue
@@ -335,12 +367,12 @@ func (f *Fetcher) Fetch(ctx context.Context, cfg *model.Config, a model.Alias) (
 			seen[e] = true
 			out = append(out, e)
 			if len(out) > MaxEntries {
-				return nil, sources, fmt.Errorf("more than %d entries", MaxEntries)
+				return nil, parts, fmt.Errorf("more than %d entries", MaxEntries)
 			}
 		}
 	}
 	sort.Strings(out)
-	return out, sources, nil
+	return out, parts, nil
 }
 
 func (f *Fetcher) one(ctx context.Context, url string, typ model.AliasType) ([]string, error) {

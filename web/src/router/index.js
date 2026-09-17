@@ -8,6 +8,16 @@ import { useSystemStore } from '@/stores/system'
 const SKIP_WIZARD_KEY = 'ostiole.skipWizard'
 
 /**
+ * The same, for a router that has not been prepared yet. The host page
+ * imports it: "Continue for now" is that page's way of letting somebody
+ * look around a router they are not ready to change.
+ */
+export const SKIP_HOST_KEY = 'ostiole.skipHost'
+
+/** Where an unprepared router is sent. */
+const HOST_PATH = '/system/host'
+
+/**
  * Entry point for an item that has pages: the bare path goes to the first
  * page, and a link written for the old tab bar (`/firewall#aliases`) goes to
  * the page that replaced that tab, so bookmarks still land.
@@ -99,13 +109,30 @@ router.beforeEach(async (to) => {
   }
   if (to.name === 'login' && auth.loggedIn) return { name: 'dashboard' }
 
-  // A configured-or-not check sends a fresh install to the wizard once.
   if (auth.loggedIn && !to.meta.public) {
     const system = useSystemStore()
+
+    // A router that is not ready to be a firewall is sent to the host page,
+    // and before the configuration wizard: the first apply turns on the
+    // services a configuration asks for, and one that needs dnsmasq and
+    // finds none fails on the whole configuration. The daemon only calls
+    // itself unprepared when it is root and could do something about it,
+    // so a dev run and the end-to-end server are never sent there.
+    if (system.host === null) await system.refreshHost()
+    if (system.host && !system.host.prepared && to.path !== HOST_PATH) {
+      if (!sessionStorage.getItem(SKIP_HOST_KEY)) {
+        return { path: HOST_PATH, query: { from: to.fullPath } }
+      }
+    }
+
+    // A configured-or-not check sends a fresh install to the wizard once.
     if (system.status === null) await system.refresh()
     const unconfigured = system.status !== null && !system.status.configured
     if (to.name === 'wizard' && !unconfigured) return { name: 'dashboard' }
-    if (unconfigured && to.name !== 'wizard') {
+    // The host page is exempt: a fresh router is usually both unprepared
+    // and unconfigured, and sending it to the wizard from here would send
+    // it straight back.
+    if (unconfigured && to.name !== 'wizard' && to.path !== HOST_PATH) {
       if (to.name === 'dashboard' && to.redirectedFrom?.name === 'wizard') {
         sessionStorage.setItem(SKIP_WIZARD_KEY, '1')
       }

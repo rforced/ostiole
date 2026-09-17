@@ -165,6 +165,45 @@ func (d dnf) RebootRequired(ctx context.Context, run Runner) (bool, string) {
 	return kernelRebootHint(ctx, run)
 }
 
+func (d dnf) Installed(ctx context.Context, run Runner, pkg string) (bool, error) {
+	return rpmInstalled(ctx, run, pkg)
+}
+
+func (d dnf) InstallArgv(pkgs []string) []string {
+	return append([]string{d.Name(), "-y", "install"}, pkgs...)
+}
+
+func (d dnf) RemoveArgv(pkgs []string, preview bool) []string {
+	// The answer goes before the command, like every other global option
+	// dnf takes: --assumeno prints the transaction and then declines to
+	// run it, which is the closest dnf comes to a dry run that lists what
+	// would come away. It exits 1 having changed nothing, and
+	// previewRefused knows that is the answer rather than a failure.
+	answer := "-y"
+	if preview {
+		answer = "--assumeno"
+	}
+	return append([]string{d.Name(), answer, "remove"}, pkgs...)
+}
+
+// rpmInstalled asks the rpm database, which both dnf and zypper routers
+// have. `rpm -q` prints the version of a package it has and says "not
+// installed" about one it does not, exiting non-zero either way, so the
+// text decides; only rpm failing to run at all is an error.
+func rpmInstalled(ctx context.Context, run Runner, pkg string) (bool, error) {
+	out, err := run.Run(ctx, "rpm", "-q", pkg)
+	text := strings.TrimSpace(string(out))
+	switch {
+	case strings.Contains(text, "not installed"):
+		return false, nil
+	case err == nil && text != "":
+		return true, nil
+	case text == "":
+		return false, fmt.Errorf("rpm -q %s: %w", pkg, err)
+	}
+	return false, nil
+}
+
 // tail keeps the end of a failed command's output, which is where the
 // reason is.
 func tail(out []byte) string {

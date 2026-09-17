@@ -264,7 +264,13 @@ func TestNetworkRevertAndRecord(t *testing.T) {
 }
 
 func TestServiceBinaryPrefersInstalled(t *testing.T) {
-	t.Parallel()
+	// Not parallel, and it empties the list of system bin directories:
+	// this test is about a router with no installed copy, and on one that
+	// has Ostiole in /usr/local/bin the real list would answer for it.
+	saved := SystemBinDirs
+	SystemBinDirs = nil
+	t.Cleanup(func() { SystemBinDirs = saved })
+
 	lay := tempLayout(t)
 	self, _ := os.Executable()
 	if got, err := ServiceBinary(lay); err != nil || got != self {

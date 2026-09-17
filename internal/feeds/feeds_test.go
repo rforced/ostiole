@@ -179,7 +179,7 @@ func TestRefreshOnlyWhenDue(t *testing.T) {
 func TestPruneForgetsRemovedAliases(t *testing.T) {
 	t.Parallel()
 	cache := NewCache(t.TempDir())
-	if err := cache.Save("gone", []string{"http://x"}, []string{"192.0.2.1"}, time.Now()); err != nil {
+	if err := cache.Save("gone", []Part{{Source: "http://x", Entries: 1}}, []string{"192.0.2.1"}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	cache.Prune(config())
@@ -199,7 +199,7 @@ func TestStatusesReportStaleAndErrors(t *testing.T) {
 		model.Alias{Name: "static", Type: model.AliasHosts, Entries: []string{"10.0.0.1"}},
 	)
 	cache := NewCache(t.TempDir())
-	if err := cache.Save("fresh", []string{"http://example.invalid/list"}, []string{"192.0.2.1"}, time.Now()); err != nil {
+	if err := cache.Save("fresh", []Part{{Source: "http://example.invalid/list", Entries: 1}}, []string{"192.0.2.1"}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -333,5 +333,60 @@ func TestSetFragmentCarriesTheBogons(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("fragment is missing %q:\n%s", want, got)
 		}
+	}
+}
+
+// A country list is fetched one country at a time, and the page shows how
+// much of the ruleset each one is: somebody picking twelve countries is
+// asking how big the answer will be.
+func TestFetchReportsWhatEachCountryHeld(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "cn"):
+			_, _ = w.Write([]byte("1.0.1.0/24\n1.0.2.0/23\n"))
+		case strings.Contains(r.URL.Path, "nl"):
+			// One range this publisher lists under both countries, to
+			// prove the parts are not the deduplicated total.
+			_, _ = w.Write([]byte("1.0.1.0/24\n2.2.2.0/24\n"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := config(model.Alias{Name: "geo", Type: model.AliasGeoIP, Entries: []string{"CN", "NL"}})
+	// One template only — an empty one is skipped — because this is about
+	// the breakdown per country, not about address families.
+	cfg.System.GeoIPv4URL = srv.URL + "/{country}.zone"
+	alias := cfg.Aliases[0]
+
+	entries, parts, err := NewFetcher("test").Fetch(context.Background(), cfg, alias)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 3 {
+		t.Errorf("entries = %v, want the three distinct ranges", entries)
+	}
+	byCountry := map[string]int{}
+	for _, p := range parts {
+		byCountry[p.Country] = p.Entries
+	}
+	if byCountry["cn"] != 2 || byCountry["nl"] != 2 {
+		t.Errorf("parts = %+v, want two each", parts)
+	}
+
+	// And the breakdown survives a round trip through the cache, which is
+	// where the page reads it from.
+	cache := NewCache(t.TempDir())
+	if err := cache.Save(alias.Name, parts, entries, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	st := NewCache(cache.Dir).Statuses(cfg)
+	if len(st) != 1 || len(st[0].Parts) != 2 || st[0].Parts[0].Country != "cn" {
+		t.Errorf("statuses = %+v", st)
+	}
+	if st[0].Entries != 3 {
+		t.Errorf("entries = %d, want the deduplicated total", st[0].Entries)
 	}
 }

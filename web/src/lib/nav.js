@@ -77,6 +77,11 @@ export const NAV = [
       },
       { path: 'nat', label: 'NAT', view: () => import('@/views/firewall/NatPage.vue') },
       {
+        path: 'protection',
+        label: 'Protection',
+        view: () => import('@/views/firewall/ProtectionPage.vue'),
+      },
+      {
         path: 'shaping',
         label: 'Traffic shaping',
         view: () => import('@/views/firewall/ShapingPage.vue'),
@@ -179,6 +184,7 @@ export const NAV = [
         label: 'Accounts',
         view: () => import('@/views/system/AccountsPage.vue'),
       },
+      { path: 'host', label: 'Host', view: () => import('@/views/system/HostPage.vue') },
       { path: 'updates', label: 'Updates', view: () => import('@/views/system/UpdatesPage.vue') },
       {
         path: 'backup',

@@ -18,6 +18,7 @@ import (
 	"github.com/rforced/ostiole/internal/feeds"
 	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/gateway"
+	"github.com/rforced/ostiole/internal/host"
 	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
@@ -60,7 +61,9 @@ type api struct {
 	fwlog     *fwlog.Ring
 	tables    TableLister
 	units     install.Systemctl
-	gateways  GatewayStatuser
+	// host is how the operating system underneath is reported on and prepared.
+	host     host.Deps
+	gateways GatewayStatuser
 	// shaping reports the live traffic queues; nil hides the live figures
 	// and leaves the page showing what is configured.
 	shaping Shaper
@@ -86,6 +89,7 @@ func (a *api) register(mux *router) {
 	a.registerBlocking(mux)
 	a.registerCrons(mux)
 	a.registerSysUpdate(mux)
+	a.registerHost(mux)
 	a.registerMetrics(mux)
 	a.registerOpenAPI(mux)
 	mux.HandleFunc("GET /api/v1/status", a.read(a.status))

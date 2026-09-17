@@ -107,6 +107,53 @@ func (x *Exec) Version(ctx context.Context) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+// ChainRef names one chain and the table it belongs to.
+type ChainRef struct {
+	Family string `json:"family"`
+	Table  string `json:"table"`
+	Name   string `json:"name"`
+}
+
+// ListChains returns every chain on the router. One call answers what is
+// inside the tables Ostiole does not own, which is what tells a leftover
+// from an older firewall apart from the working ruleset of something that
+// is still running.
+func (x *Exec) ListChains(ctx context.Context) ([]ChainRef, error) {
+	out, err := x.run(ctx, "list chains", "", "-j", "list", "chains")
+	if err != nil {
+		return nil, err
+	}
+	var doc struct {
+		Nftables []struct {
+			Chain *ChainRef `json:"chain"`
+		} `json:"nftables"`
+	}
+	if err := json.Unmarshal(out, &doc); err != nil {
+		return nil, fmt.Errorf("parse nft chains: %w", err)
+	}
+	var chains []ChainRef
+	for _, item := range doc.Nftables {
+		if item.Chain != nil {
+			chains = append(chains, *item.Chain)
+		}
+	}
+	return chains, nil
+}
+
+// DeleteTable removes one table. It is the only call in this package that
+// touches a table Ostiole does not own, and nothing reaches it without an
+// operator asking for exactly that table by name.
+func (x *Exec) DeleteTable(ctx context.Context, family, name string) error {
+	if family == "" || name == "" {
+		return errors.New("delete table: a family and a name are required")
+	}
+	if family+" "+name == Table {
+		return errors.New("delete table: " + Table + " is Ostiole's own table; apply a configuration instead")
+	}
+	_, err := x.run(ctx, "delete table", "", "delete", "table", family, name)
+	return err
+}
+
 // ListTables returns every nftables table as "family name", e.g.
 // "inet firewalld", so foreign tables can be reported.
 func (x *Exec) ListTables(ctx context.Context) ([]string, error) {

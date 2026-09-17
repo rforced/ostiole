@@ -1,6 +1,7 @@
 <script setup>
 import { ArrowDown, ArrowUp, Plus } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import { api } from '@/lib/api'
@@ -25,9 +26,12 @@ const SETTINGS = {
   upnp: '/services/upnp',
   wireguard: '/vpn',
   nat: '/firewall/nat',
+  protection: '/firewall/protection',
 }
 
 const config = useConfigStore()
+const route = useRoute()
+const router = useRouter()
 const editing = ref(null)
 const open = ref(false)
 const counters = ref({})
@@ -129,6 +133,32 @@ function edit(rule) {
 function toggle(rule) {
   config.upsertRule({ ...rule, enabled: !rule.enabled })
 }
+
+/**
+ * An alias page can send somebody here to write the rule that uses a
+ * list: `?block=<alias>` opens a new drop rule with it filled in — as the
+ * source for an address list, as the ports for a port list. The query is
+ * dropped straight away, so a reload does not reopen the dialog on a rule
+ * that may already have been saved.
+ */
+onMounted(() => {
+  const name = route.query.block
+  if (typeof name !== 'string' || !name) return
+  const alias = config.aliases.find((a) => a.name === name)
+  router.replace({ path: route.path, hash: route.hash })
+  if (!alias) return
+  editing.value = {
+    description: `Block ${name}`,
+    enabled: true,
+    zone: zone.value,
+    action: 'drop',
+    protocol: alias.type === 'ports' ? 'tcp+udp' : 'any',
+    log: false,
+    source: alias.type === 'ports' ? {} : { alias: name },
+    destination: alias.type === 'ports' ? { portAlias: name } : {},
+  }
+  open.value = true
+})
 </script>
 
 <template>

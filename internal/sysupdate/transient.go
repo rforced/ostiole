@@ -168,6 +168,21 @@ func runDirect(ctx context.Context, run Runner, argv []string, timeout time.Dura
 	return text, nil
 }
 
+// exited is a command's non-zero status, reported the way
+// exec.ExitError reports it. A caller that cares which failure it got —
+// a dry run declining to do anything, say — can then ask the same
+// question whether the command ran as a child of the daemon or in a unit
+// of its own.
+type exited struct {
+	status int
+	text   string
+}
+
+func (e exited) Error() string { return e.text }
+
+// ExitCode satisfies the interface exitCode digs for.
+func (e exited) ExitCode() int { return e.status }
+
 // exitError keeps a failed transient run readable: the status and what
 // systemd called it.
 func (r result) err() error {
@@ -175,10 +190,10 @@ func (r result) err() error {
 		if r.Status == 0 {
 			return nil
 		}
-		return fmt.Errorf("exit status %d", r.Status)
+		return exited{status: r.Status, text: fmt.Sprintf("exit status %d", r.Status)}
 	}
 	if r.Status != 0 {
-		return fmt.Errorf("%s (exit status %d)", r.Result, r.Status)
+		return exited{status: r.Status, text: fmt.Sprintf("%s (exit status %d)", r.Result, r.Status)}
 	}
 	return errors.New(r.Result)
 }

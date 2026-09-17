@@ -164,7 +164,7 @@ func TestApplySetsTheTimezone(t *testing.T) {
 	}
 
 	// A configuration that says nothing still pins the clock to UTC rather
-	// than leaving whatever the box was imaged with.
+	// than leaving whatever the router was imaged with.
 	c = cfg("b")
 	c.System.Timezone = ""
 	if _, err := e.Apply(context.Background(), c, ApplyOptions{}); err != nil {

@@ -428,7 +428,7 @@ func TestSetupWritesUnitAndMasksCompetitors(t *testing.T) {
 	_ = os.Symlink(target, resolv)
 	d := &Dnsmasq{Dir: filepath.Join(root, "generated"), Leases: filepath.Join(root, "lib", "leases"), Resolv: resolv}
 	run := &fakeRunner{}
-	err := Setup(context.Background(), d, SetupOptions{UnitDir: filepath.Join(root, "units"), Run: run, Binary: "/usr/sbin/dnsmasq"}, slog.New(slog.DiscardHandler))
+	err := Setup(context.Background(), d, SetupOptions{Dnsmasq: true, UnitDir: filepath.Join(root, "units"), Run: run, Binary: "/usr/sbin/dnsmasq"}, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -21,6 +21,18 @@ type Runner interface {
 
 // SetupOptions tunes Setup.
 type SetupOptions struct {
+	// Dnsmasq sets up DHCP and DNS: installs dnsmasq, masks the units
+	// that would fight it for port 53, and takes over resolv.conf. It is
+	// a choice of its own because a router can want a dialled line or a
+	// shaped queue and no name service at all, and masking
+	// systemd-resolved on that router would be an act of vandalism.
+	Dnsmasq bool
+	// NoRestart leaves a running ostiole.service alone at the end. The
+	// daemon's mount namespace is built once, at start, so it normally has
+	// to be restarted to see the directories this creates; when the daemon
+	// itself is driving Setup it restarts once it has answered, because a
+	// restart from in here would kill the request that asked.
+	NoRestart bool
 	// UnitDir is where the unit is written; default /etc/systemd/system.
 	UnitDir string
 	// PackageManager is dnf, apt-get, pacman, zypper, or apk; empty means
@@ -56,10 +68,12 @@ type SetupOptions struct {
 	UPnPBackend *UPnP
 }
 
-// Setup makes the host able to run the services: installs dnsmasq if
-// missing, writes the ostiole-dnsmasq unit, masks the distro dnsmasq and
-// systemd-resolved (both would fight over port 53), and turns
-// /etc/resolv.conf into a regular file so Ostiole can manage it.
+// Setup makes the host able to run the services it is asked for. Each
+// piece is a flag, and each writes a unit of Ostiole's that points a
+// distribution's daemon at a generated configuration. With Dnsmasq it
+// installs dnsmasq, masks the distro dnsmasq and systemd-resolved (both
+// would fight over port 53), and turns /etc/resolv.conf into a regular
+// file Ostiole manages.
 func Setup(ctx context.Context, d *Dnsmasq, o SetupOptions, log *slog.Logger) error {
 	run := o.Run
 	if run == nil {
@@ -69,59 +83,15 @@ func Setup(ctx context.Context, d *Dnsmasq, o SetupOptions, log *slog.Logger) er
 	if unitDir == "" {
 		unitDir = "/etc/systemd/system"
 	}
-	bin := o.Binary
-	if bin == "" {
-		if p, err := exec.LookPath("dnsmasq"); err == nil {
-			bin = p
-		}
-	}
-	if bin == "" {
-		pm := o.PackageManager
-		if pm == "" {
-			pm = detectPackageManager()
-		}
-		if err := installPackage(ctx, run, pm, "dnsmasq", log); err != nil {
-			return err
-		}
-		p, err := exec.LookPath("dnsmasq")
-		if err != nil {
-			return errors.New("dnsmasq still not found after installation")
-		}
-		bin = p
-	}
-
-	for _, unit := range []string{distroUnit, resolvedUnit} {
-		if out, err := run.Run(ctx, "systemctl", "cat", unit); err != nil || len(out) == 0 {
-			continue
-		}
-		_, _ = run.Run(ctx, "systemctl", "disable", "--now", unit)
-		_, _ = run.Run(ctx, "systemctl", "mask", unit)
-		log.Info("masked competing resolver", "unit", unit)
-	}
-
-	if d.Resolv != "" {
-		if info, err := os.Lstat(d.Resolv); err == nil && info.Mode()&os.ModeSymlink != 0 {
-			raw, _ := os.ReadFile(d.Resolv)
-			_ = os.Remove(d.Resolv)
-			if err := os.WriteFile(d.Resolv, raw, 0o644); err != nil { //nolint:gosec // world-readable by design
-				return err
-			}
-			log.Info("replaced the resolv.conf symlink with a regular file")
-		}
-	}
-
-	if err := os.MkdirAll(filepath.Dir(d.leases()), 0o755); err != nil { //nolint:gosec // dnsmasq writes leases here
-		return err
-	}
-	if err := os.MkdirAll(d.dir(), 0o755); err != nil { //nolint:gosec // dnsmasq reads these unprivileged
-		return err
-	}
-	unit := UnitContent(bin, filepath.Join(d.dir(), confName))
 	if err := os.MkdirAll(unitDir, 0o755); err != nil { //nolint:gosec // systemd unit dir
 		return err
 	}
-	if err := writeFile(filepath.Join(unitDir, Unit), unit); err != nil {
-		return err
+	bin := ""
+	if o.Dnsmasq {
+		var err error
+		if bin, err = setupDnsmasq(ctx, d, o, run, unitDir, log); err != nil {
+			return err
+		}
 	}
 	if o.Resolver {
 		if err := setupResolver(ctx, run, o, unitDir, log); err != nil {
@@ -141,9 +111,72 @@ func Setup(ctx context.Context, d *Dnsmasq, o SetupOptions, log *slog.Logger) er
 	if _, err := run.Run(ctx, "systemctl", "daemon-reload"); err != nil {
 		return err
 	}
-	restartDaemon(ctx, run, log)
-	log.Info("services ready", "unit", Unit, "dnsmasq", bin)
+	if !o.NoRestart {
+		restartDaemon(ctx, run, log)
+	}
+	if bin != "" {
+		log.Info("services ready", "unit", Unit, "dnsmasq", bin)
+	} else {
+		log.Info("services ready")
+	}
 	return nil
+}
+
+// setupDnsmasq is the DHCP and DNS part: the package, the units that have
+// to stop fighting it for port 53, resolv.conf, and our own unit. It
+// returns where dnsmasq is.
+func setupDnsmasq(ctx context.Context, d *Dnsmasq, o SetupOptions, run Runner, unitDir string, log *slog.Logger) (string, error) {
+	bin := o.Binary
+	if bin == "" {
+		if p, err := exec.LookPath("dnsmasq"); err == nil {
+			bin = p
+		}
+	}
+	if bin == "" {
+		pm := o.PackageManager
+		if pm == "" {
+			pm = detectPackageManager()
+		}
+		if err := installPackage(ctx, run, pm, "dnsmasq", log); err != nil {
+			return "", err
+		}
+		p, err := exec.LookPath("dnsmasq")
+		if err != nil {
+			return "", errors.New("dnsmasq still not found after installation")
+		}
+		bin = p
+	}
+
+	for _, unit := range []string{distroUnit, resolvedUnit} {
+		if out, err := run.Run(ctx, "systemctl", "cat", unit); err != nil || len(out) == 0 {
+			continue
+		}
+		_, _ = run.Run(ctx, "systemctl", "disable", "--now", unit)
+		_, _ = run.Run(ctx, "systemctl", "mask", unit)
+		log.Info("masked competing resolver", "unit", unit)
+	}
+
+	if d.Resolv != "" {
+		if info, err := os.Lstat(d.Resolv); err == nil && info.Mode()&os.ModeSymlink != 0 {
+			raw, _ := os.ReadFile(d.Resolv)
+			_ = os.Remove(d.Resolv)
+			if err := os.WriteFile(d.Resolv, raw, 0o644); err != nil { //nolint:gosec // world-readable by design
+				return "", err
+			}
+			log.Info("replaced the resolv.conf symlink with a regular file")
+		}
+	}
+
+	if err := os.MkdirAll(filepath.Dir(d.leases()), 0o755); err != nil { //nolint:gosec // dnsmasq writes leases here
+		return "", err
+	}
+	if err := os.MkdirAll(d.dir(), 0o755); err != nil { //nolint:gosec // dnsmasq reads these unprivileged
+		return "", err
+	}
+	if err := writeFile(filepath.Join(unitDir, Unit), UnitContent(bin, filepath.Join(d.dir(), confName))); err != nil {
+		return "", err
+	}
+	return bin, nil
 }
 
 // setupResolver installs unbound, bootstraps the DNSSEC trust anchor, and

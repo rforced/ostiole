@@ -16,6 +16,7 @@ import (
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/feeds"
 	"github.com/rforced/ostiole/internal/fwlog"
+	"github.com/rforced/ostiole/internal/host"
 	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/sysstat"
@@ -87,6 +88,11 @@ type Deps struct {
 	// Shaping reports the live traffic queues; nil leaves the page with
 	// what is configured and no figures.
 	Shaping Shaper
+	// Host prepares the operating system underneath Ostiole: the packages it
+	// needs, the services it has to take over from, and whatever an older
+	// firewall left in the kernel. Only the fields that are not already somewhere
+	// in Deps need setting; Handler fills in the rest.
+	Host host.Deps
 }
 
 // Handler builds the full HTTP handler: API routes plus the SPA.
@@ -116,12 +122,47 @@ func Handler(d Deps) http.Handler {
 		tables:     d.Tables,
 		units:      d.Units,
 		sysstat:    d.SysStat,
+		host:       hostDeps(d),
 	}
 	api.routes = mux
 	api.register(mux)
 	mux.HandleFunc("/api/", handleAPINotFound)
 	mux.Handle("/", web.Handler())
 	return securityHeaders(requestLog(csrfGuard(mux.mux)))
+}
+
+// hostDeps completes the host dependencies from the ones the API already
+// has. The caller says which router this is — root, the configuration
+// directory, the network backend — and everything else is the same
+// engine, package manager and systemd the rest of the API talks to, so
+// there is nothing to be gained by making the caller repeat it.
+func hostDeps(d Deps) host.Deps {
+	h := d.Host
+	if h.Units == nil {
+		h.Units = d.Units
+	}
+	if h.Packages == nil {
+		h.Packages = d.Packages
+	}
+	if h.Kernel == nil {
+		// The same nft runner the dashboard lists tables with, when it is
+		// one that can also delete them.
+		if k, ok := d.Tables.(host.Kernel); ok {
+			h.Kernel = k
+		}
+	}
+	if d.Engine != nil {
+		if h.Config == nil {
+			h.Config = d.Engine.Effective
+		}
+		if h.TableLoaded == nil {
+			h.TableLoaded = func(ctx context.Context) bool {
+				st, err := d.Engine.Status(ctx)
+				return err == nil && st.TableLoaded
+			}
+		}
+	}
+	return h
 }
 
 // Run serves until ctx is cancelled, then shuts down gracefully.

@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/gateway"
@@ -32,6 +33,7 @@ type Overview struct {
 	Blocked    nft.Counter      `json:"blocked"`
 	DHCP       DHCPSummary      `json:"dhcp"`
 	DNS        DNSSummary       `json:"dns"`
+	Blocking   BlockingSummary  `json:"blocking"`
 	Gateways   []gateway.Status `json:"gateways"`
 	Services   []ServiceState   `json:"services"`
 	Warnings   []Warning        `json:"warnings"`
@@ -104,6 +106,53 @@ type DNSSummary struct {
 	Overrides int      `json:"overrides"`
 }
 
+// blockingSummary reduces the blocking page's state to what the
+// dashboard shows, so both read the same numbers from the same place.
+func (a *api) blockingSummary() BlockingSummary {
+	st := a.blockingState()
+	out := BlockingSummary{
+		Enabled: st.Enabled, Active: st.Active, Mode: st.Mode,
+		Lists: st.Totals.Lists, Blocked: st.Totals.Blocked,
+		MemoryMB: st.Totals.EstimatedMemoryMB, MergedAt: st.Totals.MergedAt,
+		Allow: st.Totals.Allow, Deny: st.Totals.Deny,
+	}
+	for _, l := range st.Lists {
+		if l.Stale {
+			out.Stale = true
+			break
+		}
+	}
+	return out
+}
+
+// BlockingSummary is DNS blocking on the dashboard: whether names are
+// really being refused, how many, and when the lists last changed.
+//
+// There is no query count or block rate here, and there cannot be until
+// this router keeps a query log: the numbers would have to come from
+// dnsmasq's own log, which nothing reads yet (see the DNS blocking plan).
+type BlockingSummary struct {
+	// Enabled is the setting; Active is whether it is doing anything,
+	// which also needs the DNS service to be running.
+	Enabled bool            `json:"enabled"`
+	Active  bool            `json:"active"`
+	Mode    model.BlockMode `json:"mode,omitempty"`
+	// Lists is how many subscriptions are on.
+	Lists int `json:"lists"`
+	// Blocked is what the installed merge came to, and Memory is roughly
+	// what dnsmasq holds for it.
+	Blocked  int        `json:"blocked"`
+	MemoryMB int        `json:"memoryMb,omitempty"`
+	MergedAt *time.Time `json:"mergedAt,omitempty"`
+	// Stale is true when a list has not been fetched for far longer than
+	// it asked to be, which usually means the router cannot reach the
+	// publisher.
+	Stale bool `json:"stale,omitempty"`
+	// Allow and Deny are the operator's own exceptions.
+	Allow int `json:"allow"`
+	Deny  int `json:"deny"`
+}
+
 // ServiceState is the unit state of something Ostiole drives.
 type ServiceState struct {
 	Name   string `json:"name"`
@@ -161,6 +210,7 @@ func (a *api) overview(w http.ResponseWriter, r *http.Request) error {
 		ov.Status.Zones = len(cfg.Zones)
 		ov.Status.Rules = len(cfg.Rules)
 		ov.DHCP, ov.DNS = summarizeServices(cfg)
+		ov.Blocking = a.blockingSummary()
 	}
 	if revs, err := a.engine.Store().Revisions(); err == nil {
 		ov.Status.Revisions = len(revs)

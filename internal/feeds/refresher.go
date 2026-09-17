@@ -112,13 +112,13 @@ func (r *Refresher) RefreshOne(ctx context.Context, name string) (int, error) {
 }
 
 func (r *Refresher) refresh(ctx context.Context, cfg *model.Config, a model.Alias) (bool, error) {
-	entries, sources, err := r.Fetcher.Fetch(ctx, cfg, a)
+	entries, parts, err := r.Fetcher.Fetch(ctx, cfg, a)
 	if err != nil {
 		r.Cache.recordError(a.Name, err, time.Now())
 		return false, err
 	}
 	before := r.Cache.Entries()[a.Name]
-	if err := r.Cache.Save(a.Name, sources, entries, time.Now()); err != nil {
+	if err := r.Cache.Save(a.Name, parts, entries, time.Now()); err != nil {
 		return false, err
 	}
 	same := len(before) == len(entries)

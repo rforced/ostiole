@@ -175,6 +175,7 @@ func newRootCmd() *cobra.Command {
 		newUninstallCmd(g),
 		newUpdateCmd(g),
 		newServicesCmd(g),
+		newHostCmd(g),
 		newOpenAPICmd(),
 		newVersionCmd(),
 	)

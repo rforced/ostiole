@@ -7,7 +7,9 @@ test.describe.configure({ mode: 'serial' })
 test('schedule a nightly backup and see what the router does by itself', async ({ page }) => {
   await login(page)
   await page.goto('/crons')
-  await expect(page.getByRole('heading', { name: 'Crons' })).toBeVisible()
+  // Exact: the page also has a "Your crons" heading, which a substring
+  // match resolves to as well.
+  await expect(page.getByRole('heading', { name: 'Crons', exact: true })).toBeVisible()
 
   // The work Ostiole does on its own account is listed whether or not
   // anyone has configured a cron, and every timer the daemon starts is

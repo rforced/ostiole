@@ -61,7 +61,7 @@ the nftables one, which is checked before anything is written.`,
 			if err := requireRoot(); err != nil {
 				return err
 			}
-			opts := services.SetupOptions{Resolver: withResolver, PPPoE: withPPPoE, UPnP: withUPnP}
+			opts := services.SetupOptions{Dnsmasq: true, Resolver: withResolver, PPPoE: withPPPoE, UPnP: withUPnP}
 			if err := services.Setup(cmd.Context(), services.New(), opts, slog.Default()); err != nil {
 				return err
 			}

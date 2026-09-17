@@ -389,8 +389,9 @@ func TestPacmanAndAPKRefuseSecurity(t *testing.T) {
 	}
 }
 
+// Not parallel: it swaps lookPath, which every parallel test that detects
+// a manager or locates a command reads.
 func TestPacmanCheck(t *testing.T) {
-	t.Parallel()
 	p := pacman{}
 	// checkupdates is the tool an Arch router is expected to have, and the
 	// one that never touches the real database.

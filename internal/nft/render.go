@@ -173,6 +173,7 @@ func (r *renderer) blockSets() {
 		r.set(bogonSetV6, "ipv6_addr", v6, "prefixes IANA has not allocated")
 	}
 	r.busySets()
+	r.protectionSets()
 }
 
 // busySet names the per-source connection tally of one zone and family.
@@ -883,6 +884,9 @@ func (r *renderer) interfacesBlocking(want func(model.Interface) bool) []string 
 func (r *renderer) zoneChains() {
 	for _, z := range r.cfg.Zones {
 		r.block("chain zone_"+z.Name, func() {
+			// The defence comes first: a flood should not be matched
+			// against every rule in the zone before it is dropped.
+			r.protectZone(z.Name)
 			r.busyHosts(z)
 			for i := range r.cfg.Rules {
 				rule := &r.cfg.Rules[i]
@@ -891,6 +895,9 @@ func (r *renderer) zoneChains() {
 				}
 				r.rule(rule)
 			}
+			// Everything nothing allowed arrives here, which is what a port
+			// scan looks like from the router's side.
+			r.scanTally(z.Name)
 			// The tail counts what no rule matched. A zone that logs drops it
 			// here; the rest hand it back to the base chain, which decides
 			// per interface whether the drop is logged, so they only count.
@@ -1113,7 +1120,11 @@ func (r *renderer) rule(rule *model.Rule) {
 		return
 	}
 
-	verdict := []string{"counter"}
+	// A per-source limit is a rule of its own, and it has to come first:
+	// it is what drops the excess before this rule accepts anything.
+	r.ruleLimit(rule, m)
+
+	verdict := append(limitExpr(rule.Limit), "counter")
 	if rule.Log {
 		verdict = append(verdict, fmt.Sprintf("log prefix \"ostiole:%s: \" group %d", rule.ID, LogGroup))
 	}
