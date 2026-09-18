@@ -101,91 +101,132 @@ function addZone(zone) {
       <span class="font-medium">Enabled</span>
     </label>
 
-    <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
-      <FormField id="ts-zone" label="Zone" hint="Nothing is forwarded until this zone has a rule.">
-        <select id="ts-zone" v-model="node.zone" class="input font-mono">
-          <option v-for="z in config.zones" :key="z.name" :value="z.name">{{ z.name }}</option>
-        </select>
-      </FormField>
-      <FormField id="ts-port" label="Port" hint="41641. 0 opens nothing.">
-        <input id="ts-port" v-model.number="port" type="number" min="0" max="65535" class="input" />
-      </FormField>
-      <FormField id="ts-hostname" label="Hostname" hint="The router's name.">
-        <input id="ts-hostname" v-model="hostname" type="text" class="input font-mono" />
-      </FormField>
-      <FormField
-        id="ts-login-server"
-        label="Login server"
-        hint="Tailscale's. Changing it needs a log out."
-      >
-        <input id="ts-login-server" v-model="loginServer" type="text" class="input font-mono" />
-      </FormField>
-    </div>
+    <fieldset class="space-y-3">
+      <legend class="subsection-title">Network</legend>
+      <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
+        <FormField
+          id="ts-zone"
+          label="Zone"
+          hint="Nothing is forwarded until this zone has a rule."
+        >
+          <select id="ts-zone" v-model="node.zone" class="input font-mono">
+            <option v-for="z in config.zones" :key="z.name" :value="z.name">{{ z.name }}</option>
+          </select>
+        </FormField>
+        <FormField id="ts-port" label="Port" hint="41641. 0 opens nothing.">
+          <input
+            id="ts-port"
+            v-model.number="port"
+            type="number"
+            min="0"
+            max="65535"
+            class="input"
+          />
+        </FormField>
+      </div>
+    </fieldset>
 
-    <FormField
-      id="ts-routes"
-      label="Advertise routes"
-      hint="Comma separated. Needs a rule from the zone above."
-    >
-      <input id="ts-routes" v-model="routes" type="text" class="input font-mono" />
-    </FormField>
-    <div class="flex flex-wrap gap-2">
-      <button
-        v-for="z in internalZones"
-        :key="z.name"
-        type="button"
-        class="btn-secondary"
-        :disabled="!zonePrefixes(z.name).length"
-        @click="addZone(z.name)"
-      >
-        Add {{ z.name }}'s networks
-      </button>
-    </div>
+    <fieldset class="space-y-3">
+      <legend class="subsection-title">Identity</legend>
+      <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
+        <FormField id="ts-hostname" label="Hostname" hint="The router's name.">
+          <input id="ts-hostname" v-model="hostname" type="text" class="input font-mono" />
+        </FormField>
+        <FormField
+          id="ts-login-server"
+          label="Login server"
+          hint="Tailscale's. Changing it needs a log out."
+        >
+          <input id="ts-login-server" v-model="loginServer" type="text" class="input font-mono" />
+        </FormField>
+      </div>
+    </fieldset>
 
-    <fieldset class="space-y-2 text-sm">
-      <label class="flex items-center gap-2">
+    <fieldset class="space-y-3">
+      <legend class="subsection-title">Routes</legend>
+      <div class="max-w-2xl space-y-2">
+        <FormField
+          id="ts-routes"
+          label="Advertise routes"
+          hint="Comma separated. Needs a rule from the zone above."
+        >
+          <input id="ts-routes" v-model="routes" type="text" class="input font-mono" />
+        </FormField>
+        <div class="flex flex-wrap gap-2">
+          <button
+            v-for="z in internalZones"
+            :key="z.name"
+            type="button"
+            class="btn-secondary"
+            :disabled="!zonePrefixes(z.name).length"
+            @click="addZone(z.name)"
+          >
+            Add {{ z.name }}'s networks
+          </button>
+        </div>
+      </div>
+      <label class="flex items-start gap-2 text-sm">
         <input
           v-model="ts.advertiseExitNode"
           type="checkbox"
-          class="size-4 rounded border-neutral-300"
+          class="mt-0.5 size-4 rounded border-neutral-300"
         />
-        Advertise as exit node
-        <span class="text-neutral-500">
-          Tailnet devices reach the internet through this router. Needs a rule from its zone to an
-          external zone.
+        <span>
+          Advertise as exit node
+          <span class="block text-neutral-500">
+            Tailnet devices reach the internet through this router. Needs a rule from its zone to an
+            external zone.
+          </span>
         </span>
       </label>
-      <label class="flex items-center gap-2">
+      <label class="flex items-start gap-2 text-sm">
         <input
           v-model="ts.acceptRoutes"
           type="checkbox"
-          class="size-4 rounded border-neutral-300"
+          class="mt-0.5 size-4 rounded border-neutral-300"
         />
-        Accept routes
-        <span class="text-neutral-500">Other nodes' networks become routes on this router.</span>
-      </label>
-      <label class="flex items-center gap-2">
-        <input v-model="ts.logUploads" type="checkbox" class="size-4 rounded border-neutral-300" />
-        Log uploads
-        <span class="text-neutral-500">
-          Off keeps the daemon's logs on this router. Tailscale support cannot help without them.
+        <span>
+          Accept routes
+          <span class="block text-neutral-500">
+            Other nodes' networks become routes on this router.
+          </span>
         </span>
       </label>
     </fieldset>
 
-    <p class="text-sm text-neutral-500">
-      Interface <span class="font-mono">{{ node.name }}</span> in zone
-      <span class="font-mono">{{ node.zone || 'unassigned' }}</span> ·
-      <RouterLink to="/interfaces" class="underline">Interfaces</RouterLink>
-    </p>
+    <fieldset class="space-y-3">
+      <legend class="subsection-title">Privacy</legend>
+      <label class="flex items-start gap-2 text-sm">
+        <input
+          v-model="ts.logUploads"
+          type="checkbox"
+          class="mt-0.5 size-4 rounded border-neutral-300"
+        />
+        <span>
+          Log uploads
+          <span class="block text-neutral-500">
+            Off keeps the daemon's logs on this router. Tailscale support cannot help without them.
+          </span>
+        </span>
+      </label>
+    </fieldset>
 
-    <ConfirmButton
-      label="Remove"
-      :question="`Remove ${node.name} from the configuration?`"
-      description="The daemon stops on the next apply. The node stays in the admin console."
-      :dependents="config.interfaceDependents(node.name)"
-      :typed="node.name"
-      @confirm="config.removeInterface(node.name)"
-    />
+    <div
+      class="flex flex-wrap items-center justify-between gap-3 border-t border-neutral-200 pt-4 text-sm dark:border-neutral-800"
+    >
+      <p class="text-neutral-500">
+        Interface <span class="font-mono">{{ node.name }}</span> in zone
+        <span class="font-mono">{{ node.zone || 'unassigned' }}</span> ·
+        <RouterLink to="/interfaces" class="underline">Interfaces</RouterLink>
+      </p>
+      <ConfirmButton
+        label="Remove"
+        :question="`Remove ${node.name} from the configuration?`"
+        description="The daemon stops on the next apply. The node stays in the admin console."
+        :dependents="config.interfaceDependents(node.name)"
+        :typed="node.name"
+        @confirm="config.removeInterface(node.name)"
+      />
+    </div>
   </div>
 </template>

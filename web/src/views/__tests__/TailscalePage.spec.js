@@ -86,7 +86,7 @@ describe('TailscaleStatus', () => {
   it('offers both ways in when the node is not logged in', async () => {
     const both = config({ interfaces: [node()] })
     const wrapper = await strip(status({ state: 'NeedsLogin' }), { draft: both, saved: both })
-    expect(wrapper.text()).toContain('Not logged in.')
+    expect(wrapper.text()).toContain('not logged in')
     expect(wrapper.find('#ts-auth-key').exists()).toBe(true)
 
     api.tailscale.login.mockResolvedValue({ authUrl: 'https://login.tailscale.com/a/abc' })
@@ -112,10 +112,11 @@ describe('TailscaleStatus', () => {
       }),
       { draft: both, saved: both },
     )
-    expect(wrapper.text()).toContain('fw.tail1.ts.net.')
+    expect(wrapper.text()).toContain('fw.tail1.ts.net')
+    expect(wrapper.text()).not.toContain('ts.net.')
     expect(wrapper.text()).toContain('100.101.102.103')
-    expect(wrapper.text()).toContain('tailnet example.com')
-    expect(wrapper.text()).toContain('Key expires')
+    expect(wrapper.text()).toContain('example.com')
+    expect(wrapper.text()).toContain('expires')
   })
 
   it('says stopped when the daemon is not answering', async () => {
@@ -130,7 +131,7 @@ describe('TailscaleStatus', () => {
       draft: both,
       saved: both,
     })
-    expect(wrapper.text()).toContain('Waiting for approval')
+    expect(wrapper.text()).toContain('waiting for approval')
     expect(wrapper.find('#ts-auth-key').exists()).toBe(false)
   })
 
@@ -139,10 +140,7 @@ describe('TailscaleStatus', () => {
     const wrapper = await strip(status({ state: 'NeedsLogin' }), { draft: both, saved: both })
     api.tailscale.login.mockResolvedValue({ state: 'Running' })
     await wrapper.find('#ts-auth-key').setValue('tskey-auth-abc')
-    await wrapper
-      .findAll('button')
-      .find((b) => b.text() === 'Log in with key')
-      .trigger('click')
+    await wrapper.find('form').trigger('submit')
     await flushPromises()
     expect(api.tailscale.login).toHaveBeenCalledWith('tskey-auth-abc')
     expect(wrapper.find('#ts-auth-key').element.value).toBe('')
@@ -158,7 +156,7 @@ describe('TailscaleStatus', () => {
     wrapper.findComponent(ConfirmButton).vm.$emit('confirm')
     await flushPromises()
     expect(api.tailscale.logout).toHaveBeenCalled()
-    expect(wrapper.text()).toContain('Not logged in.')
+    expect(wrapper.text()).toContain('not logged in')
   })
 
   it('says nothing about a key that is nowhere near expiring', async () => {
@@ -167,7 +165,7 @@ describe('TailscaleStatus', () => {
       status({ keyExpiry: new Date(Date.now() + 180 * 86400000).toISOString() }),
       { draft: both, saved: both },
     )
-    expect(wrapper.text()).not.toContain('Key expires')
+    expect(wrapper.text()).not.toContain('expires')
   })
 })
 

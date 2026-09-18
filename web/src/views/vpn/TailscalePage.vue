@@ -3,9 +3,9 @@ import { TabsContent } from 'reka-ui'
 
 import AppTabs from '@/components/AppTabs.vue'
 import { usePageTabs } from '@/lib/tabs'
-import TailscaleStatus from '@/views/vpn/tailscale/TailscaleStatus.vue'
 import PeersTab from '@/views/vpn/tailscale/PeersTab.vue'
 import SettingsTab from '@/views/vpn/tailscale/SettingsTab.vue'
+import TailscaleStatus from '@/views/vpn/tailscale/TailscaleStatus.vue'
 
 const { tabs, tab } = usePageTabs()
 </script>

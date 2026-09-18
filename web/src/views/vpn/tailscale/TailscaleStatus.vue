@@ -2,7 +2,6 @@
 import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
-import FormField from '@/components/FormField.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { useConfigStore } from '@/stores/config'
@@ -30,7 +29,7 @@ const inDraft = computed(() => Boolean(config.tailscale))
 const inSaved = computed(() => (config.saved?.interfaces ?? []).some((i) => i.tailscale))
 
 /**
- * What the strip says, in the order a router goes through: the daemon,
+ * What the card says, in the order a router goes through: the daemon,
  * the draft, the apply, the login.
  */
 const stage = computed(() => {
@@ -50,6 +49,21 @@ const stage = computed(() => {
       return 'starting'
   }
 })
+
+/** The badge beside the card title, per daemon state. */
+const BADGE = {
+  running: { text: 'logged in', tone: 'badge-ok' },
+  'needs-login': { text: 'not logged in', tone: 'badge-warn' },
+  'needs-approval': { text: 'waiting for approval', tone: 'badge-warn' },
+  starting: { text: 'starting', tone: '' },
+  stopped: { text: 'stopped', tone: 'badge-warn' },
+}
+const badge = computed(() => BADGE[stage.value])
+
+/** The name as people write it, without the dot the daemon appends. */
+const name = computed(() =>
+  (status.value?.dnsName || status.value?.hostName || '').replace(/\.$/, ''),
+)
 
 /** Within a fortnight of expiry is worth saying; before that it is noise. */
 const expiring = computed(() => {
@@ -73,7 +87,7 @@ const logout = useAsync(async () => {
 </script>
 
 <template>
-  <div v-if="status" class="space-y-3">
+  <div v-if="status">
     <p
       v-if="stage === 'missing'"
       class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
@@ -86,62 +100,83 @@ const logout = useAsync(async () => {
     <p v-else-if="stage === 'unapplied'" class="text-sm text-neutral-500">
       Apply the draft to start it.
     </p>
-    <p v-else-if="stage === 'stopped'" class="text-sm text-neutral-500">Stopped.</p>
-    <p v-else-if="stage === 'starting'" class="text-sm text-neutral-500">Starting.</p>
-    <p v-else-if="stage === 'needs-approval'" class="text-sm text-neutral-500">
-      Waiting for approval in the admin console.
-    </p>
 
-    <template v-else-if="stage === 'needs-login'">
-      <p class="text-sm text-neutral-500">Not logged in.</p>
-      <div class="flex flex-wrap items-end gap-3">
-        <button
-          type="button"
-          class="btn-secondary"
-          :disabled="login.busy.value"
-          @click="login.run('')"
-        >
-          Log in
-        </button>
-        <FormField id="ts-auth-key" label="Auth key" hint="Used once and not kept.">
-          <input id="ts-auth-key" v-model="authKey" type="password" class="input" />
-        </FormField>
-        <button
-          type="button"
-          class="btn-secondary"
-          :disabled="!authKey || login.busy.value"
-          @click="login.run(authKey)"
-        >
-          Log in with key
-        </button>
+    <section v-else class="card space-y-3" aria-label="Node">
+      <div class="flex flex-wrap items-baseline justify-between gap-3">
+        <h2 class="section-title">
+          Node
+          <span class="badge ml-2" :class="badge.tone">{{ badge.text }}</span>
+        </h2>
+        <ConfirmButton
+          v-if="stage === 'running'"
+          label="Log out"
+          question="Log this router out of its tailnet?"
+          description="The node stays in the admin console, so logging in again puts it back."
+          @confirm="logout.run()"
+        />
       </div>
-      <p v-if="authUrl" class="text-sm">
-        <a :href="authUrl" target="_blank" rel="noreferrer" class="underline">{{ authUrl }}</a>
-        <span class="ml-2 text-neutral-500">Waiting for the login.</span>
-      </p>
-      <p v-if="login.error.value" role="alert" class="text-sm text-red-600 dark:text-red-400">
-        {{ login.error.value }}
-      </p>
-    </template>
 
-    <template v-else-if="stage === 'running'">
-      <p class="text-sm text-neutral-500">
-        <span class="font-mono">{{ status.dnsName }}</span>
-        <template v-if="status.ips.length">
-          · <span class="font-mono">{{ status.ips.join(', ') }}</span>
-        </template>
-        <template v-if="status.tailnet"> · tailnet {{ status.tailnet }}</template>
+      <template v-if="stage === 'running'">
+        <dl class="kv">
+          <dt>Name</dt>
+          <dd class="font-mono">{{ name }}</dd>
+          <template v-if="status.ips.length">
+            <dt>Addresses</dt>
+            <dd class="font-mono">{{ status.ips.join(', ') }}</dd>
+          </template>
+          <template v-if="status.tailnet">
+            <dt>Tailnet</dt>
+            <dd>{{ status.tailnet }}</dd>
+          </template>
+          <template v-if="expiring">
+            <dt>Key</dt>
+            <dd>expires {{ expiring }}</dd>
+          </template>
+        </dl>
+        <p v-for="h in status.health" :key="h" class="text-amber-700 dark:text-amber-300">
+          {{ h }}
+        </p>
+      </template>
+
+      <p v-else-if="stage === 'needs-approval'" class="text-neutral-500">
+        Approve this router in the admin console.
       </p>
-      <p v-if="expiring" class="text-sm text-neutral-500">Key expires {{ expiring }}.</p>
-      <p v-for="h in status.health" :key="h" class="text-sm text-amber-700 dark:text-amber-300">
-        {{ h }}
-      </p>
-      <ConfirmButton
-        label="Log out"
-        question="Log this router out of its tailnet?"
-        description="The node stays in the admin console, so logging in again puts it back."
-        @confirm="logout.run()"
-      />
-    </template>
+      <p v-else-if="stage === 'starting'" class="text-neutral-500">Starting.</p>
+      <p v-else-if="stage === 'stopped'" class="text-neutral-500">Stopped.</p>
+
+      <template v-else-if="stage === 'needs-login'">
+        <form class="flex flex-wrap items-center gap-3" @submit.prevent="login.run(authKey)">
+          <button
+            type="button"
+            class="btn-primary"
+            :disabled="login.busy.value"
+            @click="login.run('')"
+          >
+            Log in
+          </button>
+          <label for="ts-auth-key" class="text-neutral-500">or with an auth key</label>
+          <input
+            id="ts-auth-key"
+            v-model="authKey"
+            type="password"
+            class="input w-72 font-mono"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button type="submit" class="btn-secondary" :disabled="!authKey || login.busy.value">
+            Log in with key
+          </button>
+        </form>
+        <p class="text-neutral-500">A key is used once and not kept.</p>
+        <p v-if="authUrl">
+          Open
+          <a :href="authUrl" target="_blank" rel="noreferrer" class="link">{{ authUrl }}</a>
+          <span class="ml-1 text-neutral-500">Waiting for the login.</span>
+        </p>
+        <p v-if="login.error.value" role="alert" class="text-red-600 dark:text-red-400">
+          {{ login.error.value }}
+        </p>
+      </template>
+    </section>
   </div>
 </template>
