@@ -15,12 +15,9 @@ const status = ref(null)
 const authUrl = ref('')
 const authKey = ref('')
 
-const emit = defineEmits(['status'])
-
 const poll = useAsync(
   async () => {
     status.value = await api.tailscale.status()
-    emit('status', status.value)
     // The daemon's own link replaces ours as soon as it has one, and goes
     // away when the login is through.
     if (status.value.authUrl) authUrl.value = status.value.authUrl
@@ -42,7 +39,16 @@ const stage = computed(() => {
   if (!inDraft.value) return 'unjoined'
   if (!inSaved.value) return 'unapplied'
   if (!status.value.running || status.value.state === 'Stopped') return 'stopped'
-  return status.value.state === 'Running' ? 'running' : 'needs-login'
+  switch (status.value.state) {
+    case 'Running':
+      return 'running'
+    case 'NeedsLogin':
+      return 'needs-login'
+    case 'NeedsMachineAuth':
+      return 'needs-approval'
+    default:
+      return 'starting'
+  }
 })
 
 /** Within a fortnight of expiry is worth saying; before that it is noise. */
@@ -81,6 +87,10 @@ const logout = useAsync(async () => {
       Apply the draft to start it.
     </p>
     <p v-else-if="stage === 'stopped'" class="text-sm text-neutral-500">Stopped.</p>
+    <p v-else-if="stage === 'starting'" class="text-sm text-neutral-500">Starting.</p>
+    <p v-else-if="stage === 'needs-approval'" class="text-sm text-neutral-500">
+      Waiting for approval in the admin console.
+    </p>
 
     <template v-else-if="stage === 'needs-login'">
       <p class="text-sm text-neutral-500">Not logged in.</p>
@@ -93,7 +103,7 @@ const logout = useAsync(async () => {
         >
           Log in
         </button>
-        <FormField id="ts-auth-key" label="Auth key" hint="From the tailnet's admin console.">
+        <FormField id="ts-auth-key" label="Auth key" hint="Used once and not kept.">
           <input id="ts-auth-key" v-model="authKey" type="password" class="input" />
         </FormField>
         <button

@@ -4,7 +4,7 @@ FLAGS=--no-logs-no-support
 ==> prefs <==
 --netfilter-mode=off
 --accept-dns=false
---snat-subnet-routes=false
+--snat-subnet-routes=true
 --stateful-filtering=false
 --ssh=false
 --auto-update=false

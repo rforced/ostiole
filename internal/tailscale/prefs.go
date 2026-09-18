@@ -31,12 +31,14 @@ type pref struct {
 // Ostiole renders every rule, so the daemon touches no netfilter and no
 // resolv.conf of its own. --exit-node is cleared rather than omitted for
 // the same reason: using one is shelved (ADR-0014), and a node pointed at
-// one by hand would otherwise keep it.
+// one by hand would otherwise keep it. Source NAT stays on: with netfilter
+// off the flag writes nothing, and off makes tailscaled warn on every node
+// that offers an exit node.
 func prefs(t model.Tailscale) []pref {
 	return []pref{
 		{"--netfilter-mode=off", true},
 		{"--accept-dns=false", true},
-		{"--snat-subnet-routes=false", true},
+		{"--snat-subnet-routes=true", true},
 		{"--stateful-filtering=false", true},
 		{"--ssh=false", true},
 		{"--auto-update=false", false},

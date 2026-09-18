@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import ConfirmButton from '@/components/ConfirmButton.vue'
 import { api } from '@/lib/api'
 import { useConfigStore } from '@/stores/config'
 import PeersTab from '@/views/vpn/tailscale/PeersTab.vue'
@@ -117,6 +118,49 @@ describe('TailscaleStatus', () => {
     expect(wrapper.text()).toContain('Key expires')
   })
 
+  it('says stopped when the daemon is not answering', async () => {
+    const both = config({ interfaces: [node()] })
+    const wrapper = await strip(status({ running: false, state: '' }), { draft: both, saved: both })
+    expect(wrapper.text()).toContain('Stopped.')
+  })
+
+  it('waits for approval instead of offering a login', async () => {
+    const both = config({ interfaces: [node()] })
+    const wrapper = await strip(status({ state: 'NeedsMachineAuth' }), {
+      draft: both,
+      saved: both,
+    })
+    expect(wrapper.text()).toContain('Waiting for approval')
+    expect(wrapper.find('#ts-auth-key').exists()).toBe(false)
+  })
+
+  it('logs in with a key and forgets it', async () => {
+    const both = config({ interfaces: [node()] })
+    const wrapper = await strip(status({ state: 'NeedsLogin' }), { draft: both, saved: both })
+    api.tailscale.login.mockResolvedValue({ state: 'Running' })
+    await wrapper.find('#ts-auth-key').setValue('tskey-auth-abc')
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === 'Log in with key')
+      .trigger('click')
+    await flushPromises()
+    expect(api.tailscale.login).toHaveBeenCalledWith('tskey-auth-abc')
+    expect(wrapper.find('#ts-auth-key').element.value).toBe('')
+  })
+
+  it('logs out through the confirmation', async () => {
+    const both = config({ interfaces: [node()] })
+    const wrapper = await strip(status({ dnsName: 'fw.tail1.ts.net.' }), {
+      draft: both,
+      saved: both,
+    })
+    api.tailscale.logout.mockResolvedValue(status({ state: 'NeedsLogin' }))
+    wrapper.findComponent(ConfirmButton).vm.$emit('confirm')
+    await flushPromises()
+    expect(api.tailscale.logout).toHaveBeenCalled()
+    expect(wrapper.text()).toContain('Not logged in.')
+  })
+
   it('says nothing about a key that is nowhere near expiring', async () => {
     const both = config({ interfaces: [node()] })
     const wrapper = await strip(
@@ -222,6 +266,20 @@ describe('Tailscale SettingsTab', () => {
     const button = wrapper.findAll('button').find((b) => b.text() === "Add lan's networks")
     await button.trigger('click')
     expect(store.tailscale.tailscale.advertiseRoutes).toEqual(['192.168.1.0/24'])
+  })
+
+  it('removes the node through the typed confirmation', async () => {
+    const store = useConfigStore()
+    store.draft = config({ interfaces: [...config().interfaces, node()] })
+    store.loaded = true
+    const wrapper = mount(SettingsTab, { global: { stubs } })
+
+    const confirm = wrapper.findComponent(ConfirmButton)
+    expect(confirm.props('typed')).toBe('tailscale0')
+    confirm.vm.$emit('confirm')
+    await flushPromises()
+    expect(store.tailscale).toBeNull()
+    expect(store.interfaces.map((i) => i.name)).toEqual(['eth1'])
   })
 
   it('drops a preference from the draft when it is cleared', async () => {

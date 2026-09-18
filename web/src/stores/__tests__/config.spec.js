@@ -237,6 +237,23 @@ describe('config store draft changes', () => {
     expect(config.isChanged('interfaces[wg0].wireguard.peers', 'bob')).toBe(true)
     expect(config.isChanged('interfaces', 'wg0')).toBe(true)
   })
+
+  it('sends a change to the tailnet node to its own page', () => {
+    const config = useConfigStore()
+    config.replaceDraft(wired())
+    config.draft.interfaces.push({
+      name: 'tailscale0',
+      zone: 'lan',
+      enabled: true,
+      ipv4: { mode: 'none' },
+      ipv6: { mode: 'none' },
+      tailscale: { port: 41641 },
+    })
+    config.changes = [{ path: 'interfaces[tailscale0].tailscale.port', kind: 'changed' }]
+    expect(config.hasChanges('/vpn/tailscale')).toBe(true)
+    expect(config.hasChanges('/vpn/wireguard')).toBe(false)
+    expect(config.hasChanges('/interfaces')).toBe(false)
+  })
 })
 
 describe('config store traffic shaping', () => {

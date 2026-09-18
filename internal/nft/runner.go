@@ -154,28 +154,37 @@ func (x *Exec) DeleteTable(ctx context.Context, family, name string) error {
 	return err
 }
 
-// ListTables returns every nftables table as "family name", e.g.
-// "inet firewalld", so foreign tables can be reported.
+// ListTables returns every nftables table that holds a chain, as
+// "family name", e.g. "inet firewalld", so foreign rulesets can be
+// reported. A table without a chain filters nothing, and iptables-nft
+// makes four of them whenever anything on the router runs iptables at
+// all, tailscaled included.
 func (x *Exec) ListTables(ctx context.Context) ([]string, error) {
-	out, err := x.run(ctx, "list tables", "", "-j", "list", "tables")
+	out, err := x.run(ctx, "list chains", "", "-j", "list", "chains")
 	if err != nil {
 		return nil, err
 	}
 	var doc struct {
 		Nftables []struct {
-			Table *struct {
+			Chain *struct {
 				Family string `json:"family"`
-				Name   string `json:"name"`
-			} `json:"table"`
+				Table  string `json:"table"`
+			} `json:"chain"`
 		} `json:"nftables"`
 	}
 	if err := json.Unmarshal(out, &doc); err != nil {
-		return nil, fmt.Errorf("parse nft tables: %w", err)
+		return nil, fmt.Errorf("parse nft chains: %w", err)
 	}
 	var tables []string
+	seen := map[string]bool{}
 	for _, item := range doc.Nftables {
-		if item.Table != nil {
-			tables = append(tables, item.Table.Family+" "+item.Table.Name)
+		if item.Chain == nil {
+			continue
+		}
+		key := item.Chain.Family + " " + item.Chain.Table
+		if !seen[key] {
+			seen[key] = true
+			tables = append(tables, key)
 		}
 	}
 	return tables, nil

@@ -102,7 +102,7 @@ function addZone(zone) {
     </label>
 
     <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
-      <FormField id="ts-zone" label="Zone" hint="The rules for the tailnet are this zone's.">
+      <FormField id="ts-zone" label="Zone" hint="Nothing is forwarded until this zone has a rule.">
         <select id="ts-zone" v-model="node.zone" class="input font-mono">
           <option v-for="z in config.zones" :key="z.name" :value="z.name">{{ z.name }}</option>
         </select>
@@ -125,7 +125,7 @@ function addZone(zone) {
     <FormField
       id="ts-routes"
       label="Advertise routes"
-      hint="Comma separated. Approve them in the admin console."
+      hint="Comma separated. Needs a rule from the zone above."
     >
       <input id="ts-routes" v-model="routes" type="text" class="input font-mono" />
     </FormField>
@@ -151,7 +151,8 @@ function addZone(zone) {
         />
         Advertise as exit node
         <span class="text-neutral-500">
-          Tailnet devices can reach the internet through this router.
+          Tailnet devices reach the internet through this router. Needs a rule from its zone to an
+          external zone.
         </span>
       </label>
       <label class="flex items-center gap-2">
@@ -161,7 +162,7 @@ function addZone(zone) {
           class="size-4 rounded border-neutral-300"
         />
         Accept routes
-        <span class="text-neutral-500">The networks other nodes advertise.</span>
+        <span class="text-neutral-500">Other nodes' networks become routes on this router.</span>
       </label>
       <label class="flex items-center gap-2">
         <input v-model="ts.logUploads" type="checkbox" class="size-4 rounded border-neutral-300" />
