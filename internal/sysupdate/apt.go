@@ -12,7 +12,7 @@ import (
 // origin an upgrade comes from when you ask it to simulate one. That is
 // the same fact `unattended-upgrades` keys off, without needing it
 // installed.
-type apt struct{}
+type apt struct{ statusTellsPreview }
 
 func (apt) Name() string               { return "apt-get" }
 func (apt) SecurityCapable() bool      { return true }

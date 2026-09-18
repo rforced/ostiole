@@ -39,6 +39,10 @@ type InstallPlan struct {
 	Preview string
 	// Refused is set when the preview names something Ostiole needs.
 	Refused error
+	// Blocked are the removals the manager will not do on this router,
+	// with what it said about each. Their units are masked instead, so
+	// the thing is stopped even though its package stays.
+	Blocked []Blocked
 	// Kept are the extras --keep exempted.
 	Kept []string
 }
@@ -48,6 +52,14 @@ type Removal struct {
 	Label    string
 	Units    []string
 	Packages []string
+}
+
+// Blocked is a removal this router will not have, and the manager's
+// reason. RHEL 10 ships one: shim-x64 requires dbxtool, fwupd is what
+// provides it, and dnf will not break a protected package.
+type Blocked struct {
+	Removal
+	Why string
 }
 
 // Empty reports whether there is nothing to do.
@@ -139,22 +151,87 @@ func PlanInstall(ctx context.Context, d Deps, keep []string) (InstallPlan, error
 			p.Mask = append(p.Mask, e.Units...)
 		}
 	}
-	if pkgs := p.packages(); len(pkgs) > 0 {
-		if d.Packages == nil {
-			return p, sysupdate.ErrNoManager
-		}
-		preview, err := d.Packages.Remove(ctx, pkgs, true)
-		p.Preview = strings.TrimSpace(preview)
-		if err != nil {
-			return p, fmt.Errorf("ask the package manager what removing %s would take: %w", join(pkgs), err)
-		}
-		var names []string
-		for _, r := range p.Remove {
-			names = append(names, r.Label)
-		}
-		p.Refused = refuseRemoval(p.Preview, names, protectedPackages(rep))
+	if err := p.preview(ctx, d, rep); err != nil {
+		return p, err
 	}
 	return p, nil
+}
+
+// preview attaches the package manager's account of the removal, and
+// takes out of the plan whatever it says cannot come off this router.
+func (p *InstallPlan) preview(ctx context.Context, d Deps, rep Report) error {
+	pkgs := p.packages()
+	if len(pkgs) == 0 {
+		return nil
+	}
+	if d.Packages == nil {
+		return sysupdate.ErrNoManager
+	}
+	out, err := d.Packages.Remove(ctx, pkgs, true)
+	if errors.Is(err, sysupdate.ErrPreviewFailed) {
+		// One of them is welded in. Ask about each on its own, leave the
+		// ones the manager refuses where they are with their units masked,
+		// and put the rest back to it together, because a pair can be
+		// impossible when neither is. If that still fails the plan is
+		// refused below rather than guessed at again.
+		p.block(ctx, d)
+		if pkgs = p.packages(); len(pkgs) == 0 {
+			return nil
+		}
+		out, err = d.Packages.Remove(ctx, pkgs, true)
+	}
+	p.Preview = strings.TrimSpace(out)
+	if err != nil {
+		return fmt.Errorf("ask the package manager what removing %s would take: %w", join(pkgs), err)
+	}
+	var names []string
+	for _, r := range p.Remove {
+		names = append(names, r.Label)
+	}
+	p.Refused = refuseRemoval(p.Preview, names, protectedPackages(rep))
+	return nil
+}
+
+// block asks about each removal on its own and moves the ones the
+// manager will not do out of Remove and into Blocked. Their units are
+// masked instead: a package that has to stay can at least be stopped,
+// and that is what an extra with nothing to remove it with already gets.
+func (p *InstallPlan) block(ctx context.Context, d Deps) {
+	var keep []Removal
+	for _, r := range p.Remove {
+		out, err := d.Packages.Remove(ctx, r.Packages, true)
+		if !errors.Is(err, sysupdate.ErrPreviewFailed) {
+			keep = append(keep, r)
+			continue
+		}
+		p.Blocked = append(p.Blocked, Blocked{Removal: r, Why: complaint(out)})
+		p.Mask = append(p.Mask, r.Units...)
+	}
+	p.Remove = keep
+}
+
+// complaint is the line a package manager refused on. dnf prints
+// "Error:" and then the problem indented under it, so the line after
+// the error is the one worth reading; anything else falls back to the
+// end of the output.
+func complaint(out string) string {
+	found := false
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if found {
+			return line
+		}
+		if strings.HasPrefix(line, "Error") {
+			if rest := strings.TrimSpace(strings.TrimPrefix(line, "Error:")); rest != "" {
+				return rest
+			}
+			found = true
+		}
+	}
+	return tail([]byte(out))
 }
 
 // Print writes the plan the way a console reads it, one verb per line.
@@ -186,6 +263,16 @@ func (p InstallPlan) Print(w io.Writer) {
 			names = append(names, r.Label+" ("+strings.Join(r.Packages, " ")+")")
 		}
 		fmt.Fprintf(w, "  remove:               %s\n", strings.Join(names, ", "))
+	}
+	if len(p.Blocked) > 0 {
+		var names []string
+		for _, b := range p.Blocked {
+			names = append(names, b.Label)
+		}
+		fmt.Fprintf(w, "  masked, not removed:  %s\n", strings.Join(names, ", "))
+		for _, b := range p.Blocked {
+			fmt.Fprintf(w, "    %s stays: %s\n", b.Label, b.Why)
+		}
 	}
 	if len(p.Kept) > 0 {
 		fmt.Fprintf(w, "  kept (--keep):        %s\n", strings.Join(p.Kept, ", "))

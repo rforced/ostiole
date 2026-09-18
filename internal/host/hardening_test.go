@@ -440,3 +440,73 @@ func TestPlanInstall(t *testing.T) {
 		t.Error("a refused plan was carried out")
 	}
 }
+
+// What a fresh Rocky 10 does: shim-x64 requires dbxtool, fwupd is what
+// provides it, and dnf will not break a protected package. One extra
+// that cannot come off must not cost the router its install — fwupd is
+// left installed and masked, the rest still go, and the plan says which
+// and why.
+func TestPlanInstallLeavesWhatTheManagerWillNotRemove(t *testing.T) {
+	t.Parallel()
+	const refusal = "Error:\n Problem: The operation would result in broken dependencies for the following " +
+		"protected packages: shim-x64\n  - package shim-x64-16.1-2.el10.x86_64 from @System requires dbxtool >= 0.6-3"
+	const remove = "dnf --setopt=clean_requirements_on_remove=False --assumeno remove "
+	units := &fakeUnits{
+		enabled: map[string]string{
+			"firewalld.service": "enabled", "nftables.service": "enabled",
+			"fwupd.service": "enabled", "fwupd-refresh.timer": "enabled",
+			"udisks2.service": "enabled",
+		},
+		active: map[string]string{"firewalld.service": "active"},
+	}
+	run := &fakeCommands{out: map[string]string{
+		"rpm -q firewalld":                 "firewalld-2.2.1-1.el10.noarch",
+		"rpm -q fwupd":                     "fwupd-2.0.16-1.el10.x86_64",
+		"rpm -q udisks2":                   "udisks2-2.10.1-8.el10.x86_64",
+		remove + "firewalld udisks2 fwupd": refusal,
+		remove + "fwupd":                   refusal,
+		remove + "firewalld":               "Removing:\n firewalld\nOperation aborted.",
+		remove + "udisks2":                 "Removing:\n udisks2\nOperation aborted.",
+		remove + "firewalld udisks2":       "Removing:\n firewalld\n udisks2\nOperation aborted.",
+	}}
+	d := testDeps(t, &model.Config{}, units)
+	d.Run = run
+	d.Packages = testPackages(run)
+	p, err := PlanInstall(context.Background(), d, nil)
+	if err != nil {
+		t.Fatalf("a router with one welded-in package could not be planned for: %v", err)
+	}
+	var removed []string
+	for _, r := range p.Remove {
+		removed = append(removed, r.Label)
+	}
+	if strings.Join(removed, " ") != "firewalld udisks2" {
+		t.Errorf("remove = %v, want the two that can go", removed)
+	}
+	if len(p.Blocked) != 1 || p.Blocked[0].Label != "fwupd" {
+		t.Fatalf("blocked = %+v, want fwupd", p.Blocked)
+	}
+	if !strings.Contains(p.Blocked[0].Why, "shim-x64") {
+		t.Errorf("reason = %q, want the manager's own", p.Blocked[0].Why)
+	}
+	// Stopped even though it stays, which is what an extra with no
+	// package to remove already gets.
+	if !strings.Contains(strings.Join(p.Mask, " "), "fwupd.service") {
+		t.Errorf("mask = %v, want fwupd masked since it cannot be removed", p.Mask)
+	}
+	// The preview the operator agrees to is of the removal that will
+	// actually be attempted, not the one that failed.
+	if !strings.Contains(p.Preview, "udisks2") || strings.Contains(p.Preview, "shim-x64") {
+		t.Errorf("preview = %q, want the plan for what is left", p.Preview)
+	}
+	if p.Refused != nil {
+		t.Errorf("the install was refused over an extra it can simply keep: %v", p.Refused)
+	}
+	var b strings.Builder
+	p.Print(&b)
+	for _, want := range []string{"masked, not removed:  fwupd", "fwupd stays:", "shim-x64"} {
+		if !strings.Contains(b.String(), want) {
+			t.Errorf("printed plan lacks %q:\n%s", want, b.String())
+		}
+	}
+}

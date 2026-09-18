@@ -224,6 +224,12 @@ const InstallTimeout = 10 * time.Minute
 // be, which is a success with nothing to report.
 var ErrNothingToDo = errors.New("nothing to install")
 
+// ErrPreviewFailed means the manager could not work the removal out at
+// all: one of these packages cannot come off this router. It is not the
+// manager working a transaction out and then declining to run it, which
+// is what a preview asks for and reads the same way on dnf.
+var ErrPreviewFailed = errors.New("the package manager cannot remove these")
+
 // Remove takes packages off the router. With preview it changes nothing
 // and returns what the manager says it would do, which is the only honest
 // way to ask somebody to agree to a removal: the manager, not Ostiole,
@@ -242,6 +248,12 @@ func (m *Manager) Remove(ctx context.Context, pkgs []string, preview bool) (stri
 	}
 	if preview {
 		out, err := m.runFor(ctx, argv, InstallTimeout)
+		if m.Driver.PreviewFailed(out) {
+			// Not a transaction the operator can agree to, whatever the
+			// exit status was. The output goes back with the error: it is
+			// the manager's account of why, and the caller shows it.
+			return out, fmt.Errorf("%w: %s: %s", ErrPreviewFailed, m.Driver.Name(), tail([]byte(out)))
+		}
 		if previewRefused(err) {
 			// The manager printed its transaction and then declined to run
 			// it, which is exactly what a preview asked it to do.

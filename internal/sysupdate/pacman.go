@@ -13,6 +13,7 @@ import (
 // to install "only the security fixes" from: the honest answer is to
 // refuse and say why.
 type pacman struct {
+	statusTellsPreview
 	// scratch is where the throwaway database goes. It cannot be /tmp:
 	// the daemon has a PrivateTmp of its own, and the pacman that reads
 	// the directory runs in a transient unit that would see a different

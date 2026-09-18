@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/netip"
@@ -119,17 +120,6 @@ in the web UI replaces it.`,
 					return err
 				}
 			}
-			if bootstrap {
-				ports := []uint16{443}
-				if port := listenPortOf(opts.Listen); port != 0 {
-					ports = []uint16{port}
-				}
-				ports = append(ports, 22)
-				if err := os.WriteFile(filepath.Join(g.configDir, store.RulesetFile), []byte(nft.Bootstrap(ports)), 0o600); err != nil {
-					return fmt.Errorf("write the bootstrap ruleset: %w", err)
-				}
-				fmt.Fprintln(out, "wrote the bootstrap ruleset")
-			}
 			if err := (journald.System{Run: install.ExecRunner{}}).Apply(ctx, journald.DefaultMaxUseGB); err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not bound the system journal: %v\n", err)
 			}
@@ -144,6 +134,20 @@ in the web UI replaces it.`,
 			rep, err := install.Install(ctx, sc, lay, opts, slog.Default())
 			if err != nil {
 				return err
+			}
+			// After Install, which is what creates the configuration
+			// directory: on a fresh router there is nowhere to put this
+			// before then.
+			if bootstrap {
+				ports := []uint16{443}
+				if port := listenPortOf(opts.Listen); port != 0 {
+					ports = []uint16{port}
+				}
+				ports = append(ports, 22)
+				if err := os.WriteFile(filepath.Join(g.configDir, store.RulesetFile), []byte(nft.Bootstrap(ports)), 0o600); err != nil {
+					return fmt.Errorf("write the bootstrap ruleset: %w", err)
+				}
+				fmt.Fprintln(out, "wrote the bootstrap ruleset")
 			}
 			// The firewall unit was enabled; make sure what it loads is in
 			// the kernel before the old firewall is retired.
@@ -372,15 +376,34 @@ func detach(ctx context.Context, g *globals, unit string, args ...string) error 
 }
 
 func confirmPrompt(cmd *cobra.Command, question string) error {
-	if !stdinIsTerminal() {
-		return errors.New("not interactive; pass --yes to proceed")
+	in, err := promptReader()
+	if err != nil {
+		return err
 	}
+	defer in.Close()
 	fmt.Fprint(cmd.OutOrStdout(), question+" [y/N] ")
-	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	line, _ := bufio.NewReader(in).ReadString('\n')
 	if strings.ToLower(strings.TrimSpace(line)) != "y" {
 		return errors.New("aborted")
 	}
 	return nil
+}
+
+// promptReader is what the question is put to. Under the documented
+// install — `curl … | sudo sh` — stdin is the pipe the script itself
+// came down and is at its end, so asking there is asking nobody: the
+// terminal is still attached, it is just not stdin, and /dev/tty is how
+// to reach it. A router with no terminal at all, a cloud-init script or
+// a container build, has to say --yes.
+func promptReader() (io.ReadCloser, error) {
+	if stdinIsTerminal() {
+		return io.NopCloser(os.Stdin), nil
+	}
+	tty, err := os.Open("/dev/tty")
+	if err != nil {
+		return nil, errors.New("not interactive; pass --yes to proceed (curl … | sudo sh -s -- --yes)")
+	}
+	return tty, nil
 }
 
 func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) error {

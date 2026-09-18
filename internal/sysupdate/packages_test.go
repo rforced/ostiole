@@ -195,6 +195,61 @@ func TestPreviewRefused(t *testing.T) {
 	}
 }
 
+// dnf answers a transaction it cannot work out with the same exit
+// status as one it worked out and declined, so the output is what tells
+// them apart. A fresh Rocky 10 has one: shim-x64 requires dbxtool, and
+// fwupd is what provides it.
+const dnfProtectedError = `Updating and loading repositories:
+Repositories loaded.
+Error:
+ Problem: The operation would result in broken dependencies for the following protected packages: shim-x64
+  - package shim-x64-16.1-2.el10.x86_64 from @System requires dbxtool >= 0.6-3, but none of the providers can be installed
+  - conflicting requests
+  - problem with installed package shim-x64-16.1-2.el10.x86_64`
+
+func TestPreviewFailed(t *testing.T) {
+	t.Parallel()
+	if !(dnf{}).PreviewFailed(dnfProtectedError) {
+		t.Error("dnf refusing a protected package read as a transaction")
+	}
+	if (dnf{}).PreviewFailed("Removing:\n fwupd\nOperation aborted.") {
+		t.Error("a transaction dnf printed and declined read as a failure")
+	}
+	// The managers whose dry run exits non-zero when it fails have no
+	// output to read, and must not guess from one.
+	for _, d := range []Driver{apt{}, zypper{}, pacman{}, apk{}} {
+		if d.PreviewFailed("E: Error: something went wrong") {
+			t.Errorf("%s read an error out of its output rather than its exit status", d.Name())
+		}
+	}
+}
+
+// A preview the manager could not work out is an error, not a plan.
+// Read as a plan it removes nothing and refuses nothing, and the
+// installer goes on to attempt a removal that cannot work.
+func TestRemovePreviewFailureIsAnError(t *testing.T) {
+	t.Parallel()
+	argv := strings.Join(dnf{}.RemoveArgv([]string{"fwupd"}, true), " ")
+	run := &fakeRunner{
+		out:  map[string]string{argv: dnfProtectedError},
+		code: map[string]int{argv: 1},
+	}
+	m := New(Options{PackageManager: "dnf", StateDir: t.TempDir(), Run: run, Root: true, Direct: true})
+	out, err := m.Remove(t.Context(), []string{"fwupd"}, true)
+	if !errors.Is(err, ErrPreviewFailed) {
+		t.Fatalf("err = %v, want ErrPreviewFailed", err)
+	}
+	if !strings.Contains(out, "shim-x64") {
+		t.Errorf("output = %q, want the manager's own reason for the caller to show", out)
+	}
+	// The same status, with a transaction printed above it, is the
+	// preview working as intended.
+	run.out[argv] = "Removing:\n fwupd\nOperation aborted."
+	if _, err := m.Remove(t.Context(), []string{"fwupd"}, true); err != nil {
+		t.Errorf("a declined transaction was reported as a failure: %v", err)
+	}
+}
+
 // A finished unit keeps its name (RemainAfterExit), and systemd-run
 // refuses to start a second one by that name. The console never
 // collects the daemon's runs, so the stale one is cleared first; a unit

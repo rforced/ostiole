@@ -9,7 +9,7 @@ import (
 // apk drives Alpine. Like Arch it has one stream and no security-only
 // channel; unlike Arch it has no way to hold a package back from an
 // upgrade either, so an exclude list cannot be honoured here.
-type apk struct{}
+type apk struct{ statusTellsPreview }
 
 func (apk) Name() string               { return "apk" }
 func (apk) SecurityCapable() bool      { return false }

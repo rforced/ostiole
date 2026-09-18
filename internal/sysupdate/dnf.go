@@ -191,6 +191,22 @@ func (d dnf) RemoveArgv(pkgs []string, preview bool) []string {
 	return append([]string{d.Name(), "--setopt=clean_requirements_on_remove=False", answer, "remove"}, pkgs...)
 }
 
+// PreviewFailed reads dnf's own error line, because the exit status says
+// nothing: --assumeno exits 1 having printed a transaction it will not
+// run, and a removal dnf cannot resolve exits 1 having printed "Error:"
+// and the problem instead. RHEL 10 has one of those out of the box —
+// shim-x64 requires dbxtool, which fwupd provides, so fwupd cannot come
+// off a UEFI router at all — and read as a transaction it is an empty
+// plan that removes nothing and reports success.
+func (d dnf) PreviewFailed(out string) bool {
+	for _, line := range lines([]byte(out)) {
+		if strings.HasPrefix(strings.TrimSpace(line), "Error") {
+			return true
+		}
+	}
+	return false
+}
+
 // rpmInstalled asks the rpm database, which both dnf and zypper routers
 // have. `rpm -q` prints the version of a package it has and says "not
 // installed" about one it does not, exiting non-zero either way, so the

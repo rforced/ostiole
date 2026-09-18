@@ -12,7 +12,7 @@ import (
 // in several packages, so the list on the page is still packages but the
 // security count is patches, and `zypper patch --category security` is
 // what installs them.
-type zypper struct{}
+type zypper struct{ statusTellsPreview }
 
 func (zypper) Name() string          { return "zypper" }
 func (zypper) SecurityCapable() bool { return true }

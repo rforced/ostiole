@@ -2,6 +2,7 @@
 # Installs the latest Ostiole release into /usr/local/bin and runs
 # `ostiole install`. Usage:
 #   curl -fsSL https://github.com/rforced/ostiole/releases/latest/download/install.sh | sudo sh
+#   curl -fsSL … | sudo sh -s -- --yes      (agree to the plan in advance)
 # Environment: OSTIOLE_VERSION=v0.1.0 pins a version; OSTIOLE_NO_INSTALL=1 only places the binary.
 set -eu
 
@@ -115,4 +116,8 @@ if [ "${OSTIOLE_NO_INSTALL:-}" = "1" ]; then
   echo "skipping 'ostiole install' (OSTIOLE_NO_INSTALL=1)"
   exit 0
 fi
-exec "$BIN_DIR/ostiole" install
+# Arguments after `sh -s --` are the install command's, so the plan can be
+# agreed to in advance from a script: `… | sudo sh -s -- --yes`. Asked
+# nothing, ostiole install puts its question to /dev/tty, because stdin
+# here is the pipe this script came down.
+exec "$BIN_DIR/ostiole" install "$@"
