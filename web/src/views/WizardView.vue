@@ -27,7 +27,7 @@ const busy = ref(false)
 /** Set once the apply is confirmed, while the status is re-read. */
 const finishing = ref(false)
 
-const candidates = computed(() => links.value.filter((l) => l.kind !== 'loopback'))
+const candidates = computed(() => links.value.filter((l) => l.kind !== 'loopback' && !l.wireless))
 const canPreview = computed(
   () => lan.value !== '' && lanAddress.value.trim() !== '' && lan.value !== wan.value,
 )

@@ -114,14 +114,16 @@ function guards(c) {
 }
 
 /**
- * The VPN page an interface belongs to, or null. A tunnel and a tailnet
- * node are made there and deleted there: the interface is what the
- * configuration produces, not the thing itself, and only that page knows
- * what goes with it — a tunnel's peers and its private key.
+ * The page an interface belongs to, or null. A tunnel, a tailnet node and
+ * a wireless network are made there and deleted there: the interface is
+ * what the configuration produces, not the thing itself, and only that
+ * page knows what goes with it — a tunnel's peers and its private key, a
+ * network's passphrase.
  */
-function vpnPage(cfg) {
+function ownerPage(cfg) {
   if (cfg?.wireguard) return { to: '/vpn/wireguard', label: 'WireGuard' }
   if (cfg?.tailscale) return { to: '/vpn/tailscale', label: 'Tailscale' }
+  if (cfg?.wireless) return { to: '/wireless', label: 'Wireless' }
   return null
 }
 
@@ -132,10 +134,12 @@ function describeKind(row) {
   if (c?.bridge) return `bridge of ${c.bridge.members.join(', ') || 'nothing yet'}`
   if (c?.bond) return `${c.bond.mode} bond of ${c.bond.members.join(', ') || 'nothing yet'}`
   if (c?.vlan) return `VLAN ${c.vlan.id} on ${c.vlan.parent}`
+  if (c?.wireless) return `network "${c.wireless.ssid}" on ${c.wireless.radio}`
   if (c?.tailscale) return 'tailscale'
   if (c?.wireguard) return 'wireguard'
   const l = row.live
   if (!l) return 'not present on this system'
+  if (l.wireless) return 'radio'
   if (l.master) return `port on ${l.master}`
   if (l.vlanId) return `VLAN ${l.vlanId} on ${l.parent}`
   return l.kind
@@ -278,11 +282,18 @@ function editZone(z) {
                   >
                     Members
                   </button>
-                  <RouterLink v-if="vpnPage(row.cfg)" :to="vpnPage(row.cfg).to" class="link mr-3">
-                    {{ vpnPage(row.cfg).label }}
+                  <RouterLink
+                    v-if="ownerPage(row.cfg)"
+                    :to="ownerPage(row.cfg).to"
+                    class="link mr-3"
+                  >
+                    {{ ownerPage(row.cfg).label }}
+                  </RouterLink>
+                  <RouterLink v-if="!row.cfg && row.live?.wireless" to="/wireless" class="link">
+                    Wireless
                   </RouterLink>
                   <button
-                    v-if="row.cfg?.pppoe"
+                    v-else-if="row.cfg?.pppoe"
                     type="button"
                     class="link"
                     @click="editPppoe(row.cfg)"
@@ -293,7 +304,7 @@ function editZone(z) {
                     {{ row.cfg ? 'Edit' : 'Configure' }}
                   </button>
                   <ConfirmButton
-                    v-if="row.cfg && !vpnPage(row.cfg)"
+                    v-if="row.cfg && !ownerPage(row.cfg)"
                     class="ml-3"
                     label="Remove"
                     :question="`Remove ${row.cfg.name} from the configuration?`"

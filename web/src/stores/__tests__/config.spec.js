@@ -322,4 +322,29 @@ describe('config store traffic shaping', () => {
     expect(config.sectionFor('zones[lan].busy.connections')).toBe('/firewall/shaping')
     expect(config.sectionFor('zones[lan].antiLockout')).toBe('/interfaces')
   })
+
+  // A network is an interface, but it is made and edited on Wireless.
+  it('files a radio and its networks under the wireless page', () => {
+    const config = useConfigStore()
+    const d = draft()
+    d.interfaces.push({ name: 'ap0', wireless: { radio: 'wlp3s0', ssid: 'lan' } })
+    d.wireless = { country: 'US', radios: [{ name: 'wlp3s0' }] }
+    config.replaceDraft(d)
+    expect(config.sectionFor('wireless.radios[0].channel')).toBe('/wireless')
+    expect(config.sectionFor('interfaces[ap0].wireless.ssid')).toBe('/wireless')
+    expect(config.sectionFor('interfaces[eth1].ipv4.address')).toBe('/interfaces')
+  })
+
+  // A radio's networks mean nothing without it, so they go with it.
+  it("takes a radio's networks with it", () => {
+    const config = useConfigStore()
+    const d = draft()
+    d.interfaces.push({ name: 'ap0', wireless: { radio: 'wlp3s0', ssid: 'lan' } })
+    d.wireless = { country: 'US', radios: [{ name: 'wlp3s0' }] }
+    config.replaceDraft(d)
+    expect(config.radioDependents('wlp3s0')).toEqual(['network lan on ap0'])
+    config.removeRadio('wlp3s0')
+    expect(config.radios).toEqual([])
+    expect(config.findInterface('ap0')).toBeNull()
+  })
 })

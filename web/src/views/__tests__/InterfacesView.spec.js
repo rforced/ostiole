@@ -84,6 +84,13 @@ describe('InterfacesView', () => {
           ipv4: { mode: 'none' },
           tailscale: { port: 41641 },
         },
+        {
+          name: 'ap0',
+          zone: 'lan',
+          enabled: true,
+          ipv4: { mode: 'none' },
+          wireless: { radio: 'wlp3s0', ssid: 'ostiole-lan', security: 'wpa2-wpa3' },
+        },
       ],
       rules: [],
     }
@@ -106,6 +113,7 @@ describe('InterfacesView', () => {
     for (const [name, label, to] of [
       ['wg0', 'WireGuard', '/vpn/wireguard'],
       ['tailscale0', 'Tailscale', '/vpn/tailscale'],
+      ['ap0', 'Wireless', '/wireless'],
     ]) {
       const row = rowFor(wrapper, name)
       expect(row.findComponent({ name: 'ConfirmButton' }).exists()).toBe(false)
@@ -117,5 +125,24 @@ describe('InterfacesView', () => {
     // An ordinary interface is still removed from here.
     const plain = rowFor(wrapper, 'eth1')
     expect(plain.findComponent({ name: 'ConfirmButton' }).exists()).toBe(true)
+    expect(rowFor(wrapper, 'ap0').text()).toContain('network "ostiole-lan" on wlp3s0')
+  })
+
+  // A radio carries nothing of its own, so the row offers the page that
+  // makes networks rather than a Configure button.
+  it('sends a live radio to the wireless page', async () => {
+    api.interfaces.live.mockResolvedValue([
+      { name: 'wlp3s0', kind: 'ethernet', up: true, carrier: true, wireless: true, addresses: [] },
+    ])
+    const config = useConfigStore()
+    config.draft = { version: 5, zones: [], interfaces: [], rules: [] }
+    config.loaded = true
+    const wrapper = mount(InterfacesView, { global: { stubs } })
+    await flushPromises()
+
+    const row = rowFor(wrapper, 'wlp3s0')
+    expect(row.text()).toContain('radio')
+    expect(row.find('a').attributes('to')).toBe('/wireless')
+    expect(row.text()).not.toContain('Configure')
   })
 })

@@ -26,6 +26,7 @@ const SETTINGS = {
   upnp: '/services/upnp',
   wireguard: '/vpn/wireguard',
   tailscale: '/vpn/tailscale',
+  wireless: '/wireless',
   nat: '/firewall/nat',
   protection: '/firewall/protection',
 }

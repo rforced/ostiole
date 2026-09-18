@@ -270,6 +270,16 @@ export const api = {
     login: (authKey) => post('/tailscale/login', { authKey: authKey ?? '' }),
     logout: () => post('/tailscale/logout'),
   },
+  wireless: {
+    /**
+     * The radios this router has, what each can do, and what it is doing.
+     *
+     * @returns {Promise<{setUp: boolean, country?: string, radios: object[]}>}
+     */
+    radios: () => get('/wireless/radios'),
+    /** @returns {Promise<object[]>} */
+    clients: () => get('/wireless/clients'),
+  },
   update: {
     /**
      * Ask GitHub now. Admin only, and slow enough that a page should

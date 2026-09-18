@@ -8,6 +8,7 @@ import {
   Server,
   Shield,
   Stethoscope,
+  Wifi,
 } from 'lucide-vue-next'
 
 import DashboardView from '@/views/DashboardView.vue'
@@ -60,6 +61,18 @@ export const NAV = [
     tabs: [
       { value: 'interfaces', label: 'Interfaces' },
       { value: 'zones', label: 'Zones' },
+    ],
+  },
+  {
+    to: '/wireless',
+    label: 'Wireless',
+    icon: Wifi,
+    needsConfig: true,
+    view: () => import('@/views/WirelessView.vue'),
+    tabs: [
+      { value: 'radios', label: 'Radios' },
+      { value: 'networks', label: 'Networks' },
+      { value: 'clients', label: 'Clients' },
     ],
   },
   {

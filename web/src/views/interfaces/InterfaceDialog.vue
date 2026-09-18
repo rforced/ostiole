@@ -260,6 +260,11 @@ function save() {
         <RouterLink to="/vpn/tailscale" class="underline">Tailscale</RouterLink>.
       </p>
 
+      <p v-if="form.wireless" class="text-sm text-neutral-500">
+        Its network and security are on
+        <RouterLink to="/wireless" class="underline">Wireless</RouterLink>.
+      </p>
+
       <fieldset
         v-if="!daemonOwned"
         class="space-y-3 rounded-md border border-neutral-200 p-3 dark:border-neutral-800"

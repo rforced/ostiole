@@ -178,6 +178,46 @@ export const useConfigStore = defineStore('config', () => {
   /** The tailnet node, if this router has one. There is at most one. */
   const tailscale = computed(() => interfaces.value.find((i) => i.tailscale) ?? null)
 
+  // ---- Wireless --------------------------------------------------------
+
+  /** The radios this router is configured to use. */
+  const radios = computed(() => draft.value?.wireless?.radios ?? [])
+
+  /** Networks are interfaces with a wireless block. */
+  const wirelessNetworks = computed(() => interfaces.value.filter((i) => i.wireless))
+
+  /** The country every radio follows. */
+  const wirelessCountry = computed(() => draft.value?.wireless?.country ?? '')
+
+  function setWirelessCountry(code) {
+    const w = draft.value.wireless ?? (draft.value.wireless = {})
+    w.country = code
+  }
+
+  function upsertRadio(radio) {
+    const w = draft.value.wireless ?? (draft.value.wireless = {})
+    const list = w.radios ?? (w.radios = [])
+    const idx = list.findIndex((r) => r.name === radio.name)
+    if (idx === -1) list.push(clone(radio))
+    else list[idx] = clone(radio)
+  }
+
+  /** The networks a radio serves, which go with it. */
+  function radioDependents(name) {
+    return wirelessNetworks.value
+      .filter((i) => i.wireless.radio === name)
+      .map((i) => `network ${i.wireless.ssid} on ${i.name}`)
+  }
+
+  function removeRadio(name) {
+    undoable(`Removed radio ${name}.`, () => {
+      for (const i of [...wirelessNetworks.value])
+        if (i.wireless.radio === name) dropInterface(i.name)
+      const w = draft.value.wireless
+      if (w?.radios) w.radios = w.radios.filter((r) => r.name !== name)
+    })
+  }
+
   function removeTunnel(name) {
     undoable(`Deleted tunnel ${name}.`, () => dropInterface(name))
   }
@@ -843,8 +883,11 @@ export const useConfigStore = defineStore('config', () => {
           saved.value?.interfaces?.find((x) => x.name === id)
         if (i?.wireguard) return '/vpn/wireguard'
         if (i?.tailscale) return '/vpn/tailscale'
+        if (i?.wireless) return '/wireless'
         return '/interfaces'
       }
+      case 'wireless':
+        return '/wireless'
       case 'zones':
         // Holding back a busy host is a priority decision, so it is edited
         // and shown where the other priorities are.
@@ -932,6 +975,13 @@ export const useConfigStore = defineStore('config', () => {
     removeInterface,
     tunnels,
     tailscale,
+    radios,
+    wirelessNetworks,
+    wirelessCountry,
+    setWirelessCountry,
+    upsertRadio,
+    radioDependents,
+    removeRadio,
     upsertPeer,
     removePeer,
     upsertZone,
