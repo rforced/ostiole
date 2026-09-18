@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 )
 
 // BluetoothConfFile is the modprobe drop-in that keeps the modules out of
@@ -40,6 +41,11 @@ blacklist bnep
 func BlockBluetooth(ctx context.Context, run Runner, path string) error {
 	if path == "" {
 		path = BluetoothConfFile
+	}
+	// A minimal image may have no modprobe.d at all, and the block has to
+	// be there before a module is ever asked for.
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec // modprobe reads this
+		return err
 	}
 	if err := writeFile(path, BluetoothConf(), 0o644); err != nil {
 		return err
