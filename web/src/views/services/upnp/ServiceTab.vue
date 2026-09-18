@@ -53,6 +53,22 @@ const acl = computed(() => upnp.value.acl ?? [])
 const editing = ref(-1)
 const open = ref(false)
 
+const keys = new WeakMap()
+let lastKey = 0
+
+/**
+ * @param {object} entry
+ * @returns {number} a key that stays with this entry while it is in the draft
+ */
+function keyOf(entry) {
+  let key = keys.get(entry)
+  if (!key) {
+    key = ++lastKey
+    keys.set(entry, key)
+  }
+  return key
+}
+
 function add() {
   editing.value = -1
   open.value = true
@@ -161,7 +177,7 @@ function edit(index) {
             </tr>
             <tr
               v-for="(r, i) in acl"
-              :key="i"
+              :key="keyOf(r)"
               :class="{ 'row-changed': config.isChanged('services.upnp.acl', i) }"
             >
               <td>
