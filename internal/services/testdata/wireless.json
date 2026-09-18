@@ -1,0 +1,77 @@
+{
+  "version": 5,
+  "system": { "dnsServers": ["9.9.9.9"], "management": { "webPort": 443, "sshPort": 22 } },
+  "zones": [
+    { "name": "wan", "external": true },
+    { "name": "lan", "antiLockout": true },
+    { "name": "guest" }
+  ],
+  "interfaces": [
+    { "name": "enp2s0", "zone": "wan", "enabled": true, "ipv4": { "mode": "dhcp" }, "ipv6": { "mode": "none" } },
+    { "name": "enp1s0", "enabled": true, "ipv4": { "mode": "none" }, "ipv6": { "mode": "none" } },
+    {
+      "name": "br-lan",
+      "zone": "lan",
+      "enabled": true,
+      "ipv4": { "mode": "static", "address": "10.88.0.1/24" },
+      "ipv6": { "mode": "none" },
+      "bridge": { "members": ["enp1s0", "ap0"] }
+    },
+    {
+      "name": "ap0",
+      "enabled": true,
+      "ipv4": { "mode": "none" },
+      "ipv6": { "mode": "none" },
+      "wireless": {
+        "radio": "wlp3s0",
+        "ssid": "ostiole-lan",
+        "security": "wpa2-wpa3",
+        "passphrase": "correct horse battery"
+      }
+    },
+    {
+      "name": "ap1",
+      "zone": "guest",
+      "enabled": true,
+      "ipv4": { "mode": "static", "address": "10.99.0.1/24" },
+      "ipv6": { "mode": "none" },
+      "wireless": {
+        "radio": "wlp3s0",
+        "ssid": "ostiole-guest",
+        "security": "wpa3",
+        "passphrase": "guests get their own",
+        "isolate": true
+      }
+    }
+  ],
+  "rules": [],
+  "nat": { "outbound": { "mode": "automatic" } },
+  "services": {
+    "dhcp": {
+      "enabled": true,
+      "servers": [
+        {
+          "interface": "br-lan",
+          "enabled": true,
+          "rangeStart": "10.88.0.100",
+          "rangeEnd": "10.88.0.199",
+          "leaseTime": "12h"
+        },
+        {
+          "interface": "ap1",
+          "enabled": true,
+          "rangeStart": "10.99.0.100",
+          "rangeEnd": "10.99.0.199",
+          "leaseTime": "2h"
+        }
+      ]
+    },
+    "dns": { "enabled": true, "interfaces": ["br-lan", "ap1"], "domain": "home.arpa" }
+  },
+  "wireless": {
+    "country": "US",
+    "radios": [
+      { "name": "wlp3s0", "enabled": true, "band": "5g", "channel": 36, "width": 80, "standard": "ax" }
+    ]
+  }
+}

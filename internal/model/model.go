@@ -4,7 +4,9 @@
 package model
 
 import (
+	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/rforced/ostiole/internal/journald"
@@ -117,6 +119,9 @@ type Config struct {
 	// Updates is how this router keeps itself patched: the distro packages
 	// underneath it and Ostiole's own releases.
 	Updates Updates `json:"updates,omitempty"`
+	// Wireless is the radios this router has. The networks they serve are
+	// interfaces like any other.
+	Wireless Wireless `json:"wireless,omitzero"`
 }
 
 // CronKind is what a scheduled cron does.
@@ -508,7 +513,9 @@ type Interface struct {
 	// and some fibre services are delivered.
 	PPPoE     *PPPoE     `json:"pppoe,omitempty"`
 	Tailscale *Tailscale `json:"tailscale,omitempty"`
-	MTU       int        `json:"mtu,omitempty"`
+	// Wireless makes this interface an SSID served by one of the radios.
+	Wireless *WirelessNetwork `json:"wireless,omitempty"`
+	MTU      int              `json:"mtu,omitempty"`
 
 	// LogDrops overrides system.management.logDefaultDrops for traffic
 	// arriving here: a WAN worth watching can log while a busy LAN stays
@@ -628,6 +635,166 @@ type Tailscale struct {
 // the daemon's default and what every tool on the router assumes.
 const TailscaleDevice = "tailscale0"
 
+// Wireless is the router's radios and the country they transmit in.
+type Wireless struct {
+	// Country is the ISO 3166-1 alpha-2 code every radio follows.
+	Country string  `json:"country,omitempty"`
+	Radios  []Radio `json:"radios,omitempty"`
+}
+
+// Radio is one wifi device, named after the interface the kernel gave
+// it. That interface stays up and idle; the networks are interfaces of
+// their own on the same device.
+type Radio struct {
+	Name    string `json:"name"`
+	Enabled bool   `json:"enabled"`
+	Band    Band   `json:"band"`
+	// Channel 0 lets the daemon pick one.
+	Channel  int      `json:"channel,omitempty"`
+	Width    int      `json:"width"` // MHz
+	Standard Standard `json:"standard"`
+	// Power caps transmit power in dBm; 0 is the regulatory maximum.
+	Power int `json:"power,omitempty"`
+}
+
+// WirelessNetwork makes an interface an SSID served by a radio. hostapd
+// creates the device; the zone or the bridge is the interface's own.
+type WirelessNetwork struct {
+	Radio      string   `json:"radio"`
+	SSID       string   `json:"ssid"`
+	Security   Security `json:"security"`
+	Passphrase string   `json:"passphrase,omitempty"`
+	// Hidden leaves the name out of beacons.
+	Hidden bool `json:"hidden,omitempty"`
+	// Isolate stops clients reaching each other.
+	Isolate bool `json:"isolate,omitempty"`
+	// MaxClients 0 is the daemon's limit.
+	MaxClients int `json:"maxClients,omitempty"`
+}
+
+// Band is the range of frequencies a radio transmits in.
+type Band string
+
+// Bands, in the order the UI offers them.
+const (
+	Band2G Band = "2g"
+	Band5G Band = "5g"
+	Band6G Band = "6g"
+)
+
+// Bands lists every band.
+var Bands = []Band{Band2G, Band5G, Band6G}
+
+// Standard is the 802.11 generation a radio serves.
+type Standard string
+
+// Standards, best first.
+const (
+	StandardAX     Standard = "ax"
+	StandardAC     Standard = "ac"
+	StandardN      Standard = "n"
+	StandardLegacy Standard = "legacy"
+)
+
+// Standards lists every generation, best first.
+var Standards = []Standard{StandardAX, StandardAC, StandardN, StandardLegacy}
+
+// Security is how a network authenticates and encrypts.
+type Security string
+
+// Security choices, in the order the UI offers them.
+const (
+	// SecurityMixed takes WPA3 where the client has it and WPA2 where it
+	// does not.
+	SecurityMixed Security = "wpa2-wpa3"
+	SecurityWPA3  Security = "wpa3"
+	SecurityWPA2  Security = "wpa2"
+	// SecurityOWE encrypts without a passphrase; a client that has never
+	// heard of it joins an open network instead.
+	SecurityOWE  Security = "owe"
+	SecurityOpen Security = "open"
+)
+
+// Securities lists every choice, in the order the UI offers them.
+var Securities = []Security{SecurityMixed, SecurityWPA3, SecurityWPA2, SecurityOWE, SecurityOpen}
+
+// NeedsPassphrase reports whether this choice takes one.
+func (s Security) NeedsPassphrase() bool {
+	return s == SecurityMixed || s == SecurityWPA3 || s == SecurityWPA2
+}
+
+// RadarChannels are the 5 GHz channels a radar may be using, which a card
+// may only transmit on after watching for one.
+var RadarChannels = []int{52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144}
+
+// Channels lists the channels of a band.
+func Channels(b Band) []int {
+	switch b {
+	case Band2G:
+		return []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}
+	case Band5G:
+		return []int{
+			36, 40, 44, 48, 52, 56, 60, 64,
+			100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144,
+			149, 153, 157, 161, 165, 169, 173, 177,
+		}
+	case Band6G:
+		out := make([]int, 0, 59)
+		for c := 1; c <= 233; c += 4 {
+			out = append(out, c)
+		}
+		return out
+	}
+	return nil
+}
+
+// Widths lists the channel widths of a band, in MHz.
+func Widths(b Band) []int {
+	if b == Band2G {
+		return []int{20, 40}
+	}
+	return []int{20, 40, 80, 160}
+}
+
+// Radio returns the radio with the given name.
+func (c *Config) Radio(name string) (Radio, bool) {
+	for _, r := range c.Wireless.Radios {
+		if r.Name == name {
+			return r, true
+		}
+	}
+	return Radio{}, false
+}
+
+// NetworksOn returns the enabled networks a radio serves, sorted by
+// interface name. The order is stable because the first of them is the
+// one hostapd takes as its own interface.
+func (c *Config) NetworksOn(radio string) []Interface {
+	var out []Interface
+	for _, in := range c.Interfaces {
+		if in.Enabled && in.Wireless != nil && in.Wireless.Radio == radio {
+			out = append(out, in)
+		}
+	}
+	slices.SortFunc(out, func(a, b Interface) int { return strings.Compare(a.Name, b.Name) })
+	return out
+}
+
+// ActiveRadios returns the enabled radios that have a network to serve,
+// in configuration order.
+func (c *Config) ActiveRadios() []Radio {
+	var out []Radio
+	for _, r := range c.Wireless.Radios {
+		if r.Enabled && len(c.NetworksOn(r.Name)) > 0 {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// WirelessEnabled reports whether any radio is meant to be transmitting.
+func (c *Config) WirelessEnabled() bool { return len(c.ActiveRadios()) > 0 }
+
 // Kind names what an interface is made of, for the UI and for messages.
 type Kind string
 
@@ -640,6 +807,7 @@ const (
 	KindWireGuard Kind = "wireguard"
 	KindPPPoE     Kind = "pppoe"
 	KindTailscale Kind = "tailscale"
+	KindWireless  Kind = "wireless"
 )
 
 // Kind reports what this interface is.
@@ -657,6 +825,8 @@ func (i Interface) Kind() Kind {
 		return KindPPPoE
 	case i.Tailscale != nil:
 		return KindTailscale
+	case i.Wireless != nil:
+		return KindWireless
 	}
 	return KindPhysical
 }

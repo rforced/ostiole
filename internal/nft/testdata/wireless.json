@@ -1,0 +1,145 @@
+{
+  "version": 5,
+  "system": {
+    "hostname": "wireless-fw",
+    "management": {
+      "webPort": 443,
+      "sshPort": 22
+    }
+  },
+  "zones": [
+    {
+      "name": "wan",
+      "external": true
+    },
+    {
+      "name": "lan",
+      "antiLockout": true
+    },
+    {
+      "name": "guest"
+    }
+  ],
+  "interfaces": [
+    {
+      "name": "enp2s0",
+      "zone": "wan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "dhcp"
+      },
+      "ipv6": {
+        "mode": "none"
+      }
+    },
+    {
+      "name": "enp1s0",
+      "enabled": true,
+      "ipv4": {
+        "mode": "none"
+      },
+      "ipv6": {
+        "mode": "none"
+      }
+    },
+    {
+      "name": "br-lan",
+      "zone": "lan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "10.88.0.1/24"
+      },
+      "ipv6": {
+        "mode": "none"
+      },
+      "bridge": {
+        "members": ["enp1s0", "ap0"]
+      }
+    },
+    {
+      "name": "ap0",
+      "enabled": true,
+      "ipv4": {
+        "mode": "none"
+      },
+      "ipv6": {
+        "mode": "none"
+      },
+      "wireless": {
+        "radio": "wlp3s0",
+        "ssid": "ostiole-lan",
+        "security": "wpa2-wpa3",
+        "passphrase": "correct horse battery"
+      }
+    },
+    {
+      "name": "ap1",
+      "zone": "guest",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "10.99.0.1/24"
+      },
+      "ipv6": {
+        "mode": "none"
+      },
+      "wireless": {
+        "radio": "wlp3s0",
+        "ssid": "ostiole-guest",
+        "security": "wpa3",
+        "passphrase": "guests get their own",
+        "isolate": true
+      }
+    }
+  ],
+  "rules": [
+    {
+      "id": "lan-out",
+      "description": "Allow LAN to any",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    },
+    {
+      "id": "guest-out",
+      "description": "Guests reach the internet only",
+      "enabled": true,
+      "zone": "guest",
+      "destZone": "wan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    }
+  ],
+  "nat": {
+    "outbound": {
+      "mode": "automatic"
+    }
+  },
+  "services": {
+    "dhcp": {
+      "enabled": false
+    },
+    "dns": {
+      "enabled": false
+    }
+  },
+  "wireless": {
+    "country": "US",
+    "radios": [
+      {
+        "name": "wlp3s0",
+        "enabled": true,
+        "band": "5g",
+        "channel": 36,
+        "width": 80,
+        "standard": "ax"
+      }
+    ]
+  }
+}

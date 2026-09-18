@@ -752,6 +752,158 @@ func TestValidateCatchesTailscaleMistakes(t *testing.T) {
 	}
 }
 
+// wirelessConfig has one radio serving two networks: one bridged into the
+// LAN and one with an address of its own in a guest zone.
+func wirelessConfig() *Config {
+	cfg := policyConfig()
+	cfg.Zones = append(cfg.Zones, Zone{Name: "guest"})
+	cfg.Interfaces[1] = Interface{Name: "eth1", Enabled: true, IPv4: IPv4{Mode: AddrNone}, IPv6: IPv6{Mode: AddrNone}}
+	cfg.Interfaces = append(cfg.Interfaces,
+		Interface{
+			Name: "br-lan", Zone: "lan", Enabled: true,
+			IPv4:   IPv4{Mode: AddrStatic, Address: "192.168.1.1/24"},
+			IPv6:   IPv6{Mode: AddrNone},
+			Bridge: &Bridge{Members: []string{"eth1", "ap0"}},
+		},
+		Interface{
+			Name: "ap0", Enabled: true, IPv4: IPv4{Mode: AddrNone}, IPv6: IPv6{Mode: AddrNone},
+			Wireless: &WirelessNetwork{
+				Radio: "wlp3s0", SSID: "ostiole-lan", Security: SecurityMixed, Passphrase: "correct horse battery",
+			},
+		},
+		Interface{
+			Name: "ap1", Zone: "guest", Enabled: true,
+			IPv4: IPv4{Mode: AddrStatic, Address: "10.99.0.1/24"},
+			IPv6: IPv6{Mode: AddrNone},
+			Wireless: &WirelessNetwork{
+				Radio: "wlp3s0", SSID: "ostiole-guest", Security: SecurityWPA3,
+				Passphrase: "guests get their own", Isolate: true,
+			},
+		},
+	)
+	cfg.Wireless = Wireless{
+		Country: "US",
+		Radios: []Radio{
+			{Name: "wlp3s0", Enabled: true, Band: Band5G, Channel: 36, Width: 80, Standard: StandardAX},
+		},
+	}
+	return cfg
+}
+
+func TestValidateAcceptsWirelessNetworks(t *testing.T) {
+	t.Parallel()
+	cfg := wirelessConfig()
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("wireless config rejected: %v", err)
+	}
+	if k := cfg.Interfaces[3].Kind(); k != KindWireless {
+		t.Errorf("Kind() = %q, want %q", k, KindWireless)
+	}
+	nets := cfg.NetworksOn("wlp3s0")
+	if len(nets) != 2 || nets[0].Name != "ap0" || nets[1].Name != "ap1" {
+		t.Errorf("NetworksOn = %+v, want ap0 then ap1", nets)
+	}
+	if got := cfg.ActiveRadios(); len(got) != 1 || !cfg.WirelessEnabled() {
+		t.Errorf("ActiveRadios = %+v", got)
+	}
+	cfg.Interfaces[3].Enabled = false
+	cfg.Interfaces[4].Enabled = false
+	if cfg.WirelessEnabled() {
+		t.Error("a radio with no network is still active")
+	}
+}
+
+func TestValidateWantsACountryBeforeTransmitting(t *testing.T) {
+	t.Parallel()
+	cfg := wirelessConfig()
+	cfg.Wireless.Country = ""
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation errors")
+	}
+	if !strings.Contains(err.Error(), "wireless.country") {
+		t.Errorf("error = %v, want the country", err)
+	}
+}
+
+func TestValidateCatchesWirelessMistakes(t *testing.T) {
+	t.Parallel()
+	cfg := wirelessConfig()
+	cfg.Wireless.Country = "usa"
+	cfg.Wireless.Radios = append(cfg.Wireless.Radios,
+		Radio{Name: "wlp3s0", Enabled: true, Band: Band5G, Width: 80, Standard: StandardAX},
+		Radio{Name: "eth0", Enabled: true, Band: Band2G, Width: 20, Standard: StandardAC},
+		Radio{Name: "wlp4s0", Enabled: true, Band: Band5G, Channel: 52, Width: 160, Standard: StandardAX, Power: 40},
+		Radio{Name: "wlp5s0", Enabled: true, Band: Band2G, Channel: 20, Width: 160, Standard: StandardN},
+		Radio{Name: "wlp6s0", Enabled: true, Band: "7g", Width: 20, Standard: StandardN},
+		Radio{Name: "wlp7s0", Enabled: true, Band: Band6G, Channel: 5, Width: 80, Standard: StandardAC},
+	)
+	cfg.Interfaces[3].Wireless.SSID = strings.Repeat("x", 33)
+	cfg.Interfaces[3].Wireless.Passphrase = "short"
+	cfg.Interfaces[3].Wireless.MaxClients = 5000
+	cfg.Interfaces[4].Wireless.Security = "wep"
+	cfg.Interfaces = append(cfg.Interfaces,
+		Interface{
+			Name: "ap2", Zone: "guest", Enabled: true, IPv4: IPv4{Mode: AddrNone}, IPv6: IPv6{Mode: AddrNone},
+			Wireless: &WirelessNetwork{
+				Radio: "nosuch", SSID: "orphan", Security: SecurityOpen, Passphrase: "not here",
+			},
+		},
+		Interface{
+			Name: "wlp4s0", Enabled: true, IPv4: IPv4{Mode: AddrNone}, IPv6: IPv6{Mode: AddrNone},
+			Wireless: &WirelessNetwork{Radio: "wlp4s0", SSID: "on the anchor", Security: SecurityOpen},
+		},
+		Interface{
+			Name: "ap3", Zone: "guest", Enabled: true, IPv4: IPv4{Mode: AddrNone}, IPv6: IPv6{Mode: AddrNone},
+			Wireless: &WirelessNetwork{
+				Radio: "wlp7s0", SSID: "six\x01ghz", Security: SecurityMixed, Passphrase: "correct horse battery",
+			},
+		},
+	)
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation errors")
+	}
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("error type %T, want *ValidationError", err)
+	}
+	got := map[string]string{}
+	for _, i := range ve.Issues {
+		got[i.Path] = i.Message
+	}
+	for _, p := range []string{
+		"wireless.country",
+		"wireless.radios[1].name",
+		"wireless.radios[2].name",
+		"wireless.radios[2].standard",
+		"wireless.radios[3].name",
+		"wireless.radios[3].channel",
+		"wireless.radios[3].power",
+		"wireless.radios[4].channel",
+		"wireless.radios[4].width",
+		"wireless.radios[5].band",
+		"wireless.radios[6].standard",
+		"interfaces[3].wireless.ssid",
+		"interfaces[3].wireless.passphrase",
+		"interfaces[3].wireless.maxClients",
+		"interfaces[4].wireless.security",
+		"interfaces[5].wireless.radio",
+		"interfaces[5].wireless.passphrase",
+		"interfaces[6].name",
+		"interfaces[7].wireless.ssid",
+		"interfaces[7].wireless.security",
+	} {
+		if _, ok := got[p]; !ok {
+			t.Errorf("missing issue at %s; got %v", p, ve.Issues)
+		}
+	}
+	if msg := got["wireless.radios[3].channel"]; !strings.Contains(msg, "radar") {
+		t.Errorf("channel 52 message = %q, want it to mention radar", msg)
+	}
+}
+
 func TestPolicyTargetsAreStableAndSkipDisabled(t *testing.T) {
 	t.Parallel()
 	cfg := policyConfig()

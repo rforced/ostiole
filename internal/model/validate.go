@@ -110,6 +110,9 @@ func (c *Config) Validate() error {
 			}
 			v.tailscale(path, in)
 		}
+		if in.Wireless != nil {
+			v.wirelessNetwork(path, in, c)
+		}
 		if in.BlockPrivate || in.BlockBogons {
 			// These drop traffic by source address, so an interface that is
 			// itself on such a network would cut itself off.
@@ -131,6 +134,7 @@ func (c *Config) Validate() error {
 	}
 	v.shaping(c, v.enslaved(c, ifaces))
 	v.delegation(c)
+	v.wireless(c, ifaces)
 
 	aliases := map[string]AliasType{}
 	for i, a := range c.Aliases {
@@ -920,6 +924,9 @@ func builtFrom(in Interface) []string {
 	if in.Tailscale != nil {
 		kinds = append(kinds, "a Tailscale node")
 	}
+	if in.Wireless != nil {
+		kinds = append(kinds, "a wireless network")
+	}
 	return kinds
 }
 
@@ -1313,6 +1320,109 @@ func (v *validator) tailscale(path string, in Interface) {
 			v.add(rpath, "%s is the tailnet's own range", r)
 		}
 	}
+}
+
+// regCountryRe is a regulatory domain: an ISO 3166-1 alpha-2 code, which
+// the kernel and hostapd both take in upper case.
+var regCountryRe = regexp.MustCompile(`^[A-Z]{2}$`)
+
+// wireless checks the radios: one country for the router, and a band,
+// channel and width the card can be asked for.
+func (v *validator) wireless(c *Config, ifaces map[string]bool) {
+	w := c.Wireless
+	switch {
+	case w.Country != "" && !regCountryRe.MatchString(w.Country):
+		v.add("wireless.country", "%q must be a two-letter country code", w.Country)
+	case w.Country == "" && c.WirelessEnabled():
+		v.add("wireless.country", "set the country before a radio can transmit")
+	}
+
+	seen := map[string]bool{}
+	for i, r := range w.Radios {
+		path := fmt.Sprintf("wireless.radios[%d]", i)
+		switch {
+		case !ifaceRe.MatchString(r.Name):
+			v.add(path+".name", "%q is not a valid interface name", r.Name)
+		case seen[r.Name]:
+			v.add(path+".name", "duplicate radio %q", r.Name)
+		case ifaces[r.Name]:
+			v.add(path+".name", "%q is a radio; its networks are interfaces of their own", r.Name)
+		}
+		seen[r.Name] = true
+
+		if !slices.Contains(Bands, r.Band) {
+			v.add(path+".band", "%q is not a band", r.Band)
+			continue
+		}
+		if r.Channel != 0 && !slices.Contains(Channels(r.Band), r.Channel) {
+			v.add(path+".channel", "channel %d is not on %s", r.Channel, r.Band)
+		} else if r.Band == Band5G && slices.Contains(RadarChannels, r.Channel) {
+			v.add(path+".channel", "channel %d is a radar channel, which is not supported yet", r.Channel)
+		}
+		if !slices.Contains(Widths(r.Band), r.Width) {
+			v.add(path+".width", "%d MHz is not a width on %s", r.Width, r.Band)
+		}
+		switch {
+		case !slices.Contains(Standards, r.Standard):
+			v.add(path+".standard", "%q is not a standard", r.Standard)
+		case r.Band == Band2G && r.Standard == StandardAC:
+			v.add(path+".standard", "ac is 5 GHz only")
+		case r.Band == Band6G && r.Standard != StandardAX:
+			v.add(path+".standard", "6 GHz is ax only")
+		}
+		if r.Power < 0 || r.Power > 30 {
+			v.add(path+".power", "%d must be 0-30 dBm", r.Power)
+		}
+	}
+}
+
+// wirelessNetwork checks one SSID: the radio that serves it and what a
+// client needs to join.
+func (v *validator) wirelessNetwork(path string, in Interface, c *Config) {
+	n := in.Wireless
+	radio, known := c.Radio(n.Radio)
+	if !known {
+		v.add(path+".wireless.radio", "unknown radio %q", n.Radio)
+	}
+	if in.Name == n.Radio {
+		v.add(path+".name", "the radio's own interface stays idle; name the network something else")
+	}
+	switch {
+	case len(n.SSID) < 1 || len(n.SSID) > 32:
+		v.add(path+".wireless.ssid", "a network name is 1-32 bytes")
+	case strings.ContainsFunc(n.SSID, func(r rune) bool { return r < 0x20 || r == 0x7f }):
+		v.add(path+".wireless.ssid", "a network name takes no control characters")
+	}
+	switch {
+	case !slices.Contains(Securities, n.Security):
+		v.add(path+".wireless.security", "%q is not a security mode", n.Security)
+	case known && radio.Band == Band6G && n.Security != SecurityWPA3 && n.Security != SecurityOWE:
+		v.add(path+".wireless.security", "6 GHz takes wpa3 or owe")
+	}
+	switch {
+	case !n.Security.NeedsPassphrase():
+		if n.Passphrase != "" {
+			v.add(path+".wireless.passphrase", "%s takes no passphrase", n.Security)
+		}
+	case len(n.Passphrase) < 8 || len(n.Passphrase) > 63:
+		v.add(path+".wireless.passphrase", "a passphrase is 8-63 characters")
+	case !printableASCII(n.Passphrase):
+		v.add(path+".wireless.passphrase", "a passphrase is printable ASCII")
+	}
+	if n.MaxClients < 0 || n.MaxClients > 2007 {
+		v.add(path+".wireless.maxClients", "%d must be 0-2007", n.MaxClients)
+	}
+}
+
+// printableASCII reports whether every byte is one a WPA passphrase may
+// hold.
+func printableASCII(s string) bool {
+	for i := range len(s) {
+		if s[i] < 0x20 || s[i] > 0x7e {
+			return false
+		}
+	}
+	return true
 }
 
 // crons checks the scheduled work. The schedule itself is parsed by the
