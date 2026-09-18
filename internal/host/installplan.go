@@ -128,7 +128,10 @@ func PlanInstall(ctx context.Context, d Deps, keep []string) (InstallPlan, error
 		}
 		switch {
 		case e.MaskOnly:
-			p.Mask = append(p.Mask, e.Units...)
+			// Already masked and stopped is already done.
+			if e.Enabled != "masked" || e.Active {
+				p.Mask = append(p.Mask, e.Units...)
+			}
 		case len(e.Packages) > 0:
 			p.Remove = append(p.Remove, Removal{Label: e.Label, Units: e.Units, Packages: e.Packages})
 		default:

@@ -298,9 +298,21 @@ func Units(lay Layout, opts Options) map[string]string {
 	rw := cfg + " " + NetworkdUnitDir + " " + lay.BinDir +
 		" -/etc/dnsmasq.d -/etc/unbound -/etc/resolv.conf -/etc/ppp -/etc/miniupnpd" +
 		" -/etc/ssh/sshd_config.d -/etc/cloud/cloud.cfg.d -/etc/systemd/journald.conf.d"
+	// The firewall unit runs outside the default dependencies, the way
+	// Debian's nftables.service does. With them it would wait for
+	// sysinit.target, and cloud-init's network stage orders itself before
+	// sysinit.target and then waits, from inside, for
+	// systemd-networkd-wait-online, which waits for networkd, which waits
+	// for network-pre.target, which waits for this unit: a cycle systemd
+	// cannot see because one edge is a runtime "systemctl start" with no
+	// timeout. It hung an Ubuntu 26.04 router at boot with nothing
+	// listening. What the unit actually needs is the root filesystem.
 	firewall := fmt.Sprintf(`[Unit]
 Description=Ostiole firewall ruleset (loaded before networking)
 Documentation=https://github.com/rforced/ostiole
+DefaultDependencies=no
+RequiresMountsFor=%s
+After=local-fs.target systemd-sysctl.service
 Wants=network-pre.target
 Before=network-pre.target shutdown.target
 Conflicts=shutdown.target
@@ -314,7 +326,7 @@ ExecReload=%s --config-dir %s load
 
 [Install]
 WantedBy=multi-user.target
-`, cfg, bin, cfg, bin, cfg)
+`, cfg, cfg, bin, cfg, bin, cfg)
 
 	daemon := fmt.Sprintf(`[Unit]
 Description=Ostiole firewall management UI and API

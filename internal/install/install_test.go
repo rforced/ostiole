@@ -146,6 +146,14 @@ func TestUnits(t *testing.T) {
 	t.Parallel()
 	units := Units(DefaultLayout(), Options{Listen: ":443"})
 	d := units[DaemonUnit]
+	// The firewall unit must not wait for sysinit.target: cloud-init's
+	// network stage runs before sysinit and waits for networkd, which
+	// waits for network-pre.target, which waits for this unit.
+	for _, want := range []string{"DefaultDependencies=no", "Before=network-pre.target shutdown.target", "RequiresMountsFor=/etc/ostiole"} {
+		if !strings.Contains(units[FirewallUnit], want) {
+			t.Errorf("firewall unit lacks %q:\n%s", want, units[FirewallUnit])
+		}
+	}
 	if !strings.Contains(d, "--network-backend auto") || !strings.Contains(d, "ReadWritePaths=/etc/ostiole /etc/systemd/network /usr/local/bin -/etc/dnsmasq.d -/etc/unbound -/etc/resolv.conf -/etc/ppp -/etc/miniupnpd -/etc/ssh/sshd_config.d -/etc/cloud/cloud.cfg.d -/etc/systemd/journald.conf.d") {
 		t.Errorf("daemon unit:\n%s", d)
 	}
