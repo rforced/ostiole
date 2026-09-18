@@ -1,5 +1,4 @@
 #!/bin/sh
-# Runs after the package is installed. Nothing is started automatically;
-# the admin decides when the firewall takes over.
-echo "ostiole installed. Next: run 'ostiole install' as root, then open the web UI."
+# Runs after the package is installed. Nothing starts on its own.
+echo "ostiole installed. Next, as root: ostiole repair"
 exit 0

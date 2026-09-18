@@ -1,93 +1,131 @@
-# Ostiole
+<p align="center"><img src=".github/logo.svg" width="96" alt=""></p>
+<h1 align="center">Ostiole</h1>
+<p align="center">A firewall and router appliance for Linux, managed from a web UI.</p>
+<p align="center">
+  <a href="https://github.com/rforced/ostiole/actions/workflows/ci.yml"><img src="https://github.com/rforced/ostiole/actions/workflows/ci.yml/badge.svg?branch=dev" alt="CI"></a>
+  <a href="https://github.com/rforced/ostiole/releases/latest"><img src="https://img.shields.io/github/v/release/rforced/ostiole" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License: AGPL-3.0"></a>
+</p>
 
-Ostiole turns a Linux machine into a firewall and router appliance managed from a web UI, with
-[nftables](https://netfilter.org/projects/nftables/) underneath. One static binary, no runtime
-dependencies beyond `nft` and systemd.
+Ostiole turns a Linux machine into a firewall and router: one static binary with a web UI,
+[nftables](https://netfilter.org/projects/nftables/) underneath, and the standard daemons
+(systemd-networkd, dnsmasq, unbound, miniupnpd, pppd) driven from one declarative configuration.
+Think pfSense, on the distribution you already run.
 
-**Status: alpha.** It runs, but expect bugs.
+**Status: alpha.** It works; expect bugs, and expect the configuration format to change between
+releases.
+
+## What it does
+
+- **Firewall**: zones, rules with aliases (addresses, ports, URL feeds, countries) and schedules,
+  NAT, rate limits and edge protection, a live log.
+- **Interfaces**: physical, VLAN, bridge, bond, PPPoE and WireGuard, static or DHCP, IPv6.
+- **Routing**: static routes, multi-WAN with gateway monitoring, policy routing by rule.
+- **Services**: DHCP and DNS through dnsmasq and unbound, DNS block lists, UPnP IGD and PCP/NAT-PMP
+  port mapping.
+- **Traffic shaping**: a line speed per interface, CAKE queues, priorities set by rule.
+- **Operations**: commit-confirmed applies with auto-revert, configuration revisions, backup and
+  restore with diff, crons, API tokens, roles, packet capture, ping, traceroute, connection and
+  neighbour tables.
+- **Updates**: Ostiole updates itself from signed releases and keeps the distribution patched
+  through its package manager, on a schedule you set.
 
 ## Requirements
 
-- **Linux 5.14 or newer**, on x86-64 or arm64.
-- **systemd** and **nftables** (the `nft` command).
-- **`tc`** (iproute2), only to shape traffic. Red Hat family distributions ship it in a package of
-  its own (`iproute-tc`); `ostiole install` fetches it, and a router that shapes nothing never
-  needs it.
+- **Linux 5.14 or newer** on x86-64 or arm64. That is RHEL 9's kernel; the rendered ruleset needs
+  nothing newer.
+- **systemd.** The install script brings the rest: nftables, systemd-networkd, dnsmasq, unbound,
+  miniupnpd, ppp and tc.
+- **A machine that is the router.** Ostiole runs as root, becomes the network manager and the
+  firewall, and removes the ones it replaces. Do not run it on a workstation.
 
-The kernel floor is where the distributions sit, not where any particular feature does: 5.14 is what
-RHEL 9 and its rebuilds ship, so the line covers every enterprise distribution still in support along
-with current Debian, Ubuntu, Fedora, Alpine, and Arch.
+The installer refuses an older kernel (`OSTIOLE_IGNORE_KERNEL=1` overrides). A router booted onto
+an old kernel after installation keeps filtering and shows a warning on the dashboard.
 
-| Distribution | Kernel | |
+## What is tested
+
+CI runs on every push: [ci.yml](.github/workflows/ci.yml),
+[security.yml](.github/workflows/security.yml), [codeql.yml](.github/workflows/codeql.yml).
+
+| Check | Covers |
+| --- | --- |
+| `go test -race`, `go vet`, golangci-lint | The backend, with the nftables and networkd renderers checked against golden files |
+| eslint, prettier, vitest | The frontend |
+| Playwright on Chromium | The built binary driven through the browser, from first run through every section |
+| Test systems | On each distribution below: the package installs and runs, the install script verifies signatures and refuses tampered builds, and a full install followed by `ostiole repair` under systemd in a container |
+| CodeQL, govulncheck, bun audit, gitleaks, actionlint, zizmor, shellcheck | Code, dependencies, secrets, workflows and shell scripts |
+
+The test systems are the stock images in [test-systems.json](.github/test-systems.json):
+
+| Distribution | Kernel | Notes |
 | --- | --- | --- |
-| RHEL 9, Rocky 9, AlmaLinux 9 | 5.14 | supported (the floor) |
-| Ubuntu 22.04 LTS | 5.15 | supported |
-| Debian 12 | 6.1 | supported |
-| Ubuntu 24.04 LTS | 6.8 | supported |
-| RHEL 10, Rocky 10, Debian 13, Alpine 3.21 | 6.12 | supported |
-| Fedora, Arch | current | supported |
-| RHEL 8, Debian 11, Ubuntu 20.04 | 4.18–5.10 | not supported |
+| Rocky Linux 9 | 5.14 | The floor. RHEL 9 and AlmaLinux 9 are the same |
+| Rocky Linux 10 | 6.12 | RHEL 10 and AlmaLinux 10 are the same |
+| Ubuntu 24.04 LTS | 6.8 | |
+| Ubuntu 26.04 LTS | current | |
+| Fedora 44 | current | |
+| Arch Linux | current | miniupnpd is built from the AUR during install |
+| Alpine 3.24 | current | Package and script only: no systemd, so the script places the binary and stops |
 
-`ostiole install` refuses to run on an older kernel; `--ignore-kernel-version` overrides it. Ostiole
-never refuses to *filter* over a kernel version, though — a router booted onto an old kernel after
-installation keeps working and says so on the dashboard instead.
+Debian 12 and 13, Ubuntu 22.04 and openSUSE meet the requirements and should work, but are not in
+the matrix. RHEL 8, Debian 11 and Ubuntu 20.04 are below the kernel requirement.
 
 ## Install
+
+On the machine that will be the router:
 
 ```sh
 curl -fsSL https://github.com/rforced/ostiole/releases/latest/download/install.sh | sudo sh
 ```
 
-That installs what a router needs (nftables, systemd-networkd, dnsmasq, unbound, miniupnpd, pppd),
-downloads the latest release into `/usr/local/bin` and verifies its checksum, writes the units and
-a bootstrap ruleset, hands addressing to systemd-networkd, and removes the firewalls, network
-managers and updaters it replaces. It lists all of that first and waits for a yes. To agree in
-advance — in a provisioning script, or anywhere without a terminal to answer at — pass the flag
-through:
+The script prints its plan and waits for a yes. The plan is: install the packages above, download
+the release and verify its checksum and signature, write the units, load a bootstrap ruleset, hand
+addressing to systemd-networkd keeping the addresses the machine has now, then remove the
+firewalls, network managers, updaters and desktop services a router has no use for (firewalld, ufw,
+NetworkManager, netplan, unattended-upgrades, snapd and the like).
 
-```sh
-curl -fsSL https://github.com/rforced/ostiole/releases/latest/download/install.sh | sudo sh -s -- --yes
-```
+- `--dry-run` prints the plan and stops.
+- `--yes` agrees in advance, for provisioning: `curl -fsSL https://github.com/rforced/ostiole/releases/latest/download/install.sh | sudo sh -s -- --yes`
+- `--keep <package>` exempts a package from removal. Repeatable.
+- `OSTIOLE_VERSION=v0.8.2` pins a release.
 
-The install starts the web UI on `https://<host>/`. Two things are left: create the admin account
-in the UI, and run the setup wizard to pick WAN and LAN. Packages (deb, rpm, apk, Arch) are
-attached to every release; after installing one, run `ostiole repair`, which is also the command
-to run if anything changes the router's packages later. Updates are a click away under System,
-verified against signed checksums.
+Then open `https://<host>/`, create the admin account and run the wizard to choose WAN and LAN.
+Until that first apply is confirmed the router forwards nothing.
 
-## Design in one paragraph
+**Packages.** deb, rpm, apk and Arch packages are attached to every release. After installing one,
+run `ostiole repair`: it runs the same script with the binary already in place, and is also the
+command for a router whose packages were changed by hand.
 
-Ostiole runs as root on dedicated firewall hardware and owns the network stack: interface addressing,
-routes, the `inet ostiole` nftables table, and later DHCP and DNS. Configuration is a declarative model
-stored under `/etc/ostiole`, rendered to nftables text and applied atomically. Every change that could
-lock you out goes through a commit-confirmed flow that auto-reverts unless you confirm from the UI.
-Installation removes competing firewall and network managers (firewalld, ufw, NetworkManager, netplan
-and friends). Foreign nftables tables are never touched by default.
+**Uninstall.** `ostiole uninstall` stops the service and removes the units and the `inet ostiole`
+table. It does not put back what the script removed.
+
+## How it works
+
+The configuration is one JSON model under `/etc/ostiole`. Ostiole renders it into an nftables
+ruleset, systemd-networkd files and daemon configuration, validates the result, and applies it as
+one transaction. Applies that could lock you out are commit-confirmed: they revert on their own
+unless confirmed from the UI within the window. Ostiole owns one table, `inet ostiole`, and never
+flushes another. The UI serves no third-party assets and there is no telemetry.
+
+## Security
+
+Ostiole runs as root and is the firewall. Report vulnerabilities privately with
+[Report a vulnerability](https://github.com/rforced/ostiole/security/advisories/new), not in an
+issue. [SECURITY.md](SECURITY.md) has the scope, what to expect back, and how to verify a release.
 
 ## Development
 
-Requirements: Go 1.27+, [bun](https://bun.sh), [task](https://taskfile.dev), and for linting
-`golangci-lint` v2 built with the same Go version.
+Go 1.27, [bun](https://bun.sh), [task](https://taskfile.dev) and golangci-lint v2.
 
 ```sh
-task build        # bun build -> internal/web/dist, then go build -> bin/ostiole
-task dev          # Go API on :8080 and Vite dev server on :5173 (proxies /api)
-task lint         # golangci-lint, eslint, prettier
-task test         # go test -race, vitest
-task ci           # lint + test + build, same as GitHub Actions
+task dev    # Go API on :8080, Vite on :5173
+task ci     # lint, test and build, the same as CI
+task e2e    # build, then Playwright against the binary
 ```
 
-## Layout
-
-```
-cmd/ostiole/        entry point
-internal/cli/       cobra commands (serve, version)
-internal/server/    HTTP API and middleware
-internal/web/       embedded SPA (dist/ is generated)
-internal/version/   build metadata
-web/                Vue 3 (JavaScript) + Tailwind v4 + Reka UI
-```
+`scripts/ci/test-systems.sh` runs the per-distribution tests locally with podman. See
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-AGPL-3.0-or-later. See [LICENSE](LICENSE).
+[AGPL-3.0-or-later](LICENSE).

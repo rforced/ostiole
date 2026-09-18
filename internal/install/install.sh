@@ -436,7 +436,10 @@ aur_miniupnpd() {
 		echo "warning: this router has no nobody account to build as; no UPnP" >&2
 		return 0
 	fi
-	build="$(mktemp -d /tmp/ostiole-aur.XXXXXX)"
+	build="$(build_dir)" || {
+		echo "warning: nowhere to build miniupnpd that allows running a configure script; no UPnP" >&2
+		return 0
+	}
 	AUR_HOME="$build"
 	chmod 0755 "$build"
 	chown "$AUR_UID:$AUR_GID" "$build"
@@ -470,6 +473,26 @@ aur_miniupnpd() {
 	fi
 	rm -rf "$build"
 	echo "built and installed $AUR_UPNP from the AUR"
+}
+
+# build_dir prints a temporary directory a build can run binaries in, and
+# proves it rather than assuming: /tmp is noexec on a hardened router and
+# on any container whose runtime mounts it that way, and a configure
+# script has to be executable where it was unpacked.
+build_dir() {
+	for base in /var/tmp /tmp; do
+		[ -d "$base" ] || continue
+		dir="$(mktemp -d "$base/ostiole-aur.XXXXXX" 2>/dev/null)" || continue
+		printf '#!/bin/sh\n' >"$dir/probe"
+		chmod 0755 "$dir/probe"
+		if "$dir/probe" 2>/dev/null; then
+			rm -f "$dir/probe"
+			echo "$dir"
+			return 0
+		fi
+		rm -rf "$dir"
+	done
+	return 1
 }
 
 # as_nobody runs a command in a directory as the unprivileged user makepkg

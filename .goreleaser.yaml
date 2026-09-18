@@ -118,7 +118,7 @@ release:
     ```
 
     Packages above can be installed with `dpkg -i`, `rpm -i`, `apk add --allow-untrusted`, or `pacman -U`,
-    then run `ostiole install`.
+    then run `ostiole repair`.
 
     ## Verifying
 

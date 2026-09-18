@@ -26,10 +26,14 @@ cleanup
 # needs to have a /run of its own. --privileged is for the firewall:
 # loading a table wants NET_ADMIN, and it is the container's own network
 # namespace that gets it, not the host's.
+#
+# /tmp is spelled out because docker mounts a --tmpfs noexec and podman
+# does not, and a workstation run that differs from CI in what it will
+# run is a workstation run that proves nothing.
 "$CONTAINER" run -d --name "$NAME" \
   --privileged --cgroupns=host \
   -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
-  --tmpfs /run --tmpfs /run/lock --tmpfs /tmp \
+  --tmpfs /run --tmpfs /run/lock --tmpfs /tmp:rw,nosuid,nodev,noexec \
   --add-host=host.test:host-gateway \
   -v "$CI_DIR:/ci:ro" \
   "$IMAGE" /ci/systemd-boot.sh >/dev/null

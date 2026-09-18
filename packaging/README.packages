@@ -1,10 +1,12 @@
-Ostiole: firewall and router appliance manager for Linux nftables.
+Ostiole: a firewall and router appliance for Linux, with nftables underneath.
 
 After installing the package run, as root:
 
-    ostiole install
+    ostiole repair
 
-That writes the systemd units, starts the web UI on https://<host>/, and
-explains the next steps (admin account, setup wizard, takeover).
-Updates for package installs come from your package manager; the built-in
-updater is for tarball installs in /usr/local/bin.
+It prints what it will do and asks: install the daemons a router needs,
+write the units, hand addressing to systemd-networkd, remove the firewalls
+and network managers it replaces, and start the web UI on https://<host>/.
+Then create the admin account there and run the wizard.
+
+Updates for a package install come from your package manager.

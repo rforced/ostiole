@@ -4,5 +4,5 @@ This project follows the [Contributor Covenant](https://www.contributor-covenant
 version 2.1.
 
 Be respectful, assume good faith, and keep discussion technical. Harassment of any kind is not
-tolerated. Report concerns to the maintainers through GitHub private vulnerability reporting or by
-opening an issue asking for a private contact.
+tolerated. To report a concern, open an issue asking for a private contact and a maintainer will
+reach out.
