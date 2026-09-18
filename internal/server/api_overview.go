@@ -66,8 +66,10 @@ type LinkSummary struct {
 	MTU         int    `json:"mtu,omitempty"`
 	MAC         string `json:"mac,omitempty"`
 	VLANID      int    `json:"vlanId,omitempty"`
-	IPv4Mode    string `json:"ipv4Mode,omitempty"`
-	IPv6Mode    string `json:"ipv6Mode,omitempty"`
+	// Wireless marks a link on a wifi device, configured or not.
+	Wireless bool   `json:"wireless,omitempty"`
+	IPv4Mode string `json:"ipv4Mode,omitempty"`
+	IPv6Mode string `json:"ipv6Mode,omitempty"`
 	// Addresses are live, from the kernel; StaticAddresses are the ones the
 	// model asks for, so a configuration that has not reached the
 	// interface yet is visible.
@@ -298,6 +300,7 @@ func withLive(s LinkSummary, l network.Link, present bool) LinkSummary {
 	if l.VLANID != 0 {
 		s.VLANID = l.VLANID
 	}
+	s.Wireless = l.Wireless
 	if s.MTU == 0 {
 		s.MTU = l.MTU
 	}
@@ -455,6 +458,32 @@ func (a *api) serviceStates(ctx context.Context, cfg *model.Config) []ServiceSta
 		}
 	}
 
+	// One tile per radio that is meant to be transmitting: each is an
+	// instance of the templated unit, and they fail apart.
+	var radios []ServiceState
+	if cfg != nil {
+		for _, r := range cfg.ActiveRadios() {
+			tile := ServiceState{
+				Name:  "Wireless " + r.Name,
+				Unit:  services.WirelessUnitFor(r.Name),
+				State: stateUnknown,
+				Want:  true,
+			}
+			if a.wireless != nil {
+				switch {
+				case !a.wireless.Installed(ctx):
+					tile.State = stateMissing
+					tile.Detail = "hostapd is not on this router. Run `ostiole repair --wireless` as root."
+				case a.wireless.Active(ctx, r.Name):
+					tile.State = stateActive
+				default:
+					tile.State = stateInactive
+				}
+			}
+			radios = append(radios, tile)
+		}
+	}
+
 	netd := ServiceState{
 		Name:  "Network",
 		Unit:  install.NetworkdUnit,
@@ -486,6 +515,7 @@ func (a *api) serviceStates(ctx context.Context, cfg *model.Config) []ServiceSta
 	if tsConfigured {
 		states = append(states, ts)
 	}
+	states = append(states, radios...)
 	return append(states, netd, logs)
 }
 
@@ -568,9 +598,9 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 		if !l.Configured || !l.Enabled || l.Present {
 			continue
 		}
-		// tailscaled creates its own interface, so a missing one means the
-		// daemon is not running, which the service tile already says.
-		if in, ok := cfg.Interface(l.Name); ok && in.Kind() == model.KindTailscale {
+		// tailscaled and hostapd create their own interfaces, so a missing
+		// one means the daemon is not running, which its tile already says.
+		if in, ok := cfg.Interface(l.Name); ok && (in.Kind() == model.KindTailscale || in.Kind() == model.KindWireless) {
 			continue
 		}
 		missing = append(missing, l.Name)

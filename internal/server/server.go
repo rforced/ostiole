@@ -62,6 +62,9 @@ type Deps struct {
 	// TSClient drives the tailscale command line; nil leaves the status
 	// empty and refuses a login.
 	TSClient *tailscale.Client
+	// Wireless reads the radios and their clients; nil reports "not set
+	// up".
+	Wireless *services.Wireless
 	// Certs manages the certificate the UI serves; nil hides the
 	// certificate endpoints and serves whatever the files hold.
 	Certs *certs.Manager
@@ -115,6 +118,7 @@ func Handler(d Deps) http.Handler {
 		upnp:       d.UPnP,
 		tailscale:  d.Tailscale,
 		tsClient:   d.TSClient,
+		wireless:   d.Wireless,
 		certs:      d.Certs,
 		tokens:     d.Tokens,
 		feedCache:  feedCacheOf(d.Feeds),

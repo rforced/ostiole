@@ -84,6 +84,8 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/dhcp/leases":            {summary: "Current DHCP leases.", role: auth.RoleViewer},
 	"GET /api/v1/upnp/mappings":          {summary: "Port mappings clients have opened over UPnP IGD, PCP, or NAT-PMP, read from the ruleset.", role: auth.RoleViewer},
 	"GET /api/v1/tailscale/status":       {summary: "What the Tailscale node is doing: its state, its addresses, and the other nodes on the tailnet.", role: auth.RoleViewer},
+	"GET /api/v1/wireless/radios":        {summary: "The radios this router has, what each can do, and what it is transmitting now.", role: auth.RoleViewer},
+	"GET /api/v1/wireless/clients":       {summary: "The clients connected to the wireless networks, with their signal and traffic.", role: auth.RoleViewer},
 	"GET /api/v1/gateways":               {summary: "Gateway health from the multi-WAN monitor.", role: auth.RoleViewer},
 	"GET /api/v1/gateways/detected":      {summary: "Default routes the kernel already has, and the gateway each would become.", role: auth.RoleViewer},
 	"GET /api/v1/policy":                 {summary: "Where policy-routed traffic is being sent.", role: auth.RoleViewer},

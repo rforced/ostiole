@@ -48,6 +48,7 @@ type api struct {
 	upnp      *services.UPnP
 	tailscale *services.Tailscale
 	tsClient  *tailscale.Client
+	wireless  *services.Wireless
 	certs     *certs.Manager
 	tokens    *auth.Tokens
 	feeds     FeedRefresher
@@ -116,6 +117,7 @@ func (a *api) register(mux *router) {
 	mux.HandleFunc("GET /api/v1/dhcp/leases", a.readNoEngine(a.dhcpLeases))
 	mux.HandleFunc("GET /api/v1/upnp/mappings", a.readNoEngine(a.upnpMappings))
 	a.registerTailscale(mux)
+	a.registerWireless(mux)
 	mux.HandleFunc("POST /api/v1/wireguard/keys", a.write(a.wireguardKeys))
 	mux.HandleFunc("GET /api/v1/gateways", a.readNoEngine(a.gatewayStatus))
 	mux.HandleFunc("GET /api/v1/gateways/detected", a.read(a.detectedGateways))
@@ -143,6 +145,8 @@ type servicesStatus struct {
 	// Tailscale is tailscaled, which joins the tailnet.
 	TailscaleSetUp   bool `json:"tailscaleSetUp"`
 	TailscaleRunning bool `json:"tailscaleRunning"`
+	// Wireless is hostapd, which serves the networks a radio carries.
+	WirelessSetUp bool `json:"wirelessSetUp"`
 }
 
 func (a *api) servicesStatus(w http.ResponseWriter, r *http.Request) error {
@@ -168,6 +172,9 @@ func (a *api) servicesStatus(w http.ResponseWriter, r *http.Request) error {
 	if a.tailscale != nil {
 		st.TailscaleSetUp = a.tailscale.Installed(r.Context())
 		st.TailscaleRunning = a.tailscale.Active(r.Context())
+	}
+	if a.wireless != nil {
+		st.WirelessSetUp = a.wireless.Installed(r.Context())
 	}
 	// The mappings are in the ruleset, so a router with no table loaded
 	// reports none rather than failing the whole strip.

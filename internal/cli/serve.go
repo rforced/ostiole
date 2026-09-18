@@ -209,6 +209,7 @@ at your own.`,
 				deps.UPnP = services.NewUPnP()
 				deps.Tailscale = services.NewTailscale(g.configDir)
 				deps.TSClient = tailscale.New()
+				deps.Wireless = services.NewWireless(g.configDir)
 				// Gateway probes need a raw socket and route changes need
 				// netlink, so multi-WAN failover is a root-only feature.
 				mon := gateway.New(gateway.NewICMPProber(), gateway.NewNetlinkRouter(), slog.Default())
