@@ -144,6 +144,15 @@ export const NAV = [
         label: 'WireGuard',
         view: () => import('@/views/vpn/WireguardPage.vue'),
       },
+      {
+        path: 'tailscale',
+        label: 'Tailscale',
+        view: () => import('@/views/vpn/TailscalePage.vue'),
+        tabs: [
+          { value: 'settings', label: 'Settings' },
+          { value: 'peers', label: 'Peers' },
+        ],
+      },
     ],
   },
   {

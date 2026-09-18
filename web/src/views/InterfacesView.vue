@@ -120,6 +120,8 @@ function describeKind(row) {
   if (c?.bridge) return `bridge of ${c.bridge.members.join(', ') || 'nothing yet'}`
   if (c?.bond) return `${c.bond.mode} bond of ${c.bond.members.join(', ') || 'nothing yet'}`
   if (c?.vlan) return `VLAN ${c.vlan.id} on ${c.vlan.parent}`
+  if (c?.tailscale) return 'tailscale'
+  if (c?.wireguard) return 'wireguard'
   const l = row.live
   if (!l) return 'not present on this system'
   if (l.master) return `port on ${l.master}`
@@ -264,6 +266,9 @@ function editZone(z) {
                   >
                     Members
                   </button>
+                  <RouterLink v-if="row.cfg?.tailscale" to="/vpn/tailscale" class="link mr-3">
+                    Tailscale
+                  </RouterLink>
                   <button
                     v-if="row.cfg?.pppoe"
                     type="button"

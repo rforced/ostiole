@@ -25,6 +25,7 @@ const SETTINGS = {
   enforcement: '/services/dns#enforcement',
   upnp: '/services/upnp',
   wireguard: '/vpn/wireguard',
+  tailscale: '/vpn/tailscale',
   nat: '/firewall/nat',
   protection: '/firewall/protection',
 }

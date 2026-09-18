@@ -175,6 +175,9 @@ export const useConfigStore = defineStore('config', () => {
   /** Tunnels are interfaces with a wireguard block. */
   const tunnels = computed(() => interfaces.value.filter((i) => i.wireguard))
 
+  /** The tailnet node, if this router has one. There is at most one. */
+  const tailscale = computed(() => interfaces.value.find((i) => i.tailscale) ?? null)
+
   function removeTunnel(name) {
     undoable(`Deleted tunnel ${name}.`, () => dropInterface(name))
   }
@@ -839,6 +842,7 @@ export const useConfigStore = defineStore('config', () => {
           interfaces.value.find((x) => x.name === id) ??
           saved.value?.interfaces?.find((x) => x.name === id)
         if (i?.wireguard) return '/vpn/wireguard'
+        if (i?.tailscale) return '/vpn/tailscale'
         return '/interfaces'
       }
       case 'zones':
@@ -927,6 +931,7 @@ export const useConfigStore = defineStore('config', () => {
     upsertInterface,
     removeInterface,
     tunnels,
+    tailscale,
     upsertPeer,
     removePeer,
     upsertZone,

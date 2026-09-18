@@ -259,6 +259,17 @@ export const api = {
     /** @returns {Promise<{presharedKey: string}>} */
     psk: () => post('/wireguard/keys', { kind: 'psk' }),
   },
+  tailscale: {
+    status: () => get('/tailscale/status'),
+    /**
+     * Start a login. Without a key the answer carries the URL to open.
+     *
+     * @param {string} [authKey]
+     * @returns {Promise<{authUrl?: string, state?: string}>}
+     */
+    login: (authKey) => post('/tailscale/login', { authKey: authKey ?? '' }),
+    logout: () => post('/tailscale/logout'),
+  },
   update: {
     /**
      * Ask GitHub now. Admin only, and slow enough that a page should

@@ -42,6 +42,9 @@ function blank() {
 /** What the kernel has for this interface, when it exists yet. */
 const live = computed(() => props.links.find((l) => l.name === form.value.name) ?? null)
 
+/** tailscaled addresses its own interface and sets its MTU from the tailnet. */
+const daemonOwned = computed(() => Boolean(form.value.tailscale))
+
 /** Plain Ethernet, and what a WireGuard device leaves for its own header. */
 const ETHERNET_MTU = 1500
 const WIREGUARD_MTU = 1420
@@ -103,7 +106,9 @@ watch(
     }
     // An unset MTU is whatever the link is running at, which is a number
     // worth seeing; 0 only ever looked like something was broken.
-    if (!form.value.mtu) form.value.mtu = live.value?.mtu || defaultMtu.value
+    if (!form.value.mtu && !daemonOwned.value) {
+      form.value.mtu = live.value?.mtu || defaultMtu.value
+    }
   },
   { immediate: true },
 )
@@ -250,7 +255,15 @@ function save() {
         Enabled
       </label>
 
-      <fieldset class="space-y-3 rounded-md border border-neutral-200 p-3 dark:border-neutral-800">
+      <p v-if="daemonOwned" class="text-sm text-neutral-500">
+        The tailnet gives this interface its addresses and its MTU. Its settings are on
+        <RouterLink to="/vpn/tailscale" class="underline">Tailscale</RouterLink>.
+      </p>
+
+      <fieldset
+        v-if="!daemonOwned"
+        class="space-y-3 rounded-md border border-neutral-200 p-3 dark:border-neutral-800"
+      >
         <legend class="subsection-title px-1">IPv4</legend>
         <FormField id="if-v4-mode" label="Mode">
           <select id="if-v4-mode" v-model="form.ipv4.mode" class="input">
@@ -280,7 +293,10 @@ function save() {
         </div>
       </fieldset>
 
-      <fieldset class="space-y-3 rounded-md border border-neutral-200 p-3 dark:border-neutral-800">
+      <fieldset
+        v-if="!daemonOwned"
+        class="space-y-3 rounded-md border border-neutral-200 p-3 dark:border-neutral-800"
+      >
         <legend class="subsection-title px-1">IPv6</legend>
         <FormField id="if-v6-mode" label="Mode">
           <select id="if-v6-mode" v-model="form.ipv6.mode" class="input">
@@ -352,7 +368,7 @@ function save() {
         </div>
       </fieldset>
 
-      <FormField id="if-mtu" label="MTU" :hint="mtuHint">
+      <FormField v-if="!daemonOwned" id="if-mtu" label="MTU" :hint="mtuHint">
         <input
           id="if-mtu"
           v-model.number="form.mtu"
@@ -362,7 +378,7 @@ function save() {
           class="input w-32"
         />
       </FormField>
-      <p v-if="pinsLiveMtu" role="note" class="text-sm text-neutral-500">
+      <p v-if="pinsLiveMtu && !daemonOwned" role="note" class="text-sm text-neutral-500">
         {{ form.name }} is running at {{ live.mtu }}, which nothing in the configuration asks for.
         Saving this keeps it after a reboot.
       </p>
