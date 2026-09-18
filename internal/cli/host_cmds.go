@@ -12,42 +12,21 @@ import (
 
 	"github.com/rforced/ostiole/internal/host"
 	"github.com/rforced/ostiole/internal/install"
-	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/nft"
-	"github.com/rforced/ostiole/internal/sysupdate"
 )
 
 // hostDeps builds the host dependencies for a command. The same
 // dependencies the daemon uses, so both front doors report the same
 // router and act on it the same way.
 func (g *globals) hostDeps() host.Deps {
-	root := os.Geteuid() == 0
-	packages := sysupdate.New(sysupdate.Options{
-		PackageManager: g.packageManager,
-		StateDir:       g.updatesDir(),
-		Root:           root,
-		Log:            slog.Default(),
-	})
 	d := host.Deps{
-		Root:     root,
-		Units:    install.ExecSystemctl{},
-		Packages: packages,
-		Kernel:   &nft.Exec{Bin: g.nftBin},
-		Backend:  g.netBackend,
-		NFT:      g.nftBin,
-		Dir:      g.configDir,
-		Log:      slog.Default(),
-	}
-	// The configuration decides which components this router needs, and a
-	// store that cannot be read means an empty one: this command's job is
-	// to make a router ready to hold a configuration, so not having one yet
-	// is the normal case.
-	d.Config = func() *model.Config {
-		cfg, err := g.store().Load()
-		if err != nil {
-			return nil
-		}
-		return cfg
+		Root:    os.Geteuid() == 0,
+		Units:   install.ExecSystemctl{},
+		Kernel:  &nft.Exec{Bin: g.nftBin},
+		Backend: g.netBackend,
+		NFT:     g.nftBin,
+		Dir:     g.configDir,
+		Log:     slog.Default(),
 	}
 	d.TableLoaded = func(ctx context.Context) bool {
 		eng, err := g.engine()
@@ -63,71 +42,61 @@ func (g *globals) hostDeps() host.Deps {
 func newHostCmd(g *globals) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "host",
-		Short: "Prepare this router: packages, competitors, leftover rulesets",
-		Long: `Reports what this router still needs before it is a firewall, and does it.
+		Short: "What this router is, and what an older firewall left behind",
+		Long: `Reports the distribution, the kernel, Ostiole's units, the daemons it
+drives, and who owns the addresses. The same facts are on the web UI under
+System, Host.
 
-The same steps are on the web UI under System, Host, which drives these
-commands: nothing here is a second implementation of them. A router with
-something outstanding sends the browser to that page until it is done or
-the operator says they are leaving it alone.`,
+Packages and units are the install script's job: run "ostiole repair" to
+put them back.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			rep := host.Status(cmd.Context(), g.hostDeps())
-			printHost(cmd, rep)
+			printHost(cmd, host.Status(cmd.Context(), g.hostDeps()))
 			return nil
 		},
 	}
-	cmd.AddCommand(
-		newHostPrepareCmd(g),
-		newHostSetupCmd(g),
-		newHostRemoveCmd(g),
-		newHostExtrasCmd(g),
-		newHostFlushCmd(g),
-		newHostSSHCmd(g),
-		newHostSkipCmd(g),
-	)
+	cmd.AddCommand(newHostFlushCmd(g))
 	return cmd
 }
 
-// printHost writes the report the way a console reads it: what is
-// outstanding first, then the detail behind it.
+// printHost writes the report the way a console reads it.
 func printHost(cmd *cobra.Command, rep host.Report) {
 	out := cmd.OutOrStdout()
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(w, "distribution\t%s\n", or(rep.Distro, "unknown"))
 	fmt.Fprintf(w, "package manager\t%s\n", or(rep.Manager, "none found"))
+	fmt.Fprintf(w, "kernel\t%s\n", or(rep.Kernel, "unknown"))
 	fmt.Fprintf(w, "root\t%v\n", rep.Root)
-	if rep.Unavailable != "" {
-		fmt.Fprintf(w, "note\t%s\n", rep.Unavailable)
+	fmt.Fprintf(w, "ruleset loaded\t%v\n", rep.Firewalled)
+	fmt.Fprintf(w, "addresses\t%s\n", addressOwner(rep.Network))
+	for _, u := range rep.Units {
+		fmt.Fprintf(w, "%s\t%s, %s\n", u.Name, u.Active, u.Enabled)
+	}
+	var have, missing []string
+	for _, name := range host.Commands() {
+		if rep.Present[name] {
+			have = append(have, name)
+		} else {
+			missing = append(missing, name)
+		}
+	}
+	fmt.Fprintf(w, "present\t%s\n", or(strings.Join(have, " "), "none"))
+	if len(missing) > 0 {
+		fmt.Fprintf(w, "missing\t%s\n", strings.Join(missing, " "))
 	}
 	_ = w.Flush()
 
-	fmt.Fprintln(out, "\nSTEP        STATE        DETAIL")
-	for _, s := range rep.Steps {
-		fmt.Fprintf(out, "%-11s %-12s %s\n", s.Step, s.State, s.Detail)
+	fmt.Fprintf(out, "\nnetworking: %s is %s, backend %s\n",
+		install.NetworkdUnit, rep.Network.Networkd, rep.Network.Backend)
+	if len(rep.Network.Managers) > 0 {
+		verb := "still running"
+		if rep.Network.Owned {
+			verb = "retired by Ostiole"
+		}
+		fmt.Fprintf(out, "            %s: %s\n", verb, strings.Join(rep.Network.Managers, ", "))
 	}
-
-	fmt.Fprintln(out, "\nCOMPONENT   REQUIRED  STATE        PACKAGES")
-	for _, c := range rep.Components {
-		state := "missing"
-		switch {
-		case c.Ready:
-			state = "ready"
-		case c.Present:
-			state = "installed"
-		}
-		if c.Availability != sysupdate.Installable && !c.Present {
-			state = string(c.Availability)
-		}
-		fmt.Fprintf(out, "%-11s %-9v %-12s %s\n", c.Key, c.Required, state, strings.Join(c.Packages, " "))
-	}
-
-	if len(rep.Competitors) > 0 {
-		fmt.Fprintln(out, "\nSERVICE                KIND      ACTIVE     ENABLED    PACKAGES")
-		for _, c := range rep.Competitors {
-			fmt.Fprintf(out, "%-22s %-9s %-10s %-10s %s\n",
-				c.Name, c.Kind, c.Active, c.Enabled, strings.Join(c.Packages, " "))
-		}
+	if rep.Network.Pending {
+		fmt.Fprintln(out, "            a handover is waiting: ostiole takeover --network --confirm")
 	}
 	if len(rep.Legacy.Tables) > 0 {
 		fmt.Fprintln(out, "\nLEFTOVER RULESET       RULES  CHAINS")
@@ -139,193 +108,18 @@ func printHost(cmd *cobra.Command, rep host.Report) {
 			fmt.Fprintf(out, "%-22s %-6d %s%s\n", t.ID(), t.Rules, strings.Join(t.Chains, " "), owner)
 		}
 	}
-	if len(rep.Extras) > 0 {
-		fmt.Fprintln(out, "\nNOT NEEDED ON A ROUTER  KIND      STATE        PACKAGES")
-		for _, e := range rep.Extras {
-			state := e.Enabled
-			if e.Active {
-				state = "active"
-			}
-			switch {
-			case e.Removed:
-				state = "removed"
-			case e.MaskOnly:
-				state += ", mask only"
-			}
-			fmt.Fprintf(out, "%-23s %-9s %-12s %s\n", e.Key, e.Kind, state, strings.Join(e.Packages, " "))
-		}
-	}
-	fmt.Fprintf(out, "\nnetworking: %s is %s, backend %s\n",
-		install.NetworkdUnit, rep.Network.Networkd, rep.Network.Backend)
-	if len(rep.Network.Managers) > 0 {
-		verb := "still running"
-		if rep.Network.Owned {
-			verb = "retired by Ostiole"
-		}
-		fmt.Fprintf(out, "            %s: %s\n", verb, strings.Join(rep.Network.Managers, ", "))
-	}
-	printSSH(out, rep)
-	if !rep.Prepared {
-		fmt.Fprintln(out, "\nthis router is not ready: see the steps above")
-	}
 }
 
-// printSSH is the access part of the report: how sshd lets people in and
-// who it lets in.
-func printSSH(out interface{ Write([]byte) (int, error) }, rep host.Report) {
-	switch {
-	case !rep.SSH.Present:
-		fmt.Fprintln(out, "\nssh: sshd is not on this router")
-	case rep.SSH.Note != "":
-		fmt.Fprintf(out, "\nssh: %s\n", rep.SSH.Note)
-	default:
-		passwords := "keys only"
-		if rep.SSH.Passwords {
-			passwords = "passwords allowed"
-		}
-		by := ""
-		if rep.SSH.SetBy != "" {
-			by = " (set by " + rep.SSH.SetBy + ")"
-		}
-		fmt.Fprintf(out, "\nssh: %s%s, root login %s\n", passwords, by, or(rep.SSH.RootLogin, "unknown"))
+// addressOwner says who has the router's addresses, in the words the
+// page uses.
+func addressOwner(net host.NetworkState) string {
+	if net.Owned {
+		return "owned by Ostiole"
 	}
-	if len(rep.Accounts) > 0 {
-		fmt.Fprintln(out, "\nACCOUNT      SUDO   KEYS  SHELL")
-		for _, a := range rep.Accounts {
-			fmt.Fprintf(out, "%-12s %-6v %-5d %s\n", a.Name, a.Sudo, a.Keys, a.Shell)
-		}
+	if len(net.Managers) == 0 {
+		return "owned by something Ostiole does not drive"
 	}
-}
-
-func newHostPrepareCmd(g *globals) *cobra.Command {
-	return &cobra.Command{
-		Use:   "prepare",
-		Short: "Do everything this router still needs, in order",
-		Long: `Sets up the components the configuration asks for, retires the old
-firewall, and clears what it left in the kernel: the page's one button,
-from the console. The old firewall is only retired once a configuration
-has been applied and confirmed, so on a router with none yet it is left
-running and said so. Addressing is separate (ostiole takeover --network),
-because it can drop the session it is driven from.`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := requireRoot(); err != nil {
-				return err
-			}
-			d := g.hostDeps()
-			said, err := host.Prepare(cmd.Context(), d, func(ctx context.Context, keys []string) (string, error) {
-				return host.SetUp(ctx, d, keys, true)
-			})
-			if said != "" {
-				fmt.Fprintln(cmd.OutOrStdout(), said)
-			}
-			return err
-		},
-	}
-}
-
-func newHostExtrasCmd(g *globals) *cobra.Command {
-	var yes, dryRun bool
-	cmd := &cobra.Command{
-		Use:   "extras [key...]",
-		Short: "Remove what a router has no use for: other updaters, snapd, desktop daemons",
-		Long: `Stops and masks an extra's units and removes its packages. With no key,
-every extra this router has. What else comes away with a package is the
-package manager's answer, so it is asked first and printed before anything
-is removed; an extra whose package is the package manager itself is masked
-and kept.
-
-Extras: ` + strings.Join(extraKeys(), ", "),
-		Args: cobra.ArbitraryArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := requireRoot(); err != nil {
-				return err
-			}
-			d := g.hostDeps()
-			out := cmd.OutOrStdout()
-			keys := args
-			if len(keys) == 0 {
-				for _, e := range host.Status(cmd.Context(), d).Extras {
-					if !e.Removed {
-						keys = append(keys, e.Key)
-					}
-				}
-				if len(keys) == 0 {
-					fmt.Fprintln(out, "nothing to do: this router has none of them")
-					return nil
-				}
-				fmt.Fprintf(out, "removing: %s\n", strings.Join(keys, ", "))
-			}
-			preview, err := host.RemoveExtras(cmd.Context(), d, keys, true)
-			if preview != "" {
-				fmt.Fprintln(out, strings.TrimSpace(preview))
-			}
-			if err != nil {
-				return err
-			}
-			if dryRun {
-				return nil
-			}
-			if !yes {
-				if err := confirmPrompt(cmd, "\nproceed?"); err != nil {
-					return err
-				}
-			}
-			said, err := host.RemoveExtras(cmd.Context(), d, keys, false)
-			if said != "" {
-				fmt.Fprintln(out, said)
-			}
-			return err
-		},
-	}
-	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask for confirmation")
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "only report what would be removed")
-	return cmd
-}
-
-func extraKeys() []string {
-	var keys []string
-	for _, e := range host.Extras() {
-		keys = append(keys, e.Key)
-	}
-	return keys
-}
-
-func newHostSSHCmd(g *globals) *cobra.Command {
-	return &cobra.Command{
-		Use:   "ssh [require-keys|allow-passwords]",
-		Short: "Show how sshd lets people in, or require keys",
-		Long: `With no argument, reports whether sshd accepts passwords and which file
-decided that. require-keys writes ` + host.SSHDropIn + `, which sorts
-before anything cloud-init drops in and so wins, tells cloud-init to
-leave the setting alone, checks the result with sshd and reloads it.
-allow-passwords takes both files away again. Nothing checks that anybody
-has a key first: the accounts and their key counts are in the report.`,
-		Args: cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			d := g.hostDeps()
-			if len(args) == 0 {
-				printSSH(cmd.OutOrStdout(), host.Status(cmd.Context(), d))
-				return nil
-			}
-			if err := requireRoot(); err != nil {
-				return err
-			}
-			var allow bool
-			switch args[0] {
-			case "require-keys":
-			case "allow-passwords":
-				allow = true
-			default:
-				return fmt.Errorf("%q: say require-keys or allow-passwords", args[0])
-			}
-			said, err := host.SetSSHPasswords(cmd.Context(), d, allow)
-			if said != "" {
-				fmt.Fprintln(cmd.OutOrStdout(), said)
-			}
-			return err
-		},
-	}
+	return "owned by " + strings.Join(net.Managers, ", ")
 }
 
 func or(s, fallback string) string {
@@ -333,109 +127,6 @@ func or(s, fallback string) string {
 		return fallback
 	}
 	return s
-}
-
-func newHostSetupCmd(g *globals) *cobra.Command {
-	var all, noRestart bool
-	cmd := &cobra.Command{
-		Use:   "setup [component...]",
-		Short: "Install components and write the units that point them at Ostiole",
-		Long: `Installs the packages a component needs and writes Ostiole's unit for
-it, so the configuration can turn the service on. Nothing here starts a
-service: that is the Enabled switch, applied like everything else.
-
-With no component, every one the configuration in force asks for and this
-router does not have yet. With --all, every component Ostiole can install.
-
-Components: ` + strings.Join(componentKeys(), ", "),
-		Args: cobra.ArbitraryArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := requireRoot(); err != nil {
-				return err
-			}
-			d := g.hostDeps()
-			keys := args
-			if all {
-				keys = componentKeys()
-			}
-			if len(keys) == 0 {
-				rep := host.Status(cmd.Context(), d)
-				for _, c := range rep.Components {
-					if c.Outstanding() {
-						keys = append(keys, c.Key)
-					}
-				}
-				if len(keys) == 0 {
-					fmt.Fprintln(cmd.OutOrStdout(), "nothing to do: every component this configuration asks for is set up")
-					return nil
-				}
-				fmt.Fprintf(cmd.OutOrStdout(), "setting up: %s\n", strings.Join(keys, ", "))
-			}
-			said, err := host.SetUp(cmd.Context(), d, keys, !noRestart)
-			if said != "" {
-				fmt.Fprintln(cmd.OutOrStdout(), said)
-			}
-			return err
-		},
-	}
-	cmd.Flags().BoolVar(&all, "all", false, "set up every component, not only the ones this configuration needs")
-	cmd.Flags().BoolVar(&noRestart, "no-restart", false, "internal: the daemon drove this and restarts itself afterwards")
-	_ = cmd.Flags().MarkHidden("no-restart")
-	return cmd
-}
-
-func componentKeys() []string {
-	var keys []string
-	for _, c := range sysupdate.Components() {
-		keys = append(keys, c.Key)
-	}
-	return keys
-}
-
-func newHostRemoveCmd(g *globals) *cobra.Command {
-	var yes, dryRun bool
-	cmd := &cobra.Command{
-		Use:   "remove <service...>",
-		Short: "Remove a retired competitor's packages",
-		Long: `Takes the packages of a competing firewall or network manager off the
-router. Disabling and masking a unit is enough to stop it and leaves a
-way back, so this is never done for you and never done to a service that
-is still running or still enabled: retire it first with ostiole takeover.
-
-What else comes away with a package is the package manager's answer, not
-Ostiole's, so it is asked first and printed before anything is removed.`,
-		Args: cobra.MinimumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := requireRoot(); err != nil {
-				return err
-			}
-			d := g.hostDeps()
-			out := cmd.OutOrStdout()
-			preview, err := host.RemovePackages(cmd.Context(), d, args, true)
-			if preview != "" {
-				fmt.Fprintln(out, strings.TrimSpace(preview))
-			}
-			if err != nil {
-				return err
-			}
-			if dryRun {
-				return nil
-			}
-			if !yes {
-				if err := confirmPrompt(cmd, "\nremove these packages?"); err != nil {
-					return err
-				}
-			}
-			said, err := host.RemovePackages(cmd.Context(), d, args, false)
-			if said != "" {
-				fmt.Fprintln(out, said)
-			}
-			return err
-		},
-	}
-	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask for confirmation")
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "only report what would be removed")
-	return cmd
 }
 
 func newHostFlushCmd(g *globals) *cobra.Command {
@@ -497,36 +188,5 @@ it would break whatever is using it.`,
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask for confirmation")
-	return cmd
-}
-
-func newHostSkipCmd(g *globals) *cobra.Command {
-	var undo bool
-	cmd := &cobra.Command{
-		Use:   "skip <step>",
-		Short: "Leave a preparation step alone, so the web UI stops asking",
-		Long: `Records that this router is deliberately staying as it is for one
-step. The work still shows on the page, with who left it and when; what
-stops is the browser being sent there.
-
-Steps: ` + strings.Join(host.Steps(), ", "),
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			by := "console"
-			if u := os.Getenv("SUDO_USER"); u != "" {
-				by = u
-			}
-			if err := host.SetSkip(g.configDir, args[0], by, !undo); err != nil {
-				return err
-			}
-			word := "left alone"
-			if undo {
-				word = "back on the list"
-			}
-			fmt.Fprintf(cmd.OutOrStdout(), "%s: %s\n", args[0], word)
-			return nil
-		},
-	}
-	cmd.Flags().BoolVar(&undo, "undo", false, "ask about this step again")
 	return cmd
 }

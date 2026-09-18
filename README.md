@@ -38,20 +38,22 @@ installation keeps working and says so on the dashboard instead.
 curl -fsSL https://github.com/rforced/ostiole/releases/latest/download/install.sh | sudo sh
 ```
 
-That downloads the latest release into `/usr/local/bin`, verifies its checksum, and runs
-`ostiole install`, which lists everything it would install, mask and remove and waits for a
-yes before doing any of it. To agree in advance — in a provisioning script, or anywhere
-without a terminal to answer at — pass the flag through:
+That installs what a router needs (nftables, systemd-networkd, dnsmasq, unbound, miniupnpd, pppd),
+downloads the latest release into `/usr/local/bin` and verifies its checksum, writes the units and
+a bootstrap ruleset, hands addressing to systemd-networkd, and removes the firewalls, network
+managers and updaters it replaces. It lists all of that first and waits for a yes. To agree in
+advance — in a provisioning script, or anywhere without a terminal to answer at — pass the flag
+through:
 
 ```sh
 curl -fsSL https://github.com/rforced/ostiole/releases/latest/download/install.sh | sudo sh -s -- --yes
 ```
 
-The install writes the systemd units and starts the web UI on `https://<host>/`.
-Packages (deb, rpm, apk, Arch) are attached to every release; after installing one, run
-`ostiole install` yourself. Then create the admin account in the UI, run the setup wizard,
-and use `ostiole takeover` and `ostiole takeover --network` to retire the previous firewall
-and network manager. Updates are a click away under System, verified against signed checksums.
+The install starts the web UI on `https://<host>/`. Two things are left: create the admin account
+in the UI, and run the setup wizard to pick WAN and LAN. Packages (deb, rpm, apk, Arch) are
+attached to every release; after installing one, run `ostiole repair`, which is also the command
+to run if anything changes the router's packages later. Updates are a click away under System,
+verified against signed checksums.
 
 ## Design in one paragraph
 
@@ -59,7 +61,7 @@ Ostiole runs as root on dedicated firewall hardware and owns the network stack: 
 routes, the `inet ostiole` nftables table, and later DHCP and DNS. Configuration is a declarative model
 stored under `/etc/ostiole`, rendered to nftables text and applied atomically. Every change that could
 lock you out goes through a commit-confirmed flow that auto-reverts unless you confirm from the UI.
-Installation disables competing firewall and network managers (firewalld, ufw, NetworkManager, netplan
+Installation removes competing firewall and network managers (firewalld, ufw, NetworkManager, netplan
 and friends). Foreign nftables tables are never touched by default.
 
 ## Development

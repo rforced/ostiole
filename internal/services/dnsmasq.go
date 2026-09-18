@@ -464,7 +464,7 @@ func (d *Dnsmasq) Apply(ctx context.Context, files network.Files) error {
 		return nil
 	}
 	if !d.Installed(ctx) {
-		return errors.New("dnsmasq is not set up on this host; run `ostiole services setup`")
+		return errors.New("dnsmasq is not set up on this host; run `ostiole repair`")
 	}
 	if err := os.MkdirAll(filepath.Dir(d.leases()), 0o755); err != nil { //nolint:gosec // dnsmasq writes here unprivileged
 		return err

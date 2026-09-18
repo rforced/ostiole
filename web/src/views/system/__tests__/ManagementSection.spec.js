@@ -79,6 +79,16 @@ describe('ManagementSection host settings', () => {
     expect(config.draft.system).not.toHaveProperty('journalMaxUseGB')
   })
 
+  // How sshd lets people in is configuration like anything else, so the
+  // checkbox writes the draft and the apply is what changes the router.
+  it('writes the SSH password setting into the draft', async () => {
+    const { wrapper, config } = await open({ management: { webPort: 443, sshPort: 22 } })
+    const box = wrapper.findAll('input[type="checkbox"]')[0]
+    expect(box.element.checked).toBe(false)
+    await box.setValue(true)
+    expect(config.draft.system.management.sshPasswords).toBe(true)
+  })
+
   it('adds management rules for an external zone as ordinary rules', async () => {
     const config = useConfigStore()
     config.replaceDraft({

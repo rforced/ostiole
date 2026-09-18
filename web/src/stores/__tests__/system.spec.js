@@ -10,29 +10,32 @@ describe('system store', () => {
     vi.restoreAllMocks()
   })
 
-  it('reads whether this router is prepared', async () => {
-    vi.spyOn(api.host, 'status').mockResolvedValue({ prepared: false, steps: [] })
+  it('reads the engine status', async () => {
+    vi.spyOn(api, 'status').mockResolvedValue({ configured: true })
     const system = useSystemStore()
-    expect(system.host).toBe(null)
-    await system.refreshHost()
-    expect(system.host.prepared).toBe(false)
+    expect(system.status).toBe(null)
+    await system.refresh()
+    expect(system.status.configured).toBe(true)
+    expect(system.error).toBe('')
   })
 
-  // The gate must never be the thing that stops somebody reaching the UI
-  // to fix whatever is wrong with the router.
-  it('treats a router that cannot answer as prepared', async () => {
-    vi.spyOn(api.host, 'status').mockRejectedValue(new Error('403'))
+  // A status that cannot be read is an error on the page, not a null the
+  // guard would read as "unconfigured" and act on.
+  it('keeps the last status and reports why a refresh failed', async () => {
+    vi.spyOn(api, 'status').mockResolvedValue({ configured: true })
     const system = useSystemStore()
-    await system.refreshHost()
-    expect(system.host).toEqual({ prepared: true })
+    await system.refresh()
+    vi.spyOn(api, 'status').mockRejectedValue(new Error('403'))
+    await system.refresh()
+    expect(system.status.configured).toBe(true)
+    expect(system.error).toBe('403')
   })
 
-  it('forgets the host report on reset, so a new session re-reads it', async () => {
-    vi.spyOn(api.host, 'status').mockResolvedValue({ prepared: true })
+  it('forgets the status on reset, so a new session re-reads it', async () => {
+    vi.spyOn(api, 'status').mockResolvedValue({ configured: true })
     const system = useSystemStore()
-    await system.refreshHost()
+    await system.refresh()
     system.reset()
-    expect(system.host).toBe(null)
     expect(system.status).toBe(null)
   })
 })

@@ -25,6 +25,7 @@ import (
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/policy"
 	"github.com/rforced/ostiole/internal/services"
+	"github.com/rforced/ostiole/internal/sshd"
 	"github.com/rforced/ostiole/internal/store"
 	"github.com/rforced/ostiole/internal/sysstat"
 	"github.com/rforced/ostiole/internal/sysupdate"
@@ -659,6 +660,9 @@ func (a *api) starter(w http.ResponseWriter, r *http.Request) error {
 	if req.LAN == "" || req.LANAddress == "" {
 		return &badRequest{errors.New("lan and lanAddress are required")}
 	}
+	// How sshd lets people in now is what the first configuration keeps:
+	// the wizard is not the place to discover that SSH stopped working.
+	passwords, _ := sshd.System{}.State(r.Context())
 	cfg := model.Starter(model.StarterOptions{
 		Hostname:          req.Hostname,
 		LAN:               req.LAN,
@@ -667,6 +671,7 @@ func (a *api) starter(w http.ResponseWriter, r *http.Request) error {
 		ManagementFromWAN: req.ManagementFromWAN,
 		Services:          req.Services,
 		DNSUpstreams:      currentResolvers(),
+		SSHPasswords:      passwords,
 	})
 	if err := cfg.Validate(); err != nil {
 		return err

@@ -16,7 +16,7 @@ import (
 // "scopes" to "servers"; version 4 split each update source's "schedule"
 // into "checkSchedule" and "installSchedule". An older file needs each
 // changed by hand before this build will load it.
-const SchemaVersion = 4
+const SchemaVersion = 5
 
 // Action is a rule verdict.
 type Action string
@@ -460,9 +460,12 @@ func (s System) GeoIPTemplates() (v4, v6 string) {
 // the anti-lockout rule on zones that have AntiLockout set. A zero port
 // disables that entry.
 type Management struct {
-	WebPort         uint16 `json:"webPort"`
-	SSHPort         uint16 `json:"sshPort"`
-	LogDefaultDrops bool   `json:"logDefaultDrops,omitempty"`
+	WebPort uint16 `json:"webPort"`
+	SSHPort uint16 `json:"sshPort"`
+	// SSHPasswords lets a password in at the SSH prompt. Unset, sshd takes
+	// keys only; nothing here checks that anybody has one.
+	SSHPasswords    bool `json:"sshPasswords"`
+	LogDefaultDrops bool `json:"logDefaultDrops,omitempty"`
 }
 
 // Zone groups interfaces that share a security policy, like pfSense

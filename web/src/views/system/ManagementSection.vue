@@ -178,6 +178,19 @@ function allowFromExternal() {
     </div>
     <label class="flex items-start gap-2 text-sm">
       <input
+        v-model="management.sshPasswords"
+        type="checkbox"
+        class="mt-0.5 size-4 rounded border-neutral-300"
+      />
+      <span>
+        Allow password logins over SSH
+        <span class="block text-neutral-500">
+          Unchecked, only keys get in. Nothing checks that you have one.
+        </span>
+      </span>
+    </label>
+    <label class="flex items-start gap-2 text-sm">
+      <input
         v-model="management.logDefaultDrops"
         type="checkbox"
         class="mt-0.5 size-4 rounded border-neutral-300"

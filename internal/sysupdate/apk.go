@@ -9,7 +9,7 @@ import (
 // apk drives Alpine. Like Arch it has one stream and no security-only
 // channel; unlike Arch it has no way to hold a package back from an
 // upgrade either, so an exclude list cannot be honoured here.
-type apk struct{ statusTellsPreview }
+type apk struct{}
 
 func (apk) Name() string               { return "apk" }
 func (apk) SecurityCapable() bool      { return false }
@@ -62,28 +62,4 @@ func (a apk) UpgradeArgv(security bool, _ []string, _ Pending) []string {
 
 func (a apk) RebootRequired(ctx context.Context, run Runner) (bool, string) {
 	return kernelRebootHint(ctx, run)
-}
-
-func (a apk) Installed(ctx context.Context, run Runner, pkg string) (bool, error) {
-	// `apk info -e` prints the name of a package that is there and
-	// nothing for one that is not, and older apk exits 0 either way, so
-	// the output is the answer.
-	out, err := run.Run(ctx, a.Name(), "info", "-e", pkg)
-	text := strings.TrimSpace(string(out))
-	if text == "" && err != nil && exitCode(err) < 0 {
-		return false, fmt.Errorf("apk info -e %s: %w", pkg, err)
-	}
-	return text != "", nil
-}
-
-func (a apk) InstallArgv(pkgs []string) []string {
-	return append([]string{a.Name(), "add", "--no-cache"}, pkgs...)
-}
-
-func (a apk) RemoveArgv(pkgs []string, preview bool) []string {
-	argv := []string{a.Name(), "del"}
-	if preview {
-		argv = append(argv, "--simulate")
-	}
-	return append(argv, pkgs...)
 }

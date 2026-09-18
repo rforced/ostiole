@@ -145,7 +145,7 @@ test('switch the resolver to DNS over TLS', async ({ page }) => {
   await expect(servers).toHaveValue(/cloudflare-dns\.com/)
   await servers.fill('9.9.9.9 dns.quad9.net')
   await expect(page.getByRole('note').filter({ hasText: 'validating resolver' })).toContainText(
-    'setup --with-resolver',
+    'ostiole repair',
   )
   await page.screenshot({ path: shot('43-services-dot'), fullPage: true })
 

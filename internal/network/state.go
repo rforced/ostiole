@@ -3,10 +3,12 @@ package network
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"sort"
 	"strings"
 
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 
 	"github.com/rforced/ostiole/internal/model"
 )
@@ -25,6 +27,11 @@ type Link struct {
 	Master    string   `json:"master,omitempty"`
 	VLANID    int      `json:"vlanId,omitempty"`
 	Addresses []string `json:"addresses"`
+	// DynamicAddresses are the ones in Addresses that a lease or a router
+	// advertisement put there rather than a configuration file, which is
+	// how a seeded interface knows to ask for DHCP instead of pinning
+	// somebody else's lease as a static address.
+	DynamicAddresses []string `json:"dynamicAddresses,omitempty"`
 	// Traffic counted by the kernel since the link came up.
 	RXBytes   uint64 `json:"rxBytes"`
 	TXBytes   uint64 `json:"txBytes"`
@@ -97,8 +104,12 @@ func Discover() ([]Link, error) {
 		addrs, err := netlink.AddrList(l, netlink.FAMILY_ALL)
 		if err == nil {
 			for _, ad := range addrs {
-				if ad.IPNet != nil {
-					li.Addresses = append(li.Addresses, ad.IPNet.String())
+				if ad.IPNet == nil {
+					continue
+				}
+				li.Addresses = append(li.Addresses, ad.IPNet.String())
+				if ad.Flags&unix.IFA_F_PERMANENT == 0 {
+					li.DynamicAddresses = append(li.DynamicAddresses, ad.IPNet.String())
 				}
 			}
 		}
@@ -106,6 +117,51 @@ func Discover() ([]Link, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Index < out[j].Index })
 	return out, nil
+}
+
+// DefaultRoutes lists the default gateway on each interface, keyed by
+// interface name, one map per family. An address with no way out is not a
+// WAN, which is the difference a seeded configuration turns on.
+func DefaultRoutes() (v4, v6 map[string]netip.Addr, err error) {
+	links, err := netlink.LinkList()
+	if err != nil {
+		return nil, nil, fmt.Errorf("list links: %w", err)
+	}
+	byIndex := map[int]string{}
+	for _, l := range links {
+		byIndex[l.Attrs().Index] = l.Attrs().Name
+	}
+	routes, err := netlink.RouteList(nil, netlink.FAMILY_ALL)
+	if err != nil {
+		return nil, nil, fmt.Errorf("list routes: %w", err)
+	}
+	v4, v6 = map[string]netip.Addr{}, map[string]netip.Addr{}
+	for _, r := range routes {
+		// A default route has no destination prefix, or one of length
+		// zero; anything else is a route to somewhere in particular.
+		if r.Dst != nil {
+			if ones, _ := r.Dst.Mask.Size(); ones != 0 {
+				continue
+			}
+		}
+		gw, ok := netip.AddrFromSlice(r.Gw)
+		if !ok {
+			continue
+		}
+		name := byIndex[r.LinkIndex]
+		if name == "" {
+			continue
+		}
+		gw = gw.Unmap()
+		into := v6
+		if gw.Is4() {
+			into = v4
+		}
+		if _, seen := into[name]; !seen {
+			into[name] = gw
+		}
+	}
+	return v4, v6, nil
 }
 
 // carrier reports operational up. Tunnels and loopback report an unknown

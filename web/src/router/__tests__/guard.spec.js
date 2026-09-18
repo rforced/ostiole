@@ -9,16 +9,11 @@ vi.mock('@/stores/auth', () => ({
 }))
 
 vi.mock('@/lib/api', () => ({
-  api: { host: { status: vi.fn() }, status: vi.fn() },
+  api: { status: vi.fn() },
   ApiError: class ApiError extends Error {},
 }))
 
-/**
- * The two gates in front of a signed-in session, and the one order they
- * have to agree on: a fresh router is usually unprepared *and*
- * unconfigured, and each gate must let the other's page through or the
- * browser bounces between them forever.
- */
+/** The one gate in front of a signed-in session: the setup wizard. */
 describe('router guard', () => {
   let router
 
@@ -30,34 +25,25 @@ describe('router guard', () => {
     router = (await import('@/router')).default
   })
 
-  it('sends a fresh router to the host page first, and stays there', async () => {
-    api.host.status.mockResolvedValue({ prepared: false, steps: [] })
+  it('sends an unconfigured router to the wizard', async () => {
     api.status.mockResolvedValue({ configured: false })
     await router.push('/')
     await router.isReady()
-    expect(router.currentRoute.value.path).toBe('/system/host')
-    expect(router.currentRoute.value.query.from).toBe('/')
-  })
-
-  it('sends an unconfigured router to the wizard once the host is prepared', async () => {
-    api.host.status.mockResolvedValue({ prepared: true, steps: [] })
-    api.status.mockResolvedValue({ configured: false })
-    await router.push('/')
     expect(router.currentRoute.value.name).toBe('wizard')
   })
 
-  it('lets "continue for now" past the host gate and on to the wizard', async () => {
-    api.host.status.mockResolvedValue({ prepared: false, steps: [] })
+  it('honours "skip for now" until the tab closes', async () => {
     api.status.mockResolvedValue({ configured: false })
-    sessionStorage.setItem('ostiole.skipHost', '1')
-    await router.push('/')
-    expect(router.currentRoute.value.name).toBe('wizard')
+    sessionStorage.setItem('ostiole.skipWizard', '1')
+    await router.push('/firewall/rules')
+    expect(router.currentRoute.value.path).toBe('/firewall/rules')
   })
 
-  it('leaves a prepared, configured router alone', async () => {
-    api.host.status.mockResolvedValue({ prepared: true, steps: [] })
+  it('leaves a configured router alone, and keeps it out of the wizard', async () => {
     api.status.mockResolvedValue({ configured: true })
     await router.push('/firewall/rules')
     expect(router.currentRoute.value.path).toBe('/firewall/rules')
+    await router.push('/wizard')
+    expect(router.currentRoute.value.name).toBe('dashboard')
   })
 })

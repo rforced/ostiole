@@ -19,6 +19,7 @@ import (
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/shaping"
+	"github.com/rforced/ostiole/internal/sshd"
 	"github.com/rforced/ostiole/internal/store"
 	"github.com/rforced/ostiole/internal/sysctl"
 	"github.com/rforced/ostiole/internal/timezone"
@@ -118,6 +119,7 @@ func (g *globals) engine() (*engine.Engine, error) {
 		eng.WithSysctl(sysctl.Proc{})
 		eng.WithTimezone(timezone.System{})
 		eng.WithJournal(journald.System{Run: install.ExecRunner{}})
+		eng.WithSSH(sshd.System{})
 		// Shaping needs root but not a managed network: a router whose
 		// interfaces are set up by something else can still have its
 		// queues held here.
@@ -173,6 +175,7 @@ func newRootCmd() *cobra.Command {
 		newUsersCmd(g),
 		newTokensCmd(g),
 		newInstallCmd(g),
+		newRepairCmd(g),
 		newTakeoverCmd(g),
 		newUninstallCmd(g),
 		newUpdateCmd(g),

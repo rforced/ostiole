@@ -100,7 +100,7 @@ test('configure a PPPoE session over a spare link', async ({ page }) => {
   await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue('ppp0')
   // The test server is not root, so pppd is reported as missing and the
   // dialog says so rather than letting the apply fail later.
-  await expect(dialog.getByRole('note')).toContainText('services setup --with-pppoe')
+  await expect(dialog.getByRole('note')).toContainText('ostiole repair')
 
   await dialog.getByLabel('Plugged into').selectOption(spare)
   await dialog.getByLabel('Username').fill('someone@isp.example')

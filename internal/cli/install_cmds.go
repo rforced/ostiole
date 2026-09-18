@@ -13,18 +13,19 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/rforced/ostiole/internal/host"
 	"github.com/rforced/ostiole/internal/install"
+	"github.com/rforced/ostiole/internal/iptables"
 	"github.com/rforced/ostiole/internal/journald"
 	"github.com/rforced/ostiole/internal/kernel"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
+	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/store"
 	"github.com/rforced/ostiole/internal/sysctl"
 )
@@ -39,27 +40,20 @@ func requireRoot() error {
 func newInstallCmd(g *globals) *cobra.Command {
 	opts := install.Options{}
 	var ignoreKernel, yes, dryRun bool
-	var keep []string
 	cmd := &cobra.Command{
 		Use:   "install",
-		Short: "Install Ostiole and make this router its firewall",
-		Long: `Installs the binary and the units, and prepares the router in the same
-pass: installs nftables, systemd-networkd, dnsmasq, unbound and tc; stops,
-masks and removes the firewalls it replaces (firewalld, ufw, iptables
-services); removes the other updaters (unattended-upgrades, dnf-automatic)
-and what a router has no use for (snapd, ModemManager, udisks2, upower,
-fwupd, multipathd); persists the router sysctls and a ceiling on the
-system journal; and sets the clock to UTC.
+		Short: "Write Ostiole's units, load a ruleset, and take the network over",
+		Long: `Writes ostiole-firewall.service and ostiole.service, writes the units
+that point dnsmasq, unbound, pppd and miniupnpd at generated
+configuration, persists the router sysctls and a ceiling on the journal,
+sets the clock to UTC, masks the firewalls it replaces, clears what they
+left in the kernel, and hands addressing to systemd-networkd with the
+addresses this router has now.
 
-Everything it would install, mask and remove is listed first, with the
-package manager's own account of what else comes away, and nothing
-happens until you say yes. --keep leaves a named extra alone; --dry-run
-prints the plan and stops.
-
-Until a configuration is applied and confirmed the router runs a
-bootstrap ruleset: established connections, ICMP, its own DHCP replies
-and the management ports get in, nothing is forwarded. The setup wizard
-in the web UI replaces it.`,
+Packages are the install script's job (ostiole repair re-runs it). Until
+a configuration is applied and confirmed the router runs a bootstrap
+ruleset: established connections, ICMP, its own DHCP replies and the
+management ports get in, nothing is forwarded.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := requireRoot(); err != nil {
@@ -78,27 +72,31 @@ in the web UI replaces it.`,
 			out := cmd.OutOrStdout()
 			lay := install.DefaultLayout()
 			lay.ConfigDir = g.configDir
-			opts.PackageManager = g.packageManager
 			d := g.hostDeps()
+			sc := install.ExecSystemctl{}
 
-			plan, err := host.PlanInstall(ctx, d, keep)
-			if err != nil {
-				return err
-			}
 			bootstrap := !g.store().Exists() && !rulesetExists(g.configDir)
+			firewalls := conflictingFirewalls(ctx, sc)
+			owned := networkOwned(g.configDir)
+
 			fmt.Fprintln(out, "Ostiole will:")
-			plan.Print(out)
 			fmt.Fprintf(out, "  write and enable:     %s, %s\n", install.FirewallUnit, install.DaemonUnit)
+			fmt.Fprintf(out, "  write service units:  %s\n", strings.Join(serviceUnits(), ", "))
 			fmt.Fprintf(out, "  persist:              router sysctls (%s), journal ceiling (%s)\n", sysctl.ConfFile, journald.ConfFile)
 			if opts.Timezone != "-" {
 				fmt.Fprintf(out, "  set the clock to:     %s\n", or(opts.Timezone, "UTC"))
 			}
 			if bootstrap {
-				fmt.Fprintln(out, "\nUntil a configuration is applied and confirmed, this router accepts established")
-				fmt.Fprintln(out, "connections, ICMP, its own DHCP replies and the management ports, and forwards nothing.")
+				fmt.Fprintln(out, "  write:                a bootstrap ruleset that forwards nothing")
 			}
-			if plan.Refused != nil {
-				return errors.New("refusing to continue; use --keep or remove by hand and re-run")
+			if len(firewalls) > 0 {
+				fmt.Fprintf(out, "  stop and mask:        %s\n", strings.Join(firewalls, ", "))
+			}
+			fmt.Fprintln(out, "  clear:                whatever an older firewall left in the kernel")
+			if owned {
+				fmt.Fprintln(out, "  leave alone:          addressing, which systemd-networkd already has")
+			} else {
+				fmt.Fprintln(out, "  hand to networkd:     this router's addresses, keeping the ones it has now")
 			}
 			if dryRun {
 				return nil
@@ -109,28 +107,9 @@ in the web UI replaces it.`,
 				}
 			}
 
-			// What a router needs goes on first, while it still resolves
-			// names the way its image set it up to and before anything that
-			// might be a dependency comes off.
-			if said, err := host.InstallComponents(ctx, d, plan); said != "" || err != nil {
-				if said != "" {
-					fmt.Fprintln(out, said)
-				}
-				if err != nil {
-					return err
-				}
-			}
 			if err := (journald.System{Run: install.ExecRunner{}}).Apply(ctx, journald.DefaultMaxUseGB); err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not bound the system journal: %v\n", err)
 			}
-			sc := install.ExecSystemctl{}
-			wasActive := false
-			if state, err := sc.Run(ctx, "is-active", install.DaemonUnit); err == nil && state == "active" {
-				wasActive = true
-			}
-			// The old firewall is retired a moment later, so there is no
-			// point opening the UI port in it.
-			opts.KeepOldFirewall = len(plan.Retire) > 0
 			rep, err := install.Install(ctx, sc, lay, opts, slog.Default())
 			if err != nil {
 				return err
@@ -158,17 +137,31 @@ in the web UI replaces it.`,
 			if rep.Timezone != "" {
 				fmt.Fprintf(out, "clock set to %s\n", rep.Timezone)
 			}
-			if said, err := host.RetireAndRemove(ctx, d, plan); said != "" || err != nil {
-				if said != "" {
-					fmt.Fprintln(out, said)
+			if err := writeServiceUnits(ctx); err != nil {
+				return err
+			}
+			if len(firewalls) > 0 {
+				if err := install.Takeover(ctx, sc, firewalls, slog.Default()); err != nil {
+					return err
 				}
-				if err != nil {
+				fmt.Fprintf(out, "masked and stopped: %s\n", strings.Join(firewalls, ", "))
+			}
+			switch said, err := host.FlushLegacy(ctx, d, nil); {
+			case err == nil:
+				fmt.Fprintln(out, said)
+			case !errors.Is(err, iptables.ErrNothingToFlush):
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not clear what the old firewall left: %v\n", err)
+			}
+			if g.netBackend != "none" {
+				if err := handOverNetwork(cmd, g, owned); err != nil {
 					return err
 				}
 			}
-			if wasActive {
-				// A daemon that was already running keeps the mount namespace
-				// it started with, and the unit it was started from.
+			// The daemon's mount namespace is built when it starts, and a
+			// ReadWritePaths entry written with a leading dash is skipped
+			// while its path is missing. The service directories were made a
+			// moment ago, so the daemon running now cannot write them.
+			if state, err := sc.Run(ctx, "is-active", install.DaemonUnit); err == nil && state == "active" {
 				if o, err := sc.Run(ctx, "restart", install.DaemonUnit); err != nil {
 					fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not restart %s: %v: %s\n", install.DaemonUnit, err, o)
 				} else {
@@ -179,7 +172,7 @@ in the web UI replaces it.`,
 			for _, u := range uiURLs(opts.Listen) {
 				fmt.Fprintf(out, "  %s\n", u)
 			}
-			fmt.Fprintf(out, "\nnext:\n  1. create the admin account in the web UI, or: ostiole reset-password\n  2. run the setup wizard in the web UI, or: ostiole init --lan ... && ostiole apply\n  3. ostiole takeover --network    (hands addressing to systemd-networkd; needed for interface edits)\n")
+			fmt.Fprintf(out, "\nnext:\n  1. create the admin account in the web UI, or: ostiole reset-password\n  2. run the setup wizard in the web UI, or: ostiole init --lan ... && ostiole apply\n")
 			return nil
 		},
 	}
@@ -189,8 +182,120 @@ in the web UI replaces it.`,
 		fmt.Sprintf("install even if the kernel is older than %s", kernel.Minimum))
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask for confirmation")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the plan and change nothing")
-	cmd.Flags().StringSliceVar(&keep, "keep", nil, "leave an extra alone, by key (see `ostiole host`); repeatable")
 	return cmd
+}
+
+// serviceUnits are the units written for the daemons a router drives.
+func serviceUnits() []string {
+	return []string{services.Unit, services.UnboundUnit, services.PPPoEUnit, services.UPnPUnit}
+}
+
+// writeServiceUnits points dnsmasq, unbound, pppd and miniupnpd at
+// Ostiole's generated configuration. One whose binary is not on the
+// router is skipped; the install script is what puts them there.
+func writeServiceUnits(ctx context.Context) error {
+	opts := services.SetupOptions{Dnsmasq: true, Resolver: true, PPPoE: true, UPnP: true, NoRestart: true}
+	return services.Setup(ctx, services.New(), opts, slog.Default())
+}
+
+// conflictingFirewalls names the firewall services that are running or
+// would start at boot.
+func conflictingFirewalls(ctx context.Context, sc install.Systemctl) []string {
+	comp, err := install.Competitors(ctx, sc)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, c := range comp {
+		if c.Kind == "firewall" && c.Conflicts() {
+			out = append(out, c.Name)
+		}
+	}
+	return out
+}
+
+// networkOwned reports whether a handover has already happened.
+func networkOwned(dir string) bool {
+	rec, err := install.LoadTakeoverRecord(dir)
+	return err == nil && rec != nil
+}
+
+// handOverNetwork gives addressing to systemd-networkd and then checks
+// that the router kept what it had. A router that has already been handed
+// over is left alone.
+func handOverNetwork(cmd *cobra.Command, g *globals, owned bool) error {
+	out := cmd.OutOrStdout()
+	if owned {
+		fmt.Fprintln(out, "systemd-networkd already has this router's addresses")
+		return nil
+	}
+	before, err := network.Discover()
+	if err != nil {
+		return err
+	}
+	if err := networkTakeover(cmd, g, networkTakeoverOptions{yes: true, window: host.NetworkTakeoverWindow}); err != nil {
+		// The router has its units, its ruleset and its firewall; whoever
+		// owns the addresses goes on owning them. `ostiole takeover
+		// --network` is the retry.
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: addressing was left with its current manager: %v\n", err)
+		return nil
+	}
+	if kept, missing := addressesKept(before); kept {
+		install.CancelNetworkRevert(cmd.Context(), install.ExecRunner{})
+		fmt.Fprintln(out, "addresses kept, systemd-networkd in charge")
+		return nil
+	} else if len(missing) > 0 {
+		fmt.Fprintf(out, "still missing: %s\n", strings.Join(missing, ", "))
+	}
+	fmt.Fprintf(out, "the previous network manager returns in %s unless `ostiole takeover --network --confirm` runs\n",
+		host.NetworkTakeoverWindow)
+	return nil
+}
+
+// addressesKept polls until every global address that was there before is
+// back and a default route exists. Twenty seconds is a DHCP round trip
+// with room to spare; longer than that and the revert timer is the right
+// answer rather than more waiting.
+func addressesKept(before []network.Link) (bool, []string) {
+	want := map[string]bool{}
+	for _, l := range before {
+		if l.Kind == "loopback" {
+			continue
+		}
+		for _, a := range l.Addresses {
+			if p, err := netip.ParsePrefix(a); err == nil && p.Addr().IsGlobalUnicast() {
+				want[a] = true
+			}
+		}
+	}
+	var missing []string
+	for range 20 {
+		time.Sleep(time.Second)
+		missing = missing[:0]
+		have := map[string]bool{}
+		links, err := network.Discover()
+		if err != nil {
+			continue
+		}
+		for _, l := range links {
+			for _, a := range l.Addresses {
+				have[a] = true
+			}
+		}
+		for a := range want {
+			if !have[a] {
+				missing = append(missing, a)
+			}
+		}
+		v4, v6, err := network.DefaultRoutes()
+		if err != nil {
+			continue
+		}
+		if len(missing) == 0 && (len(v4) > 0 || len(v6) > 0) {
+			return true, nil
+		}
+	}
+	return false, missing
 }
 
 // rulesetExists reports whether a ruleset is already on disk, in which
@@ -250,102 +355,53 @@ func uiURLs(listen string) []string {
 	return urls
 }
 
-func printCompetitors(out interface{ Write([]byte) (int, error) }, comp []install.Service) {
-	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "\nSERVICE\tKIND\tACTIVE\tENABLED\tCONFLICT")
-	for _, c := range comp {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%v\n", c.Name, c.Kind, c.Active, c.Enabled, c.Conflicts())
-	}
-	_ = w.Flush()
-}
-
 func newTakeoverCmd(g *globals) *cobra.Command {
-	var yes, dryRun, net, confirm, revert, inUnit bool
+	var yes, dryRun, netFlag, confirm, revert, inUnit bool
 	var window time.Duration
 	cmd := &cobra.Command{
 		Use:   "takeover",
-		Short: "Disable competing firewall services so Ostiole is the only firewall",
-		Long: `Stops, disables, and masks firewalld, ufw, nftables.service, iptables, and
-similar. Refuses to run unless a confirmed Ostiole ruleset is loaded in the
-kernel, so the router is never left without a firewall.
+		Short: "Hand this router's addressing to systemd-networkd",
+		Long: `Writes the networkd units rendered from the confirmed configuration —
+or, on a router with none yet, from the addresses it has right now — stops
+and masks NetworkManager and friends, and starts networkd. Existing
+addresses persist across the switch; DHCP leases are re-acquired.
 
-With --network it instead hands addressing to systemd-networkd: installs
-networkd if missing (EPEL on RHEL-family), writes the units rendered from
-the confirmed configuration, stops and masks NetworkManager and friends,
-and starts networkd. Existing addresses persist across the switch; DHCP
-leases are re-acquired. To undo: systemctl disable --now systemd-networkd;
-systemctl unmask NetworkManager; systemctl enable --now NetworkManager.`,
+The switch runs in a transient unit and arms a timer that puts the
+previous manager back unless --confirm runs in time, because losing the
+session driving it is the expected case. --revert undoes it now.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := requireRoot(); err != nil {
 				return err
 			}
-			eng, err := g.engine()
-			if err != nil {
-				return err
+			if !netFlag {
+				return errors.New("--network is the only mode; firewalls are retired by `ostiole install`")
 			}
-			st, err := eng.Status(cmd.Context())
-			if err != nil {
-				return err
-			}
-			if !st.Configured || !st.TableLoaded {
-				return errors.New("refusing: apply and confirm an Ostiole configuration first (ostiole status)")
-			}
-			if net {
-				return networkTakeover(cmd, g, networkTakeoverOptions{yes: yes, dryRun: dryRun, window: window, confirm: confirm, revert: revert, inUnit: inUnit})
-			}
-			if confirm || revert {
-				return errors.New("--confirm and --revert only apply with --network")
-			}
-			comp, err := install.Competitors(cmd.Context(), install.ExecSystemctl{})
-			if err != nil {
-				return err
-			}
-			var targets []string
-			for _, c := range comp {
-				if c.Kind == "firewall" && c.Conflicts() {
-					targets = append(targets, c.Name)
-				}
-			}
-			out := cmd.OutOrStdout()
-			printCompetitors(out, comp)
-			if len(targets) == 0 {
-				fmt.Fprintln(out, "\nnothing to do: no competing firewall service is active or enabled")
-				return nil
-			}
-			fmt.Fprintf(out, "\nwill stop, disable, and mask: %s\n", strings.Join(targets, ", "))
-			if dryRun {
-				return nil
-			}
-			if !yes {
-				if err := confirmPrompt(cmd, "proceed?"); err != nil {
+			o := networkTakeoverOptions{yes: yes, dryRun: dryRun, window: window, confirm: confirm, revert: revert, inUnit: inUnit}
+			if !confirm && !revert {
+				// A handover leaves the router filtering with whatever is in
+				// the kernel, so there has to be something in it.
+				eng, err := g.engine()
+				if err != nil {
 					return err
 				}
-			}
-			if err := install.Takeover(cmd.Context(), install.ExecSystemctl{}, targets, slog.Default()); err != nil {
-				return err
-			}
-			if tables, err := (&nft.Exec{Bin: g.nftBin}).ListTables(cmd.Context()); err == nil {
-				var foreign []string
-				for _, t := range tables {
-					if t != nft.Table {
-						foreign = append(foreign, t)
-					}
+				st, err := eng.Status(cmd.Context())
+				if err != nil {
+					return err
 				}
-				if len(foreign) > 0 {
-					fmt.Fprintf(out, "\nnote: other nftables tables remain and still filter traffic: %s\n", strings.Join(foreign, ", "))
+				if !st.TableLoaded {
+					return errors.New("refusing: load an Ostiole ruleset first (ostiole install, or ostiole load)")
 				}
 			}
-			fmt.Fprintln(out, "done: Ostiole is the only firewall service")
-			return nil
+			return networkTakeover(cmd, g, o)
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask for confirmation")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "only report what would change")
-	cmd.Flags().BoolVar(&net, "network", false, "hand addressing to systemd-networkd instead of touching firewalls")
-	cmd.Flags().DurationVar(&window, "confirm-window", 3*time.Minute, "with --network: restore the previous network manager unless --confirm runs within this time (0 disables)")
-	cmd.Flags().BoolVar(&confirm, "confirm", false, "with --network: keep the handover and disarm the revert timer")
-	cmd.Flags().BoolVar(&revert, "revert", false, "with --network: undo the handover and restore the previous network manager")
+	cmd.Flags().BoolVar(&netFlag, "network", false, "hand addressing to systemd-networkd")
+	cmd.Flags().DurationVar(&window, "confirm-window", 3*time.Minute, "restore the previous network manager unless --confirm runs within this time (0 disables)")
+	cmd.Flags().BoolVar(&confirm, "confirm", false, "keep the handover and disarm the revert timer")
+	cmd.Flags().BoolVar(&revert, "revert", false, "undo the handover and restore the previous network manager")
 	cmd.Flags().BoolVar(&inUnit, "in-unit", false, "internal: already running inside the detached systemd unit")
 	_ = cmd.Flags().MarkHidden("in-unit")
 	return cmd
@@ -406,6 +462,16 @@ func promptReader() (io.ReadCloser, error) {
 	return tty, nil
 }
 
+// seedOrStored is the configuration the handover renders from: the
+// confirmed one when there is one, and otherwise the router's own live
+// addressing, so a fresh install keeps every address it came up with.
+func seedOrStored(g *globals) (*model.Config, error) {
+	if g.store().Exists() {
+		return g.store().Load()
+	}
+	return install.SeedNetwork()
+}
+
 func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) error {
 	ctx := cmd.Context()
 	out := cmd.OutOrStdout()
@@ -444,7 +510,7 @@ func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) e
 		return nil
 	}
 
-	cfg, err := g.store().Load()
+	cfg, err := seedOrStored(g)
 	if err != nil {
 		return err
 	}
@@ -472,7 +538,7 @@ func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) e
 		if ok {
 			liveAddrs = strings.Join(l.Addresses, " ")
 		}
-		conf := fmt.Sprintf("%s v4=%s", in.Zone, in.IPv4.Mode)
+		conf := fmt.Sprintf("%s v4=%s", or(in.Zone, "-"), in.IPv4.Mode)
 		if in.IPv4.Address != "" {
 			conf += " " + in.IPv4.Address
 		}
@@ -498,29 +564,8 @@ func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) e
 		fmt.Fprintf(out, "  warning: %s (%s) is not in the configuration; networkd will leave it alone and its DHCP lease, if any, will not be renewed\n", l.Name, strings.Join(l.Addresses, " "))
 	}
 
-	comp, err := install.Competitors(ctx, sc)
-	if err != nil {
-		return err
-	}
-	var managers []string
-	for _, c := range comp {
-		if c.Kind == "network" && c.Conflicts() {
-			managers = append(managers, c.Name)
-		}
-	}
-	for _, extra := range []string{"NetworkManager-wait-online"} {
-		for _, m := range managers {
-			if m == "NetworkManager" {
-				managers = append(managers, extra)
-				break
-			}
-		}
-	}
-	pm := install.PackageManager()
+	managers := install.NetworkTakeoverTargets(ctx, sc)
 	fmt.Fprintf(out, "\nplan:\n")
-	if !install.HasNetworkd(ctx, sc) {
-		fmt.Fprintf(out, "  - install systemd-networkd with %s\n", pm)
-	}
 	fmt.Fprintf(out, "  - write %d unit(s) to %s: %s\n", len(files), install.NetworkdUnitDir, strings.Join(files.Names(), ", "))
 	if _, err := os.Stat("/etc/cloud"); err == nil {
 		fmt.Fprintf(out, "  - disable cloud-init network rendering (%s)\n", install.CloudInitDropIn)
@@ -541,8 +586,8 @@ func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) e
 		}
 	}
 
-	if err := install.EnsureNetworkd(ctx, sc, run, pm, slog.Default()); err != nil {
-		return err
+	if !install.HasNetworkd(ctx, sc) {
+		return errors.New("systemd-networkd is not installed; run `ostiole repair` to put it back")
 	}
 	if !o.inUnit {
 		// The switch itself runs detached: stopping networkd or a manager can
@@ -580,10 +625,7 @@ func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) e
 			return err
 		}
 		// Apply the units now even if networkd was already running (re-runs).
-		if err := nd.Reload(ctx, nd.LinkNames(files)); err != nil {
-			return err
-		}
-		return nil
+		return nd.Reload(ctx, nd.LinkNames(files))
 	}
 	time.Sleep(3 * time.Second)
 	after, err := network.Discover()

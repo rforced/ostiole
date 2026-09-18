@@ -10,7 +10,7 @@ const stubs = { RouterLink: true }
 /** A draft with an outside, an inside, and one rule that is rationed. */
 function draft() {
   return {
-    version: 4,
+    version: 5,
     zones: [{ name: 'wan', external: true }, { name: 'lan' }],
     interfaces: [{ name: 'eth0', zone: 'wan' }],
     rules: [

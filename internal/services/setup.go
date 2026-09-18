@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"debug/elf"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -14,18 +13,18 @@ import (
 	"github.com/rforced/ostiole/internal/install"
 )
 
-// Runner runs commands (package managers); swapped for a fake in tests.
+// Runner runs commands (systemctl); swapped for a fake in tests.
 type Runner interface {
 	Run(ctx context.Context, name string, args ...string) ([]byte, error)
 }
 
 // SetupOptions tunes Setup.
 type SetupOptions struct {
-	// Dnsmasq sets up DHCP and DNS: installs dnsmasq, masks the units
-	// that would fight it for port 53, and takes over resolv.conf. It is
-	// a choice of its own because a router can want a dialled line or a
-	// shaped queue and no name service at all, and masking
-	// systemd-resolved on that router would be an act of vandalism.
+	// Dnsmasq sets up DHCP and DNS: masks the units that would fight
+	// dnsmasq for port 53, and takes over resolv.conf. It is a choice of
+	// its own because a router can want a dialled line or a shaped queue
+	// and no name service at all, and masking systemd-resolved on that
+	// router would be an act of vandalism.
 	Dnsmasq bool
 	// NoRestart leaves a running ostiole.service alone at the end. The
 	// daemon's mount namespace is built once, at start, so it normally has
@@ -35,31 +34,27 @@ type SetupOptions struct {
 	NoRestart bool
 	// UnitDir is where the unit is written; default /etc/systemd/system.
 	UnitDir string
-	// PackageManager is dnf, apt-get, pacman, zypper, or apk; empty means
-	// detect.
-	PackageManager string
-	// Run executes package manager and systemctl commands.
+	// Run executes systemctl commands.
 	Run Runner
 	// Binary overrides the dnsmasq path (found on PATH otherwise).
 	Binary string
-	// Resolver also installs unbound and writes its unit, so the DNS
-	// service can validate DNSSEC or speak DNS over TLS.
+	// Resolver writes unbound's unit, so the DNS service can validate
+	// DNSSEC or speak DNS over TLS.
 	Resolver bool
 	// Unbound is the backend to set up when Resolver is set; nil means
 	// production defaults.
 	Unbound *Unbound
 	// UnboundBinary overrides the unbound path (found on PATH otherwise).
 	UnboundBinary string
-	// PPPoE also installs pppd and writes the templated unit that dials a
-	// session.
+	// PPPoE writes the templated unit that dials a session.
 	PPPoE bool
 	// PPPBinary overrides the pppd path (found on PATH otherwise).
 	PPPBinary string
 	// PPPoEBackend is set up when PPPoE is set; nil means production
 	// defaults.
 	PPPoEBackend *PPPoE
-	// UPnP also installs miniupnpd and writes its unit, so clients can ask
-	// for their own port mappings.
+	// UPnP writes miniupnpd's unit, so clients can ask for their own port
+	// mappings.
 	UPnP bool
 	// UPnPBinary overrides the miniupnpd path (found on PATH otherwise).
 	UPnPBinary string
@@ -71,9 +66,14 @@ type SetupOptions struct {
 // Setup makes the host able to run the services it is asked for. Each
 // piece is a flag, and each writes a unit of Ostiole's that points a
 // distribution's daemon at a generated configuration. With Dnsmasq it
-// installs dnsmasq, masks the distro dnsmasq and systemd-resolved (both
-// would fight over port 53), and turns /etc/resolv.conf into a regular
-// file Ostiole manages.
+// masks the distro dnsmasq and systemd-resolved (both would fight over
+// port 53) and turns /etc/resolv.conf into a regular file Ostiole
+// manages.
+//
+// Nothing here installs anything. The install script puts the daemons on
+// the router; a piece whose binary is not there is skipped with a line in
+// the log, because a router that never dials a line is not broken for
+// having no pppd.
 func Setup(ctx context.Context, d *Dnsmasq, o SetupOptions, log *slog.Logger) error {
 	run := o.Run
 	if run == nil {
@@ -126,29 +126,17 @@ func Setup(ctx context.Context, d *Dnsmasq, o SetupOptions, log *slog.Logger) er
 // actually forwards to, as opposed to the stub it points resolv.conf at.
 const resolvedUpstreams = "/run/systemd/resolve/resolv.conf"
 
-// setupDnsmasq is the DHCP and DNS part: the package, the units that have
-// to stop fighting it for port 53, resolv.conf, and our own unit. It
-// returns where dnsmasq is.
+// setupDnsmasq is the DHCP and DNS part: the units that have to stop
+// fighting it for port 53, resolv.conf, and our own unit. It returns
+// where dnsmasq is, or "" when this router has none.
 func setupDnsmasq(ctx context.Context, d *Dnsmasq, o SetupOptions, run Runner, unitDir string, log *slog.Logger) (string, error) {
 	bin := o.Binary
 	if bin == "" {
-		if p, err := exec.LookPath("dnsmasq"); err == nil {
-			bin = p
-		}
+		bin = lookPath("dnsmasq")
 	}
 	if bin == "" {
-		pm := o.PackageManager
-		if pm == "" {
-			pm = detectPackageManager()
-		}
-		if err := installPackage(ctx, run, pm, "dnsmasq", log); err != nil {
-			return "", err
-		}
-		p, err := exec.LookPath("dnsmasq")
-		if err != nil {
-			return "", errors.New("dnsmasq still not found after installation")
-		}
-		bin = p
+		log.Info("no dnsmasq on this router; DHCP and DNS are not set up")
+		return "", nil
 	}
 
 	for _, unit := range []string{distroUnit, resolvedUnit} {
@@ -161,25 +149,8 @@ func setupDnsmasq(ctx context.Context, d *Dnsmasq, o SetupOptions, run Runner, u
 	}
 
 	if d.Resolv != "" {
-		if info, err := os.Lstat(d.Resolv); err == nil && info.Mode()&os.ModeSymlink != 0 {
-			raw, _ := os.ReadFile(d.Resolv)
-			// On a router that ran systemd-resolved, the symlink pointed at
-			// its stub, and the stub has just been masked: keeping
-			// "nameserver 127.0.0.53" would leave the router unable to
-			// resolve anything until the DNS service is applied. resolved
-			// keeps the real upstreams in a file of its own, and that is
-			// what the router carries on with in the meantime.
-			if strings.Contains(string(raw), "127.0.0.53") {
-				if upstream, err := os.ReadFile(resolvedUpstreams); err == nil && strings.Contains(string(upstream), "nameserver") {
-					raw = upstream
-					log.Info("kept systemd-resolved's upstream resolvers in resolv.conf", "from", resolvedUpstreams)
-				}
-			}
-			_ = os.Remove(d.Resolv)
-			if err := os.WriteFile(d.Resolv, raw, 0o644); err != nil { //nolint:gosec // world-readable by design
-				return "", err
-			}
-			log.Info("replaced the resolv.conf symlink with a regular file")
+		if err := freezeResolv(d.Resolv, log); err != nil {
+			return "", err
 		}
 	}
 
@@ -195,9 +166,40 @@ func setupDnsmasq(ctx context.Context, d *Dnsmasq, o SetupOptions, run Runner, u
 	return bin, nil
 }
 
-// setupResolver installs unbound, bootstraps the DNSSEC trust anchor, and
-// writes the ostiole-unbound unit. The distro's own unbound is masked: it
-// would bind port 53 and fight dnsmasq.
+// freezeResolv turns /etc/resolv.conf into a regular file holding the
+// resolvers the router is using now. Both managers that own the path
+// point it at something under /run that goes away with them: resolved at
+// its 127.0.0.53 stub, NetworkManager at a file in its own runtime
+// directory. In a container the path is a bind-mounted regular file
+// already, and is left as it is.
+func freezeResolv(path string, log *slog.Logger) error {
+	info, err := os.Lstat(path)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		return nil
+	}
+	raw, _ := os.ReadFile(path)
+	target, _ := os.Readlink(path)
+	// The stub is the one target whose contents are no use once resolved
+	// is masked: "nameserver 127.0.0.53" would leave the router unable to
+	// resolve anything until the DNS service is applied. resolved keeps
+	// the real upstreams in a file of its own.
+	if strings.Contains(string(raw), "127.0.0.53") {
+		if upstream, err := os.ReadFile(resolvedUpstreams); err == nil && strings.Contains(string(upstream), "nameserver") {
+			raw = upstream
+			log.Info("kept systemd-resolved's upstream resolvers in resolv.conf", "from", resolvedUpstreams)
+		}
+	}
+	_ = os.Remove(path)
+	if err := writeFile(path, string(raw)); err != nil {
+		return err
+	}
+	log.Info("replaced the resolv.conf symlink with a regular file", "was", target)
+	return nil
+}
+
+// setupResolver bootstraps the DNSSEC trust anchor and writes the
+// ostiole-unbound unit. The distro's own unbound is masked: it would bind
+// port 53 and fight dnsmasq.
 func setupResolver(ctx context.Context, run Runner, o SetupOptions, unitDir string, log *slog.Logger) error {
 	u := o.Unbound
 	if u == nil {
@@ -208,16 +210,8 @@ func setupResolver(ctx context.Context, run Runner, o SetupOptions, unitDir stri
 		bin = lookPath("unbound")
 	}
 	if bin == "" {
-		pm := o.PackageManager
-		if pm == "" {
-			pm = detectPackageManager()
-		}
-		if err := installPackage(ctx, run, pm, "unbound", log); err != nil {
-			return err
-		}
-		if bin = lookPath("unbound"); bin == "" {
-			return errors.New("unbound still not found after installation")
-		}
+		log.Info("no unbound on this router; the validating resolver is not set up")
+		return nil
 	}
 
 	if out, err := run.Run(ctx, "systemctl", "cat", unboundDistroSvc); err == nil && len(out) > 0 {
@@ -315,52 +309,16 @@ func restartDaemon(ctx context.Context, run Runner, log *slog.Logger) {
 	log.Info("restarted the daemon so it can write the directories this added", "unit", install.DaemonUnit)
 }
 
-func detectPackageManager() string {
-	for _, pm := range []string{"dnf", "apt-get", "pacman", "zypper", "apk"} {
-		if _, err := exec.LookPath(pm); err == nil {
-			return pm
-		}
-	}
-	return ""
-}
-
-func installPackage(ctx context.Context, run Runner, pm, pkg string, log *slog.Logger) error {
-	var args []string
-	switch pm {
-	case "dnf":
-		args = []string{"dnf", "-y", "install", pkg}
-	case "apt-get":
-		args = []string{"apt-get", "install", "-y", "-q", pkg}
-	case "pacman":
-		args = []string{"pacman", "-S", "--noconfirm", pkg}
-	case "zypper":
-		args = []string{"zypper", "--non-interactive", "install", pkg}
-	case "apk":
-		args = []string{"apk", "add", pkg}
-	default:
-		return fmt.Errorf("%s is not installed and no supported package manager was found; install it and retry", pkg)
-	}
-	log.Info("installing package", "package", pkg, "with", pm)
-	if out, err := run.Run(ctx, args[0], args[1:]...); err != nil {
-		s := strings.TrimSpace(string(out))
-		if len(s) > 400 {
-			s = "…" + s[len(s)-400:]
-		}
-		return fmt.Errorf("%s: %w: %s", strings.Join(args, " "), err, s)
-	}
-	return nil
-}
-
 type execRunner struct{}
 
 func (execRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	return exec.CommandContext(ctx, name, args...).CombinedOutput()
 }
 
-// setupPPPoE installs pppd and writes the templated unit. The rp-pppoe
-// plugin ships with pppd on every distribution that packages it, so there
-// is nothing else to fetch.
-func setupPPPoE(ctx context.Context, run Runner, o SetupOptions, unitDir string, log *slog.Logger) error {
+// setupPPPoE writes the templated unit that dials a session. The rp-pppoe
+// plugin ships with pppd on every distribution that packages it, so
+// finding pppd is enough.
+func setupPPPoE(_ context.Context, _ Runner, o SetupOptions, unitDir string, log *slog.Logger) error {
 	p := o.PPPoEBackend
 	if p == nil {
 		p = NewPPPoE()
@@ -370,18 +328,8 @@ func setupPPPoE(ctx context.Context, run Runner, o SetupOptions, unitDir string,
 		bin = lookPath("pppd")
 	}
 	if bin == "" {
-		pm := o.PackageManager
-		if pm == "" {
-			pm = detectPackageManager()
-		}
-		for _, pkg := range pppPackages(pm) {
-			if err := installPackage(ctx, run, pm, pkg, log); err != nil {
-				return err
-			}
-		}
-		if bin = lookPath("pppd"); bin == "" {
-			return errors.New("pppd still not found after installation")
-		}
+		log.Info("no pppd on this router; PPPoE is not set up")
+		return nil
 	}
 	// Peer files carry the provider password, so the directory is
 	// root-only too.
@@ -395,27 +343,7 @@ func setupPPPoE(ctx context.Context, run Runner, o SetupOptions, unitDir string,
 	return nil
 }
 
-// pppPackages names the ppp daemon and, where it is packaged apart, the
-// rp-pppoe plugin that dials over Ethernet.
-func pppPackages(pm string) []string {
-	if pm == "apk" {
-		return []string{"ppp-daemon", "ppp-pppoe"}
-	}
-	return []string{"ppp"}
-}
-
-// upnpUnavailable is what a router gets when nobody packages the daemon for
-// it. The Red Hat family is the case that matters, and the Fedora build
-// runs there unchanged: the sonames it wants are the ones EL ships, and
-// only the RPM's Fedora-only filesystem dependency stops a plain install.
-// A binary already on the router is used wherever it is, so unpacking one is
-// enough.
-const upnpUnavailable = "miniupnpd is not packaged for this distribution, and there is no EPEL branch for it. " +
-	"The Fedora build runs unchanged on Red Hat family routers: unpack one with " +
-	"`rpm2cpio miniupnpd-*.fc*.x86_64.rpm | cpio -idmv`, " +
-	"install usr/sbin/miniupnpd into /usr/local/sbin, and run this again"
-
-// setupUPnP installs miniupnpd, masks the distro's own unit, and writes
+// setupUPnP masks the distro's own unit and writes
 // ostiole-miniupnpd.service. Nothing here decides whether the service
 // runs: that is the Enabled switch, applied like everything else.
 func setupUPnP(ctx context.Context, run Runner, o SetupOptions, unitDir string, log *slog.Logger) error {
@@ -428,20 +356,8 @@ func setupUPnP(ctx context.Context, run Runner, o SetupOptions, unitDir string, 
 		bin = lookPath("miniupnpd")
 	}
 	if bin == "" {
-		pm := o.PackageManager
-		if pm == "" {
-			pm = detectPackageManager()
-		}
-		pkg, ok := upnpPackage(pm)
-		if !ok {
-			return errors.New(upnpUnavailable)
-		}
-		if err := installPackage(ctx, run, pm, pkg, log); err != nil {
-			return fmt.Errorf("%w\n\n%s", err, upnpUnavailable)
-		}
-		if bin = lookPath("miniupnpd"); bin == "" {
-			return errors.New("miniupnpd still not found after installation")
-		}
+		log.Info("no miniupnpd on this router; port mapping is not set up")
+		return nil
 	}
 	if err := nftablesBuild(bin); err != nil {
 		return err
@@ -461,21 +377,6 @@ func setupUPnP(ctx context.Context, run Runner, o SetupOptions, unitDir string, 
 	}
 	log.Info("mapping service ready", "unit", UPnPUnit, "miniupnpd", bin)
 	return nil
-}
-
-// upnpPackage names the nftables build. Debian and Alpine ship both
-// builds and choose between them by package name; Fedora and openSUSE
-// package only the one. Arch has it in the AUR alone, which is not
-// something to install on anyone's behalf.
-func upnpPackage(pm string) (string, bool) {
-	switch pm {
-	case "apt-get", "apk":
-		return "miniupnpd-nftables", true
-	case "dnf", "zypper":
-		return "miniupnpd", true
-	default:
-		return "", false
-	}
 }
 
 // nftablesBuild checks that the binary is the one that writes nftables.

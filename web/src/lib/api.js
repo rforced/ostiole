@@ -277,51 +277,12 @@ export const api = {
     apply: (channel = 'stable') => post('/update/apply', { channel }),
   },
   /**
-   * The router Ostiole runs on: what it still needs installed, what
-   * competes with Ostiole on it, what an older firewall left in the
-   * kernel, and who owns the addresses. Every action answers with the
-   * command's output and a fresh report, so a page never asks twice.
+   * The router Ostiole runs on: what it is, which daemons it has, who
+   * owns its addresses, and what an older firewall left in the kernel.
    */
   host: {
     /** @returns {Promise<object>} */
     status: () => get('/host'),
-    /**
-     * Install components and write their units. Slow: it fetches
-     * packages over whatever line the router has.
-     *
-     * @param {string[]} components keys from the report
-     */
-    setup: (components) => post('/host/setup', { components }),
-    /**
-     * Everything the page's one button promises, in order: the
-     * components, the old firewall once a ruleset is loaded, the
-     * leftovers. Slow for the same reason setup is.
-     */
-    prepare: () => post('/host/prepare'),
-    /**
-     * Remove what a router has no use for, or ask what removing it would
-     * take with it.
-     *
-     * @param {string[]} keys extra keys from the report
-     * @param {boolean} preview change nothing and report
-     */
-    removeExtras: (keys, preview) => post('/host/extras/remove', { keys, preview }),
-    /**
-     * Turn password logins over SSH off (keys only) or back on.
-     *
-     * @param {boolean} passwords
-     */
-    ssh: (passwords) => post('/host/ssh', { passwords }),
-    /** Stop, disable and mask every competing firewall service. */
-    takeover: () => post('/host/takeover'),
-    /**
-     * Remove a retired competitor's packages, or ask what removing them
-     * would take with it.
-     *
-     * @param {string[]} units service names from the report
-     * @param {boolean} preview change nothing and report
-     */
-    removePackages: (units, preview) => post('/host/packages/remove', { units, preview }),
     /**
      * Clear leftover rulesets. With no tables it sweeps everything with
      * no recognisable owner.
@@ -329,21 +290,6 @@ export const api = {
      * @param {string[]} [tables] table ids from the report
      */
     flushLegacy: (tables = []) => post('/host/legacy/flush', { tables }),
-    /**
-     * Hand addressing to systemd-networkd, or settle a handover that is
-     * waiting for it.
-     *
-     * @param {'take'|'confirm'|'revert'} action
-     * @param {string} [window] how long the revert timer waits, e.g. "3m"
-     */
-    network: (action, window) => post('/host/network', window ? { action, window } : { action }),
-    /**
-     * Leave a step alone, so the browser stops being sent to the page.
-     *
-     * @param {string} step packages, firewall, legacy or network
-     * @param {boolean} skip
-     */
-    skipStep: (step, skip) => post(`/host/steps/${encodeURIComponent(step)}`, { skip }),
   },
   systemUpdates: {
     /** What the distro package manager has waiting, and the mode in force. */

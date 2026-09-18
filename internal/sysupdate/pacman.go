@@ -13,7 +13,6 @@ import (
 // to install "only the security fixes" from: the honest answer is to
 // refuse and say why.
 type pacman struct {
-	statusTellsPreview
 	// scratch is where the throwaway database goes. It cannot be /tmp:
 	// the daemon has a PrivateTmp of its own, and the pacman that reads
 	// the directory runs in a transient unit that would see a different
@@ -101,31 +100,4 @@ func (p pacman) UpgradeArgv(security bool, exclude []string, _ Pending) []string
 
 func (p pacman) RebootRequired(ctx context.Context, run Runner) (bool, string) {
 	return kernelRebootHint(ctx, run)
-}
-
-func (p pacman) Installed(ctx context.Context, run Runner, pkg string) (bool, error) {
-	// -Q answers about the local database and says nothing at all about a
-	// package it does not have, so the status is the whole answer.
-	out, err := run.Run(ctx, p.Name(), "-Q", pkg)
-	if err == nil {
-		return true, nil
-	}
-	if strings.TrimSpace(string(out)) == "" {
-		return false, fmt.Errorf("pacman -Q %s: %w", pkg, err)
-	}
-	return false, nil
-}
-
-func (p pacman) InstallArgv(pkgs []string) []string {
-	return append([]string{p.Name(), "-S", "--noconfirm", "--needed"}, pkgs...)
-}
-
-func (p pacman) RemoveArgv(pkgs []string, preview bool) []string {
-	// -R and not -Rs: taking a package's dependencies with it is a
-	// judgement call, and this is not the place to make it on somebody's
-	// router.
-	if preview {
-		return append([]string{p.Name(), "-R", "--print", "--print-format", "%n"}, pkgs...)
-	}
-	return append([]string{p.Name(), "-R", "--noconfirm"}, pkgs...)
 }

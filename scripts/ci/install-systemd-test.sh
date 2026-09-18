@@ -1,14 +1,13 @@
 #!/bin/sh
-# Installs Ostiole for real, the way the documentation says to, inside a
-# container that is running systemd, and then asks the router whether
-# every promise the installer printed came true.
+# Installs Ostiole for real, the way the documentation says to, into a
+# stock image running systemd, and then asks the router whether every
+# promise the installer printed came true.
 #
 #   install-systemd-test.sh <base-url> <version>
 #
-# The three things being tested are the three the installer does and a
-# unit test cannot: that the packages a router needs go on, that the
-# ones it has no use for come off, and that what is left is a running
-# firewall with its ruleset in the kernel.
+# Nothing is preinstalled: the test is the official image, the documented
+# one-liner, and the end state. It runs twice, because `ostiole repair`
+# has to reach that same state on a router somebody has since changed.
 set -eu
 # shellcheck source=scripts/ci/lib.sh
 . "$(dirname "$0")/lib.sh"
@@ -16,38 +15,118 @@ set -eu
 BASE="${1:?base url}"
 VERSION="${2:?version}"
 
-# What this distribution calls the firewall Ostiole replaces, and an
-# extra that should not survive the install either.
+# upnp_package is what miniupnpd is packaged as here, empty when it does
+# not come from the package manager at all.
 case "$(manager)" in
 apt-get)
-	competitor=ufw
-	competitor_unit=ufw.service
-	extra=unattended-upgrades
 	tc_package=iproute2
+	upnp_package=miniupnpd-nftables
 	;;
 dnf)
-	competitor=firewalld
-	competitor_unit=firewalld.service
-	extra=PackageKit
 	tc_package=iproute-tc
+	upnp_package=miniupnpd
+	case "$(distro_id)" in
+	# Unpacked from a Fedora rpm rather than installed.
+	rocky | rhel | almalinux | centos) upnp_package="" ;;
+	esac
 	;;
 pacman)
-	competitor=ufw
-	competitor_unit=ufw.service
-	extra=""
 	tc_package=iproute2
+	upnp_package=miniupnpd-nft # built from the AUR, but pacman knows it
 	;;
 *) fail "no package manager, or one with no systemd" ;;
 esac
 
-step "a router with $competitor on it"
-systemctl enable "$competitor_unit" >/dev/null 2>&1 ||
-	fail "could not enable $competitor_unit; the installer would have nothing to retire"
-# Starting it is allowed to fail: some of these images cannot open a
-# netlink socket for it, and enabled is enough to be a competitor.
-systemctl start "$competitor_unit" >/dev/null 2>&1 || true
-pkg_present "$competitor" || fail "$competitor is not installed to begin with"
-[ -z "$extra" ] || pkg_present "$extra" || fail "$extra is not installed to begin with"
+# assert_router is the whole end state, asked twice: once of the install
+# and once of the repair that has to reproduce it.
+assert_router() {
+	step "$1: the units are running"
+	for unit in ostiole-firewall.service ostiole.service; do
+		state=$(systemctl is-enabled "$unit" 2>&1 || true)
+		[ "$state" = enabled ] || fail "$unit is $state, not enabled"
+	done
+	systemctl is-active ostiole.service >/dev/null ||
+		fail "ostiole.service is $(systemctl is-active ostiole.service 2>&1): $(systemctl status ostiole.service --no-pager -l | tail -20)"
+
+	step "$1: networkd has the network and NetworkManager cannot start"
+	# Enabled and active is as far as a container goes: the address on
+	# eth0 belongs to the container runtime, so networkd never takes it
+	# over in here. That addresses survive the handover is checked on the
+	# VM, where the router owns its own interface.
+	systemctl is-enabled systemd-networkd.service >/dev/null 2>&1 ||
+		fail "systemd-networkd is $(systemctl is-enabled systemd-networkd.service 2>&1), not enabled"
+	systemctl is-active systemd-networkd.service >/dev/null 2>&1 ||
+		fail "systemd-networkd is $(systemctl is-active systemd-networkd.service 2>&1), not active"
+	# Older systemd says "No such file or directory" where newer says
+	# not-found; both mean the unit is gone.
+	state=$(systemctl is-enabled NetworkManager.service 2>&1 || true)
+	case "$state" in
+	masked | not-found | *"No such file"*) ;;
+	*) fail "NetworkManager.service is $state, want masked or gone" ;;
+	esac
+
+	step "$1: the packages a router needs went on"
+	for pkg in nftables dnsmasq unbound ppp "$tc_package" $upnp_package; do
+		pkg_present "$pkg" || fail "$pkg was not installed"
+	done
+	# However it got here, it has to be a binary this router can run and
+	# the nftables build: the iptables one would write mappings into
+	# tables Ostiole's chains never see.
+	bin=$(command -v miniupnpd || PATH="$PATH:/usr/sbin:/sbin" command -v miniupnpd) ||
+		fail "miniupnpd is not on this router"
+	! ldd "$bin" 2>&1 | grep -q "not found" ||
+		fail "miniupnpd is missing libraries: $(ldd "$bin" 2>&1 | grep 'not found')"
+	ldd "$bin" 2>&1 | grep -q libnftnl ||
+		fail "miniupnpd is not the nftables build: $(ldd "$bin" 2>&1)"
+	for cmd in nft dnsmasq unbound pppd tc; do
+		command -v "$cmd" >/dev/null 2>&1 || PATH="$PATH:/usr/sbin:/sbin" command -v "$cmd" >/dev/null 2>&1 ||
+			fail "$cmd is not on this router"
+	done
+
+	step "$1: the service units were written"
+	units="ostiole-dnsmasq.service ostiole-unbound.service ostiole-pppoe@.service ostiole-miniupnpd.service"
+	for unit in $units; do
+		systemctl cat "$unit" >/dev/null 2>&1 || fail "$unit was not written"
+	done
+
+	step "$1: the packages a router has no use for are not there"
+	for pkg in firewalld ufw NetworkManager network-manager networkmanager unattended-upgrades PackageKit packagekit cockpit cockpit-ws; do
+		! pkg_present "$pkg" || fail "$pkg is installed"
+	done
+
+	step "$1: the bootstrap ruleset is in the kernel"
+	PATH="$PATH:/usr/sbin:/sbin"
+	nft list table inet ostiole >/tmp/ruleset.txt ||
+		fail "Ostiole's table is not loaded"
+	grep -q "bootstrap:management" /tmp/ruleset.txt ||
+		{ cat /tmp/ruleset.txt; fail "the loaded table is not the bootstrap ruleset"; }
+	grep -q "policy drop" /tmp/ruleset.txt ||
+		{ cat /tmp/ruleset.txt; fail "the bootstrap input chain does not drop"; }
+
+	step "$1: the router was persisted"
+	[ -f /etc/sysctl.d/99-ostiole.conf ] || fail "no sysctl file"
+	grep -q "net/ipv4/ip_forward\|net.ipv4.ip_forward" /etc/sysctl.d/99-ostiole.conf ||
+		fail "the sysctl file does not turn forwarding on"
+	[ -f /etc/systemd/journald.conf.d/ostiole.conf ] || fail "the journal was not bounded"
+
+	step "$1: the web UI answers"
+	for _ in 1 2 3 4 5 6 7 8 9 10; do
+		if curl -fsSk https://127.0.0.1/api/v1/health >/tmp/health.txt 2>/dev/null; then
+			break
+		fi
+		sleep 1
+	done
+	grep -q "ok\|status" /tmp/health.txt 2>/dev/null ||
+		fail "the UI did not answer on 443: $(cat /tmp/health.txt 2>/dev/null)"
+}
+
+# no_warnings holds the installer to its own output: a line that starts
+# with "warning:" is something it could not do, and on a stock image
+# there is nothing it should not be able to do.
+no_warnings() {
+	! grep -q '^warning:' "$1" ||
+		{ grep '^warning:' "$1"; fail "the install warned about something"; }
+}
 
 step "the documented install, agreed to in advance"
 # Piped, with the answer passed through `sh -s --`, because that is the
@@ -58,59 +137,19 @@ step "the documented install, agreed to in advance"
 curl -fsSL "$BASE/install.sh" >/tmp/install.sh
 [ -s /tmp/install.sh ] || fail "$BASE/install.sh served nothing"
 # shellcheck disable=SC2002 # the pipe is what is being tested
-cat /tmp/install.sh | OSTIOLE_BASE_URL="$BASE" OSTIOLE_VERSION="$VERSION" sh -s -- --yes
+cat /tmp/install.sh | OSTIOLE_BASE_URL="$BASE" OSTIOLE_VERSION="$VERSION" sh -s -- --yes >/tmp/install.log 2>&1 ||
+	{ cat /tmp/install.log; fail "the documented install failed"; }
+cat /tmp/install.log
+no_warnings /tmp/install.log
 
-step "the units are running"
-for unit in ostiole-firewall.service ostiole.service; do
-	state=$(systemctl is-enabled "$unit" 2>&1 || true)
-	[ "$state" = enabled ] || fail "$unit is $state, not enabled"
-done
-systemctl is-active ostiole.service >/dev/null ||
-	fail "ostiole.service is $(systemctl is-active ostiole.service 2>&1): $(systemctl status ostiole.service --no-pager -l | tail -20)"
+assert_router "install"
 
-step "the packages a router needs went on"
-for pkg in nftables dnsmasq unbound "$tc_package"; do
-	pkg_present "$pkg" || fail "$pkg was not installed"
-done
-for cmd in nft dnsmasq unbound tc; do
-	command -v "$cmd" >/dev/null 2>&1 || PATH="$PATH:/usr/sbin:/sbin" command -v "$cmd" >/dev/null 2>&1 ||
-		fail "$cmd is not on this router"
-done
+step "ostiole repair puts it all back"
+ostiole repair --yes >/tmp/repair.log 2>&1 ||
+	{ cat /tmp/repair.log; fail "ostiole repair failed"; }
+no_warnings /tmp/repair.log
 
-step "the packages a router has no use for came off"
-! pkg_present "$competitor" || fail "$competitor is still installed"
-[ -z "$extra" ] || ! pkg_present "$extra" || fail "$extra is still installed"
-# Masked as well as removed: a package that comes back must not start.
-state=$(systemctl is-enabled "$competitor_unit" 2>&1 || true)
-case "$state" in
-masked | not-found) ;;
-*) fail "$competitor_unit is $state, want masked" ;;
-esac
-
-step "the bootstrap ruleset is in the kernel"
-PATH="$PATH:/usr/sbin:/sbin"
-nft list table inet ostiole >/tmp/ruleset.txt ||
-	fail "Ostiole's table is not loaded"
-grep -q "bootstrap:management" /tmp/ruleset.txt ||
-	{ cat /tmp/ruleset.txt; fail "the loaded table is not the bootstrap ruleset"; }
-grep -q "policy drop" /tmp/ruleset.txt ||
-	{ cat /tmp/ruleset.txt; fail "the bootstrap input chain does not drop"; }
-
-step "the router was persisted"
-[ -f /etc/sysctl.d/99-ostiole.conf ] || fail "no sysctl file"
-grep -q "net/ipv4/ip_forward\|net.ipv4.ip_forward" /etc/sysctl.d/99-ostiole.conf ||
-	fail "the sysctl file does not turn forwarding on"
-[ -f /etc/systemd/journald.conf.d/ostiole.conf ] || fail "the journal was not bounded"
-
-step "the web UI answers"
-for _ in 1 2 3 4 5 6 7 8 9 10; do
-	if curl -fsSk https://127.0.0.1/api/v1/health >/tmp/health.txt 2>/dev/null; then
-		break
-	fi
-	sleep 1
-done
-grep -q "ok\|status" /tmp/health.txt 2>/dev/null ||
-	fail "the UI did not answer on 443: $(cat /tmp/health.txt 2>/dev/null)"
+assert_router "repair"
 
 step "what the router says about itself"
 ostiole host || true

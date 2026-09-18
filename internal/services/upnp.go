@@ -256,7 +256,7 @@ func (u *UPnP) Apply(ctx context.Context, files network.Files) error {
 		return os.Remove(u.ConfPath())
 	}
 	if !u.Installed(ctx) {
-		return errors.New("UPnP is not set up on this router: run `ostiole services setup --with-upnp` once as root")
+		return errors.New("UPnP is not set up on this router: run `ostiole repair` once as root")
 	}
 	if current[upnpConfName] != conf {
 		if err := os.MkdirAll(u.dir(), 0o755); err != nil { //nolint:gosec // miniupnpd reads this

@@ -74,6 +74,7 @@ distro_id() {
 	echo "${ID:-unknown}"
 }
 
+
 step() { printf '\n=== %s\n' "$1"; }
 fail() {
 	printf 'FAIL: %s\n' "$1" >&2

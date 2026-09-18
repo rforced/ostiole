@@ -178,7 +178,7 @@ func TestUPnPApplyNeedsTheDaemon(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = u.Apply(context.Background(), files)
-	if err == nil || !strings.Contains(err.Error(), "services setup --with-upnp") {
+	if err == nil || !strings.Contains(err.Error(), "ostiole repair") {
 		t.Errorf("error was %v, want the setup instruction", err)
 	}
 }

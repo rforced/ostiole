@@ -24,6 +24,7 @@ import (
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/policy"
 	"github.com/rforced/ostiole/internal/shaping"
+	"github.com/rforced/ostiole/internal/sshd"
 	"github.com/rforced/ostiole/internal/store"
 )
 
@@ -87,6 +88,11 @@ saved as the boot ruleset; run "ostiole apply" to load it now.`,
 			if st.Exists() && !force {
 				return fmt.Errorf("%s already has a configuration (use --force to overwrite)", st.Dir)
 			}
+			// How sshd lets people in now is what a first configuration
+			// keeps, unless the flag says otherwise.
+			if !cmd.Flags().Changed("ssh-passwords") {
+				opts.SSHPasswords, _ = sshd.System{}.State(cmd.Context())
+			}
 			cfg := model.Starter(opts)
 			ruleset, err := nft.Render(cfg)
 			if err != nil {
@@ -106,6 +112,7 @@ saved as the boot ruleset; run "ostiole apply" to load it now.`,
 	f.StringVar(&opts.Hostname, "hostname", "", "hostname")
 	f.BoolVar(&opts.ManagementFromWAN, "management-from-wan", false, "also allow the web UI and SSH from the WAN zone (routers managed over their public side)")
 	f.BoolVar(&opts.Services, "services", false, "enable DHCP and DNS on the LAN (pool derived from the LAN address)")
+	f.BoolVar(&opts.SSHPasswords, "ssh-passwords", true, "allow password logins over SSH (default: as this router is set now)")
 	f.StringSliceVar(&opts.DNSUpstreams, "dns-upstream", nil, "upstream resolvers for the DNS service (default 1.1.1.1, 9.9.9.9)")
 	f.BoolVar(&force, "force", false, "overwrite an existing configuration")
 	_ = cmd.MarkFlagRequired("lan")

@@ -68,7 +68,7 @@ A router updates by verifying the *next* release with the key it already has, so
 arrive before it is used:
 
 1. `ostiole-sign -genkey` prints a new pair. Add the public half to `TrustedKeysHex` in
-   `internal/update/update.go` and to `OSTIOLE_RELEASE_KEYS` in `scripts/install.sh`, keeping the
+   `internal/update/update.go` and to `OSTIOLE_RELEASE_KEYS` in `internal/install/install.sh`, keeping the
    old key first. Release. Routers that update now trust both keys.
 2. Once that release is the oldest one still in use, replace the `OSTIOLE_SIGNING_KEY` repository
    secret with the new secret and release again, signed by the new key.

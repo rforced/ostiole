@@ -56,12 +56,11 @@ useAsync(
         role="note"
       >
         Port mapping is not set up on this router yet. Run
-        <code class="font-mono">ostiole services setup --with-upnp</code> as root once. Until then,
-        applying this fails.
+        <code class="font-mono">ostiole repair</code> as root once. Until then, applying this fails.
       </p>
       <p v-else-if="!status.upnpSetUp" class="text-sm text-neutral-500">
         Not set up on this router. Run
-        <code class="font-mono">ostiole services setup --with-upnp</code> as root once.
+        <code class="font-mono">ostiole repair</code> as root once.
       </p>
       <p v-else class="text-sm text-neutral-500">
         Port mapping {{ status.upnpRunning ? 'running' : 'stopped' }} ·
@@ -75,8 +74,8 @@ useAsync(
         role="note"
       >
         DHCP and DNS are not set up on this router yet. Run
-        <code class="font-mono">ostiole services setup</code> as root once. Until then, enabling
-        either fails to apply.
+        <code class="font-mono">ostiole repair</code> as root once. Until then, enabling either
+        fails to apply.
       </p>
       <p v-else class="text-sm text-neutral-500">
         {{ isDns ? 'DNS' : 'DHCP' }} {{ state }}
@@ -91,8 +90,8 @@ useAsync(
         role="note"
       >
         The validating resolver is not installed. Run
-        <code class="font-mono">ostiole services setup --with-resolver</code> as root once. Until
-        then, applying this DNS configuration fails.
+        <code class="font-mono">ostiole repair</code> as root once. Until then, applying this DNS
+        configuration fails.
       </p>
     </template>
   </div>

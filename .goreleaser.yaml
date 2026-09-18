@@ -103,7 +103,7 @@ release:
     name: ostiole
   prerelease: auto
   extra_files:
-    - glob: scripts/install.sh
+    - glob: internal/install/install.sh
   # The annotated tag's message becomes the top of the release notes, so a
   # tag carrying "Security-Release: yes" tells every router on the security
   # update mode to install this one without being asked. Nothing else

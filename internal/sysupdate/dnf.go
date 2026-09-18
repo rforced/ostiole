@@ -165,66 +165,6 @@ func (d dnf) RebootRequired(ctx context.Context, run Runner) (bool, string) {
 	return kernelRebootHint(ctx, run)
 }
 
-func (d dnf) Installed(ctx context.Context, run Runner, pkg string) (bool, error) {
-	return rpmInstalled(ctx, run, pkg)
-}
-
-func (d dnf) InstallArgv(pkgs []string) []string {
-	return append([]string{d.Name(), "-y", "install"}, pkgs...)
-}
-
-func (d dnf) RemoveArgv(pkgs []string, preview bool) []string {
-	// The answer goes before the command, like every other global option
-	// dnf takes: --assumeno prints the transaction and then declines to
-	// run it, which is the closest dnf comes to a dry run that lists what
-	// would come away. It exits 1 having changed nothing, and
-	// previewRefused knows that is the answer rather than a failure.
-	//
-	// clean_requirements_on_remove is on by default, and it is how
-	// removing firewalld took nftables with it: an "unused dependency" as
-	// far as rpm can tell, because Ostiole is not a package that requires
-	// it. Off, only the named packages and what depends on them go.
-	answer := "-y"
-	if preview {
-		answer = "--assumeno"
-	}
-	return append([]string{d.Name(), "--setopt=clean_requirements_on_remove=False", answer, "remove"}, pkgs...)
-}
-
-// PreviewFailed reads dnf's own error line, because the exit status says
-// nothing: --assumeno exits 1 having printed a transaction it will not
-// run, and a removal dnf cannot resolve exits 1 having printed "Error:"
-// and the problem instead. RHEL 10 has one of those out of the box —
-// shim-x64 requires dbxtool, which fwupd provides, so fwupd cannot come
-// off a UEFI router at all — and read as a transaction it is an empty
-// plan that removes nothing and reports success.
-func (d dnf) PreviewFailed(out string) bool {
-	for _, line := range lines([]byte(out)) {
-		if strings.HasPrefix(strings.TrimSpace(line), "Error") {
-			return true
-		}
-	}
-	return false
-}
-
-// rpmInstalled asks the rpm database, which both dnf and zypper routers
-// have. `rpm -q` prints the version of a package it has and says "not
-// installed" about one it does not, exiting non-zero either way, so the
-// text decides; only rpm failing to run at all is an error.
-func rpmInstalled(ctx context.Context, run Runner, pkg string) (bool, error) {
-	out, err := run.Run(ctx, "rpm", "-q", pkg)
-	text := strings.TrimSpace(string(out))
-	switch {
-	case strings.Contains(text, "not installed"):
-		return false, nil
-	case err == nil && text != "":
-		return true, nil
-	case text == "":
-		return false, fmt.Errorf("rpm -q %s: %w", pkg, err)
-	}
-	return false, nil
-}
-
 // tail keeps the end of a failed command's output, which is where the
 // reason is.
 func tail(out []byte) string {

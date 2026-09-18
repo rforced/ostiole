@@ -1,13 +1,14 @@
 #!/bin/sh
-# Exercises scripts/install.sh inside a container of some distribution,
-# against a build served over HTTP rather than a GitHub release.
+# Exercises internal/install/install.sh inside a container of some
+# distribution, against a build served over HTTP rather than a GitHub
+# release.
 #
 # What is tested here is the script itself: that it finds the tools it
-# needs and says so when they are missing, that it refuses a tarball
-# whose checksum does not match and a signature that does not verify,
-# that it puts a working binary where it says it did, and that the
-# binary it placed can read this router well enough to plan an install.
-# Installing proper needs systemd and has a script of its own.
+# needs and says so when they are missing, that it plans the right
+# packages for this distribution, that it refuses a tarball whose
+# checksum does not match and a signature that does not verify, and that
+# it puts a working binary where it says it did. Installing proper needs
+# systemd and has a script of its own.
 #
 #   install-script-test.sh <base-url> <version>
 #
@@ -51,12 +52,24 @@ step "fetching the install script"
 curl -fsSL "$BASE/install.sh" >/tmp/install.sh
 [ -s /tmp/install.sh ] || fail "$BASE/install.sh served nothing"
 
+step "the plan names this distribution's packages"
+# --dry-run is the whole per-distribution path: find the package manager,
+# work out what this router needs and what it has no use for, say so.
+if ! OSTIOLE_BASE_URL="$BASE" sh /tmp/install.sh --dry-run >/tmp/plan.txt 2>&1; then
+	cat /tmp/plan.txt
+	fail "install.sh --dry-run failed"
+fi
+cat /tmp/plan.txt
+grep -q "nftables" /tmp/plan.txt || fail "the plan does not install nftables"
+grep -qi "miniupnpd\|no UPnP" /tmp/plan.txt || fail "the plan says nothing about UPnP"
+[ ! -e /usr/local/bin/ostiole ] || fail "--dry-run installed a binary"
+
 # pipe_install runs it the way the documentation says to, against the
 # tree named. The pipe is the point: it is what leaves stdin useless
 # for the question the installer asks.
 pipe_install() {
 	# shellcheck disable=SC2002 # the pipe is what is being tested
-	cat /tmp/install.sh | OSTIOLE_BASE_URL="$1" OSTIOLE_NO_INSTALL=1 sh
+	cat /tmp/install.sh | OSTIOLE_BASE_URL="$1" OSTIOLE_NO_INSTALL=1 sh -s -- --yes
 }
 
 step "curl | sh places the binary"
@@ -64,17 +77,6 @@ pipe_install "$BASE"
 [ -x /usr/local/bin/ostiole ] || fail "no binary at /usr/local/bin/ostiole"
 /usr/local/bin/ostiole version | grep -q "$VERSION" ||
 	fail "the binary is not $VERSION: $(/usr/local/bin/ostiole version)"
-
-step "the binary reads this router"
-# --dry-run plans and changes nothing, which is as far as a container
-# without systemd goes. It is the whole per-distribution path: find the
-# package manager, work out what this router is missing, say so.
-if ! /usr/local/bin/ostiole install --dry-run >/tmp/plan.txt 2>&1; then
-	cat /tmp/plan.txt
-	fail "install --dry-run failed"
-fi
-grep -q "Ostiole will:" /tmp/plan.txt || { cat /tmp/plan.txt; fail "no plan printed"; }
-cat /tmp/plan.txt
 
 # What follows must leave nothing behind, so each starts from nothing.
 rm -f /usr/local/bin/ostiole
@@ -97,12 +99,28 @@ grep -qi "signature check failed" /tmp/err.txt ||
 
 step "a router without curl is told so"
 hide_curl
-if OSTIOLE_BASE_URL="$BASE" sh /tmp/install.sh 2>/tmp/err.txt; then
+if OSTIOLE_BASE_URL="$BASE" sh /tmp/install.sh --yes 2>/tmp/err.txt; then
 	show_curl
 	fail "a router with no curl installed something"
 fi
 show_curl
 grep -q "curl is required" /tmp/err.txt ||
 	{ cat /tmp/err.txt; fail "the refusal does not name curl"; }
+
+# Alpine is the one image here that the full script runs to the end on,
+# because it is the one with no systemd: it installs the packages, places
+# the binary, and stops before the units it cannot write.
+if [ "$(manager)" = apk ]; then
+	step "the full script on a router without systemd"
+	OSTIOLE_BASE_URL="$BASE" sh /tmp/install.sh --yes >/tmp/alpine.txt 2>&1 ||
+		{ cat /tmp/alpine.txt; fail "the full script failed on Alpine"; }
+	cat /tmp/alpine.txt
+	grep -q "no systemd on this router" /tmp/alpine.txt ||
+		fail "the script did not say it was stopping at the binary"
+	[ -x /usr/local/bin/ostiole ] || fail "no binary at /usr/local/bin/ostiole"
+	for pkg in nftables dnsmasq unbound ppp-daemon iproute2-tc; do
+		pkg_present "$pkg" || fail "$pkg was not installed"
+	done
+fi
 
 printf '\nall install.sh checks passed\n'

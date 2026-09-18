@@ -17,6 +17,7 @@ import (
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
+	"github.com/rforced/ostiole/internal/sshd"
 	"github.com/rforced/ostiole/internal/store"
 	"github.com/rforced/ostiole/internal/sysctl"
 	"github.com/rforced/ostiole/internal/timezone"
@@ -42,6 +43,8 @@ type Engine struct {
 	clock  timezone.Applier // sets the router's zone; nil leaves it alone
 	// journal bounds the system journal; nil leaves it alone.
 	journal journald.Applier
+	// ssh decides whether sshd takes a password; nil leaves it alone.
+	ssh sshd.Applier
 	// feeds supplies the contents of aliases fetched from a URL or a
 	// country list; nil renders them empty.
 	feeds  FeedSource
@@ -147,6 +150,25 @@ func (e *Engine) WithTimezone(a timezone.Applier) *Engine {
 func (e *Engine) WithJournal(a journald.Applier) *Engine {
 	e.journal = a
 	return e
+}
+
+// WithSSH makes every apply set whether sshd accepts a password.
+func (e *Engine) WithSSH(a sshd.Applier) *Engine {
+	e.ssh = a
+	return e
+}
+
+// applySSH writes sshd's drop-in. Like the timezone it is not part of the
+// revert: locking yourself out of SSH is not something a ruleset rollback
+// can help with, and the setting is in the configuration a backup carries.
+func (e *Engine) applySSH(ctx context.Context, cfg *model.Config) {
+	if e.ssh == nil {
+		return
+	}
+	if err := e.ssh.Apply(ctx, cfg.System.Management.SSHPasswords); err != nil {
+		e.log.Warn("could not set how sshd lets people in; it admits people as it did before",
+			"passwords", cfg.System.Management.SSHPasswords, "err", err)
+	}
 }
 
 // applyJournal writes the journal ceiling. Like the timezone it is not
@@ -286,6 +308,7 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 	e.applySysctl()
 	e.applyTimezone(ctx, cfg)
 	e.applyJournal(ctx, cfg)
+	e.applySSH(ctx, cfg)
 	if e.net != nil {
 		if err := e.net.Apply(ctx, plan.Network); err != nil {
 			if rerr := e.nft.Apply(ctx, previous); rerr != nil {

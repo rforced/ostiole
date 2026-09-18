@@ -24,9 +24,8 @@ const applied = ref(null)
 const error = ref('')
 const issues = ref([])
 const busy = ref(false)
-/** After the confirm: retiring the old firewall, and what went wrong if it did not. */
+/** Set once the apply is confirmed, while the status is re-read. */
 const finishing = ref(false)
-const finishError = ref('')
 
 const candidates = computed(() => links.value.filter((l) => l.kind !== 'loopback'))
 const canPreview = computed(
@@ -94,27 +93,12 @@ async function apply() {
   }
 }
 
-/**
- * The confirm is the first moment Ostiole's ruleset is in the kernel, so
- * it is the first moment the old firewall can safely be retired: that,
- * and clearing what it left behind, is done here rather than on a page
- * whose button would have refused until now. A daemon that is not root
- * cannot do it and is not asked.
- */
+/** The apply is confirmed and in force; the dashboard takes it from here. */
 async function finish() {
   finishing.value = true
-  finishError.value = ''
-  if (system.host?.root) {
-    try {
-      await api.host.prepare()
-    } catch (e) {
-      finishError.value = e instanceof Error ? e.message : String(e)
-    }
-  }
   await system.refresh()
-  await system.refreshHost()
   finishing.value = false
-  if (!finishError.value) router.replace('/')
+  router.replace('/')
 }
 
 function reverted() {
@@ -131,19 +115,7 @@ function reverted() {
       </p>
     </div>
 
-    <section v-if="finishError" class="card space-y-3" aria-labelledby="finish-title">
-      <h2 id="finish-title" class="card-title">Applied, but the old firewall is still running</h2>
-      <p role="alert" class="text-sm text-red-600 dark:text-red-400">{{ finishError }}</p>
-      <p class="text-sm text-neutral-500">
-        Your configuration is in force. Retire the old firewall from
-        <RouterLink to="/system/host" class="underline">System, Host</RouterLink> when you are
-        ready.
-      </p>
-      <RouterLink to="/" class="btn-primary inline-block">Go to the dashboard</RouterLink>
-    </section>
-    <p v-else-if="finishing" role="status" class="text-sm text-neutral-500">
-      Confirmed. Retiring the old firewall and clearing what it left behind.
-    </p>
+    <p v-if="finishing" role="status" class="text-sm text-neutral-500">Confirmed.</p>
     <template v-else-if="applied">
       <ApplyPending :deadline="applied.deadline" @confirmed="finish" @reverted="reverted" />
     </template>
@@ -215,8 +187,7 @@ function reverted() {
         />
         <span>
           <span class="font-medium">Run DHCP and DNS for the LAN.</span>
-          Hands out addresses and resolves names for LAN clients. Needs
-          <code class="font-mono">ostiole services setup</code> on the router first.
+          Hands out addresses and resolves names for LAN clients.
         </span>
       </label>
 

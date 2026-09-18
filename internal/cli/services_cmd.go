@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"log/slog"
 	"text/tabwriter"
 	"time"
 
@@ -37,41 +36,6 @@ func newServicesCmd(g *globals) *cobra.Command {
 			return w.Flush()
 		},
 	}
-	var withResolver, withPPPoE, withUPnP bool
-	setup := &cobra.Command{
-		Use:   "setup",
-		Short: "Install dnsmasq, write its unit, and retire competing resolvers",
-		Long: `Installs dnsmasq with the package manager if needed, writes
-ostiole-dnsmasq.service, masks the distro dnsmasq unit and systemd-resolved
-(both would take port 53), and makes /etc/resolv.conf a regular file that
-Ostiole manages. Then enable DHCP and DNS under Services in the web UI.
-
-With --with-resolver it also installs unbound, bootstraps the DNSSEC root
-trust anchor, and writes ostiole-unbound.service, which the DNS service
-can then use to validate DNSSEC or to speak DNS over TLS.
-
-With --with-pppoe it installs pppd and writes ostiole-pppoe@.service, so
-an interface can dial a session over Ethernet the way DSL is delivered.
-
-With --with-upnp it installs miniupnpd and writes ostiole-miniupnpd.service,
-so clients on the LAN can open their own port mappings. The build has to be
-the nftables one, which is checked before anything is written.`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := requireRoot(); err != nil {
-				return err
-			}
-			opts := services.SetupOptions{Dnsmasq: true, Resolver: withResolver, PPPoE: withPPPoE, UPnP: withUPnP}
-			if err := services.Setup(cmd.Context(), services.New(), opts, slog.Default()); err != nil {
-				return err
-			}
-			fmt.Fprintln(cmd.OutOrStdout(), "services ready: enable DHCP and DNS in the web UI (Services) or in the configuration, then apply")
-			return nil
-		},
-	}
-	setup.Flags().BoolVar(&withResolver, "with-resolver", false, "also install unbound for DNSSEC validation and DNS over TLS")
-	setup.Flags().BoolVar(&withPPPoE, "with-pppoe", false, "also install pppd so an interface can dial a PPPoE session")
-	setup.Flags().BoolVar(&withUPnP, "with-upnp", false, "also install miniupnpd so clients can ask for their own port mappings")
 	mappings := &cobra.Command{
 		Use:   "mappings",
 		Short: "Show the port mappings clients have opened for themselves",
@@ -121,6 +85,6 @@ with the daemon and are not shown.`,
 			return w.Flush()
 		},
 	}
-	cmd.AddCommand(setup, leases, mappings)
+	cmd.AddCommand(leases, mappings)
 	return cmd
 }

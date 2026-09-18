@@ -33,7 +33,7 @@ version=${version%_linux_amd64.tar.gz}
 rm -rf "$OUT"
 mkdir -p "$OUT" "$OUT/tampered" "$OUT/badsig"
 
-cp "$REPO/scripts/install.sh" "$OUT/install.sh"
+cp "$REPO/internal/install/install.sh" "$OUT/install.sh"
 for tree in "$OUT" "$OUT/tampered" "$OUT/badsig"; do
   cp "$DIST/$tarball" "$DIST/checksums.txt" "$tree/"
   if [ -f "$DIST/checksums.txt.sig" ]; then

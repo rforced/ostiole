@@ -12,7 +12,7 @@ import (
 // in several packages, so the list on the page is still packages but the
 // security count is patches, and `zypper patch --category security` is
 // what installs them.
-type zypper struct{ statusTellsPreview }
+type zypper struct{}
 
 func (zypper) Name() string          { return "zypper" }
 func (zypper) SecurityCapable() bool { return true }
@@ -112,22 +112,6 @@ func (z zypper) UpgradeArgv(security bool, exclude []string, pending Pending) []
 	}
 	argv = append(argv, "update")
 	return append(argv, names(wanted)...)
-}
-
-func (z zypper) Installed(ctx context.Context, run Runner, pkg string) (bool, error) {
-	return rpmInstalled(ctx, run, pkg)
-}
-
-func (z zypper) InstallArgv(pkgs []string) []string {
-	return append([]string{z.Name(), "--non-interactive", "install"}, pkgs...)
-}
-
-func (z zypper) RemoveArgv(pkgs []string, preview bool) []string {
-	argv := []string{z.Name(), "--non-interactive", "remove"}
-	if preview {
-		argv = append(argv, "--dry-run")
-	}
-	return append(argv, pkgs...)
 }
 
 func (z zypper) RebootRequired(ctx context.Context, run Runner) (bool, string) {

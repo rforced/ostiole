@@ -140,16 +140,8 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/crons":           {summary: "The operator's crons, and the work Ostiole does on its own account.", role: auth.RoleViewer},
 	"POST /api/v1/crons/{id}/run": {summary: "Run a cron now.", role: auth.RoleOperator},
 
-	"GET /api/v1/host":                  {summary: "What this router still needs: packages, competing services, leftover rulesets, and who owns the addresses.", role: auth.RoleViewer},
-	"POST /api/v1/host/prepare":         {summary: "Set up the components the configuration needs, retire the old firewall once a ruleset is loaded, and clear the leftovers, in that order.", role: auth.RoleAdmin},
-	"POST /api/v1/host/setup":           {summary: "Install the named components and write their units.", role: auth.RoleAdmin},
-	"POST /api/v1/host/extras/remove":   {summary: "Remove what a router has no use for (other updaters, snapd, desktop daemons), or preview what removing it would take.", role: auth.RoleAdmin},
-	"POST /api/v1/host/ssh":             {summary: "Turn password logins over SSH off (keys only) or back on.", role: auth.RoleAdmin},
-	"POST /api/v1/host/takeover":        {summary: "Stop, disable and mask every competing firewall service.", role: auth.RoleAdmin},
-	"POST /api/v1/host/packages/remove": {summary: "Remove a retired competitor's packages, or preview what removing them would take.", role: auth.RoleAdmin},
-	"POST /api/v1/host/legacy/flush":    {summary: "Clear the rulesets an older firewall left in the kernel.", role: auth.RoleAdmin},
-	"POST /api/v1/host/network":         {summary: "Hand addressing to systemd-networkd, or confirm or revert a handover that is waiting.", role: auth.RoleAdmin},
-	"POST /api/v1/host/steps/{step}":    {summary: "Leave a preparation step alone, or take that back.", role: auth.RoleAdmin},
+	"GET /api/v1/host":               {summary: "What this router is: distribution, kernel, Ostiole's units, the daemons it has, who owns the addresses, and leftover rulesets.", role: auth.RoleViewer},
+	"POST /api/v1/host/legacy/flush": {summary: "Clear the rulesets an older firewall left in the kernel.", role: auth.RoleAdmin},
 
 	"GET /metrics":             {summary: "Metrics in the Prometheus text format.", role: auth.RoleViewer},
 	"GET /api/v1/openapi.json": {summary: "This description.", public: true},

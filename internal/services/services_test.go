@@ -244,7 +244,7 @@ func TestUnboundApplyNeedsSetup(t *testing.T) {
 	u := &Unbound{Dir: dir, Cmd: &fakeCmd{installed: false}}
 	files, _ := u.Render(loadConfig(t, "testdata/resolver-validate.json"))
 	err := u.Apply(context.Background(), files)
-	if err == nil || !strings.Contains(err.Error(), "--with-resolver") {
+	if err == nil || !strings.Contains(err.Error(), "ostiole repair") {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -332,7 +332,7 @@ func TestApplyNeedsSetup(t *testing.T) {
 	d := &Dnsmasq{Dir: t.TempDir(), Cmd: &fakeCmd{installed: false}}
 	files, _ := d.Render(loadConfig(t, "testdata/full.json"))
 	err := d.Apply(context.Background(), files)
-	if err == nil || !strings.Contains(err.Error(), "services setup") {
+	if err == nil || !strings.Contains(err.Error(), "ostiole repair") {
 		t.Fatalf("err = %v", err)
 	}
 }

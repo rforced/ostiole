@@ -88,10 +88,9 @@ type Deps struct {
 	// Shaping reports the live traffic queues; nil leaves the page with
 	// what is configured and no figures.
 	Shaping Shaper
-	// Host prepares the operating system underneath Ostiole: the packages it
-	// needs, the services it has to take over from, and whatever an older
-	// firewall left in the kernel. Only the fields that are not already somewhere
-	// in Deps need setting; Handler fills in the rest.
+	// Host reports the operating system underneath Ostiole and clears what
+	// an older firewall left in the kernel. Only the fields that are not
+	// already somewhere in Deps need setting; Handler fills in the rest.
 	Host host.Deps
 }
 
@@ -133,16 +132,13 @@ func Handler(d Deps) http.Handler {
 
 // hostDeps completes the host dependencies from the ones the API already
 // has. The caller says which router this is — root, the configuration
-// directory, the network backend — and everything else is the same
-// engine, package manager and systemd the rest of the API talks to, so
-// there is nothing to be gained by making the caller repeat it.
+// directory, the network backend — and everything else is the same engine
+// and systemd the rest of the API talks to, so there is nothing to be
+// gained by making the caller repeat it.
 func hostDeps(d Deps) host.Deps {
 	h := d.Host
 	if h.Units == nil {
 		h.Units = d.Units
-	}
-	if h.Packages == nil {
-		h.Packages = d.Packages
 	}
 	if h.Kernel == nil {
 		// The same nft runner the dashboard lists tables with, when it is
@@ -152,9 +148,6 @@ func hostDeps(d Deps) host.Deps {
 		}
 	}
 	if d.Engine != nil {
-		if h.Config == nil {
-			h.Config = d.Engine.Effective
-		}
 		if h.TableLoaded == nil {
 			h.TableLoaded = func(ctx context.Context) bool {
 				st, err := d.Engine.Status(ctx)

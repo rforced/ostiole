@@ -12,7 +12,7 @@ import (
 // origin an upgrade comes from when you ask it to simulate one. That is
 // the same fact `unattended-upgrades` keys off, without needing it
 // installed.
-type apt struct{ statusTellsPreview }
+type apt struct{}
 
 func (apt) Name() string               { return "apt-get" }
 func (apt) SecurityCapable() bool      { return true }
@@ -98,42 +98,6 @@ func (a apt) UpgradeArgv(security bool, exclude []string, pending Pending) []str
 	}
 	argv = append(argv, "install", "--only-upgrade")
 	return append(argv, names(wanted)...)
-}
-
-func (a apt) Installed(ctx context.Context, run Runner, pkg string) (bool, error) {
-	// dpkg keeps a record of packages it has merely heard of, so the
-	// status is what settles it: a removed package still has a row, with
-	// "deinstall ok config-files" in it. The whole record is asked for
-	// rather than a "${Status}" format: this command runs through
-	// systemd-run on a router, and systemd expands ${Status} to nothing
-	// before dpkg ever sees it.
-	out, err := run.Run(ctx, "dpkg-query", "-s", pkg)
-	text := strings.TrimSpace(string(out))
-	if text == "" && err != nil {
-		return false, fmt.Errorf("dpkg-query %s: %w", pkg, err)
-	}
-	for _, line := range lines(out) {
-		if status, ok := strings.CutPrefix(line, "Status:"); ok {
-			return strings.Contains(status, "install ok installed"), nil
-		}
-	}
-	return false, nil
-}
-
-func (a apt) InstallArgv(pkgs []string) []string {
-	argv := append([]string{a.Name(), "-y", "-q"}, aptConfirm...)
-	return append(append(argv, "install"), pkgs...)
-}
-
-func (a apt) RemoveArgv(pkgs []string, preview bool) []string {
-	// remove rather than purge: a competitor that is taken off the router
-	// keeps its configuration, so putting it back is a reinstall and not
-	// an afternoon.
-	if preview {
-		return append([]string{a.Name(), "-q", "-s", "remove"}, pkgs...)
-	}
-	argv := append([]string{a.Name(), "-y", "-q"}, aptConfirm...)
-	return append(append(argv, "remove"), pkgs...)
 }
 
 func (a apt) RebootRequired(ctx context.Context, run Runner) (bool, string) {

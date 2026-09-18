@@ -1,6 +1,8 @@
 // Package install puts Ostiole on a systemd host: binary, units, config
-// directory, competitor detection, and the takeover that makes Ostiole the
-// only firewall.
+// directory, competitor detection, the takeover that makes Ostiole the
+// only firewall, and the handover that gives systemd-networkd the
+// addresses. It also carries the shell installer the documentation tells
+// people to pipe into sh.
 package install
 
 import (
@@ -10,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,7 +19,6 @@ import (
 	"time"
 
 	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/shaping"
 	"github.com/rforced/ostiole/internal/sysctl"
 	"github.com/rforced/ostiole/internal/timezone"
 )
@@ -85,7 +85,7 @@ type Options struct {
 	Source string
 	// Listen is the daemon's listen address, e.g. ":443".
 	Listen string
-	// Run executes helper commands (firewall-cmd, ufw); nil means real ones.
+	// Run executes helper commands (timedatectl); nil means real ones.
 	Run Runner
 	// SysctlFile is where router sysctls are persisted; empty means the
 	// default, "-" skips it (tests).
@@ -93,24 +93,12 @@ type Options struct {
 	// Timezone is the zone the router is set to; empty means UTC, "-" leaves
 	// the clock alone (tests).
 	Timezone string
-	// PackageManager names the host's package manager so the pieces that
-	// come in packages of their own can be fetched; empty looks for one,
-	// "-" installs nothing (tests).
-	PackageManager string
-	// KeepOldFirewall leaves the competing firewall's rules alone. The
-	// installer sets it when it is about to retire that firewall anyway,
-	// so nothing is punched through a ruleset that is seconds from going.
-	KeepOldFirewall bool
 }
 
-// Report describes what Install did and found.
+// Report describes what Install did.
 type Report struct {
-	Binary      string
-	Units       []string
-	Competitors []Service
-	// OpenedIn names the competing firewall that was told to allow the UI
-	// port until takeover retires it, or "".
-	OpenedIn string
+	Binary string
+	Units  []string
 	// Sysctl is the persisted sysctl file, or "".
 	Sysctl string
 	// Timezone is the zone the clock was set to, or "".
@@ -118,8 +106,8 @@ type Report struct {
 }
 
 // Install copies the binary, writes the units, and enables them. It never
-// touches competing firewalls; that is Takeover's job, after the admin has
-// confirmed a working ruleset.
+// touches competing firewalls; that is Takeover's job, once a ruleset is
+// in the kernel.
 func Install(ctx context.Context, sc Systemctl, lay Layout, opts Options, log *slog.Logger) (*Report, error) {
 	if opts.Listen == "" {
 		opts.Listen = ":443"
@@ -201,19 +189,6 @@ func Install(ctx context.Context, sc Systemctl, lay Layout, opts Options, log *s
 			log.Info("timezone set", "zone", zone)
 		}
 	}
-	// Traffic shaping needs tc, which Red Hat family distributions ship in
-	// a package of their own. A router with no shaping configured never
-	// misses it, so a failure here is worth a line in the log and nothing
-	// more; the apply that needs it says so itself.
-	if opts.PackageManager != "-" {
-		pm := opts.PackageManager
-		if pm == "" {
-			pm = PackageManager()
-		}
-		if err := EnsureTC(ctx, run, pm, log); err != nil {
-			log.Warn("could not install tc; traffic shaping will not work until it is there", "err", err)
-		}
-	}
 	if out, err := sc.Run(ctx, "enable", FirewallUnit); err != nil {
 		return nil, fmt.Errorf("enable %s: %w: %s", FirewallUnit, err, out)
 	}
@@ -221,58 +196,7 @@ func Install(ctx context.Context, sc Systemctl, lay Layout, opts Options, log *s
 		return nil, fmt.Errorf("enable %s: %w: %s", DaemonUnit, err, out)
 	}
 	log.Info("services enabled", "units", rep.Units)
-
-	comp, err := Competitors(ctx, sc)
-	if err != nil {
-		return rep, err
-	}
-	rep.Competitors = comp
-
-	// Until takeover, the old firewall still filters: let the UI through it.
-	if port := listenPort(opts.Listen); port != "" && !opts.KeepOldFirewall {
-		opened, err := OpenUIPort(ctx, run, comp, port, log)
-		if err != nil {
-			log.Warn("could not open the UI port in the existing firewall; open it by hand or run takeover", "err", err)
-		}
-		rep.OpenedIn = opened
-	}
 	return rep, nil
-}
-
-// listenPort extracts the port from a listen address.
-func listenPort(listen string) string {
-	_, port, err := net.SplitHostPort(listen)
-	if err != nil {
-		return ""
-	}
-	return port
-}
-
-// OpenUIPort allows tcp/port in whichever competing firewall is active so
-// the web UI is reachable before takeover. Returns the firewall's name.
-func OpenUIPort(ctx context.Context, run Runner, comp []Service, port string, log *slog.Logger) (string, error) {
-	for _, c := range comp {
-		if c.Kind != "firewall" || c.Active != "active" {
-			continue
-		}
-		switch c.Name {
-		case "firewalld":
-			for _, args := range [][]string{{"--add-port=" + port + "/tcp"}, {"--permanent", "--add-port=" + port + "/tcp"}} {
-				if out, err := run.Run(ctx, "firewall-cmd", args...); err != nil {
-					return "", fmt.Errorf("firewall-cmd %s: %w: %s", strings.Join(args, " "), err, tail(out))
-				}
-			}
-			log.Info("allowed the UI port in firewalld until takeover", "port", port)
-			return "firewalld", nil
-		case "ufw":
-			if out, err := run.Run(ctx, "ufw", "allow", port+"/tcp"); err != nil {
-				return "", fmt.Errorf("ufw allow: %w: %s", err, tail(out))
-			}
-			log.Info("allowed the UI port in ufw until takeover", "port", port)
-			return "ufw", nil
-		}
-	}
-	return "", nil
 }
 
 // Units renders the systemd units for the layout and options.
@@ -387,17 +311,25 @@ func Competitors(ctx context.Context, sc Systemctl) ([]Service, error) {
 		names []string
 	}{{"firewall", FirewallServices}, {"network", NetworkServices}} {
 		for _, name := range group.names {
-			unit := name + ".service"
-			enabled, _ := sc.Run(ctx, "is-enabled", unit)
-			enabled = firstLine(enabled)
-			if enabled == "" || enabled == "not-found" || strings.Contains(enabled, "No such file") || strings.Contains(enabled, "not found") {
-				continue
+			if svc, ok := serviceState(ctx, sc, name, group.kind); ok {
+				out = append(out, svc)
 			}
-			active, _ := sc.Run(ctx, "is-active", unit)
-			out = append(out, Service{Name: name, Kind: group.kind, Active: firstLine(active), Enabled: enabled})
 		}
 	}
 	return out, nil
+}
+
+// serviceState reads one unit's state, and reports false for a unit
+// systemd has never heard of.
+func serviceState(ctx context.Context, sc Systemctl, name, kind string) (Service, bool) {
+	unit := UnitName(name)
+	enabled, _ := sc.Run(ctx, "is-enabled", unit)
+	enabled = firstLine(enabled)
+	if enabled == "" || enabled == "not-found" || strings.Contains(enabled, "No such file") || strings.Contains(enabled, "not found") {
+		return Service{}, false
+	}
+	active, _ := sc.Run(ctx, "is-active", unit)
+	return Service{Name: name, Kind: kind, Active: firstLine(active), Enabled: enabled}, true
 }
 
 // Takeover stops, masks, and disables the named units. A name with no
@@ -553,80 +485,31 @@ func HasNetworkd(ctx context.Context, sc Systemctl) bool {
 	return err == nil
 }
 
-// EnsureNetworkd installs systemd-networkd when the unit is missing. Only
-// RHEL-family hosts ship it separately (EPEL); elsewhere it comes with
-// systemd, so a missing unit is reported rather than fixed.
-func EnsureNetworkd(ctx context.Context, sc Systemctl, run Runner, pm string, log *slog.Logger) error {
-	if HasNetworkd(ctx, sc) {
-		return nil
-	}
-	switch pm {
-	case "dnf":
-		log.Info("installing systemd-networkd with dnf (EPEL)")
-		if out, err := run.Run(ctx, "dnf", "-y", "install", "systemd-networkd"); err != nil {
-			return fmt.Errorf("dnf install systemd-networkd failed (is EPEL enabled? `dnf install -y epel-release`): %w: %s", err, tail(out))
+// NetworkManagers are the units the network takeover disables.
+// cockpit.socket is not a network manager, but it answers on the same
+// router and offers to reconfigure the network from a browser of its own.
+var NetworkManagers = []string{"NetworkManager", "NetworkManager-wait-online", "netplan", "dhcpcd", "connman", "wicked", "ifupdown", "cockpit.socket"}
+
+// NetworkTakeoverTargets are the managers on this router worth retiring:
+// the ones that are running or would start at boot. A manager that is
+// installed and disabled is left alone, so a revert puts back what was
+// actually there.
+func NetworkTakeoverTargets(ctx context.Context, sc Systemctl) []string {
+	var out []string
+	for _, name := range NetworkManagers {
+		if svc, ok := serviceState(ctx, sc, name, "network"); ok && svc.Conflicts() {
+			out = append(out, name)
 		}
-	default:
-		return errors.New("systemd-networkd is not installed and no supported package manager was found; install it and retry")
 	}
-	if _, err := sc.Run(ctx, "daemon-reload"); err != nil {
-		return err
-	}
-	if !HasNetworkd(ctx, sc) {
-		return errors.New("systemd-networkd still missing after installation")
-	}
-	return nil
+	return out
 }
-
-// EnsureTC installs the tc command when it is missing. On Red Hat family
-// distributions it is a package of its own, so a router can have a
-// complete iproute2 and still not be able to shape anything; elsewhere it
-// comes with iproute2 and this is a no-op.
-func EnsureTC(ctx context.Context, run Runner, pm string, log *slog.Logger) error {
-	if _, ok := shaping.Available(""); ok {
-		return nil
-	}
-	pkg, known := shaping.TCPackages[pm]
-	if !known {
-		return fmt.Errorf("tc is not installed and no supported package manager was found; install %s and retry",
-			shaping.TCPackage(pm))
-	}
-	log.Info("installing tc for traffic shaping", "packageManager", pm, "package", pkg)
-	args := append(installArgs(pm), pkg)
-	if out, err := run.Run(ctx, pm, args...); err != nil {
-		return fmt.Errorf("%s install %s: %w: %s", pm, pkg, err, tail(out))
-	}
-	if _, ok := shaping.Available(""); !ok {
-		return errors.New("tc still missing after installation")
-	}
-	return nil
-}
-
-// installArgs is how each package manager is told to install something
-// without asking anybody anything.
-func installArgs(pm string) []string {
-	switch pm {
-	case "apt-get":
-		return []string{"install", "-y"}
-	case "pacman":
-		return []string{"-S", "--noconfirm"}
-	case "zypper":
-		return []string{"--non-interactive", "install"}
-	case "apk":
-		return []string{"add", "--no-cache"}
-	}
-	return []string{"-y", "install"} // dnf
-}
-
-// NetworkManagers are the services the network takeover disables.
-var NetworkManagers = []string{"NetworkManager", "NetworkManager-wait-online", "netplan", "dhcpcd", "connman", "wicked", "ifupdown"}
 
 // NetworkTakeover hands networking to systemd-networkd: stops, disables,
 // and masks the listed managers, then enables and starts networkd. The
 // caller must have written the networkd units first.
 func NetworkTakeover(ctx context.Context, sc Systemctl, managers []string, log *slog.Logger) error {
 	for _, name := range managers {
-		unit := name + ".service"
+		unit := UnitName(name)
 		if out, err := sc.Run(ctx, "mask", "--now", unit); err != nil {
 			return fmt.Errorf("mask %s: %w: %s", unit, err, out)
 		}
@@ -703,7 +586,7 @@ func NetworkRevert(ctx context.Context, sc Systemctl, managers []string, log *sl
 	}
 	var errs []error
 	for _, name := range managers {
-		unit := name + ".service"
+		unit := UnitName(name)
 		if out, err := sc.Run(ctx, "unmask", unit); err != nil {
 			errs = append(errs, fmt.Errorf("unmask %s: %w: %s", unit, err, out))
 			continue

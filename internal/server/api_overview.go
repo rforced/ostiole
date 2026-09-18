@@ -386,7 +386,7 @@ func (a *api) serviceStates(ctx context.Context, cfg *model.Config) []ServiceSta
 		switch {
 		case !a.services.Installed(ctx):
 			dnsmasq.State = stateMissing
-			dnsmasq.Detail = "Run `ostiole services setup` to install and enable it."
+			dnsmasq.Detail = "dnsmasq is not on this router. Run `ostiole repair` as root."
 		case a.services.Active(ctx):
 			dnsmasq.State = stateActive
 		default:
@@ -404,7 +404,7 @@ func (a *api) serviceStates(ctx context.Context, cfg *model.Config) []ServiceSta
 		switch {
 		case !a.resolver.Installed(ctx):
 			resolver.State = stateMissing
-			resolver.Detail = "Run `ostiole services setup --with-resolver` to install unbound."
+			resolver.Detail = "unbound is not on this router. Run `ostiole repair` as root."
 		case a.resolver.Active(ctx):
 			resolver.State = stateActive
 		default:
@@ -422,7 +422,7 @@ func (a *api) serviceStates(ctx context.Context, cfg *model.Config) []ServiceSta
 		switch {
 		case !a.upnp.Installed(ctx):
 			upnp.State = stateMissing
-			upnp.Detail = "Run `ostiole services setup --with-upnp` to install miniupnpd."
+			upnp.Detail = "miniupnpd is not on this router. Run `ostiole repair` as root."
 		case a.upnp.Active(ctx):
 			upnp.State = stateActive
 		default:

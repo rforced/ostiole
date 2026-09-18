@@ -209,7 +209,7 @@ func (p *PPPoE) Apply(ctx context.Context, files network.Files) error {
 		return nil
 	}
 	if len(files) > 0 && !p.Installed(ctx) {
-		return errors.New("PPPoE is not set up on this router: run `ostiole services setup --with-pppoe` once as root")
+		return errors.New("PPPoE is not set up on this router: run `ostiole repair` once as root")
 	}
 	if len(files) > 0 {
 		if err := os.MkdirAll(p.dir(), 0o700); err != nil {

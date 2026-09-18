@@ -69,24 +69,19 @@ func TestInstallAndUninstall(t *testing.T) {
 	run := &fakeRunner{}
 	sysctlFile := filepath.Join(t.TempDir(), "99-ostiole.conf")
 	rep, err := Install(context.Background(), sc, lay,
-		Options{Source: src, Listen: ":8443", Run: run, SysctlFile: sysctlFile, PackageManager: "-"}, log)
+		Options{Source: src, Listen: ":8443", Run: run, SysctlFile: sysctlFile}, log)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if rep.OpenedIn != "firewalld" {
-		t.Errorf("OpenedIn = %q, want firewalld", rep.OpenedIn)
 	}
 	if raw, err := os.ReadFile(sysctlFile); err != nil || !strings.Contains(string(raw), "ip_forward = 1") {
 		t.Errorf("sysctl file = %q, %v", raw, err)
 	}
 	// An install takes the clock to UTC along with everything else it
-	// takes over, before it opens the port in the old firewall.
+	// takes over, and runs nothing else on the router.
 	if rep.Timezone != "UTC" {
 		t.Errorf("Timezone = %q, want UTC", rep.Timezone)
 	}
-	if len(run.calls) != 3 || strings.Join(run.calls[0], " ") != "timedatectl set-timezone UTC" ||
-		strings.Join(run.calls[1], " ") != "firewall-cmd --add-port=8443/tcp" ||
-		strings.Join(run.calls[2], " ") != "firewall-cmd --permanent --add-port=8443/tcp" {
+	if len(run.calls) != 1 || strings.Join(run.calls[0], " ") != "timedatectl set-timezone UTC" {
 		t.Errorf("commands run = %v", run.calls)
 	}
 	if info, err := os.Stat(lay.Binary()); err != nil || info.Mode().Perm() != 0o755 {
@@ -111,17 +106,18 @@ func TestInstallAndUninstall(t *testing.T) {
 	if !sc.has("daemon-reload") || !sc.has("enable", FirewallUnit) || !sc.has("enable", "--now", DaemonUnit) {
 		t.Errorf("systemctl calls = %v", sc.calls)
 	}
-	if len(rep.Competitors) != 3 {
-		t.Fatalf("competitors = %+v", rep.Competitors)
+	comp, err := Competitors(context.Background(), sc)
+	if err != nil {
+		t.Fatal(err)
 	}
 	conflicting := 0
-	for _, c := range rep.Competitors {
+	for _, c := range comp {
 		if c.Conflicts() {
 			conflicting++
 		}
 	}
-	if conflicting != 2 {
-		t.Errorf("conflicting = %d, want 2 (firewalld, NetworkManager)", conflicting)
+	if len(comp) != 3 || conflicting != 2 {
+		t.Errorf("competitors = %+v, want 3 with 2 conflicting (firewalld, NetworkManager)", comp)
 	}
 
 	// Re-install from the installed path is a no-op copy.
@@ -202,30 +198,6 @@ func (f *fakeRunner) Run(_ context.Context, name string, args ...string) ([]byte
 		f.after()
 	}
 	return nil, nil
-}
-
-func TestEnsureNetworkd(t *testing.T) {
-	t.Parallel()
-	log := slog.New(slog.DiscardHandler)
-
-	present := &fakeSystemctl{enabled: map[string]string{NetworkdUnit: "disabled"}}
-	if err := EnsureNetworkd(context.Background(), present, &fakeRunner{}, "dnf", log); err != nil {
-		t.Fatalf("present: %v", err)
-	}
-
-	missing := &fakeSystemctl{enabled: map[string]string{}}
-	run := &fakeRunner{}
-	run.after = func() { missing.enabled[NetworkdUnit] = "disabled" } // dnf "installs" it
-	if err := EnsureNetworkd(context.Background(), missing, run, "dnf", log); err != nil {
-		t.Fatalf("dnf path: %v", err)
-	}
-	if len(run.calls) != 1 || run.calls[0][0] != "dnf" {
-		t.Errorf("runner calls = %v", run.calls)
-	}
-
-	if err := EnsureNetworkd(context.Background(), &fakeSystemctl{enabled: map[string]string{}}, &fakeRunner{}, "apk", log); err == nil {
-		t.Error("expected error for unsupported package manager")
-	}
 }
 
 func TestNetworkTakeover(t *testing.T) {

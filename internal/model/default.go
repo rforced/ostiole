@@ -23,6 +23,10 @@ type StarterOptions struct {
 	// LANAddress and the given upstream resolvers.
 	Services     bool
 	DNSUpstreams []string
+	// SSHPasswords allows a password at the SSH prompt. It starts as the
+	// router has it, so writing a first configuration never changes how
+	// the person writing it gets back in.
+	SSHPasswords bool
 }
 
 // Starter returns a sane first configuration: a lan zone with anti-lockout
@@ -34,7 +38,7 @@ func Starter(o StarterOptions) *Config {
 		System: System{
 			Hostname:   o.Hostname,
 			Timezone:   timezone.Default,
-			Management: Management{WebPort: 443, SSHPort: 22},
+			Management: Management{WebPort: 443, SSHPort: 22, SSHPasswords: o.SSHPasswords},
 		},
 		Zones: []Zone{
 			{Name: "wan", Description: "Internet", External: true},

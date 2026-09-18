@@ -143,8 +143,7 @@ function save() {
         class="rounded-md border border-amber-300 bg-amber-50 p-2 text-sm dark:border-amber-800 dark:bg-amber-950/40"
       >
         PPPoE is not set up on this router yet. Run
-        <span class="font-mono">ostiole services setup --with-pppoe</span> once as root, or the
-        apply will fail.
+        <span class="font-mono">ostiole repair</span> once as root, or the apply will fail.
       </p>
 
       <div class="grid gap-4 sm:grid-cols-2">

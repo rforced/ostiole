@@ -49,46 +49,19 @@ func hostServer(t *testing.T) *httptest.Server {
 	return srv
 }
 
-// The component keys become the argv of a command run as root, so they
-// are checked here before anything is driven, not only by the command.
-func TestHostSetupRejectsAnUnknownComponent(t *testing.T) {
+// The report answers on a router with nothing on it, which is what the
+// end-to-end server and a dev run are.
+func TestHostReportAnswers(t *testing.T) {
 	t.Parallel()
 	srv := hostServer(t)
-	resp, raw := do(t, srv, http.MethodPost, "/api/v1/host/setup",
-		map[string]any{"components": []string{"--all"}})
-	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(raw), "not a component") {
-		t.Fatalf("%d %s", resp.StatusCode, raw)
-	}
-	resp, raw = do(t, srv, http.MethodPost, "/api/v1/host/setup", map[string]any{"components": []string{}})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("%d %s", resp.StatusCode, raw)
-	}
-}
-
-// A skipped step is recorded with who skipped it, and the report says
-// so. A step that is done is never shown as skipped, and a step that was
-// never skipped carries no timestamp at all.
-func TestHostSkipRecordsWho(t *testing.T) {
-	t.Parallel()
-	srv := hostServer(t)
-	// Nothing is installed on this router, so the packages step is the
-	// one that is outstanding.
-	resp, raw := do(t, srv, http.MethodPost, "/api/v1/host/steps/packages", map[string]any{"skip": true})
+	resp, raw := do(t, srv, http.MethodGet, "/api/v1/host", nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("%d %s", resp.StatusCode, raw)
 	}
 	body := string(raw)
-	if !strings.Contains(body, `"step":"packages","state":"skipped"`) || !strings.Contains(body, `"by":"admin"`) {
-		t.Errorf("the skip is not on the packages step with who did it: %s", body)
-	}
-	if strings.Contains(body, "0001-01-01") {
-		t.Errorf("a step that was never skipped carries a zero time: %s", body)
-	}
-	if !strings.Contains(body, `"prepared":true`) {
-		t.Errorf("a router whose only outstanding step is skipped should be prepared: %s", body)
-	}
-	resp, raw = do(t, srv, http.MethodPost, "/api/v1/host/steps/nonsense", map[string]any{"skip": true})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("%d %s", resp.StatusCode, raw)
+	for _, want := range []string{`"units"`, `"present"`, `"network"`, `"legacy"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the report has no %s: %s", want, body)
+		}
 	}
 }

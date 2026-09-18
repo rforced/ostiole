@@ -162,34 +162,7 @@ type Driver interface {
 	UpgradeArgv(security bool, exclude []string, pending Pending) []string
 	// RebootRequired reports whether the router wants restarting, and why.
 	RebootRequired(ctx context.Context, run Runner) (bool, string)
-	// Installed reports whether a package is in the router's package
-	// database. That is a different question from whether its command is
-	// on PATH: a competing firewall can be installed, masked and idle all
-	// at once, and only the database knows there is something to remove.
-	Installed(ctx context.Context, run Runner, pkg string) (bool, error)
-	// InstallArgv installs packages without asking anybody anything.
-	InstallArgv(pkgs []string) []string
-	// RemoveArgv takes packages off the router. With preview the command
-	// says what it would do and changes nothing, because what else comes
-	// away with a package is the manager's business to answer and the
-	// operator's to agree to.
-	RemoveArgv(pkgs []string, preview bool) []string
-	// PreviewFailed reports whether a preview's output is the manager
-	// saying it could not work the removal out at all, as against
-	// working it out and then declining to run it, which is the whole
-	// point of a preview. Most managers answer that with an exit status;
-	// dnf uses the same one for both, so only the output tells them
-	// apart.
-	PreviewFailed(out string) bool
 }
-
-// statusTellsPreview is for the managers whose dry run exits zero when
-// it worked it out and non-zero when it could not, so the output never
-// has to be read to tell the two apart. dnf is the exception, and has a
-// PreviewFailed of its own.
-type statusTellsPreview struct{}
-
-func (statusTellsPreview) PreviewFailed(string) bool { return false }
 
 // Drivers are the managers Ostiole knows, in the order they are looked
 // for on PATH.
