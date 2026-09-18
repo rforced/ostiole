@@ -110,7 +110,7 @@ saved as the boot ruleset; run "ostiole apply" to load it now.`,
 	f.StringVar(&opts.LANAddress, "lan-address", "", "LAN IPv4 address in CIDR form, e.g. 192.168.1.1/24 (required)")
 	f.StringVar(&opts.WAN, "wan", "", "WAN interface name (DHCP)")
 	f.StringVar(&opts.Hostname, "hostname", "", "hostname")
-	f.BoolVar(&opts.ManagementFromWAN, "management-from-wan", false, "also allow the web UI and SSH from the WAN zone (routers managed over their public side)")
+	f.BoolVar(&opts.ManagementFromWAN, "management-from-wan", false, "turn anti-lockout on for the wan zone, so the web UI and SSH answer on the public side")
 	f.BoolVar(&opts.Services, "services", false, "enable DHCP and DNS on the LAN (pool derived from the LAN address)")
 	f.BoolVar(&opts.SSHPasswords, "ssh-passwords", true, "allow password logins over SSH (default: as this router is set now)")
 	f.StringSliceVar(&opts.DNSUpstreams, "dns-upstream", nil, "upstream resolvers for the DNS service (default 1.1.1.1, 9.9.9.9)")

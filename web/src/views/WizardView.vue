@@ -173,9 +173,8 @@ function reverted() {
         />
         <span>
           <span class="font-medium">Allow management from the WAN side too.</span>
-          Adds a rule per management port on the wan zone, for a router administered over its public
-          address. They are ordinary rules: narrow them to an address or delete them later under
-          Firewall.
+          Turns anti-lockout on for the wan zone, for a router administered over its public address.
+          Untick it on the zone under Interfaces to take it away.
         </span>
       </label>
 
