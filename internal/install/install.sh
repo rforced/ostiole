@@ -5,8 +5,8 @@
 #   curl -fsSL https://github.com/rforced/ostiole/releases/latest/download/install.sh | sudo sh
 #   curl -fsSL … | sudo sh -s -- --yes      (agree to the plan in advance)
 #
-# Flags: --yes, --dry-run, --keep <package> (repeatable). Anything else is
-# passed to `ostiole install` (--listen, --timezone).
+# Flags: --yes, --dry-run, --with-tailscale, --keep <package> (repeatable).
+# Anything else is passed to `ostiole install` (--listen, --timezone).
 #
 # Environment: OSTIOLE_VERSION pins a version; OSTIOLE_BASE_URL downloads
 # from somewhere other than the GitHub release; OSTIOLE_NO_INSTALL=1 only
@@ -27,12 +27,14 @@ BUILD_TOOLS=0
 
 YES=0
 DRY_RUN=0
+TAILSCALE=0
 KEEP=""
 INSTALL_ARGS=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 	-y | --yes) YES=1 ;;
 	--dry-run) DRY_RUN=1 ;;
+	--with-tailscale) TAILSCALE=1 ;;
 	--keep)
 		shift
 		[ $# -gt 0 ] || { echo "--keep needs a package name" >&2; exit 1; }
@@ -54,8 +56,19 @@ for tool in curl tar; do
 	command -v "$tool" >/dev/null 2>&1 || { echo "$tool is required" >&2; exit 1; }
 done
 
+# Ostiole writes and drives systemd units, so a router without systemd is
+# refused here rather than most of the way through an install it cannot
+# finish. A dry run still prints its plan, and OSTIOLE_NO_INSTALL=1 only
+# ever promised a binary, which is what the container tests place.
+HAS_SYSTEMD=1
+command -v systemctl >/dev/null 2>&1 || HAS_SYSTEMD=0
+if [ "$HAS_SYSTEMD" -eq 0 ] && [ "$DRY_RUN" -ne 1 ] && [ "${OSTIOLE_NO_INSTALL:-}" != "1" ]; then
+	echo "no systemd on this router; Ostiole writes and drives systemd units" >&2
+	exit 1
+fi
+
 # Ostiole supports Linux 5.14 and newer, which is RHEL 9 and every current
-# Debian, Ubuntu, Fedora, Alpine, and Arch. A release string this cannot
+# Debian, Ubuntu, Fedora, and Arch. A release string this cannot
 # parse is allowed through rather than blocking the install.
 kernel_too_old() {
 	rel="$1"
@@ -84,13 +97,13 @@ aarch64 | arm64) ARCH=arm64; RPM_ARCH=aarch64 ;;
 esac
 
 MANAGER=""
-for m in apt-get dnf pacman apk zypper; do
+for m in apt-get dnf pacman zypper; do
 	if command -v "$m" >/dev/null 2>&1; then
 		MANAGER="$m"
 		break
 	fi
 done
-[ -n "$MANAGER" ] || { echo "no supported package manager (apt-get, dnf, pacman, apk, zypper)" >&2; exit 1; }
+[ -n "$MANAGER" ] || { echo "no supported package manager (apt-get, dnf, pacman, zypper)" >&2; exit 1; }
 
 # Enterprise Linux differs from Fedora in three places: EPEL, miniupnpd,
 # and systemd-networkd being a package of its own.
@@ -122,6 +135,15 @@ trap 'rm -rf "$TMP"' EXIT
 
 ### the package tables
 
+# Where Tailscale comes from when it is asked for. Debian, Ubuntu and
+# Enterprise Linux need Tailscale's own repository; the rest package it.
+case "$MANAGER" in
+apt-get) TAILSCALE_NOTE="tailscale from pkgs.tailscale.com" ;;
+dnf) [ "$EL" -eq 1 ] && TAILSCALE_NOTE="tailscale from pkgs.tailscale.com" || TAILSCALE_NOTE="tailscale" ;;
+zypper) case "$OS_ID" in opensuse-leap) TAILSCALE_NOTE="tailscale from pkgs.tailscale.com" ;; *) TAILSCALE_NOTE="tailscale" ;; esac ;;
+*) TAILSCALE_NOTE="tailscale" ;;
+esac
+
 case "$MANAGER" in
 apt-get)
 	WANT="nftables dnsmasq unbound miniupnpd-nftables ppp iproute2"
@@ -146,10 +168,6 @@ dnf)
 pacman)
 	WANT="nftables dnsmasq unbound ppp iproute2"
 	UPNP_NOTE="miniupnpd-nft built from the AUR (base-devel goes on to build it)"
-	;;
-apk)
-	WANT="nftables dnsmasq unbound miniupnpd-nftables ppp-daemon ppp-pppoe iproute2-tc"
-	UPNP_NOTE="miniupnpd-nftables"
 	;;
 zypper)
 	WANT="nftables dnsmasq unbound miniupnpd ppp iproute2"
@@ -212,7 +230,6 @@ pkg_refresh() {
 	apt-get) DEBIAN_FRONTEND=noninteractive apt-get update -qq ;;
 	dnf) dnf -q makecache >/dev/null 2>&1 || true ;;
 	pacman) pacman -Sy --noconfirm >/dev/null ;;
-	apk) apk update >/dev/null ;;
 	zypper) zypper --non-interactive refresh >/dev/null ;;
 	esac
 }
@@ -222,7 +239,6 @@ pkg_install() {
 	apt-get) DEBIAN_FRONTEND=noninteractive apt-get install -y -q "$@" ;;
 	dnf) dnf -y install "$@" ;;
 	pacman) pacman -S --noconfirm --needed "$@" ;;
-	apk) apk add --no-cache "$@" ;;
 	zypper) zypper --non-interactive install "$@" ;;
 	esac
 }
@@ -232,7 +248,6 @@ pkg_remove() {
 	apt-get) DEBIAN_FRONTEND=noninteractive apt-get remove --purge -y -q "$@" ;;
 	dnf) dnf -y remove "$@" ;;
 	pacman) pacman -Rns --noconfirm "$@" ;;
-	apk) apk del "$@" ;;
 	zypper) zypper --non-interactive remove "$@" ;;
 	esac
 }
@@ -272,7 +287,6 @@ apt-get) dpkg-query -W -f '${Package} ${Status}\n' 2>/dev/null |
 	awk '$2=="install" && $3=="ok" && $4=="installed" {print $1}' >"$TMP/installed" ;;
 dnf | zypper) rpm -qa --qf '%{NAME}\n' 2>/dev/null >"$TMP/installed" ;;
 pacman) pacman -Qq 2>/dev/null >"$TMP/installed" ;;
-apk) apk info 2>/dev/null >"$TMP/installed" ;;
 esac
 
 # matching lists the installed packages a pattern names.
@@ -298,6 +312,10 @@ kept() {
 	done
 	return 1
 }
+
+# A router that already has Tailscale keeps it through a plain repair, so
+# its repository is left alone and the flag stays the only way in.
+[ -z "$(matching tailscale)" ] || TAILSCALE=1
 
 # MISSING is what actually goes to the package manager. Asking it to
 # install what is already there is not harmless: pacman warns about every
@@ -326,15 +344,14 @@ case "$UPNP_NOTE" in
 "no UPnP"*) echo "  $UPNP_NOTE" ;;
 *) echo "  UPnP:     $UPNP_NOTE" ;;
 esac
-if [ "$MANAGER" = apk ]; then
-	echo "  place:    $BIN_DIR/ostiole (no systemd here, so no units and no removals)"
-else
-	echo "  place:    $BIN_DIR/ostiole, write the units, and start the web UI on 443"
-	echo "  remove:   ${REMOVE:-nothing this router has that it has no use for}"
-	[ -z "$MASK_ONLY" ] || echo "  mask:     $MASK_ONLY"
-	echo "  hand addresses to systemd-networkd, keeping the ones this router has now"
-	echo "  bootstrap ruleset until the wizard: nothing is forwarded"
-fi
+[ "$TAILSCALE" -eq 0 ] || echo "  tailscale: $TAILSCALE_NOTE"
+echo "  place:    $BIN_DIR/ostiole, write the units, and start the web UI on 443"
+echo "  remove:   ${REMOVE:-nothing this router has that it has no use for}"
+[ -z "$MASK_ONLY" ] || echo "  mask:     $MASK_ONLY"
+echo "  hand addresses to systemd-networkd, keeping the ones this router has now"
+echo "  bootstrap ruleset until the wizard: nothing is forwarded"
+[ "$HAS_SYSTEMD" -eq 1 ] ||
+	echo "  none of it here: this router has no systemd, and an install would be refused"
 if [ "$DRY_RUN" -eq 1 ]; then
 	exit 0
 fi
@@ -525,12 +542,89 @@ fedora_key() {
 	curl -fsSL -o "$TMP/fedora-$1.key" "$url" 2>/dev/null || return 1
 	rpm --import "$TMP/fedora-$1.key" 2>/dev/null || return 1
 }
+# Tailscale, only when it was asked for: a router that never wanted a
+# tailnet has no reason to poll a third-party repository on every update
+# check. Nothing here is fatal; a router without it still routes.
+tailscale_install() {
+	command -v tailscaled >/dev/null 2>&1 && return 0
+	case "$MANAGER" in
+	apt-get)
+		distro="$OS_ID"
+		case "$distro" in
+		ubuntu | debian) ;;
+		*)
+			distro=""
+			for d in $OS_LIKE; do
+				case "$d" in ubuntu | debian) distro="$d"; break ;; esac
+			done
+			;;
+		esac
+		[ -n "$distro" ] || { echo "warning: no Tailscale repository for $OS_ID; no Tailscale" >&2; return 0; }
+		# shellcheck source=/dev/null
+		codename="$(. /etc/os-release 2>/dev/null; echo "${VERSION_CODENAME:-}")"
+		[ -n "$codename" ] || codename="$(tailscale_fallback "$distro")"
+		if ! tailscale_apt_repo "$distro" "$codename"; then
+			codename="$(tailscale_fallback "$distro")"
+			echo "note: pkgs.tailscale.com serves no $OS_ID release by that name; using $codename, which carries the same packages"
+			tailscale_apt_repo "$distro" "$codename" ||
+				{ echo "warning: could not add Tailscale's repository; no Tailscale" >&2; return 0; }
+		fi
+		pkg_refresh
+		pkg_install tailscale || { echo "warning: tailscale did not install; no Tailscale" >&2; return 0; }
+		;;
+	dnf)
+		if [ "$EL" -eq 1 ]; then
+			# The repository file carries gpgkey=, and dnf imports it.
+			curl -fsSL -o /etc/yum.repos.d/tailscale.repo \
+				"https://pkgs.tailscale.com/stable/rhel/${OS_VERSION%%.*}/tailscale.repo" ||
+				{ echo "warning: could not fetch Tailscale's repository; no Tailscale" >&2; return 0; }
+		fi
+		pkg_install tailscale || { echo "warning: tailscale did not install; no Tailscale" >&2; return 0; }
+		;;
+	zypper)
+		case "$OS_ID" in
+		opensuse-leap)
+			zypper --non-interactive ar -g -r \
+				"https://pkgs.tailscale.com/stable/opensuse/leap/$OS_VERSION/tailscale.repo" >/dev/null 2>&1 || true
+			zypper --non-interactive --gpg-auto-import-keys refresh >/dev/null 2>&1 || true
+			;;
+		esac
+		pkg_install tailscale || { echo "warning: tailscale did not install; no Tailscale" >&2; return 0; }
+		;;
+	*)
+		pkg_install tailscale || { echo "warning: tailscale did not install; no Tailscale" >&2; return 0; }
+		;;
+	esac
+	pkg_explicit tailscale
+}
+
+# tailscale_apt_repo places the keyring and the source list for one
+# release, and fails without leaving either behind when there is no such
+# release upstream.
+tailscale_apt_repo() {
+	base="https://pkgs.tailscale.com/stable/$1"
+	curl -fsSL -o "$TMP/tailscale.gpg" "$base/$2.noarmor.gpg" || return 1
+	curl -fsSL -o "$TMP/tailscale.list" "$base/$2.tailscale-keyring.list" || return 1
+	install -m 0644 "$TMP/tailscale.gpg" /usr/share/keyrings/tailscale-archive-keyring.gpg
+	install -m 0644 "$TMP/tailscale.list" /etc/apt/sources.list.d/tailscale.list
+}
+
+# The release to fall back on when this one has no repository of its own.
+# They carry the same packages.
+tailscale_fallback() {
+	case "$1" in
+	debian) echo bookworm ;;
+	*) echo noble ;;
+	esac
+}
+
 if [ "${OSTIOLE_NO_INSTALL:-}" != "1" ]; then
 	if [ "$FEDORA_UPNP" -ne 0 ]; then
 		fedora_miniupnpd
 	elif [ "$MANAGER" = pacman ]; then
 		aur_miniupnpd
 	fi
+	[ "$TAILSCALE" -eq 0 ] || tailscale_install
 fi
 
 ### the binary
@@ -611,11 +705,6 @@ if [ "${OSTIOLE_NO_INSTALL:-}" = "1" ]; then
 	echo "skipping the rest (OSTIOLE_NO_INSTALL=1)"
 	exit 0
 fi
-if [ "$MANAGER" = apk ]; then
-	echo "no systemd on this router; the binary is in place and no units were written"
-	exit 0
-fi
-
 ### units, ruleset and the network
 
 # shellcheck disable=SC2086 # the extra arguments are meant to be split

@@ -46,6 +46,32 @@ func TestPrefArgsWritesEveryFlag(t *testing.T) {
 	}
 }
 
+// `tailscale up` refuses a flag it does not define, so the three that are
+// `set` only must not reach it. They are pushed again after the login,
+// because up --reset puts them back to their defaults.
+func TestUpArgsLeaveOutTheFlagsUpDoesNotTake(t *testing.T) {
+	t.Parallel()
+	setOnly := []string{"--auto-update=", "--update-check=", "--webclient="}
+	up := strings.Join(UpArgs(model.Tailscale{}), " ")
+	for _, flag := range setOnly {
+		if strings.Contains(up, flag) {
+			t.Errorf("up was given %s, which it does not define: %s", flag, up)
+		}
+	}
+	all := strings.Join(PrefArgs(model.Tailscale{}), " ")
+	for _, flag := range setOnly {
+		if !strings.Contains(all, flag) {
+			t.Errorf("set was not given %s: %s", flag, all)
+		}
+	}
+	// Everything else is in both, so a login and an apply agree.
+	for _, arg := range UpArgs(model.Tailscale{}) {
+		if !strings.Contains(all, arg) {
+			t.Errorf("%s is on up but not on set", arg)
+		}
+	}
+}
+
 func TestDaemonEnvDefaultsThePortAndKeepsLogsHere(t *testing.T) {
 	t.Parallel()
 	if got, want := DaemonEnv(model.Tailscale{}), "PORT=41641\nFLAGS=--no-logs-no-support\n"; got != want {

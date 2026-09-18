@@ -29,6 +29,7 @@ import (
 	"github.com/rforced/ostiole/internal/store"
 	"github.com/rforced/ostiole/internal/sysstat"
 	"github.com/rforced/ostiole/internal/sysupdate"
+	"github.com/rforced/ostiole/internal/tailscale"
 	"github.com/rforced/ostiole/internal/timezone"
 	"github.com/rforced/ostiole/internal/update"
 	"github.com/rforced/ostiole/internal/wg"
@@ -45,6 +46,8 @@ type api struct {
 	resolver  *services.Unbound
 	pppoe     *services.PPPoE
 	upnp      *services.UPnP
+	tailscale *services.Tailscale
+	tsClient  *tailscale.Client
 	certs     *certs.Manager
 	tokens    *auth.Tokens
 	feeds     FeedRefresher
@@ -112,6 +115,7 @@ func (a *api) register(mux *router) {
 	mux.HandleFunc("GET /api/v1/services/status", a.readNoEngine(a.servicesStatus))
 	mux.HandleFunc("GET /api/v1/dhcp/leases", a.readNoEngine(a.dhcpLeases))
 	mux.HandleFunc("GET /api/v1/upnp/mappings", a.readNoEngine(a.upnpMappings))
+	a.registerTailscale(mux)
 	mux.HandleFunc("POST /api/v1/wireguard/keys", a.write(a.wireguardKeys))
 	mux.HandleFunc("GET /api/v1/gateways", a.readNoEngine(a.gatewayStatus))
 	mux.HandleFunc("GET /api/v1/gateways/detected", a.read(a.detectedGateways))
@@ -136,6 +140,9 @@ type servicesStatus struct {
 	UPnPSetUp   bool `json:"upnpSetUp"`
 	UPnPRunning bool `json:"upnpRunning"`
 	Mappings    int  `json:"mappings"`
+	// Tailscale is tailscaled, which joins the tailnet.
+	TailscaleSetUp   bool `json:"tailscaleSetUp"`
+	TailscaleRunning bool `json:"tailscaleRunning"`
 }
 
 func (a *api) servicesStatus(w http.ResponseWriter, r *http.Request) error {
@@ -157,6 +164,10 @@ func (a *api) servicesStatus(w http.ResponseWriter, r *http.Request) error {
 	if a.upnp != nil {
 		st.UPnPSetUp = a.upnp.Installed(r.Context())
 		st.UPnPRunning = a.upnp.Active(r.Context())
+	}
+	if a.tailscale != nil {
+		st.TailscaleSetUp = a.tailscale.Installed(r.Context())
+		st.TailscaleRunning = a.tailscale.Active(r.Context())
 	}
 	// The mappings are in the ruleset, so a router with no table loaded
 	// reports none rather than failing the whole strip.

@@ -31,6 +31,7 @@ import (
 	"github.com/rforced/ostiole/internal/sysctl"
 	"github.com/rforced/ostiole/internal/sysstat"
 	"github.com/rforced/ostiole/internal/sysupdate"
+	"github.com/rforced/ostiole/internal/tailscale"
 	"github.com/rforced/ostiole/internal/timezone"
 	"github.com/rforced/ostiole/internal/update"
 	"github.com/rforced/ostiole/internal/version"
@@ -206,6 +207,8 @@ at your own.`,
 				deps.Resolver = services.NewUnbound()
 				deps.PPPoE = services.NewPPPoE()
 				deps.UPnP = services.NewUPnP()
+				deps.Tailscale = services.NewTailscale(g.configDir)
+				deps.TSClient = tailscale.New()
 				// Gateway probes need a raw socket and route changes need
 				// netlink, so multi-WAN failover is a root-only feature.
 				mon := gateway.New(gateway.NewICMPProber(), gateway.NewNetlinkRouter(), slog.Default())

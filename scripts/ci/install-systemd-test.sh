@@ -120,6 +120,38 @@ assert_router() {
 		fail "the UI did not answer on 443: $(cat /tmp/health.txt 2>/dev/null)"
 }
 
+# assert_tailscale is the end state of the opt-in daemon: on the router,
+# with a unit of ours, and nothing started it.
+assert_tailscale() {
+	step "$1: tailscaled is on this router"
+	command -v tailscaled >/dev/null 2>&1 || PATH="$PATH:/usr/sbin:/sbin" command -v tailscaled >/dev/null 2>&1 ||
+		fail "tailscaled is not on this router"
+	systemctl cat ostiole-tailscaled.service >/dev/null 2>&1 ||
+		fail "ostiole-tailscaled.service was not written"
+	state=$(systemctl is-enabled tailscaled.service 2>&1 || true)
+	case "$state" in
+	masked | not-found | *"No such file"*) ;;
+	*) fail "tailscaled.service is $state, want masked or gone" ;;
+	esac
+	# Joining a tailnet is an apply, not an install: nothing here starts it.
+	! systemctl is-active ostiole-tailscaled.service >/dev/null 2>&1 ||
+		fail "ostiole-tailscaled.service is running, and nothing asked it to"
+
+	step "$1: the repository it came from is in place"
+	case "$(manager)" in
+	apt-get)
+		[ -f /etc/apt/sources.list.d/tailscale.list ] || fail "no Tailscale apt source"
+		;;
+	dnf)
+		case "$(distro_id)" in
+		rocky | rhel | almalinux | centos)
+			[ -f /etc/yum.repos.d/tailscale.repo ] || fail "no Tailscale yum repository"
+			;;
+		esac
+		;;
+	esac
+}
+
 # no_warnings holds the installer to its own output: a line that starts
 # with "warning:" is something it could not do, and on a stock image
 # there is nothing it should not be able to do.
@@ -150,6 +182,22 @@ ostiole repair --yes >/tmp/repair.log 2>&1 ||
 no_warnings /tmp/repair.log
 
 assert_router "repair"
+
+step "ostiole repair --tailscale adds the tailnet daemon"
+ostiole repair --yes --tailscale >/tmp/tailscale.log 2>&1 ||
+	{ cat /tmp/tailscale.log; fail "ostiole repair --tailscale failed"; }
+no_warnings /tmp/tailscale.log
+
+assert_tailscale "tailscale"
+assert_router "tailscale"
+
+step "a plain repair keeps Tailscale and its repository"
+ostiole repair --yes >/tmp/repair2.log 2>&1 ||
+	{ cat /tmp/repair2.log; fail "the repair after --tailscale failed"; }
+no_warnings /tmp/repair2.log
+
+assert_tailscale "plain repair"
+assert_router "plain repair"
 
 step "what the router says about itself"
 ostiole host || true

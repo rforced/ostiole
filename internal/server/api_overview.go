@@ -430,6 +430,31 @@ func (a *api) serviceStates(ctx context.Context, cfg *model.Config) []ServiceSta
 		}
 	}
 
+	// The tile only appears once a router has a tailnet interface: nobody
+	// else is owed a line about a daemon they never asked for.
+	tsWant, tsConfigured := false, false
+	if cfg != nil {
+		in, ok := cfg.TailscaleInterface()
+		tsConfigured, tsWant = ok, ok && in.Enabled
+	}
+	ts := ServiceState{
+		Name:  "Tailscale",
+		Unit:  services.TailscaleUnit,
+		State: stateUnknown,
+		Want:  tsWant,
+	}
+	if a.tailscale != nil {
+		switch {
+		case !a.tailscale.Installed(ctx):
+			ts.State = stateMissing
+			ts.Detail = "tailscaled is not on this router. Run `ostiole repair --tailscale` as root."
+		case a.tailscale.Active(ctx):
+			ts.State = stateActive
+		default:
+			ts.State = stateInactive
+		}
+	}
+
 	netd := ServiceState{
 		Name:  "Network",
 		Unit:  install.NetworkdUnit,
@@ -457,6 +482,9 @@ func (a *api) serviceStates(ctx context.Context, cfg *model.Config) []ServiceSta
 	}
 	if upnp.Want || upnp.State == stateActive {
 		states = append(states, upnp)
+	}
+	if tsConfigured {
+		states = append(states, ts)
 	}
 	return append(states, netd, logs)
 }
@@ -537,9 +565,15 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 	}
 	var missing []string
 	for _, l := range links {
-		if l.Configured && l.Enabled && !l.Present {
-			missing = append(missing, l.Name)
+		if !l.Configured || !l.Enabled || l.Present {
+			continue
 		}
+		// tailscaled creates its own interface, so a missing one means the
+		// daemon is not running, which the service tile already says.
+		if in, ok := cfg.Interface(l.Name); ok && in.Kind() == model.KindTailscale {
+			continue
+		}
+		missing = append(missing, l.Name)
 	}
 	if len(missing) > 0 {
 		out = append(out, Warning{

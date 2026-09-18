@@ -63,6 +63,15 @@ cat /tmp/plan.txt
 grep -q "nftables" /tmp/plan.txt || fail "the plan does not install nftables"
 grep -qi "miniupnpd\|no UPnP" /tmp/plan.txt || fail "the plan says nothing about UPnP"
 [ ! -e /usr/local/bin/ostiole ] || fail "--dry-run installed a binary"
+! grep -q "tailscale" /tmp/plan.txt || fail "the plan offers Tailscale to a router that did not ask"
+
+step "the plan names Tailscale when it is asked for"
+if ! OSTIOLE_BASE_URL="$BASE" sh /tmp/install.sh --dry-run --with-tailscale >/tmp/plan-ts.txt 2>&1; then
+	cat /tmp/plan-ts.txt
+	fail "install.sh --dry-run --with-tailscale failed"
+fi
+grep -q "^  tailscale: " /tmp/plan-ts.txt ||
+	{ cat /tmp/plan-ts.txt; fail "the plan does not say where Tailscale comes from"; }
 
 # pipe_install runs it the way the documentation says to, against the
 # tree named. The pipe is the point: it is what leaves stdin useless
@@ -106,21 +115,5 @@ fi
 show_curl
 grep -q "curl is required" /tmp/err.txt ||
 	{ cat /tmp/err.txt; fail "the refusal does not name curl"; }
-
-# Alpine is the one image here that the full script runs to the end on,
-# because it is the one with no systemd: it installs the packages, places
-# the binary, and stops before the units it cannot write.
-if [ "$(manager)" = apk ]; then
-	step "the full script on a router without systemd"
-	OSTIOLE_BASE_URL="$BASE" sh /tmp/install.sh --yes >/tmp/alpine.txt 2>&1 ||
-		{ cat /tmp/alpine.txt; fail "the full script failed on Alpine"; }
-	cat /tmp/alpine.txt
-	grep -q "no systemd on this router" /tmp/alpine.txt ||
-		fail "the script did not say it was stopping at the binary"
-	[ -x /usr/local/bin/ostiole ] || fail "no binary at /usr/local/bin/ostiole"
-	for pkg in nftables dnsmasq unbound ppp-daemon iproute2-tc; do
-		pkg_present "$pkg" || fail "$pkg was not installed"
-	done
-fi
 
 printf '\nall install.sh checks passed\n'

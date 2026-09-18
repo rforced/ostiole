@@ -21,6 +21,7 @@ import (
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/sysstat"
 	"github.com/rforced/ostiole/internal/sysupdate"
+	"github.com/rforced/ostiole/internal/tailscale"
 	"github.com/rforced/ostiole/internal/update"
 	"github.com/rforced/ostiole/internal/version"
 	"github.com/rforced/ostiole/internal/web"
@@ -56,6 +57,11 @@ type Deps struct {
 	// UPnP reads miniupnpd's state and the mappings clients hold; nil
 	// reports "not set up".
 	UPnP *services.UPnP
+	// Tailscale reads tailscaled's state; nil reports "not set up".
+	Tailscale *services.Tailscale
+	// TSClient drives the tailscale command line; nil leaves the status
+	// empty and refuses a login.
+	TSClient *tailscale.Client
 	// Certs manages the certificate the UI serves; nil hides the
 	// certificate endpoints and serves whatever the files hold.
 	Certs *certs.Manager
@@ -107,6 +113,8 @@ func Handler(d Deps) http.Handler {
 		resolver:   d.Resolver,
 		pppoe:      d.PPPoE,
 		upnp:       d.UPnP,
+		tailscale:  d.Tailscale,
+		tsClient:   d.TSClient,
 		certs:      d.Certs,
 		tokens:     d.Tokens,
 		feedCache:  feedCacheOf(d.Feeds),

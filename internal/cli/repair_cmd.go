@@ -12,7 +12,7 @@ import (
 )
 
 func newRepairCmd(_ *globals) *cobra.Command {
-	var yes, dryRun bool
+	var yes, dryRun, tailscale bool
 	cmd := &cobra.Command{
 		Use:   "repair",
 		Short: "Reinstall packages and units the way install does",
@@ -22,7 +22,7 @@ and updaters it replaces come off again. An existing ruleset, configuration
 and network handover are left alone.
 
 Run it after installing a package by hand, or if the session dropped
-during the first install.`,
+during the first install. --tailscale adds tailscaled and its unit.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := requireRoot(); err != nil {
@@ -40,6 +40,9 @@ during the first install.`,
 			if dryRun {
 				args = append(args, "--dry-run")
 			}
+			if tailscale {
+				args = append(args, "--with-tailscale")
+			}
 			self, err := os.Executable()
 			if err != nil {
 				return err
@@ -55,6 +58,7 @@ during the first install.`,
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask for confirmation")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the plan and change nothing")
+	cmd.Flags().BoolVar(&tailscale, "tailscale", false, "install Tailscale as well, from its own repository where a distribution packages none")
 	return cmd
 }
 

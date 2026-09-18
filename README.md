@@ -65,10 +65,10 @@ The test systems are the stock images in [test-systems.json](.github/test-system
 | Ubuntu 26.04 LTS | current | |
 | Fedora 44 | current | |
 | Arch Linux | current | miniupnpd is built from the AUR during install |
-| Alpine 3.24 | current | Package and script only: no systemd, so the script places the binary and stops |
 
 Debian 12 and 13, Ubuntu 22.04 and openSUSE meet the requirements and should work, but are not in
-the matrix. RHEL 8, Debian 11 and Ubuntu 20.04 are below the kernel requirement.
+the matrix. RHEL 8, Debian 11 and Ubuntu 20.04 are below the kernel requirement. Distributions
+without systemd, Alpine among them, are not supported: the installer refuses them.
 
 ## Install
 
@@ -87,12 +87,14 @@ NetworkManager, netplan, unattended-upgrades, snapd and the like).
 - `--dry-run` prints the plan and stops.
 - `--yes` agrees in advance, for provisioning: `curl -fsSL https://github.com/rforced/ostiole/releases/latest/download/install.sh | sudo sh -s -- --yes`
 - `--keep <package>` exempts a package from removal. Repeatable.
+- `--with-tailscale` puts tailscaled on as well, from Tailscale's repository where a distribution
+  packages none. `ostiole repair --tailscale` does the same later.
 - `OSTIOLE_VERSION=v0.8.2` pins a release.
 
 Then open `https://<host>/`, create the admin account and run the wizard to choose WAN and LAN.
 Until that first apply is confirmed the router forwards nothing.
 
-**Packages.** deb, rpm, apk and Arch packages are attached to every release. After installing one,
+**Packages.** deb, rpm and Arch packages are attached to every release. After installing one,
 run `ostiole repair`: it runs the same script with the binary already in place, and is also the
 command for a router whose packages were changed by hand.
 
