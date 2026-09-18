@@ -148,6 +148,12 @@ func (n *Networkd) Render(cfg *model.Config) (Files, error) {
 		}
 		files[n.networkFile(parent)] = renderPort(parent, "Carries the PPPoE session "+session, "")
 	}
+	// A radio's own interface carries nothing. It stays up because a card
+	// that forgets its country when the firmware restarts only learns it
+	// again by scanning on a live interface (ADR-0015).
+	for _, r := range cfg.ActiveRadios() {
+		files[n.networkFile(r.Name)] = renderPort(r.Name, "Radio; its networks are interfaces of their own", "")
+	}
 	return files, nil
 }
 

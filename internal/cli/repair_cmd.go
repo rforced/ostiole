@@ -12,7 +12,7 @@ import (
 )
 
 func newRepairCmd(_ *globals) *cobra.Command {
-	var yes, dryRun, tailscale bool
+	var yes, dryRun, tailscale, wireless bool
 	cmd := &cobra.Command{
 		Use:   "repair",
 		Short: "Reinstall packages and units the way install does",
@@ -22,7 +22,8 @@ and updaters it replaces come off again. An existing ruleset, configuration
 and network handover are left alone.
 
 Run it after installing a package by hand, or if the session dropped
-during the first install. --tailscale adds tailscaled and its unit.`,
+during the first install. --tailscale adds tailscaled and its unit;
+--wireless adds hostapd, iw and the firmware for the card in this router.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := requireRoot(); err != nil {
@@ -43,6 +44,9 @@ during the first install. --tailscale adds tailscaled and its unit.`,
 			if tailscale {
 				args = append(args, "--with-tailscale")
 			}
+			if wireless {
+				args = append(args, "--with-wireless")
+			}
 			self, err := os.Executable()
 			if err != nil {
 				return err
@@ -59,6 +63,7 @@ during the first install. --tailscale adds tailscaled and its unit.`,
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask for confirmation")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the plan and change nothing")
 	cmd.Flags().BoolVar(&tailscale, "tailscale", false, "install Tailscale as well, from its own repository where a distribution packages none")
+	cmd.Flags().BoolVar(&wireless, "wireless", false, "install what a wifi card needs as well, whether or not this router has one")
 	return cmd
 }
 

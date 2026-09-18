@@ -82,13 +82,16 @@ The script prints its plan and waits for a yes. The plan is: install the package
 the release and verify its checksum and signature, write the units, load a bootstrap ruleset, hand
 addressing to systemd-networkd keeping the addresses the machine has now, then remove the
 firewalls, network managers, updaters and desktop services a router has no use for (firewalld, ufw,
-NetworkManager, netplan, unattended-upgrades, snapd and the like).
+NetworkManager, netplan, unattended-upgrades, snapd and the like). Bluetooth goes with them: the
+package comes off and the modules are blocked, on every router.
 
 - `--dry-run` prints the plan and stops.
 - `--yes` agrees in advance, for provisioning: `curl -fsSL https://github.com/rforced/ostiole/releases/latest/download/install.sh | sudo sh -s -- --yes`
 - `--keep <package>` exempts a package from removal. Repeatable.
 - `--with-tailscale` puts tailscaled on as well, from Tailscale's repository where a distribution
   packages none. `ostiole repair --tailscale` does the same later.
+- `--with-wireless` puts hostapd, iw and the card's firmware on. A router with a wifi card gets
+  them without asking; `ostiole repair --wireless` does the same later.
 - `OSTIOLE_VERSION=v0.8.2` pins a release.
 
 Then open `https://<host>/`, create the admin account and run the wizard to choose WAN and LAN.

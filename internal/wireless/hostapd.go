@@ -108,10 +108,11 @@ func Render(country string, r model.Radio, nets []model.Interface, phy *Phy, mas
 	return b.String()
 }
 
-// Env is the unit's environment: which device to set the power on, which
-// interface to create for hostapd, and the country the kernel is told
-// before either.
-func Env(country string, r model.Radio, phy *Phy, first string) string {
+// Env is the unit's environment: which device to set the power on and
+// which interface to create for hostapd. The rest is what the radio was
+// asked for, so an apply can check it against the card without reading
+// the configuration back.
+func Env(country string, r model.Radio, phy *Phy, nets []model.Interface) string {
 	name := "phy0"
 	if phy != nil && phy.Name != "" {
 		name = phy.Name
@@ -120,7 +121,54 @@ func Env(country string, r model.Radio, phy *Phy, first string) string {
 	if r.Power > 0 {
 		power = fmt.Sprintf("limit %d", r.Power*100)
 	}
-	return fmt.Sprintf("PHY=%s\nAP=%s\nTXPOWER=%s\nCOUNTRY=%s\n", name, first, power, country)
+	first := ""
+	if len(nets) > 0 {
+		first = nets[0].Name
+	}
+	return fmt.Sprintf("PHY=%s\nAP=%s\nTXPOWER=%s\nCOUNTRY=%s\nBAND=%s\nCHANNEL=%d\nWIDTH=%d\nSTANDARD=%s\nNETWORKS=%d\n",
+		name, first, power, country, r.Band, r.Channel, r.Width, r.Standard, len(nets))
+}
+
+// EnvPlan is what Env recorded about a radio.
+type EnvPlan struct {
+	PHY      string
+	AP       string
+	Country  string
+	Band     model.Band
+	Channel  int
+	Width    int
+	Standard model.Standard
+	Networks int
+}
+
+// ParseEnv reads back what Env wrote.
+func ParseEnv(text string) EnvPlan {
+	var p EnvPlan
+	for _, line := range strings.Split(text, "\n") {
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		switch key {
+		case "PHY":
+			p.PHY = value
+		case "AP":
+			p.AP = value
+		case "COUNTRY":
+			p.Country = value
+		case "BAND":
+			p.Band = model.Band(value)
+		case "CHANNEL":
+			p.Channel = int(number(value))
+		case "WIDTH":
+			p.Width = int(number(value))
+		case "STANDARD":
+			p.Standard = model.Standard(value)
+		case "NETWORKS":
+			p.Networks = int(number(value))
+		}
+	}
+	return p
 }
 
 func keyMgmt(s model.Security) string {

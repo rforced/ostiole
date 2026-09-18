@@ -497,6 +497,31 @@ func TestRenderLeavesTailscaleToTheDaemon(t *testing.T) {
 	}
 }
 
+// hostapd creates a network's device, but everything after that is
+// networkd's: a bridge port or an interface with an address.
+func TestRenderWirelessNetworksAreInterfaces(t *testing.T) {
+	t.Parallel()
+	files, err := (&Networkd{}).Render(loadConfig(t, "testdata/wireless.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name := range files {
+		if strings.HasSuffix(name, ".netdev") && strings.Contains(name, "ap0") {
+			t.Errorf("networkd was given %s for a device hostapd creates", name)
+		}
+	}
+	if got := files["00-ostiole-ap0.network"]; !strings.Contains(got, "Bridge=br-lan") {
+		t.Errorf("ap0 is not a port on br-lan:\n%s", got)
+	}
+	if got := files["00-ostiole-ap1.network"]; !strings.Contains(got, "Address=10.99.0.1/24") {
+		t.Errorf("ap1 has no address of its own:\n%s", got)
+	}
+	radio := files["00-ostiole-wlp3s0.network"]
+	if !strings.Contains(radio, "Name=wlp3s0") || strings.Contains(radio, "Bridge=") || strings.Contains(radio, "Address=") {
+		t.Errorf("the radio is not an idle port:\n%s", radio)
+	}
+}
+
 // The device that carries a shaped interface's incoming traffic is
 // Ostiole's own doing, not an interface anybody configured. Leaving it in
 // the list put it on the interfaces page as "not managed" and, worse, in

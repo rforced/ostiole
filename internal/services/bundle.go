@@ -20,15 +20,16 @@ type Bundle struct {
 
 var _ network.Backend = (*Bundle)(nil)
 
-// NewBundle returns the production services: the dialled sessions first,
-// because an interface has to exist before anything serves on it, then
-// the resolver, then the blocklist, then the forwarder that reads the
-// blocklist and points at the resolver. Tailscale follows it, because the
-// forward for tailnet names has to be in place first. The mapping service
-// comes last, because it restarts into a table that has just been rebuilt.
+// NewBundle returns the production services: the dialled sessions and the
+// wireless networks first, because an interface has to exist before
+// anything serves on it, then the resolver, then the blocklist, then the
+// forwarder that reads the blocklist and points at the resolver. Tailscale
+// follows it, because the forward for tailnet names has to be in place
+// first. The mapping service comes last, because it restarts into a table
+// that has just been rebuilt.
 func NewBundle(blocklists *dnsblock.Cache, configDir string) *Bundle {
 	return &Bundle{backends: []network.Backend{
-		NewPPPoE(), NewUnbound(), NewDNSBlock(blocklists), New(),
+		NewPPPoE(), NewWireless(configDir), NewUnbound(), NewDNSBlock(blocklists), New(),
 		NewTailscale(configDir), NewUPnP(),
 	}}
 }

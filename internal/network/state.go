@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"os"
 	"sort"
 	"strings"
 
@@ -24,8 +25,11 @@ type Link struct {
 	MTU     int    `json:"mtu"`
 	Parent  string `json:"parent,omitempty"`
 	// Master is the bridge or bond this link is enslaved to, if any.
-	Master    string   `json:"master,omitempty"`
-	VLANID    int      `json:"vlanId,omitempty"`
+	Master string `json:"master,omitempty"`
+	VLANID int    `json:"vlanId,omitempty"`
+	// Wireless marks a link on a wifi device, and Phy names the device.
+	Wireless  bool     `json:"wireless,omitempty"`
+	Phy       string   `json:"phy,omitempty"`
 	Addresses []string `json:"addresses"`
 	// DynamicAddresses are the ones in Addresses that a lease or a router
 	// advertisement put there rather than a configuration file, which is
@@ -96,6 +100,9 @@ func Discover() ([]Link, error) {
 		}
 		if v, ok := l.(*netlink.Vlan); ok {
 			li.VLANID = v.VlanId
+		}
+		if phy, err := os.ReadFile("/sys/class/net/" + a.Name + "/phy80211/name"); err == nil {
+			li.Wireless, li.Phy = true, strings.TrimSpace(string(phy))
 		}
 		if s := a.Statistics; s != nil {
 			li.RXBytes, li.TXBytes = s.RxBytes, s.TxBytes

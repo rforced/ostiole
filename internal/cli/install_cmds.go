@@ -90,6 +90,7 @@ management ports get in, nothing is forwarded.`,
 			fmt.Fprintf(out, "  write and enable:     %s, %s\n", install.FirewallUnit, install.DaemonUnit)
 			fmt.Fprintf(out, "  write service units:  %s\n", strings.Join(serviceUnits(), ", "))
 			fmt.Fprintf(out, "  persist:              router sysctls (%s), journal ceiling (%s)\n", sysctl.ConfFile, journald.ConfFile)
+			fmt.Fprintf(out, "  block:                Bluetooth (%s)\n", install.BluetoothConfFile)
 			if opts.Timezone != "-" {
 				fmt.Fprintf(out, "  set the clock to:     %s\n", opts.Timezone)
 			}
@@ -219,15 +220,15 @@ func installZone(flag string, cfg *model.Config) string {
 // serviceUnits are the units written for the daemons a router drives.
 func serviceUnits() []string {
 	return []string{services.Unit, services.UnboundUnit, services.PPPoEUnit, services.UPnPUnit,
-		services.TailscaleUnit}
+		services.TailscaleUnit, services.WirelessUnit}
 }
 
-// writeServiceUnits points dnsmasq, unbound, pppd, miniupnpd and
-// tailscaled at Ostiole's generated configuration. One whose binary is not
+// writeServiceUnits points dnsmasq, unbound, pppd, miniupnpd, tailscaled
+// and hostapd at Ostiole's generated configuration. One whose binary is not
 // on the router is skipped; the install script is what puts them there.
 func writeServiceUnits(ctx context.Context, configDir string) error {
 	opts := services.SetupOptions{
-		Dnsmasq: true, Resolver: true, PPPoE: true, UPnP: true, Tailscale: true,
+		Dnsmasq: true, Resolver: true, PPPoE: true, UPnP: true, Tailscale: true, Wireless: true,
 		ConfigDir: configDir, NoRestart: true,
 	}
 	return services.Setup(ctx, services.New(), opts, slog.Default())

@@ -93,6 +93,9 @@ type Options struct {
 	// Timezone is the zone the router is set to; empty means UTC, "-" leaves
 	// the clock alone (tests).
 	Timezone string
+	// BluetoothFile is where the modprobe drop-in that blocks Bluetooth is
+	// written; empty means the default, "-" skips it (tests).
+	BluetoothFile string
 }
 
 // Report describes what Install did.
@@ -103,6 +106,8 @@ type Report struct {
 	Sysctl string
 	// Timezone is the zone the clock was set to, or "".
 	Timezone string
+	// Bluetooth is the drop-in that blocks it, or "".
+	Bluetooth string
 }
 
 // Install copies the binary, writes the units, and enables them. It never
@@ -172,6 +177,19 @@ func Install(ctx context.Context, sc Systemctl, lay Layout, opts Options, log *s
 		// Take effect now as well, not only after the next boot or apply.
 		if err := (sysctl.Proc{}).Apply(); err != nil {
 			log.Warn("could not apply router sysctls now", "err", err)
+		}
+	}
+	// A router has no use for Bluetooth, and a wifi card usually carries a
+	// controller for it on the same chip.
+	if opts.BluetoothFile != "-" {
+		if err := BlockBluetooth(ctx, run, opts.BluetoothFile); err != nil {
+			log.Warn("could not block Bluetooth", "err", err)
+		} else {
+			rep.Bluetooth = opts.BluetoothFile
+			if rep.Bluetooth == "" {
+				rep.Bluetooth = BluetoothConfFile
+			}
+			log.Info("Bluetooth blocked", "file", rep.Bluetooth)
 		}
 	}
 	// A firewall's output is timestamps, and they are read next to other

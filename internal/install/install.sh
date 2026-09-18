@@ -5,7 +5,8 @@
 #   curl -fsSL https://github.com/rforced/ostiole/releases/latest/download/install.sh | sudo sh
 #   curl -fsSL … | sudo sh -s -- --yes      (agree to the plan in advance)
 #
-# Flags: --yes, --dry-run, --with-tailscale, --keep <package> (repeatable).
+# Flags: --yes, --dry-run, --with-tailscale, --with-wireless,
+#        --keep <package> (repeatable).
 # Anything else is passed to `ostiole install` (--listen, --timezone).
 #
 # Environment: OSTIOLE_VERSION pins a version; OSTIOLE_BASE_URL downloads
@@ -28,6 +29,7 @@ BUILD_TOOLS=0
 YES=0
 DRY_RUN=0
 TAILSCALE=0
+WIRELESS=0
 KEEP=""
 INSTALL_ARGS=""
 while [ $# -gt 0 ]; do
@@ -35,6 +37,7 @@ while [ $# -gt 0 ]; do
 	-y | --yes) YES=1 ;;
 	--dry-run) DRY_RUN=1 ;;
 	--with-tailscale) TAILSCALE=1 ;;
+	--with-wireless) WIRELESS=1 ;;
 	--keep)
 		shift
 		[ $# -gt 0 ] || { echo "--keep needs a package name" >&2; exit 1; }
@@ -178,7 +181,7 @@ esac
 # What a router has no use for, by every name these carry. A pattern is
 # matched against the package database, so the names that do not exist on
 # this distribution cost nothing.
-UNWANTED="firewalld ufw iptables-services iptables-persistent netfilter-persistent shorewall shorewall6
+UNWANTED="bluez firewalld ufw iptables-services iptables-persistent netfilter-persistent shorewall shorewall6
 NetworkManager network-manager networkmanager cockpit* netplan.io dhcpcd dhcpcd-base connman wicked wicked-service ifupdown
 unattended-upgrades dnf-automatic yum-cron PackageKit packagekit
 snapd ModemManager modemmanager udisks2 upower fwupd multipath-tools device-mapper-multipath lxd-installer"
@@ -195,6 +198,7 @@ esac
 # manager refuses to remove it and masking is all that is left.
 units_for() {
 	case "$1" in
+	bluez) echo "bluetooth.service" ;;
 	firewalld) echo "firewalld.service" ;;
 	ufw) echo "ufw.service" ;;
 	iptables-services) echo "iptables.service ip6tables.service" ;;
@@ -317,6 +321,64 @@ kept() {
 # its repository is left alone and the flag stays the only way in.
 [ -z "$(matching tailscale)" ] || TAILSCALE=1
 
+# A card the kernel already drives, a PCI device that says network
+# controller (0x028000), or hostapd already here: any of them means this
+# router serves wifi, so a plain repair keeps it.
+[ ! -d /sys/class/ieee80211 ] || [ -z "$(ls -A /sys/class/ieee80211 2>/dev/null)" ] || WIRELESS=1
+[ -z "$(matching hostapd)" ] || WIRELESS=1
+WIFI_VENDORS=""
+for class in /sys/bus/pci/devices/*/class; do
+	[ -r "$class" ] || continue
+	[ "$(cat "$class")" = "0x028000" ] || continue
+	WIRELESS=1
+	vendor="$(cat "${class%class}vendor" 2>/dev/null)" || continue
+	case " $WIFI_VENDORS " in *" ${vendor#0x} "*) ;; *) WIFI_VENDORS="$WIFI_VENDORS ${vendor#0x}" ;; esac
+done
+WIFI_VENDORS="${WIFI_VENDORS# }"
+
+# wifi_firmware names the package a distribution splits a vendor's
+# firmware into. An unknown vendor gets the whole blob.
+wifi_firmware() {
+	case "$MANAGER" in
+	dnf)
+		# Enterprise Linux ships one blob for every card.
+		[ "$EL" -eq 0 ] || { echo linux-firmware; return; }
+		case "$1" in
+		8086) echo iwlwifi-mvm-firmware ;;
+		168c | 17cb) echo atheros-firmware ;;
+		14c3) echo mt7xxx-firmware ;;
+		10ec) echo realtek-firmware ;;
+		14e4) echo brcmfmac-firmware ;;
+		*) echo linux-firmware ;;
+		esac
+		;;
+	apt-get)
+		[ "$OS_ID" = debian ] || { echo linux-firmware; return; }
+		case "$1" in
+		8086) echo firmware-iwlwifi ;;
+		168c | 17cb) echo firmware-atheros ;;
+		10ec) echo firmware-realtek ;;
+		*) echo firmware-misc-nonfree ;;
+		esac
+		;;
+	zypper) case "$1" in 8086) echo kernel-firmware-iwlwifi ;; *) echo kernel-firmware ;; esac ;;
+	*) echo linux-firmware ;;
+	esac
+}
+
+# The firmware is kept out of WANT: it may live in a component this
+# router has not enabled, and a card nobody can drive is a warning, not a
+# reason to leave the install half done.
+WIRELESS_FW=""
+if [ "$WIRELESS" -eq 1 ]; then
+	WANT="$WANT hostapd iw wireless-regdb"
+	for v in $WIFI_VENDORS; do
+		fw="$(wifi_firmware "$v")"
+		case " $WIRELESS_FW " in *" $fw "*) ;; *) WIRELESS_FW="$WIRELESS_FW $fw" ;; esac
+	done
+	WIRELESS_FW="${WIRELESS_FW# }"
+fi
+
 # MISSING is what actually goes to the package manager. Asking it to
 # install what is already there is not harmless: pacman warns about every
 # one, and a repair should be quiet on a router with nothing wrong.
@@ -345,6 +407,7 @@ case "$UPNP_NOTE" in
 *) echo "  UPnP:     $UPNP_NOTE" ;;
 esac
 [ "$TAILSCALE" -eq 0 ] || echo "  tailscale: $TAILSCALE_NOTE"
+[ "$WIRELESS" -eq 0 ] || echo "  wireless: hostapd iw wireless-regdb${WIRELESS_FW:+ $WIRELESS_FW}"
 echo "  place:    $BIN_DIR/ostiole, write the units, and start the web UI on 443"
 echo "  remove:   ${REMOVE:-nothing this router has that it has no use for}"
 [ -z "$MASK_ONLY" ] || echo "  mask:     $MASK_ONLY"
@@ -387,6 +450,14 @@ if [ "${OSTIOLE_NO_INSTALL:-}" != "1" ]; then
 	fi
 	# shellcheck disable=SC2086 # the list is built to be split
 	pkg_explicit $WANT
+	for fw in $WIRELESS_FW; do
+		grep -qxF "$fw" "$TMP/installed" && continue
+		if pkg_install "$fw"; then
+			pkg_explicit "$fw"
+		else
+			echo "warning: $fw is not available here; a card that needs it will not come up" >&2
+		fi
+	done
 fi
 
 # miniupnpd for Enterprise Linux, from Fedora. The RPM's only Fedora-only

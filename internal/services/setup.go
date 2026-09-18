@@ -68,9 +68,13 @@ type SetupOptions struct {
 	// TailscaleBinary overrides the tailscaled path (found on PATH
 	// otherwise).
 	TailscaleBinary string
-	// ConfigDir is where the Tailscale backend's files go; empty is the
-	// default configuration directory.
+	// ConfigDir is where the Tailscale and wireless backends' files go;
+	// empty is the default configuration directory.
 	ConfigDir string
+	// Wireless writes the templated unit that serves a radio's networks.
+	Wireless bool
+	// HostapdBinary overrides the hostapd path (found on PATH otherwise).
+	HostapdBinary string
 }
 
 // Setup makes the host able to run the services it is asked for. Each
@@ -120,6 +124,11 @@ func Setup(ctx context.Context, d *Dnsmasq, o SetupOptions, log *slog.Logger) er
 	}
 	if o.Tailscale {
 		if err := setupTailscale(ctx, run, o, unitDir, log); err != nil {
+			return err
+		}
+	}
+	if o.Wireless {
+		if err := setupWireless(ctx, run, o, unitDir, log); err != nil {
 			return err
 		}
 	}
@@ -422,6 +431,68 @@ func setupTailscale(ctx context.Context, run Runner, o SetupOptions, unitDir str
 	}
 	log.Info("Tailscale ready", "unit", TailscaleUnit, "tailscaled", bin)
 	return nil
+}
+
+// setupWireless masks the distribution's own hostapd unit and writes the
+// templated one, one instance of which serves each radio. Nothing here
+// brings a network up: that is an interface, applied like everything else.
+func setupWireless(ctx context.Context, run Runner, o SetupOptions, unitDir string, log *slog.Logger) error {
+	bin := o.HostapdBinary
+	if bin == "" {
+		bin = lookPath("hostapd")
+	}
+	iw, ipCmd := lookPath("iw"), lookPath("ip")
+	if bin == "" || iw == "" || ipCmd == "" {
+		log.Info("no hostapd on this router; wireless is not set up")
+		return nil
+	}
+
+	if out, err := run.Run(ctx, "systemctl", "cat", hostapdDistroSvc); err == nil && len(out) > 0 {
+		_, _ = run.Run(ctx, "systemctl", "disable", "--now", hostapdDistroSvc)
+		_, _ = run.Run(ctx, "systemctl", "mask", hostapdDistroSvc)
+		log.Info("masked the distribution's own hostapd unit", "unit", hostapdDistroSvc)
+	}
+
+	dir := WirelessDir(o.ConfigDir)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	if err := writeFile(filepath.Join(unitDir, WirelessUnit), WirelessUnitContent(bin, iw, ipCmd, dir)); err != nil {
+		return err
+	}
+	log.Info("wireless ready", "unit", WirelessUnit, "hostapd", bin)
+	return nil
+}
+
+// WirelessUnitContent renders the templated hostapd unit. The instance
+// name is the radio, which is also the name of both its files, so one
+// template covers however many cards a router has.
+func WirelessUnitContent(binary, iw, ipCmd, dir string) string {
+	return fmt.Sprintf(`[Unit]
+Description=Ostiole wireless networks on %%i (hostapd)
+Documentation=https://github.com/rforced/ostiole
+After=network-pre.target ostiole-firewall.service sys-subsystem-net-devices-%%i.device
+Wants=network-pre.target ostiole-firewall.service
+BindsTo=sys-subsystem-net-devices-%%i.device
+
+[Service]
+Type=exec
+EnvironmentFile=%[4]s/%%i.env
+ExecStartPre=%[3]s link set %%i up
+# Some radios learn their country from the networks around them and forget
+# it when the firmware restarts. A scan first is what lets them use 5 GHz.
+ExecStartPre=-%[2]s dev %%i scan
+ExecStartPre=-%[2]s phy ${PHY} set txpower $TXPOWER
+ExecStartPre=-%[2]s dev %%i interface add ${AP} type __ap
+ExecStart=%[1]s %[4]s/%%i.conf
+ExecStopPost=-%[2]s dev ${AP} del
+Restart=on-failure
+RestartSec=5
+RuntimeDirectory=hostapd/%%i
+
+[Install]
+WantedBy=multi-user.target
+`, binary, iw, ipCmd, dir)
 }
 
 // TailscaleUnitContent renders the ostiole-tailscaled unit. The daemon

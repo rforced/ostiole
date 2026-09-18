@@ -81,20 +81,28 @@ func TestInstallAndUninstall(t *testing.T) {
 
 	run := &fakeRunner{}
 	sysctlFile := filepath.Join(t.TempDir(), "99-ostiole.conf")
+	btFile := filepath.Join(t.TempDir(), "ostiole-bluetooth.conf")
 	rep, err := Install(context.Background(), sc, lay,
-		Options{Source: src, Listen: ":8443", Run: run, SysctlFile: sysctlFile}, log)
+		Options{Source: src, Listen: ":8443", Run: run, SysctlFile: sysctlFile, BluetoothFile: btFile}, log)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if raw, err := os.ReadFile(sysctlFile); err != nil || !strings.Contains(string(raw), "ip_forward = 1") {
 		t.Errorf("sysctl file = %q, %v", raw, err)
 	}
+	// A router has no use for Bluetooth, wireless or not.
+	if raw, err := os.ReadFile(btFile); err != nil || !strings.Contains(string(raw), "install bluetooth /bin/false") {
+		t.Errorf("bluetooth file = %q, %v", raw, err)
+	}
+	if rep.Bluetooth != btFile || !run.ran("modprobe", "-r") {
+		t.Errorf("Bluetooth = %q, ran %v", rep.Bluetooth, run.calls)
+	}
 	// An install takes the clock to UTC along with everything else it
 	// takes over, and runs nothing else on the router.
 	if rep.Timezone != "UTC" {
 		t.Errorf("Timezone = %q, want UTC", rep.Timezone)
 	}
-	if len(run.calls) != 1 || strings.Join(run.calls[0], " ") != "timedatectl set-timezone UTC" {
+	if !run.ran("timedatectl", "set-timezone", "UTC") {
 		t.Errorf("commands run = %v", run.calls)
 	}
 	if info, err := os.Stat(lay.Binary()); err != nil || info.Mode().Perm() != 0o755 {
@@ -134,7 +142,7 @@ func TestInstallAndUninstall(t *testing.T) {
 	}
 
 	// Re-install from the installed path is a no-op copy.
-	if _, err := Install(context.Background(), sc, lay, Options{Source: lay.Binary(), Run: &fakeRunner{}, SysctlFile: "-", Timezone: "-"}, log); err != nil {
+	if _, err := Install(context.Background(), sc, lay, Options{Source: lay.Binary(), Run: &fakeRunner{}, SysctlFile: "-", Timezone: "-", BluetoothFile: "-"}, log); err != nil {
 		t.Fatal(err)
 	}
 
@@ -203,6 +211,15 @@ func TestTakeover(t *testing.T) {
 type fakeRunner struct {
 	calls [][]string
 	after func()
+}
+
+func (f *fakeRunner) ran(parts ...string) bool {
+	for _, c := range f.calls {
+		if len(c) >= len(parts) && strings.Join(c[:len(parts)], " ") == strings.Join(parts, " ") {
+			return true
+		}
+	}
+	return false
 }
 
 func (f *fakeRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {

@@ -52,6 +52,17 @@ step "fetching the install script"
 curl -fsSL "$BASE/install.sh" >/tmp/install.sh
 [ -s /tmp/install.sh ] || fail "$BASE/install.sh served nothing"
 
+# has_wifi is the detection the script does, asked here so the assertion
+# below knows whether this container can see a card.
+has_wifi() {
+	[ -z "$(ls -A /sys/class/ieee80211 2>/dev/null)" ] || return 0
+	for class in /sys/bus/pci/devices/*/class; do
+		[ -r "$class" ] || continue
+		[ "$(cat "$class")" = "0x028000" ] && return 0
+	done
+	return 1
+}
+
 step "the plan names this distribution's packages"
 # --dry-run is the whole per-distribution path: find the package manager,
 # work out what this router needs and what it has no use for, say so.
@@ -64,6 +75,11 @@ grep -q "nftables" /tmp/plan.txt || fail "the plan does not install nftables"
 grep -qi "miniupnpd\|no UPnP" /tmp/plan.txt || fail "the plan says nothing about UPnP"
 [ ! -e /usr/local/bin/ostiole ] || fail "--dry-run installed a binary"
 ! grep -q "tailscale" /tmp/plan.txt || fail "the plan offers Tailscale to a router that did not ask"
+# A container shares the host's /sys, so a workstation with a wifi card
+# finds one in here. The assertion means something only where there is none.
+if ! has_wifi; then
+	! grep -q "^  wireless: " /tmp/plan.txt || fail "the plan offers wireless to a router with no card"
+fi
 
 step "the plan names Tailscale when it is asked for"
 if ! OSTIOLE_BASE_URL="$BASE" sh /tmp/install.sh --dry-run --with-tailscale >/tmp/plan-ts.txt 2>&1; then
@@ -72,6 +88,14 @@ if ! OSTIOLE_BASE_URL="$BASE" sh /tmp/install.sh --dry-run --with-tailscale >/tm
 fi
 grep -q "^  tailscale: " /tmp/plan-ts.txt ||
 	{ cat /tmp/plan-ts.txt; fail "the plan does not say where Tailscale comes from"; }
+
+step "the plan names the wireless packages when they are asked for"
+if ! OSTIOLE_BASE_URL="$BASE" sh /tmp/install.sh --dry-run --with-wireless >/tmp/plan-wifi.txt 2>&1; then
+	cat /tmp/plan-wifi.txt
+	fail "install.sh --dry-run --with-wireless failed"
+fi
+grep -q "^  wireless: hostapd iw wireless-regdb" /tmp/plan-wifi.txt ||
+	{ cat /tmp/plan-wifi.txt; fail "the plan does not name the wireless packages"; }
 
 # pipe_install runs it the way the documentation says to, against the
 # tree named. The pipe is the point: it is what leaves stdin useless

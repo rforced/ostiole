@@ -90,9 +90,12 @@ assert_router() {
 	done
 
 	step "$1: the packages a router has no use for are not there"
-	for pkg in firewalld ufw NetworkManager network-manager networkmanager unattended-upgrades PackageKit packagekit cockpit cockpit-ws; do
+	for pkg in bluez firewalld ufw NetworkManager network-manager networkmanager unattended-upgrades PackageKit packagekit cockpit cockpit-ws; do
 		! pkg_present "$pkg" || fail "$pkg is installed"
 	done
+
+	step "$1: Bluetooth is blocked"
+	[ -f /etc/modprobe.d/ostiole-bluetooth.conf ] || fail "the Bluetooth block was not written"
 
 	step "$1: the bootstrap ruleset is in the kernel"
 	PATH="$PATH:/usr/sbin:/sbin"
@@ -152,6 +155,28 @@ assert_tailscale() {
 	esac
 }
 
+# assert_wireless is the end state of the opt-in radio packages: on the
+# router, with a unit of ours, and nothing started it.
+assert_wireless() {
+	step "$1: hostapd and iw are on this router"
+	for cmd in hostapd iw; do
+		command -v "$cmd" >/dev/null 2>&1 || PATH="$PATH:/usr/sbin:/sbin" command -v "$cmd" >/dev/null 2>&1 ||
+			fail "$cmd is not on this router"
+	done
+	[ -f /lib/firmware/regulatory.db ] || [ -f /usr/lib/firmware/regulatory.db ] ||
+		fail "no regulatory database; every radio would stay on the lowest power"
+	systemctl cat ostiole-hostapd@.service >/dev/null 2>&1 ||
+		fail "ostiole-hostapd@.service was not written"
+	state=$(systemctl is-enabled hostapd.service 2>&1 || true)
+	case "$state" in
+	masked | not-found | disabled | *"No such file"*) ;;
+	*) fail "hostapd.service is $state, want masked or gone" ;;
+	esac
+	# Serving a network is an apply, not an install: nothing here starts one.
+	! systemctl list-units --state=active 'ostiole-hostapd@*' 2>/dev/null | grep -q ostiole-hostapd ||
+		fail "an ostiole-hostapd instance is running, and nothing asked it to"
+}
+
 # no_warnings holds the installer to its own output: a line that starts
 # with "warning:" is something it could not do, and on a stock image
 # there is nothing it should not be able to do.
@@ -198,6 +223,21 @@ no_warnings /tmp/repair2.log
 
 assert_tailscale "plain repair"
 assert_router "plain repair"
+
+step "ostiole repair --wireless adds what a radio needs"
+ostiole repair --yes --wireless >/tmp/wireless.log 2>&1 ||
+	{ cat /tmp/wireless.log; fail "ostiole repair --wireless failed"; }
+no_warnings /tmp/wireless.log
+
+assert_wireless "wireless"
+assert_router "wireless"
+
+step "a plain repair keeps the wireless packages"
+ostiole repair --yes >/tmp/repair3.log 2>&1 ||
+	{ cat /tmp/repair3.log; fail "the repair after --wireless failed"; }
+no_warnings /tmp/repair3.log
+
+assert_wireless "plain repair"
 
 step "what the router says about itself"
 ostiole host || true

@@ -118,10 +118,12 @@ type Report struct {
 	// Units are Ostiole's own and the one it hands the network to.
 	Units []UnitState `json:"units"`
 	// Present is the daemons a router runs, by command name.
-	Present    map[string]bool `json:"present"`
-	Network    NetworkState    `json:"network"`
-	Legacy     iptables.Report `json:"legacy"`
-	Firewalled bool            `json:"firewalled"`
+	Present map[string]bool `json:"present"`
+	Network NetworkState    `json:"network"`
+	Legacy  iptables.Report `json:"legacy"`
+	// Bluetooth is blocked, loaded, or absent.
+	Bluetooth  string `json:"bluetooth,omitempty"`
+	Firewalled bool   `json:"firewalled"`
 }
 
 // reportedUnits are the units the page shows a badge for.
@@ -129,7 +131,8 @@ var reportedUnits = []string{install.DaemonUnit, install.FirewallUnit, install.N
 
 // reportedCommands are the daemons Ostiole drives, which the install
 // script puts on the router.
-var reportedCommands = []string{"nft", "dnsmasq", "unbound", "miniupnpd", "pppd", "tc", "tailscaled"}
+var reportedCommands = []string{"nft", "dnsmasq", "unbound", "miniupnpd", "pppd", "tc", "tailscaled",
+	"hostapd", "iw"}
 
 // Commands names them in report order, for a console that lists them.
 func Commands() []string { return append([]string(nil), reportedCommands...) }
@@ -149,6 +152,7 @@ func Status(ctx context.Context, d Deps) Report {
 		Units:   units(ctx, d),
 		Present: present(d),
 	}
+	rep.Bluetooth = install.BluetoothState()
 	rep.Legacy = iptables.Detect(ctx, d.legacy())
 	rep.Network = networkState(ctx, d)
 	rep.Firewalled = d.TableLoaded != nil && d.TableLoaded(ctx)

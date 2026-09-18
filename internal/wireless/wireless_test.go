@@ -154,7 +154,7 @@ func TestRenderGolden(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			got := Render("US", tc.radio, tc.nets, &phy, tc.master) +
-				"\n--- env ---\n" + Env("US", tc.radio, &phy, tc.nets[0].Name)
+				"\n--- env ---\n" + Env("US", tc.radio, &phy, tc.nets)
 			golden := filepath.Join("testdata", "render-"+tc.name+".conf")
 			if *update {
 				if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {
@@ -186,8 +186,19 @@ func TestRenderWithoutAPhyLeavesOutCapabilities(t *testing.T) {
 			t.Errorf("missing %s:\n%s", s, got)
 		}
 	}
-	if env := Env("GB", r, nil, "ap0"); !strings.Contains(env, "PHY=phy0\n") || !strings.Contains(env, "TXPOWER=auto\n") {
+	if env := Env("GB", r, nil, []model.Interface{network("ap0", "ostiole", model.SecurityMixed, "correct horse battery")}); !strings.Contains(env, "PHY=phy0\n") || !strings.Contains(env, "TXPOWER=auto\n") {
 		t.Errorf("env = %q", env)
+	}
+}
+
+func TestEnvRoundTrips(t *testing.T) {
+	t.Parallel()
+	r := model.Radio{Name: "wlp3s0", Enabled: true, Band: model.Band2G, Channel: 6, Width: 40, Standard: model.StandardN, Power: 12}
+	nets := []model.Interface{network("ap0", "a", model.SecurityOpen, ""), network("ap1", "b", model.SecurityOpen, "")}
+	got := ParseEnv(Env("DE", r, &Phy{Name: "phy1"}, nets))
+	want := EnvPlan{PHY: "phy1", AP: "ap0", Country: "DE", Band: model.Band2G, Channel: 6, Width: 40, Standard: model.StandardN, Networks: 2}
+	if got != want {
+		t.Errorf("env = %+v, want %+v", got, want)
 	}
 }
 
