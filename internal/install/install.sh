@@ -164,7 +164,10 @@ dnf)
 			UPNP_NOTE="no UPnP: no Fedora build runs on this release"
 		fi
 	else
-		WANT="nftables dnsmasq unbound miniupnpd ppp iproute-tc"
+		# Fedora splits networkd out of systemd and only recommends it, so a
+		# router installed with NetworkManager has nothing to hand
+		# addressing to once that goes.
+		WANT="systemd-networkd nftables dnsmasq unbound miniupnpd ppp iproute-tc"
 		UPNP_NOTE="miniupnpd"
 	fi
 	;;
