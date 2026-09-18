@@ -47,6 +47,70 @@ const dns = computed({
     else delete system.value.dnsServers
   },
 })
+// The journal's ceiling. Empty means the default, which the placeholder
+// shows rather than the field pretending it was chosen.
+const journal = computed({
+  get: () => system.value.journalMaxUseGB || '',
+  set: (v) => {
+    if (Number.isFinite(v) && v > 0) system.value.journalMaxUseGB = v
+    else delete system.value.journalMaxUseGB
+  },
+})
+
+/**
+ * The rules that let the management ports in from a zone, as the wizard
+ * writes them: one accept per port, on the zone, to the firewall itself.
+ *
+ * @param {string} zone
+ */
+function managementRules(zone) {
+  const m = management.value
+  const rules = []
+  const add = (id, what, port) => {
+    if (!port) return
+    rules.push({
+      id: `${id}-from-${zone}`,
+      description: `${what} from ${zone}`,
+      enabled: true,
+      zone,
+      action: 'accept',
+      protocol: 'tcp',
+      source: {},
+      destination: { self: true, ports: [String(port)] },
+    })
+  }
+  add('web-ui', 'Web UI', m.webPort)
+  if (m.sshPort !== m.webPort) add('ssh', 'SSH', m.sshPort)
+  return rules
+}
+
+/** The external zones that do not already have every management rule. */
+const zonesWithoutManagement = computed(() => {
+  const ids = new Set((config.draft.rules ?? []).map((r) => r.id))
+  return (config.draft.zones ?? [])
+    .filter((z) => z.external)
+    .map((z) => z.name)
+    .filter((name) => managementRules(name).some((r) => !ids.has(r.id)))
+})
+
+/**
+ * Add the management rules for every external zone that lacks them. They
+ * go into the draft as ordinary rules, so they can be narrowed to an
+ * address or deleted under Firewall like any other; the anti-lockout on a
+ * zone is a system rule nobody can edit, which is right for the LAN and
+ * wrong for the public side.
+ */
+function allowFromExternal() {
+  config.undoable('Management rules added to the draft. Apply to take effect.', () => {
+    if (!config.draft.rules) config.draft.rules = []
+    const ids = new Set(config.draft.rules.map((r) => r.id))
+    for (const zone of zonesWithoutManagement.value) {
+      for (const rule of managementRules(zone)) {
+        if (!ids.has(rule.id)) config.draft.rules.push(rule)
+      }
+    }
+  })
+}
 </script>
 
 <template>
@@ -88,6 +152,29 @@ const dns = computed({
           class="input w-32"
         />
       </FormField>
+      <FormField
+        id="sys-journal"
+        label="System logs kept (GB)"
+        hint="journald deletes the oldest entries beyond this. Default 10."
+      >
+        <input
+          id="sys-journal"
+          v-model.number="journal"
+          type="number"
+          min="0"
+          max="1024"
+          placeholder="10"
+          class="input w-32"
+        />
+      </FormField>
+    </div>
+    <div v-if="zonesWithoutManagement.length" class="flex flex-wrap items-center gap-3">
+      <button type="button" class="btn" @click="allowFromExternal">
+        Allow management from {{ zonesWithoutManagement.join(', ') }}
+      </button>
+      <span class="text-sm text-neutral-500">
+        Adds a rule per management port to the draft, editable under Firewall.
+      </span>
     </div>
     <label class="flex items-start gap-2 text-sm">
       <input

@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/rforced/ostiole/internal/journald"
 	"github.com/rforced/ostiole/internal/timezone"
 )
 
@@ -396,6 +397,19 @@ type System struct {
 	// prefixes comes from; empty uses the defaults.
 	BogonV4URL string `json:"bogonV4Url,omitempty"`
 	BogonV6URL string `json:"bogonV6Url,omitempty"`
+	// JournalMaxUseGB caps what the system journal keeps on disk, in
+	// gigabytes; journald deletes the oldest entries beyond it. Zero keeps
+	// the default.
+	JournalMaxUseGB int `json:"journalMaxUseGB,omitempty"`
+}
+
+// JournalMaxUse is the journal's ceiling in gigabytes, the default when
+// the setting says nothing.
+func (s System) JournalMaxUse() int {
+	if s.JournalMaxUseGB <= 0 {
+		return journald.DefaultMaxUseGB
+	}
+	return s.JournalMaxUseGB
 }
 
 // Default sources for country address lists.

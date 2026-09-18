@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rforced/ostiole/internal/journald"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
@@ -39,6 +40,8 @@ type Engine struct {
 	shape  network.Backend  // traffic shaping; nil when not managed
 	sysctl sysctl.Applier   // nil in tests without a kernel
 	clock  timezone.Applier // sets the router's zone; nil leaves it alone
+	// journal bounds the system journal; nil leaves it alone.
+	journal journald.Applier
 	// feeds supplies the contents of aliases fetched from a URL or a
 	// country list; nil renders them empty.
 	feeds  FeedSource
@@ -137,6 +140,26 @@ func (e *Engine) applySysctl() {
 func (e *Engine) WithTimezone(a timezone.Applier) *Engine {
 	e.clock = a
 	return e
+}
+
+// WithJournal makes every apply bound the router's system journal to the
+// ceiling in the configuration.
+func (e *Engine) WithJournal(a journald.Applier) *Engine {
+	e.journal = a
+	return e
+}
+
+// applyJournal writes the journal ceiling. Like the timezone it is not
+// part of the revert: a log ceiling is nothing anybody can be locked out
+// by.
+func (e *Engine) applyJournal(ctx context.Context, cfg *model.Config) {
+	if e.journal == nil {
+		return
+	}
+	if err := e.journal.Apply(ctx, cfg.System.JournalMaxUse()); err != nil {
+		e.log.Warn("could not bound the system journal; it keeps what journald's own defaults allow",
+			"gb", cfg.System.JournalMaxUse(), "err", err)
+	}
 }
 
 // applyTimezone puts the router in the configured zone. It is not part of
@@ -262,6 +285,7 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 	}
 	e.applySysctl()
 	e.applyTimezone(ctx, cfg)
+	e.applyJournal(ctx, cfg)
 	if e.net != nil {
 		if err := e.net.Apply(ctx, plan.Network); err != nil {
 			if rerr := e.nft.Apply(ctx, previous); rerr != nil {

@@ -14,6 +14,7 @@ import (
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/feeds"
 	"github.com/rforced/ostiole/internal/install"
+	"github.com/rforced/ostiole/internal/journald"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/services"
@@ -116,6 +117,7 @@ func (g *globals) engine() (*engine.Engine, error) {
 	if os.Geteuid() == 0 {
 		eng.WithSysctl(sysctl.Proc{})
 		eng.WithTimezone(timezone.System{})
+		eng.WithJournal(journald.System{Run: install.ExecRunner{}})
 		// Shaping needs root but not a managed network: a router whose
 		// interfaces are set up by something else can still have its
 		// queues held here.

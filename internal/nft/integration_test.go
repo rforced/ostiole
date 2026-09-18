@@ -108,3 +108,17 @@ func keys(c Counters) []string {
 	}
 	return out
 }
+
+// The bootstrap ruleset is what a freshly installed router runs until its
+// first apply, so it has to load on a real kernel like the rendered ones.
+func TestBootstrapLoadsInKernel(t *testing.T) {
+	x := namespaced(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for _, ports := range [][]uint16{{443, 22}, {8443}, nil} {
+		ruleset := Bootstrap(ports)
+		if err := x.Check(ctx, ruleset); err != nil {
+			t.Fatalf("nft -c rejected the bootstrap ruleset for %v:\n%v\n--- ruleset ---\n%s", ports, err, ruleset)
+		}
+	}
+}

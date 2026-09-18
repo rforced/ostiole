@@ -2,8 +2,11 @@ package sysupdate
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Every component has to name a package for every manager that packages
@@ -126,7 +129,8 @@ func TestInstalledReadsTheDatabase(t *testing.T) {
 		code    int
 	}{
 		{dnf{}, "rpm -q firewalld", "firewalld-2.2.1-1.el10.noarch", "package firewalld is not installed", 1},
-		{apt{}, "dpkg-query -W -f=${Status} firewalld", "install ok installed", "deinstall ok config-files", 0},
+		{apt{}, "dpkg-query -s firewalld", "Package: firewalld\nStatus: install ok installed\nPriority: optional",
+			"Package: firewalld\nStatus: deinstall ok config-files", 0},
 		{pacman{}, "pacman -Q firewalld", "firewalld 2.2.1-1", "error: package 'firewalld' was not found", 1},
 		{zypper{}, "rpm -q firewalld", "firewalld-2.2.1-1.noarch", "package firewalld is not installed", 1},
 		{apk{}, "apk info -e firewalld", "firewalld", "", 0},
@@ -180,6 +184,56 @@ func TestPreviewRefused(t *testing.T) {
 	}
 	if previewRefused(result{Result: "exit-code", Status: 4}.err()) {
 		t.Error("a transient run that exited 4 was treated as a refusal")
+	}
+	// systemd-run exits 1 too, when it cannot start the unit at all. That
+	// is not the manager declining anything: the manager never ran.
+	if previewRefused(fmt.Errorf("%w: systemd-run: %w", errUnitStart, fakeExit(1))) {
+		t.Error("a unit that could not be started was treated as a refusal")
+	}
+	if previewRefused(fmt.Errorf("%w: still running", ErrBusy)) {
+		t.Error("a transaction still running was treated as a refusal")
+	}
+}
+
+// A finished unit keeps its name (RemainAfterExit), and systemd-run
+// refuses to start a second one by that name. The console never
+// collects the daemon's runs, so the stale one is cleared first; a unit
+// that is still running is somebody else's transaction and refused.
+func TestStartClearsAFinishedUnitAndRefusesARunningOne(t *testing.T) {
+	t.Parallel()
+	show := "systemctl show " + TransientUnit + " -p LoadState -p ActiveState -p SubState -p Result -p ExecMainStatus -p InvocationID"
+	run := &fakeRunner{out: map[string]string{
+		show: "LoadState=loaded\nActiveState=active\nSubState=exited\nResult=success\nExecMainStatus=0\nInvocationID=abc",
+	}}
+	tr := transient{unit: TransientUnit, run: run}
+	if err := tr.start(context.Background(), []string{"apt-get", "-s", "remove", "ufw"}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	var stopped, started bool
+	for _, c := range run.calls {
+		if c == "systemctl stop "+TransientUnit {
+			stopped = true
+		}
+		if strings.HasPrefix(c, "systemd-run --unit="+TransientUnit) && stopped {
+			started = true
+		}
+	}
+	if !stopped || !started {
+		t.Errorf("the finished unit was not cleared before the new one started: %v", run.calls)
+	}
+
+	run = &fakeRunner{out: map[string]string{
+		show: "LoadState=loaded\nActiveState=activating\nSubState=start\nResult=\nExecMainStatus=0\nInvocationID=def",
+	}}
+	tr = transient{unit: TransientUnit, run: run}
+	err := tr.start(context.Background(), []string{"apt-get", "-s", "remove", "ufw"}, time.Minute)
+	if !errors.Is(err, ErrBusy) {
+		t.Errorf("err = %v, want busy", err)
+	}
+	for _, c := range run.calls {
+		if strings.HasPrefix(c, "systemd-run") || strings.HasPrefix(c, "systemctl stop") {
+			t.Errorf("a running transaction was touched: %v", run.calls)
+		}
 	}
 }
 

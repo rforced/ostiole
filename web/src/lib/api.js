@@ -292,6 +292,26 @@ export const api = {
      * @param {string[]} components keys from the report
      */
     setup: (components) => post('/host/setup', { components }),
+    /**
+     * Everything the page's one button promises, in order: the
+     * components, the old firewall once a ruleset is loaded, the
+     * leftovers. Slow for the same reason setup is.
+     */
+    prepare: () => post('/host/prepare'),
+    /**
+     * Remove what a router has no use for, or ask what removing it would
+     * take with it.
+     *
+     * @param {string[]} keys extra keys from the report
+     * @param {boolean} preview change nothing and report
+     */
+    removeExtras: (keys, preview) => post('/host/extras/remove', { keys, preview }),
+    /**
+     * Turn password logins over SSH off (keys only) or back on.
+     *
+     * @param {boolean} passwords
+     */
+    ssh: (passwords) => post('/host/ssh', { passwords }),
     /** Stop, disable and mask every competing firewall service. */
     takeover: () => post('/host/takeover'),
     /**

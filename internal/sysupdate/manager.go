@@ -67,6 +67,8 @@ type Manager struct {
 	// which works perfectly well from inside the sandbox and must not be
 	// wrapped in another transient unit.
 	unit transient
+	// direct skips the transient unit; see Options.Direct.
+	direct bool
 
 	mu      sync.Mutex
 	running bool
@@ -84,7 +86,11 @@ type Options struct {
 	// Root says whether this daemon can actually install. A router that is
 	// not root still gets a page, and an explanation on it.
 	Root bool
-	Log  *slog.Logger
+	// Direct runs every package manager command as a child of this
+	// process instead of in a transient unit. A test sets it, so that its
+	// fake runner sees the command and not systemd-run.
+	Direct bool
+	Log    *slog.Logger
 }
 
 // New finds the package manager and reads what is known about it.
@@ -103,11 +109,12 @@ func New(o Options) *Manager {
 		Log:    log,
 		Distro: distroName(),
 		unit:   transient{unit: TransientUnit, run: run},
+		direct: o.Direct,
 	}
 	// Only root can raise a transient unit, and only a router with systemd
 	// has one to raise; everywhere else the command runs as a child and
 	// takes the sandbox with it.
-	if o.Root && m.unit.supported() {
+	if o.Root && !o.Direct && m.unit.supported() {
 		m.Run = hostRunner{inner: run, seq: &cmdSeq}
 	}
 	driver, err := Detect(o.PackageManager)

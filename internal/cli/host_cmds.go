@@ -78,9 +78,12 @@ the operator says they are leaving it alone.`,
 		},
 	}
 	cmd.AddCommand(
+		newHostPrepareCmd(g),
 		newHostSetupCmd(g),
 		newHostRemoveCmd(g),
+		newHostExtrasCmd(g),
 		newHostFlushCmd(g),
+		newHostSSHCmd(g),
 		newHostSkipCmd(g),
 	)
 	return cmd
@@ -136,6 +139,22 @@ func printHost(cmd *cobra.Command, rep host.Report) {
 			fmt.Fprintf(out, "%-22s %-6d %s%s\n", t.ID(), t.Rules, strings.Join(t.Chains, " "), owner)
 		}
 	}
+	if len(rep.Extras) > 0 {
+		fmt.Fprintln(out, "\nNOT NEEDED ON A ROUTER  KIND      STATE        PACKAGES")
+		for _, e := range rep.Extras {
+			state := e.Enabled
+			if e.Active {
+				state = "active"
+			}
+			switch {
+			case e.Removed:
+				state = "removed"
+			case e.MaskOnly:
+				state += ", mask only"
+			}
+			fmt.Fprintf(out, "%-23s %-9s %-12s %s\n", e.Key, e.Kind, state, strings.Join(e.Packages, " "))
+		}
+	}
 	fmt.Fprintf(out, "\nnetworking: %s is %s, backend %s\n",
 		install.NetworkdUnit, rep.Network.Networkd, rep.Network.Backend)
 	if len(rep.Network.Managers) > 0 {
@@ -145,8 +164,167 @@ func printHost(cmd *cobra.Command, rep host.Report) {
 		}
 		fmt.Fprintf(out, "            %s: %s\n", verb, strings.Join(rep.Network.Managers, ", "))
 	}
+	printSSH(out, rep)
 	if !rep.Prepared {
 		fmt.Fprintln(out, "\nthis router is not ready: see the steps above")
+	}
+}
+
+// printSSH is the access part of the report: how sshd lets people in and
+// who it lets in.
+func printSSH(out interface{ Write([]byte) (int, error) }, rep host.Report) {
+	switch {
+	case !rep.SSH.Present:
+		fmt.Fprintln(out, "\nssh: sshd is not on this router")
+	case rep.SSH.Note != "":
+		fmt.Fprintf(out, "\nssh: %s\n", rep.SSH.Note)
+	default:
+		passwords := "keys only"
+		if rep.SSH.Passwords {
+			passwords = "passwords allowed"
+		}
+		by := ""
+		if rep.SSH.SetBy != "" {
+			by = " (set by " + rep.SSH.SetBy + ")"
+		}
+		fmt.Fprintf(out, "\nssh: %s%s, root login %s\n", passwords, by, or(rep.SSH.RootLogin, "unknown"))
+	}
+	if len(rep.Accounts) > 0 {
+		fmt.Fprintln(out, "\nACCOUNT      SUDO   KEYS  SHELL")
+		for _, a := range rep.Accounts {
+			fmt.Fprintf(out, "%-12s %-6v %-5d %s\n", a.Name, a.Sudo, a.Keys, a.Shell)
+		}
+	}
+}
+
+func newHostPrepareCmd(g *globals) *cobra.Command {
+	return &cobra.Command{
+		Use:   "prepare",
+		Short: "Do everything this router still needs, in order",
+		Long: `Sets up the components the configuration asks for, retires the old
+firewall, and clears what it left in the kernel: the page's one button,
+from the console. The old firewall is only retired once a configuration
+has been applied and confirmed, so on a router with none yet it is left
+running and said so. Addressing is separate (ostiole takeover --network),
+because it can drop the session it is driven from.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := requireRoot(); err != nil {
+				return err
+			}
+			d := g.hostDeps()
+			said, err := host.Prepare(cmd.Context(), d, func(ctx context.Context, keys []string) (string, error) {
+				return host.SetUp(ctx, d, keys, true)
+			})
+			if said != "" {
+				fmt.Fprintln(cmd.OutOrStdout(), said)
+			}
+			return err
+		},
+	}
+}
+
+func newHostExtrasCmd(g *globals) *cobra.Command {
+	var yes, dryRun bool
+	cmd := &cobra.Command{
+		Use:   "extras [key...]",
+		Short: "Remove what a router has no use for: other updaters, snapd, desktop daemons",
+		Long: `Stops and masks an extra's units and removes its packages. With no key,
+every extra this router has. What else comes away with a package is the
+package manager's answer, so it is asked first and printed before anything
+is removed; an extra whose package is the package manager itself is masked
+and kept.
+
+Extras: ` + strings.Join(extraKeys(), ", "),
+		Args: cobra.ArbitraryArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := requireRoot(); err != nil {
+				return err
+			}
+			d := g.hostDeps()
+			out := cmd.OutOrStdout()
+			keys := args
+			if len(keys) == 0 {
+				for _, e := range host.Status(cmd.Context(), d).Extras {
+					if !e.Removed {
+						keys = append(keys, e.Key)
+					}
+				}
+				if len(keys) == 0 {
+					fmt.Fprintln(out, "nothing to do: this router has none of them")
+					return nil
+				}
+				fmt.Fprintf(out, "removing: %s\n", strings.Join(keys, ", "))
+			}
+			preview, err := host.RemoveExtras(cmd.Context(), d, keys, true)
+			if preview != "" {
+				fmt.Fprintln(out, strings.TrimSpace(preview))
+			}
+			if err != nil {
+				return err
+			}
+			if dryRun {
+				return nil
+			}
+			if !yes {
+				if err := confirmPrompt(cmd, "\nproceed?"); err != nil {
+					return err
+				}
+			}
+			said, err := host.RemoveExtras(cmd.Context(), d, keys, false)
+			if said != "" {
+				fmt.Fprintln(out, said)
+			}
+			return err
+		},
+	}
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask for confirmation")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "only report what would be removed")
+	return cmd
+}
+
+func extraKeys() []string {
+	var keys []string
+	for _, e := range host.Extras() {
+		keys = append(keys, e.Key)
+	}
+	return keys
+}
+
+func newHostSSHCmd(g *globals) *cobra.Command {
+	return &cobra.Command{
+		Use:   "ssh [require-keys|allow-passwords]",
+		Short: "Show how sshd lets people in, or require keys",
+		Long: `With no argument, reports whether sshd accepts passwords and which file
+decided that. require-keys writes ` + host.SSHDropIn + `, which sorts
+before anything cloud-init drops in and so wins, tells cloud-init to
+leave the setting alone, checks the result with sshd and reloads it.
+allow-passwords takes both files away again. Nothing checks that anybody
+has a key first: the accounts and their key counts are in the report.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			d := g.hostDeps()
+			if len(args) == 0 {
+				printSSH(cmd.OutOrStdout(), host.Status(cmd.Context(), d))
+				return nil
+			}
+			if err := requireRoot(); err != nil {
+				return err
+			}
+			var allow bool
+			switch args[0] {
+			case "require-keys":
+			case "allow-passwords":
+				allow = true
+			default:
+				return fmt.Errorf("%q: say require-keys or allow-passwords", args[0])
+			}
+			said, err := host.SetSSHPasswords(cmd.Context(), d, allow)
+			if said != "" {
+				fmt.Fprintln(cmd.OutOrStdout(), said)
+			}
+			return err
+		},
 	}
 }
 

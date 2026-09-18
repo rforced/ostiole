@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/binary"
+	"fmt"
 	"net/netip"
 
 	"github.com/rforced/ostiole/internal/timezone"
@@ -14,7 +15,9 @@ type StarterOptions struct {
 	LANAddress string // CIDR, e.g. 192.168.1.1/24
 	WAN        string // interface name, optional
 	// ManagementFromWAN also allows the management ports from the wan
-	// zone (anti-lockout), for routers administered over their public side.
+	// zone, for routers administered over their public side. It is done
+	// with ordinary rules rather than the zone's anti-lockout, so they show
+	// up in the rule list and can be narrowed or deleted later.
 	ManagementFromWAN bool
 	// Services turns on DHCP and DNS for the LAN with a pool derived from
 	// LANAddress and the given upstream resolvers.
@@ -59,7 +62,7 @@ func Starter(o StarterOptions) *Config {
 		})
 	}
 	if o.ManagementFromWAN {
-		cfg.Zones[0].AntiLockout = true
+		cfg.Rules = append(cfg.Rules, ManagementRules("wan", cfg.System.Management)...)
 	}
 	if o.WAN != "" {
 		cfg.Interfaces = append(cfg.Interfaces, Interface{
@@ -113,4 +116,33 @@ func DefaultPool(cidr string) (start, end string, ok bool) {
 		return netip.AddrFrom4(b).String()
 	}
 	return toIP(lo), toIP(hi), true
+}
+
+// ManagementRules are the rules that let the web UI and SSH in from a
+// zone, one per port, as the setup wizard and the management page add
+// them. They are ordinary rules on purpose: anti-lockout is a system rule
+// nobody can edit, which is right for the LAN and wrong for the public
+// side, where an operator may well want to narrow it to an address or take
+// it away once a VPN is up.
+func ManagementRules(zone string, m Management) []Rule {
+	var rules []Rule
+	add := func(id, what string, port uint16) {
+		if port == 0 {
+			return
+		}
+		rules = append(rules, Rule{
+			ID:          id + "-from-" + zone,
+			Description: what + " from " + zone,
+			Enabled:     true,
+			Zone:        zone,
+			Action:      ActionAccept,
+			Protocol:    ProtocolTCP,
+			Destination: Endpoint{Self: true, Ports: []string{fmt.Sprint(port)}},
+		})
+	}
+	add("web-ui", "Web UI", m.WebPort)
+	if m.SSHPort != m.WebPort {
+		add("ssh", "SSH", m.SSHPort)
+	}
+	return rules
 }

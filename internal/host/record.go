@@ -221,11 +221,14 @@ func join(names []string) string {
 	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
 }
 
-// prepared reports whether the gate should let the browser past: nothing
-// outstanding that has not been deliberately left alone.
+// prepared reports whether the gate should let the browser past. Only
+// the packages step holds it: that is the one an apply fails without.
+// The old firewall cannot be retired before a ruleset is loaded, the
+// leftovers can wait, and addressing is a choice, so sending somebody to
+// a page whose buttons refuse to work is the wrong kind of help.
 func prepared(steps []StepState) bool {
 	for _, s := range steps {
-		if s.State == StateOutstanding {
+		if s.Step == StepPackages && s.State == StateOutstanding {
 			return false
 		}
 	}

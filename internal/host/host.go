@@ -85,7 +85,11 @@ type Deps struct {
 	// empty means /proc/net, and a test points it at a directory of its
 	// own for the same reason it sets Locate.
 	Proc string
-	Log  *slog.Logger
+	// FS is the root of the filesystem the files this package reads and
+	// writes live under (sshd's configuration, passwd, authorized keys);
+	// empty means /, and a test points it at a directory of its own.
+	FS  string
+	Log *slog.Logger
 }
 
 // legacy is the iptables side of these dependencies.
@@ -195,9 +199,25 @@ type Report struct {
 	Competitors []CompetitorState `json:"competitors"`
 	Legacy      iptables.Report   `json:"legacy"`
 	Network     NetworkState      `json:"network"`
-	Steps       []StepState       `json:"steps"`
-	// Prepared is whether nothing is outstanding that has not been
-	// deliberately left alone. It is what the router guard reads.
+	// Extras are the things this router has and does not need.
+	Extras []ExtraState `json:"extras"`
+	// SSH is how sshd lets people in, and Accounts who it lets in.
+	SSH      SSHState    `json:"ssh"`
+	Accounts []Account   `json:"accounts"`
+	Steps    []StepState `json:"steps"`
+	// Firewalled is whether Ostiole's own table is in the kernel, which
+	// is what makes retiring the old firewall safe. Before the first
+	// confirmed apply it is not, and the page says the old firewall
+	// waits until then.
+	Firewalled bool `json:"firewalled"`
+	// Sentence says what the page's one button would do, from the facts
+	// above; empty when there is nothing to do.
+	Sentence string `json:"sentence,omitempty"`
+	// Prepared is whether the router can hold a configuration: nothing
+	// an apply would need is outstanding without having been deliberately
+	// left alone. It is what the router guard reads. The other steps show
+	// on the page and never gate, because none of them can be taken
+	// before the first apply.
 	Prepared bool `json:"prepared"`
 }
 
@@ -217,12 +237,17 @@ func Status(ctx context.Context, d Deps) Report {
 	rep.Competitors = competitors(ctx, d, manager)
 	rep.Legacy = iptables.Detect(ctx, d.legacy())
 	rep.Network = networkState(ctx, d, rep.Competitors)
+	rep.Extras = extras(ctx, d, manager)
+	rep.SSH = sshState(ctx, d)
+	rep.Accounts = accounts(d)
+	rep.Firewalled = d.TableLoaded != nil && d.TableLoaded(ctx)
 	rep.Steps = steps(rep, Load(d.Dir))
 	// A daemon that is not root can do none of this, so it is never sent
 	// here: a dev run and the end-to-end server report what they found
 	// and let the browser past. The steps still say what is outstanding,
 	// because being unable to fix something is no reason to hide it.
 	rep.Prepared = !d.Root || prepared(rep.Steps)
+	rep.Sentence = Sentence(rep)
 	return rep
 }
 

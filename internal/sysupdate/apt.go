@@ -103,13 +103,21 @@ func (a apt) UpgradeArgv(security bool, exclude []string, pending Pending) []str
 func (a apt) Installed(ctx context.Context, run Runner, pkg string) (bool, error) {
 	// dpkg keeps a record of packages it has merely heard of, so the
 	// status is what settles it: a removed package still has a row, with
-	// "deinstall ok config-files" in it.
-	out, err := run.Run(ctx, "dpkg-query", "-W", "-f=${Status}", pkg)
+	// "deinstall ok config-files" in it. The whole record is asked for
+	// rather than a "${Status}" format: this command runs through
+	// systemd-run on a router, and systemd expands ${Status} to nothing
+	// before dpkg ever sees it.
+	out, err := run.Run(ctx, "dpkg-query", "-s", pkg)
 	text := strings.TrimSpace(string(out))
 	if text == "" && err != nil {
 		return false, fmt.Errorf("dpkg-query %s: %w", pkg, err)
 	}
-	return strings.Contains(text, "install ok installed"), nil
+	for _, line := range lines(out) {
+		if status, ok := strings.CutPrefix(line, "Status:"); ok {
+			return strings.Contains(status, "install ok installed"), nil
+		}
+	}
+	return false, nil
 }
 
 func (a apt) InstallArgv(pkgs []string) []string {

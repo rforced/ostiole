@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rforced/ostiole/internal/journald"
 	"github.com/rforced/ostiole/internal/timezone"
 	"github.com/rforced/ostiole/internal/wg"
 )
@@ -1401,6 +1402,10 @@ func (v *validator) system(s *System) {
 	if s.KeepRevisions < 0 || s.KeepRevisions > MaxKeepRevisions {
 		v.add("system.keepRevisions", "%d must be 0-%d (0 keeps %d)",
 			s.KeepRevisions, MaxKeepRevisions, DefaultKeepRevisions)
+	}
+	if s.JournalMaxUseGB < 0 || s.JournalMaxUseGB > journald.MaxMaxUseGB {
+		v.add("system.journalMaxUseGB", "%d must be 0-%d (0 keeps %d)",
+			s.JournalMaxUseGB, journald.MaxMaxUseGB, journald.DefaultMaxUseGB)
 	}
 	for i, d := range s.DNSServers {
 		if _, err := ParseIP(d); err != nil {

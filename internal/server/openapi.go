@@ -141,7 +141,10 @@ var routeDocs = map[string]routeDoc{
 	"POST /api/v1/crons/{id}/run": {summary: "Run a cron now.", role: auth.RoleOperator},
 
 	"GET /api/v1/host":                  {summary: "What this router still needs: packages, competing services, leftover rulesets, and who owns the addresses.", role: auth.RoleViewer},
+	"POST /api/v1/host/prepare":         {summary: "Set up the components the configuration needs, retire the old firewall once a ruleset is loaded, and clear the leftovers, in that order.", role: auth.RoleAdmin},
 	"POST /api/v1/host/setup":           {summary: "Install the named components and write their units.", role: auth.RoleAdmin},
+	"POST /api/v1/host/extras/remove":   {summary: "Remove what a router has no use for (other updaters, snapd, desktop daemons), or preview what removing it would take.", role: auth.RoleAdmin},
+	"POST /api/v1/host/ssh":             {summary: "Turn password logins over SSH off (keys only) or back on.", role: auth.RoleAdmin},
 	"POST /api/v1/host/takeover":        {summary: "Stop, disable and mask every competing firewall service.", role: auth.RoleAdmin},
 	"POST /api/v1/host/packages/remove": {summary: "Remove a retired competitor's packages, or preview what removing them would take.", role: auth.RoleAdmin},
 	"POST /api/v1/host/legacy/flush":    {summary: "Clear the rulesets an older firewall left in the kernel.", role: auth.RoleAdmin},

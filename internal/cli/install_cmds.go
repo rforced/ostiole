@@ -10,17 +10,22 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/rforced/ostiole/internal/host"
 	"github.com/rforced/ostiole/internal/install"
+	"github.com/rforced/ostiole/internal/journald"
 	"github.com/rforced/ostiole/internal/kernel"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
+	"github.com/rforced/ostiole/internal/store"
+	"github.com/rforced/ostiole/internal/sysctl"
 )
 
 func requireRoot() error {
@@ -32,17 +37,28 @@ func requireRoot() error {
 
 func newInstallCmd(g *globals) *cobra.Command {
 	opts := install.Options{}
-	var ignoreKernel bool
+	var ignoreKernel, yes, dryRun bool
+	var keep []string
 	cmd := &cobra.Command{
 		Use:   "install",
-		Short: "Install the binary and systemd units and start the service",
-		Long: `Copies this executable to /usr/local/bin, writes ostiole-firewall.service
-(loads the confirmed ruleset before networking) and ostiole.service (the
-web UI on --listen), enables both, and reports competing services.
+		Short: "Install Ostiole and make this router its firewall",
+		Long: `Installs the binary and the units, and prepares the router in the same
+pass: installs nftables, systemd-networkd, dnsmasq, unbound and tc; stops,
+masks and removes the firewalls it replaces (firewalld, ufw, iptables
+services); removes the other updaters (unattended-upgrades, dnf-automatic)
+and what a router has no use for (snapd, ModemManager, udisks2, upower,
+fwupd, multipathd); persists the router sysctls and a ceiling on the
+system journal; and sets the clock to UTC.
 
-Nothing about the existing firewall changes yet. Create the admin account,
-apply and confirm a configuration, then run "ostiole takeover" to disable
-firewalld, ufw, and friends.`,
+Everything it would install, mask and remove is listed first, with the
+package manager's own account of what else comes away, and nothing
+happens until you say yes. --keep leaves a named extra alone; --dry-run
+prints the plan and stops.
+
+Until a configuration is applied and confirmed the router runs a
+bootstrap ruleset: established connections, ICMP, its own DHCP replies
+and the management ports get in, nothing is forwarded. The setup wizard
+in the web UI replaces it.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := requireRoot(); err != nil {
@@ -57,27 +73,109 @@ firewalld, ufw, and friends.`,
 				}
 				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v; continuing because --ignore-kernel-version was given\n", err)
 			}
+			ctx := cmd.Context()
+			out := cmd.OutOrStdout()
 			lay := install.DefaultLayout()
 			lay.ConfigDir = g.configDir
 			opts.PackageManager = g.packageManager
-			rep, err := install.Install(cmd.Context(), install.ExecSystemctl{}, lay, opts, slog.Default())
+			d := g.hostDeps()
+
+			plan, err := host.PlanInstall(ctx, d, keep)
 			if err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
+			bootstrap := !g.store().Exists() && !rulesetExists(g.configDir)
+			fmt.Fprintln(out, "Ostiole will:")
+			plan.Print(out)
+			fmt.Fprintf(out, "  write and enable:     %s, %s\n", install.FirewallUnit, install.DaemonUnit)
+			fmt.Fprintf(out, "  persist:              router sysctls (%s), journal ceiling (%s)\n", sysctl.ConfFile, journald.ConfFile)
+			if opts.Timezone != "-" {
+				fmt.Fprintf(out, "  set the clock to:     %s\n", or(opts.Timezone, "UTC"))
+			}
+			if bootstrap {
+				fmt.Fprintln(out, "\nUntil a configuration is applied and confirmed, this router accepts established")
+				fmt.Fprintln(out, "connections, ICMP, its own DHCP replies and the management ports, and forwards nothing.")
+			}
+			if plan.Refused != nil {
+				return errors.New("refusing to continue; use --keep or remove by hand and re-run")
+			}
+			if dryRun {
+				return nil
+			}
+			if !yes {
+				if err := confirmPrompt(cmd, "\nproceed?"); err != nil {
+					return err
+				}
+			}
+
+			// What a router needs goes on first, while it still resolves
+			// names the way its image set it up to and before anything that
+			// might be a dependency comes off.
+			if said, err := host.InstallComponents(ctx, d, plan); said != "" || err != nil {
+				if said != "" {
+					fmt.Fprintln(out, said)
+				}
+				if err != nil {
+					return err
+				}
+			}
+			if bootstrap {
+				ports := []uint16{443}
+				if port := listenPortOf(opts.Listen); port != 0 {
+					ports = []uint16{port}
+				}
+				ports = append(ports, 22)
+				if err := os.WriteFile(filepath.Join(g.configDir, store.RulesetFile), []byte(nft.Bootstrap(ports)), 0o600); err != nil {
+					return fmt.Errorf("write the bootstrap ruleset: %w", err)
+				}
+				fmt.Fprintln(out, "wrote the bootstrap ruleset")
+			}
+			if err := (journald.System{Run: install.ExecRunner{}}).Apply(ctx, journald.DefaultMaxUseGB); err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not bound the system journal: %v\n", err)
+			}
+			sc := install.ExecSystemctl{}
+			wasActive := false
+			if state, err := sc.Run(ctx, "is-active", install.DaemonUnit); err == nil && state == "active" {
+				wasActive = true
+			}
+			// The old firewall is retired a moment later, so there is no
+			// point opening the UI port in it.
+			opts.KeepOldFirewall = len(plan.Retire) > 0
+			rep, err := install.Install(ctx, sc, lay, opts, slog.Default())
+			if err != nil {
+				return err
+			}
+			// The firewall unit was enabled; make sure what it loads is in
+			// the kernel before the old firewall is retired.
+			if o, err := sc.Run(ctx, "restart", install.FirewallUnit); err != nil {
+				return fmt.Errorf("load the ruleset: %w: %s", err, o)
+			}
 			fmt.Fprintf(out, "installed %s and %s\n", rep.Binary, strings.Join(rep.Units, ", "))
 			if rep.Timezone != "" {
 				fmt.Fprintf(out, "clock set to %s\n", rep.Timezone)
 			}
-			printCompetitors(out, rep.Competitors)
-			if rep.OpenedIn != "" {
-				fmt.Fprintf(out, "\nallowed the UI port in %s until takeover\n", rep.OpenedIn)
+			if said, err := host.RetireAndRemove(ctx, d, plan); said != "" || err != nil {
+				if said != "" {
+					fmt.Fprintln(out, said)
+				}
+				if err != nil {
+					return err
+				}
+			}
+			if wasActive {
+				// A daemon that was already running keeps the mount namespace
+				// it started with, and the unit it was started from.
+				if o, err := sc.Run(ctx, "restart", install.DaemonUnit); err != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not restart %s: %v: %s\n", install.DaemonUnit, err, o)
+				} else {
+					fmt.Fprintf(out, "%s restarted\n", install.DaemonUnit)
+				}
 			}
 			fmt.Fprintf(out, "\nweb UI (self-signed certificate):\n")
 			for _, u := range uiURLs(opts.Listen) {
 				fmt.Fprintf(out, "  %s\n", u)
 			}
-			fmt.Fprintf(out, "\nnext:\n  1. create the admin account in the web UI, or: ostiole reset-password\n  2. run the setup wizard in the web UI, or: ostiole init --lan ... && ostiole apply\n  3. ostiole takeover              (disables competing firewalls once your ruleset is confirmed)\n  4. ostiole takeover --network    (hands addressing to systemd-networkd; needed for interface edits)\n")
+			fmt.Fprintf(out, "\nnext:\n  1. create the admin account in the web UI, or: ostiole reset-password\n  2. run the setup wizard in the web UI, or: ostiole init --lan ... && ostiole apply\n  3. ostiole takeover --network    (hands addressing to systemd-networkd; needed for interface edits)\n")
 			return nil
 		},
 	}
@@ -85,7 +183,30 @@ firewalld, ufw, and friends.`,
 	cmd.Flags().StringVar(&opts.Timezone, "timezone", "", `timezone to set, UTC by default; "-" leaves the clock alone`)
 	cmd.Flags().BoolVar(&ignoreKernel, "ignore-kernel-version", false,
 		fmt.Sprintf("install even if the kernel is older than %s", kernel.Minimum))
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask for confirmation")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the plan and change nothing")
+	cmd.Flags().StringSliceVar(&keep, "keep", nil, "leave an extra alone, by key (see `ostiole host`); repeatable")
 	return cmd
+}
+
+// rulesetExists reports whether a ruleset is already on disk, in which
+// case the bootstrap would only get in its way.
+func rulesetExists(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, store.RulesetFile))
+	return err == nil
+}
+
+// listenPortOf reads the port of a listen address, 0 when it has none.
+func listenPortOf(listen string) uint16 {
+	_, port, err := net.SplitHostPort(listen)
+	if err != nil {
+		return 0
+	}
+	n, err := strconv.ParseUint(port, 10, 16)
+	if err != nil {
+		return 0
+	}
+	return uint16(n)
 }
 
 // uiURLs lists https URLs for every global address on the router.

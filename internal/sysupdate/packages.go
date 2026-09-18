@@ -268,7 +268,7 @@ func (m *Manager) Installed(ctx context.Context, pkg string) (bool, error) {
 // runFor is run with a timeout of its own, for the operations that are
 // not a distro upgrade and should not be given an hour.
 func (m *Manager) runFor(ctx context.Context, argv []string, timeout time.Duration) (string, error) {
-	if !m.unit.supported() {
+	if m.direct || !m.unit.supported() {
 		return runDirect(ctx, m.Run, argv, timeout)
 	}
 	if err := m.unit.start(ctx, argv, timeout); err != nil {
@@ -283,6 +283,10 @@ func (m *Manager) runFor(ctx context.Context, argv []string, timeout time.Durati
 func previewRefused(err error) bool {
 	if err == nil {
 		return true
+	}
+	if errors.Is(err, errUnitStart) || errors.Is(err, ErrBusy) {
+		// The manager never ran, so it declined nothing.
+		return false
 	}
 	return exitCode(err) == 1
 }

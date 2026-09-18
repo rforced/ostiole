@@ -15,7 +15,10 @@ import (
 
 func (a *api) registerHost(mux *router) {
 	mux.HandleFunc("GET /api/v1/host", a.readNoEngine(a.hostStatus))
+	mux.HandleFunc("POST /api/v1/host/prepare", a.admin(a.hostPrepare))
 	mux.HandleFunc("POST /api/v1/host/setup", a.admin(a.hostSetup))
+	mux.HandleFunc("POST /api/v1/host/extras/remove", a.admin(a.hostRemoveExtras))
+	mux.HandleFunc("POST /api/v1/host/ssh", a.admin(a.hostSSH))
 	mux.HandleFunc("POST /api/v1/host/takeover", a.admin(a.hostTakeover))
 	mux.HandleFunc("POST /api/v1/host/packages/remove", a.admin(a.hostRemovePackages))
 	mux.HandleFunc("POST /api/v1/host/legacy/flush", a.admin(a.hostFlushLegacy))
@@ -62,36 +65,96 @@ func (a *api) hostSetup(w http.ResponseWriter, r *http.Request) error {
 	if len(body.Components) == 0 {
 		return &badRequest{errors.New("name at least one component to set up")}
 	}
-	// Checked here as well as in the command, because they become argv.
-	for _, key := range body.Components {
-		if _, ok := sysupdate.ComponentByKey(key); !ok {
-			return &badRequest{fmt.Errorf("%q is not a component Ostiole installs", key)}
-		}
-	}
 	ctx, cancel := context.WithTimeout(r.Context(), setupTimeout)
 	defer cancel()
-	// Driven through the command line, because writing a unit file is
-	// exactly what the daemon's sandbox forbids. The command is told not
-	// to restart this daemon: it would cut off the answer, so the restart
-	// is scheduled below, once the report has been gathered.
-	argv := append([]string{"host", "setup", "--no-restart"}, body.Components...)
-	out, err := host.Drive(ctx, a.host, argv...)
+	out, restart, err := a.driveSetup(ctx, body.Components)
 	if err != nil {
 		return &badRequest{err}
 	}
 	st := host.Status(r.Context(), a.host)
-	if host.RestartsDaemon(body.Components) {
-		// The unit was written and its directory created, and the daemon
-		// only sees a new directory after a restart. Sessions are on disk,
-		// so nobody is signed out by it.
-		if err := host.RestartDaemonSoon(r.Context(), a.host); err != nil {
-			out += "\n" + err.Error() + "; restart it before applying"
-		} else {
-			out += "\n" + install.DaemonUnit + " restarts in a moment so it can write the directories this added"
-		}
+	if restart {
+		out += "\n" + a.restartSoon(r.Context())
 	}
 	writeJSON(w, http.StatusOK, hostResult{Output: strings.TrimSpace(out), Status: st})
 	return nil
+}
+
+// driveSetup runs `host setup` through the command line, because writing
+// a unit file is exactly what the daemon's sandbox forbids. The command
+// is told not to restart this daemon: it would cut off the answer, so
+// the caller schedules the restart once the report has been gathered.
+// It reports whether one is owed.
+func (a *api) driveSetup(ctx context.Context, keys []string) (string, bool, error) {
+	// Checked here as well as in the command, because they become argv.
+	for _, key := range keys {
+		if _, ok := sysupdate.ComponentByKey(key); !ok {
+			return "", false, fmt.Errorf("%q is not a component Ostiole installs", key)
+		}
+	}
+	argv := append([]string{"host", "setup", "--no-restart"}, keys...)
+	out, err := host.Drive(ctx, a.host, argv...)
+	return out, err == nil && host.RestartsDaemon(keys), err
+}
+
+// restartSoon schedules the daemon's restart and says so. The unit was
+// written and its directory created, and the daemon only sees a new
+// directory after a restart. Sessions are on disk, so nobody is signed
+// out by it.
+func (a *api) restartSoon(ctx context.Context) string {
+	if err := host.RestartDaemonSoon(ctx, a.host); err != nil {
+		return err.Error() + "; restart it before applying"
+	}
+	return install.DaemonUnit + " restarts in a moment so it can write the directories this added"
+}
+
+// hostPrepare is the page's one button: the components, the old
+// firewall, the leftovers, in that order, with the output of each.
+func (a *api) hostPrepare(w http.ResponseWriter, r *http.Request) error {
+	ctx, cancel := context.WithTimeout(r.Context(), setupTimeout)
+	defer cancel()
+	restart := false
+	out, err := host.Prepare(ctx, a.host, func(ctx context.Context, keys []string) (string, error) {
+		said, owed, err := a.driveSetup(ctx, keys)
+		restart = restart || owed
+		return said, err
+	})
+	if err != nil {
+		return &badRequest{err}
+	}
+	st := host.Status(r.Context(), a.host)
+	if restart {
+		out += "\n" + a.restartSoon(r.Context())
+	}
+	writeJSON(w, http.StatusOK, hostResult{Output: strings.TrimSpace(out), Status: st})
+	return nil
+}
+
+// hostRemoveExtras takes what a router has no use for off it, or asks
+// what removing it would take.
+func (a *api) hostRemoveExtras(w http.ResponseWriter, r *http.Request) error {
+	var body struct {
+		Keys    []string `json:"keys"`
+		Preview bool     `json:"preview"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), setupTimeout)
+	defer cancel()
+	out, err := host.RemoveExtras(ctx, a.host, body.Keys, body.Preview)
+	return a.result(r.Context(), w, out, err)
+}
+
+// hostSSH turns password logins over SSH off or back on.
+func (a *api) hostSSH(w http.ResponseWriter, r *http.Request) error {
+	var body struct {
+		Passwords bool `json:"passwords"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		return err
+	}
+	out, err := host.SetSSHPasswords(r.Context(), a.host, body.Passwords)
+	return a.result(r.Context(), w, out, err)
 }
 
 // hostTakeover stops, disables and masks every competing firewall.

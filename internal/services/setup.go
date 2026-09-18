@@ -122,6 +122,10 @@ func Setup(ctx context.Context, d *Dnsmasq, o SetupOptions, log *slog.Logger) er
 	return nil
 }
 
+// resolvedUpstreams is where systemd-resolved writes the resolvers it
+// actually forwards to, as opposed to the stub it points resolv.conf at.
+const resolvedUpstreams = "/run/systemd/resolve/resolv.conf"
+
 // setupDnsmasq is the DHCP and DNS part: the package, the units that have
 // to stop fighting it for port 53, resolv.conf, and our own unit. It
 // returns where dnsmasq is.
@@ -159,6 +163,18 @@ func setupDnsmasq(ctx context.Context, d *Dnsmasq, o SetupOptions, run Runner, u
 	if d.Resolv != "" {
 		if info, err := os.Lstat(d.Resolv); err == nil && info.Mode()&os.ModeSymlink != 0 {
 			raw, _ := os.ReadFile(d.Resolv)
+			// On a router that ran systemd-resolved, the symlink pointed at
+			// its stub, and the stub has just been masked: keeping
+			// "nameserver 127.0.0.53" would leave the router unable to
+			// resolve anything until the DNS service is applied. resolved
+			// keeps the real upstreams in a file of its own, and that is
+			// what the router carries on with in the meantime.
+			if strings.Contains(string(raw), "127.0.0.53") {
+				if upstream, err := os.ReadFile(resolvedUpstreams); err == nil && strings.Contains(string(upstream), "nameserver") {
+					raw = upstream
+					log.Info("kept systemd-resolved's upstream resolvers in resolv.conf", "from", resolvedUpstreams)
+				}
+			}
 			_ = os.Remove(d.Resolv)
 			if err := os.WriteFile(d.Resolv, raw, 0o644); err != nil { //nolint:gosec // world-readable by design
 				return "", err

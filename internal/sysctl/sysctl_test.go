@@ -51,6 +51,14 @@ func TestProcApplyAndPersist(t *testing.T) {
 	if !strings.Contains(string(raw), "-net.core.default_qdisc = fq_codel") {
 		t.Errorf("default_qdisc is not marked optional:\n%s", raw)
 	}
+	// Hardening is persisted with the rest, and the keys a kernel may be
+	// built without are optional there too.
+	for _, want := range []string{"kernel.kptr_restrict = 2", "kernel.dmesg_restrict = 1",
+		"kernel.unprivileged_bpf_disabled = 1", "-kernel.yama.ptrace_scope = 1", "-net.core.bpf_jit_harden = 2"} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("hardening %q missing from persisted content:\n%s", want, raw)
+		}
+	}
 }
 
 // Ostiole only sets values that mean the same thing on a one-core virtual

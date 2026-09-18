@@ -917,6 +917,7 @@ export const useConfigStore = defineStore('config', () => {
     setProtectedZones,
     load,
     discard,
+    undoable,
     markSaved,
     markApplied,
     replaceDraft,

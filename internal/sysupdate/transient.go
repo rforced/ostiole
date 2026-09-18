@@ -45,11 +45,29 @@ func (t transient) systemctl(ctx context.Context, args ...string) (string, error
 	return strings.TrimSpace(string(out)), err
 }
 
+// errUnitStart means systemd would not take the command at all, as
+// opposed to the command running and exiting with a status of its own.
+// A preview reads exit status 1 as the manager declining to run its
+// transaction, and systemd-run also exits 1 when it cannot start a unit,
+// so the two have to be told apart.
+var errUnitStart = errors.New("could not start the transient unit")
+
 // start queues the command. It returns as soon as systemd has taken it,
 // not when it has finished.
 func (t transient) start(ctx context.Context, argv []string, timeout time.Duration) error {
 	if len(argv) == 0 {
 		return errors.New("nothing to run")
+	}
+	// The unit keeps its name after it exits (RemainAfterExit), so a run
+	// nobody collected — the daemon was restarted by the upgrade it was
+	// running, or the console ran one — is still registered, and
+	// systemd-run refuses to start a second unit by that name. A finished
+	// one is cleared; one still running is somebody else's transaction.
+	if st := t.state(ctx); st.Known {
+		if st.Active {
+			return fmt.Errorf("%w: %s is still running", ErrBusy, t.unit)
+		}
+		t.clear(ctx)
 	}
 	// A unit left failed from a previous run would refuse to start.
 	_, _ = t.systemctl(ctx, "reset-failed", t.unit)
@@ -69,7 +87,7 @@ func (t transient) start(ctx context.Context, argv []string, timeout time.Durati
 	args = append(args, argv...)
 	out, err := t.run.Run(ctx, "systemd-run", args...)
 	if err != nil {
-		return fmt.Errorf("systemd-run: %w: %s", err, tail(out))
+		return fmt.Errorf("%w: systemd-run: %w: %s", errUnitStart, err, tail(out))
 	}
 	return nil
 }

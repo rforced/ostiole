@@ -146,7 +146,7 @@ func TestUnits(t *testing.T) {
 	t.Parallel()
 	units := Units(DefaultLayout(), Options{Listen: ":443"})
 	d := units[DaemonUnit]
-	if !strings.Contains(d, "--network-backend auto") || !strings.Contains(d, "ReadWritePaths=/etc/ostiole /etc/systemd/network /usr/local/bin -/etc/dnsmasq.d -/etc/unbound -/etc/resolv.conf -/etc/ppp -/etc/miniupnpd") {
+	if !strings.Contains(d, "--network-backend auto") || !strings.Contains(d, "ReadWritePaths=/etc/ostiole /etc/systemd/network /usr/local/bin -/etc/dnsmasq.d -/etc/unbound -/etc/resolv.conf -/etc/ppp -/etc/miniupnpd -/etc/ssh/sshd_config.d -/etc/cloud/cloud.cfg.d -/etc/systemd/journald.conf.d") {
 		t.Errorf("daemon unit:\n%s", d)
 	}
 	f := units[FirewallUnit]
@@ -161,10 +161,25 @@ func TestTakeover(t *testing.T) {
 	if err := Takeover(context.Background(), sc, []string{"firewalld", "ufw"}, slog.New(slog.DiscardHandler)); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range [][]string{{"disable", "--now", "firewalld.service"}, {"mask", "firewalld.service"}, {"disable", "--now", "ufw.service"}, {"mask", "ufw.service"}} {
-		if !sc.has(want...) {
-			t.Errorf("missing call %v in %v", want, sc.calls)
+	// Masked and stopped first, in one call that goes through systemd
+	// itself; the disable is the tidy-up that can fail on a unit with an
+	// init script, and it comes after.
+	want := [][]string{
+		{"mask", "--now", "firewalld.service"}, {"disable", "firewalld.service"},
+		{"mask", "--now", "ufw.service"}, {"disable", "ufw.service"},
+	}
+	for i, w := range want {
+		if strings.Join(sc.calls[i], " ") != strings.Join(w, " ") {
+			t.Fatalf("call %d = %v, want %v (all: %v)", i, sc.calls[i], w, sc.calls)
 		}
+	}
+	// A socket or a timer is named with its suffix and taken as it is.
+	sc = &fakeSystemctl{}
+	if err := Takeover(context.Background(), sc, []string{"snapd.socket", "apt-daily.timer"}, slog.New(slog.DiscardHandler)); err != nil {
+		t.Fatal(err)
+	}
+	if !sc.has("mask", "--now", "snapd.socket") || !sc.has("mask", "--now", "apt-daily.timer") {
+		t.Errorf("calls = %v", sc.calls)
 	}
 }
 
@@ -212,8 +227,8 @@ func TestNetworkTakeover(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := [][]string{
-		{"disable", "--now", "NetworkManager.service"}, {"mask", "NetworkManager.service"},
-		{"disable", "--now", "NetworkManager-wait-online.service"}, {"mask", "NetworkManager-wait-online.service"},
+		{"mask", "--now", "NetworkManager.service"}, {"disable", "NetworkManager.service"},
+		{"mask", "--now", "NetworkManager-wait-online.service"}, {"disable", "NetworkManager-wait-online.service"},
 		{"enable", "--now", NetworkdSocket, NetworkdUnit},
 	}
 	for i, w := range want {

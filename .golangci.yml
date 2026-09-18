@@ -21,6 +21,9 @@ linters:
     - unparam
   exclusions:
     generated: lax
+    # A JavaScript dependency that happens to ship Go source is not ours.
+    paths:
+      - web/node_modules
     presets:
       - std-error-handling
       - common-false-positives

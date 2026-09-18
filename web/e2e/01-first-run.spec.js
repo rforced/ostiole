@@ -29,9 +29,13 @@ test('a fresh router asks for an admin account, then runs the wizard', async ({ 
 
   await expect(page.getByRole('heading', { name: 'What will be applied' })).toBeVisible()
   await expect(page.getByText('192.168.50.1/24')).toBeVisible()
-  await expect(page.getByRole('listitem').filter({ hasText: /Zone wan/ })).toContainText(
-    'anti-lockout on',
+  // Management from the WAN is two ordinary rules, not anti-lockout on the
+  // zone, so they can be narrowed or deleted later.
+  await expect(page.getByRole('listitem').filter({ hasText: /Zone wan/ })).not.toContainText(
+    'anti-lockout',
   )
+  await expect(page.getByRole('listitem').filter({ hasText: 'Web UI from wan' })).toBeVisible()
+  await expect(page.getByRole('listitem').filter({ hasText: 'SSH from wan' })).toBeVisible()
   await page.screenshot({ path: shot('03-wizard-preview'), fullPage: true })
 
   await page.getByRole('button', { name: /Apply with 90s confirmation/ }).click()

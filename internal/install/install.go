@@ -63,8 +63,19 @@ type Systemctl interface {
 type ExecSystemctl struct{}
 
 // Run implements Systemctl.
+//
+// SYSTEMCTL_SKIP_SYSV stops systemctl syncing a unit that also has an
+// init.d script with update-rc.d or chkconfig. That sync runs in the
+// caller's own mount namespace, and the daemon's is read-only under
+// ProtectSystem=strict, so disabling ufw on Ubuntu failed with
+// "update-rc.d: error: Read-only file system" before anything was
+// disabled at all. The rc symlinks it would have removed do nothing on a
+// systemd router: a native unit exists for every one of them, and the
+// ones Ostiole touches are masked as well as disabled.
 func (ExecSystemctl) Run(ctx context.Context, args ...string) (string, error) {
-	out, err := exec.CommandContext(ctx, "systemctl", args...).CombinedOutput()
+	cmd := exec.CommandContext(ctx, "systemctl", args...)
+	cmd.Env = append(os.Environ(), "SYSTEMCTL_SKIP_SYSV=1")
+	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err
 }
 
@@ -86,6 +97,10 @@ type Options struct {
 	// come in packages of their own can be fetched; empty looks for one,
 	// "-" installs nothing (tests).
 	PackageManager string
+	// KeepOldFirewall leaves the competing firewall's rules alone. The
+	// installer sets it when it is about to retire that firewall anyway,
+	// so nothing is punched through a ruleset that is seconds from going.
+	KeepOldFirewall bool
 }
 
 // Report describes what Install did and found.
@@ -214,7 +229,7 @@ func Install(ctx context.Context, sc Systemctl, lay Layout, opts Options, log *s
 	rep.Competitors = comp
 
 	// Until takeover, the old firewall still filters: let the UI through it.
-	if port := listenPort(opts.Listen); port != "" {
+	if port := listenPort(opts.Listen); port != "" && !opts.KeepOldFirewall {
 		opened, err := OpenUIPort(ctx, run, comp, port, log)
 		if err != nil {
 			log.Warn("could not open the UI port in the existing firewall; open it by hand or run takeover", "err", err)
@@ -276,8 +291,13 @@ func Units(lay Layout, opts Options) map[string]string {
 	// resolv.conf is a file, not a directory, so systemd mounts that one
 	// file read-write and leaves /etc around it read-only; it can be
 	// rewritten but never replaced, which services.writeMode handles.
+	// -/etc/ssh/sshd_config.d takes the drop-in that turns password logins
+	// off, -/etc/cloud/cloud.cfg.d the pin that stops cloud-init turning
+	// them back on, and -/etc/systemd/journald.conf.d the journal's
+	// ceiling; all three are written from the page as well as the console.
 	rw := cfg + " " + NetworkdUnitDir + " " + lay.BinDir +
-		" -/etc/dnsmasq.d -/etc/unbound -/etc/resolv.conf -/etc/ppp -/etc/miniupnpd"
+		" -/etc/dnsmasq.d -/etc/unbound -/etc/resolv.conf -/etc/ppp -/etc/miniupnpd" +
+		" -/etc/ssh/sshd_config.d -/etc/cloud/cloud.cfg.d -/etc/systemd/journald.conf.d"
 	firewall := fmt.Sprintf(`[Unit]
 Description=Ostiole firewall ruleset (loaded before networking)
 Documentation=https://github.com/rforced/ostiole
@@ -368,22 +388,39 @@ func Competitors(ctx context.Context, sc Systemctl) ([]Service, error) {
 	return out, nil
 }
 
-// Takeover stops, disables, and masks the named services.
+// Takeover stops, masks, and disables the named units. A name with no
+// suffix is a service.
+//
+// The mask comes first, and with --now, because it is the half that
+// matters and the half that always works: stopping and masking go
+// through systemd itself, so they succeed from inside the daemon's
+// sandbox and leave a unit that cannot start whatever else happens.
+// Disabling only tidies the wants links, and it is the step that can fail
+// on a unit with an init script (see ExecSystemctl), so a failure there
+// is logged rather than returned once the unit is masked.
 func Takeover(ctx context.Context, sc Systemctl, names []string, log *slog.Logger) error {
 	var errs []error
 	for _, name := range names {
-		unit := name + ".service"
-		if out, err := sc.Run(ctx, "disable", "--now", unit); err != nil {
-			errs = append(errs, fmt.Errorf("disable %s: %w: %s", unit, err, out))
-			continue
-		}
-		if out, err := sc.Run(ctx, "mask", unit); err != nil {
+		unit := UnitName(name)
+		if out, err := sc.Run(ctx, "mask", "--now", unit); err != nil {
 			errs = append(errs, fmt.Errorf("mask %s: %w: %s", unit, err, out))
 			continue
 		}
-		log.Info("service disabled and masked", "unit", unit)
+		if out, err := sc.Run(ctx, "disable", unit); err != nil {
+			log.Warn("unit is masked and stopped but could not be disabled", "unit", unit, "err", err, "out", out)
+		}
+		log.Info("service masked and stopped", "unit", unit)
 	}
 	return errors.Join(errs...)
+}
+
+// UnitName is name as a systemd unit: a bare name is a service, and a
+// name with a suffix (snapd.socket, apt-daily.timer) is left alone.
+func UnitName(name string) string {
+	if strings.Contains(name, ".") {
+		return name
+	}
+	return name + ".service"
 }
 
 // Uninstall stops and removes the units. With purge it also removes the
@@ -578,13 +615,13 @@ var NetworkManagers = []string{"NetworkManager", "NetworkManager-wait-online", "
 func NetworkTakeover(ctx context.Context, sc Systemctl, managers []string, log *slog.Logger) error {
 	for _, name := range managers {
 		unit := name + ".service"
-		if out, err := sc.Run(ctx, "disable", "--now", unit); err != nil {
-			return fmt.Errorf("disable %s: %w: %s", unit, err, out)
-		}
-		if out, err := sc.Run(ctx, "mask", unit); err != nil {
+		if out, err := sc.Run(ctx, "mask", "--now", unit); err != nil {
 			return fmt.Errorf("mask %s: %w: %s", unit, err, out)
 		}
-		log.Info("network manager disabled and masked", "unit", unit)
+		if out, err := sc.Run(ctx, "disable", unit); err != nil {
+			log.Warn("network manager is masked and stopped but could not be disabled", "unit", unit, "err", err, "out", out)
+		}
+		log.Info("network manager masked and stopped", "unit", unit)
 	}
 	if out, err := sc.Run(ctx, "enable", "--now", NetworkdSocket, NetworkdUnit); err != nil {
 		return fmt.Errorf("enable %s: %w: %s", NetworkdUnit, err, out)

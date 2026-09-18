@@ -89,6 +89,7 @@ func testPackages(run *fakeCommands) *sysupdate.Manager {
 		PackageManager: "dnf",
 		Run:            run,
 		Root:           true,
+		Direct:         true,
 		Log:            slog.New(slog.DiscardHandler),
 	})
 	// New picks the host runner on a root router with systemd, which wraps
@@ -368,7 +369,7 @@ func TestTakeoverFirewallNeedsALoadedRuleset(t *testing.T) {
 	if !strings.Contains(said, "firewalld") {
 		t.Errorf("said %q, which does not name what was masked", said)
 	}
-	for _, want := range []string{"disable --now firewalld.service", "mask firewalld.service"} {
+	for _, want := range []string{"mask --now firewalld.service", "disable firewalld.service"} {
 		found := false
 		for _, c := range units.calls {
 			if c == want {

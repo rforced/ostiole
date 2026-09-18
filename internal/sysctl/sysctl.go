@@ -63,17 +63,47 @@ var Tuning = map[string]string{
 	"net/core/default_qdisc": "fq_codel",
 }
 
+// Hardening closes the doors a router never needs open. Nothing here
+// costs throughput or changes what the firewall does; each one takes
+// away something an attacker with a foothold would reach for first.
+var Hardening = map[string]string{
+	// Hide kernel addresses from everybody, root included: a leaked
+	// pointer is the first step of most kernel exploits.
+	"kernel/kptr_restrict": "2",
+	// Only root reads the kernel log, which is where those addresses and
+	// the odd hardware secret end up.
+	"kernel/dmesg_restrict": "1",
+	// Nothing unprivileged on a router loads BPF programs. 1 rather than
+	// 2 because it holds until reboot: a value nobody can quietly turn
+	// back is the point.
+	"kernel/unprivileged_bpf_disabled": "1",
+	// Blind the JIT's constants against being sprayed into executable
+	// memory, for the programs that do get loaded.
+	"net/core/bpf_jit_harden": "2",
+	// A process may only ptrace its own descendants, so a compromised
+	// service cannot read the memory of another one running as the same
+	// user.
+	"kernel/yama/ptrace_scope": "1",
+	// Do not answer a ping sent to a broadcast address; it is an
+	// amplifier and nothing else.
+	"net/ipv4/icmp_echo_ignore_broadcasts": "1",
+}
+
 // optional marks keys a kernel may not have. They are persisted with
 // systemd's "-" prefix so a missing qdisc is not an error at boot.
 var optional = map[string]bool{
 	"net/core/default_qdisc": true,
+	// Yama is a build option, and the JIT knob is only there with one.
+	"kernel/yama/ptrace_scope": true,
+	"net/core/bpf_jit_harden":  true,
 }
 
 // All returns every setting Ostiole manages, keyed by /proc/sys path.
 func All() map[string]string {
-	all := make(map[string]string, len(Forwarding)+len(Tuning))
+	all := make(map[string]string, len(Forwarding)+len(Tuning)+len(Hardening))
 	maps.Copy(all, Forwarding)
 	maps.Copy(all, Tuning)
+	maps.Copy(all, Hardening)
 	return all
 }
 
@@ -129,6 +159,7 @@ func Content() string {
 	section(&b, "# Settings a router needs.", Forwarding)
 	section(&b, "# Appliance tuning. Capacity limits are left to the kernel,\n"+
 		"# which sizes them from installed memory.", Tuning)
+	section(&b, "# Hardening. Nothing here costs throughput.", Hardening)
 	return b.String()
 }
 

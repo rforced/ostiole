@@ -11,10 +11,14 @@ import { useConfirmStore } from '@/stores/confirm'
 import { useSystemStore } from '@/stores/system'
 
 /**
- * Preparing the router Ostiole runs on. Four steps, in the order they
- * have to happen: the packages the configuration needs, the old firewall,
- * whatever it left in the kernel, and finally the addresses — last,
+ * Preparing the router Ostiole runs on. One button does the three steps
+ * that can be done together, in the order they have to happen: the
+ * packages the configuration needs, the old firewall (once a ruleset is
+ * loaded), and whatever it left in the kernel. The addresses are separate,
  * because that is the step that can drop the session it is driven from.
+ * Below that: how sshd lets people in, what the router has and does not
+ * need, and the three steps in detail for anybody who wants them one at a
+ * time.
  *
  * Everything here has a command-line twin (`ostiole host`), and the
  * actions are the same code: the daemon cannot write a unit file from
@@ -44,7 +48,16 @@ const components = computed(() => report.value?.components ?? [])
 const competitors = computed(() => report.value?.competitors ?? [])
 const legacy = computed(() => report.value?.legacy?.tables ?? [])
 const network = computed(() => report.value?.network ?? {})
+const extras = computed(() => report.value?.extras ?? [])
+const ssh = computed(() => report.value?.ssh ?? {})
+const accounts = computed(() => report.value?.accounts ?? [])
 const root = computed(() => report.value?.root === true)
+/** Whether Ostiole's own ruleset is in the kernel, which is what makes retiring the old one safe. */
+const firewalled = computed(() => report.value?.firewalled === true)
+/** A firewall that would be retired, if only a configuration had been applied yet. */
+const firewallWaiting = computed(
+  () => !firewalled.value && competitors.value.some((c) => c.kind === 'firewall' && c.conflicts),
+)
 
 /** The components this router needs and does not have. */
 const outstanding = computed(() =>
@@ -96,8 +109,32 @@ async function act(call) {
 }
 
 const setUp = (keys) => act(api.host.setup(keys))
+const prepare = () => act(api.host.prepare())
 const takeover = () => act(api.host.takeover())
 const flush = (ids) => act(api.host.flushLegacy(ids))
+const setSSH = (passwords) => act(api.host.ssh(passwords))
+
+async function removeExtra(e) {
+  busy.value = true
+  actionError.value = ''
+  try {
+    output.value = (await api.host.removeExtras([e.key], true)).output ?? ''
+  } catch (err) {
+    actionError.value = errorMessage(err)
+    return
+  } finally {
+    busy.value = false
+  }
+  const ok = await confirm.ask({
+    question: e.maskOnly ? `Mask ${e.label}?` : `Remove ${e.label}?`,
+    description: e.maskOnly
+      ? 'Its units are stopped and masked. The package stays, because it is the package manager itself.'
+      : 'Its units are stopped and masked, then the packages come off. Removing a package cannot be undone from here; what else comes away with it is above.',
+    confirmLabel: e.maskOnly ? 'Mask' : 'Remove',
+    typed: e.maskOnly ? '' : e.key,
+  })
+  if (ok) await act(api.host.removeExtras([e.key], false))
+}
 
 async function removePackages(unit, packages) {
   busy.value = true
@@ -199,7 +236,7 @@ const stepTitles = {
         <div>
           <h2 id="host-title" class="card-title">This router</h2>
           <p class="max-w-3xl text-sm text-neutral-500">
-            Ostiole drives the software this distribution already packages. Everything below has a
+            Ostiole drives the software this distribution already packages. Everything here has a
             command-line twin under
             <code class="font-mono text-code">ostiole host</code>.
           </p>
@@ -247,6 +284,33 @@ const stepTitles = {
         </li>
       </ul>
 
+      <div
+        v-if="root && report?.sentence"
+        class="flex flex-wrap items-center gap-3 rounded-md border border-neutral-200 p-3 dark:border-neutral-800"
+      >
+        <p class="text-sm">
+          <span class="font-medium">{{ report.sentence }}</span>
+          <span v-if="firewallWaiting" class="block text-neutral-500">
+            The old firewall is retired after your first apply; finishing the setup wizard does it.
+          </span>
+          <span class="block text-neutral-500">
+            Addresses are handed over separately, below, because that step can drop this session.
+          </span>
+        </p>
+        <button type="button" class="btn-primary ml-auto" :disabled="busy" @click="prepare">
+          Prepare this router
+        </button>
+      </div>
+      <p v-else-if="root && report && !firewallWaiting" class="text-sm text-neutral-500">
+        Nothing to do: this router is prepared.
+      </p>
+      <p v-else-if="root && firewallWaiting" class="text-sm text-neutral-500">
+        The old firewall is retired after your first apply; finishing the setup wizard does it.
+      </p>
+      <p v-if="busy" role="status" class="text-sm text-neutral-500">
+        Working. Fetching packages can take a while.
+      </p>
+
       <p v-if="actionError" role="alert" class="text-sm text-red-600 dark:text-red-400">
         {{ actionError }}
       </p>
@@ -263,117 +327,94 @@ const stepTitles = {
         >{{ output }}</pre>
     </section>
 
-    <!-- 1. Packages ---------------------------------------------------- -->
-    <section class="card space-y-4" aria-labelledby="host-pkgs-title">
+    <!-- Access ----------------------------------------------------------- -->
+    <section class="card space-y-4" aria-labelledby="host-access-title">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 id="host-pkgs-title" class="card-title">Packages</h2>
+          <h2 id="host-access-title" class="card-title">SSH access</h2>
           <p class="max-w-3xl text-sm text-neutral-500">
-            Installing one writes Ostiole's unit for it as well. Nothing here starts a service: that
-            is the switch on its own page, applied like every other change.
+            How sshd lets people in, read from the router each time. Requiring keys writes a drop-in
+            that sorts before anything cloud-init leaves in
+            <code class="font-mono text-code">sshd_config.d</code>, so it wins. Nothing checks that
+            you have a key first: the accounts below say who does.
           </p>
         </div>
-        <button
-          v-if="root && outstanding.length"
-          type="button"
-          class="btn-primary"
-          :disabled="busy"
-          @click="setUp(outstanding.map((c) => c.key))"
-        >
-          Set up {{ outstanding.length }} missing
-        </button>
+        <template v-if="root && ssh.present && !ssh.note">
+          <button
+            v-if="ssh.passwords"
+            type="button"
+            class="btn-primary"
+            :disabled="busy"
+            @click="setSSH(false)"
+          >
+            Require keys
+          </button>
+          <button v-else type="button" class="btn" :disabled="busy" @click="setSSH(true)">
+            Allow passwords
+          </button>
+        </template>
       </div>
 
-      <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
+      <p v-if="!ssh.present" class="text-sm text-neutral-500">sshd is not on this router.</p>
+      <p v-else-if="ssh.note" class="text-sm text-amber-700 dark:text-amber-300">{{ ssh.note }}</p>
+      <dl v-else class="kv max-w-2xl">
+        <dt>Password login</dt>
+        <dd>
+          <span :class="ssh.passwords ? 'badge badge-warn' : 'badge badge-ok'">
+            {{ ssh.passwords ? 'allowed' : 'keys only' }}
+          </span>
+          <span v-if="ssh.setBy" class="ml-2 text-sm text-neutral-500">
+            set by <span class="font-mono text-code">{{ ssh.setBy }}</span>
+          </span>
+        </dd>
+        <dt>Root login</dt>
+        <dd class="font-mono">{{ ssh.rootLogin || 'unknown' }}</dd>
+        <dt>Managed by Ostiole</dt>
+        <dd>{{ ssh.managed ? 'yes' : 'no' }}</dd>
+      </dl>
+
+      <div
+        v-if="accounts.length"
+        class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800"
+      >
         <table class="table">
           <thead>
             <tr>
-              <th>Component</th>
-              <th>Needed for</th>
-              <th>State</th>
-              <th>Packages</th>
-              <th class="w-0"></th>
+              <th>Account</th>
+              <th>Can sudo</th>
+              <th>Authorized keys</th>
+              <th>Shell</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="c in components" :key="c.key">
+            <tr v-for="a in accounts" :key="a.name">
+              <td class="font-mono">{{ a.name }}</td>
+              <td>{{ a.sudo ? 'yes' : 'no' }}</td>
               <td>
-                <span class="font-medium">{{ c.label }}</span>
-                <span v-if="c.required" class="badge badge-warn ml-2">needed</span>
-                <p class="text-sm text-neutral-500">{{ c.needs }}</p>
-                <p v-if="c.note" class="mt-1 text-sm text-amber-700 dark:text-amber-300">
-                  {{ c.note }}
-                </p>
+                <span :class="a.keys ? '' : 'text-amber-700 dark:text-amber-300'">{{
+                  a.keys
+                }}</span>
               </td>
-              <td class="text-sm text-neutral-500">
-                {{ c.why || 'nothing in this configuration' }}
-              </td>
-              <td>
-                <span :class="c.ready ? 'badge badge-ok' : 'badge badge-warn'">
-                  {{ componentState(c) }}
-                </span>
-              </td>
-              <td class="font-mono text-code">{{ (c.packages ?? []).join(' ') || '—' }}</td>
-              <td>
-                <button
-                  v-if="root && !c.ready && c.availability !== 'unpackaged'"
-                  type="button"
-                  class="btn"
-                  :disabled="busy"
-                  @click="setUp([c.key])"
-                >
-                  Set up
-                </button>
-              </td>
+              <td class="font-mono text-code">{{ a.shell }}</td>
             </tr>
           </tbody>
         </table>
       </div>
-      <p v-if="busy" role="status" class="text-sm text-neutral-500">
-        Working. Fetching packages can take a while.
-      </p>
-      <button
-        v-if="root && steps.packages?.state === 'outstanding'"
-        type="button"
-        class="link"
-        @click="skip('packages', true)"
-      >
-        Leave this alone
-      </button>
-      <button
-        v-else-if="root && steps.packages?.state === 'skipped'"
-        type="button"
-        class="link"
-        @click="skip('packages', false)"
-      >
-        Ask about this again
-      </button>
     </section>
 
-    <!-- 2. Old firewall ------------------------------------------------ -->
-    <section class="card space-y-4" aria-labelledby="host-fw-title">
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 id="host-fw-title" class="card-title">Old firewall</h2>
-          <p class="max-w-3xl text-sm text-neutral-500">
-            Another firewall filters next to Ostiole's rules, and two sets of rules mean traffic has
-            to pass both. Retiring one stops it and leaves a way back; removing its package does
-            not. A retired unit stays masked after its package is removed, so a reinstall stays off.
-          </p>
-        </div>
-        <button
-          v-if="root && competitors.some((c) => c.kind === 'firewall' && c.conflicts)"
-          type="button"
-          class="btn-primary"
-          :disabled="busy"
-          @click="takeover"
-        >
-          Retire competing firewalls
-        </button>
+    <!-- Extras ----------------------------------------------------------- -->
+    <section class="card space-y-4" aria-labelledby="host-extras-title">
+      <div>
+        <h2 id="host-extras-title" class="card-title">Not needed on a router</h2>
+        <p class="max-w-3xl text-sm text-neutral-500">
+          What the distribution image brought that a router has no use for: a second updater with a
+          schedule of its own, and the daemons a desktop wants. Removing one stops and masks its
+          units, then takes its packages off; what else comes away is the package manager's answer,
+          shown before anything is removed.
+        </p>
       </div>
-
-      <p v-if="!competitors.length" class="text-sm text-neutral-500">
-        Nothing else on this router does Ostiole's job.
+      <p v-if="!extras.length" class="text-sm text-neutral-500">
+        Nothing here that a router does not need.
       </p>
       <div
         v-else
@@ -382,7 +423,7 @@ const stepTitles = {
         <table class="table">
           <thead>
             <tr>
-              <th>Service</th>
+              <th>What</th>
               <th>Does</th>
               <th>State</th>
               <th>Packages</th>
@@ -390,137 +431,310 @@ const stepTitles = {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="c in competitors" :key="c.name">
-              <td class="font-mono">{{ c.name }}</td>
-              <td class="text-sm text-neutral-500">{{ c.kind }}</td>
+            <tr v-for="e in extras" :key="e.key">
               <td>
-                <span v-if="c.removed" class="badge">removed, mask kept</span>
-                <span v-else :class="c.conflicts ? 'badge badge-warn' : 'badge badge-ok'">
-                  {{ c.active }}, {{ c.enabled }}
+                <span class="font-medium">{{ e.label }}</span>
+                <span class="badge ml-2">{{ e.kind }}</span>
+              </td>
+              <td class="text-sm text-neutral-500">{{ e.why }}</td>
+              <td>
+                <span v-if="e.removed" class="badge">removed, mask kept</span>
+                <span
+                  v-else
+                  :class="e.active || e.enabled === 'enabled' ? 'badge badge-warn' : 'badge'"
+                >
+                  {{ e.active ? 'active' : e.enabled }}
                 </span>
               </td>
               <td class="font-mono text-code">
-                {{ (c.packages ?? []).join(' ') || '—' }}
-                <p v-if="c.note" class="font-sans text-sm text-neutral-500">{{ c.note }}</p>
+                {{ (e.packages ?? []).join(' ') || (e.maskOnly ? 'mask only' : '—') }}
+                <p v-if="e.note" class="font-sans text-sm text-neutral-500">{{ e.note }}</p>
               </td>
               <td>
-                <ConfirmButton
-                  v-if="root && !c.conflicts && c.installed && c.packages?.length"
-                  label="Remove packages"
-                  :question="`Remove ${c.packages.join(', ')}?`"
-                  description="What the package manager says it would take with them is shown before anything is removed."
-                  confirm-label="Show me"
-                  :danger="false"
-                  @confirm="removePackages(c.name, c.packages)"
-                />
+                <button
+                  v-if="root && !e.removed && (e.packages?.length || e.maskOnly)"
+                  type="button"
+                  class="btn"
+                  :disabled="busy"
+                  @click="removeExtra(e)"
+                >
+                  {{ e.maskOnly ? 'Mask' : 'Remove' }}
+                </button>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
-      <button
-        v-if="root && steps.firewall?.state === 'outstanding'"
-        type="button"
-        class="link"
-        @click="skip('firewall', true)"
-      >
-        Leave this alone
-      </button>
-      <button
-        v-else-if="root && steps.firewall?.state === 'skipped'"
-        type="button"
-        class="link"
-        @click="skip('firewall', false)"
-      >
-        Ask about this again
-      </button>
     </section>
 
-    <!-- 3. Leftover rules ---------------------------------------------- -->
-    <section class="card space-y-4" aria-labelledby="host-legacy-title">
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 id="host-legacy-title" class="card-title">Leftover rules</h2>
-          <p class="max-w-3xl text-sm text-neutral-500">
-            Rules an older firewall left in the kernel. They still filter traffic, and Ostiole never
-            clears anybody else's rules on its own.
+    <details class="group">
+      <summary class="cursor-pointer text-sm font-medium text-neutral-600 dark:text-neutral-300">
+        The three steps one at a time: packages, old firewall, leftover rules
+      </summary>
+      <div class="mt-4 space-y-6">
+        <!-- 1. Packages ---------------------------------------------------- -->
+        <section class="card space-y-4" aria-labelledby="host-pkgs-title">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 id="host-pkgs-title" class="card-title">Packages</h2>
+              <p class="max-w-3xl text-sm text-neutral-500">
+                Installing one writes Ostiole's unit for it as well. Nothing here starts a service:
+                that is the switch on its own page, applied like every other change.
+              </p>
+            </div>
+            <button
+              v-if="root && outstanding.length"
+              type="button"
+              class="btn-primary"
+              :disabled="busy"
+              @click="setUp(outstanding.map((c) => c.key))"
+            >
+              Set up {{ outstanding.length }} missing
+            </button>
+          </div>
+
+          <div class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Component</th>
+                  <th>Needed for</th>
+                  <th>State</th>
+                  <th>Packages</th>
+                  <th class="w-0"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="c in components" :key="c.key">
+                  <td>
+                    <span class="font-medium">{{ c.label }}</span>
+                    <span v-if="c.required" class="badge badge-warn ml-2">needed</span>
+                    <p class="text-sm text-neutral-500">{{ c.needs }}</p>
+                    <p v-if="c.note" class="mt-1 text-sm text-amber-700 dark:text-amber-300">
+                      {{ c.note }}
+                    </p>
+                  </td>
+                  <td class="text-sm text-neutral-500">
+                    {{ c.why || 'nothing in this configuration' }}
+                  </td>
+                  <td>
+                    <span :class="c.ready ? 'badge badge-ok' : 'badge badge-warn'">
+                      {{ componentState(c) }}
+                    </span>
+                  </td>
+                  <td class="font-mono text-code">{{ (c.packages ?? []).join(' ') || '—' }}</td>
+                  <td>
+                    <button
+                      v-if="root && !c.ready && c.availability !== 'unpackaged'"
+                      type="button"
+                      class="btn"
+                      :disabled="busy"
+                      @click="setUp([c.key])"
+                    >
+                      Set up
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <button
+            v-if="root && steps.packages?.state === 'outstanding'"
+            type="button"
+            class="link"
+            @click="skip('packages', true)"
+          >
+            Leave this alone
+          </button>
+          <button
+            v-else-if="root && steps.packages?.state === 'skipped'"
+            type="button"
+            class="link"
+            @click="skip('packages', false)"
+          >
+            Ask about this again
+          </button>
+        </section>
+
+        <!-- 2. Old firewall ------------------------------------------------ -->
+        <section class="card space-y-4" aria-labelledby="host-fw-title">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 id="host-fw-title" class="card-title">Old firewall</h2>
+              <p class="max-w-3xl text-sm text-neutral-500">
+                Another firewall filters next to Ostiole's rules, and two sets of rules mean traffic
+                has to pass both. Retiring one stops it and leaves a way back; removing its package
+                does not. A retired unit stays masked after its package is removed, so a reinstall
+                stays off.
+              </p>
+            </div>
+            <button
+              v-if="
+                root && firewalled && competitors.some((c) => c.kind === 'firewall' && c.conflicts)
+              "
+              type="button"
+              class="btn-primary"
+              :disabled="busy"
+              @click="takeover"
+            >
+              Retire competing firewalls
+            </button>
+          </div>
+          <p v-if="firewallWaiting" class="text-sm text-neutral-500">
+            Retired after your first apply, once Ostiole's own ruleset is in the kernel.
           </p>
-        </div>
-        <ConfirmButton
-          v-if="root && sweepable.length"
-          label="Clear leftovers"
-          :question="`Clear ${sweepable.length} leftover ruleset${sweepable.length === 1 ? '' : 's'}?`"
-          description="Legacy tables are emptied and their policies set to accept; nf_tables leftovers are deleted. Ostiole's own table is not touched."
-          confirm-label="Clear"
-          @confirm="flush([])"
-        />
-      </div>
 
-      <p v-if="!legacy.length" class="text-sm text-neutral-500">
-        Nothing was left behind.
-        <span v-if="report?.legacy?.version" class="font-mono text-code">
-          {{ report.legacy.version }}
-        </span>
-      </p>
-      <div
-        v-else
-        class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800"
-      >
-        <table class="table">
-          <thead>
-            <tr>
-              <th>Ruleset</th>
-              <th>Rules</th>
-              <th>Chains</th>
-              <th class="w-0"></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="t in legacy" :key="t.backend + (t.family ?? '') + t.name">
-              <td class="font-mono">
-                {{ t.backend === 'legacy' ? 'legacy ' : '' }}{{ t.family }} {{ t.name }}
-              </td>
-              <td>{{ t.rules || 0 }}</td>
-              <td class="font-mono text-code">
-                {{ (t.chains ?? []).join(' ') || '—' }}
-                <p v-if="t.owner" class="font-sans text-sm text-neutral-500">
-                  Belongs to {{ t.owner }}, so it is left alone.
-                </p>
-              </td>
-              <td>
-                <ConfirmButton
-                  v-if="root && t.owner"
-                  label="Clear anyway"
-                  :question="`Clear ${t.family} ${t.name}?`"
-                  :description="`This ruleset belongs to ${t.owner}. Clearing it breaks whatever is using it until that is restarted.`"
-                  confirm-label="Clear"
-                  :typed="t.name"
-                  @confirm="
-                    flush([(t.backend === 'legacy' ? 'legacy ' : '') + t.family + ' ' + t.name])
-                  "
-                />
-              </td>
-            </tr>
-          </tbody>
-        </table>
+          <p v-if="!competitors.length" class="text-sm text-neutral-500">
+            Nothing else on this router does Ostiole's job.
+          </p>
+          <div
+            v-else
+            class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800"
+          >
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Service</th>
+                  <th>Does</th>
+                  <th>State</th>
+                  <th>Packages</th>
+                  <th class="w-0"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="c in competitors" :key="c.name">
+                  <td class="font-mono">{{ c.name }}</td>
+                  <td class="text-sm text-neutral-500">{{ c.kind }}</td>
+                  <td>
+                    <span v-if="c.removed" class="badge">removed, mask kept</span>
+                    <span v-else :class="c.conflicts ? 'badge badge-warn' : 'badge badge-ok'">
+                      {{ c.active }}, {{ c.enabled }}
+                    </span>
+                  </td>
+                  <td class="font-mono text-code">
+                    {{ (c.packages ?? []).join(' ') || '—' }}
+                    <p v-if="c.note" class="font-sans text-sm text-neutral-500">{{ c.note }}</p>
+                  </td>
+                  <td>
+                    <ConfirmButton
+                      v-if="root && !c.conflicts && c.installed && c.packages?.length"
+                      label="Remove packages"
+                      :question="`Remove ${c.packages.join(', ')}?`"
+                      description="What the package manager says it would take with them is shown before anything is removed."
+                      confirm-label="Show me"
+                      :danger="false"
+                      @confirm="removePackages(c.name, c.packages)"
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <button
+            v-if="root && steps.firewall?.state === 'outstanding'"
+            type="button"
+            class="link"
+            @click="skip('firewall', true)"
+          >
+            Leave this alone
+          </button>
+          <button
+            v-else-if="root && steps.firewall?.state === 'skipped'"
+            type="button"
+            class="link"
+            @click="skip('firewall', false)"
+          >
+            Ask about this again
+          </button>
+        </section>
+
+        <!-- 3. Leftover rules ---------------------------------------------- -->
+        <section class="card space-y-4" aria-labelledby="host-legacy-title">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 id="host-legacy-title" class="card-title">Leftover rules</h2>
+              <p class="max-w-3xl text-sm text-neutral-500">
+                Rules an older firewall left in the kernel. They still filter traffic, and Ostiole
+                never clears anybody else's rules on its own.
+              </p>
+            </div>
+            <ConfirmButton
+              v-if="root && sweepable.length"
+              label="Clear leftovers"
+              :question="`Clear ${sweepable.length} leftover ruleset${sweepable.length === 1 ? '' : 's'}?`"
+              description="Legacy tables are emptied and their policies set to accept; nf_tables leftovers are deleted. Ostiole's own table is not touched."
+              confirm-label="Clear"
+              @confirm="flush([])"
+            />
+          </div>
+
+          <p v-if="!legacy.length" class="text-sm text-neutral-500">
+            Nothing was left behind.
+            <span v-if="report?.legacy?.version" class="font-mono text-code">
+              {{ report.legacy.version }}
+            </span>
+          </p>
+          <div
+            v-else
+            class="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800"
+          >
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Ruleset</th>
+                  <th>Rules</th>
+                  <th>Chains</th>
+                  <th class="w-0"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="t in legacy" :key="t.backend + (t.family ?? '') + t.name">
+                  <td class="font-mono">
+                    {{ t.backend === 'legacy' ? 'legacy ' : '' }}{{ t.family }} {{ t.name }}
+                  </td>
+                  <td>{{ t.rules || 0 }}</td>
+                  <td class="font-mono text-code">
+                    {{ (t.chains ?? []).join(' ') || '—' }}
+                    <p v-if="t.owner" class="font-sans text-sm text-neutral-500">
+                      Belongs to {{ t.owner }}, so it is left alone.
+                    </p>
+                  </td>
+                  <td>
+                    <ConfirmButton
+                      v-if="root && t.owner"
+                      label="Clear anyway"
+                      :question="`Clear ${t.family} ${t.name}?`"
+                      :description="`This ruleset belongs to ${t.owner}. Clearing it breaks whatever is using it until that is restarted.`"
+                      confirm-label="Clear"
+                      :typed="t.name"
+                      @confirm="
+                        flush([(t.backend === 'legacy' ? 'legacy ' : '') + t.family + ' ' + t.name])
+                      "
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <button
+            v-if="root && steps.legacy?.state === 'outstanding'"
+            type="button"
+            class="link"
+            @click="skip('legacy', true)"
+          >
+            Leave this alone
+          </button>
+          <button
+            v-else-if="root && steps.legacy?.state === 'skipped'"
+            type="button"
+            class="link"
+            @click="skip('legacy', false)"
+          >
+            Ask about this again
+          </button>
+        </section>
       </div>
-      <button
-        v-if="root && steps.legacy?.state === 'outstanding'"
-        type="button"
-        class="link"
-        @click="skip('legacy', true)"
-      >
-        Leave this alone
-      </button>
-      <button
-        v-else-if="root && steps.legacy?.state === 'skipped'"
-        type="button"
-        class="link"
-        @click="skip('legacy', false)"
-      >
-        Ask about this again
-      </button>
-    </section>
+    </details>
 
     <!-- 4. Addresses --------------------------------------------------- -->
     <section class="card space-y-4" aria-labelledby="host-net-title">
