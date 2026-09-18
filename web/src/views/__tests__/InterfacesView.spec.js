@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, ref } from 'vue'
@@ -22,16 +22,19 @@ vi.mock('@/lib/api', () => ({
   ApiError: class ApiError extends Error {},
 }))
 
+// The tab wrappers have to render their slot or the tables are not there.
+const slotted = { template: '<div><slot /></div>' }
+
 const stubs = {
-  AppTabs: true,
-  TabsContent: true,
+  AppTabs: slotted,
+  TabsContent: slotted,
   ConfirmButton: true,
   InterfaceDialog: true,
   VlanDialog: true,
   PppoeDialog: true,
   AggregateDialog: true,
   ZoneDialog: true,
-  RouterLink: true,
+  RouterLink: { props: ['to'], template: '<a :to="to"><slot /></a>' },
 }
 
 describe('InterfacesView', () => {
@@ -53,5 +56,66 @@ describe('InterfacesView', () => {
     useConfigStore().markApplied()
     // The re-read queues behind the first read if that is still in flight.
     await vi.waitFor(() => expect(api.interfaces.live).toHaveBeenCalledTimes(2))
+  })
+
+  /** A router with one of everything that has a page of its own. */
+  function draft() {
+    return {
+      version: 5,
+      zones: [{ name: 'lan' }, { name: 'tailnet' }],
+      interfaces: [
+        {
+          name: 'eth1',
+          zone: 'lan',
+          enabled: true,
+          ipv4: { mode: 'static', address: '10.0.0.1/24' },
+        },
+        {
+          name: 'wg0',
+          zone: 'lan',
+          enabled: true,
+          ipv4: { mode: 'static', address: '10.66.0.1/24' },
+          wireguard: { privateKey: 'k', listenPort: 51820, peers: [{ name: 'laptop' }] },
+        },
+        {
+          name: 'tailscale0',
+          zone: 'tailnet',
+          enabled: true,
+          ipv4: { mode: 'none' },
+          tailscale: { port: 41641 },
+        },
+      ],
+      rules: [],
+    }
+  }
+
+  function rowFor(wrapper, name) {
+    return wrapper.findAll('tr').find((r) => r.find('td')?.exists() && r.text().includes(name))
+  }
+
+  // A tunnel and a tailnet node are made on their own page and deleted
+  // there. Deleting from here offered a dialog that was wrong twice over:
+  // it promised the device would stay, and it never listed the peers.
+  it('sends a VPN interface to its own page instead of deleting it here', async () => {
+    const config = useConfigStore()
+    config.draft = draft()
+    config.loaded = true
+    const wrapper = mount(InterfacesView, { global: { stubs } })
+    await flushPromises()
+
+    for (const [name, label, to] of [
+      ['wg0', 'WireGuard', '/vpn/wireguard'],
+      ['tailscale0', 'Tailscale', '/vpn/tailscale'],
+    ]) {
+      const row = rowFor(wrapper, name)
+      expect(row.findComponent({ name: 'ConfirmButton' }).exists()).toBe(false)
+      const link = row.find('a')
+      expect(link.attributes('to')).toBe(to)
+      expect(link.text()).toBe(label)
+    }
+
+    // An ordinary interface is still removed from here.
+    const plain = rowFor(wrapper, 'eth1')
+    expect(plain.findComponent({ name: 'ConfirmButton' }).exists()).toBe(true)
   })
 })

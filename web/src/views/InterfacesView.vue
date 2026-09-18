@@ -113,6 +113,18 @@ function guards(c) {
   return out
 }
 
+/**
+ * The VPN page an interface belongs to, or null. A tunnel and a tailnet
+ * node are made there and deleted there: the interface is what the
+ * configuration produces, not the thing itself, and only that page knows
+ * what goes with it — a tunnel's peers and its private key.
+ */
+function vpnPage(cfg) {
+  if (cfg?.wireguard) return { to: '/vpn/wireguard', label: 'WireGuard' }
+  if (cfg?.tailscale) return { to: '/vpn/tailscale', label: 'Tailscale' }
+  return null
+}
+
 /** A one-line description of what an interface is made of. */
 function describeKind(row) {
   const c = row.cfg
@@ -266,8 +278,8 @@ function editZone(z) {
                   >
                     Members
                   </button>
-                  <RouterLink v-if="row.cfg?.tailscale" to="/vpn/tailscale" class="link mr-3">
-                    Tailscale
+                  <RouterLink v-if="vpnPage(row.cfg)" :to="vpnPage(row.cfg).to" class="link mr-3">
+                    {{ vpnPage(row.cfg).label }}
                   </RouterLink>
                   <button
                     v-if="row.cfg?.pppoe"
@@ -281,7 +293,7 @@ function editZone(z) {
                     {{ row.cfg ? 'Edit' : 'Configure' }}
                   </button>
                   <ConfirmButton
-                    v-if="row.cfg"
+                    v-if="row.cfg && !vpnPage(row.cfg)"
                     class="ml-3"
                     label="Remove"
                     :question="`Remove ${row.cfg.name} from the configuration?`"
