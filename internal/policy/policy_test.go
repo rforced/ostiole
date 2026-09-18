@@ -45,7 +45,8 @@ func targetByName(targets []Target, name string) (Target, bool) {
 }
 
 // Marks and table ids come from the sorted list of enabled names, so the
-// firewall and the routing tables agree without sharing state.
+// firewall and the routing tables agree without sharing state. The fourth
+// name is number 5: 4 is reserved for Tailscale.
 func TestPlanNumbersEnabledTargetsByName(t *testing.T) {
 	t.Parallel()
 	targets := Plan(testConfig(), liveHops())
@@ -59,7 +60,7 @@ func TestPlanNumbersEnabledTargetsByName(t *testing.T) {
 		{"backup", 0x10000, 2201, 1},
 		{"balanced", 0x20000, 2202, 2},
 		{"primary", 0x30000, 2203, 3},
-		{"tunnel", 0x40000, 2204, 4},
+		{"tunnel", 0x50000, 2205, 5},
 	}
 	if len(targets) != len(want) {
 		t.Fatalf("planned %d targets, want %d: %+v", len(targets), len(want), targets)

@@ -447,9 +447,9 @@ func (c *Config) Validate() error {
 			enabled++
 		}
 	}
-	if enabled > MaxPolicyTargets {
+	if limit := MaxPolicyTargets - len(reservedPolicyNumbers); enabled > limit {
 		v.add("gateways", "at most %d gateways and gateway groups can be enabled at once, found %d",
-			MaxPolicyTargets, enabled)
+			limit, enabled)
 	}
 
 	routeIDs := map[string]bool{}

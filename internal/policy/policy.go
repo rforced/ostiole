@@ -35,7 +35,8 @@ type Target struct {
 	Group bool   `json:"group,omitempty"`
 	Mark  uint32 `json:"mark"`
 	Table int    `json:"table"`
-	// Index numbers the target from one and fixes its ip rule priorities.
+	// Index is the target's number, the one in its mark and its table, and
+	// it fixes the ip rule priorities.
 	Index int `json:"index"`
 	// Tiers holds the usable hops, best tier first. Hops inside one tier
 	// are used together and the kernel spreads connections over them.
@@ -71,8 +72,9 @@ func (t Target) Online() bool {
 func Plan(cfg *model.Config, hops map[string]Hop) []Target {
 	targets := cfg.PolicyTargets()
 	out := make([]Target, 0, len(targets))
-	for i, pt := range targets {
-		t := Target{Name: pt.Name, Group: pt.Group, Mark: pt.Mark, Table: pt.Table, Index: i + 1}
+	for _, pt := range targets {
+		t := Target{Name: pt.Name, Group: pt.Group, Mark: pt.Mark, Table: pt.Table,
+			Index: int(pt.Mark >> model.PolicyMarkShift)}
 		if !pt.Group {
 			if h, ok := hops[pt.Name]; ok && h.Address != "" {
 				t.Tiers = [][]Hop{{h}}

@@ -1043,8 +1043,13 @@ type PolicyTarget struct {
 	Table int    `json:"table"`
 }
 
+// reservedPolicyNumbers are numbers no target may take. Tailscale hardcodes
+// 0x40000 for subnet routes and 0x80000 for its own bypass, and installs ip
+// rules for them whatever its netfilter mode is.
+var reservedPolicyNumbers = map[int]bool{4: true, 8: true}
+
 // PolicyTargets lists every enabled gateway and gateway group, sorted by
-// name and numbered from one.
+// name and numbered from one, skipping the reserved numbers.
 func (c *Config) PolicyTargets() []PolicyTarget {
 	names := make([]string, 0, len(c.Gateways)+len(c.GatewayGroups))
 	group := make(map[string]bool, len(c.GatewayGroups))
@@ -1060,16 +1065,21 @@ func (c *Config) PolicyTargets() []PolicyTarget {
 		}
 	}
 	sort.Strings(names)
-	if len(names) > MaxPolicyTargets {
-		names = names[:MaxPolicyTargets]
+	if limit := MaxPolicyTargets - len(reservedPolicyNumbers); len(names) > limit {
+		names = names[:limit]
 	}
 	out := make([]PolicyTarget, 0, len(names))
-	for i, name := range names {
+	n := 0
+	for _, name := range names {
+		n++
+		for reservedPolicyNumbers[n] {
+			n++
+		}
 		out = append(out, PolicyTarget{
 			Name:  name,
 			Group: group[name],
-			Mark:  uint32(i+1) << PolicyMarkShift,
-			Table: PolicyTableBase + i + 1,
+			Mark:  uint32(n) << PolicyMarkShift,
+			Table: PolicyTableBase + n,
 		})
 	}
 	return out

@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"testing"
@@ -702,6 +703,26 @@ func TestPolicyTargetsAreStableAndSkipDisabled(t *testing.T) {
 	}
 	if _, ok := cfg.PolicyTarget("zulu"); ok {
 		t.Error("a disabled gateway must not get a mark")
+	}
+}
+
+func TestPolicyTargetsSkipTheReservedNumbers(t *testing.T) {
+	t.Parallel()
+	cfg := &Config{Version: SchemaVersion}
+	for i := range 10 {
+		cfg.Gateways = append(cfg.Gateways, Gateway{
+			Name: fmt.Sprintf("gw%02d", i), Enabled: true, Interface: "eth0",
+		})
+	}
+
+	want := []int{1, 2, 3, 5, 6, 7, 9, 10, 11, 12}
+	for i, tg := range cfg.PolicyTargets() {
+		if got := int(tg.Mark >> PolicyMarkShift); got != want[i] {
+			t.Errorf("%s number = %d, want %d", tg.Name, got, want[i])
+		}
+		if tg.Table != PolicyTableBase+want[i] {
+			t.Errorf("%s table = %d, want %d", tg.Name, tg.Table, PolicyTableBase+want[i])
+		}
 	}
 }
 
