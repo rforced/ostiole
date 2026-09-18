@@ -96,8 +96,9 @@ func (e *Engine) WithShaping(b network.Backend) *Engine {
 
 // Preflighter is a backend that can refuse a plan before anything has
 // been applied. Shaping uses it to say that the command it drives is not
-// installed, which is better learned now than after the configuration has
-// been saved and the queues have quietly not appeared.
+// installed, and Tailscale that its daemon is not on the router, which is
+// better learned now than after the configuration has been saved and the
+// work has quietly not happened.
 type Preflighter interface {
 	Preflight(ctx context.Context, files network.Files) error
 }
@@ -230,6 +231,11 @@ func (e *Engine) Check(ctx context.Context, cfg *model.Config) (*Plan, error) {
 			return nil, fmt.Errorf("services: %w", err)
 		}
 		plan.Services = files
+		if p, ok := e.svc.(Preflighter); ok {
+			if err := p.Preflight(ctx, files); err != nil {
+				return nil, fmt.Errorf("services: %w", err)
+			}
+		}
 	}
 	if e.shape != nil {
 		files, err := e.shape.Render(cfg)

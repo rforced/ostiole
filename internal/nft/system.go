@@ -38,8 +38,8 @@ type SystemRule struct {
 	// them. Empty when the rule keeps no counter.
 	Keys []string `json:"keys,omitempty"`
 	// Setting names what controls the rule, so the page can link to it:
-	// zone, interface, dhcp, dns, enforcement, upnp, wireguard, or nat.
-	// Empty for the baseline, which nothing turns off.
+	// zone, interface, dhcp, dns, enforcement, upnp, wireguard, tailscale,
+	// or nat. Empty for the baseline, which nothing turns off.
 	Setting string `json:"setting,omitempty"`
 }
 

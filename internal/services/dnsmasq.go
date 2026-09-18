@@ -175,6 +175,13 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 				fmt.Fprintf(&b, "server=/%s/%s\n", model.NormalizeDomain(d.Domain), strings.TrimSpace(s))
 			}
 		}
+		// MagicDNS answers on the tailnet's own resolver, which the router
+		// never asks unless it is told to: the daemon runs with
+		// --accept-dns=false so it leaves resolv.conf alone.
+		if nft.TailscaleEnabled(cfg) {
+			fmt.Fprintf(&b, "server=/%s/%s\nrev-server=%s,%s\n",
+				TailnetDomain, MagicDNSAddress, TailscaleCGNAT, MagicDNSAddress)
+		}
 		if svc.DNS.Domain != "" {
 			fmt.Fprintf(&b, "domain=%s\nlocal=/%s/\nexpand-hosts\n", svc.DNS.Domain, svc.DNS.Domain)
 		}

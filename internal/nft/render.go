@@ -447,6 +447,7 @@ func (r *renderer) serviceRules() {
 		}
 	}
 	r.wireguardRules()
+	r.tailscaleRules()
 	r.upnpRules()
 }
 
@@ -516,6 +517,38 @@ func (r *renderer) wireguardRules() {
 		Source: "any", Destination: firewallDest(ports),
 		Description: "WireGuard peers dialling in", Keys: []string{"input/service:wireguard"}, Setting: "wireguard",
 	})
+}
+
+// tailscaleRules open the port peers dial directly on the external zones.
+// Without it the node still works through a relay, slowly.
+func (r *renderer) tailscaleRules() {
+	in, ok := r.cfg.TailscaleInterface()
+	if !ok || !in.Enabled || in.Tailscale.Port == 0 {
+		return
+	}
+	var ifs []string
+	for _, z := range r.cfg.Zones {
+		if z.External {
+			ifs = append(ifs, r.cfg.ZoneInterfaces(z.Name)...)
+		}
+	}
+	if len(ifs) == 0 {
+		return
+	}
+	port := fmt.Sprint(in.Tailscale.Port)
+	r.line(fmt.Sprintf(`iifname %s udp dport %s counter accept comment "service:tailscale"`,
+		ifnameSet(ifs), port))
+	r.sysFor(ifs, SystemRule{
+		Chain: "input", Action: "accept", Protocol: string(model.ProtocolUDP),
+		Source: "any", Destination: firewallDest([]string{port}),
+		Description: "Tailscale peers dialling in", Keys: []string{"input/service:tailscale"}, Setting: "tailscale",
+	})
+}
+
+// TailscaleEnabled reports whether the configuration wants tailscaled.
+func TailscaleEnabled(cfg *model.Config) bool {
+	in, ok := cfg.TailscaleInterface()
+	return ok && in.Enabled
 }
 
 // DNSInterfaces lists where the DNS service listens: the configured list,

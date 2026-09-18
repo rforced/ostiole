@@ -450,6 +450,29 @@ func TestRenderLeavesPPPoEToPppd(t *testing.T) {
 	}
 }
 
+// tailscaled creates its interface and addresses it from the tailnet, so
+// networkd is given nothing for it at all.
+func TestRenderLeavesTailscaleToTheDaemon(t *testing.T) {
+	t.Parallel()
+	cfg := loadConfig(t, "testdata/minimal.json")
+	cfg.Zones = append(cfg.Zones, model.Zone{Name: "tailnet"})
+	cfg.Interfaces = append(cfg.Interfaces, model.Interface{
+		Name: model.TailscaleDevice, Zone: "tailnet", Enabled: true,
+		IPv4:      model.IPv4{Mode: model.AddrNone},
+		IPv6:      model.IPv6{Mode: model.AddrNone},
+		Tailscale: &model.Tailscale{Port: 41641},
+	})
+	files, err := (&Networkd{}).Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name := range files {
+		if strings.Contains(name, model.TailscaleDevice) {
+			t.Errorf("networkd was given %s for an interface tailscaled owns", name)
+		}
+	}
+}
+
 // The device that carries a shaped interface's incoming traffic is
 // Ostiole's own doing, not an interface anybody configured. Leaving it in
 // the list put it on the interfaces page as "not managed" and, worse, in

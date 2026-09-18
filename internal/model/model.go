@@ -159,7 +159,7 @@ var CronKinds = []CronKind{
 }
 
 // CronServices are the units a restart cron may name.
-var CronServices = []string{"dnsmasq", "unbound", "miniupnpd", "ostiole"}
+var CronServices = []string{"dnsmasq", "unbound", "miniupnpd", "tailscaled", "ostiole"}
 
 // Cron is one piece of scheduled work.
 type Cron struct {
@@ -506,8 +506,9 @@ type Interface struct {
 	Bond *Bond `json:"bond,omitempty"`
 	// PPPoE dials a session over an Ethernet link, which is how most DSL
 	// and some fibre services are delivered.
-	PPPoE *PPPoE `json:"pppoe,omitempty"`
-	MTU   int    `json:"mtu,omitempty"`
+	PPPoE     *PPPoE     `json:"pppoe,omitempty"`
+	Tailscale *Tailscale `json:"tailscale,omitempty"`
+	MTU       int        `json:"mtu,omitempty"`
 
 	// LogDrops overrides system.management.logDefaultDrops for traffic
 	// arriving here: a WAN worth watching can log while a busy LAN stays
@@ -604,6 +605,29 @@ type PPPoE struct {
 // bytes of header come out of the usual 1500.
 const PPPoEMTU = 1492
 
+// Tailscale joins this router to a tailnet. tailscaled creates the
+// interface and addresses it; the zone and the rules are the interface's.
+type Tailscale struct {
+	// Port peers dial; 0 lets the daemon pick one and opens nothing.
+	Port uint16 `json:"port,omitempty"`
+	// Hostname on the tailnet; empty takes the router's.
+	Hostname string `json:"hostname,omitempty"`
+	// LoginServer is the control server; empty is Tailscale's.
+	LoginServer string `json:"loginServer,omitempty"`
+	// AdvertiseRoutes are the networks offered to the tailnet.
+	AdvertiseRoutes []string `json:"advertiseRoutes,omitempty"`
+	// AdvertiseExitNode offers this router as the tailnet's way out.
+	AdvertiseExitNode bool `json:"advertiseExitNode,omitempty"`
+	// AcceptRoutes takes the networks other nodes advertise.
+	AcceptRoutes bool `json:"acceptRoutes,omitempty"`
+	// LogUploads sends the daemon's logs to Tailscale. Off keeps them here.
+	LogUploads bool `json:"logUploads,omitempty"`
+}
+
+// TailscaleDevice is the only name a Tailscale interface may have: it is
+// the daemon's default and what every tool on the router assumes.
+const TailscaleDevice = "tailscale0"
+
 // Kind names what an interface is made of, for the UI and for messages.
 type Kind string
 
@@ -615,6 +639,7 @@ const (
 	KindBond      Kind = "bond"
 	KindWireGuard Kind = "wireguard"
 	KindPPPoE     Kind = "pppoe"
+	KindTailscale Kind = "tailscale"
 )
 
 // Kind reports what this interface is.
@@ -630,6 +655,8 @@ func (i Interface) Kind() Kind {
 		return KindWireGuard
 	case i.PPPoE != nil:
 		return KindPPPoE
+	case i.Tailscale != nil:
+		return KindTailscale
 	}
 	return KindPhysical
 }
@@ -1179,6 +1206,17 @@ func (c *Config) Interface(name string) (*Interface, bool) {
 		}
 	}
 	return nil, false
+}
+
+// TailscaleInterface returns the interface that joins a tailnet. There is
+// at most one.
+func (c *Config) TailscaleInterface() (Interface, bool) {
+	for _, in := range c.Interfaces {
+		if in.Tailscale != nil {
+			return in, true
+		}
+	}
+	return Interface{}, false
 }
 
 // ZoneInterfaces returns the names of enabled interfaces assigned to zone,

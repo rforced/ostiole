@@ -126,7 +126,7 @@ func (g *globals) engine() (*engine.Engine, error) {
 		eng.WithShaping(g.shaper())
 		if net != nil {
 			// Services need root and a managed router; dev runs stay firewall-only.
-			eng.WithServices(services.NewBundle(g.blocklists()))
+			eng.WithServices(services.NewBundle(g.blocklists(), g.configDir))
 		}
 	}
 	return eng, nil

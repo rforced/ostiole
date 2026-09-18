@@ -277,6 +277,58 @@ func TestDHCPv6ClientRule(t *testing.T) {
 	}
 }
 
+// A node with no port opens nothing and still works, through a relay. The
+// rest of what it needs comes from the zone its interface is in.
+func TestTailscaleRuleFollowsThePort(t *testing.T) {
+	t.Parallel()
+	const rule = `iifname "eth0" udp dport 41641 counter accept comment "service:tailscale"`
+
+	cfg := loadConfig(t, "testdata/tailscale.json")
+	got, err := Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, rule) {
+		t.Errorf("no rule for the port peers dial:\n%s", got)
+	}
+	rows, err := SystemRules(loadConfig(t, "testdata/tailscale.json"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	row, ok := findRow(rows, "Tailscale peers dialling in")
+	if !ok {
+		t.Fatal("no system rule row for the Tailscale rule")
+	}
+	if row.Setting != "tailscale" {
+		t.Errorf("row is controlled by %q, want tailscale", row.Setting)
+	}
+
+	for _, tc := range []struct {
+		name string
+		edit func(*model.Interface)
+	}{
+		{"no port", func(in *model.Interface) { in.Tailscale.Port = 0 }},
+		{"disabled", func(in *model.Interface) { in.Enabled = false }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := loadConfig(t, "testdata/tailscale.json")
+			for i := range cfg.Interfaces {
+				if cfg.Interfaces[i].Tailscale != nil {
+					tc.edit(&cfg.Interfaces[i])
+				}
+			}
+			got, err := Render(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(got, "service:tailscale") {
+				t.Errorf("a port was opened anyway:\n%s", got)
+			}
+		})
+	}
+}
+
 // The baseline accepts a family only where it is turned on: an interface
 // whose IPv6 mode is none is left out of the neighbour discovery rule and
 // the DHCPv6 client rule, and a router with no IPv6 at all carries neither.

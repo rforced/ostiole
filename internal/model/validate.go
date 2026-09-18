@@ -69,6 +69,7 @@ func (c *Config) Validate() error {
 	}
 
 	ifaces := map[string]bool{}
+	tailscales := 0
 	for i, in := range c.Interfaces {
 		path := fmt.Sprintf("interfaces[%d]", i)
 		if !ifaceRe.MatchString(in.Name) {
@@ -102,6 +103,12 @@ func (c *Config) Validate() error {
 			v.pppoe(path, in)
 		} else if in.IPv4.Mode == AddrPPP || in.IPv6.Mode == AddrPPP {
 			v.add(path+".ipv4.mode", "only a PPPoE interface takes its address from a dialled session")
+		}
+		if in.Tailscale != nil {
+			if tailscales++; tailscales > 1 {
+				v.add(path+".tailscale", "this router can join one tailnet")
+			}
+			v.tailscale(path, in)
 		}
 		if in.BlockPrivate || in.BlockBogons {
 			// These drop traffic by source address, so an interface that is
@@ -907,6 +914,9 @@ func builtFrom(in Interface) []string {
 	if in.WireGuard != nil {
 		kinds = append(kinds, "a WireGuard tunnel")
 	}
+	if in.Tailscale != nil {
+		kinds = append(kinds, "a Tailscale node")
+	}
 	return kinds
 }
 
@@ -966,6 +976,8 @@ func (v *validator) enslaved(c *Config, ifaces map[string]bool) map[string]strin
 				}
 			case KindWireGuard:
 				v.add(mpath, "a WireGuard tunnel carries routed traffic and cannot be a member")
+			case KindTailscale:
+				v.add(mpath, "a Tailscale node carries routed traffic and cannot be a member")
 			}
 		}
 	}
@@ -1243,6 +1255,59 @@ func (v *validator) wireguard(path string, in Interface) {
 		}
 		if p.Keepalive < 0 || p.Keepalive > 65535 {
 			v.add(ppath+".keepalive", "%d must be 0-65535 seconds", p.Keepalive)
+		}
+	}
+}
+
+// tailscaleCGNAT and tailscaleULA are the ranges the tailnet itself uses;
+// advertising one of them from here would fight the daemon.
+var (
+	tailscaleCGNAT = netip.MustParsePrefix("100.64.0.0/10")
+	tailscaleULA   = netip.MustParsePrefix("fd7a:115c:a1e0::/48")
+	// tsNameRe is a single DNS label: what a tailnet takes as a node name.
+	tsNameRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
+)
+
+// tailscale checks a Tailscale interface. The daemon creates the device and
+// addresses it, so everything this router would normally decide is refused.
+func (v *validator) tailscale(path string, in Interface) {
+	t := in.Tailscale
+	if in.Name != TailscaleDevice {
+		v.add(path+".name", "a Tailscale interface must be called %s", TailscaleDevice)
+	}
+	if in.IPv4.Mode != AddrNone {
+		v.add(path+".ipv4.mode", "the tailnet addresses this interface; set it to none")
+	}
+	if in.IPv6.Mode != AddrNone {
+		v.add(path+".ipv6.mode", "the tailnet addresses this interface; set it to none")
+	}
+	if in.MTU != 0 {
+		v.add(path+".mtu", "the MTU comes from the tailnet")
+	}
+	if t.Port != 0 && t.Port < 1024 {
+		v.add(path+".tailscale.port", "%d must be 0 or 1024-65535", t.Port)
+	}
+	if t.Hostname != "" && !tsNameRe.MatchString(t.Hostname) {
+		v.add(path+".tailscale.hostname", "%q must match %s", t.Hostname, tsNameRe)
+	}
+	if t.LoginServer != "" {
+		if u, err := url.Parse(t.LoginServer); err != nil || u.Scheme != "https" || u.Host == "" {
+			v.add(path+".tailscale.loginServer", "%q must be an https URL", t.LoginServer)
+		}
+	}
+	for i, r := range t.AdvertiseRoutes {
+		rpath := fmt.Sprintf("%s.tailscale.advertiseRoutes[%d]", path, i)
+		p, err := netip.ParsePrefix(r)
+		switch {
+		case err != nil:
+			v.add(rpath, "%q is not a network", r)
+			continue
+		case p.Masked() != p:
+			v.add(rpath, "%q has host bits set; write %s", r, p.Masked())
+			continue
+		}
+		if (p.Addr().Is4() && tailscaleCGNAT.Overlaps(p)) || (p.Addr().Is6() && tailscaleULA.Overlaps(p)) {
+			v.add(rpath, "%s is the tailnet's own range", r)
 		}
 	}
 }

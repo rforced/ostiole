@@ -111,10 +111,11 @@ func (n *Networkd) Render(cfg *model.Config) (Files, error) {
 	dialled := cfg.PPPoEParents()
 
 	for _, in := range cfg.Interfaces {
-		if in.Kind() == model.KindPPPoE {
-			// pppd creates the interface and puts the address on it, so
-			// networkd is told to keep its hands off rather than given a
-			// unit that would strip what pppd just configured.
+		switch in.Kind() {
+		case model.KindPPPoE, model.KindTailscale:
+			// pppd and tailscaled create the interface and put the address
+			// on it, so networkd is told to keep its hands off rather than
+			// given a unit that would strip what the daemon just configured.
 			continue
 		}
 		// A link that carries a bridge, a bond, or a dialled session is a

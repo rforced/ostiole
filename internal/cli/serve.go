@@ -303,10 +303,11 @@ func healthURL(cfg server.Config) string {
 // that was not meant to be restartable.
 func restartService(ctx context.Context, name string) error {
 	units := map[string]string{
-		"dnsmasq":   services.Unit,
-		"unbound":   services.UnboundUnit,
-		"miniupnpd": services.UPnPUnit,
-		"ostiole":   install.DaemonUnit,
+		"dnsmasq":    services.Unit,
+		"unbound":    services.UnboundUnit,
+		"miniupnpd":  services.UPnPUnit,
+		"tailscaled": services.TailscaleUnit,
+		"ostiole":    install.DaemonUnit,
 	}
 	unit, ok := units[name]
 	if !ok {

@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/rforced/ostiole/internal/install"
+	"github.com/rforced/ostiole/internal/model"
+	"github.com/rforced/ostiole/internal/tailscale"
 )
 
 // Runner runs commands (systemctl); swapped for a fake in tests.
@@ -61,6 +63,14 @@ type SetupOptions struct {
 	// UPnPBackend is set up when UPnP is set; nil means production
 	// defaults.
 	UPnPBackend *UPnP
+	// Tailscale writes tailscaled's unit, so the router can join a tailnet.
+	Tailscale bool
+	// TailscaleBinary overrides the tailscaled path (found on PATH
+	// otherwise).
+	TailscaleBinary string
+	// ConfigDir is where the Tailscale backend's files go; empty is the
+	// default configuration directory.
+	ConfigDir string
 }
 
 // Setup makes the host able to run the services it is asked for. Each
@@ -105,6 +115,11 @@ func Setup(ctx context.Context, d *Dnsmasq, o SetupOptions, log *slog.Logger) er
 	}
 	if o.UPnP {
 		if err := setupUPnP(ctx, run, o, unitDir, log); err != nil {
+			return err
+		}
+	}
+	if o.Tailscale {
+		if err := setupTailscale(ctx, run, o, unitDir, log); err != nil {
 			return err
 		}
 	}
@@ -377,6 +392,68 @@ func setupUPnP(ctx context.Context, run Runner, o SetupOptions, unitDir string, 
 	}
 	log.Info("mapping service ready", "unit", UPnPUnit, "miniupnpd", bin)
 	return nil
+}
+
+// setupTailscale masks the distribution's own unit — the package enables
+// it — and writes ostiole-tailscaled.service. Nothing here joins a
+// tailnet: that is the interface, applied like everything else.
+func setupTailscale(ctx context.Context, run Runner, o SetupOptions, unitDir string, log *slog.Logger) error {
+	bin := o.TailscaleBinary
+	if bin == "" {
+		bin = lookPath("tailscaled")
+	}
+	if bin == "" {
+		log.Info("no tailscaled on this router; Tailscale is not set up")
+		return nil
+	}
+
+	if out, err := run.Run(ctx, "systemctl", "cat", tailscaleDistroSvc); err == nil && len(out) > 0 {
+		_, _ = run.Run(ctx, "systemctl", "disable", "--now", tailscaleDistroSvc)
+		_, _ = run.Run(ctx, "systemctl", "mask", tailscaleDistroSvc)
+		log.Info("masked the distribution's own Tailscale unit", "unit", tailscaleDistroSvc)
+	}
+
+	dir := TailscaleDir(o.ConfigDir)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	if err := writeFile(filepath.Join(unitDir, TailscaleUnit), TailscaleUnitContent(bin, dir)); err != nil {
+		return err
+	}
+	log.Info("Tailscale ready", "unit", TailscaleUnit, "tailscaled", bin)
+	return nil
+}
+
+// TailscaleUnitContent renders the ostiole-tailscaled unit. The daemon
+// starts before the firewall's rules would matter and cleans its own
+// interface up on the way out; the port and the log flag come from the
+// environment file an apply writes.
+func TailscaleUnitContent(binary, dir string) string {
+	return fmt.Sprintf(`[Unit]
+Description=Ostiole Tailscale node (tailscaled)
+Documentation=https://github.com/rforced/ostiole
+After=network-pre.target ostiole-firewall.service
+Wants=network-pre.target ostiole-firewall.service
+
+[Service]
+Type=notify
+Environment=PORT=%[3]d
+EnvironmentFile=-%[2]s/env
+ExecStartPre=%[1]s --cleanup
+ExecStart=%[1]s --state=/var/lib/tailscale/tailscaled.state --socket=/run/tailscale/tailscaled.sock --tun=%[4]s --port=${PORT} $FLAGS
+ExecStopPost=%[1]s --cleanup
+Restart=on-failure
+RestartSec=2
+RuntimeDirectory=tailscale
+RuntimeDirectoryMode=0755
+StateDirectory=tailscale
+StateDirectoryMode=0700
+CacheDirectory=tailscale
+CacheDirectoryMode=0750
+
+[Install]
+WantedBy=multi-user.target
+`, binary, dir, tailscale.DefaultPort, model.TailscaleDevice)
 }
 
 // nftablesBuild checks that the binary is the one that writes nftables.

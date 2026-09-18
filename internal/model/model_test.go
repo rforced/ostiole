@@ -673,6 +673,85 @@ func TestValidateCatchesPolicyRoutingMistakes(t *testing.T) {
 	}
 }
 
+func tailscaleConfig() *Config {
+	cfg := policyConfig()
+	cfg.Zones = append(cfg.Zones, Zone{Name: "tailnet"})
+	cfg.Interfaces = append(cfg.Interfaces, Interface{
+		Name: TailscaleDevice, Zone: "tailnet", Enabled: true,
+		IPv4: IPv4{Mode: AddrNone}, IPv6: IPv6{Mode: AddrNone},
+		Tailscale: &Tailscale{
+			Port:              41641,
+			AdvertiseRoutes:   []string{"192.168.1.0/24"},
+			AdvertiseExitNode: true,
+		},
+	})
+	return cfg
+}
+
+func TestValidateAcceptsATailscaleNode(t *testing.T) {
+	t.Parallel()
+	cfg := tailscaleConfig()
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("tailscale config rejected: %v", err)
+	}
+	in, ok := cfg.TailscaleInterface()
+	if !ok || in.Name != TailscaleDevice || in.Kind() != KindTailscale {
+		t.Errorf("TailscaleInterface() = %+v, %v", in, ok)
+	}
+}
+
+func TestValidateCatchesTailscaleMistakes(t *testing.T) {
+	t.Parallel()
+	cfg := tailscaleConfig()
+	in := &cfg.Interfaces[len(cfg.Interfaces)-1]
+	in.Name = "ts0"
+	in.IPv4 = IPv4{Mode: AddrStatic, Address: "10.0.0.1/24"}
+	in.MTU = 1280
+	in.Tailscale.Port = 80
+	in.Tailscale.Hostname = "Not A Label"
+	in.Tailscale.LoginServer = "http://control.example"
+	in.Tailscale.AdvertiseRoutes = []string{
+		"192.168.1.1/24", "100.64.0.0/10", "fd7a:115c:a1e0::/48", "nonsense",
+	}
+	cfg.Interfaces = append(cfg.Interfaces, Interface{
+		Name: "tailscale1", Zone: "tailnet", Enabled: true,
+		IPv4: IPv4{Mode: AddrNone}, IPv6: IPv6{Mode: AddrNone}, Tailscale: &Tailscale{},
+	})
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation errors")
+	}
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("error type %T, want *ValidationError", err)
+	}
+	got := map[string]string{}
+	for _, i := range ve.Issues {
+		got[i.Path] = i.Message
+	}
+	for _, p := range []string{
+		"interfaces[2].name",
+		"interfaces[2].ipv4.mode",
+		"interfaces[2].mtu",
+		"interfaces[2].tailscale.port",
+		"interfaces[2].tailscale.hostname",
+		"interfaces[2].tailscale.loginServer",
+		"interfaces[2].tailscale.advertiseRoutes[0]",
+		"interfaces[2].tailscale.advertiseRoutes[1]",
+		"interfaces[2].tailscale.advertiseRoutes[2]",
+		"interfaces[2].tailscale.advertiseRoutes[3]",
+		"interfaces[3].tailscale",
+	} {
+		if _, ok := got[p]; !ok {
+			t.Errorf("missing issue at %s; got %v", p, ve.Issues)
+		}
+	}
+	if msg := got["interfaces[2].tailscale.advertiseRoutes[0]"]; !strings.Contains(msg, "192.168.1.0/24") {
+		t.Errorf("host-bits message = %q, want the masked prefix", msg)
+	}
+}
+
 func TestPolicyTargetsAreStableAndSkipDisabled(t *testing.T) {
 	t.Parallel()
 	cfg := policyConfig()

@@ -23,12 +23,36 @@ var _ network.Backend = (*Bundle)(nil)
 // NewBundle returns the production services: the dialled sessions first,
 // because an interface has to exist before anything serves on it, then
 // the resolver, then the blocklist, then the forwarder that reads the
-// blocklist and points at the resolver. The mapping service comes last,
-// because it restarts into a table that has just been rebuilt.
-func NewBundle(blocklists *dnsblock.Cache) *Bundle {
+// blocklist and points at the resolver. Tailscale follows it, because the
+// forward for tailnet names has to be in place first. The mapping service
+// comes last, because it restarts into a table that has just been rebuilt.
+func NewBundle(blocklists *dnsblock.Cache, configDir string) *Bundle {
 	return &Bundle{backends: []network.Backend{
-		NewPPPoE(), NewUnbound(), NewDNSBlock(blocklists), New(), NewUPnP(),
+		NewPPPoE(), NewUnbound(), NewDNSBlock(blocklists), New(),
+		NewTailscale(configDir), NewUPnP(),
 	}}
+}
+
+// Preflighter is a backend that can refuse a plan before anything has been
+// applied. It is the same shape as the engine's, declared here so the
+// services do not have to import it.
+type Preflighter interface {
+	Preflight(ctx context.Context, files network.Files) error
+}
+
+// Preflight implements the engine's Preflighter, asking every backend that
+// has an opinion.
+func (b *Bundle) Preflight(ctx context.Context, files network.Files) error {
+	for _, back := range b.backends {
+		p, ok := back.(Preflighter)
+		if !ok {
+			continue
+		}
+		if err := p.Preflight(ctx, split(files, back.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // NewBundleOf composes the given backends, in apply order.

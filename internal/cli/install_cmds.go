@@ -145,7 +145,7 @@ management ports get in, nothing is forwarded.`,
 			if rep.Timezone != "" {
 				fmt.Fprintf(out, "clock set to %s\n", rep.Timezone)
 			}
-			if err := writeServiceUnits(ctx); err != nil {
+			if err := writeServiceUnits(ctx, lay.ConfigDir); err != nil {
 				return err
 			}
 			if len(firewalls) > 0 {
@@ -218,14 +218,18 @@ func installZone(flag string, cfg *model.Config) string {
 
 // serviceUnits are the units written for the daemons a router drives.
 func serviceUnits() []string {
-	return []string{services.Unit, services.UnboundUnit, services.PPPoEUnit, services.UPnPUnit}
+	return []string{services.Unit, services.UnboundUnit, services.PPPoEUnit, services.UPnPUnit,
+		services.TailscaleUnit}
 }
 
-// writeServiceUnits points dnsmasq, unbound, pppd and miniupnpd at
-// Ostiole's generated configuration. One whose binary is not on the
-// router is skipped; the install script is what puts them there.
-func writeServiceUnits(ctx context.Context) error {
-	opts := services.SetupOptions{Dnsmasq: true, Resolver: true, PPPoE: true, UPnP: true, NoRestart: true}
+// writeServiceUnits points dnsmasq, unbound, pppd, miniupnpd and
+// tailscaled at Ostiole's generated configuration. One whose binary is not
+// on the router is skipped; the install script is what puts them there.
+func writeServiceUnits(ctx context.Context, configDir string) error {
+	opts := services.SetupOptions{
+		Dnsmasq: true, Resolver: true, PPPoE: true, UPnP: true, Tailscale: true,
+		ConfigDir: configDir, NoRestart: true,
+	}
 	return services.Setup(ctx, services.New(), opts, slog.Default())
 }
 
