@@ -572,10 +572,28 @@ func LoadTakeoverRecord(dir string) (*TakeoverRecord, error) {
 	return &rec, nil
 }
 
+// RouteSweeper reads the kernel's default routes and takes away the ones
+// a stopped systemd-networkd left behind. network.KernelRoutes is the
+// implementation; tests pass one that touches no routing table.
+type RouteSweeper interface {
+	Defaults() ([]network.DefaultRoute, error)
+	SweepStale(ctx context.Context, before []network.DefaultRoute, wait time.Duration) ([]network.DefaultRoute, error)
+}
+
 // NetworkRevert undoes NetworkTakeover: stops networkd and brings the
 // previous managers back. wait-online style units are only re-enabled,
 // never started, because starting them blocks until the network is up.
-func NetworkRevert(ctx context.Context, sc Systemctl, managers []string, log *slog.Logger) error {
+//
+// Stopping networkd does not always take its routes with it, so the
+// routes it had are noted first and swept once the old manager has
+// installed its own. A sweep that finds no replacement removes nothing.
+func NetworkRevert(ctx context.Context, sc Systemctl, routes RouteSweeper, managers []string, log *slog.Logger) error {
+	// Taken while networkd still owns the addressing, so every default
+	// route here is one it put in the kernel.
+	before, err := routes.Defaults()
+	if err != nil {
+		log.Warn("could not read the default routes before reverting", "err", err)
+	}
 	if err := RestoreCloudInitNetwork(); err != nil {
 		log.Warn("could not remove the cloud-init drop-in", "err", err)
 	}
@@ -600,6 +618,14 @@ func NetworkRevert(ctx context.Context, sc Systemctl, managers []string, log *sl
 			continue
 		}
 		log.Info("network manager restored", "unit", unit)
+	}
+	removed, err := routes.SweepStale(ctx, before, network.StaleRouteWait)
+	if err != nil {
+		log.Warn("could not sweep the routes systemd-networkd left behind", "err", err)
+	}
+	for _, r := range removed {
+		log.Info("removed a default route systemd-networkd left behind",
+			"interface", r.Interface, "gateway", r.Gateway, "metric", r.Metric, "protocol", r.Protocol)
 	}
 	return errors.Join(errs...)
 }

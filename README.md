@@ -107,6 +107,31 @@ one transaction. Applies that could lock you out are commit-confirmed: they reve
 unless confirmed from the UI within the window. Ostiole owns one table, `inet ostiole`, and never
 flushes another. The UI serves no third-party assets and there is no telemetry.
 
+## SELinux and AppArmor
+
+Ostiole changes neither. It loads no policy module, ships no profile, and runs neither `setenforce`
+nor `semanage`: a router that boots with SELinux enforcing stays that way. The generated files go
+where the policy your distribution already ships expects to find them.
+
+- Daemon configuration goes in the daemon's own directory — `/etc/dnsmasq.d`, `/etc/unbound`,
+  `/etc/miniupnpd` — never in `/etc/ostiole`, which is `0700` and holds only Ostiole's own files.
+  dnsmasq drops privileges before reading its hosts file, so it could not read one from there even
+  when started as root.
+- State goes where the package keeps it: `/var/lib/dnsmasq/ostiole.leases`, and the DNSSEC trust
+  anchor at `/var/lib/unbound/root.key`, owned by `unbound` so it can roll the key over in place.
+- unbound listens on `127.0.0.53:53` rather than a port of its own, because `unbound_t` may bind
+  only DNS-labelled ports and is refused any other even as root. dnsmasq keeps `127.0.0.1:53`.
+- The binary belongs in a system bin directory, which is why `ostiole install` copies it to
+  `/usr/local/bin`. systemd will not execute a copy left in `/root`, labelled `admin_home_t`, from
+  the transient units the network handover and the updater run in: it fails with 203/EXEC.
+
+The same rule satisfies AppArmor. Ubuntu enforces a profile for unbound that allows exactly
+`/etc/unbound` and the files under `/var/lib/unbound` that unbound owns; it ships none for dnsmasq.
+
+A denial looks like a daemon that will not start, reporting "Permission denied" for a file root can
+read. `journalctl -u ostiole-dnsmasq -u ostiole-unbound` shows the failure, and `ausearch -m AVC -ts
+recent` the reason.
+
 ## Security
 
 Ostiole runs as root and is the firewall. Report vulnerabilities privately with

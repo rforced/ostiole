@@ -534,7 +534,7 @@ func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) e
 			return nil
 		}
 		install.CancelNetworkRevert(ctx, run)
-		if err := install.NetworkRevert(ctx, sc, rec.Managers, slog.Default()); err != nil {
+		if err := install.NetworkRevert(ctx, sc, network.KernelRoutes{}, rec.Managers, slog.Default()); err != nil {
 			return err
 		}
 		slog.Info("network takeover reverted", "restored", rec.Managers)

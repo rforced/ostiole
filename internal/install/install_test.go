@@ -8,12 +8,25 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rforced/ostiole/internal/network"
 )
 
 type fakeSystemctl struct {
 	calls   [][]string
 	enabled map[string]string
 	active  map[string]string
+}
+
+// fakeRoutes stands in for the kernel's routing table, which a unit test
+// on a workstation has no business reading.
+type fakeRoutes struct{ swept bool }
+
+func (f *fakeRoutes) Defaults() ([]network.DefaultRoute, error) { return nil, nil }
+
+func (f *fakeRoutes) SweepStale(context.Context, []network.DefaultRoute, time.Duration) ([]network.DefaultRoute, error) {
+	f.swept = true
+	return nil, nil
 }
 
 func (f *fakeSystemctl) Run(_ context.Context, args ...string) (string, error) {
@@ -232,8 +245,12 @@ func TestNetworkRevertAndRecord(t *testing.T) {
 		t.Fatalf("record = %v, %v", rec, err)
 	}
 	sc := &fakeSystemctl{}
-	if err := NetworkRevert(context.Background(), sc, rec.Managers, slog.New(slog.DiscardHandler)); err != nil {
+	sweeper := &fakeRoutes{}
+	if err := NetworkRevert(context.Background(), sc, sweeper, rec.Managers, slog.New(slog.DiscardHandler)); err != nil {
 		t.Fatal(err)
+	}
+	if !sweeper.swept {
+		t.Error("the revert never swept the routes networkd left behind")
 	}
 	want := [][]string{
 		{"disable", "--now", NetworkdSocket, NetworkdUnit},
