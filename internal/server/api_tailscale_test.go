@@ -184,6 +184,22 @@ func TestTailscaleStatusIsNeverAnError(t *testing.T) {
 	}
 }
 
+// An online peer carries a zero LastSeen rather than no field, and a node
+// that has not logged in carries a zero KeyExpiry. Neither is a date.
+func TestTailscaleStatusDropsTheZeroTimes(t *testing.T) {
+	t.Parallel()
+	const raw = `{"BackendState":"Running","Self":{"HostName":"fw","KeyExpiry":"0001-01-01T00:00:00Z"},
+"Peer":{"a":{"HostName":"laptop","Online":true,"LastSeen":"0001-01-01T00:00:00Z"}}}`
+	srv, _ := newTailscaleServer(t, tsUnit{installed: true, active: true}, &tsCLI{status: raw}, nil)
+	got := getTailscaleStatus(t, srv)
+	if got.KeyExpiry != nil {
+		t.Errorf("KeyExpiry = %v, want none", got.KeyExpiry)
+	}
+	if len(got.Peers) != 1 || got.Peers[0].LastSeen != nil {
+		t.Errorf("peers = %+v, want no last seen", got.Peers)
+	}
+}
+
 func TestTailscaleStatusReportsTheTailnet(t *testing.T) {
 	t.Parallel()
 	srv, _ := newTailscaleServer(t, tsUnit{installed: true, active: true}, &tsCLI{status: tsRunningStatus}, nil)

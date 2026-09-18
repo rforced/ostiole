@@ -89,7 +89,7 @@ func (a *api) readTailscale(ctx context.Context) tailscaleStatus {
 	if st.Self != nil {
 		out.HostName = st.Self.HostName
 		out.DNSName = st.Self.DNSName
-		out.KeyExpiry = st.Self.KeyExpiry
+		out.KeyExpiry = whenSet(st.Self.KeyExpiry)
 	}
 	if st.CurrentTailnet != nil {
 		out.Tailnet = st.CurrentTailnet.Name
@@ -99,7 +99,7 @@ func (a *api) readTailscale(ctx context.Context) tailscaleStatus {
 		out.Peers = append(out.Peers, tailscalePeer{
 			HostName: p.HostName, DNSName: p.DNSName, OS: p.OS,
 			IPs: orEmpty(p.TailscaleIPs), Routes: orEmpty(p.PrimaryRoutes),
-			Online: p.Online, LastSeen: p.LastSeen,
+			Online: p.Online, LastSeen: whenSet(p.LastSeen),
 			Relay: p.Relay, DirectAddr: p.CurAddr,
 			RxBytes: p.RxBytes, TxBytes: p.TxBytes,
 			ExitNode: p.ExitNodeOption, Expired: p.Expired,
@@ -118,6 +118,16 @@ func sortPeers(peers []tailscalePeer) {
 		}
 		return peers[i].HostName < peers[j].HostName
 	})
+}
+
+// whenSet drops a time the daemon sent as the zero value. A peer that is
+// online carries "LastSeen":"0001-01-01T00:00:00Z" rather than no field at
+// all, which a table would otherwise render as a date in year one.
+func whenSet(t *time.Time) *time.Time {
+	if t == nil || t.IsZero() {
+		return nil
+	}
+	return t
 }
 
 func orEmpty(s []string) []string {
