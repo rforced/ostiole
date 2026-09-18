@@ -349,7 +349,7 @@ const stepTitles = {
           >
             Require keys
           </button>
-          <button v-else type="button" class="btn" :disabled="busy" @click="setSSH(true)">
+          <button v-else type="button" class="btn-secondary" :disabled="busy" @click="setSSH(true)">
             Allow passwords
           </button>
         </template>
@@ -454,7 +454,7 @@ const stepTitles = {
                 <button
                   v-if="root && !e.removed && (e.packages?.length || e.maskOnly)"
                   type="button"
-                  class="btn"
+                  class="btn-secondary"
                   :disabled="busy"
                   @click="removeExtra(e)"
                 >
@@ -527,7 +527,7 @@ const stepTitles = {
                     <button
                       v-if="root && !c.ready && c.availability !== 'unpackaged'"
                       type="button"
-                      class="btn"
+                      class="btn-secondary"
                       :disabled="busy"
                       @click="setUp([c.key])"
                     >
@@ -776,7 +776,7 @@ const stepTitles = {
           <button type="button" class="btn-primary" :disabled="busy" @click="confirmNetwork">
             Keep it
           </button>
-          <button type="button" class="btn" :disabled="busy" @click="revertNetwork">
+          <button type="button" class="btn-secondary" :disabled="busy" @click="revertNetwork">
             Put the old manager back
           </button>
         </div>

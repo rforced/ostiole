@@ -169,7 +169,7 @@ function allowFromExternal() {
       </FormField>
     </div>
     <div v-if="zonesWithoutManagement.length" class="flex flex-wrap items-center gap-3">
-      <button type="button" class="btn" @click="allowFromExternal">
+      <button type="button" class="btn-secondary" @click="allowFromExternal">
         Allow management from {{ zonesWithoutManagement.join(', ') }}
       </button>
       <span class="text-sm text-neutral-500">

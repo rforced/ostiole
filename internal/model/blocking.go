@@ -124,7 +124,7 @@ const DefaultQueryLogEntries = 2000
 // MaxBlockedDomains is the most the merged blocklist may ever come to,
 // whatever the configuration asks for. It matches dnsblock.MaxDomains,
 // which cannot be imported here: dnsblock is the one that imports model.
-const MaxBlockedDomains = 5_000_000
+const MaxBlockedDomains = 25_000_000
 
 // BlockingActive reports whether names are actually being blocked: the
 // feature is on, and so is the DNS server that would enforce it.

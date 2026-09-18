@@ -95,7 +95,7 @@ func TestManagerApplyRunsInATransientUnit(t *testing.T) {
 		t.Errorf("output = %q, want what the journal held", out)
 	}
 
-	want := "systemd-run --unit=ostiole-sysupdate --quiet --property=Type=oneshot " +
+	want := "systemd-run --unit=ostiole-sysupdate --quiet --no-block --property=Type=oneshot " +
 		"--property=RemainAfterExit=yes --property=TimeoutStartSec=3600 " +
 		"--setenv=LC_ALL=C --setenv=LANG=C --setenv=DEBIAN_FRONTEND=noninteractive " +
 		"-- dnf -y upgrade --security --exclude=kernel"
@@ -237,7 +237,7 @@ func TestRunScheduledObeysTheMode(t *testing.T) {
 	if !strings.Contains(out, "by hand") || !strings.Contains(out, "6 update(s)") {
 		t.Errorf("manual = %q", out)
 	}
-	if run.ran("systemd-run --unit=ostiole-sysupdate --quiet --property=Type=oneshot --property=RemainAfterExit=yes --property=TimeoutStartSec=3600 --setenv=LC_ALL=C --setenv=LANG=C --setenv=DEBIAN_FRONTEND=noninteractive -- dnf -y upgrade") {
+	if run.ran("systemd-run --unit=ostiole-sysupdate --quiet --no-block --property=Type=oneshot --property=RemainAfterExit=yes --property=TimeoutStartSec=3600 --setenv=LC_ALL=C --setenv=LANG=C --setenv=DEBIAN_FRONTEND=noninteractive -- dnf -y upgrade") {
 		t.Error("manual mode installed something")
 	}
 	if st := m.Status(false); len(st.Pending.Packages) != 6 {
@@ -250,7 +250,7 @@ func TestRunScheduledObeysTheMode(t *testing.T) {
 	if _, err := m.RunScheduled(t.Context(), ModeSecurity, nil); err != nil {
 		t.Fatal(err)
 	}
-	if !run.ran("systemd-run --unit=ostiole-sysupdate --quiet --property=Type=oneshot --property=RemainAfterExit=yes --property=TimeoutStartSec=3600 --setenv=LC_ALL=C --setenv=LANG=C --setenv=DEBIAN_FRONTEND=noninteractive -- dnf -y upgrade --security") {
+	if !run.ran("systemd-run --unit=ostiole-sysupdate --quiet --no-block --property=Type=oneshot --property=RemainAfterExit=yes --property=TimeoutStartSec=3600 --setenv=LC_ALL=C --setenv=LANG=C --setenv=DEBIAN_FRONTEND=noninteractive -- dnf -y upgrade --security") {
 		t.Errorf("security did not run the security upgrade:\n%s", run.transcript())
 	}
 
@@ -267,7 +267,7 @@ func TestRunScheduledObeysTheMode(t *testing.T) {
 	if !strings.Contains(out, "nothing installed") {
 		t.Errorf("security with no fixes = %q", out)
 	}
-	if run.ran("systemd-run --unit=ostiole-sysupdate --quiet --property=Type=oneshot --property=RemainAfterExit=yes --property=TimeoutStartSec=3600 --setenv=LC_ALL=C --setenv=LANG=C --setenv=DEBIAN_FRONTEND=noninteractive -- dnf -y upgrade --security") {
+	if run.ran("systemd-run --unit=ostiole-sysupdate --quiet --no-block --property=Type=oneshot --property=RemainAfterExit=yes --property=TimeoutStartSec=3600 --setenv=LC_ALL=C --setenv=LANG=C --setenv=DEBIAN_FRONTEND=noninteractive -- dnf -y upgrade --security") {
 		t.Error("it upgraded anyway")
 	}
 }
@@ -287,7 +287,7 @@ func TestCheckScheduledInstallsNothing(t *testing.T) {
 	if !strings.Contains(out, "6 update(s) waiting") || !strings.Contains(out, "security fixes") {
 		t.Errorf("out = %q", out)
 	}
-	if run.ran("systemd-run --unit=ostiole-sysupdate --quiet --property=Type=oneshot --property=RemainAfterExit=yes --property=TimeoutStartSec=3600 --setenv=LC_ALL=C --setenv=LANG=C --setenv=DEBIAN_FRONTEND=noninteractive -- dnf -y upgrade") {
+	if run.ran("systemd-run --unit=ostiole-sysupdate --quiet --no-block --property=Type=oneshot --property=RemainAfterExit=yes --property=TimeoutStartSec=3600 --setenv=LC_ALL=C --setenv=LANG=C --setenv=DEBIAN_FRONTEND=noninteractive -- dnf -y upgrade") {
 		t.Errorf("a check installed something:\n%s", run.transcript())
 	}
 	// What it found is what the page draws itself from.

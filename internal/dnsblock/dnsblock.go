@@ -27,9 +27,10 @@ const (
 	MaxListDomains = MaxDomains
 	// MaxDomains is the hard ceiling on the merged list, whatever the
 	// configuration asks for. At roughly 90 MB of dnsmasq per million
-	// names (ADR-0005) this is already more memory than most appliances
-	// have; it exists to turn an out-of-memory crash into a clear refusal.
-	MaxDomains = 5_000_000
+	// names (ADR-0005) this is about 2.2 GB, far more memory than most
+	// appliances have; it exists to turn an out-of-memory crash into a
+	// clear refusal, not to say what a given router can afford.
+	MaxDomains = 25_000_000
 	// DefaultMaxDomains is the ceiling when the configuration names none.
 	// A million names costs dnsmasq about 90 MB, which a small router can
 	// afford; more than that should be asked for on purpose.

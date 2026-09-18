@@ -207,7 +207,7 @@ function when(s) {
             v-model.number="maxDomains"
             type="number"
             min="1000"
-            :max="limits.hardMax ?? 5000000"
+            :max="limits.hardMax ?? 25000000"
             step="50000"
             class="input w-40 font-mono"
           />

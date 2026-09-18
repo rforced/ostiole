@@ -74,6 +74,13 @@ func (t transient) start(ctx context.Context, argv []string, timeout time.Durati
 	args := []string{
 		"--unit=" + t.unit,
 		"--quiet",
+		// Without this, systemd-run keeps a bus connection open until the
+		// start job completes, and for a oneshot that is the whole
+		// transaction: an upgrade that reloads or restarts dbus in the
+		// middle reset that connection and systemd-run exited 1 while the
+		// unit itself ran to completion. The unit is polled by state
+		// instead, which needs no long-lived connection.
+		"--no-block",
 		"--property=Type=oneshot",
 		// Without this the unit is gone the moment it exits, and with it
 		// the result and the invocation the output is read by.
@@ -87,6 +94,11 @@ func (t transient) start(ctx context.Context, argv []string, timeout time.Durati
 	args = append(args, argv...)
 	out, err := t.run.Run(ctx, "systemd-run", args...)
 	if err != nil {
+		// systemd-run can fail after the job was queued, if the bus
+		// dropped under it. A unit systemd knows is a unit that started.
+		if t.state(ctx).Known {
+			return nil
+		}
 		return fmt.Errorf("%w: systemd-run: %w: %s", errUnitStart, err, tail(out))
 	}
 	return nil

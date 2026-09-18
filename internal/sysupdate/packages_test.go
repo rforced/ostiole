@@ -237,6 +237,52 @@ func TestStartClearsAFinishedUnitAndRefusesARunningOne(t *testing.T) {
 	}
 }
 
+// systemd-run exiting 1 after the job was queued — the bus dropped under
+// it — is not a failure to start: the unit is there, and the state poll
+// takes it from here.
+func TestStartSurvivesABusDropAfterQueueing(t *testing.T) {
+	t.Parallel()
+	show := "systemctl show " + TransientUnit + " -p LoadState -p ActiveState -p SubState -p Result -p ExecMainStatus -p InvocationID"
+	run := &fakeRunner{
+		out: map[string]string{
+			show: "LoadState=loaded\nActiveState=activating\nSubState=start\nResult=\nExecMainStatus=0\nInvocationID=abc",
+		},
+		code: map[string]int{},
+	}
+	// The unit is unknown before the start and known after it.
+	tr := transient{unit: TransientUnit, run: run}
+	calls := 0
+	run.out[show] = ""
+	wrapped := &sequencedRunner{inner: run, before: func(line string) {
+		if strings.HasPrefix(line, "systemd-run") {
+			calls++
+			run.mu.Lock()
+			run.out[show] = "LoadState=loaded\nActiveState=activating\nSubState=start\nResult=\nExecMainStatus=0\nInvocationID=abc"
+			run.code["systemd-run --unit="+TransientUnit+" --quiet --no-block --property=Type=oneshot --property=RemainAfterExit=yes --property=TimeoutStartSec=60 --setenv=LC_ALL=C --setenv=LANG=C --setenv=DEBIAN_FRONTEND=noninteractive -- apt-get -s remove ufw"] = 1
+			run.mu.Unlock()
+		}
+	}}
+	tr.run = wrapped
+	if err := tr.start(context.Background(), []string{"apt-get", "-s", "remove", "ufw"}, time.Minute); err != nil {
+		t.Fatalf("a queued unit was reported as not started: %v", err)
+	}
+	if calls != 1 {
+		t.Errorf("systemd-run ran %d times", calls)
+	}
+}
+
+// sequencedRunner lets a test change the router's answers as commands
+// run, in the order they run.
+type sequencedRunner struct {
+	inner  *fakeRunner
+	before func(line string)
+}
+
+func (s *sequencedRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	s.before(strings.TrimSpace(name + " " + strings.Join(args, " ")))
+	return s.inner.Run(ctx, name, args...)
+}
+
 func TestLocateFindsSbin(t *testing.T) {
 	t.Parallel()
 	// Nothing is on PATH under test, so a real sbin binary is the case
