@@ -200,6 +200,32 @@ func TestTailscaleStatusDropsTheZeroTimes(t *testing.T) {
 	}
 }
 
+// Relay is a peer's DERP home region and stays set on a direct
+// connection, so the path is only knowable while traffic is flowing.
+// Reporting it any other way calls an idle direct peer relayed.
+func TestTailscaleStatusReportsThePathOnlyWhenActive(t *testing.T) {
+	t.Parallel()
+	const raw = `{"BackendState":"Running","Peer":{
+"a":{"HostName":"direct","Online":true,"Active":true,"Relay":"ord","CurAddr":"203.0.113.9:41641"},
+"b":{"HostName":"relayed","Online":true,"Active":true,"Relay":"ord","CurAddr":""},
+"c":{"HostName":"idle","Online":true,"Active":false,"Relay":"ord","CurAddr":""}}}`
+	srv, _ := newTailscaleServer(t, tsUnit{installed: true, active: true}, &tsCLI{status: raw}, nil)
+
+	got := map[string]tailscalePeer{}
+	for _, p := range getTailscaleStatus(t, srv).Peers {
+		got[p.HostName] = p
+	}
+	if p := got["direct"]; !p.Active || p.DirectAddr != "203.0.113.9:41641" || p.Relay != "ord" {
+		t.Errorf("direct peer = %+v, want active with both the endpoint and its home region", p)
+	}
+	if p := got["relayed"]; !p.Active || p.DirectAddr != "" {
+		t.Errorf("relayed peer = %+v", p)
+	}
+	if p := got["idle"]; p.Active {
+		t.Errorf("idle peer = %+v, want active false", p)
+	}
+}
+
 func TestTailscaleStatusReportsTheTailnet(t *testing.T) {
 	t.Parallel()
 	srv, _ := newTailscaleServer(t, tsUnit{installed: true, active: true}, &tsCLI{status: tsRunningStatus}, nil)

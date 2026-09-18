@@ -17,9 +17,21 @@ function name(peer) {
   return (peer.dnsName || peer.hostName).replace(/\.$/, '')
 }
 
+/** A time is worth showing for a peer that is not there to speak for itself. */
 function seen(peer) {
-  if (!peer.lastSeen) return '—'
+  if (peer.online || !peer.lastSeen) return '—'
   return new Date(peer.lastSeen).toLocaleString()
+}
+
+/**
+ * How this peer is reached, in the words `tailscale status` uses. The
+ * region is a peer's DERP home whether or not anything is relayed through
+ * it, and the direct endpoint is cleared when the connection goes idle, so
+ * neither says anything until traffic is flowing.
+ */
+function path(peer) {
+  if (!peer.active) return 'idle'
+  return peer.directAddr ? `direct ${peer.directAddr}` : `relay ${peer.relay}`
 }
 </script>
 
@@ -61,9 +73,7 @@ function seen(peer) {
             <td class="font-mono text-code">{{ p.ips.join(', ') }}</td>
             <td>{{ p.os || '—' }}</td>
             <td class="text-neutral-500">{{ seen(p) }}</td>
-            <td class="font-mono text-code">
-              {{ p.directAddr || (p.relay ? `relay ${p.relay}` : '—') }}
-            </td>
+            <td class="font-mono text-code">{{ path(p) }}</td>
             <td class="font-mono text-code">{{ p.routes.join(', ') || '—' }}</td>
           </tr>
         </TransitionGroup>

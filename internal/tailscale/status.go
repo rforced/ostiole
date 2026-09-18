@@ -46,9 +46,15 @@ type Peer struct {
 	KeyExpiry      *time.Time `json:"KeyExpiry"`
 	Expired        bool       `json:"Expired"`
 	ExitNodeOption bool       `json:"ExitNodeOption"`
-	// Relay is the DERP region a peer is reached through; CurAddr is set
-	// instead once the two of them found a direct path.
-	Relay   string `json:"Relay"`
+	// Active is whether traffic is flowing right now. Only then do Relay
+	// and CurAddr say anything about the path.
+	Active bool `json:"Active"`
+	// Relay is the peer's DERP home region. It is set whether or not
+	// anything is relayed, so it means "reached through this region" only
+	// when the connection is Active and CurAddr is empty.
+	Relay string `json:"Relay"`
+	// CurAddr is the direct endpoint, set while a direct path is carrying
+	// an active connection and cleared when it goes idle.
 	CurAddr string `json:"CurAddr"`
 	RxBytes int64  `json:"RxBytes"`
 	TxBytes int64  `json:"TxBytes"`

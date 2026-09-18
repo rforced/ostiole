@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import { useConfigStore } from '@/stores/config'
+import PeersTab from '@/views/vpn/tailscale/PeersTab.vue'
 import SettingsTab from '@/views/vpn/tailscale/SettingsTab.vue'
 import TailscaleStatus from '@/views/vpn/tailscale/TailscaleStatus.vue'
 
@@ -123,6 +124,69 @@ describe('TailscaleStatus', () => {
       { draft: both, saved: both },
     )
     expect(wrapper.text()).not.toContain('Key expires')
+  })
+})
+
+/** TransitionGroup stubs out, so the tbody it renders as is not there. */
+function bodyRows(wrapper) {
+  return wrapper.findAll('tr').filter((r) => r.findAll('td').length > 0)
+}
+
+describe('Tailscale PeersTab', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  // A peer's DERP home region is set whether or not anything is relayed
+  // through it, and the direct endpoint is cleared when the connection
+  // goes idle. Reading either on its own calls an idle direct peer
+  // relayed, which is what `tailscale status` on that peer contradicts.
+  it('names the path only while traffic is flowing', async () => {
+    api.tailscale.status.mockResolvedValue(
+      status({
+        peers: [
+          {
+            hostName: 'direct',
+            ips: [],
+            routes: [],
+            online: true,
+            active: true,
+            relay: 'ord',
+            directAddr: '203.0.113.9:41641',
+          },
+          { hostName: 'relayed', ips: [], routes: [], online: true, active: true, relay: 'ord' },
+          { hostName: 'dozing', ips: [], routes: [], online: true, active: false, relay: 'ord' },
+        ],
+      }),
+    )
+    const wrapper = mount(PeersTab, { global: { stubs } })
+    await flushPromises()
+
+    const rows = bodyRows(wrapper)
+    expect(rows[0].text()).toContain('direct 203.0.113.9:41641')
+    expect(rows[1].text()).toContain('relay ord')
+    expect(rows[2].text()).toContain('idle')
+    expect(rows[2].text()).not.toContain('relay')
+  })
+
+  // "online" and "last seen 20 minutes ago" cannot both be the answer.
+  it('keeps a last seen time for the peers that are not there', async () => {
+    const at = new Date(Date.now() - 3600000).toISOString()
+    api.tailscale.status.mockResolvedValue(
+      status({
+        peers: [
+          { hostName: 'here', ips: [], routes: [], online: true, active: false, lastSeen: at },
+          { hostName: 'gone', ips: [], routes: [], online: false, active: false, lastSeen: at },
+        ],
+      }),
+    )
+    const wrapper = mount(PeersTab, { global: { stubs } })
+    await flushPromises()
+
+    const rows = bodyRows(wrapper)
+    expect(rows[0].findAll('td')[3].text()).toBe('—')
+    expect(rows[1].findAll('td')[3].text()).not.toBe('—')
   })
 })
 

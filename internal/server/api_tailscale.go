@@ -33,19 +33,23 @@ type tailscaleStatus struct {
 
 // tailscalePeer is one other node, in the order the page lists them.
 type tailscalePeer struct {
-	HostName   string     `json:"hostName"`
-	DNSName    string     `json:"dnsName,omitempty"`
-	OS         string     `json:"os,omitempty"`
-	IPs        []string   `json:"ips"`
-	Routes     []string   `json:"routes"`
-	Online     bool       `json:"online"`
-	LastSeen   *time.Time `json:"lastSeen,omitempty"`
-	Relay      string     `json:"relay,omitempty"`
-	DirectAddr string     `json:"directAddr,omitempty"`
-	RxBytes    int64      `json:"rxBytes,omitempty"`
-	TxBytes    int64      `json:"txBytes,omitempty"`
-	ExitNode   bool       `json:"exitNode,omitempty"`
-	Expired    bool       `json:"expired,omitempty"`
+	HostName string     `json:"hostName"`
+	DNSName  string     `json:"dnsName,omitempty"`
+	OS       string     `json:"os,omitempty"`
+	IPs      []string   `json:"ips"`
+	Routes   []string   `json:"routes"`
+	Online   bool       `json:"online"`
+	LastSeen *time.Time `json:"lastSeen,omitempty"`
+	// Active is whether traffic is flowing. Relay and DirectAddr describe
+	// the path only while it is; idle clears the direct endpoint and would
+	// otherwise read as relayed.
+	Active     bool   `json:"active"`
+	Relay      string `json:"relay,omitempty"`
+	DirectAddr string `json:"directAddr,omitempty"`
+	RxBytes    int64  `json:"rxBytes,omitempty"`
+	TxBytes    int64  `json:"txBytes,omitempty"`
+	ExitNode   bool   `json:"exitNode,omitempty"`
+	Expired    bool   `json:"expired,omitempty"`
 }
 
 func (a *api) registerTailscale(mux *router) {
@@ -100,7 +104,7 @@ func (a *api) readTailscale(ctx context.Context) tailscaleStatus {
 			HostName: p.HostName, DNSName: p.DNSName, OS: p.OS,
 			IPs: orEmpty(p.TailscaleIPs), Routes: orEmpty(p.PrimaryRoutes),
 			Online: p.Online, LastSeen: whenSet(p.LastSeen),
-			Relay: p.Relay, DirectAddr: p.CurAddr,
+			Active: p.Active, Relay: p.Relay, DirectAddr: p.CurAddr,
 			RxBytes: p.RxBytes, TxBytes: p.TxBytes,
 			ExitNode: p.ExitNodeOption, Expired: p.Expired,
 		})
