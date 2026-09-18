@@ -16,11 +16,16 @@ jobs:
   web:
     name: Web
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: web
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: latest
@@ -40,8 +45,13 @@ jobs:
     name: Go
     runs-on: ubuntu-latest
     needs: web
+    timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -52,7 +62,7 @@ jobs:
           path: internal/web/dist
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          version: latest
+          version: v2.13.2
       - run: go vet ./...
       - run: go test -race -cover ./...
       - name: Build
@@ -63,7 +73,7 @@ jobs:
         run: |
           ./bin/ostiole version
           ./bin/ostiole serve --listen 127.0.0.1:18080 &
-          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:18080/api/v1/health && break; sleep 0.5; done
+          for _ in $(seq 1 20); do curl -fsS http://127.0.0.1:18080/api/v1/health && break; sleep 0.5; done
           curl -fsS http://127.0.0.1:18080/ | grep -q '<div id="app">'
           kill %1
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -75,11 +85,16 @@ jobs:
     name: Browser
     runs-on: ubuntu-latest
     needs: go
+    timeout-minutes: 20
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: web
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ostiole-linux-amd64
@@ -100,34 +115,47 @@ jobs:
           path: web/playwright-report
           retention-days: 7
 
-  packages:
-    name: Packages (${{ matrix.image }})
+  # The test systems are listed once, in .github/test-systems.json, and
+  # read from there into the matrix below. Adding or dropping one is an
+  # edit to that file and nothing else.
+  targets:
+    name: Test systems
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      images: ${{ steps.read.outputs.images }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: read
+        run: echo "images=$(jq -c . .github/test-systems.json)" >> "$GITHUB_OUTPUT"
+
+  # One snapshot build, used by every test system below. It used to be
+  # built once per system, which was the same seven builds of the same
+  # commit.
+  dist:
+    name: Snapshot packages
     runs-on: ubuntu-latest
     needs: web
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - image: debian:12
-            install: apt-get update -qq && apt-get install -y -qq ./dist/*_linux_amd64.deb
-          - image: ubuntu:24.04
-            install: apt-get update -qq && apt-get install -y -qq ./dist/*_linux_amd64.deb
-          - image: fedora:42
-            install: dnf install -y -q ./dist/*_linux_amd64.rpm
-          - image: rockylinux/rockylinux:10
-            install: dnf install -y -q ./dist/*_linux_amd64.rpm
-          - image: alpine:3.21
-            install: apk add --allow-untrusted ./dist/*_linux_amd64.apk
-          - image: archlinux:latest
-            install: pacman -Sy --noconfirm && pacman -U --noconfirm ./dist/*_linux_amd64.pkg.tar.zst
+    timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
+      # The build cache is kept here and not in the release workflow.
+      # goreleaser is what publishes there, which is why zizmor asks
+      # about it; here it builds a snapshot that is skipped, thrown at
+      # seven containers, and deleted. Nobody installs this.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache: true
+          cache: true # zizmor: ignore[cache-poisoning]
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: web-dist
@@ -137,12 +165,76 @@ jobs:
           distribution: goreleaser
           version: "~> v2"
           args: release --snapshot --clean --skip=sign,publish,sbom,before
-      - name: Install the package and run the binary
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: snapshot-dist
+          if-no-files-found: error
+          path: |
+            dist/*.tar.gz
+            dist/*.deb
+            dist/*.rpm
+            dist/*.apk
+            dist/*.pkg.tar.zst
+            dist/checksums.txt
+
+  # Everything that has to be true on a real distribution: its package
+  # installs and the binary in it runs, the install script behaves
+  # against a build it has never seen, and — where there is systemd to
+  # install into — a whole `ostiole install` does what it printed.
+  systems:
+    name: ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    needs: [dist, targets]
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.targets.outputs.images) }}
+    env:
+      IMAGE: ${{ matrix.image }}
+      PORT: '18099'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: snapshot-dist
+          path: dist
+
+      - name: Serve the build the way a release is served
         run: |
-          docker run --rm -v "$PWD/dist:/dist" -v "$PWD/internal/nft/testdata:/testdata:ro" -w / ${{ matrix.image }} sh -c '
-            set -e
-            ${{ matrix.install }}
-            ostiole version
-            ostiole render --file /testdata/full.json | head -3
-            ostiole check --file /testdata/full.json --nft /bin/true 2>&1 | head -1 || true
-          '
+          version=$(scripts/ci/serve-tree.sh dist /tmp/serve)
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          # Detached, with its output on a file: a background process
+          # still holding the step's stdout is a step that never ends.
+          python3 -m http.server "$PORT" --bind 0.0.0.0 --directory /tmp/serve \
+            >/tmp/serve.log 2>&1 &
+          disown
+          for _ in $(seq 1 20); do
+            curl -fsS "http://127.0.0.1:$PORT/install.sh" >/dev/null 2>&1 && break
+            sleep 0.5
+          done
+          # Insisted on, not hoped for: the tests below are only worth
+          # anything if there is something behind this address.
+          curl -fsS "http://127.0.0.1:$PORT/install.sh" >/dev/null
+
+      - name: The distribution package
+        run: |
+          docker run --rm -w / \
+            -v "$PWD/dist:/dist:ro" \
+            -v "$PWD/scripts/ci:/ci:ro" \
+            -v "$PWD/internal/nft/testdata:/testdata:ro" \
+            "$IMAGE" sh /ci/install-package.sh
+
+      - name: The install script
+        run: |
+          docker run --rm --add-host=host.test:host-gateway \
+            -v "$PWD/scripts/ci:/ci:ro" \
+            "$IMAGE" sh /ci/install-script-test.sh "http://host.test:$PORT" "$VERSION"
+
+      - name: A real install, under systemd
+        if: matrix.systemd
+        run: scripts/ci/run-systemd-test.sh "$IMAGE" "http://host.test:$PORT" "$VERSION"

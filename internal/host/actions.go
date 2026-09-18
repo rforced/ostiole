@@ -274,12 +274,34 @@ func protectedPackages(rep Report) []string {
 // refuseRemoval reads a package manager's plan for the packages it would
 // take, and refuses when one of them is protected.
 func refuseRemoval(plan string, units, protected []string) error {
-	taken := namedIn(plan, protected)
+	taken := namedIn(decisive(plan), protected)
 	if len(taken) == 0 {
 		return nil
 	}
 	return fmt.Errorf("refusing to remove %s: the package manager would also remove %s, which Ostiole needs",
 		join(units), join(taken))
+}
+
+// decisive narrows a plan to the lines that say what the manager is
+// going to do, for the managers that also print what they are not going
+// to do. apt's simulation lists the packages that a removal would leave
+// unused under "automatically installed and are no longer required" —
+// advice about a later `apt autoremove`, not part of this transaction.
+// Reading it as the transaction refuses a perfectly good install on any
+// router where nftables arrived as a dependency of the firewall being
+// replaced, which is every stock Ubuntu with ufw on it. The "Remv"
+// lines are what apt will actually do.
+func decisive(plan string) string {
+	var remv []string
+	for _, line := range strings.Split(plan, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "Remv ") {
+			remv = append(remv, line)
+		}
+	}
+	if len(remv) == 0 {
+		return plan
+	}
+	return strings.Join(remv, "\n")
 }
 
 // namedIn reports which of the names a plan mentions as a package. Every

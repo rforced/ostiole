@@ -575,6 +575,18 @@ Transaction Summary`,
 		"only the competitor": "Removing:\n firewalld  noarch  2.4.3-4.el10_2  @baseos\n",
 		"a lookalike":         "Removing unused dependencies:\n python3-nftables  x86_64  1:1.1.5-6.el10_2\n",
 		"empty":               "",
+		// apt says what a removal would leave unused as well as what it
+		// will remove, and the first of those is advice about a later
+		// `apt autoremove`. On a stock Ubuntu nftables is there because
+		// ufw depends on it, so it lands in that list every time and
+		// reading it as the transaction refuses the install.
+		"apt's autoremove advice": `The following packages were automatically installed and are no longer required:
+  iptables libnftnl11 nftables python3
+Use 'apt autoremove' to remove them.
+The following packages will be REMOVED:
+  ufw unattended-upgrades
+Remv ufw [0.36.2-9build1]
+Remv unattended-upgrades [2.12ubuntu9]`,
 	} {
 		if err := refuseRemoval(plan, []string{"firewalld"}, protected); err != nil {
 			t.Errorf("%s: refused %v", name, err)

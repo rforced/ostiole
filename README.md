@@ -39,7 +39,15 @@ curl -fsSL https://github.com/rforced/ostiole/releases/latest/download/install.s
 ```
 
 That downloads the latest release into `/usr/local/bin`, verifies its checksum, and runs
-`ostiole install`, which writes the systemd units and starts the web UI on `https://<host>/`.
+`ostiole install`, which lists everything it would install, mask and remove and waits for a
+yes before doing any of it. To agree in advance — in a provisioning script, or anywhere
+without a terminal to answer at — pass the flag through:
+
+```sh
+curl -fsSL https://github.com/rforced/ostiole/releases/latest/download/install.sh | sudo sh -s -- --yes
+```
+
+The install writes the systemd units and starts the web UI on `https://<host>/`.
 Packages (deb, rpm, apk, Arch) are attached to every release; after installing one, run
 `ostiole install` yourself. Then create the admin account in the UI, run the setup wizard,
 and use `ostiole takeover` and `ostiole takeover --network` to retire the previous firewall

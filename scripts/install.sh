@@ -3,7 +3,8 @@
 # `ostiole install`. Usage:
 #   curl -fsSL https://github.com/rforced/ostiole/releases/latest/download/install.sh | sudo sh
 #   curl -fsSL … | sudo sh -s -- --yes      (agree to the plan in advance)
-# Environment: OSTIOLE_VERSION=v0.1.0 pins a version; OSTIOLE_NO_INSTALL=1 only places the binary.
+# Environment: OSTIOLE_VERSION=v0.1.0 pins a version; OSTIOLE_NO_INSTALL=1 only places the binary;
+# OSTIOLE_BASE_URL=https://mirror/... downloads from somewhere other than the GitHub release.
 set -eu
 
 REPO="${OSTIOLE_REPO:-rforced/ostiole}"
@@ -53,7 +54,11 @@ if [ -z "$VERSION" ]; then
   [ -n "$VERSION" ] || { echo "could not determine the latest release" >&2; exit 1; }
 fi
 PLAIN="${VERSION#v}"
-BASE="https://github.com/$REPO/releases/download/$VERSION"
+# OSTIOLE_BASE_URL points the download somewhere else: a mirror, an
+# air-gapped file server, or the build CI is testing. It does not weaken
+# anything — the checksum is still checked, and the signature is still
+# checked against the release key built in below.
+BASE="${OSTIOLE_BASE_URL:-https://github.com/$REPO/releases/download/$VERSION}"
 TARBALL="ostiole_${PLAIN}_linux_${ARCH}.tar.gz"
 
 TMP="$(mktemp -d)"
@@ -80,8 +85,11 @@ verify_signature() {
     echo "note: openssl or base64 missing, skipping the signature check" >&2
     return 0
   fi
-  if ! curl -fsSL -o "$TMP/checksums.txt.sig" "$BASE/checksums.txt.sig"; then
-    echo "warning: this release publishes no signature" >&2
+  # Quiet, because the usual reason this fails is a 404 and curl's own
+  # account of that reads like a broken install rather than a release
+  # with nothing to check.
+  if ! curl -fsSL -o "$TMP/checksums.txt.sig" "$BASE/checksums.txt.sig" 2>/dev/null; then
+    echo "warning: no signature published for this release; the checksum was still checked" >&2
     return 0
   fi
   base64 -d < "$TMP/checksums.txt.sig" > "$TMP/sig.bin" 2>/dev/null ||

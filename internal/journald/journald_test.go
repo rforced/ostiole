@@ -58,6 +58,35 @@ func TestApplyWritesAndRestartsOnlyOnChange(t *testing.T) {
 	}
 }
 
+// systemd's own defaults live in /usr/lib, and RHEL 10 ships
+// journald.conf there and nowhere else. A router looked at for the file
+// in /etc alone reports no journald, and is then left with a journal
+// that is neither bounded nor kept across the reboot it would explain —
+// silently, because the installer had already said it would bound it.
+func TestJournaldIsFoundWhereSystemdKeepsIts(t *testing.T) {
+	t.Parallel()
+	for _, dir := range []string{"etc/systemd", "usr/lib/systemd", "lib/systemd"} {
+		root := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		conf := filepath.Join(root, dir, "journald.conf")
+		if err := os.WriteFile(conf, []byte("[Journal]\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		sys := System{Run: &fakeRunner{}, Root: root}
+		if !sys.Present() {
+			t.Errorf("journald at %s was not found", conf)
+		}
+		if err := sys.Apply(context.Background(), 0); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(filepath.Join(root, ConfFile)); err != nil {
+			t.Errorf("journald at %s was left unbounded", conf)
+		}
+	}
+}
+
 // A router without journald (Alpine) gets nothing written and nothing
 // restarted.
 func TestApplySkipsARouterWithoutJournald(t *testing.T) {

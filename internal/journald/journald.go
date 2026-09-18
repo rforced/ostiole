@@ -22,9 +22,17 @@ import (
 // here wins over the distribution's defaults.
 const ConfFile = "/etc/systemd/journald.conf.d/ostiole.conf"
 
-// mainConf is journald's own configuration file, whose presence is how a
-// router says it has journald at all. Alpine does not.
-const mainConf = "/etc/systemd/journald.conf"
+// mainConfs are where journald's own configuration file lives, and
+// finding one is how a router says it has journald at all. Alpine has
+// none of them. /etc is where it has always been and where Debian and
+// Ubuntu still ship it; systemd's own place for defaults is /usr/lib,
+// and RHEL 10 ships it there and nowhere else, so a router that looked
+// only in /etc was told it had no journald and left unbounded.
+var mainConfs = []string{
+	"/etc/systemd/journald.conf",
+	"/usr/lib/systemd/journald.conf",
+	"/lib/systemd/journald.conf",
+}
 
 // DefaultMaxUseGB is the ceiling when the setting says nothing: enough
 // to hold weeks of a busy firewall's logging, small next to any disk a
@@ -79,7 +87,7 @@ func Content(maxUseGB int) string {
 // nothing: journald is restarted only when there is something new for it
 // to read.
 func (s System) Apply(ctx context.Context, maxUseGB int) error {
-	if _, err := os.Stat(s.path(mainConf)); err != nil {
+	if !s.Present() {
 		return nil
 	}
 	path := s.path(ConfFile)
@@ -106,8 +114,12 @@ func (s System) Apply(ctx context.Context, maxUseGB int) error {
 
 // Present reports whether this router has journald.
 func (s System) Present() bool {
-	_, err := os.Stat(s.path(mainConf))
-	return err == nil
+	for _, conf := range mainConfs {
+		if _, err := os.Stat(s.path(conf)); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // writeFile writes atomically, so journald never reads half a file.
