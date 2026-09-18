@@ -47,6 +47,16 @@ const dns = computed({
     else delete system.value.dnsServers
   },
 })
+// These servers are the router's own resolvers only while the DNS service is
+// off. With it on the router asks dnsmasq like any client, and this field is
+// at most the fallback the forwarder uses when it has no upstreams of its own.
+const dnsHint = computed(() => {
+  const svc = config.draft.services?.dns
+  if (!svc?.enabled) return 'Comma separated. This router resolves names here.'
+  if ((svc.resolver || 'forward') === 'forward' && !(svc.upstreams ?? []).length)
+    return 'Comma separated. The DNS service forwards here until it has upstreams of its own.'
+  return 'Comma separated. Unused while the DNS service answers for this router.'
+})
 // The journal's ceiling. Empty means the default, which the placeholder
 // shows rather than the field pretending it was chosen.
 const journal = computed({
@@ -70,7 +80,7 @@ const journal = computed({
           <option v-for="z in zones" :key="z" :value="z">{{ z }}</option>
         </select>
       </FormField>
-      <FormField id="sys-dns" label="DNS servers for this router" hint="Comma separated.">
+      <FormField id="sys-dns" label="DNS servers for this router" :hint="dnsHint">
         <input id="sys-dns" v-model="dns" class="input font-mono" spellcheck="false" />
       </FormField>
       <FormField

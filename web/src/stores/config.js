@@ -838,7 +838,8 @@ export const useConfigStore = defineStore('config', () => {
         const i =
           interfaces.value.find((x) => x.name === id) ??
           saved.value?.interfaces?.find((x) => x.name === id)
-        return i?.wireguard ? '/vpn' : '/interfaces'
+        if (i?.wireguard) return '/vpn/wireguard'
+        return '/interfaces'
       }
       case 'zones':
         // Holding back a busy host is a priority decision, so it is edited

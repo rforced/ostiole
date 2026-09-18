@@ -6,8 +6,8 @@ test.describe.configure({ mode: 'serial' })
 
 test('create a WireGuard tunnel with a peer and apply it', async ({ page }) => {
   await login(page)
-  await page.goto('/vpn')
-  await expect(page.getByRole('heading', { name: 'VPN' })).toBeVisible()
+  await page.goto('/vpn/wireguard')
+  await expect(page.getByRole('heading', { name: 'WireGuard' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Add tunnel' }).click()
   let dialog = page.getByRole('dialog')
@@ -52,7 +52,7 @@ test('create a WireGuard tunnel with a peer and apply it', async ({ page }) => {
 
 test('a bad peer key is rejected by the server', async ({ page }) => {
   await login(page)
-  await page.goto('/vpn')
+  await page.goto('/vpn/wireguard')
   await page
     .getByRole('region', { name: 'Tunnel wg0' })
     .getByRole('button', { name: 'Add peer' })

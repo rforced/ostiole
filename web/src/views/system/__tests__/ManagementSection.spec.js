@@ -9,11 +9,18 @@ import ManagementSection from '@/views/system/ManagementSection.vue'
 
 vi.mock('@/lib/api', () => ({ api: { timezones: vi.fn() } }))
 
-const draft = (system = {}) => ({ version: 3, system, zones: [], interfaces: [], rules: [] })
+const draft = (system = {}, services) => ({
+  version: 3,
+  system,
+  zones: [],
+  interfaces: [],
+  rules: [],
+  ...(services ? { services } : {}),
+})
 
-async function open(system) {
+async function open(system, services) {
   const config = useConfigStore()
-  config.replaceDraft(draft(system))
+  config.replaceDraft(draft(system, services))
   const wrapper = mount(ManagementSection, { global: { stubs: { RouterLink: true } } })
   await flushPromises()
   return { wrapper, config, zone: wrapper.get('#sys-timezone') }
@@ -77,6 +84,30 @@ describe('ManagementSection host settings', () => {
     expect(config.draft.system.journalMaxUseGB).toBe(25)
     await field.setValue('')
     expect(config.draft.system).not.toHaveProperty('journalMaxUseGB')
+  })
+
+  // The field only resolves for the router while the DNS service is off, so
+  // the hint has to say which of the three it is rather than let an operator
+  // think a dead field is the one their lookups go through.
+  it('says these servers resolve for the router when the DNS service is off', async () => {
+    const { wrapper } = await open({}, { dns: { enabled: false } })
+    expect(wrapper.get('#sys-dns').element.value).toBe('')
+    expect(wrapper.text()).toContain('This router resolves names here.')
+  })
+
+  it('says a forwarder with no upstreams of its own falls back here', async () => {
+    const { wrapper } = await open({}, { dns: { enabled: true } })
+    expect(wrapper.text()).toContain('forwards here until it has upstreams of its own')
+  })
+
+  it('calls the field unused once the DNS service resolves', async () => {
+    const { wrapper } = await open({}, { dns: { enabled: true, resolver: 'tls' } })
+    expect(wrapper.text()).toContain('Unused while the DNS service answers for this router.')
+  })
+
+  it('calls the field unused once the forwarder has upstreams', async () => {
+    const { wrapper } = await open({}, { dns: { enabled: true, upstreams: ['1.1.1.1'] } })
+    expect(wrapper.text()).toContain('Unused while the DNS service answers for this router.')
   })
 
   // How sshd lets people in is configuration like anything else, so the

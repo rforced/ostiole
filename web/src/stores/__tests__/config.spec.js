@@ -225,6 +225,8 @@ describe('config store draft changes', () => {
     expect(config.hasChanges('/services/dns')).toBe(false)
     // A tunnel is an interface, but it lives under VPN.
     expect(config.hasChanges('/vpn')).toBe(true)
+    expect(config.hasChanges('/vpn/wireguard')).toBe(true)
+    expect(config.hasChanges('/vpn/tailscale')).toBe(false)
     expect(config.hasChanges('/interfaces')).toBe(false)
     expect(config.hasChanges('/system/backup')).toBe(true)
     expect(config.hasChanges('/')).toBe(false)

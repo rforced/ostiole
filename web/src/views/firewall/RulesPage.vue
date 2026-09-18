@@ -24,7 +24,7 @@ const SETTINGS = {
   dns: '/services/dns',
   enforcement: '/services/dns#enforcement',
   upnp: '/services/upnp',
-  wireguard: '/vpn',
+  wireguard: '/vpn/wireguard',
   nat: '/firewall/nat',
   protection: '/firewall/protection',
 }

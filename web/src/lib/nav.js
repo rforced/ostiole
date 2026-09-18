@@ -133,7 +133,19 @@ export const NAV = [
       },
     ],
   },
-  { to: '/vpn', label: 'VPN', icon: Lock, view: () => import('@/views/VpnView.vue') },
+  {
+    to: '/vpn',
+    label: 'VPN',
+    icon: Lock,
+    needsConfig: true,
+    pages: [
+      {
+        path: 'wireguard',
+        label: 'WireGuard',
+        view: () => import('@/views/vpn/WireguardPage.vue'),
+      },
+    ],
+  },
   {
     to: '/crons',
     label: 'Crons',
