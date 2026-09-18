@@ -15,7 +15,7 @@ import (
 // ruleset uses nothing newer than counters, log prefixes, and comments,
 // all of which predate it by years. 5.14 is what RHEL 9 and its rebuilds
 // ship, so the line sits at the oldest enterprise distribution still in
-// support and takes every current Debian, Ubuntu, Fedora, Alpine, and Arch
+// support and takes every current Debian, Ubuntu, Fedora, and Arch
 // with it. Anything older is RHEL 8, Debian 11, or Ubuntu 20.04, which
 // Ostiole does not test against.
 var Minimum = Version{Major: 5, Minor: 14}

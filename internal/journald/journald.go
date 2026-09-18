@@ -23,8 +23,8 @@ import (
 const ConfFile = "/etc/systemd/journald.conf.d/ostiole.conf"
 
 // mainConfs are where journald's own configuration file lives, and
-// finding one is how a router says it has journald at all. Alpine has
-// none of them. /etc is where it has always been and where Debian and
+// finding one is how a router says it has journald at all: a stripped
+// image may have systemd and no journal. /etc is where Debian and
 // Ubuntu still ship it; systemd's own place for defaults is /usr/lib,
 // and RHEL 10 ships it there and nowhere else, so a router that looked
 // only in /etc was told it had no journald and left unbounded.

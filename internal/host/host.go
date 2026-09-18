@@ -135,7 +135,7 @@ var reportedCommands = []string{"nft", "dnsmasq", "unbound", "miniupnpd", "pppd"
 func Commands() []string { return append([]string(nil), reportedCommands...) }
 
 // managers are the package managers a distribution is recognised by.
-var managers = []string{"apt-get", "dnf", "pacman", "apk", "zypper"}
+var managers = []string{"apt-get", "dnf", "pacman", "zypper"}
 
 // Status gathers everything, and never fails: a page that cannot say what
 // is wrong with a router is worse than a page with gaps in it, and every

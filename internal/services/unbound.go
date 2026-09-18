@@ -37,7 +37,7 @@ const (
 // DNS over TLS servers.
 var certBundles = []string{
 	"/etc/pki/tls/certs/ca-bundle.crt",       // RHEL family
-	"/etc/ssl/certs/ca-certificates.crt",     // Debian, Arch, Alpine
+	"/etc/ssl/certs/ca-certificates.crt",     // Debian and Arch
 	"/var/lib/ca-certificates/ca-bundle.pem", // openSUSE
 }
 

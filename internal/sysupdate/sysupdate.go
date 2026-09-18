@@ -148,7 +148,7 @@ type Driver interface {
 	// Name is the command, e.g. "dnf".
 	Name() string
 	// SecurityCapable reports whether this manager can install security
-	// fixes alone. Arch and Alpine ship one rolling stream and cannot.
+	// fixes alone. Arch ships one rolling stream and cannot.
 	SecurityCapable() bool
 	// ExcludeSupported reports whether a never-upgrade list can be
 	// honoured in this mode, so the page can say when it cannot rather
@@ -167,11 +167,11 @@ type Driver interface {
 // Drivers are the managers Ostiole knows, in the order they are looked
 // for on PATH.
 func Drivers() []Driver {
-	return []Driver{dnf{}, apt{}, zypper{}, pacman{}, apk{}}
+	return []Driver{dnf{}, apt{}, zypper{}, pacman{}}
 }
 
 // ErrNoManager means this router has no package manager Ostiole can drive.
-var ErrNoManager = errors.New("no supported package manager was found (dnf, apt-get, zypper, pacman, apk)")
+var ErrNoManager = errors.New("no supported package manager was found (dnf, apt-get, zypper, pacman)")
 
 // ErrNoSecurityChannel means the manager has no security-only mode, so
 // "security" would have to mean "everything" to do anything at all.

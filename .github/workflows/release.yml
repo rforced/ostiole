@@ -53,6 +53,5 @@ jobs:
             dist/*.tar.gz
             dist/*.deb
             dist/*.rpm
-            dist/*.apk
             dist/*.pkg.tar.zst
             dist/checksums.txt

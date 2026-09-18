@@ -14,7 +14,6 @@ apt-get)
 	DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /dist/*_linux_amd64.deb >/dev/null
 	;;
 dnf) dnf install -y -q /dist/*_linux_amd64.rpm >/dev/null ;;
-apk) apk add --allow-untrusted /dist/*_linux_amd64.apk >/dev/null ;;
 pacman)
 	pacman -Sy --noconfirm >/dev/null
 	pacman -U --noconfirm /dist/*_linux_amd64.pkg.tar.zst >/dev/null

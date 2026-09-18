@@ -143,7 +143,6 @@ var TCPackages = map[string]string{
 	"apt-get": "iproute2",
 	"pacman":  "iproute2",
 	"zypper":  "iproute2",
-	"apk":     "iproute2-tc",
 }
 
 // TCPackage is what to install to get tc on a host with the given package

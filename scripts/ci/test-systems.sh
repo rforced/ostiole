@@ -59,7 +59,6 @@ echo "serving $VERSION on :$PORT"
 
 failed=()
 for image in "${images[@]}"; do
-  systemd=$(jq -r --arg i "$image" '.[] | select(.image == $i) | .systemd' "$SYSTEMS")
   echo
   echo "################ $image"
   ok=yes
@@ -70,10 +69,8 @@ for image in "${images[@]}"; do
   "$CONTAINER" run --rm --add-host=host.test:host-gateway \
     -v "$REPO/scripts/ci:/ci:ro" \
     "$image" sh /ci/install-script-test.sh "http://host.test:$PORT" "$VERSION" || ok=no
-  if [ "$systemd" = true ]; then
-    CONTAINER=$CONTAINER "$REPO/scripts/ci/run-systemd-test.sh" \
-      "$image" "http://host.test:$PORT" "$VERSION" || ok=no
-  fi
+  CONTAINER=$CONTAINER "$REPO/scripts/ci/run-systemd-test.sh" \
+    "$image" "http://host.test:$PORT" "$VERSION" || ok=no
   [ "$ok" = yes ] || failed+=("$image")
 done
 

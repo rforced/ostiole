@@ -1,10 +1,10 @@
 # shellcheck shell=sh
 # Shared helpers for the container tests: one package manager out of
-# four, and the few questions these tests put to it. Sourced, not run.
+# three, and the few questions these tests put to it. Sourced, not run.
 
 # manager names the package manager this image has.
 manager() {
-	for m in apt-get dnf apk pacman; do
+	for m in apt-get dnf pacman; do
 		if command -v "$m" >/dev/null 2>&1; then
 			echo "$m"
 			return 0
@@ -17,7 +17,6 @@ pkg_refresh() {
 	case "$(manager)" in
 	apt-get) DEBIAN_FRONTEND=noninteractive apt-get update -qq ;;
 	dnf) dnf makecache -q >/dev/null 2>&1 || true ;;
-	apk) apk update >/dev/null ;;
 	pacman) pacman -Sy --noconfirm >/dev/null ;;
 	esac
 }
@@ -26,7 +25,6 @@ pkg_install() {
 	case "$(manager)" in
 	apt-get) DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@" >/dev/null ;;
 	dnf) dnf install -y -q "$@" >/dev/null ;;
-	apk) apk add --no-cache "$@" >/dev/null ;;
 	pacman) pacman -S --noconfirm --needed "$@" >/dev/null ;;
 	*) return 1 ;;
 	esac
@@ -39,7 +37,6 @@ pkg_present() {
 	case "$(manager)" in
 	apt-get) dpkg-query -s "$1" 2>/dev/null | grep -q "^Status:.*install ok installed" ;;
 	dnf) rpm -q "$1" >/dev/null 2>&1 ;;
-	apk) apk info -e "$1" >/dev/null 2>&1 ;;
 	pacman) pacman -Q "$1" >/dev/null 2>&1 ;;
 	*) return 1 ;;
 	esac

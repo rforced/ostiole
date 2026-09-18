@@ -49,8 +49,8 @@ describe('UpdateModeFields', () => {
   })
 
   it('greys out security where the package manager has no such channel', () => {
-    const w = open({ securityCapable: false, securityNote: 'apk has no security-only channel.' })
+    const w = open({ securityCapable: false, securityNote: 'pacman has no security-only channel.' })
     expect(w.get('#upd-mode-security').attributes('disabled')).toBeDefined()
-    expect(w.text()).toContain('apk has no security-only channel.')
+    expect(w.text()).toContain('pacman has no security-only channel.')
   })
 })

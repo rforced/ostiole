@@ -150,7 +150,7 @@ func newRootCmd() *cobra.Command {
 	pf.StringVar(&g.nftBin, "nft", "nft", "path to the nft binary")
 	pf.StringVar(&g.tcBin, "tc", "tc", "path to the tc binary, which traffic shaping drives")
 	pf.StringVar(&g.netBackend, "network-backend", "auto", "network backend: auto (networkd when it is running), networkd, or none")
-	pf.StringVar(&g.packageManager, "package-manager", "", "package manager to drive for system updates (dnf, apt-get, zypper, pacman, apk); empty detects one")
+	pf.StringVar(&g.packageManager, "package-manager", "", "package manager to drive for system updates (dnf, apt-get, zypper, pacman); empty detects one")
 	cmd.AddCommand(
 		newInterfacesCmd(),
 		newServeCmd(g),

@@ -382,6 +382,17 @@ func renderNetwork(in model.Interface, vlans []string, routes []model.StaticRout
 	if in.IPv6.Mode == model.AddrDelegated {
 		b.WriteString("DHCPPrefixDelegation=yes\n")
 	}
+	if dynamicAddressing(in) {
+		// A stop drops leased addresses, and a revert over SSH on a DHCP
+		// WAN lost its own session. Static addresses survive a stop
+		// anyway. The routes left behind are swept in install.NetworkRevert.
+		//
+		// dhcp-on-stop: systemd 257 renamed it dynamic-on-stop and still
+		// takes the old name; systemd 252 (RHEL 9) warns on the new one
+		// and ignores it. On 252 only the DHCPv4 lease is kept. `yes`
+		// would also ignore lease expiry.
+		b.WriteString("KeepConfiguration=dhcp-on-stop\n")
+	}
 	if in.IPv4.Mode == model.AddrStatic {
 		fmt.Fprintf(&b, "Address=%s\n", in.IPv4.Address)
 	}
@@ -541,6 +552,19 @@ func hasGateway(gateways []model.Gateway, family int) bool {
 		if a, err := model.ParseIP(g.Address); err == nil && (a.Is4() == (family == 4)) {
 			return true
 		}
+	}
+	return false
+}
+
+// dynamicAddressing reports whether the interface has a leased, advertised
+// or delegated address: the ones networkd drops when it stops.
+func dynamicAddressing(in model.Interface) bool {
+	if in.IPv4.Mode == model.AddrDHCP {
+		return true
+	}
+	switch in.IPv6.Mode {
+	case model.AddrDHCP, model.AddrSLAAC, model.AddrDelegated:
+		return true
 	}
 	return false
 }

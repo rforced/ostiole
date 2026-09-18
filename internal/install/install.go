@@ -458,7 +458,7 @@ func writeFile(path, content string, mode os.FileMode) error {
 
 // PackageManager identifies the host's package manager, or "".
 func PackageManager() string {
-	for _, pm := range []string{"dnf", "apt-get", "pacman", "zypper", "apk"} {
+	for _, pm := range []string{"dnf", "apt-get", "pacman", "zypper"} {
 		if _, err := exec.LookPath(pm); err == nil {
 			return pm
 		}

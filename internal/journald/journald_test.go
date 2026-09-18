@@ -87,8 +87,8 @@ func TestJournaldIsFoundWhereSystemdKeepsIts(t *testing.T) {
 	}
 }
 
-// A router without journald (Alpine) gets nothing written and nothing
-// restarted.
+// A router whose image left journald out gets nothing written and
+// nothing restarted.
 func TestApplySkipsARouterWithoutJournald(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()

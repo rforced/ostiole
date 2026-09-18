@@ -173,14 +173,13 @@ jobs:
             dist/*.tar.gz
             dist/*.deb
             dist/*.rpm
-            dist/*.apk
             dist/*.pkg.tar.zst
             dist/checksums.txt
 
   # Everything that has to be true on a real distribution: its package
   # installs and the binary in it runs, the install script behaves
-  # against a build it has never seen, and — where there is systemd to
-  # install into — a whole `ostiole install` does what it printed.
+  # against a build it has never seen, and a whole `ostiole install` does
+  # what it printed.
   systems:
     name: ${{ matrix.image }}
     runs-on: ubuntu-latest
@@ -236,5 +235,4 @@ jobs:
             "$IMAGE" sh /ci/install-script-test.sh "http://host.test:$PORT" "$VERSION"
 
       - name: A real install, under systemd
-        if: matrix.systemd
         run: scripts/ci/run-systemd-test.sh "$IMAGE" "http://host.test:$PORT" "$VERSION"

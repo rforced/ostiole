@@ -374,9 +374,9 @@ func TestZypperUpgradeArgv(t *testing.T) {
 	}
 }
 
-func TestPacmanAndAPKRefuseSecurity(t *testing.T) {
+func TestPacmanRefusesSecurity(t *testing.T) {
 	t.Parallel()
-	for _, d := range []Driver{pacman{}, apk{}} {
+	for _, d := range []Driver{pacman{}} {
 		if d.SecurityCapable() {
 			t.Errorf("%s claims a security channel it does not have", d.Name())
 		}
@@ -427,27 +427,6 @@ func TestPacmanCheck(t *testing.T) {
 	empty := &fakeRunner{code: map[string]int{"checkupdates": 2}}
 	if _, err := p.Check(t.Context(), empty); err != nil {
 		t.Errorf("an up-to-date router reported an error: %v", err)
-	}
-}
-
-func TestAPKCheck(t *testing.T) {
-	t.Parallel()
-	a := apk{}
-	run := &fakeRunner{out: map[string]string{
-		"apk upgrade --simulate": fixture(t, "apk-simulate.txt"),
-	}}
-	got, err := a.Check(t.Context(), run)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got.Packages) != 3 {
-		t.Fatalf("parsed %d packages: %+v", len(got.Packages), got.Packages)
-	}
-	if p := byName(got.Packages)["openssl"]; p.From != "3.3.2-r0" || p.To != "3.3.2-r1" {
-		t.Errorf("openssl = %+v", p)
-	}
-	if a.ExcludeSupported(false) {
-		t.Error("apk cannot hold a package back; say so")
 	}
 }
 

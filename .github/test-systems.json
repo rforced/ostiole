@@ -1,9 +1,8 @@
 [
-  { "image": "ubuntu:26.04", "systemd": true },
-  { "image": "ubuntu:24.04", "systemd": true },
-  { "image": "fedora:44", "systemd": true },
-  { "image": "rockylinux/rockylinux:10", "systemd": true },
-  { "image": "rockylinux/rockylinux:9", "systemd": true },
-  { "image": "archlinux:latest", "systemd": true },
-  { "image": "alpine:3.24", "systemd": false }
+  { "image": "ubuntu:26.04" },
+  { "image": "ubuntu:24.04" },
+  { "image": "fedora:44" },
+  { "image": "rockylinux/rockylinux:10" },
+  { "image": "rockylinux/rockylinux:9" },
+  { "image": "archlinux:latest" }
 ]

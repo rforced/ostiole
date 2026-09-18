@@ -56,7 +56,7 @@ nfpms:
     maintainer: Josh <4663874+rforced@users.noreply.github.com>
     description: Firewall and router appliance manager for Linux nftables
     license: AGPL-3.0-or-later
-    formats: [deb, rpm, apk, archlinux]
+    formats: [deb, rpm, archlinux]
     bindir: /usr/bin
     dependencies:
       - nftables
@@ -117,8 +117,8 @@ release:
     curl -fsSL https://github.com/rforced/ostiole/releases/latest/download/install.sh | sudo sh
     ```
 
-    Packages above can be installed with `dpkg -i`, `rpm -i`, `apk add --allow-untrusted`, or `pacman -U`,
-    then run `ostiole repair`.
+    Packages above can be installed with `dpkg -i`, `rpm -i`, or `pacman -U`, then run
+    `ostiole repair`.
 
     ## Verifying
 

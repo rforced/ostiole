@@ -479,7 +479,7 @@ func nftablesBuild(bin string) error {
 		}
 	}
 	return fmt.Errorf("%s is the iptables build of miniupnpd and cannot write Ostiole's chains; "+
-		"install the nftables build (Debian and Alpine call it miniupnpd-nftables)", bin)
+		"install the nftables build (Debian calls it miniupnpd-nftables)", bin)
 }
 
 // UPnPUnitContent renders the ostiole-miniupnpd unit. -d is what keeps

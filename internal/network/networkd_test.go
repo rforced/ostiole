@@ -87,6 +87,30 @@ func TestRenderNoneMeansNoLinkLocal(t *testing.T) {
 	}
 }
 
+// KeepConfiguration goes on interfaces with a leased address, spelled the
+// way systemd 252 parses it: it warns on dynamic-on-stop and ignores it.
+func TestRenderKeepsLeasedAddressesOnStop(t *testing.T) {
+	t.Parallel()
+	n := &Networkd{}
+	files, err := n.Render(loadConfig(t, "testdata/full.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]bool{
+		"eth0":    true,  // dhcp v4, slaac v6
+		"eth1":    false, // static both ways
+		"eth1.20": false, // static v4, no v6
+	} {
+		unit := files["00-ostiole-"+name+".network"]
+		if got := strings.Contains(unit, "KeepConfiguration=dhcp-on-stop"); got != want {
+			t.Errorf("%s: KeepConfiguration present %v, want %v:\n%s", name, got, want, unit)
+		}
+		if strings.Contains(unit, "dynamic-on-stop") {
+			t.Errorf("%s: wrote the systemd 257 spelling, which RHEL 9 ignores:\n%s", name, unit)
+		}
+	}
+}
+
 func TestRenderRouteNeedsInterface(t *testing.T) {
 	t.Parallel()
 	cfg := loadConfig(t, "testdata/full.json")
