@@ -28,6 +28,7 @@ import (
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/store"
 	"github.com/rforced/ostiole/internal/sysctl"
+	"github.com/rforced/ostiole/internal/timezone"
 )
 
 func requireRoot() error {
@@ -78,14 +79,21 @@ management ports get in, nothing is forwarded.`,
 			bootstrap := !g.store().Exists() && !rulesetExists(g.configDir)
 			firewalls := conflictingFirewalls(ctx, sc)
 			owned := networkOwned(g.configDir)
+			// What this router has already decided. `ostiole repair` runs
+			// this command again, so anything installed from a default here
+			// would quietly undo a setting the configuration holds.
+			cfg, _ := g.store().Load()
+			maxUse := journalCeiling(cfg)
+			opts.Timezone = installZone(opts.Timezone, cfg)
 
 			fmt.Fprintln(out, "Ostiole will:")
 			fmt.Fprintf(out, "  write and enable:     %s, %s\n", install.FirewallUnit, install.DaemonUnit)
 			fmt.Fprintf(out, "  write service units:  %s\n", strings.Join(serviceUnits(), ", "))
 			fmt.Fprintf(out, "  persist:              router sysctls (%s), journal ceiling (%s)\n", sysctl.ConfFile, journald.ConfFile)
 			if opts.Timezone != "-" {
-				fmt.Fprintf(out, "  set the clock to:     %s\n", or(opts.Timezone, "UTC"))
+				fmt.Fprintf(out, "  set the clock to:     %s\n", opts.Timezone)
 			}
+			fmt.Fprintf(out, "  bound the journal to: %dG\n", maxUse)
 			if bootstrap {
 				fmt.Fprintln(out, "  write:                a bootstrap ruleset that forwards nothing")
 			}
@@ -107,7 +115,7 @@ management ports get in, nothing is forwarded.`,
 				}
 			}
 
-			if err := (journald.System{Run: install.ExecRunner{}}).Apply(ctx, journald.DefaultMaxUseGB); err != nil {
+			if err := (journald.System{Run: install.ExecRunner{}}).Apply(ctx, maxUse); err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not bound the system journal: %v\n", err)
 			}
 			rep, err := install.Install(ctx, sc, lay, opts, slog.Default())
@@ -183,6 +191,29 @@ management ports get in, nothing is forwarded.`,
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask for confirmation")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the plan and change nothing")
 	return cmd
+}
+
+// journalCeiling is the ceiling the install writes: the one the
+// configuration holds once this router has a configuration, and the
+// default before it does.
+func journalCeiling(cfg *model.Config) int {
+	if cfg == nil {
+		return journald.DefaultMaxUseGB
+	}
+	return cfg.System.JournalMaxUse()
+}
+
+// installZone is the clock the install sets: what was asked for on the
+// command line, else what the configuration says, else UTC. "-" leaves
+// the clock alone and is passed through.
+func installZone(flag string, cfg *model.Config) string {
+	if flag != "" {
+		return flag
+	}
+	if cfg != nil && cfg.System.Zone() != "" {
+		return cfg.System.Zone()
+	}
+	return timezone.Default
 }
 
 // serviceUnits are the units written for the daemons a router drives.
