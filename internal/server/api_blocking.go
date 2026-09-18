@@ -30,9 +30,10 @@ func (a *api) registerBlocking(mux *router) {
 
 // blockingState is what the UI shows above the lists.
 type blockingState struct {
+	// Enabled is whether the subscribed lists are switched on.
 	Enabled bool `json:"enabled"`
-	// Active is whether names are really being refused: blocking is on and
-	// so is the DNS server that would do it.
+	// Active is whether their names are really being refused: the lists are
+	// on and so is the DNS server that would do it.
 	Active bool               `json:"active"`
 	Mode   model.BlockMode    `json:"mode"`
 	Lists  []dnsblock.Status  `json:"lists"`
@@ -94,7 +95,7 @@ func (a *api) blockingState() blockingState {
 		return st
 	}
 	st.Enabled = cfg.Blocking.Enabled
-	st.Active = cfg.BlockingActive()
+	st.Active = cfg.ListsActive()
 	st.Mode = cfg.Blocking.BlockMode()
 	st.Totals = blockingTotals{
 		Lists: len(cfg.Blocking.EnabledLists()),

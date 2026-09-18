@@ -117,9 +117,9 @@ export const NAV = [
         view: () => import('@/views/services/DnsPage.vue'),
         tabs: [
           { value: 'server', label: 'Server' },
+          { value: 'enforcement', label: 'Enforcement' },
           { value: 'lists', label: 'Block lists' },
           { value: 'exceptions', label: 'Exceptions' },
-          { value: 'enforcement', label: 'Enforcement' },
         ],
       },
       {

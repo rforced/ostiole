@@ -28,7 +28,7 @@ function blank() {
     enabled: true,
     rangeStart: '',
     rangeEnd: '',
-    leaseTime: '12h',
+    leaseTime: '24h',
     gateway: '',
     dns: '',
     domain: '',
@@ -113,7 +113,7 @@ function save() {
             spellcheck="false"
           />
         </FormField>
-        <FormField id="sc-lease" label="Lease time" hint="e.g. 12h, 2d, infinite">
+        <FormField id="sc-lease" label="Lease time" hint="e.g. 24h, 2d, infinite">
           <input
             id="sc-lease"
             v-model="form.leaseTime"

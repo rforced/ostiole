@@ -93,7 +93,7 @@ func (r *Refresher) Tick(ctx context.Context, force bool) Report {
 	}()
 	r.Cache.Prune(cfg)
 	if !cfg.Blocking.Enabled {
-		rep.Note = "DNS blocking is off, so no list was fetched"
+		rep.Note = "block lists are off, so nothing was fetched"
 		return rep
 	}
 	changed := false

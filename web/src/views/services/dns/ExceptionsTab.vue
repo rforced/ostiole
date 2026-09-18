@@ -51,7 +51,9 @@ const verdict = computed(() => {
     case 'delegated':
       return `Not blocked: ${f.matched} is a domain override, answered by its own resolvers.`
     case 'off':
-      return 'Not blocked: DNS blocking is off.'
+      return 'Not blocked: the DNS server is off.'
+    case 'lists-off':
+      return 'Not blocked: block lists are off.'
     case 'deny':
       return `Blocked because the deny list has ${f.matched}.`
     case 'canary':
@@ -89,7 +91,7 @@ const stale = computed(() => config.dirty)
       <FormField
         id="block-deny"
         label="Always block"
-        hint="One name per line, subdomains included, whether a list names it or not."
+        hint="One name per line, subdomains included, whether the lists are on or not."
       >
         <textarea
           id="block-deny"

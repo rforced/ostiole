@@ -5,8 +5,8 @@ import FormField from '@/components/FormField.vue'
 import { useConfigStore } from '@/stores/config'
 
 const config = useConfigStore()
-const blocking = computed(() => config.ensureBlocking())
 const enforce = computed(() => config.ensureBlocking().enforce)
+const dnsOn = computed(() => Boolean(config.draft?.services?.dns?.enabled))
 
 /** Aliases that hold addresses; port aliases are no use here. */
 const addressAliases = computed(() =>
@@ -35,11 +35,12 @@ const exemptAlias = aliasField('exemptAlias')
 <template>
   <div class="max-w-3xl space-y-6">
     <p
-      v-if="!blocking.enabled"
+      v-if="!dnsOn"
       role="note"
       class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
     >
-      DNS blocking is off, so none of this applies. Turn it on under Block lists.
+      The DNS server is off, so plain DNS cannot be sent here and Firefox is not answered. Turn it
+      on under Server. Dropping encrypted DNS works either way.
     </p>
 
     <fieldset class="space-y-3 text-sm">

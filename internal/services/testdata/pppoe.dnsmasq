@@ -17,7 +17,7 @@ local=/lan/
 expand-hosts
 conf-file=/etc/dnsmasq.d/ostiole.block.conf
 dhcp-authoritative
-dhcp-range=set:s_lan0,192.168.1.100,192.168.1.199,255.255.255.0,12h
+dhcp-range=set:s_lan0,192.168.1.100,192.168.1.199,255.255.255.0,24h
 dhcp-option=tag:s_lan0,option:router,192.168.1.1
 dhcp-option=tag:s_lan0,option:dns-server,192.168.1.1
 dhcp-option=tag:s_lan0,option:domain-name,lan

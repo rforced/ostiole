@@ -209,7 +209,7 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 			maskStr := net.IP(net.CIDRMask(prefix.Bits(), 32)).String()
 			lease := sc.LeaseTime
 			if lease == "" {
-				lease = "12h"
+				lease = model.DefaultLeaseTime
 			}
 			tag := "s_" + sanitizeTag(sc.Interface)
 			fmt.Fprintf(&b, "dhcp-range=set:%s,%s,%s,%s,%s\n", tag, sc.RangeStart, sc.RangeEnd, maskStr, lease)
@@ -352,7 +352,7 @@ func renderV6(b *strings.Builder, cfg *model.Config) {
 		tag := "s6_" + sanitizeTag(sc.Interface)
 		lease := sc.LeaseTime
 		if lease == "" {
-			lease = "12h"
+			lease = model.DefaultLeaseTime
 		}
 		switch sc.Mode {
 		case model.RASLAAC:

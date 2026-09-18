@@ -25,9 +25,15 @@ const FirefoxCanary = "use-application-dns.net"
 // written out beside the generated file, so the same inputs can be
 // rendered again later without the configuration being to hand.
 type Options struct {
+	// Enabled is whether the DNS server is answering. Off, nothing is
+	// blocked and the file is written empty.
 	Enabled bool `json:"enabled"`
 	// Mode is what a blocked name is answered with.
 	Mode model.BlockMode `json:"mode,omitempty"`
+	// UseLists is whether the subscribed lists are switched on. Lists is
+	// empty when they are not, and this tells a lookup why: "the lists are
+	// off" is a better answer than "no list has it".
+	UseLists bool `json:"useLists,omitempty"`
 	// Lists names the cached lists to merge, in any order.
 	Lists []string `json:"lists,omitempty"`
 	Allow []string `json:"allow,omitempty"`
@@ -52,7 +58,8 @@ type Options struct {
 func OptionsFor(cfg *model.Config) Options {
 	b := cfg.Blocking
 	o := Options{
-		Enabled:   cfg.BlockingActive(),
+		Enabled:   cfg.Services.DNS.Enabled,
+		UseLists:  b.Enabled,
 		Mode:      b.BlockMode(),
 		Allow:     b.Allow,
 		Deny:      b.Deny,
@@ -61,8 +68,10 @@ func OptionsFor(cfg *model.Config) Options {
 		Canary:    b.Enforce.FirefoxCanary,
 		Max:       b.MaxDomains,
 	}
-	for _, l := range b.EnabledLists() {
-		o.Lists = append(o.Lists, l.Name)
+	if b.Enabled {
+		for _, l := range b.EnabledLists() {
+			o.Lists = append(o.Lists, l.Name)
+		}
 	}
 	return o
 }
@@ -99,7 +108,9 @@ type Result struct {
 func (r Result) EstimatedBytes() int64 { return int64(r.Domains) * BytesPerName }
 
 // Render writes the dnsmasq include file: every name the enabled lists
-// block, plus the operator's own deny list, minus everything allowed.
+// block, plus the operator's own deny list and the Firefox canary, minus
+// everything allowed. The deny list and the canary do not wait for the
+// lists: with the lists off the file carries just them.
 //
 // It streams: the cached lists are read in order and merged, so a render of
 // a million names costs one buffer, not a million strings.
@@ -121,9 +132,9 @@ func Render(w io.Writer, o Options, c *Cache) (Result, error) {
 		return res, err
 	}
 	if !o.Enabled {
-		// dnsmasq is told to include this file whenever it answers
-		// queries, so with blocking off it gets a file that says nothing
-		// rather than no file at all.
+		// The DNS server is off, so nothing reads this. It is written
+		// empty rather than left out so that turning the server on finds
+		// the file dnsmasq is told to include.
 		return res, bw.Flush()
 	}
 

@@ -74,7 +74,7 @@ function editLease(l) {
             >
               <td class="font-mono">{{ s.interface }}</td>
               <td class="font-mono text-code">{{ s.rangeStart }} – {{ s.rangeEnd }}</td>
-              <td class="font-mono text-code">{{ s.leaseTime || '12h' }}</td>
+              <td class="font-mono text-code">{{ s.leaseTime || '24h' }}</td>
               <td class="font-mono text-code">{{ s.gateway || 'this router' }}</td>
               <td class="font-mono text-code">{{ s.dns?.join(', ') || 'this router' }}</td>
               <td class="text-right whitespace-nowrap">

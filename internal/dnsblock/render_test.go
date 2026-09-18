@@ -207,6 +207,43 @@ func TestRenderRefusesMoreThanTheCeiling(t *testing.T) {
 	}
 }
 
+// The deny list and the canary are the operator's own words, so they are
+// written whether or not the subscribed lists are on.
+func TestRenderListsOffKeepsDenyAndCanary(t *testing.T) {
+	cfg := testConfig()
+	cfg.Blocking.Enabled = false
+	cfg.Blocking.Deny = []string{"typed.example.com"}
+	cfg.Blocking.Enforce.FirefoxCanary = true
+	out, res := render(t, cfg, testCache(t))
+	if strings.Contains(out, "ads.example.com") {
+		t.Errorf("the lists are off but a list name was written:\n%s", out)
+	}
+	if !strings.Contains(out, "local=/typed.example.com/") {
+		t.Errorf("the lists are off and the deny list went with them:\n%s", out)
+	}
+	if !strings.Contains(out, "local=/"+FirefoxCanary+"/") {
+		t.Errorf("the lists are off and the canary went with them:\n%s", out)
+	}
+	if res.Domains != 2 {
+		t.Errorf("Domains = %d; want 2", res.Domains)
+	}
+}
+
+// With the DNS server off nothing reads the file, so it says nothing.
+func TestRenderDNSOffWritesNothing(t *testing.T) {
+	cfg := testConfig()
+	cfg.Services.DNS.Enabled = false
+	cfg.Blocking.Deny = []string{"typed.example.com"}
+	cfg.Blocking.Enforce.FirefoxCanary = true
+	out, res := render(t, cfg, testCache(t))
+	if res.Domains != 0 {
+		t.Errorf("Domains = %d; want 0", res.Domains)
+	}
+	if strings.TrimSpace(strings.TrimPrefix(out, Header)) != "" {
+		t.Errorf("wrote entries with the DNS server off:\n%s", out)
+	}
+}
+
 func TestRenderWithNothingEnabled(t *testing.T) {
 	cfg := testConfig()
 	for i := range cfg.Blocking.Lists {

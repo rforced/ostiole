@@ -40,7 +40,7 @@ test('subscribe to a blocklist, fetch it, and ask why a name is blocked', async 
   await expect(page.getByRole('heading', { name: 'DNS' })).toBeVisible()
 
   await page.getByRole('tab', { name: 'Block lists' }).click()
-  await page.getByLabel('DNS blocking enabled').check()
+  await page.getByLabel('Use block lists').check()
 
   await page.getByRole('button', { name: 'Add list' }).click()
   const dialog = page.getByRole('dialog')
@@ -152,16 +152,33 @@ test('a refresh shows it is working and says what it did', async ({ page }) => {
   await expect(page.getByText(/Refreshed: .*unchanged/)).toBeVisible()
 })
 
-test('a refresh with blocking switched off says why it fetched nothing', async ({ page }) => {
+test('turning the lists off leaves enforcement in force and says why a refresh fetched nothing', async ({
+  page,
+}) => {
   await login(page)
   await page.goto('/services/dns#lists')
-  await page.getByLabel('DNS blocking enabled').uncheck()
+  await page.getByLabel('Use block lists').uncheck()
   await applyAndConfirm(page)
 
   await page.getByRole('button', { name: 'Refresh lists' }).click()
-  await expect(page.getByText('DNS blocking is off, so no list was fetched')).toBeVisible()
+  await expect(page.getByText('block lists are off, so nothing was fetched')).toBeVisible()
+
+  // The lookup says which kind of off it is.
+  await page.goto('/services/dns#exceptions')
+  await page.getByLabel('Name', { exact: true }).fill('tracker.example.net')
+  await page.getByRole('button', { name: 'Look up' }).click()
+  await expect(page.getByText('Not blocked: block lists are off.')).toBeVisible()
+
+  // Enforcement is its own setting: the rules the previous test put in
+  // place are still there with the lists off.
+  await page.goto('/system/ruleset')
+  await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
+  const ruleset = page.locator('pre')
+  await expect(ruleset).toContainText('chain block_dns')
+  await expect(ruleset).toContainText('redirect to :53 comment "block:dns-redirect"')
 
   // Put it back for anything that runs after this.
-  await page.getByLabel('DNS blocking enabled').check()
+  await page.goto('/services/dns#lists')
+  await page.getByLabel('Use block lists').check()
   await applyAndConfirm(page)
 })

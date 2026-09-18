@@ -414,3 +414,39 @@ func TestBogonListFillsTheSets(t *testing.T) {
 		t.Errorf("a router that blocks no bogons has no sets to fill: %+v", got)
 	}
 }
+
+// Enforcement does not wait for the lists, and the drops do not wait for the
+// DNS server either: only the redirect needs a resolver here to send
+// clients to, and validation refuses it without one.
+func TestDNSEnforcementWithoutListsOrServer(t *testing.T) {
+	t.Parallel()
+	cfg := loadConfig(t, "testdata/dns-blocking.json")
+	cfg.Blocking.Enabled = false
+	got, err := Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"chain block_dns", `comment "block:dot"`, `comment "block:doh"`, `comment "block:dns-redirect"`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("lists off: no %s in:\n%s", want, got)
+		}
+	}
+
+	cfg.Services.DNS.Enabled = false
+	if _, err := Render(cfg); err == nil || !strings.Contains(err.Error(), "every client would lose DNS") {
+		t.Errorf("the redirect with the DNS server off was rendered rather than refused: %v", err)
+	}
+	cfg.Blocking.Enforce.RedirectDNS = false
+	got, err = Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"chain block_dns", `comment "block:dot"`, `comment "block:doh"`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("DNS server off: no %s in:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "block:dns-redirect") {
+		t.Errorf("DNS server off but plain DNS is redirected to it:\n%s", got)
+	}
+}

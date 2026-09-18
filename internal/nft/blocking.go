@@ -18,15 +18,18 @@ const BlockChain = "block_dns"
 const DoTPort = 853
 
 // enforcesDNS reports whether the forward chain needs the blocking chain at
-// all.
+// all. The drops do not depend on the lists or on the DNS server: a client
+// that must not use encrypted DNS must not use it whoever answers plain DNS.
 func (r *renderer) enforcesDNS() bool {
 	e := r.cfg.Blocking.Enforce
-	return r.cfg.BlockingActive() && (e.BlockDoT || e.DoHAlias != "")
+	return e.BlockDoT || e.DoHAlias != ""
 }
 
-// redirectsDNS reports whether client DNS is being pulled back to this router.
+// redirectsDNS reports whether client DNS is being pulled back to this
+// router. It needs the DNS server on; validation refuses the combination,
+// and this is the last line if something got past it.
 func (r *renderer) redirectsDNS() bool {
-	return r.cfg.BlockingActive() && r.cfg.Blocking.Enforce.RedirectDNS
+	return r.cfg.Services.DNS.Enabled && r.cfg.Blocking.Enforce.RedirectDNS
 }
 
 // exemptMatches are the "this client is allowed to resolve for itself"

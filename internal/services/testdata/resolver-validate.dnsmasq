@@ -29,7 +29,7 @@ enable-ra
 dhcp-range=set:s6_eth1,::100,::1ff,constructor:eth1,ra-names,64,6h
 dhcp-option=tag:s6_eth1,option6:dns-server,[2001:db8:1::1]
 dhcp-option=tag:s6_eth1,option6:domain-search,lan
-dhcp-range=set:s6_eth1_20,::,constructor:eth1.20,ra-only,64,12h
+dhcp-range=set:s6_eth1_20,::,constructor:eth1.20,ra-only,64,24h
 dhcp-option=tag:s6_eth1_20,option6:dns-server,[::]
 dhcp-option=tag:s6_eth1_20,option6:domain-search,lan
 dhcp-host=aa:bb:cc:dd:ee:ff,192.168.1.50,[::50],nas

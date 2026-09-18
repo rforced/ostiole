@@ -11,6 +11,9 @@ import "strings"
 // revision of this configuration never carries a quarter of a million
 // domains (ADR-0005).
 type Blocking struct {
+	// Enabled merges the subscribed lists in, and decides nothing else: the
+	// deny list, the Firefox canary and enforcement are the operator's own
+	// words, and apply whenever the DNS server is on.
 	Enabled bool `json:"enabled,omitempty"`
 	// Mode decides what a blocked name is answered with.
 	Mode BlockMode `json:"mode,omitempty"`
@@ -28,7 +31,9 @@ type Blocking struct {
 	// that does not.
 	MaxDomains int `json:"maxDomains,omitempty"`
 	// Enforce keeps clients on this resolver. Blocking a name achieves
-	// nothing if the client simply asks 8.8.8.8 instead.
+	// nothing if the client simply asks 8.8.8.8 instead, and keeping clients
+	// here is worth having without any lists at all, for local names,
+	// domain overrides and validation.
 	Enforce DNSEnforce `json:"enforce,omitempty"`
 	// QueryLog records what was asked and what was refused.
 	QueryLog QueryLog `json:"queryLog,omitempty"`
@@ -89,10 +94,14 @@ type BlockList struct {
 }
 
 // DNSEnforce keeps clients on this router's resolver. Without it, blocking is
-// advisory: anything that ships its own resolver address ignores it.
+// advisory: anything that ships its own resolver address ignores it. It does
+// not wait for the lists. The drops apply whenever they are ticked; the
+// redirect and the canary need the DNS server on, because both send clients
+// to a resolver here.
 type DNSEnforce struct {
 	// RedirectDNS sends plain DNS from internal zones to this router, whoever
-	// the client meant to ask.
+	// the client meant to ask. It needs the DNS server on: redirected to a
+	// router that is not answering, every client would lose DNS.
 	RedirectDNS bool `json:"redirectDns,omitempty"`
 	// BlockDoT drops DNS over TLS on its own port, which is the easy half
 	// of stopping encrypted DNS.
@@ -102,7 +111,8 @@ type DNSEnforce struct {
 	// an address list can catch it.
 	DoHAlias string `json:"dohAlias,omitempty"`
 	// FirefoxCanary answers use-application-dns.net with NXDOMAIN, which is
-	// how Firefox is asked not to turn DoH on by itself.
+	// how Firefox is asked not to turn DoH on by itself. It is a dnsmasq
+	// entry, so it does nothing while the DNS server is off.
 	FirefoxCanary bool `json:"firefoxCanary,omitempty"`
 	// ExemptAlias names a host alias of clients left alone by all of the
 	// above: the one machine that is allowed to resolve for itself.
@@ -126,9 +136,9 @@ const DefaultQueryLogEntries = 2000
 // which cannot be imported here: dnsblock is the one that imports model.
 const MaxBlockedDomains = 25_000_000
 
-// BlockingActive reports whether names are actually being blocked: the
-// feature is on, and so is the DNS server that would enforce it.
-func (c *Config) BlockingActive() bool {
+// ListsActive reports whether the subscribed lists are being applied: they
+// are switched on, and so is the DNS server that would refuse the names.
+func (c *Config) ListsActive() bool {
 	return c.Blocking.Enabled && c.Services.DNS.Enabled
 }
 

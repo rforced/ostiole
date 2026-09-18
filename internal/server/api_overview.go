@@ -132,8 +132,8 @@ func (a *api) blockingSummary() BlockingSummary {
 // this router keeps a query log: the numbers would have to come from
 // dnsmasq's own log, which nothing reads yet (see the DNS blocking plan).
 type BlockingSummary struct {
-	// Enabled is the setting; Active is whether it is doing anything,
-	// which also needs the DNS service to be running.
+	// Enabled is whether the lists are switched on; Active is whether they
+	// are doing anything, which also needs the DNS service to be running.
 	Enabled bool            `json:"enabled"`
 	Active  bool            `json:"active"`
 	Mode    model.BlockMode `json:"mode,omitempty"`

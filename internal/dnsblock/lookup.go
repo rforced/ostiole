@@ -35,7 +35,10 @@ const (
 	ReasonDelegated = "delegated"
 	ReasonCanary    = "canary"
 	ReasonNotAName  = "not-a-name"
-	ReasonOff       = "off"
+	// ReasonOff is the DNS server being off: nothing is blocked at all.
+	ReasonOff = "off"
+	// ReasonListsOff is the lists being off, with nothing else naming it.
+	ReasonListsOff = "lists-off"
 )
 
 // Lookup works out what this router would do with a name, and why.
@@ -70,7 +73,7 @@ func Lookup(o Options, c *Cache, name string) Finding {
 	}
 
 	// Every list that carries it is worth reporting, even once the first
-	// one has settled the answer.
+	// one has settled the answer. Lists is empty while the lists are off.
 	for _, list := range o.Lists {
 		if m, hit := coveringName(c, list, key); hit {
 			f.Blocked = true
@@ -91,6 +94,9 @@ func Lookup(o Options, c *Cache, name string) Finding {
 		if f.Matched == "" {
 			f.Reason, f.Matched = ReasonCanary, FirefoxCanary
 		}
+	}
+	if !f.Blocked && !o.UseLists {
+		f.Reason = ReasonListsOff
 	}
 	return f
 }

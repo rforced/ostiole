@@ -9,7 +9,7 @@ dhcp-leasefile=/var/lib/dnsmasq/ostiole.leases
 interface=eth1
 port=0
 dhcp-authoritative
-dhcp-range=set:s_eth1,10.0.0.50,10.0.0.99,255.255.255.0,12h
+dhcp-range=set:s_eth1,10.0.0.50,10.0.0.99,255.255.255.0,24h
 dhcp-option=tag:s_eth1,option:router,10.0.0.254
 dhcp-option=tag:s_eth1,option:dns-server,9.9.9.9
 dhcp-option=tag:s_eth1,option:domain-name,office

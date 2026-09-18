@@ -51,6 +51,11 @@ const when = computed(() =>
           <span v-if="b.stale" class="badge badge-warn ml-2">stale</span>
         </dd>
 
+        <dt>Last merge</dt>
+        <dd>{{ when }}</dd>
+      </template>
+
+      <template v-if="b.enabled || b.allow || b.deny">
         <dt>Exceptions</dt>
         <dd>
           <span v-if="b.allow || b.deny">
@@ -58,13 +63,10 @@ const when = computed(() =>
           </span>
           <span v-else class="text-neutral-500">none</span>
         </dd>
-
-        <dt>Last merge</dt>
-        <dd>{{ when }}</dd>
       </template>
     </dl>
     <p v-if="!b.enabled" class="mt-2 text-sm text-neutral-500">
-      Turn it on under
+      Block lists are off. Turn them on under
       <RouterLink class="link" to="/services/dns#lists">Services, DNS, Block lists</RouterLink>.
     </p>
   </section>

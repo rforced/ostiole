@@ -72,7 +72,7 @@ function edit(s) {
               <template v-if="s.mode === 'managed'">{{ s.rangeStart }} – {{ s.rangeEnd }}</template>
               <span v-else class="text-neutral-500">—</span>
             </td>
-            <td class="font-mono text-code">{{ s.leaseTime || '12h' }}</td>
+            <td class="font-mono text-code">{{ s.leaseTime || '24h' }}</td>
             <td class="font-mono text-code">{{ s.dns?.join(', ') || 'this router' }}</td>
             <td class="text-right whitespace-nowrap">
               <button type="button" class="link" @click="edit(s)">Edit</button>

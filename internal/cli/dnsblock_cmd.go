@@ -34,12 +34,12 @@ answers the question every support conversation starts with.`,
 			}
 			out := cmd.OutOrStdout()
 			switch {
-			case !cfg.Blocking.Enabled:
-				fmt.Fprintln(out, "DNS blocking is off")
 			case !cfg.Services.DNS.Enabled:
-				fmt.Fprintln(out, "DNS blocking is on but the DNS server is off, so nothing is being refused")
+				fmt.Fprintln(out, "the DNS server is off, so nothing is being refused")
+			case !cfg.Blocking.Enabled:
+				fmt.Fprintf(out, "block lists are off; the deny list still answers %s\n", cfg.Blocking.BlockMode())
 			default:
-				fmt.Fprintf(out, "DNS blocking is on, answering %s\n", cfg.Blocking.BlockMode())
+				fmt.Fprintf(out, "block lists are on, answering %s\n", cfg.Blocking.BlockMode())
 			}
 			statuses := g.blocklists().Statuses(cfg)
 			if len(statuses) == 0 {
@@ -188,7 +188,9 @@ func newDNSBlockWhyCmd(g *globals) *cobra.Command {
 			case f.Reason == dnsblock.ReasonNever:
 				fmt.Fprintf(out, "%s is not blocked: this router answers for %s itself\n", f.Name, f.Matched)
 			case f.Reason == dnsblock.ReasonOff:
-				fmt.Fprintf(out, "%s is not blocked: DNS blocking is off\n", f.Name)
+				fmt.Fprintf(out, "%s is not blocked: the DNS server is off\n", f.Name)
+			case f.Reason == dnsblock.ReasonListsOff:
+				fmt.Fprintf(out, "%s is not blocked: the block lists are off\n", f.Name)
 			default:
 				fmt.Fprintf(out, "%s is not blocked: no list has it\n", f.Name)
 			}

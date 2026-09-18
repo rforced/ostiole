@@ -1316,6 +1316,11 @@ type DHCPv6Server struct {
 	Domain    string   `json:"domain,omitempty"`
 }
 
+// DefaultLeaseTime is the lease a pool hands out when it names none. A day
+// keeps addresses steady across a night's sleep without holding them for
+// long after a guest has gone.
+const DefaultLeaseTime = "24h"
+
 // DHCPServer is a pool on one interface, which must carry a static IPv4
 // address. Empty Gateway and DNS default to this router's address on the
 // interface (DNS only when the DNS service is enabled; otherwise the
@@ -1325,7 +1330,7 @@ type DHCPServer struct {
 	Enabled    bool     `json:"enabled"`
 	RangeStart string   `json:"rangeStart"`
 	RangeEnd   string   `json:"rangeEnd"`
-	LeaseTime  string   `json:"leaseTime,omitempty"` // dnsmasq syntax: 12h, 2d, infinite
+	LeaseTime  string   `json:"leaseTime,omitempty"` // dnsmasq syntax: 24h, 2d, infinite; empty means DefaultLeaseTime
 	Gateway    string   `json:"gateway,omitempty"`
 	DNS        []string `json:"dns,omitempty"`
 	Domain     string   `json:"domain,omitempty"`

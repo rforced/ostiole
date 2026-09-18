@@ -37,7 +37,7 @@ function blank() {
     mode: 'slaac',
     rangeStart: '',
     rangeEnd: '',
-    leaseTime: '12h',
+    leaseTime: '24h',
     dns: '',
     domain: '',
   }

@@ -154,12 +154,13 @@ func TestDNSBlockApplyClearsUpWhenDNSGoesAway(t *testing.T) {
 	}
 }
 
-// Blocking off but DNS on still writes an include, because dnsmasq's own
-// configuration names it either way.
-func TestDNSBlockWithBlockingOffStillWritesAnEmptyInclude(t *testing.T) {
+// Lists off but DNS on still writes the include, because dnsmasq's own
+// configuration names it either way, and the deny list is still in it.
+func TestDNSBlockWithListsOffStillWritesTheDenyList(t *testing.T) {
 	d, _ := blockBackend(t)
 	cfg := blockingConfig()
 	cfg.Blocking.Enabled = false
+	cfg.Blocking.Deny = []string{"typed.example.com"}
 	files, _ := d.Render(cfg)
 	if err := d.Apply(context.Background(), files); err != nil {
 		t.Fatal(err)
@@ -169,6 +170,9 @@ func TestDNSBlockWithBlockingOffStillWritesAnEmptyInclude(t *testing.T) {
 		t.Fatalf("dnsmasq is told to include a file that is not there: %v", err)
 	}
 	if strings.Contains(string(raw), "local=/ads.example.com/") {
-		t.Errorf("blocking is off but names are still blocked:\n%s", raw)
+		t.Errorf("the lists are off but a list name is still blocked:\n%s", raw)
+	}
+	if !strings.Contains(string(raw), "local=/typed.example.com/") {
+		t.Errorf("the lists are off and the deny list went with them:\n%s", raw)
 	}
 }

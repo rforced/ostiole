@@ -68,6 +68,31 @@ func TestBlockingNeedsTheDNSServer(t *testing.T) {
 	}
 }
 
+// The redirect sends every client's DNS to this router, so this router had
+// better be answering.
+func TestRedirectNeedsTheDNSServer(t *testing.T) {
+	c := starterForBlocking()
+	c.Blocking.Enabled = false
+	c.Blocking.Enforce.RedirectDNS = true
+	if err := c.Validate(); err != nil {
+		t.Fatalf("the redirect was refused with the DNS server on: %v", err)
+	}
+	c.Services.DNS.Enabled = false
+	err := c.Validate()
+	if err == nil {
+		t.Fatal("the redirect with the DNS server off was accepted")
+	}
+	if !strings.Contains(err.Error(), "every client would lose DNS") {
+		t.Errorf("unhelpful error: %v", err)
+	}
+	// The drops need no resolver here, so they are fine on their own.
+	c.Blocking.Enforce.RedirectDNS = false
+	c.Blocking.Enforce.BlockDoT = true
+	if err := c.Validate(); err != nil {
+		t.Fatalf("dropping DoT with the DNS server off was refused: %v", err)
+	}
+}
+
 // starterForBlocking is the first configuration `ostiole init` writes, with
 // the DNS server on and blocking turned on over it.
 func starterForBlocking() *Config {

@@ -500,12 +500,15 @@ var (
 
 // blocking checks the DNS blocking section: the lists, the exceptions to
 // them, and the rules that keep clients on this resolver. The lists are
-// checked whether blocking is on or not, so turning it on later does not
+// checked whether they are on or not, so turning them on later does not
 // fail on something that was wrong all along.
 func (v *validator) blocking(c *Config, aliases map[string]AliasType) {
 	b := &c.Blocking
 	if b.Enabled && !c.Services.DNS.Enabled {
-		v.add("blocking.enabled", "DNS blocking needs the DNS server on: dnsmasq is what refuses the names")
+		v.add("blocking.enabled", "block lists need the DNS server on: dnsmasq is what refuses the names")
+	}
+	if b.Enforce.RedirectDNS && !c.Services.DNS.Enabled {
+		v.add("blocking.enforce.redirectDns", "redirecting plain DNS needs the DNS server on: sent to a router that is not answering, every client would lose DNS")
 	}
 	if b.Mode != "" && !slices.Contains(BlockModes, b.Mode) {
 		v.add("blocking.mode", "unknown block mode %q", b.Mode)
@@ -632,7 +635,7 @@ func (v *validator) services(c *Config, ifaces map[string]bool) {
 			v.add(path+".rangeEnd", "range end is before its start")
 		}
 		if sc.LeaseTime != "" && !leaseTimeRe.MatchString(sc.LeaseTime) {
-			v.add(path+".leaseTime", "%q must look like 12h, 2d, or infinite", sc.LeaseTime)
+			v.add(path+".leaseTime", "%q must look like 24h, 2d, or infinite", sc.LeaseTime)
 		}
 		if sc.Gateway != "" {
 			if gw, err := ParseIP(sc.Gateway); err != nil {
@@ -863,7 +866,7 @@ func (v *validator) dhcpv6(c *Config, ifaces map[string]bool) {
 			v.add(path+".mode", "%q must be slaac, stateless, or managed", sc.Mode)
 		}
 		if sc.LeaseTime != "" && !leaseTimeRe.MatchString(sc.LeaseTime) {
-			v.add(path+".leaseTime", "%q must look like 12h, 2d, or infinite", sc.LeaseTime)
+			v.add(path+".leaseTime", "%q must look like 24h, 2d, or infinite", sc.LeaseTime)
 		}
 		for j, d := range sc.DNS {
 			if ip, err := ParseIP(d); err != nil {
