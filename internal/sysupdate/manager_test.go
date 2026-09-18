@@ -304,10 +304,21 @@ func TestCheckScheduledInstallsNothing(t *testing.T) {
 func TestStartClaimsTheBoxBeforeItReturns(t *testing.T) {
 	withSystemd(t, true)
 	run := dnfRunner(t)
-	// The unit never finishes, so the update is still going when Start
-	// has returned and the page asks what is happening.
-	run.say(showUnit, "LoadState=loaded\nActiveState=activating\nSubState=start\nResult=success\nExecMainStatus=0\nInvocationID=abc123\n")
-	m := New(Options{PackageManager: "dnf", StateDir: t.TempDir(), Run: run, Root: true, Log: discard()})
+	// The unit is absent to begin with and reports activating from the
+	// moment systemd-run is issued, so the update really is still going
+	// while the assertions below run. Told it was activating from the
+	// start, transient.start would refuse it as somebody else's
+	// transaction, the worker would end straight away, and the test would
+	// only pass when it won the race against its own goroutine.
+	const absent = "LoadState=not-found\nActiveState=inactive\nSubState=dead\nResult=success\nExecMainStatus=0\nInvocationID=\n"
+	const running = "LoadState=loaded\nActiveState=activating\nSubState=start\nResult=success\nExecMainStatus=0\nInvocationID=abc123\n"
+	run.say(showUnit, absent)
+	started := &sequencedRunner{inner: run, before: func(line string) {
+		if strings.HasPrefix(line, "systemd-run") {
+			run.say(showUnit, running)
+		}
+	}}
+	m := New(Options{PackageManager: "dnf", StateDir: t.TempDir(), Run: started, Root: true, Log: discard()})
 	m.unit.poll = time.Millisecond
 
 	if err := m.Start(false, nil); err != nil {
