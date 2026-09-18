@@ -14,7 +14,7 @@ test('join a tailnet, advertise the LAN, and apply', async ({ page }) => {
   await expect(page.getByRole('note')).toContainText('Not on this router')
 
   await page.getByRole('button', { name: 'Join a tailnet' }).click()
-  await expect(page.getByLabel('Port')).toHaveValue('41641')
+  await expect(page.getByLabel('Port', { exact: true })).toHaveValue('41641')
 
   // The button writes the zone's networks down masked, so the model takes
   // them without an argument about host bits.
