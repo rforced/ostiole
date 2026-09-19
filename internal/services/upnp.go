@@ -20,7 +20,7 @@ const (
 	// UPnPDir holds the generated configuration. It is the package's own
 	// directory for the reason unbound taught us: SELinux labels what is
 	// in there the way the daemon's policy expects.
-	UPnPDir = "/etc/miniupnpd"
+	UPnPDir       = "/etc/miniupnpd"
 	upnpHTTPPort  = 2189
 	upnpConfName  = "ostiole.conf"
 	upnpDistroSvc = "miniupnpd.service"

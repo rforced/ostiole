@@ -473,6 +473,7 @@ type Management struct {
 	LogDefaultDrops bool `json:"logDefaultDrops,omitempty"`
 }
 
+// Zone is a security zone: interfaces that share a rule list.
 type Zone struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
@@ -1007,6 +1008,7 @@ type Alias struct {
 // Fetched reports whether this alias takes its contents from elsewhere.
 func (a Alias) Fetched() bool { return a.URL != "" || a.Type == AliasGeoIP }
 
+// Rule is one firewall rule, evaluated within its zone in order.
 type Rule struct {
 	ID          string   `json:"id"`
 	Description string   `json:"description,omitempty"`
