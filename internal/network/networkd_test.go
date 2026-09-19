@@ -573,3 +573,23 @@ func TestDiscoverHidesAHelperInTheKernel(t *testing.T) {
 		}
 	}
 }
+
+// The card's own interface is the radio, which the Wireless page shows;
+// the networks hostapd makes on it come after it and are listed.
+func TestDiscoverHidesTheRadioItself(t *testing.T) {
+	t.Parallel()
+	links := []Link{
+		{Name: "eth0", Index: 2},
+		{Name: "wlan0", Index: 3, Wireless: true, Phy: "phy0"},
+		{Name: "ap0", Index: 6, Wireless: true, Phy: "phy0"},
+		{Name: "ap1", Index: 7, Wireless: true, Phy: "phy0"},
+		{Name: "wlan1", Index: 8, Wireless: true, Phy: "phy1"},
+	}
+	var got []string
+	for _, l := range withoutRadios(links) {
+		got = append(got, l.Name)
+	}
+	if want := "eth0 ap0 ap1"; strings.Join(got, " ") != want {
+		t.Errorf("kept %q, want %q", got, want)
+	}
+}

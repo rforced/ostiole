@@ -139,7 +139,7 @@ function describeKind(row) {
   if (c?.wireguard) return 'wireguard'
   const l = row.live
   if (!l) return 'not present on this system'
-  if (l.wireless) return 'radio'
+  if (l.wireless) return 'wireless'
   if (l.master) return `port on ${l.master}`
   if (l.vlanId) return `VLAN ${l.vlanId} on ${l.parent}`
   return l.kind
@@ -289,11 +289,8 @@ function editZone(z) {
                   >
                     {{ ownerPage(row.cfg).label }}
                   </RouterLink>
-                  <RouterLink v-if="!row.cfg && row.live?.wireless" to="/wireless" class="link">
-                    Wireless
-                  </RouterLink>
                   <button
-                    v-else-if="row.cfg?.pppoe"
+                    v-if="row.cfg?.pppoe"
                     type="button"
                     class="link"
                     @click="editPppoe(row.cfg)"

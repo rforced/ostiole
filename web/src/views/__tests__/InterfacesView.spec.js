@@ -127,22 +127,4 @@ describe('InterfacesView', () => {
     expect(plain.findComponent({ name: 'ConfirmButton' }).exists()).toBe(true)
     expect(rowFor(wrapper, 'ap0').text()).toContain('network "ostiole-lan" on wlp3s0')
   })
-
-  // A radio carries nothing of its own, so the row offers the page that
-  // makes networks rather than a Configure button.
-  it('sends a live radio to the wireless page', async () => {
-    api.interfaces.live.mockResolvedValue([
-      { name: 'wlp3s0', kind: 'ethernet', up: true, carrier: true, wireless: true, addresses: [] },
-    ])
-    const config = useConfigStore()
-    config.draft = { version: 5, zones: [], interfaces: [], rules: [] }
-    config.loaded = true
-    const wrapper = mount(InterfacesView, { global: { stubs } })
-    await flushPromises()
-
-    const row = rowFor(wrapper, 'wlp3s0')
-    expect(row.text()).toContain('radio')
-    expect(row.find('a').attributes('to')).toBe('/wireless')
-    expect(row.text()).not.toContain('Configure')
-  })
 })

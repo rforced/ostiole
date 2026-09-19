@@ -63,6 +63,27 @@ func helper(l netlink.Link) bool {
 	return l.Type() == "ifb" && strings.HasPrefix(l.Attrs().Name, model.IFBPrefix)
 }
 
+// withoutRadios drops each card's own interface: the first the kernel made
+// on its phy, which the networks hostapd serves on the card come after. It
+// is left out for the reason the shaping helper is: it carries no traffic,
+// takes no address and belongs to no zone. The card is on the Wireless page.
+func withoutRadios(links []Link) []Link {
+	first := map[string]int{}
+	for _, l := range links {
+		if idx, ok := first[l.Phy]; l.Phy != "" && (!ok || l.Index < idx) {
+			first[l.Phy] = l.Index
+		}
+	}
+	out := links[:0]
+	for _, l := range links {
+		if l.Phy != "" && first[l.Phy] == l.Index {
+			continue
+		}
+		out = append(out, l)
+	}
+	return out
+}
+
 // Discover lists interfaces and their addresses from the kernel. It works
 // without privileges.
 func Discover() ([]Link, error) {
@@ -123,6 +144,7 @@ func Discover() ([]Link, error) {
 		out = append(out, li)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Index < out[j].Index })
+	out = withoutRadios(out)
 	return out, nil
 }
 
