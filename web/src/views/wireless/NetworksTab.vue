@@ -58,7 +58,7 @@ function edit(iface) {
             <th>Network</th>
             <th>Radio</th>
             <th>Security</th>
-            <th>Lands in</th>
+            <th>Attached to</th>
             <th>Interface</th>
             <th></th>
           </tr>

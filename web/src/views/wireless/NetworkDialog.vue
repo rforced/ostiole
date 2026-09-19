@@ -178,7 +178,7 @@ function save() {
             </button>
           </div>
         </FormField>
-        <FormField id="net-name" label="Interface" hint="The device hostapd creates.">
+        <FormField id="net-name" label="Interface" hint="ap0, ap1, … by default.">
           <input
             id="net-name"
             v-model="form.name"
@@ -217,6 +217,9 @@ function save() {
           >
             <option v-for="b in bridges" :key="b.name" :value="b.name">{{ b.name }}</option>
           </select>
+          <span v-if="!bridges.length" class="text-neutral-500">
+            None yet. To share a wired LAN, bridge it first.
+          </span>
         </label>
         <label class="flex items-center gap-2 text-sm">
           <input v-model="form.attach" type="radio" value="zone" class="size-4" />
@@ -234,7 +237,7 @@ function save() {
           v-if="form.attach === 'zone'"
           id="net-address"
           label="Address"
-          hint="The router's address on this network, in CIDR."
+          hint="The router's address here, in CIDR, on a network of its own."
         >
           <input
             id="net-address"

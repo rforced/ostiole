@@ -24,6 +24,9 @@ const load = useAsync(
 
 const BANDS = { '2g': '2.4 GHz', '5g': '5 GHz', '6g': '6 GHz' }
 
+/** The cards have answered once; before that a configured radio would show as absent. */
+const loaded = computed(() => load.updatedAt.value > 0 || Boolean(load.error.value))
+
 /** Every radio this router has, whether or not it is configured. */
 const rows = computed(() => {
   const seen = new Set()
@@ -59,7 +62,7 @@ function edit(row) {
 
 <template>
   <div class="space-y-3">
-    <div class="flex flex-wrap items-end gap-4">
+    <div class="form-row">
       <FormField id="wifi-country" label="Country" hint="Every radio follows it.">
         <select
           id="wifi-country"
@@ -96,7 +99,10 @@ function edit(row) {
           </tr>
         </thead>
         <tbody>
-          <tr v-if="!rows.length">
+          <tr v-if="!loaded">
+            <td colspan="6"><span class="skeleton w-48" /></td>
+          </tr>
+          <tr v-else-if="!rows.length">
             <td colspan="6" class="text-neutral-500">No radios on this router.</td>
           </tr>
           <tr v-for="row in rows" :key="row.card?.name ?? row.cfg.name">

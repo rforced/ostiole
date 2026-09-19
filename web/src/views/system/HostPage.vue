@@ -103,6 +103,13 @@ async function flush(tables) {
           network.owned ? 'owned by Ostiole' : 'owned by ' + (network.managers?.join(', ') || '—')
         }}
       </dd>
+      <dt>Bluetooth</dt>
+      <dd>
+        <span v-if="report?.bluetooth === 'loaded'" class="text-amber-700 dark:text-amber-300">
+          loaded. Run <code class="font-mono text-code">ostiole repair</code> as root.
+        </span>
+        <span v-else>{{ report?.bluetooth === 'blocked' ? 'blocked' : 'none' }}</span>
+      </dd>
       <dt>Services present</dt>
       <dd class="font-mono">{{ present || 'none' }}</dd>
       <dt v-if="missing">Missing</dt>

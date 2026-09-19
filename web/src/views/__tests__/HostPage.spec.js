@@ -25,6 +25,7 @@ function report(over = {}) {
       { name: 'systemd-networkd.service', active: 'inactive', enabled: 'disabled' },
     ],
     present: { nft: true, dnsmasq: true, unbound: true, miniupnpd: false, pppd: true, tc: true },
+    bluetooth: 'blocked',
     network: {
       backend: 'networkd',
       networkd: 'inactive',
@@ -74,6 +75,13 @@ describe('HostPage', () => {
     expect(text).toContain('nft dnsmasq unbound pppd tc')
     expect(text).toContain('miniupnpd')
     expect(text).toContain('ostiole repair')
+    expect(text).toContain('Bluetooth')
+    expect(text).toContain('blocked')
+  })
+
+  it('says when Bluetooth is back, and what to run', async () => {
+    const wrapper = await page({ bluetooth: 'loaded' })
+    expect(wrapper.text()).toMatch(/Bluetooth\s+loaded\. Run ostiole repair as root\./)
   })
 
   it('names who owns the addresses', async () => {
