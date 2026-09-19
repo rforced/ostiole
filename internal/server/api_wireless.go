@@ -38,6 +38,9 @@ type wirelessBand struct {
 	Channels  []wirelessChannel `json:"channels"`
 	MaxWidth  int               `json:"maxWidth"`
 	Standards []string          `json:"standards"`
+	// Serves is false on a band no channel allows a network on, which is
+	// every 6 GHz channel on an Intel card.
+	Serves bool `json:"serves"`
 }
 
 type wirelessChannel struct {
@@ -122,7 +125,10 @@ func (a *api) readRadios(ctx context.Context) wirelessRadios {
 			if !ok {
 				continue
 			}
-			band := wirelessBand{Channels: []wirelessChannel{}, MaxWidth: info.MaxWidth, Standards: standardsOf(b, info)}
+			band := wirelessBand{
+				Channels: []wirelessChannel{}, MaxWidth: info.MaxWidth,
+				Standards: standardsOf(b, info), Serves: phy.Serves(b),
+			}
 			for _, c := range info.Channels {
 				band.Channels = append(band.Channels, wirelessChannel{
 					Number: c.Number, MHz: c.MHz, Radar: c.Radar, Disabled: c.Disabled,

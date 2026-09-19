@@ -41,10 +41,12 @@ const rows = computed(() => {
 /** The country the card itself is following, which may not be ours yet. */
 const country = computed(() => config.wirelessCountry)
 
+/** The bands a network may be started on; a card's 6 GHz is often not one. */
 function bandsOf(card) {
   if (!card) return '—'
-  return Object.keys(card.bands ?? {})
-    .map((b) => BANDS[b] ?? b)
+  return Object.entries(card.bands ?? {})
+    .filter(([, b]) => b.serves !== false)
+    .map(([name]) => BANDS[name] ?? name)
     .join(', ')
 }
 

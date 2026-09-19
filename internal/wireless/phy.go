@@ -65,6 +65,31 @@ func (p *Phy) Supports(b model.Band) bool {
 	return ok
 }
 
+// Serves reports whether a network may be started on the band: the card
+// has it, a channel allows it, and it is not 6 GHz on an Intel card, which
+// no country it learns ever opens for an access point. Right after the
+// driver loads the channels carry no flags yet, which is why the driver
+// rule is there as well.
+func (p *Phy) Serves(b model.Band) bool {
+	info, ok := p.Bands[b]
+	if !ok || !info.Serves() {
+		return false
+	}
+	return b != model.Band6G || p.Driver != "iwlwifi"
+}
+
+// Serves reports whether a network may be started on the band at all: one
+// channel that is neither disabled nor no-IR. Intel cards mark every 6 GHz
+// channel no-IR whatever the country, and stay that way.
+func (b BandInfo) Serves() bool {
+	for _, c := range b.Channels {
+		if !c.Disabled && !c.NoIR {
+			return true
+		}
+	}
+	return false
+}
+
 // Channel returns the channel in a band.
 func (b BandInfo) Channel(n int) (Channel, bool) {
 	for _, c := range b.Channels {

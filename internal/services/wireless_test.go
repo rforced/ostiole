@@ -25,7 +25,7 @@ func ax210(t *testing.T) *wireless.Phy {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p.Name = "phy0"
+	p.Name, p.Driver = "phy0", "iwlwifi"
 	return &p
 }
 
@@ -270,6 +270,28 @@ func TestWirelessPreflightRefusals(t *testing.T) {
 		err := w.Preflight(t.Context(), files)
 		if err == nil || !strings.Contains(err.Error(), "no 6g band") {
 			t.Errorf("err = %v", err)
+		}
+	})
+
+	// The AX210 has a 6 GHz band and marks every channel on it no-IR, as
+	// it does on a real router after learning its country.
+	t.Run("a band the card may not transmit on", func(t *testing.T) {
+		t.Parallel()
+		w, _, country := newWireless(t, phy)
+		cfg := oneNetwork(t)
+		cfg.Wireless.Radios[0].Band = model.Band6G
+		cfg.Wireless.Radios[0].Channel = 0
+		for i := range cfg.Interfaces {
+			if cfg.Interfaces[i].Wireless != nil {
+				cfg.Interfaces[i].Wireless.Security = model.SecurityWPA3
+			}
+		}
+		err := w.Preflight(t.Context(), render(t, w, cfg))
+		if err == nil || !strings.Contains(err.Error(), "may not transmit on 6g") {
+			t.Errorf("err = %v", err)
+		}
+		if *country != "US" {
+			t.Errorf("the preflight probed before setting the country: %q", *country)
 		}
 	})
 

@@ -162,6 +162,20 @@ describe('RadioDialog', () => {
     expect(widths.map((o) => o.text())).toEqual(['20 MHz', '40 MHz', '80 MHz'])
   })
 
+  // The card has the band; the rules let nothing be started on it.
+  it('leaves out a band the card may not transmit on', async () => {
+    const six = {
+      channels: [{ number: 1, mhz: 5955 }],
+      maxWidth: 160,
+      standards: ['ax'],
+      serves: false,
+    }
+    const wrapper = open({ card: card({ bands: { ...card().bands, '6g': six } }), radio: null })
+    await flushPromises()
+    const bands = wrapper.find('#radio-band').findAll('option')
+    expect(bands.map((o) => o.attributes('value'))).toEqual(['2g', '5g'])
+  })
+
   it('lands a width it no longer offers on the widest it does', async () => {
     const radio = { ...config().wireless.radios[0], width: 160 }
     const wrapper = open({ card: card(), radio })

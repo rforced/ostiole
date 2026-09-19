@@ -309,3 +309,27 @@ func TestChannelCentres(t *testing.T) {
 		}
 	}
 }
+
+// A band serves when a channel on it is neither disabled nor no-IR, except
+// 6 GHz on an Intel card, which never opens for an access point.
+func TestPhyServes(t *testing.T) {
+	t.Parallel()
+	shut := BandInfo{Channels: []Channel{{Number: 1, NoIR: true}, {Number: 5, Disabled: true}}}
+	open := BandInfo{Channels: []Channel{{Number: 1, NoIR: true}, {Number: 5}}}
+	if shut.Serves() || !open.Serves() {
+		t.Errorf("Serves: shut=%v open=%v", shut.Serves(), open.Serves())
+	}
+	intel := Phy{Driver: "iwlwifi", Bands: map[model.Band]BandInfo{model.Band5G: open, model.Band6G: open}}
+	if !intel.Serves(model.Band5G) || intel.Serves(model.Band6G) || intel.Serves(model.Band2G) {
+		t.Errorf("intel serves 5g=%v 6g=%v 2g=%v", intel.Serves(model.Band5G), intel.Serves(model.Band6G), intel.Serves(model.Band2G))
+	}
+	other := Phy{Driver: "mt7915e", Bands: map[model.Band]BandInfo{model.Band6G: open}}
+	if !other.Serves(model.Band6G) {
+		t.Error("a card that may transmit on 6 GHz does not serve it")
+	}
+	p := ax210(t)
+	p.Driver = "iwlwifi"
+	if p.Serves(model.Band6G) || !p.Serves(model.Band5G) {
+		t.Errorf("AX210 serves 6g=%v 5g=%v", p.Serves(model.Band6G), p.Serves(model.Band5G))
+	}
+}

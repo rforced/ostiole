@@ -24,9 +24,11 @@ function blank() {
   return { name: '', enabled: true, band: '5g', channel: 0, width: 80, standard: 'ax', power: 0 }
 }
 
-/** The bands the card has; an unknown card offers all three. */
+/** The bands the card may transmit on; an unknown card offers all three. */
 const bands = computed(() => {
-  const have = Object.keys(props.card?.bands ?? {})
+  const have = Object.entries(props.card?.bands ?? {})
+    .filter(([, b]) => b.serves !== false)
+    .map(([name]) => name)
   return have.length ? have : ['2g', '5g', '6g']
 })
 

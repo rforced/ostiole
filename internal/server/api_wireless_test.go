@@ -197,8 +197,11 @@ func TestWirelessRadiosReportTheCard(t *testing.T) {
 		t.Errorf("a stopped radio is running: %+v", card.Running)
 	}
 	five, ok := card.Bands["5g"]
-	if !ok || five.MaxWidth != 160 {
+	if !ok || five.MaxWidth != 160 || !five.Serves {
 		t.Fatalf("5 GHz = %+v, %v", five, ok)
+	}
+	if six := card.Bands["6g"]; six.Serves {
+		t.Errorf("6 GHz serves on a card that marks every channel no-IR: %+v", six)
 	}
 	if got := strings.Join(five.Standards, ","); got != "ax,ac,n,legacy" {
 		t.Errorf("standards = %q", got)

@@ -181,7 +181,16 @@ func (w *Wireless) Preflight(ctx context.Context, files network.Files) error {
 	if w.bluetooth() {
 		return errBluetoothLoaded
 	}
-	for _, radio := range radiosIn(files) {
+	radios := radiosIn(files)
+	// A card the kernel governs reports the world's channels until the
+	// country is set, and the world allows nothing above 2.4 GHz. The apply
+	// sets it again; setting it here is what makes the probe honest.
+	if country := wireless.ParseEnv(files[radios[0]+wirelessEnvExt]).Country; country != "" {
+		if err := w.setReg(ctx, country); err != nil {
+			return err
+		}
+	}
+	for _, radio := range radios {
 		if err := w.preflightRadio(ctx, radio, wireless.ParseEnv(files[radio+wirelessEnvExt])); err != nil {
 			return err
 		}
@@ -203,6 +212,9 @@ func (w *Wireless) preflightRadio(ctx context.Context, radio string, plan wirele
 	band, ok := phy.Bands[plan.Band]
 	if !ok {
 		return fmt.Errorf("radio %s has no %s band", radio, plan.Band)
+	}
+	if !phy.Serves(plan.Band) {
+		return fmt.Errorf("radio %s may not transmit on %s here: no channel allows it", radio, plan.Band)
 	}
 	if plan.Channel != 0 {
 		// A card is not asked about no-IR here: a self-managed one calls
