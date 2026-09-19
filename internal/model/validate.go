@@ -132,6 +132,7 @@ func (c *Config) Validate() error {
 				strings.Join(kinds, " and "))
 		}
 	}
+	v.sharedNetworks(c)
 	v.shaping(c, v.enslaved(c, ifaces))
 	v.delegation(c)
 	v.wireless(c, ifaces)
@@ -903,6 +904,43 @@ func isPrivatePrefix(addr string) bool {
 		}
 	}
 	return false
+}
+
+// sharedNetworks refuses two interfaces on one network. Clients on one of
+// them are handed the other's address as their gateway; the shape people
+// want is a bridge.
+func (v *validator) sharedNetworks(c *Config) {
+	type claim struct {
+		prefix netip.Prefix
+		name   string
+	}
+	var claims []claim
+	for i, in := range c.Interfaces {
+		if !in.Enabled {
+			continue
+		}
+		for _, f := range []struct {
+			mode  AddrMode
+			addr  string
+			field string
+		}{{in.IPv4.Mode, in.IPv4.Address, "ipv4"}, {in.IPv6.Mode, in.IPv6.Address, "ipv6"}} {
+			if f.mode != AddrStatic {
+				continue
+			}
+			p, err := netip.ParsePrefix(f.addr)
+			if err != nil {
+				continue
+			}
+			for _, other := range claims {
+				if other.prefix.Overlaps(p) {
+					v.add(fmt.Sprintf("interfaces[%d].%s.address", i, f.field),
+						"%s is on the same network as %q; give each interface a network of its own, or bridge them",
+						f.addr, other.name)
+				}
+			}
+			claims = append(claims, claim{p, in.Name})
+		}
+	}
 }
 
 // builtFrom names every kind an interface claims to be. More than one is

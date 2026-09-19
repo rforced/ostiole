@@ -1565,3 +1565,27 @@ func TestValidateCatchesBusyHostMistakes(t *testing.T) {
 		t.Errorf("external zone message = %q", msg)
 	}
 }
+
+// Two interfaces on one network hand half the clients the wrong gateway;
+// a phone on the wireless one found that out.
+func TestValidateRejectsTwoInterfacesOnOneNetwork(t *testing.T) {
+	t.Parallel()
+	cfg := wirelessConfig()
+	for i := range cfg.Interfaces {
+		if cfg.Interfaces[i].Name == "ap1" {
+			cfg.Interfaces[i].IPv4.Address = "192.168.1.5/24"
+		}
+	}
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), `on the same network as "br-lan"`) {
+		t.Fatalf("err = %v", err)
+	}
+	for i := range cfg.Interfaces {
+		if cfg.Interfaces[i].Name == "ap1" {
+			cfg.Interfaces[i].Enabled = false
+		}
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("a disabled interface still counted: %v", err)
+	}
+}
