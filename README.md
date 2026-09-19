@@ -10,7 +10,6 @@
 Ostiole turns a Linux machine into a firewall and router: one static binary with a web UI,
 [nftables](https://netfilter.org/projects/nftables/) underneath, and the standard daemons
 (systemd-networkd, dnsmasq, unbound, miniupnpd, pppd) driven from one declarative configuration.
-Think pfSense, on the distribution you already run.
 
 **Status: alpha.** It works; expect bugs, and expect the configuration format to change between
 releases.

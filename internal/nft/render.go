@@ -579,9 +579,6 @@ const (
 	UPnPPostroutingChain = "upnp_postrouting"
 )
 
-// Ports the mapping service answers on. upnpHTTPPort is where miniupnpd
-// serves its device description; it is pfSense's choice, and it matches
-// the http_port the services package configures.
 const (
 	ssdpPort     = 1900
 	pcpPort      = 5351

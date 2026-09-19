@@ -21,9 +21,6 @@ const (
 	// directory for the reason unbound taught us: SELinux labels what is
 	// in there the way the daemon's policy expects.
 	UPnPDir = "/etc/miniupnpd"
-	// upnpHTTPPort serves the device description clients fetch after they
-	// find this router over SSDP. It is pfSense's port, and the one the
-	// firewall rules open.
 	upnpHTTPPort  = 2189
 	upnpConfName  = "ostiole.conf"
 	upnpDistroSvc = "miniupnpd.service"

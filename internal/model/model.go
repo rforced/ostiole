@@ -473,8 +473,6 @@ type Management struct {
 	LogDefaultDrops bool `json:"logDefaultDrops,omitempty"`
 }
 
-// Zone groups interfaces that share a security policy, like pfSense
-// interface groups or firewalld zones.
 type Zone struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
@@ -1009,10 +1007,6 @@ type Alias struct {
 // Fetched reports whether this alias takes its contents from elsewhere.
 func (a Alias) Fetched() bool { return a.URL != "" || a.Type == AliasGeoIP }
 
-// Rule is a filter rule evaluated for traffic entering Zone, whether it is
-// addressed to the firewall itself or forwarded through it (pfSense
-// semantics). DestZone restricts a rule to forwarded traffic leaving that
-// zone.
 type Rule struct {
 	ID          string   `json:"id"`
 	Description string   `json:"description,omitempty"`

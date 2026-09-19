@@ -236,8 +236,7 @@ func (r *renderer) protects(zone string) bool {
 // Without PerSource it is one expression in the rule itself: `limit rate`
 // matches while the traffic is under the rate, so the rule accepts up to
 // it and everything past it falls through to whatever comes next — the
-// drop at the end of the zone, usually. That is the pfSense behaviour and
-// it needs no set at all.
+// drop at the end of the zone, usually.
 //
 // With PerSource there is no "under" to match on, so it takes two rules:
 // this one drops what one source has sent too much of, and the rule
