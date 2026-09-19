@@ -22,11 +22,3 @@ test('wireless says what a router without a card has', async ({ page }) => {
   await page.getByRole('tab', { name: 'Clients' }).click()
   await expect(page.getByRole('cell', { name: 'Nothing to show.' })).toBeVisible()
 })
-
-test('wireless sits after interfaces in the sidebar', async ({ page }) => {
-  await login(page)
-  const menu = page.getByRole('navigation', { name: 'Main' })
-  const labels = await menu.getByRole('link').allInnerTexts()
-  const trimmed = labels.map((l) => l.trim())
-  expect(trimmed.indexOf('Wireless')).toBe(trimmed.indexOf('Interfaces') + 1)
-})

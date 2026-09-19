@@ -101,7 +101,22 @@ func (m *Manager) Check(ctx context.Context, ch Channel) (*Check, error) {
 
 // Cached is what the last check found, which is what a page shows before
 // anybody asks for a fresh one.
-func (m *Manager) Cached() Snapshot { return m.Cache.Snapshot() }
+//
+// Availability is decided here rather than read from the file. The
+// snapshot outlives the update it describes: installing what it found
+// restarts the daemon into that very release, and the file still says one
+// is waiting until the next check overwrites it.
+func (m *Manager) Cached() Snapshot {
+	s := m.Cache.Snapshot()
+	if s.LastCheck.IsZero() {
+		return s
+	}
+	s.Current = m.Current
+	if !Newer(m.Current, s.Latest) {
+		s.Available, s.Security, s.SecurityReleases = false, false, nil
+	}
+	return s
+}
 
 // Mode is what a scheduled self-update is allowed to install. It mirrors
 // the update mode in the configuration without this package having to

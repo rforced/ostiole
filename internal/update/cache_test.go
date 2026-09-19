@@ -67,6 +67,40 @@ func TestCheckIsRemembered(t *testing.T) {
 	}
 }
 
+// Installing what the check found restarts the daemon into that release,
+// and the process that comes back reads a file still saying one is
+// waiting. It must not offer the version it is.
+func TestCachedStopsOfferingTheReleaseNowRunning(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	srv := releaseServer(t, []map[string]any{release("v0.4.0", "Security-Release: yes\n")})
+	m := &Manager{Client: &Client{Repo: DefaultRepo, BaseURL: srv.URL}, Current: "0.3.0", Cache: NewCache(dir)}
+	if _, err := m.Check(t.Context(), Stable); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.Cached(); !got.Available || !got.Security {
+		t.Fatalf("snapshot = %+v, want 0.4.0 waiting", got)
+	}
+
+	// The same file, read by the version it was telling us to install.
+	after := &Manager{Client: m.Client, Current: "0.4.0", Cache: NewCache(dir)}
+	got := after.Cached()
+	if got.Available || got.Security || got.SecurityReleases != nil {
+		t.Errorf("snapshot = %+v, want nothing waiting", got)
+	}
+	// What the check found is still worth showing, against the version
+	// that is running now rather than the one that asked.
+	if got.Latest != "0.4.0" || got.Current != "0.4.0" || got.LastCheck.IsZero() {
+		t.Errorf("snapshot = %+v", got)
+	}
+
+	// A router that landed short of the latest is still behind it.
+	behind := &Manager{Client: m.Client, Current: "0.3.5", Cache: NewCache(dir)}
+	if got := behind.Cached(); !got.Available {
+		t.Errorf("snapshot = %+v, want 0.4.0 still waiting", got)
+	}
+}
+
 // A check that could not reach GitHub says so rather than quietly leaving
 // last week's answer looking fresh.
 func TestAFailedCheckIsRecorded(t *testing.T) {

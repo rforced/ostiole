@@ -15,6 +15,8 @@ const POLL_MS = 1500
 const config = useConfigStore()
 const confirm = useConfirmStore()
 const current = ref('')
+/** The version that served this page, which the script running it came from. */
+const loaded = ref('')
 const check = ref(null)
 const status = ref(null)
 const restartedTo = ref('')
@@ -47,6 +49,7 @@ const percent = computed(() =>
 async function loadVersion() {
   try {
     current.value = (await api.health()).version
+    if (!loaded.value) loaded.value = current.value
   } catch {
     /* shown elsewhere */
   }
@@ -73,22 +76,31 @@ const checking = useAsync(async () => {
 const poll = useAsync(tick, { interval: POLL_MS })
 
 async function tick() {
-  if (status.value?.state === 'restarting') {
-    // The daemon is coming back as the new version; health is public.
-    try {
-      const h = await api.health()
-      if (h.version !== current.value) {
+  // Which version answers is the only reliable sign the update landed.
+  // The restart can happen between two polls, and the process that comes
+  // back has never heard of it: it reports an idle updater and the same
+  // cached check as before, which reads exactly like an update that was
+  // never installed. Health is public and says who is answering.
+  try {
+    const h = await api.health()
+    if (h.version) {
+      current.value = h.version
+      // A version this page was not served by is the restart, whether or
+      // not the poll ever caught the state. The release the check named
+      // is the one running now, so nothing is waiting.
+      if (loaded.value && h.version !== loaded.value) {
         restartedTo.value = h.version
-        poll.stop()
+        if (check.value) check.value = { ...check.value, available: false, security: false }
       }
-    } catch {
-      /* still restarting */
     }
-    return
+  } catch {
+    return // still restarting
   }
   try {
     status.value = (await api.update.status()).status
-    if (status.value.state === 'failed') poll.stop()
+    // Idle is the new process answering: an update that is running never
+    // goes back to idle in the process that started it.
+    if (['failed', 'idle'].includes(status.value.state)) poll.stop()
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) poll.stop()
   }
@@ -192,7 +204,7 @@ onMounted(async () => {
         @click="checking.run"
       />
       <button
-        v-if="check?.available && !status?.packageManaged"
+        v-if="check?.available && !restartedTo && !status?.packageManaged"
         type="button"
         class="btn-primary"
         :disabled="busy || running"
