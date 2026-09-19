@@ -35,9 +35,16 @@ const band = computed(() => props.card?.bands?.[form.value.band] ?? null)
 /** Radar and disabled channels are left out: neither can be used here. */
 const channels = computed(() => (band.value?.channels ?? []).filter((c) => !c.radar && !c.disabled))
 
+/**
+ * What the card does, capped per band: 40 MHz on 2.4 GHz, and 80 MHz on
+ * 5 GHz because every 160 MHz block there takes in radar channels, which
+ * are not supported yet.
+ */
+const BAND_CAP = { '2g': 40, '5g': 80, '6g': 160 }
 const widths = computed(() => {
-  const max = band.value?.maxWidth ?? (form.value.band === '2g' ? 40 : 160)
-  return WIDTHS.filter((w) => w <= max && (form.value.band !== '2g' || w <= 40))
+  const cap = BAND_CAP[form.value.band] ?? 160
+  const max = band.value?.maxWidth ?? cap
+  return WIDTHS.filter((w) => w <= max && w <= cap)
 })
 
 const standards = computed(() => {
@@ -53,6 +60,8 @@ watch(
     const name = props.radio?.name ?? props.card?.name ?? ''
     if (props.radio) {
       form.value = { ...blank(), ...props.radio, name }
+      // A width saved before the cap, or by hand, lands on the widest offered.
+      if (!widths.value.includes(form.value.width)) form.value.width = widths.value.at(-1) ?? 20
       return
     }
     const first = bands.value.includes('5g') ? '5g' : (bands.value[0] ?? '2g')

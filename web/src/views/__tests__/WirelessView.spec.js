@@ -156,6 +156,17 @@ describe('RadioDialog', () => {
     expect(bands.map((o) => o.attributes('value'))).toEqual(['2g', '5g'])
     const channels = wrapper.find('#radio-channel').findAll('option')
     expect(channels.map((o) => o.text())).toEqual(['Automatic', '36 · 5180 MHz'])
+    // 160 MHz on 5 GHz would need radar channels, so it is not offered
+    // even on a card that does it.
+    const widths = wrapper.find('#radio-width').findAll('option')
+    expect(widths.map((o) => o.text())).toEqual(['20 MHz', '40 MHz', '80 MHz'])
+  })
+
+  it('lands a width it no longer offers on the widest it does', async () => {
+    const radio = { ...config().wireless.radios[0], width: 160 }
+    const wrapper = open({ card: card(), radio })
+    await flushPromises()
+    expect(wrapper.find('#radio-width').element.value).toBe('80')
   })
 
   it('saves a radio into the draft', async () => {

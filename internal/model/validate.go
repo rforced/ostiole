@@ -1397,7 +1397,9 @@ func (v *validator) wireless(c *Config, ifaces map[string]bool) {
 		} else if r.Band == Band5G && slices.Contains(RadarChannels, r.Channel) {
 			v.add(path+".channel", "channel %d is a radar channel, which is not supported yet", r.Channel)
 		}
-		if !slices.Contains(Widths(r.Band), r.Width) {
+		if r.Band == Band5G && r.Width == 160 {
+			v.add(path+".width", "160 MHz on 5 GHz needs radar channels, which are not supported yet")
+		} else if !slices.Contains(Widths(r.Band), r.Width) {
 			v.add(path+".width", "%d MHz is not a width on %s", r.Width, r.Band)
 		}
 		switch {

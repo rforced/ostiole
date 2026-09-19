@@ -749,8 +749,13 @@ func Channels(b Band) []int {
 
 // Widths lists the channel widths of a band, in MHz.
 func Widths(b Band) []int {
-	if b == Band2G {
+	switch b {
+	case Band2G:
 		return []int{20, 40}
+	case Band5G:
+		// Every 160 MHz block on 5 GHz takes in radar channels, and radar
+		// detection is not supported yet.
+		return []int{20, 40, 80}
 	}
 	return []int{20, 40, 80, 160}
 }

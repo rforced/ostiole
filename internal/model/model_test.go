@@ -880,6 +880,7 @@ func TestValidateCatchesWirelessMistakes(t *testing.T) {
 		"wireless.radios[2].standard",
 		"wireless.radios[3].name",
 		"wireless.radios[3].channel",
+		"wireless.radios[3].width",
 		"wireless.radios[3].power",
 		"wireless.radios[4].channel",
 		"wireless.radios[4].width",
@@ -901,6 +902,9 @@ func TestValidateCatchesWirelessMistakes(t *testing.T) {
 	}
 	if msg := got["wireless.radios[3].channel"]; !strings.Contains(msg, "radar") {
 		t.Errorf("channel 52 message = %q, want it to mention radar", msg)
+	}
+	if msg := got["wireless.radios[3].width"]; !strings.Contains(msg, "radar") {
+		t.Errorf("160 MHz message = %q, want it to mention radar", msg)
 	}
 }
 
