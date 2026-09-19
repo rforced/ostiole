@@ -598,6 +598,20 @@ type RouteSweeper interface {
 	SweepStale(ctx context.Context, before []network.DefaultRoute, wait time.Duration) ([]network.DefaultRoute, error)
 }
 
+// Restorable is the subset of managers that still have a unit on this
+// router. The install script removes the old manager once the handover is
+// confirmed, so a revert that runs after that would stop networkd and bring
+// back nothing: a router with no network at all.
+func Restorable(ctx context.Context, sc Systemctl, managers []string) []string {
+	var out []string
+	for _, name := range managers {
+		if _, err := sc.Run(ctx, "cat", UnitName(name)); err == nil {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
 // NetworkRevert undoes NetworkTakeover: stops networkd and brings the
 // previous managers back. wait-online style units are only re-enabled,
 // never started, because starting them blocks until the network is up.
@@ -606,6 +620,11 @@ type RouteSweeper interface {
 // routes it had are noted first and swept once the old manager has
 // installed its own. A sweep that finds no replacement removes nothing.
 func NetworkRevert(ctx context.Context, sc Systemctl, routes RouteSweeper, managers []string, log *slog.Logger) error {
+	managers = Restorable(ctx, sc, managers)
+	if len(managers) == 0 {
+		log.Warn("no previous network manager is left on this router; systemd-networkd stays in charge")
+		return nil
+	}
 	// Taken while networkd still owns the addressing, so every default
 	// route here is one it put in the kernel.
 	before, err := routes.Defaults()

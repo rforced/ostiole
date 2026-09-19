@@ -531,11 +531,16 @@ func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) e
 			return errors.New("no network takeover record found; nothing to revert")
 		}
 		if !o.inUnit {
+			restorable := install.Restorable(ctx, sc, rec.Managers)
+			if len(restorable) == 0 {
+				fmt.Fprintln(out, "nothing to revert to: the previous network manager is gone from this router; systemd-networkd stays in charge")
+				return nil
+			}
 			fmt.Fprintf(out, "reverting in unit %s; if this session drops, it still completes (journalctl -u %s)\n", revertUnit, revertUnit)
 			if err := detach(ctx, g, revertUnit, "--revert"); err != nil {
 				return err
 			}
-			fmt.Fprintf(out, "reverted: %s restored, systemd-networkd stopped\n", strings.Join(rec.Managers, ", "))
+			fmt.Fprintf(out, "reverted: %s restored, systemd-networkd stopped\n", strings.Join(restorable, ", "))
 			return nil
 		}
 		install.CancelNetworkRevert(ctx, run)

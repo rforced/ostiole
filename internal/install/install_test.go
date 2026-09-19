@@ -248,6 +248,25 @@ func TestNetworkTakeover(t *testing.T) {
 	}
 }
 
+// The install script removes the old manager after the handover, so a
+// revert that fires late has nothing to bring back and must not take
+// networkd down with it.
+func TestNetworkRevertKeepsNetworkdWhenTheOldManagerIsGone(t *testing.T) {
+	t.Parallel()
+	sc := &fakeSystemctl{}
+	sweeper := &fakeRoutes{}
+	err := NetworkRevert(context.Background(), sc, sweeper, []string{"NetworkManager"}, slog.New(slog.DiscardHandler))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sc.has("disable", "--now", NetworkdSocket, NetworkdUnit) || sweeper.swept {
+		t.Errorf("networkd was stopped with nothing to replace it: %v", sc.calls)
+	}
+	if got := Restorable(context.Background(), sc, nil); len(got) != 0 {
+		t.Errorf("Restorable(nil) = %v", got)
+	}
+}
+
 func TestNetworkRevertAndRecord(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -261,7 +280,9 @@ func TestNetworkRevertAndRecord(t *testing.T) {
 	if err != nil || len(rec.Managers) != 2 {
 		t.Fatalf("record = %v, %v", rec, err)
 	}
-	sc := &fakeSystemctl{}
+	sc := &fakeSystemctl{enabled: map[string]string{
+		"NetworkManager.service": "enabled", "NetworkManager-wait-online.service": "enabled",
+	}}
 	sweeper := &fakeRoutes{}
 	if err := NetworkRevert(context.Background(), sc, sweeper, rec.Managers, slog.New(slog.DiscardHandler)); err != nil {
 		t.Fatal(err)
@@ -270,6 +291,7 @@ func TestNetworkRevertAndRecord(t *testing.T) {
 		t.Error("the revert never swept the routes networkd left behind")
 	}
 	want := [][]string{
+		{"cat", "NetworkManager.service"}, {"cat", "NetworkManager-wait-online.service"},
 		{"disable", "--now", NetworkdSocket, NetworkdUnit},
 		{"unmask", "NetworkManager.service"}, {"enable", "--now", "NetworkManager.service"},
 		{"unmask", "NetworkManager-wait-online.service"}, {"enable", "NetworkManager-wait-online.service"},
