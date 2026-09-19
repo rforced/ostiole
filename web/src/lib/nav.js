@@ -53,6 +53,7 @@ import DashboardView from '@/views/DashboardView.vue'
 /** @type {NavItem[]} */
 export const NAV = [
   { to: '/', label: 'Dashboard', icon: Activity, view: DashboardView },
+  { to: '/routing', label: 'Routing', icon: Route, view: () => import('@/views/RoutingView.vue') },
   {
     to: '/interfaces',
     label: 'Interfaces',
@@ -61,18 +62,6 @@ export const NAV = [
     tabs: [
       { value: 'interfaces', label: 'Interfaces' },
       { value: 'zones', label: 'Zones' },
-    ],
-  },
-  {
-    to: '/wireless',
-    label: 'Wireless',
-    icon: Wifi,
-    needsConfig: true,
-    view: () => import('@/views/WirelessView.vue'),
-    tabs: [
-      { value: 'radios', label: 'Radios' },
-      { value: 'networks', label: 'Networks' },
-      { value: 'clients', label: 'Clients' },
     ],
   },
   {
@@ -107,7 +96,6 @@ export const NAV = [
       { path: 'log', label: 'Log', view: () => import('@/views/firewall/LogPage.vue') },
     ],
   },
-  { to: '/routing', label: 'Routing', icon: Route, view: () => import('@/views/RoutingView.vue') },
   {
     to: '/services',
     label: 'Services',
@@ -147,6 +135,18 @@ export const NAV = [
     ],
   },
   {
+    to: '/wireless',
+    label: 'Wireless',
+    icon: Wifi,
+    needsConfig: true,
+    view: () => import('@/views/WirelessView.vue'),
+    tabs: [
+      { value: 'radios', label: 'Radios' },
+      { value: 'networks', label: 'Networks' },
+      { value: 'clients', label: 'Clients' },
+    ],
+  },
+  {
     to: '/vpn',
     label: 'VPN',
     icon: Lock,
@@ -175,6 +175,33 @@ export const NAV = [
     view: () => import('@/views/CronsView.vue'),
   },
   {
+    to: '/system',
+    label: 'System',
+    icon: Cog,
+    pages: [
+      {
+        path: 'general',
+        label: 'General',
+        view: () => import('@/views/system/GeneralPage.vue'),
+        needsConfig: true,
+      },
+      {
+        path: 'accounts',
+        label: 'Accounts',
+        view: () => import('@/views/system/AccountsPage.vue'),
+      },
+      { path: 'host', label: 'Host', view: () => import('@/views/system/HostPage.vue') },
+      { path: 'updates', label: 'Updates', view: () => import('@/views/system/UpdatesPage.vue') },
+      {
+        path: 'backup',
+        label: 'Backup',
+        view: () => import('@/views/system/BackupPage.vue'),
+        needsConfig: true,
+      },
+      { path: 'ruleset', label: 'Ruleset', view: () => import('@/views/system/RulesetPage.vue') },
+    ],
+  },
+  {
     to: '/diagnostics',
     label: 'Diagnostics',
     icon: Stethoscope,
@@ -200,33 +227,6 @@ export const NAV = [
         view: () => import('@/views/diagnostics/CapturePage.vue'),
       },
       { path: 'logs', label: 'Logs', view: () => import('@/views/diagnostics/LogsPage.vue') },
-    ],
-  },
-  {
-    to: '/system',
-    label: 'System',
-    icon: Cog,
-    pages: [
-      {
-        path: 'general',
-        label: 'General',
-        view: () => import('@/views/system/GeneralPage.vue'),
-        needsConfig: true,
-      },
-      {
-        path: 'accounts',
-        label: 'Accounts',
-        view: () => import('@/views/system/AccountsPage.vue'),
-      },
-      { path: 'host', label: 'Host', view: () => import('@/views/system/HostPage.vue') },
-      { path: 'updates', label: 'Updates', view: () => import('@/views/system/UpdatesPage.vue') },
-      {
-        path: 'backup',
-        label: 'Backup',
-        view: () => import('@/views/system/BackupPage.vue'),
-        needsConfig: true,
-      },
-      { path: 'ruleset', label: 'Ruleset', view: () => import('@/views/system/RulesetPage.vue') },
     ],
   },
 ]
