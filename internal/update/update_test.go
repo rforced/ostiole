@@ -20,10 +20,16 @@ import (
 	"testing"
 )
 
-type fakeRun struct{ calls [][]string }
+type fakeRun struct {
+	calls  [][]string
+	failOn string // the one command that fails, for the paths that handle it
+}
 
 func (f *fakeRun) Run(_ context.Context, name string, args ...string) ([]byte, error) {
 	f.calls = append(f.calls, append([]string{name}, args...))
+	if name != "" && name == f.failOn {
+		return []byte("Failed to start transient service unit"), errors.New("exit status 1")
+	}
 	return nil, nil
 }
 
@@ -158,6 +164,32 @@ func TestCheckDownloadInstall(t *testing.T) {
 	last := strings.Join(run.calls[len(run.calls)-1], " ")
 	if !strings.Contains(last, "systemd-run") || !strings.Contains(last, " install >/dev/null") || !strings.Contains(last, "systemctl restart ostiole.service") || !strings.Contains(last, "update --probe") || !strings.Contains(last, ".previous") {
 		t.Errorf("restart command = %q", last)
+	}
+}
+
+// A swap that nothing will restart into is a binary the next reboot starts
+// without a probe. When systemd-run refuses, the old one goes back.
+func TestInstallPutsTheOldBinaryBackWhenNothingWillRestart(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "ostiole")
+	if err := os.WriteFile(bin, []byte("old"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	next := filepath.Join(dir, "ostiole.new")
+	if err := os.WriteFile(next, []byte("new"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	inst := &Installer{Binary: bin, Unit: "ostiole.service", HealthURL: "x", Run: &fakeRun{failOn: "systemd-run"}}
+	err := inst.Install(context.Background(), next)
+	if err == nil || !strings.Contains(err.Error(), "schedule restart") {
+		t.Fatalf("err = %v", err)
+	}
+	if raw, _ := os.ReadFile(bin); string(raw) != "old" {
+		t.Errorf("binary = %q, want the old one back", raw)
+	}
+	if _, err := os.Stat(bin + ".previous"); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("previous copy left behind: %v", err)
 	}
 }
 

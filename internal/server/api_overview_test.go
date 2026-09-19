@@ -208,14 +208,6 @@ func TestOverviewAfterApply(t *testing.T) {
 	}
 }
 
-func TestOverviewNeedsSession(t *testing.T) {
-	t.Parallel()
-	srv, _ := newUnauthenticatedServer(t)
-	if resp, _ := do(t, srv, http.MethodGet, "/api/v1/overview", nil); resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("overview without a session: %d, want 401", resp.StatusCode)
-	}
-}
-
 func TestSummarizeLinksPrefersKernelState(t *testing.T) {
 	t.Parallel()
 	cfg := model.Starter(model.StarterOptions{LAN: "eth1", LANAddress: "10.0.0.1/24", WAN: "eth0"})

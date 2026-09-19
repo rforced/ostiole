@@ -19,10 +19,13 @@ type router struct {
 }
 
 type route struct {
-	Method  string
-	Path    string
-	Role    auth.Role
-	Public  bool
+	Method string
+	Path   string
+	Role   auth.Role
+	Public bool
+	// Session marks a route about the session itself, which a token
+	// cannot stand in for.
+	Session bool
 	Summary string
 }
 
@@ -39,6 +42,7 @@ func (r *router) HandleFunc(pattern string, h http.HandlerFunc) {
 		Path:    path,
 		Role:    doc.role,
 		Public:  doc.public,
+		Session: doc.session,
 		Summary: doc.summary,
 	})
 	if !documented {
@@ -55,6 +59,9 @@ type routeDoc struct {
 	summary string
 	role    auth.Role
 	public  bool
+	// session routes are about the cookie session: describing it, ending
+	// it, changing its password. A token has none, so none is accepted.
+	session bool
 }
 
 // routeDocs describes every endpoint. TestOpenAPICoversEveryRoute fails
@@ -65,9 +72,9 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/setup":          {summary: "Report whether the first account still has to be created.", public: true},
 	"POST /api/v1/setup":         {summary: "Create the first administrator account.", public: true},
 	"POST /api/v1/auth/login":    {summary: "Sign in and receive a session cookie.", public: true},
-	"POST /api/v1/auth/logout":   {summary: "End the current session.", role: auth.RoleViewer},
-	"GET /api/v1/auth/me":        {summary: "Describe the current session.", role: auth.RoleViewer},
-	"POST /api/v1/auth/password": {summary: "Change the signed-in account's password.", role: auth.RoleViewer},
+	"POST /api/v1/auth/logout":   {summary: "End the current session.", role: auth.RoleViewer, session: true},
+	"GET /api/v1/auth/me":        {summary: "Describe the current session.", role: auth.RoleViewer, session: true},
+	"POST /api/v1/auth/password": {summary: "Change the signed-in account's password.", role: auth.RoleViewer, session: true},
 
 	"GET /api/v1/status":                 {summary: "Whether a configuration is saved, loaded, and confirmed.", role: auth.RoleViewer},
 	"GET /api/v1/system/stats":           {summary: "CPU, memory, swap, load, disk space and the connection table on this router.", role: auth.RoleViewer},
@@ -200,9 +207,13 @@ func (a *api) openAPI(baseURL string) map[string]any {
 				"403": map[string]any{"description": "The caller's role does not allow this"},
 			},
 		}
-		if rt.Public {
+		switch {
+		case rt.Public:
 			op["security"] = []any{}
-		} else {
+		case rt.Session:
+			op["security"] = []any{map[string]any{"session": []string{}}}
+			op["x-required-role"] = string(rt.Role)
+		default:
 			op["security"] = []any{
 				map[string]any{"session": []string{}},
 				map[string]any{"token": []string{}},
@@ -220,8 +231,10 @@ func (a *api) openAPI(baseURL string) map[string]any {
 			"title":   "Ostiole",
 			"version": version.Version,
 			"description": "The API behind the Ostiole web UI. Every endpoint takes either the " +
-				"session cookie the UI uses or an API token in an Authorization header. " +
-				"Roles are admin, operator, and viewer; each endpoint says the least it needs.",
+				"session cookie the UI uses or an API token in an Authorization header, " +
+				"except the three under /auth, which are about the session itself and take " +
+				"only the cookie. Roles are admin, operator, and viewer; each endpoint says " +
+				"the least it needs.",
 			"license": map[string]any{"name": "AGPL-3.0-or-later"},
 		},
 		"servers": []any{map[string]any{"url": baseURL}},

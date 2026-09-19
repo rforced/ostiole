@@ -506,6 +506,9 @@ if %[2]s update --probe %[3]s; then rm -f %[4]s; else mv -f %[4]s %[2]s && syste
 		i.Unit, i.Binary, i.HealthURL, previous)
 	_, _ = i.Run.Run(ctx, "systemctl", "reset-failed", "ostiole-update-restart.service")
 	if out, err := i.Run.Run(ctx, "systemd-run", "--unit=ostiole-update-restart", "--collect", "--quiet", "sh", "-c", script); err != nil {
+		// Nothing is going to restart into the new binary, and nothing
+		// would probe it if the next reboot did. Put the old one back.
+		_ = os.Rename(previous, i.Binary)
 		return fmt.Errorf("schedule restart: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil

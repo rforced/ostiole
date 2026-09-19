@@ -3,8 +3,12 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/rforced/ostiole/internal/auth"
 )
 
 // Every route the server registers has to be described, or the OpenAPI
@@ -46,8 +50,81 @@ func TestOpenAPICoversEveryRoute(t *testing.T) {
 	}
 }
 
+// probe sends one request with a bearer token and nothing else, or with no
+// credentials at all when token is empty, and reports the status.
+func probe(t *testing.T, srv *httptest.Server, method, path, token string) int {
+	t.Helper()
+	req, err := http.NewRequest(method, srv.URL+path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	// The CSRF guard sits in front of the gate and answers a write without
+	// this header itself; it is the gate that is under test here.
+	req.Header.Set(RequestHeader, RequestHeaderValue)
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("%s %s: %v", method, path, err)
+	}
+	resp.Body.Close()
+	return resp.StatusCode
+}
+
+// The description says who may call each route, and a client is written
+// against it. The wrapper on the route and its line in routeDocs are two
+// places, so this is what holds them together: every route is tried with
+// no credentials, then with a token one role short of the one documented,
+// and every read with exactly that role.
+func TestEveryRouteEnforcesItsDocumentedRole(t *testing.T) {
+	t.Parallel()
+	srv, _, _ := roleServer(t)
+	tokens := map[auth.Role]string{
+		auth.RoleViewer:   mintToken(t, srv, "look", string(auth.RoleViewer)),
+		auth.RoleOperator: mintToken(t, srv, "change", string(auth.RoleOperator)),
+		auth.RoleAdmin:    mintToken(t, srv, "own", string(auth.RoleAdmin)),
+	}
+	short := map[auth.Role]auth.Role{auth.RoleOperator: auth.RoleViewer, auth.RoleAdmin: auth.RoleOperator}
+	// Path parameters take any value: the gate comes before the lookup.
+	params := strings.NewReplacer("{id}", "x", "{name}", "x")
+	for pattern, doc := range routeDocs {
+		if doc.public {
+			continue
+		}
+		method, path, _ := strings.Cut(pattern, " ")
+		path = params.Replace(path)
+		if got := probe(t, srv, method, path, ""); got != http.StatusUnauthorized {
+			t.Errorf("%s with no credentials: %d, want 401", pattern, got)
+		}
+		if doc.session {
+			// About the session itself: a token is refused whatever its role,
+			// and the description says only the cookie gets in.
+			if got := probe(t, srv, method, path, tokens[auth.RoleAdmin]); got != http.StatusUnauthorized {
+				t.Errorf("%s with a token: %d, want 401 (documented as session only)", pattern, got)
+			}
+			continue
+		}
+		if lower, ok := short[doc.role]; ok {
+			if got := probe(t, srv, method, path, tokens[lower]); got != http.StatusForbidden {
+				t.Errorf("%s with a %s token: %d, want 403 (documented as %s)", pattern, lower, got, doc.role)
+			}
+		}
+		// Reads have no side effects, so the documented role is tried too:
+		// it has to get past the gate, whatever the handler then says.
+		if method == http.MethodGet {
+			if got := probe(t, srv, method, path, tokens[doc.role]); got == http.StatusUnauthorized || got == http.StatusForbidden {
+				t.Errorf("%s with a %s token: %d, which the description does not warn about", pattern, doc.role, got)
+			}
+		}
+	}
+}
+
 // The roles in the description have to be the roles the server enforces,
 // because that is what somebody writing a client will read.
+// TestEveryRouteEnforcesItsDocumentedRole holds routeDocs to the wrappers;
+// this checks the document carries what routeDocs says.
 func TestOpenAPIStatesTheRequiredRole(t *testing.T) {
 	t.Parallel()
 	srv, _, _ := roleServer(t)
