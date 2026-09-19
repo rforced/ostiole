@@ -50,6 +50,20 @@ func newWireless(t *testing.T, phy *wireless.Phy) (*Wireless, *fakeCmd, *string)
 	return w, cmd, country
 }
 
+// withBand is a copy of the card with one band altered; the tests share
+// the parsed card, so none of them may write to it.
+func withBand(phy *wireless.Phy, band model.Band, alter func(*wireless.BandInfo)) *wireless.Phy {
+	cut := *phy
+	cut.Bands = map[model.Band]wireless.BandInfo{}
+	for b, info := range phy.Bands {
+		cut.Bands[b] = info
+	}
+	info := cut.Bands[band]
+	alter(&info)
+	cut.Bands[band] = info
+	return &cut
+}
+
 // oneNetwork drops the guest network from the fixture, which has two on a
 // card that serves one.
 func oneNetwork(t *testing.T) *model.Config {
@@ -123,6 +137,9 @@ func TestWirelessApplyStartsChangesAndStops(t *testing.T) {
 	}
 	if !cmd.has("systemctl", "enable", "--now", "ostiole-hostapd@wlp3s0.service") {
 		t.Errorf("calls = %v", cmd.calls)
+	}
+	if cmd.has("systemctl", "restart", "ostiole-hostapd@wlp3s0.service") {
+		t.Errorf("a fresh apply restarted what it had just started: %v", cmd.calls)
 	}
 	raw, err := os.ReadFile(filepath.Join(w.Dir, "wlp3s0.conf"))
 	if err != nil {
@@ -252,6 +269,34 @@ func TestWirelessPreflightRefusals(t *testing.T) {
 		}
 		err := w.Preflight(t.Context(), files)
 		if err == nil || !strings.Contains(err.Error(), "no 6g band") {
+			t.Errorf("err = %v", err)
+		}
+	})
+
+	t.Run("wider than the card goes", func(t *testing.T) {
+		t.Parallel()
+		w, _, _ := newWireless(t, phy)
+		cfg := oneNetwork(t)
+		cfg.Wireless.Radios[0].Width = 160
+		files := render(t, w, cfg)
+		w.Probe = func(context.Context, string) (*wireless.Phy, error) {
+			return withBand(phy, model.Band5G, func(b *wireless.BandInfo) { b.MaxWidth = 80 }), nil
+		}
+		err := w.Preflight(t.Context(), files)
+		if err == nil || !strings.Contains(err.Error(), "does not go above 80 MHz") {
+			t.Errorf("err = %v", err)
+		}
+	})
+
+	t.Run("a standard the card has not got", func(t *testing.T) {
+		t.Parallel()
+		w, _, _ := newWireless(t, phy)
+		files := render(t, w, oneNetwork(t))
+		w.Probe = func(context.Context, string) (*wireless.Phy, error) {
+			return withBand(phy, model.Band5G, func(b *wireless.BandInfo) { b.HE = false }), nil
+		}
+		err := w.Preflight(t.Context(), files)
+		if err == nil || !strings.Contains(err.Error(), "does not do ax on 5g") {
 			t.Errorf("err = %v", err)
 		}
 	})

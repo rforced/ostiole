@@ -288,13 +288,16 @@ func (w *Wireless) Apply(ctx context.Context, files network.Files) error {
 			changed = true
 		}
 		unit := WirelessUnitFor(radio)
-		if !changed && w.active(ctx, unit) {
+		active := w.active(ctx, unit)
+		if !changed && active {
 			continue
 		}
 		if out, err := w.cmd().Run(ctx, "systemctl", "enable", "--now", unit); err != nil {
 			return fmt.Errorf("start the networks on %s: %w: %s", radio, err, strings.TrimSpace(string(out)))
 		}
-		if changed {
+		// A fresh start has just read the files; an instance that was
+		// already running has not.
+		if changed && active {
 			if out, err := w.cmd().Run(ctx, "systemctl", "restart", unit); err != nil {
 				return fmt.Errorf("restart the networks on %s: %w: %s", radio, err, strings.TrimSpace(string(out)))
 			}
