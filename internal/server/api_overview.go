@@ -7,12 +7,14 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/rforced/ostiole/internal/engine"
+	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/gateway"
 	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/kernel"
@@ -42,7 +44,27 @@ type Overview struct {
 	UnwatchedGateways []gateway.Detected `json:"unwatchedGateways"`
 	Services          []ServiceState     `json:"services"`
 	Warnings          []Warning          `json:"warnings"`
+	// RecentBlocks are the newest packets the firewall refused and logged,
+	// newest first. It is null, not empty, when there is no log listener,
+	// so the dashboard can tell "nothing refused" from "cannot see".
+	RecentBlocks []fwlog.Entry `json:"recentBlocks"`
+	// RecentLeases are the DHCP leases handed out or renewed last, newest
+	// first.
+	RecentLeases []services.Lease `json:"recentLeases"`
+	// Wireless is who is on the air, present only when a radio is meant
+	// to be transmitting.
+	Wireless *WirelessSummary `json:"wireless,omitempty"`
 }
+
+// WirelessSummary is every network a radio carries and every client on
+// them, for the dashboard.
+type WirelessSummary struct {
+	Networks []wirelessLiveNet `json:"networks"`
+	Clients  []wirelessClient  `json:"clients"`
+}
+
+// recentLimit is how many log lines and leases the dashboard shows.
+const recentLimit = 5
 
 // StatusSummary repeats GET /status, plus a count of what is configured,
 // so the dashboard needs one round trip.
@@ -82,6 +104,11 @@ type LinkSummary struct {
 	StaticAddresses []string `json:"configuredAddresses,omitempty"`
 	RXBytes         uint64   `json:"rxBytes"`
 	TXBytes         uint64   `json:"txBytes"`
+	// Errors and drops since the link came up; shown only when not zero.
+	RXErrors  uint64 `json:"rxErrors,omitempty"`
+	TXErrors  uint64 `json:"txErrors,omitempty"`
+	RXDropped uint64 `json:"rxDropped,omitempty"`
+	TXDropped uint64 `json:"txDropped,omitempty"`
 }
 
 // RuleCounter is one configured rule with its kernel counter.
@@ -204,6 +231,7 @@ func (a *api) overview(w http.ResponseWriter, r *http.Request) error {
 		Warnings:          []Warning{},
 		Gateways:          []gateway.Status{},
 		UnwatchedGateways: []gateway.Detected{},
+		RecentLeases:      []services.Lease{},
 	}
 	if a.gateways != nil {
 		ov.Gateways = a.gateways.Statuses()
@@ -241,7 +269,14 @@ func (a *api) overview(w http.ResponseWriter, r *http.Request) error {
 	if a.services != nil {
 		if leases, err := a.services.ReadLeases(); err == nil {
 			ov.DHCP.Leases = len(leases)
+			ov.RecentLeases = recentLeases(leases, recentLimit)
 		}
+	}
+	if a.fwlog != nil {
+		ov.RecentBlocks = recentBlocks(cfg, a.fwlog.Recent(200), recentLimit)
+	}
+	if cfg != nil && len(cfg.ActiveRadios()) > 0 {
+		ov.Wireless = a.wirelessSummary(ctx, cfg)
 	}
 	ov.Services = a.serviceStates(ctx, cfg)
 	ov.Warnings = a.warnings(ctx, cfg, st, ov.Services, ov.Interfaces)
@@ -310,6 +345,8 @@ func withLive(s LinkSummary, l network.Link, present bool) LinkSummary {
 	s.Carrier = l.Carrier
 	s.MAC = l.MAC
 	s.RXBytes, s.TXBytes = l.RXBytes, l.TXBytes
+	s.RXErrors, s.TXErrors = l.RXErrors, l.TXErrors
+	s.RXDropped, s.TXDropped = l.RXDropped, l.TXDropped
 	if l.VLANID != 0 {
 		s.VLANID = l.VLANID
 	}
@@ -354,6 +391,65 @@ func topRules(cfg *model.Config, counters nft.Counters, limit int) ([]RuleCounte
 		out = out[:limit]
 	}
 	return out, blocked
+}
+
+// recentBlocks picks the newest refused packets out of the log, newest
+// first: the zone and default drops, and logged rules whose action is
+// not accept. Entries arrive oldest first, so the walk runs backwards.
+func recentBlocks(cfg *model.Config, entries []fwlog.Entry, limit int) []fwlog.Entry {
+	refuses := map[string]bool{}
+	if cfg != nil {
+		for _, r := range cfg.Rules {
+			if r.Action != model.ActionAccept {
+				refuses[r.ID] = true
+			}
+		}
+	}
+	out := []fwlog.Entry{}
+	for i := len(entries) - 1; i >= 0 && len(out) < limit; i-- {
+		e := entries[i]
+		switch e.Kind {
+		case "zone-drop", "default-drop":
+		case "rule":
+			if !refuses[e.RuleID] {
+				continue
+			}
+		default:
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
+// recentLeases orders leases by when they were last handed out or
+// renewed. dnsmasq records only the expiry, and every lease in a pool
+// lives the same length, so the latest expiry is the latest activity.
+func recentLeases(leases []services.Lease, limit int) []services.Lease {
+	out := slices.Clone(leases)
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Expires.After(out[j].Expires) })
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out
+}
+
+// wirelessSummary lists the networks the active radios carry and who is
+// on each. Without hostapd the clients are simply nobody.
+func (a *api) wirelessSummary(ctx context.Context, cfg *model.Config) *WirelessSummary {
+	out := &WirelessSummary{Networks: []wirelessLiveNet{}, Clients: a.readWirelessClients(ctx, cfg)}
+	perIface := map[string]int{}
+	for _, c := range out.Clients {
+		perIface[c.Interface]++
+	}
+	for _, r := range cfg.ActiveRadios() {
+		for _, in := range cfg.NetworksOn(r.Name) {
+			out.Networks = append(out.Networks, wirelessLiveNet{
+				Interface: in.Name, SSID: in.Wireless.SSID, Clients: perIface[in.Name],
+			})
+		}
+	}
+	return out
 }
 
 func summarizeServices(cfg *model.Config) (DHCPSummary, DNSSummary) {

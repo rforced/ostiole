@@ -191,16 +191,17 @@ func (a *api) runningRadio(ctx context.Context, cfg *model.Config, radio string)
 // wirelessClients lists who is connected, over every network of every
 // radio that is running. Nothing running is an empty list.
 func (a *api) wirelessClients(w http.ResponseWriter, r *http.Request) error {
-	ctx := r.Context()
-	out := []wirelessClient{}
-	if a.wireless == nil || !a.wireless.Installed(ctx) {
-		writeJSON(w, http.StatusOK, out)
-		return nil
-	}
 	cfg, _ := a.engine.Store().Load()
-	if cfg == nil {
-		writeJSON(w, http.StatusOK, out)
-		return nil
+	writeJSON(w, http.StatusOK, a.readWirelessClients(r.Context(), cfg))
+	return nil
+}
+
+// readWirelessClients joins every station on a running radio to its
+// lease, so a client can be named by something other than a MAC.
+func (a *api) readWirelessClients(ctx context.Context, cfg *model.Config) []wirelessClient {
+	out := []wirelessClient{}
+	if a.wireless == nil || !a.wireless.Installed(ctx) || cfg == nil {
+		return out
 	}
 	leases := map[string]wirelessClient{}
 	if a.services != nil {
@@ -237,6 +238,5 @@ func (a *api) wirelessClients(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 	slices.SortFunc(out, func(x, y wirelessClient) int { return strings.Compare(x.MAC, y.MAC) })
-	writeJSON(w, http.StatusOK, out)
-	return nil
+	return out
 }

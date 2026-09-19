@@ -10,13 +10,16 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/engine"
+	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/nft/nfttest"
+	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/store"
 )
 
@@ -183,6 +186,17 @@ func TestOverviewAfterApply(t *testing.T) {
 			t.Errorf("unwatched route %+v is covered by gateway %q", d, d.Configured)
 		}
 	}
+	// No log listener here, and the dashboard must be able to tell that
+	// from a quiet log; no lease reader, but the list is still a list.
+	if ov.RecentBlocks != nil {
+		t.Errorf("recentBlocks = %+v, want null without a listener", ov.RecentBlocks)
+	}
+	if ov.RecentLeases == nil {
+		t.Error("recentLeases is missing, want an array")
+	}
+	if ov.Wireless != nil {
+		t.Errorf("wireless = %+v, want none without a radio", ov.Wireless)
+	}
 
 	if !ov.DHCP.Enabled || ov.DHCP.Servers != 1 || ov.DHCP.Capacity != 100 {
 		t.Errorf("dhcp = %+v, want one server of 100 addresses", ov.DHCP)
@@ -257,4 +271,47 @@ func linkByName(ov Overview, name string) *LinkSummary {
 		}
 	}
 	return nil
+}
+
+func TestRecentBlocksKeepsOnlyRefusals(t *testing.T) {
+	t.Parallel()
+	cfg := &model.Config{Rules: []model.Rule{
+		{ID: "allow-lan", Action: model.ActionAccept},
+		{ID: "block-iot", Action: model.ActionDrop},
+	}}
+	log := []fwlog.Entry{
+		{Kind: "rule", RuleID: "allow-lan", Src: "1"},
+		{Kind: "default-drop", Src: "2"},
+		{Kind: "other", Src: "3"},
+		{Kind: "rule", RuleID: "block-iot", Src: "4"},
+		{Kind: "zone-drop", Src: "5"},
+		{Kind: "rule", RuleID: "allow-lan", Src: "6"},
+	}
+	got := recentBlocks(cfg, log, 2)
+	if len(got) != 2 || got[0].Src != "5" || got[1].Src != "4" {
+		t.Errorf("recentBlocks = %+v, want the two newest refusals, newest first", got)
+	}
+	if all := recentBlocks(cfg, log, 10); len(all) != 3 {
+		t.Errorf("recentBlocks unlimited = %+v, want three refusals", all)
+	}
+	if none := recentBlocks(nil, log, 10); len(none) != 2 {
+		t.Errorf("recentBlocks without a config = %+v, want only the policy drops", none)
+	}
+}
+
+func TestRecentLeasesNewestFirst(t *testing.T) {
+	t.Parallel()
+	base := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
+	leases := []services.Lease{
+		{IP: "10.0.0.2", Expires: base.Add(1 * time.Hour)},
+		{IP: "10.0.0.3", Expires: base.Add(3 * time.Hour)},
+		{IP: "10.0.0.4", Expires: base.Add(2 * time.Hour)},
+	}
+	got := recentLeases(leases, 2)
+	if len(got) != 2 || got[0].IP != "10.0.0.3" || got[1].IP != "10.0.0.4" {
+		t.Errorf("recentLeases = %+v, want the two latest expiries first", got)
+	}
+	if leases[0].IP != "10.0.0.2" {
+		t.Error("recentLeases reordered the caller's slice")
+	}
 }

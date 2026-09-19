@@ -134,7 +134,7 @@ jobs:
         run: echo "images=$(jq -c . .github/test-systems.json)" >> "$GITHUB_OUTPUT"
 
   # One snapshot build, used by every test system below. It used to be
-  # built once per system, which was the same seven builds of the same
+  # built once per system, which was the same six builds of the same
   # commit.
   dist:
     name: Snapshot packages
@@ -151,7 +151,7 @@ jobs:
       # The build cache is kept here and not in the release workflow.
       # goreleaser is what publishes there, which is why zizmor asks
       # about it; here it builds a snapshot that is skipped, thrown at
-      # seven containers, and deleted. Nobody installs this.
+      # six containers, and deleted. Nobody installs this.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod

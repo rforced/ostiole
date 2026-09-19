@@ -41,6 +41,12 @@ type Link struct {
 	TXBytes   uint64 `json:"txBytes"`
 	RXPackets uint64 `json:"rxPackets"`
 	TXPackets uint64 `json:"txPackets"`
+	// Errors and drops the kernel counted. Either rising on a wired port
+	// is a bad cable, a duplex mismatch, or a driver that cannot keep up.
+	RXErrors  uint64 `json:"rxErrors,omitempty"`
+	TXErrors  uint64 `json:"txErrors,omitempty"`
+	RXDropped uint64 `json:"rxDropped,omitempty"`
+	TXDropped uint64 `json:"txDropped,omitempty"`
 }
 
 // helper reports whether a link is one Ostiole made for itself rather
@@ -128,6 +134,8 @@ func Discover() ([]Link, error) {
 		if s := a.Statistics; s != nil {
 			li.RXBytes, li.TXBytes = s.RxBytes, s.TxBytes
 			li.RXPackets, li.TXPackets = s.RxPackets, s.TxPackets
+			li.RXErrors, li.TXErrors = s.RxErrors, s.TxErrors
+			li.RXDropped, li.TXDropped = s.RxDropped, s.TxDropped
 		}
 		addrs, err := netlink.AddrList(l, netlink.FAMILY_ALL)
 		if err == nil {

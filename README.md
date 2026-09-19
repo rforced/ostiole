@@ -60,14 +60,14 @@ The test systems are the stock images in [test-systems.json](.github/test-system
 | --- | --- | --- |
 | Rocky Linux 9 | 5.14 | The floor. RHEL 9 and AlmaLinux 9 are the same |
 | Rocky Linux 10 | 6.12 | RHEL 10 and AlmaLinux 10 are the same |
-| Ubuntu 24.04 LTS | 6.8 | |
+| Debian 13 | 6.12 | networkd is still part of the systemd package here |
 | Ubuntu 26.04 LTS | current | |
 | Fedora 44 | current | |
 | Arch Linux | current | miniupnpd is built from the AUR during install |
 
-Debian 12 and 13, Ubuntu 22.04 and openSUSE meet the requirements and should work, but are not in
-the matrix. RHEL 8, Debian 11 and Ubuntu 20.04 are below the kernel requirement. Distributions
-without systemd, Alpine among them, are not supported: the installer refuses them.
+Debian 12, Ubuntu 22.04 and 24.04 LTS, and openSUSE meet the requirements and should work, but are
+not in the matrix. RHEL 8, Debian 11 and Ubuntu 20.04 are below the kernel requirement.
+Distributions without systemd, Alpine among them, are not supported: the installer refuses them.
 
 ## Install
 
@@ -129,8 +129,9 @@ where the policy your distribution already ships expects to find them.
   `/usr/local/bin`. systemd will not execute a copy left in `/root`, labelled `admin_home_t`, from
   the transient units the network handover and the updater run in: it fails with 203/EXEC.
 
-The same rule satisfies AppArmor. Ubuntu enforces a profile for unbound that allows exactly
-`/etc/unbound` and the files under `/var/lib/unbound` that unbound owns; it ships none for dnsmasq.
+The same rule satisfies AppArmor. Debian and Ubuntu enforce a profile for unbound that allows
+exactly `/etc/unbound` and the files under `/var/lib/unbound` that unbound owns; it ships none for
+dnsmasq.
 
 A denial looks like a daemon that will not start, reporting "Permission denied" for a file root can
 read. `journalctl -u ostiole-dnsmasq -u ostiole-unbound` shows the failure, and `ausearch -m AVC -ts

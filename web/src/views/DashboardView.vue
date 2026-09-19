@@ -5,14 +5,19 @@ import ApplyPending from '@/components/ApplyPending.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import { api } from '@/lib/api'
 import { errorMessage, useAsync } from '@/lib/async'
+import { createRateTracker } from '@/lib/rates'
 import { useSystemStore } from '@/stores/system'
 import DashboardWarnings from '@/views/dashboard/DashboardWarnings.vue'
 import BlockingCard from '@/views/dashboard/BlockingCard.vue'
 import GatewaysCard from '@/views/dashboard/GatewaysCard.vue'
 import InterfaceSummary from '@/views/dashboard/InterfaceSummary.vue'
+import RecentBlocksCard from '@/views/dashboard/RecentBlocksCard.vue'
+import RecentLeasesCard from '@/views/dashboard/RecentLeasesCard.vue'
+import RouterCard from '@/views/dashboard/RouterCard.vue'
 import ServicesCard from '@/views/dashboard/ServicesCard.vue'
 import SystemLoadCard from '@/views/dashboard/SystemLoadCard.vue'
 import TopRulesCard from '@/views/dashboard/TopRulesCard.vue'
+import WirelessCard from '@/views/dashboard/WirelessCard.vue'
 
 /** Live enough for counters and carrier, quiet enough for a router. */
 const REFRESH_MS = 10_000
@@ -29,11 +34,15 @@ const stats = ref(null)
 const healthError = ref('')
 const update = ref(null)
 const status = computed(() => system.status)
+/** Bits per second per interface, from the last two overviews. */
+const rates = ref({})
+const sampleRates = createRateTracker()
 
 const load = useAsync(
   async () => {
     const [ov] = await Promise.all([api.overview(), system.refresh()])
     overview.value = ov
+    rates.value = sampleRates(ov.interfaces ?? [])
   },
   { interval: REFRESH_MS },
 )
@@ -100,7 +109,7 @@ onMounted(async () => {
 
     <DashboardWarnings :warnings="overview?.warnings ?? []" />
 
-    <InterfaceSummary :interfaces="overview?.interfaces ?? []" />
+    <InterfaceSummary :interfaces="overview?.interfaces ?? []" :rates="rates" />
 
     <div class="grid gap-4 lg:grid-cols-2">
       <SystemLoadCard :stats="stats" />
@@ -110,67 +119,25 @@ onMounted(async () => {
         :unwatched="overview.unwatchedGateways ?? []"
       />
       <TopRulesCard :rules="overview?.topRules ?? []" :blocked="overview?.blocked" />
+      <RecentBlocksCard v-if="overview?.recentBlocks" :blocks="overview.recentBlocks" />
       <ServicesCard
         :services="overview?.services ?? []"
         :dhcp="overview?.dhcp ?? {}"
         :dns="overview?.dns ?? {}"
       />
+      <RecentLeasesCard
+        v-if="overview?.dhcp?.enabled"
+        :leases="overview.recentLeases ?? []"
+        :total="overview.dhcp.leases ?? 0"
+      />
+      <WirelessCard v-if="overview?.wireless" :wireless="overview.wireless" />
       <BlockingCard v-if="overview?.blocking?.enabled" :blocking="overview.blocking" />
-    </div>
-
-    <div class="grid gap-4 sm:grid-cols-2">
-      <section class="card" aria-labelledby="fw-status">
-        <h2 id="fw-status" class="card-title">Firewall</h2>
-        <dl v-if="status" class="kv">
-          <dt>Configured</dt>
-          <dd>{{ status.configured ? 'yes' : 'no' }}</dd>
-          <dt>Ruleset loaded</dt>
-          <dd>{{ status.tableLoaded ? 'yes' : 'no' }}</dd>
-          <dt>Network backend</dt>
-          <dd>{{ status.network }}</dd>
-          <dt>Rules</dt>
-          <dd>
-            {{ overview?.status?.rules ?? 0 }} in {{ overview?.status?.zones ?? 0 }} zones ·
-            <RouterLink to="/firewall/rules" class="link">edit</RouterLink>
-          </dd>
-          <dt>Pending apply</dt>
-          <dd>
-            {{
-              status.pending
-                ? `until ${new Date(status.pending.deadline).toLocaleTimeString()}`
-                : 'none'
-            }}
-          </dd>
-        </dl>
-        <p v-else class="text-neutral-500">Loading…</p>
-      </section>
-
-      <section class="card" aria-labelledby="backend-status">
-        <h2 id="backend-status" class="card-title">Backend</h2>
-        <dl v-if="health" class="kv">
-          <dt>Status</dt>
-          <dd>{{ health.status }}</dd>
-          <dt>Hostname</dt>
-          <dd class="font-mono">{{ overview?.status?.hostname || '—' }}</dd>
-          <dt>Version</dt>
-          <dd class="font-mono">{{ health.version }}</dd>
-          <dt>Commit</dt>
-          <dd class="font-mono">{{ health.commit }}</dd>
-          <dt>Revisions</dt>
-          <dd>
-            {{ overview?.status?.revisions ?? 0 }} ·
-            <RouterLink to="/system/backup" class="link">roll back under System</RouterLink>
-          </dd>
-          <template v-if="update">
-            <dt>Update</dt>
-            <dd>
-              <span class="font-mono">{{ update.latest }}</span> available ·
-              <RouterLink to="/system/updates" class="link">install under System</RouterLink>
-            </dd>
-          </template>
-        </dl>
-        <p v-else class="text-neutral-500">Loading…</p>
-      </section>
+      <RouterCard
+        :status="status"
+        :summary="overview?.status ?? {}"
+        :health="health"
+        :update="update"
+      />
     </div>
   </div>
 </template>

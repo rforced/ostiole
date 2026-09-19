@@ -33,4 +33,14 @@ pacman)
 esac
 ensure_tools curl tar openssl
 
+# A privileged container sees the host's sysfs, so the installer's wifi
+# detection finds whatever card the workstation running this has and asks
+# for its firmware. CI runners have no radio, so the same test would take
+# a different path here than there — and on Debian it fails outright,
+# because the firmware packages are in non-free-firmware and the image
+# does not enable it. Empty is what a router with no card looks like.
+# Never fatal: a mask that will not mount is not worth a failed boot.
+mount -t tmpfs tmpfs /sys/bus/pci/devices 2>/dev/null || true
+mount -t tmpfs tmpfs /sys/class/ieee80211 2>/dev/null || true
+
 exec /sbin/init

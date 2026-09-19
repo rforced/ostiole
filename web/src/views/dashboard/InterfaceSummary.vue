@@ -1,11 +1,13 @@
 <script setup>
 import { ArrowDown, ArrowUp } from 'lucide-vue-next'
 
-import { formatBytes } from '@/lib/format'
+import { formatBytes, formatCount, formatRate } from '@/lib/format'
 
 defineProps({
   /** Interface summaries from GET /overview. */
   interfaces: { type: Array, default: () => [] },
+  /** Bits per second per interface, once two samples have been seen. */
+  rates: { type: Object, default: () => ({}) },
 })
 
 /** How the interface is addressed, e.g. "IPv4 static · IPv6 slaac". */
@@ -19,6 +21,16 @@ function addressing(l) {
 /** Static addresses the configuration asks for that the kernel does not have. */
 function pending(l) {
   return (l.configuredAddresses ?? []).filter((a) => !(l.addresses ?? []).includes(a))
+}
+
+/** Errors and drops since the link came up, or nothing when there are none. */
+function faults(l) {
+  const errors = (l.rxErrors ?? 0) + (l.txErrors ?? 0)
+  const dropped = (l.rxDropped ?? 0) + (l.txDropped ?? 0)
+  const parts = []
+  if (errors) parts.push(`${formatCount(errors)} error${errors === 1 ? '' : 's'}`)
+  if (dropped) parts.push(`${formatCount(dropped)} dropped`)
+  return parts.join(' · ')
 }
 </script>
 
@@ -59,6 +71,9 @@ function pending(l) {
               <span v-else-if="l.carrier" class="badge badge-ok">up</span>
               <span v-else-if="l.up" class="badge badge-warn">no carrier</span>
               <span v-else class="badge">down</span>
+              <div v-if="faults(l)" class="mt-1 text-amber-700 dark:text-amber-400">
+                {{ faults(l) }}
+              </div>
             </td>
             <td class="font-mono text-code">
               <div v-for="a in l.addresses" :key="a">{{ a }}</div>
@@ -71,12 +86,16 @@ function pending(l) {
             </td>
             <td class="text-right font-mono text-code whitespace-nowrap">
               <div v-if="l.present">
-                <ArrowDown class="inline size-3" aria-hidden="true" />{{ formatBytes(l.rxBytes) }}
-                <span class="sr-only">received,</span>
+                <ArrowDown class="inline size-3" aria-hidden="true" />
+                <span class="sr-only">receiving</span>
+                {{ rates[l.name] ? formatRate(rates[l.name].rx) : '—' }}
+                <span class="ml-1 text-neutral-500">{{ formatBytes(l.rxBytes) }}</span>
               </div>
               <div v-if="l.present">
-                <ArrowUp class="inline size-3" aria-hidden="true" />{{ formatBytes(l.txBytes) }}
-                <span class="sr-only">sent</span>
+                <ArrowUp class="inline size-3" aria-hidden="true" />
+                <span class="sr-only">sending</span>
+                {{ rates[l.name] ? formatRate(rates[l.name].tx) : '—' }}
+                <span class="ml-1 text-neutral-500">{{ formatBytes(l.txBytes) }}</span>
               </div>
               <span v-if="!l.present" class="text-neutral-500">—</span>
             </td>
