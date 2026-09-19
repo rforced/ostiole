@@ -62,7 +62,8 @@ watch(
     const name = props.radio?.name ?? props.card?.name ?? ''
     if (props.radio) {
       form.value = { ...blank(), ...props.radio, name }
-      // A width saved before the cap, or by hand, lands on the widest offered.
+      // A band or width saved before the rule, or by hand, lands on what is offered.
+      if (!bands.value.includes(form.value.band)) form.value.band = bands.value[0]
       if (!widths.value.includes(form.value.width)) form.value.width = widths.value.at(-1) ?? 20
       return
     }

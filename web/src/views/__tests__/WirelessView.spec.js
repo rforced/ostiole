@@ -176,6 +176,13 @@ describe('RadioDialog', () => {
     expect(bands.map((o) => o.attributes('value'))).toEqual(['2g', '5g'])
   })
 
+  it('lands a band it no longer offers on the first it does', async () => {
+    const radio = { ...config().wireless.radios[0], band: '6g', channel: 0 }
+    const wrapper = open({ card: card(), radio })
+    await flushPromises()
+    expect(wrapper.find('#radio-band').element.value).toBe('2g')
+  })
+
   it('lands a width it no longer offers on the widest it does', async () => {
     const radio = { ...config().wireless.radios[0], width: 160 }
     const wrapper = open({ card: card(), radio })
