@@ -47,9 +47,11 @@ test('a fresh router asks for an admin account, then runs the wizard', async ({ 
   await pending.getByRole('button', { name: 'Confirm' }).click()
   await expect(page).toHaveURL(/\/$/)
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
-  const firewall = page.getByRole('region', { name: 'Firewall' })
-  await expect(firewall).toContainText('Configured')
-  await expect(firewall.locator('dd').first()).toHaveText('yes')
+  // The Router card is where the applied configuration shows up: the
+  // hostname the wizard was given, and a ruleset the kernel has.
+  const router = page.getByRole('region', { name: 'Router' })
+  await expect(router).toContainText('edge')
+  await expect(router.getByText('loaded', { exact: true })).toBeVisible()
   await page.screenshot({ path: shot('05-dashboard-light'), fullPage: true })
 })
 
