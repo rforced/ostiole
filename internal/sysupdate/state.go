@@ -12,15 +12,17 @@ import (
 // written to disk because an update can restart the daemon that started
 // it, and a page that forgets what it just did is no use to anybody.
 type Snapshot struct {
-	// LastCheck is when the package manager was last asked.
-	LastCheck time.Time `json:"lastCheck,omitempty"`
+	// LastCheck is when the package manager was last asked. omitzero, not
+	// omitempty: a struct is never empty, so a router that has never
+	// checked would otherwise report the year 1 as a timestamp.
+	LastCheck time.Time `json:"lastCheck,omitzero"`
 	// CheckError is why the last check failed, if it did.
 	CheckError string `json:"checkError,omitempty"`
 	// Pending is what the last successful check found.
 	Pending Pending `json:"pending"`
 	// LastRun, LastMode, LastError and LastOutput describe the last
 	// install attempt.
-	LastRun    time.Time `json:"lastRun,omitempty"`
+	LastRun    time.Time `json:"lastRun,omitzero"`
 	LastMode   string    `json:"lastMode,omitempty"`
 	LastError  string    `json:"lastError,omitempty"`
 	LastOutput string    `json:"lastOutput,omitempty"`

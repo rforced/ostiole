@@ -13,8 +13,10 @@ import (
 // without asking GitHub on every load, and so the answer survives the
 // restart an update itself causes.
 type Snapshot struct {
-	// LastCheck is when GitHub was last asked.
-	LastCheck time.Time `json:"lastCheck,omitempty"`
+	// LastCheck is when GitHub was last asked. omitzero, not omitempty: a
+	// struct is never empty, so a router that has never checked would
+	// otherwise report the year 1 as a timestamp.
+	LastCheck time.Time `json:"lastCheck,omitzero"`
 	// CheckError is why the last check failed, if it did.
 	CheckError string `json:"checkError,omitempty"`
 	// Channel is the channel that was asked about.
