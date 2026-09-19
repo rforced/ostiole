@@ -4,7 +4,7 @@ import { login, shot, sidebar } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
-test('the diagnostics page reports what the firewall can reach', async ({ page }) => {
+test('the ping form returns a result or an error, and never hangs', async ({ page }) => {
   await login(page)
   await page.goto('/diagnostics')
   await expect(page).toHaveURL(/\/diagnostics\/ping$/)
@@ -30,7 +30,7 @@ test('the diagnostics page reports what the firewall can reach', async ({ page }
   await page.screenshot({ path: shot('70-diagnostics'), fullPage: true })
 })
 
-test('the log viewer reads the journal', async ({ page }) => {
+test('the log viewer answers a query without hanging or going blank', async ({ page }) => {
   await login(page)
   await page.goto('/diagnostics/logs')
   await expect(page.getByLabel('Unit')).toBeVisible()
@@ -45,14 +45,16 @@ test('the log viewer reads the journal', async ({ page }) => {
   }).toPass()
 })
 
-test('a capture needs an interface and rejects a silly port', async ({ page }) => {
+test('the capture page picks an interface, so the button is live', async ({ page }) => {
   await login(page)
   await page.goto('/diagnostics/capture')
   await expect(page.getByLabel('Interface')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Capture' })).toBeEnabled()
 })
 
-test('the connections and neighbour tables read the kernel', async ({ page }) => {
+test('the connections and neighbour pages explain themselves, and the filter empties the list', async ({
+  page,
+}) => {
   await login(page)
   await page.goto('/diagnostics/connections')
   // The dev host tracks connections; a machine without the module says so

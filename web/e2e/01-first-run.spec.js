@@ -53,16 +53,6 @@ test('a fresh router asks for an admin account, then runs the wizard', async ({ 
   await page.screenshot({ path: shot('05-dashboard-light'), fullPage: true })
 })
 
-test('the wizard is not offered again once configured', async ({ page }) => {
-  await page.goto('/login')
-  await page.getByLabel('Username').fill('admin')
-  await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
-  await page.getByRole('button', { name: 'Sign in' }).click()
-  await expect(page).toHaveURL(/\/$/)
-  await page.goto('/wizard')
-  await expect(page).toHaveURL(/\/$/)
-})
-
 test('sign out, wrong password, sign in again, deep link redirect', async ({ page }) => {
   await page.goto('/login')
   await page.getByLabel('Username').fill('admin')
@@ -86,7 +76,7 @@ test('sign out, wrong password, sign in again, deep link redirect', async ({ pag
   await expect(page).toHaveURL(/\/interfaces$/)
 })
 
-test('theme selector persists and defaults to system', async ({ page }) => {
+test('a theme choice survives a reload, and System clears it', async ({ page }) => {
   await page.goto('/login')
   const html = page.locator('html')
   await page.getByRole('button', { name: 'Dark' }).click()

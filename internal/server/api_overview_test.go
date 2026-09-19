@@ -173,6 +173,16 @@ func TestOverviewAfterApply(t *testing.T) {
 	if ov.Blocked.Packets != 10 || ov.Blocked.Bytes != 1000 {
 		t.Errorf("blocked = %+v, want the default-drop and zone-default sums", ov.Blocked)
 	}
+	// Which default routes this host has is its own business, but the
+	// list is always there, and nothing on it is a gateway already watched.
+	if ov.UnwatchedGateways == nil {
+		t.Error("unwatchedGateways is missing, want an array")
+	}
+	for _, d := range ov.UnwatchedGateways {
+		if d.Configured != "" {
+			t.Errorf("unwatched route %+v is covered by gateway %q", d, d.Configured)
+		}
+	}
 
 	if !ov.DHCP.Enabled || ov.DHCP.Servers != 1 || ov.DHCP.Capacity != 100 {
 		t.Errorf("dhcp = %+v, want one server of 100 addresses", ov.DHCP)

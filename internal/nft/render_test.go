@@ -74,8 +74,14 @@ func TestRenderRejectsInvalid(t *testing.T) {
 func TestRenderIsDeterministic(t *testing.T) {
 	t.Parallel()
 	cfg := loadConfig(t, "testdata/full.json")
-	a, _ := Render(cfg)
-	b, _ := Render(cfg)
+	a, err := Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if a != b {
 		t.Fatal("render is not deterministic")
 	}

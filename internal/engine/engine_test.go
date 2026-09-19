@@ -333,7 +333,7 @@ func TestApplyFailuresLeaveNoPending(t *testing.T) {
 	}
 }
 
-func TestLoad(t *testing.T) {
+func TestLoadAppliesTheConfirmedRulesetAtBoot(t *testing.T) {
 	t.Parallel()
 	e, fr, _ := newEngine(t)
 	if err := e.Load(context.Background()); !errors.Is(err, ErrNoRuleset) {

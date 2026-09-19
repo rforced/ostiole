@@ -2,34 +2,38 @@
 defineProps({
   /** Gateway health from GET /overview. */
   gateways: { type: Array, default: () => [] },
+  /**
+   * Default routes the kernel has that no gateway covers. They carry
+   * traffic without anyone checking they still answer, which is worth
+   * seeing next to the ones that are watched.
+   */
+  unwatched: { type: Array, default: () => [] },
 })
 </script>
 
 <template>
   <section class="card" aria-labelledby="dash-gateways">
     <h2 id="dash-gateways" class="card-title">Gateways</h2>
-    <div class="-mx-4 -mb-4 overflow-x-auto">
+    <div class="-mx-4 overflow-x-auto">
       <table class="table">
         <thead>
           <tr>
             <th>Gateway</th>
-            <th>Via</th>
             <th>State</th>
             <th class="text-right">Latency</th>
             <th class="text-right">Loss</th>
           </tr>
         </thead>
         <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!gateways.length" key="empty" class="row-static">
-            <td colspan="5" class="text-neutral-500">No gateways configured.</td>
-          </tr>
           <tr v-for="g in gateways" :key="g.name">
             <td>
-              <span class="font-mono font-medium">{{ g.name }}</span>
-              <span v-if="g.active" class="badge badge-ok ml-1">active</span>
-            </td>
-            <td class="font-mono text-code">
-              {{ g.interface }}<span v-if="g.address"> · {{ g.address }}</span>
+              <div>
+                <span class="font-mono font-medium">{{ g.name }}</span>
+                <span v-if="g.active" class="badge badge-ok ml-1">active</span>
+              </div>
+              <div class="font-mono text-code text-neutral-500">
+                {{ g.interface }}<span v-if="g.address"> · {{ g.address }}</span>
+              </div>
             </td>
             <td>
               <span v-if="g.unknown" class="badge">probing</span>
@@ -40,8 +44,29 @@ defineProps({
             <td class="text-right font-mono text-code">{{ g.latencyMs.toFixed(1) }} ms</td>
             <td class="text-right font-mono text-code">{{ g.lossPercent.toFixed(0) }}%</td>
           </tr>
+          <tr
+            v-for="d in unwatched"
+            :key="`${d.interface}-${d.address}-${d.family}`"
+            data-unwatched
+            class="text-neutral-500"
+          >
+            <td>
+              <div class="font-mono font-medium">{{ d.interface }}</div>
+              <div class="font-mono text-code">{{ d.address }} · {{ d.protocol }}</div>
+            </td>
+            <td><span class="badge">not watched</span></td>
+            <td class="text-right">—</td>
+            <td class="text-right">—</td>
+          </tr>
         </TransitionGroup>
       </table>
     </div>
+    <p class="mt-3">
+      <template v-if="unwatched.length">
+        A route nobody watches cannot fail over.
+        <RouterLink to="/routing" class="link">Watch it under Routing</RouterLink>
+      </template>
+      <RouterLink v-else to="/routing" class="link">Manage gateways</RouterLink>
+    </p>
   </section>
 </template>

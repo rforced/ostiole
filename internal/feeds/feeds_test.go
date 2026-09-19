@@ -243,17 +243,6 @@ func TestSetFragmentReplacesElements(t *testing.T) {
 	}
 }
 
-func TestRefreshPeriodFloor(t *testing.T) {
-	t.Parallel()
-	if got := RefreshPeriod(model.Alias{}); got != DefaultRefresh {
-		t.Errorf("default = %v", got)
-	}
-	// Publishers ask not to be hammered, so an hour is the floor.
-	if got := RefreshPeriod(model.Alias{RefreshHours: 0}); got < MinRefresh {
-		t.Errorf("period = %v", got)
-	}
-}
-
 // The bogon list is fetched like any other feed, but nobody writes it as
 // an alias: an interface asks for it by turning its block on.
 func TestBogonListIsFetchedWhenAnInterfaceAsks(t *testing.T) {

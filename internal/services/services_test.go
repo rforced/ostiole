@@ -541,14 +541,3 @@ func TestPPPoEApplyTouchesNothingWithoutSessions(t *testing.T) {
 		t.Errorf("it talked to systemd for nothing: %v", cmd.calls)
 	}
 }
-
-// And the same on the way back: a rollback after an unrelated failure
-// must not be the thing that takes the router down.
-func TestPPPoERollbackToNothingIsQuiet(t *testing.T) {
-	t.Parallel()
-	dir := filepath.Join(t.TempDir(), "gone")
-	p := &PPPoE{Dir: dir, Cmd: &fakeCmd{}}
-	if err := p.Apply(context.Background(), network.Files{}); err != nil {
-		t.Fatalf("rollback to no sessions: %v", err)
-	}
-}

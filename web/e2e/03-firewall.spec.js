@@ -103,9 +103,9 @@ test('an alias in use cannot be deleted; a rule can be disabled', async ({ page 
   await login(page)
   await page.goto('/firewall')
   await sidebar(page, 'Aliases')
-  await expect(
-    page.getByRole('row').filter({ hasText: 'admins' }).getByText('in use'),
-  ).toBeVisible()
+  const alias = page.getByRole('row').filter({ hasText: 'admins' })
+  await expect(alias.getByText('in use')).toBeVisible()
+  await expect(alias.getByRole('button', { name: 'Delete' })).toHaveCount(0)
 
   await sidebar(page, 'Rules')
   await page.getByRole('group', { name: 'Zone' }).getByRole('button', { name: 'wan' }).click()

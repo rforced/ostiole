@@ -1,6 +1,8 @@
 package sysstat
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -69,5 +71,35 @@ func TestCPUTimesCountsIdleAsNotBusy(t *testing.T) {
 	}
 	if busy >= all {
 		t.Errorf("busy %d of %d: idle was counted as work", busy, all)
+	}
+}
+
+func TestConntrackReadsTheTable(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	nf := filepath.Join(dir, "net", "netfilter")
+	if err := os.MkdirAll(nf, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nf, "nf_conntrack_count"), []byte("2113\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nf, "nf_conntrack_max"), []byte("65536\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := &Sampler{ProcSys: dir}
+	got := s.conntrack()
+	if got == nil || got.Count != 2113 || got.Max != 65536 {
+		t.Errorf("conntrack = %+v, want 2113 of 65536", got)
+	}
+}
+
+// A kernel without the module has no files to read, and the dashboard
+// should not show a meter of zero over zero.
+func TestConntrackAbsentWithoutTheModule(t *testing.T) {
+	t.Parallel()
+	s := &Sampler{ProcSys: t.TempDir()}
+	if got := s.conntrack(); got != nil {
+		t.Errorf("conntrack = %+v, want nil", got)
 	}
 }

@@ -35,8 +35,13 @@ type Overview struct {
 	DNS        DNSSummary       `json:"dns"`
 	Blocking   BlockingSummary  `json:"blocking"`
 	Gateways   []gateway.Status `json:"gateways"`
-	Services   []ServiceState   `json:"services"`
-	Warnings   []Warning        `json:"warnings"`
+	// UnwatchedGateways are default routes the kernel has that no
+	// configured gateway covers. They carry traffic all the same, and
+	// nothing fails over from them, so the dashboard shows them until one
+	// is adopted under Routing.
+	UnwatchedGateways []gateway.Detected `json:"unwatchedGateways"`
+	Services          []ServiceState     `json:"services"`
+	Warnings          []Warning          `json:"warnings"`
 }
 
 // StatusSummary repeats GET /status, plus a count of what is configured,
@@ -192,12 +197,13 @@ func (a *api) overview(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	ov := Overview{
-		Status:     StatusSummary{Configured: st.Configured, TableLoaded: st.TableLoaded, Network: st.Network},
-		Interfaces: []LinkSummary{},
-		TopRules:   []RuleCounter{},
-		Services:   []ServiceState{},
-		Warnings:   []Warning{},
-		Gateways:   []gateway.Status{},
+		Status:            StatusSummary{Configured: st.Configured, TableLoaded: st.TableLoaded, Network: st.Network},
+		Interfaces:        []LinkSummary{},
+		TopRules:          []RuleCounter{},
+		Services:          []ServiceState{},
+		Warnings:          []Warning{},
+		Gateways:          []gateway.Status{},
+		UnwatchedGateways: []gateway.Detected{},
 	}
 	if a.gateways != nil {
 		ov.Gateways = a.gateways.Statuses()
@@ -220,6 +226,13 @@ func (a *api) overview(w http.ResponseWriter, r *http.Request) error {
 
 	links, _ := network.Discover()
 	ov.Interfaces = summarizeLinks(cfg, links)
+	if found, err := gateway.Detect(cfg); err == nil {
+		for _, d := range found {
+			if d.Configured == "" {
+				ov.UnwatchedGateways = append(ov.UnwatchedGateways, d)
+			}
+		}
+	}
 
 	if counters, err := a.engine.Counters(ctx); err == nil {
 		ov.TopRules, ov.Blocked = topRules(cfg, counters, 5)

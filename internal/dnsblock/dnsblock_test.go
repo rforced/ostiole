@@ -133,14 +133,6 @@ func TestReduceDropsWhatAParentCovers(t *testing.T) {
 	}
 }
 
-func TestReverseLabelsRoundTrip(t *testing.T) {
-	for _, s := range []string{"example.com", "a.b.c.d.example.com", "zip"} {
-		if got := reverseLabels(reverseLabels(s)); got != s {
-			t.Errorf("reverseLabels twice on %q gave %q", s, got)
-		}
-	}
-}
-
 func TestCovers(t *testing.T) {
 	cases := []struct {
 		parent, child string

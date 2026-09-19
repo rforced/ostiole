@@ -2,7 +2,7 @@
 import { TriangleAlert } from 'lucide-vue-next'
 import { computed } from 'vue'
 
-import { formatBytes, formatDuration } from '@/lib/format'
+import { formatBytes, formatCount, formatDuration } from '@/lib/format'
 
 const props = defineProps({
   /** A reading from GET /system/stats, or null before the first one. */
@@ -11,7 +11,8 @@ const props = defineProps({
 
 /**
  * Where a meter stops being reassuring. A router at 80% memory is worth a
- * glance; at 90% of a disk it is worth acting on.
+ * glance; at 90% of a disk it is worth acting on, and a connection table
+ * at 100% refuses new connections outright.
  */
 const WARN = 75
 const CRITICAL = 90
@@ -68,14 +69,19 @@ const rootDisk = computed(() => {
 
 /**
  * A second filesystem, when the configuration lives on one of its own. It
- * goes in the list below rather than the row: three meters is the shape of
- * the card, and a fourth one wrapping onto its own line reads as a fault.
+ * goes in the list below rather than among the meters, which are the
+ * things that fill up on their own.
  */
 const otherDisk = computed(
   () =>
     (props.stats?.filesystems ?? []).filter((fs) => fs.total && fs !== rootDisk.value)[0] ?? null,
 )
 
+/**
+ * The three meters every router has, then the connection table once the
+ * kernel reports one. A router that has never filtered has no table, and
+ * a meter of zero over zero would say less than no meter.
+ */
 const meters = computed(() => {
   const s = props.stats
   if (!s) return [blank('CPU'), blank('Memory'), blank('Disk')]
@@ -105,7 +111,19 @@ const meters = computed(() => {
       `${formatBytes(used)} of ${formatBytes(fs.total)}`,
     )
   }
-  return [cpu, memory, disk]
+
+  const out = [cpu, memory, disk]
+  const ct = s.conntrack
+  if (ct?.max) {
+    out.push(
+      meter(
+        'States',
+        (ct.count / ct.max) * 100,
+        `${formatCount(ct.count)} of ${formatCount(ct.max)}`,
+      ),
+    )
+  }
+  return out
 })
 
 const swap = computed(() => {
@@ -119,31 +137,34 @@ const swap = computed(() => {
   <section class="card" aria-labelledby="dash-load">
     <h2 id="dash-load" class="card-title">System</h2>
 
-    <div class="grid gap-4 sm:grid-cols-3">
-      <div v-for="m in meters" :key="m.label" class="space-y-1">
-        <div class="flex items-center gap-1.5 text-neutral-500">
-          <span>{{ m.label }}</span>
-          <template v-if="m.level !== 'ok'">
-            <TriangleAlert
-              class="size-3.5"
-              :class="
-                m.level === 'critical'
-                  ? 'text-red-600 dark:text-red-500'
-                  : 'text-amber-600 dark:text-amber-400'
-              "
-              aria-hidden="true"
-            />
-            <span class="sr-only">{{ m.level === 'critical' ? 'critical' : 'high' }}</span>
-          </template>
-        </div>
-        <div class="text-2xl leading-tight">
-          <template v-if="m.percent === null">—</template>
-          <template v-else
-            >{{ m.percent.toFixed(0) }}<span class="text-base text-neutral-500">%</span></template
-          >
+    <div class="space-y-3">
+      <div v-for="m in meters" :key="m.label" :data-meter="m.label">
+        <div class="flex items-baseline justify-between gap-3">
+          <div class="flex items-center gap-1.5 text-neutral-500">
+            <span>{{ m.label }}</span>
+            <template v-if="m.level !== 'ok'">
+              <TriangleAlert
+                class="size-3.5"
+                :class="
+                  m.level === 'critical'
+                    ? 'text-red-600 dark:text-red-500'
+                    : 'text-amber-600 dark:text-amber-400'
+                "
+                aria-hidden="true"
+              />
+              <span class="sr-only">{{ m.level === 'critical' ? 'critical' : 'high' }}</span>
+            </template>
+          </div>
+          <div class="text-right">
+            <span class="font-medium tabular-nums">
+              <template v-if="m.percent === null">—</template>
+              <template v-else>{{ m.percent.toFixed(0) }}%</template>
+            </span>
+            <span class="ml-2 text-neutral-500">{{ m.detail }}</span>
+          </div>
         </div>
         <div
-          class="meter"
+          class="meter mt-1"
           :class="LEVELS[m.level].track"
           role="meter"
           :aria-label="`${m.label} usage`"
@@ -157,7 +178,6 @@ const swap = computed(() => {
             :style="{ width: `${m.percent ?? 0}%` }"
           ></div>
         </div>
-        <div class="text-xs text-neutral-500">{{ m.detail }}</div>
       </div>
     </div>
 

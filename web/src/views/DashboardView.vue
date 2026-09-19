@@ -100,13 +100,15 @@ onMounted(async () => {
 
     <DashboardWarnings :warnings="overview?.warnings ?? []" />
 
-    <SystemLoadCard :stats="stats" />
-
     <InterfaceSummary :interfaces="overview?.interfaces ?? []" />
 
-    <GatewaysCard :gateways="overview?.gateways ?? []" />
-
     <div class="grid gap-4 lg:grid-cols-2">
+      <SystemLoadCard :stats="stats" />
+      <GatewaysCard
+        v-if="overview?.gateways?.length || overview?.unwatchedGateways?.length"
+        :gateways="overview.gateways ?? []"
+        :unwatched="overview.unwatchedGateways ?? []"
+      />
       <TopRulesCard :rules="overview?.topRules ?? []" :blocked="overview?.blocked" />
       <ServicesCard
         :services="overview?.services ?? []"

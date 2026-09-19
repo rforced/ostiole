@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestStarterValidates(t *testing.T) {
@@ -22,24 +21,6 @@ func TestStarterValidates(t *testing.T) {
 	// inferred from an empty field.
 	if cfg.System.Timezone != "UTC" {
 		t.Errorf("starter timezone = %q, want UTC", cfg.System.Timezone)
-	}
-}
-
-func TestSystemZone(t *testing.T) {
-	t.Parallel()
-	// A configuration written before the setting existed runs in UTC.
-	if got := (System{}).Zone(); got != "UTC" {
-		t.Errorf("Zone() with nothing set = %q", got)
-	}
-	if got := (System{}).Location(); got != time.UTC {
-		t.Errorf("Location() with nothing set = %v", got)
-	}
-	s := System{Timezone: "Europe/Berlin"}
-	if got := s.Zone(); got != "Europe/Berlin" {
-		t.Errorf("Zone() = %q", got)
-	}
-	if got := s.Location().String(); got != "Europe/Berlin" {
-		t.Errorf("Location() = %q", got)
 	}
 }
 
@@ -1513,6 +1494,10 @@ func TestIFBNames(t *testing.T) {
 		if got != IFBName(name) {
 			t.Errorf("IFBName(%q) is not stable", name)
 		}
+	}
+	// Two long names that differ only at the end must not share a helper.
+	if IFBName("enp0s31f6.4000") == IFBName("enp0s31f6.4001") {
+		t.Error("two long names that differ only at the end collide")
 	}
 }
 

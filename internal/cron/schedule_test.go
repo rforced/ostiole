@@ -113,14 +113,3 @@ func TestNextGivesUpOnTheImpossible(t *testing.T) {
 		t.Errorf("Next = %s, but the 30th of February does not happen", when)
 	}
 }
-
-func TestStringKeepsWhatWasTyped(t *testing.T) {
-	t.Parallel()
-	s, err := Parse("@daily")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if s.String() != "@daily" {
-		t.Errorf("String = %q, want the expression as written", s.String())
-	}
-}

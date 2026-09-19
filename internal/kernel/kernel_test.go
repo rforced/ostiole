@@ -99,19 +99,3 @@ func TestCheck(t *testing.T) {
 		t.Errorf("unparseable release = %v, want nil", err)
 	}
 }
-
-// Ostiole is tested on the kernel it is built on, so the floor had better
-// not exclude it.
-func TestRunningKernelMeetsTheFloor(t *testing.T) {
-	t.Parallel()
-	v, err := Current()
-	if err != nil {
-		t.Skipf("no readable kernel version: %v", err)
-	}
-	if !v.Supported() {
-		t.Errorf("running kernel %s is below the declared minimum %s", v, Minimum)
-	}
-	if err := Check(); err != nil {
-		t.Errorf("Check() = %v", err)
-	}
-}

@@ -135,25 +135,3 @@ func TestVLANAddsItsOwnOverhead(t *testing.T) {
 		}
 	}
 }
-
-// A long interface name will not fit in a device name, so it is cut down
-// and hashed. The name has to stay the same across runs or every apply
-// would leave the last one behind.
-func TestLongNamesGetAShortStableHelper(t *testing.T) {
-	t.Parallel()
-	for _, name := range []string{"eth0", "enp0s31f6.4000", "a-very-long-interface-name"} {
-		ifb := IFBName(name)
-		if len(ifb) > 15 {
-			t.Errorf("IFBName(%q) = %q, which the kernel will refuse", name, ifb)
-		}
-		if ifb != IFBName(name) {
-			t.Errorf("IFBName(%q) is not stable", name)
-		}
-	}
-	if got, want := IFBName("eth0"), "ifb-eth0"; got != want {
-		t.Errorf("IFBName(eth0) = %q, want %q", got, want)
-	}
-	if IFBName("enp0s31f6.4000") == IFBName("enp0s31f6.4001") {
-		t.Error("two long names that differ only at the end collide")
-	}
-}

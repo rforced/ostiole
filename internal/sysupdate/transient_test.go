@@ -96,10 +96,8 @@ func (s *sequencedRunner) Run(ctx context.Context, name string, args ...string) 
 	return s.inner.Run(ctx, name, args...)
 }
 
-func TestLocateFindsSbin(t *testing.T) {
+func TestLocateReturnsNothingForAnUnknownCommand(t *testing.T) {
 	t.Parallel()
-	// Nothing is on PATH under test, so a real sbin binary is the case
-	// worth checking: dnsmasq and nft both live there.
 	if got := Locate("definitely-not-a-command-anywhere"); got != "" {
 		t.Errorf("Locate invented %q", got)
 	}

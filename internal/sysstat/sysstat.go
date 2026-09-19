@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,6 +36,17 @@ type Stats struct {
 	// UptimeSeconds is how long the router has been up.
 	UptimeSeconds int64        `json:"uptimeSeconds"`
 	Filesystems   []Filesystem `json:"filesystems"`
+	// Conntrack is the connection table, nil until the kernel has one.
+	Conntrack *Conntrack `json:"conntrack,omitempty"`
+}
+
+// Conntrack is the connection tracking table: what the firewall's
+// stateful rules match against. Count is what the kernel holds now and
+// Max is where it starts refusing new connections, so the ratio is the
+// one figure a busy router needs watching.
+type Conntrack struct {
+	Count uint64 `json:"count"`
+	Max   uint64 `json:"max"`
 }
 
 // Filesystem is the space on one mounted path.
@@ -59,6 +71,9 @@ type Sampler struct {
 	// skipped when it sits on the same one as Root.
 	Root      string
 	ConfigDir string
+	// ProcSys is where the kernel's tunables are read from; tests point it
+	// at a directory of their own.
+	ProcSys string
 
 	mu       sync.Mutex
 	lastBusy uint64
@@ -70,7 +85,7 @@ type Sampler struct {
 
 // New returns a sampler reporting / and the filesystem holding dir.
 func New(dir string) *Sampler {
-	return &Sampler{Root: "/", ConfigDir: dir, now: time.Now}
+	return &Sampler{Root: "/", ConfigDir: dir, ProcSys: "/proc/sys", now: time.Now}
 }
 
 func (s *Sampler) clock() time.Time {
@@ -112,7 +127,35 @@ func (s *Sampler) Read() (Stats, error) {
 	st.MemTotal, st.MemAvailable = mem["MemTotal"], mem["MemAvailable"]
 	st.SwapTotal, st.SwapFree = mem["SwapTotal"], mem["SwapFree"]
 	st.Filesystems = s.disks()
+	st.Conntrack = s.conntrack()
 	return st, nil
+}
+
+// conntrack reads the connection table's size and limit. Both files
+// appear only once the nf_conntrack module is loaded, so a router that
+// has never filtered reports nothing rather than a table of zero.
+func (s *Sampler) conntrack() *Conntrack {
+	dir := s.ProcSys
+	if dir == "" {
+		dir = "/proc/sys"
+	}
+	count, err := readUint(filepath.Join(dir, "net/netfilter/nf_conntrack_count"))
+	if err != nil {
+		return nil
+	}
+	limit, err := readUint(filepath.Join(dir, "net/netfilter/nf_conntrack_max"))
+	if err != nil {
+		return nil
+	}
+	return &Conntrack{Count: count, Max: limit}
+}
+
+func readUint(path string) (uint64, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseUint(strings.TrimSpace(string(raw)), 10, 64)
 }
 
 // disks reports the root filesystem and, when it is a different one, the

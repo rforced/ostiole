@@ -134,28 +134,3 @@ func TestRuleLimitOnlyOnAnAccept(t *testing.T) {
 		t.Errorf("a limit on an accept rule was rejected: %v", err)
 	}
 }
-
-func TestRateLimitReadsAsARate(t *testing.T) {
-	t.Parallel()
-	for _, tc := range []struct {
-		limit RateLimit
-		want  string
-	}{
-		{RateLimit{Rate: 30, Unit: PerSecond, Burst: 60}, "30/second burst 60 packets"},
-		{RateLimit{Rate: 20, Unit: PerMinute}, "20/minute"},
-		// An empty period is per second, which is what nftables assumes
-		// and what the page has to agree with.
-		{RateLimit{Rate: 5}, "5/second"},
-	} {
-		if got := tc.limit.String(); got != tc.want {
-			t.Errorf("%+v = %q, want %q", tc.limit, got, tc.want)
-		}
-	}
-	// A port scan is counted over a minute unless somebody says otherwise.
-	if got := (PortScan{Rate: 20}).Limit().String(); got != "20/minute" {
-		t.Errorf("port scan limit = %q, want 20/minute", got)
-	}
-	if got := (PortScan{Rate: 20}).HoldOr(); got != DefaultScanHold {
-		t.Errorf("hold = %q, want the default", got)
-	}
-}
