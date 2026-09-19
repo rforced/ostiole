@@ -15,6 +15,11 @@
 # place (`ostiole repair`); OSTIOLE_IGNORE_KERNEL=1; OSTIOLE_UPNP_FORCE=1.
 set -eu
 
+# The rest of the script is one function, called on the last line, so a
+# shell fed it through a pipe has read all of it before anything runs.
+# Otherwise a package manager that reads stdin eats the rest of the file
+# and the shell resumes parsing wherever it left off.
+main() {
 REPO="${OSTIOLE_REPO:-rforced/ostiole}"
 BIN_DIR="${OSTIOLE_BIN_DIR:-/usr/local/bin}"
 # Enterprise Linux packages no miniupnpd and EPEL has no branch for it.
@@ -822,3 +827,6 @@ fi
 "$BIN_DIR/ostiole" host flush --yes >/dev/null 2>&1 || true
 
 echo "if this session dropped during the handover, reconnect and run: ostiole repair"
+}
+
+main "$@"
