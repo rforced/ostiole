@@ -305,16 +305,19 @@ func TestStartClaimsTheBoxBeforeItReturns(t *testing.T) {
 	withSystemd(t, true)
 	run := dnfRunner(t)
 	// The unit is absent to begin with and reports activating from the
-	// moment systemd-run is issued, so the update really is still going
-	// while the assertions below run. Told it was activating from the
-	// start, transient.start would refuse it as somebody else's
-	// transaction, the worker would end straight away, and the test would
-	// only pass when it won the race against its own goroutine.
+	// moment the transaction's own systemd-run is issued, so the update
+	// really is still going while the assertions below run. Told it was
+	// activating from the start, transient.start would refuse it as
+	// somebody else's transaction, the worker would end straight away, and
+	// the test would only pass when it won the race against its own
+	// goroutine. The line is matched on the unit and not on systemd-run
+	// alone because every command the check runs leaves the sandbox through
+	// a transient unit of its own first.
 	const absent = "LoadState=not-found\nActiveState=inactive\nSubState=dead\nResult=success\nExecMainStatus=0\nInvocationID=\n"
 	const running = "LoadState=loaded\nActiveState=activating\nSubState=start\nResult=success\nExecMainStatus=0\nInvocationID=abc123\n"
 	run.say(showUnit, absent)
 	started := &sequencedRunner{inner: run, before: func(line string) {
-		if strings.HasPrefix(line, "systemd-run") {
+		if strings.HasPrefix(line, "systemd-run --unit="+TransientUnit+" ") {
 			run.say(showUnit, running)
 		}
 	}}
@@ -334,7 +337,10 @@ func TestStartClaimsTheBoxBeforeItReturns(t *testing.T) {
 
 	// Let it finish before the test does: a goroutine still polling
 	// after the router it was told about has been taken away is a data race
-	// waiting to be reported against the next test.
+	// waiting to be reported against the next test. A unit can only be
+	// told it exited once it has been started, or the hook above overwrites
+	// the answer and the worker polls an activating unit until the timeout.
+	waitUntil(t, func() bool { return run.ranMatching("systemd-run", "--unit="+TransientUnit+" ") })
 	run.say(showUnit, "LoadState=loaded\nActiveState=active\nSubState=exited\nResult=success\nExecMainStatus=0\nInvocationID=abc123\n")
 	waitUntil(t, func() bool { return !m.Status(false).Running })
 }
