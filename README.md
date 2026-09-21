@@ -158,3 +158,9 @@ affiliate links — same price to you, a small cut to me.
 ## License
 
 [AGPL-3.0-or-later](LICENSE).
+
+## AI
+
+Most of the code was written by a variety of AI models. The architecture, the decisions,
+the review and the testing will continue to be done by me. I run it on my own network and
+will continue to do so for my commitment to the project.

@@ -87,9 +87,16 @@ type Runner struct {
 	// System lists the background work to report alongside the operator's
 	// crons.
 	System []SystemCron
+	// Dir is where the results are kept between runs. Empty remembers
+	// nothing, which is a test or a binary with nowhere to write.
+	Dir string
 
 	mu      sync.Mutex
 	results map[string]*result
+	// dirty marks work that noted itself and has not been written out.
+	dirty bool
+	// saveMu orders the writes to disk; see save.
+	saveMu sync.Mutex
 }
 
 type result struct {
@@ -109,14 +116,18 @@ const maxOutput = 4000
 // page is the whole answer to "what does this router do while nobody is
 // watching", so work missing from this list is work nobody knows about.
 // The ids match what the workers pass to Note.
-func NewRunner(source func() *model.Config, exec Executor, log *slog.Logger) *Runner {
+//
+// dir is where the results are kept, so a restart does not report a
+// nightly check as never having run; empty remembers nothing.
+func NewRunner(source func() *model.Config, exec Executor, log *slog.Logger, dir string) *Runner {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Runner{
+	r := &Runner{
 		Source:  source,
 		Exec:    exec,
 		Log:     log,
+		Dir:     dir,
 		results: map[string]*result{},
 		System: []SystemCron{
 			{
@@ -135,6 +146,8 @@ func NewRunner(source func() *model.Config, exec Executor, log *slog.Logger) *Ru
 			{ID: "system:drives", Description: "Ask each drive whether it is failing", Every: time.Hour},
 		},
 	}
+	r.load()
+	return r
 }
 
 // What the gateway probe loop does, with and without a second gateway to
@@ -162,10 +175,15 @@ func (r *Runner) Run(ctx context.Context) {
 		next := now.Truncate(time.Minute).Add(time.Minute)
 		select {
 		case <-ctx.Done():
+			r.flush()
 			return
 		case <-time.After(time.Until(next)):
 		}
 		r.Tick(ctx, time.Now())
+		// The work that only notes itself is written out here rather than
+		// on every note, because the gateway probe notes itself every five
+		// seconds and the disk should not hear about all of them.
+		r.flush()
 	}
 }
 
@@ -262,7 +280,6 @@ func (r *Runner) record(id string, started time.Time, took time.Duration, output
 		output = output[:maxOutput] + "\n… (truncated)"
 	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	res, ok := r.results[id]
 	if !ok {
 		res = &result{}
@@ -276,6 +293,10 @@ func (r *Runner) record(id string, started time.Time, took time.Duration, output
 	if err != nil {
 		res.lastErr = err.Error()
 	}
+	r.mu.Unlock()
+	// A scheduled run happens daily at most, and is the whole reason this
+	// is kept, so it goes to disk now rather than waiting for a tick.
+	r.save()
 }
 
 // Statuses reports the operator's crons and the background work
@@ -375,6 +396,7 @@ func (r *Runner) Note(id string) {
 		r.results[id] = res
 	}
 	res.lastRun = time.Now()
+	r.dirty = true
 }
 
 func (r *Runner) config() *model.Config {

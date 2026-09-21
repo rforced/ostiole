@@ -219,7 +219,7 @@ at your own.`,
 			}
 			// The crons the operator asked for, plus the work Ostiole does
 			// on its own account, reported together.
-			crons := cron.NewRunner(eng.Effective, actions, slog.Default())
+			crons := cron.NewRunner(eng.Effective, actions, slog.Default(), g.configDir)
 			refresher.OnTick = func() { crons.Note("system:aliases") }
 			blocklists.OnTick = func() { crons.Note("system:blocklists") }
 			deps := server.Deps{

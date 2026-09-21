@@ -52,7 +52,7 @@ func (f *fakeExec) calls() []string {
 func runner(t *testing.T, ex Executor, crons ...model.Cron) *Runner {
 	t.Helper()
 	cfg := config(crons...)
-	return NewRunner(func() *model.Config { return cfg }, ex, slog.New(slog.DiscardHandler))
+	return NewRunner(func() *model.Config { return cfg }, ex, slog.New(slog.DiscardHandler), t.TempDir())
 }
 
 func TestTickRunsWhatIsDue(t *testing.T) {
@@ -91,7 +91,7 @@ func TestTickReadsSchedulesInTheConfiguredZone(t *testing.T) {
 	ex := &fakeExec{}
 	cfg := config(model.Cron{ID: "nightly", Enabled: true, Schedule: "0 3 * * *", Kind: model.CronBackup})
 	cfg.System.Timezone = "Europe/Berlin"
-	r := NewRunner(func() *model.Config { return cfg }, ex, slog.New(slog.DiscardHandler))
+	r := NewRunner(func() *model.Config { return cfg }, ex, slog.New(slog.DiscardHandler), t.TempDir())
 
 	// September puts Berlin two hours ahead, so 03:00 UTC is 05:00 there.
 	r.Tick(context.Background(), at(t, "2026-09-16 03:00"))
@@ -212,7 +212,7 @@ func TestStatusesIncludeTheSystemWork(t *testing.T) {
 func TestTheGatewayRowOnlyPromisesFailoverWhenItCanHappen(t *testing.T) {
 	t.Parallel()
 	cfg := config()
-	r := NewRunner(func() *model.Config { return cfg }, &fakeExec{}, slog.New(slog.DiscardHandler))
+	r := NewRunner(func() *model.Config { return cfg }, &fakeExec{}, slog.New(slog.DiscardHandler), t.TempDir())
 
 	gateways := func() Status {
 		t.Helper()
@@ -354,7 +354,7 @@ func TestUpdateCronsRunOnTheirOwnSchedule(t *testing.T) {
 	t.Parallel()
 	ex := &fakeExec{}
 	cfg := config()
-	r := NewRunner(func() *model.Config { return cfg }, ex, slog.New(slog.DiscardHandler))
+	r := NewRunner(func() *model.Config { return cfg }, ex, slog.New(slog.DiscardHandler), t.TempDir())
 
 	// Nobody wrote these out; they come from the update settings. Midweek
 	// both sources are asked what is waiting, and neither installs.
@@ -392,7 +392,7 @@ func TestUpdateCronsAreReportedAsOstioleOwnWork(t *testing.T) {
 	cfg := config()
 	// The distro patches itself; Ostiole is installed by hand.
 	cfg.Updates.Ostiole.Mode = model.UpdateManual
-	r := NewRunner(func() *model.Config { return cfg }, &fakeExec{}, slog.New(slog.DiscardHandler))
+	r := NewRunner(func() *model.Config { return cfg }, &fakeExec{}, slog.New(slog.DiscardHandler), t.TempDir())
 	found := map[string]Status{}
 	for _, st := range r.Statuses() {
 		if st.Origin == OriginSystem {
