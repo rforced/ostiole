@@ -1,0 +1,346 @@
+// Package sysstat reads what the router is doing with its CPU, memory and
+// disks. Everything here comes from /proc and statfs, needs no privileges,
+// and costs a few file reads, so the dashboard can poll it.
+package sysstat
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"golang.org/x/sys/unix"
+)
+
+// Stats is one reading of the machine's load.
+type Stats struct {
+	// CPUPercent is how busy the CPUs were since the previous reading,
+	// 0-100 across all of them together. It is null until there are two
+	// readings to compare.
+	CPUPercent *float64 `json:"cpuPercent"`
+	// Threads is how many CPUs the kernel schedules on and Cores how much
+	// hardware is behind them: a chip with SMT runs two threads on each
+	// core, so the two differ and both are worth showing. Cores is 0 when
+	// the kernel publishes no topology to count.
+	Cores   int     `json:"cores"`
+	Threads int     `json:"threads"`
+	Load1   float64 `json:"load1"`
+	Load5   float64 `json:"load5"`
+	Load15  float64 `json:"load15"`
+	// Memory in bytes. Available is what the kernel thinks a new process
+	// could get, which is the number worth showing: free alone reads as
+	// alarmingly low on a healthy router that is using its page cache.
+	MemTotal     uint64 `json:"memTotal"`
+	MemAvailable uint64 `json:"memAvailable"`
+	SwapTotal    uint64 `json:"swapTotal"`
+	SwapFree     uint64 `json:"swapFree"`
+	// UptimeSeconds is how long the router has been up.
+	UptimeSeconds int64        `json:"uptimeSeconds"`
+	Filesystems   []Filesystem `json:"filesystems"`
+	// Conntrack is the connection table, nil until the kernel has one.
+	Conntrack *Conntrack `json:"conntrack,omitempty"`
+}
+
+// Conntrack is the connection tracking table: what the firewall's
+// stateful rules match against. Count is what the kernel holds now and
+// Max is where it starts refusing new connections, so the ratio is the
+// one figure a busy router needs watching.
+type Conntrack struct {
+	Count uint64 `json:"count"`
+	Max   uint64 `json:"max"`
+}
+
+// Filesystem is the space on one mounted path.
+type Filesystem struct {
+	Path string `json:"path"`
+	// Total and Free are bytes. Free is what an unprivileged writer can
+	// use, so it excludes the reserved blocks root keeps for itself.
+	Total uint64 `json:"total"`
+	Free  uint64 `json:"free"`
+}
+
+// minInterval is the shortest gap that gives a meaningful CPU figure. Two
+// reads closer together than this measure noise, so the previous answer is
+// repeated instead.
+const minInterval = 200 * time.Millisecond
+
+// sysCPU is where the kernel publishes what the CPUs are made of.
+const sysCPU = "/sys/devices/system/cpu"
+
+// Sampler turns the kernel's monotonic CPU counters into a percentage by
+// remembering the previous reading. It is safe for concurrent use; several
+// dashboards polling at once shorten the window but do not corrupt it.
+type Sampler struct {
+	// Root and ConfigDir are the filesystems reported. ConfigDir is
+	// skipped when it sits on the same one as Root.
+	Root      string
+	ConfigDir string
+	// ProcSys is where the kernel's tunables are read from and SysCPU where
+	// the CPU topology is; tests point them at directories of their own.
+	ProcSys string
+	SysCPU  string
+
+	mu       sync.Mutex
+	lastBusy uint64
+	lastAll  uint64
+	lastAt   time.Time
+	percent  *float64
+	now      func() time.Time
+}
+
+// New returns a sampler reporting / and the filesystem holding dir.
+func New(dir string) *Sampler {
+	return &Sampler{Root: "/", ConfigDir: dir, ProcSys: "/proc/sys", SysCPU: sysCPU, now: time.Now}
+}
+
+func (s *Sampler) clock() time.Time {
+	if s.now == nil {
+		return time.Now()
+	}
+	return s.now()
+}
+
+// Read takes a reading. The CPU figure covers the time since the previous
+// call, so the first one reports nothing.
+func (s *Sampler) Read() (Stats, error) {
+	var st Stats
+	busy, all, err := cpuTimes()
+	if err != nil {
+		return st, err
+	}
+	s.mu.Lock()
+	now := s.clock()
+	if !s.lastAt.IsZero() && now.Sub(s.lastAt) >= minInterval {
+		if dAll := all - s.lastAll; dAll > 0 && all >= s.lastAll && busy >= s.lastBusy {
+			pct := float64(busy-s.lastBusy) / float64(dAll) * 100
+			s.percent = &pct
+		}
+	}
+	if s.lastAt.IsZero() || now.Sub(s.lastAt) >= minInterval {
+		s.lastBusy, s.lastAll, s.lastAt = busy, all, now
+	}
+	st.CPUPercent = s.percent
+	s.mu.Unlock()
+
+	st.Threads = numCPU()
+	st.Cores = s.cores(st.Threads)
+	st.Load1, st.Load5, st.Load15 = loadAvg()
+	st.UptimeSeconds = uptime()
+	mem, err := meminfo()
+	if err != nil {
+		return st, err
+	}
+	st.MemTotal, st.MemAvailable = mem["MemTotal"], mem["MemAvailable"]
+	st.SwapTotal, st.SwapFree = mem["SwapTotal"], mem["SwapFree"]
+	st.Filesystems = s.disks()
+	st.Conntrack = s.conntrack()
+	return st, nil
+}
+
+// conntrack reads the connection table's size and limit. Both files
+// appear only once the nf_conntrack module is loaded, so a router that
+// has never filtered reports nothing rather than a table of zero.
+func (s *Sampler) conntrack() *Conntrack {
+	dir := s.ProcSys
+	if dir == "" {
+		dir = "/proc/sys"
+	}
+	count, err := readUint(filepath.Join(dir, "net/netfilter/nf_conntrack_count"))
+	if err != nil {
+		return nil
+	}
+	limit, err := readUint(filepath.Join(dir, "net/netfilter/nf_conntrack_max"))
+	if err != nil {
+		return nil
+	}
+	return &Conntrack{Count: count, Max: limit}
+}
+
+func readUint(path string) (uint64, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseUint(strings.TrimSpace(string(raw)), 10, 64)
+}
+
+// disks reports the root filesystem and, when it is a different one, the
+// filesystem the configuration lives on: a router that keeps /etc separate
+// runs out of room there first.
+func (s *Sampler) disks() []Filesystem {
+	var out []Filesystem
+	seen := map[uint64]bool{}
+	for _, path := range []string{s.Root, s.ConfigDir} {
+		if path == "" {
+			continue
+		}
+		var fs unix.Statfs_t
+		if err := unix.Statfs(path, &fs); err != nil {
+			continue
+		}
+		id := uint64(fs.Fsid.Val[0])<<32 | uint64(uint32(fs.Fsid.Val[1])) //nolint:gosec // an identity, not arithmetic
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, Filesystem{
+			Path:  path,
+			Total: fs.Blocks * uint64(fs.Bsize), //nolint:gosec // Bsize is a block size, never negative
+			Free:  fs.Bavail * uint64(fs.Bsize), //nolint:gosec // as above
+		})
+	}
+	return out
+}
+
+// cpuTimes returns the busy and total jiffies across all CPUs. Idle and
+// iowait are the not-busy part: a router waiting on a disk is not working.
+func cpuTimes() (busy, all uint64, err error) {
+	f, err := os.Open("/proc/stat")
+	if err != nil {
+		return 0, 0, err
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		fields := strings.Fields(sc.Text())
+		if len(fields) < 5 || fields[0] != "cpu" {
+			continue
+		}
+		for i, raw := range fields[1:] {
+			v, err := strconv.ParseUint(raw, 10, 64)
+			if err != nil {
+				return 0, 0, fmt.Errorf("parse /proc/stat: %w", err)
+			}
+			all += v
+			// Fields are user, nice, system, idle, iowait, …
+			if i != 3 && i != 4 {
+				busy += v
+			}
+		}
+		return busy, all, nil
+	}
+	if err := sc.Err(); err != nil {
+		return 0, 0, err
+	}
+	return 0, 0, fmt.Errorf("no cpu line in /proc/stat")
+}
+
+func meminfo() (map[string]uint64, error) {
+	f, err := os.Open("/proc/meminfo")
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	out := map[string]uint64{}
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		name, rest, ok := strings.Cut(sc.Text(), ":")
+		if !ok {
+			continue
+		}
+		fields := strings.Fields(rest)
+		if len(fields) == 0 {
+			continue
+		}
+		v, err := strconv.ParseUint(fields[0], 10, 64)
+		if err != nil {
+			continue
+		}
+		// Everything but a few counters is in kB; the ones read here are.
+		if len(fields) > 1 && fields[1] == "kB" {
+			v *= 1024
+		}
+		out[name] = v
+	}
+	return out, sc.Err()
+}
+
+func loadAvg() (one, five, fifteen float64) {
+	raw, err := os.ReadFile("/proc/loadavg")
+	if err != nil {
+		return 0, 0, 0
+	}
+	fields := strings.Fields(string(raw))
+	if len(fields) < 3 {
+		return 0, 0, 0
+	}
+	one, _ = strconv.ParseFloat(fields[0], 64)
+	five, _ = strconv.ParseFloat(fields[1], 64)
+	fifteen, _ = strconv.ParseFloat(fields[2], 64)
+	return one, five, fifteen
+}
+
+func uptime() int64 {
+	raw, err := os.ReadFile("/proc/uptime")
+	if err != nil {
+		return 0
+	}
+	fields := strings.Fields(string(raw))
+	if len(fields) == 0 {
+		return 0
+	}
+	secs, _ := strconv.ParseFloat(fields[0], 64)
+	return int64(secs)
+}
+
+// numCPU counts the CPUs the kernel accounts for, which is what the load
+// average should be read against.
+func numCPU() int {
+	raw, err := os.ReadFile("/proc/stat")
+	if err != nil {
+		return 0
+	}
+	n := 0
+	for line := range strings.Lines(string(raw)) {
+		if strings.HasPrefix(line, "cpu") && !strings.HasPrefix(line, "cpu ") {
+			n++
+		}
+	}
+	return n
+}
+
+// cores counts the hardware behind those CPUs. Every CPU names the package
+// and core it sits on, so the distinct pairs are the cores.
+//
+// A kernel with no topology to publish names the same pair for all of
+// them, which would read as one core running eight threads. smt/active
+// says whether any core carries more than one thread, so a machine without
+// SMT is taken to have a core per CPU and only a machine with it is
+// counted. 0 is the topology not being readable at all.
+func (s *Sampler) cores(threads int) int {
+	dir := s.SysCPU
+	if dir == "" {
+		dir = sysCPU
+	}
+	if raw, err := os.ReadFile(filepath.Join(dir, "smt", "active")); err == nil {
+		if strings.TrimSpace(string(raw)) == "0" {
+			return threads
+		}
+	}
+	paths, err := filepath.Glob(filepath.Join(dir, "cpu[0-9]*", "topology", "core_id"))
+	if err != nil {
+		return 0
+	}
+	seen := map[string]bool{}
+	for _, path := range paths {
+		core, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		pkg, err := os.ReadFile(filepath.Join(filepath.Dir(path), "physical_package_id"))
+		if err != nil {
+			continue
+		}
+		seen[strings.TrimSpace(string(pkg))+"/"+strings.TrimSpace(string(core))] = true
+	}
+	// More cores than CPUs means some of them are offline and the count
+	// describes a machine that is not running; the CPUs stand alone.
+	if len(seen) > threads {
+		return 0
+	}
+	return len(seen)
+}

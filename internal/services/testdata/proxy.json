@@ -1,0 +1,129 @@
+{
+  "version": 6,
+  "system": {
+    "dnsServers": ["9.9.9.9"],
+    "management": { "webPort": 8443, "sshPort": 22 },
+    "logging": { "level": "info" }
+  },
+  "zones": [
+    { "name": "wan", "external": true },
+    { "name": "lan", "antiLockout": true }
+  ],
+  "interfaces": [
+    { "name": "eth0", "zone": "wan", "enabled": true, "ipv4": { "mode": "dhcp" }, "ipv6": { "mode": "none" } },
+    {
+      "name": "eth1",
+      "zone": "lan",
+      "enabled": true,
+      "ipv4": { "mode": "static", "address": "192.168.1.1/24" },
+      "ipv6": { "mode": "none" }
+    }
+  ],
+  "rules": [],
+  "nat": { "outbound": { "mode": "automatic" } },
+  "certificates": [
+    {
+      "id": "shop",
+      "description": "shop.example.com",
+      "enabled": true,
+      "source": "uploaded",
+      "certPem": "",
+      "keyPem": ""
+    }
+  ],
+  "services": {
+    "dhcp": { "enabled": false },
+    "dns": { "enabled": false },
+    "proxy": {
+      "enabled": true,
+      "zones": ["wan"],
+      "http3": true,
+      "pools": [
+        {
+          "id": "web",
+          "description": "The web server",
+          "upstreams": [{ "address": "192.168.1.20:8080" }, { "address": "192.168.1.21:8080" }],
+          "policy": "least_conn",
+          "healthPath": "/healthz",
+          "healthSeconds": 15,
+          "failSeconds": 60
+        },
+        {
+          "id": "api",
+          "upstreams": [{ "address": "api.internal:443" }],
+          "tls": true,
+          "tlsServerName": "api.internal",
+          "tlsCaPem": "-----BEGIN CERTIFICATE-----\nMIIBhTCCASugAwIBAgIQIRi6zePL6mKjOipn+dNuaTAKBggqhkjOPQQDAjASMRAw\nDgYDVQQKEwdBY21lIENvMB4XDTE3MTAyMDE5NDMwNloXDTE4MTAyMDE5NDMwNlow\nEjEQMA4GA1UEChMHQWNtZSBDbzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABD0d\n7VNhbWvZLWPuj/RtHFjvtJBEwOkhbN/BnnE8rnZR8+sbwnc/KhCk3FhnpHZnQz7B\n5aETbbIgmuvewdjvSBSjYzBhMA4GA1UdDwEB/wQEAwICpDATBgNVHSUEDDAKBggr\nBgEFBQcDATAPBgNVHRMBAf8EBTADAQH/MCkGA1UdEQQiMCCCDmxvY2FsaG9zdDo1\nNDUzgg4xMjcuMC4wLjE6NTQ1MzAKBggqhkjOPQQDAgNIADBFAiEA2zpJEPQyz6/l\nWf86aX6PepsntZv2GYlA5UpabfT2EZICICpJ5h/iI+i341gBmLiAFQOyTDT+/wQc\n6MF9+Yw1Yy0t\n-----END CERTIFICATE-----\n",
+          "proxyProtocol": "v2"
+        }
+      ],
+      "wafProfiles": [
+        {
+          "id": "strict",
+          "description": "Block what scores",
+          "mode": "block",
+          "paranoia": 2,
+          "inboundThreshold": 10,
+          "outboundThreshold": 5,
+          "applications": ["wordpress", "phpmyadmin"],
+          "bodyLimitMB": 8,
+          "inspectResponses": true,
+          "exclusions": [
+            { "rule": "942100", "description": "SQL injection on the search box" },
+            { "rule": "941000-941999", "target": "ARGS:content" },
+            { "rule": "930120", "path": "/wp-admin" },
+            { "rule": "932100", "path": "/wp-admin", "target": "ARGS:code" }
+          ]
+        }
+      ],
+      "sites": [
+        {
+          "id": "shop",
+          "enabled": true,
+          "hosts": ["shop.example.com", "*.shop.example.com"],
+          "certificate": "shop",
+          "pool": "web",
+          "paths": [{ "prefix": "/api", "pool": "api" }],
+          "hostHeader": "upstream",
+          "allowFrom": ["192.168.0.0/16"],
+          "waf": "strict"
+        },
+        {
+          "id": "status",
+          "enabled": true,
+          "hosts": ["status.example.com"],
+          "pool": "web",
+          "plainHttp": true
+        }
+      ],
+      "routes": [
+        {
+          "id": "mail",
+          "enabled": true,
+          "protocol": "tcp",
+          "port": 443,
+          "sni": ["mail.example.com"],
+          "upstreams": [{ "address": "192.168.1.30:443" }]
+        },
+        {
+          "id": "imap",
+          "enabled": true,
+          "protocol": "tcp",
+          "port": 993,
+          "upstreams": [{ "address": "192.168.1.30:993" }, { "address": "192.168.1.31:993" }],
+          "policy": "least_conn",
+          "healthSeconds": 30,
+          "proxyProtocol": "v1"
+        },
+        {
+          "id": "resolver",
+          "enabled": true,
+          "protocol": "udp",
+          "port": 5353,
+          "upstreams": [{ "address": "192.168.1.40:53" }],
+          "allowFrom": ["192.168.1.0/24"]
+        }
+      ]
+    }
+  }
+}

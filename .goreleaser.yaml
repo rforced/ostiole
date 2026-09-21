@@ -1,0 +1,138 @@
+# https://goreleaser.com
+version: 2
+project_name: ostiole
+
+before:
+  hooks:
+    - sh -c "cd web && bun install --frozen-lockfile && bun run build"
+    - go mod tidy
+
+builds:
+  - id: ostiole
+    main: ./cmd/ostiole
+    binary: ostiole
+    env:
+      - CGO_ENABLED=0
+    goos: [linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w
+      - -X github.com/rforced/ostiole/internal/version.Version={{ .Version }}
+      - -X github.com/rforced/ostiole/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/rforced/ostiole/internal/version.Date={{ .Date }}
+
+  # The reverse proxy sidecar: Caddy with the modules compiled in. It is
+  # installed only where it was asked for, so it ships on its own.
+  - id: ostiole-proxy
+    main: ./cmd/ostiole-proxy
+    binary: ostiole-proxy
+    env:
+      - CGO_ENABLED=0
+    goos: [linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w
+      - -X github.com/rforced/ostiole/internal/version.Version={{ .Version }}
+      - -X github.com/rforced/ostiole/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/rforced/ostiole/internal/version.Date={{ .Date }}
+
+archives:
+  - id: tarballs
+    ids: [ostiole]
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+  - id: proxy
+    ids: [ostiole-proxy]
+    formats: [tar.gz]
+    name_template: "ostiole-proxy_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - packaging/THIRD-PARTY.proxy
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+# checksums.txt is signed with the release ed25519 key; the binary embeds
+# the public half and refuses updates that do not verify.
+signs:
+  - id: checksums
+    artifacts: checksum
+    cmd: go
+    args: ["run", "./cmd/ostiole-sign", "-in", "${artifact}", "-out", "${signature}"]
+    signature: "${artifact}.sig"
+    # The command inherits the process environment, including
+    # OSTIOLE_SIGNING_KEY from the workflow secret.
+
+sboms:
+  - artifacts: archive
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+# Commit subjects here are prose, so the groups key off the verb that
+# starts them rather than a conventional-commit prefix.
+changelog:
+  use: git
+  sort: asc
+  abbrev: 8
+  groups:
+    - title: Added
+      regexp: '(?i)^[0-9a-f]+ (add|introduce|implement|serve|watch|show|support)'
+      order: 0
+    - title: Fixed
+      regexp: '(?i)^[0-9a-f]+ (fix|correct|stop|prevent|repair|restore|keep|refuse|guard)'
+      order: 1
+    - title: Other changes
+      order: 2
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - '(?i)^[0-9a-f]+ (chore|typo|wip|bump|merge|revert)'
+      - "^Merge "
+
+release:
+  github:
+    owner: rforced
+    name: ostiole
+  prerelease: auto
+  extra_files:
+    - glob: internal/install/install.sh
+  # The annotated tag's message becomes the top of the release notes, so a
+  # tag carrying "Security-Release: yes" tells every router on the security
+  # update mode to install this one without being asked. Nothing else
+  # depends on the header, and a lightweight tag leaves it empty.
+  header: |
+    {{ .TagBody }}
+  footer: |
+    ## Install
+
+    ```sh
+    curl -fsSL https://github.com/rforced/ostiole/releases/latest/download/install.sh | sudo sh
+    ```
+
+    ## Verifying
+
+    `checksums.txt` is signed with the release ed25519 key that every Ostiole binary embeds, so the
+    built-in updater and `install.sh` both check it. To check by hand:
+
+    ```sh
+    curl -fsSLO https://github.com/rforced/ostiole/releases/download/{{ .Tag }}/checksums.txt
+    curl -fsSLO https://github.com/rforced/ostiole/releases/download/{{ .Tag }}/checksums.txt.sig
+    printf -- "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA4a3rf0bCdQNTKO3KODxqMrdT1+T1nq9t+KNN2f9DJ0U=\n-----END PUBLIC KEY-----\n" > ostiole.pem
+    base64 -d < checksums.txt.sig > checksums.sig
+    openssl pkeyutl -verify -pubin -inkey ostiole.pem -rawin -in checksums.txt -sigfile checksums.sig
+    sha256sum --ignore-missing -c checksums.txt
+    ```
+
+    Every artifact also carries a signed build provenance attestation from GitHub:
+
+    ```sh
+    gh attestation verify ostiole_{{ .Version }}_linux_amd64.tar.gz --repo rforced/ostiole
+    ```

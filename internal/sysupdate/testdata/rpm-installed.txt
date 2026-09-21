@@ -1,0 +1,6 @@
+NetworkManager-libnm 1:1.50.0-1.el10
+bash 5.2.26-3.el10
+kernel 6.12.0-50.el10
+kernel-core 6.12.0-50.el10
+openssl-libs 1:3.2.2-11.el10
+package tzdata is not installed

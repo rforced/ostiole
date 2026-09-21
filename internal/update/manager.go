@@ -1,0 +1,243 @@
+package update
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+)
+
+// State of an update run.
+type State string
+
+// States.
+const (
+	Idle        State = "idle"
+	Checking    State = "checking"
+	Downloading State = "downloading"
+	Verifying   State = "verifying"
+	Installing  State = "installing"
+	Restarting  State = "restarting"
+	Failed      State = "failed"
+)
+
+// Status is the observable progress of an update.
+type Status struct {
+	State     State     `json:"state"`
+	Version   string    `json:"version,omitempty"`
+	Message   string    `json:"message,omitempty"`
+	Done      int64     `json:"done,omitempty"`
+	Total     int64     `json:"total,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// ErrBusy means an update is already running.
+var ErrBusy = errors.New("an update is already in progress")
+
+// Manager runs updates in the background for the API.
+type Manager struct {
+	Client    *Client
+	Installer *Installer
+	Current   string
+	// Cache holds what the last check found, so the dashboard and the
+	// updates page can draw themselves without a round trip to GitHub.
+	Cache *Cache
+	Log   *slog.Logger
+
+	mu     sync.Mutex
+	status Status
+}
+
+// Status returns the current progress.
+func (m *Manager) Status() Status {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	st := m.status
+	if st.State == "" {
+		st.State = Idle
+	}
+	return st
+}
+
+func (m *Manager) set(st State, version, msg string, done, total int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.status = Status{State: st, Version: version, Message: msg, Done: done, Total: total, UpdatedAt: time.Now()}
+}
+
+// Check looks for a newer release on the channel and records what it
+// found. Every check goes through here, so pressing the button on the
+// page warms the same cache the nightly cron does.
+func (m *Manager) Check(ctx context.Context, ch Channel) (*Check, error) {
+	chk, err := m.Client.Check(ctx, m.Current, ch)
+	now := time.Now()
+	if err != nil {
+		// The channel is recorded even here, so a failure is attributable
+		// to the channel it was asked about rather than to nothing.
+		m.Cache.Update(func(s *Snapshot) {
+			s.LastCheck, s.CheckError, s.Channel = now, err.Error(), ch
+		})
+		return nil, err
+	}
+	m.Cache.Update(func(s *Snapshot) {
+		*s = Snapshot{
+			LastCheck: now, Channel: chk.Channel, Current: chk.Current, Latest: chk.Latest,
+			Available: chk.Available, Security: chk.Security, SecurityReleases: chk.SecurityReleases,
+			Release: chk.Release,
+		}
+	})
+	return chk, nil
+}
+
+// Cached is what the last check found, which is what a page shows before
+// anybody asks for a fresh one.
+//
+// Availability is decided here rather than read from the file. The
+// snapshot outlives the update it describes: installing what it found
+// restarts the daemon into that very release, and the file still says one
+// is waiting until the next check overwrites it.
+func (m *Manager) Cached() Snapshot {
+	s := m.Cache.Snapshot()
+	if s.LastCheck.IsZero() {
+		return s
+	}
+	s.Current = m.Current
+	if !Newer(m.Current, s.Latest) {
+		s.Available, s.Security, s.SecurityReleases = false, false, nil
+	}
+	return s
+}
+
+// Mode is what a scheduled self-update is allowed to install. It mirrors
+// the update mode in the configuration without this package having to
+// know about the configuration.
+type Mode string
+
+// Modes.
+const (
+	ModeManual   Mode = "manual"
+	ModeSecurity Mode = "security"
+	ModeAll      Mode = "all"
+	ModeDisabled Mode = "disabled"
+)
+
+// CheckScheduled is the scheduled check: ask GitHub what is out and
+// record it, whatever the mode is. It returns the line the crons page
+// shows.
+func (m *Manager) CheckScheduled(ctx context.Context, ch Channel) (string, error) {
+	chk, err := m.Check(ctx, ch)
+	if err != nil {
+		return "", err
+	}
+	line := checkLine(chk, ch)
+	if chk.Security {
+		line += " and fixes " + strings.Join(chk.SecurityReleases, ", ")
+	}
+	return line, nil
+}
+
+// checkLine says what a check found in one line: what is waiting, or why
+// nothing is.
+func checkLine(chk *Check, ch Channel) string {
+	switch {
+	case chk.Available:
+		return chk.Latest + " is available"
+	case chk.Latest == "":
+		return "no release on the " + string(ch) + " channel"
+	}
+	return "up to date (" + chk.Current + ")"
+}
+
+// RunScheduled is the scheduled cron: always check, then install only
+// what the mode allows. It returns a line describing what it decided,
+// which is what the cron's last result shows.
+func (m *Manager) RunScheduled(ctx context.Context, mode Mode, ch Channel) (string, error) {
+	chk, err := m.Check(ctx, ch)
+	if err != nil {
+		return "", err
+	}
+	waiting := checkLine(chk, ch)
+	if !chk.Available {
+		return waiting, nil
+	}
+	switch mode {
+	case ModeDisabled:
+		return waiting + "; this router installs nothing on its own", nil
+	case ModeManual:
+		return waiting + "; this router installs Ostiole updates by hand", nil
+	case ModeSecurity:
+		if !chk.Security {
+			return waiting + ", and is not marked a security release; nothing installed", nil
+		}
+		waiting += " and fixes " + strings.Join(chk.SecurityReleases, ", ")
+	}
+	if err := m.Start(ch); err != nil {
+		return waiting, err
+	}
+	return "installing " + chk.Latest + "; the service restarts when it is in place", nil
+}
+
+// Start begins downloading and installing the latest release on the
+// channel. It returns once the work is running in the background.
+func (m *Manager) Start(ch Channel) error {
+	m.mu.Lock()
+	switch m.status.State {
+	case Checking, Downloading, Verifying, Installing, Restarting:
+		m.mu.Unlock()
+		return ErrBusy
+	}
+	m.status = Status{State: Checking, UpdatedAt: time.Now()}
+	m.mu.Unlock()
+
+	go m.run(ch)
+	return nil
+}
+
+func (m *Manager) run(ch Channel) {
+	log := m.Log
+	if log == nil {
+		log = slog.Default()
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	defer cancel()
+
+	chk, err := m.Client.Check(ctx, m.Current, ch)
+	if err != nil {
+		m.set(Failed, "", "check failed: "+err.Error(), 0, 0)
+		return
+	}
+	if !chk.Available {
+		m.set(Failed, chk.Latest, "no newer release on the "+string(ch)+" channel", 0, 0)
+		return
+	}
+	version := chk.Release.Version
+	m.set(Downloading, version, "", 0, chk.Asset.Size)
+	dir := filepath.Dir(m.Installer.Binary)
+	got, err := m.Client.Download(ctx, chk.Release, dir, m.Installer.WantsProxy(), func(stage string, done, total int64) {
+		switch stage {
+		case "downloading":
+			m.set(Downloading, version, "", done, total)
+		case "verifying":
+			m.set(Verifying, version, "", 0, 0)
+		case "extracting":
+			m.set(Installing, version, "", 0, 0)
+		}
+	})
+	if err != nil {
+		log.Error("update download failed", "version", version, "err", err)
+		m.set(Failed, version, err.Error(), 0, 0)
+		return
+	}
+	m.set(Installing, version, "", 0, 0)
+	if err := m.Installer.Install(ctx, got); err != nil {
+		log.Error("update install failed", "version", version, "err", err)
+		m.set(Failed, version, err.Error(), 0, 0)
+		return
+	}
+	log.Info("update installed; restarting", "from", m.Current, "to", version)
+	m.set(Restarting, version, fmt.Sprintf("restarting into %s", version), 0, 0)
+}

@@ -1,0 +1,16 @@
+{
+  "version": 6,
+  "system": { "management": { "webPort": 0, "sshPort": 0 } },
+  "zones": [
+    { "name": "wan", "external": true },
+    { "name": "wan2", "external": true },
+    { "name": "lan", "antiLockout": true }
+  ],
+  "interfaces": [
+    { "name": "eth0", "zone": "wan", "enabled": true, "ipv4": { "mode": "dhcp" }, "ipv6": { "mode": "none" } },
+    { "name": "ppp0", "zone": "wan2", "enabled": true, "ipv4": { "mode": "dhcp" }, "ipv6": { "mode": "none" } },
+    { "name": "eth1", "zone": "lan", "enabled": true, "ipv4": { "mode": "static", "address": "10.0.0.1/24" }, "ipv6": { "mode": "none" } }
+  ],
+  "rules": [],
+  "nat": { "outbound": { "mode": "disabled" } }
+}

@@ -1,0 +1,15 @@
+{
+  "version": 6,
+  "system": { "management": { "webPort": 443, "sshPort": 443 } },
+  "zones": [
+    { "name": "wan", "external": true },
+    { "name": "lan", "antiLockout": true }
+  ],
+  "interfaces": [],
+  "rules": [
+    { "id": "allow-lan", "enabled": true, "zone": "lan", "action": "accept", "protocol": "any", "source": {}, "destination": {} }
+  ],
+  "nat": { "outbound": { "mode": "automatic" }, "portForwards": [
+    { "id": "pf1", "enabled": true, "zone": "wan", "protocol": "tcp", "ports": ["80"], "target": "10.0.0.1" }
+  ] }
+}

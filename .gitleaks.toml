@@ -1,0 +1,18 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Keys that are published, or made up for a fixture"
+regexTarget = "line"
+regexes = [
+  # The wg(8) man page's example keypair and preshared key, which the
+  # WireGuard fixtures use.
+  '''yAnz5TF\+lXXJte14tji3zlMNq\+hd2rYUIgJBgB3fBmk=''',
+  '''FpCyhws9cxwWoV4xELtfJvjJN\+zQVRPISllRWgeopVE=''',
+  # A counting pattern standing in for a WireGuard key in a server test.
+  '''AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=''',
+  # The public half of the release signing key, which the installer, the
+  # release notes and SECURITY.md all print on purpose. Written as the
+  # ed25519 public key prefix so a rotation does not come back here.
+  '''MCowBQYDK2Vw[A-Za-z0-9+/]+=*''',
+]

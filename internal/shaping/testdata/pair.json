@@ -1,0 +1,66 @@
+{
+  "version": 6,
+  "system": {
+    "hostname": "pair",
+    "management": {
+      "webPort": 443,
+      "sshPort": 22
+    }
+  },
+  "zones": [
+    {
+      "name": "wan",
+      "external": true
+    },
+    {
+      "name": "lan",
+      "antiLockout": true
+    }
+  ],
+  "interfaces": [
+    {
+      "name": "eth0",
+      "zone": "wan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "dhcp"
+      },
+      "ipv6": {
+        "mode": "none"
+      },
+      "shaping": {
+        "download": 200000000,
+        "upload": 20000000
+      }
+    },
+    {
+      "name": "eth1",
+      "zone": "lan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "192.168.1.1/24"
+      },
+      "ipv6": {
+        "mode": "none"
+      },
+      "shaping": {
+        "download": 50000000
+      }
+    }
+  ],
+  "rules": [],
+  "nat": {
+    "outbound": {
+      "mode": "automatic"
+    }
+  },
+  "services": {
+    "dhcp": {
+      "enabled": false
+    },
+    "dns": {
+      "enabled": false
+    }
+  }
+}

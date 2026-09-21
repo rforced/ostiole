@@ -1,0 +1,209 @@
+{
+  "version": 6,
+  "system": {
+    "hostname": "shaping",
+    "management": {
+      "webPort": 443,
+      "sshPort": 22
+    }
+  },
+  "zones": [
+    {
+      "name": "wan",
+      "description": "The line",
+      "external": true
+    },
+    {
+      "name": "lan",
+      "antiLockout": true,
+      "busy": {
+        "connections": 200,
+        "priority": "bulk"
+      }
+    },
+    {
+      "name": "dmz"
+    }
+  ],
+  "interfaces": [
+    {
+      "name": "eth0",
+      "zone": "wan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "dhcp"
+      },
+      "ipv6": {
+        "mode": "none"
+      },
+      "shaping": {
+        "download": 200000000,
+        "upload": 20000000,
+        "link": "pppoe-ptm"
+      }
+    },
+    {
+      "name": "eth1",
+      "zone": "lan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "192.168.1.1/24"
+      },
+      "ipv6": {
+        "mode": "none"
+      },
+      "shaping": {
+        "download": 50000000
+      }
+    },
+    {
+      "name": "eth2",
+      "zone": "dmz",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "192.168.2.1/24"
+      },
+      "ipv6": {
+        "mode": "none"
+      }
+    }
+  ],
+  "rules": [
+    {
+      "id": "lan-voip",
+      "description": "Calls go first",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "udp",
+      "source": {},
+      "destination": {
+        "ports": [
+          "5060"
+        ]
+      },
+      "priority": "realtime"
+    },
+    {
+      "id": "lan-to-dmz",
+      "description": "A priority on a rule that names where the traffic leaves",
+      "enabled": true,
+      "zone": "lan",
+      "destZone": "dmz",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {},
+      "priority": "high"
+    },
+    {
+      "id": "lan-admin",
+      "description": "A priority on traffic to this firewall itself",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "tcp",
+      "source": {},
+      "destination": {
+        "self": true,
+        "ports": [
+          "443"
+        ]
+      },
+      "priority": "high"
+    },
+    {
+      "id": "lan-backups",
+      "description": "A gateway and a priority at once, each writing its own bits",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {
+        "addresses": [
+          "192.168.1.50"
+        ]
+      },
+      "destination": {},
+      "gateway": "line",
+      "priority": "bulk"
+    },
+    {
+      "id": "lan-rest",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    },
+    {
+      "id": "dmz-quiet",
+      "description": "A drop needs no priority and gets none",
+      "enabled": true,
+      "zone": "dmz",
+      "action": "drop",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    },
+    {
+      "id": "wan-ping",
+      "enabled": true,
+      "zone": "wan",
+      "action": "accept",
+      "protocol": "icmp",
+      "source": {},
+      "destination": {}
+    }
+  ],
+  "nat": {
+    "outbound": {
+      "mode": "automatic"
+    },
+    "portForwards": [
+      {
+        "id": "pf-voice",
+        "description": "Classified on the packet that is translated",
+        "enabled": true,
+        "zone": "wan",
+        "protocol": "udp",
+        "ports": [
+          "5061"
+        ],
+        "target": "192.168.1.20",
+        "reflection": true,
+        "priority": "realtime"
+      },
+      {
+        "id": "pf-web",
+        "enabled": true,
+        "zone": "wan",
+        "protocol": "tcp",
+        "ports": [
+          "443"
+        ],
+        "target": "192.168.2.10",
+        "targetPort": "8443"
+      }
+    ]
+  },
+  "gateways": [
+    {
+      "name": "line",
+      "enabled": true,
+      "interface": "eth0",
+      "monitor": "9.9.9.9"
+    }
+  ],
+  "services": {
+    "dhcp": {
+      "enabled": false
+    },
+    "dns": {
+      "enabled": false
+    }
+  }
+}

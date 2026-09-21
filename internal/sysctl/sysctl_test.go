@@ -1,0 +1,136 @@
+package sysctl
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestProcApplyAndPersist(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	// Only some keys exist on this fake kernel; the rest must be skipped.
+	for _, k := range []string{"net/ipv4/ip_forward", "net/ipv4/tcp_syncookies", "vm/swappiness"} {
+		p := filepath.Join(root, k)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("0\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := (Proc{Root: root}).Apply(Settings{}); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(filepath.Join(root, "net/ipv4/ip_forward"))
+	if strings.TrimSpace(string(raw)) != "1" {
+		t.Errorf("ip_forward = %q", raw)
+	}
+	// Tuning is applied alongside the forwarding settings, not only persisted.
+	raw, _ = os.ReadFile(filepath.Join(root, "vm/swappiness"))
+	if strings.TrimSpace(string(raw)) != "5" {
+		t.Errorf("swappiness = %q", raw)
+	}
+
+	conf := filepath.Join(t.TempDir(), "sysctl.d", "99-ostiole.conf")
+	if err := Persist(conf); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ = os.ReadFile(conf)
+	if !strings.Contains(string(raw), "net.ipv4.ip_forward = 1") || !strings.Contains(string(raw), "net.ipv6.conf.all.forwarding = 1") {
+		t.Errorf("persisted content:\n%s", raw)
+	}
+	if strings.Index(string(raw), "net.ipv4.conf.all") > strings.Index(string(raw), "net.ipv6") {
+		t.Error("keys are not sorted")
+	}
+	if !strings.Contains(string(raw), "vm.swappiness = 5") || !strings.Contains(string(raw), "vm.vfs_cache_pressure = 50") {
+		t.Errorf("tuning missing from persisted content:\n%s", raw)
+	}
+	// A kernel without fq_codel must not turn the drop-in into a boot error.
+	if !strings.Contains(string(raw), "-net.core.default_qdisc = fq_codel") {
+		t.Errorf("default_qdisc is not marked optional:\n%s", raw)
+	}
+	// Hardening is persisted with the rest, and the keys a kernel may be
+	// built without are optional there too.
+	for _, want := range []string{"kernel.kptr_restrict = 2", "kernel.dmesg_restrict = 1",
+		"kernel.unprivileged_bpf_disabled = 1", "-kernel.yama.ptrace_scope = 1", "-net.core.bpf_jit_harden = 2"} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("hardening %q missing from persisted content:\n%s", want, raw)
+		}
+	}
+}
+
+// The connection ceiling is written only when somebody has asked for a
+// number, and it takes the hash table with it so the chains stay the
+// length the kernel sizes its own for.
+func TestConntrackMax(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	for _, k := range []string{ConntrackMaxKey, ConntrackBucketsKey} {
+		p := filepath.Join(root, k)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("262144\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	proc := Proc{Root: root}
+
+	// Zero is not a ceiling of zero: it leaves the kernel's own limit.
+	if err := proc.Apply(Settings{}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := proc.ConntrackMax(); err != nil || got != 262144 {
+		t.Fatalf("ConntrackMax() = %d, %v; want the kernel's 262144 untouched", got, err)
+	}
+
+	if err := proc.Apply(Settings{ConntrackMax: 1_000_000}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := proc.ConntrackMax(); err != nil || got != 1_000_000 {
+		t.Fatalf("ConntrackMax() = %d, %v; want 1000000", got, err)
+	}
+	raw, _ := os.ReadFile(filepath.Join(root, ConntrackBucketsKey))
+	if strings.TrimSpace(string(raw)) != "250000" {
+		t.Errorf("buckets = %q; want the ceiling over %d", raw, conntrackRatio)
+	}
+}
+
+// A kernel with the module unloaded has no ceiling to read, and the
+// connections page has nothing to count against. That is not an error.
+func TestConntrackMaxMissing(t *testing.T) {
+	t.Parallel()
+	proc := Proc{Root: t.TempDir()}
+	if err := proc.Apply(Settings{ConntrackMax: 1_000_000}); err != nil {
+		t.Errorf("Apply with no conntrack sysctls = %v; want it skipped", err)
+	}
+	if _, err := proc.ConntrackMax(); err == nil {
+		t.Error("ConntrackMax() on a kernel without the module = nil error")
+	}
+}
+
+// Ostiole only sets values that mean the same thing on a one-core virtual
+// machine and on a large router. Capacity limits belong to the kernel, which
+// sizes them from installed memory; a constant here would starve one end of
+// the range or waste memory on the other. The connection ceiling is an
+// override rather than a default, so it must not appear here or in the
+// drop-in either: nothing has loaded nf_conntrack when systemd-sysctl runs.
+func TestNoCapacityLimits(t *testing.T) {
+	t.Parallel()
+	for _, key := range []string{
+		"fs/file-max",
+		"fs/nr_open",
+		"net/core/somaxconn",
+		"net/netfilter/nf_conntrack_max",
+		"net/netfilter/nf_conntrack_buckets",
+	} {
+		if _, ok := All()[key]; ok {
+			t.Errorf("%s is memory-scaled by the kernel and must not be pinned to a constant", key)
+		}
+		if dotted := strings.ReplaceAll(key, "/", "."); strings.Contains(Content(), dotted) {
+			t.Errorf("%s is in the drop-in, where systemd-sysctl runs too early to write it", dotted)
+		}
+	}
+}

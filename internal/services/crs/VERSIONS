@@ -1,0 +1,10 @@
+# The application exclusion plugins, as fetched. One line per repo:
+# name, the commit these files came from, and the date of it.
+wordpress 643b1e51a480ec5ab728d8a194e1e1ac8b796cd7 2026-09-16T00:45:09Z
+nextcloud a8e748fb0b53da453b961f4bbf73920848b02ea7 2026-09-16T04:39:17Z
+drupal dc564612bf6fd378f85de89ba09a9a80ff00ed00 2026-09-16T02:10:07Z
+phpbb 62c8f7fcd8229f6d9f41cd316700118ccdcc14d0 2026-03-27T04:34:52Z
+phpmyadmin ec599e9fdae3ae5ab762ee8154668e4143a4e242 2026-09-14T22:23:58Z
+dokuwiki c2799875aab9a922022510d12b348f2e47334557 2026-09-16T00:14:05Z
+xenforo a0ef4833f6e5872a2e1a8b06b62bff0972e31007 2026-09-14T22:23:16Z
+cpanel fde2873abee01efd919d763d6caadf7738601dce 2026-09-14T22:22:47Z

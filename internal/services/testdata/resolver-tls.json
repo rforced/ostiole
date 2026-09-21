@@ -1,0 +1,477 @@
+{
+  "version": 6,
+  "system": {
+    "hostname": "edge",
+    "management": {
+      "webPort": 8443,
+      "sshPort": 22,
+      "logDefaultDrops": true
+    },
+    "logging": {
+      "level": "debug"
+    }
+  },
+  "zones": [
+    {
+      "name": "wan",
+      "description": "Internet",
+      "external": true
+    },
+    {
+      "name": "lan",
+      "description": "Local",
+      "antiLockout": true,
+      "logDrops": true
+    },
+    {
+      "name": "dmz",
+      "description": "Servers"
+    },
+    {
+      "name": "guest",
+      "description": "Zone with no interfaces"
+    }
+  ],
+  "interfaces": [
+    {
+      "name": "eth0",
+      "zone": "wan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "dhcp"
+      },
+      "ipv6": {
+        "mode": "slaac"
+      }
+    },
+    {
+      "name": "eth1",
+      "zone": "lan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "192.168.1.1/24"
+      },
+      "ipv6": {
+        "mode": "static",
+        "address": "2001:db8:1::1/64"
+      }
+    },
+    {
+      "name": "eth1.20",
+      "zone": "lan",
+      "enabled": true,
+      "vlan": {
+        "parent": "eth1",
+        "id": 20
+      },
+      "ipv4": {
+        "mode": "static",
+        "address": "192.168.20.1/24"
+      },
+      "ipv6": {
+        "mode": "slaac"
+      }
+    },
+    {
+      "name": "eth2",
+      "zone": "dmz",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "10.10.0.1/24"
+      },
+      "ipv6": {
+        "mode": "none"
+      }
+    },
+    {
+      "name": "eth3",
+      "zone": "dmz",
+      "enabled": false,
+      "ipv4": {
+        "mode": "none"
+      },
+      "ipv6": {
+        "mode": "none"
+      }
+    }
+  ],
+  "aliases": [
+    {
+      "name": "servers",
+      "type": "hosts",
+      "description": "Web \"servers\"",
+      "entries": [
+        "10.10.0.5",
+        "10.10.0.0/24",
+        "2001:db8:2::/64"
+      ]
+    },
+    {
+      "name": "v4only",
+      "type": "hosts",
+      "entries": [
+        "172.16.0.0/12"
+      ]
+    },
+    {
+      "name": "empty",
+      "type": "hosts",
+      "entries": []
+    },
+    {
+      "name": "web",
+      "type": "ports",
+      "entries": [
+        "80",
+        "443",
+        "8000-8100"
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "allow-lan",
+      "description": "Allow LAN to any",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    },
+    {
+      "id": "web-from-servers",
+      "enabled": true,
+      "zone": "dmz",
+      "action": "accept",
+      "protocol": "tcp+udp",
+      "source": {
+        "alias": "servers"
+      },
+      "destination": {
+        "portAlias": "web"
+      }
+    },
+    {
+      "id": "block-smtp",
+      "enabled": true,
+      "zone": "lan",
+      "destZone": "wan",
+      "action": "reject",
+      "protocol": "tcp",
+      "log": true,
+      "source": {},
+      "destination": {
+        "ports": [
+          "25",
+          "465-587"
+        ]
+      }
+    },
+    {
+      "id": "dns-to-self",
+      "enabled": true,
+      "zone": "dmz",
+      "action": "accept",
+      "protocol": "udp",
+      "source": {},
+      "destination": {
+        "self": true,
+        "ports": [
+          "53"
+        ]
+      }
+    },
+    {
+      "id": "ping",
+      "enabled": true,
+      "zone": "wan",
+      "action": "accept",
+      "protocol": "icmp",
+      "source": {},
+      "destination": {}
+    },
+    {
+      "id": "mixed-families",
+      "enabled": true,
+      "zone": "dmz",
+      "action": "drop",
+      "protocol": "any",
+      "source": {
+        "addresses": [
+          "10.0.0.1",
+          "10.1.0.0/16",
+          "2001:db8::1",
+          "2001:db8:5::/48"
+        ]
+      },
+      "destination": {
+        "addresses": [
+          "192.168.1.0/24"
+        ]
+      }
+    },
+    {
+      "id": "v6-only-dest",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "tcp",
+      "source": {
+        "alias": "v4only"
+      },
+      "destination": {
+        "addresses": [
+          "2001:db8:9::1"
+        ],
+        "ports": [
+          "22"
+        ]
+      }
+    },
+    {
+      "id": "empty-alias",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {
+        "alias": "empty"
+      },
+      "destination": {}
+    },
+    {
+      "id": "disabled",
+      "enabled": false,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    },
+    {
+      "id": "to-guest",
+      "enabled": true,
+      "zone": "lan",
+      "destZone": "guest",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    },
+    {
+      "id": "udp-sport",
+      "enabled": true,
+      "zone": "wan",
+      "action": "accept",
+      "protocol": "udp",
+      "source": {
+        "ports": [
+          "123"
+        ]
+      },
+      "destination": {
+        "ports": [
+          "123"
+        ]
+      }
+    },
+    {
+      "id": "reject-udp",
+      "enabled": true,
+      "zone": "lan",
+      "action": "reject",
+      "protocol": "udp",
+      "source": {},
+      "destination": {}
+    }
+  ],
+  "nat": {
+    "outbound": {
+      "mode": "manual",
+      "rules": [
+        {
+          "id": "nat-lan",
+          "enabled": true,
+          "zone": "wan",
+          "source": [
+            "192.168.0.0/16",
+            "2001:db8:1::/64"
+          ]
+        },
+        {
+          "id": "nat-all",
+          "enabled": true,
+          "zone": "wan"
+        },
+        {
+          "id": "nat-off",
+          "enabled": false,
+          "zone": "wan"
+        },
+        {
+          "id": "nat-guest",
+          "enabled": true,
+          "zone": "guest"
+        }
+      ]
+    },
+    "portForwards": [
+      {
+        "id": "pf-web",
+        "enabled": true,
+        "zone": "wan",
+        "protocol": "tcp",
+        "ports": [
+          "80",
+          "443"
+        ],
+        "target": "10.10.0.5"
+      },
+      {
+        "id": "pf-ssh",
+        "enabled": true,
+        "zone": "wan",
+        "protocol": "tcp",
+        "ports": [
+          "2222"
+        ],
+        "target": "10.10.0.6",
+        "targetPort": "22"
+      },
+      {
+        "id": "pf-game",
+        "enabled": true,
+        "zone": "wan",
+        "protocol": "tcp+udp",
+        "ports": [
+          "27015-27020"
+        ],
+        "target": "192.168.1.50"
+      },
+      {
+        "id": "pf-v6",
+        "enabled": true,
+        "zone": "wan",
+        "protocol": "udp",
+        "ports": [
+          "5000"
+        ],
+        "target": "2001:db8:2::10",
+        "targetPort": "5001"
+      },
+      {
+        "id": "pf-guest",
+        "enabled": true,
+        "zone": "guest",
+        "protocol": "tcp",
+        "ports": [
+          "1"
+        ],
+        "target": "10.0.0.1"
+      },
+      {
+        "id": "pf-off",
+        "enabled": false,
+        "zone": "wan",
+        "protocol": "tcp",
+        "ports": [
+          "2"
+        ],
+        "target": "10.0.0.1"
+      }
+    ]
+  },
+  "routes": [
+    {
+      "id": "rt1",
+      "enabled": true,
+      "destination": "10.200.0.0/16",
+      "gateway": "10.10.0.254",
+      "interface": "eth2"
+    }
+  ],
+  "services": {
+    "dhcp": {
+      "enabled": true,
+      "servers": [
+        {
+          "interface": "eth1",
+          "enabled": true,
+          "rangeStart": "192.168.1.100",
+          "rangeEnd": "192.168.1.199",
+          "leaseTime": "12h"
+        },
+        {
+          "interface": "eth2",
+          "enabled": false,
+          "rangeStart": "10.10.0.100",
+          "rangeEnd": "10.10.0.150"
+        }
+      ],
+      "staticLeases": [
+        {
+          "mac": "aa:bb:cc:dd:ee:ff",
+          "ip": "192.168.1.50",
+          "ipv6": "::50",
+          "hostname": "nas"
+        },
+        {
+          "mac": "aa:bb:cc:dd:ee:01",
+          "ipv6": "2001:db8:1::99",
+          "hostname": "vault"
+        }
+      ],
+      "v6": [
+        {
+          "interface": "eth1",
+          "enabled": true,
+          "mode": "managed",
+          "rangeStart": "::100",
+          "rangeEnd": "::1ff",
+          "leaseTime": "6h"
+        },
+        {
+          "interface": "eth1.20",
+          "enabled": true,
+          "mode": "slaac"
+        },
+        {
+          "interface": "eth0",
+          "enabled": false,
+          "mode": "stateless"
+        }
+      ]
+    },
+    "dns": {
+      "enabled": true,
+      "upstreams": [
+        "1.1.1.1",
+        "2606:4700:4700::1111"
+      ],
+      "domain": "lan",
+      "hostOverrides": [
+        {
+          "hostname": "printer",
+          "ip": "192.168.1.60"
+        }
+      ],
+      "resolver": "tls",
+      "tlsUpstreams": [
+        {
+          "address": "1.1.1.1",
+          "hostname": "cloudflare-dns.com"
+        },
+        {
+          "address": "2620:fe::fe",
+          "hostname": "dns.quad9.net"
+        }
+      ],
+      "rebind": {
+        "off": true
+      }
+    }
+  }
+}

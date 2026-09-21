@@ -1,0 +1,33 @@
+{
+  "version": 6,
+  "system": { "hostname": "gateway", "management": { "webPort": 443, "sshPort": 22 } },
+  "zones": [{ "name": "wan", "external": true }, { "name": "lan", "antiLockout": true }, { "name": "guest" }],
+  "interfaces": [
+    { "name": "eth0", "zone": "wan", "enabled": true, "ipv4": { "mode": "dhcp" }, "ipv6": { "mode": "none" } },
+    { "name": "eth1", "zone": "lan", "enabled": true, "ipv4": { "mode": "static", "address": "192.168.1.1/24" }, "ipv6": { "mode": "none" } },
+    { "name": "eth2", "zone": "guest", "enabled": true, "ipv4": { "mode": "static", "address": "192.168.5.1/24" }, "ipv6": { "mode": "none" } }
+  ],
+  "rules": [],
+  "nat": { "outbound": { "mode": "automatic" } },
+  "services": {
+    "dhcp": { "enabled": false },
+    "dns": { "enabled": false },
+    "upnp": {
+      "enabled": true,
+      "igd": true,
+      "pcp": true,
+      "externalInterface": "eth0",
+      "interfaces": ["eth1"],
+      "defaultDeny": true,
+      "acl": [
+        {
+          "action": "allow",
+          "externalPorts": "1024-65535",
+          "source": "192.168.1.0/24",
+          "internalPorts": "1024-65535",
+          "description": "The LAN may map high ports to high ports"
+        }
+      ]
+    }
+  }
+}

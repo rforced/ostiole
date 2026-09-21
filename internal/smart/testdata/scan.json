@@ -1,0 +1,30 @@
+{
+ "json_format_version": [
+  1,
+  0
+ ],
+ "smartctl": {
+  "version": [
+   7,
+   5
+  ],
+  "pre_release": false,
+  "svn_revision": "5714",
+  "platform_info": "x86_64-linux-7.2.5-200.fc44.x86_64",
+  "build_info": "(local build)",
+  "argv": [
+   "smartctl",
+   "--scan-open",
+   "--json=c"
+  ],
+  "exit_status": 0
+ },
+ "devices": [
+  {
+   "name": "/dev/sda",
+   "info_name": "/dev/sda [SAT]",
+   "type": "sat",
+   "protocol": "ATA"
+  }
+ ]
+}

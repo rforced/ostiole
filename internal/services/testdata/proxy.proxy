@@ -1,0 +1,579 @@
+==> caddy.json <==
+{
+  "admin": {
+    "listen": "unix//run/ostiole-proxy/admin.sock",
+    "config": {
+      "persist": false
+    }
+  },
+  "logging": {
+    "logs": {
+      "default": {
+        "level": "INFO",
+        "writer": {
+          "output": "stderr"
+        },
+        "encoder": {
+          "format": "json"
+        }
+      }
+    }
+  },
+  "apps": {
+    "tls": {
+      "certificates": {
+        "load_files": [
+          {
+            "certificate": "/etc/ostiole/proxy/certs/@self/fullchain.pem",
+            "key": "/etc/ostiole/proxy/certs/@self/key.pem",
+            "tags": [
+              "@self"
+            ]
+          },
+          {
+            "certificate": "/etc/ostiole/proxy/certs/shop/fullchain.pem",
+            "key": "/etc/ostiole/proxy/certs/shop/key.pem",
+            "tags": [
+              "shop"
+            ]
+          }
+        ]
+      },
+      "disable_ocsp_stapling": true
+    },
+    "http": {
+      "servers": {
+        "http": {
+          "listen": [
+            ":80"
+          ],
+          "automatic_https": {
+            "disable": true
+          },
+          "read_header_timeout": "10s",
+          "idle_timeout": "2m",
+          "max_header_bytes": 65536,
+          "logs": {},
+          "routes": [
+            {
+              "handle": [
+                {
+                  "handler": "headers",
+                  "response": {
+                    "deferred": true,
+                    "delete": [
+                      "Server"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "match": [
+                {
+                  "path": [
+                    "/.well-known/acme-challenge/*"
+                  ]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "upstreams": [
+                    {
+                      "dial": "127.0.0.1:8402"
+                    }
+                  ]
+                }
+              ],
+              "terminal": true
+            },
+            {
+              "match": [
+                {
+                  "host": [
+                    "shop.example.com",
+                    "*.shop.example.com"
+                  ]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "static_response",
+                  "headers": {
+                    "Location": [
+                      "https://{http.request.host}{http.request.uri}"
+                    ]
+                  },
+                  "status_code": 308
+                }
+              ],
+              "terminal": true
+            },
+            {
+              "match": [
+                {
+                  "host": [
+                    "status.example.com"
+                  ]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "subroute",
+                  "routes": [
+                    {
+                      "handle": [
+                        {
+                          "handler": "reverse_proxy",
+                          "health_checks": {
+                            "active": {
+                              "expect_status": 2,
+                              "interval": "15s",
+                              "path": "/healthz",
+                              "timeout": "5s"
+                            },
+                            "passive": {
+                              "fail_duration": "60s",
+                              "max_fails": 1
+                            }
+                          },
+                          "load_balancing": {
+                            "selection_policy": {
+                              "policy": "least_conn"
+                            }
+                          },
+                          "transport": {
+                            "dial_timeout": "10s",
+                            "protocol": "http"
+                          },
+                          "upstreams": [
+                            {
+                              "dial": "192.168.1.20:8080"
+                            },
+                            {
+                              "dial": "192.168.1.21:8080"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "terminal": true
+            }
+          ],
+          "errors": {
+            "routes": [
+              {
+                "handle": [
+                  {
+                    "handler": "headers",
+                    "response": {
+                      "delete": [
+                        "Server"
+                      ]
+                    }
+                  },
+                  {
+                    "handler": "static_response",
+                    "status_code": "{http.error.status_code}"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "https": {
+          "listen": [
+            ":443"
+          ],
+          "automatic_https": {
+            "disable": true
+          },
+          "protocols": [
+            "h1",
+            "h2",
+            "h3"
+          ],
+          "read_header_timeout": "10s",
+          "idle_timeout": "2m",
+          "max_header_bytes": 65536,
+          "listener_wrappers": [
+            {
+              "routes": [
+                {
+                  "match": [
+                    {
+                      "tls": {
+                        "sni": [
+                          "mail.example.com"
+                        ]
+                      }
+                    }
+                  ],
+                  "handle": [
+                    {
+                      "handler": "proxy",
+                      "upstreams": [
+                        {
+                          "dial": [
+                            "192.168.1.30:443"
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "wrapper": "layer4"
+            },
+            {
+              "wrapper": "tls"
+            }
+          ],
+          "tls_connection_policies": [
+            {
+              "certificate_selection": {
+                "any_tag": [
+                  "shop"
+                ]
+              },
+              "match": {
+                "sni": [
+                  "shop.example.com",
+                  "*.shop.example.com"
+                ]
+              }
+            },
+            {
+              "certificate_selection": {
+                "any_tag": [
+                  "@self"
+                ]
+              },
+              "match": {
+                "sni": [
+                  "status.example.com"
+                ]
+              }
+            },
+            {}
+          ],
+          "logs": {},
+          "routes": [
+            {
+              "handle": [
+                {
+                  "handler": "headers",
+                  "response": {
+                    "deferred": true,
+                    "delete": [
+                      "Server"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "match": [
+                {
+                  "host": [
+                    "shop.example.com",
+                    "*.shop.example.com"
+                  ]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "subroute",
+                  "routes": [
+                    {
+                      "match": [
+                        {
+                          "not": [
+                            {
+                              "remote_ip": {
+                                "ranges": [
+                                  "192.168.0.0/16"
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      ],
+                      "handle": [
+                        {
+                          "handler": "static_response",
+                          "status_code": 403
+                        }
+                      ],
+                      "terminal": true
+                    },
+                    {
+                      "handle": [
+                        {
+                          "directives": "SecRuleEngine On\nSecRequestBodyAccess On\nSecRequestBodyLimit 8388608\nSecRequestBodyLimitAction ProcessPartial\nSecResponseBodyAccess On\nSecResponseBodyMimeType text/plain text/html text/xml application/json\nSecResponseBodyLimit 524288\nSecResponseBodyLimitAction ProcessPartial\nSecArgumentsLimit 1000\nSecAuditEngine RelevantOnly\nSecAuditLogParts AHKZ\nSecAuditLogFormat json\nSecAuditLogType Serial\nSecAuditLog /dev/stderr\nSecComponentSignature \"ostiole-site:shop\"\nInclude @crs-setup.conf.example\nSecAction \"id:10001,phase:1,pass,nolog,setvar:tx.blocking_paranoia_level=2,setvar:tx.detection_paranoia_level=2\"\nSecAction \"id:10002,phase:1,pass,nolog,setvar:tx.inbound_anomaly_score_threshold=10,setvar:tx.outbound_anomaly_score_threshold=5\"\nInclude /etc/ostiole/proxy/crs/wordpress-config.conf\nInclude /etc/ostiole/proxy/crs/wordpress-before.conf\nInclude /etc/ostiole/proxy/crs/phpmyadmin-config.conf\nInclude /etc/ostiole/proxy/crs/phpmyadmin-before.conf\nSecRule REQUEST_URI \"@beginsWith /wp-admin\" \"id:10003,phase:1,pass,nolog,ctl:ruleRemoveById=930120\"\nSecRule REQUEST_URI \"@beginsWith /wp-admin\" \"id:10004,phase:1,pass,nolog,ctl:ruleRemoveTargetById=932100;ARGS:code\"\nInclude @owasp_crs/*.conf\nInclude /etc/ostiole/proxy/crs/phpmyadmin-after.conf\nSecRuleRemoveById 942100\nSecRuleUpdateTargetById 941000-941999 \"!ARGS:content\"\n",
+                          "handler": "waf",
+                          "load_owasp_crs": true
+                        }
+                      ]
+                    },
+                    {
+                      "match": [
+                        {
+                          "path": [
+                            "/api*"
+                          ]
+                        }
+                      ],
+                      "handle": [
+                        {
+                          "handler": "reverse_proxy",
+                          "headers": {
+                            "request": {
+                              "set": {
+                                "Host": [
+                                  "{http.reverse_proxy.upstream.hostport}"
+                                ]
+                              }
+                            }
+                          },
+                          "transport": {
+                            "dial_timeout": "10s",
+                            "protocol": "http",
+                            "proxy_protocol": "v2",
+                            "tls": {
+                              "root_ca_pem_files": [
+                                "/etc/ostiole/proxy/certs/pool-api-ca.pem"
+                              ],
+                              "server_name": "api.internal"
+                            }
+                          },
+                          "upstreams": [
+                            {
+                              "dial": "api.internal:443"
+                            }
+                          ]
+                        }
+                      ],
+                      "terminal": true
+                    },
+                    {
+                      "handle": [
+                        {
+                          "handler": "reverse_proxy",
+                          "headers": {
+                            "request": {
+                              "set": {
+                                "Host": [
+                                  "{http.reverse_proxy.upstream.hostport}"
+                                ]
+                              }
+                            }
+                          },
+                          "health_checks": {
+                            "active": {
+                              "expect_status": 2,
+                              "interval": "15s",
+                              "path": "/healthz",
+                              "timeout": "5s"
+                            },
+                            "passive": {
+                              "fail_duration": "60s",
+                              "max_fails": 1
+                            }
+                          },
+                          "load_balancing": {
+                            "selection_policy": {
+                              "policy": "least_conn"
+                            }
+                          },
+                          "transport": {
+                            "dial_timeout": "10s",
+                            "protocol": "http"
+                          },
+                          "upstreams": [
+                            {
+                              "dial": "192.168.1.20:8080"
+                            },
+                            {
+                              "dial": "192.168.1.21:8080"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "terminal": true
+            },
+            {
+              "match": [
+                {
+                  "host": [
+                    "status.example.com"
+                  ]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "subroute",
+                  "routes": [
+                    {
+                      "handle": [
+                        {
+                          "handler": "reverse_proxy",
+                          "health_checks": {
+                            "active": {
+                              "expect_status": 2,
+                              "interval": "15s",
+                              "path": "/healthz",
+                              "timeout": "5s"
+                            },
+                            "passive": {
+                              "fail_duration": "60s",
+                              "max_fails": 1
+                            }
+                          },
+                          "load_balancing": {
+                            "selection_policy": {
+                              "policy": "least_conn"
+                            }
+                          },
+                          "transport": {
+                            "dial_timeout": "10s",
+                            "protocol": "http"
+                          },
+                          "upstreams": [
+                            {
+                              "dial": "192.168.1.20:8080"
+                            },
+                            {
+                              "dial": "192.168.1.21:8080"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "terminal": true
+            }
+          ],
+          "errors": {
+            "routes": [
+              {
+                "handle": [
+                  {
+                    "handler": "headers",
+                    "response": {
+                      "delete": [
+                        "Server"
+                      ]
+                    }
+                  },
+                  {
+                    "handler": "static_response",
+                    "status_code": "{http.error.status_code}"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "metrics": {}
+    },
+    "layer4": {
+      "servers": {
+        "tcp-993": {
+          "listen": [
+            ":993"
+          ],
+          "routes": [
+            {
+              "handle": [
+                {
+                  "handler": "proxy",
+                  "health_checks": {
+                    "active": {
+                      "interval": "30s",
+                      "timeout": "5s"
+                    }
+                  },
+                  "load_balancing": {
+                    "selection": {
+                      "policy": "least_conn"
+                    }
+                  },
+                  "proxy_protocol": "v1",
+                  "upstreams": [
+                    {
+                      "dial": [
+                        "192.168.1.30:993"
+                      ]
+                    },
+                    {
+                      "dial": [
+                        "192.168.1.31:993"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "udp-5353": {
+          "listen": [
+            "udp/:5353"
+          ],
+          "routes": [
+            {
+              "match": [
+                {
+                  "remote_ip": {
+                    "ranges": [
+                      "192.168.1.0/24"
+                    ]
+                  }
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "proxy",
+                  "upstreams": [
+                    {
+                      "dial": [
+                        "udp/192.168.1.40:53"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+==> certificates <==
+@self
+shop
+==> certs/pool-api-ca.pem <==
+-----BEGIN CERTIFICATE-----
+MIIBhTCCASugAwIBAgIQIRi6zePL6mKjOipn+dNuaTAKBggqhkjOPQQDAjASMRAw
+DgYDVQQKEwdBY21lIENvMB4XDTE3MTAyMDE5NDMwNloXDTE4MTAyMDE5NDMwNlow
+EjEQMA4GA1UEChMHQWNtZSBDbzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABD0d
+7VNhbWvZLWPuj/RtHFjvtJBEwOkhbN/BnnE8rnZR8+sbwnc/KhCk3FhnpHZnQz7B
+5aETbbIgmuvewdjvSBSjYzBhMA4GA1UdDwEB/wQEAwICpDATBgNVHSUEDDAKBggr
+BgEFBQcDATAPBgNVHRMBAf8EBTADAQH/MCkGA1UdEQQiMCCCDmxvY2FsaG9zdDo1
+NDUzgg4xMjcuMC4wLjE6NTQ1MzAKBggqhkjOPQQDAgNIADBFAiEA2zpJEPQyz6/l
+Wf86aX6PepsntZv2GYlA5UpabfT2EZICICpJ5h/iI+i341gBmLiAFQOyTDT+/wQc
+6MF9+Yw1Yy0t
+-----END CERTIFICATE-----

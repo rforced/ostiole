@@ -1,0 +1,345 @@
+/*
+ * The look, written once.
+ *
+ * Colour is named for its job, not its hue: page, surface, line, ink,
+ * accent, and four tones (ok, warn, bad, info). Light and dark are the two
+ * blocks below; nothing else in the tree says dark:.
+ *
+ * A page is a stack of cards. A card is a list (a table), a form (fields
+ * that edit the draft), or facts (a key-value list). Its header is the
+ * title, a count, an intro under it, and actions on the right; a button
+ * never sits anywhere else. A form with more than about eight fields folds
+ * the rest under Advanced. A card whose contents one flag governs carries
+ * that flag as a switch in its header; a service with one flag carries it
+ * in the page header.
+ *
+ * Three heading sizes: .page-title, .card-title, .group-title. Prose is
+ * text-sm. text-xs is chrome only: table headers, badges, timestamps,
+ * group titles, the eyebrow.
+ *
+ * Words: Add, Edit, Delete, Save to draft, Cancel, Refresh and Refreshing….
+ * A badge says running, stopped or off for a service; up or down for a
+ * link; connected or disconnected for a tunnel. A column says Address,
+ * MAC, Interface, Destination. An empty table says "No <plural>." and a
+ * loading one "Reading…".
+ */
+
+@import 'tailwindcss';
+@import '@fontsource-variable/open-sans/wght.css';
+
+/* Class-based dark mode driven by the theme store (see stores/theme.js). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --page: var(--color-neutral-50);
+  --surface: #fff;
+  --surface-2: var(--color-neutral-100);
+  --line: var(--color-neutral-200);
+  --line-2: var(--color-neutral-300);
+  --ink: var(--color-neutral-900);
+  --ink-2: var(--color-neutral-600);
+  --ink-muted: var(--color-neutral-500);
+  --ink-faint: var(--color-neutral-400);
+  --accent: var(--color-sky-600);
+  --accent-hover: var(--color-sky-700);
+  --accent-text: var(--color-sky-700);
+  --ok: var(--color-emerald-600);
+  --ok-soft: var(--color-emerald-100);
+  --ok-ink: var(--color-emerald-800);
+  --ok-line: var(--color-emerald-300);
+  --warn: var(--color-amber-700);
+  --warn-soft: var(--color-amber-50);
+  --warn-ink: var(--color-amber-900);
+  --warn-line: var(--color-amber-300);
+  --bad: var(--color-red-600);
+  --bad-soft: var(--color-red-50);
+  --bad-ink: var(--color-red-800);
+  --bad-line: var(--color-red-300);
+  --info: var(--color-sky-600);
+  --info-soft: var(--color-sky-50);
+  --info-ink: var(--color-sky-900);
+  --info-line: var(--color-sky-300);
+}
+
+.dark {
+  --page: var(--color-neutral-950);
+  --surface: var(--color-neutral-900);
+  --surface-2: var(--color-neutral-800);
+  --line: var(--color-neutral-800);
+  --line-2: var(--color-neutral-700);
+  --ink: var(--color-neutral-100);
+  --ink-2: var(--color-neutral-300);
+  --ink-muted: var(--color-neutral-400);
+  --ink-faint: var(--color-neutral-600);
+  --accent: var(--color-sky-500);
+  --accent-hover: var(--color-sky-400);
+  --accent-text: var(--color-sky-400);
+  /* Soft fills are the deep shade at half strength, so a notice or badge
+     tints its surface rather than glowing on it. */
+  --ok: var(--color-emerald-400);
+  --ok-soft: color-mix(in oklab, var(--color-emerald-950) 50%, transparent);
+  --ok-ink: var(--color-emerald-300);
+  --ok-line: color-mix(in oklab, var(--color-emerald-800) 60%, transparent);
+  --warn: var(--color-amber-400);
+  --warn-soft: color-mix(in oklab, var(--color-amber-950) 50%, transparent);
+  --warn-ink: var(--color-amber-200);
+  --warn-line: color-mix(in oklab, var(--color-amber-800) 60%, transparent);
+  --bad: var(--color-red-400);
+  --bad-soft: color-mix(in oklab, var(--color-red-950) 50%, transparent);
+  --bad-ink: var(--color-red-300);
+  --bad-line: color-mix(in oklab, var(--color-red-800) 60%, transparent);
+  --info: var(--color-sky-400);
+  --info-soft: color-mix(in oklab, var(--color-sky-950) 50%, transparent);
+  --info-ink: var(--color-sky-200);
+  --info-line: color-mix(in oklab, var(--color-sky-800) 60%, transparent);
+}
+
+/* Utilities read the variables, so a class works in both modes. */
+@theme inline {
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-text: var(--accent-text);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-ok-ink: var(--ok-ink);
+  --color-ok-line: var(--ok-line);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-ink: var(--warn-ink);
+  --color-warn-line: var(--warn-line);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-bad-ink: var(--bad-ink);
+  --color-bad-line: var(--bad-line);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-ink: var(--info-ink);
+  --color-info-line: var(--info-line);
+}
+
+@theme {
+  --font-sans: 'Open Sans Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* The one size for monospace output: logs, rulesets, diffs, keys. */
+  --text-code: 0.8125rem;
+  --text-code--line-height: 1.25rem;
+
+  --animate-fade-in: fade-in 150ms ease-out both;
+  --animate-fade-out: fade-out 120ms ease-in both;
+  --animate-pop-in: pop-in 150ms ease-out both;
+  --animate-pop-out: pop-out 120ms ease-in both;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+  /* The dialog is centred by Tailwind's `translate` property, which
+     composes with `transform`, so these only scale. */
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @keyframes pop-out {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+  }
+}
+
+@layer base {
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: var(--accent);
+  }
+}
+
+@layer components {
+  .page-title {
+    @apply text-2xl font-semibold tracking-tight;
+  }
+  .eyebrow {
+    @apply text-xs font-medium tracking-wide text-ink-muted uppercase;
+  }
+  .card-title {
+    @apply text-base font-semibold tracking-tight;
+  }
+  .group-title {
+    @apply text-xs font-medium tracking-wide text-ink-muted uppercase;
+  }
+  .input {
+    @apply w-full rounded-md border border-line-2 bg-surface px-3 py-1.5 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:ring-2 focus:ring-accent/30 focus:outline-none aria-invalid:border-bad;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-accent-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-line-2 bg-surface px-3 py-1.5 text-sm font-medium text-ink shadow-sm hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md bg-bad px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:opacity-90 focus-visible:ring-2 focus-visible:ring-bad focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  /* A row action that reads as a link, so a table of them stays quiet. */
+  .link-action {
+    @apply text-sm text-ink-muted underline-offset-2 hover:text-accent-text hover:underline focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none;
+  }
+  .link {
+    @apply text-sm text-accent-text underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:text-ink-faint disabled:no-underline;
+  }
+  .icon-btn {
+    @apply inline-flex rounded p-1 text-ink-muted hover:text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:opacity-30;
+  }
+  /* A checkbox drawn as a switch, for the one flag that governs a card or a page. */
+  .switch {
+    @apply relative inline-block h-5 w-9 shrink-0 cursor-pointer appearance-none rounded-full bg-line-2 transition-colors checked:bg-accent focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .switch::before {
+    content: '';
+    @apply absolute top-0.5 left-0.5 size-4 rounded-full bg-white shadow-sm transition-transform;
+  }
+  .switch:checked::before {
+    @apply translate-x-4;
+  }
+  .kv {
+    @apply grid grid-cols-[auto_1fr] gap-x-4 gap-y-1;
+  }
+  .kv dt {
+    @apply text-ink-muted;
+  }
+  .table {
+    @apply w-full text-left text-sm;
+  }
+  .table thead th {
+    @apply border-b border-line bg-surface-2/60 px-3 py-2 text-xs font-medium tracking-wide text-ink-muted uppercase;
+  }
+  .table tbody td {
+    @apply border-b border-line px-3 py-2.5 align-top;
+  }
+  .table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+  /* A row the draft adds or changes, until it is applied. */
+  .table tbody tr.row-changed td:first-child {
+    @apply shadow-[inset_3px_0_0_0_var(--warn)];
+  }
+  /* A rule Ostiole adds on its own: there for the order, not for editing. */
+  .table tbody tr.row-system td {
+    @apply bg-surface-2/40 text-ink-muted;
+  }
+  .skeleton {
+    @apply inline-block h-3.5 animate-pulse rounded bg-surface-2;
+  }
+  /* A row of fields. Labels sit at the top, so the inputs line up whether
+     or not a field has a hint under it, and anything in the row that is
+     not a field (a button, a checkbox) is dropped to the input line. */
+  .form-row {
+    @apply flex flex-wrap items-start gap-3;
+  }
+  .form-row > :not(.field) {
+    /* One label line plus the gap under it; then as tall as an input. */
+    @apply mt-6 min-h-[2.125rem];
+  }
+  .badge {
+    @apply inline-block rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-2;
+  }
+  .badge-ok {
+    @apply bg-ok-soft text-ok-ink;
+  }
+  .badge-warn {
+    @apply bg-warn-soft text-warn-ink;
+  }
+  .badge-bad {
+    @apply bg-bad-soft text-bad-ink;
+  }
+  /* A ratio against a limit. The track takes a light step of the same hue
+     as the fill, passed in by the caller, so the severity reads across the
+     whole bar rather than only the filled part. */
+  .meter {
+    @apply h-1.5 w-full overflow-hidden rounded-full;
+  }
+  .meter-fill {
+    @apply h-full rounded-full transition-[width] duration-700 ease-out;
+  }
+}
+
+/* Vue transition classes. Rows fade in place and slide only when they
+   change order; the bar above the page grows and shrinks rather than
+   shoving the content under it. */
+.row-enter-active,
+.row-leave-active {
+  transition: opacity 150ms ease-out;
+}
+.row-enter-from,
+.row-leave-to {
+  opacity: 0;
+}
+.row-move {
+  transition: transform 200ms ease-out;
+}
+/* A placeholder row ("Reading…", "No rules.") swaps instantly, so the
+   real rows never share the table with it mid-fade. */
+.row-static.row-enter-active,
+.row-static.row-leave-active {
+  transition: none;
+}
+
+.toast-enter-active,
+.toast-leave-active,
+.toast-move {
+  transition:
+    opacity 200ms ease-out,
+    transform 200ms ease-out;
+}
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.bar-enter-active,
+.bar-leave-active {
+  transition: grid-template-rows 200ms ease-out;
+}
+.bar-enter-from,
+.bar-leave-to {
+  grid-template-rows: 0fr;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row-enter-active,
+  .row-leave-active,
+  .row-move,
+  .toast-enter-active,
+  .toast-leave-active,
+  .toast-move,
+  .bar-enter-active,
+  .bar-leave-active {
+    transition: none;
+  }
+}

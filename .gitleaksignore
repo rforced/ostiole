@@ -1,0 +1,10 @@
+# Two commits carry a throwaway P-256 key that test fixtures used to
+# satisfy the ACME account validator. It signs nothing and was never a
+# credential for anything, and both files now generate a key at test time
+# instead, but the commits themselves cannot be unwritten.
+714c17a6764d06f0556b6d4d4260b2a81de5faa4:internal/model/certificates_test.go:private-key:11
+bbea1d94b1760b0f032a9a0b79c2ab0e4bc19749:internal/nft/testdata/acme-http01.json:private-key:76
+# A third carries the Go standard library's example pair as an uploaded
+# certificate in the proxy fixture, which now leaves the pair empty and
+# generates one at test time like the others.
+52459bda3e7bf77405e7e4648fe41a091a59eb87:internal/services/testdata/proxy.json:private-key:31

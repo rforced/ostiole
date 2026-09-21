@@ -1,0 +1,158 @@
+{
+  "version": 6,
+  "system": {
+    "hostname": "blocklists",
+    "management": {
+      "webPort": 443,
+      "sshPort": 22
+    }
+  },
+  "zones": [
+    {
+      "name": "wan",
+      "external": true,
+      "antiLockout": true
+    },
+    {
+      "name": "lan",
+      "antiLockout": true
+    }
+  ],
+  "interfaces": [
+    {
+      "name": "eth0",
+      "zone": "wan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "dhcp"
+      },
+      "ipv6": {
+        "mode": "slaac"
+      }
+    },
+    {
+      "name": "eth1",
+      "zone": "lan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "192.168.1.1/24"
+      },
+      "ipv6": {
+        "mode": "static",
+        "address": "2001:db8:1::1/64"
+      }
+    }
+  ],
+  "aliases": [
+    {
+      "name": "drop",
+      "type": "hosts",
+      "description": "Spamhaus DROP",
+      "url": "https://www.spamhaus.org/drop/drop.txt",
+      "refreshHours": 12,
+      "entries": [
+        "203.0.113.66"
+      ]
+    },
+    {
+      "name": "countries",
+      "type": "geoip",
+      "entries": [
+        "cn",
+        "ru"
+      ],
+      "refreshHours": 168
+    },
+    {
+      "name": "google",
+      "type": "asn",
+      "description": "everything Google announces",
+      "entries": [
+        "AS15169",
+        "AS36040"
+      ]
+    },
+    {
+      "name": "admins",
+      "type": "hosts",
+      "entries": [
+        "198.51.100.10"
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "drop-listed",
+      "enabled": true,
+      "zone": "wan",
+      "action": "drop",
+      "protocol": "any",
+      "source": {
+        "alias": "drop"
+      },
+      "destination": {},
+      "log": true
+    },
+    {
+      "id": "drop-countries",
+      "enabled": true,
+      "zone": "wan",
+      "action": "drop",
+      "protocol": "any",
+      "source": {
+        "alias": "countries"
+      },
+      "destination": {}
+    },
+    {
+      "id": "drop-google",
+      "enabled": true,
+      "zone": "wan",
+      "action": "drop",
+      "protocol": "any",
+      "source": {
+        "alias": "google"
+      },
+      "destination": {}
+    },
+    {
+      "id": "admin-ssh",
+      "enabled": true,
+      "zone": "wan",
+      "action": "accept",
+      "protocol": "tcp",
+      "source": {
+        "alias": "admins"
+      },
+      "destination": {
+        "self": true,
+        "ports": [
+          "22"
+        ]
+      }
+    },
+    {
+      "id": "lan-out",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    }
+  ],
+  "nat": {
+    "outbound": {
+      "mode": "automatic"
+    }
+  },
+  "services": {
+    "dhcp": {
+      "enabled": false
+    },
+    "dns": {
+      "enabled": false
+    }
+  }
+}

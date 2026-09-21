@@ -1,0 +1,188 @@
+# https://taskfile.dev
+version: '3'
+
+vars:
+  MODULE: github.com/rforced/ostiole
+  BIN: bin/ostiole
+  BIN_PROXY: bin/ostiole-proxy
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo dev
+  COMMIT:
+    sh: git rev-parse --short HEAD 2>/dev/null || echo none
+  DATE:
+    sh: date -u +%Y-%m-%dT%H:%M:%SZ
+  LDFLAGS: >-
+    -s -w
+    -X {{.MODULE}}/internal/version.Version={{.VERSION}}
+    -X {{.MODULE}}/internal/version.Commit={{.COMMIT}}
+    -X {{.MODULE}}/internal/version.Date={{.DATE}}
+
+tasks:
+  default:
+    deps: [build]
+
+  # ---- web -------------------------------------------------------------
+
+  web:install:
+    desc: Install web dependencies with bun
+    dir: web
+    cmds:
+      - bun install --frozen-lockfile
+    sources:
+      - package.json
+      - bun.lock
+    generates:
+      - node_modules/.bin/vite
+
+  web:build:
+    desc: Build the Vue app into internal/web/dist (embedded by Go)
+    dir: web
+    deps: [web:install]
+    cmds:
+      - bun run build
+    sources:
+      - index.html
+      - vite.config.js
+      - package.json
+      - src/**/*
+      - public/**/*
+    generates:
+      - ../internal/web/dist/index.html
+
+  web:dev:
+    desc: Run the Vite dev server (proxies /api to the Go server)
+    dir: web
+    deps: [web:install]
+    cmds:
+      - bun run dev
+
+  web:lint:
+    desc: Lint and check formatting of the web app
+    dir: web
+    deps: [web:install]
+    cmds:
+      - bun run lint
+      - bun run format:check
+
+  web:test:
+    desc: Run web unit tests
+    dir: web
+    deps: [web:install]
+    cmds:
+      - bun run test
+
+  web:e2e:
+    desc: Run Playwright end-to-end tests against the built binary
+    dir: web
+    deps: [web:install]
+    cmds:
+      - bun run e2e
+    env:
+      OSTIOLE_BIN: ../bin/ostiole
+
+  # ---- go --------------------------------------------------------------
+
+  go:build:
+    desc: Build the ostiole binary (expects web:build to have run)
+    env:
+      # Pure-Go static binary so it runs on any distro. Not global: `go test -race` needs cgo.
+      CGO_ENABLED: '0'
+    cmds:
+      - go build -trimpath -ldflags '{{.LDFLAGS}}' -o {{.BIN}} ./cmd/ostiole
+    sources:
+      - '**/*.go'
+      - go.mod
+      - go.sum
+      - internal/web/dist/**/*
+    generates:
+      - '{{.BIN}}'
+
+  go:build-proxy:
+    desc: Build the ostiole-proxy sidecar
+    env:
+      CGO_ENABLED: '0'
+    cmds:
+      - go build -trimpath -ldflags '{{.LDFLAGS}}' -o {{.BIN_PROXY}} ./cmd/ostiole-proxy
+    sources:
+      - cmd/ostiole-proxy/**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - '{{.BIN_PROXY}}'
+
+  go:imports:
+    desc: Check the daemon carries none of the sidecar's dependencies
+    cmds:
+      - ./scripts/ci/check-imports.sh
+
+  go:dev:
+    desc: Run the Go server with debug logging
+    cmds:
+      - go run ./cmd/ostiole serve --log-level debug
+
+  go:lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run ./...
+
+  go:test:
+    desc: Run Go tests with the race detector
+    cmds:
+      - go test -race -cover ./...
+
+  go:vuln:
+    desc: Run govulncheck
+    cmds:
+      - govulncheck ./...
+
+  # ---- aggregate ------------------------------------------------------
+
+  build:
+    desc: Build the web app and the binary
+    deps: [web:build]
+    cmds:
+      - task: go:build
+
+  build:proxy:
+    desc: Build the reverse proxy sidecar
+    cmds:
+      - task: go:build-proxy
+
+  dev:
+    desc: Run Go server and Vite dev server together
+    deps: [web:dev, go:dev]
+
+  lint:
+    desc: Lint everything
+    deps: [go:lint, web:lint]
+
+  test:
+    desc: Test everything
+    deps: [go:test, web:test]
+
+  e2e:
+    desc: Build, then run the browser end-to-end tests
+    deps: [build]
+    cmds:
+      - task: web:e2e
+
+  vuln:
+    desc: Dependency vulnerability scans
+    cmds:
+      - task: go:vuln
+      - cmd: cd web && bun audit
+
+  ci:
+    desc: What CI runs
+    cmds:
+      - task: lint
+      - task: test
+      - task: go:imports
+      - task: build
+      - task: build:proxy
+
+  clean:
+    desc: Remove build outputs
+    cmds:
+      - rm -rf bin
+      - find internal/web/dist -mindepth 1 ! -name .gitkeep -delete

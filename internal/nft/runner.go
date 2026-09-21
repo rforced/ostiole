@@ -1,0 +1,191 @@
+package nft
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os/exec"
+	"strings"
+)
+
+// Runner abstracts the nft binary so the engine can be tested without it.
+type Runner interface {
+	// Check validates a ruleset without applying it (nft -c -f -).
+	Check(ctx context.Context, ruleset string) error
+	// Apply loads a ruleset atomically (nft -f -).
+	Apply(ctx context.Context, ruleset string) error
+	// ListTableJSON returns `nft -j list table inet ostiole` output, or
+	// ErrNoTable if the table does not exist.
+	ListTableJSON(ctx context.Context) ([]byte, error)
+}
+
+// ErrNoTable is returned by ListTableJSON when Ostiole's table is absent.
+var ErrNoTable = errors.New("nftables table " + Table + " does not exist")
+
+// Error carries nft's stderr, which is where the useful diagnostics live.
+type Error struct {
+	Op     string
+	Stderr string
+	Err    error
+}
+
+func (e *Error) Error() string {
+	msg := strings.TrimSpace(e.Stderr)
+	if msg == "" {
+		return fmt.Sprintf("nft %s: %v", e.Op, e.Err)
+	}
+	return fmt.Sprintf("nft %s: %s", e.Op, msg)
+}
+
+func (e *Error) Unwrap() error { return e.Err }
+
+// Exec runs the real nft binary.
+type Exec struct {
+	// Bin is the nft executable; empty means "nft" on PATH.
+	Bin string
+	// Wrap, if set, is prepended to every command (used by tests to run
+	// inside an unprivileged namespace, e.g. []string{"unshare","-Urn"}).
+	Wrap []string
+}
+
+func (x *Exec) bin() string {
+	if x.Bin == "" {
+		return "nft"
+	}
+	return x.Bin
+}
+
+func (x *Exec) run(ctx context.Context, op string, stdin string, args ...string) ([]byte, error) {
+	argv := append(append([]string{}, x.Wrap...), x.bin())
+	argv = append(argv, args...)
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) //nolint:gosec // argv is fixed by the caller, never user input
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return stdout.Bytes(), &Error{Op: op, Stderr: stderr.String(), Err: err}
+	}
+	return stdout.Bytes(), nil
+}
+
+// Check implements Runner.
+func (x *Exec) Check(ctx context.Context, ruleset string) error {
+	_, err := x.run(ctx, "check", ruleset, "-c", "-f", "-")
+	return err
+}
+
+// Apply implements Runner.
+func (x *Exec) Apply(ctx context.Context, ruleset string) error {
+	_, err := x.run(ctx, "apply", ruleset, "-f", "-")
+	return err
+}
+
+// ListTableJSON implements Runner.
+func (x *Exec) ListTableJSON(ctx context.Context) ([]byte, error) {
+	out, err := x.run(ctx, "list", "", "-j", "list", "table", "inet", "ostiole")
+	if err != nil {
+		var nerr *Error
+		if errors.As(err, &nerr) && strings.Contains(nerr.Stderr, "No such file or directory") {
+			return nil, ErrNoTable
+		}
+		return nil, err
+	}
+	return out, nil
+}
+
+// Version returns the nft version string, e.g. "nftables v1.1.6 (…)".
+func (x *Exec) Version(ctx context.Context) (string, error) {
+	out, err := x.run(ctx, "version", "", "--version")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// ChainRef names one chain and the table it belongs to.
+type ChainRef struct {
+	Family string `json:"family"`
+	Table  string `json:"table"`
+	Name   string `json:"name"`
+}
+
+// ListChains returns every chain on the router. One call answers what is
+// inside the tables Ostiole does not own, which is what tells a leftover
+// from an older firewall apart from the working ruleset of something that
+// is still running.
+func (x *Exec) ListChains(ctx context.Context) ([]ChainRef, error) {
+	out, err := x.run(ctx, "list chains", "", "-j", "list", "chains")
+	if err != nil {
+		return nil, err
+	}
+	var doc struct {
+		Nftables []struct {
+			Chain *ChainRef `json:"chain"`
+		} `json:"nftables"`
+	}
+	if err := json.Unmarshal(out, &doc); err != nil {
+		return nil, fmt.Errorf("parse nft chains: %w", err)
+	}
+	var chains []ChainRef
+	for _, item := range doc.Nftables {
+		if item.Chain != nil {
+			chains = append(chains, *item.Chain)
+		}
+	}
+	return chains, nil
+}
+
+// DeleteTable removes one table. It is the only call in this package that
+// touches a table Ostiole does not own, and nothing reaches it without an
+// operator asking for exactly that table by name.
+func (x *Exec) DeleteTable(ctx context.Context, family, name string) error {
+	if family == "" || name == "" {
+		return errors.New("delete table: a family and a name are required")
+	}
+	if family+" "+name == Table {
+		return errors.New("delete table: " + Table + " is Ostiole's own table; apply a configuration instead")
+	}
+	_, err := x.run(ctx, "delete table", "", "delete", "table", family, name)
+	return err
+}
+
+// ListTables returns every nftables table that holds a chain, as
+// "family name", e.g. "inet firewalld", so foreign rulesets can be
+// reported. A table without a chain filters nothing, and iptables-nft
+// makes four of them whenever anything on the router runs iptables at
+// all, tailscaled included.
+func (x *Exec) ListTables(ctx context.Context) ([]string, error) {
+	out, err := x.run(ctx, "list chains", "", "-j", "list", "chains")
+	if err != nil {
+		return nil, err
+	}
+	var doc struct {
+		Nftables []struct {
+			Chain *struct {
+				Family string `json:"family"`
+				Table  string `json:"table"`
+			} `json:"chain"`
+		} `json:"nftables"`
+	}
+	if err := json.Unmarshal(out, &doc); err != nil {
+		return nil, fmt.Errorf("parse nft chains: %w", err)
+	}
+	var tables []string
+	seen := map[string]bool{}
+	for _, item := range doc.Nftables {
+		if item.Chain == nil {
+			continue
+		}
+		key := item.Chain.Family + " " + item.Chain.Table
+		if !seen[key] {
+			seen[key] = true
+			tables = append(tables, key)
+		}
+	}
+	return tables, nil
+}

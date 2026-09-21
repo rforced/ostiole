@@ -1,0 +1,106 @@
+{
+  "version": 6,
+  "system": {
+    "hostname": "proxy-fw",
+    "management": {
+      "webPort": 8443,
+      "sshPort": 22
+    }
+  },
+  "zones": [
+    {
+      "name": "wan",
+      "external": true
+    },
+    {
+      "name": "lan",
+      "antiLockout": true
+    }
+  ],
+  "interfaces": [
+    {
+      "name": "eth0",
+      "zone": "wan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "dhcp"
+      },
+      "ipv6": {
+        "mode": "slaac"
+      }
+    },
+    {
+      "name": "eth1",
+      "zone": "lan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "192.168.1.1/24"
+      },
+      "ipv6": {
+        "mode": "none"
+      }
+    }
+  ],
+  "rules": [
+    {
+      "id": "lan-out",
+      "description": "Allow LAN to any",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    }
+  ],
+  "nat": {
+    "outbound": {
+      "mode": "automatic"
+    }
+  },
+  "services": {
+    "dhcp": {
+      "enabled": false
+    },
+    "dns": {
+      "enabled": false
+    },
+    "proxy": {
+      "enabled": true,
+      "zones": ["wan"],
+      "http3": true,
+      "pools": [
+        {
+          "id": "web",
+          "upstreams": [{ "address": "192.168.1.20:8080" }]
+        }
+      ],
+      "sites": [
+        {
+          "id": "shop",
+          "enabled": true,
+          "hosts": ["shop.example.com"],
+          "pool": "web"
+        }
+      ],
+      "routes": [
+        {
+          "id": "mail",
+          "enabled": true,
+          "protocol": "tcp",
+          "port": 443,
+          "sni": ["mail.example.com"],
+          "upstreams": [{ "address": "192.168.1.30:443" }]
+        },
+        {
+          "id": "resolver",
+          "enabled": true,
+          "protocol": "udp",
+          "port": 5353,
+          "upstreams": [{ "address": "192.168.1.40:53" }]
+        }
+      ]
+    }
+  }
+}

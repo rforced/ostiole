@@ -1,0 +1,15 @@
+<?xml version='1.0'?>
+<stream>
+<update-status version="0.6">
+<update-list>
+<update name="openSUSE-SLE-15.6-2026-1234" edition="1" arch="noarch" status="needed" category="security" severity="important" pkgmanager="false" restart="false" interactive="false" kind="patch">
+<summary>Security update for openssl-3</summary>
+<source url="http://download.opensuse.org/update/leap/" alias="repo-update"/>
+</update>
+<update name="openSUSE-SLE-15.6-2026-1240" edition="1" arch="noarch" status="needed" category="recommended" severity="moderate" pkgmanager="false" restart="false" interactive="false" kind="patch">
+<summary>Recommended update for bash</summary>
+<source url="http://download.opensuse.org/update/leap/" alias="repo-update"/>
+</update>
+</update-list>
+</update-status>
+</stream>

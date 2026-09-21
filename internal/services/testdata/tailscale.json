@@ -1,0 +1,32 @@
+{
+  "version": 6,
+  "system": { "dnsServers": ["9.9.9.9"], "management": { "webPort": 443, "sshPort": 22 } },
+  "zones": [
+    { "name": "wan", "external": true },
+    { "name": "lan", "antiLockout": true },
+    { "name": "tailnet" }
+  ],
+  "interfaces": [
+    { "name": "eth0", "zone": "wan", "enabled": true, "ipv4": { "mode": "dhcp" }, "ipv6": { "mode": "none" } },
+    { "name": "eth1", "zone": "lan", "enabled": true, "ipv4": { "mode": "static", "address": "192.168.1.1/24" }, "ipv6": { "mode": "none" } },
+    {
+      "name": "tailscale0",
+      "zone": "tailnet",
+      "enabled": true,
+      "ipv4": { "mode": "none" },
+      "ipv6": { "mode": "none" },
+      "tailscale": {
+        "port": 41641,
+        "hostname": "gateway",
+        "advertiseRoutes": ["192.168.1.0/24"],
+        "advertiseExitNode": true
+      }
+    }
+  ],
+  "rules": [],
+  "nat": { "outbound": { "mode": "automatic" } },
+  "services": {
+    "dhcp": { "enabled": false },
+    "dns": { "enabled": true, "interfaces": ["eth1"], "domain": "home.arpa" }
+  }
+}

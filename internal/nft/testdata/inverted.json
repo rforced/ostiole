@@ -1,0 +1,157 @@
+{
+  "version": 6,
+  "system": {
+    "hostname": "inverted",
+    "management": {
+      "webPort": 443,
+      "sshPort": 22
+    }
+  },
+  "zones": [
+    {
+      "name": "wan",
+      "external": true,
+      "antiLockout": true
+    },
+    {
+      "name": "lan",
+      "antiLockout": true
+    }
+  ],
+  "interfaces": [
+    {
+      "name": "eth0",
+      "zone": "wan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "dhcp"
+      },
+      "ipv6": {
+        "mode": "slaac"
+      }
+    },
+    {
+      "name": "eth1",
+      "zone": "lan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "192.168.1.1/24"
+      },
+      "ipv6": {
+        "mode": "static",
+        "address": "2001:db8:1::1/64"
+      }
+    }
+  ],
+  "aliases": [
+    {
+      "name": "home_country",
+      "type": "geoip",
+      "entries": ["GB"]
+    },
+    {
+      "name": "office",
+      "type": "hosts",
+      "entries": ["203.0.113.0/24"]
+    },
+    {
+      "name": "dns_ports",
+      "type": "ports",
+      "entries": ["53", "853"]
+    }
+  ],
+  "rules": [
+    {
+      "id": "drop-foreign",
+      "description": "Anything not from the home country, both families",
+      "enabled": true,
+      "zone": "wan",
+      "action": "drop",
+      "protocol": "any",
+      "source": {
+        "alias": "home_country",
+        "notAddresses": true
+      },
+      "destination": {}
+    },
+    {
+      "id": "drop-not-office",
+      "description": "An IPv4-only alias inverted still has to cover IPv6",
+      "enabled": true,
+      "zone": "wan",
+      "action": "drop",
+      "protocol": "tcp",
+      "source": {
+        "alias": "office",
+        "notAddresses": true
+      },
+      "destination": {
+        "self": true,
+        "ports": ["22"]
+      }
+    },
+    {
+      "id": "drop-literal-not",
+      "description": "Inverted literal addresses, IPv4 only",
+      "enabled": true,
+      "zone": "wan",
+      "action": "drop",
+      "protocol": "any",
+      "source": {
+        "addresses": ["198.51.100.0/24"],
+        "notAddresses": true
+      },
+      "destination": {}
+    },
+    {
+      "id": "force-local-dns",
+      "description": "LAN clients must resolve through this firewall",
+      "enabled": true,
+      "zone": "lan",
+      "action": "reject",
+      "protocol": "tcp+udp",
+      "source": {},
+      "destination": {
+        "self": true,
+        "notAddresses": true,
+        "portAlias": "dns_ports"
+      }
+    },
+    {
+      "id": "not-these-ports",
+      "description": "Inverted ports on their own",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "tcp",
+      "source": {},
+      "destination": {
+        "ports": ["25", "465"],
+        "notPorts": true
+      }
+    },
+    {
+      "id": "lan-out",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    }
+  ],
+  "nat": {
+    "outbound": {
+      "mode": "automatic"
+    }
+  },
+  "services": {
+    "dhcp": {
+      "enabled": false
+    },
+    "dns": {
+      "enabled": false
+    }
+  }
+}
