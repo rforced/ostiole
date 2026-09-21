@@ -19,8 +19,8 @@ from a single configuration.
 - **Routing** — static routes, multi-WAN with gateway monitoring, policy routing per rule.
 - **Services** — DHCP and DNS through dnsmasq and unbound, DNS block lists, UPnP and NAT-PMP.
 - **Reverse proxy** — publish what is behind the router: hostnames, a certificate it already holds,
-  a pool of health-checked backends, and a web application firewall supporting blocking or detection only modes.
-  TCP and UDP pass straight through by port or by the name.
+  a pool of health-checked backends, and a web application firewall supporting blocking or detection 
+  only modes. TCP and UDP pass straight through by port or by the name.
 - **Shaping** — a line speed per interface, CAKE queues, priority set by rule.
 - **Operations** — commit-confirmed applies that revert themselves, config revisions, backup and
   restore, encrypted copies to S3, API tokens, packet capture, drive health.
