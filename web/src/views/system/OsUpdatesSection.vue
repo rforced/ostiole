@@ -1,4 +1,5 @@
 <script setup>
+import { LoaderCircle } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
@@ -67,6 +68,11 @@ const install = useAsync(async () => {
 
 const busy = computed(() => check.busy.value || install.busy.value)
 const error = computed(() => actionError.value || check.error.value || install.error.value)
+const installing = computed(() => install.busy.value || running.value)
+const installLabel = computed(() => {
+  if (installing.value) return 'Installing…'
+  return installSecurityOnly.value ? 'Install security updates' : 'Install all updates'
+})
 
 async function askInstall() {
   const n = installSecurityOnly.value ? securityCount.value : packages.value.length
@@ -110,9 +116,11 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
           type="button"
           class="btn-primary"
           :disabled="busy || running || !status?.available || !packages.length"
+          :aria-busy="installing"
           @click="askInstall"
         >
-          {{ installSecurityOnly ? 'Install security updates' : 'Install all updates' }}
+          <LoaderCircle v-if="installing" class="size-4 animate-spin" aria-hidden="true" />
+          {{ installLabel }}
         </button>
       </template>
       <div class="space-y-4">

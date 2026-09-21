@@ -4,6 +4,7 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import './assets/main.css'
 import { UNAUTHORIZED_EVENT } from './lib/api'
+import { installChunkReload } from './lib/reload'
 import router from './router'
 import { useAuthStore } from './stores/auth'
 import { useThemeStore } from './stores/theme'
@@ -15,6 +16,8 @@ app.use(pinia)
 app.use(router)
 
 useThemeStore(pinia).init()
+
+installChunkReload()
 
 // Any 401 (expired session, restarted server) sends the user to login.
 window.addEventListener(UNAUTHORIZED_EVENT, () => {

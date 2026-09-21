@@ -1,4 +1,5 @@
 <script setup>
+import { LoaderCircle } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
@@ -116,6 +117,7 @@ const install = useAsync(async () => {
 
 const busy = computed(() => checking.busy.value || install.busy.value)
 const error = computed(() => checking.error.value || install.error.value)
+const installing = computed(() => install.busy.value || running.value)
 
 async function askInstall() {
   const ok = await confirm.ask({
@@ -168,9 +170,11 @@ onMounted(async () => {
         type="button"
         class="btn-primary"
         :disabled="busy || running"
+        :aria-busy="installing"
         @click="askInstall"
       >
-        Install {{ check.latest }}
+        <LoaderCircle v-if="installing" class="size-4 animate-spin" aria-hidden="true" />
+        {{ installing ? 'Installing…' : `Install ${check.latest}` }}
       </button>
     </template>
     <div class="space-y-4">
@@ -220,10 +224,10 @@ onMounted(async () => {
 
       <div v-if="check?.available && check.release" class="rounded-md border border-line p-3">
         <p class="font-medium">
-          {{ check.release.tag }}
-          <span v-if="check.security" class="badge badge-warn ml-1">security release</span>
-          <span class="font-normal text-ink-muted"
-            >· {{ new Date(check.release.publishedAt).toLocaleDateString() }}</span
+          {{ check.release.tag
+          }}<span v-if="check.security" class="badge badge-warn ml-1">security release</span
+          ><span class="font-normal text-ink-muted"
+            >&nbsp;· {{ new Date(check.release.publishedAt).toLocaleDateString() }}</span
           >
           <a :href="check.release.url" target="_blank" rel="noopener" class="link ml-2"
             >release page</a
@@ -237,8 +241,8 @@ onMounted(async () => {
 
       <div v-if="running" role="status" aria-live="polite">
         <p class="font-medium capitalize">
-          {{ status.state }}<span v-if="status.version"> {{ status.version }}</span>
-          <span v-if="percent !== null" class="font-mono tabular-nums"> {{ percent }}%</span>
+          {{ status.state }}<span v-if="status.version">&nbsp;{{ status.version }}</span
+          ><span v-if="percent !== null" class="font-mono tabular-nums">&nbsp;{{ percent }}%</span>
         </p>
         <div
           v-if="percent !== null"

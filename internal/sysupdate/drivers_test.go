@@ -77,6 +77,17 @@ func (f *fakeRunner) ran(line string) bool {
 	return false
 }
 
+func (f *fakeRunner) ranWithout(want, guard string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, c := range f.calls {
+		if strings.Contains(c, want) && !strings.Contains(c, guard) {
+			return c
+		}
+	}
+	return ""
+}
+
 // ranMatching reports whether one command line contains all of these.
 func (f *fakeRunner) ranMatching(parts ...string) bool {
 	f.mu.Lock()
@@ -342,6 +353,11 @@ func TestZypperCheck(t *testing.T) {
 	if !strings.Contains(got.Note, "patches") {
 		t.Errorf("note = %q, want the patch caveat", got.Note)
 	}
+	// A stale index reports nothing waiting, which is the one wrong answer
+	// this page must never give.
+	if !run.ran("zypper --non-interactive refresh") {
+		t.Error("the repositories were not refreshed, so the answer could be stale")
+	}
 
 	// Tumbleweed has package updates and no patch metadata at all, so a
 	// security run would install nothing. Say so rather than report a
@@ -427,6 +443,35 @@ func TestPacmanCheck(t *testing.T) {
 	empty := &fakeRunner{code: map[string]int{"checkupdates": 2}}
 	if _, err := p.Check(t.Context(), empty); err != nil {
 		t.Errorf("an up-to-date router reported an error: %v", err)
+	}
+}
+
+// Not parallel: it swaps lookPath, which every parallel test that detects
+// a manager or locates a command reads.
+func TestPacmanCheckWithoutCheckupdates(t *testing.T) {
+	restore := lookPath
+	lookPath = func(string) (string, error) { return "", os.ErrNotExist }
+	defer func() { lookPath = restore }()
+
+	scratch := t.TempDir()
+	p := pacman{}.useScratch(scratch)
+	run := &fakeRunner{}
+	if _, err := p.Check(t.Context(), run); err != nil {
+		t.Fatal(err)
+	}
+	// The metadata still has to be fetched, or the answer is whatever the
+	// database happened to say last time.
+	if !run.ranMatching("pacman -Sy", "--dbpath "+scratch) {
+		t.Error("the metadata was not synced, so the answer could be stale")
+	}
+	// A sync that names no database is a sync of the real one, which
+	// leaves the router one step from a partial upgrade: how an Arch
+	// install breaks.
+	if line := run.ranWithout("-Sy", "--dbpath"); line != "" {
+		t.Errorf("the real package database was synced: %q", line)
+	}
+	if !run.ranMatching("pacman -Qu", "--dbpath "+scratch) {
+		t.Error("the throwaway database was not the one queried")
 	}
 }
 

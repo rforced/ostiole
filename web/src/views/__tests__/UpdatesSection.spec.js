@@ -99,4 +99,22 @@ describe('UpdatesSection', () => {
     await flushPromises()
     expect(installButton(w)?.text()).toBe('Install v0.9.2')
   })
+
+  it('says so on the button while the install runs', async () => {
+    const w = await mountInstalling()
+    const button = installButton(w)
+    expect(button.text()).toBe('Installing…')
+    expect(button.attributes('disabled')).toBeDefined()
+    expect(button.attributes('aria-busy')).toBe('true')
+    expect(button.find('.animate-spin').exists()).toBe(true)
+  })
+
+  it('spaces the state and the version apart', async () => {
+    const w = await mountInstalling()
+    // Vue drops the whitespace between two elements, which once ran these
+    // together as "installingv0.9.2". Whichever kind of space separates
+    // them now, what matters is that one is there to be read out.
+    const said = w.find('[role="status"]').text().replace(/\s/g, ' ')
+    expect(said).toContain('installing v0.9.2')
+  })
 })
