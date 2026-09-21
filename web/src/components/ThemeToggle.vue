@@ -13,8 +13,8 @@ const theme = useThemeStore()
 
 const options = [
   { value: 'light', label: 'Light', icon: Sun },
-  { value: 'dark', label: 'Dark', icon: Moon },
   { value: 'system', label: 'System', icon: Monitor },
+  { value: 'dark', label: 'Dark', icon: Moon },
 ]
 
 function onChange(value) {
