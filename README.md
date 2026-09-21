@@ -11,7 +11,7 @@ Ostiole turns a Linux machine into a firewall and router. One static binary, a w
 underneath, and the usual daemons — systemd-networkd, dnsmasq, unbound, miniupnpd, pppd — driven
 from a single configuration.
 
-**Status: beta.** It works. Expect bugs, and expect the config format to change between releases.
+**Status:** It works. Expect bugs, and expect the config format to change between releases.
 
 - **Firewall** — zones, rules with aliases (addresses, ports, URL feeds, countries, AS numbers) and
   schedules, NAT, rate limits, a live log.
