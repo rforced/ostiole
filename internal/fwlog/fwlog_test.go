@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"testing"
 	"time"
+
+	"github.com/rforced/ostiole/internal/model"
 )
 
 func ipv4Packet(proto byte, src, dst [4]byte, l4 []byte) []byte {
@@ -86,16 +88,25 @@ func TestParsePrefix(t *testing.T) {
 		"ostiole:c:forward:drop: ":         {"", "", "default-drop", "drop"},
 		"ostiole:c:input:block-private: ":  {"", "", "block-private", "drop"},
 		"ostiole:c:forward:block-bogons: ": {"", "", "block-bogons", "drop"},
+		// The drops Ostiole makes on its own account. They name no zone;
+		// the interface the kernel reports is what places them.
+		"ostiole:s:block-dot:drop: ":         {"", "", "block-dot", "drop"},
+		"ostiole:s:block-doh:drop: ":         {"", "", "block-doh", "drop"},
+		"ostiole:s:protect-scanner:drop: ":   {"", "", "protect-scanner", "drop"},
+		"ostiole:s:protect-synflood:drop: ":  {"", "", "protect-synflood", "drop"},
+		"ostiole:s:protect-icmpflood:drop: ": {"", "", "protect-icmpflood", "drop"},
 		// A zone named the same as a rule stays unambiguous, which is the
 		// whole reason the shapes carry a tag.
 		"ostiole:r:lan:drop: ": {"lan", "", "rule", "drop"},
 		"ostiole:z:lan:drop":   {"", "lan", "zone-drop", "drop"},
 		// Nonsense in a tagged position is not guessed at.
-		"ostiole:r:web:mangle: ": {"", "", "other", ""},
-		"ostiole:x:web:drop: ":   {"", "", "other", ""},
-		"ostiole:r::accept: ":    {"", "", "other", ""},
-		"something else":         {"", "", "other", ""},
-		"":                       {"", "", "other", ""},
+		"ostiole:r:web:mangle: ":    {"", "", "other", ""},
+		"ostiole:x:web:drop: ":      {"", "", "other", ""},
+		"ostiole:r::accept: ":       {"", "", "other", ""},
+		"ostiole:s:block-dot:log: ": {"", "", "other", ""},
+		"ostiole:s:invented:drop: ": {"", "", "other", ""},
+		"something else":            {"", "", "other", ""},
+		"":                          {"", "", "other", ""},
 	}
 	for in, want := range cases {
 		id, zone, kind, action := ParsePrefix(in)
@@ -153,10 +164,92 @@ func TestRing(t *testing.T) {
 	}
 }
 
+// A ceiling is configuration, so it changes under a running log. Growing
+// keeps everything; shrinking keeps the newest that fit, which is what the
+// page is looking at.
+func TestRingConfigure(t *testing.T) {
+	t.Parallel()
+	r := NewRing(3)
+	for i := 1; i <= 5; i++ {
+		r.Add(Entry{Length: i})
+	}
+	r.Configure(6)
+	if got := lengths(r.Recent(0)); len(got) != 3 || got[0] != 5 {
+		t.Errorf("growing lost entries: %v", got)
+	}
+	for i := 6; i <= 9; i++ {
+		r.Add(Entry{Length: i})
+	}
+	if got := lengths(r.Recent(0)); len(got) != 6 || got[0] != 9 || got[5] != 4 {
+		t.Errorf("after growing = %v, want 9..4", got)
+	}
+	r.Configure(2)
+	if got := lengths(r.Recent(0)); len(got) != 2 || got[0] != 9 || got[1] != 8 {
+		t.Errorf("shrinking kept %v, want the newest two", got)
+	}
+	if r.Size() != 2 {
+		t.Errorf("size = %d, want 2", r.Size())
+	}
+	// Adding after a shrink evicts rather than growing back.
+	r.Add(Entry{Length: 10})
+	if got := lengths(r.Recent(0)); len(got) != 2 || got[0] != 10 || got[1] != 9 {
+		t.Errorf("after shrinking = %v, want 10, 9", got)
+	}
+}
+
+// A big ceiling costs nothing until the packets arrive: the ring doubles
+// into it. Allocating a million entries the moment one is configured would
+// cost 350 MB on a router that may never see them.
+func TestRingGrowsIntoItsCeiling(t *testing.T) {
+	t.Parallel()
+	r := NewRing(1_000_000)
+	if n := r.places(); n != initialRing {
+		t.Fatalf("a fresh ring holds %d places, want %d", n, initialRing)
+	}
+	for i := range initialRing + 1 {
+		r.Add(Entry{Length: i})
+	}
+	if n := r.places(); n != 2*initialRing {
+		t.Errorf("a full ring grew to %d places, want %d", n, 2*initialRing)
+	}
+	if got := r.Recent(0); len(got) != initialRing+1 {
+		t.Errorf("growing lost entries: held %d", len(got))
+	}
+}
+
+// places is how many entries the ring has room for right now, which is not
+// its ceiling until it has filled.
+func (r *Ring) places() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.ring)
+}
+
 func lengths(es []Entry) []int {
 	out := make([]int, len(es))
 	for i, e := range es {
 		out[i] = e.Length
 	}
 	return out
+}
+
+// The ceiling follows the configuration the router is really running, so a
+// reverted apply takes its ring size with it.
+func TestWatcherFollowsEffective(t *testing.T) {
+	t.Parallel()
+	r := NewRing(10)
+	cfg := &model.Config{}
+	cfg.System.Management.FirewallLog.Entries = 5000
+	source := cfg
+	w := &Watcher{Ring: r, Source: func() *model.Config { return source }}
+	w.tick()
+	if got := r.Size(); got != 5000 {
+		t.Errorf("size = %d, want 5000", got)
+	}
+	// A revert leaves nothing in force; the default is what is left.
+	source = nil
+	w.tick()
+	if got := r.Size(); got != model.DefaultFirewallLogEntries {
+		t.Errorf("size = %d, want the default %d", got, model.DefaultFirewallLogEntries)
+	}
 }

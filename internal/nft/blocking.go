@@ -66,35 +66,58 @@ func (r *renderer) chainBlockDNS() {
 	// The rows are scoped to where forward jumps here from; the exempt
 	// clients return first, so to the reader they are left out of the source.
 	internal := r.internalInterfaces()
+	// One chain serves every internal zone, so the log statement carries the
+	// interfaces whose zone logs its drops and the drop below it does not.
+	// When they all do — the usual router, with one internal zone — the set
+	// would match everything that can reach the chain, so it is left off.
+	logging := r.loggingInterfaces(internal)
+	logs := len(logging) > 0
+	loud := ""
+	if logs && len(logging) < len(internal) {
+		loud = ifnameSet(logging)
+	}
 	r.block("chain "+BlockChain, func() {
 		for _, m := range r.exemptMatches("saddr") {
 			r.line(fmt.Sprintf(`%s counter return comment "block:exempt"`, m))
 		}
 		if e.BlockDoT {
-			r.line(fmt.Sprintf(`meta l4proto { tcp, udp } th dport %d counter drop comment "block:dot"`, DoTPort))
+			match := fmt.Sprintf("meta l4proto { tcp, udp } th dport %d", DoTPort)
+			if logs {
+				r.line(systemLogLine(match, loud, "block-dot"))
+			}
+			r.line(fmt.Sprintf(`%s counter drop comment "block:dot"`, match))
 			r.sysFor(internal, SystemRule{
 				Chain: BlockChain, Action: "drop", Protocol: string(model.ProtocolTCPUDP),
 				Source: r.exemptSource(), Destination: fmt.Sprintf("any : %d", DoTPort),
-				Description: "DNS over TLS", Keys: []string{BlockChain + "/block:dot"}, Setting: "enforcement",
+				Description: "DNS over TLS", Log: logs,
+				Keys: []string{BlockChain + "/block:dot"}, Setting: "enforcement",
 			})
 		}
 		if e.DoHAlias != "" {
 			if a, ok := r.cfg.Alias(e.DoHAlias); ok {
 				v4, v6 := splitFamilies(r.entriesOf(*a))
 				emitted := false
-				if len(v4) > 0 || a.Fetched() {
-					r.line(fmt.Sprintf(`ip daddr @%s counter drop comment "block:doh"`, aliasSet(a.Name, 4)))
-					emitted = true
-				}
-				if len(v6) > 0 || a.Fetched() {
-					r.line(fmt.Sprintf(`ip6 daddr @%s counter drop comment "block:doh"`, aliasSet(a.Name, 6)))
+				for _, fam := range []struct {
+					prefix string
+					n      int
+					have   bool
+				}{{"ip", 4, len(v4) > 0}, {"ip6", 6, len(v6) > 0}} {
+					if !fam.have && !a.Fetched() {
+						continue
+					}
+					match := fmt.Sprintf("%s daddr @%s", fam.prefix, aliasSet(a.Name, fam.n))
+					if logs {
+						r.line(systemLogLine(match, loud, "block-doh"))
+					}
+					r.line(fmt.Sprintf(`%s counter drop comment "block:doh"`, match))
 					emitted = true
 				}
 				if emitted {
 					r.sysFor(internal, SystemRule{
 						Chain: BlockChain, Action: "drop", Protocol: string(model.ProtocolAny),
 						Source: r.exemptSource(), Destination: "@" + a.Name,
-						Description: "DNS over HTTPS servers", Keys: []string{BlockChain + "/block:doh"}, Setting: "enforcement",
+						Description: "DNS over HTTPS servers", Log: logs,
+						Keys: []string{BlockChain + "/block:doh"}, Setting: "enforcement",
 					})
 				}
 			}

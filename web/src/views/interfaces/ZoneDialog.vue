@@ -101,7 +101,8 @@ function save() {
           <span>
             Log drops
             <span class="block text-ink-muted">
-              Packets that match no rule in this zone are logged.
+              Every packet this firewall drops in this zone is logged: the ones no rule matched, and
+              the ones the firewall refused on its own.
             </span>
           </span>
         </label>

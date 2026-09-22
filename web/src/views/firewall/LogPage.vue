@@ -5,15 +5,17 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { ApiError, api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { matchedLabel } from '@/lib/fwlog'
 
-const MAX_ROWS = 500
+/** How many rows the page holds, and how many it asks for on opening. The
+ *  ring behind it keeps far more; reading past this is not built yet. */
+const MAX_ROWS = 2000
+const INITIAL_ROWS = 1000
 
 const entries = ref([])
 const paused = ref(false)
 const filter = ref('')
-// Blocked by default: an accept rule left logging on a busy zone would
-// otherwise bury the refusals anyone opens this page to find.
-const show = ref('blocked')
+const show = ref('all')
 const streamError = ref('')
 const connected = ref(false)
 let source = null
@@ -52,7 +54,7 @@ function connect() {
 const load = useAsync(async () => {
   let recent
   try {
-    recent = await api.log.recent(200)
+    recent = await api.log.recent(INITIAL_ROWS)
   } catch (e) {
     if (e instanceof ApiError && e.status === 503)
       throw new Error('The firewall log needs the daemon to run as root.', { cause: e })
@@ -99,14 +101,7 @@ const visible = computed(() => {
   })
 })
 
-function label(e) {
-  if (e.kind === 'rule') return e.ruleId
-  if (e.kind === 'zone-drop') return `${e.zone} default`
-  if (e.kind === 'default-drop') return 'default drop'
-  if (e.kind === 'block-private') return 'private source'
-  if (e.kind === 'block-bogons') return 'bogon source'
-  return e.prefix || '—'
-}
+const label = matchedLabel
 
 /** The verdict carries the colour: that a rule matched says nothing on
  *  its own about whether the packet got through. */
@@ -130,8 +125,8 @@ onBeforeUnmount(() => source?.close())
   <div class="space-y-5">
     <SectionCard
       title="Log"
-      intro="Only rules with logging on, zones that log drops, and the default-drop log under
-        System appear here."
+      intro="Rules with logging on, and the drops of a zone that logs them. Kept in memory
+        only; a restart empties it."
       flush
     >
       <template #actions>
@@ -151,9 +146,9 @@ onBeforeUnmount(() => source?.close())
           aria-label="Filter log"
         />
         <select v-model="show" class="input w-36" aria-label="Show">
+          <option value="all">All</option>
           <option value="blocked">Blocked</option>
           <option value="allowed">Allowed</option>
-          <option value="all">All</option>
         </select>
         <span class="text-xs" :class="connected ? 'text-ok' : 'text-ink-muted'">
           {{ connected ? 'live' : 'not connected' }} · {{ visible.length }} shown

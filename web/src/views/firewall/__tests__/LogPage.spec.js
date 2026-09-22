@@ -50,24 +50,34 @@ describe('LogPage', () => {
     entry({ kind: 'zone-drop', zone: 'guest', action: 'drop', src: '4' }),
   ]
 
-  it('opens on the refusals, hiding what was let through', async () => {
+  it('opens on everything, whatever happened to it', async () => {
     const w = await open(log)
-    expect(matched(w)).toEqual(['block-iot', 'no-smb', 'guest default'])
+    expect(matched(w)).toEqual(['allow-web', 'block-iot', 'no-smb', 'guest default'])
   })
 
-  it('shows what was let through on request, and everything together', async () => {
+  it('narrows to the refusals, or to what was let through', async () => {
     const w = await open(log)
+    await w.get('select').setValue('blocked')
+    expect(matched(w)).toEqual(['block-iot', 'no-smb', 'guest default'])
     await w.get('select').setValue('allowed')
     expect(matched(w)).toEqual(['allow-web'])
-    await w.get('select').setValue('all')
-    expect(matched(w)).toHaveLength(4)
+  })
+
+  // The firewall refuses encrypted DNS and holds a scanner in rules of its
+  // own, which the zone's log-drops setting now reaches.
+  it('names the drops the firewall makes on its own account', async () => {
+    const w = await open([
+      entry({ kind: 'block-doh', action: 'drop', src: '1' }),
+      entry({ kind: 'protect-scanner', action: 'drop', src: '2' }),
+      entry({ kind: 'protect-synflood', action: 'drop', src: '3' }),
+    ])
+    expect(matched(w)).toEqual(['DNS over HTTPS', 'port scan', 'connection flood'])
   })
 
   // Green for a rule match would read as "allowed" on a rule that drops,
   // so the colour follows the verdict instead.
   it('colours the row by what happened, not by what matched', async () => {
     const w = await open(log)
-    await w.get('select').setValue('all')
     const badge = (i) => rows(w)[i].findAll('td')[1].get('span')
     expect(badge(0).text()).toBe('accept')
     expect(badge(0).classes()).toContain('badge-ok')
@@ -97,6 +107,7 @@ describe('LogPage', () => {
     expect(matched(w)).toEqual(['no-smb'])
     // The filter searches the whole entry, so a text match outside the
     // current view still does not drag it in.
+    await w.get('select').setValue('blocked')
     await w.get('input').setValue('allow-web')
     expect(rows(w)[0].text()).toContain('Nothing matches "allow-web"')
   })

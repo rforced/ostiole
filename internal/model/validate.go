@@ -2496,6 +2496,10 @@ func (v *validator) system(s *System) {
 		v.add("system.keepRevisions", "%d must be 0-%d (0 keeps %d)",
 			s.KeepRevisions, MaxKeepRevisions, DefaultKeepRevisions)
 	}
+	if n := s.Management.FirewallLog.Entries; n < 0 || n > MaxFirewallLogEntries {
+		v.add("system.management.firewallLog.entries", "%d must be 0-%d (0 means %d)",
+			n, MaxFirewallLogEntries, DefaultFirewallLogEntries)
+	}
 	if s.Logging.MaxUseGB < 0 || s.Logging.MaxUseGB > journald.MaxMaxUseGB {
 		v.add("system.logging.maxUseGB", "%d must be 0-%d (0 keeps %d)",
 			s.Logging.MaxUseGB, journald.MaxMaxUseGB, journald.DefaultMaxUseGB)

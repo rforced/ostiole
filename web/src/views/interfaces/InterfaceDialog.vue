@@ -442,7 +442,7 @@ function save() {
         <legend class="group-title px-1">Traffic arriving here</legend>
         <FormField
           id="if-logdrops"
-          label="Log packets dropped by the default policy"
+          label="Log dropped packets"
           hint="Overrides the system setting for packets arriving on this interface."
         >
           <select id="if-logdrops" v-model="form.logDrops" class="input">

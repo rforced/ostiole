@@ -124,13 +124,13 @@ test('per-interface drop logging and source blocking', async ({ page }) => {
 
   // The system setting is the default, and it is named so nobody has to
   // go and look it up.
-  await expect(dialog.getByLabel('Log packets dropped by the default policy')).toHaveValue(
+  await expect(dialog.getByLabel('Log dropped packets')).toHaveValue(
     'inherit',
   )
   await expect(dialog.locator('#if-logdrops option[value="inherit"]')).toHaveText(
     /Follow the system setting \((on|off)\)/,
   )
-  await dialog.getByLabel('Log packets dropped by the default policy').selectOption('on')
+  await dialog.getByLabel('Log dropped packets').selectOption('on')
   await dialog.getByLabel('Block private and loopback sources').check()
   await dialog.getByLabel('Block bogon sources').check()
   await page.screenshot({ path: shot('13-interface-guards'), fullPage: true })
@@ -163,7 +163,7 @@ test('per-interface drop logging and source blocking', async ({ page }) => {
   await page.goto('/interfaces')
   await wanRow.getByRole('button', { name: 'Edit' }).click()
   dialog = page.getByRole('dialog')
-  await dialog.getByLabel('Log packets dropped by the default policy').selectOption('inherit')
+  await dialog.getByLabel('Log dropped packets').selectOption('inherit')
   await dialog.getByLabel('Block private and loopback sources').uncheck()
   await dialog.getByLabel('Block bogon sources').uncheck()
   await dialog.getByRole('button', { name: 'Save to draft' }).click()

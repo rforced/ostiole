@@ -17,8 +17,8 @@ type Entry struct {
 	RuleID string    `json:"ruleId,omitempty"`
 	Zone   string    `json:"zone,omitempty"`
 	// Kind is what matched: rule, zone-drop, default-drop, block-private,
-	// block-bogons, other. Action is what happened to the packet: accept,
-	// drop, reject, or empty when the prefix does not say.
+	// block-bogons, one of SystemKinds, or other. Action is what happened to
+	// the packet: accept, drop, reject, or empty when the prefix does not say.
 	Kind     string `json:"kind"`
 	Action   string `json:"action,omitempty"`
 	InIface  string `json:"in,omitempty"`
@@ -34,6 +34,17 @@ type Entry struct {
 	Length   int    `json:"length"`
 }
 
+// SystemKinds are the drops Ostiole makes on its own account, as the "s"
+// prefix shape spells them. They carry no zone: three parts leave no room
+// for one, and the interface the kernel reports names it well enough.
+var SystemKinds = map[string]bool{
+	"block-dot":         true,
+	"block-doh":         true,
+	"protect-scanner":   true,
+	"protect-synflood":  true,
+	"protect-icmpflood": true,
+}
+
 // ParsePrefix splits an nft log prefix the renderer produced. Each shape
 // names what matched, so the verdict can be read straight back off the
 // packet instead of being guessed from the configuration as it stands now:
@@ -41,6 +52,7 @@ type Entry struct {
 //	ostiole:r:<rule-id>:<accept|drop|reject>:
 //	ostiole:z:<zone>:drop:
 //	ostiole:c:<chain>:<drop|block-private|block-bogons>:
+//	ostiole:s:<system-kind>:<accept|drop|reject>:
 func ParsePrefix(prefix string) (ruleID, zone, kind, action string) {
 	p := strings.TrimSpace(prefix)
 	p = strings.TrimSuffix(p, ":")
@@ -69,6 +81,10 @@ func ParsePrefix(prefix string) (ruleID, zone, kind, action string) {
 			return "", "", "default-drop", "drop"
 		case "block-private", "block-bogons":
 			return "", "", parts[2], "drop"
+		}
+	case "s":
+		if SystemKinds[parts[1]] && isAction(parts[2]) {
+			return "", "", parts[1], parts[2]
 		}
 	}
 	return "", "", "other", ""

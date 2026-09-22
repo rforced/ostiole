@@ -59,6 +59,26 @@ const dnsHint = computed(() => {
     return 'Comma separated. The DNS service forwards here until it has upstreams of its own.'
   return 'Comma separated. Unused while the DNS service answers for this router.'
 })
+
+// Bounds and cost mirror model.FirewallLog; the ring grows into its ceiling,
+// so the figure quoted is what a full log costs, not what it costs today.
+const DEFAULT_ENTRIES = 20000
+const MAX_ENTRIES = 1000000
+const ENTRY_BYTES = 350
+
+/** Empty means the default, which the hint names. */
+const fwLogEntries = computed({
+  get: () => management.value.firewallLog?.entries || '',
+  set: (v) => {
+    if (Number.isFinite(v) && v > 0) management.value.firewallLog = { entries: v }
+    else delete management.value.firewallLog
+  },
+})
+const entriesMB = computed(() =>
+  Math.round(
+    ((fwLogEntries.value || DEFAULT_ENTRIES) * ENTRY_BYTES) / (1024 * 1024),
+  ).toLocaleString(),
+)
 </script>
 
 <template>
@@ -108,9 +128,25 @@ const dnsHint = computed(() => {
       />
       <ToggleRow
         v-model="management.logDefaultDrops"
-        label="Log packets dropped by the default policy"
-        hint="The default for every interface. Any one of them can say otherwise under Interfaces."
+        label="Log dropped packets"
+        hint="The default for every interface, covering the drops this firewall makes on its own.
+          Any one interface can say otherwise under Interfaces, and any zone can under Zones."
       />
+      <FormField
+        id="sys-fwlog"
+        label="Firewall log entries"
+        :hint="`${DEFAULT_ENTRIES.toLocaleString()} is the default. About ${entriesMB} MB of memory
+          when full; the log is kept in memory only.`"
+      >
+        <input
+          id="sys-fwlog"
+          v-model.number="fwLogEntries"
+          type="number"
+          min="0"
+          :max="MAX_ENTRIES"
+          class="input w-40"
+        />
+      </FormField>
     </div>
   </SectionCard>
 </template>

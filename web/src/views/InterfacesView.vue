@@ -413,11 +413,11 @@ function editZone(z) {
                     :typed="z.name"
                     @confirm="config.removeZone(z.name)"
                   />
-                  <span v-else class="ml-3 text-sm text-ink-muted"
-                    >in use by
-                    <span class="font-mono">{{
-                      config.zoneInterfaces(z.name).join(', ')
-                    }}</span></span
+                  <span
+                    v-else
+                    class="ml-3 text-sm text-ink-muted"
+                    :title="`In use by ${config.zoneInterfaces(z.name).join(', ')}`"
+                    >In use</span
                   >
                 </td>
               </tr>

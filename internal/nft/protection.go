@@ -144,10 +144,16 @@ func (r *renderer) protectZone(zone string) {
 	if !p.On() || !r.protects(zone) {
 		return
 	}
+	logs := r.zoneNamedLogsDrops(zone)
 	if p.PortScan != nil {
+		// A plain set lookup, so the sampled log can repeat the match in a
+		// rule of its own and the drop below it is untouched.
 		for _, fam := range families {
-			r.line(fmt.Sprintf(`%s saddr @%s counter drop comment "protect:scanner"`,
-				fam.prefix, scanHoldSet(zone, fam.n)))
+			match := fmt.Sprintf("%s saddr @%s", fam.prefix, scanHoldSet(zone, fam.n))
+			if logs {
+				r.line(systemLogLine(match, "", "protect-scanner"))
+			}
+			r.line(fmt.Sprintf(`%s counter drop comment "protect:scanner"`, match))
 		}
 		r.sys(SystemRule{
 			Chain: "zone_" + zone, Zones: []string{zone}, Action: "drop",
@@ -155,6 +161,7 @@ func (r *renderer) protectZone(zone string) {
 			Source:      fmt.Sprintf("a source refused more than %s", p.PortScan.Limit()),
 			Destination: "any",
 			Description: "Drop a source that was scanning, for " + p.PortScan.HoldOr(),
+			Log:         logs,
 			Keys:        []string{"zone_" + zone + "/protect:scanner"}, Setting: "protection",
 		})
 	}
@@ -164,16 +171,19 @@ func (r *renderer) protectZone(zone string) {
 			// already dropped as invalid by the state rule in the base
 			// chain, and this way the limit counts connections, which is
 			// what the setting says it counts.
-			r.line(fmt.Sprintf(`ct state new add @%s { %s saddr %s } counter drop comment "protect:synflood"`,
-				synFloodSet(zone, fam.n), fam.prefix, limitOver(*p.SynFlood)))
+			r.line(floodVerdict(zone, logs, "protect:synflood",
+				fmt.Sprintf(`ct state new add @%s { %s saddr %s }`,
+					synFloodSet(zone, fam.n), fam.prefix, limitOver(*p.SynFlood))))
 		}
 		r.sys(SystemRule{
-			Chain: "zone_" + zone, Zones: []string{zone}, Action: "drop",
+			Chain: floodChainOr(zone, logs, "synflood"), Zones: []string{zone}, Action: "drop",
 			Protocol:    string(model.ProtocolAny),
 			Source:      "a source opening connections faster than " + p.SynFlood.String(),
 			Destination: "any",
 			Description: "Drop the new connections over the limit",
-			Keys:        []string{"zone_" + zone + "/protect:synflood"}, Setting: "protection",
+			Log:         logs,
+			Keys:        []string{floodChainOr(zone, logs, "synflood") + "/protect:synflood"},
+			Setting:     "protection",
 		})
 	}
 	if p.ICMPFlood != nil {
@@ -182,17 +192,82 @@ func (r *renderer) protectZone(zone string) {
 			prefix string
 			proto  string
 		}{{4, "ip", "icmp"}, {6, "ip6", "icmpv6"}} {
-			r.line(fmt.Sprintf(`%s type echo-request add @%s { %s saddr %s } counter drop comment "protect:icmpflood"`,
-				fam.proto, icmpFloodSet(zone, fam.n), fam.prefix, limitOver(*p.ICMPFlood)))
+			r.line(floodVerdict(zone, logs, "protect:icmpflood",
+				fmt.Sprintf(`%s type echo-request add @%s { %s saddr %s }`,
+					fam.proto, icmpFloodSet(zone, fam.n), fam.prefix, limitOver(*p.ICMPFlood))))
 		}
 		r.sys(SystemRule{
-			Chain: "zone_" + zone, Zones: []string{zone}, Action: "drop",
+			Chain: floodChainOr(zone, logs, "icmpflood"), Zones: []string{zone}, Action: "drop",
 			Protocol:    string(model.ProtocolICMP),
 			Source:      "a source pinging faster than " + p.ICMPFlood.String(),
 			Destination: "any",
 			Description: "Drop the echo requests over the limit",
-			Keys:        []string{"zone_" + zone + "/protect:icmpflood"}, Setting: "protection",
+			Log:         logs,
+			Keys:        []string{floodChainOr(zone, logs, "icmpflood") + "/protect:icmpflood"},
+			Setting:     "protection",
 		})
+	}
+}
+
+// floodChain names the chain that logs and drops one kind of flood for a
+// zone. See floodVerdict for why it exists.
+func floodChain(zone, kind string) string { return "plog_" + zone + "_" + kind }
+
+// floodChainOr is the chain a flood's counter ends up in: its own log chain
+// when the zone logs, otherwise the zone chain, where the drop stays inline.
+func floodChainOr(zone string, logs bool, kind string) string {
+	if logs {
+		return floodChain(zone, kind)
+	}
+	return "zone_" + zone
+}
+
+// floodVerdict ends a flood rule. A zone that does not log gets the drop
+// inline, as before.
+//
+// A zone that logs cannot have the sampled log rule in front of the drop the
+// way the other system drops do: the match is `add @set { … limit rate over
+// … }`, so the match *is* the side effect that creates the per-source
+// limiter, and repeating it would build a second independent limiter and
+// count every packet twice. So the rule jumps into a chain holding the
+// sampled log and the drop instead: the expensive match happens once, the
+// limit gates only the recording, and the drop is unconditional.
+//
+// The counter moves into that chain with the drop, which is why the row's
+// Keys follow floodChainOr. Counters are keyed by chain and comment and
+// reset on every apply, so nothing that reads them notices.
+func floodVerdict(zone string, logs bool, comment, match string) string {
+	if !logs {
+		return fmt.Sprintf(`%s counter drop comment %q`, match, comment)
+	}
+	kind := strings.TrimPrefix(comment, "protect:")
+	return fmt.Sprintf("%s jump %s", match, floodChain(zone, kind))
+}
+
+// floodChains writes the log-and-drop chain each flood defence jumps into.
+// They are declared with the other chains so the jumps resolve whatever
+// order nft reads the file in.
+func (r *renderer) floodChains() {
+	p := r.cfg.Protection
+	if !p.On() {
+		return
+	}
+	for _, zone := range r.cfg.ProtectedZones() {
+		if !r.zoneNamedLogsDrops(zone) {
+			continue
+		}
+		for _, k := range []struct {
+			kind string
+			on   bool
+		}{{"synflood", p.SynFlood != nil}, {"icmpflood", p.ICMPFlood != nil}} {
+			if !k.on {
+				continue
+			}
+			r.block("chain "+floodChain(zone, k.kind), func() {
+				r.line(systemLogLine("", "", "protect-"+k.kind))
+				r.line(fmt.Sprintf(`counter drop comment "protect:%s"`, k.kind))
+			})
+		}
 	}
 }
 

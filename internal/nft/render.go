@@ -54,6 +54,7 @@ func (r *renderer) render() {
 	r.chainForward()
 	r.chainOutput()
 	r.zoneChains()
+	r.floodChains()
 	r.chainBlockDNS()
 	r.policyChains()
 	r.chainNATPrerouting()

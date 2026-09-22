@@ -26,8 +26,10 @@ func (a *api) logRecent(w http.ResponseWriter, r *http.Request) error {
 	limit := 200
 	if v := r.URL.Query().Get("limit"); v != "" {
 		n, err := strconv.Atoi(v)
-		if err != nil || n < 1 || n > 5000 {
-			return &badRequest{errors.New("limit must be 1-5000")}
+		// The ceiling is what the ring can hold, so a caller can ask for
+		// everything a router was told to keep.
+		if err != nil || n < 1 || n > model.MaxFirewallLogEntries {
+			return &badRequest{fmt.Errorf("limit must be 1-%d", model.MaxFirewallLogEntries)}
 		}
 		limit = n
 	}

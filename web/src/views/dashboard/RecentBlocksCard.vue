@@ -1,5 +1,7 @@
 <script setup>
 import SectionCard from '@/components/SectionCard.vue'
+import { matchedLabel as by } from '@/lib/fwlog'
+
 defineProps({
   /** The newest refused packets from GET /overview, newest first. */
   blocks: { type: Array, default: () => [] },
@@ -8,16 +10,6 @@ defineProps({
 function endpoint(addr, port) {
   if (!addr) return '—'
   return port ? `${addr}:${port}` : addr
-}
-
-/** What refused the packet: a rule by id, the zone or default policy, or
- *  one of the blocked-source guards. */
-function by(e) {
-  if (e.kind === 'rule') return e.ruleId
-  if (e.kind === 'zone-drop') return `${e.zone} default`
-  if (e.kind === 'block-private') return 'private source'
-  if (e.kind === 'block-bogons') return 'bogon source'
-  return 'default drop'
 }
 </script>
 

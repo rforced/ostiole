@@ -75,8 +75,11 @@ function edit(account) {
                 :typed="a.id"
                 @confirm="config.removeAcmeAccount(a.id)"
               />
-              <span v-else class="ml-3 text-sm text-ink-muted"
-                >in use by {{ config.accountDependents(a.id).join(', ') }}</span
+              <span
+                v-else
+                class="ml-3 text-sm text-ink-muted"
+                :title="`In use by ${config.accountDependents(a.id).join(', ')}`"
+                >In use</span
               >
             </td>
           </tr>

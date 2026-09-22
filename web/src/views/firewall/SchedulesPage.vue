@@ -76,8 +76,11 @@ function days(schedule) {
                 :description="s.description"
                 @confirm="config.removeSchedule(s.name)"
               />
-              <span v-else class="ml-3 text-sm text-ink-muted"
-                >in use by {{ config.scheduleReferences(s.name).join(', ') }}</span
+              <span
+                v-else
+                class="ml-3 text-sm text-ink-muted"
+                :title="`In use by ${config.scheduleReferences(s.name).join(', ')}`"
+                >In use</span
               >
             </td>
           </tr>

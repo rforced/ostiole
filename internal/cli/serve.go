@@ -299,8 +299,13 @@ at your own.`,
 				mon.OnTick = func() { crons.Note("system:gateways") }
 				deps.Gateways = mon
 				go mon.Run(ctx)
-				ring := fwlog.NewRing(2000)
+				// The ring starts at the default and the watcher sizes it
+				// from the configuration a moment later; it grows into its
+				// ceiling as packets arrive, so a big one costs nothing up
+				// front.
+				ring := fwlog.NewRing(model.FirewallLog{}.Size())
 				deps.Log = ring
+				go (&fwlog.Watcher{Ring: ring, Source: eng.Effective}).Run(ctx)
 				go func() {
 					if err := (&fwlog.Listener{Ring: ring, Log: slog.Default()}).Run(ctx); err != nil {
 						slog.Warn("firewall log listener stopped", "err", err)

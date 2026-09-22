@@ -58,7 +58,9 @@ describe('accounts and providers in use', () => {
   it('refuses to delete an account a certificate orders from', async () => {
     const { wrapper } = await open(AccountsTab)
     const le = row(wrapper, 'le')
-    expect(le.text()).toContain('in use by router')
+    // The label is short; the row's own column is what names the dependent.
+    expect(le.text()).toContain('In use')
+    expect(le.text()).toContain('router')
     expect(le.findAll('button').map((b) => b.text())).not.toContain('Delete')
     expect(
       row(wrapper, 'spare')
@@ -70,7 +72,8 @@ describe('accounts and providers in use', () => {
   it('refuses to delete a provider a certificate uses', async () => {
     const { wrapper } = await open(ProvidersTab)
     const cf = row(wrapper, 'cf')
-    expect(cf.text()).toContain('in use by router')
+    expect(cf.text()).toContain('In use')
+    expect(cf.text()).toContain('router')
     expect(cf.findAll('button').map((b) => b.text())).not.toContain('Delete')
     expect(
       row(wrapper, 'unused')

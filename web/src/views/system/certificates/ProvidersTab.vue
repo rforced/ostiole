@@ -86,8 +86,11 @@ const labelOf = (kind) => kinds.value.find((k) => k.kind === kind)?.label ?? kin
                 :typed="p.id"
                 @confirm="config.removeDnsProvider(p.id)"
               />
-              <span v-else class="ml-3 text-sm text-ink-muted"
-                >in use by {{ config.providerDependents(p.id).join(', ') }}</span
+              <span
+                v-else
+                class="ml-3 text-sm text-ink-muted"
+                :title="`In use by ${config.providerDependents(p.id).join(', ')}`"
+                >In use</span
               >
             </td>
           </tr>

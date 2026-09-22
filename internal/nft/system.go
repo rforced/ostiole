@@ -1,6 +1,7 @@
 package nft
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -142,9 +143,14 @@ func (r *renderer) exemptSource() string {
 	return "not @" + r.cfg.Blocking.Enforce.ExemptAlias
 }
 
-// zoneLogsDrops reports whether traffic the zone's rules did not match is
-// logged when dropped: by the zone itself, or by the base chain for every
-// interface in it.
+// zoneLogsDrops reports whether a packet this firewall drops in the zone is
+// logged: because the zone says so, or because every interface in it does.
+//
+// It answers for every drop in the zone, not only the one at the end of its
+// chain. Ostiole's own drops — encrypted DNS, the flood and scan defence —
+// are terminal and sit earlier, so a packet they take never reaches an end
+// to fall off; asking this at each of them is what makes the setting mean
+// "log the drops in this zone" rather than "log one particular rule".
 func (r *renderer) zoneLogsDrops(z model.Zone) bool {
 	if z.LogDrops {
 		return true
@@ -160,6 +166,61 @@ func (r *renderer) zoneLogsDrops(z model.Zone) bool {
 		}
 	}
 	return true
+}
+
+// zoneNamedLogsDrops is zoneLogsDrops for a zone known only by name. A name
+// that is not a zone logs nothing.
+func (r *renderer) zoneNamedLogsDrops(name string) bool {
+	z, ok := r.cfg.Zone(name)
+	if !ok {
+		return false
+	}
+	return r.zoneLogsDrops(*z)
+}
+
+// loggingInterfaces narrows ifs to those whose zone logs its drops, in the
+// order given. A chain several zones share cannot decide this per rule, so
+// the log statement carries the set and the drop beside it does not.
+func (r *renderer) loggingInterfaces(ifs []string) []string {
+	var out []string
+	for _, name := range ifs {
+		if in, ok := r.cfg.Interface(name); ok && r.zoneNamedLogsDrops(in.Zone) {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// SystemLogRate is how often one of Ostiole's own drops may log. Every
+// packet is still dropped and still counted; only the recording is sampled.
+//
+// Without it a single source can fill the log: a scanner in the hold set
+// has every packet dropped by one rule for the whole hold window, and at a
+// few thousand packets a second it would evict everything else in the ring
+// before an operator could read any of it. The counter on the rule remains
+// the true figure.
+const SystemLogRate = "10/second"
+
+// systemLogLine is the log statement in front of one of Ostiole's own
+// drops: sampled, non-terminal, so the drop below it still decides the
+// packet and still counts every one. iifnames scopes it to the interfaces
+// whose zone logs; empty means the rule is already in a chain that only
+// those interfaces reach.
+//
+// A separate rule rather than a log statement inside the drop, because
+// `limit` is a match: were it in the drop rule, a packet over the sampling
+// rate would fail the match and not be dropped at all.
+func systemLogLine(match, iifnames, kind string) string {
+	var b strings.Builder
+	if iifnames != "" {
+		fmt.Fprintf(&b, "iifname %s ", iifnames)
+	}
+	if match != "" {
+		b.WriteString(match + " ")
+	}
+	fmt.Fprintf(&b, `limit rate %s log prefix "ostiole:s:%s:drop: " group %d comment "log:%s"`,
+		SystemLogRate, kind, LogGroup, kind)
+	return b.String()
 }
 
 // forwardedZones lists the zones whose traffic can arrive already

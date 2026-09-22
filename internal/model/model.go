@@ -604,10 +604,44 @@ type Management struct {
 	SSHPort uint16 `json:"sshPort"`
 	// SSHPasswords lets a password in at the SSH prompt. Unset, sshd takes
 	// keys only; nothing here checks that anybody has one.
-	SSHPasswords    bool `json:"sshPasswords"`
+	SSHPasswords bool `json:"sshPasswords"`
+	// LogDefaultDrops is the default for every interface, and with a zone's
+	// LogDrops it answers a wider question than its name suggests: whether a
+	// packet this firewall drops on its own account is logged. See
+	// nft.zoneLogsDrops.
 	LogDefaultDrops bool `json:"logDefaultDrops,omitempty"`
+	// FirewallLog is how much of the firewall log is kept in memory.
+	FirewallLog FirewallLog `json:"firewallLog,omitzero"`
 	// Certificate the web UI serves; empty is the built-in self-signed one.
 	Certificate string `json:"certificate,omitempty"`
+}
+
+// FirewallLog is how many logged packets are kept. Nothing is written to
+// disk: the log is a ring in memory and a restart empties it.
+type FirewallLog struct {
+	// Entries is the most packets kept; zero keeps DefaultFirewallLogEntries.
+	Entries int `json:"entries,omitempty"`
+}
+
+// Firewall log defaults and bounds. An entry costs about 350 bytes once its
+// addresses and prefix are counted, and the ring grows towards the ceiling
+// as packets arrive rather than being allocated whole, so the ceiling is
+// what a full log costs, about 350 MB. The page says what the chosen
+// figure costs.
+const (
+	DefaultFirewallLogEntries = 20_000
+	MaxFirewallLogEntries     = 1_000_000
+	// FirewallLogEntryBytes is what one entry costs, for the figure the page
+	// quotes and the bound the API serves.
+	FirewallLogEntryBytes = 350
+)
+
+// Size is how many logged packets are kept, filling in the default.
+func (f FirewallLog) Size() int {
+	if f.Entries > 0 {
+		return f.Entries
+	}
+	return DefaultFirewallLogEntries
 }
 
 // Zone is a security zone: interfaces that share a rule list.
