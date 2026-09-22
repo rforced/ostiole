@@ -124,9 +124,7 @@ test('per-interface drop logging and source blocking', async ({ page }) => {
 
   // The system setting is the default, and it is named so nobody has to
   // go and look it up.
-  await expect(dialog.getByLabel('Log dropped packets')).toHaveValue(
-    'inherit',
-  )
+  await expect(dialog.getByLabel('Log dropped packets')).toHaveValue('inherit')
   await expect(dialog.locator('#if-logdrops option[value="inherit"]')).toHaveText(
     /Follow the system setting \((on|off)\)/,
   )
