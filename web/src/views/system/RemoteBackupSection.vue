@@ -284,7 +284,7 @@ const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
         </button>
       </template>
 
-      <div class="space-y-3 px-4 pb-3">
+      <div class="card-strip space-y-3">
         <dl class="kv max-w-xl">
           <dt>Last upload</dt>
           <dd>{{ when(status?.lastRun) }}</dd>

@@ -11,7 +11,8 @@
  * never sits anywhere else. A form with more than about eight fields folds
  * the rest under Advanced. A card whose contents one flag governs carries
  * that flag as a switch in its header; a service with one flag carries it
- * in the page header.
+ * in the page header. Whatever else a list card holds — a filter row, a
+ * toggle, a count, an error — is a .card-strip above or below the table.
  *
  * Three heading sizes: .page-title, .card-title, .group-title. Prose is
  * text-sm. text-xs is chrome only: table headers, badges, timestamps,
@@ -254,6 +255,12 @@
   }
   .skeleton {
     @apply inline-block h-3.5 animate-pulse rounded bg-surface-2;
+  }
+  /* Anything in a flush card that is not the table: a filter row above it,
+     a toggle, a count, an error, a footer note. It sits against a rule, so
+     it gets the same room on both sides of it. */
+  .card-strip {
+    @apply px-4 py-3;
   }
   /* A row of fields. Labels sit at the top, so the inputs line up whether
      or not a field has a hint under it, and anything in the row that is

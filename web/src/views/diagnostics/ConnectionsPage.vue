@@ -77,7 +77,7 @@ function endpoint(address, port) {
           @click="load.run()"
         />
       </template>
-      <div class="space-y-3 px-4 pb-3">
+      <div class="card-strip space-y-3">
         <!-- No submit button, so Enter in a field is wired by hand. -->
         <form class="form-row" @submit.prevent="load.run()" @keydown.enter.prevent="load.run()">
           <FormField

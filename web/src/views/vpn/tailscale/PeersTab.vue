@@ -46,7 +46,7 @@ function path(peer) {
           @click="load.run"
         />
       </template>
-      <div v-if="load.error.value" class="px-4 pb-3">
+      <div v-if="load.error.value" class="card-strip">
         <p role="alert" class="text-bad">{{ load.error.value }}</p>
       </div>
       <table class="table">

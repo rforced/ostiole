@@ -234,7 +234,7 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
           </tr>
         </TransitionGroup>
       </table>
-      <div v-if="packages.length > SHOWN" class="border-t border-line px-4 py-3">
+      <div v-if="packages.length > SHOWN" class="card-strip border-t border-line">
         <button type="button" class="link" @click="showAll = !showAll">
           {{ showAll ? 'Show fewer' : `Show all ${packages.length}` }}
         </button>

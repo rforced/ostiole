@@ -73,7 +73,7 @@ function edit(row) {
           @click="load.run()"
         />
       </template>
-      <div class="space-y-2 px-4 pt-3 pb-4">
+      <div class="card-strip space-y-2">
         <FormField id="wifi-country" label="Country" hint="Every radio follows it.">
           <select
             id="wifi-country"

@@ -131,7 +131,7 @@ const when = (s, fallback) => (s ? new Date(s).toLocaleDateString() : fallback)
       </button>
     </template>
 
-    <div v-if="error" class="px-4 pb-3">
+    <div v-if="error" class="card-strip">
       <p role="alert" class="text-bad">{{ error }}</p>
     </div>
 
@@ -186,7 +186,7 @@ const when = (s, fallback) => (s ? new Date(s).toLocaleDateString() : fallback)
       </TransitionGroup>
     </table>
 
-    <div class="border-t border-line px-4 py-3 text-ink-muted">
+    <div class="card-strip border-t border-line text-ink-muted">
       You cannot change your own role or delete your own account. A forgotten password is fixed from
       the console with <span class="font-mono">ostiole reset-password</span>.
     </div>

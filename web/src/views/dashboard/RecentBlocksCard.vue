@@ -54,7 +54,7 @@ function by(e) {
         </tr>
       </TransitionGroup>
     </table>
-    <p class="border-t border-line px-4 py-3">
+    <p class="card-strip border-t border-line">
       <RouterLink to="/firewall/log" class="link">Full log</RouterLink>
     </p>
   </SectionCard>

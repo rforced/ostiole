@@ -41,7 +41,7 @@ defineProps({
         </tr>
       </TransitionGroup>
     </table>
-    <p class="border-t border-line px-4 py-3 text-ink-muted">
+    <p class="card-strip border-t border-line text-ink-muted">
       Blocked by the default policy: {{ formatCount(blocked?.packets ?? 0) }} packets ({{
         formatBytes(blocked?.bytes ?? 0)
       }}) ·

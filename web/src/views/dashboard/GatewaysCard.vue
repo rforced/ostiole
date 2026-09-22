@@ -59,7 +59,7 @@ defineProps({
         </tr>
       </TransitionGroup>
     </table>
-    <p class="border-t border-line px-4 py-3">
+    <p class="card-strip border-t border-line">
       <template v-if="unwatched.length">
         A route nobody watches cannot fail over.
         <RouterLink to="/routing" class="link">Watch it under Routing</RouterLink>

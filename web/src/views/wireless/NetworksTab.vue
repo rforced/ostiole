@@ -53,7 +53,7 @@ function edit(iface) {
           <Plus class="size-4" aria-hidden="true" /> Add network
         </button>
       </template>
-      <div v-if="!config.radios.length" class="px-4 pb-3 text-ink-muted">
+      <div v-if="!config.radios.length" class="card-strip text-ink-muted">
         Configure a radio first.
       </div>
       <table class="table">

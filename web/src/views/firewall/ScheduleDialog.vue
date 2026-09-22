@@ -65,11 +65,14 @@ function save() {
         <FormField id="sch-desc" label="Description">
           <input id="sch-desc" v-model="form.description" class="input" />
         </FormField>
+        <!-- A time field is as wide as the browser draws it: the segments and
+             the clock button, and an AM/PM segment where the locale has one.
+             A width of ours clips whichever end does not fit. -->
         <FormField id="sch-start" label="From">
-          <input id="sch-start" v-model="form.start" type="time" class="input w-32 font-mono" />
+          <input id="sch-start" v-model="form.start" type="time" class="input w-auto font-mono" />
         </FormField>
         <FormField id="sch-end" label="To">
-          <input id="sch-end" v-model="form.end" type="time" class="input w-32 font-mono" />
+          <input id="sch-end" v-model="form.end" type="time" class="input w-auto font-mono" />
         </FormField>
       </div>
       <fieldset class="space-y-2 text-sm">

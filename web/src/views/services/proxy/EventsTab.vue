@@ -72,7 +72,7 @@ function hasQuery(uri) {
           @click="load.run()"
         />
       </template>
-      <div class="space-y-2 px-4 pb-3">
+      <div class="card-strip space-y-2">
         <form class="form-row" @submit.prevent="load.run()">
           <FormField id="ev-since" label="Since" hint="e.g. -1h, -30min, 2026-09-15">
             <input id="ev-since" v-model="since" class="input w-40 font-mono" spellcheck="false" />

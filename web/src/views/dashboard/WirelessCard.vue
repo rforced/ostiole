@@ -24,7 +24,7 @@ function ssidOf(c) {
 
 <template>
   <SectionCard title="Wireless" flush>
-    <dl class="kv px-4 pb-3">
+    <dl class="card-strip kv">
       <template v-for="n in networks" :key="n.interface">
         <dt class="font-mono">{{ n.ssid || n.interface }}</dt>
         <dd>
@@ -33,7 +33,7 @@ function ssidOf(c) {
         </dd>
       </template>
     </dl>
-    <table class="table border-t border-line">
+    <table class="table">
       <thead>
         <tr>
           <th>Client</th>
@@ -59,7 +59,7 @@ function ssidOf(c) {
         </tr>
       </TransitionGroup>
     </table>
-    <p class="border-t border-line px-4 py-3">
+    <p class="card-strip border-t border-line">
       <RouterLink to="/wireless#clients" class="link">
         <template v-if="more > 0">And {{ more }} more</template>
         <template v-else>All clients</template>

@@ -70,7 +70,7 @@ const when = (s, fallback) => (s ? new Date(s).toLocaleDateString() : fallback)
       </button>
     </template>
 
-    <div v-if="minted || error" class="space-y-3 px-4 pb-3">
+    <div v-if="minted || error" class="card-strip space-y-3">
       <p v-if="error" role="alert" class="text-bad">{{ error }}</p>
       <AppNotice
         v-if="minted"

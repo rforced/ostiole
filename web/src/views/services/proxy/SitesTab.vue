@@ -38,7 +38,7 @@ function edit(site) {
           <Plus class="size-4" aria-hidden="true" /> Add site
         </button>
       </template>
-      <div v-if="!pools.length" class="px-4 pb-3 text-ink-muted">Add a pool first.</div>
+      <div v-if="!pools.length" class="card-strip text-ink-muted">Add a pool first.</div>
       <table class="table">
         <thead>
           <tr>

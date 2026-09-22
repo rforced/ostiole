@@ -128,7 +128,7 @@ function editDomain(d) {
       <template #actions>
         <RouterLink to="/services/dhcp" class="link">Change under DHCP</RouterLink>
       </template>
-      <p v-if="systemHosts.error.value" role="alert" class="px-4 pb-3 text-bad">
+      <p v-if="systemHosts.error.value" role="alert" class="card-strip text-bad">
         {{ systemHosts.error.value }}
       </p>
       <table class="table">

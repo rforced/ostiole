@@ -44,7 +44,7 @@ function left(l) {
         </tr>
       </TransitionGroup>
     </table>
-    <p class="border-t border-line px-4 py-3">
+    <p class="card-strip border-t border-line">
       <RouterLink to="/services/dhcp#leases" class="link">
         <template v-if="total"
           >All {{ formatCount(total) }} lease{{ total === 1 ? '' : 's' }}</template

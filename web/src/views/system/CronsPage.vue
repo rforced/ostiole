@@ -103,7 +103,7 @@ function describe(c) {
             <Plus class="size-4" aria-hidden="true" /> Add cron
           </button>
         </template>
-        <div v-if="error" class="px-4 pb-3">
+        <div v-if="error" class="card-strip">
           <p role="alert" class="text-bad">{{ error }}</p>
         </div>
         <table class="table">

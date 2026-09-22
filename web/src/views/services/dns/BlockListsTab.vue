@@ -210,7 +210,7 @@ function when(s) {
           <Plus class="size-4" aria-hidden="true" /> Add list
         </button>
       </template>
-      <div class="space-y-1 px-4 pb-3 empty:hidden">
+      <div class="card-strip space-y-1 empty:hidden">
         <p v-if="total" class="text-ink-muted">
           {{ formatCount(total) }} names across the lists that are on.
           <template v-if="blocked">

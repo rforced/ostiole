@@ -143,7 +143,7 @@ function edit(index) {
           <Plus class="size-4" aria-hidden="true" /> Add entry
         </button>
       </template>
-      <div class="px-4 pb-3">
+      <div class="card-strip">
         <ToggleRow v-model="upnp.defaultDeny" label="Refuse anything no entry allows" />
       </div>
       <table class="table">

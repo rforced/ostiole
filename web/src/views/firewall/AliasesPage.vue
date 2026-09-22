@@ -122,7 +122,7 @@ function edit(a) {
           <Plus class="size-4" aria-hidden="true" /> Add alias
         </button>
       </template>
-      <div v-if="refresh.error.value" class="px-4 pb-3">
+      <div v-if="refresh.error.value" class="card-strip">
         <p role="alert" class="text-bad">{{ refresh.error.value }}</p>
       </div>
       <table class="table">

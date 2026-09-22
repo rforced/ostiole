@@ -58,7 +58,7 @@ function tone(state) {
           @click="load.run"
         />
       </template>
-      <div class="flex flex-wrap items-center gap-3 px-4 pb-3">
+      <div class="card-strip flex flex-wrap items-center gap-3">
         <label class="sr-only" for="nb-search">Search</label>
         <input
           id="nb-search"

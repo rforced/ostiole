@@ -261,7 +261,7 @@ onBeforeUnmount(disconnect)
           <span v-if="summary.dropped"> · {{ formatCount(summary.dropped) }} dropped</span>
         </template>
       </template>
-      <div class="px-4 pb-3">
+      <div class="card-strip">
         <!-- No submit button, so Enter in a field is wired by hand. -->
         <form class="form-row" @submit.prevent="search" @keydown.enter.prevent="search">
           <FormField id="q-name" label="Name">
@@ -332,11 +332,11 @@ onBeforeUnmount(disconnect)
         </p>
       </div>
 
-      <p v-if="page && !running" class="border-t border-line px-4 py-3 text-ink-muted">
+      <p v-if="page && !running" class="card-strip border-t border-line text-ink-muted">
         The log is off.
       </p>
       <template v-else>
-        <table class="table border-t border-line">
+        <table class="table">
           <thead>
             <tr>
               <th>Time</th>
@@ -393,7 +393,7 @@ onBeforeUnmount(disconnect)
         </table>
       </template>
 
-      <div v-if="running" class="flex items-center gap-3 border-t border-line px-4 py-3">
+      <div v-if="running" class="card-strip flex items-center gap-3 border-t border-line">
         <button
           v-if="(page?.entries ?? []).length < (page?.total ?? 0)"
           type="button"

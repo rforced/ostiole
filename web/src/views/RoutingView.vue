@@ -359,7 +359,7 @@ function edit(r) {
             </tr>
           </TransitionGroup>
         </table>
-        <div v-if="policyRules.length" class="border-t border-line px-4 py-3 text-ink-muted">
+        <div v-if="policyRules.length" class="card-strip border-t border-line text-ink-muted">
           <span class="font-medium">Policy routing is in use:</span>
           <template v-for="(r, i) in policyRules" :key="r.id">
             <span v-if="i">,&nbsp;</span>

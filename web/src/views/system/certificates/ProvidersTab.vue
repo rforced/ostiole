@@ -46,7 +46,7 @@ const labelOf = (kind) => kinds.value.find((k) => k.kind === kind)?.label ?? kin
           <Plus class="size-4" aria-hidden="true" /> Add provider
         </button>
       </template>
-      <div v-if="load.error.value" class="px-4 pb-3">
+      <div v-if="load.error.value" class="card-strip">
         <p role="alert" class="text-bad">{{ load.error.value }}</p>
       </div>
       <table class="table">
