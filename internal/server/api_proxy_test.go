@@ -88,7 +88,7 @@ func proxyConfig() *model.Config {
 		},
 		NAT: model.NAT{Outbound: model.OutboundNAT{Mode: model.OutboundAutomatic}},
 		Services: model.Services{Proxy: model.Proxy{
-			Enabled: true, HTTP3: true,
+			Enabled: true, HTTP3: true, Zones: []string{"wan"},
 			Pools: []model.ProxyPool{{ID: "web", Upstreams: []model.ProxyUpstream{{Address: "192.168.1.20:80"}}}},
 			Sites: []model.ProxySite{{ID: "shop", Enabled: true, Hosts: []string{"shop.example.com"}, Pool: "web"}},
 		}},

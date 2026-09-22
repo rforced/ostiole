@@ -10,7 +10,9 @@ import (
 // UDP port through to a pool of backends.
 type Proxy struct {
 	Enabled bool `json:"enabled"`
-	// Zones the listeners are open on; empty is every external zone.
+	// Zones the listeners are open on. Empty opens nothing: neither the
+	// internet nor a guest network is a safe guess, so the operator names
+	// the zones and validation says so when they have not.
 	Zones []string `json:"zones,omitempty"`
 	// HTTPPort and HTTPSPort are 80 and 443 when zero.
 	HTTPPort  uint16 `json:"httpPort,omitempty"`
@@ -217,18 +219,15 @@ func (p *Proxy) Site(id string) (*ProxySite, bool) {
 	return nil, false
 }
 
-// ProxyZones names the zones the listeners are opened on: the list, or
-// every external zone.
+// ProxyZones names the zones the listeners are opened on, in
+// configuration order. Nothing is opened until the operator ticks one.
 func (p Proxy) ProxyZones(c *Config) []string {
+	if len(p.Zones) == 0 {
+		return nil
+	}
 	var out []string
 	for _, z := range c.Zones {
-		if len(p.Zones) > 0 {
-			if slices.Contains(p.Zones, z.Name) {
-				out = append(out, z.Name)
-			}
-			continue
-		}
-		if z.External {
+		if slices.Contains(p.Zones, z.Name) {
 			out = append(out, z.Name)
 		}
 	}

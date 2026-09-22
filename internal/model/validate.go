@@ -970,7 +970,11 @@ func (v *validator) proxy(c *Config, zones map[string]bool) {
 	}
 	v.l4RouteClashes(c)
 	v.routesShadowSites(c)
-	if c.ProxyEnabled() && c.HTTP01Certificates() && !v.proxyOnExternalZone(c) {
+	switch {
+	case !c.ProxyEnabled():
+	case len(p.Zones) == 0:
+		v.add("services.proxy.zones", "the proxy serves something but is open on no zone: tick the zones its listeners answer on")
+	case c.HTTP01Certificates() && !v.proxyOnExternalZone(c):
 		v.add("services.proxy.zones", "an http-01 certificate needs the proxy on an external zone: the proxy answers the challenge on port 80")
 	}
 }

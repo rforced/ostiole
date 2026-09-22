@@ -914,6 +914,29 @@ func TestValidateProxyZones(t *testing.T) {
 	}
 }
 
+func TestValidateProxyNeedsAZone(t *testing.T) {
+	t.Parallel()
+	cfg := proxyStarter()
+	p := workingProxy()
+	p.Zones = nil
+	cfg.Services.Proxy = p
+	if !hasIssue(t, cfg, "services.proxy.zones") {
+		t.Error("a proxy serving on no zone passed")
+	}
+	if got := p.ProxyZones(cfg); got != nil {
+		t.Errorf("ProxyZones = %v, want nothing opened", got)
+	}
+
+	p.Sites[0].Enabled = false
+	for i := range p.Routes {
+		p.Routes[i].Enabled = false
+	}
+	cfg.Services.Proxy = p
+	if hasIssue(t, cfg, "services.proxy.zones") {
+		t.Error("a proxy with nothing enabled was made to name a zone")
+	}
+}
+
 // hasIssue reports whether validating cfg raised an issue at path.
 func hasIssue(t *testing.T, cfg *Config, path string) bool {
 	t.Helper()

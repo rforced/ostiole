@@ -49,7 +49,7 @@ function toggleZone(name, on) {
               <span class="font-mono">{{ z.name }}</span>
             </label>
           </div>
-          <p class="text-ink-muted">Every external zone when none is ticked.</p>
+          <p class="text-ink-muted">Nothing reaches the proxy until a zone is ticked.</p>
         </fieldset>
 
         <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
