@@ -28,7 +28,10 @@ func TestResultsSurviveARestart(t *testing.T) {
 
 	first := NewRunner(source, ex, slog.New(slog.DiscardHandler), dir)
 	first.Tick(context.Background(), at(t, "2026-09-16 03:00"))
-	waitFor(t, func() bool { return len(ex.calls()) == 1 })
+	waitForSave(t, dir, "nightly")
+	if len(ex.calls()) != 1 {
+		t.Fatalf("ran %v, want the one cron", ex.calls())
+	}
 	before := statusOf(first, "nightly")
 	if before.LastRun == nil {
 		t.Fatal("the run was not recorded at all")
@@ -62,7 +65,7 @@ func TestFailureSurvivesARestart(t *testing.T) {
 
 	first := NewRunner(source, &fakeExec{err: errNope}, slog.New(slog.DiscardHandler), dir)
 	first.Tick(context.Background(), at(t, "2026-09-16 03:00"))
-	waitFor(t, func() bool { return statusOf(first, "nightly").LastError != "" })
+	waitForSave(t, dir, "nightly")
 
 	second := NewRunner(source, &fakeExec{}, slog.New(slog.DiscardHandler), dir)
 	if got := statusOf(second, "nightly").LastError; !strings.Contains(got, errNope.Error()) {
@@ -129,9 +132,16 @@ func TestDeletedCronsAreDroppedFromTheFile(t *testing.T) {
 	source := func() *model.Config { return cfg }
 	ex := &fakeExec{}
 
+	// RunNow rather than Tick: it runs and records in this goroutine, so the
+	// deletion below cannot land while a background run is still reading the
+	// configuration, and no late save can put the cron back in the file.
 	r := NewRunner(source, ex, slog.New(slog.DiscardHandler), dir)
-	r.Tick(context.Background(), at(t, "2026-09-16 03:00"))
-	waitFor(t, func() bool { return len(ex.calls()) == 1 })
+	if err := r.RunNow(context.Background(), "nightly"); err != nil {
+		t.Fatal(err)
+	}
+	if len(ex.calls()) != 1 {
+		t.Fatalf("ran %v, want the one cron", ex.calls())
+	}
 
 	// The operator removes it and something else writes the file out.
 	cfg.Crons = nil

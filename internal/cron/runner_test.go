@@ -116,7 +116,9 @@ func TestTickReadsSchedulesInTheConfiguredZone(t *testing.T) {
 func TestALongCronIsNotStartedTwice(t *testing.T) {
 	t.Parallel()
 	ex := &fakeExec{block: make(chan struct{})}
-	r := runner(t, ex, model.Cron{ID: "slow", Enabled: true, Schedule: "* * * * *", Kind: model.CronRefreshAliases})
+	dir := t.TempDir()
+	cfg := config(model.Cron{ID: "slow", Enabled: true, Schedule: "* * * * *", Kind: model.CronRefreshAliases})
+	r := NewRunner(func() *model.Config { return cfg }, ex, slog.New(slog.DiscardHandler), dir)
 
 	r.Tick(context.Background(), at(t, "2026-09-16 04:10"))
 	waitFor(t, func() bool { return len(ex.calls()) == 1 })
@@ -130,7 +132,10 @@ func TestALongCronIsNotStartedTwice(t *testing.T) {
 		t.Errorf("status = %+v, want it marked running", st)
 	}
 	close(ex.block)
-	waitFor(t, func() bool { return !statusOf(r, "slow").Running })
+	waitForSave(t, dir, "slow")
+	if st := statusOf(r, "slow"); st.Running {
+		t.Errorf("status = %+v, want the finished run marked done", st)
+	}
 }
 
 func TestStatusesRecordSuccessAndFailure(t *testing.T) {
@@ -244,7 +249,9 @@ func TestTheGatewayRowOnlyPromisesFailoverWhenItCanHappen(t *testing.T) {
 func TestABrokenScheduleIsReported(t *testing.T) {
 	t.Parallel()
 	r := runner(t, &fakeExec{}, model.Cron{ID: "broken", Enabled: true, Schedule: "not a schedule", Kind: model.CronBackup})
-	r.Tick(context.Background(), at(t, "2026-09-16 04:00"))
+	// Three, not four: the update checks are due at four, and this test does
+	// not wait for the runs it would start.
+	r.Tick(context.Background(), at(t, "2026-09-16 03:00"))
 	if st := statusOf(r, "broken"); !strings.Contains(st.LastError, "schedule") {
 		t.Errorf("status = %+v", st)
 	}
@@ -348,6 +355,19 @@ func waitFor(t *testing.T, ok func() bool) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatal("timed out waiting")
+}
+
+// waitForSave waits until a background run has written its result out.
+// The status says so first: record marks the result and then saves, so a
+// test that reads the file on the status alone reads it too early, and a
+// test that ends there leaves a write landing in a directory the harness
+// is already deleting.
+func waitForSave(t *testing.T, dir, id string) {
+	t.Helper()
+	waitFor(t, func() bool {
+		raw, err := os.ReadFile(filepath.Join(dir, "crons.json"))
+		return err == nil && strings.Contains(string(raw), id)
+	})
 }
 
 func TestUpdateCronsRunOnTheirOwnSchedule(t *testing.T) {
