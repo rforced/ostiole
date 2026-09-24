@@ -5,6 +5,8 @@ import { computed, ref } from 'vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import { api } from '@/lib/api'
+import { useDraftRows } from '@/lib/draft'
 import { useConfigStore } from '@/stores/config'
 import OneToOneDialog from '@/views/firewall/OneToOneDialog.vue'
 import OutboundDialog from '@/views/firewall/OutboundDialog.vue'
@@ -33,6 +35,17 @@ const mode = computed({
   get: () => outbound.value.mode,
   set: (v) => config.setOutboundMode(v),
 })
+
+/**
+ * What automatic and hybrid mode write on their own, read for the draft:
+ * the masquerade on each external zone. The mode is checked here too,
+ * because a draft that does not validate keeps the rows of the last one
+ * that did, which may have been in another mode.
+ */
+const { rows: automatic } = useDraftRows((draft) => api.systemNat(draft))
+const showAutomatic = computed(
+  () => (mode.value === 'automatic' || mode.value === 'hybrid') && automatic.value.length > 0,
+)
 
 function addPf() {
   pfEditing.value = null
@@ -238,6 +251,37 @@ function editOb(r) {
           </TransitionGroup>
         </table>
       </template>
+    </SectionCard>
+
+    <SectionCard v-if="showAutomatic" title="Automatic rules" flush>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Zone</th>
+            <th>Sources</th>
+            <th>Destination</th>
+            <th>Leaves as</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="s in automatic" :key="s.zone" class="row-static">
+            <td class="font-mono">
+              {{ s.zone }}
+              <span class="ml-1 text-ink-muted">{{ (s.interfaces ?? []).join(', ') }}</span>
+            </td>
+            <td class="font-mono text-code">{{ s.source }}</td>
+            <td class="font-mono text-code">{{ s.destination }}</td>
+            <td class="font-mono text-code">
+              <template v-if="s.to">{{ s.to }}</template>
+              <span v-else class="text-ink-muted">the interface address</span>
+            </td>
+            <td class="text-right whitespace-nowrap">
+              <span class="badge">locked</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </SectionCard>
 
     <PortForwardDialog v-model:open="pfOpen" :forward="pfEditing" />

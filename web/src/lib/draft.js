@@ -8,11 +8,11 @@ const DEBOUNCE_MS = 300
 
 /**
  * Rows the router derives from the draft being edited rather than from
- * what is saved: the rules Ostiole adds around a zone's rules and the
- * names static leases answer. They are read on mount and again once edits
- * pause, so a change shows before it is applied. A read that fails, as it
- * does while the draft does not validate, keeps the rows of the last one
- * that did.
+ * what is saved: the rules Ostiole adds around a zone's rules, the
+ * automatic outbound NAT, the names static leases answer. They are read on
+ * mount and again once edits pause, so a change shows before it is
+ * applied. A read that fails, as it does while the draft does not
+ * validate, keeps the rows of the last one that did.
  *
  * @template T
  * @param {(draft: object) => Promise<T[]>} read

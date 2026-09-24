@@ -2,9 +2,13 @@ package nft
 
 import (
 	"path/filepath"
+	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/rforced/ostiole/internal/model"
 )
 
 // chainComments maps each chain in a rendered ruleset to the comments of
@@ -222,5 +226,93 @@ func TestSystemRulesBlockedSourcesCountBothChains(t *testing.T) {
 	}
 	if got := strings.Join(r.Zones, ","); got != "wan" {
 		t.Errorf("zones = %q, want wan", got)
+	}
+}
+
+// Every automatic rule the NAT page lists is a line in nat_postrouting, and
+// every such line is listed, in the same order. The rows are recorded where
+// the lines are written; this keeps it so when the renderer changes.
+func TestSystemNATMatchesRuleset(t *testing.T) {
+	t.Parallel()
+	for _, in := range goldenCases(t) {
+		name := strings.TrimSuffix(filepath.Base(in), ".json")
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			cfg := loadConfig(t, in)
+			out, err := Build(cfg, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var lines []string
+			for _, c := range chainComments(t, out.Ruleset)["nat_postrouting"] {
+				if strings.HasPrefix(c, "auto-nat:") {
+					lines = append(lines, "nat_postrouting/"+c)
+				}
+			}
+			var keys []string
+			for i, row := range out.NAT {
+				if z, ok := cfg.Zone(row.Zone); !ok || !z.External {
+					t.Errorf("row %d names %q, which is not an external zone", i, row.Zone)
+				}
+				if want := cfg.ZoneInterfaces(row.Zone); !slices.Equal(row.Interfaces, want) {
+					t.Errorf("row %d lists links %v, the zone has %v", i, row.Interfaces, want)
+				}
+				if row.Source == "" || row.Destination == "" {
+					t.Errorf("row %d has an empty column: %+v", i, row)
+				}
+				keys = append(keys, row.Keys...)
+			}
+			if !slices.Equal(keys, lines) {
+				t.Errorf("the rows count %v, the chain has %v", keys, lines)
+			}
+		})
+	}
+}
+
+// Automatic and hybrid mode masquerade each external zone that has a link
+// up; manual and disabled write nothing of their own.
+func TestSystemNATFollowsTheMode(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		mode  model.OutboundMode
+		zones []string
+	}{
+		{model.OutboundAutomatic, []string{"wan", "wan2"}},
+		{model.OutboundHybrid, []string{"wan", "wan2"}},
+		{model.OutboundManual, nil},
+		{model.OutboundDisabled, nil},
+	} {
+		t.Run(string(tc.mode), func(t *testing.T) {
+			t.Parallel()
+			cfg := loadConfig(t, "testdata/minimal.json")
+			cfg.NAT.Outbound.Mode = tc.mode
+			// wan3 is external but has no link up, so it has no rule to show.
+			cfg.Zones = append(cfg.Zones,
+				model.Zone{Name: "wan2", External: true},
+				model.Zone{Name: "wan3", External: true})
+			cfg.Interfaces = append(cfg.Interfaces,
+				model.Interface{Name: "eth2", Zone: "wan2", Enabled: true, IPv4: model.IPv4{Mode: "dhcp"}, IPv6: model.IPv6{Mode: "none"}},
+				model.Interface{Name: "eth3", Zone: "wan3", Enabled: false, IPv4: model.IPv4{Mode: "dhcp"}, IPv6: model.IPv6{Mode: "none"}})
+			out, err := Build(cfg, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var zones []string
+			for _, row := range out.NAT {
+				zones = append(zones, row.Zone)
+			}
+			if !slices.Equal(zones, tc.zones) {
+				t.Fatalf("rows for %v, want %v", zones, tc.zones)
+			}
+			if len(out.NAT) > 0 {
+				want := SystemNAT{
+					Zone: "wan", Interfaces: []string{"eth0"}, Source: "any IPv4", Destination: "anywhere",
+					Keys: []string{"nat_postrouting/auto-nat:wan"},
+				}
+				if !reflect.DeepEqual(out.NAT[0], want) {
+					t.Errorf("row = %+v, want %+v", out.NAT[0], want)
+				}
+			}
+		})
 	}
 }

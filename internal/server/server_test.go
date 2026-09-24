@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -461,6 +462,38 @@ func TestSystemRules(t *testing.T) {
 	}
 	if !lockout || !tail {
 		t.Errorf("rows lack the anti-lockout row for lan or a closing drop: %s", raw)
+	}
+}
+
+// The NAT page reads the automatic rules of its draft the same way, so a
+// mode switched a moment ago shows what it writes before it is applied.
+func TestSystemNAT(t *testing.T) {
+	t.Parallel()
+	srv, _ := newTestServer(t)
+
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/nat/system", configRequest{})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("no config: %d %s", resp.StatusCode, raw)
+	}
+
+	cfg := starter()
+	resp, raw = do(t, srv, http.MethodPost, "/api/v1/nat/system", configRequest{Config: cfg})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("automatic: %d %s", resp.StatusCode, raw)
+	}
+	var rows []nft.SystemNAT
+	if err := json.Unmarshal(raw, &rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].Zone != "wan" || !slices.Equal(rows[0].Interfaces, []string{"eth0"}) {
+		t.Errorf("automatic: want one row for wan on eth0, got %s", raw)
+	}
+
+	// Manual writes nothing of its own, and says so with a list, not null.
+	cfg.NAT.Outbound.Mode = model.OutboundManual
+	resp, raw = do(t, srv, http.MethodPost, "/api/v1/nat/system", configRequest{Config: cfg})
+	if resp.StatusCode != http.StatusOK || strings.TrimSpace(string(raw)) != "[]" {
+		t.Errorf("manual: %d %s", resp.StatusCode, raw)
 	}
 }
 

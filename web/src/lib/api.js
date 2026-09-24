@@ -196,6 +196,8 @@ export const api = {
   counters: () => get('/counters'),
   /** The rules Ostiole adds on its own for a configuration, in evaluation order. */
   systemRules: (config) => post('/rules/system', { config }),
+  /** The outbound NAT rules a configuration makes Ostiole write on its own: the automatic masquerade. */
+  systemNat: (config) => post('/nat/system', { config }),
   /** The names a configuration makes the DNS server answer on its own: static leases with hostnames. */
   systemHosts: (config) => post('/dns/system-hosts', { config }),
   /** Empty the caches the router is running now. Answers with what it cleared. */

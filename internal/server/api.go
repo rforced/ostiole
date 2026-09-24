@@ -148,6 +148,7 @@ func (a *api) register(mux *router) {
 	mux.HandleFunc("GET /api/v1/ruleset", a.read(a.ruleset))
 	mux.HandleFunc("GET /api/v1/counters", a.read(a.counters))
 	mux.HandleFunc("POST /api/v1/rules/system", a.read(a.systemRules))
+	mux.HandleFunc("POST /api/v1/nat/system", a.read(a.systemNAT))
 	mux.HandleFunc("POST /api/v1/dns/system-hosts", a.readNoEngine(a.systemHosts))
 	mux.HandleFunc("DELETE /api/v1/dns/cache", a.write(a.clearDNSCache))
 	mux.HandleFunc("GET /api/v1/interfaces/live", a.readNoEngine(a.liveInterfaces))
@@ -761,6 +762,28 @@ func (a *api) systemRules(w http.ResponseWriter, r *http.Request) error {
 	}
 	if rows == nil {
 		rows = []nft.SystemRule{}
+	}
+	writeJSON(w, http.StatusOK, rows)
+	return nil
+}
+
+// systemNAT describes the outbound NAT rules a configuration makes Ostiole
+// write on its own, for the draft the NAT page is editing, like
+// systemRules.
+func (a *api) systemNAT(w http.ResponseWriter, r *http.Request) error {
+	var req configRequest
+	if err := decodeJSON(r, &req); err != nil {
+		return err
+	}
+	if req.Config == nil {
+		return &badRequest{errors.New("config is required")}
+	}
+	rows, err := a.engine.SystemNAT(req.Config)
+	if err != nil {
+		return err
+	}
+	if rows == nil {
+		rows = []nft.SystemNAT{}
 	}
 	writeJSON(w, http.StatusOK, rows)
 	return nil

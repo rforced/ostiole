@@ -80,6 +80,8 @@ type renderer struct {
 	// system collects the rules Ostiole adds on its own, recorded as they
 	// are written.
 	system []SystemRule
+	// nat does the same for outbound NAT.
+	nat []SystemNAT
 }
 
 func (r *renderer) line(s string) {
@@ -1639,6 +1641,10 @@ func (r *renderer) outboundAutomatic() {
 		// IPv4 only: masquerading IPv6 would break end-to-end addressing.
 		r.line(fmt.Sprintf("oifname %s meta nfproto ipv4 counter masquerade comment %q",
 			ifnameSet(ifs), "auto-nat:"+z.Name))
+		r.nat = append(r.nat, SystemNAT{
+			Zone: z.Name, Interfaces: ifs, Source: "any IPv4", Destination: "anywhere",
+			Keys: []string{"nat_postrouting/auto-nat:" + z.Name},
+		})
 	}
 }
 

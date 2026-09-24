@@ -629,6 +629,16 @@ func (e *Engine) SystemRules(cfg *model.Config) ([]nft.SystemRule, error) {
 	return nft.SystemRules(cfg, e.FeedEntries())
 }
 
+// SystemNAT lists the outbound NAT rules cfg makes Ostiole write on its
+// own, as cheaply as SystemRules.
+func (e *Engine) SystemNAT(cfg *model.Config) ([]nft.SystemNAT, error) {
+	out, err := nft.Build(cfg, e.FeedEntries())
+	if err != nil {
+		return nil, err
+	}
+	return out.NAT, nil
+}
+
 // Mappings reads the port mappings clients have opened for themselves. They
 // come from the ruleset because that is where they are: the daemon that
 // answers the mapping protocols writes into a chain of ours.

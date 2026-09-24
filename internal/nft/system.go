@@ -44,10 +44,33 @@ type SystemRule struct {
 	Setting string `json:"setting,omitempty"`
 }
 
+// SystemNAT is an outbound NAT rule Ostiole writes on its own account: the
+// masquerade automatic and hybrid mode put on each external zone. The NAT
+// page lists them under the operator's rules, as pfSense lists its
+// automatic rules under the mappings. Like a SystemRule, a row is recorded
+// where its line is written.
+type SystemNAT struct {
+	// Zone the traffic leaves through, and which of its links the rule
+	// matches.
+	Zone        string   `json:"zone"`
+	Interfaces  []string `json:"interfaces"`
+	Source      string   `json:"source"`
+	Destination string   `json:"destination"`
+	// To is the address the traffic leaves as. Empty is a masquerade: the
+	// address the interface has at the time.
+	To string `json:"to,omitempty"`
+	// Keys the rule's packets are counted under, as ParseCounters names
+	// them.
+	Keys []string `json:"keys,omitempty"`
+}
+
 // Rendered is a ruleset and the system rules it carries.
 type Rendered struct {
 	Ruleset string       `json:"ruleset"`
 	System  []SystemRule `json:"system"`
+	// NAT is the outbound NAT Ostiole wrote on its own, in the order it is
+	// evaluated.
+	NAT []SystemNAT `json:"nat"`
 }
 
 // Build renders cfg and reports the system rules that went into it, in the
@@ -61,7 +84,7 @@ func Build(cfg *model.Config, feeds map[string][]string) (*Rendered, error) {
 	sort.SliceStable(r.system, func(i, j int) bool {
 		return chainRank(r.system[i].Chain) < chainRank(r.system[j].Chain)
 	})
-	return &Rendered{Ruleset: r.b.String(), System: r.system}, nil
+	return &Rendered{Ruleset: r.b.String(), System: r.system, NAT: r.nat}, nil
 }
 
 // SystemRules is Build without the ruleset, for showing the rows.
