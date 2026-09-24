@@ -96,6 +96,8 @@ type api struct {
 		bad []string
 	}
 	fwlog *fwlog.Ring
+	// keepalive paces the log streams' keepalives and their checks.
+	keepalive time.Duration
 	// querylog keeps what the DNS server answered; nil answers 503.
 	querylog *dnslog.Log
 	// devices caches the lease-to-name mapping the query log puts on its

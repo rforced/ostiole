@@ -6,6 +6,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import { ApiError, api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { matchedLabel } from '@/lib/fwlog'
+import { streamLost } from '@/lib/stream'
 
 /** How many rows the page holds, and how many it asks for on opening. The
  *  ring behind it keeps far more; reading past this is not built yet. */
@@ -30,12 +31,13 @@ function push(list) {
 
 function connect() {
   // EventSource sends the session cookie on same-origin requests.
-  source = new EventSource('/api/v1/log/stream')
-  source.onopen = () => {
+  const es = new EventSource('/api/v1/log/stream')
+  source = es
+  es.onopen = () => {
     connected.value = true
     streamError.value = ''
   }
-  source.onmessage = (ev) => {
+  es.onmessage = (ev) => {
     try {
       const e = JSON.parse(ev.data)
       if (paused.value) pending.unshift(e)
@@ -44,10 +46,9 @@ function connect() {
       /* ignore malformed */
     }
   }
-  source.onerror = () => {
+  es.onerror = () => {
     connected.value = false
-    // The browser retries on its own; a 503/401 will keep failing, so say so.
-    if (!streamError.value) streamError.value = 'Stream disconnected, retrying…'
+    streamError.value = streamLost(es)
   }
 }
 

@@ -131,6 +131,40 @@ func TestSetupLoginAndSessions(t *testing.T) {
 	}
 }
 
+// A log stream checks its session with Peek every few seconds. That is
+// not somebody using the router, so it must not keep the session from
+// idling out, and it sees a logout like any request does.
+func TestPeekDoesNotKeepASessionAlive(t *testing.T) {
+	t.Parallel()
+	s, now := newService(t)
+	if err := s.Setup("admin", goodPassword); err != nil {
+		t.Fatal(err)
+	}
+	sess, err := s.Login("admin", goodPassword, "192.0.2.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		*now = now.Add(SessionIdleTimeout / 4)
+		if _, ok := s.Peek(sess.ID); !ok {
+			t.Fatal("a live session did not peek")
+		}
+	}
+	*now = now.Add(SessionIdleTimeout / 2)
+	if _, ok := s.Peek(sess.ID); ok {
+		t.Error("peeking kept an idle session alive")
+	}
+
+	sess, _ = s.Login("admin", goodPassword, "192.0.2.1")
+	if got, ok := s.Peek(sess.ID); !ok || got.Username != "admin" {
+		t.Fatalf("Peek = %+v, %v", got, ok)
+	}
+	s.Logout(sess.ID)
+	if _, ok := s.Peek(sess.ID); ok {
+		t.Error("a logged out session still peeks")
+	}
+}
+
 // An update restarts the daemon, so a session that only lived in memory
 // logged everybody out every time.
 func TestSessionsSurviveARestart(t *testing.T) {

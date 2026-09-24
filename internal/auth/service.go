@@ -598,6 +598,17 @@ func (s *Service) SignIn(username string) (*Session, error) {
 	return s.sessions.create(username), nil
 }
 
+// Peek resolves a session ID without counting as use of it: a response
+// that stays open, like a log stream, checks it is still wanted this way,
+// and must not keep the session from idling out.
+func (s *Service) Peek(id string) (*Session, bool) {
+	if id == "" {
+		return nil, false
+	}
+	s.refresh()
+	return s.sessions.peek(id)
+}
+
 // Logout ends a session.
 func (s *Service) Logout(id string) {
 	s.sessions.delete(id)

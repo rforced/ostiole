@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -32,6 +33,13 @@ var errForbidden = errors.New("this account is not allowed to do that")
 // authenticate is refused outright, cookie or no cookie: the CSRF guard
 // stands down for a bearer request, so the bearer has to be the credential.
 func (a *api) authenticate(r *http.Request) (Principal, bool) {
+	return a.principal(r, true)
+}
+
+// principal resolves the caller the way authenticate says. touch counts
+// the request as use of the session, which a request somebody made is and
+// a stream checking on itself is not.
+func (a *api) principal(r *http.Request, touch bool) (Principal, bool) {
 	if raw := bearer(r); raw != "" {
 		if a.tokens == nil {
 			return Principal{}, false
@@ -45,11 +53,31 @@ func (a *api) authenticate(r *http.Request) (Principal, bool) {
 	if a.auth == nil {
 		return Principal{}, false
 	}
-	sess, ok := a.session(r)
+	c, err := r.Cookie(SessionCookie)
+	if err != nil {
+		return Principal{}, false
+	}
+	lookup := a.auth.Session
+	if !touch {
+		lookup = a.auth.Peek
+	}
+	sess, ok := lookup(c.Value)
 	if !ok {
 		return Principal{}, false
 	}
 	return Principal{Name: sess.Username, Role: a.auth.Role(sess.Username)}, true
+}
+
+// routeRole is the context key for the role a route was let in with.
+type routeRole struct{}
+
+// stillAllowed checks, partway through a response that stays open, that
+// the caller could make the request now. A log stream runs for hours, and
+// meanwhile the session can end, the account go, the token be revoked.
+func (a *api) stillAllowed(r *http.Request) bool {
+	role, _ := r.Context().Value(routeRole{}).(auth.Role)
+	p, ok := a.principal(r, false)
+	return ok && len(p.Certificates) == 0 && p.Role.Allows(role)
 }
 
 func bearer(r *http.Request) string {
@@ -76,7 +104,7 @@ func (a *api) requires(role auth.Role, h func(w http.ResponseWriter, r *http.Req
 		if len(p.Certificates) > 0 || !p.Role.Allows(role) {
 			return errForbidden
 		}
-		return h(w, r)
+		return h(w, r.WithContext(context.WithValue(r.Context(), routeRole{}, role)))
 	})
 }
 

@@ -160,13 +160,18 @@ func (a *api) queryLogStream(w http.ResponseWriter, r *http.Request) error {
 	}
 	_ = rc.SetWriteDeadline(time.Time{})
 
-	keepalive := time.NewTicker(15 * time.Second)
+	keepalive := time.NewTicker(a.keepalive)
 	defer keepalive.Stop()
 	for {
 		select {
 		case <-r.Context().Done():
 			return nil
 		case <-keepalive.C:
+			// Every client's queries, so no longer than the session or
+			// token that opened the stream.
+			if !a.stillAllowed(r) {
+				return nil
+			}
 			fmt.Fprint(w, ": keepalive\n\n")
 			if err := rc.Flush(); err != nil {
 				return nil

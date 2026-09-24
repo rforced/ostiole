@@ -107,6 +107,9 @@ type Deps struct {
 	CertHosts func() []string
 	// Log is the firewall log ring; nil disables the log endpoints.
 	Log *fwlog.Ring
+	// Keepalive is how often an open log stream says it is still there
+	// and checks its caller may still read it; zero is 15 seconds.
+	Keepalive time.Duration
 	// QueryLog keeps what the DNS server answered; nil hides the query
 	// log, which is what a daemon that is not root can offer.
 	QueryLog *dnslog.Log
@@ -170,6 +173,7 @@ func Handler(d Deps) http.Handler {
 		modems:      modemsOf(d.Modems),
 		dial:        d.Dial,
 		fwlog:       d.Log,
+		keepalive:   d.Keepalive,
 		querylog:    d.QueryLog,
 		gateways:    d.Gateways,
 		shaping:     d.Shaping,
@@ -179,6 +183,9 @@ func Handler(d Deps) http.Handler {
 		drives:      d.Drives,
 		driveHealth: d.DriveHealth,
 		host:        hostDeps(d),
+	}
+	if api.keepalive <= 0 {
+		api.keepalive = 15 * time.Second
 	}
 	api.routes = mux
 	mux.HandleFunc("GET /api/v1/health", api.health)

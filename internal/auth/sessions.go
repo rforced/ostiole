@@ -132,6 +132,20 @@ func (s *sessionStore) get(id string) (*Session, bool) {
 	return &cp, true
 }
 
+// peek returns a live session without refreshing its idle timer.
+func (s *sessionStore) peek(id string) (*Session, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sess, ok := s.sessions[sessionKey(id)]
+	now := s.now()
+	if !ok || now.After(sess.Expires) || now.Sub(sess.LastSeen) > SessionIdleTimeout {
+		return nil, false
+	}
+	cp := *sess
+	cp.ID = id
+	return &cp, true
+}
+
 func (s *sessionStore) delete(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

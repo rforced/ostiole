@@ -79,7 +79,8 @@ func withAction(e fwlog.Entry, actions map[string]string) fwlog.Entry {
 }
 
 // logStream sends new entries as server-sent events until the client
-// goes away. A comment line every 15s keeps proxies from timing out.
+// goes away or may no longer read them. A comment line every 15s keeps
+// proxies from timing out, and is when the caller is checked again.
 func (a *api) logStream(w http.ResponseWriter, r *http.Request) error {
 	if a.fwlog == nil {
 		return &unavailable{errors.New("firewall log not available (daemon not running as root?)")}
@@ -101,7 +102,7 @@ func (a *api) logStream(w http.ResponseWriter, r *http.Request) error {
 	}
 	_ = rc.SetWriteDeadline(time.Time{})
 
-	keepalive := time.NewTicker(15 * time.Second)
+	keepalive := time.NewTicker(a.keepalive)
 	defer keepalive.Stop()
 	// Read once here rather than per packet: a stream stays open for hours
 	// and the store is a file. The keepalive picks up an apply since.
@@ -111,6 +112,11 @@ func (a *api) logStream(w http.ResponseWriter, r *http.Request) error {
 		case <-r.Context().Done():
 			return nil
 		case <-keepalive.C:
+			// The session or token that opened the stream can end while
+			// it runs, and the stream goes with it.
+			if !a.stillAllowed(r) {
+				return nil
+			}
 			actions = a.ruleActions()
 			fmt.Fprint(w, ": keepalive\n\n")
 			if err := rc.Flush(); err != nil {

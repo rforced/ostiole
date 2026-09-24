@@ -11,6 +11,7 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { sentence } from '@/lib/blocking'
 import { formatCount } from '@/lib/format'
+import { streamLost } from '@/lib/stream'
 import { useConfigStore } from '@/stores/config'
 
 /** How many streamed rows to hold before the oldest go. */
@@ -103,8 +104,9 @@ const loadLists = useAsync(async () => {
 })
 
 function connect() {
-  source = new EventSource('/api/v1/dns/queries/stream')
-  source.onmessage = (ev) => {
+  const es = new EventSource('/api/v1/dns/queries/stream')
+  source = es
+  es.onmessage = (ev) => {
     try {
       const row = JSON.parse(ev.data)
       if (!matches(row)) return
@@ -113,8 +115,8 @@ function connect() {
       /* ignore malformed */
     }
   }
-  source.onerror = () => {
-    if (!streamError.value) streamError.value = 'Stream disconnected, retrying…'
+  es.onerror = () => {
+    streamError.value = streamLost(es)
   }
 }
 
