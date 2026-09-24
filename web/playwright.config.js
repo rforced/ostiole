@@ -16,7 +16,16 @@ export default defineConfig({
     // every such assertion twice.
     timezoneId: 'UTC',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: '24-mobile.spec.js' },
+    // The phone layout, last, against the router the desktop specs configured.
+    {
+      name: 'mobile',
+      use: { ...devices['Pixel 7'] },
+      testMatch: '24-mobile.spec.js',
+      dependencies: ['chromium'],
+    },
+  ],
   webServer: {
     command: 'sh e2e/serve.sh',
     url: 'http://127.0.0.1:18090/api/v1/health',
