@@ -76,6 +76,8 @@ unattended-upgrades, snapd.
 - `--with-wireless` installs hostapd, iw and the card's firmware. A router with a wifi card gets
   them anyway.
 - `--with-proxy` installs the reverse proxy beside the binary.
+- `--no-verify` skips the signature check, for a mirror without `checksums.txt.sig` or a machine
+  without OpenSSL 3. The checksum is still checked.
 - `OSTIOLE_VERSION=v0.1.0` pins a release.
 
 Then open `https://<host>:9443/`, create the admin account, and run the wizard to pick WAN and LAN. Until

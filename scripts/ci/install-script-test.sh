@@ -12,10 +12,11 @@
 #
 #   install-script-test.sh <base-url> <version>
 #
-# The server behind <base-url> holds the build, a tampered/ tree whose
-# tarball does not match its checksums, and a badsig/ tree signed by the
-# wrong key. Run as root in a throwaway container: it installs packages
-# and moves commands around.
+# The server behind <base-url> holds the build, signed with a key the
+# install.sh it serves trusts, a tampered/ tree whose tarball does not
+# match its checksums, a badsig/ tree signed by the wrong key, and a
+# nosig/ tree with no signature. Run as root in a throwaway container: it
+# installs packages and moves commands around.
 set -eu
 # shellcheck source=scripts/ci/lib.sh
 . "$(dirname "$0")/lib.sh"
@@ -98,15 +99,19 @@ grep -q "^  wireless: hostapd iw wireless-regdb" /tmp/plan-wifi.txt ||
 	{ cat /tmp/plan-wifi.txt; fail "the plan does not name the wireless packages"; }
 
 # pipe_install runs it the way the documentation says to, against the
-# tree named. The pipe is the point: it is what leaves stdin useless
-# for the question the installer asks.
+# tree named, with any further flags after it. The pipe is the point: it
+# is what leaves stdin useless for the question the installer asks.
 pipe_install() {
+	tree="$1"
+	shift
 	# shellcheck disable=SC2002 # the pipe is what is being tested
-	cat /tmp/install.sh | OSTIOLE_BASE_URL="$1" OSTIOLE_NO_INSTALL=1 sh -s -- --yes
+	cat /tmp/install.sh | OSTIOLE_BASE_URL="$tree" OSTIOLE_NO_INSTALL=1 sh -s -- --yes "$@"
 }
 
 step "curl | sh places the binary"
-pipe_install "$BASE"
+pipe_install "$BASE" >/tmp/out.txt 2>&1 || { cat /tmp/out.txt; fail "the install failed"; }
+grep -q "signature verified" /tmp/out.txt ||
+	{ cat /tmp/out.txt; fail "the signature was not checked"; }
 [ -x /usr/local/bin/ostiole ] || fail "no binary at /usr/local/bin/ostiole"
 /usr/local/bin/ostiole version | grep -q "$VERSION" ||
 	fail "the binary is not $VERSION: $(/usr/local/bin/ostiole version)"
@@ -134,6 +139,14 @@ if pipe_install "$BASE/badsig" 2>/tmp/err.txt; then
 	fail "a checksums.txt signed by the wrong key was installed"
 fi
 grep -qi "signature check failed" /tmp/err.txt ||
+	{ cat /tmp/err.txt; fail "the refusal does not name the signature"; }
+[ ! -e /usr/local/bin/ostiole ] || fail "a refused download still left a binary"
+
+step "a release with no signature is refused"
+if pipe_install "$BASE/nosig" 2>/tmp/err.txt; then
+	fail "a release with no signature was installed"
+fi
+grep -qi "no signature" /tmp/err.txt ||
 	{ cat /tmp/err.txt; fail "the refusal does not name the signature"; }
 [ ! -e /usr/local/bin/ostiole ] || fail "a refused download still left a binary"
 

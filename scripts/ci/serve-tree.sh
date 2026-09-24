@@ -8,11 +8,16 @@
 # It prints the version it found on stdout, which is what the tests have
 # to be told to ask for, and everything else on stderr.
 #
-# Three trees come out of it: the release itself, a tampered/ whose
-# tarball no longer matches its checksums, and a badsig/ whose
-# checksums.txt is signed by a key that is not the release key. The two
-# poisoned ones are how the tests know the script's refusals work, which
-# is the half of it nobody notices until it matters.
+# Four trees come out of it: the release itself, a tampered/ whose
+# tarball no longer matches its checksums, a badsig/ whose checksums.txt
+# is signed by a key that is not the release key, and a nosig/ with no
+# signature at all. The poisoned ones are how the tests know the script's
+# refusals work, which is the half of it nobody notices until it matters.
+#
+# A snapshot is not signed with the release key, so checksums.txt is
+# signed here with a key made for the run, and the install.sh served
+# trusts that key in place of the release one. The check then runs as it
+# does against a real release.
 set -euo pipefail
 
 DIST=${1:?dist dir}
@@ -31,20 +36,32 @@ version=${tarball#ostiole_}
 version=${version%_linux_amd64.tar.gz}
 
 rm -rf "$OUT"
-mkdir -p "$OUT" "$OUT/tampered" "$OUT/badsig"
+mkdir -p "$OUT" "$OUT/tampered" "$OUT/badsig" "$OUT/nosig"
 
 # The sidecar is a second tarball of the same release, so --with-proxy
 # has something to fetch.
 proxy=("$DIST"/ostiole-proxy_*_linux_amd64.tar.gz)
 
-cp "$REPO/internal/install/install.sh" "$OUT/install.sh"
-for tree in "$OUT" "$OUT/tampered" "$OUT/badsig"; do
+keys=$(mktemp -d)
+trap 'rm -rf "$keys"' EXIT
+openssl genpkey -algorithm ed25519 -out "$keys/run.key"
+pub=$(openssl pkey -in "$keys/run.key" -pubout | sed -n 2p)
+openssl pkeyutl -sign -inkey "$keys/run.key" -rawin -in "$DIST/checksums.txt" -out "$keys/sig.bin"
+base64 <"$keys/sig.bin" | tr -d '\n' >"$keys/checksums.txt.sig"
+
+sed "s|^OSTIOLE_RELEASE_KEYS=\"[^\"]*\"|OSTIOLE_RELEASE_KEYS=\"$pub\"|" \
+  "$REPO/internal/install/install.sh" >"$OUT/install.sh"
+grep -q "^OSTIOLE_RELEASE_KEYS=\"$pub\"" "$OUT/install.sh" || {
+  echo "the key made for this run is not in the install.sh served" >&2
+  exit 1
+}
+for tree in "$OUT" "$OUT/tampered" "$OUT/badsig" "$OUT/nosig"; do
   cp "$DIST/$tarball" "$DIST/checksums.txt" "$tree/"
   if [ ${#proxy[@]} -gt 0 ]; then
     cp "${proxy[0]}" "$tree/"
   fi
-  if [ -f "$DIST/checksums.txt.sig" ]; then
-    cp "$DIST/checksums.txt.sig" "$tree/"
+  if [ "$tree" != "$OUT/nosig" ]; then
+    cp "$keys/checksums.txt.sig" "$tree/"
   fi
 done
 

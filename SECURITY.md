@@ -22,8 +22,9 @@ Alpha: the latest release only.
 ## Verifying a release
 
 Every release publishes `checksums.txt` signed with an ed25519 key. The public half is compiled
-into every Ostiole binary, so the built-in updater refuses anything it cannot verify, and
-`install.sh` checks the same signature with `openssl` when it is available. By hand:
+into every Ostiole binary, so the built-in updater refuses anything it cannot verify. `install.sh`
+checks the same signature with `openssl` and refuses a release it cannot check unless given
+`--no-verify`. By hand:
 
 ```sh
 curl -fsSLO https://github.com/rforced/ostiole/releases/latest/download/checksums.txt

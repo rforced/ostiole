@@ -6,7 +6,7 @@
 #   curl -fsSL … | sudo sh -s -- --yes      (agree to the plan in advance)
 #
 # Flags: --yes, --dry-run, --with-tailscale, --with-wireless, --with-proxy,
-#        --keep <package> (repeatable).
+#        --keep <package> (repeatable), --no-verify.
 # Anything else is passed to `ostiole install` (--listen, --timezone).
 #
 # Environment: OSTIOLE_VERSION pins a version; OSTIOLE_BASE_URL downloads
@@ -36,6 +36,7 @@ DRY_RUN=0
 TAILSCALE=0
 WIRELESS=0
 PROXY=0
+NO_VERIFY=0
 KEEP=""
 INSTALL_ARGS=""
 while [ $# -gt 0 ]; do
@@ -45,6 +46,7 @@ while [ $# -gt 0 ]; do
 	--with-tailscale) TAILSCALE=1 ;;
 	--with-wireless) WIRELESS=1 ;;
 	--with-proxy) PROXY=1 ;;
+	--no-verify) NO_VERIFY=1 ;;
 	--keep)
 		shift
 		[ $# -gt 0 ] || { echo "--keep needs a package name" >&2; exit 1; }
@@ -156,7 +158,7 @@ esac
 
 case "$MANAGER" in
 apt-get)
-	WANT="nftables dnsmasq unbound miniupnpd-nftables ppp iproute2 smartmontools"
+	WANT="nftables dnsmasq unbound miniupnpd-nftables ppp iproute2 smartmontools openssl"
 	# Newer Debian and Ubuntu split networkd out of the systemd package.
 	if apt-cache show systemd-networkd >/dev/null 2>&1; then
 		WANT="$WANT systemd-networkd"
@@ -165,7 +167,7 @@ apt-get)
 	;;
 dnf)
 	if [ "$EL" -eq 1 ]; then
-		WANT="systemd-networkd nftables dnsmasq unbound ppp iproute-tc cpio smartmontools"
+		WANT="systemd-networkd nftables dnsmasq unbound ppp iproute-tc cpio smartmontools openssl"
 		UPNP_NOTE="miniupnpd unpacked from Fedora $FEDORA_UPNP"
 		if [ "$FEDORA_UPNP" -eq 0 ]; then
 			UPNP_NOTE="no UPnP: no Fedora build runs on this release"
@@ -174,16 +176,16 @@ dnf)
 		# Fedora splits networkd out of systemd and only recommends it, so a
 		# router installed with NetworkManager has nothing to hand
 		# addressing to once that goes.
-		WANT="systemd-networkd nftables dnsmasq unbound miniupnpd ppp iproute-tc smartmontools"
+		WANT="systemd-networkd nftables dnsmasq unbound miniupnpd ppp iproute-tc smartmontools openssl"
 		UPNP_NOTE="miniupnpd"
 	fi
 	;;
 pacman)
-	WANT="nftables dnsmasq unbound ppp iproute2 smartmontools"
+	WANT="nftables dnsmasq unbound ppp iproute2 smartmontools openssl"
 	UPNP_NOTE="miniupnpd-nft built from the AUR (base-devel goes on to build it)"
 	;;
 zypper)
-	WANT="nftables dnsmasq unbound miniupnpd ppp iproute2 smartmontools"
+	WANT="nftables dnsmasq unbound miniupnpd ppp iproute2 smartmontools openssl"
 	UPNP_NOTE="miniupnpd"
 	;;
 esac
@@ -451,6 +453,7 @@ esac
 [ "$WIRELESS" -eq 0 ] || echo "  wireless: hostapd iw wireless-regdb${WIRELESS_FW:+ $WIRELESS_FW}"
 [ "$PROXY" -eq 0 ] || echo "  proxy:    ostiole-proxy${OSTIOLE_VERSION:+ $OSTIOLE_VERSION} beside the binary"
 echo "  place:    $BIN_DIR/ostiole, write the units, and start the web UI (on 9443 unless it runs already)"
+[ "$NO_VERIFY" -eq 0 ] || echo "  skip:     the release signature check (--no-verify)"
 case "$REMOVE" in
 *rsyslog* | *syslog-ng*) echo "  remove:   $REMOVE (and the /var/log files it wrote)" ;;
 *) echo "  remove:   ${REMOVE:-nothing this router has that it has no use for}" ;;
@@ -770,20 +773,25 @@ PLAIN="${VERSION#v}"
 BASE="${OSTIOLE_BASE_URL:-https://github.com/$REPO/releases/download/$VERSION}"
 # The checksums file is signed with the release ed25519 key, the same one
 # the built-in updater trusts. Verifying it here means a tampered
-# checksums.txt cannot hand you a tampered tarball. Rotation: add the new
-# key to the list, keep the old one for a release.
+# checksums.txt cannot hand you a tampered tarball. Whatever stops the
+# check stops the install: deleting the signature is the first thing
+# somebody able to change the release assets would do. --no-verify skips
+# it. Rotation: add the new key to the list, keep the old one for a
+# release.
 OSTIOLE_RELEASE_KEYS="MCowBQYDK2VwAyEA4a3rf0bCdQNTKO3KODxqMrdT1+T1nq9t+KNN2f9DJ0U=" # gitleaks:allow (public key)
 verify_signature() {
-	if ! command -v openssl >/dev/null 2>&1 || ! command -v base64 >/dev/null 2>&1; then
-		echo "note: openssl or base64 missing, skipping the signature check" >&2
+	if [ "$NO_VERIFY" -eq 1 ]; then
+		echo "note: --no-verify: the signature is not checked, the checksum still is" >&2
 		return 0
 	fi
-	# Quiet, because the usual reason this fails is a 404 and curl's own
-	# account of that reads like a broken install rather than a release
-	# with nothing to check.
+	if ! command -v openssl >/dev/null 2>&1 || ! command -v base64 >/dev/null 2>&1; then
+		echo "openssl and base64 are needed to check the release signature; install them or pass --no-verify" >&2
+		exit 1
+	fi
+	# Quiet, because curl's account of a 404 says less than this does.
 	if ! curl -fsSL -o "$TMP/checksums.txt.sig" "$BASE/checksums.txt.sig" 2>/dev/null; then
-		echo "note: no signature published for this release; the checksum was still checked" >&2
-		return 0
+		echo "no signature at $BASE/checksums.txt.sig; refusing the release (--no-verify installs it anyway)" >&2
+		exit 1
 	fi
 	base64 -d <"$TMP/checksums.txt.sig" >"$TMP/sig.bin" 2>/dev/null ||
 		{ echo "malformed signature" >&2; exit 1; }
@@ -800,8 +808,8 @@ verify_signature() {
 		fi
 		# An openssl too old for ed25519 cannot tell us anything either way.
 		if grep -qiE "unknown option|unsupported|not supported|usage" "$TMP/openssl.out"; then
-			echo "note: this openssl cannot check ed25519, skipping the signature check" >&2
-			return 0
+			echo "this openssl cannot check an ed25519 signature; install OpenSSL 3 or pass --no-verify" >&2
+			exit 1
 		fi
 	done
 	echo "signature check failed for checksums.txt" >&2
@@ -812,7 +820,12 @@ verify_signature() {
 # it is fetched once and each download is checked against it.
 verify_release_checksums() {
 	[ ! -f "$TMP/checksums.txt" ] || return 0
-	curl -fsSL -o "$TMP/checksums.txt" "$BASE/checksums.txt"
+	# Not a missing signature, and not a reason to turn the check off.
+	if ! curl -fsSL -o "$TMP/checksums.txt" "$BASE/checksums.txt"; then
+		rm -f "$TMP/checksums.txt"
+		echo "could not fetch $BASE/checksums.txt" >&2
+		return 1
+	fi
 	verify_signature
 }
 
@@ -821,7 +834,7 @@ verify_release_checksums() {
 fetch_release_binary() {
 	name="$1"
 	tarball="${name}_${PLAIN}_linux_${ARCH}.tar.gz"
-	verify_release_checksums
+	verify_release_checksums || return 1
 	want="$(grep " $tarball\$" "$TMP/checksums.txt" | awk '{print $1}')"
 	[ -n "$want" ] || { echo "$tarball missing from checksums.txt" >&2; return 1; }
 	curl -fsSL -o "$TMP/$tarball" "$BASE/$tarball" || return 1

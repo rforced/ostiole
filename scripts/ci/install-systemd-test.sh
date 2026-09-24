@@ -255,7 +255,9 @@ no_warnings /tmp/repair3.log
 assert_wireless "plain repair"
 
 step "ostiole repair --proxy adds the reverse proxy"
-OSTIOLE_BASE_URL="$BASE" ostiole repair --yes --proxy >/tmp/proxy.log 2>&1 ||
+# The script this runs is the one built into the binary, which trusts
+# the release key and not the one the build under test was signed with.
+OSTIOLE_BASE_URL="$BASE" ostiole repair --yes --proxy --no-verify >/tmp/proxy.log 2>&1 ||
 	{ cat /tmp/proxy.log; fail "ostiole repair --proxy failed"; }
 no_warnings /tmp/proxy.log
 

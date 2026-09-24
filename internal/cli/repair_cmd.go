@@ -13,7 +13,7 @@ import (
 )
 
 func newRepairCmd(_ *globals) *cobra.Command {
-	var yes, dryRun, tailscale, wireless, proxy bool
+	var yes, dryRun, tailscale, wireless, proxy, noVerify bool
 	cmd := &cobra.Command{
 		Use:   "repair",
 		Short: "Reinstall packages and units the way install does",
@@ -25,7 +25,8 @@ and network handover are left alone.
 Run it on a router whose packages were changed by hand, or if the session
 dropped during the first install. --tailscale adds tailscaled and its unit;
 --wireless adds hostapd, iw and the firmware for the card in this router;
---proxy adds the reverse proxy sidecar.`,
+--proxy adds the reverse proxy sidecar, and --no-verify fetches it without
+checking the release signature.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := requireRoot(); err != nil {
@@ -51,6 +52,9 @@ dropped during the first install. --tailscale adds tailscaled and its unit;
 			}
 			if proxy {
 				args = append(args, "--with-proxy")
+			}
+			if noVerify {
+				args = append(args, "--no-verify")
 			}
 			self, err := os.Executable()
 			if err != nil {
@@ -80,6 +84,7 @@ dropped during the first install. --tailscale adds tailscaled and its unit;
 	cmd.Flags().BoolVar(&tailscale, "tailscale", false, "install Tailscale as well, from its own repository where a distribution packages none")
 	cmd.Flags().BoolVar(&wireless, "wireless", false, "install what a wifi card needs as well, whether or not this router has one")
 	cmd.Flags().BoolVar(&proxy, "proxy", false, "install the reverse proxy as well")
+	cmd.Flags().BoolVar(&noVerify, "no-verify", false, "fetch the reverse proxy without checking the release signature (the checksum is still checked)")
 	return cmd
 }
 
