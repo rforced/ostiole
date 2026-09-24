@@ -853,6 +853,35 @@ export const useConfigStore = defineStore('config', () => {
     Object.assign(ensureBackup().remote, patch)
   }
 
+  // ---- notifications ---------------------------------------------------
+
+  /** Where notices go, or an empty block on a draft that has never had one. */
+  const notifications = computed(() => draft.value?.notifications ?? {})
+
+  /**
+   * Change the notifications block, or its email or webhook part. A field
+   * set to nothing is dropped, and so is a part left empty, so a draft put
+   * back the way it was matches the saved configuration again.
+   *
+   * @param {object} patch fields to change
+   * @param {'email' | 'webhook'} [part]
+   */
+  function setNotifications(patch, part) {
+    const d = draft.value
+    const block = d.notifications ?? {}
+    const target = part ? (block[part] ?? {}) : block
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === '' || v === false || v == null || (Array.isArray(v) && !v.length)) delete target[k]
+      else target[k] = v
+    }
+    if (part) {
+      if (Object.keys(target).length) block[part] = target
+      else delete block[part]
+    }
+    if (Object.keys(block).length) d.notifications = block
+    else delete d.notifications
+  }
+
   // ---- protection ------------------------------------------------------
 
   /** The edge defence, or an empty one on a draft that has never had it. */
@@ -1116,6 +1145,8 @@ export const useConfigStore = defineStore('config', () => {
         return '/system/crons'
       case 'updates':
         return '/system/updates'
+      case 'notifications':
+        return '/system/notifications'
       case 'acme':
       case 'certificates':
         return '/system/certificates'
@@ -1251,6 +1282,8 @@ export const useConfigStore = defineStore('config', () => {
     setUpdates,
     remoteBackup,
     setRemoteBackup,
+    notifications,
+    setNotifications,
     gateways,
     upsertGateway,
     removeGateway,

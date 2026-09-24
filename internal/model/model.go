@@ -141,6 +141,8 @@ type Config struct {
 	ACME ACME `json:"acme,omitzero"`
 	// Certificates are what this router holds, issued or uploaded.
 	Certificates []Certificate `json:"certificates,omitempty"`
+	// Notifications is where the router sends word of what goes wrong.
+	Notifications Notifications `json:"notifications,omitzero"`
 }
 
 // CronKind is what a scheduled cron does.

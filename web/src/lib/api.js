@@ -304,6 +304,12 @@ export const api = {
     list: () => get('/crons'),
     run: (id) => post(`/crons/${encodeURIComponent(id)}/run`),
   },
+  notifications: {
+    /** How mail and the webhook have done, and what went out lately. */
+    status: () => get('/notifications'),
+    /** Sends a test to the targets these settings switch on. */
+    test: (settings) => post('/notifications/test', settings),
+  },
   users: {
     list: () => get('/users'),
     create: (body) => post('/users', body),

@@ -223,6 +223,12 @@ export const NAV = [
         view: () => import('@/views/system/BackupPage.vue'),
         needsConfig: true,
       },
+      {
+        path: 'notifications',
+        label: 'Notifications',
+        view: () => import('@/views/system/NotificationsPage.vue'),
+        needsConfig: true,
+      },
       { path: 'crons', label: 'Crons', view: () => import('@/views/system/CronsPage.vue') },
       { path: 'ruleset', label: 'Ruleset', view: () => import('@/views/system/RulesetPage.vue') },
     ],

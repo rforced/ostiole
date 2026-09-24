@@ -56,6 +56,10 @@ func (c *Config) Redacted() *Config {
 	for i := range out.Certificates {
 		out.Certificates[i].KeyPEM = ""
 	}
+	out.Notifications.Email.Password = ""
+	out.Notifications.Webhook.Token = ""
+	// A chat service's webhook URL is the key to its channel.
+	out.Notifications.Webhook.URL = ""
 	return out
 }
 

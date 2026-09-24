@@ -32,6 +32,7 @@ import (
 	"github.com/rforced/ostiole/internal/modem"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
+	"github.com/rforced/ostiole/internal/notify"
 	"github.com/rforced/ostiole/internal/policy"
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/smart"
@@ -118,6 +119,12 @@ type api struct {
 	// hourly verdict the dashboard warns from.
 	drives      *smart.Client
 	driveHealth *smart.Monitor
+	// notifier sends notices, and tracker remembers which conditions it
+	// sent them for; a nil notifier sends nothing.
+	notifier *notify.Notifier
+	tracker  *notify.Tracker
+	// watchEvery replaces the minute between looks in tests.
+	watchEvery time.Duration
 }
 
 // GatewayStatuser reports what the gateway monitor knows.
@@ -140,6 +147,7 @@ func (a *api) register(mux *router) {
 	a.registerCrons(mux)
 	a.registerSysUpdate(mux)
 	a.registerHost(mux)
+	a.registerNotify(mux)
 	a.registerMetrics(mux)
 	a.registerOpenAPI(mux)
 	mux.HandleFunc("GET /api/v1/status", a.read(a.status))

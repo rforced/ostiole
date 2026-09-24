@@ -6,9 +6,10 @@ import (
 )
 
 // AdminChanges names what in the change from old to next only an
-// administrator may make: what runs as root, what carries the accounts off
-// the router, and who gets in to manage it. An operator changes and
-// applies everything else. old is nil for a router with no configuration.
+// administrator may make: what runs as root, what carries the accounts or
+// word of the router off it, and who gets in to manage it. An operator
+// changes and applies everything else. old is nil for a router with no
+// configuration.
 func AdminChanges(old, next *Config) []string {
 	if old == nil {
 		old = &Config{}
@@ -23,6 +24,10 @@ func AdminChanges(old, next *Config) []string {
 	if old.Backup.Remote != next.Backup.Remote {
 		// A remote backup carries the accounts, password hashes included.
 		out = append(out, "remote backup")
+	}
+	if !sameJSON(old.Notifications, next.Notifications) {
+		// What the router says about itself, and to whom, leaves it.
+		out = append(out, "notifications")
 	}
 	om, nm := old.System.Management, next.System.Management
 	if om.WebPort != nm.WebPort || om.SSHPort != nm.SSHPort || om.SSHPasswords != nm.SSHPasswords ||

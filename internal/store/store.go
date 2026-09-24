@@ -31,6 +31,9 @@ const (
 	// OffsetFile is the UTC offset the ruleset in the kernel was loaded
 	// at, which its schedules' hours were converted with.
 	OffsetFile = "offset.json"
+	// NotifyFile lists the conditions a notice went out for, so a restart
+	// does not send them again.
+	NotifyFile = "notify.json"
 )
 
 // DefaultDir is the production location.

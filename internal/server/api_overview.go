@@ -21,6 +21,7 @@ import (
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
+	"github.com/rforced/ostiole/internal/notify"
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/store"
 )
@@ -219,6 +220,9 @@ type Warning struct {
 	Level  string `json:"level"` // warn or info
 	Title  string `json:"title"`
 	Detail string `json:"detail,omitempty"`
+	// Key tells two warnings of a kind apart for notices when the title
+	// does not stay the same.
+	Key string `json:"-"`
 }
 
 // TableLister reports every nftables table on the router so the dashboard can
@@ -873,10 +877,27 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 			detail = "Nothing has renewed it."
 		}
 		out = append(out, Warning{
-			Kind: "certificate", Level: "warn",
+			Kind: "certificate", Level: "warn", Key: c.ID,
 			Title:  title,
 			Detail: detail + " Details under System, Certificates.",
 		})
+	}
+	// A notice that did not arrive is only missed by somebody waiting for
+	// it, so the page they do look at says so.
+	if a.notifier != nil && cfg != nil && cfg.Notifications.Enabled {
+		if failing := a.notifier.Failing(cfg.Notifications); len(failing) > 0 {
+			var failed []string
+			for _, target := range []string{notify.TargetEmail, notify.TargetWebhook} {
+				if err, ok := failing[target]; ok {
+					failed = append(failed, targetName[target]+": "+err)
+				}
+			}
+			out = append(out, Warning{
+				Kind: kindNotifyFailed, Level: "warn",
+				Title:  "Notifications are not getting through",
+				Detail: strings.Join(failed, ". ") + ". Details under System, Notifications.",
+			})
+		}
 	}
 	// Installing refuses on an old kernel, but a router can be booted onto one
 	// afterwards. Say so and keep filtering: a firewall that stops working

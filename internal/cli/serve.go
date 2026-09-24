@@ -32,6 +32,7 @@ import (
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
+	"github.com/rforced/ostiole/internal/notify"
 	"github.com/rforced/ostiole/internal/panics"
 	"github.com/rforced/ostiole/internal/policy"
 	"github.com/rforced/ostiole/internal/server"
@@ -278,6 +279,12 @@ at your own.`,
 			// Every loop starts again after a panic rather than taking the
 			// daemon with it: several parse what the internet sends.
 			log := slog.Default()
+			// Notices leave the router only once an admin turns them on;
+			// until then the notifier keeps and sends nothing.
+			notifier := &notify.Notifier{Config: eng.Effective, Log: log}
+			eng.WithNotifier(notifier)
+			deps.Notify = notifier
+			go panics.Loop(ctx, log, "notifications", notifier.Run)
 			go panics.Loop(ctx, log, "alias refresher", refresher.Run)
 			go panics.Loop(ctx, log, "blocklist refresher", blocklists.Run)
 			go panics.Loop(ctx, log, "crons", crons.Run)

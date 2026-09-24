@@ -15,6 +15,7 @@ import (
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
+	"github.com/rforced/ostiole/internal/notify"
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/shaping"
 	"github.com/rforced/ostiole/internal/store"
@@ -759,5 +760,45 @@ func TestRenewLeaseGatesOnTheConfiguration(t *testing.T) {
 	bare, _, _ := newEngine(t)
 	if err := bare.RenewLease(ctx, "eth0", false); !errors.Is(err, ErrNoNetwork) {
 		t.Errorf("no backend: err = %v, want ErrNoNetwork", err)
+	}
+}
+
+// A window that runs out is the one undo nobody asked for, so the
+// notifier hears of it. The daemon's notifier reads the configuration
+// through Effective, which takes the engine's lock, so it has to be told
+// after the undo lets go of it.
+func TestAnExpiredWindowIsToldWithoutTheLock(t *testing.T) {
+	t.Parallel()
+	e, _, _ := newEngine(t)
+	n := &notify.Notifier{Config: e.Effective}
+	e.WithNotifier(n)
+	ctx := context.Background()
+	on := cfg("on")
+	on.Notifications = model.Notifications{Enabled: true, Webhook: model.NotifyWebhook{Enabled: true, URL: "https://hooks.example.net/x"}}
+	if _, err := e.Apply(ctx, on, ApplyOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Apply(ctx, cfg("asked"), ApplyOptions{ConfirmTimeout: time.Hour}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Revert(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n.Status().Waiting != 0 {
+		t.Error("a revert somebody asked for was told")
+	}
+	if _, err := e.Apply(ctx, cfg("forgotten"), ApplyOptions{ConfirmTimeout: 30 * time.Millisecond}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return n.Status().Waiting == 1 })
+	answered := make(chan struct{})
+	go func() {
+		e.Effective()
+		close(answered)
+	}()
+	select {
+	case <-answered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the engine stayed locked after the window ran out")
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
+	"github.com/rforced/ostiole/internal/notify"
 	"github.com/rforced/ostiole/internal/sshd"
 	"github.com/rforced/ostiole/internal/store"
 	"github.com/rforced/ostiole/internal/sysctl"
@@ -70,6 +72,9 @@ type Engine struct {
 	defaultPorts []uint16
 	// alive reports whether a PID is a running Ostiole process.
 	alive func(pid int) bool
+	// notifier hears of an apply undone because nobody confirmed it; nil
+	// tells nobody.
+	notifier Notifier
 
 	mu      sync.Mutex
 	pending *pendingApply
@@ -112,6 +117,17 @@ func New(st *store.Store, runner nft.Runner, net network.Backend, log *slog.Logg
 		store: st, nft: runner, net: net, log: log, revert: time.Minute,
 		defaultPorts: []uint16{model.DefaultWebPort, 22}, alive: ostioleRunning,
 	}
+}
+
+// Notifier is told what the engine did that nobody asked it to.
+type Notifier interface {
+	Notify(notify.Event)
+}
+
+// WithNotifier has n told when an apply's window runs out.
+func (e *Engine) WithNotifier(n Notifier) *Engine {
+	e.notifier = n
+	return e
 }
 
 // WithDefaultPorts sets the management ports the fallback ruleset opens
@@ -595,19 +611,55 @@ func (e *Engine) confirmed() (cfg *model.Config, ok bool) {
 }
 
 func (e *Engine) expire(id string) {
+	// The notifier reads the configuration in force through Effective,
+	// which takes the lock, so it is told once the lock is let go.
+	if ev, ok := e.undoExpired(id); ok {
+		e.tell(ev)
+	}
+}
+
+// undoExpired puts back the apply whose window ran out, and says what to
+// tell of it.
+func (e *Engine) undoExpired(id string) (notify.Event, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	p := e.pending
 	if p == nil || p.id != id {
-		return
+		return notify.Event{}, false
 	}
 	e.pending = nil
+	window := p.deadline.Sub(p.since)
 	if err := e.undo(context.Background(), p); err != nil {
 		e.log.Error("automatic revert failed; system may still have the unconfirmed configuration", "err", err)
-		return
+		return notify.Event{
+			Kind: notify.KindApplyReverted, Title: "An unconfirmed apply could not be undone",
+			Detail: "Nobody confirmed it within " + minutes(window) + ", and putting the configuration before it back failed: " +
+				err.Error() + ". The router may still run what nobody confirmed.",
+		}, true
 	}
-	e.log.Warn("apply not confirmed in time; reverted to previous ruleset",
-		"window", p.deadline.Sub(p.since))
+	e.log.Warn("apply not confirmed in time; reverted to previous ruleset", "window", window)
+	return notify.Event{
+		Kind: notify.KindApplyReverted, Title: "An apply was not confirmed and was undone",
+		Detail: "Nobody confirmed it within " + minutes(window) + ". The configuration before it is back.",
+	}, true
+}
+
+func (e *Engine) tell(ev notify.Event) {
+	if e.notifier != nil {
+		e.notifier.Notify(ev)
+	}
+}
+
+// minutes says how long a window was the way a person would.
+func minutes(d time.Duration) string {
+	switch m := d.Round(time.Minute) / time.Minute; {
+	case d < time.Minute:
+		return d.Round(time.Second).String()
+	case m == 1:
+		return "a minute"
+	default:
+		return strconv.Itoa(int(m)) + " minutes"
+	}
 }
 
 func (e *Engine) commit(cfg *model.Config, ruleset string) (*store.Revision, error) {

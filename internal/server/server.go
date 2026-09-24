@@ -27,6 +27,8 @@ import (
 	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/modem"
+	"github.com/rforced/ostiole/internal/notify"
+	"github.com/rforced/ostiole/internal/panics"
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/smart"
 	"github.com/rforced/ostiole/internal/sysstat"
@@ -140,10 +142,19 @@ type Deps struct {
 	// an older firewall left in the kernel. Only the fields that are not
 	// already somewhere in Deps need setting; Handler fills in the rest.
 	Host host.Deps
+	// Notify sends notices off the router; nil sends none, and Run then
+	// watches for nothing to send.
+	Notify *notify.Notifier
 }
 
 // Handler builds the full HTTP handler: API routes plus the SPA.
 func Handler(d Deps) http.Handler {
+	h, _ := build(d)
+	return h
+}
+
+// build makes the handler and the API behind it, whose watchers Run starts.
+func build(d Deps) (http.Handler, *api) {
 	mux := &router{mux: http.NewServeMux()}
 	api := &api{
 		engine:      d.Engine,
@@ -183,6 +194,10 @@ func Handler(d Deps) http.Handler {
 		drives:      d.Drives,
 		driveHealth: d.DriveHealth,
 		host:        hostDeps(d),
+		notifier:    d.Notify,
+	}
+	if d.Engine != nil {
+		api.tracker = &notify.Tracker{State: d.Engine.Store(), Log: slog.Default()}
 	}
 	if api.keepalive <= 0 {
 		api.keepalive = 15 * time.Second
@@ -192,7 +207,7 @@ func Handler(d Deps) http.Handler {
 	api.register(mux)
 	mux.HandleFunc("/api/", mux.notFound)
 	mux.Handle("/", web.Handler())
-	return securityHeaders(requestLog(csrfGuard(mux.mux)))
+	return securityHeaders(requestLog(csrfGuard(mux.mux))), api
 }
 
 // hostDeps completes the host dependencies from the ones the API already
@@ -223,11 +238,17 @@ func hostDeps(d Deps) host.Deps {
 	return h
 }
 
-// Run serves until ctx is cancelled, then shuts down gracefully.
+// Run serves until ctx is cancelled, then shuts down gracefully. With a
+// notifier it also watches for what to notify.
 func Run(ctx context.Context, cfg Config, d Deps, logger *slog.Logger) error {
+	handler, api := build(d)
+	if api.notifier != nil && api.engine != nil {
+		go panics.Loop(ctx, logger, "notification watcher", api.watchConditions)
+		go panics.Loop(ctx, logger, "waf count", api.watchWAF)
+	}
 	srv := &http.Server{
 		Addr:              cfg.Listen,
-		Handler:           Handler(d),
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       120 * time.Second,

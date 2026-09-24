@@ -147,7 +147,7 @@ var routeDocs = map[string]routeDoc{
 
 	"POST /api/v1/config/starter":               {summary: "Build a first configuration from the wizard's answers.", role: auth.RoleOperator},
 	"POST /api/v1/check":                        {summary: "Validate a configuration and render it without applying. Changes only an administrator may apply are refused.", role: auth.RoleOperator},
-	"POST /api/v1/apply":                        {summary: "Apply a configuration, optionally with a confirmation window. Command crons, backups that carry accounts, updates, the remote backup, management access and anti-lockout need an administrator.", role: auth.RoleOperator},
+	"POST /api/v1/apply":                        {summary: "Apply a configuration, optionally with a confirmation window. Command crons, backups that carry accounts, updates, the remote backup, notifications, management access and anti-lockout need an administrator.", role: auth.RoleOperator},
 	"POST /api/v1/apply/confirm":                {summary: "Confirm the pending apply.", role: auth.RoleOperator},
 	"POST /api/v1/apply/revert":                 {summary: "Undo the pending apply.", role: auth.RoleOperator},
 	"POST /api/v1/config/restore":               {summary: "Read a backup file and report what it would change.", role: auth.RoleOperator},
@@ -197,6 +197,9 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/dns/queries/stream":  {summary: "Answers from the DNS server as they are given (server-sent events).", role: auth.RoleViewer},
 	"GET /api/v1/dns/queries/summary": {summary: "Totals for the query log, with the busiest names and clients.", role: auth.RoleViewer},
 	"DELETE /api/v1/dns/queries":      {summary: "Empty the query log and its per-list counts.", role: auth.RoleOperator},
+
+	"GET /api/v1/notifications":       {summary: "How mail and the webhook have done, and the notices sent lately.", role: auth.RoleViewer},
+	"POST /api/v1/notifications/test": {summary: "Send a test notice to the targets the settings in the body switch on.", role: auth.RoleAdmin},
 
 	"GET /api/v1/crons":           {summary: "The operator's crons, and the work Ostiole does on its own account.", role: auth.RoleViewer},
 	"POST /api/v1/crons/{id}/run": {summary: "Run a cron now. Command and update crons need an administrator.", role: auth.RoleOperator},

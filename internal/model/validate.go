@@ -514,6 +514,7 @@ func (c *Config) Validate() error {
 	v.crons(c)
 	v.updates(&c.Updates)
 	v.backup(&c.Backup)
+	v.notifications(&c.Notifications)
 	v.acme(c)
 	v.certificates(c, ifaces)
 
