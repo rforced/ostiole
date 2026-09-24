@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/rforced/ostiole/internal/journald"
 	"github.com/rforced/ostiole/internal/sysctl"
@@ -935,8 +936,10 @@ func (v *validator) upnp(c *Config, ifaces map[string]bool) {
 
 var (
 	// wafTargetRe is a Coraza variable, optionally with a member:
-	// ARGS, ARGS:password, REQUEST_HEADERS:User-Agent.
-	wafTargetRe = regexp.MustCompile(`^[A-Z_]+(:[^\s"']+)?$`)
+	// ARGS, ARGS:password, REQUEST_HEADERS:User-Agent, ARGS:tags[]. The
+	// member goes into a rule's action list, where a comma starts another
+	// action and a semicolon another target.
+	wafTargetRe = regexp.MustCompile(`^[A-Z_]+(:[A-Za-z0-9_.\[\]-]+)?$`)
 	// wafRuleRe is a rule ID or a range of them.
 	wafRuleRe = regexp.MustCompile(`^([0-9]{1,9})(-([0-9]{1,9}))?$`)
 )
@@ -1206,10 +1209,13 @@ func (v *validator) wafExclusion(path string, e WAFExclusion) {
 	case e.Path == "":
 	case !strings.HasPrefix(e.Path, "/"):
 		v.add(path+".path", "%q must start with /", e.Path)
-	case strings.Contains(e.Path, `"`):
+	case strings.ContainsAny(e.Path, `"\`):
 		// The path is quoted into a rule, and the rule language has no
-		// escape for a quote inside one.
-		v.add(path+".path", "a path cannot hold a quote")
+		// escape for a quote inside one; a backslash escapes the closing one.
+		v.add(path+".path", "a path cannot hold a quote or a backslash")
+	case strings.ContainsFunc(e.Path, unicode.IsControl):
+		// A line break ends the rule halfway and the proxy refuses the file.
+		v.add(path+".path", "a path cannot hold a control character")
 	}
 	if e.Target != "" && !wafTargetRe.MatchString(e.Target) {
 		v.add(path+".target", "%q must be a variable like ARGS or ARGS:password", e.Target)

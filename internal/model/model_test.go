@@ -763,6 +763,12 @@ func TestValidateWAFProfiles(t *testing.T) {
 		{"path without a slash", func(w *WAFProfile) { w.Exclusions[1].Path = "wp-admin" }, "services.proxy.wafProfiles[0].exclusions[1].path"},
 		{"path with a quote", func(w *WAFProfile) { w.Exclusions[1].Path = `/wp"admin` }, "services.proxy.wafProfiles[0].exclusions[1].path"},
 		{"target is not a variable", func(w *WAFProfile) { w.Exclusions[1].Target = "args:content" }, "services.proxy.wafProfiles[0].exclusions[1].target"},
+		{"path with a backslash", func(w *WAFProfile) { w.Exclusions[1].Path = `/wp-admin\` }, "services.proxy.wafProfiles[0].exclusions[1].path"},
+		{"path with a line break", func(w *WAFProfile) { w.Exclusions[1].Path = "/wp-admin\nSecRuleEngine Off" }, "services.proxy.wafProfiles[0].exclusions[1].path"},
+		// A comma would start another action on the rule: this one would
+		// switch the engine off for the path while the page shows it on.
+		{"target with an action", func(w *WAFProfile) { w.Exclusions[1].Target = "ARGS:x,ctl:ruleEngine=Off" }, "services.proxy.wafProfiles[0].exclusions[1].target"},
+		{"target with a second target", func(w *WAFProfile) { w.Exclusions[1].Target = "ARGS:x;REQUEST_URI" }, "services.proxy.wafProfiles[0].exclusions[1].target"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
