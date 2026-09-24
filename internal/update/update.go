@@ -569,20 +569,8 @@ func (i *Installer) Install(ctx context.Context, d Downloaded) error {
 		}
 	}
 	// The restart runs detached so the daemon can answer the request that
-	// triggered it. If the new binary does not come up healthy, the
-	// previous one is put back.
-	// `install` first, so unit files written by the new version (hardening,
-	// paths) are in place before the restart; it is idempotent.
-	restore, after := "", ""
-	if proxyPrevious != "" {
-		// try-restart, so a router with the proxy installed but nothing
-		// to serve is not started by an update.
-		after = fmt.Sprintf("systemctl try-restart %s; ", i.ProxyUnit)
-		restore = fmt.Sprintf("mv -f %s %s; ", proxyPrevious, i.Proxy)
-	}
-	script := fmt.Sprintf(`sleep 1; %[2]s install >/dev/null 2>&1; systemctl restart %[1]s; sleep 4;
-if %[2]s update --probe %[3]s; then rm -f %[4]s %[6]s; %[5]selse %[7]smv -f %[4]s %[2]s && systemctl restart %[1]s; fi`,
-		i.Unit, i.Binary, i.HealthURL, previous, after, proxyPrevious, restore)
+	// triggered it.
+	script := i.restartScript(previous, proxyPrevious)
 	_, _ = i.Run.Run(ctx, "systemctl", "reset-failed", "ostiole-update-restart.service")
 	if out, err := i.Run.Run(ctx, "systemd-run", "--unit=ostiole-update-restart", "--collect", "--quiet", "sh", "-c", script); err != nil {
 		// Nothing is going to restart into the new binary, and nothing
@@ -594,4 +582,28 @@ if %[2]s update --probe %[3]s; then rm -f %[4]s %[6]s; %[5]selse %[7]smv -f %[4]
 		return fmt.Errorf("schedule restart: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
+}
+
+// restartScript restarts into the new binaries and puts the old ones back
+// if they fail. `install` goes first, so unit files written by the new
+// version (hardening, paths) are in place before the restart; it is
+// idempotent. The proxy is restarted and checked only once the daemon
+// answers, and its previous copy goes only when the new one runs: one that
+// is not running is only asked for its version, since an update must not
+// start a proxy that has nothing to serve.
+func (i *Installer) restartScript(previous, proxyPrevious string) string {
+	restore, proxy := "", ""
+	if proxyPrevious != "" {
+		restore = fmt.Sprintf("mv -f %s %s; ", proxyPrevious, i.Proxy)
+		proxy = fmt.Sprintf(`
+if systemctl is-active --quiet %[1]s; then
+if systemctl try-restart %[1]s && sleep 3 && systemctl is-active --quiet %[1]s; then rm -f %[2]s;
+else mv -f %[2]s %[3]s; systemctl reset-failed %[1]s; systemctl restart %[1]s; fi
+elif %[3]s version >/dev/null 2>&1; then rm -f %[2]s; else mv -f %[2]s %[3]s; fi`,
+			i.ProxyUnit, proxyPrevious, i.Proxy)
+	}
+	return fmt.Sprintf(`sleep 1; %[2]s install >/dev/null 2>&1; systemctl restart %[1]s; sleep 4;
+if %[2]s update --probe %[3]s; then rm -f %[4]s;%[5]s
+else %[6]smv -f %[4]s %[2]s && systemctl restart %[1]s; fi`,
+		i.Unit, i.Binary, i.HealthURL, previous, proxy, restore)
 }

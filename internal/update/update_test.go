@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -311,6 +312,113 @@ func TestInstallPutsTheOldBinaryBackWhenNothingWillRestart(t *testing.T) {
 	}
 	if raw, _ := os.ReadFile(proxy); string(raw) != "old proxy" {
 		t.Errorf("proxy = %q, want the old one back", raw)
+	}
+}
+
+// The restart script is run for real, with systemctl, sleep and both
+// binaries faked on a PATH of their own, so what it leaves on disk is
+// checked rather than read off its text. The proxy's previous copy stays
+// until the new proxy runs, and comes back when it does not.
+func TestRestartScriptKeepsTheOldProxyUntilTheNewOneRuns(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name                            string
+		daemonUp, proxyUp, proxyBroken  bool
+		wantDaemon, wantProxy, restarts string
+	}{
+		{name: "healthy", daemonUp: true, proxyUp: true,
+			wantDaemon: "new", wantProxy: "new", restarts: "try-restart"},
+		{name: "proxy fails", daemonUp: true, proxyUp: true, proxyBroken: true,
+			wantDaemon: "new", wantProxy: "old", restarts: "try-restart,restart"},
+		{name: "proxy idle", daemonUp: true,
+			wantDaemon: "new", wantProxy: "new"},
+		{name: "idle proxy will not run", daemonUp: true, proxyBroken: true,
+			wantDaemon: "new", wantProxy: "old"},
+		{name: "daemon fails", proxyUp: true,
+			wantDaemon: "old", wantProxy: "old"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			bin, proxy := filepath.Join(dir, "ostiole"), filepath.Join(dir, "ostiole-proxy")
+			probe := 1
+			if tc.daemonUp {
+				probe = 0
+			}
+			broken := ""
+			if tc.proxyBroken {
+				broken = " broken"
+			}
+			for path, content := range map[string]string{
+				bin:                                 "#!/bin/sh\n# old\nexit 0\n",
+				bin + ".new":                        fmt.Sprintf("#!/bin/sh\n# new\n[ \"$1\" != update ] || exit %d\n", probe),
+				proxy:                               "#!/bin/sh\n# old\nexit 0\n",
+				proxy + ".new":                      "#!/bin/sh\n# new" + broken + "\n[ -z \"" + broken + "\" ]\n",
+				filepath.Join(dir, "path", "sleep"): "#!/bin/sh\n",
+				// A proxy starts when its binary is not broken; the calls
+				// that restart it are recorded.
+				filepath.Join(dir, "path", "systemctl"): `#!/bin/sh
+case "$1 $2" in
+"is-active --quiet") [ -f "$DIR/up" ] ;;
+"try-restart ostiole-proxy.service" | "restart ostiole-proxy.service")
+	echo "$1" >>"$DIR/restarts"
+	if grep -q broken "$DIR/ostiole-proxy"; then rm -f "$DIR/up"; exit 1; fi
+	touch "$DIR/up" ;;
+esac
+`,
+			} {
+				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// The rest are the real commands, and nothing else is on the
+			// path: a script that reached the real systemctl would restart
+			// this machine's units.
+			for _, name := range []string{"mv", "rm", "grep", "touch"} {
+				target, err := exec.LookPath(name)
+				if err != nil {
+					t.Skip(err)
+				}
+				if err := os.Symlink(target, filepath.Join(dir, "path", name)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.proxyUp {
+				if err := os.WriteFile(filepath.Join(dir, "up"), nil, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			run := &fakeRun{}
+			inst := &Installer{Binary: bin, Unit: "ostiole.service", HealthURL: "x", Run: run,
+				Proxy: proxy, ProxyUnit: "ostiole-proxy.service"}
+			if err := inst.Install(t.Context(), Downloaded{Binary: bin + ".new", Proxy: proxy + ".new"}); err != nil {
+				t.Fatal(err)
+			}
+			call := run.calls[len(run.calls)-1]
+			sh := exec.CommandContext(t.Context(), "/bin/sh", "-c", call[len(call)-1])
+			sh.Env = []string{"PATH=" + filepath.Join(dir, "path"), "DIR=" + dir}
+			if out, err := sh.CombinedOutput(); err != nil {
+				t.Fatalf("script: %v\n%s", err, out)
+			}
+
+			for path, want := range map[string]string{bin: tc.wantDaemon, proxy: tc.wantProxy} {
+				if raw, _ := os.ReadFile(path); !strings.Contains(string(raw), "# "+want) {
+					t.Errorf("%s = %q, want the %s one", filepath.Base(path), raw, want)
+				}
+			}
+			for _, left := range []string{bin + ".previous", proxy + ".previous"} {
+				if _, err := os.Stat(left); err == nil {
+					t.Errorf("%s left behind", filepath.Base(left))
+				}
+			}
+			raw, _ := os.ReadFile(filepath.Join(dir, "restarts"))
+			if got := strings.Join(strings.Fields(string(raw)), ","); got != tc.restarts {
+				t.Errorf("proxy restarts = %q, want %q", got, tc.restarts)
+			}
+		})
 	}
 }
 
