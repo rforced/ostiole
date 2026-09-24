@@ -178,7 +178,7 @@ function when(s) {
               min="1000"
               :max="limits.hardMax ?? 25000000"
               step="50000"
-              class="input w-40 font-mono"
+              class="input w-40 font-mono max-sm:w-full"
             />
           </FormField>
           <p class="max-w-2xl text-ink-muted">
@@ -226,7 +226,7 @@ function when(s) {
         </p>
         <p v-else-if="note" aria-live="polite" class="text-ink-muted">{{ note }}</p>
       </div>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>List</th>
@@ -249,23 +249,27 @@ function when(s) {
             :key="l.name"
             :class="{ 'row-changed': config.isChanged('blocking.lists', l.name) }"
           >
-            <td class="font-mono font-medium">
+            <td class="font-mono font-medium" data-label="">
               {{ l.name }}
               <div v-if="l.description" class="font-sans text-sm font-normal text-ink-muted">
                 {{ l.description }}
               </div>
             </td>
-            <td>
-              <input
-                type="checkbox"
-                class="size-4 rounded"
-                :checked="l.enabled"
-                :disabled="auth.readOnly"
-                :aria-label="`${l.name} enabled`"
-                @change="config.upsertBlockList({ ...l, enabled: $event.target.checked })"
-              />
+            <td data-label="On">
+              <label
+                class="max-sm:-my-3 max-sm:inline-flex max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center"
+              >
+                <input
+                  type="checkbox"
+                  class="size-4 rounded"
+                  :checked="l.enabled"
+                  :disabled="auth.readOnly"
+                  :aria-label="`${l.name} enabled`"
+                  @change="config.upsertBlockList({ ...l, enabled: $event.target.checked })"
+                />
+              </label>
             </td>
-            <td class="font-mono text-code">
+            <td class="font-mono text-code" data-label="Names">
               <template v-if="fetched[l.name]?.fetchedAt">
                 {{ formatCount(fetched[l.name].domains) }}
                 <div v-if="fetched[l.name].skipped" class="text-ink-muted">
@@ -276,7 +280,7 @@ function when(s) {
               <span v-else-if="!applied.has(l.name)" class="text-ink-muted"> not applied yet </span>
               <span v-else class="text-ink-muted">not fetched yet</span>
             </td>
-            <td class="text-code">
+            <td class="text-code" data-label="Blocked">
               <template v-if="counts[l.name]">
                 {{ formatCount(counts[l.name].blocked) }}
                 <div v-if="counts[l.name].alone" class="text-xs text-ink-muted">
@@ -285,13 +289,13 @@ function when(s) {
               </template>
               <span v-else class="text-ink-muted">&mdash;</span>
             </td>
-            <td class="max-w-xs">
+            <td class="max-w-xs max-sm:max-w-none" data-label="Source">
               <div class="font-mono text-code break-all text-ink-muted">{{ source(l) }}</div>
               <div v-if="fetched[l.name]?.format" class="text-xs text-ink-muted">
                 read as {{ fetched[l.name].format }}
               </div>
             </td>
-            <td class="text-code">
+            <td class="text-code" data-label="Fetched">
               <span v-if="fetched[l.name]?.lastError" class="text-sm text-bad">
                 {{ fetched[l.name].lastError }}
               </span>
@@ -300,7 +304,7 @@ function when(s) {
                 <span v-if="fetched[l.name]?.stale" class="badge badge-warn ml-1">stale</span>
               </template>
             </td>
-            <td class="text-right whitespace-nowrap">
+            <td class="text-right whitespace-nowrap" data-label="">
               <button
                 v-if="l.url && applied.has(l.name) && !auth.readOnly"
                 type="button"

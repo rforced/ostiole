@@ -200,7 +200,7 @@ function toggleInterface(name, on) {
                 min="0"
                 max="1000000"
                 placeholder="10000"
-                class="input w-32"
+                class="input w-32 max-sm:w-full"
               />
             </FormField>
             <FormField
@@ -216,7 +216,7 @@ function toggleInterface(name, on) {
                 min="0"
                 max="512"
                 placeholder="10"
-                class="input w-32"
+                class="input w-32 max-sm:w-full"
               />
             </FormField>
           </div>

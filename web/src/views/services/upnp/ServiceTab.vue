@@ -171,7 +171,7 @@ function edit(index) {
           :disabled="auth.readOnly"
         />
       </div>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>Action</th>
@@ -197,16 +197,16 @@ function edit(index) {
             :key="keyOf(r)"
             :class="{ 'row-changed': config.isChanged('services.upnp.acl', i) }"
           >
-            <td>
+            <td data-label="Action">
               <span class="badge" :class="r.action === 'deny' ? 'badge-bad' : 'badge-ok'">{{
                 r.action
               }}</span>
             </td>
-            <td class="font-mono text-code">{{ r.externalPorts }}</td>
-            <td class="font-mono text-code">{{ r.source }}</td>
-            <td class="font-mono text-code">{{ r.internalPorts }}</td>
-            <td>{{ r.description }}</td>
-            <td class="text-right whitespace-nowrap">
+            <td class="font-mono text-code" data-label="External">{{ r.externalPorts }}</td>
+            <td class="font-mono text-code" data-label="Client">{{ r.source }}</td>
+            <td class="font-mono text-code" data-label="Internal">{{ r.internalPorts }}</td>
+            <td data-label="Description">{{ r.description }}</td>
+            <td class="text-right whitespace-nowrap" data-label="">
               <template v-if="!auth.readOnly">
                 <button
                   type="button"

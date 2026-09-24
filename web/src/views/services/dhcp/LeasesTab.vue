@@ -45,7 +45,7 @@ onMounted(load.run)
       <div v-if="load.error.value" class="card-strip">
         <p role="alert" class="text-bad">{{ load.error.value }}</p>
       </div>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>Address</th>
@@ -62,17 +62,19 @@ onMounted(load.run)
             </td>
           </tr>
           <tr v-for="l in leases" :key="l.ip + (l.mac || l.clientId)">
-            <td class="font-mono text-code">
+            <td class="font-mono text-code" data-label="Address">
               {{ l.ip }}
               <span v-if="l.family === 6" class="badge ml-1">v6</span>
             </td>
             <!-- DHCPv6 identifies clients by DUID, so there is no MAC. -->
-            <td class="font-mono text-code">{{ l.mac || l.clientId || '—' }}</td>
-            <td class="font-mono text-code">{{ l.hostname }}</td>
-            <td>
+            <td class="font-mono text-code" data-label="Client">
+              {{ l.mac || l.clientId || '—' }}
+            </td>
+            <td class="font-mono text-code" data-label="Hostname">{{ l.hostname }}</td>
+            <td data-label="Expires">
               {{ l.static ? 'static' : new Date(l.expires).toLocaleString() }}
             </td>
-            <td class="text-right whitespace-nowrap">
+            <td class="text-right whitespace-nowrap" data-label="">
               <button
                 v-if="l.mac && !l.static && l.family !== 6 && !auth.readOnly"
                 type="button"

@@ -45,7 +45,7 @@ function editLease(l) {
           <Plus class="size-4" aria-hidden="true" /> Add server
         </button>
       </template>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>Interface</th>
@@ -70,15 +70,21 @@ function editLease(l) {
               'row-changed': config.isChanged('services.dhcp.servers', s.interface),
             }"
           >
-            <td class="font-mono">
+            <td class="font-mono" data-label="">
               {{ s.interface }}
               <span v-if="off.has(s.interface)" class="badge ml-1">interface off</span>
             </td>
-            <td class="font-mono text-code">{{ s.rangeStart }} – {{ s.rangeEnd }}</td>
-            <td class="font-mono text-code">{{ s.leaseTime || '24h' }}</td>
-            <td class="font-mono text-code">{{ s.gateway || 'this router' }}</td>
-            <td class="font-mono text-code">{{ s.dns?.join(', ') || 'this router' }}</td>
-            <td class="text-right whitespace-nowrap">
+            <td class="font-mono text-code" data-label="Range">
+              {{ s.rangeStart }} – {{ s.rangeEnd }}
+            </td>
+            <td class="font-mono text-code" data-label="Lease">{{ s.leaseTime || '24h' }}</td>
+            <td class="font-mono text-code" data-label="Gateway">
+              {{ s.gateway || 'this router' }}
+            </td>
+            <td class="font-mono text-code" data-label="DNS">
+              {{ s.dns?.join(', ') || 'this router' }}
+            </td>
+            <td class="text-right whitespace-nowrap" data-label="">
               <button type="button" class="link" @click="editServer(s)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
@@ -100,7 +106,7 @@ function editLease(l) {
           <Plus class="size-4" aria-hidden="true" /> Add static lease
         </button>
       </template>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>MAC</th>
@@ -120,12 +126,12 @@ function editLease(l) {
             :key="l.mac"
             :class="{ 'row-changed': config.isChanged('services.dhcp.staticLeases', l.mac) }"
           >
-            <td class="font-mono text-code">{{ l.mac }}</td>
-            <td class="font-mono text-code">{{ l.ip || '—' }}</td>
-            <td class="font-mono text-code">{{ l.ipv6 || '—' }}</td>
-            <td class="font-mono text-code">{{ l.hostname }}</td>
-            <td>{{ l.description }}</td>
-            <td class="text-right whitespace-nowrap">
+            <td class="font-mono text-code" data-label="MAC">{{ l.mac }}</td>
+            <td class="font-mono text-code" data-label="IPv4">{{ l.ip || '—' }}</td>
+            <td class="font-mono text-code" data-label="IPv6">{{ l.ipv6 || '—' }}</td>
+            <td class="font-mono text-code" data-label="Hostname">{{ l.hostname }}</td>
+            <td data-label="Description">{{ l.description }}</td>
+            <td class="text-right whitespace-nowrap" data-label="">
               <button type="button" class="link" @click="editLease(l)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>

@@ -127,7 +127,7 @@ function save() {
           <input
             id="v6-lease"
             v-model="form.leaseTime"
-            class="input w-32 font-mono"
+            class="input w-32 font-mono max-sm:w-full"
             spellcheck="false"
           />
         </FormField>

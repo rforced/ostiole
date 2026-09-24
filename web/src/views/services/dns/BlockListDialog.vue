@@ -182,7 +182,7 @@ function save() {
             type="number"
             min="1"
             max="720"
-            class="input w-32 font-mono"
+            class="input w-32 font-mono max-sm:w-full"
           />
         </FormField>
       </div>

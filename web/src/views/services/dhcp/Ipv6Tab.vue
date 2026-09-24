@@ -45,7 +45,7 @@ function edit(s) {
           <Plus class="size-4" aria-hidden="true" /> Advertise IPv6
         </button>
       </template>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>Interface</th>
@@ -70,18 +70,20 @@ function edit(s) {
               'row-changed': config.isChanged('services.dhcp.v6', s.interface),
             }"
           >
-            <td class="font-mono">
+            <td class="font-mono" data-label="">
               {{ s.interface }}
               <span v-if="off.has(s.interface)" class="badge ml-1">interface off</span>
             </td>
-            <td>{{ MODES[s.mode] ?? s.mode }}</td>
-            <td class="font-mono text-code">
+            <td data-label="Mode">{{ MODES[s.mode] ?? s.mode }}</td>
+            <td class="font-mono text-code" data-label="Range">
               <template v-if="s.mode === 'managed'">{{ s.rangeStart }} – {{ s.rangeEnd }}</template>
               <span v-else class="text-ink-muted">—</span>
             </td>
-            <td class="font-mono text-code">{{ s.leaseTime || '24h' }}</td>
-            <td class="font-mono text-code">{{ s.dns?.join(', ') || 'this router' }}</td>
-            <td class="text-right whitespace-nowrap">
+            <td class="font-mono text-code" data-label="Lease">{{ s.leaseTime || '24h' }}</td>
+            <td class="font-mono text-code" data-label="DNS">
+              {{ s.dns?.join(', ') || 'this router' }}
+            </td>
+            <td class="text-right whitespace-nowrap" data-label="">
               <button type="button" class="link" @click="edit(s)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>

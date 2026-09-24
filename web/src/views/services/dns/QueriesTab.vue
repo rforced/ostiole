@@ -269,7 +269,7 @@ onBeforeUnmount(disconnect)
             min="0"
             max="10000000"
             placeholder="20000"
-            class="input w-32"
+            class="input w-32 max-sm:w-full"
           />
         </FormField>
         <FormField
@@ -284,7 +284,7 @@ onBeforeUnmount(disconnect)
             min="0"
             max="720"
             placeholder="24"
-            class="input w-32"
+            class="input w-32 max-sm:w-full"
           />
         </FormField>
       </div>
@@ -311,7 +311,7 @@ onBeforeUnmount(disconnect)
             <input
               id="q-name"
               v-model="filter.name"
-              class="input w-56 font-mono"
+              class="input w-56 font-mono max-sm:w-full"
               spellcheck="false"
               placeholder="any"
             />
@@ -320,13 +320,13 @@ onBeforeUnmount(disconnect)
             <input
               id="q-client"
               v-model="filter.client"
-              class="input w-44 font-mono"
+              class="input w-44 font-mono max-sm:w-full"
               spellcheck="false"
               placeholder="any"
             />
           </FormField>
           <FormField id="q-status" label="Status">
-            <select id="q-status" v-model="filter.status" class="input w-40">
+            <select id="q-status" v-model="filter.status" class="input w-40 max-sm:w-full">
               <option value="">Any</option>
               <option value="blocked">Blocked</option>
               <option value="ok">Answered</option>
@@ -336,13 +336,13 @@ onBeforeUnmount(disconnect)
             </select>
           </FormField>
           <FormField id="q-list" label="List">
-            <select id="q-list" v-model="filter.list" class="input w-40">
+            <select id="q-list" v-model="filter.list" class="input w-40 max-sm:w-full">
               <option value="">Any</option>
               <option v-for="l in lists" :key="l.name" :value="l.name">{{ l.name }}</option>
             </select>
           </FormField>
           <FormField id="q-type" label="Type">
-            <select id="q-type" v-model="filter.type" class="input w-28">
+            <select id="q-type" v-model="filter.type" class="input w-28 max-sm:w-full">
               <option value="">Any</option>
               <option v-for="t in ['A', 'AAAA', 'HTTPS', 'PTR', 'SRV', 'TXT', 'MX']" :key="t">
                 {{ t }}
@@ -379,7 +379,9 @@ onBeforeUnmount(disconnect)
         The log is off.
       </p>
       <template v-else>
-        <table class="table">
+        <!-- On a phone a query is two lines: when, what and its type; who asked
+             and what they got. -->
+        <table class="table table-flow">
           <thead>
             <tr>
               <th>Time</th>
@@ -399,20 +401,24 @@ onBeforeUnmount(disconnect)
               </td>
             </tr>
             <template v-for="e in rows" :key="e.key">
-              <tr>
-                <td class="font-mono text-code whitespace-nowrap">
+              <tr class="max-sm:after:order-4 max-sm:after:basis-full max-sm:after:content-['']">
+                <td class="font-mono text-code whitespace-nowrap max-sm:order-1">
                   {{ new Date(e.time).toLocaleTimeString() }}
                 </td>
-                <td>
+                <td class="max-sm:order-5">
                   <template v-if="e.device">
                     {{ e.device }}
                     <div class="font-mono text-xs text-ink-muted">{{ e.client }}</div>
                   </template>
                   <span v-else class="font-mono text-code">{{ e.client }}</span>
                 </td>
-                <td class="font-mono text-code break-all">{{ e.name }}</td>
-                <td class="font-mono text-code">{{ e.type }}</td>
-                <td>
+                <td class="font-mono text-code break-all max-sm:order-2 max-sm:font-medium">
+                  {{ e.name }}
+                </td>
+                <td class="font-mono text-code max-sm:order-3 max-sm:text-ink-muted">
+                  {{ e.type }}
+                </td>
+                <td class="max-sm:order-6">
                   <span class="badge" :class="{ 'badge-warn': e.status === 'blocked' }">
                     {{ e.status }}
                   </span>
@@ -428,7 +434,7 @@ onBeforeUnmount(disconnect)
                     Why?
                   </button>
                 </td>
-                <td class="font-mono text-code">{{ e.answer }}</td>
+                <td class="font-mono text-code max-sm:order-7">{{ e.answer }}</td>
               </tr>
               <tr v-if="why[e.name]">
                 <td colspan="6" class="text-sm text-ink-muted">{{ why[e.name] }}</td>
