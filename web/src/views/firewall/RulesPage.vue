@@ -27,6 +27,7 @@ const SETTINGS = {
   enforcement: '/services/dns#enforcement',
   queryLog: '/services/dns#queries',
   upnp: '/services/upnp',
+  ntp: '/services/time',
   proxy: '/services/proxy',
   wireguard: '/vpn/wireguard',
   tailscale: '/vpn/tailscale',

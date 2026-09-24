@@ -9,12 +9,15 @@ export function interfaceLabel(i) {
 }
 
 /**
- * The interfaces the DNS server listens on when none are picked: every
+ * Where a LAN-side service answers when no interface is picked: every
  * enabled interface in a zone that is not external. Mirrors the server's
  * own reading of an empty list.
  */
-export function dnsListenInterfaces(draft) {
+export function internalInterfaces(draft) {
   if (!draft) return []
   const external = new Set((draft.zones ?? []).filter((z) => z.external).map((z) => z.name))
   return (draft.interfaces ?? []).filter((i) => i.enabled && i.zone && !external.has(i.zone))
 }
+
+/** The interfaces the DNS server listens on when none are picked. */
+export const dnsListenInterfaces = internalInterfaces

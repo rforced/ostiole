@@ -121,6 +121,7 @@ function wired() {
         v6: [{ interface: 'eth1' }],
       },
       dns: { enabled: true, interfaces: ['eth1', 'eth1.10'] },
+      ntp: { serve: true, interfaces: ['eth1'] },
     },
   }
 }
@@ -138,6 +139,7 @@ describe('config store interfaces', () => {
       'DHCP server on eth1',
       'IPv6 advertisement on eth1',
       'DNS listener on eth1',
+      'time served on eth1',
     ])
     expect(config.interfaceDependents('eth0')).toEqual([
       'eth1 loses its delegated IPv6 prefix',
@@ -159,6 +161,9 @@ describe('config store interfaces', () => {
     expect(config.draft.services.dhcp.servers).toEqual([])
     expect(config.draft.services.dhcp.v6).toEqual([])
     expect(config.draft.services.dns.interfaces).toEqual([])
+    // An empty list means every inside interface, so it goes rather than
+    // staying behind empty.
+    expect(config.draft.services.ntp).toEqual({ serve: true })
   })
 
   it('drops gateways with their interface and clears what pointed at them', () => {
@@ -441,6 +446,20 @@ describe('config store traffic shaping', () => {
     expect(config.sectionFor('acme.accounts[le].email')).toBe('/system/certificates')
     expect(config.sectionFor('system.management.certificate')).toBe('/system/certificates')
     expect(config.sectionFor('system.management.webPort')).toBe('/system/general')
+  })
+
+  it('files time changes under the Time page, and drops the block when it empties', () => {
+    const config = useConfigStore()
+    config.replaceDraft(draft())
+    expect(config.sectionFor('services.ntp.servers[0].host')).toBe('/services/time')
+    expect(config.sectionFor('services.ntp.serve')).toBe('/services/time')
+    config.setNTP({ serve: true, interfaces: ['eth1'] })
+    expect(config.ntp).toEqual({ serve: true, interfaces: ['eth1'] })
+    config.setNTP({ interfaces: [] })
+    expect(config.ntp).toEqual({ serve: true })
+    config.setNTP({ serve: false })
+    expect(config.draft.services.ntp).toBeUndefined()
+    expect(config.ntp).toEqual({})
   })
 })
 

@@ -369,6 +369,10 @@ export const api = {
   upnp: {
     mappings: () => get('/upnp/mappings'),
   },
+  ntp: {
+    /** @returns {Promise<object>} whether the clock follows a server, the servers, and the defaults */
+    status: () => get('/ntp/status'),
+  },
   proxy: {
     /** @returns {Promise<{setUp: boolean, running: boolean, release?: string, ports: object, upstreams: object[]}>} */
     status: () => get('/proxy/status'),

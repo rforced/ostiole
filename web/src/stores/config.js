@@ -165,6 +165,7 @@ export const useConfigStore = defineStore('config', () => {
       out.push(`IPv6 advertisement on ${name}`)
     }
     if ((d.services?.dns?.interfaces ?? []).includes(name)) out.push(`DNS listener on ${name}`)
+    if ((d.services?.ntp?.interfaces ?? []).includes(name)) out.push(`time served on ${name}`)
     for (const g of gateways.value) {
       if (g.interface === name) out.push(`gateway ${g.name}`, ...gatewayDependents(g.name))
     }
@@ -192,6 +193,8 @@ export const useConfigStore = defineStore('config', () => {
     if (dhcp?.v6) dhcp.v6 = dhcp.v6.filter((s) => s.interface !== name)
     const dns = d.services?.dns
     if (dns?.interfaces) dns.interfaces = dns.interfaces.filter((n) => n !== name)
+    const served = d.services?.ntp?.interfaces
+    if (served) setNTP({ interfaces: served.filter((n) => n !== name) })
     for (const g of [...gateways.value]) if (g.interface === name) dropGateway(g.name)
     if (d.routes) d.routes = d.routes.filter((r) => r.interface !== name)
     d.interfaces = interfaces.value.filter((i) => i.name !== name)
@@ -650,6 +653,29 @@ export const useConfigStore = defineStore('config', () => {
     const to = index + delta
     if (to < 0 || to >= list.length) return
     ;[list[index], list[to]] = [list[to], list[index]]
+  }
+
+  // ---- time ------------------------------------------------------------
+
+  /** The time block, or an empty one on a draft that has never had it. */
+  const ntp = computed(() => draft.value?.services?.ntp ?? {})
+
+  /**
+   * Change the time block. A field set to nothing is dropped, and so is
+   * the block once it is empty, so a draft put back the way it was matches
+   * the saved configuration again.
+   *
+   * @param {object} patch fields to change
+   */
+  function setNTP(patch) {
+    const services = ensureServices()
+    const block = services.ntp ?? {}
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === '' || v === false || v == null || (Array.isArray(v) && !v.length)) delete block[k]
+      else block[k] = clone(v)
+    }
+    if (Object.keys(block).length) services.ntp = block
+    else delete services.ntp
   }
 
   // ---- reverse proxy ---------------------------------------------------
@@ -1153,6 +1179,7 @@ export const useConfigStore = defineStore('config', () => {
       case 'services':
         if (path.startsWith('services.dns')) return '/services/dns'
         if (path.startsWith('services.upnp')) return '/services/upnp'
+        if (path.startsWith('services.ntp')) return '/services/time'
         if (path.startsWith('services.proxy')) return '/services/proxy'
         return '/services/dhcp'
       case 'blocking':
@@ -1214,6 +1241,8 @@ export const useConfigStore = defineStore('config', () => {
     applied,
     zones,
     interfaces,
+    ntp,
+    setNTP,
     aliases,
     rules,
     protection,

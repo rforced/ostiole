@@ -52,6 +52,25 @@ export function formatCount(n) {
   return value.toLocaleString()
 }
 
+/**
+ * How far a clock is from true time, e.g. -0.00031 -> "0.31 ms behind".
+ * Positive is ahead. Two significant figures: nobody reads a clock's
+ * offset to the nanosecond.
+ *
+ * @param {number} seconds
+ * @returns {string}
+ */
+export function formatOffset(seconds) {
+  const v = Number(seconds)
+  if (!Number.isFinite(v)) return '—'
+  const abs = Math.abs(v)
+  const way = v > 0 ? ' ahead' : ' behind'
+  if (abs >= 1) return `${Number(abs.toPrecision(3))} s${way}`
+  if (abs >= 0.001) return `${Number((abs * 1e3).toPrecision(2))} ms${way}`
+  const us = Math.round(abs * 1e6)
+  return us === 0 ? '0 µs' : `${us} µs${way}`
+}
+
 const RATE_UNITS = ['bit/s', 'kbit/s', 'Mbit/s', 'Gbit/s']
 
 /**

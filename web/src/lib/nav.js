@@ -137,6 +137,12 @@ export const NAV = [
         ],
       },
       {
+        path: 'time',
+        ownHeader: true,
+        label: 'Time',
+        view: () => import('@/views/services/TimePage.vue'),
+      },
+      {
         path: 'proxy',
         ownHeader: true,
         label: 'Proxy',

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatBytes, formatCount, formatRate } from '@/lib/format'
+import { formatBytes, formatCount, formatOffset, formatRate } from '@/lib/format'
 
 describe('formatBytes', () => {
   it('uses decimal units and one decimal below 100', () => {
@@ -22,6 +22,23 @@ describe('formatCount', () => {
     expect(formatCount(0)).toBe('0')
     expect(formatCount(12345)).toBe((12345).toLocaleString())
     expect(formatCount('nope')).toBe('—')
+  })
+})
+
+describe('formatOffset', () => {
+  it('says which way the clock is off, to two figures', () => {
+    expect(formatOffset(-0.0031)).toBe('3.1 ms behind')
+    expect(formatOffset(0.000095551)).toBe('96 µs ahead')
+    expect(formatOffset(-0.04521)).toBe('45 ms behind')
+    expect(formatOffset(1.23456)).toBe('1.23 s ahead')
+    expect(formatOffset(-120)).toBe('120 s behind')
+  })
+
+  it('has no direction for no offset, and refuses nonsense', () => {
+    expect(formatOffset(0)).toBe('0 µs')
+    expect(formatOffset(0.0000002)).toBe('0 µs')
+    expect(formatOffset(Number.NaN)).toBe('—')
+    expect(formatOffset(undefined)).toBe('—')
   })
 })
 
