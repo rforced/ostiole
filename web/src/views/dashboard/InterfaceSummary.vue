@@ -38,7 +38,7 @@ function faults(l) {
 
 <template>
   <SectionCard title="Interfaces" flush :aria-busy="loaded ? undefined : 'true'">
-    <table class="table">
+    <table class="table table-stack">
       <thead>
         <tr>
           <th>Interface</th>
@@ -56,15 +56,15 @@ function faults(l) {
         </tr>
         <template v-else-if="!loaded">
           <tr v-for="n in placeholders" :key="`reading-${n}`" data-reading>
-            <td>
+            <td data-label="">
               <span v-if="n === 1" class="sr-only">Reading…</span>
               <div><span class="skeleton w-14"></span></div>
               <div><span class="skeleton h-3 w-32"></span></div>
             </td>
-            <td><span class="skeleton w-10"></span></td>
-            <td><span class="skeleton h-5 w-9 rounded-full"></span></td>
-            <td><span class="skeleton w-28"></span></td>
-            <td class="text-right">
+            <td data-label="Zone"><span class="skeleton w-10"></span></td>
+            <td data-label="Link"><span class="skeleton h-5 w-9 rounded-full"></span></td>
+            <td data-label="Addresses"><span class="skeleton w-28"></span></td>
+            <td class="text-right max-sm:text-left" data-label="Traffic">
               <div><span class="skeleton w-24"></span></div>
               <div><span class="skeleton w-24"></span></div>
             </td>
@@ -74,19 +74,19 @@ function faults(l) {
           <td colspan="5" class="text-ink-muted">No interfaces.</td>
         </tr>
         <tr v-for="l in interfaces" :key="l.name" :class="l.configured ? '' : 'opacity-70'">
-          <td>
+          <td data-label="">
             <div class="font-mono font-medium">{{ l.name }}</div>
             <div class="text-xs text-ink-muted">
               {{ l.description || (l.vlanId ? `VLAN ${l.vlanId}` : l.kind || 'not present') }}
               <template v-if="l.configured && addressing(l)"> · {{ addressing(l) }}</template>
             </div>
           </td>
-          <td>
+          <td data-label="Zone">
             <span v-if="l.zone" class="font-mono text-code">{{ l.zone }}</span>
             <span v-else class="text-xs text-ink-muted">unmanaged</span>
             <span v-if="l.external" class="badge ml-1">WAN</span>
           </td>
-          <td>
+          <td data-label="Link">
             <span v-if="!l.present" class="badge badge-warn">absent</span>
             <span v-else-if="l.configured && !l.enabled" class="badge">disabled</span>
             <span v-else-if="l.carrier" class="badge badge-ok">up</span>
@@ -97,14 +97,17 @@ function faults(l) {
               {{ faults(l) }}
             </div>
           </td>
-          <td class="font-mono text-code">
+          <td class="font-mono text-code" data-label="Addresses">
             <div v-for="a in l.addresses" :key="a">{{ a }}</div>
             <div v-for="a in pending(l)" :key="a" class="text-ink-muted">
               {{ a }} <span class="font-sans">(configured)</span>
             </div>
             <span v-if="!l.addresses?.length && !pending(l).length" class="text-ink-muted">—</span>
           </td>
-          <td class="text-right font-mono text-code whitespace-nowrap">
+          <td
+            class="text-right font-mono text-code whitespace-nowrap max-sm:text-left"
+            data-label="Traffic"
+          >
             <div v-if="l.present">
               <ArrowDown class="inline size-3" aria-hidden="true" />
               <span class="sr-only">receiving</span>
