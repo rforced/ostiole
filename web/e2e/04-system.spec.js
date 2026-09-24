@@ -172,6 +172,61 @@ test('add an operator, rename it, prove what it may do, and remove it', async ({
   await expect(roleOf('ops')).toHaveCount(0)
 })
 
+test('a viewer reads everything and changes nothing', async ({ page }) => {
+  const VIEWER_PASSWORD = 'a third account here'
+  await login(page)
+  await page.goto('/system/accounts')
+  const section = page.getByRole('region', { name: 'Accounts' })
+  await section.getByRole('button', { name: 'Add account' }).click()
+  const add = page.getByRole('dialog')
+  await add.getByLabel('Username').fill('watcher')
+  await add.getByLabel('Password', { exact: true }).fill(VIEWER_PASSWORD)
+  await add.getByLabel('Role', { exact: true }).selectOption('viewer')
+  await add.getByRole('button', { name: 'Create account' }).click()
+  const roleOf = page.getByLabel('Role for watcher', { exact: true })
+  await expect(roleOf).toHaveValue('viewer')
+  await page.getByRole('button', { name: 'Sign out' }).click()
+
+  await page.getByLabel('Username').fill('watcher')
+  await page.getByLabel('Password', { exact: true }).fill(VIEWER_PASSWORD)
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.getByText('Viewer, read only')).toBeVisible()
+
+  // Settings are there to read, and will not move.
+  await page.goto('/system/general')
+  await expect(page.getByLabel('Hostname', { exact: true })).toBeDisabled()
+  await expect(page.getByText('Only an admin')).toHaveCount(0)
+
+  // Nothing to add, and a row opens to be read, with one way out.
+  await page.goto('/interfaces')
+  const interfaces = page.getByRole('region', { name: 'Interfaces' })
+  await expect(interfaces.getByRole('button', { name: /^Add/ })).toHaveCount(0)
+  await expect(interfaces.getByRole('button', { name: 'Edit' })).toHaveCount(0)
+  await interfaces.getByRole('button', { name: 'View' }).first().click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByRole('button', { name: 'Save to draft' })).toBeHidden()
+  await page.screenshot({ path: shot('52-viewer'), fullPage: true })
+  await dialog.getByRole('button', { name: 'Close' }).last().click()
+  await expect(dialog).toBeHidden()
+
+  // What only acts is not offered: pinging reaches out from the router.
+  await page.goto('/diagnostics/ping')
+  await expect(page.getByRole('button', { name: 'Ping' })).toHaveCount(0)
+  await expect(page.getByText('Only an operator or an admin can run these.')).toBeVisible()
+  await page.getByRole('button', { name: 'Sign out' }).click()
+
+  await login(page)
+  await page.goto('/system/accounts')
+  await section
+    .getByRole('row')
+    .filter({ has: roleOf })
+    .getByRole('button', { name: 'Delete' })
+    .click()
+  await confirmDialog(page, { typed: 'watcher' })
+  await expect(roleOf).toHaveCount(0)
+})
+
 test('choose how this router patches itself, and see why some of it is refused', async ({
   page,
 }) => {

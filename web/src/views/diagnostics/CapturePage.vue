@@ -8,9 +8,11 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { formatBytes } from '@/lib/format'
 import { interfaceLabel } from '@/lib/interfaces'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useToastStore } from '@/stores/toast'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const toast = useToastStore()
 const iface = ref('')
@@ -54,7 +56,8 @@ const capture = useAsync(async () => {
       title="Packet capture"
       intro="Records the interface into a pcap file until whichever limit comes first."
     >
-      <form class="form-row" @submit.prevent="capture.run()">
+      <p v-if="auth.readOnly" class="text-ink-muted">Only an operator or an admin can capture.</p>
+      <form v-else class="form-row" @submit.prevent="capture.run()">
         <FormField id="cp-if" label="Interface">
           <select id="cp-if" v-model="iface" class="input w-48" required>
             <option v-for="i in config.interfaces" :key="i.name" :value="i.name">

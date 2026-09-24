@@ -7,6 +7,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import { api } from '@/lib/api'
 import { errorMessage, useAsync } from '@/lib/async'
 import { createRateTracker } from '@/lib/rates'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useSystemStore } from '@/stores/system'
 import DashboardWarnings from '@/views/dashboard/DashboardWarnings.vue'
@@ -29,6 +30,7 @@ const REFRESH_MS = 10_000
  */
 const STATS_MS = 3_000
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const system = useSystemStore()
 const health = ref(null)
@@ -117,7 +119,9 @@ onMounted(() => {
 
     <AppNotice v-if="status && !status.configured" kind="info">
       This firewall has no configuration yet.
-      <RouterLink to="/wizard" class="font-medium underline">Run the setup wizard</RouterLink>.
+      <template v-if="!auth.readOnly">
+        <RouterLink to="/wizard" class="font-medium underline">Run the setup wizard</RouterLink>.
+      </template>
     </AppNotice>
 
     <DashboardWarnings :warnings="overview?.warnings ?? []" />

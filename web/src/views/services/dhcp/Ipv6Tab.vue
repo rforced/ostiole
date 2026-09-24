@@ -4,9 +4,11 @@ import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import V6ServerDialog from '@/views/services/dhcp/V6ServerDialog.vue'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const dhcp = computed(() => config.ensureServices().dhcp)
 /** Interfaces that are switched off. Nothing is advertised on one of them. */
@@ -38,7 +40,7 @@ function edit(s) {
       intro="Router advertisements are sent only while DHCP is enabled."
       flush
     >
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <button type="button" class="btn-secondary" @click="add">
           <Plus class="size-4" aria-hidden="true" /> Advertise IPv6
         </button>
@@ -80,7 +82,9 @@ function edit(s) {
             <td class="font-mono text-code">{{ s.leaseTime || '24h' }}</td>
             <td class="font-mono text-code">{{ s.dns?.join(', ') || 'this router' }}</td>
             <td class="text-right whitespace-nowrap">
-              <button type="button" class="link" @click="edit(s)">Edit</button>
+              <button type="button" class="link" @click="edit(s)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
+              </button>
               <ConfirmButton
                 class="ml-3"
                 label="Delete"

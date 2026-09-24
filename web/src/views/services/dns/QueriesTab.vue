@@ -12,11 +12,13 @@ import { useAsync } from '@/lib/async'
 import { sentence } from '@/lib/blocking'
 import { formatCount } from '@/lib/format'
 import { streamLost } from '@/lib/stream'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
 /** How many streamed rows to hold before the oldest go. */
 const MAX_LIVE = 500
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const dns = computed(() => config.ensureServices().dns)
 
@@ -242,6 +244,7 @@ onBeforeUnmount(disconnect)
     <SectionCard
       title="Query log"
       intro="Kept in memory on this router only. Switching it off, or a restart, clears it."
+      :locked="auth.readOnly"
     >
       <template #actions>
         <ToggleRow
@@ -250,6 +253,7 @@ onBeforeUnmount(disconnect)
           variant="switch"
           label="Enabled"
           aria-label="Query log enabled"
+          :disabled="auth.readOnly"
         />
       </template>
       <div v-if="enabled" class="grid max-w-2xl gap-4 sm:grid-cols-2">

@@ -8,11 +8,13 @@ import StatusBadge from '@/components/StatusBadge.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { useServicesStatus } from '@/lib/servicesStatus'
 import { usePageTabs } from '@/lib/tabs'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ServicesStatus from '@/views/services/ServicesStatus.vue'
 import MappingsTab from '@/views/services/upnp/MappingsTab.vue'
 import ServiceTab from '@/views/services/upnp/ServiceTab.vue'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const upnp = computed(() => config.ensureUPnP())
 const { state } = useServicesStatus('upnp', { load: true })
@@ -28,6 +30,7 @@ const { tabs, tab } = usePageTabs()
         variant="switch"
         label="Enabled"
         aria-label="Port mapping enabled"
+        :disabled="auth.readOnly"
       />
     </PageHeader>
     <ServicesStatus service="upnp" />

@@ -107,6 +107,7 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
     >
       <template #actions>
         <RefreshButton
+          v-if="!auth.readOnly"
           :busy="check.busy.value"
           :updated-at="check.updatedAt.value"
           :disabled="running || !status?.available"
@@ -115,6 +116,7 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
           @click="check.run"
         />
         <button
+          v-if="!auth.readOnly"
           type="button"
           class="btn-primary"
           :disabled="busy || running || !status?.available || !packages.length || !auth.isAdmin"
@@ -143,7 +145,7 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
           Nothing on this router drives a package manager.
         </p>
 
-        <p v-if="!auth.isAdmin" class="text-ink-muted">
+        <p v-if="auth.isOperator" class="text-ink-muted">
           Only an admin can install updates, reboot, or change how updates run.
         </p>
 

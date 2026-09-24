@@ -7,9 +7,11 @@ import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { someOf } from '@/lib/lists'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ProviderDialog from '@/views/system/certificates/ProviderDialog.vue'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const kinds = ref([])
 const load = useAsync(
@@ -42,7 +44,7 @@ const labelOf = (kind) => kinds.value.find((k) => k.kind === kind)?.label ?? kin
       intro="Where a dns-01 challenge writes its record. The credentials are in the configuration."
       flush
     >
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <button type="button" class="btn-secondary" @click="add">
           <Plus class="size-4" aria-hidden="true" /> Add provider
         </button>
@@ -77,7 +79,9 @@ const labelOf = (kind) => kinds.value.find((k) => k.kind === kind)?.label ?? kin
               {{ config.providerDependents(p.id).join(', ') || '—' }}
             </td>
             <td class="text-right whitespace-nowrap">
-              <button type="button" class="link" @click="edit(p)">Edit</button>
+              <button type="button" class="link" @click="edit(p)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
+              </button>
               <ConfirmButton
                 v-if="config.providerDependents(p.id).length === 0"
                 class="ml-3"

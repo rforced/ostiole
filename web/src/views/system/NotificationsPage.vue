@@ -134,7 +134,7 @@ const targetStates = computed(() =>
       </template>
 
       <div class="space-y-4">
-        <p v-if="locked" class="text-ink-muted">Only an admin can change these.</p>
+        <p v-if="auth.isOperator" class="text-ink-muted">Only an admin can change these.</p>
 
         <fieldset class="min-w-0 space-y-4" :disabled="locked">
           <legend class="group-title mb-1">Mail</legend>
@@ -288,6 +288,7 @@ const targetStates = computed(() =>
           @click="load.run"
         />
         <button
+          v-if="!auth.readOnly"
           type="button"
           class="btn-secondary"
           :disabled="!canTest || testing.busy.value"

@@ -7,10 +7,12 @@ import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useDraftRows } from '@/lib/draft'
 import { overrideKey, overrideName } from '@/lib/hosts'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import DomainOverrideDialog from '@/views/services/dns/DomainOverrideDialog.vue'
 import HostOverrideDialog from '@/views/services/dns/HostOverrideDialog.vue'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const dns = computed(() => config.ensureServices().dns)
 const hosts = computed(() => dns.value.hostOverrides ?? [])
@@ -61,7 +63,7 @@ function editDomain(d) {
         </template>
         <template v-else>The first name on a row answers the reverse lookup.</template>
       </template>
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <button type="button" class="btn-secondary" @click="addHost">
           <Plus class="size-4" aria-hidden="true" /> Add host
         </button>
@@ -92,7 +94,9 @@ function editDomain(d) {
             <td class="font-mono text-code">{{ (h.aliases ?? []).join(', ') }}</td>
             <td>{{ h.description }}</td>
             <td class="text-right whitespace-nowrap">
-              <button type="button" class="link" @click="editHost(h)">Edit</button>
+              <button type="button" class="link" @click="editHost(h)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
+              </button>
               <ConfirmButton
                 class="ml-3"
                 label="Delete"
@@ -156,7 +160,7 @@ function editDomain(d) {
       intro="A domain here goes to its own resolvers, and stops answering while they are unreachable."
       flush
     >
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <button type="button" class="btn-secondary" @click="addDomain">
           <Plus class="size-4" aria-hidden="true" /> Add domain
         </button>
@@ -185,7 +189,9 @@ function editDomain(d) {
             <td class="font-mono text-code">{{ (d.servers ?? []).join(', ') }}</td>
             <td>{{ d.description }}</td>
             <td class="text-right whitespace-nowrap">
-              <button type="button" class="link" @click="editDomain(d)">Edit</button>
+              <button type="button" class="link" @click="editDomain(d)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
+              </button>
               <ConfirmButton
                 class="ml-3"
                 label="Delete"

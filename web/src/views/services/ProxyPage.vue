@@ -8,6 +8,7 @@ import StatusBadge from '@/components/StatusBadge.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { useProxyStatus } from '@/lib/proxyStatus'
 import { usePageTabs } from '@/lib/tabs'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import EventsTab from '@/views/services/proxy/EventsTab.vue'
 import PoolsTab from '@/views/services/proxy/PoolsTab.vue'
@@ -17,6 +18,7 @@ import ServiceTab from '@/views/services/proxy/ServiceTab.vue'
 import SitesTab from '@/views/services/proxy/SitesTab.vue'
 import WafTab from '@/views/services/proxy/WafTab.vue'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const proxy = computed(() => config.ensureProxy())
 const { state } = useProxyStatus()
@@ -32,6 +34,7 @@ const { tabs, tab } = usePageTabs()
         variant="switch"
         label="Enabled"
         aria-label="Proxy enabled"
+        :disabled="auth.readOnly"
       />
     </PageHeader>
     <ProxyStatus />

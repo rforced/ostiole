@@ -7,10 +7,12 @@ import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import RestorePreview from '@/views/system/RestorePreview.vue'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const confirm = useConfirmStore()
 const note = ref('')
@@ -67,8 +69,9 @@ async function loadIntoDraft() {
 
 <template>
   <div class="space-y-5">
-    <SectionCard title="Backup">
+    <SectionCard v-if="!auth.readOnly" title="Backup" :locked="!auth.isAdmin">
       <div class="space-y-4">
+        <p v-if="auth.isOperator" class="text-ink-muted">Only an admin can download a backup.</p>
         <p v-if="download.error.value" role="alert" class="text-bad">
           {{ download.error.value }}
         </p>
@@ -123,7 +126,7 @@ async function loadIntoDraft() {
       </div>
     </SectionCard>
 
-    <SectionCard title="Restore">
+    <SectionCard v-if="!auth.readOnly" title="Restore">
       <div class="space-y-4">
         <p v-if="restore.error.value" role="alert" class="text-bad">{{ restore.error.value }}</p>
         <div class="grid max-w-2xl gap-4 sm:grid-cols-2">

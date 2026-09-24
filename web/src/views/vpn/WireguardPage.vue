@@ -5,10 +5,12 @@ import { computed, ref } from 'vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import PeerDialog from '@/views/vpn/PeerDialog.vue'
 import TunnelDialog from '@/views/vpn/TunnelDialog.vue'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const tunnelEditing = ref(null)
 const tunnelOpen = ref(false)
@@ -49,7 +51,7 @@ function editPeer(tunnel, peer) {
 <template>
   <div class="space-y-5">
     <PageHeader>
-      <button type="button" class="btn-secondary" @click="addTunnel">
+      <button v-if="!auth.readOnly" type="button" class="btn-secondary" @click="addTunnel">
         <Plus class="size-4" aria-hidden="true" /> Add tunnel
       </button>
     </PageHeader>
@@ -69,10 +71,12 @@ function editPeer(tunnel, peer) {
           </span>
         </template>
         <template #actions>
-          <button type="button" class="btn-secondary" @click="addPeer(t)">
+          <button v-if="!auth.readOnly" type="button" class="btn-secondary" @click="addPeer(t)">
             <Plus class="size-4" aria-hidden="true" /> Add peer
           </button>
-          <button type="button" class="link ml-2" @click="editTunnel(t)">Edit</button>
+          <button type="button" class="link ml-2" @click="editTunnel(t)">
+            {{ auth.readOnly ? 'View' : 'Edit' }}
+          </button>
           <ConfirmButton
             label="Delete"
             :question="`Delete tunnel ${t.name}?`"
@@ -135,7 +139,9 @@ function editPeer(tunnel, peer) {
                 }}<span v-if="p.keepalive" class="text-ink-muted"> · {{ p.keepalive }}s</span>
               </td>
               <td class="text-right whitespace-nowrap">
-                <button type="button" class="link" @click="editPeer(t, p)">Edit</button>
+                <button type="button" class="link" @click="editPeer(t, p)">
+                  {{ auth.readOnly ? 'View' : 'Edit' }}
+                </button>
                 <ConfirmButton
                   class="ml-3"
                   label="Delete"

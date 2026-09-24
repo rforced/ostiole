@@ -6,6 +6,7 @@ import { useRoute } from 'vue-router'
 import ApplyPending from '@/components/ApplyPending.vue'
 import ChangeList from '@/components/ChangeList.vue'
 import { ApiError, api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useSystemStore } from '@/stores/system'
 
@@ -14,6 +15,7 @@ const SHOWN_CHANGES = 20
 /** How long an outcome stays on screen before the bar goes away. */
 const LINGER_MS = 2500
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const system = useSystemStore()
 const route = useRoute()
@@ -34,7 +36,10 @@ let applied = null
 
 /** The wizard shows its own apply. */
 const onWizard = computed(() => route?.name === 'wizard')
-const visible = computed(() => !onWizard.value && (config.dirty || pending.value !== null))
+/** A viewer has nothing to apply, but sees an apply that is waiting. */
+const visible = computed(
+  () => !onWizard.value && ((config.dirty && !auth.readOnly) || pending.value !== null),
+)
 const count = computed(() => config.changes.length)
 
 watch(

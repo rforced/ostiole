@@ -8,9 +8,11 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { errorMessage, useAsync } from '@/lib/async'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const confirm = useConfirmStore()
 const revisions = ref([])
@@ -112,6 +114,7 @@ defineExpose({ refresh: load.run })
           min="1"
           :max="MAX_KEEP"
           class="input w-32"
+          :disabled="auth.readOnly"
         />
       </FormField>
       <p v-if="actionError || load.error.value" role="alert" class="text-bad">
@@ -151,7 +154,12 @@ defineExpose({ refresh: load.run })
               >
                 {{ comparing === r.id ? 'Hide changes' : 'Compare with current' }}
               </button>
-              <button type="button" class="link ml-3" @click="loadIntoDraft(r.id)">
+              <button
+                v-if="!auth.readOnly"
+                type="button"
+                class="link ml-3"
+                @click="loadIntoDraft(r.id)"
+              >
                 Load into draft
               </button>
             </td>

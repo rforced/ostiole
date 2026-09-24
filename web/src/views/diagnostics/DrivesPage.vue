@@ -11,9 +11,11 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { formatBytes, formatCount } from '@/lib/format'
 import { LEVELS } from '@/lib/meter'
+import { useAuthStore } from '@/stores/auth'
 import { useConfirmStore } from '@/stores/confirm'
 import { useToastStore } from '@/stores/toast'
 
+const auth = useAuthStore()
 const confirm = useConfirmStore()
 const toast = useToastStore()
 
@@ -201,7 +203,7 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
         <span class="badge font-mono">{{ d.name }}</span>
       </template>
       <template #actions>
-        <template v-if="d.selfTest?.supported && !d.selfTest.running">
+        <template v-if="d.selfTest?.supported && !d.selfTest.running && !auth.readOnly">
           <button
             type="button"
             class="btn-secondary"
@@ -246,7 +248,7 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
           </button>
         </template>
         <button
-          v-else-if="d.selfTest?.supported"
+          v-else-if="d.selfTest?.supported && !auth.readOnly"
           type="button"
           class="btn-secondary"
           :disabled="action.busy.value"

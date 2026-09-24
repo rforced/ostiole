@@ -6,6 +6,7 @@ import ConfirmButton from '@/components/ConfirmButton.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
 /** The one name a Tailscale interface may have; every tool assumes it. */
@@ -13,6 +14,7 @@ const DEVICE = 'tailscale0'
 /** The port peers dial by default. */
 const DEFAULT_PORT = 41641
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const node = computed(() => config.tailscale)
 const ts = computed(() => node.value?.tailscale ?? null)
@@ -97,20 +99,21 @@ function addZone(zone) {
 <template>
   <div v-if="!node" class="space-y-5">
     <SectionCard title="Tailscale" intro="This router is not on a tailnet.">
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <button type="button" class="btn-secondary" @click="join">Join a tailnet</button>
       </template>
     </SectionCard>
   </div>
 
   <div v-else class="space-y-5">
-    <SectionCard title="Node">
+    <SectionCard title="Node" :locked="auth.readOnly">
       <template #actions>
         <ToggleRow
           v-model="node.enabled"
           variant="switch"
           label="Enabled"
           aria-label="Tailscale enabled"
+          :disabled="auth.readOnly"
         />
       </template>
 
@@ -152,7 +155,7 @@ function addZone(zone) {
             >
               <input id="ts-routes" v-model="routes" type="text" class="input font-mono" />
             </FormField>
-            <div v-if="routableZones.length" class="flex flex-wrap gap-2">
+            <div v-if="routableZones.length && !auth.readOnly" class="flex flex-wrap gap-2">
               <button
                 v-for="z in routableZones"
                 :key="z.name"

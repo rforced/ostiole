@@ -7,6 +7,9 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { errorMessage, useAsync } from '@/lib/async'
+import { useAuthStore } from '@/stores/auth'
+
+const auth = useAuthStore()
 
 /**
  * The router Ostiole runs on, as facts: the distribution, the units, the
@@ -150,6 +153,8 @@ async function flush(tables) {
       <template v-if="root && sweepable.length" #actions>
         <ConfirmButton
           label="Clear leftovers"
+          :disabled="!auth.isAdmin"
+          :title="auth.isAdmin ? undefined : 'Only an admin can clear them.'"
           :question="`Clear ${sweepable.length} leftover ruleset${sweepable.length === 1 ? '' : 's'}?`"
           description="Legacy tables are emptied and set to accept. The others are deleted. Ostiole's own table is not touched."
           confirm-label="Clear"
@@ -186,6 +191,8 @@ async function flush(tables) {
               <ConfirmButton
                 v-if="root && t.owner"
                 label="Clear anyway"
+                :disabled="!auth.isAdmin"
+                :title="auth.isAdmin ? undefined : 'Only an admin can clear it.'"
                 :question="`Clear ${t.family} ${t.name}?`"
                 :description="`This ruleset belongs to ${t.owner}. Clearing it breaks whatever is using it until that is restarted.`"
                 confirm-label="Clear"

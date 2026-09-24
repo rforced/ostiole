@@ -5,9 +5,11 @@ import { ref } from 'vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { someOf } from '@/lib/lists'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import AccountDialog from '@/views/system/certificates/AccountDialog.vue'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const editing = ref(null)
 const open = ref(false)
@@ -30,7 +32,7 @@ function edit(account) {
       intro="One account per CA. The key is generated here and kept in the configuration."
       flush
     >
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <button type="button" class="btn-secondary" @click="add">
           <Plus class="size-4" aria-hidden="true" /> Add account
         </button>
@@ -66,7 +68,9 @@ function edit(account) {
               {{ config.accountDependents(a.id).join(', ') || '—' }}
             </td>
             <td class="text-right whitespace-nowrap">
-              <button type="button" class="link" @click="edit(a)">Edit</button>
+              <button type="button" class="link" @click="edit(a)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
+              </button>
               <ConfirmButton
                 v-if="config.accountDependents(a.id).length === 0"
                 class="ml-3"

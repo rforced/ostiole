@@ -3,8 +3,10 @@ import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 
 import PageHeader from '@/components/PageHeader.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const route = useRoute()
 
@@ -22,7 +24,9 @@ onMounted(() => config.load())
     </p>
     <p v-if="blocked" class="text-sm text-ink-muted">
       No configuration yet.
-      <RouterLink to="/wizard" class="underline">Run the setup wizard</RouterLink> first.
+      <template v-if="!auth.readOnly">
+        <RouterLink to="/wizard" class="underline">Run the setup wizard</RouterLink> first.
+      </template>
     </p>
     <RouterView v-else-if="!route.meta.needsConfig || config.draft" />
   </div>

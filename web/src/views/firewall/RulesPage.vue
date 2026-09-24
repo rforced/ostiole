@@ -10,6 +10,7 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { useDraftRows } from '@/lib/draft'
 import { useTabHash } from '@/lib/tabs'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import RuleDialog from '@/views/firewall/RuleDialog.vue'
 import SystemRuleRow from '@/views/firewall/SystemRuleRow.vue'
@@ -34,6 +35,7 @@ const SETTINGS = {
   certificates: '/system/certificates',
 }
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const route = useRoute()
 const router = useRouter()
@@ -183,7 +185,13 @@ onMounted(() => {
             {{ z.name }}
           </button>
         </div>
-        <button type="button" class="btn-secondary" :disabled="!zone" @click="add">
+        <button
+          v-if="!auth.readOnly"
+          type="button"
+          class="btn-secondary"
+          :disabled="!zone"
+          @click="add"
+        >
           <Plus class="size-4" aria-hidden="true" /> Add rule
         </button>
       </template>
@@ -222,6 +230,7 @@ onMounted(() => {
                 type="checkbox"
                 class="size-4 rounded border-line-2"
                 :checked="r.enabled"
+                :disabled="auth.readOnly"
                 :aria-label="`Enable ${r.id}`"
                 @change="toggle(r)"
               />
@@ -255,25 +264,29 @@ onMounted(() => {
               {{ counters[r.id]?.packets ?? '' }}
             </td>
             <td class="text-right whitespace-nowrap">
-              <button
-                type="button"
-                class="icon-btn"
-                :disabled="i === 0"
-                :aria-label="`Move ${r.id} up`"
-                @click="config.moveRule(r.id, -1)"
-              >
-                <ArrowUp class="size-4" />
+              <template v-if="!auth.readOnly">
+                <button
+                  type="button"
+                  class="icon-btn"
+                  :disabled="i === 0"
+                  :aria-label="`Move ${r.id} up`"
+                  @click="config.moveRule(r.id, -1)"
+                >
+                  <ArrowUp class="size-4" />
+                </button>
+                <button
+                  type="button"
+                  class="icon-btn"
+                  :disabled="i === rules.length - 1"
+                  :aria-label="`Move ${r.id} down`"
+                  @click="config.moveRule(r.id, 1)"
+                >
+                  <ArrowDown class="size-4" />
+                </button>
+              </template>
+              <button type="button" class="link ml-2" @click="edit(r)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
-              <button
-                type="button"
-                class="icon-btn"
-                :disabled="i === rules.length - 1"
-                :aria-label="`Move ${r.id} down`"
-                @click="config.moveRule(r.id, 1)"
-              >
-                <ArrowDown class="size-4" />
-              </button>
-              <button type="button" class="link ml-2" @click="edit(r)">Edit</button>
               <ConfirmButton
                 class="ml-3"
                 label="Delete"

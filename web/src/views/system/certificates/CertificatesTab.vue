@@ -161,10 +161,11 @@ function remove(cert) {
           @click="load.run"
         />
         <button
-          v-if="page.builtIn"
+          v-if="page.builtIn && !auth.readOnly"
           type="button"
           class="btn-secondary"
           :disabled="regenerate.busy.value || !auth.isAdmin"
+          :title="auth.isAdmin ? undefined : 'Only an admin can regenerate it.'"
           :aria-busy="regenerate.busy.value"
           @click="askRegenerate"
         >
@@ -185,7 +186,7 @@ function remove(cert) {
           <FormField
             id="served-by"
             label="Served by"
-            :hint="auth.isAdmin ? 'From the next connection.' : ADMIN_ONLY"
+            :hint="auth.isOperator ? ADMIN_ONLY : 'From the next connection.'"
           >
             <select id="served-by" v-model="served" class="input sm:w-96" :disabled="!auth.isAdmin">
               <option value="">Built-in self-signed</option>
@@ -225,7 +226,7 @@ function remove(cert) {
         <RouterLink to="/system/crons" class="link">system:certificates</RouterLink>. Other hosts
         fetch one with a token limited to it.
       </template>
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <button type="button" class="btn-secondary" @click="add">
           <Plus class="size-4" aria-hidden="true" /> Add certificate
         </button>
@@ -271,10 +272,11 @@ function remove(cert) {
             <td class="whitespace-nowrap">{{ expires(c) }}</td>
             <td class="text-right whitespace-nowrap">
               <button
-                v-if="c.source !== 'uploaded'"
+                v-if="c.source !== 'uploaded' && !auth.readOnly"
                 type="button"
                 class="link"
-                :disabled="status[c.id]?.running"
+                :disabled="status[c.id]?.running || !auth.isAdmin"
+                :title="auth.isAdmin ? undefined : 'Only an admin can order a certificate.'"
                 :aria-busy="status[c.id]?.running === true"
                 @click="issue(c)"
               >
@@ -285,7 +287,7 @@ function remove(cert) {
                 />
                 {{ status[c.id]?.running ? 'Issuing…' : 'Issue now' }}
               </button>
-              <span v-if="issued(c)" class="ml-3 inline-flex items-center gap-2">
+              <span v-if="issued(c) && auth.isAdmin" class="ml-3 inline-flex items-center gap-2">
                 <Download class="size-4 text-ink-muted" aria-hidden="true" />
                 <a
                   v-for="d in DOWNLOADS"
@@ -296,7 +298,9 @@ function remove(cert) {
                 >
                 <button type="button" class="link" @click="askPKCS12(c)">PKCS#12</button>
               </span>
-              <button type="button" class="link ml-3" @click="edit(c)">Edit</button>
+              <button type="button" class="link ml-3" @click="edit(c)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
+              </button>
               <ConfirmButton
                 class="ml-3"
                 label="Delete"

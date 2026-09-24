@@ -6,8 +6,10 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const events = ref([])
 const since = ref('-1h')
@@ -135,10 +137,14 @@ function hasQuery(uri) {
                 <span class="badge font-mono" :title="r.data || r.message">{{ r.id }}</span>
                 <span class="text-ink-muted">{{ r.message }}</span>
                 <template v-if="profileOf(e.site)">
-                  <button type="button" class="link" @click="exclude(e, r, false)">Exclude</button>
-                  <button type="button" class="link" @click="exclude(e, r, true)">
-                    Exclude on this path
-                  </button>
+                  <template v-if="!auth.readOnly">
+                    <button type="button" class="link" @click="exclude(e, r, false)">
+                      Exclude
+                    </button>
+                    <button type="button" class="link" @click="exclude(e, r, true)">
+                      Exclude on this path
+                    </button>
+                  </template>
                 </template>
                 <span v-else class="text-ink-muted">The site has no WAF profile.</span>
               </div>

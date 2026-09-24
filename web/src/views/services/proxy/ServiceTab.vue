@@ -4,8 +4,10 @@ import { computed } from 'vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const proxy = computed(() => config.ensureProxy())
 
@@ -34,7 +36,7 @@ function toggleZone(name, on) {
 
 <template>
   <div class="space-y-5">
-    <SectionCard title="Service">
+    <SectionCard title="Service" :locked="auth.readOnly">
       <div class="space-y-5">
         <fieldset class="space-y-2">
           <legend class="group-title">Open on</legend>

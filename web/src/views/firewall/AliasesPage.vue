@@ -11,9 +11,11 @@ import { canonicalAsn } from '@/lib/asn'
 import { useAsync } from '@/lib/async'
 import { COUNTRIES } from '@/lib/countries'
 import { someOf } from '@/lib/lists'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import AliasDialog from '@/views/firewall/AliasDialog.vue'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const router = useRouter()
 const editing = ref(null)
@@ -111,7 +113,7 @@ function edit(a) {
       intro="A named list of addresses, networks or ports, to use in a rule."
       flush
     >
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <RefreshButton
           v-if="anyFetched"
           :busy="refresh.busy.value"
@@ -171,19 +173,23 @@ function edit(a) {
               </div>
             </td>
             <td class="text-right whitespace-nowrap">
-              <button
-                v-if="fetches(a)"
-                type="button"
-                class="link mr-3"
-                :disabled="refresh.busy.value"
-                @click="refresh.run(a.name)"
-              >
-                {{ refreshing === a.name ? 'Refreshing…' : 'Refresh' }}
+              <template v-if="!auth.readOnly">
+                <button
+                  v-if="fetches(a)"
+                  type="button"
+                  class="link mr-3"
+                  :disabled="refresh.busy.value"
+                  @click="refresh.run(a.name)"
+                >
+                  {{ refreshing === a.name ? 'Refreshing…' : 'Refresh' }}
+                </button>
+                <button v-if="ruleZone" type="button" class="link mr-3" @click="blockWith(a)">
+                  Make a rule
+                </button>
+              </template>
+              <button type="button" class="link" @click="edit(a)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
-              <button v-if="ruleZone" type="button" class="link mr-3" @click="blockWith(a)">
-                Make a rule
-              </button>
-              <button type="button" class="link" @click="edit(a)">Edit</button>
               <ConfirmButton
                 v-if="config.aliasReferences(a.name).length === 0"
                 class="ml-3"

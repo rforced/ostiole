@@ -4,10 +4,12 @@ import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ServerDialog from '@/views/services/dhcp/ServerDialog.vue'
 import StaticLeaseDialog from '@/views/services/dhcp/StaticLeaseDialog.vue'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const dhcp = computed(() => config.ensureServices().dhcp)
 /** Interfaces that are switched off. A pool on one of them hands out nothing. */
@@ -38,7 +40,7 @@ function editLease(l) {
 <template>
   <div class="space-y-5">
     <SectionCard title="Servers" :count="(dhcp.servers ?? []).length" flush>
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <button type="button" class="btn-secondary" @click="addServer">
           <Plus class="size-4" aria-hidden="true" /> Add server
         </button>
@@ -77,7 +79,9 @@ function editLease(l) {
             <td class="font-mono text-code">{{ s.gateway || 'this router' }}</td>
             <td class="font-mono text-code">{{ s.dns?.join(', ') || 'this router' }}</td>
             <td class="text-right whitespace-nowrap">
-              <button type="button" class="link" @click="editServer(s)">Edit</button>
+              <button type="button" class="link" @click="editServer(s)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
+              </button>
               <ConfirmButton
                 class="ml-3"
                 label="Delete"
@@ -91,7 +95,7 @@ function editLease(l) {
     </SectionCard>
 
     <SectionCard title="Static leases" :count="(dhcp.staticLeases ?? []).length" flush>
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <button type="button" class="btn-secondary" @click="addLease">
           <Plus class="size-4" aria-hidden="true" /> Add static lease
         </button>
@@ -122,7 +126,9 @@ function editLease(l) {
             <td class="font-mono text-code">{{ l.hostname }}</td>
             <td>{{ l.description }}</td>
             <td class="text-right whitespace-nowrap">
-              <button type="button" class="link" @click="editLease(l)">Edit</button>
+              <button type="button" class="link" @click="editLease(l)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
+              </button>
               <ConfirmButton
                 class="ml-3"
                 label="Delete"

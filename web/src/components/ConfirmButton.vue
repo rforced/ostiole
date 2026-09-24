@@ -1,9 +1,11 @@
 <script setup>
+import { useAuthStore } from '@/stores/auth'
 import { useConfirmStore } from '@/stores/confirm'
 
 /**
  * A destructive action behind the shared confirm dialog. Emits `confirm`
- * only after the admin says yes there.
+ * only after the admin says yes there. A viewer changes nothing, so it is
+ * not there for one.
  */
 const props = defineProps({
   label: { type: String, required: true },
@@ -20,6 +22,7 @@ const props = defineProps({
   danger: { type: Boolean, default: true },
 })
 const emit = defineEmits(['confirm'])
+const auth = useAuthStore()
 const confirm = useConfirmStore()
 
 async function click() {
@@ -37,7 +40,7 @@ async function click() {
 </script>
 
 <template>
-  <button type="button" class="link-action hover:text-bad" @click="click">
+  <button v-if="!auth.readOnly" type="button" class="link-action hover:text-bad" @click="click">
     {{ label }}
   </button>
 </template>

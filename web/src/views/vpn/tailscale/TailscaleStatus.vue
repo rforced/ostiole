@@ -8,6 +8,9 @@ import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { useTailscaleStatus } from '@/lib/tailscaleStatus'
+import { useAuthStore } from '@/stores/auth'
+
+const auth = useAuthStore()
 
 /** The notices and the facts under Tailscale's page header. It owns the read. */
 const { status, authUrl, stage, read } = useTailscaleStatus({ poll: true })
@@ -62,6 +65,8 @@ const logout = useAsync(async () => {
       <template v-if="stage === 'running'" #actions>
         <ConfirmButton
           label="Log out"
+          :disabled="!auth.isAdmin"
+          :title="auth.isAdmin ? undefined : 'Only an admin can log the router out.'"
           question="Log this router out of its tailnet?"
           description="The node stays in the admin console, so logging in again puts it back."
           @confirm="logout.run()"
@@ -95,6 +100,9 @@ const logout = useAsync(async () => {
         <p v-else-if="stage === 'starting'" class="text-ink-muted">Starting.</p>
         <p v-else-if="stage === 'stopped'" class="text-ink-muted">Stopped.</p>
 
+        <p v-else-if="stage === 'needs-login' && auth.readOnly" class="text-ink-muted">
+          Not logged in.
+        </p>
         <template v-else-if="stage === 'needs-login'">
           <form class="flex flex-wrap items-center gap-3" @submit.prevent="logIn(authKey)">
             <button

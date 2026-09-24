@@ -8,7 +8,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import ToastStack from '@/components/ToastStack.vue'
 import { NAV } from '@/lib/nav'
-import { useAuthStore } from '@/stores/auth'
+import { ROLE_LABELS, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 
@@ -34,10 +34,17 @@ watch(
   { immediate: true },
 )
 
+/**
+ * A viewer changes nothing, so a draft that differs for one is a page
+ * filling in a default, not an edit worth a dot or a question.
+ */
+const dirty = computed(() => config.dirty && !auth.readOnly)
+const changed = (to) => !auth.readOnly && config.hasChanges(to)
+
 /** Signing out drops the draft, so a dirty one is worth a question. */
 async function logout() {
   if (
-    config.dirty &&
+    dirty.value &&
     !(await confirm.ask({
       question: 'Sign out with unapplied changes?',
       description: 'The draft is kept only in this tab. Signing out throws it away.',
@@ -54,9 +61,9 @@ function keep(e) {
   e.preventDefault()
 }
 watch(
-  () => config.dirty,
-  (dirty) => {
-    if (dirty) window.addEventListener('beforeunload', keep)
+  () => dirty.value,
+  (on) => {
+    if (on) window.addEventListener('beforeunload', keep)
     else window.removeEventListener('beforeunload', keep)
   },
 )
@@ -86,12 +93,12 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', keep))
             class="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[0.9375rem] text-ink-2 hover:bg-surface-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none [&>svg]:text-ink-muted"
             active-class="bg-surface-2 font-medium text-ink [&>svg]:text-accent"
             exact-active-class=""
-            :aria-describedby="config.hasChanges(item.to) ? 'nav-unapplied' : undefined"
+            :aria-describedby="changed(item.to) ? 'nav-unapplied' : undefined"
           >
             <component :is="item.icon" class="size-[18px] shrink-0" aria-hidden="true" />
             {{ item.label }}
             <span
-              v-if="config.hasChanges(item.to)"
+              v-if="changed(item.to)"
               class="ml-auto size-2 rounded-full bg-warn"
               title="Unapplied changes"
               aria-hidden="true"
@@ -103,13 +110,11 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', keep))
             :to="`${item.to}/${page.path}`"
             class="ml-[1.35rem] flex items-center gap-2 border-l border-line py-1.5 pl-4 text-sm text-ink-muted hover:border-line-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
             active-class="border-accent font-medium text-ink"
-            :aria-describedby="
-              config.hasChanges(`${item.to}/${page.path}`) ? 'nav-unapplied' : undefined
-            "
+            :aria-describedby="changed(`${item.to}/${page.path}`) ? 'nav-unapplied' : undefined"
           >
             {{ page.label }}
             <span
-              v-if="config.hasChanges(`${item.to}/${page.path}`)"
+              v-if="changed(`${item.to}/${page.path}`)"
               class="ml-auto size-2 rounded-full bg-warn"
               title="Unapplied changes"
               aria-hidden="true"
@@ -125,8 +130,11 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', keep))
           >
             {{ initial }}
           </span>
-          <span v-if="auth.user" class="min-w-0 flex-1 truncate text-sm font-medium">
-            {{ auth.user.username }}
+          <span v-if="auth.user" class="min-w-0 flex-1">
+            <span class="block truncate text-sm font-medium">{{ auth.user.username }}</span>
+            <span v-if="ROLE_LABELS[auth.user.role]" class="block truncate text-xs text-ink-muted">
+              {{ ROLE_LABELS[auth.user.role] }}
+            </span>
           </span>
           <button
             type="button"

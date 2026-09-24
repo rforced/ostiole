@@ -5,10 +5,12 @@ import { computed, ref } from 'vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { formatCount } from '@/lib/format'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import BusyHostsDialog from '@/views/firewall/shaping/BusyHostsDialog.vue'
 import { tierBadge, tierLabel } from '@/views/firewall/shaping/tiers'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const editing = ref(null)
 const open = ref(false)
@@ -79,7 +81,7 @@ const entries = computed(() => [
         ports no longer can."
       flush
     >
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <button type="button" class="btn-secondary" @click="addBusy">
           <Plus class="size-4" aria-hidden="true" /> Hold back busy hosts
         </button>
@@ -113,7 +115,9 @@ const entries = computed(() => [
               <span :class="tierBadge(z.busy.priority)">{{ tierLabel(z.busy.priority) }}</span>
             </td>
             <td class="text-right whitespace-nowrap">
-              <button type="button" class="link" @click="editBusy(z)">Edit</button>
+              <button type="button" class="link" @click="editBusy(z)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
+              </button>
               <ConfirmButton
                 class="ml-3"
                 label="Delete"

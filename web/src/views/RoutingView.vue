@@ -8,11 +8,13 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import GatewayDialog from '@/views/routing/GatewayDialog.vue'
 import GatewayGroupDialog from '@/views/routing/GatewayGroupDialog.vue'
 import StaticRouteDialog from '@/views/routing/StaticRouteDialog.vue'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const open = ref(false)
 const editing = ref(null)
@@ -152,7 +154,9 @@ function edit(r) {
     </p>
     <p v-if="config.loaded && !config.draft" class="text-sm text-ink-muted">
       No configuration yet.
-      <RouterLink to="/wizard" class="underline">Run the setup wizard</RouterLink> first.
+      <template v-if="!auth.readOnly">
+        <RouterLink to="/wizard" class="underline">Run the setup wizard</RouterLink> first.
+      </template>
     </p>
     <template v-else-if="config.draft">
       <SectionCard
@@ -161,7 +165,7 @@ function edit(r) {
         intro="Each one is probed, and the default route moves off a gateway that stops answering."
         flush
       >
-        <template #actions>
+        <template v-if="!auth.readOnly" #actions>
           <button type="button" class="btn-secondary" @click="addGateway">
             <Plus class="size-4" aria-hidden="true" /> Add gateway
           </button>
@@ -219,7 +223,9 @@ function edit(r) {
                 <span v-else class="badge">not probed</span>
               </td>
               <td class="text-right whitespace-nowrap">
-                <button type="button" class="link" @click="editGateway(g)">Edit</button>
+                <button type="button" class="link" @click="editGateway(g)">
+                  {{ auth.readOnly ? 'View' : 'Edit' }}
+                </button>
                 <ConfirmButton
                   class="ml-3"
                   label="Delete"
@@ -273,7 +279,7 @@ function edit(r) {
               </td>
               <td class="text-right whitespace-nowrap">
                 <button
-                  v-if="!coveredBy(d) && d.suggested"
+                  v-if="!coveredBy(d) && d.suggested && !auth.readOnly"
                   type="button"
                   class="link"
                   @click="adopt(d)"
@@ -287,7 +293,7 @@ function edit(r) {
       </SectionCard>
 
       <SectionCard title="Gateway groups" :count="groupRows.length" flush>
-        <template #actions>
+        <template v-if="!auth.readOnly" #actions>
           <button
             type="button"
             class="btn-secondary"
@@ -345,7 +351,9 @@ function edit(r) {
                 <span v-else class="text-ink-muted">default route</span>
               </td>
               <td class="text-right whitespace-nowrap">
-                <button type="button" class="link" @click="editGroup(g)">Edit</button>
+                <button type="button" class="link" @click="editGroup(g)">
+                  {{ auth.readOnly ? 'View' : 'Edit' }}
+                </button>
                 <ConfirmButton
                   class="ml-3"
                   label="Delete"
@@ -371,7 +379,7 @@ function edit(r) {
       </SectionCard>
 
       <SectionCard title="Static routes" :count="config.routes.length" flush>
-        <template #actions>
+        <template v-if="!auth.readOnly" #actions>
           <button type="button" class="btn-secondary" @click="add">
             <Plus class="size-4" aria-hidden="true" /> Add static route
           </button>
@@ -400,7 +408,9 @@ function edit(r) {
               <td class="font-mono text-code">{{ r.interface ?? 'auto' }}</td>
               <td>{{ r.description }}</td>
               <td class="text-right whitespace-nowrap">
-                <button type="button" class="link" @click="edit(r)">Edit</button>
+                <button type="button" class="link" @click="edit(r)">
+                  {{ auth.readOnly ? 'View' : 'Edit' }}
+                </button>
                 <ConfirmButton
                   class="ml-3"
                   label="Delete"

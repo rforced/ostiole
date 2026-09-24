@@ -8,12 +8,14 @@ import StatusBadge from '@/components/StatusBadge.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { useServicesStatus } from '@/lib/servicesStatus'
 import { usePageTabs } from '@/lib/tabs'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ServicesStatus from '@/views/services/ServicesStatus.vue'
 import Ipv4Tab from '@/views/services/dhcp/Ipv4Tab.vue'
 import Ipv6Tab from '@/views/services/dhcp/Ipv6Tab.vue'
 import LeasesTab from '@/views/services/dhcp/LeasesTab.vue'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 /** One flag for both families: it governs the pools and the advertisements. */
 const dhcp = computed(() => config.ensureServices().dhcp)
@@ -30,6 +32,7 @@ const { tabs, tab } = usePageTabs()
         variant="switch"
         label="Enabled"
         aria-label="DHCP enabled"
+        :disabled="auth.readOnly"
       />
     </PageHeader>
     <ServicesStatus service="dhcp" />

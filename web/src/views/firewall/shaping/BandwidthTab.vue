@@ -5,6 +5,7 @@ import { computed, ref } from 'vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { formatRate } from '@/lib/format'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import BandwidthDialog from '@/views/firewall/shaping/BandwidthDialog.vue'
 
@@ -18,6 +19,7 @@ const LINKS = {
   conservative: 'Not sure',
 }
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const editing = ref(null)
 const open = ref(false)
@@ -48,7 +50,7 @@ function rate(bits) {
         interface faces."
       flush
     >
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <button type="button" class="btn-secondary" @click="add">
           <Plus class="size-4" aria-hidden="true" /> Set a speed
         </button>
@@ -81,7 +83,9 @@ function rate(bits) {
             <td class="font-mono text-code tabular-nums">{{ rate(i.shaping.upload) }}</td>
             <td>{{ LINKS[i.shaping.link || 'ethernet'] }}</td>
             <td class="text-right whitespace-nowrap">
-              <button type="button" class="link" @click="edit(i)">Edit</button>
+              <button type="button" class="link" @click="edit(i)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
+              </button>
               <ConfirmButton
                 class="ml-3"
                 label="Delete"

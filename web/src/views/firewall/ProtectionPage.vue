@@ -5,6 +5,7 @@ import AppNotice from '@/components/AppNotice.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
 /**
@@ -31,6 +32,7 @@ const DEFAULTS = {
   portScan: { rate: 20, unit: 'minute', hold: '10m' },
 }
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const protection = computed(() => config.protection)
 
@@ -92,6 +94,7 @@ function rate(limit) {
     <SectionCard
       title="Where"
       intro="Defended zones. None chosen means every zone that faces the internet."
+      :locked="auth.readOnly"
     >
       <div class="space-y-4">
         <ul class="flex flex-wrap gap-4">
@@ -119,6 +122,7 @@ function rate(limit) {
       title="Connection flood"
       intro="Holds each source to a number of new connections. Over it, the connections are dropped
         and the source keeps whatever it already has open."
+      :locked="auth.readOnly"
     >
       <template #actions>
         <ToggleRow
@@ -127,6 +131,7 @@ function rate(limit) {
           variant="switch"
           label="Enabled"
           aria-label="Connection flood enabled"
+          :disabled="auth.readOnly"
           @update:model-value="toggleDefence('synFlood', $event)"
         />
       </template>
@@ -172,6 +177,7 @@ function rate(limit) {
       title="Ping flood"
       intro="The same for echo requests, which open no connection and so are never counted as one.
         Replies to pings this router sent are not affected."
+      :locked="auth.readOnly"
     >
       <template #actions>
         <ToggleRow
@@ -180,6 +186,7 @@ function rate(limit) {
           variant="switch"
           label="Enabled"
           aria-label="Ping flood enabled"
+          :disabled="auth.readOnly"
           @update:model-value="toggleDefence('icmpFlood', $event)"
         />
       </template>
@@ -222,6 +229,7 @@ function rate(limit) {
       intro="A scan is a few packets to a great many closed ports, so it is counted where refused
         traffic ends up: past the last rule of the zone. A source that keeps arriving there is
         dropped outright for a while."
+      :locked="auth.readOnly"
     >
       <template #actions>
         <ToggleRow
@@ -230,6 +238,7 @@ function rate(limit) {
           variant="switch"
           label="Enabled"
           aria-label="Port scan enabled"
+          :disabled="auth.readOnly"
           @update:model-value="toggleDefence('portScan', $event)"
         />
       </template>
@@ -308,7 +317,7 @@ function rate(limit) {
       </table>
     </SectionCard>
 
-    <SectionCard title="Connection table">
+    <SectionCard title="Connection table" :locked="auth.readOnly">
       <template #intro>
         Every connection through the router takes one entry, and the kernel drops packets once the
         table is full. Empty keeps the kernel's own limit, sized from installed memory. Raise it

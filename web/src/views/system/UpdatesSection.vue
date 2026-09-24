@@ -158,7 +158,7 @@ onMounted(async () => {
 
 <template>
   <SectionCard title="Ostiole updates">
-    <template #actions>
+    <template v-if="!auth.readOnly" #actions>
       <RefreshButton
         :busy="checking.busy.value"
         :updated-at="checking.updatedAt.value"
@@ -189,7 +189,7 @@ onMounted(async () => {
         <dd>{{ when(lastCheck) }}</dd>
       </dl>
 
-      <p v-if="!auth.isAdmin" class="text-ink-muted">
+      <p v-if="auth.isOperator" class="text-ink-muted">
         Only an admin can check, install or change how updates run.
       </p>
 

@@ -7,9 +7,11 @@ import ConfirmButton from '@/components/ConfirmButton.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import AclDialog from '@/views/services/upnp/AclDialog.vue'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const upnp = computed(() => config.ensureUPnP())
 
@@ -96,7 +98,11 @@ function edit(index) {
 
 <template>
   <div class="space-y-5">
-    <SectionCard title="Service" intro="Clients open their own inbound ports.">
+    <SectionCard
+      title="Service"
+      intro="Clients open their own inbound ports."
+      :locked="auth.readOnly"
+    >
       <div class="space-y-5">
         <fieldset class="space-y-2">
           <legend class="group-title">Protocols</legend>
@@ -151,13 +157,17 @@ function edit(index) {
       intro="Read top to bottom, first match wins. IPv6 clients are not matched."
       flush
     >
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <button type="button" class="btn-secondary" @click="add">
           <Plus class="size-4" aria-hidden="true" /> Add entry
         </button>
       </template>
       <div class="card-strip">
-        <ToggleRow v-model="upnp.defaultDeny" label="Refuse anything no entry allows" />
+        <ToggleRow
+          v-model="upnp.defaultDeny"
+          label="Refuse anything no entry allows"
+          :disabled="auth.readOnly"
+        />
       </div>
       <table class="table">
         <thead>
@@ -195,25 +205,29 @@ function edit(index) {
             <td class="font-mono text-code">{{ r.internalPorts }}</td>
             <td>{{ r.description }}</td>
             <td class="text-right whitespace-nowrap">
-              <button
-                type="button"
-                class="icon-btn"
-                :disabled="i === 0"
-                :aria-label="`Move entry ${i + 1} up`"
-                @click="config.moveUPnPRule(i, -1)"
-              >
-                <ArrowUp class="size-4" />
+              <template v-if="!auth.readOnly">
+                <button
+                  type="button"
+                  class="icon-btn"
+                  :disabled="i === 0"
+                  :aria-label="`Move entry ${i + 1} up`"
+                  @click="config.moveUPnPRule(i, -1)"
+                >
+                  <ArrowUp class="size-4" />
+                </button>
+                <button
+                  type="button"
+                  class="icon-btn"
+                  :disabled="i === acl.length - 1"
+                  :aria-label="`Move entry ${i + 1} down`"
+                  @click="config.moveUPnPRule(i, 1)"
+                >
+                  <ArrowDown class="size-4" />
+                </button>
+              </template>
+              <button type="button" class="link ml-2" @click="edit(i)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
-              <button
-                type="button"
-                class="icon-btn"
-                :disabled="i === acl.length - 1"
-                :aria-label="`Move entry ${i + 1} down`"
-                @click="config.moveUPnPRule(i, 1)"
-              >
-                <ArrowDown class="size-4" />
-              </button>
-              <button type="button" class="link ml-2" @click="edit(i)">Edit</button>
               <ConfirmButton
                 class="ml-3"
                 label="Delete"

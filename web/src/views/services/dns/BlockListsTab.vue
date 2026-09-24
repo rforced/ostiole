@@ -12,9 +12,11 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { formatCount } from '@/lib/format'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import BlockListDialog from '@/views/services/dns/BlockListDialog.vue'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const blocking = computed(() => config.ensureBlocking())
 const dnsOn = computed(() => Boolean(config.draft?.services?.dns?.enabled))
@@ -137,13 +139,14 @@ function when(s) {
 
 <template>
   <div class="space-y-5">
-    <SectionCard title="Block lists">
+    <SectionCard title="Block lists" :locked="auth.readOnly">
       <template #actions>
         <ToggleRow
           v-model="blocking.enabled"
           variant="switch"
           label="Enabled"
           aria-label="Block lists enabled"
+          :disabled="auth.readOnly"
         />
       </template>
       <div class="space-y-4">
@@ -192,7 +195,7 @@ function when(s) {
       intro="A name on a list blocks everything under it. Names to let back through go under Exceptions."
       flush
     >
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <RefreshButton
           v-if="config.blockLists.some((l) => l.url)"
           :busy="refresh.busy.value"
@@ -257,6 +260,7 @@ function when(s) {
                 type="checkbox"
                 class="size-4 rounded"
                 :checked="l.enabled"
+                :disabled="auth.readOnly"
                 :aria-label="`${l.name} enabled`"
                 @change="config.upsertBlockList({ ...l, enabled: $event.target.checked })"
               />
@@ -298,7 +302,7 @@ function when(s) {
             </td>
             <td class="text-right whitespace-nowrap">
               <button
-                v-if="l.url && applied.has(l.name)"
+                v-if="l.url && applied.has(l.name) && !auth.readOnly"
                 type="button"
                 class="link mr-3"
                 :disabled="refresh.busy.value"
@@ -313,7 +317,7 @@ function when(s) {
                 {{ which === l.name ? 'Refreshing…' : 'Refresh' }}
               </button>
               <button type="button" class="link" :disabled="refresh.busy.value" @click="edit(l)">
-                Edit
+                {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
                 class="ml-3"

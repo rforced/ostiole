@@ -367,3 +367,10 @@
     transition: none;
   }
 }
+
+/* A dialog read only closes with its own button, so the form's Cancel and
+   Save, the row that holds the submit button, go. Outside the layers, or
+   the row's own flex utility would win. */
+.read-only :has(> button[type='submit']) {
+  display: none;
+}

@@ -9,12 +9,26 @@ import {
   DialogRoot,
   DialogTitle,
 } from 'reka-ui'
+import { computed } from 'vue'
 
-defineProps({
+import { provideLocked } from '@/lib/locked'
+import { useAuthStore } from '@/stores/auth'
+
+const props = defineProps({
   title: { type: String, required: true },
   description: { type: String, default: '' },
+  /**
+   * Shows the form without letting it be sent: its fields disabled and
+   * one button that closes it. Unset, it follows the account, so a viewer
+   * reads every dialog this way.
+   */
+  readOnly: { type: Boolean, default: undefined },
 })
 const open = defineModel('open', { type: Boolean, default: false })
+
+const auth = useAuthStore()
+const locked = computed(() => props.readOnly ?? auth.readOnly)
+provideLocked(() => locked.value)
 </script>
 
 <template>
@@ -40,7 +54,15 @@ const open = defineModel('open', { type: Boolean, default: false })
             <X class="size-4" aria-hidden="true" />
           </DialogClose>
         </div>
-        <slot />
+        <template v-if="locked">
+          <fieldset disabled class="read-only min-w-0">
+            <slot />
+          </fieldset>
+          <div class="mt-4 flex justify-end">
+            <DialogClose class="btn-secondary">Close</DialogClose>
+          </div>
+        </template>
+        <slot v-else />
       </DialogContent>
     </DialogPortal>
   </DialogRoot>

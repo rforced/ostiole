@@ -125,4 +125,18 @@ describe('ManagementSection host settings', () => {
     expect(wrapper.get('#sys-hostname').attributes('disabled')).toBeUndefined()
     expect(wrapper.text()).toContain('Only an admin can change this.')
   })
+
+  // A viewer changes nothing, so every field is shown disabled and none
+  // of them is singled out as an admin's.
+  it('shows a viewer every setting, disabled', async () => {
+    const { wrapper } = await open(
+      { management: { webPort: 443, sshPort: 22 } },
+      undefined,
+      'viewer',
+    )
+    expect(wrapper.find('fieldset[disabled] #sys-hostname').exists()).toBe(true)
+    expect(wrapper.find('fieldset[disabled] #sys-web').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('Only an admin')
+    expect(wrapper.text()).toContain('Kept open from anti-lockout zones.')
+  })
 })

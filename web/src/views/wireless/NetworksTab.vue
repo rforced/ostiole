@@ -4,9 +4,11 @@ import { Plus } from 'lucide-vue-next'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import NetworkDialog from '@/views/wireless/NetworkDialog.vue'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const editing = ref(null)
 const dialogOpen = ref(false)
@@ -48,7 +50,7 @@ function edit(iface) {
 <template>
   <div class="space-y-5">
     <SectionCard title="Networks" :count="rows.length" flush>
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <button type="button" class="btn-secondary" :disabled="!config.radios.length" @click="add">
           <Plus class="size-4" aria-hidden="true" /> Add network
         </button>
@@ -88,7 +90,9 @@ function edit(iface) {
               }}<span v-if="!row.iface.enabled" class="ml-1 text-ink-muted">(disabled)</span>
             </td>
             <td class="text-right whitespace-nowrap">
-              <button type="button" class="link" @click="edit(row.iface)">Edit</button>
+              <button type="button" class="link" @click="edit(row.iface)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
+              </button>
               <ConfirmButton
                 class="ml-3"
                 label="Delete"

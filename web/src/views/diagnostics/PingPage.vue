@@ -8,8 +8,10 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { interfaceLabel } from '@/lib/interfaces'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const target = ref('9.9.9.9')
 const iface = ref('')
@@ -51,7 +53,8 @@ async function run(kind) {
 <template>
   <div class="space-y-5">
     <SectionCard title="Ping and traceroute">
-      <form class="form-row" @submit.prevent="run('ping')">
+      <p v-if="auth.readOnly" class="text-ink-muted">Only an operator or an admin can run these.</p>
+      <form v-else class="form-row" @submit.prevent="run('ping')">
         <FormField
           id="dg-target"
           label="Target"

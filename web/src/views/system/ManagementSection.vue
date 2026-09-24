@@ -84,7 +84,7 @@ const entriesMB = computed(() =>
 </script>
 
 <template>
-  <SectionCard title="System settings">
+  <SectionCard title="System settings" :locked="auth.readOnly">
     <div class="space-y-4">
       <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
         <FormField id="sys-hostname" label="Hostname">
@@ -102,7 +102,9 @@ const entriesMB = computed(() =>
           id="sys-web"
           label="Web UI port"
           :hint="
-            auth.isAdmin ? 'Kept open from anti-lockout zones. 0 disables that entry.' : ADMIN_ONLY
+            auth.isOperator
+              ? ADMIN_ONLY
+              : 'Kept open from anti-lockout zones. 0 disables that entry.'
           "
         >
           <input
@@ -118,7 +120,7 @@ const entriesMB = computed(() =>
         <FormField
           id="sys-ssh"
           label="SSH port"
-          :hint="auth.isAdmin ? 'Same anti-lockout treatment.' : ADMIN_ONLY"
+          :hint="auth.isOperator ? ADMIN_ONLY : 'Same anti-lockout treatment.'"
         >
           <input
             id="sys-ssh"
@@ -135,9 +137,9 @@ const entriesMB = computed(() =>
         v-model="management.sshPasswords"
         label="Allow password logins over SSH"
         :hint="
-          auth.isAdmin
-            ? 'Unchecked, only keys get in. Nothing checks that you have one.'
-            : ADMIN_ONLY
+          auth.isOperator
+            ? ADMIN_ONLY
+            : 'Unchecked, only keys get in. Nothing checks that you have one.'
         "
         :disabled="!auth.isAdmin"
       />

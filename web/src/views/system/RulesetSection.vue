@@ -4,8 +4,10 @@ import { ref } from 'vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { ApiError, api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const text = ref('')
 const which = ref('')
@@ -64,24 +66,27 @@ const render = useAsync(async (what) => {
       >
         Show confirmed ruleset
       </button>
-      <button
-        type="button"
-        class="btn-secondary"
-        :disabled="!config.draft || render.busy.value"
-        :aria-busy="rendering === 'draft ruleset'"
-        @click="render.run('draft ruleset')"
-      >
-        Render the draft
-      </button>
-      <button
-        type="button"
-        class="btn-secondary"
-        :disabled="!config.draft || render.busy.value"
-        :aria-busy="rendering === 'draft network units'"
-        @click="render.run('draft network units')"
-      >
-        Render network units
-      </button>
+      <!-- Rendering checks the draft, which is an operator's. -->
+      <template v-if="!auth.readOnly">
+        <button
+          type="button"
+          class="btn-secondary"
+          :disabled="!config.draft || render.busy.value"
+          :aria-busy="rendering === 'draft ruleset'"
+          @click="render.run('draft ruleset')"
+        >
+          Render the draft
+        </button>
+        <button
+          type="button"
+          class="btn-secondary"
+          :disabled="!config.draft || render.busy.value"
+          :aria-busy="rendering === 'draft network units'"
+          @click="render.run('draft network units')"
+        >
+          Render network units
+        </button>
+      </template>
     </template>
     <div class="space-y-3">
       <p v-if="render.error.value" role="alert" class="text-bad">{{ render.error.value }}</p>

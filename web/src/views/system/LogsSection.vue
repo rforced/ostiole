@@ -3,8 +3,10 @@ import { computed } from 'vue'
 
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 if (!config.draft.system.logging) config.draft.system.logging = {}
 const logging = computed(() => config.draft.system.logging)
@@ -39,7 +41,7 @@ const maxUse = numberField('maxUseGB')
 </script>
 
 <template>
-  <SectionCard title="Logs">
+  <SectionCard title="Logs" :locked="auth.readOnly">
     <div class="space-y-4">
       <fieldset class="space-y-1.5">
         <legend class="group-title mb-1 block">Level</legend>

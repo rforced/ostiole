@@ -5,9 +5,11 @@ import { ref } from 'vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { someOf } from '@/lib/lists'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ScheduleDialog from '@/views/firewall/ScheduleDialog.vue'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const editing = ref(null)
 const open = ref(false)
@@ -36,7 +38,7 @@ function days(schedule) {
       intro="Times are this firewall's local time."
       flush
     >
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <button type="button" class="btn-secondary" @click="add">
           <Plus class="size-4" aria-hidden="true" /> Add schedule
         </button>
@@ -68,7 +70,9 @@ function days(schedule) {
             </td>
             <td>{{ s.description }}</td>
             <td class="text-right whitespace-nowrap">
-              <button type="button" class="link" @click="edit(s)">Edit</button>
+              <button type="button" class="link" @click="edit(s)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
+              </button>
               <ConfirmButton
                 v-if="config.scheduleReferences(s.name).length === 0"
                 class="ml-3"

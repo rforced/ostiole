@@ -8,9 +8,11 @@ import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { COUNTRIES } from '@/lib/countries'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import RadioDialog from '@/views/wireless/RadioDialog.vue'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const live = ref([])
 const editing = ref(null)
@@ -79,6 +81,7 @@ function edit(row) {
             id="wifi-country"
             class="input w-64"
             :value="country"
+            :disabled="auth.readOnly"
             @change="config.setWirelessCountry($event.target.value)"
           >
             <option value="">Not set</option>
@@ -126,7 +129,14 @@ function edit(row) {
               >
             </td>
             <td class="text-right whitespace-nowrap">
-              <button type="button" class="link" @click="edit(row)">Edit</button>
+              <button
+                v-if="row.cfg || !auth.readOnly"
+                type="button"
+                class="link"
+                @click="edit(row)"
+              >
+                {{ auth.readOnly ? 'View' : 'Edit' }}
+              </button>
               <ConfirmButton
                 v-if="row.cfg"
                 class="ml-3"

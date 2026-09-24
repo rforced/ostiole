@@ -226,7 +226,9 @@ function editZone(z) {
     </p>
     <p v-if="config.loaded && !config.draft" class="text-sm text-ink-muted">
       No configuration yet.
-      <RouterLink to="/wizard" class="underline">Run the setup wizard</RouterLink> first.
+      <template v-if="!auth.readOnly">
+        <RouterLink to="/wizard" class="underline">Run the setup wizard</RouterLink> first.
+      </template>
     </p>
 
     <AppTabs v-else-if="config.draft" v-model="tab" :tabs="tabs">
@@ -238,18 +240,20 @@ function editZone(z) {
               :updated-at="live.updatedAt.value"
               @click="refreshLive"
             />
-            <button type="button" class="btn-secondary" @click="vlanOpen = true">
-              <Plus class="size-4" aria-hidden="true" /> Add VLAN
-            </button>
-            <button type="button" class="btn-secondary" @click="addAggregate('bridge')">
-              <Plus class="size-4" aria-hidden="true" /> Add bridge
-            </button>
-            <button type="button" class="btn-secondary" @click="addAggregate('bond')">
-              <Plus class="size-4" aria-hidden="true" /> Add bond
-            </button>
-            <button type="button" class="btn-secondary" @click="addPppoe">
-              <Plus class="size-4" aria-hidden="true" /> Add PPPoE
-            </button>
+            <template v-if="!auth.readOnly">
+              <button type="button" class="btn-secondary" @click="vlanOpen = true">
+                <Plus class="size-4" aria-hidden="true" /> Add VLAN
+              </button>
+              <button type="button" class="btn-secondary" @click="addAggregate('bridge')">
+                <Plus class="size-4" aria-hidden="true" /> Add bridge
+              </button>
+              <button type="button" class="btn-secondary" @click="addAggregate('bond')">
+                <Plus class="size-4" aria-hidden="true" /> Add bond
+              </button>
+              <button type="button" class="btn-secondary" @click="addPppoe">
+                <Plus class="size-4" aria-hidden="true" /> Add PPPoE
+              </button>
+            </template>
           </template>
           <table class="table">
             <thead>
@@ -305,7 +309,7 @@ function editZone(z) {
                   </div>
                 </td>
                 <td class="text-right whitespace-nowrap">
-                  <template v-if="row.live && dynamic(row.cfg)">
+                  <template v-if="row.live && dynamic(row.cfg) && !auth.readOnly">
                     <button
                       type="button"
                       class="link mr-3"
@@ -344,9 +348,14 @@ function editZone(z) {
                     class="link"
                     @click="editPppoe(row.cfg)"
                   >
+                    {{ auth.readOnly ? 'View' : 'Edit' }}
+                  </button>
+                  <button v-else-if="row.cfg" type="button" class="link" @click="edit(row)">
+                    {{ auth.readOnly ? 'View' : 'Edit' }}
+                  </button>
+                  <button v-else-if="!auth.readOnly" type="button" class="link" @click="edit(row)">
                     Edit
                   </button>
-                  <button v-else type="button" class="link" @click="edit(row)">Edit</button>
                   <ConfirmButton
                     v-if="row.cfg && !ownerPage(row.cfg)"
                     class="ml-3"
@@ -372,7 +381,7 @@ function editZone(z) {
           intro="A zone groups the interfaces that share a set of rules."
           flush
         >
-          <template #actions>
+          <template v-if="!auth.readOnly" #actions>
             <button type="button" class="btn-secondary" @click="editZone(null)">
               <Plus class="size-4" aria-hidden="true" /> Add zone
             </button>
@@ -409,7 +418,9 @@ function editZone(z) {
                   <span v-if="z.logDrops" class="badge">log drops</span>
                 </td>
                 <td class="text-right whitespace-nowrap">
-                  <button type="button" class="link" @click="editZone(z)">Edit</button>
+                  <button type="button" class="link" @click="editZone(z)">
+                    {{ auth.readOnly ? 'View' : 'Edit' }}
+                  </button>
                   <ConfirmButton
                     v-if="!config.zoneInterfaces(z.name).length"
                     class="ml-3"

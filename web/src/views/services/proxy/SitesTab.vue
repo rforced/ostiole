@@ -4,9 +4,11 @@ import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import SiteDialog from '@/views/services/proxy/SiteDialog.vue'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const editing = ref(null)
 const dialogOpen = ref(false)
@@ -33,7 +35,7 @@ function edit(site) {
 <template>
   <div class="space-y-5">
     <SectionCard title="Sites" :count="sites.length" flush>
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <button type="button" class="btn-secondary" :disabled="!pools.length" @click="add">
           <Plus class="size-4" aria-hidden="true" /> Add site
         </button>
@@ -74,7 +76,9 @@ function edit(site) {
               <span v-else class="text-ink-muted">none</span>
             </td>
             <td class="text-right whitespace-nowrap">
-              <button type="button" class="link" @click="edit(s)">Edit</button>
+              <button type="button" class="link" @click="edit(s)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
+              </button>
               <ConfirmButton
                 class="ml-3"
                 label="Delete"

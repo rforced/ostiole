@@ -7,12 +7,14 @@ import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useDraftRows } from '@/lib/draft'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import OneToOneDialog from '@/views/firewall/OneToOneDialog.vue'
 import OutboundDialog from '@/views/firewall/OutboundDialog.vue'
 import PortForwardDialog from '@/views/firewall/PortForwardDialog.vue'
 import { tierBadge, tierLabel } from '@/views/firewall/shaping/tiers'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const pfEditing = ref(null)
 const pfOpen = ref(false)
@@ -81,7 +83,7 @@ function editOb(r) {
 <template>
   <div class="space-y-5">
     <SectionCard title="Port forwards" :count="forwards.length" flush>
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <button type="button" class="btn-secondary" @click="addPf">
           <Plus class="size-4" aria-hidden="true" /> Add port forward
         </button>
@@ -126,7 +128,9 @@ function editOb(r) {
               >
             </td>
             <td class="text-right whitespace-nowrap">
-              <button type="button" class="link" @click="editPf(pf)">Edit</button>
+              <button type="button" class="link" @click="editPf(pf)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
+              </button>
               <ConfirmButton
                 class="ml-3"
                 label="Delete"
@@ -141,7 +145,7 @@ function editOb(r) {
     </SectionCard>
 
     <SectionCard title="1:1 NAT" :count="oneToOne.length" flush>
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <button type="button" class="btn-secondary" @click="addOne">
           <Plus class="size-4" aria-hidden="true" /> Add 1:1 NAT
         </button>
@@ -173,7 +177,9 @@ function editOb(r) {
             <td class="font-mono text-code">{{ o.internal }}</td>
             <td>{{ o.description }}</td>
             <td class="text-right whitespace-nowrap">
-              <button type="button" class="link" @click="editOne(o)">Edit</button>
+              <button type="button" class="link" @click="editOne(o)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
+              </button>
               <ConfirmButton
                 class="ml-3"
                 label="Delete"
@@ -188,14 +194,14 @@ function editOb(r) {
     </SectionCard>
 
     <SectionCard title="Outbound NAT" :count="(outbound.rules ?? []).length" flush>
-      <template v-if="mode === 'manual' || mode === 'hybrid'" #actions>
+      <template v-if="(mode === 'manual' || mode === 'hybrid') && !auth.readOnly" #actions>
         <button type="button" class="btn-secondary" @click="addOb">
           <Plus class="size-4" aria-hidden="true" /> Add outbound rule
         </button>
       </template>
       <div class="card-strip">
         <FormField id="ob-mode" label="Mode" :hint="MODE_HINTS[mode]" class="max-w-lg">
-          <select id="ob-mode" v-model="mode" class="input">
+          <select id="ob-mode" v-model="mode" class="input" :disabled="auth.readOnly">
             <option value="automatic">Automatic</option>
             <option value="hybrid">Hybrid</option>
             <option value="manual">Manual</option>
@@ -247,7 +253,9 @@ function editOb(r) {
               </td>
               <td>{{ r.description }}</td>
               <td class="text-right whitespace-nowrap">
-                <button type="button" class="link" @click="editOb(r)">Edit</button>
+                <button type="button" class="link" @click="editOb(r)">
+                  {{ auth.readOnly ? 'View' : 'Edit' }}
+                </button>
                 <ConfirmButton
                   class="ml-3"
                   label="Delete"

@@ -8,8 +8,10 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { sentence } from '@/lib/blocking'
 import { joinList, parseList } from '@/lib/lists'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const blocking = computed(() => config.ensureBlocking())
 
@@ -51,6 +53,7 @@ const stale = computed(() => config.dirty)
     <SectionCard
       title="Exceptions"
       intro="Names this router answers for itself are never blocked, whatever a list says."
+      :locked="auth.readOnly"
     >
       <div class="grid max-w-4xl gap-4 sm:grid-cols-2">
         <FormField

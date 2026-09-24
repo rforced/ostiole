@@ -110,7 +110,7 @@ function describe(c) {
             :updated-at="load.updatedAt.value"
             @click="load.run"
           />
-          <button type="button" class="btn-secondary" @click="add">
+          <button v-if="!auth.readOnly" type="button" class="btn-secondary" @click="add">
             <Plus class="size-4" aria-hidden="true" /> Add cron
           </button>
         </template>
@@ -174,6 +174,7 @@ function describe(c) {
               </td>
               <td class="text-right whitespace-nowrap">
                 <button
+                  v-if="!auth.readOnly"
                   type="button"
                   class="link mr-3"
                   :disabled="
@@ -191,8 +192,13 @@ function describe(c) {
                   />
                   Run now
                 </button>
-                <button type="button" class="link" :disabled="locked(c)" @click="edit(c)">
-                  Edit
+                <button
+                  type="button"
+                  class="link"
+                  :disabled="locked(c) && !auth.readOnly"
+                  @click="edit(c)"
+                >
+                  {{ auth.readOnly ? 'View' : 'Edit' }}
                 </button>
                 <ConfirmButton
                   class="ml-3"
@@ -205,7 +211,10 @@ function describe(c) {
             </tr>
           </TransitionGroup>
         </table>
-        <div v-if="rows.some(locked)" class="card-strip border-t border-line text-ink-muted">
+        <div
+          v-if="auth.isOperator && rows.some(locked)"
+          class="card-strip border-t border-line text-ink-muted"
+        >
           Only an admin can change crons that run a command or back up accounts.
         </div>
       </SectionCard>

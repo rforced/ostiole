@@ -122,7 +122,7 @@ function save() {
         <FormField
           id="cron-kind"
           label="What it does"
-          :hint="auth.isAdmin ? '' : 'Only an admin can add one that runs a command.'"
+          :hint="auth.isOperator ? 'Only an admin can add one that runs a command.' : ''"
         >
           <select id="cron-kind" v-model="form.kind" class="input">
             <option
@@ -189,7 +189,7 @@ function save() {
           </FormField>
         </div>
         <div class="text-sm">
-          <label class="flex items-center gap-2" :class="{ 'opacity-60': !auth.isAdmin }">
+          <label class="flex items-center gap-2" :class="{ 'opacity-60': auth.isOperator }">
             <input
               v-model="form.withUsers"
               type="checkbox"
@@ -198,7 +198,7 @@ function save() {
             />
             Include the administrator accounts and their password hashes
           </label>
-          <p v-if="!auth.isAdmin" class="mt-1 text-ink-muted">{{ ADMIN_ONLY }}</p>
+          <p v-if="auth.isOperator" class="mt-1 text-ink-muted">{{ ADMIN_ONLY }}</p>
         </div>
       </template>
 

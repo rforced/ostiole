@@ -1,6 +1,8 @@
 <script setup>
 import { computed, useId, useSlots } from 'vue'
 
+import { provideLocked } from '@/lib/locked'
+
 /**
  * One card of a page. The header is the title, a count, an intro under
  * it, and the actions slot on the right. The body is a table that runs
@@ -16,11 +18,14 @@ const props = defineProps({
   flush: { type: Boolean, default: false },
   /** The element; a card that submits is a form. */
   as: { type: String, default: 'section' },
+  /** The body is settings the account may not change: shown, disabled. */
+  locked: { type: Boolean, default: false },
 })
 
 const slots = useSlots()
 const id = useId()
 const headed = computed(() => Boolean(props.title || slots.title || slots.actions))
+provideLocked(() => props.locked)
 </script>
 
 <template>
@@ -57,7 +62,10 @@ const headed = computed(() => Boolean(props.title || slots.title || slots.action
       <slot />
     </div>
     <div v-else-if="$slots.default" :class="headed ? 'px-4 pb-4' : 'p-4'">
-      <slot />
+      <fieldset v-if="locked" disabled class="min-w-0">
+        <slot />
+      </fieldset>
+      <slot v-else />
     </div>
   </component>
 </template>

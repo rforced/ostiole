@@ -4,9 +4,11 @@ import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import RouteDialog from '@/views/services/proxy/RouteDialog.vue'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const editing = ref(null)
 const dialogOpen = ref(false)
@@ -27,7 +29,7 @@ function edit(route) {
 <template>
   <div class="space-y-5">
     <SectionCard title="Routes" :count="routes.length" flush>
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <button type="button" class="btn-secondary" @click="add">
           <Plus class="size-4" aria-hidden="true" /> Add route
         </button>
@@ -67,7 +69,9 @@ function edit(route) {
               {{ (r.upstreams ?? []).map((u) => u.address).join(', ') }}
             </td>
             <td class="text-right whitespace-nowrap">
-              <button type="button" class="link" @click="edit(r)">Edit</button>
+              <button type="button" class="link" @click="edit(r)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
+              </button>
               <ConfirmButton
                 class="ml-3"
                 label="Delete"

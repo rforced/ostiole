@@ -1,6 +1,8 @@
 <script setup>
 import { Lock } from 'lucide-vue-next'
 
+import { useAuthStore } from '@/stores/auth'
+
 /**
  * A rule Ostiole adds on its own, shown among the zone's rules for the order
  * it is evaluated in. It cannot be toggled, moved, or edited here; the link
@@ -14,6 +16,8 @@ defineProps({
   /** Route of the page that controls the rule, if any. */
   to: { type: String, default: '' },
 })
+
+const auth = useAuthStore()
 </script>
 
 <template>
@@ -38,7 +42,7 @@ defineProps({
     <td>{{ rule.description }}</td>
     <td class="text-right font-mono text-code tabular-nums">{{ packets }}</td>
     <td class="text-right whitespace-nowrap">
-      <RouterLink v-if="to" :to="to" class="link">Edit</RouterLink>
+      <RouterLink v-if="to" :to="to" class="link">{{ auth.readOnly ? 'View' : 'Edit' }}</RouterLink>
     </td>
   </tr>
 </template>

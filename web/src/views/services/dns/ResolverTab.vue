@@ -11,8 +11,10 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { dnsListenInterfaces } from '@/lib/interfaces'
 import { parseList } from '@/lib/lists'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const dns = computed(() => config.ensureServices().dns)
 
@@ -135,7 +137,11 @@ function toggleInterface(name, on) {
 
 <template>
   <div class="space-y-5">
-    <SectionCard title="Resolver" intro="This router looks names up here too.">
+    <SectionCard
+      title="Resolver"
+      intro="This router looks names up here too."
+      :locked="auth.readOnly"
+    >
       <div class="space-y-4">
         <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
           <FormField id="dns-resolver" label="Resolver">
@@ -214,7 +220,7 @@ function toggleInterface(name, on) {
               />
             </FormField>
           </div>
-          <div class="flex flex-wrap items-center gap-3">
+          <div v-if="!auth.readOnly" class="flex flex-wrap items-center gap-3">
             <button
               type="button"
               class="btn-secondary"
@@ -265,7 +271,7 @@ function toggleInterface(name, on) {
       </div>
     </SectionCard>
 
-    <SectionCard title="Answers">
+    <SectionCard title="Answers" :locked="auth.readOnly">
       <div class="space-y-4">
         <ToggleRow
           id="dns-rebind"

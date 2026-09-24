@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import NatPage from '@/views/firewall/NatPage.vue'
 
@@ -118,5 +119,44 @@ describe('NatPage automatic rules', () => {
     expect(api.systemNat).toHaveBeenCalledTimes(2)
     expect(api.systemNat).toHaveBeenLastCalledWith(config.draft)
     expect(rows(wrapper).some((r) => r.text().includes('any IPv4'))).toBe(true)
+  })
+})
+
+// A viewer reads NAT the way everybody else does and changes none of it:
+// no Add, each row opens to View, and the mode shows but will not move.
+describe('NatPage for a viewer', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    api.systemNat.mockResolvedValue([masquerade])
+  })
+
+  it('offers nothing to change', async () => {
+    useAuthStore().user = { username: 'watcher', role: 'viewer' }
+    const d = draft('hybrid', [
+      {
+        id: 'nat-mail',
+        enabled: true,
+        zone: 'wan',
+        source: ['192.168.1.25/32'],
+        address: '203.0.113.25',
+      },
+    ])
+    d.nat.portForwards = [
+      {
+        id: 'web',
+        enabled: true,
+        zone: 'wan',
+        protocol: 'tcp',
+        ports: ['443'],
+        target: '10.0.0.5',
+      },
+    ]
+    const { wrapper } = await mountPage(d)
+    const labels = wrapper.findAll('button').map((b) => b.text())
+    expect(labels.filter((l) => l.startsWith('Add'))).toEqual([])
+    expect(labels).not.toContain('Edit')
+    expect(labels.filter((l) => l === 'View')).toHaveLength(2)
+    expect(wrapper.get('#ob-mode').attributes('disabled')).toBeDefined()
   })
 })

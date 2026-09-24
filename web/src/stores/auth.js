@@ -8,6 +8,9 @@ import { useSystemStore } from '@/stores/system'
 /** Beside a setting only an admin may change, for everyone else. */
 export const ADMIN_ONLY = 'Only an admin can change this.'
 
+/** What each role is called where the account is shown. */
+export const ROLE_LABELS = { admin: 'Admin', operator: 'Operator', viewer: 'Viewer, read only' }
+
 /**
  * Tracks the current session and whether first-run setup is still needed.
  */
@@ -25,6 +28,17 @@ export const useAuthStore = defineStore('auth', () => {
    * server refuses those to anyone else at apply; the UI greys them out.
    */
   const isAdmin = computed(() => user.value?.role === 'admin')
+  /**
+   * Whether the account only looks. Nothing a viewer sends changes the
+   * router, so settings show disabled and what acts is left out.
+   */
+  const readOnly = computed(() => user.value?.role === 'viewer')
+  /**
+   * Whether the account changes everything but what only an admin may:
+   * the one that needs telling where that line is. A viewer changes
+   * nothing, so the line means nothing to one.
+   */
+  const isOperator = computed(() => user.value?.role === 'operator')
 
   /** Resolve the session state once; safe to call repeatedly. */
   async function bootstrap() {
@@ -81,6 +95,8 @@ export const useAuthStore = defineStore('auth', () => {
     ready,
     loggedIn,
     isAdmin,
+    isOperator,
+    readOnly,
     bootstrap,
     login,
     setup,

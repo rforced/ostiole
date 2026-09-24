@@ -5,8 +5,10 @@ import AppNotice from '@/components/AppNotice.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const enforce = computed(() => config.ensureBlocking().enforce)
 const dnsOn = computed(() => Boolean(config.draft?.services?.dns?.enabled))
@@ -40,7 +42,7 @@ const exemptAlias = aliasField('exemptAlias')
       on under Resolver. Dropping encrypted DNS works either way.
     </AppNotice>
 
-    <SectionCard title="Keep clients here">
+    <SectionCard title="Keep clients here" :locked="auth.readOnly">
       <div class="space-y-3">
         <ToggleRow
           v-model="enforce.redirectDns"
@@ -60,7 +62,7 @@ const exemptAlias = aliasField('exemptAlias')
       </div>
     </SectionCard>
 
-    <SectionCard title="Encrypted DNS">
+    <SectionCard title="Encrypted DNS" :locked="auth.readOnly">
       <div class="max-w-2xl space-y-4">
         <FormField
           id="enf-doh"

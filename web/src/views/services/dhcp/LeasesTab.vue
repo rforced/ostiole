@@ -5,9 +5,11 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import StaticLeaseDialog from '@/views/services/dhcp/StaticLeaseDialog.vue'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const leases = ref([])
 const open = ref(false)
@@ -72,7 +74,7 @@ onMounted(load.run)
             </td>
             <td class="text-right whitespace-nowrap">
               <button
-                v-if="l.mac && !l.static && l.family !== 6"
+                v-if="l.mac && !l.static && l.family !== 6 && !auth.readOnly"
                 type="button"
                 class="link"
                 @click="makeStatic(l)"

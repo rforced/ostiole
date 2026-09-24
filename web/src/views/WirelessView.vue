@@ -5,6 +5,7 @@ import { TabsContent } from 'reka-ui'
 import AppTabs from '@/components/AppTabs.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { usePageTabs } from '@/lib/tabs'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ClientsTab from '@/views/wireless/ClientsTab.vue'
 import NetworksTab from '@/views/wireless/NetworksTab.vue'
@@ -12,6 +13,7 @@ import RadiosTab from '@/views/wireless/RadiosTab.vue'
 import WirelessStatus from '@/views/wireless/WirelessStatus.vue'
 
 const { tabs, tab } = usePageTabs()
+const auth = useAuthStore()
 const config = useConfigStore()
 
 onMounted(() => config.load())
@@ -25,7 +27,9 @@ onMounted(() => config.load())
     </p>
     <p v-if="config.loaded && !config.draft" class="text-sm text-ink-muted">
       No configuration yet.
-      <RouterLink to="/wizard" class="underline">Run the setup wizard</RouterLink> first.
+      <template v-if="!auth.readOnly">
+        <RouterLink to="/wizard" class="underline">Run the setup wizard</RouterLink> first.
+      </template>
     </p>
 
     <template v-else-if="config.draft">

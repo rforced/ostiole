@@ -42,7 +42,12 @@ function submit() {
 </script>
 
 <template>
-  <AppDialog v-model:open="open" :title="req?.question ?? ''" :description="req?.description ?? ''">
+  <AppDialog
+    v-model:open="open"
+    :title="req?.question ?? ''"
+    :description="req?.description ?? ''"
+    :read-only="false"
+  >
     <form v-if="req" class="space-y-4" @submit.prevent="submit">
       <div v-if="req.dependents.length" class="text-sm">
         <p class="mb-1 text-ink-muted">{{ req.dependentsLabel }}</p>

@@ -89,7 +89,8 @@ watch(
   (on) => {
     if (!on) return
     loadStatus.run()
-    loadCopies.run()
+    // Listing the bucket is an operator's, like restoring from it.
+    if (!auth.readOnly) loadCopies.run()
   },
   { immediate: true },
 )
@@ -136,7 +137,7 @@ const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
 
       <div class="space-y-4">
         <p v-if="error" role="alert" class="text-bad">{{ error }}</p>
-        <p v-if="!auth.isAdmin" class="text-ink-muted">Only an admin can change these.</p>
+        <p v-if="auth.isOperator" class="text-ink-muted">Only an admin can change these.</p>
 
         <template v-if="config.draft">
           <!-- A disabled fieldset greys out every field in it; the fold's
@@ -288,7 +289,7 @@ const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
       intro="Back up now uses the applied settings."
       flush
     >
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <RefreshButton
           :busy="loadCopies.busy.value"
           :updated-at="loadCopies.updatedAt.value"
@@ -325,7 +326,7 @@ const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
         </p>
       </div>
 
-      <table class="table">
+      <table v-if="!auth.readOnly" class="table">
         <thead>
           <tr>
             <th>Name</th>

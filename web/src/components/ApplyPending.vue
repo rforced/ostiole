@@ -3,6 +3,7 @@ import { LoaderCircle } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { ApiError, api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
 import { useSystemStore } from '@/stores/system'
 
 /**
@@ -23,6 +24,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['confirmed', 'reverted'])
 
+const auth = useAuthStore()
 const system = useSystemStore()
 const now = ref(Date.now())
 /** The request in flight: 'confirm', 'revert' or ''. */
@@ -101,7 +103,16 @@ async function revert() {
     role="status"
     aria-live="polite"
   >
-    <template v-if="!outcome">
+    <template v-if="!outcome && auth.readOnly">
+      <p class="font-medium">Changes applied, awaiting confirmation.</p>
+      <p class="mt-1">
+        Unless an operator confirms them within
+        <span role="timer" aria-live="off" class="font-mono font-semibold tabular-nums"
+          >{{ remaining }}s</span
+        >, the previous configuration is restored.
+      </p>
+    </template>
+    <template v-else-if="!outcome">
       <p class="font-medium">Changes applied, awaiting confirmation.</p>
       <p class="mt-1">
         If this page can still reach the firewall, confirm within

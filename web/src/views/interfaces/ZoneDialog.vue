@@ -58,7 +58,11 @@ function save() {
         <FormField
           id="zone-name"
           label="Name"
-          :hint="nameLocked ? 'Only an admin can rename a zone with anti-lockout.' : ''"
+          :hint="
+            nameLocked && auth.isOperator
+              ? 'Only an admin can rename a zone with anti-lockout.'
+              : ''
+          "
         >
           <input
             id="zone-name"
@@ -95,13 +99,13 @@ function save() {
             class="mt-0.5 size-4 rounded border-line-2"
             :disabled="!auth.isAdmin"
           />
-          <span :class="{ 'opacity-60': !auth.isAdmin }">
+          <span :class="{ 'opacity-60': auth.isOperator }">
             Anti-lockout
             <span class="block text-ink-muted">
               {{
-                auth.isAdmin
-                  ? 'The management ports are always reachable from this zone.'
-                  : ADMIN_ONLY
+                auth.isOperator
+                  ? ADMIN_ONLY
+                  : 'The management ports are always reachable from this zone.'
               }}
             </span>
           </span>

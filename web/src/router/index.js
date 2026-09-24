@@ -105,8 +105,9 @@ router.beforeEach(async (to) => {
     const system = useSystemStore()
 
     // A configured-or-not check sends a fresh install to the wizard once.
+    // A viewer cannot save what the wizard builds, so is never sent there.
     if (system.status === null) await system.refresh()
-    const unconfigured = system.status !== null && !system.status.configured
+    const unconfigured = system.status !== null && !system.status.configured && !auth.readOnly
     if (to.name === 'wizard' && !unconfigured) return { name: 'dashboard' }
     if (unconfigured && to.name !== 'wizard') {
       if (to.name === 'dashboard' && to.redirectedFrom?.name === 'wizard') {
