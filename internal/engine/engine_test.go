@@ -94,14 +94,25 @@ type fakeRunner struct {
 	// refuse fails an apply of any ruleset holding this text, the way
 	// nft refuses one the kernel cannot load.
 	refuse string
-	table  bool
+	// onCheck runs inside Check, which is where a caller that goes away
+	// mid-apply goes.
+	onCheck func()
+	table   bool
 }
 
-func (f *fakeRunner) Check(_ context.Context, _ string) error { return f.checkErr }
+func (f *fakeRunner) Check(_ context.Context, _ string) error {
+	if f.onCheck != nil {
+		f.onCheck()
+	}
+	return f.checkErr
+}
 
-func (f *fakeRunner) Apply(_ context.Context, rs string) error {
+func (f *fakeRunner) Apply(ctx context.Context, rs string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if f.applyErr != nil {
 		return f.applyErr
 	}

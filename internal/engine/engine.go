@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"sync"
 	"time"
 
@@ -37,9 +38,13 @@ var (
 	ErrNoNetwork = errors.New("network management is not enabled")
 )
 
-// Engine coordinates the store and the nft runner. One Engine per process;
-// the pending state is in memory, so CLI and daemon applies must not be
-// interleaved (the store lock only protects the files).
+// applyTimeout bounds the part of an apply that changes the router. It is
+// not the caller's to cut short, so something has to.
+const applyTimeout = 5 * time.Minute
+
+// Engine coordinates the store and the nft runner. One Engine per process
+// holds the pending state in memory; the record in the store keeps another
+// process from applying over it and lets the next start undo it.
 type Engine struct {
 	store  *store.Store
 	nft    nft.Runner
@@ -58,13 +63,17 @@ type Engine struct {
 	// country list; nil renders them empty.
 	feeds  FeedSource
 	log    *slog.Logger
-	revert time.Duration // time budget for an automatic revert
+	revert time.Duration // time budget for putting the previous state back
 	// defaultPorts are what the fallback ruleset opens when there is no
 	// configuration to read the management ports from.
 	defaultPorts []uint16
+	// alive reports whether a PID is a running Ostiole process.
+	alive func(pid int) bool
 
 	mu      sync.Mutex
 	pending *pendingApply
+	// recovered is set when Recover undid an apply, until the next commit.
+	recovered *Recovered
 }
 
 type pendingApply struct {
@@ -86,9 +95,11 @@ func New(st *store.Store, runner nft.Runner, net network.Backend, log *slog.Logg
 	if log == nil {
 		log = slog.Default()
 	}
+	// A minute to put things back: restoring services restarts daemons,
+	// and the proxy alone may take fifteen seconds to settle.
 	return &Engine{
-		store: st, nft: runner, net: net, log: log, revert: 15 * time.Second,
-		defaultPorts: []uint16{model.DefaultWebPort, 22},
+		store: st, nft: runner, net: net, log: log, revert: time.Minute,
+		defaultPorts: []uint16{model.DefaultWebPort, 22}, alive: ostioleRunning,
 	}
 }
 
@@ -325,6 +336,10 @@ type ApplyResult struct {
 // Apply loads cfg into the kernel and, when a network backend is present,
 // installs the network units. With a confirm timeout the change stays
 // provisional until Confirm; otherwise it is committed to the store at once.
+//
+// The caller's context bounds the check. Once the router is being changed,
+// the apply finishes or goes back to where it started whatever the caller
+// does: a browser tab closed halfway must not leave half a configuration.
 func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions) (*ApplyResult, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -340,24 +355,16 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 	if err != nil {
 		return nil, fmt.Errorf("load previous ruleset: %w", err)
 	}
-	var previousNet, previousSvc, previousShape network.Files
-	if e.net != nil {
-		if previousNet, err = e.net.Snapshot(); err != nil {
-			return nil, fmt.Errorf("network snapshot: %w", err)
-		}
+	rec, base, err := e.begin(cfg)
+	if err != nil {
+		return nil, err
 	}
-	if e.svc != nil {
-		if previousSvc, err = e.svc.Snapshot(); err != nil {
-			return nil, fmt.Errorf("services snapshot: %w", err)
-		}
-	}
-	if e.shape != nil {
-		if previousShape, err = e.shape.Snapshot(); err != nil {
-			return nil, fmt.Errorf("shaping snapshot: %w", err)
-		}
-	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), applyTimeout)
+	defer cancel()
 
 	if err := e.nft.Apply(ctx, plan.Ruleset); err != nil {
+		// One transaction, so nothing changed.
+		e.keep(base)
 		return nil, err
 	}
 	e.applySysctl(cfg)
@@ -366,15 +373,15 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 	e.applyLogging(ctx, cfg)
 	e.applySSH(ctx, cfg)
 	rollback := &pendingApply{
-		previous: previous, previousNet: previousNet,
-		previousSvc: previousSvc, previousShape: previousShape,
+		previous: previous, previousNet: rec.Network,
+		previousSvc: rec.Services, previousShape: rec.Shaping,
 	}
 	if e.net != nil {
 		// The units were written and networkd told before the failure,
 		// so the previous ones go back too, or the router would run a
 		// network nobody confirmed.
 		if err := e.net.Apply(ctx, plan.Network); err != nil {
-			if rerr := e.restore(ctx, rollback); rerr != nil {
+			if rerr := e.undo(ctx, rollback); rerr != nil {
 				e.log.Error("network apply failed and rollback failed too", "networkErr", err, "err", rerr)
 				return nil, fmt.Errorf("network apply failed (%w) and rollback failed (%w)", err, rerr)
 			}
@@ -383,7 +390,7 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 	}
 	if e.svc != nil {
 		if err := e.svc.Apply(ctx, plan.Services); err != nil {
-			if rerr := e.restore(ctx, rollback); rerr != nil {
+			if rerr := e.undo(ctx, rollback); rerr != nil {
 				e.log.Error("services apply failed and rollback failed too", "servicesErr", err, "err", rerr)
 				return nil, fmt.Errorf("services apply failed (%w) and rollback failed (%w)", err, rerr)
 			}
@@ -394,7 +401,7 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 	// the dialled sessions have only just brought up.
 	if e.shape != nil {
 		if err := e.shape.Apply(ctx, plan.Shaping); err != nil {
-			if rerr := e.restore(ctx, rollback); rerr != nil {
+			if rerr := e.undo(ctx, rollback); rerr != nil {
 				e.log.Error("traffic shaping failed and rollback failed too", "shapingErr", err, "err", rerr)
 				return nil, fmt.Errorf("traffic shaping failed (%w) and rollback failed (%w)", err, rerr)
 			}
@@ -406,20 +413,23 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 	if opts.ConfirmTimeout <= 0 {
 		archived, err := e.commit(cfg, plan.Ruleset)
 		if err != nil {
+			// The record stays, so the next start puts the rest back to
+			// match the saved configuration, as a reboot does the firewall.
 			return nil, err
 		}
+		e.clearRecord()
 		return &ApplyResult{Plan: *plan, Archived: archived}, nil
 	}
 
 	now := time.Now()
 	p := &pendingApply{
-		id:            newID(),
+		id:            rec.ID,
 		cfg:           cfg,
 		ruleset:       plan.Ruleset,
 		previous:      previous,
-		previousNet:   previousNet,
-		previousSvc:   previousSvc,
-		previousShape: previousShape,
+		previousNet:   rec.Network,
+		previousSvc:   rec.Services,
+		previousShape: rec.Shaping,
 		since:         now,
 		deadline:      now.Add(opts.ConfirmTimeout),
 	}
@@ -427,6 +437,32 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 	p.timer = time.AfterFunc(opts.ConfirmTimeout, func() { e.expire(id) })
 	e.pending = p
 	return &ApplyResult{Plan: *plan, Pending: true, Deadline: p.deadline}, nil
+}
+
+// begin writes the record of an apply before it changes anything. It takes
+// the store lock so that two processes cannot both find no record and both
+// apply. It returns the record, and the one an unfinished earlier apply
+// left, whose "before" this apply inherits.
+func (e *Engine) begin(cfg *model.Config) (rec, base *record, err error) {
+	unlock, err := e.store.Lock()
+	if err != nil {
+		return nil, nil, err
+	}
+	defer unlock()
+	if base, err = e.leftover(); err != nil {
+		return nil, nil, err
+	}
+	rec = &record{ID: newID(), PID: os.Getpid(), Boot: bootID(), Since: time.Now(), Config: digest(cfg)}
+	if base != nil {
+		rec.Network, rec.Services, rec.Shaping = base.Network, base.Services, base.Shaping
+	}
+	if err := e.snapshot(rec); err != nil {
+		return nil, nil, err
+	}
+	if err := e.writeRecord(rec); err != nil {
+		return nil, nil, fmt.Errorf("record the apply before making it: %w", err)
+	}
+	return rec, base, nil
 }
 
 // Confirm commits the pending apply.
@@ -442,14 +478,17 @@ func (e *Engine) Confirm(_ context.Context) (*store.Revision, error) {
 	archived, err := e.commit(p.cfg, p.ruleset)
 	if err != nil {
 		// Kernel has the new ruleset but the store does not. Leave it: a
-		// reboot loads the old one, which is the safer failure.
+		// reboot loads the old one and the record has the next start put
+		// the rest back to match, which is the safer failure.
 		return nil, fmt.Errorf("apply confirmed but not saved: %w", err)
 	}
+	e.clearRecord()
 	e.log.Info("apply confirmed")
 	return archived, nil
 }
 
-// Revert cancels the pending apply and restores the previous ruleset.
+// Revert cancels the pending apply and restores the previous ruleset. It
+// runs to the end even when the caller goes away.
 func (e *Engine) Revert(ctx context.Context) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -459,7 +498,7 @@ func (e *Engine) Revert(ctx context.Context) error {
 	}
 	p.timer.Stop()
 	e.pending = nil
-	if err := e.restore(ctx, p); err != nil {
+	if err := e.undo(ctx, p); err != nil {
 		return fmt.Errorf("revert: %w", err)
 	}
 	e.log.Info("apply reverted by request")
@@ -477,13 +516,14 @@ func (e *Engine) previousRuleset() (string, error) {
 	return ruleset, err
 }
 
-// restore puts the previous firewall and network state back.
+// restore puts the previous firewall and network state back. A backend
+// with no "before" was not driven when it was taken and is left alone.
 func (e *Engine) restore(ctx context.Context, p *pendingApply) error {
 	var errs []error
 	if err := e.nft.Apply(ctx, p.previous); err != nil {
 		errs = append(errs, fmt.Errorf("firewall: %w", err))
 	}
-	if e.net != nil {
+	if e.net != nil && p.previousNet != nil {
 		if err := e.net.Apply(ctx, p.previousNet); err != nil {
 			errs = append(errs, fmt.Errorf("network: %w", err))
 		}
@@ -509,9 +549,7 @@ func (e *Engine) expire(id string) {
 		return
 	}
 	e.pending = nil
-	ctx, cancel := context.WithTimeout(context.Background(), e.revert)
-	defer cancel()
-	if err := e.restore(ctx, p); err != nil {
+	if err := e.undo(context.Background(), p); err != nil {
 		e.log.Error("automatic revert failed; system may still have the unconfirmed configuration", "err", err)
 		return
 	}
@@ -529,8 +567,9 @@ func (e *Engine) commit(cfg *model.Config, ruleset string) (*store.Revision, err
 	if err != nil {
 		return archived, err
 	}
-	// The kernel runs a confirmed ruleset again.
+	// The kernel runs a confirmed ruleset again, so neither note applies.
 	e.clearFallback()
+	e.recovered = nil
 	return archived, nil
 }
 
@@ -664,6 +703,9 @@ type Status struct {
 	// Fallback is set while the kernel runs the fallback ruleset because
 	// the saved one would not load.
 	Fallback *FallbackStatus `json:"fallback,omitempty"`
+	// Recovered is set when this daemon undid an apply that a crash or a
+	// reboot left unconfirmed, until the next commit.
+	Recovered *Recovered `json:"recovered,omitempty"`
 }
 
 // Status reports whether configuration exists, whether the table is in the
@@ -674,9 +716,10 @@ func (e *Engine) Status(ctx context.Context) (Status, error) {
 	if p := e.pending; p != nil {
 		pending = &PendingStatus{Since: p.since, Deadline: p.deadline, Remaining: time.Until(p.deadline).Truncate(time.Second)}
 	}
+	recovered := e.recovered
 	e.mu.Unlock()
 
-	st := Status{Configured: e.store.Exists(), Pending: pending, Network: "none", Fallback: e.readFallback()}
+	st := Status{Configured: e.store.Exists(), Pending: pending, Network: "none", Fallback: e.readFallback(), Recovered: recovered}
 	if e.net != nil {
 		st.Network = e.net.Name()
 	}

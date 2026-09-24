@@ -23,6 +23,9 @@ const (
 	RulesetFile  = "ruleset.nft"
 	RevisionsDir = "revisions"
 	lockFile     = ".lock"
+	// PendingFile records an apply that has not been committed or undone
+	// yet, so the next start can undo one a crash or a reboot cut short.
+	PendingFile = "pending.json"
 	// FallbackFile says the kernel runs the fallback ruleset, and why.
 	FallbackFile = "fallback.json"
 )

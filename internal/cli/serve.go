@@ -85,6 +85,12 @@ at your own.`,
 			if err != nil {
 				return err
 			}
+			// An apply that a crash or a reboot cut short was never
+			// confirmed. It goes back before anything reads the
+			// configuration.
+			if _, err := eng.Recover(cmd.Context()); err != nil {
+				slog.Error("could not undo an apply that was never confirmed", "err", err)
+			}
 			// The daemon logs at the configured level from its first line,
 			// not from the first apply. A --log-level on the command line
 			// still wins.

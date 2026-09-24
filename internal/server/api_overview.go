@@ -705,6 +705,13 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 			Detail: "The saved ruleset did not load: " + f.Reason + ". Only the web UI and SSH are reachable and nothing is forwarded until the next apply.",
 		})
 	}
+	if r := st.Recovered; r != nil {
+		out = append(out, Warning{
+			Kind: "apply-undone", Level: "warn",
+			Title:  "An unconfirmed apply was undone",
+			Detail: "Ostiole stopped or the router restarted before the apply from " + r.Since.Local().Format("2006-01-02 15:04") + " was confirmed. The configuration before it is back.",
+		})
+	}
 	if a.tables != nil {
 		if tables, err := a.tables.ListTables(ctx); err == nil {
 			var foreign []string
