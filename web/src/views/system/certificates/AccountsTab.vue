@@ -37,7 +37,7 @@ function edit(account) {
           <Plus class="size-4" aria-hidden="true" /> Add account
         </button>
       </template>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>Name</th>
@@ -57,17 +57,17 @@ function edit(account) {
             :key="a.id"
             :class="{ 'row-changed': config.isChanged('acme.accounts', a.id) }"
           >
-            <td>
+            <td data-label="">
               <div class="font-mono text-code">{{ a.id }}</div>
               <div v-if="a.description" class="text-ink-muted">{{ a.description }}</div>
             </td>
-            <td class="font-mono text-code break-all">{{ a.directory }}</td>
-            <td>{{ a.email || '—' }}</td>
-            <td>{{ a.eabKeyId ? 'yes' : 'no' }}</td>
-            <td class="font-mono text-code">
+            <td class="font-mono text-code break-all" data-label="Directory">{{ a.directory }}</td>
+            <td data-label="Email">{{ a.email || '—' }}</td>
+            <td data-label="EAB">{{ a.eabKeyId ? 'yes' : 'no' }}</td>
+            <td class="font-mono text-code" data-label="Used by">
               {{ config.accountDependents(a.id).join(', ') || '—' }}
             </td>
-            <td class="text-right whitespace-nowrap">
+            <td class="text-right whitespace-nowrap" data-label="">
               <button type="button" class="link" @click="edit(a)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>

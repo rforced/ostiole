@@ -113,7 +113,7 @@ const entriesMB = computed(() =>
             type="number"
             min="0"
             max="65535"
-            class="input w-32"
+            class="input w-32 max-sm:w-full"
             :disabled="!auth.isAdmin"
           />
         </FormField>
@@ -128,7 +128,7 @@ const entriesMB = computed(() =>
             type="number"
             min="0"
             max="65535"
-            class="input w-32"
+            class="input w-32 max-sm:w-full"
             :disabled="!auth.isAdmin"
           />
         </FormField>
@@ -161,7 +161,7 @@ const entriesMB = computed(() =>
           type="number"
           min="0"
           :max="MAX_ENTRIES"
-          class="input w-40"
+          class="input w-40 max-sm:w-full"
         />
       </FormField>
     </div>

@@ -81,7 +81,7 @@ const maxUse = numberField('maxUseGB')
             min="0"
             max="3650"
             placeholder="90"
-            class="input w-32"
+            class="input w-32 max-sm:w-full"
           />
         </FormField>
         <FormField
@@ -96,7 +96,7 @@ const maxUse = numberField('maxUseGB')
             min="0"
             max="1024"
             placeholder="10"
-            class="input w-32"
+            class="input w-32 max-sm:w-full"
           />
         </FormField>
       </div>

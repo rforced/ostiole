@@ -102,7 +102,11 @@ const installPreset = computed({
          say what is waiting. -->
     <div v-if="current !== 'disabled'" class="form-row">
       <FormField :id="`${prefix}-check-preset`" label="Check for updates">
-        <select :id="`${prefix}-check-preset`" v-model="checkPreset" class="input w-64">
+        <select
+          :id="`${prefix}-check-preset`"
+          v-model="checkPreset"
+          class="input w-64 max-sm:w-full"
+        >
           <option value="">Something else</option>
           <option v-for="p in SCHEDULE_PRESETS" :key="p.value" :value="p.value">
             {{ p.label }}
@@ -116,7 +120,7 @@ const installPreset = computed({
       >
         <input
           :id="`${prefix}-check-schedule`"
-          class="input w-48 font-mono"
+          class="input w-48 font-mono max-sm:w-full"
           :value="checkSchedule || defaultCheckSchedule"
           :placeholder="defaultCheckSchedule"
           @change="emit('update:checkSchedule', $event.target.value)"
@@ -126,7 +130,11 @@ const installPreset = computed({
 
     <div v-if="current !== 'manual' && current !== 'disabled'" class="form-row">
       <FormField :id="`${prefix}-install-preset`" label="Install automatically">
-        <select :id="`${prefix}-install-preset`" v-model="installPreset" class="input w-64">
+        <select
+          :id="`${prefix}-install-preset`"
+          v-model="installPreset"
+          class="input w-64 max-sm:w-full"
+        >
           <option value="">Something else</option>
           <option v-for="p in SCHEDULE_PRESETS" :key="p.value" :value="p.value">
             {{ p.label }}
@@ -136,7 +144,7 @@ const installPreset = computed({
       <FormField :id="`${prefix}-install-schedule`" label="Install schedule">
         <input
           :id="`${prefix}-install-schedule`"
-          class="input w-48 font-mono"
+          class="input w-48 font-mono max-sm:w-full"
           :value="installSchedule || defaultInstallSchedule"
           :placeholder="defaultInstallSchedule"
           @change="emit('update:installSchedule', $event.target.value)"

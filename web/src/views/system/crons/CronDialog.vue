@@ -175,7 +175,7 @@ function save() {
               type="number"
               min="1"
               max="1000"
-              class="input w-24 font-mono"
+              class="input w-24 font-mono max-sm:w-full"
             />
           </FormField>
           <FormField id="cron-passphrase" label="Passphrase" hint="Empty writes plain JSON.">
@@ -242,7 +242,7 @@ function save() {
               type="number"
               min="1"
               max="3600"
-              class="input w-28 font-mono"
+              class="input w-28 font-mono max-sm:w-full"
             />
           </FormField>
         </div>

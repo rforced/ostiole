@@ -52,7 +52,7 @@ const labelOf = (kind) => kinds.value.find((k) => k.kind === kind)?.label ?? kin
       <div v-if="load.error.value" class="card-strip">
         <p role="alert" class="text-bad">{{ load.error.value }}</p>
       </div>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>Name</th>
@@ -70,15 +70,15 @@ const labelOf = (kind) => kinds.value.find((k) => k.kind === kind)?.label ?? kin
             :key="p.id"
             :class="{ 'row-changed': config.isChanged('acme.providers', p.id) }"
           >
-            <td>
+            <td data-label="">
               <div class="font-mono text-code">{{ p.id }}</div>
               <div v-if="p.description" class="text-ink-muted">{{ p.description }}</div>
             </td>
-            <td>{{ labelOf(p.kind) }}</td>
-            <td class="font-mono text-code">
+            <td data-label="Kind">{{ labelOf(p.kind) }}</td>
+            <td class="font-mono text-code" data-label="Used by">
               {{ config.providerDependents(p.id).join(', ') || '—' }}
             </td>
-            <td class="text-right whitespace-nowrap">
+            <td class="text-right whitespace-nowrap" data-label="">
               <button type="button" class="link" @click="edit(p)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>

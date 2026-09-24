@@ -224,7 +224,7 @@ const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
                 <FormField id="rb-preset" label="Take a copy">
                   <select
                     id="rb-preset"
-                    class="input w-64"
+                    class="input w-64 max-sm:w-full"
                     :value="presetFor(schedule)"
                     @change="$event.target.value && set({ schedule: $event.target.value })"
                   >
@@ -237,7 +237,7 @@ const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
                 <FormField id="rb-schedule" label="Schedule" hint="Router time.">
                   <input
                     id="rb-schedule"
-                    class="input w-48 font-mono"
+                    class="input w-48 font-mono max-sm:w-full"
                     :value="schedule"
                     :placeholder="DEFAULT_SCHEDULE"
                     @change="set({ schedule: $event.target.value })"
@@ -251,7 +251,7 @@ const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
                     id="rb-keep"
                     type="number"
                     min="0"
-                    class="input w-32"
+                    class="input w-32 max-sm:w-full"
                     :value="settings.keep ?? 0"
                     @change="set({ keep: Number($event.target.value) || 0 })"
                   />
@@ -265,7 +265,7 @@ const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
                     id="rb-days"
                     type="number"
                     min="0"
-                    class="input w-32"
+                    class="input w-32 max-sm:w-full"
                     :value="settings.days ?? 0"
                     @change="set({ days: Number($event.target.value) || 0 })"
                   />
@@ -326,7 +326,7 @@ const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
         </p>
       </div>
 
-      <table v-if="!auth.readOnly" class="table">
+      <table v-if="!auth.readOnly" class="table table-stack">
         <thead>
           <tr>
             <th>Name</th>
@@ -342,16 +342,16 @@ const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
             </td>
           </tr>
           <tr v-for="c in copies" :key="c.key">
-            <td class="font-mono text-code break-all">{{ c.name }}</td>
-            <td class="text-xs">{{ new Date(c.takenAt).toLocaleString() }}</td>
-            <td class="tabular-nums">{{ kb(c.size) }}</td>
-            <td class="text-right whitespace-nowrap">
+            <td class="font-mono text-code break-all" data-label="">{{ c.name }}</td>
+            <td class="text-xs" data-label="Taken">{{ new Date(c.takenAt).toLocaleString() }}</td>
+            <td class="tabular-nums" data-label="Size">{{ kb(c.size) }}</td>
+            <td class="text-right whitespace-nowrap" data-label="">
               <input
                 v-if="asking === c.key"
                 :ref="(el) => (passphraseInput = el)"
                 v-model="rowPassphrase"
                 type="password"
-                class="input mr-2 inline-block w-48"
+                class="input mr-2 inline-block w-48 max-sm:w-full"
                 autocomplete="off"
                 :aria-label="`Passphrase for ${c.name}`"
                 placeholder="Passphrase for this copy"

@@ -231,7 +231,7 @@ function remove(cert) {
           <Plus class="size-4" aria-hidden="true" /> Add certificate
         </button>
       </template>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>Name</th>
@@ -251,26 +251,26 @@ function remove(cert) {
             :key="c.id"
             :class="{ 'row-changed': config.isChanged('certificates', c.id) }"
           >
-            <td>
+            <td data-label="">
               <div class="font-mono text-code">{{ c.id }}</div>
               <div v-if="c.description" class="text-ink-muted">{{ c.description }}</div>
             </td>
-            <td class="font-mono text-code">
+            <td class="font-mono text-code" data-label="Covers">
               {{ (c.names ?? []).join(', ') }}
               <span v-if="(c.interfaceAddresses ?? []).length" class="text-ink-muted">
                 {{ (c.interfaceAddresses ?? []).join(', ') }}
               </span>
             </td>
-            <td>
+            <td data-label="Source">
               {{ c.source === 'uploaded' ? 'uploaded' : c.challenge || 'acme' }}
             </td>
-            <td>
+            <td data-label="Status">
               <span class="badge" :class="state(c).tone" :title="state(c).title">
                 {{ state(c).label }}
               </span>
             </td>
-            <td class="whitespace-nowrap">{{ expires(c) }}</td>
-            <td class="text-right whitespace-nowrap">
+            <td class="whitespace-nowrap" data-label="Expires">{{ expires(c) }}</td>
+            <td class="text-right whitespace-nowrap" data-label="">
               <button
                 v-if="c.source !== 'uploaded' && !auth.readOnly"
                 type="button"

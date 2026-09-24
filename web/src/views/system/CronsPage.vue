@@ -117,7 +117,7 @@ function describe(c) {
         <div v-if="error" class="card-strip">
           <p role="alert" class="text-bad">{{ error }}</p>
         </div>
-        <table class="table">
+        <table class="table table-stack">
           <thead>
             <tr>
               <th>Cron</th>
@@ -139,18 +139,20 @@ function describe(c) {
                 'row-changed': config.isChanged('crons', c.id),
               }"
             >
-              <td>
+              <td data-label="">
                 <div class="font-medium">{{ c.description || c.kind }}</div>
                 <div class="font-mono text-code break-all text-ink-muted">
                   {{ describe(c) }}
                 </div>
               </td>
-              <td class="font-mono text-code">
+              <td class="font-mono text-code" data-label="Schedule">
                 {{ c.schedule }}
                 <span v-if="!c.enabled" class="badge ml-1">off</span>
               </td>
-              <td class="text-xs">{{ c.enabled ? when(c.status?.next) : '—' }}</td>
-              <td class="text-xs">
+              <td class="text-xs" data-label="Next">
+                {{ c.enabled ? when(c.status?.next) : '—' }}
+              </td>
+              <td class="text-xs" data-label="Last run">
                 <template v-if="c.status?.running">
                   <span class="badge">running</span>
                 </template>
@@ -172,7 +174,7 @@ function describe(c) {
                 </template>
                 <span v-else class="text-ink-muted">never</span>
               </td>
-              <td class="text-right whitespace-nowrap">
+              <td class="text-right whitespace-nowrap" data-label="">
                 <button
                   v-if="!auth.readOnly"
                   type="button"
@@ -221,7 +223,7 @@ function describe(c) {
     </template>
 
     <SectionCard title="Ostiole's crons" :count="system.length" flush>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>Work</th>
@@ -240,11 +242,13 @@ function describe(c) {
             </td>
           </tr>
           <tr v-for="s in system" :key="s.id">
-            <td>{{ s.description }}</td>
+            <td data-label="">{{ s.description }}</td>
             <!-- An update mode of manual turns its install off; saying
                    when it would have run would be a lie. -->
-            <td class="font-mono text-code">{{ s.enabled ? s.schedule : 'never' }}</td>
-            <td class="text-xs">{{ when(s.lastRun) }}</td>
+            <td class="font-mono text-code" data-label="How often">
+              {{ s.enabled ? s.schedule : 'never' }}
+            </td>
+            <td class="text-xs" data-label="Last seen">{{ when(s.lastRun) }}</td>
           </tr>
         </tbody>
       </table>

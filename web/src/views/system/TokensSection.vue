@@ -125,7 +125,7 @@ const when = (s, fallback) => (s ? new Date(s).toLocaleDateString() : fallback)
       </AppNotice>
     </div>
 
-    <table class="table">
+    <table class="table table-stack">
       <thead>
         <tr>
           <th>Token</th>
@@ -143,20 +143,20 @@ const when = (s, fallback) => (s ? new Date(s).toLocaleDateString() : fallback)
           </td>
         </tr>
         <tr v-for="t in tokens" :key="t.id">
-          <td>
+          <td data-label="">
             <div class="font-medium">{{ t.name }}</div>
             <div class="font-mono text-code text-ink-muted">{{ t.id }}</div>
           </td>
-          <td class="font-mono text-code">
+          <td class="font-mono text-code" data-label="Role">
             <template v-if="(t.certificates ?? []).length">
               certificates: {{ t.certificates.join(', ') }}
             </template>
             <template v-else>{{ t.role }}</template>
           </td>
-          <td>{{ when(t.createdAt, '—') }}</td>
-          <td>{{ when(t.expiresAt, 'never') }}</td>
-          <td>{{ when(t.lastUsedAt, 'never') }}</td>
-          <td class="text-right">
+          <td data-label="Created">{{ when(t.createdAt, '—') }}</td>
+          <td data-label="Expires">{{ when(t.expiresAt, 'never') }}</td>
+          <td data-label="Last used">{{ when(t.lastUsedAt, 'never') }}</td>
+          <td class="text-right" data-label="">
             <ConfirmButton
               label="Delete"
               :question="`Delete token ${t.name}?`"

@@ -135,7 +135,7 @@ const when = (s, fallback) => (s ? new Date(s).toLocaleDateString() : fallback)
       <p role="alert" class="text-bad">{{ error }}</p>
     </div>
 
-    <table class="table">
+    <table class="table table-stack">
       <thead>
         <tr>
           <th>Account</th>
@@ -151,13 +151,13 @@ const when = (s, fallback) => (s ? new Date(s).toLocaleDateString() : fallback)
           </td>
         </tr>
         <tr v-for="u in users" :key="u.username">
-          <td class="font-mono">
+          <td class="font-mono" data-label="">
             {{ u.username }}
             <span v-if="isSelf(u)" class="ml-1 font-sans text-xs text-ink-muted">you</span>
           </td>
-          <td>
+          <td data-label="Role">
             <select
-              class="input w-72"
+              class="input w-72 max-sm:w-full"
               :value="u.role"
               :disabled="isSelf(u)"
               :aria-label="`Role for ${u.username}`"
@@ -170,8 +170,8 @@ const when = (s, fallback) => (s ? new Date(s).toLocaleDateString() : fallback)
               Another admin has to change your role.
             </p>
           </td>
-          <td>{{ when(u.createdAt, '—') }}</td>
-          <td class="space-x-3 text-right whitespace-nowrap">
+          <td data-label="Created">{{ when(u.createdAt, '—') }}</td>
+          <td class="space-x-3 text-right whitespace-nowrap" data-label="">
             <button type="button" class="link-action" @click="openRename(u)">Rename</button>
             <button v-if="!isSelf(u)" type="button" class="link-action" @click="openPassword(u)">
               Set password

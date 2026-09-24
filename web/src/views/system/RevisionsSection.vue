@@ -113,7 +113,7 @@ defineExpose({ refresh: load.run })
           type="number"
           min="1"
           :max="MAX_KEEP"
-          class="input w-32"
+          class="input w-32 max-sm:w-full"
           :disabled="auth.readOnly"
         />
       </FormField>
@@ -125,7 +125,7 @@ defineExpose({ refresh: load.run })
         back, or discard.
       </AppNotice>
     </div>
-    <table class="table">
+    <table class="table table-stack">
       <thead>
         <tr>
           <th>Archived</th>
@@ -142,10 +142,10 @@ defineExpose({ refresh: load.run })
         </tr>
         <template v-for="r in revisions" :key="r.id">
           <tr>
-            <td>{{ new Date(r.time).toLocaleString() }}</td>
-            <td class="font-mono text-code">{{ r.id }}</td>
-            <td class="font-mono text-code">{{ r.size }} B</td>
-            <td class="text-right whitespace-nowrap">
+            <td data-label="">{{ new Date(r.time).toLocaleString() }}</td>
+            <td class="font-mono text-code" data-label="ID">{{ r.id }}</td>
+            <td class="font-mono text-code" data-label="Size">{{ r.size }} B</td>
+            <td class="text-right whitespace-nowrap" data-label="">
               <button
                 type="button"
                 class="link"

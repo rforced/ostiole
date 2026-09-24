@@ -46,7 +46,7 @@ function submit() {
             type="number"
             min="0"
             max="3650"
-            class="input w-24 font-mono"
+            class="input w-24 font-mono max-sm:w-full"
           />
         </FormField>
       </div>
