@@ -69,6 +69,14 @@ type Release struct {
 	Security bool `json:"security,omitempty"`
 }
 
+// versionRe is what a version must look like to go into the restart
+// script as it is.
+var versionRe = regexp.MustCompile(`^[0-9A-Za-z][0-9A-Za-z.+-]*$`)
+
+// RolledBackFile is the usual name of Installer.RolledBack, in the
+// updates state directory.
+const RolledBackFile = "rolled-back"
+
 // SecurityMarker is the line a release carries to say it fixes
 // something. It goes in the release notes, which is the only place both
 // a scripted release and a hand-edited one can put it:
@@ -308,6 +316,8 @@ type Downloaded struct {
 	Binary string
 	// Proxy is the sidecar, empty when it was not asked for.
 	Proxy string
+	// Version is the release's, which a rollback notes.
+	Version string
 }
 
 // Download fetches the platform tarballs for rel into dir, verifying the
@@ -315,7 +325,7 @@ type Downloaded struct {
 // withProxy the sidecar is required: a router running it must not end up
 // with two halves of different releases.
 func (c *Client) Download(ctx context.Context, rel *Release, dir string, withProxy bool, progress Progress) (Downloaded, error) {
-	var out Downloaded
+	out := Downloaded{Version: rel.Version}
 	if progress == nil {
 		progress = func(string, int64, int64) {}
 	}
@@ -530,6 +540,10 @@ type Installer struct {
 	// release.
 	Proxy     string
 	ProxyUnit string
+	// RolledBack is where the restart script notes the version it put the
+	// old binary back over, for the daemon to report once it is up again.
+	// Empty keeps no note.
+	RolledBack string
 }
 
 // WantsProxy reports whether this router runs the sidecar, which is what
@@ -545,6 +559,11 @@ func (i *Installer) WantsProxy() bool {
 // Install moves the new binaries over the running ones, keeping each old
 // one as <path>.previous, and schedules a restart plus health check.
 func (i *Installer) Install(ctx context.Context, d Downloaded) error {
+	if i.RolledBack != "" {
+		// The note is about the last attempt; this one makes its own.
+		_ = os.Remove(i.RolledBack)
+		_ = os.MkdirAll(filepath.Dir(i.RolledBack), 0o700)
+	}
 	previous := i.Binary + ".previous"
 	_ = os.Remove(previous)
 	if err := os.Rename(i.Binary, previous); err != nil {
@@ -578,7 +597,7 @@ func (i *Installer) Install(ctx context.Context, d Downloaded) error {
 	syncDir(filepath.Dir(i.Binary))
 	// The restart runs detached so the daemon can answer the request that
 	// triggered it.
-	script := i.restartScript(previous, proxyPrevious)
+	script := i.restartScript(previous, proxyPrevious, d.Version)
 	_, _ = i.Run.Run(ctx, "systemctl", "reset-failed", "ostiole-update-restart.service")
 	if out, err := i.Run.Run(ctx, "systemd-run", "--unit=ostiole-update-restart", "--collect", "--quiet", "sh", "-c", script); err != nil {
 		// Nothing is going to restart into the new binary, and nothing
@@ -606,11 +625,18 @@ func syncDir(dir string) {
 // idempotent. The proxy is restarted and checked only once the daemon
 // answers, and its previous copy goes only when the new one runs: one that
 // is not running is only asked for its version, since an update must not
-// start a proxy that has nothing to serve.
-func (i *Installer) restartScript(previous, proxyPrevious string) string {
+// start a proxy that has nothing to serve. Putting the daemon back notes
+// the version given up on in RolledBack.
+func (i *Installer) restartScript(previous, proxyPrevious, version string) string {
 	restore, proxy := "", ""
+	if i.RolledBack != "" {
+		if !versionRe.MatchString(version) {
+			version = "" // an empty note still says an update was put back
+		}
+		restore = fmt.Sprintf("echo %s >%s; ", version, i.RolledBack)
+	}
 	if proxyPrevious != "" {
-		restore = fmt.Sprintf("mv -f %s %s; ", proxyPrevious, i.Proxy)
+		restore += fmt.Sprintf("mv -f %s %s; ", proxyPrevious, i.Proxy)
 		proxy = fmt.Sprintf(`
 if systemctl is-active --quiet %[1]s; then
 if systemctl try-restart %[1]s && sleep 3 && systemctl is-active --quiet %[1]s; then rm -f %[2]s;

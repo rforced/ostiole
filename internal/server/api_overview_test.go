@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -34,6 +35,7 @@ import (
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/smart"
 	"github.com/rforced/ostiole/internal/store"
+	"github.com/rforced/ostiole/internal/update"
 )
 
 // fakeTables stands in for the nft binary's table listing.
@@ -572,5 +574,24 @@ func TestOverviewWarnsAboutTheFallbackRuleset(t *testing.T) {
 	}
 	if w := warning(getOverview(t, srv), "fallback-ruleset"); w != nil {
 		t.Errorf("a confirmed apply left the warning: %+v", w)
+	}
+}
+
+// An update the restart script put back was installed by a cron nobody
+// watched, so the dashboard says so until a newer version runs.
+func TestOverviewWarnsAboutARolledBackUpdate(t *testing.T) {
+	t.Parallel()
+	note := filepath.Join(t.TempDir(), update.RolledBackFile)
+	updater := &update.Manager{Current: "1.0.2", Installer: &update.Installer{RolledBack: note}}
+	srv := newTestServerWith(t, func(d *Deps) { d.Updater = updater })
+	if w := warning(getOverview(t, srv), "update-rolled-back"); w != nil {
+		t.Errorf("warned with no rollback: %+v", w)
+	}
+	if err := os.WriteFile(note, []byte("1.0.3\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	w := warning(getOverview(t, srv), "update-rolled-back")
+	if w == nil || !strings.Contains(w.Title, "1.0.3") || !strings.Contains(w.Detail, "1.0.2 was put back") {
+		t.Errorf("warning = %+v", w)
 	}
 }

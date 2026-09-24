@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -54,15 +56,62 @@ type Manager struct {
 	status Status
 }
 
-// Status returns the current progress.
+// Status returns the current progress. Before anything runs in this
+// process, an update the restart script put back is the last word.
 func (m *Manager) Status() Status {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	st := m.status
-	if st.State == "" {
-		st.State = Idle
+	m.mu.Unlock()
+	if st.State != "" {
+		return st
 	}
-	return st
+	if rb, ok := m.RolledBack(); ok {
+		return Status{State: Failed, Version: rb.Version, Message: rb.Release() +
+			" did not answer after the restart, so " + m.Current + " was put back", UpdatedAt: rb.At}
+	}
+	return Status{State: Idle}
+}
+
+// Rollback is an update the restart script gave up on.
+type Rollback struct {
+	// Version is empty when the release did not say.
+	Version string
+	At      time.Time
+}
+
+// Release names the release given up on, for a sentence.
+func (r Rollback) Release() string {
+	if r.Version == "" {
+		return "the new release"
+	}
+	return r.Version
+}
+
+// RolledBack reports the last update whose new version did not answer and
+// was put back, unless this version is that one or newer. The note stays
+// until the next install.
+func (m *Manager) RolledBack() (Rollback, bool) {
+	if m.Installer == nil || m.Installer.RolledBack == "" {
+		return Rollback{}, false
+	}
+	f, err := os.Open(m.Installer.RolledBack)
+	if err != nil {
+		return Rollback{}, false
+	}
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil {
+		return Rollback{}, false
+	}
+	raw, err := io.ReadAll(io.LimitReader(f, 256))
+	if err != nil {
+		return Rollback{}, false
+	}
+	v := strings.TrimSpace(string(raw))
+	if v != "" && !Newer(m.Current, v) {
+		return Rollback{}, false
+	}
+	return Rollback{Version: v, At: info.ModTime()}, true
 }
 
 func (m *Manager) set(st State, version, msg string, done, total int64) {

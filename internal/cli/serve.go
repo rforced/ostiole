@@ -491,8 +491,9 @@ func newUpdater(cfg server.Config, stateDir string) *update.Manager {
 		Client: update.NewClient(),
 		Installer: &update.Installer{
 			Binary: bin, Unit: install.DaemonUnit, HealthURL: healthURL(cfg), Run: install.ExecRunner{},
-			Proxy:     filepath.Join(filepath.Dir(bin), services.ProxyBinaryName),
-			ProxyUnit: services.ProxyUnit,
+			Proxy:      filepath.Join(filepath.Dir(bin), services.ProxyBinaryName),
+			ProxyUnit:  services.ProxyUnit,
+			RolledBack: filepath.Join(stateDir, update.RolledBackFile),
 		},
 		Current: version.Version,
 		Cache:   update.NewCache(stateDir),

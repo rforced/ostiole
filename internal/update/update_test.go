@@ -391,10 +391,18 @@ esac
 					t.Fatal(err)
 				}
 			}
+			// A note from an earlier attempt goes with this one.
+			note := filepath.Join(dir, "updates", RolledBackFile)
+			if err := os.MkdirAll(filepath.Dir(note), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(note, []byte("0.1.5\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
 			run := &fakeRun{}
 			inst := &Installer{Binary: bin, Unit: "ostiole.service", HealthURL: "x", Run: run,
-				Proxy: proxy, ProxyUnit: "ostiole-proxy.service"}
-			if err := inst.Install(t.Context(), Downloaded{Binary: bin + ".new", Proxy: proxy + ".new"}); err != nil {
+				Proxy: proxy, ProxyUnit: "ostiole-proxy.service", RolledBack: note}
+			if err := inst.Install(t.Context(), Downloaded{Binary: bin + ".new", Proxy: proxy + ".new", Version: "0.2.0"}); err != nil {
 				t.Fatal(err)
 			}
 			call := run.calls[len(run.calls)-1]
@@ -418,7 +426,42 @@ esac
 			if got := strings.Join(strings.Fields(string(raw)), ","); got != tc.restarts {
 				t.Errorf("proxy restarts = %q, want %q", got, tc.restarts)
 			}
+			// Only putting the daemon back leaves a note, naming the
+			// release it gave up on.
+			raw, err := os.ReadFile(note)
+			switch {
+			case tc.wantDaemon == "old" && string(raw) != "0.2.0\n":
+				t.Errorf("rollback note = %q, %v", raw, err)
+			case tc.wantDaemon == "new" && err == nil:
+				t.Errorf("a healthy daemon left a rollback note: %q", raw)
+			}
 		})
+	}
+}
+
+// The daemon that comes back up after a rollback says what happened, on
+// the updates page and the dashboard, until a newer version runs.
+func TestManagerReportsARollback(t *testing.T) {
+	t.Parallel()
+	note := filepath.Join(t.TempDir(), RolledBackFile)
+	m := &Manager{Current: "0.1.0", Installer: &Installer{RolledBack: note}}
+	if st := m.Status(); st.State != Idle {
+		t.Errorf("status with no note = %+v", st)
+	}
+	if err := os.WriteFile(note, []byte("0.2.0\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rb, ok := m.RolledBack()
+	if !ok || rb.Version != "0.2.0" || rb.At.IsZero() {
+		t.Errorf("RolledBack = %+v, %v", rb, ok)
+	}
+	if st := m.Status(); st.State != Failed || !strings.Contains(st.Message, "0.1.0 was put back") {
+		t.Errorf("status after a rollback = %+v", st)
+	}
+	// Once the release it gave up on runs, the note is history.
+	m.Current = "0.2.0"
+	if _, ok := m.RolledBack(); ok {
+		t.Error("a rollback reported by the version it gave up on")
 	}
 }
 

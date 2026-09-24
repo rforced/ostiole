@@ -21,7 +21,7 @@ import (
 	"github.com/rforced/ostiole/internal/version"
 )
 
-func newUpdateCmd(_ *globals) *cobra.Command {
+func newUpdateCmd(g *globals) *cobra.Command {
 	var check, yes bool
 	var channel, probe string
 	cmd := &cobra.Command{
@@ -71,8 +71,9 @@ the service with a health check that rolls back on failure.`,
 			inst := &update.Installer{
 				Binary: bin, Unit: install.DaemonUnit,
 				HealthURL: probeURL(installedListen(), true), Run: install.ExecRunner{},
-				Proxy:     filepath.Join(filepath.Dir(bin), services.ProxyBinaryName),
-				ProxyUnit: services.ProxyUnit,
+				Proxy:      filepath.Join(filepath.Dir(bin), services.ProxyBinaryName),
+				ProxyUnit:  services.ProxyUnit,
+				RolledBack: filepath.Join(g.updatesDir(), update.RolledBackFile),
 			}
 			got, err := client.Download(cmd.Context(), chk.Release, filepath.Dir(bin), inst.WantsProxy(), func(stage string, done, total int64) {
 				if stage == "downloading" && total > 0 {

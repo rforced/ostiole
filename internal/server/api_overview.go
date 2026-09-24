@@ -899,6 +899,22 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 			})
 		}
 	}
+	// An update the restart script put back happened with nobody watching
+	// when the cron ran it, and the release it wanted is still out there.
+	if a.updater != nil {
+		if rb, ok := a.updater.RolledBack(); ok {
+			at := rb.At
+			if cfg != nil {
+				at = at.In(cfg.System.Location())
+			}
+			out = append(out, Warning{
+				Kind: "update-rolled-back", Level: "warn",
+				Title: "The update to " + rb.Release() + " was rolled back",
+				Detail: "It did not answer after the restart at " + at.Format("2 January 15:04") +
+					", so " + a.updater.Current + " was put back. Its log is under Diagnostics, Logs.",
+			})
+		}
+	}
 	// Installing refuses on an old kernel, but a router can be booted onto one
 	// afterwards. Say so and keep filtering: a firewall that stops working
 	// because of its kernel version is worse than an unsupported one.
