@@ -27,6 +27,7 @@ import (
 	"github.com/rforced/ostiole/internal/certs"
 	"github.com/rforced/ostiole/internal/cron"
 	"github.com/rforced/ostiole/internal/engine"
+	"github.com/rforced/ostiole/internal/feeds"
 	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
@@ -615,4 +616,22 @@ type sshRefuses struct{}
 
 func (sshRefuses) Apply(context.Context, bool) error {
 	return errors.New("sshd still accepts passwords")
+}
+
+// A fetched alias with no entries turns the rules over it inside out, so
+// each one an enabled rule uses is named, with those rules.
+func TestEmptyRuleAliases(t *testing.T) {
+	t.Parallel()
+	cfg := starter()
+	cfg.Rules = []model.Rule{
+		{ID: "home-only", Enabled: true, Source: model.Endpoint{Alias: "home", NotAddresses: true}},
+		{ID: "bad", Enabled: true, Destination: model.Endpoint{Alias: "bad"}},
+		{ID: "off", Enabled: false, Source: model.Endpoint{Alias: "spare"}},
+		{ID: "also-home", Enabled: true, Destination: model.Endpoint{Alias: "home"}},
+	}
+	statuses := []feeds.Status{{Alias: "home"}, {Alias: "bad", Entries: 12}, {Alias: "spare"}}
+	got := emptyRuleAliases(cfg, statuses)
+	if len(got) != 1 || got[0].alias != "home" || strings.Join(got[0].rules, ",") != "home-only,also-home" {
+		t.Errorf("empty aliases = %+v", got)
+	}
 }

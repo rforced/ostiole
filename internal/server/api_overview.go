@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rforced/ostiole/internal/engine"
+	"github.com/rforced/ostiole/internal/feeds"
 	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/gateway"
 	"github.com/rforced/ostiole/internal/install"
@@ -801,6 +802,23 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 			})
 		}
 	}
+	// A fetched alias with nothing in it turns the rules that use it inside
+	// out: "drop unless home country" drops everything until the first
+	// fetch, and "drop these networks" drops nothing.
+	if cfg != nil && a.feedCache != nil {
+		for _, e := range emptyRuleAliases(cfg, a.feedCache.Statuses(cfg)) {
+			rules := "Rule " + e.rules[0] + " uses it"
+			if len(e.rules) > 1 {
+				rules = "Rules " + strings.Join(e.rules, ", ") + " use it"
+			}
+			out = append(out, Warning{
+				Kind: "alias-empty", Level: "warn",
+				Title: "Alias " + e.alias + " has no entries yet",
+				Detail: rules + ". Until it is fetched, a rule that matches addresses in it matches none, and one " +
+					"that matches addresses not in it matches every address. Details under Firewall, Aliases.",
+			})
+		}
+	}
 	for _, g := range a.gatewayStatuses() {
 		if g.Unknown || g.Online {
 			continue
@@ -933,6 +951,39 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 				" and newer. Boot a newer kernel when you can.",
 		})
 	}
+	return out
+}
+
+type emptyAlias struct {
+	alias string
+	rules []string
+}
+
+// emptyRuleAliases lists the fetched aliases that hold no entries, with
+// the enabled rules that use them.
+func emptyRuleAliases(cfg *model.Config, statuses []feeds.Status) []emptyAlias {
+	empty := map[string]bool{}
+	for _, f := range statuses {
+		if f.Entries == 0 {
+			empty[f.Alias] = true
+		}
+	}
+	users := map[string][]string{}
+	for _, r := range cfg.Rules {
+		if !r.Enabled {
+			continue
+		}
+		for _, e := range []model.Endpoint{r.Source, r.Destination} {
+			if empty[e.Alias] && !slices.Contains(users[e.Alias], r.ID) {
+				users[e.Alias] = append(users[e.Alias], r.ID)
+			}
+		}
+	}
+	out := make([]emptyAlias, 0, len(users))
+	for alias, rules := range users {
+		out = append(out, emptyAlias{alias: alias, rules: rules})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].alias < out[j].alias })
 	return out
 }
 
