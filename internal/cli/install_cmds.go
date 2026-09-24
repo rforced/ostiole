@@ -127,23 +127,25 @@ management ports get in, nothing is forwarded.`,
 			if err := (journald.System{Run: install.ExecRunner{}}).Apply(ctx, maxUse, retention); err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not bound the system journal: %v\n", err)
 			}
-			rep, err := install.Install(ctx, sc, lay, opts, slog.Default())
-			if err != nil {
-				return err
-			}
-			// After Install, which is what creates the configuration
-			// directory: on a fresh router there is nowhere to put this
-			// before then.
+			// Before Install: starting the daemon starts the firewall unit,
+			// which loads the fallback and fails when there is no ruleset.
 			if bootstrap {
 				ports := []uint16{model.DefaultWebPort}
 				if port := listenPortOf(opts.Listen); port != 0 {
 					ports = []uint16{port}
 				}
 				ports = append(ports, 22)
+				if err := os.MkdirAll(g.configDir, 0o700); err != nil {
+					return fmt.Errorf("create %s: %w", g.configDir, err)
+				}
 				if err := os.WriteFile(filepath.Join(g.configDir, store.RulesetFile), []byte(nft.Bootstrap(ports)), 0o600); err != nil {
 					return fmt.Errorf("write the bootstrap ruleset: %w", err)
 				}
 				fmt.Fprintln(out, "wrote the bootstrap ruleset")
+			}
+			rep, err := install.Install(ctx, sc, lay, opts, slog.Default())
+			if err != nil {
+				return err
 			}
 			// The firewall unit was enabled; make sure what it loads is in
 			// the kernel before the old firewall is retired.
