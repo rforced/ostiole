@@ -425,6 +425,45 @@ func TestLoadRendersTheConfigurationWhenTheRulesetIsDamaged(t *testing.T) {
 	}
 }
 
+// A crash between the store's two renames leaves the ruleset of the save
+// before. Boot renders the saved configuration rather than load it, and
+// going back does the same.
+func TestLoadRendersTheConfigurationWhenTheRulesetIsStale(t *testing.T) {
+	t.Parallel()
+	e, fr, st := newEngine(t)
+	ctx := context.Background()
+	if _, err := e.Apply(ctx, cfg("boot"), ApplyOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(st.Dir, store.RulesetFile)
+	first, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := cfg("second")
+	second.System.Management.WebPort = 8443
+	res, err := e.Apply(ctx, second, ApplyOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(first), res.Ruleset) {
+		t.Fatal("the two configurations render the same ruleset")
+	}
+	if err := os.WriteFile(path, first, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := e.Load(ctx)
+	if err != nil || got.Source != LoadedRendered || !errors.Is(got.Reason, store.ErrStaleRuleset) {
+		t.Fatalf("Load = %+v, %v", got, err)
+	}
+	if fr.last() != res.Ruleset {
+		t.Error("boot did not load the saved configuration rendered again")
+	}
+	if previous, err := e.previousRuleset(); err != nil || previous != res.Ruleset {
+		t.Errorf("previousRuleset = %v, want the saved configuration rendered again", err)
+	}
+}
+
 // When nothing the configuration renders will load, the fallback keeps the
 // management ports on the anti-lockout interfaces, and the dashboard hears
 // of it until an apply is confirmed.

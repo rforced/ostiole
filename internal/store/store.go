@@ -4,6 +4,8 @@
 package store
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -42,6 +44,14 @@ const DefaultDir = "/etc/ostiole"
 // ErrNotFound means the store has no configuration yet.
 var ErrNotFound = errors.New("no configuration found")
 
+// ErrStaleRuleset means the saved ruleset was not written with the saved
+// configuration: a crash came between the two renames of a Save.
+var ErrStaleRuleset = errors.New("the saved ruleset belongs to another configuration")
+
+// rulesetNote heads a saved ruleset with the SHA-256 of the config.json
+// saved with it. nft reads it as a comment.
+const rulesetNote = "# config.json sha256 "
+
 // Store is a directory-backed configuration store. It is safe for use from
 // multiple processes when callers hold Lock around read-modify-write.
 type Store struct {
@@ -74,7 +84,8 @@ func (s *Store) Load() (*model.Config, error) {
 	return readConfig(filepath.Join(s.Dir, ConfigFile))
 }
 
-// LoadRuleset returns the last confirmed ruleset, or ErrNotFound.
+// LoadRuleset returns the last confirmed ruleset, ErrNotFound, or
+// ErrStaleRuleset when it was not saved with the configuration beside it.
 func (s *Store) LoadRuleset() (string, error) {
 	raw, err := os.ReadFile(filepath.Join(s.Dir, RulesetFile))
 	if errors.Is(err, os.ErrNotExist) {
@@ -83,7 +94,20 @@ func (s *Store) LoadRuleset() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(raw), nil
+	rest, noted := strings.CutPrefix(string(raw), rulesetNote)
+	if !noted {
+		// The install's bootstrap, or a ruleset saved before the note.
+		return string(raw), nil
+	}
+	want, ruleset, _ := strings.Cut(rest, "\n")
+	cfg, err := os.ReadFile(filepath.Join(s.Dir, ConfigFile))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+	if sum := sha256.Sum256(cfg); hex.EncodeToString(sum[:]) != want {
+		return "", ErrStaleRuleset
+	}
+	return ruleset, nil
 }
 
 // WriteState atomically writes one of the state files kept beside the
@@ -147,10 +171,16 @@ func (s *Store) Save(cfg *model.Config, ruleset string) (*Revision, error) {
 		return nil, err
 	}
 	raw = append(raw, '\n')
-	if err := writeAtomic(current, raw); err != nil {
+	// Two renames are not one. The ruleset goes first and names the
+	// configuration it belongs to, so a crash between them leaves one that
+	// LoadRuleset refuses rather than one that loads under the wrong
+	// configuration.
+	sum := sha256.Sum256(raw)
+	note := rulesetNote + hex.EncodeToString(sum[:]) + "\n"
+	if err := writeAtomic(filepath.Join(s.Dir, RulesetFile), []byte(note+ruleset)); err != nil {
 		return nil, err
 	}
-	if err := writeAtomic(filepath.Join(s.Dir, RulesetFile), []byte(ruleset)); err != nil {
+	if err := writeAtomic(current, raw); err != nil {
 		return nil, err
 	}
 	if err := s.prune(cfg.System.RevisionsKept()); err != nil {

@@ -253,7 +253,7 @@ func (e *Engine) inForce() (rulesets []string, skip bool, err error) {
 	switch {
 	case err == nil:
 		rulesets = append(rulesets, saved)
-	case !errors.Is(err, store.ErrNotFound):
+	case !errors.Is(err, store.ErrNotFound) && !errors.Is(err, store.ErrStaleRuleset):
 		return nil, false, err
 	}
 	if cfg, err := e.store.Load(); err == nil && cfg.Validate() == nil {

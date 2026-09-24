@@ -557,8 +557,20 @@ func (e *Engine) Revert(ctx context.Context) error {
 // Never an empty table: a router without one is wide open.
 func (e *Engine) previousRuleset() (string, error) {
 	ruleset, err := e.store.LoadRuleset()
-	if errors.Is(err, store.ErrNotFound) {
+	switch {
+	case errors.Is(err, store.ErrNotFound):
 		return nft.Fallback(nil, e.defaultPorts), nil
+	case errors.Is(err, store.ErrStaleRuleset):
+		// A crash split the last save; the configuration is the half to go
+		// back to.
+		cfg, err := e.store.Load()
+		if errors.Is(err, store.ErrNotFound) {
+			return nft.Fallback(nil, e.defaultPorts), nil
+		}
+		if err != nil {
+			return "", err
+		}
+		return nft.RenderWithFeeds(cfg, e.FeedEntries())
 	}
 	return ruleset, err
 }

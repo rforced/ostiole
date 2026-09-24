@@ -88,6 +88,39 @@ func TestSaveLoadAndRevisions(t *testing.T) {
 	}
 }
 
+// A crash between Save's two renames leaves the ruleset of one save beside
+// the configuration of another. Loading that ruleset would run the old
+// policy under the new configuration, so it is refused.
+func TestLoadRulesetRefusesOneSavedWithAnotherConfiguration(t *testing.T) {
+	t.Parallel()
+	s := New(t.TempDir())
+	if _, err := s.Save(starter("one"), "ruleset-one\n"); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(s.Dir, RulesetFile)
+	first, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Save(starter("two"), "ruleset-two\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, first, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if rs, err := s.LoadRuleset(); !errors.Is(err, ErrStaleRuleset) {
+		t.Errorf("LoadRuleset = %q, %v, want ErrStaleRuleset", rs, err)
+	}
+
+	// The install's bootstrap carries no note and loads as it is.
+	if err := os.WriteFile(path, []byte("table inet ostiole {}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if rs, err := s.LoadRuleset(); err != nil || rs != "table inet ostiole {}\n" {
+		t.Errorf("LoadRuleset of the bootstrap = %q, %v", rs, err)
+	}
+}
+
 func TestSaveRejectsInvalid(t *testing.T) {
 	t.Parallel()
 	s := New(t.TempDir())
