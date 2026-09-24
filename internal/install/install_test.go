@@ -175,7 +175,8 @@ func TestUnits(t *testing.T) {
 		t.Errorf("daemon unit:\n%s", d)
 	}
 	f := units[FirewallUnit]
-	if !strings.Contains(f, "Before=network-pre.target") || !strings.Contains(f, "ConditionPathExists=/etc/ostiole/ruleset.nft") {
+	// A missing ruleset must not skip the unit: `load` puts the fallback in.
+	if !strings.Contains(f, "Before=network-pre.target") || strings.Contains(f, "ConditionPathExists") {
 		t.Errorf("firewall unit:\n%s", f)
 	}
 }

@@ -127,6 +127,12 @@ func TestBootstrapLoadsInKernel(t *testing.T) {
 			t.Fatalf("nft -c rejected the bootstrap ruleset for %v:\n%v\n--- ruleset ---\n%s", ports, err, ruleset)
 		}
 	}
+	for _, in := range []string{"testdata/minimal.json", "testdata/full.json"} {
+		ruleset := Fallback(loadConfig(t, in), []uint16{9443, 22})
+		if err := x.Check(ctx, ruleset); err != nil {
+			t.Fatalf("nft -c rejected the fallback ruleset for %s:\n%v\n--- ruleset ---\n%s", in, err, ruleset)
+		}
+	}
 }
 
 // runInNamespace re-runs the calling test inside a fresh unprivileged user

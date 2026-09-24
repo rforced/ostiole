@@ -22,6 +22,7 @@ import (
 	"github.com/rforced/ostiole/internal/cron"
 	"github.com/rforced/ostiole/internal/dnsblock"
 	"github.com/rforced/ostiole/internal/dnslog"
+	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/feeds"
 	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/gateway"
@@ -91,6 +92,7 @@ at your own.`,
 				LogLevel.Set(logging.Slog(c.System.Logging.EffectiveLevel()))
 			}
 			if os.Geteuid() == 0 {
+				ensureRuleset(cmd.Context(), eng)
 				// A router must forward from the moment the daemon is up.
 				var kernel sysctl.Settings
 				if cfg := eng.Effective(); cfg != nil {
@@ -372,6 +374,26 @@ func lockDaemon(dir string) (func(), error) {
 		_, _ = f.WriteAt([]byte(strconv.Itoa(os.Getpid())+"\n"), 0)
 	}
 	return func() { _ = f.Close() }, nil
+}
+
+// ensureRuleset loads the firewall when the kernel has none, whatever
+// happened to the unit that loads it at boot: a router must never run
+// without one.
+func ensureRuleset(ctx context.Context, eng *engine.Engine) {
+	st, err := eng.Status(ctx)
+	if err != nil || st.TableLoaded {
+		return
+	}
+	res, err := eng.Load(ctx)
+	switch {
+	case err != nil:
+		slog.Error("no firewall ruleset is loaded and none would load", "err", err)
+	case res.Source == engine.LoadedSaved:
+		slog.Warn("no firewall ruleset was loaded; loaded the saved one")
+	default:
+		slog.Error("no firewall ruleset was loaded and the saved one would not load",
+			"loaded", res.Source, "reason", res.Reason)
+	}
 }
 
 // certHosts lists names the self-signed certificate should cover: the

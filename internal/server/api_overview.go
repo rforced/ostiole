@@ -698,6 +698,13 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 			Detail: "A configuration exists but table inet ostiole is not in the kernel. Apply the configuration or run `ostiole load`.",
 		})
 	}
+	if f := st.Fallback; f != nil {
+		out = append(out, Warning{
+			Kind: "fallback-ruleset", Level: "warn",
+			Title:  "The firewall runs its fallback ruleset",
+			Detail: "The saved ruleset did not load: " + f.Reason + ". Only the web UI and SSH are reachable and nothing is forwarded until the next apply.",
+		})
+	}
 	if a.tables != nil {
 		if tables, err := a.tables.ListTables(ctx); err == nil {
 			var foreign []string

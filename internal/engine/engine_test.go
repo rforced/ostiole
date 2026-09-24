@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -89,7 +91,10 @@ type fakeRunner struct {
 	applied  []string
 	checkErr error
 	applyErr error
-	table    bool
+	// refuse fails an apply of any ruleset holding this text, the way
+	// nft refuses one the kernel cannot load.
+	refuse string
+	table  bool
 }
 
 func (f *fakeRunner) Check(_ context.Context, _ string) error { return f.checkErr }
@@ -99,6 +104,9 @@ func (f *fakeRunner) Apply(_ context.Context, rs string) error {
 	defer f.mu.Unlock()
 	if f.applyErr != nil {
 		return f.applyErr
+	}
+	if f.refuse != "" && strings.Contains(rs, f.refuse) {
+		return errors.New("nft: kernel refuses " + f.refuse)
 	}
 	f.applied = append(f.applied, rs)
 	f.table = !strings.HasSuffix(strings.TrimSpace(rs), "delete table inet ostiole")
@@ -309,15 +317,16 @@ func TestApplyExpiresAndReverts(t *testing.T) {
 	if fr.count() != 2 {
 		t.Fatalf("expected automatic revert, applied=%d", fr.count())
 	}
-	// First apply on a fresh store: revert removes the table.
-	if !strings.Contains(fr.last(), "delete table inet ostiole") || strings.Contains(fr.last(), "{") {
-		t.Errorf("revert ruleset = %q, want empty ruleset", fr.last())
+	// First apply on a fresh store: nothing to go back to, so the
+	// fallback goes in. A router with no table at all is wide open.
+	if got := fr.last(); got != nft.Fallback(nil, []uint16{model.DefaultWebPort, 22}) {
+		t.Errorf("revert ruleset = %q, want the fallback", got)
 	}
 	if st.Exists() {
 		t.Error("store must not be written for an expired apply")
 	}
 	status, _ := e.Status(context.Background())
-	if status.Pending != nil || status.TableLoaded {
+	if status.Pending != nil || !status.TableLoaded {
 		t.Errorf("status after expiry = %+v", status)
 	}
 	if _, err := e.Confirm(context.Background()); !errors.Is(err, ErrNothingPending) {
@@ -357,15 +366,78 @@ func TestApplyFailuresLeaveNoPending(t *testing.T) {
 func TestLoadAppliesTheConfirmedRulesetAtBoot(t *testing.T) {
 	t.Parallel()
 	e, fr, _ := newEngine(t)
-	if err := e.Load(context.Background()); !errors.Is(err, ErrNoRuleset) {
-		t.Fatalf("Load on empty store: %v", err)
+	ctx := context.Background()
+	// Nothing saved: the fallback, never an empty kernel.
+	got, err := e.Load(ctx)
+	if err != nil || got.Source != LoadedFallback || !errors.Is(got.Reason, ErrNoRuleset) {
+		t.Fatalf("Load on empty store = %+v, %v", got, err)
 	}
-	res, _ := e.Apply(context.Background(), cfg("boot"), ApplyOptions{})
-	if err := e.Load(context.Background()); err != nil {
+	res, _ := e.Apply(ctx, cfg("boot"), ApplyOptions{})
+	if got, err := e.Load(ctx); err != nil || got.Source != LoadedSaved {
+		t.Fatalf("Load = %+v, %v", got, err)
+	}
+	if fr.count() != 3 || fr.last() != res.Ruleset {
+		t.Errorf("Load applied wrong ruleset")
+	}
+}
+
+// A saved ruleset that is gone or damaged is rendered again from the saved
+// configuration, which is the policy the router was confirmed to run.
+func TestLoadRendersTheConfigurationWhenTheRulesetIsDamaged(t *testing.T) {
+	t.Parallel()
+	e, fr, st := newEngine(t)
+	ctx := context.Background()
+	res, err := e.Apply(ctx, cfg("boot"), ApplyOptions{})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if fr.count() != 2 || fr.last() != res.Ruleset {
-		t.Errorf("Load applied wrong ruleset")
+	if err := os.WriteFile(filepath.Join(st.Dir, store.RulesetFile), []byte("damaged\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fr.refuse = "damaged"
+	got, err := e.Load(ctx)
+	if err != nil || got.Source != LoadedRendered || got.Reason == nil {
+		t.Fatalf("Load = %+v, %v", got, err)
+	}
+	if fr.last() != res.Ruleset {
+		t.Error("the configuration rendered again is not the confirmed ruleset")
+	}
+	if status, _ := e.Status(ctx); status.Fallback != nil {
+		t.Errorf("a rendered ruleset reported as the fallback: %+v", status.Fallback)
+	}
+}
+
+// When nothing the configuration renders will load, the fallback keeps the
+// management ports on the anti-lockout interfaces, and the dashboard hears
+// of it until an apply is confirmed.
+func TestLoadFallsBackWhenNothingElseLoads(t *testing.T) {
+	t.Parallel()
+	e, fr, _ := newEngine(t)
+	ctx := context.Background()
+	if _, err := e.Apply(ctx, cfg("boot"), ApplyOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	fr.refuse = "chain zone_"
+	got, err := e.Load(ctx)
+	if err != nil || got.Source != LoadedFallback {
+		t.Fatalf("Load = %+v, %v", got, err)
+	}
+	if want := nft.Fallback(cfg("boot"), nil); fr.last() != want {
+		t.Errorf("fallback applied:\n%s\nwant:\n%s", fr.last(), want)
+	}
+	if !strings.Contains(fr.last(), `iifname "eth1" tcp dport`) {
+		t.Errorf("the fallback does not keep the LAN's management ports:\n%s", fr.last())
+	}
+	status, _ := e.Status(ctx)
+	if status.Fallback == nil || !strings.Contains(status.Fallback.Reason, "refuses") {
+		t.Fatalf("status after a fallback = %+v", status.Fallback)
+	}
+	fr.refuse = ""
+	if _, err := e.Apply(ctx, cfg("fixed"), ApplyOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := e.Status(ctx); status.Fallback != nil {
+		t.Errorf("a confirmed apply left the fallback note: %+v", status.Fallback)
 	}
 }
 

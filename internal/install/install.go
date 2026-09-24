@@ -312,6 +312,8 @@ func Units(lay Layout, opts Options) map[string]string {
 	// cannot see because one edge is a runtime "systemctl start" with no
 	// timeout. It hung an Ubuntu 26.04 router at boot with nothing
 	// listening. What the unit actually needs is the root filesystem.
+	// It runs whether or not a ruleset is saved: with none, `load` puts
+	// the fallback in, and a router never boots without a firewall.
 	firewall := fmt.Sprintf(`[Unit]
 Description=Ostiole firewall ruleset (loaded before networking)
 Documentation=https://github.com/rforced/ostiole
@@ -321,7 +323,6 @@ After=local-fs.target systemd-sysctl.service
 Wants=network-pre.target
 Before=network-pre.target shutdown.target
 Conflicts=shutdown.target
-ConditionPathExists=%s/ruleset.nft
 
 [Service]
 Type=oneshot
@@ -331,7 +332,7 @@ ExecReload=%s --config-dir %s load
 
 [Install]
 WantedBy=multi-user.target
-`, cfg, cfg, bin, cfg, bin, cfg)
+`, cfg, bin, cfg, bin, cfg)
 
 	daemon := fmt.Sprintf(`[Unit]
 Description=Ostiole firewall management UI and API

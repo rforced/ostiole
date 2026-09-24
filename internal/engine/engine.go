@@ -59,6 +59,9 @@ type Engine struct {
 	feeds  FeedSource
 	log    *slog.Logger
 	revert time.Duration // time budget for an automatic revert
+	// defaultPorts are what the fallback ruleset opens when there is no
+	// configuration to read the management ports from.
+	defaultPorts []uint16
 
 	mu      sync.Mutex
 	pending *pendingApply
@@ -83,7 +86,17 @@ func New(st *store.Store, runner nft.Runner, net network.Backend, log *slog.Logg
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Engine{store: st, nft: runner, net: net, log: log, revert: 15 * time.Second}
+	return &Engine{
+		store: st, nft: runner, net: net, log: log, revert: 15 * time.Second,
+		defaultPorts: []uint16{model.DefaultWebPort, 22},
+	}
+}
+
+// WithDefaultPorts sets the management ports the fallback ruleset opens
+// when no configuration names them: where the daemon really listens.
+func (e *Engine) WithDefaultPorts(ports ...uint16) *Engine {
+	e.defaultPorts = ports
+	return e
 }
 
 // WithServices adds the DHCP/DNS backend, applied after the network and
@@ -323,11 +336,8 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 	if err != nil {
 		return nil, err
 	}
-	previous, err := e.store.LoadRuleset()
-	if errors.Is(err, store.ErrNotFound) {
-		// Nothing confirmed yet: reverting means removing our table entirely.
-		previous = nft.EmptyRuleset()
-	} else if err != nil {
+	previous, err := e.previousRuleset()
+	if err != nil {
 		return nil, fmt.Errorf("load previous ruleset: %w", err)
 	}
 	var previousNet, previousSvc, previousShape network.Files
@@ -456,6 +466,17 @@ func (e *Engine) Revert(ctx context.Context) error {
 	return nil
 }
 
+// previousRuleset is what going back puts in the kernel: the last
+// confirmed ruleset, or the fallback when nothing has been confirmed.
+// Never an empty table: a router without one is wide open.
+func (e *Engine) previousRuleset() (string, error) {
+	ruleset, err := e.store.LoadRuleset()
+	if errors.Is(err, store.ErrNotFound) {
+		return nft.Fallback(nil, e.defaultPorts), nil
+	}
+	return ruleset, err
+}
+
 // restore puts the previous firewall and network state back.
 func (e *Engine) restore(ctx context.Context, p *pendingApply) error {
 	var errs []error
@@ -504,7 +525,13 @@ func (e *Engine) commit(cfg *model.Config, ruleset string) (*store.Revision, err
 		return nil, err
 	}
 	defer unlock()
-	return e.store.Save(cfg, ruleset)
+	archived, err := e.store.Save(cfg, ruleset)
+	if err != nil {
+		return archived, err
+	}
+	// The kernel runs a confirmed ruleset again.
+	e.clearFallback()
+	return archived, nil
 }
 
 // Effective returns the configuration the kernel is actually running: the
@@ -552,25 +579,73 @@ func (e *Engine) RenewLease(ctx context.Context, name string, release bool) erro
 	return nil
 }
 
-// Load applies the last confirmed ruleset without touching the store. It
-// is the early-boot path.
-func (e *Engine) Load(ctx context.Context) error {
-	ruleset, err := e.store.LoadRuleset()
-	if errors.Is(err, store.ErrNotFound) {
-		return ErrNoRuleset
+// LoadSource says which ruleset Load put in the kernel.
+type LoadSource string
+
+// What Load can put in.
+const (
+	// LoadedSaved is the last confirmed ruleset, as saved.
+	LoadedSaved LoadSource = "saved"
+	// LoadedRendered is the saved configuration rendered again, because
+	// the saved ruleset was missing or would not load.
+	LoadedRendered LoadSource = "rendered"
+	// LoadedFallback accepts the management ports and forwards nothing.
+	LoadedFallback LoadSource = "fallback"
+)
+
+// LoadResult says what Load put in and, when it was not the saved
+// ruleset, why.
+type LoadResult struct {
+	Source LoadSource
+	Reason error
+}
+
+// Load puts the last confirmed ruleset in the kernel without touching the
+// configuration. It is the early-boot path, so it never leaves the router
+// without a firewall: a saved ruleset that is missing or that nft refuses
+// is rendered again from the saved configuration, and when that will not
+// load either, the fallback goes in. The error is set only when not even
+// the fallback loaded.
+func (e *Engine) Load(ctx context.Context) (LoadResult, error) {
+	cfg, err := e.store.Load()
+	if err != nil || cfg.Validate() != nil {
+		cfg = nil
 	}
-	if err != nil {
-		return err
+	ruleset, why := e.store.LoadRuleset()
+	if errors.Is(why, store.ErrNotFound) {
+		why = ErrNoRuleset
 	}
-	if err := e.nft.Apply(ctx, ruleset); err != nil {
-		return err
+	if why == nil {
+		if why = e.nft.Apply(ctx, ruleset); why == nil {
+			return e.loaded(cfg, LoadResult{Source: LoadedSaved}), nil
+		}
 	}
-	// Best effort: a ruleset that loads is worth more than the settings
-	// that go with it, so an unreadable configuration still leaves the
-	// router forwarding on the kernel's own limits.
-	cfg, _ := e.store.Load()
+	if cfg != nil {
+		if rendered, err := nft.RenderWithFeeds(cfg, e.FeedEntries()); err == nil && rendered != ruleset {
+			if err := e.nft.Apply(ctx, rendered); err == nil {
+				return e.loaded(cfg, LoadResult{Source: LoadedRendered, Reason: why}), nil
+			}
+		}
+	}
+	if err := e.nft.Apply(ctx, nft.Fallback(cfg, e.defaultPorts)); err != nil {
+		return LoadResult{}, fmt.Errorf("the saved ruleset did not load (%w) and neither did the fallback: %w", why, err)
+	}
+	return e.loaded(cfg, LoadResult{Source: LoadedFallback, Reason: why}), nil
+}
+
+// loaded finishes a Load that put a ruleset in: it notes or clears the
+// fallback and turns the router settings on. Those are best effort: a
+// ruleset that loads is worth more than the settings that go with it, so
+// an unreadable configuration still leaves the router forwarding on the
+// kernel's own limits.
+func (e *Engine) loaded(cfg *model.Config, res LoadResult) LoadResult {
+	if res.Source == LoadedFallback {
+		e.noteFallback(res.Reason)
+	} else {
+		e.clearFallback()
+	}
 	e.applySysctl(cfg)
-	return nil
+	return res
 }
 
 // PendingStatus describes an unconfirmed apply.
@@ -586,6 +661,9 @@ type Status struct {
 	TableLoaded bool           `json:"tableLoaded"`
 	Network     string         `json:"network"` // backend name or "none"
 	Pending     *PendingStatus `json:"pending,omitempty"`
+	// Fallback is set while the kernel runs the fallback ruleset because
+	// the saved one would not load.
+	Fallback *FallbackStatus `json:"fallback,omitempty"`
 }
 
 // Status reports whether configuration exists, whether the table is in the
@@ -598,7 +676,7 @@ func (e *Engine) Status(ctx context.Context) (Status, error) {
 	}
 	e.mu.Unlock()
 
-	st := Status{Configured: e.store.Exists(), Pending: pending, Network: "none"}
+	st := Status{Configured: e.store.Exists(), Pending: pending, Network: "none", Fallback: e.readFallback()}
 	if e.net != nil {
 		st.Network = e.net.Name()
 	}

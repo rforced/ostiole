@@ -553,3 +553,24 @@ func testAccountKey(t *testing.T) string {
 	}
 	return string(pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der}))
 }
+
+// A router on its fallback ruleset says so on the dashboard until an apply
+// puts a confirmed one back.
+func TestOverviewWarnsAboutTheFallbackRuleset(t *testing.T) {
+	t.Parallel()
+	var eng *engine.Engine
+	srv := newTestServerWith(t, func(d *Deps) { eng = d.Engine })
+	raw, _ := json.Marshal(engine.FallbackStatus{Since: time.Now(), Reason: "nft refused it"})
+	if err := eng.Store().WriteState(store.FallbackFile, raw); err != nil {
+		t.Fatal(err)
+	}
+	if w := warning(getOverview(t, srv), "fallback-ruleset"); w == nil || !strings.Contains(w.Detail, "nft refused it") {
+		t.Fatalf("want a fallback-ruleset warning, got %+v", w)
+	}
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: starter()}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
+	}
+	if w := warning(getOverview(t, srv), "fallback-ruleset"); w != nil {
+		t.Errorf("a confirmed apply left the warning: %+v", w)
+	}
+}

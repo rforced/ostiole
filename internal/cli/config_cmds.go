@@ -259,16 +259,28 @@ func newLoadCmd(g *globals) *cobra.Command {
 	return &cobra.Command{
 		Use:   "load",
 		Short: "Load the last confirmed ruleset (used at boot)",
-		Args:  cobra.NoArgs,
+		Long: `Loads the last confirmed ruleset. When it is missing or nft refuses it,
+the saved configuration is rendered again. When that will not load either,
+a fallback goes in that accepts only the management ports and forwards
+nothing, and the command fails so the unit shows it.`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			eng, err := g.engine()
 			if err != nil {
 				return err
 			}
-			if err := eng.Load(cmd.Context()); err != nil {
+			res, err := eng.Load(cmd.Context())
+			if err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "loaded confirmed ruleset")
+			switch res.Source {
+			case engine.LoadedSaved:
+				fmt.Fprintln(cmd.OutOrStdout(), "loaded confirmed ruleset")
+			case engine.LoadedRendered:
+				fmt.Fprintf(cmd.OutOrStdout(), "loaded the confirmed configuration, rendered again: the saved ruleset did not load (%v)\n", res.Reason)
+			default:
+				return fmt.Errorf("loaded the fallback ruleset, which accepts only the management ports and forwards nothing: the saved ruleset did not load (%w)", res.Reason)
+			}
 			return nil
 		},
 	}
@@ -298,6 +310,9 @@ func newStatusCmd(g *globals) *cobra.Command {
 			fmt.Fprintf(w, "config dir\t%s\n", st.Dir)
 			fmt.Fprintf(w, "configured\t%v\n", status.Configured)
 			fmt.Fprintf(w, "table loaded\t%v\n", status.TableLoaded)
+			if f := status.Fallback; f != nil {
+				fmt.Fprintf(w, "fallback ruleset\tsince %s: %s\n", f.Since.Local().Format("2006-01-02 15:04"), f.Reason)
+			}
 			fmt.Fprintf(w, "network backend\t%s\n", status.Network)
 			fmt.Fprintf(w, "revisions\t%d\n", len(revs))
 			fmt.Fprintf(w, "nft\t%s\n", nftVersion)

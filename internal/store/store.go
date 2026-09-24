@@ -23,6 +23,8 @@ const (
 	RulesetFile  = "ruleset.nft"
 	RevisionsDir = "revisions"
 	lockFile     = ".lock"
+	// FallbackFile says the kernel runs the fallback ruleset, and why.
+	FallbackFile = "fallback.json"
 )
 
 // DefaultDir is the production location.
@@ -73,6 +75,33 @@ func (s *Store) LoadRuleset() (string, error) {
 		return "", err
 	}
 	return string(raw), nil
+}
+
+// WriteState atomically writes one of the state files kept beside the
+// configuration, such as PendingFile.
+func (s *Store) WriteState(name string, data []byte) error {
+	if err := s.Init(); err != nil {
+		return err
+	}
+	return writeAtomic(filepath.Join(s.Dir, filepath.Base(name)), data)
+}
+
+// ReadState reads a state file, or returns ErrNotFound.
+func (s *Store) ReadState(name string) ([]byte, error) {
+	raw, err := os.ReadFile(filepath.Join(s.Dir, filepath.Base(name)))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, ErrNotFound
+	}
+	return raw, err
+}
+
+// RemoveState deletes a state file; one that is not there is not an error.
+func (s *Store) RemoveState(name string) error {
+	err := os.Remove(filepath.Join(s.Dir, filepath.Base(name)))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
 }
 
 // Revision identifies an archived configuration.

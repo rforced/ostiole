@@ -154,6 +154,9 @@ func (g *globals) engineWith(ownLevel bool) (*engine.Engine, error) {
 	}
 	eng := engine.New(g.store(), &nft.Exec{Bin: g.nftBin}, net, slog.Default())
 	eng.WithFeeds(g.feeds())
+	if port := listenPortOf(installedListen()); port != 0 {
+		eng.WithDefaultPorts(port, 22)
+	}
 	if os.Geteuid() == 0 {
 		eng.WithSysctl(sysctl.Proc{})
 		eng.WithTimezone(timezone.System{})
