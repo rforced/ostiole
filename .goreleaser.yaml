@@ -2,9 +2,10 @@
 version: 2
 project_name: ostiole
 
+# The web UI is built before this runs: by the release workflow, in a step
+# the signing key never reaches, or by `task web:build`.
 before:
   hooks:
-    - sh -c "cd web && bun install --frozen-lockfile && bun run build"
     - go mod tidy
 
 builds:
@@ -58,17 +59,6 @@ checksum:
   name_template: checksums.txt
   algorithm: sha256
 
-# checksums.txt is signed with the release ed25519 key; the binary embeds
-# the public half and refuses updates that do not verify.
-signs:
-  - id: checksums
-    artifacts: checksum
-    cmd: go
-    args: ["run", "./cmd/ostiole-sign", "-in", "${artifact}", "-out", "${signature}"]
-    signature: "${artifact}.sig"
-    # The command inherits the process environment, including
-    # OSTIOLE_SIGNING_KEY from the workflow secret.
-
 sboms:
   - artifacts: archive
 
@@ -101,6 +91,9 @@ release:
   github:
     owner: rforced
     name: ostiole
+  draft: true
+  # A run that failed after goreleaser left a draft; the next one starts over.
+  replace_existing_draft: true
   prerelease: auto
   extra_files:
     - glob: internal/install/install.sh

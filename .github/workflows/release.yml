@@ -38,6 +38,16 @@ jobs:
           bun-version: 1.4.2
           no-cache: true
       - uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+      # The signing key is in scope for one step, the one that signs. The
+      # UI build runs other people's JavaScript and goreleaser runs the
+      # toolchain and syft, so the signer is built before any of them
+      # and the key is given to nothing else.
+      - name: Build the web UI
+        working-directory: web
+        run: bun install --frozen-lockfile && bun run build
+      - name: Build the signer
+        run: go build -trimpath -o "$RUNNER_TEMP/ostiole-sign" ./cmd/ostiole-sign
+      # Publishes a draft, which neither install.sh nor the updater sees.
       - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           distribution: goreleaser
@@ -45,6 +55,9 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Sign the checksums
+        run: '"$RUNNER_TEMP/ostiole-sign" -in dist/checksums.txt -out dist/checksums.txt.sig'
+        env:
           OSTIOLE_SIGNING_KEY: ${{ secrets.OSTIOLE_SIGNING_KEY }}
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
@@ -52,3 +65,11 @@ jobs:
           subject-path: |
             dist/*.tar.gz
             dist/checksums.txt
+      - name: Publish the release
+        run: |
+          gh release upload "$TAG" dist/checksums.txt.sig
+          gh release edit "$TAG" --draft=false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
