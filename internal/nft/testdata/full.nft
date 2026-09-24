@@ -97,12 +97,12 @@ table inet ostiole {
 	}
 	chain nat_postrouting {
 		type nat hook postrouting priority srcnat; policy accept;
+		oifname "eth0" ip saddr 10.10.0.25 counter snat ip to 203.0.113.10 comment "id:one-mail"
+		oifname "eth0" ip6 saddr 2001:db8:2::125 counter snat ip6 to 2001:db8:2::25 comment "id:one-v6"
 		oifname "eth0" ip saddr 192.168.0.0/16 counter masquerade comment "id:nat-lan"
 		oifname "eth0" ip6 saddr 2001:db8:1::/64 counter masquerade comment "id:nat-lan"
 		oifname "eth0" meta nfproto ipv4 counter masquerade comment "id:nat-all"
 		# outbound nat nat-guest skipped: zone "guest" has no enabled interfaces
-		oifname "eth0" ip saddr 10.10.0.25 counter snat ip to 203.0.113.10 comment "id:one-mail"
-		oifname "eth0" ip6 saddr 2001:db8:2::125 counter snat ip6 to 2001:db8:2::25 comment "id:one-v6"
 		ip saddr { 192.168.1.0/24, 192.168.20.0/24, 10.10.0.0/24, 10.66.0.0/24 } ip daddr 10.10.0.5 tcp dport { 80, 443 } counter masquerade comment "reflect:pf-web"
 		ip saddr { 192.168.1.0/24, 192.168.20.0/24, 10.10.0.0/24, 10.66.0.0/24 } ip daddr 192.168.1.50 meta l4proto { tcp, udp } th dport 27015-27020 counter masquerade comment "reflect:pf-game"
 	}

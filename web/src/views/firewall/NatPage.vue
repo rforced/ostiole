@@ -26,8 +26,8 @@ const outbound = computed(() => config.nat.outbound)
 const MODE_HINTS = {
   automatic: 'Masquerades IPv4 leaving every external zone. Nothing to configure.',
   hybrid: 'The rules below apply first, then the automatic masquerade.',
-  manual: 'Only the rules below. Anything they do not match leaves untranslated.',
-  disabled: 'Nothing is translated on the way out.',
+  manual: 'Only the rules below and 1:1 mappings. Anything else leaves untranslated.',
+  disabled: 'Only 1:1 mappings are translated on the way out.',
 }
 const mode = computed({
   get: () => outbound.value.mode,

@@ -3,11 +3,17 @@ package nft
 import (
 	"context"
 	"errors"
+	"net"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/vishvananda/netlink"
+
+	"github.com/rforced/ostiole/internal/model"
 )
 
 // namespaced returns an Exec that runs nft inside a fresh unprivileged user
@@ -119,6 +125,113 @@ func TestBootstrapLoadsInKernel(t *testing.T) {
 		ruleset := Bootstrap(ports)
 		if err := x.Check(ctx, ruleset); err != nil {
 			t.Fatalf("nft -c rejected the bootstrap ruleset for %v:\n%v\n--- ruleset ---\n%s", ports, err, ruleset)
+		}
+	}
+}
+
+// runInNamespace re-runs the calling test inside a fresh unprivileged user
+// and network namespace, where it can add links and send packets without
+// being root on the host. It skips where the sandbox forbids that, which is
+// what GitHub's runners do.
+func runInNamespace(t *testing.T, env, name string) {
+	t.Helper()
+	if _, err := exec.LookPath("unshare"); err != nil {
+		t.Skip("unshare not installed")
+	}
+	if _, err := exec.LookPath("nft"); err != nil {
+		t.Skip("nft not installed")
+	}
+	cmd := exec.Command("unshare", "-Urn", os.Args[0], "-test.run", "^"+name+"$", "-test.v")
+	cmd.Env = append(os.Environ(), env+"=1")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return
+	}
+	if strings.Contains(string(out), "uid_map") || strings.Contains(string(out), "Operation not permitted") {
+		t.Skipf("unprivileged namespaces are not allowed here: %s", strings.TrimSpace(string(out)))
+	}
+	t.Fatalf("inside namespace: %v\n%s", err, out)
+}
+
+// dummyLink brings up a dummy interface carrying addrs. What it sends is
+// dropped by the driver, after the postrouting hook has seen it.
+func dummyLink(t *testing.T, name string, addrs ...string) {
+	t.Helper()
+	link := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Name: name}}
+	if err := netlink.LinkAdd(link); err != nil {
+		t.Fatalf("add %s: %v", name, err)
+	}
+	if err := netlink.LinkSetUp(link); err != nil {
+		t.Fatalf("bring %s up: %v", name, err)
+	}
+	for _, addr := range addrs {
+		a, err := netlink.ParseAddr(addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := netlink.AddrAdd(link, a); err != nil {
+			t.Fatalf("address %s on %s: %v", addr, name, err)
+		}
+	}
+}
+
+// A golden records the order the renderer wrote, right or wrong, so this
+// checks the order where it counts: a packet from a mapped host leaves
+// through a kernel running the ruleset, and the counters say which rule
+// translated it. A NAT statement ends the chain, so only one may count it.
+func TestOneToOneBeatsOutboundNATInKernel(t *testing.T) {
+	const env = "OSTIOLE_NFT_NETNS"
+	if os.Getenv(env) == "" {
+		runInNamespace(t, env, "TestOneToOneBeatsOutboundNATInKernel")
+		return
+	}
+
+	cfg := loadConfig(t, "testdata/minimal.json")
+	cfg.NAT.Outbound = model.OutboundNAT{Mode: model.OutboundHybrid, Rules: []model.OutboundRule{
+		{ID: "nat-all", Enabled: true, Zone: "wan"},
+	}}
+	cfg.NAT.OneToOne = []model.OneToOneNAT{
+		{ID: "one-mail", Enabled: true, Zone: "wan", External: "203.0.113.10", Internal: "192.168.1.25"},
+	}
+	ruleset, err := Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The mapped host's address is local here, so this process can send
+	// as it, straight out of the WAN.
+	dummyLink(t, "eth0", "198.51.100.2/24", "192.168.1.25/32")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	x := &Exec{}
+	if err := x.Apply(ctx, ruleset); err != nil {
+		t.Fatal(err)
+	}
+
+	conn, err := net.DialUDP("udp4",
+		&net.UDPAddr{IP: net.ParseIP("192.168.1.25")},
+		&net.UDPAddr{IP: net.ParseIP("198.51.100.1"), Port: 9})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Write([]byte("x")); err != nil {
+		t.Fatal(err)
+	}
+	_ = conn.Close()
+
+	raw, err := x.ListTableJSON(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	counters, err := ParseCounters(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := counters["one-mail"].Packets; got != 1 {
+		t.Errorf("the 1:1 rule counted %d packets, want 1", got)
+	}
+	for _, key := range []string{"nat-all", "nat_postrouting/auto-nat:wan"} {
+		if got := counters[key].Packets; got != 0 {
+			t.Errorf("%s counted %d packets: it translated the mapped host", key, got)
 		}
 	}
 }

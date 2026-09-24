@@ -1602,11 +1602,14 @@ func dnatTarget(ip netip.Addr, port string) string {
 func (r *renderer) chainNATPostrouting() {
 	r.block("chain nat_postrouting", func() {
 		r.line("type nat hook postrouting priority srcnat; policy accept;")
-		// First, so the source translation a mapping asks for is applied
-		// instead of the masquerade everything else gets.
+		// A NAT statement ends the chain, so the first rule to match
+		// decides how a connection leaves. UPnP goes first, so the source
+		// translation a mapping asks for is applied instead of the
+		// masquerade everything else gets.
 		if UPnPEnabled(r.cfg) {
 			r.line("jump " + UPnPPostroutingChain)
 		}
+		r.oneToOneSNAT()
 		// The listed rules come first in hybrid mode, so a host can be
 		// given its own address, or kept out of NAT, without anyone
 		// writing out the rules for everything else.
@@ -1619,7 +1622,6 @@ func (r *renderer) chainNATPostrouting() {
 		case model.OutboundManual:
 			r.outboundManual()
 		}
-		r.oneToOneSNAT()
 		r.reflectSNAT()
 	})
 }
@@ -1733,7 +1735,8 @@ func (r *renderer) outboundRule(o model.OutboundRule, ifs string) {
 }
 
 // oneToOneSNAT sends the mapped host out as its external address. It comes
-// after outbound NAT so the explicit mapping wins over a masquerade.
+// before outbound NAT, as binat does in pf, so the mapping beats the
+// masquerade and the operator's rules alike.
 func (r *renderer) oneToOneSNAT() {
 	for _, o := range r.cfg.NAT.OneToOne {
 		if !o.Enabled {

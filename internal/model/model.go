@@ -1288,7 +1288,8 @@ type NAT struct {
 
 // OneToOneNAT maps one external address onto one internal host, both
 // directions: traffic to External is translated to Internal, and traffic
-// the host sends out of Zone leaves as External.
+// the host sends out of Zone leaves as External. It applies before
+// outbound NAT, so no outbound rule changes how the host leaves.
 type OneToOneNAT struct {
 	ID          string `json:"id"`
 	Description string `json:"description,omitempty"`

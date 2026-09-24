@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -621,5 +622,53 @@ func TestDNSEnforcementWithoutListsOrServer(t *testing.T) {
 	}
 	if strings.Contains(got, "block:dns-redirect") {
 		t.Errorf("DNS server off but plain DNS is redirected to it:\n%s", got)
+	}
+}
+
+// A NAT statement ends the chain, so a mapped host has to meet its 1:1
+// rule before the masquerade or an outbound rule can claim it. That holds
+// in every mode, as binat comes first in pf.
+func TestOneToOneComesBeforeOutboundNAT(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		mode  model.OutboundMode
+		after []string
+	}{
+		{model.OutboundAutomatic, []string{"auto-nat:wan"}},
+		{model.OutboundHybrid, []string{"id:nat-all", "auto-nat:wan"}},
+		{model.OutboundManual, []string{"id:nat-all"}},
+		{model.OutboundDisabled, nil},
+	} {
+		t.Run(string(tc.mode), func(t *testing.T) {
+			t.Parallel()
+			cfg := loadConfig(t, "testdata/minimal.json")
+			cfg.NAT.Outbound.Mode = tc.mode
+			if tc.mode == model.OutboundHybrid || tc.mode == model.OutboundManual {
+				cfg.NAT.Outbound.Rules = []model.OutboundRule{{ID: "nat-all", Enabled: true, Zone: "wan"}}
+			}
+			cfg.NAT.OneToOne = []model.OneToOneNAT{
+				{ID: "one-mail", Enabled: true, Zone: "wan", External: "203.0.113.10", Internal: "192.168.1.25"},
+			}
+			got, err := Render(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, post, ok := strings.Cut(got, "chain nat_postrouting")
+			if !ok {
+				t.Fatalf("no nat_postrouting chain:\n%s", got)
+			}
+			one := strings.Index(post, `comment "id:one-mail"`)
+			if one < 0 {
+				t.Fatalf("no 1:1 rule:\n%s", post)
+			}
+			for _, c := range tc.after {
+				at := strings.Index(post, fmt.Sprintf("comment %q", c))
+				if at < 0 {
+					t.Errorf("no %s:\n%s", c, post)
+				} else if at < one {
+					t.Errorf("%s comes before the 1:1 rule, so the mapping never applies:\n%s", c, post)
+				}
+			}
+		})
 	}
 }
