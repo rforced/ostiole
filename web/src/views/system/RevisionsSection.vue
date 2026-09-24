@@ -156,7 +156,10 @@ defineExpose({ refresh: load.run })
               </button>
             </td>
           </tr>
-          <tr v-if="comparing === r.id">
+          <!-- A key of its own: in the transition group both rows of a
+               revision would share one, and opening another compare
+               patched one row onto the other. -->
+          <tr v-if="comparing === r.id" :key="`${r.id}-changes`">
             <td colspan="4" class="bg-surface-2/40">
               <ChangeList
                 :changes="changes"
