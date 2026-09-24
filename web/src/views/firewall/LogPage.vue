@@ -126,8 +126,8 @@ onBeforeUnmount(() => source?.close())
   <div class="space-y-5">
     <SectionCard
       title="Log"
-      intro="Rules with logging on, and the drops of a zone that logs them. Kept in memory
-        only; a restart empties it."
+      intro="Rules with logging on, and the drops of a zone that logs them. Kept in memory, so a
+        restart empties it."
       flush
     >
       <template #actions>
@@ -151,7 +151,7 @@ onBeforeUnmount(() => source?.close())
           <option value="blocked">Blocked</option>
           <option value="allowed">Allowed</option>
         </select>
-        <span class="text-xs" :class="connected ? 'text-ok' : 'text-ink-muted'">
+        <span :class="connected ? 'text-ok' : 'text-ink-muted'">
           {{ connected ? 'live' : 'not connected' }} · {{ visible.length }} shown
         </span>
         <p v-if="error" role="alert" class="text-bad">{{ error }}</p>

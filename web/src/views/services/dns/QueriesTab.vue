@@ -1,5 +1,5 @@
 <script setup>
-import { Pause, Play } from 'lucide-vue-next'
+import { LoaderCircle, Pause, Play } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
@@ -106,6 +106,9 @@ const loadLists = useAsync(async () => {
 function connect() {
   const es = new EventSource('/api/v1/dns/queries/stream')
   source = es
+  es.onopen = () => {
+    streamError.value = ''
+  }
   es.onmessage = (ev) => {
     try {
       const row = JSON.parse(ev.data)
@@ -234,7 +237,7 @@ onBeforeUnmount(disconnect)
         <FormField
           id="qlog-hours"
           label="Hours"
-          hint="24 is the default. Older answers are dropped; 720 is a month."
+          hint="24 is the default, 720 a month. Older answers are dropped."
         >
           <input
             id="qlog-hours"
@@ -401,8 +404,10 @@ onBeforeUnmount(disconnect)
           type="button"
           class="btn-secondary"
           :disabled="more.busy.value"
+          :aria-busy="more.busy.value"
           @click="more.run()"
         >
+          <LoaderCircle v-if="more.busy.value" class="size-4 animate-spin" aria-hidden="true" />
           {{ more.busy.value ? 'Loading…' : 'Load more' }}
         </button>
         <span v-if="page?.total" class="text-sm text-ink-muted">
