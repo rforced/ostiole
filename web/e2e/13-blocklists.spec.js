@@ -6,13 +6,25 @@ import { applyAndConfirm, login, shot, sidebar } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
-// A local stand-in for a published blocklist and for a cloud's address
-// ranges in JSON, shaped like Oracle's, so the test never reaches out to
-// the internet.
+// A local stand-in for a published blocklist, for a cloud's address ranges
+// in JSON, shaped like Oracle's, and for RIPEstat, so the test never
+// reaches out to the internet.
 let lists
+let base
 let listURL
 let rangesURL
 let served = 0
+
+// What two documentation AS numbers announce, and who holds them. The
+// second announces nothing, which is an answer and not a failure.
+const announced = { 64500: ['203.0.113.0/25', '2001:db8:fe::/48'], 64501: [] }
+const holders = { 64500: 'Example Networks', 64501: 'Quiet Networks' }
+
+/** RIPEstat's answer: the data asked about, under "data". */
+function ripestat(res, data) {
+  res.writeHead(200, { 'Content-Type': 'application/json' })
+  res.end(JSON.stringify({ status: 'ok', data }))
+}
 
 const ranges = {
   last_updated_timestamp: '2026-08-25T08:06:24.590745',
@@ -36,6 +48,18 @@ const ranges = {
 test.beforeAll(async () => {
   lists = createServer((req, res) => {
     served++
+    const url = new URL(req.url, base)
+    const resource = url.searchParams.get('resource') ?? ''
+    if (url.pathname === '/announced-prefixes') {
+      const prefixes = announced[resource.replace(/^AS/, '')] ?? []
+      ripestat(res, { prefixes: prefixes.map((prefix) => ({ prefix })) })
+      return
+    }
+    if (url.pathname === '/as-names') {
+      const asked = resource.split(',').filter((n) => holders[n])
+      ripestat(res, { names: Object.fromEntries(asked.map((n) => [n, holders[n]])) })
+      return
+    }
     if (req.url === '/public_ip_ranges.json') {
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify(ranges, null, 4))
@@ -45,8 +69,9 @@ test.beforeAll(async () => {
     res.end('# a list\n192.0.2.0/24 ; note\n198.51.100.7\n2001:db8:dead::/48\n')
   })
   await new Promise((resolve) => lists.listen(0, '127.0.0.1', resolve))
-  listURL = `http://127.0.0.1:${lists.address().port}/drop.txt`
-  rangesURL = `http://127.0.0.1:${lists.address().port}/public_ip_ranges.json`
+  base = `http://127.0.0.1:${lists.address().port}`
+  listURL = `${base}/drop.txt`
+  rangesURL = `${base}/public_ip_ranges.json`
 })
 
 test.afterAll(() => lists?.close())
@@ -127,6 +152,54 @@ test('a JSON list is narrowed to one region', async ({ page }) => {
   // One prefix of each family from that region, of the four in the list.
   await row.getByRole('button', { name: 'Refresh' }).click()
   await expect(row).toContainText('2 fetched')
+})
+
+// An AS alias expands through RIPEstat, whose URLs are settings with no
+// page, as the GeoIP ones are: one call per AS, and one for the names.
+test('an AS alias fetches what each network announces', async ({ page }) => {
+  await login(page)
+  const cfg = await (await page.request.get('/api/v1/config')).json()
+  cfg.system.asnUrl = `${base}/announced-prefixes?resource=AS{asn}`
+  cfg.system.asnNamesUrl = `${base}/as-names?resource={asns}`
+  const headers = { 'X-Requested-With': 'ostiole' }
+  const applied = await page.request.post('/api/v1/apply', {
+    data: { config: cfg, confirmTimeoutSeconds: 60 },
+    headers,
+  })
+  expect(applied.ok()).toBe(true)
+  expect((await page.request.post('/api/v1/apply/confirm', { headers })).ok()).toBe(true)
+
+  await page.goto('/firewall')
+  await sidebar(page, 'Aliases')
+  await page.getByRole('button', { name: 'Add alias' }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Name', { exact: true }).fill('carriers')
+  await dialog.getByLabel('Type').selectOption('asn')
+  await expect(dialog.getByLabel('Fetch from')).toHaveCount(0)
+  await dialog.getByLabel('Entries').fill('as64500, transit')
+  await dialog.getByRole('button', { name: 'Save to draft' }).click()
+  await expect(dialog.getByRole('alert')).toHaveText('transit is not an AS number.')
+
+  // Any spelling goes in, one comes out, and a repeat is dropped.
+  await dialog.getByLabel('Entries').fill('as64500, 64501, AS64500')
+  await dialog.getByRole('button', { name: 'Save to draft' }).click()
+  const row = page.getByRole('row').filter({ hasText: 'carriers' })
+  await expect(row).toContainText('AS64500, AS64501')
+  await expect(row).toContainText('not fetched yet')
+  await applyAndConfirm(page)
+
+  // Both families from the first, nothing from the second, each named.
+  await row.getByRole('button', { name: 'Refresh' }).click()
+  await expect(row).toContainText('2 fetched')
+  await expect(row).toContainText('AS64500 Example Networks, AS64501 Quiet Networks')
+  await page.screenshot({ path: shot('99-asn-list'), fullPage: true })
+
+  // The dialog counts by network, so the one that announces nothing shows.
+  await row.getByRole('button', { name: 'Edit' }).click()
+  const edit = page.getByRole('dialog')
+  await expect(edit).toContainText('AS64500 · Example Networks · 2 prefixes')
+  await expect(edit).toContainText('AS64501 · Quiet Networks · 0 prefixes')
+  await edit.getByRole('button', { name: 'Cancel' }).click()
 })
 
 test('a country alias is picked by name, and a preset picks a whole bloc', async ({ page }) => {
