@@ -68,10 +68,24 @@ const why = ref({})
 let source = null
 let key = 0
 
+/**
+ * Where each page read starts: the newest answers, then the ones older
+ * than the last row of the page before. Only the page on screen is kept,
+ * however far back the reading goes.
+ */
+const cursors = ref([{ before: 0, offset: 0 }])
+const cursor = computed(() => cursors.value[cursors.value.length - 1])
+const newest = computed(() => cursors.value.length === 1)
+
+function read(c) {
+  return Promise.all([
+    api.queries.list(params(c.before ? { before: c.before } : {})),
+    api.queries.summary(),
+  ])
+}
+
 const load = useAsync(async () => {
-  const [p, s] = await Promise.all([api.queries.list(params()), api.queries.summary()])
-  page.value = p
-  summary.value = s
+  ;[page.value, summary.value] = await read(cursor.value)
 })
 
 function params(extra = {}) {
@@ -85,16 +99,31 @@ function params(extra = {}) {
   }
 }
 
-const more = useAsync(async () => {
+const older = useAsync(async () => {
   const rows = page.value?.entries ?? []
   if (!rows.length) return
-  const next = await api.queries.list(params({ before: rows[rows.length - 1].seq }))
-  page.value = { ...next, entries: [...rows, ...next.entries] }
+  const next = { before: rows[rows.length - 1].seq, offset: cursor.value.offset + rows.length }
+  ;[page.value, summary.value] = await read(next)
+  cursors.value = [...cursors.value, next]
+  // What streams in is new, and this page is not.
+  stopLive()
 })
+
+const newer = useAsync(async () => {
+  const back = cursors.value.slice(0, -1)
+  ;[page.value, summary.value] = await read(back[back.length - 1])
+  cursors.value = back
+})
+
+const paging = computed(() => older.busy.value || newer.busy.value)
+const hasOlder = computed(
+  () => cursor.value.offset + (page.value?.entries ?? []).length < (page.value?.total ?? 0),
+)
 
 const clear = useAsync(async () => {
   await api.queries.clear()
   streamed.value = []
+  cursors.value = [{ before: 0, offset: 0 }]
   await load.run()
 })
 
@@ -136,6 +165,10 @@ function toggleLive() {
     disconnect()
     streamed.value = []
   }
+}
+
+function stopLive() {
+  if (live.value) toggleLive()
 }
 
 /** The filter, applied to a streamed row the server did not filter. */
@@ -193,6 +226,7 @@ function explain(name) {
 
 function search() {
   streamed.value = []
+  cursors.value = [{ before: 0, offset: 0 }]
   load.run()
 }
 
@@ -311,7 +345,7 @@ onBeforeUnmount(disconnect)
               </option>
             </select>
           </FormField>
-          <button type="button" class="btn-secondary" @click="toggleLive">
+          <button type="button" class="btn-secondary" :disabled="!newest" @click="toggleLive">
             <component :is="live ? Pause : Play" class="size-4" aria-hidden="true" />
             {{ live ? 'Stop' : 'Live' }}
           </button>
@@ -355,7 +389,9 @@ onBeforeUnmount(disconnect)
           <TransitionGroup name="row" tag="tbody">
             <tr v-if="!rows.length" key="empty" class="row-static">
               <td colspan="6" class="text-ink-muted">
-                {{ load.busy.value && !page ? 'Reading…' : 'No queries.' }}
+                {{
+                  load.busy.value && !page ? 'Reading…' : newest ? 'No queries.' : 'Nothing older.'
+                }}
               </td>
             </tr>
             <template v-for="e in rows" :key="e.key">
@@ -400,19 +436,36 @@ onBeforeUnmount(disconnect)
 
       <div v-if="running" class="card-strip flex items-center gap-3 border-t border-line">
         <button
-          v-if="(page?.entries ?? []).length < (page?.total ?? 0)"
+          v-if="!newest"
           type="button"
           class="btn-secondary"
-          :disabled="more.busy.value"
-          :aria-busy="more.busy.value"
-          @click="more.run()"
+          :disabled="paging"
+          :aria-busy="newer.busy.value"
+          @click="newer.run()"
         >
-          <LoaderCircle v-if="more.busy.value" class="size-4 animate-spin" aria-hidden="true" />
-          {{ more.busy.value ? 'Loading…' : 'Load more' }}
+          <LoaderCircle v-if="newer.busy.value" class="size-4 animate-spin" aria-hidden="true" />
+          Newer
         </button>
-        <span v-if="page?.total" class="text-sm text-ink-muted">
-          Showing {{ formatCount((page.entries ?? []).length) }} of {{ formatCount(page.total) }}.
+        <button
+          v-if="hasOlder"
+          type="button"
+          class="btn-secondary"
+          :disabled="paging"
+          :aria-busy="older.busy.value"
+          @click="older.run()"
+        >
+          <LoaderCircle v-if="older.busy.value" class="size-4 animate-spin" aria-hidden="true" />
+          Older
+        </button>
+        <span v-if="page?.entries?.length" class="text-sm text-ink-muted">
+          {{ formatCount(cursor.offset + 1) }}–{{
+            formatCount(cursor.offset + page.entries.length)
+          }}
+          of {{ formatCount(page.total) }}.
         </span>
+        <p v-if="older.error.value || newer.error.value" role="alert" class="text-sm text-bad">
+          {{ older.error.value || newer.error.value }}
+        </p>
       </div>
     </SectionCard>
   </div>
