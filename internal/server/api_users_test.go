@@ -11,9 +11,9 @@ import (
 )
 
 // login swaps the test client's session for another account's.
-func login(t *testing.T, srv *httptest.Server, username, password string) {
+func login(t *testing.T, srv *httptest.Server, username string) {
 	t.Helper()
-	resp, raw := do(t, srv, http.MethodPost, "/api/v1/auth/login", credentials{Username: username, Password: password})
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/auth/login", credentials{Username: username, Password: testPassword})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("login as %s: %d %s", username, resp.StatusCode, raw)
 	}
@@ -222,7 +222,7 @@ func TestAccountRoutesAreAdminOnly(t *testing.T) {
 	if err := as.SetRole("admin", auth.RoleOperator); err == nil {
 		t.Fatal("expected the last-administrator rule to hold")
 	}
-	login(t, srv, "watcher", testPassword)
+	login(t, srv, "watcher")
 
 	for _, tc := range []struct {
 		method string

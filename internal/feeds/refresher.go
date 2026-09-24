@@ -85,8 +85,8 @@ func (r *Refresher) woken() chan struct{} {
 }
 
 // Inspect reads a list the configuration does not name yet.
-func (r *Refresher) Inspect(ctx context.Context, url string) (Part, error) {
-	return r.Fetcher.Inspect(ctx, url)
+func (r *Refresher) Inspect(ctx context.Context, url string, publicOnly bool) (Part, error) {
+	return r.Fetcher.Inspect(ctx, url, publicOnly)
 }
 
 // Tick refreshes whatever is due. With force, everything is fetched

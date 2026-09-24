@@ -372,18 +372,18 @@ func TestInspectDescribesAList(t *testing.T) {
 	defer srv.Close()
 
 	f := NewFetcher("test")
-	part, err := f.Inspect(context.Background(), srv.URL+"/ranges.json")
+	part, err := f.Inspect(context.Background(), srv.URL+"/ranges.json", false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if part.Source != srv.URL+"/ranges.json" || part.Entries != 8 || len(part.Choices) != 2 {
 		t.Errorf("JSON: %+v", part)
 	}
-	part, err = f.Inspect(context.Background(), srv.URL+"/drop.txt")
+	part, err = f.Inspect(context.Background(), srv.URL+"/drop.txt", false)
 	if err != nil || part.Entries != 2 || len(part.Choices) != 0 {
 		t.Errorf("text: %+v, %v", part, err)
 	}
-	if _, err := f.Inspect(context.Background(), srv.URL+"/gone"); err == nil || !strings.Contains(err.Error(), "404") {
+	if _, err := f.Inspect(context.Background(), srv.URL+"/gone", false); err == nil || !strings.Contains(err.Error(), "404") {
 		t.Errorf("missing: err = %v", err)
 	}
 }

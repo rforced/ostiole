@@ -450,7 +450,7 @@ func (f *Fetcher) Fetch(ctx context.Context, cfg *model.Config, a model.Alias) (
 }
 
 func (f *Fetcher) one(ctx context.Context, url string, a model.Alias) ([]string, []Choice, error) {
-	raw, err := f.get(ctx, url)
+	raw, err := f.get(ctx, f.Client, url)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -460,8 +460,18 @@ func (f *Fetcher) one(ctx context.Context, url string, a model.Alias) ([]string,
 // Inspect reads a list without keeping it: how many addresses it holds
 // and what it can be narrowed by. The alias dialog asks as soon as a URL
 // is typed, so the selection can be offered before anything is saved.
-func (f *Fetcher) Inspect(ctx context.Context, url string) (Part, error) {
-	raw, err := f.get(ctx, url)
+// With publicOnly, it connects only to public addresses that are not this
+// router's own.
+func (f *Fetcher) Inspect(ctx context.Context, url string, publicOnly bool) (Part, error) {
+	client := f.Client
+	if publicOnly {
+		client = publicClient
+	}
+	raw, err := f.get(ctx, client, url)
+	if errors.Is(err, ErrNotPublic) {
+		// The dial error around it names where a name or a redirect led.
+		return Part{}, ErrNotPublic
+	}
 	if err != nil {
 		return Part{}, err
 	}
@@ -490,8 +500,9 @@ func read(raw []byte, a model.Alias) ([]string, []Choice, error) {
 	return entries, nil, err
 }
 
-// get downloads one URL, bounded by the timeout and MaxBytes.
-func (f *Fetcher) get(ctx context.Context, url string) ([]byte, error) {
+// get downloads one URL through client, bounded by the timeout and
+// MaxBytes. A nil client is a plain one with the timeout.
+func (f *Fetcher) get(ctx context.Context, client *http.Client, url string) ([]byte, error) {
 	timeout := f.Timeout
 	if timeout <= 0 {
 		timeout = DefaultTimeout
@@ -505,7 +516,6 @@ func (f *Fetcher) get(ctx context.Context, url string) ([]byte, error) {
 	if f.UserAgent != "" {
 		req.Header.Set("User-Agent", f.UserAgent)
 	}
-	client := f.Client
 	if client == nil {
 		client = &http.Client{Timeout: timeout}
 	}
@@ -589,7 +599,7 @@ func (f *Fetcher) holders(ctx context.Context, cfg *model.Config, parts []Part) 
 			Names map[string]string `json:"names"`
 		} `json:"data"`
 	}
-	raw, err := f.get(ctx, strings.ReplaceAll(tmpl, "{asns}", strings.Join(numbers, ",")))
+	raw, err := f.get(ctx, f.Client, strings.ReplaceAll(tmpl, "{asns}", strings.Join(numbers, ",")))
 	if err == nil {
 		err = json.Unmarshal(raw, &ans)
 	}

@@ -116,6 +116,42 @@ func TestInspectReadsAList(t *testing.T) {
 	}
 }
 
+// An operator's URL is read from the internet only, and the list server
+// here is on the loopback. Once the router fetches it, they may read it.
+func TestInspectKeepsAnOperatorToPublicAddresses(t *testing.T) {
+	t.Parallel()
+	lists, hits := listServer(t)
+	srv, _ := newFeedServer(t)
+	source := lists.URL + "/ranges.json"
+	inspect := func() (*http.Response, []byte) {
+		t.Helper()
+		return do(t, srv, http.MethodPost, "/api/v1/aliases/inspect", map[string]string{"url": source})
+	}
+
+	user := map[string]string{"username": "hand", "password": testPassword, "role": "operator"}
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/users", user); resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create the operator: %d %s", resp.StatusCode, raw)
+	}
+	login(t, srv, "hand")
+	if resp, raw := inspect(); resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(raw), "not a public address") {
+		t.Errorf("an operator's loopback URL: %d %s", resp.StatusCode, raw)
+	}
+	if n := hits.Load(); n != 0 {
+		t.Errorf("the list was fetched %d times, want none", n)
+	}
+
+	login(t, srv, "admin")
+	cfg := starter()
+	cfg.Aliases = []model.Alias{{Name: "cloud", Type: model.AliasHosts, URL: source}}
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: cfg}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
+	}
+	login(t, srv, "hand")
+	if resp, raw := inspect(); resp.StatusCode != http.StatusOK {
+		t.Errorf("a URL the router fetches: %d %s", resp.StatusCode, raw)
+	}
+}
+
 // An apply or a revert has the refresher look at once, so an alias whose
 // URL or selection changed does not keep the old list until its next tick.
 func TestApplyAndRevertWakeTheRefresher(t *testing.T) {

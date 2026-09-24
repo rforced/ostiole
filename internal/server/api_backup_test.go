@@ -287,7 +287,7 @@ func TestRemoteBackupRoutesNeedAnOperator(t *testing.T) {
 	if err := as.CreateUser("watcher", testPassword, auth.RoleViewer); err != nil {
 		t.Fatal(err)
 	}
-	login(t, srv, "watcher", testPassword)
+	login(t, srv, "watcher")
 	if resp, _ := do(t, srv, http.MethodGet, "/api/v1/config/backup/remote", nil); resp.StatusCode != http.StatusForbidden {
 		t.Errorf("a viewer listing the copies = %d", resp.StatusCode)
 	}

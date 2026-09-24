@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/feeds"
 )
 
@@ -16,8 +17,9 @@ type FeedRefresher interface {
 	Tick(ctx context.Context, force bool)
 	// Wake asks for a pass now rather than at the next tick.
 	Wake()
-	// Inspect reads a list no alias names yet.
-	Inspect(ctx context.Context, url string) (feeds.Part, error)
+	// Inspect reads a list no alias names yet. With publicOnly, it
+	// connects only to public addresses that are not this router's own.
+	Inspect(ctx context.Context, url string, publicOnly bool) (feeds.Part, error)
 }
 
 func (a *api) registerFeeds(mux *router) {
@@ -81,12 +83,34 @@ func (a *api) inspectFeed(w http.ResponseWriter, r *http.Request) error {
 	if u, err := url.Parse(req.URL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
 		return &badRequest{fmt.Errorf("%q must be an http or https URL", req.URL)}
 	}
-	part, err := a.feeds.Inspect(r.Context(), req.URL)
+	// An operator's URL is read from the internet only, so the router is
+	// not a way to probe what else it can reach. An administrator's is
+	// read from anywhere, and so is one the router already fetches.
+	p, ok := a.authenticate(r)
+	admin := ok && p.Role.Allows(auth.RoleAdmin)
+	part, err := a.feeds.Inspect(r.Context(), req.URL, !admin && !a.fetches(req.URL))
 	if err != nil {
 		return &badRequest{err}
 	}
 	writeJSON(w, http.StatusOK, part)
 	return nil
+}
+
+// fetches reports whether the running configuration reads a list from
+// source.
+func (a *api) fetches(source string) bool {
+	cfg := a.engine.Effective()
+	if cfg == nil {
+		return false
+	}
+	for _, alias := range feeds.Wanted(cfg) {
+		for _, part := range feeds.SourceParts(cfg, alias) {
+			if part.Source == source {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // wakeFeeds has the refresher look at the configuration now: an apply or
