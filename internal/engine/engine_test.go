@@ -97,6 +97,9 @@ type fakeRunner struct {
 	// onCheck runs inside Check, which is where a caller that goes away
 	// mid-apply goes.
 	onCheck func()
+	// onApply runs as each ruleset goes in, which is how a test puts the
+	// loads in order with what else the engine does.
+	onApply func()
 	table   bool
 }
 
@@ -112,6 +115,9 @@ func (f *fakeRunner) Apply(ctx context.Context, rs string) error {
 	defer f.mu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if f.onApply != nil {
+		f.onApply()
 	}
 	if f.applyErr != nil {
 		return f.applyErr

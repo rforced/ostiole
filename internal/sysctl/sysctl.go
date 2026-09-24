@@ -127,7 +127,11 @@ type Settings struct {
 	// ConntrackMax is the ceiling on connections the kernel tracks at
 	// once. Zero leaves the kernel's own limit, which is the right answer
 	// almost always; see ConntrackMaxKey.
-	ConntrackMax int
+	ConntrackMax int `json:"conntrackMax"`
+	// ConntrackBuckets sizes the table they live in. Zero sizes it from
+	// the ceiling; a number is only ever one read back from the kernel,
+	// to be put back.
+	ConntrackBuckets int `json:"conntrackBuckets"`
 }
 
 // ConntrackMaxKey is the ceiling on tracked connections, and the one
@@ -164,6 +168,13 @@ const (
 // Applier sets kernel parameters; the engine uses it after every apply.
 type Applier interface {
 	Apply(Settings) error
+}
+
+// Reader is an Applier that can say what the kernel holds now, which is
+// what undoing an apply puts back: the kernel keeps a raised ceiling until
+// something lowers it.
+type Reader interface {
+	Current() (Settings, error)
 }
 
 // Proc writes settings straight into /proc/sys. Root is the base path,
@@ -209,9 +220,13 @@ func conntrack(s Settings) map[string]string {
 	if s.ConntrackMax <= 0 {
 		return nil
 	}
+	buckets := s.ConntrackBuckets
+	if buckets <= 0 {
+		buckets = s.ConntrackMax / conntrackRatio
+	}
 	return map[string]string{
 		ConntrackMaxKey:     strconv.Itoa(s.ConntrackMax),
-		ConntrackBucketsKey: strconv.Itoa(s.ConntrackMax / conntrackRatio),
+		ConntrackBucketsKey: strconv.Itoa(buckets),
 	}
 }
 
@@ -219,13 +234,30 @@ func conntrack(s Settings) map[string]string {
 // the denominator the connections page counts against. A kernel with the
 // module unloaded has no such file and no connections to count either.
 func (p Proc) ConntrackMax() (int, error) {
-	raw, err := os.ReadFile(filepath.Join(p.root(), ConntrackMaxKey))
+	return p.read(ConntrackMaxKey)
+}
+
+// Current implements Reader: the ceiling and the table size in force.
+func (p Proc) Current() (Settings, error) {
+	ceiling, err := p.read(ConntrackMaxKey)
+	if err != nil {
+		return Settings{}, err
+	}
+	buckets, err := p.read(ConntrackBucketsKey)
+	if err != nil {
+		return Settings{}, err
+	}
+	return Settings{ConntrackMax: ceiling, ConntrackBuckets: buckets}, nil
+}
+
+func (p Proc) read(key string) (int, error) {
+	raw, err := os.ReadFile(filepath.Join(p.root(), key))
 	if err != nil {
 		return 0, err
 	}
 	n, err := strconv.Atoi(strings.TrimSpace(string(raw)))
 	if err != nil {
-		return 0, fmt.Errorf("%s: %w", ConntrackMaxKey, err)
+		return 0, fmt.Errorf("%s: %w", key, err)
 	}
 	return n, nil
 }

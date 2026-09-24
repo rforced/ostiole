@@ -98,6 +98,40 @@ func TestConntrackMax(t *testing.T) {
 	}
 }
 
+// What the kernel holds is read back exactly, so undoing an apply that
+// raised the ceiling puts back the kernel's own figures, table size and
+// all, rather than ones worked out from the ceiling.
+func TestConntrackReadBackAndRestored(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	for k, v := range map[string]string{ConntrackMaxKey: "65536", ConntrackBucketsKey: "65536"} {
+		p := filepath.Join(root, k)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(v+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	proc := Proc{Root: root}
+	before, err := proc.Current()
+	if err != nil || before != (Settings{ConntrackMax: 65536, ConntrackBuckets: 65536}) {
+		t.Fatalf("Current() = %+v, %v", before, err)
+	}
+	if err := proc.Apply(Settings{ConntrackMax: 1_000_000}); err != nil {
+		t.Fatal(err)
+	}
+	if err := proc.Apply(before); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := proc.Current(); err != nil || got != before {
+		t.Errorf("after putting it back: %+v, %v; want %+v", got, err, before)
+	}
+	if _, err := (Proc{Root: t.TempDir()}).Current(); err == nil {
+		t.Error("a kernel without the module read as having a ceiling")
+	}
+}
+
 // A kernel with the module unloaded has no ceiling to read, and the
 // connections page has nothing to count against. That is not an error.
 func TestConntrackMaxMissing(t *testing.T) {

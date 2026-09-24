@@ -15,14 +15,17 @@ import (
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/store"
+	"github.com/rforced/ostiole/internal/sysctl"
 )
 
 // record is written before an apply changes anything and removed once it
 // is committed or undone. The pending state lives in memory, so without it
 // a daemon that died inside the confirmation window, or a router that
 // rebooted in it, would keep a configuration nobody confirmed. It holds
-// the network, services and shaping files from before the apply; the
-// firewall's half is the saved ruleset, which only a commit replaces.
+// the network, services and shaping files from before the apply, and the
+// conntrack ceiling; the firewall's half is the saved ruleset and the rest
+// of the router's own settings the saved configuration, which only a
+// commit replaces.
 type record struct {
 	ID string `json:"id"`
 	// PID and Boot say whose apply it is. One whose process is gone, or
@@ -39,6 +42,9 @@ type record struct {
 	Network  network.Files `json:"network"`
 	Services network.Files `json:"services"`
 	Shaping  network.Files `json:"shaping"`
+	// Kernel is the conntrack ceiling before the apply; nil when the
+	// kernel had none to read.
+	Kernel *sysctl.Settings `json:"kernel,omitempty"`
 }
 
 // Recovered describes an apply that Recover undid.
@@ -166,7 +172,17 @@ func (e *Engine) snapshot(r *record) error {
 	if err := take(e.svc, &r.Services, "services"); err != nil {
 		return err
 	}
-	return take(e.shape, &r.Shaping, "shaping")
+	if err := take(e.shape, &r.Shaping, "shaping"); err != nil {
+		return err
+	}
+	// Only a kernel with nf_conntrack loaded has a ceiling, and one
+	// without had nothing an apply could raise.
+	if kernel, ok := e.sysctl.(sysctl.Reader); ok && r.Kernel == nil {
+		if s, err := kernel.Current(); err == nil {
+			r.Kernel = &s
+		}
+	}
+	return nil
 }
 
 // Recover undoes an apply that a previous run left unfinished: one being
@@ -194,7 +210,10 @@ func (e *Engine) Recover(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	p := &pendingApply{previous: previous, previousNet: r.Network, previousSvc: r.Services, previousShape: r.Shaping}
+	p := &pendingApply{
+		previous: previous, previousNet: r.Network, previousSvc: r.Services, previousShape: r.Shaping,
+		previousKernel: r.Kernel,
+	}
 	if err := e.undo(ctx, p); err != nil {
 		return false, fmt.Errorf("undo the apply started %s: %w", r.Since.Format(time.RFC3339), err)
 	}

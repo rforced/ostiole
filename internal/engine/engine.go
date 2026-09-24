@@ -84,9 +84,12 @@ type pendingApply struct {
 	previousNet   network.Files
 	previousSvc   network.Files
 	previousShape network.Files
-	since         time.Time
-	deadline      time.Time
-	timer         *time.Timer
+	// previousKernel is the conntrack ceiling before the apply, when it
+	// could be read.
+	previousKernel *sysctl.Settings
+	since          time.Time
+	deadline       time.Time
+	timer          *time.Timer
 }
 
 // New returns an engine over st and runner. net may be nil to leave
@@ -166,8 +169,11 @@ func (e *Engine) WithSysctl(a sysctl.Applier) *Engine {
 // applySysctl turns on the router settings and, where the configuration
 // asks for one, the ceiling on tracked connections. It runs after the
 // ruleset has been loaded: the ruleset is what pulls in nf_conntrack, so
-// that is the first moment the ceiling can be written at all.
-func (e *Engine) applySysctl(cfg *model.Config) {
+// that is the first moment the ceiling can be written at all. before is
+// what the kernel had ahead of an apply being undone: a ceiling the kernel
+// was left to choose goes back to what it chose, since nothing else would
+// lower one the apply raised.
+func (e *Engine) applySysctl(cfg *model.Config, before *sysctl.Settings) {
 	if e.sysctl == nil {
 		return
 	}
@@ -175,9 +181,32 @@ func (e *Engine) applySysctl(cfg *model.Config) {
 	if cfg != nil {
 		s.ConntrackMax = cfg.System.ConntrackMax
 	}
+	if s.ConntrackMax == 0 && before != nil {
+		s = *before
+	}
 	if err := e.sysctl.Apply(s); err != nil {
 		e.log.Warn("could not set router sysctls; forwarding may not work", "err", err)
 	}
+}
+
+// system is the part of a configuration the router's own settings come
+// from. With nothing confirmed yet they are the defaults.
+func system(cfg *model.Config) model.System {
+	if cfg == nil {
+		return model.System{}
+	}
+	return cfg.System
+}
+
+// applyHost sets the router's own settings from cfg: the kernel's, the
+// clock's zone, the journal, the log levels and sshd. before is the
+// conntrack ceiling to put back where cfg leaves it to the kernel.
+func (e *Engine) applyHost(ctx context.Context, cfg *model.Config, before *sysctl.Settings) {
+	e.applySysctl(cfg, before)
+	e.applyTimezone(ctx, cfg)
+	e.applyJournal(ctx, cfg)
+	e.applyLogging(ctx, cfg)
+	e.applySSH(ctx, cfg)
 }
 
 // WithTimezone makes every apply set the router's clock to the zone in the
@@ -201,14 +230,12 @@ func (e *Engine) WithLogging(a logging.Applier) *Engine {
 	return e
 }
 
-// applyLogging writes the per-unit level caps. Like the journal ceiling
-// it is not part of the revert: a log level is nothing anybody can be
-// locked out by.
+// applyLogging writes the per-unit level caps.
 func (e *Engine) applyLogging(ctx context.Context, cfg *model.Config) {
 	if e.logging == nil {
 		return
 	}
-	level := cfg.System.Logging.EffectiveLevel()
+	level := system(cfg).Logging.EffectiveLevel()
 	if err := e.logging.Apply(ctx, level); err != nil {
 		e.log.Warn("could not cap what the daemons log; they write as much as they did before",
 			"level", level, "err", err)
@@ -221,44 +248,40 @@ func (e *Engine) WithSSH(a sshd.Applier) *Engine {
 	return e
 }
 
-// applySSH writes sshd's drop-in. Like the timezone it is not part of the
-// revert: locking yourself out of SSH is not something a ruleset rollback
-// can help with, and the setting is in the configuration a backup carries.
+// applySSH writes sshd's drop-in. With nothing confirmed yet there is no
+// setting to hold sshd to, so the drop-in goes and sshd takes its own.
 func (e *Engine) applySSH(ctx context.Context, cfg *model.Config) {
 	if e.ssh == nil {
 		return
 	}
-	if err := e.ssh.Apply(ctx, cfg.System.Management.SSHPasswords); err != nil {
+	passwords := cfg == nil || cfg.System.Management.SSHPasswords
+	if err := e.ssh.Apply(ctx, passwords); err != nil {
 		e.log.Warn("could not set how sshd lets people in; it admits people as it did before",
-			"passwords", cfg.System.Management.SSHPasswords, "err", err)
+			"passwords", passwords, "err", err)
 	}
 }
 
-// applyJournal writes the journal ceiling. Like the timezone it is not
-// part of the revert: a log ceiling is nothing anybody can be locked out
-// by.
+// applyJournal writes the journal ceiling.
 func (e *Engine) applyJournal(ctx context.Context, cfg *model.Config) {
 	if e.journal == nil {
 		return
 	}
-	log := cfg.System.Logging
+	log := system(cfg).Logging
 	if err := e.journal.Apply(ctx, log.MaxUse(), log.Retention()); err != nil {
 		e.log.Warn("could not bound the system journal; it keeps what journald's own defaults allow",
 			"gb", log.MaxUse(), "days", log.Retention(), "err", err)
 	}
 }
 
-// applyTimezone puts the router in the configured zone. It is not part of
-// the revert: the zone is persistent state on the router rather than
-// something a bad ruleset can lock anybody out of, and a clock that
-// jumps back on an expiry would only confuse the logs of the attempt.
+// applyTimezone puts the router in the configured zone.
 func (e *Engine) applyTimezone(ctx context.Context, cfg *model.Config) {
 	if e.clock == nil {
 		return
 	}
-	if err := e.clock.Apply(ctx, cfg.System.Zone()); err != nil {
+	zone := system(cfg).Zone()
+	if err := e.clock.Apply(ctx, zone); err != nil {
 		e.log.Warn("could not set the router's timezone; its clock still reads in the old one",
-			"zone", cfg.System.Zone(), "err", err)
+			"zone", zone, "err", err)
 	}
 }
 
@@ -367,14 +390,10 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 		e.keep(base)
 		return nil, err
 	}
-	e.applySysctl(cfg)
-	e.applyTimezone(ctx, cfg)
-	e.applyJournal(ctx, cfg)
-	e.applyLogging(ctx, cfg)
-	e.applySSH(ctx, cfg)
+	e.applyHost(ctx, cfg, nil)
 	rollback := &pendingApply{
 		previous: previous, previousNet: rec.Network,
-		previousSvc: rec.Services, previousShape: rec.Shaping,
+		previousSvc: rec.Services, previousShape: rec.Shaping, previousKernel: rec.Kernel,
 	}
 	if e.net != nil {
 		// The units were written and networkd told before the failure,
@@ -423,15 +442,16 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 
 	now := time.Now()
 	p := &pendingApply{
-		id:            rec.ID,
-		cfg:           cfg,
-		ruleset:       plan.Ruleset,
-		previous:      previous,
-		previousNet:   rec.Network,
-		previousSvc:   rec.Services,
-		previousShape: rec.Shaping,
-		since:         now,
-		deadline:      now.Add(opts.ConfirmTimeout),
+		id:             rec.ID,
+		cfg:            cfg,
+		ruleset:        plan.Ruleset,
+		previous:       previous,
+		previousNet:    rec.Network,
+		previousSvc:    rec.Services,
+		previousShape:  rec.Shaping,
+		previousKernel: rec.Kernel,
+		since:          now,
+		deadline:       now.Add(opts.ConfirmTimeout),
 	}
 	id := p.id
 	p.timer = time.AfterFunc(opts.ConfirmTimeout, func() { e.expire(id) })
@@ -454,7 +474,7 @@ func (e *Engine) begin(cfg *model.Config) (rec, base *record, err error) {
 	}
 	rec = &record{ID: newID(), PID: os.Getpid(), Boot: bootID(), Since: time.Now(), Config: digest(cfg)}
 	if base != nil {
-		rec.Network, rec.Services, rec.Shaping = base.Network, base.Services, base.Shaping
+		rec.Network, rec.Services, rec.Shaping, rec.Kernel = base.Network, base.Services, base.Shaping, base.Kernel
 	}
 	if err := e.snapshot(rec); err != nil {
 		return nil, nil, err
@@ -516,7 +536,8 @@ func (e *Engine) previousRuleset() (string, error) {
 	return ruleset, err
 }
 
-// restore puts the previous firewall and network state back. A backend
+// restore puts the previous state back: the firewall, the network, and the
+// router's own settings as the confirmed configuration has them. A backend
 // with no "before" was not driven when it was taken and is left alone.
 func (e *Engine) restore(ctx context.Context, p *pendingApply) error {
 	var errs []error
@@ -538,7 +559,27 @@ func (e *Engine) restore(ctx context.Context, p *pendingApply) error {
 			errs = append(errs, fmt.Errorf("shaping: %w", err))
 		}
 	}
+	// After the firewall, which a slow clock or sshd must not hold up.
+	if confirmed, ok := e.confirmed(); ok {
+		e.applyHost(ctx, confirmed, p.previousKernel)
+	}
 	return errors.Join(errs...)
+}
+
+// confirmed is the configuration last committed, nil before the first.
+// ok is false when it cannot be read: the router's own settings are then
+// left as they are rather than set to defaults, which would, for one, let
+// passwords back into sshd.
+func (e *Engine) confirmed() (cfg *model.Config, ok bool) {
+	cfg, err := e.store.Load()
+	switch {
+	case err == nil:
+		return cfg, true
+	case errors.Is(err, store.ErrNotFound):
+		return nil, true
+	}
+	e.log.Warn("could not read the confirmed configuration; the router's own settings stay as they are", "err", err)
+	return nil, false
 }
 
 func (e *Engine) expire(id string) {
@@ -683,7 +724,7 @@ func (e *Engine) loaded(cfg *model.Config, res LoadResult) LoadResult {
 	} else {
 		e.clearFallback()
 	}
-	e.applySysctl(cfg)
+	e.applySysctl(cfg, nil)
 	return res
 }
 
