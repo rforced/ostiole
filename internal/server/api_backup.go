@@ -246,11 +246,11 @@ func (a *api) diffConfigs(w http.ResponseWriter, r *http.Request) error {
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}
-	from, err := a.configSide(req.From, req.FromConfig)
+	from, err := a.configSide(r, req.From, req.FromConfig)
 	if err != nil {
 		return err
 	}
-	to, err := a.configSide(req.To, req.ToConfig)
+	to, err := a.configSide(r, req.To, req.ToConfig)
 	if err != nil {
 		return err
 	}
@@ -265,21 +265,27 @@ func (a *api) diffConfigs(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// configSide resolves one end of a comparison.
-func (a *api) configSide(ref string, inline *model.Config) (*model.Config, error) {
+// configSide resolves one end of a comparison. A stored side comes the
+// way the caller may read it: a viewer comparing against an empty
+// configuration would otherwise read every secret as a change.
+func (a *api) configSide(r *http.Request, ref string, inline *model.Config) (*model.Config, error) {
 	if inline != nil {
 		return inline, nil
 	}
+	var cfg *model.Config
+	var err error
 	switch strings.TrimSpace(ref) {
 	case "", "current":
-		return a.engine.Store().Load()
+		cfg, err = a.engine.Store().Load()
 	case "running":
-		cfg := a.engine.Effective()
-		if cfg == nil {
-			return nil, errors.New("nothing is running yet")
+		if cfg = a.engine.Effective(); cfg == nil {
+			err = errors.New("nothing is running yet")
 		}
-		return cfg, nil
 	default:
-		return a.engine.Store().LoadRevision(ref)
+		cfg, err = a.engine.Store().LoadRevision(ref)
 	}
+	if err != nil {
+		return nil, err
+	}
+	return a.visible(r, cfg), nil
 }

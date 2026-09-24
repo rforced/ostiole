@@ -320,3 +320,30 @@ func TestRestoreOfARedactedBackupSaysWhatIsMissing(t *testing.T) {
 		t.Errorf("validation = %v, want it to name the tunnel key", err)
 	}
 }
+
+// A viewer comparing the saved configuration with anything reads no
+// secret in the changes, the way it reads none in the configuration.
+func TestAViewersDiffCarriesNoSecret(t *testing.T) {
+	t.Parallel()
+	var as *auth.Service
+	srv := newTestServerWith(t, func(d *Deps) { as = d.Auth })
+	cfg := starter()
+	cfg.Backup.Remote = model.RemoteBackup{
+		Endpoint: "https://s3.example.net", Bucket: "router-backups", KeyID: "0055abc", Secret: "hunter2", Passphrase: "correct horse",
+	}
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: cfg}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
+	}
+	if err := as.CreateUser("eyes", testPassword, auth.RoleViewer); err != nil {
+		t.Fatal(err)
+	}
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/auth/login", credentials{Username: "eyes", Password: testPassword}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("login: %d %s", resp.StatusCode, raw)
+	}
+	for _, from := range []string{"current", "running"} {
+		resp, raw := do(t, srv, http.MethodPost, "/api/v1/config/diff", map[string]any{"from": from, "toConfig": starter()})
+		if resp.StatusCode != http.StatusOK || strings.Contains(string(raw), "hunter2") {
+			t.Errorf("%s: %d %s", from, resp.StatusCode, raw)
+		}
+	}
+}
