@@ -21,13 +21,13 @@ const auth = useAuthStore()
 </script>
 
 <template>
-  <tr class="row-system" data-system>
-    <td>
+  <tr class="row-system max-sm:relative max-sm:pl-12" data-system>
+    <td class="max-sm:absolute max-sm:top-3.5 max-sm:left-4">
       <span role="img" aria-label="System rule" title="Added by Ostiole"
         ><Lock class="size-4" aria-hidden="true"
       /></span>
     </td>
-    <td>
+    <td class="max-sm:order-2">
       <span
         class="badge"
         :class="{ 'badge-ok': rule.action === 'accept', 'badge-warn': rule.action === 'drop' }"
@@ -35,13 +35,15 @@ const auth = useAuthStore()
       >
       <span v-if="rule.log" class="badge ml-1">log</span>
     </td>
-    <td class="font-mono text-code">{{ rule.protocol }}</td>
-    <td class="font-mono text-code">{{ rule.source }}</td>
-    <td class="font-mono text-code">{{ rule.destination }}</td>
-    <td></td>
-    <td>{{ rule.description }}</td>
-    <td class="text-right font-mono text-code tabular-nums">{{ packets }}</td>
-    <td class="text-right whitespace-nowrap">
+    <td class="font-mono text-code max-sm:order-3">{{ rule.protocol }}</td>
+    <td class="font-mono text-code max-sm:order-3">{{ rule.source }}</td>
+    <td class="font-mono text-code max-sm:order-3 max-sm:before:mr-2 max-sm:before:content-['→']">
+      {{ rule.destination }}
+    </td>
+    <td class="max-sm:hidden"></td>
+    <td class="max-sm:order-1 max-sm:basis-full">{{ rule.description }}</td>
+    <td class="text-right font-mono text-code tabular-nums max-sm:hidden">{{ packets }}</td>
+    <td class="text-right whitespace-nowrap max-sm:order-4 max-sm:basis-full max-sm:text-left">
       <RouterLink v-if="to" :to="to" class="link">{{ auth.readOnly ? 'View' : 'Edit' }}</RouterLink>
     </td>
   </tr>

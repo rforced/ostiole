@@ -75,7 +75,7 @@ function set(conditions, on) {
       <input
         v-model="filter"
         type="search"
-        class="input w-48"
+        class="input w-48 max-sm:w-full"
         placeholder="Find a value"
         aria-label="Find a value"
       />

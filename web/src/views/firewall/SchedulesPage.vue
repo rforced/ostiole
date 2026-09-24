@@ -43,7 +43,7 @@ function days(schedule) {
           <Plus class="size-4" aria-hidden="true" /> Add schedule
         </button>
       </template>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>Name</th>
@@ -62,14 +62,14 @@ function days(schedule) {
             :key="s.name"
             :class="{ 'row-changed': config.isChanged('schedules', s.name) }"
           >
-            <td class="font-mono font-medium">{{ s.name }}</td>
-            <td>{{ days(s) }}</td>
-            <td class="font-mono text-code">
+            <td class="font-mono font-medium" data-label="">{{ s.name }}</td>
+            <td data-label="Days">{{ days(s) }}</td>
+            <td class="font-mono text-code" data-label="Window">
               {{ s.start }} – {{ s.end }}
               <span v-if="s.end < s.start" class="badge ml-1">over midnight</span>
             </td>
-            <td>{{ s.description }}</td>
-            <td class="text-right whitespace-nowrap">
+            <td data-label="Description">{{ s.description }}</td>
+            <td class="text-right whitespace-nowrap" data-label="">
               <button type="button" class="link" @click="edit(s)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>

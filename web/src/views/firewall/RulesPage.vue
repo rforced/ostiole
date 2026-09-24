@@ -192,7 +192,7 @@ onMounted(() => {
             v-for="z in config.zones"
             :key="z.name"
             type="button"
-            class="rounded px-2.5 py-1 font-mono text-sm"
+            class="rounded px-2.5 py-1 font-mono text-sm max-sm:min-h-10 max-sm:px-4"
             :class="z.name === zone ? 'bg-surface-2 text-ink' : 'text-ink-muted hover:text-ink'"
             :aria-pressed="z.name === zone"
             @click="zone = z.name"
@@ -210,7 +210,9 @@ onMounted(() => {
           <Plus class="size-4" aria-hidden="true" /> Add rule
         </button>
       </template>
-      <table class="table">
+      <!-- On a phone a rule is three lines: its description; its action and
+           what it matches; its buttons. -->
+      <table class="table table-flow">
         <thead>
           <tr>
             <th class="w-8"></th>
@@ -243,19 +245,22 @@ onMounted(() => {
           <tr
             v-for="(r, i) in rules"
             :key="r.id"
+            class="max-sm:relative max-sm:pl-12"
             :class="{ 'opacity-50': !r.enabled, 'row-changed': config.isChanged('rules', r.id) }"
           >
-            <td>
-              <input
-                type="checkbox"
-                class="size-4 rounded border-line-2"
-                :checked="r.enabled"
-                :disabled="auth.readOnly"
-                :aria-label="`Enable ${r.id}`"
-                @change="toggle(r)"
-              />
+            <td class="max-sm:absolute max-sm:top-0.5 max-sm:left-1">
+              <label class="max-sm:flex max-sm:size-11 max-sm:items-center max-sm:justify-center">
+                <input
+                  type="checkbox"
+                  class="size-4 rounded border-line-2"
+                  :checked="r.enabled"
+                  :disabled="auth.readOnly"
+                  :aria-label="`Enable ${r.id}`"
+                  @change="toggle(r)"
+                />
+              </label>
             </td>
-            <td>
+            <td class="max-sm:order-2">
               <span
                 class="badge"
                 :class="{ 'badge-ok': r.action === 'accept', 'badge-warn': r.action !== 'accept' }"
@@ -264,10 +269,14 @@ onMounted(() => {
               <span v-if="r.log" class="badge ml-1">log</span>
               <span v-if="r.schedule" class="badge ml-1">{{ r.schedule }}</span>
             </td>
-            <td class="font-mono text-code">{{ r.protocol }}</td>
-            <td class="font-mono text-code">{{ describe(r.source, true) }}</td>
-            <td class="font-mono text-code">{{ describe(r.destination, true) }}</td>
-            <td class="font-mono text-code">
+            <td class="font-mono text-code max-sm:order-3">{{ r.protocol }}</td>
+            <td class="font-mono text-code max-sm:order-3">{{ describe(r.source, true) }}</td>
+            <td
+              class="font-mono text-code max-sm:order-3 max-sm:before:mr-2 max-sm:before:content-['→']"
+            >
+              {{ describe(r.destination, true) }}
+            </td>
+            <td class="font-mono text-code max-sm:hidden">
               <span v-if="r.gateway" class="badge" :title="`Routed through ${r.gateway}`"
                 >→ {{ r.gateway }}</span
               >
@@ -279,11 +288,13 @@ onMounted(() => {
                 >{{ tierLabel(r.priority) }}</span
               >
             </td>
-            <td>{{ r.description }}</td>
-            <td class="text-right font-mono text-code tabular-nums">
+            <td class="max-sm:order-1 max-sm:basis-full max-sm:font-medium">{{ r.description }}</td>
+            <td class="text-right font-mono text-code tabular-nums max-sm:hidden">
               {{ counters[r.id]?.packets ?? '' }}
             </td>
-            <td class="text-right whitespace-nowrap">
+            <td
+              class="text-right whitespace-nowrap max-sm:order-4 max-sm:basis-full max-sm:text-left"
+            >
               <template v-if="!auth.readOnly">
                 <button
                   type="button"

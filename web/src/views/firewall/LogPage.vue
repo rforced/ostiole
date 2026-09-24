@@ -146,7 +146,7 @@ onBeforeUnmount(() => source?.close())
           placeholder="Filter (address, port, rule, interface…)"
           aria-label="Filter log"
         />
-        <select v-model="show" class="input w-36" aria-label="Show">
+        <select v-model="show" class="input w-36 max-sm:w-full" aria-label="Show">
           <option value="all">All</option>
           <option value="blocked">Blocked</option>
           <option value="allowed">Allowed</option>
@@ -157,7 +157,9 @@ onBeforeUnmount(() => source?.close())
         <p v-if="error" role="alert" class="text-bad">{{ error }}</p>
       </div>
 
-      <table class="table">
+      <!-- On a phone an entry is three lines: when and what; the packet;
+           the links it crossed. The row's ::before and ::after break them. -->
+      <table class="table table-flow">
         <thead>
           <tr>
             <th>Time</th>
@@ -183,22 +185,38 @@ onBeforeUnmount(() => source?.close())
               }}
             </td>
           </tr>
-          <tr v-for="e in visible" :key="e.key">
-            <td class="font-mono text-code whitespace-nowrap">
+          <tr
+            v-for="e in visible"
+            :key="e.key"
+            class="max-sm:before:order-4 max-sm:before:basis-full max-sm:before:content-[''] max-sm:after:order-8 max-sm:after:basis-full max-sm:after:content-['']"
+          >
+            <td class="font-mono text-code whitespace-nowrap max-sm:order-1">
               {{ new Date(e.time).toLocaleTimeString() }}
             </td>
-            <td>
+            <td class="max-sm:order-2">
               <span class="badge" :class="actionClass(e.action)">{{ e.action || 'unknown' }}</span>
             </td>
-            <td>
+            <td class="max-sm:order-3">
               <span class="badge">{{ label(e) }}</span>
             </td>
-            <td class="font-mono text-code">{{ e.in }}</td>
-            <td class="font-mono text-code">{{ e.out }}</td>
-            <td class="font-mono text-code">{{ e.proto }}</td>
-            <td class="font-mono text-code">{{ endpoint(e.src, e.srcPort) }}</td>
-            <td class="font-mono text-code">{{ endpoint(e.dst, e.dstPort) }}</td>
-            <td class="font-mono text-code text-ink-muted">
+            <td
+              class="font-mono text-code max-sm:order-9 max-sm:text-ink-muted max-sm:before:content-['in_']"
+            >
+              {{ e.in }}
+            </td>
+            <td
+              class="font-mono text-code max-sm:order-10 max-sm:text-ink-muted max-sm:before:content-['out_']"
+            >
+              {{ e.out }}
+            </td>
+            <td class="font-mono text-code max-sm:order-5">{{ e.proto }}</td>
+            <td class="font-mono text-code max-sm:order-6">{{ endpoint(e.src, e.srcPort) }}</td>
+            <td
+              class="font-mono text-code max-sm:order-7 max-sm:before:mr-2 max-sm:before:content-['→']"
+            >
+              {{ endpoint(e.dst, e.dstPort) }}
+            </td>
+            <td class="font-mono text-code text-ink-muted max-sm:order-11">
               <template v-if="e.tcpFlags">{{ e.tcpFlags }}</template>
               <template v-else-if="e.proto?.startsWith('icmp')">type {{ e.icmpType }}</template>
               <template v-else>{{ e.length }} B</template>

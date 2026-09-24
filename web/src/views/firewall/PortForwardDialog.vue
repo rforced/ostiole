@@ -114,7 +114,7 @@ function save() {
           <input
             id="pf-tport"
             v-model="form.targetPort"
-            class="input w-32 font-mono"
+            class="input w-32 font-mono max-sm:w-full"
             spellcheck="false"
           />
         </FormField>

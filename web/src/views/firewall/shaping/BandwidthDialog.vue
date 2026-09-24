@@ -160,7 +160,7 @@ function save() {
             <input
               id="bw-down"
               v-model="form.download"
-              class="input w-28 font-mono tabular-nums"
+              class="input w-28 font-mono tabular-nums max-sm:w-full"
               type="number"
               min="0"
               step="any"
@@ -168,7 +168,7 @@ function save() {
             />
             <select
               v-model.number="form.downloadUnit"
-              class="input w-28"
+              class="input w-28 max-sm:w-full"
               aria-label="Download unit"
             >
               <option v-for="u in UNITS" :key="u.value" :value="u.value">{{ u.label }}</option>
@@ -180,13 +180,17 @@ function save() {
             <input
               id="bw-up"
               v-model="form.upload"
-              class="input w-28 font-mono tabular-nums"
+              class="input w-28 font-mono tabular-nums max-sm:w-full"
               type="number"
               min="0"
               step="any"
               inputmode="decimal"
             />
-            <select v-model.number="form.uploadUnit" class="input w-28" aria-label="Upload unit">
+            <select
+              v-model.number="form.uploadUnit"
+              class="input w-28 max-sm:w-full"
+              aria-label="Upload unit"
+            >
               <option v-for="u in UNITS" :key="u.value" :value="u.value">{{ u.label }}</option>
             </select>
           </div>

@@ -166,36 +166,38 @@ function delay(us) {
           </div>
 
           <p v-if="!d.state.installed" class="text-ink-muted">Not in the kernel yet.</p>
-          <table v-else class="table">
-            <thead>
-              <tr>
-                <th>Priority</th>
-                <th class="text-right">Rate</th>
-                <th class="text-right">Peak delay</th>
-                <th class="text-right">Drops</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="t in tins(d.state)" :key="t.tier">
-                <td>
-                  <span :class="tierBadge(t.tier)">{{ tierLabel(t.tier) }}</span>
-                </td>
-                <td class="text-right font-mono text-code tabular-nums">
-                  {{
-                    rateOf(`${iface.name}:${d.name}:${t.tier}`) === undefined
-                      ? '—'
-                      : formatRate(rateOf(`${iface.name}:${d.name}:${t.tier}`))
-                  }}
-                </td>
-                <td class="text-right font-mono text-code tabular-nums">
-                  {{ delay(t.peakDelayUs) }}
-                </td>
-                <td class="text-right font-mono text-code tabular-nums">
-                  {{ formatCount(t.drops ?? 0) }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <div v-else class="overflow-x-auto max-lg:relative max-lg:scroll-fade">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Priority</th>
+                  <th class="text-right">Rate</th>
+                  <th class="text-right">Peak delay</th>
+                  <th class="text-right">Drops</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="t in tins(d.state)" :key="t.tier">
+                  <td>
+                    <span :class="tierBadge(t.tier)">{{ tierLabel(t.tier) }}</span>
+                  </td>
+                  <td class="text-right font-mono text-code tabular-nums">
+                    {{
+                      rateOf(`${iface.name}:${d.name}:${t.tier}`) === undefined
+                        ? '—'
+                        : formatRate(rateOf(`${iface.name}:${d.name}:${t.tier}`))
+                    }}
+                  </td>
+                  <td class="text-right font-mono text-code tabular-nums">
+                    {{ delay(t.peakDelayUs) }}
+                  </td>
+                  <td class="text-right font-mono text-code tabular-nums">
+                    {{ formatCount(t.drops ?? 0) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </SectionCard>

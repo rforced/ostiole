@@ -263,13 +263,13 @@ function save() {
             <input
               id="rule-limit-rate"
               v-model="form.limitRate"
-              class="input w-24"
+              class="input w-24 max-sm:w-full"
               type="number"
               min="1"
             />
           </FormField>
           <FormField id="rule-limit-unit" label="Period">
-            <select id="rule-limit-unit" v-model="form.limitUnit" class="input w-36">
+            <select id="rule-limit-unit" v-model="form.limitUnit" class="input w-36 max-sm:w-full">
               <option value="second">per second</option>
               <option value="minute">per minute</option>
               <option value="hour">per hour</option>
@@ -283,7 +283,7 @@ function save() {
             <input
               id="rule-limit-burst"
               v-model="form.limitBurst"
-              class="input w-24"
+              class="input w-24 max-sm:w-full"
               type="number"
               min="0"
             />
@@ -293,7 +293,11 @@ function save() {
             label="Counted"
             hint="Per source keeps one busy host from spending everybody's allowance."
           >
-            <select id="rule-limit-per-source" v-model="form.limitPerSource" class="input w-48">
+            <select
+              id="rule-limit-per-source"
+              v-model="form.limitPerSource"
+              class="input w-48 max-sm:w-full"
+            >
               <option :value="true">per source address</option>
               <option :value="false">everybody together</option>
             </select>

@@ -128,7 +128,7 @@ function edit(a) {
       <div v-if="refresh.error.value" class="card-strip">
         <p role="alert" class="text-bad">{{ refresh.error.value }}</p>
       </div>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>Alias</th>
@@ -147,9 +147,9 @@ function edit(a) {
             :key="a.name"
             :class="{ 'row-changed': config.isChanged('aliases', a.name) }"
           >
-            <td class="font-mono font-medium">{{ a.name }}</td>
-            <td>{{ a.type }}</td>
-            <td class="font-mono text-code">
+            <td class="font-mono font-medium" data-label="">{{ a.name }}</td>
+            <td data-label="Type">{{ a.type }}</td>
+            <td class="font-mono text-code" data-label="Entries">
               <template v-if="a.type === 'geoip'">{{ countryNames(a.entries) }}</template>
               <template v-else-if="a.type === 'asn'">{{ asnNames(a) }}</template>
               <template v-else>
@@ -166,7 +166,7 @@ function edit(a) {
               </div>
               <div v-else-if="fetches(a)" class="mt-1 text-ink-muted">not fetched yet</div>
             </td>
-            <td>
+            <td data-label="Description" :class="{ 'max-sm:hidden': !a.description && !a.url }">
               {{ a.description }}
               <div v-if="a.url" class="font-mono text-code break-all text-ink-muted">
                 {{ a.url }}
@@ -175,7 +175,7 @@ function edit(a) {
                 Keeps only <span class="font-mono">{{ someOf(a.select, 3) }}</span>
               </div>
             </td>
-            <td class="text-right whitespace-nowrap">
+            <td class="text-right whitespace-nowrap" data-label="">
               <template v-if="!auth.readOnly">
                 <button
                   v-if="fetches(a)"

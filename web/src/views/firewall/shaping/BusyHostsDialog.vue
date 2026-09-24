@@ -99,7 +99,7 @@ function save() {
           <input
             id="busy-count"
             v-model="form.connections"
-            class="input w-32 font-mono tabular-nums"
+            class="input w-32 font-mono tabular-nums max-sm:w-full"
             type="number"
             :min="MIN"
             :max="MAX"
