@@ -1147,6 +1147,8 @@ export const useConfigStore = defineStore('config', () => {
         return '/system/updates'
       case 'notifications':
         return '/system/notifications'
+      case 'backup':
+        return '/system/backup'
       case 'acme':
       case 'certificates':
         return '/system/certificates'

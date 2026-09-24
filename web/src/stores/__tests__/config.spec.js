@@ -255,6 +255,7 @@ describe('config store draft changes', () => {
     expect(config.hasChanges('/vpn/tailscale')).toBe(false)
     expect(config.hasChanges('/interfaces')).toBe(false)
     expect(config.hasChanges('/system/backup')).toBe(true)
+    expect(config.hasChanges('/system/general')).toBe(false)
     expect(config.hasChanges('/')).toBe(false)
 
     expect(config.isChanged('rules', 'r1')).toBe(true)
@@ -262,6 +263,15 @@ describe('config store draft changes', () => {
     expect(config.isChanged('services.dhcp.servers', 'lan')).toBe(true)
     expect(config.isChanged('interfaces[wg0].wireguard.peers', 'bob')).toBe(true)
     expect(config.isChanged('interfaces', 'wg0')).toBe(true)
+  })
+
+  // The remote backup is set up on the backup page, not under General.
+  it('sends a change to the remote backup to the backup page', () => {
+    const config = useConfigStore()
+    config.replaceDraft(wired())
+    config.changes = [{ path: 'backup.remote.bucket', kind: 'changed' }]
+    expect(config.hasChanges('/system/backup')).toBe(true)
+    expect(config.hasChanges('/system/general')).toBe(false)
   })
 
   it('sends a change to the tailnet node to its own page', () => {
