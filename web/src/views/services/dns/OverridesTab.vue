@@ -1,18 +1,15 @@
 <script setup>
 import { Plus } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
-import { useAsync } from '@/lib/async'
+import { useDraftRows } from '@/lib/draft'
 import { overrideKey, overrideName } from '@/lib/hosts'
 import { useConfigStore } from '@/stores/config'
 import DomainOverrideDialog from '@/views/services/dns/DomainOverrideDialog.vue'
 import HostOverrideDialog from '@/views/services/dns/HostOverrideDialog.vue'
-
-/** How long after the last edit the derived names are re-read for the draft. */
-const SYSTEM_DEBOUNCE_MS = 300
 
 const config = useConfigStore()
 const dns = computed(() => config.ensureServices().dns)
@@ -24,22 +21,7 @@ const domains = computed(() => dns.value.domainOverrides ?? [])
  * leases with hostnames. Read for the draft, like the system rules, so a
  * lease added a moment ago shows here before it is applied.
  */
-const system = ref([])
-const systemHosts = useAsync(async () => {
-  if (!config.draft) return
-  system.value = await api.systemHosts(config.draft)
-})
-let systemTimer = 0
-onMounted(systemHosts.run)
-watch(
-  () => config.draft,
-  () => {
-    window.clearTimeout(systemTimer)
-    systemTimer = window.setTimeout(systemHosts.run, SYSTEM_DEBOUNCE_MS)
-  },
-  { deep: true },
-)
-onBeforeUnmount(() => window.clearTimeout(systemTimer))
+const { rows: system, error: systemError } = useDraftRows((draft) => api.systemHosts(draft))
 
 const hostEditing = ref(null)
 const hostOpen = ref(false)
@@ -128,8 +110,8 @@ function editDomain(d) {
       <template #actions>
         <RouterLink to="/services/dhcp" class="link">Change under DHCP</RouterLink>
       </template>
-      <p v-if="systemHosts.error.value" role="alert" class="card-strip text-bad">
-        {{ systemHosts.error.value }}
+      <p v-if="systemError" role="alert" class="card-strip text-bad">
+        {{ systemError }}
       </p>
       <table class="table">
         <thead>

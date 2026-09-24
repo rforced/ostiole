@@ -1,6 +1,6 @@
 <script setup>
 import { ArrowDown, ArrowUp, Plus } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppNotice from '@/components/AppNotice.vue'
@@ -8,14 +8,12 @@ import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { useDraftRows } from '@/lib/draft'
 import { useTabHash } from '@/lib/tabs'
 import { useConfigStore } from '@/stores/config'
 import RuleDialog from '@/views/firewall/RuleDialog.vue'
 import SystemRuleRow from '@/views/firewall/SystemRuleRow.vue'
 import { tierBadge, tierLabel } from '@/views/firewall/shaping/tiers'
-
-/** How long after the last edit the system rules are re-read for the draft. */
-const SYSTEM_DEBOUNCE_MS = 300
 
 /** Where each system rule is controlled from, by the setting the server names. */
 const SETTINGS = {
@@ -42,7 +40,6 @@ const router = useRouter()
 const editing = ref(null)
 const open = ref(false)
 const counters = ref({})
-const system = ref([])
 
 /**
  * The zone lives in the URL hash, like the tabs of a page: a reload comes
@@ -57,32 +54,14 @@ const rules = computed(() => config.rulesForZone(zone.value))
 /**
  * The rules Ostiole adds on its own, around the zone's rules and in the
  * order the kernel meets them. They follow the draft, so a zone that just
- * got anti-lockout shows it at once. Like the counters they are decoration:
- * a draft that does not validate yet keeps the rows of the last one that did.
+ * got anti-lockout shows it at once. Like the counters they are decoration.
  */
+const { rows: system } = useDraftRows((draft) => api.systemRules(draft))
 function inZone(row) {
   return !row.zones?.length || row.zones.includes(zone.value)
 }
 const before = computed(() => system.value.filter((s) => !s.after && inZone(s)))
 const after = computed(() => system.value.filter((s) => s.after && inZone(s)))
-
-const systemRules = useAsync(
-  async () => {
-    if (!config.draft) return
-    system.value = await api.systemRules(config.draft)
-  },
-  { immediate: true },
-)
-let systemTimer = 0
-watch(
-  () => config.draft,
-  () => {
-    window.clearTimeout(systemTimer)
-    systemTimer = window.setTimeout(systemRules.run, SYSTEM_DEBOUNCE_MS)
-  },
-  { deep: true },
-)
-onBeforeUnmount(() => window.clearTimeout(systemTimer))
 
 /** A system rule may count under more than one kernel rule; they are summed. */
 function packets(row) {
