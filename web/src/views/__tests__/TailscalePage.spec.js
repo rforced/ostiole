@@ -16,6 +16,15 @@ vi.mock('@/lib/api', () => ({
 
 const stubs = { ConfirmButton: true, RouterLink: true }
 
+/** Identity and Privacy sit behind the Advanced fold, which starts closed. */
+async function openAdvanced(wrapper) {
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text().includes('Advanced'))
+    .trigger('click')
+  await flushPromises()
+}
+
 function node(over = {}) {
   return {
     name: 'tailscale0',
@@ -294,6 +303,7 @@ describe('Tailscale SettingsTab', () => {
     store.draft = config({ interfaces: [node({ hostname: 'gateway' })] })
     store.loaded = true
     const wrapper = mount(SettingsTab, { global: { stubs } })
+    await openAdvanced(wrapper)
 
     await wrapper.find('#ts-hostname').setValue('')
     expect('hostname' in store.tailscale.tailscale).toBe(false)
