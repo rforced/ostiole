@@ -147,6 +147,22 @@ func TestJournalRejectsInjectedArguments(t *testing.T) {
 	}
 }
 
+// A time is relative, a date, a date and a time, or seconds since 1970;
+// the watchers write the last, which no zone can misread.
+func TestJournalSinceTakesTheFormsJournalctlDoes(t *testing.T) {
+	t.Parallel()
+	for _, since := range []string{"-1h", "2026-09-15", "2026-09-15 10:00:00", "@1790000000", "yesterday"} {
+		if _, err := journalArgs(JournalOptions{Since: since}); err != nil {
+			t.Errorf("%q refused: %v", since, err)
+		}
+	}
+	for _, since := range []string{"a;b", "$(reboot)", "@@1", "1 | x"} {
+		if _, err := journalArgs(JournalOptions{Since: since}); err == nil {
+			t.Errorf("%q accepted", since)
+		}
+	}
+}
+
 // frame builds a minimal Ethernet/IPv4/UDP packet for the filter tests.
 func frame(src, dst string, sport, dport int) []byte {
 	b := make([]byte, 14+20+8)

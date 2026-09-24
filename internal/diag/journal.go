@@ -72,7 +72,9 @@ func Journal(ctx context.Context, o JournalOptions) ([]JournalEntry, error) {
 	return parseJournal(out), nil
 }
 
-var sinceRe = regexp.MustCompile(`^[-+]?[0-9a-zA-Z: ]{1,32}$`)
+// sinceRe is what --since may be given: -1h, 2026-09-15 10:00:00, or @ and
+// the seconds since 1970.
+var sinceRe = regexp.MustCompile(`^[-+@]?[0-9a-zA-Z: -]{1,32}$`)
 
 // journalArgs builds the command line. --lines takes the newest entries
 // and --reverse hands them back newest first, which is the order every log
