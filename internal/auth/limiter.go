@@ -27,24 +27,19 @@ func newLimiter(now func() time.Time) *limiter {
 	return &limiter{hits: map[string]*bucket{}, now: now}
 }
 
-// blocked reports whether key has exhausted its attempts, and how long
-// until it may try again.
-func (l *limiter) blocked(key string) (bool, time.Duration) {
+// blocked reports whether key has exhausted its attempts.
+func (l *limiter) blocked(key string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	b, ok := l.hits[key]
 	if !ok {
-		return false, 0
+		return false
 	}
-	now := l.now()
-	if now.Sub(b.start) > FailureWindow {
+	if l.now().Sub(b.start) > FailureWindow {
 		delete(l.hits, key)
-		return false, 0
+		return false
 	}
-	if b.failures >= MaxFailures {
-		return true, FailureWindow - now.Sub(b.start)
-	}
-	return false, 0
+	return b.failures >= MaxFailures
 }
 
 func (l *limiter) failure(key string) {

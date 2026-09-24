@@ -31,7 +31,17 @@ var (
 	ErrLastAdmin          = errors.New("this is the only administrator; promote another account first")
 	ErrLastAccount        = errors.New("cannot delete the last account")
 	ErrUnknownRole        = errors.New("unknown role")
+	ErrBusy               = errors.New("too many sign-ins at once; try again in a moment")
 )
+
+// hashSlots is how many passwords are hashed or checked at once. Each
+// takes 64 MiB, and the limiter only counts a failure once it is done, so
+// a burst of logins from one client would otherwise ask for as much
+// memory as it liked.
+const hashSlots = 2
+
+// hashWait is how long a sign-in waits for a slot before it is refused.
+const hashWait = 5 * time.Second
 
 // User is a local administrator.
 type User struct {
@@ -65,6 +75,9 @@ type Service struct {
 	now      func() time.Time
 	sessions *sessionStore
 	limiter  *limiter
+	// hashing holds a token for each argon2 computation running.
+	hashing  chan struct{}
+	hashWait time.Duration
 
 	// SessionLoadError says why the stored sessions could not be read, if
 	// they could not. Everyone logs in again; nothing else breaks.
@@ -78,7 +91,10 @@ type Service struct {
 
 // NewService loads (or lazily creates) the users file in dir.
 func NewService(dir string) (*Service, error) {
-	s := &Service{path: filepath.Join(dir, UsersFile), now: time.Now, users: map[string]User{}}
+	s := &Service{
+		path: filepath.Join(dir, UsersFile), now: time.Now, users: map[string]User{},
+		hashing: make(chan struct{}, hashSlots), hashWait: hashWait,
+	}
 	s.sessions = newSessionStore(dir, func() time.Time { return s.now() })
 	s.limiter = newLimiter(func() time.Time { return s.now() })
 	if err := s.load(); err != nil {
@@ -302,6 +318,31 @@ func (s *Service) Restore(users []User) error {
 	return s.save()
 }
 
+// turn waits for a hashing slot; the caller gives it back.
+func (s *Service) turn() (func(), error) {
+	t := time.NewTimer(s.hashWait)
+	defer t.Stop()
+	select {
+	case s.hashing <- struct{}{}:
+		return func() { <-s.hashing }, nil
+	case <-t.C:
+		return nil, ErrBusy
+	}
+}
+
+// hash is HashPassword in its turn.
+func (s *Service) hash(password string) (string, error) {
+	if err := checkPassword(password); err != nil {
+		return "", err
+	}
+	done, err := s.turn()
+	if err != nil {
+		return "", err
+	}
+	defer done()
+	return HashPassword(password)
+}
+
 // Setup creates the first account, as an administrator: the operator
 // running first-run setup has to be able to manage everything afterwards.
 // It fails once any account exists. The check is made again under the
@@ -315,7 +356,7 @@ func (s *Service) Setup(username, password string) error {
 	if !usernameRe.MatchString(username) {
 		return ErrInvalidUsername
 	}
-	hash, err := HashPassword(password)
+	hash, err := s.hash(password)
 	if err != nil {
 		return err
 	}
@@ -361,7 +402,7 @@ func (s *Service) CreateUser(username, password string, role Role) error {
 	if !role.Valid() {
 		return fmt.Errorf("%w %q", ErrUnknownRole, role)
 	}
-	hash, err := HashPassword(password)
+	hash, err := s.hash(password)
 	if err != nil {
 		return err
 	}
@@ -383,7 +424,7 @@ func (s *Service) SetPassword(username, password string) error {
 	if !usernameRe.MatchString(username) {
 		return ErrInvalidUsername
 	}
-	hash, err := HashPassword(password)
+	hash, err := s.hash(password)
 	if err != nil {
 		return err
 	}
@@ -502,7 +543,19 @@ var dummyHash = func() string {
 // Login checks credentials, applying per-address rate limiting, and
 // returns a new session on success. remote should be the client IP.
 func (s *Service) Login(username, password, remote string) (*Session, error) {
-	if blocked, _ := s.limiter.blocked(remote); blocked {
+	if s.limiter.blocked(remote) {
+		return nil, ErrRateLimited
+	}
+	done, err := s.turn()
+	if err != nil {
+		return nil, err
+	}
+	// The slot goes back once this one is counted, so the next sign-in from
+	// the same address to get it sees the failure.
+	defer done()
+	// Failures from the same address may have landed while this waited,
+	// and a burst that all got past the first look must not all be tried.
+	if s.limiter.blocked(remote) {
 		return nil, ErrRateLimited
 	}
 	s.refresh()
@@ -529,6 +582,20 @@ func (s *Service) Session(id string) (*Session, bool) {
 	}
 	s.refresh()
 	return s.sessions.get(id)
+}
+
+// SignIn starts a session for an account the caller has just created or
+// given a new password. Checking the password again would cost a second
+// hash, and could be refused for want of a slot after the change was made.
+func (s *Service) SignIn(username string) (*Session, error) {
+	s.refresh()
+	s.mu.RLock()
+	_, ok := s.users[username]
+	s.mu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("%w %q", ErrNoSuchUser, username)
+	}
+	return s.sessions.create(username), nil
 }
 
 // Logout ends a session.

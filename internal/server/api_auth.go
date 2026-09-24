@@ -94,7 +94,7 @@ func (a *api) setup(w http.ResponseWriter, r *http.Request) error {
 	if err := a.auth.Setup(c.Username, c.Password); err != nil {
 		return err
 	}
-	sess, err := a.auth.Login(c.Username, c.Password, remoteIP(r))
+	sess, err := a.auth.SignIn(c.Username)
 	if err != nil {
 		return err
 	}
@@ -157,7 +157,7 @@ func (a *api) changePassword(w http.ResponseWriter, r *http.Request) error {
 	if err := a.auth.SetPassword(sess.Username, req.New); err != nil {
 		return err
 	}
-	fresh, err := a.auth.Login(sess.Username, req.New, remoteIP(r))
+	fresh, err := a.auth.SignIn(sess.Username)
 	if err != nil {
 		return err
 	}

@@ -239,6 +239,71 @@ func TestRateLimit(t *testing.T) {
 	}
 }
 
+// Each check of a password takes 64 MiB, so a burst of sign-ins waits its
+// turn for one of two, gives up rather than queue for ever, and is looked
+// at by the limiter again once it has waited.
+func TestSignInsTakeTurnsToHash(t *testing.T) {
+	t.Parallel()
+	s, _ := newService(t)
+	if err := s.Setup("admin", goodPassword); err != nil {
+		t.Fatal(err)
+	}
+	s.hashWait = 20 * time.Millisecond
+	for range cap(s.hashing) {
+		s.hashing <- struct{}{}
+	}
+	if _, err := s.Login("admin", goodPassword, "192.0.2.1"); !errors.Is(err, ErrBusy) {
+		t.Errorf("login with every slot taken: %v, want ErrBusy", err)
+	}
+	if err := s.SetPassword("admin", goodPassword+"!"); !errors.Is(err, ErrBusy) {
+		t.Errorf("password change with every slot taken: %v, want ErrBusy", err)
+	}
+
+	// The failures that landed while this one waited count against it.
+	s.hashWait = time.Minute
+	result := make(chan error, 1)
+	go func() {
+		_, err := s.Login("admin", goodPassword, "192.0.2.2")
+		result <- err
+	}()
+	// Time to get past the first look and start waiting. Were it slower,
+	// the first look would refuse it, and the answer would be the same.
+	time.Sleep(20 * time.Millisecond)
+	for range MaxFailures {
+		s.limiter.failure("192.0.2.2")
+	}
+	<-s.hashing
+	if err := <-result; !errors.Is(err, ErrRateLimited) {
+		t.Errorf("login after its address used up its tries: %v, want ErrRateLimited", err)
+	}
+	if _, err := s.Login("admin", goodPassword, "192.0.2.1"); err != nil {
+		t.Errorf("login with a slot free: %v", err)
+	}
+}
+
+// Setup and a password change end in a session for the account without a
+// second hash: with every slot taken, the change itself still signs in.
+func TestSignInNeedsNoHash(t *testing.T) {
+	t.Parallel()
+	s, _ := newService(t)
+	if err := s.Setup("admin", goodPassword); err != nil {
+		t.Fatal(err)
+	}
+	for range cap(s.hashing) {
+		s.hashing <- struct{}{}
+	}
+	sess, err := s.SignIn("admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := s.Session(sess.ID); !ok || got.Username != "admin" {
+		t.Errorf("Session = %+v, %v", got, ok)
+	}
+	if _, err := s.SignIn("nobody"); !errors.Is(err, ErrNoSuchUser) {
+		t.Errorf("SignIn(nobody) = %v, want ErrNoSuchUser", err)
+	}
+}
+
 func TestDeleteUser(t *testing.T) {
 	t.Parallel()
 	s, _ := newService(t)

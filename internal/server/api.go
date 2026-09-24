@@ -600,6 +600,8 @@ func statusFor(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, auth.ErrRateLimited):
 		return http.StatusTooManyRequests
+	case errors.Is(err, auth.ErrBusy):
+		return http.StatusServiceUnavailable
 	case errors.Is(err, auth.ErrSetupDone), errors.Is(err, auth.ErrUserExists),
 		errors.Is(err, auth.ErrLastAdmin), errors.Is(err, auth.ErrLastAccount):
 		return http.StatusConflict
