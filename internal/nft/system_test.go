@@ -211,6 +211,36 @@ func TestSystemRulesDNSEnforcement(t *testing.T) {
 	}
 }
 
+// Time is served on every enabled interface outside an external zone,
+// and the row says where, so the rules page can link to the Time page.
+func TestSystemRulesNTP(t *testing.T) {
+	t.Parallel()
+	cfg := loadConfig(t, "testdata/ntp.json")
+	rows, err := SystemRules(cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, ok := findRow(rows, "Time requests to this firewall")
+	if !ok {
+		t.Fatal("no row for serving time")
+	}
+	if got := strings.Join(r.Zones, ","); got != "lan,lab" {
+		t.Errorf("zones = %q, want lan,lab: not wan, which is external", got)
+	}
+	if r.Setting != "ntp" || r.Protocol != "udp" || r.Destination != "this firewall : 123" {
+		t.Errorf("row = %+v", r)
+	}
+
+	cfg.Services.NTP.Serve = false
+	rows, err = SystemRules(cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := findRow(rows, "Time requests to this firewall"); ok {
+		t.Error("a router that serves no time still opens udp/123")
+	}
+}
+
 func TestSystemRulesBlockedSourcesCountBothChains(t *testing.T) {
 	t.Parallel()
 	rows, err := SystemRules(loadConfig(t, "testdata/blocked-sources.json"), nil)

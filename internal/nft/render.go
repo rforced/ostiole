@@ -407,8 +407,8 @@ func (r *renderer) connectionState(chain string) {
 	})
 }
 
-// serviceRules lets DHCP and DNS clients reach the services this router runs,
-// regardless of zone rules, on the interfaces that serve them.
+// serviceRules lets DHCP, DNS and time clients reach the services this
+// router runs, regardless of zone rules, on the interfaces that serve them.
 func (r *renderer) serviceRules() {
 	svc := r.cfg.Services
 	if svc.DHCP.Enabled {
@@ -451,6 +451,15 @@ func (r *renderer) serviceRules() {
 				Description: "DNS queries to this firewall", Keys: []string{"input/service:dns"}, Setting: "dns",
 			})
 		}
+	}
+	if r.cfg.NTPServing() {
+		ifs := r.cfg.NTPInterfaces()
+		r.line(fmt.Sprintf(`iifname %s udp dport 123 fib daddr type local counter accept comment "service:ntp"`, ifnameSet(ifs)))
+		r.sysFor(ifs, SystemRule{
+			Chain: "input", Action: "accept", Protocol: string(model.ProtocolUDP),
+			Source: "any", Destination: firewallDest([]string{"123"}),
+			Description: "Time requests to this firewall", Keys: []string{"input/service:ntp"}, Setting: "ntp",
+		})
 	}
 	r.wireguardRules()
 	r.tailscaleRules()
@@ -589,24 +598,7 @@ func TailscaleEnabled(cfg *model.Config) bool {
 // or every interface outside external zones. Either way a disabled
 // interface is left out; nothing arrives on it to answer.
 func DNSInterfaces(cfg *model.Config) []string {
-	var ifs []string
-	if len(cfg.Services.DNS.Interfaces) > 0 {
-		for _, name := range cfg.Services.DNS.Interfaces {
-			if in, ok := cfg.Interface(name); ok && in.Enabled {
-				ifs = append(ifs, name)
-			}
-		}
-		return ifs
-	}
-	for _, in := range cfg.Interfaces {
-		if !in.Enabled || in.Zone == "" {
-			continue
-		}
-		if z, ok := cfg.Zone(in.Zone); ok && !z.External {
-			ifs = append(ifs, in.Name)
-		}
-	}
-	return ifs
+	return cfg.InsideInterfaces(cfg.Services.DNS.Interfaces)
 }
 
 // The chains miniupnpd is pointed at. It creates none of its own: its

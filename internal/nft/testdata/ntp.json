@@ -1,0 +1,40 @@
+{
+  "version": 6,
+  "system": {
+    "hostname": "ntp-fw",
+    "management": {
+      "webPort": 443,
+      "sshPort": 22
+    }
+  },
+  "zones": [
+    {"name": "wan", "external": true},
+    {"name": "lan", "antiLockout": true},
+    {"name": "lab"}
+  ],
+  "interfaces": [
+    {"name": "eth0", "zone": "wan", "enabled": true, "ipv4": {"mode": "dhcp"}, "ipv6": {"mode": "slaac"}},
+    {"name": "eth1", "zone": "lan", "enabled": true, "ipv4": {"mode": "static", "address": "192.168.1.1/24"}, "ipv6": {"mode": "none"}},
+    {"name": "eth2", "zone": "lab", "enabled": true, "ipv4": {"mode": "static", "address": "10.30.0.1/24"}, "ipv6": {"mode": "none"}},
+    {"name": "eth3", "zone": "lan", "enabled": false, "ipv4": {"mode": "none"}, "ipv6": {"mode": "none"}}
+  ],
+  "rules": [
+    {
+      "id": "lan-out",
+      "description": "Allow LAN to any",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    }
+  ],
+  "nat": {"outbound": {"mode": "automatic"}},
+  "services": {
+    "dhcp": {"enabled": false},
+    "dns": {"enabled": false},
+    "upnp": {"enabled": false},
+    "ntp": {"serve": true}
+  }
+}

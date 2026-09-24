@@ -18,7 +18,7 @@ func TestLoggingCapsEveryServiceUnit(t *testing.T) {
 	for _, u := range logging.Units {
 		capped = append(capped, u.Name)
 	}
-	for _, name := range []string{Unit, UnboundUnit, UPnPUnit, PPPoEUnit, WirelessUnit} {
+	for _, name := range []string{Unit, UnboundUnit, UPnPUnit, PPPoEUnit, WirelessUnit, NTPUnit} {
 		if !slices.Contains(capped, name) {
 			t.Errorf("%s writes to the journal uncapped; add it to logging.Units", name)
 		}

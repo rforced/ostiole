@@ -80,6 +80,13 @@ type SetupOptions struct {
 	// ProxyBinary overrides the ostiole-proxy path (found on PATH
 	// otherwise).
 	ProxyBinary string
+	// NTP writes the time service's unit and chrony's directory.
+	NTP bool
+	// ChronydBinary overrides the chronyd path (found on PATH otherwise).
+	ChronydBinary string
+	// NTPBackend is set up when NTP is set; nil means production
+	// defaults.
+	NTPBackend *NTP
 }
 
 // Setup makes the host able to run the services it is asked for. Each
@@ -139,6 +146,11 @@ func Setup(ctx context.Context, d *Dnsmasq, o SetupOptions, log *slog.Logger) er
 	}
 	if o.Proxy {
 		if err := setupProxy(ctx, run, o, unitDir, log); err != nil {
+			return err
+		}
+	}
+	if o.NTP {
+		if err := setupNTP(o, unitDir, log); err != nil {
 			return err
 		}
 	}
@@ -428,6 +440,33 @@ func setupUPnP(ctx context.Context, run Runner, o SetupOptions, unitDir string, 
 		return err
 	}
 	log.Info("mapping service ready", "unit", UPnPUnit, "miniupnpd", bin)
+	return nil
+}
+
+// setupNTP writes ostiole-chronyd.service and makes chrony's directory,
+// which the daemon writes the configuration into. Unlike the other
+// services it masks nothing: the distribution's time service keeps the
+// clock until ours is started, which the daemon does at its next start.
+func setupNTP(o SetupOptions, unitDir string, log *slog.Logger) error {
+	n := o.NTPBackend
+	if n == nil {
+		n = NewNTP()
+	}
+	bin := o.ChronydBinary
+	if bin == "" {
+		bin = lookPath("chronyd")
+	}
+	if bin == "" {
+		log.Info("no chronyd on this router; the time service is not set up")
+		return nil
+	}
+	if err := os.MkdirAll(n.dir(), 0o755); err != nil { //nolint:gosec // chronyd reads this
+		return err
+	}
+	if err := writeFile(filepath.Join(unitDir, NTPUnit), NTPUnitContent(bin, n.ConfPath())); err != nil {
+		return err
+	}
+	log.Info("time service ready", "unit", NTPUnit, "chronyd", bin)
 	return nil
 }
 

@@ -19,6 +19,7 @@ import (
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/backup"
 	"github.com/rforced/ostiole/internal/certs"
+	"github.com/rforced/ostiole/internal/chrony"
 	"github.com/rforced/ostiole/internal/diag"
 	"github.com/rforced/ostiole/internal/dnsblock"
 	"github.com/rforced/ostiole/internal/dnslog"
@@ -61,6 +62,8 @@ type api struct {
 	tsClient  *tailscale.Client
 	wireless  *services.Wireless
 	proxy     *services.Proxy
+	ntp       *services.NTP
+	chrony    *chrony.Client
 	// journal reads the system journal; nil uses diag.Journal, which is
 	// what a router does and a test does not.
 	journal func(context.Context, diag.JournalOptions) ([]diag.JournalEntry, error)
@@ -137,6 +140,7 @@ func (a *api) register(mux *router) {
 	a.registerLog(mux)
 	a.registerDiag(mux)
 	a.registerDrives(mux)
+	a.registerNTP(mux)
 	a.registerBackup(mux)
 	a.registerCerts(mux)
 	a.registerTokens(mux)
@@ -208,6 +212,9 @@ type servicesStatus struct {
 	// Proxy is the sidecar that publishes what is behind the router.
 	ProxySetUp   bool `json:"proxySetUp"`
 	ProxyRunning bool `json:"proxyRunning"`
+	// NTP is chronyd, which keeps the clock and answers the LAN.
+	NTPSetUp   bool `json:"ntpSetUp"`
+	NTPRunning bool `json:"ntpRunning"`
 	// ResolverUnreachable lists the DNS over TLS upstreams that do not
 	// answer on their port, when that is the resolver in use. Behind a
 	// network that blocks the port every name fails silently.
@@ -260,6 +267,10 @@ func (a *api) servicesStatus(w http.ResponseWriter, r *http.Request) error {
 	if a.proxy != nil {
 		st.ProxySetUp = a.proxy.Installed(r.Context())
 		st.ProxyRunning = a.proxy.Active(r.Context())
+	}
+	if a.ntp != nil {
+		st.NTPSetUp = a.ntp.Installed(r.Context())
+		st.NTPRunning = a.ntp.Active(r.Context())
 	}
 	if a.engine != nil {
 		if cfg := a.engine.Effective(); cfg != nil && cfg.Services.DNS.Enabled && cfg.Services.DNS.Resolver == model.ResolverTLS {

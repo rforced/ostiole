@@ -872,6 +872,7 @@ func (v *validator) services(c *Config, ifaces, zones map[string]bool) {
 		}
 	}
 	v.upnp(c, ifaces)
+	v.ntp(c, ifaces)
 	v.proxy(c, zones)
 }
 

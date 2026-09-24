@@ -8,8 +8,8 @@
 </p>
 
 Ostiole turns a Linux machine into a firewall and router. One static binary, a web UI, nftables
-underneath, and the usual daemons — systemd-networkd, dnsmasq, unbound, miniupnpd, pppd — driven
-from a single configuration.
+underneath, and the usual daemons — systemd-networkd, dnsmasq, unbound, miniupnpd, pppd, chrony —
+driven from a single configuration.
 
 **Status:** It works. Expect bugs, and expect the config format to change between releases.
 
@@ -17,7 +17,8 @@ from a single configuration.
   AS numbers) and schedules, NAT, rate limits, a live log.
 - **Interfaces** — physical, VLAN, bridge, bond, PPPoE, WireGuard. Static or DHCP, IPv4 and IPv6.
 - **Routing** — static routes, multi-WAN with gateway monitoring, policy routing per rule.
-- **Services** — DHCP and DNS through dnsmasq and unbound, DNS block lists, UPnP and NAT-PMP.
+- **Services** — DHCP and DNS through dnsmasq and unbound, DNS block lists, UPnP and NAT-PMP, and
+  time from NTS servers through chrony, served to the LAN.
 - **Reverse proxy** — publish what is behind the router: hostnames, a certificate it already holds,
   a pool of health-checked backends, and a web application firewall supporting blocking or detection 
   only modes. TCP and UDP pass straight through by port or by the name.
@@ -47,7 +48,7 @@ from a single configuration.
 - **Linux 5.14 or newer**, x86-64 or arm64. That is RHEL 9's kernel; nothing in the ruleset needs
   anything newer.
 - **systemd.** The install script brings the rest: nftables, systemd-networkd, dnsmasq, unbound,
-  miniupnpd, ppp, tc.
+  miniupnpd, ppp, tc, chrony.
 - **A machine that is the router.** Ostiole runs as root, takes over networking and the firewall,
   and removes what it replaces. Don't run it on your workstation.
 
@@ -64,9 +65,9 @@ curl -fsSL https://github.com/rforced/ostiole/releases/latest/download/install.s
 
 It prints the plan and waits for a yes. The plan: install the packages, download the release and
 check its checksum and signature, write the units, load a bootstrap ruleset, hand addressing to
-systemd-networkd keeping the addresses the machine already has, then remove the firewalls, network
-managers and desktop services a router has no use for — firewalld, ufw, NetworkManager, netplan,
-unattended-upgrades, snapd.
+systemd-networkd keeping the addresses the machine already has, keep the time with chrony in place
+of the distribution's time service, then remove the firewalls, network managers and desktop services
+a router has no use for — firewalld, ufw, NetworkManager, netplan, unattended-upgrades, snapd.
 
 - `--dry-run` prints the plan and stops.
 - `--yes` agrees in advance, for provisioning: `curl -fsSL … | sudo sh -s -- --yes`

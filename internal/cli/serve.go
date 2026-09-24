@@ -19,6 +19,7 @@ import (
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/backup"
 	"github.com/rforced/ostiole/internal/certs"
+	"github.com/rforced/ostiole/internal/chrony"
 	"github.com/rforced/ostiole/internal/cron"
 	"github.com/rforced/ostiole/internal/dnsblock"
 	"github.com/rforced/ostiole/internal/dnslog"
@@ -310,6 +311,18 @@ at your own.`,
 				proxy.Watch(ctx)
 				deps.Proxy = proxy
 				deps.Wireless = services.NewWireless(g.configDir)
+				ntp := services.NewNTP()
+				deps.NTP = ntp
+				deps.Chrony = chrony.New()
+				// The first start after `ostiole repair` wrote the unit hands
+				// the clock over here rather than at the next apply, which
+				// may be days away.
+				go func() {
+					defer panics.Recover(log, "time service")
+					if err := ntp.Start(ctx, eng.Effective()); err != nil {
+						log.Warn("could not start the time service; the next apply tries again", "err", err)
+					}
+				}()
 				// Gateway probes need a raw socket and route changes need
 				// netlink, so multi-WAN failover is a root-only feature.
 				mon := gateway.New(gateway.NewICMPProber(), gateway.NewNetlinkRouter(), slog.Default())
@@ -529,6 +542,7 @@ func restartService(ctx context.Context, name string) error {
 		"miniupnpd":     services.UPnPUnit,
 		"tailscaled":    services.TailscaleUnit,
 		"ostiole-proxy": services.ProxyUnit,
+		"chronyd":       services.NTPUnit,
 		"ostiole":       install.DaemonUnit,
 	}
 	unit, ok := units[name]

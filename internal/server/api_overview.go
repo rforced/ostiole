@@ -606,6 +606,25 @@ func (a *api) serviceStates(ctx context.Context, cfg *model.Config) []ServiceSta
 		}
 	}
 
+	// The time service is always wanted once its unit is there. Until
+	// then the distribution keeps the clock, which is no failure, so the
+	// tile says what to do without a warning.
+	clock := ServiceState{Name: "Time", Unit: services.NTPUnit, State: stateUnknown}
+	if a.ntp != nil {
+		switch {
+		case !a.ntp.Installed(ctx):
+			clock.State = stateMissing
+			clock.Detail = "chronyd is not set up on this router, so the distribution keeps the clock. Run `ostiole repair` as root."
+		case a.ntp.Active(ctx):
+			clock.State, clock.Want = stateActive, true
+		case a.ntp.Skipped(ctx):
+			clock.State = stateInactive
+			clock.Detail = "The host keeps this router's clock."
+		default:
+			clock.State, clock.Want = stateInactive, true
+		}
+	}
+
 	// One tile per radio that is meant to be transmitting: each is an
 	// instance of the templated unit, and they fail apart.
 	var radios []ServiceState
@@ -671,6 +690,9 @@ func (a *api) serviceStates(ctx context.Context, cfg *model.Config) []ServiceSta
 	}
 	if proxyWant || proxy.State == stateActive {
 		states = append(states, proxy)
+	}
+	if a.ntp != nil {
+		states = append(states, clock)
 	}
 	states = append(states, radios...)
 	return append(states, netd, logs)
@@ -757,6 +779,9 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 				})
 			}
 		}
+	}
+	if w, ok := a.clockWarning(ctx); ok {
+		out = append(out, w)
 	}
 	for _, s := range svcs {
 		if s.Want && s.State != stateActive && s.State != stateUnknown {

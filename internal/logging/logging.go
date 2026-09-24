@@ -100,6 +100,7 @@ var Units = []Unit{
 	{Name: "ostiole-miniupnpd.service", StderrIsDuplicate: true},
 	{Name: "ostiole-pppoe@.service", StderrIsDuplicate: true, Templated: true},
 	{Name: "ostiole-hostapd@.service", Templated: true},
+	{Name: "ostiole-chronyd.service"},
 }
 
 // Runner runs a command; nil means nothing is restarted.

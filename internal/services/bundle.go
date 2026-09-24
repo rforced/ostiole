@@ -23,13 +23,14 @@ var _ network.Backend = (*Bundle)(nil)
 // NewBundle returns the production services: the dialled sessions and the
 // wireless networks first, because an interface has to exist before
 // anything serves on it, then the resolver, then the blocklist, then the
-// forwarder that reads the blocklist and points at the resolver. Tailscale
-// follows it, because the forward for tailnet names has to be in place
+// forwarder that reads the blocklist and points at the resolver. The time
+// service follows it, because it looks its servers up through it, then
+// Tailscale, because the forward for tailnet names has to be in place
 // first, and the proxy after that. The mapping service comes last, because
 // it restarts into a table that has just been rebuilt.
 func NewBundle(blocklists *dnsblock.Cache, configDir string, store CertSource) *Bundle {
 	return &Bundle{backends: []network.Backend{
-		NewPPPoE(), NewWireless(configDir), NewUnbound(), NewDNSBlock(blocklists), New(),
+		NewPPPoE(), NewWireless(configDir), NewUnbound(), NewDNSBlock(blocklists), New(), NewNTP(),
 		NewTailscale(configDir), NewProxy(configDir, store), NewUPnP(),
 	}}
 }

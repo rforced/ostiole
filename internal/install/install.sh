@@ -158,7 +158,7 @@ esac
 
 case "$MANAGER" in
 apt-get)
-	WANT="nftables dnsmasq unbound miniupnpd-nftables ppp iproute2 smartmontools openssl"
+	WANT="nftables dnsmasq unbound miniupnpd-nftables ppp iproute2 smartmontools openssl chrony"
 	# Newer Debian and Ubuntu split networkd out of the systemd package.
 	if apt-cache show systemd-networkd >/dev/null 2>&1; then
 		WANT="$WANT systemd-networkd"
@@ -167,7 +167,7 @@ apt-get)
 	;;
 dnf)
 	if [ "$EL" -eq 1 ]; then
-		WANT="systemd-networkd nftables dnsmasq unbound ppp iproute-tc cpio smartmontools openssl"
+		WANT="systemd-networkd nftables dnsmasq unbound ppp iproute-tc cpio smartmontools openssl chrony"
 		UPNP_NOTE="miniupnpd unpacked from Fedora $FEDORA_UPNP"
 		if [ "$FEDORA_UPNP" -eq 0 ]; then
 			UPNP_NOTE="no UPnP: no Fedora build runs on this release"
@@ -176,16 +176,16 @@ dnf)
 		# Fedora splits networkd out of systemd and only recommends it, so a
 		# router installed with NetworkManager has nothing to hand
 		# addressing to once that goes.
-		WANT="systemd-networkd nftables dnsmasq unbound miniupnpd ppp iproute-tc smartmontools openssl"
+		WANT="systemd-networkd nftables dnsmasq unbound miniupnpd ppp iproute-tc smartmontools openssl chrony"
 		UPNP_NOTE="miniupnpd"
 	fi
 	;;
 pacman)
-	WANT="nftables dnsmasq unbound ppp iproute2 smartmontools openssl"
+	WANT="nftables dnsmasq unbound ppp iproute2 smartmontools openssl chrony"
 	UPNP_NOTE="miniupnpd-nft built from the AUR (base-devel goes on to build it)"
 	;;
 zypper)
-	WANT="nftables dnsmasq unbound miniupnpd ppp iproute2 smartmontools openssl"
+	WANT="nftables dnsmasq unbound miniupnpd ppp iproute2 smartmontools openssl chrony"
 	UPNP_NOTE="miniupnpd"
 	;;
 esac
@@ -197,7 +197,8 @@ UNWANTED="bluez firewalld ufw iptables-services iptables-persistent netfilter-pe
 NetworkManager network-manager networkmanager cockpit* netplan.io dhcpcd dhcpcd-base connman wicked wicked-service ifupdown
 unattended-upgrades dnf-automatic yum-cron PackageKit packagekit
 snapd ModemManager modemmanager udisks2 upower fwupd multipath-tools device-mapper-multipath lxd-installer
-rsyslog syslog-ng apport whoopsie popularity-contest abrt* avahi avahi-daemon geoclue geoclue2 geoclue-2.0 reportbug"
+rsyslog syslog-ng apport whoopsie popularity-contest abrt* avahi avahi-daemon geoclue geoclue2 geoclue-2.0 reportbug
+ntp ntpsec openntpd ntpd-rs"
 
 # Units of packages a router keeps for something else, so they are masked
 # and nothing is removed: the package manager's own timers, and the drive
@@ -249,6 +250,9 @@ units_for() {
 	avahi | avahi-daemon) echo "avahi-daemon.service avahi-daemon.socket" ;;
 	geoclue | geoclue2 | geoclue-2.0) echo "geoclue.service" ;;
 	popularity-contest | reportbug) echo "" ;;
+	ntp | ntpsec) echo "ntpd.service ntpsec.service" ;;
+	openntpd) echo "openntpd.service" ;;
+	ntpd-rs) echo "ntpd-rs.service" ;;
 	*) echo "" ;;
 	esac
 }
@@ -460,6 +464,7 @@ case "$REMOVE" in
 esac
 [ -z "$MASK_ONLY" ] || echo "  mask:     $MASK_ONLY"
 echo "  hand addresses to systemd-networkd, keeping the ones this router has now"
+echo "  keep the time with chrony in place of the distribution's time service"
 echo "  bootstrap ruleset until the wizard: nothing is forwarded"
 [ "$HAS_SYSTEMD" -eq 1 ] ||
 	echo "  none of it here: this router has no systemd, and an install would be refused"

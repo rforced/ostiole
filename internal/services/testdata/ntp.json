@@ -1,0 +1,56 @@
+{
+  "version": 6,
+  "system": {
+    "hostname": "ntp-fw",
+    "management": {
+      "webPort": 443,
+      "sshPort": 22
+    }
+  },
+  "zones": [
+    {"name": "wan", "external": true},
+    {"name": "lan", "antiLockout": true},
+    {"name": "lab"}
+  ],
+  "interfaces": [
+    {"name": "eth0", "zone": "wan", "enabled": true, "ipv4": {"mode": "dhcp"}, "ipv6": {"mode": "slaac"}},
+    {"name": "eth1", "zone": "lan", "enabled": true,
+      "ipv4": {"mode": "static", "address": "192.168.1.1/24"},
+      "ipv6": {"mode": "static", "address": "2001:db8:1::1/64"}},
+    {"name": "eth2", "zone": "lan", "enabled": true,
+      "ipv4": {"mode": "static", "address": "192.168.2.1/24"},
+      "ipv6": {"mode": "slaac"}},
+    {"name": "eth3", "zone": "lab", "enabled": true,
+      "ipv4": {"mode": "static", "address": "10.30.0.1/24"},
+      "ipv6": {"mode": "slaac"}}
+  ],
+  "rules": [],
+  "nat": {"outbound": {"mode": "automatic"}},
+  "services": {
+    "dhcp": {
+      "enabled": true,
+      "servers": [
+        {"interface": "eth1", "enabled": true, "rangeStart": "192.168.1.100", "rangeEnd": "192.168.1.199"},
+        {"interface": "eth2", "enabled": true, "rangeStart": "192.168.2.100", "rangeEnd": "192.168.2.150"},
+        {"interface": "eth3", "enabled": true, "rangeStart": "10.30.0.100", "rangeEnd": "10.30.0.150"}
+      ],
+      "v6": [
+        {"interface": "eth1", "enabled": true, "mode": "stateless"},
+        {"interface": "eth2", "enabled": true, "mode": "managed", "rangeStart": "::100", "rangeEnd": "::1ff"},
+        {"interface": "eth3", "enabled": true, "mode": "stateless"}
+      ]
+    },
+    "dns": {"enabled": true, "upstreams": ["9.9.9.9"], "domain": "lan"},
+    "upnp": {"enabled": false},
+    "ntp": {
+      "servers": [
+        {"host": "nts.netnod.se", "nts": true},
+        {"host": "time.example.lan"},
+        {"host": "192.168.1.5"},
+        {"host": "pool.ntp.org", "pool": true}
+      ],
+      "serve": true,
+      "interfaces": ["eth1", "eth2"]
+    }
+  }
+}

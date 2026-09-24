@@ -192,7 +192,7 @@ var CronKinds = []CronKind{
 }
 
 // CronServices are the units a restart cron may name.
-var CronServices = []string{"dnsmasq", "unbound", "miniupnpd", "tailscaled", "ostiole-proxy", "ostiole"}
+var CronServices = []string{"dnsmasq", "unbound", "miniupnpd", "tailscaled", "ostiole-proxy", "chronyd", "ostiole"}
 
 // Cron is one piece of scheduled work.
 type Cron struct {
@@ -1623,6 +1623,8 @@ type Services struct {
 	// Proxy publishes what is behind the router: HTTP sites behind a WAF,
 	// and TCP or UDP ports passed through.
 	Proxy Proxy `json:"proxy,omitzero"`
+	// NTP keeps the router's clock and can pass the time on to the LAN.
+	NTP NTP `json:"ntp,omitzero"`
 }
 
 // UPnP lets a client on the LAN open a hole through the firewall for

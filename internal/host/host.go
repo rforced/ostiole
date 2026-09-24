@@ -132,7 +132,7 @@ var reportedUnits = []string{install.DaemonUnit, install.FirewallUnit, install.N
 // reportedCommands are the daemons Ostiole drives, which the install
 // script puts on the router.
 var reportedCommands = []string{"nft", "dnsmasq", "unbound", "miniupnpd", "pppd", "tc", "tailscaled",
-	"hostapd", "iw", "smartctl", "ostiole-proxy"}
+	"hostapd", "iw", "smartctl", "ostiole-proxy", "chronyd"}
 
 // Commands names them in report order, for a console that lists them.
 func Commands() []string { return append([]string(nil), reportedCommands...) }

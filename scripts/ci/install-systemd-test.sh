@@ -89,6 +89,28 @@ assert_router() {
 		systemctl cat "$unit" >/dev/null 2>&1 || fail "$unit was not written"
 	done
 
+	step "$1: chrony keeps the time in place of the distribution's service"
+	pkg_present chrony || fail "chrony was not installed"
+	PATH="$PATH:/usr/sbin:/sbin" command -v chronyd >/dev/null 2>&1 || fail "chronyd is not on this router"
+	echo "  $(PATH="$PATH:/usr/sbin:/sbin" chronyd -v)"
+	systemctl cat ostiole-chronyd.service >/dev/null 2>&1 || fail "ostiole-chronyd.service was not written"
+	# The daemon takes the clock over as it starts, in the background.
+	for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+		[ -f /etc/chrony/ostiole.conf ] && break
+		sleep 1
+	done
+	[ -f /etc/chrony/ostiole.conf ] ||
+		fail "the time service's configuration was not written: $(journalctl -u ostiole.service --no-pager | tail -20)"
+	PATH="$PATH:/usr/sbin:/sbin" chronyd -p -f /etc/chrony/ostiole.conf >/dev/null ||
+		fail "chronyd refuses the configuration Ostiole wrote: $(cat /etc/chrony/ostiole.conf)"
+	for unit in chronyd.service chrony.service systemd-timesyncd.service; do
+		state=$(systemctl show -P LoadState "$(systemctl show -P Id "$unit")")
+		case "$state" in
+		masked | not-found) ;;
+		*) fail "$unit is $state, want masked or gone" ;;
+		esac
+	done
+
 	step "$1: the packages a router has no use for are not there"
 	for pkg in bluez firewalld ufw NetworkManager network-manager networkmanager unattended-upgrades PackageKit packagekit cockpit cockpit-ws; do
 		! pkg_present "$pkg" || fail "$pkg is installed"

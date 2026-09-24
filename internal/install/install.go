@@ -287,8 +287,8 @@ func Units(lay Layout, opts Options) map[string]string {
 	// The daemon needs to write its own binary directory for self-updates.
 	// -/etc/dnsmasq.d takes the DHCP and DNS configuration once dnsmasq is
 	// set up, -/etc/unbound the validating resolver's, -/etc/miniupnpd the
-	// mapping service's, and -/etc/resolv.conf is managed by the DNS
-	// service. The leading dash means "only if it exists": a router that never
+	// mapping service's, -/etc/chrony the time service's, and
+	// -/etc/resolv.conf is managed by the DNS service. The leading dash means "only if it exists": a router that never
 	// sets up dnsmasq or PPPoE still starts.
 	// resolv.conf is a file, not a directory, so systemd mounts that one
 	// file read-write and leaves /etc around it read-only; it can be
@@ -300,7 +300,7 @@ func Units(lay Layout, opts Options) map[string]string {
 	// Each unit's own .d directory takes the level cap, written from the
 	// page too.
 	rw := cfg + " " + NetworkdUnitDir + " " + lay.BinDir +
-		" -/etc/dnsmasq.d -/etc/unbound -/etc/resolv.conf -/etc/ppp -/etc/miniupnpd" +
+		" -/etc/dnsmasq.d -/etc/unbound -/etc/resolv.conf -/etc/ppp -/etc/miniupnpd -/etc/chrony" +
 		" -/etc/ssh/sshd_config.d -/etc/cloud/cloud.cfg.d -/etc/systemd/journald.conf.d" +
 		" " + strings.Join(LogDropInDirs(), " ")
 	// The firewall unit runs outside the default dependencies, the way

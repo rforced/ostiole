@@ -18,6 +18,7 @@ import (
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/backup"
 	"github.com/rforced/ostiole/internal/certs"
+	"github.com/rforced/ostiole/internal/chrony"
 	"github.com/rforced/ostiole/internal/diag"
 	"github.com/rforced/ostiole/internal/dnsblock"
 	"github.com/rforced/ostiole/internal/dnslog"
@@ -81,6 +82,10 @@ type Deps struct {
 	// Proxy reads the reverse proxy's state and its upstreams; nil
 	// reports "not set up".
 	Proxy *services.Proxy
+	// NTP reads the time service's unit; nil reports "not set up".
+	NTP *services.NTP
+	// Chrony reads what the time service is doing; nil reads nothing.
+	Chrony *chrony.Client
 	// Journal reads the system journal; nil runs journalctl, which is
 	// what a router does and a test does not.
 	Journal func(context.Context, diag.JournalOptions) ([]diag.JournalEntry, error)
@@ -170,6 +175,8 @@ func build(d Deps) (http.Handler, *api) {
 		tsClient:    d.TSClient,
 		wireless:    d.Wireless,
 		proxy:       d.Proxy,
+		ntp:         d.NTP,
+		chrony:      d.Chrony,
 		journal:     d.Journal,
 		certs:       d.Certs,
 		certStore:   d.CertStore,

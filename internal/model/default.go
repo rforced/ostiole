@@ -96,6 +96,9 @@ func Starter(o StarterOptions) *Config {
 			upstreams = []string{"1.1.1.1", "9.9.9.9"}
 		}
 		cfg.Services.DNS = DNSServer{Enabled: true, Upstreams: upstreams, Domain: "lan"}
+		// Answering the LAN's time requests sends nothing off the router,
+		// and a device that takes its time from here asks nobody outside.
+		cfg.Services.NTP = NTP{Serve: true}
 	}
 	return cfg
 }

@@ -230,17 +230,17 @@ func installZone(flag string, cfg *model.Config) string {
 // serviceUnits are the units written for the daemons a router drives.
 func serviceUnits() []string {
 	return []string{services.Unit, services.UnboundUnit, services.PPPoEUnit, services.UPnPUnit,
-		services.TailscaleUnit, services.WirelessUnit, services.ProxyUnit}
+		services.TailscaleUnit, services.WirelessUnit, services.ProxyUnit, services.NTPUnit}
 }
 
 // writeServiceUnits points dnsmasq, unbound, pppd, miniupnpd, tailscaled,
-// hostapd and the reverse proxy at Ostiole's generated configuration. One
-// whose binary is not on the router is skipped; the install script is what
-// puts them there.
+// hostapd, the reverse proxy and chronyd at Ostiole's generated
+// configuration. One whose binary is not on the router is skipped; the
+// install script is what puts them there.
 func writeServiceUnits(ctx context.Context, configDir string) error {
 	opts := services.SetupOptions{
 		Dnsmasq: true, Resolver: true, PPPoE: true, UPnP: true, Tailscale: true, Wireless: true,
-		Proxy: true, ConfigDir: configDir, NoRestart: true,
+		Proxy: true, NTP: true, ConfigDir: configDir, NoRestart: true,
 	}
 	return services.Setup(ctx, services.New(), opts, slog.Default())
 }

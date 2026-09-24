@@ -171,7 +171,7 @@ func TestUnits(t *testing.T) {
 			t.Errorf("firewall unit lacks %q:\n%s", want, units[FirewallUnit])
 		}
 	}
-	if !strings.Contains(d, "--network-backend auto") || !strings.Contains(d, "ReadWritePaths=/etc/ostiole /etc/systemd/network /usr/local/bin -/etc/dnsmasq.d -/etc/unbound -/etc/resolv.conf -/etc/ppp -/etc/miniupnpd -/etc/ssh/sshd_config.d -/etc/cloud/cloud.cfg.d -/etc/systemd/journald.conf.d") {
+	if !strings.Contains(d, "--network-backend auto") || !strings.Contains(d, "ReadWritePaths=/etc/ostiole /etc/systemd/network /usr/local/bin -/etc/dnsmasq.d -/etc/unbound -/etc/resolv.conf -/etc/ppp -/etc/miniupnpd -/etc/chrony -/etc/ssh/sshd_config.d -/etc/cloud/cloud.cfg.d -/etc/systemd/journald.conf.d") {
 		t.Errorf("daemon unit:\n%s", d)
 	}
 	f := units[FirewallUnit]

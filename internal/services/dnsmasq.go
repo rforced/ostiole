@@ -220,6 +220,7 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 		case model.LogDebug:
 			b.WriteString("log-dhcp\n")
 		}
+		timeFrom := ntpServed(cfg)
 		for _, sc := range cfg.ActiveDHCP() {
 			in, _ := cfg.Interface(sc.Interface)
 			prefix, perr := netip.ParsePrefix(in.IPv4.Address)
@@ -251,6 +252,9 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 			}
 			if len(dns) > 0 {
 				fmt.Fprintf(&b, "dhcp-option=tag:%s,option:dns-server,%s\n", tag, strings.Join(dns, ","))
+			}
+			if timeFrom[sc.Interface] {
+				fmt.Fprintf(&b, "dhcp-option=tag:%s,option:ntp-server,%s\n", tag, prefix.Addr())
 			}
 			domain := sc.Domain
 			if domain == "" {
@@ -399,6 +403,7 @@ func renderV6(b *strings.Builder, cfg *model.Config) {
 		return
 	}
 	svc := cfg.Services
+	timeFrom := ntpServed(cfg)
 	b.WriteString("enable-ra\n")
 	for _, sc := range servers {
 		tag := "s6_" + sanitizeTag(sc.Interface)
@@ -422,12 +427,7 @@ func renderV6(b *strings.Builder, cfg *model.Config) {
 			// router" reaches DHCPv6 replies but is dropped from the RDNSS
 			// option, which is all a SLAAC-only client ever sees. Use the
 			// interface's own address when the configuration names one.
-			dns = []string{"::"}
-			if in, ok := cfg.Interface(sc.Interface); ok && in.IPv6.Mode == model.AddrStatic {
-				if p, err := netip.ParsePrefix(in.IPv6.Address); err == nil {
-					dns = []string{p.Addr().String()}
-				}
-			}
+			dns = []string{routerV6(cfg, sc.Interface)}
 		}
 		if len(dns) > 0 {
 			addrs := make([]string, 0, len(dns))
@@ -435,6 +435,11 @@ func renderV6(b *strings.Builder, cfg *model.Config) {
 				addrs = append(addrs, "["+d+"]")
 			}
 			fmt.Fprintf(b, "dhcp-option=tag:%s,option6:dns-server,%s\n", tag, strings.Join(addrs, ","))
+		}
+		// A router advertisement has no option for a time server, so a
+		// SLAAC-only segment is told nothing; DHCPv6 carries it.
+		if timeFrom[sc.Interface] && sc.Mode != model.RASLAAC {
+			fmt.Fprintf(b, "dhcp-option=tag:%s,option6:ntp-server,[%s]\n", tag, routerV6(cfg, sc.Interface))
 		}
 		domain := sc.Domain
 		if domain == "" {
@@ -444,6 +449,30 @@ func renderV6(b *strings.Builder, cfg *model.Config) {
 			fmt.Fprintf(b, "dhcp-option=tag:%s,option6:domain-search,%s\n", tag, domain)
 		}
 	}
+}
+
+// routerV6 is this router's address on an interface as a DHCPv6 option
+// gives it: the static address when there is one, otherwise [::], which
+// dnsmasq fills in with the interface's global address as it replies.
+func routerV6(cfg *model.Config, iface string) string {
+	if in, ok := cfg.Interface(iface); ok && in.IPv6.Mode == model.AddrStatic {
+		if p, err := netip.ParsePrefix(in.IPv6.Address); err == nil {
+			return p.Addr().String()
+		}
+	}
+	return "::"
+}
+
+// ntpServed is the set of interfaces whose DHCP clients are told to take
+// their time from this router.
+func ntpServed(cfg *model.Config) map[string]bool {
+	out := map[string]bool{}
+	if cfg.NTPServing() {
+		for _, name := range cfg.NTPInterfaces() {
+			out[name] = true
+		}
+	}
+	return out
 }
 
 func sanitizeTag(s string) string {
