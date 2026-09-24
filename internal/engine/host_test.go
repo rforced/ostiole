@@ -297,3 +297,34 @@ func waitFor(t *testing.T, ok func() bool) {
 		time.Sleep(5 * time.Millisecond)
 	}
 }
+
+type sshRefuses struct{}
+
+func (sshRefuses) Apply(_ context.Context, passwords bool) error {
+	if passwords {
+		return nil
+	}
+	return errors.New("sshd still accepts passwords")
+}
+
+// A password setting sshd does not follow is a security setting that is
+// not in force, so the status says so until an apply that sshd follows.
+func TestStatusSaysWhenSSHDoesNotFollow(t *testing.T) {
+	t.Parallel()
+	e := New(store.New(t.TempDir()), &fakeRunner{}, nil, slog.New(slog.DiscardHandler)).WithSSH(sshRefuses{})
+	ctx := context.Background()
+	if _, err := e.Apply(ctx, unconfirmed(), ApplyOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := e.Status(ctx); st.SSH != "sshd still accepts passwords" {
+		t.Errorf("status SSH = %q", st.SSH)
+	}
+	allowed := cfg("passwords")
+	allowed.System.Management.SSHPasswords = true
+	if _, err := e.Apply(ctx, allowed, ApplyOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := e.Status(ctx); st.SSH != "" {
+		t.Errorf("status SSH after a followed apply = %q", st.SSH)
+	}
+}

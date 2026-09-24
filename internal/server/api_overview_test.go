@@ -595,3 +595,24 @@ func TestOverviewWarnsAboutARolledBackUpdate(t *testing.T) {
 		t.Errorf("warning = %+v", w)
 	}
 }
+
+// sshd that goes on taking passwords after an apply that turned them off
+// is a setting that is not in force, which is worth a line on the dashboard.
+func TestOverviewWarnsWhenSSHDoesNotFollow(t *testing.T) {
+	t.Parallel()
+	srv := newTestServerWith(t, func(d *Deps) { d.Engine = d.Engine.WithSSH(sshRefuses{}) })
+	cfg := starter()
+	cfg.System.Management.SSHPasswords = false
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: cfg}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
+	}
+	if w := warning(getOverview(t, srv), "ssh-settings"); w == nil || !strings.Contains(w.Detail, "still accepts passwords") {
+		t.Errorf("warning = %+v", w)
+	}
+}
+
+type sshRefuses struct{}
+
+func (sshRefuses) Apply(context.Context, bool) error {
+	return errors.New("sshd still accepts passwords")
+}

@@ -80,6 +80,9 @@ type Engine struct {
 	pending *pendingApply
 	// recovered is set when Recover undid an apply, until the next commit.
 	recovered *Recovered
+	// sshErr is why sshd does not do what the last apply or revert asked of
+	// it, for the dashboard.
+	sshErr string
 	// retimed is the offset Retime last loaded the ruleset at, until the
 	// next load: were the offset not to be noted, it would load again
 	// every hour.
@@ -279,8 +282,10 @@ func (e *Engine) applySSH(ctx context.Context, cfg *model.Config) {
 		return
 	}
 	passwords := cfg == nil || cfg.System.Management.SSHPasswords
+	e.sshErr = ""
 	if err := e.ssh.Apply(ctx, passwords); err != nil {
-		e.log.Warn("could not set how sshd lets people in; it admits people as it did before",
+		e.sshErr = err.Error()
+		e.log.Warn("could not set how sshd lets people in",
 			"passwords", passwords, "err", err)
 	}
 }
@@ -823,6 +828,9 @@ type Status struct {
 	// Recovered is set when this daemon undid an apply that a crash or a
 	// reboot left unconfirmed, until the next commit.
 	Recovered *Recovered `json:"recovered,omitempty"`
+	// SSH is why sshd does not let people in the way the last apply or
+	// revert asked.
+	SSH string `json:"ssh,omitempty"`
 }
 
 // Status reports whether configuration exists, whether the table is in the
@@ -833,10 +841,13 @@ func (e *Engine) Status(ctx context.Context) (Status, error) {
 	if p := e.pending; p != nil {
 		pending = &PendingStatus{Since: p.since, Deadline: p.deadline, Remaining: time.Until(p.deadline).Truncate(time.Second)}
 	}
-	recovered := e.recovered
+	recovered, sshErr := e.recovered, e.sshErr
 	e.mu.Unlock()
 
-	st := Status{Configured: e.store.Exists(), Pending: pending, Network: "none", Fallback: e.readFallback(), Recovered: recovered}
+	st := Status{
+		Configured: e.store.Exists(), Pending: pending, Network: "none", Fallback: e.readFallback(),
+		Recovered: recovered, SSH: sshErr,
+	}
 	if e.net != nil {
 		st.Network = e.net.Name()
 	}

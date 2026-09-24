@@ -119,18 +119,26 @@ func (s System) Apply(ctx context.Context, allowPasswords bool) error {
 	if err != nil {
 		return err
 	}
-	if !changed {
-		return nil
+	if changed {
+		if out, err := s.run(ctx, bin, "-t"); err != nil {
+			// Whatever was there before is better than a configuration sshd
+			// will not start with.
+			_, _ = s.write(!allowPasswords)
+			return fmt.Errorf("sshd rejected the configuration, so it was put back: %s", strings.TrimSpace(string(out)))
+		}
+		if unit := s.unit(ctx); unit != "" {
+			if out, err := s.run(ctx, "systemctl", "reload", unit); err != nil {
+				return fmt.Errorf("reload %s: %w: %s", unit, err, strings.TrimSpace(string(out)))
+			}
+		}
 	}
-	if out, err := s.run(ctx, bin, "-t"); err != nil {
-		// Whatever was there before is better than a configuration sshd
-		// will not start with.
-		_, _ = s.write(!allowPasswords)
-		return fmt.Errorf("sshd rejected the configuration, so it was put back: %s", strings.TrimSpace(string(out)))
-	}
-	if unit := s.unit(ctx); unit != "" {
-		if out, err := s.run(ctx, "systemctl", "reload", unit); err != nil {
-			return fmt.Errorf("reload %s: %w: %s", unit, err, strings.TrimSpace(string(out)))
+	// The drop-in wins only while nothing sshd reads first says otherwise,
+	// and an upgrade or cloud-init can change that between applies, so
+	// every apply asks sshd what it ended up with.
+	if !allowPasswords {
+		if passwords, readable := s.State(ctx); readable && passwords {
+			return fmt.Errorf("sshd still accepts passwords: something it reads before %s turns them on, "+
+				"in %s above its Include or in a drop-in that sorts first", filepath.Base(DropIn), sshdConfig)
 		}
 	}
 	return nil
@@ -155,17 +163,19 @@ func (s System) write(allow bool) (bool, error) {
 		}
 		return changed, nil
 	}
-	if same(dropIn, dropInContent) {
-		return false, nil
-	}
-	if err := s.ensureInclude(); err != nil {
+	// A package upgrade can put back a main file without the Include.
+	added, err := s.ensureInclude()
+	if err != nil {
 		return false, err
+	}
+	if same(dropIn, dropInContent) {
+		return added, nil
 	}
 	if err := os.MkdirAll(filepath.Dir(dropIn), 0o755); err != nil { //nolint:gosec // sshd's own directory
-		return false, err
+		return added, err
 	}
 	if err := writeAtomic(dropIn, dropInContent, 0o600); err != nil {
-		return false, err
+		return added, err
 	}
 	if _, err := os.Stat(filepath.Dir(pin)); err == nil {
 		if err := writeAtomic(pin, cloudInitContent, 0o644); err != nil {
@@ -176,21 +186,23 @@ func (s System) write(allow bool) (bool, error) {
 }
 
 // ensureInclude adds the Include line to a main file that lacks it, at the
-// top, which is the only place it means "the drop-ins win".
-func (s System) ensureInclude() error {
+// top, which is the only place it means "the drop-ins win". It reports
+// whether it added one.
+func (s System) ensureInclude() (bool, error) {
 	path := s.path(sshdConfig)
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return false, err
 	}
 	for _, line := range strings.Split(string(raw), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) >= 2 && strings.EqualFold(fields[0], "Include") &&
 			strings.Contains(fields[1], "sshd_config.d") {
-			return nil
+			return false, nil
 		}
 	}
-	return writeAtomic(path, "# Added by ostiole so the drop-ins below are read.\n"+sshdInclude+"\n"+string(raw), 0o600)
+	err = writeAtomic(path, "# Added by ostiole so the drop-ins below are read.\n"+sshdInclude+"\n"+string(raw), 0o600)
+	return err == nil, err
 }
 
 // unit is the sshd unit that is running: ssh.service on Debian and

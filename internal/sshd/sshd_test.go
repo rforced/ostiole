@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -82,13 +83,14 @@ func TestApplyWritesTheDropInThatWins(t *testing.T) {
 	}
 
 	// An apply that agrees with the router changes nothing and reloads
-	// nothing, because every apply runs this.
+	// nothing, because every apply runs this. It only asks sshd what it
+	// reads.
 	before := len(run.calls)
 	if err := s.Apply(context.Background(), false); err != nil {
 		t.Fatal(err)
 	}
-	if len(run.calls) != before {
-		t.Errorf("a second apply ran %v", run.calls[before:])
+	if got := run.calls[before:]; len(got) != 1 || got[0] != filepath.Join(root, "usr/sbin/sshd")+" -T" {
+		t.Errorf("a second apply ran %v", got)
 	}
 
 	// Allowing passwords again takes both files away.
@@ -133,6 +135,49 @@ func TestApplyAddsTheIncludeWhenMissing(t *testing.T) {
 	raw, _ := os.ReadFile(main)
 	if !strings.HasPrefix(string(raw), "# Added by ostiole") || !strings.Contains(string(raw), sshdInclude+"\nPasswordAuthentication yes") {
 		t.Errorf("main file:\n%s", raw)
+	}
+}
+
+// A drop-in that is in place but loses to a line read before it is not
+// passwords off, and an upgrade that drops the Include does not get to
+// hide behind a drop-in that has not changed.
+func TestApplyChecksWhatSSHDEndsUpWith(t *testing.T) {
+	t.Parallel()
+	root := router(t)
+	effective := filepath.Join(root, "usr/sbin/sshd") + " -T"
+	run := &fakeRun{out: map[string]string{effective: "passwordauthentication no\n"}}
+	s := System{Run: run, FS: root}
+	if err := s.Apply(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+
+	run.out[effective] = "passwordauthentication yes\n"
+	err := s.Apply(context.Background(), false)
+	if err == nil || !strings.Contains(err.Error(), "still accepts passwords") {
+		t.Errorf("err = %v, want passwords still on", err)
+	}
+	// Allowing passwords asks nothing of sshd's answer.
+	if err := s.Apply(context.Background(), true); err != nil {
+		t.Errorf("allowing passwords: %v", err)
+	}
+
+	run.out[effective] = "passwordauthentication no\n"
+	if err := s.Apply(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	main := filepath.Join(root, "etc/ssh/sshd_config")
+	if err := os.WriteFile(main, []byte("PasswordAuthentication yes\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before := len(run.calls)
+	if err := s.Apply(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	if raw, _ := os.ReadFile(main); !strings.HasPrefix(string(raw), "# Added by ostiole") {
+		t.Errorf("the Include was not put back:\n%s", raw)
+	}
+	if !slices.Contains(run.calls[before:], filepath.Join(root, "usr/sbin/sshd")+" -t") {
+		t.Errorf("the restored Include was not checked: %v", run.calls[before:])
 	}
 }
 

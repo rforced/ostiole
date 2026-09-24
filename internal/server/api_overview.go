@@ -716,6 +716,13 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 			Detail: "Ostiole stopped or the router restarted before the apply from " + r.Since.Local().Format("2006-01-02 15:04") + " was confirmed. The configuration before it is back.",
 		})
 	}
+	if st.SSH != "" {
+		out = append(out, Warning{
+			Kind: "ssh-settings", Level: "warn",
+			Title:  "SSH does not follow the configuration",
+			Detail: st.SSH + ".",
+		})
+	}
 	if a.tables != nil {
 		if tables, err := a.tables.ListTables(ctx); err == nil {
 			var foreign []string
