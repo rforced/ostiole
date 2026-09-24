@@ -58,7 +58,20 @@ const rules = computed(() => config.rulesForZone(zone.value))
  * order the kernel meets them. They follow the draft, so a zone that just
  * got anti-lockout shows it at once. Like the counters they are decoration.
  */
-const { rows: system } = useDraftRows((draft) => api.systemRules(draft))
+const {
+  rows: system,
+  error: systemError,
+  updatedAt: systemRead,
+} = useDraftRows((draft) => api.systemRules(draft))
+
+/**
+ * The table waits for the first read of the system rules. They land above
+ * and below the zone's own rules, and arriving after those they would push
+ * them down the moment they appear. A read that fails shows the zone's
+ * rules alone.
+ */
+const ready = computed(() => Boolean(systemRead.value || systemError.value))
+
 function inZone(row) {
   return !row.zones?.length || row.zones.includes(zone.value)
 }
@@ -209,7 +222,12 @@ onMounted(() => {
             <th></th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
+        <tbody v-if="!ready">
+          <tr>
+            <td colspan="9" class="text-ink-muted">Reading…</td>
+          </tr>
+        </tbody>
+        <TransitionGroup v-else name="row" tag="tbody">
           <SystemRuleRow
             v-for="s in before"
             :key="`system:${s.chain}:${s.description}`"

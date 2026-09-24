@@ -115,7 +115,7 @@ async function mountPage(path = '/firewall/rules') {
   await router.isReady()
   const wrapper = mount(RulesPage, { global: { plugins: [router], stubs } })
   await vi.waitFor(() => expect(api.systemRules).toHaveBeenCalled())
-  await nextTick()
+  await flushPromises()
   return wrapper
 }
 
@@ -198,6 +198,26 @@ describe('RulesPage system rules', () => {
     await wrapper.find('[aria-label="Zone"] button:first-child').trigger('click')
     await flushPromises()
     expect(wrapper.vm.$route.fullPath).toBe('/firewall/rules')
+  })
+
+  it('reads the system rules before showing any row', async () => {
+    let answer
+    api.systemRules.mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    const wrapper = await mountPage()
+    // The lan rule is in the draft already, but on its own it would be
+    // pushed down by the rows that arrive above it.
+    expect(rowsText(wrapper)).toEqual(['Reading…'])
+    answer(system)
+    await flushPromises()
+    const rows = rowsText(wrapper)
+    expect(rows[0]).toContain('Replies and related traffic')
+    expect(rows[2]).toContain('Web UI')
+  })
+
+  it('shows the zone rules alone when the system rules cannot be read', async () => {
+    api.systemRules.mockRejectedValue(new Error('the draft does not validate'))
+    const wrapper = await mountPage()
+    expect(rowsText(wrapper)).toEqual([expect.stringContaining('Web UI')])
   })
 
   it('re-reads the rows for the draft after an edit settles', async () => {
