@@ -13,7 +13,7 @@ defineProps({
 </script>
 
 <template>
-  <SectionCard title="Busiest rules" flush>
+  <SectionCard title="Busiest rules" flush :aria-busy="loaded ? undefined : 'true'">
     <table class="table">
       <thead>
         <tr>
@@ -24,10 +24,20 @@ defineProps({
         </tr>
       </thead>
       <TransitionGroup name="row" tag="tbody">
-        <tr v-if="!rules.length" key="empty" class="row-static">
-          <td colspan="4" class="text-ink-muted">
-            {{ loaded ? 'No rules with counters yet.' : 'Reading…' }}
-          </td>
+        <template v-if="!loaded">
+          <tr v-for="n in 3" :key="`reading-${n}`" class="row-static" data-reading>
+            <td>
+              <span v-if="n === 1" class="sr-only">Reading…</span>
+              <div><span class="skeleton w-36"></span></div>
+              <div><span class="skeleton h-5 w-12 rounded-full"></span></div>
+            </td>
+            <td><span class="skeleton w-10"></span></td>
+            <td class="text-right"><span class="skeleton w-12"></span></td>
+            <td class="text-right"><span class="skeleton w-14"></span></td>
+          </tr>
+        </template>
+        <tr v-else-if="!rules.length" key="empty" class="row-static">
+          <td colspan="4" class="text-ink-muted">No rules with counters yet.</td>
         </tr>
         <tr v-for="r in rules" :key="r.id">
           <td>
@@ -46,9 +56,12 @@ defineProps({
       </TransitionGroup>
     </table>
     <p class="card-strip border-t border-line text-ink-muted">
-      Blocked by the default policy: {{ formatCount(blocked?.packets ?? 0) }} packets ({{
-        formatBytes(blocked?.bytes ?? 0)
-      }}) ·
+      Blocked by the default policy:
+      <span v-if="loaded">
+        {{ formatCount(blocked?.packets ?? 0) }} packets ({{ formatBytes(blocked?.bytes ?? 0) }})
+      </span>
+      <span v-else class="skeleton w-28"></span>
+      ·
       <RouterLink to="/firewall/log" class="link">see the log</RouterLink>
     </p>
   </SectionCard>

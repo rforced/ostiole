@@ -253,8 +253,10 @@
   .table tbody tr.row-system td {
     @apply bg-surface-2/40 text-ink-muted;
   }
+  /* A value not read yet, where "Reading…" would leave the card a
+     different shape from the one it is about to take. */
   .skeleton {
-    @apply inline-block h-3.5 animate-pulse rounded bg-surface-2;
+    @apply inline-block h-3.5 animate-pulse rounded bg-surface-2 align-middle motion-reduce:animate-none;
   }
   /* Anything in a flush card that is not the table: a filter row above it,
      a toggle, a count, an error, a footer note. It sits against a rule, so
@@ -316,6 +318,19 @@
   transition: none;
 }
 
+/* Dashboard cards fade in when there is something to say and slide to
+   make room. One that goes quiet leaves at once, so the rest close the
+   gap rather than waiting on it. */
+.card-enter-active {
+  transition: opacity 200ms ease-out;
+}
+.card-enter-from {
+  opacity: 0;
+}
+.card-move {
+  transition: transform 200ms ease-out;
+}
+
 .toast-enter-active,
 .toast-leave-active,
 .toast-move {
@@ -342,6 +357,8 @@
   .row-enter-active,
   .row-leave-active,
   .row-move,
+  .card-enter-active,
+  .card-move,
   .toast-enter-active,
   .toast-leave-active,
   .toast-move,

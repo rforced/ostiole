@@ -39,6 +39,16 @@ describe('SystemLoadCard', () => {
     expect(w.text()).toContain('no reading yet')
   })
 
+  it('holds placeholders rather than dashes until the first read answers', () => {
+    const w = mount(SystemLoadCard, { props: { stats: null, loaded: false } })
+    expect(meters(w)).toEqual(['CPU usage', 'Memory usage', 'Disk usage'])
+    expect(w.attributes('aria-busy')).toBe('true')
+    expect(w.text()).toContain('Reading…')
+    expect(w.text()).not.toContain('no reading yet')
+    expect(w.text()).not.toContain('—')
+    expect(w.findAll('.skeleton').length).toBeGreaterThan(3)
+  })
+
   it('names the cores and the threads on a chip with SMT', () => {
     const w = mount(SystemLoadCard, { props: { stats: reading() } })
     expect(w.find('[data-meter="CPU"]').text()).toContain('2 cores, 4 threads')
@@ -154,6 +164,21 @@ describe('RouterCard', () => {
     })
     expect(w.text()).toContain('not loaded')
     expect(w.text()).not.toContain('Update')
+  })
+
+  it('states no counts before the overview has given any', () => {
+    const w = mount(RouterCard, {
+      props: {
+        status: { configured: true, tableLoaded: true, network: 'networkd' },
+        loaded: false,
+      },
+      global: { stubs },
+    })
+    expect(w.attributes('aria-busy')).toBe('true')
+    expect(w.text()).toContain('Hostname')
+    expect(w.text()).toContain('Reading…')
+    expect(w.text()).not.toContain('0 rules')
+    expect(w.text()).not.toContain('loaded')
   })
 })
 

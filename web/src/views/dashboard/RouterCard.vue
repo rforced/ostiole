@@ -9,12 +9,23 @@ defineProps({
   health: { type: Object, default: null },
   /** A newer release, when the nightly check found one. */
   update: { type: Object, default: null },
+  /** False until the first overview arrives; the counts are zero until then. */
+  loaded: { type: Boolean, default: true },
 })
+
+/** The rows the card will have, with about the width each value takes. */
+const READING = [
+  ['Hostname', 'w-20'],
+  ['Version', 'w-32'],
+  ['Ruleset', 'w-52'],
+  ['Network backend', 'w-20'],
+  ['Revisions', 'w-44'],
+]
 </script>
 
 <template>
-  <SectionCard title="Router">
-    <dl v-if="status" class="kv">
+  <SectionCard title="Router" :aria-busy="status && loaded ? undefined : 'true'">
+    <dl v-if="status && loaded" class="kv">
       <dt>Hostname</dt>
       <dd class="font-mono">{{ summary.hostname || '—' }}</dd>
 
@@ -58,6 +69,14 @@ defineProps({
         <RouterLink to="/system/backup" class="link">roll back under System</RouterLink>
       </dd>
     </dl>
-    <p v-else class="text-ink-muted">Reading…</p>
+    <template v-else>
+      <p class="sr-only">Reading…</p>
+      <dl class="kv" aria-hidden="true" data-reading>
+        <template v-for="[label, width] in READING" :key="label">
+          <dt>{{ label }}</dt>
+          <dd><span class="skeleton" :class="width"></span></dd>
+        </template>
+      </dl>
+    </template>
   </SectionCard>
 </template>

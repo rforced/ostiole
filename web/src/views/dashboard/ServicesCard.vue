@@ -8,6 +8,8 @@ defineProps({
   services: { type: Array, default: () => [] },
   dhcp: { type: Object, default: () => ({}) },
   dns: { type: Object, default: () => ({}) },
+  /** False until the first overview arrives. */
+  loaded: { type: Boolean, default: true },
 })
 
 /** The service pages' words: off when the configuration leaves it off. */
@@ -19,8 +21,23 @@ function word(s) {
 </script>
 
 <template>
-  <SectionCard title="Services">
-    <dl class="kv">
+  <SectionCard title="Services" :aria-busy="loaded ? undefined : 'true'">
+    <template v-if="!loaded">
+      <p class="sr-only">Reading…</p>
+      <!-- How many units there are depends on what is set up; the two
+           summaries are always there. -->
+      <dl class="kv" aria-hidden="true" data-reading>
+        <template v-for="n in 3" :key="n">
+          <dt><span class="skeleton w-28"></span></dt>
+          <dd><span class="skeleton h-5 w-14 rounded-full"></span></dd>
+        </template>
+        <dt>DHCP</dt>
+        <dd><span class="skeleton w-48"></span></dd>
+        <dt>DNS</dt>
+        <dd><span class="skeleton w-56"></span></dd>
+      </dl>
+    </template>
+    <dl v-else class="kv">
       <template v-for="s in services" :key="s.name">
         <dt>{{ s.name }}</dt>
         <dd>

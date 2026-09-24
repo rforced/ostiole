@@ -35,7 +35,7 @@ function faults(l) {
 </script>
 
 <template>
-  <SectionCard title="Interfaces" flush>
+  <SectionCard title="Interfaces" flush :aria-busy="loaded ? undefined : 'true'">
     <table class="table">
       <thead>
         <tr>
@@ -47,8 +47,24 @@ function faults(l) {
         </tr>
       </thead>
       <TransitionGroup name="row" tag="tbody">
-        <tr v-if="!interfaces.length" key="empty" class="row-static">
-          <td colspan="5" class="text-ink-muted">{{ loaded ? 'No interfaces.' : 'Reading…' }}</td>
+        <template v-if="!loaded">
+          <tr v-for="n in 3" :key="`reading-${n}`" class="row-static" data-reading>
+            <td>
+              <span v-if="n === 1" class="sr-only">Reading…</span>
+              <div><span class="skeleton w-14"></span></div>
+              <div><span class="skeleton h-3 w-32"></span></div>
+            </td>
+            <td><span class="skeleton w-10"></span></td>
+            <td><span class="skeleton h-5 w-9 rounded-full"></span></td>
+            <td><span class="skeleton w-28"></span></td>
+            <td class="text-right">
+              <div><span class="skeleton w-24"></span></div>
+              <div><span class="skeleton w-24"></span></div>
+            </td>
+          </tr>
+        </template>
+        <tr v-else-if="!interfaces.length" key="empty" class="row-static">
+          <td colspan="5" class="text-ink-muted">No interfaces.</td>
         </tr>
         <tr v-for="l in interfaces" :key="l.name" :class="l.configured ? '' : 'opacity-70'">
           <td>

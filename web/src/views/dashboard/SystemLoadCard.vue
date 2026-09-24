@@ -9,6 +9,8 @@ import { LEVELS, levelOf } from '@/lib/meter'
 const props = defineProps({
   /** A reading from GET /system/stats, or null before the first one. */
   stats: { type: Object, default: null },
+  /** False until the first read has answered, with a reading or without. */
+  loaded: { type: Boolean, default: true },
 })
 
 function plural(n, word) {
@@ -111,7 +113,8 @@ const swap = computed(() => {
 </script>
 
 <template>
-  <SectionCard title="System">
+  <SectionCard title="System" :aria-busy="loaded ? undefined : 'true'">
+    <p v-if="!loaded" class="sr-only">Reading…</p>
     <div class="space-y-3">
       <div v-for="m in meters" :key="m.label" :data-meter="m.label">
         <div class="flex items-baseline justify-between gap-3">
@@ -126,13 +129,14 @@ const swap = computed(() => {
               <span class="sr-only">{{ m.level === 'critical' ? 'critical' : 'high' }}</span>
             </template>
           </div>
-          <div class="text-right">
+          <div v-if="loaded" class="text-right">
             <span class="font-medium tabular-nums">
               <template v-if="m.percent === null">—</template>
               <template v-else>{{ m.percent.toFixed(0) }}%</template>
             </span>
             <span class="ml-2 text-ink-muted">{{ m.detail }}</span>
           </div>
+          <span v-else class="skeleton w-36"></span>
         </div>
         <div
           class="meter mt-1"
@@ -158,10 +162,12 @@ const swap = computed(() => {
         {{ stats.load1.toFixed(2) }} · {{ stats.load5.toFixed(2) }} · {{ stats.load15.toFixed(2) }}
         <span class="ml-1 text-xs text-ink-muted">1 · 5 · 15 min</span>
       </dd>
+      <dd v-else-if="!loaded"><span class="skeleton w-44"></span></dd>
       <dd v-else class="text-ink-muted">—</dd>
 
       <dt>Uptime</dt>
-      <dd>{{ stats ? formatDuration(stats.uptimeSeconds) : '—' }}</dd>
+      <dd v-if="loaded">{{ stats ? formatDuration(stats.uptimeSeconds) : '—' }}</dd>
+      <dd v-else><span class="skeleton w-20"></span></dd>
 
       <template v-if="swap">
         <dt>Swap</dt>
