@@ -138,12 +138,12 @@ func NewRunner(source func() *model.Config, exec Executor, log *slog.Logger, dir
 				Describe:    describeGateways,
 				Every:       5 * time.Second,
 			},
-			{ID: "system:aliases", Description: "Refresh the address lists and country ranges that are due", Every: 15 * time.Minute},
-			{ID: "system:blocklists", Description: "Refresh the DNS blocklists that are due and hand them to the resolver", Every: 15 * time.Minute},
+			{ID: "system:aliases", Description: "Refresh firewall alias lists", Every: 15 * time.Minute},
+			{ID: "system:blocklists", Description: "Refresh DNS block lists", Every: 15 * time.Minute},
+			{ID: "system:drives", Description: "Check SMART data on drives", Every: time.Hour},
 			{ID: "system:sessions", Description: "Expire idle web sessions", Note: "as they expire"},
-			{ID: "system:firewall-log", Description: "Collect dropped packets from the kernel", Note: "continuously"},
-			{ID: "system:query-log", Description: "Collect the resolver's answers from the kernel", Note: "continuously"},
-			{ID: "system:drives", Description: "Ask each drive whether it is failing", Every: time.Hour},
+			{ID: "system:firewall-log", Description: "Firewall packet collector", Note: "continuously"},
+			{ID: "system:query-log", Description: "DNS Query Collector", Note: "continuously"},
 		},
 	}
 	r.load()
