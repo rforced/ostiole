@@ -14,6 +14,8 @@ import (
 type FeedRefresher interface {
 	RefreshOne(ctx context.Context, alias string) (int, error)
 	Tick(ctx context.Context, force bool)
+	// Wake asks for a pass now rather than at the next tick.
+	Wake()
 	// Inspect reads a list no alias names yet.
 	Inspect(ctx context.Context, url string) (feeds.Part, error)
 }
@@ -85,4 +87,12 @@ func (a *api) inspectFeed(w http.ResponseWriter, r *http.Request) error {
 	}
 	writeJSON(w, http.StatusOK, part)
 	return nil
+}
+
+// wakeFeeds has the refresher look at the configuration now: an apply or
+// a revert may have changed where a list comes from or what it keeps.
+func (a *api) wakeFeeds() {
+	if a.feeds != nil {
+		a.feeds.Wake()
+	}
 }

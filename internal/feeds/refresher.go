@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rforced/ostiole/internal/model"
@@ -36,6 +37,9 @@ type Refresher struct {
 	// OnTick, when set, is called after every pass, so the crons page can
 	// say when the router last looked.
 	OnTick func()
+
+	wakeOnce sync.Once
+	wake     chan struct{}
 }
 
 // DefaultTick is how often the refresher wakes up.
@@ -60,8 +64,24 @@ func (r *Refresher) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
+		case <-r.woken():
 		}
 	}
+}
+
+// Wake asks Run for a pass now rather than at the next tick. An apply
+// calls it, so an alias whose source or selection changed follows within
+// seconds. Two Wakes before the pass ask for one pass.
+func (r *Refresher) Wake() {
+	select {
+	case r.woken() <- struct{}{}:
+	default:
+	}
+}
+
+func (r *Refresher) woken() chan struct{} {
+	r.wakeOnce.Do(func() { r.wake = make(chan struct{}, 1) })
+	return r.wake
 }
 
 // Inspect reads a list the configuration does not name yet.
@@ -79,7 +99,7 @@ func (r *Refresher) Tick(ctx context.Context, force bool) {
 	r.Cache.Prune(cfg)
 	changed := false
 	for _, a := range Wanted(cfg) {
-		if !force && !r.due(a) {
+		if !force && !r.due(cfg, a) {
 			continue
 		}
 		updated, err := r.refresh(ctx, cfg, a)
@@ -128,7 +148,7 @@ func (r *Refresher) refresh(ctx context.Context, cfg *model.Config, a model.Alia
 		return false, err
 	}
 	before := r.Cache.Entries()[a.Name]
-	if err := r.Cache.Save(a.Name, parts, entries, time.Now()); err != nil {
+	if err := r.Cache.Save(a, parts, entries, time.Now()); err != nil {
 		return false, err
 	}
 	same := len(before) == len(entries)
@@ -146,10 +166,12 @@ func (r *Refresher) refresh(ctx context.Context, cfg *model.Config, a model.Alia
 	return !same, nil
 }
 
-// due reports whether an alias has gone long enough without a fetch.
-func (r *Refresher) due(a model.Alias) bool {
+// due reports whether an alias has gone long enough without a fetch, or
+// has changed since the one it has: a new URL, country, number or
+// selection is fetched on the next pass, not a refresh period later.
+func (r *Refresher) due(cfg *model.Config, a model.Alias) bool {
 	at, ok := r.Cache.FetchedAt(a.Name)
-	if !ok {
+	if !ok || !r.Cache.Current(cfg, a) {
 		return true
 	}
 	return time.Since(at) >= RefreshPeriod(a)

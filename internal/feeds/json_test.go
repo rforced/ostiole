@@ -330,15 +330,19 @@ func TestFetchKeepsWhatTheAliasSelects(t *testing.T) {
 		t.Fatalf("parts = %+v", parts)
 	}
 
-	// The page reads the choices from the cache.
+	// The page reads the choices from the cache, which also remembers the
+	// selection the entries were kept by.
 	cache := NewCache(t.TempDir())
-	if err := cache.Save(alias.Name, parts, entries, time.Now()); err != nil {
+	if err := cache.Save(alias, parts, entries, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	reopened := NewCache(cache.Dir)
 	st := reopened.Statuses(cfg)
 	if len(st) != 1 || st[0].Stale || len(st[0].Parts[0].Choices) != 2 {
 		t.Errorf("statuses = %+v", st)
+	}
+	if !reopened.Current(cfg, alias) {
+		t.Error("the reopened cache is not current for the alias it was saved for")
 	}
 
 	// A country list read from a JSON mirror offers nothing: it cannot select.

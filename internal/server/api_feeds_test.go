@@ -16,6 +16,7 @@ import (
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/feeds"
+	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/nft/nfttest"
 	"github.com/rforced/ostiole/internal/store"
 )
@@ -113,4 +114,45 @@ func TestInspectReadsAList(t *testing.T) {
 	if resp, _ := do(t, plain, http.MethodPost, "/api/v1/aliases/inspect", map[string]string{"url": lists.URL + "/drop.txt"}); resp.StatusCode != http.StatusServiceUnavailable {
 		t.Errorf("without a refresher: %d, want 503", resp.StatusCode)
 	}
+}
+
+// An apply or a revert has the refresher look at once, so an alias whose
+// URL or selection changed does not keep the old list until its next tick.
+func TestApplyAndRevertWakeTheRefresher(t *testing.T) {
+	t.Parallel()
+	lists, hits := listServer(t)
+	srv, passes := newFeedServer(t)
+	wait := func(what string) {
+		t.Helper()
+		select {
+		case <-passes:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("no pass after %s", what)
+		}
+	}
+
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: starter()}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
+	}
+	wait("the first apply")
+
+	cfg := starter()
+	cfg.Aliases = []model.Alias{{Name: "cloud", Type: model.AliasHosts, URL: lists.URL + "/ranges.json", Select: []string{"region=b"}}}
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: cfg, ConfirmTimeoutSeconds: 60}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("apply with the alias: %d %s", resp.StatusCode, raw)
+	}
+	wait("the alias was added")
+	if hits.Load() != 1 {
+		t.Fatalf("the list was fetched %d times, want once", hits.Load())
+	}
+	_, raw := do(t, srv, http.MethodGet, "/api/v1/aliases/feeds", nil)
+	var st []feeds.Status
+	if err := json.Unmarshal(raw, &st); err != nil || len(st) != 1 || st[0].Entries != 2 || st[0].Stale || len(st[0].Parts[0].Choices) != 1 {
+		t.Fatalf("feeds = %s (%v)", raw, err)
+	}
+
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/apply/revert", nil); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("revert: %d", resp.StatusCode)
+	}
+	wait("the revert")
 }

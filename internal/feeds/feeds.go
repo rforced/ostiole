@@ -61,7 +61,8 @@ type Status struct {
 	LastError   string     `json:"lastError,omitempty"`
 	LastTriedAt *time.Time `json:"lastTriedAt,omitempty"`
 	// Stale is true when the cache is older than the refresh period, which
-	// usually means the router cannot reach the publisher.
+	// usually means the router cannot reach the publisher, or was fetched
+	// before the alias's source or selection changed.
 	Stale bool `json:"stale"`
 }
 
@@ -85,10 +86,31 @@ type Part struct {
 // cached is the on-disk form. It is a cache: a file written by an older
 // version simply has no breakdown until the next refresh fills one in.
 type cached struct {
-	Alias     string    `json:"alias"`
+	Alias string `json:"alias"`
+	// Select is the selection the entries were kept by. With the sources
+	// in Parts, it tells a list fetched for the alias as it is now from
+	// one fetched before it changed.
+	Select    []string  `json:"select,omitempty"`
 	Parts     []Part    `json:"parts,omitempty"`
 	FetchedAt time.Time `json:"fetchedAt"`
 	Entries   []string  `json:"entries"`
+}
+
+// fetchedFor reports whether a cached list is what the alias asks for now:
+// fetched from the same sources and kept by the same selection. One fetched
+// before its URL, countries, numbers or selection changed is not.
+func (f cached) fetchedFor(cfg *model.Config, a model.Alias) bool {
+	if !slices.Equal(f.Select, a.Select) {
+		return false
+	}
+	want := Sources(cfg, a)
+	have := make([]string, 0, len(f.Parts))
+	for _, p := range f.Parts {
+		have = append(have, p.Source)
+	}
+	slices.Sort(want)
+	slices.Sort(have)
+	return slices.Equal(want, have)
 }
 
 // Cache stores fetched entries under a directory, one file per alias.
@@ -153,9 +175,10 @@ func (c *Cache) path(alias string) string {
 	return filepath.Join(c.Dir, safeName(alias)+".json")
 }
 
-// Save records fetched entries and what each source contributed.
-func (c *Cache) Save(alias string, parts []Part, entries []string, when time.Time) error {
-	f := cached{Alias: alias, Parts: parts, FetchedAt: when.UTC().Truncate(time.Second), Entries: entries}
+// Save records what an alias fetched: the entries, what each source
+// contributed, and the selection they were kept by.
+func (c *Cache) Save(a model.Alias, parts []Part, entries []string, when time.Time) error {
+	f := cached{Alias: a.Name, Select: a.Select, Parts: parts, FetchedAt: when.UTC().Truncate(time.Second), Entries: entries}
 	raw, err := json.Marshal(f)
 	if err != nil {
 		return err
@@ -163,12 +186,12 @@ func (c *Cache) Save(alias string, parts []Part, entries []string, when time.Tim
 	if err := os.MkdirAll(c.Dir, 0o700); err != nil {
 		return err
 	}
-	if err := os.WriteFile(c.path(alias), raw, 0o600); err != nil {
+	if err := os.WriteFile(c.path(a.Name), raw, 0o600); err != nil {
 		return err
 	}
 	c.mu.Lock()
-	c.loaded[alias] = f
-	delete(c.errs, alias)
+	c.loaded[a.Name] = f
+	delete(c.errs, a.Name)
 	c.mu.Unlock()
 	return nil
 }
@@ -216,6 +239,15 @@ func (c *Cache) FetchedAt(alias string) (time.Time, bool) {
 	return f.FetchedAt, ok
 }
 
+// Current reports whether the cache holds the list the alias asks for now,
+// rather than one fetched before it changed.
+func (c *Cache) Current(cfg *model.Config, a model.Alias) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	f, ok := c.loaded[a.Name]
+	return ok && f.fetchedFor(cfg, a)
+}
+
 // Statuses describes every feed in the configuration.
 func (c *Cache) Statuses(cfg *model.Config) []Status {
 	out := []Status{}
@@ -228,7 +260,7 @@ func (c *Cache) Statuses(cfg *model.Config) []Status {
 			st.Parts = f.Parts
 			st.Entries = len(f.Entries)
 			st.FetchedAt = f.FetchedAt
-			st.Stale = now.Sub(f.FetchedAt) > 2*RefreshPeriod(a)
+			st.Stale = now.Sub(f.FetchedAt) > 2*RefreshPeriod(a) || !f.fetchedFor(cfg, a)
 		} else {
 			st.Stale = true
 		}

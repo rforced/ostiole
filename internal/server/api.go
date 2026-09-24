@@ -989,6 +989,7 @@ func (a *api) apply(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	a.wakeFeeds()
 	writeJSON(w, http.StatusOK, res)
 	return nil
 }
@@ -1006,6 +1007,7 @@ func (a *api) revert(w http.ResponseWriter, r *http.Request) error {
 	if err := a.engine.Revert(r.Context()); err != nil {
 		return err
 	}
+	a.wakeFeeds()
 	w.WriteHeader(http.StatusNoContent)
 	return nil
 }

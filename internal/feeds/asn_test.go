@@ -89,7 +89,7 @@ func TestASAliasFetchesEachNumber(t *testing.T) {
 
 	// The breakdown is what the page reads, through the cache.
 	cache := NewCache(t.TempDir())
-	if err := cache.Save("google", parts, entries, time.Now()); err != nil {
+	if err := cache.Save(cfg.Aliases[0], parts, entries, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	st := NewCache(cache.Dir).Statuses(cfg)

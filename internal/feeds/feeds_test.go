@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -123,7 +124,7 @@ func TestFetchAndCache(t *testing.T) {
 	if len(entries) != 2 || len(sources) != 1 {
 		t.Fatalf("entries = %v, sources = %v", entries, sources)
 	}
-	if err := cache.Save("drop", sources, entries, time.Now()); err != nil {
+	if err := cache.Save(cfg.Aliases[0], sources, entries, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -212,11 +213,151 @@ func TestRefreshOnlyWhenDue(t *testing.T) {
 	}
 }
 
+// A list fetched for an alias as it was is not the list it asks for now: a
+// new URL or selection is fetched on the next pass, not a refresh period
+// later, and until then the page calls the old list stale.
+func TestChangedAliasRefetches(t *testing.T) {
+	t.Parallel()
+	var mu sync.Mutex
+	hits := map[string]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		hits[r.URL.Path]++
+		mu.Unlock()
+		_, _ = w.Write([]byte(`{"regions": [{"region": "a", "ips": ["192.0.2.0/24"]}, {"region": "b", "ips": ["198.51.100.0/24"]}]}`))
+	}))
+	defer srv.Close()
+	count := func(path string) int {
+		mu.Lock()
+		defer mu.Unlock()
+		return hits[path]
+	}
+
+	cfg := config(model.Alias{Name: "list", Type: model.AliasHosts, URL: srv.URL + "/one.json"})
+	r := &Refresher{
+		Cache:   NewCache(t.TempDir()),
+		Fetcher: NewFetcher("test"),
+		Source:  func() *model.Config { return cfg },
+		Log:     slog.New(slog.DiscardHandler),
+	}
+	ctx := context.Background()
+	r.Tick(ctx, false)
+	r.Tick(ctx, false)
+	if count("/one.json") != 1 {
+		t.Fatalf("hits = %v, want one fetch while nothing changed", hits)
+	}
+
+	cfg.Aliases[0].URL = srv.URL + "/two.json"
+	if st := r.Cache.Statuses(cfg); !st[0].Stale {
+		t.Errorf("a list from the old URL is not stale: %+v", st[0])
+	}
+	r.Tick(ctx, false)
+	if count("/two.json") != 1 {
+		t.Fatalf("hits = %v, want the new URL fetched at once", hits)
+	}
+
+	cfg.Aliases[0].Select = []string{"region=b"}
+	r.Tick(ctx, false)
+	if count("/two.json") != 2 {
+		t.Fatalf("hits = %v, want a changed selection fetched at once", hits)
+	}
+	if got := r.Cache.Entries()["list"]; strings.Join(got, ",") != "198.51.100.0/24" {
+		t.Errorf("entries = %v", got)
+	}
+	r.Tick(ctx, false)
+	if count("/two.json") != 2 {
+		t.Errorf("hits = %v, want nothing more once the cache matches", hits)
+	}
+	if st := r.Cache.Statuses(cfg); st[0].Stale {
+		t.Errorf("stale after the refetch: %+v", st[0])
+	}
+
+	// A country added to a country list is a new source too.
+	geo := config(model.Alias{Name: "geo", Type: model.AliasGeoIP, Entries: []string{"de"}})
+	geo.System.GeoIPv4URL = srv.URL + "/{country}.zone"
+	r.Source = func() *model.Config { return geo }
+	r.Tick(ctx, false)
+	geo.Aliases[0].Entries = []string{"de", "fr"}
+	r.Tick(ctx, false)
+	if count("/de.zone") != 2 || count("/fr.zone") != 1 {
+		t.Errorf("hits = %v, want both countries fetched after the change", hits)
+	}
+}
+
+// A cache written before it recorded its sources is fetched once more,
+// and then left to its schedule.
+func TestOldCacheIsRefetchedOnce(t *testing.T) {
+	t.Parallel()
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
+		_, _ = w.Write([]byte("192.0.2.0/24\n"))
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	old := `{"alias": "drop", "fetchedAt": "` + time.Now().UTC().Format(time.RFC3339) + `", "entries": ["192.0.2.0/24"]}`
+	if err := os.WriteFile(filepath.Join(dir, "drop.json"), []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config(model.Alias{Name: "drop", Type: model.AliasHosts, URL: srv.URL})
+	r := &Refresher{Cache: NewCache(dir), Fetcher: NewFetcher("test"), Source: func() *model.Config { return cfg },
+		Log: slog.New(slog.DiscardHandler)}
+	r.Tick(context.Background(), false)
+	r.Tick(context.Background(), false)
+	if hits != 1 {
+		t.Errorf("fetched %d times, want once", hits)
+	}
+}
+
+// Wake makes Run look now rather than at its next tick, which is how an
+// apply gets a changed list fetched within seconds.
+func TestWakeRunsAPass(t *testing.T) {
+	t.Parallel()
+	passes := make(chan struct{}, 4)
+	r := &Refresher{
+		Cache:    NewCache(t.TempDir()),
+		Fetcher:  NewFetcher("test"),
+		Source:   func() *model.Config { return config() },
+		Log:      slog.New(slog.DiscardHandler),
+		Interval: time.Hour,
+		OnTick:   func() { passes <- struct{}{} },
+	}
+	// Waking with nothing running never blocks the caller, and two Wakes
+	// before a pass ask for one pass, not two.
+	r.Wake()
+	r.Wake()
+	if n := len(r.woken()); n != 1 {
+		t.Fatalf("%d passes pending, want one", n)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go r.Run(ctx)
+	wait := func(what string) {
+		t.Helper()
+		select {
+		case <-passes:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("no pass %s", what)
+		}
+	}
+	wait("at start")
+	wait("for the Wakes before the start")
+	select {
+	case <-passes:
+		t.Fatal("a pass nobody asked for, an hour early")
+	case <-time.After(50 * time.Millisecond):
+	}
+	r.Wake()
+	wait("after Wake")
+}
+
 // An alias that has been removed should not leave its list on disk.
 func TestPruneForgetsRemovedAliases(t *testing.T) {
 	t.Parallel()
 	cache := NewCache(t.TempDir())
-	if err := cache.Save("gone", []Part{{Source: "http://x", Entries: 1}}, []string{"192.0.2.1"}, time.Now()); err != nil {
+	if err := cache.Save(model.Alias{Name: "gone"}, []Part{{Source: "http://x", Entries: 1}}, []string{"192.0.2.1"}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	cache.Prune(config())
@@ -236,7 +377,7 @@ func TestStatusesReportStaleAndErrors(t *testing.T) {
 		model.Alias{Name: "static", Type: model.AliasHosts, Entries: []string{"10.0.0.1"}},
 	)
 	cache := NewCache(t.TempDir())
-	if err := cache.Save("fresh", []Part{{Source: "http://example.invalid/list", Entries: 1}}, []string{"192.0.2.1"}, time.Now()); err != nil {
+	if err := cache.Save(cfg.Aliases[0], []Part{{Source: "http://example.invalid/list", Entries: 1}}, []string{"192.0.2.1"}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -273,7 +414,7 @@ func TestPushLeavesAListTheCacheLacks(t *testing.T) {
 		model.Alias{Name: "lost", Type: model.AliasHosts, URL: "http://example.invalid/b"},
 	)
 	cache := NewCache(t.TempDir())
-	if err := cache.Save("cached", nil, []string{"192.0.2.0/24"}, time.Now()); err != nil {
+	if err := cache.Save(cfg.Aliases[0], nil, []string{"192.0.2.0/24"}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	sets := &setsFake{}
@@ -436,7 +577,7 @@ func TestFetchReportsWhatEachCountryHeld(t *testing.T) {
 	// And the breakdown survives a round trip through the cache, which is
 	// where the page reads it from.
 	cache := NewCache(t.TempDir())
-	if err := cache.Save(alias.Name, parts, entries, time.Now()); err != nil {
+	if err := cache.Save(alias, parts, entries, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	st := NewCache(cache.Dir).Statuses(cfg)
