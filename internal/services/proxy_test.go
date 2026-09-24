@@ -401,6 +401,55 @@ func TestProxyApplyWaitsForAReload(t *testing.T) {
 	}
 }
 
+// Caddy refuses a configuration by failing the reload, and the apply fails
+// with what it said, so the engine puts the old files back rather than
+// leaving ones the next start would not get past validate with.
+func TestProxyApplyFailsWhenCaddyRefusesTheReload(t *testing.T) {
+	t.Parallel()
+	p, cmd, _ := proxyBackend(t)
+	files, err := p.Render(loadConfig(t, "testdata/proxy.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Apply(t.Context(), files); err != nil {
+		t.Fatal(err)
+	}
+	p.Cmd = refusingCmd{cmd}
+	cfg := loadConfig(t, "testdata/proxy.json")
+	cfg.Services.Proxy.Sites[0].Hosts = []string{"refused.example.com"}
+	changed, err := p.Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = p.Apply(t.Context(), changed)
+	if err == nil || !strings.Contains(err.Error(), "invalid listener address") || strings.Contains(err.Error(), "handled request") {
+		t.Errorf("a refused reload read as %v", err)
+	}
+}
+
+// refusingCmd is a unit whose reload fails the way ExecReload does when
+// Caddy refuses the configuration: systemctl says little, the journal has
+// Caddy's answer.
+type refusingCmd struct{ *fakeCmd }
+
+func (c refusingCmd) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	switch {
+	case name == "systemctl" && len(args) > 0 && args[0] == "reload":
+		return []byte("Job for ostiole-proxy.service failed."), errors.New("exit status 1")
+	case name == "journalctl":
+		// Requests go on being logged beside the refusal.
+		return []byte(`{"level":"info","msg":"handled request","uri":"/"}
+{"level":"info","msg":"using config from file","file":"caddy.json"}
+Error: sending configuration to instance: caddy responded with error: HTTP 400: {"error":"loading config: invalid listener address"}
+{"level":"info","msg":"handled request","uri":"/favicon.ico"}
+{"level":"info","msg":"handled request","uri":"/"}
+{"level":"info","msg":"handled request","uri":"/"}
+{"level":"info","msg":"handled request","uri":"/"}
+ostiole-proxy.service: Control process exited, code=exited, status=1/FAILURE`), nil
+	}
+	return c.fakeCmd.Run(ctx, name, args...)
+}
+
 // reloadingCmd answers "reloading" to the first looks after a reload, as
 // systemd does while Caddy is between its two notifications.
 type reloadingCmd struct {
@@ -688,7 +737,9 @@ func TestProxyUnitContent(t *testing.T) {
 		"Type=notify",
 		"User=ostiole-proxy",
 		"ExecStartPre=/usr/local/bin/ostiole-proxy validate --config /etc/ostiole/proxy/caddy.json",
-		"ExecReload=/bin/kill -USR1 $MAINPID",
+		// Through the admin socket, which fails the reload on a
+		// configuration Caddy refuses; a signal only gets it logged.
+		"ExecReload=/usr/local/bin/ostiole-proxy reload --config /etc/ostiole/proxy/caddy.json --address unix//run/ostiole-proxy/admin.sock --force",
 		"AmbientCapabilities=CAP_NET_BIND_SERVICE",
 		"ProtectSystem=strict",
 	} {

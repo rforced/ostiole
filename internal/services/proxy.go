@@ -303,11 +303,41 @@ func (p *Proxy) start(ctx context.Context, changed bool) error {
 			return fmt.Errorf("enable %s: %w: %s", ProxyUnit, err, strings.TrimSpace(string(out)))
 		}
 	} else if changed {
-		if out, err := p.cmd().Run(ctx, "systemctl", "reload", ProxyUnit); err != nil {
-			return fmt.Errorf("reload %s: %w: %s", ProxyUnit, err, strings.TrimSpace(string(out)))
+		if err := p.reload(ctx); err != nil {
+			return err
 		}
 	}
 	return p.settle(ctx)
+}
+
+// reload has the running proxy read its files again. A configuration Caddy
+// refuses fails the reload and leaves the old one serving.
+func (p *Proxy) reload(ctx context.Context) error {
+	since := time.Now()
+	if _, err := p.cmd().Run(ctx, "systemctl", "reload", ProxyUnit); err != nil {
+		return fmt.Errorf("reload %s: %w: %s", ProxyUnit, err, p.refusal(ctx, since))
+	}
+	return nil
+}
+
+// refusal is what Caddy said about a reload it refused. systemctl only says
+// the reload failed; Caddy's reason is in the journal, among whatever the
+// proxy logged since, and it is the line its command line starts with
+// "Error: ".
+func (p *Proxy) refusal(ctx context.Context, since time.Time) string {
+	out, _ := p.cmd().Run(ctx, "journalctl", "-u", ProxyUnit, "--since=@"+strconv.FormatInt(since.Unix(), 10),
+		"-o", "cat", "--no-pager")
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	var said []string
+	for _, line := range lines {
+		if reason, ok := strings.CutPrefix(line, "Error: "); ok {
+			said = append(said, reason)
+		}
+	}
+	if len(said) == 0 {
+		said = lines[max(0, len(lines)-5):]
+	}
+	return strings.Join(said, "\n")
 }
 
 // reloadSettle is how long a reload may take before the apply gives up
@@ -442,9 +472,8 @@ func (p *Proxy) Watch(ctx context.Context) {
 		if !changed || !p.Active(ctx) {
 			return
 		}
-		if out, err := p.cmd().Run(ctx, "systemctl", "reload", ProxyUnit); err != nil {
-			p.log().Error("proxy reload after renewal failed", "id", id, "err", err,
-				"output", strings.TrimSpace(string(out)))
+		if err := p.reload(ctx); err != nil {
+			p.log().Error("proxy reload after renewal failed", "id", id, "err", err)
 		}
 	})
 }

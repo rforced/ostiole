@@ -502,10 +502,11 @@ func grantTraversal(path string, gid int) error {
 	return os.Chmod(path, 0o710) //nolint:gosec // traversal for one group, no read
 }
 
-// ProxyUnitContent renders the ostiole-proxy unit. Caddy reloads from its
-// own file on SIGUSR1 as long as the admin API never replaced the running
-// configuration, which nothing here does, and it tells systemd when it is
-// ready, so Type=notify holds an apply until the listeners are up.
+// ProxyUnitContent renders the ostiole-proxy unit. A reload goes through the
+// admin socket: on SIGUSR1 Caddy only logs a configuration it refuses, where
+// `reload` exits non-zero and fails the apply. --force, because an apply that
+// only placed a certificate leaves the file as it was. Caddy tells systemd
+// when it is ready, so Type=notify holds an apply until the listeners are up.
 func ProxyUnitContent(binary, dir string) string {
 	return fmt.Sprintf(`[Unit]
 Description=Ostiole reverse proxy
@@ -520,7 +521,7 @@ Group=%[3]s
 Environment=XDG_DATA_HOME=%[4]s XDG_CONFIG_HOME=%[4]s
 ExecStartPre=%[1]s validate --config %[2]s/caddy.json
 ExecStart=%[1]s run --config %[2]s/caddy.json
-ExecReload=/bin/kill -USR1 $MAINPID
+ExecReload=%[1]s reload --config %[2]s/caddy.json --address unix/%[5]s --force
 Restart=on-failure
 RestartSec=2
 StateDirectory=ostiole-proxy
@@ -540,7 +541,7 @@ LimitNOFILE=1048576
 
 [Install]
 WantedBy=multi-user.target
-`, binary, dir, ProxyUser, ProxyStateDir)
+`, binary, dir, ProxyUser, ProxyStateDir, ProxyAdminSocket)
 }
 
 // setupWireless masks the distribution's own hostapd unit and writes the
