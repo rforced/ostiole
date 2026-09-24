@@ -112,6 +112,30 @@ func TestJournalArgsTakeTheNewestFirst(t *testing.T) {
 	}
 }
 
+// A read kept to Ostiole's units names them all when it names none, and
+// refuses one that is not Ostiole's.
+func TestJournalArgsKeepToOstiolesUnits(t *testing.T) {
+	t.Parallel()
+	args, err := journalArgs(JournalOptions{Own: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"--unit=ostiole.service", "--unit=ostiole-*", "--unit=systemd-networkd.service"} {
+		if !slices.Contains(args, want) {
+			t.Errorf("args = %q, want %q among them", args, want)
+		}
+	}
+	if args, err := journalArgs(JournalOptions{Own: true, Unit: "ostiole-pppoe@eth0.service"}); err != nil ||
+		!slices.Contains(args, "--unit=ostiole-pppoe@eth0.service") {
+		t.Errorf("an Ostiole unit: %q, %v", args, err)
+	}
+	for _, unit := range []string{"sshd.service", "ssh", "ostiolefake.service"} {
+		if _, err := journalArgs(JournalOptions{Own: true, Unit: unit}); err == nil {
+			t.Errorf("%s read as one of Ostiole's units", unit)
+		}
+	}
+}
+
 func TestJournalRejectsInjectedArguments(t *testing.T) {
 	t.Parallel()
 	_, err := Journal(context.Background(), JournalOptions{Unit: "ostiole.service; rm -rf /"})

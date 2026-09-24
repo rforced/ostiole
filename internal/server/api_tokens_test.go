@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rforced/ostiole/internal/auth"
+	"github.com/rforced/ostiole/internal/diag"
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/modem"
@@ -39,7 +40,11 @@ func roleServer(t *testing.T) (*httptest.Server, *auth.Service, *auth.Tokens) {
 	modems := modem.NewCacheWith(time.Minute, func(_ context.Context, address string) (*modem.Status, error) {
 		return &modem.Status{Address: address, FetchedAt: time.Now()}, nil
 	})
-	srv := httptest.NewServer(Handler(Deps{Engine: eng, Auth: as, Tokens: tokens, Modems: modems}))
+	// Nor is this machine's journal read.
+	journal := func(context.Context, diag.JournalOptions) ([]diag.JournalEntry, error) {
+		return []diag.JournalEntry{}, nil
+	}
+	srv := httptest.NewServer(Handler(Deps{Engine: eng, Auth: as, Tokens: tokens, Modems: modems, Journal: journal}))
 	jar, _ := cookiejar.New(nil)
 	srv.Client().Jar = jar
 	t.Cleanup(srv.Close)

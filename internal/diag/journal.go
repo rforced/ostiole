@@ -21,6 +21,9 @@ var unitRe = regexp.MustCompile(`^[A-Za-z0-9:_.\\@-]+$`)
 type JournalOptions struct {
 	// Unit filters to one systemd unit; empty reads everything.
 	Unit string
+	// Own keeps the read to Ostiole's units: Unit has to be one, and
+	// without Unit it reads all of them rather than the whole host.
+	Own bool
 	// Lines is how many of the newest entries to return.
 	Lines int
 	// Since is a systemd time expression like "-1h"; empty means no limit.
@@ -40,6 +43,16 @@ type JournalEntry struct {
 
 // MaxJournalLines caps one query.
 const MaxJournalLines = 2000
+
+// ownUnits are Ostiole's units as journalctl patterns: the daemon, what it
+// runs, and the network backend it drives.
+var ownUnits = []string{"ostiole.service", "ostiole-*", "systemd-networkd.service"}
+
+// OwnUnit reports whether a unit is one of Ostiole's, as ownUnits has them.
+func OwnUnit(unit string) bool {
+	name := strings.TrimSuffix(unit, ".service")
+	return name == "ostiole" || name == "systemd-networkd" || strings.HasPrefix(name, "ostiole-")
+}
 
 // Journal reads recent entries with journalctl, newest first. Reading the
 // binary journal format directly would need cgo or a reimplementation; the
@@ -73,11 +86,19 @@ func journalArgs(o JournalOptions) ([]string, error) {
 	// kilobytes as null rather than printing it, and a WAF audit entry is
 	// tens of kilobytes.
 	args := []string{"--output=json", "--no-pager", "--all", "--reverse", "--lines=" + strconv.Itoa(lines)}
-	if o.Unit != "" {
+	switch {
+	case o.Unit != "":
 		if !unitRe.MatchString(o.Unit) {
 			return nil, fmt.Errorf("invalid unit name %q", o.Unit)
 		}
+		if o.Own && !OwnUnit(o.Unit) {
+			return nil, fmt.Errorf("%s is not one of Ostiole's units", o.Unit)
+		}
 		args = append(args, "--unit="+o.Unit)
+	case o.Own:
+		for _, u := range ownUnits {
+			args = append(args, "--unit="+u)
+		}
 	}
 	if o.Since != "" {
 		if !sinceRe.MatchString(o.Since) {

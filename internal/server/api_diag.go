@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/diag"
 	"github.com/rforced/ostiole/internal/modem"
 )
@@ -225,14 +226,22 @@ func (a *api) diagJournal(w http.ResponseWriter, r *http.Request) error {
 		}
 		priority = n
 	}
+	opts := diag.JournalOptions{Unit: q.Get("unit"), Lines: lines, Since: q.Get("since"), Priority: priority}
+	// A viewer reads what Ostiole runs, not the whole host: the rest has
+	// sshd's record of who tried to get in, and every other daemon.
+	if p, _ := a.authenticate(r); !p.Role.Allows(auth.RoleOperator) {
+		if opts.Unit != "" && !diag.OwnUnit(opts.Unit) {
+			return fmt.Errorf("%w: only an operator can read units Ostiole does not run", errForbidden)
+		}
+		opts.Own = true
+	}
 	ctx, cancel := contextWithTimeout(r, 20*time.Second)
 	defer cancel()
-	entries, err := diag.Journal(ctx, diag.JournalOptions{
-		Unit:     q.Get("unit"),
-		Lines:    lines,
-		Since:    q.Get("since"),
-		Priority: priority,
-	})
+	read := a.journal
+	if read == nil {
+		read = diag.Journal
+	}
+	entries, err := read(ctx, opts)
 	if err != nil {
 		return diagError(err)
 	}

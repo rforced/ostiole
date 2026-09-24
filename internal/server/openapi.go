@@ -130,7 +130,7 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/shaping":                  {summary: "Line speeds per interface and how the queues are behaving.", role: auth.RoleViewer},
 	"GET /api/v1/log/recent":               {summary: "Recent firewall log entries, newest first.", role: auth.RoleViewer},
 	"GET /api/v1/log/stream":               {summary: "Firewall log entries as they arrive (server-sent events).", role: auth.RoleViewer},
-	"GET /api/v1/diagnostics/journal":      {summary: "Read the system journal, newest entry first.", role: auth.RoleViewer},
+	"GET /api/v1/diagnostics/journal":      {summary: "Read the system journal, newest entry first. A viewer reads Ostiole's own units only.", role: auth.RoleViewer},
 	"GET /api/v1/diagnostics/states":       {summary: "The connections the kernel is tracking.", role: auth.RoleViewer},
 	"GET /api/v1/diagnostics/neighbours":   {summary: "The ARP and NDP tables.", role: auth.RoleViewer},
 	"GET /api/v1/diagnostics/modem":        {summary: "What the cable modem reports: provisioning, channels and levels.", role: auth.RoleViewer},

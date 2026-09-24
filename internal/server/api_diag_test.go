@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/rforced/ostiole/internal/auth"
+	"github.com/rforced/ostiole/internal/diag"
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/modem"
@@ -67,6 +68,57 @@ func TestDiagModem(t *testing.T) {
 	}
 	if want := []string{"192.168.0.1", modem.DefaultAddress, modem.DefaultAddress}; strings.Join(reads, ",") != strings.Join(want, ",") {
 		t.Errorf("modem reads = %v, want %v", reads, want)
+	}
+}
+
+// A viewer reads the journal of the units Ostiole runs, not the whole host:
+// the rest has sshd's record of who tried to get in. An operator reads it
+// all.
+func TestJournalKeepsAViewerToOstiolesUnits(t *testing.T) {
+	t.Parallel()
+	var mu sync.Mutex
+	var last diag.JournalOptions
+	srv := newTestServerWith(t, func(d *Deps) {
+		tokens, err := auth.NewTokens(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		d.Tokens = tokens
+		d.Journal = func(_ context.Context, o diag.JournalOptions) ([]diag.JournalEntry, error) {
+			mu.Lock()
+			last = o
+			mu.Unlock()
+			return []diag.JournalEntry{}, nil
+		}
+	})
+	viewer := mintToken(t, srv, "look", string(auth.RoleViewer))
+	operator := mintToken(t, srv, "change", string(auth.RoleOperator))
+	for _, tc := range []struct {
+		token, unit string
+		status      int
+		own         bool
+	}{
+		{viewer, "ostiole.service", http.StatusOK, true},
+		{viewer, "ostiole-dnsmasq.service", http.StatusOK, true},
+		{viewer, "", http.StatusOK, true},
+		{viewer, "sshd.service", http.StatusForbidden, false},
+		{operator, "sshd.service", http.StatusOK, false},
+		{operator, "", http.StatusOK, false},
+	} {
+		mu.Lock()
+		last = diag.JournalOptions{}
+		mu.Unlock()
+		resp, raw := withToken(t, srv, http.MethodGet, "/api/v1/diagnostics/journal?unit="+tc.unit, tc.token)
+		if resp.StatusCode != tc.status {
+			t.Errorf("unit %q: %d %s, want %d", tc.unit, resp.StatusCode, raw, tc.status)
+			continue
+		}
+		mu.Lock()
+		got := last
+		mu.Unlock()
+		if tc.status == http.StatusOK && (got.Own != tc.own || got.Unit != tc.unit) {
+			t.Errorf("unit %q read as %+v, want own %v", tc.unit, got, tc.own)
+		}
 	}
 }
 
