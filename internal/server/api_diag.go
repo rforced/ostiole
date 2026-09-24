@@ -22,7 +22,7 @@ func (a *api) registerDiag(mux *router) {
 	mux.HandleFunc("GET /api/v1/diagnostics/journal", a.readNoEngine(a.diagJournal))
 	mux.HandleFunc("GET /api/v1/diagnostics/states", a.readNoEngine(a.diagStates))
 	mux.HandleFunc("GET /api/v1/diagnostics/neighbours", a.readNoEngine(a.diagNeighbours))
-	mux.HandleFunc("GET /api/v1/diagnostics/modem", a.readNoEngine(a.diagModem))
+	mux.HandleFunc("GET /api/v1/diagnostics/modem", a.requires(auth.RoleOperator, a.diagModem))
 }
 
 // diagModem reads the cable modem's status pages: provisioning, the

@@ -133,7 +133,6 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/diagnostics/journal":      {summary: "Read the system journal, newest entry first. A viewer reads Ostiole's own units only.", role: auth.RoleViewer},
 	"GET /api/v1/diagnostics/states":       {summary: "The connections the kernel is tracking.", role: auth.RoleViewer},
 	"GET /api/v1/diagnostics/neighbours":   {summary: "The ARP and NDP tables.", role: auth.RoleViewer},
-	"GET /api/v1/diagnostics/modem":        {summary: "What the cable modem reports: provisioning, channels and levels.", role: auth.RoleViewer},
 
 	"GET /api/v1/diagnostics/drives":                     {summary: "Every drive in this router: identity, health, temperature, wear, attributes and logs.", role: auth.RoleViewer},
 	"GET /api/v1/diagnostics/drives/{name}":              {summary: "What one drive says about itself.", role: auth.RoleViewer},
@@ -156,6 +155,7 @@ var routeDocs = map[string]routeDoc{
 	"POST /api/v1/wireguard/keys":               {summary: "Generate a WireGuard key pair or preshared key.", role: auth.RoleOperator},
 	"POST /api/v1/certificates/keys":            {summary: "Generate a private key for an ACME account.", role: auth.RoleOperator},
 	"POST /api/v1/tailscale/login":              {summary: "Log this router into its tailnet, with an auth key or a browser.", role: auth.RoleOperator},
+	"GET /api/v1/diagnostics/modem":             {summary: "What the cable modem in 192.168.100.0/24 reports: provisioning, channels and levels.", role: auth.RoleOperator},
 	"POST /api/v1/diagnostics/ping":             {summary: "Ping an address from this router.", role: auth.RoleOperator},
 	"POST /api/v1/diagnostics/traceroute":       {summary: "Trace the route to an address.", role: auth.RoleOperator},
 	"POST /api/v1/diagnostics/capture":          {summary: "Capture packets and return a pcap file.", role: auth.RoleOperator},

@@ -6,6 +6,9 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { useAuthStore } from '@/stores/auth'
+
+const auth = useAuthStore()
 
 const STORAGE_KEY = 'ostiole.modem.address'
 const DEFAULT_ADDRESS = '192.168.100.1'
@@ -20,7 +23,10 @@ const load = useAsync(async (refresh = false) => {
   else localStorage.setItem(STORAGE_KEY, target)
   status.value = await api.diagnostics.modem(target, refresh)
 })
-onMounted(() => load.run(false))
+// Reading the modem is an operator's: it has the router reach out.
+onMounted(() => {
+  if (!auth.readOnly) load.run(false)
+})
 
 const stuckAt = computed(() => status.value?.provisioning.find((s) => !s.ok) ?? null)
 
@@ -54,14 +60,17 @@ function upPowerTone(p) {
         Read from the modem at 192.168.100.1 when you ask, never in the background. It answers there
         with or without a WAN address.
       </template>
-      <template #actions>
+      <template v-if="!auth.readOnly" #actions>
         <RefreshButton
           :busy="load.busy.value"
           :updated-at="load.updatedAt.value"
           @click="load.run(true)"
         />
       </template>
-      <div class="space-y-3">
+      <p v-if="auth.readOnly" class="text-ink-muted">
+        Only an operator or an admin can read the modem.
+      </p>
+      <div v-else class="space-y-3">
         <form
           class="form-row"
           @submit.prevent="load.run(true)"
@@ -70,7 +79,7 @@ function upPowerTone(p) {
           <FormField
             id="modem-address"
             label="Modem address"
-            hint="Where a DOCSIS modem answers by convention."
+            hint="In 192.168.100.0/24, where cable modems answer."
           >
             <input
               id="modem-address"

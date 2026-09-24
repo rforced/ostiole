@@ -104,8 +104,9 @@ func TestFallsBackToHTTP(t *testing.T) {
 	}
 }
 
-// A web server that is not a modem's is "no known modem", not a crash;
-// an address nobody listens on says so too, with the reason.
+// A web server that is not a modem's is "no modem", not a crash; an
+// address nobody listens on says so too, and no more: why the connection
+// failed would tell a closed port from a filtered one.
 func TestNotAModem(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -123,21 +124,22 @@ func TestNotAModem(t *testing.T) {
 	closed := l.Addr().String()
 	l.Close()
 	_, err = fetchWith(context.Background(), newHTTPClient(), closed)
-	if !errors.Is(err, ErrNoModem) || !strings.Contains(err.Error(), "refused") {
+	if !errors.Is(err, ErrNoModem) || strings.Contains(err.Error(), "refused") {
 		t.Errorf("closed port: err = %v", err)
 	}
 }
 
-// The address has to be a private IP: the router must not become a way
-// to read pages on the internet.
-func TestAddressIsPrivate(t *testing.T) {
+// The address has to be in the modem subnet: the router must not become
+// a way to read pages on the internet, or to probe its own neighbours.
+func TestAddressIsTheModemSubnet(t *testing.T) {
 	t.Parallel()
-	for _, bad := range []string{"", "modem", "1.1.1.1", "8.8.8.8:80", "2001:db8::1", "192.168.100.1:x"} {
-		if _, err := fetchWith(context.Background(), newHTTPClient(), bad); !errors.Is(err, ErrBadAddress) {
+	for _, bad := range []string{"", "modem", "1.1.1.1", "8.8.8.8:80", "2001:db8::1", "192.168.100.1:x",
+		"192.168.100.1:22", "10.0.0.1", "192.168.1.1", "127.0.0.1", "fe80::1"} {
+		if _, err := Fetch(context.Background(), bad); !errors.Is(err, ErrBadAddress) {
 			t.Errorf("%q: err = %v, want ErrBadAddress", bad, err)
 		}
 	}
-	for _, ok := range []string{"192.168.100.1", "10.0.0.1:8080", "fe80::1", "[fd00::1]:80", "127.0.0.1"} {
+	for _, ok := range []string{"192.168.100.1", "192.168.100.254"} {
 		if err := checkAddress(ok); err != nil {
 			t.Errorf("%q: %v", ok, err)
 		}

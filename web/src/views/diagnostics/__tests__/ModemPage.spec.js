@@ -1,7 +1,9 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
 import ModemPage from '@/views/diagnostics/ModemPage.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -74,6 +76,8 @@ function status() {
 
 describe('ModemPage', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
+    useAuthStore().user = { username: 'op', role: 'operator' }
     vi.clearAllMocks()
     localStorage.clear()
     api.diagnostics.modem.mockResolvedValue(status())
@@ -113,16 +117,27 @@ describe('ModemPage', () => {
   it('remembers a different address', async () => {
     const wrapper = mount(ModemPage)
     await flushPromises()
-    await wrapper.find('input').setValue('10.0.0.1')
+    await wrapper.find('input').setValue('192.168.100.254')
     await wrapper.find('form').trigger('submit')
     await flushPromises()
-    expect(api.diagnostics.modem).toHaveBeenLastCalledWith('10.0.0.1', true)
-    expect(localStorage.getItem('ostiole.modem.address')).toBe('10.0.0.1')
+    expect(api.diagnostics.modem).toHaveBeenLastCalledWith('192.168.100.254', true)
+    expect(localStorage.getItem('ostiole.modem.address')).toBe('192.168.100.254')
 
     const again = mount(ModemPage)
     await flushPromises()
-    expect(again.find('input').element.value).toBe('10.0.0.1')
-    expect(api.diagnostics.modem).toHaveBeenLastCalledWith('10.0.0.1', false)
+    expect(again.find('input').element.value).toBe('192.168.100.254')
+    expect(api.diagnostics.modem).toHaveBeenLastCalledWith('192.168.100.254', false)
+  })
+
+  // Reading the modem has the router reach out, which is an operator's to
+  // ask for, so a viewer is told as much and nothing is read.
+  it('reads nothing for a viewer', async () => {
+    useAuthStore().user = { username: 'watcher', role: 'viewer' }
+    const wrapper = mount(ModemPage)
+    await flushPromises()
+    expect(api.diagnostics.modem).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('Only an operator or an admin can read the modem.')
+    expect(wrapper.find('input').exists()).toBe(false)
   })
 
   it('shows the error when nothing answers', async () => {

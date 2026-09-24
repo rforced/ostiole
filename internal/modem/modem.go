@@ -14,7 +14,6 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -22,14 +21,18 @@ import (
 // DefaultAddress is where a DOCSIS modem answers by convention.
 const DefaultAddress = "192.168.100.1"
 
+// modemNet is where a cable modem answers: 192.168.100.1 by the DOCSIS
+// specification, and the rest of the /24 for one that was moved.
+var modemNet = netip.MustParsePrefix("192.168.100.0/24")
+
 var (
-	// ErrBadAddress says the address is not one a modem could have: it
-	// is not an IP address, or it is a public one. A public address is
-	// refused so the router is not a way to read arbitrary web pages.
-	ErrBadAddress = errors.New("modem address must be a private IP address")
+	// ErrBadAddress says the address is not one a modem could have. The
+	// page reads a modem; it is not a way to probe what else the router
+	// can reach.
+	ErrBadAddress = errors.New("modem address must be in 192.168.100.0/24, where cable modems answer")
 	// ErrNoModem says nothing at the address answered like a modem this
 	// package knows.
-	ErrNoModem = errors.New("no known modem answered")
+	ErrNoModem = errors.New("no modem Ostiole can read answered")
 )
 
 // Status is what a modem reports.
@@ -130,22 +133,11 @@ func newHTTPClient() *http.Client {
 	}
 }
 
-// checkAddress accepts an IP address, with an optional port, that is on
-// a private, link-local or loopback network.
+// checkAddress accepts an address in the modem subnet, without a port.
 func checkAddress(address string) error {
-	host := address
-	if h, port, err := net.SplitHostPort(address); err == nil {
-		if p, err := strconv.ParseUint(port, 10, 16); err != nil || p == 0 {
-			return fmt.Errorf("%w: %q is not a port", ErrBadAddress, port)
-		}
-		host = h
-	}
-	ip, err := netip.ParseAddr(host)
-	if err != nil {
+	ip, err := netip.ParseAddr(address)
+	if err != nil || !modemNet.Contains(ip) {
 		return fmt.Errorf("%w: %q", ErrBadAddress, address)
-	}
-	if !ip.IsPrivate() && !ip.IsLinkLocalUnicast() && !ip.IsLoopback() {
-		return fmt.Errorf("%w: %s is public", ErrBadAddress, address)
 	}
 	return nil
 }
@@ -153,20 +145,19 @@ func checkAddress(address string) error {
 // Fetch reads the modem at address. HTTPS is tried first, then plain
 // HTTP: a Hitron answers only the first, an Arris only the second.
 func Fetch(ctx context.Context, address string) (*Status, error) {
-	return fetchWith(ctx, newHTTPClient(), address)
-}
-
-func fetchWith(ctx context.Context, hc *http.Client, address string) (*Status, error) {
 	if err := checkAddress(address); err != nil {
 		return nil, err
 	}
-	var last error
+	return fetchWith(ctx, newHTTPClient(), address)
+}
+
+// fetchWith reads the modem at address, which the caller has checked.
+func fetchWith(ctx context.Context, hc *http.Client, address string) (*Status, error) {
 	for _, scheme := range []string{"https", "http"} {
 		c := &client{base: scheme + "://" + address, http: hc}
 		for _, d := range drivers {
 			ok, err := d.detect(ctx, c)
 			if err != nil {
-				last = err
 				break // the scheme is wrong, not the driver
 			}
 			if !ok {
@@ -181,9 +172,8 @@ func fetchWith(ctx context.Context, hc *http.Client, address string) (*Status, e
 			return st, nil
 		}
 	}
-	if last != nil {
-		return nil, fmt.Errorf("%w at %s: %w", ErrNoModem, address, last)
-	}
+	// Why the connection failed stays here: a refused port reads
+	// differently from a filtered one, and that is a port scan.
 	return nil, fmt.Errorf("%w at %s", ErrNoModem, address)
 }
 

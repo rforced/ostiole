@@ -35,19 +35,23 @@ func TestDiagModem(t *testing.T) {
 	var reads []string
 	fake := modem.NewCacheWith(time.Minute, func(_ context.Context, address string) (*modem.Status, error) {
 		reads = append(reads, address)
-		if address == "192.168.0.1" {
-			return nil, errors.New("connection refused")
+		if address == "192.168.100.2" {
+			return nil, modem.ErrNoModem
 		}
 		return &modem.Status{Address: address, Vendor: "Hitron", Model: "CODA", FetchedAt: time.Now()}, nil
 	})
 	srv := newTestServerWith(t, func(d *Deps) { d.Modems = fake })
 
 	resp, raw := do(t, srv, http.MethodGet, "/api/v1/diagnostics/modem?address=8.8.8.8", nil)
-	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(raw), "private") {
+	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(raw), "192.168.100.0/24") {
 		t.Errorf("public address: %d %s", resp.StatusCode, raw)
 	}
-	resp, raw = do(t, srv, http.MethodGet, "/api/v1/diagnostics/modem?address=192.168.0.1", nil)
-	if resp.StatusCode != http.StatusBadGateway || !strings.Contains(string(raw), "refused") {
+	resp, raw = do(t, srv, http.MethodGet, "/api/v1/diagnostics/modem?address=192.168.1.1", nil)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("address outside the modem subnet: %d %s", resp.StatusCode, raw)
+	}
+	resp, raw = do(t, srv, http.MethodGet, "/api/v1/diagnostics/modem?address=192.168.100.2", nil)
+	if resp.StatusCode != http.StatusBadGateway || !strings.Contains(string(raw), "no modem") {
 		t.Errorf("silent modem: %d %s", resp.StatusCode, raw)
 	}
 	resp, raw = do(t, srv, http.MethodGet, "/api/v1/diagnostics/modem", nil)
@@ -66,7 +70,7 @@ func TestDiagModem(t *testing.T) {
 	if resp, _ := do(t, srv, http.MethodGet, "/api/v1/diagnostics/modem?refresh=1", nil); resp.StatusCode != http.StatusOK {
 		t.Errorf("refresh: %d", resp.StatusCode)
 	}
-	if want := []string{"192.168.0.1", modem.DefaultAddress, modem.DefaultAddress}; strings.Join(reads, ",") != strings.Join(want, ",") {
+	if want := []string{"192.168.100.2", modem.DefaultAddress, modem.DefaultAddress}; strings.Join(reads, ",") != strings.Join(want, ",") {
 		t.Errorf("modem reads = %v, want %v", reads, want)
 	}
 }
