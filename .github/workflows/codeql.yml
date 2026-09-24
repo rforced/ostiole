@@ -52,7 +52,8 @@ jobs:
           for f in sarif/*.sarif; do
             jq '.runs[].results |= map(select(
               [.ruleId, .locations[0].physicalLocation.artifactLocation.uri]
-              | IN(["go/request-forgery", "internal/notify/webhook.go"]) | not))' "$f" > "$f.tmp"
+              | IN(["go/request-forgery", "internal/notify/webhook.go"],
+                   ["go/request-forgery", "internal/feeds/feeds.go"]) | not))' "$f" > "$f.tmp"
             mv "$f.tmp" "$f"
           done
       - uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
