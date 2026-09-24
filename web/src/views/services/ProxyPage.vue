@@ -20,7 +20,7 @@ import WafTab from '@/views/services/proxy/WafTab.vue'
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const proxy = computed(() => config.ensureProxy())
+const proxy = computed(() => config.proxy)
 const { state } = useProxyStatus()
 const { tabs, tab } = usePageTabs()
 </script>
@@ -30,11 +30,12 @@ const { tabs, tab } = usePageTabs()
     <PageHeader>
       <template #status><StatusBadge v-if="state" :state="state" /></template>
       <ToggleRow
-        v-model="proxy.enabled"
+        :model-value="proxy.enabled === true"
         variant="switch"
         label="Enabled"
         aria-label="Proxy enabled"
         :disabled="auth.readOnly"
+        @update:model-value="config.setProxy({ enabled: $event })"
       />
     </PageHeader>
     <ProxyStatus />

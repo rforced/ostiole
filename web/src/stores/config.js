@@ -662,6 +662,22 @@ export const useConfigStore = defineStore('config', () => {
     return services.proxy
   }
 
+  /**
+   * @param {object} patch fields to change
+   */
+  function setProxy(patch) {
+    const services = ensureServices()
+    const p = services.proxy ?? { enabled: false }
+    for (const [k, v] of Object.entries(patch)) {
+      // Always written while there is a block, so off stays in place.
+      if (k === 'enabled') p.enabled = v === true
+      else if (v === '' || v === false || v == null || (Array.isArray(v) && !v.length)) delete p[k]
+      else p[k] = v
+    }
+    if (p.enabled || Object.keys(p).some((k) => k !== 'enabled')) services.proxy = p
+    else delete services.proxy
+  }
+
   /** upsert is the same shape for every list the proxy holds. */
   function upsertIn(key, entry, previousId = entry.id) {
     const p = ensureProxy()
@@ -1313,6 +1329,7 @@ export const useConfigStore = defineStore('config', () => {
     moveUPnPRule,
     proxy,
     ensureProxy,
+    setProxy,
     upsertPool,
     removePool,
     poolDependents,

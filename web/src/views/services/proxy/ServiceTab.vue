@@ -9,15 +9,14 @@ import { useConfigStore } from '@/stores/config'
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const proxy = computed(() => config.ensureProxy())
+const proxy = computed(() => config.proxy)
 
 function numberField(key, fallback) {
   return computed({
     get: () => proxy.value[key] || fallback,
     set: (v) => {
       const n = Number(v)
-      if (!n || n === fallback) delete proxy.value[key]
-      else proxy.value[key] = n
+      config.setProxy({ [key]: n && n !== fallback ? n : undefined })
     },
   })
 }
@@ -29,8 +28,7 @@ function toggleZone(name, on) {
   const list = new Set(proxy.value.zones ?? [])
   if (on) list.add(name)
   else list.delete(name)
-  if (list.size) proxy.value.zones = [...list]
-  else delete proxy.value.zones
+  config.setProxy({ zones: [...list] })
 }
 </script>
 
@@ -77,7 +75,13 @@ function toggleZone(name, on) {
           </FormField>
         </div>
 
-        <ToggleRow v-model="proxy.http3" label="HTTP/3" hint="UDP on the HTTPS port as well." />
+        <ToggleRow
+          id="proxy-http3"
+          :model-value="proxy.http3 === true"
+          label="HTTP/3"
+          hint="UDP on the HTTPS port as well."
+          @update:model-value="config.setProxy({ http3: $event })"
+        />
       </div>
     </SectionCard>
   </div>

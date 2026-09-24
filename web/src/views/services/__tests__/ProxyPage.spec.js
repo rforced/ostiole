@@ -6,6 +6,7 @@ import { h } from 'vue'
 import { api } from '@/lib/api'
 import { useProxyStatus } from '@/lib/proxyStatus'
 import { useConfigStore } from '@/stores/config'
+import ProxyPage from '@/views/services/ProxyPage.vue'
 import EventsTab from '@/views/services/proxy/EventsTab.vue'
 import ProfileDialog from '@/views/services/proxy/ProfileDialog.vue'
 import ProxyStatus from '@/views/services/proxy/ProxyStatus.vue'
@@ -14,6 +15,12 @@ vi.mock('@/lib/api', () => ({
   api: { proxy: { status: vi.fn(), events: vi.fn() } },
   ApiError: class ApiError extends Error {},
 }))
+
+// The page takes its tabs from the route; there is no router here.
+vi.mock('@/lib/tabs', async () => {
+  const { ref } = await import('vue')
+  return { usePageTabs: () => ({ tabs: [], tab: ref('service') }) }
+})
 
 const stubs = { ConfirmButton: true, RouterLink: true }
 
@@ -265,5 +272,68 @@ describe('ProfileDialog', () => {
     expect(store.proxy.wafProfiles[0].exclusions).toEqual([
       { rule: '941100', description: 'XSS Attack Detected' },
     ])
+  })
+})
+
+/** Services as a saved configuration has them, with no proxy unless given. */
+const withProxy = (p) => config({ services: { dhcp: {}, dns: {}, ...(p && { proxy: p }) } })
+const bare = () => withProxy()
+
+function page({ draft = bare(), saved = bare() } = {}) {
+  const store = useConfigStore()
+  store.draft = draft
+  store.saved = saved
+  store.loaded = true
+  const wrapper = mount(ProxyPage, { global: { stubs: { ...stubs, ProxyStatus: true } } })
+  return { wrapper, store }
+}
+
+describe('ProxyPage', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  // Opening the page used to write a proxy into the draft, a change nobody
+  // made that asked to be applied and stopped signing out.
+  it('changes nothing by being opened, and nothing once put back', async () => {
+    const { wrapper, store } = page()
+    await flushPromises()
+    expect(wrapper.find('#proxy-https').exists()).toBe(true)
+    expect(store.dirty).toBe(false)
+
+    const on = wrapper.get('input[aria-label="Proxy enabled"]')
+    await on.setValue(true)
+    expect(store.draft.services.proxy).toEqual({ enabled: true })
+    await on.setValue(false)
+    expect(store.dirty).toBe(false)
+
+    const https = wrapper.get('#proxy-https')
+    await https.setValue('8443')
+    expect(store.draft.services.proxy).toEqual({ enabled: false, httpsPort: 8443 })
+    await https.setValue('443')
+    expect(store.dirty).toBe(false)
+
+    const lan = wrapper.findAll('label').find((l) => l.text() === 'lan')
+    await lan.get('input').setValue(true)
+    expect(store.draft.services.proxy.zones).toEqual(['lan'])
+    await lan.get('input').setValue(false)
+    expect(store.dirty).toBe(false)
+
+    await wrapper.get('#proxy-http3').setValue(true)
+    expect(store.draft.services.proxy.http3).toBe(true)
+    await wrapper.get('#proxy-http3').setValue(false)
+    expect(store.dirty).toBe(false)
+  })
+
+  // A proxy that is set up is saved with enabled false when off, so off
+  // keeps the block and what is in it.
+  it('switches a proxy off without losing it', async () => {
+    const { wrapper, store } = page({ draft: withProxy(proxy()), saved: withProxy(proxy()) })
+    const on = wrapper.get('input[aria-label="Proxy enabled"]')
+    await on.setValue(false)
+    expect(store.draft.services.proxy).toEqual({ ...proxy(), enabled: false })
+    await on.setValue(true)
+    expect(store.dirty).toBe(false)
   })
 })
