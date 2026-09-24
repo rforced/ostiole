@@ -159,7 +159,7 @@ func decodeIPv6(e *Entry, b []byte) {
 			if len(rest) < 8 {
 				return
 			}
-			l := int(rest[1]+1) * 8
+			l := (int(rest[1]) + 1) * 8
 			if len(rest) < l {
 				return
 			}

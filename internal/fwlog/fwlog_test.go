@@ -64,6 +64,16 @@ func TestDecode(t *testing.T) {
 		t.Errorf("ipv6 entry = %+v", e)
 	}
 
+	// A length byte of 255 is 2048 bytes of options, not a wrap to zero.
+	opts := make([]byte, 2048)
+	opts[0], opts[1] = 6, 255 // next=tcp
+	v6[6] = 60                // destination options
+	e = Entry{}
+	Decode(&e, append(append(append([]byte{}, v6...), opts...), tcpHeader(1000, 443, 0x02)...))
+	if e.Proto != "tcp" || e.DstPort != 443 || e.TCPFlags != "SYN" {
+		t.Errorf("long options entry = %+v", e)
+	}
+
 	e = Entry{}
 	Decode(&e, []byte{0x45, 0x00})
 	if e.Family != "ipv4" || e.Src != "" {
