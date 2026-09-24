@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -127,6 +128,8 @@ func (c *Cache) loadAll() {
 		if err := json.Unmarshal(raw, &f); err != nil || f.Alias == "" {
 			continue
 		}
+		// A file written before default routes were refused may hold one.
+		f.Entries = slices.DeleteFunc(f.Entries, defaultRoute)
 		c.loaded[f.Alias] = f
 	}
 }
@@ -591,13 +594,25 @@ func Parse(body string, typ model.AliasType) ([]string, error) {
 }
 
 // normalizeAddress is how an address or network is written in the cache
-// and the sets: a host without its /32 or /128.
+// and the sets: a host without its /32 or /128. A default route is
+// refused: it covers every address there is, so one such line from a
+// broken publisher, or a leaked route in RIPEstat's data, would turn an
+// allow rule over the alias into allow-all.
 func normalizeAddress(s string) (string, error) {
 	p, err := model.ParseAddress(s)
 	if err != nil {
 		return "", err
 	}
+	if p.Bits() == 0 {
+		return "", fmt.Errorf("%s covers every address", s)
+	}
 	return prefixString(p), nil
+}
+
+// defaultRoute reports whether a cached entry is 0.0.0.0/0 or ::/0.
+func defaultRoute(entry string) bool {
+	p, err := netip.ParsePrefix(entry)
+	return err == nil && p.Bits() == 0
 }
 
 func prefixString(p netip.Prefix) string {

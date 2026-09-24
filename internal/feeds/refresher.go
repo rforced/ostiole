@@ -41,8 +41,13 @@ type Refresher struct {
 // DefaultTick is how often the refresher wakes up.
 const DefaultTick = 15 * time.Minute
 
-// Run refreshes until the context is cancelled.
+// Run refreshes until the context is cancelled. It starts by putting the
+// cache into the loaded sets: the ruleset loaded at boot holds the entries
+// of the last apply, and one refreshed since would otherwise wait for the
+// list to change again. That is also what takes out an entry a fix since
+// refuses, such as a default route.
 func (r *Refresher) Run(ctx context.Context) {
+	r.Push(ctx)
 	interval := r.Interval
 	if interval <= 0 {
 		interval = DefaultTick
@@ -80,7 +85,7 @@ func (r *Refresher) Tick(ctx context.Context, force bool) {
 		changed = changed || updated
 	}
 	if changed {
-		r.push(ctx, cfg)
+		r.push(ctx, SetFragment(cfg, r.Cache.Entries()))
 	}
 	if r.OnTick != nil {
 		r.OnTick()
@@ -107,7 +112,7 @@ func (r *Refresher) RefreshOne(ctx context.Context, name string) (int, error) {
 	if _, err := r.refresh(ctx, cfg, *want); err != nil {
 		return 0, err
 	}
-	r.push(ctx, cfg)
+	r.push(ctx, SetFragment(cfg, r.Cache.Entries()))
 	return len(r.Cache.Entries()[name]), nil
 }
 
@@ -145,15 +150,21 @@ func (r *Refresher) due(a model.Alias) bool {
 	return time.Since(at) >= RefreshPeriod(a)
 }
 
+// Push puts what the cache holds into the loaded sets. A ruleset loaded
+// outside an apply carries the entries it was saved with, which the
+// refreshes since may have changed. A list the cache has nothing for is
+// left as the ruleset has it rather than emptied.
+func (r *Refresher) Push(ctx context.Context) {
+	if cfg := r.config(); cfg != nil {
+		r.push(ctx, setFragment(cfg, r.Cache.Entries(), true))
+	}
+}
+
 // push replaces the elements of the fetched sets in the kernel. It is a
 // small transaction of its own: flushing and refilling a set leaves every
 // rule in place, so nothing is briefly unprotected.
-func (r *Refresher) push(ctx context.Context, cfg *model.Config) {
-	if r.Sets == nil {
-		return
-	}
-	fragment := SetFragment(cfg, r.Cache.Entries())
-	if fragment == "" {
+func (r *Refresher) push(ctx context.Context, fragment string) {
+	if r.Sets == nil || fragment == "" {
 		return
 	}
 	if err := r.Sets.Apply(ctx, fragment); err != nil {
@@ -165,6 +176,12 @@ func (r *Refresher) push(ctx context.Context, cfg *model.Config) {
 // SetFragment renders the nftables text that replaces the contents of
 // every fetched alias's sets.
 func SetFragment(cfg *model.Config, entries map[string][]string) string {
+	return setFragment(cfg, entries, false)
+}
+
+// setFragment is SetFragment; cachedOnly leaves out the sets of a list
+// entries has nothing for.
+func setFragment(cfg *model.Config, entries map[string][]string, cachedOnly bool) string {
 	var b strings.Builder
 	b.WriteString(nft.Header + "\n")
 	wrote := false
@@ -181,14 +198,19 @@ func SetFragment(cfg *model.Config, entries map[string][]string) string {
 		if !IsFeed(a) {
 			continue
 		}
-		list := entries[a.Name]
+		list, cached := entries[a.Name]
+		if cachedOnly && !cached {
+			continue
+		}
 		if !a.Keyed() {
 			list = append(append([]string{}, a.Entries...), list...)
 		}
 		replace(nft.AliasSets(a, list))
 	}
 	// The bogon list fills sets of its own, not an alias's.
-	replace(nft.BlockSets(cfg, entries[BogonAlias]))
+	if bogons, cached := entries[BogonAlias]; cached || !cachedOnly {
+		replace(nft.BlockSets(cfg, bogons))
+	}
 	if !wrote {
 		return ""
 	}

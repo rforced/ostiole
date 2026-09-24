@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -45,6 +47,41 @@ not-an-address
 	want := []string{"192.0.2.0/24", "198.51.100.0/24", "203.0.113.5", "2001:db8::/32", "10.0.0.1", "10.0.0.2"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("Parse = %v, want %v", got, want)
+	}
+}
+
+// A default route covers every address, so one in a list would turn an
+// allow rule over the alias into allow-all. It is dropped however it is
+// written, from a list, from RIPEstat, and from a cache written before.
+func TestDefaultRoutesAreDropped(t *testing.T) {
+	t.Parallel()
+	got, err := Parse("192.0.2.0/24\n0.0.0.0/0\n10.1.2.3/0\n::/0\n2001:db8::/32\n", model.AliasHosts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got, ",") != "192.0.2.0/24,2001:db8::/32" {
+		t.Errorf("Parse = %v", got)
+	}
+	if _, err := Parse("0.0.0.0/0\n", model.AliasHosts); err == nil {
+		t.Error("a list holding nothing but a default route was accepted")
+	}
+
+	announced, err := parseAnnounced([]byte(`{"status": "ok", "data": {"prefixes": [
+		{"prefix": "0.0.0.0/0"}, {"prefix": "8.8.8.0/24"}, {"prefix": "::/0"}]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(announced, ",") != "8.8.8.0/24" {
+		t.Errorf("parseAnnounced = %v", announced)
+	}
+
+	dir := t.TempDir()
+	old := `{"alias": "drop", "fetchedAt": "2026-09-01T00:00:00Z", "entries": ["0.0.0.0/0", "192.0.2.0/24", "::/0"]}`
+	if err := os.WriteFile(filepath.Join(dir, "drop.json"), []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := NewCache(dir).Entries()["drop"]; strings.Join(got, ",") != "192.0.2.0/24" {
+		t.Errorf("cached entries = %v", got)
 	}
 }
 
@@ -216,6 +253,37 @@ func TestStatusesReportStaleAndErrors(t *testing.T) {
 	}
 	if s := byName["never"]; s.Entries != 0 || !s.Stale {
 		t.Errorf("never fetched = %+v, want it marked stale", s)
+	}
+}
+
+// setsFake records the fragments the refresher loads.
+type setsFake struct{ loaded []string }
+
+func (s *setsFake) Apply(_ context.Context, fragment string) error {
+	s.loaded = append(s.loaded, fragment)
+	return nil
+}
+
+// Push puts the cache in the kernel, leaving a list it has nothing for as
+// the loaded ruleset has it rather than emptying the set.
+func TestPushLeavesAListTheCacheLacks(t *testing.T) {
+	t.Parallel()
+	cfg := config(
+		model.Alias{Name: "cached", Type: model.AliasHosts, URL: "http://example.invalid/a"},
+		model.Alias{Name: "lost", Type: model.AliasHosts, URL: "http://example.invalid/b"},
+	)
+	cache := NewCache(t.TempDir())
+	if err := cache.Save("cached", nil, []string{"192.0.2.0/24"}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	sets := &setsFake{}
+	r := &Refresher{Cache: cache, Source: func() *model.Config { return cfg }, Sets: sets}
+	r.Push(context.Background())
+	if len(sets.loaded) != 1 {
+		t.Fatalf("loaded %d fragments", len(sets.loaded))
+	}
+	if got := sets.loaded[0]; !strings.Contains(got, "alias_cached_v4 { 192.0.2.0/24 }") || strings.Contains(got, "alias_lost") {
+		t.Errorf("fragment:\n%s", got)
 	}
 }
 
