@@ -531,11 +531,31 @@ func writeFile(path, content string, mode os.FileMode) error {
 		_ = os.Remove(name)
 		return err
 	}
+	// The units decide what boots, firewall included, so a crash soon
+	// after an install must not leave one empty.
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(name)
+		return err
+	}
 	if err := tmp.Close(); err != nil {
 		_ = os.Remove(name)
 		return err
 	}
-	return os.Rename(name, path)
+	if err := os.Rename(name, path); err != nil {
+		_ = os.Remove(name)
+		return err
+	}
+	syncDir(filepath.Dir(path))
+	return nil
+}
+
+// syncDir makes the renames in dir durable. Best effort, as in the store.
+func syncDir(dir string) {
+	if d, err := os.Open(dir); err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
 }
 
 // PackageManager identifies the host's package manager, or "".
