@@ -93,6 +93,8 @@ saved as the boot ruleset; run "ostiole apply" to load it now.`,
 			if !cmd.Flags().Changed("ssh-passwords") {
 				opts.SSHPasswords, _ = sshd.System{}.State(cmd.Context())
 			}
+			// The anti-lockout rule opens the port the UI really listens on.
+			opts.WebPort = listenPortOf(installedListen())
 			cfg := model.Starter(opts)
 			ruleset, err := nft.Render(cfg)
 			if err != nil {

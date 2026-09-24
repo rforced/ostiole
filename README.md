@@ -78,7 +78,7 @@ unattended-upgrades, snapd.
 - `--with-proxy` installs the reverse proxy beside the binary.
 - `OSTIOLE_VERSION=v0.1.0` pins a release.
 
-Then open `https://<host>/`, create the admin account, and run the wizard to pick WAN and LAN. Until
+Then open `https://<host>:9443/`, create the admin account, and run the wizard to pick WAN and LAN. Until
 that first apply is confirmed the router forwards nothing.
 
 Everything in the UI is on the CLI too:

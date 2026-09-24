@@ -85,9 +85,17 @@ management ports get in, nothing is forwarded.`,
 			cfg, _ := g.store().Load()
 			maxUse, retention := journalLimits(cfg)
 			opts.Timezone = installZone(opts.Timezone, cfg)
+			// The same goes for the UI's address, which only the unit holds.
+			if opts.Listen == "" {
+				opts.Listen = install.Listen(lay)
+			}
+			if opts.Listen == "" {
+				opts.Listen = install.DefaultListen
+			}
 
 			fmt.Fprintln(out, "Ostiole will:")
 			fmt.Fprintf(out, "  write and enable:     %s, %s\n", install.FirewallUnit, install.DaemonUnit)
+			fmt.Fprintf(out, "  serve the web UI on:  %s\n", opts.Listen)
 			fmt.Fprintf(out, "  write service units:  %s\n", strings.Join(serviceUnits(), ", "))
 			fmt.Fprintf(out, "  persist:              router sysctls (%s), journal ceiling (%s)\n", sysctl.ConfFile, journald.ConfFile)
 			fmt.Fprintf(out, "  block:                Bluetooth (%s)\n", install.BluetoothConfFile)
@@ -127,7 +135,7 @@ management ports get in, nothing is forwarded.`,
 			// directory: on a fresh router there is nowhere to put this
 			// before then.
 			if bootstrap {
-				ports := []uint16{443}
+				ports := []uint16{model.DefaultWebPort}
 				if port := listenPortOf(opts.Listen); port != 0 {
 					ports = []uint16{port}
 				}
@@ -185,7 +193,7 @@ management ports get in, nothing is forwarded.`,
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&opts.Listen, "listen", ":443", "address the web UI listens on")
+	cmd.Flags().StringVar(&opts.Listen, "listen", "", "address the web UI listens on (default: what the installed unit has, else "+install.DefaultListen+")")
 	cmd.Flags().StringVar(&opts.Timezone, "timezone", "", `timezone to set, UTC by default; "-" leaves the clock alone`)
 	cmd.Flags().BoolVar(&ignoreKernel, "ignore-kernel-version", false,
 		fmt.Sprintf("install even if the kernel is older than %s", kernel.Minimum))
@@ -342,6 +350,14 @@ func rulesetExists(dir string) bool {
 	return err == nil
 }
 
+// installedListen is where the installed daemon serves the UI.
+func installedListen() string {
+	if l := install.Listen(install.DefaultLayout()); l != "" {
+		return l
+	}
+	return install.DefaultListen
+}
+
 // listenPortOf reads the port of a listen address, 0 when it has none.
 func listenPortOf(listen string) uint16 {
 	_, port, err := net.SplitHostPort(listen)
@@ -359,7 +375,7 @@ func listenPortOf(listen string) uint16 {
 func uiURLs(listen string) []string {
 	_, port, err := net.SplitHostPort(listen)
 	if err != nil {
-		port = "443"
+		port = strconv.Itoa(model.DefaultWebPort)
 	}
 	suffix := ""
 	if port != "443" {

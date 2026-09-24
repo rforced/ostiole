@@ -18,7 +18,7 @@ test('publish a site through a pool and apply it', async ({ page }) => {
   await login(page)
   await page.goto('/services/proxy')
 
-  // The UI is on 443 here, so the proxy has to answer somewhere else.
+  // Ports of its own, so nothing else in the suite has to move.
   await page.getByLabel('Proxy enabled').check()
   await page.getByRole('spinbutton', { name: 'HTTP port' }).fill('8080')
   await page.getByRole('spinbutton', { name: 'HTTPS port' }).fill('8443')

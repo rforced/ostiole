@@ -15,10 +15,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/rforced/ostiole/internal/logging"
+	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/sysctl"
 	"github.com/rforced/ostiole/internal/timezone"
@@ -50,6 +52,34 @@ func DefaultLayout() Layout {
 
 // Binary is the installed executable path.
 func (l Layout) Binary() string { return filepath.Join(l.BinDir, "ostiole") }
+
+// DefaultListen is where the web UI listens unless told otherwise.
+var DefaultListen = ":" + strconv.Itoa(model.DefaultWebPort)
+
+// Listen reads the address the installed daemon unit serves the UI on, or
+// "" when there is no unit or it names none. An install that is not told
+// where to listen keeps this, so an update or a repair never moves the UI.
+func Listen(lay Layout) string {
+	raw, err := os.ReadFile(filepath.Join(lay.UnitDir, DaemonUnit))
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(raw), "\n") {
+		if !strings.HasPrefix(line, "ExecStart=") {
+			continue
+		}
+		fields := strings.Fields(line)
+		for i, f := range fields {
+			if f == "--listen" && i+1 < len(fields) {
+				return fields[i+1]
+			}
+			if v, ok := strings.CutPrefix(f, "--listen="); ok {
+				return v
+			}
+		}
+	}
+	return ""
+}
 
 // Unit names.
 const (
@@ -96,7 +126,8 @@ func (ExecSystemctl) Run(ctx context.Context, args ...string) (string, error) {
 type Options struct {
 	// Source is the executable to install; empty means the running one.
 	Source string
-	// Listen is the daemon's listen address, e.g. ":443".
+	// Listen is the daemon's listen address, e.g. ":9443". Empty keeps
+	// what the installed unit has, else DefaultListen.
 	Listen string
 	// Run executes helper commands (timedatectl); nil means real ones.
 	Run Runner
@@ -128,7 +159,10 @@ type Report struct {
 // in the kernel.
 func Install(ctx context.Context, sc Systemctl, lay Layout, opts Options, log *slog.Logger) (*Report, error) {
 	if opts.Listen == "" {
-		opts.Listen = ":443"
+		opts.Listen = Listen(lay)
+	}
+	if opts.Listen == "" {
+		opts.Listen = DefaultListen
 	}
 	src := opts.Source
 	if src == "" {

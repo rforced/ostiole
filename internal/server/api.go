@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/netip"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -883,12 +885,28 @@ func (a *api) starter(w http.ResponseWriter, r *http.Request) error {
 		Services:          req.Services,
 		DNSUpstreams:      currentResolvers(),
 		SSHPasswords:      passwords,
+		WebPort:           uiPort(r),
 	})
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
 	writeJSON(w, http.StatusOK, cfg)
 	return nil
+}
+
+// uiPort is the port this request reached the UI on, which is the one the
+// first configuration's anti-lockout rule has to keep open.
+func uiPort(r *http.Request) uint16 {
+	addr, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
+	if !ok {
+		return 0
+	}
+	_, port, err := net.SplitHostPort(addr.String())
+	if err != nil {
+		return 0
+	}
+	n, _ := strconv.ParseUint(port, 10, 16)
+	return uint16(n)
 }
 
 type configRequest struct {

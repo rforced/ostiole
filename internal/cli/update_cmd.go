@@ -70,7 +70,7 @@ the service with a health check that rolls back on failure.`,
 			}
 			inst := &update.Installer{
 				Binary: bin, Unit: install.DaemonUnit,
-				HealthURL: "https://127.0.0.1:443/api/v1/health", Run: install.ExecRunner{},
+				HealthURL: probeURL(installedListen(), true), Run: install.ExecRunner{},
 				Proxy:     filepath.Join(filepath.Dir(bin), services.ProxyBinaryName),
 				ProxyUnit: services.ProxyUnit,
 			}

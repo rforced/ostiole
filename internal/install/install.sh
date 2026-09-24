@@ -450,7 +450,7 @@ esac
 [ "$TAILSCALE" -eq 0 ] || echo "  tailscale: $TAILSCALE_NOTE"
 [ "$WIRELESS" -eq 0 ] || echo "  wireless: hostapd iw wireless-regdb${WIRELESS_FW:+ $WIRELESS_FW}"
 [ "$PROXY" -eq 0 ] || echo "  proxy:    ostiole-proxy${OSTIOLE_VERSION:+ $OSTIOLE_VERSION} beside the binary"
-echo "  place:    $BIN_DIR/ostiole, write the units, and start the web UI on 443"
+echo "  place:    $BIN_DIR/ostiole, write the units, and start the web UI (on 9443 unless it runs already)"
 case "$REMOVE" in
 *rsyslog* | *syslog-ng*) echo "  remove:   $REMOVE (and the /var/log files it wrote)" ;;
 *) echo "  remove:   ${REMOVE:-nothing this router has that it has no use for}" ;;

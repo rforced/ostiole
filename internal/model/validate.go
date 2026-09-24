@@ -942,8 +942,9 @@ var (
 
 // proxy checks the reverse proxy. What is written down is checked whether
 // or not it is switched on; the clashes with the router's own ports are
-// only asked of a router that runs it, because the defaults collide with a
-// stock web UI on 443 and that is what the operator is told to move.
+// only asked of a router that runs it, because a web UI still on 443, where
+// older installs put it, collides with the defaults, and that is what the
+// operator is told to move.
 func (v *validator) proxy(c *Config, zones map[string]bool) {
 	p := c.Services.Proxy
 	ids := map[string]string{}

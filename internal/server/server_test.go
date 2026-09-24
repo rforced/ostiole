@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -540,6 +541,10 @@ func TestStarter(t *testing.T) {
 	var cfg model.Config
 	if err := json.Unmarshal(raw, &cfg); err != nil || len(cfg.Interfaces) != 2 || cfg.System.Hostname != "fw" {
 		t.Fatalf("starter config = %s (%v)", raw, err)
+	}
+	// The anti-lockout rule keeps open the port the wizard is reached on.
+	if want := srv.Listener.Addr().(*net.TCPAddr).Port; int(cfg.System.Management.WebPort) != want {
+		t.Errorf("starter webPort = %d, want the UI's own %d", cfg.System.Management.WebPort, want)
 	}
 	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/config/starter", starterRequest{LAN: "eth1"}); resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("missing lanAddress: %d, want 400", resp.StatusCode)

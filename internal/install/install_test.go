@@ -346,3 +346,33 @@ func TestInSystemBinDir(t *testing.T) {
 		}
 	}
 }
+
+// An install that is not told where to listen keeps the unit's address:
+// the updater runs `ostiole install` with no flags, and moving the UI under
+// its operator would lock them out. With no unit yet, it takes the default.
+func TestInstallKeepsWhereTheUIListens(t *testing.T) {
+	t.Parallel()
+	lay := tempLayout(t)
+	src := filepath.Join(t.TempDir(), "ostiole-src")
+	if err := os.WriteFile(src, []byte("#!/bin/sh\necho fake\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	opts := func(listen string) Options {
+		return Options{Source: src, Listen: listen, Run: &fakeRunner{}, SysctlFile: "-", Timezone: "-", BluetoothFile: "-"}
+	}
+	install := func(o Options) {
+		t.Helper()
+		if _, err := Install(context.Background(), &fakeSystemctl{}, lay, o, slog.New(slog.DiscardHandler)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	install(opts(""))
+	if got := Listen(lay); got != DefaultListen || got != ":9443" {
+		t.Errorf("a first install listens on %q, want :9443", got)
+	}
+	install(opts(":8443"))
+	install(opts(""))
+	if got := Listen(lay); got != ":8443" {
+		t.Errorf("a reinstall moved the UI to %q, want :8443", got)
+	}
+}

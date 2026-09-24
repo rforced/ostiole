@@ -11,7 +11,7 @@ import { useConfigStore } from '@/stores/config'
 
 const config = useConfigStore()
 // Older drafts may lack the management block; create it once, outside any computed.
-if (!config.draft.system.management) config.draft.system.management = { webPort: 443, sshPort: 22 }
+if (!config.draft.system.management) config.draft.system.management = { webPort: 9443, sshPort: 22 }
 const system = computed(() => config.draft.system)
 const management = computed(() => system.value.management)
 

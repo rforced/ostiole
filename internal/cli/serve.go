@@ -416,13 +416,18 @@ func newUpdater(cfg server.Config, stateDir string) *update.Manager {
 
 // healthURL is where the post-update probe reaches this daemon.
 func healthURL(cfg server.Config) string {
+	return probeURL(cfg.Listen, cfg.TLS())
+}
+
+// probeURL is the health endpoint of a daemon listening on listen.
+func probeURL(listen string, tls bool) string {
 	scheme := "http"
-	if cfg.TLS() {
+	if tls {
 		scheme = "https"
 	}
-	_, port, err := net.SplitHostPort(cfg.Listen)
+	_, port, err := net.SplitHostPort(listen)
 	if err != nil || port == "" {
-		port = "443"
+		port = strconv.Itoa(model.DefaultWebPort)
 	}
 	return scheme + "://127.0.0.1:" + port + "/api/v1/health"
 }

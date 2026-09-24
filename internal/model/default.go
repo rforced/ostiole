@@ -7,12 +7,19 @@ import (
 	"github.com/rforced/ostiole/internal/timezone"
 )
 
+// DefaultWebPort is where the web UI listens unless told otherwise. It
+// leaves 443 to the reverse proxy.
+const DefaultWebPort = 9443
+
 // StarterOptions parameterise Starter.
 type StarterOptions struct {
 	Hostname   string
 	LAN        string // interface name, required
 	LANAddress string // CIDR, e.g. 192.168.1.1/24
 	WAN        string // interface name, optional
+	// WebPort is where the web UI listens, which the anti-lockout rule
+	// opens; zero means DefaultWebPort.
+	WebPort uint16
 	// ManagementFromWAN turns the wan zone's anti-lockout on, for a router
 	// administered over its public side. It is the same switch the zone
 	// carries, so it is taken back the same way: untick anti-lockout on
@@ -30,14 +37,19 @@ type StarterOptions struct {
 
 // Starter returns a sane first configuration: a lan zone with anti-lockout
 // and an allow-all rule, an external wan zone with DHCP, automatic outbound
-// NAT, and management on 443/22. It is what `ostiole init` writes.
+// NAT, and management on the web UI's port and 22. It is what `ostiole
+// init` writes.
 func Starter(o StarterOptions) *Config {
+	web := o.WebPort
+	if web == 0 {
+		web = DefaultWebPort
+	}
 	cfg := &Config{
 		Version: SchemaVersion,
 		System: System{
 			Hostname:   o.Hostname,
 			Timezone:   timezone.Default,
-			Management: Management{WebPort: 443, SSHPort: 22, SSHPasswords: o.SSHPasswords},
+			Management: Management{WebPort: web, SSHPort: 22, SSHPasswords: o.SSHPasswords},
 		},
 		Zones: []Zone{
 			{Name: "wan", Description: "Internet", External: true, AntiLockout: o.ManagementFromWAN},
