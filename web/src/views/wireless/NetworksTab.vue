@@ -58,7 +58,7 @@ function edit(iface) {
       <div v-if="!config.radios.length" class="card-strip text-ink-muted">
         Configure a radio first.
       </div>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>Network</th>
@@ -78,18 +78,20 @@ function edit(iface) {
             :key="row.iface.name"
             :class="{ 'row-changed': config.isChanged('interfaces', row.iface.name) }"
           >
-            <td>
+            <td data-label="">
               <div class="font-medium">{{ row.iface.wireless.ssid }}</div>
               <div v-if="row.iface.wireless.hidden" class="text-xs text-ink-muted">hidden</div>
             </td>
-            <td class="font-mono text-code">{{ row.iface.wireless.radio }}</td>
-            <td>{{ SECURITY[row.iface.wireless.security] ?? row.iface.wireless.security }}</td>
-            <td>{{ row.attach }}</td>
-            <td class="font-mono text-code">
+            <td class="font-mono text-code" data-label="Radio">{{ row.iface.wireless.radio }}</td>
+            <td data-label="Security">
+              {{ SECURITY[row.iface.wireless.security] ?? row.iface.wireless.security }}
+            </td>
+            <td data-label="Attached to">{{ row.attach }}</td>
+            <td class="font-mono text-code" data-label="Interface">
               {{ row.iface.name
               }}<span v-if="!row.iface.enabled" class="ml-1 text-ink-muted">(disabled)</span>
             </td>
-            <td class="text-right whitespace-nowrap">
+            <td class="text-right whitespace-nowrap" data-label="">
               <button type="button" class="link" @click="edit(row.iface)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>

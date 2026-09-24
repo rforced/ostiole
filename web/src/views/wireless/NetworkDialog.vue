@@ -195,7 +195,7 @@ function save() {
             type="number"
             min="0"
             max="2007"
-            class="input w-32 font-mono"
+            class="input w-32 font-mono max-sm:w-full"
           />
         </FormField>
       </div>
@@ -213,7 +213,7 @@ function save() {
           Bridge
           <select
             v-model="form.bridge"
-            class="input w-48 font-mono"
+            class="input w-48 font-mono max-sm:w-full"
             :disabled="form.attach !== 'bridge'"
           >
             <option v-for="b in bridges" :key="b.name" :value="b.name">{{ b.name }}</option>
@@ -227,7 +227,7 @@ function save() {
           Zone
           <select
             v-model="form.zone"
-            class="input w-48 font-mono"
+            class="input w-48 font-mono max-sm:w-full"
             :disabled="form.attach !== 'zone'"
           >
             <option value="">Unassigned</option>

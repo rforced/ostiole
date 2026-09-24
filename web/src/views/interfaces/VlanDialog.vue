@@ -63,7 +63,7 @@ function create() {
           type="number"
           min="1"
           max="4094"
-          class="input w-32"
+          class="input w-32 max-sm:w-full"
           required
         />
       </FormField>

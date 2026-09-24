@@ -44,7 +44,7 @@ function ssidOf(c) {
       <div v-if="load.error.value" class="card-strip">
         <p role="alert" class="text-bad">{{ load.error.value }}</p>
       </div>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>Client</th>
@@ -63,22 +63,22 @@ function ssidOf(c) {
             </td>
           </tr>
           <tr v-for="c in clients" :key="c.mac">
-            <td>
+            <td data-label="">
               <div class="font-medium">{{ c.hostname || c.mac }}</div>
               <div v-if="c.hostname" class="text-xs text-ink-muted">{{ c.mac }}</div>
             </td>
-            <td class="font-mono text-code">{{ c.address || '—' }}</td>
-            <td>
+            <td class="font-mono text-code" data-label="Address">{{ c.address || '—' }}</td>
+            <td data-label="Network">
               {{ ssidOf(c) }}
               <span class="text-xs text-ink-muted">{{ c.radio }}</span>
             </td>
-            <td class="font-mono text-code">{{ c.signalDbm }} dBm</td>
-            <td class="text-code">
+            <td class="font-mono text-code" data-label="Signal">{{ c.signalDbm }} dBm</td>
+            <td class="text-code" data-label="Rates">
               <div>↓ {{ c.rxBitrate || '—' }}</div>
               <div>↑ {{ c.txBitrate || '—' }}</div>
             </td>
-            <td>{{ formatDuration(c.connectedSeconds) }}</td>
-            <td class="text-code">
+            <td data-label="Connected">{{ formatDuration(c.connectedSeconds) }}</td>
+            <td class="text-code" data-label="Traffic">
               <div>↓ {{ formatBytes(c.rxBytes) }}</div>
               <div>↑ {{ formatBytes(c.txBytes) }}</div>
             </td>

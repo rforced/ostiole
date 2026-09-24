@@ -170,7 +170,7 @@ function edit(r) {
             <Plus class="size-4" aria-hidden="true" /> Add gateway
           </button>
         </template>
-        <table class="table">
+        <table class="table table-stack">
           <thead>
             <tr>
               <th>Gateway</th>
@@ -196,21 +196,23 @@ function edit(r) {
                 'row-changed': config.isChanged('gateways', g.name),
               }"
             >
-              <td>
+              <td data-label="">
                 <div class="font-mono font-medium">{{ g.name }}</div>
                 <div class="text-xs text-ink-muted">{{ g.description }}</div>
               </td>
-              <td class="font-mono text-code">{{ g.interface }}</td>
-              <td class="font-mono text-code">
+              <td class="font-mono text-code" data-label="Interface">{{ g.interface }}</td>
+              <td class="font-mono text-code" data-label="Address">
                 {{ g.live?.address || g.address || 'from DHCP' }}
                 <div v-if="detectedFor(g)" class="text-xs text-ink-muted">
                   kernel: {{ detectedFor(g).address }} · metric {{ detectedFor(g).metric }} ·
                   {{ detectedFor(g).protocol }}
                 </div>
               </td>
-              <td class="font-mono text-code">{{ g.monitor || 'the gateway' }}</td>
-              <td class="font-mono text-code">{{ g.priority ?? 0 }}</td>
-              <td class="whitespace-nowrap">
+              <td class="font-mono text-code" data-label="Monitor">
+                {{ g.monitor || 'the gateway' }}
+              </td>
+              <td class="font-mono text-code" data-label="Priority">{{ g.priority ?? 0 }}</td>
+              <td class="whitespace-nowrap" data-label="State">
                 <template v-if="g.live && !g.live.unknown">
                   <span class="badge" :class="g.live.online ? 'badge-ok' : 'badge-warn'">
                     {{ g.live.online ? 'up' : 'down' }}
@@ -222,7 +224,7 @@ function edit(r) {
                 </template>
                 <span v-else class="badge">not probed</span>
               </td>
-              <td class="text-right whitespace-nowrap">
+              <td class="text-right whitespace-nowrap" data-label="">
                 <button type="button" class="link" @click="editGateway(g)">
                   {{ auth.readOnly ? 'View' : 'Edit' }}
                 </button>
@@ -247,7 +249,7 @@ function edit(r) {
         intro="The default routes this router has right now, whether Ostiole put them there or not."
         flush
       >
-        <table class="table">
+        <table class="table table-stack">
           <thead>
             <tr>
               <th>Next hop</th>
@@ -266,18 +268,18 @@ function edit(r) {
               </td>
             </tr>
             <tr v-for="d in detected" :key="`${d.interface}-${d.address}-${d.family}`">
-              <td class="font-mono text-code">{{ d.address }}</td>
-              <td class="font-mono text-code">{{ d.interface }}</td>
-              <td>{{ d.family }}</td>
-              <td class="font-mono text-code">{{ d.metric }}</td>
-              <td>{{ d.protocol }}</td>
-              <td>
+              <td class="font-mono text-code" data-label="">{{ d.address }}</td>
+              <td class="font-mono text-code" data-label="Interface">{{ d.interface }}</td>
+              <td data-label="Family">{{ d.family }}</td>
+              <td class="font-mono text-code" data-label="Metric">{{ d.metric }}</td>
+              <td data-label="From">{{ d.protocol }}</td>
+              <td data-label="Gateway">
                 <span v-if="coveredBy(d)" class="font-mono text-code text-ink-muted">
                   {{ coveredBy(d) }}
                 </span>
                 <span v-else class="badge">not watched</span>
               </td>
-              <td class="text-right whitespace-nowrap">
+              <td class="text-right whitespace-nowrap" data-label="">
                 <button
                   v-if="!coveredBy(d) && d.suggested && !auth.readOnly"
                   type="button"
@@ -303,7 +305,7 @@ function edit(r) {
             <Plus class="size-4" aria-hidden="true" /> Add group
           </button>
         </template>
-        <table class="table">
+        <table class="table table-stack">
           <thead>
             <tr>
               <th>Group</th>
@@ -331,17 +333,17 @@ function edit(r) {
                 'row-changed': config.isChanged('gatewayGroups', g.name),
               }"
             >
-              <td>
+              <td data-label="">
                 <div class="font-mono font-medium">{{ g.name }}</div>
                 <div class="text-xs text-ink-muted">{{ g.description }}</div>
               </td>
-              <td class="font-mono text-code">{{ tierSummary(g) || '—' }}</td>
-              <td>
+              <td class="font-mono text-code" data-label="Members">{{ tierSummary(g) || '—' }}</td>
+              <td data-label="All down">
                 <span v-if="g.onDown === 'block'" class="badge badge-warn">drop</span>
                 <span v-else class="text-ink-muted">default route</span>
               </td>
-              <td class="font-mono text-code">{{ g.policy?.rules ?? 0 }}</td>
-              <td class="font-mono text-code">
+              <td class="font-mono text-code" data-label="Rules">{{ g.policy?.rules ?? 0 }}</td>
+              <td class="font-mono text-code" data-label="Next hop">
                 <template v-if="g.policy?.nextHops?.length">
                   {{ g.policy.nextHops.join(', ') }}
                 </template>
@@ -350,7 +352,7 @@ function edit(r) {
                 >
                 <span v-else class="text-ink-muted">default route</span>
               </td>
-              <td class="text-right whitespace-nowrap">
+              <td class="text-right whitespace-nowrap" data-label="">
                 <button type="button" class="link" @click="editGroup(g)">
                   {{ auth.readOnly ? 'View' : 'Edit' }}
                 </button>

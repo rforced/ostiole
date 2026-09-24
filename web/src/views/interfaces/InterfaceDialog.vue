@@ -370,7 +370,7 @@ function save() {
               type="number"
               min="0"
               max="65535"
-              class="input w-32 font-mono"
+              class="input w-32 font-mono max-sm:w-full"
             />
           </FormField>
         </div>
@@ -417,7 +417,7 @@ function save() {
           type="number"
           min="68"
           max="65535"
-          class="input w-32"
+          class="input w-32 max-sm:w-full"
         />
       </FormField>
       <p v-if="pinsLiveMtu && !daemonOwned" class="text-sm text-ink-muted">
@@ -429,7 +429,7 @@ function save() {
         <input
           id="if-mac"
           v-model="form.macAddress"
-          class="input w-56 font-mono"
+          class="input w-56 font-mono max-sm:w-full"
           placeholder="optional"
           spellcheck="false"
           autocapitalize="none"

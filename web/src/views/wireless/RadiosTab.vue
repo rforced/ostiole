@@ -79,7 +79,7 @@ function edit(row) {
         <FormField id="wifi-country" label="Country" hint="Every radio follows it.">
           <select
             id="wifi-country"
-            class="input w-64"
+            class="input w-64 max-sm:w-full"
             :value="country"
             :disabled="auth.readOnly"
             @change="config.setWirelessCountry($event.target.value)"
@@ -92,7 +92,7 @@ function edit(row) {
         </FormField>
         <p v-if="load.error.value" role="alert" class="text-bad">{{ load.error.value }}</p>
       </div>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>Radio</th>
@@ -111,24 +111,24 @@ function edit(row) {
             <td colspan="6" class="text-ink-muted">No radios on this router.</td>
           </tr>
           <tr v-for="row in rows" :key="row.card?.name ?? row.cfg.name">
-            <td>
+            <td data-label="">
               <div class="font-mono font-medium">{{ row.card?.name ?? row.cfg.name }}</div>
               <div v-if="row.card?.mac" class="text-xs text-ink-muted">{{ row.card.mac }}</div>
             </td>
-            <td class="font-mono text-code">{{ row.card?.driver || '—' }}</td>
-            <td>{{ bandsOf(row.card) }}</td>
-            <td>
+            <td class="font-mono text-code" data-label="Driver">{{ row.card?.driver || '—' }}</td>
+            <td data-label="Bands">{{ bandsOf(row.card) }}</td>
+            <td data-label="Networks">
               <span v-if="!row.card" class="text-ink-muted">—</span>
               <span v-else-if="row.card.maxNetworks === 1">one network</span>
               <span v-else>up to {{ row.card.maxNetworks }} networks</span>
             </td>
-            <td>
+            <td data-label="Configured">
               {{ describe(row)
               }}<span v-if="row.cfg && !row.cfg.enabled" class="ml-1 text-ink-muted"
                 >(disabled)</span
               >
             </td>
-            <td class="text-right whitespace-nowrap">
+            <td class="text-right whitespace-nowrap" data-label="">
               <button
                 v-if="row.cfg || !auth.readOnly"
                 type="button"

@@ -49,7 +49,7 @@ function path(peer) {
       <div v-if="load.error.value" class="card-strip">
         <p role="alert" class="text-bad">{{ load.error.value }}</p>
       </div>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>Node</th>
@@ -70,18 +70,20 @@ function path(peer) {
             <td colspan="6" class="text-ink-muted">No peers.</td>
           </tr>
           <tr v-for="p in status?.running ? status.peers : []" :key="p.dnsName || p.hostName">
-            <td>
+            <td data-label="">
               <div class="font-mono">{{ name(p) }}</div>
               <span v-if="p.online" class="badge badge-ok">online</span>
               <span v-else class="badge">offline</span>
               <span v-if="p.exitNode" class="badge ml-1">exit node</span>
               <span v-if="p.expired" class="badge badge-warn ml-1">expired</span>
             </td>
-            <td class="font-mono text-code">{{ p.ips.join(', ') }}</td>
-            <td>{{ p.os || '—' }}</td>
-            <td class="text-ink-muted">{{ seen(p) }}</td>
-            <td class="font-mono text-code">{{ path(p) }}</td>
-            <td class="font-mono text-code">{{ p.routes.join(', ') || '—' }}</td>
+            <td class="font-mono text-code" data-label="Addresses">{{ p.ips.join(', ') }}</td>
+            <td data-label="OS">{{ p.os || '—' }}</td>
+            <td class="text-ink-muted" data-label="Last seen">{{ seen(p) }}</td>
+            <td class="font-mono text-code" data-label="Path">{{ path(p) }}</td>
+            <td class="font-mono text-code" data-label="Routes">
+              {{ p.routes.join(', ') || '—' }}
+            </td>
           </tr>
         </tbody>
       </table>

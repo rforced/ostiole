@@ -103,7 +103,7 @@ function editPeer(tunnel, peer) {
             <dd class="font-mono text-code break-all">{{ t.wireguard.publicKey || 'unknown' }}</dd>
           </dl>
         </div>
-        <table class="table">
+        <table class="table table-stack">
           <thead>
             <tr>
               <th>Peer</th>
@@ -125,20 +125,25 @@ function editPeer(tunnel, peer) {
                 'row-changed': config.isChanged(`interfaces[${t.name}].wireguard.peers`, p.name),
               }"
             >
-              <td>
+              <td data-label="">
                 <div class="font-mono">{{ p.name }}</div>
                 <div class="text-xs text-ink-muted">{{ p.description }}</div>
               </td>
-              <td class="max-w-56 font-mono text-code break-all">
+              <td
+                class="max-w-56 font-mono text-code break-all max-sm:max-w-none"
+                data-label="Public key"
+              >
                 {{ p.publicKey }}
                 <span v-if="p.presharedKey" class="badge ml-1">PSK</span>
               </td>
-              <td class="font-mono text-code">{{ (p.allowedIps ?? []).join(', ') }}</td>
-              <td class="font-mono text-code">
+              <td class="font-mono text-code" data-label="Allowed">
+                {{ (p.allowedIps ?? []).join(', ') }}
+              </td>
+              <td class="font-mono text-code" data-label="Endpoint">
                 {{ p.endpoint || '—'
                 }}<span v-if="p.keepalive" class="text-ink-muted"> · {{ p.keepalive }}s</span>
               </td>
-              <td class="text-right whitespace-nowrap">
+              <td class="text-right whitespace-nowrap" data-label="">
                 <button type="button" class="link" @click="editPeer(t, p)">
                   {{ auth.readOnly ? 'View' : 'Edit' }}
                 </button>

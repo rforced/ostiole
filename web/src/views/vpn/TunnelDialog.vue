@@ -155,7 +155,7 @@ function save() {
             type="number"
             min="0"
             max="65535"
-            class="input w-32 font-mono"
+            class="input w-32 font-mono max-sm:w-full"
           />
         </FormField>
         <FormField id="wg-mtu" label="MTU" hint="1420 fits inside a 1500-byte path.">
@@ -164,7 +164,7 @@ function save() {
             v-model="form.mtu"
             type="number"
             min="0"
-            class="input w-32 font-mono"
+            class="input w-32 font-mono max-sm:w-full"
           />
         </FormField>
       </div>

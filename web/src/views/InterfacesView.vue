@@ -255,7 +255,7 @@ function editZone(z) {
               </button>
             </template>
           </template>
-          <table class="table">
+          <table class="table table-stack">
             <thead>
               <tr>
                 <th>Interface</th>
@@ -277,14 +277,14 @@ function editZone(z) {
                 :key="row.live?.name ?? row.cfg.name"
                 :class="{ 'row-changed': config.isChanged('interfaces', row.cfg?.name) }"
               >
-                <td>
+                <td data-label="">
                   <div class="font-mono font-medium">{{ row.live?.name ?? row.cfg.name }}</div>
                   <div class="text-xs text-ink-muted">
                     {{ describeKind(row) }}<span v-if="row.live?.mac"> · {{ row.live.mac }}</span
                     ><span v-else-if="row.cfg && !row.live"> · not present yet</span>
                   </div>
                 </td>
-                <td>
+                <td data-label="Link">
                   <span v-if="!row.live" class="badge" :class="{ 'badge-warn': row.cfg }">
                     absent
                   </span>
@@ -293,13 +293,15 @@ function editZone(z) {
                   <!-- Down is a fault on a link the router is meant to use. -->
                   <span v-else class="badge" :class="{ 'badge-warn': row.cfg?.enabled }">down</span>
                 </td>
-                <td class="font-mono text-code">{{ row.live?.addresses.join(' ') || '—' }}</td>
-                <td>
+                <td class="font-mono text-code" data-label="Addresses">
+                  {{ row.live?.addresses.join(' ') || '—' }}
+                </td>
+                <td data-label="Zone">
                   <span v-if="row.cfg?.zone" class="font-mono">{{ row.cfg.zone }}</span>
                   <span v-else-if="row.cfg" class="text-ink-muted">unassigned</span>
                   <span v-else class="text-ink-muted">not managed</span>
                 </td>
-                <td class="font-mono text-code">
+                <td class="font-mono text-code" data-label="Addressing">
                   {{ describeAddressing(row.cfg)
                   }}<span v-if="row.cfg && !row.cfg.enabled" class="ml-1 text-ink-muted"
                     >(disabled)</span
@@ -308,7 +310,7 @@ function editZone(z) {
                     <span v-for="g in guards(row.cfg)" :key="g" class="badge">{{ g }}</span>
                   </div>
                 </td>
-                <td class="text-right whitespace-nowrap">
+                <td class="text-right whitespace-nowrap" data-label="">
                   <template v-if="row.live && dynamic(row.cfg) && !auth.readOnly">
                     <button
                       type="button"
@@ -386,7 +388,7 @@ function editZone(z) {
               <Plus class="size-4" aria-hidden="true" /> Add zone
             </button>
           </template>
-          <table class="table">
+          <table class="table table-stack">
             <thead>
               <tr>
                 <th>Zone</th>
@@ -407,17 +409,17 @@ function editZone(z) {
                 :key="z.name"
                 :class="{ 'row-changed': config.isChanged('zones', z.name) }"
               >
-                <td class="font-mono font-medium">{{ z.name }}</td>
-                <td>{{ z.description }}</td>
-                <td class="font-mono text-code">
+                <td class="font-mono font-medium" data-label="">{{ z.name }}</td>
+                <td data-label="Description">{{ z.description }}</td>
+                <td class="font-mono text-code" data-label="Interfaces">
                   {{ config.zoneInterfaces(z.name).join(' ') || '—' }}
                 </td>
-                <td class="space-x-1">
+                <td class="space-x-1" data-label="Flags">
                   <span v-if="z.external" class="badge">external</span>
                   <span v-if="z.antiLockout" class="badge badge-ok">anti-lockout</span>
                   <span v-if="z.logDrops" class="badge">log drops</span>
                 </td>
-                <td class="text-right whitespace-nowrap">
+                <td class="text-right whitespace-nowrap" data-label="">
                   <button type="button" class="link" @click="editZone(z)">
                     {{ auth.readOnly ? 'View' : 'Edit' }}
                   </button>
