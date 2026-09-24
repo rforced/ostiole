@@ -10,6 +10,8 @@ defineProps({
   dns: { type: Object, default: () => ({}) },
   /** False until the first overview arrives. */
   loaded: { type: Boolean, default: true },
+  /** How many units to hold room for until then. */
+  placeholders: { type: Number, default: 3 },
 })
 
 /** The service pages' words: off when the configuration leaves it off. */
@@ -27,7 +29,7 @@ function word(s) {
       <!-- How many units there are depends on what is set up; the two
            summaries are always there. -->
       <dl class="kv" aria-hidden="true" data-reading>
-        <template v-for="n in 3" :key="n">
+        <template v-for="n in placeholders" :key="n">
           <dt><span class="skeleton w-28"></span></dt>
           <dd><span class="skeleton h-5 w-14 rounded-full"></span></dd>
         </template>

@@ -7,6 +7,10 @@ defineProps({
   leases: { type: Array, default: () => [] },
   /** How many leases there are altogether. */
   total: { type: Number, default: 0 },
+  /** False until the first overview arrives. */
+  loaded: { type: Boolean, default: true },
+  /** How many rows to hold room for until then. */
+  placeholders: { type: Number, default: 1 },
 })
 
 /** How long a lease has left, as the dashboard is read. */
@@ -19,7 +23,7 @@ function left(l) {
 </script>
 
 <template>
-  <SectionCard title="Newest leases" flush>
+  <SectionCard title="Newest leases" flush :aria-busy="loaded ? undefined : 'true'">
     <table class="table">
       <thead>
         <tr>
@@ -28,7 +32,25 @@ function left(l) {
           <th>Expires</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody v-if="!loaded">
+        <tr v-if="!placeholders" data-reading>
+          <td colspan="3">
+            <span class="sr-only">Reading…</span><span class="skeleton w-28"></span>
+          </td>
+        </tr>
+        <tr v-for="n in placeholders" :key="n" data-reading>
+          <td>
+            <span v-if="n === 1" class="sr-only">Reading…</span>
+            <span class="skeleton w-24"></span>
+          </td>
+          <td>
+            <div><span class="skeleton w-20"></span></div>
+            <div><span class="skeleton w-32"></span></div>
+          </td>
+          <td><span class="skeleton w-16"></span></td>
+        </tr>
+      </tbody>
+      <tbody v-else>
         <tr v-if="!leases.length">
           <td colspan="3" class="text-ink-muted">No leases yet.</td>
         </tr>

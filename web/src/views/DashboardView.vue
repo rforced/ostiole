@@ -11,6 +11,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useSystemStore } from '@/stores/system'
 import DashboardWarnings from '@/views/dashboard/DashboardWarnings.vue'
+import { heightsIn, rememberedShape, rememberShape, shapeOf } from '@/views/dashboard/shape'
 import BlockingCard from '@/views/dashboard/BlockingCard.vue'
 import GatewaysCard from '@/views/dashboard/GatewaysCard.vue'
 import InterfaceSummary from '@/views/dashboard/InterfaceSummary.vue'
@@ -70,12 +71,40 @@ const loaded = computed(() => load.updatedAt.value > 0)
 /** The usage read swallows its errors, so this is only whether it has answered. */
 const statsLoaded = computed(() => loadStats.updatedAt.value > 0)
 /**
- * Nothing under the header shows until the first overview is in. Its
- * warnings go above the interfaces and the cards it adds go between the
- * others, so a page drawn before it would reshuffle when it came. A read
- * that fails shows what there is.
+ * Which cards the page has and how many rows each holds. Until the first
+ * overview is in, it is the shape of the last one this browser saw: an
+ * overview's warnings go above the interfaces and the cards it adds go
+ * between the others, so placeholders of any other shape would reshuffle
+ * the page when it came.
  */
-const ready = computed(() => loaded.value || Boolean(load.error.value))
+const remembered = rememberedShape()
+const shape = computed(() =>
+  overview.value ? { ...remembered, ...shapeOf(overview.value) } : remembered,
+)
+/** Whether a card that comes and goes is on the page. */
+const has = (card) => Object.hasOwn(shape.value.cards, card)
+
+/**
+ * A placeholder holds the room its card took last time, so a row with
+ * more lines than a placeholder has, or a note that wraps, moves nothing
+ * when it arrives.
+ */
+function hold(card, ready = loaded.value) {
+  const h = shape.value.heights[card]
+  return !ready && h ? { minHeight: `${h}px` } : undefined
+}
+
+// Each overview, once drawn, is the shape the next visit starts from.
+const page = ref(null)
+watch(
+  load.updatedAt,
+  () => {
+    if (overview.value && page.value) {
+      rememberShape({ ...shapeOf(overview.value), heights: heightsIn(page.value) })
+    }
+  },
+  { flush: 'post' },
+)
 
 // An apply or a revert changes what the router is doing.
 watch(
@@ -105,8 +134,8 @@ async function readUpdate() {
   }
 }
 
-// Nothing here needs another's answer, so the reads start together; the
-// overview is the slow one.
+// Nothing here needs another's answer. The overview is the slow one, and
+// the usage meters do not wait for it.
 onMounted(() => {
   readHealth()
   load.run()
@@ -116,7 +145,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-5">
+  <div ref="page" class="space-y-5">
     <PageHeader title="Dashboard">
       <RefreshButton :busy="load.busy.value" :updated-at="load.updatedAt.value" @click="load.run" />
     </PageHeader>
@@ -131,48 +160,100 @@ onMounted(() => {
       </template>
     </AppNotice>
 
-    <template v-if="ready">
-      <DashboardWarnings :warnings="overview?.warnings ?? []" />
+    <DashboardWarnings
+      data-card="warnings"
+      :style="hold('warnings')"
+      :warnings="overview?.warnings ?? []"
+      :loaded="loaded"
+      :placeholders="shape.warnings"
+    />
 
-      <InterfaceSummary :interfaces="overview?.interfaces ?? []" :rates="rates" :loaded="loaded" />
+    <InterfaceSummary
+      data-card="interfaces"
+      :style="hold('interfaces')"
+      :interfaces="overview?.interfaces ?? []"
+      :rates="rates"
+      :loaded="loaded"
+      :placeholders="shape.interfaces"
+    />
 
-      <!-- The cards every router has are always here. The rest only exist
-           once the overview says there is something in them. -->
-      <div class="grid gap-4 lg:grid-cols-2">
-        <SystemLoadCard :stats="stats" :loaded="statsLoaded" />
-        <GatewaysCard
-          v-if="overview?.gateways?.length || overview?.unwatchedGateways?.length"
-          :gateways="overview.gateways ?? []"
-          :unwatched="overview.unwatchedGateways ?? []"
-        />
-        <TopRulesCard
-          :rules="overview?.topRules ?? []"
-          :blocked="overview?.blocked"
-          :loaded="loaded"
-        />
-        <RecentBlocksCard v-if="overview?.recentBlocks" :blocks="overview.recentBlocks" />
-        <ServicesCard
-          :services="overview?.services ?? []"
-          :dhcp="overview?.dhcp ?? {}"
-          :dns="overview?.dns ?? {}"
-          :loaded="loaded"
-        />
-        <RecentLeasesCard
-          v-if="overview?.dhcp?.enabled"
-          :leases="overview.recentLeases ?? []"
-          :total="overview.dhcp.leases ?? 0"
-        />
-        <WirelessCard v-if="overview?.wireless" :wireless="overview.wireless" />
-        <BlockingCard v-if="overview?.blocking?.enabled" :blocking="overview.blocking" />
-        <RouterCard
-          :status="status"
-          :summary="overview?.status ?? {}"
-          :health="health"
-          :update="update"
-          :loaded="loaded"
-        />
-      </div>
-    </template>
-    <p v-else class="sr-only">Reading…</p>
+    <!-- The cards every router has are always here. The rest exist when the
+         overview has something for them, and until it is in, when the last
+         one did. -->
+    <div class="grid gap-4 lg:grid-cols-2">
+      <SystemLoadCard
+        data-card="system"
+        :style="hold('system', statsLoaded)"
+        :stats="stats"
+        :loaded="statsLoaded"
+      />
+      <GatewaysCard
+        v-if="has('gateways')"
+        data-card="gateways"
+        :style="hold('gateways')"
+        :gateways="overview?.gateways ?? []"
+        :unwatched="overview?.unwatchedGateways ?? []"
+        :loaded="loaded"
+        :placeholders="shape.cards.gateways"
+      />
+      <TopRulesCard
+        data-card="rules"
+        :style="hold('rules')"
+        :rules="overview?.topRules ?? []"
+        :blocked="overview?.blocked"
+        :loaded="loaded"
+        :placeholders="shape.rules"
+      />
+      <RecentBlocksCard
+        v-if="has('blocks')"
+        data-card="blocks"
+        :style="hold('blocks')"
+        :blocks="overview?.recentBlocks ?? []"
+        :loaded="loaded"
+        :placeholders="shape.cards.blocks"
+      />
+      <ServicesCard
+        data-card="services"
+        :style="hold('services')"
+        :services="overview?.services ?? []"
+        :dhcp="overview?.dhcp ?? {}"
+        :dns="overview?.dns ?? {}"
+        :loaded="loaded"
+        :placeholders="shape.services"
+      />
+      <RecentLeasesCard
+        v-if="has('leases')"
+        data-card="leases"
+        :style="hold('leases')"
+        :leases="overview?.recentLeases ?? []"
+        :total="overview?.dhcp?.leases ?? 0"
+        :loaded="loaded"
+        :placeholders="shape.cards.leases"
+      />
+      <WirelessCard
+        v-if="has('wireless')"
+        data-card="wireless"
+        :style="hold('wireless')"
+        :wireless="overview?.wireless"
+        :loaded="loaded"
+        :placeholders="shape.cards.wireless"
+      />
+      <BlockingCard
+        v-if="has('blocking')"
+        data-card="blocking"
+        :style="hold('blocking')"
+        :blocking="overview?.blocking"
+        :loaded="loaded"
+      />
+      <RouterCard
+        data-card="router"
+        :style="hold('router')"
+        :status="status"
+        :summary="overview?.status ?? {}"
+        :health="health"
+        :update="update"
+        :loaded="loaded"
+      />
+    </div>
   </div>
 </template>

@@ -9,11 +9,15 @@ defineProps({
    * seeing next to the ones that are watched.
    */
   unwatched: { type: Array, default: () => [] },
+  /** False until the first overview arrives. */
+  loaded: { type: Boolean, default: true },
+  /** How many rows to hold room for until then. */
+  placeholders: { type: Number, default: 1 },
 })
 </script>
 
 <template>
-  <SectionCard title="Gateways" flush>
+  <SectionCard title="Gateways" flush :aria-busy="loaded ? undefined : 'true'">
     <table class="table">
       <thead>
         <tr>
@@ -23,7 +27,19 @@ defineProps({
           <th class="text-right">Loss</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody v-if="!loaded">
+        <tr v-for="n in Math.max(placeholders, 1)" :key="n" data-reading>
+          <td>
+            <span v-if="n === 1" class="sr-only">Reading…</span>
+            <div><span class="skeleton w-16"></span></div>
+            <div><span class="skeleton w-32"></span></div>
+          </td>
+          <td><span class="skeleton h-5 w-10 rounded-full"></span></td>
+          <td class="text-right"><span class="skeleton w-14"></span></td>
+          <td class="text-right"><span class="skeleton w-8"></span></td>
+        </tr>
+      </tbody>
+      <tbody v-else>
         <tr v-for="g in gateways" :key="g.name">
           <td>
             <div>
@@ -59,7 +75,10 @@ defineProps({
         </tr>
       </tbody>
     </table>
-    <p class="card-strip border-t border-line">
+    <p v-if="!loaded" class="card-strip border-t border-line">
+      <span class="skeleton w-32"></span>
+    </p>
+    <p v-else class="card-strip border-t border-line">
       <template v-if="unwatched.length">
         A route nobody watches cannot fail over.
         <RouterLink to="/routing" class="link">Watch it under Routing</RouterLink>

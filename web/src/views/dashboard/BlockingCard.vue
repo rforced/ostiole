@@ -12,7 +12,18 @@ import { formatCount } from '@/lib/format'
 const props = defineProps({
   /** The blocking summary from GET /overview. */
   blocking: { type: Object, default: () => ({}) },
+  /** False until the first overview arrives. */
+  loaded: { type: Boolean, default: true },
 })
+
+/** The rows the card has while blocking is on, with about the width each value takes. */
+const READING = [
+  ['State', 'h-5 w-16 rounded-full'],
+  ['Names', 'w-32'],
+  ['Lists', 'w-24'],
+  ['Last merge', 'w-40'],
+  ['Exceptions', 'w-36'],
+]
 
 const b = computed(() => props.blocking ?? {})
 const when = computed(() =>
@@ -29,8 +40,17 @@ const blockedPct = computed(() => {
 </script>
 
 <template>
-  <SectionCard title="DNS blocking">
-    <dl class="kv">
+  <SectionCard title="DNS blocking" :aria-busy="loaded ? undefined : 'true'">
+    <template v-if="!loaded">
+      <p class="sr-only">Reading…</p>
+      <dl class="kv" aria-hidden="true" data-reading>
+        <template v-for="[label, width] in READING" :key="label">
+          <dt>{{ label }}</dt>
+          <dd><span class="skeleton" :class="width"></span></dd>
+        </template>
+      </dl>
+    </template>
+    <dl v-else class="kv">
       <dt>State</dt>
       <dd>
         <span v-if="b.active" class="badge badge-ok">blocking</span>
@@ -77,7 +97,7 @@ const blockedPct = computed(() => {
         </dd>
       </template>
     </dl>
-    <p v-if="!b.enabled" class="mt-2 text-ink-muted">
+    <p v-if="loaded && !b.enabled" class="mt-2 text-ink-muted">
       Block lists are off. Turn them on under
       <RouterLink class="link" to="/services/dns#blocking">Services, DNS, Blocking</RouterLink>.
     </p>

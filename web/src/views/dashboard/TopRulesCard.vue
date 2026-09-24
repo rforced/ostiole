@@ -9,6 +9,8 @@ defineProps({
   blocked: { type: Object, default: () => ({ packets: 0, bytes: 0 }) },
   /** False until the first overview arrives. */
   loaded: { type: Boolean, default: true },
+  /** How many rows to hold room for until then. */
+  placeholders: { type: Number, default: 3 },
 })
 </script>
 
@@ -24,8 +26,13 @@ defineProps({
         </tr>
       </thead>
       <tbody>
-        <template v-if="!loaded">
-          <tr v-for="n in 3" :key="`reading-${n}`" data-reading>
+        <tr v-if="!loaded && !placeholders" data-reading>
+          <td colspan="4">
+            <span class="sr-only">Reading…</span><span class="skeleton w-44"></span>
+          </td>
+        </tr>
+        <template v-else-if="!loaded">
+          <tr v-for="n in placeholders" :key="`reading-${n}`" data-reading>
             <td>
               <span v-if="n === 1" class="sr-only">Reading…</span>
               <div><span class="skeleton w-36"></span></div>

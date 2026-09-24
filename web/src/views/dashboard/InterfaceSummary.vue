@@ -11,6 +11,8 @@ defineProps({
   rates: { type: Object, default: () => ({}) },
   /** False until the first overview arrives. */
   loaded: { type: Boolean, default: true },
+  /** How many rows to hold room for until then. */
+  placeholders: { type: Number, default: 3 },
 })
 
 /** How the interface is addressed, e.g. "IPv4 static · IPv6 slaac". */
@@ -47,8 +49,13 @@ function faults(l) {
         </tr>
       </thead>
       <tbody>
-        <template v-if="!loaded">
-          <tr v-for="n in 3" :key="`reading-${n}`" data-reading>
+        <tr v-if="!loaded && !placeholders" data-reading>
+          <td colspan="5">
+            <span class="sr-only">Reading…</span><span class="skeleton w-28"></span>
+          </td>
+        </tr>
+        <template v-else-if="!loaded">
+          <tr v-for="n in placeholders" :key="`reading-${n}`" data-reading>
             <td>
               <span v-if="n === 1" class="sr-only">Reading…</span>
               <div><span class="skeleton w-14"></span></div>
