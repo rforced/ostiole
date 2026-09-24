@@ -574,6 +574,32 @@ func TestSetupWritesUnitAndMasksCompetitors(t *testing.T) {
 	var _ network.Backend = d
 }
 
+// unbound follows root key rollovers by rewriting the trust anchor, so a
+// directory it cannot write fails the setup instead of passing quietly.
+func TestSetupFailsWhenUnboundCannotOwnTheAnchor(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	run := &chownFails{}
+	opts := SetupOptions{
+		Resolver: true, UnitDir: filepath.Join(root, "units"), Run: run,
+		Unbound:       &Unbound{Dir: filepath.Join(root, "unbound"), Anchor: filepath.Join(root, "lib", "root.key")},
+		UnboundBinary: "/usr/sbin/unbound",
+	}
+	err := Setup(context.Background(), nil, opts, slog.New(slog.DiscardHandler))
+	if err == nil || !strings.Contains(err.Error(), filepath.Join(root, "lib")) {
+		t.Errorf("Setup = %v, want the anchor directory named", err)
+	}
+}
+
+type chownFails struct{ fakeRunner }
+
+func (c *chownFails) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	if name == "chown" {
+		return []byte("chown: invalid user: 'unbound:unbound'"), errors.New("exit status 1")
+	}
+	return c.fakeRunner.Run(ctx, name, args...)
+}
+
 // The pppd peer files are golden-tested on the inputs that dial; the rest
 // must produce none at all.
 func TestRenderPPPoEGolden(t *testing.T) {

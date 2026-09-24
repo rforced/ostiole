@@ -262,15 +262,21 @@ func setupResolver(ctx context.Context, run Runner, o SetupOptions, unitDir stri
 	}
 	// unbound writes its copy of the root zone here too, so a directory
 	// this created is handed over; the packages that ship one already own
-	// it this way.
-	_, _ = run.Run(ctx, "chown", "unbound:unbound", filepath.Dir(u.anchor()))
+	// it this way. Without it unbound cannot follow a root key rollover.
+	if err := chownToUnbound(ctx, run, filepath.Dir(u.anchor())); err != nil {
+		return err
+	}
 	if anchorTool != "" {
 		if _, err := run.Run(ctx, anchorTool, "-a", u.anchor()); err != nil {
 			// Exit code 1 means "anchor written but not verified yet",
 			// which is normal on a first run.
 			log.Debug("unbound-anchor reported a problem", "err", err)
 		}
-		_, _ = run.Run(ctx, "chown", "unbound:unbound", u.anchor())
+		if _, err := os.Stat(u.anchor()); err == nil {
+			if err := chownToUnbound(ctx, run, u.anchor()); err != nil {
+				return err
+			}
+		}
 	}
 	if err := os.MkdirAll(u.dir(), 0o755); err != nil { //nolint:gosec // unbound reads this unprivileged
 		return err
@@ -280,6 +286,14 @@ func setupResolver(ctx context.Context, run Runner, o SetupOptions, unitDir stri
 		return err
 	}
 	log.Info("validating resolver ready", "unit", UnboundUnit, "unbound", bin, "port", UnboundPort)
+	return nil
+}
+
+func chownToUnbound(ctx context.Context, run Runner, path string) error {
+	if out, err := run.Run(ctx, "chown", "unbound:unbound", path); err != nil {
+		return fmt.Errorf("hand %s to unbound, which updates the DNSSEC trust anchor there: %w: %s",
+			path, err, strings.TrimSpace(string(out)))
+	}
 	return nil
 }
 
