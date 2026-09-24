@@ -9,6 +9,8 @@ import (
 	"time"
 
 	nflog "github.com/florianl/go-nflog/v2"
+
+	"github.com/rforced/ostiole/internal/panics"
 )
 
 // Group is the nflog group the renderer sends log statements to.
@@ -42,6 +44,9 @@ func (l *Listener) Run(ctx context.Context) error {
 	defer func() { _ = nf.Close() }()
 
 	hook := func(attrs nflog.Attribute) int {
+		// The packets come from anywhere, the WAN included: one that trips
+		// the parser is dropped, not the daemon.
+		defer panics.Drop(log, "firewall log packet")
 		e := Entry{Time: time.Now()}
 		if attrs.Timestamp != nil {
 			e.Time = *attrs.Timestamp

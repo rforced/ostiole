@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rforced/ostiole/internal/panics"
 )
 
 var (
@@ -145,6 +147,8 @@ func (c *Client) ReadAll(ctx context.Context) ([]Drive, error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			// smartctl reports what the drive's firmware says, whatever that is.
+			defer panics.Into(&errs[i], nil, "reading "+d.Name)
 			drives[i], errs[i] = c.readDevice(ctx, d)
 		}()
 	}

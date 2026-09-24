@@ -32,6 +32,7 @@ import (
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
+	"github.com/rforced/ostiole/internal/panics"
 	"github.com/rforced/ostiole/internal/policy"
 	"github.com/rforced/ostiole/internal/server"
 	"github.com/rforced/ostiole/internal/services"
@@ -274,13 +275,17 @@ at your own.`,
 					Log:     slog.Default(),
 				},
 			}
-			go refresher.Run(ctx)
-			go blocklists.Run(ctx)
-			go crons.Run(ctx)
+			// Every loop starts again after a panic rather than taking the
+			// daemon with it: several parse what the internet sends.
+			log := slog.Default()
+			go panics.Loop(ctx, log, "alias refresher", refresher.Run)
+			go panics.Loop(ctx, log, "blocklist refresher", blocklists.Run)
+			go panics.Loop(ctx, log, "crons", crons.Run)
 			// The store follows the configuration the router is running
 			// rather than the apply, so a revert or an expired window puts
 			// the right certificate back.
-			go (&certs.Watcher{Store: store, Manager: certManager, Source: eng.Effective, Log: slog.Default()}).Run(ctx)
+			go panics.Loop(ctx, log, "certificate watcher",
+				(&certs.Watcher{Store: store, Manager: certManager, Source: eng.Effective, Log: log}).Run)
 			if os.Geteuid() == 0 {
 				deps.Services = services.New()
 				deps.Resolver = services.NewUnbound()
@@ -311,19 +316,19 @@ at your own.`,
 				mon.Shaping = g.shaper()
 				mon.OnTick = func() { crons.Note("system:gateways") }
 				deps.Gateways = mon
-				go mon.Run(ctx)
+				go panics.Loop(ctx, log, "gateway monitor", mon.Run)
 				// The ring starts at the default and the watcher sizes it
 				// from the configuration a moment later; it grows into its
 				// ceiling as packets arrive, so a big one costs nothing up
 				// front.
 				ring := fwlog.NewRing(model.FirewallLog{}.Size())
 				deps.Log = ring
-				go (&fwlog.Watcher{Ring: ring, Source: eng.Effective}).Run(ctx)
-				go func() {
-					if err := (&fwlog.Listener{Ring: ring, Log: slog.Default()}).Run(ctx); err != nil {
-						slog.Warn("firewall log listener stopped", "err", err)
+				go panics.Loop(ctx, log, "firewall log watcher", (&fwlog.Watcher{Ring: ring, Source: eng.Effective}).Run)
+				go panics.Loop(ctx, log, "firewall log listener", func(ctx context.Context) {
+					if err := (&fwlog.Listener{Ring: ring, Log: log}).Run(ctx); err != nil {
+						log.Warn("firewall log listener stopped", "err", err)
 					}
-				}()
+				})
 				// The resolver's own answers, copied out of the kernel by
 				// the same mechanism, and kept only while the
 				// configuration says so.
@@ -331,19 +336,20 @@ at your own.`,
 				qlog.Slog = slog.Default()
 				deps.QueryLog = qlog
 				blocklists.Installed = func(o dnsblock.Options) { qlog.Reindex(o, g.blocklists()) }
-				go (&dnslog.Watcher{Log: qlog, Source: eng.Effective, Cache: g.blocklists()}).Run(ctx)
-				go func() {
-					if err := (&dnslog.Listener{Log: qlog, Slog: slog.Default()}).Run(ctx); err != nil {
-						slog.Warn("query log listener stopped", "err", err)
+				go panics.Loop(ctx, log, "query log watcher",
+					(&dnslog.Watcher{Log: qlog, Source: eng.Effective, Cache: g.blocklists()}).Run)
+				go panics.Loop(ctx, log, "query log listener", func(ctx context.Context) {
+					if err := (&dnslog.Listener{Log: qlog, Slog: log}).Run(ctx); err != nil {
+						log.Warn("query log listener stopped", "err", err)
 					}
-				}()
+				})
 				// Reading a drive needs the device, so the hourly verdict
 				// is root-only; the page itself is not.
 				if deps.Drives.Bin != "" {
 					drives := &smart.Monitor{Client: deps.Drives, Log: slog.Default()}
 					drives.OnTick = func() { crons.Note("system:drives") }
 					deps.DriveHealth = drives
-					go drives.Run(ctx)
+					go panics.Loop(ctx, log, "drive monitor", drives.Run)
 				}
 			}
 			return server.Run(ctx, cfg, deps, slog.Default())

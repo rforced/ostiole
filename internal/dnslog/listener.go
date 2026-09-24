@@ -11,6 +11,7 @@ import (
 	nflog "github.com/florianl/go-nflog/v2"
 
 	"github.com/rforced/ostiole/internal/nft"
+	"github.com/rforced/ostiole/internal/panics"
 )
 
 // Listener reads the nflog group the resolver's answers are copied to and
@@ -42,6 +43,9 @@ func (l *Listener) Run(ctx context.Context) error {
 	defer func() { _ = nf.Close() }()
 
 	hook := func(attrs nflog.Attribute) int {
+		// An answer carries whatever a remote server put in it: one that
+		// trips the parser is dropped, not the daemon.
+		defer panics.Drop(log, "query log packet")
 		if attrs.Payload == nil || !l.Log.Enabled() {
 			return 0
 		}

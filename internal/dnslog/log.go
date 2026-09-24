@@ -12,6 +12,7 @@ import (
 
 	"github.com/rforced/ostiole/internal/dnsblock"
 	"github.com/rforced/ostiole/internal/model"
+	"github.com/rforced/ostiole/internal/panics"
 )
 
 // MaxLists is how many list names can be attributed to. Eight bytes an
@@ -133,6 +134,13 @@ func New() *Log {
 	}
 }
 
+// index is Build in the background: the lists come from the internet, so
+// a panic reading one fails the index rather than the daemon.
+func (l *Log) index(o dnsblock.Options, c *dnsblock.Cache) (x *Index, err error) {
+	defer panics.Into(&err, l.log(), "query log index")
+	return Build(o, c)
+}
+
 func (l *Log) log() *slog.Logger {
 	if l.Slog != nil {
 		return l.Slog
@@ -222,7 +230,7 @@ func (l *Log) build() {
 		l.mu.Unlock()
 
 		started := time.Now()
-		x, err := Build(*o, c)
+		x, err := l.index(*o, c)
 		if err != nil {
 			l.log().Warn("could not index the blocklists for the query log; blocked answers keep the attribution they had", "err", err)
 			continue
@@ -262,9 +270,11 @@ func (l *Log) Since() time.Time {
 // and by age, counts, and fans out to subscribers without blocking.
 // Nothing is kept while the log is off, whatever the kernel sends.
 func (l *Log) Add(e Entry, lists []string) {
+	// Deferred: the listener recovers a panic here and carries on, which
+	// a lock left held would turn into a hang.
 	l.mu.Lock()
+	defer l.mu.Unlock()
 	if !l.on || l.size == 0 {
-		l.mu.Unlock()
 		return
 	}
 	l.seq++
@@ -309,7 +319,6 @@ func (l *Log) Add(e Entry, lists []string) {
 			l.dropped++
 		}
 	}
-	l.mu.Unlock()
 }
 
 // intern turns list names into bits, adding names it has not seen. The

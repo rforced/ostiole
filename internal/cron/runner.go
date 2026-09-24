@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rforced/ostiole/internal/model"
+	"github.com/rforced/ostiole/internal/panics"
 )
 
 // Origin separates the crons Ostiole runs on its own account from the
@@ -270,9 +271,17 @@ func (r *Runner) run(ctx context.Context, c model.Cron) error {
 	r.mu.Unlock()
 
 	started := time.Now()
-	output, err := r.Exec.Run(ctx, c)
+	output, err := r.exec(ctx, c)
 	r.record(c.ID, started, time.Since(started), output, err)
 	return err
+}
+
+// exec runs one cron. A panic in it, from lego or the S3 client reading
+// what a server sent, fails that run: the daemon carries on, and the cron
+// does not stay marked as running.
+func (r *Runner) exec(ctx context.Context, c model.Cron) (output string, err error) {
+	defer panics.Into(&err, r.Log, "cron "+c.ID)
+	return r.Exec.Run(ctx, c)
 }
 
 func (r *Runner) record(id string, started time.Time, took time.Duration, output string, err error) {

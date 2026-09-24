@@ -340,6 +340,25 @@ func TestActionsSayWhatIsMissing(t *testing.T) {
 	}
 }
 
+// panicExec panics the way a library reading a malformed answer might.
+type panicExec struct{}
+
+func (panicExec) Run(context.Context, model.Cron) (string, error) { panic("unexpected end of answer") }
+
+// A cron that panics fails like any other, and is not left marked as
+// running, which would skip every scheduled run after it.
+func TestAPanickingCronFailsThatRun(t *testing.T) {
+	t.Parallel()
+	cfg := config(model.Cron{ID: "nightly", Enabled: true, Schedule: "0 3 * * *", Kind: model.CronBackup})
+	r := NewRunner(func() *model.Config { return cfg }, panicExec{}, slog.New(slog.DiscardHandler), "")
+	if err := r.RunNow(context.Background(), "nightly"); err == nil || !strings.Contains(err.Error(), "panicked") {
+		t.Fatalf("RunNow = %v", err)
+	}
+	if st := statusOf(r, "nightly"); st.Running || !strings.Contains(st.LastError, "unexpected end of answer") {
+		t.Errorf("status = %+v", st)
+	}
+}
+
 func statusOf(r *Runner, id string) Status {
 	for _, s := range r.Statuses() {
 		if s.ID == id {

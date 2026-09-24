@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rforced/ostiole/internal/panics"
 )
 
 // State of an update run.
@@ -202,6 +204,16 @@ func (m *Manager) run(ch Channel) {
 	if log == nil {
 		log = slog.Default()
 	}
+	// A panic fails the update like any other failure, rather than leaving
+	// it busy for good.
+	var version string
+	var failed error
+	defer func() {
+		if failed != nil {
+			m.set(Failed, version, failed.Error(), 0, 0)
+		}
+	}()
+	defer panics.Into(&failed, log, "update")
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 
@@ -214,7 +226,7 @@ func (m *Manager) run(ch Channel) {
 		m.set(Failed, chk.Latest, "no newer release on the "+string(ch)+" channel", 0, 0)
 		return
 	}
-	version := chk.Release.Version
+	version = chk.Release.Version
 	m.set(Downloading, version, "", 0, chk.Asset.Size)
 	dir := filepath.Dir(m.Installer.Binary)
 	got, err := m.Client.Download(ctx, chk.Release, dir, m.Installer.WantsProxy(), func(stage string, done, total int64) {

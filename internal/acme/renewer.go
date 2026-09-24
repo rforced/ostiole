@@ -13,6 +13,7 @@ import (
 
 	"github.com/rforced/ostiole/internal/certs"
 	"github.com/rforced/ostiole/internal/model"
+	"github.com/rforced/ostiole/internal/panics"
 )
 
 // failureBackoff is how long a certificate waits after the CA refused it.
@@ -92,25 +93,33 @@ func (r *Renewer) Pass(ctx context.Context) (string, error) {
 			continue
 		}
 		checked++
-		due, reason := r.due(ctx, cfg, cert)
-		if !due {
-			r.release(cert.ID)
-			continue
-		}
-		r.log().Info("issuing certificate", "id", cert.ID, "reason", reason)
-		err := r.issue(ctx, cfg, cert)
-		r.release(cert.ID)
+		ordered, err := r.renew(ctx, cfg, cert)
 		switch {
 		case err != nil:
 			failed++
 			if first == nil {
 				first = fmt.Errorf("%s: %w", cert.ID, err)
 			}
-		default:
+		case ordered:
 			renewed++
 		}
 	}
 	return fmt.Sprintf("%d checked, %d renewed, %d failed", checked, renewed, failed), first
+}
+
+// renew orders a claimed certificate when it is due, and gives the claim
+// back however that ends. A claim kept would skip the certificate on every
+// pass after, until it expired.
+func (r *Renewer) renew(ctx context.Context, cfg *model.Config, cert model.Certificate) (ordered bool, err error) {
+	defer r.release(cert.ID)
+	// The renewal check reads what the CA sends as well.
+	defer panics.Into(&err, r.log(), "certificate "+cert.ID)
+	due, reason := r.due(ctx, cfg, cert)
+	if !due {
+		return false, nil
+	}
+	r.log().Info("issuing certificate", "id", cert.ID, "reason", reason)
+	return true, r.issue(ctx, cfg, cert)
 }
 
 // IssueNow orders one certificate whatever the schedule says, in the
@@ -131,6 +140,7 @@ func (r *Renewer) IssueNow(ctx context.Context, id string) error {
 	want := *cert
 	go func() {
 		defer r.release(id)
+		defer panics.Recover(r.log(), "certificate order")
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), orderTimeout)
 		defer cancel()
 		if err := r.issue(ctx, cfg, want); err != nil {
@@ -246,7 +256,10 @@ func (r *Renewer) issue(ctx context.Context, cfg *model.Config, cert model.Certi
 	return err
 }
 
-func (r *Renewer) order(ctx context.Context, cfg *model.Config, cert model.Certificate) error {
+func (r *Renewer) order(ctx context.Context, cfg *model.Config, cert model.Certificate) (err error) {
+	// lego reads what the CA sends: a panic there is this order failing,
+	// recorded like any other failure.
+	defer panics.Into(&err, r.log(), "certificate order "+cert.ID)
 	account, ok := cfg.ACMEAccount(cert.Account)
 	if !ok {
 		return fmt.Errorf("unknown ACME account %q", cert.Account)

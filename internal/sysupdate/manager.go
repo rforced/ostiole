@@ -10,6 +10,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/rforced/ostiole/internal/panics"
 )
 
 // ErrBusy means an update is already running.
@@ -346,6 +348,7 @@ func (m *Manager) Start(security bool, exclude []string) error {
 	}
 	go func() {
 		defer m.end()
+		defer panics.Recover(m.Log, "system update")
 		ctx, cancel := context.WithTimeout(context.Background(), UpgradeTimeout+2*CheckTimeout)
 		defer cancel()
 		if _, err := m.apply(ctx, security, exclude); err != nil {
@@ -402,10 +405,11 @@ func (m *Manager) Reattach(ctx context.Context) {
 	m.mu.Unlock()
 	m.Log.Info("a system update was still running; reattaching", "unit", m.unit.unit)
 	go func() {
-		out, err := m.collect(ctx)
-		m.mu.Lock()
-		m.running = false
-		m.mu.Unlock()
+		defer panics.Recover(m.Log, "system update")
+		out, err := func() (string, error) {
+			defer m.end()
+			return m.collect(ctx)
+		}()
 		m.record("", out, err)
 		if _, checkErr := m.Check(ctx); checkErr != nil {
 			m.Log.Debug("could not re-check after an update", "err", checkErr)

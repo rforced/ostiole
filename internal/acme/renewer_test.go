@@ -192,6 +192,37 @@ func TestPassRenewsWhenTheAddressChanges(t *testing.T) {
 	}
 }
 
+// panickingIssuer panics the way lego might on an answer it did not
+// expect.
+type panickingIssuer struct{ fakeIssuer }
+
+func (p *panickingIssuer) Issue(context.Context, Request) (*Issued, error) {
+	panic("unexpected answer from the CA")
+}
+
+// A panic in an order fails that certificate like any failure, recorded
+// where the page shows it, and gives its claim back: a claim kept would
+// skip the certificate on every pass until it expired.
+func TestAPanickingOrderFailsAndLetsGo(t *testing.T) {
+	t.Parallel()
+	r, store := renewer(t, acmeConfig(), &panickingIssuer{})
+	summary, err := r.Pass(context.Background())
+	if err == nil || summary != "1 checked, 0 renewed, 1 failed" {
+		t.Fatalf("Pass = %q, %v", summary, err)
+	}
+	if r.isRunning("router") {
+		t.Error("the certificate is still claimed")
+	}
+	if state, err := store.ReadState("router"); err != nil || state.LastError == "" {
+		t.Errorf("the failure was not recorded: %+v, %v", state, err)
+	}
+	// Checked again rather than skipped as busy, and held back only by the
+	// wait after any failure.
+	if summary, err := r.Pass(context.Background()); err != nil || summary != "1 checked, 0 renewed, 0 failed" {
+		t.Errorf("the next pass = %q, %v", summary, err)
+	}
+}
+
 func TestPassBacksOffAfterAFailure(t *testing.T) {
 	t.Parallel()
 	cfg := acmeConfig()
