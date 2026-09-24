@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -252,7 +253,7 @@ func Run(ctx context.Context, cfg Config, d Deps, logger *slog.Logger) error {
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       120 * time.Second,
-		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelError),
+		ErrorLog:          log.New(serverLog{logger}, "", 0),
 	}
 
 	// A certificate manager serves the certificate through a callback, so
@@ -265,15 +266,23 @@ func Run(ctx context.Context, cfg Config, d Deps, logger *slog.Logger) error {
 	errCh := make(chan error, 1)
 	go func() {
 		logger.Info("listening", "addr", cfg.Listen, "tls", cfg.TLS(), "version", version.Version)
-		if cfg.TLS() {
-			if srv.TLSConfig != nil {
-				errCh <- srv.ListenAndServeTLS("", "")
-				return
-			}
-			errCh <- srv.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey)
+		if !cfg.TLS() {
+			errCh <- srv.ListenAndServe()
 			return
 		}
-		errCh <- srv.ListenAndServe()
+		var lc net.ListenConfig
+		ln, err := lc.Listen(ctx, "tcp", cfg.Listen)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		defer ln.Close()
+		ln = redirectListener{ln}
+		if srv.TLSConfig != nil {
+			errCh <- srv.ServeTLS(ln, "", "")
+			return
+		}
+		errCh <- srv.ServeTLS(ln, cfg.TLSCert, cfg.TLSKey)
 	}()
 
 	select {
