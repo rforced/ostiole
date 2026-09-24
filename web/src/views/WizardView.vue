@@ -195,7 +195,7 @@ function reverted() {
         </ul>
       </div>
 
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-3 max-sm:flex-wrap">
         <button
           type="submit"
           class="btn-secondary"
@@ -208,7 +208,7 @@ function reverted() {
         <button
           v-if="preview"
           type="button"
-          class="btn-primary"
+          class="btn-primary max-sm:flex-1"
           :disabled="busy !== ''"
           :aria-busy="busy === 'apply'"
           @click="apply"
@@ -216,7 +216,9 @@ function reverted() {
           <LoaderCircle v-if="busy === 'apply'" class="size-4 animate-spin" aria-hidden="true" />
           {{ busy === 'apply' ? 'Applying…' : `Apply with ${CONFIRM_SECONDS}s confirmation` }}
         </button>
-        <RouterLink to="/" class="ml-auto text-sm text-ink-muted underline"
+        <RouterLink
+          to="/"
+          class="ml-auto text-sm text-ink-muted underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
           >Skip for now</RouterLink
         >
       </div>
