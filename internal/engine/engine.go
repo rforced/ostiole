@@ -79,6 +79,9 @@ type Engine struct {
 	// next load: were the offset not to be noted, it would load again
 	// every hour.
 	retimed atomic.Pointer[int]
+	// kernelErr is why the kernel last refused the offset, so that it is
+	// logged once rather than at every look.
+	kernelErr atomic.Pointer[string]
 }
 
 type pendingApply struct {

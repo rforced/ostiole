@@ -79,6 +79,12 @@ type Offsetter interface {
 	Offset(t time.Time) (seconds int, next time.Time)
 }
 
+// KernelOffsetter sets the offset the kernel keeps beside its clock. nft
+// matches a schedule's days in it, and its hours in UTC.
+type KernelOffsetter interface {
+	SetKernelOffset(seconds int) error
+}
+
 // System is the router this process runs on.
 type System struct {
 	// Run executes timedatectl; nil runs it directly.

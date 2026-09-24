@@ -319,8 +319,10 @@ at your own.`,
 				go panics.Loop(ctx, log, "gateway monitor", mon.Run)
 				// Daylight saving, or a zone set at start that differs from
 				// the one the ruleset was loaded in, moves the offset a
-				// schedule's hours were converted at, so the ruleset goes in
-				// again, and what the old table held outside it goes back.
+				// schedule's hours were converted at, so its scheduled chains
+				// go in again and the kernel takes the offset for its days.
+				// When the whole table had to go in, what the old one held
+				// outside the ruleset goes back.
 				go panics.Loop(ctx, log, "schedule clock", func(ctx context.Context) {
 					eng.FollowOffset(ctx, func(ctx context.Context) {
 						refresher.Push(ctx)

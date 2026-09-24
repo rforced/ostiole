@@ -1063,7 +1063,9 @@ func (r *renderer) forwardAccepts(z model.Zone) {
 // ends before it starts runs over midnight, which nft cannot express as a
 // range, so it is matched as "outside the daytime window" instead.
 // Times are the firewall's local time: nft converts them to UTC when the
-// ruleset is loaded, so a change of offset needs a reload.
+// ruleset is loaded, so a change of offset needs a reload. Days are not
+// converted: the kernel matches them in an offset it keeps, which the
+// engine sets to the clock's.
 func scheduleMatch(sc model.Schedule) []string {
 	var out []string
 	if len(sc.Days) > 0 {
