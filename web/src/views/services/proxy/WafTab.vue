@@ -34,7 +34,7 @@ function edit(profile) {
           <Plus class="size-4" aria-hidden="true" /> Add profile
         </button>
       </template>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>Profile</th>
@@ -54,22 +54,22 @@ function edit(profile) {
             :key="w.id"
             :class="{ 'row-changed': config.isChanged('services.proxy.wafProfiles', w.id) }"
           >
-            <td>
+            <td data-label="">
               <div class="font-mono font-medium">{{ w.id }}</div>
               <div v-if="w.description" class="text-xs text-ink-muted">{{ w.description }}</div>
             </td>
-            <td>
+            <td data-label="Mode">
               <span class="badge" :class="w.mode === 'block' ? 'badge-bad' : 'badge-warn'">
                 {{ w.mode === 'block' ? 'block' : 'detect only' }}
               </span>
             </td>
-            <td class="tabular-nums">{{ w.paranoia || 1 }}</td>
-            <td>
+            <td class="tabular-nums" data-label="Paranoia">{{ w.paranoia || 1 }}</td>
+            <td data-label="Applications">
               <span v-if="(w.applications ?? []).length">{{ w.applications.join(', ') }}</span>
               <span v-else class="text-ink-muted">none</span>
             </td>
-            <td class="tabular-nums">{{ (w.exclusions ?? []).length }}</td>
-            <td class="text-right whitespace-nowrap">
+            <td class="tabular-nums" data-label="Exclusions">{{ (w.exclusions ?? []).length }}</td>
+            <td class="text-right whitespace-nowrap" data-label="">
               <button type="button" class="link" @click="edit(w)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>

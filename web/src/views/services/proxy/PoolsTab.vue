@@ -34,7 +34,7 @@ function edit(pool) {
           <Plus class="size-4" aria-hidden="true" /> Add pool
         </button>
       </template>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>Pool</th>
@@ -53,22 +53,22 @@ function edit(pool) {
             :key="p.id"
             :class="{ 'row-changed': config.isChanged('services.proxy.pools', p.id) }"
           >
-            <td>
+            <td data-label="">
               <div class="font-mono font-medium">{{ p.id }}</div>
               <div v-if="p.description" class="text-xs text-ink-muted">{{ p.description }}</div>
             </td>
-            <td class="font-mono text-code">
+            <td class="font-mono text-code" data-label="Upstreams">
               {{ (p.upstreams ?? []).map((u) => u.address).join(', ') }}
               <span v-if="p.tls" class="ml-1 text-ink-muted">over TLS</span>
             </td>
-            <td>{{ p.policy || 'round_robin' }}</td>
-            <td>
+            <td data-label="Balancing">{{ p.policy || 'round_robin' }}</td>
+            <td data-label="Health">
               <template v-if="p.healthPath">
                 {{ p.healthPath }} every {{ p.healthSeconds || 30 }}s
               </template>
               <span v-else class="text-ink-muted">none</span>
             </td>
-            <td class="text-right whitespace-nowrap">
+            <td class="text-right whitespace-nowrap" data-label="">
               <button type="button" class="link" @click="edit(p)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>

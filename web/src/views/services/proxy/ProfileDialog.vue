@@ -159,7 +159,7 @@ function save() {
           label="Paranoia"
           hint="1. Higher levels block more of ordinary traffic."
         >
-          <select id="waf-paranoia" v-model.number="form.paranoia" class="input w-24">
+          <select id="waf-paranoia" v-model.number="form.paranoia" class="input w-24 max-sm:w-full">
             <option v-for="n in 4" :key="n" :value="n">{{ n }}</option>
           </select>
         </FormField>
@@ -174,7 +174,7 @@ function save() {
             type="number"
             min="0"
             max="1024"
-            class="input w-32 font-mono"
+            class="input w-32 font-mono max-sm:w-full"
           />
         </FormField>
         <FormField id="waf-inbound" label="Request threshold" hint="5.">
@@ -184,7 +184,7 @@ function save() {
             type="number"
             min="0"
             max="1000"
-            class="input w-32 font-mono"
+            class="input w-32 font-mono max-sm:w-full"
           />
         </FormField>
         <FormField id="waf-outbound" label="Response threshold" hint="4.">
@@ -194,7 +194,7 @@ function save() {
             type="number"
             min="0"
             max="1000"
-            class="input w-32 font-mono"
+            class="input w-32 font-mono max-sm:w-full"
           />
         </FormField>
       </div>

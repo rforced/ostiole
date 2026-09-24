@@ -34,7 +34,7 @@ function edit(route) {
           <Plus class="size-4" aria-hidden="true" /> Add route
         </button>
       </template>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>Route</th>
@@ -53,22 +53,22 @@ function edit(route) {
             :key="r.id"
             :class="{ 'row-changed': config.isChanged('services.proxy.routes', r.id) }"
           >
-            <td>
+            <td data-label="">
               <div class="font-mono font-medium">
                 {{ r.id
                 }}<span v-if="!r.enabled" class="ml-1 font-sans text-ink-muted">(disabled)</span>
               </div>
               <div v-if="r.description" class="text-xs text-ink-muted">{{ r.description }}</div>
             </td>
-            <td class="font-mono text-code">{{ r.protocol }}/{{ r.port }}</td>
-            <td class="font-mono text-code">
+            <td class="font-mono text-code" data-label="Port">{{ r.protocol }}/{{ r.port }}</td>
+            <td class="font-mono text-code" data-label="Server names">
               <span v-if="(r.sni ?? []).length">{{ r.sni.join(', ') }}</span>
               <span v-else class="font-sans text-ink-muted">the whole port</span>
             </td>
-            <td class="font-mono text-code">
+            <td class="font-mono text-code" data-label="Upstreams">
               {{ (r.upstreams ?? []).map((u) => u.address).join(', ') }}
             </td>
-            <td class="text-right whitespace-nowrap">
+            <td class="text-right whitespace-nowrap" data-label="">
               <button type="button" class="link" @click="edit(r)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>

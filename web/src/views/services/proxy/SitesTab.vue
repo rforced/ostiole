@@ -41,7 +41,7 @@ function edit(site) {
         </button>
       </template>
       <div v-if="!pools.length" class="card-strip text-ink-muted">Add a pool first.</div>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>Site</th>
@@ -61,21 +61,23 @@ function edit(site) {
             :key="s.id"
             :class="{ 'row-changed': config.isChanged('services.proxy.sites', s.id) }"
           >
-            <td>
+            <td data-label="">
               <div class="font-mono font-medium">
                 {{ s.id
                 }}<span v-if="!s.enabled" class="ml-1 font-sans text-ink-muted">(disabled)</span>
               </div>
               <div v-if="s.description" class="text-xs text-ink-muted">{{ s.description }}</div>
             </td>
-            <td class="font-mono text-code">{{ (s.hosts ?? []).join(', ') }}</td>
-            <td class="font-mono text-code">{{ certificateOf(s) }}</td>
-            <td class="font-mono text-code">{{ s.pool }}</td>
-            <td>
+            <td class="font-mono text-code" data-label="Hostnames">
+              {{ (s.hosts ?? []).join(', ') }}
+            </td>
+            <td class="font-mono text-code" data-label="Certificate">{{ certificateOf(s) }}</td>
+            <td class="font-mono text-code" data-label="Pool">{{ s.pool }}</td>
+            <td data-label="WAF">
               <span v-if="s.waf" class="font-mono text-code">{{ s.waf }}</span>
               <span v-else class="text-ink-muted">none</span>
             </td>
-            <td class="text-right whitespace-nowrap">
+            <td class="text-right whitespace-nowrap" data-label="">
               <button type="button" class="link" @click="edit(s)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>

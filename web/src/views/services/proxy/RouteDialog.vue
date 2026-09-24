@@ -111,7 +111,7 @@ function save() {
           <input id="route-desc" v-model="form.description" class="input" />
         </FormField>
         <FormField id="route-protocol" label="Protocol">
-          <select id="route-protocol" v-model="form.protocol" class="input w-32">
+          <select id="route-protocol" v-model="form.protocol" class="input w-32 max-sm:w-full">
             <option value="tcp">TCP</option>
             <option value="udp">UDP</option>
           </select>
@@ -123,7 +123,7 @@ function save() {
             type="number"
             min="1"
             max="65535"
-            class="input w-32 font-mono"
+            class="input w-32 font-mono max-sm:w-full"
             required
           />
         </FormField>
@@ -167,7 +167,7 @@ function save() {
             type="number"
             min="0"
             max="3600"
-            class="input w-32 font-mono"
+            class="input w-32 font-mono max-sm:w-full"
             :disabled="!isTCP"
           />
         </FormField>

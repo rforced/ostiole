@@ -183,7 +183,7 @@ function save() {
           />
           <select
             v-model="p.pool"
-            class="input w-40 font-mono"
+            class="input w-40 font-mono max-sm:w-full"
             :aria-label="`Pool for path ${i + 1}`"
           >
             <option v-for="pool in pools" :key="pool.id" :value="pool.id">{{ pool.id }}</option>

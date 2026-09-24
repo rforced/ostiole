@@ -151,7 +151,7 @@ function save() {
             type="number"
             min="0"
             max="3600"
-            class="input w-32 font-mono"
+            class="input w-32 font-mono max-sm:w-full"
             :disabled="!form.healthPath"
           />
         </FormField>
@@ -166,7 +166,7 @@ function save() {
             type="number"
             min="0"
             max="3600"
-            class="input w-32 font-mono"
+            class="input w-32 font-mono max-sm:w-full"
           />
         </FormField>
       </div>
