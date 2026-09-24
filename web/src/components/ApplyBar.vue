@@ -6,6 +6,7 @@ import { useRoute } from 'vue-router'
 import ApplyPending from '@/components/ApplyPending.vue'
 import ChangeList from '@/components/ChangeList.vue'
 import { ApiError, api } from '@/lib/api'
+import { useNarrow } from '@/lib/media'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useSystemStore } from '@/stores/system'
@@ -62,8 +63,10 @@ watch(
 /**
  * Below lg the bar is docked over the bottom of the page. --dock is how
  * much of the page it covers, so the page and the toasts can clear it.
+ * Above lg nothing reads it, so nothing measures.
  */
 const bar = ref(null)
+const narrow = useNarrow()
 let observer = null
 function undock() {
   observer?.disconnect()
@@ -71,10 +74,10 @@ function undock() {
   document.documentElement.style.removeProperty('--dock')
 }
 watch(
-  bar,
-  (el) => {
+  [bar, narrow],
+  ([el, docked]) => {
     undock()
-    if (!el || typeof ResizeObserver !== 'function') return
+    if (!el || !docked || typeof ResizeObserver !== 'function') return
     observer = new ResizeObserver(() => {
       document.documentElement.style.setProperty('--dock', `${el.offsetHeight}px`)
     })

@@ -126,4 +126,55 @@ describe('ApplyBar', () => {
     await flushPromises()
     expect(w.find('[role="status"]').exists()).toBe(false)
   })
+
+  // Docked over the bottom of a narrow screen, the bar says how much of the
+  // page it covers. Above lg it sits in the flow and measures nothing.
+  describe('docked', () => {
+    let observed
+    beforeEach(() => {
+      observed = []
+      window.ResizeObserver = class {
+        constructor(fn) {
+          this.fn = fn
+        }
+        observe(el) {
+          observed.push(el)
+          this.fn()
+        }
+        disconnect() {}
+      }
+    })
+    afterEach(() => {
+      delete window.ResizeObserver
+      delete window.matchMedia
+      document.documentElement.style.removeProperty('--dock')
+    })
+
+    async function dirty(narrow) {
+      window.matchMedia = vi.fn(() => ({
+        matches: narrow,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+      await router({ applying: false })
+      useConfigStore().draft.system.hostname = 'mine'
+      const w = mount(ApplyBar)
+      await flushPromises()
+      return w
+    }
+
+    it('says how much of a narrow screen it covers', async () => {
+      const w = await dirty(true)
+      expect(observed).toHaveLength(1)
+      expect(document.documentElement.style.getPropertyValue('--dock')).toMatch(/px$/)
+      w.unmount()
+      expect(document.documentElement.style.getPropertyValue('--dock')).toBe('')
+    })
+
+    it('measures nothing on a wide one', async () => {
+      await dirty(false)
+      expect(observed).toHaveLength(0)
+      expect(document.documentElement.style.getPropertyValue('--dock')).toBe('')
+    })
+  })
 })
