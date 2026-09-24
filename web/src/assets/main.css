@@ -306,19 +306,6 @@
   transition: transform 120ms ease-out;
 }
 
-/* Dashboard cards fade in when there is something to say and slide to
-   make room. One that goes quiet leaves at once, so the rest close the
-   gap rather than waiting on it. */
-.card-enter-active {
-  transition: opacity 200ms ease-out;
-}
-.card-enter-from {
-  opacity: 0;
-}
-.card-move {
-  transition: transform 200ms ease-out;
-}
-
 .toast-enter-active,
 .toast-leave-active,
 .toast-move {
@@ -343,8 +330,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .row-move,
-  .card-enter-active,
-  .card-move,
   .toast-enter-active,
   .toast-leave-active,
   .toast-move,

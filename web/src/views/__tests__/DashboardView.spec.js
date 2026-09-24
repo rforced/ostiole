@@ -52,8 +52,8 @@ describe('DashboardView', () => {
 
   beforeEach(() => {
     setActivePinia(createPinia())
-    // The polls, and the frames a row leaving a transition group waits out.
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'requestAnimationFrame'] })
+    // The polls.
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
     api.health.mockResolvedValue({ status: 'ok', version: 'v1.0.0' })
     api.status.mockResolvedValue({ configured: true, tableLoaded: true, network: 'networkd' })
     api.systemStats.mockResolvedValue(stats)
@@ -65,54 +65,60 @@ describe('DashboardView', () => {
     vi.restoreAllMocks()
   })
 
-  /**
-   * The real transition groups, whose keying the default stub would hide.
-   * The header reads the route, and there is none here.
-   */
+  /** The header reads the route, and there is none here. */
   async function mountDashboard() {
     const w = mount(DashboardView, {
-      global: {
-        stubs: { RouterLink: RouterLinkStub, PageHeader: true, 'transition-group': false },
-      },
+      global: { stubs: { RouterLink: RouterLinkStub, PageHeader: true } },
     })
     await flushPromises()
     return w
   }
 
-  it('fills the usage meters while the overview is still being read', async () => {
+  it('shows nothing under the header until the overview is in', async () => {
     const w = await mountDashboard()
-    const system = card(w, 'System')
-    expect(system.attributes('aria-busy')).toBeUndefined()
-    expect(system.text()).toContain('12%')
-
-    for (const title of ['Interfaces', 'Busiest rules', 'Services', 'Router']) {
-      expect(card(w, title).attributes('aria-busy')).toBe('true')
-      expect(card(w, title).text()).toContain('Reading…')
-    }
-    expect(card(w, 'Busiest rules').text()).not.toContain('0 packets')
-    expect(card(w, 'Router').text()).not.toContain('0 rules')
+    // The usage has been read, but its card would be pushed down by the
+    // warnings and interfaces the overview brings.
+    expect(api.systemStats).toHaveBeenCalled()
+    expect(w.findAll('section')).toHaveLength(0)
+    expect(w.text()).toContain('Reading…')
   })
 
-  it('swaps the placeholders for what the overview says', async () => {
+  it('lays every card out at once when the overview comes', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const w = await mountDashboard()
-    expect(card(w, 'Gateways')).toBeUndefined()
     answer({
       ...overview,
       gateways: [{ name: 'wan', interface: 'eth0', online: true, latencyMs: 1, lossPercent: 0 }],
     })
     await flushPromises()
-    vi.advanceTimersToNextFrame()
-    vi.advanceTimersToNextFrame()
 
     expect(warn).not.toHaveBeenCalled()
-    expect(card(w, 'Gateways').text()).toContain('wan')
+    expect(w.text()).not.toContain('Reading…')
     expect(w.find('[data-reading]').exists()).toBe(false)
-    for (const title of ['Interfaces', 'Busiest rules', 'Services', 'Router']) {
-      expect(card(w, title).attributes('aria-busy')).toBeUndefined()
+    const titles = w.findAll('section h2').map((h) => h.text())
+    expect(titles).toEqual([
+      'Interfaces',
+      'System',
+      'Gateways',
+      'Busiest rules',
+      'Services',
+      'Router',
+    ])
+    for (const section of w.findAll('section')) {
+      expect(section.attributes('aria-busy')).toBeUndefined()
     }
+    expect(card(w, 'System').text()).toContain('12%')
+    expect(card(w, 'Gateways').text()).toContain('wan')
     expect(card(w, 'Interfaces').text()).toContain('No interfaces.')
     expect(card(w, 'Busiest rules').text()).toContain('9 packets')
     expect(card(w, 'Router').text()).toContain('3 rules in 2 zones')
+  })
+
+  it('shows what there is when the overview fails', async () => {
+    api.overview.mockRejectedValue(new Error('overview failed'))
+    const w = await mountDashboard()
+    expect(w.get('[role=alert]').text()).toBe('overview failed')
+    expect(card(w, 'System').text()).toContain('12%')
+    expect(card(w, 'Router').attributes('aria-busy')).toBe('true')
   })
 })

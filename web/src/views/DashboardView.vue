@@ -69,6 +69,13 @@ const error = computed(() => healthError.value || load.error.value || system.err
 const loaded = computed(() => load.updatedAt.value > 0)
 /** The usage read swallows its errors, so this is only whether it has answered. */
 const statsLoaded = computed(() => loadStats.updatedAt.value > 0)
+/**
+ * Nothing under the header shows until the first overview is in. Its
+ * warnings go above the interfaces and the cards it adds go between the
+ * others, so a page drawn before it would reshuffle when it came. A read
+ * that fails shows what there is.
+ */
+const ready = computed(() => loaded.value || Boolean(load.error.value))
 
 // An apply or a revert changes what the router is doing.
 watch(
@@ -98,8 +105,8 @@ async function readUpdate() {
   }
 }
 
-// Nothing here needs another's answer. The overview is the slow one, and
-// the usage meters do not wait for it.
+// Nothing here needs another's answer, so the reads start together; the
+// overview is the slow one.
 onMounted(() => {
   readHealth()
   load.run()
@@ -124,58 +131,48 @@ onMounted(() => {
       </template>
     </AppNotice>
 
-    <DashboardWarnings :warnings="overview?.warnings ?? []" />
+    <template v-if="ready">
+      <DashboardWarnings :warnings="overview?.warnings ?? []" />
 
-    <InterfaceSummary :interfaces="overview?.interfaces ?? []" :rates="rates" :loaded="loaded" />
+      <InterfaceSummary :interfaces="overview?.interfaces ?? []" :rates="rates" :loaded="loaded" />
 
-    <!-- The cards every router has hold their place from the start. The
-         rest only exist once the overview says there is something in them. -->
-    <TransitionGroup name="card" tag="div" class="grid gap-4 lg:grid-cols-2">
-      <SystemLoadCard key="system" :stats="stats" :loaded="statsLoaded" />
-      <GatewaysCard
-        v-if="overview?.gateways?.length || overview?.unwatchedGateways?.length"
-        key="gateways"
-        :gateways="overview.gateways ?? []"
-        :unwatched="overview.unwatchedGateways ?? []"
-      />
-      <TopRulesCard
-        key="rules"
-        :rules="overview?.topRules ?? []"
-        :blocked="overview?.blocked"
-        :loaded="loaded"
-      />
-      <RecentBlocksCard
-        v-if="overview?.recentBlocks"
-        key="blocks"
-        :blocks="overview.recentBlocks"
-      />
-      <ServicesCard
-        key="services"
-        :services="overview?.services ?? []"
-        :dhcp="overview?.dhcp ?? {}"
-        :dns="overview?.dns ?? {}"
-        :loaded="loaded"
-      />
-      <RecentLeasesCard
-        v-if="overview?.dhcp?.enabled"
-        key="leases"
-        :leases="overview.recentLeases ?? []"
-        :total="overview.dhcp.leases ?? 0"
-      />
-      <WirelessCard v-if="overview?.wireless" key="wireless" :wireless="overview.wireless" />
-      <BlockingCard
-        v-if="overview?.blocking?.enabled"
-        key="blocking"
-        :blocking="overview.blocking"
-      />
-      <RouterCard
-        key="router"
-        :status="status"
-        :summary="overview?.status ?? {}"
-        :health="health"
-        :update="update"
-        :loaded="loaded"
-      />
-    </TransitionGroup>
+      <!-- The cards every router has are always here. The rest only exist
+           once the overview says there is something in them. -->
+      <div class="grid gap-4 lg:grid-cols-2">
+        <SystemLoadCard :stats="stats" :loaded="statsLoaded" />
+        <GatewaysCard
+          v-if="overview?.gateways?.length || overview?.unwatchedGateways?.length"
+          :gateways="overview.gateways ?? []"
+          :unwatched="overview.unwatchedGateways ?? []"
+        />
+        <TopRulesCard
+          :rules="overview?.topRules ?? []"
+          :blocked="overview?.blocked"
+          :loaded="loaded"
+        />
+        <RecentBlocksCard v-if="overview?.recentBlocks" :blocks="overview.recentBlocks" />
+        <ServicesCard
+          :services="overview?.services ?? []"
+          :dhcp="overview?.dhcp ?? {}"
+          :dns="overview?.dns ?? {}"
+          :loaded="loaded"
+        />
+        <RecentLeasesCard
+          v-if="overview?.dhcp?.enabled"
+          :leases="overview.recentLeases ?? []"
+          :total="overview.dhcp.leases ?? 0"
+        />
+        <WirelessCard v-if="overview?.wireless" :wireless="overview.wireless" />
+        <BlockingCard v-if="overview?.blocking?.enabled" :blocking="overview.blocking" />
+        <RouterCard
+          :status="status"
+          :summary="overview?.status ?? {}"
+          :health="health"
+          :update="update"
+          :loaded="loaded"
+        />
+      </div>
+    </template>
+    <p v-else class="sr-only">Reading…</p>
   </div>
 </template>
