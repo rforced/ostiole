@@ -7,8 +7,10 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { parseList } from '@/lib/lists'
+import { ADMIN_ONLY, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 // Older drafts may lack the management block; create it once, outside any computed.
 if (!config.draft.system.management) config.draft.system.management = { webPort: 9443, sshPort: 22 }
@@ -99,7 +101,9 @@ const entriesMB = computed(() =>
         <FormField
           id="sys-web"
           label="Web UI port"
-          hint="Kept open from anti-lockout zones. 0 disables that entry."
+          :hint="
+            auth.isAdmin ? 'Kept open from anti-lockout zones. 0 disables that entry.' : ADMIN_ONLY
+          "
         >
           <input
             id="sys-web"
@@ -108,9 +112,14 @@ const entriesMB = computed(() =>
             min="0"
             max="65535"
             class="input w-32"
+            :disabled="!auth.isAdmin"
           />
         </FormField>
-        <FormField id="sys-ssh" label="SSH port" hint="Same anti-lockout treatment.">
+        <FormField
+          id="sys-ssh"
+          label="SSH port"
+          :hint="auth.isAdmin ? 'Same anti-lockout treatment.' : ADMIN_ONLY"
+        >
           <input
             id="sys-ssh"
             v-model.number="management.sshPort"
@@ -118,13 +127,19 @@ const entriesMB = computed(() =>
             min="0"
             max="65535"
             class="input w-32"
+            :disabled="!auth.isAdmin"
           />
         </FormField>
       </div>
       <ToggleRow
         v-model="management.sshPasswords"
         label="Allow password logins over SSH"
-        hint="Unchecked, only keys get in. Nothing checks that you have one."
+        :hint="
+          auth.isAdmin
+            ? 'Unchecked, only keys get in. Nothing checks that you have one.'
+            : ADMIN_ONLY
+        "
+        :disabled="!auth.isAdmin"
       />
       <ToggleRow
         v-model="management.logDefaultDrops"

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ManagementSection from '@/views/system/ManagementSection.vue'
 
@@ -18,7 +19,8 @@ const draft = (system = {}, services) => ({
   ...(services ? { services } : {}),
 })
 
-async function open(system, services) {
+async function open(system, services, role = 'admin') {
+  useAuthStore().user = { username: role, role }
   const config = useConfigStore()
   config.replaceDraft(draft(system, services))
   const wrapper = mount(ManagementSection, { global: { stubs: { RouterLink: true } } })
@@ -107,5 +109,20 @@ describe('ManagementSection host settings', () => {
     expect(box.element.checked).toBe(false)
     await box.setValue(true)
     expect(config.draft.system.management.sshPasswords).toBe(true)
+  })
+
+  // How the router is reached is an admin's to change, and the apply would
+  // refuse it from anyone else, so the fields say so up front.
+  it('greys out management access for an operator', async () => {
+    const { wrapper } = await open(
+      { management: { webPort: 443, sshPort: 22 } },
+      undefined,
+      'operator',
+    )
+    expect(wrapper.get('#sys-web').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('#sys-ssh').attributes('disabled')).toBeDefined()
+    expect(wrapper.findAll('input[type="checkbox"]')[0].attributes('disabled')).toBeDefined()
+    expect(wrapper.get('#sys-hostname').attributes('disabled')).toBeUndefined()
+    expect(wrapper.text()).toContain('Only an admin can change this.')
   })
 })

@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import RemoteBackupSection from '@/views/system/RemoteBackupSection.vue'
 
@@ -62,7 +63,8 @@ async function openAdvanced(wrapper) {
 }
 
 /** Mounts the section with the given block saved and in the draft. */
-async function open(backup = { remote }) {
+async function open(backup = { remote }, role = 'admin') {
+  useAuthStore().user = { username: role, role }
   const store = useConfigStore()
   store.saved = config(backup)
   store.replaceDraft(config(backup))
@@ -94,6 +96,19 @@ describe('RemoteBackupSection', () => {
     // An empty schedule shows the default rather than nothing.
     await openAdvanced(wrapper)
     expect(wrapper.get('#rb-schedule').element.value).toBe('0 3 * * *')
+  })
+
+  // The bucket gets the account hashes, so where it is and how it is
+  // locked are an admin's to say. An operator can still read the settings.
+  it('keeps the settings from an operator', async () => {
+    const { wrapper } = await open({ remote }, 'operator')
+    expect(wrapper.get('#rb-enabled').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('Only an admin can change these.')
+    await openAdvanced(wrapper)
+    const fieldsets = wrapper.findAll('fieldset')
+    expect(fieldsets).toHaveLength(2)
+    for (const f of fieldsets) expect(f.attributes('disabled')).toBeDefined()
+    expect(wrapper.get('#rb-endpoint').element.value).toBe(remote.endpoint)
   })
 
   it('writes a typed endpoint into the draft', async () => {

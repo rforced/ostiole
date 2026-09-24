@@ -159,6 +159,10 @@ test('add an operator, rename it, prove what it may do, and remove it', async ({
   await page.goto('/system/accounts')
   await expect(page.getByRole('region', { name: 'Accounts' })).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Change password' })).toBeVisible()
+  // What only an admin may apply is greyed out rather than refused later.
+  await page.goto('/system/general')
+  await expect(page.getByLabel('Web UI port', { exact: true })).toBeDisabled()
+  await expect(page.getByLabel('Hostname', { exact: true })).toBeEnabled()
   await page.getByRole('button', { name: 'Sign out' }).click()
 
   await login(page)

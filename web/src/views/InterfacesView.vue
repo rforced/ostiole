@@ -12,6 +12,7 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { someOf } from '@/lib/lists'
 import { usePageTabs } from '@/lib/tabs'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import AggregateDialog from '@/views/interfaces/AggregateDialog.vue'
 import InterfaceDialog from '@/views/interfaces/InterfaceDialog.vue'
@@ -19,6 +20,7 @@ import PppoeDialog from '@/views/interfaces/PppoeDialog.vue'
 import VlanDialog from '@/views/interfaces/VlanDialog.vue'
 import ZoneDialog from '@/views/interfaces/ZoneDialog.vue'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const { tabs, tab } = usePageTabs()
 const links = ref([])
@@ -415,6 +417,7 @@ function editZone(z) {
                     :question="`Delete zone ${z.name}?`"
                     :dependents="config.zoneDependents(z.name)"
                     :typed="z.name"
+                    :disabled="z.antiLockout && !auth.isAdmin"
                     @confirm="config.removeZone(z.name)"
                   />
                   <span

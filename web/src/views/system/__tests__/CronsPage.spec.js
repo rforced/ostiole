@@ -1,0 +1,78 @@
+import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
+import CronsPage from '@/views/system/CronsPage.vue'
+
+vi.mock('@/lib/api', () => ({
+  ApiError: class extends Error {},
+  api: { config: { get: vi.fn() }, crons: { list: vi.fn(), run: vi.fn() } },
+}))
+
+const config = {
+  version: 6,
+  zones: [],
+  interfaces: [],
+  rules: [],
+  system: {},
+  crons: [
+    { id: 'nightly', enabled: true, schedule: '0 4 * * *', kind: 'backup', directory: '/b' },
+    {
+      id: 'hashes',
+      enabled: true,
+      schedule: '0 5 * * *',
+      kind: 'backup',
+      directory: '/b',
+      withUsers: true,
+    },
+    { id: 'script', enabled: true, schedule: '0 6 * * *', kind: 'command', command: '/bin/true' },
+  ],
+}
+
+async function open(role) {
+  useAuthStore().user = { username: role, role }
+  api.config.get.mockResolvedValue(structuredClone(config))
+  api.crons.list.mockResolvedValue([])
+  const wrapper = mount(CronsPage, { global: { stubs: { CronDialog: true } } })
+  await flushPromises()
+  return wrapper
+}
+
+// TransitionGroup is stubbed here, so the rows are found as tr, not under tbody.
+const rows = (w) => w.findAll('tr').filter((tr) => tr.find('button').exists())
+const button = (tr, label) => tr.findAll('button').find((b) => b.text().includes(label))
+
+describe('CronsPage', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  // A cron that runs a command runs it as root, and one that backs up the
+  // accounts writes their hashes out: the apply refuses a change to either
+  // from anyone but an admin, so the page does not offer one.
+  it('keeps the crons only an admin may change from an operator', async () => {
+    const w = await open('operator')
+    const [nightly, hashes, script] = rows(w)
+    expect(button(nightly, 'Edit').attributes('disabled')).toBeUndefined()
+    expect(button(hashes, 'Edit').attributes('disabled')).toBeDefined()
+    expect(button(hashes, 'Delete').attributes('disabled')).toBeDefined()
+    // Running the backup now changes nothing; running the command does.
+    expect(button(hashes, 'Run now').attributes('disabled')).toBeUndefined()
+    expect(button(script, 'Run now').attributes('disabled')).toBeDefined()
+    expect(button(script, 'Edit').attributes('disabled')).toBeDefined()
+    expect(w.text()).toContain('Only an admin can change crons that run a command')
+  })
+
+  it('offers an admin every cron', async () => {
+    const w = await open('admin')
+    expect(rows(w)).toHaveLength(3)
+    for (const tr of rows(w)) {
+      for (const label of ['Run now', 'Edit', 'Delete'])
+        expect(button(tr, label).attributes('disabled')).toBeUndefined()
+    }
+    expect(w.text()).not.toContain('Only an admin')
+  })
+})

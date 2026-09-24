@@ -69,9 +69,21 @@ type credentials struct {
 	Password string `json:"password"`
 }
 
+// sessionResponse describes the caller's session and the role it acts
+// with, which the UI reads to grey out what the account may not change.
 type sessionResponse struct {
 	Username string    `json:"username"`
+	Role     auth.Role `json:"role"`
+	Created  time.Time `json:"created"`
+	LastSeen time.Time `json:"lastSeen"`
 	Expires  time.Time `json:"expires"`
+}
+
+func (a *api) describe(sess *auth.Session) sessionResponse {
+	return sessionResponse{
+		Username: sess.Username, Role: a.auth.Role(sess.Username),
+		Created: sess.Created, LastSeen: sess.LastSeen, Expires: sess.Expires,
+	}
 }
 
 func (a *api) setupStatus(w http.ResponseWriter, _ *http.Request) error {
@@ -99,7 +111,7 @@ func (a *api) setup(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	setSessionCookie(w, r, sess)
-	writeJSON(w, http.StatusCreated, sessionResponse{Username: sess.Username, Expires: sess.Expires})
+	writeJSON(w, http.StatusCreated, a.describe(sess))
 	return nil
 }
 
@@ -116,7 +128,7 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	setSessionCookie(w, r, sess)
-	writeJSON(w, http.StatusOK, sessionResponse{Username: sess.Username, Expires: sess.Expires})
+	writeJSON(w, http.StatusOK, a.describe(sess))
 	return nil
 }
 
@@ -130,8 +142,12 @@ func (a *api) logout(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (a *api) me(w http.ResponseWriter, r *http.Request) error {
-	sess, _ := a.session(r)
-	writeJSON(w, http.StatusOK, sess)
+	// The session can end between protect's look and this one.
+	sess, ok := a.session(r)
+	if !ok {
+		return errUnauthorized
+	}
+	writeJSON(w, http.StatusOK, a.describe(sess))
 	return nil
 }
 
@@ -144,7 +160,10 @@ type passwordChange struct {
 // login), sets the new one, and re-issues the caller's session since the
 // change ends every session for the account.
 func (a *api) changePassword(w http.ResponseWriter, r *http.Request) error {
-	sess, _ := a.session(r)
+	sess, ok := a.session(r)
+	if !ok {
+		return errUnauthorized
+	}
 	var req passwordChange
 	if err := decodeJSON(r, &req); err != nil {
 		return err
@@ -162,6 +181,6 @@ func (a *api) changePassword(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	setSessionCookie(w, r, fresh)
-	writeJSON(w, http.StatusOK, sessionResponse{Username: fresh.Username, Expires: fresh.Expires})
+	writeJSON(w, http.StatusOK, a.describe(fresh))
 	return nil
 }

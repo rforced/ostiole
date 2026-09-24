@@ -1,8 +1,9 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
+import { ADMIN_ONLY, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
@@ -10,8 +11,11 @@ const props = defineProps({
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const form = ref(blank())
+// Anti-lockout is kept by zone name, so renaming such a zone changes it.
+const nameLocked = computed(() => !auth.isAdmin && props.zone?.antiLockout === true)
 const error = ref('')
 
 function blank() {
@@ -51,10 +55,15 @@ function save() {
   <AppDialog v-model:open="open" :title="zone ? `Zone ${zone.name}` : 'Add zone'">
     <form class="space-y-4" @submit.prevent="save">
       <div class="grid gap-4 sm:grid-cols-2">
-        <FormField id="zone-name" label="Name">
+        <FormField
+          id="zone-name"
+          label="Name"
+          :hint="nameLocked ? 'Only an admin can rename a zone with anti-lockout.' : ''"
+        >
           <input
             id="zone-name"
             v-model="form.name"
+            :disabled="nameLocked"
             class="input font-mono"
             autocapitalize="none"
             spellcheck="false"
@@ -84,11 +93,16 @@ function save() {
             v-model="form.antiLockout"
             type="checkbox"
             class="mt-0.5 size-4 rounded border-line-2"
+            :disabled="!auth.isAdmin"
           />
-          <span>
+          <span :class="{ 'opacity-60': !auth.isAdmin }">
             Anti-lockout
             <span class="block text-ink-muted">
-              The management ports are always reachable from this zone.
+              {{
+                auth.isAdmin
+                  ? 'The management ports are always reachable from this zone.'
+                  : ADMIN_ONLY
+              }}
             </span>
           </span>
         </label>

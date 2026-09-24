@@ -6,12 +6,14 @@ import FormField from '@/components/FormField.vue'
 import { newId } from '@/lib/ids'
 import { parseList } from '@/lib/lists'
 import { SCHEDULE_PRESETS, presetFor } from '@/lib/schedules'
+import { ADMIN_ONLY, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { SERVICES } from '@/views/system/crons/services'
 
 const props = defineProps({ cron: { type: Object, default: null } })
 const open = defineModel('open', { type: Boolean, default: false })
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const error = ref('')
 const form = ref(blank())
@@ -117,9 +119,20 @@ function save() {
             placeholder="Nightly backup"
           />
         </FormField>
-        <FormField id="cron-kind" label="What it does">
+        <FormField
+          id="cron-kind"
+          label="What it does"
+          :hint="auth.isAdmin ? '' : 'Only an admin can add one that runs a command.'"
+        >
           <select id="cron-kind" v-model="form.kind" class="input">
-            <option v-for="k in KINDS" :key="k.value" :value="k.value">{{ k.label }}</option>
+            <option
+              v-for="k in KINDS"
+              :key="k.value"
+              :value="k.value"
+              :disabled="k.value === 'command' && !auth.isAdmin"
+            >
+              {{ k.label }}
+            </option>
           </select>
         </FormField>
         <FormField id="cron-preset" label="When">
@@ -175,10 +188,18 @@ function save() {
             />
           </FormField>
         </div>
-        <label class="flex items-center gap-2 text-sm">
-          <input v-model="form.withUsers" type="checkbox" class="size-4 rounded border-line-2" />
-          Include the administrator accounts and their password hashes
-        </label>
+        <div class="text-sm">
+          <label class="flex items-center gap-2" :class="{ 'opacity-60': !auth.isAdmin }">
+            <input
+              v-model="form.withUsers"
+              type="checkbox"
+              class="size-4 rounded border-line-2"
+              :disabled="!auth.isAdmin"
+            />
+            Include the administrator accounts and their password hashes
+          </label>
+          <p v-if="!auth.isAdmin" class="mt-1 text-ink-muted">{{ ADMIN_ONLY }}</p>
+        </div>
       </template>
 
       <FormField v-if="form.kind === 'restart-service'" id="cron-service" label="Service">

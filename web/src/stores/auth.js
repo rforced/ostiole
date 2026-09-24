@@ -5,6 +5,9 @@ import { ApiError, api } from '@/lib/api'
 import { useConfigStore } from '@/stores/config'
 import { useSystemStore } from '@/stores/system'
 
+/** Beside a setting only an admin may change, for everyone else. */
+export const ADMIN_ONLY = 'Only an admin can change this.'
+
 /**
  * Tracks the current session and whether first-run setup is still needed.
  */
@@ -16,6 +19,12 @@ export const useAuthStore = defineStore('auth', () => {
   const ready = ref(false)
 
   const loggedIn = computed(() => user.value !== null)
+  /**
+   * Whether the account may change what only an admin may: command crons,
+   * updates, the remote backup, management access and anti-lockout. The
+   * server refuses those to anyone else at apply; the UI greys them out.
+   */
+  const isAdmin = computed(() => user.value?.role === 'admin')
 
   /** Resolve the session state once; safe to call repeatedly. */
   async function bootstrap() {
@@ -66,5 +75,16 @@ export const useAuthStore = defineStore('auth', () => {
     useConfigStore().reset()
   }
 
-  return { user, setupNeeded, ready, loggedIn, bootstrap, login, setup, logout, invalidate }
+  return {
+    user,
+    setupNeeded,
+    ready,
+    loggedIn,
+    isAdmin,
+    bootstrap,
+    login,
+    setup,
+    logout,
+    invalidate,
+  }
 })

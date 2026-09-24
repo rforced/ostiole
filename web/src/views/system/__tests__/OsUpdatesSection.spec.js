@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
 import { useConfirmStore } from '@/stores/confirm'
 import OsUpdatesSection from '@/views/system/OsUpdatesSection.vue'
 
@@ -39,7 +40,8 @@ const waiting = {
 
 const installButton = (w) => w.findAll('button').find((b) => b.text().startsWith('Install'))
 
-async function mountWith(status) {
+async function mountWith(status, role = 'admin') {
+  useAuthStore().user = { username: role, role }
   api.systemUpdates.status.mockResolvedValue(status)
   const w = mount(OsUpdatesSection)
   await flushPromises()
@@ -65,6 +67,13 @@ describe('OsUpdatesSection', () => {
     expect(button.text()).toBe('Install all updates')
     expect(button.attributes('disabled')).toBeUndefined()
     expect(button.attributes('aria-busy')).toBe('false')
+  })
+
+  // Installing is an admin's; an operator can still look.
+  it('keeps the install from an operator', async () => {
+    const w = await mountWith(waiting, 'operator')
+    expect(installButton(w).attributes('disabled')).toBeDefined()
+    expect(w.text()).toContain('Only an admin can install updates')
   })
 
   it('follows the mode when it is security only', async () => {

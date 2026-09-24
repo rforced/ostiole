@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import CertificatesTab from '@/views/system/certificates/CertificatesTab.vue'
 
@@ -50,9 +51,10 @@ function draft() {
   }
 }
 
-async function open(page = {}) {
+async function open(page = {}, role = 'admin') {
   setActivePinia(createPinia())
   vi.clearAllMocks()
+  useAuthStore().user = { username: role, role }
   api.certificates.list.mockResolvedValue({
     builtIn,
     certificates: [],
@@ -134,5 +136,15 @@ describe('CertificatesTab', () => {
     expect(config.draft.system.management.certificate).toBe('router')
     await wrapper.get('#served-by').setValue('')
     expect(config.draft.system.management.certificate).toBeUndefined()
+  })
+
+  // What the web UI serves is management access, which only an admin may
+  // change; the certificates themselves stay an operator's.
+  it('keeps the served certificate from an operator', async () => {
+    const { wrapper } = await open({}, 'operator')
+    expect(wrapper.get('#served-by').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('Only an admin can change this.')
+    const regenerate = wrapper.findAll('button').find((b) => b.text().includes('Regenerate'))
+    expect(regenerate.attributes('disabled')).toBeDefined()
   })
 })

@@ -98,7 +98,7 @@ var routeDocs = map[string]routeDoc{
 	"POST /api/v1/setup":         {summary: "Create the first administrator account.", public: true},
 	"POST /api/v1/auth/login":    {summary: "Sign in and receive a session cookie.", public: true},
 	"POST /api/v1/auth/logout":   {summary: "End the current session.", role: auth.RoleViewer, session: true},
-	"GET /api/v1/auth/me":        {summary: "Describe the current session.", role: auth.RoleViewer, session: true},
+	"GET /api/v1/auth/me":        {summary: "Describe the current session and the role it acts with.", role: auth.RoleViewer, session: true},
 	"POST /api/v1/auth/password": {summary: "Change the signed-in account's password.", role: auth.RoleViewer, session: true},
 
 	"GET /api/v1/status":                   {summary: "Whether a configuration is saved, loaded, and confirmed.", role: auth.RoleViewer},

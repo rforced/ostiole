@@ -10,6 +10,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { errorMessage, useAsync } from '@/lib/async'
+import { ADMIN_ONLY, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import { useToastStore } from '@/stores/toast'
@@ -18,6 +19,7 @@ import CertificateDialog from '@/views/system/certificates/CertificateDialog.vue
 /** How often the list is re-read while an order is running. */
 const ISSUING_POLL_MS = 5000
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const confirm = useConfirmStore()
 const toast = useToastStore()
@@ -162,7 +164,7 @@ function remove(cert) {
           v-if="page.builtIn"
           type="button"
           class="btn-secondary"
-          :disabled="regenerate.busy.value"
+          :disabled="regenerate.busy.value || !auth.isAdmin"
           :aria-busy="regenerate.busy.value"
           @click="askRegenerate"
         >
@@ -180,8 +182,12 @@ function remove(cert) {
         <p v-if="error" role="alert" class="text-bad">{{ error }}</p>
 
         <template v-if="page.builtIn">
-          <FormField id="served-by" label="Served by" hint="From the next connection.">
-            <select id="served-by" v-model="served" class="input sm:w-96">
+          <FormField
+            id="served-by"
+            label="Served by"
+            :hint="auth.isAdmin ? 'From the next connection.' : ADMIN_ONLY"
+          >
+            <select id="served-by" v-model="served" class="input sm:w-96" :disabled="!auth.isAdmin">
               <option value="">Built-in self-signed</option>
               <option v-for="c in config.certificates" :key="c.id" :value="c.id">{{ c.id }}</option>
             </select>
@@ -299,6 +305,7 @@ function remove(cert) {
                 :dependents="config.certificateDependents(c.id)"
                 dependents-label="Goes back to the built-in certificate"
                 :typed="c.id"
+                :disabled="!auth.isAdmin && served === c.id"
                 @confirm="remove(c)"
               />
             </td>

@@ -242,3 +242,33 @@ func TestAccountRoutesAreAdminOnly(t *testing.T) {
 		}
 	}
 }
+
+// The session says which role it acts with, so the UI can grey out what
+// the account may not change rather than let the apply refuse it.
+func TestSessionsSayTheirRole(t *testing.T) {
+	t.Parallel()
+	srv, as, _ := roleServer(t)
+	role := func(raw []byte) auth.Role {
+		t.Helper()
+		var s struct {
+			Role auth.Role `json:"role"`
+		}
+		if err := json.Unmarshal(raw, &s); err != nil {
+			t.Fatal(err)
+		}
+		return s.Role
+	}
+	if resp, raw := do(t, srv, http.MethodGet, "/api/v1/auth/me", nil); resp.StatusCode != http.StatusOK || role(raw) != auth.RoleAdmin {
+		t.Errorf("me as the admin: %d %s", resp.StatusCode, raw)
+	}
+	if err := as.CreateUser("hand", testPassword, auth.RoleOperator); err != nil {
+		t.Fatal(err)
+	}
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/auth/login", credentials{Username: "hand", Password: testPassword})
+	if resp.StatusCode != http.StatusOK || role(raw) != auth.RoleOperator {
+		t.Errorf("login as an operator: %d %s", resp.StatusCode, raw)
+	}
+	if resp, raw := do(t, srv, http.MethodGet, "/api/v1/auth/me", nil); resp.StatusCode != http.StatusOK || role(raw) != auth.RoleOperator {
+		t.Errorf("me as an operator: %d %s", resp.StatusCode, raw)
+	}
+}

@@ -7,6 +7,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import CronDialog from '@/views/system/crons/CronDialog.vue'
@@ -14,6 +15,7 @@ import { serviceName } from '@/views/system/crons/services'
 
 const REFRESH_MS = 10_000
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const confirm = useConfirmStore()
 const statuses = ref([])
@@ -28,6 +30,10 @@ const load = useAsync(
 )
 
 onMounted(() => Promise.all([config.load(), load.run()]))
+
+/** A cron only an admin may change: it runs as root, or writes password hashes out. */
+const adminOnly = (c) => c.kind === 'command' || c.withUsers === true
+const locked = (c) => !auth.isAdmin && adminOnly(c)
 
 const byID = computed(() => Object.fromEntries(statuses.value.map((s) => [s.id, s])))
 const system = computed(() => statuses.value.filter((s) => s.origin === 'system'))
@@ -170,7 +176,11 @@ function describe(c) {
                 <button
                   type="button"
                   class="link mr-3"
-                  :disabled="runner.busy.value || c.status?.running"
+                  :disabled="
+                    runner.busy.value ||
+                    c.status?.running ||
+                    (c.kind === 'command' && !auth.isAdmin)
+                  "
                   :aria-busy="starting === c.id || c.status?.running === true"
                   @click="runNow(c)"
                 >
@@ -181,17 +191,23 @@ function describe(c) {
                   />
                   Run now
                 </button>
-                <button type="button" class="link" @click="edit(c)">Edit</button>
+                <button type="button" class="link" :disabled="locked(c)" @click="edit(c)">
+                  Edit
+                </button>
                 <ConfirmButton
                   class="ml-3"
                   label="Delete"
                   :question="`Delete cron ${c.description || c.id}?`"
+                  :disabled="locked(c)"
                   @confirm="config.removeCron(c.id)"
                 />
               </td>
             </tr>
           </TransitionGroup>
         </table>
+        <div v-if="rows.some(locked)" class="card-strip border-t border-line text-ink-muted">
+          Only an admin can change crons that run a command or back up accounts.
+        </div>
       </SectionCard>
     </template>
 

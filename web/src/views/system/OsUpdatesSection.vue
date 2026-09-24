@@ -10,6 +10,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { errorMessage, useAsync } from '@/lib/async'
 import { parseList } from '@/lib/lists'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import UpdateModeFields from '@/views/system/UpdateModeFields.vue'
@@ -19,6 +20,7 @@ const SHOWN = 15
 /** How often a running install is looked at. */
 const POLL_MS = 3000
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const confirm = useConfirmStore()
 const status = ref(null)
@@ -115,7 +117,7 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
         <button
           type="button"
           class="btn-primary"
-          :disabled="busy || running || !status?.available || !packages.length"
+          :disabled="busy || running || !status?.available || !packages.length || !auth.isAdmin"
           :aria-busy="installing"
           @click="askInstall"
         >
@@ -141,7 +143,11 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
           Nothing on this router drives a package manager.
         </p>
 
-        <template v-if="config.draft">
+        <p v-if="!auth.isAdmin" class="text-ink-muted">
+          Only an admin can install updates, reboot, or change how updates run.
+        </p>
+
+        <fieldset v-if="config.draft" class="space-y-4" :disabled="!auth.isAdmin">
           <UpdateModeFields
             prefix="os-upd"
             :mode="settings.mode ?? ''"
@@ -169,7 +175,7 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
               placeholder="kernel*, nvidia*"
             />
           </FormField>
-        </template>
+        </fieldset>
 
         <p v-if="running" role="status" class="text-ink-muted">Updating. This can take a while.</p>
 
@@ -184,6 +190,7 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
             description="Everything behind it loses its connection until it is back."
             confirm-label="Reboot"
             typed="reboot"
+            :disabled="!auth.isAdmin"
             @confirm="reboot"
           />
         </AppNotice>

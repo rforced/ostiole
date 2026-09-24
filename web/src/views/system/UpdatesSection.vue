@@ -9,6 +9,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import { ApiError, api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { LEVELS } from '@/lib/meter'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import UpdateModeFields from '@/views/system/UpdateModeFields.vue'
@@ -16,6 +17,7 @@ import UpdateModeFields from '@/views/system/UpdateModeFields.vue'
 /** How often a running update is looked at. */
 const POLL_MS = 1500
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const confirm = useConfirmStore()
 const current = ref('')
@@ -160,7 +162,7 @@ onMounted(async () => {
       <RefreshButton
         :busy="checking.busy.value"
         :updated-at="checking.updatedAt.value"
-        :disabled="running"
+        :disabled="running || !auth.isAdmin"
         label="Check now"
         busy-label="Checking…"
         @click="checking.run"
@@ -169,7 +171,7 @@ onMounted(async () => {
         v-if="check?.available && !restartedTo"
         type="button"
         class="btn-primary"
-        :disabled="busy || running"
+        :disabled="busy || running || !auth.isAdmin"
         :aria-busy="installing"
         @click="askInstall"
       >
@@ -187,7 +189,11 @@ onMounted(async () => {
         <dd>{{ when(lastCheck) }}</dd>
       </dl>
 
-      <template v-if="config.draft">
+      <p v-if="!auth.isAdmin" class="text-ink-muted">
+        Only an admin can check, install or change how updates run.
+      </p>
+
+      <fieldset v-if="config.draft" class="space-y-4" :disabled="!auth.isAdmin">
         <UpdateModeFields
           prefix="ostiole-upd"
           :mode="settings.mode ?? ''"
@@ -201,7 +207,7 @@ onMounted(async () => {
         <p class="text-ink-muted">
           An install restarts the service and rolls back if the new version does not come up.
         </p>
-      </template>
+      </fieldset>
 
       <div class="form-row">
         <FormField id="upd-channel" label="Channel">
@@ -209,7 +215,7 @@ onMounted(async () => {
             id="upd-channel"
             :value="channel"
             class="input w-40"
-            :disabled="running"
+            :disabled="running || !auth.isAdmin"
             @change="setChannel($event.target.value)"
           >
             <option value="stable">Stable</option>

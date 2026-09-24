@@ -195,7 +195,7 @@
     @apply text-xs font-medium tracking-wide text-ink-muted uppercase;
   }
   .input {
-    @apply w-full rounded-md border border-line-2 bg-surface px-3 py-1.5 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:ring-2 focus:ring-accent/30 focus:outline-none aria-invalid:border-bad;
+    @apply w-full rounded-md border border-line-2 bg-surface px-3 py-1.5 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:ring-2 focus:ring-accent/30 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-bad;
   }
   .btn-primary {
     @apply inline-flex items-center justify-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-accent-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50;

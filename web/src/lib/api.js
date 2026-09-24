@@ -112,7 +112,7 @@ function base64(buf) {
 }
 
 /** @typedef {{ status: string, version: string, commit?: string }} Health */
-/** @typedef {{ username: string, expires: string }} Session */
+/** @typedef {{ username: string, role: 'admin' | 'operator' | 'viewer', created: string, lastSeen: string, expires: string }} Session */
 /** @typedef {{ configured: boolean, tableLoaded: boolean, network: string, pending?: { since: string, deadline: string, remaining: number }, fallback?: { since: string, reason: string }, recovered?: { since: string, at: string } }} Status */
 
 export const api = {

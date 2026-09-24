@@ -10,6 +10,7 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import { ApiError, api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { SCHEDULE_PRESETS, presetFor } from '@/lib/schedules'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import RestorePreview from '@/views/system/RestorePreview.vue'
@@ -18,6 +19,7 @@ import RestorePreview from '@/views/system/RestorePreview.vue'
 const CRON_ID = 'system:remote-backup'
 const DEFAULT_SCHEDULE = '0 3 * * *'
 
+const auth = useAuthStore()
 const config = useConfigStore()
 const confirm = useConfirmStore()
 const status = ref(null)
@@ -127,15 +129,19 @@ const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
           variant="switch"
           label="Enabled"
           aria-label="Remote backup enabled"
+          :disabled="!auth.isAdmin"
           @update:model-value="set({ enabled: $event })"
         />
       </template>
 
       <div class="space-y-4">
         <p v-if="error" role="alert" class="text-bad">{{ error }}</p>
+        <p v-if="!auth.isAdmin" class="text-ink-muted">Only an admin can change these.</p>
 
         <template v-if="config.draft">
-          <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
+          <!-- A disabled fieldset greys out every field in it; the fold's
+               own button stays outside, so the settings can still be read. -->
+          <fieldset class="grid max-w-2xl min-w-0 gap-4 sm:grid-cols-2" :disabled="!auth.isAdmin">
             <FormField id="rb-endpoint" label="Endpoint" hint="HTTPS, no path.">
               <input
                 id="rb-endpoint"
@@ -194,75 +200,77 @@ const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
                 @change="set({ passphrase: $event.target.value })"
               />
             </FormField>
-          </div>
+          </fieldset>
 
           <AppDisclosure>
-            <FormField
-              id="rb-prefix"
-              label="Prefix"
-              hint="Retention touches only this folder."
-              class="max-w-md"
-            >
-              <input
-                id="rb-prefix"
-                class="input"
-                placeholder="ostiole/"
-                :value="settings.prefix ?? ''"
-                @change="set({ prefix: $event.target.value.trim() })"
-              />
-            </FormField>
-
-            <div class="form-row max-w-2xl">
-              <FormField id="rb-preset" label="Take a copy">
-                <select
-                  id="rb-preset"
-                  class="input w-64"
-                  :value="presetFor(schedule)"
-                  @change="$event.target.value && set({ schedule: $event.target.value })"
-                >
-                  <option value="">Something else</option>
-                  <option v-for="p in SCHEDULE_PRESETS" :key="p.value" :value="p.value">
-                    {{ p.label }}
-                  </option>
-                </select>
-              </FormField>
-              <FormField id="rb-schedule" label="Schedule" hint="Router time.">
-                <input
-                  id="rb-schedule"
-                  class="input w-48 font-mono"
-                  :value="schedule"
-                  :placeholder="DEFAULT_SCHEDULE"
-                  @change="set({ schedule: $event.target.value })"
-                />
-              </FormField>
-            </div>
-
-            <div class="form-row max-w-2xl">
-              <FormField id="rb-keep" label="Keep copies" hint="0 keeps every copy.">
-                <input
-                  id="rb-keep"
-                  type="number"
-                  min="0"
-                  class="input w-32"
-                  :value="settings.keep ?? 0"
-                  @change="set({ keep: Number($event.target.value) || 0 })"
-                />
-              </FormField>
+            <fieldset class="min-w-0 space-y-4" :disabled="!auth.isAdmin">
               <FormField
-                id="rb-days"
-                label="Days"
-                hint="0 writes no rule. Written to the bucket on each run."
+                id="rb-prefix"
+                label="Prefix"
+                hint="Retention touches only this folder."
+                class="max-w-md"
               >
                 <input
-                  id="rb-days"
-                  type="number"
-                  min="0"
-                  class="input w-32"
-                  :value="settings.days ?? 0"
-                  @change="set({ days: Number($event.target.value) || 0 })"
+                  id="rb-prefix"
+                  class="input"
+                  placeholder="ostiole/"
+                  :value="settings.prefix ?? ''"
+                  @change="set({ prefix: $event.target.value.trim() })"
                 />
               </FormField>
-            </div>
+
+              <div class="form-row max-w-2xl">
+                <FormField id="rb-preset" label="Take a copy">
+                  <select
+                    id="rb-preset"
+                    class="input w-64"
+                    :value="presetFor(schedule)"
+                    @change="$event.target.value && set({ schedule: $event.target.value })"
+                  >
+                    <option value="">Something else</option>
+                    <option v-for="p in SCHEDULE_PRESETS" :key="p.value" :value="p.value">
+                      {{ p.label }}
+                    </option>
+                  </select>
+                </FormField>
+                <FormField id="rb-schedule" label="Schedule" hint="Router time.">
+                  <input
+                    id="rb-schedule"
+                    class="input w-48 font-mono"
+                    :value="schedule"
+                    :placeholder="DEFAULT_SCHEDULE"
+                    @change="set({ schedule: $event.target.value })"
+                  />
+                </FormField>
+              </div>
+
+              <div class="form-row max-w-2xl">
+                <FormField id="rb-keep" label="Keep copies" hint="0 keeps every copy.">
+                  <input
+                    id="rb-keep"
+                    type="number"
+                    min="0"
+                    class="input w-32"
+                    :value="settings.keep ?? 0"
+                    @change="set({ keep: Number($event.target.value) || 0 })"
+                  />
+                </FormField>
+                <FormField
+                  id="rb-days"
+                  label="Days"
+                  hint="0 writes no rule. Written to the bucket on each run."
+                >
+                  <input
+                    id="rb-days"
+                    type="number"
+                    min="0"
+                    class="input w-32"
+                    :value="settings.days ?? 0"
+                    @change="set({ days: Number($event.target.value) || 0 })"
+                  />
+                </FormField>
+              </div>
+            </fieldset>
           </AppDisclosure>
 
           <p class="max-w-3xl text-ink-muted">
