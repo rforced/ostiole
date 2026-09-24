@@ -146,8 +146,8 @@ var routeDocs = map[string]routeDoc{
 	"POST /api/v1/config/diff":                           {summary: "Compare two configurations.", role: auth.RoleViewer},
 
 	"POST /api/v1/config/starter":               {summary: "Build a first configuration from the wizard's answers.", role: auth.RoleOperator},
-	"POST /api/v1/check":                        {summary: "Validate a configuration and render it without applying.", role: auth.RoleOperator},
-	"POST /api/v1/apply":                        {summary: "Apply a configuration, optionally with a confirmation window.", role: auth.RoleOperator},
+	"POST /api/v1/check":                        {summary: "Validate a configuration and render it without applying. Changes only an administrator may apply are refused.", role: auth.RoleOperator},
+	"POST /api/v1/apply":                        {summary: "Apply a configuration, optionally with a confirmation window. Command crons, backups that carry accounts, updates, the remote backup, management access and anti-lockout need an administrator.", role: auth.RoleOperator},
 	"POST /api/v1/apply/confirm":                {summary: "Confirm the pending apply.", role: auth.RoleOperator},
 	"POST /api/v1/apply/revert":                 {summary: "Undo the pending apply.", role: auth.RoleOperator},
 	"POST /api/v1/config/restore":               {summary: "Read a backup file and report what it would change.", role: auth.RoleOperator},
@@ -199,7 +199,7 @@ var routeDocs = map[string]routeDoc{
 	"DELETE /api/v1/dns/queries":      {summary: "Empty the query log and its per-list counts.", role: auth.RoleOperator},
 
 	"GET /api/v1/crons":           {summary: "The operator's crons, and the work Ostiole does on its own account.", role: auth.RoleViewer},
-	"POST /api/v1/crons/{id}/run": {summary: "Run a cron now.", role: auth.RoleOperator},
+	"POST /api/v1/crons/{id}/run": {summary: "Run a cron now. Command and update crons need an administrator.", role: auth.RoleOperator},
 
 	"GET /api/v1/host":               {summary: "What this router is: distribution, kernel, Ostiole's units, the daemons it has, who owns the addresses, and leftover rulesets.", role: auth.RoleViewer},
 	"POST /api/v1/host/legacy/flush": {summary: "Clear the rulesets an older firewall left in the kernel.", role: auth.RoleAdmin},

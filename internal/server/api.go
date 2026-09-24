@@ -909,11 +909,33 @@ func (a *api) check(w http.ResponseWriter, r *http.Request) error {
 	if req.Config == nil {
 		return &badRequest{errors.New("config is required")}
 	}
+	if err := a.mayChange(r, req.Config); err != nil {
+		return err
+	}
 	plan, err := a.engine.Check(r.Context(), req.Config)
 	if err != nil {
 		return err
 	}
 	writeJSON(w, http.StatusOK, plan)
+	return nil
+}
+
+// mayChange refuses an operator a configuration that changes what only an
+// administrator may: an operator may apply, but a command cron would make
+// them root and a remote backup would hand them the accounts.
+func (a *api) mayChange(r *http.Request, next *model.Config) error {
+	if p, ok := a.authenticate(r); ok && p.Role.Allows(auth.RoleAdmin) {
+		return nil
+	}
+	old, err := a.engine.Store().Load()
+	if errors.Is(err, store.ErrNotFound) {
+		old = nil
+	} else if err != nil {
+		return err
+	}
+	if parts := model.AdminChanges(old, next); len(parts) > 0 {
+		return fmt.Errorf("%w: only an administrator can change %s", errForbidden, strings.Join(parts, ", "))
+	}
 	return nil
 }
 
@@ -927,6 +949,9 @@ func (a *api) apply(w http.ResponseWriter, r *http.Request) error {
 	}
 	if req.ConfirmTimeoutSeconds < 0 || req.ConfirmTimeoutSeconds > 3600 {
 		return &badRequest{errors.New("confirmTimeoutSeconds must be 0-3600")}
+	}
+	if err := a.mayChange(r, req.Config); err != nil {
+		return err
 	}
 	res, err := a.engine.Apply(r.Context(), req.Config, engine.ApplyOptions{
 		ConfirmTimeout: time.Duration(req.ConfirmTimeoutSeconds) * time.Second,

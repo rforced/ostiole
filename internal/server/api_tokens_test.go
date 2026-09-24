@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -241,4 +242,89 @@ func TestViewerReadsTheConfigurationWithoutSecrets(t *testing.T) {
 			t.Errorf("an operator reads %s without its secrets", path)
 		}
 	}
+}
+
+// An operator applies the configuration, but not the parts that would make
+// them root, hand them the accounts or decide who gets in. Running a
+// command cron now is the administrator's call too.
+func TestOperatorCannotTakeWhatIsTheAdministrators(t *testing.T) {
+	t.Parallel()
+	tokens, err := auth.NewTokens(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, operator, err := tokens.Create("automation", auth.RoleOperator, 0, "admin", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := newTestServerWith(t, func(d *Deps) { d.Tokens = tokens; d.Crons = &fakeCrons{} })
+	clone := func(c *model.Config) *model.Config {
+		raw, _ := json.Marshal(c)
+		var out model.Config
+		_ = json.Unmarshal(raw, &out)
+		return &out
+	}
+	cfg := starter()
+	cfg.Crons = []model.Cron{{ID: "hook", Enabled: true, Schedule: "0 5 * * *", Kind: model.CronCommand, Command: "/usr/local/bin/hook"}}
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: cfg}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("admin apply: %d %s", resp.StatusCode, raw)
+	}
+
+	mine := clone(cfg)
+	mine.Rules = append(mine.Rules, model.Rule{ID: "extra", Enabled: true, Zone: "lan", Action: model.ActionAccept, Protocol: model.ProtocolAny})
+	if resp, raw := sendAs(t, srv, "/api/v1/apply", operator, applyRequest{Config: mine}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("operator's own change: %d %s", resp.StatusCode, raw)
+	}
+	for name, change := range map[string]func(*model.Config){
+		"a command": func(c *model.Config) {
+			c.Crons = append(c.Crons, model.Cron{ID: "shell", Enabled: true, Schedule: "* * * * *",
+				Kind: model.CronCommand, Command: "/bin/sh", Args: []string{"-c", "id"}})
+		},
+		"ssh passwords": func(c *model.Config) { c.System.Management.SSHPasswords = !c.System.Management.SSHPasswords },
+		"the remote backup": func(c *model.Config) {
+			c.Backup.Remote = model.RemoteBackup{Enabled: true, Endpoint: "https://s3.example.net", Bucket: "theirs",
+				KeyID: "k", Secret: "s", Passphrase: "their passphrase"}
+		},
+	} {
+		next := clone(mine)
+		change(next)
+		for path, body := range map[string]any{
+			"/api/v1/check": configRequest{Config: next},
+			"/api/v1/apply": applyRequest{Config: next},
+		} {
+			resp, raw := sendAs(t, srv, path, operator, body)
+			if resp.StatusCode != http.StatusForbidden || !strings.Contains(string(raw), "only an administrator") {
+				t.Errorf("operator %s via %s: %d %s", name, path, resp.StatusCode, raw)
+			}
+		}
+	}
+
+	if resp, raw := sendAs(t, srv, "/api/v1/crons/hook/run", operator, nil); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("operator ran the command cron: %d %s", resp.StatusCode, raw)
+	}
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/crons/hook/run", nil); resp.StatusCode != http.StatusOK {
+		t.Errorf("admin run: %d %s", resp.StatusCode, raw)
+	}
+}
+
+// sendAs posts a JSON body with a bearer token and nothing else.
+func sendAs(t *testing.T, srv *httptest.Server, path, token string, body any) (*http.Response, []byte) {
+	t.Helper()
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequest(http.MethodPost, srv.URL+path, bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	out, _ := io.ReadAll(resp.Body)
+	return resp, out
 }
