@@ -49,10 +49,14 @@ func (f *fakeExec) calls() []string {
 	return append([]string(nil), f.ran...)
 }
 
+// runner gives the runner no directory. Tick runs crons in the background
+// and each saves after it finishes, which can land after the test returns
+// and break the TempDir cleanup. Tests that read the file pass their own
+// directory and wait with waitForSave.
 func runner(t *testing.T, ex Executor, crons ...model.Cron) *Runner {
 	t.Helper()
 	cfg := config(crons...)
-	return NewRunner(func() *model.Config { return cfg }, ex, slog.New(slog.DiscardHandler), t.TempDir())
+	return NewRunner(func() *model.Config { return cfg }, ex, slog.New(slog.DiscardHandler), "")
 }
 
 func TestTickRunsWhatIsDue(t *testing.T) {
@@ -91,7 +95,7 @@ func TestTickReadsSchedulesInTheConfiguredZone(t *testing.T) {
 	ex := &fakeExec{}
 	cfg := config(model.Cron{ID: "nightly", Enabled: true, Schedule: "0 3 * * *", Kind: model.CronBackup})
 	cfg.System.Timezone = "Europe/Berlin"
-	r := NewRunner(func() *model.Config { return cfg }, ex, slog.New(slog.DiscardHandler), t.TempDir())
+	r := NewRunner(func() *model.Config { return cfg }, ex, slog.New(slog.DiscardHandler), "")
 
 	// September puts Berlin two hours ahead, so 03:00 UTC is 05:00 there.
 	r.Tick(context.Background(), at(t, "2026-09-16 03:00"))
@@ -217,7 +221,7 @@ func TestStatusesIncludeTheSystemWork(t *testing.T) {
 func TestTheGatewayRowOnlyPromisesFailoverWhenItCanHappen(t *testing.T) {
 	t.Parallel()
 	cfg := config()
-	r := NewRunner(func() *model.Config { return cfg }, &fakeExec{}, slog.New(slog.DiscardHandler), t.TempDir())
+	r := NewRunner(func() *model.Config { return cfg }, &fakeExec{}, slog.New(slog.DiscardHandler), "")
 
 	gateways := func() Status {
 		t.Helper()
@@ -374,7 +378,7 @@ func TestUpdateCronsRunOnTheirOwnSchedule(t *testing.T) {
 	t.Parallel()
 	ex := &fakeExec{}
 	cfg := config()
-	r := NewRunner(func() *model.Config { return cfg }, ex, slog.New(slog.DiscardHandler), t.TempDir())
+	r := NewRunner(func() *model.Config { return cfg }, ex, slog.New(slog.DiscardHandler), "")
 
 	// Nobody wrote these out; they come from the update settings. Midweek
 	// both sources are asked what is waiting, and neither installs.
@@ -412,7 +416,7 @@ func TestUpdateCronsAreReportedAsOstioleOwnWork(t *testing.T) {
 	cfg := config()
 	// The distro patches itself; Ostiole is installed by hand.
 	cfg.Updates.Ostiole.Mode = model.UpdateManual
-	r := NewRunner(func() *model.Config { return cfg }, &fakeExec{}, slog.New(slog.DiscardHandler), t.TempDir())
+	r := NewRunner(func() *model.Config { return cfg }, &fakeExec{}, slog.New(slog.DiscardHandler), "")
 	found := map[string]Status{}
 	for _, st := range r.Statuses() {
 		if st.Origin == OriginSystem {
