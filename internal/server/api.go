@@ -679,13 +679,24 @@ func (a *api) timezones(w http.ResponseWriter, _ *http.Request) error {
 	return nil
 }
 
-func (a *api) getConfig(w http.ResponseWriter, _ *http.Request) error {
+func (a *api) getConfig(w http.ResponseWriter, r *http.Request) error {
 	cfg, err := a.engine.Store().Load()
 	if err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, cfg)
+	writeJSON(w, http.StatusOK, a.visible(r, cfg))
 	return nil
+}
+
+// visible is the configuration as the caller may see it. An operator edits
+// it and saves it back whole, so needs it as it is. A viewer may only
+// look, and the keys, passphrases and passwords in it are not for looking
+// at: they get the copy a shared backup carries.
+func (a *api) visible(r *http.Request, cfg *model.Config) *model.Config {
+	if p, ok := a.authenticate(r); ok && p.Role.Allows(auth.RoleOperator) {
+		return cfg
+	}
+	return cfg.Redacted()
 }
 
 func (a *api) revisions(w http.ResponseWriter, _ *http.Request) error {
@@ -705,7 +716,7 @@ func (a *api) revision(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, cfg)
+	writeJSON(w, http.StatusOK, a.visible(r, cfg))
 	return nil
 }
 

@@ -14,6 +14,7 @@ import (
 
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/engine"
+	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/modem"
 	"github.com/rforced/ostiole/internal/nft/nfttest"
 	"github.com/rforced/ostiole/internal/store"
@@ -193,5 +194,51 @@ func TestRolesAreEnforcedForSessionsToo(t *testing.T) {
 	resp, _ = do(t, srv, http.MethodPost, "/api/v1/apply/confirm", nil)
 	if resp.StatusCode != http.StatusForbidden {
 		t.Errorf("viewer confirming = %d, want 403", resp.StatusCode)
+	}
+}
+
+// A viewer reads the configuration and its history without the secrets in
+// them. An operator, who saves the configuration back whole, reads it as
+// it is.
+func TestViewerReadsTheConfigurationWithoutSecrets(t *testing.T) {
+	t.Parallel()
+	srv, _, _ := roleServer(t)
+	cfg := starter()
+	cfg.Backup.Remote = model.RemoteBackup{
+		Enabled: true, Endpoint: "https://s3.us-west-004.backblazeb2.com", Bucket: "router-backups",
+		KeyID: "key-id-1", Secret: "s3-secret-1", Passphrase: "correct horse battery",
+	}
+	// Twice, so the first is in the history too.
+	for range 2 {
+		if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: cfg}); resp.StatusCode != http.StatusOK {
+			t.Fatalf("apply: %d %s", resp.StatusCode, raw)
+		}
+	}
+	viewer := mintToken(t, srv, "dashboard", "viewer")
+	operator := mintToken(t, srv, "automation", "operator")
+
+	_, raw := withToken(t, srv, http.MethodGet, "/api/v1/config/revisions", viewer)
+	var revs []struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(raw, &revs); err != nil || len(revs) == 0 {
+		t.Fatalf("revisions: %v %s", err, raw)
+	}
+	for _, path := range []string{"/api/v1/config", "/api/v1/config/revisions/" + revs[0].ID} {
+		resp, raw := withToken(t, srv, http.MethodGet, path, viewer)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("viewer %s: %d %s", path, resp.StatusCode, raw)
+		}
+		for _, secret := range []string{"key-id-1", "s3-secret-1", "correct horse battery"} {
+			if strings.Contains(string(raw), secret) {
+				t.Errorf("a viewer reads %q in %s", secret, path)
+			}
+		}
+		if !strings.Contains(string(raw), "router-backups") {
+			t.Errorf("%s lost more than its secrets: %s", path, raw)
+		}
+		if _, raw := withToken(t, srv, http.MethodGet, path, operator); !strings.Contains(string(raw), "s3-secret-1") {
+			t.Errorf("an operator reads %s without its secrets", path)
+		}
 	}
 }
