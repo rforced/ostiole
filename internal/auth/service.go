@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -303,12 +304,51 @@ func (s *Service) Restore(users []User) error {
 
 // Setup creates the first account, as an administrator: the operator
 // running first-run setup has to be able to manage everything afterwards.
-// It fails once any account exists.
+// It fails once any account exists. The check is made again under the
+// lock the write takes, so two setups racing each other, or one racing
+// `ostiole reset-password`, leave one account rather than two.
 func (s *Service) Setup(username, password string) error {
+	// Cheap first, so a request after setup never costs a hash.
 	if !s.NeedsSetup() {
 		return ErrSetupDone
 	}
-	return s.CreateUser(username, password, RoleAdmin)
+	if !usernameRe.MatchString(username) {
+		return ErrInvalidUsername
+	}
+	hash, err := HashPassword(password)
+	if err != nil {
+		return err
+	}
+	return s.exclusive(func() error {
+		if len(s.users) > 0 {
+			return ErrSetupDone
+		}
+		now := s.now()
+		s.users[username] = User{Username: username, Hash: hash, Role: RoleAdmin, CreatedAt: now, UpdatedAt: now}
+		return s.save()
+	})
+}
+
+// exclusive runs fn with the users file locked against other processes and
+// read fresh, and the accounts locked against this one, so what fn checks
+// is still true when it writes.
+func (s *Service) exclusive(fn func() error) error {
+	dir := filepath.Dir(s.path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(filepath.Join(dir, ".users.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		return fmt.Errorf("lock %s: %w", s.path, err)
+	}
+	s.refresh()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return fn()
 }
 
 // CreateUser adds an account. It is separate from SetPassword so that
@@ -325,15 +365,14 @@ func (s *Service) CreateUser(username, password string, role Role) error {
 	if err != nil {
 		return err
 	}
-	s.refresh()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if _, taken := s.users[username]; taken {
-		return ErrUserExists
-	}
-	now := s.now()
-	s.users[username] = User{Username: username, Hash: hash, Role: role, CreatedAt: now, UpdatedAt: now}
-	return s.save()
+	return s.exclusive(func() error {
+		if _, taken := s.users[username]; taken {
+			return ErrUserExists
+		}
+		now := s.now()
+		s.users[username] = User{Username: username, Hash: hash, Role: role, CreatedAt: now, UpdatedAt: now}
+		return s.save()
+	})
 }
 
 // SetPassword creates or updates an account and invalidates its sessions.
@@ -348,22 +387,21 @@ func (s *Service) SetPassword(username, password string) error {
 	if err != nil {
 		return err
 	}
-	s.refresh()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	now := s.now()
-	u, ok := s.users[username]
-	if !ok {
-		u = User{Username: username, Role: RoleAdmin, CreatedAt: now}
-	}
-	u.Hash = hash
-	u.UpdatedAt = now
-	s.users[username] = u
-	if err := s.save(); err != nil {
-		return err
-	}
-	s.sessions.deleteUser(username)
-	return nil
+	return s.exclusive(func() error {
+		now := s.now()
+		u, ok := s.users[username]
+		if !ok {
+			u = User{Username: username, Role: RoleAdmin, CreatedAt: now}
+		}
+		u.Hash = hash
+		u.UpdatedAt = now
+		s.users[username] = u
+		if err := s.save(); err != nil {
+			return err
+		}
+		s.sessions.deleteUser(username)
+		return nil
+	})
 }
 
 // Rename changes an account's username, keeping its password, its role,

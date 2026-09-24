@@ -430,3 +430,48 @@ func TestReloadsWhenFileChangesOnDisk(t *testing.T) {
 		t.Error("NeedsSetup false after file removal")
 	}
 }
+
+// First-run setup is open to whoever gets there first, so two at once must
+// leave one account, not one each. The two services stand for the daemon
+// and `ostiole reset-password`: they share only the directory.
+func TestConcurrentSetupsLeaveOneAccount(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	var services [2]*Service
+	for i := range services {
+		s, err := NewService(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		services[i] = s
+	}
+	names := []string{"alice", "bob", "carol", "dave"}
+	errs := make(chan error, len(names))
+	start := make(chan struct{})
+	for i, name := range names {
+		go func() {
+			<-start
+			errs <- services[i%2].Setup(name, goodPassword)
+		}()
+	}
+	close(start)
+	created := 0
+	for range names {
+		switch err := <-errs; {
+		case err == nil:
+			created++
+		case !errors.Is(err, ErrSetupDone):
+			t.Errorf("setup: %v", err)
+		}
+	}
+	if created != 1 {
+		t.Errorf("%d setups succeeded, want 1", created)
+	}
+	fresh, err := NewService(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(fresh.Users()); n != 1 {
+		t.Errorf("%d accounts on disk, want 1", n)
+	}
+}
