@@ -378,7 +378,7 @@ func (s *Service) exclusive(fn func() error) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(filepath.Join(dir, ".users.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	f, err := os.OpenFile(filepath.Join(dir, ".users.lock"), os.O_CREATE|os.O_RDONLY, 0o600)
 	if err != nil {
 		return err
 	}
