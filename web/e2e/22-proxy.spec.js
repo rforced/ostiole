@@ -20,6 +20,8 @@ test('publish a site through a pool and apply it', async ({ page }) => {
 
   // Ports of its own, so nothing else in the suite has to move.
   await page.getByLabel('Proxy enabled').check()
+  // Nothing reaches the proxy until a zone is ticked, and validation says so.
+  await page.getByRole('checkbox', { name: 'wan', exact: true }).check()
   await page.getByRole('spinbutton', { name: 'HTTP port' }).fill('8080')
   await page.getByRole('spinbutton', { name: 'HTTPS port' }).fill('8443')
 

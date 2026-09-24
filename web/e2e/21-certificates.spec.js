@@ -61,11 +61,15 @@ test('order a certificate over dns-01', async ({ page }) => {
     provider: 'local',
   })
 
-  // The renewal cron is derived from the certificate, not written out.
+  // The renewal cron is derived from the certificate, not written out: the
+  // row is always listed, and gains an hourly schedule once there is work.
   await page.goto('/system/crons')
-  await expect(page.getByRole('region', { name: "Ostiole's crons" })).toContainText(
-    'Renew the certificates that are due',
-  )
+  await expect(
+    page
+      .getByRole('region', { name: "Ostiole's crons" })
+      .getByRole('row')
+      .filter({ hasText: 'Renew and issue certificates' }),
+  ).toContainText(/\d+ \* \* \* \*/)
 })
 
 test('a token limited to a certificate reaches that and nothing else', async ({

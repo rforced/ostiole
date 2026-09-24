@@ -15,12 +15,12 @@ test('schedule a nightly backup and see what the router does by itself', async (
   // anyone has configured a cron, and every timer the daemon starts is
   // on it.
   const system = page.getByRole('region', { name: "Ostiole's crons" })
-  await expect(system).toContainText('Refresh the address lists and country ranges')
-  await expect(system).toContainText('Refresh the DNS blocklists')
+  await expect(system).toContainText('Refresh firewall alias lists')
+  await expect(system).toContainText('Refresh DNS block lists')
   await expect(system).toContainText('Probe each gateway')
   await expect(system).toContainText('Expire idle web sessions')
-  await expect(system).toContainText('Collect dropped packets')
-  await expect(system).toContainText('Renew the certificates that are due')
+  await expect(system).toContainText('Firewall packet collector')
+  await expect(system).toContainText('Renew and issue certificates')
 
   await page.getByRole('button', { name: 'Add cron' }).click()
   const dialog = page.getByRole('dialog')

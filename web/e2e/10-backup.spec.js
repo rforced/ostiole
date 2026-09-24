@@ -96,7 +96,7 @@ test('the remote backup settings become a system cron', async ({ page }) => {
 
   await sidebar(page, 'Crons')
   const system = page.getByRole('region', { name: "Ostiole's crons" })
-  const row = system.getByRole('row').filter({ hasText: 'Copy an encrypted backup' })
+  const row = system.getByRole('row').filter({ hasText: 'Remote backup' })
   await expect(row).toContainText('0 3 * * *')
 
   // Off again: the specs that follow are not about a bucket.

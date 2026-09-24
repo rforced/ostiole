@@ -45,7 +45,7 @@ test('peers say nothing while the daemon is not running', async ({ page }) => {
   await login(page)
   await page.goto('/vpn/tailscale')
   await page.getByRole('tab', { name: 'Peers' }).click()
-  await expect(page.getByRole('cell', { name: 'No peers.' })).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'Tailscale is not running.' })).toBeVisible()
 })
 
 test('removing the node takes its interface with it', async ({ page }) => {
