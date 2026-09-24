@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"time"
@@ -125,8 +126,16 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) error {
 	}
 	sess, err := a.auth.Login(c.Username, c.Password, remoteIP(r))
 	if err != nil {
+		// A name that is no account is left out of the log: it is as often
+		// a password typed into the wrong box.
+		user := "(no such account)"
+		if _, ok := a.auth.Account(c.Username); ok {
+			user = c.Username
+		}
+		slog.Warn("sign-in refused", "user", user, "address", remoteIP(r), "reason", err)
 		return err
 	}
+	slog.Info("signed in", "user", sess.Username, "address", remoteIP(r))
 	setSessionCookie(w, r, sess)
 	writeJSON(w, http.StatusOK, a.describe(sess))
 	return nil
