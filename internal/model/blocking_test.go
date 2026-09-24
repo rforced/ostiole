@@ -66,6 +66,24 @@ func TestDenyingADelegatedDomainIsRefused(t *testing.T) {
 	}
 }
 
+// A service name like _dns.resolver.arpa is how a client finds an encrypted
+// resolver on its own, and the lists carry names like it already.
+func TestExceptionsTakeServiceNames(t *testing.T) {
+	c := starterForBlocking()
+	c.Blocking.Deny = []string{"_dns.resolver.arpa", "_dmarc.example.com."}
+	c.Blocking.Allow = []string{"_ldap._tcp.example.org"}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("service names were refused: %v", err)
+	}
+	c.Blocking.Allow = nil
+	for _, bad := range []string{"bad name.example", "-ads.example.com", "ads..example.com", "_ads-.example.com"} {
+		c.Blocking.Deny = []string{bad}
+		if err := c.Validate(); err == nil || !strings.Contains(err.Error(), "is not a domain name") {
+			t.Errorf("deny %q: %v", bad, err)
+		}
+	}
+}
+
 func TestBlockingNeedsTheDNSServer(t *testing.T) {
 	c := starterForBlocking()
 	c.Services.DNS.Enabled = false

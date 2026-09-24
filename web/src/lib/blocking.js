@@ -48,9 +48,10 @@ export function coversName(parent, name) {
   return p !== '' && (p === n || n.endsWith(`.${p}`))
 }
 
-const DOMAIN_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/
+const DOMAIN_RE =
+  /^[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?(\.[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?)*$/
 
-/** Whether the check takes a name as an allow or deny entry. It refuses an underscore. */
+/** Whether the check takes a name as an allow or deny entry, underscores included. */
 export function isDomainName(name) {
   const n = normalizeName(name)
   return n !== '' && n.length <= 253 && DOMAIN_RE.test(n)

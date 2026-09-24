@@ -532,6 +532,8 @@ var (
 	macRe       = regexp.MustCompile(`^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$`)
 	leaseTimeRe = regexp.MustCompile(`^([0-9]+[smhdw]|infinite)$`)
 	domainRe    = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$`)
+	// blockNameRe is domainRe with underscores, as dnsblock reads a list.
+	blockNameRe = regexp.MustCompile(`^[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?(\.[a-zA-Z0-9_]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9_])?)*$`)
 )
 
 // blocking checks the DNS blocking section: the lists, the exceptions to
@@ -575,7 +577,7 @@ func (v *validator) blocking(c *Config, aliases map[string]AliasType) {
 	delegated := c.DelegatedDomains()
 	for i, d := range b.Deny {
 		path := fmt.Sprintf("blocking.deny[%d]", i)
-		v.domainName(path, d)
+		v.blockName(path, d)
 		// Blocking is by subtree, so denying a parent of one of this router's
 		// own names takes it away just as surely as denying it outright.
 		for _, n := range never {
@@ -592,7 +594,7 @@ func (v *validator) blocking(c *Config, aliases map[string]AliasType) {
 		}
 	}
 	for i, d := range b.Allow {
-		v.domainName(fmt.Sprintf("blocking.allow[%d]", i), d)
+		v.blockName(fmt.Sprintf("blocking.allow[%d]", i), d)
 	}
 
 	for _, ref := range []struct{ field, name string }{
@@ -615,9 +617,20 @@ func (v *validator) blocking(c *Config, aliases map[string]AliasType) {
 	}
 }
 
-// domainName checks one name written by hand: an allow or deny entry, or a
-// domain override. A trailing dot is accepted and ignored, because that is
-// how a resolver writes a fully qualified name.
+// blockName checks an allow or deny entry. It also takes the underscores of
+// service names like _dns.resolver.arpa, which the lists carry too; what it
+// refuses, domainName refuses and says why.
+func (v *validator) blockName(path, name string) {
+	n := strings.Trim(strings.TrimSpace(name), ".")
+	if len(n) <= 253 && blockNameRe.MatchString(n) {
+		return
+	}
+	v.domainName(path, name)
+}
+
+// domainName checks one name written by hand, such as a domain override. A
+// trailing dot is accepted and ignored, because that is how a resolver
+// writes a fully qualified name.
 func (v *validator) domainName(path, name string) {
 	n := strings.Trim(strings.TrimSpace(name), ".")
 	switch {

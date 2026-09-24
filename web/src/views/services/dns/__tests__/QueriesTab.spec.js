@@ -41,7 +41,7 @@ function button(wrapper, label) {
   return wrapper.findAll('button').find((b) => b.text() === label)
 }
 
-/** A blocked answer, one answered, one the router answers for, one the check refuses. */
+/** A blocked answer, one answered, one the router answers for, and a service name. */
 function mixed() {
   const row = (seq, name, status, extra = {}) => ({
     seq,
@@ -140,9 +140,9 @@ describe('QueriesTab', () => {
     const always = () => toggle(wrapper, 'Always block example.com')
     expect(never().element.checked).toBe(false)
     expect(always().element.checked).toBe(false)
-    // The router answers for its own names, and the check refuses an underscore.
+    // The router answers for its own names, so they get none.
     expect(wrapper.find('input[aria-label$=" nas.lan"]').exists()).toBe(false)
-    expect(wrapper.find('input[aria-label$=" _dns.resolver.arpa"]').exists()).toBe(false)
+    expect(toggle(wrapper, 'Always block _dns.resolver.arpa').exists()).toBe(true)
 
     await never().setValue(true)
     expect(config.draft.blocking.allow).toEqual(['ads.example.com'])

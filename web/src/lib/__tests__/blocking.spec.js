@@ -55,11 +55,14 @@ describe('isDomainName', () => {
     expect(isDomainName('ads.example.com')).toBe(true)
     expect(isDomainName('Ads.Example.COM.')).toBe(true)
     expect(isDomainName('wpad')).toBe(true)
+    expect(isDomainName('_dns.resolver.arpa')).toBe(true)
+    expect(isDomainName('_ldap._tcp.example.org')).toBe(true)
     for (const bad of [
       '',
       '.',
-      '_dns.resolver.arpa',
+      'bad name.example',
       '-ads.example.com',
+      '_ads-.example.com',
       `${'a'.repeat(64)}.com`,
     ]) {
       expect(isDomainName(bad), bad).toBe(false)
@@ -108,11 +111,14 @@ describe('exceptionToggles', () => {
 
   it('offers nothing the check would refuse', () => {
     const toggle = exceptionToggles(router())
-    expect(toggle(answered('_dns.resolver.arpa'))).toBeNull()
-    expect(toggle(blocked('_dns.resolver.arpa'))).toBeNull()
+    expect(toggle(answered('-ads.example.com'))).toBeNull()
+    expect(toggle(blocked('-ads.example.com'))).toBeNull()
     // Above a name the router answers for, or a delegated domain.
     expect(toggle(answered('test'))).toBeNull()
     expect(toggle(answered('net'))).toBeNull()
+    // A service name is fine.
+    expect(toggle(answered('_dns.resolver.arpa'))).toEqual({ key: 'deny', on: false })
+    expect(toggle(blocked('_dns.resolver.arpa'))).toEqual({ key: 'allow', on: false })
   })
 
   it('offers nothing for what the router answers for or has delegated', () => {

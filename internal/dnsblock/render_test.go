@@ -186,6 +186,19 @@ func TestRenderDenyAndCanary(t *testing.T) {
 	}
 }
 
+// dnsmasq 2.92 blocks and carves out a service name as written.
+func TestRenderServiceNames(t *testing.T) {
+	cfg := testConfig()
+	cfg.Blocking.Deny = []string{"_dns.resolver.arpa"}
+	cfg.Blocking.Allow = []string{"_sip._tcp.ads.example.com"}
+	out, _ := render(t, cfg, testCache(t))
+	for _, want := range []string{"local=/_dns.resolver.arpa/\n", "server=/_sip._tcp.ads.example.com/#\n"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("no %q:\n%s", strings.TrimSpace(want), out)
+		}
+	}
+}
+
 func TestRenderNullMode(t *testing.T) {
 	cfg := testConfig()
 	cfg.Blocking.Mode = model.BlockNull
