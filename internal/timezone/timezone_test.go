@@ -1,7 +1,9 @@
 package timezone
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"os"
 	"path/filepath"
@@ -201,4 +203,50 @@ func fakeRoot(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return root
+}
+
+// tzif builds a zone file with no transitions of its own, only the rule in
+// its footer, which is how a zone file writes its future.
+func tzif(rule string, std int32, abbr string) []byte {
+	var b bytes.Buffer
+	block := func() {
+		b.WriteString("TZif2")
+		b.Write(make([]byte, 15))
+		for _, n := range []uint32{0, 0, 0, 0, 1, uint32(len(abbr) + 1)} {
+			_ = binary.Write(&b, binary.BigEndian, n)
+		}
+		_ = binary.Write(&b, binary.BigEndian, std)
+		b.Write([]byte{0, 0})
+		b.WriteString(abbr + "\x00")
+	}
+	block()
+	block()
+	b.WriteString("\n" + rule + "\n")
+	return b.Bytes()
+}
+
+// The offset is read from the zone file nft reads too, with the moment it
+// next changes, which is when the schedules in a loaded ruleset go wrong.
+func TestOffsetReadsTheZoneFile(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	sys := System{Root: root}
+	autumn := time.Date(2026, 9, 24, 0, 0, 0, 0, time.UTC)
+	// No zone file is UTC to libc, and UTC never changes.
+	if offset, next := sys.Offset(autumn); offset != 0 || !next.IsZero() {
+		t.Errorf("no zone file: %d, %v", offset, next)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "etc"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "etc/localtime"), tzif("CET-1CEST,M3.5.0,M10.5.0/3", 3600, "CET"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	offset, next := sys.Offset(autumn)
+	if want := time.Date(2026, 10, 25, 1, 0, 0, 0, time.UTC); offset != 7200 || !next.Equal(want) {
+		t.Errorf("Offset = %d, %v; want 7200 until %v", offset, next, want)
+	}
+	if offset, _ := sys.Offset(next); offset != 3600 {
+		t.Errorf("after the change: %d, want 3600", offset)
+	}
 }

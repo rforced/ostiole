@@ -268,9 +268,20 @@ func (u *UPnP) Apply(ctx context.Context, files network.Files) error {
 	}
 	// Restart even when the configuration has not changed. The apply that
 	// got here deleted and recreated `table inet ostiole`, so every rule
-	// miniupnpd had inserted went with it; it rebuilds them from the lease
-	// file at startup, so the mappings themselves survive.
+	// miniupnpd had inserted went with it. With no lease file it starts
+	// over, and clients map again on their own schedule.
 	if out, err := u.cmd().Run(ctx, "systemctl", "restart", UPnPUnit); err != nil {
+		return fmt.Errorf("restart %s: %w: %s", UPnPUnit, err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// Rebuild restarts a running miniupnpd after its table was loaded again
+// outside an apply. Its rules went with the old table while it still
+// counts the mappings as made; started over, it takes them afresh as
+// clients ask again. One that is not running is left alone.
+func (u *UPnP) Rebuild(ctx context.Context) error {
+	if out, err := u.cmd().Run(ctx, "systemctl", "try-restart", UPnPUnit); err != nil {
 		return fmt.Errorf("restart %s: %w: %s", UPnPUnit, err, strings.TrimSpace(string(out)))
 	}
 	return nil

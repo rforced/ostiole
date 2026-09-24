@@ -28,6 +28,9 @@ const (
 	PendingFile = "pending.json"
 	// FallbackFile says the kernel runs the fallback ruleset, and why.
 	FallbackFile = "fallback.json"
+	// OffsetFile is the UTC offset the ruleset in the kernel was loaded
+	// at, which its schedules' hours were converted with.
+	OffsetFile = "offset.json"
 )
 
 // DefaultDir is the production location.

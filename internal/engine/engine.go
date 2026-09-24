@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rforced/ostiole/internal/journald"
@@ -74,6 +75,10 @@ type Engine struct {
 	pending *pendingApply
 	// recovered is set when Recover undid an apply, until the next commit.
 	recovered *Recovered
+	// retimed is the offset Retime last loaded the ruleset at, until the
+	// next load: were the offset not to be noted, it would load again
+	// every hour.
+	retimed atomic.Pointer[int]
 }
 
 type pendingApply struct {
@@ -273,7 +278,9 @@ func (e *Engine) applyJournal(ctx context.Context, cfg *model.Config) {
 	}
 }
 
-// applyTimezone puts the router in the configured zone.
+// applyTimezone puts the router in the configured zone. A new zone moves
+// the offset nft read the schedules of the ruleset in at, which retime
+// sees to.
 func (e *Engine) applyTimezone(ctx context.Context, cfg *model.Config) {
 	if e.clock == nil {
 		return
@@ -385,12 +392,13 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), applyTimeout)
 	defer cancel()
 
-	if err := e.nft.Apply(ctx, plan.Ruleset); err != nil {
+	if err := e.load(ctx, plan.Ruleset); err != nil {
 		// One transaction, so nothing changed.
 		e.keep(base)
 		return nil, err
 	}
 	e.applyHost(ctx, cfg, nil)
+	e.retime(ctx, plan.Ruleset)
 	rollback := &pendingApply{
 		previous: previous, previousNet: rec.Network,
 		previousSvc: rec.Services, previousShape: rec.Shaping, previousKernel: rec.Kernel,
@@ -541,7 +549,7 @@ func (e *Engine) previousRuleset() (string, error) {
 // with no "before" was not driven when it was taken and is left alone.
 func (e *Engine) restore(ctx context.Context, p *pendingApply) error {
 	var errs []error
-	if err := e.nft.Apply(ctx, p.previous); err != nil {
+	if err := e.load(ctx, p.previous); err != nil {
 		errs = append(errs, fmt.Errorf("firewall: %w", err))
 	}
 	if e.net != nil && p.previousNet != nil {
@@ -562,6 +570,7 @@ func (e *Engine) restore(ctx context.Context, p *pendingApply) error {
 	// After the firewall, which a slow clock or sshd must not hold up.
 	if confirmed, ok := e.confirmed(); ok {
 		e.applyHost(ctx, confirmed, p.previousKernel)
+		e.retime(ctx, p.previous)
 	}
 	return errors.Join(errs...)
 }
@@ -696,18 +705,18 @@ func (e *Engine) Load(ctx context.Context) (LoadResult, error) {
 		why = ErrNoRuleset
 	}
 	if why == nil {
-		if why = e.nft.Apply(ctx, ruleset); why == nil {
+		if why = e.load(ctx, ruleset); why == nil {
 			return e.loaded(cfg, LoadResult{Source: LoadedSaved}), nil
 		}
 	}
 	if cfg != nil {
 		if rendered, err := nft.RenderWithFeeds(cfg, e.FeedEntries()); err == nil && rendered != ruleset {
-			if err := e.nft.Apply(ctx, rendered); err == nil {
+			if err := e.load(ctx, rendered); err == nil {
 				return e.loaded(cfg, LoadResult{Source: LoadedRendered, Reason: why}), nil
 			}
 		}
 	}
-	if err := e.nft.Apply(ctx, nft.Fallback(cfg, e.defaultPorts)); err != nil {
+	if err := e.load(ctx, nft.Fallback(cfg, e.defaultPorts)); err != nil {
 		return LoadResult{}, fmt.Errorf("the saved ruleset did not load (%w) and neither did the fallback: %w", why, err)
 	}
 	return e.loaded(cfg, LoadResult{Source: LoadedFallback, Reason: why}), nil

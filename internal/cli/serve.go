@@ -317,6 +317,18 @@ at your own.`,
 				mon.OnTick = func() { crons.Note("system:gateways") }
 				deps.Gateways = mon
 				go panics.Loop(ctx, log, "gateway monitor", mon.Run)
+				// Daylight saving, or a zone set at start that differs from
+				// the one the ruleset was loaded in, moves the offset a
+				// schedule's hours were converted at, so the ruleset goes in
+				// again, and what the old table held outside it goes back.
+				go panics.Loop(ctx, log, "schedule clock", func(ctx context.Context) {
+					eng.FollowOffset(ctx, func(ctx context.Context) {
+						refresher.Push(ctx)
+						if err := deps.UPnP.Rebuild(ctx); err != nil {
+							log.Warn("could not restart the port mapping service; mappings made before the reload do not work until it restarts", "err", err)
+						}
+					})
+				})
 				// The ring starts at the default and the watcher sizes it
 				// from the configuration a moment later; it grows into its
 				// ceiling as packets arrive, so a big one costs nothing up

@@ -71,6 +71,14 @@ type Applier interface {
 	Apply(ctx context.Context, zone string) error
 }
 
+// Offsetter says the router's offset from UTC, which nft converts a
+// schedule's hours with when it loads a ruleset.
+type Offsetter interface {
+	// Offset is the offset in seconds at t, and when it next changes: the
+	// zero time for a zone that never does.
+	Offset(t time.Time) (seconds int, next time.Time)
+}
+
 // System is the router this process runs on.
 type System struct {
 	// Run executes timedatectl; nil runs it directly.
@@ -150,6 +158,22 @@ func (s System) link(zone string) error {
 		return err
 	}
 	return nil
+}
+
+// Offset implements Offsetter from the zone file every process on the
+// router reads, nft included, rather than from what the configuration says
+// the zone should be. With no file the clock is UTC, as it is to libc.
+func (s System) Offset(t time.Time) (int, time.Time) {
+	loc := time.UTC
+	if raw, err := os.ReadFile(s.path(localtimePath)); err == nil {
+		if l, err := time.LoadLocationFromTZData("Local", raw); err == nil {
+			loc = l
+		}
+	}
+	at := t.In(loc)
+	_, offset := at.Zone()
+	_, next := at.ZoneBounds()
+	return offset, next
 }
 
 // Current is the zone the router is set to, read the way every other tool
