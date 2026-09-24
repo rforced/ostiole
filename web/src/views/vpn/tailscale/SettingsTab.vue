@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 
 import AppDisclosure from '@/components/AppDisclosure.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
@@ -86,9 +86,6 @@ function maskPrefix(address) {
   const net = value & mask
   return `${(net >>> 24) & 255}.${(net >>> 16) & 255}.${(net >>> 8) & 255}.${net & 255}/${width}`
 }
-
-/** The fold opens itself once anything inside it has been set. */
-const advanced = ref(Boolean(ts.value?.hostname || ts.value?.loginServer || ts.value?.logUploads))
 
 function addZone(zone) {
   const list = new Set(ts.value.advertiseRoutes ?? [])
@@ -180,7 +177,7 @@ function addZone(zone) {
           />
         </fieldset>
 
-        <AppDisclosure v-model:open="advanced">
+        <AppDisclosure>
           <fieldset class="space-y-3">
             <legend class="group-title">Identity</legend>
             <div class="grid max-w-2xl gap-4 sm:grid-cols-2">

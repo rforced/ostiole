@@ -1,6 +1,6 @@
 <script setup>
 import { LoaderCircle, Plus } from 'lucide-vue-next'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import AppDisclosure from '@/components/AppDisclosure.vue'
 import AppNotice from '@/components/AppNotice.vue'
@@ -71,12 +71,6 @@ const maxDomains = computed({
     if (!n || n === limits.value.defaultMax) delete blocking.value.maxDomains
     else blocking.value.maxDomains = n
   },
-})
-
-/** The fold opens itself once the ceiling is in the way. */
-const advanced = ref(Boolean(blocking.value.maxDomains))
-watch(overCeiling, (over) => {
-  if (over) advanced.value = true
 })
 
 /** What a ceiling of n names would cost in memory, in whole MB. */
@@ -167,7 +161,7 @@ function when(s) {
             <option value="null">0.0.0.0 and ::, a null address</option>
           </select>
         </FormField>
-        <AppDisclosure v-model:open="advanced">
+        <AppDisclosure>
           <FormField
             id="block-max"
             label="Ceiling on merged names"

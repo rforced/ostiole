@@ -131,11 +131,6 @@ function toggleInterface(name, on) {
   else list.delete(name)
   dns.value.interfaces = [...list]
 }
-
-/** The fold starts open when something in it is set. */
-const advanced = ref(
-  Boolean(dns.value.cacheSize || dns.value.resolverCacheMB || dns.value.interfaces?.length),
-)
 </script>
 
 <template>
@@ -185,7 +180,7 @@ const advanced = ref(
           </FormField>
         </div>
 
-        <AppDisclosure v-model:open="advanced">
+        <AppDisclosure>
           <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
             <FormField
               id="dns-cache"

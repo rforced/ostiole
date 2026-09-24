@@ -108,13 +108,6 @@ async function loadIntoDraft() {
   pending.value = null
 }
 
-/** The fold opens itself once anything inside it has been set. */
-const advanced = ref(
-  Boolean(
-    settings.value.prefix || settings.value.schedule || settings.value.keep || settings.value.days,
-  ),
-)
-
 const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
 // Binary, like the size the upload itself reports in the Result line.
 const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
@@ -203,7 +196,7 @@ const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
             </FormField>
           </div>
 
-          <AppDisclosure v-model:open="advanced">
+          <AppDisclosure>
             <FormField
               id="rb-prefix"
               label="Prefix"
