@@ -170,7 +170,7 @@ async function settle() {
               <button
                 v-if="count"
                 type="button"
-                class="link"
+                class="link max-sm:-my-3 max-sm:py-3"
                 :aria-expanded="showChanges"
                 @click="showChanges = !showChanges"
               >

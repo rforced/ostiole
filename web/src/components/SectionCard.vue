@@ -58,7 +58,14 @@ provideLocked(() => props.locked)
         <slot name="actions" />
       </div>
     </div>
-    <div v-if="flush" class="overflow-x-auto" :class="{ 'border-t border-line': headed }">
+    <!-- Relative below lg, so nothing absolute in the table (sr-only text)
+         escapes the scroller and widens the page. Not above it: a positioned
+         scroller loses subpixel text on a desktop. -->
+    <div
+      v-if="flush"
+      class="overflow-x-auto max-lg:relative max-lg:scroll-fade"
+      :class="{ 'border-t border-line': headed }"
+    >
       <slot />
     </div>
     <div v-else-if="$slots.default" :class="headed ? 'px-4 pb-4' : 'p-4'">

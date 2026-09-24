@@ -37,7 +37,13 @@ const isSwitch = computed(() => props.variant === 'switch')
       :disabled="disabled"
       :aria-label="ariaLabel || undefined"
     />
-    <label :for="inputId" class="min-w-0" :class="{ 'flex-1': !isSwitch, 'opacity-60': disabled }">
+    <!-- On a phone the label reaches past its line, so a short one is still
+         a thumb's height to tap, without moving anything. -->
+    <label
+      :for="inputId"
+      class="min-w-0 max-sm:-my-3 max-sm:py-3"
+      :class="{ 'flex-1': !isSwitch, 'opacity-60': disabled }"
+    >
       {{ label }}
       <span v-if="hint" class="block text-ink-muted">{{ hint }}</span>
     </label>

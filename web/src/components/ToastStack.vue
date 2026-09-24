@@ -18,7 +18,12 @@ const toast = useToastStore()
         class="pointer-events-auto flex items-center gap-3 rounded-lg border border-line bg-surface p-3 text-sm shadow-lg"
       >
         <span class="min-w-0 flex-1">{{ t.message }}</span>
-        <button v-if="t.action" type="button" class="link font-medium" @click="toast.act(t.id)">
+        <button
+          v-if="t.action"
+          type="button"
+          class="link font-medium max-sm:-my-3 max-sm:py-3"
+          @click="toast.act(t.id)"
+        >
           {{ t.action.label }}
         </button>
         <button type="button" class="icon-btn" aria-label="Dismiss" @click="toast.dismiss(t.id)">

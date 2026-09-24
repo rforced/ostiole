@@ -159,11 +159,13 @@
     }
   }
   /* The dialog is centred by Tailwind's `translate` property, which
-     composes with `transform`, so these only scale. */
+     composes with `transform`, so these only scale. A sheet on a phone
+     sets --pop-from to slide up instead: the same animation, so crossing
+     the breakpoint never restarts it. */
   @keyframes pop-in {
     from {
-      opacity: 0;
-      transform: scale(0.97);
+      opacity: var(--pop-from-opacity, 0);
+      transform: var(--pop-from, scale(0.97));
     }
     to {
       opacity: 1;
@@ -176,8 +178,8 @@
       transform: scale(1);
     }
     to {
-      opacity: 0;
-      transform: scale(0.97);
+      opacity: var(--pop-from-opacity, 0);
+      transform: var(--pop-from, scale(0.97));
     }
   }
   /* The drawer sits against an edge, not centred, so it slides with
@@ -214,27 +216,30 @@
   .group-title {
     @apply text-xs font-medium tracking-wide text-ink-muted uppercase;
   }
+  /* 16px on a phone: iOS zooms into any field smaller, and stays there. */
   .input {
-    @apply w-full rounded-md border border-line-2 bg-surface px-3 py-1.5 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:ring-2 focus:ring-accent/30 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-bad;
+    @apply w-full rounded-md border border-line-2 bg-surface px-3 py-1.5 text-sm text-ink placeholder:text-ink-faint focus:border-accent focus:ring-2 focus:ring-accent/30 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-bad max-sm:py-2 max-sm:text-base;
   }
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-accent-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-accent-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 max-sm:min-h-11 max-sm:px-4;
   }
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-line-2 bg-surface px-3 py-1.5 text-sm font-medium text-ink shadow-sm hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-line-2 bg-surface px-3 py-1.5 text-sm font-medium text-ink shadow-sm hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 max-sm:min-h-11 max-sm:px-4;
   }
   .btn-danger {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-md bg-bad px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:opacity-90 focus-visible:ring-2 focus-visible:ring-bad focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md bg-bad px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:opacity-90 focus-visible:ring-2 focus-visible:ring-bad focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 max-sm:min-h-11 max-sm:px-4;
   }
-  /* A row action that reads as a link, so a table of them stays quiet. */
+  /* A row action that reads as a link, so a table of them stays quiet.
+     On a phone it is as tall as a thumb. */
   .link-action {
-    @apply text-sm text-ink-muted underline-offset-2 hover:text-accent-text hover:underline focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:cursor-not-allowed disabled:text-ink-faint disabled:no-underline;
+    @apply text-sm text-ink-muted underline-offset-2 hover:text-accent-text hover:underline focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:cursor-not-allowed disabled:text-ink-faint disabled:no-underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center;
   }
   .link {
     @apply text-sm text-accent-text underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:text-ink-faint disabled:no-underline;
   }
+  /* On a phone the box grows to a thumb around the same icon. */
   .icon-btn {
-    @apply inline-flex rounded p-1 text-ink-muted hover:text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:opacity-30;
+    @apply inline-flex rounded p-1 text-ink-muted hover:text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:opacity-30 max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center max-sm:justify-center;
   }
   /* A checkbox drawn as a switch, for the one flag that governs a card or a page. */
   .switch {
@@ -247,8 +252,13 @@
   .switch:checked::before {
     @apply translate-x-4;
   }
+  /* On a phone the key takes at most two fifths and a long value wraps
+     rather than pushing the card wider than the screen. */
   .kv {
-    @apply grid grid-cols-[auto_1fr] gap-x-4 gap-y-1;
+    @apply grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 max-sm:grid-cols-[fit-content(40%)_minmax(0,1fr)] max-sm:gap-x-3;
+  }
+  .kv > * {
+    @apply max-sm:wrap-anywhere;
   }
   .kv dt {
     @apply text-ink-muted;
@@ -256,11 +266,14 @@
   .table {
     @apply w-full text-left text-sm;
   }
+  /* On a phone a cell keeps to one line, so a table wider than the screen
+     scrolls inside its card instead of squeezing every cell to a column of
+     words. A cell that should wrap says whitespace-normal. */
   .table thead th {
-    @apply border-b border-line bg-surface-2/60 px-3 py-2 text-xs font-medium tracking-wide text-ink-muted uppercase;
+    @apply border-b border-line bg-surface-2/60 px-3 py-2 text-xs font-medium tracking-wide text-ink-muted uppercase max-sm:whitespace-nowrap;
   }
   .table tbody td {
-    @apply border-b border-line px-3 py-2.5 align-top;
+    @apply border-b border-line px-3 py-2.5 align-top max-sm:py-3 max-sm:whitespace-nowrap;
   }
   .table tbody tr:last-child td {
     @apply border-b-0;
@@ -286,13 +299,14 @@
   }
   /* A row of fields. Labels sit at the top, so the inputs line up whether
      or not a field has a hint under it, and anything in the row that is
-     not a field (a button, a checkbox) is dropped to the input line. */
+     not a field (a button, a checkbox) is dropped to the input line. On a
+     phone the row is a column, so there is nothing to line up with. */
   .form-row {
-    @apply flex flex-wrap items-start gap-3;
+    @apply flex flex-wrap items-start gap-3 max-sm:flex-col max-sm:items-stretch;
   }
   .form-row > :not(.field) {
     /* One label line plus the gap under it; then as tall as an input. */
-    @apply mt-6 min-h-[2.125rem];
+    @apply mt-6 min-h-[2.125rem] max-sm:mt-0 max-sm:min-h-0;
   }
   .badge {
     @apply inline-block rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-2;
@@ -314,6 +328,74 @@
   }
   .meter-fill {
     @apply h-full rounded-full transition-[width] duration-700 ease-out;
+  }
+
+  /* A table read on a phone as a stack of blocks, one per row, each cell a
+     line led by its column's name from data-label. A cell with an empty
+     data-label (the actions) and one that spans the row (No rules.,
+     Reading…) go without. */
+  @media (width < 40rem) {
+    .table-stack thead {
+      @apply hidden;
+    }
+    .table-stack tbody tr {
+      @apply block border-b border-line py-2;
+    }
+    .table-stack tbody tr:last-child {
+      @apply border-b-0;
+    }
+    .table-stack tbody td {
+      @apply flex items-baseline gap-3 border-b-0 px-4 py-1 whitespace-normal;
+    }
+    .table-stack tbody td::before {
+      content: attr(data-label);
+      @apply w-24 shrink-0 text-xs font-medium tracking-wide text-ink-muted uppercase;
+    }
+    .table-stack tbody td:is([data-label=''], [colspan])::before {
+      @apply hidden;
+    }
+    .table-stack tbody tr.row-changed {
+      @apply shadow-[inset_3px_0_0_0_var(--warn)];
+    }
+    .table-stack tbody tr.row-changed td:first-child {
+      @apply shadow-none;
+    }
+    .table-stack tbody tr.row-system {
+      @apply bg-surface-2/40;
+    }
+    .table-stack tbody tr.row-system td {
+      @apply bg-transparent;
+    }
+
+    /* A dialog is a sheet on a phone. The row that holds its submit button
+       stays in reach at the bottom, its buttons sharing the width. */
+    [role='dialog'] :has(> button[type='submit']) {
+      --sheet-pb: max(1rem, env(safe-area-inset-bottom));
+      @apply sticky bottom-[calc(var(--sheet-pb)*-1)] z-10 -mx-4 mb-[calc(var(--sheet-pb)*-1)] border-t border-line bg-surface px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))];
+    }
+    [role='dialog'] :has(> button[type='submit']) > button {
+      @apply flex-1;
+    }
+  }
+}
+
+/* A scroller with a shadow at an edge while there is more past it. The
+   covers move with the content and hide the shadow at the end. --fade is
+   the colour behind the scroller, a card's surface unless set. */
+@utility scroll-fade {
+  --fade-edge: rgb(0 0 0 / 0.14);
+  background:
+    linear-gradient(to right, var(--fade, var(--surface)) 40%, transparent) left / 2rem 100%
+      no-repeat local,
+    linear-gradient(to left, var(--fade, var(--surface)) 40%, transparent) right / 2rem 100%
+      no-repeat local,
+    radial-gradient(farthest-side at 0 50%, var(--fade-edge), transparent) left / 0.75rem 100%
+      no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, var(--fade-edge), transparent) right / 0.75rem 100%
+      no-repeat scroll;
+
+  :where(.dark) & {
+    --fade-edge: rgb(0 0 0 / 0.6);
   }
 }
 
