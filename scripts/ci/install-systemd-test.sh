@@ -114,13 +114,13 @@ assert_router() {
 
 	step "$1: the web UI answers"
 	for _ in 1 2 3 4 5 6 7 8 9 10; do
-		if curl -fsSk https://127.0.0.1/api/v1/health >/tmp/health.txt 2>/dev/null; then
+		if curl -fsSk https://127.0.0.1:9443/api/v1/health >/tmp/health.txt 2>/dev/null; then
 			break
 		fi
 		sleep 1
 	done
 	grep -q "ok\|status" /tmp/health.txt 2>/dev/null ||
-		fail "the UI did not answer on 443: $(cat /tmp/health.txt 2>/dev/null)"
+		fail "the UI did not answer on 9443: $(cat /tmp/health.txt 2>/dev/null)"
 }
 
 # assert_tailscale is the end state of the opt-in daemon: on the router,
