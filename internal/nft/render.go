@@ -671,23 +671,9 @@ func (r *renderer) chainForward() {
 		r.connectionState("forward")
 		r.blockedSources("forward")
 		r.blockDNSJump()
-		if r.hasPortForwards() {
-			r.line(`ct status dnat counter accept comment "port-forwards"`)
-			r.sys(SystemRule{
-				Chain: "forward", Zones: r.forwardedZones(), Action: "accept", Protocol: string(model.ProtocolAny),
-				Source: "any", Destination: "forwarded hosts",
-				Description: "Traffic a port forward or 1:1 mapping sent inside",
-				Keys:        []string{"forward/port-forwards"}, Setting: "nat",
-			})
-		}
-		if UPnPEnabled(r.cfg) {
-			r.line("jump " + UPnPForwardChain)
-			r.sysFor([]string{r.cfg.Services.UPnP.ExternalInterface}, SystemRule{
-				Chain: "forward", Action: "accept", Protocol: string(model.ProtocolAny),
-				Source: "any", Destination: "mapped hosts",
-				Description: "Ports opened by UPnP or NAT-PMP", Setting: "upnp",
-			})
-		}
+		// What port forwards, 1:1 mappings and UPnP send inside is
+		// accepted at the tail of the zone it arrives from, not here: see
+		// forwardAccepts.
 		r.zoneDispatch()
 		r.defaultDrop("forward")
 	})
@@ -989,6 +975,7 @@ func (r *renderer) zoneChains() {
 				r.rule(rule)
 			}
 			r.proxyRules(z)
+			r.forwardAccepts(z)
 			// Everything nothing allowed arrives here, which is what a port
 			// scan looks like from the router's side.
 			r.scanTally(z.Name)
@@ -1041,6 +1028,33 @@ func (r *renderer) proxyRules(z model.Zone) {
 			Protocol: string(l.proto), Source: "any", Destination: firewallDest(ports),
 			Description: "Reverse proxy", Keys: []string{"zone_" + z.Name + "/" + l.comment},
 			Setting: "proxy",
+		})
+	}
+}
+
+// forwardAccepts pass what a port forward, a 1:1 mapping or a client's own
+// UPnP mapping sent inside. They sit at the tail of the zone the traffic
+// arrives from, behind the zone's flood and scan defence and the
+// operator's rules, so a drop written there narrows a forward the way it
+// narrows everything else. The zone chains serve input too; fib keeps the
+// accept to forwarded traffic, so a forward to the router itself is still
+// the zone's rules to allow.
+func (r *renderer) forwardAccepts(z model.Zone) {
+	if r.hasPortForwards() && slices.Contains(r.forwardedZones(), z.Name) {
+		r.line(`ct status dnat fib daddr type != local counter accept comment "port-forwards"`)
+		r.sys(SystemRule{
+			Chain: "zone_" + z.Name, After: true, Zones: []string{z.Name}, Action: "accept",
+			Protocol: string(model.ProtocolAny), Source: "any", Destination: "forwarded hosts",
+			Description: "Traffic a port forward or 1:1 mapping sent inside",
+			Keys:        []string{"zone_" + z.Name + "/port-forwards"}, Setting: "nat",
+		})
+	}
+	if UPnPEnabled(r.cfg) && slices.Contains(r.zonesOf([]string{r.cfg.Services.UPnP.ExternalInterface}), z.Name) {
+		r.line("jump " + UPnPForwardChain)
+		r.sys(SystemRule{
+			Chain: "zone_" + z.Name, After: true, Zones: []string{z.Name}, Action: "accept",
+			Protocol: string(model.ProtocolAny), Source: "any", Destination: "mapped hosts",
+			Description: "Ports opened by UPnP or NAT-PMP", Setting: "upnp",
 		})
 	}
 }

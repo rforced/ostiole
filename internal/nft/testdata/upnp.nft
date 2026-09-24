@@ -22,8 +22,6 @@ table inet ostiole {
 		type filter hook forward priority filter; policy drop;
 		ct state established,related accept
 		ct state invalid drop
-		ct status dnat counter accept comment "port-forwards"
-		jump upnp_forward
 		iifname "eth0" jump zone_wan
 		iifname "eth1" jump zone_lan
 		iifname "eth2" jump zone_guest
@@ -33,6 +31,8 @@ table inet ostiole {
 		type filter hook output priority filter; policy accept;
 	}
 	chain zone_wan {
+		ct status dnat fib daddr type != local counter accept comment "port-forwards"
+		jump upnp_forward
 		counter comment "zone-unmatched"
 	}
 	chain zone_lan {

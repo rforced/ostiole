@@ -31,7 +31,6 @@ table inet ostiole {
 		ct mark & 0x07000000 != 0x0 meta mark set ct mark counter comment "shaping:restore"
 		ct state established,related accept
 		ct state invalid drop
-		ct status dnat counter accept comment "port-forwards"
 		iifname "eth0" jump zone_wan
 		iifname "eth1" jump zone_lan
 		iifname "eth2" jump zone_dmz
@@ -43,6 +42,7 @@ table inet ostiole {
 	}
 	chain zone_wan {
 		meta l4proto { icmp, ipv6-icmp } counter accept comment "id:wan-ping"
+		ct status dnat fib daddr type != local counter accept comment "port-forwards"
 		counter comment "zone-unmatched"
 	}
 	chain zone_lan {
@@ -53,10 +53,12 @@ table inet ostiole {
 		fib daddr type local tcp dport 443 counter meta mark set meta mark & 0xf8ffffff | 0x03000000 ct mark set meta mark accept comment "id:lan-admin"
 		ip saddr 192.168.1.50 counter meta mark set meta mark & 0xf8ffffff | 0x01000000 ct mark set meta mark accept comment "id:lan-backups"
 		counter accept comment "id:lan-rest"
+		ct status dnat fib daddr type != local counter accept comment "port-forwards"
 		counter comment "zone-unmatched"
 	}
 	chain zone_dmz {
 		counter drop comment "id:dmz-quiet"
+		ct status dnat fib daddr type != local counter accept comment "port-forwards"
 		counter comment "zone-unmatched"
 	}
 	chain policy_prerouting {

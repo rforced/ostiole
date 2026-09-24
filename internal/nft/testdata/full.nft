@@ -50,7 +50,6 @@ table inet ostiole {
 		type filter hook forward priority filter; policy drop;
 		ct state established,related accept
 		ct state invalid drop
-		ct status dnat counter accept comment "port-forwards"
 		iifname "eth0" jump zone_wan
 		iifname { "eth1", "eth1.20", "wg0" } jump zone_lan
 		iifname "eth2" jump zone_dmz
@@ -62,6 +61,7 @@ table inet ostiole {
 	chain zone_wan {
 		meta l4proto { icmp, ipv6-icmp } counter accept comment "id:ping"
 		udp sport 123 udp dport 123 counter accept comment "id:udp-sport"
+		ct status dnat fib daddr type != local counter accept comment "port-forwards"
 		counter comment "zone-unmatched"
 	}
 	chain zone_lan {
@@ -71,6 +71,7 @@ table inet ostiole {
 		# rule empty-alias skipped: source and destination cannot match the same address family (empty alias, or IPv4 on one side and IPv6 on the other)
 		# rule to-guest skipped: destination zone "guest" has no enabled interfaces
 		meta l4proto udp counter reject comment "id:reject-udp"
+		ct status dnat fib daddr type != local counter accept comment "port-forwards"
 		counter log prefix "ostiole:z:lan:drop: " group 1 drop comment "zone-default"
 	}
 	chain zone_dmz {
@@ -78,6 +79,7 @@ table inet ostiole {
 		meta day { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday" } meta hour "08:30"-"17:30" ip6 saddr @alias_servers_v6 meta l4proto { tcp, udp } th dport @alias_web_ports counter accept comment "id:web-from-servers"
 		fib daddr type local udp dport 53 counter accept comment "id:dns-to-self"
 		ip saddr { 10.0.0.1, 10.1.0.0/16 } ip daddr 192.168.1.0/24 counter drop comment "id:mixed-families"
+		ct status dnat fib daddr type != local counter accept comment "port-forwards"
 		counter comment "zone-unmatched"
 	}
 	chain zone_guest {
