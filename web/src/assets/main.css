@@ -230,9 +230,10 @@
     @apply inline-flex items-center justify-center gap-1.5 rounded-md bg-bad px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:opacity-90 focus-visible:ring-2 focus-visible:ring-bad focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 max-sm:min-h-11 max-sm:px-4;
   }
   /* A row action that reads as a link, so a table of them stays quiet.
-     On a phone it is as tall as a thumb. */
+     On a phone it is as tall as a thumb, reaching past its line rather
+     than making the row taller. */
   .link-action {
-    @apply text-sm text-ink-muted underline-offset-2 hover:text-accent-text hover:underline focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:cursor-not-allowed disabled:text-ink-faint disabled:no-underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center;
+    @apply text-sm text-ink-muted underline-offset-2 hover:text-accent-text hover:underline focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:cursor-not-allowed disabled:text-ink-faint disabled:no-underline max-sm:-my-3 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center;
   }
   .link {
     @apply text-sm text-accent-text underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:text-ink-faint disabled:no-underline;
@@ -308,6 +309,9 @@
     /* One label line plus the gap under it; then as tall as an input. */
     @apply mt-6 min-h-[2.125rem] max-sm:mt-0 max-sm:min-h-0;
   }
+  .form-row > :is(.btn-primary, .btn-secondary, .btn-danger) {
+    @apply max-sm:min-h-11;
+  }
   .badge {
     @apply inline-block rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-2;
   }
@@ -330,11 +334,41 @@
     @apply h-full rounded-full transition-[width] duration-700 ease-out;
   }
 
-  /* A table read on a phone as a stack of blocks, one per row, each cell a
-     line led by its column's name from data-label. A cell with an empty
-     data-label (the actions) and one that spans the row (No rules.,
-     Reading…) go without. */
   @media (width < 40rem) {
+    /* A row's actions, the last cell when it holds one or two buttons and
+       nothing else, stay at the right edge while the rest of the row
+       scrolls under it and fades out beneath them. A table with more to
+       say there stacks instead. The buttons are a thumb tall without
+       making the row any taller. */
+    .table:not(.table-stack, .table-flow)
+      tbody
+      td:last-child:has(> :is(button, a)):not(:has(> :not(button, a), > :nth-child(3))) {
+      @apply sticky right-0 pl-6;
+      background: linear-gradient(to right, transparent, var(--surface) 1.25rem);
+    }
+    .table:not(.table-stack, .table-flow)
+      tbody
+      tr.row-system
+      td:last-child:has(> :is(button, a)):not(:has(> :not(button, a), > :nth-child(3))) {
+      background: linear-gradient(
+        to right,
+        transparent,
+        color-mix(in oklab, var(--surface-2) 40%, var(--surface)) 1.25rem
+      );
+    }
+    .table:not(.table-stack, .table-flow) thead th:last-child:empty {
+      @apply sticky right-0;
+      background: color-mix(in oklab, var(--surface-2) 60%, var(--surface));
+    }
+    .table tbody td:last-child > :is(button, a),
+    .table td .icon-btn {
+      @apply -my-3 inline-flex min-h-11 items-center;
+    }
+
+    /* A table read as a stack of blocks, one per row, each cell led by its
+       column's name from data-label in a gutter on the left. A cell with
+       an empty data-label (the row's name, its actions) and one that spans
+       the row (No leases., Reading…) runs the full width. */
     .table-stack thead {
       @apply hidden;
     }
@@ -344,15 +378,28 @@
     .table-stack tbody tr:last-child {
       @apply border-b-0;
     }
+    /* Important: a stacked cell wraps whatever its desktop column said. */
     .table-stack tbody td {
-      @apply flex items-baseline gap-3 border-b-0 px-4 py-1 whitespace-normal;
+      @apply relative block border-b-0 py-1 pr-4 pl-31 whitespace-normal! wrap-anywhere;
     }
     .table-stack tbody td::before {
       content: attr(data-label);
-      @apply w-24 shrink-0 text-xs font-medium tracking-wide text-ink-muted uppercase;
+      @apply absolute top-1.5 left-4 w-24 text-xs font-medium tracking-wide text-ink-muted uppercase;
+    }
+    .table-stack tbody td:is([data-label=''], [colspan]) {
+      @apply pl-4;
     }
     .table-stack tbody td:is([data-label=''], [colspan])::before {
       @apply hidden;
+    }
+    .table-stack tbody td:last-child > :is(button, a) {
+      @apply my-0;
+    }
+    .table-stack tbody tr.row-system {
+      @apply bg-surface-2/40;
+    }
+    .table-stack tbody tr.row-system td {
+      @apply bg-transparent;
     }
     .table-stack tbody tr.row-changed {
       @apply shadow-[inset_3px_0_0_0_var(--warn)];
@@ -360,11 +407,46 @@
     .table-stack tbody tr.row-changed td:first-child {
       @apply shadow-none;
     }
-    .table-stack tbody tr.row-system {
+
+    /* A table whose rows read as a line of text (rules, the firewall log)
+       flows: each row a block, its cells running on and wrapping. A page
+       orders the cells and breaks the lines with utilities. */
+    .table-flow,
+    .table-flow tbody {
+      @apply block;
+    }
+    .table-flow thead {
+      @apply hidden;
+    }
+    .table-flow tbody tr {
+      @apply flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line px-4 py-3;
+    }
+    .table-flow tbody tr:last-child {
+      @apply border-b-0;
+    }
+    .table-flow tbody td {
+      @apply border-0 p-0 whitespace-normal wrap-anywhere;
+    }
+    .table-flow tbody td:last-child > :is(button, a),
+    .table-flow td .icon-btn {
+      @apply my-0;
+    }
+    .table-flow tbody tr.row-system {
       @apply bg-surface-2/40;
     }
-    .table-stack tbody tr.row-system td {
+    .table-flow tbody tr.row-system td {
       @apply bg-transparent;
+    }
+    .table-flow tbody tr.row-changed {
+      @apply shadow-[inset_3px_0_0_0_var(--warn)];
+    }
+    .table-flow tbody tr.row-changed td:first-child {
+      @apply shadow-none;
+    }
+
+    .table-stack tbody td:empty,
+    .table-flow tbody td:empty {
+      @apply hidden;
     }
 
     /* A dialog is a sheet on a phone. The row that holds its submit button
