@@ -149,7 +149,11 @@ onMounted(() => {
 
 <template>
   <div class="space-y-5">
-    <AppNotice v-if="zone && !members.length">
+    <AppNotice v-if="!config.zones.length">
+      No zones yet, so a rule has nowhere to go.
+      <RouterLink to="/interfaces#zones" class="link">Add one</RouterLink>.
+    </AppNotice>
+    <AppNotice v-else-if="zone && !members.length">
       No interface is in zone <span class="font-mono">{{ zone }}</span
       >, so these rules match nothing.
       <RouterLink to="/interfaces" class="link">Assign one</RouterLink>.
@@ -161,7 +165,7 @@ onMounted(() => {
         <template v-if="members.length">
           Zone <span class="font-mono">{{ zone }}</span> covers
           <span class="font-mono">{{ members.join(', ') }}</span
-          >; to give one of them rules of its own,
+          >. To give one of them rules of its own,
           <RouterLink to="/interfaces" class="link">move it to its own zone</RouterLink>.
         </template>
       </template>

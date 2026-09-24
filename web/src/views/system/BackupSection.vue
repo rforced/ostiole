@@ -1,5 +1,5 @@
 <script setup>
-import { Download, Upload } from 'lucide-vue-next'
+import { Download, LoaderCircle, Upload } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
 import FormField from '@/components/FormField.vue'
@@ -104,8 +104,20 @@ async function loadIntoDraft() {
           hint="Their password hashes go in the file."
         />
         <div>
-          <button type="button" class="btn-primary" :disabled="busy" @click="download.run">
-            <Download class="size-4" aria-hidden="true" /> Download backup
+          <button
+            type="button"
+            class="btn-primary"
+            :disabled="busy"
+            :aria-busy="download.busy.value"
+            @click="download.run"
+          >
+            <LoaderCircle
+              v-if="download.busy.value"
+              class="size-4 animate-spin"
+              aria-hidden="true"
+            />
+            <Download v-else class="size-4" aria-hidden="true" />
+            Download backup
           </button>
         </div>
       </div>
@@ -130,8 +142,20 @@ async function loadIntoDraft() {
           </FormField>
         </div>
         <div>
-          <button type="button" class="btn-secondary" :disabled="busy" @click="fileInput?.click()">
-            <Upload class="size-4" aria-hidden="true" /> Restore from file
+          <button
+            type="button"
+            class="btn-secondary"
+            :disabled="busy"
+            :aria-busy="restore.busy.value"
+            @click="fileInput?.click()"
+          >
+            <LoaderCircle
+              v-if="restore.busy.value"
+              class="size-4 animate-spin"
+              aria-hidden="true"
+            />
+            <Upload v-else class="size-4" aria-hidden="true" />
+            Restore from file
           </button>
         </div>
         <input

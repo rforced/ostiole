@@ -1,13 +1,13 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
-import ApplyPending from '@/components/ApplyPending.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import { api } from '@/lib/api'
 import { errorMessage, useAsync } from '@/lib/async'
 import { createRateTracker } from '@/lib/rates'
+import { useConfigStore } from '@/stores/config'
 import { useSystemStore } from '@/stores/system'
 import DashboardWarnings from '@/views/dashboard/DashboardWarnings.vue'
 import BlockingCard from '@/views/dashboard/BlockingCard.vue'
@@ -29,6 +29,7 @@ const REFRESH_MS = 10_000
  */
 const STATS_MS = 3_000
 
+const config = useConfigStore()
 const system = useSystemStore()
 const health = ref(null)
 const overview = ref(null)
@@ -62,6 +63,14 @@ const loadStats = useAsync(
 )
 
 const error = computed(() => healthError.value || load.error.value || system.error)
+/** Until the first overview arrives, an empty list means not read yet. */
+const loaded = computed(() => load.updatedAt.value > 0)
+
+// An apply or a revert changes what the router is doing.
+watch(
+  () => config.applied,
+  () => load.run(),
+)
 
 onMounted(async () => {
   try {
@@ -92,14 +101,6 @@ onMounted(async () => {
       {{ error }}
     </p>
 
-    <ApplyPending
-      v-if="status?.pending"
-      :key="status.pending.deadline"
-      :deadline="status.pending.deadline"
-      @confirmed="load.run()"
-      @reverted="load.run()"
-    />
-
     <AppNotice v-if="status && !status.configured" kind="info">
       This firewall has no configuration yet.
       <RouterLink to="/wizard" class="font-medium underline">Run the setup wizard</RouterLink>.
@@ -107,7 +108,7 @@ onMounted(async () => {
 
     <DashboardWarnings :warnings="overview?.warnings ?? []" />
 
-    <InterfaceSummary :interfaces="overview?.interfaces ?? []" :rates="rates" />
+    <InterfaceSummary :interfaces="overview?.interfaces ?? []" :rates="rates" :loaded="loaded" />
 
     <div class="grid gap-4 lg:grid-cols-2">
       <SystemLoadCard :stats="stats" />
@@ -116,9 +117,14 @@ onMounted(async () => {
         :gateways="overview.gateways ?? []"
         :unwatched="overview.unwatchedGateways ?? []"
       />
-      <TopRulesCard :rules="overview?.topRules ?? []" :blocked="overview?.blocked" />
+      <TopRulesCard
+        :rules="overview?.topRules ?? []"
+        :blocked="overview?.blocked"
+        :loaded="loaded"
+      />
       <RecentBlocksCard v-if="overview?.recentBlocks" :blocks="overview.recentBlocks" />
       <ServicesCard
+        v-if="overview"
         :services="overview?.services ?? []"
         :dhcp="overview?.dhcp ?? {}"
         :dns="overview?.dns ?? {}"

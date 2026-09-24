@@ -10,6 +10,7 @@ import { api } from '@/lib/api'
 import { canonicalAsn } from '@/lib/asn'
 import { useAsync } from '@/lib/async'
 import { COUNTRIES } from '@/lib/countries'
+import { someOf } from '@/lib/lists'
 import { useConfigStore } from '@/stores/config'
 import AliasDialog from '@/views/firewall/AliasDialog.vue'
 
@@ -194,9 +195,10 @@ function edit(a) {
               <span
                 v-else
                 class="ml-3 text-sm text-ink-muted"
-                :title="`In use by ${config.aliasReferences(a.name).join(', ')}`"
-                >In use</span
+                :title="config.aliasReferences(a.name).join(', ')"
               >
+                In use by {{ someOf(config.aliasReferences(a.name)) }}
+              </span>
             </td>
           </tr>
         </TransitionGroup>

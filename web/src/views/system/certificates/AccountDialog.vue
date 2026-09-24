@@ -96,10 +96,6 @@ function save() {
 <template>
   <AppDialog v-model:open="open" :title="account ? `Account ${account.id}` : 'Add ACME account'">
     <form class="space-y-4" @submit.prevent="save">
-      <p v-if="key.error.value" role="alert" class="text-sm text-bad">
-        {{ key.error.value }}
-      </p>
-
       <div class="grid gap-4 sm:grid-cols-2">
         <FormField id="acc-id" label="Name">
           <input
@@ -177,6 +173,9 @@ function save() {
 
       <p class="text-sm text-ink-muted">Saving agrees to the CA's terms.</p>
 
+      <p v-if="key.error.value" role="alert" class="text-sm text-bad">
+        {{ key.error.value }}
+      </p>
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
         <button type="submit" class="btn-primary" :disabled="!valid || key.busy.value">

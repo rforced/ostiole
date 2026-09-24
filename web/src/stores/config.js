@@ -70,9 +70,39 @@ export const useConfigStore = defineStore('config', () => {
     undoable('Draft discarded.', () => (draft.value = clone(saved.value)))
   }
 
-  /** After a confirmed apply the draft becomes the saved state. */
-  function markSaved() {
-    saved.value = clone(draft.value)
+  /** After a confirmed apply, what was applied becomes the saved state. */
+  function markSaved(cfg = draft.value) {
+    saved.value = clone(cfg)
+  }
+
+  /**
+   * Reads the saved configuration again after something else committed
+   * one: a confirm from another tab or from before a reload, or the wizard.
+   * A draft with no edits of its own follows it, and `applied`, the draft
+   * as this tab applied it, counts as no edits. Resolves true when the
+   * saved configuration changed.
+   *
+   * @param {object | null} [applied]
+   */
+  async function resync(applied = null) {
+    let next
+    try {
+      next = await api.config.get()
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) next = null
+      else {
+        error.value = e instanceof Error ? e.message : String(e)
+        return false
+      }
+    }
+    error.value = ''
+    if (JSON.stringify(next) === JSON.stringify(saved.value)) return false
+    const follow =
+      !dirty.value || (applied !== null && JSON.stringify(draft.value) === JSON.stringify(applied))
+    saved.value = next
+    if (follow) draft.value = clone(next)
+    loaded.value = true
+    return true
   }
 
   /** Called whenever the kernel has just been changed, applied or rolled back. */
@@ -168,7 +198,7 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function removeInterface(name) {
-    undoable(`Removed ${name} from the configuration.`, () => dropInterface(name))
+    undoable(`Deleted ${name}.`, () => dropInterface(name))
   }
 
   // ---- WireGuard -------------------------------------------------------
@@ -448,7 +478,7 @@ export const useConfigStore = defineStore('config', () => {
   function clearShaping(name) {
     const iface = findInterface(name)
     if (!iface?.shaping) return
-    undoable(`Removed the speed set on ${name}.`, () => {
+    undoable(`Deleted the speed set on ${name}.`, () => {
       delete findInterface(name).shaping
     })
   }
@@ -1144,6 +1174,7 @@ export const useConfigStore = defineStore('config', () => {
     discard,
     undoable,
     markSaved,
+    resync,
     markApplied,
     replaceDraft,
     reset,

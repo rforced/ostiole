@@ -124,7 +124,8 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
         </button>
       </template>
       <div class="space-y-4">
-        <dl class="kv max-w-md">
+        <p v-if="!poll.updatedAt.value" class="text-ink-muted">Reading…</p>
+        <dl v-else class="kv max-w-md">
           <dt>System</dt>
           <dd>{{ status?.distro || 'unknown' }}</dd>
           <dt>Package manager</dt>
@@ -136,7 +137,7 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
         <!-- These are part of the page rather than announcements, so they are
          plain text: a live region here would join the apply bar's. -->
         <AppNotice v-if="status && !status.available">{{ status.unavailable }}</AppNotice>
-        <p v-else-if="!status" class="text-ink-muted">
+        <p v-else-if="!status && poll.updatedAt.value" class="text-ink-muted">
           Nothing on this router drives a package manager.
         </p>
 

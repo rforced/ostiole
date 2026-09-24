@@ -18,6 +18,8 @@ const node = computed(() => config.tailscale)
 const ts = computed(() => node.value?.tailscale ?? null)
 
 const internalZones = computed(() => config.zones.filter((z) => !z.external))
+/** The zones with networks to offer; one without an address has nothing to add. */
+const routableZones = computed(() => internalZones.value.filter((z) => zonePrefixes(z.name).length))
 
 function join() {
   config.upsertInterface({
@@ -98,7 +100,9 @@ function addZone(zone) {
 <template>
   <div v-if="!node" class="space-y-5">
     <SectionCard title="Tailscale" intro="This router is not on a tailnet.">
-      <button type="button" class="btn-secondary" @click="join">Join a tailnet</button>
+      <template #actions>
+        <button type="button" class="btn-secondary" @click="join">Join a tailnet</button>
+      </template>
     </SectionCard>
   </div>
 
@@ -151,13 +155,12 @@ function addZone(zone) {
             >
               <input id="ts-routes" v-model="routes" type="text" class="input font-mono" />
             </FormField>
-            <div class="flex flex-wrap gap-2">
+            <div v-if="routableZones.length" class="flex flex-wrap gap-2">
               <button
-                v-for="z in internalZones"
+                v-for="z in routableZones"
                 :key="z.name"
                 type="button"
                 class="btn-secondary"
-                :disabled="!zonePrefixes(z.name).length"
                 @click="addZone(z.name)"
               >
                 Add {{ z.name }}'s networks

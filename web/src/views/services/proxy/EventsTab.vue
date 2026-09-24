@@ -101,8 +101,8 @@ function hasQuery(uri) {
             <th>Rules</th>
           </tr>
         </thead>
-        <tbody>
-          <tr v-if="!events.length">
+        <TransitionGroup name="row" tag="tbody">
+          <tr v-if="!events.length" key="empty" class="row-static">
             <td colspan="6" class="text-ink-muted">{{ empty }}</td>
           </tr>
           <tr v-for="e in events" :key="e.id">
@@ -133,20 +133,18 @@ function hasQuery(uri) {
                 class="flex flex-wrap items-center gap-2"
               >
                 <span class="badge font-mono" :title="r.data || r.message">{{ r.id }}</span>
-                <span class="text-xs text-ink-muted">{{ r.message }}</span>
+                <span class="text-ink-muted">{{ r.message }}</span>
                 <template v-if="profileOf(e.site)">
-                  <button type="button" class="link text-xs" @click="exclude(e, r, false)">
-                    Exclude
-                  </button>
-                  <button type="button" class="link text-xs" @click="exclude(e, r, true)">
+                  <button type="button" class="link" @click="exclude(e, r, false)">Exclude</button>
+                  <button type="button" class="link" @click="exclude(e, r, true)">
                     Exclude on this path
                   </button>
                 </template>
-                <span v-else class="text-xs text-ink-muted">The site has no WAF profile.</span>
+                <span v-else class="text-ink-muted">The site has no WAF profile.</span>
               </div>
             </td>
           </tr>
-        </tbody>
+        </TransitionGroup>
       </table>
     </SectionCard>
   </div>

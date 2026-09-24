@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
@@ -19,8 +20,8 @@ const SECURITY = [
   { value: 'wpa2-wpa3', label: 'WPA2 and WPA3', hint: 'WPA3 where the client has it.' },
   { value: 'wpa3', label: 'WPA3', hint: 'Older devices cannot join.' },
   { value: 'wpa2', label: 'WPA2', hint: '' },
-  { value: 'owe', label: 'Enhanced open', hint: 'No password; traffic is still encrypted.' },
-  { value: 'open', label: 'Open', hint: 'No password; traffic is not encrypted.' },
+  { value: 'owe', label: 'Enhanced open', hint: 'No password. Traffic is still encrypted.' },
+  { value: 'open', label: 'Open', hint: 'No password. Traffic is not encrypted.' },
 ]
 
 function blank() {
@@ -249,19 +250,13 @@ function save() {
       </fieldset>
 
       <div class="space-y-2">
-        <label class="flex items-center gap-2 text-sm">
-          <input v-model="form.hidden" type="checkbox" class="size-4 rounded border-line-2" />
-          Hidden
-        </label>
-        <label class="flex items-center gap-2 text-sm">
-          <input v-model="form.isolate" type="checkbox" class="size-4 rounded border-line-2" />
-          Isolate clients
-          <span class="text-ink-muted">Off lets clients see each other.</span>
-        </label>
-        <label class="flex items-center gap-2 text-sm">
-          <input v-model="form.enabled" type="checkbox" class="size-4 rounded border-line-2" />
-          Enabled
-        </label>
+        <ToggleRow v-model="form.hidden" label="Hidden" />
+        <ToggleRow
+          v-model="form.isolate"
+          label="Isolate clients"
+          hint="Off lets clients see each other."
+        />
+        <ToggleRow v-model="form.enabled" label="Enabled" />
       </div>
 
       <div class="flex justify-end gap-2 pt-2">

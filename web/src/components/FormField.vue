@@ -12,6 +12,6 @@ defineProps({
   <div class="field space-y-1">
     <Label :for="id" class="block text-sm font-medium">{{ label }}</Label>
     <slot />
-    <p v-if="hint" class="text-xs text-ink-muted">{{ hint }}</p>
+    <p v-if="hint" class="text-sm text-ink-muted">{{ hint }}</p>
   </div>
 </template>

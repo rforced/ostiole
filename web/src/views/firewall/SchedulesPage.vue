@@ -4,6 +4,7 @@ import { ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import { someOf } from '@/lib/lists'
 import { useConfigStore } from '@/stores/config'
 import ScheduleDialog from '@/views/firewall/ScheduleDialog.vue'
 
@@ -79,9 +80,10 @@ function days(schedule) {
               <span
                 v-else
                 class="ml-3 text-sm text-ink-muted"
-                :title="`In use by ${config.scheduleReferences(s.name).join(', ')}`"
-                >In use</span
+                :title="config.scheduleReferences(s.name).join(', ')"
               >
+                In use by {{ someOf(config.scheduleReferences(s.name)) }}
+              </span>
             </td>
           </tr>
         </TransitionGroup>

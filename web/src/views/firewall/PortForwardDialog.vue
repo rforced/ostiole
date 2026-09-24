@@ -3,10 +3,11 @@ import { ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { newId } from '@/lib/ids'
 import { parseList } from '@/lib/lists'
 import { useConfigStore } from '@/stores/config'
-import { PRIORITY_HINT, TIERS, UNSET_LABEL } from '@/views/firewall/shaping/tiers'
+import { PRIORITY_HINT, TIERS, UNSET_LABEL, tierOption } from '@/views/firewall/shaping/tiers'
 
 const props = defineProps({ forward: { type: Object, default: null } })
 const open = defineModel('open', { type: Boolean, default: false })
@@ -126,7 +127,7 @@ function save() {
           <select id="pf-priority" v-model="form.priority" class="input">
             <option value="">{{ UNSET_LABEL }}</option>
             <option v-for="t in TIERS" :key="t.value" :value="t.value">
-              {{ t.label }} — {{ t.hint }}
+              {{ tierOption(t) }}
             </option>
           </select>
         </FormField>
@@ -142,10 +143,7 @@ function save() {
           outside address too.</span
         >
       </label>
-      <label class="flex items-center gap-2 text-sm">
-        <input v-model="form.enabled" type="checkbox" class="size-4 rounded border-line-2" />
-        Enabled
-      </label>
+      <ToggleRow v-model="form.enabled" label="Enabled" />
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
         <button type="submit" class="btn-primary">Save to draft</button>

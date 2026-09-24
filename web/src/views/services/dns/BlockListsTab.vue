@@ -1,5 +1,5 @@
 <script setup>
-import { Plus } from 'lucide-vue-next'
+import { LoaderCircle, Plus } from 'lucide-vue-next'
 import { computed, onMounted, ref, watch } from 'vue'
 
 import AppDisclosure from '@/components/AppDisclosure.vue'
@@ -311,14 +311,19 @@ function when(s) {
                 :aria-busy="which === l.name"
                 @click="refresh.run(l.name)"
               >
+                <LoaderCircle
+                  v-if="which === l.name"
+                  class="mr-1 inline size-4 animate-spin"
+                  aria-hidden="true"
+                />
                 {{ which === l.name ? 'Refreshing…' : 'Refresh' }}
               </button>
               <button type="button" class="link" :disabled="refresh.busy.value" @click="edit(l)">
                 Edit
               </button>
               <ConfirmButton
-                v-if="!refresh.busy.value"
                 class="ml-3"
+                :disabled="refresh.busy.value"
                 label="Delete"
                 :question="`Delete list ${l.name}?`"
                 :description="l.description"

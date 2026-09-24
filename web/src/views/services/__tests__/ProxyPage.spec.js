@@ -1,8 +1,10 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { h } from 'vue'
 
 import { api } from '@/lib/api'
+import { useProxyStatus } from '@/lib/proxyStatus'
 import { useConfigStore } from '@/stores/config'
 import EventsTab from '@/views/services/proxy/EventsTab.vue'
 import ProfileDialog from '@/views/services/proxy/ProfileDialog.vue'
@@ -59,6 +61,16 @@ async function strip(st, { draft = config(), saved = config() } = {}) {
   return wrapper
 }
 
+/** The word in the page header's badge, read the way ProxyPage reads it. */
+function badge() {
+  return mount({
+    setup() {
+      const { state } = useProxyStatus()
+      return () => h('span', state.value)
+    },
+  }).text()
+}
+
 describe('ProxyStatus', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -80,15 +92,26 @@ describe('ProxyStatus', () => {
     expect(wrapper.text()).toContain('System, General')
   })
 
-  it('says it is off when the draft has it switched off', async () => {
+  // Switching it off is a draft edit until it is applied. The router is
+  // still serving, and the badge is about the router.
+  it('stays running while it is switched off only in the draft', async () => {
     const draft = config({ services: { proxy: { enabled: false } } })
-    const wrapper = await strip(status({ running: false }), { draft })
-    expect(wrapper.text()).toContain('Off.')
+    const wrapper = await strip(status(), { draft })
+    expect(badge()).toBe('running')
+    expect(wrapper.text()).toContain('v1.2.3')
+  })
+
+  it('says nothing beyond the badge when it is off', async () => {
+    const off = config({ services: { proxy: { enabled: false } } })
+    const wrapper = await strip(status({ running: false }), { draft: off, saved: off })
+    expect(badge()).toBe('off')
+    expect(wrapper.text()).toBe('')
   })
 
   it('asks for an apply while the site is only in the draft', async () => {
     const saved = config({ services: { proxy: { enabled: false } } })
     const wrapper = await strip(status({ running: false }), { saved })
+    expect(badge()).toBe('off')
     expect(wrapper.text()).toContain('Apply the draft to start it.')
   })
 

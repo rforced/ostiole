@@ -219,7 +219,7 @@ describe('RecentBlocksCard', () => {
 
   it('says so when nothing was refused', () => {
     const w = mount(RecentBlocksCard, { props: { blocks: [] }, global: { stubs } })
-    expect(w.text()).toContain('Nothing refused lately.')
+    expect(w.text()).toContain('No blocks yet.')
   })
 })
 

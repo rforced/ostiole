@@ -1,5 +1,5 @@
 // Runs synchronously in <head> so the correct theme is applied before first paint.
-// Must stay in sync with src/stores/theme.ts (storage key and semantics).
+// Must stay in sync with src/stores/theme.js (storage key and semantics).
 ;(function () {
   try {
     var pref = localStorage.getItem('ostiole.theme')

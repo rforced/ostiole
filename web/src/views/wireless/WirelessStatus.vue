@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
@@ -30,11 +31,6 @@ const stage = computed(() => {
   return 'ready'
 })
 
-/** The badge beside each radio, per what it is doing. */
-const RUNNING = { text: 'running', tone: 'badge-ok' }
-const STOPPED = { text: 'stopped', tone: 'badge-warn' }
-const OFF = { text: 'off', tone: '' }
-
 /** One line per configured radio, merged with what the card reports. */
 const rows = computed(() =>
   config.radios.map((r) => {
@@ -49,7 +45,7 @@ const rows = computed(() =>
       running: live?.running ?? null,
       stopped: live?.stopped ?? null,
       networks,
-      badge: !r.enabled || !networks.length ? OFF : live?.running ? RUNNING : STOPPED,
+      state: !r.enabled || !networks.length ? 'off' : live?.running ? 'running' : 'stopped',
     }
   }),
 )
@@ -86,7 +82,7 @@ function clientsOf(row, name) {
         <fieldset v-for="row in rows" :key="row.name" class="space-y-1">
           <legend class="mb-1 flex items-center gap-2 font-mono font-medium">
             {{ row.name }}
-            <span class="badge" :class="row.badge.tone">{{ row.badge.text }}</span>
+            <StatusBadge :state="row.state" />
           </legend>
           <dl class="kv">
             <dt>Band</dt>

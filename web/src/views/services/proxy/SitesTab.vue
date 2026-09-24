@@ -50,8 +50,8 @@ function edit(site) {
             <th></th>
           </tr>
         </thead>
-        <tbody>
-          <tr v-if="!sites.length">
+        <TransitionGroup name="row" tag="tbody">
+          <tr v-if="!sites.length" key="empty" class="row-static">
             <td colspan="6" class="text-ink-muted">No sites.</td>
           </tr>
           <tr
@@ -86,7 +86,7 @@ function edit(site) {
               />
             </td>
           </tr>
-        </tbody>
+        </TransitionGroup>
       </table>
     </SectionCard>
 

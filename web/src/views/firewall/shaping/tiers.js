@@ -19,7 +19,10 @@ export const TIERS = [
  *
  * It is one string because both dialogs offer it and they must not drift.
  */
-export const UNSET_LABEL = "Not set — the device's own marking decides"
+export const UNSET_LABEL = "Not set: the device's own marking decides"
+
+/** A tier as its option in a priority list reads. */
+export const tierOption = (t) => `${t.label}: ${t.hint}`
 
 /** The line under either priority field, for the same reason. */
 export const PRIORITY_HINT =

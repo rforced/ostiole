@@ -1,4 +1,5 @@
 <script setup>
+import { LoaderCircle } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
 import AppDisclosure from '@/components/AppDisclosure.vue'
@@ -223,8 +224,14 @@ const advanced = ref(
               type="button"
               class="btn-secondary"
               :disabled="!dnsRunning || clearCache.busy.value"
+              :aria-busy="clearCache.busy.value"
               @click="clearCache.run()"
             >
+              <LoaderCircle
+                v-if="clearCache.busy.value"
+                class="size-4 animate-spin"
+                aria-hidden="true"
+              />
               {{ clearCache.busy.value ? 'Clearing…' : 'Clear cache' }}
             </button>
             <p v-if="clearCache.error.value" role="alert" class="text-bad">

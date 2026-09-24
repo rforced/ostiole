@@ -256,7 +256,7 @@ function edit(r) {
           <TransitionGroup name="row" tag="tbody">
             <tr v-if="!detected.length" key="empty" class="row-static">
               <td colspan="7" class="text-ink-muted">
-                {{ refresh.updatedAt.value ? 'No default route on this router.' : 'Reading…' }}
+                {{ refresh.updatedAt.value ? 'No default routes.' : 'Reading…' }}
               </td>
             </tr>
             <tr v-for="d in detected" :key="`${d.interface}-${d.address}-${d.family}`">
@@ -314,7 +314,7 @@ function edit(r) {
                 <template v-if="config.gateways.length">
                   No groups. Add one to route some rules over a different line.
                 </template>
-                <template v-else> Add a gateway first. A group is made of them. </template>
+                <template v-else> No groups. Add a gateway first. </template>
               </td>
             </tr>
             <tr

@@ -83,7 +83,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', keep))
         <template v-for="item in NAV" :key="item.to">
           <RouterLink
             :to="item.to"
-            class="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[0.9375rem] text-ink-2 hover:bg-surface-2 hover:text-ink [&>svg]:text-ink-muted"
+            class="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[0.9375rem] text-ink-2 hover:bg-surface-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none [&>svg]:text-ink-muted"
             active-class="bg-surface-2 font-medium text-ink [&>svg]:text-accent"
             exact-active-class=""
             :aria-describedby="config.hasChanges(item.to) ? 'nav-unapplied' : undefined"
@@ -101,7 +101,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', keep))
             v-for="page in inside(item) ? (item.pages ?? []) : []"
             :key="page.path"
             :to="`${item.to}/${page.path}`"
-            class="ml-[1.35rem] flex items-center gap-2 border-l border-line py-1.5 pl-4 text-sm text-ink-muted hover:border-line-2 hover:text-ink"
+            class="ml-[1.35rem] flex items-center gap-2 border-l border-line py-1.5 pl-4 text-sm text-ink-muted hover:border-line-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
             active-class="border-accent font-medium text-ink"
             :aria-describedby="
               config.hasChanges(`${item.to}/${page.path}`) ? 'nav-unapplied' : undefined

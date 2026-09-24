@@ -5,13 +5,18 @@ import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import { useConfigStore } from '@/stores/config'
 
-const props = defineProps({ lease: { type: Object, default: null } })
+const props = defineProps({
+  /** The static lease being edited, or null to add one. */
+  lease: { type: Object, default: null },
+  /** What a new one starts from, e.g. a lease the server handed out. */
+  prefill: { type: Object, default: null },
+})
 const open = defineModel('open', { type: Boolean, default: false })
 const config = useConfigStore()
 const form = ref({ mac: '', ip: '', ipv6: '', hostname: '', description: '' })
 
 watch(
-  () => [open.value, props.lease],
+  () => [open.value, props.lease, props.prefill],
   () => {
     if (open.value)
       form.value = {
@@ -20,7 +25,7 @@ watch(
         ipv6: '',
         hostname: '',
         description: '',
-        ...(props.lease ?? {}),
+        ...(props.lease ?? props.prefill ?? {}),
       }
   },
   { immediate: true },

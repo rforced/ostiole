@@ -51,14 +51,13 @@ function upPowerTone(p) {
   <div class="space-y-5">
     <SectionCard title="Modem">
       <template #intro>
-        Read from the modem's own status pages when you ask, never in the background. A cable modem
-        answers at 192.168.100.1 whether or not the WAN has an address.
+        Read from the modem at 192.168.100.1 when you ask, never in the background. It answers there
+        with or without a WAN address.
       </template>
       <template #actions>
         <RefreshButton
           :busy="load.busy.value"
           :updated-at="load.updatedAt.value"
-          busy-label="Reading…"
           @click="load.run(true)"
         />
       </template>
@@ -124,7 +123,7 @@ function upPowerTone(p) {
               >: everything after it waits on that.
             </p>
             <p v-else-if="status.provisioning.length" class="text-ink-muted">
-              Every step passed; if the WAN still has no address, the provider's DHCP is next to
+              Every step passed. If the WAN still has no address, the provider's DHCP is next to
               ask.
             </p>
             <p v-else class="text-ink-muted">The modem did not report its steps.</p>

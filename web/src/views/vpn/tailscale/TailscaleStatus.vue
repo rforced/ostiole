@@ -1,4 +1,5 @@
 <script setup>
+import { LoaderCircle } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
@@ -31,6 +32,14 @@ const login = useAsync(async (key) => {
   authKey.value = ''
   await read.run()
 })
+/** Which way the login in flight went: 'link', 'key' or ''. */
+const via = ref('')
+
+async function logIn(key) {
+  via.value = key ? 'key' : 'link'
+  await login.run(key)
+  via.value = ''
+}
 
 const logout = useAsync(async () => {
   status.value = await api.tailscale.logout()
@@ -87,13 +96,15 @@ const logout = useAsync(async () => {
         <p v-else-if="stage === 'stopped'" class="text-ink-muted">Stopped.</p>
 
         <template v-else-if="stage === 'needs-login'">
-          <form class="flex flex-wrap items-center gap-3" @submit.prevent="login.run(authKey)">
+          <form class="flex flex-wrap items-center gap-3" @submit.prevent="logIn(authKey)">
             <button
               type="button"
               class="btn-primary"
               :disabled="login.busy.value"
-              @click="login.run('')"
+              :aria-busy="via === 'link'"
+              @click="logIn('')"
             >
+              <LoaderCircle v-if="via === 'link'" class="size-4 animate-spin" aria-hidden="true" />
               Log in
             </button>
             <label for="ts-auth-key" class="text-ink-muted">or with an auth key</label>
@@ -105,7 +116,13 @@ const logout = useAsync(async () => {
               autocomplete="off"
               spellcheck="false"
             />
-            <button type="submit" class="btn-secondary" :disabled="!authKey || login.busy.value">
+            <button
+              type="submit"
+              class="btn-secondary"
+              :disabled="!authKey || login.busy.value"
+              :aria-busy="via === 'key'"
+            >
+              <LoaderCircle v-if="via === 'key'" class="size-4 animate-spin" aria-hidden="true" />
               Log in with key
             </button>
           </form>
@@ -113,7 +130,10 @@ const logout = useAsync(async () => {
           <p v-if="authUrl">
             Open
             <a :href="authUrl" target="_blank" rel="noreferrer" class="link">{{ authUrl }}</a>
-            <span class="ml-1 text-ink-muted">Waiting for the login.</span>
+            <span class="ml-1 text-ink-muted">
+              <LoaderCircle class="mr-1 inline size-4 animate-spin" aria-hidden="true" />Waiting for
+              the login.
+            </span>
           </p>
           <p v-if="login.error.value" role="alert" class="text-bad">{{ login.error.value }}</p>
         </template>

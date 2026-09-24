@@ -102,7 +102,7 @@ function edit(row) {
         </thead>
         <tbody>
           <tr v-if="!loaded">
-            <td colspan="6"><span class="skeleton w-48" /></td>
+            <td colspan="6" class="text-ink-muted">Reading…</td>
           </tr>
           <tr v-else-if="!rows.length">
             <td colspan="6" class="text-ink-muted">No radios on this router.</td>

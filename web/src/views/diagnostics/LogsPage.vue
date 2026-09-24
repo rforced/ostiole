@@ -47,7 +47,6 @@ onMounted(load.run)
         <RefreshButton
           :busy="load.busy.value"
           :updated-at="load.updatedAt.value"
-          busy-label="Reading…"
           @click="load.run()"
         />
       </template>

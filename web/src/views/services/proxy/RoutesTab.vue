@@ -42,8 +42,8 @@ function edit(route) {
             <th></th>
           </tr>
         </thead>
-        <tbody>
-          <tr v-if="!routes.length">
+        <TransitionGroup name="row" tag="tbody">
+          <tr v-if="!routes.length" key="empty" class="row-static">
             <td colspan="5" class="text-ink-muted">No routes.</td>
           </tr>
           <tr
@@ -78,7 +78,7 @@ function edit(route) {
               />
             </td>
           </tr>
-        </tbody>
+        </TransitionGroup>
       </table>
     </SectionCard>
 

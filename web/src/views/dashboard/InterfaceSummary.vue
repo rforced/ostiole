@@ -9,6 +9,8 @@ defineProps({
   interfaces: { type: Array, default: () => [] },
   /** Bits per second per interface, once two samples have been seen. */
   rates: { type: Object, default: () => ({}) },
+  /** False until the first overview arrives. */
+  loaded: { type: Boolean, default: true },
 })
 
 /** How the interface is addressed, e.g. "IPv4 static · IPv6 slaac". */
@@ -46,7 +48,7 @@ function faults(l) {
       </thead>
       <TransitionGroup name="row" tag="tbody">
         <tr v-if="!interfaces.length" key="empty" class="row-static">
-          <td colspan="5" class="text-ink-muted">No interfaces yet.</td>
+          <td colspan="5" class="text-ink-muted">{{ loaded ? 'No interfaces.' : 'Reading…' }}</td>
         </tr>
         <tr v-for="l in interfaces" :key="l.name" :class="l.configured ? '' : 'opacity-70'">
           <td>
@@ -66,7 +68,8 @@ function faults(l) {
             <span v-else-if="l.configured && !l.enabled" class="badge">disabled</span>
             <span v-else-if="l.carrier" class="badge badge-ok">up</span>
             <span v-else-if="l.up" class="badge badge-warn">no carrier</span>
-            <span v-else class="badge">down</span>
+            <!-- Down is a fault on a link the router is meant to use. -->
+            <span v-else class="badge" :class="{ 'badge-warn': l.configured }">down</span>
             <div v-if="faults(l)" class="mt-1 text-warn">
               {{ faults(l) }}
             </div>

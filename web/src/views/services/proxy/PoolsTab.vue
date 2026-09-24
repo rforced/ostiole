@@ -42,8 +42,8 @@ function edit(pool) {
             <th></th>
           </tr>
         </thead>
-        <tbody>
-          <tr v-if="!pools.length">
+        <TransitionGroup name="row" tag="tbody">
+          <tr v-if="!pools.length" key="empty" class="row-static">
             <td colspan="5" class="text-ink-muted">No pools.</td>
           </tr>
           <tr
@@ -79,7 +79,7 @@ function edit(pool) {
               />
             </td>
           </tr>
-        </tbody>
+        </TransitionGroup>
       </table>
     </SectionCard>
 

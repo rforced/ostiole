@@ -216,7 +216,7 @@ function save() {
             @change="toggleMember(o.name)"
           />
           <span class="font-mono">{{ o.name }}</span>
-          <span v-if="o.takenBy" class="text-xs text-ink-muted">already in {{ o.takenBy }}</span>
+          <span v-if="o.takenBy" class="text-sm text-ink-muted">already in {{ o.takenBy }}</span>
           <span v-else-if="o.zone" class="text-sm text-warn">
             in zone {{ o.zone }}, cleared when it becomes a port
           </span>

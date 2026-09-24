@@ -1,6 +1,7 @@
 <script setup>
-import { AlertTriangle } from 'lucide-vue-next'
+import { AlertTriangle, LoaderCircle } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
 import ApplyPending from '@/components/ApplyPending.vue'
 import ChangeList from '@/components/ChangeList.vue'
@@ -10,18 +11,39 @@ import { useSystemStore } from '@/stores/system'
 
 const CONFIRM_SECONDS = 60
 const SHOWN_CHANGES = 20
+/** How long an outcome stays on screen before the bar goes away. */
+const LINGER_MS = 2500
 
 const config = useConfigStore()
 const system = useSystemStore()
+const route = useRoute()
 
 const busy = ref(false)
 const error = ref('')
 const issues = ref([])
-const pending = ref(null)
 const showChanges = ref(false)
+/**
+ * The apply awaiting confirmation: one this tab made, or the server's,
+ * whichever tab made it and across a reload, so the countdown is on every
+ * page. Kept a moment after it settles so the outcome can be read.
+ * @type {import('vue').Ref<{deadline: string} | null>}
+ */
+const pending = ref(null)
+/** The draft as this tab applied it, until that apply settles. */
+let applied = null
 
-const visible = computed(() => config.dirty || pending.value !== null)
+/** The wizard shows its own apply. */
+const onWizard = computed(() => route?.name === 'wizard')
+const visible = computed(() => !onWizard.value && (config.dirty || pending.value !== null))
 const count = computed(() => config.changes.length)
+
+watch(
+  [() => system.status?.pending?.deadline, onWizard],
+  ([deadline, wizard]) => {
+    if (deadline && !wizard && pending.value?.deadline !== deadline) pending.value = { deadline }
+  },
+  { immediate: true },
+)
 
 watch(
   () => config.dirty,
@@ -37,8 +59,11 @@ async function apply() {
   error.value = ''
   issues.value = []
   try {
-    await api.config.check(config.draft)
-    pending.value = await api.config.apply(config.draft, CONFIRM_SECONDS)
+    const draft = JSON.parse(JSON.stringify(config.draft))
+    await api.config.check(draft)
+    const res = await api.config.apply(draft, CONFIRM_SECONDS)
+    applied = draft
+    pending.value = { deadline: res.deadline }
     // The kernel changed the moment the apply returned, not when it is
     // confirmed, so anything showing live state is stale from here.
     config.markApplied()
@@ -53,20 +78,39 @@ async function apply() {
   }
 }
 
-const LINGER_MS = 2500
+function linger() {
+  const shown = pending.value
+  window.setTimeout(() => {
+    if (pending.value === shown) pending.value = null
+  }, LINGER_MS)
+}
 
 async function confirmed() {
-  config.markSaved()
-  await system.refresh()
-  // Leave the outcome on screen briefly before the bar goes away.
-  window.setTimeout(() => (pending.value = null), LINGER_MS)
+  // Read the saved configuration back rather than assume it, so a confirm
+  // for an apply made before a reload or in another tab updates this tab.
+  if (!(await config.resync(applied)) && applied) config.markSaved(applied)
+  applied = null
+  linger()
 }
 
 async function reverted() {
   // Keep the draft so the admin can fix it and try again.
+  applied = null
   config.markApplied()
   await system.refresh()
-  window.setTimeout(() => (pending.value = null), LINGER_MS)
+  linger()
+}
+
+/**
+ * What happened to an apply that stopped pending without a click here.
+ * Only a confirm writes the saved configuration, so a changed one means
+ * it was confirmed somewhere else.
+ */
+async function settle() {
+  const changed = await config.resync(applied)
+  applied = null
+  if (changed) return 'confirmed'
+  return Date.now() >= Date.parse(pending.value?.deadline ?? '') ? 'expired' : 'reverted'
 }
 </script>
 
@@ -77,7 +121,9 @@ async function reverted() {
         <div class="border-b border-line bg-surface px-6 py-3">
           <ApplyPending
             v-if="pending"
+            :key="pending.deadline"
             :deadline="pending.deadline"
+            :settle="settle"
             @confirmed="confirmed"
             @reverted="reverted"
           />
@@ -95,9 +141,6 @@ async function reverted() {
                 {{ showChanges ? 'Hide' : 'Show' }} {{ count }}
                 {{ count === 1 ? 'change' : 'changes' }}
               </button>
-              <span class="text-ink-muted"
-                >Nothing reaches the kernel until you apply and confirm.</span
-              >
               <div class="ml-auto flex gap-2">
                 <button
                   type="button"
@@ -107,7 +150,14 @@ async function reverted() {
                 >
                   Discard
                 </button>
-                <button type="button" class="btn-primary" :disabled="busy" @click="apply">
+                <button
+                  type="button"
+                  class="btn-primary"
+                  :disabled="busy"
+                  :aria-busy="busy"
+                  @click="apply"
+                >
+                  <LoaderCircle v-if="busy" class="size-4 animate-spin" aria-hidden="true" />
                   {{ busy ? 'Applying…' : `Apply with ${CONFIRM_SECONDS}s confirmation` }}
                 </button>
               </div>

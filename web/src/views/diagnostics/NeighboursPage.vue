@@ -101,7 +101,7 @@ function tone(state) {
             <td class="font-mono text-code">{{ n.interface }}</td>
             <td>{{ n.family }}</td>
             <td>
-              <span class="badge" :class="tone(n.state)">{{ n.state }}</span>
+              <span class="badge" :class="tone(n.state)">{{ n.state.toLowerCase() }}</span>
             </td>
           </tr>
         </TransitionGroup>

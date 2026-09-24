@@ -26,22 +26,9 @@ function fetchStatus() {
   return inflight
 }
 
-/** The word for the badge, for each stage the proxy can be in. */
-const STATE = {
-  running: 'running',
-  stopped: 'stopped',
-  off: 'off',
-  unapplied: 'not applied',
-  // Not installed: the notice under the header says so, and a badge that
-  // said 'stopped' would be a different claim.
-  missing: '',
-  'port-clash': 'stopped',
-  loading: '',
-}
-
 /**
  * What the proxy is doing, in the order a router goes through it: the
- * daemon, the ports, the draft, the apply. One caller polls and the rest
+ * daemon, the ports, the apply, the draft. One caller polls and the rest
  * read what it left behind.
  *
  * @param {{poll?: boolean}} [opts] poll: own the read
@@ -65,7 +52,7 @@ export function useProxyStatus({ poll = false } = {}) {
     return (draft.value.routes ?? []).find((r) => r.enabled && r.port === web)?.port ?? 0
   })
 
-  /** Whether the draft has anything for the proxy to serve. */
+  /** Whether a proxy configuration has anything to serve. */
   const serves = (p) =>
     Boolean(
       p?.enabled &&
@@ -76,13 +63,21 @@ export function useProxyStatus({ poll = false } = {}) {
     if (!status.value) return 'loading'
     if (!status.value.setUp) return 'missing'
     if (clash.value) return 'port-clash'
-    if (!draft.value.enabled) return 'off'
-    if (!serves(saved.value)) return 'unapplied'
+    if (!serves(saved.value)) return serves(draft.value) ? 'unapplied' : 'off'
     if (!status.value.running) return 'stopped'
     return 'running'
   })
 
-  const state = computed(() => STATE[stage.value] ?? '')
+  /**
+   * The badge: what the router runs, from the applied configuration and
+   * the daemon, never the draft. Not installed has no badge; the notice
+   * under the header says so.
+   */
+  const state = computed(() => {
+    if (!status.value?.setUp) return ''
+    if (!serves(saved.value)) return 'off'
+    return status.value.running ? 'running' : 'stopped'
+  })
 
   return { status, stage, state, clash }
 }

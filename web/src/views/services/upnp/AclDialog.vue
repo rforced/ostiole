@@ -50,7 +50,7 @@ function save() {
 <template>
   <AppDialog
     v-model:open="open"
-    :title="entry ? 'Access list entry' : 'Add access list entry'"
+    :title="entry ? `Access list entry ${index + 1}` : 'Add access list entry'"
     description="The first entry that matches the request decides it."
   >
     <form class="space-y-4" @submit.prevent="save">

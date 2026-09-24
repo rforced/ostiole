@@ -19,7 +19,7 @@ const healthy = computed(() => (status.value?.upstreams ?? []).filter((u) => u.h
     <AppNotice v-else-if="stage === 'port-clash'">
       Port {{ clash }} is the web UI's. Change it under System, General first.
     </AppNotice>
-    <p v-else-if="stage === 'off'" class="text-sm text-ink-muted">Off.</p>
+    <template v-else-if="stage === 'off'" />
     <p v-else-if="stage === 'unapplied'" class="text-sm text-ink-muted">
       Apply the draft to start it.
     </p>

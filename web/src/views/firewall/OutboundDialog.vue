@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { newId } from '@/lib/ids'
 import { joinList, parseList } from '@/lib/lists'
 import { useConfigStore } from '@/stores/config'
@@ -102,10 +103,7 @@ function save() {
           ></textarea>
         </FormField>
       </div>
-      <label class="flex items-center gap-2 text-sm">
-        <input v-model="form.noNat" type="checkbox" class="size-4 rounded border-line-2" />
-        Do not translate this traffic
-      </label>
+      <ToggleRow v-model="form.noNat" label="Do not translate this traffic" />
       <FormField
         v-if="!form.noNat"
         id="nat-address"
@@ -120,10 +118,7 @@ function save() {
           spellcheck="false"
         />
       </FormField>
-      <label class="flex items-center gap-2 text-sm">
-        <input v-model="form.enabled" type="checkbox" class="size-4 rounded border-line-2" />
-        Enabled
-      </label>
+      <ToggleRow v-model="form.enabled" label="Enabled" />
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
         <button type="submit" class="btn-primary">Save to draft</button>

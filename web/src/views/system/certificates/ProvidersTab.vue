@@ -6,6 +6,7 @@ import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { someOf } from '@/lib/lists'
 import { useConfigStore } from '@/stores/config'
 import ProviderDialog from '@/views/system/certificates/ProviderDialog.vue'
 
@@ -89,9 +90,10 @@ const labelOf = (kind) => kinds.value.find((k) => k.kind === kind)?.label ?? kin
               <span
                 v-else
                 class="ml-3 text-sm text-ink-muted"
-                :title="`In use by ${config.providerDependents(p.id).join(', ')}`"
-                >In use</span
+                :title="config.providerDependents(p.id).join(', ')"
               >
+                In use by {{ someOf(config.providerDependents(p.id)) }}
+              </span>
             </td>
           </tr>
         </TransitionGroup>

@@ -1,5 +1,6 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { LoaderCircle } from 'lucide-vue-next'
+import { computed, nextTick, ref, watch } from 'vue'
 
 import AppDisclosure from '@/components/AppDisclosure.vue'
 import FormField from '@/components/FormField.vue'
@@ -68,11 +69,28 @@ const restore = useAsync(async (key, passphrase = '') => {
   }
 })
 
-onMounted(() => {
-  if (!applied.value) return
-  loadStatus.run()
-  loadCopies.run()
-})
+/** The copy whose restore is being read, for its row's spinner. */
+const restoring = ref('')
+let passphraseInput = null
+
+async function restoreCopy(key) {
+  restoring.value = key
+  await restore.run(key, asking.value === key ? rowPassphrase.value : '')
+  restoring.value = ''
+  if (asking.value !== key) return
+  await nextTick()
+  passphraseInput?.focus()
+}
+
+watch(
+  applied,
+  (on) => {
+    if (!on) return
+    loadStatus.run()
+    loadCopies.run()
+  },
+  { immediate: true },
+)
 
 const error = computed(() => backUpNow.error.value || restore.error.value || loadStatus.error.value)
 
@@ -98,6 +116,7 @@ const advanced = ref(
 )
 
 const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
+// Binary, like the size the upload itself reports in the Result line.
 const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
 </script>
 
@@ -254,8 +273,8 @@ const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
           </AppDisclosure>
 
           <p class="max-w-3xl text-ink-muted">
-            The key needs to write files; to list and delete them for Keep copies; to read them to
-            restore; and to change the bucket for Days.
+            The key needs write access. Keep copies also needs list and delete, restoring needs
+            read, and Days needs bucket changes.
           </p>
         </template>
       </div>
@@ -263,7 +282,7 @@ const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
 
     <SectionCard
       v-if="applied"
-      title="Copies in the bucket"
+      title="Remote Configurations"
       :count="copies.length"
       intro="Back up now uses the applied settings."
       flush
@@ -278,8 +297,14 @@ const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
           type="button"
           class="btn-secondary"
           :disabled="backUpNow.busy.value"
+          :aria-busy="backUpNow.busy.value"
           @click="backUpNow.run"
         >
+          <LoaderCircle
+            v-if="backUpNow.busy.value"
+            class="size-4 animate-spin"
+            aria-hidden="true"
+          />
           {{ backUpNow.busy.value ? 'Uploading…' : 'Back up now' }}
         </button>
       </template>
@@ -310,7 +335,9 @@ const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
         </thead>
         <tbody>
           <tr v-if="!copies.length">
-            <td colspan="4" class="text-ink-muted">No copies.</td>
+            <td colspan="4" class="text-ink-muted">
+              {{ loadCopies.updatedAt.value ? 'No copies.' : 'Reading…' }}
+            </td>
           </tr>
           <tr v-for="c in copies" :key="c.key">
             <td class="font-mono text-code break-all">{{ c.name }}</td>
@@ -319,6 +346,7 @@ const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
             <td class="text-right whitespace-nowrap">
               <input
                 v-if="asking === c.key"
+                :ref="(el) => (passphraseInput = el)"
                 v-model="rowPassphrase"
                 type="password"
                 class="input mr-2 inline-block w-48"
@@ -328,10 +356,16 @@ const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
               />
               <button
                 type="button"
-                class="btn-secondary"
+                class="link"
                 :disabled="restore.busy.value"
-                @click="restore.run(c.key, asking === c.key ? rowPassphrase : '')"
+                :aria-busy="restoring === c.key"
+                @click="restoreCopy(c.key)"
               >
+                <LoaderCircle
+                  v-if="restoring === c.key"
+                  class="mr-1 inline size-4 animate-spin"
+                  aria-hidden="true"
+                />
                 Restore
               </button>
             </td>

@@ -7,6 +7,8 @@ defineProps({
   rules: { type: Array, default: () => [] },
   /** Packets that reached a default drop. */
   blocked: { type: Object, default: () => ({ packets: 0, bytes: 0 }) },
+  /** False until the first overview arrives. */
+  loaded: { type: Boolean, default: true },
 })
 </script>
 
@@ -23,7 +25,9 @@ defineProps({
       </thead>
       <TransitionGroup name="row" tag="tbody">
         <tr v-if="!rules.length" key="empty" class="row-static">
-          <td colspan="4" class="text-ink-muted">No rules with counters yet.</td>
+          <td colspan="4" class="text-ink-muted">
+            {{ loaded ? 'No rules with counters yet.' : 'Reading…' }}
+          </td>
         </tr>
         <tr v-for="r in rules" :key="r.id">
           <td>

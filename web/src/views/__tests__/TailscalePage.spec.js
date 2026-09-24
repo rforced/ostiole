@@ -83,6 +83,15 @@ describe('TailscaleStatus', () => {
     expect(wrapper.text()).toContain('Apply the draft to start it.')
   })
 
+  // Deleting the node is a draft edit until it is applied, and the router
+  // is still on the tailnet until then.
+  it('stays connected while the node is gone only from the draft', async () => {
+    const saved = config({ interfaces: [node()] })
+    const wrapper = await strip(status(), { saved })
+    expect(wrapper.text()).not.toContain('Not joined.')
+    expect(wrapper.text()).toContain('Node')
+  })
+
   it('offers both ways in when the node is not logged in', async () => {
     const both = config({ interfaces: [node()] })
     const wrapper = await strip(status({ state: 'NeedsLogin' }), { draft: both, saved: both })

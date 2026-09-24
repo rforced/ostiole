@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import AppDialog from '@/components/AppDialog.vue'
 import AppNotice from '@/components/AppNotice.vue'
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
@@ -268,10 +269,7 @@ function save() {
         >, so they are all matched by the same rules.
       </p>
 
-      <label class="flex items-center gap-2 text-sm">
-        <input v-model="form.enabled" type="checkbox" class="size-4 rounded border-line-2" />
-        Enabled
-      </label>
+      <ToggleRow v-model="form.enabled" label="Enabled" />
 
       <p v-if="daemonOwned" class="text-sm text-ink-muted">
         The tailnet gives this interface its addresses and its MTU. Its settings are on

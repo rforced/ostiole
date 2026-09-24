@@ -4,6 +4,7 @@ import { ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import { someOf } from '@/lib/lists'
 import { useConfigStore } from '@/stores/config'
 import AccountDialog from '@/views/system/certificates/AccountDialog.vue'
 
@@ -78,9 +79,10 @@ function edit(account) {
               <span
                 v-else
                 class="ml-3 text-sm text-ink-muted"
-                :title="`In use by ${config.accountDependents(a.id).join(', ')}`"
-                >In use</span
+                :title="config.accountDependents(a.id).join(', ')"
               >
+                In use by {{ someOf(config.accountDependents(a.id)) }}
+              </span>
             </td>
           </tr>
         </TransitionGroup>

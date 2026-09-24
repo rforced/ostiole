@@ -4,7 +4,7 @@ import { computed, ref, watch } from 'vue'
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import { useConfigStore } from '@/stores/config'
-import { TIERS } from '@/views/firewall/shaping/tiers'
+import { TIERS, tierOption } from '@/views/firewall/shaping/tiers'
 
 /** What the router will accept, and what it offers when asked first. */
 const MIN = 10
@@ -115,7 +115,7 @@ function save() {
         >
           <select id="busy-priority" v-model="form.priority" class="input" required>
             <option v-for="t in TIERS" :key="t.value" :value="t.value">
-              {{ t.label }} — {{ t.hint }}
+              {{ tierOption(t) }}
             </option>
           </select>
         </FormField>

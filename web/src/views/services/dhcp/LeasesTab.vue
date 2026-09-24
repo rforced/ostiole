@@ -5,8 +5,24 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { useConfigStore } from '@/stores/config'
+import StaticLeaseDialog from '@/views/services/dhcp/StaticLeaseDialog.vue'
 
+const config = useConfigStore()
 const leases = ref([])
+const open = ref(false)
+const editing = ref(null)
+const prefill = ref(null)
+
+/** Pins a client to the address it has. One already pinned in the draft opens as it is. */
+function makeStatic(l) {
+  const mac = l.mac.toLowerCase()
+  editing.value =
+    (config.draft?.services?.dhcp?.staticLeases ?? []).find((s) => s.mac.toLowerCase() === mac) ??
+    null
+  prefill.value = { mac, ip: l.ip, hostname: l.hostname ?? '' }
+  open.value = true
+}
 
 const load = useAsync(async () => {
   leases.value = await api.services.leases()
@@ -34,11 +50,12 @@ onMounted(load.run)
             <th>Client</th>
             <th>Hostname</th>
             <th>Expires</th>
+            <th></th>
           </tr>
         </thead>
         <TransitionGroup name="row" tag="tbody">
           <tr v-if="!leases.length" key="empty" class="row-static">
-            <td colspan="4" class="text-ink-muted">
+            <td colspan="5" class="text-ink-muted">
               {{ load.updatedAt.value ? 'No leases.' : 'Reading…' }}
             </td>
           </tr>
@@ -53,9 +70,21 @@ onMounted(load.run)
             <td>
               {{ l.static ? 'static' : new Date(l.expires).toLocaleString() }}
             </td>
+            <td class="text-right whitespace-nowrap">
+              <button
+                v-if="l.mac && !l.static && l.family !== 6"
+                type="button"
+                class="link"
+                @click="makeStatic(l)"
+              >
+                Make static
+              </button>
+            </td>
           </tr>
         </TransitionGroup>
       </table>
     </SectionCard>
+
+    <StaticLeaseDialog v-model:open="open" :lease="editing" :prefill="prefill" />
   </div>
 </template>

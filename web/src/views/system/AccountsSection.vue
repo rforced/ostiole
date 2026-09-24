@@ -161,11 +161,14 @@ const when = (s, fallback) => (s ? new Date(s).toLocaleDateString() : fallback)
               :value="u.role"
               :disabled="isSelf(u)"
               :aria-label="`Role for ${u.username}`"
-              :title="isSelf(u) ? 'Another admin has to change your role.' : undefined"
+              :aria-describedby="isSelf(u) ? 'role-self' : undefined"
               @change="changeRole(u, $event)"
             >
               <option v-for="r in ROLES" :key="r.value" :value="r.value">{{ r.label }}</option>
             </select>
+            <p v-if="isSelf(u)" id="role-self" class="mt-1 text-ink-muted">
+              Another admin has to change your role.
+            </p>
           </td>
           <td>{{ when(u.createdAt, '—') }}</td>
           <td class="space-x-3 text-right whitespace-nowrap">

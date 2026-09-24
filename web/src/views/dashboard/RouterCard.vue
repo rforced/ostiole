@@ -58,6 +58,6 @@ defineProps({
         <RouterLink to="/system/backup" class="link">roll back under System</RouterLink>
       </dd>
     </dl>
-    <p v-else class="text-ink-muted">Loading…</p>
+    <p v-else class="text-ink-muted">Reading…</p>
   </SectionCard>
 </template>

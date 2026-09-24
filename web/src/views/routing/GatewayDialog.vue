@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { interfaceLabel } from '@/lib/interfaces'
 import { useConfigStore } from '@/stores/config'
 
@@ -105,7 +106,11 @@ function save() {
             placeholder="9.9.9.9"
           />
         </FormField>
-        <FormField id="gw-prio" label="Priority" hint="Lowest wins; equal priorities share.">
+        <FormField
+          id="gw-prio"
+          label="Priority"
+          hint="Lowest wins. Equal priorities share the traffic."
+        >
           <input
             id="gw-prio"
             v-model="form.priority"
@@ -116,10 +121,7 @@ function save() {
           />
         </FormField>
       </div>
-      <label class="flex items-center gap-2 text-sm">
-        <input v-model="form.enabled" type="checkbox" class="size-4 rounded border-line-2" />
-        Enabled
-      </label>
+      <ToggleRow v-model="form.enabled" label="Enabled" />
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
         <button type="submit" class="btn-primary" :disabled="!form.interface">Save to draft</button>

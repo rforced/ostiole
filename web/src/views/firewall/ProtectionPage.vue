@@ -91,8 +91,7 @@ function rate(limit) {
   <div v-if="config.draft" class="space-y-5">
     <SectionCard
       title="Where"
-      intro="Defended zones. Without a choice this is every zone that faces the internet, which is
-        where a flood comes from; a guest network is the other reasonable answer."
+      intro="Defended zones. None chosen means every zone that faces the internet."
     >
       <div class="space-y-4">
         <ul class="flex flex-wrap gap-4">
@@ -312,9 +311,8 @@ function rate(limit) {
     <SectionCard title="Connection table">
       <template #intro>
         Every connection through the router takes one entry, and the kernel drops packets once the
-        table is full. Empty leaves the kernel's own limit, which it sizes from installed memory;
-        raise it when
-        <RouterLink class="link" to="/diagnostics/connections">the table</RouterLink> is running
+        table is full. Empty keeps the kernel's own limit, sized from installed memory. Raise it
+        when <RouterLink class="link" to="/diagnostics/connections">the table</RouterLink> runs
         close to full.
       </template>
       <FormField

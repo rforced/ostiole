@@ -26,7 +26,7 @@ function endpoint(addr, port) {
       </thead>
       <TransitionGroup name="row" tag="tbody">
         <tr v-if="!blocks.length" key="empty" class="row-static">
-          <td colspan="4" class="text-ink-muted">Nothing refused lately.</td>
+          <td colspan="4" class="text-ink-muted">No blocks yet.</td>
         </tr>
         <tr v-for="e in blocks" :key="`${e.time}-${e.src}-${e.srcPort}-${e.dst}-${e.dstPort}`">
           <td class="text-xs whitespace-nowrap text-ink-muted">

@@ -30,6 +30,18 @@ const externalInterface = computed({
   },
 })
 
+/**
+ * The interface still chosen after it stopped qualifying, with why, so the
+ * select shows it rather than going blank.
+ */
+const stale = computed(() => {
+  const name = externalInterface.value
+  if (!name || externalChoices.value.some((i) => i.name === name)) return null
+  const i = config.interfaces.find((x) => x.name === name)
+  const why = !i ? 'gone' : !i.enabled ? 'disabled' : 'not external'
+  return { name, why }
+})
+
 /** The interfaces clients may ask from; empty means every internal one. */
 const insideChoices = computed(() =>
   config.interfaces.filter(
@@ -107,6 +119,7 @@ function edit(index) {
           <FormField id="upnp-ext" label="External interface" hint="Where a mapped port is opened.">
             <select id="upnp-ext" v-model="externalInterface" class="input font-mono">
               <option value="">Choose</option>
+              <option v-if="stale" :value="stale.name">{{ stale.name }} ({{ stale.why }})</option>
               <option v-for="i in externalChoices" :key="i.name" :value="i.name">
                 {{ i.name }}
               </option>

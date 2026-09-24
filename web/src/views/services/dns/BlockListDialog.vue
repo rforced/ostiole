@@ -3,7 +3,9 @@ import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
+import { errorMessage } from '@/lib/async'
 import { formatCount } from '@/lib/format'
 import { useConfigStore } from '@/stores/config'
 
@@ -14,6 +16,8 @@ const config = useConfigStore()
 const form = ref(blank())
 const error = ref('')
 const catalog = ref([])
+/** Why the published lists did not load; the form still works without them. */
+const catalogError = ref('')
 const chosen = ref('')
 
 function blank() {
@@ -48,8 +52,10 @@ watch(
     if (!catalog.value.length) {
       try {
         catalog.value = await api.blocking.catalog()
-      } catch {
+        catalogError.value = ''
+      } catch (e) {
         catalog.value = []
+        catalogError.value = errorMessage(e)
       }
     }
   },
@@ -117,6 +123,9 @@ function save() {
             </option>
           </optgroup>
         </select>
+        <p v-if="catalogError" class="text-sm text-bad">
+          The published lists did not load: {{ catalogError }}
+        </p>
       </FormField>
 
       <div class="grid gap-4 sm:grid-cols-2">
@@ -176,18 +185,13 @@ function save() {
             class="input w-32 font-mono"
           />
         </FormField>
-        <FormField id="bl-enabled" label="Use this list">
-          <label class="flex items-center gap-2 text-sm">
-            <input
-              id="bl-enabled"
-              v-model="form.enabled"
-              type="checkbox"
-              class="size-4 rounded border-line-2"
-            />
-            Merge it into what this router blocks
-          </label>
-        </FormField>
       </div>
+      <ToggleRow
+        id="bl-enabled"
+        v-model="form.enabled"
+        label="Use this list"
+        hint="Merged into what this router blocks."
+      />
 
       <p v-if="error" role="alert" class="text-sm text-bad">{{ error }}</p>
       <div class="flex justify-end gap-2 pt-2">

@@ -1,5 +1,6 @@
 <script setup>
 import SectionCard from '@/components/SectionCard.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { formatCount } from '@/lib/format'
 
 defineProps({
@@ -9,11 +10,11 @@ defineProps({
   dns: { type: Object, default: () => ({}) },
 })
 
-const BADGE = {
-  active: 'badge-ok',
-  inactive: 'badge-warn',
-  missing: 'badge-warn',
-  unknown: '',
+/** The service pages' words: off when the configuration leaves it off. */
+function word(s) {
+  if (s.state === 'active') return 'running'
+  if (s.state === 'inactive') return s.want ? 'stopped' : 'off'
+  return s.state
 }
 </script>
 
@@ -23,8 +24,8 @@ const BADGE = {
       <template v-for="s in services" :key="s.name">
         <dt>{{ s.name }}</dt>
         <dd>
-          <span class="badge" :class="BADGE[s.state] ?? ''">{{ s.state }}</span>
-          <span v-if="s.detail && s.state !== 'active'" class="ml-2 text-xs text-ink-muted">
+          <StatusBadge :state="word(s)" />
+          <span v-if="s.detail && s.state !== 'active'" class="ml-2 text-ink-muted">
             {{ s.detail }}
           </span>
         </dd>

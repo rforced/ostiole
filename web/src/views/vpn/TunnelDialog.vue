@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
 import { useConfigStore } from '@/stores/config'
@@ -120,7 +121,6 @@ function save() {
     description="Its zone decides which rules apply to what comes out of it."
   >
     <form class="space-y-4" @submit.prevent="save">
-      <p v-if="error" role="alert" class="text-sm text-bad">{{ error }}</p>
       <div class="grid gap-4 sm:grid-cols-2">
         <FormField id="wg-name" label="Interface name">
           <input
@@ -177,10 +177,8 @@ function save() {
         <span class="text-ink-muted">The private key never leaves this firewall.</span>
       </div>
 
-      <label class="flex items-center gap-2 text-sm">
-        <input v-model="form.enabled" type="checkbox" class="size-4 rounded border-line-2" />
-        Enabled
-      </label>
+      <ToggleRow v-model="form.enabled" label="Enabled" />
+      <p v-if="error" role="alert" class="text-sm text-bad">{{ error }}</p>
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
         <button type="submit" class="btn-primary" :disabled="!form.privateKey">

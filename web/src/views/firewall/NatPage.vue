@@ -36,6 +36,11 @@ const mode = computed({
   set: (v) => config.setOutboundMode(v),
 })
 
+/** Manual rules the mode leaves out: kept in the draft, not shown in the table. */
+const unusedRules = computed(() =>
+  mode.value === 'manual' || mode.value === 'hybrid' ? 0 : (outbound.value.rules ?? []).length,
+)
+
 /**
  * What automatic and hybrid mode write on their own, read for the draft:
  * the masquerade on each external zone. The mode is checked here too,
@@ -182,13 +187,13 @@ function editOb(r) {
       </table>
     </SectionCard>
 
-    <SectionCard title="Outbound NAT" flush>
+    <SectionCard title="Outbound NAT" :count="(outbound.rules ?? []).length" flush>
       <template v-if="mode === 'manual' || mode === 'hybrid'" #actions>
         <button type="button" class="btn-secondary" @click="addOb">
           <Plus class="size-4" aria-hidden="true" /> Add outbound rule
         </button>
       </template>
-      <div class="px-4 py-3">
+      <div class="card-strip">
         <FormField id="ob-mode" label="Mode" :hint="MODE_HINTS[mode]" class="max-w-lg">
           <select id="ob-mode" v-model="mode" class="input">
             <option value="automatic">Automatic</option>
@@ -197,6 +202,10 @@ function editOb(r) {
             <option value="disabled">Disabled</option>
           </select>
         </FormField>
+        <p v-if="unusedRules" class="mt-3 text-ink-muted">
+          {{ unusedRules }} {{ unusedRules === 1 ? 'rule is' : 'rules are' }} kept but not used in
+          this mode.
+        </p>
       </div>
       <template v-if="mode === 'manual' || mode === 'hybrid'">
         <table class="table">

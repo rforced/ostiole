@@ -1,6 +1,6 @@
 <script setup>
-import { Plus } from 'lucide-vue-next'
-import { computed, onMounted, ref } from 'vue'
+import { Check, Copy, Plus } from 'lucide-vue-next'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
@@ -17,6 +17,38 @@ const available = ref(true)
 const adding = ref(false)
 /** The one moment a new token's secret exists outside the server. */
 const minted = ref(null)
+const secret = ref(null)
+/** 'copied', 'selected' when only the fallback's selection worked, or ''. */
+const copy = ref('')
+let copyTimer = 0
+
+watch(minted, () => (copy.value = ''))
+onBeforeUnmount(() => window.clearTimeout(copyTimer))
+
+/**
+ * The clipboard API needs HTTPS or localhost, which a router reached over
+ * plain HTTP on its LAN is not, so that falls back to selecting the secret
+ * and the older copy command. Either way the secret ends up selected.
+ */
+async function copySecret() {
+  const range = document.createRange()
+  range.selectNodeContents(secret.value)
+  const selection = window.getSelection()
+  selection.removeAllRanges()
+  selection.addRange(range)
+  let ok
+  try {
+    if (window.isSecureContext && navigator.clipboard) {
+      await navigator.clipboard.writeText(minted.value.secret)
+      ok = true
+    } else ok = document.execCommand('copy')
+  } catch {
+    ok = false
+  }
+  copy.value = ok ? 'copied' : 'selected'
+  window.clearTimeout(copyTimer)
+  copyTimer = window.setTimeout(() => (copy.value = ''), 2000)
+}
 
 const load = useAsync(async () => {
   try {
@@ -76,7 +108,19 @@ const when = (s, fallback) => (s ? new Date(s).toLocaleDateString() : fallback)
         v-if="minted"
         :title="`Copy ${minted.name} now. It is not stored and cannot be shown again.`"
       >
-        <code class="block font-mono text-code break-all select-all">{{ minted.secret }}</code>
+        <div class="flex items-start gap-2">
+          <code ref="secret" class="min-w-0 flex-1 font-mono text-code break-all select-all">{{
+            minted.secret
+          }}</code>
+          <button type="button" class="btn-secondary shrink-0" @click="copySecret">
+            <Check v-if="copy === 'copied'" class="size-4" aria-hidden="true" />
+            <Copy v-else class="size-4" aria-hidden="true" />
+            {{ copy === 'copied' ? 'Copied' : copy === 'selected' ? 'Selected' : 'Copy' }}
+          </button>
+        </div>
+        <span class="sr-only" aria-live="polite">{{
+          copy === 'copied' ? 'Copied.' : copy === 'selected' ? 'Selected, copy it by hand.' : ''
+        }}</span>
         <button type="button" class="btn-secondary mt-2" @click="minted = null">Close</button>
       </AppNotice>
     </div>

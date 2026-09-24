@@ -208,7 +208,7 @@
   }
   /* A row action that reads as a link, so a table of them stays quiet. */
   .link-action {
-    @apply text-sm text-ink-muted underline-offset-2 hover:text-accent-text hover:underline focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none;
+    @apply text-sm text-ink-muted underline-offset-2 hover:text-accent-text hover:underline focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:cursor-not-allowed disabled:text-ink-faint disabled:no-underline;
   }
   .link {
     @apply text-sm text-accent-text underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:text-ink-faint disabled:no-underline;

@@ -10,6 +10,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { someOf } from '@/lib/lists'
 import { usePageTabs } from '@/lib/tabs'
 import { useConfigStore } from '@/stores/config'
 import AggregateDialog from '@/views/interfaces/AggregateDialog.vue'
@@ -278,10 +279,13 @@ function editZone(z) {
                   </div>
                 </td>
                 <td>
-                  <span v-if="!row.live" class="badge">absent</span>
+                  <span v-if="!row.live" class="badge" :class="{ 'badge-warn': row.cfg }">
+                    absent
+                  </span>
                   <span v-else-if="row.live.carrier" class="badge badge-ok">up</span>
                   <span v-else-if="row.live.up" class="badge badge-warn">no carrier</span>
-                  <span v-else class="badge">down</span>
+                  <!-- Down is a fault on a link the router is meant to use. -->
+                  <span v-else class="badge" :class="{ 'badge-warn': row.cfg?.enabled }">down</span>
                 </td>
                 <td class="font-mono text-code">{{ row.live?.addresses.join(' ') || '—' }}</td>
                 <td>
@@ -312,7 +316,7 @@ function editZone(z) {
                       class="mr-3"
                       label="Release"
                       :question="`Release the lease on ${row.cfg.name} and ask for a new one?`"
-                      description="The address is gone until the server answers; a WAN is offline for those seconds."
+                      description="The address is gone until the server answers. A WAN is offline until then."
                       :danger="false"
                       @confirm="renew(row, true)"
                     />
@@ -416,9 +420,10 @@ function editZone(z) {
                   <span
                     v-else
                     class="ml-3 text-sm text-ink-muted"
-                    :title="`In use by ${config.zoneInterfaces(z.name).join(', ')}`"
-                    >In use</span
+                    :title="config.zoneInterfaces(z.name).join(', ')"
                   >
+                    In use by {{ someOf(config.zoneInterfaces(z.name)) }}
+                  </span>
                 </td>
               </tr>
             </TransitionGroup>

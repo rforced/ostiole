@@ -69,7 +69,10 @@ function editPeer(tunnel, peer) {
           </span>
         </template>
         <template #actions>
-          <button type="button" class="link" @click="editTunnel(t)">Edit</button>
+          <button type="button" class="btn-secondary" @click="addPeer(t)">
+            <Plus class="size-4" aria-hidden="true" /> Add peer
+          </button>
+          <button type="button" class="link ml-2" @click="editTunnel(t)">Edit</button>
           <ConfirmButton
             label="Delete"
             :question="`Delete tunnel ${t.name}?`"
@@ -80,7 +83,7 @@ function editPeer(tunnel, peer) {
           />
         </template>
 
-        <div class="flex flex-wrap items-start justify-between gap-4 px-4 py-3">
+        <div class="card-strip">
           <dl class="kv">
             <dt>Zone</dt>
             <dd class="font-mono">{{ t.zone || 'unassigned' }}</dd>
@@ -95,9 +98,6 @@ function editPeer(tunnel, peer) {
             <dt>Public key</dt>
             <dd class="font-mono text-code break-all">{{ t.wireguard.publicKey || 'unknown' }}</dd>
           </dl>
-          <button type="button" class="btn-secondary" @click="addPeer(t)">
-            <Plus class="size-4" aria-hidden="true" /> Add peer
-          </button>
         </div>
         <table class="table">
           <thead>

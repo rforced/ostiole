@@ -21,6 +21,9 @@ const POLL_MS = 5000
 const result = ref(null)
 const auto = ref(false)
 const filter = ref({ address: '', protocol: '', port: '' })
+const filtered = computed(() =>
+  Boolean(filter.value.address.trim() || filter.value.protocol || filter.value.port),
+)
 
 const load = useAsync(
   async () => {
@@ -143,7 +146,7 @@ function endpoint(address, port) {
               :style="{ width: `${used}%` }"
             ></div>
           </div>
-          <p v-if="level !== 'ok'" class="text-warn">
+          <p v-if="level !== 'ok'" :class="level === 'critical' ? 'text-bad' : 'text-warn'">
             The kernel drops packets once the table is full. The ceiling is set under Firewall,
             Protection.
           </p>
@@ -177,7 +180,13 @@ function endpoint(address, port) {
         <TransitionGroup name="row" tag="tbody">
           <tr v-if="!result?.states.length" key="empty" class="row-static">
             <td colspan="7" class="text-ink-muted">
-              {{ load.busy.value && !result ? 'Reading…' : 'Nothing matches.' }}
+              {{
+                load.busy.value && !result
+                  ? 'Reading…'
+                  : filtered
+                    ? 'Nothing matches.'
+                    : 'No connections.'
+              }}
             </td>
           </tr>
           <tr v-for="(s, i) in result?.states ?? []" :key="i">

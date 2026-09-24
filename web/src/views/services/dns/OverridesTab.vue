@@ -21,7 +21,11 @@ const domains = computed(() => dns.value.domainOverrides ?? [])
  * leases with hostnames. Read for the draft, like the system rules, so a
  * lease added a moment ago shows here before it is applied.
  */
-const { rows: system, error: systemError } = useDraftRows((draft) => api.systemHosts(draft))
+const {
+  rows: system,
+  error: systemError,
+  updatedAt: systemRead,
+} = useDraftRows((draft) => api.systemHosts(draft))
 
 const hostEditing = ref(null)
 const hostOpen = ref(false)
@@ -52,7 +56,7 @@ function editDomain(d) {
       <template #intro>
         <template v-if="dns.domain">
           A name with no domain lives under <span class="font-mono">{{ dns.domain }}</span> and
-          answers bare as well; one with its own domain answers in full only. The first name on a
+          answers bare as well. One with its own domain answers in full only. The first name on a
           row answers the reverse lookup.
         </template>
         <template v-else>The first name on a row answers the reverse lookup.</template>
@@ -104,7 +108,7 @@ function editDomain(d) {
 
     <SectionCard
       title="From static leases"
-      intro="A static lease with a hostname is answered like an override. Names clients send with their requests resolve too; those are on the DHCP leases tab."
+      intro="A static lease with a hostname is answered like an override. Names clients send with their requests resolve too, and are on the DHCP leases tab."
       flush
     >
       <template #actions>
@@ -124,7 +128,9 @@ function editDomain(d) {
         </thead>
         <tbody>
           <tr v-if="!system.length" class="row-static">
-            <td colspan="4" class="text-ink-muted">No static lease has a hostname.</td>
+            <td colspan="4" class="text-ink-muted">
+              {{ systemRead ? 'No static lease has a hostname.' : 'Reading…' }}
+            </td>
           </tr>
           <tr v-for="s in system" :key="`${s.hostname}-${s.ip}`" class="row-static">
             <td class="font-mono text-code">

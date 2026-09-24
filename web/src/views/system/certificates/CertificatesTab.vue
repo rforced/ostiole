@@ -163,9 +163,16 @@ function remove(cert) {
           type="button"
           class="btn-secondary"
           :disabled="regenerate.busy.value"
+          :aria-busy="regenerate.busy.value"
           @click="askRegenerate"
         >
-          <RefreshCw class="size-4" aria-hidden="true" /> Regenerate self-signed
+          <LoaderCircle
+            v-if="regenerate.busy.value"
+            class="size-4 animate-spin"
+            aria-hidden="true"
+          />
+          <RefreshCw v-else class="size-4" aria-hidden="true" />
+          {{ regenerate.busy.value ? 'Regenerating…' : 'Regenerate self-signed' }}
         </button>
       </template>
 
@@ -200,7 +207,9 @@ function remove(cert) {
             >, which the built-in certificate does not cover.
           </AppNotice>
         </template>
-        <p v-else class="text-ink-muted">This server is not serving HTTPS.</p>
+        <p v-else class="text-ink-muted">
+          {{ load.updatedAt.value ? 'This server is not serving HTTPS.' : 'Reading…' }}
+        </p>
       </div>
     </SectionCard>
 
@@ -260,6 +269,7 @@ function remove(cert) {
                 type="button"
                 class="link"
                 :disabled="status[c.id]?.running"
+                :aria-busy="status[c.id]?.running === true"
                 @click="issue(c)"
               >
                 <LoaderCircle

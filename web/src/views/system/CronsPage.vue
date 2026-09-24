@@ -1,5 +1,5 @@
 <script setup>
-import { Plus } from 'lucide-vue-next'
+import { LoaderCircle, Plus } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
@@ -10,6 +10,7 @@ import { useAsync } from '@/lib/async'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import CronDialog from '@/views/system/crons/CronDialog.vue'
+import { serviceName } from '@/views/system/crons/services'
 
 const REFRESH_MS = 10_000
 
@@ -44,6 +45,8 @@ const runner = useAsync(async (c) => {
 })
 
 const error = computed(() => load.error.value || runner.error.value)
+/** The cron whose Run now is in flight. */
+const starting = ref('')
 
 async function runNow(c) {
   const ok = await confirm.ask({
@@ -52,7 +55,9 @@ async function runNow(c) {
     confirmLabel: 'Run',
   })
   if (!ok) return
+  starting.value = c.id
   await runner.run(c)
+  starting.value = ''
 }
 
 function add() {
@@ -76,7 +81,7 @@ function describe(c) {
     case 'refresh-blocklists':
       return 'Fetch the DNS blocklists'
     case 'restart-service':
-      return `Restart ${c.service}`
+      return `Restart ${serviceName(c.service)}`
     case 'command':
       return [c.command, ...(c.args ?? [])].join(' ')
   }
@@ -165,9 +170,15 @@ function describe(c) {
                 <button
                   type="button"
                   class="link mr-3"
-                  :disabled="runner.busy.value"
+                  :disabled="runner.busy.value || c.status?.running"
+                  :aria-busy="starting === c.id || c.status?.running === true"
                   @click="runNow(c)"
                 >
+                  <LoaderCircle
+                    v-if="starting === c.id || c.status?.running"
+                    class="mr-1 inline size-4 animate-spin"
+                    aria-hidden="true"
+                  />
                   Run now
                 </button>
                 <button type="button" class="link" @click="edit(c)">Edit</button>

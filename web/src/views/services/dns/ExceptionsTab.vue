@@ -1,5 +1,5 @@
 <script setup>
-import { Search } from 'lucide-vue-next'
+import { LoaderCircle, Search } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
 import FormField from '@/components/FormField.vue'
@@ -99,8 +99,15 @@ const stale = computed(() => config.dirty)
               placeholder="ads.doubleclick.net"
             />
           </FormField>
-          <button type="submit" class="btn-secondary" :disabled="lookup.busy.value">
-            <Search class="size-4" aria-hidden="true" /> Look up
+          <button
+            type="submit"
+            class="btn-secondary"
+            :disabled="lookup.busy.value"
+            :aria-busy="lookup.busy.value"
+          >
+            <LoaderCircle v-if="lookup.busy.value" class="size-4 animate-spin" aria-hidden="true" />
+            <Search v-else class="size-4" aria-hidden="true" />
+            Look up
           </button>
         </form>
 

@@ -45,7 +45,7 @@ const upnpWanted = computed(() => {
       <AppNotice v-if="isDns && status.resolverUnreachable?.length">
         No answer on port 853 from
         <span class="font-mono">{{ status.resolverUnreachable.join(', ') }}</span
-        >. Where that port is blocked every name fails; Validate or Forward would still resolve.
+        >. Where that port is blocked every name fails. Validate or Forward would still resolve.
       </AppNotice>
       <AppNotice v-if="isDns && !status.resolverSetUp && resolverWanted">
         The validating resolver is not installed. Run

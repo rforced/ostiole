@@ -1,4 +1,5 @@
 <script setup>
+import { LoaderCircle } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { ApiError, api } from '@/lib/api'
@@ -6,18 +7,26 @@ import { useSystemStore } from '@/stores/system'
 
 /**
  * Shown while an apply awaits confirmation. Counts down to the deadline,
- * lets the admin confirm or revert, and notices when the server reverted
- * on its own.
+ * lets the admin confirm or revert, and notices when the apply stopped
+ * pending without a click here. The countdown is a timer, which a screen
+ * reader leaves alone; the outcome is what the live region announces.
  */
 const props = defineProps({
   /** ISO timestamp the server will revert at. */
   deadline: { type: String, required: true },
+  /**
+   * Works out what happened to an apply that stopped pending without a
+   * click here: 'confirmed', 'reverted' or 'expired'. Without it the apply
+   * is taken to have run out.
+   */
+  settle: { type: Function, default: null },
 })
 const emit = defineEmits(['confirmed', 'reverted'])
 
 const system = useSystemStore()
 const now = ref(Date.now())
-const busy = ref(false)
+/** The request in flight: 'confirm', 'revert' or ''. */
+const busy = ref('')
 const error = ref('')
 const outcome = ref('')
 
@@ -27,16 +36,25 @@ const remaining = computed(() =>
 
 let tick = 0
 let poll = 0
+let settling = false
+
+/** The apply is no longer pending and nothing here ended it. */
+async function ended() {
+  if (settling) return
+  settling = true
+  const result = props.settle ? await props.settle() : 'expired'
+  if (outcome.value) return
+  outcome.value = result
+  emit(result === 'confirmed' ? 'confirmed' : 'reverted')
+}
+
 onMounted(() => {
   tick = window.setInterval(() => {
     now.value = Date.now()
   }, 250)
   poll = window.setInterval(async () => {
     const status = await system.refresh()
-    if (status && !status.pending && !outcome.value) {
-      outcome.value = 'expired'
-      emit('reverted')
-    }
+    if (status && !status.pending && !outcome.value && !busy.value) await ended()
   }, 2000)
 })
 onBeforeUnmount(() => {
@@ -45,7 +63,7 @@ onBeforeUnmount(() => {
 })
 
 async function confirm() {
-  busy.value = true
+  busy.value = 'confirm'
   error.value = ''
   try {
     await api.config.confirm()
@@ -53,17 +71,15 @@ async function confirm() {
     await system.refresh()
     emit('confirmed')
   } catch (e) {
-    if (e instanceof ApiError && e.status === 409) {
-      outcome.value = 'expired'
-      emit('reverted')
-    } else error.value = e instanceof Error ? e.message : String(e)
+    if (e instanceof ApiError && e.status === 409) await ended()
+    else error.value = e instanceof Error ? e.message : String(e)
   } finally {
-    busy.value = false
+    busy.value = ''
   }
 }
 
 async function revert() {
-  busy.value = true
+  busy.value = 'revert'
   error.value = ''
   try {
     await api.config.revert()
@@ -71,9 +87,10 @@ async function revert() {
     await system.refresh()
     emit('reverted')
   } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
+    if (e instanceof ApiError && e.status === 409) await ended()
+    else error.value = e instanceof Error ? e.message : String(e)
   } finally {
-    busy.value = false
+    busy.value = ''
   }
 }
 </script>
@@ -88,13 +105,30 @@ async function revert() {
       <p class="font-medium">Changes applied, awaiting confirmation.</p>
       <p class="mt-1">
         If this page can still reach the firewall, confirm within
-        <span class="font-mono font-semibold tabular-nums">{{ remaining }}s</span>. Otherwise the
-        previous configuration is restored automatically.
+        <span role="timer" aria-live="off" class="font-mono font-semibold tabular-nums"
+          >{{ remaining }}s</span
+        >. Otherwise the previous configuration is restored automatically.
       </p>
       <div class="mt-3 flex gap-2">
-        <button type="button" class="btn-primary" :disabled="busy" @click="confirm">Confirm</button>
-        <button type="button" class="btn-secondary" :disabled="busy" @click="revert">
-          Revert now
+        <button
+          type="button"
+          class="btn-primary"
+          :disabled="busy !== ''"
+          :aria-busy="busy === 'confirm'"
+          @click="confirm"
+        >
+          <LoaderCircle v-if="busy === 'confirm'" class="size-4 animate-spin" aria-hidden="true" />
+          {{ busy === 'confirm' ? 'Confirming…' : 'Confirm' }}
+        </button>
+        <button
+          type="button"
+          class="btn-secondary"
+          :disabled="busy !== ''"
+          :aria-busy="busy === 'revert'"
+          @click="revert"
+        >
+          <LoaderCircle v-if="busy === 'revert'" class="size-4 animate-spin" aria-hidden="true" />
+          {{ busy === 'revert' ? 'Reverting…' : 'Revert now' }}
         </button>
       </div>
     </template>

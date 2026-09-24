@@ -136,7 +136,7 @@ const entriesMB = computed(() =>
         id="sys-fwlog"
         label="Firewall log entries"
         :hint="`${DEFAULT_ENTRIES.toLocaleString()} is the default. About ${entriesMB} MB of memory
-          when full; the log is kept in memory only.`"
+          when full.`"
       >
         <input
           id="sys-fwlog"

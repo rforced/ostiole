@@ -1,4 +1,5 @@
 <script setup>
+import { LoaderCircle } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -8,11 +9,13 @@ import PageHeader from '@/components/PageHeader.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { ApiError, api } from '@/lib/api'
+import { useConfigStore } from '@/stores/config'
 import { useSystemStore } from '@/stores/system'
 
 const CONFIRM_SECONDS = 90
 
 const router = useRouter()
+const config = useConfigStore()
 const system = useSystemStore()
 
 const links = ref([])
@@ -26,7 +29,8 @@ const preview = ref(null)
 const applied = ref(null)
 const error = ref('')
 const issues = ref([])
-const busy = ref(false)
+/** The request in flight: 'preview', 'apply' or ''. */
+const busy = ref('')
 /** Set once the apply is confirmed, while the status is re-read. */
 const finishing = ref(false)
 
@@ -59,7 +63,7 @@ function describe(l) {
 async function buildPreview() {
   error.value = ''
   issues.value = []
-  busy.value = true
+  busy.value = 'preview'
   try {
     preview.value = await api.config.starter({
       hostname: hostname.value.trim(),
@@ -76,13 +80,13 @@ async function buildPreview() {
       issues.value = e.issues
     } else error.value = String(e)
   } finally {
-    busy.value = false
+    busy.value = ''
   }
 }
 
 async function apply() {
   error.value = ''
-  busy.value = true
+  busy.value = 'apply'
   try {
     applied.value = await api.config.apply(preview.value, CONFIRM_SECONDS)
     await system.refresh()
@@ -92,14 +96,15 @@ async function apply() {
       issues.value = e.issues
     } else error.value = String(e)
   } finally {
-    busy.value = false
+    busy.value = ''
   }
 }
 
 /** The apply is confirmed and in force; the dashboard takes it from here. */
 async function finish() {
   finishing.value = true
-  await system.refresh()
+  // The configuration the wizard applied never went through the draft.
+  await Promise.all([system.refresh(), config.resync()])
   finishing.value = false
   router.replace('/')
 }
@@ -191,9 +196,25 @@ function reverted() {
       </div>
 
       <div class="flex items-center gap-3">
-        <button type="submit" class="btn-secondary" :disabled="busy || !canPreview">Preview</button>
-        <button v-if="preview" type="button" class="btn-primary" :disabled="busy" @click="apply">
-          Apply with {{ CONFIRM_SECONDS }}s confirmation
+        <button
+          type="submit"
+          class="btn-secondary"
+          :disabled="busy !== '' || !canPreview"
+          :aria-busy="busy === 'preview'"
+        >
+          <LoaderCircle v-if="busy === 'preview'" class="size-4 animate-spin" aria-hidden="true" />
+          Preview
+        </button>
+        <button
+          v-if="preview"
+          type="button"
+          class="btn-primary"
+          :disabled="busy !== ''"
+          :aria-busy="busy === 'apply'"
+          @click="apply"
+        >
+          <LoaderCircle v-if="busy === 'apply'" class="size-4 animate-spin" aria-hidden="true" />
+          {{ busy === 'apply' ? 'Applying…' : `Apply with ${CONFIRM_SECONDS}s confirmation` }}
         </button>
         <RouterLink to="/" class="ml-auto text-sm text-ink-muted underline"
           >Skip for now</RouterLink

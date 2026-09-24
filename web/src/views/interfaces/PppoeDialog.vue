@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
+import AppDisclosure from '@/components/AppDisclosure.vue'
 import AppNotice from '@/components/AppNotice.vue'
 import FormField from '@/components/FormField.vue'
 import { useConfigStore } from '@/stores/config'
@@ -198,9 +199,8 @@ function save() {
         </FormField>
       </div>
 
-      <details class="text-sm">
-        <summary class="cursor-pointer select-none">Settings most lines do not need</summary>
-        <div class="mt-3 grid gap-4 sm:grid-cols-2">
+      <AppDisclosure>
+        <div class="grid gap-4 sm:grid-cols-2">
           <FormField
             id="ppp-service"
             label="Service name"
@@ -258,7 +258,7 @@ function save() {
             />
           </FormField>
         </div>
-      </details>
+      </AppDisclosure>
 
       <label class="flex items-center gap-2 text-sm">
         <input v-model="form.ipv6" type="checkbox" class="size-4 rounded border-line-2" />

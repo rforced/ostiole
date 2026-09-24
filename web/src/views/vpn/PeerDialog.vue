@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
 import { parseList } from '@/lib/lists'
@@ -19,6 +20,7 @@ const config = useConfigStore()
 const confirm = useConfirmStore()
 const form = ref(blank())
 const error = ref('')
+const showKey = ref(false)
 
 function blank() {
   return {
@@ -38,6 +40,7 @@ watch(
   () => {
     if (!open.value) return
     error.value = ''
+    showKey.value = false
     const p = props.peer
     form.value = p
       ? { ...blank(), ...p, allowedIps: (p.allowedIps ?? []).join(', ') }
@@ -107,7 +110,6 @@ function save() {
     :description="`On ${tunnel?.name ?? 'the tunnel'}. The peer's own device generates its key pair. Paste its public key here.`"
   >
     <form class="space-y-4" @submit.prevent="save">
-      <p v-if="error" role="alert" class="text-sm text-bad">{{ error }}</p>
       <div class="grid gap-4 sm:grid-cols-2">
         <FormField id="pe-name" label="Name" hint="Lower case, e.g. laptop.">
           <input
@@ -157,7 +159,7 @@ function save() {
             spellcheck="false"
           />
         </FormField>
-        <FormField id="pe-keep" label="Keepalive" hint="Seconds; 25 keeps a NAT binding open.">
+        <FormField id="pe-keep" label="Keepalive" hint="In seconds. 25 keeps a NAT binding open.">
           <input
             id="pe-keep"
             v-model="form.keepalive"
@@ -169,16 +171,26 @@ function save() {
         </FormField>
       </div>
       <FormField id="pe-psk" label="Preshared key" hint="Optional. The peer needs the same value.">
-        <input id="pe-psk" v-model="form.presharedKey" class="input font-mono" />
+        <div class="flex gap-2">
+          <input
+            id="pe-psk"
+            v-model="form.presharedKey"
+            :type="showKey ? 'text' : 'password'"
+            class="input font-mono"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button type="button" class="btn-secondary" @click="showKey = !showKey">
+            {{ showKey ? 'Hide' : 'Show' }}
+          </button>
+        </div>
       </FormField>
       <button type="button" class="btn-secondary" @click="generatePSK">
         Generate preshared key
       </button>
 
-      <label class="flex items-center gap-2 text-sm">
-        <input v-model="form.enabled" type="checkbox" class="size-4 rounded border-line-2" />
-        Enabled
-      </label>
+      <ToggleRow v-model="form.enabled" label="Enabled" />
+      <p v-if="error" role="alert" class="text-sm text-bad">{{ error }}</p>
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
         <button type="submit" class="btn-primary">Save to draft</button>

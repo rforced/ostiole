@@ -150,7 +150,7 @@ function save() {
           <input v-model="form.mode" type="radio" value="block" class="size-4" />
           Block
         </label>
-        <p class="text-xs text-ink-muted">Detect only records what would have been blocked.</p>
+        <p class="text-sm text-ink-muted">Detect only records what would have been blocked.</p>
       </fieldset>
 
       <div class="grid gap-4 sm:grid-cols-2">

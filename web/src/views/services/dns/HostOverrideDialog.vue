@@ -63,7 +63,7 @@ function save() {
           label="Domain"
           :hint="
             dns.domain
-              ? `Empty means ${dns.domain}; the name answers bare too.`
+              ? `Empty means ${dns.domain}. The name answers bare too.`
               : 'Empty means no domain.'
           "
         >

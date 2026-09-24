@@ -1,4 +1,5 @@
 <script setup>
+import { LoaderCircle } from 'lucide-vue-next'
 import { computed, onMounted, ref, watch } from 'vue'
 
 import AppDisclosure from '@/components/AppDisclosure.vue'
@@ -30,6 +31,15 @@ const started = ref({})
 
 /** One place for what a button does, so its failure lands in one alert. */
 const action = useAsync((run) => run())
+/** The button whose request is in flight, as drive:what. */
+const doing = ref('')
+const busyOn = (drive, what) => doing.value === `${drive.name}:${what}`
+
+async function act(drive, what, run) {
+  doing.value = `${drive.name}:${what}`
+  await action.run(run)
+  doing.value = ''
+}
 
 function replaceDrive(updated) {
   if (!updated || !status.value) return
@@ -64,20 +74,20 @@ async function start(drive, kind) {
     })
     if (!ok) return
   }
-  action.run(async () => {
+  await act(drive, kind, async () => {
     started.value = { ...started.value, [drive.name]: kind }
     replaceDrive(await api.diagnostics.selfTest(drive.name, kind))
   })
 }
 
 function abort(drive) {
-  action.run(async () => {
+  act(drive, 'abort', async () => {
     replaceDrive(await api.diagnostics.abortSelfTest(drive.name))
   })
 }
 
 function report(drive) {
-  action.run(async () => {
+  act(drive, 'report', async () => {
     const { blob, name } = await api.diagnostics.driveReport(drive.name)
     // The API is behind a CSRF header, so a plain link cannot fetch it.
     const url = URL.createObjectURL(blob)
@@ -197,8 +207,14 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
             class="btn-secondary"
             :disabled="action.busy.value"
             :title="minutes(d.selfTest.shortMinutes)"
+            :aria-busy="busyOn(d, 'short')"
             @click="start(d, 'short')"
           >
+            <LoaderCircle
+              v-if="busyOn(d, 'short')"
+              class="size-4 animate-spin"
+              aria-hidden="true"
+            />
             Short test
           </button>
           <button
@@ -206,8 +222,10 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
             class="btn-secondary"
             :disabled="action.busy.value"
             :title="minutes(d.selfTest.extendedMinutes)"
+            :aria-busy="busyOn(d, 'long')"
             @click="start(d, 'long')"
           >
+            <LoaderCircle v-if="busyOn(d, 'long')" class="size-4 animate-spin" aria-hidden="true" />
             Extended test
           </button>
           <button
@@ -216,8 +234,14 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
             class="btn-secondary"
             :disabled="action.busy.value"
             :title="minutes(d.selfTest.conveyanceMinutes)"
+            :aria-busy="busyOn(d, 'conveyance')"
             @click="start(d, 'conveyance')"
           >
+            <LoaderCircle
+              v-if="busyOn(d, 'conveyance')"
+              class="size-4 animate-spin"
+              aria-hidden="true"
+            />
             Conveyance test
           </button>
         </template>
@@ -226,11 +250,22 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
           type="button"
           class="btn-secondary"
           :disabled="action.busy.value"
+          :aria-busy="busyOn(d, 'abort')"
           @click="abort(d)"
         >
+          <LoaderCircle v-if="busyOn(d, 'abort')" class="size-4 animate-spin" aria-hidden="true" />
           Abort
         </button>
-        <button type="button" class="btn-secondary" @click="report(d)">Full report</button>
+        <button
+          type="button"
+          class="btn-secondary"
+          :disabled="action.busy.value"
+          :aria-busy="busyOn(d, 'report')"
+          @click="report(d)"
+        >
+          <LoaderCircle v-if="busyOn(d, 'report')" class="size-4 animate-spin" aria-hidden="true" />
+          Full report
+        </button>
       </template>
 
       <div class="space-y-4">

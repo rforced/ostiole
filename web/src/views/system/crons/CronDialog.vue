@@ -7,6 +7,7 @@ import { newId } from '@/lib/ids'
 import { parseList } from '@/lib/lists'
 import { SCHEDULE_PRESETS, presetFor } from '@/lib/schedules'
 import { useConfigStore } from '@/stores/config'
+import { SERVICES } from '@/views/system/crons/services'
 
 const props = defineProps({ cron: { type: Object, default: null } })
 const open = defineModel('open', { type: Boolean, default: false })
@@ -182,9 +183,7 @@ function save() {
 
       <FormField v-if="form.kind === 'restart-service'" id="cron-service" label="Service">
         <select id="cron-service" v-model="form.service" class="input">
-          <option value="dnsmasq">dnsmasq (DHCP and DNS)</option>
-          <option value="unbound">unbound (the resolver)</option>
-          <option value="ostiole">ostiole (this daemon)</option>
+          <option v-for="s in SERVICES" :key="s.value" :value="s.value">{{ s.label }}</option>
         </select>
       </FormField>
 

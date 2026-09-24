@@ -8,6 +8,8 @@ import { ApiError } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 
 const MIN_PASSWORD = 12
+/** The same rule as the input's pattern, so the button waits for it too. */
+const USERNAME = /^[a-z][a-z0-9_.-]{0,31}$/
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -18,11 +20,12 @@ const confirm = ref('')
 const error = ref('')
 const busy = ref(false)
 
+const badName = computed(() => username.value !== '' && !USERNAME.test(username.value.trim()))
 const mismatch = computed(() => confirm.value !== '' && confirm.value !== password.value)
 const tooShort = computed(() => password.value !== '' && password.value.length < MIN_PASSWORD)
 const valid = computed(
   () =>
-    username.value.trim() !== '' &&
+    USERNAME.test(username.value.trim()) &&
     password.value.length >= MIN_PASSWORD &&
     confirm.value === password.value,
 )
@@ -60,6 +63,7 @@ async function submit() {
           pattern="[a-z][a-z0-9_.\-]{0,31}"
           required
           class="input"
+          :aria-invalid="badName"
         />
       </FormField>
       <FormField id="password" label="Password" :hint="`At least ${MIN_PASSWORD} characters.`">

@@ -12,7 +12,11 @@ const status = ref(null)
 /** The daemon's login link, kept while the login is in the air. */
 const authUrl = ref('')
 
-/** The word for the badge, for each stage the node can be in. */
+/**
+ * The word for the badge, for each stage the node can be in. The stages
+ * follow the applied configuration, so the badge says what the router is
+ * doing: a node only in the draft is still off.
+ */
 const STATE = {
   running: 'connected',
   'needs-login': 'disconnected',
@@ -20,7 +24,7 @@ const STATE = {
   starting: 'starting',
   stopped: 'stopped',
   unjoined: 'off',
-  unapplied: 'not applied',
+  unapplied: 'off',
   // Not installed: the notice under the header says so, and a badge that
   // said 'stopped' would be a different claim.
   missing: '',
@@ -29,8 +33,8 @@ const STATE = {
 
 /**
  * What Tailscale is doing, in the order a router goes through it: the
- * daemon, the draft, the apply, the login. One caller polls and the rest
- * read what it left behind.
+ * daemon, the apply, the login. One caller polls and the rest read what it
+ * left behind.
  *
  * @param {{poll?: boolean}} [opts] poll: own the read
  */
@@ -54,8 +58,7 @@ export function useTailscaleStatus({ poll = false } = {}) {
   const stage = computed(() => {
     if (!status.value) return 'loading'
     if (!status.value.setUp) return 'missing'
-    if (!inDraft.value) return 'unjoined'
-    if (!inSaved.value) return 'unapplied'
+    if (!inSaved.value) return inDraft.value ? 'unapplied' : 'unjoined'
     if (!status.value.running || status.value.state === 'Stopped') return 'stopped'
     switch (status.value.state) {
       case 'Running':

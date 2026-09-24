@@ -63,7 +63,7 @@ function path(peer) {
         <TransitionGroup name="row" tag="tbody">
           <tr v-if="!status?.running" key="stopped" class="row-static">
             <td colspan="6" class="text-ink-muted">
-              {{ load.updatedAt.value ? 'No peers.' : 'Reading…' }}
+              {{ load.updatedAt.value ? 'Tailscale is not running.' : 'Reading…' }}
             </td>
           </tr>
           <tr v-else-if="!status.peers.length" key="empty" class="row-static">

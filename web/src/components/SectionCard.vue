@@ -56,7 +56,7 @@ const headed = computed(() => Boolean(props.title || slots.title || slots.action
     <div v-if="flush" class="overflow-x-auto" :class="{ 'border-t border-line': headed }">
       <slot />
     </div>
-    <div v-else :class="headed ? 'px-4 pb-4' : 'p-4'">
+    <div v-else-if="$slots.default" :class="headed ? 'px-4 pb-4' : 'p-4'">
       <slot />
     </div>
   </component>

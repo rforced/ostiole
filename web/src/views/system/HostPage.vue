@@ -84,7 +84,8 @@ async function flush(tables) {
         />
       </template>
       <div class="space-y-4">
-        <dl class="kv max-w-xl">
+        <p v-if="!report" class="text-ink-muted">Reading…</p>
+        <dl v-else class="kv max-w-xl">
           <dt>Distribution</dt>
           <dd>{{ report?.distro || 'unknown' }}</dd>
           <dt>Package manager</dt>
@@ -150,7 +151,7 @@ async function flush(tables) {
         <ConfirmButton
           label="Clear leftovers"
           :question="`Clear ${sweepable.length} leftover ruleset${sweepable.length === 1 ? '' : 's'}?`"
-          description="Legacy tables are emptied and their policies set to accept; nf_tables leftovers are deleted. Ostiole's own table is not touched."
+          description="Legacy tables are emptied and set to accept. The others are deleted. Ostiole's own table is not touched."
           confirm-label="Clear"
           @confirm="flush([])"
         />
@@ -166,7 +167,9 @@ async function flush(tables) {
         </thead>
         <tbody>
           <tr v-if="!legacy.length">
-            <td colspan="4" class="text-ink-muted">Nothing was left behind.</td>
+            <td colspan="4" class="text-ink-muted">
+              {{ report ? 'Nothing was left behind.' : 'Reading…' }}
+            </td>
           </tr>
           <tr v-for="t in legacy" :key="t.backend + (t.family ?? '') + t.name">
             <td class="font-mono">

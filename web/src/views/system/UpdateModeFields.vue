@@ -90,7 +90,7 @@ const installPreset = computed({
           <label :for="`${prefix}-mode-${m.value}`" class="block text-sm font-medium">
             {{ m.label }}
           </label>
-          <p :id="`${prefix}-mode-${m.value}-hint`" class="text-xs text-ink-muted">
+          <p :id="`${prefix}-mode-${m.value}-hint`" class="text-sm text-ink-muted">
             {{ m.value === 'security' && !securityCapable ? securityNote : m.hint }}
           </p>
         </div>
