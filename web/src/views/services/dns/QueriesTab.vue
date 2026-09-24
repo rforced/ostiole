@@ -9,7 +9,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
-import { sentence } from '@/lib/blocking'
+import { exceptionToggles, sentence } from '@/lib/blocking'
 import { formatCount } from '@/lib/format'
 import { streamLost } from '@/lib/stream'
 import { useAuthStore } from '@/stores/auth'
@@ -188,10 +188,19 @@ function matches(row) {
   return true
 }
 
-const rows = computed(() => [
-  ...streamed.value,
-  ...(page.value?.entries ?? []).map((e) => ({ ...e, key: `s${e.seq}` })),
-])
+/** The exception lists, as their toggles call them. */
+const EXCEPTIONS = { allow: 'Never block', deny: 'Always block' }
+
+/** What each row offers to toggle, from the draft rather than the log. */
+const toggleFor = computed(() => exceptionToggles(config.draft))
+
+const rows = computed(() => {
+  const toggle = toggleFor.value
+  return [
+    ...streamed.value,
+    ...(page.value?.entries ?? []).map((e) => ({ ...e, key: `s${e.seq}` })),
+  ].map((e) => ({ ...e, toggle: toggle(e) }))
+})
 
 /** Nothing was ever read: the daemon is not root, or the router is away. */
 const unreadable = computed(() => Boolean(load.error.value) && !page.value)
@@ -380,7 +389,7 @@ onBeforeUnmount(disconnect)
       </p>
       <template v-else>
         <!-- On a phone a query is two lines: when, what and its type; who asked
-             and what they got. -->
+             and what they got, and its toggle at the end. -->
         <table class="table table-flow">
           <thead>
             <tr>
@@ -390,11 +399,12 @@ onBeforeUnmount(disconnect)
               <th>Type</th>
               <th>Status</th>
               <th>Answer</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="!rows.length">
-              <td colspan="6" class="text-ink-muted">
+              <td colspan="7" class="text-ink-muted">
                 {{
                   load.busy.value && !page ? 'Reading…' : newest ? 'No queries.' : 'Nothing older.'
                 }}
@@ -435,9 +445,25 @@ onBeforeUnmount(disconnect)
                   </button>
                 </td>
                 <td class="font-mono text-code max-sm:order-7">{{ e.answer }}</td>
+                <td class="text-right whitespace-nowrap max-sm:order-8 max-sm:ml-auto">
+                  <label
+                    v-if="e.toggle && !auth.readOnly"
+                    class="inline-flex items-center gap-2 max-sm:-my-3 max-sm:py-3"
+                    :class="e.toggle.on ? 'text-ink' : 'text-ink-muted'"
+                  >
+                    <input
+                      type="checkbox"
+                      class="size-4 rounded"
+                      :checked="e.toggle.on"
+                      :aria-label="`${EXCEPTIONS[e.toggle.key]} ${e.name}`"
+                      @change="config.setException(e.name, e.toggle.key, $event.target.checked)"
+                    />
+                    {{ EXCEPTIONS[e.toggle.key] }}
+                  </label>
+                </td>
               </tr>
               <tr v-if="why[e.name]">
-                <td colspan="6" class="text-sm text-ink-muted">{{ why[e.name] }}</td>
+                <td colspan="7" class="text-sm text-ink-muted">{{ why[e.name] }}</td>
               </tr>
             </template>
           </tbody>

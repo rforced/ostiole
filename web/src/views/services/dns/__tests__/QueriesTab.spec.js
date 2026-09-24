@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import QueriesTab from '@/views/services/dns/QueriesTab.vue'
 
@@ -38,6 +39,49 @@ function names(wrapper) {
 
 function button(wrapper, label) {
   return wrapper.findAll('button').find((b) => b.text() === label)
+}
+
+/** A blocked answer, one answered, one the router answers for, one the check refuses. */
+function mixed() {
+  const row = (seq, name, status, extra = {}) => ({
+    seq,
+    time: '2026-09-24T12:00:00Z',
+    client: '10.0.0.2',
+    name,
+    type: 'A',
+    status,
+    ...extra,
+  })
+  return {
+    enabled: true,
+    total: 4,
+    entries: [
+      row(4, 'ads.example.com', 'blocked', { lists: ['oisd'] }),
+      row(3, 'example.com', 'ok', { answer: '93.184.216.34' }),
+      row(2, 'nas.lan', 'ok', { answer: '10.0.0.5' }),
+      row(1, '_dns.resolver.arpa', 'nodata'),
+    ],
+  }
+}
+
+/** A saved router with the query log on and no exceptions yet. */
+function saved() {
+  const config = useConfigStore()
+  config.replaceDraft({
+    version: 6,
+    services: {
+      dhcp: { enabled: false },
+      dns: { enabled: true, domain: 'lan', queryLog: { enabled: true } },
+    },
+    blocking: { enabled: true, enforce: {} },
+  })
+  config.markSaved()
+  config.loaded = true
+  return config
+}
+
+function toggle(wrapper, label) {
+  return wrapper.find(`input[aria-label="${label}"]`)
 }
 
 describe('QueriesTab', () => {
@@ -83,5 +127,44 @@ describe('QueriesTab', () => {
     await flushPromises()
     expect(names(wrapper)[0]).toBe('name450.example')
     expect(button(wrapper, 'Newer')).toBeUndefined()
+  })
+
+  it('toggles a name onto the exception lists from its row', async () => {
+    api.queries.list.mockResolvedValue(mixed())
+    const config = saved()
+    const wrapper = mount(QueriesTab)
+    await flushPromises()
+
+    expect(config.dirty).toBe(false)
+    const never = () => toggle(wrapper, 'Never block ads.example.com')
+    const always = () => toggle(wrapper, 'Always block example.com')
+    expect(never().element.checked).toBe(false)
+    expect(always().element.checked).toBe(false)
+    // The router answers for its own names, and the check refuses an underscore.
+    expect(wrapper.find('input[aria-label$=" nas.lan"]').exists()).toBe(false)
+    expect(wrapper.find('input[aria-label$=" _dns.resolver.arpa"]').exists()).toBe(false)
+
+    await never().setValue(true)
+    expect(config.draft.blocking.allow).toEqual(['ads.example.com'])
+    expect(never().element.checked).toBe(true)
+    await always().setValue(true)
+    expect(config.draft.blocking.deny).toEqual(['example.com'])
+    expect(always().element.checked).toBe(true)
+
+    // Put back, the draft is what was saved.
+    await never().setValue(false)
+    await always().setValue(false)
+    expect(never().element.checked).toBe(false)
+    expect(config.dirty).toBe(false)
+  })
+
+  it('offers a viewer no toggles', async () => {
+    useAuthStore().user = { username: 'v', role: 'viewer' }
+    api.queries.list.mockResolvedValue(mixed())
+    saved()
+    const wrapper = mount(QueriesTab)
+    await flushPromises()
+    expect(names(wrapper)).toHaveLength(4)
+    expect(wrapper.findAll('tbody input')).toHaveLength(0)
   })
 })

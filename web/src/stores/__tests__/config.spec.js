@@ -560,3 +560,38 @@ describe('config store reverse proxy', () => {
     expect(config.proxy.routes).toEqual([])
   })
 })
+
+describe('config store DNS blocking exceptions', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  function blocked() {
+    const d = draft()
+    d.blocking = { enabled: true, enforce: {}, deny: ['tracker.example.net'] }
+    return d
+  }
+
+  it('puts a name on a list and takes it off again without a trace', () => {
+    const config = useConfigStore()
+    config.replaceDraft(blocked())
+    config.markSaved()
+    config.setException('ads.example.com', 'allow', true)
+    expect(config.blocking.allow).toEqual(['ads.example.com'])
+    // Twice is still once.
+    config.setException('Ads.Example.com.', 'allow', true)
+    expect(config.blocking.allow).toEqual(['ads.example.com'])
+    config.setException('ads.example.com', 'allow', false)
+    expect(config.draft.blocking).not.toHaveProperty('allow')
+    expect(config.dirty).toBe(false)
+  })
+
+  it('takes a name off one list as it goes on the other', () => {
+    const config = useConfigStore()
+    config.replaceDraft(blocked())
+    config.setException('Tracker.Example.net', 'allow', true)
+    expect(config.blocking.allow).toEqual(['tracker.example.net'])
+    expect(config.draft.blocking).not.toHaveProperty('deny')
+    config.setException('tracker.example.net', 'deny', true)
+    expect(config.blocking.deny).toEqual(['tracker.example.net'])
+    expect(config.draft.blocking).not.toHaveProperty('allow')
+  })
+})

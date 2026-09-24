@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 
 import { ApiError, api } from '@/lib/api'
+import { normalizeName } from '@/lib/blocking'
 import { overrideKey } from '@/lib/hosts'
 import { useToastStore } from '@/stores/toast'
 
@@ -1096,6 +1097,35 @@ export const useConfigStore = defineStore('config', () => {
     })
   }
 
+  /**
+   * Puts a name on the allow or the deny list, or takes it off. Going on
+   * one takes it off the other: allow wins, so a name on both would read
+   * as blocked and never be. A list left empty is dropped, so a toggle
+   * put back leaves the draft as it was.
+   *
+   * @param {string} name
+   * @param {'allow' | 'deny'} key
+   * @param {boolean} on
+   */
+  function setException(name, key, on) {
+    const b = ensureBlocking()
+    const n = normalizeName(name)
+    const without = (k) => {
+      const list = b[k] ?? []
+      const kept = list.filter((e) => normalizeName(e) !== n)
+      if (kept.length === list.length) return
+      if (kept.length) b[k] = kept
+      else delete b[k]
+    }
+    if (!on) {
+      without(key)
+      return
+    }
+    without(key === 'allow' ? 'deny' : 'allow')
+    const list = b[key] ?? []
+    if (!list.some((e) => normalizeName(e) === n)) b[key] = [...list, n]
+  }
+
   // ---- what the draft changes ------------------------------------------
 
   /**
@@ -1304,6 +1334,7 @@ export const useConfigStore = defineStore('config', () => {
     blockLists,
     upsertBlockList,
     removeBlockList,
+    setException,
     upsertOutboundRule,
     removeOutboundRule,
     routes,
