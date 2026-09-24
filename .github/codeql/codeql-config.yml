@@ -1,20 +1,9 @@
 name: Ostiole CodeQL
 
-# Playwright specs drive a browser against a fixture router, so the taint
-# sources CodeQL finds in them are the test's own inputs. Scanning them only
-# produced noise: an unanchored regex in an assertion on a form field, read
-# as if it were a URL check.
-#
-# Interpreted languages only — the Go job builds, and paths-ignore does not
-# apply to a compiled language.
 paths-ignore:
   - web/e2e
   - web/test-results
 
-# A router logs what it was configured with: interface names, zones, log
-# levels, journal sizes. go/log-injection flags every one of them, and the
-# only attacker it imagines is the admin forging entries in their own
-# journal. Nothing else is filtered, so everything else stays on.
 query-filters:
   - exclude:
       id: go/log-injection
