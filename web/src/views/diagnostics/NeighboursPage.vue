@@ -63,7 +63,7 @@ function tone(state) {
         <input
           id="nb-search"
           v-model="search"
-          class="input w-64 font-mono"
+          class="input w-64 font-mono max-sm:w-full"
           placeholder="address, MAC, or interface"
           spellcheck="false"
         />
@@ -71,7 +71,9 @@ function tone(state) {
         <p v-if="load.error.value" role="alert" class="text-bad">{{ load.error.value }}</p>
       </div>
 
-      <table class="table">
+      <!-- On a phone a neighbour is two lines: the address and its state; the
+           link layer. -->
+      <table class="table table-flow">
         <thead>
           <tr>
             <th>Address</th>
@@ -87,20 +89,24 @@ function tone(state) {
               {{ load.busy.value && !rows.length ? 'Reading…' : 'No neighbours.' }}
             </td>
           </tr>
-          <tr v-for="(n, i) in shown" :key="`${n.interface}-${n.address}-${i}`">
-            <td class="font-mono text-code">
+          <tr
+            v-for="(n, i) in shown"
+            :key="`${n.interface}-${n.address}-${i}`"
+            class="max-sm:after:order-3 max-sm:after:basis-full max-sm:after:content-['']"
+          >
+            <td class="font-mono text-code max-sm:order-1">
               {{ n.address }}
               <span v-if="n.router" class="badge ml-1">router</span>
             </td>
-            <td class="font-mono text-code">
+            <td class="font-mono text-code max-sm:order-4">
               {{ n.mac || '—' }}
               <span v-if="named[(n.mac ?? '').toLowerCase()]" class="ml-1 text-ink-muted">
                 {{ named[n.mac.toLowerCase()] }}
               </span>
             </td>
-            <td class="font-mono text-code">{{ n.interface }}</td>
-            <td>{{ n.family }}</td>
-            <td>
+            <td class="font-mono text-code max-sm:order-5">{{ n.interface }}</td>
+            <td class="max-sm:order-6 max-sm:text-ink-muted">{{ n.family }}</td>
+            <td class="max-sm:order-2">
               <span class="badge" :class="tone(n.state)">{{ n.state.toLowerCase() }}</span>
             </td>
           </tr>

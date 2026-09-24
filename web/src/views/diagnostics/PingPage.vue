@@ -63,13 +63,13 @@ async function run(kind) {
           <input
             id="dg-target"
             v-model="target"
-            class="input w-64 font-mono"
+            class="input w-64 font-mono max-sm:w-full"
             required
             spellcheck="false"
           />
         </FormField>
         <FormField id="dg-if" label="Through interface" hint="Empty lets routing decide.">
-          <select id="dg-if" v-model="iface" class="input w-48">
+          <select id="dg-if" v-model="iface" class="input w-48 max-sm:w-full">
             <option value="">Automatic</option>
             <option v-for="i in config.interfaces" :key="i.name" :value="i.name">
               {{ interfaceLabel(i) }}
@@ -83,7 +83,7 @@ async function run(kind) {
             type="number"
             min="1"
             max="20"
-            class="input w-24 font-mono"
+            class="input w-24 font-mono max-sm:w-full"
           />
         </FormField>
         <button

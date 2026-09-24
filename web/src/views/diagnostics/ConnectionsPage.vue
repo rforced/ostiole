@@ -91,13 +91,13 @@ function endpoint(address, port) {
             <input
               id="st-address"
               v-model="filter.address"
-              class="input w-56 font-mono"
+              class="input w-56 font-mono max-sm:w-full"
               spellcheck="false"
               placeholder="any"
             />
           </FormField>
           <FormField id="st-proto" label="Protocol">
-            <select id="st-proto" v-model="filter.protocol" class="input w-32">
+            <select id="st-proto" v-model="filter.protocol" class="input w-32 max-sm:w-full">
               <option value="">Any</option>
               <option value="tcp">TCP</option>
               <option value="udp">UDP</option>
@@ -112,7 +112,7 @@ function endpoint(address, port) {
               type="number"
               min="1"
               max="65535"
-              class="input w-28 font-mono"
+              class="input w-28 font-mono max-sm:w-full"
             />
           </FormField>
           <ToggleRow v-model="auto" label="Every 5 seconds" />
@@ -165,7 +165,9 @@ function endpoint(address, port) {
         </p>
       </div>
 
-      <table class="table">
+      <!-- On a phone a connection is two lines: who talks to whom; what
+           became of it. -->
+      <table class="table table-flow">
         <thead>
           <tr>
             <th>Protocol</th>
@@ -189,27 +191,41 @@ function endpoint(address, port) {
               }}
             </td>
           </tr>
-          <tr v-for="(s, i) in result?.states ?? []" :key="i">
-            <td class="font-mono text-code">{{ s.protocol }}</td>
-            <td class="font-mono text-code">{{ endpoint(s.source, s.sourcePort) }}</td>
-            <td class="font-mono text-code">{{ endpoint(s.destination, s.destPort) }}</td>
-            <td class="font-mono text-code">
+          <tr
+            v-for="(s, i) in result?.states ?? []"
+            :key="i"
+            class="max-sm:after:order-4 max-sm:after:basis-full max-sm:after:content-['']"
+          >
+            <td class="font-mono text-code max-sm:order-1">{{ s.protocol }}</td>
+            <td class="font-mono text-code max-sm:order-2">
+              {{ endpoint(s.source, s.sourcePort) }}
+            </td>
+            <td
+              class="font-mono text-code max-sm:order-3 max-sm:before:mr-2 max-sm:before:content-['→']"
+            >
+              {{ endpoint(s.destination, s.destPort) }}
+            </td>
+            <td class="font-mono text-code max-sm:order-5">
               <template v-if="s.nat">
                 {{ endpoint(s.replyDest, s.replyDestPort) }}
                 <span class="badge">NAT</span>
               </template>
               <span v-else class="text-ink-muted">not translated</span>
             </td>
-            <td class="font-mono text-code">
+            <td class="font-mono text-code max-sm:order-6">
               {{ s.state || '—'
               }}<span v-if="s.mark" class="ml-1 badge" :title="`Packet mark ${s.mark}`">
                 routed
               </span>
             </td>
-            <td class="font-mono text-code whitespace-nowrap">
+            <td class="font-mono text-code whitespace-nowrap max-sm:order-7">
               {{ formatBytes(s.bytes) }} · {{ s.packets }}p
             </td>
-            <td class="font-mono text-code">{{ s.ttl }}</td>
+            <td
+              class="font-mono text-code max-sm:order-8 max-sm:text-ink-muted max-sm:before:content-['expires_in_']"
+            >
+              {{ s.ttl }}
+            </td>
           </tr>
         </tbody>
       </table>

@@ -59,7 +59,7 @@ const capture = useAsync(async () => {
       <p v-if="auth.readOnly" class="text-ink-muted">Only an operator or an admin can capture.</p>
       <form v-else class="form-row" @submit.prevent="capture.run()">
         <FormField id="cp-if" label="Interface">
-          <select id="cp-if" v-model="iface" class="input w-48" required>
+          <select id="cp-if" v-model="iface" class="input w-48 max-sm:w-full" required>
             <option v-for="i in config.interfaces" :key="i.name" :value="i.name">
               {{ interfaceLabel(i) }}
             </option>
@@ -72,7 +72,7 @@ const capture = useAsync(async () => {
             type="number"
             min="1"
             max="120"
-            class="input w-24 font-mono"
+            class="input w-24 font-mono max-sm:w-full"
           />
         </FormField>
         <FormField id="cp-count" label="Packets">
@@ -82,7 +82,7 @@ const capture = useAsync(async () => {
             type="number"
             min="1"
             max="5000"
-            class="input w-28 font-mono"
+            class="input w-28 font-mono max-sm:w-full"
           />
         </FormField>
         <FormField
@@ -90,7 +90,12 @@ const capture = useAsync(async () => {
           label="Address"
           hint="Matches source or destination. Empty for all."
         >
-          <input id="cp-addr" v-model="address" class="input w-44 font-mono" spellcheck="false" />
+          <input
+            id="cp-addr"
+            v-model="address"
+            class="input w-44 font-mono max-sm:w-full"
+            spellcheck="false"
+          />
         </FormField>
         <FormField id="cp-port" label="Port" hint="Optional.">
           <input
@@ -99,7 +104,7 @@ const capture = useAsync(async () => {
             type="number"
             min="1"
             max="65535"
-            class="input w-28 font-mono"
+            class="input w-28 font-mono max-sm:w-full"
           />
         </FormField>
         <button

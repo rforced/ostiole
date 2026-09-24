@@ -84,7 +84,7 @@ function upPowerTone(p) {
             <input
               id="modem-address"
               v-model="address"
-              class="input w-48 font-mono"
+              class="input w-48 font-mono max-sm:w-full"
               placeholder="192.168.100.1"
               spellcheck="false"
             />
