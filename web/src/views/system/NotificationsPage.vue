@@ -325,8 +325,8 @@ const targetStates = computed(() =>
             <th>Went to</th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!status.recent.length" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="!status.recent.length">
             <td colspan="3" class="text-ink-muted">
               {{ load.updatedAt.value ? 'Nothing sent.' : 'Reading…' }}
             </td>
@@ -344,7 +344,7 @@ const targetStates = computed(() =>
               </div>
             </td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
   </div>

@@ -177,8 +177,8 @@ function endpoint(address, port) {
             <th>Expires in</th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!result?.states.length" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="!result?.states.length">
             <td colspan="7" class="text-ink-muted">
               {{
                 load.busy.value && !result
@@ -211,7 +211,7 @@ function endpoint(address, port) {
             </td>
             <td class="font-mono text-code">{{ s.ttl }}</td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
   </div>

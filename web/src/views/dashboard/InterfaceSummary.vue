@@ -46,9 +46,9 @@ function faults(l) {
           <th class="text-right">Traffic</th>
         </tr>
       </thead>
-      <TransitionGroup name="row" tag="tbody">
+      <tbody>
         <template v-if="!loaded">
-          <tr v-for="n in 3" :key="`reading-${n}`" class="row-static" data-reading>
+          <tr v-for="n in 3" :key="`reading-${n}`" data-reading>
             <td>
               <span v-if="n === 1" class="sr-only">Reading…</span>
               <div><span class="skeleton w-14"></span></div>
@@ -63,7 +63,7 @@ function faults(l) {
             </td>
           </tr>
         </template>
-        <tr v-else-if="!interfaces.length" key="empty" class="row-static">
+        <tr v-else-if="!interfaces.length">
           <td colspan="5" class="text-ink-muted">No interfaces.</td>
         </tr>
         <tr v-for="l in interfaces" :key="l.name" :class="l.configured ? '' : 'opacity-70'">
@@ -113,7 +113,7 @@ function faults(l) {
             <span v-if="!l.present" class="text-ink-muted">—</span>
           </td>
         </tr>
-      </TransitionGroup>
+      </tbody>
     </table>
   </SectionCard>
 </template>

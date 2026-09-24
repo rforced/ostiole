@@ -23,9 +23,9 @@ defineProps({
           <th class="text-right">Bytes</th>
         </tr>
       </thead>
-      <TransitionGroup name="row" tag="tbody">
+      <tbody>
         <template v-if="!loaded">
-          <tr v-for="n in 3" :key="`reading-${n}`" class="row-static" data-reading>
+          <tr v-for="n in 3" :key="`reading-${n}`" data-reading>
             <td>
               <span v-if="n === 1" class="sr-only">Reading…</span>
               <div><span class="skeleton w-36"></span></div>
@@ -36,7 +36,7 @@ defineProps({
             <td class="text-right"><span class="skeleton w-14"></span></td>
           </tr>
         </template>
-        <tr v-else-if="!rules.length" key="empty" class="row-static">
+        <tr v-else-if="!rules.length">
           <td colspan="4" class="text-ink-muted">No rules with counters yet.</td>
         </tr>
         <tr v-for="r in rules" :key="r.id">
@@ -53,7 +53,7 @@ defineProps({
           <td class="text-right font-mono text-code">{{ formatCount(r.packets) }}</td>
           <td class="text-right font-mono text-code">{{ formatBytes(r.bytes) }}</td>
         </tr>
-      </TransitionGroup>
+      </tbody>
     </table>
     <p class="card-strip border-t border-line text-ink-muted">
       Blocked by the default policy:

@@ -242,8 +242,8 @@ function remove(cert) {
             <th></th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!config.certificates.length" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="!config.certificates.length">
             <td colspan="6" class="text-ink-muted">No certificates.</td>
           </tr>
           <tr
@@ -314,7 +314,7 @@ function remove(cert) {
               />
             </td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
 

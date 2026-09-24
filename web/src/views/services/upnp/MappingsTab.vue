@@ -41,8 +41,8 @@ onMounted(load.run)
             <th>Internal port</th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!mappings.length" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="!mappings.length">
             <td colspan="4" class="text-ink-muted">
               {{ load.updatedAt.value ? 'No mappings.' : 'Reading…' }}
             </td>
@@ -58,7 +58,7 @@ onMounted(load.run)
             <td class="font-mono text-code">{{ m.internal }}</td>
             <td class="font-mono text-code">{{ m.internalPort }}</td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
   </div>

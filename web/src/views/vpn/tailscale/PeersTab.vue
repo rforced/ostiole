@@ -60,13 +60,13 @@ function path(peer) {
             <th>Routes</th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!status?.running" key="stopped" class="row-static">
+        <tbody>
+          <tr v-if="!status?.running">
             <td colspan="6" class="text-ink-muted">
               {{ load.updatedAt.value ? 'Tailscale is not running.' : 'Reading…' }}
             </td>
           </tr>
-          <tr v-else-if="!status.peers.length" key="empty" class="row-static">
+          <tr v-else-if="!status.peers.length">
             <td colspan="6" class="text-ink-muted">No peers.</td>
           </tr>
           <tr v-for="p in status?.running ? status.peers : []" :key="p.dnsName || p.hostName">
@@ -83,7 +83,7 @@ function path(peer) {
             <td class="font-mono text-code">{{ path(p) }}</td>
             <td class="font-mono text-code">{{ p.routes.join(', ') || '—' }}</td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
   </div>

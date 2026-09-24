@@ -46,12 +46,8 @@ async function open(accounts = [account('admin', 'admin'), account('watcher', 'v
   return wrapper
 }
 
-// TransitionGroup is stubbed in tests, so its tag="tbody" never becomes a
-// real element: match on the row's first cell instead.
 const row = (wrapper, username) =>
-  wrapper
-    .findAll('tr')
-    .find((tr) => tr.find('td').exists() && tr.get('td').text().startsWith(username))
+  wrapper.findAll('tbody tr').find((tr) => tr.get('td').text().startsWith(username))
 
 const button = (scope, text) => scope.findAll('button').find((b) => b.text() === text)
 

@@ -9,6 +9,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { useDraftRows } from '@/lib/draft'
+import { useReorder } from '@/lib/reorder'
 import { useTabHash } from '@/lib/tabs'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -52,6 +53,7 @@ const counters = ref({})
 const zone = useTabHash(() => config.zones.map((z) => z.name))
 
 const rules = computed(() => config.rulesForZone(zone.value))
+const { moveClass, reorder } = useReorder()
 
 /**
  * The rules Ostiole adds on its own, around the zone's rules and in the
@@ -227,7 +229,7 @@ onMounted(() => {
             <td colspan="9" class="text-ink-muted">Reading…</td>
           </tr>
         </tbody>
-        <TransitionGroup v-else name="row" tag="tbody">
+        <TransitionGroup v-else tag="tbody" :css="false" :move-class="moveClass">
           <SystemRuleRow
             v-for="s in before"
             :key="`system:${s.chain}:${s.description}`"
@@ -235,7 +237,7 @@ onMounted(() => {
             :packets="packets(s)"
             :to="SETTINGS[s.setting]"
           />
-          <tr v-if="rules.length === 0" key="empty" class="row-static">
+          <tr v-if="rules.length === 0" key="empty">
             <td colspan="9" class="text-ink-muted">No rules of your own in this zone.</td>
           </tr>
           <tr
@@ -288,7 +290,7 @@ onMounted(() => {
                   class="icon-btn"
                   :disabled="i === 0"
                   :aria-label="`Move ${r.id} up`"
-                  @click="config.moveRule(r.id, -1)"
+                  @click="reorder(() => config.moveRule(r.id, -1))"
                 >
                   <ArrowUp class="size-4" />
                 </button>
@@ -297,7 +299,7 @@ onMounted(() => {
                   class="icon-btn"
                   :disabled="i === rules.length - 1"
                   :aria-label="`Move ${r.id} down`"
-                  @click="config.moveRule(r.id, 1)"
+                  @click="reorder(() => config.moveRule(r.id, 1))"
                 >
                   <ArrowDown class="size-4" />
                 </button>

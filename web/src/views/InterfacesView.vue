@@ -266,8 +266,8 @@ function editZone(z) {
                 <th></th>
               </tr>
             </thead>
-            <TransitionGroup name="row" tag="tbody">
-              <tr v-if="!rows.length" key="empty" class="row-static">
+            <tbody>
+              <tr v-if="!rows.length">
                 <td colspan="6" class="text-ink-muted">
                   {{ ready ? 'No links on this system.' : 'Reading…' }}
                 </td>
@@ -369,7 +369,7 @@ function editZone(z) {
                   />
                 </td>
               </tr>
-            </TransitionGroup>
+            </tbody>
           </table>
         </SectionCard>
       </TabsContent>
@@ -396,8 +396,8 @@ function editZone(z) {
                 <th></th>
               </tr>
             </thead>
-            <TransitionGroup name="row" tag="tbody">
-              <tr v-if="!config.zones.length" key="empty" class="row-static">
+            <tbody>
+              <tr v-if="!config.zones.length">
                 <td colspan="5" class="text-ink-muted">
                   No zones. Every interface needs one before it gets rules.
                 </td>
@@ -440,7 +440,7 @@ function editZone(z) {
                   </span>
                 </td>
               </tr>
-            </TransitionGroup>
+            </tbody>
           </table>
         </SectionCard>
       </TabsContent>

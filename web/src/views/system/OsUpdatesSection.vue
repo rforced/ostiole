@@ -232,7 +232,7 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
             <th>From</th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
+        <tbody>
           <tr v-for="p in shown" :key="p.name">
             <td>
               <span class="font-mono">{{ p.name }}</span>
@@ -242,7 +242,7 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
             <td class="font-mono text-code">{{ p.to || '—' }}</td>
             <td class="text-ink-muted">{{ p.repo || '—' }}</td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
       <div v-if="packages.length > SHOWN" class="card-strip border-t border-line">
         <button type="button" class="link" @click="showAll = !showAll">

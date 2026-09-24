@@ -134,8 +134,8 @@ defineExpose({ refresh: load.run })
           <th></th>
         </tr>
       </thead>
-      <TransitionGroup name="row" tag="tbody">
-        <tr v-if="revisions.length === 0" key="empty" class="row-static">
+      <tbody>
+        <tr v-if="revisions.length === 0">
           <td colspan="4" class="text-ink-muted">
             {{ load.updatedAt.value ? 'No revisions.' : 'Reading…' }}
           </td>
@@ -167,7 +167,7 @@ defineExpose({ refresh: load.run })
           <!-- A key of its own: in the transition group both rows of a
                revision would share one, and opening another compare
                patched one row onto the other. -->
-          <tr v-if="comparing === r.id" :key="`${r.id}-changes`">
+          <tr v-if="comparing === r.id">
             <td colspan="4" class="bg-surface-2/40">
               <ChangeList
                 :changes="changes"
@@ -176,7 +176,7 @@ defineExpose({ refresh: load.run })
             </td>
           </tr>
         </template>
-      </TransitionGroup>
+      </tbody>
     </table>
   </SectionCard>
 </template>

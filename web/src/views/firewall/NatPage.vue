@@ -99,8 +99,8 @@ function editOb(r) {
             <th></th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="forwards.length === 0" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="forwards.length === 0">
             <td colspan="6" class="text-ink-muted">No port forwards.</td>
           </tr>
           <tr
@@ -140,7 +140,7 @@ function editOb(r) {
               />
             </td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
 
@@ -160,8 +160,8 @@ function editOb(r) {
             <th></th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="oneToOne.length === 0" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="oneToOne.length === 0">
             <td colspan="5" class="text-ink-muted">No 1:1 mappings.</td>
           </tr>
           <tr
@@ -189,7 +189,7 @@ function editOb(r) {
               />
             </td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
 
@@ -225,8 +225,8 @@ function editOb(r) {
               <th></th>
             </tr>
           </thead>
-          <TransitionGroup name="row" tag="tbody">
-            <tr v-if="(outbound.rules ?? []).length === 0" key="empty" class="row-static">
+          <tbody>
+            <tr v-if="(outbound.rules ?? []).length === 0">
               <td colspan="6" class="text-ink-muted">
                 {{
                   mode === 'hybrid'
@@ -265,7 +265,7 @@ function editOb(r) {
                 />
               </td>
             </tr>
-          </TransitionGroup>
+          </tbody>
         </table>
       </template>
     </SectionCard>
@@ -282,7 +282,7 @@ function editOb(r) {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="s in automatic" :key="s.zone" class="row-static">
+          <tr v-for="s in automatic" :key="s.zone">
             <td class="font-mono">
               {{ s.zone }}
               <span class="ml-1 text-ink-muted">{{ (s.interfaces ?? []).join(', ') }}</span>

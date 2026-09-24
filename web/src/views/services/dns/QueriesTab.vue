@@ -390,8 +390,8 @@ onBeforeUnmount(disconnect)
               <th>Answer</th>
             </tr>
           </thead>
-          <TransitionGroup name="row" tag="tbody">
-            <tr v-if="!rows.length" key="empty" class="row-static">
+          <tbody>
+            <tr v-if="!rows.length">
               <td colspan="6" class="text-ink-muted">
                 {{
                   load.busy.value && !page ? 'Reading…' : newest ? 'No queries.' : 'Nothing older.'
@@ -430,11 +430,11 @@ onBeforeUnmount(disconnect)
                 </td>
                 <td class="font-mono text-code">{{ e.answer }}</td>
               </tr>
-              <tr v-if="why[e.name]" :key="`${e.key}-why`" class="row-static">
+              <tr v-if="why[e.name]">
                 <td colspan="6" class="text-sm text-ink-muted">{{ why[e.name] }}</td>
               </tr>
             </template>
-          </TransitionGroup>
+          </tbody>
         </table>
       </template>
 

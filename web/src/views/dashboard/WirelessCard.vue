@@ -42,8 +42,8 @@ function ssidOf(c) {
           <th class="text-right">Connected</th>
         </tr>
       </thead>
-      <TransitionGroup name="row" tag="tbody">
-        <tr v-if="!clients.length" key="empty" class="row-static">
+      <tbody>
+        <tr v-if="!clients.length">
           <td colspan="4" class="text-ink-muted">No clients.</td>
         </tr>
         <tr v-for="c in shown" :key="c.mac">
@@ -57,7 +57,7 @@ function ssidOf(c) {
           <td class="text-right font-mono text-code">{{ c.signalDbm }} dBm</td>
           <td class="text-right whitespace-nowrap">{{ formatDuration(c.connectedSeconds) }}</td>
         </tr>
-      </TransitionGroup>
+      </tbody>
     </table>
     <p class="card-strip border-t border-line">
       <RouterLink to="/wireless#clients" class="link">

@@ -23,7 +23,7 @@ defineProps({
           <th class="text-right">Loss</th>
         </tr>
       </thead>
-      <TransitionGroup name="row" tag="tbody">
+      <tbody>
         <tr v-for="g in gateways" :key="g.name">
           <td>
             <div>
@@ -57,7 +57,7 @@ defineProps({
           <td class="text-right">—</td>
           <td class="text-right">—</td>
         </tr>
-      </TransitionGroup>
+      </tbody>
     </table>
     <p class="card-strip border-t border-line">
       <template v-if="unwatched.length">

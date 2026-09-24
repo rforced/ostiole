@@ -66,8 +66,8 @@ function rate(bits) {
             <th></th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!shaped.length" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="!shaped.length">
             <td colspan="6" class="text-ink-muted">
               No interface has a speed. Queues are first come, first served.
             </td>
@@ -95,7 +95,7 @@ function rate(bits) {
               />
             </td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
 

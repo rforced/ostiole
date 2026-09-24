@@ -60,7 +60,7 @@ function editPeer(tunnel, peer) {
       No tunnels. Adding one generates its key pair.
     </p>
 
-    <TransitionGroup name="row" class="space-y-5" tag="div">
+    <div class="space-y-5">
       <SectionCard v-for="t in tunnels" :key="t.name" flush>
         <template #title>
           <span class="font-mono">{{ t.name }}</span>
@@ -113,8 +113,8 @@ function editPeer(tunnel, peer) {
               <th></th>
             </tr>
           </thead>
-          <TransitionGroup name="row" tag="tbody">
-            <tr v-if="!(t.wireguard.peers ?? []).length" key="empty" class="row-static">
+          <tbody>
+            <tr v-if="!(t.wireguard.peers ?? []).length">
               <td colspan="5" class="text-ink-muted">No peers.</td>
             </tr>
             <tr
@@ -150,10 +150,10 @@ function editPeer(tunnel, peer) {
                 />
               </td>
             </tr>
-          </TransitionGroup>
+          </tbody>
         </table>
       </SectionCard>
-    </TransitionGroup>
+    </div>
 
     <TunnelDialog v-model:open="tunnelOpen" :tunnel="tunnelEditing" />
     <PeerDialog v-model:open="peerOpen" :tunnel="peerTunnel" :peer="peerEditing" />

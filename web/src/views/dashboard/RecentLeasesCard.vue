@@ -28,8 +28,8 @@ function left(l) {
           <th>Expires</th>
         </tr>
       </thead>
-      <TransitionGroup name="row" tag="tbody">
-        <tr v-if="!leases.length" key="empty" class="row-static">
+      <tbody>
+        <tr v-if="!leases.length">
           <td colspan="3" class="text-ink-muted">No leases yet.</td>
         </tr>
         <tr v-for="l in leases" :key="l.ip + (l.mac || l.clientId)">
@@ -42,7 +42,7 @@ function left(l) {
           </td>
           <td class="whitespace-nowrap">{{ left(l) }}</td>
         </tr>
-      </TransitionGroup>
+      </tbody>
     </table>
     <p class="card-strip border-t border-line">
       <RouterLink to="/services/dhcp#leases" class="link">

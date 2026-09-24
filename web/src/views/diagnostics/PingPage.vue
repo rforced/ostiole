@@ -151,7 +151,7 @@ async function run(kind) {
             <th class="text-right">Round trip</th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
+        <tbody>
           <tr v-for="h in trace.hops" :key="h.ttl">
             <td class="font-mono text-code">{{ h.ttl }}</td>
             <td class="font-mono text-code">
@@ -163,7 +163,7 @@ async function run(kind) {
               {{ h.address ? `${h.rttMs.toFixed(1)} ms` : '' }}
             </td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
   </div>

@@ -171,8 +171,8 @@ onBeforeUnmount(() => source?.close())
             <th>Info</th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!visible.length" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="!visible.length">
             <td colspan="9" class="text-ink-muted">
               {{
                 load.busy.value
@@ -204,7 +204,7 @@ onBeforeUnmount(() => source?.close())
               <template v-else>{{ e.length }} B</template>
             </td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
   </div>

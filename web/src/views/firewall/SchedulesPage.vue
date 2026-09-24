@@ -53,8 +53,8 @@ function days(schedule) {
             <th></th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!config.schedules.length" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="!config.schedules.length">
             <td colspan="5" class="text-ink-muted">No schedules.</td>
           </tr>
           <tr
@@ -90,7 +90,7 @@ function days(schedule) {
               </span>
             </td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
 

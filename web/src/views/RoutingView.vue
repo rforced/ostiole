@@ -182,8 +182,8 @@ function edit(r) {
               <th></th>
             </tr>
           </thead>
-          <TransitionGroup name="row" tag="tbody">
-            <tr v-if="!gatewayRows.length" key="empty" class="row-static">
+          <tbody>
+            <tr v-if="!gatewayRows.length">
               <td colspan="7" class="text-ink-muted">
                 No gateways. The default route from the interface is used as it is.
               </td>
@@ -237,7 +237,7 @@ function edit(r) {
                 />
               </td>
             </tr>
-          </TransitionGroup>
+          </tbody>
         </table>
       </SectionCard>
 
@@ -259,8 +259,8 @@ function edit(r) {
               <th></th>
             </tr>
           </thead>
-          <TransitionGroup name="row" tag="tbody">
-            <tr v-if="!detected.length" key="empty" class="row-static">
+          <tbody>
+            <tr v-if="!detected.length">
               <td colspan="7" class="text-ink-muted">
                 {{ refresh.updatedAt.value ? 'No default routes.' : 'Reading…' }}
               </td>
@@ -288,7 +288,7 @@ function edit(r) {
                 </button>
               </td>
             </tr>
-          </TransitionGroup>
+          </tbody>
         </table>
       </SectionCard>
 
@@ -314,8 +314,8 @@ function edit(r) {
               <th></th>
             </tr>
           </thead>
-          <TransitionGroup name="row" tag="tbody">
-            <tr v-if="!groupRows.length" key="empty" class="row-static">
+          <tbody>
+            <tr v-if="!groupRows.length">
               <td colspan="6" class="text-ink-muted">
                 <template v-if="config.gateways.length">
                   No groups. Add one to route some rules over a different line.
@@ -365,7 +365,7 @@ function edit(r) {
                 />
               </td>
             </tr>
-          </TransitionGroup>
+          </tbody>
         </table>
         <div v-if="policyRules.length" class="card-strip border-t border-line text-ink-muted">
           <span class="font-medium">Policy routing is in use:</span>
@@ -394,8 +394,8 @@ function edit(r) {
               <th></th>
             </tr>
           </thead>
-          <TransitionGroup name="row" tag="tbody">
-            <tr v-if="config.routes.length === 0" key="empty" class="row-static">
+          <tbody>
+            <tr v-if="config.routes.length === 0">
               <td colspan="5" class="text-ink-muted">No static routes.</td>
             </tr>
             <tr
@@ -420,7 +420,7 @@ function edit(r) {
                 />
               </td>
             </tr>
-          </TransitionGroup>
+          </tbody>
         </table>
       </SectionCard>
     </template>

@@ -78,8 +78,8 @@ function editDomain(d) {
             <th></th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!hosts.length" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="!hosts.length">
             <td colspan="5" class="text-ink-muted">No overrides.</td>
           </tr>
           <tr
@@ -106,7 +106,7 @@ function editDomain(d) {
               />
             </td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
 
@@ -131,12 +131,12 @@ function editDomain(d) {
           </tr>
         </thead>
         <tbody>
-          <tr v-if="!system.length" class="row-static">
+          <tr v-if="!system.length">
             <td colspan="4" class="text-ink-muted">
               {{ systemRead ? 'No static lease has a hostname.' : 'Reading…' }}
             </td>
           </tr>
-          <tr v-for="s in system" :key="`${s.hostname}-${s.ip}`" class="row-static">
+          <tr v-for="s in system" :key="`${s.hostname}-${s.ip}`">
             <td class="font-mono text-code">
               {{ s.hostname }}
               <span v-if="s.fqdn" class="ml-1 text-ink-muted">{{ s.fqdn }}</span>
@@ -174,8 +174,8 @@ function editDomain(d) {
             <th></th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!domains.length" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="!domains.length">
             <td colspan="4" class="text-ink-muted">
               No overrides. Every domain goes to the resolver.
             </td>
@@ -201,7 +201,7 @@ function editDomain(d) {
               />
             </td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
 

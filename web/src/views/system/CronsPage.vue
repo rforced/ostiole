@@ -127,8 +127,8 @@ function describe(c) {
               <th></th>
             </tr>
           </thead>
-          <TransitionGroup name="row" tag="tbody">
-            <tr v-if="!rows.length" key="empty" class="row-static">
+          <tbody>
+            <tr v-if="!rows.length">
               <td colspan="5" class="text-ink-muted">No crons.</td>
             </tr>
             <tr
@@ -209,7 +209,7 @@ function describe(c) {
                 />
               </td>
             </tr>
-          </TransitionGroup>
+          </tbody>
         </table>
         <div
           v-if="auth.isOperator && rows.some(locked)"
@@ -229,8 +229,8 @@ function describe(c) {
             <th>Last seen</th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!system.length" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="!system.length">
             <td colspan="3" class="text-ink-muted">
               {{
                 load.busy.value && !load.updatedAt.value
@@ -246,7 +246,7 @@ function describe(c) {
             <td class="font-mono text-code">{{ s.enabled ? s.schedule : 'never' }}</td>
             <td class="text-xs">{{ when(s.lastRun) }}</td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
 

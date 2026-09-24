@@ -95,8 +95,8 @@ const entries = computed(() => [
             <th></th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!config.busyZones.length" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="!config.busyZones.length">
             <td colspan="4" class="text-ink-muted">
               No zone holds a busy device back. Every device gets an equal share whatever it is
               doing.
@@ -127,7 +127,7 @@ const entries = computed(() => [
               />
             </td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
 
@@ -148,8 +148,8 @@ const entries = computed(() => [
             <th>Description</th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!entries.length" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="!entries.length">
             <td colspan="5" class="text-ink-muted">
               No rule sets a priority, so every flow is sorted by what its device asks for.
             </td>
@@ -166,7 +166,7 @@ const entries = computed(() => [
             <td class="font-mono text-code">{{ e.match }}</td>
             <td>{{ e.description }}</td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
 

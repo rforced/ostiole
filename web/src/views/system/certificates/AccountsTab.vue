@@ -48,8 +48,8 @@ function edit(account) {
             <th></th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!config.acmeAccounts.length" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="!config.acmeAccounts.length">
             <td colspan="6" class="text-ink-muted">No accounts.</td>
           </tr>
           <tr
@@ -89,7 +89,7 @@ function edit(account) {
               </span>
             </td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
 

@@ -238,8 +238,8 @@ function when(s) {
             <th></th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!config.blockLists.length" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="!config.blockLists.length">
             <td colspan="7" class="text-ink-muted">
               No lists. "Add list" offers the well-known ones.
             </td>
@@ -329,7 +329,7 @@ function when(s) {
               />
             </td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
 

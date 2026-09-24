@@ -187,9 +187,8 @@ describe('TailscaleStatus', () => {
   })
 })
 
-/** TransitionGroup stubs out, so the tbody it renders as is not there. */
 function bodyRows(wrapper) {
-  return wrapper.findAll('tr').filter((r) => r.findAll('td').length > 0)
+  return wrapper.findAll('tbody tr')
 }
 
 describe('Tailscale PeersTab', () => {

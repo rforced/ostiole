@@ -136,8 +136,8 @@ const when = (s, fallback) => (s ? new Date(s).toLocaleDateString() : fallback)
           <th></th>
         </tr>
       </thead>
-      <TransitionGroup name="row" tag="tbody">
-        <tr v-if="!tokens.length" key="empty" class="row-static">
+      <tbody>
+        <tr v-if="!tokens.length">
           <td colspan="6" class="text-ink-muted">
             {{ load.updatedAt.value ? 'No tokens.' : 'Reading…' }}
           </td>
@@ -166,7 +166,7 @@ const when = (s, fallback) => (s ? new Date(s).toLocaleDateString() : fallback)
             />
           </td>
         </tr>
-      </TransitionGroup>
+      </tbody>
     </table>
 
     <TokenDialog v-model:open="adding" @create="createToken" />

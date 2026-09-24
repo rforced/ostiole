@@ -104,7 +104,7 @@ const system = [
   },
 ]
 
-async function mountPage(path = '/firewall/rules') {
+async function mountPage(path = '/firewall/rules', extraStubs = {}) {
   api.config.get.mockResolvedValue(structuredClone(config))
   await useConfigStore().load()
   const router = createRouter({
@@ -113,7 +113,9 @@ async function mountPage(path = '/firewall/rules') {
   })
   router.push(path)
   await router.isReady()
-  const wrapper = mount(RulesPage, { global: { plugins: [router], stubs } })
+  const wrapper = mount(RulesPage, {
+    global: { plugins: [router], stubs: { ...stubs, ...extraStubs } },
+  })
   await vi.waitFor(() => expect(api.systemRules).toHaveBeenCalled())
   await flushPromises()
   return wrapper
@@ -218,6 +220,20 @@ describe('RulesPage system rules', () => {
     api.systemRules.mockRejectedValue(new Error('the draft does not validate'))
     const wrapper = await mountPage()
     expect(rowsText(wrapper)).toEqual([expect.stringContaining('Web UI')])
+  })
+
+  it('swaps the rows at once for another zone', async () => {
+    const wrapper = await mountPage('/firewall/rules', { 'transition-group': false })
+    await wrapper.find('[aria-label="Zone"] button:last-child').trigger('click')
+    await flushPromises()
+    // No lan row is left fading out beside the wan rows, and the wan rows
+    // do not fade in.
+    const body = wrapper.find('tbody')
+    expect(body.text()).toContain('bogon')
+    expect(body.text()).not.toContain('Web UI')
+    expect(
+      body.findAll('tr').filter((tr) => /row-(enter|leave)/.test(tr.classes().join(' '))),
+    ).toEqual([])
   })
 
   it('re-reads the rows for the draft after an edit settles', async () => {

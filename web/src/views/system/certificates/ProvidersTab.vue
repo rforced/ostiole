@@ -61,8 +61,8 @@ const labelOf = (kind) => kinds.value.find((k) => k.kind === kind)?.label ?? kin
             <th></th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!config.dnsProviders.length" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="!config.dnsProviders.length">
             <td colspan="4" class="text-ink-muted">No providers.</td>
           </tr>
           <tr
@@ -100,7 +100,7 @@ const labelOf = (kind) => kinds.value.find((k) => k.kind === kind)?.label ?? kin
               </span>
             </td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
 

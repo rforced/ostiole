@@ -297,25 +297,13 @@
   }
 }
 
-/* Vue transition classes. Rows fade in place and slide only when they
-   change order; the bar above the page grows and shrinks rather than
-   shoving the content under it. */
-.row-enter-active,
-.row-leave-active {
-  transition: opacity 150ms ease-out;
-}
-.row-enter-from,
-.row-leave-to {
-  opacity: 0;
-}
+/* Vue transition classes. Table rows change in the frame their data does:
+   a row fading out keeps its place, so any fade shows two lists at once
+   and then a jump. Only a reorder slides, so the eye can follow the row
+   that moved (lib/reorder.js). The bar above the page grows and shrinks
+   rather than shoving the content under it. */
 .row-move {
-  transition: transform 200ms ease-out;
-}
-/* A placeholder row ("Reading…", "No rules.") swaps instantly, so the
-   real rows never share the table with it mid-fade. */
-.row-static.row-enter-active,
-.row-static.row-leave-active {
-  transition: none;
+  transition: transform 120ms ease-out;
 }
 
 /* Dashboard cards fade in when there is something to say and slide to
@@ -354,8 +342,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .row-enter-active,
-  .row-leave-active,
   .row-move,
   .card-enter-active,
   .card-move,

@@ -55,8 +55,8 @@ onMounted(load.run)
             <th></th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!leases.length" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="!leases.length">
             <td colspan="5" class="text-ink-muted">
               {{ load.updatedAt.value ? 'No leases.' : 'Reading…' }}
             </td>
@@ -83,7 +83,7 @@ onMounted(load.run)
               </button>
             </td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
 

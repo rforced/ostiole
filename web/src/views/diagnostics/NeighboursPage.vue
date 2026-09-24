@@ -81,8 +81,8 @@ function tone(state) {
             <th>State</th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!shown.length" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="!shown.length">
             <td colspan="5" class="text-ink-muted">
               {{ load.busy.value && !rows.length ? 'Reading…' : 'No neighbours.' }}
             </td>
@@ -104,7 +104,7 @@ function tone(state) {
               <span class="badge" :class="tone(n.state)">{{ n.state.toLowerCase() }}</span>
             </td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
   </div>

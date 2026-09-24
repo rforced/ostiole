@@ -56,8 +56,8 @@ function editLease(l) {
             <th></th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!(dhcp.servers ?? []).length" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="!(dhcp.servers ?? []).length">
             <td colspan="6" class="text-ink-muted">
               No servers. Add one per interface that should hand out addresses.
             </td>
@@ -90,7 +90,7 @@ function editLease(l) {
               />
             </td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
 
@@ -111,8 +111,8 @@ function editLease(l) {
             <th></th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!(dhcp.staticLeases ?? []).length" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="!(dhcp.staticLeases ?? []).length">
             <td colspan="6" class="text-ink-muted">No static leases.</td>
           </tr>
           <tr
@@ -138,7 +138,7 @@ function editLease(l) {
               />
             </td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
 

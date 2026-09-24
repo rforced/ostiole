@@ -45,8 +45,8 @@ function edit(profile) {
             <th></th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!profiles.length" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="!profiles.length">
             <td colspan="6" class="text-ink-muted">No profiles.</td>
           </tr>
           <tr
@@ -84,7 +84,7 @@ function edit(profile) {
               />
             </td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
 

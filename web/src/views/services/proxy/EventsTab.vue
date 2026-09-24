@@ -103,8 +103,8 @@ function hasQuery(uri) {
             <th>Rules</th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!events.length" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="!events.length">
             <td colspan="6" class="text-ink-muted">{{ empty }}</td>
           </tr>
           <tr v-for="e in events" :key="e.id">
@@ -150,7 +150,7 @@ function hasQuery(uri) {
               </div>
             </td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
   </div>

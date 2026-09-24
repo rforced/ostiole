@@ -28,10 +28,10 @@ function answers({ before } = {}) {
   return { enabled: true, total: all.length, entries: all.slice(from, from + 200) }
 }
 
-/** Vue Test Utils stubs TransitionGroup, so the rows sit in no tbody. */
+/** The names in the table, top to bottom. */
 function names(wrapper) {
   return wrapper
-    .findAll('tr')
+    .findAll('tbody tr')
     .map((tr) => tr.findAll('td')[2]?.text())
     .filter(Boolean)
 }

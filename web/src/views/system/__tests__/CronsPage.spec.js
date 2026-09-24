@@ -40,8 +40,7 @@ async function open(role) {
   return wrapper
 }
 
-// TransitionGroup is stubbed here, so the rows are found as tr, not under tbody.
-const rows = (w) => w.findAll('tr').filter((tr) => tr.find('button').exists())
+const rows = (w) => w.findAll('tbody tr').filter((tr) => tr.find('button').exists())
 const button = (tr, label) => tr.findAll('button').find((b) => b.text().includes(label))
 
 describe('CronsPage', () => {

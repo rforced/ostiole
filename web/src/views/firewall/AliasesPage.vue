@@ -138,8 +138,8 @@ function edit(a) {
             <th></th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="config.aliases.length === 0" key="empty" class="row-static">
+        <tbody>
+          <tr v-if="config.aliases.length === 0">
             <td colspan="5" class="text-ink-muted">No aliases.</td>
           </tr>
           <tr
@@ -210,7 +210,7 @@ function edit(a) {
               </span>
             </td>
           </tr>
-        </TransitionGroup>
+        </tbody>
       </table>
     </SectionCard>
 

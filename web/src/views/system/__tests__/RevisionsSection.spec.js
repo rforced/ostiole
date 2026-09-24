@@ -85,24 +85,20 @@ describe('RevisionsSection compare', () => {
   }
 
   // Opening one compare after another used to stitch a revision into the
-  // changes row of another: in the transition group both rows of a
-  // revision had the same key, so Vue patched one onto the other.
+  // changes row of another, when the table was a transition group and both
+  // rows of a revision had the same key.
   it('keeps every row whole as compares open and close', async () => {
     const config = useConfigStore()
     config.replaceDraft(draft({}))
     const wrapper = mount(RevisionsSection, {
-      global: { stubs: { ChangeList: true, 'transition-group': false } },
+      global: { stubs: { ChangeList: true } },
     })
     await flushPromises()
     const [a, b, c] = revisions.map((r) => r.id)
-    const settle = async () => {
-      await flushPromises()
-      await new Promise((resolve) => setTimeout(resolve, 50))
-    }
     async function toggle(id) {
       const row = wrapper.findAll('tbody tr').find((tr) => tr.text().includes(id))
       await row.find('button').trigger('click')
-      await settle()
+      await flushPromises()
     }
 
     await toggle(b)

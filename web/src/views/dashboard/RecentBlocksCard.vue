@@ -24,8 +24,8 @@ function endpoint(addr, port) {
           <th>By</th>
         </tr>
       </thead>
-      <TransitionGroup name="row" tag="tbody">
-        <tr v-if="!blocks.length" key="empty" class="row-static">
+      <tbody>
+        <tr v-if="!blocks.length">
           <td colspan="4" class="text-ink-muted">No blocks yet.</td>
         </tr>
         <tr v-for="e in blocks" :key="`${e.time}-${e.src}-${e.srcPort}-${e.dst}-${e.dstPort}`">
@@ -44,7 +44,7 @@ function endpoint(addr, port) {
             </div>
           </td>
         </tr>
-      </TransitionGroup>
+      </tbody>
     </table>
     <p class="card-strip border-t border-line">
       <RouterLink to="/firewall/log" class="link">Full log</RouterLink>

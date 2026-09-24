@@ -7,6 +7,7 @@ import ConfirmButton from '@/components/ConfirmButton.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import { useReorder } from '@/lib/reorder'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import AclDialog from '@/views/services/upnp/AclDialog.vue'
@@ -67,6 +68,7 @@ function toggleInterface(name, on) {
 }
 
 const acl = computed(() => upnp.value.acl ?? [])
+const { moveClass, reorder } = useReorder()
 const editing = ref(-1)
 const open = ref(false)
 
@@ -180,8 +182,8 @@ function edit(index) {
             <th></th>
           </tr>
         </thead>
-        <TransitionGroup name="row" tag="tbody">
-          <tr v-if="!acl.length" key="empty" class="row-static">
+        <TransitionGroup tag="tbody" :css="false" :move-class="moveClass">
+          <tr v-if="!acl.length" key="empty">
             <td colspan="6" class="text-ink-muted">
               {{
                 upnp.defaultDeny
@@ -211,7 +213,7 @@ function edit(index) {
                   class="icon-btn"
                   :disabled="i === 0"
                   :aria-label="`Move entry ${i + 1} up`"
-                  @click="config.moveUPnPRule(i, -1)"
+                  @click="reorder(() => config.moveUPnPRule(i, -1))"
                 >
                   <ArrowUp class="size-4" />
                 </button>
@@ -220,7 +222,7 @@ function edit(index) {
                   class="icon-btn"
                   :disabled="i === acl.length - 1"
                   :aria-label="`Move entry ${i + 1} down`"
-                  @click="config.moveUPnPRule(i, 1)"
+                  @click="reorder(() => config.moveUPnPRule(i, 1))"
                 >
                   <ArrowDown class="size-4" />
                 </button>
