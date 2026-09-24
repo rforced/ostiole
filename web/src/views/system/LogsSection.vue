@@ -8,8 +8,18 @@ import { useConfigStore } from '@/stores/config'
 
 const auth = useAuthStore()
 const config = useConfigStore()
-if (!config.draft.system.logging) config.draft.system.logging = {}
-const logging = computed(() => config.draft.system.logging)
+/**
+ * Out of the draft while every value is the default, as the saved
+ * configuration has it: opening the page must not make a change.
+ */
+const logging = computed(() => config.draft.system.logging ?? {})
+function set(key, value) {
+  const next = { ...logging.value }
+  if (value === undefined) delete next[key]
+  else next[key] = value
+  if (Object.keys(next).length) config.draft.system.logging = next
+  else delete config.draft.system.logging
+}
 
 const LEVELS = [
   { value: 'error', label: 'Error' },
@@ -22,18 +32,14 @@ const LEVELS = [
 const level = computed(() => logging.value.level || 'warning')
 
 function setLevel(v) {
-  if (v === 'warning') delete logging.value.level
-  else logging.value.level = v
+  set('level', v === 'warning' ? undefined : v)
 }
 
 /** Empty means the default, which the placeholder shows. */
 function numberField(key) {
   return computed({
     get: () => logging.value[key] || '',
-    set: (v) => {
-      if (Number.isFinite(v) && v > 0) logging.value[key] = v
-      else delete logging.value[key]
-    },
+    set: (v) => set(key, Number.isFinite(v) && v > 0 ? v : undefined),
   })
 }
 const retention = numberField('retentionDays')

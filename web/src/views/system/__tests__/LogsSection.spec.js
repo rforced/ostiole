@@ -29,6 +29,20 @@ describe('LogsSection', () => {
     expect(wrapper.get('#logs-level-warning').element.checked).toBe(true)
   })
 
+  // The saved configuration leaves defaults out. Opening the page used to
+  // write an empty block, which was a change nobody made and stopped
+  // signing out.
+  it('changes nothing by being opened, and nothing once back at the defaults', async () => {
+    const config = useConfigStore()
+    config.saved = draft()
+    const { wrapper } = open()
+    expect(config.dirty).toBe(false)
+    await wrapper.get('#logs-level-info').setValue()
+    expect(config.dirty).toBe(true)
+    await wrapper.get('#logs-level-warning').setValue()
+    expect(config.dirty).toBe(false)
+  })
+
   it('writes a chosen level into the draft', async () => {
     const { wrapper, config } = open()
     await wrapper.get('#logs-level-info').setValue()
@@ -40,7 +54,7 @@ describe('LogsSection', () => {
   it('clears the level when warning is chosen again', async () => {
     const { wrapper, config } = open({ logging: { level: 'debug' } })
     await wrapper.get('#logs-level-warning').setValue()
-    expect(config.draft.system.logging).not.toHaveProperty('level')
+    expect(config.draft.system.logging?.level).toBeUndefined()
   })
 
   it('writes the retention and the ceiling and clears them when emptied', async () => {
@@ -50,13 +64,13 @@ describe('LogsSection', () => {
     await days.setValue('30')
     expect(config.draft.system.logging.retentionDays).toBe(30)
     await days.setValue('')
-    expect(config.draft.system.logging).not.toHaveProperty('retentionDays')
+    expect(config.draft.system.logging?.retentionDays).toBeUndefined()
 
     const gb = wrapper.get('#logs-max-use')
     expect(gb.attributes('placeholder')).toBe('10')
     await gb.setValue('25')
     expect(config.draft.system.logging.maxUseGB).toBe(25)
     await gb.setValue('')
-    expect(config.draft.system.logging).not.toHaveProperty('maxUseGB')
+    expect(config.draft.system.logging?.maxUseGB).toBeUndefined()
   })
 })
