@@ -1,6 +1,6 @@
 <script setup>
 import { AlertTriangle, LoaderCircle } from 'lucide-vue-next'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import ApplyPending from '@/components/ApplyPending.vue'
@@ -58,6 +58,31 @@ watch(
     if (!dirty) showChanges.value = false
   },
 )
+
+/**
+ * Below lg the bar is docked over the bottom of the page. --dock is how
+ * much of the page it covers, so the page and the toasts can clear it.
+ */
+const bar = ref(null)
+let observer = null
+function undock() {
+  observer?.disconnect()
+  observer = null
+  document.documentElement.style.removeProperty('--dock')
+}
+watch(
+  bar,
+  (el) => {
+    undock()
+    if (!el || typeof ResizeObserver !== 'function') return
+    observer = new ResizeObserver(() => {
+      document.documentElement.style.setProperty('--dock', `${el.offsetHeight}px`)
+    })
+    observer.observe(el)
+  },
+  { flush: 'post' },
+)
+onBeforeUnmount(undock)
 
 async function apply() {
   busy.value = true
@@ -121,9 +146,15 @@ async function settle() {
 
 <template>
   <Transition name="bar">
-    <div v-if="visible" class="sticky top-0 z-30 grid grid-rows-[1fr]">
+    <div
+      v-if="visible"
+      ref="bar"
+      class="sticky top-0 z-30 grid grid-rows-[1fr] max-lg:fixed max-lg:inset-x-0 max-lg:top-auto max-lg:bottom-0"
+    >
       <div class="min-h-0 overflow-hidden">
-        <div class="border-b border-line bg-surface px-6 py-3">
+        <div
+          class="border-b border-line bg-surface px-6 py-3 max-lg:border-t max-lg:border-b-0 max-lg:px-[max(1.5rem,env(safe-area-inset-left),env(safe-area-inset-right))] max-lg:pb-[calc(0.75rem+env(safe-area-inset-bottom))] max-sm:px-4"
+        >
           <ApplyPending
             v-if="pending"
             :key="pending.deadline"
@@ -146,7 +177,7 @@ async function settle() {
                 {{ showChanges ? 'Hide' : 'Show' }} {{ count }}
                 {{ count === 1 ? 'change' : 'changes' }}
               </button>
-              <div class="ml-auto flex gap-2">
+              <div class="ml-auto flex gap-2 max-sm:ml-0 max-sm:w-full">
                 <button
                   type="button"
                   class="btn-secondary"
@@ -157,7 +188,7 @@ async function settle() {
                 </button>
                 <button
                   type="button"
-                  class="btn-primary"
+                  class="btn-primary max-sm:flex-1"
                   :disabled="busy"
                   :aria-busy="busy"
                   @click="apply"
@@ -167,7 +198,12 @@ async function settle() {
                 </button>
               </div>
             </div>
-            <ChangeList v-if="showChanges" :changes="config.changes" :limit="SHOWN_CHANGES" />
+            <ChangeList
+              v-if="showChanges"
+              :changes="config.changes"
+              :limit="SHOWN_CHANGES"
+              class="max-lg:max-h-[40dvh] max-lg:overflow-y-auto"
+            />
             <div v-if="error" role="alert" class="text-sm text-bad">
               <p>{{ error }}</p>
               <ul v-if="issues.length" class="mt-1 list-disc pl-5">

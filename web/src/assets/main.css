@@ -23,6 +23,12 @@
  * link; connected or disconnected for a tunnel. A column says Address,
  * MAC, Interface, Destination. An empty table says "No <plural>." and a
  * loading one "Reading…".
+ *
+ * Two widths. Below lg the shell is a top bar, a drawer and an apply bar
+ * docked at the bottom. Below sm a page is laid out for a thumb: 16px
+ * inputs, 44px targets, tables that scroll sideways or stack, dialogs as
+ * sheets. Both are written max-lg: and max-sm:, so the desktop classes stay
+ * the base and a grep for the two finds all of it.
  */
 
 @import 'tailwindcss';
@@ -139,6 +145,8 @@
   --animate-fade-out: fade-out 120ms ease-in both;
   --animate-pop-in: pop-in 150ms ease-out both;
   --animate-pop-out: pop-out 120ms ease-in both;
+  --animate-drawer-in: drawer-in 200ms ease-out both;
+  --animate-drawer-out: drawer-out 150ms ease-in both;
 
   @keyframes fade-in {
     from {
@@ -170,6 +178,18 @@
     to {
       opacity: 0;
       transform: scale(0.97);
+    }
+  }
+  /* The drawer sits against an edge, not centred, so it slides with
+     transform. */
+  @keyframes drawer-in {
+    from {
+      transform: translateX(-100%);
+    }
+  }
+  @keyframes drawer-out {
+    to {
+      transform: translateX(-100%);
     }
   }
 }

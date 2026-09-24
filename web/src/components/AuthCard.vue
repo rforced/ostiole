@@ -10,7 +10,7 @@ defineProps({
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col items-center justify-center p-6">
+  <div class="flex min-h-dvh flex-col items-center justify-center p-6 max-sm:p-4">
     <div class="absolute top-4 right-4">
       <ThemeToggle />
     </div>

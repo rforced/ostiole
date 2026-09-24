@@ -38,7 +38,7 @@ provideLocked(() => locked.value)
         class="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px] data-[state=closed]:animate-fade-out data-[state=open]:animate-fade-in motion-reduce:animate-none"
       />
       <DialogContent
-        class="fixed top-1/2 left-1/2 z-50 max-h-[90vh] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-line bg-surface p-6 shadow-xl focus:outline-none data-[state=closed]:animate-pop-out data-[state=open]:animate-pop-in motion-reduce:animate-none"
+        class="fixed top-1/2 left-1/2 z-50 max-h-[90dvh] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-line bg-surface p-6 shadow-xl focus:outline-none data-[state=closed]:animate-pop-out data-[state=open]:animate-pop-in motion-reduce:animate-none"
       >
         <div class="mb-4 flex items-start justify-between gap-4">
           <div>

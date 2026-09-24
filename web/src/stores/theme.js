@@ -7,6 +7,12 @@ import { computed, ref, watch } from 'vue'
 /** Must match public/theme-init.js. */
 export const THEME_STORAGE_KEY = 'ostiole.theme'
 
+/**
+ * The browser's own bar takes the top bar's colour, --surface in each
+ * theme. Must match public/theme-init.js.
+ */
+export const THEME_COLORS = { light: '#ffffff', dark: '#171717' }
+
 const DARK_QUERY = '(prefers-color-scheme: dark)'
 const PREFERENCES = ['light', 'dark', 'system']
 
@@ -44,6 +50,9 @@ export const useThemeStore = defineStore('theme', () => {
     const root = document.documentElement
     root.classList.toggle('dark', resolved.value === 'dark')
     root.style.colorScheme = resolved.value
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute('content', THEME_COLORS[resolved.value])
   }
 
   /** Attach the OS listener and apply the current theme. Call once at startup. */

@@ -8,7 +8,7 @@ const toast = useToastStore()
 
 <template>
   <div
-    class="pointer-events-none fixed right-4 bottom-4 z-50 flex w-80 flex-col gap-2"
+    class="pointer-events-none fixed right-4 bottom-4 z-50 flex w-80 flex-col gap-2 max-lg:right-[max(1rem,env(safe-area-inset-right))] max-lg:bottom-[calc(max(var(--dock,0px),env(safe-area-inset-bottom))+1rem)] max-sm:left-4 max-sm:w-auto"
     aria-live="polite"
   >
     <TransitionGroup name="toast">
