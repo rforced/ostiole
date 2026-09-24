@@ -55,6 +55,11 @@ under <config-dir>/tls on first use unless --tls-cert and --tls-key point
 at your own.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			release, err := lockDaemon(g.configDir)
+			if err != nil {
+				return err
+			}
+			defer release()
 			var certManager *certs.Manager
 			if useTLS {
 				if cfg.TLSCert == "" {
@@ -341,6 +346,32 @@ at your own.`,
 	cmd.Flags().StringVar(&cfg.TLSCert, "tls-cert", "", "TLS certificate (PEM); default <config-dir>/tls/cert.pem")
 	cmd.Flags().StringVar(&cfg.TLSKey, "tls-key", "", "TLS private key (PEM); default <config-dir>/tls/key.pem")
 	return cmd
+}
+
+// lockDaemon keeps a second daemon off the same configuration: two would
+// fight over the kernel's table, the store and every unit Ostiole drives,
+// and each would hold its own idea of what is pending. The lock goes with
+// the process, so a crash never leaves it behind.
+func lockDaemon(dir string) (func(), error) {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(filepath.Join(dir, ".serve.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		holder, _ := os.ReadFile(f.Name())
+		_ = f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, fmt.Errorf("ostiole serve is already running on %s (pid %s)", dir, strings.TrimSpace(string(holder)))
+		}
+		return nil, fmt.Errorf("lock %s: %w", dir, err)
+	}
+	if err := f.Truncate(0); err == nil {
+		_, _ = f.WriteAt([]byte(strconv.Itoa(os.Getpid())+"\n"), 0)
+	}
+	return func() { _ = f.Close() }, nil
 }
 
 // certHosts lists names the self-signed certificate should cover: the
