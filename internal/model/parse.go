@@ -1,11 +1,13 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 	"net/netip"
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 var (
@@ -62,6 +64,55 @@ func parsePort(s string) (uint16, error) {
 		return 0, fmt.Errorf("invalid port %q: must be 1-65535", s)
 	}
 	return uint16(n), nil
+}
+
+// MaxSelect is how many conditions an alias's select may hold, and
+// MaxSelectFields how many different fields they may name, the bare key
+// names counting as one. Picking a hundred regions from a list is
+// reasonable; a thousand, or forty fields, is a mistake.
+const (
+	MaxSelect       = 256
+	MaxSelectFields = 32
+)
+
+// Condition is one line of an alias's select: a field and the value it
+// must hold, or, with no field, a key the address must be listed under.
+type Condition struct {
+	Field, Value string
+}
+
+// String is the condition as it is written in the configuration.
+func (c Condition) String() string {
+	if c.Field == "" {
+		return c.Value
+	}
+	return c.Field + "=" + c.Value
+}
+
+// ParseCondition accepts "field=value" or a bare key name. Only the value
+// or the key may hold a *; a field name is matched exactly.
+func ParseCondition(s string) (Condition, error) {
+	s = strings.TrimSpace(s)
+	switch {
+	case s == "":
+		return Condition{}, errors.New("empty condition")
+	case len(s) > 128:
+		return Condition{}, errors.New("a condition may be at most 128 characters")
+	case strings.ContainsFunc(s, unicode.IsControl):
+		return Condition{}, fmt.Errorf("condition %q holds a control character", s)
+	}
+	field, value, found := strings.Cut(s, "=")
+	if !found {
+		return Condition{Value: s}, nil
+	}
+	field, value = strings.TrimSpace(field), strings.TrimSpace(value)
+	if field == "" || value == "" {
+		return Condition{}, fmt.Errorf("condition %q needs a field and a value, like region=us-ashburn-1", s)
+	}
+	if strings.Contains(field, "*") {
+		return Condition{}, fmt.Errorf("condition %q: * matches in a value, not in a field name", s)
+	}
+	return Condition{Field: field, Value: value}, nil
 }
 
 // MaxASN is the largest four-byte AS number.

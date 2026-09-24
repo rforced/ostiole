@@ -171,6 +171,9 @@ function edit(a) {
               <div v-if="a.url" class="font-mono text-code break-all text-ink-muted">
                 {{ a.url }}
               </div>
+              <div v-if="a.url && a.select?.length" class="text-sm text-ink-muted">
+                Keeps only <span class="font-mono">{{ someOf(a.select, 3) }}</span>
+              </div>
             </td>
             <td class="text-right whitespace-nowrap">
               <template v-if="!auth.readOnly">

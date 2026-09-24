@@ -208,6 +208,7 @@ func (c *Config) Validate() error {
 		if a.RefreshHours < 0 || a.RefreshHours > 24*30 {
 			v.add(path+".refreshHours", "%d must be 0-720 (0 means once a day)", a.RefreshHours)
 		}
+		v.aliasSelect(path, a)
 	}
 
 	schedules := map[string]bool{}
@@ -2464,6 +2465,39 @@ func joinLogLevels() string {
 		out = append(out, string(l))
 	}
 	return strings.Join(out, ", ")
+}
+
+// aliasSelect checks the conditions that keep part of a fetched JSON list.
+func (v *validator) aliasSelect(path string, a Alias) {
+	if len(a.Select) == 0 {
+		return
+	}
+	if !a.Selectable() {
+		v.add(path+".select", "only a hosts alias with a URL can keep part of what it fetches")
+		return
+	}
+	if len(a.Select) > MaxSelect {
+		v.add(path+".select", "at most %d conditions", MaxSelect)
+	}
+	seen := map[string]bool{}
+	fields := map[string]bool{}
+	for j, s := range a.Select {
+		at := fmt.Sprintf("%s.select[%d]", path, j)
+		c, err := ParseCondition(s)
+		if err != nil {
+			v.add(at, "%v", err)
+			continue
+		}
+		key := strings.ToLower(c.String())
+		if seen[key] {
+			v.add(at, "%s is listed twice", c)
+		}
+		seen[key] = true
+		fields[strings.ToLower(c.Field)] = true
+	}
+	if len(fields) > MaxSelectFields {
+		v.add(path+".select", "conditions on at most %d different fields", MaxSelectFields)
+	}
 }
 
 func (v *validator) system(s *System) {

@@ -1,12 +1,16 @@
 <script setup>
+import { LoaderCircle } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
+import { api } from '@/lib/api'
 import { parseAsnList } from '@/lib/asn'
 import { formatCount } from '@/lib/format'
 import { joinList, parseList } from '@/lib/lists'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import ChoicePicker from '@/views/firewall/ChoicePicker.vue'
 import CountryPicker from '@/views/firewall/CountryPicker.vue'
 
 const props = defineProps({
@@ -22,6 +26,7 @@ const props = defineProps({
 const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
+const auth = useAuthStore()
 const form = ref(blank())
 const error = ref('')
 
@@ -34,6 +39,7 @@ function blank() {
     countries: [],
     url: '',
     refreshHours: 24,
+    select: [],
   }
 }
 
@@ -66,6 +72,63 @@ const asnParts = computed(() => {
 const keyed = computed(() => form.value.type === 'geoip' || form.value.type === 'asn')
 /** A host or port alias fetches when it has a URL. */
 const fetches = computed(() => keyed.value || form.value.url.trim() !== '')
+/** A host alias with a URL can keep part of a JSON list. */
+const selectable = computed(() => form.value.type === 'hosts' && form.value.url.trim() !== '')
+
+/**
+ * What the last fetch of this alias found to narrow it by, while the URL
+ * is still the one fetched; null when there is no such fetch.
+ */
+const fetchedChoices = computed(() => {
+  const status = props.feeds.find((f) => f.alias === props.alias?.name)
+  const part = status?.parts?.find((p) => p.source === form.value.url.trim())
+  return part ? (part.choices ?? []) : null
+})
+
+/** What the router found at a URL typed here, which nothing has fetched. */
+const inspected = ref({ url: '', choices: [], error: '', busy: false })
+const inspecting = computed(
+  () => inspected.value.busy && inspected.value.url === form.value.url.trim(),
+)
+const inspectError = computed(() =>
+  selectable.value && inspected.value.url === form.value.url.trim() ? inspected.value.error : '',
+)
+
+const choices = computed(() => {
+  if (!selectable.value) return []
+  if (fetchedChoices.value) return fetchedChoices.value
+  return inspected.value.url === form.value.url.trim() ? inspected.value.choices : []
+})
+
+/**
+ * The filter shows when the list has something to select, or the alias
+ * already keeps part of one.
+ */
+const showFilter = computed(
+  () => selectable.value && (choices.value.length > 0 || form.value.select.length > 0),
+)
+
+/**
+ * Asks the router to read a URL typed here, so what the list can be
+ * narrowed by is known before anything is saved. It reads only the URL
+ * the operator typed, once.
+ */
+async function inspect() {
+  const url = form.value.url.trim()
+  if (!selectable.value || auth.readOnly || !/^https?:\/\/\S+$/i.test(url)) return
+  if (fetchedChoices.value || (inspected.value.url === url && !inspected.value.error)) return
+  inspected.value = { url, choices: [], error: '', busy: true }
+  try {
+    const part = await api.aliases.inspect(url)
+    if (inspected.value.url === url) {
+      inspected.value = { url, choices: part.choices ?? [], error: '', busy: false }
+    }
+  } catch (e) {
+    if (inspected.value.url === url) {
+      inspected.value = { url, choices: [], error: e.message, busy: false }
+    }
+  }
+}
 
 const ENTRY_HINTS = {
   hosts:
@@ -95,8 +158,10 @@ watch(
           countries: a.type === 'geoip' ? [...(a.entries ?? [])] : [],
           url: a.url ?? '',
           refreshHours: a.refreshHours || 24,
+          select: [...(a.select ?? [])],
         }
       : blank()
+    inspect()
   },
   { immediate: true },
 )
@@ -137,6 +202,7 @@ function save() {
   if (fetches.value && Number(form.value.refreshHours) > 0) {
     out.refreshHours = Number(form.value.refreshHours)
   }
+  if (selectable.value && form.value.select.length > 0) out.select = [...form.value.select]
   config.upsertAlias(out, previous)
   open.value = false
 }
@@ -161,7 +227,7 @@ function save() {
           />
         </FormField>
         <FormField id="alias-type" label="Type">
-          <select id="alias-type" v-model="form.type" class="input">
+          <select id="alias-type" v-model="form.type" class="input" @change="inspect">
             <option value="hosts">Hosts and networks</option>
             <option value="ports">Ports</option>
             <option value="geoip">Countries (addresses fetched)</option>
@@ -176,7 +242,7 @@ function save() {
         v-if="!keyed"
         id="alias-url"
         label="Fetch from"
-        hint="A published list, one entry per line, cached here and refetched on a schedule."
+        hint="A published list, plain text or JSON, cached here and refetched on a schedule."
       >
         <input
           id="alias-url"
@@ -184,7 +250,26 @@ function save() {
           class="input font-mono"
           placeholder="https://www.spamhaus.org/drop/drop.txt"
           spellcheck="false"
+          @change="inspect"
         />
+        <p
+          v-if="inspecting"
+          class="flex items-center gap-2 text-sm text-ink-muted"
+          aria-busy="true"
+        >
+          <LoaderCircle class="size-4 animate-spin" aria-hidden="true" />Reading the list…
+        </p>
+        <p v-else-if="inspectError" class="text-sm text-bad">
+          Could not read the list: {{ inspectError }}
+        </p>
+      </FormField>
+      <FormField
+        v-if="showFilter"
+        id="alias-select"
+        label="Keep only"
+        hint="Nothing ticked keeps every address. Ticks in two groups keep only what is in both."
+      >
+        <ChoicePicker v-model="form.select" :choices="choices" />
       </FormField>
       <FormField
         v-if="fetches"

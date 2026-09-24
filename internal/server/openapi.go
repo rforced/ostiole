@@ -184,6 +184,7 @@ var routeDocs = map[string]routeDoc{
 
 	"GET /api/v1/aliases/feeds":           {summary: "When each fetched alias was last updated, and what went wrong if it did.", role: auth.RoleViewer},
 	"POST /api/v1/aliases/feeds/refresh":  {summary: "Fetch every address list, country list and AS list now.", role: auth.RoleOperator},
+	"POST /api/v1/aliases/inspect":        {summary: "Read a list before an alias names it: how many addresses it holds and what it can be narrowed by.", role: auth.RoleOperator},
 	"POST /api/v1/aliases/{name}/refresh": {summary: "Fetch one alias now.", role: auth.RoleOperator},
 
 	"GET /api/v1/blocking":                       {summary: "What DNS blocking is doing: the lists, how many names they hold, and when they were last fetched.", role: auth.RoleViewer},

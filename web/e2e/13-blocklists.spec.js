@@ -6,20 +6,47 @@ import { applyAndConfirm, login, shot, sidebar } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
-// A local stand-in for a published blocklist, so the test never reaches
-// out to the internet.
+// A local stand-in for a published blocklist and for a cloud's address
+// ranges in JSON, shaped like Oracle's, so the test never reaches out to
+// the internet.
 let lists
 let listURL
+let rangesURL
 let served = 0
+
+const ranges = {
+  last_updated_timestamp: '2026-08-25T08:06:24.590745',
+  regions: [
+    {
+      region: 'us-ashburn-1',
+      cidrs: [{ cidr: '192.0.2.0/24', tags: ['OCI'] }],
+      ipv6_cidrs: [{ cidr: '2001:db8:a::/48', tags: ['OCI'] }],
+    },
+    {
+      region: 'eu-frankfurt-1',
+      cidrs: [
+        { cidr: '198.51.100.0/24', tags: ['OCI'] },
+        { cidr: '203.0.113.0/24', tags: ['OSN'] },
+      ],
+      ipv6_cidrs: [],
+    },
+  ],
+}
 
 test.beforeAll(async () => {
   lists = createServer((req, res) => {
     served++
+    if (req.url === '/public_ip_ranges.json') {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(ranges, null, 4))
+      return
+    }
     res.writeHead(200, { 'Content-Type': 'text/plain' })
     res.end('# a list\n192.0.2.0/24 ; note\n198.51.100.7\n2001:db8:dead::/48\n')
   })
   await new Promise((resolve) => lists.listen(0, '127.0.0.1', resolve))
   listURL = `http://127.0.0.1:${lists.address().port}/drop.txt`
+  rangesURL = `http://127.0.0.1:${lists.address().port}/public_ip_ranges.json`
 })
 
 test.afterAll(() => lists?.close())
@@ -73,6 +100,33 @@ test('a blocklist alias fetches, lands in the ruleset, and refreshes', async ({ 
   await expect(listed).toContainText('3 fetched')
   expect(served).toBeGreaterThan(0)
   await page.screenshot({ path: shot('99-blocklist-fetched'), fullPage: true })
+})
+
+// The router reads a JSON list as soon as its URL is typed, offers what it
+// can be narrowed by, and keeps only what was ticked.
+test('a JSON list is narrowed to one region', async ({ page }) => {
+  await login(page)
+  await page.goto('/firewall')
+  await sidebar(page, 'Aliases')
+
+  await page.getByRole('button', { name: 'Add alias' }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Name', { exact: true }).fill('cloud')
+  await expect(dialog.getByText('Keep only')).toHaveCount(0)
+  await dialog.getByLabel('Fetch from').fill(rangesURL)
+  await dialog.getByLabel('Fetch from').blur()
+  await dialog.getByRole('checkbox', { name: 'us-ashburn-1' }).check()
+  await expect(dialog).toContainText('1 ticked: region=us-ashburn-1')
+  await page.screenshot({ path: shot('99-json-list'), fullPage: true })
+  await dialog.getByRole('button', { name: 'Save to draft' }).click()
+
+  const row = page.getByRole('row').filter({ hasText: 'cloud' })
+  await expect(row).toContainText('Keeps only region=us-ashburn-1')
+  await applyAndConfirm(page)
+
+  // One prefix of each family from that region, of the four in the list.
+  await row.getByRole('button', { name: 'Refresh' }).click()
+  await expect(row).toContainText('2 fetched')
 })
 
 test('a country alias is picked by name, and a preset picks a whole bloc', async ({ page }) => {

@@ -13,8 +13,8 @@ from a single configuration.
 
 **Status:** It works. Expect bugs, and expect the config format to change between releases.
 
-- **Firewall** — zones, rules with aliases (addresses, ports, URL feeds, countries, AS numbers) and
-  schedules, NAT, rate limits, a live log.
+- **Firewall** — zones, rules with aliases (addresses, ports, URL feeds in text or JSON, countries,
+  AS numbers) and schedules, NAT, rate limits, a live log.
 - **Interfaces** — physical, VLAN, bridge, bond, PPPoE, WireGuard. Static or DHCP, IPv4 and IPv6.
 - **Routing** — static routes, multi-WAN with gateway monitoring, policy routing per rule.
 - **Services** — DHCP and DNS through dnsmasq and unbound, DNS block lists, UPnP and NAT-PMP.

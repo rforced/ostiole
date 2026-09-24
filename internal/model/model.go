@@ -1205,6 +1205,12 @@ type Alias struct {
 	// RefreshHours is how often to fetch; zero means once a day. Nothing
 	// is fetched more than once an hour.
 	RefreshHours int `json:"refreshHours,omitempty"`
+	// Select keeps part of a JSON list. "region=us-ashburn-1" keeps the
+	// addresses inside an object whose region is us-ashburn-1, and a bare
+	// name such as "hooks" those listed under that key. Conditions on the
+	// same field are alternatives; different fields must all hold. Case is
+	// ignored, and * in a value matches any run of characters.
+	Select []string `json:"select,omitempty"`
 }
 
 // Keyed reports whether the written entries are lookup keys, country
@@ -1214,6 +1220,10 @@ func (a Alias) Keyed() bool { return a.Type == AliasGeoIP || a.Type == AliasASN 
 
 // Fetched reports whether this alias takes its contents from elsewhere.
 func (a Alias) Fetched() bool { return a.URL != "" || a.Keyed() }
+
+// Selectable reports whether Select applies: a hosts alias fetched from a
+// URL.
+func (a Alias) Selectable() bool { return a.Type == AliasHosts && a.URL != "" }
 
 // Rule is one firewall rule, evaluated within its zone in order.
 type Rule struct {

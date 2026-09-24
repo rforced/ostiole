@@ -64,6 +64,11 @@ func (r *Refresher) Run(ctx context.Context) {
 	}
 }
 
+// Inspect reads a list the configuration does not name yet.
+func (r *Refresher) Inspect(ctx context.Context, url string) (Part, error) {
+	return r.Fetcher.Inspect(ctx, url)
+}
+
 // Tick refreshes whatever is due. With force, everything is fetched
 // whether it is due or not, which is what the "refresh now" button does.
 func (r *Refresher) Tick(ctx context.Context, force bool) {

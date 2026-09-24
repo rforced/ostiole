@@ -1,0 +1,69 @@
+{
+    "last_updated_timestamp": "2026-08-25T08:06:24.590745",
+    "regions": [
+        {
+            "region": "us-ashburn-1",
+            "cidrs": [
+                {
+                    "cidr": "129.80.0.0/16",
+                    "tags": [
+                        "OCI"
+                    ]
+                },
+                {
+                    "cidr": "64.181.152.0/21",
+                    "tags": [
+                        "OSN"
+                    ]
+                },
+                {
+                    "cidr": "134.70.24.0/21",
+                    "tags": [
+                        "OSN",
+                        "OBJECT_STORAGE"
+                    ]
+                }
+            ],
+            "ipv6_cidrs": [
+                {
+                    "cidr": "2603:c020:4000::/35",
+                    "tags": [
+                        "OCI"
+                    ]
+                }
+            ]
+        },
+        {
+            "region": "eu-frankfurt-1",
+            "cidrs": [
+                {
+                    "cidr": "79.76.96.0/19",
+                    "tags": [
+                        "OCI"
+                    ]
+                },
+                {
+                    "cidr": "92.4.240.0/20",
+                    "tags": [
+                        "OSN"
+                    ]
+                },
+                {
+                    "cidr": "134.70.40.0/21",
+                    "tags": [
+                        "OSN",
+                        "OBJECT_STORAGE"
+                    ]
+                }
+            ],
+            "ipv6_cidrs": [
+                {
+                    "cidr": "2603:c020:8000::/35",
+                    "tags": [
+                        "OCI"
+                    ]
+                }
+            ]
+        }
+    ]
+}

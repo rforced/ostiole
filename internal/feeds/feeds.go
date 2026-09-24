@@ -77,6 +77,9 @@ type Part struct {
 	// Holder is who that AS belongs to, when the names lookup answered.
 	Holder  string `json:"holder,omitempty"`
 	Entries int    `json:"entries"`
+	// Choices is what a JSON list can be narrowed by, for an alias that
+	// can select.
+	Choices []Choice `json:"choices,omitempty"`
 }
 
 // cached is the on-disk form. It is a cache: a file written by an older
@@ -385,7 +388,7 @@ func (f *Fetcher) Fetch(ctx context.Context, cfg *model.Config, a model.Alias) (
 	seen := map[string]bool{}
 	var out []string
 	for i := range parts {
-		entries, err := f.one(ctx, parts[i].Source, a.Type)
+		entries, choices, err := f.one(ctx, parts[i].Source, a)
 		if err != nil {
 			return nil, parts, fmt.Errorf("%s: %w", parts[i].Source, err)
 		}
@@ -393,6 +396,9 @@ func (f *Fetcher) Fetch(ctx context.Context, cfg *model.Config, a model.Alias) (
 		// first: the question is how big this country is, not how much of
 		// it arrived here first.
 		parts[i].Entries = len(entries)
+		if a.Selectable() {
+			parts[i].Choices = choices
+		}
 		for _, e := range entries {
 			if seen[e] {
 				continue
@@ -411,17 +417,45 @@ func (f *Fetcher) Fetch(ctx context.Context, cfg *model.Config, a model.Alias) (
 	return out, parts, nil
 }
 
-func (f *Fetcher) one(ctx context.Context, url string, typ model.AliasType) ([]string, error) {
+func (f *Fetcher) one(ctx context.Context, url string, a model.Alias) ([]string, []Choice, error) {
 	raw, err := f.get(ctx, url)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	// The default AS source answers in JSON; a mirror serving a plain
-	// list of prefixes reads like any other list.
-	if typ == model.AliasASN && bytes.HasPrefix(bytes.TrimSpace(raw), []byte("{")) {
-		return parseAnnounced(raw)
+	return read(raw, a)
+}
+
+// Inspect reads a list without keeping it: how many addresses it holds
+// and what it can be narrowed by. The alias dialog asks as soon as a URL
+// is typed, so the selection can be offered before anything is saved.
+func (f *Fetcher) Inspect(ctx context.Context, url string) (Part, error) {
+	raw, err := f.get(ctx, url)
+	if err != nil {
+		return Part{}, err
 	}
-	return Parse(string(raw), typ)
+	entries, choices, err := read(raw, model.Alias{Type: model.AliasHosts, URL: url})
+	if err != nil {
+		return Part{}, err
+	}
+	return Part{Source: url, Entries: len(entries), Choices: choices}, nil
+}
+
+// read picks the parser by what came back. The default AS source answers
+// in JSON of its own, and a mirror serving a plain list of prefixes reads
+// like any other list. Any other JSON is searched for addresses.
+func read(raw []byte, a model.Alias) ([]string, []Choice, error) {
+	raw = bytes.TrimPrefix(raw, bom)
+	switch {
+	case a.Type == model.AliasASN && bytes.HasPrefix(bytes.TrimSpace(raw), []byte("{")):
+		entries, err := parseAnnounced(raw)
+		return entries, nil, err
+	case a.Type.HoldsAddresses() && isJSON(raw):
+		return ParseJSON(raw, a.Select)
+	case len(a.Select) > 0:
+		return nil, nil, errors.New("this list is plain text, so there is nothing in it to select")
+	}
+	entries, err := Parse(string(raw), a.Type)
+	return entries, nil, err
 }
 
 // get downloads one URL, bounded by the timeout and MaxBytes.

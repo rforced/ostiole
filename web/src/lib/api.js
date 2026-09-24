@@ -285,6 +285,8 @@ export const api = {
     feeds: () => get('/aliases/feeds'),
     refresh: (name) => post(`/aliases/${encodeURIComponent(name)}/refresh`),
     refreshAll: () => post('/aliases/feeds/refresh'),
+    /** Reads a list no alias names yet: its size and what it can be narrowed by. */
+    inspect: (url) => post('/aliases/inspect', { url }),
   },
   blocking: {
     status: () => get('/blocking'),
