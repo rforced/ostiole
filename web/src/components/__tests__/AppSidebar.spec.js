@@ -39,6 +39,19 @@ describe('AppSidebar', () => {
     expect(pages(wrapper, 'Firewall').isVisible()).toBe(false)
   })
 
+  // aria-current is what styles the current row, so a closed section keeps it.
+  it('marks the section and the page you are on', async () => {
+    const { wrapper } = await sidebar('/services/dns')
+    expect(section(wrapper, 'Services').attributes('aria-current')).toBe('true')
+    expect(section(wrapper, 'Firewall').attributes('aria-current')).toBeUndefined()
+    const dns = pages(wrapper, 'Services')
+      .findAll('a')
+      .find((a) => a.text() === 'DNS')
+    expect(dns.attributes('aria-current')).toBe('page')
+    await section(wrapper, 'Services').trigger('click')
+    expect(section(wrapper, 'Services').attributes('aria-current')).toBe('true')
+  })
+
   // A section is a list to pick from, not a page, and one open at a time
   // keeps the column short.
   it('opens one section at a time and goes nowhere', async () => {

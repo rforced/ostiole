@@ -81,7 +81,18 @@ test('the drawer opens, takes you to a page, and closes', async ({ page }) => {
   await nav.getByRole('link', { name: 'Rules', exact: true }).click()
   await expect(page).toHaveURL(/\/firewall\/rules$/)
   await expect(nav).toHaveCount(0)
-  await drawer(page, 'NAT')
+
+  // The section and the page you are on stand out from their neighbours.
+  await page.getByRole('button', { name: 'Open navigation' }).click()
+  const style = (el, prop) => el.evaluate((e, p) => getComputedStyle(e)[p], prop)
+  const firewall = nav.getByRole('button', { name: 'Firewall', exact: true })
+  const services = nav.getByRole('button', { name: 'Services', exact: true })
+  expect(await style(firewall, 'color')).not.toBe(await style(services, 'color'))
+  const rules = nav.getByRole('link', { name: 'Rules', exact: true })
+  const nat = nav.getByRole('link', { name: 'NAT', exact: true })
+  await expect(rules).toHaveAttribute('aria-current', 'page')
+  expect(await style(rules, 'borderLeftColor')).not.toBe(await style(nat, 'borderLeftColor'))
+  await nat.click()
   await expect(page.getByRole('heading', { name: 'NAT', level: 1 })).toBeVisible()
 })
 
