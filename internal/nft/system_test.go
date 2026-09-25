@@ -212,7 +212,7 @@ func TestSystemRulesDNSEnforcement(t *testing.T) {
 }
 
 // Time is served on every enabled interface outside an external zone,
-// and the row says where, so the rules page can link to the Time page.
+// and the row says where, so the rules page can link to the NTP page.
 func TestSystemRulesNTP(t *testing.T) {
 	t.Parallel()
 	cfg := loadConfig(t, "testdata/ntp.json")

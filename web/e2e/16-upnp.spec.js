@@ -4,15 +4,13 @@ import { applyAndConfirm, confirmDialog, login, shot, sidebar } from './helpers.
 
 test.describe.configure({ mode: 'serial' })
 
-test('switch on port mapping, write an access list, and apply', async ({ page }) => {
+test('switch on UPnP, write an access list, and apply', async ({ page }) => {
   await login(page)
   await page.goto('/services/upnp')
-  await expect(
-    page.getByRole('heading', { name: 'Port mapping', exact: true, level: 1 }),
-  ).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'UPnP', exact: true, level: 1 })).toBeVisible()
 
   // Off is the default, and nothing about it is filled in.
-  const enabled = page.getByLabel('Port mapping enabled')
+  const enabled = page.getByLabel('UPnP enabled')
   await expect(enabled).not.toBeChecked()
   await enabled.check()
 
@@ -81,9 +79,7 @@ test('the page is honest about the daemon not being installed', async ({ page })
   await page.goto('/services/upnp')
   // The e2e server is not root and has no miniupnpd, so the warning stands
   // rather than the service claiming to run.
-  await expect(page.getByRole('note')).toContainText(
-    'Port mapping is not set up on this router yet',
-  )
+  await expect(page.getByRole('note')).toContainText('UPnP is not set up on this router yet')
 
   // Mappings are read out of the ruleset, not from a lease file: the stub
   // answers with one the daemon would have written.

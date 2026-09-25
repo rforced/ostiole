@@ -448,7 +448,7 @@ describe('config store traffic shaping', () => {
     expect(config.sectionFor('system.management.webPort')).toBe('/system/general')
   })
 
-  it('files time changes under the Time page, and drops the block when it empties', () => {
+  it('files NTP changes under the NTP page, and drops the block when it empties', () => {
     const config = useConfigStore()
     config.replaceDraft(draft())
     expect(config.sectionFor('services.ntp.servers[0].host')).toBe('/services/time')

@@ -93,7 +93,7 @@ export const NAV = [
           { value: 'live', label: 'Live' },
         ],
       },
-      { path: 'log', label: 'Log', view: () => import('@/views/firewall/LogPage.vue') },
+      { path: 'log', label: 'Logs', view: () => import('@/views/firewall/LogPage.vue') },
     ],
   },
   {
@@ -127,25 +127,15 @@ export const NAV = [
         ],
       },
       {
-        path: 'upnp',
-        ownHeader: true,
-        label: 'Port mapping',
-        view: () => import('@/views/services/UpnpPage.vue'),
-        tabs: [
-          { value: 'service', label: 'Service' },
-          { value: 'mappings', label: 'Mappings' },
-        ],
-      },
-      {
         path: 'time',
         ownHeader: true,
-        label: 'Time',
+        label: 'NTP',
         view: () => import('@/views/services/TimePage.vue'),
       },
       {
         path: 'proxy',
         ownHeader: true,
-        label: 'Proxy',
+        label: 'Reverse proxy',
         view: () => import('@/views/services/ProxyPage.vue'),
         tabs: [
           { value: 'service', label: 'Service' },
@@ -154,6 +144,16 @@ export const NAV = [
           { value: 'waf', label: 'WAF' },
           { value: 'routes', label: 'Routes' },
           { value: 'events', label: 'Events' },
+        ],
+      },
+      {
+        path: 'upnp',
+        ownHeader: true,
+        label: 'UPnP',
+        view: () => import('@/views/services/UpnpPage.vue'),
+        tabs: [
+          { value: 'service', label: 'Service' },
+          { value: 'mappings', label: 'Mappings' },
         ],
       },
     ],
@@ -221,7 +221,11 @@ export const NAV = [
         label: 'Accounts',
         view: () => import('@/views/system/AccountsPage.vue'),
       },
-      { path: 'host', label: 'Host', view: () => import('@/views/system/HostPage.vue') },
+      {
+        path: 'host',
+        label: 'Operating system',
+        view: () => import('@/views/system/HostPage.vue'),
+      },
       { path: 'updates', label: 'Updates', view: () => import('@/views/system/UpdatesPage.vue') },
       {
         path: 'backup',
@@ -235,7 +239,7 @@ export const NAV = [
         view: () => import('@/views/system/NotificationsPage.vue'),
         needsConfig: true,
       },
-      { path: 'crons', label: 'Crons', view: () => import('@/views/system/CronsPage.vue') },
+      { path: 'crons', label: 'Cron jobs', view: () => import('@/views/system/CronsPage.vue') },
       { path: 'ruleset', label: 'Ruleset', view: () => import('@/views/system/RulesetPage.vue') },
     ],
   },

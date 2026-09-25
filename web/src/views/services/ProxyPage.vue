@@ -33,7 +33,7 @@ const { tabs, tab } = usePageTabs()
         :model-value="proxy.enabled === true"
         variant="switch"
         label="Enabled"
-        aria-label="Proxy enabled"
+        aria-label="Reverse proxy enabled"
         :disabled="auth.readOnly"
         @update:model-value="config.setProxy({ enabled: $event })"
       />

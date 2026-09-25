@@ -275,7 +275,7 @@ test('choose how this router patches itself, and see why some of it is refused',
   // All four update crons are on the page that says what the router does
   // by itself, and the one the manual mode turned off says so.
   await page.goto('/system/crons')
-  const system = page.getByRole('region', { name: "Ostiole's crons" })
+  const system = page.getByRole('region', { name: "Ostiole's cron jobs" })
   const row = (text) => system.getByRole('row').filter({ hasText: text })
   await expect(row('Check for system updates')).toContainText('0 4 * * *')
   await expect(row('Install system updates')).toContainText('0 4 * * 0')

@@ -16,7 +16,7 @@ func AdminChanges(old, next *Config) []string {
 	}
 	var out []string
 	if !sameJSON(adminCrons(old), adminCrons(next)) {
-		out = append(out, "crons that run a command or back up accounts")
+		out = append(out, "cron jobs that run a command or back up accounts")
 	}
 	if !sameJSON(old.Updates, next.Updates) {
 		out = append(out, "updates")

@@ -59,8 +59,8 @@ func BlockBluetooth(ctx context.Context, run Runner, path string) error {
 	return nil
 }
 
-// BluetoothState is what the Host page reports: blocked, loaded, or a
-// router that never had it.
+// BluetoothState is what the Operating system page reports: blocked,
+// loaded, or a router that never had it.
 func BluetoothState() string {
 	_, blocked := os.Stat(BluetoothConfFile)
 	_, loaded := os.Stat("/sys/module/bluetooth")

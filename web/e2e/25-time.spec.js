@@ -8,8 +8,8 @@ const DEFAULTS = ['nts.netnod.se', 'nts.time.nl', 'a.st1.ntp.br', 'virginia.time
 
 test('the defaults are listed, and the page says the service is not set up', async ({ page }) => {
   await login(page)
-  await sidebar(page, 'Services', 'Time')
-  await expect(page.getByRole('heading', { name: 'Time', exact: true, level: 1 })).toBeVisible()
+  await sidebar(page, 'Services', 'NTP')
+  await expect(page.getByRole('heading', { name: 'NTP', exact: true, level: 1 })).toBeVisible()
 
   // The e2e server is not root, so there is no unit of ours: the
   // distribution keeps the clock, and the page says so rather than
@@ -29,7 +29,7 @@ test('the defaults are listed, and the page says the service is not set up', asy
 
 test('add a server beside the defaults, narrow serving, and apply', async ({ page }) => {
   await login(page)
-  await sidebar(page, 'Services', 'Time')
+  await sidebar(page, 'Services', 'NTP')
 
   await page.getByRole('button', { name: 'Add server' }).click()
   const dialog = page.getByRole('dialog')
@@ -66,7 +66,7 @@ test('add a server beside the defaults, narrow serving, and apply', async ({ pag
 
 test('back to the defaults, served everywhere inside', async ({ page }) => {
   await login(page)
-  await sidebar(page, 'Services', 'Time')
+  await sidebar(page, 'Services', 'NTP')
   await page
     .getByRole('row')
     .filter({ hasText: '192.168.50.5' })

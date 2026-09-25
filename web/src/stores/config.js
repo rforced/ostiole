@@ -969,7 +969,7 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function removeCron(id) {
-    undoable(`Deleted cron ${id}.`, () => {
+    undoable(`Deleted cron job ${id}.`, () => {
       draft.value.crons = crons.value.filter((c) => c.id !== id)
     })
   }

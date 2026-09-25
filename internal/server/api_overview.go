@@ -543,7 +543,7 @@ func (a *api) serviceStates(ctx context.Context, cfg *model.Config) []ServiceSta
 	}
 
 	upnp := ServiceState{
-		Name:  "Port mapping",
+		Name:  "UPnP",
 		Unit:  services.UPnPUnit,
 		State: stateUnknown,
 		Want:  cfg != nil && nft.UPnPEnabled(cfg),
@@ -609,7 +609,7 @@ func (a *api) serviceStates(ctx context.Context, cfg *model.Config) []ServiceSta
 	// The time service is always wanted once its unit is there. Until
 	// then the distribution keeps the clock, which is no failure, so the
 	// tile says what to do without a warning.
-	clock := ServiceState{Name: "Time", Unit: services.NTPUnit, State: stateUnknown}
+	clock := ServiceState{Name: "NTP", Unit: services.NTPUnit, State: stateUnknown}
 	if a.ntp != nil {
 		switch {
 		case !a.ntp.Installed(ctx):

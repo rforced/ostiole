@@ -62,7 +62,7 @@ describe('CronsPage', () => {
     expect(button(hashes, 'Run now').attributes('disabled')).toBeUndefined()
     expect(button(script, 'Run now').attributes('disabled')).toBeDefined()
     expect(button(script, 'Edit').attributes('disabled')).toBeDefined()
-    expect(w.text()).toContain('Only an admin can change crons that run a command')
+    expect(w.text()).toContain('Only an admin can change cron jobs that run a command')
   })
 
   it('offers an admin every cron', async () => {

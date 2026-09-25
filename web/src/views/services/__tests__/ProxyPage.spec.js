@@ -302,7 +302,7 @@ describe('ProxyPage', () => {
     expect(wrapper.find('#proxy-https').exists()).toBe(true)
     expect(store.dirty).toBe(false)
 
-    const on = wrapper.get('input[aria-label="Proxy enabled"]')
+    const on = wrapper.get('input[aria-label="Reverse proxy enabled"]')
     await on.setValue(true)
     expect(store.draft.services.proxy).toEqual({ enabled: true })
     await on.setValue(false)
@@ -330,7 +330,7 @@ describe('ProxyPage', () => {
   // keeps the block and what is in it.
   it('switches a proxy off without losing it', async () => {
     const { wrapper, store } = page({ draft: withProxy(proxy()), saved: withProxy(proxy()) })
-    const on = wrapper.get('input[aria-label="Proxy enabled"]')
+    const on = wrapper.get('input[aria-label="Reverse proxy enabled"]')
     await on.setValue(false)
     expect(store.draft.services.proxy).toEqual({ ...proxy(), enabled: false })
     await on.setValue(true)

@@ -32,7 +32,7 @@ const upnpWanted = computed(() => {
   <div v-if="status && config.loaded" class="space-y-3 empty:hidden">
     <template v-if="service === 'upnp'">
       <AppNotice v-if="!status.upnpSetUp && upnpWanted">
-        Port mapping is not set up on this router yet. Run
+        UPnP is not set up on this router yet. Run
         <code class="font-mono">ostiole repair</code> as root once. Until then, applying this fails.
       </AppNotice>
     </template>

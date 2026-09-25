@@ -7,7 +7,9 @@ test.describe.configure({ mode: 'serial' })
 test('the page is honest about the sidecar not being installed', async ({ page }) => {
   await login(page)
   await page.goto('/services/proxy')
-  await expect(page.getByRole('heading', { name: 'Proxy', exact: true, level: 1 })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Reverse proxy', exact: true, level: 1 }),
+  ).toBeVisible()
   // The e2e server is not root and has no ostiole-proxy, so the strip says
   // so rather than the page claiming the proxy runs.
   await expect(page.getByRole('note')).toContainText('Not on this router')
@@ -19,7 +21,7 @@ test('publish a site through a pool and apply it', async ({ page }) => {
   await page.goto('/services/proxy')
 
   // Ports of its own, so nothing else in the suite has to move.
-  await page.getByLabel('Proxy enabled').check()
+  await page.getByLabel('Reverse proxy enabled').check()
   // Nothing reaches the proxy until a zone is ticked, and validation says so.
   await page.getByRole('checkbox', { name: 'wan', exact: true }).check()
   await page.getByRole('spinbutton', { name: 'HTTP port' }).fill('8080')

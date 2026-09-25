@@ -125,7 +125,7 @@ onBeforeUnmount(() => source?.close())
 <template>
   <div class="space-y-5">
     <SectionCard
-      title="Log"
+      title="Logs"
       intro="Rules with logging on, and the drops of a zone that logs them. Kept in memory, so a
         restart empties it."
       flush

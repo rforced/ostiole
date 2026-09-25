@@ -29,7 +29,7 @@ const { tabs, tab } = usePageTabs()
         v-model="upnp.enabled"
         variant="switch"
         label="Enabled"
-        aria-label="Port mapping enabled"
+        aria-label="UPnP enabled"
         :disabled="auth.readOnly"
       />
     </PageHeader>

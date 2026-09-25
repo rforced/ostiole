@@ -106,7 +106,7 @@ function save() {
 <template>
   <AppDialog
     v-model:open="open"
-    :title="cron ? `Cron ${cron.description || cron.id}` : 'Add cron'"
+    :title="cron ? `Cron job ${cron.description || cron.id}` : 'Add cron job'"
     description="Runs on this router, as root, on the schedule you give."
   >
     <form class="space-y-4" @submit.prevent="save">

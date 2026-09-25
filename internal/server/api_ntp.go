@@ -168,7 +168,7 @@ func (a *api) clockWarning(ctx context.Context) (Warning, bool) {
 	}
 	detail := "No time server answers. Check that the router reaches the internet and that udp/123 is not blocked on the way out."
 	if failing := a.failingNTS(ctx); failing != "" {
-		detail = "No server gave a signed answer, " + failing + ". Where tcp/4460 or large UDP packets are blocked on the way out NTS cannot work; list servers without it on the Time page."
+		detail = "No server gave a signed answer, " + failing + ". Where tcp/4460 or large UDP packets are blocked on the way out NTS cannot work; list servers without it on the NTP page."
 	}
 	return Warning{
 		Kind: "clock-unsynchronised", Level: "warn",

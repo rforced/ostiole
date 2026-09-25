@@ -205,7 +205,7 @@ func TestNTPStatusDoesNotAskAStoppedService(t *testing.T) {
 func timeTile(t *testing.T, srv *httptest.Server) *ServiceState {
 	t.Helper()
 	for _, svc := range getOverview(t, srv).Services {
-		if svc.Name == "Time" {
+		if svc.Name == "NTP" {
 			return &svc
 		}
 	}
@@ -233,7 +233,7 @@ func TestOverviewTimeTile(t *testing.T) {
 
 	// Stopped is a failure; declined in a container is not.
 	unit.set(func(u *ntpUnit) { u.active = false })
-	if w := warning(getOverview(t, srv), "service-down"); w == nil || !strings.Contains(w.Title, "Time") {
+	if w := warning(getOverview(t, srv), "service-down"); w == nil || !strings.Contains(w.Title, "NTP") {
 		t.Errorf("a stopped time service did not warn: %+v", getOverview(t, srv).Warnings)
 	}
 	unit.set(func(u *ntpUnit) { u.skipped = true })

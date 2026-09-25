@@ -99,9 +99,9 @@ function describe(c) {
   <div class="space-y-5">
     <template v-if="config.draft">
       <SectionCard
-        title="Your crons"
+        title="Your cron jobs"
         :count="rows.length"
-        intro="Run now uses the saved configuration, so apply a new cron before trying it."
+        intro="Run now uses the saved configuration, so apply a new cron job before trying it."
         flush
       >
         <template #actions>
@@ -111,7 +111,7 @@ function describe(c) {
             @click="load.run"
           />
           <button v-if="!auth.readOnly" type="button" class="btn-secondary" @click="add">
-            <Plus class="size-4" aria-hidden="true" /> Add cron
+            <Plus class="size-4" aria-hidden="true" /> Add cron job
           </button>
         </template>
         <div v-if="error" class="card-strip">
@@ -120,7 +120,7 @@ function describe(c) {
         <table class="table table-stack">
           <thead>
             <tr>
-              <th>Cron</th>
+              <th>Cron job</th>
               <th>Schedule</th>
               <th>Next</th>
               <th>Last run</th>
@@ -129,7 +129,7 @@ function describe(c) {
           </thead>
           <tbody>
             <tr v-if="!rows.length">
-              <td colspan="5" class="text-ink-muted">No crons.</td>
+              <td colspan="5" class="text-ink-muted">No cron jobs.</td>
             </tr>
             <tr
               v-for="c in rows"
@@ -217,12 +217,12 @@ function describe(c) {
           v-if="auth.isOperator && rows.some(locked)"
           class="card-strip border-t border-line text-ink-muted"
         >
-          Only an admin can change crons that run a command or back up accounts.
+          Only an admin can change cron jobs that run a command or back up accounts.
         </div>
       </SectionCard>
     </template>
 
-    <SectionCard title="Ostiole's crons" :count="system.length" flush>
+    <SectionCard title="Ostiole's cron jobs" :count="system.length" flush>
       <table class="table table-stack">
         <thead>
           <tr>

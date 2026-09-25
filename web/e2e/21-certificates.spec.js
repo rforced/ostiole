@@ -66,7 +66,7 @@ test('order a certificate over dns-01', async ({ page }) => {
   await page.goto('/system/crons')
   await expect(
     page
-      .getByRole('region', { name: "Ostiole's crons" })
+      .getByRole('region', { name: "Ostiole's cron jobs" })
       .getByRole('row')
       .filter({ hasText: 'Renew and issue certificates' }),
   ).toContainText(/\d+ \* \* \* \*/)

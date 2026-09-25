@@ -94,8 +94,8 @@ test('the remote backup settings become a system cron', async ({ page }) => {
   await page.screenshot({ path: shot('82-remote-backup'), fullPage: true })
   await applyAndConfirm(page)
 
-  await sidebar(page, 'Crons')
-  const system = page.getByRole('region', { name: "Ostiole's crons" })
+  await sidebar(page, 'Cron jobs')
+  const system = page.getByRole('region', { name: "Ostiole's cron jobs" })
   const row = system.getByRole('row').filter({ hasText: 'Remote backup' })
   await expect(row).toContainText('0 3 * * *')
 
