@@ -2,13 +2,13 @@ package gateway
 
 import (
 	"net"
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/vishvananda/netlink"
 
 	"github.com/rforced/ostiole/internal/model"
+	"github.com/rforced/ostiole/internal/netnstest"
 )
 
 func detectConfig(gateways ...model.Gateway) *model.Config {
@@ -108,22 +108,11 @@ func TestRouteProtocolNames(t *testing.T) {
 // Detect reads the real routing table, so it runs in a namespace where a
 // default route can be added without touching the host.
 func TestDetectReadsTheKernel(t *testing.T) {
-	if os.Getenv("OSTIOLE_DETECT_NETNS") == "" {
-		runInNamespace(t, "OSTIOLE_DETECT_NETNS", "TestDetectReadsTheKernel")
+	if !netnstest.Enter(t) {
 		return
 	}
 
-	link := &netlink.Dummy{Name: "wan0"}
-	if err := netlink.LinkAdd(link); err != nil {
-		t.Fatalf("add link: %v", err)
-	}
-	if err := netlink.LinkSetUp(link); err != nil {
-		t.Fatalf("up: %v", err)
-	}
-	addr, _ := netlink.ParseAddr("203.0.113.2/24")
-	if err := netlink.AddrAdd(link, addr); err != nil {
-		t.Fatalf("address: %v", err)
-	}
+	link := netnstest.Dummy(t, "wan0", "203.0.113.2/24")
 	if err := netlink.RouteAdd(&netlink.Route{
 		LinkIndex: link.Attrs().Index,
 		Gw:        net.ParseIP("203.0.113.1"),

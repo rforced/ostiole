@@ -3,57 +3,14 @@ package policy
 import (
 	"log/slog"
 	"net"
-	"os"
-	"os/exec"
-	"strings"
 	"testing"
 
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
 	"github.com/rforced/ostiole/internal/model"
+	"github.com/rforced/ostiole/internal/netnstest"
 )
-
-// runInNamespace re-runs the calling test inside a fresh unprivileged user
-// and network namespace, where it can change routes without being root on
-// the host. It skips where the sandbox forbids that, which is what
-// GitHub's runners do.
-func runInNamespace(t *testing.T, env, name string) {
-	t.Helper()
-	if _, err := exec.LookPath("unshare"); err != nil {
-		t.Skip("unshare not installed")
-	}
-	cmd := exec.Command("unshare", "-Urn", os.Args[0], "-test.run", "^"+name+"$", "-test.v")
-	cmd.Env = append(os.Environ(), env+"=1")
-	out, err := cmd.CombinedOutput()
-	if err == nil {
-		return
-	}
-	if strings.Contains(string(out), "uid_map") || strings.Contains(string(out), "Operation not permitted") {
-		t.Skipf("unprivileged namespaces are not allowed here: %s", strings.TrimSpace(string(out)))
-	}
-	t.Fatalf("inside namespace: %v\n%s", err, out)
-}
-
-// dummyLink brings up a dummy interface carrying addr, so routes through
-// it have somewhere to go.
-func dummyLink(t *testing.T, name, addr string) {
-	t.Helper()
-	link := &netlink.Dummy{Name: name}
-	if err := netlink.LinkAdd(link); err != nil {
-		t.Fatalf("add %s: %v", name, err)
-	}
-	if err := netlink.LinkSetUp(link); err != nil {
-		t.Fatalf("bring %s up: %v", name, err)
-	}
-	a, err := netlink.ParseAddr(addr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := netlink.AddrAdd(link, a); err != nil {
-		t.Fatalf("address on %s: %v", name, err)
-	}
-}
 
 func policyRules(t *testing.T) map[int]netlink.Rule {
 	t.Helper()
@@ -85,13 +42,12 @@ func tableRoutes(t *testing.T, table int) []netlink.Route {
 // changes nothing, failover rewrites the table, and a shrinking plan takes
 // the leftovers away.
 func TestSyncInstallsAndReconciles(t *testing.T) {
-	if os.Getenv("OSTIOLE_POLICY_NETNS") == "" {
-		runInNamespace(t, "OSTIOLE_POLICY_NETNS", "TestSyncInstallsAndReconciles")
+	if !netnstest.Enter(t) {
 		return
 	}
 
-	dummyLink(t, "wan0", "203.0.113.2/24")
-	dummyLink(t, "wan1", "198.51.100.2/24")
+	netnstest.Dummy(t, "wan0", "203.0.113.2/24")
+	netnstest.Dummy(t, "wan1", "198.51.100.2/24")
 
 	cfg := &model.Config{
 		Version: model.SchemaVersion,
@@ -202,12 +158,11 @@ func TestSyncInstallsAndReconciles(t *testing.T) {
 // out the ordinary default route, which is what keeps a tunnel from
 // leaking while it is down.
 func TestSyncBlocksWhenEveryMemberIsDown(t *testing.T) {
-	if os.Getenv("OSTIOLE_POLICY_BLOCK_NETNS") == "" {
-		runInNamespace(t, "OSTIOLE_POLICY_BLOCK_NETNS", "TestSyncBlocksWhenEveryMemberIsDown")
+	if !netnstest.Enter(t) {
 		return
 	}
 
-	dummyLink(t, "wan0", "203.0.113.2/24")
+	netnstest.Dummy(t, "wan0", "203.0.113.2/24")
 	cfg := &model.Config{
 		Version:  model.SchemaVersion,
 		Gateways: []model.Gateway{{Name: "vpn", Enabled: true, Interface: "wan0", Address: "203.0.113.1"}},

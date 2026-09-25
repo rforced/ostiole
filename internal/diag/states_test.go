@@ -2,11 +2,12 @@ package diag
 
 import (
 	"net"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/vishvananda/netlink"
+
+	"github.com/rforced/ostiole/internal/netnstest"
 )
 
 func TestAddressMatchesAddressesAndPrefixes(t *testing.T) {
@@ -114,22 +115,11 @@ func TestNeighbourStateNames(t *testing.T) {
 // Reading the real ARP table needs a kernel, so this runs in a namespace
 // where an entry can be created without touching the host.
 func TestNeighboursReadsTheKernel(t *testing.T) {
-	if os.Getenv("OSTIOLE_NEIGH_NETNS") == "" {
-		runInNamespace(t, "OSTIOLE_NEIGH_NETNS", "TestNeighboursReadsTheKernel")
+	if !netnstest.Enter(t) {
 		return
 	}
 
-	link := &netlink.Dummy{Name: "lan0"}
-	if err := netlink.LinkAdd(link); err != nil {
-		t.Fatalf("add link: %v", err)
-	}
-	if err := netlink.LinkSetUp(link); err != nil {
-		t.Fatalf("up: %v", err)
-	}
-	addr, _ := netlink.ParseAddr("192.168.77.1/24")
-	if err := netlink.AddrAdd(link, addr); err != nil {
-		t.Fatalf("address: %v", err)
-	}
+	link := netnstest.Dummy(t, "lan0", "192.168.77.1/24")
 	mac, _ := net.ParseMAC("02:00:00:00:00:01")
 	if err := netlink.NeighAdd(&netlink.Neigh{
 		LinkIndex:    link.Attrs().Index,

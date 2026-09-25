@@ -6,14 +6,13 @@ import (
 	"encoding/binary"
 	"errors"
 	"net"
-	"os"
-	"os/exec"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/vishvananda/netlink"
+
+	"github.com/rforced/ostiole/internal/netnstest"
 )
 
 type fakePinger struct {
@@ -274,8 +273,7 @@ func TestPcapFormat(t *testing.T) {
 // unprivileged network namespace, where this process has the raw socket
 // capability without being root on the host.
 func TestCaptureAndTraceInNamespace(t *testing.T) {
-	if os.Getenv("OSTIOLE_DIAG_NETNS") == "" {
-		runInNamespace(t, "OSTIOLE_DIAG_NETNS", "TestCaptureAndTraceInNamespace")
+	if !netnstest.Enter(t) {
 		return
 	}
 
@@ -328,25 +326,4 @@ func TestCaptureAndTraceInNamespace(t *testing.T) {
 	if got := binary.LittleEndian.Uint32(buf.Bytes()[0:4]); got != pcapMagic {
 		t.Errorf("magic = %x", got)
 	}
-}
-
-// runInNamespace re-runs the calling test inside a fresh unprivileged user
-// and network namespace, where it has the network capabilities without
-// being root. It skips when the sandbox forbids that, which is what
-// GitHub's runners do.
-func runInNamespace(t *testing.T, env, name string) {
-	t.Helper()
-	if _, err := exec.LookPath("unshare"); err != nil {
-		t.Skip("unshare not installed")
-	}
-	cmd := exec.Command("unshare", "-Urn", os.Args[0], "-test.run", "^"+name+"$", "-test.v")
-	cmd.Env = append(os.Environ(), env+"=1")
-	out, err := cmd.CombinedOutput()
-	if err == nil {
-		return
-	}
-	if strings.Contains(string(out), "uid_map") || strings.Contains(string(out), "Operation not permitted") {
-		t.Skipf("unprivileged namespaces are not allowed here: %s", strings.TrimSpace(string(out)))
-	}
-	t.Fatalf("inside namespace: %v\n%s", err, out)
 }

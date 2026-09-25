@@ -4,16 +4,14 @@ import (
 	"context"
 	"errors"
 	"net"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/vishvananda/netlink"
-
 	"github.com/rforced/ostiole/internal/model"
+	"github.com/rforced/ostiole/internal/netnstest"
 )
 
 // namespaced returns an Exec that runs nft inside a fresh unprivileged user
@@ -135,60 +133,12 @@ func TestBootstrapLoadsInKernel(t *testing.T) {
 	}
 }
 
-// runInNamespace re-runs the calling test inside a fresh unprivileged user
-// and network namespace, where it can add links and send packets without
-// being root on the host. It skips where the sandbox forbids that, which is
-// what GitHub's runners do.
-func runInNamespace(t *testing.T, env, name string) {
-	t.Helper()
-	if _, err := exec.LookPath("unshare"); err != nil {
-		t.Skip("unshare not installed")
-	}
-	if _, err := exec.LookPath("nft"); err != nil {
-		t.Skip("nft not installed")
-	}
-	cmd := exec.Command("unshare", "-Urn", os.Args[0], "-test.run", "^"+name+"$", "-test.v")
-	cmd.Env = append(os.Environ(), env+"=1")
-	out, err := cmd.CombinedOutput()
-	if err == nil {
-		return
-	}
-	if strings.Contains(string(out), "uid_map") || strings.Contains(string(out), "Operation not permitted") {
-		t.Skipf("unprivileged namespaces are not allowed here: %s", strings.TrimSpace(string(out)))
-	}
-	t.Fatalf("inside namespace: %v\n%s", err, out)
-}
-
-// dummyLink brings up a dummy interface carrying addrs. What it sends is
-// dropped by the driver, after the postrouting hook has seen it.
-func dummyLink(t *testing.T, name string, addrs ...string) {
-	t.Helper()
-	link := &netlink.Dummy{Name: name}
-	if err := netlink.LinkAdd(link); err != nil {
-		t.Fatalf("add %s: %v", name, err)
-	}
-	if err := netlink.LinkSetUp(link); err != nil {
-		t.Fatalf("bring %s up: %v", name, err)
-	}
-	for _, addr := range addrs {
-		a, err := netlink.ParseAddr(addr)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := netlink.AddrAdd(link, a); err != nil {
-			t.Fatalf("address %s on %s: %v", addr, name, err)
-		}
-	}
-}
-
 // A golden records the order the renderer wrote, right or wrong, so this
 // checks the order where it counts: a packet from a mapped host leaves
 // through a kernel running the ruleset, and the counters say which rule
 // translated it. A NAT statement ends the chain, so only one may count it.
 func TestOneToOneBeatsOutboundNATInKernel(t *testing.T) {
-	const env = "OSTIOLE_NFT_NETNS"
-	if os.Getenv(env) == "" {
-		runInNamespace(t, env, "TestOneToOneBeatsOutboundNATInKernel")
+	if !netnstest.Enter(t, "nft") {
 		return
 	}
 
@@ -205,7 +155,7 @@ func TestOneToOneBeatsOutboundNATInKernel(t *testing.T) {
 	}
 	// The mapped host's address is local here, so this process can send
 	// as it, straight out of the WAN.
-	dummyLink(t, "eth0", "198.51.100.2/24", "192.168.1.25/32")
+	netnstest.Dummy(t, "eth0", "198.51.100.2/24", "192.168.1.25/32")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	x := &Exec{}

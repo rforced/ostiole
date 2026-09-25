@@ -12,6 +12,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/rforced/ostiole/internal/model"
+	"github.com/rforced/ostiole/internal/netnstest"
 )
 
 // A port forward is no way around the zone it arrives on. The kernel runs
@@ -19,9 +20,7 @@ import (
 // counters say which rule decided: a source the WAN zone drops is dropped
 // there, and anyone else reaches the forward.
 func TestPortForwardsPassThroughTheZoneInKernel(t *testing.T) {
-	const env = "OSTIOLE_NFT_NETNS"
-	if os.Getenv(env) == "" {
-		runInNamespace(t, env, "TestPortForwardsPassThroughTheZoneInKernel")
+	if !netnstest.Enter(t, "nft") {
 		return
 	}
 
@@ -61,7 +60,7 @@ func TestPortForwardsPassThroughTheZoneInKernel(t *testing.T) {
 	if err := netlink.AddrAdd(wan, addr); err != nil {
 		t.Fatal(err)
 	}
-	dummyLink(t, "eth1", "192.168.1.1/24")
+	netnstest.Dummy(t, "eth1", "192.168.1.1/24")
 	for path, value := range map[string]string{
 		"/proc/sys/net/ipv4/ip_forward":          "1",
 		"/proc/sys/net/ipv4/conf/all/rp_filter":  "0",

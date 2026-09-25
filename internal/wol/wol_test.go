@@ -5,14 +5,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"net"
-	"os"
-	"os/exec"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
+
+	"github.com/rforced/ostiole/internal/netnstest"
 )
 
 func TestPacket(t *testing.T) {
@@ -43,8 +43,7 @@ func TestSendRefusesALongAddress(t *testing.T) {
 // network namespace, where this process has CAP_NET_RAW without being
 // root, and reads them back off the link.
 func TestSendInNamespace(t *testing.T) {
-	if os.Getenv("OSTIOLE_WOL_NETNS") == "" {
-		runInNamespace(t, "OSTIOLE_WOL_NETNS", "TestSendInNamespace")
+	if !netnstest.Enter(t) {
 		return
 	}
 	if err := netlink.LinkAdd(&netlink.Dummy{Name: "wake0"}); err != nil {
@@ -116,24 +115,4 @@ func readWake(t *testing.T, fd int) []byte {
 			return buf[:n]
 		}
 	}
-}
-
-// runInNamespace re-runs the calling test inside a fresh unprivileged user
-// and network namespace. It skips when the sandbox forbids that, which is
-// what GitHub's runners do.
-func runInNamespace(t *testing.T, env, name string) {
-	t.Helper()
-	if _, err := exec.LookPath("unshare"); err != nil {
-		t.Skip("unshare not installed")
-	}
-	cmd := exec.Command("unshare", "-Urn", os.Args[0], "-test.run", "^"+name+"$", "-test.v")
-	cmd.Env = append(os.Environ(), env+"=1")
-	out, err := cmd.CombinedOutput()
-	if err == nil {
-		return
-	}
-	if strings.Contains(string(out), "uid_map") || strings.Contains(string(out), "Operation not permitted") {
-		t.Skipf("unprivileged namespaces are not allowed here: %s", strings.TrimSpace(string(out)))
-	}
-	t.Fatalf("inside namespace: %v\n%s", err, out)
 }
