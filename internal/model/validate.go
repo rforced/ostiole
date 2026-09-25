@@ -889,6 +889,7 @@ func (v *validator) services(c *Config, ifaces, zones map[string]bool) {
 	}
 	v.upnp(c, ifaces)
 	v.ntp(c, ifaces)
+	v.wol(c)
 	v.proxy(c, zones)
 }
 
@@ -2088,6 +2089,12 @@ func (v *validator) crons(c *Config) {
 				v.add(path+".service", "%q is not a service this router runs (%s)",
 					cr.Service, strings.Join(CronServices, ", "))
 			}
+		case CronWake:
+			if cr.Device == "" {
+				v.add(path+".device", "say which device to wake")
+			} else if _, ok := c.WoLDevice(cr.Device); !ok {
+				v.add(path+".device", "no Wake on LAN device has the id %q", cr.Device)
+			}
 		case CronCommand:
 			if cr.Command == "" {
 				v.add(path+".command", "say what to run")
@@ -2107,6 +2114,9 @@ func (v *validator) crons(c *Config) {
 		}
 		if cr.Passphrase != "" && cr.Kind != CronBackup {
 			v.add(path+".passphrase", "only a backup has a file to encrypt")
+		}
+		if cr.Device != "" && cr.Kind != CronWake {
+			v.add(path+".device", "only a wake cron names a device")
 		}
 	}
 }

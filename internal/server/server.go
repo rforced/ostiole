@@ -89,6 +89,8 @@ type Deps struct {
 	// Journal reads the system journal; nil runs journalctl, which is
 	// what a router does and a test does not.
 	Journal func(context.Context, diag.JournalOptions) ([]diag.JournalEntry, error)
+	// Wake sends a Wake on LAN packet; nil sends one for real.
+	Wake func(iface string, mac net.HardwareAddr) error
 	// Certs manages the certificate the UI serves; nil hides the
 	// certificate endpoints and serves whatever the files hold.
 	Certs *certs.Manager
@@ -178,6 +180,7 @@ func build(d Deps) (http.Handler, *api) {
 		ntp:         d.NTP,
 		chrony:      d.Chrony,
 		journal:     d.Journal,
+		wake:        d.Wake,
 		certs:       d.Certs,
 		certStore:   d.CertStore,
 		renewer:     d.Renewer,

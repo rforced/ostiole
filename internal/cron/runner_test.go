@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -332,11 +333,66 @@ func TestActionsSayWhatIsMissing(t *testing.T) {
 		{Kind: model.CronRefreshAliases},
 		{Kind: model.CronRefreshBlocklists},
 		{Kind: model.CronRestartService, Service: "dnsmasq"},
+		{Kind: model.CronWake, Device: "nas"},
 		{Kind: "invented"},
 	} {
 		if _, err := actions.Run(context.Background(), c); err == nil {
 			t.Errorf("%q reported success with nothing wired up", c.Kind)
 		}
+	}
+}
+
+// A wake cron reads its device from the configuration in force, so a
+// device that was edited is woken where it is now, and one that cannot be
+// woken fails the run with nothing sent.
+func TestWakeCronSendsToTheDevice(t *testing.T) {
+	t.Parallel()
+	cfg := config()
+	cfg.Services.WoL.Devices = []model.WoLDevice{{ID: "nas", Interface: "eth1", MAC: "AA:BB:CC:00:00:01"}}
+	var sent []string
+	actions := &Actions{
+		Config: func() *model.Config { return cfg },
+		Wake: func(iface string, mac net.HardwareAddr) error {
+			sent = append(sent, iface+" "+mac.String())
+			return nil
+		},
+	}
+	wake := model.Cron{Kind: model.CronWake, Device: "nas"}
+	out, err := actions.Run(context.Background(), wake)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "sent a wake packet to aa:bb:cc:00:00:01 on eth1" {
+		t.Errorf("output = %q", out)
+	}
+	if len(sent) != 1 || sent[0] != "eth1 aa:bb:cc:00:00:01" {
+		t.Errorf("sent = %v", sent)
+	}
+
+	lan, _ := cfg.Interface("eth1")
+	lan.Enabled = false
+	if _, err := actions.Run(context.Background(), wake); err == nil || !strings.Contains(err.Error(), "off") {
+		t.Errorf("interface off: err = %v", err)
+	}
+	lan.Enabled = true
+	cfg.Services.WoL.Devices[0].Interface = "eth0"
+	if _, err := actions.Run(context.Background(), wake); err == nil || !strings.Contains(err.Error(), "external zone") {
+		t.Errorf("moved to the WAN: err = %v", err)
+	}
+	if _, err := actions.Run(context.Background(), model.Cron{Kind: model.CronWake, Device: "gone"}); err == nil {
+		t.Error("a device that is gone reported success")
+	}
+	if len(sent) != 1 {
+		t.Errorf("sent = %v, want only the first", sent)
+	}
+
+	failing := &Actions{
+		Config: func() *model.Config { return cfg },
+		Wake:   func(string, net.HardwareAddr) error { return errors.New("send on eth1: network is down") },
+	}
+	cfg.Services.WoL.Devices[0].Interface = "eth1"
+	if _, err := failing.Run(context.Background(), wake); err == nil || !strings.Contains(err.Error(), "network is down") {
+		t.Errorf("failed send: err = %v", err)
 	}
 }
 

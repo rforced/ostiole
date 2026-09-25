@@ -46,6 +46,7 @@ import (
 	"github.com/rforced/ostiole/internal/timezone"
 	"github.com/rforced/ostiole/internal/update"
 	"github.com/rforced/ostiole/internal/version"
+	"github.com/rforced/ostiole/internal/wol"
 )
 
 func newServeCmd(g *globals) *cobra.Command {
@@ -232,6 +233,7 @@ at your own.`,
 					return backup.Upload(ctx, r, hostname, "ostiole/"+version.Version, archive)
 				},
 				Certificates: renewer.Pass,
+				Wake:         wol.Send,
 			}
 			// The crons the operator asked for, plus the work Ostiole does
 			// on its own account, reported together.

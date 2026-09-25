@@ -1804,6 +1804,7 @@ func TestDerivedCronsFollowTheSettings(t *testing.T) {
 func TestValidateCrons(t *testing.T) {
 	t.Parallel()
 	cfg := policyConfig()
+	cfg.Services.WoL.Devices = []WoLDevice{{ID: "nas", Interface: "eth1", MAC: "aa:bb:cc:00:00:01"}}
 	// Every kind the UI offers has to be accepted here, or a cron that
 	// can be created cannot be applied.
 	for _, kind := range CronKinds {
@@ -1813,6 +1814,8 @@ func TestValidateCrons(t *testing.T) {
 			c.Directory = "/var/backups/ostiole"
 		case CronRestartService:
 			c.Service = "dnsmasq"
+		case CronWake:
+			c.Device = "nas"
 		case CronCommand:
 			c.Command = "/usr/bin/true"
 		}

@@ -163,6 +163,9 @@ const (
 	CronRefreshBlocklists CronKind = "refresh-blocklists"
 	// CronRestartService restarts one of the services Ostiole runs.
 	CronRestartService CronKind = "restart-service"
+	// CronWake wakes one of the machines listed under Wake on LAN, like a
+	// backup server that sleeps until the backup is due.
+	CronWake CronKind = "wake"
 	// CronCommand runs a command line. It is as powerful as the router, which
 	// is the point and also the warning.
 	CronCommand CronKind = "command"
@@ -188,7 +191,7 @@ const (
 
 // CronKinds lists them in the order the UI offers them.
 var CronKinds = []CronKind{
-	CronBackup, CronRefreshAliases, CronRefreshBlocklists, CronRestartService, CronCommand,
+	CronBackup, CronRefreshAliases, CronRefreshBlocklists, CronRestartService, CronWake, CronCommand,
 }
 
 // CronServices are the units a restart cron may name.
@@ -213,6 +216,8 @@ type Cron struct {
 	Passphrase string `json:"passphrase,omitempty"`
 	// Service is the unit a restart cron acts on.
 	Service string `json:"service,omitempty"`
+	// Device is the id of the Wake on LAN device a wake cron wakes.
+	Device string `json:"device,omitempty"`
 	// Command and Args are what a command cron runs. The command is not
 	// passed through a shell, so there is nothing to quote and nothing to
 	// inject.
@@ -1625,6 +1630,8 @@ type Services struct {
 	Proxy Proxy `json:"proxy,omitzero"`
 	// NTP keeps the router's clock and can pass the time on to the LAN.
 	NTP NTP `json:"ntp,omitzero"`
+	// WoL lists the machines on the LAN this router can switch on.
+	WoL WoL `json:"wol,omitzero"`
 }
 
 // UPnP lets a client on the LAN open a hole through the firewall for

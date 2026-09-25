@@ -18,6 +18,7 @@ import (
 	"github.com/rforced/ostiole/internal/sysupdate"
 	"github.com/rforced/ostiole/internal/update"
 	"github.com/rforced/ostiole/internal/version"
+	"github.com/rforced/ostiole/internal/wol"
 )
 
 func newCronsCmd(g *globals) *cobra.Command {
@@ -121,6 +122,7 @@ it works whether or not the daemon is up.`,
 					}
 					return m.CheckScheduled(ctx, update.Channel(channel))
 				},
+				Wake: wol.Send,
 			}
 			out, err := actions.Run(cmd.Context(), *c)
 			if out != "" {

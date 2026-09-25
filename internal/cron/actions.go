@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -50,6 +51,8 @@ type Actions struct {
 	Remote func(ctx context.Context, r model.RemoteBackup, hostname string, archive *backup.Archive) (string, error)
 	// Certificates renews what is due and issues what is missing.
 	Certificates func(ctx context.Context) (string, error)
+	// Wake sends the magic packet for a machine onto one interface.
+	Wake func(iface string, mac net.HardwareAddr) error
 	// Version is recorded in the backups this takes.
 	Version string
 	// Exec runs a command; swapped for a fake in tests.
@@ -75,6 +78,8 @@ func (a *Actions) Run(ctx context.Context, c model.Cron) (string, error) {
 		return "refreshed", a.RefreshBlocklists(ctx)
 	case model.CronRestartService:
 		return a.restart(ctx, c)
+	case model.CronWake:
+		return a.wake(c)
 	case model.CronCommand:
 		return a.command(ctx, c)
 	case model.CronSystemUpdate:
@@ -182,6 +187,34 @@ func (a *Actions) remoteBackup(ctx context.Context) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, RemoteBackupTimeout)
 	defer cancel()
 	return a.Remote(ctx, r, cfg.System.Hostname, archive)
+}
+
+// wake sends the magic packet for the device a wake cron names, read from
+// the configuration in force, so a device that was edited is woken where
+// it is now.
+func (a *Actions) wake(c model.Cron) (string, error) {
+	if a.Wake == nil {
+		return "", errors.New("this router cannot send a wake from here")
+	}
+	if a.Config == nil {
+		return "", errors.New("nothing is configured yet")
+	}
+	cfg := a.Config()
+	if cfg == nil {
+		return "", errors.New("nothing is configured yet")
+	}
+	d, ok := cfg.WoLDevice(c.Device)
+	if !ok {
+		return "", fmt.Errorf("no Wake on LAN device has the id %q", c.Device)
+	}
+	mac, err := cfg.WakeTarget(d.Interface, d.MAC)
+	if err != nil {
+		return "", err
+	}
+	if err := a.Wake(d.Interface, mac); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("sent a wake packet to %s on %s", mac, d.Interface), nil
 }
 
 func (a *Actions) updates() (model.Updates, error) {
