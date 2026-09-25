@@ -51,7 +51,7 @@ type fakeRunner struct {
 }
 
 func (f *fakeRunner) Batch(_ context.Context, script string) error {
-	for _, line := range strings.Split(strings.TrimSpace(stripComments(script)), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(stripComments(script)), "\n") {
 		if line != "" {
 			f.ev.add("tc %s", line)
 		}

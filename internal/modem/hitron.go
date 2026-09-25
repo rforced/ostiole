@@ -20,8 +20,7 @@ func (hitron) detect(ctx context.Context, c *client) (bool, error) {
 		Vendor string `json:"vendorname"`
 	}
 	if err := c.getJSON(ctx, "/data/system_model.asp", &model); err != nil {
-		var pe *pageError
-		if errors.As(err, &pe) {
+		if _, ok := errors.AsType[*pageError](err); ok {
 			return false, nil
 		}
 		return false, err

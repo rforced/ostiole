@@ -65,9 +65,6 @@ const (
 	SourceUploaded CertSource = "uploaded"
 )
 
-// CertSources lists them in the order the UI offers them.
-var CertSources = []CertSource{SourceACME, SourceUploaded}
-
 // Challenge is how a CA checks that this router holds a name.
 type Challenge string
 

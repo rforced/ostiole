@@ -278,7 +278,7 @@ func (c *Config) ProxyPorts() (tcp, udp []uint16) {
 }
 
 func sortPorts(in []uint16) []uint16 {
-	sort.Slice(in, func(i, j int) bool { return in[i] < in[j] })
+	slices.Sort(in)
 	return slices.Compact(in)
 }
 

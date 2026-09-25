@@ -410,7 +410,7 @@ func TestRenderKeepsKeysInTheirSection(t *testing.T) {
 			continue
 		}
 		section := ""
-		for _, line := range strings.Split(unit, "\n") {
+		for line := range strings.SplitSeq(unit, "\n") {
 			switch {
 			case strings.HasPrefix(line, "["):
 				section = strings.Trim(line, "[]")
@@ -559,7 +559,7 @@ func TestDiscoverHidesAHelperInTheKernel(t *testing.T) {
 		t.Skip("creating a link needs root")
 	}
 	name := model.IFBName("ostdisc0")
-	if err := netlink.LinkAdd(&netlink.Ifb{LinkAttrs: netlink.LinkAttrs{Name: name}}); err != nil {
+	if err := netlink.LinkAdd(&netlink.Ifb{Name: name}); err != nil {
 		t.Skipf("cannot create an ifb here: %v", err)
 	}
 	t.Cleanup(func() {

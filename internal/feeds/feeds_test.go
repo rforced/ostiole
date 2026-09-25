@@ -331,8 +331,7 @@ func TestWakeRunsAPass(t *testing.T) {
 		t.Fatalf("%d passes pending, want one", n)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go r.Run(ctx)
 	wait := func(what string) {
 		t.Helper()

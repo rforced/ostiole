@@ -34,7 +34,7 @@ type Blocking struct {
 	// nothing if the client simply asks 8.8.8.8 instead, and keeping clients
 	// here is worth having without any lists at all, for local names,
 	// domain overrides and validation.
-	Enforce DNSEnforce `json:"enforce,omitempty"`
+	Enforce DNSEnforce `json:"enforce"`
 }
 
 // BlockMode is the answer a blocked name gets.

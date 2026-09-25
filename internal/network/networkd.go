@@ -327,7 +327,7 @@ func renderNetwork(in model.Interface, vlans []string, routes []model.StaticRout
 	b.WriteString(fileHeader)
 	fmt.Fprintf(&b, "[Match]\nName=%s\n", in.Name)
 
-	link := []string{}
+	var link []string
 	if !in.Enabled {
 		link = append(link, "ActivationPolicy=down")
 	}
@@ -755,8 +755,7 @@ func (n *Networkd) delLink(name string) error {
 	}
 	link, err := netlink.LinkByName(name)
 	if err != nil {
-		var missing netlink.LinkNotFoundError
-		if errors.As(err, &missing) {
+		if _, ok := errors.AsType[netlink.LinkNotFoundError](err); ok {
 			return nil
 		}
 		return err

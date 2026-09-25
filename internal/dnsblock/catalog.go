@@ -28,12 +28,6 @@ const (
 	CategoryGeneral = "general purpose"
 )
 
-// DoHServersURL is a published list of the addresses public DNS over HTTPS
-// resolvers answer on. It is an address list, not a name list, so it is
-// subscribed to as a firewall alias and dropped by a rule — DoH hides on
-// port 443 and nothing in a resolver can see it.
-const DoHServersURL = "https://raw.githubusercontent.com/dibdot/DoH-IP-blocklists/master/doh-ipv4.txt"
-
 // catalog is deliberately short. A handful of well-known lists covers what
 // most people want, and a long menu of overlapping lists mostly costs
 // memory: the lists overlap so heavily that the second one added rarely

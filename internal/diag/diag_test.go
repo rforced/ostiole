@@ -307,7 +307,7 @@ func TestCaptureAndTraceInNamespace(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 		conn, err := net.Dial("udp", "127.0.0.1:9999")
 		if err == nil {
-			for i := 0; i < 3; i++ {
+			for range 3 {
 				_, _ = conn.Write([]byte("ostiole"))
 				time.Sleep(20 * time.Millisecond)
 			}

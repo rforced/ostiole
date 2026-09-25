@@ -29,12 +29,7 @@ func (f *fakeRun) Run(_ context.Context, name string, args ...string) ([]byte, e
 }
 
 func (f *fakeRun) ran(want string) bool {
-	for _, c := range f.calls {
-		if c == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(f.calls, want)
 }
 
 // router is a filesystem with sshd set up the way a cloud image leaves

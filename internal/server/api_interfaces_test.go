@@ -36,7 +36,7 @@ func (r *renewingNet) Renew(_ context.Context, link string, release bool) error 
 func newRenewServer(t *testing.T) (*httptest.Server, *renewingNet) {
 	t.Helper()
 	dir := t.TempDir()
-	net := &renewingNet{Networkd: network.Networkd{LinkExists: func(string) bool { return true }}}
+	net := &renewingNet{LinkExists: func(string) bool { return true }}
 	eng := engine.New(store.New(dir), &nfttest.Fake{}, net, slog.New(slog.DiscardHandler))
 	as, err := auth.NewService(dir)
 	if err != nil {

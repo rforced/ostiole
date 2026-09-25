@@ -33,22 +33,22 @@ func following(t *testing.T) (*chronytest.Daemon, *chrony.Client) {
 		return &chrony.Auth{Mode: "NTS", LastKE: lastKE, Cookies: 8}
 	}
 	d.SetSources(
-		chronytest.Source{Source: chrony.Source{Name: "nts.netnod.se", Address: "194.58.205.196", State: "excluded",
-			Stratum: 1, Poll: 64 * time.Second, Reach: 0o37, LastRx: 6 * time.Second, Offset: -0.002077126, Error: 0.070244834},
+		chronytest.Source{Name: "nts.netnod.se", Address: "194.58.205.196", State: "excluded",
+			Stratum: 1, Poll: 64 * time.Second, Reach: 0o37, LastRx: 6 * time.Second, Offset: -0.002077126, Error: 0.070244834,
 			Auth: nts(76 * time.Second)},
-		chronytest.Source{Source: chrony.Source{Name: "nts.time.nl", Address: "2a01:3f7:3:51::4", State: "combined",
-			Stratum: 2, Poll: 64 * time.Second, Reach: 0o37, LastRx: 7 * time.Second, Offset: -0.002527710, Error: 0.070126206},
+		chronytest.Source{Name: "nts.time.nl", Address: "2a01:3f7:3:51::4", State: "combined",
+			Stratum: 2, Poll: 64 * time.Second, Reach: 0o37, LastRx: 7 * time.Second, Offset: -0.002527710, Error: 0.070126206,
 			Auth: nts(77 * time.Second)},
-		chronytest.Source{Source: chrony.Source{Name: "virginia.time.system76.com", Address: "3.220.42.39", State: "selected",
-			Stratum: 2, Poll: 64 * time.Second, Reach: 0o37, LastRx: 6 * time.Second, Offset: 0.000897395, Error: 0.025176724},
+		chronytest.Source{Name: "virginia.time.system76.com", Address: "3.220.42.39", State: "selected",
+			Stratum: 2, Poll: 64 * time.Second, Reach: 0o37, LastRx: 6 * time.Second, Offset: 0.000897395, Error: 0.025176724,
 			Auth: nts(77 * time.Second)},
-		chronytest.Source{Source: chrony.Source{Name: "192.0.2.123", Address: "192.0.2.123", State: "unusable",
-			Poll: 128 * time.Second, LastRx: -1}},
-		chronytest.Source{Source: chrony.Source{Name: "2.pool.ntp.org", Address: "23.186.168.126", State: "unusable",
-			Stratum: 2, Poll: 64 * time.Second, Reach: 0o37, LastRx: 10 * time.Second, Offset: 0.002320803, Error: 0.057981949}},
-		chronytest.Source{Source: chrony.Source{Name: "2.pool.ntp.org"}, Unresolved: true},
-		chronytest.Source{Source: chrony.Source{Name: "2.pool.ntp.org", Address: "104.232.0.123", State: "jittery",
-			Stratum: 2, Poll: 64 * time.Second, Reach: 0o37, LastRx: 8 * time.Second, Offset: 0.000656150, Error: 0.034684535}},
+		chronytest.Source{Name: "192.0.2.123", Address: "192.0.2.123", State: "unusable",
+			Poll: 128 * time.Second, LastRx: -1},
+		chronytest.Source{Name: "2.pool.ntp.org", Address: "23.186.168.126", State: "unusable",
+			Stratum: 2, Poll: 64 * time.Second, Reach: 0o37, LastRx: 10 * time.Second, Offset: 0.002320803, Error: 0.057981949},
+		chronytest.Source{Name: "2.pool.ntp.org", Unresolved: true},
+		chronytest.Source{Name: "2.pool.ntp.org", Address: "104.232.0.123", State: "jittery",
+			Stratum: 2, Poll: 64 * time.Second, Reach: 0o37, LastRx: 8 * time.Second, Offset: 0.000656150, Error: 0.034684535},
 	)
 	d.SetServerStats(chrony.ServerStats{NTPReceived: 1234, NTPDropped: 5})
 	return d, &chrony.Client{Addr: d.Addr}

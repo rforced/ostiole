@@ -211,8 +211,12 @@ func TestSessionsSurviveARestart(t *testing.T) {
 	if strings.Contains(string(raw), sess.ID) {
 		t.Error("the session file contains the session ID itself")
 	}
-	if info, err := os.Stat(filepath.Join(dir, SessionsFile)); err != nil || info.Mode().Perm() != 0o600 {
-		t.Errorf("sessions file mode = %v, %v", info.Mode().Perm(), err)
+	info, err := os.Stat(filepath.Join(dir, SessionsFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("sessions file mode = %v", info.Mode().Perm())
 	}
 
 	// Logging out on one instance clears it for the next one too.

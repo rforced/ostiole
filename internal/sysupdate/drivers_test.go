@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -69,12 +70,7 @@ func (f *fakeRunner) say(line, out string) {
 func (f *fakeRunner) ran(line string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	for _, c := range f.calls {
-		if c == line {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(f.calls, line)
 }
 
 func (f *fakeRunner) ranWithout(want, guard string) string {

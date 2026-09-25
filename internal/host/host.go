@@ -165,7 +165,7 @@ func distro() string {
 	if err != nil {
 		return ""
 	}
-	for _, line := range strings.Split(string(raw), "\n") {
+	for line := range strings.SplitSeq(string(raw), "\n") {
 		if rest, ok := strings.CutPrefix(line, "PRETTY_NAME="); ok {
 			return strings.Trim(strings.TrimSpace(rest), `"`)
 		}

@@ -1824,14 +1824,7 @@ func (v *validator) delegation(c *Config) {
 }
 
 func (v *validator) bond(path string, b Bond) {
-	known := false
-	for _, m := range BondModes {
-		if b.Mode == m {
-			known = true
-			break
-		}
-	}
-	if !known {
+	if !slices.Contains(BondModes, b.Mode) {
 		v.add(path+".mode", "unknown bond mode %q", b.Mode)
 	}
 	if b.MIIMonitorMS < 0 || b.MIIMonitorMS > 10000 {

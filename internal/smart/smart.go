@@ -144,13 +144,11 @@ func (c *Client) ReadAll(ctx context.Context) ([]Drive, error) {
 	errs := make([]error, len(devs))
 	var wg sync.WaitGroup
 	for i, d := range devs {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			// smartctl reports what the drive's firmware says, whatever that is.
 			defer panics.Into(&errs[i], nil, "reading "+d.Name)
 			drives[i], errs[i] = c.readDevice(ctx, d)
-		}()
+		})
 	}
 	wg.Wait()
 	out := make([]Drive, 0, len(devs))

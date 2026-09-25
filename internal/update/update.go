@@ -474,7 +474,7 @@ func Sign(priv ed25519.PrivateKey, data []byte) string {
 }
 
 func expectedSum(sums []byte, name string) (string, error) {
-	for _, line := range strings.Split(string(sums), "\n") {
+	for line := range strings.SplitSeq(string(sums), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) == 2 && strings.TrimPrefix(fields[1], "*") == name {
 			return strings.ToLower(fields[0]), nil

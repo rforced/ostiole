@@ -127,7 +127,7 @@ func (Netlink) EnsureIFB(name string) error {
 			return fmt.Errorf("a device called %s is already here and is not ours", name)
 		}
 	case notFound(err):
-		if err := netlink.LinkAdd(&netlink.Ifb{LinkAttrs: netlink.LinkAttrs{Name: name}}); err != nil {
+		if err := netlink.LinkAdd(&netlink.Ifb{Name: name}); err != nil {
 			return fmt.Errorf("create %s: %w", name, err)
 		}
 		if link, err = netlink.LinkByName(name); err != nil {

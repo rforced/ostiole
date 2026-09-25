@@ -174,7 +174,7 @@ type EnvPlan struct {
 // ParseEnv reads back what Env wrote.
 func ParseEnv(text string) EnvPlan {
 	var p EnvPlan
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.SplitSeq(text, "\n") {
 		key, value, ok := strings.Cut(line, "=")
 		if !ok {
 			continue

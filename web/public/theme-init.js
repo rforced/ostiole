@@ -3,15 +3,15 @@
 // theme-color values).
 ;(function () {
   try {
-    var pref = localStorage.getItem('ostiole.theme')
-    var dark =
+    const pref = localStorage.getItem('ostiole.theme')
+    const dark =
       pref === 'dark' ||
       ((pref === null || pref === 'system') &&
         window.matchMedia('(prefers-color-scheme: dark)').matches)
-    var root = document.documentElement
+    const root = document.documentElement
     root.classList.toggle('dark', dark)
     root.style.colorScheme = dark ? 'dark' : 'light'
-    var meta = document.querySelector('meta[name="theme-color"]')
+    const meta = document.querySelector('meta[name="theme-color"]')
     if (meta) meta.setAttribute('content', dark ? '#171717' : '#ffffff')
   } catch {
     /* storage unavailable: fall through to system default */

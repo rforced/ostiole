@@ -22,7 +22,10 @@ const webhook = computed(() => settings.value.webhook ?? {})
 // Where the router's news goes is an admin's to say, as the apply enforces.
 const locked = computed(() => !auth.isAdmin)
 
-/** @param {object} patch @param {'email' | 'webhook'} [part] */
+/**
+ * @param {object} patch
+ * @param {'email' | 'webhook'} [part]
+ */
 const set = (patch, part) => config.setNotifications(patch, part)
 
 /**

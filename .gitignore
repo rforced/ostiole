@@ -48,6 +48,7 @@ go.work.sum
 .vscode/
 
 /docs
+/goland_problems
 
 CLAUDE.md
 ARCHITECTURE.md

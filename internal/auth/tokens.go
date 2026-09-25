@@ -35,9 +35,6 @@ const (
 	RoleViewer Role = "viewer"
 )
 
-// Roles lists them in order, strongest first.
-var Roles = []Role{RoleAdmin, RoleOperator, RoleViewer}
-
 var roleRank = map[Role]int{RoleAdmin: 3, RoleOperator: 2, RoleViewer: 1}
 
 // Allows reports whether this role is at least as strong as need.

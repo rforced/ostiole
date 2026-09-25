@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"maps"
 	"os"
 	"slices"
 	"sync"
@@ -438,9 +439,7 @@ func (n *Notifier) Status() Status {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	out := Status{Targets: map[string]TargetStatus{}, Recent: slices.Clone(n.status.Recent), Waiting: len(n.queue) + n.sending}
-	for k, v := range n.status.Targets {
-		out.Targets[k] = v
-	}
+	maps.Copy(out.Targets, n.status.Targets)
 	if out.Recent == nil {
 		out.Recent = []Record{}
 	}

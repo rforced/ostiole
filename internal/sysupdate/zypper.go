@@ -17,8 +17,9 @@ type zypper struct{}
 func (zypper) Name() string          { return "zypper" }
 func (zypper) SecurityCapable() bool { return true }
 
-// ExcludeSupported: naming the packages to update is how an exclude is
-// honoured, and a patch cannot be told to skip one.
+// ExcludeSupported is true only for a full update: naming the packages to
+// update is how an exclude is honoured, and a patch cannot be told to skip
+// one.
 func (zypper) ExcludeSupported(security bool) bool { return !security }
 
 type zypperStream struct {

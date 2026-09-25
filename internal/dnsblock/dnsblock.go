@@ -98,7 +98,7 @@ func validName(s string) bool {
 	if s == "" {
 		return false
 	}
-	for _, label := range strings.Split(s, ".") {
+	for label := range strings.SplitSeq(s, ".") {
 		if label == "" || len(label) > 63 {
 			return false
 		}

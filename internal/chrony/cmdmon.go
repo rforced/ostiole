@@ -103,20 +103,20 @@ func dial(ctx context.Context, addr string) (*conn, error) {
 // sends it, each time under a new sequence number so a late reply to an
 // earlier one is not taken for it. The number is random, so another
 // process on the router cannot answer in chronyd's place.
-func (c *conn) exchange(ctx context.Context, cmd command, fields []byte) ([]byte, error) {
+func (cn *conn) exchange(ctx context.Context, cmd command, fields []byte) ([]byte, error) {
 	req := make([]byte, cmd.length())
 	req[0], req[1] = protoVersion, pktRequest
 	binary.BigEndian.PutUint16(req[4:], cmd.code)
 	copy(req[requestHeader:], fields)
-	stop := context.AfterFunc(ctx, func() { _ = c.SetReadDeadline(time.Now()) })
+	stop := context.AfterFunc(ctx, func() { _ = cn.SetReadDeadline(time.Now()) })
 	defer stop()
 	wait := time.Second
 	for attempt := range 3 {
 		binary.BigEndian.PutUint16(req[6:], uint16(attempt))
 		_, _ = rand.Read(req[8:12])
 		seq := binary.BigEndian.Uint32(req[8:])
-		if _, err := c.Write(req); err != nil {
-			return nil, c.failed(err)
+		if _, err := cn.Write(req); err != nil {
+			return nil, cn.failed(err)
 		}
 		resend := time.Now().Add(wait)
 		wait *= 2
@@ -125,7 +125,7 @@ func (c *conn) exchange(ctx context.Context, cmd command, fields []byte) ([]byte
 			if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
 				deadline = d
 			}
-			if err := c.SetReadDeadline(deadline); err != nil {
+			if err := cn.SetReadDeadline(deadline); err != nil {
 				return nil, err
 			}
 			// After the deadline is set, so a cancel from here on cuts
@@ -133,7 +133,7 @@ func (c *conn) exchange(ctx context.Context, cmd command, fields []byte) ([]byte
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			n, err := c.Read(c.buf[:])
+			n, err := cn.Read(cn.buf[:])
 			if errors.Is(err, os.ErrDeadlineExceeded) {
 				if err := ctx.Err(); err != nil {
 					return nil, err
@@ -144,9 +144,9 @@ func (c *conn) exchange(ctx context.Context, cmd command, fields []byte) ([]byte
 				break
 			}
 			if err != nil {
-				return nil, c.failed(err)
+				return nil, cn.failed(err)
 			}
-			rpy := c.buf[:n]
+			rpy := cn.buf[:n]
 			if n < replyHeader || rpy[1] != pktReply || rpy[2] != 0 || rpy[3] != 0 ||
 				binary.BigEndian.Uint16(rpy[4:]) != cmd.code || binary.BigEndian.Uint32(rpy[16:]) != seq {
 				continue
@@ -154,12 +154,12 @@ func (c *conn) exchange(ctx context.Context, cmd command, fields []byte) ([]byte
 			return answer(cmd, rpy)
 		}
 	}
-	return nil, fmt.Errorf("chronyd did not answer %s on %s", cmd.name, c.addr)
+	return nil, fmt.Errorf("chronyd did not answer %s on %s", cmd.name, cn.addr)
 }
 
-func (c *conn) failed(err error) error {
+func (cn *conn) failed(err error) error {
 	if errors.Is(err, syscall.ECONNREFUSED) {
-		return fmt.Errorf("chronyd is not listening on %s", c.addr)
+		return fmt.Errorf("chronyd is not listening on %s", cn.addr)
 	}
 	return err
 }

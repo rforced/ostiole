@@ -26,7 +26,7 @@ type Station struct {
 func ParseStations(text string) []Station {
 	var out []Station
 	var cur *Station
-	for _, raw := range strings.Split(text, "\n") {
+	for raw := range strings.SplitSeq(text, "\n") {
 		line := strings.TrimSpace(raw)
 		if line == "" {
 			continue

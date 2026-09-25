@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -46,12 +47,7 @@ func (u *unitCmd) Run(_ context.Context, name string, args ...string) ([]byte, e
 func (u *unitCmd) did(call string) bool {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	for _, c := range u.calls {
-		if c == call {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(u.calls, call)
 }
 
 // dnsCacheServer applies cfg to a server wired to the two fakes.

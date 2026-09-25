@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -274,7 +275,7 @@ func TestBackupCronWritesAndPrunes(t *testing.T) {
 	c := model.Cron{ID: "nightly", Kind: model.CronBackup, Directory: dir, Keep: 2, WithUsers: true}
 
 	// Three backups, named by the minute, so the oldest can be pruned.
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("gateway-2026091%d-000000.json", i)), []byte("{}"), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -464,11 +465,11 @@ func TestUpdateCronsRunOnTheirOwnSchedule(t *testing.T) {
 	r.Tick(t.Context(), wednesday)
 	waitFor(t, func() bool { return len(ex.calls()) == 2 })
 	for _, id := range []string{model.CronIDSystemUpdateCheck, model.CronIDOstioleUpdateCheck} {
-		if !contains(ex.calls(), id) {
+		if !slices.Contains(ex.calls(), id) {
 			t.Errorf("ran %v midweek, want both checks", ex.calls())
 		}
 	}
-	if contains(ex.calls(), model.CronIDSystemUpdate) || contains(ex.calls(), model.CronIDOstioleUpdate) {
+	if slices.Contains(ex.calls(), model.CronIDSystemUpdate) || slices.Contains(ex.calls(), model.CronIDOstioleUpdate) {
 		t.Errorf("ran %v midweek, want nothing installed", ex.calls())
 	}
 
@@ -480,7 +481,7 @@ func TestUpdateCronsRunOnTheirOwnSchedule(t *testing.T) {
 	r.Tick(t.Context(), sunday)
 	waitFor(t, func() bool { return len(ex.calls()) == 4 })
 	for _, id := range []string{model.CronIDSystemUpdate, model.CronIDOstioleUpdate} {
-		if !contains(ex.calls(), id) {
+		if !slices.Contains(ex.calls(), id) {
 			t.Errorf("ran %v on Sunday, want both installs", ex.calls())
 		}
 	}
@@ -674,13 +675,4 @@ func TestRemoteBackupCronHandsOverAnEncryptedArchive(t *testing.T) {
 		err.Error() != "this router cannot reach a bucket from here" {
 		t.Errorf("nothing wired up: %v", err)
 	}
-}
-
-func contains(list []string, want string) bool {
-	for _, s := range list {
-		if s == want {
-			return true
-		}
-	}
-	return false
 }

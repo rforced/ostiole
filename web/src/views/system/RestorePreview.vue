@@ -8,7 +8,7 @@ import ChangeList from '@/components/ChangeList.vue'
  * nothing it shows has been applied.
  */
 defineProps({
-  /** @type {{summary: object, changes: object[]}} */
+  /** @type {import('vue').PropType<{summary: object, changes: object[]}>} */
   pending: { type: Object, required: true },
 })
 defineEmits(['load', 'cancel'])

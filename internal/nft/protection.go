@@ -2,6 +2,7 @@ package nft
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/rforced/ostiole/internal/model"
@@ -298,12 +299,7 @@ func (r *renderer) scanTally(zone string) {
 
 // protects reports whether a zone is defended.
 func (r *renderer) protects(zone string) bool {
-	for _, z := range r.cfg.ProtectedZones() {
-		if z == zone {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(r.cfg.ProtectedZones(), zone)
 }
 
 // ruleLimit is how a rule's own limit is written.

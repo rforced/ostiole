@@ -163,7 +163,7 @@ func runInNamespace(t *testing.T, env, name string) {
 // dropped by the driver, after the postrouting hook has seen it.
 func dummyLink(t *testing.T, name string, addrs ...string) {
 	t.Helper()
-	link := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Name: name}}
+	link := &netlink.Dummy{Name: name}
 	if err := netlink.LinkAdd(link); err != nil {
 		t.Fatalf("add %s: %v", name, err)
 	}

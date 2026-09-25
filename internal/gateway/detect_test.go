@@ -113,7 +113,7 @@ func TestDetectReadsTheKernel(t *testing.T) {
 		return
 	}
 
-	link := &netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Name: "wan0"}}
+	link := &netlink.Dummy{Name: "wan0"}
 	if err := netlink.LinkAdd(link); err != nil {
 		t.Fatalf("add link: %v", err)
 	}

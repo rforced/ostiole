@@ -123,13 +123,13 @@ type Config struct {
 	Services      Services       `json:"services"`
 	// Blocking is DNS blocking: the lists of names this router refuses to
 	// resolve, and what it does to stop a client going around it.
-	Blocking Blocking `json:"blocking,omitempty"`
+	Blocking Blocking `json:"blocking"`
 	// Crons are the work this router runs on a schedule of the operator's
 	// choosing, alongside the work Ostiole does on its own account.
 	Crons []Cron `json:"crons,omitempty"`
 	// Updates is how this router keeps itself patched: the distro packages
 	// underneath it and Ostiole's own releases.
-	Updates Updates `json:"updates,omitempty"`
+	Updates Updates `json:"updates"`
 	// Backup is what the router does with its own configuration on a
 	// schedule.
 	Backup Backup `json:"backup,omitzero"`
@@ -298,9 +298,9 @@ const (
 // security updates rather than nothing.
 type Updates struct {
 	// System is the distro packages underneath Ostiole.
-	System PackageUpdates `json:"system,omitempty"`
+	System PackageUpdates `json:"system"`
 	// Ostiole is Ostiole's own releases.
-	Ostiole SelfUpdates `json:"ostiole,omitempty"`
+	Ostiole SelfUpdates `json:"ostiole"`
 }
 
 // PackageUpdates controls the distro package manager.
@@ -638,9 +638,6 @@ type FirewallLog struct {
 const (
 	DefaultFirewallLogEntries = 20_000
 	MaxFirewallLogEntries     = 1_000_000
-	// FirewallLogEntryBytes is what one entry costs, for the figure the page
-	// quotes and the bound the API serves.
-	FirewallLogEntryBytes = 350
 )
 
 // Size is how many logged packets are kept, filling in the default.
@@ -1388,10 +1385,7 @@ type Gateway struct {
 // to demote a gateway that fails its monitor without colliding with the
 // next one.
 func (g Gateway) GatewayMetric() int {
-	p := g.Priority
-	if p < 0 {
-		p = 0
-	}
+	p := max(g.Priority, 0)
 	return 10 + p*10
 }
 

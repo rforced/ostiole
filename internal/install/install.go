@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -64,7 +65,7 @@ func Listen(lay Layout) string {
 	if err != nil {
 		return ""
 	}
-	for _, line := range strings.Split(string(raw), "\n") {
+	for line := range strings.SplitSeq(string(raw), "\n") {
 		if !strings.HasPrefix(line, "ExecStart=") {
 			continue
 		}
@@ -820,12 +821,7 @@ var SystemBinDirs = []string{"/usr/local/bin", "/usr/bin", "/usr/local/sbin", "/
 // InSystemBinDir reports whether path lives in a system bin directory.
 func InSystemBinDir(path string) bool {
 	dir := filepath.Dir(filepath.Clean(path))
-	for _, d := range SystemBinDirs {
-		if dir == d {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(SystemBinDirs, dir)
 }
 
 // ServiceBinary returns the executable that units, timers, and the updater

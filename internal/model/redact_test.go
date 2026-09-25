@@ -14,7 +14,7 @@ import (
 var secretName = regexp.MustCompile(`(?i)(password|passphrase|privatekey|presharedkey|secret|authkey|hmac|keypem|token)$`)
 
 // redactExempt are the matching fields a shared backup may keep, and why.
-var redactExempt = []string{}
+var redactExempt []string
 
 func TestRedactedBlanksEverySecret(t *testing.T) {
 	cfg := &Config{}

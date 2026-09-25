@@ -19,7 +19,7 @@ func chainComments(t *testing.T, ruleset string) map[string][]string {
 	comment := regexp.MustCompile(`comment "([^"]+)"`)
 	out := map[string][]string{}
 	chain := ""
-	for _, line := range strings.Split(ruleset, "\n") {
+	for line := range strings.SplitSeq(ruleset, "\n") {
 		if m := open.FindStringSubmatch(line); m != nil {
 			chain = m[1]
 			out[chain] = nil
@@ -91,14 +91,7 @@ func TestSystemRulesMatchRuleset(t *testing.T) {
 						t.Errorf("row %d (%s) has key %q without a chain", i, row.Description, key)
 						continue
 					}
-					found := false
-					for _, c := range comments[chain] {
-						if c == comment {
-							found = true
-							break
-						}
-					}
-					if !found {
+					if !slices.Contains(comments[chain], comment) {
 						t.Errorf("row %d (%s) counts %q, but chain %s carries no such comment", i, row.Description, key, chain)
 					}
 				}

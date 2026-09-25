@@ -23,8 +23,8 @@ func TestOpenAPICoversEveryRoute(t *testing.T) {
 		t.Fatalf("openapi: %d %s", resp.StatusCode, raw)
 	}
 	var doc struct {
-		OpenAPI string                            `json:"openapi"`
-		Paths   map[string]map[string]interface{} `json:"paths"`
+		OpenAPI string                    `json:"openapi"`
+		Paths   map[string]map[string]any `json:"paths"`
 	}
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatal(err)

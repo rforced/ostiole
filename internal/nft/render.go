@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/netip"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/rforced/ostiole/internal/model"
@@ -1545,10 +1544,10 @@ func (r *renderer) internalInterfaces() []string {
 	return out
 }
 
-// internalAddresses lists the firewall's own static addresses on internal
-// interfaces, in the given family.
-func (r *renderer) internalAddresses(fam int) []string {
-	var out []string
+// internalPrefixes lists the firewall's own static addresses on internal
+// interfaces, in the given family, each with its network's length.
+func (r *renderer) internalPrefixes(fam int) []netip.Prefix {
+	var out []netip.Prefix
 	for _, in := range r.cfg.Interfaces {
 		if !in.Enabled || in.Zone == "" {
 			continue
@@ -1561,8 +1560,18 @@ func (r *renderer) internalAddresses(fam int) []string {
 			addr = in.IPv6.Address
 		}
 		if p, err := netip.ParsePrefix(addr); err == nil && (p.Addr().Is4() == (fam == 4)) {
-			out = append(out, p.Addr().String())
+			out = append(out, p)
 		}
+	}
+	return out
+}
+
+// internalAddresses lists the firewall's own static addresses on internal
+// interfaces, in the given family.
+func (r *renderer) internalAddresses(fam int) []string {
+	var out []string
+	for _, p := range r.internalPrefixes(fam) {
+		out = append(out, p.Addr().String())
 	}
 	return out
 }
@@ -1571,20 +1580,8 @@ func (r *renderer) internalAddresses(fam int) []string {
 // who may be sent through the hairpin.
 func (r *renderer) internalNetworks(fam int) []string {
 	var out []string
-	for _, in := range r.cfg.Interfaces {
-		if !in.Enabled || in.Zone == "" {
-			continue
-		}
-		if z, ok := r.cfg.Zone(in.Zone); !ok || z.External {
-			continue
-		}
-		addr := in.IPv4.Address
-		if fam == 6 {
-			addr = in.IPv6.Address
-		}
-		if p, err := netip.ParsePrefix(addr); err == nil && (p.Addr().Is4() == (fam == 4)) {
-			out = append(out, p.Masked().String())
-		}
+	for _, p := range r.internalPrefixes(fam) {
+		out = append(out, p.Masked().String())
 	}
 	return out
 }
@@ -1843,15 +1840,4 @@ func sanitizeComment(s string) string {
 		s = s[:120]
 	}
 	return s
-}
-
-// SortedZoneNames is a helper for callers that want deterministic zone order
-// independent of configuration order.
-func SortedZoneNames(cfg *model.Config) []string {
-	names := make([]string, 0, len(cfg.Zones))
-	for _, z := range cfg.Zones {
-		names = append(names, z.Name)
-	}
-	sort.Strings(names)
-	return names
 }

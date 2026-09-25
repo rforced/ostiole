@@ -24,13 +24,13 @@ func TestSecurityHeadersAreSelfOnly(t *testing.T) {
 	defer srv.Close()
 	resp, _ := do(t, srv, http.MethodGet, "/api/v1/health", nil)
 	csp := resp.Header.Get("Content-Security-Policy")
-	for _, d := range strings.Split(csp, ";") {
+	for d := range strings.SplitSeq(csp, ";") {
 		d = strings.TrimSpace(d)
 		if d == "" {
 			continue
 		}
 		name, sources, _ := strings.Cut(d, " ")
-		for _, src := range strings.Fields(sources) {
+		for src := range strings.FieldsSeq(sources) {
 			switch src {
 			case "'self'", "'none'", "data:":
 			case "'unsafe-inline'":

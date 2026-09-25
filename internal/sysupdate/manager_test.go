@@ -386,7 +386,7 @@ func TestPackageCommandsLeaveTheSandbox(t *testing.T) {
 
 	// systemd's own tools work perfectly well from inside the sandbox,
 	// and wrapping them in a second transient unit would be absurd.
-	for _, line := range strings.Split(run.transcript(), "\n") {
+	for line := range strings.SplitSeq(run.transcript(), "\n") {
 		if strings.Contains(line, "-- systemctl") || strings.Contains(line, "-- journalctl") {
 			t.Errorf("systemd was driven through a transient unit: %q", line)
 		}

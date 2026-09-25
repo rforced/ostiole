@@ -125,7 +125,7 @@ func probeHealth(ctx context.Context, rawURL string) error {
 	}
 	client := &http.Client{Timeout: 5 * time.Second, Transport: tr}
 	var lastErr error
-	for attempt := 0; attempt < 10; attempt++ {
+	for range 10 {
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 		resp, err := client.Do(req)
 		if err == nil {

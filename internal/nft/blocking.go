@@ -168,10 +168,3 @@ func (r *renderer) dnsRedirect() {
 		Keys:        []string{"nat_prerouting/block:dns-redirect"}, Setting: "enforcement",
 	})
 }
-
-// BlockingUsesAlias reports whether DNS enforcement refers to an alias, so
-// deleting it can say what would break.
-func BlockingUsesAlias(cfg *model.Config, name string) bool {
-	e := cfg.Blocking.Enforce
-	return name != "" && (e.DoHAlias == name || e.ExemptAlias == name)
-}

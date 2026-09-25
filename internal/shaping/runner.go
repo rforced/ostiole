@@ -110,7 +110,7 @@ func (x *Exec) Version(ctx context.Context) (string, error) {
 // stripComments leaves only the commands.
 func stripComments(script string) string {
 	var b strings.Builder
-	for _, line := range strings.Split(script, "\n") {
+	for line := range strings.SplitSeq(script, "\n") {
 		if line = strings.TrimSpace(line); line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}

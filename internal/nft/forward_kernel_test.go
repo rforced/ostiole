@@ -40,7 +40,7 @@ func TestPortForwardsPassThroughTheZoneInKernel(t *testing.T) {
 
 	// eth0 is the WAN, fed from its veth peer. eth1 is the LAN, a dummy
 	// that drops what it is given once the forward hook has seen it.
-	veth := &netlink.Veth{LinkAttrs: netlink.LinkAttrs{Name: "eth0"}, PeerName: "peer0"}
+	veth := &netlink.Veth{Name: "eth0", PeerName: "peer0"}
 	if err := netlink.LinkAdd(veth); err != nil {
 		t.Fatalf("add veth: %v", err)
 	}

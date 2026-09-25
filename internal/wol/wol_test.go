@@ -47,7 +47,7 @@ func TestSendInNamespace(t *testing.T) {
 		runInNamespace(t, "OSTIOLE_WOL_NETNS", "TestSendInNamespace")
 		return
 	}
-	if err := netlink.LinkAdd(&netlink.Dummy{LinkAttrs: netlink.LinkAttrs{Name: "wake0"}}); err != nil {
+	if err := netlink.LinkAdd(&netlink.Dummy{Name: "wake0"}); err != nil {
 		t.Fatalf("add link: %v", err)
 	}
 	link, err := netlink.LinkByName("wake0")

@@ -205,9 +205,9 @@ func zoneChain(t *testing.T, ruleset, zone string) string {
 		t.Fatalf("no chain for zone %q", zone)
 	}
 	rest := ruleset[i+len(open):]
-	end := strings.Index(rest, "\n\t}")
-	if end < 0 {
+	before, _, ok := strings.Cut(rest, "\n\t}")
+	if !ok {
 		t.Fatalf("chain for zone %q does not end", zone)
 	}
-	return rest[:end]
+	return before
 }

@@ -173,10 +173,6 @@ func Drivers() []Driver {
 // ErrNoManager means this router has no package manager Ostiole can drive.
 var ErrNoManager = errors.New("no supported package manager was found (dnf, apt-get, zypper, pacman)")
 
-// ErrNoSecurityChannel means the manager has no security-only mode, so
-// "security" would have to mean "everything" to do anything at all.
-var ErrNoSecurityChannel = errors.New("has no security-only channel")
-
 // SecurityUnavailable explains, in the words the page uses, why security
 // updates cannot be separated out on this router.
 func SecurityUnavailable(d Driver) string {
@@ -219,7 +215,7 @@ func exitCode(err error) int {
 // lines splits output into trimmed, non-empty lines.
 func lines(out []byte) []string {
 	var keep []string
-	for _, l := range strings.Split(string(out), "\n") {
+	for l := range strings.SplitSeq(string(out), "\n") {
 		if l = strings.TrimRight(l, "\r"); strings.TrimSpace(l) != "" {
 			keep = append(keep, l)
 		}

@@ -89,7 +89,7 @@ func newTestMonitor(t *testing.T) (*Monitor, *fakeProber, *fakeRouter) {
 }
 
 func tick(m *Monitor, times int) {
-	for i := 0; i < times; i++ {
+	for range times {
 		m.Tick(context.Background())
 	}
 }

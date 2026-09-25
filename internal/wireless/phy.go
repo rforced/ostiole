@@ -40,7 +40,7 @@ type Phy struct {
 // sends. The client-side flag is a different feature and does not count:
 // a card that can verify somebody else's beacons cannot necessarily
 // protect its own.
-func (p Phy) BeaconProtection() bool { return p.Features["BEACON_PROTECTION"] }
+func (p *Phy) BeaconProtection() bool { return p.Features["BEACON_PROTECTION"] }
 
 // BandInfo is what a device can do in one band.
 type BandInfo struct {
@@ -151,7 +151,7 @@ func ParsePhy(text string) (Phy, error) {
 		band = nil
 	}
 
-	for _, raw := range strings.Split(text, "\n") {
+	for raw := range strings.SplitSeq(text, "\n") {
 		if strings.TrimSpace(raw) == "" {
 			continue
 		}

@@ -472,7 +472,7 @@ func locate(name string) string {
 // lines splits output into trimmed, non-empty lines.
 func lines(s string) []string {
 	var keep []string
-	for _, l := range strings.Split(s, "\n") {
+	for l := range strings.SplitSeq(s, "\n") {
 		if l = strings.TrimSpace(l); l != "" {
 			keep = append(keep, l)
 		}

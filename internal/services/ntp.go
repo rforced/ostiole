@@ -269,7 +269,7 @@ func (n *NTP) Preflight(ctx context.Context, files network.Files) error {
 // chronydFatal picks chronyd's reason out of what `chronyd -p` printed,
 // which is the configuration it read and then the line it stopped at.
 func chronydFatal(out string, err error) string {
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		if _, why, ok := strings.Cut(line, "Fatal error : "); ok {
 			return strings.TrimSpace(why)
 		}
@@ -356,9 +356,9 @@ func (n *NTP) takeOver(ctx context.Context) error {
 		return fmt.Errorf("look for other time services: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	seen := map[string]bool{}
-	for _, block := range strings.Split(strings.TrimSpace(string(out)), "\n\n") {
+	for block := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n\n") {
 		props := map[string]string{}
-		for _, line := range strings.Split(block, "\n") {
+		for line := range strings.SplitSeq(block, "\n") {
 			if k, v, ok := strings.Cut(strings.TrimSpace(line), "="); ok {
 				props[k] = v
 			}

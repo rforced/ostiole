@@ -155,7 +155,7 @@ func decodeIPv6(e *Entry, b []byte) {
 	next := b[6]
 	rest := b[40:]
 	// Skip the common extension headers to reach the transport header.
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		switch next {
 		case 0, 43, 60: // hop-by-hop, routing, destination options
 			if len(rest) < 8 {

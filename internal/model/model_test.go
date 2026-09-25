@@ -2189,9 +2189,8 @@ func TestValidateConntrackMax(t *testing.T) {
 	} {
 		cfg := &Config{Version: SchemaVersion, System: System{ConntrackMax: tc.max}}
 		err := cfg.Validate()
-		var ve *ValidationError
 		got := true
-		if errors.As(err, &ve) {
+		if ve, ok := errors.AsType[*ValidationError](err); ok {
 			for _, issue := range ve.Issues {
 				if issue.Path == "system.conntrackMax" {
 					got = false

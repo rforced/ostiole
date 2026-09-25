@@ -35,8 +35,8 @@ type Reload int
 
 // What Retime can load.
 const (
-	// ReloadedNothing: the offset had not moved, or nothing in force keeps
-	// a schedule's hours.
+	// ReloadedNothing means the offset had not moved, or nothing in force
+	// keeps a schedule's hours.
 	ReloadedNothing Reload = iota
 	// ReloadedSchedules is the chains that keep a schedule's hours.
 	ReloadedSchedules

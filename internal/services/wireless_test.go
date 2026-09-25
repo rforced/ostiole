@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,9 +56,7 @@ func newWireless(t *testing.T, phy *wireless.Phy) (*Wireless, *fakeCmd, *string)
 func with5G(phy *wireless.Phy, alter func(*wireless.BandInfo)) *wireless.Phy {
 	cut := *phy
 	cut.Bands = map[model.Band]wireless.BandInfo{}
-	for b, info := range phy.Bands {
-		cut.Bands[b] = info
-	}
+	maps.Copy(cut.Bands, phy.Bands)
 	info := cut.Bands[model.Band5G]
 	alter(&info)
 	cut.Bands[model.Band5G] = info

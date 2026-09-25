@@ -357,9 +357,7 @@ func UnreachableTLS(ctx context.Context, ups []model.TLSUpstream, dial Dialer) [
 	bad := make([]string, len(ups))
 	var wg sync.WaitGroup
 	for i, up := range ups {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			addr := up.Address
 			if _, _, err := net.SplitHostPort(addr); err != nil {
 				addr = net.JoinHostPort(addr, "853")
@@ -370,7 +368,7 @@ func UnreachableTLS(ctx context.Context, ups []model.TLSUpstream, dial Dialer) [
 				return
 			}
 			_ = c.Close()
-		}()
+		})
 	}
 	wg.Wait()
 	out := []string{}

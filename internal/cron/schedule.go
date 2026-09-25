@@ -45,11 +45,6 @@ var shorthands = map[string]string{
 	"@hourly":   "0 * * * *",
 }
 
-// Shorthands lists the accepted @-forms, for the UI to offer.
-func Shorthands() []string {
-	return []string{"@hourly", "@daily", "@weekly", "@monthly", "@yearly"}
-}
-
 var monthNames = map[string]int{
 	"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
 	"jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
@@ -102,7 +97,7 @@ func Parse(expr string) (Schedule, error) {
 
 func parseField(spec string, lowest, highest int, names map[string]int) (field, error) {
 	var out field
-	for _, part := range strings.Split(spec, ",") {
+	for part := range strings.SplitSeq(spec, ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			return 0, fmt.Errorf("empty value in %q", spec)

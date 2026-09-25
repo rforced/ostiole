@@ -203,7 +203,7 @@ func (p *Proxy) Preflight(ctx context.Context, files network.Files) error {
 // certIDs reads back the list Render wrote, one ID per line.
 func certIDs(s string) []string {
 	var out []string
-	for _, line := range strings.Split(s, "\n") {
+	for line := range strings.SplitSeq(s, "\n") {
 		if line = strings.TrimSpace(line); line != "" {
 			out = append(out, line)
 		}

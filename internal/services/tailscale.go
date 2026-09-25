@@ -190,7 +190,7 @@ func (t *Tailscale) Apply(ctx context.Context, files network.Files) error {
 // with a space in it stays one argument.
 func prefLines(s string) []string {
 	var args []string
-	for _, line := range strings.Split(s, "\n") {
+	for line := range strings.SplitSeq(s, "\n") {
 		if line = strings.TrimSpace(line); line != "" {
 			args = append(args, line)
 		}

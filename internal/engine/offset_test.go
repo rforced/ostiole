@@ -211,8 +211,7 @@ func TestRetimeTakesAnUnrecordedLoadAsCurrent(t *testing.T) {
 func TestFollowOffsetLoadsTheWholeTableForAnUnnamedLoad(t *testing.T) {
 	t.Parallel()
 	e, fr, clock, st := offsetEngine(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	res, err := e.Apply(ctx, scheduled("saved"), ApplyOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -396,8 +395,7 @@ func TestFollowOffsetLooksAtTheStart(t *testing.T) {
 func TestFollowOffsetReloadsWhenTheOffsetChanges(t *testing.T) {
 	t.Parallel()
 	e, fr, clock, _ := offsetEngine(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	res, err := e.Apply(ctx, scheduled("saved"), ApplyOptions{})
 	if err != nil {
 		t.Fatal(err)

@@ -234,7 +234,7 @@ func TestBlockedSourcesComeFirst(t *testing.T) {
 	}
 	// Link-local is never blocked: IPv6 needs it for neighbour discovery
 	// and for the default route on a WAN.
-	for _, line := range strings.Split(got, "\n") {
+	for line := range strings.SplitSeq(got, "\n") {
 		if strings.Contains(line, "fe80::") && strings.Contains(line, "drop") {
 			t.Errorf("link-local was blocked, which would take IPv6 down: %s", strings.TrimSpace(line))
 		}

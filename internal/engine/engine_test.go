@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -59,9 +60,7 @@ func (f *fakeNet) Snapshot() (network.Files, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	out := network.Files{}
-	for k, v := range f.files {
-		out[k] = v
-	}
+	maps.Copy(out, f.files)
 	return out, nil
 }
 
@@ -679,7 +678,7 @@ func TestShapingAppliedAndRevertedWithTheRest(t *testing.T) {
 	st := store.New(t.TempDir())
 	fr := &fakeRunner{}
 	fn := &fakeNet{files: network.Files{}}
-	sh := &fakeShaper{fakeNet: fakeNet{files: network.Files{}}}
+	sh := &fakeShaper{files: network.Files{}}
 	e := New(st, fr, fn, slog.New(slog.DiscardHandler)).WithShaping(sh)
 
 	if _, err := e.Apply(context.Background(), shapedConfig("first", 200_000_000), ApplyOptions{}); err != nil {
@@ -713,7 +712,7 @@ func TestShapingFailureRollsBackEverything(t *testing.T) {
 	fr := &fakeRunner{}
 	fn := &fakeNet{files: network.Files{}}
 	svc := &fakeNet{files: network.Files{}, services: true}
-	sh := &fakeShaper{fakeNet: fakeNet{files: network.Files{}}}
+	sh := &fakeShaper{files: network.Files{}}
 	e := New(st, fr, fn, slog.New(slog.DiscardHandler)).WithServices(svc).WithShaping(sh)
 
 	first := shapedConfig("first", 200_000_000)
@@ -745,7 +744,7 @@ func TestShapingPreflightRefusesBeforeAnythingIsApplied(t *testing.T) {
 	t.Parallel()
 	st := store.New(t.TempDir())
 	fr := &fakeRunner{}
-	sh := &fakeShaper{fakeNet: fakeNet{files: network.Files{}}, preflightErr: errors.New("tc is not installed")}
+	sh := &fakeShaper{files: network.Files{}, preflightErr: errors.New("tc is not installed")}
 	e := New(st, fr, nil, slog.New(slog.DiscardHandler)).WithShaping(sh)
 
 	_, err := e.Apply(context.Background(), shapedConfig("first", 200_000_000), ApplyOptions{})

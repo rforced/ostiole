@@ -2,8 +2,10 @@ package dnslog
 
 import (
 	"log/slog"
+	"maps"
 	"net/netip"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -383,9 +385,7 @@ func (l *Log) ListCounts() (map[string]ListCount, time.Time) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	out := make(map[string]ListCount, len(l.counts))
-	for k, v := range l.counts {
-		out[k] = v
-	}
+	maps.Copy(out, l.counts)
 	return out, l.since
 }
 
@@ -441,18 +441,8 @@ func matches(e Entry, f Filter, name string, wanted uint64) bool {
 		return false
 	case !f.Since.IsZero() && e.Time.Before(f.Since):
 		return false
-	}
-	if len(f.Clients) > 0 {
-		var hit bool
-		for _, c := range f.Clients {
-			if c == e.Client {
-				hit = true
-				break
-			}
-		}
-		if !hit {
-			return false
-		}
+	case len(f.Clients) > 0 && !slices.Contains(f.Clients, e.Client):
+		return false
 	}
 	return true
 }

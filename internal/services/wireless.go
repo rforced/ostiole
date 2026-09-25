@@ -171,7 +171,7 @@ func (w *Wireless) Snapshot() (network.Files, error) {
 // errWirelessMissing is what an apply says when hostapd is not here. The
 // script installs it when it finds a card or is asked for one (ADR-0013).
 var errWirelessMissing = errors.New(
-	"Wireless is not on this router: run `ostiole repair --wireless` once as root")
+	"hostapd is not on this router: run `ostiole repair --wireless` once as root")
 
 // errBluetoothLoaded refuses to bring a radio up next to the module the
 // install removed.
@@ -421,8 +421,8 @@ func (w *Wireless) LastLog(ctx context.Context, radio string) string {
 	}
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
 	last := ""
-	for i := len(lines) - 1; i >= 0; i-- {
-		l := strings.TrimSpace(lines[i])
+	for _, line := range slices.Backward(lines) {
+		l := strings.TrimSpace(line)
 		if l == "" {
 			continue
 		}

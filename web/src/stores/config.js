@@ -850,15 +850,6 @@ export const useConfigStore = defineStore('config', () => {
     undoable(`Deleted gateway group ${name}.`, () => dropGatewayGroup(name))
   }
 
-  /** Where a gateway or group is used, so deleting it cannot go unnoticed. */
-  function gatewayReferences(name) {
-    const refs = rules.value.filter((r) => r.gateway === name).map((r) => `rule ${r.id}`)
-    for (const g of gatewayGroups.value) {
-      if ((g.members ?? []).some((m) => m.gateway === name)) refs.push(`group ${g.name}`)
-    }
-    return refs
-  }
-
   // ---- updates ---------------------------------------------------------
 
   /**
@@ -1306,7 +1297,6 @@ export const useConfigStore = defineStore('config', () => {
 
   return {
     changes,
-    refreshChanges,
     hasChanges,
     isChanged,
     sectionFor,
@@ -1424,7 +1414,6 @@ export const useConfigStore = defineStore('config', () => {
     routeTargets,
     upsertGatewayGroup,
     removeGatewayGroup,
-    gatewayReferences,
     upsertRoute,
     removeRoute,
     ensureServices,
@@ -1443,7 +1432,6 @@ export const useConfigStore = defineStore('config', () => {
     removeUPnPRule,
     moveUPnPRule,
     proxy,
-    ensureProxy,
     setProxy,
     upsertPool,
     removePool,

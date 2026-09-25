@@ -204,8 +204,7 @@ func retryable(err error) bool {
 		errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}
-	var e *Error
-	if errors.As(err, &e) {
+	if e, ok := errors.AsType[*Error](err); ok {
 		return e.Status >= 500
 	}
 	return true

@@ -194,7 +194,7 @@ func (s System) ensureInclude() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	for _, line := range strings.Split(string(raw), "\n") {
+	for line := range strings.SplitSeq(string(raw), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) >= 2 && strings.EqualFold(fields[0], "Include") &&
 			strings.Contains(fields[1], "sshd_config.d") {
@@ -231,7 +231,7 @@ func (s System) State(ctx context.Context) (passwords, readable bool) {
 	if err != nil {
 		return true, false
 	}
-	for _, line := range strings.Split(string(out), "\n") {
+	for line := range strings.SplitSeq(string(out), "\n") {
 		key, value, ok := strings.Cut(strings.TrimSpace(line), " ")
 		if ok && strings.EqualFold(key, "passwordauthentication") {
 			return strings.TrimSpace(value) == "yes", true

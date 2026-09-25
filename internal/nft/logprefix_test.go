@@ -102,7 +102,7 @@ func TestSystemDropsLogWhereTheZoneSaysSo(t *testing.T) {
 	}
 	// Every log statement of a system drop is rate limited; the drop beside
 	// it is not, so the counter stays the true figure.
-	for _, line := range strings.Split(out.Ruleset, "\n") {
+	for line := range strings.SplitSeq(out.Ruleset, "\n") {
 		if !strings.Contains(line, "ostiole:s:") {
 			continue
 		}
@@ -202,7 +202,7 @@ func TestSharedChainDropsTheSetWhenEveryZoneLogs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, line := range strings.Split(out.Ruleset, "\n") {
+	for line := range strings.SplitSeq(out.Ruleset, "\n") {
 		if strings.Contains(line, "ostiole:s:block-") && strings.Contains(line, "iifname") {
 			t.Errorf("the log statement is scoped when it need not be: %s", strings.TrimSpace(line))
 		}

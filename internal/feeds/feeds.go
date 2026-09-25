@@ -630,13 +630,13 @@ func Parse(body string, typ model.AliasType) ([]string, error) {
 	var out []string
 	seen := map[string]bool{}
 	bad := 0
-	for _, line := range strings.Split(body, "\n") {
+	for line := range strings.SplitSeq(body, "\n") {
 		line = strings.TrimSpace(commentRe.ReplaceAllString(line, ""))
 		if line == "" {
 			continue
 		}
 		// Some lists put several entries on a line.
-		for _, field := range strings.Fields(line) {
+		for field := range strings.FieldsSeq(line) {
 			field = strings.Trim(field, ",")
 			if field == "" {
 				continue

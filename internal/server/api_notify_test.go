@@ -255,8 +255,7 @@ func TestTheDashboardSaysANoticeFailed(t *testing.T) {
 	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: cfg}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go n.Run(ctx)
 	n.Notify(notify.Event{Kind: "gateway-down", Title: "Gateway wan is down"})
 	waitUntil(t, func() bool { return len(n.Status().Recent) == 1 })

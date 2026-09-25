@@ -21,7 +21,7 @@ type DevInfo struct {
 // ParseDevInfo reads `iw dev <interface> info`.
 func ParseDevInfo(text string) (DevInfo, error) {
 	var d DevInfo
-	for _, raw := range strings.Split(text, "\n") {
+	for raw := range strings.SplitSeq(text, "\n") {
 		line := strings.TrimSpace(raw)
 		switch {
 		case strings.HasPrefix(line, "Interface "):
@@ -35,14 +35,14 @@ func ParseDevInfo(text string) (DevInfo, error) {
 		case strings.HasPrefix(line, "channel "):
 			// channel 40 (5200 MHz), width: 80 MHz, center1: 5210 MHz
 			d.Channel = int(number(strings.TrimPrefix(line, "channel ")))
-			for _, part := range strings.Split(line, ",") {
+			for part := range strings.SplitSeq(line, ",") {
 				part = strings.TrimSpace(part)
 				if w, ok := strings.CutPrefix(part, "width: "); ok {
 					d.Width = int(number(w))
 				}
 			}
-			if open := strings.Index(line, "("); open >= 0 {
-				d.MHz = int(number(line[open+1:]))
+			if _, after, ok := strings.Cut(line, "("); ok {
+				d.MHz = int(number(after))
 			}
 		}
 	}
@@ -57,7 +57,7 @@ func ParseDevInfo(text string) (DevInfo, error) {
 func RegCountry(text string) (global string, phys map[string]string) {
 	phys = map[string]string{}
 	current := ""
-	for _, raw := range strings.Split(text, "\n") {
+	for raw := range strings.SplitSeq(text, "\n") {
 		line := strings.TrimSpace(raw)
 		switch {
 		case line == "global":
