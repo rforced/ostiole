@@ -4,6 +4,7 @@ import (
 	"net"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/vishvananda/netlink"
 )
@@ -140,26 +141,60 @@ func TestNeighboursReadsTheKernel(t *testing.T) {
 		t.Fatalf("add neighbour: %v", err)
 	}
 
+	// An entry that says the neighbour just answered.
+	if err := netlink.NeighAdd(&netlink.Neigh{
+		LinkIndex:    link.Attrs().Index,
+		Family:       netlink.FAMILY_V4,
+		State:        netlink.NUD_REACHABLE,
+		IP:           net.ParseIP("192.168.77.51"),
+		HardwareAddr: mac,
+	}); err != nil {
+		t.Fatalf("add neighbour: %v", err)
+	}
+
+	before := time.Now()
 	got, err := Neighbours()
 	if err != nil {
 		t.Fatal(err)
 	}
-	found := false
+	found := map[string]Neighbour{}
 	for _, n := range got {
-		if n.Address == "192.168.77.50" {
-			found = true
-			if n.MAC != "02:00:00:00:00:01" {
-				t.Errorf("mac = %q", n.MAC)
-			}
-			if n.Interface != "lan0" {
-				t.Errorf("interface = %q", n.Interface)
-			}
-			if n.Family != "IPv4" || n.State != "PERMANENT" {
-				t.Errorf("entry = %+v", n)
-			}
-		}
+		found[n.Address] = n
 	}
-	if !found {
-		t.Errorf("the entry that was just added is not in the table: %+v", got)
+	n, ok := found["192.168.77.50"]
+	if !ok {
+		t.Fatalf("the entry that was just added is not in the table: %+v", got)
+	}
+	if n.MAC != "02:00:00:00:00:01" {
+		t.Errorf("mac = %q", n.MAC)
+	}
+	if n.Interface != "lan0" {
+		t.Errorf("interface = %q", n.Interface)
+	}
+	if n.Family != "IPv4" || n.State != "PERMANENT" {
+		t.Errorf("entry = %+v", n)
+	}
+	// Typed in, so nothing was heard from it.
+	if !n.Seen.IsZero() {
+		t.Errorf("a permanent entry was seen at %v", n.Seen)
+	}
+	r, ok := found["192.168.77.51"]
+	if !ok || r.State != "REACHABLE" {
+		t.Fatalf("reachable entry = %+v", r)
+	}
+	if r.Seen.Before(before.Add(-5*time.Second)) || r.Seen.After(time.Now()) {
+		t.Errorf("seen at %v, want just now (%v)", r.Seen, before)
+	}
+}
+
+func TestNeighbourAgeIsInClockTicks(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 9, 25, 18, 0, 0, 0, time.UTC)
+	if got := ago(now, 150); !got.Equal(now.Add(-1500 * time.Millisecond)) {
+		t.Errorf("150 ticks = %v", got)
+	}
+	// The kernel's u32 at its largest is 497 days back, not a wrap.
+	if got := ago(now, 1<<32-1); !got.Before(now.Add(-497 * 24 * time.Hour)) {
+		t.Errorf("max ticks = %v", got)
 	}
 }

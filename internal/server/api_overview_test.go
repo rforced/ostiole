@@ -33,7 +33,6 @@ import (
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/nft/nfttest"
-	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/smart"
 	"github.com/rforced/ostiole/internal/store"
 	"github.com/rforced/ostiole/internal/update"
@@ -456,23 +455,6 @@ func TestRecentBlocksPrefersTheLoggedAction(t *testing.T) {
 	got := recentBlocks(cfg, log, 10)
 	if len(got) != 3 || got[0].Src != "3" || got[1].Src != "2" || got[2].Src != "1" {
 		t.Errorf("recentBlocks = %+v, want the drop, the reject and the blocked source", got)
-	}
-}
-
-func TestRecentLeasesNewestFirst(t *testing.T) {
-	t.Parallel()
-	base := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
-	leases := []services.Lease{
-		{IP: "10.0.0.2", Expires: base.Add(1 * time.Hour)},
-		{IP: "10.0.0.3", Expires: base.Add(3 * time.Hour)},
-		{IP: "10.0.0.4", Expires: base.Add(2 * time.Hour)},
-	}
-	got := recentLeases(leases, 2)
-	if len(got) != 2 || got[0].IP != "10.0.0.3" || got[1].IP != "10.0.0.4" {
-		t.Errorf("recentLeases = %+v, want the two latest expiries first", got)
-	}
-	if leases[0].IP != "10.0.0.2" {
-		t.Error("recentLeases reordered the caller's slice")
 	}
 }
 

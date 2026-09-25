@@ -76,8 +76,8 @@ with the daemon and are not shown.`,
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
 			fmt.Fprintln(w, "IP\tMAC\tHOSTNAME\tEXPIRES")
 			for _, l := range leases {
-				exp := "static"
-				if !l.Static {
+				exp := "never"
+				if !l.Expires.IsZero() {
 					exp = l.Expires.Local().Format(time.RFC3339)
 				}
 				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", l.IP, l.MAC, l.Hostname, exp)

@@ -52,7 +52,7 @@ type Overview struct {
 	RecentBlocks []fwlog.Entry `json:"recentBlocks"`
 	// RecentLeases are the DHCP leases handed out or renewed last, newest
 	// first.
-	RecentLeases []services.Lease `json:"recentLeases"`
+	RecentLeases []lease `json:"recentLeases"`
 	// Wireless is who is on the air, present only when a radio is meant
 	// to be transmitting.
 	Wireless *WirelessSummary `json:"wireless,omitempty"`
@@ -253,7 +253,7 @@ func (a *api) overview(w http.ResponseWriter, r *http.Request) error {
 		Warnings:          []Warning{},
 		Gateways:          []gateway.Status{},
 		UnwatchedGateways: []gateway.Detected{},
-		RecentLeases:      []services.Lease{},
+		RecentLeases:      []lease{},
 	}
 	if a.gateways != nil {
 		ov.Gateways = a.gateways.Statuses()
@@ -289,9 +289,9 @@ func (a *api) overview(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if a.services != nil {
-		if leases, err := a.services.ReadLeases(); err == nil {
-			ov.DHCP.Leases = len(leases)
-			ov.RecentLeases = recentLeases(leases, recentLimit)
+		if rows, err := a.leases(links); err == nil {
+			ov.DHCP.Leases = len(rows)
+			ov.RecentLeases = recentLeases(rows, recentLimit)
 		}
 	}
 	if a.fwlog != nil {
@@ -439,18 +439,6 @@ func recentBlocks(cfg *model.Config, entries []fwlog.Entry, limit int) []fwlog.E
 			continue
 		}
 		out = append(out, e)
-	}
-	return out
-}
-
-// recentLeases orders leases by when they were last handed out or
-// renewed. dnsmasq records only the expiry, and every lease in a pool
-// lives the same length, so the latest expiry is the latest activity.
-func recentLeases(leases []services.Lease, limit int) []services.Lease {
-	out := slices.Clone(leases)
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Expires.After(out[j].Expires) })
-	if len(out) > limit {
-		out = out[:limit]
 	}
 	return out
 }

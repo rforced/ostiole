@@ -338,39 +338,6 @@ func (a *api) upnpMappings(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// lease is a DHCP lease and the interface it was handed out on. dnsmasq's
-// file does not record that, so it comes from the configuration in force:
-// whose network holds the address.
-type lease struct {
-	services.Lease
-	Interface string `json:"interface,omitempty"`
-}
-
-func (a *api) dhcpLeases(w http.ResponseWriter, _ *http.Request) error {
-	out := []lease{}
-	if a.services == nil {
-		writeJSON(w, http.StatusOK, out)
-		return nil
-	}
-	leases, err := a.services.ReadLeases()
-	if err != nil {
-		return err
-	}
-	var cfg *model.Config
-	if a.engine != nil {
-		cfg = a.engine.Effective()
-	}
-	for _, l := range leases {
-		row := lease{Lease: l}
-		if ip, err := netip.ParseAddr(l.IP); err == nil && cfg != nil && l.Family == 4 {
-			row.Interface, _ = cfg.InterfaceFor(ip)
-		}
-		out = append(out, row)
-	}
-	writeJSON(w, http.StatusOK, out)
-	return nil
-}
-
 // gatewayStatus reports gateway health. Without a monitor (a dev run, or
 // a daemon that is not root) the list is empty rather than an error.
 func (a *api) gatewayStatus(w http.ResponseWriter, _ *http.Request) error {

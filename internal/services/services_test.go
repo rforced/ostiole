@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rforced/ostiole/internal/certs"
 	"github.com/rforced/ostiole/internal/model"
@@ -472,11 +473,12 @@ func TestParseLeases(t *testing.T) {
 	if len(leases) != 3 {
 		t.Fatalf("leases = %+v", leases)
 	}
-	// Sorted by family, then numerically: .50 before .101, IPv6 last.
-	if !leases[0].Static || leases[0].IP != "192.168.1.50" || leases[0].ClientID != "" || leases[0].Family != 4 {
+	// Sorted by family, then numerically: .50 before .101, IPv6 last. An
+	// expiry of 0 is a lease that never expires.
+	if !leases[0].Expires.IsZero() || leases[0].IP != "192.168.1.50" || leases[0].ClientID != "" || leases[0].Family != 4 {
 		t.Errorf("lease 0 = %+v", leases[0])
 	}
-	if leases[1].IP != "192.168.1.101" || leases[1].Hostname != "laptop" || leases[1].Static || leases[1].Expires.IsZero() {
+	if leases[1].IP != "192.168.1.101" || leases[1].Hostname != "laptop" || !leases[1].Expires.Equal(time.Unix(1758000000, 0)) {
 		t.Errorf("lease 1 = %+v", leases[1])
 	}
 	// IPv6 leases carry an IAID where a MAC would be, and a DUID at the end.

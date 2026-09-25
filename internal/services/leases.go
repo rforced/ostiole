@@ -13,13 +13,14 @@ import (
 
 // Lease is one entry of the dnsmasq lease file.
 type Lease struct {
-	Expires time.Time `json:"expires"`
+	// Expires is zero for a lease that never expires, which dnsmasq
+	// writes as 0.
+	Expires time.Time `json:"expires,omitzero"`
 	// MAC is empty for IPv6 leases: DHCPv6 identifies clients by DUID.
 	MAC      string `json:"mac,omitempty"`
 	IP       string `json:"ip"`
 	Hostname string `json:"hostname,omitempty"`
 	ClientID string `json:"clientId,omitempty"`
-	Static   bool   `json:"static"`
 	Family   int    `json:"family"` // 4 or 6
 }
 
@@ -55,7 +56,7 @@ func ParseLeases(r interface{ Read([]byte) (int, error) }) ([]Lease, error) {
 		if err != nil {
 			continue
 		}
-		l := Lease{IP: fields[2], Static: epoch == 0, Family: 4}
+		l := Lease{IP: fields[2], Family: 4}
 		if ip.Is6() && !ip.Is4In6() {
 			l.Family = 6
 		} else {

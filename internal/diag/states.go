@@ -235,6 +235,23 @@ type Neighbour struct {
 	State string `json:"state"`
 	// Router marks an IPv6 neighbour that advertises itself as one.
 	Router bool `json:"router,omitempty"`
+	// Seen is when the neighbour last answered, to ARP or NDP or to a
+	// connection. The router asks only when it has traffic for it. Zero
+	// when the entry holds no address the neighbour gave.
+	Seen time.Time `json:"seen,omitzero"`
+}
+
+// answered are the states whose hardware address came from the
+// neighbour. A permanent entry was typed in; a failed one gave up.
+const answered = netlink.NUD_REACHABLE | netlink.NUD_STALE | netlink.NUD_DELAY | netlink.NUD_PROBE
+
+// userHZ is the clock tick the kernel counts neighbour ages in, 100 on
+// every architecture Ostiole ships for.
+const userHZ = 100
+
+// ago is the time a neighbour age in clock ticks points back to.
+func ago(now time.Time, ticks uint32) time.Time {
+	return now.Add(-time.Duration(ticks) * time.Second / userHZ)
 }
 
 // Neighbours reads the ARP and NDP tables. Entries with no hardware
@@ -249,6 +266,7 @@ func Neighbours() ([]Neighbour, error) {
 		names[l.Attrs().Index] = l.Attrs().Name
 	}
 	out := []Neighbour{}
+	now := time.Now()
 	for _, family := range []int{netlink.FAMILY_V4, netlink.FAMILY_V6} {
 		entries, err := netlink.NeighList(0, family)
 		if err != nil {
@@ -274,6 +292,9 @@ func Neighbours() ([]Neighbour, error) {
 			}
 			if len(n.HardwareAddr) > 0 {
 				nb.MAC = n.HardwareAddr.String()
+				if n.State&answered != 0 {
+					nb.Seen = ago(now, n.Confirmed)
+				}
 			}
 			out = append(out, nb)
 		}

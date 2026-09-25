@@ -118,7 +118,7 @@ var routeDocs = map[string]routeDoc{
 	"POST /api/v1/interfaces/{name}/renew": {summary: "Ask for a fresh lease on a dynamic interface; release drops it first.", role: auth.RoleOperator},
 	"GET /api/v1/services/status":          {summary: "Whether DHCP, DNS, the resolver, PPPoE, the mapping service, Tailscale, the proxy and the time service are set up and running.", role: auth.RoleViewer},
 	"GET /api/v1/ntp/status":               {summary: "What the time service is doing: whether the clock is synchronised, the servers it asks, and what the LAN asked of it.", role: auth.RoleViewer},
-	"GET /api/v1/dhcp/leases":              {summary: "Current DHCP leases, each IPv4 one with the interface whose network holds it.", role: auth.RoleViewer},
+	"GET /api/v1/dhcp/leases":              {summary: "Current DHCP leases, with the interface each was handed out on, the static lease pinning it, when it was last renewed and when its client last answered.", role: auth.RoleViewer},
 	"GET /api/v1/upnp/mappings":            {summary: "Port mappings clients have opened over UPnP IGD, PCP, or NAT-PMP, read from the ruleset.", role: auth.RoleViewer},
 	"POST /api/v1/wol/wake":                {summary: "Send the Wake on LAN packet for a MAC address onto an inside interface.", role: auth.RoleOperator},
 	"GET /api/v1/tailscale/status":         {summary: "What the Tailscale node is doing: its state, its addresses, and the other nodes on the tailnet.", role: auth.RoleViewer},
