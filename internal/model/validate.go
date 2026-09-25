@@ -846,6 +846,7 @@ func (v *validator) services(c *Config, ifaces, zones map[string]bool) {
 		}
 		names[key] = true
 	}
+	leased := leasedNames(c.Services.DHCP.StaticLeases, local)
 	for i, h := range dns.HostOverrides {
 		path := fmt.Sprintf("services.dns.hostOverrides[%d]", i)
 		v.hostLabel(path+".hostname", h.Hostname)
@@ -853,10 +854,12 @@ func (v *validator) services(c *Config, ifaces, zones map[string]bool) {
 			v.domainName(path+".domain", h.Domain)
 		}
 		claim(path+".hostname", h.FQDN(local))
+		v.sharedWithLease(path+".hostname", HostOverride{Hostname: h.Hostname, Domain: h.Domain, IP: h.IP}, local, leased)
 		for j, a := range h.Aliases {
 			p := fmt.Sprintf("%s.aliases[%d]", path, j)
 			v.hostLabel(p, a)
 			claim(p, HostOverride{Hostname: a, Domain: h.Domain}.FQDN(local))
+			v.sharedWithLease(p, HostOverride{Hostname: a, Domain: h.Domain, IP: h.IP}, local, leased)
 		}
 		if _, err := ParseIP(h.IP); err != nil {
 			v.add(path+".ip", "%v", err)
@@ -887,6 +890,58 @@ func (v *validator) services(c *Config, ifaces, zones map[string]bool) {
 	v.upnp(c, ifaces)
 	v.ntp(c, ifaces)
 	v.proxy(c, zones)
+}
+
+// leasedNames maps every name the static leases answer to the leases that
+// answer it. A bare hostname answers under the local domain as well.
+func leasedNames(leases []StaticLease, local string) map[string][]StaticLease {
+	out := map[string][]StaticLease{}
+	for _, l := range leases {
+		name := strings.ToLower(l.Hostname)
+		if name == "" {
+			continue
+		}
+		out[name] = append(out[name], l)
+		if local != "" && !strings.Contains(name, ".") {
+			out[name+"."+local] = append(out[name+"."+local], l)
+		}
+	}
+	return out
+}
+
+// sharedWithLease refuses an override name that a static lease answers at
+// another address of the same family: the name would answer both, and
+// the device would lose it to the override.
+func (v *validator) sharedWithLease(path string, o HostOverride, local string, leased map[string][]StaticLease) {
+	ip, err := ParseIP(o.IP)
+	if err != nil {
+		return
+	}
+	for _, name := range o.Names(local) {
+		for _, l := range leased[strings.ToLower(name)] {
+			if at, ok := leaseAddr(l, ip); ok && at != ip {
+				v.add(path, "%q is also the static lease name for %s at %s, so the name would answer both addresses", o.Hostname, l.MAC, at)
+				return
+			}
+		}
+	}
+}
+
+// leaseAddr is the lease's address in ip's family. An IPv6 host part like
+// ::20 takes its prefix from the interface, so it cannot be compared.
+func leaseAddr(l StaticLease, ip netip.Addr) (netip.Addr, bool) {
+	s := l.IP
+	if ip.Is6() {
+		s = l.IPv6
+	}
+	a, err := ParseIP(s)
+	if err != nil || a.Is6() != ip.Is6() {
+		return netip.Addr{}, false
+	}
+	if b := a.As16(); a.Is6() && [8]byte(b[:8]) == [8]byte{} {
+		return netip.Addr{}, false
+	}
+	return a, true
 }
 
 // upnp checks the mapping service. A name that is written down is checked

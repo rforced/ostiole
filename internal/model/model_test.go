@@ -456,6 +456,74 @@ func TestValidateHostOverrides(t *testing.T) {
 	}
 }
 
+// A static lease's hostname is answered beside the overrides, so an
+// override of the same name at another address would answer both.
+func TestValidateOverridesBesideStaticLeases(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name     string
+		domain   string
+		override HostOverride
+		lease    StaticLease
+		want     string // the path of the issue; empty for none
+	}{
+		{"the lease's name elsewhere", "lan",
+			HostOverride{Hostname: "watch", IP: "192.168.1.1"},
+			StaticLease{IP: "192.168.1.20", Hostname: "Watch"}, "services.dns.hostOverrides[0].hostname"},
+		{"an alias", "lan",
+			HostOverride{Hostname: "proxy", IP: "192.168.1.1", Aliases: []string{"watch"}},
+			StaticLease{IP: "192.168.1.20", Hostname: "watch"}, "services.dns.hostOverrides[0].aliases[0]"},
+		{"the local domain written out", "lan",
+			HostOverride{Hostname: "watch", Domain: "LAN.", IP: "192.168.1.1"},
+			StaticLease{IP: "192.168.1.20", Hostname: "watch"}, "services.dns.hostOverrides[0].hostname"},
+		{"no local domain", "",
+			HostOverride{Hostname: "watch", IP: "192.168.1.1"},
+			StaticLease{IP: "192.168.1.20", Hostname: "watch"}, "services.dns.hostOverrides[0].hostname"},
+		{"a lease named in full", "lan",
+			HostOverride{Hostname: "tv", Domain: "example", IP: "192.168.1.1"},
+			StaticLease{IP: "192.168.1.20", Hostname: "tv.example"}, "services.dns.hostOverrides[0].hostname"},
+		{"IPv6 against IPv6", "lan",
+			HostOverride{Hostname: "nas", IP: "2001:db8::5"},
+			StaticLease{IP: "192.168.1.21", IPv6: "2001:db8::21", Hostname: "nas"}, "services.dns.hostOverrides[0].hostname"},
+		{"the same address", "lan",
+			HostOverride{Hostname: "nas", IP: "192.168.1.21"},
+			StaticLease{IP: "192.168.1.21", Hostname: "nas"}, ""},
+		{"another family", "lan",
+			HostOverride{Hostname: "nas", IP: "2001:db8::5"},
+			StaticLease{IP: "192.168.1.21", Hostname: "nas"}, ""},
+		// Its prefix comes from the interface, so nothing says it differs.
+		{"an IPv6 host part", "lan",
+			HostOverride{Hostname: "nas", IP: "2001:db8::5"},
+			StaticLease{IPv6: "::21", Hostname: "nas"}, ""},
+		{"another domain", "lan",
+			HostOverride{Hostname: "watch", Domain: "example", IP: "192.168.1.1"},
+			StaticLease{IP: "192.168.1.20", Hostname: "watch"}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0"})
+			tc.lease.MAC = "aa:bb:cc:dd:ee:01"
+			cfg.Services.DHCP.StaticLeases = []StaticLease{tc.lease}
+			cfg.Services.DNS = DNSServer{Enabled: true, Upstreams: []string{"1.1.1.1"}, Domain: tc.domain,
+				HostOverrides: []HostOverride{tc.override}}
+			err := cfg.Validate()
+			if tc.want == "" {
+				if err != nil {
+					t.Fatalf("refused: %v", err)
+				}
+				return
+			}
+			var ve *ValidationError
+			if !errors.As(err, &ve) || len(ve.Issues) != 1 || ve.Issues[0].Path != tc.want {
+				t.Fatalf("err = %v, want one issue at %s", err, tc.want)
+			}
+			if msg := ve.Issues[0].Message; !strings.Contains(msg, "aa:bb:cc:dd:ee:01") || !strings.Contains(msg, "both addresses") {
+				t.Errorf("message = %q", msg)
+			}
+		})
+	}
+}
+
 func TestValidateDHCPv6(t *testing.T) {
 	t.Parallel()
 	cfg := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0"})
