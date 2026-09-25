@@ -4,7 +4,6 @@ import { computed, ref, watch } from 'vue'
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import { newId } from '@/lib/ids'
-import { parseList } from '@/lib/lists'
 import { SCHEDULE_PRESETS, presetFor } from '@/lib/schedules'
 import { deviceName } from '@/lib/wol'
 import { ADMIN_ONLY, useAuthStore } from '@/stores/auth'
@@ -104,7 +103,12 @@ function save() {
         return
       }
       out.command = f.command.trim()
-      if (f.args.trim()) out.args = parseList(f.args)
+      // A line is one argument; no shell splits it on spaces or commas.
+      out.args = f.args
+        .split('\n')
+        .map((a) => a.trim())
+        .filter(Boolean)
+      if (!out.args.length) delete out.args
       if (Number(f.timeoutSeconds) > 0) out.timeoutSeconds = Number(f.timeoutSeconds)
       break
   }

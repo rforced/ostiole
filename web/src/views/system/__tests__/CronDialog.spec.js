@@ -13,8 +13,8 @@ const stubs = {
   },
 }
 
-function mountDialog(devices) {
-  useAuthStore().user = { username: 'operator', role: 'operator' }
+function mountDialog(devices, role = 'operator') {
+  useAuthStore().user = { username: role, role }
   const config = useConfigStore()
   config.replaceDraft({
     version: 6,
@@ -51,5 +51,15 @@ describe('CronDialog', () => {
     await wrapper.get('form').trigger('submit')
     expect(wrapper.get('[role="alert"]').text()).toBe('Add a device on the Wake on LAN page first.')
     expect(config.crons).toHaveLength(0)
+  })
+
+  // No shell runs the command, so a space or a comma is part of an argument.
+  it('passes each line as one argument', async () => {
+    const { wrapper, config } = mountDialog(undefined, 'admin')
+    await wrapper.get('#cron-kind').setValue('command')
+    await wrapper.get('#cron-command').setValue('/usr/local/bin/report')
+    await wrapper.get('#cron-args').setValue('--subject=Nightly run\n\na,b')
+    await wrapper.get('form').trigger('submit')
+    expect(config.crons[0].args).toEqual(['--subject=Nightly run', 'a,b'])
   })
 })
