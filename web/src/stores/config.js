@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import { ApiError, api } from '@/lib/api'
 import { normalizeName } from '@/lib/blocking'
 import { overrideKey } from '@/lib/hosts'
+import { deviceName } from '@/lib/wol'
 import { useToastStore } from '@/stores/toast'
 
 const clone = (v) => (v === null || v === undefined ? v : JSON.parse(JSON.stringify(v)))
@@ -167,6 +168,11 @@ export const useConfigStore = defineStore('config', () => {
     }
     if ((d.services?.dns?.interfaces ?? []).includes(name)) out.push(`DNS listener on ${name}`)
     if ((d.services?.ntp?.interfaces ?? []).includes(name)) out.push(`time served on ${name}`)
+    for (const w of wolDevices.value) {
+      if (w.interface === name) {
+        out.push(`Wake on LAN device ${deviceName(w)}`, ...wolDeviceDependents(w.id))
+      }
+    }
     for (const g of gateways.value) {
       if (g.interface === name) out.push(`gateway ${g.name}`, ...gatewayDependents(g.name))
     }
@@ -196,6 +202,7 @@ export const useConfigStore = defineStore('config', () => {
     if (dns?.interfaces) dns.interfaces = dns.interfaces.filter((n) => n !== name)
     const served = d.services?.ntp?.interfaces
     if (served) setNTP({ interfaces: served.filter((n) => n !== name) })
+    for (const w of [...wolDevices.value]) if (w.interface === name) dropWoLDevice(w.id)
     for (const g of [...gateways.value]) if (g.interface === name) dropGateway(g.name)
     if (d.routes) d.routes = d.routes.filter((r) => r.interface !== name)
     d.interfaces = interfaces.value.filter((i) => i.name !== name)
@@ -974,6 +981,49 @@ export const useConfigStore = defineStore('config', () => {
     })
   }
 
+  // ---- wake on LAN -----------------------------------------------------
+
+  /** The machines this router can wake, or none on a draft that never had any. */
+  const wolDevices = computed(() => draft.value?.services?.wol?.devices ?? [])
+
+  /**
+   * Writes the device list. The block goes once it is empty, so a draft put
+   * back the way it was matches the saved configuration again.
+   */
+  function setWoLDevices(list) {
+    const services = ensureServices()
+    const wol = { ...services.wol }
+    if (list.length) wol.devices = list
+    else delete wol.devices
+    if (Object.keys(wol).length) services.wol = wol
+    else delete services.wol
+  }
+
+  function upsertWoLDevice(device, previousId = device.id) {
+    const list = [...wolDevices.value]
+    const idx = list.findIndex((d) => d.id === previousId)
+    if (idx === -1) list.push(clone(device))
+    else list[idx] = clone(device)
+    setWoLDevices(list)
+  }
+
+  /** The wake cron jobs that name a device, which go with it. */
+  function wolDeviceDependents(id) {
+    return crons.value
+      .filter((c) => c.kind === 'wake' && c.device === id)
+      .map((c) => `cron job ${c.description || c.id}`)
+  }
+
+  function dropWoLDevice(id) {
+    const kept = crons.value.filter((c) => !(c.kind === 'wake' && c.device === id))
+    if (kept.length !== crons.value.length) draft.value.crons = kept
+    setWoLDevices(wolDevices.value.filter((d) => d.id !== id))
+  }
+
+  function removeWoLDevice(device) {
+    undoable(`Deleted ${deviceName(device)}.`, () => dropWoLDevice(device.id))
+  }
+
   // ---- certificates ----------------------------------------------------
 
   const certificates = computed(() => draft.value?.certificates ?? [])
@@ -1210,6 +1260,7 @@ export const useConfigStore = defineStore('config', () => {
         if (path.startsWith('services.dns')) return '/services/dns'
         if (path.startsWith('services.upnp')) return '/services/upnp'
         if (path.startsWith('services.ntp')) return '/services/time'
+        if (path.startsWith('services.wol')) return '/services/wol'
         if (path.startsWith('services.proxy')) return '/services/proxy'
         return '/services/dhcp'
       case 'blocking':
@@ -1354,6 +1405,10 @@ export const useConfigStore = defineStore('config', () => {
     crons,
     upsertCron,
     removeCron,
+    wolDevices,
+    upsertWoLDevice,
+    removeWoLDevice,
+    wolDeviceDependents,
     updates,
     systemUpdates,
     ostioleUpdates,

@@ -6,6 +6,7 @@ import FormField from '@/components/FormField.vue'
 import { newId } from '@/lib/ids'
 import { parseList } from '@/lib/lists'
 import { SCHEDULE_PRESETS, presetFor } from '@/lib/schedules'
+import { deviceName } from '@/lib/wol'
 import { ADMIN_ONLY, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { SERVICES } from '@/views/system/crons/services'
@@ -24,6 +25,7 @@ const KINDS = [
   { value: 'refresh-aliases', label: 'Fetch the address lists and country ranges' },
   { value: 'refresh-blocklists', label: 'Fetch the DNS blocklists' },
   { value: 'restart-service', label: 'Restart a service' },
+  { value: 'wake', label: 'Wake a device' },
   { value: 'command', label: 'Run a command' },
 ]
 
@@ -39,6 +41,7 @@ function blank() {
     withUsers: false,
     passphrase: '',
     service: 'dnsmasq',
+    device: config.wolDevices[0]?.id ?? '',
     command: '',
     args: '',
     timeoutSeconds: 300,
@@ -87,6 +90,13 @@ function save() {
       break
     case 'restart-service':
       out.service = f.service
+      break
+    case 'wake':
+      if (!f.device) {
+        error.value = 'Add a device on the Wake on LAN page first.'
+        return
+      }
+      out.device = f.device
       break
     case 'command':
       if (!f.command.trim().startsWith('/')) {
@@ -205,6 +215,15 @@ function save() {
       <FormField v-if="form.kind === 'restart-service'" id="cron-service" label="Service">
         <select id="cron-service" v-model="form.service" class="input">
           <option v-for="s in SERVICES" :key="s.value" :value="s.value">{{ s.label }}</option>
+        </select>
+      </FormField>
+
+      <FormField v-if="form.kind === 'wake'" id="cron-device" label="Device">
+        <select id="cron-device" v-model="form.device" class="input">
+          <option v-if="!config.wolDevices.length" value="">None on the Wake on LAN page</option>
+          <option v-for="d in config.wolDevices" :key="d.id" :value="d.id">
+            {{ deviceName(d) }}
+          </option>
         </select>
       </FormField>
 

@@ -7,6 +7,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { deviceName } from '@/lib/wol'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -88,6 +89,8 @@ function describe(c) {
       return 'Fetch the DNS blocklists'
     case 'restart-service':
       return `Restart ${serviceName(c.service)}`
+    case 'wake':
+      return `Wake ${deviceName(config.wolDevices.find((d) => d.id === c.device)) || c.device}`
     case 'command':
       return [c.command, ...(c.args ?? [])].join(' ')
   }

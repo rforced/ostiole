@@ -157,6 +157,7 @@ export const NAV = [
           { value: 'mappings', label: 'Mappings' },
         ],
       },
+      { path: 'wol', label: 'Wake on LAN', view: () => import('@/views/services/WolPage.vue') },
     ],
   },
   {

@@ -1,10 +1,11 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { useWake, wakeInterfaces } from '@/lib/wol'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import StaticLeaseDialog from '@/views/services/dhcp/StaticLeaseDialog.vue'
@@ -15,6 +16,21 @@ const leases = ref([])
 const open = ref(false)
 const editing = ref(null)
 const prefill = ref(null)
+const waking = useWake()
+
+/**
+ * The server names a lease's interface from the configuration it is
+ * running, and sends a wake the same way, so this reads the saved one.
+ */
+const wakeable = computed(
+  () =>
+    new Set(
+      wakeInterfaces(config.saved)
+        .filter((i) => i.enabled)
+        .map((i) => i.name),
+    ),
+)
+const canWake = (l) => Boolean(l.mac && l.family !== 6 && wakeable.value.has(l.interface))
 
 /** Pins a client to the address it has. One already pinned in the draft opens as it is. */
 function makeStatic(l) {
@@ -44,6 +60,9 @@ onMounted(load.run)
       </template>
       <div v-if="load.error.value" class="card-strip">
         <p role="alert" class="text-bad">{{ load.error.value }}</p>
+      </div>
+      <div v-if="waking.errors.value.length" class="card-strip">
+        <p role="alert" class="text-bad">{{ waking.errors.value[0] }}</p>
       </div>
       <table class="table table-stack">
         <thead>
@@ -76,9 +95,20 @@ onMounted(load.run)
             </td>
             <td class="text-right whitespace-nowrap" data-label="">
               <button
+                v-if="canWake(l) && !auth.readOnly"
+                type="button"
+                class="link"
+                :disabled="waking.busy.value !== ''"
+                :aria-busy="waking.busy.value === l.mac"
+                @click="waking.wake(l, l.hostname || l.mac)"
+              >
+                Wake
+              </button>
+              <button
                 v-if="l.mac && !l.static && l.family !== 6 && !auth.readOnly"
                 type="button"
                 class="link"
+                :class="{ 'ml-3': canWake(l) }"
                 @click="makeStatic(l)"
               >
                 Make static

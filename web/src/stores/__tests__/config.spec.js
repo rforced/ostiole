@@ -595,3 +595,78 @@ describe('config store DNS blocking exceptions', () => {
     expect(config.draft.blocking).not.toHaveProperty('allow')
   })
 })
+
+describe('config store wake on LAN', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  /** Two machines on the LAN, one on a VLAN of it, and a cron that wakes one. */
+  function sleepers() {
+    const d = draft()
+    d.interfaces.push({ name: 'eth1.20', zone: 'lan', vlan: { parent: 'eth1', id: 20 } })
+    d.services = {
+      dhcp: { enabled: false },
+      dns: { enabled: false },
+      wol: {
+        devices: [
+          { id: 'wol-nas', interface: 'eth1', mac: 'aa:bb:cc:00:00:01', description: 'NAS' },
+          { id: 'wol-pc', interface: 'eth1.20', mac: 'aa:bb:cc:00:00:02' },
+        ],
+      },
+    }
+    d.crons = [
+      { id: 'c1', kind: 'wake', device: 'wol-nas', description: 'Morning NAS' },
+      { id: 'c2', kind: 'wake', device: 'wol-pc' },
+      { id: 'c3', kind: 'backup', directory: '/b' },
+    ]
+    return d
+  }
+
+  it('adds and edits a device, and drops the block when the last one goes', () => {
+    const config = useConfigStore()
+    // The server always writes these two blocks.
+    config.replaceDraft({
+      ...draft(),
+      services: { dhcp: { enabled: false }, dns: { enabled: false } },
+    })
+    config.markSaved()
+    config.upsertWoLDevice({ id: 'wol-a', interface: 'eth1', mac: 'aa:bb:cc:00:00:09' })
+    expect(config.wolDevices).toHaveLength(1)
+    expect(config.sectionFor('services.wol.devices[wol-a].mac')).toBe('/services/wol')
+    config.upsertWoLDevice(
+      { id: 'wol-a', interface: 'eth1', mac: 'aa:bb:cc:00:00:09', description: 'NAS' },
+      'wol-a',
+    )
+    expect(config.wolDevices).toEqual([
+      { id: 'wol-a', interface: 'eth1', mac: 'aa:bb:cc:00:00:09', description: 'NAS' },
+    ])
+    config.removeWoLDevice(config.wolDevices[0])
+    expect(config.draft.services).not.toHaveProperty('wol')
+    expect(config.dirty).toBe(false)
+  })
+
+  it('takes a device wake cron jobs with it', () => {
+    const config = useConfigStore()
+    const toast = useToastStore()
+    config.replaceDraft(sleepers())
+    expect(config.wolDeviceDependents('wol-nas')).toEqual(['cron job Morning NAS'])
+    config.removeWoLDevice(config.wolDevices[0])
+    expect(toast.toasts.at(-1).message).toBe('Deleted NAS.')
+    expect(config.wolDevices.map((d) => d.id)).toEqual(['wol-pc'])
+    expect(config.crons.map((c) => c.id)).toEqual(['c2', 'c3'])
+  })
+
+  it('goes with its interface, and a VLAN child takes its own', () => {
+    const config = useConfigStore()
+    config.replaceDraft(sleepers())
+    expect(config.interfaceDependents('eth1')).toEqual([
+      'VLAN eth1.20',
+      'Wake on LAN device aa:bb:cc:00:00:02',
+      'cron job c2',
+      'Wake on LAN device NAS',
+      'cron job Morning NAS',
+    ])
+    config.removeInterface('eth1')
+    expect(config.draft.services).not.toHaveProperty('wol')
+    expect(config.crons.map((c) => c.id)).toEqual(['c3'])
+  })
+})

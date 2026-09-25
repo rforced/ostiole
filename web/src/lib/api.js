@@ -373,6 +373,10 @@ export const api = {
     /** @returns {Promise<object>} whether the clock follows a server, the servers, and the defaults */
     status: () => get('/ntp/status'),
   },
+  wol: {
+    /** @param {{interface: string, mac: string}} body */
+    wake: (body) => post('/wol/wake', body),
+  },
   proxy: {
     /** @returns {Promise<{setUp: boolean, running: boolean, release?: string, ports: object, upstreams: object[]}>} */
     status: () => get('/proxy/status'),

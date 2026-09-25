@@ -28,7 +28,13 @@ const config = {
       withUsers: true,
     },
     { id: 'script', enabled: true, schedule: '0 6 * * *', kind: 'command', command: '/bin/true' },
+    { id: 'morning', enabled: true, schedule: '0 7 * * *', kind: 'wake', device: 'wol-nas' },
   ],
+  services: {
+    wol: {
+      devices: [{ id: 'wol-nas', interface: 'eth1', mac: 'aa:bb:cc:00:00:01', description: 'NAS' }],
+    },
+  },
 }
 
 async function open(role) {
@@ -67,11 +73,18 @@ describe('CronsPage', () => {
 
   it('offers an admin every cron', async () => {
     const w = await open('admin')
-    expect(rows(w)).toHaveLength(3)
+    expect(rows(w)).toHaveLength(4)
     for (const tr of rows(w)) {
       for (const label of ['Run now', 'Edit', 'Delete'])
         expect(button(tr, label).attributes('disabled')).toBeUndefined()
     }
     expect(w.text()).not.toContain('Only an admin')
+  })
+
+  it('names the device a wake cron wakes', async () => {
+    const w = await open('operator')
+    const morning = rows(w)[3]
+    expect(morning.text()).toContain('Wake NAS')
+    expect(button(morning, 'Edit').attributes('disabled')).toBeUndefined()
   })
 })
