@@ -29,7 +29,9 @@ type Entry struct {
 	Dst      string `json:"dst,omitempty"`
 	SrcPort  uint16 `json:"srcPort,omitempty"`
 	DstPort  uint16 `json:"dstPort,omitempty"`
-	ICMPType uint8  `json:"icmpType,omitempty"`
+	// ICMPType is nil when the packet did not carry one, so an echo reply
+	// (type 0) is not mistaken for no type at all.
+	ICMPType *uint8 `json:"icmpType,omitempty"`
 	TCPFlags string `json:"tcpFlags,omitempty"`
 	Length   int    `json:"length"`
 }
@@ -198,12 +200,12 @@ func decodeL4(e *Entry, proto byte, b []byte, fragment bool) {
 	case 1:
 		e.Proto = "icmp"
 		if !fragment && len(b) >= 1 {
-			e.ICMPType = b[0]
+			e.ICMPType = new(b[0])
 		}
 	case 58:
 		e.Proto = "icmpv6"
 		if !fragment && len(b) >= 1 {
-			e.ICMPType = b[0]
+			e.ICMPType = new(b[0])
 		}
 	default:
 		e.Proto = protoName(proto)

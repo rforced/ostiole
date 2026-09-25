@@ -2,6 +2,8 @@ package fwlog
 
 import (
 	"encoding/binary"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,8 +49,15 @@ func TestDecode(t *testing.T) {
 
 	e = Entry{}
 	Decode(&e, ipv4Packet(1, [4]byte{1, 2, 3, 4}, [4]byte{5, 6, 7, 8}, []byte{8, 0, 0, 0}))
-	if e.Proto != "icmp" || e.ICMPType != 8 {
+	if e.Proto != "icmp" || e.ICMPType == nil || *e.ICMPType != 8 {
 		t.Errorf("icmp entry = %+v", e)
+	}
+
+	// An echo reply is type 0, which the log page still has to show.
+	e = Entry{}
+	Decode(&e, ipv4Packet(1, [4]byte{1, 2, 3, 4}, [4]byte{5, 6, 7, 8}, []byte{0, 0, 0, 0}))
+	if raw, _ := json.Marshal(e); !strings.Contains(string(raw), `"icmpType":0`) {
+		t.Errorf("echo reply = %s", raw)
 	}
 
 	// IPv6 with a hop-by-hop extension header before TCP.
