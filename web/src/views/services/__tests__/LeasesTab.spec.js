@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
@@ -45,6 +45,20 @@ async function tab(leases, { role = 'admin' } = {}) {
 }
 
 const makeStatic = (w) => w.findAll('button').filter((b) => b.text() === 'Make static')
+const rows = (w) => w.findAll('tbody tr')
+const addresses = (w) => rows(w).map((r) => r.find('td .font-mono').text())
+const header = (w, name) => w.findAll('th').find((th) => th.text() === name)
+
+const laptop = {
+  ip: '192.168.1.9',
+  mac: 'da:a1:19:00:00:02',
+  hostname: 'laptop',
+  description: 'Work laptop',
+  expires: '2026-09-24T18:00:00Z',
+  renewed: '2026-09-24T06:00:00Z',
+  seen: '2026-09-24T11:00:00Z',
+  family: 4,
+}
 
 describe('LeasesTab', () => {
   beforeEach(() => {
@@ -95,5 +109,95 @@ describe('LeasesTab', () => {
   it('offers a viewer no wake', async () => {
     const { wrapper } = await tab([{ ...printer, interface: 'eth1' }], { role: 'viewer' })
     expect(wrapper.findAll('button').filter((b) => b.text() === 'Wake')).toHaveLength(0)
+  })
+
+  it('searches every field, and a MAC whatever its separators', async () => {
+    const v6 = { ip: 'fd00::5', clientId: '00:01:00:01', family: 6, expires: printer.expires }
+    const { wrapper } = await tab([printer, laptop, v6])
+    const search = wrapper.get('input[type=search]')
+    await search.setValue('work')
+    expect(addresses(wrapper)).toEqual(['192.168.1.9'])
+    expect(wrapper.text()).toContain('1 of 3')
+    await search.setValue('aa-bb-cc-dd-ee-01')
+    expect(addresses(wrapper)).toEqual(['192.168.1.50'])
+    await search.setValue('nobody')
+    expect(rows(wrapper)[0].text()).toBe('Nothing matches "nobody".')
+  })
+
+  it('sorts by a column header', async () => {
+    const { wrapper } = await tab([printer, laptop])
+    expect(addresses(wrapper)).toEqual(['192.168.1.9', '192.168.1.50'])
+    await header(wrapper, 'Hostname').get('button').trigger('click')
+    expect(header(wrapper, 'Hostname').attributes('aria-sort')).toBe('ascending')
+    expect(addresses(wrapper)).toEqual(['192.168.1.9', '192.168.1.50'])
+    await header(wrapper, 'Hostname').get('button').trigger('click')
+    expect(addresses(wrapper)).toEqual(['192.168.1.50', '192.168.1.9'])
+  })
+
+  // Pinned, online and random: what the server found, as badges; the
+  // times as the router's clock has them.
+  it('shows who answered, what is pinned and what never expires', async () => {
+    const pinned = {
+      ...printer,
+      mac: '3c:0a:f3:60:c4:60',
+      static: true,
+      online: true,
+      seen: '2026-09-24T11:59:00Z',
+    }
+    const forever = { ...printer, ip: '192.168.1.60', mac: 'aa:bb:cc:dd:ee:03', expires: undefined }
+    const { wrapper } = await tab([pinned, laptop, forever])
+    // By address: the laptop at .9, the printer at .50, then .60.
+    const [lap, pin, never] = rows(wrapper).map((r) => r.findAll('td'))
+    expect(lap[0].text()).toContain('offline')
+    expect(lap[1].text()).toContain('random')
+    expect(lap[2].text()).toContain('Work laptop')
+    expect(lap[4].text()).toBe(new Date(laptop.seen).toLocaleString())
+    expect(lap[5].text()).toBe(new Date(laptop.renewed).toLocaleString())
+    expect(pin[0].get('.badge-ok').text()).toBe('online')
+    expect(pin[0].text()).toContain('static')
+    expect(pin[1].text()).not.toContain('random')
+    expect(pin[4].text()).toBe('—')
+    expect(pin[5].text()).toBe('—')
+    expect(never[6].text()).toBe('never')
+  })
+
+  describe('Live', () => {
+    beforeEach(() => vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] }))
+    afterEach(() => vi.useRealTimers())
+
+    const newer = { ...printer, renewed: '2026-09-24T11:00:00Z' }
+
+    it('reads every two seconds and keeps the newest on top', async () => {
+      const { wrapper } = await tab([newer, laptop])
+      expect(addresses(wrapper)).toEqual(['192.168.1.9', '192.168.1.50'])
+      const live = wrapper.findAll('button').find((b) => b.text() === 'Live')
+      await live.trigger('click')
+      await flushPromises()
+      expect(live.attributes('aria-pressed')).toBe('true')
+      expect(api.services.leases).toHaveBeenCalledTimes(2)
+      expect(header(wrapper, 'Last renewed').attributes('aria-sort')).toBe('descending')
+      expect(addresses(wrapper)).toEqual(['192.168.1.50', '192.168.1.9'])
+      expect(header(wrapper, 'Address').get('button').attributes('disabled')).toBeDefined()
+
+      // A lease handed out since lands on top.
+      const joined = {
+        ...laptop,
+        ip: '192.168.1.77',
+        mac: 'aa:bb:cc:dd:ee:07',
+        renewed: '2026-09-24T11:59:00Z',
+      }
+      api.services.leases.mockResolvedValue([newer, laptop, joined])
+      vi.advanceTimersByTime(2000)
+      await flushPromises()
+      expect(addresses(wrapper)).toEqual(['192.168.1.77', '192.168.1.50', '192.168.1.9'])
+
+      // Off, the table holds its order and the headers sort again.
+      await live.trigger('click')
+      vi.advanceTimersByTime(4000)
+      await flushPromises()
+      expect(api.services.leases).toHaveBeenCalledTimes(3)
+      expect(addresses(wrapper)).toEqual(['192.168.1.77', '192.168.1.50', '192.168.1.9'])
+      expect(header(wrapper, 'Address').get('button').attributes('disabled')).toBeUndefined()
+    })
   })
 })

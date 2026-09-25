@@ -1,4 +1,5 @@
 <script setup>
+import RandomMacBadge from '@/components/RandomMacBadge.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { formatCount, formatDuration } from '@/lib/format'
 
@@ -15,7 +16,7 @@ defineProps({
 
 /** How long a lease has left, as the dashboard is read. */
 function left(l) {
-  if (l.static) return 'static'
+  if (!l.expires) return 'never'
   const seconds = (new Date(l.expires).getTime() - Date.now()) / 1000
   if (!Number.isFinite(seconds) || seconds <= 0) return 'expired'
   return `${formatDuration(seconds)} left`
@@ -60,6 +61,7 @@ function left(l) {
             <div v-if="l.hostname" class="font-mono">{{ l.hostname }}</div>
             <div class="font-mono text-code" :class="l.hostname ? 'text-ink-muted' : ''">
               {{ l.mac || l.clientId || '—' }}
+              <RandomMacBadge :mac="l.mac" />
             </div>
           </td>
           <td class="whitespace-nowrap">{{ left(l) }}</td>

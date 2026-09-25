@@ -258,12 +258,8 @@ describe('RecentLeasesCard', () => {
         leases: [
           { ip: '10.0.0.7', mac: 'aa:bb:cc:dd:ee:ff', hostname: 'laptop', expires: soon },
           { ip: '10.0.0.8', mac: '11:22:33:44:55:66', expires: '2020-01-01T00:00:00Z' },
-          {
-            ip: '10.0.0.9',
-            mac: '99:88:77:66:55:44',
-            static: true,
-            expires: '1970-01-01T00:00:00Z',
-          },
+          // A lease that never expires comes with no expiry.
+          { ip: '10.0.0.9', mac: '99:88:77:66:55:44' },
         ],
         total: 12,
       },
@@ -274,7 +270,7 @@ describe('RecentLeasesCard', () => {
     expect(body[0].text()).toContain('2h 1m left')
     expect(body[1].text()).toContain('11:22:33:44:55:66')
     expect(body[1].text()).toContain('expired')
-    expect(body[2].text()).toContain('static')
+    expect(body[2].text()).toContain('never')
     expect(w.text()).toContain('All 12 leases')
     expect(w.findComponent(RouterLinkStub).props('to')).toBe('/services/dhcp#leases')
   })
