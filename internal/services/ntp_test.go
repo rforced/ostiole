@@ -301,7 +301,7 @@ func TestNTPPreflight(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	refused := "server nts.netnod.se iburst nts\nopencommandz tracking\n" +
+	refused := "pool 2.pool.ntp.org iburst\nopencommandz tracking\n" +
 		"2026-09-24T22:09:37Z Fatal error : Invalid directive opencommandz at line 2 in file /etc/chrony/.ostiole-check.conf\n"
 	cmd := &ntpCmd{installed: true, check: func(string) ([]byte, error) {
 		return []byte(refused), errors.New("exit status 1")
@@ -329,12 +329,18 @@ func TestNTPPreflight(t *testing.T) {
 		t.Errorf("chronyd read %q", read)
 	}
 
-	// A build without NTS cannot keep the default servers.
+	// A build without NTS cannot keep a server asked to sign. The
+	// defaults are not asked to.
 	cmd = &ntpCmd{installed: true}
 	n = newTestNTP(t, cmd)
 	n.Features = &NTPFeatures{Version: chrony.Version{Major: 4, Minor: 5}}
-	if err := n.Preflight(ctx, ntpFiles(t, n, &model.Config{})); !errors.As(err, &pe) || !strings.Contains(pe.Message, "without NTS") {
+	signed := &model.Config{}
+	signed.Services.NTP.Servers = []model.NTPServer{{Host: "nts.example", NTS: true}}
+	if err := n.Preflight(ctx, ntpFiles(t, n, signed)); !errors.As(err, &pe) || !strings.Contains(pe.Message, "without NTS") {
 		t.Errorf("err = %v, want the missing NTS named", err)
+	}
+	if err := n.Preflight(ctx, ntpFiles(t, n, &model.Config{})); err != nil {
+		t.Errorf("a build without NTS refused the defaults: %v", err)
 	}
 
 	// Not set up: nothing to check against, and the apply leaves the
@@ -368,7 +374,7 @@ func TestNTPStart(t *testing.T) {
 		t.Errorf("the clock was not handed over: %v", cmd.calls)
 	}
 	raw, _ := os.ReadFile(n.ConfPath())
-	if !strings.Contains(string(raw), "server nts.netnod.se iburst nts\n") {
+	if !strings.Contains(string(raw), "pool 2.pool.ntp.org iburst\n") {
 		t.Errorf("a router with no configuration did not get the default servers:\n%s", raw)
 	}
 }

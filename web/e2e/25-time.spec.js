@@ -4,7 +4,7 @@ import { applyAndConfirm, confirmDialog, login, shot, sidebar } from './helpers.
 
 test.describe.configure({ mode: 'serial' })
 
-const DEFAULTS = ['nts.netnod.se', 'nts.time.nl', 'a.st1.ntp.br', 'virginia.time.system76.com']
+const DEFAULTS = ['2.pool.ntp.org']
 
 test('the defaults are listed, and the page says the service is not set up', async ({ page }) => {
   await login(page)
@@ -21,7 +21,7 @@ test('the defaults are listed, and the page says the service is not set up', asy
     page.getByText("These follow Ostiole's defaults until you edit the list."),
   ).toBeVisible()
   for (const host of DEFAULTS) {
-    await expect(page.getByRole('row').filter({ hasText: host })).toContainText('Signed')
+    await expect(page.getByRole('row').filter({ hasText: host })).toContainText('Unsigned')
   }
   // The wizard switched serving on with the LAN services.
   await expect(page.getByLabel('Answer time requests')).toBeChecked()

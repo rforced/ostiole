@@ -18,7 +18,7 @@ driven from a single configuration.
 - **Interfaces** — physical, VLAN, bridge, bond, PPPoE, WireGuard. Static or DHCP, IPv4 and IPv6.
 - **Routing** — static routes, multi-WAN with gateway monitoring, policy routing per rule.
 - **Services** — DHCP and DNS through dnsmasq and unbound, DNS block lists, UPnP and NAT-PMP, and
-  time from NTS servers through chrony, served to the LAN.
+  time from the NTP Pool through chrony, served to the LAN.
 - **Reverse proxy** — publish what is behind the router: hostnames, a certificate it already holds,
   a pool of health-checked backends, and a web application firewall supporting blocking or detection 
   only modes. TCP and UDP pass straight through by port or by the name.

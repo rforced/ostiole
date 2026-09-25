@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/rforced/ostiole/internal/chrony"
+	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/services"
 )
 
@@ -133,7 +134,7 @@ func TestNTPStatusBeforeSetUp(t *testing.T) {
 		t.Errorf("status = %+v", st)
 	}
 	// The page shows the list a router with none of its own would use.
-	if len(st.Defaults) != 4 || st.Defaults[0].Host != "nts.netnod.se" || !st.Defaults[0].NTS {
+	if !slices.Equal(st.Defaults, model.DefaultNTPServers) {
 		t.Errorf("defaults = %+v", st.Defaults)
 	}
 	if stub.count() != 0 {

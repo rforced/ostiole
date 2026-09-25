@@ -13,11 +13,6 @@ func TestNTPServersFallBackToTheDefaults(t *testing.T) {
 	if !slices.Equal(got, DefaultNTPServers) {
 		t.Fatalf("servers = %+v, want the defaults", got)
 	}
-	for _, s := range got {
-		if !s.NTS {
-			t.Errorf("default %s is not asked to sign its answers", s.Host)
-		}
-	}
 	// What a caller does with the list is its own business.
 	got[0].Host = "changed.example"
 	if DefaultNTPServers[0].Host == "changed.example" {

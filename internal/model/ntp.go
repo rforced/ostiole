@@ -34,14 +34,10 @@ type NTPServer struct {
 	Pool bool `json:"pool,omitempty"`
 }
 
-// DefaultNTPServers are four operators in four countries that sign their
-// answers with NTS. None of them is a CDN, and no name in the list says
-// which distribution the router runs, as a vendor pool would.
+// DefaultNTPServers is the NTP Pool, of which chronyd asks four servers.
+// Of the pool's names only 2.pool.ntp.org also gives IPv6 addresses.
 var DefaultNTPServers = []NTPServer{
-	{Host: "nts.netnod.se", NTS: true},
-	{Host: "nts.time.nl", NTS: true},
-	{Host: "a.st1.ntp.br", NTS: true},
-	{Host: "virginia.time.system76.com", NTS: true},
+	{Host: "2.pool.ntp.org", Pool: true},
 }
 
 // NTPServers is the list the router asks: its own, or the defaults.
