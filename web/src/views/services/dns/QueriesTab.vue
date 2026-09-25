@@ -1,9 +1,10 @@
 <script setup>
-import { LoaderCircle, Pause, Play } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { LoaderCircle } from 'lucide-vue-next'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import FormField from '@/components/FormField.vue'
+import LiveButton from '@/components/LiveButton.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
@@ -108,7 +109,8 @@ const older = useAsync(async () => {
   ;[page.value, summary.value] = await read(next)
   cursors.value = [...cursors.value, next]
   // What streams in is new, and this page is not.
-  stopLive()
+  live.value = false
+  streamed.value = []
 })
 
 const newer = useAsync(async () => {
@@ -141,6 +143,8 @@ function connect() {
     streamError.value = ''
   }
   es.onmessage = (ev) => {
+    // Paging back turns Live off before the stream has closed.
+    if (!live.value) return
     try {
       const row = JSON.parse(ev.data)
       if (!matches(row)) return
@@ -160,18 +164,18 @@ function disconnect() {
   streamError.value = ''
 }
 
-function toggleLive() {
-  live.value = !live.value
-  if (live.value) connect()
-  else {
+/**
+ * On, the stream opens and the newest page is read again, so nothing that
+ * came in meanwhile is missed. Off, the rows stay where they are.
+ */
+watch(live, (on) => {
+  if (on) {
+    connect()
+    search()
+  } else {
     disconnect()
-    streamed.value = []
   }
-}
-
-function stopLive() {
-  if (live.value) toggleLive()
-}
+})
 
 /** The filter, applied to a streamed row the server did not filter. */
 function matches(row) {
@@ -196,9 +200,12 @@ const toggleFor = computed(() => exceptionToggles(config.draft))
 
 const rows = computed(() => {
   const toggle = toggleFor.value
+  const entries = page.value?.entries ?? []
+  // A row can stream in while the page holding it is being read.
+  const top = entries[0]?.seq ?? 0
   return [
-    ...streamed.value,
-    ...(page.value?.entries ?? []).map((e) => ({ ...e, key: `s${e.seq}` })),
+    ...streamed.value.filter((e) => !(e.seq <= top)),
+    ...entries.map((e) => ({ ...e, key: `s${e.seq}` })),
   ].map((e) => ({ ...e, toggle: toggle(e) }))
 })
 
@@ -358,10 +365,7 @@ onBeforeUnmount(disconnect)
               </option>
             </select>
           </FormField>
-          <button type="button" class="btn-secondary" :disabled="!newest" @click="toggleLive">
-            <component :is="live ? Pause : Play" class="size-4" aria-hidden="true" />
-            {{ live ? 'Stop' : 'Live' }}
-          </button>
+          <LiveButton v-model="live" :failing="Boolean(streamError)" :disabled="!newest" />
           <RefreshButton
             :busy="load.busy.value"
             :updated-at="load.updatedAt.value"

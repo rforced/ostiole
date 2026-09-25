@@ -1,11 +1,14 @@
 <script setup>
-import { Pause, Play, Trash2 } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { Trash2 } from 'lucide-vue-next'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+import LiveButton from '@/components/LiveButton.vue'
+import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { ApiError, api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { matchedLabel } from '@/lib/fwlog'
+import { useSearch } from '@/lib/search'
 import { streamLost } from '@/lib/stream'
 
 /** How many rows the page holds, and how many it asks for on opening. The
@@ -14,11 +17,10 @@ const MAX_ROWS = 2000
 const INITIAL_ROWS = 1000
 
 const entries = ref([])
-const paused = ref(false)
-const filter = ref('')
+/** On from the start. Off holds what arrives until it is on again. */
+const live = ref(true)
 const show = ref('all')
 const streamError = ref('')
-const connected = ref(false)
 let source = null
 let pending = []
 let seq = 0
@@ -34,20 +36,18 @@ function connect() {
   const es = new EventSource('/api/v1/log/stream')
   source = es
   es.onopen = () => {
-    connected.value = true
     streamError.value = ''
   }
   es.onmessage = (ev) => {
     try {
       const e = JSON.parse(ev.data)
-      if (paused.value) pending.unshift(e)
-      else push([e])
+      if (live.value) push([e])
+      else pending.unshift(e)
     } catch {
       /* ignore malformed */
     }
   }
   es.onerror = () => {
-    connected.value = false
     streamError.value = streamLost(es)
   }
 }
@@ -67,13 +67,12 @@ const load = useAsync(async () => {
 
 const error = computed(() => load.error.value || streamError.value)
 
-function togglePause() {
-  paused.value = !paused.value
-  if (!paused.value && pending.length) {
+watch(live, (on) => {
+  if (on && pending.length) {
     push(pending)
     pending = []
   }
-}
+})
 
 function clear() {
   entries.value = []
@@ -90,17 +89,11 @@ function chosen(e) {
   return show.value === 'blocked' ? e.action !== 'accept' : e.action === 'accept'
 }
 
-const visible = computed(() => {
-  const q = filter.value.trim().toLowerCase()
-  return entries.value.filter((e) => {
-    if (!chosen(e)) return false
-    if (!q) return true
-    // The row key is ours, not the packet's, so it is not searched.
-    return JSON.stringify(e, (k, v) => (k === 'key' ? undefined : v))
-      .toLowerCase()
-      .includes(q)
-  })
-})
+// The row key is ours, not the packet's, so it is not searched.
+const { query, shown: visible } = useSearch(
+  computed(() => entries.value.filter(chosen)),
+  (e) => ({ values: [JSON.stringify(e, (k, v) => (k === 'key' ? undefined : v))] }),
+)
 
 const label = matchedLabel
 
@@ -131,29 +124,23 @@ onBeforeUnmount(() => source?.close())
       flush
     >
       <template #actions>
-        <button type="button" class="btn-secondary" @click="togglePause">
-          <component :is="paused ? Play : Pause" class="size-4" aria-hidden="true" />
-          {{ paused ? 'Resume' : 'Pause' }}
-        </button>
+        <LiveButton v-model="live" :failing="Boolean(error)" />
         <button type="button" class="btn-secondary" @click="clear">
           <Trash2 class="size-4" aria-hidden="true" /> Clear
         </button>
       </template>
-      <div class="flex flex-wrap items-center gap-3 px-4 py-3">
-        <input
-          v-model="filter"
-          class="input max-w-xs"
-          placeholder="Filter (address, port, rule, interface…)"
-          aria-label="Filter log"
-        />
+      <div class="card-strip flex flex-wrap items-center gap-3">
         <select v-model="show" class="input w-36 max-sm:w-full" aria-label="Show">
           <option value="all">All</option>
           <option value="blocked">Blocked</option>
           <option value="allowed">Allowed</option>
         </select>
-        <span :class="connected ? 'text-ok' : 'text-ink-muted'">
-          {{ connected ? 'live' : 'not connected' }} · {{ visible.length }} shown
-        </span>
+        <SearchBox
+          v-model="query"
+          placeholder="address, port, rule, or interface"
+          :shown="visible.length"
+          :total="entries.length"
+        />
         <p v-if="error" role="alert" class="text-bad">{{ error }}</p>
       </div>
 
@@ -180,7 +167,7 @@ onBeforeUnmount(() => source?.close())
                 load.busy.value
                   ? 'Reading…'
                   : entries.length
-                    ? `Nothing matches ${filter.trim() ? `"${filter.trim()}"` : 'this view'}.`
+                    ? `Nothing matches ${query.trim() ? `"${query.trim()}"` : 'this view'}.`
                     : 'No packets logged.'
               }}
             </td>

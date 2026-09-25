@@ -3,8 +3,11 @@ import { onMounted, ref } from 'vue'
 
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import SortHeader from '@/components/SortHeader.vue'
+import SortSelect from '@/components/SortSelect.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { byAddress, byText, byTime, useSort } from '@/lib/sort'
 
 const status = ref(null)
 
@@ -34,12 +37,29 @@ function path(peer) {
   if (!peer.active) return 'idle'
   return peer.directAddr ? `direct ${peer.directAddr}` : `relay ${peer.relay}`
 }
+
+const COLUMNS = [
+  ['node', 'Node'],
+  ['addresses', 'Addresses'],
+  ['os', 'OS'],
+  ['seen', 'Last seen'],
+]
+
+/** A peer online now was last seen now. */
+const sort = useSort(() => (status.value?.running ? status.value.peers : []), {
+  node: byText(name),
+  addresses: byAddress((p) => p.ips?.[0]),
+  os: byText((p) => p.os),
+  seen: byTime((p) => (p.online ? new Date() : p.lastSeen)),
+})
+const peers = sort.sorted
 </script>
 
 <template>
   <div class="space-y-5">
     <SectionCard title="Peers" :count="status?.running ? status.peers.length : 0" flush>
       <template #actions>
+        <SortSelect :sort="sort" :columns="COLUMNS" />
         <RefreshButton
           :busy="load.busy.value"
           :updated-at="load.updatedAt.value"
@@ -52,10 +72,10 @@ function path(peer) {
       <table class="table table-stack">
         <thead>
           <tr>
-            <th>Node</th>
-            <th>Addresses</th>
-            <th>OS</th>
-            <th>Last seen</th>
+            <SortHeader by="node" :sort="sort">Node</SortHeader>
+            <SortHeader by="addresses" :sort="sort">Addresses</SortHeader>
+            <SortHeader by="os" :sort="sort">OS</SortHeader>
+            <SortHeader by="seen" :sort="sort">Last seen</SortHeader>
             <th>Path</th>
             <th>Routes</th>
           </tr>
@@ -69,7 +89,7 @@ function path(peer) {
           <tr v-else-if="!status.peers.length">
             <td colspan="6" class="text-ink-muted">No peers.</td>
           </tr>
-          <tr v-for="p in status?.running ? status.peers : []" :key="p.dnsName || p.hostName">
+          <tr v-for="p in peers" :key="p.dnsName || p.hostName">
             <td data-label="">
               <div class="font-mono">{{ name(p) }}</div>
               <span v-if="p.online" class="badge badge-ok">online</span>

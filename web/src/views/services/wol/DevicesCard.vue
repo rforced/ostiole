@@ -3,6 +3,7 @@ import { LoaderCircle, Plus } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import RandomMacBadge from '@/components/RandomMacBadge.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { deviceName, useWake } from '@/lib/wol'
 import { useAuthStore } from '@/stores/auth'
@@ -71,7 +72,10 @@ function edit(d) {
           :class="{ 'row-changed': config.isChanged('services.wol.devices', d.id) }"
         >
           <td data-label="">{{ deviceName(d) }}</td>
-          <td class="font-mono text-code" data-label="MAC">{{ d.mac }}</td>
+          <td class="font-mono text-code" data-label="MAC">
+            {{ d.mac }}
+            <RandomMacBadge :mac="d.mac" />
+          </td>
           <td class="font-mono" data-label="Interface">
             {{ d.interface }}
             <span v-if="off.has(d.interface)" class="badge ml-1">interface off</span>

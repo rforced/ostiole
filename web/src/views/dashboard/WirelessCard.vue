@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 
+import RandomMacBadge from '@/components/RandomMacBadge.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { formatDuration } from '@/lib/format'
 
@@ -77,6 +78,7 @@ function ssidOf(c) {
             <div v-if="c.hostname" class="font-mono">{{ c.hostname }}</div>
             <div class="font-mono text-code" :class="c.hostname ? 'text-ink-muted' : ''">
               {{ c.address || c.mac }}
+              <RandomMacBadge v-if="!c.address" :mac="c.mac" />
             </div>
           </td>
           <td class="font-mono text-code">{{ ssidOf(c) }}</td>

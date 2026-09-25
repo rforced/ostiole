@@ -2,13 +2,16 @@
 import { computed, onMounted, ref, watch } from 'vue'
 
 import FormField from '@/components/FormField.vue'
+import LiveButton from '@/components/LiveButton.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
-import ToggleRow from '@/components/ToggleRow.vue'
+import SortHeader from '@/components/SortHeader.vue'
+import SortSelect from '@/components/SortSelect.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { formatBytes, formatCount } from '@/lib/format'
 import { LEVELS, levelOf } from '@/lib/meter'
+import { byAddress, byNumber, byText, useSort } from '@/lib/sort'
 
 const POLL_MS = 5000
 
@@ -18,8 +21,18 @@ const POLL_MS = 5000
  * kernel is enforcing, on the same meter as the dashboard uses.
  */
 
+const COLUMNS = [
+  ['protocol', 'Protocol'],
+  ['from', 'From'],
+  ['to', 'To'],
+  ['leaves', 'Leaves as'],
+  ['state', 'State'],
+  ['traffic', 'Traffic'],
+  ['expires', 'Expires in'],
+]
+
 const result = ref(null)
-const auto = ref(false)
+const live = ref(false)
 const filter = ref({ address: '', protocol: '', port: '' })
 const filtered = computed(() =>
   Boolean(filter.value.address.trim() || filter.value.protocol || filter.value.port),
@@ -33,12 +46,45 @@ const load = useAsync(
       port: filter.value.port,
     })
   },
-  // The poll is opt-in: the checkbox owns it.
+  // The poll is opt-in: Live owns it.
   { interval: POLL_MS, autostart: false },
 )
 
 onMounted(load.run)
-watch(auto, (on) => (on ? load.start() : load.stop()))
+watch(live, (on) => {
+  if (on) {
+    load.run()
+    load.start()
+  } else {
+    load.stop()
+  }
+})
+
+/** Seconds in a Go duration as the server writes it: 1h2m3s. */
+function seconds(ttl) {
+  const m = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+(?:\.\d+)?)s)?$/.exec(ttl ?? '')
+  if (!m || !ttl) return null
+  return Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0)
+}
+
+/** The server sends the busiest first, which is what Live keeps to. */
+const sort = useSort(
+  () => result.value?.states ?? [],
+  {
+    protocol: byText((s) => s.protocol),
+    from: byAddress((s) => s.source),
+    to: byAddress((s) => s.destination),
+    leaves: byAddress((s) => (s.nat ? s.replyDest : null)),
+    state: byText((s) => s.state),
+    traffic: byNumber((s) => s.bytes),
+    expires: byNumber((s) => seconds(s.ttl), 'asc'),
+  },
+  {
+    by: 'traffic',
+    lock: () => (live.value ? { by: 'traffic', dir: 'desc' } : null),
+  },
+)
+const states = sort.sorted
 
 /** Protocol counts across the whole table, not just the rows shown. */
 const protocols = computed(() =>
@@ -74,6 +120,8 @@ function endpoint(address, port) {
       flush
     >
       <template #actions>
+        <SortSelect :sort="sort" :columns="COLUMNS" />
+        <LiveButton v-model="live" :failing="Boolean(load.error.value)" />
         <RefreshButton
           :busy="load.busy.value"
           :updated-at="load.updatedAt.value"
@@ -115,7 +163,6 @@ function endpoint(address, port) {
               class="input w-28 font-mono max-sm:w-full"
             />
           </FormField>
-          <ToggleRow v-model="auto" label="Every 5 seconds" />
         </form>
 
         <p v-if="load.error.value" role="alert" class="text-bad">{{ load.error.value }}</p>
@@ -170,17 +217,17 @@ function endpoint(address, port) {
       <table class="table table-flow">
         <thead>
           <tr>
-            <th>Protocol</th>
-            <th>From</th>
-            <th>To</th>
-            <th>Leaves as</th>
-            <th>State</th>
-            <th>Traffic</th>
-            <th>Expires in</th>
+            <SortHeader by="protocol" :sort="sort">Protocol</SortHeader>
+            <SortHeader by="from" :sort="sort">From</SortHeader>
+            <SortHeader by="to" :sort="sort">To</SortHeader>
+            <SortHeader by="leaves" :sort="sort">Leaves as</SortHeader>
+            <SortHeader by="state" :sort="sort">State</SortHeader>
+            <SortHeader by="traffic" :sort="sort">Traffic</SortHeader>
+            <SortHeader by="expires" :sort="sort">Expires in</SortHeader>
           </tr>
         </thead>
         <tbody>
-          <tr v-if="!result?.states.length">
+          <tr v-if="!states.length">
             <td colspan="7" class="text-ink-muted">
               {{
                 load.busy.value && !result
@@ -192,7 +239,7 @@ function endpoint(address, port) {
             </td>
           </tr>
           <tr
-            v-for="(s, i) in result?.states ?? []"
+            v-for="(s, i) in states"
             :key="i"
             class="max-sm:after:order-4 max-sm:after:basis-full max-sm:after:content-['']"
           >

@@ -6,11 +6,14 @@ import { useRouter } from 'vue-router'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import SortHeader from '@/components/SortHeader.vue'
+import SortSelect from '@/components/SortSelect.vue'
 import { api } from '@/lib/api'
 import { canonicalAsn } from '@/lib/asn'
 import { useAsync } from '@/lib/async'
 import { COUNTRIES } from '@/lib/countries'
 import { someOf } from '@/lib/lists'
+import { byNumber, byText, useSort } from '@/lib/sort'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import AliasDialog from '@/views/firewall/AliasDialog.vue'
@@ -26,6 +29,22 @@ const refreshing = ref('')
 
 /** What the router has actually fetched, keyed by alias. */
 const fetched = computed(() => Object.fromEntries(status.value.map((s) => [s.alias, s])))
+
+const COLUMNS = [
+  ['name', 'Alias'],
+  ['type', 'Type'],
+  ['entries', 'Entries'],
+  ['description', 'Description'],
+]
+
+/** A list that is fetched counts what it fetched. */
+const sort = useSort(() => config.aliases, {
+  name: byText((a) => a.name),
+  type: byText((a) => a.type),
+  entries: byNumber((a) => fetched.value[a.name]?.entries ?? a.entries.length),
+  description: byText((a) => a.description),
+})
+const aliases = sort.sorted
 
 /** Whether the router fetches this alias: a URL, or a country or AS list. */
 function fetches(a) {
@@ -113,17 +132,20 @@ function edit(a) {
       intro="A named list of addresses, networks or ports, to use in a rule."
       flush
     >
-      <template v-if="!auth.readOnly" #actions>
-        <RefreshButton
-          v-if="anyFetched"
-          :busy="refresh.busy.value"
-          :updated-at="refresh.updatedAt.value"
-          label="Refresh lists"
-          @click="refresh.run('')"
-        />
-        <button type="button" class="btn-secondary" @click="add">
-          <Plus class="size-4" aria-hidden="true" /> Add alias
-        </button>
+      <template #actions>
+        <SortSelect :sort="sort" :columns="COLUMNS" />
+        <template v-if="!auth.readOnly">
+          <RefreshButton
+            v-if="anyFetched"
+            :busy="refresh.busy.value"
+            :updated-at="refresh.updatedAt.value"
+            label="Refresh lists"
+            @click="refresh.run('')"
+          />
+          <button type="button" class="btn-secondary" @click="add">
+            <Plus class="size-4" aria-hidden="true" /> Add alias
+          </button>
+        </template>
       </template>
       <div v-if="refresh.error.value" class="card-strip">
         <p role="alert" class="text-bad">{{ refresh.error.value }}</p>
@@ -131,10 +153,10 @@ function edit(a) {
       <table class="table table-stack">
         <thead>
           <tr>
-            <th>Alias</th>
-            <th>Type</th>
-            <th>Entries</th>
-            <th>Description</th>
+            <SortHeader by="name" :sort="sort">Alias</SortHeader>
+            <SortHeader by="type" :sort="sort">Type</SortHeader>
+            <SortHeader by="entries" :sort="sort">Entries</SortHeader>
+            <SortHeader by="description" :sort="sort">Description</SortHeader>
             <th></th>
           </tr>
         </thead>
@@ -143,7 +165,7 @@ function edit(a) {
             <td colspan="5" class="text-ink-muted">No aliases.</td>
           </tr>
           <tr
-            v-for="a in config.aliases"
+            v-for="a in aliases"
             :key="a.name"
             :class="{ 'row-changed': config.isChanged('aliases', a.name) }"
           >

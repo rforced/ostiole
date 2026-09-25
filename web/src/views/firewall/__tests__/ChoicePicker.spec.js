@@ -53,7 +53,8 @@ describe('ChoicePicker', () => {
   it('takes all of what the search found in a group', async () => {
     const wrapper = pick(oracle)
     await wrapper.get('input[type=search]').setValue('us-')
-    expect(wrapper.findAll('label').map((l) => l.text())).toEqual(['us-ashburn-1', 'us-phoenix-1'])
+    const values = wrapper.findAll('label').filter((l) => l.find('input[type=checkbox]').exists())
+    expect(values.map((l) => l.text())).toEqual(['us-ashburn-1', 'us-phoenix-1'])
     await wrapper.get('button.link').trigger('click')
     expect(wrapper.props('modelValue')).toEqual(['region=us-ashburn-1', 'region=us-phoenix-1'])
   })

@@ -3,10 +3,13 @@ import { Plus } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import RandomMacBadge from '@/components/RandomMacBadge.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import SortHeader from '@/components/SortHeader.vue'
 import { api } from '@/lib/api'
 import { useDraftRows } from '@/lib/draft'
 import { overrideKey, overrideName } from '@/lib/hosts'
+import { byAddress, byText, useSort } from '@/lib/sort'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import DomainOverrideDialog from '@/views/services/dns/DomainOverrideDialog.vue'
@@ -28,6 +31,25 @@ const {
   error: systemError,
   updatedAt: systemRead,
 } = useDraftRows((draft) => api.systemHosts(draft))
+
+// Each list keeps the order it was written in until a header is clicked.
+const hostSort = useSort(hosts, {
+  name: byText((h) => overrideName(h, dns.value.domain)),
+  address: byAddress((h) => h.ip),
+  description: byText((h) => h.description),
+})
+const systemSort = useSort(system, {
+  hostname: byText((s) => s.hostname),
+  address: byAddress((s) => s.ip),
+  lease: byText((s) => s.mac),
+})
+const domainSort = useSort(domains, {
+  domain: byText((d) => d.domain),
+  description: byText((d) => d.description),
+})
+const hostRows = hostSort.sorted
+const systemRows = systemSort.sorted
+const domainRows = domainSort.sorted
 
 const hostEditing = ref(null)
 const hostOpen = ref(false)
@@ -71,10 +93,10 @@ function editDomain(d) {
       <table class="table">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Address</th>
+            <SortHeader by="name" :sort="hostSort">Name</SortHeader>
+            <SortHeader by="address" :sort="hostSort">Address</SortHeader>
             <th>Aliases</th>
-            <th>Description</th>
+            <SortHeader by="description" :sort="hostSort">Description</SortHeader>
             <th></th>
           </tr>
         </thead>
@@ -83,7 +105,7 @@ function editDomain(d) {
             <td colspan="5" class="text-ink-muted">No overrides.</td>
           </tr>
           <tr
-            v-for="h in hosts"
+            v-for="h in hostRows"
             :key="overrideKey(h)"
             :class="{
               'row-changed': config.isChanged('services.dns.hostOverrides', overrideKey(h)),
@@ -124,9 +146,9 @@ function editDomain(d) {
       <table class="table">
         <thead>
           <tr>
-            <th>Hostname</th>
-            <th>Address</th>
-            <th>Lease</th>
+            <SortHeader by="hostname" :sort="systemSort">Hostname</SortHeader>
+            <SortHeader by="address" :sort="systemSort">Address</SortHeader>
+            <SortHeader by="lease" :sort="systemSort">Lease</SortHeader>
             <th></th>
           </tr>
         </thead>
@@ -136,7 +158,7 @@ function editDomain(d) {
               {{ systemRead ? 'No static lease has a hostname.' : 'Reading…' }}
             </td>
           </tr>
-          <tr v-for="s in system" :key="`${s.hostname}-${s.ip}`">
+          <tr v-for="s in systemRows" :key="`${s.hostname}-${s.ip}`">
             <td class="font-mono text-code">
               {{ s.hostname }}
               <span v-if="s.fqdn" class="ml-1 text-ink-muted">{{ s.fqdn }}</span>
@@ -144,6 +166,7 @@ function editDomain(d) {
             <td class="font-mono text-code">{{ s.ip }}</td>
             <td>
               <span class="font-mono text-code">{{ s.mac }}</span>
+              <RandomMacBadge :mac="s.mac" />
               <span v-if="s.description" class="ml-1 text-ink-muted">{{ s.description }}</span>
             </td>
             <td class="text-right whitespace-nowrap">
@@ -168,9 +191,9 @@ function editDomain(d) {
       <table class="table">
         <thead>
           <tr>
-            <th>Domain</th>
+            <SortHeader by="domain" :sort="domainSort">Domain</SortHeader>
             <th>Resolvers</th>
-            <th>Description</th>
+            <SortHeader by="description" :sort="domainSort">Description</SortHeader>
             <th></th>
           </tr>
         </thead>
@@ -181,7 +204,7 @@ function editDomain(d) {
             </td>
           </tr>
           <tr
-            v-for="d in domains"
+            v-for="d in domainRows"
             :key="d.domain"
             :class="{ 'row-changed': config.isChanged('services.dns.domainOverrides', d.domain) }"
           >

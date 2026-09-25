@@ -9,10 +9,15 @@ vi.mock('@/lib/api', () => ({
   api: { log: { recent: vi.fn() } },
 }))
 
-/** The page opens a stream; nothing here tests it, so it is inert. */
+/** The stream the page opens; a test sends through the last one. */
+let source = null
 class FakeSource {
+  constructor() {
+    source = this
+  }
   close() {}
 }
+const send = (e) => source.onmessage({ data: JSON.stringify(e) })
 
 function entry(over = {}) {
   return {
@@ -110,5 +115,23 @@ describe('LogPage', () => {
     await w.get('select').setValue('blocked')
     await w.get('input').setValue('allow-web')
     expect(rows(w)[0].text()).toContain('Nothing matches "allow-web"')
+  })
+
+  // Off holds what arrives, so nothing is missed; on shows it.
+  it('holds new packets while Live is off', async () => {
+    const w = await open(log)
+    send(entry({ ruleId: 'first', action: 'accept' }))
+    await flushPromises()
+    expect(matched(w)[0]).toBe('first')
+
+    const live = w.findAll('button').find((b) => b.text() === 'Live')
+    expect(live.attributes('aria-pressed')).toBe('true')
+    await live.trigger('click')
+    send(entry({ ruleId: 'held', action: 'accept' }))
+    await flushPromises()
+    expect(matched(w)).not.toContain('held')
+
+    await live.trigger('click')
+    expect(matched(w)[0]).toBe('held')
   })
 })

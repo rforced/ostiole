@@ -215,15 +215,15 @@ test('a country alias is picked by name, and a preset picks a whole bloc', async
   await expect(dialog.getByLabel('Fetch from')).toHaveCount(0)
 
   // Countries are chosen by name; the codes are what gets stored.
-  await dialog.getByLabel('Find a country').fill('german')
+  await dialog.getByLabel('Search', { exact: true }).fill('german')
   await dialog.getByRole('checkbox', { name: /Germany/ }).check()
-  await dialog.getByLabel('Find a country').fill('france')
+  await dialog.getByLabel('Search', { exact: true }).fill('france')
   await dialog.getByRole('checkbox', { name: /France/ }).check()
   await expect(dialog).toContainText('2 selected')
   await expect(dialog).toContainText('France, Germany')
 
   // One click for a bloc nobody wants to tick 27 times.
-  await dialog.getByLabel('Find a country').fill('')
+  await dialog.getByLabel('Search', { exact: true }).fill('')
   await dialog.getByRole('button', { name: '+ European Union' }).click()
   await expect(dialog).toContainText('27 selected')
   await page.screenshot({ path: shot('99-countries'), fullPage: true })

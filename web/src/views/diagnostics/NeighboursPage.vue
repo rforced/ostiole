@@ -1,15 +1,28 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 
+import RandomMacBadge from '@/components/RandomMacBadge.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
+import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import SortHeader from '@/components/SortHeader.vue'
+import SortSelect from '@/components/SortSelect.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { useSearch } from '@/lib/search'
+import { byAddress, byText, useSort } from '@/lib/sort'
 import { useConfigStore } from '@/stores/config'
+
+const COLUMNS = [
+  ['address', 'Address'],
+  ['mac', 'MAC'],
+  ['interface', 'Interface'],
+  ['family', 'Family'],
+  ['state', 'State'],
+]
 
 const config = useConfigStore()
 const rows = ref([])
-const search = ref('')
 
 const load = useAsync(async () => {
   rows.value = await api.diagnostics.neighbours()
@@ -25,14 +38,28 @@ const named = computed(() => {
   return out
 })
 
-const shown = computed(() => {
-  const q = search.value.trim().toLowerCase()
-  if (!q) return rows.value
-  return rows.value.filter((n) =>
-    [n.address, n.mac, n.interface, named.value[(n.mac ?? '').toLowerCase()]]
-      .filter(Boolean)
-      .some((v) => v.toLowerCase().includes(q)),
-  )
+const { query, shown } = useSearch(rows, (n) => ({
+  values: [n.address, n.interface, named.value[(n.mac ?? '').toLowerCase()]],
+  macs: [n.mac],
+}))
+
+const sort = useSort(
+  shown,
+  {
+    address: byAddress((n) => n.address),
+    mac: byText((n) => n.mac),
+    interface: byText((n) => n.interface),
+    family: byText((n) => n.family),
+    state: byText((n) => n.state),
+  },
+  { by: 'interface', tie: 'address' },
+)
+const sorted = sort.sorted
+
+const empty = computed(() => {
+  if (!load.updatedAt.value) return 'Reading…'
+  if (!rows.value.length) return 'No neighbours.'
+  return `Nothing matches "${query.value.trim()}".`
 })
 
 /** REACHABLE is current; FAILED means the address answered nothing. */
@@ -52,6 +79,7 @@ function tone(state) {
       flush
     >
       <template #actions>
+        <SortSelect :sort="sort" :columns="COLUMNS" />
         <RefreshButton
           :busy="load.busy.value"
           :updated-at="load.updatedAt.value"
@@ -59,15 +87,12 @@ function tone(state) {
         />
       </template>
       <div class="card-strip flex flex-wrap items-center gap-3">
-        <label class="sr-only" for="nb-search">Search</label>
-        <input
-          id="nb-search"
-          v-model="search"
-          class="input w-64 font-mono max-sm:w-full"
+        <SearchBox
+          v-model="query"
           placeholder="address, MAC, or interface"
-          spellcheck="false"
+          :shown="shown.length"
+          :total="rows.length"
         />
-        <span class="text-ink-muted">{{ shown.length }} of {{ rows.length }}</span>
         <p v-if="load.error.value" role="alert" class="text-bad">{{ load.error.value }}</p>
       </div>
 
@@ -76,21 +101,19 @@ function tone(state) {
       <table class="table table-flow">
         <thead>
           <tr>
-            <th>Address</th>
-            <th>MAC</th>
-            <th>Interface</th>
-            <th>Family</th>
-            <th>State</th>
+            <SortHeader by="address" :sort="sort">Address</SortHeader>
+            <SortHeader by="mac" :sort="sort">MAC</SortHeader>
+            <SortHeader by="interface" :sort="sort">Interface</SortHeader>
+            <SortHeader by="family" :sort="sort">Family</SortHeader>
+            <SortHeader by="state" :sort="sort">State</SortHeader>
           </tr>
         </thead>
         <tbody>
-          <tr v-if="!shown.length">
-            <td colspan="5" class="text-ink-muted">
-              {{ load.busy.value && !rows.length ? 'Reading…' : 'No neighbours.' }}
-            </td>
+          <tr v-if="!sorted.length">
+            <td colspan="5" class="text-ink-muted">{{ empty }}</td>
           </tr>
           <tr
-            v-for="(n, i) in shown"
+            v-for="(n, i) in sorted"
             :key="`${n.interface}-${n.address}-${i}`"
             class="max-sm:after:order-3 max-sm:after:basis-full max-sm:after:content-['']"
           >
@@ -100,6 +123,7 @@ function tone(state) {
             </td>
             <td class="font-mono text-code max-sm:order-4">
               {{ n.mac || '—' }}
+              <RandomMacBadge :mac="n.mac" />
               <span v-if="named[(n.mac ?? '').toLowerCase()]" class="ml-1 text-ink-muted">
                 {{ named[n.mac.toLowerCase()] }}
               </span>

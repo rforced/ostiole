@@ -3,7 +3,11 @@ import { Plus } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import RandomMacBadge from '@/components/RandomMacBadge.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import SortHeader from '@/components/SortHeader.vue'
+import SortSelect from '@/components/SortSelect.vue'
+import { byAddress, byText, useSort } from '@/lib/sort'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ServerDialog from '@/views/services/dhcp/ServerDialog.vue'
@@ -18,6 +22,24 @@ const serverEditing = ref(null)
 const serverOpen = ref(false)
 const leaseEditing = ref(null)
 const leaseOpen = ref(false)
+
+const LEASE_COLUMNS = [
+  ['mac', 'MAC'],
+  ['ip', 'IPv4'],
+  ['ipv6', 'IPv6'],
+  ['hostname', 'Hostname'],
+  ['description', 'Description'],
+]
+
+/** In the order they were added until a header says otherwise. */
+const leaseSort = useSort(() => dhcp.value.staticLeases ?? [], {
+  mac: byText((l) => l.mac),
+  ip: byAddress((l) => l.ip),
+  ipv6: byAddress((l) => l.ipv6),
+  hostname: byText((l) => l.hostname),
+  description: byText((l) => l.description),
+})
+const staticLeases = leaseSort.sorted
 
 function addServer() {
   serverEditing.value = null
@@ -101,19 +123,20 @@ function editLease(l) {
     </SectionCard>
 
     <SectionCard title="Static leases" :count="(dhcp.staticLeases ?? []).length" flush>
-      <template v-if="!auth.readOnly" #actions>
-        <button type="button" class="btn-secondary" @click="addLease">
+      <template #actions>
+        <SortSelect :sort="leaseSort" :columns="LEASE_COLUMNS" />
+        <button v-if="!auth.readOnly" type="button" class="btn-secondary" @click="addLease">
           <Plus class="size-4" aria-hidden="true" /> Add static lease
         </button>
       </template>
       <table class="table table-stack">
         <thead>
           <tr>
-            <th>MAC</th>
-            <th>IPv4</th>
-            <th>IPv6</th>
-            <th>Hostname</th>
-            <th>Description</th>
+            <SortHeader by="mac" :sort="leaseSort">MAC</SortHeader>
+            <SortHeader by="ip" :sort="leaseSort">IPv4</SortHeader>
+            <SortHeader by="ipv6" :sort="leaseSort">IPv6</SortHeader>
+            <SortHeader by="hostname" :sort="leaseSort">Hostname</SortHeader>
+            <SortHeader by="description" :sort="leaseSort">Description</SortHeader>
             <th></th>
           </tr>
         </thead>
@@ -122,11 +145,14 @@ function editLease(l) {
             <td colspan="6" class="text-ink-muted">No static leases.</td>
           </tr>
           <tr
-            v-for="l in dhcp.staticLeases"
+            v-for="l in staticLeases"
             :key="l.mac"
             :class="{ 'row-changed': config.isChanged('services.dhcp.staticLeases', l.mac) }"
           >
-            <td class="font-mono text-code" data-label="MAC">{{ l.mac }}</td>
+            <td class="font-mono text-code" data-label="MAC">
+              {{ l.mac }}
+              <RandomMacBadge :mac="l.mac" />
+            </td>
             <td class="font-mono text-code" data-label="IPv4">{{ l.ip || '—' }}</td>
             <td class="font-mono text-code" data-label="IPv6">{{ l.ipv6 || '—' }}</td>
             <td class="font-mono text-code" data-label="Hostname">{{ l.hostname }}</td>

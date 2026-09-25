@@ -8,10 +8,13 @@ import ConfirmButton from '@/components/ConfirmButton.vue'
 import FormField from '@/components/FormField.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import SortHeader from '@/components/SortHeader.vue'
+import SortSelect from '@/components/SortSelect.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { formatCount } from '@/lib/format'
+import { byNumber, byText, byTime, useSort } from '@/lib/sort'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import BlockListDialog from '@/views/services/dns/BlockListDialog.vue'
@@ -57,6 +60,14 @@ const total = computed(() => status.value?.totals?.domains ?? 0)
 /** What the last installed merge came to: the number that costs memory. */
 const blocked = computed(() => status.value?.totals?.blocked ?? 0)
 const memoryMB = computed(() => status.value?.totals?.estimatedMemoryMb ?? 0)
+
+const COLUMNS = [
+  ['name', 'List'],
+  ['names', 'Names'],
+  ['blocked', 'Blocked'],
+  ['source', 'Source'],
+  ['fetched', 'Fetched'],
+]
 
 /**
  * Whether the ceiling is in the way. The merged number is the one that
@@ -135,6 +146,16 @@ function when(s) {
   if (!s?.fetchedAt) return 'never'
   return new Date(s.fetchedAt).toLocaleString()
 }
+
+/** In the order they were added until a header says otherwise. */
+const sort = useSort(() => config.blockLists, {
+  name: byText((l) => l.name),
+  names: byNumber((l) => fetched.value[l.name]?.domains),
+  blocked: byNumber((l) => counts.value[l.name]?.blocked),
+  source: byText(source),
+  fetched: byTime((l) => fetched.value[l.name]?.fetchedAt),
+})
+const lists = sort.sorted
 </script>
 
 <template>
@@ -195,17 +216,20 @@ function when(s) {
       intro="A name on a list blocks everything under it. Names to let back through go under Exceptions."
       flush
     >
-      <template v-if="!auth.readOnly" #actions>
-        <RefreshButton
-          v-if="config.blockLists.some((l) => l.url)"
-          :busy="refresh.busy.value"
-          :updated-at="refresh.updatedAt.value"
-          label="Refresh lists"
-          @click="refresh.run('')"
-        />
-        <button type="button" class="btn-secondary" :disabled="refresh.busy.value" @click="add">
-          <Plus class="size-4" aria-hidden="true" /> Add list
-        </button>
+      <template #actions>
+        <SortSelect :sort="sort" :columns="COLUMNS" />
+        <template v-if="!auth.readOnly">
+          <RefreshButton
+            v-if="config.blockLists.some((l) => l.url)"
+            :busy="refresh.busy.value"
+            :updated-at="refresh.updatedAt.value"
+            label="Refresh lists"
+            @click="refresh.run('')"
+          />
+          <button type="button" class="btn-secondary" :disabled="refresh.busy.value" @click="add">
+            <Plus class="size-4" aria-hidden="true" /> Add list
+          </button>
+        </template>
       </template>
       <div class="card-strip space-y-1 empty:hidden">
         <p v-if="total" class="text-ink-muted">
@@ -229,12 +253,14 @@ function when(s) {
       <table class="table table-stack">
         <thead>
           <tr>
-            <th>List</th>
+            <SortHeader by="name" :sort="sort">List</SortHeader>
             <th>On</th>
-            <th>Names</th>
-            <th title="Counts need the query log.">Blocked</th>
-            <th>Source</th>
-            <th>Fetched</th>
+            <SortHeader by="names" :sort="sort">Names</SortHeader>
+            <SortHeader by="blocked" :sort="sort" title="Counts need the query log.">
+              Blocked
+            </SortHeader>
+            <SortHeader by="source" :sort="sort">Source</SortHeader>
+            <SortHeader by="fetched" :sort="sort">Fetched</SortHeader>
             <th></th>
           </tr>
         </thead>
@@ -245,7 +271,7 @@ function when(s) {
             </td>
           </tr>
           <tr
-            v-for="l in config.blockLists"
+            v-for="l in lists"
             :key="l.name"
             :class="{ 'row-changed': config.isChanged('blocking.lists', l.name) }"
           >

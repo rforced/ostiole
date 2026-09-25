@@ -1,7 +1,9 @@
 <script setup>
 import { computed, ref } from 'vue'
 
+import SearchBox from '@/components/SearchBox.vue'
 import { COUNTRIES, PRESETS, REGIONS } from '@/lib/countries'
+import { matches as found } from '@/lib/search'
 
 /** The two-letter codes the alias holds. */
 const selected = defineModel({ type: Array, default: () => [] })
@@ -20,11 +22,7 @@ const props = defineProps({
 const filter = ref('')
 const chosen = computed(() => new Set(selected.value))
 
-const matches = computed(() => {
-  const q = filter.value.trim().toLowerCase()
-  if (!q) return COUNTRIES
-  return COUNTRIES.filter((c) => c.name.toLowerCase().includes(q) || c.code.includes(q))
-})
+const matches = computed(() => COUNTRIES.filter((c) => found(filter.value, [c.name, c.code])))
 
 /** Only the regions the filter left something in. */
 const groups = computed(() =>
@@ -75,13 +73,7 @@ const chosenTotal = computed(() =>
 <template>
   <div class="space-y-2">
     <div class="flex flex-wrap items-center gap-2">
-      <input
-        v-model="filter"
-        type="search"
-        class="input w-48 max-sm:w-full"
-        placeholder="Find a country"
-        aria-label="Find a country"
-      />
+      <SearchBox v-model="filter" placeholder="country or code" />
       <button
         v-for="p in PRESETS"
         :key="p.name"
@@ -129,7 +121,7 @@ const chosenTotal = computed(() =>
 
     <div class="max-h-72 overflow-y-auto rounded-lg border border-line p-2">
       <p v-if="!groups.length" class="p-2 text-sm text-ink-muted">
-        Nothing matches "{{ filter }}".
+        Nothing matches "{{ filter.trim() }}".
       </p>
       <div v-for="g in groups" :key="g.region" class="mb-2 last:mb-0">
         <div class="flex items-baseline gap-2 px-1 py-1">

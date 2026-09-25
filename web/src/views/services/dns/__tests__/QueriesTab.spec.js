@@ -129,6 +129,64 @@ describe('QueriesTab', () => {
     expect(button(wrapper, 'Newer')).toBeUndefined()
   })
 
+  // Live reads the newest page again as it starts, so the stream picks up
+  // where the page ends; a row in both shows once. Off, the rows stay.
+  it('streams new answers on top while live', async () => {
+    let source = null
+    vi.stubGlobal(
+      'EventSource',
+      class {
+        constructor() {
+          source = this
+          this.closed = false
+        }
+        close() {
+          this.closed = true
+        }
+      },
+    )
+    const send = (seq) =>
+      source.onmessage({
+        data: JSON.stringify({
+          seq,
+          time: '2026-09-24T12:00:01Z',
+          client: '10.0.0.2',
+          name: `name${seq}.example`,
+          type: 'A',
+          status: 'ok',
+        }),
+      })
+    const config = useConfigStore()
+    config.draft = { version: 6, services: { dns: { enabled: true, queryLog: { enabled: true } } } }
+    config.loaded = true
+    const wrapper = mount(QueriesTab)
+    await flushPromises()
+
+    const live = button(wrapper, 'Live')
+    await live.trigger('click')
+    expect(live.attributes('aria-pressed')).toBe('true')
+    send(450)
+    await flushPromises()
+    expect(api.queries.list).toHaveBeenCalledTimes(2)
+    send(451)
+    await flushPromises()
+    expect(names(wrapper).slice(0, 3)).toEqual([
+      'name451.example',
+      'name450.example',
+      'name449.example',
+    ])
+
+    await live.trigger('click')
+    expect(source.closed).toBe(true)
+    expect(names(wrapper)[0]).toBe('name451.example')
+
+    // An older page has nothing new above it.
+    await button(wrapper, 'Older').trigger('click')
+    await flushPromises()
+    expect(names(wrapper)[0]).toBe('name250.example')
+    vi.unstubAllGlobals()
+  })
+
   it('toggles a name onto the exception lists from its row', async () => {
     api.queries.list.mockResolvedValue(mixed())
     const config = saved()

@@ -1,7 +1,9 @@
 <script setup>
 import { computed, ref } from 'vue'
 
+import SearchBox from '@/components/SearchBox.vue'
 import { conditionKey, formatCondition } from '@/lib/conditions'
+import { matches } from '@/lib/search'
 
 /** The conditions the alias keeps part of its list by, as written. */
 const selected = defineModel({ type: Array, default: () => [] })
@@ -25,22 +27,21 @@ const offered = computed(() =>
 )
 
 /** The groups with the values the filter leaves, each with its condition. */
-const groups = computed(() => {
-  const q = filter.value.trim().toLowerCase()
-  return props.choices
+const groups = computed(() =>
+  props.choices
     .map((c) => {
       const field = c.field ?? ''
-      const all = !q || field.toLowerCase().includes(q)
+      const all = matches(filter.value, [field])
       return {
         key: field || '(keys)',
         title: field || 'Listed under',
         items: c.values
-          .filter((v) => all || v.toLowerCase().includes(q))
+          .filter((v) => all || matches(filter.value, [v]))
           .map((v) => ({ value: v, condition: formatCondition(field, v) })),
       }
     })
-    .filter((g) => g.items.length)
-})
+    .filter((g) => g.items.length),
+)
 
 /**
  * Conditions the list does not offer: a pattern, or a value it no longer
@@ -72,13 +73,7 @@ function set(conditions, on) {
 <template>
   <div class="space-y-2">
     <div class="flex flex-wrap items-center gap-2">
-      <input
-        v-model="filter"
-        type="search"
-        class="input w-48 max-sm:w-full"
-        placeholder="Find a value"
-        aria-label="Find a value"
-      />
+      <SearchBox v-model="filter" placeholder="value or field" />
       <button v-if="selected.length" type="button" class="btn-secondary" @click="selected = []">
         Clear {{ selected.length }}
       </button>
@@ -99,7 +94,7 @@ function set(conditions, on) {
 
     <div class="max-h-72 overflow-y-auto rounded-lg border border-line p-2">
       <p v-if="!groups.length" class="p-2 text-sm text-ink-muted">
-        Nothing matches "{{ filter }}".
+        Nothing matches "{{ filter.trim() }}".
       </p>
       <div v-for="g in groups" :key="g.key" class="mb-2 last:mb-0">
         <div class="flex items-baseline gap-2 px-1 py-1">
