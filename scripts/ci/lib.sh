@@ -17,7 +17,11 @@ pkg_refresh() {
 	case "$(manager)" in
 	apt-get) DEBIAN_FRONTEND=noninteractive apt-get update -qq ;;
 	dnf) dnf makecache -q >/dev/null 2>&1 || true ;;
-	pacman) pacman -Sy --noconfirm >/dev/null ;;
+	# Arch upgrades everything or nothing. The image trails the
+	# repositories, and one package taken from a newer database breaks
+	# whatever is pinned to the old one: systemd 262 on its own is refused
+	# because systemd-sysvcompat wants the systemd the image came with.
+	pacman) pacman -Syu --noconfirm >/dev/null ;;
 	esac
 }
 
