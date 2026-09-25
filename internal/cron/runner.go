@@ -144,7 +144,7 @@ func NewRunner(source func() *model.Config, exec Executor, log *slog.Logger, dir
 			{ID: "system:drives", Description: "Check SMART data on drives", Every: time.Hour},
 			{ID: "system:sessions", Description: "Expire idle web sessions", Note: "as they expire"},
 			{ID: "system:firewall-log", Description: "Firewall packet collector", Note: "continuously"},
-			{ID: "system:query-log", Description: "DNS Query Collector", Note: "continuously"},
+			{ID: "system:query-log", Description: "DNS query collector", Note: "continuously"},
 		},
 	}
 	r.load()
