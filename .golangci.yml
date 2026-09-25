@@ -33,6 +33,12 @@ linters:
           - bodyclose
           - gosec
           - noctx
+      # Helper packages like s3test only ever run under go test.
+      - path: internal/[a-z0-9]+/[a-z0-9]+test/
+        linters:
+          - bodyclose
+          - gosec
+          - noctx
 
 formatters:
   enable:

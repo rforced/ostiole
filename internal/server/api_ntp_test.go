@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -16,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rforced/ostiole/internal/chrony"
+	"github.com/rforced/ostiole/internal/chrony/chronytest"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/services"
 )
@@ -62,52 +61,51 @@ func (u *ntpUnit) Run(_ context.Context, _ string, args ...string) ([]byte, erro
 	return nil, nil
 }
 
-// chronyStub answers like chronyc from the captures the chrony package
-// keeps. An older build answers authdata and serverstats with 501.
-type chronyStub struct {
-	mu       sync.Mutex
-	calls    int
-	tracking string // a file in the chrony package's testdata
-	auth     string // authdata rows; empty reads the capture
-	older    bool
-}
-
-func (c *chronyStub) set(change func(c *chronyStub)) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	change(c)
-}
-
-func (c *chronyStub) run(_ context.Context, _ string, args ...string) ([]byte, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.calls++
-	names, command := args[2], args[4]
-	if c.older && (command == "authdata" || command == "serverstats") {
-		return []byte("501 Not authorised\n"), errors.New("exit status 1")
+var (
+	// synced is what chrony 4.9 on the router said once it followed
+	// virginia.time.system76.com.
+	synced = chrony.Tracking{
+		Address: "3.220.42.39", Stratum: 3, RefTime: time.Date(2026, 9, 24, 22, 2, 50, 868255935, time.UTC),
+		Offset: -0.003059836, RootDelay: 0.049001947, RootDispersion: 0.019441204, Leap: "Normal",
 	}
-	file := map[string]string{
-		"tracking -n": c.tracking, "sources -n": "sources-n.csv", "sources -N": "sources-N.csv",
-		"authdata -n": "authdata-n.csv", "authdata -N": "authdata-N.csv", "serverstats -n": "serverstats.csv",
-	}[command+" "+names]
-	if command == "authdata" && c.auth != "" {
-		return []byte(c.auth), nil
+	unsynchronised = chrony.Tracking{Leap: "Not synchronised"}
+)
+
+// chronySource is a server as chronytest lists it.
+func chronySource(name, addr, state string, stratum int, last time.Duration, auth *chrony.Auth) chronytest.Source {
+	s := chrony.Source{Name: name, Address: addr, State: state, Stratum: stratum, Poll: 64 * time.Second, LastRx: last}
+	if last >= 0 {
+		s.Reach = 0o17
 	}
-	return os.ReadFile(filepath.Join("..", "chrony", "testdata", file))
+	return chronytest.Source{Source: s, Auth: auth}
 }
 
-func (c *chronyStub) count() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.calls
+// chronyd is the router's time service following four NTS servers, an
+// address that never answers and a pool, as chrony 4.9 reported it.
+func chronyd(t *testing.T) *chronytest.Daemon {
+	t.Helper()
+	d := chronytest.New(t)
+	d.SetTracking(synced)
+	signed := &chrony.Auth{Mode: "NTS", LastKE: 75 * time.Second, Cookies: 8}
+	d.SetSources(
+		chronySource("nts.netnod.se", "194.58.205.196", "excluded", 1, 26*time.Second, signed),
+		chronySource("nts.time.nl", "94.198.159.11", "excluded", 2, 27*time.Second, signed),
+		chronySource("a.st1.ntp.br", "200.160.7.186", "excluded", 1, 28*time.Second, signed),
+		chronySource("virginia.time.system76.com", "3.220.42.39", "selected", 2, 28*time.Second, signed),
+		chronySource("192.0.2.123", "192.0.2.123", "unusable", 0, -1, nil),
+		chronySource("2.pool.ntp.org", "45.63.54.13", "excluded", 2, 28*time.Second, nil),
+		chronySource("2.pool.ntp.org", "137.190.2.4", "excluded", 1, 28*time.Second, nil),
+	)
+	d.SetServerStats(chrony.ServerStats{NTPReceived: 1234, NTPDropped: 5})
+	return d
 }
 
-func newNTPServer(t *testing.T, unit *ntpUnit, stub *chronyStub) *httptest.Server {
+func newNTPServer(t *testing.T, unit *ntpUnit, daemon *chronytest.Daemon) *httptest.Server {
 	t.Helper()
 	f := services.NTPFeatures{Version: chrony.Version{Major: 4, Minor: 9, NTS: true}}
 	return newTestServerWith(t, func(d *Deps) {
 		d.NTP = &services.NTP{Cmd: unit, Features: &f}
-		d.Chrony = &chrony.Client{Bin: "chronyc", Run: stub.run}
+		d.Chrony = &chrony.Client{Addr: daemon.Addr}
 	})
 }
 
@@ -124,12 +122,12 @@ func getNTPStatus(t *testing.T, srv *httptest.Server) ntpStatus {
 	return st
 }
 
-// Before `ostiole repair` writes the unit, the page says so, and chronyc
-// is not asked: the daemon it would reach is the distribution's.
+// Before `ostiole repair` writes the unit, the page says so, and chronyd
+// is not asked: the daemon on the port is the distribution's.
 func TestNTPStatusBeforeSetUp(t *testing.T) {
 	t.Parallel()
-	stub := &chronyStub{tracking: "tracking.csv"}
-	st := getNTPStatus(t, newNTPServer(t, &ntpUnit{}, stub))
+	daemon := chronyd(t)
+	st := getNTPStatus(t, newNTPServer(t, &ntpUnit{}, daemon))
 	if st.SetUp || st.Running || st.Read || st.Sources == nil || len(st.Sources) != 0 {
 		t.Errorf("status = %+v", st)
 	}
@@ -137,15 +135,14 @@ func TestNTPStatusBeforeSetUp(t *testing.T) {
 	if !slices.Equal(st.Defaults, model.DefaultNTPServers) {
 		t.Errorf("defaults = %+v", st.Defaults)
 	}
-	if stub.count() != 0 {
-		t.Errorf("chronyc was asked %d times about a service that is not ours", stub.count())
+	if n := daemon.Requests(); n != 0 {
+		t.Errorf("chronyd was asked %d times about a service that is not ours", n)
 	}
 }
 
 func TestNTPStatusReadsTheService(t *testing.T) {
 	t.Parallel()
-	stub := &chronyStub{tracking: "tracking.csv"}
-	st := getNTPStatus(t, newNTPServer(t, &ntpUnit{installed: true, active: true}, stub))
+	st := getNTPStatus(t, newNTPServer(t, &ntpUnit{installed: true, active: true}, chronyd(t)))
 	if !st.SetUp || !st.Running || !st.Read || !st.Synchronised || st.Version != "4.9" {
 		t.Fatalf("status = %+v", st)
 	}
@@ -154,7 +151,7 @@ func TestNTPStatusReadsTheService(t *testing.T) {
 		t.Errorf("reference = %q stratum %d at %v", st.Reference, st.Stratum, st.LastUpdate)
 	}
 	if st.OffsetSeconds >= 0 {
-		t.Errorf("offset = %v; chronyc said slow, which is negative here", st.OffsetSeconds)
+		t.Errorf("offset = %v; chronyd said slow, which is negative here", st.OffsetSeconds)
 	}
 	if len(st.Sources) != 7 {
 		t.Fatalf("sources = %+v", st.Sources)
@@ -179,8 +176,9 @@ func TestNTPStatusReadsTheService(t *testing.T) {
 // port. The rest is still read, and those parts are left out.
 func TestNTPStatusOnAnOlderBuild(t *testing.T) {
 	t.Parallel()
-	stub := &chronyStub{tracking: "tracking.csv", older: true}
-	st := getNTPStatus(t, newNTPServer(t, &ntpUnit{installed: true, active: true}, stub))
+	daemon := chronyd(t)
+	daemon.Refuse("authdata", "serverstats")
+	st := getNTPStatus(t, newNTPServer(t, &ntpUnit{installed: true, active: true}, daemon))
 	if !st.Read || len(st.Sources) != 7 || st.Served != nil {
 		t.Fatalf("status = %+v", st)
 	}
@@ -193,13 +191,13 @@ func TestNTPStatusOnAnOlderBuild(t *testing.T) {
 
 func TestNTPStatusDoesNotAskAStoppedService(t *testing.T) {
 	t.Parallel()
-	stub := &chronyStub{tracking: "tracking.csv"}
-	st := getNTPStatus(t, newNTPServer(t, &ntpUnit{installed: true, skipped: true}, stub))
+	daemon := chronyd(t)
+	st := getNTPStatus(t, newNTPServer(t, &ntpUnit{installed: true, skipped: true}, daemon))
 	if !st.SetUp || st.Running || !st.HostClock || st.Read {
 		t.Errorf("status = %+v", st)
 	}
-	if stub.count() != 0 {
-		t.Errorf("chronyc was asked %d times about a stopped service", stub.count())
+	if n := daemon.Requests(); n != 0 {
+		t.Errorf("chronyd was asked %d times about a stopped service", n)
 	}
 }
 
@@ -218,7 +216,7 @@ func timeTile(t *testing.T, srv *httptest.Server) *ServiceState {
 func TestOverviewTimeTile(t *testing.T) {
 	t.Parallel()
 	unit := &ntpUnit{}
-	srv := newNTPServer(t, unit, &chronyStub{tracking: "tracking.csv"})
+	srv := newNTPServer(t, unit, chronyd(t))
 	tile := timeTile(t, srv)
 	if tile == nil || tile.State != stateMissing || tile.Want || !strings.Contains(tile.Detail, "ostiole repair") {
 		t.Fatalf("tile before setup = %+v", tile)
@@ -249,8 +247,9 @@ func TestOverviewTimeTile(t *testing.T) {
 func TestOverviewWarnsAboutAnUnsynchronisedClock(t *testing.T) {
 	t.Parallel()
 	unit := &ntpUnit{installed: true, active: true, since: time.Now().Add(-2 * time.Minute)}
-	stub := &chronyStub{tracking: "tracking-unsynchronised.csv"}
-	srv := newNTPServer(t, unit, stub)
+	daemon := chronyd(t)
+	daemon.SetTracking(unsynchronised)
+	srv := newNTPServer(t, unit, daemon)
 	// A service that has just started is still finding its servers.
 	if w := warning(getOverview(t, srv), "clock-unsynchronised"); w != nil {
 		t.Errorf("warned two minutes after start: %+v", w)
@@ -263,15 +262,19 @@ func TestOverviewWarnsAboutAnUnsynchronisedClock(t *testing.T) {
 	}
 
 	// Every server asked to sign failing points at NTS being blocked.
-	stub.set(func(c *chronyStub) {
-		c.auth = "194.58.205.196,NTS,0,0,0,4294967295,3,0,0,0\n94.198.159.11,NTS,0,0,0,4294967295,3,0,0,0\n192.0.2.123,-,0,0,0,4294967295,0,0,0,0\n"
-	})
+	failing := &chrony.Auth{Mode: "NTS", LastKE: -1, Attempts: 3}
+	daemon.SetSources(
+		chronySource("nts.netnod.se", "194.58.205.196", "unusable", 0, -1, failing),
+		chronySource("nts.time.nl", "94.198.159.11", "unusable", 0, -1, failing),
+		chronySource("192.0.2.123", "192.0.2.123", "unusable", 0, -1, nil),
+	)
 	w = warning(getOverview(t, srv), "clock-unsynchronised")
-	if w == nil || !strings.Contains(w.Detail, "signed answer") || !strings.Contains(w.Detail, "tcp/4460") {
+	if w == nil || !strings.Contains(w.Detail, "signed answer") || !strings.Contains(w.Detail, "tcp/4460") ||
+		!strings.Contains(w.Detail, "nts.netnod.se, nts.time.nl") {
 		t.Errorf("warning = %+v", w)
 	}
 
-	stub.set(func(c *chronyStub) { c.tracking = "tracking.csv" })
+	daemon.SetTracking(synced)
 	if w := warning(getOverview(t, srv), "clock-unsynchronised"); w != nil {
 		t.Errorf("a synchronised clock warned: %+v", w)
 	}

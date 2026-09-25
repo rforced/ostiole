@@ -82,9 +82,8 @@ func (a *api) ntpStatus(w http.ResponseWriter, r *http.Request) error {
 		st.HostClock = st.SetUp && !st.Running && a.ntp.Skipped(ctx)
 		st.Version = a.ntp.Version().String()
 	}
-	// Only a running unit is asked: chronyc waits seconds for a daemon
-	// that is not there, and with no unit of ours the daemon it would
-	// reach is the distribution's.
+	// Only a running unit is asked: with no unit of ours, the daemon on
+	// the command port is the distribution's.
 	if st.Running && a.chrony != nil {
 		ctx, cancel := contextWithTimeout(r, 5*time.Second)
 		defer cancel()
