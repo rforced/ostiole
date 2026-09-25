@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -145,48 +144,9 @@ func (a *api) queryLogStream(w http.ResponseWriter, r *http.Request) error {
 	if a.querylog == nil {
 		return &unavailable{errors.New("query log not available (daemon not running as root?)")}
 	}
-	rc := http.NewResponseController(w)
 	ch, cancel := a.querylog.Subscribe(256)
 	defer cancel()
-
-	h := w.Header()
-	h.Set("Content-Type", "text/event-stream")
-	h.Set("Cache-Control", "no-store")
-	h.Set("X-Accel-Buffering", "no")
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, ": connected\n\n")
-	if err := rc.Flush(); err != nil {
-		return nil
-	}
-	_ = rc.SetWriteDeadline(time.Time{})
-
-	keepalive := time.NewTicker(a.keepalive)
-	defer keepalive.Stop()
-	for {
-		select {
-		case <-r.Context().Done():
-			return nil
-		case <-keepalive.C:
-			// Every client's queries, so no longer than the session or
-			// token that opened the stream.
-			if !a.stillAllowed(r) {
-				return nil
-			}
-			fmt.Fprint(w, ": keepalive\n\n")
-			if err := rc.Flush(); err != nil {
-				return nil
-			}
-		case e := <-ch:
-			raw, err := json.Marshal(a.row(a.namer(), e))
-			if err != nil {
-				continue
-			}
-			fmt.Fprintf(w, "data: %s\n\n", raw)
-			if err := rc.Flush(); err != nil {
-				return nil
-			}
-		}
-	}
+	return streamEvents(a, w, r, ch, func(e dnslog.Entry) any { return a.row(a.namer(), e) }, nil)
 }
 
 // querySummary is the line above the table: what is held, and who asked
