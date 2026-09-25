@@ -17,6 +17,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -275,11 +276,9 @@ func TestOverviewWarnsAboutAFailingDrive(t *testing.T) {
 	t.Parallel()
 	passed := true
 	client := &smart.Client{Bin: "smartctl", Run: func(_ context.Context, _ string, args ...string) ([]byte, int, error) {
-		for _, a := range args {
-			if a == "--scan-open" {
-				return []byte(`{"smartctl":{"version":[7,5],"exit_status":0},"devices":[` +
-					`{"name":"/dev/sda","type":"sat","protocol":"ATA"}]}`), 0, nil
-			}
+		if slices.Contains(args, "--scan-open") {
+			return []byte(`{"smartctl":{"version":[7,5],"exit_status":0},"devices":[` +
+				`{"name":"/dev/sda","type":"sat","protocol":"ATA"}]}`), 0, nil
 		}
 		return []byte(`{"smartctl":{"version":[7,5],"exit_status":0},"model_name":"GOFATOO 256GB SSD",` +
 			`"smart_status":{"passed":` + strconv.FormatBool(passed) + `}}`), 0, nil

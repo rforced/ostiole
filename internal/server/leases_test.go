@@ -132,7 +132,7 @@ func TestRecentLeasesNewestFirst(t *testing.T) {
 	t.Parallel()
 	base := time.Date(2026, 9, 19, 12, 0, 0, 0, time.UTC)
 	row := func(ip string, renewed, expires time.Time) lease {
-		return lease{Lease: services.Lease{IP: ip, Expires: expires}, Renewed: renewed}
+		return lease{IP: ip, Expires: expires, Renewed: renewed}
 	}
 	rows := []lease{
 		// A day's lease renewed an hour ago still expires last.

@@ -319,7 +319,7 @@ func operationID(rt route) string {
 
 func pathParams(path string) []any {
 	var out []any
-	for _, part := range strings.Split(path, "/") {
+	for part := range strings.SplitSeq(path, "/") {
 		if strings.HasPrefix(part, "{") && strings.HasSuffix(part, "}") {
 			out = append(out, map[string]any{
 				"name":     strings.Trim(part, "{}"),

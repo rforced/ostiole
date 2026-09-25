@@ -575,8 +575,7 @@ type errorResponse struct {
 
 func writeError(w http.ResponseWriter, status int, err error) {
 	resp := errorResponse{Error: err.Error()}
-	var ve *model.ValidationError
-	if errors.As(err, &ve) {
+	if ve, ok := errors.AsType[*model.ValidationError](err); ok {
 		resp.Error = "invalid configuration"
 		resp.Issues = ve.Issues
 	}
@@ -854,7 +853,7 @@ func currentResolvers() []string {
 		return nil
 	}
 	var out []string
-	for _, line := range strings.Split(string(raw), "\n") {
+	for line := range strings.SplitSeq(string(raw), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) == 2 && fields[0] == "nameserver" {
 			if ip, err := netip.ParseAddr(fields[1]); err == nil && !ip.IsLoopback() {
