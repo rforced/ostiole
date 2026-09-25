@@ -84,7 +84,7 @@ const exemptAlias = aliasField('exemptAlias')
           hint="Addresses in this alias are left alone by everything above, so nothing is blocked for them."
         >
           <select id="enf-exempt" v-model="exemptAlias" class="input">
-            <option value="">No exceptions</option>
+            <option value="">None</option>
             <option v-for="a in addressAliases" :key="a.name" :value="a.name">{{ a.name }}</option>
           </select>
         </FormField>
