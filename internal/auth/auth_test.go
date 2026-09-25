@@ -83,6 +83,12 @@ func TestSetupLoginAndSessions(t *testing.T) {
 		t.Error("bogus session resolved")
 	}
 
+	// A tab left in the background overnight is still signed in.
+	*now = now.Add(23 * time.Hour)
+	if _, ok := s.Session(sess.ID); !ok {
+		t.Error("session idle for less than a day was dropped")
+	}
+
 	// Idle timeout.
 	*now = now.Add(SessionIdleTimeout + time.Minute)
 	if _, ok := s.Session(sess.ID); ok {
@@ -91,8 +97,8 @@ func TestSetupLoginAndSessions(t *testing.T) {
 
 	// Absolute lifetime even when active.
 	sess, _ = s.Login("admin", goodPassword, "1.2.3.4")
-	for range 30 {
-		*now = now.Add(time.Hour)
+	for range SessionMaxLifetime/(SessionIdleTimeout/2) + 1 {
+		*now = now.Add(SessionIdleTimeout / 2)
 		s.Session(sess.ID)
 	}
 	if _, ok := s.Session(sess.ID); ok {

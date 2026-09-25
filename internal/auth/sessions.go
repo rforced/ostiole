@@ -13,10 +13,12 @@ import (
 	"time"
 )
 
-// Session lifetimes.
+// Session lifetimes. A tab in the background stops polling, so a day idle
+// keeps a browser left open overnight signed in; the cap ends even a
+// session in daily use once a week.
 const (
-	SessionIdleTimeout = 2 * time.Hour
-	SessionMaxLifetime = 24 * time.Hour
+	SessionIdleTimeout = 24 * time.Hour
+	SessionMaxLifetime = 7 * 24 * time.Hour
 )
 
 // SessionsFile holds the sessions across a restart, so an update does not
