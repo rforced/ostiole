@@ -88,6 +88,28 @@ not json
 	}
 }
 
+// An SELinux denial reaches the journal as an audit record with no
+// priority, which is not an emergency.
+func TestParseJournalReadsNoPriorityAsInfo(t *testing.T) {
+	t.Parallel()
+	raw := []byte(`{"__REALTIME_TIMESTAMP":"1790298244000000","_TRANSPORT":"audit","_COMM":"ostiole","SYSLOG_IDENTIFIER":"audit","MESSAGE":"AVC avc:  denied  { nnp_transition }"}
+{"__REALTIME_TIMESTAMP":"1790298244000000","_TRANSPORT":"audit","SYSLOG_IDENTIFIER":"audit","MESSAGE":"SELINUX_ERR op=security_bounded_transition seresult=denied"}
+{"__REALTIME_TIMESTAMP":"1790298244000000","_COMM":"kernel","PRIORITY":"0","MESSAGE":"Kernel panic"}
+`)
+	entries := parseJournal(raw)
+	if len(entries) != 3 {
+		t.Fatalf("entries = %+v", entries)
+	}
+	for _, e := range entries[:2] {
+		if e.Priority != priorityInfo {
+			t.Errorf("%q has priority %d, want info", e.Message, e.Priority)
+		}
+	}
+	if entries[2].Priority != 0 {
+		t.Errorf("a real emerg read as %d", entries[2].Priority)
+	}
+}
+
 func TestJournalArgsTakeTheNewestFirst(t *testing.T) {
 	t.Parallel()
 	args, err := journalArgs(JournalOptions{Unit: "ostiole.service", Lines: 50, Since: "-1h", Priority: 4})

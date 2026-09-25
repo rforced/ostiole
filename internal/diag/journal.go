@@ -44,6 +44,9 @@ type JournalEntry struct {
 // MaxJournalLines caps one query.
 const MaxJournalLines = 2000
 
+// priorityInfo is syslog's info level.
+const priorityInfo = 6
+
 // ownUnits are Ostiole's units as journalctl patterns: the daemon, what it
 // runs, and the network backend it drives.
 var ownUnits = []string{"ostiole.service", "ostiole-*", "systemd-networkd.service"}
@@ -138,6 +141,9 @@ func parseJournal(raw []byte) []JournalEntry {
 		if us, err := strconv.ParseInt(e.Realtime, 10, 64); err == nil {
 			entry.Time = time.UnixMicro(us).UTC()
 		}
+		// Kernel audit records carry no priority. journald files any other
+		// line without one as info, and the zero value would be emerg.
+		entry.Priority = priorityInfo
 		if p, err := strconv.Atoi(e.Priority); err == nil {
 			entry.Priority = p
 		}
