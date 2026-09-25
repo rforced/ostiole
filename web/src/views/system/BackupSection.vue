@@ -69,7 +69,7 @@ async function loadIntoDraft() {
 
 <template>
   <div class="space-y-5">
-    <SectionCard v-if="!auth.readOnly" title="Backup" :locked="!auth.isAdmin">
+    <SectionCard v-if="!auth.readOnly" title="Download" :locked="!auth.isAdmin">
       <div class="space-y-4">
         <p v-if="auth.isOperator" class="text-ink-muted">Only an admin can download a backup.</p>
         <p v-if="download.error.value" role="alert" class="text-bad">

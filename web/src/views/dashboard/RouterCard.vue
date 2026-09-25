@@ -66,7 +66,7 @@ const READING = [
       <dt>Revisions</dt>
       <dd>
         {{ summary.revisions ?? 0 }} ·
-        <RouterLink to="/system/backup" class="link">roll back under System</RouterLink>
+        <RouterLink to="/system/configuration" class="link">roll back under System</RouterLink>
       </dd>
     </dl>
     <template v-else>

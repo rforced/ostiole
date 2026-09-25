@@ -345,7 +345,7 @@ func TestOverviewWarnsAboutAFailedRemoteBackup(t *testing.T) {
 	if !strings.Contains(w.Detail, "the key may not upload") || !strings.Contains(w.Detail, "03:00") {
 		t.Errorf("warning = %+v", w)
 	}
-	if !strings.Contains(w.Detail, "System, Backup") {
+	if !strings.Contains(w.Detail, "System, Configuration") {
 		t.Errorf("warning does not say where to look: %+v", w)
 	}
 

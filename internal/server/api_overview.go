@@ -906,7 +906,7 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 			out = append(out, Warning{
 				Kind: "remote-backup-failed", Level: "warn",
 				Title:  "Remote backup did not complete",
-				Detail: detail + ". Details under System, Backup.",
+				Detail: detail + ". Details under System, Configuration.",
 			})
 		}
 	}

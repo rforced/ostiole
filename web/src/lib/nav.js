@@ -229,10 +229,15 @@ export const NAV = [
       },
       { path: 'updates', label: 'Updates', view: () => import('@/views/system/UpdatesPage.vue') },
       {
-        path: 'backup',
-        label: 'Backup',
-        view: () => import('@/views/system/BackupPage.vue'),
+        path: 'configuration',
+        label: 'Configuration',
+        view: () => import('@/views/system/ConfigurationPage.vue'),
         needsConfig: true,
+        tabs: [
+          { value: 'history', label: 'History' },
+          { value: 'backup', label: 'Backup' },
+          { value: 'remote', label: 'Remote backup' },
+        ],
       },
       {
         path: 'notifications',

@@ -28,6 +28,7 @@ const MOVED = [
   { path: '/services/dhcp6', redirect: { path: '/services/dhcp', hash: '#v6' } },
   { path: '/services/leases', redirect: { path: '/services/dhcp', hash: '#leases' } },
   { path: '/crons', redirect: '/system/crons' },
+  { path: '/system/backup', redirect: '/system/configuration' },
 ]
 
 /**

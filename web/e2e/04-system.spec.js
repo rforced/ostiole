@@ -22,7 +22,7 @@ test('system settings, ruleset view, and rollback via revisions', async ({ page 
   await applyAndConfirm(page)
 
   // Roll back to the previous revision through the draft.
-  await page.goto('/system/backup')
+  await page.goto('/system/configuration')
   const rows = page
     .getByRole('row')
     .filter({ has: page.getByRole('button', { name: 'Load into draft' }) })

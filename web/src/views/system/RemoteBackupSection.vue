@@ -284,7 +284,7 @@ const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`
 
     <SectionCard
       v-if="applied"
-      title="Remote Configurations"
+      title="Copies"
       :count="copies.length"
       intro="Back up now uses the applied settings."
       flush

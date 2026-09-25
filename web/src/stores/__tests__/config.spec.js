@@ -259,7 +259,7 @@ describe('config store draft changes', () => {
     expect(config.hasChanges('/vpn/wireguard')).toBe(true)
     expect(config.hasChanges('/vpn/tailscale')).toBe(false)
     expect(config.hasChanges('/interfaces')).toBe(false)
-    expect(config.hasChanges('/system/backup')).toBe(true)
+    expect(config.hasChanges('/system/configuration')).toBe(true)
     expect(config.hasChanges('/system/general')).toBe(false)
     expect(config.hasChanges('/')).toBe(false)
 
@@ -270,12 +270,12 @@ describe('config store draft changes', () => {
     expect(config.isChanged('interfaces', 'wg0')).toBe(true)
   })
 
-  // The remote backup is set up on the backup page, not under General.
-  it('sends a change to the remote backup to the backup page', () => {
+  // The remote backup is set up on the Configuration page, not under General.
+  it('sends a change to the remote backup to the Configuration page', () => {
     const config = useConfigStore()
     config.replaceDraft(wired())
     config.changes = [{ path: 'backup.remote.bucket', kind: 'changed' }]
-    expect(config.hasChanges('/system/backup')).toBe(true)
+    expect(config.hasChanges('/system/configuration')).toBe(true)
     expect(config.hasChanges('/system/general')).toBe(false)
   })
 

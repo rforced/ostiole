@@ -8,8 +8,11 @@ test.describe.configure({ mode: 'serial' })
 
 test('download a backup, change the router, then restore it', async ({ page }) => {
   await login(page)
-  await page.goto('/system/backup')
-  await expect(page.getByRole('heading', { name: 'Backup', exact: true, level: 1 })).toBeVisible()
+  await page.goto('/system/configuration')
+  await expect(
+    page.getByRole('heading', { name: 'Configuration', exact: true, level: 1 }),
+  ).toBeVisible()
+  await page.getByRole('tab', { name: 'Backup', exact: true }).click()
 
   await page.getByLabel('Description').fill('before the hostname change')
   const download = page.waitForEvent('download')
@@ -30,7 +33,7 @@ test('download a backup, change the router, then restore it', async ({ page }) =
   await page.getByLabel('Hostname').fill('renamed-for-the-test')
   await applyAndConfirm(page)
 
-  await page.goto('/system/backup')
+  await page.goto('/system/configuration#backup')
   await page.getByLabel('Backup file').setInputFiles(await file.path())
   const summary = page.getByRole('note').filter({ hasText: 'What it would change' })
   await expect(summary).toContainText('before the hostname change')
@@ -48,7 +51,7 @@ test('download a backup, change the router, then restore it', async ({ page }) =
 
 test('a file that is not a backup is refused', async ({ page }) => {
   await login(page)
-  await page.goto('/system/backup')
+  await page.goto('/system/configuration#backup')
   await page.getByLabel('Backup file').setInputFiles({
     name: 'notes.json',
     mimeType: 'application/json',
@@ -59,8 +62,8 @@ test('a file that is not a backup is refused', async ({ page }) => {
 
 test('a revision can be compared with the running configuration', async ({ page }) => {
   await login(page)
-  await page.goto('/system/backup')
-  const history = page.getByRole('region', { name: 'Configuration history' })
+  await page.goto('/system/configuration')
+  const history = page.getByRole('region', { name: 'Revisions' })
   const row = history.getByRole('row').nth(1)
 
   await row.getByRole('button', { name: 'Compare with current' }).click()
@@ -78,7 +81,7 @@ test('a revision can be compared with the running configuration', async ({ page 
 // endpoint is a name that cannot resolve, so nothing leaves the machine.
 test('the remote backup settings become a system cron', async ({ page }) => {
   await login(page)
-  await page.goto('/system/backup')
+  await page.goto('/system/configuration#remote')
   const section = page.getByRole('region', { name: 'Remote backup' })
   await expect(section).toBeVisible()
 
@@ -100,7 +103,8 @@ test('the remote backup settings become a system cron', async ({ page }) => {
   await expect(row).toContainText('0 3 * * *')
 
   // Off again: the specs that follow are not about a bucket.
-  await sidebar(page, 'System', 'Backup')
+  await sidebar(page, 'System', 'Configuration')
+  await page.getByRole('tab', { name: 'Remote backup' }).click()
   await page
     .getByRole('region', { name: 'Remote backup' })
     .getByLabel('Remote backup enabled')

@@ -93,7 +93,7 @@ defineExpose({ refresh: load.run })
 
 <template>
   <SectionCard
-    title="Configuration history"
+    title="Revisions"
     :count="revisions.length"
     intro="Every confirmed apply archives the configuration it replaced."
     flush
@@ -104,7 +104,7 @@ defineExpose({ refresh: load.run })
     <div class="card-strip space-y-3">
       <FormField
         id="rev-keep"
-        label="Configurations to keep"
+        label="Revisions to keep"
         hint="The oldest is deleted once there are more than this."
       >
         <input

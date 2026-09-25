@@ -1221,12 +1221,12 @@ export const useConfigStore = defineStore('config', () => {
       case 'notifications':
         return '/system/notifications'
       case 'backup':
-        return '/system/backup'
+        return '/system/configuration'
       case 'acme':
       case 'certificates':
         return '/system/certificates'
       case 'system':
-        if (path.startsWith('system.keepRevisions')) return '/system/backup'
+        if (path.startsWith('system.keepRevisions')) return '/system/configuration'
         if (path.startsWith('system.management.certificate')) return '/system/certificates'
         return '/system/general'
       default:
