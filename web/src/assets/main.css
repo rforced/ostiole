@@ -147,6 +147,8 @@
   --animate-pop-out: pop-out 120ms ease-in both;
   --animate-drawer-in: drawer-in 200ms ease-out both;
   --animate-drawer-out: drawer-out 150ms ease-in both;
+  /* The ring around Live's dot while the list is live. */
+  --animate-live: live 2s cubic-bezier(0, 0, 0.2, 1) infinite;
 
   @keyframes fade-in {
     from {
@@ -192,6 +194,13 @@
   @keyframes drawer-out {
     to {
       transform: translateX(-100%);
+    }
+  }
+  @keyframes live {
+    75%,
+    100% {
+      transform: scale(2.2);
+      opacity: 0;
     }
   }
 }
