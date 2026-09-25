@@ -199,7 +199,9 @@ func renderNTP(cfg *model.Config, f NTPFeatures) string {
 	b.WriteString("driftfile /var/lib/chrony/drift\n")
 	b.WriteString("makestep 1.0 3\n")
 	b.WriteString("rtcsync\n")
-	if f.LeapList {
+	// tzdata puts the list on disk whatever the build, but a build older
+	// than 4.6 refuses the line.
+	if f.LeapList && f.Version.AtLeast(4, 6) {
 		fmt.Fprintf(&b, "leapseclist %s\n", ntpLeapList)
 	}
 	if f.Version.AtLeast(4, 7) {

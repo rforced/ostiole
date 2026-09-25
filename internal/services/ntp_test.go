@@ -58,18 +58,24 @@ func TestRenderNTPGolden(t *testing.T) {
 }
 
 // A router that has no chronyd, or one that would not say what it is,
-// gets nothing a build might not know.
-func TestRenderNTPForAnUnknownBuild(t *testing.T) {
+// gets nothing a build might not know, and 4.5 (Ubuntu 24.04) nothing
+// newer than it. The list of leap seconds is on disk either way.
+func TestRenderNTPForAnOldOrUnknownBuild(t *testing.T) {
 	t.Parallel()
 	cfg := loadConfig(t, "testdata/ntp.json")
-	got := renderNTP(cfg, NTPFeatures{})
-	for _, line := range []string{"opencommands", "local stratum", "leapseclist"} {
-		if strings.Contains(got, line) {
-			t.Errorf("an unknown build was given %s:\n%s", line, got)
+	for _, f := range []NTPFeatures{
+		{LeapList: true},
+		{Version: chrony.Version{Major: 4, Minor: 5, NTS: true}, LeapList: true},
+	} {
+		got := renderNTP(cfg, f)
+		for _, line := range []string{"opencommands", "local stratum", "leapseclist"} {
+			if strings.Contains(got, line) {
+				t.Errorf("build %q was given %s:\n%s", f.Version, line, got)
+			}
 		}
-	}
-	if !strings.Contains(got, "allow all\n") {
-		t.Errorf("serving was dropped:\n%s", got)
+		if !strings.Contains(got, "allow all\n") {
+			t.Errorf("serving was dropped:\n%s", got)
+		}
 	}
 }
 
