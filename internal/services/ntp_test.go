@@ -434,20 +434,26 @@ func TestSetupWritesTheTimeUnit(t *testing.T) {
 	}
 }
 
-// The goldens are read by the chronyd this machine has, when it has one:
-// a line a build does not know stops the daemon starting at all. CI reads
-// what the installer writes with every distribution's own build.
-func TestChronydReadsTheGoldens(t *testing.T) {
+// The chronyd this machine has, when it has one, reads what is rendered
+// for it: a line a build does not know stops the daemon starting at all.
+// The lines go to it as arguments rather than in a file: the AppArmor
+// profile Debian and Ubuntu ship lets chronyd read configuration from
+// /etc/chrony only. CI reads what the installer writes with every
+// distribution's own build.
+func TestChronydReadsWhatIsRenderedForIt(t *testing.T) {
 	t.Parallel()
 	bin := lookPath("chronyd")
 	if bin == "" {
 		t.Skip("no chronyd here")
 	}
-	goldens, _ := filepath.Glob("testdata/*.chrony")
-	for _, golden := range goldens {
-		out, err := (execCommander{}).Run(context.Background(), bin, "-p", "-f", golden)
+	n := &NTP{Binary: bin}
+	f := n.features()
+	for _, fixture := range []string{"full", "ntp"} {
+		conf := renderNTP(loadConfig(t, filepath.Join("testdata", fixture+".json")), f)
+		args := append([]string{"-p"}, strings.Split(strings.TrimSuffix(conf, "\n"), "\n")...)
+		out, err := n.cmd().Run(context.Background(), bin, args...)
 		if err != nil {
-			t.Errorf("%s: %s", golden, chronydFatal(string(out), err))
+			t.Errorf("chronyd %s refuses %s as rendered for it: %s", f.Version, fixture, chronydFatal(string(out), err))
 		}
 	}
 }
