@@ -187,6 +187,8 @@ func newDNSBlockWhyCmd(g *globals) *cobra.Command {
 				fmt.Fprintf(out, "%s is not blocked: Exceptions allow %s\n", f.Name, f.Matched)
 			case f.Reason == dnsblock.ReasonNever:
 				fmt.Fprintf(out, "%s is not blocked: this router answers for %s itself\n", f.Name, f.Matched)
+			case f.Reason == dnsblock.ReasonDelegated:
+				fmt.Fprintf(out, "%s is not blocked: %s is a domain override, answered by its own resolvers\n", f.Name, f.Matched)
 			case f.Reason == dnsblock.ReasonOff:
 				fmt.Fprintf(out, "%s is not blocked: the DNS server is off\n", f.Name)
 			case f.Reason == dnsblock.ReasonListsOff:
