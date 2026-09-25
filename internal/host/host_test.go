@@ -78,7 +78,6 @@ func testDeps(t *testing.T, units *fakeUnits) Deps {
 		Kernel:      noKernel{},
 		TableLoaded: func(context.Context) bool { return true },
 		Backend:     "networkd",
-		NFT:         "/nonexistent/nft",
 		Dir:         t.TempDir(),
 		Run:         &fakeCommands{},
 		// A router with none of the daemons installed, whatever the
@@ -144,18 +143,11 @@ func TestStatusFollowsTheTakeoverRecord(t *testing.T) {
 }
 
 // Nothing that changes the router runs without root.
-func TestActionsNeedRoot(t *testing.T) {
+func TestFlushNeedsRoot(t *testing.T) {
 	t.Parallel()
 	d := testDeps(t, &fakeUnits{})
 	d.Root = false
-	for name, err := range map[string]error{
-		"flush":   errOf(FlushLegacy(context.Background(), d, nil)),
-		"network": errOf(ConfirmNetwork(context.Background(), d)),
-	} {
-		if !errors.Is(err, ErrNotRoot) {
-			t.Errorf("%s = %v, want ErrNotRoot", name, err)
-		}
+	if _, err := FlushLegacy(context.Background(), d, nil); !errors.Is(err, ErrNotRoot) {
+		t.Errorf("flush = %v, want ErrNotRoot", err)
 	}
 }
-
-func errOf(_ string, err error) error { return err }

@@ -24,7 +24,6 @@ func (g *globals) hostDeps() host.Deps {
 		Units:   install.ExecSystemctl{},
 		Kernel:  &nft.Exec{Bin: g.nftBin},
 		Backend: g.netBackend,
-		NFT:     g.nftBin,
 		Dir:     g.configDir,
 		Log:     slog.Default(),
 	}

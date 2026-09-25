@@ -138,17 +138,6 @@ func New(o Options) *Manager {
 	return m
 }
 
-// NewHostRunner returns a Runner that runs commands on the host instead
-// of inside the daemon's sandbox, and gives back what they printed. It is
-// how anything that has to write outside ReadWritePaths gets run from the
-// daemon: see hostRunner for the two obvious routes that do not work.
-func NewHostRunner(inner Runner) Runner {
-	if inner == nil {
-		inner = ExecRunner{}
-	}
-	return hostRunner{inner: inner, seq: &cmdSeq}
-}
-
 var cmdSeq atomic.Int64
 
 // scratchUser is a driver that writes somewhere while it works.

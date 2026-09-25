@@ -274,7 +274,6 @@ at your own.`,
 				Host: host.Deps{
 					Root:    os.Geteuid() == 0,
 					Backend: g.netBackend,
-					NFT:     g.nftBin,
 					Dir:     g.configDir,
 					Log:     slog.Default(),
 				},

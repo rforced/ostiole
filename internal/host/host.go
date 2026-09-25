@@ -36,7 +36,7 @@ type Deps struct {
 	// reported either way; a router that is not root gets the page and an
 	// explanation instead of buttons.
 	Root bool
-	// Units answers systemd questions and performs the takeovers.
+	// Units answers systemd questions.
 	Units install.Systemctl
 	// Kernel reads and deletes nftables tables, for the leftovers an
 	// older firewall wrote through the nf_tables front end.
@@ -44,16 +44,10 @@ type Deps struct {
 	// Backend is the network backend the daemon runs with (auto, networkd
 	// or none).
 	Backend string
-	// NFT is the nft binary the daemon runs with, passed on to the
-	// command line so both front doors talk to the same kernel.
-	NFT string
 	// TableLoaded reports whether Ostiole's ruleset is in the kernel.
 	TableLoaded func(ctx context.Context) bool
 	// Dir is the configuration directory.
 	Dir string
-	// Binary is the ostiole to run for the steps that have to happen
-	// outside the sandbox; empty finds the installed one.
-	Binary string
 	// Run runs commands; nil means the real ones.
 	Run Runner
 	// Locate finds a command on the router. nil looks on PATH and in the

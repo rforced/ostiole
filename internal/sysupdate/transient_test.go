@@ -113,7 +113,7 @@ func (a *argvRecorder) Run(_ context.Context, name string, args ...string) ([]by
 func TestHostRunnerNamesNeverRepeat(t *testing.T) {
 	t.Parallel()
 	rec := &argvRecorder{}
-	a, b := NewHostRunner(rec), NewHostRunner(rec)
+	a, b := hostRunner{inner: rec, seq: &cmdSeq}, hostRunner{inner: rec, seq: &cmdSeq}
 	for _, r := range []Runner{a, b, a} {
 		_, _ = r.Run(context.Background(), "true")
 	}
