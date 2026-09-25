@@ -31,6 +31,8 @@ export default defineConfig({
     url: 'http://127.0.0.1:18090/api/v1/health',
     timeout: 120_000,
     reuseExistingServer: false,
+    // Not the default SIGKILL, so serve.sh lives to remove its config dir.
+    gracefulShutdown: { signal: 'SIGTERM', timeout: 10_000 },
     stdout: 'ignore',
     stderr: 'pipe',
   },
