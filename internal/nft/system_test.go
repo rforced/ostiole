@@ -155,7 +155,7 @@ func TestSystemRulesFull(t *testing.T) {
 
 	// The DNS service listens on every internal interface unless told
 	// otherwise, so the row is on every internal zone's tab.
-	dns, ok := findRow(rows, "DNS queries to this firewall")
+	dns, ok := findRow(rows, "DNS queries")
 	if !ok {
 		t.Fatal("no DNS row")
 	}
@@ -193,7 +193,7 @@ func TestSystemRulesDNSEnforcement(t *testing.T) {
 	if rows[0].Action != "redirect" || rows[0].Chain != "nat_prerouting" {
 		t.Errorf("first row = %+v, want the DNS redirect", rows[0])
 	}
-	for _, want := range []string{"DNS over TLS", "DNS over HTTPS servers", "Plain DNS answered by this firewall instead"} {
+	for _, want := range []string{"DNS over TLS", "DNS over HTTPS servers", "Forward DNS queries to this firewall"} {
 		r, ok := findRow(rows, want)
 		if !ok {
 			t.Errorf("no %q row", want)
@@ -220,7 +220,7 @@ func TestSystemRulesNTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, ok := findRow(rows, "Time requests to this firewall")
+	r, ok := findRow(rows, "NTP requests")
 	if !ok {
 		t.Fatal("no row for serving time")
 	}
@@ -236,7 +236,7 @@ func TestSystemRulesNTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := findRow(rows, "Time requests to this firewall"); ok {
+	if _, ok := findRow(rows, "NTP requests"); ok {
 		t.Error("a router that serves no time still opens udp/123")
 	}
 }

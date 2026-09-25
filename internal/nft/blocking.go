@@ -164,7 +164,7 @@ func (r *renderer) dnsRedirect() {
 	r.sysFor(ifs, SystemRule{
 		Chain: "nat_prerouting", Action: "redirect", Protocol: string(model.ProtocolTCPUDP),
 		Source: r.exemptSource(), Destination: "not this firewall : 53",
-		Description: "Plain DNS answered by this firewall instead",
+		Description: "Forward DNS queries to this firewall",
 		Keys:        []string{"nat_prerouting/block:dns-redirect"}, Setting: "enforcement",
 	})
 }

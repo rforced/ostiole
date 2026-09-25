@@ -56,7 +56,7 @@ test('the rules page links the log rule to the setting that made it', async ({ p
 
   await page.goto('/firewall/rules')
   await page.getByRole('group', { name: 'Zone' }).getByRole('button', { name: 'lan' }).click()
-  const row = page.getByRole('row').filter({ hasText: 'DNS answers copied to the query log' })
+  const row = page.getByRole('row').filter({ hasText: 'DNS query logger' })
   await expect(row).toBeVisible()
   await expect(row.getByRole('link', { name: 'Edit' })).toHaveAttribute(
     'href',

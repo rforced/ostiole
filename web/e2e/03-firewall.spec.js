@@ -69,7 +69,7 @@ test('add an alias, a rule using it, and a port forward, then apply', async ({ p
   await expect(lockout).toContainText('this firewall : ')
   await expect(lockout.getByRole('link', { name: 'Edit' })).toBeVisible()
   await expect(
-    page.getByRole('row').filter({ hasText: 'DNS queries to this firewall' }),
+    page.getByRole('row').filter({ hasText: 'DNS queries' }),
   ).toBeVisible()
 
   // Port forward

@@ -448,7 +448,7 @@ func (r *renderer) serviceRules() {
 			r.sysFor(ifs, SystemRule{
 				Chain: "input", Action: "accept", Protocol: string(model.ProtocolTCPUDP),
 				Source: "any", Destination: firewallDest([]string{"53"}),
-				Description: "DNS queries to this firewall", Keys: []string{"input/service:dns"}, Setting: "dns",
+				Description: "DNS queries", Keys: []string{"input/service:dns"}, Setting: "dns",
 			})
 		}
 	}
@@ -458,7 +458,7 @@ func (r *renderer) serviceRules() {
 		r.sysFor(ifs, SystemRule{
 			Chain: "input", Action: "accept", Protocol: string(model.ProtocolUDP),
 			Source: "any", Destination: firewallDest([]string{"123"}),
-			Description: "Time requests to this firewall", Keys: []string{"input/service:ntp"}, Setting: "ntp",
+			Description: "NTP requests", Keys: []string{"input/service:ntp"}, Setting: "ntp",
 		})
 	}
 	r.wireguardRules()
@@ -696,7 +696,7 @@ func (r *renderer) queryLogRule() {
 	r.sysFor(ifs, SystemRule{
 		Chain: "output", Action: "continue", Protocol: string(model.ProtocolUDP),
 		Source: firewallDest([]string{"53"}), Destination: "any",
-		Description: "DNS answers copied to the query log",
+		Description: "DNS query logger",
 		Keys:        []string{"output/dns-log"}, Setting: "queryLog",
 	})
 }
