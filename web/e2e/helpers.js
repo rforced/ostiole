@@ -23,7 +23,12 @@ export async function login(page) {
 export async function sidebar(page, ...pages) {
   const menu = page.getByRole('navigation', { name: 'Main' })
   for (const name of pages) {
-    await menu.getByRole('link', { name, exact: true }).click()
+    // A section is a button that opens its pages, and a second click
+    // would close them again.
+    const row = menu
+      .getByRole('button', { name, exact: true })
+      .or(menu.getByRole('link', { name, exact: true }))
+    if ((await row.getAttribute('aria-expanded')) !== 'true') await row.click()
   }
 }
 

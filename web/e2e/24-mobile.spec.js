@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { login } from './helpers.js'
+import { login, sidebar } from './helpers.js'
 
 // The phone layout, run last by the mobile project against the router the
 // rest of the suite configured.
@@ -26,36 +26,28 @@ const still = (page) =>
     ),
   )
 
-/** Opens the drawer and follows its links, outermost first. */
+/** Opens the drawer and follows it to a page, its section first. */
 async function drawer(page, ...names) {
-  for (const name of names) {
-    await page.getByRole('button', { name: 'Open navigation' }).click()
-    await page
-      .getByRole('navigation', { name: 'Main' })
-      .getByRole('link', { name, exact: true })
-      .click()
-  }
+  await page.getByRole('button', { name: 'Open navigation' }).click()
+  await sidebar(page, ...names)
 }
 
-/** Every page the drawer can reach: the items, then the pages under each. */
+/** Every page the drawer can reach: the items, then the pages of each section. */
 async function pages(page) {
-  const links = async () => {
-    await page.getByRole('button', { name: 'Open navigation' }).click()
-    const nav = page.getByRole('navigation', { name: 'Main' })
-    const hrefs = await nav.getByRole('link').evaluateAll((as) => as.map((a) => a.pathname))
-    await page.keyboard.press('Escape')
-    await expect(nav).toHaveCount(0)
-    return hrefs
-  }
   await page.goto('/')
-  const items = await links()
-  const all = new Set(items)
-  for (const href of items) {
-    await page.goto(href)
+  await page.getByRole('button', { name: 'Open navigation' }).click()
+  const nav = page.getByRole('navigation', { name: 'Main' })
+  const links = () => nav.getByRole('link').evaluateAll((as) => as.map((a) => a.pathname))
+  const all = new Set(await links())
+  // One section is open at a time, so each is opened in turn.
+  for (const section of await nav.getByRole('button').all()) {
+    await section.click()
+    await expect(section).toHaveAttribute('aria-expanded', 'true')
     for (const h of await links()) all.add(h)
   }
-  // An item with pages redirects to its first one, which is listed anyway.
-  return [...all].filter((h) => ![...all].some((o) => o !== h && o.startsWith(`${h}/`)))
+  await page.keyboard.press('Escape')
+  await expect(nav).toHaveCount(0)
+  return [...all]
 }
 
 test('no page or tab scrolls sideways at 360px', async ({ page }) => {
@@ -83,7 +75,10 @@ test('the drawer opens, takes you to a page, and closes', async ({ page }) => {
   await expect(nav).toBeVisible()
   await still(page)
   await page.screenshot({ path: shot('drawer') })
-  await nav.getByRole('link', { name: 'Firewall', exact: true }).click()
+  // A section opens its pages in place, and the drawer waits for the pick.
+  await nav.getByRole('button', { name: 'Firewall', exact: true }).click()
+  await expect(page).toHaveURL(/\/$/)
+  await nav.getByRole('link', { name: 'Rules', exact: true }).click()
   await expect(page).toHaveURL(/\/firewall\/rules$/)
   await expect(nav).toHaveCount(0)
   await drawer(page, 'NAT')
@@ -92,7 +87,7 @@ test('the drawer opens, takes you to a page, and closes', async ({ page }) => {
 
 test('a dialog is a sheet with its submit in reach', async ({ page }) => {
   await login(page)
-  await drawer(page, 'Firewall')
+  await drawer(page, 'Firewall', 'Rules')
   await page.getByRole('button', { name: 'Add rule' }).click()
   const dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()

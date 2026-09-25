@@ -18,10 +18,11 @@ import DashboardView from '@/views/DashboardView.vue'
  * Three tiers, each with a test for what goes where:
  *
  * - An item is an area of the product (Firewall, Services, System). It is a
- *   sidebar row and a path segment; with pages, its link lands on the first.
+ *   sidebar row and a path segment. With pages, its row opens their list and
+ *   its bare path lands on the first.
  * - A page is a noun you would say in a sentence: "open NAT", "go to DNS". It
  *   is a path segment under its item with its own route and heading, and the
- *   sidebar lists it while you are inside the item.
+ *   sidebar lists it while its item is open.
  * - A tab is a facet of a page that shares its subject but not its screen:
  *   DHCP has IPv4, IPv6 and Leases. It lives in the URL hash, never nests,
  *   and never carries its own heading.

@@ -116,7 +116,7 @@ test('advertise IPv6 on the LAN and pin a lease from the prefix', async ({ page 
   await expect(dialog).toHaveCount(0)
 
   // Navigate inside the SPA: a full page load would drop the draft.
-  await page.getByRole('link', { name: 'Services' }).click()
+  await sidebar(page, 'Services', 'DHCP')
   await page.getByRole('tab', { name: 'IPv6' }).click()
   await page.getByRole('button', { name: 'Advertise IPv6' }).click()
   dialog = page.getByRole('dialog')

@@ -22,6 +22,8 @@ async function shell() {
 
 const nav = () => document.querySelector('nav[aria-label="Main"]')
 const link = (name) => [...nav().querySelectorAll('a')].find((a) => a.textContent.trim() === name)
+const button = (name) =>
+  [...nav().querySelectorAll('button')].find((b) => b.textContent.trim() === name)
 
 async function open(wrapper) {
   await wrapper.get('button[aria-label="Open navigation"]').trigger('click')
@@ -54,6 +56,21 @@ describe('AppTopBar', () => {
     await open(wrapper)
     link('Dashboard').click()
     await flushPromises()
+    expect(nav()).toBeNull()
+  })
+
+  // A section opens its pages in place, so the drawer waits for the pick.
+  it('stays open when a section is tapped', async () => {
+    const { router, wrapper } = await shell()
+    await open(wrapper)
+    button('Firewall').click()
+    await flushPromises()
+    expect(nav()).not.toBeNull()
+    expect(button('Firewall').getAttribute('aria-expanded')).toBe('true')
+
+    link('Rules').click()
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/firewall/rules')
     expect(nav()).toBeNull()
   })
 
