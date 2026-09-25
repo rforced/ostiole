@@ -23,6 +23,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/rforced/ostiole/internal/atomicfile"
 )
 
 // Applier turns password logins over SSH on or off.
@@ -174,11 +176,11 @@ func (s System) write(allow bool) (bool, error) {
 	if err := os.MkdirAll(filepath.Dir(dropIn), 0o755); err != nil { //nolint:gosec // sshd's own directory
 		return added, err
 	}
-	if err := writeAtomic(dropIn, dropInContent, 0o600); err != nil {
+	if err := atomicfile.Write(dropIn, []byte(dropInContent), 0o600); err != nil {
 		return added, err
 	}
 	if _, err := os.Stat(filepath.Dir(pin)); err == nil {
-		if err := writeAtomic(pin, cloudInitContent, 0o644); err != nil {
+		if err := atomicfile.Write(pin, []byte(cloudInitContent), 0o644); err != nil {
 			return true, err
 		}
 	}
@@ -201,7 +203,7 @@ func (s System) ensureInclude() (bool, error) {
 			return false, nil
 		}
 	}
-	err = writeAtomic(path, "# Added by ostiole so the drop-ins below are read.\n"+sshdInclude+"\n"+string(raw), 0o600)
+	err = atomicfile.Write(path, []byte("# Added by ostiole so the drop-ins below are read.\n"+sshdInclude+"\n"+string(raw)), 0o600)
 	return err == nil, err
 }
 
@@ -244,26 +246,4 @@ func (s System) State(ctx context.Context) (passwords, readable bool) {
 func same(path, content string) bool {
 	raw, err := os.ReadFile(path)
 	return err == nil && string(raw) == content
-}
-
-// writeAtomic writes a file in one rename, so sshd never reads half of one.
-func writeAtomic(path, content string, mode os.FileMode) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
-	if err != nil {
-		return err
-	}
-	name := tmp.Name()
-	defer func() { _ = os.Remove(name) }()
-	if _, err := tmp.WriteString(content); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(mode); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(name, path)
 }

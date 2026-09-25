@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rforced/ostiole/internal/atomicfile"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 )
@@ -413,7 +414,7 @@ func (s *Shaper) write(files network.Files) error {
 		}
 		for _, name := range files.Names() {
 			path := filepath.Join(s.dir(), name)
-			if err := os.WriteFile(path, []byte(files[name]), 0o600); err != nil {
+			if err := atomicfile.Write(path, []byte(files[name]), 0o600); err != nil {
 				errs = append(errs, fmt.Errorf("write %s: %w", path, err))
 			}
 		}

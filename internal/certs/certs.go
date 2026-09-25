@@ -25,6 +25,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rforced/ostiole/internal/atomicfile"
 )
 
 // SelfSignedYears is how long a generated certificate lasts. Nobody
@@ -196,24 +198,28 @@ func (m *Manager) Install(certPEM, keyPEM []byte) (*Info, error) {
 	if err := os.MkdirAll(filepath.Dir(m.CertPath), 0o700); err != nil {
 		return nil, err
 	}
-	// Write both to temporary files first, so a failure halfway cannot
-	// leave a certificate that does not match its key.
-	tmpCert, err := writeTemp(m.CertPath, certPEM, 0o644)
+	// Write both before either goes in, so a failed write cannot leave a
+	// certificate that does not match its key.
+	cert, err := atomicfile.Create(m.CertPath, 0o644)
 	if err != nil {
 		return nil, err
 	}
-	tmpKey, err := writeTemp(m.KeyPath, keyPEM, 0o600)
+	defer cert.Close()
+	key, err := atomicfile.Create(m.KeyPath, 0o600)
 	if err != nil {
-		_ = os.Remove(tmpCert)
 		return nil, err
 	}
-	if err := os.Rename(tmpCert, m.CertPath); err != nil {
-		_ = os.Remove(tmpCert)
-		_ = os.Remove(tmpKey)
+	defer key.Close()
+	if _, err := cert.Write(certPEM); err != nil {
 		return nil, err
 	}
-	if err := os.Rename(tmpKey, m.KeyPath); err != nil {
-		_ = os.Remove(tmpKey)
+	if _, err := key.Write(keyPEM); err != nil {
+		return nil, err
+	}
+	if err := cert.Commit(); err != nil {
+		return nil, err
+	}
+	if err := key.Commit(); err != nil {
 		return nil, err
 	}
 	if err := m.Load(); err != nil {
@@ -381,27 +387,4 @@ func colonHex(b []byte) string {
 		out.WriteString(s[i : i+2])
 	}
 	return out.String()
-}
-
-func writeTemp(path string, content []byte, mode os.FileMode) (string, error) {
-	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
-	if err != nil {
-		return "", err
-	}
-	name := f.Name()
-	if _, err := f.Write(content); err != nil {
-		_ = f.Close()
-		_ = os.Remove(name)
-		return "", err
-	}
-	if err := f.Chmod(mode); err != nil {
-		_ = f.Close()
-		_ = os.Remove(name)
-		return "", err
-	}
-	if err := f.Close(); err != nil {
-		_ = os.Remove(name)
-		return "", err
-	}
-	return name, nil
 }

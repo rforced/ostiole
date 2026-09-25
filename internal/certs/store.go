@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rforced/ostiole/internal/atomicfile"
 	"github.com/rforced/ostiole/internal/model"
 )
 
@@ -131,7 +132,7 @@ func (s *Store) Write(id string, f Files) error {
 		{FullChainFile, full, 0o644},
 		{KeyFile, f.Key, 0o600},
 	} {
-		if err := replace(filepath.Join(dir, w.name), w.content, w.mode); err != nil {
+		if err := atomicfile.Write(filepath.Join(dir, w.name), w.content, w.mode); err != nil {
 			return err
 		}
 	}
@@ -172,7 +173,7 @@ func (s *Store) WriteState(id string, st State) error {
 	if err != nil {
 		return err
 	}
-	return replace(filepath.Join(dir, stateFile), append(raw, '\n'), 0o600)
+	return atomicfile.Write(filepath.Join(dir, stateFile), append(raw, '\n'), 0o600)
 }
 
 // Remove deletes a certificate's directory.
@@ -342,18 +343,4 @@ func parsePrivateKey(block *pem.Block) (crypto.PrivateKey, error) {
 		return x509.ParsePKCS8PrivateKey(block.Bytes)
 	}
 	return nil, fmt.Errorf("%q is not a private key", block.Type)
-}
-
-// replace writes content to path through a temporary file, so a reader
-// sees the old file or the new one and never half of either.
-func replace(path string, content []byte, mode os.FileMode) error {
-	tmp, err := writeTemp(path, content, mode)
-	if err != nil {
-		return err
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	return nil
 }

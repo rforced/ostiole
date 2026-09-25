@@ -35,6 +35,7 @@ import (
 	legolog "github.com/go-acme/lego/v4/log"
 	"github.com/go-acme/lego/v4/registration"
 
+	"github.com/rforced/ostiole/internal/atomicfile"
 	"github.com/rforced/ostiole/internal/model"
 )
 
@@ -428,7 +429,7 @@ func (c *Client) cache(a model.ACMEAccount, reg *registration.Resource) {
 	if err := os.MkdirAll(c.AccountsDir, 0o700); err != nil {
 		return
 	}
-	_ = os.WriteFile(c.accountPath(a.ID), raw, 0o600)
+	_ = atomicfile.Write(c.accountPath(a.ID), raw, 0o600)
 }
 
 func (c *Client) accountPath(id string) string {

@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rforced/ostiole/internal/atomicfile"
 	"github.com/rforced/ostiole/internal/model"
 )
 
@@ -116,30 +117,25 @@ func (c *Cache) Save(m Meta, domains []string) error {
 	reduced := Reduce(domains)
 	m.Domains = len(reduced)
 
-	sum := sha256.New()
-	tmp, err := os.CreateTemp(c.Dir, "."+safeName(m.Name)+".*.tmp")
+	f, err := atomicfile.Create(c.namesPath(m.Name), 0o600)
 	if err != nil {
 		return err
 	}
-	name := tmp.Name()
-	w := bufio.NewWriterSize(io.MultiWriter(tmp, sum), 64<<10)
+	defer f.Close()
+	sum := sha256.New()
+	w := bufio.NewWriterSize(io.MultiWriter(f, sum), 64<<10)
 	for _, d := range reduced {
 		if _, err := w.WriteString(d); err != nil {
-			return cleanup(tmp, name, err)
+			return err
 		}
 		if err := w.WriteByte('\n'); err != nil {
-			return cleanup(tmp, name, err)
+			return err
 		}
 	}
 	if err := w.Flush(); err != nil {
-		return cleanup(tmp, name, err)
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(name)
 		return err
 	}
-	if err := os.Rename(name, c.namesPath(m.Name)); err != nil {
-		_ = os.Remove(name)
+	if err := f.Commit(); err != nil {
 		return err
 	}
 	m.Sum = hex.EncodeToString(sum.Sum(nil))
@@ -148,7 +144,7 @@ func (c *Cache) Save(m Meta, domains []string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(c.metaPath(m.Name), raw, 0o600); err != nil {
+	if err := atomicfile.Write(c.metaPath(m.Name), raw, 0o600); err != nil {
 		return err
 	}
 	c.mu.Lock()
@@ -156,12 +152,6 @@ func (c *Cache) Save(m Meta, domains []string) error {
 	delete(c.errs, m.Name)
 	c.mu.Unlock()
 	return nil
-}
-
-func cleanup(f *os.File, name string, err error) error {
-	_ = f.Close()
-	_ = os.Remove(name)
-	return err
 }
 
 // Reduce sorts names so a parent comes before everything under it, drops the
@@ -208,7 +198,7 @@ func (c *Cache) SaveMerged(res Result) error {
 	if err := os.MkdirAll(c.Dir, 0o700); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(c.Dir, mergedName), raw, 0o600); err != nil {
+	if err := atomicfile.Write(filepath.Join(c.Dir, mergedName), raw, 0o600); err != nil {
 		return err
 	}
 	c.mu.Lock()

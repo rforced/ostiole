@@ -24,6 +24,8 @@ import (
 	"time"
 
 	"golang.org/x/mod/semver"
+
+	"github.com/rforced/ostiole/internal/atomicfile"
 )
 
 // DefaultRepo is the GitHub repository releases come from.
@@ -592,9 +594,9 @@ func (i *Installer) Install(ctx context.Context, d Downloaded) error {
 		if err := os.Chmod(i.Proxy, 0o755); err != nil { //nolint:gosec // executable
 			return err
 		}
-		syncDir(filepath.Dir(i.Proxy))
+		atomicfile.SyncDir(filepath.Dir(i.Proxy))
 	}
-	syncDir(filepath.Dir(i.Binary))
+	atomicfile.SyncDir(filepath.Dir(i.Binary))
 	// The restart runs detached so the daemon can answer the request that
 	// triggered it.
 	script := i.restartScript(previous, proxyPrevious, d.Version)
@@ -609,14 +611,6 @@ func (i *Installer) Install(ctx context.Context, d Downloaded) error {
 		return fmt.Errorf("schedule restart: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
-}
-
-// syncDir makes the renames in dir durable. Best effort, as in the store.
-func syncDir(dir string) {
-	if d, err := os.Open(dir); err == nil {
-		_ = d.Sync()
-		_ = d.Close()
-	}
 }
 
 // restartScript restarts into the new binaries and puts the old ones back

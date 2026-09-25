@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/rforced/ostiole/internal/atomicfile"
 )
 
 // persisted is one cron's last attempt as it is kept on disk.
@@ -112,18 +114,10 @@ func (r *Runner) save() {
 	if err != nil {
 		return
 	}
-	// Written beside and renamed over, so a router that loses power
-	// mid-write keeps the last good copy rather than half of this one.
 	// 0600: what this router does while nobody is watching is nobody
 	// else's business.
-	tmp := r.path() + ".tmp"
-	if err := os.WriteFile(tmp, raw, 0o600); err != nil {
+	if err := atomicfile.Write(r.path(), raw, 0o600); err != nil {
 		r.Log.Warn("could not write the cron results", "err", err)
-		return
-	}
-	if err := os.Rename(tmp, r.path()); err != nil {
-		r.Log.Warn("could not replace the cron results", "err", err)
-		_ = os.Remove(tmp)
 	}
 }
 

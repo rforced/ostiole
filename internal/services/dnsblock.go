@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/rforced/ostiole/internal/atomicfile"
 	"github.com/rforced/ostiole/internal/dnsblock"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
@@ -161,30 +162,18 @@ func (d *DNSBlock) Load(ctx context.Context, fn func(io.Writer) error) (bool, er
 	if err := os.MkdirAll(d.dir(), 0o755); err != nil { //nolint:gosec // dnsmasq reads these unprivileged
 		return false, err
 	}
-	tmp, err := os.CreateTemp(d.dir(), "."+BlockConfName+".*.tmp")
+	f, err := atomicfile.Create(d.ConfPath(), 0o644)
 	if err != nil {
 		return false, err
 	}
-	name := tmp.Name()
-	// Removing the temporary file is best effort: once it is renamed into
-	// place there is nothing left to remove.
-	defer func() { _ = os.Remove(name) }()
+	defer f.Close()
 
 	sum := sha256.New()
-	bw := bufio.NewWriterSize(io.MultiWriter(tmp, sum), 64<<10)
+	bw := bufio.NewWriterSize(io.MultiWriter(f, sum), 64<<10)
 	if err := fn(bw); err != nil {
-		_ = tmp.Close()
 		return false, err
 	}
 	if err := bw.Flush(); err != nil {
-		_ = tmp.Close()
-		return false, err
-	}
-	if err := tmp.Chmod(0o644); err != nil {
-		_ = tmp.Close()
-		return false, err
-	}
-	if err := tmp.Close(); err != nil {
 		return false, err
 	}
 	fresh := hex.EncodeToString(sum.Sum(nil))
@@ -192,7 +181,7 @@ func (d *DNSBlock) Load(ctx context.Context, fn func(io.Writer) error) (bool, er
 	if current, err := sumFile(d.ConfPath()); err == nil && current == fresh {
 		return false, nil
 	}
-	if err := os.Rename(name, d.ConfPath()); err != nil {
+	if err := f.Commit(); err != nil {
 		return false, err
 	}
 	return true, d.reload(ctx)

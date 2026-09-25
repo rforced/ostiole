@@ -10,11 +10,12 @@ package journald
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/rforced/ostiole/internal/atomicfile"
 )
 
 // ConfFile is the drop-in Ostiole writes. journald reads every file in
@@ -110,7 +111,7 @@ func (s System) Apply(ctx context.Context, maxUseGB, retentionDays int) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec // system config dir
 		return err
 	}
-	if err := writeFile(path, want); err != nil {
+	if err := atomicfile.Write(path, []byte(want), 0o644); err != nil {
 		return err
 	}
 	if s.Run == nil {
@@ -132,29 +133,4 @@ func (s System) Present() bool {
 		}
 	}
 	return false
-}
-
-// writeFile writes atomically, so journald never reads half a file.
-func writeFile(path, content string) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
-	if err != nil {
-		return err
-	}
-	name := tmp.Name()
-	defer func() { _ = os.Remove(name) }()
-	if _, err := tmp.WriteString(content); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(0o644); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(name, path); err != nil {
-		return errors.Join(err)
-	}
-	return nil
 }

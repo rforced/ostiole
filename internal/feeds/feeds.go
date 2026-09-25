@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rforced/ostiole/internal/atomicfile"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/nft"
 )
@@ -186,7 +187,7 @@ func (c *Cache) Save(a model.Alias, parts []Part, entries []string, when time.Ti
 	if err := os.MkdirAll(c.Dir, 0o700); err != nil {
 		return err
 	}
-	if err := os.WriteFile(c.path(a.Name), raw, 0o600); err != nil {
+	if err := atomicfile.Write(c.path(a.Name), raw, 0o600); err != nil {
 		return err
 	}
 	c.mu.Lock()

@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/rforced/ostiole/internal/atomicfile"
 )
 
 // Session lifetimes. A tab in the background stops polling, so a day idle
@@ -271,26 +273,5 @@ func (s *sessionStore) persist() {
 	if err != nil {
 		return
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(s.path), ".sessions.*.tmp")
-	if err != nil {
-		return
-	}
-	name := tmp.Name()
-	if _, err := tmp.Write(raw); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(name)
-		return
-	}
-	if err := tmp.Chmod(0o600); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(name)
-		return
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(name)
-		return
-	}
-	if err := os.Rename(name, s.path); err != nil {
-		_ = os.Remove(name)
-	}
+	_ = atomicfile.Write(s.path, raw, 0o600)
 }

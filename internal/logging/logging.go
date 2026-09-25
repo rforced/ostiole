@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/rforced/ostiole/internal/atomicfile"
 	"github.com/rforced/ostiole/internal/model"
 )
 
@@ -166,7 +167,7 @@ func (s System) Apply(ctx context.Context, level model.LogLevel) error {
 		if have, err := os.ReadFile(path); err == nil && string(have) == want {
 			continue
 		}
-		if err := writeFile(path, want); err != nil {
+		if err := atomicfile.Write(path, []byte(want), 0o644); err != nil {
 			errs = append(errs, fmt.Errorf("write %s: %w", path, err))
 			continue
 		}
@@ -193,26 +194,4 @@ func (s System) Apply(ctx context.Context, level model.LogLevel) error {
 		}
 	}
 	return errors.Join(errs...)
-}
-
-// writeFile replaces path atomically, so systemd never reads half a file.
-func writeFile(path, content string) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
-	if err != nil {
-		return err
-	}
-	name := tmp.Name()
-	defer func() { _ = os.Remove(name) }()
-	if _, err := tmp.WriteString(content); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(0o644); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(name, path)
 }

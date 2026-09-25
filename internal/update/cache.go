@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/rforced/ostiole/internal/atomicfile"
 )
 
 // Snapshot is what the router last learned about Ostiole's own releases.
@@ -89,5 +91,5 @@ func (c *Cache) Update(change func(*Snapshot)) {
 		return
 	}
 	// 0600: what a firewall is behind on is nobody else's business.
-	_ = os.WriteFile(c.path(), raw, 0o600)
+	_ = atomicfile.Write(c.path(), raw, 0o600)
 }

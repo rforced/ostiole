@@ -16,6 +16,7 @@ import (
 
 	"github.com/vishvananda/netlink"
 
+	"github.com/rforced/ostiole/internal/atomicfile"
 	"github.com/rforced/ostiole/internal/model"
 )
 
@@ -848,54 +849,27 @@ func (n *Networkd) linkNames(files Files) []string {
 const networkdUser = "systemd-network"
 
 func writeFile(path, content string) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
+	key := strings.HasSuffix(path, ".key")
+	mode := os.FileMode(0o644)
+	if key {
+		mode = 0o640
+	}
+	f, err := atomicfile.Create(path, mode)
 	if err != nil {
 		return err
 	}
-	name := tmp.Name()
-	if _, err := tmp.WriteString(content); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(name)
+	defer f.Close()
+	if _, err := f.WriteString(content); err != nil {
 		return err
 	}
-	mode := os.FileMode(0o644)
-	if strings.HasSuffix(path, ".key") {
-		mode = 0o640
+	if key {
 		if gid, err := networkdGID(); err == nil {
 			// Ignore failures: without the group the file stays root-only,
 			// which networkd reports clearly if it cannot read it.
-			_ = tmp.Chown(0, gid)
+			_ = f.Chown(0, gid)
 		}
 	}
-	if err := tmp.Chmod(mode); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(name)
-		return err
-	}
-	// A crash soon after an apply must not boot networkd on an empty unit.
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(name)
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(name)
-		return err
-	}
-	if err := os.Rename(name, path); err != nil {
-		_ = os.Remove(name)
-		return err
-	}
-	syncDir(filepath.Dir(path))
-	return nil
-}
-
-// syncDir makes the renames in dir durable. Best effort, as in the store.
-func syncDir(dir string) {
-	if d, err := os.Open(dir); err == nil {
-		_ = d.Sync()
-		_ = d.Close()
-	}
+	return f.Commit()
 }
 
 func networkdGID() (int, error) {

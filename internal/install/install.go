@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rforced/ostiole/internal/atomicfile"
 	"github.com/rforced/ostiole/internal/logging"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
@@ -215,7 +216,7 @@ func Install(ctx context.Context, sc Systemctl, lay Layout, opts Options, log *s
 		}
 	}
 	for name, content := range Units(lay, opts) {
-		if err := writeFile(filepath.Join(lay.UnitDir, name), content, 0o644); err != nil {
+		if err := atomicfile.Write(filepath.Join(lay.UnitDir, name), []byte(content), 0o644); err != nil {
 			return nil, fmt.Errorf("write %s: %w", name, err)
 		}
 		rep.Units = append(rep.Units, name)
@@ -512,51 +513,7 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	return writeFile(dst, string(data), mode)
-}
-
-// writeFile writes atomically so a running service never sees a torn file.
-func writeFile(path, content string, mode os.FileMode) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
-	if err != nil {
-		return err
-	}
-	name := tmp.Name()
-	if _, err := tmp.WriteString(content); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(name)
-		return err
-	}
-	if err := tmp.Chmod(mode); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(name)
-		return err
-	}
-	// The units decide what boots, firewall included, so a crash soon
-	// after an install must not leave one empty.
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(name)
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(name)
-		return err
-	}
-	if err := os.Rename(name, path); err != nil {
-		_ = os.Remove(name)
-		return err
-	}
-	syncDir(filepath.Dir(path))
-	return nil
-}
-
-// syncDir makes the renames in dir durable. Best effort, as in the store.
-func syncDir(dir string) {
-	if d, err := os.Open(dir); err == nil {
-		_ = d.Sync()
-		_ = d.Close()
-	}
+	return atomicfile.Write(dst, data, mode)
 }
 
 // PackageManager identifies the host's package manager, or "".
@@ -656,7 +613,7 @@ func SaveTakeoverRecord(dir string, rec TakeoverRecord) error {
 	if err != nil {
 		return err
 	}
-	return writeFile(filepath.Join(dir, TakeoverRecordFile), string(raw)+"\n", 0o600)
+	return atomicfile.Write(filepath.Join(dir, TakeoverRecordFile), append(raw, '\n'), 0o600)
 }
 
 // LoadTakeoverRecord reads the record, or returns nil when none exists.
@@ -785,7 +742,7 @@ func DisableCloudInitNetwork(log *slog.Logger) (bool, error) {
 		return false, nil
 	}
 	content := "# Written by ostiole: networking is managed through systemd-networkd by Ostiole.\nnetwork: {config: disabled}\n"
-	if err := writeFile(CloudInitDropIn, content, 0o644); err != nil {
+	if err := atomicfile.Write(CloudInitDropIn, []byte(content), 0o644); err != nil {
 		return false, err
 	}
 	log.Info("disabled cloud-init network rendering", "file", CloudInitDropIn)

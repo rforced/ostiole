@@ -17,6 +17,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/rforced/ostiole/internal/atomicfile"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 	"github.com/rforced/ostiole/internal/nft"
@@ -597,7 +598,7 @@ func writeFile(path, content string) error { return writeMode(path, content, 0o6
 func writeSecretFile(path, content string) error { return writeMode(path, content, 0o600) }
 
 func writeMode(path, content string, mode os.FileMode) error {
-	err := writeAtomic(path, content, mode)
+	err := atomicfile.Write(path, []byte(content), mode)
 	if err == nil || !sealedDir(err) {
 		return err
 	}
@@ -625,35 +626,6 @@ func sealedDirError(path string, err error) error {
 	}
 	return fmt.Errorf("%w (%s was not there when the daemon started, so it stayed read-only inside "+
 		"its sandbox: run `systemctl restart ostiole` and apply again)", err, filepath.Dir(path))
-}
-
-// writeAtomic writes a temporary file beside path and renames it over the
-// top, so a reader sees either the whole old file or the whole new one.
-func writeAtomic(path, content string, mode os.FileMode) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
-	if err != nil {
-		return err
-	}
-	name := tmp.Name()
-	if _, err := tmp.WriteString(content); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(name)
-		return err
-	}
-	if err := tmp.Chmod(mode); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(name)
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(name)
-		return err
-	}
-	if err := os.Rename(name, path); err != nil {
-		_ = os.Remove(name)
-		return err
-	}
-	return nil
 }
 
 // writeInPlace rewrites an existing file through its own inode: the new

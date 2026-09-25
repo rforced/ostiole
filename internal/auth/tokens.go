@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rforced/ostiole/internal/atomicfile"
 )
 
 // Role decides what an account or a token may do. There are three
@@ -166,7 +168,7 @@ func (t *Tokens) save() error {
 	}
 	// 0600: these hashes are the only thing between a copy of the file and
 	// an authenticated request.
-	if err := os.WriteFile(t.path, raw, 0o600); err != nil {
+	if err := atomicfile.Write(t.path, raw, 0o600); err != nil {
 		return err
 	}
 	if info, err := os.Stat(t.path); err == nil {

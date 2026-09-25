@@ -17,6 +17,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/rforced/ostiole/internal/atomicfile"
 	"github.com/rforced/ostiole/internal/host"
 	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/iptables"
@@ -138,7 +139,7 @@ management ports get in, nothing is forwarded.`,
 				if err := os.MkdirAll(g.configDir, 0o700); err != nil {
 					return fmt.Errorf("create %s: %w", g.configDir, err)
 				}
-				if err := os.WriteFile(filepath.Join(g.configDir, store.RulesetFile), []byte(nft.Bootstrap(ports)), 0o600); err != nil {
+				if err := atomicfile.Write(filepath.Join(g.configDir, store.RulesetFile), []byte(nft.Bootstrap(ports)), 0o600); err != nil {
 					return fmt.Errorf("write the bootstrap ruleset: %w", err)
 				}
 				fmt.Fprintln(out, "wrote the bootstrap ruleset")

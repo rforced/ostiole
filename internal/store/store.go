@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rforced/ostiole/internal/atomicfile"
 	"github.com/rforced/ostiole/internal/model"
 )
 
@@ -116,7 +117,7 @@ func (s *Store) WriteState(name string, data []byte) error {
 	if err := s.Init(); err != nil {
 		return err
 	}
-	return writeAtomic(filepath.Join(s.Dir, filepath.Base(name)), data)
+	return atomicfile.Write(filepath.Join(s.Dir, filepath.Base(name)), data, 0o600)
 }
 
 // ReadState reads a state file, or returns ErrNotFound.
@@ -177,10 +178,10 @@ func (s *Store) Save(cfg *model.Config, ruleset string) (*Revision, error) {
 	// configuration.
 	sum := sha256.Sum256(raw)
 	note := rulesetNote + hex.EncodeToString(sum[:]) + "\n"
-	if err := writeAtomic(filepath.Join(s.Dir, RulesetFile), []byte(note+ruleset)); err != nil {
+	if err := atomicfile.Write(filepath.Join(s.Dir, RulesetFile), []byte(note+ruleset), 0o600); err != nil {
 		return nil, err
 	}
-	if err := writeAtomic(current, raw); err != nil {
+	if err := atomicfile.Write(current, raw, 0o600); err != nil {
 		return nil, err
 	}
 	if err := s.prune(cfg.System.RevisionsKept()); err != nil {
@@ -270,7 +271,7 @@ func (s *Store) archive(raw []byte) (*Revision, error) {
 		}
 		ts = ts.Add(time.Nanosecond)
 	}
-	if err := writeAtomic(filepath.Join(dir, id+".json"), raw); err != nil {
+	if err := atomicfile.Write(filepath.Join(dir, id+".json"), raw, 0o600); err != nil {
 		return nil, err
 	}
 	return &Revision{ID: id, Time: ts, Size: int64(len(raw))}, nil
@@ -307,44 +308,4 @@ func readConfig(path string) (*model.Config, error) {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	return &cfg, nil
-}
-
-// writeAtomic writes data to a temp file in the same directory, fsyncs it,
-// and renames it over path so readers never see a partial file.
-func writeAtomic(path string, data []byte) error {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.tmp")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	cleanup := func() { _ = os.Remove(tmpName) }
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		cleanup()
-		return err
-	}
-	if err := tmp.Chmod(0o600); err != nil {
-		_ = tmp.Close()
-		cleanup()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		cleanup()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		cleanup()
-		return err
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		cleanup()
-		return err
-	}
-	if d, err := os.Open(dir); err == nil {
-		_ = d.Sync()
-		_ = d.Close()
-	}
-	return nil
 }

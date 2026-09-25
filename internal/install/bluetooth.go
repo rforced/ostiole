@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/rforced/ostiole/internal/atomicfile"
 )
 
 // BluetoothConfFile is the modprobe drop-in that keeps the modules out of
@@ -47,7 +49,7 @@ func BlockBluetooth(ctx context.Context, run Runner, path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec // modprobe reads this
 		return err
 	}
-	if err := writeFile(path, BluetoothConf(), 0o644); err != nil {
+	if err := atomicfile.Write(path, []byte(BluetoothConf()), 0o644); err != nil {
 		return err
 	}
 	if _, err := exec.LookPath("rfkill"); err == nil {

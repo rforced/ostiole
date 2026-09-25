@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rforced/ostiole/internal/atomicfile"
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/backup"
 	"github.com/rforced/ostiole/internal/model"
@@ -260,7 +261,7 @@ func (a *Actions) backup(c model.Cron) (string, error) {
 		return "", err
 	}
 	path := filepath.Join(c.Directory, archive.Filename())
-	if err := os.WriteFile(path, raw, 0o600); err != nil {
+	if err := atomicfile.Write(path, raw, 0o600); err != nil {
 		return "", err
 	}
 	removed, err := prune(c.Directory, keepOf(c))

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/rforced/ostiole/internal/atomicfile"
 )
 
 // Snapshot is what the router last learned about its own updates. It is
@@ -82,5 +84,5 @@ func (s *State) Update(change func(*Snapshot)) {
 	}
 	// 0600: the list of unpatched packages on a firewall is nobody
 	// else's business.
-	_ = os.WriteFile(s.path(), raw, 0o600)
+	_ = atomicfile.Write(s.path(), raw, 0o600)
 }

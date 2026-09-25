@@ -11,6 +11,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/rforced/ostiole/internal/atomicfile"
 )
 
 // Forwarding settings a router needs. Keys are /proc/sys paths relative
@@ -298,5 +300,5 @@ func Persist(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec // system config dir
 		return err
 	}
-	return os.WriteFile(path, []byte(Content()), 0o644) //nolint:gosec // world-readable like its siblings
+	return atomicfile.Write(path, []byte(Content()), 0o644)
 }
