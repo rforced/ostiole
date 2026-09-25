@@ -83,12 +83,12 @@ test('the lookup says which list blocks a name, and an allow entry beats it', as
   await page.screenshot({ path: shot('51-dnsblock-lookup'), fullPage: true })
 
   // Allowing the parent lets the child back through.
-  await page.getByLabel('Never block').fill('ads.example.com')
+  await page.getByLabel('Allow', { exact: true }).fill('ads.example.com')
   await applyAndConfirm(page)
 
   await query.fill('deep.ads.example.com')
   await page.getByRole('button', { name: 'Look up' }).click()
-  await expect(page.getByText('Not blocked: the allow list has ads.example.com')).toBeVisible()
+  await expect(page.getByText('Not blocked: Exceptions allow ads.example.com')).toBeVisible()
 })
 
 test('a name this router answers for is never blocked', async ({ page }) => {
@@ -96,8 +96,8 @@ test('a name this router answers for is never blocked', async ({ page }) => {
   await page.goto('/services/dns#blocking')
 
   // 05-services set the local domain to "lan" and added the host printer.
-  await page.getByLabel('Never block').fill('ads.example.com')
-  await page.getByLabel('Always block').fill('printer.lan')
+  await page.getByLabel('Allow', { exact: true }).fill('ads.example.com')
+  await page.getByLabel('Block', { exact: true }).fill('printer.lan')
   await page.getByRole('button', { name: /Apply with \d+s confirmation/ }).click()
   await expect(page.getByRole('alert')).toContainText('take the UI away')
   await page.getByRole('button', { name: 'Discard' }).click()

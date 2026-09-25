@@ -37,7 +37,7 @@ answers the question every support conversation starts with.`,
 			case !cfg.Services.DNS.Enabled:
 				fmt.Fprintln(out, "the DNS server is off, so nothing is being refused")
 			case !cfg.Blocking.Enabled:
-				fmt.Fprintf(out, "block lists are off; the deny list still answers %s\n", cfg.Blocking.BlockMode())
+				fmt.Fprintf(out, "block lists are off; Exceptions still block, answering %s\n", cfg.Blocking.BlockMode())
 			default:
 				fmt.Fprintf(out, "block lists are on, answering %s\n", cfg.Blocking.BlockMode())
 			}
@@ -184,7 +184,7 @@ func newDNSBlockWhyCmd(g *globals) *cobra.Command {
 					fmt.Fprintf(out, "  on: %s\n", strings.Join(f.Lists, ", "))
 				}
 			case f.Reason == dnsblock.ReasonAllow:
-				fmt.Fprintf(out, "%s is not blocked: the allow list has %s\n", f.Name, f.Matched)
+				fmt.Fprintf(out, "%s is not blocked: Exceptions allow %s\n", f.Name, f.Matched)
 			case f.Reason == dnsblock.ReasonNever:
 				fmt.Fprintf(out, "%s is not blocked: this router answers for %s itself\n", f.Name, f.Matched)
 			case f.Reason == dnsblock.ReasonOff:
@@ -204,7 +204,7 @@ func newDNSBlockWhyCmd(g *globals) *cobra.Command {
 func blockedBy(f dnsblock.Finding) string {
 	switch f.Reason {
 	case dnsblock.ReasonDeny:
-		return fmt.Sprintf("because the deny list has %s", f.Matched)
+		return fmt.Sprintf("because Exceptions block %s", f.Matched)
 	case dnsblock.ReasonCanary:
 		return "because it is the name Firefox uses to ask about DNS over HTTPS"
 	default:

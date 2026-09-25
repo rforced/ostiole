@@ -91,7 +91,7 @@ const blockedPct = computed(() => {
         <dt>Exceptions</dt>
         <dd>
           <span v-if="b.allow || b.deny">
-            {{ b.allow ?? 0 }} allowed · {{ b.deny ?? 0 }} refused
+            {{ b.allow ?? 0 }} allowed · {{ b.deny ?? 0 }} blocked
           </span>
           <span v-else class="text-ink-muted">none</span>
         </dd>

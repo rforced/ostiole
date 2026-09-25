@@ -11,7 +11,7 @@ export function sentence(finding) {
     case 'not-a-name':
       return 'That is not a domain name.'
     case 'allow':
-      return `Not blocked: the allow list has ${f.matched}.`
+      return `Not blocked: Exceptions allow ${f.matched}.`
     case 'never':
       return `Not blocked: this router answers for ${f.matched} itself.`
     case 'delegated':
@@ -21,7 +21,7 @@ export function sentence(finding) {
     case 'lists-off':
       return 'Not blocked: block lists are off.'
     case 'deny':
-      return `Blocked because the deny list has ${f.matched}.`
+      return `Blocked: Exceptions block ${f.matched}.`
     case 'canary':
       return 'Blocked: Firefox asks this name before turning on DNS over HTTPS.'
     case 'list':

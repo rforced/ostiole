@@ -189,7 +189,7 @@ function matches(row) {
 }
 
 /** The exception lists, as their toggles call them. */
-const EXCEPTIONS = { allow: 'Never block', deny: 'Always block' }
+const EXCEPTIONS = { allow: 'Allow', deny: 'Block' }
 
 /** What each row offers to toggle, from the draft rather than the log. */
 const toggleFor = computed(() => exceptionToggles(config.draft))

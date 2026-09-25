@@ -136,25 +136,25 @@ describe('QueriesTab', () => {
     await flushPromises()
 
     expect(config.dirty).toBe(false)
-    const never = () => toggle(wrapper, 'Never block ads.example.com')
-    const always = () => toggle(wrapper, 'Always block example.com')
-    expect(never().element.checked).toBe(false)
-    expect(always().element.checked).toBe(false)
+    const allow = () => toggle(wrapper, 'Allow ads.example.com')
+    const block = () => toggle(wrapper, 'Block example.com')
+    expect(allow().element.checked).toBe(false)
+    expect(block().element.checked).toBe(false)
     // The router answers for its own names, so they get none.
     expect(wrapper.find('input[aria-label$=" nas.lan"]').exists()).toBe(false)
-    expect(toggle(wrapper, 'Always block _dns.resolver.arpa').exists()).toBe(true)
+    expect(toggle(wrapper, 'Block _dns.resolver.arpa').exists()).toBe(true)
 
-    await never().setValue(true)
+    await allow().setValue(true)
     expect(config.draft.blocking.allow).toEqual(['ads.example.com'])
-    expect(never().element.checked).toBe(true)
-    await always().setValue(true)
+    expect(allow().element.checked).toBe(true)
+    await block().setValue(true)
     expect(config.draft.blocking.deny).toEqual(['example.com'])
-    expect(always().element.checked).toBe(true)
+    expect(block().element.checked).toBe(true)
 
     // Put back, the draft is what was saved.
-    await never().setValue(false)
-    await always().setValue(false)
-    expect(never().element.checked).toBe(false)
+    await allow().setValue(false)
+    await block().setValue(false)
+    expect(allow().element.checked).toBe(false)
     expect(config.dirty).toBe(false)
   })
 

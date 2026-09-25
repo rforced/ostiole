@@ -58,7 +58,7 @@ const stale = computed(() => config.dirty)
       <div class="grid max-w-4xl gap-4 sm:grid-cols-2">
         <FormField
           id="block-allow"
-          label="Never block"
+          label="Allow"
           hint="One name per line. A name here covers everything under it, and beats every list."
         >
           <textarea
@@ -72,7 +72,7 @@ const stale = computed(() => config.dirty)
         </FormField>
         <FormField
           id="block-deny"
-          label="Always block"
+          label="Block"
           hint="One name per line, subdomains included, whether the lists are on or not."
         >
           <textarea

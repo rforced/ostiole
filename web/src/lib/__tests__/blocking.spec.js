@@ -84,7 +84,7 @@ describe('exceptionToggles', () => {
   const blocked = (name) => ({ name, status: 'blocked' })
   const answered = (name) => ({ name, status: 'ok' })
 
-  it('offers never block for a blocked answer and always block for the rest', () => {
+  it('offers allow for a blocked answer and block for the rest', () => {
     const toggle = exceptionToggles(router())
     expect(toggle(blocked('ads.example.com'))).toEqual({ key: 'allow', on: false })
     expect(toggle(answered('example.com'))).toEqual({ key: 'deny', on: false })
@@ -133,12 +133,12 @@ describe('exceptionToggles', () => {
     expect(toggle(answered('www.potato.example'))).toEqual({ key: 'deny', on: false })
   })
 
-  it('leaves always block off under an allowed parent, which would win', () => {
+  it('leaves block off under an allowed parent, which would win', () => {
     const toggle = exceptionToggles(router({ allow: ['example.com'] }))
     expect(toggle(answered('cdn.example.com'))).toBeNull()
     // A blocked answer from before the parent was allowed still offers it.
     expect(toggle(blocked('ads.example.com'))).toEqual({ key: 'allow', on: false })
-    // Under a denied parent, never block is what beats it.
+    // Under a blocked parent, allow is what beats it.
     const denied = exceptionToggles(router({ deny: ['example.org'] }))
     expect(denied(blocked('www.example.org'))).toEqual({ key: 'allow', on: false })
   })
