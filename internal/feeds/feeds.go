@@ -57,7 +57,7 @@ type Status struct {
 	// published by two sources is counted by both and kept once.
 	Parts       []Part     `json:"parts,omitempty"`
 	Entries     int        `json:"entries"`
-	FetchedAt   time.Time  `json:"fetchedAt,omitempty"`
+	FetchedAt   time.Time  `json:"fetchedAt,omitzero"`
 	LastError   string     `json:"lastError,omitempty"`
 	LastTriedAt *time.Time `json:"lastTriedAt,omitempty"`
 	// Stale is true when the cache is older than the refresh period, which

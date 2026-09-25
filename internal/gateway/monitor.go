@@ -74,7 +74,7 @@ type Status struct {
 	Active      bool      `json:"active"`
 	LatencyMS   float64   `json:"latencyMs"`
 	LossPercent float64   `json:"lossPercent"`
-	Since       time.Time `json:"since,omitempty"`
+	Since       time.Time `json:"since,omitzero"`
 	LastError   string    `json:"lastError,omitempty"`
 }
 

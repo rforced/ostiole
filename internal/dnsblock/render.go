@@ -101,7 +101,7 @@ type Result struct {
 	// Allowed is how many carve-outs were written.
 	Allowed int `json:"allowed"`
 	// At is when the merge happened.
-	At time.Time `json:"at,omitempty"`
+	At time.Time `json:"at,omitzero"`
 }
 
 // EstimatedBytes is roughly what this many names cost dnsmasq.

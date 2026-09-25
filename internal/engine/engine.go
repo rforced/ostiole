@@ -383,7 +383,7 @@ type ApplyOptions struct {
 type ApplyResult struct {
 	Plan
 	Pending  bool            `json:"pending"`
-	Deadline time.Time       `json:"deadline,omitempty"`
+	Deadline time.Time       `json:"deadline,omitzero"`
 	Archived *store.Revision `json:"archived,omitempty"`
 }
 
