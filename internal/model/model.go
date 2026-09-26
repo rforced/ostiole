@@ -1910,6 +1910,16 @@ func (d DNSServer) ResolverCache() int {
 	return d.ResolverCacheMB
 }
 
+// DNSForwarders are where forward mode sends the names this router does
+// not know: the DNS service's upstreams, or the system resolvers when it
+// has none.
+func (c *Config) DNSForwarders() []string {
+	if ups := c.Services.DNS.Upstreams; len(ups) > 0 {
+		return ups
+	}
+	return c.System.DNSServers
+}
+
 // RebindAllowed lists the domains whose answers may carry private
 // addresses: the local domain, every delegated domain and the tailnet,
 // which point into the LAN by design, plus whatever the operator added.

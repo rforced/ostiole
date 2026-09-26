@@ -169,11 +169,7 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 			fmt.Fprintf(&b, "server=%s#%d\n", UnboundAddress, UnboundPort)
 			b.WriteString("proxy-dnssec\n")
 		} else {
-			upstreams := svc.DNS.Upstreams
-			if len(upstreams) == 0 {
-				upstreams = cfg.System.DNSServers
-			}
-			for _, u := range upstreams {
+			for _, u := range cfg.DNSForwarders() {
 				fmt.Fprintf(&b, "server=%s\n", u)
 			}
 		}

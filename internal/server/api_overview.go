@@ -136,8 +136,12 @@ type DHCPSummary struct {
 
 // DNSSummary describes the resolver.
 type DNSSummary struct {
-	Enabled   bool     `json:"enabled"`
-	Domain    string   `json:"domain,omitempty"`
+	Enabled bool   `json:"enabled"`
+	Domain  string `json:"domain,omitempty"`
+	// Resolver is the mode, forward when the configuration leaves it out.
+	Resolver model.ResolverMode `json:"resolver"`
+	// Upstreams are where the mode sends names: addresses when forwarding,
+	// certificate names over TLS, none when recursive.
 	Upstreams []string `json:"upstreams,omitempty"`
 	Overrides int      `json:"overrides"`
 }
@@ -470,11 +474,26 @@ func summarizeServices(cfg *model.Config) (DHCPSummary, DNSSummary) {
 		d.Servers++
 		d.Capacity += poolSize(sc.RangeStart, sc.RangeEnd)
 	}
+	dns := cfg.Services.DNS
 	n := DNSSummary{
-		Enabled:   cfg.Services.DNS.Enabled,
-		Domain:    cfg.Services.DNS.Domain,
-		Upstreams: cfg.Services.DNS.Upstreams,
-		Overrides: len(cfg.Services.DNS.HostOverrides),
+		Enabled:   dns.Enabled,
+		Domain:    dns.Domain,
+		Resolver:  dns.Resolver,
+		Overrides: len(dns.HostOverrides),
+	}
+	// Each mode keeps the other's servers in case it is switched back, so
+	// only the ones in use are named.
+	switch dns.Resolver {
+	case model.ResolverTLS:
+		for _, u := range dns.TLSUpstreams {
+			if !slices.Contains(n.Upstreams, u.Hostname) {
+				n.Upstreams = append(n.Upstreams, u.Hostname)
+			}
+		}
+	case model.ResolverRecursive:
+	default:
+		n.Resolver = model.ResolverForward
+		n.Upstreams = cfg.DNSForwarders()
 	}
 	return d, n
 }

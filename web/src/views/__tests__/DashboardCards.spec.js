@@ -5,6 +5,7 @@ import GatewaysCard from '@/views/dashboard/GatewaysCard.vue'
 import RecentBlocksCard from '@/views/dashboard/RecentBlocksCard.vue'
 import RecentLeasesCard from '@/views/dashboard/RecentLeasesCard.vue'
 import RouterCard from '@/views/dashboard/RouterCard.vue'
+import ServicesCard from '@/views/dashboard/ServicesCard.vue'
 import SystemLoadCard from '@/views/dashboard/SystemLoadCard.vue'
 import WirelessCard from '@/views/dashboard/WirelessCard.vue'
 
@@ -324,5 +325,30 @@ describe('WirelessCard', () => {
     })
     expect(w.text()).toContain('No clients.')
     expect(w.text()).toContain('All clients')
+  })
+})
+
+describe('ServicesCard', () => {
+  const stubs = { RouterLink: RouterLinkStub }
+  /** The DNS line, spaces as a reader hears them. */
+  function dnsLine(dns) {
+    const w = mount(ServicesCard, {
+      props: { dns: { enabled: true, domain: 'lan', ...dns } },
+      global: { stubs },
+    })
+    const dd = w.findAll('dt').find((dt) => dt.text() === 'DNS').element.nextElementSibling
+    return dd.textContent.replace(/\s+/g, ' ').trim()
+  }
+
+  // Each resolver mode keeps the other's servers, so the line says where
+  // the mode in use sends names and nothing else.
+  it('says where DNS goes for the resolver in use', () => {
+    expect(dnsLine({ resolver: 'forward', upstreams: ['9.9.9.9', '149.112.112.112'] })).toBe(
+      'lan · forwards to 9.9.9.9, 149.112.112.112',
+    )
+    expect(dnsLine({ resolver: 'tls', upstreams: ['dns.quad9.net'] })).toBe(
+      'lan · DNS over TLS to dns.quad9.net',
+    )
+    expect(dnsLine({ resolver: 'recursive' })).toBe('lan · recursive')
   })
 })

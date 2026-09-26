@@ -238,6 +238,40 @@ func TestOverviewAfterApply(t *testing.T) {
 	}
 }
 
+// Each resolver mode keeps the other's servers for switching back, so the
+// dashboard names only the ones in use. Naming the rest would say the
+// router forwards somewhere it does not.
+func TestSummarizeDNSNamesTheServersInUse(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		edit func(*model.Config)
+		mode model.ResolverMode
+		want []string
+	}{
+		{"forward", func(*model.Config) {}, model.ResolverForward, []string{"192.0.2.53"}},
+		{"forward to the system resolvers", func(c *model.Config) {
+			c.Services.DNS.Upstreams = nil
+			c.System.DNSServers = []string{"192.0.2.1"}
+		}, model.ResolverForward, []string{"192.0.2.1"}},
+		{"tls", func(c *model.Config) { c.Services.DNS.Resolver = model.ResolverTLS }, model.ResolverTLS, []string{"dns.quad9.net"}},
+		{"recursive", func(c *model.Config) { c.Services.DNS.Resolver = model.ResolverRecursive }, model.ResolverRecursive, nil},
+	}
+	for _, tc := range cases {
+		cfg := model.Starter(model.StarterOptions{
+			LAN: "eth1", LANAddress: "192.168.1.1/24", Services: true, DNSUpstreams: []string{"192.0.2.53"},
+		})
+		cfg.Services.DNS.TLSUpstreams = []model.TLSUpstream{
+			{Address: "9.9.9.9", Hostname: "dns.quad9.net"},
+			{Address: "149.112.112.112", Hostname: "dns.quad9.net"},
+		}
+		tc.edit(cfg)
+		if _, dns := summarizeServices(cfg); dns.Resolver != tc.mode || !slices.Equal(dns.Upstreams, tc.want) {
+			t.Errorf("%s: resolver %q, upstreams %v; want %q, %v", tc.name, dns.Resolver, dns.Upstreams, tc.mode, tc.want)
+		}
+	}
+}
+
 // A pool on an interface that has been switched off hands out nothing.
 // That is allowed — the interface comes back and so does the pool — so it
 // is not counted as a server, and the dashboard says where the addresses

@@ -64,8 +64,10 @@ function word(s) {
       <dd v-if="dns.enabled">
         <span v-if="dns.domain" class="font-mono">{{ dns.domain }}</span>
         <span v-else class="text-ink-muted">no local domain</span>
-        <template v-if="dns.upstreams?.length">
-          · forwards to <span class="font-mono">{{ dns.upstreams.join(', ') }}</span>
+        <template v-if="dns.resolver === 'recursive'"> · recursive</template>
+        <template v-else-if="dns.upstreams?.length">
+          · {{ dns.resolver === 'tls' ? 'DNS over TLS to' : 'forwards to' }}
+          <span class="font-mono">{{ dns.upstreams.join(', ') }}</span>
         </template>
         <template v-if="dns.overrides"> · {{ dns.overrides }} host overrides</template>
       </dd>
