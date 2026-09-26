@@ -27,7 +27,8 @@ type ntpStatus struct {
 	HostClock bool   `json:"hostClock,omitempty"`
 	Version   string `json:"version,omitempty"`
 	// Read says chronyd answered, so what follows is its account.
-	Read         bool `json:"read"`
+	Read bool `json:"read"`
+	// Synchronised says a source still sets the clock.
 	Synchronised bool `json:"synchronised"`
 	// Reference is the source the clock follows, by the name it was
 	// configured with.
@@ -101,10 +102,11 @@ func (a *api) readChrony(ctx context.Context, st *ntpStatus) {
 		return
 	}
 	st.Read = true
-	st.Synchronised = tr.Synchronised()
+	st.Synchronised = following(tr, time.Now())
 	st.Stratum = tr.Stratum
 	st.OffsetSeconds = tr.Offset
-	if !tr.RefTime.IsZero() {
+	// On its own clock chronyd gives the time of asking, not of a source.
+	if !tr.RefTime.IsZero() && !tr.Local {
 		t := tr.RefTime
 		st.LastUpdate = &t
 	}
@@ -121,7 +123,7 @@ func (a *api) readChrony(ctx context.Context, st *ntpStatus) {
 		}
 	}
 	for _, s := range sources {
-		if s.Address == tr.Address && tr.Address != "" {
+		if st.Synchronised && s.Address == tr.Address && tr.Address != "" {
 			st.Reference = s.Name
 		}
 		last := int64(-1)
@@ -149,10 +151,23 @@ func ntsState(au chrony.Auth) string {
 	return "failing"
 }
 
+// lostAfter is how long the clock can go uncorrected before its sources
+// count as lost. chronyd asks a source at least every 1024 s and gives up
+// on one after eight polls unanswered, so while any source answers the
+// last correction is never this old.
+const lostAfter = 3 * time.Hour
+
+// following says whether a source still sets the clock. chronyd's word is
+// not enough: it goes on calling the clock synchronised after every
+// source stops answering.
+func following(tr chrony.Tracking, now time.Time) bool {
+	return tr.Synchronised() && now.Sub(tr.RefTime) < lostAfter
+}
+
 // clockWarning speaks up when the time service has run for a while and
-// still does not follow any server: certificates, DNSSEC and schedules
-// all go wrong on a clock that drifts. A service that just started is
-// given ten minutes, which is far longer than a first sync takes.
+// no server sets the clock: certificates, DNSSEC and schedules all go
+// wrong on a clock that drifts. A service that just started is given ten
+// minutes, which is far longer than a first sync takes.
 func (a *api) clockWarning(ctx context.Context) (Warning, bool) {
 	if a.ntp == nil || a.chrony == nil || !a.ntp.Active(ctx) {
 		return Warning{}, false
@@ -162,12 +177,15 @@ func (a *api) clockWarning(ctx context.Context) (Warning, bool) {
 		return Warning{}, false
 	}
 	tr, err := a.chrony.Tracking(ctx)
-	if err != nil || tr.Synchronised() {
+	if err != nil || following(tr, time.Now()) {
 		return Warning{}, false
 	}
 	detail := "No time server answers. Check that the router reaches the internet and that udp/123 is not blocked on the way out."
 	if failing := a.failingNTS(ctx); failing != "" {
 		detail = "No server gave a signed answer, " + failing + ". Where tcp/4460 or large UDP packets are blocked on the way out NTS cannot work; list servers without it on the NTP page."
+	}
+	if tr.Local {
+		detail += " Meanwhile the router answers the LAN from its own clock."
 	}
 	return Warning{
 		Kind: "clock-unsynchronised", Level: "warn",

@@ -63,9 +63,10 @@ func (u *ntpUnit) Run(_ context.Context, _ string, args ...string) ([]byte, erro
 
 var (
 	// synced is what chrony 4.9 on the router said once it followed
-	// virginia.time.system76.com.
+	// virginia.time.system76.com, corrected a moment ago rather than on
+	// the day, which would count as lost.
 	synced = chrony.Tracking{
-		Address: "3.220.42.39", Stratum: 3, RefTime: time.Date(2026, 9, 24, 22, 2, 50, 868255935, time.UTC),
+		Address: "3.220.42.39", Stratum: 3, RefTime: time.Now().Add(-40 * time.Second),
 		Offset: -0.003059836, RootDelay: 0.049001947, RootDispersion: 0.019441204, Leap: "Normal",
 	}
 	unsynchronised = chrony.Tracking{Leap: "Not synchronised"}
@@ -277,5 +278,36 @@ func TestOverviewWarnsAboutAnUnsynchronisedClock(t *testing.T) {
 	daemon.SetTracking(synced)
 	if w := warning(getOverview(t, srv), "clock-unsynchronised"); w != nil {
 		t.Errorf("a synchronised clock warned: %+v", w)
+	}
+}
+
+// chronyd goes on calling the clock synchronised after every source has
+// stopped answering, and once the local directive has it answer from its
+// own clock it calls that synchronised too.
+func TestOverviewWarnsWhenEverySourceIsLost(t *testing.T) {
+	t.Parallel()
+	unit := &ntpUnit{installed: true, active: true, since: time.Now().Add(-48 * time.Hour)}
+	daemon := chronyd(t)
+	lost := synced
+	lost.RefTime = time.Now().Add(-lostAfter - time.Minute)
+	daemon.SetTracking(lost)
+	srv := newNTPServer(t, unit, daemon)
+	w := warning(getOverview(t, srv), "clock-unsynchronised")
+	if w == nil || !strings.Contains(w.Detail, "udp/123") || strings.Contains(w.Detail, "own clock") {
+		t.Errorf("warning with the last correction over %v old = %+v", lostAfter, w)
+	}
+	// The page says when a source last set the clock, and names none.
+	if st := getNTPStatus(t, srv); st.Synchronised || st.Reference != "" || st.LastUpdate == nil {
+		t.Errorf("status = %+v", st)
+	}
+
+	daemon.SetTracking(chrony.Tracking{Local: true, Stratum: 10, RefTime: time.Now(), Leap: "Normal"})
+	w = warning(getOverview(t, srv), "clock-unsynchronised")
+	if w == nil || !strings.Contains(w.Detail, "own clock") {
+		t.Errorf("warning on its own clock = %+v", w)
+	}
+	// Its own clock is stamped with the time of asking, which is no update.
+	if st := getNTPStatus(t, srv); st.Synchronised || st.LastUpdate != nil || st.Stratum != 10 {
+		t.Errorf("status on its own clock = %+v", st)
 	}
 }
