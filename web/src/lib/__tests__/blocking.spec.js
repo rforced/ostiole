@@ -22,6 +22,34 @@ function router(blocking = {}) {
 }
 
 describe('protectedNames', () => {
+  // The router answers a site's names itself; TestNeverBlockedCoversProxySiteNames in Go.
+  it("covers a proxy site's names while the proxy and DNS share an interface", () => {
+    const cfg = router()
+    cfg.services.dns.enabled = true
+    cfg.zones = [{ name: 'lan' }, { name: 'wan', external: true }]
+    cfg.interfaces = [
+      { name: 'eth1', zone: 'lan', enabled: true },
+      { name: 'eth0', zone: 'wan', enabled: true },
+    ]
+    cfg.services.proxy = {
+      enabled: true,
+      zones: ['lan', 'wan'],
+      sites: [
+        { enabled: true, hosts: ['watch.lan', 'Watch.Example.com', '*.example.org', 'media'] },
+        { enabled: false, hosts: ['old.example.com'] },
+      ],
+    }
+    const got = protectedNames(cfg)
+    for (const want of ['watch.lan', 'watch', 'watch.example.com', 'media.lan', 'media']) {
+      expect(got, want).toContain(want)
+    }
+    expect(got).not.toContain('old.example.com')
+    expect(got).not.toContain('*.example.org')
+
+    cfg.services.proxy.zones = ['wan']
+    expect(protectedNames(cfg)).not.toContain('watch.example.com')
+  })
+
   it('matches the names Go never blocks', () => {
     const got = protectedNames(router())
     for (const want of [

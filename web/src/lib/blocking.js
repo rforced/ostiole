@@ -1,3 +1,5 @@
+import { internalInterfaces } from '@/lib/interfaces'
+
 /** What a blocking lookup comes to, in one sentence. */
 
 /**
@@ -91,8 +93,46 @@ export function protectedNames(cfg) {
     }
   }
   for (const l of cfg?.services?.dhcp?.staticLeases ?? []) addBoth(l.hostname)
+  for (const name of proxyNames(cfg)) add(name)
   for (const d of dns.domainOverrides ?? []) add(d.domain)
   return [...out]
+}
+
+/**
+ * The names the router answers for the reverse proxy's sites, while the
+ * proxy and the DNS service are on and share an interface: each host but
+ * a wildcard, and bare too when it is one label under the local domain.
+ * Config.ProxyNames in Go.
+ *
+ * @param {object | null} cfg
+ * @returns {string[]}
+ */
+function proxyNames(cfg) {
+  const proxy = cfg?.services?.proxy
+  const dns = cfg?.services?.dns ?? {}
+  if (!proxy?.enabled || !dns.enabled) return []
+  const named = dns.interfaces ?? []
+  const listening = named.length
+    ? (cfg.interfaces ?? []).filter((i) => i.enabled && named.includes(i.name))
+    : internalInterfaces(cfg)
+  const zones = new Set(proxy.zones ?? [])
+  if (!listening.some((i) => zones.has(i.zone))) return []
+  const domain = normalizeName(dns.domain)
+  const out = []
+  for (const site of proxy.sites ?? []) {
+    if (!site.enabled) continue
+    for (const host of (site.hosts ?? []).map(normalizeName)) {
+      if (!host || host.startsWith('*.')) continue
+      const label = !host.includes('.')
+        ? host
+        : domain && host.endsWith(`.${domain}`)
+          ? host.slice(0, -domain.length - 1)
+          : ''
+      if (label && !label.includes('.') && domain) out.push(`${label}.${domain}`, label)
+      else out.push(host)
+    }
+  }
+  return out
 }
 
 /**

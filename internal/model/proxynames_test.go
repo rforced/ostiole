@@ -111,3 +111,17 @@ func TestValidateNamesAProxySiteAnswers(t *testing.T) {
 		t.Errorf("an override for a site served only outside was refused: %v", err)
 	}
 }
+
+// The router answers a site's names itself, so no list blocks them.
+func TestNeverBlockedCoversProxySiteNames(t *testing.T) {
+	t.Parallel()
+	got := proxyOnLAN().NeverBlocked()
+	for _, want := range []string{"watch.lan", "watch", "watch.example.com", "media.lan", "media"} {
+		if !slices.Contains(got, want) {
+			t.Errorf("%q is not protected; have %v", want, got)
+		}
+	}
+	if slices.Contains(got, "old.example.com") {
+		t.Errorf("a switched-off site's name is protected: %v", got)
+	}
+}

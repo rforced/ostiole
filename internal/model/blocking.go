@@ -201,6 +201,11 @@ func (c *Config) NeverBlocked() []string {
 	for _, l := range c.Services.DHCP.StaticLeases {
 		addBoth(l.Hostname)
 	}
+	for _, pn := range c.ProxyNames() {
+		for _, n := range pn.Names() {
+			add(n)
+		}
+	}
 	return out
 }
 
