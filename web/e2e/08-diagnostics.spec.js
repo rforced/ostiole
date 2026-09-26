@@ -76,7 +76,7 @@ test('the connections and neighbour pages explain themselves, and the filter emp
   const neigh = page.getByRole('main')
   await expect(neigh).toContainText(/ of \d+/)
   await page.getByPlaceholder('address, MAC, or interface').fill('zzz-nothing')
-  await expect(neigh).toContainText('No neighbours.')
+  await expect(neigh).toContainText('Nothing matches "zzz-nothing".')
   await page.screenshot({ path: shot('46-neighbours'), fullPage: true })
 })
 
