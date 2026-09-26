@@ -120,7 +120,11 @@ function save() {
         </FormField>
       </div>
 
-      <FormField id="site-hosts" label="Hostnames" hint="One per line. *.example.com is allowed.">
+      <FormField
+        id="site-hosts"
+        label="Hostnames"
+        hint="One per line. *.example.com is allowed. The rest resolve to this router where the proxy listens."
+      >
         <textarea
           id="site-hosts"
           v-model="form.hosts"

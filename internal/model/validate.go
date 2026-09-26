@@ -847,6 +847,12 @@ func (v *validator) services(c *Config, ifaces, zones map[string]bool) {
 		names[key] = true
 	}
 	leased := leasedNames(c.Services.DHCP.StaticLeases, local)
+	proxied := map[string]string{}
+	for _, pn := range c.ProxyNames() {
+		for _, name := range pn.Names() {
+			proxied[name] = pn.Site
+		}
+	}
 	for i, h := range dns.HostOverrides {
 		path := fmt.Sprintf("services.dns.hostOverrides[%d]", i)
 		v.hostLabel(path+".hostname", h.Hostname)
@@ -855,15 +861,27 @@ func (v *validator) services(c *Config, ifaces, zones map[string]bool) {
 		}
 		claim(path+".hostname", h.FQDN(local))
 		v.sharedWithLease(path+".hostname", HostOverride{Hostname: h.Hostname, Domain: h.Domain, IP: h.IP}, local, leased)
+		v.sharedWithSite(path+".hostname", HostOverride{Hostname: h.Hostname, Domain: h.Domain}.Names(local), proxied)
 		for j, a := range h.Aliases {
 			p := fmt.Sprintf("%s.aliases[%d]", path, j)
 			v.hostLabel(p, a)
 			claim(p, HostOverride{Hostname: a, Domain: h.Domain}.FQDN(local))
 			v.sharedWithLease(p, HostOverride{Hostname: a, Domain: h.Domain, IP: h.IP}, local, leased)
+			v.sharedWithSite(p, HostOverride{Hostname: a, Domain: h.Domain}.Names(local), proxied)
 		}
 		if _, err := ParseIP(h.IP); err != nil {
 			v.add(path+".ip", "%v", err)
 		}
+	}
+	for i, l := range c.Services.DHCP.StaticLeases {
+		if l.Hostname == "" {
+			continue
+		}
+		names := []string{l.Hostname}
+		if local != "" && !strings.Contains(l.Hostname, ".") {
+			names = append(names, l.Hostname+"."+local)
+		}
+		v.sharedWithSite(fmt.Sprintf("services.dhcp.staticLeases[%d].hostname", i), names, proxied)
 	}
 	domains := map[string]bool{}
 	for i, d := range dns.DomainOverrides {
@@ -924,6 +942,17 @@ func (v *validator) sharedWithLease(path string, o HostOverride, local string, l
 				v.add(path, "%q is also the static lease name for %s at %s, so the name would answer both addresses", o.Hostname, l.MAC, at)
 				return
 			}
+		}
+	}
+}
+
+// sharedWithSite refuses a name the router already answers for a proxy
+// site, with its own address: the other answer would never be heard.
+func (v *validator) sharedWithSite(path string, names []string, proxied map[string]string) {
+	for _, name := range names {
+		if site, ok := proxied[strings.ToLower(name)]; ok {
+			v.add(path, "%q is a name of reverse proxy site %q, which this router answers with its own address", name, site)
+			return
 		}
 	}
 }

@@ -3,6 +3,7 @@ package model
 import (
 	"slices"
 	"sort"
+	"strings"
 )
 
 // Proxy publishes what is behind the router. Sites are hostnames served
@@ -300,4 +301,78 @@ func (p Proxy) Certificates() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// ProxyName is a name the router answers for an enabled site, with its
+// own addresses on Interfaces: those that carry the proxy and get their
+// DNS from this router.
+type ProxyName struct {
+	Name string `json:"name"`
+	// Bare is the label alone, answered as well when Name is one label
+	// under the local domain, as a host override's is.
+	Bare       string   `json:"bare,omitempty"`
+	Site       string   `json:"site"`
+	Interfaces []string `json:"interfaces"`
+}
+
+// Names is the name in full and, when it has one, bare.
+func (p ProxyName) Names() []string {
+	if p.Bare == "" {
+		return []string{p.Name}
+	}
+	return []string{p.Name, p.Bare}
+}
+
+// ProxyNames lists the names the DNS service answers for the reverse
+// proxy, site by site, while both are on and share an interface. Wildcards
+// are left out: they name no one host.
+func (c *Config) ProxyNames() []ProxyName {
+	if !c.ProxyEnabled() || !c.Services.DNS.Enabled {
+		return nil
+	}
+	dns := c.InsideInterfaces(c.Services.DNS.Interfaces)
+	var ifaces []string
+	for _, z := range c.Services.Proxy.ProxyZones(c) {
+		for _, name := range c.ZoneInterfaces(z) {
+			if slices.Contains(dns, name) && !slices.Contains(ifaces, name) {
+				ifaces = append(ifaces, name)
+			}
+		}
+	}
+	if len(ifaces) == 0 {
+		return nil
+	}
+	local := NormalizeDomain(c.Services.DNS.Domain)
+	var out []ProxyName
+	for _, s := range c.Services.Proxy.Sites {
+		if !s.Enabled {
+			continue
+		}
+		for _, h := range s.Hosts {
+			if strings.HasPrefix(h, "*.") {
+				continue
+			}
+			name, bare := siteName(h, local)
+			out = append(out, ProxyName{Name: name, Bare: bare, Site: s.ID, Interfaces: ifaces})
+		}
+	}
+	return out
+}
+
+// siteName is the name a site host answers in full, and the label it
+// answers alone as well when it has no domain or is one label under the
+// local one.
+func siteName(host, local string) (name, bare string) {
+	host = NormalizeDomain(host)
+	switch {
+	case !strings.Contains(host, "."):
+		if local != "" {
+			return host + "." + local, host
+		}
+	case local != "" && strings.HasSuffix(host, "."+local):
+		if label := strings.TrimSuffix(host, "."+local); !strings.Contains(label, ".") {
+			return host, label
+		}
+	}
+	return host, ""
 }

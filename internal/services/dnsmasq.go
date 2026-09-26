@@ -198,6 +198,20 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 		if svc.DNS.Domain != "" {
 			fmt.Fprintf(&b, "domain=%s\nlocal=/%s/\nexpand-hosts\n", svc.DNS.Domain, svc.DNS.Domain)
 		}
+		// A proxy site's names answer with this router's own addresses on
+		// the interface, both families, a moving IPv6 prefix included. A
+		// hosts line would answer one family and pass the other upstream,
+		// where a public name has an address of its own. localise-queries
+		// narrows only an A answer asked over IPv4 to the asker's network,
+		// but any of the router's addresses reaches the proxy, whose rule
+		// takes them all.
+		for _, pn := range cfg.ProxyNames() {
+			for _, name := range pn.Names() {
+				for _, iface := range pn.Interfaces {
+					fmt.Fprintf(&b, "interface-name=%s,%s\n", name, iface)
+				}
+			}
+		}
 		// The blocklist lives in its own file, written from the cache
 		// rather than from the model. The include is named whenever DNS is
 		// answering, empty or not, so turning blocking on and off does not

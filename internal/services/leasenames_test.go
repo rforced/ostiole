@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
 )
 
@@ -220,5 +221,38 @@ func TestStrippedLeasesReadsIPv6PrefixesFromTheLinks(t *testing.T) {
 	want := "duid 00:01\n1790471918 1234 2001:db8:1::150 phone 00:01:aa\n1790471918 5678 2001:db8:9::150 * 00:01:bb\n"
 	if string(got) != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// A proxy site's names answer with the router's own addresses on each
+// interface that carries the proxy and gets DNS from the router.
+func TestRenderAnswersProxySiteNames(t *testing.T) {
+	t.Parallel()
+	cfg := model.Starter(model.StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0", Services: true})
+	cfg.System.Management.WebPort = 8443
+	cfg.Services.Proxy = model.Proxy{
+		Enabled: true,
+		Zones:   []string{"lan", "wan"},
+		Pools:   []model.ProxyPool{{ID: "media", Upstreams: []model.ProxyUpstream{{Address: "192.168.1.11:8096"}}}},
+		Sites: []model.ProxySite{{ID: "watch", Enabled: true, Pool: "media",
+			Hosts: []string{"watch.lan", "watch.example.com", "*.example.org"}}},
+	}
+	files, err := (&Dnsmasq{}).Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, line := range strings.Split(files[confName], "\n") {
+		if strings.HasPrefix(line, "interface-name=") {
+			got = append(got, line)
+		}
+	}
+	want := []string{
+		"interface-name=watch.lan,eth1",
+		"interface-name=watch,eth1",
+		"interface-name=watch.example.com,eth1",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("interface-name lines = %v, want %v", got, want)
 	}
 }
