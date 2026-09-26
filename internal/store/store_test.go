@@ -1,6 +1,10 @@
 package store
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -118,6 +122,57 @@ func TestLoadRulesetRefusesOneSavedWithAnotherConfiguration(t *testing.T) {
 	}
 	if rs, err := s.LoadRuleset(); err != nil || rs != "table inet ostiole {}\n" {
 		t.Errorf("LoadRuleset of the bootstrap = %q, %v", rs, err)
+	}
+}
+
+// A file the release before saved loads as the current version and is left
+// as it was: the next save writes the new one, so until then the saved
+// ruleset still matches it and a binary put back can still read it.
+func TestLoadBringsAnOlderFileUpToDate(t *testing.T) {
+	t.Parallel()
+	s := New(t.TempDir())
+	if err := s.Init(); err != nil {
+		t.Fatal(err)
+	}
+	cfg := starter("gateway")
+	cfg.Services.DNS.Resolver = model.ResolverRecursive
+	raw, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw = bytes.Replace(raw, []byte(`"version": 7`), []byte(`"version": 6`), 1)
+	raw = bytes.Replace(raw, []byte(`"resolver": "recursive"`), []byte(`"resolver": "validate"`), 1)
+	sum := sha256.Sum256(raw)
+	for name, data := range map[string][]byte{
+		ConfigFile: raw,
+		filepath.Join(RevisionsDir, "older.json"): raw,
+		RulesetFile: []byte(rulesetNote + hex.EncodeToString(sum[:]) + "\nruleset\n"),
+	} {
+		if err := os.WriteFile(filepath.Join(s.Dir, name), data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for name, load := range map[string]func() (*model.Config, error){
+		"config":   s.Load,
+		"revision": func() (*model.Config, error) { return s.LoadRevision("older") },
+	} {
+		got, err := load()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if got.Version != model.SchemaVersion || got.Services.DNS.Resolver != model.ResolverRecursive {
+			t.Errorf("%s: version %d, resolver %q; want %d, recursive", name, got.Version, got.Services.DNS.Resolver, model.SchemaVersion)
+		}
+		if err := got.Validate(); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if onDisk, _ := os.ReadFile(filepath.Join(s.Dir, ConfigFile)); !bytes.Equal(onDisk, raw) {
+		t.Error("loading rewrote the file")
+	}
+	if rs, err := s.LoadRuleset(); err != nil || rs != "ruleset\n" {
+		t.Errorf("LoadRuleset = %q, %v; want the ruleset saved with the file", rs, err)
 	}
 }
 

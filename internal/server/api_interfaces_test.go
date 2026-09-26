@@ -57,7 +57,7 @@ func newRenewServer(t *testing.T) (*httptest.Server, *renewingNet) {
 func TestRenewLease(t *testing.T) {
 	t.Parallel()
 	srv, net := newRenewServer(t)
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: starter()}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(starter())}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 	cases := []struct {
@@ -86,7 +86,7 @@ func TestRenewLease(t *testing.T) {
 func TestRenewLeaseWithoutANetworkBackend(t *testing.T) {
 	t.Parallel()
 	srv, _ := newTestServer(t)
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: starter()}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(starter())}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/interfaces/eth0/renew", nil); resp.StatusCode != http.StatusServiceUnavailable {

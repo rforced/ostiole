@@ -131,19 +131,30 @@ func (a *Archive) Encrypted() bool { return a.passphrase != "" }
 // Parse reads a backup file and checks that the configuration inside it is
 // valid, so a restore cannot leave a draft that can never be applied.
 func Parse(raw []byte) (*Archive, error) {
-	var a Archive
-	if err := json.Unmarshal(raw, &a); err != nil {
+	// The configuration is read on its own, so one an older Ostiole wrote
+	// is brought up to date and restores like one saved today.
+	var file struct {
+		Archive
+		Config json.RawMessage `json:"config"`
+	}
+	if err := json.Unmarshal(raw, &file); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrNotABackup, err)
 	}
+	a := file.Archive
 	if a.Kind != Kind {
 		return nil, ErrNotABackup
 	}
 	if a.Version > Version {
 		return nil, ErrUnknownVersion
 	}
-	if a.Config == nil {
+	if len(file.Config) == 0 || string(file.Config) == "null" {
 		return nil, ErrNoConfig
 	}
+	cfg, err := model.ParseConfig(file.Config)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrNotABackup, err)
+	}
+	a.Config = cfg
 	// A redacted backup is invalid by design: the secrets were taken out
 	// so the file could be shared. It loads as a draft and validation is
 	// what names each one that has to be typed back in.

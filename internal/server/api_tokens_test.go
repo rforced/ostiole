@@ -216,7 +216,7 @@ func TestViewerReadsTheConfigurationWithoutSecrets(t *testing.T) {
 	}
 	// Twice, so the first is in the history too.
 	for range 2 {
-		if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: cfg}); resp.StatusCode != http.StatusOK {
+		if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 			t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 		}
 	}
@@ -271,13 +271,13 @@ func TestOperatorCannotTakeWhatIsTheAdministrators(t *testing.T) {
 	}
 	cfg := starter()
 	cfg.Crons = []model.Cron{{ID: "hook", Enabled: true, Schedule: "0 5 * * *", Kind: model.CronCommand, Command: "/usr/local/bin/hook"}}
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: cfg}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("admin apply: %d %s", resp.StatusCode, raw)
 	}
 
 	mine := clone(cfg)
 	mine.Rules = append(mine.Rules, model.Rule{ID: "extra", Enabled: true, Zone: "lan", Action: model.ActionAccept, Protocol: model.ProtocolAny})
-	if resp, raw := sendAs(t, srv, "/api/v1/apply", operator, applyRequest{Config: mine}); resp.StatusCode != http.StatusOK {
+	if resp, raw := sendAs(t, srv, "/api/v1/apply", operator, applyRequest{Config: (*draftConfig)(mine)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("operator's own change: %d %s", resp.StatusCode, raw)
 	}
 	for name, change := range map[string]func(*model.Config){
@@ -294,8 +294,8 @@ func TestOperatorCannotTakeWhatIsTheAdministrators(t *testing.T) {
 		next := clone(mine)
 		change(next)
 		for path, body := range map[string]any{
-			"/api/v1/check": configRequest{Config: next},
-			"/api/v1/apply": applyRequest{Config: next},
+			"/api/v1/check": configRequest{Config: (*draftConfig)(next)},
+			"/api/v1/apply": applyRequest{Config: (*draftConfig)(next)},
 		} {
 			resp, raw := sendAs(t, srv, path, operator, body)
 			if resp.StatusCode != http.StatusForbidden || !strings.Contains(string(raw), "only an administrator") {

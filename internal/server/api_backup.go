@@ -235,10 +235,10 @@ const maxBackupBytes = 8 << 20
 // word "current" for the saved configuration, or an inline configuration
 // for a draft that has not been applied.
 type diffRequest struct {
-	From       string        `json:"from,omitempty"`
-	To         string        `json:"to,omitempty"`
-	FromConfig *model.Config `json:"fromConfig,omitempty"`
-	ToConfig   *model.Config `json:"toConfig,omitempty"`
+	From       string       `json:"from,omitempty"`
+	To         string       `json:"to,omitempty"`
+	FromConfig *draftConfig `json:"fromConfig,omitempty"`
+	ToConfig   *draftConfig `json:"toConfig,omitempty"`
 }
 
 func (a *api) diffConfigs(w http.ResponseWriter, r *http.Request) error {
@@ -246,11 +246,11 @@ func (a *api) diffConfigs(w http.ResponseWriter, r *http.Request) error {
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}
-	from, err := a.configSide(r, req.From, req.FromConfig)
+	from, err := a.configSide(r, req.From, req.FromConfig.config())
 	if err != nil {
 		return err
 	}
-	to, err := a.configSide(r, req.To, req.ToConfig)
+	to, err := a.configSide(r, req.To, req.ToConfig.config())
 	if err != nil {
 		return err
 	}

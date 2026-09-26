@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -129,6 +130,31 @@ func TestParseRejectsAnInvalidConfiguration(t *testing.T) {
 	}
 	if _, err := Parse(raw); err == nil || !strings.Contains(err.Error(), "not valid") {
 		t.Errorf("err = %v, want the validation to be reported", err)
+	}
+}
+
+// A backup an older release took restores like one taken today.
+func TestParseBringsAnOlderConfigurationUpToDate(t *testing.T) {
+	t.Parallel()
+	c := cfg()
+	c.Services.DNS.Resolver = model.ResolverRecursive
+	a, err := Create(c, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw = bytes.Replace(raw, []byte(`"version":7`), []byte(`"version":6`), 1)
+	raw = bytes.Replace(raw, []byte(`"resolver":"recursive"`), []byte(`"resolver":"validate"`), 1)
+	got, err := Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Config.Version != model.SchemaVersion || got.Config.Services.DNS.Resolver != model.ResolverRecursive {
+		t.Errorf("config version %d, resolver %q; want %d, recursive",
+			got.Config.Version, got.Config.Services.DNS.Resolver, model.SchemaVersion)
 	}
 }
 

@@ -303,9 +303,9 @@ func readConfig(path string) (*model.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	var cfg model.Config
-	if err := json.Unmarshal(raw, &cfg); err != nil {
+	cfg, err := model.ParseConfig(raw)
+	if err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
-	return &cfg, nil
+	return cfg, nil
 }

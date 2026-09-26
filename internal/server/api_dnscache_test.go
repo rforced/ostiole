@@ -58,7 +58,7 @@ func dnsCacheServer(t *testing.T, cfg *model.Config) (*httptest.Server, *unitCmd
 		d.Services = &services.Dnsmasq{Cmd: dc}
 		d.Resolver = &services.Unbound{Cmd: uc}
 	})
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: cfg}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 	return srv, dc, uc
@@ -137,7 +137,7 @@ func TestClearDNSCacheNeedsTheUnit(t *testing.T) {
 	}
 
 	noRoot := newTestServerWith(t, func(*Deps) {})
-	if resp, raw := do(t, noRoot, http.MethodPost, "/api/v1/apply", applyRequest{Config: cfg}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, noRoot, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 	if resp, _ := clearCache(t, noRoot); resp.StatusCode != http.StatusServiceUnavailable {

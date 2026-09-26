@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -764,7 +765,7 @@ func (a *api) systemHosts(w http.ResponseWriter, r *http.Request) error {
 	if req.Config == nil {
 		return &badRequest{errors.New("config is required")}
 	}
-	writeJSON(w, http.StatusOK, services.SystemHosts(req.Config))
+	writeJSON(w, http.StatusOK, services.SystemHosts(req.Config.config()))
 	return nil
 }
 
@@ -779,7 +780,7 @@ func (a *api) systemRules(w http.ResponseWriter, r *http.Request) error {
 	if req.Config == nil {
 		return &badRequest{errors.New("config is required")}
 	}
-	rows, err := a.engine.SystemRules(req.Config)
+	rows, err := a.engine.SystemRules(req.Config.config())
 	if err != nil {
 		return err
 	}
@@ -801,7 +802,7 @@ func (a *api) systemNAT(w http.ResponseWriter, r *http.Request) error {
 	if req.Config == nil {
 		return &badRequest{errors.New("config is required")}
 	}
-	rows, err := a.engine.SystemNAT(req.Config)
+	rows, err := a.engine.SystemNAT(req.Config.config())
 	if err != nil {
 		return err
 	}
@@ -899,12 +900,27 @@ func uiPort(r *http.Request) uint16 {
 	return uint16(n)
 }
 
+// draftConfig is a configuration in a request body. It is brought up to
+// date before it is decoded, since the page that sent it may have been
+// open across an update, and decoded as strictly as the rest of the body.
+type draftConfig model.Config
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (d *draftConfig) UnmarshalJSON(raw []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(model.Migrate(raw)))
+	dec.DisallowUnknownFields()
+	return dec.Decode((*model.Config)(d))
+}
+
+// config is the configuration itself, nil when the body carried none.
+func (d *draftConfig) config() *model.Config { return (*model.Config)(d) }
+
 type configRequest struct {
-	Config *model.Config `json:"config"`
+	Config *draftConfig `json:"config"`
 }
 
 type applyRequest struct {
-	Config *model.Config `json:"config"`
+	Config *draftConfig `json:"config"`
 	// ConfirmTimeoutSeconds of zero commits immediately.
 	ConfirmTimeoutSeconds int `json:"confirmTimeoutSeconds"`
 }
@@ -917,10 +933,10 @@ func (a *api) check(w http.ResponseWriter, r *http.Request) error {
 	if req.Config == nil {
 		return &badRequest{errors.New("config is required")}
 	}
-	if err := a.mayChange(r, req.Config); err != nil {
+	if err := a.mayChange(r, req.Config.config()); err != nil {
 		return err
 	}
-	plan, err := a.engine.Check(r.Context(), req.Config)
+	plan, err := a.engine.Check(r.Context(), req.Config.config())
 	if err != nil {
 		return err
 	}
@@ -958,10 +974,10 @@ func (a *api) apply(w http.ResponseWriter, r *http.Request) error {
 	if req.ConfirmTimeoutSeconds < 0 || req.ConfirmTimeoutSeconds > 3600 {
 		return &badRequest{errors.New("confirmTimeoutSeconds must be 0-3600")}
 	}
-	if err := a.mayChange(r, req.Config); err != nil {
+	if err := a.mayChange(r, req.Config.config()); err != nil {
 		return err
 	}
-	res, err := a.engine.Apply(r.Context(), req.Config, engine.ApplyOptions{
+	res, err := a.engine.Apply(r.Context(), req.Config.config(), engine.ApplyOptions{
 		ConfirmTimeout: time.Duration(req.ConfirmTimeoutSeconds) * time.Second,
 	})
 	if err != nil {

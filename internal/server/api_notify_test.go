@@ -252,7 +252,7 @@ func TestTheDashboardSaysANoticeFailed(t *testing.T) {
 	})
 	cfg := notifying()
 	cfg.Notifications.Webhook = model.NotifyWebhook{Enabled: true, URL: "https://hooks.example.net/x"}
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: cfg}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 	ctx := t.Context()

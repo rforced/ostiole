@@ -319,7 +319,7 @@ func TestApplyImmediateFlow(t *testing.T) {
 		t.Fatalf("config before apply: %d, want 404", resp.StatusCode)
 	}
 
-	resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: starter()})
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(starter())})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
@@ -356,16 +356,16 @@ func TestApplyImmediateFlow(t *testing.T) {
 func TestApplyConfirmAndRevertFlow(t *testing.T) {
 	t.Parallel()
 	srv, fake := newTestServer(t)
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: starter()}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(starter())}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("first apply: %d %s", resp.StatusCode, raw)
 	}
 	second := starter()
 	second.System.Hostname = "second"
-	resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: second, ConfirmTimeoutSeconds: 60})
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(second), ConfirmTimeoutSeconds: 60})
 	if resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), `"pending":true`) {
 		t.Fatalf("pending apply: %d %s", resp.StatusCode, raw)
 	}
-	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: second}); resp.StatusCode != http.StatusConflict {
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(second)}); resp.StatusCode != http.StatusConflict {
 		t.Errorf("apply while pending: %d, want 409", resp.StatusCode)
 	}
 	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply/confirm", nil); resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), `"archived"`) {
@@ -386,7 +386,7 @@ func TestApplyConfirmAndRevertFlow(t *testing.T) {
 
 	third := starter()
 	third.System.Hostname = "third"
-	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: third, ConfirmTimeoutSeconds: 60}); resp.StatusCode != http.StatusOK {
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(third), ConfirmTimeoutSeconds: 60}); resp.StatusCode != http.StatusOK {
 		t.Fatal("third apply")
 	}
 	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/apply/revert", nil); resp.StatusCode != http.StatusNoContent {
@@ -405,7 +405,7 @@ func TestApplyValidationAndBadRequests(t *testing.T) {
 	t.Parallel()
 	srv, _ := newTestServer(t)
 
-	resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: &model.Config{Version: model.SchemaVersion}})
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(&model.Config{Version: model.SchemaVersion})})
 	if resp.StatusCode != http.StatusUnprocessableEntity {
 		t.Fatalf("invalid config: %d %s", resp.StatusCode, raw)
 	}
@@ -427,9 +427,33 @@ func TestApplyValidationAndBadRequests(t *testing.T) {
 		}
 	}
 
-	resp, raw = do(t, srv, http.MethodPost, "/api/v1/check", configRequest{Config: starter()})
+	resp, raw = do(t, srv, http.MethodPost, "/api/v1/check", configRequest{Config: (*draftConfig)(starter())})
 	if resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), "table inet ostiole") {
 		t.Fatalf("check: %d %s", resp.StatusCode, raw)
+	}
+}
+
+// A page left open across an update sends its draft in the shape the
+// release before wrote. It is brought up to date rather than refused, and
+// a field no version knows is refused as before.
+func TestCheckTakesADraftFromBeforeAnUpdate(t *testing.T) {
+	t.Parallel()
+	srv, _ := newTestServer(t)
+	cfg := starter()
+	cfg.Services.DNS.Resolver = model.ResolverRecursive
+	body, err := json.Marshal(configRequest{Config: (*draftConfig)(cfg)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body = bytes.Replace(body, []byte(`"version":7`), []byte(`"version":6`), 1)
+	body = bytes.Replace(body, []byte(`"resolver":"recursive"`), []byte(`"resolver":"validate"`), 1)
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/check", json.RawMessage(body)); resp.StatusCode != http.StatusOK {
+		t.Fatalf("check an older draft: %d %s", resp.StatusCode, raw)
+	}
+
+	body = bytes.Replace(body, []byte(`"version":6`), []byte(`"version":6,"surplus":true`), 1)
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/check", json.RawMessage(body)); resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(raw), "surplus") {
+		t.Errorf("check with an unknown field: %d %s, want 400 naming it", resp.StatusCode, raw)
 	}
 }
 
@@ -444,7 +468,7 @@ func TestSystemRules(t *testing.T) {
 		t.Fatalf("no config: %d %s", resp.StatusCode, raw)
 	}
 
-	resp, raw = do(t, srv, http.MethodPost, "/api/v1/rules/system", configRequest{Config: starter()})
+	resp, raw = do(t, srv, http.MethodPost, "/api/v1/rules/system", configRequest{Config: (*draftConfig)(starter())})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("system rules: %d %s", resp.StatusCode, raw)
 	}
@@ -478,7 +502,7 @@ func TestSystemNAT(t *testing.T) {
 	}
 
 	cfg := starter()
-	resp, raw = do(t, srv, http.MethodPost, "/api/v1/nat/system", configRequest{Config: cfg})
+	resp, raw = do(t, srv, http.MethodPost, "/api/v1/nat/system", configRequest{Config: (*draftConfig)(cfg)})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("automatic: %d %s", resp.StatusCode, raw)
 	}
@@ -492,7 +516,7 @@ func TestSystemNAT(t *testing.T) {
 
 	// Manual writes nothing of its own, and says so with a list, not null.
 	cfg.NAT.Outbound.Mode = model.OutboundManual
-	resp, raw = do(t, srv, http.MethodPost, "/api/v1/nat/system", configRequest{Config: cfg})
+	resp, raw = do(t, srv, http.MethodPost, "/api/v1/nat/system", configRequest{Config: (*draftConfig)(cfg)})
 	if resp.StatusCode != http.StatusOK || strings.TrimSpace(string(raw)) != "[]" {
 		t.Errorf("manual: %d %s", resp.StatusCode, raw)
 	}

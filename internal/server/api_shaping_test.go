@@ -127,7 +127,7 @@ func TestOverviewWarnsWhenTCIsMissing(t *testing.T) {
 			cfg.Interfaces[i].Shaping = &model.Shaping{Download: 200_000_000}
 		}
 	}
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: cfg}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 	ov := getOverview(t, srv)

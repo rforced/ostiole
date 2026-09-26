@@ -143,7 +143,7 @@ func TestInspectKeepsAnOperatorToPublicAddresses(t *testing.T) {
 	login(t, srv, "admin")
 	cfg := starter()
 	cfg.Aliases = []model.Alias{{Name: "cloud", Type: model.AliasHosts, URL: source}}
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: cfg}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 	login(t, srv, "hand")
@@ -167,14 +167,14 @@ func TestApplyAndRevertWakeTheRefresher(t *testing.T) {
 		}
 	}
 
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: starter()}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(starter())}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 	wait("the first apply")
 
 	cfg := starter()
 	cfg.Aliases = []model.Alias{{Name: "cloud", Type: model.AliasHosts, URL: lists.URL + "/ranges.json", Select: []string{"region=b"}}}
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: cfg, ConfirmTimeoutSeconds: 60}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg), ConfirmTimeoutSeconds: 60}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply with the alias: %d %s", resp.StatusCode, raw)
 	}
 	wait("the alias was added")

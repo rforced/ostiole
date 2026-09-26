@@ -58,7 +58,7 @@ func TestWake(t *testing.T) {
 	cfg := starter()
 	cfg.Interfaces = append(cfg.Interfaces,
 		model.Interface{Name: "eth2", Zone: "lan", IPv4: model.IPv4{Mode: model.AddrNone}, IPv6: model.IPv6{Mode: model.AddrNone}})
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: cfg}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 
@@ -151,7 +151,7 @@ func TestLeasesNameTheirInterface(t *testing.T) {
 	if got := read(); got["10.0.0.20"] != "" {
 		t.Errorf("named an interface before anything was applied: %v", got)
 	}
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: starter()}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(starter())}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 	got := read()

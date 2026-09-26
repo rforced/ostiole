@@ -19,8 +19,9 @@ import (
 // into "checkSchedule" and "installSchedule"; version 5 added
 // "sshPasswords"; version 6 moved "journalMaxUseGB" under "logging" as
 // "maxUseGB"; version 7 renamed the DNS resolver "validate" to
-// "recursive". An older file needs each changed by hand before this build
-// will load it.
+// "recursive". A bump adds a step to migrations, which brings a file from
+// version 6 on up to date as it is read; an older one needs each change
+// made by hand.
 const SchemaVersion = 7
 
 // Action is a rule verdict.
