@@ -85,6 +85,52 @@ describe('ResolverTab', () => {
     expect(wrapper.text()).toContain('Only the servers below see every lookup.')
   })
 
+  // Picking DNS over TLS with no servers starts from Quad9, the provider a
+  // new router forwards to, over IPv4 alone: a router without IPv6 would
+  // report the IPv6 servers unreachable, and nobody asked for them.
+  it('fills in Quad9 over IPv4 when DNS over TLS has no servers yet', async () => {
+    const config = useConfigStore()
+    config.draft = draft()
+    config.loaded = true
+    const wrapper = mount(ResolverTab)
+    await flushPromises()
+
+    await wrapper.find('#dns-resolver').setValue('tls')
+    expect(config.draft.services.dns.resolver).toBe('tls')
+    expect(wrapper.find('#dns-tls').element.value).toBe(
+      '9.9.9.9 dns.quad9.net\n149.112.112.112 dns.quad9.net',
+    )
+  })
+
+  // A provider button fills in whatever the resolver in use takes, both
+  // families: bare addresses to forward to, or each address with its
+  // certificate name.
+  it('fills in a provider the way the resolver takes it', async () => {
+    const config = useConfigStore()
+    config.draft = draft()
+    config.loaded = true
+    const wrapper = mount(ResolverTab)
+    await flushPromises()
+    const provider = (name) =>
+      wrapper.findAll('[aria-label="Fill in a provider"] button').find((b) => b.text() === name)
+    const cloudflare = ['1.1.1.1', '1.0.0.1', '2606:4700:4700::1111', '2606:4700:4700::1001']
+
+    await provider('Cloudflare').trigger('click')
+    expect(wrapper.find('#dns-up').element.value).toBe(cloudflare.join(', '))
+
+    await wrapper.find('#dns-resolver').setValue('tls')
+    await provider('Cloudflare').trigger('click')
+    expect(wrapper.find('#dns-tls').element.value).toBe(
+      cloudflare.map((a) => `${a} cloudflare-dns.com`).join('\n'),
+    )
+    // Forwarding keeps its own list for switching back.
+    expect(config.draft.services.dns.upstreams).toEqual(cloudflare)
+
+    // Recursive asks nobody upstream, so there is nothing to fill in.
+    await wrapper.find('#dns-resolver').setValue('recursive')
+    expect(wrapper.find('[aria-label="Fill in a provider"]').exists()).toBe(false)
+  })
+
   // The tab is a draft editor, so an action that reached for the config
   // would throw away whatever was being typed. It names what it cleared.
   it('clears the cache without touching the draft', async () => {

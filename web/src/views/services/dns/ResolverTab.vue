@@ -34,20 +34,47 @@ const domain = computed({
   },
 })
 
+/**
+ * Public resolvers a button fills in, both families. Over TLS each address
+ * goes with the name on its certificate.
+ */
+const PROVIDERS = [
+  {
+    name: 'Quad9',
+    hostname: 'dns.quad9.net',
+    v4: ['9.9.9.9', '149.112.112.112'],
+    v6: ['2620:fe::fe', '2620:fe::9'],
+  },
+  {
+    name: 'Cloudflare',
+    hostname: 'cloudflare-dns.com',
+    v4: ['1.1.1.1', '1.0.0.1'],
+    v6: ['2606:4700:4700::1111', '2606:4700:4700::1001'],
+  },
+]
+
+const tlsServers = (p, addresses) => addresses.map((address) => ({ address, hostname: p.hostname }))
+
 /** forward (dnsmasq asks upstreams), recursive, or tls (both via unbound). */
 const resolver = computed({
   get: () => dns.value.resolver ?? 'forward',
   set: (v) => {
     if (v === 'forward') delete dns.value.resolver
     else dns.value.resolver = v
+    // Unasked, only what every router can reach: Quad9 over IPv4, as a
+    // new router forwards to (model.Quad9).
     if (v === 'tls' && !(dns.value.tlsUpstreams ?? []).length) {
-      dns.value.tlsUpstreams = [
-        { address: '1.1.1.1', hostname: 'cloudflare-dns.com' },
-        { address: '9.9.9.9', hostname: 'dns.quad9.net' },
-      ]
+      dns.value.tlsUpstreams = tlsServers(PROVIDERS[0], PROVIDERS[0].v4)
     }
   },
 })
+
+/** Fills in a provider the way the resolver in use takes it, replacing what was there. */
+function fillIn(p) {
+  const addresses = [...p.v4, ...p.v6]
+  if (resolver.value === 'tls') dns.value.tlsUpstreams = tlsServers(p, addresses)
+  else dns.value.upstreams = addresses
+}
 
 /** Who can read the names looked up, which is what the choice comes down to. */
 const resolverHints = {
@@ -166,6 +193,7 @@ function toggleInterface(name, on) {
             id="dns-up"
             label="Upstream resolvers"
             hint="Comma separated. Empty: the system resolvers."
+            class="sm:col-span-2"
           >
             <input
               id="dns-up"
@@ -174,6 +202,22 @@ function toggleInterface(name, on) {
               spellcheck="false"
               placeholder="1.1.1.1, 9.9.9.9"
             />
+            <div
+              v-if="!auth.readOnly"
+              role="group"
+              aria-label="Fill in a provider"
+              class="flex flex-wrap gap-2 pt-1"
+            >
+              <button
+                v-for="p in PROVIDERS"
+                :key="p.name"
+                type="button"
+                class="btn-secondary"
+                @click="fillIn(p)"
+              >
+                {{ p.name }}
+              </button>
+            </div>
           </FormField>
           <FormField
             v-if="resolver === 'tls'"
@@ -185,11 +229,27 @@ function toggleInterface(name, on) {
             <textarea
               id="dns-tls"
               v-model="tlsUpstreams"
-              rows="3"
+              rows="4"
               class="input font-mono"
               spellcheck="false"
-              placeholder="1.1.1.1 cloudflare-dns.com"
+              placeholder="9.9.9.9 dns.quad9.net"
             ></textarea>
+            <div
+              v-if="!auth.readOnly"
+              role="group"
+              aria-label="Fill in a provider"
+              class="flex flex-wrap gap-2 pt-1"
+            >
+              <button
+                v-for="p in PROVIDERS"
+                :key="p.name"
+                type="button"
+                class="btn-secondary"
+                @click="fillIn(p)"
+              >
+                {{ p.name }}
+              </button>
+            </div>
           </FormField>
         </div>
 

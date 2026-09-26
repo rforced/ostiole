@@ -37,7 +37,13 @@ test('enable DHCP with a server and DNS with an override, then apply', async ({ 
 
   await sidebar(page, 'DNS')
   await expect(page.getByLabel('DNS enabled')).toBeChecked()
-  await page.getByLabel('Upstream resolvers').fill('1.1.1.1, 9.9.9.9')
+  // The wizard forwards to Quad9. A provider button fills in another.
+  const upstreams = page.getByLabel('Upstream resolvers')
+  await expect(upstreams).toHaveValue('9.9.9.9, 149.112.112.112')
+  await page.getByRole('button', { name: 'Cloudflare', exact: true }).click()
+  await expect(upstreams).toHaveValue(
+    '1.1.1.1, 1.0.0.1, 2606:4700:4700::1111, 2606:4700:4700::1001',
+  )
   await page.getByLabel('Local domain').fill('lan')
   await page.getByRole('tab', { name: 'Overrides' }).click()
   await page.getByRole('button', { name: 'Add host' }).click()
@@ -79,7 +85,9 @@ test('enable DHCP with a server and DNS with an override, then apply', async ({ 
   await expect(page).toHaveURL(/\/services\/dns#overrides$/)
   await expect(page.getByRole('row').filter({ hasText: 'ts.net' })).toContainText('100.100.100.100')
   await page.getByRole('tab', { name: 'Resolver' }).click()
-  await expect(page.getByLabel('Upstream resolvers')).toHaveValue('1.1.1.1, 9.9.9.9')
+  await expect(page.getByLabel('Upstream resolvers')).toHaveValue(
+    '1.1.1.1, 1.0.0.1, 2606:4700:4700::1111, 2606:4700:4700::1001',
+  )
   await sidebar(page, 'DHCP')
   await expect(page.getByLabel('DHCP enabled')).toBeChecked()
   await page.getByRole('tab', { name: 'Leases' }).click()
@@ -155,13 +163,19 @@ test('switch the resolver to DNS over TLS', async ({ page }) => {
   await page.goto('/services')
   await sidebar(page, 'DNS')
 
-  // Forwarding is the default and shows plain upstreams.
+  // The first test left it forwarding, which shows plain upstreams.
   await expect(page.getByLabel('Upstream resolvers')).toBeVisible()
   // By role, not by label: the Resolver tab panel carries that name too.
   await page.getByRole('combobox', { name: 'Resolver', exact: true }).selectOption('tls')
   await expect(page.getByLabel('Upstream resolvers')).toHaveCount(0)
   const servers = page.getByLabel('DNS over TLS servers')
-  await expect(servers).toHaveValue(/cloudflare-dns\.com/)
+  await expect(servers).toHaveValue(/dns\.quad9\.net/)
+  // Over TLS a provider comes with the name on its certificate.
+  await page.getByRole('button', { name: 'Cloudflare', exact: true }).click()
+  await expect(servers).toHaveValue(
+    '1.1.1.1 cloudflare-dns.com\n1.0.0.1 cloudflare-dns.com\n' +
+      '2606:4700:4700::1111 cloudflare-dns.com\n2606:4700:4700::1001 cloudflare-dns.com',
+  )
   await servers.fill('9.9.9.9 dns.quad9.net')
   await expect(page.getByRole('note').filter({ hasText: 'validating resolver' })).toContainText(
     'ostiole repair',
