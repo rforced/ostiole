@@ -228,8 +228,17 @@ func TestStarterServicesAndDefaultPool(t *testing.T) {
 	if len(sc) != 1 || sc[0].RangeStart != "192.168.1.100" || sc[0].RangeEnd != "192.168.1.199" {
 		t.Errorf("server = %+v", sc)
 	}
-	if !cfg.Services.DNS.Enabled || len(cfg.Services.DNS.Upstreams) != 2 {
-		t.Errorf("dns = %+v", cfg.Services.DNS)
+	// DNS forwards to Quad9, unless it is given resolvers of its own.
+	dns := cfg.Services.DNS
+	if !dns.Enabled || dns.Resolver != "" || !slices.Equal(dns.Upstreams, Quad9()) {
+		t.Errorf("dns = %+v, want forwarding to Quad9", dns)
+	}
+	own := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24", Services: true, DNSUpstreams: []string{"192.0.2.53"}})
+	if dns := own.Services.DNS; !slices.Equal(dns.Upstreams, []string{"192.0.2.53"}) {
+		t.Errorf("dns with upstreams = %+v, want forwarding to them", dns)
+	}
+	if err := own.Validate(); err != nil {
+		t.Errorf("starter with upstreams: %v", err)
 	}
 	cases := map[string][2]string{
 		"10.0.0.1/16":      {"10.0.0.100", "10.0.0.199"},

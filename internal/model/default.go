@@ -26,7 +26,8 @@ type StarterOptions struct {
 	// the zone.
 	ManagementFromWAN bool
 	// Services turns on DHCP and DNS for the LAN with a pool derived from
-	// LANAddress and the given upstream resolvers.
+	// LANAddress. DNS forwards to DNSUpstreams, or to Quad9 when there are
+	// none.
 	Services     bool
 	DNSUpstreams []string
 	// SSHPasswords allows a password at the SSH prompt. It starts as the
@@ -91,9 +92,11 @@ func Starter(o StarterOptions) *Config {
 				Interface: o.LAN, Enabled: true, RangeStart: start, RangeEnd: end, LeaseTime: DefaultLeaseTime,
 			}}}
 		}
+		// Forwarded in the clear: DNS over TLS and DNSSEC need the clock
+		// right, and the clock finds its time servers through DNS.
 		upstreams := o.DNSUpstreams
 		if len(upstreams) == 0 {
-			upstreams = []string{"1.1.1.1", "9.9.9.9"}
+			upstreams = Quad9()
 		}
 		cfg.Services.DNS = DNSServer{Enabled: true, Upstreams: upstreams, Domain: "lan"}
 		// Answering the LAN's time requests sends nothing off the router,
@@ -101,6 +104,12 @@ func Starter(o StarterOptions) *Config {
 		cfg.Services.NTP = NTP{Serve: true}
 	}
 	return cfg
+}
+
+// Quad9 is where a new router forwards the names it does not know. IPv4
+// only, which every router can reach.
+func Quad9() []string {
+	return []string{"9.9.9.9", "149.112.112.112"}
 }
 
 // DefaultPool picks a DHCP range inside the interface's subnet: hosts 100

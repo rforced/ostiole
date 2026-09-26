@@ -546,6 +546,16 @@ func TestStarter(t *testing.T) {
 	if want := srv.Listener.Addr().(*net.TCPAddr).Port; int(cfg.System.Management.WebPort) != want {
 		t.Errorf("starter webPort = %d, want the UI's own %d", cfg.System.Management.WebPort, want)
 	}
+	// DNS forwards to Quad9, not to whatever this host's resolv.conf
+	// names, which is usually the ISP.
+	resp, raw = do(t, srv, http.MethodPost, "/api/v1/config/starter", starterRequest{LAN: "eth1", LANAddress: "192.168.1.1/24", Services: true})
+	cfg = model.Config{}
+	if err := json.Unmarshal(raw, &cfg); resp.StatusCode != http.StatusOK || err != nil {
+		t.Fatalf("starter with services: %d %s (%v)", resp.StatusCode, raw, err)
+	}
+	if dns := cfg.Services.DNS; dns.Resolver != "" || !slices.Equal(dns.Upstreams, model.Quad9()) {
+		t.Errorf("starter dns = %+v, want forwarding to Quad9", dns)
+	}
 	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/config/starter", starterRequest{LAN: "eth1"}); resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("missing lanAddress: %d, want 400", resp.StatusCode)
 	}

@@ -132,8 +132,9 @@ ask for them. The journal is the only log, capped at 10 GB and 90 days. The WAN 
 no hostname, and its IPv6 address carries no hardware address. DNS rebinding is refused, and in
 recursive mode the root zone is served locally, so no lookup reaches a root server.
 
-What leaves the machine by default: your distribution's mirrors, GitHub's release feed, and whatever
-lists you subscribed to. A certificate authority and a DNS provider hear from you only once you ask
+What leaves the machine by default: your distribution's mirrors, GitHub's release feed, whatever
+lists you subscribed to, the NTP Pool for the clock, and DNS lookups to Quad9, unencrypted unless
+you pick DNS over TLS. A certificate authority and a DNS provider hear from you only once you ask
 for a certificate. Both update checks can be switched off. Nothing is reported to Ostiole; there is
 nowhere for it to go. The UI serves no third-party assets and its CSP is `self` only.
 

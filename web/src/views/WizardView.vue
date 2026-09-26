@@ -182,7 +182,7 @@ function reverted() {
       <ToggleRow
         v-model="services"
         label="Run DHCP and DNS for the LAN"
-        hint="Hands out addresses and resolves names for LAN clients."
+        hint="Hands out addresses and resolves names for LAN clients. Lookups go to Quad9, unencrypted."
       />
 
       <div v-if="error" role="alert" class="text-sm text-bad">

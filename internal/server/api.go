@@ -8,8 +8,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/netip"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -845,25 +843,6 @@ func (a *api) renewLease(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// currentResolvers reads the nameservers the router uses today so the DNS
-// service forwards to the same place. Loopback entries are skipped.
-func currentResolvers() []string {
-	raw, err := os.ReadFile("/etc/resolv.conf")
-	if err != nil {
-		return nil
-	}
-	var out []string
-	for line := range strings.SplitSeq(string(raw), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) == 2 && fields[0] == "nameserver" {
-			if ip, err := netip.ParseAddr(fields[1]); err == nil && !ip.IsLoopback() {
-				out = append(out, ip.String())
-			}
-		}
-	}
-	return out
-}
-
 type starterRequest struct {
 	Hostname          string `json:"hostname"`
 	LAN               string `json:"lan"`
@@ -871,7 +850,7 @@ type starterRequest struct {
 	WAN               string `json:"wan"`
 	ManagementFromWAN bool   `json:"managementFromWan"`
 	// Services enables DHCP and DNS on the LAN with a pool derived from
-	// the LAN address; upstreams default to the router's current resolvers.
+	// the LAN address and DNS forwarded to Quad9.
 	Services bool `json:"services"`
 }
 
@@ -895,7 +874,6 @@ func (a *api) starter(w http.ResponseWriter, r *http.Request) error {
 		WAN:               req.WAN,
 		ManagementFromWAN: req.ManagementFromWAN,
 		Services:          req.Services,
-		DNSUpstreams:      currentResolvers(),
 		SSHPasswords:      passwords,
 		WebPort:           uiPort(r),
 	})

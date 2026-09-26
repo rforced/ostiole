@@ -115,7 +115,7 @@ saved as the boot ruleset; run "ostiole apply" to load it now.`,
 	f.BoolVar(&opts.ManagementFromWAN, "management-from-wan", false, "turn anti-lockout on for the wan zone, so the web UI and SSH answer on the public side")
 	f.BoolVar(&opts.Services, "services", false, "enable DHCP and DNS on the LAN (pool derived from the LAN address)")
 	f.BoolVar(&opts.SSHPasswords, "ssh-passwords", true, "allow password logins over SSH (default: as this router is set now)")
-	f.StringSliceVar(&opts.DNSUpstreams, "dns-upstream", nil, "upstream resolvers for the DNS service (default 1.1.1.1, 9.9.9.9)")
+	f.StringSliceVar(&opts.DNSUpstreams, "dns-upstream", nil, "upstream resolvers for the DNS service (default Quad9, 9.9.9.9 and 149.112.112.112)")
 	f.BoolVar(&force, "force", false, "overwrite an existing configuration")
 	_ = cmd.MarkFlagRequired("lan")
 	_ = cmd.MarkFlagRequired("lan-address")
