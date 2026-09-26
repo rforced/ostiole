@@ -189,16 +189,14 @@ func TestManagerReattachesToARunningUpdate(t *testing.T) {
 		t.Fatal("an update that outlived the daemon is not reported as running")
 	}
 
-	// When it finishes, the result is picked up without anyone asking.
+	// When it finishes, the result is picked up without anyone asking, and
+	// the re-check is in before the router is let go: the page stops
+	// polling at the first status that is not running.
 	run.say(showUnit, "LoadState=loaded\nActiveState=active\nSubState=exited\nResult=success\nExecMainStatus=0\nInvocationID=ghi789\n")
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if st := m.Status(false); !st.Running && !st.LastRun.IsZero() {
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
+	waitUntil(t, func() bool { return !m.Status(false).Running })
+	if st := m.Status(false); st.LastRun.IsZero() || st.LastCheck.IsZero() {
+		t.Errorf("the router was let go before the update was recorded: %+v", st.Snapshot)
 	}
-	t.Fatal("the reattached update never reported how it ended")
 }
 
 func TestDistroName(t *testing.T) {

@@ -394,11 +394,11 @@ func (m *Manager) Reattach(ctx context.Context) {
 	m.mu.Unlock()
 	m.Log.Info("a system update was still running; reattaching", "unit", m.unit.unit)
 	go func() {
+		// Held until the re-check is in, as Start does: the page stops
+		// polling at the first status that is not running.
+		defer m.end()
 		defer panics.Recover(m.Log, "system update")
-		out, err := func() (string, error) {
-			defer m.end()
-			return m.collect(ctx)
-		}()
+		out, err := m.collect(ctx)
 		m.record("", out, err)
 		if _, checkErr := m.Check(ctx); checkErr != nil {
 			m.Log.Debug("could not re-check after an update", "err", checkErr)
