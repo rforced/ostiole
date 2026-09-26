@@ -68,6 +68,23 @@ describe('ResolverTab', () => {
     expect(choices.map((l) => l.text()).join(' ')).toContain('Cable')
   })
 
+  // The choice comes down to who can read the names looked up, so the
+  // hint says that for whichever resolver is picked.
+  it('says who sees the lookups for each resolver', async () => {
+    const config = useConfigStore()
+    config.draft = draft()
+    config.loaded = true
+    const wrapper = mount(ResolverTab)
+    await flushPromises()
+
+    const select = wrapper.find('#dns-resolver')
+    expect(wrapper.text()).toContain('The upstream resolvers and your ISP see every lookup.')
+    await select.setValue('recursive')
+    expect(wrapper.text()).toContain('No single server sees every lookup, but your ISP can.')
+    await select.setValue('tls')
+    expect(wrapper.text()).toContain('Only the servers below see every lookup.')
+  })
+
   // The tab is a draft editor, so an action that reached for the config
   // would throw away whatever was being typed. It names what it cleared.
   it('clears the cache without touching the draft', async () => {

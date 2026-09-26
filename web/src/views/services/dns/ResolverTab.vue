@@ -49,6 +49,13 @@ const resolver = computed({
   },
 })
 
+/** Who can read the names looked up, which is what the choice comes down to. */
+const resolverHints = {
+  forward: 'Unencrypted. The upstream resolvers and your ISP see every lookup.',
+  recursive: 'Unencrypted. No single server sees every lookup, but your ISP can.',
+  tls: 'Encrypted. Only the servers below see every lookup.',
+}
+
 /** One "address hostname" pair per line, which is how DoT servers are quoted. */
 const tlsUpstreams = computed({
   get: () => (dns.value.tlsUpstreams ?? []).map((u) => `${u.address} ${u.hostname}`).join('\n'),
@@ -144,7 +151,7 @@ function toggleInterface(name, on) {
     >
       <div class="space-y-4">
         <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
-          <FormField id="dns-resolver" label="Resolver">
+          <FormField id="dns-resolver" label="Resolver" :hint="resolverHints[resolver]">
             <select id="dns-resolver" v-model="resolver" class="input">
               <option value="forward">Forward: ask the upstream resolvers below</option>
               <option value="recursive">Recursive: look names up directly, check DNSSEC</option>
