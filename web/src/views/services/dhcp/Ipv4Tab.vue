@@ -95,6 +95,7 @@ function editLease(l) {
             <td class="font-mono" data-label="">
               {{ s.interface }}
               <span v-if="off.has(s.interface)" class="badge ml-1">interface off</span>
+              <span v-if="s.dnsRegistration" class="badge ml-1">DNS registration</span>
             </td>
             <td class="font-mono text-code" data-label="Range">
               {{ s.rangeStart }} – {{ s.rangeEnd }}

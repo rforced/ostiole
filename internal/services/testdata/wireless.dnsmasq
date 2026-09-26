@@ -29,10 +29,12 @@ dhcp-range=set:s_br_lan,10.88.0.100,10.88.0.199,255.255.255.0,12h
 dhcp-option=tag:s_br_lan,option:router,10.88.0.1
 dhcp-option=tag:s_br_lan,option:dns-server,10.88.0.1
 dhcp-option=tag:s_br_lan,option:domain-name,home.arpa
+dhcp-ignore-names=tag:s_br_lan
 dhcp-range=set:s_ap1,10.99.0.100,10.99.0.199,255.255.255.0,2h
 dhcp-option=tag:s_ap1,option:router,10.99.0.1
 dhcp-option=tag:s_ap1,option:dns-server,10.99.0.1
 dhcp-option=tag:s_ap1,option:domain-name,home.arpa
+dhcp-ignore-names=tag:s_ap1
 ==> ostiole.enabled <==
 1
 ==> ostiole.hosts <==

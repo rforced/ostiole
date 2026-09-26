@@ -16,6 +16,7 @@ dhcp-range=set:s_eth1,10.0.0.50,10.0.0.99,255.255.255.0,24h
 dhcp-option=tag:s_eth1,option:router,10.0.0.254
 dhcp-option=tag:s_eth1,option:dns-server,9.9.9.9
 dhcp-option=tag:s_eth1,option:domain-name,office
+dhcp-ignore-names=tag:s_eth1
 ==> ostiole.enabled <==
 1
 ==> ostiole.hosts <==

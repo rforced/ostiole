@@ -402,7 +402,8 @@
           "enabled": true,
           "rangeStart": "192.168.1.100",
           "rangeEnd": "192.168.1.199",
-          "leaseTime": "12h"
+          "leaseTime": "12h",
+          "dnsRegistration": true
         },
         {
           "interface": "eth2",
@@ -431,7 +432,8 @@
           "mode": "managed",
           "rangeStart": "::100",
           "rangeEnd": "::1ff",
-          "leaseTime": "6h"
+          "leaseTime": "6h",
+          "dnsRegistration": true
         },
         {
           "interface": "eth1.20",

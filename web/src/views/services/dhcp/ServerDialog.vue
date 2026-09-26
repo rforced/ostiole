@@ -33,6 +33,7 @@ function blank() {
     gateway: '',
     dns: '',
     domain: '',
+    dnsRegistration: false,
   }
 }
 
@@ -46,6 +47,12 @@ watch(
   },
   { immediate: true },
 )
+
+/** Where a device's own name resolves once it is registered. */
+const registration = computed(() => {
+  const domain = config.draft?.services?.dns?.domain
+  return domain ? `Names devices send resolve under ${domain}.` : 'Names devices send resolve.'
+})
 
 /** Suggest hosts 100-199 of the interface's /24 when the fields are empty. */
 watch(
@@ -75,6 +82,7 @@ function save() {
   const dns = parseList(f.dns)
   if (dns.length) out.dns = dns
   if (f.domain) out.domain = f.domain.trim()
+  if (f.dnsRegistration) out.dnsRegistration = true
   config.upsertServer(out)
   open.value = false
 }
@@ -136,10 +144,21 @@ function save() {
           <input id="sc-domain" v-model="form.domain" class="input font-mono" spellcheck="false" />
         </FormField>
       </div>
-      <label class="flex items-center gap-2 text-sm">
-        <input v-model="form.enabled" type="checkbox" class="size-4 rounded border-line-2" />
-        Enabled
-      </label>
+      <div class="space-y-2">
+        <label class="flex items-center gap-2 text-sm">
+          <input
+            v-model="form.dnsRegistration"
+            type="checkbox"
+            class="size-4 rounded border-line-2"
+          />
+          DNS registration
+          <span class="text-ink-muted">{{ registration }}</span>
+        </label>
+        <label class="flex items-center gap-2 text-sm">
+          <input v-model="form.enabled" type="checkbox" class="size-4 rounded border-line-2" />
+          Enabled
+        </label>
+      </div>
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
         <button type="submit" class="btn-primary" :disabled="!form.interface">Save to draft</button>

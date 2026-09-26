@@ -54,6 +54,9 @@ type Dnsmasq struct {
 	Resolv string
 	// Cmd runs systemctl; default execs it.
 	Cmd network.Commander
+	// Links lists the kernel's links, for the IPv6 prefixes a lease is
+	// checked against; default network.Discover.
+	Links func() ([]network.Link, error)
 }
 
 // New returns a backend with production defaults.
@@ -260,8 +263,20 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 			if domain != "" {
 				fmt.Fprintf(&b, "dhcp-option=tag:%s,option:domain-name,%s\n", tag, domain)
 			}
+			if !sc.DNSRegistration {
+				fmt.Fprintf(&b, "dhcp-ignore-names=tag:%s\n", tag)
+			}
 		}
 		renderV6(&b, cfg)
+		if registersNames(cfg) {
+			// A device calling itself wpad would hand every browser that
+			// looks for a proxy its own settings, and isatap is the same
+			// trick for an IPv6 tunnel.
+			for _, name := range refusedNames {
+				fmt.Fprintf(&b, "dhcp-name-match=set:%s,%s\n", refusedTag, name)
+			}
+			fmt.Fprintf(&b, "dhcp-ignore-names=tag:%s\n", refusedTag)
+		}
 		for _, l := range svc.DHCP.StaticLeases {
 			parts := []string{strings.ToLower(l.MAC)}
 			if l.IP != "" {
@@ -408,14 +423,28 @@ func renderV6(b *strings.Builder, cfg *model.Config) {
 		if lease == "" {
 			lease = model.DefaultLeaseTime
 		}
+		// ra-names guesses a device's SLAAC address from its IPv4 name, so
+		// it is a name the device sent and follows the switch.
+		names := ""
+		if sc.DNSRegistration {
+			names = "ra-names,"
+		}
 		switch sc.Mode {
 		case model.RASLAAC:
 			fmt.Fprintf(b, "dhcp-range=set:%s,::,constructor:%s,ra-only,64,%s\n", tag, sc.Interface, lease)
 		case model.RAStateless:
-			fmt.Fprintf(b, "dhcp-range=set:%s,::,constructor:%s,ra-stateless,ra-names,64,%s\n", tag, sc.Interface, lease)
+			fmt.Fprintf(b, "dhcp-range=set:%s,::,constructor:%s,ra-stateless,%s64,%s\n", tag, sc.Interface, names, lease)
 		case model.RAManaged:
-			fmt.Fprintf(b, "dhcp-range=set:%s,%s,%s,constructor:%s,ra-names,64,%s\n",
-				tag, sc.RangeStart, sc.RangeEnd, sc.Interface, lease)
+			fmt.Fprintf(b, "dhcp-range=set:%s,%s,%s,constructor:%s,%s64,%s\n",
+				tag, sc.RangeStart, sc.RangeEnd, sc.Interface, names, lease)
+			// Only a managed server hands out leases, so only its clients
+			// can send a name over DHCPv6. dnsmasq sets the range's tag
+			// after it has put the name on the lease, so it cannot stop it;
+			// a request carries dhcpv6 and its interface's own name from
+			// the start. That name is the interface's, not sanitizeTag's.
+			if !sc.DNSRegistration {
+				fmt.Fprintf(b, "dhcp-ignore-names=tag:dhcpv6,tag:%s\n", sc.Interface)
+			}
 		}
 		dns := sc.DNS
 		if len(dns) == 0 && svc.DNS.Enabled {
@@ -470,6 +499,30 @@ func ntpServed(cfg *model.Config) map[string]bool {
 		}
 	}
 	return out
+}
+
+// refusedNames are never answered for a device that asks for them, and
+// refusedTag marks the requests that do. dnsmasq also tags a request with
+// the interface it came in on, and an interface name is at most 15
+// characters, so a longer tag cannot be one.
+var refusedNames = []string{"wpad", "isatap"}
+
+const refusedTag = "refused_hostnames"
+
+// registersNames reports whether any server that is running answers the
+// names devices send. Only those servers need names refused.
+func registersNames(cfg *model.Config) bool {
+	for _, sc := range cfg.ActiveDHCP() {
+		if sc.DNSRegistration {
+			return true
+		}
+	}
+	for _, sc := range cfg.ActiveDHCPv6() {
+		if sc.DNSRegistration && sc.Mode != model.RASLAAC {
+			return true
+		}
+	}
+	return false
 }
 
 func sanitizeTag(s string) string {
@@ -557,10 +610,7 @@ func (d *Dnsmasq) Apply(ctx context.Context, files network.Files) error {
 	if out, err := d.cmd().Run(ctx, "systemctl", "enable", Unit); err != nil {
 		return fmt.Errorf("enable %s: %w: %s", Unit, err, bytes.TrimSpace(out))
 	}
-	if out, err := d.cmd().Run(ctx, "systemctl", "restart", Unit); err != nil {
-		return fmt.Errorf("restart %s: %w: %s", Unit, err, bytes.TrimSpace(out))
-	}
-	return nil
+	return d.restart(ctx, files[confName])
 }
 
 // Installed reports whether the ostiole-dnsmasq unit exists.

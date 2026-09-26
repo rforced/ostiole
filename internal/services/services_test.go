@@ -52,10 +52,16 @@ type fakeCmd struct {
 	calls     [][]string
 	installed bool
 	active    bool
+	// onRun sees each command as it runs, for a test that has to look at
+	// something the command reads before it is gone.
+	onRun func(name string, args []string)
 }
 
 func (f *fakeCmd) Run(_ context.Context, name string, args ...string) ([]byte, error) {
 	f.calls = append(f.calls, append([]string{name}, args...))
+	if f.onRun != nil {
+		f.onRun(name, args)
+	}
 	if name == "systemctl" && len(args) >= 2 {
 		switch args[0] {
 		case "cat":
@@ -68,9 +74,9 @@ func (f *fakeCmd) Run(_ context.Context, name string, args ...string) ([]byte, e
 				return []byte("active\n"), nil
 			}
 			return []byte("inactive\n"), errors.New("exit 3")
-		case "restart", "enable":
+		case "restart", "enable", "start":
 			f.active = true
-		case "disable":
+		case "disable", "stop":
 			f.active = false
 		}
 	}
@@ -742,7 +748,7 @@ func TestApplyLeavesTheLeaseFileAlone(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	leases := filepath.Join(dir, "ostiole.leases")
-	const record = "1758300000 aa:bb:cc:00:00:01 10.0.0.20 calcifer *\n"
+	const record = "1758300000 aa:bb:cc:00:00:01 10.0.0.20 * *\n"
 	if err := os.WriteFile(leases, []byte(record), 0o644); err != nil {
 		t.Fatal(err)
 	}

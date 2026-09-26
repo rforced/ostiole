@@ -26,8 +26,10 @@ dhcp-range=set:s_eth1,192.168.1.100,192.168.1.199,255.255.255.0,12h
 dhcp-option=tag:s_eth1,option:router,192.168.1.1
 dhcp-option=tag:s_eth1,option:dns-server,192.168.1.1
 dhcp-option=tag:s_eth1,option:domain-name,lan
+dhcp-ignore-names=tag:s_eth1
 enable-ra
-dhcp-range=set:s6_eth1,::100,::1ff,constructor:eth1,ra-names,64,6h
+dhcp-range=set:s6_eth1,::100,::1ff,constructor:eth1,64,6h
+dhcp-ignore-names=tag:dhcpv6,tag:eth1
 dhcp-option=tag:s6_eth1,option6:dns-server,[2001:db8:1::1]
 dhcp-option=tag:s6_eth1,option6:domain-search,lan
 dhcp-range=set:s6_eth1_20,::,constructor:eth1.20,ra-only,64,24h

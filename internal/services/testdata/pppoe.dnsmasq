@@ -28,6 +28,7 @@ dhcp-range=set:s_lan0,192.168.1.100,192.168.1.199,255.255.255.0,24h
 dhcp-option=tag:s_lan0,option:router,192.168.1.1
 dhcp-option=tag:s_lan0,option:dns-server,192.168.1.1
 dhcp-option=tag:s_lan0,option:domain-name,lan
+dhcp-ignore-names=tag:s_lan0
 ==> ostiole.enabled <==
 1
 ==> ostiole.hosts <==

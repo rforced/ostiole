@@ -38,6 +38,9 @@ dhcp-option=tag:s6_eth1,option6:domain-search,lan
 dhcp-range=set:s6_eth1_20,::,constructor:eth1.20,ra-only,64,24h
 dhcp-option=tag:s6_eth1_20,option6:dns-server,[::]
 dhcp-option=tag:s6_eth1_20,option6:domain-search,lan
+dhcp-name-match=set:refused_hostnames,wpad
+dhcp-name-match=set:refused_hostnames,isatap
+dhcp-ignore-names=tag:refused_hostnames
 dhcp-host=aa:bb:cc:dd:ee:ff,192.168.1.50,[::50],nas
 dhcp-host=aa:bb:cc:dd:ee:01,[2001:db8:1::99],vault
 ==> ostiole.enabled <==

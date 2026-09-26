@@ -1706,6 +1706,9 @@ type DHCPv6Server struct {
 	LeaseTime string   `json:"leaseTime,omitempty"`
 	DNS       []string `json:"dns,omitempty"`
 	Domain    string   `json:"domain,omitempty"`
+	// DNSRegistration answers the names devices send over DHCPv6, and the
+	// SLAAC addresses guessed from their IPv4 names, like DHCPServer's.
+	DNSRegistration bool `json:"dnsRegistration,omitempty"`
 }
 
 // DefaultLeaseTime is the lease a pool hands out when it names none. A day
@@ -1726,6 +1729,11 @@ type DHCPServer struct {
 	Gateway    string   `json:"gateway,omitempty"`
 	DNS        []string `json:"dns,omitempty"`
 	Domain     string   `json:"domain,omitempty"`
+	// DNSRegistration answers the name a device sends with its request,
+	// bare and under the local domain, while its lease lasts. Off, the name
+	// is ignored and not even kept on the lease; a static lease's hostname
+	// is answered either way.
+	DNSRegistration bool `json:"dnsRegistration,omitempty"`
 }
 
 // ActiveDHCP lists the IPv4 pools that hand out addresses: the service is

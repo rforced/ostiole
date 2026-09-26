@@ -26,6 +26,16 @@ const candidates = computed(() =>
 
 const managed = computed(() => form.value.mode === 'managed')
 
+/**
+ * What registering answers. A managed server hears names over DHCPv6; a
+ * stateless one only gives the IPv4 server's names their IPv6 addresses.
+ */
+const registration = computed(() => {
+  if (!managed.value) return 'Names the IPv4 server registers resolve to IPv6 addresses too.'
+  const domain = config.draft?.services?.dns?.domain
+  return domain ? `Names devices send resolve under ${domain}.` : 'Names devices send resolve.'
+})
+
 /** True when the chosen interface takes its prefix from an upstream. */
 const delegated = computed(
   () => config.findInterface(form.value.interface)?.ipv6?.mode === 'delegated',
@@ -41,6 +51,7 @@ function blank() {
     leaseTime: '24h',
     dns: '',
     domain: '',
+    dnsRegistration: false,
   }
 }
 
@@ -73,6 +84,8 @@ function save() {
   const dns = parseList(f.dns)
   if (dns.length) out.dns = dns
   if (f.domain) out.domain = f.domain.trim()
+  // SLAAC alone hands out nothing a device could put a name to.
+  if (f.dnsRegistration && f.mode !== 'slaac') out.dnsRegistration = true
   config.upsertV6Server(out)
   open.value = false
 }
@@ -146,10 +159,21 @@ function save() {
           <input id="v6-domain" v-model="form.domain" class="input font-mono" spellcheck="false" />
         </FormField>
       </div>
-      <label class="flex items-center gap-2 text-sm">
-        <input v-model="form.enabled" type="checkbox" class="size-4 rounded border-line-2" />
-        Enabled
-      </label>
+      <div class="space-y-2">
+        <label v-if="form.mode !== 'slaac'" class="flex items-center gap-2 text-sm">
+          <input
+            v-model="form.dnsRegistration"
+            type="checkbox"
+            class="size-4 rounded border-line-2"
+          />
+          DNS registration
+          <span class="text-ink-muted">{{ registration }}</span>
+        </label>
+        <label class="flex items-center gap-2 text-sm">
+          <input v-model="form.enabled" type="checkbox" class="size-4 rounded border-line-2" />
+          Enabled
+        </label>
+      </div>
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
         <button type="submit" class="btn-primary" :disabled="!form.interface">Save to draft</button>
