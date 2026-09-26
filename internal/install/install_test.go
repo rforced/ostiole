@@ -278,7 +278,7 @@ func TestNetworkRevertAndRecord(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec, err := LoadTakeoverRecord(dir)
-	if err != nil || len(rec.Managers) != 2 {
+	if err != nil || rec == nil || len(rec.Managers) != 2 {
 		t.Fatalf("record = %v, %v", rec, err)
 	}
 	sc := &fakeSystemctl{enabled: map[string]string{

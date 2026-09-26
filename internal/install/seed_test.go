@@ -20,6 +20,9 @@ func TestSeedInterfaceFollowsTheAddressFlags(t *testing.T) {
 		DynamicAddresses: []string{"203.0.113.10/24", "2001:db8::10/64"},
 	}
 	in, gws := seedInterface(lease, netip.MustParseAddr("203.0.113.1"), netip.Addr{})
+	if in == nil {
+		t.Fatal("a leased interface was not seeded")
+	}
 	if in.IPv4.Mode != model.AddrDHCP || in.IPv6.Mode != model.AddrSLAAC {
 		t.Errorf("leased interface = %+v", in)
 	}
@@ -35,6 +38,9 @@ func TestSeedInterfaceFollowsTheAddressFlags(t *testing.T) {
 		Addresses: []string{"198.51.100.5/24"},
 	}
 	in, gws = seedInterface(fixed, netip.MustParseAddr("198.51.100.1"), netip.Addr{})
+	if in == nil {
+		t.Fatal("a fixed interface was not seeded")
+	}
 	if in.IPv4.Mode != model.AddrStatic || in.IPv4.Address != "198.51.100.5/24" {
 		t.Errorf("fixed interface = %+v", in)
 	}
@@ -62,6 +68,9 @@ func TestSeedRendersAsAConfiguration(t *testing.T) {
 	in, gws := seedInterface(network.Link{
 		Name: "eth0", Kind: "ethernet", Addresses: []string{"203.0.113.10/24"},
 	}, netip.MustParseAddr("203.0.113.1"), netip.Addr{})
+	if in == nil {
+		t.Fatal("eth0 was not seeded")
+	}
 	cfg.Interfaces = append(cfg.Interfaces, *in)
 	cfg.Gateways = append(cfg.Gateways, gws...)
 	if err := cfg.Validate(); err != nil {
