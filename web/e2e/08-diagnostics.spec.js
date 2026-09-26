@@ -73,10 +73,13 @@ test('the connections and neighbour pages explain themselves, and the filter emp
   await page.screenshot({ path: shot('45-states'), fullPage: true })
 
   await sidebar(page, 'ARP and NDP')
-  const neigh = page.getByRole('main')
-  await expect(neigh).toContainText(/ of \d+/)
+  const neigh = page.getByRole('region', { name: 'Neighbours' })
+  await expect(neigh).not.toContainText('Reading…')
+  // The kernel's table may be empty, as in a netns of dummy links, and an
+  // empty table says so rather than that nothing matches.
+  const total = Number((await neigh.getByText(/^\d+ of \d+$/).textContent()).split(' of ')[1])
   await page.getByPlaceholder('address, MAC, or interface').fill('zzz-nothing')
-  await expect(neigh).toContainText('Nothing matches "zzz-nothing".')
+  await expect(neigh).toContainText(total ? 'Nothing matches "zzz-nothing".' : 'No neighbours.')
   await page.screenshot({ path: shot('46-neighbours'), fullPage: true })
 })
 
