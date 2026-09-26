@@ -112,7 +112,7 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/counters":                 {summary: "Per-rule packet and byte counters from the kernel.", role: auth.RoleViewer},
 	"POST /api/v1/rules/system":            {summary: "The rules Ostiole adds on its own for the given configuration, in evaluation order.", role: auth.RoleViewer},
 	"POST /api/v1/nat/system":              {summary: "The outbound NAT rules Ostiole writes on its own for the given configuration: the automatic masquerade.", role: auth.RoleViewer},
-	"POST /api/v1/dns/system-hosts":        {summary: "The names a configuration makes the DNS server answer on its own: static leases with hostnames.", role: auth.RoleViewer},
+	"POST /api/v1/dns/names":               {summary: "The names a configuration makes the DNS server answer besides its host overrides: static leases, proxy sites and registered device names.", role: auth.RoleViewer},
 	"DELETE /api/v1/dns/cache":             {summary: "Empty the DNS caches this router is running: dnsmasq, and the validating resolver when it is on.", role: auth.RoleOperator},
 	"GET /api/v1/interfaces/live":          {summary: "Interfaces as the kernel has them now.", role: auth.RoleViewer},
 	"POST /api/v1/interfaces/{name}/renew": {summary: "Ask for a fresh lease on a dynamic interface; release drops it first.", role: auth.RoleOperator},

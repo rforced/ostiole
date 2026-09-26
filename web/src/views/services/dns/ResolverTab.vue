@@ -1,22 +1,45 @@
 <script setup>
-import { LoaderCircle } from 'lucide-vue-next'
+import { LoaderCircle, Plus } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
 import AppDisclosure from '@/components/AppDisclosure.vue'
+import ConfirmButton from '@/components/ConfirmButton.vue'
 import FormField from '@/components/FormField.vue'
 import InterfaceLabel from '@/components/InterfaceLabel.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import SortHeader from '@/components/SortHeader.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { dnsListenInterfaces } from '@/lib/interfaces'
 import { parseList } from '@/lib/lists'
+import { byText, useSort } from '@/lib/sort'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import DomainOverrideDialog from '@/views/services/dns/DomainOverrideDialog.vue'
 
 const auth = useAuthStore()
 const config = useConfigStore()
 const dns = computed(() => config.ensureServices().dns)
+
+// Domain overrides send a whole domain to resolvers of its own, so they
+// sit with the resolver rather than with the names this router answers.
+const domains = computed(() => dns.value.domainOverrides ?? [])
+const domainSort = useSort(domains, {
+  domain: byText((d) => d.domain),
+  description: byText((d) => d.description),
+})
+const domainRows = domainSort.sorted
+const domainEditing = ref(null)
+const domainOpen = ref(false)
+function addDomain() {
+  domainEditing.value = null
+  domainOpen.value = true
+}
+function editDomain(d) {
+  domainEditing.value = d
+  domainOpen.value = true
+}
 
 const upstreams = computed({
   get: () => (dns.value.upstreams ?? []).join(', '),
@@ -338,6 +361,57 @@ function toggleInterface(name, on) {
       </div>
     </SectionCard>
 
+    <SectionCard
+      title="Domain overrides"
+      :count="domains.length"
+      intro="A domain here goes to its own resolvers, and stops answering while they are unreachable."
+      flush
+    >
+      <template v-if="!auth.readOnly" #actions>
+        <button type="button" class="btn-secondary" @click="addDomain">
+          <Plus class="size-4" aria-hidden="true" /> Add domain
+        </button>
+      </template>
+      <table class="table">
+        <thead>
+          <tr>
+            <SortHeader by="domain" :sort="domainSort">Domain</SortHeader>
+            <th>Resolvers</th>
+            <SortHeader by="description" :sort="domainSort">Description</SortHeader>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="!domains.length">
+            <td colspan="4" class="text-ink-muted">
+              No overrides. Every domain goes to the resolver.
+            </td>
+          </tr>
+          <tr
+            v-for="d in domainRows"
+            :key="d.domain"
+            :class="{ 'row-changed': config.isChanged('services.dns.domainOverrides', d.domain) }"
+          >
+            <td class="font-mono text-code">{{ d.domain }}</td>
+            <td class="font-mono text-code">{{ (d.servers ?? []).join(', ') }}</td>
+            <td>{{ d.description }}</td>
+            <td class="text-right whitespace-nowrap">
+              <button type="button" class="link" @click="editDomain(d)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
+              </button>
+              <ConfirmButton
+                class="ml-3"
+                label="Delete"
+                :question="`Delete the override for ${d.domain}?`"
+                :description="d.description"
+                @confirm="config.removeDomainOverride(d.domain)"
+              />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </SectionCard>
+
     <SectionCard title="Answers" :locked="auth.readOnly">
       <div class="space-y-4">
         <ToggleRow
@@ -362,5 +436,7 @@ function toggleInterface(name, on) {
         </FormField>
       </div>
     </SectionCard>
+
+    <DomainOverrideDialog v-model:open="domainOpen" :override="domainEditing" />
   </div>
 </template>

@@ -13,7 +13,7 @@ import { useConfigStore } from '@/stores/config'
 import ServicesStatus from '@/views/services/ServicesStatus.vue'
 import BlockingTab from '@/views/services/dns/BlockingTab.vue'
 import EnforcementTab from '@/views/services/dns/EnforcementTab.vue'
-import OverridesTab from '@/views/services/dns/OverridesTab.vue'
+import NamesTab from '@/views/services/dns/NamesTab.vue'
 import QueriesTab from '@/views/services/dns/QueriesTab.vue'
 import ResolverTab from '@/views/services/dns/ResolverTab.vue'
 
@@ -39,7 +39,7 @@ const { tabs, tab } = usePageTabs()
     <ServicesStatus service="dns" />
     <AppTabs v-model="tab" :tabs="tabs">
       <TabsContent value="resolver"><ResolverTab /></TabsContent>
-      <TabsContent value="overrides"><OverridesTab /></TabsContent>
+      <TabsContent value="names"><NamesTab /></TabsContent>
       <TabsContent value="blocking"><BlockingTab /></TabsContent>
       <TabsContent value="enforcement"><EnforcementTab /></TabsContent>
       <TabsContent value="queries"><QueriesTab /></TabsContent>

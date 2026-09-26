@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"sort"
@@ -147,26 +149,31 @@ func newTestServerWith(t *testing.T, adjust func(*Deps)) *httptest.Server {
 	return srv
 }
 
-// The overrides tab asks for the names the draft makes the router answer
-// on its own, the way the rules page asks for the system rules.
-func TestSystemHosts(t *testing.T) {
+// The names tab asks for the names the draft makes the router answer
+// besides its overrides, the way the rules page asks for the system rules.
+func TestDNSNamesEndpoint(t *testing.T) {
 	t.Parallel()
-	srv, _ := newTestServer(t)
-	cfg := starter()
-	cfg.Services.DNS.Domain = "lan"
+	leases := filepath.Join(t.TempDir(), "ostiole.leases")
+	if err := os.WriteFile(leases, []byte("1790471918 3a:8a:33:e0:8f:75 10.0.0.185 Watch *\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	srv := newTestServerWith(t, func(d *Deps) { d.Services = &services.Dnsmasq{Leases: leases} })
+	cfg := model.Starter(model.StarterOptions{Hostname: "fw", LAN: "eth1", LANAddress: "10.0.0.1/24", WAN: "eth0", Services: true})
+	cfg.Services.DHCP.Servers[0].DNSRegistration = true
 	cfg.Services.DHCP.StaticLeases = []model.StaticLease{{MAC: "aa:bb:cc:00:00:01", IP: "10.0.0.20", Hostname: "calcifer"}}
-	resp, raw := do(t, srv, http.MethodPost, "/api/v1/dns/system-hosts", configRequest{Config: (*draftConfig)(cfg)})
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/dns/names", configRequest{Config: (*draftConfig)(cfg)})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("%d %s", resp.StatusCode, raw)
 	}
-	var rows []services.SystemHost
+	var rows []dnsName
 	if err := json.Unmarshal(raw, &rows); err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 1 || rows[0].FQDN != "calcifer.lan" || rows[0].Setting != "dhcp" {
+	if len(rows) != 2 || rows[0].Name != "calcifer.lan" || rows[0].Source != "static" ||
+		rows[1].Name != "Watch.lan" || rows[1].Bare != "Watch" || rows[1].Source != "device" {
 		t.Errorf("rows = %+v", rows)
 	}
-	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/dns/system-hosts", configRequest{}); resp.StatusCode != http.StatusBadRequest {
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/dns/names", configRequest{}); resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("no config: %d, want 400", resp.StatusCode)
 	}
 }

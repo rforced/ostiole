@@ -199,7 +199,7 @@ export const api = {
   /** The outbound NAT rules a configuration makes Ostiole write on its own: the automatic masquerade. */
   systemNat: (config) => post('/nat/system', { config }),
   /** The names a configuration makes the DNS server answer on its own: static leases with hostnames. */
-  systemHosts: (config) => post('/dns/system-hosts', { config }),
+  dnsNames: (config) => post('/dns/names', { config }),
   /** Empty the caches the router is running now. Answers with what it cleared. */
   clearDnsCache: () => request('DELETE', '/dns/cache'),
   interfaces: {

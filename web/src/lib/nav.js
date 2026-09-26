@@ -121,7 +121,7 @@ export const NAV = [
         view: () => import('@/views/services/DnsPage.vue'),
         tabs: [
           { value: 'resolver', label: 'Resolver' },
-          { value: 'overrides', label: 'Overrides' },
+          { value: 'names', label: 'Names' },
           { value: 'blocking', label: 'Blocking' },
           { value: 'enforcement', label: 'Enforcement' },
           { value: 'queries', label: 'Queries' },

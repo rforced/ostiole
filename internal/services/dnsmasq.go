@@ -334,20 +334,15 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 }
 
 // SystemHost is a name this router answers on its own account rather than
-// from a host override: a static lease with a hostname. The overrides tab
-// lists them beside the operator's own, locked, so nothing the router
-// answers is hidden there.
+// from a host override: a static lease with a hostname. The names tab lists
+// them beside the operator's own, locked, so nothing the router answers is
+// hidden there.
 type SystemHost struct {
 	Hostname string `json:"hostname"`
 	IP       string `json:"ip"`
-	// FQDN is the name with the local domain on it, which expand-hosts
-	// answers too. Empty without a domain.
-	FQDN string `json:"fqdn,omitempty"`
 	// MAC is the lease the name comes from.
 	MAC         string `json:"mac"`
 	Description string `json:"description,omitempty"`
-	// Setting names what controls the entry, so the page can link to it.
-	Setting string `json:"setting"`
 }
 
 // SystemHosts derives the names the DHCP configuration makes this router
@@ -364,11 +359,7 @@ func SystemHosts(cfg *model.Config) []SystemHost {
 			continue
 		}
 		add := func(ip string) {
-			sh := SystemHost{Hostname: l.Hostname, IP: ip, MAC: strings.ToLower(l.MAC), Description: l.Description, Setting: "dhcp"}
-			if svc.DNS.Domain != "" {
-				sh.FQDN = l.Hostname + "." + svc.DNS.Domain
-			}
-			out = append(out, sh)
+			out = append(out, SystemHost{Hostname: l.Hostname, IP: ip, MAC: strings.ToLower(l.MAC), Description: l.Description})
 		}
 		if l.IP != "" {
 			add(l.IP)

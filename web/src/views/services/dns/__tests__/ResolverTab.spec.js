@@ -165,4 +165,17 @@ describe('ResolverTab', () => {
     const button = wrapper.findAll('button').find((b) => b.text().includes('Clear cache'))
     expect(button.attributes('disabled')).toBeDefined()
   })
+  // Domain overrides send a whole domain to resolvers of its own, so they
+  // sit with the resolver, not with the names this router answers.
+  it('lists the domain overrides beside the resolver', async () => {
+    const config = useConfigStore()
+    config.draft = draft()
+    config.draft.services.dns.domainOverrides = [{ domain: 'ts.net', servers: ['100.100.100.100'] }]
+    config.loaded = true
+    const wrapper = mount(ResolverTab)
+    await flushPromises()
+    const row = wrapper.findAll('tr').find((r) => r.text().includes('ts.net'))
+    expect(row.text()).toContain('100.100.100.100')
+    expect(wrapper.findAll('button').some((b) => b.text().includes('Add domain'))).toBe(true)
+  })
 })

@@ -698,9 +698,8 @@ func TestPPPoEApplyTouchesNothingWithoutSessions(t *testing.T) {
 }
 
 // A static lease with a hostname is a DNS record the operator never wrote
-// on the DNS page; the overrides tab lists it from here, with the local
-// domain expand-hosts adds. A bare IPv6 host part is not an address yet
-// and is left out, as the hosts file leaves it out.
+// on the DNS page; the names tab lists it from here. A bare IPv6 host part
+// is not an address yet and is left out, as the hosts file leaves it out.
 func TestSystemHostsComeFromStaticLeases(t *testing.T) {
 	t.Parallel()
 	cfg := &model.Config{}
@@ -712,15 +711,11 @@ func TestSystemHostsComeFromStaticLeases(t *testing.T) {
 	}
 	got := SystemHosts(cfg)
 	want := []SystemHost{
-		{Hostname: "calcifer", IP: "10.0.0.20", FQDN: "calcifer.lan", MAC: "aa:bb:cc:00:00:01", Description: "the NAS", Setting: "dhcp"},
-		{Hostname: "sixonly", IP: "fd00::3", FQDN: "sixonly.lan", MAC: "aa:bb:cc:00:00:03", Setting: "dhcp"},
+		{Hostname: "calcifer", IP: "10.0.0.20", MAC: "aa:bb:cc:00:00:01", Description: "the NAS"},
+		{Hostname: "sixonly", IP: "fd00::3", MAC: "aa:bb:cc:00:00:03"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("SystemHosts =\n%+v\nwant\n%+v", got, want)
-	}
-	cfg.Services.DNS.Domain = ""
-	if got := SystemHosts(cfg); got[0].FQDN != "" {
-		t.Errorf("FQDN without a domain = %q", got[0].FQDN)
 	}
 	if got := SystemHosts(nil); len(got) != 0 {
 		t.Errorf("nil config = %v", got)

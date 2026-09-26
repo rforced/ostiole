@@ -167,7 +167,7 @@ func (a *api) register(mux *router) {
 	mux.HandleFunc("GET /api/v1/counters", a.read(a.counters))
 	mux.HandleFunc("POST /api/v1/rules/system", a.read(a.systemRules))
 	mux.HandleFunc("POST /api/v1/nat/system", a.read(a.systemNAT))
-	mux.HandleFunc("POST /api/v1/dns/system-hosts", a.readNoEngine(a.systemHosts))
+	mux.HandleFunc("POST /api/v1/dns/names", a.readNoEngine(a.dnsNamesHandler))
 	mux.HandleFunc("DELETE /api/v1/dns/cache", a.write(a.clearDNSCache))
 	mux.HandleFunc("GET /api/v1/interfaces/live", a.readNoEngine(a.liveInterfaces))
 	mux.HandleFunc("POST /api/v1/interfaces/{name}/renew", a.write(a.renewLease))
@@ -750,22 +750,6 @@ func (a *api) counters(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	writeJSON(w, http.StatusOK, c)
-	return nil
-}
-
-// systemHosts describes the names a configuration makes the DNS server
-// answer on its own: the static leases with hostnames. Like systemRules
-// it takes the configuration in the body, so the overrides tab shows them
-// for the draft being edited.
-func (a *api) systemHosts(w http.ResponseWriter, r *http.Request) error {
-	var req configRequest
-	if err := decodeJSON(r, &req); err != nil {
-		return err
-	}
-	if req.Config == nil {
-		return &badRequest{errors.New("config is required")}
-	}
-	writeJSON(w, http.StatusOK, services.SystemHosts(req.Config.config()))
 	return nil
 }
 
