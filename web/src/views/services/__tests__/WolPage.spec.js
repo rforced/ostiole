@@ -20,7 +20,7 @@ const stubs = {
 
 function config() {
   return {
-    version: 6,
+    version: 7,
     zones: [{ name: 'wan', external: true }, { name: 'lan' }],
     interfaces: [
       { name: 'eth0', zone: 'wan', enabled: true },

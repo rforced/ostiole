@@ -12,7 +12,7 @@ vi.mock('@/lib/api', () => ({
 }))
 
 const config = {
-  version: 6,
+  version: 7,
   zones: [],
   interfaces: [],
   rules: [],

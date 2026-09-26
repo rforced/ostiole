@@ -102,7 +102,7 @@ func (u *Unbound) Name() string { return "unbound" }
 // ResolverEnabled reports whether the configuration wants unbound.
 func ResolverEnabled(cfg *model.Config) bool {
 	dns := cfg.Services.DNS
-	return dns.Enabled && (dns.Resolver == model.ResolverValidate || dns.Resolver == model.ResolverTLS)
+	return dns.Enabled && (dns.Resolver == model.ResolverRecursive || dns.Resolver == model.ResolverTLS)
 }
 
 // ConfPath is the generated configuration file.
@@ -174,7 +174,7 @@ func (u *Unbound) render(cfg *model.Config) string {
 	if dns.Resolver == model.ResolverTLS {
 		fmt.Fprintf(&b, "    tls-cert-bundle: %q\n", u.certBundle())
 	}
-	if dns.Resolver == model.ResolverValidate {
+	if dns.Resolver == model.ResolverRecursive {
 		// RFC 8806: the root zone is transferred once and answered from
 		// here, so no client query ever reaches a root server. The only
 		// thing that leaves is the transfer itself, on the SOA refresh.

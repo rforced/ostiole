@@ -24,7 +24,7 @@ const masquerade = {
 
 function draft(mode, rules = []) {
   return {
-    version: 6,
+    version: 7,
     zones: [{ name: 'wan', external: true }, { name: 'lan' }],
     interfaces: [],
     rules: [],

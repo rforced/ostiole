@@ -130,7 +130,7 @@ it.
 The router keeps as little as it can. DNS queries are never logged at any level, leases only if you
 ask for them. The journal is the only log, capped at 10 GB and 90 days. The WAN tells your provider
 no hostname, and its IPv6 address carries no hardware address. DNS rebinding is refused, and in
-validating mode the root zone is served locally, so no lookup reaches a root server.
+recursive mode the root zone is served locally, so no lookup reaches a root server.
 
 What leaves the machine by default: your distribution's mirrors, GitHub's release feed, and whatever
 lists you subscribed to. A certificate authority and a DNS provider hear from you only once you ask

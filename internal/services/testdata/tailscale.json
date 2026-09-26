@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "system": { "dnsServers": ["9.9.9.9"], "management": { "webPort": 443, "sshPort": 22 } },
   "zones": [
     { "name": "wan", "external": true },

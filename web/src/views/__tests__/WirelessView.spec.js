@@ -48,7 +48,7 @@ function card(over = {}) {
 
 function config(over = {}) {
   return {
-    version: 6,
+    version: 7,
     zones: [{ name: 'wan', external: true }, { name: 'lan' }, { name: 'guest' }],
     interfaces: [
       {

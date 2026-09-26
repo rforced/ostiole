@@ -35,7 +35,7 @@ function proxy(over = {}) {
 
 function config(over = {}) {
   return {
-    version: 6,
+    version: 7,
     system: { management: { webPort: 8443, sshPort: 22 } },
     zones: [{ name: 'wan', external: true }, { name: 'lan' }],
     interfaces: [],

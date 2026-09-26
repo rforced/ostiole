@@ -6,7 +6,7 @@ import { useConfigStore } from '@/stores/config'
 import LogsSection from '@/views/system/LogsSection.vue'
 
 const draft = (system = {}) => ({
-  version: 6,
+  version: 7,
   system,
   zones: [],
   interfaces: [],

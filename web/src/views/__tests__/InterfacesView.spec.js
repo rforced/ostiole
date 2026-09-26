@@ -61,7 +61,7 @@ describe('InterfacesView', () => {
   /** A router with one of everything that has a page of its own. */
   function draft() {
     return {
-      version: 6,
+      version: 7,
       zones: [{ name: 'lan' }, { name: 'tailnet' }],
       interfaces: [
         {

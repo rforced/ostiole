@@ -100,7 +100,7 @@ func TestClearDNSCacheValidatingHUPsBoth(t *testing.T) {
 	t.Parallel()
 	cfg := starter()
 	cfg.Services.DNS.Enabled = true
-	cfg.Services.DNS.Resolver = model.ResolverValidate
+	cfg.Services.DNS.Resolver = model.ResolverRecursive
 	srv, dc, uc := dnsCacheServer(t, cfg)
 
 	resp, cleared := clearCache(t, srv)

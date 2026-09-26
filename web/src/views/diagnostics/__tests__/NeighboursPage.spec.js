@@ -39,7 +39,7 @@ async function page(rows = table) {
   api.diagnostics.neighbours.mockResolvedValue(rows)
   const config = useConfigStore()
   config.replaceDraft({
-    version: 6,
+    version: 7,
     services: { dhcp: { staticLeases: [{ mac: 'AA:BB:CC:00:00:01', hostname: 'printer' }] } },
   })
   const wrapper = mount(NeighboursPage)

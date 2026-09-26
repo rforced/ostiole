@@ -13,7 +13,7 @@ const stubs = {
 function open(zone, role) {
   useAuthStore().user = { username: role, role }
   useConfigStore().replaceDraft({
-    version: 6,
+    version: 7,
     zones: [{ name: 'lan', antiLockout: true }],
     interfaces: [],
     rules: [],

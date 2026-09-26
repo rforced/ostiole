@@ -20,7 +20,7 @@ const stubs = {
 function open(alias = null, feeds = []) {
   const config = useConfigStore()
   config.replaceDraft({
-    version: 6,
+    version: 7,
     zones: [],
     interfaces: [],
     aliases: alias ? [alias] : [],

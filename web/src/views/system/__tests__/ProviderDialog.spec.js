@@ -32,7 +32,7 @@ const KINDS = [
 function open(provider = null) {
   setActivePinia(createPinia())
   const config = useConfigStore()
-  config.replaceDraft({ version: 6, zones: [], interfaces: [], rules: [], nat: {}, system: {} })
+  config.replaceDraft({ version: 7, zones: [], interfaces: [], rules: [], nat: {}, system: {} })
   const wrapper = mount(ProviderDialog, {
     props: { open: true, provider, kinds: KINDS },
     global: { stubs: { AppDialog: AppDialogStub } },

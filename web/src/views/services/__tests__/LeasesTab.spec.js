@@ -30,7 +30,7 @@ async function tab(leases, { role = 'admin' } = {}) {
   useAuthStore().user = { username: role, role }
   const config = useConfigStore()
   config.replaceDraft({
-    version: 6,
+    version: 7,
     zones: [{ name: 'wan', external: true }, { name: 'lan' }],
     interfaces: [
       { name: 'eth0', zone: 'wan', enabled: true },

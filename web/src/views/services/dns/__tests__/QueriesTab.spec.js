@@ -68,7 +68,7 @@ function mixed() {
 function saved() {
   const config = useConfigStore()
   config.replaceDraft({
-    version: 6,
+    version: 7,
     services: {
       dhcp: { enabled: false },
       dns: { enabled: true, domain: 'lan', queryLog: { enabled: true } },
@@ -97,7 +97,7 @@ describe('QueriesTab', () => {
   // so a million answers ended up in the browser. One page is kept.
   it('pages through the log a page at a time', async () => {
     const config = useConfigStore()
-    config.draft = { version: 6, services: { dns: { enabled: true, queryLog: { enabled: true } } } }
+    config.draft = { version: 7, services: { dns: { enabled: true, queryLog: { enabled: true } } } }
     config.loaded = true
     const wrapper = mount(QueriesTab)
     await flushPromises()
@@ -157,7 +157,7 @@ describe('QueriesTab', () => {
         }),
       })
     const config = useConfigStore()
-    config.draft = { version: 6, services: { dns: { enabled: true, queryLog: { enabled: true } } } }
+    config.draft = { version: 7, services: { dns: { enabled: true, queryLog: { enabled: true } } } }
     config.loaded = true
     const wrapper = mount(QueriesTab)
     await flushPromises()

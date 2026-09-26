@@ -17,7 +17,7 @@ function mountDialog(devices, role = 'operator') {
   useAuthStore().user = { username: role, role }
   const config = useConfigStore()
   config.replaceDraft({
-    version: 6,
+    version: 7,
     zones: [{ name: 'lan' }],
     interfaces: [{ name: 'eth1', zone: 'lan', enabled: true }],
     services: { dhcp: { enabled: false }, dns: { enabled: false }, wol: { devices } },

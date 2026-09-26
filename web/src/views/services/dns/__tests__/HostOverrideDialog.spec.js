@@ -17,7 +17,7 @@ const stubs = {
 
 async function open(override = null) {
   useConfigStore().replaceDraft({
-    version: 6,
+    version: 7,
     zones: [{ name: 'lan' }],
     interfaces: [],
     rules: [],

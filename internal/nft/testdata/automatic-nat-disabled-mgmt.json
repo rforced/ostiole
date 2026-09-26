@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "system": { "management": { "webPort": 0, "sshPort": 0 } },
   "zones": [
     { "name": "wan", "external": true },

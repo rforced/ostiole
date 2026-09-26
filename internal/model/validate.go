@@ -789,13 +789,13 @@ func (v *validator) services(c *Config, ifaces, zones map[string]bool) {
 		if dns.Enabled && len(dns.Upstreams) == 0 && len(c.System.DNSServers) == 0 {
 			v.add("services.dns.upstreams", "at least one upstream DNS server is required (or set system.dnsServers)")
 		}
-	case ResolverValidate:
+	case ResolverRecursive:
 	case ResolverTLS:
 		if dns.Enabled && len(dns.TLSUpstreams) == 0 {
 			v.add("services.dns.tlsUpstreams", "DNS over TLS needs at least one resolver")
 		}
 	default:
-		v.add("services.dns.resolver", "%q must be forward, validate, or tls", dns.Resolver)
+		v.add("services.dns.resolver", "%q must be forward, recursive, or tls", dns.Resolver)
 	}
 	for i, u := range dns.TLSUpstreams {
 		path := fmt.Sprintf("services.dns.tlsUpstreams[%d]", i)

@@ -66,7 +66,7 @@ function status(over = {}) {
 
 function config(ntp) {
   return {
-    version: 6,
+    version: 7,
     system: { timezone: 'Europe/Berlin', management: { webPort: 9443, sshPort: 22 } },
     zones: [{ name: 'wan', external: true }, { name: 'lan' }],
     interfaces: [

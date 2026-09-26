@@ -34,7 +34,7 @@ const domain = computed({
   },
 })
 
-/** forward (dnsmasq asks upstreams), validate, or tls (both via unbound). */
+/** forward (dnsmasq asks upstreams), recursive, or tls (both via unbound). */
 const resolver = computed({
   get: () => dns.value.resolver ?? 'forward',
   set: (v) => {
@@ -147,7 +147,7 @@ function toggleInterface(name, on) {
           <FormField id="dns-resolver" label="Resolver">
             <select id="dns-resolver" v-model="resolver" class="input">
               <option value="forward">Forward: ask the upstream resolvers below</option>
-              <option value="validate">Validate: resolve from the root, check DNSSEC</option>
+              <option value="recursive">Recursive: look names up directly, check DNSSEC</option>
               <option value="tls">DNS over TLS: encrypted upstreams, check DNSSEC</option>
             </select>
           </FormField>

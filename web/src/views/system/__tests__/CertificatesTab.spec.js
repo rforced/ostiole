@@ -37,7 +37,7 @@ const builtIn = {
 
 function draft() {
   return {
-    version: 6,
+    version: 7,
     zones: [{ name: 'wan', external: true }],
     interfaces: [{ name: 'eth0', zone: 'wan' }],
     rules: [],

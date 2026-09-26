@@ -18,9 +18,10 @@ import (
 // "scopes" to "servers"; version 4 split each update source's "schedule"
 // into "checkSchedule" and "installSchedule"; version 5 added
 // "sshPasswords"; version 6 moved "journalMaxUseGB" under "logging" as
-// "maxUseGB". An older file needs each changed by hand before this build
+// "maxUseGB"; version 7 renamed the DNS resolver "validate" to
+// "recursive". An older file needs each changed by hand before this build
 // will load it.
-const SchemaVersion = 6
+const SchemaVersion = 7
 
 // Action is a rule verdict.
 type Action string
@@ -1949,10 +1950,11 @@ type ResolverMode string
 // validating resolver behind dnsmasq.
 const (
 	// ResolverForward sends queries straight to Upstreams, in the clear.
-	// It is the default because it needs nothing but dnsmasq.
+	// It is what an empty mode means, and where a new router starts.
 	ResolverForward ResolverMode = "forward"
-	// ResolverValidate resolves from the root servers and checks DNSSEC.
-	ResolverValidate ResolverMode = "validate"
+	// ResolverRecursive looks names up itself, asking each domain's own
+	// servers from a local copy of the root zone down, and checks DNSSEC.
+	ResolverRecursive ResolverMode = "recursive"
 	// ResolverTLS forwards to TLSUpstreams over DNS over TLS and checks
 	// DNSSEC.
 	ResolverTLS ResolverMode = "tls"

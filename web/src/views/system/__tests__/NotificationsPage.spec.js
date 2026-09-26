@@ -12,7 +12,7 @@ vi.mock('@/lib/api', () => ({
 }))
 
 const config = (notifications) => ({
-  version: 6,
+  version: 7,
   system: {},
   zones: [],
   interfaces: [],

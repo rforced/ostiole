@@ -13,7 +13,7 @@ vi.mock('@/lib/api', () => ({
 
 function draft() {
   return {
-    version: 6,
+    version: 7,
     zones: [
       { name: 'lan', description: 'Home' },
       { name: 'wan', external: true },

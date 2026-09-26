@@ -19,7 +19,7 @@ const stubs = {
 
 function draft() {
   return {
-    version: 6,
+    version: 7,
     zones: [{ name: 'lan' }],
     interfaces: [],
     rules: [],

@@ -14,7 +14,7 @@ const AppDialogStub = {
 
 function draft() {
   return {
-    version: 6,
+    version: 7,
     zones: [{ name: 'lan' }, { name: 'wan', external: true }],
     interfaces: [
       { name: 'eth1', zone: 'lan' },
