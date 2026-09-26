@@ -16,6 +16,10 @@ import (
 const (
 	trackingReply = "0602000000210005000000000000000001020304000000000000000003dc2a2703dc2a27000000000000000000000000000100000003" +
 		"0000000000006ab5e1590c452528f2afc560f1408d36f0bf72ca0ac5723ff2d923c80ce9fc6ffac8c08af0dde9b704d54820"
+	// Another daemon, with `local stratum 10` and no source, answering
+	// from its own clock. chronyc: 7F7F0101,,10,1790386581.799298585,...,Normal
+	localTrackingReply = "060200000021000500000000000000000102030400000000000000007f7f01010000000000000000000000000000000000000000" +
+		"000a0000000000006ab721952fa45419000000000000000000000000000000000000000000000000000000000000000000000000"
 	nSourcesReply = "06020000000e000200000000000000000102030400000000000000000000000e"
 	// chronyc: ^,-,194.58.205.196,1,6,37,6,-0.002077126,-0.002077126,0.070244834
 	excludedReply = "06020000000f00030000000000000000010203040000000000000000c23acdc4000000000000000000000000" +
@@ -83,6 +87,19 @@ func TestDecodeTrackingFromChronyd(t *testing.T) {
 	}
 	if tr.RootDispersion < 0.001687340 || tr.RootDispersion > 0.001693209 {
 		t.Errorf("root dispersion = %.9f", tr.RootDispersion)
+	}
+}
+
+// chronyd calls its own clock Normal and stamps it with the time it was
+// asked, so neither says whether a source still sets the clock.
+func TestDecodeTrackingOnItsOwnClock(t *testing.T) {
+	t.Parallel()
+	tr := decodeTracking(report(t, cmdTracking, localTrackingReply))
+	if !tr.Local || tr.Synchronised() || tr.Address != "" || tr.Stratum != 10 || tr.Leap != "Normal" {
+		t.Errorf("tracking = %+v", tr)
+	}
+	if want := time.Unix(1790386581, 799298585).UTC(); !tr.RefTime.Equal(want) {
+		t.Errorf("ref time = %v, want %v", tr.RefTime, want)
 	}
 }
 

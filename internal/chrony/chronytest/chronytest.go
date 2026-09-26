@@ -299,6 +299,10 @@ func (d *Daemon) trackingData() []byte {
 		copy(id[:], t.Address)
 		binary.BigEndian.PutUint32(b, binary.BigEndian.Uint32(id[:]))
 	}
+	if t.Local {
+		// chronyd's own clock, 127.127.1.1, with no address.
+		binary.BigEndian.PutUint32(b, 0x7f7f0101)
+	}
 	binary.BigEndian.PutUint16(b[24:], uint16(t.Stratum))
 	binary.BigEndian.PutUint16(b[26:], leaps[t.Leap])
 	if !t.RefTime.IsZero() {

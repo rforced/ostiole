@@ -50,9 +50,13 @@ func (c *Client) dial(ctx context.Context) (*conn, error) {
 type Tracking struct {
 	// Address is the source the clock follows; empty while it follows none.
 	Address string
+	// Local says chronyd has given up on its sources and answers from its
+	// own clock, as the local directive lets it. It reports that as a
+	// Normal leap status at the local stratum.
+	Local   bool
 	Stratum int
 	// RefTime is when the clock was last corrected from a source; zero
-	// when it never was.
+	// when it never was, and the time of asking while Local.
 	RefTime time.Time
 	// Offset is how far the clock is from true time, in seconds. Positive
 	// means it is ahead.
@@ -64,10 +68,15 @@ type Tracking struct {
 	Leap string
 }
 
-// Synchronised reports whether the clock is following a source.
+// Synchronised reports whether the clock is following a source, as far
+// as chronyd says. It goes on saying so after every source has stopped
+// answering; RefTime shows how long ago one last set the clock.
 func (t Tracking) Synchronised() bool {
-	return t.Leap != "" && t.Leap != "Not synchronised"
+	return t.Leap != "" && t.Leap != "Not synchronised" && !t.Local
 }
+
+// refIDLocal is the reference ID of chronyd's own clock, 127.127.1.1.
+const refIDLocal = 0x7f7f0101
 
 // Source is one server the router asks.
 type Source struct {
@@ -155,6 +164,7 @@ func decodeTracking(d []byte) Tracking {
 	case family == familyUnspec:
 		// A reference clock, or the local one, goes by its ID.
 		t.Address = refIDName(refID)
+		t.Local = refID == refIDLocal
 	case ip.IsValid():
 		t.Address = ip.String()
 	}
