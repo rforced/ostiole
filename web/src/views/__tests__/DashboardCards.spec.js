@@ -243,6 +243,33 @@ describe('RecentBlocksCard', () => {
     expect(body[1].text()).not.toContain('·')
   })
 
+  // Unbroken, a long IPv6 address squeezed By to a word a line.
+  it('breaks an address only after a colon', () => {
+    const w = mount(RecentBlocksCard, {
+      props: {
+        blocks: [
+          {
+            time: '2026-09-19T12:00:00Z',
+            kind: 'zone-drop',
+            zone: 'wan',
+            action: 'drop',
+            proto: 'tcp',
+            src: '2001:db8:beef::17',
+            srcPort: 42249,
+            dst: '192.0.2.10',
+            dstPort: 8080,
+          },
+        ],
+      },
+      global: { stubs },
+    })
+    const [, src, dst] = rows(w)[0].findAll('td')
+    expect(src.text()).toBe('2001:db8:beef::17:42249')
+    expect(src.findAll('wbr')).toHaveLength(5)
+    expect(dst.text()).toBe('192.0.2.10:8080')
+    expect(dst.findAll('wbr')).toHaveLength(1)
+  })
+
   it('says so when nothing was refused', () => {
     const w = mount(RecentBlocksCard, { props: { blocks: [] }, global: { stubs } })
     expect(w.text()).toContain('No blocks yet.')

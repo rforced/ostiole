@@ -15,6 +15,15 @@ function endpoint(addr, port) {
   if (!addr) return '—'
   return port ? `${addr}:${port}` : addr
 }
+
+/**
+ * An endpoint cut after each colon, where it may break: an IPv4 address
+ * only before its port, an IPv6 one at every group. Unbroken, a long IPv6
+ * address squeezes By to a word a line.
+ */
+function pieces(addr, port) {
+  return endpoint(addr, port).split(/(?<=:)/)
+}
 </script>
 
 <template>
@@ -55,11 +64,19 @@ function endpoint(addr, port) {
           <td class="text-xs whitespace-nowrap text-ink-muted tabular-nums">
             {{ new Date(e.time).toLocaleTimeString() }}
           </td>
-          <td class="font-mono text-code">{{ endpoint(e.src, e.srcPort) }}</td>
-          <td class="font-mono text-code">{{ endpoint(e.dst, e.dstPort) }}</td>
+          <td class="font-mono text-code">
+            <template v-for="(p, n) in pieces(e.src, e.srcPort)" :key="n"
+              ><wbr v-if="n" />{{ p }}</template
+            >
+          </td>
+          <td class="font-mono text-code">
+            <template v-for="(p, n) in pieces(e.dst, e.dstPort)" :key="n"
+              ><wbr v-if="n" />{{ p }}</template
+            >
+          </td>
           <td>
             <div class="font-mono text-code">{{ by(e) }}</div>
-            <div class="font-mono text-code text-ink-muted">
+            <div class="font-mono text-code whitespace-nowrap text-ink-muted">
               <!-- Whether the sender was told is worth the width: a reject
                    answers back, a drop says nothing. -->
               <span v-if="e.action">{{ e.action }} · </span>{{ e.proto
