@@ -198,6 +198,14 @@ func TestRulesSurviveARoundTrip(t *testing.T) {
 	for _, want := range []Rule{
 		{Family: unix.AF_INET, Priority: 22000, Mark: 1 << 16, Mask: 0xff0000, Table: unix.RT_TABLE_MAIN, SuppressPrefixlen: 0},
 		{Family: unix.AF_INET6, Priority: 22001, Mark: 1 << 16, Mask: 0xff0000, Table: 2201, SuppressPrefixlen: -1},
+		{
+			Family: unix.AF_INET, Priority: 22450, Src: netip.MustParsePrefix("198.51.100.2/32"),
+			IPProto: unix.IPPROTO_UDP, Sport: PortRange{Start: 51820, End: 51820}, Table: unix.RT_TABLE_MAIN, SuppressPrefixlen: 0,
+		},
+		{
+			Family: unix.AF_INET6, Priority: 22451, Src: netip.MustParsePrefix("2001:db8:2::/64"),
+			IPProto: unix.IPPROTO_UDP, Sport: PortRange{Start: 51820, End: 51830}, Table: 2425, SuppressPrefixlen: -1,
+		},
 	} {
 		var e encoder
 		e.rule(want)

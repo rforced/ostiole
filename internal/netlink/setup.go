@@ -111,6 +111,10 @@ type RouteQuery struct {
 	Src  net.IP
 	Iif  int
 	Mark uint32
+	// IPProto and Sport are its transport and source port, which rules
+	// can match.
+	IPProto uint8
+	Sport   uint16
 }
 
 // RouteGet answers a query with the route the kernel chose, and the table
@@ -136,6 +140,13 @@ func RouteGet(q RouteQuery) ([]Route, error) {
 	}
 	if q.Mark > 0 {
 		e.u32(unix.RTA_MARK, q.Mark)
+	}
+	if q.IPProto != 0 {
+		e.attr(unix.RTA_IP_PROTO, []byte{q.IPProto})
+	}
+	// In network order, as it is in the packet.
+	if q.Sport != 0 {
+		e.attr(unix.RTA_SPORT, binary.BigEndian.AppendUint16(nil, q.Sport))
 	}
 	var out []Route
 	err := request(unix.RTM_GETROUTE, 0, &e, func(m message) error {

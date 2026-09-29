@@ -381,6 +381,102 @@ func TestRulesSendAMarkToItsTable(t *testing.T) {
 	}
 }
 
+// A rule can match a source address and a source port, as the ones that
+// keep WireGuard's answers on a line do: a lookup from that address and
+// port goes to the rule's table, one from another port or address, or to
+// a network the main table knows without its default route, does not. The
+// rules read back as they were written, in both families.
+func TestRulesSendASourceAndPortToItsTable(t *testing.T) {
+	if !netnstest.Enter(t) {
+		return
+	}
+	for _, key := range []string{"all", "default"} {
+		if err := os.WriteFile("/proc/sys/net/ipv6/conf/"+key+"/accept_dad", []byte("0"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	netnstest.Dummy(t, "lan0", "192.0.2.1/24", "2001:db8:10::1/64")
+	wan0 := netnstest.Dummy(t, "wan0", "203.0.113.2/24", "2001:db8:1::2/64")
+	wan1 := netnstest.Dummy(t, "wan1", "198.51.100.2/24", "2001:db8:2::2/64")
+	for _, r := range []netlink.Route{
+		{LinkIndex: wan0.Index, Gw: net.ParseIP("203.0.113.1")},
+		{LinkIndex: wan0.Index, Dst: cidr("::/0"), Gw: net.ParseIP("2001:db8:1::1")},
+		{Table: 2425, Dst: cidr("0.0.0.0/0"), LinkIndex: wan1.Index, Gw: net.ParseIP("198.51.100.1")},
+		{Table: 2425, Dst: cidr("::/0"), LinkIndex: wan1.Index, Gw: net.ParseIP("2001:db8:2::1")},
+	} {
+		if err := netlink.AddRoute(r); err != nil {
+			t.Fatalf("route %+v: %v", r, err)
+		}
+	}
+	var rules []netlink.Rule
+	for _, fam := range []struct {
+		family int
+		src    string
+	}{{unix.AF_INET, "198.51.100.2/32"}, {unix.AF_INET6, "2001:db8:2::2/128"}} {
+		suppress := netlink.NewRule()
+		suppress.Family, suppress.Priority, suppress.Src = fam.family, 22450, netip.MustParsePrefix(fam.src)
+		suppress.IPProto, suppress.Sport = unix.IPPROTO_UDP, netlink.PortRange{Start: 51820, End: 51820}
+		suppress.Table, suppress.SuppressPrefixlen = unix.RT_TABLE_MAIN, 0
+		lookup := suppress
+		lookup.Priority, lookup.Table, lookup.SuppressPrefixlen = 22451, 2425, -1
+		rules = append(rules, suppress, lookup)
+	}
+	for _, r := range rules {
+		if err := netlink.AddRule(r); err != nil {
+			t.Fatalf("add %+v: %v", r, err)
+		}
+	}
+	for _, want := range rules {
+		have, err := netlink.Rules(want.Family)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Contains(have, want) {
+			t.Errorf("rules %+v lack %+v", have, want)
+		}
+	}
+
+	for _, tc := range []struct {
+		dst, src string
+		proto    uint8
+		sport    uint16
+		gw       string
+		table    int
+	}{
+		{"1.1.1.1", "198.51.100.2", unix.IPPROTO_UDP, 51820, "198.51.100.1", 2425},
+		{"1.1.1.1", "198.51.100.2", unix.IPPROTO_UDP, 51821, "203.0.113.1", unix.RT_TABLE_MAIN},
+		{"1.1.1.1", "198.51.100.2", unix.IPPROTO_TCP, 51820, "203.0.113.1", unix.RT_TABLE_MAIN},
+		{"1.1.1.1", "203.0.113.2", unix.IPPROTO_UDP, 51820, "203.0.113.1", unix.RT_TABLE_MAIN},
+		{"192.0.2.50", "198.51.100.2", unix.IPPROTO_UDP, 51820, "<nil>", unix.RT_TABLE_MAIN},
+		{"2001:db8:ff::9", "2001:db8:2::2", unix.IPPROTO_UDP, 51820, "2001:db8:2::1", 2425},
+		{"2001:db8:ff::9", "2001:db8:2::2", unix.IPPROTO_UDP, 51821, "2001:db8:1::1", unix.RT_TABLE_MAIN},
+		{"2001:db8:10::50", "2001:db8:2::2", unix.IPPROTO_UDP, 51820, "<nil>", unix.RT_TABLE_MAIN},
+	} {
+		routes, err := netlink.RouteGet(netlink.RouteQuery{
+			Dst: net.ParseIP(tc.dst), Src: net.ParseIP(tc.src), IPProto: tc.proto, Sport: tc.sport,
+		})
+		if err != nil || len(routes) != 1 {
+			t.Fatalf("route to %s from %s: %+v, %v", tc.dst, tc.src, routes, err)
+		}
+		if routes[0].Gw.String() != tc.gw || routes[0].Table != tc.table {
+			t.Errorf("route to %s from %s, protocol %d port %d = via %s in %d, want via %s in %d",
+				tc.dst, tc.src, tc.proto, tc.sport, routes[0].Gw, routes[0].Table, tc.gw, tc.table)
+		}
+	}
+
+	for _, r := range rules {
+		if err := netlink.DeleteRule(r); err != nil {
+			t.Fatalf("delete %+v: %v", r, err)
+		}
+	}
+	for _, fam := range []int{unix.AF_INET, unix.AF_INET6} {
+		have, _ := netlink.Rules(fam)
+		if slices.ContainsFunc(have, func(r netlink.Rule) bool { return r.Src.IsValid() }) {
+			t.Errorf("rules %+v still match a source", have)
+		}
+	}
+}
+
 func TestAddressChangesAreAnnounced(t *testing.T) {
 	if !netnstest.Enter(t) {
 		return
