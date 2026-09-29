@@ -52,6 +52,10 @@ func crsInclude(b *strings.Builder, dir, app, part string) {
 	fmt.Fprintf(b, "Include %s\n", filepath.Join(dir, crsDirName, app+"-"+part+".conf"))
 }
 
+// cloudflareCookies matches the cookies Cloudflare's documentation lists
+// it setting on a site it serves.
+const cloudflareCookies = `^(?:__cf_bm|__cflb|__cfruid|__cfseq.*|__cfwaitingroom|_cfuvid|cf_clearance|cf_chl_rc_(?:i|ni|m)|cf_ob_info|cf_use_ob)$`
+
 // The first rule ID Ostiole writes. CRS reserves 10000-99999 for local
 // rules, and everything below is a counter from here. Ostiole's own
 // exclusion sets take a thousand each from 20000: vaultwarden 20000-20999,
@@ -172,6 +176,13 @@ func wafDirectives(dir string, w model.WAFProfile, siteID string) string {
 		fmt.Fprintf(&b, "SecRule REQUEST_URI \"@beginsWith %s\" \"id:%d,phase:1,pass,nolog,%s\"\n", e.Path, id, ctl)
 	}
 	b.WriteString("Include @owasp_crs/*.conf\n")
+	// Cloudflare's cookies are for Cloudflare, and a browser sends them to
+	// every name under a zone once one name in it has been through
+	// Cloudflare. Their random base64url trips the SQL comment, hex and
+	// character counting rules now and then, for as long as the cookie
+	// lasts. CRS leaves Google's analytics and ad cookies out the same way,
+	// by name.
+	b.WriteString("SecRuleUpdateTargetByTag OWASP_CRS \"!REQUEST_COOKIES:/" + cloudflareCookies + "/\"\n")
 	for _, app := range w.Applications {
 		crsInclude(&b, dir, app, "after")
 	}

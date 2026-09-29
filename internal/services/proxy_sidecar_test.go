@@ -538,6 +538,92 @@ func TestAReloadReadsAChangedSet(t *testing.T) {
 	}
 }
 
+// cloudflareCookie is a cookie Cloudflare sets, with a random value of its
+// shape: base64url, the time it was issued and a version, joined by dashes,
+// and more base64url in parts joined by dots.
+func cloudflareCookie(r *rand.Rand) string {
+	const b64url = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+	random := func(n int) string {
+		b := make([]byte, n)
+		for i := range b {
+			b[i] = b64url[r.IntN(len(b64url))]
+		}
+		return string(b)
+	}
+	parts := func(n int) string {
+		var p []string
+		for range n {
+			p = append(p, random(10+r.IntN(60)))
+		}
+		return strings.Join(p, ".")
+	}
+	issued := strconv.FormatInt(1.7e9+r.Int64N(1e8), 10)
+	switch r.IntN(3) {
+	case 0:
+		return "cf_clearance=" + random(43) + "-" + issued + "-1.2.1.1-" + parts(2+r.IntN(6))
+	case 1:
+		return "__cf_bm=" + random(43) + "-" + issued + "-1.0.1.1-" + parts(1+r.IntN(4))
+	default:
+		return "_cfuvid=" + random(43) + "-" + issued + strconv.Itoa(r.IntN(1000)) + "-0.0.1.1-604800000"
+	}
+}
+
+// A browser sends Cloudflare's cookies to every name under a zone once one
+// name in it has been through Cloudflare, and their random values trip the
+// SQL rules now and then, a comment in one of eleven. No rule reads them at
+// paranoia 4; any other cookie is read as before.
+func TestCloudflaresCookiesAreNotRead(t *testing.T) {
+	t.Parallel()
+	cfg := &model.Config{}
+	cfg.Services.Proxy = model.Proxy{
+		Enabled: true, HTTPPort: freePort(t), HTTPSPort: freePort(t),
+		Pools:    []model.ProxyPool{{ID: "shop", Upstreams: []model.ProxyUpstream{{Address: answer(t, "{}")}}}},
+		Profiles: []model.WAFProfile{{ID: "block", Mode: "block", Paranoia: 4}},
+		Sites: []model.ProxySite{{ID: "shop", Enabled: true, Hosts: []string{"shop.example.com"}, Pool: "shop",
+			PlainHTTP: true, WAF: "block"}},
+	}
+	plain, _, out := runSidecar(t, sidecar(t), cfg, "", map[string][]string{model.SelfCertificate: {"127.0.0.1"}})
+	tr := &http.Transport{DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+		var d net.Dialer
+		return d.DialContext(ctx, network, plain)
+	}}
+	defer tr.CloseIdleConnections()
+	client := &http.Client{Transport: tr, Timeout: 10 * time.Second}
+	send := func(path, cookie string) int {
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://shop.example.com"+path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Accept", "text/html")
+		req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:151.0) Gecko/20100101 Firefox/151.0")
+		req.Header.Set("Cookie", cookie)
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode
+	}
+	r := rand.New(rand.NewPCG(3, 4))
+	for i := range 1000 {
+		if status := send("/cf/"+strconv.Itoa(i), cloudflareCookie(r)+"; theme=dark"); status != http.StatusOK {
+			t.Errorf("request %d: %d", i, status)
+		}
+	}
+	for _, name := range []string{"session", "cf_clearance_copy"} {
+		if status := send("/other/"+name, name+"=1' or '1'='1"); status != http.StatusForbidden {
+			t.Errorf("an injection in %s: %d, want 403", name, status)
+		}
+	}
+	waitFor(t, "the injections' events", func() bool {
+		_, ok := findEvent(out, func(ev wafevent.Event) bool { return ev.URI == "/other/cf_clearance_copy" })
+		return ok
+	})
+	if ev, ok := findEvent(out, func(ev wafevent.Event) bool { return strings.HasPrefix(ev.URI, "/cf/") }); ok {
+		t.Errorf("a Cloudflare cookie matched: %s %+v", ev.URI, ev.Rules)
+	}
+}
+
 // A player whose buffer is full stops reading, and holds its download open
 // for as long as it stays. A reload leaves the download running, past the
 // grace period too; a stop waits for one only the grace period.
