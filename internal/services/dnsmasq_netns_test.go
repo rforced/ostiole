@@ -150,6 +150,11 @@ func startDnsmasq(t *testing.T, bin string, d *Dnsmasq, cfg *model.Config) dnsma
 		t.Fatal(err)
 	}
 	for name, content := range files {
+		if name == confName {
+			// The namespace maps one uid, so dnsmasq cannot drop to its
+			// account here, and the file's user= beats --user= below.
+			content = strings.Replace(content, "user="+User+"\n", "", 1)
+		}
 		if err := os.WriteFile(filepath.Join(d.Dir, name), []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}

@@ -817,14 +817,26 @@ func (failCmd) Run(context.Context, string, ...string) ([]byte, error) {
 }
 
 // Lookups through a gateway are marked by the account each resolver runs
-// as, so dnsmasq's unit names its account rather than leave it to the
-// build, and unbound's configuration names its own.
+// as, so dnsmasq's configuration names its account rather than leave it
+// to the build, and unbound's names its own. It is the configuration and
+// not the unit: an update rewrites the unit without restarting dnsmasq,
+// but the next apply restarts it on a changed configuration.
 func TestTheResolversRunAsTheAccountsTheRulesetMarks(t *testing.T) {
 	t.Parallel()
-	if unit := UnitContent("/usr/sbin/dnsmasq", "/etc/dnsmasq.d/ostiole.conf"); !strings.Contains(unit, " --user=dnsmasq ") {
-		t.Errorf("the dnsmasq unit leaves its account to the build:\n%s", unit)
+	for _, in := range []string{"testdata/full.json", "testdata/dhcp-only.json"} {
+		d := &Dnsmasq{Dir: DefaultDir, Leases: LeaseFile}
+		files, err := d.Render(loadConfig(t, in))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(files[confName], "\nuser=dnsmasq\n") {
+			t.Errorf("%s: dnsmasq's configuration leaves its account to the build:\n%s", in, files[confName])
+		}
 	}
-	if !slices.Contains(nft.ResolverAccounts, "dnsmasq") || !slices.Contains(nft.ResolverAccounts, "unbound") {
+	if unit := UnitContent("/usr/sbin/dnsmasq", "/etc/dnsmasq.d/ostiole.conf"); strings.Contains(unit, "--user") {
+		t.Errorf("the dnsmasq unit names an account, which an update would not start it under:\n%s", unit)
+	}
+	if !slices.Contains(nft.ResolverAccounts, User) || !slices.Contains(nft.ResolverAccounts, "unbound") {
 		t.Errorf("the ruleset marks the lookups of %v", nft.ResolverAccounts)
 	}
 }

@@ -42,6 +42,10 @@ const (
 	resolvedUnit = "systemd-resolved.service"
 )
 
+// User is the account dnsmasq drops to, which the ruleset marks its
+// lookups by when they go through a gateway.
+const User = "dnsmasq"
+
 // Dnsmasq is the services backend. It implements network.Backend so the
 // engine can snapshot, apply, and revert it like the network units.
 type Dnsmasq struct {
@@ -140,6 +144,10 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 	var b strings.Builder
 	b.WriteString(fileHeader)
 	b.WriteString("no-resolv\nno-hosts\nno-poll\nbind-dynamic\n")
+	// Named here, not in the unit: a changed configuration restarts
+	// dnsmasq, so a router updated from a release that left the account
+	// to the build drops to this one at its next apply.
+	fmt.Fprintf(&b, "user=%s\n", User)
 	fmt.Fprintf(&b, "addn-hosts=%s\n", filepath.Join(d.dir(), hostsName))
 	fmt.Fprintf(&b, "dhcp-leasefile=%s\n", d.leases())
 

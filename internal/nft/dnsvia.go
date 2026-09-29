@@ -11,8 +11,7 @@ import (
 )
 
 // ResolverAccounts are the users the resolvers run as and look names up
-// as: dnsmasq's unit starts it with --user=dnsmasq, and unbound's
-// configuration names unbound.
+// as: dnsmasq's configuration names dnsmasq, and unbound's names unbound.
 var ResolverAccounts = []string{"dnsmasq", "unbound"}
 
 // ResolverUIDs reads the resolvers' accounts on this machine. They go in
