@@ -51,13 +51,29 @@ type Layout struct {
 	BackupDir string
 	// LogDir holds the log files, which the unit's LogsDirectory makes.
 	LogDir string
+	// NetworkdConfDir takes the drop-in that keeps networkd off the policy
+	// routing rules; empty writes none.
+	NetworkdConfDir string
 }
 
 // DefaultLayout is the production layout.
 func DefaultLayout() Layout {
 	return Layout{BinDir: "/usr/local/bin", UnitDir: "/etc/systemd/system", ConfigDir: "/etc/ostiole",
-		BackupDir: backup.Dir, LogDir: logfile.Dir}
+		BackupDir: backup.Dir, LogDir: logfile.Dir, NetworkdConfDir: "/etc/systemd/networkd.conf.d"}
 }
+
+// NetworkdConfFile is the drop-in's name in NetworkdConfDir.
+const NetworkdConfFile = "ostiole.conf"
+
+// NetworkdConf keeps networkd from deleting ip rules it did not make.
+// Policy routing's are Ostiole's, and networkd drops every one of them
+// whenever it reconfigures any link, which an apply does: rules sent
+// through a gateway would take the main table until the next probe.
+// networkd reads it when it starts.
+const NetworkdConf = `# Ostiole: policy routing's ip rules are Ostiole's to keep.
+[Network]
+ManageForeignRoutingPolicyRules=no
+`
 
 // Binary is the installed executable path.
 func (l Layout) Binary() string { return filepath.Join(l.BinDir, "ostiole") }
@@ -199,6 +215,15 @@ func WriteUnits(ctx context.Context, sc Systemctl, lay Layout, opts Options) ([]
 		}
 		if err := os.Chmod(lay.BackupDir, 0o700); err != nil { //nolint:gosec // a directory needs its search bit
 			return nil, err
+		}
+	}
+	if lay.NetworkdConfDir != "" {
+		if err := os.MkdirAll(lay.NetworkdConfDir, 0o755); err != nil { //nolint:gosec // networkd reads this
+			return nil, err
+		}
+		path := filepath.Join(lay.NetworkdConfDir, NetworkdConfFile)
+		if err := atomicfile.Write(path, []byte(NetworkdConf), 0o644); err != nil {
+			return nil, fmt.Errorf("write %s: %w", path, err)
 		}
 	}
 	var names []string
@@ -601,6 +626,11 @@ func Uninstall(ctx context.Context, sc Systemctl, lay Layout, purge bool, log *s
 			_ = os.Remove(f)
 		}
 		log.Info("removed Ostiole networkd units", "count", len(owned))
+	}
+	if lay.NetworkdConfDir != "" {
+		if err := os.Remove(filepath.Join(lay.NetworkdConfDir, NetworkdConfFile)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
 	}
 	if purge {
 		if err := os.RemoveAll(lay.ConfigDir); err != nil {

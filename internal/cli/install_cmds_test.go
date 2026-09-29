@@ -33,7 +33,8 @@ func TestInstallUnitsOnlyWritesTheUnitsAndNothingElse(t *testing.T) {
 	}
 	root := t.TempDir()
 	lay := install.Layout{BinDir: filepath.Join(root, "bin"), UnitDir: filepath.Join(root, "units"),
-		ConfigDir: filepath.Join(root, "etc"), BackupDir: filepath.Join(root, "backups")}
+		ConfigDir: filepath.Join(root, "etc"), BackupDir: filepath.Join(root, "backups"),
+		NetworkdConfDir: filepath.Join(root, "networkd.conf.d")}
 	// The UI stays where the installed unit serves it.
 	old := install.Units(lay, install.Options{Listen: "10.0.0.1:9000"})[install.DaemonUnit]
 	if err := os.MkdirAll(lay.UnitDir, 0o755); err != nil {
@@ -63,6 +64,10 @@ func TestInstallUnitsOnlyWritesTheUnitsAndNothingElse(t *testing.T) {
 	}
 	if info, err := os.Stat(lay.BackupDir); err != nil || info.Mode().Perm() != 0o700 {
 		t.Errorf("backup dir = %v, %v", info, err)
+	}
+	// An update brings the networkd drop-in to a router installed before it.
+	if _, err := os.Stat(filepath.Join(lay.NetworkdConfDir, install.NetworkdConfFile)); err != nil {
+		t.Errorf("networkd drop-in: %v", err)
 	}
 	if !slices.Equal(sc.calls, []string{"daemon-reload"}) {
 		t.Errorf("systemctl calls = %q, want only daemon-reload", sc.calls)

@@ -88,7 +88,8 @@ func tempLayout(t *testing.T) Layout {
 	t.Helper()
 	root := t.TempDir()
 	return Layout{BinDir: filepath.Join(root, "bin"), UnitDir: filepath.Join(root, "units"), ConfigDir: filepath.Join(root, "etc"),
-		BackupDir: filepath.Join(root, "backups"), LogDir: filepath.Join(root, "log")}
+		BackupDir: filepath.Join(root, "backups"), LogDir: filepath.Join(root, "log"),
+		NetworkdConfDir: filepath.Join(root, "networkd.conf.d")}
 }
 
 func TestInstallAndUninstall(t *testing.T) {
@@ -129,6 +130,11 @@ func TestInstallAndUninstall(t *testing.T) {
 	}
 	if !run.ran("timedatectl", "set-timezone", "UTC") {
 		t.Errorf("commands run = %v", run.calls)
+	}
+	// networkd would drop policy routing's rules on every reconfigure.
+	if raw, err := os.ReadFile(filepath.Join(lay.NetworkdConfDir, NetworkdConfFile)); err != nil ||
+		!strings.Contains(string(raw), "ManageForeignRoutingPolicyRules=no") {
+		t.Errorf("networkd drop-in = %q, %v", raw, err)
 	}
 	if info, err := os.Stat(lay.Binary()); err != nil || info.Mode().Perm() != 0o755 {
 		t.Fatalf("binary = %v, %v", info, err)
@@ -181,7 +187,8 @@ func TestInstallAndUninstall(t *testing.T) {
 	if err := Uninstall(context.Background(), sc, lay, true, log); err != nil {
 		t.Fatal(err)
 	}
-	for _, p := range []string{filepath.Join(lay.UnitDir, DaemonUnit), filepath.Join(lay.UnitDir, FirewallUnit), lay.Binary(), lay.ConfigDir, lay.LogDir} {
+	for _, p := range []string{filepath.Join(lay.UnitDir, DaemonUnit), filepath.Join(lay.UnitDir, FirewallUnit), lay.Binary(), lay.ConfigDir, lay.LogDir,
+		filepath.Join(lay.NetworkdConfDir, NetworkdConfFile)} {
 		if _, err := os.Stat(p); err == nil {
 			t.Errorf("%s still exists after purge", p)
 		}
