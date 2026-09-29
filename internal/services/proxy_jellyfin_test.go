@@ -18,8 +18,9 @@ import (
 )
 
 // jf makes what Jellyfin's clients send, from a seed: the web client, the
-// Android TV client and the Roku client, with the shapes a capture of a
-// server in use showed. Names and ids are made up.
+// Android TV client, the Roku client and a client built on the Kotlin SDK
+// whose name begins like the who command, with the shapes a capture of a
+// server in use and a router's log showed. Names and ids are made up.
 type jf struct{ vw }
 
 // id is a Jellyfin id as the server writes it: a GUID's 32 hex digits.
@@ -30,13 +31,18 @@ func (g jf) ticks() string { return strconv.FormatInt(g.r.Int64N(1e11), 10) }
 // jfClient is one client's way of asking.
 type jfClient struct {
 	userAgent, auth, deviceID string
-	accept                    bool // sends an Accept header with media requests
-	dashedIDs                 bool // writes item ids with dashes
+	accept                    bool   // sends an Accept header with media requests
+	dashedIDs                 bool   // writes item ids with dashes
+	prefs                     string // the name it keeps display settings under, where seen
 }
 
-func (g jf) client() jfClient {
+// jfClients is how many clients client knows.
+const jfClients = 4
+
+// client is client n's way of asking, n from 0 to jfClients-1.
+func (g jf) client(n int) jfClient {
 	token := g.id()
-	switch g.r.IntN(3) {
+	switch n {
 	case 0:
 		ua := fmt.Sprintf("Mozilla/5.0 (X11; Linux x86_64; rv:%d.0) Gecko/20100101 Firefox/%d.0", 120+g.r.IntN(40), 120+g.r.IntN(40))
 		// The web client's device id is its user agent and the time it
@@ -44,19 +50,25 @@ func (g jf) client() jfClient {
 		dev := strings.ReplaceAll(base64.StdEncoding.EncodeToString(
 			[]byte(ua+"|"+strconv.FormatInt(1600000000000+g.r.Int64N(2e11), 10))), "=", "1")
 		return jfClient{ua, fmt.Sprintf(`MediaBrowser Client="Jellyfin%%20Web", Device="Firefox", DeviceId="%s", Version="10.11.%d", Token="%s"`,
-			dev, g.r.IntN(9), token), dev, true, false}
+			dev, g.r.IntN(9), token), dev, true, false, "emby"}
 	case 1:
 		// The Kotlin SDK encodes its values as a form does.
 		dev := hex.EncodeToString(g.bytes(20))
 		name := url.QueryEscape(g.pick("Front Room TV", "Sam's TV (2)", "Attic Fire TV", "Büro", "LOFT Android TV"))
 		return jfClient{"Jellyfin Android TV/0.19.10 via jellyfin-sdk-kotlin (OkHttp/4.12.0)",
 			fmt.Sprintf(`MediaBrowser Client="Jellyfin+Android+TV", Version="0.19.10", DeviceId="%s", Device="%s", Token="%s"`, dev, name, token),
-			dev, false, true}
-	default:
+			dev, false, true, ""}
+	case 2:
 		dev := g.uuid() + g.pick("", "sam", "kitchen")
 		return jfClient{"Roku/DVP-15.0 (15.0.4.2001-CG)",
 			fmt.Sprintf(`MediaBrowser Client="Jellyfin Roku", Device="%s", Version="3.2.3", UserId="%s", DeviceId="%s", Token="%s"`,
-				g.pick("50K410 (Z000X)", "Roku Ultra", "Streaming Stick 4K"), g.id(), dev, token), dev, false, false}
+				g.pick("50K410 (Z000X)", "Roku Ultra", "Streaming Stick 4K"), g.id(), dev, token), dev, false, false, ""}
+	default:
+		dev := hex.EncodeToString(g.bytes(8))
+		name := url.QueryEscape(g.pick("Den TV", "Sam's TV (2)"))
+		return jfClient{"Whorlix/1.4.2-0-g3c1d2e0a via jellyfin-sdk-kotlin (OkHttp/4.12.0)",
+			fmt.Sprintf(`MediaBrowser Client="Whorlix", Version="1.4.2-0-g3c1d2e0a", DeviceId="%s", Device="%s", Token="%s"`, dev, name, token),
+			dev, false, true, "Whorlix"}
 	}
 }
 
@@ -132,10 +144,9 @@ func (g jf) progress(c jfClient) map[string]any {
 }
 
 // requests is one of everything the clients were seen to send, and the
-// everyday ones a capture of an evening missed.
-func (g jf) requests() []jfRequest {
+// everyday ones a capture of an evening missed, as c sends them.
+func (g jf) requests(c jfClient) []jfRequest {
 	const js = "application/json"
-	c := g.client()
 	user, item, source, session := g.id(), g.id(), g.id(), g.id()
 	stream := fmt.Sprintf("DeviceId=%s&MediaSourceId=%s&VideoCodec=av1,hevc,h264&AudioCodec=aac,opus,flac&AudioStreamIndex=1"+
 		"&VideoBitrate=139616000&AudioBitrate=384000&MaxFramerate=23.976025&api_key=%s&PlaySessionId=%s&TranscodingMaxAudioChannels=2"+
@@ -148,7 +159,7 @@ func (g jf) requests() []jfRequest {
 		"CustomPrefs": map[string]any{"homesection0": "resume", "homesection1": "nextup", "skipForwardLength": "30000", "enableNextVideoInfoOverlay": "True",
 			"tvhome": "", g.id() + "-series": `{"SortBy":"SortName","SortOrder":"Ascending"}`, g.id() + "-series-_view": "PosterCard",
 			g.id() + "-movies": `{"SortBy":"PlayCount,SortName,ProductionYear","SortOrder":"Descending"}`, "subtitleeditor-language": "eng"}}
-	return []jfRequest{
+	rs := []jfRequest{
 		{"GET", "/System/Info/Public", "", "", false, c},
 		{"GET", "/web/config.json", "", "", false, c},
 		{"GET", "/web/main.jellyfin.bundle.js?" + g.id()[:20], "", "", false, c},
@@ -217,6 +228,10 @@ func (g jf) requests() []jfRequest {
 		{"POST", "/Items/" + item + "/Refresh?Recursive=true&ImageRefreshMode=Default&MetadataRefreshMode=Default&ReplaceAllImages=false" +
 			"&RegenerateTrickplay=false&ReplaceAllMetadata=false", "", "", false, c},
 	}
+	if c.prefs != "" {
+		rs = append(rs, jfRequest{"GET", "/DisplayPreferences/" + g.pick("default", "usersettings") + "?userId=" + g.uuid() + "&client=" + c.prefs, "", "", false, c})
+	}
+	return rs
 }
 
 // jfSend sends r to the Jellyfin site at addr as r's client does, and
@@ -281,13 +296,13 @@ func TestTheJellyfinSetLetsItsClientsThrough(t *testing.T) {
 			plain, out := watchSite(t, pl, true)
 			g := jf{vw{rand.New(rand.NewPCG(uint64(pl), 2))}}
 			for _, term := range jfSearches {
-				r := jfRequest{"GET", "/Items?userId=" + g.id() + "&searchTerm=" + url.QueryEscape(term) + "&recursive=true", "", "", false, g.client()}
+				r := jfRequest{"GET", "/Items?userId=" + g.id() + "&searchTerm=" + url.QueryEscape(term) + "&recursive=true", "", "", false, g.client(g.r.IntN(jfClients))}
 				if status := jfSend(t, plain, r); status != http.StatusOK {
 					t.Errorf("a search for %q: %d", term, status)
 				}
 			}
-			for range 8 {
-				for _, r := range g.requests() {
+			for i := range 2 * jfClients {
+				for _, r := range g.requests(g.client(i % jfClients)) {
 					if status := jfSend(t, plain, r); status != http.StatusOK {
 						t.Errorf("%s %s (%s): %d", r.method, r.path, r.client.userAgent, status)
 					}
@@ -307,7 +322,13 @@ func TestTheJellyfinSetLetsItsClientsThrough(t *testing.T) {
 func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 	t.Parallel()
 	g := jf{vw{rand.New(rand.NewPCG(7, 8))}}
-	c := g.client()
+	c := g.client(0)
+	kt := g.client(jfClients - 1)
+	ua := func(userAgent string) jfClient {
+		k := kt
+		k.userAgent = userAgent
+		return k
+	}
 	const js = "application/json"
 	progress := func(field, value string) string {
 		p := g.progress(c)
@@ -331,7 +352,11 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 		{"POST", "/Sessions/Playing/Progress", js, progress("PlaySessionId", "<img src=x onerror=alert(1)>"), false, c},
 		{"POST", "/Items/RemoteSearch/Apply/" + g.id(), js, vwJSON(map[string]any{"Name": "x", "ImageUrl": "file:///etc/passwd"}), false, c},
 		{"GET", "/System/Info", "", "", false, jfClient{c.userAgent,
-			`MediaBrowser Client="Jellyfin Web", Device="<script>alert(1)</script>", DeviceId="x", Version="1", Token="` + g.id() + `"`, c.deviceID, true, false}},
+			`MediaBrowser Client="Jellyfin Web", Device="<script>alert(1)</script>", DeviceId="x", Version="1", Token="` + g.id() + `"`, c.deviceID, true, false, ""}},
+		// A command after the client's name. After a closing bracket only
+		// the check the set lifts off a plain User-Agent reads it.
+		{"GET", "/UserViews?userId=" + g.uuid(), "", "", false, ua(kt.userAgent + ";wget")},
+		{"GET", "/UserViews?userId=" + g.uuid(), "", "", false, ua(kt.userAgent + " `id`")},
 		// Without a character only the rules that count them see. Where
 		// the clients send ids and lists these are marked, and read as CRS
 		// reads them.
@@ -360,7 +385,7 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 					}
 					refused++
 					if status := jfSend(t, plain, r); status != http.StatusForbidden {
-						t.Errorf("%s %s with %.80q: %d with the set, 403 without", r.method, r.path, r.body+r.client.auth, status)
+						t.Errorf("%s %s with %.80q (%s): %d with the set, 403 without", r.method, r.path, r.body+r.client.auth, r.client.userAgent, status)
 					}
 				}
 			}
