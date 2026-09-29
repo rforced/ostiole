@@ -1,0 +1,7 @@
+# The application exclusion plugins, as fetched. One line per repo:
+# name, the commit these files came from, and the date of it. vaultwarden and
+# jellyfin are Ostiole's own and are not fetched.
+wordpress 643b1e51a480ec5ab728d8a194e1e1ac8b796cd7 2026-09-16T00:45:09Z
+nextcloud a8e748fb0b53da453b961f4bbf73920848b02ea7 2026-09-16T04:39:17Z
+phpbb 62c8f7fcd8229f6d9f41cd316700118ccdcc14d0 2026-03-27T04:34:52Z
+xenforo a0ef4833f6e5872a2e1a8b06b62bff0972e31007 2026-09-14T22:23:16Z

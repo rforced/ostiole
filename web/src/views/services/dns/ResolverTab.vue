@@ -1,0 +1,442 @@
+<script setup>
+import { LoaderCircle, Plus } from 'lucide-vue-next'
+import { computed, ref } from 'vue'
+
+import AppDisclosure from '@/components/AppDisclosure.vue'
+import ConfirmButton from '@/components/ConfirmButton.vue'
+import FormField from '@/components/FormField.vue'
+import InterfaceLabel from '@/components/InterfaceLabel.vue'
+import SectionCard from '@/components/SectionCard.vue'
+import SortHeader from '@/components/SortHeader.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
+import { api } from '@/lib/api'
+import { useAsync } from '@/lib/async'
+import { dnsListenInterfaces } from '@/lib/interfaces'
+import { parseList } from '@/lib/lists'
+import { byText, useSort } from '@/lib/sort'
+import { useAuthStore } from '@/stores/auth'
+import { useConfigStore } from '@/stores/config'
+import DomainOverrideDialog from '@/views/services/dns/DomainOverrideDialog.vue'
+
+const auth = useAuthStore()
+const config = useConfigStore()
+const dns = computed(() => config.ensureServices().dns)
+
+// Domain overrides send a whole domain to resolvers of its own, so they
+// sit with the resolver rather than with the names this router answers.
+const domains = computed(() => dns.value.domainOverrides ?? [])
+const domainSort = useSort(domains, {
+  domain: byText((d) => d.domain),
+  description: byText((d) => d.description),
+})
+const domainRows = domainSort.sorted
+const domainEditing = ref(null)
+const domainOpen = ref(false)
+function addDomain() {
+  domainEditing.value = null
+  domainOpen.value = true
+}
+function editDomain(d) {
+  domainEditing.value = d
+  domainOpen.value = true
+}
+
+const upstreams = computed({
+  get: () => (dns.value.upstreams ?? []).join(', '),
+  set: (v) => {
+    const list = parseList(v)
+    if (list.length) dns.value.upstreams = list
+    else delete dns.value.upstreams
+  },
+})
+const domain = computed({
+  get: () => dns.value.domain ?? '',
+  set: (v) => {
+    if (v.trim()) dns.value.domain = v.trim()
+    else delete dns.value.domain
+  },
+})
+
+/**
+ * Public resolvers a button fills in, both families. Over TLS each address
+ * goes with the name on its certificate.
+ */
+const PROVIDERS = [
+  {
+    name: 'Quad9',
+    hostname: 'dns.quad9.net',
+    v4: ['9.9.9.9', '149.112.112.112'],
+    v6: ['2620:fe::fe', '2620:fe::9'],
+  },
+  {
+    name: 'Cloudflare',
+    hostname: 'cloudflare-dns.com',
+    v4: ['1.1.1.1', '1.0.0.1'],
+    v6: ['2606:4700:4700::1111', '2606:4700:4700::1001'],
+  },
+]
+
+const tlsServers = (p, addresses) => addresses.map((address) => ({ address, hostname: p.hostname }))
+
+/** forward (dnsmasq asks upstreams), recursive, or tls (both via unbound). */
+const resolver = computed({
+  get: () => dns.value.resolver ?? 'forward',
+  set: (v) => {
+    if (v === 'forward') delete dns.value.resolver
+    else dns.value.resolver = v
+    // Unasked, only what every router can reach: Quad9 over IPv4, as a
+    // new router forwards to (model.Quad9).
+    if (v === 'tls' && !(dns.value.tlsUpstreams ?? []).length) {
+      dns.value.tlsUpstreams = tlsServers(PROVIDERS[0], PROVIDERS[0].v4)
+    }
+  },
+})
+
+/** Fills in a provider the way the resolver in use takes it, replacing what was there. */
+function fillIn(p) {
+  const addresses = [...p.v4, ...p.v6]
+  if (resolver.value === 'tls') dns.value.tlsUpstreams = tlsServers(p, addresses)
+  else dns.value.upstreams = addresses
+}
+
+/** Who can read the names looked up, which is what the choice comes down to. */
+const resolverHints = {
+  forward: 'Unencrypted. The upstream resolvers and your ISP see every lookup.',
+  recursive: 'Unencrypted. No single server sees every lookup, but your ISP can.',
+  tls: 'Encrypted. Only the servers below see every lookup.',
+}
+
+/** One "address hostname" pair per line, which is how DoT servers are quoted. */
+const tlsUpstreams = computed({
+  get: () => (dns.value.tlsUpstreams ?? []).map((u) => `${u.address} ${u.hostname}`).join('\n'),
+  set: (v) => {
+    const list = v
+      .split('\n')
+      .map((line) => line.trim().split(/[\s,]+/))
+      .filter((parts) => parts[0])
+      .map(([address, hostname = '']) => ({ address, hostname }))
+    if (list.length) dns.value.tlsUpstreams = list
+    else delete dns.value.tlsUpstreams
+  },
+})
+
+/** Empty means the default, which the placeholder shows. */
+function numberField(key) {
+  return computed({
+    get: () => dns.value[key] || '',
+    set: (v) => {
+      if (Number.isFinite(v) && v > 0) dns.value[key] = v
+      else delete dns.value[key]
+    },
+  })
+}
+const cacheSize = numberField('cacheSize')
+const resolverCacheMB = numberField('resolverCacheMB')
+
+/** Writes the rebind block back, or drops it once nothing is left in it. */
+function setRebind(r) {
+  if (Object.keys(r).length) dns.value.rebind = r
+  else delete dns.value.rebind
+}
+/** Rebinding protection is on unless the configuration says off. */
+const rebindOn = computed({
+  get: () => !dns.value.rebind?.off,
+  set: (on) => {
+    const r = { ...(dns.value.rebind ?? {}) }
+    if (on) delete r.off
+    else r.off = true
+    setRebind(r)
+  },
+})
+const rebindAllow = computed({
+  get: () => (dns.value.rebind?.allow ?? []).join(', '),
+  set: (v) => {
+    const r = { ...(dns.value.rebind ?? {}) }
+    const list = parseList(v)
+    if (list.length) r.allow = list
+    else delete r.allow
+    setRebind(r)
+  },
+})
+
+// Clearing acts on the running router, not the draft, so it reads the
+// saved configuration and never touches the one being edited.
+const dnsRunning = computed(() => Boolean(config.saved?.services?.dns?.enabled))
+const cleared = ref('')
+const names = { dnsmasq: 'the DNS server', unbound: 'the validating resolver' }
+const clearCache = useAsync(async () => {
+  cleared.value = ''
+  const { cleared: what = [] } = await api.clearDnsCache()
+  cleared.value = what.length
+    ? `Cleared ${what.map((n) => names[n] ?? n).join(' and ')}.`
+    : 'Nothing was running to clear.'
+})
+
+/** What "every interface outside external zones" comes to for this draft. */
+const defaultListen = computed(() => dnsListenInterfaces(config.draft))
+
+const listenAll = computed({
+  get: () => !(dns.value.interfaces ?? []).length,
+  set: (all) => {
+    if (all) delete dns.value.interfaces
+    else
+      dns.value.interfaces = config.interfaces.filter((i) => i.zone && i.enabled).map((i) => i.name)
+  },
+})
+
+function toggleInterface(name, on) {
+  const list = new Set(dns.value.interfaces ?? [])
+  if (on) list.add(name)
+  else list.delete(name)
+  dns.value.interfaces = [...list]
+}
+</script>
+
+<template>
+  <div class="space-y-5">
+    <SectionCard
+      title="Resolver"
+      intro="This router looks names up here too."
+      :locked="auth.readOnly"
+    >
+      <div class="space-y-4">
+        <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
+          <FormField id="dns-resolver" label="Resolver" :hint="resolverHints[resolver]">
+            <select id="dns-resolver" v-model="resolver" class="input">
+              <option value="forward">Forward: ask the upstream resolvers below</option>
+              <option value="recursive">Recursive: look names up directly, check DNSSEC</option>
+              <option value="tls">DNS over TLS: encrypted upstreams, check DNSSEC</option>
+            </select>
+          </FormField>
+          <FormField id="dns-domain" label="Local domain" hint="Hosts get this suffix, e.g. lan.">
+            <input id="dns-domain" v-model="domain" class="input font-mono" spellcheck="false" />
+          </FormField>
+          <FormField
+            v-if="resolver === 'forward'"
+            id="dns-up"
+            label="Upstream resolvers"
+            hint="Comma separated. Empty: the system resolvers."
+            class="sm:col-span-2"
+          >
+            <input
+              id="dns-up"
+              v-model="upstreams"
+              class="input font-mono"
+              spellcheck="false"
+              placeholder="1.1.1.1, 9.9.9.9"
+            />
+            <div
+              v-if="!auth.readOnly"
+              role="group"
+              aria-label="Fill in a provider"
+              class="flex flex-wrap gap-2 pt-1"
+            >
+              <button
+                v-for="p in PROVIDERS"
+                :key="p.name"
+                type="button"
+                class="btn-secondary"
+                @click="fillIn(p)"
+              >
+                {{ p.name }}
+              </button>
+            </div>
+          </FormField>
+          <FormField
+            v-if="resolver === 'tls'"
+            id="dns-tls"
+            label="DNS over TLS servers"
+            hint="One per line: address and the name on its certificate."
+            class="sm:col-span-2"
+          >
+            <textarea
+              id="dns-tls"
+              v-model="tlsUpstreams"
+              rows="4"
+              class="input font-mono"
+              spellcheck="false"
+              placeholder="9.9.9.9 dns.quad9.net"
+            ></textarea>
+            <div
+              v-if="!auth.readOnly"
+              role="group"
+              aria-label="Fill in a provider"
+              class="flex flex-wrap gap-2 pt-1"
+            >
+              <button
+                v-for="p in PROVIDERS"
+                :key="p.name"
+                type="button"
+                class="btn-secondary"
+                @click="fillIn(p)"
+              >
+                {{ p.name }}
+              </button>
+            </div>
+          </FormField>
+        </div>
+
+        <AppDisclosure>
+          <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
+            <FormField
+              id="dns-cache"
+              label="Cache entries"
+              hint="10000 is the default. Each is about 100 bytes."
+            >
+              <input
+                id="dns-cache"
+                v-model.number="cacheSize"
+                type="number"
+                min="0"
+                max="1000000"
+                placeholder="10000"
+                class="input w-32 max-sm:w-full"
+              />
+            </FormField>
+            <FormField
+              v-if="resolver !== 'forward'"
+              id="dns-resolver-cache"
+              label="Resolver cache (MB)"
+              hint="10 is the default. Records take twice as much again."
+            >
+              <input
+                id="dns-resolver-cache"
+                v-model.number="resolverCacheMB"
+                type="number"
+                min="0"
+                max="512"
+                placeholder="10"
+                class="input w-32 max-sm:w-full"
+              />
+            </FormField>
+          </div>
+          <div v-if="!auth.readOnly" class="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              class="btn-secondary"
+              :disabled="!dnsRunning || clearCache.busy.value"
+              :aria-busy="clearCache.busy.value"
+              @click="clearCache.run()"
+            >
+              <LoaderCircle
+                v-if="clearCache.busy.value"
+                class="size-4 animate-spin"
+                aria-hidden="true"
+              />
+              {{ clearCache.busy.value ? 'Clearing…' : 'Clear cache' }}
+            </button>
+            <p v-if="clearCache.error.value" role="alert" class="text-bad">
+              {{ clearCache.error.value }}
+            </p>
+            <p v-else-if="cleared" role="status" class="text-ink-muted">{{ cleared }}</p>
+            <p v-else class="text-ink-muted">Names are looked up again on the running resolver.</p>
+          </div>
+
+          <fieldset class="space-y-2">
+            <legend class="group-title mb-2">Listen on</legend>
+            <ToggleRow v-model="listenAll" label="Every interface outside external zones" />
+            <ul v-if="listenAll" class="ml-6 flex flex-wrap gap-4" aria-label="Listening on">
+              <li v-if="!defaultListen.length" class="text-ink-muted">
+                No enabled interface is in an internal zone yet.
+              </li>
+              <li v-for="i in defaultListen" :key="i.name"><InterfaceLabel :iface="i" /></li>
+            </ul>
+            <div v-else class="ml-6 flex flex-wrap gap-4">
+              <label
+                v-for="i in config.interfaces.filter((x) => x.zone && x.enabled)"
+                :key="i.name"
+                class="flex items-center gap-2"
+              >
+                <input
+                  type="checkbox"
+                  class="size-4 rounded"
+                  :checked="(dns.interfaces ?? []).includes(i.name)"
+                  @change="toggleInterface(i.name, $event.target.checked)"
+                />
+                <InterfaceLabel :iface="i" />
+              </label>
+            </div>
+          </fieldset>
+        </AppDisclosure>
+      </div>
+    </SectionCard>
+
+    <SectionCard
+      title="Domain overrides"
+      :count="domains.length"
+      intro="A domain here goes to its own resolvers, and stops answering while they are unreachable."
+      flush
+    >
+      <template v-if="!auth.readOnly" #actions>
+        <button type="button" class="btn-secondary" @click="addDomain">
+          <Plus class="size-4" aria-hidden="true" /> Add domain
+        </button>
+      </template>
+      <table class="table">
+        <thead>
+          <tr>
+            <SortHeader by="domain" :sort="domainSort">Domain</SortHeader>
+            <th>Resolvers</th>
+            <SortHeader by="description" :sort="domainSort">Description</SortHeader>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="!domains.length">
+            <td colspan="4" class="text-ink-muted">
+              No overrides. Every domain goes to the resolver.
+            </td>
+          </tr>
+          <tr
+            v-for="d in domainRows"
+            :key="d.domain"
+            :class="{ 'row-changed': config.isChanged('services.dns.domainOverrides', d.domain) }"
+          >
+            <td class="font-mono text-code">{{ d.domain }}</td>
+            <td class="font-mono text-code">{{ (d.servers ?? []).join(', ') }}</td>
+            <td>{{ d.description }}</td>
+            <td class="text-right whitespace-nowrap">
+              <button type="button" class="link" @click="editDomain(d)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
+              </button>
+              <ConfirmButton
+                class="ml-3"
+                label="Delete"
+                :question="`Delete the override for ${d.domain}?`"
+                :description="d.description"
+                @confirm="config.removeDomainOverride(d.domain)"
+              />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </SectionCard>
+
+    <SectionCard title="Answers" :locked="auth.readOnly">
+      <div class="space-y-4">
+        <ToggleRow
+          id="dns-rebind"
+          v-model="rebindOn"
+          label="Block private answers from upstream"
+          hint="Off lets a public name resolve to a LAN address."
+        />
+        <FormField
+          v-if="rebindOn"
+          id="dns-rebind-allow"
+          label="Allowed domains"
+          hint="Comma separated. The local domain, overrides and the tailnet are always allowed."
+        >
+          <input
+            id="dns-rebind-allow"
+            v-model="rebindAllow"
+            class="input max-w-2xl font-mono"
+            spellcheck="false"
+            placeholder="home.example.com"
+          />
+        </FormField>
+      </div>
+    </SectionCard>
+
+    <DomainOverrideDialog v-model:open="domainOpen" :override="domainEditing" />
+  </div>
+</template>

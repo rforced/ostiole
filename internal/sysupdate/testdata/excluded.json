@@ -1,0 +1,19 @@
+{
+  "cases": [
+    { "name": "kernel", "exclude": ["kernel*"], "excluded": true },
+    { "name": "kernel-core", "exclude": ["kernel*"], "excluded": true },
+    { "name": "bash", "exclude": ["kernel*"], "excluded": false },
+    { "name": "Kernel", "exclude": ["kernel*"], "excluded": false },
+    { "name": "kernel-core", "exclude": ["kernel"], "excluded": false },
+    { "name": "kernel6", "exclude": ["kernel?"], "excluded": true },
+    { "name": "kernel", "exclude": ["kernel?"], "excluded": false },
+    { "name": "kernel-6.12", "exclude": ["*6.12"], "excluded": true },
+    { "name": "python3x12", "exclude": ["python3.12"], "excluded": false },
+    { "name": "gcc-c++", "exclude": ["gcc-c++"], "excluded": true },
+    { "name": "gcc-cc", "exclude": ["gcc-c+"], "excluded": false },
+    { "name": "nvidia-dkms", "exclude": ["bash", "nvidia*"], "excluded": true },
+    { "name": "openssl", "exclude": [], "excluded": false },
+    { "name": "kernel[", "exclude": ["kernel["], "excluded": true },
+    { "name": "kernel-core", "exclude": ["kernel["], "excluded": false }
+  ]
+}

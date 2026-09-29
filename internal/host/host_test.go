@@ -1,0 +1,220 @@
+package host
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/rforced/ostiole/internal/install"
+	"github.com/rforced/ostiole/internal/kernel"
+	"github.com/rforced/ostiole/internal/nft"
+)
+
+// fakeUnits is a systemd that answers from a table: what is enabled, what
+// is active, and which units it has heard of at all.
+type fakeUnits struct {
+	enabled map[string]string
+	active  map[string]string
+	known   map[string]bool
+	calls   []string
+}
+
+func (f *fakeUnits) Run(_ context.Context, args ...string) (string, error) {
+	f.calls = append(f.calls, strings.Join(args, " "))
+	if len(args) < 2 {
+		return "", nil
+	}
+	// Both take many units, as systemd does: list-unit-files leaves out a
+	// unit with no file, and is-active answers a line for every unit.
+	switch {
+	case args[0] == "list-unit-files":
+		var lines []string
+		for _, u := range args[3:] {
+			if state, ok := f.enabled[u]; ok {
+				lines = append(lines, u+" "+state+" enabled")
+			}
+		}
+		if len(lines) == 0 {
+			return "", errors.New("exit status 1")
+		}
+		return strings.Join(lines, "\n"), nil
+	case args[0] == "is-active" && len(args) > 2:
+		var lines []string
+		for _, u := range args[1:] {
+			state, ok := f.active[u]
+			if !ok {
+				state = "inactive"
+			}
+			lines = append(lines, state)
+		}
+		return strings.Join(lines, "\n"), nil
+	}
+	unit := args[len(args)-1]
+	switch args[0] {
+	case "is-enabled":
+		if state, ok := f.enabled[unit]; ok {
+			return state, nil
+		}
+		return "not-found", errors.New("not found")
+	case "is-active":
+		if state, ok := f.active[unit]; ok {
+			return state, nil
+		}
+		return "inactive", errors.New("inactive")
+	case "cat":
+		if f.known[unit] {
+			return "[Unit]", nil
+		}
+		return "", errors.New("no such unit")
+	}
+	return "", nil
+}
+
+// noKernel is an nftables side that has nothing to say, which is what a
+// daemon that is not root gets.
+type noKernel struct{}
+
+func (noKernel) ListChains(context.Context) ([]nft.ChainRef, error) {
+	return nil, errors.New("not permitted")
+}
+func (noKernel) DeleteTable(context.Context, string, string) error {
+	return errors.New("not permitted")
+}
+
+// fakeCommands is every command a test lets this package run. Nothing
+// reaches the machine the test is running on.
+type fakeCommands struct {
+	out   map[string]string
+	calls []string
+}
+
+func (f *fakeCommands) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+	line := strings.TrimSpace(name + " " + strings.Join(args, " "))
+	f.calls = append(f.calls, line)
+	return []byte(f.out[line]), nil
+}
+
+func testDeps(t *testing.T, units *fakeUnits) Deps {
+	t.Helper()
+	return Deps{
+		Root:        true,
+		Units:       units,
+		Kernel:      noKernel{},
+		TableLoaded: func(context.Context) bool { return true },
+		Backend:     "networkd",
+		Dir:         t.TempDir(),
+		Run:         &fakeCommands{},
+		// A router with none of the daemons installed, whatever the
+		// machine running the test has on it, and none of its files.
+		Locate: func(string) string { return "" },
+		Proc:   t.TempDir(),
+		FSRoot: t.TempDir(),
+		Log:    slog.New(slog.DiscardHandler),
+	}
+}
+
+// The distribution, the kernel and Bluetooth come from the router's own
+// files. Bluetooth is blocked by the drop-in while its module is out of
+// the kernel, loaded while the module is in it whatever the drop-in says,
+// and absent on a router that has neither.
+func TestStatusReadsTheSystemFiles(t *testing.T) {
+	t.Parallel()
+	d := testDeps(t, &fakeUnits{})
+	write := func(path, content string) {
+		t.Helper()
+		full := filepath.Join(d.FSRoot, path)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rep := Status(context.Background(), d)
+	if rep.Distro != "" || rep.Kernel != "" || rep.Bluetooth != "absent" {
+		t.Errorf("bare router: distro %q, kernel %q, bluetooth %q", rep.Distro, rep.Kernel, rep.Bluetooth)
+	}
+
+	write("/etc/os-release", "NAME=\"Debian GNU/Linux\"\nPRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nID=debian\n")
+	write(kernel.ReleaseFile, "6.12.48+deb13-amd64\n")
+	write(install.BluetoothConfFile, install.BluetoothConf())
+	rep = Status(context.Background(), d)
+	if rep.Distro != "Debian GNU/Linux 13 (trixie)" || rep.Kernel != "6.12.48+deb13-amd64" || rep.Bluetooth != "blocked" {
+		t.Errorf("distro %q, kernel %q, bluetooth %q", rep.Distro, rep.Kernel, rep.Bluetooth)
+	}
+
+	if err := os.MkdirAll(filepath.Join(d.FSRoot, "/sys/module/bluetooth"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if rep := Status(context.Background(), d); rep.Bluetooth != "loaded" {
+		t.Errorf("bluetooth %q with the module in the kernel", rep.Bluetooth)
+	}
+}
+
+// The report is the three units, the daemons a router runs, and who owns
+// the addresses, read from the router every time.
+func TestStatusReadsTheRouter(t *testing.T) {
+	t.Parallel()
+	units := &fakeUnits{
+		enabled: map[string]string{
+			install.DaemonUnit: "enabled", install.FirewallUnit: "enabled",
+			install.NetworkdUnit: "enabled", "NetworkManager.service": "enabled",
+		},
+		active: map[string]string{install.DaemonUnit: "active", install.NetworkdUnit: "active"},
+		known:  map[string]bool{install.NetworkdUnit: true},
+	}
+	d := testDeps(t, units)
+	d.Locate = func(name string) string {
+		if name == "nft" || name == "dnf" {
+			return "/usr/sbin/" + name
+		}
+		return ""
+	}
+	rep := Status(context.Background(), d)
+	if rep.Manager != "dnf" {
+		t.Errorf("manager = %q, want dnf", rep.Manager)
+	}
+	if !rep.Present["nft"] || rep.Present["dnsmasq"] {
+		t.Errorf("present = %+v", rep.Present)
+	}
+	if len(rep.Units) != 3 || rep.Units[0].Name != install.DaemonUnit || rep.Units[0].Active != "active" {
+		t.Errorf("units = %+v", rep.Units)
+	}
+	if !rep.Firewalled {
+		t.Error("the loaded ruleset was not reported")
+	}
+	if rep.Network.Networkd != "active" || rep.Network.Owned {
+		t.Errorf("network = %+v", rep.Network)
+	}
+	if len(rep.Network.Managers) != 1 || rep.Network.Managers[0] != "NetworkManager" {
+		t.Errorf("managers = %v, want the one still enabled", rep.Network.Managers)
+	}
+}
+
+// Once the handover has happened the record is what the report reads, so
+// a masked manager is named as retired rather than as competing.
+func TestStatusFollowsTheTakeoverRecord(t *testing.T) {
+	t.Parallel()
+	d := testDeps(t, &fakeUnits{enabled: map[string]string{install.NetworkdUnit: "enabled"}})
+	if err := install.SaveTakeoverRecord(d.Dir, install.TakeoverRecord{Managers: []string{"NetworkManager"}}); err != nil {
+		t.Fatal(err)
+	}
+	rep := Status(context.Background(), d)
+	if !rep.Network.Owned || len(rep.Network.Managers) != 1 {
+		t.Errorf("network = %+v, want it owned with the manager it replaced", rep.Network)
+	}
+}
+
+// Nothing that changes the router runs without root.
+func TestFlushNeedsRoot(t *testing.T) {
+	t.Parallel()
+	d := testDeps(t, &fakeUnits{})
+	d.Root = false
+	if _, err := FlushLegacy(context.Background(), d, nil); !errors.Is(err, ErrNotRoot) {
+		t.Errorf("flush = %v, want ErrNotRoot", err)
+	}
+}

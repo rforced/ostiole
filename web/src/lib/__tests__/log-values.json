@@ -1,0 +1,360 @@
+{
+  "firewall": [
+    {
+      "why": "a rule's packet",
+      "entry": {
+        "seq": 7,
+        "time": "2026-09-26T14:02:00Z",
+        "kind": "rule",
+        "ruleId": "web-in",
+        "action": "accept",
+        "in": "eth0",
+        "family": "ipv4",
+        "proto": "tcp",
+        "src": "203.0.113.9",
+        "srcPort": 40000,
+        "dst": "198.51.100.2",
+        "dstPort": 443,
+        "tcpFlags": "SYN",
+        "length": 60
+      },
+      "values": ["accept", "web-in", "eth0", "tcp", "203.0.113.9:40000", "198.51.100.2:443", "SYN"]
+    },
+    {
+      "why": "a zone's drop, forwarded",
+      "entry": {
+        "seq": 8,
+        "time": "2026-09-26T14:02:01Z",
+        "kind": "zone-drop",
+        "zone": "guest",
+        "action": "drop",
+        "in": "eth2",
+        "out": "eth0",
+        "family": "ipv4",
+        "proto": "udp",
+        "src": "10.0.9.4",
+        "srcPort": 5353,
+        "dst": "192.0.2.1",
+        "dstPort": 53,
+        "length": 72
+      },
+      "values": [
+        "drop",
+        "guest default",
+        "eth2",
+        "eth0",
+        "udp",
+        "10.0.9.4:5353",
+        "192.0.2.1:53",
+        "72 B"
+      ]
+    },
+    {
+      "why": "a line of the proxy's access list",
+      "access": { "access-x1": "Sites from home" },
+      "entry": {
+        "seq": 9,
+        "time": "2026-09-26T14:02:02Z",
+        "kind": "proxy",
+        "ruleId": "access-x1",
+        "action": "drop",
+        "in": "eth0",
+        "family": "ipv6",
+        "proto": "tcp",
+        "src": "2001:db8::9",
+        "srcPort": 51000,
+        "dst": "2001:db8::1",
+        "dstPort": 443,
+        "tcpFlags": "SYN",
+        "length": 80
+      },
+      "values": [
+        "drop",
+        "proxy: Sites from home",
+        "eth0",
+        "tcp",
+        "2001:db8::9:51000",
+        "2001:db8::1:443",
+        "SYN"
+      ]
+    },
+    {
+      "why": "a ping the firewall dropped on its own account",
+      "entry": {
+        "seq": 10,
+        "time": "2026-09-26T14:02:03Z",
+        "kind": "protect-icmpflood",
+        "action": "drop",
+        "in": "eth0",
+        "family": "ipv4",
+        "proto": "icmp",
+        "src": "198.18.0.5",
+        "dst": "198.51.100.2",
+        "icmpType": 8,
+        "length": 84
+      },
+      "values": ["drop", "ping flood", "eth0", "icmp", "198.18.0.5", "198.51.100.2", "type 8"]
+    },
+    {
+      "why": "a scan the firewall dropped on its own account, named by its zone",
+      "entry": {
+        "seq": 12,
+        "time": "2026-09-26T14:02:05Z",
+        "kind": "protect-scanner",
+        "zone": "wan",
+        "action": "drop",
+        "in": "eth0",
+        "family": "ipv4",
+        "proto": "tcp",
+        "src": "198.18.0.7",
+        "srcPort": 51515,
+        "dst": "198.51.100.2",
+        "dstPort": 3389,
+        "tcpFlags": "SYN",
+        "length": 60
+      },
+      "values": [
+        "drop",
+        "wan port scan",
+        "eth0",
+        "tcp",
+        "198.18.0.7:51515",
+        "198.51.100.2:3389",
+        "SYN"
+      ]
+    },
+    {
+      "why": "a prefix written before the verdict was",
+      "entry": {
+        "seq": 11,
+        "time": "2026-09-26T14:02:04Z",
+        "kind": "other",
+        "prefix": "something: ",
+        "family": "other",
+        "proto": "",
+        "length": 0
+      },
+      "values": ["unknown", "something: ", "0 B"]
+    }
+  ],
+  "queries": [
+    {
+      "why": "a blocked name, by a named device",
+      "entry": {
+        "seq": 3,
+        "time": "2026-09-26T14:02:00Z",
+        "client": "10.0.0.5",
+        "device": "Laptop",
+        "name": "ads.example.com",
+        "type": "A",
+        "status": "blocked",
+        "reason": "list",
+        "lists": ["oisd", "hagezi"]
+      },
+      "values": ["Laptop", "10.0.0.5", "ads.example.com", "A", "blocked", "oisd", "hagezi"]
+    },
+    {
+      "why": "an answer",
+      "entry": {
+        "seq": 4,
+        "time": "2026-09-26T14:02:01Z",
+        "client": "2001:db8::7",
+        "name": "example.com",
+        "type": "AAAA",
+        "status": "ok",
+        "answer": "2001:db8::80"
+      },
+      "values": ["2001:db8::7", "example.com", "AAAA", "ok", "2001:db8::80"]
+    }
+  ],
+  "events": [
+    {
+      "why": "a blocked request",
+      "entry": {
+        "seq": 2,
+        "time": "2026-09-26T14:02:00Z",
+        "id": "Ze77",
+        "site": "shop",
+        "client": "192.168.1.55",
+        "method": "GET",
+        "uri": "/?q=%3Cscript%3E",
+        "status": 403,
+        "verdict": "blocked",
+        "engine": "On",
+        "rules": [
+          {
+            "id": 941100,
+            "message": "XSS Attack Detected via libinjection",
+            "severity": "critical"
+          },
+          { "id": 949110, "message": "Inbound Anomaly Score Exceeded" }
+        ]
+      },
+      "values": [
+        "shop",
+        "192.168.1.55",
+        "GET",
+        "/?q=%3Cscript%3E",
+        "403",
+        "blocked",
+        "941100",
+        "XSS Attack Detected via libinjection",
+        "949110",
+        "Inbound Anomaly Score Exceeded"
+      ]
+    },
+    {
+      "why": "a match with no site or status",
+      "entry": {
+        "seq": 3,
+        "time": "2026-09-26T14:02:01Z",
+        "id": "A1",
+        "client": "10.0.0.2",
+        "method": "POST",
+        "uri": "/login",
+        "verdict": "would-block",
+        "rules": []
+      },
+      "values": ["10.0.0.2", "POST", "/login", "would block"]
+    }
+  ],
+  "requests": [
+    {
+      "why": "a request a site answered",
+      "entry": {
+        "seq": 3,
+        "time": "2026-09-28T14:02:00Z",
+        "site": "vault",
+        "client": "203.0.113.9",
+        "method": "GET",
+        "host": "vault.example.com",
+        "path": "/notifications/hub",
+        "proto": "HTTP/2.0",
+        "status": 101,
+        "bytes": 512,
+        "duration": 0.0123,
+        "agent": "Bitwarden_Mobile/2026.9"
+      },
+      "values": [
+        "vault",
+        "203.0.113.9",
+        "GET",
+        "vault.example.com",
+        "/notifications/hub",
+        "101",
+        "Bitwarden_Mobile/2026.9"
+      ]
+    },
+    {
+      "why": "a name no site claims",
+      "entry": {
+        "seq": 4,
+        "time": "2026-09-28T14:02:01Z",
+        "client": "198.51.100.7",
+        "method": "GET",
+        "host": "203.0.113.1",
+        "path": "/",
+        "status": 403,
+        "bytes": 0,
+        "duration": 0.0001
+      },
+      "values": ["198.51.100.7", "GET", "203.0.113.1", "/", "403"]
+    }
+  ],
+  "dhcp": [
+    {
+      "why": "an address given to a known device",
+      "entry": {
+        "seq": 5,
+        "time": "2026-09-28T14:02:00Z",
+        "message": "ACK",
+        "interface": "eth1",
+        "address": "10.0.0.50",
+        "mac": "aa:bb:cc:dd:ee:ff",
+        "name": "switch",
+        "device": "switch"
+      },
+      "values": ["ACK", "eth1", "10.0.0.50", "switch", "aa:bb:cc:dd:ee:ff", "switch"]
+    },
+    {
+      "why": "a DHCPv6 client refused",
+      "entry": {
+        "seq": 6,
+        "time": "2026-09-28T14:02:01Z",
+        "message": "REPLY",
+        "interface": "eth1",
+        "duid": "00:03:00:01:aa:bb:cc:dd:ee:ff",
+        "detail": "no addresses available"
+      },
+      "values": ["REPLY", "eth1", "00:03:00:01:aa:bb:cc:dd:ee:ff", "no addresses available"]
+    }
+  ],
+  "wireless": [
+    {
+      "why": "a known phone joins",
+      "entry": {
+        "seq": 7,
+        "time": "2026-09-28T14:02:00Z",
+        "event": "connected",
+        "interface": "wlan0",
+        "mac": "12:34:56:78:9a:bc",
+        "network": "Home",
+        "device": "phone"
+      },
+      "values": ["connected", "Home", "wlan0", "phone", "12:34:56:78:9a:bc"]
+    },
+    {
+      "why": "an unknown client with the wrong password",
+      "entry": {
+        "seq": 8,
+        "time": "2026-09-28T14:02:01Z",
+        "event": "wrong password",
+        "interface": "guest",
+        "mac": "12:34:56:78:9a:bd"
+      },
+      "values": ["wrong password", "guest", "12:34:56:78:9a:bd"]
+    }
+  ],
+  "peers": [
+    {
+      "why": "a WireGuard peer that roamed",
+      "entry": {
+        "seq": 9,
+        "time": "2026-09-28T14:02:00Z",
+        "event": "roamed",
+        "tunnel": "wg0",
+        "peer": "phone",
+        "endpoint": "198.51.100.7:40000"
+      },
+      "values": ["roamed", "wg0", "phone", "198.51.100.7:40000"]
+    },
+    {
+      "why": "a Tailscale peer that went offline",
+      "entry": {
+        "seq": 10,
+        "time": "2026-09-28T14:02:01Z",
+        "event": "offline",
+        "peer": "laptop"
+      },
+      "values": ["offline", "laptop"]
+    }
+  ],
+  "drives": [
+    {
+      "why": "a reading with a temperature",
+      "entry": {
+        "seq": 11,
+        "time": "2026-09-28T14:00:00Z",
+        "drive": "sda",
+        "model": "GENERIC 256GB SSD",
+        "serial": "S1234",
+        "health": "passed",
+        "temperature": 41,
+        "wear": 3,
+        "bad": 0,
+        "powerOnHours": 1234
+      },
+      "values": ["sda", "GENERIC 256GB SSD", "S1234", "passed", "41 °C"]
+    }
+  ]
+}

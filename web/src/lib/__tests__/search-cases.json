@@ -1,0 +1,118 @@
+[
+  {
+    "why": "a word anywhere in the row",
+    "query": "printer",
+    "values": ["10.0.0.20", "Printer", "lan0"],
+    "match": true
+  },
+  {
+    "why": "case aside, every word",
+    "query": "PRINTER lan0",
+    "values": ["10.0.0.20", "Printer", "lan0"],
+    "match": true
+  },
+  {
+    "why": "one word missing",
+    "query": "printer wan0",
+    "values": ["10.0.0.20", "Printer", "lan0"],
+    "match": false
+  },
+  { "why": "nothing to look for", "query": "   ", "values": ["10.0.0.20"], "match": true },
+  { "why": "part of a value", "query": "0.0.2", "values": ["10.0.0.20"], "match": true },
+  {
+    "why": "words in different values",
+    "query": "drop 443",
+    "values": ["drop", "203.0.113.9:443"],
+    "match": true
+  },
+  {
+    "why": "one value holding two words",
+    "query": "example ads",
+    "values": ["ads.example.com"],
+    "match": true
+  },
+  {
+    "why": "a number is its digits",
+    "query": "942100",
+    "values": ["942100", "SQL Injection"],
+    "match": true
+  },
+  {
+    "why": "not a key, only values",
+    "query": "src",
+    "values": ["10.0.0.5", "tcp"],
+    "match": false
+  },
+  { "why": "letters beyond ASCII", "query": "ÉCOLE", "values": ["école.example"], "match": true },
+  {
+    "why": "a MAC written the Windows way",
+    "query": "aa-bb-cc",
+    "values": [],
+    "macs": ["aa:bb:cc:dd:ee:01"],
+    "match": true
+  },
+  {
+    "why": "a MAC written the switch way",
+    "query": "aabb.ccdd",
+    "values": [],
+    "macs": ["aa:bb:cc:dd:ee:01"],
+    "match": true
+  },
+  {
+    "why": "a MAC in bare hex",
+    "query": "AABBCCDDEE01",
+    "values": [],
+    "macs": ["aa:bb:cc:dd:ee:01"],
+    "match": true
+  },
+  {
+    "why": "part of a MAC as written",
+    "query": "dd:ee",
+    "values": [],
+    "macs": ["aa:bb:cc:dd:ee:01"],
+    "match": true
+  },
+  {
+    "why": "a MAC that is not there",
+    "query": "aabb.ccff",
+    "values": [],
+    "macs": ["aa:bb:cc:dd:ee:01"],
+    "match": false
+  },
+  {
+    "why": "a short word is not a MAC",
+    "query": "00",
+    "values": [],
+    "macs": ["01:00:02:00:00:05"],
+    "match": true
+  },
+  {
+    "why": "a port is not part of a MAC",
+    "query": "1000",
+    "values": [],
+    "macs": ["01:00:02:00:00:05"],
+    "match": false
+  },
+  {
+    "why": "an address is not part of a MAC",
+    "query": "10.0.0.5",
+    "values": [],
+    "macs": ["01:00:02:00:00:05"],
+    "match": false
+  },
+  {
+    "why": "a year is not part of a MAC",
+    "query": "2000",
+    "values": [],
+    "macs": ["01:00:02:00:00:05"],
+    "match": false
+  },
+  {
+    "why": "one hex digit a side is not a MAC",
+    "query": "a-b",
+    "values": [],
+    "macs": ["0a:0b:00:00:00:01"],
+    "match": false
+  },
+  { "why": "empty values are skipped", "query": "undefined", "values": [""], "match": false }
+]

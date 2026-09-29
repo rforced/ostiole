@@ -1,0 +1,59 @@
+{
+  "version": 12,
+  "system": {
+    "hostname": "dsl",
+    "management": { "webPort": 443, "sshPort": 22 }
+  },
+  "zones": [
+    { "name": "wan", "external": true },
+    { "name": "lan", "antiLockout": true }
+  ],
+  "interfaces": [
+    {
+      "name": "ppp0",
+      "zone": "wan",
+      "description": "The line",
+      "enabled": true,
+      "ipv4": { "mode": "ppp" },
+      "ipv6": { "mode": "ppp" },
+      "pppoe": {
+        "parent": "eth0",
+        "username": "someone@isp.example",
+        "password": "secret",
+        "ipv6": true
+      }
+    },
+    {
+      "name": "ppp1",
+      "zone": "wan",
+      "description": "Second line, not dialling yet",
+      "enabled": false,
+      "ipv4": { "mode": "ppp" },
+      "ipv6": { "mode": "none" },
+      "pppoe": {
+        "parent": "eth2",
+        "username": "backup@isp.example",
+        "password": "secret"
+      }
+    },
+    {
+      "name": "eth1",
+      "zone": "lan",
+      "enabled": true,
+      "ipv4": { "mode": "static", "address": "192.168.1.1/24" },
+      "ipv6": { "mode": "none" }
+    }
+  ],
+  "rules": [
+    {
+      "id": "lan-out",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    }
+  ],
+  "nat": { "outbound": { "mode": "automatic" } }
+}

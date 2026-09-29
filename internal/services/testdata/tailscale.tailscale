@@ -1,0 +1,20 @@
+==> env <==
+PORT=41641
+FLAGS=--no-logs-no-support
+==> prefs <==
+--netfilter-mode=off
+--accept-dns=false
+--snat-subnet-routes=true
+--stateful-filtering=false
+--ssh=false
+--auto-update=false
+--update-check=false
+--webclient=false
+--shields-up=false
+--advertise-connector=false
+--report-posture=false
+--exit-node=
+--hostname=gateway
+--advertise-routes=192.168.1.0/24
+--advertise-exit-node=true
+--accept-routes=false

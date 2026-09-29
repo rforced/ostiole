@@ -1,0 +1,624 @@
+/*
+ * The look, written once.
+ *
+ * Colour is named for its job, not its hue: page, surface, line, ink,
+ * accent, and four tones (ok, warn, bad, info). Light and dark are the two
+ * blocks below; nothing else in the tree says dark:. In both, text holds
+ * 7:1 against whatever it sits on (WCAG AAA), which
+ * __tests__/contrast.spec.js checks. Only ink-faint, for disabled text and
+ * icons, is below it.
+ *
+ * A page is a stack of cards. A card is a list (a table), a form (fields
+ * that edit the draft), or facts (a key-value list). Its header is the
+ * title, a count, an intro under it, and actions on the right; a button
+ * never sits anywhere else. A form with more than about eight fields folds
+ * the rest under Advanced. A card whose contents one flag governs carries
+ * that flag as a switch in its header; a service with one flag carries it
+ * in the page header. Whatever else a list card holds — a filter row, a
+ * toggle, a count, an error — is a .card-strip above or below the table.
+ *
+ * Three heading sizes: .page-title, .card-title, .group-title. Prose is
+ * text-sm. text-xs is chrome only: table headers, badges, timestamps,
+ * group titles, the eyebrow.
+ *
+ * Words: Add, Edit, Delete, Save to draft, Cancel, Refresh and Refreshing….
+ * A badge says running, stopped or off for a service; up or down for a
+ * link; connected or disconnected for a tunnel. A column says Address,
+ * MAC, Interface, Destination. An empty table says "No <plural>." and a
+ * loading one "Reading…".
+ *
+ * Two widths. Below lg the shell is a top bar, a drawer and an apply bar
+ * docked at the bottom. Below sm a page is laid out for a thumb: 16px
+ * inputs, 44px targets, tables that scroll sideways or stack, dialogs as
+ * sheets. Both are written max-lg: and max-sm:, so the desktop classes stay
+ * the base and a grep for the two finds all of it.
+ */
+
+@import 'tailwindcss';
+@import '@fontsource-variable/open-sans/wght.css';
+
+/* Class-based dark mode driven by the theme store (see stores/theme.js). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --page: var(--color-neutral-50);
+  --surface: #fff;
+  --surface-2: var(--color-neutral-100);
+  --line: var(--color-neutral-200);
+  --line-2: var(--color-neutral-300);
+  /* The edge of a field or a switch: 3:1 on any ground, which a control's
+     edge needs (WCAG 1.4.11). Lines that only divide stay lighter. */
+  --edge: oklch(62% 0 0);
+  --ink: var(--color-neutral-900);
+  --ink-2: var(--color-neutral-700);
+  --ink-muted: var(--color-neutral-600);
+  --ink-faint: var(--color-neutral-400);
+  /* 7:1 on white, or under a white label, takes the 800s or deeper. */
+  --accent: var(--color-sky-800);
+  --accent-hover: var(--color-sky-900);
+  --accent-text: var(--color-sky-900);
+  --on-fill: #fff;
+  --ok: var(--color-emerald-800);
+  --ok-soft: var(--color-emerald-100);
+  --ok-ink: var(--color-emerald-900);
+  --ok-line: var(--color-emerald-300);
+  --warn: var(--color-amber-900);
+  /* A meter is a graphic, which needs 3:1 on its track rather than 7:1,
+     so it fills in a brighter shade than the text of its tone. */
+  --warn-fill: var(--color-amber-700);
+  --warn-soft: var(--color-amber-50);
+  --warn-ink: var(--color-amber-900);
+  --warn-line: var(--color-amber-300);
+  --bad: var(--color-red-800);
+  --bad-fill: var(--color-red-600);
+  /* The Delete button: dark red under a white label, in both themes. */
+  --danger: var(--color-red-800);
+  --on-danger: #fff;
+  --bad-soft: var(--color-red-50);
+  --bad-ink: var(--color-red-800);
+  --bad-line: var(--color-red-300);
+  --info: var(--color-sky-800);
+  --info-soft: var(--color-sky-50);
+  --info-ink: var(--color-sky-900);
+  --info-line: var(--color-sky-300);
+  /* Traffic's two lines, down and up: 3:1 on the card, and told apart
+     under protanopia and deuteranopia (the palette validator's checks). */
+  --chart-down: var(--color-sky-600);
+  --chart-up: var(--color-orange-600);
+}
+
+.dark {
+  --page: var(--color-neutral-950);
+  --surface: var(--color-neutral-900);
+  --surface-2: var(--color-neutral-800);
+  --line: var(--color-neutral-800);
+  --line-2: var(--color-neutral-700);
+  --edge: oklch(58% 0 0);
+  --ink: var(--color-neutral-100);
+  --ink-2: var(--color-neutral-300);
+  /* Neutral 400 is under 7:1 on surface-2 and 300 is ink-2. */
+  --ink-muted: oklch(78% 0 0);
+  --ink-faint: var(--color-neutral-600);
+  /* A fill light enough to stand out here is too light for a white label,
+     so fills take a dark one. */
+  --accent: var(--color-sky-400);
+  --accent-hover: var(--color-sky-300);
+  --accent-text: var(--color-sky-400);
+  --on-fill: var(--color-neutral-950);
+  /* Soft fills are the deep shade at half strength, so a notice or badge
+     tints its surface rather than glowing on it. */
+  --ok: var(--color-emerald-400);
+  --ok-soft: color-mix(in oklab, var(--color-emerald-950) 50%, transparent);
+  --ok-ink: var(--color-emerald-300);
+  --ok-line: color-mix(in oklab, var(--color-emerald-800) 60%, transparent);
+  --warn: var(--color-amber-400);
+  --warn-fill: var(--color-amber-400);
+  --warn-soft: color-mix(in oklab, var(--color-amber-950) 50%, transparent);
+  --warn-ink: var(--color-amber-200);
+  --warn-line: color-mix(in oklab, var(--color-amber-800) 60%, transparent);
+  --bad: var(--color-red-300);
+  --bad-fill: var(--color-red-300);
+  --danger: var(--color-red-800);
+  --on-danger: #fff;
+  --bad-soft: color-mix(in oklab, var(--color-red-950) 50%, transparent);
+  --bad-ink: var(--color-red-300);
+  --bad-line: color-mix(in oklab, var(--color-red-800) 60%, transparent);
+  --info: var(--color-sky-400);
+  --info-soft: color-mix(in oklab, var(--color-sky-950) 50%, transparent);
+  --info-ink: var(--color-sky-200);
+  --info-line: color-mix(in oklab, var(--color-sky-800) 60%, transparent);
+  /* The same two steps pass on the dark card as well. */
+  --chart-down: var(--color-sky-600);
+  --chart-up: var(--color-orange-600);
+}
+
+/* Utilities read the variables, so a class works in both modes. */
+@theme inline {
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-edge: var(--edge);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-text: var(--accent-text);
+  --color-on-fill: var(--on-fill);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-ok-ink: var(--ok-ink);
+  --color-ok-line: var(--ok-line);
+  --color-warn: var(--warn);
+  --color-warn-fill: var(--warn-fill);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-ink: var(--warn-ink);
+  --color-warn-line: var(--warn-line);
+  --color-bad: var(--bad);
+  --color-bad-fill: var(--bad-fill);
+  --color-danger: var(--danger);
+  --color-on-danger: var(--on-danger);
+  --color-bad-soft: var(--bad-soft);
+  --color-bad-ink: var(--bad-ink);
+  --color-bad-line: var(--bad-line);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-ink: var(--info-ink);
+  --color-info-line: var(--info-line);
+  --color-chart-down: var(--chart-down);
+  --color-chart-up: var(--chart-up);
+}
+
+@theme {
+  --font-sans: 'Open Sans Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* The one size for monospace output: logs, rulesets, diffs, keys. */
+  --text-code: 0.8125rem;
+  --text-code--line-height: 1.25rem;
+
+  --animate-fade-in: fade-in 150ms ease-out both;
+  --animate-fade-out: fade-out 120ms ease-in both;
+  --animate-pop-in: pop-in 150ms ease-out both;
+  --animate-pop-out: pop-out 120ms ease-in both;
+  --animate-drawer-in: drawer-in 200ms ease-out both;
+  --animate-drawer-out: drawer-out 150ms ease-in both;
+  /* The ring around Live's dot while the list is live. */
+  --animate-live: live 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+  /* The dialog is centred by Tailwind's `translate` property, which
+     composes with `transform`, so these only scale. A sheet on a phone
+     sets --pop-from to slide up instead: the same animation, so crossing
+     the breakpoint never restarts it. */
+  @keyframes pop-in {
+    from {
+      opacity: var(--pop-from-opacity, 0);
+      transform: var(--pop-from, scale(0.97));
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @keyframes pop-out {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: var(--pop-from-opacity, 0);
+      transform: var(--pop-from, scale(0.97));
+    }
+  }
+  /* The drawer sits against an edge, not centred, so it slides with
+     transform. */
+  @keyframes drawer-in {
+    from {
+      transform: translateX(-100%);
+    }
+  }
+  @keyframes drawer-out {
+    to {
+      transform: translateX(-100%);
+    }
+  }
+  @keyframes live {
+    75%,
+    100% {
+      transform: scale(2.2);
+      opacity: 0;
+    }
+  }
+}
+
+@layer base {
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: var(--accent);
+  }
+}
+
+@layer components {
+  .page-title {
+    @apply text-2xl font-semibold tracking-tight;
+  }
+  .eyebrow {
+    @apply text-xs font-medium tracking-wide text-ink-muted uppercase;
+  }
+  .card-title {
+    @apply text-base font-semibold tracking-tight;
+  }
+  .group-title {
+    @apply text-xs font-medium tracking-wide text-ink-muted uppercase;
+  }
+  /* 16px on a phone, and on any touch screen: iOS zooms into any field
+     smaller, and stays there. An iPad has desktop density otherwise. */
+  .input {
+    @apply w-full rounded-md border border-edge bg-surface px-3 py-1.5 text-sm text-ink placeholder:text-ink-muted focus:border-accent focus:ring-2 focus:ring-accent/30 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-bad max-sm:py-2 max-sm:text-base pointer-coarse:text-base;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-on-fill shadow-sm hover:bg-accent-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 max-sm:min-h-11 max-sm:px-4;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-line-2 bg-surface px-3 py-1.5 text-sm font-medium text-ink shadow-sm hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 max-sm:min-h-11 max-sm:px-4;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md bg-danger px-3 py-1.5 text-sm font-medium text-on-danger shadow-sm hover:opacity-90 focus-visible:ring-2 focus-visible:ring-bad focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 max-sm:min-h-11 max-sm:px-4;
+  }
+  /* A row action that reads as a link, so a table of them stays quiet.
+     On a phone it is as tall as a thumb, reaching past its line rather
+     than making the row taller. */
+  .link-action {
+    @apply text-sm text-ink-muted underline-offset-2 hover:text-accent-text hover:underline focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:cursor-not-allowed disabled:text-ink-faint disabled:no-underline max-sm:-my-3 max-sm:inline-flex max-sm:min-h-11 max-sm:items-center;
+  }
+  .link {
+    @apply text-sm text-accent-text underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:text-ink-faint disabled:no-underline;
+  }
+  /* A link inside a sentence is underlined. Colour cannot set it apart:
+     link and text both hold 7:1 on the ground, which leaves them about
+     2:1 from each other (WCAG 1.4.1). Row actions and links that stand
+     alone keep the plain look. */
+  :is(p, li, dd, [role='note'], [role='alert']) .link {
+    @apply underline;
+  }
+  /* On a phone the box grows to a thumb around the same icon. */
+  .icon-btn {
+    @apply inline-flex rounded p-1 text-ink-muted hover:text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:opacity-30 max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center max-sm:justify-center;
+  }
+  /* A checkbox drawn as a switch, for the one flag that governs a card or a page. */
+  .switch {
+    @apply relative inline-block h-5 w-9 shrink-0 cursor-pointer appearance-none rounded-full bg-edge transition-colors checked:bg-accent focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .switch::before {
+    content: '';
+    @apply absolute top-0.5 left-0.5 size-4 rounded-full bg-white shadow-sm transition-transform;
+  }
+  /* On the accent the knob takes the label colour fills take, or it is
+     2.2:1 on the dark theme's light track. */
+  .switch:checked::before {
+    @apply translate-x-4 bg-on-fill;
+  }
+  /* On a phone the key takes at most two fifths and a long value wraps
+     rather than pushing the card wider than the screen. */
+  .kv {
+    @apply grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 max-sm:grid-cols-[fit-content(40%)_minmax(0,1fr)] max-sm:gap-x-3;
+  }
+  .kv > * {
+    @apply max-sm:wrap-anywhere;
+  }
+  .kv dt {
+    @apply text-ink-muted;
+  }
+  .table {
+    @apply w-full text-left text-sm;
+  }
+  /* On a phone a cell keeps to one line, so a table wider than the screen
+     scrolls inside its card instead of squeezing every cell to a column of
+     words. A cell that should wrap says whitespace-normal. */
+  .table thead th {
+    @apply border-b border-line bg-surface-2/60 px-3 py-2 text-xs font-medium tracking-wide text-ink-muted uppercase max-sm:whitespace-nowrap;
+  }
+  .table tbody td {
+    @apply border-b border-line px-3 py-2.5 align-top max-sm:py-3 max-sm:whitespace-nowrap;
+  }
+  .table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+  /* A row the draft adds or changes, until it is applied. */
+  .table tbody tr.row-changed td:first-child {
+    @apply shadow-[inset_3px_0_0_0_var(--warn)];
+  }
+  /* A rule Ostiole adds on its own: there for the order, not for editing. */
+  .table tbody tr.row-system td {
+    @apply bg-surface-2/40 text-ink-muted;
+  }
+  /* A value not read yet, where "Reading…" would leave the card a
+     different shape from the one it is about to take. */
+  .skeleton {
+    @apply inline-block h-3.5 animate-pulse rounded bg-surface-2 align-middle motion-reduce:animate-none;
+  }
+  /* Anything in a flush card that is not the table: a filter row above it,
+     a toggle, a count, an error, a footer note. It sits against a rule, so
+     it gets the same room on both sides of it. */
+  .card-strip {
+    @apply px-4 py-3;
+  }
+  /* A row of fields. Labels sit at the top, so the inputs line up whether
+     or not a field has a hint under it, and anything in the row that is
+     not a field (a button, a checkbox) is dropped to the input line. On a
+     phone the row is a column, so there is nothing to line up with. */
+  .form-row {
+    @apply flex flex-wrap items-start gap-3 max-sm:flex-col max-sm:items-stretch;
+  }
+  .form-row > :not(.field) {
+    /* One label line plus the gap under it; then as tall as an input. */
+    @apply mt-6 min-h-[2.125rem] max-sm:mt-0 max-sm:min-h-0;
+  }
+  .form-row > :is(.btn-primary, .btn-secondary, .btn-danger) {
+    @apply max-sm:min-h-11;
+  }
+  .badge {
+    @apply inline-block rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-2;
+  }
+  .badge-ok {
+    @apply bg-ok-soft text-ok-ink;
+  }
+  .badge-warn {
+    @apply bg-warn-soft text-warn-ink;
+  }
+  .badge-bad {
+    @apply bg-bad-soft text-bad-ink;
+  }
+  /* A ratio against a limit. The track takes a light step of the same hue
+     as the fill, passed in by the caller, so the severity reads across the
+     whole bar rather than only the filled part. */
+  .meter {
+    @apply h-1.5 w-full overflow-hidden rounded-full;
+  }
+  .meter-fill {
+    @apply h-full rounded-full transition-[width] duration-700 ease-out;
+  }
+
+  @media (width < 40rem) {
+    /* A row's actions, the last cell when it holds one or two buttons and
+       nothing else, stay at the right edge while the rest of the row
+       scrolls under it and fades out beneath them. A table with more to
+       say there stacks instead. The buttons are a thumb tall without
+       making the row any taller. */
+    .table:not(.table-stack, .table-flow)
+      tbody
+      td:last-child:has(> :is(button, a)):not(:has(> :not(button, a), > :nth-child(3))) {
+      @apply sticky right-0 pl-6;
+      background: linear-gradient(to right, transparent, var(--surface) 1.25rem);
+    }
+    .table:not(.table-stack, .table-flow)
+      tbody
+      tr.row-system
+      td:last-child:has(> :is(button, a)):not(:has(> :not(button, a), > :nth-child(3))) {
+      background: linear-gradient(
+        to right,
+        transparent,
+        color-mix(in oklab, var(--surface-2) 40%, var(--surface)) 1.25rem
+      );
+    }
+    .table:not(.table-stack, .table-flow) thead th:last-child:empty {
+      @apply sticky right-0;
+      background: color-mix(in oklab, var(--surface-2) 60%, var(--surface));
+    }
+    .table tbody td:last-child > :is(button, a),
+    .table td .icon-btn {
+      @apply -my-3 inline-flex min-h-11 items-center;
+    }
+
+    /* A table read as a stack of blocks, one per row, each cell led by its
+       column's name from data-label in a gutter on the left. A cell with
+       an empty data-label (the row's name, its actions) and one that spans
+       the row (No leases., Reading…) runs the full width. */
+    .table-stack thead {
+      @apply hidden;
+    }
+    .table-stack tbody tr {
+      @apply block border-b border-line py-2;
+    }
+    .table-stack tbody tr:last-child {
+      @apply border-b-0;
+    }
+    /* Important: a stacked cell wraps whatever its desktop column said.
+       Its label floats out into the gutter, and the cell, a flow root,
+       grows around it: a cell with nothing in it, or a label on two
+       lines, would otherwise leave the label over the next cell. */
+    .table-stack tbody td {
+      @apply relative flow-root border-b-0 py-1 pr-4 pl-31 whitespace-normal! wrap-anywhere;
+    }
+    .table-stack tbody td::before {
+      content: attr(data-label);
+      @apply float-left mt-0.5 -ml-27 w-24 text-xs font-medium tracking-wide text-ink-muted uppercase;
+    }
+    .table-stack tbody td:is([data-label=''], [colspan]) {
+      @apply pl-4;
+    }
+    .table-stack tbody td:is([data-label=''], [colspan])::before {
+      @apply hidden;
+    }
+    .table-stack tbody td:last-child > :is(button, a) {
+      @apply my-0;
+    }
+    .table-stack tbody tr.row-system {
+      @apply bg-surface-2/40;
+    }
+    .table-stack tbody tr.row-system td {
+      @apply bg-transparent;
+    }
+    .table-stack tbody tr.row-changed {
+      @apply shadow-[inset_3px_0_0_0_var(--warn)];
+    }
+    .table-stack tbody tr.row-changed td:first-child {
+      @apply shadow-none;
+    }
+
+    /* A table whose rows read as a line of text (rules, the firewall log)
+       flows: each row a block, its cells running on and wrapping. A page
+       orders the cells and breaks the lines with utilities. Important:
+       the table utility, which the .table class also is, would keep it a
+       table as wide as its widest row. */
+    .table-flow {
+      @apply block!;
+    }
+    .table-flow tbody {
+      @apply block;
+    }
+    .table-flow thead {
+      @apply hidden;
+    }
+    .table-flow tbody tr {
+      @apply flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line px-4 py-3;
+    }
+    .table-flow tbody tr:last-child {
+      @apply border-b-0;
+    }
+    .table-flow tbody td {
+      @apply border-0 p-0 whitespace-normal wrap-anywhere;
+    }
+    .table-flow tbody td:last-child > :is(button, a),
+    .table-flow td .icon-btn {
+      @apply my-0;
+    }
+    .table-flow tbody tr.row-system {
+      @apply bg-surface-2/40;
+    }
+    .table-flow tbody tr.row-system td {
+      @apply bg-transparent;
+    }
+    .table-flow tbody tr.row-changed {
+      @apply shadow-[inset_3px_0_0_0_var(--warn)];
+    }
+    .table-flow tbody tr.row-changed td:first-child {
+      @apply shadow-none;
+    }
+
+    .table-stack tbody td:empty,
+    .table-flow tbody td:empty {
+      @apply hidden;
+    }
+
+    /* A dialog is a sheet on a phone. The row that holds its submit button
+       stays in reach at the bottom, its buttons sharing the width. */
+    [role='dialog'] :has(> button[type='submit']) {
+      --sheet-pb: max(1rem, env(safe-area-inset-bottom));
+      @apply sticky bottom-[calc(var(--sheet-pb)*-1)] z-10 -mx-4 mb-[calc(var(--sheet-pb)*-1)] border-t border-line bg-surface px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))];
+    }
+    [role='dialog'] :has(> button[type='submit']) > button {
+      @apply flex-1;
+    }
+  }
+
+  /* The same flow for a table whose columns cut their text to share the
+     width (WAF events): below 1280 px, where the sidebar leaves it too
+     narrow for them, rather than only on a phone. The page orders its
+     cells with max-xl: and sizes its columns with xl:. */
+  @media (width < 80rem) {
+    .table-flow-xl {
+      @apply block!;
+    }
+    .table-flow-xl tbody {
+      @apply block;
+    }
+    .table-flow-xl thead {
+      @apply hidden;
+    }
+    .table-flow-xl tbody tr {
+      @apply flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line px-4 py-3;
+    }
+    .table-flow-xl tbody tr:last-child {
+      @apply border-b-0;
+    }
+    .table-flow-xl tbody td {
+      @apply border-0 p-0 whitespace-normal wrap-anywhere;
+    }
+    .table-flow-xl tbody td:empty {
+      @apply hidden;
+    }
+  }
+}
+
+/* A scroller with a shadow at an edge while there is more past it. The
+   covers move with the content and hide the shadow at the end. --fade is
+   the colour behind the scroller, a card's surface unless set. */
+@utility scroll-fade {
+  --fade-edge: rgb(0 0 0 / 0.14);
+  background:
+    linear-gradient(to right, var(--fade, var(--surface)) 40%, transparent) left / 2rem 100%
+      no-repeat local,
+    linear-gradient(to left, var(--fade, var(--surface)) 40%, transparent) right / 2rem 100%
+      no-repeat local,
+    radial-gradient(farthest-side at 0 50%, var(--fade-edge), transparent) left / 0.75rem 100%
+      no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, var(--fade-edge), transparent) right / 0.75rem 100%
+      no-repeat scroll;
+
+  :where(.dark) & {
+    --fade-edge: rgb(0 0 0 / 0.6);
+  }
+}
+
+/* Vue transition classes. Table rows change in the frame their data does:
+   a row fading out keeps its place, so any fade shows two lists at once
+   and then a jump. Only a reorder slides, so the eye can follow the row
+   that moved (lib/reorder.js). The bar above the page grows and shrinks
+   rather than shoving the content under it. */
+.row-move {
+  transition: transform 120ms ease-out;
+}
+
+.toast-enter-active,
+.toast-leave-active,
+.toast-move {
+  transition:
+    opacity 200ms ease-out,
+    transform 200ms ease-out;
+}
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.bar-enter-active,
+.bar-leave-active {
+  transition: grid-template-rows 200ms ease-out;
+}
+.bar-enter-from,
+.bar-leave-to {
+  grid-template-rows: 0fr;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row-move,
+  .toast-enter-active,
+  .toast-leave-active,
+  .toast-move,
+  .bar-enter-active,
+  .bar-leave-active {
+    transition: none;
+  }
+}
+
+/* A dialog read only closes with its own button, so the form's Cancel and
+   Save, the row that holds the submit button, go. Outside the layers, or
+   the row's own flex utility would win. */
+.read-only :has(> button[type='submit']) {
+  display: none;
+}

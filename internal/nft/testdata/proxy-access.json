@@ -1,0 +1,186 @@
+{
+  "version": 12,
+  "system": {
+    "hostname": "access-fw",
+    "management": {
+      "webPort": 8443,
+      "sshPort": 22
+    }
+  },
+  "zones": [
+    {
+      "name": "wan",
+      "external": true
+    },
+    {
+      "name": "lan",
+      "antiLockout": true
+    }
+  ],
+  "interfaces": [
+    {
+      "name": "eth0",
+      "zone": "wan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "dhcp"
+      },
+      "ipv6": {
+        "mode": "slaac"
+      }
+    },
+    {
+      "name": "eth1",
+      "zone": "lan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "192.168.1.1/24"
+      },
+      "ipv6": {
+        "mode": "none"
+      }
+    }
+  ],
+  "rules": [
+    {
+      "id": "lan-out",
+      "description": "Allow LAN to any",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    }
+  ],
+  "nat": {
+    "outbound": {
+      "mode": "automatic"
+    }
+  },
+  "services": {
+    "dhcp": {
+      "enabled": false
+    },
+    "dns": {
+      "enabled": false
+    },
+    "proxy": {
+      "enabled": true,
+      "access": [
+        {
+          "id": "scanners",
+          "enabled": true,
+          "zone": "wan",
+          "ports": ["http", "https"],
+          "source": {
+            "addresses": ["203.0.113.0/24"]
+          },
+          "action": "drop",
+          "log": true,
+          "description": "Known scanners"
+        },
+        {
+          "id": "https-home",
+          "enabled": true,
+          "zone": "wan",
+          "ports": ["https"],
+          "source": {
+            "alias": "home"
+          },
+          "action": "accept",
+          "description": "Sites from home"
+        },
+        {
+          "id": "http-rest",
+          "enabled": true,
+          "zone": "wan",
+          "ports": ["http"],
+          "source": {
+            "alias": "home",
+            "notAddresses": true
+          },
+          "action": "reject"
+        },
+        {
+          "id": "resolver",
+          "enabled": true,
+          "zone": "wan",
+          "routes": ["resolver"],
+          "source": {},
+          "action": "accept"
+        },
+        {
+          "id": "off",
+          "enabled": false,
+          "zone": "wan",
+          "ports": ["http"],
+          "source": {},
+          "action": "accept"
+        },
+        {
+          "id": "lan",
+          "enabled": true,
+          "zone": "lan",
+          "ports": ["http", "https"],
+          "routes": ["mail", "resolver"],
+          "source": {},
+          "action": "accept"
+        }
+      ],
+      "http3": true,
+      "pools": [
+        {
+          "id": "web",
+          "upstreams": [
+            {
+              "address": "192.168.1.20:8080"
+            }
+          ]
+        }
+      ],
+      "sites": [
+        {
+          "id": "shop",
+          "enabled": true,
+          "hosts": ["shop.example.com"],
+          "pool": "web"
+        }
+      ],
+      "routes": [
+        {
+          "id": "mail",
+          "enabled": true,
+          "protocol": "tcp",
+          "port": 443,
+          "sni": ["mail.example.com"],
+          "upstreams": [
+            {
+              "address": "192.168.1.30:443"
+            }
+          ]
+        },
+        {
+          "id": "resolver",
+          "enabled": true,
+          "protocol": "udp",
+          "port": 5353,
+          "upstreams": [
+            {
+              "address": "192.168.1.40:53"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "aliases": [
+    {
+      "name": "home",
+      "type": "hosts",
+      "description": "Where the admins are",
+      "entries": ["192.0.2.0/24", "2001:db8::/32"]
+    }
+  ]
+}

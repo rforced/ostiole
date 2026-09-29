@@ -1,0 +1,14 @@
+# Install hooks with: lefthook install
+pre-commit:
+  parallel: true
+  commands:
+    go-lint:
+      glob: '*.go'
+      run: golangci-lint run ./...
+    go-test:
+      glob: '*.go'
+      run: go test ./...
+    web-lint:
+      root: web/
+      glob: '*.{ts,vue,js,css,json}'
+      run: bun run lint && bun run format:check

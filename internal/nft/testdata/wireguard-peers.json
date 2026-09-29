@@ -1,0 +1,47 @@
+{
+  "version": 12,
+  "system": { "hostname": "fw", "management": { "webPort": 443, "sshPort": 22 } },
+  "zones": [
+    { "name": "wan", "external": true },
+    { "name": "lan", "antiLockout": true },
+    { "name": "devices" },
+    { "name": "sites" }
+  ],
+  "interfaces": [
+    { "name": "eth0", "zone": "wan", "enabled": true, "ipv4": { "mode": "dhcp" }, "ipv6": { "mode": "slaac" } },
+    { "name": "eth1", "zone": "lan", "enabled": true, "ipv4": { "mode": "static", "address": "192.168.1.1/24" }, "ipv6": { "mode": "none" } },
+    {
+      "name": "wg0", "zone": "devices", "enabled": true,
+      "ipv4": { "mode": "static", "address": "10.66.0.1/24" }, "ipv6": { "mode": "static", "address": "fd66::1/64" },
+      "wireguard": {
+        "privateKey": "yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=",
+        "listenPort": 51820,
+        "peers": [
+          { "name": "laptop", "enabled": true, "publicKey": "xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=", "allowedIps": ["10.66.0.2/32", "fd66::2/128"] },
+          { "name": "phone", "enabled": true, "publicKey": "gN65BkIKy1eCE9pP1wdc8ROUtkHLF2PfAqYdyYBz6EA=", "allowedIps": ["10.66.0.3/32"] }
+        ]
+      }
+    },
+    {
+      "name": "wg1", "zone": "sites", "enabled": true,
+      "ipv4": { "mode": "static", "address": "10.77.0.1/30" }, "ipv6": { "mode": "none" },
+      "wireguard": {
+        "privateKey": "FpCyhws9cxwWoV4xELtfJvjJN+zQVRPISllRWgeopVE=",
+        "peers": [
+          {
+            "name": "friend", "enabled": true, "publicKey": "TrMvSoP4jYQlY6RIzBgbssQqY3vxI2Pi+y71lOWWXX0=",
+            "allowedIps": ["10.77.0.2/32", "192.168.50.0/24"], "endpoint": "friend.example.net:51820", "keepalive": 25,
+            "masquerade": true
+          }
+        ]
+      }
+    }
+  ],
+  "rules": [
+    { "id": "allow-lan", "description": "Allow LAN to any", "enabled": true, "zone": "lan", "action": "accept", "protocol": "any", "source": {}, "destination": {} },
+    { "id": "laptop-in", "description": "The laptop reaches the LAN", "enabled": true, "zone": "devices", "action": "accept", "protocol": "any", "source": { "peer": "wg0/laptop" }, "destination": { "addresses": ["192.168.1.0/24"] } },
+    { "id": "devices-dns", "description": "Everyone but the phone asks the router", "enabled": true, "zone": "devices", "action": "accept", "protocol": "udp", "source": { "peer": "wg0/phone", "notAddresses": true }, "destination": { "self": true, "ports": ["53"] } },
+    { "id": "lan-to-friend", "description": "The LAN reaches the friend's network", "enabled": true, "zone": "lan", "action": "accept", "protocol": "tcp", "source": {}, "destination": { "peer": "wg1/friend", "ports": ["22"] } }
+  ],
+  "nat": { "outbound": { "mode": "automatic" } }
+}

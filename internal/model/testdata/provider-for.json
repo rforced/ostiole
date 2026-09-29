@@ -1,0 +1,22 @@
+{
+  "providers": [
+    { "id": "cf", "domains": ["example.com"] },
+    { "id": "home", "domains": ["home.example.com"] },
+    { "id": "other", "domains": ["Example.ORG."] },
+    { "id": "none" }
+  ],
+  "cases": [
+    { "name": "example.com", "provider": "cf", "zone": "example.com" },
+    { "name": "www.example.com", "provider": "cf", "zone": "example.com" },
+    { "name": "home.example.com", "provider": "home", "zone": "home.example.com" },
+    { "name": "nas.home.example.com", "provider": "home", "zone": "home.example.com" },
+    { "name": "*.example.com", "provider": "cf", "zone": "example.com" },
+    { "name": "*.home.example.com", "provider": "home", "zone": "home.example.com" },
+    { "name": "WWW.Example.Com.", "provider": "cf", "zone": "example.com" },
+    { "name": "mail.example.org", "provider": "other", "zone": "example.org" },
+    { "name": "notexample.com", "provider": "", "zone": "" },
+    { "name": "example.net", "provider": "", "zone": "" },
+    { "name": "com", "provider": "", "zone": "" },
+    { "name": "", "provider": "", "zone": "" }
+  ]
+}

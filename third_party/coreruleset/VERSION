@@ -1,0 +1,6 @@
+# The Core Rule Set release in rules/, written by scripts/update-crs.sh,
+# and the sha256 of the signed tarball it came from. The script takes
+# crs-setup's SecDefaultAction for phases 3 and 4 out, since the daemon
+# writes those. coreruleset.go and LICENSE are coraza-coreruleset
+# v4.25.0's, unchanged.
+v4.29.0 1aa1c5c8fc29e532d35293bcea36bf72de61db8f6ed4716a0f91ab14552b7fed

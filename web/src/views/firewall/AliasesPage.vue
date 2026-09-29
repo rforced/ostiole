@@ -1,0 +1,270 @@
+<script setup>
+import { Plus } from 'lucide-vue-next'
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+
+import ConfirmButton from '@/components/ConfirmButton.vue'
+import ListContentsDialog from '@/components/ListContentsDialog.vue'
+import RefreshButton from '@/components/RefreshButton.vue'
+import SectionCard from '@/components/SectionCard.vue'
+import SortHeader from '@/components/SortHeader.vue'
+import SortSelect from '@/components/SortSelect.vue'
+import UsedByCell from '@/components/UsedByCell.vue'
+import { api } from '@/lib/api'
+import { canonicalAsn } from '@/lib/asn'
+import { useAsync } from '@/lib/async'
+import { COUNTRIES } from '@/lib/countries'
+import { formatCount } from '@/lib/format'
+import { someOf } from '@/lib/lists'
+import { byNumber, byText, useSort } from '@/lib/sort'
+import { useAuthStore } from '@/stores/auth'
+import { useConfigStore } from '@/stores/config'
+import AliasDialog from '@/views/firewall/AliasDialog.vue'
+
+const auth = useAuthStore()
+const config = useConfigStore()
+const router = useRouter()
+const editing = ref(null)
+const open = ref(false)
+const status = ref([])
+/** The alias being fetched right now, or 'all'; only its own link says so. */
+const refreshing = ref('')
+
+/** What the router has actually fetched, keyed by alias. */
+const fetched = computed(() => Object.fromEntries(status.value.map((s) => [s.alias, s])))
+
+const COLUMNS = [
+  ['name', 'Alias'],
+  ['type', 'Type'],
+  ['entries', 'Entries'],
+  ['description', 'Description'],
+  ['usedBy', 'Used by'],
+]
+
+/** A list that is fetched counts what it fetched. */
+const sort = useSort(() => config.aliases, {
+  name: byText((a) => a.name),
+  type: byText((a) => a.type),
+  entries: byNumber((a) => fetched.value[a.name]?.entries ?? a.entries.length),
+  description: byText((a) => a.description),
+  usedBy: byNumber((a) => config.aliasReferences(a.name).length),
+})
+const aliases = sort.sorted
+
+/** Whether the router fetches this alias: a URL, or a country or AS list. */
+function fetches(a) {
+  return Boolean(a.url) || a.type === 'geoip' || a.type === 'asn'
+}
+const anyFetched = computed(() => config.aliases.some(fetches))
+
+// A router that cannot say what it fetched just shows nothing against each alias.
+const feeds = useAsync(async () => {
+  try {
+    status.value = await api.aliases.feeds()
+  } catch {
+    status.value = []
+  }
+})
+onMounted(feeds.run)
+
+const refresh = useAsync(async (name) => {
+  refreshing.value = name || 'all'
+  try {
+    if (name) await api.aliases.refresh(name)
+    else await api.aliases.refreshAll()
+    await feeds.run()
+  } finally {
+    refreshing.value = ''
+  }
+})
+
+const COUNTRY_NAMES = Object.fromEntries(COUNTRIES.map((c) => [c.code, c.name]))
+
+/** Country aliases read better as names than as two-letter codes. */
+function countryNames(codes) {
+  const shown = codes.slice(0, 4).map((c) => COUNTRY_NAMES[c] ?? c)
+  if (codes.length <= 4) return shown.join(', ')
+  return `${shown.join(', ')} … (${codes.length} countries)`
+}
+
+/** AS numbers read better with their holders, which the last fetch supplied. */
+function asnNames(a) {
+  const holders = {}
+  for (const p of fetched.value[a.name]?.parts ?? []) {
+    if (p.asn && p.holder) holders[p.asn] = p.holder
+  }
+  const shown = a.entries.slice(0, 4).map((e) => {
+    const asn = canonicalAsn(e)
+    return holders[asn] ? `${asn} ${holders[asn]}` : asn
+  })
+  if (a.entries.length <= 4) return shown.join(', ')
+  return `${shown.join(', ')} … (${a.entries.length} networks)`
+}
+
+/**
+ * Where a rule made from this list would go: the first zone that faces
+ * the internet, which is where a blocklist belongs, and otherwise the
+ * first zone there is.
+ */
+const ruleZone = computed(
+  () => (config.zones.find((z) => z.external) ?? config.zones[0])?.name ?? '',
+)
+
+/**
+ * Hand the list to the rules page, which opens a new rule with it filled
+ * in: an address list becomes the source, a port list becomes the ports.
+ * The rule is a draft like any other until it is applied.
+ */
+function blockWith(a) {
+  router.push({ path: '/firewall/rules', query: { block: a.name }, hash: `#${ruleZone.value}` })
+}
+
+function add() {
+  editing.value = null
+  open.value = true
+}
+function edit(a) {
+  editing.value = a
+  open.value = true
+}
+
+/** The alias whose fetched entries are open. */
+const showing = ref(null)
+const showingOpen = ref(false)
+function show(a) {
+  showing.value = a
+  showingOpen.value = true
+}
+async function readEntries(q, offset, limit) {
+  const page = await api.aliases.entries(showing.value.name, { q, offset, limit })
+  return { ...page, items: page.entries }
+}
+</script>
+
+<template>
+  <div class="space-y-5">
+    <SectionCard
+      title="Aliases"
+      :count="config.aliases.length"
+      intro="A named list of addresses, networks or ports, to use in a rule."
+      flush
+    >
+      <template #actions>
+        <SortSelect :sort="sort" :columns="COLUMNS" />
+        <template v-if="!auth.readOnly">
+          <RefreshButton
+            v-if="anyFetched"
+            :busy="refresh.busy.value"
+            :updated-at="refresh.updatedAt.value"
+            label="Refresh lists"
+            @click="refresh.run('')"
+          />
+          <button type="button" class="btn-secondary" @click="add">
+            <Plus class="size-4" aria-hidden="true" /> Add alias
+          </button>
+        </template>
+      </template>
+      <div v-if="refresh.error.value" class="card-strip">
+        <p role="alert" class="text-bad">{{ refresh.error.value }}</p>
+      </div>
+      <table class="table table-stack">
+        <thead>
+          <tr>
+            <SortHeader by="name" :sort="sort">Alias</SortHeader>
+            <SortHeader by="type" :sort="sort">Type</SortHeader>
+            <SortHeader by="entries" :sort="sort">Entries</SortHeader>
+            <SortHeader by="description" :sort="sort">Description</SortHeader>
+            <SortHeader by="usedBy" :sort="sort">Used by</SortHeader>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="config.aliases.length === 0">
+            <td colspan="6" class="text-ink-muted">No aliases.</td>
+          </tr>
+          <tr
+            v-for="a in aliases"
+            :key="a.name"
+            :class="{ 'row-changed': config.isChanged('aliases', a.name) }"
+          >
+            <td class="font-mono font-medium" data-label="">{{ a.name }}</td>
+            <td data-label="Type">{{ a.type }}</td>
+            <td class="font-mono text-code" data-label="Entries">
+              <template v-if="a.type === 'geoip'">{{ countryNames(a.entries) }}</template>
+              <template v-else-if="a.type === 'asn'">{{ asnNames(a) }}</template>
+              <template v-else>
+                {{ a.entries.slice(0, 4).join(', ')
+                }}<span v-if="a.entries.length > 4"> … ({{ a.entries.length }})</span>
+              </template>
+              <div v-if="fetched[a.name]?.lastError" class="mt-1 font-sans text-sm text-bad">
+                {{ fetched[a.name].lastError }}
+              </div>
+              <div v-else-if="fetched[a.name]" class="mt-1 text-ink-muted">
+                <button
+                  v-if="fetched[a.name].entries"
+                  type="button"
+                  class="link"
+                  :aria-label="`${formatCount(fetched[a.name].entries)} fetched for ${a.name}`"
+                  @click="show(a)"
+                >
+                  {{ formatCount(fetched[a.name].entries) }} fetched</button
+                ><template v-else>0 fetched</template
+                ><span v-if="fetched[a.name].stale">
+                  · <span class="badge badge-warn">stale</span></span
+                >
+              </div>
+              <div v-else-if="fetches(a)" class="mt-1 text-ink-muted">not fetched yet</div>
+            </td>
+            <td data-label="Description" :class="{ 'max-sm:hidden': !a.description && !a.url }">
+              {{ a.description }}
+              <div v-if="a.url" class="font-mono text-code break-all text-ink-muted">
+                {{ a.url }}
+              </div>
+              <div v-if="a.url && a.select?.length" class="text-sm text-ink-muted">
+                Keeps only <span class="font-mono">{{ someOf(a.select, 3) }}</span>
+              </div>
+            </td>
+            <UsedByCell :names="config.aliasReferences(a.name)" />
+            <td class="text-right whitespace-nowrap" data-label="">
+              <template v-if="!auth.readOnly">
+                <button
+                  v-if="fetches(a)"
+                  type="button"
+                  class="link mr-3"
+                  :disabled="refresh.busy.value"
+                  @click="refresh.run(a.name)"
+                >
+                  {{ refreshing === a.name ? 'Refreshing…' : 'Refresh' }}
+                </button>
+                <button v-if="ruleZone" type="button" class="link mr-3" @click="blockWith(a)">
+                  Make a rule
+                </button>
+              </template>
+              <button type="button" class="link" @click="edit(a)">
+                {{ auth.readOnly ? 'View' : 'Edit' }}
+              </button>
+              <ConfirmButton
+                class="ml-3"
+                label="Delete"
+                :question="`Delete alias ${a.name}?`"
+                :description="a.description"
+                :disabled="config.aliasReferences(a.name).length > 0"
+                @confirm="config.removeAlias(a.name)"
+              />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </SectionCard>
+
+    <AliasDialog v-model:open="open" :alias="editing" :feeds="status" />
+    <ListContentsDialog
+      v-model:open="showingOpen"
+      :title="`Entries fetched for ${showing?.name ?? ''}`"
+      label="Entries"
+      :placeholder="showing?.type === 'ports' ? 'port' : 'address or network'"
+      columns
+      :read="readEntries"
+    />
+  </div>
+</template>
