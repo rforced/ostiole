@@ -19,8 +19,8 @@ configuration: systemd-networkd, dnsmasq, unbound, chrony, miniupnpd, pppd and h
 - **Interfaces:** Ethernet, VLANs, bridges, bonds and PPPoE. IPv4 static or DHCP. IPv6 static,
   SLAAC or DHCPv6 with prefix delegation, and LANs numbered from the delegated prefix. MTU and MAC
   address per interface.
-- **Routing:** static routes, monitored gateways, WAN failover through gateway groups, and policy
-  routing per rule.
+- **Routing:** static routes, monitored gateways, WAN failover through gateway groups, policy
+  routing per rule, and answers sent back out of the WAN a connection came in on.
 - **DHCP and DNS:** DHCP for IPv4 and IPv6, router advertisements and static leases. DNS forwarded
   in the clear or over TLS, or resolved recursively. Host and domain overrides, DHCP client names
   in DNS, block lists with allow and block exceptions. Clients that use another resolver can be
