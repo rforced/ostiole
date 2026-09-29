@@ -1,6 +1,7 @@
 <script setup>
 import { Lock } from 'lucide-vue-next'
 
+import { formatCount } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth'
 
 /**
@@ -45,12 +46,12 @@ const auth = useAuthStore()
     <td class="max-sm:hidden"></td>
     <td class="max-sm:order-1 max-sm:basis-full">{{ rule.description }}</td>
     <td class="text-right font-mono text-code tabular-nums max-sm:hidden">
-      {{ packets }}
+      {{ packets === '' ? '' : formatCount(packets) }}
       <div
         v-if="logged !== '' && packets !== '' && logged < packets"
         class="font-sans text-xs text-ink-muted"
       >
-        {{ logged }} logged
+        {{ formatCount(logged) }} logged
       </div>
     </td>
     <td class="text-right whitespace-nowrap max-sm:order-4 max-sm:basis-full max-sm:text-left">

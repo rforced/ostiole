@@ -9,6 +9,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { useDraftRows } from '@/lib/draft'
+import { formatCount } from '@/lib/format'
 import { useReorder } from '@/lib/reorder'
 import { useTabHash } from '@/lib/tabs'
 import { useAuthStore } from '@/stores/auth'
@@ -307,9 +308,9 @@ onMounted(() => {
             </td>
             <td class="max-sm:order-1 max-sm:basis-full max-sm:font-medium">{{ r.description }}</td>
             <td class="text-right font-mono text-code tabular-nums max-sm:hidden">
-              {{ counters[r.id]?.packets ?? '' }}
+              {{ counters[r.id] ? formatCount(counters[r.id].packets) : '' }}
               <div v-if="ruleLogged(r) !== ''" class="font-sans text-xs text-ink-muted">
-                {{ ruleLogged(r) }} logged
+                {{ formatCount(ruleLogged(r)) }} logged
               </div>
             </td>
             <td

@@ -5,6 +5,7 @@ import { nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { api } from '@/lib/api'
+import { formatCount } from '@/lib/format'
 import { useConfigStore } from '@/stores/config'
 import RulesPage from '@/views/firewall/RulesPage.vue'
 
@@ -240,6 +241,46 @@ describe('RulesPage system rules', () => {
     expect(rows.find((t) => t.includes('900'))).toContain('40 logged')
     // A log that kept every packet has nothing to add.
     expect(rows.find((t) => t.includes('12'))).not.toContain('logged')
+  })
+
+  it('groups the thousands of a count, as the dashboard does', async () => {
+    api.counters.mockResolvedValue({
+      'input/block-bogons': { packets: 2_000, bytes: 0 },
+      'forward/block-bogons': { packets: 1_412, bytes: 0 },
+      'input/log:block-bogons': { packets: 1_000, bytes: 0 },
+      'forward/log:block-bogons': { packets: 1_116, bytes: 0 },
+      'r-scan': { packets: 274_551, bytes: 0 },
+      'log:r-scan': { packets: 61_207, bytes: 0 },
+    })
+    api.systemRules.mockResolvedValue(
+      system.map((s) =>
+        s.keys?.includes('input/block-bogons')
+          ? { ...s, logKeys: ['input/log:block-bogons', 'forward/log:block-bogons'] }
+          : s,
+      ),
+    )
+    const scan = {
+      id: 'r-scan',
+      zone: 'wan',
+      enabled: true,
+      action: 'drop',
+      protocol: 'tcp',
+      source: {},
+      destination: { ports: ['23'] },
+      log: true,
+    }
+    const wrapper = await mountPage(
+      '/firewall/rules#wan',
+      {},
+      { ...config, rules: [...config.rules, scan] },
+    )
+    await vi.waitFor(() => expect(api.counters).toHaveBeenCalled())
+    await nextTick()
+    const bogons = systemRows(wrapper).find((tr) => tr.text().includes('bogon'))
+    expect(bogons.text()).toContain(formatCount(3_412))
+    expect(bogons.text()).toContain(`${formatCount(2_116)} logged`)
+    const scanRow = rowsText(wrapper).find((t) => t.includes(formatCount(274_551)))
+    expect(scanRow).toContain(`${formatCount(61_207)} logged`)
   })
 
   it('opens the zone the hash names, so a reload comes back to it', async () => {
