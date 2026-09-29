@@ -53,15 +53,15 @@ configuration: systemd-networkd, dnsmasq, unbound, chrony, miniupnpd, pppd and h
 <table>
 <tr>
 <td width="25%"><a href=".github/screenshots/dashboard.png"><img src=".github/screenshots/dashboard.png" alt="Dashboard"></a><br>Dashboard</td>
-<td width="25%"><a href=".github/screenshots/interfaces.png"><img src=".github/screenshots/interfaces.png" alt="Interfaces"></a><br>Interfaces</td>
-<td width="25%"><a href=".github/screenshots/rules.png"><img src=".github/screenshots/rules.png" alt="Firewall rules in the wan zone"></a><br>Firewall rules</td>
 <td width="25%"><a href=".github/screenshots/dns-blocking.png"><img src=".github/screenshots/dns-blocking.png" alt="DNS block lists"></a><br>DNS blocking</td>
+<td width="25%"><a href=".github/screenshots/proxy.png"><img src=".github/screenshots/proxy.png" alt="Requests the reverse proxy's WAF blocked"></a><br>Reverse proxy</td>
+<td width="25%"><a href=".github/screenshots/rules.png"><img src=".github/screenshots/rules.png" alt="Firewall rules in the wan zone, with private and bogon sources blocked"></a><br>Firewall rules</td>
 </tr>
 <tr>
-<td width="25%"><a href=".github/screenshots/proxy-waf.png"><img src=".github/screenshots/proxy-waf.png" alt="WAF profiles on the reverse proxy"></a><br>WAF profiles</td>
-<td width="25%"><a href=".github/screenshots/wireless.png"><img src=".github/screenshots/wireless.png" alt="Wireless radios"></a><br>Wireless</td>
-<td width="25%"><a href=".github/screenshots/updates.png"><img src=".github/screenshots/updates.png" alt="Update settings"></a><br>Updates</td>
-<td width="25%"><a href=".github/screenshots/connections.png"><img src=".github/screenshots/connections.png" alt="The connection table"></a><br>Connections</td>
+<td width="25%"><a href=".github/screenshots/traffic.png"><img src=".github/screenshots/traffic.png" alt="Traffic per interface over a day"></a><br>Traffic</td>
+<td width="25%"><a href=".github/screenshots/firewall-log.png"><img src=".github/screenshots/firewall-log.png" alt="The firewall log"></a><br>Firewall log</td>
+<td width="25%"><a href=".github/screenshots/wireguard.png"><img src=".github/screenshots/wireguard.png" alt="A WireGuard device's file and QR code"></a><br>WireGuard</td>
+<td width="25%"><a href=".github/screenshots/shaping.png"><img src=".github/screenshots/shaping.png" alt="Traffic shaping queues, live"></a><br>Traffic shaping</td>
 </tr>
 </table>
 
