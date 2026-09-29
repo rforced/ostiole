@@ -63,6 +63,12 @@ configuration: systemd-networkd, dnsmasq, unbound, chrony, miniupnpd, pppd and h
 <td width="25%"><a href=".github/screenshots/wireguard.png"><img src=".github/screenshots/wireguard.png" alt="A WireGuard device's file and QR code"></a><br>WireGuard</td>
 <td width="25%"><a href=".github/screenshots/shaping.png"><img src=".github/screenshots/shaping.png" alt="Traffic shaping queues, live"></a><br>Traffic shaping</td>
 </tr>
+<tr>
+<td width="25%"><a href=".github/screenshots/mobile-dashboard.png"><img src=".github/screenshots/mobile-dashboard.png" alt="The dashboard on a phone"></a><br>Dashboard on a phone</td>
+<td width="25%"><a href=".github/screenshots/mobile-navigation.png"><img src=".github/screenshots/mobile-navigation.png" alt="The navigation drawer on a phone"></a><br>Navigation</td>
+<td width="25%"><a href=".github/screenshots/mobile-rules.png"><img src=".github/screenshots/mobile-rules.png" alt="Firewall rules on a phone"></a><br>Rules on a phone</td>
+<td width="25%"><a href=".github/screenshots/mobile-traffic.png"><img src=".github/screenshots/mobile-traffic.png" alt="Traffic charts on a phone"></a><br>Traffic on a phone</td>
+</tr>
 </table>
 
 ## Requirements
