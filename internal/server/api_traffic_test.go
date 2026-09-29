@@ -126,8 +126,8 @@ func TestTrafficReads(t *testing.T) {
 	}
 }
 
-// A viewer reads traffic and may not clear it; an operator may.
-func TestClearingTrafficTakesAnOperator(t *testing.T) {
+// A viewer reads traffic, and only an admin may clear it.
+func TestClearingTrafficTakesAnAdmin(t *testing.T) {
 	t.Parallel()
 	c, step := countingRouter(t)
 	step(0, 1000)
@@ -139,13 +139,20 @@ func TestClearingTrafficTakesAnOperator(t *testing.T) {
 		}
 		d.Tokens, d.Traffic = tokens, c
 	})
-	viewer := mintToken(t, srv, "look", string(auth.RoleViewer))
-	if resp, raw := withToken(t, srv, http.MethodDelete, "/api/v1/traffic", viewer); resp.StatusCode != http.StatusForbidden {
-		t.Errorf("viewer: %d %s", resp.StatusCode, raw)
+	for _, role := range []auth.Role{auth.RoleViewer, auth.RoleOperator} {
+		token := mintToken(t, srv, string(role), string(role))
+		for _, path := range []string{"/api/v1/traffic", "/api/v1/traffic/destinations"} {
+			if resp, raw := withToken(t, srv, http.MethodDelete, path, token); resp.StatusCode != http.StatusForbidden {
+				t.Errorf("%s cleared %s: %d %s", role, path, resp.StatusCode, raw)
+			}
+		}
 	}
-	operator := mintToken(t, srv, "hand", string(auth.RoleOperator))
-	if resp, raw := withToken(t, srv, http.MethodDelete, "/api/v1/traffic", operator); resp.StatusCode != http.StatusOK {
-		t.Errorf("operator: %d %s", resp.StatusCode, raw)
+	if got := c.DeviceReports(traffic.Window24h); len(got) != 1 {
+		t.Fatalf("devices before clear = %+v", got)
+	}
+	admin := mintToken(t, srv, "own", string(auth.RoleAdmin))
+	if resp, raw := withToken(t, srv, http.MethodDelete, "/api/v1/traffic", admin); resp.StatusCode != http.StatusOK {
+		t.Errorf("admin: %d %s", resp.StatusCode, raw)
 	}
 	if got := c.DeviceReports(traffic.Window24h); len(got) != 0 {
 		t.Errorf("devices after clear = %+v", got)
@@ -153,27 +160,52 @@ func TestClearingTrafficTakesAnOperator(t *testing.T) {
 }
 
 // Clear takes the devices' and the destinations' files with them; the
-// links' stay, as they are always counted.
+// links' stay, as they are always counted. Clearing the destinations
+// leaves the devices and their files.
 func TestClearingTrafficDeletesItsFiles(t *testing.T) {
 	t.Parallel()
-	c, step := countingRouter(t)
+	c, step := countingRouter(t, func(cfg *model.Config) {
+		cfg.Traffic.Destinations = model.TrafficDestinations{Enabled: true}
+	})
 	step(0, 1000)
+	step(5*time.Second, 51000)
 	dir := t.TempDir()
-	for _, name := range []string{traffic.LinksFile, traffic.DevicesFile, traffic.DestinationsFile} {
-		if err := os.MkdirAll(filepath.Join(dir, name), 0o700); err != nil {
-			t.Fatal(err)
+	mkdirs := func() {
+		for _, name := range []string{traffic.LinksFile, traffic.DevicesFile, traffic.DestinationsFile} {
+			if err := os.MkdirAll(filepath.Join(dir, name), 0o700); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
+	kept := func(want map[string]bool) {
+		t.Helper()
+		for name, keep := range want {
+			if _, err := os.Stat(filepath.Join(dir, name)); (err == nil) != keep {
+				t.Errorf("%s kept = %v, want %v", name, err == nil, keep)
+			}
+		}
+	}
+	mkdirs()
 	files := &logfile.Writer{Dir: dir, Source: func() *model.Config { return nil }, Log: slog.New(slog.DiscardHandler)}
 	srv := newTestServerWith(t, func(d *Deps) { d.Traffic, d.LogFiles = c, files })
+	if rows, held, _ := c.Destinations(time.Hour, ""); len(rows) == 0 || held == 0 {
+		t.Fatal("no destinations to clear")
+	}
+	if resp, raw := do(t, srv, http.MethodDelete, "/api/v1/traffic/destinations", nil); resp.StatusCode != http.StatusOK {
+		t.Fatalf("clear destinations: %d %s", resp.StatusCode, raw)
+	}
+	kept(map[string]bool{traffic.LinksFile: true, traffic.DevicesFile: true, traffic.DestinationsFile: false})
+	if rows, held, _ := c.Destinations(time.Hour, ""); len(rows) != 0 || held != 0 {
+		t.Errorf("destinations after their clear = %+v", rows)
+	}
+	if got := c.DeviceReports(traffic.Window24h); len(got) != 1 {
+		t.Errorf("devices after the destinations' clear = %+v", got)
+	}
+	mkdirs()
 	if resp, raw := do(t, srv, http.MethodDelete, "/api/v1/traffic", nil); resp.StatusCode != http.StatusOK {
 		t.Fatalf("clear: %d %s", resp.StatusCode, raw)
 	}
-	for name, kept := range map[string]bool{traffic.LinksFile: true, traffic.DevicesFile: false, traffic.DestinationsFile: false} {
-		if _, err := os.Stat(filepath.Join(dir, name)); (err == nil) != kept {
-			t.Errorf("%s kept = %v, want %v", name, err == nil, kept)
-		}
-	}
+	kept(map[string]bool{traffic.LinksFile: true, traffic.DevicesFile: false, traffic.DestinationsFile: false})
 }
 
 // The stream carries the links each second.

@@ -12,8 +12,10 @@ import (
 func (a *api) registerPeerLogs(mux *router) {
 	mux.HandleFunc("GET /api/v1/wireguard/log", a.readNoEngine(a.peerLogList(peerlog.WireGuard, func() *peerlog.Log { return a.wireguardLog })))
 	mux.HandleFunc("GET /api/v1/wireguard/log/stream", a.readNoEngine(a.peerLogStream(func() *peerlog.Log { return a.wireguardLog })))
+	mux.HandleFunc("DELETE /api/v1/wireguard/log", a.admin(a.clearOne(peerlog.WireGuard.Name)))
 	mux.HandleFunc("GET /api/v1/tailscale/log", a.readNoEngine(a.peerLogList(peerlog.Tailscale, func() *peerlog.Log { return a.tailscaleLog })))
 	mux.HandleFunc("GET /api/v1/tailscale/log/stream", a.readNoEngine(a.peerLogStream(func() *peerlog.Log { return a.tailscaleLog })))
+	mux.HandleFunc("DELETE /api/v1/tailscale/log", a.admin(a.clearOne(peerlog.Tailscale.Name)))
 }
 
 // peerLogPage is a page of a VPN's peer log, and whether the level the

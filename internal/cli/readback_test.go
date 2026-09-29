@@ -8,10 +8,12 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/rforced/ostiole/internal/fwlog"
+	"github.com/rforced/ostiole/internal/journalfeed"
 	"github.com/rforced/ostiole/internal/logfile"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/wafevent"
@@ -84,13 +86,10 @@ func TestWAFEventsComeBackFromTheirFiles(t *testing.T) {
 	files.Run(ctx)
 
 	after := waflog.New()
-	from := readWAFEvents(cfg, after, &logfile.Writer{Dir: dir, Source: func() *model.Config { return cfg }, Log: log}, log)
+	readWAFEvents(cfg, after, &logfile.Writer{Dir: dir, Source: func() *model.Config { return cfg }, Log: log}, log)
 	got := after.Recent(0)
 	if len(got) != 3 || got[0].ID != "2" || got[0].Seq != 3 {
 		t.Fatalf("read back %+v", got)
-	}
-	if !from.IsZero() {
-		t.Errorf("the feed reads the journal back from %v, not after the files' newest event", from)
 	}
 	after.Add(now, wafevent.Event{Time: now, ID: "new", Rules: []wafevent.Hit{}})
 	if after.Newest() != 4 {
@@ -98,24 +97,68 @@ func TestWAFEventsComeBackFromTheirFiles(t *testing.T) {
 	}
 }
 
-// Files that hold no events, as after the update that first kept them in
-// files, leave the journal to fill the log over the days the files keep:
-// until then it alone kept the events. With the files off the log starts
-// empty.
-func TestWAFEventsTheFilesNeverHeldComeFromTheJournal(t *testing.T) {
+// proxyJournal holds a WAF event the proxy logged an hour ago, and says
+// when the feed starts following it.
+type proxyJournal struct {
+	line      string
+	following chan struct{}
+	once      sync.Once
+}
+
+func (j *proxyJournal) Back(_ context.Context, since time.Time, fn func(journalfeed.Record) bool) error {
+	if at := time.Now().Add(-time.Hour); at.After(since) {
+		fn(journalfeed.Record{Cursor: "c1", Time: at, Message: j.line})
+	}
+	return nil
+}
+
+func (j *proxyJournal) Holds(context.Context, string) (bool, error) { return true, nil }
+
+func (j *proxyJournal) Follow(ctx context.Context, _ string, _ time.Time, _ func(journalfeed.Record)) error {
+	j.once.Do(func() { close(j.following) })
+	<-ctx.Done()
+	return nil
+}
+
+// A Clear leaves the WAF events' files empty while the journal still has
+// the proxy's lines. The next start reads none of them back.
+func TestClearedWAFEventsStayClearedAfterARestart(t *testing.T) {
 	t.Parallel()
 	cfg := &model.Config{}
 	cfg.System.Logging.Files.Enabled = true
 	log := slog.New(slog.DiscardHandler)
 	files := &logfile.Writer{Dir: t.TempDir(), Source: func() *model.Config { return cfg }, Log: log}
-	started := time.Now()
-	from := readWAFEvents(cfg, waflog.New(), files, log)
-	kept := waflog.New().Files().Kept(cfg)
-	if want := started.Add(-kept); from.Before(want.Add(-time.Second)) || from.After(time.Now().Add(-kept)) {
-		t.Errorf("reads the journal back from %v, want the start of the files' %v", from, kept)
+	line, err := wafevent.Line(wafevent.Event{Time: time.Now().Add(-time.Hour), ID: "cleared",
+		Verdict: wafevent.VerdictBlocked, Rules: []wafevent.Hit{}})
+	if _, ok := wafevent.Parse(string(line)); err != nil || !ok {
+		t.Fatalf("the proxy's line does not parse: %s (%v)", line, err)
 	}
-	cfg.System.Logging.Files.Enabled = false
-	if from := readWAFEvents(cfg, waflog.New(), files, log); !from.IsZero() {
-		t.Errorf("with the files off the journal is read back from %v", from)
+	journal := &proxyJournal{line: string(line), following: make(chan struct{})}
+	events := waflog.New()
+	feed := &journalfeed.Feed[wafevent.Event]{
+		Log: events, Journal: journal, Parse: wafevent.Parse, Name: "the WAF events", Slog: log,
+		Source: func() *model.Config { return cfg },
+		Settings: func(c *model.Config) (int, time.Duration) {
+			return c.Services.Proxy.Events.Size(), c.Services.Proxy.Events.Retention()
+		},
+		On:        func(*model.Config) bool { return true },
+		Installed: func(context.Context) bool { return true },
+	}
+	readWAFEvents(cfg, events, files, log)
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		feed.Run(ctx)
+		close(done)
+	}()
+	select {
+	case <-journal.following:
+	case <-time.After(5 * time.Second):
+		t.Error("the feed never followed the journal")
+	}
+	cancel()
+	<-done
+	if n, _ := events.Held(); n != 0 {
+		t.Errorf("the start read back %d events the Clear took", n)
 	}
 }

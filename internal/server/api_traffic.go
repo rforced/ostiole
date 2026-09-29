@@ -24,7 +24,8 @@ func (a *api) registerTraffic(mux *router) {
 	mux.HandleFunc("GET /api/v1/traffic/devices/{id}", a.readNoEngine(a.trafficDevice))
 	mux.HandleFunc("GET /api/v1/traffic/stream", a.readNoEngine(a.trafficStream))
 	mux.HandleFunc("GET /api/v1/traffic/destinations", a.readNoEngine(a.trafficDestinations))
-	mux.HandleFunc("DELETE /api/v1/traffic", a.write(a.trafficClear))
+	mux.HandleFunc("DELETE /api/v1/traffic", a.admin(a.trafficClear))
+	mux.HandleFunc("DELETE /api/v1/traffic/destinations", a.admin(a.clearOne(traffic.DestinationsFile)))
 }
 
 var errNoTraffic = errors.New("traffic is not counted by this daemon")
@@ -193,15 +194,16 @@ func (a *api) trafficStream(w http.ResponseWriter, r *http.Request) error {
 
 // trafficClear forgets every device and what it moved, and every
 // destination, their files included.
-func (a *api) trafficClear(w http.ResponseWriter, _ *http.Request) error {
+func (a *api) trafficClear(w http.ResponseWriter, r *http.Request) error {
 	if a.traffic == nil {
 		return &unavailable{errNoTraffic}
 	}
-	if err := a.clearLog(traffic.DevicesFile, a.traffic.Clear); err != nil {
-		return err
-	}
-	if err := a.clearLog(traffic.DestinationsFile, func() {}); err != nil {
-		return err
+	err := errors.Join(a.clearLog(traffic.DevicesFile, a.traffic.Clear),
+		a.clearLog(traffic.DestinationsFile, func() {}))
+	a.noteCleared(r, "cleared a log", "log", traffic.DevicesFile)
+	a.noteCleared(r, "cleared a log", "log", traffic.DestinationsFile)
+	if err != nil {
+		return errFilesStay(err)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"cleared": true, "at": time.Now()})
 	return nil

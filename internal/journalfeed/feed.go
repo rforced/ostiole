@@ -77,9 +77,6 @@ type Feed[E any] struct {
 	Interval time.Duration
 	// Backoff is the first wait after the reader fails; zero is a second.
 	Backoff time.Duration
-	// From is where the first reader reads the journal back from when the
-	// log holds nothing; zero follows from now. It is used once.
-	From time.Time
 
 	reader reader
 	// emptied says Log was cleared for a configuration that does not keep
@@ -205,9 +202,9 @@ func (f *Feed[E]) follow(ctx context.Context, done chan struct{}) {
 // read carries on after the last entry read when the journal still has it.
 // Otherwise it reads what the journal holds after the newest entry the log
 // has, which after a restart is what the unit logged while the daemon was
-// down, before following; a log with none reads back from From the first
-// time, and follows from now after that. What it parses came from the
-// internet, so a panic fails the read rather than the daemon.
+// down, before following; a log with none follows from now, so a cleared
+// one stays cleared. What it parses came from the internet, so a panic
+// fails the read rather than the daemon.
 func (f *Feed[E]) read(ctx context.Context) (err error) {
 	defer panics.Into(&err, f.log(), f.Name+" reader")
 	if f.cursor != "" {
@@ -223,16 +220,12 @@ func (f *Feed[E]) read(ctx context.Context) (err error) {
 		// Following from the moment the back-fill began, when it found
 		// nothing, is what leaves no gap between the two.
 		since = time.Now()
-		after := f.Log.NewestAt()
-		if after.IsZero() {
-			after = f.From
-		}
-		if !after.IsZero() {
+		if after := f.Log.NewestAt(); !after.IsZero() {
 			cursor, err := f.backfill(ctx, after)
 			if err != nil {
 				return err
 			}
-			f.cursor, f.From = cursor, time.Time{}
+			f.cursor = cursor
 		}
 	}
 	var lines lines

@@ -313,10 +313,14 @@ func (l *Log) Held() (int, time.Time) {
 }
 
 // Clear empties the log. The numbers carry on, so what arrives next is
-// newer than anything a page read before.
+// newer than anything a page read before, and what it held counts as let
+// go, so a count reaching back over it is short.
 func (l *Log) Clear() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if l.n > 0 {
+		l.let(l.at(l.n - 1).Logged)
+	}
 	l.ring, l.start, l.n = nil, 0, 0
 }
 

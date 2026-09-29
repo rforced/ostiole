@@ -15,7 +15,7 @@ func (a *api) registerQueryLog(mux *router) {
 	mux.HandleFunc("GET /api/v1/dns/queries", a.readNoEngine(a.queryLogList))
 	mux.HandleFunc("GET /api/v1/dns/queries/stream", a.readNoEngine(a.queryLogStream))
 	mux.HandleFunc("GET /api/v1/dns/queries/summary", a.readNoEngine(a.queryLogSummary))
-	mux.HandleFunc("DELETE /api/v1/dns/queries", a.write(a.queryLogClear))
+	mux.HandleFunc("DELETE /api/v1/dns/queries", a.admin(a.clearOne(dnslog.FileName)))
 }
 
 // queryRow is one answer on the wire. dnslog.Entry is not marshalled
@@ -212,16 +212,5 @@ func (a *api) queryLogSummary(w http.ResponseWriter, _ *http.Request) error {
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
-	return nil
-}
-
-func (a *api) queryLogClear(w http.ResponseWriter, _ *http.Request) error {
-	if a.querylog == nil {
-		return &unavailable{errors.New("query log not available (daemon not running as root?)")}
-	}
-	if err := a.clearLog(dnslog.FileName, a.querylog.Clear); err != nil {
-		return err
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"cleared": true})
 	return nil
 }

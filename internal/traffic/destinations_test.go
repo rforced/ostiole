@@ -123,6 +123,26 @@ func TestDestinationsOffForgetThem(t *testing.T) {
 	}
 }
 
+// Clearing the destinations leaves the devices, and a connection still
+// open counts once in the row it moves into next.
+func TestClearingDestinationsLeavesTheDevices(t *testing.T) {
+	t.Parallel()
+	r := destRouter(t)
+	r.step(5*time.Second, tcp(1, "10.0.0.5", "198.51.100.7", 443, 10, 10))
+	r.c.ClearDestinations()
+	if rows, held, _ := r.c.Destinations(time.Hour, ""); len(rows) != 0 || held != 0 {
+		t.Errorf("rows after the clear = %+v", rows)
+	}
+	if got := r.totals()["10.0.0.5"]; got.Up != 10 {
+		t.Errorf("the device went with its destinations: %+v", got)
+	}
+	r.step(5*time.Second, tcp(1, "10.0.0.5", "198.51.100.7", 443, 25, 10))
+	rows, _, _ := r.c.Destinations(time.Hour, "")
+	if len(rows) != 1 || rows[0].Up != 15 || rows[0].Connections != 1 {
+		t.Errorf("rows after more traffic = %+v", rows)
+	}
+}
+
 // Every address of an answer names it, for a day, and the oldest go past
 // the bound.
 func TestNamesKeepADayOfAnswers(t *testing.T) {

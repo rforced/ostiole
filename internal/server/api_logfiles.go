@@ -1,13 +1,17 @@
 package server
 
 import (
+	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/rforced/ostiole/internal/dhcplog"
 	"github.com/rforced/ostiole/internal/dnslog"
 	"github.com/rforced/ostiole/internal/fwlog"
 	"github.com/rforced/ostiole/internal/logfile"
+	"github.com/rforced/ostiole/internal/logging"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/peerlog"
 	"github.com/rforced/ostiole/internal/requestlog"
@@ -19,6 +23,7 @@ import (
 
 func (a *api) registerLogFiles(mux *router) {
 	mux.HandleFunc("GET /api/v1/system/log-files", a.readNoEngine(a.logFilesStatus))
+	mux.HandleFunc("DELETE /api/v1/system/logs", a.admin(a.logsClear))
 }
 
 // logFilesStatus says whether the logs are written to files and how that
@@ -40,16 +45,116 @@ func (a *api) logFilesStatus(w http.ResponseWriter, _ *http.Request) error {
 }
 
 // clearLog empties a log and deletes its files together, so nothing the
-// log held before is written after.
+// log held before is written after. An error is about the files alone:
+// the memory is empty either way.
 func (a *api) clearLog(name string, empty func()) error {
 	if a.logFiles == nil {
 		empty()
 		return nil
 	}
-	if err := a.logFiles.Clear(name, empty); err != nil {
-		return fmt.Errorf("the log is empty, but its files could not be deleted: %w", err)
+	return a.logFiles.Clear(name, empty)
+}
+
+// errFilesStay is what a Clear says when a log is empty but its files are
+// still there.
+func errFilesStay(err error) error {
+	return fmt.Errorf("the log is empty, but its files could not be deleted: %w", err)
+}
+
+// clearable is a log a Clear takes: its directory among the log files,
+// and what empties it in memory.
+type clearable struct {
+	name  string
+	empty func()
+}
+
+// clearables are the logs this daemon keeps that a Clear takes, in the
+// order logFileNames has them. Traffic per link and the journal are not
+// among them.
+func (a *api) clearables() []clearable {
+	var out []clearable
+	add := func(name string, empty func()) { out = append(out, clearable{name, empty}) }
+	if a.fwlog != nil {
+		add(fwlog.FileName, a.fwlog.Clear)
 	}
+	if a.querylog != nil {
+		add(dnslog.FileName, a.querylog.Clear)
+	}
+	if a.waflog != nil {
+		add(waflog.FileName, a.waflog.Clear)
+	}
+	if a.requests != nil {
+		add(requestlog.FileName, a.requests.Clear)
+	}
+	if a.dhcplog != nil {
+		add(dhcplog.FileName, a.dhcplog.Clear)
+	}
+	if a.wirelesslog != nil {
+		add(wirelesslog.FileName, a.wirelesslog.Clear)
+	}
+	if a.wireguardLog != nil {
+		add(peerlog.WireGuard.Name, a.wireguardLog.Clear)
+	}
+	if a.tailscaleLog != nil {
+		add(peerlog.Tailscale.Name, a.tailscaleLog.Clear)
+	}
+	if a.driveHistory != nil {
+		add(smart.HistoryFileName, a.driveHistory.Clear)
+	}
+	if a.traffic != nil {
+		add(traffic.DevicesFile, a.traffic.Clear)
+		add(traffic.DestinationsFile, a.traffic.ClearDestinations)
+	}
+	return out
+}
+
+// clearOne empties the log kept under name, and deletes its files.
+func (a *api) clearOne(name string) func(http.ResponseWriter, *http.Request) error {
+	return func(w http.ResponseWriter, r *http.Request) error {
+		for _, c := range a.clearables() {
+			if c.name != name {
+				continue
+			}
+			err := a.clearLog(c.name, c.empty)
+			a.noteCleared(r, "cleared a log", "log", name)
+			if err != nil {
+				return errFilesStay(err)
+			}
+			writeJSON(w, http.StatusOK, map[string]any{"cleared": true})
+			return nil
+		}
+		return &unavailable{fmt.Errorf("the %s is not kept by this daemon", logFileNames[name])}
+	}
+}
+
+// logsClear empties every log a Clear takes and deletes their files. A log
+// whose files stay does not stop the rest.
+func (a *api) logsClear(w http.ResponseWriter, r *http.Request) error {
+	var names []string
+	var errs []error
+	for _, c := range a.clearables() {
+		if err := a.clearLog(c.name, c.empty); err != nil {
+			names = append(names, logFileNames[c.name])
+			errs = append(errs, err)
+		}
+	}
+	a.noteCleared(r, "cleared every log")
+	if len(errs) > 0 {
+		return fmt.Errorf("every log is empty, but the files of the %s could not be deleted: %w",
+			strings.Join(names, ", "), errors.Join(errs...))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"cleared": true})
 	return nil
+}
+
+// noteCleared writes a Clear to the journal whatever the level, with who
+// asked for it and from where: nothing brings back what it took.
+func (a *api) noteCleared(r *http.Request, msg string, args ...any) {
+	user := ""
+	if p, ok := a.authenticate(r); ok {
+		user = p.Name
+	}
+	slog.InfoContext(logging.Always(r.Context()), msg, append(args, "user", user, "address", remoteIP(r))...)
 }
 
 // logFileNames are what a sentence calls each log kept in files.

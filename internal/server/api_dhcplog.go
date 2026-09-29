@@ -13,6 +13,7 @@ import (
 func (a *api) registerDHCPLog(mux *router) {
 	mux.HandleFunc("GET /api/v1/dhcp/log", a.readNoEngine(a.dhcpLogList))
 	mux.HandleFunc("GET /api/v1/dhcp/log/stream", a.readNoEngine(a.dhcpLogStream))
+	mux.HandleFunc("DELETE /api/v1/dhcp/log", a.admin(a.clearOne(dhcplog.FileName)))
 }
 
 // dhcpRow is one of the DHCP server's messages on the wire, with the name

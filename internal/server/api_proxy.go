@@ -32,8 +32,10 @@ func (a *api) registerProxy(mux *router) {
 	mux.HandleFunc("GET /api/v1/proxy/status", a.readNoEngine(a.proxyStatus))
 	mux.HandleFunc("GET /api/v1/proxy/events", a.readNoEngine(a.proxyEvents))
 	mux.HandleFunc("GET /api/v1/proxy/events/stream", a.readNoEngine(a.proxyEventsStream))
+	mux.HandleFunc("DELETE /api/v1/proxy/events", a.admin(a.clearOne(waflog.FileName)))
 	mux.HandleFunc("GET /api/v1/proxy/requests", a.readNoEngine(a.proxyRequests))
 	mux.HandleFunc("GET /api/v1/proxy/requests/stream", a.readNoEngine(a.proxyRequestsStream))
+	mux.HandleFunc("DELETE /api/v1/proxy/requests", a.admin(a.clearOne(requestlog.FileName)))
 }
 
 func (a *api) proxyStatus(w http.ResponseWriter, r *http.Request) error {

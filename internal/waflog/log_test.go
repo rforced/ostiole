@@ -216,3 +216,20 @@ func TestBetweenSaysWhenTheLogLetGo(t *testing.T) {
 		t.Errorf("aged out: %s, whole %v", got, whole)
 	}
 }
+
+// A Clear lets go of everything the log held: a count reaching back over
+// it is short, and one from after it is whole.
+func TestBetweenSaysWhenALogWasCleared(t *testing.T) {
+	t.Parallel()
+	l := New()
+	now := time.Now()
+	l.Add(now.Add(-2*time.Minute), event("1", now))
+	l.Add(now.Add(-time.Minute), event("2", now))
+	l.Clear()
+	if l.Between(now.Add(-time.Hour), now, func(*Entry) {}) {
+		t.Error("a count over what a Clear took is whole")
+	}
+	if !l.Between(now.Add(-30*time.Second), now, func(*Entry) {}) {
+		t.Error("a count from after the Clear is short")
+	}
+}

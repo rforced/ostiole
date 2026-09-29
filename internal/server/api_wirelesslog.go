@@ -13,6 +13,7 @@ import (
 func (a *api) registerWirelessLog(mux *router) {
 	mux.HandleFunc("GET /api/v1/wireless/log", a.readNoEngine(a.wirelessLogList))
 	mux.HandleFunc("GET /api/v1/wireless/log/stream", a.readNoEngine(a.wirelessLogStream))
+	mux.HandleFunc("DELETE /api/v1/wireless/log", a.admin(a.clearOne(wirelesslog.FileName)))
 }
 
 // wirelessRow is a client's coming or going on the wire, with the network

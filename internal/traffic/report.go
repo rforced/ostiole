@@ -208,6 +208,23 @@ func (c *Counter) Clear() {
 		return
 	}
 	c.devices, c.pending = map[string]*device{}, map[string]*delta{}
-	c.open, c.closed = nil, nil
+	c.forgetDestinations()
 	c.since = c.now()
+}
+
+// ClearDestinations forgets every destination and leaves the devices.
+func (c *Counter) ClearDestinations() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.forgetDestinations()
+}
+
+// forgetDestinations drops every destination row. A connection still open
+// counts once in the row it moves into next, as in a new hour. The caller
+// holds c.mu.
+func (c *Counter) forgetDestinations() {
+	c.open, c.closed = nil, nil
+	for _, s := range c.flows {
+		s.hour = [2]int64{}
+	}
 }

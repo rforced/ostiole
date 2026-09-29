@@ -454,9 +454,8 @@ at your own.`,
 			}
 			// What the WAF matched, fed from the proxy's journal: read back
 			// from its files at start while they are on, then from the
-			// journal after the newest event they held, or over the days
-			// they keep when they held none. Without root there is no proxy
-			// to read, and the log stays empty.
+			// journal after the newest event they held. Without root there
+			// is no proxy to read, and the log stays empty.
 			wafLog := waflog.New()
 			deps.WAFLog = wafLog
 			wafFeed := &journalfeed.Feed[wafevent.Event]{
@@ -471,7 +470,7 @@ at your own.`,
 				wafFeed.Installed = deps.Proxy.Installed
 			}
 			go afterReadBack(ctx, log, "WAF event files", "WAF events", func() {
-				wafFeed.From = readWAFEvents(eng.Effective(), wafLog, files, log)
+				readWAFEvents(eng.Effective(), wafLog, files, log)
 			}, wafFeed.Run)
 			// The proxy's requests, fed from the same journal while the
 			// level keeps them.
@@ -646,11 +645,9 @@ func readQueryLog(cfg *model.Config, qlog *dnslog.Log, files *logfile.Writer, lo
 	files.Add(qlog.Files(), st)
 }
 
-// readWAFEvents does the same for the WAF events, and says where their feed
-// reads the journal back from when the files held none: the start of the
-// days they keep, since until the files kept the events the journal alone
-// did. With the files off the log starts empty.
-func readWAFEvents(cfg *model.Config, events *waflog.Log, files *logfile.Writer, log *slog.Logger) (from time.Time) {
+// readWAFEvents does the same for the WAF events. Files that hold none,
+// as a Clear leaves them, start the log empty, as the files being off does.
+func readWAFEvents(cfg *model.Config, events *waflog.Log, files *logfile.Writer, log *slog.Logger) {
 	var st logfile.ReadStats
 	if cfg != nil && cfg.System.Logging.Files.Enabled {
 		e := cfg.Services.Proxy.Events
@@ -666,12 +663,8 @@ func readWAFEvents(cfg *model.Config, events *waflog.Log, files *logfile.Writer,
 			log.Warn("could not put the WAF events' files back", "err", err)
 		}
 		log.Info("read the WAF events back from their files", "events", len(entries), "took", time.Since(started))
-		if len(entries) == 0 {
-			from = started.Add(-events.Files().Kept(cfg))
-		}
 	}
 	files.Add(events.Files(), st)
-	return from
 }
 
 // readRing does the same for one of the newer logs, while the

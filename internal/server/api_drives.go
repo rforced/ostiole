@@ -21,6 +21,7 @@ func (a *api) registerDrives(mux *router) {
 	mux.HandleFunc("GET /api/v1/diagnostics/drives/{name}/report", a.readNoEngine(a.driveReport))
 	mux.HandleFunc("GET /api/v1/diagnostics/drives/history", a.readNoEngine(a.driveHistoryList))
 	mux.HandleFunc("GET /api/v1/diagnostics/drives/history/stream", a.readNoEngine(a.driveHistoryStream))
+	mux.HandleFunc("DELETE /api/v1/diagnostics/drives/history", a.admin(a.clearOne(smart.HistoryFileName)))
 }
 
 type drivesResponse struct {

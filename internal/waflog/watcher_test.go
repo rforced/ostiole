@@ -220,9 +220,7 @@ func restored(t *testing.T, when time.Time, ids ...string) *Log {
 }
 
 // watchLog runs a watcher feeding l, set as each of set says.
-func watchLog(t *testing.T, l *Log, j journalfeed.Journal, cfg *atomic.Pointer[model.Config], installed bool,
-	set ...func(*journalfeed.Feed[wafevent.Event]),
-) *Log {
+func watchLog(t *testing.T, l *Log, j journalfeed.Journal, cfg *atomic.Pointer[model.Config], installed bool) *Log {
 	t.Helper()
 	w := &journalfeed.Feed[wafevent.Event]{
 		Log: l, Journal: j, Parse: wafevent.Parse, Source: cfg.Load, Slog: slog.New(slog.DiscardHandler),
@@ -233,9 +231,6 @@ func watchLog(t *testing.T, l *Log, j journalfeed.Journal, cfg *atomic.Pointer[m
 		On:        func(c *model.Config) bool { return c.ProxyEnabled() },
 		Installed: func(context.Context) bool { return installed },
 		Interval:  5 * time.Millisecond, Backoff: time.Millisecond,
-	}
-	for _, s := range set {
-		s(w)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
@@ -308,8 +303,8 @@ func TestBackFillThenFollowLeavesNoGapAndNoDuplicate(t *testing.T) {
 	}
 }
 
-// An empty log, as the files being off leave one after a restart, reads
-// nothing back from the journal: it follows from now.
+// An empty log, as the files being off or a Clear leave one after a
+// restart, reads nothing back from the journal: it follows from now.
 func TestAnEmptyLogFollowsFromNow(t *testing.T) {
 	t.Parallel()
 	j := newFakeJournal()
@@ -320,44 +315,6 @@ func TestAnEmptyLogFollowsFromNow(t *testing.T) {
 	eventually(t, l, "[first]")
 	if backs, _ := j.counts(); backs != 0 {
 		t.Errorf("%d back-fills of an empty log", backs)
-	}
-}
-
-// A log whose files held nothing, as after the update that first kept the
-// events in files, reads the journal back from where the files' days
-// start: until then the journal alone kept the events.
-func TestAnEmptyLogReadsBackFromWhereItsFilesStart(t *testing.T) {
-	t.Parallel()
-	j := newFakeJournal()
-	now := time.Now()
-	j.write(audit("too old", now.Add(-3*time.Hour)), now.Add(-3*time.Hour))
-	j.write(audit("a", now.Add(-2*time.Hour)), now.Add(-2*time.Hour))
-	j.write(access, now.Add(-90*time.Minute))
-	j.write(audit("b", now.Add(-time.Hour)), now.Add(-time.Hour))
-	l := watchLog(t, New(), j, on(proxyOn()), true, func(f *journalfeed.Feed[wafevent.Event]) {
-		f.From = now.Add(-150 * time.Minute)
-	})
-	eventually(t, l, "[b a]")
-	j.write(audit("c", time.Now()), time.Now())
-	eventually(t, l, "[c b a]")
-	if backs, follows := j.counts(); backs != 1 || follows != 1 {
-		t.Errorf("%d back-fills and %d followers, want one of each", backs, follows)
-	}
-}
-
-// From is read back once: a reader started again with the log still empty
-// follows from now, rather than reading the same days again.
-func TestTheLogReadsBackFromFromOnce(t *testing.T) {
-	t.Parallel()
-	j := newFakeJournal()
-	watchLog(t, New(), j, on(proxyOn()), true, func(f *journalfeed.Feed[wafevent.Event]) {
-		f.From = time.Now().Add(-time.Hour)
-	})
-	waitFor(t, "a follower", j.following)
-	j.fail()
-	waitFor(t, "a second follower", func() bool { _, follows := j.counts(); return follows == 2 })
-	if backs, _ := j.counts(); backs != 1 {
-		t.Errorf("%d back-fills, want 1", backs)
 	}
 }
 

@@ -15,19 +15,7 @@ func (a *api) registerLog(mux *router) {
 	mux.HandleFunc("GET /api/v1/log/recent", a.readNoEngine(a.logRecent))
 	mux.HandleFunc("GET /api/v1/log/entries", a.readNoEngine(a.logEntries))
 	mux.HandleFunc("GET /api/v1/log/stream", a.readNoEngine(a.logStream))
-	mux.HandleFunc("DELETE /api/v1/log", a.write(a.logClear))
-}
-
-// logClear empties the firewall log, its files included.
-func (a *api) logClear(w http.ResponseWriter, _ *http.Request) error {
-	if a.fwlog == nil {
-		return &unavailable{errors.New("firewall log not available (daemon not running as root?)")}
-	}
-	if err := a.clearLog(fwlog.FileName, a.fwlog.Clear); err != nil {
-		return err
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"cleared": true})
-	return nil
+	mux.HandleFunc("DELETE /api/v1/log", a.admin(a.clearOne(fwlog.FileName)))
 }
 
 // logEntries serves a page of the firewall log, newest first, searched and
