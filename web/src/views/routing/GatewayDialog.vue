@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
@@ -42,13 +42,20 @@ watch(
   { immediate: true },
 )
 
+/** A WireGuard tunnel as the interface: with no address, rules send traffic into it. */
+const onTunnel = computed(
+  () => !!config.interfaces.find((i) => i.name === form.value.interface)?.wireguard,
+)
+const tunnelGateway = computed(() => onTunnel.value && !form.value.address.trim())
+
 function save() {
   const f = form.value
   const out = {
     name: f.name.trim(),
     enabled: f.enabled,
     interface: f.interface,
-    priority: Number(f.priority) || 0,
+    // A tunnel gateway never carries the default route.
+    priority: tunnelGateway.value ? 0 : Number(f.priority) || 0,
   }
   if (f.description) out.description = f.description
   if (f.address) out.address = f.address.trim()
@@ -62,7 +69,11 @@ function save() {
   <AppDialog
     v-model:open="open"
     :title="gateway ? `Gateway ${gateway.name}` : 'Add gateway'"
-    description="The lowest priority that answers its monitor carries the default route. The others wait."
+    :description="
+      tunnelGateway
+        ? 'With the tunnel down, its traffic is dropped.'
+        : 'The lowest priority that answers its monitor carries the default route. The others wait.'
+    "
   >
     <form class="space-y-4" @submit.prevent="save">
       <div class="grid gap-4 sm:grid-cols-2">
@@ -89,24 +100,33 @@ function save() {
         <FormField
           id="gw-addr"
           label="Gateway address"
-          hint="Empty follows DHCP or a router advertisement."
+          :hint="
+            onTunnel
+              ? 'Empty sends traffic from rules into the tunnel. The router\'s own traffic keeps the default route.'
+              : 'Empty follows DHCP or a router advertisement.'
+          "
         >
           <input id="gw-addr" v-model="form.address" class="input font-mono" spellcheck="false" />
         </FormField>
         <FormField
           id="gw-monitor"
           label="Monitor address"
-          hint="Probed to decide if the line works. Empty pings the gateway itself, which only proves the first hop."
+          :hint="
+            tunnelGateway
+              ? 'An IPv4 address beyond the tunnel. The provider\'s DNS server keeps the probe inside its network.'
+              : 'Probed to decide if the line works. Empty pings the gateway itself, which only proves the first hop.'
+          "
         >
           <input
             id="gw-monitor"
             v-model="form.monitor"
             class="input font-mono"
             spellcheck="false"
-            placeholder="9.9.9.9"
+            :required="tunnelGateway"
           />
         </FormField>
         <FormField
+          v-if="!tunnelGateway"
           id="gw-prio"
           label="Priority"
           hint="Lowest wins. Equal priorities share the traffic."

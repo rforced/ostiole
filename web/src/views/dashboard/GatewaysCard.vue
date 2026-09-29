@@ -47,7 +47,8 @@ defineProps({
               <span v-if="g.active" class="badge badge-ok ml-1">active</span>
             </div>
             <div class="font-mono text-code text-ink-muted">
-              {{ g.interface }}<span v-if="g.address"> · {{ g.address }}</span>
+              {{ g.interface }}<span v-if="g.tunnel" class="font-sans"> · through the tunnel</span
+              ><span v-else-if="g.address"> · {{ g.address }}</span>
             </div>
           </td>
           <td>

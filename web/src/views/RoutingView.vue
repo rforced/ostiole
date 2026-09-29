@@ -28,7 +28,13 @@ const detected = ref([])
 
 /** Configured gateways merged with what the monitor sees. */
 const gatewayRows = computed(() =>
-  config.gateways.map((g) => ({ ...g, live: live.value.find((l) => l.name === g.name) ?? null })),
+  config.gateways.map((g) => ({
+    ...g,
+    live: live.value.find((l) => l.name === g.name) ?? null,
+    // No address on a tunnel: rules send traffic into it, and it never
+    // carries the default route.
+    tunnel: !g.address && Boolean(config.interfaces.find((i) => i.name === g.interface)?.wireguard),
+  })),
 )
 
 /** Groups merged with where the kernel currently sends their traffic. */
@@ -202,7 +208,8 @@ function edit(r) {
               </td>
               <td class="font-mono text-code" data-label="Interface">{{ g.interface }}</td>
               <td class="font-mono text-code" data-label="Address">
-                {{ g.live?.address || g.address || 'from DHCP' }}
+                <span v-if="g.tunnel" class="font-sans">through the tunnel</span>
+                <template v-else>{{ g.live?.address || g.address || 'from DHCP' }}</template>
                 <div v-if="detectedFor(g)" class="text-xs text-ink-muted">
                   kernel: {{ detectedFor(g).address }} · metric {{ detectedFor(g).metric }} ·
                   {{ detectedFor(g).protocol
@@ -212,7 +219,9 @@ function edit(r) {
               <td class="font-mono text-code" data-label="Monitor">
                 {{ g.monitor || 'the gateway' }}
               </td>
-              <td class="font-mono text-code" data-label="Priority">{{ g.priority ?? 0 }}</td>
+              <td class="font-mono text-code" data-label="Priority">
+                {{ g.tunnel ? '—' : (g.priority ?? 0) }}
+              </td>
               <td class="whitespace-nowrap" data-label="State">
                 <template v-if="g.live && !g.live.unknown">
                   <span class="badge" :class="g.live.online ? 'badge-ok' : 'badge-warn'">
