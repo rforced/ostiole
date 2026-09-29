@@ -3,8 +3,10 @@ package services
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
 	"math/rand/v2"
 	"net"
@@ -472,6 +474,67 @@ func TestAReloadLeavesTheWAFsOwnLoggerOut(t *testing.T) {
 	})
 	if n := ruleLines("/after"); n != 0 {
 		t.Errorf("after the reload the WAF wrote %d lines of its own:\n%s", n, out)
+	}
+}
+
+// coraza-caddy keeps a WAF across reloads while its directives read the
+// same, whatever the files they include hold. A set that changed changes
+// its hash in the directives, and the reload an apply does reads it.
+func TestAReloadReadsAChangedSet(t *testing.T) {
+	t.Parallel()
+	bin := sidecar(t)
+	cfg := &model.Config{}
+	cfg.Services.Proxy = model.Proxy{
+		Enabled: true, HTTPPort: freePort(t), HTTPSPort: freePort(t),
+		Pools:    []model.ProxyPool{{ID: "jellyfin", Upstreams: []model.ProxyUpstream{{Address: answer(t, "{}")}}}},
+		Profiles: []model.WAFProfile{{ID: "watch", Mode: "block", Paranoia: 4, Applications: []string{"jellyfin"}}},
+		Sites: []model.ProxySite{{ID: "watch", Enabled: true, Hosts: []string{"watch.example.com"}, Pool: "jellyfin",
+			PlainHTTP: true, WAF: "watch"}},
+	}
+	raw, err := crsPlugins.ReadFile("crs/plugins/jellyfin-before.conf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now, empty := fmt.Sprintf("%x", sha256.Sum256(raw)), fmt.Sprintf("%x", sha256.Sum256(nil))
+	include := regexp.MustCompile(`Include ([^\\"]+/jellyfin-before\.conf)`)
+	var current, set string
+	// The set as an older release wrote it, empty, and the directives that
+	// release rendered for it.
+	older := func(conf string) string {
+		current = conf
+		m := include.FindStringSubmatch(conf)
+		if m == nil || !strings.Contains(conf, now) {
+			t.Fatalf("the directives do not name the set and its hash:\n%s", conf)
+		}
+		set = m[1]
+		if err := os.WriteFile(set, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return strings.ReplaceAll(conf, now, empty)
+	}
+	s := runSidecarWith(t, bin, cfg, "", map[string][]string{model.SelfCertificate: {"127.0.0.1"}}, older)
+	g := jf{vw{rand.New(rand.NewPCG(5, 6))}}
+	r := jfRequest{"GET", "/UserViews?userId=" + g.uuid(), "", "", false, g.client(jfClients - 1)}
+	if status := jfSend(t, s.plain, r); status != http.StatusForbidden {
+		t.Fatalf("with the set empty the client got %d, want 403", status)
+	}
+
+	// The new set on disk and the old directives: the WAF stays as it was.
+	if err := os.WriteFile(set, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reloadSidecar(t, bin, s.path)
+	if status := jfSend(t, s.plain, r); status != http.StatusForbidden {
+		t.Fatalf("a reload with the same directives read the new set (%d): coraza-caddy no longer keeps its WAFs", status)
+	}
+
+	// The directives the new set renders.
+	if err := os.WriteFile(s.path, []byte(current), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reloadSidecar(t, bin, s.path)
+	if status := jfSend(t, s.plain, r); status != http.StatusOK {
+		t.Errorf("after the reload the client got %d, want 200\n%s", status, events(s.out))
 	}
 }
 

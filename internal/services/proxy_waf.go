@@ -1,6 +1,7 @@
 package services
 
 import (
+	"crypto/sha256"
 	"embed"
 	"fmt"
 	"io/fs"
@@ -37,10 +38,18 @@ func crsFiles() map[string]string {
 	return out
 }
 
-// crsHas reports whether an application ships the given part.
-func crsHas(app, part string) bool {
-	_, err := crsPlugins.Open(fmt.Sprintf("crs/plugins/%s-%s.conf", app, part))
-	return err == nil
+// crsInclude includes an application's set file, if it ships that part.
+// coraza-caddy keeps a WAF across reloads while its directives read the
+// same, whatever the files they include hold, so the file's hash goes in
+// first: a set that changed changes caddy.json, and the reload an apply
+// then does builds the WAF again.
+func crsInclude(b *strings.Builder, dir, app, part string) {
+	raw, err := crsPlugins.ReadFile(fmt.Sprintf("crs/plugins/%s-%s.conf", app, part))
+	if err != nil {
+		return
+	}
+	fmt.Fprintf(b, "# sha256 %x\n", sha256.Sum256(raw))
+	fmt.Fprintf(b, "Include %s\n", filepath.Join(dir, crsDirName, app+"-"+part+".conf"))
 }
 
 // The first rule ID Ostiole writes. CRS reserves 10000-99999 for local
@@ -148,9 +157,7 @@ func wafDirectives(dir string, w model.WAFProfile, siteID string) string {
 
 	for _, app := range w.Applications {
 		for _, part := range []string{"config", "before"} {
-			if crsHas(app, part) {
-				fmt.Fprintf(&b, "Include %s\n", filepath.Join(dir, crsDirName, app+"-"+part+".conf"))
-			}
+			crsInclude(&b, dir, app, part)
 		}
 	}
 	for _, e := range w.Exclusions {
@@ -166,9 +173,7 @@ func wafDirectives(dir string, w model.WAFProfile, siteID string) string {
 	}
 	b.WriteString("Include @owasp_crs/*.conf\n")
 	for _, app := range w.Applications {
-		if crsHas(app, "after") {
-			fmt.Fprintf(&b, "Include %s\n", filepath.Join(dir, crsDirName, app+"-after.conf"))
-		}
+		crsInclude(&b, dir, app, "after")
 	}
 	for _, e := range w.Exclusions {
 		if e.Path != "" {
