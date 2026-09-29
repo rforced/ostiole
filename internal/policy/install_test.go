@@ -783,6 +783,18 @@ func TestALinesTableCopiesItsRoutesFromTheMainTable(t *testing.T) {
 	if got := familyRoutes(t, unix.AF_INET, second.Table); len(got) != 3 {
 		t.Errorf("wan1's table = %+v, want its network, the static route and its default", got)
 	}
+	replies, err := Replies(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []Reply{
+		{Interface: "wan0", Table: first.Table, NextHops: []string{"203.0.113.1", "2001:db8:1::1"}},
+		{Interface: "wan1", Table: second.Table, NextHops: []string{"198.51.100.1", "2001:db8:2::1"}},
+	}; !slices.EqualFunc(replies, want, func(a, b Reply) bool {
+		return a.Interface == b.Interface && a.Table == b.Table && slices.Equal(a.NextHops, b.NextHops)
+	}) {
+		t.Errorf("replies = %+v, want %+v", replies, want)
+	}
 
 	for _, c := range []struct {
 		what     string

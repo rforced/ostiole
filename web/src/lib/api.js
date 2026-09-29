@@ -222,6 +222,7 @@ export const api = {
   /** Default routes the kernel already has, with the gateway each would become. */
   detectedGateways: () => get('/gateways/detected'),
   policy: () => get('/policy'),
+  policyReplies: () => get('/policy/replies'),
   /** Line speeds per interface and how the queues behind them are doing. */
   shaping: () => get('/shaping'),
   diagnostics: {

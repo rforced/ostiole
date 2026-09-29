@@ -532,3 +532,49 @@ func hopName(gw net.IP, link int) string {
 	}
 	return fmt.Sprintf("dev %d", link)
 }
+
+// Reply is a line as the Routing page shows it: the table that answers
+// what came in on it, and where that table sends answers now.
+type Reply struct {
+	Interface string `json:"interface"`
+	Table     int    `json:"table"`
+	// NextHops are its default routes' next hops, or the device one with
+	// none goes into; empty while it has none and answers take the main
+	// table's.
+	NextHops []string `json:"nextHops"`
+}
+
+// Replies reads the lines' tables from the kernel.
+func Replies(cfg *model.Config) ([]Reply, error) {
+	out := []Reply{}
+	for _, l := range cfg.ReplyLines() {
+		r := Reply{Interface: l.Interface, Table: l.Table, NextHops: []string{}}
+		for _, family := range []int{unix.AF_INET, unix.AF_INET6} {
+			routes, err := netlink.Routes(family, netlink.RouteFilter{Table: l.Table})
+			if err != nil {
+				return nil, fmt.Errorf("list table %d: %w", l.Table, err)
+			}
+			for _, route := range routes {
+				if !isDefault(route.Dst) {
+					continue
+				}
+				hops := route.MultiPath
+				if len(hops) == 0 {
+					hops = []netlink.Nexthop{{LinkIndex: route.LinkIndex, Gw: route.Gw}}
+				}
+				for _, h := range hops {
+					switch {
+					case h.Gw != nil:
+						r.NextHops = append(r.NextHops, h.Gw.String())
+					default:
+						if link, err := net.InterfaceByIndex(h.LinkIndex); err == nil {
+							r.NextHops = append(r.NextHops, link.Name)
+						}
+					}
+				}
+			}
+		}
+		out = append(out, r)
+	}
+	return out, nil
+}

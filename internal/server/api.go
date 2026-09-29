@@ -232,6 +232,7 @@ func (a *api) register(mux *router) {
 	mux.HandleFunc("GET /api/v1/gateways", a.readNoEngine(a.gatewayStatus))
 	mux.HandleFunc("GET /api/v1/gateways/detected", a.read(a.detectedGateways))
 	mux.HandleFunc("GET /api/v1/policy", a.readNoEngine(a.policyStatus))
+	mux.HandleFunc("GET /api/v1/policy/replies", a.readNoEngine(a.policyReplies))
 	mux.HandleFunc("GET /api/v1/shaping", a.read(a.shapingStatus))
 	mux.HandleFunc("GET /api/v1/update/check", a.admin(a.updateCheck))
 	mux.HandleFunc("GET /api/v1/update/status", a.readNoEngine(a.updateStatus))
@@ -480,6 +481,21 @@ func (a *api) policyStatus(w http.ResponseWriter, _ *http.Request) error {
 			}
 		}
 		out = append(out, pt)
+	}
+	writeJSON(w, http.StatusOK, out)
+	return nil
+}
+
+// policyReplies lists the lines and where each one's table sends the
+// answers to what came in on it (ADR-0037). Like policyStatus it reads the
+// configuration the kernel is running.
+func (a *api) policyReplies(w http.ResponseWriter, _ *http.Request) error {
+	out := []policy.Reply{}
+	if cfg := a.engine.Effective(); cfg != nil {
+		var err error
+		if out, err = policy.Replies(cfg); err != nil {
+			return err
+		}
 	}
 	writeJSON(w, http.StatusOK, out)
 	return nil

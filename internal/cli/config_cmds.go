@@ -421,33 +421,53 @@ func newPolicyCmd(g *globals) *cobra.Command {
 		Short: "Show where rules that pick a gateway send their traffic",
 		Long: `Lists every gateway and gateway group that firewall rules can route
 through, with the packet mark the firewall sets, the routing table that
-answers it, and what the kernel currently has in that table.`,
+answers it, and what the kernel currently has in that table. With two
+external interfaces or more it lists the replies too: the table each one
+answers what came in on it through, and where that table sends them now.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := g.store().Load()
 			if err != nil {
 				return err
 			}
+			out := cmd.OutOrStdout()
 			targets := policy.Plan(cfg, policyHops(cmd.Context(), cfg))
 			if len(targets) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "no gateways or gateway groups configured")
-				return nil
-			}
-			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "NAME\tKIND\tMARK\tTABLE\tRULES\tNEXT HOP")
-			for _, t := range targets {
-				kind := "gateway"
-				if t.Group {
-					kind = "group"
-				}
-				rules := 0
-				for _, r := range cfg.Rules {
-					if r.Enabled && r.Gateway == t.Name {
-						rules++
+				fmt.Fprintln(out, "no gateways or gateway groups configured")
+			} else {
+				w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+				fmt.Fprintln(w, "NAME\tKIND\tMARK\tTABLE\tRULES\tNEXT HOP")
+				for _, t := range targets {
+					kind := "gateway"
+					if t.Group {
+						kind = "group"
 					}
+					rules := 0
+					for _, r := range cfg.Rules {
+						if r.Enabled && r.Gateway == t.Name {
+							rules++
+						}
+					}
+					fmt.Fprintf(w, "%s\t%s\t0x%x\t%d\t%d\t%s\n",
+						t.Name, kind, t.Mark, t.Table, rules, policyNextHop(t))
 				}
-				fmt.Fprintf(w, "%s\t%s\t0x%x\t%d\t%d\t%s\n",
-					t.Name, kind, t.Mark, t.Table, rules, policyNextHop(t))
+				if err := w.Flush(); err != nil {
+					return err
+				}
+			}
+			replies, err := policy.Replies(cfg)
+			if err != nil || len(replies) == 0 {
+				return err
+			}
+			fmt.Fprintln(out, "\nreplies:")
+			w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "INTERFACE\tTABLE\tNEXT HOP")
+			for _, r := range replies {
+				hops := strings.Join(r.NextHops, ", ")
+				if hops == "" {
+					hops = "none (answers follow the default route)"
+				}
+				fmt.Fprintf(w, "%s\t%d\t%s\n", r.Interface, r.Table, hops)
 			}
 			return w.Flush()
 		},

@@ -193,6 +193,11 @@ test('add a way out from a file and route a rule through it', async ({ page }) =
   await expect(
     page.getByRole('region', { name: 'Gateways' }).getByRole('row').filter({ hasText: 'wg0' }),
   ).toContainText('through the tunnel')
+  // The tunnel is external like the WAN, so each answers what comes in on
+  // it. The test server installs no tables, so neither has a next hop.
+  const replies = page.getByRole('region', { name: 'Replies' })
+  await expect(replies.getByRole('row')).toHaveCount(3)
+  await expect(replies.getByRole('row').filter({ hasText: 'wg0' })).toContainText('default route')
 
   await page.goto('/firewall')
   await page.getByRole('group', { name: 'Zone' }).getByRole('button', { name: 'lan' }).click()
@@ -209,4 +214,5 @@ test('add a way out from a file and route a rule through it', async ({ page }) =
   await expect(ruleset).toContainText('comment "tunnel-nat:wg0"')
   await expect(ruleset).toContainText('comment "tunnel-mss"')
   await expect(ruleset).toContainText('comment "kill-switch:wg0"')
+  await expect(ruleset).toContainText('comment "reply:wg0"')
 })

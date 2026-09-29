@@ -24,6 +24,7 @@ const groupOpen = ref(false)
 const groupEditing = ref(null)
 const live = ref([])
 const policy = ref([])
+const replies = ref([])
 const detected = ref([])
 
 /** Configured gateways merged with what the monitor sees. */
@@ -60,6 +61,11 @@ const refresh = useAsync(
       policy.value = await api.policy()
     } catch {
       policy.value = []
+    }
+    try {
+      replies.value = await api.policyReplies()
+    } catch {
+      replies.value = []
     }
     try {
       detected.value = await api.detectedGateways()
@@ -391,6 +397,34 @@ function edit(r) {
             → {{ r.gateway }}
           </template>
         </p>
+      </SectionCard>
+
+      <SectionCard
+        v-if="replies.length"
+        title="Replies"
+        :count="replies.length"
+        intro="Connections that come in on an external interface are answered out of it, whichever holds the default route."
+        flush
+      >
+        <table class="table table-stack">
+          <thead>
+            <tr>
+              <th>Interface</th>
+              <th>Table</th>
+              <th>Next hop</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in replies" :key="r.interface">
+              <td class="font-mono text-code" data-label="">{{ r.interface }}</td>
+              <td class="font-mono text-code" data-label="Table">{{ r.table }}</td>
+              <td class="font-mono text-code" data-label="Next hop">
+                <template v-if="r.nextHops.length">{{ r.nextHops.join(', ') }}</template>
+                <span v-else class="font-sans text-ink-muted">default route</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </SectionCard>
 
       <SectionCard title="Static routes" :count="config.routes.length" flush>
