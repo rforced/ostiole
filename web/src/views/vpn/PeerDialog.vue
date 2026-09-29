@@ -20,6 +20,12 @@ const props = defineProps({
 const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
+/** The tunnel a new peer goes on, when there are several to choose from. */
+const chosen = ref('')
+/** The peer's tunnel: its own when it has one, else the one chosen. */
+const current = computed(() =>
+  props.peer ? props.tunnel : (config.tunnels.find((t) => t.name === chosen.value) ?? props.tunnel),
+)
 const confirm = useConfirmStore()
 const form = ref(blank())
 const error = ref('')
@@ -61,6 +67,7 @@ watch(
     showKey.value = false
     keys.value = 'make'
     device.value = null
+    chosen.value = props.tunnel?.name ?? ''
     const p = props.peer
     form.value = p
       ? { ...blank(), ...p, allowedIps: (p.allowedIps ?? []).join(', ') }
@@ -69,13 +76,25 @@ watch(
   { immediate: true },
 )
 
+// Another tunnel means other free addresses, unless some were typed in.
+watch(chosen, (now, before) => {
+  if (props.peer || !open.value || !before || now === before) return
+  const earlier = config.tunnels.find((t) => t.name === before)
+  if (form.value.allowedIps === suggestFor(earlier).join(', '))
+    form.value.allowedIps = suggestAddresses().join(', ')
+})
+
 /** A device dials in, so only a tunnel that listens can be given one. */
-const listens = computed(() => Boolean(props.tunnel?.wireguard?.listenPort))
+const listens = computed(() => Boolean(current.value?.wireguard?.listenPort))
 const making = computed(() => !props.peer && listens.value && keys.value === 'make')
 
 /** The next free address in each family the tunnel has. */
 function suggestAddresses() {
-  const t = props.tunnel
+  return suggestFor(current.value)
+}
+
+/** The next free address in each family a tunnel has. */
+function suggestFor(t) {
   const taken = (t?.wireguard?.peers ?? []).flatMap((p) => p.allowedIps ?? [])
   return [t?.ipv4?.address, t?.ipv6?.address]
     .filter(Boolean)
@@ -85,7 +104,7 @@ function suggestAddresses() {
 
 /** The addresses the device holds out of the ones listed for it. */
 function ownAddresses(allowed) {
-  const t = props.tunnel
+  const t = current.value
   return deviceAddresses(allowed, [t?.ipv4?.address, t?.ipv6?.address].filter(Boolean))
 }
 
@@ -148,7 +167,7 @@ async function makeKeys() {
 async function save() {
   error.value = ''
   if (!making.value) {
-    config.upsertPeer(props.tunnel.name, peerOut(), props.peer?.name ?? form.value.name.trim())
+    config.upsertPeer(current.value.name, peerOut(), props.peer?.name ?? form.value.name.trim())
     open.value = false
     return
   }
@@ -157,7 +176,7 @@ async function save() {
   try {
     const made = await makeKeys()
     const out = { ...peerOut(), publicKey: made.publicKey, presharedKey: made.presharedKey }
-    config.upsertPeer(props.tunnel.name, out, out.name)
+    config.upsertPeer(current.value.name, out, out.name)
     showDevice(out, made.privateKey)
   } catch (e) {
     error.value = errorMessage(e)
@@ -184,7 +203,7 @@ async function remake() {
   try {
     const made = await makeKeys()
     const out = { ...peerOut(), publicKey: made.publicKey, presharedKey: made.presharedKey }
-    config.upsertPeer(props.tunnel.name, out, name)
+    config.upsertPeer(current.value.name, out, name)
     showDevice(out, made.privateKey)
   } catch (e) {
     error.value = errorMessage(e)
@@ -238,7 +257,7 @@ const routerNetworks = computed(() => {
   const out = []
   for (const i of config.interfaces) {
     const inside =
-      i.name === props.tunnel?.name || (i.enabled && i.zone && !external.value.has(i.zone))
+      i.name === current.value?.name || (i.enabled && i.zone && !external.value.has(i.zone))
     if (!inside) continue
     for (const fam of [i.ipv4, i.ipv6]) {
       if (fam?.mode !== 'static' || !fam.address) continue
@@ -254,7 +273,7 @@ const routerNetworks = computed(() => {
  * page's interfaces, or with none named every one outside an external zone.
  */
 const dnsAddresses = computed(() => {
-  const t = props.tunnel
+  const t = current.value
   const dns = config.draft?.services?.dns
   if (!t || !dns?.enabled) return []
   const named = dns.interfaces ?? []
@@ -272,10 +291,10 @@ const fileText = computed(() => {
     addresses: d.addresses,
     dns: dnsAddresses.value,
     peer: {
-      publicKey: props.tunnel?.wireguard?.publicKey ?? '',
+      publicKey: current.value?.wireguard?.publicKey ?? '',
       presharedKey: d.presharedKey,
       allowedIps: f.route === 'everything' ? ['0.0.0.0/0', '::/0'] : routerNetworks.value,
-      endpoint: endpoint(f.host, props.tunnel?.wireguard?.listenPort),
+      endpoint: endpoint(f.host, current.value?.wireguard?.listenPort),
       keepalive: Number(f.keepalive) || 0,
     },
   })
@@ -283,7 +302,7 @@ const fileText = computed(() => {
 
 const qr = computed(() => (fileText.value ? encode(fileText.value) : null))
 const qrPath = computed(() => (qr.value ? svgPath(qr.value) : ''))
-const fileName = computed(() => `${props.tunnel?.name}-${device.value?.name}.conf`)
+const fileName = computed(() => `${current.value?.name}-${device.value?.name}.conf`)
 
 function download() {
   const url = URL.createObjectURL(new Blob([fileText.value], { type: 'text/plain' }))
@@ -330,7 +349,7 @@ async function copyFile() {
   <AppDialog
     v-model:open="open"
     :title="device ? `File for ${device.name}` : peer ? `Peer ${peer.name}` : 'Add peer'"
-    :description="`On ${tunnel?.name ?? 'the tunnel'}.`"
+    :description="`On ${current?.name ?? 'the tunnel'}.`"
   >
     <div v-if="device" class="space-y-4">
       <p class="text-sm">
@@ -340,7 +359,7 @@ async function copyFile() {
         <FormField
           id="dv-endpoint"
           label="Endpoint"
-          :hint="`With the tunnel's port, ${tunnel?.wireguard?.listenPort}.`"
+          :hint="`With the tunnel's port, ${current?.wireguard?.listenPort}.`"
         >
           <input
             id="dv-endpoint"
@@ -416,17 +435,26 @@ async function copyFile() {
           <input id="pe-desc" v-model="form.description" class="input" />
         </FormField>
       </div>
-      <FormField
-        v-if="!peer && listens"
-        id="pe-keys"
-        label="Keys"
-        :hint="making ? 'The file is shown once. Only the public key is kept.' : ''"
-      >
-        <select id="pe-keys" v-model="keys" class="input">
-          <option value="make">Make them here</option>
-          <option value="paste">Paste its public key</option>
-        </select>
-      </FormField>
+      <div v-if="!peer && (config.tunnels.length > 1 || listens)" class="grid gap-4 sm:grid-cols-2">
+        <FormField v-if="config.tunnels.length > 1" id="pe-tunnel" label="Tunnel">
+          <select id="pe-tunnel" v-model="chosen" class="input font-mono">
+            <option v-for="t in config.tunnels" :key="t.name" :value="t.name">
+              {{ t.description ? `${t.name} (${t.description})` : t.name }}
+            </option>
+          </select>
+        </FormField>
+        <FormField
+          v-if="listens"
+          id="pe-keys"
+          label="Keys"
+          :hint="making ? 'The file is shown once. Only the public key is kept.' : ''"
+        >
+          <select id="pe-keys" v-model="keys" class="input">
+            <option value="make">Make them here</option>
+            <option value="paste">Paste its public key</option>
+          </select>
+        </FormField>
+      </div>
       <FormField v-if="!making" id="pe-pub" label="Public key">
         <input
           id="pe-pub"

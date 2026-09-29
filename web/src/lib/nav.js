@@ -181,6 +181,7 @@ export const NAV = [
         view: () => import('@/views/vpn/WireguardPage.vue'),
         tabs: [
           { value: 'tunnels', label: 'Tunnels' },
+          { value: 'peers', label: 'Peers' },
           { value: 'log', label: 'Log' },
         ],
       },

@@ -5,6 +5,13 @@ import { applyAndConfirm, login, shot } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
+/** A tunnel's row on the Tunnels tab. */
+const tunnelRow = (page, name) =>
+  page
+    .getByRole('region', { name: 'Tunnels' })
+    .getByRole('row')
+    .filter({ has: page.getByText(name, { exact: true }) })
+
 test('create a WireGuard tunnel with a peer and apply it', async ({ page }) => {
   await login(page)
   await page.goto('/vpn/wireguard')
@@ -21,12 +28,13 @@ test('create a WireGuard tunnel with a peer and apply it', async ({ page }) => {
   await dialog.getByLabel('IPv4 address').fill('10.66.0.1/24')
   await dialog.getByRole('button', { name: 'Save to draft' }).click()
 
-  const tunnel = page.getByRole('region', { name: 'wg0' })
+  const tunnel = tunnelRow(page, 'wg0')
   await expect(tunnel).toContainText('Road warriors')
   await expect(tunnel).toContainText(tunnelKey)
   await expect(tunnel).toContainText('udp/51820')
 
-  await tunnel.getByRole('button', { name: 'Add peer' }).click()
+  await page.getByRole('tab', { name: 'Peers' }).click()
+  await page.getByRole('button', { name: 'Add peer' }).click()
   dialog = page.getByRole('dialog')
   await dialog.getByLabel('Name').fill('laptop')
   await dialog.getByLabel('Keys').selectOption('paste')
@@ -46,9 +54,9 @@ test('create a WireGuard tunnel with a peer and apply it', async ({ page }) => {
 
   // The tunnel is a real interface: it shows up with its zone and address.
   // The test server makes no devices, so the kernel has none and says so.
-  await page.reload()
-  await expect(page.getByRole('region', { name: 'wg0' })).toContainText('10.66.0.1/24')
-  await expect(page.getByRole('region', { name: 'wg0' }).locator('.badge-warn')).toHaveText('down')
+  await page.goto('/vpn/wireguard#tunnels')
+  await expect(tunnelRow(page, 'wg0')).toContainText('10.66.0.1/24')
+  await expect(tunnelRow(page, 'wg0').locator('.badge-warn')).toHaveText('down')
   await page.goto('/system/ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   await expect(page.locator('pre')).toContainText('service:wireguard')
@@ -57,9 +65,11 @@ test('create a WireGuard tunnel with a peer and apply it', async ({ page }) => {
 test('make a device on the page and hand it its file', async ({ page }) => {
   await login(page)
   await page.goto('/vpn/wireguard')
-  const tunnel = page.getByRole('region', { name: 'wg0' })
-  const tunnelKey = (await tunnel.locator('dd').last().textContent()).trim()
-  await tunnel.getByRole('button', { name: 'Add peer' }).click()
+  const key = tunnelRow(page, 'wg0').locator('[data-label="Public key"]')
+  await expect(key).not.toHaveText('')
+  const tunnelKey = (await key.textContent()).trim()
+  await page.getByRole('tab', { name: 'Peers' }).click()
+  await page.getByRole('button', { name: 'Add peer' }).click()
   const dialog = page.getByRole('dialog')
   // A tunnel that listens makes a device's keys unless told otherwise.
   await expect(dialog.getByLabel('Keys')).toHaveValue('make')
@@ -91,7 +101,7 @@ test('make a device on the page and hand it its file', async ({ page }) => {
 
 test('make new keys for a device and hand it the new file', async ({ page }) => {
   await login(page)
-  await page.goto('/vpn/wireguard')
+  await page.goto('/vpn/wireguard#peers')
   const row = page.getByRole('row').filter({ hasText: 'phone' })
   await row.getByRole('button', { name: 'Edit' }).click()
   // Hidden from the accessibility tree while the confirm is open.
@@ -114,15 +124,18 @@ test('make new keys for a device and hand it the new file', async ({ page }) => 
   await expect(dialog.locator('pre')).toContainText('Address = 10.66.0.3/32')
   await dialog.getByRole('button', { name: 'Done' }).click()
 
-  await expect(row).not.toContainText(oldKey)
   await expect(row).toContainText('PSK')
+  await row.getByRole('button', { name: 'Edit' }).click()
+  const again = page.getByRole('dialog', { name: 'Peer phone' })
+  await expect(again.getByLabel('Public key')).not.toHaveValue(oldKey)
+  await again.getByRole('button', { name: 'Cancel' }).click()
   await applyAndConfirm(page)
 })
 
 test('a bad peer key is rejected by the server', async ({ page }) => {
   await login(page)
-  await page.goto('/vpn/wireguard')
-  await page.getByRole('region', { name: 'wg0' }).getByRole('button', { name: 'Add peer' }).click()
+  await page.goto('/vpn/wireguard#peers')
+  await page.getByRole('button', { name: 'Add peer' }).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByLabel('Name').fill('broken')
   await dialog.getByLabel('Keys').selectOption('paste')

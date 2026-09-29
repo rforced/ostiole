@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { ref } from 'vue'
 
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -7,14 +7,20 @@ import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { formatBytes } from '@/lib/format'
 import { byAddress, byText, byTime, useSort } from '@/lib/sort'
+
+/** How often the peers are read while the tab is shown. */
+const POLL_MS = 5000
 
 const status = ref(null)
 
-const load = useAsync(async () => {
-  status.value = await api.tailscale.status()
-})
-onMounted(load.run)
+const load = useAsync(
+  async () => {
+    status.value = await api.tailscale.status()
+  },
+  { interval: POLL_MS, immediate: true },
+)
 
 /** A name with the tailnet suffix on it reads better without the dot. */
 function name(peer) {
@@ -78,16 +84,17 @@ const peers = sort.sorted
             <SortHeader by="seen" :sort="sort">Last seen</SortHeader>
             <th>Path</th>
             <th>Routes</th>
+            <th>Traffic</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="!status?.running">
-            <td colspan="6" class="text-ink-muted">
+            <td colspan="7" class="text-ink-muted">
               {{ load.updatedAt.value ? 'Tailscale is not running.' : 'Reading…' }}
             </td>
           </tr>
           <tr v-else-if="!status.peers.length">
-            <td colspan="6" class="text-ink-muted">No peers.</td>
+            <td colspan="7" class="text-ink-muted">No peers.</td>
           </tr>
           <tr v-for="p in peers" :key="p.dnsName || p.hostName">
             <td data-label="">
@@ -103,6 +110,10 @@ const peers = sort.sorted
             <td class="font-mono text-code" data-label="Path">{{ path(p) }}</td>
             <td class="font-mono text-code" data-label="Routes">
               {{ p.routes.join(', ') || '—' }}
+            </td>
+            <td class="text-code" data-label="Traffic">
+              <div>↓ {{ formatBytes(p.rxBytes ?? 0) }}</div>
+              <div>↑ {{ formatBytes(p.txBytes ?? 0) }}</div>
             </td>
           </tr>
         </tbody>
