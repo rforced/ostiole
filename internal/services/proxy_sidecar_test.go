@@ -624,6 +624,86 @@ func TestCloudflaresCookiesAreNotRead(t *testing.T) {
 	}
 }
 
+// Coraza 3.7 appends a request's removed targets to an exception list it
+// shares between requests, where the list has room: 942421's has twelve
+// entries and room for four. Two exclusions taking different cookies off
+// it, hit at once, overwrote each other, and a request lost its own.
+// third_party/coraza copies the list first.
+func TestConcurrentExclusionsKeepTheirOwnTargets(t *testing.T) {
+	t.Parallel()
+	cfg := &model.Config{}
+	cfg.Services.Proxy = model.Proxy{
+		Enabled: true, HTTPPort: freePort(t), HTTPSPort: freePort(t),
+		Pools: []model.ProxyPool{{ID: "shop", Upstreams: []model.ProxyUpstream{{Address: answer(t, "{}")}}}},
+		Profiles: []model.WAFProfile{{ID: "detect", Mode: "detect", Paranoia: 4, Exclusions: []model.WAFExclusion{
+			{Rule: "942421", Path: "/alpha", Target: "REQUEST_COOKIES:alpha"},
+			{Rule: "942421", Path: "/beta", Target: "REQUEST_COOKIES:beta"},
+		}}},
+		Sites: []model.ProxySite{{ID: "shop", Enabled: true, Hosts: []string{"shop.example.com"}, Pool: "shop",
+			PlainHTTP: true, WAF: "detect"}},
+	}
+	plain, _, out := runSidecar(t, sidecar(t), cfg, "", map[string][]string{model.SelfCertificate: {"127.0.0.1"}})
+	tr := &http.Transport{MaxIdleConnsPerHost: 16, DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+		var d net.Dialer
+		return d.DialContext(ctx, network, plain)
+	}}
+	defer tr.CloseIdleConnections()
+	client := &http.Client{Transport: tr, Timeout: 10 * time.Second}
+	const n = 8000
+	next := make(chan int)
+	var wg sync.WaitGroup
+	for range 16 {
+		wg.Go(func() {
+			for i := range next {
+				name := []string{"alpha", "beta"}[i%2]
+				req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://shop.example.com/"+name+"/"+strconv.Itoa(i), nil)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				req.Header.Set("Accept", "text/html")
+				req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:151.0) Gecko/20100101 Firefox/151.0")
+				req.Header.Set("Cookie", name+"=a-b-c-d")
+				resp, err := client.Do(req)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				_ = resp.Body.Close()
+			}
+		})
+	}
+	for i := range n {
+		next <- i
+	}
+	close(next)
+	wg.Wait()
+	// A cookie no exclusion takes off marks the end of the log.
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://shop.example.com/end", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Cookie", "gamma=a-b-c-d")
+	if resp, err := client.Do(req); err != nil {
+		t.Fatal(err)
+	} else {
+		_ = resp.Body.Close()
+	}
+	waitFor(t, "the last event", func() bool {
+		_, ok := findEvent(out, func(ev wafevent.Event) bool { return ev.URI == "/end" })
+		return ok
+	})
+	lost := 0
+	for line := range strings.SplitSeq(out.String(), "\n") {
+		if ev, ok := wafevent.Parse(line); ok && (strings.HasPrefix(ev.URI, "/alpha/") || strings.HasPrefix(ev.URI, "/beta/")) {
+			lost++
+		}
+	}
+	if lost > 0 {
+		t.Errorf("%d of %d requests matched a cookie their exclusion takes off", lost, n)
+	}
+}
+
 // A player whose buffer is full stops reading, and holds its download open
 // for as long as it stays. A reload leaves the download running, past the
 // grace period too; a stop waits for one only the grace period.

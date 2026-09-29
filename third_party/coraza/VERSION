@@ -1,0 +1,14 @@
+# Coraza v3.7.0 from the Go module proxy, h1:LIQqu1r+l6e/U/gyiZeykWaNNBY1TzRLz+aaI+QYEEM=,
+# without its tests, testdata, testing/ and http/e2e/ packages or CI files.
+# It is updated with the other dependencies: copy the new release the same
+# way and apply the changes below again, less any upstream took.
+# govulncheck sees this copy without a version, so Coraza's advisories
+# (github.com/corazawaf/coraza/security/advisories) are checked by hand.
+#
+# Changes, each marked "Changed by Ostiole" in the source:
+# - internal/corazawaf/rule.go: a transaction appended its
+#   ctl:ruleRemoveTargetById removals into the rule's shared exception
+#   list where that had room, so concurrent requests removing different
+#   targets from one rule overwrote each other. The capacity is capped so
+#   the append copies. Upstream: closed, unmerged PR #1509 had the same fix.
+v3.7.0
