@@ -452,11 +452,8 @@ func (a *api) policyStatus(w http.ResponseWriter, _ *http.Request) error {
 	hops := map[string]policy.Hop{}
 	if a.gateways != nil {
 		for _, s := range a.gateways.Statuses() {
-			hops[s.Name] = policy.Hop{
-				Gateway:   s.Name,
-				Address:   s.Address,
-				Interface: s.Interface,
-				Online:    s.Online || s.Unknown,
+			if g, ok := cfg.Gateway(s.Name); ok {
+				hops[s.Name] = policy.NewHop(cfg, *g, s.Address, s.Online || s.Unknown)
 			}
 		}
 	}
@@ -469,7 +466,12 @@ func (a *api) policyStatus(w http.ResponseWriter, _ *http.Request) error {
 		}
 		for _, tier := range t.Tiers {
 			for _, h := range tier {
-				if h.Online && h.Address != "" {
+				switch {
+				case !h.Online:
+				case h.Device:
+					// No next hop: the traffic goes into the tunnel.
+					pt.NextHops = append(pt.NextHops, h.Interface)
+				case h.Address != "":
 					pt.NextHops = append(pt.NextHops, h.Address)
 				}
 			}

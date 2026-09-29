@@ -268,19 +268,31 @@ func TestSystemNATMatchesRuleset(t *testing.T) {
 			}
 			var lines []string
 			for _, c := range chainComments(t, out.Ruleset)["nat_postrouting"] {
-				if strings.HasPrefix(c, "auto-nat:") || strings.HasPrefix(c, "peer-nat:") || strings.HasPrefix(c, "tunnel-v6:") {
+				if strings.HasPrefix(c, "auto-nat:") || strings.HasPrefix(c, "peer-nat:") || strings.HasPrefix(c, "tunnel-v6:") ||
+					strings.HasPrefix(c, "tunnel-nat:") {
 					lines = append(lines, "nat_postrouting/"+c)
 				}
 			}
 			var keys []string
 			for i, row := range out.NAT {
-				if len(row.Keys) == 1 && strings.HasPrefix(row.Keys[0], "nat_postrouting/peer-nat:") {
+				key := ""
+				if len(row.Keys) == 1 {
+					key = row.Keys[0]
+				}
+				switch {
+				case strings.HasPrefix(key, "nat_postrouting/tunnel-nat:"):
+					// A tunnel gateway's: its tunnel, in the tunnel's zone.
+					name := strings.TrimPrefix(key, "nat_postrouting/tunnel-nat:")
+					if in, ok := cfg.Interface(name); !ok || row.Zone != in.Zone || !slices.Equal(row.Interfaces, []string{name}) {
+						t.Errorf("row %d = %+v, want tunnel %s", i, row, name)
+					}
+				case strings.HasPrefix(key, "nat_postrouting/peer-nat:"):
 					// A peer's Translate: its tunnel, in the tunnel's zone.
-					ref := strings.TrimPrefix(row.Keys[0], "nat_postrouting/peer-nat:")
+					ref := strings.TrimPrefix(key, "nat_postrouting/peer-nat:")
 					if in, _, ok := cfg.Peer(ref); !ok || row.Zone != in.Zone || !slices.Equal(row.Interfaces, []string{in.Name}) {
 						t.Errorf("row %d = %+v, want the tunnel of %s", i, row, ref)
 					}
-				} else {
+				default:
 					if z, ok := cfg.Zone(row.Zone); !ok || !z.External {
 						t.Errorf("row %d names %q, which is not an external zone", i, row.Zone)
 					}

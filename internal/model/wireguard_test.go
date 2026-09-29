@@ -344,3 +344,124 @@ func TestAnAccessLineLooksWhereItsPeerArrives(t *testing.T) {
 		}
 	}
 }
+
+// wayOutConfig is a starter router with a tunnel to a provider, wg1 in an
+// external zone of its own, and a gateway through it.
+func wayOutConfig(t *testing.T) *Config {
+	t.Helper()
+	cfg := Starter(StarterOptions{Hostname: "fw", LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0"})
+	cfg.Zones = append(cfg.Zones, Zone{Name: "vpn", External: true})
+	cfg.Interfaces = append(cfg.Interfaces, Interface{
+		Name:    "wg1",
+		Zone:    "vpn",
+		Enabled: true,
+		IPv4:    IPv4{Mode: AddrStatic, Address: "10.66.1.2/32"},
+		IPv6:    IPv6{Mode: AddrStatic, Address: "fc00:bbbb::2/128"},
+		WireGuard: &WireGuard{
+			PrivateKey: newKey(t),
+			Peers: []WireGuardPeer{{
+				Name: "provider", Enabled: true, PublicKey: newKey(t),
+				AllowedIPs: []string{"0.0.0.0/0", "::/0"}, Endpoint: "198.51.100.7:51820",
+			}},
+		},
+	})
+	cfg.Gateways = append(cfg.Gateways,
+		Gateway{Name: "wan", Enabled: true, Interface: "eth0", Monitor: "9.9.9.9"},
+		Gateway{Name: "vpn", Enabled: true, Interface: "wg1", Monitor: "10.64.0.1"},
+	)
+	return cfg
+}
+
+func TestATunnelGatewayValidates(t *testing.T) {
+	t.Parallel()
+	cfg := wayOutConfig(t)
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	vpn, _ := cfg.Gateway("vpn")
+	if !cfg.TunnelGateway(*vpn) {
+		t.Error("a gateway on a tunnel with no address is not a tunnel gateway")
+	}
+	if v4, v6 := cfg.TunnelFamilies(*vpn); !v4 || !v6 {
+		t.Errorf("families = %v, %v; want both", v4, v6)
+	}
+	wan, _ := cfg.Gateway("wan")
+	if cfg.TunnelGateway(*wan) {
+		t.Error("the WAN's gateway is taken for a tunnel gateway")
+	}
+	// The tunnel never carries the default route, so one WAN is still
+	// nothing to fail over between.
+	if cfg.CanFailover() {
+		t.Error("a WAN and a tunnel gateway count as two lines to fail over between")
+	}
+}
+
+// A gateway with an address on a tunnel is an ordinary one: a far end
+// routed by its tunnel address, as before tunnel gateways.
+func TestAGatewayWithAnAddressOnATunnelIsOrdinary(t *testing.T) {
+	t.Parallel()
+	cfg := wayOutConfig(t)
+	cfg.Gateways[1].Address = "10.66.1.1"
+	if cfg.TunnelGateway(cfg.Gateways[1]) {
+		t.Error("a gateway with an address counts as a tunnel gateway")
+	}
+}
+
+// A family the tunnel has no address in, or no peer takes the default
+// route of, is not carried; the policy table refuses it instead.
+func TestTunnelFamiliesNeedAnAddressAndADefaultRoute(t *testing.T) {
+	t.Parallel()
+	cfg := wayOutConfig(t)
+	tunnel(cfg).IPv6 = IPv6{Mode: AddrNone}
+	vpn, _ := cfg.Gateway("vpn")
+	if v4, v6 := cfg.TunnelFamilies(*vpn); !v4 || v6 {
+		t.Errorf("without an IPv6 address: families = %v, %v; want IPv4 alone", v4, v6)
+	}
+	cfg = wayOutConfig(t)
+	tunnel(cfg).WireGuard.Peers[0].AllowedIPs = []string{"::/0"}
+	vpn, _ = cfg.Gateway("vpn")
+	if v4, v6 := cfg.TunnelFamilies(*vpn); v4 || !v6 {
+		t.Errorf("a peer taking ::/0 alone: families = %v, %v; want IPv6 alone", v4, v6)
+	}
+	tunnel(cfg).WireGuard.Peers[0].Enabled = false
+	if v4, v6 := cfg.TunnelFamilies(*vpn); v4 || v6 {
+		t.Errorf("a disabled peer: families = %v, %v; want none", v4, v6)
+	}
+}
+
+func TestValidateTunnelGateway(t *testing.T) {
+	t.Parallel()
+	const gw = "gateways[1]"
+	for _, tc := range []struct {
+		name, path, want string
+		change           func(*Config)
+	}{
+		{"no monitor", gw + ".monitor", "a tunnel gateway needs an IPv4 address beyond the tunnel to probe",
+			func(c *Config) { c.Gateways[1].Monitor = "" }},
+		{"an IPv6 monitor", gw + ".monitor", "a tunnel gateway is probed over IPv4",
+			func(c *Config) { c.Gateways[1].Monitor = "2001:db8::53" }},
+		{"a priority", gw + ".priority", "a tunnel gateway never carries the default route; leave it at 0",
+			func(c *Config) { c.Gateways[1].Priority = 2 }},
+		{"no peer takes the default route", gw + ".interface",
+			"no peer on wg1 takes a default route, so nothing would go through it",
+			func(c *Config) { tunnel(c).WireGuard.Peers[0].AllowedIPs = []string{"10.64.0.0/24"} }},
+		{"no address in the family carried", gw + ".interface",
+			"wg1 has no address in the family its peer's default route is in",
+			func(c *Config) {
+				tunnel(c).WireGuard.Peers[0].AllowedIPs = []string{"::/0"}
+				tunnel(c).IPv6 = IPv6{Mode: AddrNone}
+			}},
+		{"an internal zone", gw + ".interface",
+			"wg1 has to be in an external zone, or its far end can use this router's DNS",
+			func(c *Config) { c.Zones[len(c.Zones)-1].External = false }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := wayOutConfig(t)
+			tc.change(cfg)
+			if got := tunnelIssues(t, cfg)[tc.path]; got != tc.want {
+				t.Errorf("%s = %q, want %q", tc.path, got, tc.want)
+			}
+		})
+	}
+}

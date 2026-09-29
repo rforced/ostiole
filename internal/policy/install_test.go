@@ -488,3 +488,156 @@ func TestATierOfSeveralGatewaysSharesTheTrafficAndStaysPut(t *testing.T) {
 		t.Errorf("a pass with nothing to do made %d changes to the policy tables, the first %+v", len(changes), changes[0])
 	}
 }
+
+// wayOutNamespace lays out a router with a WAN carrying both families'
+// default routes, a LAN, and a dummy link standing in for the tunnel:
+// routing does not care what kind of device it is.
+func wayOutNamespace(t *testing.T) (tun netlink.Link) {
+	t.Helper()
+	wan := netnstest.Dummy(t, "wan0", "203.0.113.2/24", "2001:db8:1::2/64")
+	tun = netnstest.Dummy(t, "tun0", "10.66.1.2/32")
+	netnstest.Dummy(t, "lan0", "192.168.1.1/24", "2001:db8:10::1/64")
+	forwarding(t)
+	addRoute(t, wan, "0.0.0.0/0", "203.0.113.1")
+	addRoute(t, wan, "::/0", "2001:db8:1::1")
+	return tun
+}
+
+// familyRoutes lists a policy table in one family.
+func familyRoutes(t *testing.T, family, table int) []netlink.Route {
+	t.Helper()
+	routes, err := netlink.Routes(family, netlink.RouteFilter{Table: table})
+	if err != nil {
+		t.Fatalf("list table %d: %v", table, err)
+	}
+	return routes
+}
+
+// noChurn fails when a second pass with the same plan changes anything:
+// the kernel's copy of each route has to read back as what is asked for.
+func noChurn(t *testing.T, inst *Installer, targets []Target) {
+	t.Helper()
+	if changes := routeChanges(t, func() {
+		if err := inst.Sync(targets); err != nil {
+			t.Errorf("second sync: %v", err)
+		}
+	}); len(changes) != 0 {
+		t.Errorf("a pass with nothing to do made %d changes to the policy tables, the first %+v", len(changes), changes[0])
+	}
+}
+
+// A tunnel gateway sends what is marked for it into the tunnel with no
+// next hop, and refuses the family the tunnel does not carry rather than
+// let it out the WAN. Down, it blocks both. Every one of those routes
+// reads back from the kernel as the installer asks for it, so none of
+// them is put back every few seconds.
+func TestATunnelGatewayRoutesIntoItsTunnelAndRefusesTheRest(t *testing.T) {
+	if !netnstest.Enter(t) {
+		return
+	}
+	tun := wayOutNamespace(t)
+	cfg := wayOutConfig()
+	cfg.GatewayGroups = nil
+	inst := NewInstaller(slog.New(slog.DiscardHandler))
+	targets := Plan(cfg, wayOutHops(cfg, true))
+	if err := inst.Sync(targets); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	vpn, _ := targetByName(targets, "vpn")
+
+	v4 := familyRoutes(t, unix.AF_INET, vpn.Table)
+	if len(v4) != 1 || v4[0].LinkIndex != tun.Index || v4[0].Gw != nil || v4[0].Type != unix.RTN_UNICAST {
+		t.Fatalf("IPv4 table = %+v, want the tunnel with no next hop", v4)
+	}
+	routes, err := netlink.RouteGet(netlink.RouteQuery{
+		Dst: net.ParseIP("1.1.1.1"), Src: net.ParseIP("192.168.1.10"),
+		Iif: netnstest.Link(t, "lan0").Index, Mark: vpn.Mark,
+	})
+	if err != nil || len(routes) != 1 || routes[0].LinkIndex != tun.Index || routes[0].Table != vpn.Table {
+		t.Errorf("marked traffic goes %+v (%v), want into the tunnel from table %d", routes, err, vpn.Table)
+	}
+	if v6 := familyRoutes(t, unix.AF_INET6, vpn.Table); len(v6) != 1 || v6[0].Type != unix.RTN_UNREACHABLE {
+		t.Errorf("IPv6 table = %+v, want it refused", v6)
+	}
+	noChurn(t, inst, targets)
+
+	// Down, it blocks both families.
+	targets = Plan(cfg, wayOutHops(cfg, false))
+	if err := inst.Sync(targets); err != nil {
+		t.Fatalf("sync with the tunnel down: %v", err)
+	}
+	for _, family := range []int{unix.AF_INET, unix.AF_INET6} {
+		if r := familyRoutes(t, family, vpn.Table); len(r) != 1 || r[0].Type != unix.RTN_BLACKHOLE {
+			t.Errorf("family %d with the tunnel down = %+v, want a blackhole", family, r)
+		}
+	}
+	noChurn(t, inst, targets)
+}
+
+// A group with the tunnel first and the WAN after it uses the tunnel for
+// what it carries and refuses the rest while the tunnel is up; only when
+// the tunnel is down does the WAN take both families.
+func TestAGroupFallsBackFromTheTunnelOnlyWhenItIsDown(t *testing.T) {
+	if !netnstest.Enter(t) {
+		return
+	}
+	tun := wayOutNamespace(t)
+	cfg := wayOutConfig()
+	inst := NewInstaller(slog.New(slog.DiscardHandler))
+	targets := Plan(cfg, wayOutHops(cfg, true))
+	if err := inst.Sync(targets); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	private, _ := targetByName(targets, "private")
+	if r := familyRoutes(t, unix.AF_INET, private.Table); len(r) != 1 || r[0].LinkIndex != tun.Index {
+		t.Errorf("IPv4 with the tunnel up = %+v, want the tunnel", r)
+	}
+	if r := familyRoutes(t, unix.AF_INET6, private.Table); len(r) != 1 || r[0].Type != unix.RTN_UNREACHABLE {
+		t.Errorf("IPv6 with the tunnel up = %+v, want it refused, not sent out the WAN", r)
+	}
+
+	targets = Plan(cfg, wayOutHops(cfg, false))
+	if err := inst.Sync(targets); err != nil {
+		t.Fatalf("sync with the tunnel down: %v", err)
+	}
+	if r := familyRoutes(t, unix.AF_INET, private.Table); len(r) != 1 || !r[0].Gw.Equal(net.ParseIP("203.0.113.1")) {
+		t.Errorf("IPv4 with the tunnel down = %+v, want the WAN", r)
+	}
+	if r := familyRoutes(t, unix.AF_INET6, private.Table); len(r) != 1 || !r[0].Gw.Equal(net.ParseIP("2001:db8:1::1")) {
+		t.Errorf("IPv6 with the tunnel down = %+v, want the WAN", r)
+	}
+	noChurn(t, inst, targets)
+}
+
+// A tunnel and a line in one tier share IPv4, one route with a hop that
+// has no next hop beside one that has, and the kernel's copy of it is
+// what the next pass asks for.
+func TestATunnelSharesATierWithALine(t *testing.T) {
+	if !netnstest.Enter(t) {
+		return
+	}
+	tun := wayOutNamespace(t)
+	cfg := wayOutConfig()
+	cfg.GatewayGroups[0].Members = []model.GatewayMember{{Gateway: "vpn"}, {Gateway: "wan"}, {Gateway: "wan6"}}
+	inst := NewInstaller(slog.New(slog.DiscardHandler))
+	targets := Plan(cfg, wayOutHops(cfg, true))
+	if err := inst.Sync(targets); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	private, _ := targetByName(targets, "private")
+	v4 := familyRoutes(t, unix.AF_INET, private.Table)
+	if len(v4) != 1 || len(v4[0].MultiPath) != 2 {
+		t.Fatalf("IPv4 = %+v, want one route over the tunnel and the line", v4)
+	}
+	devices := map[int]bool{}
+	for _, h := range v4[0].MultiPath {
+		devices[h.LinkIndex] = true
+	}
+	if !devices[tun.Index] {
+		t.Errorf("IPv4 hops = %+v, want the tunnel among them", v4[0].MultiPath)
+	}
+	if v6 := familyRoutes(t, unix.AF_INET6, private.Table); len(v6) != 1 || !v6[0].Gw.Equal(net.ParseIP("2001:db8:1::1")) {
+		t.Errorf("IPv6 = %+v, want the line alone, since the tunnel does not carry it", v6)
+	}
+	noChurn(t, inst, targets)
+}

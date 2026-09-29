@@ -148,17 +148,32 @@ func (i *Installer) syncRules(family int, want map[int]netlink.Rule) error {
 
 // routeFor builds the default route for a target in one family: the best
 // tier that has an online hop, a multipath route when that tier has
-// several, a blackhole for a blocking group with nothing online, and nil
-// when the traffic should fall back to the main table.
+// several, a blackhole for a blocking target with nothing online, and nil
+// when the traffic should fall back to the main table. A tier holding a
+// tunnel that does not carry the family refuses it, rather than let a
+// later tier's line take what the tunnel was meant to hide.
 func (i *Installer) routeFor(t Target, family int) *netlink.Route {
+	v4 := family == unix.AF_INET
 	for _, tier := range t.Tiers {
 		var hops []netlink.Nexthop
+		tunnel := false
 		for _, h := range tier {
 			if !h.Online {
 				continue
 			}
+			if h.Device {
+				link, err := netlink.LinkByName(h.Interface)
+				if err != nil {
+					continue
+				}
+				tunnel = true
+				if h.carries(v4) {
+					hops = append(hops, netlink.Nexthop{LinkIndex: link.Index})
+				}
+				continue
+			}
 			ip := net.ParseIP(h.Address)
-			if ip == nil || (ip.To4() != nil) != (family == unix.AF_INET) {
+			if ip == nil || (ip.To4() != nil) != v4 {
 				continue
 			}
 			link, err := netlink.LinkByName(h.Interface)
@@ -168,11 +183,18 @@ func (i *Installer) routeFor(t Target, family int) *netlink.Route {
 			hops = append(hops, netlink.Nexthop{LinkIndex: link.Index, Gw: ip})
 		}
 		if len(hops) == 0 {
+			if tunnel {
+				return &netlink.Route{Table: t.Table, Dst: defaultDst(family), Type: unix.RTN_UNREACHABLE}
+			}
 			continue
 		}
 		route := &netlink.Route{Table: t.Table, Dst: defaultDst(family)}
 		if len(hops) == 1 {
 			route.LinkIndex, route.Gw = hops[0].LinkIndex, hops[0].Gw
+			if route.Gw == nil && v4 {
+				// What ip(8) gives an IPv4 route with no next hop.
+				route.Scope = unix.RT_SCOPE_LINK
+			}
 		} else {
 			route.MultiPath = hops
 		}
@@ -213,6 +235,11 @@ func rulesFor(t Target, family int) []netlink.Rule {
 func sameRoute(a, b *netlink.Route) bool {
 	if a.Table != b.Table || routeType(a) != routeType(b) || !sameDst(a.Dst, b.Dst) {
 		return false
+	}
+	// A blackhole or an unreachable route leads nowhere, and the kernel
+	// reads an IPv6 one back on the loopback device.
+	if routeType(a) != unix.RTN_UNICAST {
+		return true
 	}
 	if len(a.MultiPath) != len(b.MultiPath) {
 		return false
@@ -265,15 +292,30 @@ func defaultDst(family int) *net.IPNet {
 }
 
 func describe(r *netlink.Route) string {
-	if r.Type == unix.RTN_BLACKHOLE {
+	switch r.Type {
+	case unix.RTN_BLACKHOLE:
 		return "blackhole"
+	case unix.RTN_UNREACHABLE:
+		return "unreachable"
 	}
 	if len(r.MultiPath) > 0 {
 		out := "multipath"
 		for _, h := range r.MultiPath {
-			out += " " + h.Gw.String()
+			out += " " + hopName(h.Gw, h.LinkIndex)
 		}
 		return out
 	}
-	return "via " + r.Gw.String()
+	return hopName(r.Gw, r.LinkIndex)
+}
+
+// hopName is a next hop as a log line gives it, or the device a hop with
+// none goes into.
+func hopName(gw net.IP, link int) string {
+	if gw != nil {
+		return "via " + gw.String()
+	}
+	if l, err := net.InterfaceByIndex(link); err == nil {
+		return "dev " + l.Name
+	}
+	return fmt.Sprintf("dev %d", link)
 }

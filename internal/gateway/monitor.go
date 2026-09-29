@@ -78,7 +78,10 @@ type Status struct {
 	Online  bool `json:"online"`
 	Unknown bool `json:"unknown"`
 	// Active marks the gateway currently carrying the default route.
-	Active      bool      `json:"active"`
+	Active bool `json:"active"`
+	// Tunnel is a tunnel gateway: it sends rule traffic into its tunnel
+	// and never carries the default route.
+	Tunnel      bool      `json:"tunnel,omitempty"`
 	LatencyMS   float64   `json:"latencyMs"`
 	LossPercent float64   `json:"lossPercent"`
 	Since       time.Time `json:"since,omitzero"`
@@ -90,7 +93,10 @@ type Status struct {
 }
 
 type state struct {
-	gw        model.Gateway
+	gw model.Gateway
+	// tunnel is fixed for the state's life: a gateway that stops or starts
+	// being a tunnel gateway gets a new one.
+	tunnel    bool
 	address   string
 	online    bool
 	unknown   bool
@@ -140,20 +146,22 @@ func New(p Prober, r Router, log *slog.Logger) *Monitor {
 	return &Monitor{Prober: p, Router: r, Interval: DefaultInterval, Timeout: DefaultTimeout, Log: log}
 }
 
-// Configure replaces the watched set, keeping the state of gateways that
-// are still there. It is called after every apply.
-func (m *Monitor) Configure(gateways []model.Gateway) {
+// Configure replaces the watched set with cfg's gateways, keeping the
+// state of those that are still there. It is called after every apply.
+func (m *Monitor) Configure(cfg *model.Config) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	next := make(map[string]*state, len(gateways))
-	order := make([]string, 0, len(gateways))
-	for _, g := range gateways {
+	next := make(map[string]*state, len(cfg.Gateways))
+	order := make([]string, 0, len(cfg.Gateways))
+	for _, g := range cfg.Gateways {
 		if !g.Enabled {
 			continue
 		}
+		tunnel := cfg.TunnelGateway(g)
 		st, ok := m.states[g.Name]
-		if !ok || st.gw.Interface != g.Interface || st.gw.Address != g.Address || st.gw.Monitor != g.Monitor {
-			st = &state{gw: g, unknown: true, since: time.Now()}
+		if !ok || st.gw.Interface != g.Interface || st.gw.Address != g.Address || st.gw.Monitor != g.Monitor ||
+			st.tunnel != tunnel {
+			st = &state{gw: g, tunnel: tunnel, unknown: true, since: time.Now()}
 		} else {
 			st.gw = g
 		}
@@ -196,7 +204,7 @@ func (m *Monitor) Tick(ctx context.Context) {
 	var cfg *model.Config
 	if m.Source != nil {
 		if cfg = m.Source(); cfg != nil {
-			m.Configure(cfg.Gateways)
+			m.Configure(cfg)
 		}
 	}
 	m.mu.Lock()
@@ -247,16 +255,11 @@ func (m *Monitor) syncPolicy(cfg *model.Config, states []*state) {
 	hops := make(map[string]policy.Hop, len(states))
 	m.mu.Lock()
 	for _, st := range states {
-		h := policy.Hop{
-			Gateway:   st.gw.Name,
-			Address:   st.address,
-			Interface: st.gw.Interface,
-			Online:    st.online || st.unknown,
+		address := st.address
+		if address == "" {
+			address = st.gw.Address
 		}
-		if h.Address == "" {
-			h.Address = st.gw.Address
-		}
-		hops[h.Gateway] = h
+		hops[st.gw.Name] = policy.NewHop(cfg, st.gw, address, st.online || st.unknown)
 	}
 	m.mu.Unlock()
 	if err := m.Policy.Sync(policy.Plan(cfg, hops)); err != nil {
@@ -270,7 +273,11 @@ func (m *Monitor) probe(ctx context.Context, st *state, timeout time.Duration) {
 	addr := st.address
 	m.mu.Unlock()
 
-	if resolved, ok := m.Router.Resolve(Status{Name: st.gw.Name, Interface: st.gw.Interface, Address: st.gw.Address}); ok {
+	// A tunnel has no next hop to find: the probe goes into the tunnel,
+	// to the monitor beyond it.
+	if st.tunnel {
+		addr = ""
+	} else if resolved, ok := m.Router.Resolve(Status{Name: st.gw.Name, Interface: st.gw.Interface, Address: st.gw.Address}); ok {
 		addr = resolved
 	} else if st.gw.Address != "" {
 		addr = st.gw.Address
@@ -336,6 +343,9 @@ func (m *Monitor) applyRoutes(states []*state) {
 	if m.Router == nil {
 		return
 	}
+	// A tunnel gateway has no default route to move, and counting it as a
+	// line that works would demote the only WAN of a router with one.
+	states = slices.DeleteFunc(slices.Clone(states), func(st *state) bool { return st.tunnel })
 	anyOnline := false
 	for _, st := range states {
 		if st.online || st.unknown {
@@ -376,7 +386,9 @@ func (m *Monitor) findCarriers(states []*state) {
 	gs := make([]Status, 0, len(states))
 	m.mu.Lock()
 	for _, st := range states {
-		gs = append(gs, m.status(st, true))
+		if !st.tunnel {
+			gs = append(gs, m.status(st, true))
+		}
 	}
 	m.mu.Unlock()
 	names, err := m.Router.Carriers(gs)
@@ -395,6 +407,9 @@ func (m *Monitor) forget(dropped []Status) {
 		return
 	}
 	for _, g := range dropped {
+		if g.Tunnel {
+			continue
+		}
 		if err := m.Router.Forget(g); err != nil {
 			m.Log.Warn("could not clear the routes of a gateway no longer watched", "gateway", g.Name, "err", err)
 		}
@@ -430,6 +445,7 @@ func (m *Monitor) status(st *state, _ bool) Status {
 		Unknown:   st.unknown,
 		Since:     st.since,
 		LastError: st.lastError,
+		Tunnel:    st.tunnel,
 		learned:   st.gw.Address == "",
 	}
 	if s.Address == "" {

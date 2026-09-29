@@ -427,6 +427,8 @@ func (c *Config) Validate() error {
 				v.add(path+".address", "%v", err)
 			}
 			addr = a
+		} else if c.TunnelGateway(g) {
+			v.tunnelGateway(c, path, g)
 		} else if in, ok := c.Interface(g.Interface); ok && !learnsGateway(*in) {
 			v.add(path+".address", "this interface gets no gateway from the network; give one here")
 		}
@@ -2061,6 +2063,35 @@ func (v *validator) wireguard(path string, in Interface) {
 		if p.Masquerade {
 			v.translate(ppath+".masquerade", in, p)
 		}
+	}
+}
+
+// tunnelGateway checks a gateway that sends rule traffic into a WireGuard
+// tunnel. There is no next hop to ping, so the monitor has to be an
+// address beyond the tunnel; a peer has to take a default route, or
+// nothing goes through; and the tunnel has to be in an external zone, or
+// its far end could ask this router's DNS for its names.
+func (v *validator) tunnelGateway(c *Config, path string, g Gateway) {
+	in, _ := c.Interface(g.Interface)
+	switch m, err := ParseIP(g.Monitor); {
+	case g.Monitor == "":
+		v.add(path+".monitor", "a tunnel gateway needs an IPv4 address beyond the tunnel to probe")
+	case err == nil && !m.Is4():
+		v.add(path+".monitor", "a tunnel gateway is probed over IPv4")
+	}
+	if g.Priority != 0 {
+		v.add(path+".priority", "a tunnel gateway never carries the default route; leave it at 0")
+	}
+	takes := slices.ContainsFunc(in.WireGuard.Peers, func(p WireGuardPeer) bool {
+		return p.Enabled && p.TakesDefaultRoute()
+	})
+	if v4, v6 := c.TunnelFamilies(g); !takes {
+		v.add(path+".interface", "no peer on %s takes a default route, so nothing would go through it", in.Name)
+	} else if !v4 && !v6 {
+		v.add(path+".interface", "%s has no address in the family its peer's default route is in", in.Name)
+	}
+	if z, ok := c.Zone(in.Zone); !ok || !z.External {
+		v.add(path+".interface", "%s has to be in an external zone, or its far end can use this router's DNS", in.Name)
 	}
 }
 

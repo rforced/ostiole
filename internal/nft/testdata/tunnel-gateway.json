@@ -1,0 +1,39 @@
+{
+  "version": 12,
+  "system": { "hostname": "fw", "management": { "webPort": 443, "sshPort": 22 } },
+  "zones": [
+    { "name": "wan", "external": true },
+    { "name": "lan", "antiLockout": true },
+    { "name": "vpn", "external": true }
+  ],
+  "interfaces": [
+    { "name": "eth0", "zone": "wan", "enabled": true, "ipv4": { "mode": "dhcp" }, "ipv6": { "mode": "slaac" } },
+    { "name": "eth1", "zone": "lan", "enabled": true, "ipv4": { "mode": "static", "address": "192.168.1.1/24" }, "ipv6": { "mode": "none" } },
+    {
+      "name": "wg1", "zone": "vpn", "enabled": true,
+      "ipv4": { "mode": "static", "address": "10.66.1.2/32" }, "ipv6": { "mode": "static", "address": "fc00:bbbb::2/128" },
+      "wireguard": {
+        "privateKey": "yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=",
+        "peers": [
+          {
+            "name": "provider", "enabled": true, "publicKey": "ve6gIXQOS0uLC6p3avm8QFXslT2uGUZIo1q9qDAVrTU=",
+            "allowedIps": ["0.0.0.0/0", "::/0"], "endpoint": "198.51.100.7:51820", "keepalive": 25
+          }
+        ]
+      }
+    }
+  ],
+  "gateways": [
+    { "name": "wan", "enabled": true, "interface": "eth0", "monitor": "9.9.9.9" },
+    { "name": "vpn", "enabled": true, "interface": "wg1", "monitor": "10.64.0.1" }
+  ],
+  "gatewayGroups": [
+    { "name": "private", "enabled": true, "members": [{ "gateway": "vpn", "tier": 1 }, { "gateway": "wan", "tier": 2 }] }
+  ],
+  "rules": [
+    { "id": "tv-out-vpn", "description": "The TV goes out the provider or nowhere", "enabled": true, "zone": "lan", "action": "accept", "protocol": "any", "source": { "addresses": ["192.168.1.50"] }, "destination": {}, "gateway": "vpn" },
+    { "id": "guests-private", "description": "Guests go out the provider while it is up", "enabled": true, "zone": "lan", "action": "accept", "protocol": "any", "source": { "addresses": ["192.168.1.128/25"] }, "destination": {}, "gateway": "private" },
+    { "id": "allow-lan", "description": "Allow LAN to any", "enabled": true, "zone": "lan", "action": "accept", "protocol": "any", "source": {}, "destination": {} }
+  ],
+  "nat": { "outbound": { "mode": "automatic" } }
+}

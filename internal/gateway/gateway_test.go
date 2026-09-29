@@ -145,11 +145,11 @@ func newTestMonitor(t *testing.T) (*Monitor, *fakeProber, *fakeRouter) {
 	p := &fakeProber{fail: map[string]bool{}}
 	r := &fakeRouter{resolveTo: map[string]string{}}
 	m := New(p, r, slog.New(slog.DiscardHandler))
-	m.Configure([]model.Gateway{
+	m.Configure(&model.Config{Gateways: []model.Gateway{
 		{Name: "primary", Enabled: true, Interface: "eth0", Address: "203.0.113.1", Priority: 0},
 		{Name: "backup", Enabled: true, Interface: "eth1", Address: "198.51.100.1", Priority: 1},
 		{Name: "off", Enabled: false, Interface: "eth2", Address: "192.0.2.1"},
-	})
+	}})
 	return m, p, r
 }
 
@@ -224,7 +224,7 @@ func TestAGatewayComingBackIsLoggedAtTheLevelOfGoingDown(t *testing.T) {
 	p := &fakeProber{fail: map[string]bool{}}
 	m := New(p, &fakeRouter{resolveTo: map[string]string{}},
 		slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
-	m.Configure([]model.Gateway{{Name: "primary", Enabled: true, Interface: "eth0", Address: "203.0.113.1"}})
+	m.Configure(&model.Config{Gateways: []model.Gateway{{Name: "primary", Enabled: true, Interface: "eth0", Address: "203.0.113.1"}}})
 	tick(m, RiseAfter)
 	p.setFail("203.0.113.1", true)
 	tick(m, FailAfter)
@@ -284,10 +284,10 @@ func TestMonitorLeavesASingleGatewayAlone(t *testing.T) {
 	p := &fakeProber{fail: map[string]bool{"203.0.113.1": true}}
 	r := &fakeRouter{resolveTo: map[string]string{}}
 	m := New(p, r, slog.New(slog.DiscardHandler))
-	m.Configure([]model.Gateway{
+	m.Configure(&model.Config{Gateways: []model.Gateway{
 		{Name: "wan", Enabled: true, Interface: "eth0", Address: "203.0.113.1"},
 		{Name: "off", Enabled: false, Interface: "eth1", Address: "198.51.100.1"},
-	})
+	}})
 	tick(m, 5)
 
 	if s := m.Statuses()[0]; s.Online || s.Unknown || s.LossPercent == 0 {
@@ -311,9 +311,9 @@ func TestRemovingTheSecondGatewayRestoresTheDemotedOne(t *testing.T) {
 		t.Fatalf("demoted = %v, want the primary once", demoted)
 	}
 
-	m.Configure([]model.Gateway{
+	m.Configure(&model.Config{Gateways: []model.Gateway{
 		{Name: "primary", Enabled: true, Interface: "eth0", Address: "203.0.113.1", Priority: 0},
-	})
+	}})
 	tick(m, 1)
 	if _, restored := router.calls(); len(restored) != 1 || restored[0] != "primary" {
 		t.Errorf("restored = %v, want the primary back: it is the only gateway left", restored)
@@ -325,7 +325,7 @@ func TestMonitorResolvesDynamicGateways(t *testing.T) {
 	p := &fakeProber{fail: map[string]bool{}}
 	r := &fakeRouter{resolveTo: map[string]string{}}
 	m := New(p, r, slog.New(slog.DiscardHandler))
-	m.Configure([]model.Gateway{{Name: "wan", Enabled: true, Interface: "eth0"}})
+	m.Configure(&model.Config{Gateways: []model.Gateway{{Name: "wan", Enabled: true, Interface: "eth0"}}})
 
 	// Without a next hop there is nothing to probe.
 	tick(m, 3)
@@ -347,10 +347,10 @@ func TestConfigureKeepsStateOfUnchangedGateways(t *testing.T) {
 	t.Parallel()
 	m, _, _ := newTestMonitor(t)
 	tick(m, 2)
-	m.Configure([]model.Gateway{
+	m.Configure(&model.Config{Gateways: []model.Gateway{
 		{Name: "primary", Enabled: true, Interface: "eth0", Address: "203.0.113.1", Priority: 0},
 		{Name: "backup", Enabled: true, Interface: "eth1", Address: "198.51.100.2", Priority: 1},
-	})
+	}})
 	statuses := m.Statuses()
 	if !statuses[0].Online {
 		t.Errorf("unchanged gateway lost its state: %+v", statuses[0])
@@ -559,19 +559,107 @@ func TestAGatewayNoLongerWatchedIsForgotten(t *testing.T) {
 	t.Parallel()
 	m, _, router := newTestMonitor(t)
 	tick(m, 2)
-	m.Configure([]model.Gateway{
+	m.Configure(&model.Config{Gateways: []model.Gateway{
 		{Name: "primary", Enabled: true, Interface: "eth0", Address: "203.0.113.1", Monitor: "192.0.2.53"},
 		{Name: "backup", Enabled: true, Interface: "eth1", Address: "198.51.100.9", Priority: 1},
-	})
+	}})
 	tick(m, 1)
-	m.Configure([]model.Gateway{
+	m.Configure(&model.Config{Gateways: []model.Gateway{
 		{Name: "primary", Enabled: false, Interface: "eth0", Address: "203.0.113.1"},
 		{Name: "backup", Enabled: true, Interface: "eth1", Address: "198.51.100.9", Priority: 1},
-	})
+	}})
 	tick(m, 1)
 	router.mu.Lock()
 	defer router.mu.Unlock()
 	if !slices.Equal(router.forgotten, []string{"backup", "primary"}) {
 		t.Errorf("forgotten = %v, want the backup's old address, then the disabled primary", router.forgotten)
+	}
+}
+
+// statusOf finds one gateway among the monitor's statuses.
+func statusOf(t *testing.T, m *Monitor, name string) Status {
+	t.Helper()
+	for _, s := range m.Statuses() {
+		if s.Name == name {
+			return s
+		}
+	}
+	t.Fatalf("no status for %s", name)
+	return Status{}
+}
+
+// targetOf finds one policy target in a plan.
+func targetOf(t *testing.T, plan []policy.Target, name string) policy.Target {
+	t.Helper()
+	for _, target := range plan {
+		if target.Name == name {
+			return target
+		}
+	}
+	t.Fatalf("no target %s in the plan", name)
+	return policy.Target{}
+}
+
+// A tunnel gateway is probed at the monitor beyond its tunnel and never
+// touches the main table: it is not resolved, demoted, restored or active,
+// and while it is down the one WAN of a router stays where it is. Policy
+// routing sends its rules into the tunnel, and blocks them while it is
+// down.
+func TestATunnelGatewayIsProbedButNeverMovesTheDefaultRoute(t *testing.T) {
+	t.Parallel()
+	cfg := &model.Config{
+		Version: model.SchemaVersion,
+		Interfaces: []model.Interface{{
+			Name: "wg1", Enabled: true, IPv4: model.IPv4{Mode: model.AddrStatic, Address: "10.66.1.2/32"},
+			WireGuard: &model.WireGuard{Peers: []model.WireGuardPeer{
+				{Name: "provider", Enabled: true, AllowedIPs: []string{"0.0.0.0/0"}},
+			}},
+		}},
+		Gateways: []model.Gateway{
+			{Name: "wan", Enabled: true, Interface: "eth0", Address: "203.0.113.1"},
+			{Name: "vpn", Enabled: true, Interface: "wg1", Monitor: "10.64.0.1"},
+		},
+	}
+	prober := &fakeProber{fail: map[string]bool{}}
+	// Were the tunnel gateway resolved like a DHCP line, it would get this.
+	router := &fakeRouter{resolveTo: map[string]string{"vpn": "10.66.1.1"}}
+	pol := &fakePolicy{}
+	m := &Monitor{
+		Prober: prober, Router: router, Log: slog.New(slog.DiscardHandler), Policy: pol,
+		Source: func() *model.Config { return cfg },
+	}
+
+	tick(m, RiseAfter)
+	vpn := statusOf(t, m, "vpn")
+	if !vpn.Tunnel || vpn.Address != "" || !vpn.Online || vpn.Active || vpn.Monitor != "10.64.0.1" {
+		t.Errorf("tunnel gateway = %+v, want online, no next hop, not active", vpn)
+	}
+	if !statusOf(t, m, "wan").Active {
+		t.Error("the WAN does not carry the default route beside a tunnel gateway")
+	}
+	target := targetOf(t, pol.last(t), "vpn")
+	if !target.Block || len(target.Tiers) != 1 || !target.Tiers[0][0].Device || !target.Tiers[0][0].Online {
+		t.Errorf("policy target = %+v, want the tunnel, online, blocking when down", target)
+	}
+
+	prober.setFail("10.64.0.1", true)
+	tick(m, FailAfter)
+	if statusOf(t, m, "vpn").Online {
+		t.Error("the tunnel gateway stayed up with its monitor gone")
+	}
+	if target := targetOf(t, pol.last(t), "vpn"); target.Online() {
+		t.Error("policy routing still sends traffic into a tunnel that is down")
+	}
+	demoted, restored := router.calls()
+	if len(demoted) != 0 || slices.Contains(restored, "vpn") {
+		t.Errorf("demoted %v, restored %v; want the main table left alone", demoted, restored)
+	}
+
+	// Gone from the configuration, it is not forgotten like a line either:
+	// it has no routes in the main table to clear.
+	cfg = &model.Config{Version: model.SchemaVersion, Gateways: cfg.Gateways[:1]}
+	tick(m, 1)
+	if slices.Contains(router.forgotten, "vpn") {
+		t.Error("a removed tunnel gateway had the main table searched for its routes")
 	}
 }

@@ -163,3 +163,83 @@ func TestOnlineFollowsHops(t *testing.T) {
 		t.Error("every member is down, so the target is not online")
 	}
 }
+
+// wayOutConfig is a router with a tunnel to a provider that carries IPv4,
+// a gateway through it, and a group that falls back to the WAN.
+func wayOutConfig() *model.Config {
+	return &model.Config{
+		Version: model.SchemaVersion,
+		Interfaces: []model.Interface{{
+			Name: "tun0", Enabled: true,
+			IPv4: model.IPv4{Mode: model.AddrStatic, Address: "10.66.1.2/32"},
+			WireGuard: &model.WireGuard{Peers: []model.WireGuardPeer{
+				{Name: "provider", Enabled: true, AllowedIPs: []string{"0.0.0.0/0", "::/0"}},
+			}},
+		}},
+		Gateways: []model.Gateway{
+			{Name: "vpn", Enabled: true, Interface: "tun0", Monitor: "10.64.0.1"},
+			{Name: "wan", Enabled: true, Interface: "wan0", Address: "203.0.113.1"},
+			{Name: "wan6", Enabled: true, Interface: "wan0", Address: "2001:db8:1::1"},
+		},
+		GatewayGroups: []model.GatewayGroup{{Name: "private", Enabled: true, Members: []model.GatewayMember{
+			{Gateway: "vpn", Tier: 1}, {Gateway: "wan", Tier: 2}, {Gateway: "wan6", Tier: 2},
+		}}},
+	}
+}
+
+// wayOutHops describes every gateway of wayOutConfig as the monitor would,
+// the tunnel online or not.
+func wayOutHops(cfg *model.Config, tunnelUp bool) map[string]Hop {
+	hops := map[string]Hop{}
+	for _, g := range cfg.Gateways {
+		hops[g.Name] = NewHop(cfg, g, g.Address, g.Name != "vpn" || tunnelUp)
+	}
+	return hops
+}
+
+func TestNewHopMakesATunnelGatewayADevice(t *testing.T) {
+	cfg := wayOutConfig()
+	h := NewHop(cfg, cfg.Gateways[0], "10.66.1.1", true)
+	if !h.Device || h.Address != "" || h.Interface != "tun0" {
+		t.Errorf("tunnel hop = %+v, want the device with no next hop", h)
+	}
+	// The tunnel has no IPv6 address, so its peer's ::/0 carries nothing.
+	if !h.V4 || h.V6 {
+		t.Errorf("families = %v, %v; want IPv4 alone", h.V4, h.V6)
+	}
+	if w := NewHop(cfg, cfg.Gateways[1], "203.0.113.1", true); w.Device || w.Address != "203.0.113.1" {
+		t.Errorf("WAN hop = %+v, want its next hop", w)
+	}
+}
+
+// A tunnel gateway on its own blocks while it is down, where an ordinary
+// gateway falls back to the main table.
+func TestPlanBlocksALoneTunnelGateway(t *testing.T) {
+	cfg := wayOutConfig()
+	targets := Plan(cfg, wayOutHops(cfg, false))
+	vpn, _ := targetByName(targets, "vpn")
+	if !vpn.Block {
+		t.Error("a lone tunnel gateway would fall back to the WAN while down")
+	}
+	if len(vpn.Tiers) != 1 || !vpn.Tiers[0][0].Device {
+		t.Errorf("tiers = %+v, want the tunnel", vpn.Tiers)
+	}
+	if vpn.Online() {
+		t.Error("a tunnel gateway that is down counts as online")
+	}
+	if wan, _ := targetByName(targets, "wan"); wan.Block {
+		t.Error("an ordinary gateway blocks")
+	}
+	private, _ := targetByName(targets, "private")
+	if private.Block || len(private.Tiers) != 2 {
+		t.Errorf("group = %+v, want two tiers falling back", private)
+	}
+	if !targetsOnline(Plan(cfg, wayOutHops(cfg, true)), "vpn") {
+		t.Error("a tunnel gateway that is up counts as offline")
+	}
+}
+
+func targetsOnline(targets []Target, name string) bool {
+	t, ok := targetByName(targets, name)
+	return ok && t.Online()
+}

@@ -1574,26 +1574,33 @@ func (c *Config) PolicyTarget(name string) (PolicyTarget, bool) {
 // BlockingTarget is a policy target whose traffic may leave only by its
 // own lines: Interfaces are those of its enabled members.
 type BlockingTarget struct {
-	Name       string
+	Name string
+	// Group is a gateway group set to block; otherwise the target is a
+	// tunnel gateway, which blocks on its own.
+	Group      bool
 	Mark       uint32
 	Interfaces []string
 }
 
-// BlockingTargets lists the gateway groups set to block, in the order
-// PolicyTargets numbers them. Their policy tables drop the traffic while
-// every member is down, but the tables come from the daemon, and the
-// firewall is what holds the traffic before they exist.
+// BlockingTargets lists the gateway groups set to block and the tunnel
+// gateways, in the order PolicyTargets numbers them. Their policy tables
+// drop the traffic while every member is down, but the tables come from
+// the daemon, and the firewall is what holds the traffic before they
+// exist.
 func (c *Config) BlockingTargets() []BlockingTarget {
 	var out []BlockingTarget
 	for _, t := range c.PolicyTargets() {
 		if !t.Group {
+			if gw, ok := c.Gateway(t.Name); ok && c.TunnelGateway(*gw) {
+				out = append(out, BlockingTarget{Name: t.Name, Mark: t.Mark, Interfaces: []string{gw.Interface}})
+			}
 			continue
 		}
 		g, ok := c.GatewayGroup(t.Name)
 		if !ok || g.OnDown != OnDownBlock {
 			continue
 		}
-		b := BlockingTarget{Name: t.Name, Mark: t.Mark}
+		b := BlockingTarget{Name: t.Name, Group: true, Mark: t.Mark}
 		for _, m := range g.Members {
 			gw, ok := c.Gateway(m.Gateway)
 			if ok && gw.Enabled && !slices.Contains(b.Interfaces, gw.Interface) {
@@ -1618,10 +1625,11 @@ func (c *Config) Gateway(name string) (*Gateway, bool) {
 // CanFailover reports whether there is more than one enabled gateway, which
 // is what failover needs: a router with one gateway has nowhere to move the
 // default route to, so the monitor probes it but never touches its route.
+// A tunnel gateway never carries the default route, so it does not count.
 func (c *Config) CanFailover() bool {
 	n := 0
 	for _, g := range c.Gateways {
-		if !g.Enabled {
+		if !g.Enabled || c.TunnelGateway(g) {
 			continue
 		}
 		if n++; n > 1 {

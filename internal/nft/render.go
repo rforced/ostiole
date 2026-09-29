@@ -704,6 +704,7 @@ func (r *renderer) chainForward() {
 		r.line("type filter hook forward priority filter; policy drop;")
 		r.shapeRestore("forward")
 		r.clampPPPoE()
+		r.clampTunnels()
 		r.killSwitch()
 		r.connectionState("forward")
 		r.blockedSources("forward")
@@ -740,8 +741,9 @@ func (r *renderer) clampPPPoE() {
 	})
 }
 
-// killSwitch holds the traffic of a group set to block to its members'
-// lines. Its policy table drops the traffic while every member is down,
+// killSwitch holds the traffic of a group set to block, and of a tunnel
+// gateway, to their own lines. The policy table drops the traffic while
+// every member is down,
 // but the tables come from the daemon: from the ruleset's load at boot
 // until the daemon's first pass, the mark routes nowhere and the traffic
 // would take the main table out whichever WAN holds the default route. It
@@ -770,10 +772,14 @@ func (r *renderer) killSwitch() {
 		key := "kill-switch:" + t.Name
 		r.line(fmt.Sprintf(`ct mark & 0x%08x == 0x%x oifname %s counter drop comment %q`,
 			model.PolicyMarkMask, t.Mark, ifnameSet(others), key))
+		what := "Keep a blocking group's traffic off every other WAN"
+		if !t.Group {
+			what = "Keep a tunnel gateway's traffic off every other WAN"
+		}
 		r.sys(SystemRule{
 			Chain: "forward", Zones: zones, Action: "drop", Protocol: string(model.ProtocolAny),
 			Source: "routed through " + t.Name, Destination: "out " + strings.Join(others, ", "),
-			Description: "Keep a blocking group's traffic off every other WAN",
+			Description: what,
 			Keys:        []string{"forward/" + key}, Setting: "routing",
 		})
 	}
@@ -1858,6 +1864,7 @@ func (r *renderer) chainNATPostrouting() {
 		}
 		r.oneToOneSNAT()
 		r.peerNAT()
+		r.tunnelNAT()
 		// The listed rules come first in hybrid mode, so a host can be
 		// given its own address, or kept out of NAT, without anyone
 		// writing out the rules for everything else.
@@ -1957,11 +1964,15 @@ func (r *renderer) outboundAutomatic() {
 var uniqueLocal = netip.MustParsePrefix("fc00::/7")
 
 // tunnelULAs are the networks of the WireGuard tunnels' unique local IPv6
-// addresses.
+// addresses, of the tunnels devices dial into. One in an external zone is
+// a way out, holding the one address its far end gave it.
 func (r *renderer) tunnelULAs() []string {
 	var out []string
 	for _, in := range r.cfg.Interfaces {
 		if !in.Enabled || in.WireGuard == nil || in.IPv6.Mode != model.AddrStatic {
+			continue
+		}
+		if z, ok := r.cfg.Zone(in.Zone); ok && z.External {
 			continue
 		}
 		if p, err := netip.ParsePrefix(in.IPv6.Address); err == nil && uniqueLocal.Contains(p.Addr()) {

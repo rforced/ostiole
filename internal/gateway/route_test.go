@@ -99,10 +99,10 @@ func TestLosingThePrimaryLinkMovesTrafficToTheBackupAndBack(t *testing.T) {
 
 	prober := &fakeProber{fail: map[string]bool{}}
 	m := New(prober, NewNetlinkRouter(), slog.New(slog.DiscardHandler))
-	m.Configure([]model.Gateway{
+	m.Configure(&model.Config{Gateways: []model.Gateway{
 		{Name: "primary", Enabled: true, Interface: "wan0", Address: "203.0.113.1"},
 		{Name: "backup", Enabled: true, Interface: "wan1", Address: "198.51.100.1", Priority: 1},
-	})
+	}})
 	tick(m, RiseAfter)
 	if got := nextHop(t, "1.1.1.1"); got != "203.0.113.1" {
 		t.Fatalf("with both lines up traffic leaves via %s, want the primary", got)
@@ -280,10 +280,10 @@ func TestAGatewayWatchedBeyondItselfComesBack(t *testing.T) {
 
 	m := New(probing{real: NewICMPProber(), address: "192.0.2.53"}, NewNetlinkRouter(), slog.New(slog.DiscardHandler))
 	m.Timeout = 300 * time.Millisecond
-	m.Configure([]model.Gateway{
+	m.Configure(&model.Config{Gateways: []model.Gateway{
 		{Name: "primary", Enabled: true, Interface: "wan0", Address: "203.0.113.1", Monitor: "192.0.2.53"},
 		{Name: "backup", Enabled: true, Interface: "wan1", Address: "198.51.100.1", Priority: 1},
-	})
+	}})
 	tick(m, RiseAfter)
 	if s := m.Statuses()[0]; !s.Online {
 		t.Fatalf("the primary never answered through its line: %+v", s)

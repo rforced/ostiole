@@ -23,9 +23,37 @@ type Hop struct {
 	// traffic yet.
 	Address   string
 	Interface string
+	// Device is a tunnel gateway: traffic goes into its interface with no
+	// next hop, in the families V4 and V6 say it carries.
+	Device bool
+	V4     bool
+	V6     bool
 	// Online is the monitor's verdict. A gateway it has not probed yet
 	// counts as online: a router that just booted should still route.
 	Online bool
+}
+
+// NewHop describes a gateway as a hop: a next hop at address, or for a
+// tunnel gateway the tunnel itself.
+func NewHop(cfg *model.Config, g model.Gateway, address string, online bool) Hop {
+	h := Hop{Gateway: g.Name, Address: address, Interface: g.Interface, Online: online}
+	if cfg.TunnelGateway(g) {
+		h.Address, h.Device = "", true
+		h.V4, h.V6 = cfg.TunnelFamilies(g)
+	}
+	return h
+}
+
+// usable reports whether the hop has somewhere to send traffic: a next
+// hop, or a tunnel.
+func (h Hop) usable() bool { return h.Address != "" || h.Device }
+
+// carries reports whether a tunnel hop takes traffic of a family.
+func (h Hop) carries(v4 bool) bool {
+	if v4 {
+		return h.V4
+	}
+	return h.V6
 }
 
 // Target is one destination rules can route through: the mark the firewall
@@ -58,7 +86,7 @@ func (t Target) Priorities() (suppress, lookup int) {
 func (t Target) Online() bool {
 	for _, tier := range t.Tiers {
 		for _, h := range tier {
-			if h.Online && h.Address != "" {
+			if h.Online && h.usable() {
 				return true
 			}
 		}
@@ -76,8 +104,14 @@ func Plan(cfg *model.Config, hops map[string]Hop) []Target {
 		t := Target{Name: pt.Name, Group: pt.Group, Mark: pt.Mark, Table: pt.Table,
 			Index: int(pt.Mark >> model.PolicyMarkShift)}
 		if !pt.Group {
-			if h, ok := hops[pt.Name]; ok && h.Address != "" {
+			if h, ok := hops[pt.Name]; ok && h.usable() {
 				t.Tiers = [][]Hop{{h}}
+			}
+			// A tunnel gateway on its own blocks when it is down: a way out
+			// that falls back to the WAN leaks what it was meant to hide.
+			// A fallback is a group with a WAN in a later tier.
+			if g, ok := cfg.Gateway(pt.Name); ok && cfg.TunnelGateway(*g) {
+				t.Block = true
 			}
 			out = append(out, t)
 			continue
@@ -99,7 +133,7 @@ func tiers(g *model.GatewayGroup, hops map[string]Hop) [][]Hop {
 	byTier := map[int][]Hop{}
 	for _, m := range g.Members {
 		h, ok := hops[m.Gateway]
-		if !ok || h.Address == "" {
+		if !ok || !h.usable() {
 			continue
 		}
 		byTier[m.Tier] = append(byTier[m.Tier], h)

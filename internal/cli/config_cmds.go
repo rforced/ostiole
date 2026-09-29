@@ -464,11 +464,11 @@ func policyHops(_ context.Context, cfg *model.Config) map[string]policy.Hop {
 		if !gw.Enabled {
 			continue
 		}
-		h := policy.Hop{Gateway: gw.Name, Address: gw.Address, Interface: gw.Interface, Online: true}
-		if addr, ok := router.Resolve(gateway.Status{Name: gw.Name, Interface: gw.Interface, Address: gw.Address}); ok {
-			h.Address = addr
+		addr := gw.Address
+		if resolved, ok := router.Resolve(gateway.Status{Name: gw.Name, Interface: gw.Interface, Address: gw.Address}); ok {
+			addr = resolved
 		}
-		hops[gw.Name] = h
+		hops[gw.Name] = policy.NewHop(cfg, gw, addr, true)
 	}
 	return hops
 }
@@ -477,13 +477,19 @@ func policyNextHop(t policy.Target) string {
 	for _, tier := range t.Tiers {
 		var hops []string
 		for _, h := range tier {
-			if h.Address != "" {
+			switch {
+			case h.Device:
+				hops = append(hops, "dev "+h.Interface)
+			case h.Address != "":
 				hops = append(hops, h.Address+" dev "+h.Interface)
 			}
 		}
 		if len(hops) > 0 {
 			return strings.Join(hops, ", ")
 		}
+	}
+	if t.Block && !t.Group {
+		return "blackhole (a tunnel gateway blocks)"
 	}
 	if t.Block {
 		return "blackhole (group is set to block)"
@@ -584,7 +590,7 @@ moves the default route off a gateway that stops answering.`,
 			// daemon.
 			router := gateway.ReadOnlyRouter{Router: gateway.NewNetlinkRouter()}
 			mon := gateway.New(gateway.NewICMPProber(), router, slog.Default())
-			mon.Configure(cfg.Gateways)
+			mon.Configure(cfg)
 			for i := 0; i < count; i++ {
 				mon.Tick(cmd.Context())
 			}
