@@ -3,17 +3,25 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import { useConfirmStore } from '@/stores/confirm'
 import RequestsTab from '@/views/services/proxy/RequestsTab.vue'
 
 vi.mock('@/lib/api', () => ({
-  api: { proxy: { status: vi.fn(), requests: vi.fn() }, systemStats: vi.fn(), logFiles: vi.fn() },
+  api: {
+    proxy: { status: vi.fn(), requests: vi.fn(), clearRequests: vi.fn() },
+    systemStats: vi.fn(),
+    logFiles: vi.fn(),
+  },
   ApiError: class ApiError extends Error {},
 }))
 
 class FakeSource {
   close() {}
 }
+
+const clearButton = (w) => w.findAll('button').find((b) => b.text() === 'Clear')
 
 function request(over = {}) {
   return {
@@ -87,5 +95,26 @@ describe('RequestsTab', () => {
     await wrapper.find('#requests-days').setValue('3')
     expect(store.draft.services.proxy.requests).toEqual({ entries: 100000, days: 3 })
     expect(wrapper.text()).toContain('About 40.0 MB of memory when full.')
+  })
+
+  // Clear empties the router's log and reads it again. Below Info there is
+  // nothing kept to clear.
+  it('clears the router’s log, once asked', async () => {
+    useAuthStore().user = { username: 'root', role: 'admin' }
+    const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
+    const { wrapper } = await tab([request()])
+    api.proxy.requests.mockResolvedValue({ entries: [], held: 0, kept: true })
+    await clearButton(wrapper).trigger('click')
+    await flushPromises()
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: 'Clear the proxy requests?',
+        description: 'Every request it holds is dropped. The journal keeps its own copy.',
+      }),
+    )
+    expect(api.proxy.clearRequests).toHaveBeenCalled()
+    expect(wrapper.text()).toContain('No requests.')
+    const { wrapper: warning } = await tab([], 'warning')
+    expect(clearButton(warning)).toBeUndefined()
   })
 })

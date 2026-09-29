@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
 import { useConfirmStore } from '@/stores/confirm'
 import DrivesPage from '@/views/diagnostics/DrivesPage.vue'
 
@@ -15,6 +16,7 @@ vi.mock('@/lib/api', () => ({
       abortSelfTest: vi.fn(),
       driveReport: vi.fn(),
       driveHistory: vi.fn(),
+      clearDriveHistory: vi.fn(),
     },
   },
   ApiError: class ApiError extends Error {},
@@ -246,5 +248,28 @@ describe('DrivesPage', () => {
     await button(wrapper, 'Short test').trigger('click')
     await flushPromises()
     expect(wrapper.find('[role=alert]').text()).toContain('forbidden')
+  })
+
+  // Clear empties the router's history, files included, and reads it again.
+  it('clears the drives history, once asked', async () => {
+    useAuthStore().user = { username: 'root', role: 'admin' }
+    const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
+    const wrapper = mount(DrivesPage)
+    await flushPromises()
+    const history = wrapper.findAll('section').find((s) => s.text().includes('History'))
+    const reads = api.diagnostics.driveHistory.mock.calls.length
+    await history
+      .findAll('button')
+      .find((b) => b.text() === 'Clear')
+      .trigger('click')
+    await flushPromises()
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: 'Clear the drive history?',
+        description: 'Every reading it holds is dropped.',
+      }),
+    )
+    expect(api.diagnostics.clearDriveHistory).toHaveBeenCalledOnce()
+    expect(api.diagnostics.driveHistory.mock.calls.length).toBeGreaterThan(reads)
   })
 })

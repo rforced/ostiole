@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { h } from 'vue'
 
+import ClearLogButton from '@/components/ClearLogButton.vue'
 import { api } from '@/lib/api'
 import { eventValues } from '@/lib/proxyEvents'
 import { matches } from '@/lib/search'
@@ -19,7 +20,11 @@ import RoutesTab from '@/views/services/proxy/RoutesTab.vue'
 import ServiceTab from '@/views/services/proxy/ServiceTab.vue'
 
 vi.mock('@/lib/api', () => ({
-  api: { proxy: { status: vi.fn(), events: vi.fn() }, systemStats: vi.fn(), logFiles: vi.fn() },
+  api: {
+    proxy: { status: vi.fn(), events: vi.fn(), clearEvents: vi.fn() },
+    systemStats: vi.fn(),
+    logFiles: vi.fn(),
+  },
   ApiError: class ApiError extends Error {},
 }))
 
@@ -433,6 +438,19 @@ describe('EventsTab', () => {
       index: -1,
       exclusion: { rule: '941100', path: '/', description: 'XSS Attack Detected' },
     })
+  })
+
+  // Clear empties the router's events, files included, and reads them again.
+  it('clears the router’s events', async () => {
+    const held = [event()]
+    const { wrapper } = await events(held)
+    api.proxy.clearEvents.mockImplementation(async () => held.splice(0))
+    const clear = wrapper.findComponent(ClearLogButton)
+    expect(clear.props()).toMatchObject({ name: 'WAF events', noun: 'event', journal: true })
+    clear.vm.$emit('confirm')
+    await flushPromises()
+    expect(api.proxy.clearEvents).toHaveBeenCalled()
+    expect(wrapper.text()).toContain('No events.')
   })
 })
 

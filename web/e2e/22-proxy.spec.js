@@ -205,6 +205,25 @@ test('exclude a rule on a path cut down from an event, then edit and delete one'
   await expect(fromEvent).toHaveCount(1)
 })
 
+// The e2e server keeps a WAF log that nothing feeds. Clear empties it on
+// the router all the same, and says the journal keeps its own copy.
+test('clear the WAF events', async ({ page }) => {
+  await login(page)
+  await page.goto('/services/proxy#events')
+  const events = page.getByRole('region', { name: 'Events', exact: true })
+  await expect(events).toContainText('No events.')
+  await events.getByRole('button', { name: 'Clear', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toContainText('Clear the WAF events?')
+  await expect(dialog).toContainText('The journal keeps its own copy.')
+  const cleared = page.waitForResponse(
+    (r) => r.url().endsWith('/api/v1/proxy/events') && r.request().method() === 'DELETE',
+  )
+  await confirmDialog(page, { confirm: 'Clear' })
+  expect((await cleared).status()).toBe(200)
+  await expect(events).toContainText('No events.')
+})
+
 test('a reload comes back to the tab it was on', async ({ page }) => {
   await login(page)
   await page.goto('/services/proxy#sites')

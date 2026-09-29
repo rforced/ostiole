@@ -1,12 +1,14 @@
 <script setup>
 import { computed, ref } from 'vue'
 
+import ClearLogButton from '@/components/ClearLogButton.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import LoadMore from '@/components/LoadMore.vue'
 import LogRetention from '@/components/LogRetention.vue'
 import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
+import { useAsync } from '@/lib/async'
 import { heldLine, useLog } from '@/lib/log'
 import { records } from '@/lib/logs'
 import { peerValues } from '@/lib/peerLog'
@@ -28,6 +30,7 @@ const KINDS = {
     intro:
       'Each peer connecting, going quiet after three minutes without a handshake, and roaming.',
     read: (params, signal) => api.wireguard.log(params, signal),
+    clear: () => api.wireguard.clearLog(),
     on: (cfg) => (cfg?.interfaces ?? []).some((i) => i.enabled && i.wireguard),
     off: 'No tunnel is on, so no peers arrive.',
     placeholder: 'event, tunnel, peer, or endpoint',
@@ -38,6 +41,7 @@ const KINDS = {
     setting: 'tailscaleLog',
     intro: 'Each peer going online and offline, and the way its traffic goes.',
     read: (params, signal) => api.tailscale.log(params, signal),
+    clear: () => api.tailscale.clearLog(),
     on: (cfg) => (cfg?.interfaces ?? []).some((i) => i.enabled && i.tailscale),
     off: 'Tailscale is off, so no peers arrive.',
     placeholder: 'event, peer, or path',
@@ -72,7 +76,13 @@ const log = useLog({
 })
 const { rows, query, live } = log
 
-const error = computed(() => log.error.value || log.streamError.value)
+/** Empties the router's log, its files included, and reads it again. */
+const clear = useAsync(async () => {
+  await spec.clear()
+  await log.reload()
+})
+
+const error = computed(() => log.error.value || clear.error.value || log.streamError.value)
 
 /** Kept in files as well, by the configuration the router runs. */
 const inFiles = computed(() => Boolean(config.saved?.system?.logging?.files?.enabled))
@@ -101,6 +111,13 @@ const QUIET = ['quiet', 'offline']
       </template>
       <template #actions>
         <LiveButton v-model="live" :failing="Boolean(error)" />
+        <ClearLogButton
+          v-if="kept"
+          :name="spec.title"
+          noun="event"
+          :busy="clear.busy.value"
+          @confirm="clear.run()"
+        />
       </template>
       <div class="card-strip space-y-2">
         <SearchBox v-model="query" :placeholder="spec.placeholder" />

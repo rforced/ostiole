@@ -213,9 +213,9 @@ describe('LogPage', () => {
   })
 
   // Clear empties the router's log, its files included, not only the
-  // page, and asks first.
+  // page, and asks first. Only an admin clears.
   it('clears the router’s log on Clear, once asked', async () => {
-    useAuthStore().user = { username: 'ops', role: 'operator' }
+    useAuthStore().user = { username: 'root', role: 'admin' }
     const held = [...log]
     const w = await open(held)
     api.log.clear.mockImplementation(async () => held.splice(0))

@@ -3,17 +3,21 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import { useConfirmStore } from '@/stores/confirm'
 import LogTab from '@/views/wireless/LogTab.vue'
 
 vi.mock('@/lib/api', () => ({
-  api: { wireless: { log: vi.fn() }, systemStats: vi.fn(), logFiles: vi.fn() },
+  api: { wireless: { log: vi.fn(), clearLog: vi.fn() }, systemStats: vi.fn(), logFiles: vi.fn() },
   ApiError: class ApiError extends Error {},
 }))
 
 class FakeSource {
   close() {}
 }
+
+const clearButton = (w) => w.findAll('button').find((b) => b.text() === 'Clear')
 
 async function tab(list, { level = 'info', radio = true } = {}) {
   api.wireless.log.mockResolvedValue({ entries: list, held: list.length, kept: level === 'info' })
@@ -80,5 +84,34 @@ describe('Wireless log', () => {
     expect(store.draft.wireless).toEqual({ log: { days: 3 } })
     await wrapper.find('#wireless-days').setValue('')
     expect(store.draft.wireless).toBeUndefined()
+  })
+
+  // Clear empties the router's log and reads it again. Below Info there is
+  // nothing kept to clear.
+  it('clears the router’s log, once asked', async () => {
+    useAuthStore().user = { username: 'root', role: 'admin' }
+    const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
+    const { wrapper } = await tab([
+      {
+        seq: 1,
+        time: '2026-09-28T14:02:00Z',
+        event: 'joined',
+        interface: 'ap1',
+        mac: '12:34:56:78:9a:bc',
+      },
+    ])
+    api.wireless.log.mockResolvedValue({ entries: [], held: 0, kept: true })
+    await clearButton(wrapper).trigger('click')
+    await flushPromises()
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: 'Clear the wireless log?',
+        description: 'Every event it holds is dropped. The journal keeps its own copy.',
+      }),
+    )
+    expect(api.wireless.clearLog).toHaveBeenCalled()
+    expect(wrapper.text()).toContain('No clients yet.')
+    const { wrapper: warning } = await tab([], { level: 'warning' })
+    expect(clearButton(warning)).toBeUndefined()
   })
 })

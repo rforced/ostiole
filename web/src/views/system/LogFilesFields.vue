@@ -72,6 +72,9 @@ watch(
   () => status.run(),
 )
 
+// A Clear on the card reads what is left at once, not at the next poll.
+defineExpose({ refresh: status.run })
+
 const logs = computed(() => state.value?.logs ?? [])
 const name = (l) => FILE_LOG_NAMES[l.name] ?? l.name
 

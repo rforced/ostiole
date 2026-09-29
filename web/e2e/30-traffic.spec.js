@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures.js'
-import { applyAndConfirm, login, shot, sidebar } from './helpers.js'
+import { applyAndConfirm, confirmDialog, login, shot, sidebar } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -43,6 +43,19 @@ test('the links chart from the stream, and counting per device goes on', async (
   })
   await expect(page.getByRole('region', { name: 'Devices' })).toContainText('No devices.')
   await page.screenshot({ path: shot('B1-traffic-devices'), fullPage: true })
+
+  // Clear forgets the devices on the router, and says counting goes on.
+  await page
+    .getByRole('region', { name: 'Devices' })
+    .getByRole('button', { name: 'Clear', exact: true })
+    .click()
+  await expect(page.getByRole('dialog')).toContainText('Counting carries on.')
+  const cleared = page.waitForResponse(
+    (r) => r.url().endsWith('/api/v1/traffic') && r.request().method() === 'DELETE',
+  )
+  await confirmDialog(page, { confirm: 'Clear' })
+  expect((await cleared).status()).toBe(200)
+  await expect(page.getByRole('region', { name: 'Devices' })).toContainText('No devices.')
 })
 
 // Destinations need the devices counted, which the test above switched on.
@@ -55,6 +68,17 @@ test('destinations go on beside the devices', async ({ page }) => {
   await record.check()
   await expect(page.getByLabel('Days')).toHaveAttribute('placeholder', '7')
   await applyAndConfirm(page)
-  await expect(page.getByRole('region', { name: 'Destinations' })).toContainText('No destinations.')
+  const destinations = page.getByRole('region', { name: 'Destinations' })
+  await expect(destinations).toContainText('No destinations.')
   await page.screenshot({ path: shot('B2-traffic-destinations'), fullPage: true })
+
+  // Clear takes the destinations alone.
+  await destinations.getByRole('button', { name: 'Clear', exact: true }).click()
+  await expect(page.getByRole('dialog')).toContainText('Clear the destinations?')
+  const cleared = page.waitForResponse(
+    (r) => r.url().endsWith('/api/v1/traffic/destinations') && r.request().method() === 'DELETE',
+  )
+  await confirmDialog(page, { confirm: 'Clear' })
+  expect((await cleared).status()).toBe(200)
+  await expect(destinations).toContainText('No destinations.')
 })

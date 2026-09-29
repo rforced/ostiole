@@ -2,12 +2,18 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import { useConfirmStore } from '@/stores/confirm'
+import { useToastStore } from '@/stores/toast'
 import LogsSection from '@/views/system/LogsSection.vue'
 
 vi.mock('@/lib/api', () => ({
-  api: { logFiles: vi.fn(async () => ({ dir: '/var/log/ostiole', enabled: false, logs: [] })) },
+  api: {
+    logFiles: vi.fn(async () => ({ dir: '/var/log/ostiole', enabled: false, logs: [] })),
+    clearLogs: vi.fn(),
+  },
 }))
 
 const draft = (system = {}) => ({
@@ -98,5 +104,62 @@ describe('LogsSection', () => {
     expect(wrapper.find('fieldset[disabled]').exists()).toBe(true)
     expect(wrapper.get('fieldset[disabled]').find('#logs-level-info').exists()).toBe(true)
     expect(wrapper.get('fieldset[disabled]').find('input[type="checkbox"]').exists()).toBe(true)
+  })
+
+  // Clear every log takes what the log pages clear, listed first, and the
+  // files' status is read again after. Only an admin clears.
+  it('clears every log, once asked', async () => {
+    useAuthStore().user = { username: 'root', role: 'admin' }
+    const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
+    const { wrapper, config } = open()
+    await flushPromises()
+    const clear = () => wrapper.findAll('button').find((b) => b.text() === 'Clear every log')
+    const reads = api.logFiles.mock.calls.length
+    await clear().trigger('click')
+    await flushPromises()
+    expect(ask).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        question: 'Clear every log?',
+        description: 'Each is emptied. The journal and traffic per link are kept.',
+        dependentsLabel: 'Cleared',
+        dependents: [
+          'Firewall log',
+          'Query log',
+          'WAF events',
+          'Proxy requests',
+          'DHCP log',
+          'Wireless log',
+          'WireGuard log',
+          'Tailscale log',
+          'Drive history',
+          'Traffic per device',
+          'Destinations',
+        ],
+      }),
+    )
+    expect(api.clearLogs).toHaveBeenCalledOnce()
+    expect(useToastStore().toasts.map((t) => t.message)).toEqual(['Every log is cleared.'])
+    expect(api.logFiles.mock.calls.length).toBeGreaterThan(reads)
+
+    config.saved = draft({ logging: { files: { enabled: true } } })
+    await flushPromises()
+    await clear().trigger('click')
+    expect(ask).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        description:
+          'Each is emptied, and its files are deleted. The journal and traffic per link are kept.',
+      }),
+    )
+  })
+
+  it('greys Clear every log for an operator, and leaves it out for a viewer', () => {
+    useAuthStore().user = { username: 'operator', role: 'operator' }
+    let { wrapper } = open()
+    const clear = wrapper.findAll('button').find((b) => b.text() === 'Clear every log')
+    expect(clear.attributes('disabled')).toBeDefined()
+    expect(clear.attributes('title')).toBe('Only an admin can clear them.')
+    useAuthStore().user = { username: 'viewer', role: 'viewer' }
+    ;({ wrapper } = open())
+    expect(wrapper.findAll('button').some((b) => b.text() === 'Clear every log')).toBe(false)
   })
 })

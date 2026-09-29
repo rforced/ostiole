@@ -6,11 +6,12 @@ import { api } from '@/lib/api'
 import { SETTLE_MS } from '@/lib/log'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import { useConfirmStore } from '@/stores/confirm'
 import DestinationsTab from '@/views/traffic/DestinationsTab.vue'
 
 vi.mock('@/lib/api', () => ({
   api: {
-    traffic: { destinations: vi.fn(), devices: vi.fn() },
+    traffic: { destinations: vi.fn(), devices: vi.fn(), clearDestinations: vi.fn() },
     systemStats: vi.fn(() => Promise.resolve({ memTotal: 0 })),
     logFiles: vi.fn(() => Promise.resolve({ enabled: false, logs: [] })),
   },
@@ -145,5 +146,26 @@ describe('DestinationsTab', () => {
   it('shows no table while destinations are not recorded', async () => {
     const { w } = await open({ traffic: { devices: true }, enabled: false })
     expect(w.find('table').exists()).toBe(false)
+  })
+
+  // Clear forgets the router's destinations, files included, and reads
+  // them again. The devices are the Devices tab's to clear.
+  it('clears the destinations, once asked', async () => {
+    const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
+    const { w } = await open()
+    const reads = api.traffic.destinations.mock.calls.length
+    await w
+      .findAll('button')
+      .find((b) => b.text() === 'Clear')
+      .trigger('click')
+    await flushPromises()
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: 'Clear the destinations?',
+        description: 'Every destination it holds is dropped.',
+      }),
+    )
+    expect(api.traffic.clearDestinations).toHaveBeenCalledOnce()
+    expect(api.traffic.destinations.mock.calls.length).toBeGreaterThan(reads)
   })
 })

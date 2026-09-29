@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 
+import ClearLogButton from '@/components/ClearLogButton.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import LoadMore from '@/components/LoadMore.vue'
 import LogRetention from '@/components/LogRetention.vue'
@@ -82,6 +83,11 @@ const more = useAsync(async () => {
 const readDevices = useAsync(async () => {
   devices.value = (await api.traffic.devices('24h')).devices ?? []
 })
+/** Empties the router's destinations, their files included, and reads again. */
+const clear = useAsync(async () => {
+  await api.traffic.clearDestinations()
+  await read.run()
+})
 onMounted(() => {
   read.run()
   readDevices.run()
@@ -111,7 +117,12 @@ watch(live, (on) => {
 
 const running = computed(() => Boolean(page.value?.enabled))
 const error = computed(
-  () => read.error.value || more.error.value || stream.error.value || readDevices.error.value,
+  () =>
+    read.error.value ||
+    more.error.value ||
+    clear.error.value ||
+    stream.error.value ||
+    readDevices.error.value,
 )
 const empty = computed(() => {
   if (!page.value) return 'Reading…'
@@ -152,6 +163,14 @@ const empty = computed(() => {
       <SectionCard title="Destinations" flush>
         <template #intro>
           {{ page ? heldLine(page.held, page.oldest) : '' }}
+        </template>
+        <template #actions>
+          <ClearLogButton
+            name="destinations"
+            noun="destination"
+            :busy="clear.busy.value"
+            @confirm="clear.run()"
+          />
         </template>
         <div class="card-strip flex flex-wrap items-center gap-3">
           <SearchBox v-model="query" placeholder="name, address, service, or device" />

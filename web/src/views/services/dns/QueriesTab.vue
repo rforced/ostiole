@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 
-import ConfirmButton from '@/components/ConfirmButton.vue'
+import ClearLogButton from '@/components/ClearLogButton.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import LoadMore from '@/components/LoadMore.vue'
 import LogRetention from '@/components/LogRetention.vue'
@@ -195,15 +195,15 @@ function explain(name) {
       </template>
       <template #actions>
         <LiveButton v-model="live" :failing="Boolean(log.streamError.value)" />
-        <ConfirmButton
+        <ClearLogButton
           v-if="running"
-          label="Clear"
-          question="Clear the query log?"
+          name="query log"
           :description="
-            filesOn
+            inFiles
               ? 'Every answer it holds, and the counts per list, are dropped, and its files are deleted.'
               : 'Every answer it holds, and the counts per list, are dropped.'
           "
+          :busy="clear.busy.value"
           @confirm="clear.run()"
         />
       </template>

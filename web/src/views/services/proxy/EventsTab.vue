@@ -1,12 +1,14 @@
 <script setup>
 import { computed, ref } from 'vue'
 
+import ClearLogButton from '@/components/ClearLogButton.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import LoadMore from '@/components/LoadMore.vue'
 import LogRetention from '@/components/LogRetention.vue'
 import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
+import { useAsync } from '@/lib/async'
 import { formatCount, formatDuration } from '@/lib/format'
 import { heldLine, useLog } from '@/lib/log'
 import { VERDICTS, eventValues, openSeconds, ruleLines } from '@/lib/proxyEvents'
@@ -38,7 +40,13 @@ const log = useLog({
 })
 const { rows, query, live } = log
 
-const error = computed(() => log.error.value || log.streamError.value)
+/** Empties the router's log, its files included, and reads it again. */
+const clear = useAsync(async () => {
+  await api.proxy.clearEvents()
+  await log.reload()
+})
+
+const error = computed(() => log.error.value || clear.error.value || log.streamError.value)
 
 /** Kept in files as well, by the configuration the router runs. */
 const inFiles = computed(() => Boolean(config.saved?.system?.logging?.files?.enabled))
@@ -116,6 +124,13 @@ function halves(addr) {
       </template>
       <template #actions>
         <LiveButton v-model="live" :failing="Boolean(error)" />
+        <ClearLogButton
+          name="WAF events"
+          noun="event"
+          journal
+          :busy="clear.busy.value"
+          @confirm="clear.run()"
+        />
       </template>
       <div class="card-strip space-y-2">
         <div class="flex flex-wrap items-center gap-3">

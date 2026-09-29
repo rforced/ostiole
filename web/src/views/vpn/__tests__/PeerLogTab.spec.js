@@ -3,13 +3,15 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import { useConfirmStore } from '@/stores/confirm'
 import PeerLogTab from '@/views/vpn/PeerLogTab.vue'
 
 vi.mock('@/lib/api', () => ({
   api: {
-    wireguard: { log: vi.fn() },
-    tailscale: { log: vi.fn() },
+    wireguard: { log: vi.fn(), clearLog: vi.fn() },
+    tailscale: { log: vi.fn(), clearLog: vi.fn() },
     systemStats: vi.fn(),
     logFiles: vi.fn(),
   },
@@ -19,6 +21,8 @@ vi.mock('@/lib/api', () => ({
 class FakeSource {
   close() {}
 }
+
+const clearButton = (w) => w.findAll('button').find((b) => b.text() === 'Clear')
 
 async function tab(kind, list, { level = 'info', on = true } = {}) {
   api[kind].log.mockResolvedValue({ entries: list, held: list.length, kept: level === 'info' })
@@ -83,5 +87,33 @@ describe('PeerLogTab', () => {
     expect(store.draft.vpn).toEqual({ wireguardLog: { days: 3 } })
     await wrapper.find('#wireguard-days').setValue('')
     expect(store.draft.vpn).toBeUndefined()
+  })
+
+  // Clear empties the router's log of that kind and reads it again. Below
+  // Info there is nothing kept to clear.
+  it('clears the router’s log, once asked', async () => {
+    useAuthStore().user = { username: 'root', role: 'admin' }
+    const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
+    for (const [kind, name] of [
+      ['wireguard', 'WireGuard log'],
+      ['tailscale', 'Tailscale log'],
+    ]) {
+      const { wrapper } = await tab(kind, [
+        { seq: 1, time: '2026-09-28T14:02:00Z', event: 'connected', peer: 'phone' },
+      ])
+      api[kind].log.mockResolvedValue({ entries: [], held: 0, kept: true })
+      await clearButton(wrapper).trigger('click')
+      await flushPromises()
+      expect(ask).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          question: `Clear the ${name}?`,
+          description: 'Every event it holds is dropped.',
+        }),
+      )
+      expect(api[kind].clearLog).toHaveBeenCalledOnce()
+      expect(wrapper.text()).toContain('No events.')
+      const { wrapper: warning } = await tab(kind, [], { level: 'warning' })
+      expect(clearButton(warning)).toBeUndefined()
+    }
   })
 })

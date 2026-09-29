@@ -149,6 +149,8 @@ export const api = {
   timezones: () => get('/system/timezones'),
   /** Whether the logs are written to files, what the files hold, and how writing goes. */
   logFiles: () => get('/system/log-files'),
+  /** Empties every log a page can clear and deletes its files. */
+  clearLogs: () => request('DELETE', '/system/logs'),
   config: {
     get: () => get('/config'),
     /** Build (without saving) a first configuration from the wizard answers. */
@@ -242,6 +244,7 @@ export const api = {
     /** A page of what the hourly check read on each drive, as a log page is. */
     driveHistory: (params = {}, signal) =>
       get(withQuery('/diagnostics/drives/history', params), signal),
+    clearDriveHistory: () => request('DELETE', '/diagnostics/drives/history'),
     drive: (name) => get(`/diagnostics/drives/${encodeURIComponent(name)}`),
     /** Starts a self-test and answers with the drive as it reads afterwards. */
     selfTest: (name, kind) =>
@@ -326,8 +329,10 @@ export const api = {
     device: (id, window) => get(`/traffic/devices/${encodeURIComponent(id)}?window=${window}`),
     /** A page of destinations: {window, device, q, offset, limit}. */
     destinations: (params = {}) => get(withQuery('/traffic/destinations', params)),
-    /** Forgets every device and what it moved. */
+    /** Forgets every device and what it moved, and every destination. */
     clear: () => request('DELETE', '/traffic'),
+    /** Forgets every destination and leaves the devices. */
+    clearDestinations: () => request('DELETE', '/traffic/destinations'),
   },
   /** What the DNS server answered, while the query log is on. */
   queries: {
@@ -400,6 +405,7 @@ export const api = {
     leases: () => get('/dhcp/leases'),
     /** A page of what the DHCP server said of its clients, and whether the level keeps it. */
     dhcpLog: (params = {}, signal) => get(withQuery('/dhcp/log', params), signal),
+    clearDhcpLog: () => request('DELETE', '/dhcp/log'),
   },
   upnp: {
     mappings: () => get('/upnp/mappings'),
@@ -437,8 +443,10 @@ export const api = {
     status: () => get('/proxy/status'),
     /** A page of what the web application firewall matched, as a log page is. */
     events: (params = {}, signal) => get(withQuery('/proxy/events', params), signal),
+    clearEvents: () => request('DELETE', '/proxy/events'),
     /** A page of what the proxy answered, as a log page is, and whether the level keeps them. */
     requests: (params = {}, signal) => get(withQuery('/proxy/requests', params), signal),
+    clearRequests: () => request('DELETE', '/proxy/requests'),
   },
   wireguard: {
     /** @returns {Promise<{privateKey: string, publicKey: string}>} */
@@ -457,11 +465,13 @@ export const api = {
     status: () => get('/wireguard/status'),
     /** A page of the peers connecting and going quiet, and whether the level keeps them. */
     log: (params = {}, signal) => get(withQuery('/wireguard/log', params), signal),
+    clearLog: () => request('DELETE', '/wireguard/log'),
   },
   tailscale: {
     status: () => get('/tailscale/status'),
     /** A page of the peers going online and offline, and whether the level keeps them. */
     log: (params = {}, signal) => get(withQuery('/tailscale/log', params), signal),
+    clearLog: () => request('DELETE', '/tailscale/log'),
     /**
      * Start a login. Without a key the answer carries the URL to open.
      *
@@ -482,6 +492,7 @@ export const api = {
     clients: () => get('/wireless/clients'),
     /** A page of clients joining and leaving, and whether the level keeps them. */
     log: (params = {}, signal) => get(withQuery('/wireless/log', params), signal),
+    clearLog: () => request('DELETE', '/wireless/log'),
   },
   update: {
     /**

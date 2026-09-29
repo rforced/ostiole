@@ -1,14 +1,20 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
+import ConfirmButton from '@/components/ConfirmButton.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import { api } from '@/lib/api'
+import { useAsync } from '@/lib/async'
+import { FILE_LOG_NAMES } from '@/lib/logs'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import { useToastStore } from '@/stores/toast'
 import LogFilesFields from '@/views/system/LogFilesFields.vue'
 
 const auth = useAuthStore()
 const config = useConfigStore()
+const toast = useToastStore()
 /**
  * Out of the draft while every value is the default, as the saved
  * configuration has it: opening the page must not make a change.
@@ -45,11 +51,47 @@ function numberField(key) {
 }
 const retention = numberField('retentionDays')
 const maxUse = numberField('maxUseGB')
+
+/**
+ * What Clear every log takes: every log a page clears, so all but traffic
+ * per link, whose minutes hold the month a data cap is read against.
+ */
+const CLEARED = Object.entries(FILE_LOG_NAMES)
+  .filter(([log]) => log !== 'links')
+  .map(([, name]) => name)
+
+/** Kept in files as well, by the configuration the router runs. */
+const inFiles = computed(() => Boolean(config.saved?.system?.logging?.files?.enabled))
+
+const files = ref(null)
+const clearAll = useAsync(async () => {
+  await api.clearLogs()
+  toast.show('Every log is cleared.')
+  files.value?.refresh()
+})
 </script>
 
 <template>
   <SectionCard title="Logs" :locked="auth.readOnly">
+    <template #actions>
+      <ConfirmButton
+        label="Clear every log"
+        question="Clear every log?"
+        :description="
+          inFiles
+            ? 'Each is emptied, and its files are deleted. The journal and traffic per link are kept.'
+            : 'Each is emptied. The journal and traffic per link are kept.'
+        "
+        :dependents="CLEARED"
+        dependents-label="Cleared"
+        :busy="clearAll.busy.value"
+        :disabled="!auth.isAdmin"
+        :title="auth.isAdmin ? undefined : 'Only an admin can clear them.'"
+        @confirm="clearAll.run()"
+      />
+    </template>
     <div class="space-y-4">
+      <p v-if="clearAll.error.value" role="alert" class="text-bad">{{ clearAll.error.value }}</p>
       <fieldset class="min-w-0 space-y-4">
         <legend class="group-title mb-1">Journal</legend>
         <fieldset class="space-y-1.5">
@@ -104,7 +146,7 @@ const maxUse = numberField('maxUseGB')
           </FormField>
         </div>
       </fieldset>
-      <LogFilesFields />
+      <LogFilesFields ref="files" />
     </div>
   </SectionCard>
 </template>

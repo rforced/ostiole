@@ -43,13 +43,13 @@ test('system settings, ruleset view, and rollback via revisions', async ({ page 
 })
 
 // The e2e server is not root, so it keeps no firewall or DNS log: once on,
-// the files have nothing to hold.
-test('the logs are written to files once switched on', async ({ page }) => {
+// the files have nothing to hold. Clear every log asks first, and says
+// what goes and what stays.
+test('the logs are written to files once switched on, and cleared', async ({ page }) => {
   await login(page)
   await page.goto('/system/general')
-  const files = page
-    .getByRole('region', { name: 'Logs', exact: true })
-    .getByRole('group', { name: 'Files' })
+  const logs = page.getByRole('region', { name: 'Logs', exact: true })
+  const files = logs.getByRole('group', { name: 'Files' })
   await expect(files.getByLabel('Write every')).toHaveCount(0)
   await files.getByLabel('Write logs to files').check()
   await expect(files.getByLabel('Write every')).toHaveValue('5')
@@ -57,6 +57,20 @@ test('the logs are written to files once switched on', async ({ page }) => {
   await applyAndConfirm(page)
   await expect(files).toContainText('Not written yet.')
   await page.screenshot({ path: shot('31-log-files'), fullPage: true })
+
+  await logs.getByRole('button', { name: 'Clear every log' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toContainText('Clear every log?')
+  await expect(dialog).toContainText('Traffic per device')
+  await expect(dialog).toContainText(
+    'Each is emptied, and its files are deleted. The journal and traffic per link are kept.',
+  )
+  const cleared = page.waitForResponse(
+    (r) => r.url().endsWith('/api/v1/system/logs') && r.request().method() === 'DELETE',
+  )
+  await confirmDialog(page, { confirm: 'Clear every log' })
+  expect((await cleared).status()).toBe(200)
+  await expect(page.getByText('Every log is cleared.')).toBeVisible()
 })
 
 test('change password and sign in with it', async ({ page }) => {
@@ -182,6 +196,7 @@ test('add an operator, rename it, prove what it may do, and remove it', async ({
   await page.goto('/system/general')
   await expect(page.getByLabel('Web UI port', { exact: true })).toBeDisabled()
   await expect(page.getByLabel('Hostname', { exact: true })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Clear every log' })).toBeDisabled()
   await page.getByRole('button', { name: 'Sign out' }).click()
 
   await login(page)
@@ -216,6 +231,7 @@ test('a viewer reads everything and changes nothing', async ({ page }) => {
   await page.goto('/system/general')
   await expect(page.getByLabel('Hostname', { exact: true })).toBeDisabled()
   await expect(page.getByText('Only an admin')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Clear every log' })).toHaveCount(0)
 
   // Nothing to add, and a row opens to be read, with one way out.
   await page.goto('/interfaces')

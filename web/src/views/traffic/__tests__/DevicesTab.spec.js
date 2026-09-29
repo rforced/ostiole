@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import { useConfirmStore } from '@/stores/confirm'
 import DevicesTab from '@/views/traffic/DevicesTab.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -144,5 +145,42 @@ describe('DevicesTab', () => {
     const { w } = await open({ counting: false, draft: null })
     expect(w.text()).not.toContain('No devices.')
     expect(w.find('table').exists()).toBe(false)
+  })
+
+  // Clear forgets the router's devices and destinations, files included,
+  // and reads again. Only an admin clears.
+  it('clears the counts, once asked', async () => {
+    const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
+    const { w, config } = await open()
+    const clear = () => w.findAll('button').find((b) => b.text() === 'Clear')
+    const reads = api.traffic.devices.mock.calls.length
+    await clear().trigger('click')
+    await flushPromises()
+    expect(ask).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        question: 'Clear the traffic counts?',
+        description:
+          'Every device and what it moved is forgotten, and every destination. Counting carries on.',
+      }),
+    )
+    expect(api.traffic.clear).toHaveBeenCalledOnce()
+    expect(api.traffic.devices.mock.calls.length).toBeGreaterThan(reads)
+    config.saved = { ...config.saved, system: { logging: { files: { enabled: true } } } }
+    await flushPromises()
+    await clear().trigger('click')
+    await flushPromises()
+    expect(ask).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        description:
+          'Every device and what it moved is forgotten, and every destination, files included. Counting carries on.',
+      }),
+    )
+  })
+
+  it('greys Clear for an operator', async () => {
+    const { w } = await open({ role: 'operator' })
+    const clear = w.findAll('button').find((b) => b.text() === 'Clear')
+    expect(clear.attributes('disabled')).toBeDefined()
+    expect(clear.attributes('title')).toBe('Only an admin can clear it.')
   })
 })

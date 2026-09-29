@@ -3,17 +3,25 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import { useConfirmStore } from '@/stores/confirm'
 import LogTab from '@/views/services/dhcp/LogTab.vue'
 
 vi.mock('@/lib/api', () => ({
-  api: { services: { dhcpLog: vi.fn() }, systemStats: vi.fn(), logFiles: vi.fn() },
+  api: {
+    services: { dhcpLog: vi.fn(), clearDhcpLog: vi.fn() },
+    systemStats: vi.fn(),
+    logFiles: vi.fn(),
+  },
   ApiError: class ApiError extends Error {},
 }))
 
 class FakeSource {
   close() {}
 }
+
+const clearButton = (w) => w.findAll('button').find((b) => b.text() === 'Clear')
 
 async function tab(list, { level = 'info', dhcp = true } = {}) {
   api.services.dhcpLog.mockResolvedValue({
@@ -90,5 +98,28 @@ describe('DHCP log', () => {
     expect(store.draft.services.dhcp.log).toEqual({ entries: 5000 })
     await wrapper.find('#dhcp-entries').setValue('')
     expect(store.draft.services.dhcp.log).toBeUndefined()
+  })
+
+  // Clear empties the router's log and reads it again. Below Info there is
+  // nothing kept to clear.
+  it('clears the router’s log, once asked', async () => {
+    useAuthStore().user = { username: 'root', role: 'admin' }
+    const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
+    const { wrapper } = await tab([
+      { seq: 1, time: '2026-09-28T14:02:00Z', message: 'ACK', interface: 'eth1' },
+    ])
+    api.services.dhcpLog.mockResolvedValue({ entries: [], held: 0, kept: true })
+    await clearButton(wrapper).trigger('click')
+    await flushPromises()
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: 'Clear the DHCP log?',
+        description: 'Every message it holds is dropped. The journal keeps its own copy.',
+      }),
+    )
+    expect(api.services.clearDhcpLog).toHaveBeenCalled()
+    expect(wrapper.text()).toContain('No messages.')
+    const { wrapper: warning } = await tab([], { level: 'warning' })
+    expect(clearButton(warning)).toBeUndefined()
   })
 })

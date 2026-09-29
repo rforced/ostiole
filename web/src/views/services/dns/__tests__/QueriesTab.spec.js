@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import { useConfirmStore } from '@/stores/confirm'
 import QueriesTab from '@/views/services/dns/QueriesTab.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -268,5 +269,26 @@ describe('QueriesTab', () => {
     await flushPromises()
     expect(names(wrapper)).toHaveLength(4)
     expect(wrapper.findAll('tbody input')).toHaveLength(0)
+  })
+
+  // Clear empties the router's log and its counts per list, and reads the
+  // log again. Only an admin clears.
+  it('clears the router’s log, once asked', async () => {
+    useAuthStore().user = { username: 'root', role: 'admin' }
+    const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
+    saved()
+    const wrapper = mount(QueriesTab)
+    await flushPromises()
+    const reads = api.queries.list.mock.calls.length
+    await button(wrapper, 'Clear').trigger('click')
+    await flushPromises()
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: 'Clear the query log?',
+        description: 'Every answer it holds, and the counts per list, are dropped.',
+      }),
+    )
+    expect(api.queries.clear).toHaveBeenCalledOnce()
+    expect(api.queries.list.mock.calls.length).toBeGreaterThan(reads)
   })
 })

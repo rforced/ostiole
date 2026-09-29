@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 
-import ConfirmButton from '@/components/ConfirmButton.vue'
+import ClearLogButton from '@/components/ClearLogButton.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import LoadMore from '@/components/LoadMore.vue'
 import LogRetention from '@/components/LogRetention.vue'
@@ -115,14 +115,9 @@ const empty = computed(() => {
       </template>
       <template #actions>
         <LiveButton v-model="live" :failing="Boolean(error)" />
-        <ConfirmButton
-          label="Clear"
-          question="Clear the firewall log?"
-          :description="
-            inFiles
-              ? 'Every packet it holds is dropped, and its files are deleted.'
-              : 'Every packet it holds is dropped.'
-          "
+        <ClearLogButton
+          name="firewall log"
+          noun="packet"
           :busy="clear.busy.value"
           @confirm="clear.run()"
         />

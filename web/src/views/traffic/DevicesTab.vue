@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 
-import ConfirmButton from '@/components/ConfirmButton.vue'
+import ClearLogButton from '@/components/ClearLogButton.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import RandomMacBadge from '@/components/RandomMacBadge.vue'
 import SearchBox from '@/components/SearchBox.vue'
@@ -103,6 +103,8 @@ const clear = useAsync(async () => {
   await api.traffic.clear()
   await read.run()
 })
+/** Kept in files as well, by the configuration the router runs. */
+const inFiles = computed(() => Boolean(config.saved?.system?.logging?.files?.enabled))
 
 const error = computed(
   () => read.error.value || clear.error.value || stream.error.value || state.value?.error,
@@ -154,10 +156,13 @@ function show(d) {
       <SectionCard title="Devices" :count="rows.length" flush>
         <template #actions>
           <SortSelect :sort="sort" :columns="COLUMNS" />
-          <ConfirmButton
-            label="Clear"
-            question="Clear the traffic counts?"
-            description="Every device and what it moved is forgotten, and every destination. Counting carries on."
+          <ClearLogButton
+            name="traffic counts"
+            :description="
+              inFiles
+                ? 'Every device and what it moved is forgotten, and every destination, files included. Counting carries on.'
+                : 'Every device and what it moved is forgotten, and every destination. Counting carries on.'
+            "
             :busy="clear.busy.value"
             @confirm="clear.run()"
           />
