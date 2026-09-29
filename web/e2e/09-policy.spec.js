@@ -150,3 +150,62 @@ test('a default route the kernel already has is offered as a gateway', async ({ 
   await page.getByRole('button', { name: 'Discard' }).click()
   await expect(page.getByText('Unapplied changes.')).toHaveCount(0)
 })
+
+/** A provider's wg-quick file, keys from the wg(8) man page. */
+const PROVIDER = `[Interface]
+PrivateKey = yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=
+Address = 10.64.1.2/32
+DNS = 10.64.0.1
+PostUp = iptables -A FORWARD -i %i -j ACCEPT
+
+[Peer]
+PublicKey = xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = 198.51.100.7:51820
+`
+
+// A provider's file makes a way out: a tunnel in an external zone of its
+// own and a gateway through it. A rule sent through the gateway brings in
+// the masquerade into the tunnel and the kill switch that keeps its
+// traffic off the WAN.
+test('add a way out from a file and route a rule through it', async ({ page }) => {
+  await login(page)
+  await page.goto('/vpn/wireguard')
+  await page.getByRole('button', { name: 'Add from file' }).click()
+  let dialog = page.getByRole('dialog')
+  await dialog.getByLabel('File', { exact: true }).fill(PROVIDER)
+  await expect(dialog).toContainText('Ignored: PostUp on line 5.')
+  await expect(dialog).toContainText('wg0, new and external')
+  await expect(dialog.getByLabel('Monitor address')).toHaveValue('10.64.0.1')
+  await dialog.getByRole('button', { name: 'Save to draft' }).click()
+  await applyAndConfirm(page)
+
+  // The test server makes no devices, so the kernel has no tunnel to show.
+  const tunnel = page
+    .getByRole('region', { name: 'Tunnels' })
+    .getByRole('row')
+    .filter({ hasText: 'wg0' })
+  await expect(tunnel.locator('.badge-warn')).toHaveText('down')
+  await expect(tunnel.locator('[data-label="Gateway"]')).toContainText('wg0')
+
+  await page.goto('/routing')
+  await expect(
+    page.getByRole('region', { name: 'Gateways' }).getByRole('row').filter({ hasText: 'wg0' }),
+  ).toContainText('through the tunnel')
+
+  await page.goto('/firewall')
+  await page.getByRole('group', { name: 'Zone' }).getByRole('button', { name: 'lan' }).click()
+  await page.getByRole('button', { name: 'Add rule' }).click()
+  dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Description').fill('The TV out the provider')
+  await dialog.getByLabel('Route through').selectOption('wg0')
+  await dialog.getByRole('button', { name: 'Save to draft' }).click()
+  await applyAndConfirm(page)
+
+  await page.goto('/system/ruleset')
+  await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
+  const ruleset = page.locator('pre')
+  await expect(ruleset).toContainText('comment "tunnel-nat:wg0"')
+  await expect(ruleset).toContainText('comment "tunnel-mss"')
+  await expect(ruleset).toContainText('comment "kill-switch:wg0"')
+})

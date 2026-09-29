@@ -1,5 +1,5 @@
 <script setup>
-import { Plus } from 'lucide-vue-next'
+import { FileUp, Plus } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
@@ -8,6 +8,7 @@ import { connected, livePeer } from '@/lib/wgStatus'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import TunnelDialog from '@/views/vpn/TunnelDialog.vue'
+import TunnelFileDialog from '@/views/vpn/TunnelFileDialog.vue'
 
 const props = defineProps({
   /** Each tunnel of the running configuration as its device has it, by name. */
@@ -22,6 +23,7 @@ const auth = useAuthStore()
 const config = useConfigStore()
 const editing = ref(null)
 const open = ref(false)
+const fromFile = ref(false)
 
 const tunnels = computed(() => config.tunnels)
 
@@ -64,6 +66,9 @@ function edit(t) {
   <div class="space-y-5">
     <SectionCard title="Tunnels" :count="tunnels.length" flush>
       <template v-if="!auth.readOnly" #actions>
+        <button type="button" class="btn-secondary" @click="fromFile = true">
+          <FileUp class="size-4" aria-hidden="true" /> Add from file
+        </button>
         <button type="button" class="btn-secondary" @click="add">
           <Plus class="size-4" aria-hidden="true" /> Add tunnel
         </button>
@@ -156,5 +161,6 @@ function edit(t) {
     </SectionCard>
 
     <TunnelDialog v-model:open="open" :tunnel="editing" />
+    <TunnelFileDialog v-model:open="fromFile" />
   </div>
 </template>

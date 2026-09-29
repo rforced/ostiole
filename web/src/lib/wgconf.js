@@ -161,3 +161,198 @@ export function endpoint(host, port) {
   if (!h) return ''
   return h.includes(':') && !h.startsWith('[') ? `[${h}]:${port}` : `${h}:${port}`
 }
+
+/** 32 bytes in base64, the shape of every WireGuard key. */
+const KEY_SHAPE = /^[A-Za-z0-9+/]{43}=$/
+
+/** Keys wg-quick reads that this router has no use for: scripts it would run, and its own routing. */
+const IGNORED = new Set(['preup', 'postup', 'predown', 'postdown', 'table', 'fwmark', 'saveconfig'])
+
+/** A list value: comma separated, blanks dropped. */
+const items = (v) =>
+  v
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+
+/** An address with its length, a host length when it has none; null when it is no address. */
+function withLength(text) {
+  const p = parsePrefix(text)
+  return p ? `${formatAddress(p)}/${p.prefix}` : null
+}
+
+/**
+ * A wg-quick file as the tunnel it describes. Section names and keys
+ * ignore case, # starts a comment, a list splits on commas and a key given
+ * twice adds to it. The keys that make wg-quick run commands or route by
+ * itself, and any it does not know, are listed as ignored with their line
+ * numbers; nothing in a file is ever run. Problems carry a line number and
+ * never the value of a key.
+ *
+ * @param {string} text
+ */
+export function parseQuick(text) {
+  const iface = { privateKey: '', ipv4: '', ipv6: '', listenPort: 0, mtu: 0, dns: [] }
+  const peers = []
+  const ignored = []
+  const errors = []
+  const notes = []
+  let section = ''
+  let sectionLine = 0
+  let interfaces = 0
+  let peer = null
+  const fail = (line, message) => errors.push({ line, message })
+
+  String(text ?? '')
+    .split(/\r?\n/)
+    .forEach((raw, i) => {
+      const line = i + 1
+      const s = raw.replace(/#.*/, '').trim()
+      if (!s) return
+      const head = /^\[([^\]]*)\]$/.exec(s)
+      if (head) {
+        section = head[1].trim().toLowerCase()
+        sectionLine = line
+        if (section === 'interface') interfaces += 1
+        else if (section === 'peer') {
+          peer = {
+            line,
+            publicKey: '',
+            presharedKey: '',
+            allowedIps: [],
+            endpoint: '',
+            keepalive: 0,
+          }
+          peers.push(peer)
+        } else fail(line, `[${head[1].trim()}] is not a wg-quick section`)
+        return
+      }
+      const eq = s.indexOf('=')
+      if (eq < 1) return fail(line, 'not a key = value line')
+      const key = s.slice(0, eq).trim()
+      const k = key.toLowerCase()
+      const v = s.slice(eq + 1).trim()
+      if (!section) return fail(line, `${key} comes before any section`)
+      if (section !== 'interface' && section !== 'peer') return
+      if (IGNORED.has(k)) return ignored.push({ line, key })
+      if (section === 'interface') readInterface(line, key, k, v)
+      else readPeer(line, key, k, v)
+    })
+
+  function readInterface(line, key, k, v) {
+    switch (k) {
+      case 'privatekey':
+        if (!KEY_SHAPE.test(v)) return fail(line, 'PrivateKey is not a WireGuard key')
+        iface.privateKey = v
+        return
+      case 'address':
+        for (const a of items(v)) {
+          const cidr = withLength(a)
+          if (!cidr) return fail(line, `${a} is not an address`)
+          const field = cidr.includes(':') ? 'ipv6' : 'ipv4'
+          if (iface[field]) {
+            return fail(
+              line,
+              `more than one ${field === 'ipv6' ? 'IPv6' : 'IPv4'} address. A tunnel here holds one of each`,
+            )
+          }
+          iface[field] = cidr
+        }
+        return
+      case 'listenport': {
+        const n = Number(v)
+        if (!Number.isInteger(n) || n < 0 || n > 65535)
+          return fail(line, 'ListenPort must be 0-65535')
+        iface.listenPort = n
+        return
+      }
+      case 'mtu': {
+        const n = Number(v)
+        if (!Number.isInteger(n) || n < 576 || n > 65535) return fail(line, 'MTU must be 576-65535')
+        iface.mtu = n
+        return
+      }
+      case 'dns': {
+        const names = []
+        for (const d of items(v)) {
+          if (parseAddress(d)) iface.dns.push(d)
+          else names.push(d)
+        }
+        if (names.length) notes.push(`Search domains in DNS are not used: ${names.join(', ')}.`)
+        return
+      }
+      default:
+        ignored.push({ line, key })
+    }
+  }
+
+  function readPeer(line, key, k, v) {
+    switch (k) {
+      case 'publickey':
+        if (!KEY_SHAPE.test(v)) return fail(line, 'PublicKey is not a WireGuard key')
+        peer.publicKey = v
+        return
+      case 'presharedkey':
+        if (!KEY_SHAPE.test(v)) return fail(line, 'PresharedKey is not a WireGuard key')
+        peer.presharedKey = v
+        return
+      case 'allowedips':
+        for (const a of items(v)) {
+          const cidr = withLength(a)
+          if (!cidr) return fail(line, `${a} is not an address or network`)
+          peer.allowedIps.push(cidr)
+        }
+        return
+      case 'endpoint': {
+        const m = /^(\[[^\]]+\]|[^:\s]+):(\d+)$/.exec(v)
+        const port = m ? Number(m[2]) : 0
+        if (!m || port < 1 || port > 65535)
+          return fail(line, 'Endpoint must be host:port or [IPv6]:port')
+        peer.endpoint = v
+        return
+      }
+      case 'persistentkeepalive': {
+        const n = v.toLowerCase() === 'off' ? 0 : Number(v)
+        if (!Number.isInteger(n) || n < 0 || n > 65535) {
+          return fail(line, 'PersistentKeepalive must be 0-65535 seconds')
+        }
+        peer.keepalive = n
+        return
+      }
+      default:
+        ignored.push({ line, key })
+    }
+  }
+
+  if (!interfaces) fail(0, 'there is no [Interface] section')
+  else if (interfaces > 1) fail(sectionLine, 'there is more than one [Interface] section')
+  else if (!iface.privateKey) fail(0, 'the [Interface] section has no PrivateKey')
+  if (!peers.length) fail(0, 'there is no [Peer] section')
+  for (const p of peers) {
+    if (!p.publicKey) fail(p.line, 'this [Peer] has no PublicKey')
+    if (!p.allowedIps.length) fail(p.line, 'this [Peer] has no AllowedIPs')
+  }
+  return { iface, peers, ignored, notes, errors }
+}
+
+/**
+ * The name a peer takes from the file it came in: lower case, the rest
+ * as underscores, as short as a name may be. "server" when there is none.
+ *
+ * @param {string} fileName
+ */
+export function peerName(fileName) {
+  const base = String(fileName ?? '')
+    .replace(/\.conf$/i, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+  if (!base) return 'server'
+  const name = /^[a-z]/.test(base) ? base : `peer_${base}`
+  return name.slice(0, 31).replace(/_+$/, '')
+}
+
+/** Whether a peer's allowed addresses send it everything in some family. */
+export function takesDefaultRoute(allowedIps) {
+  return allowedIps.some((a) => parsePrefix(a)?.prefix === 0)
+}
