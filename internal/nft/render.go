@@ -57,6 +57,8 @@ func (r *renderer) render() {
 	r.floodChains()
 	r.chainBlockDNS()
 	r.policyChains()
+	r.dnsViaChain()
+	r.chainPostrouting()
 	r.chainNATPrerouting()
 	r.chainNATPostrouting()
 	r.upnpChains()
@@ -74,9 +76,11 @@ type renderer struct {
 	cfg *model.Config
 	// feeds holds the entries of aliases that are fetched rather than
 	// written out.
-	feeds  map[string][]string
-	b      strings.Builder
-	indent int
+	feeds map[string][]string
+	// resolverUIDs are the accounts the resolvers run as.
+	resolverUIDs []uint32
+	b            strings.Builder
+	indent       int
 	// system collects the rules Ostiole adds on its own, recorded as they
 	// are written.
 	system []SystemRule
@@ -750,22 +754,11 @@ func (r *renderer) clampPPPoE() {
 // comes before the connection state, so a flow already going cannot move
 // to another WAN either.
 func (r *renderer) killSwitch() {
-	var external []string
-	for _, z := range r.cfg.Zones {
-		if z.External {
-			external = append(external, r.cfg.ZoneInterfaces(z.Name)...)
-		}
-	}
 	for _, t := range r.cfg.BlockingTargets() {
-		// Only a rule puts the mark on traffic, so a group no rule routes
-		// through has nothing to hold.
+		// A rule puts the mark on forwarded traffic, so a target no rule
+		// routes through has nothing here to hold.
 		zones := r.gatewayZones(t.Name)
-		var others []string
-		for _, name := range external {
-			if !slices.Contains(t.Interfaces, name) {
-				others = append(others, name)
-			}
-		}
+		others := r.otherExternals(t)
 		if len(zones) == 0 || len(others) == 0 {
 			continue
 		}
@@ -783,6 +776,23 @@ func (r *renderer) killSwitch() {
 			Keys:        []string{"forward/" + key}, Setting: "routing",
 		})
 	}
+}
+
+// otherExternals lists the interfaces of external zones that are none of
+// a blocking target's lines.
+func (r *renderer) otherExternals(t model.BlockingTarget) []string {
+	var out []string
+	for _, z := range r.cfg.Zones {
+		if !z.External {
+			continue
+		}
+		for _, name := range r.cfg.ZoneInterfaces(z.Name) {
+			if !slices.Contains(t.Interfaces, name) {
+				out = append(out, name)
+			}
+		}
+	}
+	return out
 }
 
 // gatewayZones lists the zones whose enabled rules route through a gateway

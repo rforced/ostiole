@@ -178,4 +178,32 @@ describe('ResolverTab', () => {
     expect(row.text()).toContain('100.100.100.100')
     expect(wrapper.findAll('button').some((b) => b.text().includes('Add domain'))).toBe(true)
   })
+
+  // Lookups go through a gateway or a group only once there is one to pick,
+  // and the default route is the field left empty.
+  it("sends this router's lookups through a gateway", async () => {
+    const config = useConfigStore()
+    config.draft = draft()
+    config.loaded = true
+    const wrapper = mount(ResolverTab)
+    await flushPromises()
+    expect(wrapper.find('#dns-via').exists()).toBe(false)
+
+    config.draft.gateways = [
+      { name: 'vpn', enabled: true, interface: 'wg1' },
+      { name: 'old', enabled: false, interface: 'eth9' },
+    ]
+    config.draft.gatewayGroups = [{ name: 'private', enabled: true, members: [] }]
+    await flushPromises()
+    const select = wrapper.find('#dns-via')
+    expect(select.findAll('option').map((o) => o.text())).toEqual([
+      'The default route',
+      'vpn',
+      'private',
+    ])
+    await select.setValue('vpn')
+    expect(config.draft.services.dns.via).toBe('vpn')
+    await select.setValue('')
+    expect('via' in config.draft.services.dns).toBe(false)
+  })
 })

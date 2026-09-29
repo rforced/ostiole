@@ -1971,6 +1971,10 @@ type DNSServer struct {
 	// memory, and in files only while Logging.Files says so: a DNS query log
 	// is the most revealing thing this router could write down.
 	QueryLog QueryLog `json:"queryLog,omitzero"`
+	// Via sends the lookups this router makes upstream through a gateway
+	// or gateway group, so upstreams see that line's address. Empty keeps
+	// them on the default route.
+	Via string `json:"via,omitempty"`
 }
 
 // QueryLog is how much of what the server answered is kept, and for how

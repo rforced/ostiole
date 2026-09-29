@@ -63,6 +63,10 @@ func goldenCases(t *testing.T) []string {
 	return matches
 }
 
+// goldenResolverUIDs stand in for the resolvers' accounts, which differ
+// from one machine to the next.
+var goldenResolverUIDs = []uint32{973, 994}
+
 func TestRenderGolden(t *testing.T) {
 	t.Parallel()
 	for _, in := range goldenCases(t) {
@@ -70,10 +74,11 @@ func TestRenderGolden(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			cfg := loadConfig(t, in)
-			got, err := Render(cfg)
+			out, err := BuildEnv(cfg, Env{ResolverUIDs: goldenResolverUIDs})
 			if err != nil {
 				t.Fatalf("Render: %v", err)
 			}
+			got := out.Ruleset
 			golden := strings.TrimSuffix(in, ".json") + ".nft"
 			if *update {
 				if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {

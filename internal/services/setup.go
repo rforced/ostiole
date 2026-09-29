@@ -335,7 +335,7 @@ Wants=ostiole-firewall.service
 [Service]
 Type=simple
 ExecStartPre=%[1]s --test --conf-file=%[2]s
-ExecStart=%[1]s --keep-in-foreground --conf-file=%[2]s
+ExecStart=%[1]s --keep-in-foreground --user=dnsmasq --conf-file=%[2]s
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=2

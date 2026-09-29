@@ -933,3 +933,53 @@ describe('config store aliases', () => {
     })
   })
 })
+
+describe('config store gateways', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  /** A gateway and a group rules and this router's lookups go through. */
+  function routed() {
+    return {
+      ...draft(),
+      gateways: [
+        { name: 'vpn', enabled: true, interface: 'wg1' },
+        { name: 'wan', enabled: true, interface: 'eth0' },
+      ],
+      gatewayGroups: [
+        {
+          name: 'private',
+          enabled: true,
+          members: [{ gateway: 'vpn' }, { gateway: 'wan', tier: 1 }],
+        },
+      ],
+      rules: [
+        { id: 'tv', zone: 'lan', gateway: 'vpn' },
+        { id: 'guests', zone: 'lan', gateway: 'private' },
+      ],
+      services: { dns: { enabled: true, via: 'vpn' } },
+    }
+  }
+
+  it('takes what routes through a gateway to its new name', () => {
+    const config = useConfigStore()
+    config.replaceDraft(routed())
+    config.upsertGateway({ name: 'provider', enabled: true, interface: 'wg1' }, 'vpn')
+    expect(config.rules.find((r) => r.id === 'tv').gateway).toBe('provider')
+    expect(config.gatewayGroups[0].members[0].gateway).toBe('provider')
+    expect(config.draft.services.dns.via).toBe('provider')
+
+    config.upsertGatewayGroup({ ...config.gatewayGroups[0], name: 'hidden' }, 'private')
+    expect(config.rules.find((r) => r.id === 'guests').gateway).toBe('hidden')
+  })
+
+  it("sends this router's lookups back to the default route with their gateway", () => {
+    const config = useConfigStore()
+    config.replaceDraft(routed())
+    expect(config.gatewayDependents('vpn')).toContain(
+      "this router's lookups go back to the default route",
+    )
+    config.removeGateway('vpn')
+    expect('via' in config.draft.services.dns).toBe(false)
+    expect(config.rules.find((r) => r.id === 'tv').gateway).toBeUndefined()
+  })
+})

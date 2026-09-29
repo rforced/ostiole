@@ -99,6 +99,17 @@ function fillIn(p) {
   else dns.value.upstreams = addresses
 }
 
+/** The gateway or group this router's own lookups go through; empty is the default route. */
+const via = computed({
+  get: () => dns.value.via ?? '',
+  set: (v) => {
+    if (v) dns.value.via = v
+    else delete dns.value.via
+  },
+})
+const viaGateways = computed(() => config.gateways.filter((g) => g.enabled).map((g) => g.name))
+const viaGroups = computed(() => config.gatewayGroups.filter((g) => g.enabled).map((g) => g.name))
+
 /** Who can read the names looked up, which is what the choice comes down to. */
 const resolverHints = {
   forward: 'Unencrypted. The upstream resolvers and your ISP see every lookup.',
@@ -210,6 +221,22 @@ function toggleInterface(name, on) {
           </FormField>
           <FormField id="dns-domain" label="Local domain" hint="Hosts get this suffix, e.g. lan.">
             <input id="dns-domain" v-model="domain" class="input font-mono" spellcheck="false" />
+          </FormField>
+          <FormField
+            v-if="viaGateways.length || viaGroups.length || via"
+            id="dns-via"
+            label="Send lookups through"
+            hint="While a gateway that blocks is down, this router looks nothing up."
+          >
+            <select id="dns-via" v-model="via" class="input">
+              <option value="">The default route</option>
+              <optgroup v-if="viaGateways.length" label="Gateways">
+                <option v-for="g in viaGateways" :key="g" :value="g">{{ g }}</option>
+              </optgroup>
+              <optgroup v-if="viaGroups.length" label="Groups">
+                <option v-for="g in viaGroups" :key="g" :value="g">{{ g }}</option>
+              </optgroup>
+            </select>
           </FormField>
           <FormField
             v-if="resolver === 'forward'"

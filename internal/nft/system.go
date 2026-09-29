@@ -78,13 +78,29 @@ type Rendered struct {
 	NAT []SystemNAT `json:"nat"`
 }
 
+// Env is what a render reads beyond the configuration.
+type Env struct {
+	// Feeds holds the entries of aliases that are fetched rather than
+	// written out.
+	Feeds map[string][]string
+	// ResolverUIDs are the accounts the resolvers run as, whose lookups
+	// services.dns.via sends through a gateway.
+	ResolverUIDs []uint32
+}
+
 // Build renders cfg and reports the system rules that went into it, in the
-// order the kernel evaluates them.
+// order the kernel evaluates them. The resolvers' accounts are this
+// machine's.
 func Build(cfg *model.Config, feeds map[string][]string) (*Rendered, error) {
+	return BuildEnv(cfg, Env{Feeds: feeds, ResolverUIDs: ResolverUIDs()})
+}
+
+// BuildEnv is Build with everything outside the configuration given.
+func BuildEnv(cfg *model.Config, env Env) (*Rendered, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	r := &renderer{cfg: cfg, feeds: feeds}
+	r := &renderer{cfg: cfg, feeds: env.Feeds, resolverUIDs: env.ResolverUIDs}
 	r.render()
 	sort.SliceStable(r.system, func(i, j int) bool {
 		return chainRank(r.system[i].Chain) < chainRank(r.system[j].Chain)

@@ -63,9 +63,9 @@ func (r *renderer) tunnelWays() []tunnelWay {
 }
 
 // targetUsed reports whether anything puts a gateway's or group's mark on
-// traffic: only a rule does.
+// traffic: a rule, or the resolvers' lookups.
 func (r *renderer) targetUsed(name string) bool {
-	return len(r.gatewayZones(name)) > 0
+	return len(r.gatewayZones(name)) > 0 || (r.cfg.Services.DNS.Via == name && len(r.resolverUIDs) > 0)
 }
 
 // markMatch compares a masked mark with one value or several.

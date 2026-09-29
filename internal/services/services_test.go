@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -17,6 +18,7 @@ import (
 	"github.com/rforced/ostiole/internal/certs"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/network"
+	"github.com/rforced/ostiole/internal/nft"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
@@ -812,4 +814,17 @@ type failCmd struct{}
 
 func (failCmd) Run(context.Context, string, ...string) ([]byte, error) {
 	return []byte("Job failed"), errors.New("exit 1")
+}
+
+// Lookups through a gateway are marked by the account each resolver runs
+// as, so dnsmasq's unit names its account rather than leave it to the
+// build, and unbound's configuration names its own.
+func TestTheResolversRunAsTheAccountsTheRulesetMarks(t *testing.T) {
+	t.Parallel()
+	if unit := UnitContent("/usr/sbin/dnsmasq", "/etc/dnsmasq.d/ostiole.conf"); !strings.Contains(unit, " --user=dnsmasq ") {
+		t.Errorf("the dnsmasq unit leaves its account to the build:\n%s", unit)
+	}
+	if !slices.Contains(nft.ResolverAccounts, "dnsmasq") || !slices.Contains(nft.ResolverAccounts, "unbound") {
+		t.Errorf("the ruleset marks the lookups of %v", nft.ResolverAccounts)
+	}
 }

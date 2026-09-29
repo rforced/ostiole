@@ -465,3 +465,44 @@ func TestValidateTunnelGateway(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateLookupsThroughAGateway(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, want string
+		change     func(*Config)
+	}{
+		{"a tunnel gateway", "", func(c *Config) { c.Services.DNS.Via = "vpn" }},
+		{"a line", "", func(c *Config) { c.Services.DNS.Via = "wan" }},
+		{"nothing called that", `no enabled gateway or group is called "vps"`,
+			func(c *Config) { c.Services.DNS.Via = "vps" }},
+		{"a disabled gateway", `no enabled gateway or group is called "vpn"`, func(c *Config) {
+			c.Services.DNS.Via = "vpn"
+			c.Gateways[1].Enabled = false
+		}},
+		{"a tunnel dialled by name",
+			"wg1/provider is dialled by name, which could not be looked up once lookups need wg1; give its address",
+			func(c *Config) {
+				c.Services.DNS.Via = "vpn"
+				tunnel(c).WireGuard.Peers[0].Endpoint = "vpn.example.net:51820"
+			}},
+		{"a group holding a tunnel dialled by name",
+			"wg1/provider is dialled by name, which could not be looked up once lookups need wg1; give its address",
+			func(c *Config) {
+				c.GatewayGroups = []GatewayGroup{{Name: "private", Enabled: true, Members: []GatewayMember{
+					{Gateway: "vpn", Tier: 1}, {Gateway: "wan", Tier: 2},
+				}}}
+				c.Services.DNS.Via = "private"
+				tunnel(c).WireGuard.Peers[0].Endpoint = "vpn.example.net:51820"
+			}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := wayOutConfig(t)
+			tc.change(cfg)
+			if got := tunnelIssues(t, cfg)["services.dns.via"]; got != tc.want {
+				t.Errorf("services.dns.via = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

@@ -922,15 +922,34 @@ export const useConfigStore = defineStore('config', () => {
     const idx = list.findIndex((g) => g.name === previousName)
     if (idx === -1) list.push(clone(gateway))
     else list[idx] = clone(gateway)
+    if (previousName === gateway.name) return
+    for (const g of gatewayGroups.value)
+      for (const m of g.members ?? []) if (m.gateway === previousName) m.gateway = gateway.name
+    renameRouteTarget(previousName, gateway.name)
+  }
+
+  /** Rules and this router's lookups follow a gateway or group to its new name. */
+  function renameRouteTarget(from, to) {
+    for (const r of rules.value) if (r.gateway === from) r.gateway = to
+    const dns = draft.value.services?.dns
+    if (dns?.via === from) dns.via = to
+  }
+
+  /** What losing a gateway or group does to this router's own lookups. */
+  function lookupsDependent(name) {
+    return draft.value?.services?.dns?.via === name
+      ? ["this router's lookups go back to the default route"]
+      : []
   }
 
   const gatewayGroups = computed(() => draft.value?.gatewayGroups ?? [])
 
   /** Rules routed through a group, which lose that when it goes. */
   function groupDependents(name) {
-    return rules.value
-      .filter((r) => r.gateway === name)
-      .map((r) => `rule ${r.id} loses its gateway`)
+    return [
+      ...rules.value.filter((r) => r.gateway === name).map((r) => `rule ${r.id} loses its gateway`),
+      ...lookupsDependent(name),
+    ]
   }
 
   /**
@@ -939,9 +958,10 @@ export const useConfigStore = defineStore('config', () => {
    * the only member of goes too.
    */
   function gatewayDependents(name) {
-    const out = rules.value
-      .filter((r) => r.gateway === name)
-      .map((r) => `rule ${r.id} loses its gateway`)
+    const out = [
+      ...rules.value.filter((r) => r.gateway === name).map((r) => `rule ${r.id} loses its gateway`),
+      ...lookupsDependent(name),
+    ]
     for (const g of gatewayGroups.value) {
       const members = g.members ?? []
       if (!members.some((m) => m.gateway === name)) continue
@@ -952,13 +972,20 @@ export const useConfigStore = defineStore('config', () => {
     return out
   }
 
-  function dropGatewayGroup(name) {
+  /** Rules and this router's lookups routed through a gateway or group go back to the default route. */
+  function dropRouteTarget(name) {
     for (const r of rules.value) if (r.gateway === name) delete r.gateway
+    const dns = draft.value.services?.dns
+    if (dns?.via === name) delete dns.via
+  }
+
+  function dropGatewayGroup(name) {
+    dropRouteTarget(name)
     draft.value.gatewayGroups = gatewayGroups.value.filter((g) => g.name !== name)
   }
 
   function dropGateway(name) {
-    for (const r of rules.value) if (r.gateway === name) delete r.gateway
+    dropRouteTarget(name)
     for (const g of [...gatewayGroups.value]) {
       const members = g.members ?? []
       if (!members.some((m) => m.gateway === name)) continue
@@ -983,6 +1010,7 @@ export const useConfigStore = defineStore('config', () => {
     const idx = list.findIndex((g) => g.name === previousName)
     if (idx === -1) list.push(clone(group))
     else list[idx] = clone(group)
+    if (previousName !== group.name) renameRouteTarget(previousName, group.name)
   }
 
   function removeGatewayGroup(name) {

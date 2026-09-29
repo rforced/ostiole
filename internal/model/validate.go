@@ -819,6 +819,9 @@ func (v *validator) services(c *Config, ifaces, zones map[string]bool) {
 	if dns.Domain != "" && !domainRe.MatchString(dns.Domain) {
 		v.add("services.dns.domain", "%q is not a valid domain", dns.Domain)
 	}
+	if dns.Via != "" {
+		v.dnsVia(c, dns.Via)
+	}
 	if n := dns.CacheSize; n != 0 && (n < 100 || n > MaxCacheSize) {
 		v.add("services.dns.cacheSize", "%d must be 100-%d (0 keeps %d)", n, MaxCacheSize, DefaultCacheSize)
 	}
@@ -2062,6 +2065,40 @@ func (v *validator) wireguard(path string, in Interface) {
 		}
 		if p.Masquerade {
 			v.translate(ppath+".masquerade", in, p)
+		}
+	}
+}
+
+// dnsVia checks the gateway or group lookups go through. A tunnel in it
+// whose far end is known by a name could never be dialled again once the
+// name has to be looked up through that same tunnel.
+func (v *validator) dnsVia(c *Config, via string) {
+	if _, ok := c.PolicyTarget(via); !ok {
+		v.add("services.dns.via", "no enabled gateway or group is called %q", via)
+		return
+	}
+	members := []string{via}
+	if g, ok := c.GatewayGroup(via); ok {
+		members = members[:0]
+		for _, m := range g.Members {
+			members = append(members, m.Gateway)
+		}
+	}
+	for _, name := range members {
+		gw, ok := c.Gateway(name)
+		if !ok || !gw.Enabled || !c.TunnelGateway(*gw) {
+			continue
+		}
+		in, _ := c.Interface(gw.Interface)
+		for _, p := range in.WireGuard.Peers {
+			if !p.Enabled || p.Endpoint == "" {
+				continue
+			}
+			host, _, err := net.SplitHostPort(p.Endpoint)
+			if _, aerr := netip.ParseAddr(host); err == nil && aerr != nil {
+				v.add("services.dns.via", "%s/%s is dialled by name, which could not be looked up once lookups need %s; give its address",
+					in.Name, p.Name, in.Name)
+			}
 		}
 	}
 }
