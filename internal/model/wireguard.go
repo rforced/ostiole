@@ -6,11 +6,16 @@ import (
 	"strings"
 )
 
-// TunnelRoute is a network routed into a WireGuard tunnel in the main
-// table, and the peer that listed it.
+// TunnelRoute is a network routed into a WireGuard tunnel, and the peer
+// that listed it.
 type TunnelRoute struct {
 	Prefix netip.Prefix
 	Peer   string
+	// Mapped is a network the peer shows here under another prefix
+	// (WireGuardPeer.Theirs): this side has one with the same numbers, so
+	// it goes into the tunnel by a mark and a table of its own, never the
+	// main table.
+	Mapped bool
 }
 
 // TunnelRoutes lists the enabled peers' networks that the tunnel's own
@@ -37,7 +42,7 @@ func (i Interface) TunnelRoutes() []TunnelRoute {
 				continue
 			}
 			seen[pre] = true
-			out = append(out, TunnelRoute{Prefix: pre, Peer: p.Name})
+			out = append(out, TunnelRoute{Prefix: pre, Peer: p.Name, Mapped: p.shows(pre)})
 		}
 	}
 	slices.SortFunc(out, func(a, b TunnelRoute) int { return strings.Compare(a.Prefix.String(), b.Prefix.String()) })
@@ -125,4 +130,97 @@ func (c *Config) TunnelFamilies(g Gateway) (v4, v6 bool) {
 	}
 	return v4 && in.IPv4.Mode == AddrStatic && in.IPv4.Address != "",
 		v6 && in.IPv6.Mode == AddrStatic && in.IPv6.Address != ""
+}
+
+// PrefixMap is a NetMap read: the network the hosts are on and the prefix
+// they go by.
+type PrefixMap struct {
+	Real, Shown netip.Prefix
+}
+
+// ParseNetMaps reads the maps that parse, skipping the rest; validation
+// says what is wrong with those.
+func ParseNetMaps(maps []NetMap) []PrefixMap {
+	var out []PrefixMap
+	for _, m := range maps {
+		network, err1 := netip.ParsePrefix(m.Network)
+		shown, err2 := netip.ParsePrefix(m.As)
+		if err1 != nil || err2 != nil || !network.Addr().Is4() || !shown.Addr().Is4() || network.Bits() != shown.Bits() {
+			continue
+		}
+		out = append(out, PrefixMap{Real: network.Masked(), Shown: shown.Masked()})
+	}
+	return out
+}
+
+// ShownRoutes are the prefixes the tunnel's enabled peers show their
+// networks under here. They are routed into the tunnel like its peers'
+// networks, so the router can answer them, and its own connections to
+// them are mapped back to the real networks on the way out.
+func (i Interface) ShownRoutes() []netip.Prefix {
+	if i.WireGuard == nil {
+		return nil
+	}
+	var out []netip.Prefix
+	for _, p := range i.WireGuard.Peers {
+		if !p.Enabled {
+			continue
+		}
+		for _, m := range ParseNetMaps(p.Theirs) {
+			out = append(out, m.Shown)
+		}
+	}
+	return out
+}
+
+// shows reports whether the peer shows a network of its own under another
+// prefix.
+func (p WireGuardPeer) shows(pre netip.Prefix) bool {
+	return slices.ContainsFunc(ParseNetMaps(p.Theirs), func(m PrefixMap) bool { return m.Real == pre.Masked() })
+}
+
+// TranslateTarget is a tunnel whose peers show networks under other
+// prefixes. Its mark sends traffic for their real networks into it by a
+// table of its own, since this side has networks with the same numbers.
+type TranslateTarget struct {
+	Tunnel string
+	Mark   uint32
+	Table  int
+	// Networks are the real networks behind the tunnel's peers.
+	Networks []netip.Prefix
+}
+
+// TranslateTargets numbers the tunnels that show networks after the
+// policy targets, in the order the configuration has them.
+func (c *Config) TranslateTargets() []TranslateTarget {
+	n := 0
+	for _, t := range c.PolicyTargets() {
+		n = int(t.Mark >> PolicyMarkShift)
+	}
+	var out []TranslateTarget
+	for _, in := range c.Interfaces {
+		if !in.Enabled || in.WireGuard == nil {
+			continue
+		}
+		var nets []netip.Prefix
+		for _, r := range in.TunnelRoutes() {
+			if r.Mapped {
+				nets = append(nets, r.Prefix)
+			}
+		}
+		if len(nets) == 0 {
+			continue
+		}
+		n++
+		for reservedPolicyNumbers[n] {
+			n++
+		}
+		if n > MaxPolicyTargets {
+			break
+		}
+		out = append(out, TranslateTarget{
+			Tunnel: in.Name, Mark: uint32(n) << PolicyMarkShift, Table: PolicyTableBase + n, Networks: nets,
+		})
+	}
+	return out
 }

@@ -1250,6 +1250,22 @@ type WireGuardPeer struct {
 	// own address, for a far end that does not route this side's
 	// networks. The far end then cannot open connections to them.
 	Masquerade bool `json:"masquerade,omitempty"`
+	// Theirs shows networks behind the peer under other prefixes on this
+	// side, for a far end numbered like this one. Each network is one of
+	// the peer's allowed addresses.
+	Theirs []NetMap `json:"theirs,omitempty"`
+	// Ours shows this side's networks to the peer under other prefixes,
+	// so its hosts can tell them from their own.
+	Ours []NetMap `json:"ours,omitempty"`
+}
+
+// NetMap shows a network under another prefix of the same length: the
+// network part changes and each host keeps its number.
+type NetMap struct {
+	// Network is the one the hosts are really on.
+	Network string `json:"network"`
+	// As is the prefix it goes by.
+	As string `json:"as"`
 }
 
 // Alias is a named, reusable list of hosts/networks or ports. Host aliases

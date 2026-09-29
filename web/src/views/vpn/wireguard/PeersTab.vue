@@ -47,6 +47,14 @@ const sort = useSort(rows, {
 })
 const peers = sort.sorted
 
+/** The peer's allowed addresses, a network it shows under another prefix with it. */
+function allowed(peer) {
+  const shown = new Map((peer.theirs ?? []).map((m) => [m.network, m.as]))
+  return (peer.allowedIps ?? [])
+    .map((a) => (shown.has(a) ? `${a} as ${shown.get(a)}` : a))
+    .join(', ')
+}
+
 /** When the peer last shook hands: "never" for one that has not. */
 function handshake(r) {
   if (!props.read.updatedAt.value) return '…'
@@ -139,7 +147,14 @@ function edit(r) {
             </td>
             <td class="font-mono text-code" data-label="Tunnel">{{ r.tunnel.name }}</td>
             <td class="font-mono text-code" data-label="Allowed">
-              {{ (r.peer.allowedIps ?? []).join(', ') }}
+              {{ allowed(r.peer) }}
+              <div
+                v-for="m in r.peer.ours ?? []"
+                :key="m.network"
+                class="font-sans text-xs text-ink-muted"
+              >
+                this side's {{ m.network }} there as {{ m.as }}
+              </div>
             </td>
             <td class="font-mono text-code" data-label="Endpoint">
               {{ seen(r)?.endpoint || r.peer.endpoint || '—'

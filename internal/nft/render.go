@@ -58,9 +58,12 @@ func (r *renderer) render() {
 	r.chainBlockDNS()
 	r.policyChains()
 	r.dnsViaChain()
+	r.translateChains()
 	r.chainPostrouting()
 	r.chainNATPrerouting()
 	r.chainNATPostrouting()
+	r.chainNATOutput()
+	r.chainNATInput()
 	r.upnpChains()
 	r.indent--
 	r.line("}")
@@ -710,6 +713,7 @@ func (r *renderer) chainForward() {
 		r.clampPPPoE()
 		r.clampTunnels()
 		r.killSwitch()
+		r.translateHold("forward")
 		r.connectionState("forward")
 		r.blockedSources("forward")
 		r.blockDNSJump()
@@ -1350,14 +1354,24 @@ func (r *renderer) endpointAddr(dir string, e model.Endpoint) famExpr {
 		return coverBothFamilies(f, e.NotAddresses)
 	}
 	addrs := e.Addresses
+	pin := ""
 	if e.Peer != "" {
 		// A peer is the addresses it may use in its tunnel. One that is
 		// gone, or has none, matches nothing rather than everything.
-		_, p, ok := r.cfg.Peer(e.Peer)
+		in, p, ok := r.cfg.Peer(e.Peer)
 		if !ok || len(p.AllowedIPs) == 0 {
 			return famExpr{}
 		}
 		addrs = p.AllowedIPs
+		// A peer that shows its network under another prefix has this
+		// side's numbers, so it is told apart by its tunnel. Validation
+		// keeps it from being inverted.
+		if len(p.Theirs) > 0 {
+			pin = fmt.Sprintf("oifname %q ", in.Name)
+			if dir == "saddr" {
+				pin = fmt.Sprintf("iifname %q ", in.Name)
+			}
+		}
 	}
 	if len(addrs) == 0 {
 		return famExpr{any: true}
@@ -1365,11 +1379,11 @@ func (r *renderer) endpointAddr(dir string, e model.Endpoint) famExpr {
 	v4, v6 := splitFamilies(addrs)
 	var f famExpr
 	if len(v4) > 0 {
-		s := fmt.Sprintf("ip %s%s%s", dir, op, setOrSingle(v4))
+		s := fmt.Sprintf("%sip %s%s%s", pin, dir, op, setOrSingle(v4))
 		f.v4 = &s
 	}
 	if len(v6) > 0 {
-		s := fmt.Sprintf("ip6 %s%s%s", dir, op, setOrSingle(v6))
+		s := fmt.Sprintf("%sip6 %s%s%s", pin, dir, op, setOrSingle(v6))
 		f.v6 = &s
 	}
 	return coverBothFamilies(f, e.NotAddresses)
@@ -1558,6 +1572,11 @@ func (r *renderer) policyChains() {
 			model.PolicyMarkMask))
 		// Traffic addressed to the firewall itself is never policy routed.
 		r.line(`fib daddr type local counter accept comment "policy:local"`)
+		// Nor is traffic to a network a tunnel's peer shows under another
+		// prefix: the tunnel's own mark takes it there.
+		if shown := r.allTheirs(); len(shown) > 0 {
+			r.line(fmt.Sprintf(`ip daddr %s counter accept comment "policy:translated"`, setOrSingle(shown)))
+		}
 		// Only a connection's first packet picks a gateway. A reply has
 		// no mark of its own when its connection came in from outside, a
 		// port forward's say, and marking it would send it out the rule's
@@ -1714,6 +1733,7 @@ func (r *renderer) chainNATPrerouting() {
 		// First, so a UPnP mapping of port 80 cannot take a challenge.
 		// Validation keeps port forwards off it.
 		r.acmeRedirect()
+		r.translateDNAT()
 		for _, pf := range r.cfg.NAT.PortForwards {
 			if !pf.Enabled {
 				continue
@@ -1873,6 +1893,7 @@ func (r *renderer) chainNATPostrouting() {
 			r.line("jump " + UPnPPostroutingChain)
 		}
 		r.oneToOneSNAT()
+		r.translateSNAT()
 		r.peerNAT()
 		r.tunnelNAT()
 		// The listed rules come first in hybrid mode, so a host can be

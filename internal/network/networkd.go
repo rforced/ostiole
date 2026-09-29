@@ -450,9 +450,17 @@ func renderNetwork(in model.Interface, vlans []string, routes []model.StaticRout
 		fmt.Fprintf(&b, "\n[Route]\nDestination=%s\nGateway=%s\nMetric=%d\n", dst, g.Address, g.GatewayMetric())
 	}
 	for _, r := range in.TunnelRoutes() {
+		// A network shown under another prefix has this side's numbers:
+		// its own table routes it, by a mark.
+		if r.Mapped {
+			continue
+		}
 		// On-link through the tunnel: WireGuard picks the peer by its
 		// allowed addresses, so no gateway is involved.
 		fmt.Fprintf(&b, "\n[Route]\nDestination=%s\nScope=link\n", r.Prefix)
+	}
+	for _, p := range in.ShownRoutes() {
+		fmt.Fprintf(&b, "\n[Route]\nDestination=%s\nScope=link\n", p)
 	}
 	for _, r := range routes {
 		fmt.Fprintf(&b, "\n[Route]\nDestination=%s\nGateway=%s\n", r.Destination, r.Gateway)

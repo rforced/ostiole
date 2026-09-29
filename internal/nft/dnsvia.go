@@ -77,37 +77,51 @@ func uidSet(uids []uint32) string {
 	return "{ " + strings.Join(parts, ", ") + " }"
 }
 
-// chainPostrouting holds the router's own lookups to the lines of the
-// target they go through when it blocks, as the kill switch in forward
-// holds a rule's traffic: before the daemon's first pass the mark routes
-// nowhere and the lookups would leave by the default route. It cannot sit
-// in output: every chain of that hook sees the device routing chose
-// before dns_via marked the lookup, so a lookup the mark had sent into the
-// tunnel would be dropped as leaving by the WAN.
+// chainPostrouting holds what the router sends to the lines it has to
+// leave by: its lookups to the target they go through when it blocks, as
+// the kill switch in forward holds a rule's traffic, and its answers to a
+// tunnel's shown networks to that tunnel. Until the daemon's first pass
+// the marks route nowhere. It cannot sit in output: every chain of that
+// hook sees the device routing chose before a route chain changed the
+// mark, so a packet the mark had already sent into the tunnel would be
+// dropped as leaving by the WAN.
 func (r *renderer) chainPostrouting() {
-	via := r.cfg.Services.DNS.Via
-	if via == "" || len(r.resolverUIDs) == 0 {
+	lookups, holds := r.lookupsBlocked(), false
+	for _, tr := range r.translations() {
+		holds = holds || tr.mark != 0
+	}
+	if lookups == nil && !holds {
 		return
 	}
-	for _, t := range r.cfg.BlockingTargets() {
-		if t.Name != via {
-			continue
-		}
-		others := r.otherExternals(t)
-		if len(others) == 0 {
-			return
-		}
-		key := "kill-switch:" + t.Name
-		r.block("chain postrouting", func() {
-			r.line("type filter hook postrouting priority filter; policy accept;")
+	r.block("chain postrouting", func() {
+		r.line("type filter hook postrouting priority filter; policy accept;")
+		if lookups != nil {
+			others := r.otherExternals(*lookups)
+			key := "kill-switch:" + lookups.Name
 			r.line(fmt.Sprintf(`ct mark & 0x%08x == 0x%x oifname %s counter drop comment %q`,
-				model.PolicyMarkMask, t.Mark, ifnameSet(others), key))
-		})
-		r.sys(SystemRule{
-			Chain: "postrouting", Action: "drop", Protocol: string(model.ProtocolTCPUDP),
-			Source: "this router's lookups", Destination: "out " + strings.Join(others, ", "),
-			Description: "Keep this router's lookups off every other WAN",
-			Keys:        []string{"postrouting/" + key}, Setting: "dns",
-		})
+				model.PolicyMarkMask, lookups.Mark, ifnameSet(others), key))
+			r.sys(SystemRule{
+				Chain: "postrouting", Action: "drop", Protocol: string(model.ProtocolTCPUDP),
+				Source: "this router's lookups", Destination: "out " + strings.Join(others, ", "),
+				Description: "Keep this router's lookups off every other WAN",
+				Keys:        []string{"postrouting/" + key}, Setting: "dns",
+			})
+		}
+		r.translateHold("postrouting")
+	})
+}
+
+// lookupsBlocked is the blocking target the resolvers' lookups go
+// through, when there is one and another external line to hold them off.
+func (r *renderer) lookupsBlocked() *model.BlockingTarget {
+	via := r.cfg.Services.DNS.Via
+	if via == "" || len(r.resolverUIDs) == 0 {
+		return nil
 	}
+	for _, t := range r.cfg.BlockingTargets() {
+		if t.Name == via && len(r.otherExternals(t)) > 0 {
+			return &t
+		}
+	}
+	return nil
 }

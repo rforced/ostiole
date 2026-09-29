@@ -6,6 +6,7 @@
 package policy
 
 import (
+	"net/netip"
 	"sort"
 
 	"github.com/rforced/ostiole/internal/model"
@@ -15,6 +16,12 @@ import (
 // consecutive priorities, well below the kernel's main lookup at 32766 so
 // policy routing gets its say first.
 const RulePriorityBase = 22000
+
+// TranslatePriorityBase is where the rules of tunnels that show networks
+// under other prefixes start, one each. They come before every gateway's:
+// the real networks they route have this side's numbers, which the main
+// table would otherwise answer.
+const TranslatePriorityBase = 21000
 
 // Hop is one gateway as the monitor currently sees it.
 type Hop struct {
@@ -73,6 +80,25 @@ type Target struct {
 	// the ordinary default route. It is what a tunnel that must not leak
 	// needs.
 	Block bool `json:"block,omitempty"`
+	// Networks, for a tunnel that shows its peers' networks under other
+	// prefixes, are the real networks its table routes into Tunnel. Such
+	// a target has no tiers.
+	Networks []netip.Prefix `json:"networks,omitempty"`
+	Tunnel   string         `json:"tunnel,omitempty"`
+}
+
+// Translations are the tunnels that show networks behind their peers
+// under other prefixes, as targets whose tables route those networks into
+// them.
+func Translations(cfg *model.Config) []Target {
+	var out []Target
+	for _, tt := range cfg.TranslateTargets() {
+		out = append(out, Target{
+			Name: tt.Tunnel, Mark: tt.Mark, Table: tt.Table, Index: int(tt.Mark >> model.PolicyMarkShift),
+			Networks: tt.Networks, Tunnel: tt.Tunnel,
+		})
+	}
+	return out
 }
 
 // Priorities returns the ip rule priorities this target owns: the first

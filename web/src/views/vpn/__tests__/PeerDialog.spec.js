@@ -65,6 +65,43 @@ describe('PeerDialog Translate', () => {
   })
 })
 
+describe('PeerDialog shown networks', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  const cabin = () => ({
+    name: 'cabin',
+    enabled: true,
+    publicKey: FRIEND,
+    allowedIps: ['10.77.0.2/32', '192.168.1.0/24'],
+    theirs: [{ network: '192.168.1.0/24', as: '10.201.1.0/24' }],
+    ours: [{ network: '192.168.1.0/24', as: '10.200.1.0/24' }],
+  })
+
+  it('keeps what a peer shows and drops the rows left empty', async () => {
+    const { wrapper, config } = open(cabin())
+    expect(wrapper.get('#pe-theirs-0').element.value).toBe('192.168.1.0/24')
+    expect(wrapper.get('#pe-ours-as-0').element.value).toBe('10.200.1.0/24')
+    await wrapper.get('#pe-theirs-as-0').setValue('10.202.1.0/24')
+    const add = wrapper.findAll('button').filter((b) => b.text() === 'Add network')
+    await add[0].trigger('click')
+    expect(wrapper.find('#pe-theirs-1').exists()).toBe(true)
+    await wrapper.get('form').trigger('submit')
+    const saved = config.findInterface('wg1').wireguard.peers[0]
+    expect(saved.theirs).toEqual([{ network: '192.168.1.0/24', as: '10.202.1.0/24' }])
+    expect(saved.ours).toEqual([{ network: '192.168.1.0/24', as: '10.200.1.0/24' }])
+  })
+
+  it('leaves the fields out once every row is removed', async () => {
+    const { wrapper, config } = open(cabin())
+    await wrapper.get('[aria-label="Remove 192.168.1.0/24"]').trigger('click')
+    await wrapper.get('[aria-label="Remove 192.168.1.0/24"]').trigger('click')
+    await wrapper.get('form').trigger('submit')
+    const saved = config.findInterface('wg1').wireguard.peers[0]
+    expect(saved).not.toHaveProperty('theirs')
+    expect(saved).not.toHaveProperty('ours')
+  })
+})
+
 describe('PeerDialog device file', () => {
   beforeEach(() => {
     setActivePinia(createPinia())

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"slices"
 
 	"golang.org/x/sys/unix"
 
@@ -45,16 +46,16 @@ func (i *Installer) Sync(targets []Target) error {
 func (i *Installer) Clear() error { return i.Sync(nil) }
 
 func (i *Installer) syncFamily(family int, targets []Target) error {
-	wantRoutes := map[int]*netlink.Route{}
+	wantRoutes := map[int][]*netlink.Route{}
 	wantRules := map[int]netlink.Rule{}
 	for _, t := range targets {
-		route := i.routeFor(t, family)
-		if route == nil {
+		routes := i.routesFor(t, family)
+		if len(routes) == 0 {
 			// Nothing to route through: leave the table empty so the mark
 			// falls through to the main table.
 			continue
 		}
-		wantRoutes[t.Table] = route
+		wantRoutes[t.Table] = routes
 		for _, rule := range rulesFor(t, family) {
 			wantRules[rule.Priority] = rule
 		}
@@ -84,39 +85,42 @@ func WatchRemoved(ctx context.Context) (<-chan struct{}, error) {
 
 // ownPriority reports whether an ip rule priority belongs to policy routing.
 func ownPriority(p int) bool {
-	return p >= RulePriorityBase && p < RulePriorityBase+2*(model.MaxPolicyTargets+1)
+	return (p >= RulePriorityBase && p < RulePriorityBase+2*(model.MaxPolicyTargets+1)) ||
+		(p >= TranslatePriorityBase && p < TranslatePriorityBase+model.MaxPolicyTargets+1)
 }
 
-func (i *Installer) syncRoutes(family int, want map[int]*netlink.Route) error {
+func (i *Installer) syncRoutes(family int, want map[int][]*netlink.Route) error {
 	existing, err := netlink.Routes(family, netlink.RouteFilter{AllTables: true})
 	if err != nil {
 		return fmt.Errorf("list policy routes: %w", err)
 	}
 	var errs []error
-	seen := map[int]bool{}
+	have := map[*netlink.Route]bool{}
 	for k := range existing {
 		route := existing[k]
 		if !ownTable(route.Table) {
 			continue
 		}
-		desired := want[route.Table]
-		if desired != nil && sameRoute(&route, desired) {
-			seen[route.Table] = true
+		at := slices.IndexFunc(want[route.Table], func(d *netlink.Route) bool { return !have[d] && sameRoute(&route, d) })
+		if at >= 0 {
+			have[want[route.Table][at]] = true
 			continue
 		}
 		if err := netlink.DeleteRoute(route); err != nil {
 			errs = append(errs, fmt.Errorf("remove route from table %d: %w", route.Table, err))
 		}
 	}
-	for table, route := range want {
-		if seen[table] {
-			continue
+	for table, routes := range want {
+		for _, route := range routes {
+			if have[route] {
+				continue
+			}
+			if err := netlink.ReplaceRoute(*route); err != nil {
+				errs = append(errs, fmt.Errorf("install route in table %d: %w", table, err))
+				continue
+			}
+			i.Log.Info("policy route installed", "table", table, "route", describe(route))
 		}
-		if err := netlink.ReplaceRoute(*route); err != nil {
-			errs = append(errs, fmt.Errorf("install route in table %d: %w", table, err))
-			continue
-		}
-		i.Log.Info("policy route installed", "table", table, "route", describe(route))
 	}
 	return errors.Join(errs...)
 }
@@ -151,6 +155,34 @@ func (i *Installer) syncRules(family int, want map[int]netlink.Rule) error {
 		i.Log.Info("policy rule installed", "priority", priority, "mark", fmt.Sprintf("0x%x", rule.Mark), "table", rule.Table)
 	}
 	return errors.Join(errs...)
+}
+
+// routesFor is a target's table in one family: the networks a translation
+// sends into its tunnel, or routeFor's default route.
+func (i *Installer) routesFor(t Target, family int) []*netlink.Route {
+	if len(t.Networks) == 0 {
+		if r := i.routeFor(t, family); r != nil {
+			return []*netlink.Route{r}
+		}
+		return nil
+	}
+	link, err := netlink.LinkByName(t.Tunnel)
+	if err != nil {
+		return nil
+	}
+	var out []*netlink.Route
+	for _, n := range t.Networks {
+		if n.Addr().Is4() != (family == unix.AF_INET) {
+			continue
+		}
+		dst := &net.IPNet{IP: n.Addr().AsSlice(), Mask: net.CIDRMask(n.Bits(), n.Addr().BitLen())}
+		r := &netlink.Route{Table: t.Table, Dst: dst, LinkIndex: link.Index}
+		if family == unix.AF_INET {
+			r.Scope = unix.RT_SCOPE_LINK
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 // routeFor builds the default route for a target in one family: the best
@@ -219,6 +251,17 @@ func (i *Installer) routeFor(t Target, family int) *netlink.Route {
 // would have taken the default route reaches the second rule and the
 // policy table.
 func rulesFor(t Target, family int) []netlink.Rule {
+	// A translation's table routes networks the main table has too, so it
+	// is asked first, and alone.
+	if len(t.Networks) > 0 {
+		r := netlink.NewRule()
+		r.Family = family
+		r.Priority = TranslatePriorityBase + t.Index
+		r.Mark = t.Mark
+		r.Mask = model.PolicyMarkMask
+		r.Table = t.Table
+		return []netlink.Rule{r}
+	}
 	suppressPriority, lookupPriority := t.Priorities()
 
 	suppress := netlink.NewRule()
@@ -311,6 +354,9 @@ func describe(r *netlink.Route) string {
 			out += " " + hopName(h.Gw, h.LinkIndex)
 		}
 		return out
+	}
+	if !isDefault(r.Dst) {
+		return r.Dst.String() + " " + hopName(r.Gw, r.LinkIndex)
 	}
 	return hopName(r.Gw, r.LinkIndex)
 }

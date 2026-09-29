@@ -191,16 +191,22 @@ func (s *server) seen() []string {
 	return append([]string(nil), s.froms...)
 }
 
-// dial connects from ns to addr, reporting whether it got through.
+// dial connects from ns to addr, reporting whether it got through. A nil
+// ns is the test's own.
 func dial(t *testing.T, ns *os.File, addr string, wait time.Duration) error {
 	t.Helper()
 	var err error
-	netnstest.Do(t, ns, func() {
+	connect := func() {
 		var c net.Conn
 		if c, err = net.DialTimeout("tcp", addr, wait); err == nil {
 			_ = c.Close()
 		}
-	})
+	}
+	if ns == nil {
+		connect()
+	} else {
+		netnstest.Do(t, ns, connect)
+	}
 	return err
 }
 
@@ -735,4 +741,176 @@ func TestADeviceReachesWhatItsFileSendsThroughInKernel(t *testing.T) {
 	if got := waitSeen(t, far6); len(got) != 1 || got[0] != "2001:db8:1::2" {
 		t.Errorf("the far host saw %v over IPv6, want the router's WAN address", got)
 	}
+}
+
+// overlapConfig is siteConfig with the cabin on this side's own network,
+// 192.168.1.0/24: the cabin's shows here as 10.201.1.0/24 and this side's
+// there as 10.200.1.0/24. The cabin may reach the NAS on 443 and this
+// router on 8443.
+func overlapConfig(router, cabin *ecdh.PrivateKey) *model.Config {
+	cfg := siteConfig(router, cabin, true, false)
+	peer := &cfg.Interfaces[2].WireGuard.Peers[0]
+	peer.AllowedIPs = []string{"10.77.0.2/32", "192.168.1.0/24"}
+	peer.Theirs = []model.NetMap{{Network: "192.168.1.0/24", As: "10.201.1.0/24"}}
+	peer.Ours = []model.NetMap{{Network: "192.168.1.0/24", As: "10.200.1.0/24"}}
+	cfg.Rules = append(cfg.Rules, model.Rule{
+		ID: "cabin-to-router", Enabled: true, Zone: "sites", Action: model.ActionAccept, Protocol: model.ProtocolTCP,
+		Source:      model.Endpoint{Peer: "wg2/cabin"},
+		Destination: model.Endpoint{Self: true, Ports: []string{"8443"}},
+	})
+	return cfg
+}
+
+// Two sites on one network, 192.168.1.0/24, joined by a tunnel with this
+// side doing all the translating. Each side reaches the other at the
+// prefix it is shown, both ways, from the prefix it is shown; the rule
+// naming the cabin's peer still tells the NAS from the printer; the cabin
+// reaches this router's own services and gets its answers back through
+// the tunnel. The cabin router's .1, which is this router's own address
+// here, is not answered by this router, and a host here that sends to
+// this side's shown prefix is stopped before conntrack sees it.
+func TestTwoSitesOnOneNetworkReachEachOtherTranslatedInKernel(t *testing.T) {
+	if !wgKernel(t) {
+		return
+	}
+	quietIPv6(t)
+	routeAll(t)
+	routerKey, cabinKey := wgKey(t), wgKey(t)
+	lan, cabin, cabinLAN := netnstest.NewNS(t), netnstest.NewNS(t), netnstest.NewNS(t)
+
+	cable(t, "eth1", "lan0", lan)
+	addrs(t, "eth1", "192.168.1.1/24")
+	netnstest.Do(t, lan, func() {
+		addrs(t, "lan0", "192.168.1.10/24", "192.168.1.11/24")
+		route(t, "default", "192.168.1.1", "lan0")
+	})
+	cable(t, "eth0", "wan0", cabin)
+	addrs(t, "eth0", "203.0.113.2/24")
+	netnstest.Do(t, cabin, func() {
+		routeAll(t)
+		addrs(t, "wan0", "203.0.113.1/24")
+		if err := netlink.AddVeth("lan1", "host0"); err != nil {
+			t.Fatal(err)
+		}
+		if err := netlink.SetLinkNamespace(netnstest.Link(t, "host0").Index, int(cabinLAN.Fd())); err != nil {
+			t.Fatal(err)
+		}
+		if err := netlink.SetLinkUp(netnstest.Link(t, "lan1").Index); err != nil {
+			t.Fatal(err)
+		}
+		addrs(t, "lan1", "192.168.1.1/24")
+		wgDevice(t, "wg0", cabinKey, 51820, []netlink.WireGuardPeerConfig{{
+			PublicKey: routerKey.PublicKey().Bytes(), AllowedIPs: prefixes("10.77.0.1/32", "10.200.1.0/24"),
+		}}, "10.77.0.2/30")
+		route(t, "10.200.1.0/24", "", "wg0")
+	})
+	netnstest.Do(t, cabinLAN, func() {
+		if err := netlink.SetLinkUp(netnstest.Link(t, "host0").Index); err != nil {
+			t.Fatal(err)
+		}
+		addrs(t, "host0", "192.168.1.20/24")
+		route(t, "default", "192.168.1.1", "host0")
+	})
+	wgDevice(t, "wg2", routerKey, 0, []netlink.WireGuardPeerConfig{{
+		PublicKey: cabinKey.PublicKey().Bytes(), Endpoint: netip.MustParseAddrPort("203.0.113.1:51820"),
+		AllowedIPs: prefixes("10.77.0.2/32", "192.168.1.0/24"),
+	}}, "10.77.0.1/30")
+	// What networkd adds for the shown prefix; the real network has only
+	// the translation's own table.
+	route(t, "10.201.1.0/24", "", "wg2")
+
+	cfg := overlapConfig(routerKey, cabinKey)
+	ruleset, err := Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	x := &Exec{}
+	if err := x.Apply(ctx, ruleset); err != nil {
+		t.Fatal(err)
+	}
+	if err := policy.NewInstaller(slog.New(slog.DiscardHandler)).Sync(policy.Translations(cfg)); err != nil {
+		t.Fatal(err)
+	}
+	nas := listen(t, lan, "192.168.1.10:443")
+	printer := listen(t, lan, "192.168.1.11:443")
+	host := listen(t, cabinLAN, "192.168.1.20:443")
+	self := listenHere(t, "0.0.0.0:8443")
+
+	if err := dial(t, lan, "10.201.1.20:443", 3*time.Second); err != nil {
+		t.Fatalf("the NAS to the cabin's host: %v", err)
+	}
+	if got := waitSeen(t, host); len(got) != 1 || got[0] != "10.200.1.10" {
+		t.Errorf("the cabin's host saw %v, want the NAS as it is shown there", got)
+	}
+	if err := dial(t, cabinLAN, "10.200.1.10:443", 3*time.Second); err != nil {
+		t.Fatalf("the cabin's host to the NAS: %v", err)
+	}
+	if got := waitSeen(t, nas); len(got) != 1 || got[0] != "10.201.1.20" {
+		t.Errorf("the NAS saw %v, want the cabin's host as it is shown here", got)
+	}
+	if err := dial(t, cabinLAN, "10.200.1.11:443", time.Second); err == nil {
+		t.Error("the cabin reached the printer, which no rule lets it")
+	}
+	if got := printer.seen(); len(got) != 0 {
+		t.Errorf("the printer saw %v", got)
+	}
+	// This router's own services, answered back through the tunnel.
+	if err := dial(t, cabinLAN, "10.200.1.1:8443", 3*time.Second); err != nil {
+		t.Fatalf("the cabin's host to this router: %v", err)
+	}
+	if got := waitSeen(t, self); len(got) != 1 || got[0] != "10.201.1.20" {
+		t.Errorf("this router saw %v, want the cabin's host as it is shown here", got)
+	}
+	// The cabin router's .1 is this router's own address here.
+	if err := dial(t, lan, "10.201.1.1:8443", time.Second); err == nil {
+		t.Error("10.201.1.1 was answered, by this router rather than the cabin's")
+	}
+	if got := self.seen(); len(got) != 1 {
+		t.Errorf("this router answered %v, want only the cabin's host", got)
+	}
+	// This router's own connection to the cabin's host, from its tunnel
+	// address.
+	if err := dial(t, nil, "10.201.1.20:443", 3*time.Second); err != nil {
+		t.Fatalf("this router to the cabin's host: %v", err)
+	}
+	got := host.seen()
+	for deadline := time.Now().Add(3 * time.Second); len(got) < 2 && time.Now().Before(deadline); got = host.seen() {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if len(got) != 2 || got[1] != "10.77.0.1" {
+		t.Errorf("the cabin's host saw %v, want this router at its tunnel address last", got)
+	}
+	if err := dial(t, lan, "10.200.1.11:443", time.Second); err == nil {
+		t.Error("a host here reached this side's shown prefix")
+	}
+	if n := waitForCounter(ctx, t, x, "translate_guard/translate-guard:wg2", 1); n == 0 {
+		t.Error("the guard counted nothing")
+	}
+}
+
+// listenHere is listen in the test's own namespace.
+func listenHere(t *testing.T, addr string) *server {
+	t.Helper()
+	s := &server{}
+	l, err := net.Listen("tcp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = l.Close() })
+	go func() {
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				return
+			}
+			host, _, _ := net.SplitHostPort(c.RemoteAddr().String())
+			s.mu.Lock()
+			s.froms = append(s.froms, host)
+			s.mu.Unlock()
+			_ = c.Close()
+		}
+	}()
+	return s
 }

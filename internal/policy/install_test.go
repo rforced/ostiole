@@ -641,3 +641,66 @@ func TestATunnelSharesATierWithALine(t *testing.T) {
 	}
 	noChurn(t, inst, targets)
 }
+
+// A tunnel that shows its peer's networks under other prefixes routes the
+// real ones into itself from a table of its own, asked before the main
+// table: this side's LAN has the same numbers. A packet carrying the mark
+// goes into the tunnel, one without it stays on the LAN, and a second
+// pass changes nothing.
+func TestATranslationRoutesItsRealNetworksIntoTheTunnel(t *testing.T) {
+	if !netnstest.Enter(t) {
+		return
+	}
+	tun := netnstest.Dummy(t, "wg2", "10.77.0.1/30")
+	lan := netnstest.Dummy(t, "lan0", "192.168.1.1/24")
+	netnstest.Dummy(t, "lan1", "192.168.9.1/24")
+	forwarding(t)
+	cfg := &model.Config{
+		Version: model.SchemaVersion,
+		Interfaces: []model.Interface{{
+			Name: "wg2", Enabled: true, IPv4: model.IPv4{Mode: model.AddrStatic, Address: "10.77.0.1/30"},
+			WireGuard: &model.WireGuard{Peers: []model.WireGuardPeer{{
+				Name: "cabin", Enabled: true, AllowedIPs: []string{"10.77.0.2/32", "192.168.1.0/24", "192.168.60.0/24"},
+				Theirs: []model.NetMap{
+					{Network: "192.168.1.0/24", As: "10.201.1.0/24"},
+					{Network: "192.168.60.0/24", As: "10.201.60.0/24"},
+				},
+			}}},
+		}},
+	}
+	targets := Translations(cfg)
+	if len(targets) != 1 || len(targets[0].Networks) != 2 {
+		t.Fatalf("translations = %+v, want wg2 with two networks", targets)
+	}
+	inst := NewInstaller(slog.New(slog.DiscardHandler))
+	if err := inst.Sync(targets); err != nil {
+		t.Fatal(err)
+	}
+	tr := targets[0]
+	routes := familyRoutes(t, unix.AF_INET, tr.Table)
+	if len(routes) != 2 || routes[0].LinkIndex != tun.Index || routes[1].LinkIndex != tun.Index {
+		t.Fatalf("table %d = %+v, want both networks into the tunnel", tr.Table, routes)
+	}
+	if r, ok := policyRules(t)[TranslatePriorityBase+tr.Index]; !ok || r.Table != tr.Table || r.Mark != tr.Mark {
+		t.Errorf("rules = %+v, want the translation's before the gateways'", policyRules(t))
+	}
+
+	src := "192.168.9.10"
+	for _, c := range []struct {
+		dst  string
+		mark uint32
+		link int
+	}{
+		{"192.168.1.9", tr.Mark, tun.Index},
+		{"192.168.60.9", tr.Mark, tun.Index},
+		{"192.168.1.9", 0, lan.Index},
+	} {
+		got, err := netlink.RouteGet(netlink.RouteQuery{
+			Dst: net.ParseIP(c.dst), Src: net.ParseIP(src), Iif: netnstest.Link(t, "lan1").Index, Mark: c.mark,
+		})
+		if err != nil || len(got) != 1 || got[0].LinkIndex != c.link {
+			t.Errorf("%s with mark %#x goes %+v (%v), want link %d", c.dst, c.mark, got, err, c.link)
+		}
+	}
+	noChurn(t, inst, targets)
+}

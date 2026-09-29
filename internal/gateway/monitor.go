@@ -307,7 +307,7 @@ func (m *Monitor) syncPolicy(cfg *model.Config, states []*state) {
 		hops[st.gw.Name] = policy.NewHop(cfg, st.gw, address, st.online || st.unknown)
 	}
 	m.mu.Unlock()
-	if err := m.Policy.Sync(policy.Plan(cfg, hops)); err != nil {
+	if err := m.Policy.Sync(append(policy.Plan(cfg, hops), policy.Translations(cfg)...)); err != nil {
 		m.Log.Warn("could not update policy routing", "err", err)
 	}
 }

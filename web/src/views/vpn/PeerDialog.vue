@@ -1,5 +1,5 @@
 <script setup>
-import { Check, Copy, LoaderCircle } from 'lucide-vue-next'
+import { Check, Copy, LoaderCircle, Trash2 } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
@@ -53,8 +53,17 @@ function blank() {
     endpoint: '',
     keepalive: 25,
     masquerade: false,
+    theirs: [],
+    ours: [],
   }
 }
+
+/** A peer's maps as rows to edit, apart from the peer itself. */
+const rows = (maps) => (maps ?? []).map((m) => ({ network: m.network, as: m.as }))
+
+/** The rows filled in, as the model takes them. */
+const maps = (list) =>
+  list.map((m) => ({ network: m.network.trim(), as: m.as.trim() })).filter((m) => m.network && m.as)
 
 watch(
   () => [open.value, props.peer],
@@ -70,7 +79,13 @@ watch(
     chosen.value = props.tunnel?.name ?? ''
     const p = props.peer
     form.value = p
-      ? { ...blank(), ...p, allowedIps: (p.allowedIps ?? []).join(', ') }
+      ? {
+          ...blank(),
+          ...p,
+          allowedIps: (p.allowedIps ?? []).join(', '),
+          theirs: rows(p.theirs),
+          ours: rows(p.ours),
+        }
       : { ...blank(), allowedIps: suggestAddresses().join(', ') }
   },
   { immediate: true },
@@ -152,6 +167,10 @@ function peerOut() {
   if (f.endpoint) out.endpoint = f.endpoint.trim()
   if (Number(f.keepalive)) out.keepalive = Number(f.keepalive)
   if (f.masquerade) out.masquerade = true
+  const theirs = maps(f.theirs)
+  if (theirs.length) out.theirs = theirs
+  const ours = maps(f.ours)
+  if (ours.length) out.ours = ours
   return out
 }
 
@@ -542,6 +561,92 @@ async function copyFile() {
         label="Translate to the tunnel address"
         hint="For a far end that does not route your networks. It cannot open connections to them."
       />
+
+      <section class="space-y-2">
+        <div class="flex items-center gap-3">
+          <h3 class="group-title">Show their networks here as</h3>
+          <button
+            type="button"
+            class="btn-secondary"
+            @click="form.theirs.push({ network: '', as: '' })"
+          >
+            Add network
+          </button>
+        </div>
+        <p v-if="!form.theirs.length" class="text-sm text-ink-muted">
+          None. For a far end numbered like this side, each host keeping its number.
+        </p>
+        <ul class="space-y-2">
+          <li v-for="(m, i) in form.theirs" :key="i" class="form-row flex-nowrap">
+            <FormField :id="`pe-theirs-${i}`" label="Their network" class="flex-1">
+              <input
+                :id="`pe-theirs-${i}`"
+                v-model="m.network"
+                class="input font-mono"
+                spellcheck="false"
+              />
+            </FormField>
+            <FormField :id="`pe-theirs-as-${i}`" label="Shown as" class="flex-1">
+              <input
+                :id="`pe-theirs-as-${i}`"
+                v-model="m.as"
+                class="input font-mono"
+                spellcheck="false"
+              />
+            </FormField>
+            <button
+              type="button"
+              class="link inline-flex items-center text-bad"
+              :aria-label="`Remove ${m.network || 'this network'}`"
+              @click="form.theirs.splice(i, 1)"
+            >
+              <Trash2 class="size-4" aria-hidden="true" />
+            </button>
+          </li>
+        </ul>
+      </section>
+
+      <section class="space-y-2">
+        <div class="flex items-center gap-3">
+          <h3 class="group-title">Show this side's networks there as</h3>
+          <button
+            type="button"
+            class="btn-secondary"
+            @click="form.ours.push({ network: '', as: '' })"
+          >
+            Add network
+          </button>
+        </div>
+        <p v-if="!form.ours.length" class="text-sm text-ink-muted">None.</p>
+        <ul class="space-y-2">
+          <li v-for="(m, i) in form.ours" :key="i" class="form-row flex-nowrap">
+            <FormField :id="`pe-ours-${i}`" label="This side's network" class="flex-1">
+              <input
+                :id="`pe-ours-${i}`"
+                v-model="m.network"
+                class="input font-mono"
+                spellcheck="false"
+              />
+            </FormField>
+            <FormField :id="`pe-ours-as-${i}`" label="Shown as" class="flex-1">
+              <input
+                :id="`pe-ours-as-${i}`"
+                v-model="m.as"
+                class="input font-mono"
+                spellcheck="false"
+              />
+            </FormField>
+            <button
+              type="button"
+              class="link inline-flex items-center text-bad"
+              :aria-label="`Remove ${m.network || 'this network'}`"
+              @click="form.ours.splice(i, 1)"
+            >
+              <Trash2 class="size-4" aria-hidden="true" />
+            </button>
+          </li>
+        </ul>
+      </section>
       <ToggleRow v-model="form.enabled" label="Enabled" />
       <p v-if="error" role="alert" class="text-sm text-bad">{{ error }}</p>
       <div class="flex justify-end gap-2 pt-2">

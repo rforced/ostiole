@@ -694,7 +694,19 @@ func newView(cfg *model.Config, links []network.Link) view {
 			z, ok := cfg.Zone(in.Zone)
 			outside[in.Name] = !ok || z.External
 			for _, r := range in.TunnelRoutes() {
-				v.inside = append(v.inside, insideNet{prefix: r.Prefix, link: in.Name})
+				// A network shown under another prefix is known here by that.
+				if !r.Mapped {
+					v.inside = append(v.inside, insideNet{prefix: r.Prefix, link: in.Name})
+				}
+			}
+			if in.WireGuard != nil {
+				for _, p := range in.WireGuard.Peers {
+					for _, m := range model.ParseNetMaps(p.Theirs) {
+						if p.Enabled {
+							v.inside = append(v.inside, insideNet{prefix: m.Shown, link: in.Name})
+						}
+					}
+				}
 			}
 		}
 	}

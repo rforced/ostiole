@@ -506,3 +506,121 @@ func TestValidateLookupsThroughAGateway(t *testing.T) {
 		})
 	}
 }
+
+// overlapConfig is a starter router whose LAN, 192.168.1.0/24, is also the
+// cabin's: the cabin's shows here as 10.201.1.0/24 and this side's there
+// as 10.200.1.0/24.
+func overlapConfig(t *testing.T) *Config {
+	t.Helper()
+	cfg := Starter(StarterOptions{Hostname: "fw", LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0"})
+	cfg.Zones = append(cfg.Zones, Zone{Name: "sites"})
+	cfg.Interfaces = append(cfg.Interfaces, Interface{
+		Name: "wg2", Zone: "sites", Enabled: true,
+		IPv4: IPv4{Mode: AddrStatic, Address: "10.77.0.1/30"},
+		IPv6: IPv6{Mode: AddrNone},
+		WireGuard: &WireGuard{
+			PrivateKey: newKey(t), ListenPort: 51821,
+			Peers: []WireGuardPeer{{
+				Name: "cabin", Enabled: true, PublicKey: newKey(t),
+				AllowedIPs: []string{"10.77.0.2/32", "192.168.1.0/24"},
+				Theirs:     []NetMap{{Network: "192.168.1.0/24", As: "10.201.1.0/24"}},
+				Ours:       []NetMap{{Network: "192.168.1.0/24", As: "10.200.1.0/24"}},
+			}},
+		},
+	})
+	return cfg
+}
+
+func TestTwoSitesOnOneNetworkValidateWhenBothSidesAreShown(t *testing.T) {
+	t.Parallel()
+	cfg := overlapConfig(t)
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	routes := tunnel(cfg).TunnelRoutes()
+	if len(routes) != 1 || routes[0].Prefix.String() != "192.168.1.0/24" || !routes[0].Mapped {
+		t.Errorf("routes = %+v, want the cabin's network, mapped", routes)
+	}
+	targets := cfg.TranslateTargets()
+	if len(targets) != 1 || targets[0].Tunnel != "wg2" || len(targets[0].Networks) != 1 {
+		t.Fatalf("translate targets = %+v, want wg2's", targets)
+	}
+	// Numbered after the gateways and groups, whose numbers stay as they were.
+	cfg.Gateways = append(cfg.Gateways, Gateway{Name: "wan", Enabled: true, Interface: "eth0"})
+	if got := cfg.TranslateTargets()[0]; got.Mark != 2<<PolicyMarkShift || got.Table != PolicyTableBase+2 {
+		t.Errorf("after one gateway: mark %#x, table %d; want the second number", got.Mark, got.Table)
+	}
+}
+
+func TestValidateNetworkMaps(t *testing.T) {
+	t.Parallel()
+	const peer = "interfaces[2].wireguard.peers[0]"
+	for _, tc := range []struct {
+		name, path, want string
+		change           func(*WireGuardPeer)
+	}{
+		{"this side not shown", peer + ".allowedIps[1]",
+			"192.168.1.0/24 is also on eth1; show that network to cabin under another prefix too, or translate to the tunnel address",
+			func(p *WireGuardPeer) { p.Ours = nil }},
+		{"translated to the tunnel address instead", "", "",
+			func(p *WireGuardPeer) { p.Ours, p.Masquerade = nil, true }},
+		{"both at once", peer + ".ours", "Translate to the tunnel address already hides this side; leave these out",
+			func(p *WireGuardPeer) { p.Masquerade = true }},
+		{"not the peer's network", peer + ".theirs[0].network", "192.168.2.0/24 is not one of cabin's allowed addresses",
+			func(p *WireGuardPeer) { p.Theirs[0].Network = "192.168.2.0/24" }},
+		{"a shorter prefix", peer + ".theirs[0].as", "10.201.0.0/16 has to be a /24 like 192.168.1.0/24, so each host keeps its number",
+			func(p *WireGuardPeer) { p.Theirs[0].As = "10.201.0.0/16" }},
+		{"IPv6", peer + ".theirs[0].as", `"fd01::/64" is not an IPv4 network`,
+			func(p *WireGuardPeer) { p.Theirs[0].As = "fd01::/64" }},
+		{"a shown prefix this side uses", peer + ".theirs[0].as", "192.168.1.0/24 overlaps the network it stands for",
+			func(p *WireGuardPeer) { p.Theirs[0].As = "192.168.1.0/24" }},
+		{"a shown prefix on an interface", peer + ".theirs[0].as", "10.77.0.0/24 is also on wg2; a shown prefix has to be free",
+			func(p *WireGuardPeer) { p.Theirs[0].As = "10.77.0.0/24" }},
+		{"one shown prefix twice", peer + ".ours[0].as", "10.201.1.0/24 is also behind wg2/cabin; a shown prefix has to be free",
+			func(p *WireGuardPeer) { p.Ours[0].As = "10.201.1.0/24" }},
+		{"this side's network where the far end has one", peer + ".ours[0].as",
+			"192.168.70.0/24 is also behind wg2/cabin; a shown prefix has to be free",
+			func(p *WireGuardPeer) {
+				p.AllowedIPs = append(p.AllowedIPs, "192.168.70.0/24")
+				p.Ours[0].As = "192.168.70.0/24"
+			}},
+		{"not this side's network", peer + ".ours[0].network", "172.20.0.0/24 is none of this router's networks",
+			func(p *WireGuardPeer) { p.Ours[0].Network = "172.20.0.0/24" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := overlapConfig(t)
+			tc.change(&tunnel(cfg).WireGuard.Peers[0])
+			got := tunnelIssues(t, cfg)
+			if tc.path == "" {
+				if len(got) != 0 {
+					t.Errorf("issues = %v, want none", got)
+				}
+				return
+			}
+			if got[tc.path] != tc.want {
+				t.Errorf("%s = %q, want %q (all: %v)", tc.path, got[tc.path], tc.want, got)
+			}
+		})
+	}
+}
+
+// A rule naming a peer whose network is shown elsewhere matches that
+// peer's real addresses pinned to its tunnel, which cannot be inverted.
+func TestAShowingPeerCannotBeInverted(t *testing.T) {
+	t.Parallel()
+	cfg := overlapConfig(t)
+	cfg.Rules = append(cfg.Rules, Rule{
+		ID: "not-cabin", Enabled: true, Zone: "sites", Action: ActionDrop, Protocol: ProtocolAny,
+		Source: Endpoint{Peer: "wg2/cabin", NotAddresses: true},
+	})
+	var msg string
+	for path, m := range tunnelIssues(t, cfg) {
+		if strings.HasSuffix(path, ".source.peer") {
+			msg = m
+		}
+	}
+	if msg != `peer "wg2/cabin" shows networks under other prefixes, so it cannot be inverted` {
+		t.Errorf("message = %q", msg)
+	}
+}

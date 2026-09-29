@@ -128,6 +128,22 @@ describe('WireguardPage', () => {
     expect(phone.find('[data-label="Traffic"]').text()).toBe('—')
   })
 
+  it('shows a network a peer shows under another prefix beside it', async () => {
+    tab.value = 'peers'
+    api.wireguard.status.mockResolvedValue([])
+    const config = useConfigStore()
+    const wrapper = mountPage()
+    Object.assign(config.findInterface('wg0').wireguard.peers[1], {
+      allowedIps: ['10.66.0.3/32', '192.168.1.0/24'],
+      theirs: [{ network: '192.168.1.0/24', as: '10.201.1.0/24' }],
+      ours: [{ network: '192.168.1.0/24', as: '10.200.1.0/24' }],
+    })
+    await flushPromises()
+    const allowed = row(wrapper, 'site').find('[data-label="Allowed"]').text()
+    expect(allowed).toContain('10.66.0.3/32, 192.168.1.0/24 as 10.201.1.0/24')
+    expect(allowed).toContain("this side's 192.168.1.0/24 there as 10.200.1.0/24")
+  })
+
   it('counts the peers each tunnel has sending, and names its gateway', async () => {
     tab.value = 'tunnels'
     api.wireguard.status.mockResolvedValue([

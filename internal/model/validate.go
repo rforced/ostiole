@@ -106,7 +106,7 @@ func (c *Config) Validate() error {
 		}
 		v.macAddress(path, in)
 		if in.WireGuard != nil {
-			v.wireguard(path+".wireguard", in)
+			v.wireguard(c, path+".wireguard", in)
 		}
 		if in.PPPoE != nil {
 			v.pppoe(path, in)
@@ -1617,6 +1617,7 @@ func (v *validator) sharedNetworks(c *Config) {
 		prefix netip.Prefix
 		iface  string
 		peer   string
+		mapped bool
 	}
 	var claims []claim
 	for i, in := range c.Interfaces {
@@ -1657,6 +1658,16 @@ func (v *validator) sharedNetworks(c *Config) {
 					continue
 				}
 				path := allowedPath(i, in, r)
+				// A network shown under another prefix goes into its tunnel by
+				// a mark, so it may share numbers with one here, as long as
+				// this side's hosts are shown to the peer too.
+				if r.Mapped || other.mapped {
+					if r.Mapped && other.peer == "" && !hidesOverlap(in, r.Peer, other.prefix, r.Prefix) {
+						v.add(path, "%s is also on %s; show that network to %s under another prefix too, or translate to the tunnel address",
+							r.Prefix, other.iface, r.Peer)
+					}
+					continue
+				}
 				if other.peer != "" {
 					v.add(path, "%s is also behind %s/%s; renumber one side", r.Prefix, other.iface, other.peer)
 					continue
@@ -1666,7 +1677,45 @@ func (v *validator) sharedNetworks(c *Config) {
 				v.add(path, "%s is on %s; list only the peer's tunnel address and the networks behind it, "+
 					"or renumber one side if the far end uses these numbers too", r.Prefix, other.iface)
 			}
-			claims = append(claims, claim{prefix: r.Prefix, iface: in.Name, peer: r.Peer})
+			claims = append(claims, claim{prefix: r.Prefix, iface: in.Name, peer: r.Peer, mapped: r.Mapped})
+		}
+	}
+	// A shown prefix, either side's, takes numbers nothing here uses and
+	// no other shown prefix does.
+	for i, in := range c.Interfaces {
+		if !in.Enabled || in.WireGuard == nil {
+			continue
+		}
+		for j, p := range in.WireGuard.Peers {
+			if !p.Enabled {
+				continue
+			}
+			for _, side := range []struct {
+				field string
+				maps  []NetMap
+			}{{"theirs", p.Theirs}, {"ours", p.Ours}} {
+				for k, m := range side.maps {
+					// A map netMaps refused has been reported already.
+					read := ParseNetMaps([]NetMap{m})
+					if len(read) == 0 || read[0].Shown.Overlaps(read[0].Real) {
+						continue
+					}
+					as := read[0].Shown
+					path := fmt.Sprintf("interfaces[%d].wireguard.peers[%d].%s[%d].as", i, j, side.field, k)
+					for _, other := range claims {
+						if !other.prefix.Overlaps(as) {
+							continue
+						}
+						if other.peer != "" {
+							v.add(path, "%s is also behind %s/%s; a shown prefix has to be free", m.As, other.iface, other.peer)
+						} else {
+							v.add(path, "%s is also on %s; a shown prefix has to be free", m.As, other.iface)
+						}
+						break
+					}
+					claims = append(claims, claim{prefix: as, iface: in.Name, peer: p.Name, mapped: true})
+				}
+			}
 		}
 	}
 }
@@ -1990,7 +2039,7 @@ func (v *validator) bond(path string, b Bond) {
 	}
 }
 
-func (v *validator) wireguard(path string, in Interface) {
+func (v *validator) wireguard(c *Config, path string, in Interface) {
 	w := in.WireGuard
 	if !wg.ValidKey(w.PrivateKey) {
 		v.add(path+".privateKey", "not a WireGuard key: want 32 bytes, base64 encoded")
@@ -2066,7 +2115,98 @@ func (v *validator) wireguard(path string, in Interface) {
 		if p.Masquerade {
 			v.translate(ppath+".masquerade", in, p)
 		}
+		v.netMaps(c, ppath, in, p)
 	}
+}
+
+// netMaps checks the networks a peer shows under other prefixes. Theirs
+// have to be the peer's own, ours this router's, and a prefix has to be as
+// long as the network it stands for, so each host keeps its number.
+func (v *validator) netMaps(c *Config, path string, in Interface, p WireGuardPeer) {
+	own := map[netip.Prefix]bool{}
+	for _, a := range p.AllowedIPs {
+		if pre, err := ParseAddress(a); err == nil {
+			own[pre.Masked()] = true
+		}
+	}
+	check := func(mpath string, m NetMap) (netip.Prefix, bool) {
+		network, err := netip.ParsePrefix(m.Network)
+		if err != nil || !network.Addr().Is4() || network.Bits() == 0 {
+			v.add(mpath+".network", "%q is not an IPv4 network", m.Network)
+			return network, false
+		}
+		as, err := netip.ParsePrefix(m.As)
+		if err != nil || !as.Addr().Is4() {
+			v.add(mpath+".as", "%q is not an IPv4 network", m.As)
+			return network, false
+		}
+		network, as = network.Masked(), as.Masked()
+		switch {
+		case as.Bits() != network.Bits():
+			v.add(mpath+".as", "%s has to be a /%d like %s, so each host keeps its number", m.As, network.Bits(), m.Network)
+			return network, false
+		case as.Overlaps(network):
+			v.add(mpath+".as", "%s overlaps the network it stands for", m.As)
+			return network, false
+		}
+		return network, true
+	}
+	for i, m := range p.Theirs {
+		mpath := fmt.Sprintf("%s.theirs[%d]", path, i)
+		if network, ok := check(mpath, m); ok && !own[network] {
+			v.add(mpath+".network", "%s is not one of %s's allowed addresses", m.Network, p.Name)
+		}
+	}
+	if p.Masquerade && len(p.Ours) > 0 {
+		v.add(path+".ours", "Translate to the tunnel address already hides this side; leave these out")
+	}
+	// Where the far end's own networks are is checked with the rest of the
+	// shown prefixes, in sharedNetworks: every network routed to it is.
+	for i, m := range p.Ours {
+		mpath := fmt.Sprintf("%s.ours[%d]", path, i)
+		if network, ok := check(mpath, m); ok && !c.hasNetwork(network, in.Name) {
+			v.add(mpath+".network", "%s is none of this router's networks", m.Network)
+		}
+	}
+}
+
+// hasNetwork reports whether an interface other than skip has an IPv4
+// network of its own that overlaps pre.
+func (c *Config) hasNetwork(pre netip.Prefix, skip string) bool {
+	for _, in := range c.Interfaces {
+		if !in.Enabled || in.Name == skip || in.IPv4.Mode != AddrStatic {
+			continue
+		}
+		if p, err := netip.ParsePrefix(in.IPv4.Address); err == nil && p.Masked().Overlaps(pre) {
+			return true
+		}
+	}
+	return false
+}
+
+// hidesOverlap reports whether a peer that shows its network under another
+// prefix shows this side's hosts in the overlap to it as well, or puts
+// them behind the tunnel's address: otherwise the far end would answer
+// them on its own network.
+func hidesOverlap(in Interface, peer string, here, there netip.Prefix) bool {
+	inside := here
+	if there.Bits() > here.Bits() {
+		inside = there
+	}
+	for _, p := range in.WireGuard.Peers {
+		if p.Name != peer {
+			continue
+		}
+		if p.Masquerade {
+			return true
+		}
+		for _, m := range ParseNetMaps(p.Ours) {
+			if m.Real.Bits() <= inside.Bits() && m.Real.Contains(inside.Addr()) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // dnsVia checks the gateway or group lookups go through. A tunnel in it
@@ -3078,6 +3218,8 @@ func (v *validator) endpoint(c *Config, path string, e Endpoint, aliases map[str
 			v.add(path+".peer", "unknown WireGuard peer %q: want tunnel/peer, e.g. wg0/laptop", e.Peer)
 		case p.TakesDefaultRoute():
 			v.add(path+".peer", "peer %q takes a default route, so it stands for the whole internet: name addresses instead", e.Peer)
+		case e.NotAddresses && len(p.Theirs) > 0:
+			v.add(path+".peer", "peer %q shows networks under other prefixes, so it cannot be inverted", e.Peer)
 		}
 	}
 	for i, a := range e.Addresses {

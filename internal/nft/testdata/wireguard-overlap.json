@@ -1,0 +1,38 @@
+{
+  "version": 12,
+  "system": { "hostname": "fw", "management": { "webPort": 443, "sshPort": 22 } },
+  "zones": [
+    { "name": "wan", "external": true },
+    { "name": "lan", "antiLockout": true },
+    { "name": "sites" }
+  ],
+  "interfaces": [
+    { "name": "eth0", "zone": "wan", "enabled": true, "ipv4": { "mode": "dhcp" }, "ipv6": { "mode": "slaac" } },
+    { "name": "eth1", "zone": "lan", "enabled": true, "ipv4": { "mode": "static", "address": "192.168.1.1/24" }, "ipv6": { "mode": "none" } },
+    {
+      "name": "wg2", "zone": "sites", "enabled": true,
+      "ipv4": { "mode": "static", "address": "10.77.0.1/30" }, "ipv6": { "mode": "none" },
+      "wireguard": {
+        "privateKey": "yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=",
+        "listenPort": 51821,
+        "peers": [
+          {
+            "name": "cabin", "enabled": true, "publicKey": "xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=",
+            "allowedIps": ["10.77.0.2/32", "192.168.1.0/24", "192.168.60.0/24"],
+            "endpoint": "198.51.100.30:51820", "keepalive": 25,
+            "theirs": [{ "network": "192.168.1.0/24", "as": "10.201.1.0/24" }],
+            "ours": [{ "network": "192.168.1.0/24", "as": "10.200.1.0/24" }]
+          }
+        ]
+      }
+    }
+  ],
+  "gateways": [{ "name": "wan", "enabled": true, "interface": "eth0", "monitor": "9.9.9.9" }],
+  "rules": [
+    { "id": "tv-out-wan", "description": "The TV out the WAN's gateway", "enabled": true, "zone": "lan", "action": "accept", "protocol": "any", "source": { "addresses": ["192.168.1.50"] }, "destination": {}, "gateway": "wan" },
+    { "id": "allow-lan", "description": "Allow LAN to any", "enabled": true, "zone": "lan", "action": "accept", "protocol": "any", "source": {}, "destination": {} },
+    { "id": "cabin-to-nas", "description": "The cabin reaches the NAS", "enabled": true, "zone": "sites", "action": "accept", "protocol": "tcp", "source": { "peer": "wg2/cabin" }, "destination": { "addresses": ["192.168.1.10"], "ports": ["443"] } },
+    { "id": "lan-to-cabin", "description": "The LAN reaches the cabin's printer", "enabled": true, "zone": "lan", "action": "accept", "protocol": "tcp", "source": {}, "destination": { "peer": "wg2/cabin", "ports": ["631"] } }
+  ],
+  "nat": { "outbound": { "mode": "automatic" } }
+}

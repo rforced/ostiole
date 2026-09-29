@@ -269,8 +269,11 @@ func TestSystemNATMatchesRuleset(t *testing.T) {
 			var lines []string
 			for _, c := range chainComments(t, out.Ruleset)["nat_postrouting"] {
 				if strings.HasPrefix(c, "auto-nat:") || strings.HasPrefix(c, "peer-nat:") || strings.HasPrefix(c, "tunnel-v6:") ||
-					strings.HasPrefix(c, "tunnel-nat:") {
-					lines = append(lines, "nat_postrouting/"+c)
+					strings.HasPrefix(c, "tunnel-nat:") || strings.HasPrefix(c, "translate:") {
+					// A peer's maps write one line a map; the row counts them all.
+					if key := "nat_postrouting/" + c; len(lines) == 0 || lines[len(lines)-1] != key {
+						lines = append(lines, key)
+					}
 				}
 			}
 			var keys []string
@@ -285,6 +288,12 @@ func TestSystemNATMatchesRuleset(t *testing.T) {
 					name := strings.TrimPrefix(key, "nat_postrouting/tunnel-nat:")
 					if in, ok := cfg.Interface(name); !ok || row.Zone != in.Zone || !slices.Equal(row.Interfaces, []string{name}) {
 						t.Errorf("row %d = %+v, want tunnel %s", i, row, name)
+					}
+				case strings.HasPrefix(key, "nat_postrouting/translate:"):
+					// A peer's shown networks: its tunnel, in the tunnel's zone.
+					ref := strings.TrimPrefix(key, "nat_postrouting/translate:")
+					if in, _, ok := cfg.Peer(ref); !ok || row.Zone != in.Zone || !slices.Equal(row.Interfaces, []string{in.Name}) {
+						t.Errorf("row %d = %+v, want the tunnel of %s", i, row, ref)
 					}
 				case strings.HasPrefix(key, "nat_postrouting/peer-nat:"):
 					// A peer's Translate: its tunnel, in the tunnel's zone.
