@@ -51,7 +51,7 @@ table inet ostiole {
 		iifname "eth1" ct state new jump policy_lan
 	}
 	chain policy_lan {
-		ip saddr 192.168.1.50 meta mark set meta mark & 0xff00ffff | 0x10000 ct mark set meta mark counter accept comment "policy:tv-out-wan"
+		ip saddr 192.168.1.50 meta mark set meta mark & 0xff00ffff | 0x10000 ct mark set ct mark & 0xff00ffff | 0x10000 counter accept comment "policy:tv-out-wan"
 	}
 	chain translate {
 		type filter hook prerouting priority mangle; policy accept;

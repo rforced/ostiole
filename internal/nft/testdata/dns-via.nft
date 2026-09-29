@@ -50,12 +50,12 @@ table inet ostiole {
 		iifname "eth1" ct state new jump policy_lan
 	}
 	chain policy_lan {
-		ip saddr 192.168.1.50 meta mark set meta mark & 0xff00ffff | 0x20000 ct mark set meta mark counter accept comment "policy:tv-out-vpn"
-		ip saddr 192.168.1.128/25 meta mark set meta mark & 0xff00ffff | 0x10000 ct mark set meta mark counter accept comment "policy:guests-private"
+		ip saddr 192.168.1.50 meta mark set meta mark & 0xff00ffff | 0x20000 ct mark set ct mark & 0xff00ffff | 0x20000 counter accept comment "policy:tv-out-vpn"
+		ip saddr 192.168.1.128/25 meta mark set meta mark & 0xff00ffff | 0x10000 ct mark set ct mark & 0xff00ffff | 0x10000 counter accept comment "policy:guests-private"
 	}
 	chain dns_via {
 		type route hook output priority mangle; policy accept;
-		meta skuid { 973, 994 } meta l4proto { tcp, udp } th dport { 53, 853 } fib daddr type != local meta mark set meta mark & 0xff00ffff | 0x20000 ct mark set meta mark counter comment "dns-via:vpn"
+		meta skuid { 973, 994 } meta l4proto { tcp, udp } th dport { 53, 853 } fib daddr type != local meta mark set meta mark & 0xff00ffff | 0x20000 ct mark set ct mark & 0xff00ffff | 0x20000 counter comment "dns-via:vpn"
 	}
 	chain postrouting {
 		type filter hook postrouting priority filter; policy accept;

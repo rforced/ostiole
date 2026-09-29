@@ -855,21 +855,25 @@ func (r *renderer) queryLogRule() {
 const (
 	shapeSet        = "meta mark set meta mark & 0x%08x | 0x%08x"
 	shapeTest       = "ct mark & 0x%08x != 0x0"
-	shapeCopy       = "ct mark set meta mark"
+	shapeCopy       = "ct mark set ct mark & 0x%08x | 0x%08x"
 	shapeRestoreTag = "shaping:restore"
 )
 
 // shapeMark is what a rule does to put its traffic in a tier: the tier
-// goes into the packet mark, leaving the byte policy routing keeps beside
-// it alone, and the whole mark is then copied onto the connection. Later
-// packets and the replies coming back are tiered from that copy without
-// being matched again.
+// goes into the packet mark and into the connection's, leaving the rest of
+// both alone. Later packets and the replies coming back are tiered from
+// the connection's without being matched again. Copying the whole packet
+// mark instead would also store what other features put on this packet
+// alone, such as a translation's mark, and put it back on the replies.
 func shapeMark(t model.Tier) []string {
 	mark, ok := t.Mark()
 	if !ok {
 		return nil
 	}
-	return []string{fmt.Sprintf(shapeSet, ^uint32(model.ShapeMarkMask), mark), shapeCopy}
+	return []string{
+		fmt.Sprintf(shapeSet, ^uint32(model.ShapeMarkMask), mark),
+		fmt.Sprintf(shapeCopy, ^uint32(model.ShapeMarkMask), mark),
+	}
 }
 
 // shapePrefix is shapeMark for a rule assembled by formatting rather than
@@ -900,17 +904,16 @@ func (r *renderer) busyHosts(z model.Zone) {
 	if b == nil || len(r.cfg.ZoneInterfaces(z.Name)) == 0 {
 		return
 	}
-	mark, ok := b.Priority.Mark()
-	if !ok {
+	if _, ok := b.Priority.Mark(); !ok {
 		return
 	}
-	set := fmt.Sprintf(shapeSet, ^uint32(model.ShapeMarkMask), mark)
+	set := strings.Join(shapeMark(b.Priority), " ")
 	for _, fam := range []struct{ set, prefix string }{
 		{busySet(z.Name, 4), "ip"},
 		{busySet(z.Name, 6), "ip6"},
 	} {
-		r.line(fmt.Sprintf(`ct state new add @%s { %s saddr ct count over %d } counter %s %s comment "busy:%s"`,
-			fam.set, fam.prefix, b.Connections, set, shapeCopy, z.Name))
+		r.line(fmt.Sprintf(`ct state new add @%s { %s saddr ct count over %d } counter %s comment "busy:%s"`,
+			fam.set, fam.prefix, b.Connections, set, z.Name))
 	}
 	r.sys(SystemRule{
 		Chain: "zone_" + z.Name, Zones: []string{z.Name}, Action: "continue",
@@ -1642,12 +1645,11 @@ func (r *renderer) policyZoneRules(zone string) {
 			r.line(fmt.Sprintf("# rule %s: gateway %q is disabled, so its traffic follows the default route", rule.ID, rule.Gateway))
 			r.emit(rule.ID, m, []string{"counter", "accept", fmt.Sprintf("comment %q", "no-policy:"+rule.ID)})
 		default:
-			// Only this feature's byte is written: the rest of the register
-			// belongs to whoever else marks a packet, and the copy onto the
-			// connection takes the union of both.
+			// Only this feature's byte is written, on the packet and on the
+			// connection: the rest of both belongs to whoever else marks.
 			r.emit(rule.ID, m, []string{
 				fmt.Sprintf("meta mark set meta mark & 0x%08x | 0x%x", ^uint32(model.PolicyMarkMask), target.Mark),
-				"ct mark set meta mark",
+				fmt.Sprintf("ct mark set ct mark & 0x%08x | 0x%x", ^uint32(model.PolicyMarkMask), target.Mark),
 				"counter", "accept",
 				fmt.Sprintf("comment %q", "policy:"+rule.ID),
 			})

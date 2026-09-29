@@ -66,11 +66,11 @@ table inet ostiole {
 	chain policy_lan {
 		# rule lan-to-guest not mirrored: it matches on the destination zone, which prerouting cannot see
 		fib daddr type local udp dport 53 counter accept comment "no-policy:lan-dns"
-		meta hour != "06:00"-"22:00" ip saddr @alias_torrents_v4 meta mark set meta mark & 0xff00ffff | 0x10000 ct mark set meta mark counter accept comment "policy:torrents-out-backup"
-		meta mark set meta mark & 0xff00ffff | 0x20000 ct mark set meta mark counter accept comment "policy:lan-default"
+		meta hour != "06:00"-"22:00" ip saddr @alias_torrents_v4 meta mark set meta mark & 0xff00ffff | 0x10000 ct mark set ct mark & 0xff00ffff | 0x10000 counter accept comment "policy:torrents-out-backup"
+		meta mark set meta mark & 0xff00ffff | 0x20000 ct mark set ct mark & 0xff00ffff | 0x20000 counter accept comment "policy:lan-default"
 	}
 	chain policy_guest {
-		ip saddr 192.168.9.50 meta mark set meta mark & 0xff00ffff | 0x60000 ct mark set meta mark counter accept comment "policy:guest-kiosk"
+		ip saddr 192.168.9.50 meta mark set meta mark & 0xff00ffff | 0x60000 ct mark set ct mark & 0xff00ffff | 0x60000 counter accept comment "policy:guest-kiosk"
 		# rule guest-out-parked: gateway "parked" is disabled, so its traffic follows the default route
 		counter accept comment "no-policy:guest-out-parked"
 	}

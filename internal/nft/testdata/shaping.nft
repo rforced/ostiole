@@ -46,12 +46,12 @@ table inet ostiole {
 		counter comment "zone-unmatched"
 	}
 	chain zone_lan {
-		ct state new add @busy_lan_v4 { ip saddr ct count over 200 } counter meta mark set meta mark & 0xf8ffffff | 0x01000000 ct mark set meta mark comment "busy:lan"
-		ct state new add @busy_lan_v6 { ip6 saddr ct count over 200 } counter meta mark set meta mark & 0xf8ffffff | 0x01000000 ct mark set meta mark comment "busy:lan"
-		udp dport 5060 counter meta mark set meta mark & 0xf8ffffff | 0x04000000 ct mark set meta mark accept comment "id:lan-voip"
-		oifname "eth2" counter meta mark set meta mark & 0xf8ffffff | 0x03000000 ct mark set meta mark accept comment "id:lan-to-dmz"
-		fib daddr type local tcp dport 443 counter meta mark set meta mark & 0xf8ffffff | 0x03000000 ct mark set meta mark accept comment "id:lan-admin"
-		ip saddr 192.168.1.50 counter meta mark set meta mark & 0xf8ffffff | 0x01000000 ct mark set meta mark accept comment "id:lan-backups"
+		ct state new add @busy_lan_v4 { ip saddr ct count over 200 } counter meta mark set meta mark & 0xf8ffffff | 0x01000000 ct mark set ct mark & 0xf8ffffff | 0x01000000 comment "busy:lan"
+		ct state new add @busy_lan_v6 { ip6 saddr ct count over 200 } counter meta mark set meta mark & 0xf8ffffff | 0x01000000 ct mark set ct mark & 0xf8ffffff | 0x01000000 comment "busy:lan"
+		udp dport 5060 counter meta mark set meta mark & 0xf8ffffff | 0x04000000 ct mark set ct mark & 0xf8ffffff | 0x04000000 accept comment "id:lan-voip"
+		oifname "eth2" counter meta mark set meta mark & 0xf8ffffff | 0x03000000 ct mark set ct mark & 0xf8ffffff | 0x03000000 accept comment "id:lan-to-dmz"
+		fib daddr type local tcp dport 443 counter meta mark set meta mark & 0xf8ffffff | 0x03000000 ct mark set ct mark & 0xf8ffffff | 0x03000000 accept comment "id:lan-admin"
+		ip saddr 192.168.1.50 counter meta mark set meta mark & 0xf8ffffff | 0x01000000 ct mark set ct mark & 0xf8ffffff | 0x01000000 accept comment "id:lan-backups"
 		counter accept comment "id:lan-rest"
 		ct status dnat fib daddr type != local counter accept comment "port-forwards"
 		counter comment "zone-unmatched"
@@ -71,12 +71,12 @@ table inet ostiole {
 		udp dport 5060 counter accept comment "no-policy:lan-voip"
 		# rule lan-to-dmz not mirrored: it matches on the destination zone, which prerouting cannot see
 		fib daddr type local tcp dport 443 counter accept comment "no-policy:lan-admin"
-		ip saddr 192.168.1.50 meta mark set meta mark & 0xff00ffff | 0x10000 ct mark set meta mark counter accept comment "policy:lan-backups"
+		ip saddr 192.168.1.50 meta mark set meta mark & 0xff00ffff | 0x10000 ct mark set ct mark & 0xff00ffff | 0x10000 counter accept comment "policy:lan-backups"
 	}
 	chain nat_prerouting {
 		type nat hook prerouting priority dstnat; policy accept;
-		iifname "eth0" udp dport 5061 counter meta mark set meta mark & 0xf8ffffff | 0x04000000 ct mark set meta mark dnat ip to 192.168.1.20 comment "id:pf-voice"
-		iifname { "eth1", "eth2" } ip daddr != { 192.168.1.1, 192.168.2.1 } fib daddr type local udp dport 5061 counter meta mark set meta mark & 0xf8ffffff | 0x04000000 ct mark set meta mark dnat ip to 192.168.1.20 comment "reflect:pf-voice"
+		iifname "eth0" udp dport 5061 counter meta mark set meta mark & 0xf8ffffff | 0x04000000 ct mark set ct mark & 0xf8ffffff | 0x04000000 dnat ip to 192.168.1.20 comment "id:pf-voice"
+		iifname { "eth1", "eth2" } ip daddr != { 192.168.1.1, 192.168.2.1 } fib daddr type local udp dport 5061 counter meta mark set meta mark & 0xf8ffffff | 0x04000000 ct mark set ct mark & 0xf8ffffff | 0x04000000 dnat ip to 192.168.1.20 comment "reflect:pf-voice"
 		iifname "eth0" tcp dport 443 counter dnat ip to 192.168.2.10:8443 comment "id:pf-web"
 	}
 	chain nat_postrouting {

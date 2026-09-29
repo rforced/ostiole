@@ -770,6 +770,20 @@ func overlapConfig(router, cabin *ecdh.PrivateKey) *model.Config {
 // here, is not answered by this router, and a host here that sends to
 // this side's shown prefix is stopped before conntrack sees it.
 func TestTwoSitesOnOneNetworkReachEachOtherTranslatedInKernel(t *testing.T) {
+	translatedSites(t, "")
+}
+
+// A rule with a priority leaves a translated site its answers. The tier
+// goes onto the connection by itself: were the whole packet mark copied,
+// the translation's mark would go with it, come back on the cabin's
+// answers, and hold them for the tunnel they have just come out of.
+func TestATieredRuleLeavesATranslatedSiteItsAnswersInKernel(t *testing.T) {
+	translatedSites(t, model.TierHigh)
+}
+
+// translatedSites is TestTwoSitesOnOneNetworkReachEachOtherTranslatedInKernel
+// with tier on the LAN's rule.
+func translatedSites(t *testing.T, tier model.Tier) {
 	if !wgKernel(t) {
 		return
 	}
@@ -820,6 +834,7 @@ func TestTwoSitesOnOneNetworkReachEachOtherTranslatedInKernel(t *testing.T) {
 	route(t, "10.201.1.0/24", "", "wg2")
 
 	cfg := overlapConfig(routerKey, cabinKey)
+	cfg.Rules[0].Priority = tier
 	ruleset, err := Render(cfg)
 	if err != nil {
 		t.Fatal(err)

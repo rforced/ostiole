@@ -49,8 +49,8 @@ table inet ostiole {
 		iifname "eth1" ct state new jump policy_lan
 	}
 	chain policy_lan {
-		ip saddr 192.168.1.50 meta mark set meta mark & 0xff00ffff | 0x20000 ct mark set meta mark counter accept comment "policy:tv-out-vpn"
-		ip saddr 192.168.1.128/25 meta mark set meta mark & 0xff00ffff | 0x10000 ct mark set meta mark counter accept comment "policy:guests-private"
+		ip saddr 192.168.1.50 meta mark set meta mark & 0xff00ffff | 0x20000 ct mark set ct mark & 0xff00ffff | 0x20000 counter accept comment "policy:tv-out-vpn"
+		ip saddr 192.168.1.128/25 meta mark set meta mark & 0xff00ffff | 0x10000 ct mark set ct mark & 0xff00ffff | 0x10000 counter accept comment "policy:guests-private"
 	}
 	chain nat_prerouting {
 		type nat hook prerouting priority dstnat; policy accept;

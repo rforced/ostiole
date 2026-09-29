@@ -53,8 +53,8 @@ func (r *renderer) dnsViaChain() {
 		}
 		key := "dns-via:" + via
 		r.line(fmt.Sprintf(`meta skuid %s meta l4proto { tcp, udp } th dport { 53, 853 } fib daddr type != local `+
-			`meta mark set meta mark & 0x%08x | 0x%x ct mark set meta mark counter comment %q`,
-			uidSet(r.resolverUIDs), ^uint32(model.PolicyMarkMask), t.Mark, key))
+			`meta mark set meta mark & 0x%08x | 0x%x ct mark set ct mark & 0x%08x | 0x%x counter comment %q`,
+			uidSet(r.resolverUIDs), ^uint32(model.PolicyMarkMask), t.Mark, ^uint32(model.PolicyMarkMask), t.Mark, key))
 		r.sys(SystemRule{
 			Chain: "dns_via", Action: "continue", Protocol: string(model.ProtocolTCPUDP),
 			Source: "this router's lookups", Destination: "upstream, port 53 or 853",
