@@ -663,3 +663,49 @@ func TestATunnelGatewayIsProbedButNeverMovesTheDefaultRoute(t *testing.T) {
 		t.Error("a removed tunnel gateway had the main table searched for its routes")
 	}
 }
+
+// A policy route taken out between two ticks, as networkd does when an
+// apply has it reconfigure a link, is put back at once from what the last
+// probes found, without probing again.
+func TestARemovedPolicyRouteIsPutBackWithoutWaitingForAProbe(t *testing.T) {
+	t.Parallel()
+	cfg := &model.Config{
+		Version:  model.SchemaVersion,
+		Gateways: []model.Gateway{{Name: "wan", Enabled: true, Interface: "eth0", Address: "203.0.113.1"}},
+	}
+	prober := &fakeProber{fail: map[string]bool{}}
+	pol := &fakePolicy{}
+	removed := make(chan struct{}, 1)
+	m := &Monitor{
+		Prober: prober, Router: &fakeRouter{resolveTo: map[string]string{}}, Log: slog.New(slog.DiscardHandler),
+		Policy: pol, Interval: time.Hour, Source: func() *model.Config { return cfg },
+		Removed: func(context.Context) (<-chan struct{}, error) { return removed, nil },
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	go m.Run(ctx)
+	waitPlans := func(n int) {
+		t.Helper()
+		for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+			pol.mu.Lock()
+			got := len(pol.plans)
+			pol.mu.Unlock()
+			if got >= n {
+				return
+			}
+		}
+		t.Fatalf("policy routing was synced fewer than %d times", n)
+	}
+	waitPlans(1)
+	prober.mu.Lock()
+	probes := prober.probes
+	prober.mu.Unlock()
+
+	removed <- struct{}{}
+	waitPlans(2)
+	prober.mu.Lock()
+	defer prober.mu.Unlock()
+	if prober.probes != probes {
+		t.Errorf("putting the route back probed %d more times", prober.probes-probes)
+	}
+}

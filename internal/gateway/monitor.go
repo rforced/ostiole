@@ -26,6 +26,9 @@ const (
 	RiseAfter = 2
 	// history is how many probes the loss figure covers.
 	history = 20
+	// settle is how long a removed policy route waits before the tables
+	// are put back: networkd takes a link's routes out in a burst.
+	settle = 200 * time.Millisecond
 )
 
 // Prober sends one probe and reports the round trip time.
@@ -129,6 +132,10 @@ type Monitor struct {
 	// OnTick, when set, is called after every pass, so the crons page can
 	// say when the router last probed.
 	OnTick func()
+	// Removed, when set, signals that something took a policy route out of
+	// the kernel. networkd does when it reconfigures a link, which an apply
+	// makes it do; the tables go back at once instead of at the next probe.
+	Removed func(ctx context.Context) (<-chan struct{}, error)
 
 	mu     sync.Mutex
 	states map[string]*state
@@ -189,14 +196,52 @@ func (m *Monitor) Run(ctx context.Context) {
 	}
 	t := time.NewTicker(interval)
 	defer t.Stop()
+	var removed <-chan struct{}
+	if m.Removed != nil {
+		ch, err := m.Removed(ctx)
+		if err != nil {
+			m.Log.Warn("cannot watch the policy routes; one that goes is put back at the next probe", "err", err)
+		}
+		removed = ch
+	}
+	var settled <-chan time.Time
+	m.Tick(ctx)
 	for {
-		m.Tick(ctx)
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
+			m.Tick(ctx)
+		case _, ok := <-removed:
+			if !ok {
+				removed = nil
+				continue
+			}
+			settled = time.After(settle)
+		case <-settled:
+			settled = nil
+			m.Resync()
 		}
 	}
+}
+
+// Resync puts the policy tables back as the last probes left them,
+// without probing again.
+func (m *Monitor) Resync() {
+	if m.Source == nil {
+		return
+	}
+	cfg := m.Source()
+	if cfg == nil {
+		return
+	}
+	m.mu.Lock()
+	states := make([]*state, 0, len(m.order))
+	for _, name := range m.order {
+		states = append(states, m.states[name])
+	}
+	m.mu.Unlock()
+	m.syncPolicy(cfg, states)
 }
 
 // Tick probes every gateway once and applies the routing decision.

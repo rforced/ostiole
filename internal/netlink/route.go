@@ -1,10 +1,12 @@
 package netlink
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"strconv"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -352,4 +354,50 @@ func parseNexthops(b []byte) ([]Nexthop, error) {
 		b = b[min(align(n), len(b)):]
 	}
 	return out, nil
+}
+
+// WatchRouteDeletes signals each time the kernel removes a route that
+// keep accepts, until ctx is done; then it closes the channel. Signals
+// coalesce, and a message the socket had no room for is signalled too,
+// since whatever it said is unknown.
+func WatchRouteDeletes(ctx context.Context, keep func(Route) bool) (<-chan struct{}, error) {
+	c, err := dial(unix.NETLINK_ROUTE, unix.RTMGRP_IPV4_ROUTE|unix.RTMGRP_IPV6_ROUTE)
+	if err != nil {
+		return nil, err
+	}
+	out := make(chan struct{}, 1)
+	stop := context.AfterFunc(ctx, func() { _ = c.f.SetReadDeadline(time.Now()) })
+	go func() {
+		defer close(out)
+		defer func() { _ = c.close() }()
+		defer stop()
+		for {
+			msgs, err := c.receive()
+			switch {
+			case errors.Is(err, unix.ENOBUFS):
+			case err != nil:
+				return
+			case !deletesAny(msgs, keep):
+				continue
+			}
+			select {
+			case out <- struct{}{}:
+			default:
+			}
+		}
+	}()
+	return out, nil
+}
+
+// deletesAny reports whether msgs remove a route keep accepts.
+func deletesAny(msgs []message, keep func(Route) bool) bool {
+	for _, m := range msgs {
+		if m.typ != unix.RTM_DELROUTE {
+			continue
+		}
+		if r, err := parseRoute(m.data); err == nil && keep(r) {
+			return true
+		}
+	}
+	return false
 }

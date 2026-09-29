@@ -1,6 +1,7 @@
 package policy
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -73,6 +74,12 @@ func (i *Installer) syncFamily(family int, targets []Target) error {
 // ownTable reports whether a routing table id belongs to policy routing.
 func ownTable(id int) bool {
 	return id > model.PolicyTableBase && id <= model.PolicyTableBase+model.MaxPolicyTargets
+}
+
+// WatchRemoved signals each time a route leaves one of policy routing's
+// tables, until ctx is done.
+func WatchRemoved(ctx context.Context) (<-chan struct{}, error) {
+	return netlink.WatchRouteDeletes(ctx, func(r netlink.Route) bool { return ownTable(r.Table) })
 }
 
 // ownPriority reports whether an ip rule priority belongs to policy routing.

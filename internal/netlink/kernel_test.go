@@ -453,6 +453,54 @@ func TestRouteChangesAreAnnounced(t *testing.T) {
 	}
 }
 
+// A route leaving a table the watcher keeps is signalled; one leaving
+// another table, or one coming in, is not.
+func TestRouteDeletesAreSignalledForTheTablesKept(t *testing.T) {
+	if !netnstest.Enter(t) {
+		return
+	}
+	link := netnstest.Dummy(t, "dummy0", "192.0.2.1/24")
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	signals, err := netlink.WatchRouteDeletes(ctx, func(r netlink.Route) bool { return r.Table == 2201 })
+	if err != nil {
+		t.Fatal(err)
+	}
+	expect := func(want bool, what string) {
+		t.Helper()
+		select {
+		case <-signals:
+			if !want {
+				t.Errorf("%s was signalled", what)
+			}
+		case <-time.After(300 * time.Millisecond):
+			if want {
+				t.Errorf("%s was not signalled", what)
+			}
+		}
+	}
+	for _, table := range []int{2201, 100} {
+		for _, dst := range []string{"198.51.100.0/24", "203.0.113.0/24"} {
+			if err := netlink.AddRoute(netlink.Route{Table: table, Dst: cidr(dst), Gw: net.ParseIP("192.0.2.254"), LinkIndex: link.Index}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	expect(false, "adding routes")
+	for _, dst := range []string{"198.51.100.0/24", "203.0.113.0/24"} {
+		if err := netlink.DeleteRoute(netlink.Route{Table: 100, Dst: cidr(dst)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	expect(false, "a route leaving another table")
+	for _, dst := range []string{"198.51.100.0/24", "203.0.113.0/24"} {
+		if err := netlink.DeleteRoute(netlink.Route{Table: 2201, Dst: cidr(dst)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	expect(true, "a route leaving the table kept")
+}
+
 func TestNeighboursAreRead(t *testing.T) {
 	if !netnstest.Enter(t) {
 		return
