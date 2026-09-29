@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { linePath, nearest, niceScale, rateTicks, timeLabel, timeTicks } from '@/lib/chart'
+import {
+  fittingTicks,
+  linePath,
+  nearest,
+  niceScale,
+  rateTicks,
+  timeLabel,
+  timeTicks,
+} from '@/lib/chart'
 
 describe('niceScale', () => {
   // The axis stops at round rates, about four of them.
@@ -43,6 +51,16 @@ describe('timeTicks', () => {
     expect(timeLabel(t, '31d')).toBe(
       new Date(t * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
     )
+  })
+})
+
+describe('fittingTicks', () => {
+  // A label is centred on its stop, so one near either end would run off.
+  it('keeps the stops whose label fits inside the chart', () => {
+    // Eight characters at 7 px: 28 px either side of the stop.
+    const label = () => '02:57 AM'
+    const x = (t) => t
+    expect(fittingTicks([27, 28, 300, 612, 613], x, label, 640)).toEqual([28, 300, 612])
   })
 })
 

@@ -70,6 +70,24 @@ export function timeTicks(start, end, window, narrow = false) {
   return out
 }
 
+/** A text-xs character at its widest, in pixels, for labels not yet drawn. */
+const LABEL_CHAR_PX = 7
+
+/**
+ * The stops whose label, centred on the stop, fits between 0 and width.
+ * A stop near either end would draw half its label outside the chart.
+ * @param {number[]} ticks seconds
+ * @param {(t: number) => number} xOf where a stop is, in pixels
+ * @param {(t: number) => string} labelOf what a stop says
+ * @param {number} width the chart's width, in pixels
+ */
+export function fittingTicks(ticks, xOf, labelOf, width) {
+  return ticks.filter((t) => {
+    const half = (labelOf(t).length * LABEL_CHAR_PX) / 2
+    return xOf(t) - half >= 0 && xOf(t) + half <= width
+  })
+}
+
 /**
  * What a stop on the time axis says: 14:05 within a day, 27 Sep over a
  * month.

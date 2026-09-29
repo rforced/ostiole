@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 
 import TrafficChart from '@/components/TrafficChart.vue'
+import { timeLabel } from '@/lib/chart'
 
 const END = 1_790_000_000
 /** A minute of a link at 1 and 2 Mbit/s, then 3 and 4. */
@@ -39,6 +40,16 @@ describe('TrafficChart', () => {
     // Round rates up the axis, to the busiest point.
     const ticks = w.findAll('text').map((t) => t.text())
     expect(ticks.slice(0, 5)).toEqual(['0 bit/s', '1 Mbit/s', '2 Mbit/s', '3 Mbit/s', '4 Mbit/s'])
+  })
+
+  // A window that ends on a whole minute has a stop at the right edge,
+  // whose centred label would be cut in half.
+  it('leaves out a time whose label would run off the end', () => {
+    const end = 1_790_000_040
+    const w = chart({ end })
+    const labels = w.findAll('text').map((t) => t.text())
+    expect(labels).not.toContain(timeLabel(end, '5m'))
+    expect(labels).toContain(timeLabel(end - 60, '5m'))
   })
 
   // The keyboard reads the points as the pointer does: values first.

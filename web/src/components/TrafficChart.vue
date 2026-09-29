@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, useId } from 'vue'
 
 import {
   SPANS,
+  fittingTicks,
   linePath,
   nearest,
   niceScale,
@@ -81,7 +82,14 @@ const y = (v) => PAD.top + plotH - (v / scale.value.top) * plotH
 const down = computed(() => linePath(shown.value, 1, x, y))
 const up = computed(() => linePath(shown.value, 2, x, y))
 const rates = computed(() => rateTicks(scale.value))
-const times = computed(() => timeTicks(startT.value, endT.value, props.window, width.value < 480))
+const times = computed(() =>
+  fittingTicks(
+    timeTicks(startT.value, endT.value, props.window, width.value < 480),
+    x,
+    (t) => timeLabel(t, props.window),
+    width.value,
+  ),
+)
 const last = computed(() => shown.value.at(-1) ?? null)
 const current = computed(
   () => props.now ?? (last.value ? { down: last.value[1], up: last.value[2] } : null),
