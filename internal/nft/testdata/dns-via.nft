@@ -45,7 +45,7 @@ table inet ostiole {
 	}
 	chain policy_prerouting {
 		type filter hook prerouting priority mangle; policy accept;
-		ct mark & 0x00ff0000 != 0x0 meta mark set ct mark counter accept comment "policy:established"
+		ct mark & 0x00ff0000 != 0x0 meta mark set ct mark & 0x07ffffff counter accept comment "policy:established"
 		fib daddr type local counter accept comment "policy:local"
 		iifname "eth1" ct state new jump policy_lan
 	}
@@ -56,6 +56,18 @@ table inet ostiole {
 	chain dns_via {
 		type route hook output priority mangle; policy accept;
 		meta skuid { 973, 994 } meta l4proto { tcp, udp } th dport { 53, 853 } fib daddr type != local meta mark set meta mark & 0xff00ffff | 0x20000 ct mark set ct mark & 0xff00ffff | 0x20000 counter comment "dns-via:vpn"
+	}
+	chain reply_prerouting {
+		type filter hook prerouting priority mangle + 1; policy accept;
+		iifname "eth0" ct state new ct mark set ct mark & 0x07ffffff | 0x08000000 counter comment "reply:eth0"
+		iifname "wg1" ct state new ct mark set ct mark & 0x07ffffff | 0x10000000 counter comment "reply:wg1"
+		ct direction reply ct mark & 0xf8000000 == 0x08000000 meta mark set meta mark & 0x07ffffff | 0x08000000 counter comment "reply-back:eth0"
+		ct direction reply ct mark & 0xf8000000 == 0x10000000 meta mark set meta mark & 0x07ffffff | 0x10000000 counter comment "reply-back:wg1"
+	}
+	chain reply_output {
+		type route hook output priority mangle; policy accept;
+		ct direction reply ct mark & 0xf8000000 == 0x08000000 meta mark set meta mark & 0x07ffffff | 0x08000000 counter comment "reply-back:eth0"
+		ct direction reply ct mark & 0xf8000000 == 0x10000000 meta mark set meta mark & 0x07ffffff | 0x10000000 counter comment "reply-back:wg1"
 	}
 	chain postrouting {
 		type filter hook postrouting priority filter; policy accept;

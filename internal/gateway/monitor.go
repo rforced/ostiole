@@ -298,6 +298,9 @@ func (m *Monitor) syncPolicy(cfg *model.Config, states []*state) {
 		return
 	}
 	hops := make(map[string]policy.Hop, len(states))
+	// A line is up while a gateway on it answers, or while nothing watches
+	// it.
+	up, watched := map[string]bool{}, map[string]bool{}
 	m.mu.Lock()
 	for _, st := range states {
 		address := st.address
@@ -305,9 +308,13 @@ func (m *Monitor) syncPolicy(cfg *model.Config, states []*state) {
 			address = st.gw.Address
 		}
 		hops[st.gw.Name] = policy.NewHop(cfg, st.gw, address, st.online || st.unknown)
+		watched[st.gw.Interface] = true
+		up[st.gw.Interface] = up[st.gw.Interface] || st.online || st.unknown
 	}
 	m.mu.Unlock()
-	if err := m.Policy.Sync(append(policy.Plan(cfg, hops), policy.Translations(cfg)...)); err != nil {
+	targets := append(policy.Plan(cfg, hops), policy.Translations(cfg)...)
+	targets = append(targets, policy.Lines(cfg, func(iface string) bool { return up[iface] || !watched[iface] })...)
+	if err := m.Policy.Sync(targets); err != nil {
 		m.Log.Warn("could not update policy routing", "err", err)
 	}
 }

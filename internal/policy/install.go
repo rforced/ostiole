@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/netip"
 	"slices"
 
 	"golang.org/x/sys/unix"
@@ -46,23 +47,41 @@ func (i *Installer) Sync(targets []Target) error {
 func (i *Installer) Clear() error { return i.Sync(nil) }
 
 func (i *Installer) syncFamily(family int, targets []Target) error {
+	existing, err := netlink.Routes(family, netlink.RouteFilter{AllTables: true})
+	if err != nil {
+		return fmt.Errorf("list policy routes: %w", err)
+	}
+	var addrs []netlink.Addr
+	if slices.ContainsFunc(targets, func(t Target) bool { return t.Line != "" && t.Up && len(t.Ports) > 0 }) {
+		if addrs, err = netlink.Addrs(family); err != nil {
+			return fmt.Errorf("list addresses: %w", err)
+		}
+	}
 	wantRoutes := map[int][]*netlink.Route{}
-	wantRules := map[int]netlink.Rule{}
+	var wantRules []netlink.Rule
 	for _, t := range targets {
-		routes := i.routesFor(t, family)
+		var routes []*netlink.Route
+		link := 0
+		if t.Line != "" {
+			if l, err := netlink.LinkByName(t.Line); err == nil {
+				link = l.Index
+				routes = lineRoutes(t, family, link, existing)
+			}
+		} else {
+			routes = i.routesFor(t, family)
+		}
 		if len(routes) == 0 {
 			// Nothing to route through: leave the table empty so the mark
 			// falls through to the main table.
 			continue
 		}
 		wantRoutes[t.Table] = routes
-		for _, rule := range rulesFor(t, family) {
-			wantRules[rule.Priority] = rule
-		}
+		wantRules = append(wantRules, rulesFor(t, family)...)
+		wantRules = append(wantRules, sourceRules(t, family, link, addrs)...)
 	}
 
 	var errs []error
-	if err := i.syncRoutes(family, wantRoutes); err != nil {
+	if err := i.syncRoutes(existing, wantRoutes); err != nil {
 		errs = append(errs, err)
 	}
 	// Rules come after routes so a mark never points at an empty table.
@@ -72,9 +91,15 @@ func (i *Installer) syncFamily(family int, targets []Target) error {
 	return errors.Join(errs...)
 }
 
-// ownTable reports whether a routing table id belongs to policy routing.
+// ownTable reports whether a routing table id belongs to policy routing:
+// the gateways', groups' and translations', then the lines'.
 func ownTable(id int) bool {
-	return id > model.PolicyTableBase && id <= model.PolicyTableBase+model.MaxPolicyTargets
+	return id > model.PolicyTableBase && id <= model.ReplyTableBase+model.MaxReplyLines
+}
+
+// lineTable reports whether a routing table id is a line's.
+func lineTable(id int) bool {
+	return id > model.ReplyTableBase && id <= model.ReplyTableBase+model.MaxReplyLines
 }
 
 // WatchRemoved signals each time a route leaves one of policy routing's
@@ -83,17 +108,19 @@ func WatchRemoved(ctx context.Context) (<-chan struct{}, error) {
 	return netlink.WatchRouteDeletes(ctx, func(r netlink.Route) bool { return ownTable(r.Table) })
 }
 
-// ownPriority reports whether an ip rule priority belongs to policy routing.
+// ownPriority reports whether an ip rule priority belongs to policy routing:
+// the translations' and the lines', then the gateways' and the source rules.
+// They are the ranges every release has owned, so a release removes what
+// another left behind.
 func ownPriority(p int) bool {
-	return (p >= RulePriorityBase && p < RulePriorityBase+2*(model.MaxPolicyTargets+1)) ||
-		(p >= TranslatePriorityBase && p < TranslatePriorityBase+model.MaxPolicyTargets+1)
+	const numbers = model.MaxPolicyTargets + model.MaxReplyLines + 1
+	return (p >= TranslatePriorityBase && p < TranslatePriorityBase+numbers) ||
+		(p >= RulePriorityBase && p < RulePriorityBase+2*numbers)
 }
 
-func (i *Installer) syncRoutes(family int, want map[int][]*netlink.Route) error {
-	existing, err := netlink.Routes(family, netlink.RouteFilter{AllTables: true})
-	if err != nil {
-		return fmt.Errorf("list policy routes: %w", err)
-	}
+// syncRoutes makes the policy tables among existing, every route of the
+// family, what want holds.
+func (i *Installer) syncRoutes(existing []netlink.Route, want map[int][]*netlink.Route) error {
 	var errs []error
 	have := map[*netlink.Route]bool{}
 	for k := range existing {
@@ -101,7 +128,11 @@ func (i *Installer) syncRoutes(family int, want map[int][]*netlink.Route) error 
 		if !ownTable(route.Table) {
 			continue
 		}
-		at := slices.IndexFunc(want[route.Table], func(d *netlink.Route) bool { return !have[d] && sameRoute(&route, d) })
+		same := sameRoute
+		if lineTable(route.Table) {
+			same = sameCopy
+		}
+		at := slices.IndexFunc(want[route.Table], func(d *netlink.Route) bool { return !have[d] && same(&route, d) })
 		if at >= 0 {
 			have[want[route.Table][at]] = true
 			continue
@@ -115,7 +146,13 @@ func (i *Installer) syncRoutes(family int, want map[int][]*netlink.Route) error 
 			if have[route] {
 				continue
 			}
-			if err := netlink.ReplaceRoute(*route); err != nil {
+			// A line's table can hold several routes the kernel keys alike,
+			// as the main table does, so they go in beside each other.
+			install := netlink.ReplaceRoute
+			if lineTable(table) {
+				install = netlink.AppendRoute
+			}
+			if err := install(*route); err != nil {
 				errs = append(errs, fmt.Errorf("install route in table %d: %w", table, err))
 				continue
 			}
@@ -125,34 +162,47 @@ func (i *Installer) syncRoutes(family int, want map[int][]*netlink.Route) error 
 	return errors.Join(errs...)
 }
 
-func (i *Installer) syncRules(family int, want map[int]netlink.Rule) error {
+// syncRules makes the rules at policy routing's priorities what want holds.
+// Several can share a priority.
+func (i *Installer) syncRules(family int, want []netlink.Rule) error {
 	existing, err := netlink.Rules(family)
 	if err != nil {
 		return fmt.Errorf("list ip rules: %w", err)
 	}
 	var errs []error
-	seen := map[int]bool{}
+	kept := make([]bool, len(want))
 	for _, rule := range existing {
 		if !ownPriority(rule.Priority) {
 			continue
 		}
-		if desired, ok := want[rule.Priority]; ok && rule == desired {
-			seen[rule.Priority] = true
+		at := -1
+		for k, w := range want {
+			if !kept[k] && w == rule {
+				at = k
+				break
+			}
+		}
+		if at >= 0 {
+			kept[at] = true
 			continue
 		}
 		if err := netlink.DeleteRule(rule); err != nil {
 			errs = append(errs, fmt.Errorf("remove ip rule %d: %w", rule.Priority, err))
 		}
 	}
-	for priority, rule := range want {
-		if seen[priority] {
+	for k, rule := range want {
+		if kept[k] {
 			continue
 		}
 		if err := netlink.AddRule(rule); err != nil {
-			errs = append(errs, fmt.Errorf("add ip rule %d: %w", priority, err))
+			errs = append(errs, fmt.Errorf("add ip rule %d: %w", rule.Priority, err))
 			continue
 		}
-		i.Log.Info("policy rule installed", "priority", priority, "mark", fmt.Sprintf("0x%x", rule.Mark), "table", rule.Table)
+		args := []any{"priority", rule.Priority, "mark", fmt.Sprintf("0x%x", rule.Mark), "table", rule.Table}
+		if rule.Src.IsValid() {
+			args = append(args, "from", rule.Src, "sport", rule.Sport.Start)
+		}
+		i.Log.Info("policy rule installed", args...)
 	}
 	return errors.Join(errs...)
 }
@@ -251,6 +301,18 @@ func (i *Installer) routeFor(t Target, family int) *netlink.Route {
 // would have taken the default route reaches the second rule and the
 // policy table.
 func rulesFor(t Target, family int) []netlink.Rule {
+	// A line's table holds nothing but its own routes, so it is asked
+	// alone: an answer goes back by its line even when the main table knows
+	// a shorter way to where it is going.
+	if t.Line != "" {
+		r := netlink.NewRule()
+		r.Family = family
+		r.Priority = LinePriorityBase + t.Index
+		r.Mark = t.Mark
+		r.Mask = model.ReplyMarkMask
+		r.Table = t.Table
+		return []netlink.Rule{r}
+	}
 	// A translation's table routes networks the main table has too, so it
 	// is asked first, and alone.
 	if len(t.Networks) > 0 {
@@ -280,6 +342,104 @@ func rulesFor(t Target, family int) []netlink.Rule {
 	lookup.Table = t.Table
 
 	return []netlink.Rule{suppress, lookup}
+}
+
+// lineRoutes is a line's table in one family: a copy of every route the
+// main table has out of the line, whatever its metric, a demoted one too,
+// so answers leave by the line whatever the monitor makes of it. A
+// multipath route keeps its hops out of the line. A tunnel's line gets a
+// default route into it in the families it carries.
+func lineRoutes(t Target, family, link int, existing []netlink.Route) []*netlink.Route {
+	var out []*netlink.Route
+	for _, r := range existing {
+		if r.Table != unix.RT_TABLE_MAIN || routeType(&r) != unix.RTN_UNICAST {
+			continue
+		}
+		if len(r.MultiPath) > 0 {
+			var hops []netlink.Nexthop
+			for _, h := range r.MultiPath {
+				if h.LinkIndex == link {
+					hops = append(hops, h)
+				}
+			}
+			switch len(hops) {
+			case 0:
+				continue
+			case 1:
+				r.LinkIndex, r.Gw, r.MultiPath = hops[0].LinkIndex, hops[0].Gw, nil
+			default:
+				r.MultiPath = hops
+			}
+		} else if r.LinkIndex != link {
+			continue
+		}
+		r.Table = t.Table
+		out = append(out, &r)
+	}
+	if into := (family == unix.AF_INET && t.IntoV4) || (family == unix.AF_INET6 && t.IntoV6); into &&
+		!slices.ContainsFunc(out, func(r *netlink.Route) bool { return isDefault(r.Dst) }) {
+		r := &netlink.Route{Table: t.Table, Dst: defaultDst(family), LinkIndex: link}
+		if family == unix.AF_INET {
+			// What ip(8) gives an IPv4 route with no next hop.
+			r.Scope = unix.RT_SCOPE_LINK
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// sourceRules keep WireGuard's answers on the line a peer called, while
+// the line is up: from the line's own addresses and a tunnel's listen
+// port, what would take the default route takes the line's table.
+// WireGuard looks its route up before the firewall sees the packet, with
+// the address the peer called and its listen port, and when that route
+// leaves by another line it answers from that line's address instead, so
+// the marks never reach it. A tunnel this router dials has a port of its
+// own and keeps following the main table.
+func sourceRules(t Target, family, link int, addrs []netlink.Addr) []netlink.Rule {
+	if t.Line == "" || !t.Up {
+		return nil
+	}
+	var out []netlink.Rule
+	for _, a := range addrs {
+		if a.LinkIndex != link || a.Flags&(unix.IFA_F_TENTATIVE|unix.IFA_F_DADFAILED) != 0 {
+			continue
+		}
+		ip, ok := netip.AddrFromSlice(a.IPNet.IP)
+		if ip = ip.Unmap(); !ok || !ip.IsGlobalUnicast() || ip.Is4() != (family == unix.AF_INET) {
+			continue
+		}
+		for _, port := range t.Ports {
+			suppress := netlink.NewRule()
+			suppress.Family = family
+			suppress.Priority = SourcePriority
+			suppress.Src = netip.PrefixFrom(ip, ip.BitLen())
+			suppress.IPProto = unix.IPPROTO_UDP
+			suppress.Sport = netlink.PortRange{Start: port, End: port}
+			suppress.Table = unix.RT_TABLE_MAIN
+			suppress.SuppressPrefixlen = 0
+			lookup := suppress
+			lookup.Priority, lookup.Table, lookup.SuppressPrefixlen = SourcePriority+1, t.Table, -1
+			out = append(out, suppress, lookup)
+		}
+	}
+	return out
+}
+
+// sameCopy compares routes in a line's table, where several can lead to
+// one destination at different metrics: the metric and the preferred
+// source count too.
+func sameCopy(a, b *netlink.Route) bool {
+	return sameRoute(a, b) && metric(a) == metric(b) && a.Src.Equal(b.Src)
+}
+
+// metric is a route's metric as the kernel keeps it: IPv6 gives a route
+// asked for with none 1024.
+func metric(r *netlink.Route) int {
+	if r.Priority == 0 && (r.Family == unix.AF_INET6 || (r.Dst != nil && r.Dst.IP.To4() == nil)) {
+		return 1024
+	}
+	return r.Priority
 }
 
 func sameRoute(a, b *netlink.Route) bool {

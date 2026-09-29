@@ -34,6 +34,18 @@ table inet ostiole {
 	chain zone_lan {
 		counter comment "zone-unmatched"
 	}
+	chain reply_prerouting {
+		type filter hook prerouting priority mangle + 1; policy accept;
+		iifname "eth0" ct state new ct mark set ct mark & 0x07ffffff | 0x08000000 counter comment "reply:eth0"
+		iifname "ppp0" ct state new ct mark set ct mark & 0x07ffffff | 0x10000000 counter comment "reply:ppp0"
+		ct direction reply ct mark & 0xf8000000 == 0x08000000 meta mark set meta mark & 0x07ffffff | 0x08000000 counter comment "reply-back:eth0"
+		ct direction reply ct mark & 0xf8000000 == 0x10000000 meta mark set meta mark & 0x07ffffff | 0x10000000 counter comment "reply-back:ppp0"
+	}
+	chain reply_output {
+		type route hook output priority mangle; policy accept;
+		ct direction reply ct mark & 0xf8000000 == 0x08000000 meta mark set meta mark & 0x07ffffff | 0x08000000 counter comment "reply-back:eth0"
+		ct direction reply ct mark & 0xf8000000 == 0x10000000 meta mark set meta mark & 0x07ffffff | 0x10000000 counter comment "reply-back:ppp0"
+	}
 	chain nat_prerouting {
 		type nat hook prerouting priority dstnat; policy accept;
 	}

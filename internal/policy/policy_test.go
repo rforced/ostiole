@@ -1,6 +1,7 @@
 package policy
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/rforced/ostiole/internal/model"
@@ -242,4 +243,78 @@ func TestPlanBlocksALoneTunnelGateway(t *testing.T) {
 func targetsOnline(targets []Target, name string) bool {
 	t, ok := targetByName(targets, name)
 	return ok && t.Online()
+}
+
+// Lines come numbered from the configuration with what their tables need:
+// the listen ports whose answers stay on a line while it is up, and for a
+// tunnel's line the families its table sends into the tunnel. A tunnel's
+// line gets no ports, since WireGuard answers from the line under it.
+func TestLinesCarryTheirPortsAndTunnels(t *testing.T) {
+	t.Parallel()
+	cfg := &model.Config{
+		Version: model.SchemaVersion,
+		Zones:   []model.Zone{{Name: "wan", External: true}, {Name: "vpn", External: true}, {Name: "phones"}},
+		Interfaces: []model.Interface{
+			{Name: "eth0", Zone: "wan", Enabled: true},
+			{Name: "eth1", Zone: "wan", Enabled: true},
+			{Name: "wg0", Zone: "phones", Enabled: true, WireGuard: &model.WireGuard{ListenPort: 51820}},
+			{Name: "wg2", Zone: "phones", Enabled: true, WireGuard: &model.WireGuard{ListenPort: 443}},
+			{Name: "wg3", Zone: "phones", WireGuard: &model.WireGuard{ListenPort: 51823}},
+			{
+				Name: "wg1", Zone: "vpn", Enabled: true,
+				IPv4: model.IPv4{Mode: model.AddrStatic, Address: "10.66.1.2/32"}, IPv6: model.IPv6{Mode: model.AddrNone},
+				WireGuard: &model.WireGuard{Peers: []model.WireGuardPeer{{
+					Name: "provider", Enabled: true, AllowedIPs: []string{"0.0.0.0/0", "::/0"},
+				}}},
+			},
+		},
+		Gateways: []model.Gateway{{Name: "vpn", Enabled: true, Interface: "wg1"}},
+	}
+	lines := Lines(cfg, func(iface string) bool { return iface != "eth1" })
+	if len(lines) != 3 {
+		t.Fatalf("lines = %+v, want eth0, eth1 and wg1", lines)
+	}
+	for i, want := range []struct {
+		line   string
+		up     bool
+		ports  []uint16
+		v4, v6 bool
+	}{
+		{"eth0", true, []uint16{443, 51820}, false, false},
+		{"eth1", false, []uint16{443, 51820}, false, false},
+		{"wg1", true, nil, true, false},
+	} {
+		got := lines[i]
+		if got.Line != want.line || got.Up != want.up || !slices.Equal(got.Ports, want.ports) ||
+			got.IntoV4 != want.v4 || got.IntoV6 != want.v6 {
+			t.Errorf("line %d = %+v, want %+v", i, got, want)
+		}
+		if got.Index != i+1 || got.Mark != uint32(i+1)<<model.ReplyMarkShift || got.Table != model.ReplyTableBase+i+1 {
+			t.Errorf("%s is numbered %d, mark %#x, table %d", got.Line, got.Index, got.Mark, got.Table)
+		}
+	}
+}
+
+// A line's rule comes after every translation's and before every
+// gateway's, the source rules after every gateway's, and all of them sit
+// in the ranges every release has reconciled, so each removes what
+// another left behind.
+func TestLinePrioritiesSitBetweenTheOthers(t *testing.T) {
+	t.Parallel()
+	lastTranslation := TranslatePriorityBase + model.MaxPolicyTargets
+	firstLine, lastLine := LinePriorityBase+1, LinePriorityBase+model.MaxReplyLines
+	_, lastGateway := Target{Index: model.MaxPolicyTargets}.Priorities()
+	if firstLine <= lastTranslation || lastLine >= RulePriorityBase || SourcePriority <= lastGateway {
+		t.Errorf("lines at %d-%d, sources at %d: want them after the translations (to %d), "+
+			"before the gateways (from %d) and after them (to %d)",
+			firstLine, lastLine, SourcePriority, lastTranslation, RulePriorityBase, lastGateway)
+	}
+	for _, p := range []int{firstLine, lastLine, SourcePriority, SourcePriority + 1} {
+		if !ownPriority(p) {
+			t.Errorf("priority %d is outside the range Ostiole reconciles", p)
+		}
+	}
+	if lastLine != 21255 || SourcePriority+1 > 22511 {
+		t.Errorf("lines end at %d and sources at %d, outside the ranges older releases reconcile", lastLine, SourcePriority+1)
+	}
 }

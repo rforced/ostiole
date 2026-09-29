@@ -1572,6 +1572,65 @@ func TestPolicyTargetsSkipTheReservedNumbers(t *testing.T) {
 	}
 }
 
+// Every enabled interface in an external zone is a line, numbered by name
+// into bits of its own and a table past the policy targets'. A router with
+// one line has nothing to choose between and gets none.
+func TestReplyLinesNumberTheExternalInterfaces(t *testing.T) {
+	t.Parallel()
+	cfg := &Config{
+		Version: SchemaVersion,
+		Zones:   []Zone{{Name: "wan", External: true}, {Name: "backup", External: true}, {Name: "lan"}},
+		Interfaces: []Interface{
+			{Name: "wan0", Zone: "wan", Enabled: true},
+			{Name: "lan0", Zone: "lan", Enabled: true},
+		},
+	}
+	if got := cfg.ReplyLines(); got != nil {
+		t.Errorf("one line gives %+v, want none", got)
+	}
+	cfg.Interfaces = append(cfg.Interfaces,
+		Interface{Name: "lte0", Zone: "backup", Enabled: true},
+		Interface{Name: "dsl0", Zone: "wan"},
+		Interface{Name: "cable0", Zone: "wan", Enabled: true},
+	)
+	want := []ReplyLine{
+		{Interface: "cable0", Index: 1, Mark: 0x08000000, Table: 2425},
+		{Interface: "lte0", Index: 2, Mark: 0x10000000, Table: 2426},
+		{Interface: "wan0", Index: 3, Mark: 0x18000000, Table: 2427},
+	}
+	if got := cfg.ReplyLines(); !slices.Equal(got, want) {
+		t.Errorf("lines = %+v, want %+v", got, want)
+	}
+	// The last line's table is the last one the policy tables' range held
+	// before lines had any, and its mark still fits their bits.
+	if last := ReplyTableBase + MaxReplyLines; last != PolicyTableBase+255 {
+		t.Errorf("the last line's table is %d, want %d", last, PolicyTableBase+255)
+	}
+	if uint32(MaxReplyLines)<<ReplyMarkShift != ReplyMarkMask {
+		t.Errorf("the last line's mark leaves its bits")
+	}
+}
+
+// Each line needs a mark of its own, and there are 31.
+func TestValidateRefusesMoreLinesThanMarks(t *testing.T) {
+	t.Parallel()
+	cfg := policyConfig()
+	for i := range MaxReplyLines - 1 {
+		cfg.Interfaces = append(cfg.Interfaces, Interface{
+			Name: fmt.Sprintf("wan%d", i), Zone: "wan", Enabled: true, IPv4: IPv4{Mode: AddrDHCP}, IPv6: IPv6{Mode: AddrNone},
+		})
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("31 lines refused: %v", err)
+	}
+	cfg.Interfaces = append(cfg.Interfaces, Interface{
+		Name: "wan99", Zone: "wan", Enabled: true, IPv4: IPv4{Mode: AddrDHCP}, IPv6: IPv6{Mode: AddrNone},
+	})
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "at most 31 interfaces can be enabled in external zones") {
+		t.Errorf("32 lines: %v", err)
+	}
+}
+
 func aggregateConfig() *Config {
 	return &Config{
 		Version: SchemaVersion,

@@ -1511,9 +1511,21 @@ const (
 	PolicyMarkShift = 16
 	PolicyMarkMask  = 0xff << PolicyMarkShift
 	PolicyTableBase = 2200
-	// MaxPolicyTargets is how many gateways and groups can be marked; the
-	// mark has one byte for them.
-	MaxPolicyTargets = 255
+	// MaxPolicyTargets is how many gateways, groups and translations can
+	// be numbered. The mark's byte would hold 255; the tables above
+	// 2200+224 are the lines'.
+	MaxPolicyTargets = 224
+)
+
+// Reply routing numbering (ADR-0037). The line a connection came in on
+// occupies bits 27-31, above the shaping tier, and line n routes through
+// table 2424+n. The tables and their rules sit inside the ranges earlier
+// releases own, so going back to one removes them.
+const (
+	ReplyMarkShift = 27
+	ReplyMarkMask  = 0x1f << ReplyMarkShift // 0xf8000000
+	ReplyTableBase = PolicyTableBase + MaxPolicyTargets
+	MaxReplyLines  = 31
 )
 
 // Traffic shaping numbering. The tier occupies bits 24-26, beside policy
@@ -1585,6 +1597,46 @@ func (c *Config) PolicyTarget(name string) (PolicyTarget, bool) {
 		}
 	}
 	return PolicyTarget{}, false
+}
+
+// ReplyLine is an enabled interface in an external zone. What comes in on
+// it is answered out of it, whichever line holds the default route: its
+// mark goes on each connection that arrives there, and its table holds the
+// main table's routes out of it.
+type ReplyLine struct {
+	Interface string `json:"interface"`
+	// Index is the line's number, the one in its mark and its table.
+	Index int    `json:"index"`
+	Mark  uint32 `json:"mark"`
+	Table int    `json:"table"`
+}
+
+// ReplyLines numbers the lines from one, sorted by interface name. A
+// router with fewer than two has nothing to choose between and gets none.
+func (c *Config) ReplyLines() []ReplyLine {
+	names := c.lineNames()
+	if len(names) < 2 {
+		return nil
+	}
+	sort.Strings(names)
+	names = names[:min(len(names), MaxReplyLines)]
+	out := make([]ReplyLine, len(names))
+	for i, name := range names {
+		n := i + 1
+		out[i] = ReplyLine{Interface: name, Index: n, Mark: uint32(n) << ReplyMarkShift, Table: ReplyTableBase + n}
+	}
+	return out
+}
+
+// lineNames lists the enabled interfaces in external zones.
+func (c *Config) lineNames() []string {
+	var names []string
+	for _, in := range c.Interfaces {
+		if z, ok := c.Zone(in.Zone); in.Enabled && ok && z.External {
+			names = append(names, in.Name)
+		}
+	}
+	return names
 }
 
 // BlockingTarget is a policy target whose traffic may leave only by its

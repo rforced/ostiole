@@ -59,6 +59,7 @@ func (r *renderer) render() {
 	r.policyChains()
 	r.dnsViaChain()
 	r.translateChains()
+	r.replyChains()
 	r.chainPostrouting()
 	r.chainNATPrerouting()
 	r.chainNATPostrouting()
@@ -1570,9 +1571,14 @@ func (r *renderer) policyChains() {
 		// lines halfway through would break the connection. Only this
 		// feature's own byte counts: a flow that carries nothing but a
 		// shaping tier was never policy routed and has to go on to the
-		// zone chains like any other.
-		r.line(fmt.Sprintf(`ct mark & 0x%08x != 0x0 meta mark set ct mark counter accept comment "policy:established"`,
-			model.PolicyMarkMask))
+		// zone chains like any other. The line a connection came in on
+		// stays off: reply_prerouting puts it back on the answers alone.
+		restore := "meta mark set ct mark"
+		if len(r.cfg.ReplyLines()) > 0 {
+			restore = fmt.Sprintf("meta mark set ct mark & 0x%08x", ^uint32(model.ReplyMarkMask))
+		}
+		r.line(fmt.Sprintf(`ct mark & 0x%08x != 0x0 %s counter accept comment "policy:established"`,
+			model.PolicyMarkMask, restore))
 		// Traffic addressed to the firewall itself is never policy routed.
 		r.line(`fib daddr type local counter accept comment "policy:local"`)
 		// Nor is traffic to a network a tunnel's peer shows under another

@@ -7,6 +7,7 @@ package policy
 
 import (
 	"net/netip"
+	"slices"
 	"sort"
 
 	"github.com/rforced/ostiole/internal/model"
@@ -22,6 +23,16 @@ const RulePriorityBase = 22000
 // the real networks they route have this side's numbers, which the main
 // table would otherwise answer.
 const TranslatePriorityBase = 21000
+
+// LinePriorityBase is where the lines' rules start, one each (ADR-0037).
+// They come before every gateway's, so an answer goes back out its line
+// even when a rule routed its connection's first packet elsewhere.
+const LinePriorityBase = TranslatePriorityBase + model.MaxPolicyTargets
+
+// SourcePriority holds the rules that keep WireGuard's answers on the line
+// a peer called: the suppress rules at it, the lookups one after. They come
+// after every gateway's, so a lookup a gateway's mark routes keeps it.
+const SourcePriority = RulePriorityBase + 2*(model.MaxPolicyTargets+1)
 
 // Hop is one gateway as the monitor currently sees it.
 type Hop struct {
@@ -85,6 +96,51 @@ type Target struct {
 	// a target has no tiers.
 	Networks []netip.Prefix `json:"networks,omitempty"`
 	Tunnel   string         `json:"tunnel,omitempty"`
+	// Line, for an interface in an external zone, is that interface
+	// (ADR-0037). Its table copies the main table's routes out of it, and
+	// the line's mark sends there the answers to what came in on it.
+	Line string `json:"line,omitempty"`
+	// IntoV4 and IntoV6 give a tunnel's line a default route into it in
+	// those families: the main table has none out of a tunnel.
+	IntoV4 bool `json:"-"`
+	IntoV6 bool `json:"-"`
+	// Ports are the listen ports of the tunnels that take calls. While the
+	// line is Up, WireGuard's answers from its addresses on them leave by
+	// it too.
+	Ports []uint16 `json:"-"`
+	Up    bool     `json:"-"`
+}
+
+// Lines are cfg's lines as targets (ADR-0037). up says whether the monitor
+// has a gateway on a line answering, nil that every line counts as up.
+// While a line has none, WireGuard's answers from its addresses follow the
+// main table, so a tunnel this router dials can move to another line.
+func Lines(cfg *model.Config, up func(iface string) bool) []Target {
+	var ports []uint16
+	for _, in := range cfg.Interfaces {
+		if in.Enabled && in.WireGuard != nil && in.WireGuard.ListenPort != 0 {
+			ports = append(ports, in.WireGuard.ListenPort)
+		}
+	}
+	slices.Sort(ports)
+	ports = slices.Compact(ports)
+	var out []Target
+	for _, l := range cfg.ReplyLines() {
+		t := Target{Name: l.Interface, Line: l.Interface, Mark: l.Mark, Table: l.Table, Index: l.Index,
+			Up: up == nil || up(l.Interface)}
+		// WireGuard answers from a line under it, never from a tunnel.
+		if in, ok := cfg.Interface(l.Interface); ok && in.WireGuard == nil {
+			t.Ports = ports
+		}
+		for _, g := range cfg.Gateways {
+			if g.Enabled && g.Interface == l.Interface && cfg.TunnelGateway(g) {
+				v4, v6 := cfg.TunnelFamilies(g)
+				t.IntoV4, t.IntoV6 = t.IntoV4 || v4, t.IntoV6 || v6
+			}
+		}
+		out = append(out, t)
+	}
+	return out
 }
 
 // Translations are the tunnels that show networks behind their peers

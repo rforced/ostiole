@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/netip"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -703,4 +705,200 @@ func TestATranslationRoutesItsRealNetworksIntoTheTunnel(t *testing.T) {
 		}
 	}
 	noChurn(t, inst, targets)
+}
+
+// ipNet parses a prefix for a route.
+func ipNet(t *testing.T, s string) *net.IPNet {
+	t.Helper()
+	_, n, err := net.ParseCIDR(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// sourceRuleFrom reports whether a rule at SourcePriority matches from
+// addr, in either family.
+func sourceRuleFrom(t *testing.T, addr string) bool {
+	t.Helper()
+	want := netip.MustParseAddr(addr)
+	for _, fam := range []int{unix.AF_INET, unix.AF_INET6} {
+		rules, err := netlink.Rules(fam)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range rules {
+			if r.Priority == SourcePriority && r.Src.Addr() == want {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// A line's table holds the main table's routes out of the line, in both
+// families and at their metrics: its own network, a static route through
+// it and its default route. An answer with the line's mark leaves by it,
+// even to a network the main table sends out another line, while traffic
+// without one takes the main table's default; so does the router's own
+// from the line's address and a tunnel's listen port while the line is up,
+// and not from another port. A demotion moves the copy with the original,
+// a pass with nothing to do changes nothing, and a line left without a
+// default route hands its answers back to the main table.
+func TestALinesTableCopiesItsRoutesFromTheMainTable(t *testing.T) {
+	if !netnstest.Enter(t) {
+		return
+	}
+	wan0 := netnstest.Dummy(t, "wan0", "203.0.113.2/24", "2001:db8:1::2/64")
+	wan1 := netnstest.Dummy(t, "wan1", "198.51.100.2/24", "2001:db8:2::2/64")
+	netnstest.Dummy(t, "lan0", "192.168.1.1/24", "2001:db8:10::1/64")
+	forwarding(t)
+	defaults := []netlink.Route{
+		{LinkIndex: wan0.Index, Dst: ipNet(t, "0.0.0.0/0"), Gw: net.ParseIP("203.0.113.1"), Priority: 10},
+		{LinkIndex: wan1.Index, Dst: ipNet(t, "0.0.0.0/0"), Gw: net.ParseIP("198.51.100.1"), Priority: 20},
+		{LinkIndex: wan0.Index, Dst: ipNet(t, "::/0"), Gw: net.ParseIP("2001:db8:1::1"), Priority: 10},
+		{LinkIndex: wan1.Index, Dst: ipNet(t, "::/0"), Gw: net.ParseIP("2001:db8:2::1"), Priority: 20},
+	}
+	for _, r := range append(defaults, netlink.Route{LinkIndex: wan1.Index, Dst: ipNet(t, "10.9.0.0/16"), Gw: net.ParseIP("198.51.100.254")}) {
+		if err := netlink.AddRoute(r); err != nil {
+			t.Fatalf("add %+v: %v", r, err)
+		}
+	}
+	cfg := &model.Config{
+		Version: model.SchemaVersion,
+		Zones:   []model.Zone{{Name: "wan", External: true}, {Name: "lan"}},
+		Interfaces: []model.Interface{
+			{Name: "wan0", Zone: "wan", Enabled: true},
+			{Name: "wan1", Zone: "wan", Enabled: true},
+			{Name: "lan0", Zone: "lan", Enabled: true},
+			{Name: "wg0", Zone: "lan", Enabled: true, WireGuard: &model.WireGuard{ListenPort: 51820}},
+		},
+	}
+	inst := NewInstaller(slog.New(slog.DiscardHandler))
+	lines := Lines(cfg, nil)
+	if err := inst.Sync(lines); err != nil {
+		t.Fatal(err)
+	}
+	first, second := lines[0], lines[1]
+	if got := familyRoutes(t, unix.AF_INET, second.Table); len(got) != 3 {
+		t.Errorf("wan1's table = %+v, want its network, the static route and its default", got)
+	}
+
+	for _, c := range []struct {
+		what     string
+		dst, src string
+		mark     uint32
+		iif      bool
+		sport    uint16
+		gw       string
+		table    int
+	}{
+		{"an answer to what came in on wan1", "1.1.1.1", "192.168.1.10", second.Mark, true, 0, "198.51.100.1", second.Table},
+		{"traffic with no line", "1.1.1.1", "192.168.1.10", 0, true, 0, "203.0.113.1", unix.RT_TABLE_MAIN},
+		{"an answer on wan0 to a network the main table sends out wan1", "10.9.1.1", "192.168.1.10", first.Mark, true, 0, "203.0.113.1", first.Table},
+		{"an IPv6 answer to what came in on wan1", "2001:db8:ff::9", "2001:db8:10::10", second.Mark, true, 0, "2001:db8:2::1", second.Table},
+		{"WireGuard answering from wan1's address", "1.1.1.1", "198.51.100.2", 0, false, 51820, "198.51.100.1", second.Table},
+		{"another port on wan1's address", "1.1.1.1", "198.51.100.2", 0, false, 40000, "203.0.113.1", unix.RT_TABLE_MAIN},
+		{"WireGuard answering from wan1's IPv6 address", "2001:db8:ff::9", "2001:db8:2::2", 0, false, 51820, "2001:db8:2::1", second.Table},
+		{"WireGuard answering a LAN host from wan1's address", "192.168.1.10", "198.51.100.2", 0, false, 51820, "<nil>", unix.RT_TABLE_MAIN},
+	} {
+		q := netlink.RouteQuery{Dst: net.ParseIP(c.dst), Src: net.ParseIP(c.src), Mark: c.mark}
+		if c.iif {
+			q.Iif = netnstest.Link(t, "lan0").Index
+		}
+		if c.sport != 0 {
+			q.IPProto, q.Sport = unix.IPPROTO_UDP, c.sport
+		}
+		got, err := netlink.RouteGet(q)
+		if err != nil || len(got) != 1 {
+			t.Fatalf("%s: %+v, %v", c.what, got, err)
+		}
+		if got[0].Gw.String() != c.gw || got[0].Table != c.table {
+			t.Errorf("%s leaves via %s from table %d, want via %s from table %d", c.what, got[0].Gw, got[0].Table, c.gw, c.table)
+		}
+	}
+	noChurn(t, inst, lines)
+
+	// wan1's gateway fails its monitor: the monitor demotes its default
+	// route, and the copy follows it rather than staying at the old metric.
+	demoted := defaults[1]
+	demoted.Priority += 1_000_000
+	if err := netlink.AppendRoute(demoted); err != nil {
+		t.Fatal(err)
+	}
+	if err := netlink.DeleteRoute(defaults[1]); err != nil {
+		t.Fatal(err)
+	}
+	if err := inst.Sync(lines); err != nil {
+		t.Fatal(err)
+	}
+	routes := familyRoutes(t, unix.AF_INET, second.Table)
+	if !slices.ContainsFunc(routes, func(r netlink.Route) bool { return isDefault(r.Dst) && r.Priority == demoted.Priority }) ||
+		slices.ContainsFunc(routes, func(r netlink.Route) bool { return isDefault(r.Dst) && r.Priority == 20 }) {
+		t.Errorf("after the demotion wan1's table = %+v, want its default at %d alone", routes, demoted.Priority)
+	}
+	noChurn(t, inst, lines)
+
+	// A line nothing answers on keeps its table, but WireGuard's answers
+	// from its addresses follow the main table again.
+	down := Lines(cfg, func(iface string) bool { return iface != "wan1" })
+	if err := inst.Sync(down); err != nil {
+		t.Fatal(err)
+	}
+	if sourceRuleFrom(t, "198.51.100.2") || sourceRuleFrom(t, "2001:db8:2::2") {
+		t.Error("WireGuard's answers from wan1 are still held on it with the line down")
+	}
+	if !sourceRuleFrom(t, "203.0.113.2") || !sourceRuleFrom(t, "2001:db8:1::2") {
+		t.Error("WireGuard's answers from wan0 lost their rules with wan1 down")
+	}
+
+	// With no default route left out of wan1, its answers take the main
+	// table's.
+	if err := netlink.DeleteRoute(demoted); err != nil {
+		t.Fatal(err)
+	}
+	if err := inst.Sync(down); err != nil {
+		t.Fatal(err)
+	}
+	if gw, table := forwardedBy(t, "1.1.1.1", "192.168.1.10", second.Mark); gw != "203.0.113.1" || table != unix.RT_TABLE_MAIN {
+		t.Errorf("with no default out of wan1 its answers leave via %s from table %d, want the main table's default", gw, table)
+	}
+
+	// Clearing takes the lines' tables and rules too.
+	if err := inst.Clear(); err != nil {
+		t.Fatal(err)
+	}
+	if routes := familyRoutes(t, unix.AF_INET, second.Table); len(routes) != 0 {
+		t.Errorf("after clearing wan1's table = %+v", routes)
+	}
+	if sourceRuleFrom(t, "203.0.113.2") {
+		t.Error("after clearing a source rule is left")
+	}
+}
+
+// A tunnel's line gets a default route into the tunnel in the families it
+// carries, since the main table has none out of a tunnel, and keeps it
+// from one pass to the next.
+func TestATunnelsLineRoutesIntoTheTunnel(t *testing.T) {
+	if !netnstest.Enter(t) {
+		return
+	}
+	tun := wayOutNamespace(t)
+	line := Target{
+		Name: "tun0", Line: "tun0", Index: 2, Mark: 2 << model.ReplyMarkShift, Table: model.ReplyTableBase + 2,
+		IntoV4: true, IntoV6: true, Up: true,
+	}
+	inst := NewInstaller(slog.New(slog.DiscardHandler))
+	if err := inst.Sync([]Target{line}); err != nil {
+		t.Fatal(err)
+	}
+	for _, family := range []int{unix.AF_INET, unix.AF_INET6} {
+		routes := familyRoutes(t, family, line.Table)
+		if !slices.ContainsFunc(routes, func(r netlink.Route) bool {
+			return isDefault(r.Dst) && r.LinkIndex == tun.Index && r.Gw == nil
+		}) {
+			t.Errorf("family %d: the tunnel's table = %+v, want a default route into it", family, routes)
+		}
+	}
+	noChurn(t, inst, []Target{line})
 }

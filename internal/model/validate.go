@@ -495,6 +495,11 @@ func (c *Config) Validate() error {
 		v.add("gateways", "at most %d gateways and gateway groups can be enabled at once, found %d",
 			limit, enabled)
 	}
+	// Each line needs a mark of its own to answer what came in on it.
+	if lines := len(c.lineNames()); lines > MaxReplyLines {
+		v.add("interfaces", "at most %d interfaces can be enabled in external zones at once, found %d",
+			MaxReplyLines, lines)
+	}
 
 	routeIDs := map[string]bool{}
 	for i, r := range c.Routes {

@@ -537,6 +537,58 @@ func TestPolicyRoutingFollowsTheProbes(t *testing.T) {
 	}
 }
 
+// Every line goes to policy routing, up while a gateway on it answers or
+// while no gateway watches it. Only WireGuard's answers heed that: a
+// tunnel this router dials has to be able to follow the default route off
+// a dead line.
+func TestALineIsUpWhileAGatewayOnItAnswers(t *testing.T) {
+	t.Parallel()
+	cfg := &model.Config{
+		Version: model.SchemaVersion,
+		Zones:   []model.Zone{{Name: "wan", External: true}},
+		Interfaces: []model.Interface{
+			{Name: "eth0", Zone: "wan", Enabled: true},
+			{Name: "eth1", Zone: "wan", Enabled: true},
+			{Name: "eth2", Zone: "wan", Enabled: true},
+		},
+		Gateways: []model.Gateway{
+			{Name: "fibre", Enabled: true, Interface: "eth0", Address: "203.0.113.1"},
+			{Name: "lte", Enabled: true, Interface: "eth1", Address: "198.51.100.1", Priority: 1},
+		},
+	}
+	prober := &fakeProber{fail: map[string]bool{}}
+	pol := &fakePolicy{}
+	m := &Monitor{
+		Prober: prober, Router: &fakeRouter{}, Log: slog.New(slog.DiscardHandler), Policy: pol,
+		Source: func() *model.Config { return cfg },
+	}
+	up := func(iface string) bool {
+		t.Helper()
+		for _, target := range pol.last(t) {
+			if target.Line == iface {
+				return target.Up
+			}
+		}
+		t.Fatalf("no line %s in the plan", iface)
+		return false
+	}
+
+	tick(m, 1)
+	for _, iface := range []string{"eth0", "eth1", "eth2"} {
+		if !up(iface) {
+			t.Errorf("%s is down before any verdict", iface)
+		}
+	}
+	prober.setFail("198.51.100.1", true)
+	tick(m, FailAfter)
+	if up("eth1") {
+		t.Error("eth1 is up with its only gateway down")
+	}
+	if !up("eth0") || !up("eth2") {
+		t.Error("a line whose gateway answers, or that has none, went down")
+	}
+}
+
 // A dead gateway's route that something puts back, networkd renewing a
 // lease for one, is moved off again on the next tick.
 func TestARouteThatComesBackIsMovedOffAgain(t *testing.T) {

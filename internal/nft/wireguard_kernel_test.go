@@ -279,62 +279,10 @@ func TestAWayOutCarriesBothFamiliesAndStopsWhenItsFarEndDiesInKernel(t *testing.
 	if !wgKernel(t) {
 		return
 	}
-	quietIPv6(t)
-	routeAll(t)
-	routerKey, providerKey := wgKey(t), wgKey(t)
-	client, far := netnstest.NewNS(t), netnstest.NewNS(t)
-	for _, ns := range []*os.File{client, far} {
-		netnstest.Do(t, ns, func() { quietIPv6(t) })
-	}
-
-	cable(t, "eth1", "lan0", client)
-	addrs(t, "eth1", "192.168.1.1/24", "2001:db8:10::1/64")
-	netnstest.Do(t, client, func() {
-		addrs(t, "lan0", "192.168.1.10/24", "2001:db8:10::10/64")
-		route(t, "default", "192.168.1.1", "lan0")
-		route(t, "default6", "2001:db8:10::1", "lan0")
-	})
-
-	cable(t, "eth0", "wan0", far)
-	addrs(t, "eth0", "203.0.113.2/24", "2001:db8:1::2/64")
-	route(t, "default", "203.0.113.1", "eth0")
-	route(t, "default6", "2001:db8:1::1", "eth0")
-	// The provider's side: its WAN, its end of the tunnel, and the far
-	// host on a dummy, reachable either way. It routes the router's tunnel
-	// addresses back into the tunnel, and the LAN's IPv6 prefix to the
-	// router, as the internet would.
-	netnstest.Do(t, far, func() {
-		addrs(t, "wan0", "203.0.113.1/24", "2001:db8:1::1/64")
-		route(t, "2001:db8:10::/64", "2001:db8:1::2", "wan0")
-		netnstest.Dummy(t, "net0", "198.18.0.7/32", "2001:db8:ff::7/128")
-		wgDevice(t, "wg0", providerKey, 51820, []netlink.WireGuardPeerConfig{{
-			PublicKey:  routerKey.PublicKey().Bytes(),
-			AllowedIPs: prefixes("10.66.1.2/32", "fc00:bbbb::2/128"),
-		}}, "10.64.0.1/24", "fc00:bbbb::1/64")
-		route(t, "10.66.1.2/32", "", "wg0")
-	})
-	wgDevice(t, "wg1", routerKey, 0, []netlink.WireGuardPeerConfig{{
-		PublicKey:  providerKey.PublicKey().Bytes(),
-		Endpoint:   netip.MustParseAddrPort("203.0.113.1:51820"),
-		AllowedIPs: prefixes("0.0.0.0/0", "::/0"),
-	}}, "10.66.1.2/32", "fc00:bbbb::2/128")
-
-	cfg := wayOutConfig(routerKey, providerKey)
-	ruleset, err := Render(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
+	client, far, routerKey, providerKey := wayOut(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := (&Exec{}).Apply(ctx, ruleset); err != nil {
-		t.Fatal(err)
-	}
-	log := slog.New(slog.DiscardHandler)
-	mon := gateway.New(gateway.NewICMPProber(), gateway.NewNetlinkRouter(), log)
-	mon.Timeout = 300 * time.Millisecond
-	mon.Policy = policy.NewInstaller(log)
-	mon.Source = func() *model.Config { return cfg }
-	mon.Tick(ctx)
+	mon := runRouter(ctx, t, wayOutConfig(routerKey, providerKey))
 
 	v4 := listen(t, far, "198.18.0.7:443")
 	v6 := listen(t, far, "[2001:db8:ff::7]:443")
@@ -383,6 +331,54 @@ func TestAWayOutCarriesBothFamiliesAndStopsWhenItsFarEndDiesInKernel(t *testing.
 	if got := append(v4.seen(), v6.seen()...); len(got) != 2 {
 		t.Errorf("the far host saw %v, want only the two connections through the tunnel", got)
 	}
+}
+
+// wayOut builds the world of the way-out tests around the router, the
+// namespace the test runs in: a client on its LAN, and across its WAN a
+// provider whose end of the tunnel also stands in for the internet, with
+// the router's end of the tunnel, wg1, already dialled.
+func wayOut(t *testing.T) (client, far *os.File, routerKey, providerKey *ecdh.PrivateKey) {
+	t.Helper()
+	quietIPv6(t)
+	routeAll(t)
+	routerKey, providerKey = wgKey(t), wgKey(t)
+	client, far = netnstest.NewNS(t), netnstest.NewNS(t)
+	for _, ns := range []*os.File{client, far} {
+		netnstest.Do(t, ns, func() { quietIPv6(t) })
+	}
+
+	cable(t, "eth1", "lan0", client)
+	addrs(t, "eth1", "192.168.1.1/24", "2001:db8:10::1/64")
+	netnstest.Do(t, client, func() {
+		addrs(t, "lan0", "192.168.1.10/24", "2001:db8:10::10/64")
+		route(t, "default", "192.168.1.1", "lan0")
+		route(t, "default6", "2001:db8:10::1", "lan0")
+	})
+
+	cable(t, "eth0", "wan0", far)
+	addrs(t, "eth0", "203.0.113.2/24", "2001:db8:1::2/64")
+	route(t, "default", "203.0.113.1", "eth0")
+	route(t, "default6", "2001:db8:1::1", "eth0")
+	// The provider's side: its WAN, its end of the tunnel, and the far
+	// host on a dummy, reachable either way. It routes the router's tunnel
+	// addresses back into the tunnel, and the LAN's IPv6 prefix to the
+	// router, as the internet would.
+	netnstest.Do(t, far, func() {
+		addrs(t, "wan0", "203.0.113.1/24", "2001:db8:1::1/64")
+		route(t, "2001:db8:10::/64", "2001:db8:1::2", "wan0")
+		netnstest.Dummy(t, "net0", "198.18.0.7/32", "2001:db8:ff::7/128")
+		wgDevice(t, "wg0", providerKey, 51820, []netlink.WireGuardPeerConfig{{
+			PublicKey:  routerKey.PublicKey().Bytes(),
+			AllowedIPs: prefixes("10.66.1.2/32", "fc00:bbbb::2/128"),
+		}}, "10.64.0.1/24", "fc00:bbbb::1/64")
+		route(t, "10.66.1.2/32", "", "wg0")
+	})
+	wgDevice(t, "wg1", routerKey, 0, []netlink.WireGuardPeerConfig{{
+		PublicKey:  providerKey.PublicKey().Bytes(),
+		Endpoint:   netip.MustParseAddrPort("203.0.113.1:51820"),
+		AllowedIPs: prefixes("0.0.0.0/0", "::/0"),
+	}}, "10.66.1.2/32", "fc00:bbbb::2/128")
+	return client, far, routerKey, providerKey
 }
 
 // statusOf finds one gateway among the monitor's statuses.
