@@ -67,7 +67,6 @@ const stale = computed(() => config.dirty)
             rows="8"
             class="input font-mono"
             spellcheck="false"
-            placeholder="analytics.example.com"
           ></textarea>
         </FormField>
         <FormField
@@ -81,7 +80,6 @@ const stale = computed(() => config.dirty)
             rows="8"
             class="input font-mono"
             spellcheck="false"
-            placeholder="ads.example.net"
           ></textarea>
         </FormField>
       </div>
@@ -94,13 +92,7 @@ const stale = computed(() => config.dirty)
       <div class="max-w-3xl space-y-3">
         <form class="form-row" @submit.prevent="lookup.run">
           <FormField id="lookup-name" label="Name" class="flex-1">
-            <input
-              id="lookup-name"
-              v-model="query"
-              class="input font-mono"
-              spellcheck="false"
-              placeholder="ads.doubleclick.net"
-            />
+            <input id="lookup-name" v-model="query" class="input font-mono" spellcheck="false" />
           </FormField>
           <button
             type="submit"
