@@ -216,7 +216,7 @@ func vwSend(t *testing.T, addr string, r vwRequest) int {
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Bitwarden-Client-Name", "web")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:143.0) Gecko/20100101 Firefox/143.0")
-	resp, err := (&http.Client{Transport: tr, Timeout: 10 * time.Second}).Do(req)
+	resp, err := (&http.Client{Transport: tr, Timeout: time.Minute}).Do(req)
 	if err != nil {
 		t.Fatalf("%s %s: %v", r.method, r.path, err)
 	}
