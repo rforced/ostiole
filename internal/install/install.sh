@@ -260,15 +260,19 @@ units_for() {
 
 ### the package manager
 
-# Every dnf call carries countme=0: the counter is a weekly ping that
-# tells the mirror how many routers of this age exist, and a router that
-# tells nobody it is here tells nobody that either.
-DNF_QUIET='--setopt=*.countme=0'
+# pkg_dnf is dnf as every call here runs it. countme=0: the counter is a
+# weekly ping that tells the mirror how many routers of this age exist,
+# and a router that tells nobody it is here tells nobody that either.
+# timeout=10: a mirror that sends under 1 kB/s for 10 s is left for the
+# next, where dnf waits 30. The mirror list comes shuffled, and one Rocky
+# mirror takes 20 s to answer each request, which kept makecache at it
+# for nine minutes.
+pkg_dnf() { dnf '--setopt=*.countme=0' --setopt=timeout=10 "$@"; }
 
 pkg_refresh() {
 	case "$MANAGER" in
 	apt-get) DEBIAN_FRONTEND=noninteractive apt-get update -qq ;;
-	dnf) dnf "$DNF_QUIET" -q makecache >/dev/null 2>&1 || true ;;
+	dnf) pkg_dnf -q makecache >/dev/null 2>&1 || true ;;
 	pacman) pacman -Sy --noconfirm >/dev/null ;;
 	esac
 }
@@ -276,7 +280,7 @@ pkg_refresh() {
 pkg_install() {
 	case "$MANAGER" in
 	apt-get) DEBIAN_FRONTEND=noninteractive apt-get install -y -q "$@" ;;
-	dnf) dnf "$DNF_QUIET" -y install "$@" ;;
+	dnf) pkg_dnf -y install "$@" ;;
 	pacman) pacman -S --noconfirm --needed "$@" ;;
 	esac
 }
@@ -284,7 +288,7 @@ pkg_install() {
 pkg_remove() {
 	case "$MANAGER" in
 	apt-get) DEBIAN_FRONTEND=noninteractive apt-get remove --purge -y -q "$@" ;;
-	dnf) dnf "$DNF_QUIET" -y remove "$@" ;;
+	dnf) pkg_dnf -y remove "$@" ;;
 	pacman) pacman -Rns --noconfirm "$@" ;;
 	esac
 }
@@ -300,7 +304,7 @@ pkg_remove() {
 pkg_explicit() {
 	case "$MANAGER" in
 	apt-get) apt-mark manual "$@" </dev/null >/dev/null 2>&1 || true ;;
-	dnf) dnf "$DNF_QUIET" -y mark user "$@" </dev/null >/dev/null 2>&1 || dnf "$DNF_QUIET" -y mark install "$@" </dev/null >/dev/null 2>&1 || true ;;
+	dnf) pkg_dnf -y mark user "$@" </dev/null >/dev/null 2>&1 || pkg_dnf -y mark install "$@" </dev/null >/dev/null 2>&1 || true ;;
 	pacman) pacman -D --asexplicit "$@" </dev/null >/dev/null 2>&1 || true ;;
 	esac
 }
@@ -308,7 +312,7 @@ pkg_explicit() {
 pkg_autoremove() {
 	case "$MANAGER" in
 	apt-get) DEBIAN_FRONTEND=noninteractive apt-get autoremove --purge -y -q && apt-get clean ;;
-	dnf) dnf "$DNF_QUIET" -y autoremove && dnf "$DNF_QUIET" clean all >/dev/null ;;
+	dnf) pkg_dnf -y autoremove && pkg_dnf clean all >/dev/null ;;
 	pacman)
 		orphans=""
 		for p in $(pacman -Qtdq 2>/dev/null || true); do
