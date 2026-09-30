@@ -90,7 +90,6 @@ function fill(config) {
           enabled: true,
           publicKey: keyPair(2).publicKey,
           allowedIps: ['10.66.0.2/32'],
-          keepalive: 25,
         },
         {
           name: 'phone',
@@ -99,7 +98,6 @@ function fill(config) {
           publicKey: keyPair(3).publicKey,
           presharedKey: Buffer.alloc(32, 4).toString('base64'),
           allowedIps: ['10.66.0.3/32'],
-          keepalive: 25,
         },
       ],
     },

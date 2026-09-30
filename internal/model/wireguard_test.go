@@ -238,6 +238,25 @@ func TestTunnelRoutes(t *testing.T) {
 	}
 }
 
+func TestKeepaliveWithoutEndpoint(t *testing.T) {
+	t.Parallel()
+	cfg := tunnelConfig(t)
+	wg0 := tunnel(cfg)
+	wg0.WireGuard.Peers = []WireGuardPeer{
+		{Name: "phone", Enabled: true, Keepalive: 25},
+		{Name: "laptop", Enabled: true},
+		{Name: "branch", Enabled: true, Endpoint: "198.51.100.7:51820", Keepalive: 25},
+		{Name: "retired", Keepalive: 25},
+	}
+	off := *wg0
+	off.Name, off.Enabled = "wg1", false
+	off.WireGuard = &WireGuard{Peers: []WireGuardPeer{{Name: "tablet", Enabled: true, Keepalive: 25}}}
+	cfg.Interfaces = append(cfg.Interfaces, off)
+	if got := cfg.KeepaliveWithoutEndpoint(); !slices.Equal(got, []string{"wg0/phone"}) {
+		t.Errorf("peers = %q, want only wg0/phone", got)
+	}
+}
+
 // A rule names a peer as "tunnel/peer" and means its addresses. It cannot
 // name one that is not there, one that stands for the whole internet, or
 // one that arrives in another zone than the rule looks at.

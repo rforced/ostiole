@@ -819,6 +819,17 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 				Detail: "Nothing is handed out on " + strings.Join(idle, ", ") + " until the interface is enabled.",
 			})
 		}
+		// Info, since nothing breaks. Once such a peer leaves, the router
+		// shakes hands with the address it last called from every few
+		// seconds, for as long as it stays away.
+		if peers := cfg.KeepaliveWithoutEndpoint(); len(peers) > 0 {
+			out = append(out, Warning{
+				Kind: "keepalive-no-endpoint", Level: "info",
+				Title: "Keepalive is set on peers that call in",
+				Detail: "Once a peer that calls in leaves, the router keeps sending handshakes to its last address. " +
+					"Set Keepalive to 0 on " + strings.Join(peers, ", ") + " under VPN, WireGuard.",
+			})
+		}
 	}
 	// A fetched alias with nothing in it turns the rules that use it inside
 	// out: "drop unless home country" drops everything until the first

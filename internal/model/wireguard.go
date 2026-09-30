@@ -85,6 +85,25 @@ func (c *Config) Peer(ref string) (*Interface, *WireGuardPeer, bool) {
 // PeerRef writes the name a rule gives a peer.
 func PeerRef(tunnel, peer string) string { return tunnel + "/" + peer }
 
+// KeepaliveWithoutEndpoint names the enabled peers on enabled tunnels that
+// have a keepalive but no endpoint, as a rule names them. Such a peer calls
+// in, and once it leaves the router keeps shaking hands with the address it
+// last called from.
+func (c *Config) KeepaliveWithoutEndpoint() []string {
+	var out []string
+	for _, in := range c.Interfaces {
+		if !in.Enabled || in.WireGuard == nil {
+			continue
+		}
+		for _, p := range in.WireGuard.Peers {
+			if p.Enabled && p.Keepalive > 0 && p.Endpoint == "" {
+				out = append(out, PeerRef(in.Name, p.Name))
+			}
+		}
+	}
+	return out
+}
+
 // TakesDefaultRoute reports whether the peer's allowed addresses include
 // 0.0.0.0/0 or ::/0, which make it the way to the whole internet.
 func (p WireGuardPeer) TakesDefaultRoute() bool {

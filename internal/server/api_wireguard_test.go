@@ -9,6 +9,7 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/netip"
+	"strings"
 	"testing"
 
 	"github.com/rforced/ostiole/internal/auth"
@@ -109,5 +110,53 @@ func TestWireGuardStatus(t *testing.T) {
 	refuse = errors.New("operation not permitted")
 	if resp, body := do(t, srv, http.MethodGet, "/api/v1/wireguard/status", nil); resp.StatusCode != http.StatusServiceUnavailable {
 		t.Errorf("unreadable device: %d %s, want 503", resp.StatusCode, body)
+	}
+}
+
+// A keepalive to a peer that calls in outlasts the peer: the dashboard
+// names it. One this router calls is left alone.
+func TestOverviewNotesKeepaliveToAPeerThatCallsIn(t *testing.T) {
+	t.Parallel()
+	private, err := wg.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer := func(name, allowed, endpoint string) model.WireGuardPeer {
+		key, err := wg.GenerateKey()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return model.WireGuardPeer{Name: name, Enabled: true, PublicKey: key, AllowedIPs: []string{allowed},
+			Endpoint: endpoint, Keepalive: 25}
+	}
+	cfg := &model.Config{
+		Version: model.SchemaVersion,
+		System:  model.System{Hostname: "fw", Management: model.Management{WebPort: 443, SSHPort: 22}},
+		Zones:   []model.Zone{{Name: "lan", AntiLockout: true}, {Name: "vpn"}},
+		Interfaces: []model.Interface{
+			{Name: "eth1", Zone: "lan", Enabled: true,
+				IPv4: model.IPv4{Mode: model.AddrStatic, Address: "192.168.1.1/24"},
+				IPv6: model.IPv6{Mode: model.AddrNone}},
+			{Name: "wg0", Zone: "vpn", Enabled: true,
+				IPv4: model.IPv4{Mode: model.AddrStatic, Address: "10.66.0.1/24"},
+				IPv6: model.IPv6{Mode: model.AddrNone},
+				WireGuard: &model.WireGuard{PrivateKey: private, ListenPort: 51820, Peers: []model.WireGuardPeer{
+					peer("phone", "10.66.0.2/32", ""),
+					peer("branch", "10.66.0.3/32", "198.51.100.7:51820"),
+				}}},
+		},
+		NAT: model.NAT{Outbound: model.OutboundNAT{Mode: model.OutboundAutomatic}},
+	}
+	w := warning(getOverview(t, newWireGuardServer(t, cfg, nil)), "keepalive-no-endpoint")
+	if w == nil || w.Level != "info" {
+		t.Fatalf("want an info warning, got %+v", w)
+	}
+	if !strings.Contains(w.Detail, "wg0/phone") || strings.Contains(w.Detail, "branch") {
+		t.Errorf("detail = %q, want wg0/phone named and not branch", w.Detail)
+	}
+
+	cfg.Interfaces[1].WireGuard.Peers[0].Keepalive = 0
+	if w := warning(getOverview(t, newWireGuardServer(t, cfg, nil)), "keepalive-no-endpoint"); w != nil {
+		t.Errorf("warned with no keepalive left: %+v", w)
 	}
 }
