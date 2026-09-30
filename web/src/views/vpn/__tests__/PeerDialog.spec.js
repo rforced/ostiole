@@ -65,6 +65,64 @@ describe('PeerDialog Translate', () => {
   })
 })
 
+describe('PeerDialog keepalive', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  const keepalive = (wrapper) => wrapper.get('#pe-keep').element.value
+  const hint = (wrapper) =>
+    wrapper.get('#pe-keep').element.closest('.field').querySelector('p').textContent
+
+  it("follows a new peer's endpoint until a value is typed", async () => {
+    const { wrapper, config } = open()
+    expect(keepalive(wrapper)).toBe('0')
+    expect(hint(wrapper)).toBe('In seconds. Leave 0 for a peer that calls in.')
+    await wrapper.get('#pe-endpoint').setValue('198.51.100.7:51820')
+    expect(keepalive(wrapper)).toBe('25')
+    expect(hint(wrapper)).toBe('In seconds. 25 keeps a NAT binding open.')
+    await wrapper.get('#pe-endpoint').setValue('')
+    expect(keepalive(wrapper)).toBe('0')
+
+    await wrapper.get('#pe-keep').setValue('10')
+    expect(hint(wrapper)).toBe(
+      'In seconds. Once it leaves, the router keeps sending handshakes to its last address.',
+    )
+    await wrapper.get('#pe-endpoint').setValue('198.51.100.7:51820')
+    expect(keepalive(wrapper)).toBe('10')
+    await wrapper.get('#pe-name').setValue('branch')
+    await wrapper.get('#pe-pub').setValue(FRIEND)
+    await wrapper.get('#pe-allowed').setValue('10.77.0.2/32')
+    await wrapper.get('form').trigger('submit')
+    expect(config.findInterface('wg1').wireguard.peers[0].keepalive).toBe(10)
+  })
+
+  it('leaves out the keepalive of a new peer that calls in', async () => {
+    const { wrapper, config } = open()
+    await wrapper.get('#pe-name').setValue('friend')
+    await wrapper.get('#pe-pub').setValue(FRIEND)
+    await wrapper.get('#pe-allowed').setValue('10.77.0.2/32')
+    await wrapper.get('form').trigger('submit')
+    expect(config.findInterface('wg1').wireguard.peers[0]).not.toHaveProperty('keepalive')
+  })
+
+  it('keeps what a saved peer has when its endpoint changes', async () => {
+    const peer = {
+      name: 'friend',
+      enabled: true,
+      publicKey: FRIEND,
+      allowedIps: ['10.77.0.2/32'],
+      keepalive: 25,
+    }
+    const { wrapper } = open(peer)
+    expect(keepalive(wrapper)).toBe('25')
+    expect(hint(wrapper)).toBe(
+      'In seconds. Once it leaves, the router keeps sending handshakes to its last address.',
+    )
+    await wrapper.get('#pe-endpoint').setValue('198.51.100.7:51820')
+    await wrapper.get('#pe-endpoint').setValue('')
+    expect(keepalive(wrapper)).toBe('25')
+  })
+})
+
 describe('PeerDialog shown networks', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
@@ -177,6 +235,7 @@ describe('PeerDialog device file', () => {
 
     const phone = config.findInterface('wg0').wireguard.peers.find((p) => p.name === 'phone')
     expect(phone).toMatchObject({ publicKey: 'DEVICE=', presharedKey: 'PSK=' })
+    expect(phone).not.toHaveProperty('keepalive')
     expect(JSON.stringify(config.draft)).not.toContain('DEVICE-PRIVATE=')
     for (const fn of [api.wireguard.keys, api.wireguard.psk, api.ddns.status, api.overview]) {
       expect(JSON.stringify(fn.mock.calls)).not.toContain('DEVICE-PRIVATE=')

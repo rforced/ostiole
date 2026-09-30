@@ -41,6 +41,8 @@ const busy = ref(false)
 const device = ref(null)
 const deviceForm = ref({ host: '', route: 'networks', keepalive: 0 })
 const candidates = ref([])
+/** Whether the keepalive was typed, after which it no longer follows the endpoint. */
+const keepaliveTyped = ref(false)
 
 function blank() {
   return {
@@ -51,7 +53,7 @@ function blank() {
     presharedKey: '',
     allowedIps: '',
     endpoint: '',
-    keepalive: 25,
+    keepalive: 0,
     masquerade: false,
     theirs: [],
     ours: [],
@@ -75,6 +77,7 @@ watch(
     error.value = ''
     showKey.value = false
     keys.value = 'make'
+    keepaliveTyped.value = false
     device.value = null
     chosen.value = props.tunnel?.name ?? ''
     const p = props.peer
@@ -97,6 +100,24 @@ watch(chosen, (now, before) => {
   const earlier = config.tunnels.find((t) => t.name === before)
   if (form.value.allowedIps === suggestFor(earlier).join(', '))
     form.value.allowedIps = suggestAddresses().join(', ')
+})
+
+// A new peer's keepalive follows its endpoint until one is typed: 25 for a
+// peer this router calls, 0 for one that calls in, since a keepalive sent
+// to that outlasts the peer.
+watch(
+  () => form.value.endpoint,
+  (now) => {
+    if (props.peer || keepaliveTyped.value) return
+    form.value.keepalive = now?.trim() ? 25 : 0
+  },
+)
+
+const keepaliveHint = computed(() => {
+  if (form.value.endpoint?.trim()) return 'In seconds. 25 keeps a NAT binding open.'
+  if (Number(form.value.keepalive) > 0)
+    return 'In seconds. Once it leaves, the router keeps sending handshakes to its last address.'
+  return 'In seconds. Leave 0 for a peer that calls in.'
 })
 
 /** A device dials in, so only a tunnel that listens can be given one. */
@@ -397,7 +418,11 @@ async function copyFile() {
             <option value="everything">Everything</option>
           </select>
         </FormField>
-        <FormField id="dv-keep" label="Keepalive" hint="In seconds. 0 sends none.">
+        <FormField
+          id="dv-keep"
+          label="Keepalive"
+          hint="In seconds. 0 sends none. 25 keeps the device reachable while it is idle."
+        >
           <input
             id="dv-keep"
             v-model="deviceForm.keepalive"
@@ -509,7 +534,7 @@ async function copyFile() {
             spellcheck="false"
           />
         </FormField>
-        <FormField id="pe-keep" label="Keepalive" hint="In seconds. 25 keeps a NAT binding open.">
+        <FormField id="pe-keep" label="Keepalive" :hint="keepaliveHint">
           <input
             id="pe-keep"
             v-model="form.keepalive"
@@ -517,6 +542,7 @@ async function copyFile() {
             min="0"
             max="65535"
             class="input w-32 font-mono max-sm:w-full"
+            @input="keepaliveTyped = true"
           />
         </FormField>
       </div>
