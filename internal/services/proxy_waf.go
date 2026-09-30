@@ -158,6 +158,17 @@ func wafDirectives(dir string, w model.WAFProfile, siteID string) string {
 	fmt.Fprintf(&b, "SecRule REQUEST_HEADERS:Content-Type \"@rx ^(?:application/(?:[a-z0-9.-]+[+])?|text/)xml\" \"id:%d,phase:1,t:none,t:lowercase,pass,nolog,ctl:requestBodyProcessor=XML\"\n", id)
 	id++
 	fmt.Fprintf(&b, "SecRule REQBODY_ERROR \"!@eq 0\" \"id:%d,phase:2,t:none,log,deny,msg:'Failed to parse request body',logdata:'%%{reqbody_error_msg}',severity:2\"\n", id)
+	// Coraza reads the first 1,000 arguments, from the query string, the
+	// path and the body together, and drops the rest, where no rule sees
+	// them: a thousand harmless ones in front of an attack hid it. So a
+	// request with more is refused, from the query in phase 1 and from the
+	// body in phase 2, as the recommended rules 200004 and 200005 do. The
+	// vaultwarden set lifts the phase 2 one by its ID where a whole vault
+	// is sent, so these two stay where they are.
+	id++
+	fmt.Fprintf(&b, "SecRule ARGUMENTS_LIMIT_REACHED \"@eq 1\" \"id:%d,phase:1,t:none,log,deny,msg:'Argument limit reached (GET/PATH args)',severity:2\"\n", id)
+	id++
+	fmt.Fprintf(&b, "SecRule ARGUMENTS_LIMIT_REACHED \"@eq 1\" \"id:%d,phase:2,t:none,log,deny,msg:'Argument limit reached (POST args)',severity:2\"\n", id)
 
 	for _, app := range w.Applications {
 		for _, part := range []string{"config", "before"} {

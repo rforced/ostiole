@@ -288,9 +288,9 @@ func TestProxyErrorLinesAreCutDown(t *testing.T) {
 
 // A JSON body is read as JSON: a harmless one passes even at paranoia 4,
 // where read as a form its quotes and braces were an attack, and an attack
-// in one of its values is caught by that value's name. One that does not
-// parse is refused rather than let through unread, and an empty one is not
-// read at all.
+// in one of its values is caught by that value's name, even where another
+// key flattens to the same name. One that does not parse is refused rather
+// than let through unread, and an empty one is not read at all.
 func TestProxyReadsJSONBodiesAsJSON(t *testing.T) {
 	t.Parallel()
 	bin := sidecar(t)
@@ -314,6 +314,8 @@ func TestProxyReadsJSONBodiesAsJSON(t *testing.T) {
 		{"/event", "application/cloudevents+json", `{"specversion":"1.0","type":"a.b","data":{"tags":["a","b"]}}`, http.StatusOK},
 		{"/empty", "application/json", "", http.StatusOK},
 		{"/xss", "application/json", `{"name":"<script>alert(1)</script>"}`, http.StatusForbidden},
+		// Both flatten to json.a.b, where Coraza 3.7 kept only the last.
+		{"/collision", "application/json", `{"a":{"b":"<script>alert(1)</script>"},"a.b":"x"}`, http.StatusForbidden},
 		{"/broken", "application/json", `{"name": `, http.StatusForbidden},
 	} {
 		if got := post(t, plain, site+c.path, c.contentType, c.body); got != c.status {
@@ -415,6 +417,83 @@ func TestProxyReadsXMLBodiesAsXML(t *testing.T) {
 		t.Errorf("the broken body was refused with %d by %+v", ev.Status, ev.Rules)
 	}
 	for _, path := range []string{"/order", "/price", "/feed", "/xmlrpc", "/empty"} {
+		if ev, ok := event(path)(); ok {
+			t.Errorf("%s matched %+v", path, ev.Rules)
+		}
+	}
+}
+
+// Coraza reads the first thousand arguments and drops the rest, so an
+// attack behind a thousand harmless ones went unread. A request with more
+// is refused, whether they come in the query string, a form or JSON, and
+// one with a thousand passes.
+func TestProxyRefusesArgumentsPastTheLimit(t *testing.T) {
+	t.Parallel()
+	bin := sidecar(t)
+	cfg := &model.Config{}
+	cfg.Services.Proxy = model.Proxy{
+		Enabled: true, HTTPPort: freePort(t), HTTPSPort: freePort(t),
+		Pools:    []model.ProxyPool{{ID: "app", Upstreams: []model.ProxyUpstream{{Address: answer(t, "ok")}}}},
+		Profiles: []model.WAFProfile{{ID: "p1", Mode: "block", Paranoia: 1}},
+		Sites: []model.ProxySite{{ID: "web", Enabled: true, Hosts: []string{"web.example.com"}, Pool: "app",
+			PlainHTTP: true, WAF: "p1"}},
+	}
+	plain, _, out := runSidecar(t, bin, cfg, "", map[string][]string{model.SelfCertificate: {"127.0.0.1"}})
+	const site = "http://web.example.com"
+	args := func(n int) string {
+		a := make([]string, n)
+		for i := range a {
+			a[i] = fmt.Sprintf("a%d=1", i)
+		}
+		return strings.Join(a, "&")
+	}
+	const xss = "q=%3Cscript%3Ealert(1)%3C%2Fscript%3E"
+	const form = "application/x-www-form-urlencoded"
+	for _, c := range []struct {
+		path, query, contentType, body string
+		status                         int
+	}{
+		{"/search", args(1000), "", "", http.StatusOK},
+		{"/login", "", form, args(1000), http.StatusOK},
+		{"/search-flood", args(1000) + "&" + xss, "", "", http.StatusForbidden},
+		{"/login-flood", "", form, args(1000) + "&" + xss, http.StatusForbidden},
+		{"/api-flood", "", "application/json", `{"a":[` + strings.Repeat("1,", 1000) + `"<script>alert(1)</script>"]}`, http.StatusForbidden},
+	} {
+		target := site + c.path
+		if c.query != "" {
+			target += "?" + c.query
+		}
+		if got := post(t, plain, target, c.contentType, c.body); got != c.status {
+			t.Errorf("%s: status %d, want %d", c.path, got, c.status)
+		}
+	}
+	event := func(path string) func() (wafevent.Event, bool) {
+		return func() (wafevent.Event, bool) {
+			return findEvent(out, func(ev wafevent.Event) bool {
+				p, _, _ := strings.Cut(ev.URI, "?")
+				return p == path
+			})
+		}
+	}
+	refused := map[string]string{
+		"/search-flood": "Argument limit reached (GET/PATH args)",
+		"/login-flood":  "Argument limit reached (POST args)",
+		"/api-flood":    "Argument limit reached (POST args)",
+	}
+	waitFor(t, "the events", func() bool {
+		for path := range refused {
+			if _, ok := event(path)(); !ok {
+				return false
+			}
+		}
+		return true
+	})
+	for path, message := range refused {
+		if ev, _ := event(path)(); !slices.ContainsFunc(ev.Rules, func(h wafevent.Hit) bool { return h.Message == message }) {
+			t.Errorf("%s was refused by %+v", path, ev.Rules)
+		}
+	}
+	for _, path := range []string{"/search", "/login"} {
 		if ev, ok := event(path)(); ok {
 			t.Errorf("%s matched %+v", path, ev.Rules)
 		}
@@ -624,11 +703,11 @@ func TestCloudflaresCookiesAreNotRead(t *testing.T) {
 	}
 }
 
-// Coraza 3.7 appends a request's removed targets to an exception list it
+// Coraza appends a request's removed targets to an exception list it
 // shares between requests, where the list has room: 942421's has twelve
 // entries and room for four. Two exclusions taking different cookies off
 // it, hit at once, overwrote each other, and a request lost its own.
-// third_party/coraza copies the list first.
+// third_party/coraza copies the list first, until upstream's #1723 is fixed.
 func TestConcurrentExclusionsKeepTheirOwnTargets(t *testing.T) {
 	t.Parallel()
 	cfg := &model.Config{}
