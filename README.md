@@ -103,7 +103,8 @@ Where they differ:
   chrony 4.6 does not report them. Wifi firmware is in the non-free-firmware section. Debian's
   installer enables it on most machines; on a cloud image, add it and run `ostiole repair`.
 - **Where UPnP and Tailscale come from:** Arch builds miniupnpd from the AUR during the install and
-  removes the build tools afterwards. Rocky Linux uses Fedora's miniupnpd package, Fedora 38's on
+  removes the build tools afterwards. Each release pins the AUR commit it reviewed and carries
+  miniupnp's signing key, so a changed recipe, source or package is not installed. Rocky Linux uses Fedora's miniupnpd package, Fedora 38's on
   Rocky 9. Debian, Ubuntu and Rocky Linux get Tailscale from Tailscale's own repository.
 
 ## Install

@@ -27,6 +27,41 @@ BIN_DIR="${OSTIOLE_BIN_DIR:-/usr/local/bin}"
 FEDORA_RELEASE=44
 # Arch packages miniupnpd in the AUR only, and this is the nftables build.
 AUR_UPNP=miniupnpd-nft
+# The miniupnpd-nft this release reviewed: the AUR commit, the sha256 of
+# every file in it, and the version and paths its package holds.
+# scripts/update-aur.sh writes this block.
+# BEGIN reviewed miniupnpd-nft
+AUR_UPNP_COMMIT=144b6607bcd310e820148263e270aee293ad4205
+AUR_UPNP_SUMS='282b459df9d07ae7b93df43f3e6b3c4fe66ffd62a43ff7082884192877f31543  .SRCINFO
+488a47ffb9d44284183593573b00878e23ca642ddee0f86839965e4115e694ec  PKGBUILD'
+AUR_UPNP_VERSION=2.3.11-1
+AUR_UPNP_PATHS='.BUILDINFO
+.MTREE
+.PKGINFO
+etc/
+etc/init.d/
+etc/init.d/miniupnpd
+etc/miniupnpd/
+etc/miniupnpd/miniupnpd.conf
+etc/miniupnpd/nft_delete_chain.sh
+etc/miniupnpd/nft_flush.sh
+etc/miniupnpd/nft_init.sh
+etc/miniupnpd/nft_removeall.sh
+usr/
+usr/bin/
+usr/bin/miniupnpd
+usr/lib/
+usr/lib/systemd/
+usr/lib/systemd/system/
+usr/lib/systemd/system/miniupnpd.service
+usr/share/
+usr/share/licenses/
+usr/share/licenses/miniupnpd/
+usr/share/licenses/miniupnpd/LICENSE
+usr/share/man/
+usr/share/man/man8/
+usr/share/man/man8/miniupnpd.8.gz'
+# END reviewed miniupnpd-nft
 # Set when a toolchain went on to build it, so the sweep runs afterwards
 # and takes it away again.
 BUILD_TOOLS=0
@@ -188,7 +223,7 @@ dnf)
 	;;
 pacman)
 	WANT="nftables dnsmasq unbound ppp iproute2 smartmontools openssl chrony ca-certificates tzdata curl tar kmod dbus"
-	UPNP_NOTE="miniupnpd-nft built from the AUR (base-devel goes on to build it)"
+	UPNP_NOTE="miniupnpd-nft $AUR_UPNP_VERSION built from the AUR at $(printf %.7s "$AUR_UPNP_COMMIT") (base-devel goes on to build it)"
 	;;
 esac
 
@@ -575,9 +610,11 @@ fedora_dirs() {
 	echo "$archive/releases/$1/Everything/$RPM_ARCH/os/Packages/m/"
 }
 
-# miniupnpd for Arch, which packages it in the AUR only. The PKGBUILD
-# comes over TLS, pins its tarball by sha256 and builds the nftables
-# backend; makepkg refuses to run as root, so the build runs as nobody.
+# miniupnpd for Arch, which packages it in the AUR only. Nothing is taken
+# on the AUR's word: the build uses the commit this release reviewed and
+# stops if a file in it differs, the source must carry miniupnp's
+# signature, and the package goes on only if it holds what the review
+# built. makepkg refuses to run as root, so the build runs as nobody.
 # Nothing here is fatal: a router without port mapping still routes.
 aur_miniupnpd() {
 	upnp_path >/dev/null && [ "${OSTIOLE_UPNP_FORCE:-0}" != "1" ] && return 0
@@ -601,25 +638,29 @@ aur_miniupnpd() {
 	AUR_HOME="$build"
 	chmod 0755 "$build"
 	chown "$AUR_UID:$AUR_GID" "$build"
-	if ! aur_clone "https://aur.archlinux.org/$AUR_UPNP.git"; then
+	if ! aur_fetch "https://aur.archlinux.org/$AUR_UPNP.git"; then
 		echo "note: could not fetch $AUR_UPNP from the AUR; trying Arch's mirror of it on GitHub"
-		if ! aur_clone "--revision refs/heads/$AUR_UPNP https://github.com/archlinux/aur.git"; then
+		if ! aur_fetch https://github.com/archlinux/aur.git; then
 			tail -5 "$TMP/aur.log" >&2
 			rm -rf "$build"
 			echo "warning: could not fetch $AUR_UPNP from the AUR or its GitHub mirror; no UPnP" >&2
 			return 0
 		fi
 	fi
-	# The PKGBUILD checks upstream's signature as well as the sha256. The
-	# key comes from a keyserver; when none answers, the sha256 still pins
-	# the source and the build goes on without it.
-	skip=""
-	key=$(sed -n "s/^validpgpkeys=('\([0-9A-Fa-f]*\)').*/\1/p" "$build/$AUR_UPNP/PKGBUILD")
-	if [ -n "$key" ] && ! as_nobody "$build" "gpg --batch --keyserver keyserver.ubuntu.com --recv-keys $key"; then
-		skip="--skippgpcheck"
-		echo "note: no keyserver answered for the miniupnpd signing key; the sha256 in the PKGBUILD still pins the source"
+	if ! aur_reviewed "$build/$AUR_UPNP"; then
+		rm -rf "$build"
+		echo "warning: $AUR_UPNP at $(printf %.7s "$AUR_UPNP_COMMIT") is not the one this release reviewed; no UPnP" >&2
+		return 0
 	fi
-	if ! as_nobody "$build/$AUR_UPNP" "makepkg --noconfirm --nodeps $skip"; then
+	# The key goes into the build's own keyring, where makepkg checks the
+	# tarball's signature against the key the PKGBUILD names.
+	if ! printf '%s\n' "$AUR_UPNP_KEY" | as_nobody "$build" "gpg --batch --import && gpg --batch --list-keys $AUR_UPNP_KEY_FPR"; then
+		tail -5 "$TMP/aur.log" >&2
+		rm -rf "$build"
+		echo "warning: could not load miniupnp's signing key; no UPnP" >&2
+		return 0
+	fi
+	if ! as_nobody "$build/$AUR_UPNP" "makepkg --noconfirm --nodeps"; then
 		tail -5 "$TMP/aur.log" >&2
 		rm -rf "$build"
 		echo "warning: $AUR_UPNP did not build; no UPnP" >&2
@@ -627,14 +668,88 @@ aur_miniupnpd() {
 	fi
 	pkg=$(find "$build/$AUR_UPNP" -maxdepth 1 -name "$AUR_UPNP-*.pkg.tar.*" \
 		! -name '*.sig' ! -name "$AUR_UPNP-debug-*" | head -1)
-	if [ -z "$pkg" ] || ! pacman -U --noconfirm "$pkg" >/dev/null 2>&1; then
+	if [ -z "$pkg" ]; then
 		rm -rf "$build"
 		echo "warning: the AUR build left nothing to install; no UPnP" >&2
 		return 0
 	fi
+	# pacman runs a package's install script as root, so a path the review
+	# did not see, .INSTALL above all, stops it here.
+	bsdtar -tf "$pkg" | LC_ALL=C sort >"$TMP/aur.paths"
+	bsdtar -xOf "$pkg" .PKGINFO >"$TMP/aur.pkginfo" 2>/dev/null || true
+	if ! grep -qx "pkgname = $AUR_UPNP" "$TMP/aur.pkginfo" ||
+		! grep -qx "pkgver = $AUR_UPNP_VERSION" "$TMP/aur.pkginfo" ||
+		[ "$(cat "$TMP/aur.paths")" != "$AUR_UPNP_PATHS" ]; then
+		printf '%s\n' "$AUR_UPNP_PATHS" | LC_ALL=C comm -3 - "$TMP/aur.paths" >&2
+		rm -rf "$build"
+		echo "warning: the $AUR_UPNP package is not the one this release reviewed; no UPnP" >&2
+		return 0
+	fi
+	if ! pacman -U --noconfirm "$pkg" >/dev/null 2>&1; then
+		rm -rf "$build"
+		echo "warning: pacman would not install the $AUR_UPNP it built; no UPnP" >&2
+		return 0
+	fi
 	rm -rf "$build"
-	echo "built and installed $AUR_UPNP from the AUR"
+	echo "built and installed $AUR_UPNP $AUR_UPNP_VERSION from the AUR"
 }
+
+# miniupnp's release key, which signs every miniupnpd tarball. It travels
+# here so no keyserver is asked; a signature by any other key, or none,
+# stops the build.
+AUR_UPNP_KEY_FPR=751E9FF6944A3B36A5432216DB511043A31ACAAF # gitleaks:allow (key fingerprint)
+AUR_UPNP_KEY='-----BEGIN PGP PUBLIC KEY BLOCK-----
+
+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
+QP3d
+=bCg1
+-----END PGP PUBLIC KEY BLOCK-----'
 
 # build_dir prints a temporary directory a build can run binaries in, and
 # proves it rather than assuming: /tmp is noexec on a hardened router and
@@ -665,12 +780,24 @@ as_nobody() {
 		sh -c "cd '$1' && $2" >>"$TMP/aur.log" 2>&1
 }
 
-# aur_clone clones the PKGBUILD into the build directory. The AUR answers
-# for a package it does not have with an empty repository, which would
-# stand in the way of the next try, so an earlier one goes first.
-aur_clone() {
+# aur_fetch fetches the reviewed commit into the build directory by its
+# hash, so the AUR moving on changes nothing here. Arch's GitHub mirror
+# keeps each package on a branch of its own, with the same commits. A
+# failed try leaves a repository behind, so an earlier one goes first.
+aur_fetch() {
 	rm -rf "${build:?}/$AUR_UPNP"
-	as_nobody "$build" "git clone -q --depth 1 $1 $AUR_UPNP" && [ -f "$build/$AUR_UPNP/PKGBUILD" ]
+	as_nobody "$build" "git init -q $AUR_UPNP && cd $AUR_UPNP && git fetch -q --depth 1 $1 $AUR_UPNP_COMMIT && git checkout -q FETCH_HEAD"
+}
+
+# aur_reviewed says whether a checkout holds exactly the files the review
+# hashed, no more and no fewer.
+aur_reviewed() {
+	(
+		cd "$1" || exit 1
+		[ "$(find . -path ./.git -prune -o ! -type d -print | sed 's|^\./||' | LC_ALL=C sort)" = \
+			"$(printf '%s\n' "$AUR_UPNP_SUMS" | sed 's/^[0-9a-f]*  //' | LC_ALL=C sort)" ] &&
+			printf '%s\n' "$AUR_UPNP_SUMS" | sha256sum -c --quiet --strict - >/dev/null 2>&1
+	)
 }
 
 # upnp_path prints where miniupnpd is. Fedora 42 merged /usr/sbin into
