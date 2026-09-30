@@ -169,6 +169,16 @@ func wafDirectives(dir string, w model.WAFProfile, siteID string) string {
 	fmt.Fprintf(&b, "SecRule ARGUMENTS_LIMIT_REACHED \"@eq 1\" \"id:%d,phase:1,t:none,log,deny,msg:'Argument limit reached (GET/PATH args)',severity:2\"\n", id)
 	id++
 	fmt.Fprintf(&b, "SecRule ARGUMENTS_LIMIT_REACHED \"@eq 1\" \"id:%d,phase:2,t:none,log,deny,msg:'Argument limit reached (POST args)',severity:2\"\n", id)
+	// A multipart body that repeats a part's header or a parameter, two
+	// filenames say, which backends settle differently, or that breaks the
+	// format in a way they might read past, is refused too, as the
+	// recommended rule 200003 does. Except when it was cut at the body
+	// limit, where it breaks off mid-part: the recommended config refuses
+	// a body that long outright, but here the part up to the limit is read
+	// and the rest let through unread, so an upload that size still works.
+	id++
+	fmt.Fprintf(&b, "SecRule MULTIPART_STRICT_ERROR \"!@eq 0\" \"id:%d,phase:2,t:none,log,deny,msg:'Multipart request body failed strict validation',logdata:'MULTIPART_DUPLICATE_PART_HEADER=%%{MULTIPART_DUPLICATE_PART_HEADER}, MULTIPART_INVALID_QUOTING=%%{MULTIPART_INVALID_QUOTING}',severity:2,chain\"\n", id)
+	b.WriteString("SecRule INBOUND_DATA_ERROR \"@eq 0\" \"t:none\"\n")
 
 	for _, app := range w.Applications {
 		for _, part := range []string{"config", "before"} {

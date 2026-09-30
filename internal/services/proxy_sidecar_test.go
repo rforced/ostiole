@@ -500,6 +500,77 @@ func TestProxyRefusesArgumentsPastTheLimit(t *testing.T) {
 	}
 }
 
+// A multipart body that repeats a part's header or a parameter, quotes an
+// extended filename or never closes is refused, since backends settle
+// those differently. An upload cut at the body limit is not: the part up to
+// the limit is read and the rest let through.
+func TestProxyRefusesMalformedMultipartBodies(t *testing.T) {
+	t.Parallel()
+	bin := sidecar(t)
+	cfg := &model.Config{}
+	cfg.Services.Proxy = model.Proxy{
+		Enabled: true, HTTPPort: freePort(t), HTTPSPort: freePort(t),
+		Pools:    []model.ProxyPool{{ID: "app", Upstreams: []model.ProxyUpstream{{Address: answer(t, "ok")}}}},
+		Profiles: []model.WAFProfile{{ID: "p1", Mode: "block", Paranoia: 1, BodyLimitMB: 1}},
+		Sites: []model.ProxySite{{ID: "web", Enabled: true, Hosts: []string{"web.example.com"}, Pool: "app",
+			PlainHTTP: true, WAF: "p1"}},
+	}
+	plain, _, out := runSidecar(t, bin, cfg, "", map[string][]string{model.SelfCertificate: {"127.0.0.1"}})
+	const site = "http://web.example.com"
+	part := func(disposition, data string) string {
+		return "--XyZ\r\nContent-Disposition: " + disposition + "\r\n\r\n" + data + "\r\n"
+	}
+	const end = "--XyZ--\r\n"
+	photo := strings.Repeat("A", 10_000)
+	for _, c := range []struct {
+		path, body string
+		status     int
+	}{
+		{"/upload", part(`form-data; name="f"; filename="photo.jpg"`, photo) + part(`form-data; name="title"`, "Holiday") + end, http.StatusOK},
+		{"/long", part(`form-data; name="f"; filename="photo.jpg"`, strings.Repeat("A", 2<<20)) + end, http.StatusOK},
+		{"/two-names", part(`form-data; name="f"; filename="photo.jpg"; filename="photo.png"`, photo) + end, http.StatusForbidden},
+		{"/two-headers", "--XyZ\r\nContent-Disposition: form-data; name=\"f\"; filename=\"photo.jpg\"\r\n" +
+			"Content-Disposition: form-data; name=\"f\"; filename=\"photo.png\"\r\n\r\n" + photo + "\r\n" + end, http.StatusForbidden},
+		{"/quoted", part(`form-data; name="f"; filename*="utf-8''photo.jpg"`, photo) + end, http.StatusForbidden},
+		{"/unclosed", part(`form-data; name="f"; filename="photo.jpg"`, photo), http.StatusForbidden},
+	} {
+		if got := post(t, plain, site+c.path, "multipart/form-data; boundary=XyZ", c.body); got != c.status {
+			t.Errorf("%s: status %d, want %d", c.path, got, c.status)
+		}
+	}
+	event := func(path string) func() (wafevent.Event, bool) {
+		return func() (wafevent.Event, bool) {
+			return findEvent(out, func(ev wafevent.Event) bool { return ev.URI == path })
+		}
+	}
+	refused := []string{"/two-names", "/two-headers", "/quoted", "/unclosed"}
+	waitFor(t, "the events", func() bool {
+		for _, path := range refused {
+			if _, ok := event(path)(); !ok {
+				return false
+			}
+		}
+		return true
+	})
+	for path, data := range map[string]string{
+		"/two-names":   "MULTIPART_DUPLICATE_PART_HEADER=1",
+		"/two-headers": "MULTIPART_DUPLICATE_PART_HEADER=1",
+		"/quoted":      "MULTIPART_INVALID_QUOTING=1",
+		"/unclosed":    "MULTIPART_DUPLICATE_PART_HEADER=0, MULTIPART_INVALID_QUOTING=0",
+	} {
+		if ev, _ := event(path)(); !slices.ContainsFunc(ev.Rules, func(h wafevent.Hit) bool {
+			return h.Message == "Multipart request body failed strict validation" && strings.Contains(h.Data, data)
+		}) {
+			t.Errorf("%s was refused by %+v", path, ev.Rules)
+		}
+	}
+	for _, path := range []string{"/upload", "/long"} {
+		if ev, ok := event(path)(); ok {
+			t.Errorf("%s matched %+v", path, ev.Rules)
+		}
+	}
+}
+
 // coraza-caddy keeps a WAF, and the logger it was built with, across
 // reloads while the WAF's directives stay the same. A proxy that built its
 // WAFs before their logger was left out rebuilds them at the reload that
