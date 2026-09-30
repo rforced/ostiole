@@ -13,10 +13,17 @@ manager() {
 	echo ""
 }
 
+# dnf_ci is dnf that leaves a mirror for the next once it has sent under
+# 500 kB/s for 10 s, the wait for an answer included. dnf's own limit is
+# 1 kB/s for 30 s, and the mirror list comes shuffled: with a Rocky mirror
+# that takes 20 s to answer each request first, systemd-boot.sh took ten
+# minutes, where run-systemd-test.sh waits four.
+dnf_ci() { dnf --setopt=timeout=10 --setopt=minrate=500k "$@"; }
+
 pkg_refresh() {
 	case "$(manager)" in
 	apt-get) DEBIAN_FRONTEND=noninteractive apt-get update -qq ;;
-	dnf) dnf makecache -q >/dev/null 2>&1 || true ;;
+	dnf) dnf_ci makecache -q >/dev/null 2>&1 || true ;;
 	# Arch upgrades everything or nothing. The image trails the
 	# repositories, and one package taken from a newer database breaks
 	# whatever is pinned to the old one: systemd 262 on its own is refused
@@ -28,7 +35,7 @@ pkg_refresh() {
 pkg_install() {
 	case "$(manager)" in
 	apt-get) DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@" >/dev/null ;;
-	dnf) dnf install -y -q "$@" >/dev/null ;;
+	dnf) dnf_ci install -y -q "$@" >/dev/null ;;
 	pacman) pacman -S --noconfirm --needed "$@" >/dev/null ;;
 	*) return 1 ;;
 	esac
