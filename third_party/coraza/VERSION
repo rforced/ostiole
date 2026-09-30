@@ -1,7 +1,8 @@
-# Coraza v3.7.0 from the Go module proxy, h1:LIQqu1r+l6e/U/gyiZeykWaNNBY1TzRLz+aaI+QYEEM=,
-# without its tests, testdata, testing/ and http/e2e/ packages or CI files.
-# It is updated with the other dependencies: copy the new release the same
-# way and apply the changes below again, less any upstream took.
+# Coraza v3.8.0 from the Go module proxy, h1:3VZxU7JAN16BkhlHe2sZuZgE0r1qm8Aa1lI5sC/h7jI=,
+# without its tests, testdata, testing/ and http/e2e/ packages, docs, agent
+# guides, or dev and CI files. It is updated as soon as upstream releases:
+# copy the new release the same way and apply the changes below again, less
+# any upstream took.
 # govulncheck sees this copy without a version, so Coraza's advisories
 # (github.com/corazawaf/coraza/security/advisories) are checked by hand.
 #
@@ -10,5 +11,6 @@
 #   ctl:ruleRemoveTargetById removals into the rule's shared exception
 #   list where that had room, so concurrent requests removing different
 #   targets from one rule overwrote each other. The capacity is capped so
-#   the append copies. Upstream: closed, unmerged PR #1509 had the same fix.
-v3.7.0
+#   the append copies. Upstream: issue #1723, open at v3.8.0; closed,
+#   unmerged PR #1509 had the same fix.
+v3.8.0
