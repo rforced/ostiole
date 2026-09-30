@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -325,4 +326,70 @@ func TestTheVaultwardenSetKeepsTheAttacks(t *testing.T) {
 			}
 		})
 	}
+}
+
+// An import or a key rotation sends the whole vault at once, more
+// arguments than the thousand the WAF reads, and passes at every level with
+// the set loaded. That many anywhere else, or without the set, is refused
+// by the WAF's own rule for a body past the limit, 10007.
+func TestTheVaultwardenSetLetsAWholeVaultThrough(t *testing.T) {
+	t.Parallel()
+	g := vw{rand.New(rand.NewPCG(9, 9))}
+	const js = "application/json; charset=utf-8"
+	var ciphers []any
+	for range 60 {
+		ciphers = append(ciphers, g.cipher())
+	}
+	name := g.enc(12)
+	vault := vwJSON(map[string]any{"ciphers": ciphers, "folders": []any{map[string]any{"name": name}},
+		"folderRelationships": []any{map[string]any{"key": 0, "value": 0}}})
+	org := vwJSON(map[string]any{"ciphers": ciphers, "collections": []any{map[string]any{"name": name}},
+		"collectionRelationships": []any{map[string]any{"key": 0, "value": 0}}})
+	// Key rotation's own fields are not covered yet, so numbers stand in.
+	numbers := make([]int, 1100)
+	for i := range numbers {
+		numbers[i] = i
+	}
+	many := vwJSON(map[string]any{"accountData": map[string]any{"ciphers": numbers}})
+	whole := []vwRequest{
+		{"POST", "/api/ciphers/import", js, vault, ""},
+		{"POST", "/api/ciphers/import-organization?organizationId=" + g.uuid(), js, org, ""},
+		{"POST", "/api/accounts/key-management/rotate-user-account-keys", js, many, ""},
+	}
+	for pl := 1; pl <= 4; pl++ {
+		t.Run(fmt.Sprintf("paranoia %d", pl), func(t *testing.T) {
+			t.Parallel()
+			plain, out := vaultSite(t, pl, true)
+			for _, r := range whole {
+				if status := vwSend(t, plain, r); status != http.StatusOK {
+					t.Errorf("%s %s: %d", r.method, r.path, status)
+				}
+			}
+			if t.Failed() {
+				t.Logf("events:\n%s", events(out))
+			}
+		})
+	}
+	refused := func(t *testing.T, set bool, r vwRequest) {
+		t.Helper()
+		plain, out := vaultSite(t, 1, set)
+		if status := vwSend(t, plain, r); status != http.StatusForbidden {
+			t.Errorf("%s %s: %d", r.method, r.path, status)
+		}
+		waitFor(t, "the refusal", func() bool {
+			_, ok := findEvent(out, func(ev wafevent.Event) bool {
+				return slices.ContainsFunc(ev.Rules, func(h wafevent.Hit) bool { return h.ID == 10007 })
+			})
+			return ok
+		})
+	}
+	folder := "/api/folders/" + g.uuid()
+	t.Run("elsewhere", func(t *testing.T) {
+		t.Parallel()
+		refused(t, true, vwRequest{"PUT", folder, js, many, ""})
+	})
+	t.Run("without the set", func(t *testing.T) {
+		t.Parallel()
+		refused(t, false, whole[0])
+	})
 }
