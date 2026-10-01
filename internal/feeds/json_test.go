@@ -319,7 +319,7 @@ func TestFetchKeepsWhatTheAliasSelects(t *testing.T) {
 	cfg := config(model.Alias{Name: "oracle", Type: model.AliasHosts, URL: srv.URL + "/public_ip_ranges.json",
 		Select: []string{"region=us-ashburn-1", "tags=OCI"}, Entries: []string{"203.0.113.9"}})
 	alias := cfg.Aliases[0]
-	entries, parts, err := NewFetcher().Fetch(context.Background(), cfg, alias)
+	entries, parts, err := testFetcher().Fetch(context.Background(), cfg, alias)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -348,7 +348,7 @@ func TestFetchKeepsWhatTheAliasSelects(t *testing.T) {
 	// A country list read from a JSON mirror offers nothing: it cannot select.
 	geo := config(model.Alias{Name: "geo", Type: model.AliasGeoIP, Entries: []string{"us"}})
 	geo.System.GeoIPv4URL = srv.URL + "/{country}.json"
-	_, parts, err = NewFetcher().Fetch(context.Background(), geo, geo.Aliases[0])
+	_, parts, err = testFetcher().Fetch(context.Background(), geo, geo.Aliases[0])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,7 +371,7 @@ func TestInspectDescribesAList(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	f := NewFetcher()
+	f := testFetcher()
 	part, err := f.Inspect(context.Background(), srv.URL+"/ranges.json", false)
 	if err != nil {
 		t.Fatal(err)

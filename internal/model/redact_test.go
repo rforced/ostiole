@@ -60,6 +60,87 @@ func TestRedactedBlanksProviderSecrets(t *testing.T) {
 	}
 }
 
+// A list's URL may carry the key to a private feed. Every field named
+// like a URL is walked, so one added later is checked too.
+func TestRedactedHidesCredentialsInURLs(t *testing.T) {
+	t.Parallel()
+	const credentialed = "https://alice:hunter2@lists.example.com/{country}.txt?licence_key=abc123&api-token=def456&edition=lite"
+	cfg := &Config{}
+	filled := walkURLs(reflect.ValueOf(cfg).Elem(), "", nil, credentialed)
+	if len(filled) < 8 {
+		t.Fatalf("filled %v; the walk is broken", filled)
+	}
+	redacted := cfg.Redacted()
+	for _, path := range walkURLs(reflect.ValueOf(redacted).Elem(), "", nil, "") {
+		t.Errorf("Redacted() left a credential in %s", path)
+	}
+	if got, want := redacted.Aliases[0].URL, "https://lists.example.com/{country}.txt?licence_key=&api-token=&edition=lite"; got != want {
+		t.Errorf("alias URL = %q, want %q", got, want)
+	}
+}
+
+func TestRedactURLLeavesAPlainURLAsWritten(t *testing.T) {
+	t.Parallel()
+	for _, u := range []string{
+		"",
+		"https://stat.ripe.net/data/announced-prefixes/data.json?resource=AS{asn}&sourceapp=ostiole",
+		"https://www.example.com/ipblocks/{country}-aggregated.zone",
+		"http://192.168.1.10:8080/list.txt#top",
+		"not a url",
+	} {
+		if got := RedactURL(u); got != u {
+			t.Errorf("RedactURL(%q) = %q", u, got)
+		}
+	}
+	if got, want := RedactURL("https://token@example.com/a@b?x=1"), "https://example.com/a@b?x=1"; got != want {
+		t.Errorf("user part: %q, want %q", got, want)
+	}
+}
+
+// walkURLs sets every string field named like a URL to set, or with set
+// empty returns the paths of those still holding a credential.
+func walkURLs(v reflect.Value, path string, seen []reflect.Type, set string) []string {
+	var out []string
+	switch v.Kind() {
+	case reflect.Pointer:
+		if v.IsNil() {
+			if set == "" || slices.Contains(seen, v.Type().Elem()) {
+				return nil
+			}
+			v.Set(reflect.New(v.Type().Elem()))
+		}
+		return walkURLs(v.Elem(), path, append(seen, v.Type().Elem()), set)
+	case reflect.Slice:
+		if v.Type().Elem().Kind() == reflect.Struct && set != "" && v.Len() == 0 {
+			v.Set(reflect.Append(v, reflect.New(v.Type().Elem()).Elem()))
+		}
+		for i := range v.Len() {
+			out = append(out, walkURLs(v.Index(i), path+"[]", seen, set)...)
+		}
+	case reflect.Struct:
+		for i := range v.NumField() {
+			f := v.Type().Field(i)
+			if !f.IsExported() {
+				continue
+			}
+			p := path + "." + f.Name
+			if f.Type.Kind() == reflect.String && strings.HasSuffix(f.Name, "URL") {
+				switch {
+				case set != "":
+					v.Field(i).SetString(set)
+					out = append(out, p)
+				case strings.ContainsAny(v.Field(i).String(), "@") || strings.Contains(v.Field(i).String(), "abc123") ||
+					strings.Contains(v.Field(i).String(), "def456"):
+					out = append(out, p)
+				}
+				continue
+			}
+			out = append(out, walkURLs(v.Field(i), p, seen, set)...)
+		}
+	}
+	return out
+}
+
 func TestRedactedDoesNotTouchTheOriginal(t *testing.T) {
 	cfg := &Config{Crons: []Cron{{ID: "backup", Passphrase: "hunter2"}}}
 	if got := cfg.Redacted().Crons[0].Passphrase; got != "" {

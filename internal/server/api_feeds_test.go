@@ -15,8 +15,10 @@ import (
 	"time"
 
 	"github.com/rforced/ostiole/internal/auth"
+	"github.com/rforced/ostiole/internal/dnsblock"
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/feeds"
+	"github.com/rforced/ostiole/internal/fetch"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/nft/nfttest"
 	"github.com/rforced/ostiole/internal/store"
@@ -35,7 +37,7 @@ func newFeedServer(t *testing.T) (*httptest.Server, <-chan struct{}) {
 	passes := make(chan struct{}, 8)
 	refresher := &feeds.Refresher{
 		Cache:    feeds.NewCache(filepath.Join(dir, "feeds")),
-		Fetcher:  feeds.NewFetcher(),
+		Fetcher:  &feeds.Fetcher{Getter: fetch.Inside(), Timeout: feeds.DefaultTimeout},
 		Source:   eng.Effective,
 		Log:      slog.New(slog.DiscardHandler),
 		Interval: time.Hour,
@@ -150,6 +152,52 @@ func TestInspectKeepsAnOperatorToPublicAddresses(t *testing.T) {
 	login(t, srv, "hand")
 	if resp, raw := inspect(); resp.StatusCode != http.StatusOK {
 		t.Errorf("a URL the router fetches: %d %s", resp.StatusCode, raw)
+	}
+}
+
+// A list's URL may carry the key to it. A viewer reads it without, in the
+// configuration and in both kinds of list's status; an operator reads it
+// as written.
+func TestAViewerReadsListURLsWithoutTheirKeys(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	srv := withTokens(t, func(d *Deps) {
+		d.Feeds = &feeds.Refresher{Cache: feeds.NewCache(filepath.Join(dir, "feeds")), Fetcher: &feeds.Fetcher{Getter: fetch.Inside()}}
+		d.Blocklists = &dnsblock.Refresher{Cache: dnsblock.NewCache(filepath.Join(dir, "blocklists")), Fetcher: &dnsblock.Fetcher{Getter: fetch.Inside()}}
+	})
+	cfg := model.Starter(model.StarterOptions{Hostname: "fw", LAN: "eth1", LANAddress: "10.0.0.1/24", WAN: "eth0",
+		Services: true, DNSUpstreams: []string{"192.0.2.53"}})
+	cfg.Aliases = []model.Alias{{Name: "partners", Type: model.AliasHosts, URL: "https://lists.example.com/drop.txt?token=list-key-1"}}
+	cfg.Blocking.Enabled = true
+	cfg.Blocking.Lists = []model.BlockList{{Name: "private", Enabled: true, URL: "https://bob:list-pass-2@lists.example.com/block.txt"}}
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
+	}
+	viewer := mintToken(t, srv, "dashboard", "viewer")
+	operator := mintToken(t, srv, "automation", "operator")
+	for path, keys := range map[string][]string{
+		"/api/v1/config":        {"list-key-1", "list-pass-2"},
+		"/api/v1/aliases/feeds": {"list-key-1"},
+		"/api/v1/blocking":      {"list-pass-2"},
+	} {
+		resp, raw := withToken(t, srv, http.MethodGet, path, viewer)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("viewer %s: %d %s", path, resp.StatusCode, raw)
+		}
+		for _, key := range append(keys, "bob") {
+			if strings.Contains(string(raw), key) {
+				t.Errorf("a viewer reads %q in %s", key, path)
+			}
+		}
+		if !strings.Contains(string(raw), "lists.example.com/") {
+			t.Errorf("%s lost more than the keys: %s", path, raw)
+		}
+		_, raw = withToken(t, srv, http.MethodGet, path, operator)
+		for _, key := range keys {
+			if !strings.Contains(string(raw), key) {
+				t.Errorf("an operator reads %s without %q", path, key)
+			}
+		}
 	}
 }
 

@@ -242,7 +242,7 @@ function save() {
         v-if="!keyed"
         id="alias-url"
         label="Fetch from"
-        hint="A published list, plain text or JSON, cached here and refetched on a schedule."
+        hint="A published list, plain text or JSON, cached here and refetched on a schedule. Plain http only from inside the network."
       >
         <input
           id="alias-url"

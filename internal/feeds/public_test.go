@@ -5,51 +5,16 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"net/netip"
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/rforced/ostiole/internal/fetch"
 )
 
-// What an operator's URL may reach: the internet, and nothing of the
-// router's own or behind it.
-func TestPublicAddresses(t *testing.T) {
-	t.Parallel()
-	own := []netip.Addr{netip.MustParseAddr("198.51.100.7"), netip.MustParseAddr("2001:db8::7")}
-	for addr, want := range map[string]bool{
-		"1.1.1.1":              true,
-		"2606:4700:4700::1111": true,
-		"::ffff:1.1.1.1":       true,
-		"198.51.100.8":         true,
-		"198.51.100.7":         false,
-		"2001:db8::7":          false,
-		"127.0.0.1":            false,
-		"::1":                  false,
-		"::ffff:127.0.0.1":     false,
-		"0.0.0.0":              false,
-		"::":                   false,
-		"192.168.1.1":          false,
-		"172.16.0.1":           false,
-		"192.168.100.1":        false,
-		"::ffff:10.0.0.1":      false,
-		"169.254.169.254":      false,
-		"fe80::1%eth0":         false,
-		"fd7a:115c:a1e0::1":    false,
-		"100.64.0.1":           false,
-		"100.100.100.100":      false,
-		"224.0.0.1":            false,
-		"255.255.255.255":      false,
-		"ff02::1":              false,
-	} {
-		if got := public(netip.MustParseAddr(addr), own); got != want {
-			t.Errorf("%s: public = %v, want %v", addr, got, want)
-		}
-	}
-}
-
 // A URL on the router itself is refused before anything connects to it,
-// however the address is written.
-func TestInspectPublicOnlyRefusesTheRouter(t *testing.T) {
+// however the address is written and whoever typed it.
+func TestInspectRefusesTheRouter(t *testing.T) {
 	t.Parallel()
 	var hits atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -58,17 +23,29 @@ func TestInspectPublicOnlyRefusesTheRouter(t *testing.T) {
 	}))
 	defer srv.Close()
 	port := srv.URL[strings.LastIndex(srv.URL, ":"):]
+	secure := strings.Replace(srv.URL, "http://", "https://", 1)
 
-	f := NewFetcher()
-	for _, u := range []string{srv.URL + "/list.txt", "http://[::ffff:127.0.0.1]" + port + "/list.txt"} {
-		if _, err := f.Inspect(context.Background(), u, true); !errors.Is(err, ErrNotPublic) || err.Error() != ErrNotPublic.Error() {
-			t.Errorf("%s: err = %v, want ErrNotPublic alone", u, err)
+	f := NewFetcher(nil)
+	for _, c := range []struct {
+		url        string
+		publicOnly bool
+		want       error
+	}{
+		{srv.URL + "/list.txt", false, fetch.ErrNotAllowed},
+		{"http://[::ffff:127.0.0.1]" + port + "/list.txt", false, fetch.ErrNotAllowed},
+		{secure + "/list.txt", false, fetch.ErrNotAllowed},
+		{secure + "/list.txt", true, fetch.ErrNotAllowed},
+		{srv.URL + "/list.txt", true, fetch.ErrNotAllowed},
+	} {
+		if _, err := f.Inspect(context.Background(), c.url, c.publicOnly); !errors.Is(err, c.want) || err.Error() != c.want.Error() {
+			t.Errorf("%s, publicOnly %v: err = %v, want %v alone", c.url, c.publicOnly, err, c.want)
 		}
 	}
 	if n := hits.Load(); n != 0 {
 		t.Errorf("the server was reached %d times", n)
 	}
-	if part, err := f.Inspect(context.Background(), srv.URL+"/list.txt", false); err != nil || part.Entries != 1 {
-		t.Errorf("unrestricted: %+v, %v", part, err)
-	}
 }
+
+// testFetcher reads from servers on the loopback as if they were lists
+// inside the network.
+func testFetcher() *Fetcher { return NewFetcher(fetch.Inside()) }

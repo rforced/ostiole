@@ -37,7 +37,7 @@ func asnConfig(srv *httptest.Server, numbers ...string) *model.Config {
 }
 
 func asnFetcher() *Fetcher {
-	f := NewFetcher()
+	f := testFetcher()
 	f.Log = slog.New(slog.DiscardHandler)
 	return f
 }

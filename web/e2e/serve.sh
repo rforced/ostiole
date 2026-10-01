@@ -19,13 +19,15 @@ fi
 # so nothing is ever run through it. Releases are asked of the stand-in
 # 28-updates.spec.js runs, never of GitHub, and dynamic DNS writes to the
 # one 29-ddns.spec.js runs, never to Cloudflare. Backups and log files go
-# beside the configuration, since the server may not write /var.
+# beside the configuration, since the server may not write /var. Lists come
+# from servers the specs run on the loopback, which a router never reads.
 "$BIN" --config-dir "$DIR" --nft "$PWD/e2e/nft-stub.sh" --tc "$PWD/e2e/tc-stub.sh" \
   --smartctl "$PWD/e2e/smartctl-stub.sh" \
   --network-backend none \
   --package-manager dnf \
   --update-api http://127.0.0.1:18096 \
   --cloudflare-api http://127.0.0.1:18097 \
+  --lists-on-loopback \
   --backup-dir "$DIR/backups" \
   --log-dir "$DIR/log" \
   serve --listen "127.0.0.1:${E2E_PORT:-18090}" --log-level warn &

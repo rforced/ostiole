@@ -59,7 +59,7 @@ func TestAFailedFetchKeepsYesterdaysList(t *testing.T) {
 	cfg.Services.DNS.Enabled = true
 	cfg.Blocking = model.Blocking{Enabled: true, Lists: []model.BlockList{{Name: "ads", Enabled: true, URL: srv.URL}}}
 	loader := &recordingLoader{}
-	r := &Refresher{Cache: NewCache(t.TempDir()), Fetcher: NewFetcher(), Source: func() *model.Config { return cfg }, Loader: loader}
+	r := &Refresher{Cache: NewCache(t.TempDir()), Fetcher: testFetcher(), Source: func() *model.Config { return cfg }, Loader: loader}
 
 	if rep := r.Tick(context.Background(), true); len(rep.Fetched) != 1 || rep.Failed != nil {
 		t.Fatalf("first tick = %+v", rep)

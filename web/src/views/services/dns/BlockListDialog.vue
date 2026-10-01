@@ -159,7 +159,11 @@ function save() {
         <input id="bl-desc" v-model="form.description" class="input" />
       </FormField>
 
-      <FormField id="bl-url" label="Fetch from" hint="Empty: a list loaded by hand.">
+      <FormField
+        id="bl-url"
+        label="Fetch from"
+        hint="Empty: a list loaded by hand. Plain http only from inside the network."
+      >
         <input
           id="bl-url"
           v-model="form.url"

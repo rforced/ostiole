@@ -1,6 +1,11 @@
 package model
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"net/url"
+	"strings"
+	"unicode"
+)
 
 // Redacted returns a copy with every secret blanked: what a backup for
 // sharing carries. This function is the one place the secrets in a
@@ -60,7 +65,68 @@ func (c *Config) Redacted() *Config {
 	out.Notifications.Webhook.Token = ""
 	// A chat service's webhook URL is the key to its channel.
 	out.Notifications.Webhook.URL = ""
+	for i := range out.Aliases {
+		out.Aliases[i].URL = RedactURL(out.Aliases[i].URL)
+	}
+	for i := range out.Blocking.Lists {
+		out.Blocking.Lists[i].URL = RedactURL(out.Blocking.Lists[i].URL)
+	}
+	s := &out.System
+	for _, u := range []*string{&s.GeoIPv4URL, &s.GeoIPv6URL, &s.ASNURL, &s.ASNNamesURL, &s.BogonV4URL, &s.BogonV6URL} {
+		*u = RedactURL(*u)
+	}
 	return out
+}
+
+// RedactURL blanks what in a URL is a credential: its user part, and the
+// value of each query parameter named like a key or a token, the way a
+// private list or a GeoIP licence carries one. The rest is left exactly
+// as written, so a template keeps its {country}.
+func RedactURL(raw string) string {
+	scheme, rest, ok := strings.Cut(raw, "://")
+	if !ok {
+		return raw
+	}
+	end := strings.IndexAny(rest, "/?#")
+	if end < 0 {
+		end = len(rest)
+	}
+	if at := strings.LastIndex(rest[:end], "@"); at >= 0 {
+		rest = rest[at+1:]
+	}
+	out, fragment, hasFragment := strings.Cut(rest, "#")
+	out, query, hasQuery := strings.Cut(out, "?")
+	if hasQuery {
+		pairs := strings.Split(query, "&")
+		for i, p := range pairs {
+			name, _, ok := strings.Cut(p, "=")
+			if n, err := url.QueryUnescape(name); ok && err == nil && secretParam(n) {
+				pairs[i] = name + "="
+			}
+		}
+		out += "?" + strings.Join(pairs, "&")
+	}
+	if hasFragment {
+		out += "#" + fragment
+	}
+	return scheme + "://" + out
+}
+
+// secretParam says whether a query parameter is named like a credential.
+// Hiding one that was not costs a viewer little.
+func secretParam(name string) bool {
+	n := strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return unicode.ToLower(r)
+		}
+		return -1
+	}, name)
+	for _, part := range []string{"key", "token", "secret", "pass", "pwd", "auth", "sig", "credential", "licen", "session"} {
+		if strings.Contains(n, part) {
+			return true
+		}
+	}
+	return false
 }
 
 // clone deep-copies through JSON, which is the shape the configuration is

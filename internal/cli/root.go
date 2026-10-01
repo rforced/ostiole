@@ -15,6 +15,7 @@ import (
 	"github.com/rforced/ostiole/internal/dnsblock"
 	"github.com/rforced/ostiole/internal/engine"
 	"github.com/rforced/ostiole/internal/feeds"
+	"github.com/rforced/ostiole/internal/fetch"
 	"github.com/rforced/ostiole/internal/install"
 	"github.com/rforced/ostiole/internal/journald"
 	"github.com/rforced/ostiole/internal/logfile"
@@ -61,6 +62,9 @@ type globals struct {
 	packageManager string
 	// updateAPI is where the updater asks for releases; empty is GitHub.
 	updateAPI string
+	// listsOnLoopback has lists read from the loopback as if it were
+	// inside the network; only the end-to-end tests set it.
+	listsOnLoopback bool
 	// cloudflareAPI is where dynamic DNS writes Cloudflare records;
 	// empty is Cloudflare's API.
 	cloudflareAPI string
@@ -115,6 +119,15 @@ func (g *globals) network() (network.Backend, error) {
 func (g *globals) feedsDir() string { return filepath.Join(g.configDir, "feeds") }
 
 func (g *globals) feeds() *feeds.Cache { return feeds.NewCache(g.feedsDir()) }
+
+// listGetter reads the lists a configuration names: under the router's
+// own rules, or with --lists-on-loopback, from the tests' list servers.
+func (g *globals) listGetter() *fetch.Getter {
+	if g.listsOnLoopback {
+		return fetch.Inside()
+	}
+	return nil
+}
 
 // updateClient asks for releases where --update-api says.
 func (g *globals) updateClient() *update.Client {
@@ -240,6 +253,10 @@ func newRootCmd() *cobra.Command {
 	_ = pf.MarkHidden("backup-dir")
 	pf.StringVar(&g.logDir, "log-dir", logfile.Dir, "directory the log files go in")
 	_ = pf.MarkHidden("log-dir")
+	// And at the lists its specs serve on the loopback, which the router
+	// otherwise never reads from.
+	pf.BoolVar(&g.listsOnLoopback, "lists-on-loopback", false, "read lists served on the loopback as if from inside the network")
+	_ = pf.MarkHidden("lists-on-loopback")
 	cmd.AddCommand(
 		newInterfacesCmd(g),
 		newServeCmd(g),

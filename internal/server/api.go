@@ -800,10 +800,16 @@ func (a *api) getConfig(w http.ResponseWriter, r *http.Request) error {
 // look, and the keys, passphrases and passwords in it are not for looking
 // at: they get the copy a shared backup carries.
 func (a *api) visible(r *http.Request, cfg *model.Config) *model.Config {
-	if p, ok := a.authenticate(r); ok && p.Role.Allows(auth.RoleOperator) {
+	if a.operator(r) {
 		return cfg
 	}
 	return cfg.Redacted()
+}
+
+// operator reports whether the caller sees the configuration as it is.
+func (a *api) operator(r *http.Request) bool {
+	p, ok := a.authenticate(r)
+	return ok && p.Role.Allows(auth.RoleOperator)
 }
 
 func (a *api) revisions(w http.ResponseWriter, _ *http.Request) error {

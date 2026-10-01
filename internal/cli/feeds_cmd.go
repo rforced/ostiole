@@ -58,7 +58,7 @@ them on a schedule; this shows what it has and refreshes on demand.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			r := &feeds.Refresher{
 				Cache:   g.feeds(),
-				Fetcher: feeds.NewFetcher(),
+				Fetcher: feeds.NewFetcher(g.listGetter()),
 				Source: func() *model.Config {
 					cfg, err := g.store().Load()
 					if err != nil {

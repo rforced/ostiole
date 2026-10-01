@@ -81,8 +81,16 @@ type blockingLimitsInfo struct {
 	BytesPerName int `json:"bytesPerName"`
 }
 
-func (a *api) blockingStatus(w http.ResponseWriter, _ *http.Request) error {
-	writeJSON(w, http.StatusOK, a.blockingState())
+func (a *api) blockingStatus(w http.ResponseWriter, r *http.Request) error {
+	st := a.blockingState()
+	if !a.operator(r) {
+		// As the configuration does for a viewer: a list's URL may carry
+		// the key to it.
+		for i := range st.Lists {
+			st.Lists[i].URL = model.RedactURL(st.Lists[i].URL)
+		}
+	}
+	writeJSON(w, http.StatusOK, st)
 	return nil
 }
 

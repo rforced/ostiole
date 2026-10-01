@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/rforced/ostiole/internal/fetch"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/version"
 )
@@ -27,17 +28,20 @@ const sampleBytes = 64 << 10
 // one streams names to disk, because the lists are two orders of magnitude
 // bigger.
 type Fetcher struct {
-	Client  *http.Client
+	// Getter makes the requests; nil is the router's own, and tests give
+	// fetch.Inside for their loopback servers.
+	Getter  *fetch.Getter
 	Timeout time.Duration
 	// UserAgent identifies this router to the publisher, several of whom ask
 	// for one.
 	UserAgent string
 }
 
-// NewFetcher returns a fetcher with production defaults.
-func NewFetcher() *Fetcher {
+// NewFetcher returns a fetcher with production defaults that reads
+// through getter, nil being the router's own.
+func NewFetcher(getter *fetch.Getter) *Fetcher {
 	return &Fetcher{
-		Client:    &http.Client{Timeout: DefaultTimeout},
+		Getter:    getter,
 		Timeout:   DefaultTimeout,
 		UserAgent: version.Agent,
 	}
@@ -56,18 +60,7 @@ func (f *Fetcher) Fetch(ctx context.Context, l model.BlockList) ([]string, int, 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, l.URL, nil)
-	if err != nil {
-		return nil, 0, "", err
-	}
-	if f.UserAgent != "" {
-		req.Header.Set("User-Agent", f.UserAgent)
-	}
-	client := f.Client
-	if client == nil {
-		client = &http.Client{Timeout: timeout}
-	}
-	resp, err := client.Do(req)
+	resp, err := f.Getter.Get(ctx, l.URL, f.UserAgent, fetch.Named)
 	if err != nil {
 		return nil, 0, "", err
 	}

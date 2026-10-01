@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/rforced/ostiole/internal/atomicfile"
+	"github.com/rforced/ostiole/internal/fetch"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/nft"
 	"github.com/rforced/ostiole/internal/version"
@@ -396,7 +397,9 @@ func SourceParts(cfg *model.Config, a model.Alias) []Part {
 
 // Fetcher downloads and parses feeds.
 type Fetcher struct {
-	Client  *http.Client
+	// Getter makes the requests; nil is the router's own, and tests give
+	// fetch.Inside for their loopback servers.
+	Getter  *fetch.Getter
 	Timeout time.Duration
 	// UserAgent identifies this router to the publisher, several of whom ask
 	// for one.
@@ -406,10 +409,11 @@ type Fetcher struct {
 	Log *slog.Logger
 }
 
-// NewFetcher returns a fetcher with production defaults.
-func NewFetcher() *Fetcher {
+// NewFetcher returns a fetcher with production defaults that reads
+// through getter, nil being the router's own.
+func NewFetcher(getter *fetch.Getter) *Fetcher {
 	return &Fetcher{
-		Client:    &http.Client{Timeout: DefaultTimeout},
+		Getter:    getter,
 		Timeout:   DefaultTimeout,
 		UserAgent: version.Agent,
 	}
@@ -428,7 +432,7 @@ func (f *Fetcher) Fetch(ctx context.Context, cfg *model.Config, a model.Alias) (
 	for i := range parts {
 		entries, choices, err := f.one(ctx, parts[i].Source, a)
 		if err != nil {
-			return nil, parts, fmt.Errorf("%s: %w", parts[i].Source, err)
+			return nil, parts, fmt.Errorf("%s: %w", model.RedactURL(parts[i].Source), err)
 		}
 		// What this source held, whether or not another source had it
 		// first: the question is how big this country is, not how much of
@@ -456,7 +460,7 @@ func (f *Fetcher) Fetch(ctx context.Context, cfg *model.Config, a model.Alias) (
 }
 
 func (f *Fetcher) one(ctx context.Context, url string, a model.Alias) ([]string, []Choice, error) {
-	raw, err := f.get(ctx, f.Client, url)
+	raw, err := f.get(ctx, url, fetch.Named)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -467,16 +471,19 @@ func (f *Fetcher) one(ctx context.Context, url string, a model.Alias) ([]string,
 // and what it can be narrowed by. The alias dialog asks as soon as a URL
 // is typed, so the selection can be offered before anything is saved.
 // With publicOnly, it connects only to public addresses that are not this
-// router's own.
+// router's own; without, wherever an applied alias would.
 func (f *Fetcher) Inspect(ctx context.Context, url string, publicOnly bool) (Part, error) {
-	client := f.Client
+	reach := fetch.Named
 	if publicOnly {
-		client = publicClient
+		reach = fetch.Internet
 	}
-	raw, err := f.get(ctx, client, url)
-	if errors.Is(err, ErrNotPublic) {
-		// The dial error around it names where a name or a redirect led.
-		return Part{}, ErrNotPublic
+	raw, err := f.get(ctx, url, reach)
+	for _, refused := range []error{fetch.ErrNotPublic, fetch.ErrNotAllowed, fetch.ErrPlainHTTP} {
+		if errors.Is(err, refused) {
+			// The dial error around it names where a name or a redirect
+			// led, which is not for whoever typed the URL to learn.
+			return Part{}, refused
+		}
 	}
 	if err != nil {
 		return Part{}, err
@@ -506,26 +513,16 @@ func read(raw []byte, a model.Alias) ([]string, []Choice, error) {
 	return entries, nil, err
 }
 
-// get downloads one URL through client, bounded by the timeout and
-// MaxBytes. A nil client is a plain one with the timeout.
-func (f *Fetcher) get(ctx context.Context, client *http.Client, url string) ([]byte, error) {
+// get downloads one URL from where reach allows, bounded by the timeout
+// and MaxBytes.
+func (f *Fetcher) get(ctx context.Context, url string, reach fetch.Reach) ([]byte, error) {
 	timeout := f.Timeout
 	if timeout <= 0 {
 		timeout = DefaultTimeout
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	if f.UserAgent != "" {
-		req.Header.Set("User-Agent", f.UserAgent)
-	}
-	if client == nil {
-		client = &http.Client{Timeout: timeout}
-	}
-	resp, err := client.Do(req)
+	resp, err := f.Getter.Get(ctx, url, f.UserAgent, reach)
 	if err != nil {
 		return nil, err
 	}
@@ -605,7 +602,7 @@ func (f *Fetcher) holders(ctx context.Context, cfg *model.Config, parts []Part) 
 			Names map[string]string `json:"names"`
 		} `json:"data"`
 	}
-	raw, err := f.get(ctx, f.Client, strings.ReplaceAll(tmpl, "{asns}", strings.Join(numbers, ",")))
+	raw, err := f.get(ctx, strings.ReplaceAll(tmpl, "{asns}", strings.Join(numbers, ",")), fetch.Named)
 	if err == nil {
 		err = json.Unmarshal(raw, &ans)
 	}

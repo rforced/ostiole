@@ -86,7 +86,7 @@ it works whether or not the daemon is up.`,
 				Refresh: func(ctx context.Context) error {
 					r := &feeds.Refresher{
 						Cache:   g.feeds(),
-						Fetcher: feeds.NewFetcher(),
+						Fetcher: feeds.NewFetcher(g.listGetter()),
 						Source:  source,
 						Sets:    &nft.Exec{Bin: g.nftBin},
 					}
@@ -98,7 +98,7 @@ it works whether or not the daemon is up.`,
 				RefreshBlocklists: func(ctx context.Context) error {
 					r := &dnsblock.Refresher{
 						Cache:   g.blocklists(),
-						Fetcher: dnsblock.NewFetcher(),
+						Fetcher: dnsblock.NewFetcher(g.listGetter()),
 						Source:  source,
 						Loader:  services.NewDNSBlock(g.blocklists()),
 					}

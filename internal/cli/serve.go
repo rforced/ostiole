@@ -163,7 +163,7 @@ at your own.`,
 			// disturbs the rules that use them.
 			refresher := &feeds.Refresher{
 				Cache:   g.feeds(),
-				Fetcher: feeds.NewFetcher(),
+				Fetcher: feeds.NewFetcher(g.listGetter()),
 				Source:  eng.Effective,
 				Sets:    &nft.Exec{Bin: g.nftBin},
 				Log:     slog.Default(),
@@ -173,7 +173,7 @@ at your own.`,
 			// moved does not wait for the next apply.
 			blocklists := &dnsblock.Refresher{
 				Cache:   g.blocklists(),
-				Fetcher: dnsblock.NewFetcher(),
+				Fetcher: dnsblock.NewFetcher(g.listGetter()),
 				Source:  eng.Effective,
 				Log:     slog.Default(),
 			}

@@ -34,7 +34,7 @@ func (a *api) registerFeeds(mux *router) {
 
 // feedStatus reports when each fetched alias was last updated, how many
 // entries it holds, and why the last attempt failed if it did.
-func (a *api) feedStatus(w http.ResponseWriter, _ *http.Request) error {
+func (a *api) feedStatus(w http.ResponseWriter, r *http.Request) error {
 	out := []feeds.Status{}
 	if a.feedCache == nil {
 		writeJSON(w, http.StatusOK, out)
@@ -45,7 +45,23 @@ func (a *api) feedStatus(w http.ResponseWriter, _ *http.Request) error {
 		writeJSON(w, http.StatusOK, out)
 		return nil
 	}
-	writeJSON(w, http.StatusOK, a.feedCache.Statuses(cfg))
+	statuses := a.feedCache.Statuses(cfg)
+	if !a.operator(r) {
+		// A viewer reads the sources the way it reads the configuration:
+		// a list's URL may carry the key to it.
+		for i := range statuses {
+			st := &statuses[i]
+			st.Sources = slices.Clone(st.Sources)
+			for j := range st.Sources {
+				st.Sources[j] = model.RedactURL(st.Sources[j])
+			}
+			st.Parts = slices.Clone(st.Parts)
+			for j := range st.Parts {
+				st.Parts[j].Source = model.RedactURL(st.Parts[j].Source)
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, statuses)
 	return nil
 }
 

@@ -115,7 +115,7 @@ and a name whose parent is already blocked is left out.`,
 func (g *globals) blockRefresher() *dnsblock.Refresher {
 	r := &dnsblock.Refresher{
 		Cache:   g.blocklists(),
-		Fetcher: dnsblock.NewFetcher(),
+		Fetcher: dnsblock.NewFetcher(g.listGetter()),
 		Source: func() *model.Config {
 			cfg, err := g.store().Load()
 			if err != nil {
