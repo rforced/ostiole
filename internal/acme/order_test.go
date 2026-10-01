@@ -29,7 +29,7 @@ func fakeAccount(t *testing.T, f *fakeCA) model.ACMEAccount {
 
 func fakeClient(t *testing.T) *Client {
 	t.Helper()
-	c := NewClient("test", func() *model.Config { return &model.Config{} }, t.TempDir())
+	c := NewClient(func() *model.Config { return &model.Config{} }, t.TempDir())
 	// The fake does not fetch the answer; the solver just needs a port.
 	c.Addr = func() string { return "127.0.0.1:0" }
 	c.Log = slog.New(slog.DiscardHandler)

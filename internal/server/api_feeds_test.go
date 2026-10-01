@@ -35,7 +35,7 @@ func newFeedServer(t *testing.T) (*httptest.Server, <-chan struct{}) {
 	passes := make(chan struct{}, 8)
 	refresher := &feeds.Refresher{
 		Cache:    feeds.NewCache(filepath.Join(dir, "feeds")),
-		Fetcher:  feeds.NewFetcher("test"),
+		Fetcher:  feeds.NewFetcher(),
 		Source:   eng.Effective,
 		Log:      slog.New(slog.DiscardHandler),
 		Interval: time.Hour,

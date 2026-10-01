@@ -59,7 +59,7 @@ func TestInspectPublicOnlyRefusesTheRouter(t *testing.T) {
 	defer srv.Close()
 	port := srv.URL[strings.LastIndex(srv.URL, ":"):]
 
-	f := NewFetcher("test")
+	f := NewFetcher()
 	for _, u := range []string{srv.URL + "/list.txt", "http://[::ffff:127.0.0.1]" + port + "/list.txt"} {
 		if _, err := f.Inspect(context.Background(), u, true); !errors.Is(err, ErrNotPublic) || err.Error() != ErrNotPublic.Error() {
 			t.Errorf("%s: err = %v, want ErrNotPublic alone", u, err)

@@ -156,9 +156,7 @@ func (a *api) remoteBucket() (*backup.Remote, model.RemoteBackup, error) {
 	}
 	build := a.bucket
 	if build == nil {
-		build = func(r model.RemoteBackup, hostname string) (*backup.Remote, error) {
-			return backup.NewRemote(r, hostname, "ostiole/"+version.Version)
-		}
+		build = backup.NewRemote
 	}
 	remote, err := build(settings, cfg.System.Hostname)
 	if err != nil {

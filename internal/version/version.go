@@ -10,6 +10,11 @@ var (
 	Date    = "unknown"
 )
 
+// Agent is the User-Agent every request leaving the router carries. The
+// version stays off it: like the one /health keeps from strangers, it
+// would tell a publisher's or a CA's logs which bugs this router has.
+const Agent = "ostiole"
+
 // String returns a human-readable version line.
 func String() string {
 	return fmt.Sprintf("ostiole %s (commit %s, built %s)", Version, Commit, Date)

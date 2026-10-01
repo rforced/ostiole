@@ -13,7 +13,6 @@ import (
 	"github.com/rforced/ostiole/internal/dnsblock"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/services"
-	"github.com/rforced/ostiole/internal/version"
 )
 
 func newDNSBlockCmd(g *globals) *cobra.Command {
@@ -116,7 +115,7 @@ and a name whose parent is already blocked is left out.`,
 func (g *globals) blockRefresher() *dnsblock.Refresher {
 	r := &dnsblock.Refresher{
 		Cache:   g.blocklists(),
-		Fetcher: dnsblock.NewFetcher(version.Version),
+		Fetcher: dnsblock.NewFetcher(),
 		Source: func() *model.Config {
 			cfg, err := g.store().Load()
 			if err != nil {

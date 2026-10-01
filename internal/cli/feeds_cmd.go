@@ -10,7 +10,6 @@ import (
 	"github.com/rforced/ostiole/internal/feeds"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/nft"
-	"github.com/rforced/ostiole/internal/version"
 )
 
 func newAliasesCmd(g *globals) *cobra.Command {
@@ -59,7 +58,7 @@ them on a schedule; this shows what it has and refreshes on demand.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			r := &feeds.Refresher{
 				Cache:   g.feeds(),
-				Fetcher: feeds.NewFetcher(version.Version),
+				Fetcher: feeds.NewFetcher(),
 				Source: func() *model.Config {
 					cfg, err := g.store().Load()
 					if err != nil {

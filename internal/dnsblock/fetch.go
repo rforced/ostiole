@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rforced/ostiole/internal/model"
+	"github.com/rforced/ostiole/internal/version"
 )
 
 // DefaultTimeout is how long one fetch may take. Some of these lists are
@@ -34,11 +35,11 @@ type Fetcher struct {
 }
 
 // NewFetcher returns a fetcher with production defaults.
-func NewFetcher(version string) *Fetcher {
+func NewFetcher() *Fetcher {
 	return &Fetcher{
 		Client:    &http.Client{Timeout: DefaultTimeout},
 		Timeout:   DefaultTimeout,
-		UserAgent: "ostiole/" + version,
+		UserAgent: version.Agent,
 	}
 }
 

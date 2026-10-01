@@ -27,6 +27,7 @@ import (
 	"github.com/rforced/ostiole/internal/dnsclient"
 	"github.com/rforced/ostiole/internal/dnsprovider"
 	"github.com/rforced/ostiole/internal/model"
+	"github.com/rforced/ostiole/internal/version"
 )
 
 // ErrNoARI says the CA does not publish renewal windows, so the renewer
@@ -97,10 +98,11 @@ type Client struct {
 	relaxPropagation bool
 }
 
-// NewClient returns a client that identifies itself as this Ostiole.
-func NewClient(version string, cfg func() *model.Config, accountsDir string) *Client {
+// NewClient returns a client that names itself Ostiole. RFC 8555 asks
+// for the version too, a SHOULD, which version.Agent leaves out.
+func NewClient(cfg func() *model.Config, accountsDir string) *Client {
 	return &Client{
-		UserAgent:   "ostiole/" + version,
+		UserAgent:   version.Agent,
 		Config:      cfg,
 		AccountsDir: accountsDir,
 		Log:         slog.Default(),

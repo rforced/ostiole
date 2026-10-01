@@ -43,7 +43,7 @@ func pebbleClient(t *testing.T) (*Client, model.ACMEAccount) {
 	// The propagation pre-check asks the challenge server, which is the
 	// only resolver that knows about the records the test writes.
 	cfg := &model.Config{System: model.System{DNSServers: []string{"127.0.0.1:8053"}}}
-	c := NewClient("test", func() *model.Config { return cfg }, t.TempDir())
+	c := NewClient(func() *model.Config { return cfg }, t.TempDir())
 	c.relaxPropagation = true
 	return c, account
 }
@@ -235,7 +235,7 @@ func TestPebbleFindsTheAccountAgain(t *testing.T) {
 	if uri == "" {
 		t.Fatal("nothing cached")
 	}
-	fresh := NewClient("test", c.Config, t.TempDir())
+	fresh := NewClient(c.Config, t.TempDir())
 	fresh.Addr = c.Addr
 	if _, err := fresh.Issue(ctx, Request{Account: account, Names: []string{"cache3.example.test"}, Challenge: model.ChallengeHTTP}); err != nil {
 		t.Fatal(err)

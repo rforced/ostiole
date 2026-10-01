@@ -28,6 +28,7 @@ import (
 	"github.com/rforced/ostiole/internal/atomicfile"
 	"github.com/rforced/ostiole/internal/model"
 	"github.com/rforced/ostiole/internal/nft"
+	"github.com/rforced/ostiole/internal/version"
 )
 
 // Limits on what a feed may be. A blocklist with a million entries is
@@ -406,11 +407,11 @@ type Fetcher struct {
 }
 
 // NewFetcher returns a fetcher with production defaults.
-func NewFetcher(version string) *Fetcher {
+func NewFetcher() *Fetcher {
 	return &Fetcher{
 		Client:    &http.Client{Timeout: DefaultTimeout},
 		Timeout:   DefaultTimeout,
-		UserAgent: "ostiole/" + version,
+		UserAgent: version.Agent,
 	}
 }
 

@@ -117,7 +117,7 @@ func TestFetchAndCache(t *testing.T) {
 
 	cfg := config(model.Alias{Name: "drop", Type: model.AliasHosts, URL: srv.URL})
 	cache := NewCache(t.TempDir())
-	entries, sources, err := NewFetcher("test").Fetch(context.Background(), cfg, cfg.Aliases[0])
+	entries, sources, err := NewFetcher().Fetch(context.Background(), cfg, cfg.Aliases[0])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func TestFetchFailsWholesale(t *testing.T) {
 	cfg.System.GeoIPv4URL = srv.URL + "/{country}.zone"
 	cfg.System.GeoIPv6URL = ""
 
-	_, _, err := NewFetcher("test").Fetch(context.Background(), cfg, cfg.Aliases[0])
+	_, _, err := NewFetcher().Fetch(context.Background(), cfg, cfg.Aliases[0])
 	if err == nil {
 		t.Fatal("a failing source was ignored")
 	}
@@ -197,7 +197,7 @@ func TestRefreshOnlyWhenDue(t *testing.T) {
 	cfg := config(model.Alias{Name: "drop", Type: model.AliasHosts, URL: srv.URL, RefreshHours: 12})
 	r := &Refresher{
 		Cache:   NewCache(t.TempDir()),
-		Fetcher: NewFetcher("test"),
+		Fetcher: NewFetcher(),
 		Source:  func() *model.Config { return cfg },
 		Log:     slog.New(slog.DiscardHandler),
 	}
@@ -236,7 +236,7 @@ func TestChangedAliasRefetches(t *testing.T) {
 	cfg := config(model.Alias{Name: "list", Type: model.AliasHosts, URL: srv.URL + "/one.json"})
 	r := &Refresher{
 		Cache:   NewCache(t.TempDir()),
-		Fetcher: NewFetcher("test"),
+		Fetcher: NewFetcher(),
 		Source:  func() *model.Config { return cfg },
 		Log:     slog.New(slog.DiscardHandler),
 	}
@@ -301,7 +301,7 @@ func TestOldCacheIsRefetchedOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := config(model.Alias{Name: "drop", Type: model.AliasHosts, URL: srv.URL})
-	r := &Refresher{Cache: NewCache(dir), Fetcher: NewFetcher("test"), Source: func() *model.Config { return cfg },
+	r := &Refresher{Cache: NewCache(dir), Fetcher: NewFetcher(), Source: func() *model.Config { return cfg },
 		Log: slog.New(slog.DiscardHandler)}
 	r.Tick(context.Background(), false)
 	r.Tick(context.Background(), false)
@@ -317,7 +317,7 @@ func TestWakeRunsAPass(t *testing.T) {
 	passes := make(chan struct{}, 4)
 	r := &Refresher{
 		Cache:    NewCache(t.TempDir()),
-		Fetcher:  NewFetcher("test"),
+		Fetcher:  NewFetcher(),
 		Source:   func() *model.Config { return config() },
 		Log:      slog.New(slog.DiscardHandler),
 		Interval: time.Hour,
@@ -473,7 +473,7 @@ func TestBogonListIsFetchedWhenAnInterfaceAsks(t *testing.T) {
 	// Nothing blocks bogons yet, so nothing is fetched.
 	r := &Refresher{
 		Cache:   NewCache(t.TempDir()),
-		Fetcher: NewFetcher("test"),
+		Fetcher: NewFetcher(),
 		Source:  func() *model.Config { return cfg },
 		Log:     slog.New(slog.DiscardHandler),
 	}
@@ -558,7 +558,7 @@ func TestFetchReportsWhatEachCountryHeld(t *testing.T) {
 	cfg.System.GeoIPv4URL = srv.URL + "/{country}.zone"
 	alias := cfg.Aliases[0]
 
-	entries, parts, err := NewFetcher("test").Fetch(context.Background(), cfg, alias)
+	entries, parts, err := NewFetcher().Fetch(context.Background(), cfg, alias)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -52,12 +52,11 @@ type Remote struct {
 }
 
 // NewRemote builds the bucket from the settings.
-func NewRemote(r model.RemoteBackup, hostname, userAgent string) (*Remote, error) {
+func NewRemote(r model.RemoteBackup, hostname string) (*Remote, error) {
 	client, err := s3.New(r.Endpoint, r.RegionOr(), r.Bucket, r.KeyID, r.Secret)
 	if err != nil {
 		return nil, err
 	}
-	client.UserAgent = userAgent
 	return &Remote{
 		S3:       client,
 		Prefix:   r.PrefixOr(),
@@ -487,8 +486,8 @@ func (r *Remote) copyOf(key string) (Copy, bool) {
 }
 
 // Upload is what the cron calls: build the bucket, run, report.
-func Upload(ctx context.Context, r model.RemoteBackup, hostname, userAgent string, archive *Archive) (string, error) {
-	remote, err := NewRemote(r, hostname, userAgent)
+func Upload(ctx context.Context, r model.RemoteBackup, hostname string, archive *Archive) (string, error) {
+	remote, err := NewRemote(r, hostname)
 	if err != nil {
 		return "", err
 	}

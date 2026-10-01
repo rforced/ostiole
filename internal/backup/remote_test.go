@@ -297,7 +297,7 @@ func TestUploadBuildsTheBucketFromTheSettings(t *testing.T) {
 	// endpoint is a real one, so nothing is sent.
 	_, err := backup.Upload(t.Context(), model.RemoteBackup{
 		Endpoint: "not a url", Bucket: "b", KeyID: "k", Secret: "s",
-	}, "router", "ostiole/test", archive(t, taken))
+	}, "router", archive(t, taken))
 	if err == nil {
 		t.Fatal("a broken endpoint was accepted")
 	}

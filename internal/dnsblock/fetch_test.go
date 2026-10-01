@@ -20,6 +20,22 @@ func serve(t *testing.T, body string) string {
 	return srv.URL
 }
 
+// A publisher learns the software, never its version (ADR-0016).
+func TestFetchNamesOstioleWithoutItsVersion(t *testing.T) {
+	var agent string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		agent = r.UserAgent()
+		_, _ = w.Write([]byte("ads.example.com\n"))
+	}))
+	t.Cleanup(srv.Close)
+	if _, _, _, err := NewFetcher().Fetch(context.Background(), model.BlockList{Name: "l", URL: srv.URL}); err != nil {
+		t.Fatal(err)
+	}
+	if agent != "ostiole" {
+		t.Errorf("User-Agent = %q, want ostiole", agent)
+	}
+}
+
 func TestFetchReadsEachPublishedShape(t *testing.T) {
 	cases := []struct {
 		name string
@@ -52,7 +68,7 @@ func TestFetchReadsEachPublishedShape(t *testing.T) {
 			want: model.FormatUnbound,
 		},
 	}
-	f := NewFetcher("test")
+	f := NewFetcher()
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			url := serve(t, c.body)
@@ -86,7 +102,7 @@ func TestFetchReadsEachPublishedShape(t *testing.T) {
 // replace yesterday's list with nothing.
 func TestFetchRefusesAListWithNothingInIt(t *testing.T) {
 	url := serve(t, "<html><body><h1>404 Not Found</h1></body></html>")
-	f := NewFetcher("test")
+	f := NewFetcher()
 	_, _, _, err := f.Fetch(context.Background(), model.BlockList{Name: "l", URL: url})
 	if err == nil {
 		t.Fatal("an HTML error page was accepted as a blocklist")
@@ -101,7 +117,7 @@ func TestFetchReportsHTTPFailures(t *testing.T) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
 	defer srv.Close()
-	f := NewFetcher("test")
+	f := NewFetcher()
 	_, _, _, err := f.Fetch(context.Background(), model.BlockList{Name: "l", URL: srv.URL})
 	if err == nil || !strings.Contains(err.Error(), "503") {
 		t.Fatalf("err = %v; want one naming HTTP 503", err)
@@ -112,7 +128,7 @@ func TestFetchHonoursTheDeclaredFormat(t *testing.T) {
 	// Written as hosts, but declared as domains: the second field is not a
 	// name to block, so nothing usable comes out rather than nonsense.
 	url := serve(t, "0.0.0.0 ads.example.com\n0.0.0.0 tracker.example.net\n")
-	f := NewFetcher("test")
+	f := NewFetcher()
 	_, _, _, err := f.Fetch(context.Background(), model.BlockList{Name: "l", URL: url, Format: model.FormatDomains})
 	if err == nil {
 		t.Fatal("a hosts file read as a domain list produced entries")
@@ -130,7 +146,7 @@ func TestStoreAndRefreshRoundTrip(t *testing.T) {
 	loader := &recordingLoader{}
 	r := &Refresher{
 		Cache:   NewCache(t.TempDir()),
-		Fetcher: NewFetcher("test"),
+		Fetcher: NewFetcher(),
 		Source:  func() *model.Config { return cfg },
 		Loader:  loader,
 	}

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/rforced/ostiole/internal/sigv4"
+	"github.com/rforced/ostiole/internal/version"
 )
 
 // DefaultTimeout bounds one request. A backup is a few tens of kilobytes;
@@ -331,7 +332,7 @@ func (c *Client) attempt(ctx context.Context, r request) ([]byte, error) {
 	req.ContentLength = int64(len(r.body))
 	agent := c.UserAgent
 	if agent == "" {
-		agent = "ostiole"
+		agent = version.Agent
 	}
 	req.Header.Set("User-Agent", agent)
 	if r.body != nil {

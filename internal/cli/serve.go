@@ -163,7 +163,7 @@ at your own.`,
 			// disturbs the rules that use them.
 			refresher := &feeds.Refresher{
 				Cache:   g.feeds(),
-				Fetcher: feeds.NewFetcher(version.Version),
+				Fetcher: feeds.NewFetcher(),
 				Source:  eng.Effective,
 				Sets:    &nft.Exec{Bin: g.nftBin},
 				Log:     slog.Default(),
@@ -173,7 +173,7 @@ at your own.`,
 			// moved does not wait for the next apply.
 			blocklists := &dnsblock.Refresher{
 				Cache:   g.blocklists(),
-				Fetcher: dnsblock.NewFetcher(version.Version),
+				Fetcher: dnsblock.NewFetcher(),
 				Source:  eng.Effective,
 				Log:     slog.Default(),
 			}
@@ -192,7 +192,7 @@ at your own.`,
 			// not there to answer, so it listens on every address. Read per
 			// order, so a proxy switched on between two orders is seen by the
 			// next.
-			issuer := acme.NewClient(version.Version, eng.Effective, certStore.AccountsDir())
+			issuer := acme.NewClient(eng.Effective, certStore.AccountsDir())
 			issuer.Addr = func() string {
 				if cfg := eng.Effective(); cfg != nil && cfg.ProxyEnabled() {
 					return ":" + strconv.Itoa(model.ChallengePort)
@@ -204,7 +204,7 @@ at your own.`,
 			// asked.
 			dyn := &ddns.Updater{
 				Config:  eng.Effective,
-				Options: dnsprovider.Options{UserAgent: "ostiole/" + version.Version, CloudflareAPI: g.cloudflareAPI},
+				Options: dnsprovider.Options{UserAgent: version.Agent, CloudflareAPI: g.cloudflareAPI},
 				State:   eng.Store(),
 				Log:     slog.Default(),
 			}
@@ -266,9 +266,7 @@ at your own.`,
 					}
 					return updater.CheckScheduled(ctx, update.Channel(channel))
 				},
-				Remote: func(ctx context.Context, r model.RemoteBackup, hostname string, archive *backup.Archive) (string, error) {
-					return backup.Upload(ctx, r, hostname, "ostiole/"+version.Version, archive)
-				},
+				Remote:       backup.Upload,
 				Certificates: renewer.Pass,
 				Wake:         wol.Send,
 			}
