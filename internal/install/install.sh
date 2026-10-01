@@ -304,10 +304,17 @@ units_for() {
 # for nine minutes.
 pkg_dnf() { dnf '--setopt=*.countme=0' --setopt=timeout=10 "$@"; }
 
+# On dnf a refresh is only noted, and the next install makes it. dnf 4's
+# makecache fetches every repository's metadata again however fresh it
+# is, and Rocky's mirrors do not all serve the same revision, so a repair
+# with nothing to install could spend minutes downloading all of it. A
+# run that installs nothing asks no mirror anything.
+DNF_REFRESH=0
+
 pkg_refresh() {
 	case "$MANAGER" in
 	apt-get) DEBIAN_FRONTEND=noninteractive apt-get update -qq ;;
-	dnf) pkg_dnf -q makecache >/dev/null 2>&1 || true ;;
+	dnf) DNF_REFRESH=1 ;;
 	pacman) pacman -Sy --noconfirm >/dev/null ;;
 	esac
 }
@@ -315,7 +322,13 @@ pkg_refresh() {
 pkg_install() {
 	case "$MANAGER" in
 	apt-get) DEBIAN_FRONTEND=noninteractive apt-get install -y -q "$@" ;;
-	dnf) pkg_dnf -y install "$@" ;;
+	dnf)
+		if [ "$DNF_REFRESH" -eq 1 ]; then
+			DNF_REFRESH=0
+			pkg_dnf -q makecache >/dev/null 2>&1 || true
+		fi
+		pkg_dnf -y install "$@"
+		;;
 	pacman) pacman -S --noconfirm --needed "$@" ;;
 	esac
 }

@@ -23,7 +23,9 @@ dnf_ci() { dnf --setopt=timeout=10 --setopt=minrate=500k "$@"; }
 pkg_refresh() {
 	case "$(manager)" in
 	apt-get) DEBIAN_FRONTEND=noninteractive apt-get update -qq ;;
-	dnf) dnf_ci makecache -q >/dev/null 2>&1 || true ;;
+	# Nothing: an install fetches the metadata it is missing, and dnf 4's
+	# makecache would fetch every repository's again, however fresh.
+	dnf) ;;
 	# Arch upgrades everything or nothing. The image trails the
 	# repositories, and one package taken from a newer database breaks
 	# whatever is pinned to the old one: systemd 262 on its own is refused
