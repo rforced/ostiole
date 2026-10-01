@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rforced/ostiole/internal/auth"
 	"github.com/rforced/ostiole/internal/model"
@@ -63,6 +64,36 @@ func TestDecryptRefusesWithoutTheRightPassphrase(t *testing.T) {
 	}
 	if _, err := Decrypt(raw, "two"); !errors.Is(err, ErrBadPassphrase) {
 		t.Errorf("wrong passphrase = %v, want ErrBadPassphrase", err)
+	}
+}
+
+// The file names its own scrypt cost. One asking for 2^22, 4 GiB, is
+// refused before the work starts, whatever the passphrase.
+func TestDecryptRefusesAFileThatAsksForTooMuchWork(t *testing.T) {
+	t.Parallel()
+	a, _ := Create(cfg(), Options{Passphrase: "one"})
+	raw, err := a.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := bytes.Split(raw, []byte("\n"))
+	found := false
+	for i, l := range lines {
+		if f := bytes.Fields(l); len(f) == 4 && string(f[0]) == "->" && string(f[1]) == "scrypt" {
+			lines[i] = []byte("-> scrypt " + string(f[2]) + " 22")
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("no scrypt stanza in %q", raw[:min(len(raw), 120)])
+	}
+	start := time.Now()
+	_, err = Decrypt(bytes.Join(lines, []byte("\n")), "one")
+	if !errors.Is(err, ErrTooCostly) {
+		t.Errorf("work factor 22 = %v, want ErrTooCostly", err)
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Errorf("refusing took %v: the work was done", d)
 	}
 }
 

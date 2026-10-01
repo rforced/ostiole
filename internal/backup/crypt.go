@@ -55,6 +55,16 @@ func Encrypt(raw []byte, passphrase string) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
+// maxWorkFactor is the most scrypt work a file may ask for: 2^18, what
+// Encrypt and age(1) write, 256 MiB and about a second. The file sets
+// it, and age would otherwise take 2^22 from anyone who uploads one:
+// 4 GiB before the passphrase is even checked.
+const maxWorkFactor = 18
+
+// opening holds a slot for each file being opened, so a burst of uploads
+// waits its turn rather than taking a quarter of a gigabyte each.
+var opening = make(chan struct{}, 2)
+
 // Decrypt opens an age file with a passphrase. A file that is not
 // encrypted at all is returned as it came, so a caller can hand over
 // whatever was uploaded.
@@ -69,15 +79,21 @@ func Decrypt(raw []byte, passphrase string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	id.SetMaxWorkFactor(maxWorkFactor)
+	opening <- struct{}{}
 	r, err := age.Decrypt(bytes.NewReader(raw), id)
+	<-opening
 	if err != nil {
 		// age says "no identity matched any of the recipients", or
 		// "identity did not match any of the recipients" depending on its
 		// version, for a wrong passphrase. Neither is a sentence anybody
 		// wants.
-		if text := err.Error(); strings.Contains(text, "no identity matched") ||
-			strings.Contains(text, "identity did not match") {
+		text := err.Error()
+		switch {
+		case strings.Contains(text, "no identity matched"), strings.Contains(text, "identity did not match"):
 			return nil, ErrBadPassphrase
+		case strings.Contains(text, "work factor too large"):
+			return nil, ErrTooCostly
 		}
 		return nil, fmt.Errorf("%w: %w", ErrBadPassphrase, err)
 	}

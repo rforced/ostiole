@@ -35,6 +35,7 @@ var (
 	ErrNoConfig         = errors.New("the backup contains no configuration")
 	ErrPassphraseNeeded = errors.New("this backup is encrypted; its passphrase is needed")
 	ErrBadPassphrase    = errors.New("the passphrase does not open this backup")
+	ErrTooCostly        = errors.New("this file asks for more work to open than a backup Ostiole writes")
 	ErrRedactedUsers    = errors.New("a redacted backup cannot carry accounts")
 )
 
