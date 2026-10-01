@@ -16,9 +16,10 @@ import (
 )
 
 // What traffic keeps in files while System, General writes the logs to
-// them: a line for each minute a link or a device moved something, and a
-// line for each hour of a destination. At start the minutes of a day and
-// the hours of a month are rebuilt from them.
+// them: a line for each minute a link or a device moved something or a
+// link had errors, and a line for each hour of a destination. At start the
+// minutes of a day, the hours of a month and the links' errors of
+// ErrorsKept are rebuilt from them.
 const (
 	LinksFile        = "links"
 	DevicesFile      = "devices"
@@ -92,12 +93,15 @@ func (r *records[T]) newest() uint64 {
 	return r.seq
 }
 
-// MinuteLine is a minute of a link or a device as its files keep it.
+// MinuteLine is a minute of a link or a device as its files keep it. A
+// link's minute carries the errors the kernel counted in it.
 type MinuteLine struct {
-	Time time.Time `json:"time"`
-	ID   string    `json:"id"`
-	Down uint64    `json:"down"`
-	Up   uint64    `json:"up"`
+	Time     time.Time `json:"time"`
+	ID       string    `json:"id"`
+	Down     uint64    `json:"down"`
+	Up       uint64    `json:"up"`
+	RXErrors uint64    `json:"rxErrors,omitempty"`
+	TXErrors uint64    `json:"txErrors,omitempty"`
 }
 
 // HourLine is an hour of a destination as its files keep it: the row as
@@ -183,11 +187,11 @@ func appendJSON[T any](buf []byte, r *record[T]) []byte {
 }
 
 // closeMinutes hands each link's and device's last minute to the files
-// once it is over: a line for each minute something moved. The caller
-// holds c.mu.
+// once it is over: a line for each minute something moved or a link had
+// errors. The caller holds c.mu.
 func (c *Counter) closeMinutes(now time.Time) {
 	minute := now.Truncate(time.Minute).Unix()
-	closeOf := func(id string, s *series, into *records[MinuteLine]) {
+	closeOf := func(id string, s *series, errs *[]bucket, into *records[MinuteLine]) {
 		// Every minute over and not yet written, however many a slow
 		// tick let pass.
 		i := len(s.minutes)
@@ -200,14 +204,22 @@ func (c *Counter) closeMinutes(now time.Time) {
 			}
 			s.written = b.start
 			t := time.Unix(b.start, 0).UTC()
-			into.push(t, MinuteLine{Time: t, ID: id, Down: b.down, Up: b.up})
+			line := MinuteLine{Time: t, ID: id, Down: b.down, Up: b.up}
+			// A link's errors in the minute go on its line.
+			for errs != nil && len(*errs) > 0 && (*errs)[0].start <= b.start {
+				if e := (*errs)[0]; e.start == b.start {
+					line.RXErrors, line.TXErrors = e.down, e.up
+				}
+				*errs = (*errs)[1:]
+			}
+			into.push(t, line)
 		}
 	}
 	for name, l := range c.links {
-		closeOf(name, l.series, &c.linkRecs)
+		closeOf(name, l.series, &l.errMinutes, &c.linkRecs)
 	}
 	for id, d := range c.devices {
-		closeOf(id, d.series, &c.deviceRecs)
+		closeOf(id, d.series, nil, &c.deviceRecs)
 	}
 }
 
@@ -237,6 +249,10 @@ func (c *Counter) RestoreMinute(file string, m MinuteLine, now time.Time) {
 			c.links[m.ID] = l
 		}
 		s = l.series
+		hour, cut := m.Time.Truncate(time.Hour).Unix(), errorsCut(now)
+		if (m.RXErrors != 0 || m.TXErrors != 0) && hour >= cut {
+			l.errs = addBucket(l.errs, hour, m.RXErrors, m.TXErrors, cut)
+		}
 	case file == DevicesFile && c.counting:
 		d := c.devices[m.ID]
 		if d == nil {

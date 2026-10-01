@@ -51,10 +51,10 @@ func (a *api) metrics(w http.ResponseWriter, r *http.Request) error {
 
 	if links, err := network.Discover(); err == nil {
 		m.help("ostiole_interface_up", "1 when the interface has carrier.", "gauge")
-		m.help("ostiole_interface_receive_bytes_total", "Bytes received since the link came up.", "counter")
-		m.help("ostiole_interface_transmit_bytes_total", "Bytes sent since the link came up.", "counter")
-		m.help("ostiole_interface_receive_packets_total", "Packets received since the link came up.", "counter")
-		m.help("ostiole_interface_transmit_packets_total", "Packets sent since the link came up.", "counter")
+		m.help("ostiole_interface_receive_bytes_total", "Bytes received since the kernel made the link.", "counter")
+		m.help("ostiole_interface_transmit_bytes_total", "Bytes sent since the kernel made the link.", "counter")
+		m.help("ostiole_interface_receive_packets_total", "Packets received since the kernel made the link.", "counter")
+		m.help("ostiole_interface_transmit_packets_total", "Packets sent since the kernel made the link.", "counter")
 		for _, l := range links {
 			if l.Kind == "loopback" {
 				continue

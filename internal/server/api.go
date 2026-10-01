@@ -891,12 +891,30 @@ func (a *api) systemNAT(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// liveLink is a link as the kernel has it, with its errors of the last
+// 72 hours in place of the kernel's totals.
+type liveLink struct {
+	network.Link
+	RXErrors uint64 `json:"rxErrors,omitempty"`
+	TXErrors uint64 `json:"txErrors,omitempty"`
+}
+
+// liveLinks gives each link its errors of the last 72 hours.
+func liveLinks(links []network.Link, errs map[string]traffic.Errors) []liveLink {
+	out := make([]liveLink, 0, len(links))
+	for _, l := range links {
+		e := errs[l.Name]
+		out = append(out, liveLink{Link: l, RXErrors: e.RX, TXErrors: e.TX})
+	}
+	return out
+}
+
 func (a *api) liveInterfaces(w http.ResponseWriter, _ *http.Request) error {
 	links, err := network.Discover()
 	if err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, links)
+	writeJSON(w, http.StatusOK, liveLinks(links, a.linkErrors()))
 	return nil
 }
 

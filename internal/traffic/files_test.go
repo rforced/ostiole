@@ -163,3 +163,58 @@ func TestTheRestoreSkipsWhatIsTooOld(t *testing.T) {
 		t.Error("a minute without its id was read")
 	}
 }
+
+// A link's errors go to the files on its minute's line, a minute with
+// errors and nothing moved included, and come back into a fresh counter's
+// 72 hours. A line older than those does not, and a line written before
+// errors were kept still brings its bytes.
+func TestAMinuteOfErrorsIsWrittenAndReadBack(t *testing.T) {
+	t.Parallel()
+	r := newRouter(t)
+	r.now = time.Date(2026, 9, 27, 12, 0, 10, 0, time.UTC)
+	r.c.follow(r.now)
+	set := func(rxBytes, rxErr, txErr uint64) {
+		r.mu.Lock()
+		r.links[1].RXBytes, r.links[1].RXErrors, r.links[1].TXErrors = rxBytes, rxErr, txErr
+		r.mu.Unlock()
+	}
+	set(1000, 0, 0)
+	r.c.Tick(r.now)
+	set(3000, 3, 0)
+	r.now = r.now.Add(5 * time.Second)
+	r.c.Tick(r.now)
+	set(3000, 3, 2)
+	r.now = r.now.Add(time.Minute)
+	r.c.Tick(r.now)
+	r.now = r.now.Add(time.Minute)
+	r.c.Tick(r.now)
+	got := lines(&r.c.linkRecs)
+	noon := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
+	if len(got) != 2 ||
+		got[0].ID != "eth0" || !got[0].Time.Equal(noon) || got[0].Down != 2000 || got[0].RXErrors != 3 || got[0].TXErrors != 0 ||
+		got[1].ID != "eth0" || !got[1].Time.Equal(noon.Add(time.Minute)) || got[1].Down != 0 || got[1].TXErrors != 2 {
+		t.Fatalf("link minutes = %+v", got)
+	}
+
+	fresh := newRouter(t)
+	fresh.now = r.now.Add(10 * time.Minute)
+	fresh.c.BeginRestore(fresh.now)
+	for _, m := range got {
+		fresh.c.RestoreMinute(LinksFile, m, fresh.now)
+	}
+	fresh.c.RestoreMinute(LinksFile, MinuteLine{Time: fresh.now.Add(-74 * time.Hour).Truncate(time.Minute), ID: "eth1", RXErrors: 5}, fresh.now)
+	old, _, err := ParseMinute([]byte(`{"time":"2026-09-27T11:00:00Z","id":"eth2","down":7,"up":8}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh.c.RestoreMinute(LinksFile, old, fresh.now)
+	fresh.c.EndRestore(fresh.now)
+	if errs := fresh.c.LinkErrors(); len(errs) != 1 || errs["eth0"] != (Errors{RX: 3, TX: 2}) {
+		t.Errorf("errors read back = %+v", errs)
+	}
+	reports := fresh.c.LinkReports(Window24h)
+	if i := slices.IndexFunc(reports, func(l LinkReport) bool { return l.Name == "eth2" }); i < 0 ||
+		reports[i].Totals != (Totals{Down: 7, Up: 8}) {
+		t.Errorf("eth2 from a line without errors = %+v", reports)
+	}
+}

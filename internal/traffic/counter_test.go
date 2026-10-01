@@ -453,3 +453,73 @@ func TestBucketsRollOverAndAgeOut(t *testing.T) {
 		t.Errorf("five minutes = %v", pts)
 	}
 }
+
+// setErrors sets what the kernel says eth0 counted as errors.
+func (r *router) setErrors(rx, tx uint64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.links[1].RXErrors, r.links[1].TXErrors = rx, tx
+}
+
+// Errors the kernel counted before the first read are not counted: only
+// those found after it are.
+func TestErrorsBeforeTheFirstReadAreNotCounted(t *testing.T) {
+	t.Parallel()
+	r := newRouter(t)
+	r.setErrors(147, 0)
+	r.step(0)
+	if got := r.c.LinkErrors(); len(got) != 0 {
+		t.Fatalf("errors from before the first read = %+v", got)
+	}
+	r.setErrors(150, 2)
+	r.step(time.Second)
+	if got := r.c.LinkErrors(); len(got) != 1 || got["eth0"] != (Errors{RX: 3, TX: 2}) {
+		t.Errorf("errors = %+v", got)
+	}
+}
+
+// A link's errors show for 72 hours, to the hour, then go.
+func TestErrorsGoAfter72Hours(t *testing.T) {
+	t.Parallel()
+	r := newRouter(t)
+	r.step(0)
+	r.setErrors(0, 1)
+	r.step(time.Second)
+	r.step(ErrorsKept)
+	if got := r.c.LinkErrors(); got["eth0"] != (Errors{TX: 1}) {
+		t.Errorf("72 hours on = %+v", got)
+	}
+	r.step(time.Hour)
+	if got := r.c.LinkErrors(); len(got) != 0 {
+		t.Errorf("73 hours on = %+v", got)
+	}
+}
+
+// A counter that went back belongs to a link made again, which starts
+// over without counting; so does a link that went away and came back.
+func TestALinkMadeAgainStartsItsErrorsOver(t *testing.T) {
+	t.Parallel()
+	r := newRouter(t)
+	r.setErrors(5, 0)
+	r.step(0)
+	r.setErrors(0, 0)
+	r.step(time.Second)
+	r.setErrors(2, 0)
+	r.step(time.Second)
+	if got := r.c.LinkErrors(); got["eth0"] != (Errors{RX: 2}) {
+		t.Fatalf("after the link was made again = %+v", got)
+	}
+	r.mu.Lock()
+	gone := r.links[1]
+	r.links = slices.Delete(slices.Clone(r.links), 1, 2)
+	r.mu.Unlock()
+	r.step(time.Second)
+	gone.RXErrors = 9
+	r.mu.Lock()
+	r.links = slices.Insert(r.links, 1, gone)
+	r.mu.Unlock()
+	r.step(time.Second)
+	if got := r.c.LinkErrors(); got["eth0"] != (Errors{RX: 2}) {
+		t.Errorf("after the link came back = %+v", got)
+	}
+}

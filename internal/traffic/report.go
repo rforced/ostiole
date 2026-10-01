@@ -81,6 +81,32 @@ func (c *Counter) LinkReports(window string) []LinkReport {
 	return out
 }
 
+// Errors are what the kernel counted as errors on a link, each way.
+type Errors struct{ RX, TX uint64 }
+
+// LinkErrors is every link with errors in the last ErrorsKept, by name.
+// An idle link's old hours are only let go of at its next error, so they
+// are left out here.
+func (c *Counter) LinkErrors() map[string]Errors {
+	cut := errorsCut(c.now())
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := map[string]Errors{}
+	for name, l := range c.links {
+		var e Errors
+		for _, b := range l.errs {
+			if b.start >= cut {
+				e.RX += b.down
+				e.TX += b.up
+			}
+		}
+		if e != (Errors{}) {
+			out[name] = e
+		}
+	}
+	return out
+}
+
 // DeviceReport is one device over a window.
 type DeviceReport struct {
 	// ID is its hardware address, its address where there is none, or

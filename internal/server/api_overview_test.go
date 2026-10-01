@@ -39,6 +39,7 @@ import (
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/smart"
 	"github.com/rforced/ostiole/internal/store"
+	"github.com/rforced/ostiole/internal/traffic"
 	"github.com/rforced/ostiole/internal/update"
 )
 
@@ -587,14 +588,15 @@ func TestSummarizeLinksPrefersKernelState(t *testing.T) {
 	cfg := model.Starter(model.StarterOptions{LAN: "eth1", LANAddress: "10.0.0.1/24", WAN: "eth0"})
 	links := []network.Link{
 		{Name: "lo", Kind: "loopback"},
-		{Name: "eth1", Kind: "ethernet", Up: true, Carrier: true, MTU: 1500, Addresses: []string{"10.0.0.1/24"}, RXBytes: 5},
+		{Name: "eth1", Kind: "ethernet", Up: true, Carrier: true, MTU: 1500, Addresses: []string{"10.0.0.1/24"}, RXBytes: 5, RXErrors: 147},
 		{Name: "wg0", Kind: "wireguard", Up: true},
 	}
 	got := summarizeLinks(cfg, links)
 	if len(got) != 3 {
 		t.Fatalf("summaries = %+v, want lan, wan, and the unconfigured wg0", got)
 	}
-	if got[0].Name != "eth1" || !got[0].Present || !got[0].Carrier || got[0].RXBytes != 5 {
+	// The kernel's error totals never reach a summary.
+	if got[0].Name != "eth1" || !got[0].Present || !got[0].Carrier || got[0].RXBytes != 5 || got[0].RXErrors != 0 {
 		t.Errorf("eth1 = %+v", got[0])
 	}
 	if got[1].Name != "eth0" || got[1].Present {
@@ -602,6 +604,35 @@ func TestSummarizeLinksPrefersKernelState(t *testing.T) {
 	}
 	if got[2].Name != "wg0" || got[2].Configured {
 		t.Errorf("wg0 = %+v, want live but unconfigured", got[2])
+	}
+}
+
+// The dashboard and the Interfaces page show a link's errors of the last
+// 72 hours from the traffic counter, never the kernel's totals.
+func TestLinksCarryTheCountersErrors(t *testing.T) {
+	t.Parallel()
+	errs := map[string]traffic.Errors{"wg0": {RX: 3}}
+	summaries := []LinkSummary{{Name: "eth1"}, {Name: "wg0"}}
+	withErrors(summaries, errs)
+	if summaries[0].RXErrors != 0 || summaries[0].TXErrors != 0 || summaries[1].RXErrors != 3 {
+		t.Errorf("summaries = %+v", summaries)
+	}
+	raw, err := json.Marshal(liveLinks([]network.Link{
+		{Name: "eth1", Kind: "ethernet", RXErrors: 147},
+		{Name: "wg0", Kind: "wireguard", TXErrors: 9},
+	}, errs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var live []map[string]any
+	if err := json.Unmarshal(raw, &live); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := live[0]["rxErrors"]; ok || live[0]["name"] != "eth1" {
+		t.Errorf("eth1 = %v, want no errors", live[0])
+	}
+	if _, ok := live[1]["txErrors"]; ok || live[1]["rxErrors"] != 3.0 {
+		t.Errorf("wg0 = %v, want the counter's 3 alone", live[1])
 	}
 }
 

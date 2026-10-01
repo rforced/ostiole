@@ -26,6 +26,7 @@ import (
 	"github.com/rforced/ostiole/internal/notify"
 	"github.com/rforced/ostiole/internal/services"
 	"github.com/rforced/ostiole/internal/store"
+	"github.com/rforced/ostiole/internal/traffic"
 )
 
 // Overview is everything the dashboard shows, gathered in one request:
@@ -107,7 +108,8 @@ type LinkSummary struct {
 	StaticAddresses []string `json:"configuredAddresses,omitempty"`
 	RXBytes         uint64   `json:"rxBytes"`
 	TXBytes         uint64   `json:"txBytes"`
-	// Errors since the link came up; shown only when not zero.
+	// RXErrors and TXErrors are the errors the kernel counted in the last
+	// 72 hours (traffic.ErrorsKept); left out when there were none.
 	RXErrors uint64 `json:"rxErrors,omitempty"`
 	TXErrors uint64 `json:"txErrors,omitempty"`
 }
@@ -279,6 +281,7 @@ func (a *api) overview(w http.ResponseWriter, r *http.Request) error {
 
 	links, _ := network.Discover()
 	ov.Interfaces = summarizeLinks(cfg, links)
+	withErrors(ov.Interfaces, a.linkErrors())
 	if found, err := gateway.Detect(cfg); err == nil {
 		for _, d := range found {
 			if d.Configured == "" {
@@ -391,7 +394,6 @@ func withLive(s LinkSummary, l network.Link, present bool) LinkSummary {
 	s.Carrier = l.Carrier
 	s.MAC = l.MAC
 	s.RXBytes, s.TXBytes = l.RXBytes, l.TXBytes
-	s.RXErrors, s.TXErrors = l.RXErrors, l.TXErrors
 	if l.VLANID != 0 {
 		s.VLANID = l.VLANID
 	}
@@ -403,6 +405,23 @@ func withLive(s LinkSummary, l network.Link, present bool) LinkSummary {
 		s.Addresses = l.Addresses
 	}
 	return s
+}
+
+// linkErrors is each link's errors of the last 72 hours, none when this
+// daemon counts no traffic.
+func (a *api) linkErrors() map[string]traffic.Errors {
+	if a.traffic == nil {
+		return nil
+	}
+	return a.traffic.LinkErrors()
+}
+
+// withErrors puts each link's errors of the last 72 hours in its summary.
+func withErrors(links []LinkSummary, errs map[string]traffic.Errors) {
+	for i := range links {
+		e := errs[links[i].Name]
+		links[i].RXErrors, links[i].TXErrors = e.RX, e.TX
+	}
 }
 
 // topRules pairs configured rules with their counters, busiest first, and

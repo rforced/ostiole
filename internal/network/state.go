@@ -41,10 +41,11 @@ type Link struct {
 	TXBytes   uint64 `json:"txBytes"`
 	RXPackets uint64 `json:"rxPackets"`
 	TXPackets uint64 `json:"txPackets"`
-	// Errors the kernel counted. Either rising on a wired port is a bad
-	// cable, a duplex mismatch, or a driver that cannot keep up.
-	RXErrors uint64 `json:"rxErrors,omitempty"`
-	TXErrors uint64 `json:"txErrors,omitempty"`
+	// Errors the kernel counted since it made the link, which the traffic
+	// counter turns into the last 72 hours'. Either rising on a wired port
+	// is a bad cable, a duplex mismatch, or a driver that cannot keep up.
+	RXErrors uint64 `json:"-"`
+	TXErrors uint64 `json:"-"`
 }
 
 // helper reports whether a link is one Ostiole made for itself rather

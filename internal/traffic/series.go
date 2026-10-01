@@ -69,6 +69,12 @@ func (s *series) add(end time.Time, dur time.Duration, down, up uint64, loc *tim
 	s.hours = addBucket(s.hours, hourStart(end, loc).Unix(), down, up, end.Add(-hourKept).Unix())
 }
 
+// touch makes sure the minute from start has a bucket, an empty one when
+// nothing moved in it, so the minute is handed to the files.
+func (s *series) touch(start int64) {
+	s.minutes = addBucket(s.minutes, start, 0, 0, start-int64(minuteKept/time.Second))
+}
+
 // hourStart is the start of the hour t falls in, in the router's zone, so
 // a month's days break at its midnight.
 func hourStart(t time.Time, loc *time.Location) time.Time {

@@ -36,6 +36,8 @@ const (
 	macKept = 24 * time.Hour
 	// RouterID names the router's own row.
 	RouterID = "router"
+	// ErrorsKept is how long a link's errors are shown.
+	ErrorsKept = 72 * time.Hour
 )
 
 // FlowEnds is what the kernel announces connections' ends through.
@@ -115,7 +117,31 @@ type link struct {
 	ok       bool
 	down, up float64
 	series   *series
+	// rxErr and txErr are the kernel's error counters at the last read.
+	// errs holds the errors counted since, an hour a bucket for
+	// ErrorsKept, received as down and sent as up; errMinutes holds those
+	// of the minutes not yet handed to the files.
+	rxErr, txErr uint64
+	errs         []bucket
+	errMinutes   []bucket
 }
+
+// countErrors counts the errors the kernel found since the last read:
+// into their hour, which the pages read, and their minute, which the
+// files get. The minute gets a bucket in the series even when nothing
+// moved, so closeMinutes writes its line.
+func (l *link) countErrors(now time.Time, rx, tx uint64) {
+	if rx == 0 && tx == 0 {
+		return
+	}
+	l.errs = addBucket(l.errs, now.Truncate(time.Hour).Unix(), rx, tx, errorsCut(now))
+	minute := now.Truncate(time.Minute).Unix()
+	l.errMinutes = addBucket(l.errMinutes, minute, rx, tx, 0)
+	l.series.touch(minute)
+}
+
+// errorsCut is the start of the oldest hour whose errors still show.
+func errorsCut(now time.Time) int64 { return now.Add(-ErrorsKept).Truncate(time.Hour).Unix() }
 
 // flowState is a connection's counters at the last dump, and the dump
 // that last saw it. dest is the destination row each end that is a
@@ -364,6 +390,10 @@ func (c *Counter) sampleLinks(now time.Time) {
 		} else {
 			s.down, s.up = 0, 0
 		}
+		if s.ok && l.RXErrors >= s.rxErr && l.TXErrors >= s.txErr {
+			s.countErrors(now, l.RXErrors-s.rxErr, l.TXErrors-s.txErr)
+		}
+		s.rxErr, s.txErr = l.RXErrors, l.TXErrors
 		s.rx, s.tx, s.at, s.ok = l.RXBytes, l.TXBytes, now, true
 		ev.Links = append(ev.Links, Rate{ID: l.Name, Down: s.down, Up: s.up})
 	}
