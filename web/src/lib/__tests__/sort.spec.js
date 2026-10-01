@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nextTick, ref } from 'vue'
+import { ref } from 'vue'
 
 import { addressKey, byAddress, byNumber, byText, byTime, useSort } from '@/lib/sort'
 
@@ -90,28 +90,6 @@ describe('useSort', () => {
       '10.0.0.9',
       '10.0.0.1',
     ])
-  })
-
-  // Live holds the order; when it lets go the table stays as it was.
-  it('holds a locked order and keeps it after', async () => {
-    const live = ref(false)
-    const s = useSort(hosts(), columns, {
-      by: 'ip',
-      lock: () => (live.value ? { by: 'seen', dir: 'desc' } : null),
-    })
-    live.value = true
-    expect(s.locked.value).toBe(true)
-    expect(ips(s)).toEqual(['10.0.0.100', '10.0.0.20', '10.0.0.3'])
-    s.toggle('name')
-    s.choose('name')
-    expect(s.order.value).toEqual({ by: 'seen', dir: 'desc' })
-
-    live.value = false
-    await nextTick()
-    expect(s.locked.value).toBe(false)
-    expect(s.order.value).toEqual({ by: 'seen', dir: 'desc' })
-    s.toggle('seen')
-    expect(s.order.value).toEqual({ by: 'seen', dir: 'asc' })
   })
 
   it('takes a column in its own order from the select', () => {

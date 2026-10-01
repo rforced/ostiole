@@ -4,8 +4,7 @@ import { computed } from 'vue'
 
 /**
  * A column header that sorts its table: a click sorts by it, a second
- * reverses. The chevron and aria-sort say which way. While the order is
- * locked, as Live locks it, the header is only a header.
+ * reverses. The chevron and aria-sort say which way.
  */
 const props = defineProps({
   /** The column's key in the sort's columns. */
@@ -26,8 +25,7 @@ const dir = computed(() => {
   >
     <button
       type="button"
-      class="inline-flex items-center gap-1 rounded-sm uppercase enabled:hover:text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:cursor-default max-sm:-my-3 max-sm:min-h-11"
-      :disabled="sort.locked.value"
+      class="inline-flex items-center gap-1 rounded-sm uppercase hover:text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none max-sm:-my-3 max-sm:min-h-11"
       @click="sort.toggle(by)"
     >
       <slot />

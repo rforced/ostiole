@@ -1,12 +1,12 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import { defineComponent, nextTick, ref } from 'vue'
+import { defineComponent, ref } from 'vue'
 
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
 import { byAddress, byText, useSort } from '@/lib/sort'
 
-/** A table of two columns with a switch that locks it, as Live does. */
+/** A table of two columns. */
 const Host = defineComponent({
   components: { SortHeader, SortSelect },
   setup() {
@@ -14,15 +14,13 @@ const Host = defineComponent({
       { ip: '10.0.0.20', name: 'b' },
       { ip: '10.0.0.3', name: 'a' },
     ])
-    const live = ref(false)
     const sort = useSort(
       rows,
       { ip: byAddress((r) => r.ip), name: byText((r) => r.name) },
-      { by: 'ip', lock: () => (live.value ? { by: 'name', dir: 'desc' } : null) },
+      { by: 'ip' },
     )
     return {
       sort,
-      live,
       columns: [
         ['ip', 'Address'],
         ['name', 'Name'],
@@ -57,17 +55,6 @@ describe('SortHeader', () => {
     await header(wrapper, 'Name').get('button').trigger('click')
     expect(header(wrapper, 'Address').attributes('aria-sort')).toBeUndefined()
     expect(header(wrapper, 'Name').attributes('aria-sort')).toBe('ascending')
-  })
-
-  it('does nothing while the order is locked', async () => {
-    const wrapper = mount(Host)
-    wrapper.vm.live = true
-    await nextTick()
-    expect(header(wrapper, 'Name').attributes('aria-sort')).toBe('descending')
-    for (const th of wrapper.findAll('th')) {
-      expect(th.get('button').attributes('disabled')).toBeDefined()
-    }
-    expect(wrapper.get('select').attributes('disabled')).toBeDefined()
   })
 })
 

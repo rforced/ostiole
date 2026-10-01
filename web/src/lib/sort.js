@@ -1,4 +1,4 @@
-import { computed, ref, toValue, watch } from 'vue'
+import { computed, ref, toValue } from 'vue'
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
 const plain = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
@@ -79,32 +79,18 @@ function compareEmptyLast(a, b, compare, sign) {
  * it reads, the second reverses it. Empty values go last either way, and
  * ties fall to the tie column, then to the order the rows came in. With
  * no column to start from, a list keeps the order it has until a header
- * is clicked. While lock returns an order, as Live holds a list newest
- * first, that order stands and a click does nothing; when it lets go, the
- * table keeps it.
+ * is clicked.
  *
  * @param {import('vue').MaybeRefOrGetter<any[]>} rows
  * @param {Record<string, {value: (row: any) => any, compare: (a: any, b: any) => number, first?: 'asc' | 'desc'}>} columns
- * @param {{by?: string | null, dir?: 'asc' | 'desc', tie?: string, lock?: () => ({by: string, dir: 'asc' | 'desc'} | null)}} [options]
+ * @param {{by?: string | null, dir?: 'asc' | 'desc', tie?: string}} [options]
  */
-export function useSort(rows, columns, { by = null, dir, tie, lock } = {}) {
+export function useSort(rows, columns, { by = null, dir, tie } = {}) {
   const chosen = ref(by ? { by, dir: dir ?? columns[by].first ?? 'asc' } : { by: null, dir: null })
-  const held = computed(() => lock?.() ?? null)
-  const order = computed(() => held.value ?? chosen.value)
-  const locked = computed(() => Boolean(held.value))
-  // Synchronous, so a lock taken and let go within one tick still leaves
-  // its order behind.
-  watch(
-    held,
-    (now, before) => {
-      if (!now && before) chosen.value = { ...before }
-    },
-    { flush: 'sync' },
-  )
+  const order = computed(() => chosen.value)
 
   /** A header click: this column in its own order, or the other way. */
   function toggle(key) {
-    if (locked.value) return
     const { by: current, dir: d } = chosen.value
     chosen.value =
       current === key
@@ -114,7 +100,7 @@ export function useSort(rows, columns, { by = null, dir, tie, lock } = {}) {
 
   /** The phone's select: a column in its own order. */
   function choose(key) {
-    if (locked.value || !columns[key]) return
+    if (!columns[key]) return
     chosen.value = { by: key, dir: columns[key].first ?? 'asc' }
   }
 
@@ -135,5 +121,5 @@ export function useSort(rows, columns, { by = null, dir, tie, lock } = {}) {
       .map((x) => x.row)
   })
 
-  return { sorted, order, locked, toggle, choose }
+  return { sorted, order, toggle, choose }
 }

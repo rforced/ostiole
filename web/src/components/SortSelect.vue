@@ -17,7 +17,6 @@ defineProps({
     class="input w-auto sm:hidden max-sm:w-full"
     aria-label="Sort"
     :value="sort.order.value.by ?? ''"
-    :disabled="sort.locked.value"
     @change="sort.choose($event.target.value)"
   >
     <option v-if="!sort.order.value.by" value="" disabled>Sort</option>
