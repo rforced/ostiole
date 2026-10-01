@@ -139,9 +139,9 @@ const (
 
 // proxyGracePeriod is how long a stop waits for requests still running.
 // Caddy's default waits for all of them, and a player that has stopped
-// reading holds its download open until it leaves, so a restart waited
-// for systemd to kill the proxy while the sites refused connections. A
-// reload does not wait: a stream outlives an apply.
+// reading holds its download open until Caddy's one-minute write idle
+// timeout cuts it, so a restart waited that long while the sites refused
+// connections. A reload does not wait: a stream outlives an apply.
 const proxyGracePeriod = "5s"
 
 // render returns the files an enabled proxy needs: the configuration, the
