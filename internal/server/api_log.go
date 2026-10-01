@@ -108,10 +108,11 @@ func (a *api) logRecent(w http.ResponseWriter, r *http.Request) error {
 	limit := 200
 	if v := r.URL.Query().Get("limit"); v != "" {
 		n, err := strconv.Atoi(v)
-		// The ceiling is what the ring can hold, so a caller can ask for
-		// everything a router was told to keep.
-		if err != nil || n < 1 || n > model.MaxFirewallLogEntries {
-			return &badRequest{fmt.Errorf("limit must be 1-%d", model.MaxFirewallLogEntries)}
+		// A page at most, as every log's reader gives: the copy is made
+		// under the lock the feed writes through, and /log/entries reads
+		// further back a page at a time.
+		if err != nil || n < 1 || n > maxLogPageRows {
+			return &badRequest{fmt.Errorf("limit must be 1-%d", maxLogPageRows)}
 		}
 		limit = n
 	}

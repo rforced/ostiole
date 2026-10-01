@@ -66,6 +66,62 @@ func TestLogStreamsEndWithTheirCaller(t *testing.T) {
 	}
 }
 
+// Each stream holds a goroutine and a buffer while it lasts, so one caller
+// holds maxStreams at most, and gets a place back when one closes.
+func TestACallerHoldsSoManyStreams(t *testing.T) {
+	t.Parallel()
+	srv := newTestServerWith(t, func(d *Deps) {
+		tokens, err := auth.NewTokens(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		d.Tokens = tokens
+		d.Log = fwlog.NewRing(16)
+		d.Keepalive = time.Hour
+	})
+	token := mintToken(t, srv, "look", string(auth.RoleViewer))
+	open := func() *http.Response {
+		t.Helper()
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/api/v1/log/stream", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err := srv.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = resp.Body.Close() })
+		return resp
+	}
+	held := make([]*http.Response, 0, maxStreams)
+	for range maxStreams {
+		resp := open()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("stream %d: %d", len(held)+1, resp.StatusCode)
+		}
+		held = append(held, resp)
+	}
+	if resp := open(); resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("one past the cap: %d, want 429", resp.StatusCode)
+	}
+	// The signed-in admin is counted apart from the token.
+	openStream(t, srv, "/api/v1/log/stream", "")
+	_ = held[0].Body.Close()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		resp := open()
+		if resp.StatusCode == http.StatusOK {
+			break
+		}
+		_ = resp.Body.Close()
+		if time.Now().After(deadline) {
+			t.Fatal("a closed stream never gave its place back")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 // openStream opens a server-sent event stream with the client's cookies,
 // and a bearer token when one is given.
 func openStream(t *testing.T, srv *httptest.Server, path, token string) *bufio.Reader {

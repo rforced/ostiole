@@ -785,8 +785,11 @@ func TestFirewallLogEndpoints(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), `"zone":"lan"`) {
 		t.Fatalf("recent: %d %s", resp.StatusCode, raw)
 	}
-	if resp, _ := do(t, srv, http.MethodGet, "/api/v1/log/recent?limit=0", nil); resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("bad limit: %d", resp.StatusCode)
+	// A page at most: the whole ring is copied under the feed's lock.
+	for _, limit := range []string{"0", "1001", "10000000"} {
+		if resp, _ := do(t, srv, http.MethodGet, "/api/v1/log/recent?limit="+limit, nil); resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("limit %s: %d", limit, resp.StatusCode)
+		}
 	}
 
 	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/v1/log/stream", nil)

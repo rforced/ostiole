@@ -122,6 +122,11 @@ type api struct {
 	// timeout.
 	stopping chan struct{}
 	stopOnce sync.Once
+	// streams counts the streams each caller holds, at most maxStreams.
+	streams struct {
+		mu sync.Mutex
+		by map[string]int
+	}
 	// querylog keeps what the DNS server answered; nil answers 503.
 	querylog *dnslog.Log
 	// waflog keeps what the proxy's WAF matched; nil answers 503.
@@ -683,7 +688,7 @@ func statusFor(err error) int {
 		return http.StatusForbidden
 	case errors.Is(err, auth.ErrTokenNotFound), errors.Is(err, auth.ErrNoSuchUser):
 		return http.StatusNotFound
-	case errors.Is(err, auth.ErrRateLimited):
+	case errors.Is(err, auth.ErrRateLimited), errors.Is(err, errTooManyStreams):
 		return http.StatusTooManyRequests
 	case errors.Is(err, auth.ErrBusy):
 		return http.StatusServiceUnavailable
