@@ -92,6 +92,41 @@ describe('useSort', () => {
     ])
   })
 
+  // A cell's rate and total under one header: a click moves to the other,
+  // each the way it reads, rather than reversing.
+  it('moves through the columns of one header', () => {
+    const rows = ref([
+      { ip: '10.0.0.1', rate: 5, total: 100 },
+      { ip: '10.0.0.2', rate: 9, total: 10 },
+    ])
+    const s = useSort(rows, {
+      ip: byAddress((r) => r.ip),
+      rate: byNumber((r) => r.rate),
+      total: byNumber((r) => r.total),
+    })
+    const usage = ['rate', 'total']
+    s.toggle(usage)
+    expect(s.order.value).toEqual({ by: 'rate', dir: 'desc' })
+    expect(ips(s)).toEqual(['10.0.0.2', '10.0.0.1'])
+    s.toggle(usage)
+    expect(s.order.value).toEqual({ by: 'total', dir: 'desc' })
+    expect(ips(s)).toEqual(['10.0.0.1', '10.0.0.2'])
+    s.toggle(usage)
+    expect(s.order.value).toEqual({ by: 'rate', dir: 'desc' })
+    // From the select's choice, the next click moves on from it.
+    s.choose('total')
+    s.toggle(usage)
+    expect(s.order.value).toEqual({ by: 'rate', dir: 'desc' })
+    // From another column, it starts again at the first.
+    s.toggle('ip')
+    s.toggle(usage)
+    expect(s.order.value).toEqual({ by: 'rate', dir: 'desc' })
+    // A list of one is a column of its own, and reverses.
+    s.toggle(['ip'])
+    s.toggle(['ip'])
+    expect(s.order.value).toEqual({ by: 'ip', dir: 'desc' })
+  })
+
   it('takes a column in its own order from the select', () => {
     const s = useSort(hosts(), columns, { by: 'ip', dir: 'desc' })
     s.choose('seen')

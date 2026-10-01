@@ -130,6 +130,41 @@ describe('DevicesTab', () => {
     expect(w.get('tbody').text()).toBe('Nothing matches "nothing here".')
   })
 
+  // Down and Up sort by the rate first, then by the window's total, and
+  // the header says which.
+  it('sorts Down and Up by the rate, then by the total', async () => {
+    const quiet = { ...devices[0], down: 1000, up: 1000 }
+    const busy = { ...devices[1], down: 5000, up: 5000 }
+    const { w } = await open({ extra: { devices: [quiet, busy] } })
+    const first = () => w.get('tbody tr').text()
+    const header = (i) => w.findAll('th')[i]
+    const reads = (th) =>
+      th
+        .findAll('button > span > span')
+        .filter((s) => !s.classes('invisible'))
+        .map((s) => s.text())
+    for (const [i, name] of [
+      [1, 'Down'],
+      [2, 'Up'],
+    ]) {
+      await header(i).get('button').trigger('click')
+      expect(reads(header(i))).toEqual([name])
+      expect(header(i).attributes('aria-sort')).toBe('descending')
+      expect(first()).toContain('6a:00:00:00:00:07')
+      await header(i).get('button').trigger('click')
+      expect(reads(header(i))).toEqual([`${name} total`])
+      expect(header(i).attributes('aria-sort')).toBe('descending')
+      expect(first()).toContain('laptop')
+    }
+    // The phone has no headers: each figure is its own choice.
+    expect(
+      w
+        .get('select[aria-label="Sort"]')
+        .findAll('option')
+        .map((o) => o.text()),
+    ).toEqual(['Device', 'Down', 'Down total', 'Up', 'Up total', 'Last seen'])
+  })
+
   it('says when a big table stretches the interval, and why devices are missing', async () => {
     const { w } = await open({
       extra: {

@@ -19,12 +19,16 @@ import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import DeviceDialog from '@/views/traffic/DeviceDialog.vue'
 
-const COLUMNS = [
-  ['device', 'Device'],
+// Down and Up each sort by the rate, then by the window's total.
+const DOWN = [
   ['down', 'Down'],
-  ['up', 'Up'],
-  ['seen', 'Last seen'],
+  ['downTotal', 'Down total'],
 ]
+const UP = [
+  ['up', 'Up'],
+  ['upTotal', 'Up total'],
+]
+const COLUMNS = [['device', 'Device'], ...DOWN, ...UP, ['seen', 'Last seen']]
 
 const auth = useAuthStore()
 const config = useConfigStore()
@@ -95,7 +99,9 @@ const { query, shown } = useSearch(rows, (d) => ({
 const sort = useSort(shown, {
   device: byText((d) => deviceLabel(d)),
   down: byNumber((d) => d.down),
+  downTotal: byNumber((d) => d.totals.down),
   up: byNumber((d) => d.up),
+  upTotal: byNumber((d) => d.totals.up),
   seen: byTime((d) => d.lastSeen),
 })
 
@@ -182,8 +188,8 @@ function show(d) {
           <thead>
             <tr>
               <SortHeader by="device" :sort="sort">Device</SortHeader>
-              <SortHeader by="down" :sort="sort" class="text-right">Down</SortHeader>
-              <SortHeader by="up" :sort="sort" class="text-right">Up</SortHeader>
+              <SortHeader :columns="DOWN" :sort="sort" class="text-right" />
+              <SortHeader :columns="UP" :sort="sort" class="text-right" />
               <th>Interface</th>
               <SortHeader by="seen" :sort="sort">Last seen</SortHeader>
             </tr>

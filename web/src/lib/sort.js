@@ -76,10 +76,11 @@ function compareEmptyLast(a, b, compare, sign) {
 
 /**
  * The order of a sortable table. A column's first click sorts it the way
- * it reads, the second reverses it. Empty values go last either way, and
- * ties fall to the tie column, then to the order the rows came in. With
- * no column to start from, a list keeps the order it has until a header
- * is clicked.
+ * it reads, the second reverses it. A header over several columns, such
+ * as a cell's rate and its total, moves to the next one instead. Empty
+ * values go last either way, and ties fall to the tie column, then to the
+ * order the rows came in. With no column to start from, a list keeps the
+ * order it has until a header is clicked.
  *
  * @param {import('vue').MaybeRefOrGetter<any[]>} rows
  * @param {Record<string, {value: (row: any) => any, compare: (a: any, b: any) => number, first?: 'asc' | 'desc'}>} columns
@@ -89,13 +90,17 @@ export function useSort(rows, columns, { by = null, dir, tie } = {}) {
   const chosen = ref(by ? { by, dir: dir ?? columns[by].first ?? 'asc' } : { by: null, dir: null })
   const order = computed(() => chosen.value)
 
-  /** A header click: this column in its own order, or the other way. */
+  /**
+   * A header click: this column in its own order, or the other way. Over
+   * several columns, the next of them in its own order.
+   * @param {string | string[]} key
+   */
   function toggle(key) {
+    const keys = [key].flat()
     const { by: current, dir: d } = chosen.value
-    chosen.value =
-      current === key
-        ? { by: key, dir: d === 'asc' ? 'desc' : 'asc' }
-        : { by: key, dir: columns[key].first ?? 'asc' }
+    if (keys.length === 1 && current === keys[0])
+      chosen.value = { by: current, dir: d === 'asc' ? 'desc' : 'asc' }
+    else choose(keys[(keys.indexOf(current) + 1) % keys.length])
   }
 
   /** The phone's select: a column in its own order. */
