@@ -433,7 +433,10 @@ func findParam(s, key string) (rawValue string, ok bool) {
 // repeated parameter name as a parse error -- so its allocation stays off the
 // path taken by well-formed parts.
 func hasDuplicateParam(s string) bool {
-	var seen []string
+	// Changed by Ostiole: a set, not a slice, as upstream's PR #1726 does.
+	// The header is the client's and can carry hundreds of thousands of
+	// parameters, so a scan of every earlier name per key is quadratic.
+	seen := map[string]struct{}{}
 	duplicate := false
 	forEachParam(s, func(seg string) bool {
 		key, _, found := strings.Cut(seg, "=")
@@ -441,13 +444,11 @@ func hasDuplicateParam(s string) bool {
 			return true
 		}
 		key = strings.ToLower(strings.TrimSpace(key))
-		for _, k := range seen {
-			if k == key {
-				duplicate = true
-				return false
-			}
+		if _, ok := seen[key]; ok {
+			duplicate = true
+			return false
 		}
-		seen = append(seen, key)
+		seen[key] = struct{}{}
 		return true
 	})
 	return duplicate

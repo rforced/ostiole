@@ -13,4 +13,8 @@
 #   targets from one rule overwrote each other. The capacity is capped so
 #   the append copies. Upstream: issue #1723, open at v3.8.0; closed,
 #   unmerged PR #1509 had the same fix.
+# - internal/bodyprocessors/multipart.go: hasDuplicateParam compared each
+#   parameter of a malformed Content-Disposition with every earlier one,
+#   so one request with a 900 KB header cost 9 s of CPU. It keeps a set.
+#   Upstream: PR #1726, merged after v3.8.0 (c144e85).
 v3.8.0
