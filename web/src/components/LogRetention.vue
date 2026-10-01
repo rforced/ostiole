@@ -21,7 +21,7 @@ const props = defineProps({
   log: { type: String, required: true },
   title: { type: String, required: true },
   intro: { type: String, default: '' },
-  /** The log is off, so there is nothing to size. */
+  /** The log is off, so there is nothing to size. The off slot can say why. */
   off: { type: Boolean, default: false },
 })
 /** {entries, days}, an empty field being the default. */
@@ -115,7 +115,7 @@ const daysHint = computed(() => {
         <p v-if="inFiles" class="text-ink-muted">In files: {{ formatBytes(inFiles.bytes) }}.</p>
         <AppNotice v-if="heavy">That is more than half of this router's memory.</AppNotice>
       </template>
-      <p v-else class="text-ink-muted">Off.</p>
+      <p v-else class="text-ink-muted"><slot name="off">Off.</slot></p>
     </div>
   </SectionCard>
 </template>

@@ -12,6 +12,7 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { formatBytes, formatRate } from '@/lib/format'
+import { keptLine } from '@/lib/log'
 import { useSearch } from '@/lib/search'
 import { byNumber, byText, byTime, useSort } from '@/lib/sort'
 import { WINDOWS, deviceLabel, sinceLine, useTrafficStream } from '@/lib/traffic'
@@ -54,6 +55,17 @@ const counting = computed({
     if (Object.keys(t).length) config.draft.traffic = t
     else delete config.draft.traffic
   },
+})
+/** On in the draft, not yet in what the router runs. */
+const unapplied = computed(() => counting.value && !config.saved?.traffic?.devices)
+/** Written to files as well, as the draft has it. */
+const filesOn = computed(() => Boolean(config.draft?.system?.logging?.files?.enabled))
+/** Where the counts are kept, and what switching off takes with it. */
+const intro = computed(() => {
+  const kept = keptLine(filesOn.value)
+  return config.draft?.traffic?.destinations?.enabled
+    ? `${kept} Destinations switch off with it.`
+    : kept
 })
 
 const win = ref('5m')
@@ -136,17 +148,20 @@ function show(d) {
 
 <template>
   <div class="space-y-5">
-    <SectionCard title="Counting" :locked="auth.readOnly">
-      <div class="space-y-3">
+    <SectionCard title="Counting" :intro="intro" :locked="auth.readOnly">
+      <template #actions>
         <ToggleRow
+          id="devices-enabled"
           v-model="counting"
-          label="Count traffic per device"
-          hint="A restart clears it unless System → General writes logs to files."
+          variant="switch"
+          label="Enabled"
+          aria-label="Counting enabled"
+          :disabled="auth.readOnly"
         />
-        <p v-if="counting && state && !state.counting" class="text-ink-muted">
-          Apply the draft to start it.
-        </p>
-      </div>
+      </template>
+      <template v-if="unapplied" #default>
+        <p class="text-ink-muted">Apply the draft to start it.</p>
+      </template>
     </SectionCard>
 
     <template v-if="state?.counting">

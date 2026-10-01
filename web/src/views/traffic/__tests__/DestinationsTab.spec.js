@@ -87,16 +87,26 @@ describe('DestinationsTab', () => {
   })
   afterEach(() => vi.useRealTimers())
 
-  // The switch needs counting per device, and says so while it is off.
+  // The switch needs counting per device, and the card says so while it
+  // is off.
   it('offers the switch only with devices counted', async () => {
     let { w } = await open({ traffic: null, enabled: false })
     const toggle = w.get('#destinations-enabled')
+    expect(toggle.attributes('role')).toBe('switch')
+    expect(toggle.attributes('aria-label')).toBe('Recording enabled')
     expect(toggle.attributes('disabled')).toBeDefined()
-    expect(w.text()).toContain('Needs counting per device.')
+    expect(w.text()).toContain('Needs counting on the Devices tab.')
+    expect(w.text()).not.toContain('Off.')
     let config
     ;({ w, config } = await open({ traffic: { devices: true }, enabled: false }))
+    expect(w.text()).toContain('Off.')
+    expect(w.text()).toContain(
+      'Kept in memory on this router only. Switching it off, or a restart, clears it.',
+    )
+    expect(w.text()).not.toContain('Apply the draft to start it.')
     await w.get('#destinations-enabled').setValue(true)
     expect(config.draft.traffic).toEqual({ devices: true, destinations: { enabled: true } })
+    expect(w.text()).toContain('Apply the draft to start it.')
     await w.get('#destinations-days').setValue('3')
     expect(config.draft.traffic.destinations).toEqual({ enabled: true, days: 3 })
     await w.get('#destinations-days').setValue('')

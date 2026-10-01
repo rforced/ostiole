@@ -84,17 +84,39 @@ describe('DevicesTab', () => {
     vi.stubGlobal('EventSource', FakeSource)
   })
 
+  // The card's switch, as every switch that governs a card is.
   it('writes the switch into the draft, and takes it out again', async () => {
     const { w, config } = await open({ counting: false, draft: null })
-    const box = w.get('input[type="checkbox"]')
-    expect(box.element.checked).toBe(false)
-    expect(w.text()).toContain('A restart clears it unless System → General writes logs to files.')
-    await box.setValue(true)
+    const toggle = w.get('#devices-enabled')
+    expect(toggle.attributes('role')).toBe('switch')
+    expect(toggle.attributes('aria-label')).toBe('Counting enabled')
+    expect(toggle.element.checked).toBe(false)
+    expect(w.text()).toContain(
+      'Kept in memory on this router only. Switching it off, or a restart, clears it.',
+    )
+    expect(w.text()).not.toContain('Apply the draft to start it.')
+    await toggle.setValue(true)
     expect(config.draft.traffic).toEqual({ devices: true })
     expect(w.text()).toContain('Apply the draft to start it.')
-    await box.setValue(false)
+    await toggle.setValue(false)
     expect(config.draft.traffic).toBeUndefined()
     expect(config.dirty).toBe(false)
+  })
+
+  // Applied, the draft and the router agree, whether or not the router
+  // has started counting yet.
+  it('asks for an apply only while the router runs without it', async () => {
+    const { w } = await open({ counting: false })
+    expect(w.text()).not.toContain('Apply the draft to start it.')
+  })
+
+  it('says what the files keep, as the draft has them', async () => {
+    const { w, config } = await open()
+    config.draft.system = { logging: { files: { enabled: true } } }
+    await flushPromises()
+    expect(w.text()).toContain(
+      'Kept on this router only. Switching it off clears it, files included.',
+    )
   })
 
   // Destinations belong to devices: switching counting off takes them too.
@@ -102,13 +124,15 @@ describe('DevicesTab', () => {
     const { w, config } = await open({
       draft: { devices: true, destinations: { enabled: true, days: 3 } },
     })
-    await w.get('input[type="checkbox"]').setValue(false)
+    expect(w.text()).toContain('clears it. Destinations switch off with it.')
+    await w.get('#devices-enabled').setValue(false)
     expect(config.draft.traffic).toEqual({ destinations: { days: 3 } })
+    expect(w.text()).not.toContain('Destinations switch off with it.')
   })
 
   it('is locked for a viewer', async () => {
     const { w } = await open({ role: 'viewer' })
-    expect(w.find('fieldset[disabled]').exists()).toBe(true)
+    expect(w.get('#devices-enabled').attributes('disabled')).toBeDefined()
     expect(w.findAll('button').some((b) => b.text() === 'Clear')).toBe(false)
   })
 

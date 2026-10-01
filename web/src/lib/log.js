@@ -46,6 +46,17 @@ export function heldLine(held, oldest, inFiles = false) {
 }
 
 /**
+ * Where a log behind a switch is kept and what clears it, as its card
+ * says it.
+ * @param {boolean} inFiles whether the draft writes logs to files
+ */
+export function keptLine(inFiles) {
+  return inFiles
+    ? 'Kept on this router only. Switching it off clears it, files included.'
+    : 'Kept in memory on this router only. Switching it off, or a restart, clears it.'
+}
+
+/**
  * The one way a page reads a log the router keeps: the newest page on
  * opening, the next as the table scrolls, the search asked of the router
  * once typing rests, and new rows over the stream while Live is on.

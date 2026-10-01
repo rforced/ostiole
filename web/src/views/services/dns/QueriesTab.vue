@@ -12,7 +12,7 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { exceptionToggles, sentence } from '@/lib/blocking'
 import { formatCount } from '@/lib/format'
-import { heldLine, useLog } from '@/lib/log'
+import { heldLine, keptLine, useLog } from '@/lib/log'
 import { queryValues } from '@/lib/queries'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -158,11 +158,7 @@ function explain(name) {
       v-model="retention"
       log="queries"
       title="Query log"
-      :intro="
-        filesOn
-          ? 'Kept on this router only. Switching it off clears it, files included.'
-          : 'Kept in memory on this router only. Switching it off, or a restart, clears it.'
-      "
+      :intro="keptLine(filesOn)"
       :off="!enabled"
     >
       <template #actions>

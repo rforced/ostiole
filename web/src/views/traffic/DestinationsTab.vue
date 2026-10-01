@@ -11,7 +11,7 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { formatBytes, formatCount } from '@/lib/format'
-import { SETTLE_MS, heldLine } from '@/lib/log'
+import { SETTLE_MS, heldLine, keptLine } from '@/lib/log'
 import { DESTINATION_WINDOWS, deviceLabel, serviceLabel, useTrafficStream } from '@/lib/traffic'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -39,6 +39,12 @@ const enabled = computed({
     setDestinations(d)
   },
 })
+/** Whether a configuration records destinations: on, with devices counted. */
+const recording = (c) => Boolean(c?.traffic?.devices && c.traffic.destinations?.enabled)
+/** On in the draft, not yet in what the router runs. */
+const unapplied = computed(() => recording(config.draft) && !recording(config.saved))
+/** Written to files as well, as the draft has it. */
+const filesOn = computed(() => Boolean(config.draft?.system?.logging?.files?.enabled))
 /** Entries and days, beside the switch. */
 const retention = computed({
   get: () => {
@@ -133,17 +139,25 @@ const empty = computed(() => {
 
 <template>
   <div class="space-y-5">
-    <LogRetention v-model="retention" log="destinations" title="Recording" :off="!enabled">
+    <LogRetention
+      v-model="retention"
+      log="destinations"
+      title="Recording"
+      :intro="keptLine(filesOn)"
+      :off="!enabled"
+    >
       <template #actions>
         <ToggleRow
           id="destinations-enabled"
           v-model="enabled"
           variant="switch"
-          label="Record destinations"
-          :hint="devicesOn ? '' : 'Needs counting per device.'"
+          label="Enabled"
+          aria-label="Recording enabled"
           :disabled="auth.readOnly || (!devicesOn && !enabled)"
         />
       </template>
+      <p v-if="unapplied" class="text-ink-muted">Apply the draft to start it.</p>
+      <template v-if="!devicesOn" #off>Needs counting on the Devices tab.</template>
     </LogRetention>
 
     <template v-if="running">

@@ -33,7 +33,7 @@ test('the links chart from the stream, and counting per device goes on', async (
   await expect(page.getByRole('table').first().locator('tbody tr').first()).toBeVisible()
 
   await page.getByRole('tab', { name: 'Devices' }).click()
-  const counting = page.getByLabel('Count traffic per device')
+  const counting = page.getByRole('switch', { name: 'Counting enabled' })
   await expect(counting).not.toBeChecked()
   await counting.check()
   await expect(page.getByText('Apply the draft to start it.')).toBeVisible()
@@ -63,7 +63,7 @@ test('the links chart from the stream, and counting per device goes on', async (
 test('destinations go on beside the devices', async ({ page }) => {
   await login(page)
   await page.goto('/traffic#destinations')
-  const record = page.getByRole('switch', { name: 'Record destinations' })
+  const record = page.getByRole('switch', { name: 'Recording enabled' })
   await expect(record).toBeEnabled()
   await record.check()
   await expect(page.getByLabel('Days')).toHaveAttribute('placeholder', '7')
