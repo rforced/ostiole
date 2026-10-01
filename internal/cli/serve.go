@@ -913,11 +913,14 @@ func probeURL(listen string, tls bool) string {
 	if tls {
 		scheme = "https"
 	}
-	_, port, err := net.SplitHostPort(listen)
-	if err != nil || port == "" {
-		port = strconv.Itoa(model.DefaultWebPort)
+	// Go listens on a service's name as well as its number.
+	port := model.DefaultWebPort
+	if _, name, err := net.SplitHostPort(listen); err == nil {
+		if n, err := net.DefaultResolver.LookupPort(context.Background(), "tcp", name); err == nil && n > 0 {
+			port = n
+		}
 	}
-	return scheme + "://127.0.0.1:" + port + "/api/v1/health"
+	return fmt.Sprintf("%s://127.0.0.1:%d/api/v1/health", scheme, port)
 }
 
 // restartService restarts one of the units Ostiole owns. The names the

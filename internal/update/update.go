@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"golang.org/x/mod/semver"
@@ -382,6 +383,9 @@ func (c *Client) fetchBinary(ctx context.Context, a *Asset, sumsRaw []byte, dir,
 	if err != nil {
 		return "", err
 	}
+	if a.Size > maxTarball {
+		return "", fmt.Errorf("%s is %d bytes, more than a release holds", a.Name, a.Size)
+	}
 	progress("downloading", 0, a.Size)
 	tmp, err := os.CreateTemp(dir, ".ostiole-update-*.tar.gz")
 	if err != nil {
@@ -412,6 +416,10 @@ func (c *Client) fetchBinary(ctx context.Context, a *Asset, sumsRaw []byte, dir,
 			_, _ = h.Write(buf[:n])
 			done += int64(n)
 			progress("downloading", done, a.Size)
+			if done > maxTarball {
+				_ = tmp.Close()
+				return "", fmt.Errorf("%s is more than %d bytes, more than a release holds", a.Name, maxTarball)
+			}
 		}
 		if errors.Is(rerr, io.EOF) {
 			break
@@ -434,6 +442,11 @@ func (c *Client) fetchBinary(ctx context.Context, a *Asset, sumsRaw []byte, dir,
 	}
 	return out, nil
 }
+
+// maxTarball bounds a release asset as it is written beside the binary,
+// before its checksum can say anything: a release's are tens of
+// megabytes.
+const maxTarball = 256 << 20
 
 func (c *Client) fetchSmall(ctx context.Context, url string, limit int64) ([]byte, error) {
 	resp, err := c.get(ctx, url, "application/octet-stream")
@@ -564,9 +577,26 @@ func (i *Installer) WantsProxy() bool {
 	return err == nil
 }
 
+// restartUnit runs the restart into a new binary and its health check.
+const restartUnit = "ostiole-update-restart.service"
+
 // Install moves the new binaries over the running ones, keeping each old
-// one as <path>.previous, and schedules a restart plus health check.
+// one as <path>.previous, and schedules a restart plus health check. One
+// install runs at a time, whichever process asked, and none while an
+// earlier one is still restarting: each would take the other's previous
+// copy for its own, and a failed probe would have nothing to put back.
 func (i *Installer) Install(ctx context.Context, d Downloaded) error {
+	unlock, err := lockInstall(filepath.Dir(i.Binary))
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	if out, err := i.Run.Run(ctx, "systemctl", "show", "--property=ActiveState", "--value", restartUnit); err == nil {
+		switch strings.TrimSpace(string(out)) {
+		case "active", "activating", "reloading":
+			return ErrBusy
+		}
+	}
 	if i.RolledBack != "" {
 		// The note is about the last attempt; this one makes its own.
 		_ = os.Remove(i.RolledBack)
@@ -606,8 +636,8 @@ func (i *Installer) Install(ctx context.Context, d Downloaded) error {
 	// The restart runs detached so the daemon can answer the request that
 	// triggered it.
 	script := i.restartScript(previous, proxyPrevious, d.Version)
-	_, _ = i.Run.Run(ctx, "systemctl", "reset-failed", "ostiole-update-restart.service")
-	if out, err := i.Run.Run(ctx, "systemd-run", "--unit=ostiole-update-restart", "--collect", "--quiet", "sh", "-c", script); err != nil {
+	_, _ = i.Run.Run(ctx, "systemctl", "reset-failed", restartUnit)
+	if out, err := i.Run.Run(ctx, "systemd-run", "--unit="+restartUnit, "--collect", "--quiet", "sh", "-c", script); err != nil {
 		// Nothing is going to restart into the new binary, and nothing
 		// would probe it if the next reboot did. Put the old ones back.
 		_ = os.Rename(previous, i.Binary)
@@ -617,6 +647,29 @@ func (i *Installer) Install(ctx context.Context, d Downloaded) error {
 		return fmt.Errorf("schedule restart: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
+}
+
+// lockInstall locks dir, the binary's, against another install. The lock
+// is on the directory itself, so nothing is left beside the binary, and
+// it goes with the process.
+func lockInstall(dir string) (func(), error) {
+	f, err := os.Open(dir)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		_ = f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, ErrBusy
+		}
+		return nil, fmt.Errorf("lock %s: %w", f.Name(), err)
+	}
+	return func() { _ = f.Close() }, nil
+}
+
+// shq quotes s as one word for sh, whatever the path or URL holds.
+func shq(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // restartScript restarts into the new binaries and puts the old ones back
@@ -634,19 +687,19 @@ func (i *Installer) restartScript(previous, proxyPrevious, version string) strin
 		if !versionRe.MatchString(version) {
 			version = "" // an empty note still says an update was put back
 		}
-		restore = fmt.Sprintf("echo %s >%s; ", version, i.RolledBack)
+		restore = fmt.Sprintf("echo %s >%s; ", shq(version), shq(i.RolledBack))
 	}
 	if proxyPrevious != "" {
-		restore += fmt.Sprintf("mv -f %s %s; ", proxyPrevious, i.Proxy)
+		restore += fmt.Sprintf("mv -f %s %s; ", shq(proxyPrevious), shq(i.Proxy))
 		proxy = fmt.Sprintf(`
 if systemctl is-active --quiet %[1]s; then
 if systemctl try-restart %[1]s && sleep 3 && systemctl is-active --quiet %[1]s; then rm -f %[2]s;
 else mv -f %[2]s %[3]s; systemctl reset-failed %[1]s; systemctl restart %[1]s; fi
 elif %[3]s version >/dev/null 2>&1; then rm -f %[2]s; else mv -f %[2]s %[3]s; fi`,
-			i.ProxyUnit, proxyPrevious, i.Proxy)
+			shq(i.ProxyUnit), shq(proxyPrevious), shq(i.Proxy))
 	}
 	return fmt.Sprintf(`sleep 1; %[2]s install --units-only --log-level warn; systemctl restart %[1]s; sleep 4;
 if %[2]s update --probe %[3]s; then rm -f %[4]s;%[5]s
 else %[6]smv -f %[4]s %[2]s && { %[2]s install --units-only --log-level warn; systemctl restart %[1]s; }; fi`,
-		i.Unit, i.Binary, i.HealthURL, previous, proxy, restore)
+		shq(i.Unit), shq(i.Binary), shq(i.HealthURL), shq(previous), proxy, restore)
 }

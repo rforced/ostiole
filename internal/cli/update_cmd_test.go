@@ -220,8 +220,8 @@ func (r *consoleRouter) installed(t *testing.T, version string) {
 		t.Fatalf("last call to systemd = %q, want the restart", last)
 	}
 	note := filepath.Join(r.g.configDir, "updates", "rolled-back")
-	for _, want := range []string{"systemctl restart ostiole.service", "update --probe https://127.0.0.1:8443/api/v1/health",
-		"echo " + version + " >" + note} {
+	for _, want := range []string{"systemctl restart 'ostiole.service'", "update --probe 'https://127.0.0.1:8443/api/v1/health'",
+		"echo '" + version + "' >'" + note + "'"} {
 		if !strings.Contains(last[len(last)-1], want) {
 			t.Errorf("the restart script does not have %q: %q", want, last[len(last)-1])
 		}

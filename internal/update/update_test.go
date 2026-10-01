@@ -216,7 +216,7 @@ func TestCheckDownloadInstall(t *testing.T) {
 		t.Error("previous binary not kept")
 	}
 	last := strings.Join(run.calls[len(run.calls)-1], " ")
-	if !strings.Contains(last, "systemd-run") || !strings.Contains(last, " install --units-only ") || !strings.Contains(last, "systemctl restart ostiole.service") || !strings.Contains(last, "update --probe") || !strings.Contains(last, ".previous") {
+	if !strings.Contains(last, "systemd-run") || !strings.Contains(last, " install --units-only ") || !strings.Contains(last, "systemctl restart 'ostiole.service'") || !strings.Contains(last, "update --probe") || !strings.Contains(last, ".previous") {
 		t.Errorf("restart command = %q", last)
 	}
 }
@@ -264,7 +264,7 @@ func TestUpdateSwapsTheProxyWithTheBinary(t *testing.T) {
 	}
 	run := inst.Run.(*fakeRun)
 	last := strings.Join(run.calls[len(run.calls)-1], " ")
-	for _, want := range []string{"systemctl try-restart ostiole-proxy.service", proxy + ".previous"} {
+	for _, want := range []string{"systemctl try-restart 'ostiole-proxy.service'", "'" + proxy + ".previous'"} {
 		if !strings.Contains(last, want) {
 			t.Errorf("%q missing from the restart script: %q", want, last)
 		}
@@ -323,6 +323,62 @@ func TestInstallPutsTheOldBinaryBackWhenNothingWillRestart(t *testing.T) {
 	}
 }
 
+// One install at a time, whichever process asked, and none while an
+// earlier one is still restarting into its binary: either would take the
+// other's previous copy for its own.
+func TestInstallWaitsForNoOtherInstall(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "ostiole")
+	for path, content := range map[string]string{bin: "old", bin + ".new": "new"} {
+		if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	unlock, err := lockInstall(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inst := &Installer{Binary: bin, Unit: "ostiole.service", HealthURL: "x", Run: &fakeRun{}}
+	if err := inst.Install(t.Context(), Downloaded{Binary: bin + ".new"}); !errors.Is(err, ErrBusy) {
+		t.Errorf("with the lock held elsewhere: %v, want ErrBusy", err)
+	}
+	unlock()
+
+	inst.Run = restarting{}
+	if err := inst.Install(t.Context(), Downloaded{Binary: bin + ".new"}); !errors.Is(err, ErrBusy) {
+		t.Errorf("while an update restarts: %v, want ErrBusy", err)
+	}
+	if raw, _ := os.ReadFile(bin); string(raw) != "old" {
+		t.Errorf("binary = %q, want it untouched", raw)
+	}
+	if _, err := os.Stat(bin + ".previous"); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("a previous copy was made: %v", err)
+	}
+}
+
+// restarting answers as systemd does while an update's restart unit runs.
+type restarting struct{}
+
+func (restarting) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+	if name == "systemctl" && len(args) > 0 && args[0] == "show" {
+		return []byte("active\n"), nil
+	}
+	return nil, nil
+}
+
+// A release asset larger than any release is refused before a byte of it
+// is written beside the binary.
+func TestDownloadRefusesAnAssetLargerThanARelease(t *testing.T) {
+	t.Parallel()
+	c := &Client{}
+	_, err := c.fetchBinary(t.Context(), &Asset{Name: "ostiole_0.2.0_linux_amd64.tar.gz", Size: maxTarball + 1},
+		[]byte(strings.Repeat("0", 64)+"  ostiole_0.2.0_linux_amd64.tar.gz\n"), t.TempDir(), "ostiole", func(string, int64, int64) {})
+	if err == nil || !strings.Contains(err.Error(), "more than a release holds") {
+		t.Errorf("err = %v", err)
+	}
+}
+
 // The restart script is run for real, with systemctl, sleep and both
 // binaries faked on a PATH of their own, so what it leaves on disk is
 // checked rather than read off its text. The proxy's previous copy stays
@@ -333,6 +389,8 @@ func TestRestartScriptKeepsTheOldProxyUntilTheNewOneRuns(t *testing.T) {
 		name                            string
 		daemonUp, proxyUp, proxyBroken  bool
 		wantDaemon, wantProxy, restarts string
+		// awkward puts everything under a path with a space and a quote.
+		awkward bool
 	}{
 		{name: "healthy", daemonUp: true, proxyUp: true,
 			wantDaemon: "new", wantProxy: "new", restarts: "try-restart"},
@@ -344,10 +402,17 @@ func TestRestartScriptKeepsTheOldProxyUntilTheNewOneRuns(t *testing.T) {
 			wantDaemon: "new", wantProxy: "old"},
 		{name: "daemon fails", proxyUp: true,
 			wantDaemon: "old", wantProxy: "old"},
+		{name: "daemon fails on an awkward path", proxyUp: true, awkward: true,
+			wantDaemon: "old", wantProxy: "old"},
+		{name: "healthy on an awkward path", daemonUp: true, proxyUp: true, awkward: true,
+			wantDaemon: "new", wantProxy: "new", restarts: "try-restart"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
+			if tc.awkward {
+				dir = filepath.Join(dir, "it's a dir")
+			}
 			bin, proxy := filepath.Join(dir, "ostiole"), filepath.Join(dir, "ostiole-proxy")
 			probe := 1
 			if tc.daemonUp {
