@@ -27,11 +27,15 @@ var Forwarding = map[string]string{
 	// Do not accept ICMP redirects or source-routed packets on a router.
 	"net/ipv4/conf/all/accept_redirects":     "0",
 	"net/ipv4/conf/default/accept_redirects": "0",
-	"net/ipv6/conf/all/accept_redirects":     "0",
-	"net/ipv4/conf/all/send_redirects":       "0",
 	"net/ipv4/conf/all/accept_source_route":  "0",
 	"net/ipv6/conf/all/accept_source_route":  "0",
-	"net/ipv4/tcp_syncookies":                "1",
+	// Nor send redirects. The kernel sends one when all or the interface
+	// says so, and IPv6 reads accept_redirects of the interface alone, so
+	// these two are set on every interface, those that appear later too:
+	// systemd-sysctl applies a pattern to each as it comes.
+	"net/ipv4/conf/*/send_redirects":   "0",
+	"net/ipv6/conf/*/accept_redirects": "0",
+	"net/ipv4/tcp_syncookies":          "1",
 }
 
 // Tuning holds host settings that suit an appliance rather than a desktop.
@@ -204,19 +208,25 @@ func (p Proc) root() string {
 }
 
 // Apply implements Applier. Missing keys (a kernel without IPv6, say) are
-// skipped; other errors are reported together.
+// skipped; other errors are reported together. A key with a * is written
+// wherever it matches.
 func (p Proc) Apply(s Settings) error {
 	want := All()
 	maps.Copy(want, conntrack(s))
 	var errs []error
 	for key, value := range want {
-		path := filepath.Join(p.root(), key)
-		err := os.WriteFile(path, []byte(value+"\n"), 0o644) //nolint:gosec // sysfs files, mode is ignored
-		if errors.Is(err, os.ErrNotExist) {
-			continue
+		paths := []string{filepath.Join(p.root(), key)}
+		if strings.Contains(key, "*") {
+			paths, _ = filepath.Glob(paths[0])
 		}
-		if err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", key, err))
+		for _, path := range paths {
+			err := os.WriteFile(path, []byte(value+"\n"), 0o644) //nolint:gosec // sysfs files, mode is ignored
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%s: %w", strings.TrimPrefix(path, p.root()+"/"), err))
+			}
 		}
 	}
 	return errors.Join(errs...)

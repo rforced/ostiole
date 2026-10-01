@@ -64,6 +64,40 @@ func TestProcApplyAndPersist(t *testing.T) {
 // The connection ceiling is written only when somebody has asked for a
 // number, and it takes the hash table with it so the chains stay the
 // length the kernel sizes its own for.
+// The kernel sends a redirect when all or the interface says so, and
+// reads an IPv6 interface's accept_redirects alone, so both are set on
+// every interface, and the persisted pattern reaches those that come later.
+func TestRedirectsAreOffOnEveryInterface(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	keys := []string{}
+	for _, iface := range []string{"all", "default", "eth0", "eth0.10", "wg0"} {
+		keys = append(keys, "net/ipv4/conf/"+iface+"/send_redirects", "net/ipv6/conf/"+iface+"/accept_redirects")
+	}
+	for _, k := range keys {
+		p := filepath.Join(root, k)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("1\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := (Proc{Root: root}).Apply(Settings{}); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range keys {
+		if raw, _ := os.ReadFile(filepath.Join(root, k)); strings.TrimSpace(string(raw)) != "0" {
+			t.Errorf("%s = %q", k, raw)
+		}
+	}
+	for _, want := range []string{"net.ipv4.conf.*.send_redirects = 0", "net.ipv6.conf.*.accept_redirects = 0"} {
+		if !strings.Contains(Content(), want+"\n") {
+			t.Errorf("%q missing from the persisted file:\n%s", want, Content())
+		}
+	}
+}
+
 func TestConntrackMax(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
