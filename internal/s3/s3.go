@@ -347,7 +347,12 @@ func (c *Client) attempt(ctx context.Context, r request) ([]byte, error) {
 	if client == nil {
 		client = &http.Client{Timeout: DefaultTimeout}
 	}
-	res, err := client.Do(req)
+	// A redirect is an answer, never followed: a 301 or 302 with a
+	// Location turns an upload into a GET of somewhere else, whose 200
+	// would read as stored.
+	once := *client
+	once.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	res, err := once.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("could not %s: %w", r.op, err)
 	}

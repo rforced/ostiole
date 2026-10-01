@@ -4,7 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -262,6 +265,35 @@ func TestARedirectIsNotASuccess(t *testing.T) {
 	}
 	if _, ok := b.Object("ostiole/copy"); ok {
 		t.Error("a redirected upload was stored")
+	}
+}
+
+// A service, or whatever answers at its name, that redirects an upload
+// with a Location: following it would turn the PUT into a GET and read
+// that GET's 200 as the copy stored.
+func TestARedirectWithALocationIsNotFollowed(t *testing.T) {
+	var followed atomic.Bool
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/elsewhere" {
+			followed.Store(true)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		http.Redirect(w, r, "/elsewhere", http.StatusFound)
+	}))
+	t.Cleanup(srv.Close)
+	u, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &s3.Client{Endpoint: u, Region: "us-west-004", Bucket: "b", KeyID: "key", Secret: "secret", HTTP: srv.Client()}
+	err = c.Put(t.Context(), "ostiole/copy", []byte("x"), "")
+	var serr *s3.Error
+	if !errors.As(err, &serr) || serr.Status != http.StatusFound {
+		t.Fatalf("Put: %v, want the redirect surfaced", err)
+	}
+	if followed.Load() {
+		t.Error("the redirect was followed")
 	}
 }
 
