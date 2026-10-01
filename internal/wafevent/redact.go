@@ -59,25 +59,71 @@ func redactParam(p string) string {
 }
 
 // evidence is how CRS writes what a rule matched: "Matched Data: <match>
-// found within ARGS:access_token: <value>".
-var evidence = regexp.MustCompile(`(?s)^(Matched Data: ).*?( found within )([A-Z_]+):([^:]*): .*$`)
+// found within ARGS:access_token: <value>", or of a variable without
+// names, "... found within REQUEST_URI: <value>".
+var evidence = regexp.MustCompile(`(?s)^(Matched Data: )(.*?)( found within )([A-Z_]+)(?::([^:\s][^:]*))?: (.*)$`)
 
 // pairs are the name=value pairs of a URI or body a rule quotes.
 var pairs = regexp.MustCompile(`([^=&?;\s]+)=([^&;\s]*)`)
 
+// jsonPairs are the "name": "value" pairs of a JSON body a rule quotes,
+// the value perhaps cut off at the end.
+var jsonPairs = regexp.MustCompile(`"((?:[^"\\]|\\.){1,64})"(\s*:\s*)"((?:[^"\\]|\\.)*)("?)`)
+
 func redactData(data string) string {
-	if m := evidence.FindStringSubmatch(data); m != nil && secretVariable(m[3], m[4]) {
-		return m[1] + Redacted + m[2] + m[3] + ":" + m[4] + ": " + Redacted
+	m := evidence.FindStringSubmatch(data)
+	if m == nil {
+		text, _ := redactText(data)
+		return text
 	}
-	data = jwts.ReplaceAllString(data, Redacted)
-	return pairs.ReplaceAllStringFunc(data, redactParam)
+	prefix, match, within, variable, name, value := m[1], m[2], m[3], m[4], m[5], m[6]
+	if name != "" {
+		variable += ":" + name
+	}
+	if secretVariable(m[4], name) {
+		return prefix + Redacted + within + variable + ": " + Redacted
+	}
+	value, secrets := redactText(value)
+	// What matched may be a piece of a value just hidden, or hold it.
+	if match != "" && slices.ContainsFunc(secrets, func(s string) bool {
+		return strings.Contains(s, match) || strings.Contains(match, s)
+	}) {
+		match = Redacted
+	} else {
+		match, _ = redactText(match)
+	}
+	return prefix + match + within + variable + ": " + value
+}
+
+// redactText hides the credentials in what a rule quotes, and returns
+// the values it hid under a credential's name.
+func redactText(s string) (string, []string) {
+	var secrets []string
+	s = pairs.ReplaceAllStringFunc(s, func(p string) string {
+		name, value, _ := strings.Cut(p, "=")
+		if value == "" || !secretName(name) {
+			return p
+		}
+		secrets = append(secrets, value)
+		return name + "=" + Redacted
+	})
+	s = jsonPairs.ReplaceAllStringFunc(s, func(p string) string {
+		g := jsonPairs.FindStringSubmatch(p)
+		if g[3] == "" || !secretName(g[1]) {
+			return p
+		}
+		secrets = append(secrets, g[3])
+		return `"` + g[1] + `"` + g[2] + `"` + Redacted + g[4]
+	})
+	return jwts.ReplaceAllString(s, Redacted), secrets
 }
 
 // secretVariable says whether a rule's variable holds a credential: every
-// cookie, and the parameters and headers named like one.
+// cookie, the parameters and headers named like one, and the text of an
+// XML body, which comes without the names of what it was.
 func secretVariable(variable, name string) bool {
 	switch variable {
-	case "REQUEST_COOKIES":
+	case "REQUEST_COOKIES", "XML":
 		return true
 	case "ARGS", "ARGS_GET", "ARGS_POST", "REQUEST_HEADERS", "MULTIPART_PART_HEADERS":
 		return secretName(name)
@@ -93,7 +139,7 @@ var (
 		"token", "secret", "pass", "apikey", "signature", "credential",
 		"session", "sessid", "auth", "jwt", "bearer", "cookie",
 	}
-	secretEnds = []string{"key", "sig", "pwd", "pin", "otp", "code", "sid", "ticket", "hash"}
+	secretEnds = []string{"key", "sig", "pw", "pwd", "pswd", "pin", "otp", "code", "sid", "ticket", "hash"}
 )
 
 func secretName(name string) bool {
