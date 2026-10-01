@@ -263,7 +263,6 @@ async function readEntries(q, offset, limit) {
       :title="`Entries fetched for ${showing?.name ?? ''}`"
       label="Entries"
       :placeholder="showing?.type === 'ports' ? 'port' : 'address or network'"
-      columns
       :read="readEntries"
     />
   </div>

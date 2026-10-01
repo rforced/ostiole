@@ -8,7 +8,7 @@ import { useAsync } from '@/lib/async'
 import { formatCount } from '@/lib/format'
 
 /** Entries on a page. */
-const PAGE = 100
+const PAGE = 1000
 /** How long typing rests before the router is asked. */
 const SETTLE_MS = 250
 
@@ -23,8 +23,6 @@ const props = defineProps({
   placeholder: { type: String, required: true },
   /** The list's word for what it holds, e.g. Entries. */
   label: { type: String, required: true },
-  /** Short entries, such as addresses, sit in two columns. */
-  columns: { type: Boolean, default: false },
   /**
    * Reads one page: (q, offset, limit) resolving to
    * {total, matches, offset, items, fetchedAt}.
@@ -37,10 +35,20 @@ const query = ref('')
 const page = ref(null)
 /** Which way the list is being paged, for its button's spinner. */
 const going = ref('')
+const list = ref(null)
 
 const load = useAsync(async (offset) => {
   page.value = await props.read(query.value.trim(), offset, PAGE)
 })
+
+// A new page shows from its top, not where the last one was scrolled to.
+watch(
+  page,
+  () => {
+    if (list.value) list.value.scrollTop = 0
+  },
+  { flush: 'post' },
+)
 
 let settle = 0
 watch(query, () => {
@@ -92,11 +100,11 @@ const empty = computed(() => {
       <p v-if="load.error.value" role="alert" class="text-sm text-bad">{{ load.error.value }}</p>
       <ul
         v-if="items.length"
+        ref="list"
         :aria-label="label"
         class="max-h-[50dvh] overflow-y-auto rounded-md border border-line px-3 py-2 font-mono text-code break-all"
-        :class="{ 'gap-x-6 sm:columns-2': columns }"
       >
-        <li v-for="e in items" :key="e" class="break-inside-avoid">{{ e }}</li>
+        <li v-for="e in items" :key="e">{{ e }}</li>
       </ul>
       <p v-else-if="!load.error.value" class="text-ink-muted">{{ empty }}</p>
       <div class="flex flex-wrap items-center gap-3">

@@ -7,7 +7,7 @@ import { useAuthStore } from '@/stores/auth'
 
 vi.mock('@/lib/api', () => ({ api: {}, ApiError: class ApiError extends Error {} }))
 
-const ENTRIES = Array.from({ length: 250 }, (_, i) => `10.0.${Math.floor(i / 100)}.${i % 100}`)
+const ENTRIES = Array.from({ length: 2500 }, (_, i) => `10.0.${Math.floor(i / 100)}.${i % 100}`)
 
 /** Stands in for the router: searches and pages the way it does. */
 function router() {
@@ -30,7 +30,6 @@ async function opened(read) {
       title: 'Entries fetched for drop',
       label: 'Entries',
       placeholder: 'address or network',
-      columns: true,
       read,
     },
     attachTo: document.body,
@@ -55,11 +54,11 @@ describe('ListContentsDialog', () => {
   it('reads the first page when it opens', async () => {
     const read = router()
     await opened(read)
-    expect(read).toHaveBeenCalledWith('', 0, 100)
-    expect(rows()).toHaveLength(100)
+    expect(read).toHaveBeenCalledWith('', 0, 1000)
+    expect(rows()).toHaveLength(1000)
     expect(rows()[0]).toBe('10.0.0.0')
-    expect(document.body.textContent).toContain('250 of 250')
-    expect(document.body.textContent).toContain('1–100 of 250.')
+    expect(document.body.textContent).toContain('2,500 of 2,500')
+    expect(document.body.textContent).toContain('1–1,000 of 2,500.')
     expect(button('Previous')).toBeUndefined()
   })
 
@@ -68,16 +67,25 @@ describe('ListContentsDialog', () => {
     await opened(read)
     button('Next').click()
     await flushPromises()
-    expect(read).toHaveBeenLastCalledWith('', 100, 100)
-    expect(document.body.textContent).toContain('101–200 of 250.')
+    expect(read).toHaveBeenLastCalledWith('', 1000, 1000)
+    expect(document.body.textContent).toContain('1,001–2,000 of 2,500.')
     button('Next').click()
     await flushPromises()
-    expect(rows()).toHaveLength(50)
-    expect(document.body.textContent).toContain('201–250 of 250.')
+    expect(rows()).toHaveLength(500)
+    expect(document.body.textContent).toContain('2,001–2,500 of 2,500.')
     expect(button('Next')).toBeUndefined()
     button('Previous').click()
     await flushPromises()
-    expect(read).toHaveBeenLastCalledWith('', 100, 100)
+    expect(read).toHaveBeenLastCalledWith('', 1000, 1000)
+  })
+
+  it('shows a new page from its top', async () => {
+    await opened(router())
+    const list = document.querySelector('ul[aria-label="Entries"]')
+    list.scrollTop = 5000
+    button('Next').click()
+    await flushPromises()
+    expect(list.scrollTop).toBe(0)
   })
 
   it('asks the router once typing rests, from the first page', async () => {
@@ -92,9 +100,9 @@ describe('ListContentsDialog', () => {
     expect(read).toHaveBeenCalledTimes(2)
     vi.advanceTimersByTime(250)
     await flushPromises()
-    expect(read).toHaveBeenLastCalledWith('10.0.1.', 0, 100)
+    expect(read).toHaveBeenLastCalledWith('10.0.1.', 0, 1000)
     expect(rows()).toHaveLength(100)
-    expect(document.body.textContent).toContain('100 of 250')
+    expect(document.body.textContent).toContain('100 of 2,500')
 
     search().value = 'nowhere'
     search().dispatchEvent(new Event('input'))
