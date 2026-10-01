@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"debug/elf"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -538,6 +539,11 @@ func setupProxy(ctx context.Context, run Runner, o SetupOptions, unitDir string,
 			return err
 		}
 	}
+	// systemd leaves a state directory that exists at the mode it found,
+	// and releases before StateDirectoryMode had it readable by all.
+	if err := os.Chmod(ProxyStateDir, 0o700); err != nil && !errors.Is(err, os.ErrNotExist) { //nolint:gosec // a directory needs its search bit
+		return err
+	}
 	if err := writeFile(filepath.Join(unitDir, ProxyUnit), ProxyUnitContent(bin, dir)); err != nil {
 		return err
 	}
@@ -564,7 +570,9 @@ func grantTraversal(path string, gid int) error {
 // at Info, the requests, and a flood of requests must not take the events
 // down with it. The journal's ceiling bounds what a flood costs. systemd
 // never hands journald an interval of 0, the same as none set, so the burst
-// is set past anything a flood reaches instead.
+// is set past anything a flood reaches instead. What the rest of the router
+// keeps about the network and who is on it, leases and static addresses
+// and every other process's command line, is not the proxy's to read.
 func ProxyUnitContent(binary, dir string) string {
 	return fmt.Sprintf(`[Unit]
 Description=Ostiole reverse proxy
@@ -583,6 +591,7 @@ ExecReload=%[1]s reload --config %[2]s/caddy.json --address unix/%[5]s --force
 Restart=on-failure
 RestartSec=2
 StateDirectory=ostiole-proxy
+StateDirectoryMode=0700
 RuntimeDirectory=ostiole-proxy
 RuntimeDirectoryMode=0750
 AmbientCapabilities=CAP_NET_BIND_SERVICE
@@ -594,6 +603,8 @@ PrivateTmp=yes
 PrivateDevices=yes
 ProtectKernelTunables=yes
 ProtectControlGroups=yes
+ProtectProc=invisible
+InaccessiblePaths=-/etc/dnsmasq.d -/var/lib/dnsmasq -/etc/systemd/network -/run/systemd/netif -/etc/unbound -/etc/chrony -/etc/miniupnpd -/etc/ppp
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 LimitNOFILE=1048576
 LogRateLimitIntervalSec=30s

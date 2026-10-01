@@ -846,6 +846,11 @@ func TestProxyUnitContent(t *testing.T) {
 		"ExecReload=/usr/local/bin/ostiole-proxy reload --config /etc/ostiole/proxy/caddy.json --address unix//run/ostiole-proxy/admin.sock --force",
 		"AmbientCapabilities=CAP_NET_BIND_SERVICE",
 		"ProtectSystem=strict",
+		// Nothing of the LAN's, its leases and names, nor any other
+		// process's command line.
+		"StateDirectoryMode=0700",
+		"ProtectProc=invisible",
+		"InaccessiblePaths=-/etc/dnsmasq.d -/var/lib/dnsmasq -/etc/systemd/network ",
 		// A flood of requests must not have journald drop WAF events.
 		"LogRateLimitIntervalSec=30s",
 		"LogRateLimitBurst=1000000",
