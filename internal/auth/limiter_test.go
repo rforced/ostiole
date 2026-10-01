@@ -2,6 +2,8 @@ package auth
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -11,7 +13,7 @@ import (
 func TestLimiterCountsAnIPv6ClientByItsPrefix(t *testing.T) {
 	t.Parallel()
 	now := time.Now()
-	l := newLimiter(func() time.Time { return now })
+	l := newLimiter("", func() time.Time { return now })
 	for i := range MaxFailures {
 		l.failure(fmt.Sprintf("2001:db8:1:2::%x", i+1))
 	}
@@ -34,7 +36,7 @@ func TestLimiterCountsAnIPv6ClientByItsPrefix(t *testing.T) {
 func TestLimiterShutsOutStrangersDuringAFlood(t *testing.T) {
 	t.Parallel()
 	now := time.Now()
-	l := newLimiter(func() time.Time { return now })
+	l := newLimiter("", func() time.Time { return now })
 	l.success("192.0.2.1")
 	for i := range MaxFailuresAll {
 		l.failure(fmt.Sprintf("2001:db8:%x::1", i))
@@ -48,5 +50,42 @@ func TestLimiterShutsOutStrangersDuringAFlood(t *testing.T) {
 	now = now.Add(FailureWindow + time.Second)
 	if l.blocked("198.51.100.1") {
 		t.Error("still shut out after the window")
+	}
+}
+
+// The addresses that signed in outlive a restart, so a flood that runs
+// across one, or an update in the middle of one, still lets them in.
+func TestLimiterTrustOutlivesARestart(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	now := time.Now()
+	clock := func() time.Time { return now }
+	newLimiter(dir, clock).success("192.0.2.1")
+	newLimiter(dir, clock).success("2001:db8:1:2::7")
+	info, err := os.Stat(filepath.Join(dir, SignInsFile))
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("the file: %v, %v", info, err)
+	}
+
+	now = now.Add(time.Hour)
+	l := newLimiter(dir, clock)
+	for i := range MaxFailuresAll {
+		l.failure(fmt.Sprintf("2001:db8:%x::1", i+100))
+	}
+	if l.blocked("192.0.2.1") || l.blocked("2001:db8:1:2::8") {
+		t.Error("an address that signed in before the restart is shut out")
+	}
+	if !l.blocked("198.51.100.1") {
+		t.Error("a stranger may still try")
+	}
+
+	// Trust lapses as it would have without the restart.
+	now = now.Add(TrustedFor)
+	l = newLimiter(dir, clock)
+	for i := range MaxFailuresAll {
+		l.failure(fmt.Sprintf("2001:db8:%x::1", i+200))
+	}
+	if !l.blocked("192.0.2.1") {
+		t.Error("trust from more than TrustedFor ago survived a restart")
 	}
 }

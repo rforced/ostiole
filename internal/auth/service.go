@@ -98,7 +98,7 @@ func NewService(dir string) (*Service, error) {
 		hashing: make(chan struct{}, hashSlots), hashWait: hashWait,
 	}
 	s.sessions = newSessionStore(dir, func() time.Time { return s.now() })
-	s.limiter = newLimiter(func() time.Time { return s.now() })
+	s.limiter = newLimiter(dir, func() time.Time { return s.now() })
 	if err := s.load(); err != nil {
 		return nil, err
 	}

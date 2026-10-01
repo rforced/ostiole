@@ -1,9 +1,14 @@
 package auth
 
 import (
+	"encoding/json"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/rforced/ostiole/internal/atomicfile"
 )
 
 // Login rate limiting: after MaxFailures failed attempts from one address
@@ -18,6 +23,11 @@ const (
 	TrustedFor     = 30 * 24 * time.Hour
 )
 
+// SignInsFile keeps when each address last signed in, so a restart in the
+// middle of a flood of failed logins does not shut the owner out with
+// everybody else.
+const SignInsFile = "signins.json"
+
 type limiter struct {
 	mu   sync.Mutex
 	hits map[string]*bucket
@@ -25,6 +35,12 @@ type limiter struct {
 	// trusted is when each address last signed in.
 	trusted map[string]time.Time
 	now     func() time.Time
+	// path keeps trusted across a restart; empty keeps it in memory.
+	path string
+}
+
+type signInsFile struct {
+	Addresses map[string]time.Time `json:"addresses"`
 }
 
 type bucket struct {
@@ -32,8 +48,51 @@ type bucket struct {
 	start    time.Time
 }
 
-func newLimiter(now func() time.Time) *limiter {
-	return &limiter{hits: map[string]*bucket{}, trusted: map[string]time.Time{}, now: now}
+// newLimiter keeps its trusted addresses in dir, or in memory when dir is
+// empty.
+func newLimiter(dir string, now func() time.Time) *limiter {
+	l := &limiter{hits: map[string]*bucket{}, trusted: map[string]time.Time{}, now: now}
+	if dir != "" {
+		l.path = filepath.Join(dir, SignInsFile)
+	}
+	l.load()
+	return l
+}
+
+// load reads the addresses that signed in before a restart. A file that
+// will not read costs only that: until they sign in again, they are
+// strangers to a flood.
+func (l *limiter) load() {
+	if l.path == "" {
+		return
+	}
+	raw, err := os.ReadFile(l.path)
+	if err != nil {
+		return
+	}
+	var f signInsFile
+	if json.Unmarshal(raw, &f) != nil {
+		return
+	}
+	now := l.now()
+	for key, last := range f.Addresses {
+		if now.Sub(last) <= TrustedFor {
+			l.trusted[key] = last
+		}
+	}
+}
+
+// persist writes the trusted addresses out, with the lock held. Like the
+// sessions it is best effort: a sign-in does not fail over a full disk.
+func (l *limiter) persist() {
+	if l.path == "" {
+		return
+	}
+	raw, err := json.Marshal(signInsFile{Addresses: l.trusted})
+	if err != nil {
+		return
+	}
+	_ = atomicfile.Write(l.path, raw, 0o600)
 }
 
 // limitKey is what an address is counted as: itself, or its /64.
@@ -111,4 +170,5 @@ func (l *limiter) success(remote string) {
 		}
 	}
 	l.trusted[key] = now
+	l.persist()
 }
