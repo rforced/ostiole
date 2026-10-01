@@ -808,6 +808,61 @@ func TestDNSEnforcementWithoutListsOrServer(t *testing.T) {
 	}
 }
 
+// withVPNZone adds a second internal zone, vpn on eth2, whose clients may
+// go anywhere.
+func withVPNZone(cfg *model.Config) *model.Config {
+	cfg.Zones = append(cfg.Zones, model.Zone{Name: "vpn"})
+	cfg.Interfaces = append(cfg.Interfaces, model.Interface{
+		Name: "eth2", Zone: "vpn", Enabled: true,
+		IPv4: model.IPv4{Mode: model.AddrStatic, Address: "192.168.2.1/24"},
+		IPv6: model.IPv6{Mode: model.AddrNone},
+	})
+	cfg.Rules = append(cfg.Rules, model.Rule{
+		ID: "vpn-out", Enabled: true, Zone: "vpn", Action: model.ActionAccept, Protocol: model.ProtocolAny,
+	})
+	return cfg
+}
+
+// Plain DNS is redirected only where the DNS server listens: anywhere else
+// nothing answers the redirected query, and a client that asked another
+// resolver would lose DNS. The drops stay on every internal zone, since
+// they do not depend on who answers plain DNS.
+func TestDNSIsRedirectedOnlyWhereTheServerListens(t *testing.T) {
+	t.Parallel()
+	cfg := withVPNZone(loadConfig(t, "testdata/dns-blocking.json"))
+	cfg.Services.DNS.Interfaces = []string{"eth1"}
+	got, err := Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`iifname "eth1" meta l4proto { tcp, udp } th dport 53 fib daddr type != local counter redirect to :53 comment "block:dns-redirect"`,
+		`iifname { "eth1", "eth2" } jump block_dns`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("no %s in:\n%s", want, got)
+		}
+	}
+	rows, err := SystemRules(cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range rows {
+		if slices.Contains(row.Keys, "nat_prerouting/block:dns-redirect") && !slices.Equal(row.Zones, []string{"lan"}) {
+			t.Errorf("the redirect is listed on %v, want lan alone", row.Zones)
+		}
+	}
+
+	// Listening on the WAN alone leaves no internal interface to redirect.
+	cfg.Services.DNS.Interfaces = []string{"eth0"}
+	if got, err = Render(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(got, "block:dns-redirect") {
+		t.Errorf("DNS listens on no internal interface but plain DNS is redirected:\n%s", got)
+	}
+}
+
 // A NAT statement ends the chain, so a mapped host has to meet its 1:1
 // rule before the masquerade or an outbound rule can claim it. That holds
 // in every mode, as binat comes first in pf.

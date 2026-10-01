@@ -2,6 +2,7 @@ package nft
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/rforced/ostiole/internal/model"
 )
@@ -140,9 +141,10 @@ func (r *renderer) blockDNSJump() {
 	r.line(fmt.Sprintf("iifname %s jump %s", ifnameSet(ifs), BlockChain))
 }
 
-// dnsRedirect pulls plain DNS from internal zones back to this router,
-// whoever the client meant to ask. It is the last thing in nat_prerouting
-// so that a port forward the operator wrote wins over it.
+// dnsRedirect pulls plain DNS back to this router on the internal
+// interfaces it listens on, whoever the client meant to ask. It is the last
+// thing in nat_prerouting so that a port forward the operator wrote wins
+// over it.
 //
 // Only traffic addressed elsewhere is redirected: a query already sent to
 // this router needs no translation, and leaving it alone keeps the counter
@@ -151,9 +153,9 @@ func (r *renderer) dnsRedirect() {
 	if !r.redirectsDNS() {
 		return
 	}
-	ifs := r.internalInterfaces()
+	ifs := r.redirectInterfaces()
 	if len(ifs) == 0 {
-		r.line("# DNS redirect skipped: no internal interfaces")
+		r.line("# DNS redirect skipped: DNS listens on no internal interface")
 		return
 	}
 	set := ifnameSet(ifs)
@@ -169,4 +171,18 @@ func (r *renderer) dnsRedirect() {
 		Description: "Forward DNS queries to this firewall",
 		Keys:        []string{"nat_prerouting/block:dns-redirect"}, Setting: "enforcement",
 	})
+}
+
+// redirectInterfaces are the internal interfaces the DNS server listens on.
+// A query redirected anywhere else reaches a port nothing answers on, and
+// the client loses the DNS it had.
+func (r *renderer) redirectInterfaces() []string {
+	listens := DNSInterfaces(r.cfg)
+	var out []string
+	for _, name := range r.internalInterfaces() {
+		if slices.Contains(listens, name) {
+			out = append(out, name)
+		}
+	}
+	return out
 }

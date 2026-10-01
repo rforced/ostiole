@@ -97,9 +97,10 @@ type BlockList struct {
 // redirect and the canary need the DNS server on, because both send clients
 // to a resolver here.
 type DNSEnforce struct {
-	// RedirectDNS sends plain DNS from internal zones to this router, whoever
-	// the client meant to ask. It needs the DNS server on: redirected to a
-	// router that is not answering, every client would lose DNS.
+	// RedirectDNS sends plain DNS to this router, whoever the client meant
+	// to ask, on the internal interfaces the DNS server listens on. It needs
+	// the DNS server on: redirected to a router that is not answering, every
+	// client would lose DNS.
 	RedirectDNS bool `json:"redirectDns,omitempty"`
 	// BlockDoT drops DNS over TLS on its own port, which is the easy half
 	// of stopping encrypted DNS.

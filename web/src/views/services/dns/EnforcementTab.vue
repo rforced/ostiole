@@ -47,7 +47,7 @@ const exemptAlias = aliasField('exemptAlias')
         <ToggleRow
           v-model="enforce.redirectDns"
           label="Send all plain DNS to this router"
-          hint="Queries sent to any other resolver are answered by this router instead."
+          hint="Queries sent to any other resolver are answered by this router instead, on the interfaces it listens on."
         />
         <ToggleRow
           v-model="enforce.blockDot"
