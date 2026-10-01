@@ -183,8 +183,8 @@ type WAFProfile struct {
 	// Applications names the exclusion sets loaded: wordpress, nextcloud,
 	// phpbb, xenforo, vaultwarden, jellyfin.
 	Applications []string `json:"applications,omitempty"`
-	// BodyLimitMB is how much of a request body is inspected; 0 is 12.
-	// The rest passes uninspected.
+	// BodyLimitMB is the largest request body taken, all of it inspected;
+	// 0 is 12. A larger one is refused.
 	BodyLimitMB int `json:"bodyLimitMB,omitempty"`
 	// InspectResponses runs the outbound rules on text responses.
 	InspectResponses bool           `json:"inspectResponses,omitempty"`

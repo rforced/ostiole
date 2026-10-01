@@ -132,8 +132,8 @@ function save() {
         </FormField>
         <FormField
           id="waf-body"
-          label="Inspect request body up to"
-          hint="12 MB is the default. The rest passes uninspected."
+          label="Largest request body"
+          hint="12 MB is the default. A larger one is refused, an upload too."
         >
           <input
             id="waf-body"

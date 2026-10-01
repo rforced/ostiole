@@ -502,8 +502,8 @@ func TestProxyRefusesArgumentsPastTheLimit(t *testing.T) {
 
 // A multipart body that repeats a part's header or a parameter, quotes an
 // extended filename or never closes is refused, since backends settle
-// those differently. An upload cut at the body limit is not: the part up to
-// the limit is read and the rest let through.
+// those differently. So is any body past the limit, an upload or padding
+// in front of an attack the WAF would otherwise never read.
 func TestProxyRefusesMalformedMultipartBodies(t *testing.T) {
 	t.Parallel()
 	bin := sidecar(t)
@@ -527,7 +527,7 @@ func TestProxyRefusesMalformedMultipartBodies(t *testing.T) {
 		status     int
 	}{
 		{"/upload", part(`form-data; name="f"; filename="photo.jpg"`, photo) + part(`form-data; name="title"`, "Holiday") + end, http.StatusOK},
-		{"/long", part(`form-data; name="f"; filename="photo.jpg"`, strings.Repeat("A", 2<<20)) + end, http.StatusOK},
+		{"/long", part(`form-data; name="f"; filename="photo.jpg"`, strings.Repeat("A", 2<<20)) + end, http.StatusForbidden},
 		{"/two-names", part(`form-data; name="f"; filename="photo.jpg"; filename="photo.png"`, photo) + end, http.StatusForbidden},
 		{"/two-headers", "--XyZ\r\nContent-Disposition: form-data; name=\"f\"; filename=\"photo.jpg\"\r\n" +
 			"Content-Disposition: form-data; name=\"f\"; filename=\"photo.png\"\r\n\r\n" + photo + "\r\n" + end, http.StatusForbidden},
@@ -543,7 +543,11 @@ func TestProxyRefusesMalformedMultipartBodies(t *testing.T) {
 			return findEvent(out, func(ev wafevent.Event) bool { return ev.URI == path })
 		}
 	}
-	refused := []string{"/two-names", "/two-headers", "/quoted", "/unclosed"}
+	padded := `{"pad": "` + strings.Repeat("A", 2<<20) + `", "q": "' or 1=1 union select password from users--"}`
+	if got := post(t, plain, site+"/padded", "application/json", padded); got != http.StatusForbidden {
+		t.Errorf("/padded: status %d, want 403", got)
+	}
+	refused := []string{"/two-names", "/two-headers", "/quoted", "/unclosed", "/long", "/padded"}
 	waitFor(t, "the events", func() bool {
 		for _, path := range refused {
 			if _, ok := event(path)(); !ok {
@@ -564,10 +568,15 @@ func TestProxyRefusesMalformedMultipartBodies(t *testing.T) {
 			t.Errorf("%s was refused by %+v", path, ev.Rules)
 		}
 	}
-	for _, path := range []string{"/upload", "/long"} {
-		if ev, ok := event(path)(); ok {
-			t.Errorf("%s matched %+v", path, ev.Rules)
+	for _, path := range []string{"/long", "/padded"} {
+		if ev, _ := event(path)(); !slices.ContainsFunc(ev.Rules, func(h wafevent.Hit) bool {
+			return h.Message == "Request body larger than the limit"
+		}) {
+			t.Errorf("%s was refused by %+v", path, ev.Rules)
 		}
+	}
+	if ev, ok := event("/upload")(); ok {
+		t.Errorf("/upload matched %+v", ev.Rules)
 	}
 }
 
