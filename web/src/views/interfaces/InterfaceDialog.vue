@@ -6,6 +6,7 @@ import AppNotice from '@/components/AppNotice.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import ZoneField from '@/components/ZoneField.vue'
+import { ADMIN_ONLY, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
@@ -18,8 +19,18 @@ const open = defineModel('open', { type: Boolean, default: false })
 const emit = defineEmits(['saved'])
 
 const config = useConfigStore()
+const auth = useAuthStore()
 const form = ref(blank())
 const zoneField = ref(null)
+
+/**
+ * Switching an interface on or off in a zone with anti-lockout changes
+ * where the router is managed from, which only an admin may.
+ */
+const enabledLocked = computed(() => {
+  const zone = config.interfaces.find((i) => i.name === form.value.name)?.zone
+  return auth.isOperator && config.zones.some((z) => z.name === zone && z.antiLockout)
+})
 
 function blank() {
   return {
@@ -198,7 +209,12 @@ function save() {
         <ZoneField id="if-zone" ref="zoneField" v-model="form.zone" :iface="form.name" />
       </div>
 
-      <ToggleRow v-model="form.enabled" label="Enabled" />
+      <ToggleRow
+        v-model="form.enabled"
+        label="Enabled"
+        :disabled="enabledLocked"
+        :hint="enabledLocked ? ADMIN_ONLY : ''"
+      />
 
       <p v-if="daemonOwned" class="text-sm text-ink-muted">
         The tailnet gives this interface its addresses and its MTU. Its settings are on

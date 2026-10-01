@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import InterfaceDialog from '@/views/interfaces/InterfaceDialog.vue'
 
@@ -82,5 +83,37 @@ describe('InterfaceDialog MTU', () => {
     // 9000 is the parent's MTU, so it is the default here rather than
     // drift worth warning about.
     expect(wrapper.text()).not.toContain('is running at')
+  })
+})
+
+// Switching an interface on or off in an anti-lockout zone changes where
+// the router is managed from, which is the admin's call.
+describe('InterfaceDialog anti-lockout', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  function enabled(role, zone) {
+    useAuthStore().user = { username: role, role }
+    useConfigStore().replaceDraft({
+      version: 12,
+      zones: [{ name: 'lan', antiLockout: true }, { name: 'dmz' }],
+      interfaces: [iface({ zone })],
+      rules: [],
+    })
+    const wrapper = mount(InterfaceDialog, {
+      props: { open: true, iface: iface({ zone }) },
+      global: { stubs },
+    })
+    return wrapper
+      .findAll('input[type="checkbox"]')
+      .find((i) => i.element.parentElement.textContent.trim().startsWith('Enabled'))
+  }
+
+  it('keeps it from an operator', () => {
+    expect(enabled('operator', 'lan').attributes('disabled')).toBeDefined()
+  })
+
+  it('leaves it to an operator in any other zone, and to an admin', () => {
+    expect(enabled('operator', 'dmz').attributes('disabled')).toBeUndefined()
+    expect(enabled('admin', 'lan').attributes('disabled')).toBeUndefined()
   })
 })

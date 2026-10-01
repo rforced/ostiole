@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
 /**
@@ -27,6 +28,7 @@ const props = defineProps({
 })
 
 const config = useConfigStore()
+const auth = useAuthStore()
 const newName = ref(props.suggested)
 const renamed = ref(false)
 const newExternal = ref(false)
@@ -40,6 +42,21 @@ watch(
 )
 
 const creating = computed(() => zone.value === NEW_ZONE)
+
+/**
+ * The interfaces in a zone with anti-lockout are where the router is
+ * managed from, which is an admin's call: an operator moves none into such
+ * a zone or out of one, as the server would refuse at apply.
+ */
+const guarded = (name) => config.zones.some((z) => z.name === name && z.antiLockout)
+const current = computed(() => config.interfaces.find((i) => i.name === props.iface)?.zone ?? '')
+const pinned = computed(() => auth.isOperator && guarded(current.value))
+const barred = (name) => auth.isOperator && guarded(name) && name !== current.value
+const hint = computed(() =>
+  auth.isOperator && config.zones.some((z) => z.antiLockout)
+    ? 'Firewall rules match on zones. Only an admin moves an interface into or out of one with anti-lockout.'
+    : 'Firewall rules match on zones. Interfaces in the same zone share one rule list.',
+)
 const mates = computed(() =>
   config.interfaces
     .filter((i) => i.name !== props.iface && i.zone && i.zone === zone.value)
@@ -79,14 +96,12 @@ export const NEW_ZONE = '+new'
 </script>
 
 <template>
-  <FormField
-    :id="id"
-    label="Zone"
-    hint="Firewall rules match on zones. Interfaces in the same zone share one rule list."
-  >
-    <select :id="id" v-model="zone" class="input">
+  <FormField :id="id" label="Zone" :hint="hint">
+    <select :id="id" v-model="zone" class="input" :disabled="pinned">
       <option value="">Unassigned (traffic dropped)</option>
-      <option v-for="z in config.zones" :key="z.name" :value="z.name">{{ z.name }}</option>
+      <option v-for="z in config.zones" :key="z.name" :value="z.name" :disabled="barred(z.name)">
+        {{ z.name }}
+      </option>
       <option :value="NEW_ZONE">New zone…</option>
     </select>
   </FormField>

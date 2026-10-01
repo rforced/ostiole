@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"maps"
+	"slices"
 )
 
 // AdminChanges names what in the change from old to next only an
@@ -38,7 +39,7 @@ func AdminChanges(old, next *Config) []string {
 		om.Certificate != nm.Certificate {
 		out = append(out, "management access")
 	}
-	if !maps.Equal(antiLockout(old), antiLockout(next)) {
+	if !maps.EqualFunc(antiLockout(old), antiLockout(next), slices.Equal) {
 		out = append(out, "anti-lockout")
 	}
 	return out
@@ -73,11 +74,14 @@ func programProviders(cfg *Config) map[string]DNSProvider {
 	return out
 }
 
-func antiLockout(cfg *Config) map[string]bool {
-	out := map[string]bool{}
+// antiLockout keys the interfaces the management ports stay open on by
+// their zone: the zones with anti-lockout, and which interfaces are in
+// them, decide alike who reaches the router to manage it.
+func antiLockout(cfg *Config) map[string][]string {
+	out := map[string][]string{}
 	for _, z := range cfg.Zones {
 		if z.AntiLockout {
-			out[z.Name] = true
+			out[z.Name] = slices.Sorted(slices.Values(cfg.ZoneInterfaces(z.Name)))
 		}
 	}
 	return out

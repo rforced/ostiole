@@ -63,6 +63,18 @@ func TestAdminChanges(t *testing.T) {
 		{"the web port", func(c *Config) { c.System.Management.WebPort = 8443 }, []string{"management access"}},
 		{"anti-lockout on the wan", func(c *Config) { c.Zones[0].AntiLockout = true }, []string{"anti-lockout"}},
 		{"anti-lockout off the lan", func(c *Config) { c.Zones[1].AntiLockout = false }, []string{"anti-lockout"}},
+		{"the wan moved into the anti-lockout zone", func(c *Config) { c.Interfaces[1].Zone = "lan" }, []string{"anti-lockout"}},
+		{"a new interface in the anti-lockout zone", func(c *Config) {
+			c.Interfaces = append(c.Interfaces, Interface{Name: "eth2", Zone: "lan", Enabled: true})
+		}, []string{"anti-lockout"}},
+		{"the lan switched off", func(c *Config) { c.Interfaces[0].Enabled = false }, []string{"anti-lockout"}},
+		{"a new interface switched off in it", func(c *Config) {
+			c.Interfaces = append(c.Interfaces, Interface{Name: "eth2", Zone: "lan"})
+		}, nil},
+		{"a new interface elsewhere", func(c *Config) {
+			c.Zones = append(c.Zones, Zone{Name: "dmz"})
+			c.Interfaces = append(c.Interfaces, Interface{Name: "eth2", Zone: "dmz", Enabled: true})
+		}, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
