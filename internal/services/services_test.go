@@ -126,6 +126,24 @@ func TestRenderGolden(t *testing.T) {
 
 // The unbound configuration is golden-tested on the inputs that ask for a
 // validating resolver; the others must produce no files at all.
+// A resolver reaches dnsmasq's line as an address and a port, however it
+// was typed: validation reads " 192.0.2.53 # 5353 " as one, and dnsmasq
+// would not.
+func TestDnsmasqServerIsWrittenFromItsParsedForm(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct{ in, want string }{
+		{"192.0.2.53", "192.0.2.53"},
+		{" 192.0.2.53 # 5353 ", "192.0.2.53#5353"},
+		{"192.0.2.53#53", "192.0.2.53"},
+		{"2001:DB8::53", "2001:db8::53"},
+		{"fe80::1%eth0", "fe80::1%eth0"},
+	} {
+		if got := dnsmasqServer(c.in); got != c.want {
+			t.Errorf("%q became %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
 func TestRenderUnboundGolden(t *testing.T) {
 	t.Parallel()
 	inputs, _ := filepath.Glob("testdata/*.json")

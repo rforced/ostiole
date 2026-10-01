@@ -784,6 +784,8 @@ func (v *validator) services(c *Config, ifaces, zones map[string]bool) {
 		}
 		if l.Hostname != "" && !hostnameRe.MatchString(l.Hostname) {
 			v.add(path+".hostname", "%q is not a valid hostname", l.Hostname)
+		} else if dhcpHostWord(l.Hostname) {
+			v.add(path+".hostname", "%q is read as something else in a static lease: an address, a lease time or ignore", l.Hostname)
 		}
 	}
 	dns := c.Services.DNS
@@ -3012,6 +3014,23 @@ func (v *validator) aliasSelect(path string, a Alias) {
 	if len(fields) > MaxSelectFields {
 		v.add(path+".select", "conditions on at most %d different fields", MaxSelectFields)
 	}
+}
+
+// dnsmasqTimeRe is anything dnsmasq reads as a lease time: seconds, or a
+// number of seconds, minutes, hours, days or weeks.
+var dnsmasqTimeRe = regexp.MustCompile(`^[0-9]+[smhdwSMHDW]?$`)
+
+// dhcpHostWord says whether dnsmasq reads name in a dhcp-host line as
+// something other than a name, a line it has no way to quote: an address,
+// a lease time like 12h or infinite, or ignore, which turns the device
+// away.
+func dhcpHostWord(name string) bool {
+	switch strings.ToLower(name) {
+	case "ignore", "infinite":
+		return true
+	}
+	_, err := netip.ParseAddr(name)
+	return err == nil || dnsmasqTimeRe.MatchString(name)
 }
 
 func (v *validator) system(s *System) {

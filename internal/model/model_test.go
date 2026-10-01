@@ -303,7 +303,11 @@ func TestValidateServices(t *testing.T) {
 				{Interface: "eth0", Enabled: true, RangeStart: "1.1.1.1", RangeEnd: "1.1.1.2"},
 				{Interface: "ghost", Enabled: true},
 			},
-			StaticLeases: []StaticLease{{MAC: "nope", IP: "2001:db8::1", Hostname: "bad host"}, {MAC: "AA:bb:cc:dd:ee:ff", IP: "192.168.1.9"}, {MAC: "aa:bb:cc:dd:ee:ff", IP: "192.168.1.10"}},
+			StaticLeases: []StaticLease{{MAC: "nope", IP: "2001:db8::1", Hostname: "bad host"}, {MAC: "AA:bb:cc:dd:ee:ff", IP: "192.168.1.9"}, {MAC: "aa:bb:cc:dd:ee:ff", IP: "192.168.1.10"},
+				// What dnsmasq reads as an address, ignore and a lease time.
+				{MAC: "02:00:00:00:00:01", Hostname: "192.168.1.30"}, {MAC: "02:00:00:00:00:02", Hostname: "ignore"},
+				{MAC: "02:00:00:00:00:03", Hostname: "12h"}, {MAC: "02:00:00:00:00:04", Hostname: "Infinite"},
+				{MAC: "02:00:00:00:00:05", Hostname: "printer-2"}, {MAC: "02:00:00:00:00:06", Hostname: "12h-clock"}},
 		},
 		DNS: DNSServer{Enabled: true, Interfaces: []string{"nope"}, Upstreams: []string{"x"}, Domain: "bad domain", HostOverrides: []HostOverride{{Hostname: "a", IP: "1.1.1.1"}, {Hostname: "A", IP: "x"}, {Hostname: "-", IP: "1.1.1.1"}}},
 	}
@@ -321,12 +325,18 @@ func TestValidateServices(t *testing.T) {
 		"services.dhcp.servers[0].dns[0]", "services.dhcp.servers[0].domain",
 		"services.dhcp.servers[1].interface", "services.dhcp.servers[2].interface",
 		"services.dhcp.staticLeases[0].mac", "services.dhcp.staticLeases[0].ip", "services.dhcp.staticLeases[0].hostname",
-		"services.dhcp.staticLeases[2].mac",
+		"services.dhcp.staticLeases[2].mac", "services.dhcp.staticLeases[3].hostname", "services.dhcp.staticLeases[4].hostname",
+		"services.dhcp.staticLeases[5].hostname", "services.dhcp.staticLeases[6].hostname",
 		"services.dns.interfaces[0]", "services.dns.upstreams[0]", "services.dns.domain",
 		"services.dns.hostOverrides[1].hostname", "services.dns.hostOverrides[1].ip", "services.dns.hostOverrides[2].hostname",
 	} {
 		if !got[p] {
 			t.Errorf("missing issue at %s (have %v)", p, ve.Issues)
+		}
+	}
+	for _, p := range []string{"services.dhcp.staticLeases[7].hostname", "services.dhcp.staticLeases[8].hostname"} {
+		if got[p] {
+			t.Errorf("an ordinary name refused at %s", p)
 		}
 	}
 	cfg.Services.DNS = DNSServer{Enabled: true}

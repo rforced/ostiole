@@ -193,7 +193,7 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 		sort.Slice(delegated, func(i, j int) bool { return delegated[i].Domain < delegated[j].Domain })
 		for _, d := range delegated {
 			for _, s := range d.Servers {
-				fmt.Fprintf(&b, "server=/%s/%s\n", model.NormalizeDomain(d.Domain), strings.TrimSpace(s))
+				fmt.Fprintf(&b, "server=/%s/%s\n", model.NormalizeDomain(d.Domain), dnsmasqServer(s))
 			}
 		}
 		// MagicDNS answers on the tailnet's own resolver, which the router
@@ -666,6 +666,19 @@ func (d *Dnsmasq) Reload(ctx context.Context) error {
 // writeFile replaces path, atomically where the filesystem allows it.
 // Generated service files are world-readable: dnsmasq and unbound read them
 // after dropping privileges.
+// dnsmasqServer writes a resolver from its parsed form rather than as it
+// was typed, so nothing but an address and a port reaches the line.
+func dnsmasqServer(s string) string {
+	ap, err := model.ParseDNSServer(s)
+	if err != nil {
+		return strings.TrimSpace(s)
+	}
+	if ap.Port() == 53 {
+		return ap.Addr().String()
+	}
+	return fmt.Sprintf("%s#%d", ap.Addr(), ap.Port())
+}
+
 func writeFile(path, content string) error { return writeMode(path, content, 0o644) }
 
 // writeSecretFile does the same for a file nobody but root should read,
