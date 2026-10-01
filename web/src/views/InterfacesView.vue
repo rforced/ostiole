@@ -5,6 +5,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 
 import AppTabs from '@/components/AppTabs.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import LinkErrors from '@/components/LinkErrors.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -291,6 +292,7 @@ function editZone(z) {
                   <span v-else-if="row.live.up" class="badge badge-warn">no carrier</span>
                   <!-- Down is a fault on a link the router is meant to use. -->
                   <span v-else class="badge" :class="{ 'badge-warn': row.cfg?.enabled }">down</span>
+                  <LinkErrors :link="row.live" />
                 </td>
                 <td class="font-mono text-code" data-label="Addresses">
                   {{ row.live?.addresses.join(' ') || '—' }}

@@ -1,8 +1,9 @@
 <script setup>
 import { ArrowDown, ArrowUp } from 'lucide-vue-next'
 
+import LinkErrors from '@/components/LinkErrors.vue'
 import SectionCard from '@/components/SectionCard.vue'
-import { formatBytes, formatCount, formatRate } from '@/lib/format'
+import { formatBytes, formatRate } from '@/lib/format'
 
 defineProps({
   /** Interface summaries from GET /overview. */
@@ -26,13 +27,6 @@ function addressing(l) {
 /** Static addresses the configuration asks for that the kernel does not have. */
 function pending(l) {
   return (l.configuredAddresses ?? []).filter((a) => !(l.addresses ?? []).includes(a))
-}
-
-/** Errors since the link came up, or nothing when there are none. */
-function faults(l) {
-  const errors = (l.rxErrors ?? 0) + (l.txErrors ?? 0)
-  if (!errors) return ''
-  return `${formatCount(errors)} error${errors === 1 ? '' : 's'}`
 }
 </script>
 
@@ -93,9 +87,7 @@ function faults(l) {
             <span v-else-if="l.up" class="badge badge-warn">no carrier</span>
             <!-- Down is a fault on a link the router is meant to use. -->
             <span v-else class="badge" :class="{ 'badge-warn': l.configured }">down</span>
-            <div v-if="faults(l)" class="mt-1 text-warn">
-              {{ faults(l) }}
-            </div>
+            <LinkErrors :link="l" />
           </td>
           <td class="font-mono text-code" data-label="Addresses">
             <div v-for="a in l.addresses" :key="a">{{ a }}</div>

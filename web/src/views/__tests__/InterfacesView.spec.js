@@ -128,6 +128,34 @@ describe('InterfacesView', () => {
     expect(rowFor(wrapper, 'ap0').text()).toContain('network "ostiole-lan" on wlp3s0')
   })
 
+  // The router counts a link's errors over the last 72 hours; a total
+  // since boot would never go away.
+  it('shows a link’s recent errors under its state', async () => {
+    const config = useConfigStore()
+    config.draft = draft()
+    config.loaded = true
+    api.interfaces.live.mockResolvedValue([
+      { name: 'eth1', index: 2, kind: 'ether', up: true, carrier: true, addresses: [] },
+      {
+        name: 'wg0',
+        index: 3,
+        kind: 'wireguard',
+        up: true,
+        carrier: true,
+        addresses: [],
+        rxErrors: 2,
+        txErrors: 1,
+      },
+    ])
+    const wrapper = mount(InterfacesView, { global: { stubs } })
+    await flushPromises()
+
+    const link = rowFor(wrapper, 'wg0').find('td[data-label="Link"]')
+    expect(link.text()).toContain('up')
+    expect(link.text()).toContain('3 errors in the last 72\u00a0hours')
+    expect(rowFor(wrapper, 'eth1').text()).not.toContain('error')
+  })
+
   // A WAN that will not come up used to mean `networkctl renew` over SSH.
   // The button is only where there is a lease to renew: a static LAN has
   // none, and an interface the kernel does not have yet cannot be asked.

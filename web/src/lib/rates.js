@@ -1,7 +1,7 @@
 /**
  * Turns the byte counters of successive interface samples into bit
- * rates. The kernel only counts bytes since a link came up, so a rate
- * needs two readings and the time between them.
+ * rates. The kernel gives totals, so a rate needs two readings and the
+ * time between them.
  */
 
 /** Two samples closer than this measure jitter, not traffic. */
