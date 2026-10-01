@@ -107,11 +107,9 @@ type LinkSummary struct {
 	StaticAddresses []string `json:"configuredAddresses,omitempty"`
 	RXBytes         uint64   `json:"rxBytes"`
 	TXBytes         uint64   `json:"txBytes"`
-	// Errors and drops since the link came up; shown only when not zero.
-	RXErrors  uint64 `json:"rxErrors,omitempty"`
-	TXErrors  uint64 `json:"txErrors,omitempty"`
-	RXDropped uint64 `json:"rxDropped,omitempty"`
-	TXDropped uint64 `json:"txDropped,omitempty"`
+	// Errors since the link came up; shown only when not zero.
+	RXErrors uint64 `json:"rxErrors,omitempty"`
+	TXErrors uint64 `json:"txErrors,omitempty"`
 }
 
 // RuleCounter is one configured rule with its kernel counter.
@@ -394,7 +392,6 @@ func withLive(s LinkSummary, l network.Link, present bool) LinkSummary {
 	s.MAC = l.MAC
 	s.RXBytes, s.TXBytes = l.RXBytes, l.TXBytes
 	s.RXErrors, s.TXErrors = l.RXErrors, l.TXErrors
-	s.RXDropped, s.TXDropped = l.RXDropped, l.TXDropped
 	if l.VLANID != 0 {
 		s.VLANID = l.VLANID
 	}

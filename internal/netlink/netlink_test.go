@@ -287,7 +287,7 @@ func TestALinkReadsItsKindAndCounters(t *testing.T) {
 		l.OperState != OperUp || l.Flags != net.FlagUp|net.FlagLoopback {
 		t.Errorf("link = %+v", l)
 	}
-	if s := l.Statistics; s == nil || s.RxPackets != 1 || s.RxBytes != 3 || s.TxDropped != 8 {
+	if s := l.Statistics; s == nil || s.RxPackets != 1 || s.RxBytes != 3 || s.TxErrors != 6 {
 		t.Errorf("statistics = %+v", l.Statistics)
 	}
 }

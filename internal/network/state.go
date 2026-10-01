@@ -36,17 +36,15 @@ type Link struct {
 	// how a seeded interface knows to ask for DHCP instead of pinning
 	// somebody else's lease as a static address.
 	DynamicAddresses []string `json:"dynamicAddresses,omitempty"`
-	// Traffic counted by the kernel since the link came up.
+	// Traffic the kernel counted since it made the link.
 	RXBytes   uint64 `json:"rxBytes"`
 	TXBytes   uint64 `json:"txBytes"`
 	RXPackets uint64 `json:"rxPackets"`
 	TXPackets uint64 `json:"txPackets"`
-	// Errors and drops the kernel counted. Either rising on a wired port
-	// is a bad cable, a duplex mismatch, or a driver that cannot keep up.
-	RXErrors  uint64 `json:"rxErrors,omitempty"`
-	TXErrors  uint64 `json:"txErrors,omitempty"`
-	RXDropped uint64 `json:"rxDropped,omitempty"`
-	TXDropped uint64 `json:"txDropped,omitempty"`
+	// Errors the kernel counted. Either rising on a wired port is a bad
+	// cable, a duplex mismatch, or a driver that cannot keep up.
+	RXErrors uint64 `json:"rxErrors,omitempty"`
+	TXErrors uint64 `json:"txErrors,omitempty"`
 }
 
 // helper reports whether a link is one Ostiole made for itself rather
@@ -140,7 +138,6 @@ func Discover() ([]Link, error) {
 			li.RXBytes, li.TXBytes = s.RxBytes, s.TxBytes
 			li.RXPackets, li.TXPackets = s.RxPackets, s.TxPackets
 			li.RXErrors, li.TXErrors = s.RxErrors, s.TxErrors
-			li.RXDropped, li.TXDropped = s.RxDropped, s.TxDropped
 		}
 		for _, ad := range addrs[l.Index] {
 			li.Addresses = append(li.Addresses, ad.IPNet.String())

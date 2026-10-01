@@ -25,8 +25,8 @@ type Link struct {
 	MasterIndex int
 	OperState   OperState
 	VLANID      int
-	// Statistics are counted since the device came up; nil when the
-	// kernel sent none.
+	// Statistics are counted since the kernel made the device; nil when
+	// it sent none.
 	Statistics *LinkStatistics
 }
 
@@ -50,7 +50,6 @@ type LinkStatistics struct {
 	RxPackets, TxPackets uint64
 	RxBytes, TxBytes     uint64
 	RxErrors, TxErrors   uint64
-	RxDropped, TxDropped uint64
 }
 
 // Links lists every device.
@@ -169,13 +168,13 @@ func parseLink(b []byte) (Link, error) {
 		}
 	}
 	switch {
-	case len(stats64) >= 64:
+	case len(stats64) >= 48:
 		s := LinkStatistics{}
 		for i, f := range s.fields() {
 			*f = native.Uint64(stats64[8*i:])
 		}
 		l.Statistics = &s
-	case len(stats32) >= 32:
+	case len(stats32) >= 24:
 		s := LinkStatistics{}
 		for i, f := range s.fields() {
 			*f = uint64(native.Uint32(stats32[4*i:]))
@@ -195,7 +194,7 @@ func parseLink(b []byte) (Link, error) {
 func (s *LinkStatistics) fields() []*uint64 {
 	return []*uint64{
 		&s.RxPackets, &s.TxPackets, &s.RxBytes, &s.TxBytes,
-		&s.RxErrors, &s.TxErrors, &s.RxDropped, &s.TxDropped,
+		&s.RxErrors, &s.TxErrors,
 	}
 }
 
