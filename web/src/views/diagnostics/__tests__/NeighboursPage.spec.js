@@ -1,6 +1,6 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import { useConfigStore } from '@/stores/config'
@@ -10,6 +10,9 @@ vi.mock('@/lib/api', () => ({
   api: { diagnostics: { neighbours: vi.fn() } },
   ApiError: class ApiError extends Error {},
 }))
+
+// Live reads from the start, so no page outlives its test.
+enableAutoUnmount(afterEach)
 
 const table = [
   {
@@ -107,17 +110,19 @@ describe('NeighboursPage', () => {
     expect(macs).toEqual(['02:00:5e:00:53:10 random', '00:00:5e:00:53:60'])
   })
 
+  // On from the start; off, the table holds still.
   it('reads the tables again while Live is on', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
     try {
       const w = await page()
       const live = w.findAll('button').find((b) => b.text() === 'Live')
-      expect(live.attributes('aria-pressed')).toBe('false')
-      await live.trigger('click')
-      await flushPromises()
+      expect(live.attributes('aria-pressed')).toBe('true')
       vi.advanceTimersByTime(2000)
       await flushPromises()
-      expect(api.diagnostics.neighbours).toHaveBeenCalledTimes(3)
+      expect(api.diagnostics.neighbours).toHaveBeenCalledTimes(2)
+      await live.trigger('click')
+      vi.advanceTimersByTime(6000)
+      expect(api.diagnostics.neighbours).toHaveBeenCalledTimes(2)
     } finally {
       vi.useRealTimers()
     }

@@ -1,9 +1,8 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import LiveButton from '@/components/LiveButton.vue'
 import RandomMacBadge from '@/components/RandomMacBadge.vue'
-import RefreshButton from '@/components/RefreshButton.vue'
 import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
@@ -27,16 +26,15 @@ const LIVE_MS = 2000
 
 const config = useConfigStore()
 const rows = ref([])
-const live = ref(false)
+const live = ref(true)
 
-// Live polls; otherwise the page reads on opening and on Refresh.
 const load = useAsync(
   async () => {
     rows.value = await api.diagnostics.neighbours()
   },
-  { interval: LIVE_MS, autostart: false },
+  // Live owns the poll, and starts on.
+  { interval: LIVE_MS, immediate: true },
 )
-onMounted(load.run)
 watch(live, (on) => {
   if (on) {
     load.run()
@@ -98,11 +96,6 @@ function tone(state) {
       <template #actions>
         <SortSelect :sort="sort" :columns="COLUMNS" />
         <LiveButton v-model="live" :failing="Boolean(load.error.value)" />
-        <RefreshButton
-          :busy="load.busy.value"
-          :updated-at="load.updatedAt.value"
-          @click="load.run"
-        />
       </template>
       <div class="card-strip flex flex-wrap items-center gap-3">
         <SearchBox

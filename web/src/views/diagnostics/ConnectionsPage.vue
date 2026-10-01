@@ -1,8 +1,7 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import LiveButton from '@/components/LiveButton.vue'
-import RefreshButton from '@/components/RefreshButton.vue'
 import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
@@ -34,7 +33,7 @@ const COLUMNS = [
 ]
 
 const result = ref(null)
-const live = ref(false)
+const live = ref(true)
 /**
  * The router filters, since the table runs to hundreds of thousands and
  * only the busiest come back: each word in what a row shows, or a network
@@ -46,11 +45,10 @@ const load = useAsync(
   async () => {
     result.value = await api.diagnostics.states({ q: query.value.trim() })
   },
-  // The poll is opt-in: Live owns it.
-  { interval: POLL_MS, autostart: false },
+  // Live owns the poll, and starts on.
+  { interval: POLL_MS, immediate: true },
 )
 
-onMounted(load.run)
 let settle = 0
 watch(query, () => {
   window.clearTimeout(settle)
@@ -73,7 +71,7 @@ function seconds(ttl) {
   return Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0)
 }
 
-/** The server sends the busiest first, which is what Live keeps to. */
+/** The server sends the busiest first, and the table opens that way. */
 const sort = useSort(
   () => result.value?.states ?? [],
   {
@@ -85,10 +83,7 @@ const sort = useSort(
     traffic: byNumber((s) => s.bytes),
     expires: byNumber((s) => seconds(s.ttl), 'asc'),
   },
-  {
-    by: 'traffic',
-    lock: () => (live.value ? { by: 'traffic', dir: 'desc' } : null),
-  },
+  { by: 'traffic' },
 )
 const states = sort.sorted
 
@@ -128,11 +123,6 @@ function endpoint(address, port) {
       <template #actions>
         <SortSelect :sort="sort" :columns="COLUMNS" />
         <LiveButton v-model="live" :failing="Boolean(load.error.value)" />
-        <RefreshButton
-          :busy="load.busy.value"
-          :updated-at="load.updatedAt.value"
-          @click="load.run()"
-        />
       </template>
       <div class="card-strip space-y-3">
         <SearchBox

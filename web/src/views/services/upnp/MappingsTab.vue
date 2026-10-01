@@ -1,8 +1,7 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import LiveButton from '@/components/LiveButton.vue'
-import RefreshButton from '@/components/RefreshButton.vue'
 import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
@@ -15,16 +14,15 @@ import { byAddress, byNumber, byText, useSort } from '@/lib/sort'
 const LIVE_MS = 2000
 
 const mappings = ref([])
-const live = ref(false)
+const live = ref(true)
 
-// Live polls; otherwise the tab reads on opening and on Refresh.
 const load = useAsync(
   async () => {
     mappings.value = await api.upnp.mappings()
   },
-  { interval: LIVE_MS, autostart: false },
+  // Live owns the poll, and starts on.
+  { interval: LIVE_MS, immediate: true },
 )
-onMounted(load.run)
 watch(live, (on) => {
   if (on) {
     load.run()
@@ -64,11 +62,6 @@ const rows = sort.sorted
     >
       <template #actions>
         <LiveButton v-model="live" :failing="Boolean(load.error.value)" />
-        <RefreshButton
-          :busy="load.busy.value"
-          :updated-at="load.updatedAt.value"
-          @click="load.run"
-        />
       </template>
       <div class="card-strip flex flex-wrap items-center gap-3">
         <SearchBox

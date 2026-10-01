@@ -1,8 +1,8 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
+import LiveButton from '@/components/LiveButton.vue'
 import RandomMacBadge from '@/components/RandomMacBadge.vue'
-import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
@@ -12,18 +12,28 @@ import { formatBytes, formatDuration } from '@/lib/format'
 import { byAddress, byNumber, byText, useSort } from '@/lib/sort'
 import { useConfigStore } from '@/stores/config'
 
-/** How often the stations are read while the tab is shown. */
+/** How often Live reads the stations again. */
 const POLL_MS = 5000
 
 const config = useConfigStore()
 const clients = ref([])
+const live = ref(true)
 
 const load = useAsync(
   async () => {
     clients.value = await api.wireless.clients()
   },
+  // Live owns the poll, and starts on.
   { interval: POLL_MS, immediate: true },
 )
+watch(live, (on) => {
+  if (on) {
+    load.run()
+    load.start()
+  } else {
+    load.stop()
+  }
+})
 
 /** Nothing is meant to be transmitting, so nothing is meant to be here. */
 const nothingRunning = computed(
@@ -60,11 +70,7 @@ const rows = sort.sorted
     <SectionCard title="Clients" :count="clients.length" flush>
       <template #actions>
         <SortSelect :sort="sort" :columns="COLUMNS" />
-        <RefreshButton
-          :busy="load.busy.value"
-          :updated-at="load.updatedAt.value"
-          @click="load.run()"
-        />
+        <LiveButton v-model="live" :failing="Boolean(load.error.value)" />
       </template>
       <div v-if="load.error.value" class="card-strip">
         <p role="alert" class="text-bad">{{ load.error.value }}</p>

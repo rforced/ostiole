@@ -63,9 +63,10 @@ test('the connections and neighbour pages explain themselves, and the filter emp
   await expect(states).toContainText(
     /connection\(s\) tracked|connection table|tracking no connections/,
   )
-  // One search box, which the router answers.
+  // One search box, which the router answers once typing rests.
+  const searched = page.waitForResponse((r) => r.url().endsWith('/api/v1/diagnostics/states?q=tcp'))
   await page.getByPlaceholder('address, network, port, or state').fill('tcp')
-  await page.getByRole('button', { name: 'Refresh' }).click()
+  await searched
   // Either a table or an explanation, never a silently empty panel.
   await expect(states).toContainText(
     /connection\(s\) tracked|connection table|tracking no connections/,

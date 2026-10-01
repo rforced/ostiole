@@ -1,6 +1,6 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import ClientsTab from '@/views/wireless/ClientsTab.vue'
@@ -9,6 +9,9 @@ vi.mock('@/lib/api', () => ({
   api: { wireless: { clients: vi.fn() } },
   ApiError: class ApiError extends Error {},
 }))
+
+// Live reads from the start, so no tab outlives its test.
+enableAutoUnmount(afterEach)
 
 describe('ClientsTab', () => {
   beforeEach(() => setActivePinia(createPinia()))
@@ -41,5 +44,25 @@ describe('ClientsTab', () => {
     expect(macs()).toEqual(['00:11:22:00:00:02', '00:11:22:00:00:03', '00:11:22:00:00:01'])
     await sortBy('Connected')
     expect(macs()).toEqual(['00:11:22:00:00:03', '00:11:22:00:00:01', '00:11:22:00:00:02'])
+  })
+
+  // Clients join and leave on their own; off, the table holds still.
+  it('reads again while Live is on, from the start', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    try {
+      api.wireless.clients.mockResolvedValue([])
+      const wrapper = mount(ClientsTab)
+      await flushPromises()
+      const live = wrapper.findAll('button').find((b) => b.text() === 'Live')
+      expect(live.attributes('aria-pressed')).toBe('true')
+      vi.advanceTimersByTime(5000)
+      await flushPromises()
+      expect(api.wireless.clients).toHaveBeenCalledTimes(2)
+      await live.trigger('click')
+      vi.advanceTimersByTime(15000)
+      expect(api.wireless.clients).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

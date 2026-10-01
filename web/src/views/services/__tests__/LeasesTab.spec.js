@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -16,6 +16,9 @@ vi.mock('@/lib/api', () => ({
 const stubs = {
   AppDialog: { props: ['open', 'title'], template: '<div v-if="open"><slot /></div>' },
 }
+
+// Live reads from the start, so no tab outlives its test.
+enableAutoUnmount(afterEach)
 
 const printer = {
   ip: '192.168.1.50',
@@ -167,17 +170,15 @@ describe('LeasesTab', () => {
 
     const newer = { ...printer, renewed: '2026-09-24T11:00:00Z' }
 
-    it('reads every two seconds and keeps the newest on top', async () => {
+    // On from the start, and every read lands in the order chosen.
+    it('reads every two seconds, in the order chosen', async () => {
       const { wrapper } = await tab([newer, laptop])
-      expect(addresses(wrapper)).toEqual(['192.168.1.9', '192.168.1.50'])
       const live = wrapper.findAll('button').find((b) => b.text() === 'Live')
-      await live.trigger('click')
-      await flushPromises()
       expect(live.attributes('aria-pressed')).toBe('true')
-      expect(api.services.leases).toHaveBeenCalledTimes(2)
+      expect(addresses(wrapper)).toEqual(['192.168.1.9', '192.168.1.50'])
+      await header(wrapper, 'Last renewed').get('button').trigger('click')
       expect(header(wrapper, 'Last renewed').attributes('aria-sort')).toBe('descending')
       expect(addresses(wrapper)).toEqual(['192.168.1.50', '192.168.1.9'])
-      expect(header(wrapper, 'Address').get('button').attributes('disabled')).toBeDefined()
 
       // A lease handed out since lands on top.
       const joined = {
@@ -189,15 +190,15 @@ describe('LeasesTab', () => {
       api.services.leases.mockResolvedValue([newer, laptop, joined])
       vi.advanceTimersByTime(2000)
       await flushPromises()
+      expect(api.services.leases).toHaveBeenCalledTimes(2)
+      expect(live.attributes('aria-pressed')).toBe('true')
       expect(addresses(wrapper)).toEqual(['192.168.1.77', '192.168.1.50', '192.168.1.9'])
 
-      // Off, the table holds its order and the headers sort again.
+      // Off, the table holds still.
       await live.trigger('click')
       vi.advanceTimersByTime(4000)
       await flushPromises()
-      expect(api.services.leases).toHaveBeenCalledTimes(3)
-      expect(addresses(wrapper)).toEqual(['192.168.1.77', '192.168.1.50', '192.168.1.9'])
-      expect(header(wrapper, 'Address').get('button').attributes('disabled')).toBeUndefined()
+      expect(api.services.leases).toHaveBeenCalledTimes(2)
     })
   })
 })

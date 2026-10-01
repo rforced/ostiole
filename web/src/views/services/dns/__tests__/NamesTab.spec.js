@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -10,6 +10,9 @@ vi.mock('@/lib/api', () => ({
   api: { dnsNames: vi.fn(), services: { leases: vi.fn() } },
   ApiError: class ApiError extends Error {},
 }))
+
+// Live reads from the start, so no tab outlives its test.
+enableAutoUnmount(afterEach)
 
 const stubs = {
   ConfirmButton: true,
@@ -151,7 +154,8 @@ describe('NamesTab', () => {
     expect(api.dnsNames).toHaveBeenCalledTimes(2)
   })
 
-  // Devices come and go without the draft changing; Live follows them.
+  // Devices come and go without the draft changing; Live follows them,
+  // from the start.
   it('keeps reading while Live is on', async () => {
     vi.useFakeTimers()
     const config = useConfigStore()
@@ -159,13 +163,13 @@ describe('NamesTab', () => {
     config.loaded = true
     const wrapper = mount(NamesTab, { global: { stubs } })
     await flushPromises()
-    await vi.advanceTimersByTimeAsync(5000)
-    expect(api.dnsNames).toHaveBeenCalledTimes(1)
-
-    await wrapper.get('button[aria-pressed]').trigger('click')
-    await flushPromises()
+    const live = wrapper.get('button[aria-pressed]')
+    expect(live.attributes('aria-pressed')).toBe('true')
     await vi.advanceTimersByTimeAsync(4000)
-    await flushPromises()
-    expect(api.dnsNames.mock.calls.length).toBeGreaterThanOrEqual(3)
+    expect(api.dnsNames).toHaveBeenCalledTimes(3)
+
+    await live.trigger('click')
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(api.dnsNames).toHaveBeenCalledTimes(3)
   })
 })

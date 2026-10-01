@@ -1,6 +1,6 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 
 import { api } from '@/lib/api'
@@ -11,6 +11,9 @@ vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal()
   return { ...mod, api: { ...mod.api, wireguard: { status: vi.fn() }, gateways: vi.fn() } }
 })
+
+// The page reads from the start, so none outlives its test.
+enableAutoUnmount(afterEach)
 
 // The page takes its tabs from the route; there is no router here.
 const tab = ref('tunnels')
@@ -126,6 +129,41 @@ describe('WireguardPage', () => {
     const phone = row(wrapper, 'phone')
     expect(phone.text()).toContain('disabled')
     expect(phone.find('[data-label="Traffic"]').text()).toBe('—')
+  })
+
+  // The page reads on for the Tunnels tab; Live off holds this table.
+  it('holds the peers while Live is off', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    try {
+      tab.value = 'peers'
+      const status = (rxBytes) => [
+        {
+          name: 'wg0',
+          up: true,
+          peers: [{ publicKey: LAPTOP, lastHandshake: ago(30), rxBytes, txBytes: 0 }],
+        },
+      ]
+      api.wireguard.status.mockResolvedValue(status(1500))
+      const wrapper = mountPage()
+      await flushPromises()
+      const traffic = () => row(wrapper, 'laptop').find('[data-label="Traffic"]').text()
+      expect(traffic()).toContain('↓ 1.5 kB')
+      const live = wrapper.findAll('button').find((b) => b.text() === 'Live')
+      expect(live.attributes('aria-pressed')).toBe('true')
+
+      await live.trigger('click')
+      api.wireguard.status.mockResolvedValue(status(3000))
+      vi.advanceTimersByTime(5000)
+      await flushPromises()
+      expect(api.wireguard.status).toHaveBeenCalledTimes(2)
+      expect(traffic()).toContain('↓ 1.5 kB')
+
+      await live.trigger('click')
+      await flushPromises()
+      expect(traffic()).toContain('↓ 3.0 kB')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('shows a network a peer shows under another prefix beside it', async () => {

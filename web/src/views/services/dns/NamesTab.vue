@@ -5,7 +5,6 @@ import { computed, ref, watch } from 'vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import RandomMacBadge from '@/components/RandomMacBadge.vue'
-import RefreshButton from '@/components/RefreshButton.vue'
 import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
@@ -40,7 +39,7 @@ const auth = useAuthStore()
 const config = useConfigStore()
 const dns = computed(() => config.ensureServices().dns)
 const hosts = computed(() => dns.value.hostOverrides ?? [])
-const live = ref(false)
+const live = ref(true)
 
 /**
  * The names the router answers that nobody wrote on this page: static
@@ -142,11 +141,6 @@ function editHost(h) {
       <template #actions>
         <SortSelect :sort="sort" :columns="COLUMNS" />
         <LiveButton v-model="live" :failing="Boolean(derived.error.value)" />
-        <RefreshButton
-          :busy="derived.busy.value"
-          :updated-at="derived.updatedAt.value"
-          @click="derived.run"
-        />
         <button v-if="!auth.readOnly" type="button" class="btn-secondary" @click="addHost">
           <Plus class="size-4" aria-hidden="true" /> Add host
         </button>

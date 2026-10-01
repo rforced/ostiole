@@ -1,9 +1,9 @@
 <script setup>
 import { Plus } from 'lucide-vue-next'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
-import RefreshButton from '@/components/RefreshButton.vue'
+import LiveButton from '@/components/LiveButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
@@ -32,8 +32,19 @@ const rows = computed(() =>
   config.tunnels.flatMap((t) => (t.wireguard.peers ?? []).map((p) => ({ tunnel: t, peer: p }))),
 )
 
+/**
+ * Live, on from the start. The page reads on for the Tunnels tab, so off
+ * holds what the devices said, and when, as it went off.
+ */
+const following = ref(true)
+const held = ref(null)
+watch(following, (on) => {
+  held.value = on ? null : { status: props.live, at: Date.now() }
+  if (on) props.read.run()
+})
+
 /** A row's peer as its device reports it. */
-const seen = (r) => livePeer(props.live, r.tunnel.name, r.peer.publicKey)
+const seen = (r) => livePeer(held.value?.status ?? props.live, r.tunnel.name, r.peer.publicKey)
 
 const COLUMNS = [
   ['peer', 'Peer'],
@@ -86,11 +97,7 @@ function edit(r) {
     <SectionCard title="Peers" :count="rows.length" flush>
       <template #actions>
         <SortSelect :sort="sort" :columns="COLUMNS" />
-        <RefreshButton
-          :busy="read.busy.value"
-          :updated-at="read.updatedAt.value"
-          @click="read.run"
-        />
+        <LiveButton v-model="following" :failing="Boolean(read.error.value)" />
         <button
           v-if="!auth.readOnly"
           type="button"
@@ -140,7 +147,7 @@ function edit(r) {
               </div>
               <span v-if="!r.peer.enabled" class="badge badge-warn">disabled</span>
               <template v-else-if="read.updatedAt.value">
-                <span v-if="connected(seen(r))" class="badge badge-ok">connected</span>
+                <span v-if="connected(seen(r), held?.at)" class="badge badge-ok">connected</span>
                 <span v-else class="badge">quiet</span>
               </template>
               <span v-if="r.peer.presharedKey" class="badge ml-1">PSK</span>

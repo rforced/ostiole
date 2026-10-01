@@ -1,5 +1,5 @@
-import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import PeersTab from '@/views/vpn/tailscale/PeersTab.vue'
@@ -8,6 +8,9 @@ vi.mock('@/lib/api', () => ({
   api: { tailscale: { status: vi.fn() } },
   ApiError: class ApiError extends Error {},
 }))
+
+// Live reads from the start, so no tab outlives its test.
+enableAutoUnmount(afterEach)
 
 const peer = (hostName, over = {}) => ({
   hostName,
@@ -49,5 +52,25 @@ describe('PeersTab', () => {
       'old.tail.ts.net',
       'never.tail.ts.net',
     ])
+  })
+
+  // Peers come and go on the tailnet; off, the table holds still.
+  it('reads again while Live is on, from the start', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    try {
+      api.tailscale.status.mockResolvedValue({ running: true, peers: [peer('up')] })
+      const wrapper = mount(PeersTab)
+      await flushPromises()
+      const live = wrapper.findAll('button').find((b) => b.text() === 'Live')
+      expect(live.attributes('aria-pressed')).toBe('true')
+      vi.advanceTimersByTime(5000)
+      await flushPromises()
+      expect(api.tailscale.status).toHaveBeenCalledTimes(2)
+      await live.trigger('click')
+      vi.advanceTimersByTime(15000)
+      expect(api.tailscale.status).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

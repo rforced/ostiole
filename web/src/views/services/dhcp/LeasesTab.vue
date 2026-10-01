@@ -1,9 +1,8 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import LiveButton from '@/components/LiveButton.vue'
 import RandomMacBadge from '@/components/RandomMacBadge.vue'
-import RefreshButton from '@/components/RefreshButton.vue'
 import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
@@ -33,7 +32,7 @@ const COLUMNS = [
 const auth = useAuthStore()
 const config = useConfigStore()
 const leases = ref([])
-const live = ref(false)
+const live = ref(true)
 const open = ref(false)
 const editing = ref(null)
 const prefill = ref(null)
@@ -63,14 +62,13 @@ function makeStatic(l) {
   open.value = true
 }
 
-// Live polls; otherwise the tab reads on opening and on Refresh.
 const load = useAsync(
   async () => {
     leases.value = await api.services.leases()
   },
-  { interval: LIVE_MS, autostart: false },
+  // Live owns the poll, and starts on.
+  { interval: LIVE_MS, immediate: true },
 )
-onMounted(load.run)
 watch(live, (on) => {
   if (on) {
     load.run()
@@ -85,7 +83,7 @@ const { query, shown } = useSearch(leases, (l) => ({
   macs: [l.mac],
 }))
 
-/** Live shows the newest leases on top, as they are handed out. */
+/** Last renewed, newest first, shows leases as they are handed out. */
 const sort = useSort(
   shown,
   {
@@ -97,11 +95,7 @@ const sort = useSort(
     renewed: byTime((l) => l.renewed),
     expires: byTime((l) => l.expires, 'asc'),
   },
-  {
-    by: 'address',
-    tie: 'address',
-    lock: () => (live.value ? { by: 'renewed', dir: 'desc' } : null),
-  },
+  { by: 'address', tie: 'address' },
 )
 const rows = sort.sorted
 
@@ -122,11 +116,6 @@ const empty = computed(() => {
       <template #actions>
         <SortSelect :sort="sort" :columns="COLUMNS" />
         <LiveButton v-model="live" :failing="Boolean(load.error.value)" />
-        <RefreshButton
-          :busy="load.busy.value"
-          :updated-at="load.updatedAt.value"
-          @click="load.run"
-        />
       </template>
       <div class="card-strip">
         <SearchBox

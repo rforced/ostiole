@@ -1,7 +1,7 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
-import RefreshButton from '@/components/RefreshButton.vue'
+import LiveButton from '@/components/LiveButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
@@ -10,17 +10,27 @@ import { useAsync } from '@/lib/async'
 import { formatBytes } from '@/lib/format'
 import { byAddress, byText, byTime, useSort } from '@/lib/sort'
 
-/** How often the peers are read while the tab is shown. */
+/** How often Live reads the peers again. */
 const POLL_MS = 5000
 
 const status = ref(null)
+const live = ref(true)
 
 const load = useAsync(
   async () => {
     status.value = await api.tailscale.status()
   },
+  // Live owns the poll, and starts on.
   { interval: POLL_MS, immediate: true },
 )
+watch(live, (on) => {
+  if (on) {
+    load.run()
+    load.start()
+  } else {
+    load.stop()
+  }
+})
 
 /** A name with the tailnet suffix on it reads better without the dot. */
 function name(peer) {
@@ -66,11 +76,7 @@ const peers = sort.sorted
     <SectionCard title="Peers" :count="status?.running ? status.peers.length : 0" flush>
       <template #actions>
         <SortSelect :sort="sort" :columns="COLUMNS" />
-        <RefreshButton
-          :busy="load.busy.value"
-          :updated-at="load.updatedAt.value"
-          @click="load.run"
-        />
+        <LiveButton v-model="live" :failing="Boolean(load.error.value)" />
       </template>
       <div v-if="load.error.value" class="card-strip">
         <p role="alert" class="text-bad">{{ load.error.value }}</p>

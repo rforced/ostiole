@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
@@ -8,6 +8,9 @@ vi.mock('@/lib/api', () => ({
   api: { upnp: { mappings: vi.fn() } },
   ApiError: class ApiError extends Error {},
 }))
+
+// Live reads from the start, so no tab outlives its test.
+enableAutoUnmount(afterEach)
 
 describe('MappingsTab', () => {
   it('sorts ports as numbers and clients as addresses', async () => {
@@ -55,20 +58,19 @@ describe('MappingsTab', () => {
   })
 
   // Clients open and close their mappings on their own, so Live reads the
-  // list again every few seconds.
+  // list again every few seconds, from the start.
   it('reads again while Live is on', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
     api.upnp.mappings.mockResolvedValue([])
     const wrapper = mount(MappingsTab)
     await flushPromises()
     const live = wrapper.findAll('button').find((b) => b.text() === 'Live')
-    await live.trigger('click')
-    await flushPromises()
+    expect(live.attributes('aria-pressed')).toBe('true')
     vi.advanceTimersByTime(2000)
     await flushPromises()
-    expect(api.upnp.mappings).toHaveBeenCalledTimes(3)
+    expect(api.upnp.mappings).toHaveBeenCalledTimes(2)
     await live.trigger('click')
     vi.advanceTimersByTime(6000)
-    expect(api.upnp.mappings).toHaveBeenCalledTimes(3)
+    expect(api.upnp.mappings).toHaveBeenCalledTimes(2)
   })
 })

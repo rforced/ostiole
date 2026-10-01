@@ -15,7 +15,8 @@ const DEBOUNCE_MS = 300
  * validate, keeps the rows of the last one that did.
  *
  * Rows that also follow the router, like the names devices hold, can poll:
- * interval sets the period and start() and stop() switch it, as Live does.
+ * interval sets the period, the poll runs from mount, and stop() and
+ * start() switch it, as Live does.
  *
  * @template T
  * @param {(draft: object) => Promise<T[]>} read
@@ -30,7 +31,7 @@ export function useDraftRows(read, { interval = 0 } = {}) {
       if (!config.draft) return
       rows.value = await read(config.draft)
     },
-    { immediate: true, interval, autostart: false },
+    { immediate: true, interval },
   )
   let timer = 0
   watch(

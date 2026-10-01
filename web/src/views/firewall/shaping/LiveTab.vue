@@ -1,8 +1,8 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
-import RefreshButton from '@/components/RefreshButton.vue'
+import LiveButton from '@/components/LiveButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
@@ -56,15 +56,29 @@ function ratesBetween(before, after) {
   return out
 }
 
-const live = useAsync(
+const live = ref(true)
+
+const load = useAsync(
   async () => {
     const next = await api.shaping()
-    rates.value = ratesBetween(previous, next)
+    // A rate takes two samples, so the first keeps the rates shown.
+    if (previous) rates.value = ratesBetween(previous, next)
     previous = next
     report.value = next
   },
+  // Live owns the poll, and starts on.
   { interval: INTERVAL_MS, immediate: true },
 )
+watch(live, (on) => {
+  if (on) {
+    // A rate across the pause would be an average of it, not the line now.
+    previous = null
+    load.run()
+    load.start()
+  } else {
+    load.stop()
+  }
+})
 
 const interfaces = computed(() => report.value?.interfaces ?? [])
 
@@ -105,14 +119,10 @@ function delay(us) {
   <div class="space-y-5">
     <SectionCard title="Queues">
       <template #actions>
-        <RefreshButton
-          :busy="live.busy.value"
-          :updated-at="live.updatedAt.value"
-          @click="live.run"
-        />
+        <LiveButton v-model="live" :failing="Boolean(load.error.value)" />
       </template>
       <div class="space-y-3">
-        <AppNotice v-if="live.error.value" kind="bad">{{ live.error.value }}</AppNotice>
+        <AppNotice v-if="load.error.value" kind="bad">{{ load.error.value }}</AppNotice>
         <AppNotice v-else-if="report && !report.available" data-testid="shaping-unavailable">
           {{ report.reason }}
         </AppNotice>

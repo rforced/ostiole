@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
@@ -10,6 +10,9 @@ vi.mock('@/lib/api', () => ({
 }))
 
 const stubs = { RouterLink: true }
+
+// Live reads from the start, so no page outlives its test.
+enableAutoUnmount(afterEach)
 
 /** A table with `total` of `max` entries in it and nothing else to say. */
 function table(total, max) {
@@ -86,26 +89,28 @@ describe('ConnectionsPage', () => {
       expect(from(wrapper)).toEqual(['10.0.0.1', '10.0.0.3', '10.0.0.2'])
     })
 
-    // Live reads every five seconds and keeps the busiest on top.
-    it('holds the busiest first while live', async () => {
+    // Live is on from the start and reads every five seconds, into the
+    // order the table is in. Off, the table holds still.
+    it('keeps reading while live, in the order chosen', async () => {
       const wrapper = await page(busy)
+      const live = wrapper.findAll('button').find((b) => b.text() === 'Live')
+      expect(live.attributes('aria-pressed')).toBe('true')
       await header(wrapper, 'From').get('button').trigger('click')
       expect(from(wrapper)).toEqual(['10.0.0.1', '10.0.0.2', '10.0.0.3'])
 
-      const live = wrapper.findAll('button').find((b) => b.text() === 'Live')
-      await live.trigger('click')
-      await flushPromises()
-      expect(api.diagnostics.states).toHaveBeenCalledTimes(2)
-      expect(from(wrapper)).toEqual(['10.0.0.2', '10.0.0.3', '10.0.0.1'])
-      expect(header(wrapper, 'From').get('button').attributes('disabled')).toBeDefined()
+      api.diagnostics.states.mockResolvedValue({
+        ...busy,
+        states: [row('10.0.0.4', 900, '10s'), ...busy.states],
+      })
       vi.advanceTimersByTime(5000)
       await flushPromises()
-      expect(api.diagnostics.states).toHaveBeenCalledTimes(3)
+      expect(api.diagnostics.states).toHaveBeenCalledTimes(2)
+      expect(live.attributes('aria-pressed')).toBe('true')
+      expect(from(wrapper)).toEqual(['10.0.0.1', '10.0.0.2', '10.0.0.3', '10.0.0.4'])
 
       await live.trigger('click')
       vi.advanceTimersByTime(10000)
-      expect(api.diagnostics.states).toHaveBeenCalledTimes(3)
-      expect(header(wrapper, 'Traffic').attributes('aria-sort')).toBe('descending')
+      expect(api.diagnostics.states).toHaveBeenCalledTimes(2)
     })
   })
 
