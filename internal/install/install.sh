@@ -250,6 +250,15 @@ dnf) MASK_ONLY="dnf-makecache.timer smartd.service" ;;
 *) MASK_ONLY="smartd.service" ;;
 esac
 
+# network_manager says whether a package hands out this router's
+# addresses, which a handover not yet confirmed brings back.
+network_manager() {
+	case "$1" in
+	NetworkManager | network-manager | networkmanager | netplan.io | dhcpcd | dhcpcd-base | connman | ifupdown) return 0 ;;
+	esac
+	return 1
+}
+
 # units_for names what systemd calls a package, for the case where the
 # manager refuses to remove it and masking is all that is left.
 units_for() {
@@ -1097,6 +1106,24 @@ if command -v pro >/dev/null 2>&1; then
 	pro config set apt_news=false >/dev/null 2>&1 || true
 fi
 
+# A handover not yet confirmed brings the old network manager back when
+# its window runs out, and has nothing to bring back once the package is
+# gone. So it stays until then, and `ostiole repair` takes it after.
+if systemctl is-active --quiet ostiole-network-revert.timer 2>/dev/null; then
+	KEPT=""
+	REST=""
+	for pkg in $REMOVE; do
+		if network_manager "$pkg"; then
+			KEPT="$KEPT $pkg"
+		else
+			REST="$REST $pkg"
+		fi
+	done
+	if [ -n "$KEPT" ]; then
+		echo "keeping${KEPT} until the network handover is confirmed: run \`ostiole takeover --network --confirm\`, then \`ostiole repair\`"
+		REMOVE="${REST# }"
+	fi
+fi
 if [ -n "$REMOVE" ]; then
 	echo "removing what a router has no use for: $REMOVE"
 	# shellcheck disable=SC2086 # the list is built to be split
