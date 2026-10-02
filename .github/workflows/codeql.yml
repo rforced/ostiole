@@ -54,7 +54,7 @@ jobs:
               (.locations[0].physicalLocation.artifactLocation.uri | startswith("third_party/") | not)
               and ([.ruleId, .locations[0].physicalLocation.artifactLocation.uri]
               | IN(["go/request-forgery", "internal/notify/webhook.go"],
-                   ["go/request-forgery", "internal/feeds/feeds.go"]) | not)))' "$f" > "$f.tmp"
+                   ["go/request-forgery", "internal/fetch/fetch.go"]) | not)))' "$f" > "$f.tmp"
             mv "$f.tmp" "$f"
           done
       - uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
