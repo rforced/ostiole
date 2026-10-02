@@ -227,8 +227,9 @@ function rate(limit) {
     <SectionCard
       title="Port scan"
       intro="A scan is a few packets to a great many closed ports, so it is counted where refused
-        traffic ends up: past the last rule of the zone. A source that keeps arriving there is
-        dropped outright for a while."
+        traffic ends up: past the last rule of the zone. A source whose TCP or UDP keeps arriving
+        there is dropped outright for a while. Its connections already open carry on, and so does
+        WireGuard."
       :locked="auth.readOnly"
     >
       <template #actions>
@@ -270,7 +271,7 @@ function rate(limit) {
         <FormField
           id="prot-scan-hold"
           label="Hold for"
-          hint="A number and a unit: 30s, 10m, 1h. An address shared behind carrier NAT is held too."
+          hint="A number and a unit: 30s, 10m, 1h. An address shared behind carrier NAT is held too, and one somebody forges."
         >
           <input
             id="prot-scan-hold"

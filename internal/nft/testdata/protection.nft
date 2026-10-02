@@ -107,8 +107,8 @@ table inet ostiole {
 		fib daddr type local tcp dport 22 add @rlimit_ssh-in_v6 { ip6 saddr limit rate over 3/minute burst 3 packets } counter drop comment "limit:ssh-in"
 		fib daddr type local tcp dport 22 counter accept comment "id:ssh-in"
 		ip daddr 192.168.1.10 tcp dport 443 limit rate 500/second burst 1000 packets counter accept comment "id:web-in"
-		add @scan_wan_v4 { ip saddr limit rate over 20/minute } add @scanners_wan_v4 { ip saddr } counter comment "protect:scan"
-		add @scan_wan_v6 { ip6 saddr limit rate over 20/minute } add @scanners_wan_v6 { ip6 saddr } counter comment "protect:scan"
+		meta l4proto { tcp, udp } add @scan_wan_v4 { ip saddr limit rate over 20/minute } add @scanners_wan_v4 { ip saddr } counter comment "protect:scan"
+		meta l4proto { tcp, udp } add @scan_wan_v6 { ip6 saddr limit rate over 20/minute } add @scanners_wan_v6 { ip6 saddr } counter comment "protect:scan"
 		counter comment "zone-unmatched"
 	}
 	chain zone_lan {

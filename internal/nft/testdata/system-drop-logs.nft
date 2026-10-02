@@ -167,8 +167,8 @@ table inet ostiole {
 		icmp type echo-request add @icmpflood_lan_v4 { ip saddr limit rate over 10/second burst 20 packets } jump plog_lan_icmpflood
 		icmpv6 type echo-request add @icmpflood_lan_v6 { ip6 saddr limit rate over 10/second burst 20 packets } jump plog_lan_icmpflood
 		counter accept comment "id:lan-out"
-		add @scan_lan_v4 { ip saddr limit rate over 20/minute } add @scanners_lan_v4 { ip saddr } counter comment "protect:scan"
-		add @scan_lan_v6 { ip6 saddr limit rate over 20/minute } add @scanners_lan_v6 { ip6 saddr } counter comment "protect:scan"
+		meta l4proto { tcp, udp } add @scan_lan_v4 { ip saddr limit rate over 20/minute } add @scanners_lan_v4 { ip saddr } counter comment "protect:scan"
+		meta l4proto { tcp, udp } add @scan_lan_v6 { ip6 saddr limit rate over 20/minute } add @scanners_lan_v6 { ip6 saddr } counter comment "protect:scan"
 		limit rate 10/second counter log prefix "ostiole:z:lan:drop: " group 1 comment "log:zone-default"
 		counter drop comment "zone-default"
 	}
@@ -180,8 +180,8 @@ table inet ostiole {
 		icmp type echo-request add @icmpflood_guest_v4 { ip saddr limit rate over 10/second burst 20 packets } counter drop comment "protect:icmpflood"
 		icmpv6 type echo-request add @icmpflood_guest_v6 { ip6 saddr limit rate over 10/second burst 20 packets } counter drop comment "protect:icmpflood"
 		counter accept comment "id:guest-out"
-		add @scan_guest_v4 { ip saddr limit rate over 20/minute } add @scanners_guest_v4 { ip saddr } counter comment "protect:scan"
-		add @scan_guest_v6 { ip6 saddr limit rate over 20/minute } add @scanners_guest_v6 { ip6 saddr } counter comment "protect:scan"
+		meta l4proto { tcp, udp } add @scan_guest_v4 { ip saddr limit rate over 20/minute } add @scanners_guest_v4 { ip saddr } counter comment "protect:scan"
+		meta l4proto { tcp, udp } add @scan_guest_v6 { ip6 saddr limit rate over 20/minute } add @scanners_guest_v6 { ip6 saddr } counter comment "protect:scan"
 		counter comment "zone-unmatched"
 	}
 	chain plog_lan_synflood {

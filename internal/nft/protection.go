@@ -279,20 +279,22 @@ func (r *renderer) floodChains() {
 // rule allowed arrives. It counts those per source and, for a source that
 // keeps arriving there, writes the address into the set the head of the
 // chain drops on. The verdict is left to the tail that follows: this
-// rule's job is to notice, not to decide.
+// rule's job is to notice, not to decide. Only TCP and UDP count: a scan
+// is of ports, and a monitor that pings once a second is refused sixty
+// times a minute without knocking on anything.
 func (r *renderer) scanTally(zone string) {
 	p := r.cfg.Protection.PortScan
 	if p == nil || !r.protects(zone) {
 		return
 	}
 	for _, fam := range families {
-		r.line(fmt.Sprintf(`add @%s { %s saddr %s } add @%s { %s saddr } counter comment "protect:scan"`,
+		r.line(fmt.Sprintf(`meta l4proto { tcp, udp } add @%s { %s saddr %s } add @%s { %s saddr } counter comment "protect:scan"`,
 			scanCountSet(zone, fam.n), fam.prefix, limitOver(p.Limit()),
 			scanHoldSet(zone, fam.n), fam.prefix))
 	}
 	r.sys(SystemRule{
 		Chain: "zone_" + zone, After: true, Zones: []string{zone}, Action: "continue",
-		Protocol:    string(model.ProtocolAny),
+		Protocol:    string(model.ProtocolTCPUDP),
 		Source:      "a source refused more than " + p.Limit().String(),
 		Destination: "any",
 		Description: "Hold a source that keeps knocking on closed ports, for " + p.HoldOr(),
