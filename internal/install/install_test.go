@@ -513,3 +513,36 @@ func TestReadUnitsFallsBackAndSaysWhenItCouldNotRead(t *testing.T) {
 		t.Error("a systemctl that could not reach systemd was taken as an answer")
 	}
 }
+
+// A configuration directory that was there before is closed to everybody
+// else, and so is each directory in it, whatever mode it had; the way
+// through that the proxy's group has stays, and nothing past a link moves.
+func TestInstallClosesTheConfigurationToOthers(t *testing.T) {
+	t.Parallel()
+	dir := filepath.Join(t.TempDir(), "ostiole")
+	outside := t.TempDir()
+	for path, mode := range map[string]os.FileMode{dir: 0o755, filepath.Join(dir, "wireless"): 0o755,
+		filepath.Join(dir, "proxy"): 0o750, filepath.Join(dir, "certs"): 0o700} {
+		if err := os.MkdirAll(path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(path, mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Chmod(outside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, "elsewhere")); err != nil {
+		t.Fatal(err)
+	}
+	if err := closeToOthers(dir); err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]os.FileMode{dir: 0o750, filepath.Join(dir, "wireless"): 0o750,
+		filepath.Join(dir, "proxy"): 0o750, filepath.Join(dir, "certs"): 0o700, outside: 0o755} {
+		if info, err := os.Stat(path); err != nil || info.Mode().Perm() != want {
+			t.Errorf("%s: %v, %v, want %v", path, info.Mode().Perm(), err, want)
+		}
+	}
+}

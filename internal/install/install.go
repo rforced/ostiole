@@ -257,6 +257,9 @@ func Install(ctx context.Context, sc Systemctl, lay Layout, opts Options, log *s
 	if err := os.MkdirAll(lay.ConfigDir, 0o700); err != nil {
 		return nil, fmt.Errorf("create %s: %w", lay.ConfigDir, err)
 	}
+	if err := closeToOthers(lay.ConfigDir); err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(lay.BinDir, 0o755); err != nil { //nolint:gosec // system bin dir must be world-readable
 		return nil, err
 	}
@@ -295,13 +298,9 @@ func Install(ctx context.Context, sc Systemctl, lay Layout, opts Options, log *s
 				rep.Sysctl = sysctl.ConfFile
 			}
 		}
-		// Take effect now as well, not only after the next boot or apply.
-		// Only the constants: an install has no configuration yet, so the
-		// connection ceiling is whatever the kernel sized for itself until
-		// the first apply says otherwise.
-		if err := (sysctl.Proc{}).Apply(sysctl.Settings{}); err != nil {
-			log.Warn("could not apply router sysctls now", "err", err)
-		}
+		// Persisted only. They take effect when the firewall unit, started
+		// below, has loaded a ruleset: `ostiole load` turns them on after
+		// it, so this router never forwards before it filters.
 	}
 	// A router has no use for Bluetooth, and a wifi card usually carries a
 	// controller for it on the same chip.
@@ -339,6 +338,35 @@ func Install(ctx context.Context, sc Systemctl, lay Layout, opts Options, log *s
 	}
 	log.Info("services enabled", "units", rep.Units)
 	return rep, nil
+}
+
+// closeToOthers takes everybody else's access off dir and the
+// directories in it. MkdirAll leaves one that was there at the mode it
+// found, and the configuration holds keys. The proxy's group keeps the
+// way through that services.Setup gives it.
+func closeToOthers(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	paths := []string{dir}
+	for _, e := range entries {
+		if e.IsDir() {
+			paths = append(paths, filepath.Join(dir, e.Name()))
+		}
+	}
+	for _, p := range paths {
+		info, err := os.Lstat(p)
+		if err != nil {
+			return err
+		}
+		if perm := info.Mode().Perm(); perm&0o007 != 0 {
+			if err := os.Chmod(p, perm&^0o007); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // Units renders the systemd units for the layout and options.

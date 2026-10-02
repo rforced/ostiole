@@ -627,7 +627,10 @@ fedora_dirs() {
 # on the AUR's word: the build uses the commit this release reviewed and
 # stops if a file in it differs, the source must carry miniupnp's
 # signature, and the package goes on only if it holds what the review
-# built. makepkg refuses to run as root, so the build runs as nobody.
+# built. makepkg refuses to run as root, so the build runs as an account
+# made for it and removed after: nothing else runs as that account, so
+# nothing can reach into the build between the review and makepkg, as
+# anything running as nobody could into a build run as nobody.
 # Nothing here is fatal: a router without port mapping still routes.
 aur_miniupnpd() {
 	upnp_path >/dev/null && [ "${OSTIOLE_UPNP_FORCE:-0}" != "1" ] && return 0
@@ -638,13 +641,12 @@ aur_miniupnpd() {
 		return 0
 	fi
 	BUILD_TOOLS=1
-	AUR_UID="$(id -u nobody 2>/dev/null || true)"
-	AUR_GID="$(id -g nobody 2>/dev/null || true)"
-	if [ -z "$AUR_UID" ] || [ -z "$AUR_GID" ]; then
-		echo "warning: this router has no nobody account to build as; no UPnP" >&2
+	if ! aur_account; then
+		echo "warning: could not make an account to build miniupnpd as; no UPnP" >&2
 		return 0
 	fi
 	build="$(build_dir)" || {
+		aur_done
 		echo "warning: nowhere to build miniupnpd that allows running a configure script; no UPnP" >&2
 		return 0
 	}
@@ -655,34 +657,34 @@ aur_miniupnpd() {
 		echo "note: could not fetch $AUR_UPNP from the AUR; trying Arch's mirror of it on GitHub"
 		if ! aur_fetch https://github.com/archlinux/aur.git; then
 			tail -5 "$TMP/aur.log" >&2
-			rm -rf "$build"
+			aur_done
 			echo "warning: could not fetch $AUR_UPNP from the AUR or its GitHub mirror; no UPnP" >&2
 			return 0
 		fi
 	fi
 	if ! aur_reviewed "$build/$AUR_UPNP"; then
-		rm -rf "$build"
+		aur_done
 		echo "warning: $AUR_UPNP at $(printf %.7s "$AUR_UPNP_COMMIT") is not the one this release reviewed; no UPnP" >&2
 		return 0
 	fi
 	# The key goes into the build's own keyring, where makepkg checks the
 	# tarball's signature against the key the PKGBUILD names.
-	if ! printf '%s\n' "$AUR_UPNP_KEY" | as_nobody "$build" "gpg --batch --import && gpg --batch --list-keys $AUR_UPNP_KEY_FPR"; then
+	if ! printf '%s\n' "$AUR_UPNP_KEY" | as_builder "$build" "gpg --batch --import && gpg --batch --list-keys $AUR_UPNP_KEY_FPR"; then
 		tail -5 "$TMP/aur.log" >&2
-		rm -rf "$build"
+		aur_done
 		echo "warning: could not load miniupnp's signing key; no UPnP" >&2
 		return 0
 	fi
-	if ! as_nobody "$build/$AUR_UPNP" "makepkg --noconfirm --nodeps"; then
+	if ! as_builder "$build/$AUR_UPNP" "makepkg --noconfirm --nodeps"; then
 		tail -5 "$TMP/aur.log" >&2
-		rm -rf "$build"
+		aur_done
 		echo "warning: $AUR_UPNP did not build; no UPnP" >&2
 		return 0
 	fi
 	pkg=$(find "$build/$AUR_UPNP" -maxdepth 1 -name "$AUR_UPNP-*.pkg.tar.*" \
 		! -name '*.sig' ! -name "$AUR_UPNP-debug-*" | head -1)
 	if [ -z "$pkg" ]; then
-		rm -rf "$build"
+		aur_done
 		echo "warning: the AUR build left nothing to install; no UPnP" >&2
 		return 0
 	fi
@@ -694,17 +696,41 @@ aur_miniupnpd() {
 		! grep -qx "pkgver = $AUR_UPNP_VERSION" "$TMP/aur.pkginfo" ||
 		[ "$(cat "$TMP/aur.paths")" != "$AUR_UPNP_PATHS" ]; then
 		printf '%s\n' "$AUR_UPNP_PATHS" | LC_ALL=C comm -3 - "$TMP/aur.paths" >&2
-		rm -rf "$build"
+		aur_done
 		echo "warning: the $AUR_UPNP package is not the one this release reviewed; no UPnP" >&2
 		return 0
 	fi
 	if ! pacman -U --noconfirm "$pkg" >/dev/null 2>&1; then
-		rm -rf "$build"
+		aur_done
 		echo "warning: pacman would not install the $AUR_UPNP it built; no UPnP" >&2
 		return 0
 	fi
-	rm -rf "$build"
+	aur_done
 	echo "built and installed $AUR_UPNP $AUR_UPNP_VERSION from the AUR"
+}
+
+# aur_account makes the account the build runs as, fresh: one left by a
+# build that died goes first, along with anything still running as it.
+AUR_USER=ostiole-build
+aur_account() {
+	aur_gone
+	useradd --system --no-create-home --home-dir / --shell /usr/bin/nologin --user-group "$AUR_USER" >>"$TMP/aur.log" 2>&1 ||
+		return 1
+	AUR_UID="$(id -u "$AUR_USER")" && AUR_GID="$(id -g "$AUR_USER")"
+}
+
+# aur_done removes the build and the account it ran as.
+aur_done() {
+	rm -rf "${build:?}"
+	aur_gone
+}
+
+# aur_gone stops whatever runs as the build account, gpg's agent above
+# all, and removes the account with its group.
+aur_gone() {
+	id -u "$AUR_USER" >/dev/null 2>&1 || return 0
+	pkill -KILL -u "$AUR_USER" 2>/dev/null || true
+	userdel "$AUR_USER" >>"$TMP/aur.log" 2>&1 || true
 }
 
 # miniupnp's release key, which signs every miniupnpd tarball. It travels
@@ -784,11 +810,11 @@ build_dir() {
 	return 1
 }
 
-# as_nobody runs a command in a directory as the unprivileged user makepkg
-# insists on. setpriv rather than su, because Arch ships nobody with an
-# expired account and su will not have it. One HOME for the whole build,
-# so the key gpg imported is the keyring makepkg then reads.
-as_nobody() {
+# as_builder runs a command in a directory as the build account, which
+# makepkg insists is not root. setpriv rather than su, which will not have
+# an account with no shell. One HOME for the whole build, so the key gpg
+# imported is the keyring makepkg then reads.
+as_builder() {
 	HOME="$AUR_HOME" setpriv --reuid="$AUR_UID" --regid="$AUR_GID" --clear-groups \
 		sh -c "cd '$1' && $2" >>"$TMP/aur.log" 2>&1
 }
@@ -799,7 +825,7 @@ as_nobody() {
 # failed try leaves a repository behind, so an earlier one goes first.
 aur_fetch() {
 	rm -rf "${build:?}/$AUR_UPNP"
-	as_nobody "$build" "git init -q $AUR_UPNP && cd $AUR_UPNP && git fetch -q --depth 1 $1 $AUR_UPNP_COMMIT && git checkout -q FETCH_HEAD"
+	as_builder "$build" "git init -q $AUR_UPNP && cd $AUR_UPNP && git fetch -q --depth 1 $1 $AUR_UPNP_COMMIT && git checkout -q FETCH_HEAD"
 }
 
 # aur_reviewed says whether a checkout holds exactly the files the review
