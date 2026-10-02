@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,12 +34,7 @@ checking the release signature.`,
 			if err := requireRoot(); err != nil {
 				return err
 			}
-			path, err := writeScript()
-			if err != nil {
-				return err
-			}
-			defer func() { _ = os.Remove(path) }()
-			args := []string{path}
+			var args []string
 			if yes {
 				args = append(args, "--yes")
 			}
@@ -56,27 +53,7 @@ checking the release signature.`,
 			if noVerify {
 				args = append(args, "--no-verify")
 			}
-			self, err := os.Executable()
-			if err != nil {
-				return err
-			}
-			sh := exec.CommandContext(cmd.Context(), "sh", args...)
-			// The binary is already here, so nothing of ostiole's is
-			// fetched; the version is passed anyway, because the sidecar
-			// has to match the release this binary came from.
-			sh.Env = append(os.Environ(), "OSTIOLE_NO_DOWNLOAD=1",
-				"OSTIOLE_BIN_DIR="+filepath.Dir(self), "OSTIOLE_VERSION="+version.Version)
-			// No stdin: under the documented install the script comes down
-			// a pipe that is already at its end, so nothing it runs can
-			// read the terminal, and it asks its own question on /dev/tty.
-			// Handing it a live terminal here instead is how a package
-			// manager that asks something with its output on /dev/null
-			// leaves the repair hanging on a question nobody can see.
-			sh.Stdout, sh.Stderr, sh.Stdin = cmd.OutOrStdout(), cmd.ErrOrStderr(), nil
-			if err := sh.Run(); err != nil {
-				return fmt.Errorf("the install script failed: %w", err)
-			}
-			return nil
+			return runScript(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), nil, args...)
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask for confirmation")
@@ -86,6 +63,37 @@ checking the release signature.`,
 	cmd.Flags().BoolVar(&proxy, "proxy", false, "install the reverse proxy as well")
 	cmd.Flags().BoolVar(&noVerify, "no-verify", false, "fetch the reverse proxy without checking the release signature (the checksum is still checked)")
 	return cmd
+}
+
+// runScript runs the embedded install script with the binary already in
+// place, env on top of this process's own.
+func runScript(ctx context.Context, stdout, stderr io.Writer, env []string, args ...string) error {
+	path, err := writeScript()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(path) }()
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	sh := exec.CommandContext(ctx, "sh", append([]string{path}, args...)...) //nolint:gosec // the embedded script and this command's own flags
+	// The binary is already here, so nothing of ostiole's is fetched; the
+	// version is passed anyway, because the sidecar has to match the
+	// release this binary came from.
+	sh.Env = append(append(os.Environ(), "OSTIOLE_NO_DOWNLOAD=1",
+		"OSTIOLE_BIN_DIR="+filepath.Dir(self), "OSTIOLE_VERSION="+version.Version), env...)
+	// No stdin: under the documented install the script comes down a
+	// pipe that is already at its end, so nothing it runs can read the
+	// terminal, and it asks its own question on /dev/tty. Handing it a
+	// live terminal here instead is how a package manager that asks
+	// something with its output on /dev/null leaves the repair hanging on
+	// a question nobody can see.
+	sh.Stdout, sh.Stderr, sh.Stdin = stdout, stderr, nil
+	if err := sh.Run(); err != nil {
+		return fmt.Errorf("the install script failed: %w", err)
+	}
+	return nil
 }
 
 // writeScript puts the embedded installer somewhere sh can read it.

@@ -302,6 +302,13 @@ units_for() {
 	esac
 }
 
+# mask_units masks whatever of a package's units systemd knows.
+mask_units() {
+	for unit in $(units_for "$1"); do
+		systemctl mask --now "$unit" >/dev/null 2>&1 || true
+	done
+}
+
 ### the package manager
 
 # pkg_dnf is dnf as every call here runs it. countme=0: the counter is a
@@ -416,6 +423,20 @@ kept() {
 	return 1
 }
 
+# remove_packages takes the packages off in one transaction, which is what
+# keeps a dependency from being taken out and put back. A single refusal
+# fails all of it, as RHEL 10 will not let shim's fwupd go, so then the
+# refusals are found one at a time and masked instead.
+remove_packages() {
+	pkg_remove "$@" >"$TMP/remove.log" 2>&1 && return 0
+	for pkg in "$@"; do
+		if ! pkg_remove "$pkg" >"$TMP/remove.log" 2>&1; then
+			echo "warning: $MANAGER will not remove $pkg; masking its units instead" >&2
+			mask_units "$pkg"
+		fi
+	done
+}
+
 # A router that already has Tailscale keeps it through a plain repair, so
 # its repository is left alone and the flag stays the only way in.
 [ -z "$(matching tailscale)" ] || TAILSCALE=1
@@ -518,6 +539,25 @@ for pattern in $UNWANTED; do
 	done
 done
 REMOVE="${REMOVE# }"
+
+# What the install left while a network handover could bring it back:
+# `ostiole takeover --network --confirm` runs this part alone, with those
+# packages in OSTIOLE_REMOVE, once nothing can.
+if [ -n "${OSTIOLE_REMOVE:-}" ]; then
+	LEFT=""
+	for pkg in $OSTIOLE_REMOVE; do
+		if grep -qxF "$pkg" "$TMP/installed"; then
+			LEFT="$LEFT $pkg"
+		fi
+	done
+	if [ -n "$LEFT" ]; then
+		echo "removing what the install left until the network handover was confirmed:$LEFT"
+		# shellcheck disable=SC2086 # the list is built to be split
+		remove_packages $LEFT
+		pkg_autoremove >/dev/null 2>&1 || true
+	fi
+	exit 0
+fi
 
 ### the plan
 
@@ -1079,19 +1119,13 @@ if [ "${OSTIOLE_NO_INSTALL:-}" = "1" ]; then
 	echo "skipping the rest (OSTIOLE_NO_INSTALL=1)"
 	exit 0
 fi
-### units, ruleset and the network
+### units and ruleset
 
+# The network is handed over at the very end, below.
 # shellcheck disable=SC2086 # the extra arguments are meant to be split
-"$BIN_DIR/ostiole" install --yes $INSTALL_ARGS
+"$BIN_DIR/ostiole" install --yes --network-later $INSTALL_ARGS
 
 ### what a router has no use for
-
-# mask_units masks whatever of a package's units systemd knows.
-mask_units() {
-	for unit in $(units_for "$1"); do
-		systemctl mask --now "$unit" >/dev/null 2>&1 || true
-	done
-}
 
 for unit in $MASK_ONLY; do
 	systemctl mask --now "$unit" >/dev/null 2>&1 || true
@@ -1106,39 +1140,23 @@ if command -v pro >/dev/null 2>&1; then
 	pro config set apt_news=false >/dev/null 2>&1 || true
 fi
 
-# A handover not yet confirmed brings the old network manager back when
-# its window runs out, and has nothing to bring back once the package is
-# gone. So it stays until then, and `ostiole repair` takes it after.
-if systemctl is-active --quiet ostiole-network-revert.timer 2>/dev/null; then
-	KEPT=""
-	REST=""
-	for pkg in $REMOVE; do
-		if network_manager "$pkg"; then
-			KEPT="$KEPT $pkg"
-		else
-			REST="$REST $pkg"
-		fi
-	done
-	if [ -n "$KEPT" ]; then
-		echo "keeping${KEPT} until the network handover is confirmed: run \`ostiole takeover --network --confirm\`, then \`ostiole repair\`"
-		REMOVE="${REST# }"
+# The old network managers stay for the handover at the end: until it
+# holds, a revert needs one to bring back.
+NETWORK_PKGS=""
+REST=""
+for pkg in $REMOVE; do
+	if network_manager "$pkg"; then
+		NETWORK_PKGS="$NETWORK_PKGS $pkg"
+	else
+		REST="$REST $pkg"
 	fi
-fi
+done
+REMOVE="${REST# }"
+NETWORK_PKGS="${NETWORK_PKGS# }"
 if [ -n "$REMOVE" ]; then
 	echo "removing what a router has no use for: $REMOVE"
 	# shellcheck disable=SC2086 # the list is built to be split
-	if ! pkg_remove $REMOVE >"$TMP/remove.log" 2>&1; then
-		# One transaction is what keeps a dependency from being taken out
-		# and put back, but a single refusal — RHEL 10 will not let shim's
-		# fwupd go — fails all of it, so the refusals are found one at a
-		# time and masked instead.
-		for pkg in $REMOVE; do
-			if ! pkg_remove "$pkg" >"$TMP/remove.log" 2>&1; then
-				echo "warning: $MANAGER will not remove $pkg; masking its units instead" >&2
-				mask_units "$pkg"
-			fi
-		done
-	fi
+	remove_packages $REMOVE
 fi
 # The journal is the only log this router keeps, so the files the second
 # copy left behind go with the package that wrote them. Only when it
@@ -1162,7 +1180,18 @@ fi
 # ufw leaves its own empty iptables-nft tables behind when it goes.
 "$BIN_DIR/ostiole" host flush --yes >/dev/null 2>&1 || true
 
-echo "if this session dropped during the handover, reconnect and run: ostiole repair"
+### the network, last
+
+# The handover is the one step that can cut this session off, so nothing
+# else waits on it. Once it holds, it removes the old network managers:
+# by itself when every address comes back, or when the next session
+# confirms it.
+echo "handing the network to systemd-networkd; if this session drops, reconnect within three minutes and run \`ostiole takeover --network --confirm\`, or the previous manager comes back on its own"
+if [ -n "$NETWORK_PKGS" ]; then
+	"$BIN_DIR/ostiole" takeover --network --for-install --remove-on-confirm "$(printf '%s' "$NETWORK_PKGS" | tr ' ' ',')"
+else
+	"$BIN_DIR/ostiole" takeover --network --for-install
+fi
 }
 
 main "$@"

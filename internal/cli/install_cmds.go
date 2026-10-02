@@ -42,7 +42,7 @@ func requireRoot() error {
 
 func newInstallCmd(g *globals) *cobra.Command {
 	opts := install.Options{}
-	var ignoreKernel, yes, dryRun, unitsOnly bool
+	var ignoreKernel, yes, dryRun, unitsOnly, networkLater bool
 	cmd := &cobra.Command{
 		Use:   "install",
 		Short: "Write Ostiole's units, load a ruleset, and take the network over",
@@ -135,7 +135,7 @@ want of --yes.`,
 			if owned {
 				fmt.Fprintln(out, "  leave alone:          addressing, which systemd-networkd already has")
 			} else {
-				fmt.Fprintln(out, "  hand to networkd:     this router's addresses, keeping the ones it has now")
+				fmt.Fprintln(out, "  hand to networkd:     this router's addresses, keeping the ones it has now, last")
 			}
 			if dryRun {
 				return nil
@@ -193,8 +193,10 @@ want of --yes.`,
 			case !errors.Is(err, iptables.ErrNothingToFlush) && !errors.Is(err, iptables.ErrAllOwned):
 				fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not clear what the old firewall left: %v\n", err)
 			}
-			if g.netBackend != "none" {
-				if err := handOverNetwork(cmd, g, owned); err != nil {
+			// The install script hands over last, after its own cleanup, so
+			// that a session the handover cuts off has nothing left to lose.
+			if !networkLater {
+				if err := installHandover(cmd, g, nil); err != nil {
 					return err
 				}
 			}
@@ -224,6 +226,8 @@ want of --yes.`,
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask for confirmation")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the plan and change nothing")
 	cmd.Flags().BoolVar(&unitsOnly, "units-only", false, "only write the units and reload systemd, as a self-update does")
+	cmd.Flags().BoolVar(&networkLater, "network-later", false, "internal: leave the network handover to the install script's last step")
+	_ = cmd.Flags().MarkHidden("network-later")
 	return cmd
 }
 
@@ -324,38 +328,6 @@ func conflictingFirewalls(ctx context.Context, sc install.Systemctl) []string {
 func networkOwned(dir string) bool {
 	rec, err := install.LoadTakeoverRecord(dir)
 	return err == nil && rec != nil
-}
-
-// handOverNetwork gives addressing to systemd-networkd and then checks
-// that the router kept what it had. A router that has already been handed
-// over is left alone.
-func handOverNetwork(cmd *cobra.Command, g *globals, owned bool) error {
-	out := cmd.OutOrStdout()
-	if owned {
-		fmt.Fprintln(out, "systemd-networkd already has this router's addresses")
-		return nil
-	}
-	before, err := network.Discover()
-	if err != nil {
-		return err
-	}
-	if err := networkTakeover(cmd, g, networkTakeoverOptions{yes: true, window: host.NetworkTakeoverWindow}); err != nil {
-		// The router has its units, its ruleset and its firewall; whoever
-		// owns the addresses goes on owning them. `ostiole takeover
-		// --network` is the retry.
-		fmt.Fprintf(cmd.ErrOrStderr(), "warning: addressing was left with its current manager: %v\n", err)
-		return nil
-	}
-	if kept, missing := addressesKept(before); kept {
-		install.CancelNetworkRevert(cmd.Context(), install.ExecRunner{})
-		fmt.Fprintln(out, "addresses kept, systemd-networkd in charge")
-		return nil
-	} else if len(missing) > 0 {
-		fmt.Fprintf(out, "still missing: %s\n", strings.Join(missing, ", "))
-	}
-	fmt.Fprintf(out, "the previous network manager returns in %s unless `ostiole takeover --network --confirm` runs\n",
-		host.NetworkTakeoverWindow)
-	return nil
 }
 
 // addressesKept polls until every global address that was there before is
@@ -470,8 +442,9 @@ func uiURLs(listen string) []string {
 }
 
 func newTakeoverCmd(g *globals) *cobra.Command {
-	var yes, dryRun, netFlag, confirm, revert, inUnit bool
+	var yes, dryRun, netFlag, confirm, revert, inUnit, finish, forInstall bool
 	var window time.Duration
+	var removeOnConfirm []string
 	cmd := &cobra.Command{
 		Use:   "takeover",
 		Short: "Hand this router's addressing to systemd-networkd",
@@ -491,8 +464,9 @@ session driving it is the expected case. --revert undoes it now.`,
 			if !netFlag {
 				return errors.New("--network is the only mode; firewalls are retired by `ostiole install`")
 			}
-			o := networkTakeoverOptions{yes: yes, dryRun: dryRun, window: window, confirm: confirm, revert: revert, inUnit: inUnit}
-			if !confirm && !revert {
+			o := networkTakeoverOptions{yes: yes, dryRun: dryRun, window: window, confirm: confirm, revert: revert,
+				inUnit: inUnit, finish: finish, removeOnConfirm: removeOnConfirm}
+			if !confirm && !revert && !finish {
 				// A handover leaves the router filtering with whatever is in
 				// the kernel, so there has to be something in it.
 				eng, err := g.engine()
@@ -507,6 +481,9 @@ session driving it is the expected case. --revert undoes it now.`,
 					return errors.New("refusing: load an Ostiole ruleset first (ostiole install, or ostiole load)")
 				}
 			}
+			if forInstall {
+				return installHandover(cmd, g, removeOnConfirm)
+			}
 			return networkTakeover(cmd, g, o)
 		},
 	}
@@ -518,6 +495,14 @@ session driving it is the expected case. --revert undoes it now.`,
 	cmd.Flags().BoolVar(&revert, "revert", false, "undo the handover and restore the previous network manager")
 	cmd.Flags().BoolVar(&inUnit, "in-unit", false, "internal: already running inside the detached systemd unit")
 	_ = cmd.Flags().MarkHidden("in-unit")
+	// The install script hands over last, naming the old managers'
+	// packages, which go once the handover holds.
+	cmd.Flags().BoolVar(&forInstall, "for-install", false, "internal: the install script's handover, its last step")
+	_ = cmd.Flags().MarkHidden("for-install")
+	cmd.Flags().StringSliceVar(&removeOnConfirm, "remove-on-confirm", nil, "internal: packages a confirmed handover removes")
+	_ = cmd.Flags().MarkHidden("remove-on-confirm")
+	cmd.Flags().BoolVar(&finish, "finish", false, "internal: remove what the install left for the handover")
+	_ = cmd.Flags().MarkHidden("finish")
 	return cmd
 }
 
@@ -525,7 +510,10 @@ type networkTakeoverOptions struct {
 	yes, dryRun     bool
 	window          time.Duration
 	confirm, revert bool
-	inUnit          bool
+	inUnit, finish  bool
+	// removeOnConfirm goes into the handover's record as it is made, so a
+	// confirm from another session at any moment finds it there.
+	removeOnConfirm []string
 }
 
 // Transient unit names for the detached switch.
@@ -603,12 +591,15 @@ func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) e
 	run := install.ExecRunner{}
 
 	if o.confirm {
-		if install.CancelNetworkRevert(ctx, run) {
-			fmt.Fprintln(out, "confirmed: systemd-networkd stays in charge; revert timer disarmed")
-		} else {
+		if !install.CancelNetworkRevert(ctx, run) {
 			fmt.Fprintln(out, "no revert timer was armed; nothing to confirm")
+			return nil
 		}
-		return nil
+		fmt.Fprintln(out, "confirmed: systemd-networkd stays in charge; revert timer disarmed")
+		return finishHandover(ctx, g, out)
+	}
+	if o.finish {
+		return finishInstall(cmd, g)
 	}
 	if o.revert {
 		rec, err := install.LoadTakeoverRecord(g.configDir)
@@ -728,7 +719,11 @@ func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) e
 			}
 		}
 		fmt.Fprintf(out, "switching in unit %s; if this session drops, it still completes (journalctl -u %s)\n", takeoverUnit, takeoverUnit)
-		if err := detach(ctx, g, takeoverUnit, "--yes", "--confirm-window", o.window.String()); err != nil {
+		args := []string{"--yes", "--confirm-window", o.window.String()}
+		if len(o.removeOnConfirm) > 0 {
+			args = append(args, "--remove-on-confirm", strings.Join(o.removeOnConfirm, ","))
+		}
+		if err := detach(ctx, g, takeoverUnit, args...); err != nil {
 			return err
 		}
 	} else {
@@ -738,7 +733,12 @@ func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) e
 		if _, err := install.DisableCloudInitNetwork(slog.Default()); err != nil {
 			return err
 		}
-		if err := install.SaveTakeoverRecord(g.configDir, install.TakeoverRecord{Managers: managers, At: time.Now()}); err != nil {
+		rec := install.TakeoverRecord{Managers: managers, At: time.Now(), Remove: o.removeOnConfirm}
+		// What an earlier install left waits for this handover instead.
+		if prev, err := install.LoadTakeoverRecord(g.configDir); err == nil && prev != nil && len(rec.Remove) == 0 {
+			rec.Remove = prev.Remove
+		}
+		if err := install.SaveTakeoverRecord(g.configDir, rec); err != nil {
 			return err
 		}
 		if o.window > 0 {
@@ -773,6 +773,98 @@ func networkTakeover(cmd *cobra.Command, g *globals, o networkTakeoverOptions) e
 	}
 	fmt.Fprintln(out, "done: systemd-networkd manages addressing; interface changes in Ostiole now apply live")
 	return nil
+}
+
+// installHandover is the install's last step: the handover to networkd,
+// and once it holds, the old managers' packages off the router. It comes
+// last so a session it cuts off has nothing left to lose, and confirming
+// it from the next one finishes the install.
+func installHandover(cmd *cobra.Command, g *globals, remove []string) error {
+	if g.netBackend == "none" {
+		return nil
+	}
+	ctx := cmd.Context()
+	out := cmd.OutOrStdout()
+	rec, err := install.LoadTakeoverRecord(g.configDir)
+	if err != nil {
+		return err
+	}
+	if rec != nil {
+		// Handed over before. A revert has put the old manager back since,
+		// and then it stays, with its packages, until a handover holds.
+		if len(remove) > 0 {
+			rec.Remove = remove
+			if err := install.SaveTakeoverRecord(g.configDir, *rec); err != nil {
+				return err
+			}
+		}
+		if !install.HandoverHolds(ctx, install.ExecSystemctl{}, rec.Managers) {
+			fmt.Fprintf(out, "%s has the network again, as a revert left it; `ostiole takeover --network` hands it over\n",
+				strings.Join(rec.Managers, ", "))
+			return nil
+		}
+		fmt.Fprintln(out, "systemd-networkd already has this router's addresses")
+		return finishHandover(ctx, g, out)
+	}
+	before, err := network.Discover()
+	if err != nil {
+		return err
+	}
+	o := networkTakeoverOptions{yes: true, window: host.NetworkTakeoverWindow, removeOnConfirm: remove}
+	if err := networkTakeover(cmd, g, o); err != nil {
+		// The router has its units, its ruleset and its firewall; whoever
+		// owns the addresses goes on owning them. `ostiole takeover
+		// --network` is the retry.
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: addressing was left with its current manager: %v\n", err)
+		return nil
+	}
+	if kept, missing := addressesKept(before); kept {
+		install.CancelNetworkRevert(ctx, install.ExecRunner{})
+		fmt.Fprintln(out, "addresses kept, systemd-networkd in charge")
+		return finishHandover(ctx, g, out)
+	} else if len(missing) > 0 {
+		fmt.Fprintf(out, "still missing: %s\n", strings.Join(missing, ", "))
+	}
+	fmt.Fprintf(out, "the previous network manager returns in %s unless `ostiole takeover --network --confirm` runs, which also finishes the install\n",
+		host.NetworkTakeoverWindow)
+	return nil
+}
+
+// finishHandover removes what the install left for the handover, once it
+// holds, in a unit of its own: a package manager stopped halfway by a
+// dropped session is worse than one never started.
+func finishHandover(ctx context.Context, g *globals, out io.Writer) error {
+	rec, err := install.LoadTakeoverRecord(g.configDir)
+	if err != nil || rec == nil || len(rec.Remove) == 0 {
+		return err
+	}
+	left := strings.Join(rec.Remove, " ")
+	if !install.HandoverHolds(ctx, install.ExecSystemctl{}, rec.Managers) {
+		fmt.Fprintf(out, "systemd-networkd does not have the network, so %s stays\n", left)
+		return nil
+	}
+	fmt.Fprintf(out, "removing %s, which the install left until now, in unit %s; if this session drops, it still completes (journalctl -u %s)\n",
+		left, install.FinishUnit, install.FinishUnit)
+	if err := detach(ctx, g, install.FinishUnit, "--finish"); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "removed %s; the install is done\n", left)
+	return nil
+}
+
+// finishInstall runs the install script's removal alone, for what the
+// install left until the handover was confirmed, and clears the note.
+func finishInstall(cmd *cobra.Command, g *globals) error {
+	rec, err := install.LoadTakeoverRecord(g.configDir)
+	if err != nil || rec == nil || len(rec.Remove) == 0 {
+		return err
+	}
+	if err := runScript(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(),
+		[]string{"OSTIOLE_REMOVE=" + strings.Join(rec.Remove, " ")}); err != nil {
+		return err
+	}
+	rec.Remove = nil
+	return install.SaveTakeoverRecord(g.configDir, *rec)
 }
 
 func hasAddress(l network.Link, cidr string) bool {

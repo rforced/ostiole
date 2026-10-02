@@ -148,11 +148,12 @@ forwards nothing until that first apply is confirmed.
 
 Two steps can cut off the session you install from:
 
-- **The handover to systemd-networkd.** The install waits about 20 seconds for every address to
-  come back. If one does not, the previous network manager returns after three minutes unless
-  `ostiole takeover --network --confirm` runs. If the SSH session drops, reconnect, confirm, and
-  run `ostiole repair` to finish the install. If you cannot reconnect, wait: the old manager comes
-  back with the old addresses.
+- **The handover to systemd-networkd.** It is the install's last step, and the old network
+  manager is removed once it holds. The install waits about 20 seconds for every address to come
+  back. If one does not, the previous network manager returns after three minutes unless
+  `ostiole takeover --network --confirm` runs. If the SSH session drops, reconnect and confirm:
+  that finishes the install. If you cannot reconnect, wait: the old manager comes back with the
+  old addresses.
 - **The first apply.** Anti-lockout keeps the web UI and SSH open from the LAN only. If you manage
   the router over its public address, tick "Allow management from the WAN side too" in the
   wizard. Otherwise the apply cuts you off, is never confirmed, and reverts on its own.

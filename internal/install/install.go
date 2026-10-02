@@ -802,6 +802,28 @@ const RevertTimerUnit = "ostiole-network-revert"
 type TakeoverRecord struct {
 	Managers []string  `json:"managers"`
 	At       time.Time `json:"at"`
+	// Remove is what the install script left on the router while the
+	// handover could still bring it back: the old managers' packages,
+	// which go once a handover is confirmed.
+	Remove []string `json:"remove,omitempty"`
+}
+
+// FinishUnit is the transient unit that removes them.
+const FinishUnit = "ostiole-install-finish"
+
+// HandoverHolds reports whether systemd-networkd has the network and none
+// of the managers it replaced is running again: what a confirmed handover
+// leaves, and a revert does not. Only then can their packages go.
+func HandoverHolds(ctx context.Context, sc Systemctl, managers []string) bool {
+	if out, _ := sc.Run(ctx, "is-active", NetworkdUnit); strings.TrimSpace(out) != "active" {
+		return false
+	}
+	for _, m := range managers {
+		if out, _ := sc.Run(ctx, "is-active", UnitName(m)); strings.TrimSpace(out) == "active" {
+			return false
+		}
+	}
+	return true
 }
 
 // TakeoverRecordFile is the record's name inside the config directory.

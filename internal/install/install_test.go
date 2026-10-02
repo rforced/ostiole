@@ -546,3 +546,24 @@ func TestInstallClosesTheConfigurationToOthers(t *testing.T) {
 		}
 	}
 }
+
+// Only a handover that holds lets the old managers' packages go: networkd
+// running and none of the managers it replaced, as a revert leaves them.
+func TestHandoverHoldsOnlyWithNetworkdAndNoOldManager(t *testing.T) {
+	t.Parallel()
+	managers := []string{"NetworkManager", "NetworkManager-wait-online"}
+	for _, c := range []struct {
+		name   string
+		active map[string]string
+		want   bool
+	}{
+		{"confirmed", map[string]string{NetworkdUnit: "active"}, true},
+		{"reverted", map[string]string{NetworkdUnit: "inactive", "NetworkManager.service": "active"}, false},
+		{"both running", map[string]string{NetworkdUnit: "active", "NetworkManager.service": "active"}, false},
+		{"neither", map[string]string{}, false},
+	} {
+		if got := HandoverHolds(context.Background(), &fakeSystemctl{active: c.active}, managers); got != c.want {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+}
