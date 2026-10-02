@@ -1,4 +1,4 @@
-# Coraza v3.8.0 from the Go module proxy, h1:3VZxU7JAN16BkhlHe2sZuZgE0r1qm8Aa1lI5sC/h7jI=,
+# Coraza v3.8.1 from the Go module proxy, h1:dMV55FbMR2vOks/acrT43RShR+VkzU6jwp+XPdxay8o=,
 # without its tests, testdata, testing/ and http/e2e/ packages, docs, agent
 # guides, or dev and CI files. It is updated as soon as upstream releases:
 # copy the new release the same way and apply the changes below again, less
@@ -11,10 +11,6 @@
 #   ctl:ruleRemoveTargetById removals into the rule's shared exception
 #   list where that had room, so concurrent requests removing different
 #   targets from one rule overwrote each other. The capacity is capped so
-#   the append copies. Upstream: issue #1723, open at v3.8.0; closed,
+#   the append copies. Upstream: issue #1723, open at v3.8.1; closed,
 #   unmerged PR #1509 had the same fix.
-# - internal/bodyprocessors/multipart.go: hasDuplicateParam compared each
-#   parameter of a malformed Content-Disposition with every earlier one,
-#   so one request with a 900 KB header cost 9 s of CPU. It keeps a set.
-#   Upstream: PR #1726, merged after v3.8.0 (c144e85).
-v3.8.0
+v3.8.1

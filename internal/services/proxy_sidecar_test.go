@@ -289,8 +289,9 @@ func TestProxyErrorLinesAreCutDown(t *testing.T) {
 // A JSON body is read as JSON: a harmless one passes even at paranoia 4,
 // where read as a form its quotes and braces were an attack, and an attack
 // in one of its values is caught by that value's name, even where another
-// key flattens to the same name. One that does not parse is refused rather
-// than let through unread, and an empty one is not read at all.
+// key flattens to the same name or differs only in case. One that does not
+// parse, or nests too deep, is refused rather than let through unread, and
+// an empty one is not read at all.
 func TestProxyReadsJSONBodiesAsJSON(t *testing.T) {
 	t.Parallel()
 	bin := sidecar(t)
@@ -322,6 +323,20 @@ func TestProxyReadsJSONBodiesAsJSON(t *testing.T) {
 			t.Errorf("%s: status %d, want %d", c.path, got, c.status)
 		}
 	}
+	// Names that differ only in case are one argument, where Coraza 3.8.0
+	// kept one of the two values, at random.
+	for range 20 {
+		if got := post(t, plain, site+"/case", "application/json", `{"a":{"b":"<script>alert(1)</script>","B":"x"}}`); got != http.StatusForbidden {
+			t.Fatalf("/case: status %d, want 403", got)
+		}
+	}
+	// Nested ten million deep behind a thousand values: Coraza 3.8.0 stopped
+	// reading at the limit, then checked the rest by recursion, and the stack
+	// overflow killed the proxy.
+	deep := `{"a":[` + strings.Repeat("1,", 1000) + strings.Repeat("[", 10_000_000) + `]}`
+	if got := post(t, plain, site+"/deep", "application/json", deep); got != http.StatusForbidden {
+		t.Errorf("/deep: status %d, want 403", got)
+	}
 	event := func(path string) func() (wafevent.Event, bool) {
 		return func() (wafevent.Event, bool) {
 			return findEvent(out, func(ev wafevent.Event) bool { return ev.URI == path })
@@ -330,17 +345,20 @@ func TestProxyReadsJSONBodiesAsJSON(t *testing.T) {
 	waitFor(t, "the events", func() bool {
 		_, xss := event("/xss")()
 		_, broken := event("/broken")()
-		return xss && broken
+		_, deep := event("/deep")()
+		return xss && broken && deep
 	})
 	if ev, _ := event("/xss")(); !slices.ContainsFunc(ev.Rules, func(h wafevent.Hit) bool {
 		return h.ID == 941100 && strings.Contains(h.Data, "found within ARGS:json.name:")
 	}) {
 		t.Errorf("the attack in a value was caught as %+v", ev.Rules)
 	}
-	if ev, _ := event("/broken")(); ev.Status != http.StatusForbidden || !slices.ContainsFunc(ev.Rules, func(h wafevent.Hit) bool {
-		return h.Message == "Failed to parse request body"
-	}) {
-		t.Errorf("the broken body was refused with %d by %+v", ev.Status, ev.Rules)
+	for _, path := range []string{"/broken", "/deep"} {
+		if ev, _ := event(path)(); ev.Status != http.StatusForbidden || !slices.ContainsFunc(ev.Rules, func(h wafevent.Hit) bool {
+			return h.Message == "Failed to parse request body"
+		}) {
+			t.Errorf("%s was refused with %d by %+v", path, ev.Status, ev.Rules)
+		}
 	}
 	for _, path := range []string{"/user-key-id", "/event", "/empty"} {
 		if ev, ok := event(path)(); ok {
@@ -455,6 +473,8 @@ func TestProxyRefusesArgumentsPastTheLimit(t *testing.T) {
 	}{
 		{"/search", args(1000), "", "", http.StatusOK},
 		{"/login", "", form, args(1000), http.StatusOK},
+		// The array's length is no argument, where Coraza 3.8.0 counted it.
+		{"/api", "", "application/json", `{"a":[` + strings.Repeat("1,", 999) + `1]}`, http.StatusOK},
 		{"/search-flood", args(1000) + "&" + xss, "", "", http.StatusForbidden},
 		{"/login-flood", "", form, args(1000) + "&" + xss, http.StatusForbidden},
 		{"/api-flood", "", "application/json", `{"a":[` + strings.Repeat("1,", 1000) + `"<script>alert(1)</script>"]}`, http.StatusForbidden},
@@ -493,7 +513,7 @@ func TestProxyRefusesArgumentsPastTheLimit(t *testing.T) {
 			t.Errorf("%s was refused by %+v", path, ev.Rules)
 		}
 	}
-	for _, path := range []string{"/search", "/login"} {
+	for _, path := range []string{"/search", "/login", "/api"} {
 		if ev, ok := event(path)(); ok {
 			t.Errorf("%s matched %+v", path, ev.Rules)
 		}
@@ -501,9 +521,10 @@ func TestProxyRefusesArgumentsPastTheLimit(t *testing.T) {
 }
 
 // A multipart body that repeats a part's header or a parameter, quotes an
-// extended filename or never closes is refused, since backends settle
-// those differently. So is any body past the limit, an upload or padding
-// in front of an attack the WAF would otherwise never read.
+// extended filename or continues one in numbered pieces, or never closes is
+// refused, since backends settle those differently. So is any body past the
+// limit, an upload or padding in front of an attack the WAF would otherwise
+// never read.
 func TestProxyRefusesMalformedMultipartBodies(t *testing.T) {
 	t.Parallel()
 	bin := sidecar(t)
@@ -532,6 +553,9 @@ func TestProxyRefusesMalformedMultipartBodies(t *testing.T) {
 		{"/two-headers", "--XyZ\r\nContent-Disposition: form-data; name=\"f\"; filename=\"photo.jpg\"\r\n" +
 			"Content-Disposition: form-data; name=\"f\"; filename=\"photo.png\"\r\n\r\n" + photo + "\r\n" + end, http.StatusForbidden},
 		{"/quoted", part(`form-data; name="f"; filename*="utf-8''photo.jpg"`, photo) + end, http.StatusForbidden},
+		// Werkzeug takes the piece, which Coraza 3.8.0 let through unread
+		// beside the extended filename.
+		{"/continued", part(`form-data; name="f"; filename="photo.jpg"; filename*=utf-8''photo.png; filename*0*=utf-8''photo.php`, photo) + end, http.StatusForbidden},
 		{"/unclosed", part(`form-data; name="f"; filename="photo.jpg"`, photo), http.StatusForbidden},
 	} {
 		if got := post(t, plain, site+c.path, "multipart/form-data; boundary=XyZ", c.body); got != c.status {
@@ -547,7 +571,7 @@ func TestProxyRefusesMalformedMultipartBodies(t *testing.T) {
 	if got := post(t, plain, site+"/padded", "application/json", padded); got != http.StatusForbidden {
 		t.Errorf("/padded: status %d, want 403", got)
 	}
-	refused := []string{"/two-names", "/two-headers", "/quoted", "/unclosed", "/long", "/padded"}
+	refused := []string{"/two-names", "/two-headers", "/quoted", "/continued", "/unclosed", "/long", "/padded"}
 	waitFor(t, "the events", func() bool {
 		for _, path := range refused {
 			if _, ok := event(path)(); !ok {
@@ -560,6 +584,7 @@ func TestProxyRefusesMalformedMultipartBodies(t *testing.T) {
 		"/two-names":   "MULTIPART_DUPLICATE_PART_HEADER=1",
 		"/two-headers": "MULTIPART_DUPLICATE_PART_HEADER=1",
 		"/quoted":      "MULTIPART_INVALID_QUOTING=1",
+		"/continued":   "MULTIPART_DUPLICATE_PART_HEADER=0, MULTIPART_INVALID_QUOTING=0",
 		"/unclosed":    "MULTIPART_DUPLICATE_PART_HEADER=0, MULTIPART_INVALID_QUOTING=0",
 	} {
 		if ev, _ := event(path)(); !slices.ContainsFunc(ev.Rules, func(h wafevent.Hit) bool {
@@ -777,7 +802,8 @@ func cloudflareCookie(r *rand.Rand) string {
 // A browser sends Cloudflare's cookies to every name under a zone once one
 // name in it has been through Cloudflare, and their random values trip the
 // SQL rules now and then, a comment in one of eleven. No rule reads them at
-// paranoia 4; any other cookie is read as before.
+// paranoia 4; any other cookie is read as before, one with no name too,
+// which Coraza 3.8.0 dropped and Node's cookie package does not.
 func TestCloudflaresCookiesAreNotRead(t *testing.T) {
 	t.Parallel()
 	cfg := &model.Config{}
@@ -816,9 +842,9 @@ func TestCloudflaresCookiesAreNotRead(t *testing.T) {
 			t.Errorf("request %d: %d", i, status)
 		}
 	}
-	for _, name := range []string{"session", "cf_clearance_copy"} {
+	for _, name := range []string{"session", "cf_clearance_copy", ""} {
 		if status := send("/other/"+name, name+"=1' or '1'='1"); status != http.StatusForbidden {
-			t.Errorf("an injection in %s: %d, want 403", name, status)
+			t.Errorf("an injection in %q: %d, want 403", name, status)
 		}
 	}
 	waitFor(t, "the injections' events", func() bool {
