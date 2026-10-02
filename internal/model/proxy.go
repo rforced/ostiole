@@ -184,8 +184,12 @@ type WAFProfile struct {
 	// phpbb, xenforo, vaultwarden, jellyfin.
 	Applications []string `json:"applications,omitempty"`
 	// BodyLimitMB is the largest request body taken, all of it inspected;
-	// 0 is 12. A larger one is refused.
+	// 0 is 12. A larger one is refused unless PassLargeBodies.
 	BodyLimitMB int `json:"bodyLimitMB,omitempty"`
+	// PassLargeBodies lets a larger body through with only its first
+	// BodyLimitMB inspected, for a site that takes uploads bigger than the
+	// WAF should hold. What comes after is never read.
+	PassLargeBodies bool `json:"passLargeBodies,omitempty"`
 	// InspectResponses runs the outbound rules on text responses.
 	InspectResponses bool           `json:"inspectResponses,omitempty"`
 	Exclusions       []WAFExclusion `json:"exclusions,omitempty"`

@@ -580,6 +580,53 @@ func TestProxyRefusesMalformedMultipartBodies(t *testing.T) {
 	}
 }
 
+// A profile that passes larger bodies lets an upload past the limit
+// through with its first part inspected, and a body cut at the limit is
+// not refused as one that does not parse. That padding hides what comes
+// after it is the price, and what a request carries up to the limit is
+// still read.
+func TestAProfileThatPassesLargeBodiesLetsThemThrough(t *testing.T) {
+	t.Parallel()
+	bin := sidecar(t)
+	cfg := &model.Config{}
+	cfg.Services.Proxy = model.Proxy{
+		Enabled: true, HTTPPort: freePort(t), HTTPSPort: freePort(t),
+		Pools:    []model.ProxyPool{{ID: "app", Upstreams: []model.ProxyUpstream{{Address: answer(t, "ok")}}}},
+		Profiles: []model.WAFProfile{{ID: "p1", Mode: "block", Paranoia: 1, BodyLimitMB: 1, PassLargeBodies: true}},
+		Sites: []model.ProxySite{{ID: "web", Enabled: true, Hosts: []string{"web.example.com"}, Pool: "app",
+			PlainHTTP: true, WAF: "p1"}},
+	}
+	plain, _, out := runSidecar(t, bin, cfg, "", map[string][]string{model.SelfCertificate: {"127.0.0.1"}})
+	const site = "http://web.example.com"
+	upload := "--XyZ\r\nContent-Disposition: form-data; name=\"f\"; filename=\"photo.jpg\"\r\n\r\n" +
+		strings.Repeat("A", 2<<20) + "\r\n--XyZ--\r\n"
+	padded := `{"pad": "` + strings.Repeat("A", 2<<20) + `", "q": "' or 1=1 union select password from users--"}`
+	attack := `{"q": "' or 1=1 union select password from users--"}`
+	for _, c := range []struct {
+		path, kind, body string
+		status           int
+	}{
+		{"/upload", "multipart/form-data; boundary=XyZ", upload, http.StatusOK},
+		{"/padded", "application/json", padded, http.StatusOK},
+		{"/attack", "application/json", attack, http.StatusForbidden},
+	} {
+		if got := post(t, plain, site+c.path, c.kind, c.body); got != c.status {
+			t.Errorf("%s: status %d, want %d", c.path, got, c.status)
+		}
+	}
+	event := func(path string) func() (wafevent.Event, bool) {
+		return func() (wafevent.Event, bool) {
+			return findEvent(out, func(ev wafevent.Event) bool { return ev.URI == path })
+		}
+	}
+	waitFor(t, "the attack's event", func() bool { _, ok := event("/attack")(); return ok })
+	for _, path := range []string{"/upload", "/padded"} {
+		if ev, ok := event(path)(); ok {
+			t.Errorf("%s matched %+v", path, ev.Rules)
+		}
+	}
+}
+
 // coraza-caddy keeps a WAF, and the logger it was built with, across
 // reloads while the WAF's directives stay the same. A proxy that built its
 // WAFs before their logger was left out rebuilds them at the reload that

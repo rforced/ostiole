@@ -107,6 +107,28 @@ func TestProxyGoldenValidates(t *testing.T) {
 	}
 }
 
+// A body past the limit is refused unless the profile lets larger ones
+// through, and then a JSON body cut at the limit is not refused for
+// failing to parse either.
+func TestLargeBodiesAreRefusedUnlessTheProfilePassesThem(t *testing.T) {
+	t.Parallel()
+	refuse := wafDirectives("/etc/ostiole/proxy", model.WAFProfile{}, "shop")
+	pass := wafDirectives("/etc/ostiole/proxy", model.WAFProfile{PassLargeBodies: true}, "shop")
+	const oversize = `SecRule INBOUND_DATA_ERROR "@eq 1" "id:10000,phase:2,t:none,log,deny,msg:'Request body larger than the limit',severity:2"`
+	const parse = `SecRule REQBODY_ERROR "!@eq 0" "id:10005,phase:2,t:none,log,deny,msg:'Failed to parse request body',logdata:'%{reqbody_error_msg}',severity:2`
+	if !strings.Contains(refuse, oversize+"\n") || !strings.Contains(refuse, parse+"\"\n") {
+		t.Errorf("refusing:\n%s", refuse)
+	}
+	if strings.Contains(pass, "id:10000") || !strings.Contains(pass, parse+",chain\"\nSecRule INBOUND_DATA_ERROR \"@eq 0\" \"t:none\"\n") {
+		t.Errorf("passing:\n%s", pass)
+	}
+	for _, d := range []string{refuse, pass} {
+		if !strings.Contains(d, "SecRequestBodyLimitAction ProcessPartial\n") {
+			t.Errorf("the limit action is not ProcessPartial, which the rules read the cut from:\n%s", d)
+		}
+	}
+}
+
 // Coraza refuses a second SecDefaultAction for a phase. The daemon writes
 // phases 3 and 4, as every daemon before CRS 4.29 did, so the crs-setup
 // the proxy ships must set neither, or a proxy and a daemon one release

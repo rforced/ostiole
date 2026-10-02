@@ -1,8 +1,9 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
@@ -29,6 +30,7 @@ function blank() {
     outboundThreshold: '',
     applications: [],
     bodyLimitMB: '',
+    passLargeBodies: false,
     inspectResponses: false,
   }
 }
@@ -53,10 +55,17 @@ watch(
       outboundThreshold: w.outboundThreshold || '',
       applications: [...(w.applications ?? [])],
       bodyLimitMB: w.bodyLimitMB || '',
+      passLargeBodies: Boolean(w.passLargeBodies),
       inspectResponses: Boolean(w.inspectResponses),
     }
   },
   { immediate: true },
+)
+
+const bodyHint = computed(() =>
+  form.value.passLargeBodies
+    ? '12 MB is the default. Past it, a body goes through with the rest unread.'
+    : '12 MB is the default. A larger one is refused, an upload too.',
 )
 
 function toggleApp(name, on) {
@@ -76,6 +85,7 @@ function save() {
   if (Number(f.outboundThreshold)) profile.outboundThreshold = Number(f.outboundThreshold)
   if (f.applications.length) profile.applications = [...f.applications]
   if (Number(f.bodyLimitMB)) profile.bodyLimitMB = Number(f.bodyLimitMB)
+  if (f.passLargeBodies) profile.passLargeBodies = true
   if (f.inspectResponses) profile.inspectResponses = true
   // The exclusions card edits those; a rename takes them along.
   const exclusions = config.proxy.wafProfiles?.find((w) => w.id === f.previousId)?.exclusions
@@ -130,11 +140,7 @@ function save() {
             <option v-for="n in 4" :key="n" :value="n">{{ n }}</option>
           </select>
         </FormField>
-        <FormField
-          id="waf-body"
-          label="Largest request body"
-          hint="12 MB is the default. A larger one is refused, an upload too."
-        >
+        <FormField id="waf-body" label="Request body limit" :hint="bodyHint">
           <input
             id="waf-body"
             v-model.number="form.bodyLimitMB"
@@ -176,6 +182,12 @@ function save() {
           />
         </FormField>
       </div>
+
+      <ToggleRow
+        v-model="form.passLargeBodies"
+        label="Let larger bodies through"
+        hint="Only the part up to the limit is inspected, and the rest reaches the site unread. For a site that takes larger uploads."
+      />
 
       <fieldset class="space-y-2">
         <legend class="group-title">Applications</legend>

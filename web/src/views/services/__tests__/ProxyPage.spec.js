@@ -501,6 +501,33 @@ describe('ProfileDialog', () => {
     await wrapper.find('form').trigger('submit')
     expect(store.proxy.wafProfiles[0]).toEqual({ id: 'watch', inboundThreshold: 10 })
   })
+
+  // A body past the limit is refused unless the profile lets it through,
+  // which only the switch says.
+  it('passes larger bodies only when switched to', async () => {
+    const profile = { id: 'vault', bodyLimitMB: 64 }
+    const store = useConfigStore()
+    store.draft = config({ services: { proxy: proxy({ wafProfiles: [profile] }) } })
+    store.loaded = true
+    const wrapper = mount(ProfileDialog, {
+      props: { open: true, profile },
+      global: { stubs: { AppDialog: { template: '<div><slot /></div>' } } },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('A larger one is refused, an upload too.')
+    const pass = wrapper
+      .findAll('input[type="checkbox"]')
+      .find((i) => i.element.parentElement.textContent.includes('Let larger bodies through'))
+    expect(pass.element.checked).toBe(false)
+    await pass.setValue(true)
+    expect(wrapper.text()).toContain('Past it, a body goes through with the rest unread.')
+    await wrapper.find('form').trigger('submit')
+    expect(store.proxy.wafProfiles[0]).toEqual({
+      id: 'vault',
+      bodyLimitMB: 64,
+      passLargeBodies: true,
+    })
+  })
 })
 
 /** Services as a saved configuration has them, with no proxy unless given. */

@@ -160,10 +160,17 @@ func wafDirectives(dir string, w model.WAFProfile, siteID string) string {
 	// attacker puts after a limit's worth of padding no rule would see: it
 	// is refused, before a JSON one cut short reads as unparseable. Coraza's
 	// own Reject would refuse it before any rule, with no event to say why.
-	// The ID is the base, outside the counter, so nothing below moves.
-	fmt.Fprintf(&b, "SecRule INBOUND_DATA_ERROR \"@eq 1\" \"id:%d,phase:2,t:none,log,deny,msg:'Request body larger than the limit',severity:2\"\n", wafRuleBase)
+	// The ID is the base, outside the counter, so nothing below moves. A
+	// profile that lets such a body through has it parsed up to the cut,
+	// which no longer fails it for not parsing.
+	parse := ""
+	if w.PassLargeBodies {
+		parse = ",chain\"\nSecRule INBOUND_DATA_ERROR \"@eq 0\" \"t:none"
+	} else {
+		fmt.Fprintf(&b, "SecRule INBOUND_DATA_ERROR \"@eq 1\" \"id:%d,phase:2,t:none,log,deny,msg:'Request body larger than the limit',severity:2\"\n", wafRuleBase)
+	}
 	id++
-	fmt.Fprintf(&b, "SecRule REQBODY_ERROR \"!@eq 0\" \"id:%d,phase:2,t:none,log,deny,msg:'Failed to parse request body',logdata:'%%{reqbody_error_msg}',severity:2\"\n", id)
+	fmt.Fprintf(&b, "SecRule REQBODY_ERROR \"!@eq 0\" \"id:%d,phase:2,t:none,log,deny,msg:'Failed to parse request body',logdata:'%%{reqbody_error_msg}',severity:2%s\"\n", id, parse)
 	// Coraza reads the first 1,000 arguments, from the query string, the
 	// path and the body together, and drops the rest, where no rule sees
 	// them: a thousand harmless ones in front of an attack hid it. So a
@@ -179,7 +186,8 @@ func wafDirectives(dir string, w model.WAFProfile, siteID string) string {
 	// filenames say, which backends settle differently, or that breaks the
 	// format in a way they might read past, is refused too, as the
 	// recommended rule 200003 does. One cut at the body limit, which breaks
-	// off mid-part, is refused above for what it is.
+	// off mid-part, is refused above for what it is, or let through where
+	// the profile passes larger bodies.
 	id++
 	fmt.Fprintf(&b, "SecRule MULTIPART_STRICT_ERROR \"!@eq 0\" \"id:%d,phase:2,t:none,log,deny,msg:'Multipart request body failed strict validation',logdata:'MULTIPART_DUPLICATE_PART_HEADER=%%{MULTIPART_DUPLICATE_PART_HEADER}, MULTIPART_INVALID_QUOTING=%%{MULTIPART_INVALID_QUOTING}',severity:2,chain\"\n", id)
 	b.WriteString("SecRule INBOUND_DATA_ERROR \"@eq 0\" \"t:none\"\n")
