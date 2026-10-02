@@ -151,7 +151,7 @@ func TestHealthKeepsTheVersionFromStrangers(t *testing.T) {
 		t.Error("a token holder was told no version")
 	}
 	// A token that may only fetch a certificate is not inside.
-	_, restricted, err := tokens.Create("proxy", auth.RoleAdmin, 0, "test", []string{"web"})
+	_, restricted, err := tokens.Create("proxy", auth.RoleAdmin, 0, "test", auth.Limits{Certificates: []string{"web"}})
 	if err != nil {
 		t.Fatal(err)
 	}

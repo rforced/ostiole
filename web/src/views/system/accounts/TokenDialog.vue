@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { useConfigStore } from '@/stores/config'
 import { ROLES } from '@/views/system/accounts/roles'
 
@@ -10,15 +11,33 @@ const open = defineModel('open', { type: Boolean, default: false })
 const emit = defineEmits(['create'])
 
 const config = useConfigStore()
-const form = ref({ name: '', role: 'viewer', expiresInDays: 0, certificates: [] })
+const blank = () => ({
+  name: '',
+  role: 'viewer',
+  expiresInDays: 0,
+  certificates: [],
+  metrics: false,
+})
+const form = ref(blank())
 
 watch(open, (on) => {
-  if (on) form.value = { name: '', role: 'viewer', expiresInDays: 0, certificates: [] }
+  if (on) form.value = blank()
 })
+
+/** A token for a scraper is a viewer, and fetches no certificates too. */
+watch(
+  () => form.value.metrics,
+  (on) => {
+    if (!on) return
+    form.value.role = 'viewer'
+    form.value.certificates = []
+  },
+)
 
 /** The parent closes the dialog once the server has minted the secret. */
 function submit() {
-  emit('create', { ...form.value })
+  const { metrics, ...token } = form.value
+  emit('create', metrics ? { ...token, metrics } : token)
 }
 </script>
 
@@ -51,12 +70,17 @@ function submit() {
         </FormField>
       </div>
       <FormField id="tok-role" label="Role">
-        <select id="tok-role" v-model="form.role" class="input">
+        <select id="tok-role" v-model="form.role" class="input" :disabled="form.metrics">
           <option v-for="r in ROLES" :key="r.value" :value="r.value">{{ r.label }}</option>
         </select>
       </FormField>
+      <ToggleRow
+        v-model="form.metrics"
+        label="Metrics only"
+        hint="For a monitoring system: the token reads /metrics and nothing else, the logs included."
+      />
       <FormField
-        v-if="config.certificates.length"
+        v-if="config.certificates.length && !form.metrics"
         id="tok-certs"
         label="Limit to certificates"
         hint="The token fetches these and can do nothing else."

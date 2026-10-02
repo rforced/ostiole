@@ -252,7 +252,7 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/host":               {summary: "What this router is: distribution, kernel, Ostiole's units, the daemons it has, who owns the addresses, and leftover rulesets.", role: auth.RoleViewer},
 	"POST /api/v1/host/legacy/flush": {summary: "Clear the rulesets an older firewall left in the kernel.", role: auth.RoleAdmin},
 
-	"GET /metrics":             {summary: "Metrics in the Prometheus text format.", role: auth.RoleViewer},
+	"GET /metrics":             {summary: "Metrics in the Prometheus text format. A token limited to the metrics reads them and nothing else.", role: auth.RoleViewer},
 	"GET /api/v1/openapi.json": {summary: "This description.", public: true},
 }
 

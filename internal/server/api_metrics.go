@@ -11,15 +11,16 @@ import (
 )
 
 func (a *api) registerMetrics(mux *router) {
-	mux.HandleFunc("GET /metrics", a.readNoEngine(a.metrics))
+	mux.HandleFunc("GET /metrics", a.scrape(a.metrics))
 }
 
 // metrics answers in the Prometheus text format. It is deliberately
 // hand-rolled: the numbers come from places Ostiole already reads, and a
 // client library would be a dependency for a few dozen lines of text.
 //
-// It needs a viewer, which an API token can be, so scraping does not mean
-// handing a monitoring system the keys to the firewall.
+// It needs a viewer, or a token limited to the metrics, which reads them
+// and nothing else: scraping does not hand a monitoring system the keys
+// to the firewall, nor the logs a viewer reads.
 func (a *api) metrics(w http.ResponseWriter, r *http.Request) error {
 	var b strings.Builder
 	m := &metricWriter{b: &b}

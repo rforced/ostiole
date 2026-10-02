@@ -86,6 +86,14 @@ func TestEveryRouteEnforcesItsDocumentedRole(t *testing.T) {
 		auth.RoleOperator: mintToken(t, srv, "change", string(auth.RoleOperator)),
 		auth.RoleAdmin:    mintToken(t, srv, "own", string(auth.RoleAdmin)),
 	}
+	// A token for a scraper reads the metrics and is refused everywhere else.
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/tokens", map[string]any{"name": "scrape", "metrics": true})
+	var scraper struct {
+		Secret string `json:"secret"`
+	}
+	if resp.StatusCode != http.StatusCreated || json.Unmarshal(raw, &scraper) != nil {
+		t.Fatalf("create the scraper's token: %d %s", resp.StatusCode, raw)
+	}
 	short := map[auth.Role]auth.Role{auth.RoleOperator: auth.RoleViewer, auth.RoleAdmin: auth.RoleOperator}
 	// Path parameters take any value: the gate comes before the lookup.
 	params := strings.NewReplacer("{id}", "x", "{name}", "x")
@@ -105,6 +113,12 @@ func TestEveryRouteEnforcesItsDocumentedRole(t *testing.T) {
 				t.Errorf("%s with a token: %d, want 401 (documented as session only)", pattern, got)
 			}
 			continue
+		}
+		switch got := probe(t, srv, method, path, scraper.Secret); {
+		case pattern == "GET /metrics" && (got == http.StatusUnauthorized || got == http.StatusForbidden):
+			t.Errorf("%s with a token limited to the metrics: %d", pattern, got)
+		case pattern != "GET /metrics" && got != http.StatusForbidden:
+			t.Errorf("%s with a token limited to the metrics: %d, want 403", pattern, got)
 		}
 		if lower, ok := short[doc.role]; ok {
 			if got := probe(t, srv, method, path, tokens[lower]); got != http.StatusForbidden {

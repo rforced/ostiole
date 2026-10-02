@@ -22,6 +22,8 @@ type Principal struct {
 	// Certificates restricts the caller to fetching those certificates.
 	// A principal with any is refused everywhere else, whatever its role.
 	Certificates []string
+	// Metrics restricts it to the metrics, the same way.
+	Metrics bool
 }
 
 // errForbidden is returned when the caller is authenticated but not
@@ -48,7 +50,7 @@ func (a *api) principal(r *http.Request, touch bool) (Principal, bool) {
 		if err != nil {
 			return Principal{}, false
 		}
-		return Principal{Name: tok.Name, Role: tok.Role, Token: true, Certificates: tok.Certificates}, true
+		return Principal{Name: tok.Name, Role: tok.Role, Token: true, Certificates: tok.Certificates, Metrics: tok.Metrics}, true
 	}
 	if a.auth == nil {
 		return Principal{}, false
@@ -77,7 +79,7 @@ type routeRole struct{}
 func (a *api) stillAllowed(r *http.Request) bool {
 	role, _ := r.Context().Value(routeRole{}).(auth.Role)
 	p, ok := a.principal(r, false)
-	return ok && len(p.Certificates) == 0 && p.Role.Allows(role)
+	return ok && !p.limited() && p.Role.Allows(role)
 }
 
 func bearer(r *http.Request) string {
@@ -99,12 +101,37 @@ func (a *api) requires(role auth.Role, h func(w http.ResponseWriter, r *http.Req
 		if !ok {
 			return errUnauthorized
 		}
-		// A token restricted to certificates reaches nothing that goes
-		// through here, so the restriction does not depend on its role.
-		if len(p.Certificates) > 0 || !p.Role.Allows(role) {
+		// A token restricted to certificates or the metrics reaches
+		// nothing that goes through here, so the restriction does not
+		// depend on its role.
+		if p.limited() || !p.Role.Allows(role) {
 			return errForbidden
 		}
 		return h(w, r.WithContext(context.WithValue(r.Context(), routeRole{}, role)))
+	})
+}
+
+// limited reports a token narrowed below its role, which reaches only the
+// one route made for it.
+func (p Principal) limited() bool {
+	return len(p.Certificates) > 0 || p.Metrics
+}
+
+// scrape wraps /metrics: a viewer, or a token limited to the metrics,
+// which this is the one route for.
+func (a *api) scrape(h func(w http.ResponseWriter, r *http.Request) error) http.HandlerFunc {
+	return a.public(func(w http.ResponseWriter, r *http.Request) error {
+		if a.auth == nil {
+			return &unavailable{errors.New("authentication not available")}
+		}
+		p, ok := a.authenticate(r)
+		if !ok {
+			return errUnauthorized
+		}
+		if !p.Metrics && (p.limited() || !p.Role.Allows(auth.RoleViewer)) {
+			return errForbidden
+		}
+		return h(w, r)
 	})
 }
 

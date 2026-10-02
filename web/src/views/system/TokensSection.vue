@@ -151,6 +151,7 @@ const when = (s, fallback) => (s ? new Date(s).toLocaleDateString() : fallback)
             <template v-if="(t.certificates ?? []).length">
               certificates: {{ t.certificates.join(', ') }}
             </template>
+            <template v-else-if="t.metrics">metrics only</template>
             <template v-else>{{ t.role }}</template>
           </td>
           <td data-label="Created">{{ when(t.createdAt, '—') }}</td>

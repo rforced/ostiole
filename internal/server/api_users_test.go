@@ -130,7 +130,7 @@ func TestTheLastAdministratorStays(t *testing.T) {
 	if err := as.CreateUser("watcher", testPassword, auth.RoleViewer); err != nil {
 		t.Fatal(err)
 	}
-	_, secret, err := tokens.Create("robot", auth.RoleAdmin, 0, "admin", nil)
+	_, secret, err := tokens.Create("robot", auth.RoleAdmin, 0, "admin", auth.Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}

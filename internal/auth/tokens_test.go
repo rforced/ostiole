@@ -23,7 +23,7 @@ func TestTokenRoundTrip(t *testing.T) {
 	t.Parallel()
 	tk := tokens(t)
 
-	tok, secret, err := tk.Create("monitoring", RoleViewer, 0, "admin", nil)
+	tok, secret, err := tk.Create("monitoring", RoleViewer, 0, "admin", Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestTokenRoundTrip(t *testing.T) {
 func TestAuthenticateRejects(t *testing.T) {
 	t.Parallel()
 	tk := tokens(t)
-	_, secret, err := tk.Create("real", RoleAdmin, 0, "", nil)
+	_, secret, err := tk.Create("real", RoleAdmin, 0, "", Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestTokenExpiry(t *testing.T) {
 	now := time.Now()
 	tk.now = func() time.Time { return now }
 
-	_, secret, err := tk.Create("short", RoleViewer, 24*time.Hour, "", nil)
+	_, secret, err := tk.Create("short", RoleViewer, 24*time.Hour, "", Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,16 +104,16 @@ func TestTokenExpiry(t *testing.T) {
 func TestTokenNamesAreUniqueAndChecked(t *testing.T) {
 	t.Parallel()
 	tk := tokens(t)
-	if _, _, err := tk.Create("taken", RoleViewer, 0, "", nil); err != nil {
+	if _, _, err := tk.Create("taken", RoleViewer, 0, "", Limits{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := tk.Create("TAKEN", RoleViewer, 0, "", nil); err == nil {
+	if _, _, err := tk.Create("TAKEN", RoleViewer, 0, "", Limits{}); err == nil {
 		t.Error("a duplicate name was accepted")
 	}
-	if _, _, err := tk.Create("", RoleViewer, 0, "", nil); err == nil {
+	if _, _, err := tk.Create("", RoleViewer, 0, "", Limits{}); err == nil {
 		t.Error("an empty name was accepted")
 	}
-	if _, _, err := tk.Create("fine", "wizard", 0, "", nil); err == nil {
+	if _, _, err := tk.Create("fine", "wizard", 0, "", Limits{}); err == nil {
 		t.Error("an unknown role was accepted")
 	}
 }
@@ -121,7 +121,7 @@ func TestTokenNamesAreUniqueAndChecked(t *testing.T) {
 func TestRestrictedTokenCarriesItsCertificates(t *testing.T) {
 	t.Parallel()
 	tk := tokens(t)
-	tok, secret, err := tk.Create("proxy", RoleViewer, 0, "", []string{"router", "mail"})
+	tok, secret, err := tk.Create("proxy", RoleViewer, 0, "", Limits{Certificates: []string{"router", "mail"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,23 +135,43 @@ func TestRestrictedTokenCarriesItsCertificates(t *testing.T) {
 	if !slices.Equal(back.Certificates, tok.Certificates) {
 		t.Errorf("authenticated = %v, want %v", back.Certificates, tok.Certificates)
 	}
-	if _, _, err := tk.Create("bad", RoleViewer, 0, "", []string{"Not A Name"}); err == nil {
+	if _, _, err := tk.Create("bad", RoleViewer, 0, "", Limits{Certificates: []string{"Not A Name"}}); err == nil {
 		t.Error("a name no certificate could have was accepted")
 	}
 	too := make([]string, MaxTokenCertificates+1)
 	for i := range too {
 		too[i] = fmt.Sprintf("c%d", i)
 	}
-	if _, _, err := tk.Create("many", RoleViewer, 0, "", too); err == nil {
+	if _, _, err := tk.Create("many", RoleViewer, 0, "", Limits{Certificates: too}); err == nil {
 		t.Error("an unbounded list was accepted")
+	}
+}
+
+// A token for a scraper reads the metrics and nothing else. It is a
+// viewer, and it does not fetch certificates too.
+func TestMetricsTokenIsAViewerAndNothingElse(t *testing.T) {
+	t.Parallel()
+	tk := tokens(t)
+	tok, secret, err := tk.Create("scraper", RoleViewer, 0, "", Limits{Metrics: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if back, err := tk.Authenticate(secret); err != nil || !back.Metrics || !tok.Metrics {
+		t.Errorf("authenticated = %+v, %v", back, err)
+	}
+	if _, _, err := tk.Create("loud", RoleAdmin, 0, "", Limits{Metrics: true}); err == nil {
+		t.Error("an admin limited to the metrics was accepted")
+	}
+	if _, _, err := tk.Create("both", RoleViewer, 0, "", Limits{Metrics: true, Certificates: []string{"router"}}); err == nil {
+		t.Error("metrics and certificates together were accepted")
 	}
 }
 
 func TestDeleteTokenByNameOrID(t *testing.T) {
 	t.Parallel()
 	tk := tokens(t)
-	byName, _, _ := tk.Create("by-name", RoleViewer, 0, "", nil)
-	byID, _, _ := tk.Create("by-id", RoleViewer, 0, "", nil)
+	byName, _, _ := tk.Create("by-name", RoleViewer, 0, "", Limits{})
+	byID, _, _ := tk.Create("by-id", RoleViewer, 0, "", Limits{})
 
 	if err := tk.Delete("BY-NAME"); err != nil {
 		t.Errorf("delete by name: %v", err)
@@ -180,7 +200,7 @@ func TestTokensFollowTheFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, secret, err := first.Create("shared", RoleOperator, 0, "", nil)
+	_, secret, err := first.Create("shared", RoleOperator, 0, "", Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}

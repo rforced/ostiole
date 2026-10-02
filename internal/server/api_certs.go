@@ -309,6 +309,9 @@ func (a *api) certificateFiles(h func(w http.ResponseWriter, r *http.Request) er
 		if !ok {
 			return errUnauthorized
 		}
+		if p.Metrics {
+			return errForbidden
+		}
 		if len(p.Certificates) > 0 {
 			if !slices.Contains(p.Certificates, r.PathValue("id")) {
 				return errForbidden

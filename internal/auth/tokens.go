@@ -73,6 +73,17 @@ type Token struct {
 	Description string     `json:"description,omitempty"`
 	// Certificates the token may fetch, and nothing else.
 	Certificates []string `json:"certificates,omitempty"`
+	// Metrics has the token read the metrics, and nothing else: what a
+	// monitoring system scrapes with needs no logs or configuration.
+	Metrics bool `json:"metrics,omitempty"`
+}
+
+// Limits narrows what a token may do below its role.
+type Limits struct {
+	// Certificates the token may fetch, and nothing else.
+	Certificates []string
+	// Metrics has the token read the metrics, and nothing else.
+	Metrics bool
 }
 
 // Expired reports whether the token is past its expiry.
@@ -195,8 +206,9 @@ func (t *Tokens) List() []Token {
 // Create mints a token and returns it with the secret filled in. That is
 // the only time the secret exists outside the caller's hands. A token
 // given certificates fetches those and can do nothing else, whatever its
-// role says.
-func (t *Tokens) Create(name string, role Role, ttl time.Duration, createdBy string, certificates []string) (Token, string, error) {
+// role says, and one limited to the metrics reads them and nothing else.
+func (t *Tokens) Create(name string, role Role, ttl time.Duration, createdBy string, limits Limits) (Token, string, error) {
+	certificates := limits.Certificates
 	if !tokenNameRe.MatchString(name) {
 		return Token{}, "", errors.New("a token name is 1-64 characters of letters, digits, spaces, dots, or dashes")
 	}
@@ -210,6 +222,12 @@ func (t *Tokens) Create(name string, role Role, ttl time.Duration, createdBy str
 		if !certIDRe.MatchString(id) {
 			return Token{}, "", fmt.Errorf("%q is not a certificate name", id)
 		}
+	}
+	if limits.Metrics && len(certificates) > 0 {
+		return Token{}, "", errors.New("a token reads the metrics or fetches certificates, not both")
+	}
+	if limits.Metrics && role != RoleViewer {
+		return Token{}, "", errors.New("a token that reads the metrics is a viewer")
 	}
 	id, err := randomHex(4)
 	if err != nil {
@@ -228,6 +246,7 @@ func (t *Tokens) Create(name string, role Role, ttl time.Duration, createdBy str
 		CreatedAt:    t.now().UTC().Truncate(time.Second),
 		CreatedBy:    createdBy,
 		Certificates: certificates,
+		Metrics:      limits.Metrics,
 	}
 	if ttl > 0 {
 		expires := tok.CreatedAt.Add(ttl)

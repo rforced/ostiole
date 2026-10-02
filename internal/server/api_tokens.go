@@ -47,6 +47,8 @@ func (a *api) createToken(w http.ResponseWriter, r *http.Request) error {
 		// Certificates limits the token to fetching those, and nothing
 		// else on this API.
 		Certificates []string `json:"certificates,omitempty"`
+		// Metrics limits it to /metrics.
+		Metrics bool `json:"metrics,omitempty"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		return err
@@ -69,7 +71,7 @@ func (a *api) createToken(w http.ResponseWriter, r *http.Request) error {
 	if p, ok := a.authenticate(r); ok {
 		by = p.Name
 	}
-	tok, secret, err := a.tokens.Create(req.Name, role, ttl, by, req.Certificates)
+	tok, secret, err := a.tokens.Create(req.Name, role, ttl, by, auth.Limits{Certificates: req.Certificates, Metrics: req.Metrics})
 	if err != nil {
 		return &badRequest{err}
 	}

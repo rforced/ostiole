@@ -35,8 +35,11 @@ A token limited to certificates fetches those and can do nothing else.`,
 			fmt.Fprintln(w, "ID\tNAME\tROLE\tCREATED\tEXPIRES\tLAST USED")
 			for _, t := range list {
 				role := string(t.Role)
-				if len(t.Certificates) > 0 {
+				switch {
+				case len(t.Certificates) > 0:
 					role = "certificates: " + strings.Join(t.Certificates, ", ")
+				case t.Metrics:
+					role = "metrics only"
 				}
 				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", t.ID, t.Name, role,
 					t.CreatedAt.Format(time.DateOnly), stamp(t.ExpiresAt, "never"), stamp(t.LastUsedAt, "never"))
@@ -48,6 +51,7 @@ A token limited to certificates fetches those and can do nothing else.`,
 	var role string
 	var days int
 	var certificates []string
+	var metrics bool
 	create := &cobra.Command{
 		Use:   "create <name>",
 		Short: "Mint a token and print it once",
@@ -61,7 +65,7 @@ A token limited to certificates fetches those and can do nothing else.`,
 			if days > 0 {
 				ttl = time.Duration(days) * 24 * time.Hour
 			}
-			tok, secret, err := tk.Create(args[0], auth.Role(role), ttl, "cli", certificates)
+			tok, secret, err := tk.Create(args[0], auth.Role(role), ttl, "cli", auth.Limits{Certificates: certificates, Metrics: metrics})
 			if err != nil {
 				return err
 			}
@@ -76,6 +80,7 @@ A token limited to certificates fetches those and can do nothing else.`,
 	create.Flags().StringVar(&role, "role", string(auth.RoleViewer), "admin, operator, or viewer")
 	create.Flags().IntVar(&days, "days", 0, "expire the token after this many days (0 never expires)")
 	create.Flags().StringSliceVar(&certificates, "certificates", nil, "limit the token to fetching these certificates, and nothing else")
+	create.Flags().BoolVar(&metrics, "metrics", false, "limit the token to reading /metrics, and nothing else")
 
 	del := &cobra.Command{
 		Use:   "delete <id-or-name>",

@@ -258,7 +258,7 @@ func TestOperatorCannotTakeWhatIsTheAdministrators(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, operator, err := tokens.Create("automation", auth.RoleOperator, 0, "admin", nil)
+	_, operator, err := tokens.Create("automation", auth.RoleOperator, 0, "admin", auth.Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
