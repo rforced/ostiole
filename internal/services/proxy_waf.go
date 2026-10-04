@@ -117,7 +117,7 @@ func wafDirectives(dir string, w model.WAFProfile, siteID string) string {
 	// built-in log,auditlog only to phase 2. crs-setup covers phases 1, 2
 	// and 5, so without these the response rules would neither log nor
 	// audit, and a blocked response would be an empty 403 with no event.
-	// CRS 4.29's crs-setup sets 3 and 4 as well, and Coraza refuses a
+	// Since CRS 4.29 crs-setup sets 3 and 4 as well, and Coraza refuses a
 	// second default for a phase: scripts/update-crs.sh takes those out,
 	// so a proxy still loads what an older daemon wrote.
 	b.WriteString("SecDefaultAction \"phase:3,log,auditlog,pass\"\n")

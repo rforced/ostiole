@@ -8,6 +8,7 @@
 
 
 arachni
+Mozilla/6.0
 betabot
 bewica-security-scan
 BFAC
@@ -51,7 +52,7 @@ feroxbuster
 l9explore
 l9tcpid
 wapiti
-vega
+vega/
 appspider
 ironwasp
 skipfish

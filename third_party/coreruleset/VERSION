@@ -3,4 +3,4 @@
 # crs-setup's SecDefaultAction for phases 3 and 4 out, since the daemon
 # writes those. coreruleset.go and LICENSE are coraza-coreruleset
 # v4.25.0's, unchanged.
-v4.29.0 1aa1c5c8fc29e532d35293bcea36bf72de61db8f6ed4716a0f91ab14552b7fed
+v4.30.0 3d678a41fd5aade34760127fef5dd64fd7a77848913fc0f70dde0cf467c94427

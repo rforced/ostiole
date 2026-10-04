@@ -605,6 +605,105 @@ func TestProxyRefusesMalformedMultipartBodies(t *testing.T) {
 	}
 }
 
+// A request may name only the charsets CRS allows, however its header
+// spells the parameter, and a multipart body only those too, however many
+// times it names one. CRS 4.29 read the parameter in lower case alone and
+// the first _charset_ alone, so CHARSET=utf-7, or a second _charset_, went
+// through.
+func TestProxyHoldsRequestsToTheAllowedCharsets(t *testing.T) {
+	t.Parallel()
+	bin := sidecar(t)
+	cfg := &model.Config{}
+	cfg.Services.Proxy = model.Proxy{
+		Enabled: true, HTTPPort: freePort(t), HTTPSPort: freePort(t),
+		Pools:    []model.ProxyPool{{ID: "app", Upstreams: []model.ProxyUpstream{{Address: answer(t, "ok")}}}},
+		Profiles: []model.WAFProfile{{ID: "p1", Mode: "block", Paranoia: 1}},
+		Sites: []model.ProxySite{{ID: "web", Enabled: true, Hosts: []string{"web.example.com"}, Pool: "app",
+			PlainHTTP: true, WAF: "p1"}},
+	}
+	plain, _, out := runSidecar(t, bin, cfg, "", map[string][]string{model.SelfCertificate: {"127.0.0.1"}})
+	const site = "http://web.example.com"
+	const form, multipart = "application/x-www-form-urlencoded", "multipart/form-data; boundary=XyZ"
+	part := func(name, value string) string {
+		return "--XyZ\r\nContent-Disposition: form-data; name=\"" + name + "\"\r\n\r\n" + value + "\r\n"
+	}
+	const end = "--XyZ--\r\n"
+	for _, c := range []struct {
+		path, contentType, body string
+		status                  int
+	}{
+		{"/form", form + "; charset=utf-8", "q=hello", http.StatusOK},
+		{"/form-utf7", form + "; charset=utf-7", "q=hello", http.StatusForbidden},
+		{"/form-shouted", form + "; CHARSET=utf-7", "q=hello", http.StatusForbidden},
+		{"/upload", multipart, part("_charset_", "utf-8") + part("q", "hello") + end, http.StatusOK},
+		{"/upload-second", multipart, part("_charset_", "utf-8") + part("_charset_", "utf-7") + part("q", "hello") + end, http.StatusForbidden},
+	} {
+		if got := post(t, plain, site+c.path, c.contentType, c.body); got != c.status {
+			t.Errorf("%s: status %d, want %d", c.path, got, c.status)
+		}
+	}
+	refusedBy := map[string]int{"/form-utf7": 920480, "/form-shouted": 920480, "/upload-second": 922100}
+	event := func(path string) (wafevent.Event, bool) {
+		return findEvent(out, func(ev wafevent.Event) bool { return ev.URI == path })
+	}
+	waitFor(t, "the events", func() bool {
+		for path := range refusedBy {
+			if _, ok := event(path); !ok {
+				return false
+			}
+		}
+		return true
+	})
+	for path, id := range refusedBy {
+		if ev, _ := event(path); !slices.ContainsFunc(ev.Rules, func(h wafevent.Hit) bool { return h.ID == id }) {
+			t.Errorf("%s was refused by %+v, want %d", path, ev.Rules, id)
+		}
+	}
+}
+
+// A command in the path is read as one in an argument is. CRS 4.29's
+// command rules never read the path, so a site that hands a path segment
+// to a shell was open at every paranoia level.
+func TestProxyReadsCommandsInThePath(t *testing.T) {
+	t.Parallel()
+	bin := sidecar(t)
+	cfg := &model.Config{}
+	cfg.Services.Proxy = model.Proxy{
+		Enabled: true, HTTPPort: freePort(t), HTTPSPort: freePort(t),
+		Pools:    []model.ProxyPool{{ID: "app", Upstreams: []model.ProxyUpstream{{Address: answer(t, "ok")}}}},
+		Profiles: []model.WAFProfile{{ID: "p1", Mode: "block", Paranoia: 1}},
+		Sites: []model.ProxySite{{ID: "web", Enabled: true, Hosts: []string{"web.example.com"}, Pool: "app",
+			PlainHTTP: true, WAF: "p1"}},
+	}
+	plain, _, out := runSidecar(t, bin, cfg, "", map[string][]string{model.SelfCertificate: {"127.0.0.1"}})
+	const site = "http://web.example.com"
+	refused := []string{"/files?f=x%26%26whoami", "/files/x%26%26whoami", "/files/x%7Cuname%20-a", "/files/%24(id)"}
+	if status, _ := fetch(t, plain, "", site+"/files/report.pdf"); status != http.StatusOK {
+		t.Errorf("/files/report.pdf: status %d, want 200", status)
+	}
+	for _, uri := range refused {
+		if status, _ := fetch(t, plain, "", site+uri); status != http.StatusForbidden {
+			t.Errorf("%s: status %d, want 403", uri, status)
+		}
+	}
+	event := func(uri string) (wafevent.Event, bool) {
+		return findEvent(out, func(ev wafevent.Event) bool { return ev.URI == uri })
+	}
+	waitFor(t, "the events", func() bool {
+		for _, uri := range refused {
+			if _, ok := event(uri); !ok {
+				return false
+			}
+		}
+		return true
+	})
+	for _, uri := range refused {
+		if ev, _ := event(uri); !slices.ContainsFunc(ev.Rules, func(h wafevent.Hit) bool { return h.ID/1000 == 932 }) {
+			t.Errorf("%s was refused by %+v, want a command rule", uri, ev.Rules)
+		}
+	}
+}
+
 // A profile that passes larger bodies lets an upload past the limit
 // through with its first part inspected, and a body cut at the limit is
 // not refused as one that does not parse. That padding hides what comes
