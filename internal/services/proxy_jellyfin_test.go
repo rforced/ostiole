@@ -90,6 +90,13 @@ var jfSearches = []string{"the night ferry", "Kite-Girl: Beyond the Kite-Line", 
 
 func (g jf) search() string { return g.pick(jfSearches...) }
 
+// jfNames are artists, genres, people and studios, which part of the API
+// names in the path. Each begins with a command's name, which CRS 4.30
+// takes for a command there.
+var jfNames = []string{"Watch the Tide", "Top Floor Kings", "Sleep Tight, Harbour", "Kill the Lights, Charlie",
+	"Head Over Hills", "Last Train to Wexmoor", "Time Bandit Island", "Echo Valley", "Sudo Sisters", "Netcat Records",
+	"Who Framed the Moon?"}
+
 // password is one a password manager made.
 func (g jf) password() string {
 	const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+[]{};:'\",.<>/?`~|\\"
@@ -379,6 +386,21 @@ func TestTheJellyfinSetLetsItsClientsThrough(t *testing.T) {
 					}
 				}
 			}
+			for _, name := range jfNames {
+				n, c := uriComponent(name), g.client(g.r.IntN(jfClients))
+				for _, r := range []jfRequest{
+					{"GET", "/Persons/" + n + "/Images/Primary?fillHeight=300&quality=96&tag=" + g.id(), "", "", true, c},
+					{"GET", "/Genres/" + n + "?userId=" + g.id(), "", "", false, c},
+					{"GET", "/MusicGenres/" + n + "?userId=" + g.id(), "", "", false, c},
+					{"GET", "/Artists/" + n + "?userId=" + g.id(), "", "", false, c},
+					{"GET", "/Studios/" + n + "/Images/Thumb?quality=90", "", "", true, c},
+					{"GET", "/persons/" + n + "/images/primary/0?maxheight=300", "", "", true, g.client(jfRoku)},
+				} {
+					if status := jfSend(t, plain, r); status != http.StatusOK {
+						t.Errorf("%s %s (%s): %d", r.method, r.path, r.client.userAgent, status)
+					}
+				}
+			}
 			for i := range 2 * jfClients {
 				for _, r := range g.requests(g.client(i % jfClients)) {
 					if status := jfSend(t, plain, r); status != http.StatusOK {
@@ -456,6 +478,10 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 		{"POST", "/DisplayPreferences/usersettings?client=emby", js, vwJSON(map[string]any{"CustomPrefs": map[string]any{"x": `{"a":"1 or 1"}`}}), false, c},
 		// Outside the arguments the set knows, text is read as CRS reads it.
 		{"GET", "/Items?userId=" + g.id() + "&overview=" + url.QueryEscape("It's a trap: 'quoted' -- (really)!"), "", "", false, c},
+		// A command in the path is read where no name goes, and a name is
+		// read for everything but commands.
+		{"GET", "/Items/" + uriComponent("x&&whoami") + "/Images/Primary", "", "", true, c},
+		{"GET", "/Persons/" + uriComponent("<script>alert(1)</script>") + "/Images/Primary", "", "", true, c},
 	}
 	for pl := 1; pl <= 4; pl++ {
 		t.Run(fmt.Sprintf("paranoia %d", pl), func(t *testing.T) {
