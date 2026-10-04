@@ -259,6 +259,12 @@ func events(out *lockedBuffer) string {
 	return b.String()
 }
 
+// vwIconSites are sites a vault's logins are for, whose icons the clients
+// ask for by name. Some names begin with a command's, who or dnf say, which
+// CRS 4.30 takes for a command in the path.
+var vwIconSites = []string{"vault.example.com", "who.example.com", "whoville.example.org", "dnf.example.net",
+	"top.example.com", "sh.example.org", "login.example.co.uk", "xn--bcher-kva.example"}
+
 // What Vaultwarden's clients send passes at every paranoia level with the
 // set loaded, where at paranoia 4 without it every save is refused.
 func TestTheVaultwardenSetLetsItsClientsThrough(t *testing.T) {
@@ -273,6 +279,12 @@ func TestTheVaultwardenSetLetsItsClientsThrough(t *testing.T) {
 					if status := vwSend(t, plain, r); status != http.StatusOK {
 						t.Errorf("%s %s: %d", r.method, r.path, status)
 					}
+				}
+			}
+			for _, site := range vwIconSites {
+				r := vwRequest{"GET", "/icons/" + site + "/icon.png", "", "", ""}
+				if status := vwSend(t, plain, r); status != http.StatusOK {
+					t.Errorf("%s %s: %d", r.method, r.path, status)
 				}
 			}
 			if t.Failed() {
@@ -311,6 +323,8 @@ func TestTheVaultwardenSetKeepsTheAttacks(t *testing.T) {
 		{"POST", "/api/ciphers/" + g.uuid() + "/attachment/abc", "", "", "shell.php"},
 		// Outside the paths the set covers, ciphertext is read as CRS reads it.
 		{"POST", "/admin/users", js, vwJSON(map[string]any{"name": "<script>alert(1)</script>", "key": g.enc(64)}), ""},
+		// A command where an icon's site name goes is read as CRS reads it.
+		{"GET", "/icons/x%26%26whoami/icon.png", "", "", ""},
 	}
 	for pl := 1; pl <= 4; pl++ {
 		t.Run(fmt.Sprintf("paranoia %d", pl), func(t *testing.T) {
