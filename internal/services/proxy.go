@@ -60,6 +60,9 @@ type Proxy struct {
 	Log               *slog.Logger
 	// Poll is how often a reload in progress is looked at; zero is 200 ms.
 	Poll time.Duration
+	// Binary is the sidecar's path, empty to look it up; Proc is where the
+	// processes are, empty for /proc. Tests point both elsewhere.
+	Binary, Proc string
 
 	// The strip polls every few seconds: the release is kept until the
 	// binary changes, and one client keeps one admin connection open.
@@ -588,6 +591,37 @@ func (p *Proxy) Release(ctx context.Context) string {
 		p.mu.Unlock()
 	}
 	return rel
+}
+
+// RunsRelease reports whether the proxy running is the binary on disk and
+// that binary is release, as an update leaves them once it has restarted
+// the proxy into the new one. Until then the proxy running is the one the
+// update replaced, which /proc/<pid>/exe still points at.
+func (p *Proxy) RunsRelease(ctx context.Context, release string) bool {
+	out, err := p.cmd().Run(ctx, "systemctl", "show", "--property=MainPID", "--value", ProxyUnit)
+	if err != nil {
+		return false
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil || pid <= 0 {
+		return false
+	}
+	bin, proc := p.Binary, p.Proc
+	if bin == "" {
+		bin = lookPath(ProxyBinaryName)
+	}
+	if proc == "" {
+		proc = "/proc"
+	}
+	running, err := os.Stat(filepath.Join(proc, strconv.Itoa(pid), "exe"))
+	if err != nil {
+		return false
+	}
+	disk, err := os.Stat(bin)
+	if err != nil || !os.SameFile(running, disk) {
+		return false
+	}
+	return release != "" && p.Release(ctx) == release
 }
 
 // binaryModTime is when the sidecar's binary last changed, or zero when

@@ -905,3 +905,56 @@ func writeTestPair(t *testing.T, dir string, hosts ...string) {
 		t.Fatal(err)
 	}
 }
+
+// pidCmd answers for a proxy running as pid, built for release.
+type pidCmd struct {
+	pid, release string
+}
+
+func (c pidCmd) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+	switch {
+	case name == "systemctl" && len(args) > 0 && args[0] == "show":
+		return []byte(c.pid + "\n"), nil
+	case name == ProxyBinaryName && len(args) == 1 && args[0] == "release":
+		return []byte(c.release + "\n"), nil
+	}
+	return nil, errors.New("unexpected command " + name)
+}
+
+// The proxy's files follow the release once the proxy running is the binary
+// on disk, and that binary is the release: not while an update has replaced
+// the binary under a proxy it has not restarted yet.
+func TestProxyRunsRelease(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "ostiole-proxy")
+	old := filepath.Join(dir, "ostiole-proxy.old")
+	for _, f := range []string{bin, old} {
+		if err := os.WriteFile(f, []byte(f), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	proc := filepath.Join(dir, "proc")
+	if err := os.MkdirAll(filepath.Join(proc, "4242"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	exe := filepath.Join(proc, "4242", "exe")
+	for _, c := range []struct {
+		name, pid, release, runs string
+		want                     bool
+	}{
+		{"this release running", "4242", "v1.2.3", bin, true},
+		{"another release", "4242", "v1.2.2", bin, false},
+		{"the replaced binary still running", "4242", "v1.2.3", old, false},
+		{"not running", "0", "v1.2.3", bin, false},
+	} {
+		_ = os.Remove(exe)
+		if err := os.Symlink(c.runs, exe); err != nil {
+			t.Fatal(err)
+		}
+		p := &Proxy{Cmd: pidCmd{pid: c.pid, release: c.release}, Binary: bin, Proc: proc}
+		if got := p.RunsRelease(t.Context(), "v1.2.3"); got != c.want {
+			t.Errorf("%s: %v", c.name, got)
+		}
+	}
+}

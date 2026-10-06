@@ -286,7 +286,8 @@ nothing, and the command fails so the unit shows it.`,
 }
 
 func newStatusCmd(g *globals) *cobra.Command {
-	return &cobra.Command{
+	var changes bool
+	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show configuration and kernel state",
 		Args:  cobra.NoArgs,
@@ -318,6 +319,20 @@ func newStatusCmd(g *globals) *cobra.Command {
 				fmt.Fprintf(w, "fallback ruleset\tsince %s: %s\n", f.Since.Local().Format("2006-01-02 15:04"), f.Reason)
 			}
 			fmt.Fprintf(w, "network backend\t%s\n", status.Network)
+			drift, driftErr := eng.Drift()
+			switch {
+			case driftErr != nil:
+				fmt.Fprintf(w, "not applied with this version\tunknown: %v\n", driftErr)
+			case drift == nil:
+				fmt.Fprintf(w, "not applied with this version\tnothing\n")
+			default:
+				n := len(drift.Changes) + drift.More
+				lines := "lines"
+				if n == 1 {
+					lines = "line"
+				}
+				fmt.Fprintf(w, "not applied with this version\t%s (%d %s)\n", strings.Join(drift.Parts, ", "), n, lines)
+			}
 			fmt.Fprintf(w, "revisions\t%d\n", len(revs))
 			fmt.Fprintf(w, "nft\t%s\n", nftVersion)
 			if tables, err := (&nft.Exec{Bin: g.nftBin}).ListTables(cmd.Context()); err == nil {
@@ -338,8 +353,31 @@ func newStatusCmd(g *globals) *cobra.Command {
 				}
 				fmt.Fprintf(w, "conflicting services\t%s\n", strings.Join(names, ", "))
 			}
-			return w.Flush()
+			if err := w.Flush(); err != nil {
+				return err
+			}
+			if changes && drift != nil {
+				printDrift(cmd.OutOrStdout(), drift)
+			}
+			return nil
 		},
+	}
+	cmd.Flags().BoolVar(&changes, "changes", false, "also list the lines applying the configuration again would change")
+	return cmd
+}
+
+// printDrift lists a drift's lines the way the apply bar does.
+func printDrift(out io.Writer, d *engine.Drift) {
+	fmt.Fprintln(out)
+	for _, c := range d.Changes {
+		if c.Kind == "removed" {
+			fmt.Fprintf(out, "- %s: %s\n", c.Path, c.Before)
+		} else {
+			fmt.Fprintf(out, "+ %s: %s\n", c.Path, c.After)
+		}
+	}
+	if d.More > 0 {
+		fmt.Fprintf(out, "and %d more\n", d.More)
 	}
 }
 

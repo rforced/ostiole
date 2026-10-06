@@ -102,7 +102,7 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/auth/me":        {summary: "Describe the current session and the role it acts with.", role: auth.RoleViewer, session: true},
 	"POST /api/v1/auth/password": {summary: "Change the signed-in account's password.", role: auth.RoleViewer, session: true},
 
-	"GET /api/v1/status":                   {summary: "Whether a configuration is saved, loaded, and confirmed.", role: auth.RoleViewer},
+	"GET /api/v1/status":                   {summary: "Whether a configuration is saved, loaded, and confirmed, and which parts applying it again would change.", role: auth.RoleViewer},
 	"GET /api/v1/system/stats":             {summary: "CPU, memory, swap, load, disk space and the connection table on this router.", role: auth.RoleViewer},
 	"GET /api/v1/system/timezones":         {summary: "The timezones this router can be set to, and the one its clock reads now.", role: auth.RoleViewer},
 	"GET /api/v1/overview":                 {summary: "Everything the dashboard shows, in one request.", role: auth.RoleViewer},
@@ -185,6 +185,7 @@ var routeDocs = map[string]routeDoc{
 	"POST /api/v1/apply":                        {summary: "Apply a configuration, optionally with a confirmation window. Command crons, backups that carry accounts, updates, the remote backup, notifications, management access and anti-lockout need an administrator.", role: auth.RoleOperator},
 	"POST /api/v1/apply/confirm":                {summary: "Confirm the pending apply.", role: auth.RoleOperator},
 	"POST /api/v1/apply/revert":                 {summary: "Undo the pending apply.", role: auth.RoleOperator},
+	"GET /api/v1/apply/drift":                   {summary: "What applying the saved configuration again would change: this release's render of it against what the last apply rendered, line by line.", role: auth.RoleOperator},
 	"POST /api/v1/config/restore":               {summary: "Read a backup file and report what it would change.", role: auth.RoleOperator},
 	"GET /api/v1/config/backup/remote":          {summary: "The backups this router has in its bucket, newest first.", role: auth.RoleOperator},
 	"POST /api/v1/config/backup/remote/restore": {summary: "Read one backup out of the bucket and report what it would change.", role: auth.RoleOperator},

@@ -114,7 +114,9 @@ function base64(buf) {
 
 /** @typedef {{ status: string, version: string, commit?: string }} Health */
 /** @typedef {{ username: string, role: 'admin' | 'operator' | 'viewer', created: string, lastSeen: string, expires: string }} Session */
-/** @typedef {{ configured: boolean, tableLoaded: boolean, network: string, pending?: { since: string, deadline: string, remaining: number }, fallback?: { since: string, reason: string }, recovered?: { since: string, at: string }, ssh?: string }} Status */
+/** @typedef {{ configured: boolean, tableLoaded: boolean, network: string, pending?: { since: string, deadline: string, remaining: number }, fallback?: { since: string, reason: string }, recovered?: { since: string, at: string }, ssh?: string, drift?: { parts: string[], changes: number } }} Status */
+/** @typedef {{ path: string, kind: 'added' | 'removed', before?: string, after?: string }} DriftChange */
+/** @typedef {{ parts: string[], changes: DriftChange[], more?: number }} Drift */
 
 export const api = {
   /** @returns {Promise<Health>} */
@@ -162,6 +164,11 @@ export const api = {
       post('/apply', { config, confirmTimeoutSeconds }),
     confirm: () => post('/apply/confirm'),
     revert: () => post('/apply/revert'),
+    /**
+     * The lines applying the saved configuration again would change.
+     * @returns {Promise<Drift>}
+     */
+    drift: () => get('/apply/drift'),
     /** Compares two configurations; each side is a revision id, 'current', or inline. */
     diff: (body) => post('/config/diff', body),
     /**

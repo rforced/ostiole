@@ -44,8 +44,9 @@ configuration: systemd-networkd, dnsmasq, unbound, chrony, miniupnpd, pppd and h
 - **Accounts and API:** admin, operator and viewer roles, API tokens, an OpenAPI description
   and Prometheus metrics.
 - **Updates:** Ostiole updates itself from signed releases and puts the old release back if the
-  new one does not start. The distribution's packages update on a schedule you set, all of them or
-  only security fixes.
+  new one does not start. The reverse proxy takes the new release's configuration on its own. What
+  else a release renders differently waits for an apply, which the UI offers. The distribution's
+  packages update on a schedule you set, all of them or only security fixes.
 - **Diagnostics:** ping and traceroute, the connection table, ARP and NDP, packet capture, the
   journal, drive health from SMART, and a Hitron cable modem's status.
 - **Web UI:** a setup wizard, a dashboard, light and dark themes, and a layout for phones.
@@ -168,7 +169,8 @@ At the console, or over SSH from the LAN:
 
 The same binary is the command line:
 
-- `ostiole status`: the configuration and the kernel's state.
+- `ostiole status`: the configuration and the kernel's state, and what an apply would change
+  (`--changes` lists the lines).
 - `ostiole check`: validate the configuration and dry-run the ruleset through nft.
 - `ostiole apply`: load it, with a confirmation window.
 - `ostiole backup`, `restore`, `diff`: the configuration in and out as JSON.

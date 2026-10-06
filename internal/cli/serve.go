@@ -362,6 +362,11 @@ at your own.`,
 				// A renewal reloads the proxy outside an apply, the way the
 				// blocklist refresher installs outside one.
 				proxy.Watch(ctx)
+				// And its files follow the proxy an update puts in, without
+				// waiting for an apply (ADR-0038).
+				go panics.Loop(ctx, log, "proxy follower", func(ctx context.Context) {
+					followRelease(ctx, eng, proxy, log)
+				})
 				deps.Proxy = proxy
 				deps.Wireless = services.NewWireless(g.configDir)
 				ntp := services.NewNTP()
@@ -822,6 +827,34 @@ func ensureRuleset(ctx context.Context, eng *engine.Engine) {
 	default:
 		slog.Error("no firewall ruleset was loaded and the saved one would not load",
 			"loaded", res.Source, "reason", res.Reason)
+	}
+}
+
+// followRelease brings the proxy's files in line with this release whenever
+// the proxy running is this release's. An update restarts the proxy into
+// the new binary seconds after this daemon starts, so it looks every ten
+// seconds for the first two minutes, then once a minute.
+func followRelease(ctx context.Context, eng *engine.Engine, proxy *services.Proxy, log *slog.Logger) {
+	start := time.Now()
+	for {
+		if proxy.RunsRelease(ctx, version.Version) {
+			switch changed, err := eng.Follow(ctx, proxy); {
+			case err != nil:
+				log.Error("the reverse proxy refused this release's configuration and serves the one before; an apply tries again",
+					"err", err)
+			case changed:
+				log.Info("the reverse proxy's configuration follows this release", "release", version.Version)
+			}
+		}
+		wait := time.Minute
+		if time.Since(start) < 2*time.Minute {
+			wait = 10 * time.Second
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(wait):
+		}
 	}
 }
 

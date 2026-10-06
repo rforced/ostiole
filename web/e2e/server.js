@@ -1,4 +1,7 @@
 import { spawn } from 'node:child_process'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 
@@ -16,12 +19,16 @@ const answers = (url) =>
  * earlier run is never the one tested.
  *
  * @param {{port: number, seed?: string, dir?: string}} opts seed is a
- *   directory to start from, dir one to use and keep
- * @returns {Promise<{url: string, stop: () => Promise<void>}>}
+ *   directory to start from, dir one to use and keep. Without one the
+ *   server gets a directory of its own, gone once it stops; a test reads
+ *   and writes its files there.
+ * @returns {Promise<{url: string, dir: string, stop: () => Promise<void>}>}
  */
 export async function startServer({ port, seed = '', dir = '' }) {
   const url = `http://127.0.0.1:${port}`
   if (await answers(url)) throw new Error(`something already answers on ${url}`)
+  const kept = dir !== ''
+  if (!kept) dir = mkdtempSync(join(tmpdir(), 'ostiole-e2e-'))
   const child = spawn('sh', [SERVE], {
     env: { ...process.env, E2E_PORT: String(port), E2E_SEED: seed, E2E_DIR: dir },
     stdio: ['ignore', 'ignore', 'pipe'],
@@ -33,6 +40,7 @@ export async function startServer({ port, seed = '', dir = '' }) {
   const stop = async () => {
     child.kill('SIGTERM')
     await exited
+    if (!kept) rmSync(dir, { recursive: true, force: true })
   }
   const deadline = Date.now() + 30_000
   while (!(await answers(url))) {
@@ -43,5 +51,5 @@ export async function startServer({ port, seed = '', dir = '' }) {
     }
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
-  return { url, stop }
+  return { url, dir, stop }
 }

@@ -90,12 +90,17 @@ type Engine struct {
 	// kernelErr is why the kernel last refused the offset, so that it is
 	// logged once rather than at every look.
 	kernelErr atomic.Pointer[string]
+	// drifted is what an apply would change, as last worked out.
+	drifted *driftState
+	// refused holds, by backend, the render it last refused to follow, so
+	// that the same files are not tried again.
+	refused map[string]string
 }
 
 type pendingApply struct {
 	id            string
 	cfg           *model.Config
-	ruleset       string
+	plan          *Plan
 	previous      string
 	previousNet   network.Files
 	previousSvc   network.Files
@@ -462,7 +467,7 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 	e.log.Info("configuration applied", "rules", len(cfg.Rules), "networkUnits", len(plan.Network), "confirmTimeout", opts.ConfirmTimeout)
 
 	if opts.ConfirmTimeout <= 0 {
-		archived, err := e.commit(cfg, plan.Ruleset)
+		archived, err := e.commit(cfg, plan)
 		if err != nil {
 			// The record stays, so the next start puts the rest back to
 			// match the saved configuration, as a reboot does the firewall.
@@ -476,7 +481,7 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 	p := &pendingApply{
 		id:             rec.ID,
 		cfg:            cfg,
-		ruleset:        plan.Ruleset,
+		plan:           plan,
 		previous:       previous,
 		previousNet:    rec.Network,
 		previousSvc:    rec.Services,
@@ -527,7 +532,7 @@ func (e *Engine) Confirm(_ context.Context) (*store.Revision, error) {
 	}
 	p.timer.Stop()
 	e.pending = nil
-	archived, err := e.commit(p.cfg, p.ruleset)
+	archived, err := e.commit(p.cfg, p.plan)
 	if err != nil {
 		// Kernel has the new ruleset but the store does not. Leave it: a
 		// reboot loads the old one and the record has the next start put
@@ -679,19 +684,22 @@ func minutes(d time.Duration) string {
 	}
 }
 
-func (e *Engine) commit(cfg *model.Config, ruleset string) (*store.Revision, error) {
+func (e *Engine) commit(cfg *model.Config, plan *Plan) (*store.Revision, error) {
 	unlock, err := e.store.Lock()
 	if err != nil {
 		return nil, err
 	}
 	defer unlock()
-	archived, err := e.store.Save(cfg, ruleset)
+	archived, err := e.store.Save(cfg, plan.Ruleset)
 	if err != nil {
 		return archived, err
 	}
+	e.saveRendered(plan)
 	// The kernel runs a confirmed ruleset again, so neither note applies.
 	e.clearFallback()
 	e.recovered = nil
+	// What was just rendered is what runs, so nothing differs.
+	e.drifted = &driftState{at: time.Now(), stamp: e.store.Stamp()}
 	return archived, nil
 }
 

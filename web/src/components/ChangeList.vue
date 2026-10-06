@@ -7,12 +7,16 @@ const props = defineProps({
   emptyLabel: { type: String, default: 'No differences.' },
   /** Longer lists are cut off until the reader asks for the rest. */
   limit: { type: Number, default: 0 },
+  /** The changes are lines of files, shown as written rather than as values. */
+  lines: { type: Boolean, default: false },
+  /** Changes counted past the list, which the server did not send. */
+  more: { type: Number, default: 0 },
 })
 
 const shown = computed(() =>
   props.limit > 0 ? props.changes.slice(0, props.limit) : props.changes,
 )
-const hidden = computed(() => props.changes.length - shown.value.length)
+const hidden = computed(() => props.changes.length - shown.value.length + props.more)
 
 const marks = { added: '+', removed: '−', changed: '~' }
 const tones = {
@@ -29,6 +33,11 @@ function value(v) {
   return String(v)
 }
 
+/** A line of a file, without the indent that only nests it. */
+function line(c) {
+  return (c.kind === 'removed' ? c.before : c.after)?.trimStart() ?? ''
+}
+
 /** A value cut after each comma, so a long one wraps between its fields. */
 function pieces(v) {
   return value(v).split(/(?<=,)/)
@@ -42,7 +51,8 @@ function pieces(v) {
       <span :class="tones[c.kind]" aria-hidden="true">{{ marks[c.kind] }}</span>
       <span class="min-w-0 wrap-break-word">
         <span class="font-medium">{{ c.path }}</span>
-        <template v-if="c.kind === 'changed'">
+        <template v-if="lines">: {{ line(c) }}</template>
+        <template v-else-if="c.kind === 'changed'">
           :
           <span class="text-ink-muted"
             ><template v-for="(p, n) in pieces(c.before)" :key="n"

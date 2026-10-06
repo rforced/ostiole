@@ -37,6 +37,9 @@ const (
 	// NotifyFile lists the conditions a notice went out for, so a restart
 	// does not send them again.
 	NotifyFile = "notify.json"
+	// RenderedFile is what the last commit rendered for the network, the
+	// services and shaping, for setting a later release's render against.
+	RenderedFile = "rendered.json"
 )
 
 // DefaultDir is the production location.
@@ -136,6 +139,22 @@ func (s *Store) RemoveState(name string) error {
 		return nil
 	}
 	return err
+}
+
+// Stamp changes whenever the configuration, the saved ruleset or the record
+// of what the last commit rendered does: a commit here or in another
+// process, or an edit by hand.
+func (s *Store) Stamp() string {
+	var b strings.Builder
+	for _, name := range []string{ConfigFile, RulesetFile, RenderedFile} {
+		info, err := os.Stat(filepath.Join(s.Dir, name))
+		if err != nil {
+			b.WriteString("-;")
+			continue
+		}
+		fmt.Fprintf(&b, "%d %d;", info.Size(), info.ModTime().UnixNano())
+	}
+	return b.String()
 }
 
 // Revision identifies an archived configuration.

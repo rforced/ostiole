@@ -13,6 +13,8 @@ import { useSystemStore } from '@/stores/system'
 
 const CONFIRM_SECONDS = 60
 const SHOWN_CHANGES = 20
+/** How often the status is read again while the bar shows what an update left. */
+const DRIFT_POLL_MS = 15000
 /** How long an outcome stays on screen before the bar goes away. */
 const LINGER_MS = 2500
 
@@ -34,14 +36,69 @@ const showChanges = ref(false)
 const pending = ref(null)
 /** The draft as this tab applied it, until that apply settles. */
 let applied = null
+/** Whether that apply was of the saved configuration, to bring in a drift. */
+let driftApplied = false
 
 /** The wizard shows its own apply. */
 const onWizard = computed(() => route?.name === 'wizard')
+/**
+ * What applying the saved configuration again would change: what this
+ * version renders differently from what the router runs. An apply of the
+ * draft brings it in too, so it shows only while there is no draft.
+ */
+const drift = computed(() => {
+  const d = system.status?.drift
+  if (!d?.parts?.length || config.dirty || pending.value !== null || auth.readOnly) return null
+  return d
+})
 /** A viewer has nothing to apply, but sees an apply that is waiting. */
 const visible = computed(
-  () => !onWizard.value && ((config.dirty && !auth.readOnly) || pending.value !== null),
+  () =>
+    !onWizard.value &&
+    ((config.dirty && !auth.readOnly) || pending.value !== null || drift.value !== null),
 )
-const count = computed(() => config.changes.length)
+const count = computed(() => (drift.value ? drift.value.changes : config.changes.length))
+
+/**
+ * The lines the drift is made of, read when the list is opened and again
+ * whenever the status says the drift moved.
+ * @type {import('vue').Ref<import('@/lib/api').Drift | null>}
+ */
+const driftLines = ref(null)
+async function readDrift() {
+  try {
+    driftLines.value = await api.config.drift()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+  }
+}
+watch(
+  () => JSON.stringify(drift.value),
+  () => {
+    driftLines.value = null
+    if (drift.value && showChanges.value) readDrift()
+  },
+)
+watch(showChanges, (open) => {
+  if (open && drift.value && !driftLines.value) readDrift()
+})
+
+/**
+ * While it shows, the drift is read again: the proxy follows on its own. A
+ * list opened for the drift or for a draft closes as the bar turns to the
+ * other.
+ */
+let poll = null
+watch(
+  () => drift.value !== null,
+  (shown) => {
+    showChanges.value = false
+    window.clearInterval(poll)
+    poll = shown ? window.setInterval(() => system.refresh(), DRIFT_POLL_MS) : null
+  },
+  { immediate: true },
+)
+onBeforeUnmount(() => window.clearInterval(poll))
 
 watch(
   [() => system.status?.pending?.deadline, onWizard],
@@ -96,6 +153,7 @@ async function apply() {
     await api.config.check(draft)
     const res = await api.config.apply(draft, CONFIRM_SECONDS)
     applied = draft
+    driftApplied = drift.value !== null
     pending.value = { deadline: res.deadline }
     // The kernel changed the moment the apply returned, not when it is
     // confirmed, so anything showing live state is stale from here.
@@ -142,7 +200,9 @@ async function reverted() {
 async function settle() {
   const changed = await config.resync(applied)
   applied = null
-  if (changed) return 'confirmed'
+  // A confirm of the saved configuration saves nothing new: what it
+  // brought in is gone from the status instead.
+  if (changed || (driftApplied && !system.status?.drift)) return 'confirmed'
   return Date.now() >= Date.parse(pending.value?.deadline ?? '') ? 'expired' : 'reverted'
 }
 </script>
@@ -169,7 +229,10 @@ async function settle() {
           <div v-else class="space-y-2">
             <div class="flex flex-wrap items-center gap-3 text-sm">
               <AlertTriangle class="size-4 text-warn" aria-hidden="true" />
-              <span class="font-medium">Unapplied changes.</span>
+              <span v-if="drift" class="font-medium"
+                >Not applied with this version: {{ drift.parts.join(', ') }}.</span
+              >
+              <span v-else class="font-medium">Unapplied changes.</span>
               <button
                 v-if="count"
                 type="button"
@@ -182,6 +245,7 @@ async function settle() {
               </button>
               <div class="ml-auto flex gap-2 max-sm:ml-0 max-sm:w-full">
                 <button
+                  v-if="!drift"
                   type="button"
                   class="btn-secondary"
                   :disabled="busy"
@@ -202,7 +266,16 @@ async function settle() {
               </div>
             </div>
             <ChangeList
-              v-if="showChanges"
+              v-if="showChanges && drift"
+              :changes="driftLines?.changes ?? []"
+              :more="driftLines?.more ?? 0"
+              :empty-label="driftLines ? 'No differences.' : 'Reading…'"
+              :limit="SHOWN_CHANGES"
+              lines
+              class="max-lg:max-h-[40dvh] max-lg:overflow-y-auto"
+            />
+            <ChangeList
+              v-else-if="showChanges"
               :changes="config.changes"
               :limit="SHOWN_CHANGES"
               class="max-lg:max-h-[40dvh] max-lg:overflow-y-auto"

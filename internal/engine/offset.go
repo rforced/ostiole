@@ -241,7 +241,7 @@ func (e *Engine) Retime(ctx context.Context) (Reload, error) {
 // loads, or the fallback is in, which keeps no schedule.
 func (e *Engine) inForce() (rulesets []string, skip bool, err error) {
 	if e.pending != nil {
-		return []string{e.pending.ruleset}, false, nil
+		return []string{e.pending.plan.Ruleset}, false, nil
 	}
 	if e.readFallback() != nil {
 		return nil, true, nil

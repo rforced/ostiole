@@ -224,6 +224,7 @@ func (a *api) register(mux *router) {
 	mux.HandleFunc("POST /api/v1/apply", a.write(a.apply))
 	mux.HandleFunc("POST /api/v1/apply/confirm", a.write(a.confirm))
 	mux.HandleFunc("POST /api/v1/apply/revert", a.write(a.revert))
+	mux.HandleFunc("GET /api/v1/apply/drift", a.write(a.drift))
 	mux.HandleFunc("GET /api/v1/services/status", a.readNoEngine(a.servicesStatus))
 	mux.HandleFunc("GET /api/v1/dhcp/leases", a.readNoEngine(a.dhcpLeases))
 	a.registerDHCPLog(mux)
@@ -753,12 +754,34 @@ func decodeJSON(r *http.Request, v any) error {
 	return nil
 }
 
+// statusReply is the engine's status and what applying the confirmed
+// configuration again would change.
+type statusReply struct {
+	engine.Status
+	Drift *engine.DriftStatus `json:"drift,omitempty"`
+}
+
 func (a *api) status(w http.ResponseWriter, r *http.Request) error {
 	st, err := a.engine.Status(r.Context())
 	if err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, st)
+	writeJSON(w, http.StatusOK, statusReply{Status: st, Drift: a.engine.DriftStatus()})
+	return nil
+}
+
+// drift lists the lines applying the confirmed configuration again would
+// change. They are what the configuration renders, secrets included, so
+// they are an operator's, as the configuration is.
+func (a *api) drift(w http.ResponseWriter, _ *http.Request) error {
+	d, err := a.engine.Drift()
+	if err != nil {
+		return err
+	}
+	if d == nil {
+		d = &engine.Drift{Parts: []string{}, Changes: []engine.DriftChange{}}
+	}
+	writeJSON(w, http.StatusOK, d)
 	return nil
 }
 

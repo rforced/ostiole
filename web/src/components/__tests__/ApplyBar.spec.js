@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ApplyBar from '@/components/ApplyBar.vue'
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useSystemStore } from '@/stores/system'
 
@@ -19,6 +20,7 @@ vi.mock('@/lib/api', () => ({
       confirm: vi.fn(),
       revert: vi.fn(),
       diff: vi.fn(),
+      drift: vi.fn(),
     },
   },
   ApiError: class ApiError extends Error {},
@@ -117,6 +119,99 @@ describe('ApplyBar', () => {
     await vi.advanceTimersByTimeAsync(3000)
     expect(w.text()).toContain('Unapplied changes.')
     expect(config.draft.system.hostname).toBe('mine')
+  })
+
+  describe('what this version would apply differently', () => {
+    const drift = { parts: ['Firewall', 'Reverse proxy'], changes: 3 }
+
+    /** A router whose saved configuration this version renders differently. */
+    async function updated() {
+      api.config.get.mockResolvedValue(OLD)
+      api.status.mockResolvedValue({ configured: true, drift })
+      api.config.drift.mockResolvedValue({
+        parts: drift.parts,
+        changes: [
+          { path: 'firewall', kind: 'removed', before: '\tan old rule' },
+          { path: 'proxy/caddy.json', kind: 'added', after: '  "site": "two"' },
+        ],
+        more: 1,
+      })
+      await useConfigStore().load()
+      await useSystemStore().refresh()
+    }
+
+    it('offers it, with the lines it is made of', async () => {
+      await updated()
+      const w = mount(ApplyBar)
+      await flushPromises()
+      expect(w.text()).toContain('Not applied with this version: Firewall, Reverse proxy.')
+      expect(button(w, 'Discard')).toBeUndefined()
+      expect(api.config.drift).not.toHaveBeenCalled()
+
+      await button(w, 'Show 3 changes').trigger('click')
+      await flushPromises()
+      expect(api.config.drift).toHaveBeenCalledOnce()
+      const lines = w.findAll('li').map((li) => li.text())
+      // The mark is a cell of its own beside the line.
+      expect(lines).toEqual([
+        '−firewall: an old rule',
+        '+proxy/caddy.json: "site": "two"',
+        'and 1 more',
+      ])
+    })
+
+    it('leaves it to a draft, whose apply brings it in too', async () => {
+      await updated()
+      useConfigStore().draft.system.hostname = 'mine'
+      const w = mount(ApplyBar)
+      await flushPromises()
+      expect(w.text()).toContain('Unapplied changes.')
+      expect(button(w, 'Discard')).toBeDefined()
+    })
+
+    it('is not shown to a viewer, who cannot apply', async () => {
+      useAuthStore().user = { username: 'look', role: 'viewer' }
+      await updated()
+      const w = mount(ApplyBar)
+      await flushPromises()
+      expect(w.text()).toBe('')
+    })
+
+    it('applies the saved configuration, and its confirm clears it', async () => {
+      await updated()
+      const w = mount(ApplyBar)
+      await flushPromises()
+
+      const waiting = {
+        since: new Date().toISOString(),
+        deadline: new Date(Date.now() + 60_000).toISOString(),
+      }
+      api.config.check.mockResolvedValue({})
+      api.config.apply.mockResolvedValue({ pending: true, deadline: waiting.deadline })
+      api.status.mockResolvedValue({ configured: true, pending: waiting })
+      await button(w, 'Apply with 60s confirmation').trigger('click')
+      await flushPromises()
+      expect(api.config.apply).toHaveBeenCalledWith(OLD, 60)
+      expect(w.text()).toContain('awaiting confirmation')
+
+      // Confirmed in another tab: the saved configuration is as it was, and
+      // the drift is gone from the status.
+      api.status.mockResolvedValue({ configured: true })
+      await vi.advanceTimersByTimeAsync(2000)
+      await flushPromises()
+      expect(w.text()).toContain('Confirmed and saved.')
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(w.text()).toBe('')
+    })
+
+    it('reads the status again while shown', async () => {
+      await updated()
+      mount(ApplyBar)
+      await flushPromises()
+      const reads = api.status.mock.calls.length
+      await vi.advanceTimersByTimeAsync(15_000)
+      expect(api.status.mock.calls.length).toBe(reads + 1)
+    })
   })
 
   it('leaves the wizard to show its own apply', async () => {
