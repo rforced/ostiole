@@ -2,8 +2,6 @@ package engine
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -348,17 +346,16 @@ func (e *Engine) Follow(ctx context.Context, b network.Backend) (bool, error) {
 		e.noteRendered(b.Name(), want)
 		return false, nil
 	}
-	sum := filesDigest(want)
-	if e.refused[b.Name()] == sum {
+	if maps.Equal(e.refused[b.Name()], want) {
 		return false, nil
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), applyTimeout)
 	defer cancel()
 	if err := b.Apply(ctx, want); err != nil {
 		if e.refused == nil {
-			e.refused = map[string]string{}
+			e.refused = map[string]network.Files{}
 		}
-		e.refused[b.Name()] = sum
+		e.refused[b.Name()] = want
 		if rerr := b.Apply(ctx, have); rerr != nil {
 			return false, fmt.Errorf("%w, and putting the files before it back failed: %w", err, rerr)
 		}
@@ -396,13 +393,4 @@ func (e *Engine) noteRendered(name string, files network.Files) {
 		e.log.Warn("could not note what followed this release; it is listed as differing until the next apply",
 			"service", name, "err", err)
 	}
-}
-
-// filesDigest identifies a set of files by their names and contents.
-func filesDigest(files network.Files) string {
-	h := sha256.New()
-	for _, name := range files.Names() {
-		fmt.Fprintf(h, "%d %s %d %s", len(name), name, len(files[name]), files[name])
-	}
-	return hex.EncodeToString(h.Sum(nil))
 }

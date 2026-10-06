@@ -94,7 +94,7 @@ type Engine struct {
 	drifted *driftState
 	// refused holds, by backend, the render it last refused to follow, so
 	// that the same files are not tried again.
-	refused map[string]string
+	refused map[string]network.Files
 }
 
 type pendingApply struct {
