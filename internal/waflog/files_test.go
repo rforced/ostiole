@@ -18,7 +18,9 @@ import (
 func TestEventsComeBackFromTheFiles(t *testing.T) {
 	t.Parallel()
 	l := New()
-	logged := time.Date(2026, 9, 28, 0, 30, 0, 0, time.UTC)
+	// Yesterday, as the log ages events out by the real clock.
+	day := time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, -1)
+	logged := day.Add(30 * time.Minute)
 	opened := logged.Add(-time.Hour)
 	cfg := &model.Config{}
 	cfg.System.Logging.Files.Enabled = true
@@ -31,7 +33,7 @@ func TestEventsComeBackFromTheFiles(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	w.Run(ctx)
-	if _, err := os.Stat(filepath.Join(w.Dir, FileName, "2026-09-28.jsonl.gz")); err != nil {
+	if _, err := os.Stat(filepath.Join(w.Dir, FileName, day.Format(time.DateOnly)+".jsonl.gz")); err != nil {
 		t.Fatalf("not filed under the day it was logged: %v", err)
 	}
 	if st := w.Status(); len(st.Logs) != 1 || st.Logs[0].Oldest == nil || !st.Logs[0].Oldest.Equal(logged) {

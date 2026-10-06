@@ -44,7 +44,8 @@ func TestAWireGuardPeersComingAndGoing(t *testing.T) {
 	cfg.Interfaces = []model.Interface{{Name: "wg0", Enabled: true, WireGuard: &model.WireGuard{
 		Peers: []model.WireGuardPeer{{Name: "phone", PublicKey: phoneKey}},
 	}}}
-	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
+	// The log ages entries out by the real clock, so the poller's starts there.
+	now := time.Now()
 	peer := netlink.WireGuardPeer{PublicKey: make([]byte, 32), LastHandshake: now.Add(-time.Minute),
 		Endpoint: netip.MustParseAddrPort("203.0.113.5:51820")}
 	read := func(string) (netlink.WireGuardDevice, bool, error) {
