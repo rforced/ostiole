@@ -1,6 +1,6 @@
 <script setup>
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, inject } from 'vue'
+import { routeLocationKey } from 'vue-router'
 
 /**
  * The top of every page: eyebrow, title, one line under it, and the
@@ -13,7 +13,8 @@ const props = defineProps({
   intro: { type: String, default: '' },
 })
 
-const route = useRoute()
+// useRoute() without its warning when a unit test mounts a page with no router.
+const route = inject(routeLocationKey, null)
 const title = computed(() => props.title || route?.meta.title || '')
 const eyebrow = computed(() => props.eyebrow || route?.meta.section?.label || '')
 const intro = computed(() => props.intro || route?.meta.section?.intro || '')
