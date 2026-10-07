@@ -42,7 +42,7 @@ cleanup
 # this takes is a package manager's business. "degraded" is the ordinary
 # answer in a container: some units have nothing to do here.
 state=
-for _ in $(seq 1 120); do
+for _ in $(seq 1 300); do
   state=$("$CONTAINER" exec "$NAME" systemctl is-system-running 2>/dev/null || true)
   case "$state" in running | degraded) break ;; esac
   sleep 2
