@@ -159,6 +159,9 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	slog.InfoContext(logging.Always(r.Context()), "signed in", "user", sess.Username, "address", remoteIP(r))
+	if old, err := r.Cookie(SessionCookie); err == nil {
+		a.auth.Logout(old.Value)
+	}
 	setSessionCookie(w, r, sess)
 	writeJSON(w, http.StatusOK, a.describe(sess))
 	return nil

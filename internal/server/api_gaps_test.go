@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -137,6 +138,44 @@ func TestSessionRoutesRefuseABearer(t *testing.T) {
 	}
 	if resp, raw := do(t, srv, http.MethodGet, "/api/v1/auth/me", nil); resp.StatusCode != http.StatusOK {
 		t.Errorf("the session did not survive: %d %s", resp.StatusCode, raw)
+	}
+}
+
+// Signing in ends the session the browser held before.
+func TestSigningInEndsTheSessionBefore(t *testing.T) {
+	t.Parallel()
+	srv, _ := newTestServer(t)
+	u, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var before string
+	for _, c := range srv.Client().Jar.Cookies(u) {
+		if c.Name == SessionCookie {
+			before = c.Value
+		}
+	}
+	if before == "" {
+		t.Fatal("setup left no session cookie")
+	}
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/auth/login", credentials{Username: "admin", Password: testPassword}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("login: %d %s", resp.StatusCode, raw)
+	}
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/v1/auth/me", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.AddCookie(&http.Cookie{Name: SessionCookie, Value: before})
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("the session from before the sign-in: %d, want 401", resp.StatusCode)
+	}
+	if resp, raw := do(t, srv, http.MethodGet, "/api/v1/auth/me", nil); resp.StatusCode != http.StatusOK {
+		t.Errorf("the new session: %d %s", resp.StatusCode, raw)
 	}
 }
 
