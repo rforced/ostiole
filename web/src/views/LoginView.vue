@@ -32,7 +32,7 @@ async function submit() {
   try {
     await auth.login(username.value.trim(), password.value)
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
-    await router.replace(redirect.startsWith('/') ? redirect : '/')
+    await router.replace(/^\/(?![/\\])/.test(redirect) ? redirect : '/')
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) error.value = 'Invalid username or password.'
     else if (e instanceof ApiError && e.status === 429)
