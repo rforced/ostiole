@@ -231,19 +231,12 @@ func TestDnsmasqForwardsTailnetNames(t *testing.T) {
 	got := files.String()
 	for _, want := range []string{
 		"server=/ts.net/100.100.100.100\n",
-		"server=/64.100.in-addr.arpa/100.100.100.100\n",
-		"server=/127.100.in-addr.arpa/100.100.100.100\n",
+		// dnsmasq makes it a zone per /16 of the /10, 64 to 127, and asks
+		// MagicDNS for them over bogus-priv.
+		"rev-server=100.64.0.0/10,100.100.100.100\n",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q:\n%s", want, got)
 		}
-	}
-	// One zone per /16 of the /10, because dnsmasq 2.85 refuses
-	// rev-server for anything but a whole octet.
-	if n := strings.Count(got, ".100.in-addr.arpa/100.100.100.100\n"); n != 64 {
-		t.Errorf("%d tailnet reverse zones, want 64", n)
-	}
-	if strings.Contains(got, "rev-server=") {
-		t.Errorf("rev-server is refused by dnsmasq 2.85:\n%s", got)
 	}
 }

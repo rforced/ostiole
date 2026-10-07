@@ -161,9 +161,6 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 	if svc.DNS.Enabled {
 		b.WriteString("domain-needed\nbogus-priv\nlocalise-queries\n")
 		b.WriteString("listen-address=127.0.0.1\n")
-		// dnsmasq before 2.86 clamps this to 10000 and says so in the
-		// journal. RHEL 9 ships 2.85, so a bigger cache there is the
-		// clamp rather than the setting.
 		fmt.Fprintf(&b, "cache-size=%d\n", svc.DNS.Cache())
 		if !svc.DNS.Rebind.Off {
 			// dnsmasq is the enforcement point in every resolver mode: it
@@ -200,10 +197,7 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 		// never asks unless it is told to: the daemon runs with
 		// --accept-dns=false so it leaves resolv.conf alone.
 		if nft.TailscaleEnabled(cfg) {
-			fmt.Fprintf(&b, "server=/%s/%s\n", TailnetDomain, MagicDNSAddress)
-			for _, zone := range tailnetReverseZones() {
-				fmt.Fprintf(&b, "server=/%s/%s\n", zone, MagicDNSAddress)
-			}
+			fmt.Fprintf(&b, "server=/%s/%s\nrev-server=%s,%s\n", TailnetDomain, MagicDNSAddress, TailscaleCGNAT, MagicDNSAddress)
 		}
 		if svc.DNS.Domain != "" {
 			fmt.Fprintf(&b, "domain=%s\nlocal=/%s/\nexpand-hosts\n", svc.DNS.Domain, svc.DNS.Domain)
@@ -394,20 +388,6 @@ func hostPartOnly(ip netip.Addr) bool {
 		}
 	}
 	return true
-}
-
-// tailnetReverseZones are the reverse zones of TailscaleCGNAT, one per
-// /16. dnsmasq 2.86 expands rev-server for a /10 into the same list;
-// Enterprise Linux 9 ships 2.85, which refuses anything but a whole octet.
-func tailnetReverseZones() []string {
-	p := netip.MustParsePrefix(TailscaleCGNAT)
-	a := p.Addr().As4()
-	n := 1 << (16 - p.Bits())
-	zones := make([]string, 0, n)
-	for i := range n {
-		zones = append(zones, fmt.Sprintf("%d.%d.in-addr.arpa", int(a[1])+i, a[0]))
-	}
-	return zones
 }
 
 // listenInterfaces is every interface dnsmasq must bind: the DNS
