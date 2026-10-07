@@ -369,28 +369,11 @@ func closeToOthers(dir string) error {
 	return nil
 }
 
-// Units renders the systemd units for the layout and options.
+// Units renders the systemd units.
 func Units(lay Layout, opts Options) map[string]string {
 	bin := lay.Binary()
 	cfg := lay.ConfigDir
-	// The auto backend drives systemd-networkd once it is running and stays
-	// out of the way before the network takeover.
 	backend := "auto"
-	// The daemon needs to write its own binary directory for self-updates.
-	// -/etc/dnsmasq.d takes the DHCP and DNS configuration once dnsmasq is
-	// set up, -/etc/unbound the validating resolver's, -/etc/miniupnpd the
-	// mapping service's, -/etc/chrony the time service's, and
-	// -/etc/resolv.conf is managed by the DNS service. The leading dash means "only if it exists": a router that never
-	// sets up dnsmasq or PPPoE still starts.
-	// resolv.conf is a file, not a directory, so systemd mounts that one
-	// file read-write and leaves /etc around it read-only; it can be
-	// rewritten but never replaced, which services.writeMode handles.
-	// -/etc/ssh/sshd_config.d takes the drop-in that turns password logins
-	// off, -/etc/cloud/cloud.cfg.d the pin that stops cloud-init turning
-	// them back on, and -/etc/systemd/journald.conf.d the journal's
-	// ceiling; all three are written from the page as well as the console.
-	// Each unit's own .d directory takes the level cap, written from the
-	// page too, and the backup directory takes what backup crons write.
 	rw := cfg + " " + NetworkdUnitDir + " " + lay.BinDir +
 		" -/etc/dnsmasq.d -/etc/unbound -/etc/resolv.conf -/etc/ppp -/etc/miniupnpd -/etc/chrony" +
 		" -/etc/ssh/sshd_config.d -/etc/cloud/cloud.cfg.d -/etc/systemd/journald.conf.d" +
@@ -398,17 +381,6 @@ func Units(lay Layout, opts Options) map[string]string {
 	if lay.BackupDir != "" {
 		rw += " -" + lay.BackupDir
 	}
-	// The firewall unit runs outside the default dependencies, the way
-	// Debian's nftables.service does. With them it would wait for
-	// sysinit.target, and cloud-init's network stage orders itself before
-	// sysinit.target and then waits, from inside, for
-	// systemd-networkd-wait-online, which waits for networkd, which waits
-	// for network-pre.target, which waits for this unit: a cycle systemd
-	// cannot see because one edge is a runtime "systemctl start" with no
-	// timeout. It hung an Ubuntu 26.04 router at boot with nothing
-	// listening. What the unit actually needs is the root filesystem.
-	// It runs whether or not a ruleset is saved: with none, `load` puts
-	// the fallback in, and a router never boots without a firewall.
 	firewall := fmt.Sprintf(`[Unit]
 Description=Ostiole firewall ruleset (loaded before networking)
 Documentation=https://github.com/rforced/ostiole
@@ -441,11 +413,9 @@ ExecStart=%s --config-dir %s --network-backend %s serve --tls --listen %s
 Restart=on-failure
 RestartSec=2
 
-# Runs as root because it programs nftables and networkd; limit everything else.
 ProtectHome=yes
 ProtectSystem=strict
 ReadWritePaths=%s
-# The log files, written only while System, General says so.
 LogsDirectory=ostiole
 LogsDirectoryMode=0700
 PrivateTmp=yes
