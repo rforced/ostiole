@@ -294,10 +294,7 @@ Type=exec
 ExecStart=` + pppd + ` call ` + PPPoEPrefix + `%i nodetach
 Restart=always
 RestartSec=5
-# pppd needs to create an interface, set routes, and open a raw socket on
-# the Ethernet link; it needs nothing else.
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_SYS_ADMIN
-NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
 ProtectSystem=strict
 ProtectHome=yes
 ReadWritePaths=/etc/ppp /var/run /run

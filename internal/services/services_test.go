@@ -688,6 +688,20 @@ func TestPeerFileQuotesTheSecret(t *testing.T) {
 	}
 }
 
+// Under SELinux, NoNewPrivileges keeps pppd out of pppd_t, and init_t may
+// not read /etc/ppp, so pppd never dials. A session came up on Fedora 44
+// with these two capabilities alone.
+func TestPPPoEUnitLetsPPPdIntoItsDomain(t *testing.T) {
+	t.Parallel()
+	unit := PPPoEUnitContent("/usr/sbin/pppd")
+	if !strings.Contains(unit, "\nCapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW\n") {
+		t.Errorf("capabilities are not exactly NET_ADMIN and NET_RAW:\n%s", unit)
+	}
+	if strings.Contains(unit, "NoNewPrivileges") {
+		t.Errorf("NoNewPrivileges keeps pppd in init_t under SELinux:\n%s", unit)
+	}
+}
+
 // A router that dials no PPPoE must not have /etc/ppp created under it. The
 // daemon runs with ProtectSystem=strict, so an apply that has nothing to
 // do with PPPoE used to fail with "mkdir /etc/ppp: read-only file
