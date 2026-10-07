@@ -15,8 +15,9 @@ func TestParse(t *testing.T) {
 		release string
 		want    Version
 	}{
-		{"5.14.0-503.el9.x86_64", Version{5, 14}},         // RHEL 9, the floor
-		{"6.12.0-211.54.1.el10_2.x86_64", Version{6, 12}}, // Rocky 10
+		{"6.12.0-211.54.1.el10_2.x86_64", Version{6, 12}}, // Rocky 10, the floor
+		{"6.12.48+deb13-amd64", Version{6, 12}},           // Debian 13
+		{"5.14.0-503.el9.x86_64", Version{5, 14}},         // RHEL 9
 		{"6.1.0-18-amd64", Version{6, 1}},                 // Debian 12
 		{"6.8.0-45-generic", Version{6, 8}},               // Ubuntu 24.04
 		{"5.15.0-101-generic", Version{5, 15}},            // Ubuntu 22.04
@@ -51,14 +52,14 @@ func TestSupported(t *testing.T) {
 		v    Version
 		want bool
 	}{
-		{Version{5, 14}, true}, // exactly the floor
-		{Version{5, 15}, true}, // Ubuntu 22.04
-		{Version{6, 1}, true},  // Debian 12
+		{Version{6, 12}, true}, // exactly the floor: Debian 13, Enterprise Linux 10
+		{Version{6, 17}, true},
 		{Version{7, 2}, true},
-		{Version{5, 13}, false}, // one minor below
-		{Version{5, 10}, false}, // Debian 11
-		{Version{5, 4}, false},  // Ubuntu 20.04
-		{Version{4, 18}, false}, // RHEL 8
+		{Version{6, 11}, false}, // one minor below
+		{Version{6, 8}, false},  // Ubuntu 24.04
+		{Version{6, 1}, false},  // Debian 12
+		{Version{5, 14}, false}, // Enterprise Linux 9
+		{Version{4, 18}, false}, // Enterprise Linux 8
 	} {
 		if got := tc.v.Supported(); got != tc.want {
 			t.Errorf("Version%v.Supported() = %v, want %v", tc.v, got, tc.want)
@@ -87,8 +88,11 @@ func TestCheck(t *testing.T) {
 		t.Errorf("unhelpful message: %v", err)
 	}
 
-	if err := check(write("floor", "5.14.0-503.el9.x86_64\n")); err != nil {
-		t.Errorf("check rejected RHEL 9's 5.14: %v", err)
+	if err := check(write("floor", "6.12.0-211.54.1.el10_2.x86_64\n")); err != nil {
+		t.Errorf("check rejected Enterprise Linux 10's 6.12: %v", err)
+	}
+	if err := check(write("el9", "5.14.0-503.el9.x86_64\n")); err == nil {
+		t.Error("check accepted Enterprise Linux 9's 5.14")
 	}
 
 	// A version Ostiole cannot read or parse must not block anything.

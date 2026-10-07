@@ -114,8 +114,8 @@ if [ "$HAS_SYSTEMD" -eq 0 ] && [ "$DRY_RUN" -ne 1 ] && [ "${OSTIOLE_NO_INSTALL:-
 	exit 1
 fi
 
-# Ostiole supports Linux 5.14 and newer, which is RHEL 9 and every current
-# Debian, Ubuntu, Fedora, and Arch. A release string this cannot
+# Ostiole supports Linux 6.12 and newer: Debian 13, Enterprise Linux 10,
+# and every current Ubuntu, Fedora, and Arch. A release string this cannot
 # parse is allowed through rather than blocking the install.
 kernel_too_old() {
 	rel="$1"
@@ -125,12 +125,12 @@ kernel_too_old() {
 	minor="${rest%%[!0-9]*}"
 	case "$major" in '' | *[!0-9]*) return 1 ;; esac
 	case "$minor" in '' | *[!0-9]*) return 1 ;; esac
-	if [ "$major" -lt 5 ]; then return 0; fi
-	if [ "$major" -eq 5 ] && [ "$minor" -lt 14 ]; then return 0; fi
+	if [ "$major" -lt 6 ]; then return 0; fi
+	if [ "$major" -eq 6 ] && [ "$minor" -lt 12 ]; then return 0; fi
 	return 1
 }
 if kernel_too_old "$(uname -r)"; then
-	echo "unsupported kernel: $(uname -r) (Ostiole needs Linux 5.14 or newer)" >&2
+	echo "unsupported kernel: $(uname -r) (Ostiole needs Linux 6.12 or newer)" >&2
 	if [ "${OSTIOLE_IGNORE_KERNEL:-0}" != "1" ]; then
 		echo "set OSTIOLE_IGNORE_KERNEL=1 to install anyway" >&2
 		exit 1
@@ -164,16 +164,13 @@ EL=0
 case "$OS_ID" in rocky | rhel | almalinux | centos) EL=1 ;; esac
 case " $OS_LIKE " in *rhel*) EL=1 ;; esac
 # Which Fedora build of miniupnpd this Enterprise Linux can run. Its glibc
-# decides: EL 10 is 2.39 and takes the current one; EL 9 is 2.34, and
-# Fedora 38 is the newest with both an old enough glibc and the nftables
-# backend — 36 and older are the iptables build, which would write
-# mappings into tables Ostiole's chains never see.
+# decides: EL 10 is 2.39 and takes the current one. An older release gets
+# no UPnP.
 FEDORA_UPNP=0
 if [ "$EL" -eq 1 ]; then
 	case "${OS_VERSION%%.*}" in
-	9) FEDORA_UPNP=38 ;;
 	'' | *[!0-9]*) ;;
-	*) [ "${OS_VERSION%%.*}" -lt 9 ] || FEDORA_UPNP="$FEDORA_RELEASE" ;;
+	*) [ "${OS_VERSION%%.*}" -lt 10 ] || FEDORA_UPNP="$FEDORA_RELEASE" ;;
 	esac
 fi
 
@@ -468,19 +465,8 @@ WIFI_VENDORS="${WIFI_VENDORS# }"
 wifi_firmware() {
 	case "$MANAGER" in
 	dnf)
-		# Enterprise Linux 9 keeps every vendor but Intel in the blob, and
-		# names Intel's by chip: iwl7260-firmware from the 7260 on, the
-		# AX210 included, and iwl3160-firmware for the 3160 and 3168.
 		# Enterprise Linux 10 splits by vendor as Fedora does, and its blob
 		# only recommends the other vendors' packages.
-		if [ "$EL" -eq 1 ]; then
-			case "${OS_VERSION%%.*}" in
-			[0-9])
-				case "$1" in 8086) echo iwl7260-firmware iwl3160-firmware ;; *) echo linux-firmware ;; esac
-				return
-				;;
-			esac
-		fi
 		case "$1" in
 		# Fedora keeps the newest Intel cards' firmware apart, in a package
 		# Enterprise Linux 10 does not have.
@@ -660,8 +646,7 @@ fedora_miniupnpd() {
 }
 
 # fedora_dirs prints the package directories to try for a release: the
-# mirrors while it is still supported, and the archive once it is not,
-# which is where the older build an Enterprise Linux 9 needs lives.
+# mirrors while it is still supported, and the archive once it is not.
 fedora_dirs() {
 	for repo in "updates-released-f$1" "fedora-$1"; do
 		curl -fsSL "https://mirrors.fedoraproject.org/mirrorlist?repo=$repo&arch=$RPM_ARCH" 2>/dev/null |

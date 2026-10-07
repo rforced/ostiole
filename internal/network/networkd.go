@@ -412,9 +412,8 @@ func renderNetwork(in model.Interface, vlans []string, routes []model.StaticRout
 		// anyway. The routes left behind are swept in install.NetworkRevert.
 		//
 		// dhcp-on-stop: systemd 257 renamed it dynamic-on-stop and still
-		// takes the old name; systemd 252 (RHEL 9) warns on the new one
-		// and ignores it. On 252 only the DHCPv4 lease is kept. `yes`
-		// would also ignore lease expiry.
+		// takes the old name, so the units routers already have stand as
+		// written. `yes` would also ignore lease expiry.
 		b.WriteString("KeepConfiguration=dhcp-on-stop\n")
 	}
 	if in.IPv4.Mode == model.AddrStatic {

@@ -13,12 +13,11 @@ import (
 //
 // The floor is a support decision, not a technical one: the rendered
 // ruleset uses nothing newer than counters, log prefixes, and comments,
-// all of which predate it by years. 5.14 is what RHEL 9 and its rebuilds
-// ship, so the line sits at the oldest enterprise distribution still in
-// support and takes every current Debian, Ubuntu, Fedora, and Arch
-// with it. Anything older is RHEL 8, Debian 11, or Ubuntu 20.04, which
-// Ostiole does not test against.
-var Minimum = Version{Major: 5, Minor: 14}
+// all of which predate it by years. 6.12 is the long-term kernel Debian 13
+// and Enterprise Linux 10 ship, and every current Ubuntu, Fedora, and Arch
+// is newer. Anything older is Enterprise Linux 9, Debian 12, or Ubuntu
+// 24.04's first kernel, which Ostiole does not test against.
+var Minimum = Version{Major: 6, Minor: 12}
 
 // ReleaseFile is where the kernel publishes its version.
 const ReleaseFile = "/proc/sys/kernel/osrelease"
@@ -31,7 +30,7 @@ type Version struct {
 	Major, Minor int
 }
 
-// String renders the version as "5.14".
+// String renders the version as "6.12".
 func (v Version) String() string { return strconv.Itoa(v.Major) + "." + strconv.Itoa(v.Minor) }
 
 // Before reports whether v is older than o.

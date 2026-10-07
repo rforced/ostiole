@@ -74,7 +74,7 @@ configuration: systemd-networkd, dnsmasq, unbound, chrony, miniupnpd, pppd and h
 
 ## Requirements
 
-- **Linux 5.14 or newer** (RHEL 9's kernel), x86-64 or arm64.
+- **Linux 6.12 or newer** (the kernel of Debian 13 and Rocky Linux 10), x86-64 or arm64.
 - **systemd.** The install script installs the rest: nftables, systemd-networkd, dnsmasq, unbound,
   chrony, miniupnpd, ppp, tc and smartmontools.
 - **1 GB of RAM.** Large DNS block lists (about 100 MB per million names), the reverse proxy with
@@ -92,7 +92,7 @@ CI installs Ostiole on each of these on every push:
 - Debian 13
 - Ubuntu 26.04
 - Fedora 44
-- Rocky Linux 9 and 10
+- Rocky Linux 10
 - Arch Linux
 
 Where they differ:
@@ -105,8 +105,9 @@ Where they differ:
   installer enables it on most machines; on a cloud image, add it and run `ostiole repair`.
 - **Where UPnP and Tailscale come from:** Arch builds miniupnpd from the AUR during the install and
   removes the build tools afterwards. Each release pins the AUR commit it reviewed and carries
-  miniupnp's signing key, so a changed recipe, source or package is not installed. Rocky Linux uses Fedora's miniupnpd package, Fedora 38's on
-  Rocky 9. Debian, Ubuntu and Rocky Linux get Tailscale from Tailscale's own repository.
+  miniupnp's signing key, so a changed recipe, source or package is not installed. Rocky Linux uses
+  Fedora's miniupnpd package. Debian, Ubuntu and Rocky Linux get Tailscale from Tailscale's own
+  repository.
 
 ## Install
 

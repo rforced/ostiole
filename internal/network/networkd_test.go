@@ -90,8 +90,9 @@ func TestRenderNoneMeansNoLinkLocal(t *testing.T) {
 	}
 }
 
-// KeepConfiguration goes on interfaces with a leased address, spelled the
-// way systemd 252 parses it: it warns on dynamic-on-stop and ignores it.
+// KeepConfiguration goes on interfaces with a leased address, in the
+// spelling every router has: a new one would rewrite their units for
+// nothing, since systemd 257 takes both.
 func TestRenderKeepsLeasedAddressesOnStop(t *testing.T) {
 	t.Parallel()
 	n := &Networkd{}
@@ -109,7 +110,7 @@ func TestRenderKeepsLeasedAddressesOnStop(t *testing.T) {
 			t.Errorf("%s: KeepConfiguration present %v, want %v:\n%s", name, got, want, unit)
 		}
 		if strings.Contains(unit, "dynamic-on-stop") {
-			t.Errorf("%s: wrote the systemd 257 spelling, which RHEL 9 ignores:\n%s", name, unit)
+			t.Errorf("%s: wrote the new spelling, which rewrites every router's units:\n%s", name, unit)
 		}
 	}
 }
