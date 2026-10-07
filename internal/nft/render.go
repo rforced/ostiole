@@ -330,11 +330,18 @@ func (r *renderer) chainInput() {
 // related to a tracked flow, which the state rule accepted already, or
 // invalid, which the state rule dropped already. Echo is deliberately
 // absent: whether this firewall answers ping is a zone rule.
+// ICMP an interface needs: errors, and IPv6's neighbour discovery and MLD.
+const (
+	icmpErrors   = "{ destination-unreachable, time-exceeded, parameter-problem }"
+	icmpv6Needed = "{ nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit, nd-router-advert, " +
+		"destination-unreachable, packet-too-big, time-exceeded, parameter-problem, " +
+		"mld-listener-query, mld-listener-report, mld-listener-done }"
+)
+
 func (r *renderer) linkLocalBaseline() {
 	if v4 := r.interfacesWith(func(in model.Interface) model.AddrMode { return in.IPv4.Mode }); len(v4) > 0 {
 		// Error messages that IPv4 needs to function (no echo: that is a user rule).
-		r.line(fmt.Sprintf("iifname %s icmp type { destination-unreachable, time-exceeded, parameter-problem } accept",
-			ifnameSet(v4)))
+		r.line(fmt.Sprintf("iifname %s icmp type %s accept", ifnameSet(v4), icmpErrors))
 		r.sysFor(v4, SystemRule{
 			Chain: "input", Action: "accept", Protocol: string(model.ProtocolICMP),
 			Source: "any", Destination: firewallDest(nil),
@@ -343,9 +350,7 @@ func (r *renderer) linkLocalBaseline() {
 	}
 	if v6 := r.interfacesWith(func(in model.Interface) model.AddrMode { return in.IPv6.Mode }); len(v6) > 0 {
 		// Neighbour discovery, MLD, and error messages that IPv6 cannot work without.
-		r.line(fmt.Sprintf("iifname %s icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit, nd-router-advert, "+
-			"destination-unreachable, packet-too-big, time-exceeded, parameter-problem, "+
-			"mld-listener-query, mld-listener-report, mld-listener-done } accept", ifnameSet(v6)))
+		r.line(fmt.Sprintf("iifname %s icmpv6 type %s accept", ifnameSet(v6), icmpv6Needed))
 		r.sysFor(v6, SystemRule{
 			Chain: "input", Action: "accept", Protocol: string(model.ProtocolICMP),
 			Source: "any", Destination: firewallDest(nil),

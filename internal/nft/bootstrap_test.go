@@ -13,10 +13,18 @@ func TestBootstrap(t *testing.T) {
 		"policy drop;",
 		`tcp dport { 443, 22 } accept comment "bootstrap:management"`,
 		"ct state established,related accept",
-		"udp dport 68 accept",
+		`icmp type { destination-unreachable, time-exceeded, parameter-problem } accept comment "bootstrap:icmp"`,
+		`icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit, nd-router-advert, `,
+		`ip6 saddr fe80::/10 ip6 daddr fe80::/10 udp sport 547 udp dport 546 accept comment "bootstrap:dhcpv6-client"`,
 	} {
 		if !strings.Contains(r, want) {
 			t.Errorf("bootstrap lacks %q:\n%s", want, r)
+		}
+	}
+	// No echo, and no DHCP port open to every source.
+	for _, never := range []string{"echo-request", "meta l4proto", "dport 68"} {
+		if strings.Contains(r, never) {
+			t.Errorf("bootstrap has %q:\n%s", never, r)
 		}
 	}
 	// One port is written bare, and no port means no management rule at

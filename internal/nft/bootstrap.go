@@ -14,8 +14,8 @@ import (
 // driven from and the ports the wizard is reached on, and nothing else.
 //
 // Input accepts what an unconfigured router has to accept — its own
-// loopback, the replies to what it started, ICMP, the DHCP and DHCPv6
-// replies to its own lease requests, and the management ports from
+// loopback, the replies to what it started, ICMP errors and neighbour
+// discovery, DHCPv6 replies from the link, and the management ports from
 // anywhere, since the wizard has not yet said which side is inside — and
 // drops the rest. Nothing is forwarded: a firewall that does not know its
 // zones yet has no business passing traffic between them. It is the same
@@ -76,9 +76,9 @@ func minimal(title, tag string, ports []uint16, ifaces []string) string {
 	b.WriteString("\t\tiif \"lo\" accept\n")
 	b.WriteString("\t\tct state invalid drop\n")
 	b.WriteString("\t\tct state established,related accept\n")
-	b.WriteString("\t\tmeta l4proto { icmp, ipv6-icmp } accept comment \"" + tag + ":icmp\"\n")
-	b.WriteString("\t\tudp dport 68 accept comment \"" + tag + ":dhcp-client\"\n")
-	b.WriteString("\t\tudp dport 546 accept comment \"" + tag + ":dhcpv6-client\"\n")
+	b.WriteString("\t\ticmp type " + icmpErrors + " accept comment \"" + tag + ":icmp\"\n")
+	b.WriteString("\t\ticmpv6 type " + icmpv6Needed + " accept comment \"" + tag + ":icmpv6\"\n")
+	b.WriteString("\t\tip6 saddr fe80::/10 ip6 daddr fe80::/10 udp sport 547 udp dport 546 accept comment \"" + tag + ":dhcpv6-client\"\n")
 	if len(list) > 0 {
 		b.WriteString("\t\t" + from + "tcp dport " + setOrSingle(list) + " accept comment \"" + tag + ":management\"\n")
 	}
