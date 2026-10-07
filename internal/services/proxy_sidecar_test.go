@@ -1336,11 +1336,13 @@ func freePort(t *testing.T) uint16 {
 	return 0
 }
 
-// answer is an HTTP server that says body to every request. It returns
-// the server's address.
+// answer is an HTTP server that reads each request's body and says body
+// to it, so an upload past what Go drains unread still goes through
+// whole. It returns the server's address.
 func answer(t *testing.T, body string) string {
 	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
 		_, _ = io.WriteString(w, body)
 	}))
 	t.Cleanup(srv.Close)

