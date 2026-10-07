@@ -307,6 +307,7 @@
               "drop": true
             }
           ],
+          "strict_sni_host": true,
           "logs": {},
           "routes": [
             {

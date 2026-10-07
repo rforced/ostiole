@@ -32,8 +32,9 @@ import (
 )
 
 // A name no site claims gets nothing from the proxy: a 403 over HTTP, and
-// no handshake over HTTPS, whatever the loaded certificates cover. What
-// Caddy makes of the configuration is the point, so the sidecar is asked.
+// no handshake over HTTPS, whatever the loaded certificates cover. A Host
+// that is not the handshake's name gets a 421. What Caddy makes of the
+// configuration is the point, so the sidecar is asked.
 func TestProxyRefusesNamesNoSiteClaims(t *testing.T) {
 	t.Parallel()
 	bin := sidecar(t)
@@ -64,7 +65,8 @@ func TestProxyRefusesNamesNoSiteClaims(t *testing.T) {
 		{"a name no site claims", "", "http://nothing.example.com/", http.StatusForbidden, ""},
 		{"the challenge under any name", "", "http://nothing.example.com/.well-known/acme-challenge/x", http.StatusOK, "solver"},
 		{"a site", "", "http://status.example.com/", http.StatusPermanentRedirect, ""},
-		{"a site's name, then a host no site claims", "status.example.com", "https://nothing.example.com/", http.StatusForbidden, ""},
+		{"a site's name, then a host no site claims", "status.example.com", "https://nothing.example.com/", http.StatusMisdirectedRequest, ""},
+		{"a site's name, then another site's", "status.example.com", "https://shop.example.com/", http.StatusMisdirectedRequest, ""},
 		{"a site on the built-in pair", "status.example.com", "https://status.example.com/", http.StatusOK, "site"},
 		{"a site on the wildcard", "shop.example.com", "https://shop.example.com/", http.StatusOK, "site"},
 	} {

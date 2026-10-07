@@ -86,6 +86,7 @@ type (
 		MaxHeaderBytes    int          `json:"max_header_bytes"`
 		ListenerWrappers  []jsonMap    `json:"listener_wrappers,omitempty"`
 		TLSConnPolicies   []jsonMap    `json:"tls_connection_policies,omitempty"`
+		StrictSNIHost     bool         `json:"strict_sni_host,omitempty"`
 		Logs              *emptyObject `json:"logs,omitempty"`
 		Routes            []httpRoute  `json:"routes,omitempty"`
 		Errors            *httpErrors  `json:"errors,omitempty"`
@@ -282,6 +283,7 @@ func (p *Proxy) httpApp(cfg *model.Config) *httpApp {
 		ReadHeaderTimeout: proxyHeaderTimeout,
 		IdleTimeout:       proxyIdleTimeout,
 		MaxHeaderBytes:    proxyMaxHeader,
+		StrictSNIHost:     true,
 	}
 	if pr.HTTP3 {
 		secure.Protocols = append(secure.Protocols, "h3")
