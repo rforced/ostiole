@@ -455,6 +455,13 @@ RestrictSUIDSGID=yes
 LockPersonality=yes
 NoNewPrivileges=yes
 SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK AF_PACKET
+RestrictNamespaces=yes
+MemoryDenyWriteExecute=yes
+ProtectKernelLogs=yes
+ProtectHostname=yes
+SystemCallFilter=~@obsolete @cpu-emulation @debug @swap @reboot @raw-io @mount
+SystemCallErrorNumber=EPERM
 
 [Install]
 WantedBy=multi-user.target

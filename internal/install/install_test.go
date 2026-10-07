@@ -226,6 +226,25 @@ func TestUnits(t *testing.T) {
 	if !strings.Contains(d, "\nLogsDirectory=ostiole\nLogsDirectoryMode=0700\n") {
 		t.Errorf("daemon unit has no log directory:\n%s", d)
 	}
+	// What the sandbox takes away, which systemd-analyze security scores.
+	// Captures and Wake on LAN need raw frames, and nft, routes and nflog
+	// need netlink; the filter is a deny list, so a call it misses fails.
+	for _, want := range []string{
+		"\nRestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK AF_PACKET\n",
+		"\nRestrictNamespaces=yes\n", "\nMemoryDenyWriteExecute=yes\n", "\nProtectKernelLogs=yes\n", "\nProtectHostname=yes\n",
+		"\nSystemCallFilter=~@obsolete @cpu-emulation @debug @swap @reboot @raw-io @mount\n", "\nSystemCallErrorNumber=EPERM\n",
+	} {
+		if !strings.Contains(d, want) {
+			t.Errorf("daemon unit lacks %q:\n%s", strings.TrimSpace(want), d)
+		}
+	}
+	// sysctls, the kernel's time zone offset, the disks and the module
+	// directory are the daemon's to reach.
+	for _, never := range []string{"ProtectKernelTunables=", "ProtectClock=", "PrivateDevices=", "ProtectKernelModules="} {
+		if strings.Contains(d, never) {
+			t.Errorf("daemon unit has %s, which takes what the daemon needs:\n%s", never, d)
+		}
+	}
 	f := units[FirewallUnit]
 	// A missing ruleset must not skip the unit: `load` puts the fallback in.
 	if !strings.Contains(f, "Before=network-pre.target") || strings.Contains(f, "ConditionPathExists") {
