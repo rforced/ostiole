@@ -626,6 +626,10 @@ func (a *api) protect(h func(w http.ResponseWriter, r *http.Request) error) http
 		if a.auth == nil {
 			return &unavailable{errors.New("authentication not available")}
 		}
+		// A bearer skipped the CSRF guard, so it may not ride the cookie.
+		if hasBearer(r) {
+			return errUnauthorized
+		}
 		if _, ok := a.session(r); !ok {
 			return errUnauthorized
 		}

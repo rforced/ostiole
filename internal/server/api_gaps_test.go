@@ -118,6 +118,28 @@ func TestBadBearerDoesNotFallThroughToTheSession(t *testing.T) {
 	}
 }
 
+// The session-only routes take no bearer, which would skip the CSRF guard.
+func TestSessionRoutesRefuseABearer(t *testing.T) {
+	t.Parallel()
+	srv, _ := newTestServer(t)
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/api/v1/auth/logout", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer not-a-token")
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("logout with a bearer beside the cookie: %d, want 401", resp.StatusCode)
+	}
+	if resp, raw := do(t, srv, http.MethodGet, "/api/v1/auth/me", nil); resp.StatusCode != http.StatusOK {
+		t.Errorf("the session did not survive: %d %s", resp.StatusCode, raw)
+	}
+}
+
 // Everything under /api answers in JSON, a wrong method on a known path
 // included; the Allow header still says what would have worked.
 func TestWrongMethodOnAnAPIPathIsJSON(t *testing.T) {
