@@ -5,6 +5,7 @@ import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
@@ -13,6 +14,7 @@ const props = defineProps({
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
+const auth = useAuthStore()
 const config = useConfigStore()
 
 const LETS_ENCRYPT = 'https://acme-v02.api.letsencrypt.org/directory'
@@ -94,7 +96,11 @@ function save() {
 </script>
 
 <template>
-  <AppDialog v-model:open="open" :title="account ? `Account ${account.id}` : 'Add ACME account'">
+  <AppDialog
+    v-model:open="open"
+    :title="account ? `Account ${account.id}` : 'Add ACME account'"
+    :read-only="!auth.isAdmin"
+  >
     <form class="space-y-4" @submit.prevent="save">
       <div class="grid gap-4 sm:grid-cols-2">
         <FormField id="acc-id" label="Name">

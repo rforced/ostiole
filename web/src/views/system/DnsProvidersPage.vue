@@ -45,7 +45,7 @@ const labelOf = (kind) => kinds.value.find((k) => k.kind === kind)?.label ?? kin
       flush
     >
       <template v-if="!auth.readOnly" #actions>
-        <button type="button" class="btn-secondary" @click="add">
+        <button type="button" class="btn-secondary" :disabled="!auth.isAdmin" @click="add">
           <Plus class="size-4" aria-hidden="true" /> Add provider
         </button>
       </template>
@@ -90,13 +90,16 @@ const labelOf = (kind) => kinds.value.find((k) => k.kind === kind)?.label ?? kin
                 :question="`Delete DNS provider ${p.id}?`"
                 description="The credentials go with it."
                 :typed="p.id"
-                :disabled="config.providerDependents(p.id).length > 0"
+                :disabled="!auth.isAdmin || config.providerDependents(p.id).length > 0"
                 @confirm="config.removeDnsProvider(p.id)"
               />
             </td>
           </tr>
         </tbody>
       </table>
+      <div v-if="auth.isOperator" class="card-strip border-t border-line text-ink-muted">
+        Only an admin can add or delete DNS providers, or change their kind and credentials.
+      </div>
     </SectionCard>
 
     <ProviderDialog v-model:open="open" :provider="editing" :kinds="kinds" />

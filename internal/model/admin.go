@@ -23,6 +23,12 @@ func AdminChanges(old, next *Config) []string {
 		// The program runs as root at the next order that uses it.
 		out = append(out, "DNS providers that run a program")
 	}
+	if !sameJSON(providerCredentials(old), providerCredentials(next)) {
+		out = append(out, "DNS provider credentials")
+	}
+	if !sameJSON(old.ACME.Accounts, next.ACME.Accounts) {
+		out = append(out, "certificate authority accounts")
+	}
 	if !sameJSON(old.Updates, next.Updates) {
 		out = append(out, "updates")
 	}
@@ -69,6 +75,18 @@ func programProviders(cfg *Config) map[string]DNSProvider {
 	for _, p := range cfg.DNSProviders {
 		if p.Kind == ProviderExec {
 			out[p.ID] = p
+		}
+	}
+	return out
+}
+
+// providerCredentials keys every other DNS provider's kind and settings
+// by ID.
+func providerCredentials(cfg *Config) map[string]DNSProvider {
+	out := map[string]DNSProvider{}
+	for _, p := range cfg.DNSProviders {
+		if p.Kind != ProviderExec {
+			out[p.ID] = DNSProvider{Kind: p.Kind, Settings: p.Settings}
 		}
 	}
 	return out

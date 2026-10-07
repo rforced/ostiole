@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ProviderDialog from '@/views/system/providers/ProviderDialog.vue'
 
@@ -36,8 +37,9 @@ const KINDS = [
   },
 ]
 
-function open(provider = null) {
+function open(provider = null, role = 'admin') {
   setActivePinia(createPinia())
+  useAuthStore().user = { username: role, role }
   const config = useConfigStore()
   config.replaceDraft({ version: 11, zones: [], interfaces: [], rules: [], nat: {}, system: {} })
   const wrapper = mount(ProviderDialog, {
@@ -51,6 +53,19 @@ const save = (wrapper) => wrapper.findAll('button').find((b) => b.text() === 'Sa
 
 describe('ProviderDialog', () => {
   beforeEach(() => setActivePinia(createPinia()))
+
+  it('leaves an operator the domains and the wait, not the kind or credentials', async () => {
+    const { wrapper } = open(
+      { id: 'cf', kind: 'cloudflare', settings: { token: 'x' }, domains: ['example.com'] },
+      'operator',
+    )
+    await flushPromises()
+    expect(wrapper.get('#prov-kind').element.disabled).toBe(true)
+    expect(wrapper.get('#prov-token').element.disabled).toBe(true)
+    expect(wrapper.get('#prov-domains').element.disabled).toBe(false)
+    expect(wrapper.get('#prov-wait').element.disabled).toBe(false)
+    expect(wrapper.text()).toContain('Only an admin can change the kind and credentials.')
+  })
 
   it('builds its fields from the kind, and hides the secret ones', async () => {
     const { wrapper } = open()

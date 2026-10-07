@@ -33,7 +33,7 @@ function edit(account) {
       flush
     >
       <template v-if="!auth.readOnly" #actions>
-        <button type="button" class="btn-secondary" @click="add">
+        <button type="button" class="btn-secondary" :disabled="!auth.isAdmin" @click="add">
           <Plus class="size-4" aria-hidden="true" /> Add account
         </button>
       </template>
@@ -67,7 +67,7 @@ function edit(account) {
             <UsedByCell :names="config.accountDependents(a.id)" />
             <td class="text-right whitespace-nowrap" data-label="">
               <button type="button" class="link" @click="edit(a)">
-                {{ auth.readOnly ? 'View' : 'Edit' }}
+                {{ auth.isAdmin ? 'Edit' : 'View' }}
               </button>
               <ConfirmButton
                 class="ml-3"
@@ -75,13 +75,16 @@ function edit(account) {
                 :question="`Delete ACME account ${a.id}?`"
                 description="Nothing is deleted at the CA."
                 :typed="a.id"
-                :disabled="config.accountDependents(a.id).length > 0"
+                :disabled="!auth.isAdmin || config.accountDependents(a.id).length > 0"
                 @confirm="config.removeAcmeAccount(a.id)"
               />
             </td>
           </tr>
         </tbody>
       </table>
+      <div v-if="auth.isOperator" class="card-strip border-t border-line text-ink-muted">
+        Only an admin can change ACME accounts.
+      </div>
     </SectionCard>
 
     <AccountDialog v-model:open="open" :account="editing" />

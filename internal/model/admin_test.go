@@ -44,10 +44,11 @@ func TestAdminChanges(t *testing.T) {
 			c.Crons[1].Kind, c.Crons[1].Command = CronCommand, "/bin/sh"
 		}, []string{"cron jobs that run a command or back up accounts"}},
 		{"a backup that takes the accounts", func(c *Config) { c.Crons[0].WithUsers = true }, []string{"cron jobs that run a command or back up accounts"}},
-		{"a provider's token and domains", func(c *Config) {
-			c.DNSProviders[0].Settings["token"] = "u"
-			c.DNSProviders[0].Domains = []string{"example.com"}
-		}, nil},
+		{"a provider's domains", func(c *Config) { c.DNSProviders[0].Domains = []string{"example.com"} }, nil},
+		{"a provider's token", func(c *Config) { c.DNSProviders[0].Settings["token"] = "u" }, []string{"DNS provider credentials"}},
+		{"a new provider", func(c *Config) {
+			c.DNSProviders = append(c.DNSProviders, DNSProvider{ID: "r53", Kind: "route53", Settings: map[string]string{"accessKeyId": "a"}})
+		}, []string{"DNS provider credentials"}},
 		{"a new program provider", func(c *Config) {
 			c.DNSProviders = append(c.DNSProviders, DNSProvider{ID: "sh", Kind: ProviderExec, Settings: map[string]string{"program": "/bin/sh"}})
 		}, []string{"DNS providers that run a program"}},
@@ -55,7 +56,10 @@ func TestAdminChanges(t *testing.T) {
 		{"a program provider removed", func(c *Config) { c.DNSProviders = c.DNSProviders[:1] }, []string{"DNS providers that run a program"}},
 		{"a provider turned into a program", func(c *Config) {
 			c.DNSProviders[0].Kind, c.DNSProviders[0].Settings = ProviderExec, map[string]string{"program": "/bin/sh"}
-		}, []string{"DNS providers that run a program"}},
+		}, []string{"DNS providers that run a program", "DNS provider credentials"}},
+		{"a new CA account", func(c *Config) {
+			c.ACME.Accounts = append(c.ACME.Accounts, ACMEAccount{ID: "le", Directory: "https://acme.example.org/directory", PrivateKey: "k"})
+		}, []string{"certificate authority accounts"}},
 		{"updates", func(c *Config) { c.Updates.Ostiole.Mode = "all" }, []string{"updates"}},
 		{"the remote backup", func(c *Config) { c.Backup.Remote.Bucket = "elsewhere" }, []string{"remote backup"}},
 		// Who gets in.

@@ -136,8 +136,12 @@ const sees = computed(() => {
         </FormField>
       </div>
 
-      <FormField id="prov-kind" label="Kind">
-        <select id="prov-kind" v-model="form.kind" class="input">
+      <FormField
+        id="prov-kind"
+        label="Kind"
+        :hint="auth.isOperator ? 'Only an admin can change the kind and credentials.' : undefined"
+      >
+        <select id="prov-kind" v-model="form.kind" class="input" :disabled="!auth.isAdmin">
           <option v-for="k in kinds" :key="k.kind" :value="k.kind">{{ k.label }}</option>
         </select>
       </FormField>
@@ -165,6 +169,7 @@ const sees = computed(() => {
           :type="f.secret ? 'password' : 'text'"
           class="input font-mono"
           :required="f.required"
+          :disabled="!auth.isAdmin"
           autocomplete="off"
           spellcheck="false"
         />

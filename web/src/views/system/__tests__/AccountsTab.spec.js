@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import AccountsTab from '@/views/system/certificates/AccountsTab.vue'
 import DnsProvidersPage from '@/views/system/DnsProvidersPage.vue'
@@ -44,7 +45,8 @@ function draft() {
 const row = (wrapper, id) =>
   wrapper.findAll('tr').find((tr) => tr.find('td').exists() && tr.get('td').text().startsWith(id))
 
-async function open(component) {
+async function open(component, role = 'admin') {
+  useAuthStore().user = { username: role, role }
   const config = useConfigStore()
   config.replaceDraft(draft())
   const wrapper = mount(component, { global: { stubs: { RouterLink: true } } })
@@ -78,5 +80,28 @@ describe('accounts and providers in use', () => {
     const unused = row(wrapper, 'unused')
     expect(usedBy(unused)).toBe('—')
     expect(deleteOf(unused).disabled).toBe(false)
+  })
+})
+
+// An operator changes neither, so Add and Delete are off and the card says why.
+describe('accounts and providers for an operator', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('leaves the ACME accounts to an admin', async () => {
+    const { wrapper } = await open(AccountsTab, 'operator')
+    const add = wrapper.findAll('button').find((b) => b.text().includes('Add account'))
+    expect(add.element.disabled).toBe(true)
+    expect(deleteOf(row(wrapper, 'spare')).disabled).toBe(true)
+    expect(row(wrapper, 'spare').text()).toContain('View')
+    expect(wrapper.text()).toContain('Only an admin can change ACME accounts.')
+  })
+
+  it('leaves adding and deleting DNS providers to an admin', async () => {
+    const { wrapper } = await open(DnsProvidersPage, 'operator')
+    const add = wrapper.findAll('button').find((b) => b.text().includes('Add provider'))
+    expect(add.element.disabled).toBe(true)
+    expect(deleteOf(row(wrapper, 'unused')).disabled).toBe(true)
+    expect(row(wrapper, 'unused').text()).toContain('Edit')
+    expect(wrapper.text()).toContain('Only an admin can add or delete DNS providers')
   })
 })
