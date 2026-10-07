@@ -310,6 +310,9 @@ jobs:
     env:
       IMAGE: ${{ matrix.image }}
       PORT: '18099'
+      # GitHub's own runners use this mirror. archive.ubuntu.com has hours
+      # where it takes a connection and sends nothing.
+      UBUNTU_MIRROR: http://azure.archive.ubuntu.com/ubuntu/
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -339,6 +342,7 @@ jobs:
       - name: The install script
         run: |
           docker run --rm --add-host=host.test:host-gateway \
+            -e UBUNTU_MIRROR \
             -v "$PWD/scripts/ci:/ci:ro" \
             -v "$PWD/internal/nft/testdata:/testdata:ro" \
             "$IMAGE" sh /ci/install-script-test.sh "http://host.test:$PORT" "$VERSION"

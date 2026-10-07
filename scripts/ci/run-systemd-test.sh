@@ -35,6 +35,7 @@ cleanup
   -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
   --tmpfs /run --tmpfs /run/lock --tmpfs /tmp:rw,nosuid,nodev,noexec \
   --add-host=host.test:host-gateway \
+  -e UBUNTU_MIRROR \
   -v "$CI_DIR:/ci:ro" \
   "$IMAGE" /ci/systemd-boot.sh >/dev/null
 

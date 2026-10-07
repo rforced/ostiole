@@ -62,6 +62,7 @@ for image in "${images[@]}"; do
   echo "################ $image"
   ok=yes
   "$CONTAINER" run --rm --add-host=host.test:host-gateway \
+    -e UBUNTU_MIRROR \
     -v "$REPO/scripts/ci:/ci:ro" \
     -v "$REPO/internal/nft/testdata:/testdata:ro" \
     "$image" sh /ci/install-script-test.sh "http://host.test:$PORT" "$VERSION" || ok=no

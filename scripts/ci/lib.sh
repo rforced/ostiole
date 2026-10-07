@@ -20,9 +20,24 @@ manager() {
 # minutes, where run-systemd-test.sh waits four.
 dnf_ci() { dnf --setopt=timeout=10 --setopt=minrate=500k "$@"; }
 
+ubuntu_mirror() {
+	sources=/etc/apt/sources.list.d/ubuntu.sources
+	[ -n "${UBUNTU_MIRROR:-}" ] && [ -f "$sources" ] || return 0
+	sed -i -E "s#http://(archive|security)\.ubuntu\.com/ubuntu/?#$UBUNTU_MIRROR#" "$sources"
+}
+
+# apt waits minutes on a mirror that takes a request and sends nothing.
+apt_timeout() {
+	printf 'Acquire::http::Timeout "10";\nAcquire::Retries "3";\n' >/etc/apt/apt.conf.d/99ci-timeout
+}
+
 pkg_refresh() {
 	case "$(manager)" in
-	apt-get) DEBIAN_FRONTEND=noninteractive apt-get update -qq ;;
+	apt-get)
+		ubuntu_mirror
+		apt_timeout
+		DEBIAN_FRONTEND=noninteractive apt-get update -qq
+		;;
 	# Nothing: an install fetches the metadata it is missing, and dnf 4's
 	# makecache would fetch every repository's again, however fresh.
 	dnf) ;;
