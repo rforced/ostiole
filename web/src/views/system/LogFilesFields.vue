@@ -119,7 +119,7 @@ const failures = computed(() => logs.value.filter((l) => l.error))
       label="Write logs to files"
       hint="Every log that is on, read back when Ostiole starts. The files hold client addresses."
     />
-    <div v-if="enabled" class="grid max-w-3xl gap-4 sm:grid-cols-3">
+    <div v-if="enabled" class="fields fields-card">
       <FormField
         id="log-files-retention"
         label="Kept for (days)"

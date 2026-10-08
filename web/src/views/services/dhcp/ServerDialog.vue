@@ -103,7 +103,7 @@ function save() {
           </option>
         </select>
       </FormField>
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="sc-start" label="Range start">
           <input
             id="sc-start"

@@ -180,7 +180,7 @@ async function save() {
       </ul>
 
       <template v-if="ok">
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="fields">
           <FormField id="tf-name" label="Interface name">
             <input
               id="tf-name"

@@ -52,7 +52,7 @@ function save() {
     description="Rules that name this schedule match only inside the window. An end before the start runs over midnight."
   >
     <form class="space-y-4" @submit.prevent="save">
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="sch-name" label="Name" hint="Lower case, e.g. workday.">
           <input
             id="sch-name"

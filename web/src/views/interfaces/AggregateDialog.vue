@@ -182,7 +182,7 @@ function save() {
     "
   >
     <form class="space-y-4" @submit.prevent="save">
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="agg-name" label="Name">
           <input
             id="agg-name"
@@ -230,7 +230,7 @@ function save() {
             <option v-for="m in BOND_MODES" :key="m.value" :value="m.value">{{ m.label }}</option>
           </select>
         </FormField>
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="fields">
           <FormField
             id="agg-mii"
             label="Link check interval (ms)"

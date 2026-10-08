@@ -102,7 +102,7 @@ function save() {
     description="How requests to a site are inspected."
   >
     <form class="space-y-4" @submit.prevent="save">
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="waf-id" label="Name">
           <input
             id="waf-id"
@@ -130,7 +130,7 @@ function save() {
         <p class="text-sm text-ink-muted">Detect only records what would have been blocked.</p>
       </fieldset>
 
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField
           id="waf-paranoia"
           label="Paranoia"

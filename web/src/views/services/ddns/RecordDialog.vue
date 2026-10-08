@@ -158,7 +158,7 @@ function sentence(r) {
         <input v-model="form.enabled" type="checkbox" class="size-4 rounded border-line-2" />
         Enabled
       </label>
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="ddns-name" label="Name" :hint="providerLine">
           <input
             id="ddns-name"

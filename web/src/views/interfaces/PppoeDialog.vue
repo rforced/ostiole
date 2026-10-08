@@ -145,7 +145,7 @@ function save() {
         <span class="font-mono">ostiole repair</span> once as root, or the apply will fail.
       </AppNotice>
 
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="ppp-name" label="Name">
           <input
             id="ppp-name"
@@ -201,7 +201,7 @@ function save() {
       </div>
 
       <AppDisclosure>
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="fields">
           <FormField
             id="ppp-service"
             label="Service name"

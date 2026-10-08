@@ -130,7 +130,7 @@ function edit(index) {
           </AppNotice>
         </fieldset>
 
-        <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
+        <div class="fields fields-card">
           <FormField id="upnp-ext" label="External interface" hint="Where a mapped port is opened.">
             <select id="upnp-ext" v-model="externalInterface" class="input font-mono">
               <option value="">Choose</option>

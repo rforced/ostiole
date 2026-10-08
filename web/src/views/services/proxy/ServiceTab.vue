@@ -89,7 +89,7 @@ function label(a) {
   <div class="space-y-5">
     <SectionCard title="Service" :locked="auth.readOnly">
       <div class="space-y-5">
-        <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
+        <div class="fields fields-card">
           <FormField id="proxy-http" label="HTTP port" hint="80 is the default.">
             <input
               id="proxy-http"

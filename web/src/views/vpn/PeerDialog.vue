@@ -397,7 +397,7 @@ async function copyFile() {
       <p class="text-sm">
         The private key is shown only now. Close this and it is gone. Make new keys replaces it.
       </p>
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField
           id="dv-endpoint"
           label="Endpoint"
@@ -467,7 +467,7 @@ async function copyFile() {
     </div>
 
     <form v-else class="space-y-4" @submit.prevent="save">
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="pe-name" label="Name" hint="Lower case, e.g. laptop.">
           <input
             id="pe-name"
@@ -481,7 +481,7 @@ async function copyFile() {
           <input id="pe-desc" v-model="form.description" class="input" />
         </FormField>
       </div>
-      <div v-if="!peer && (config.tunnels.length > 1 || listens)" class="grid gap-4 sm:grid-cols-2">
+      <div v-if="!peer && (config.tunnels.length > 1 || listens)" class="fields">
         <FormField v-if="config.tunnels.length > 1" id="pe-tunnel" label="Tunnel">
           <select id="pe-tunnel" v-model="chosen" class="input font-mono">
             <option v-for="t in config.tunnels" :key="t.name" :value="t.name">
@@ -523,7 +523,7 @@ async function copyFile() {
           spellcheck="false"
         />
       </FormField>
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField
           id="pe-endpoint"
           label="Endpoint"

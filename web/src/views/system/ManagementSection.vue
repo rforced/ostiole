@@ -66,7 +66,7 @@ const dnsHint = computed(() => {
 <template>
   <SectionCard title="System settings" :locked="auth.readOnly">
     <div class="space-y-4">
-      <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
+      <div class="fields fields-card">
         <FormField id="sys-hostname" label="Hostname">
           <input id="sys-hostname" v-model="system.hostname" class="input" spellcheck="false" />
         </FormField>

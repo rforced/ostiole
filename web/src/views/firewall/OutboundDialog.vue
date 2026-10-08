@@ -77,7 +77,7 @@ function save() {
           <option v-for="z in config.zones" :key="z.name" :value="z.name">{{ z.name }}</option>
         </select>
       </FormField>
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField
           id="nat-source"
           label="Source networks"

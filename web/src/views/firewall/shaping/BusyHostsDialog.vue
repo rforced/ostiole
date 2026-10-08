@@ -90,7 +90,7 @@ function save() {
         </select>
       </FormField>
 
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField
           id="busy-count"
           label="Connections"

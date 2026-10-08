@@ -198,7 +198,7 @@ function save() {
 <template>
   <AppDialog v-model:open="open" :title="title">
     <form class="space-y-4" @submit.prevent="save">
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField
           id="if-desc"
           label="Description"
@@ -235,7 +235,7 @@ function save() {
             <option value="dhcp">DHCP client</option>
           </select>
         </FormField>
-        <div v-if="form.ipv4.mode === 'static'" class="grid gap-3 sm:grid-cols-2">
+        <div v-if="form.ipv4.mode === 'static'" class="fields">
           <FormField id="if-v4-addr" label="Address (CIDR)">
             <input
               id="if-v4-addr"
@@ -290,7 +290,7 @@ function save() {
             spellcheck="false"
           />
         </FormField>
-        <div v-if="form.ipv6.mode === 'delegated'" class="grid gap-3 sm:grid-cols-2">
+        <div v-if="form.ipv6.mode === 'delegated'" class="fields">
           <FormField id="if-v6-from" label="Prefix from">
             <select id="if-v6-from" v-model="form.ipv6.delegatedFrom" class="input" required>
               <option value="" disabled>Choose</option>
@@ -314,7 +314,7 @@ function save() {
             />
           </FormField>
         </div>
-        <div v-if="form.ipv6.mode === 'static'" class="grid gap-3 sm:grid-cols-2">
+        <div v-if="form.ipv6.mode === 'static'" class="fields">
           <FormField id="if-v6-addr" label="Address (CIDR)">
             <input
               id="if-v6-addr"

@@ -48,7 +48,7 @@ function submit() {
     description="The secret is shown once and never stored."
   >
     <form class="space-y-4" @submit.prevent="submit">
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="tok-name" label="Name">
           <input
             id="tok-name"

@@ -112,7 +112,7 @@ function save() {
       <p v-if="card?.selfManaged" class="text-sm text-ink-muted">
         Takes its country from networks in range. With none in range, 5 GHz stays off.
       </p>
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="radio-band" label="Band">
           <select id="radio-band" v-model="form.band" class="input">
             <option v-for="b in bands" :key="b" :value="b">{{ BANDS[b] ?? b }}</option>

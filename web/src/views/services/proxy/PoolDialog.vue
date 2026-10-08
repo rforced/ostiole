@@ -100,7 +100,7 @@ function save() {
     description="Where a site's requests go, and how they are shared out."
   >
     <form class="space-y-4" @submit.prevent="save">
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="pool-id" label="Name">
           <input
             id="pool-id"
@@ -125,7 +125,7 @@ function save() {
         ></textarea>
       </FormField>
 
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="pool-policy" label="Balancing">
           <select id="pool-policy" v-model="form.policy" class="input">
             <option value="">round_robin</option>

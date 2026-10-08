@@ -115,7 +115,7 @@ function save() {
           <option value="managed">Managed: addresses handed out over DHCPv6</option>
         </select>
       </FormField>
-      <div v-if="managed" class="grid gap-4 sm:grid-cols-2">
+      <div v-if="managed" class="fields">
         <FormField id="v6-start" label="Range start" hint="Host part, e.g. ::100">
           <input
             id="v6-start"
@@ -135,7 +135,7 @@ function save() {
           />
         </FormField>
       </div>
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="v6-lease" label="Lease time" hint="Also the advertised prefix lifetime.">
           <input
             id="v6-lease"

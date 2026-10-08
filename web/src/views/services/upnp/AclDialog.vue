@@ -54,7 +54,7 @@ function save() {
     description="The first entry that matches the request decides it."
   >
     <form class="space-y-4" @submit.prevent="save">
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="acl-action" label="Action">
           <select id="acl-action" v-model="form.action" class="input">
             <option value="allow">Allow</option>

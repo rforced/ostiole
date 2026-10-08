@@ -108,7 +108,7 @@ function save() {
     description="A set of hostnames served over HTTPS from a pool of backends."
   >
     <form class="space-y-4" @submit.prevent="save">
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="site-id" label="Name">
           <input
             id="site-id"
@@ -137,7 +137,7 @@ function save() {
         ></textarea>
       </FormField>
 
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField
           id="site-cert"
           label="Certificate"

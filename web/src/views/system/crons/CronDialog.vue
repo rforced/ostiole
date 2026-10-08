@@ -120,7 +120,7 @@ function save() {
     description="Runs on this router, as root, on the schedule you give."
   >
     <form class="space-y-4" @submit.prevent="save">
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="cron-desc" label="Description">
           <input
             id="cron-desc"
@@ -173,7 +173,7 @@ function save() {
           <dt>Written to</dt>
           <dd class="font-mono text-code">{{ BACKUP_DIR }}</dd>
         </dl>
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="fields">
           <FormField id="cron-keep" label="Keep" hint="Older backups beyond this are removed.">
             <input
               id="cron-keep"
@@ -237,7 +237,7 @@ function save() {
             spellcheck="false"
           />
         </FormField>
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="fields">
           <FormField id="cron-args" label="Arguments" hint="One per line.">
             <textarea
               id="cron-args"

@@ -200,7 +200,7 @@ async function loadIntoDraft() {
         <template v-if="config.draft">
           <!-- A disabled fieldset greys out every field in it; the fold's
                own button stays outside, so the settings can still be read. -->
-          <fieldset class="grid max-w-2xl min-w-0 gap-4 sm:grid-cols-2" :disabled="!auth.isAdmin">
+          <fieldset class="fields fields-card min-w-0" :disabled="!auth.isAdmin">
             <FormField id="rb-endpoint" label="Endpoint" hint="HTTPS, no path.">
               <input
                 id="rb-endpoint"

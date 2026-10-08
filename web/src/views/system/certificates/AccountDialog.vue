@@ -103,7 +103,7 @@ function save() {
     :read-only="!auth.isAdmin"
   >
     <form class="space-y-4" @submit.prevent="save">
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="acc-id" label="Name">
           <input
             id="acc-id"
@@ -144,7 +144,7 @@ function save() {
         <input v-model="showEAB" type="checkbox" class="size-4 rounded" />
         This CA gave me account credentials
       </label>
-      <div v-if="showEAB" class="grid gap-4 sm:grid-cols-2">
+      <div v-if="showEAB" class="fields">
         <FormField id="acc-eab-kid" label="EAB key ID">
           <input
             id="acc-eab-kid"

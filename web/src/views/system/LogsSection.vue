@@ -109,7 +109,7 @@ const clearAll = useAsync(async () => {
             reconnects wireless clients.
           </p>
         </fieldset>
-        <div class="grid max-w-3xl gap-4 sm:grid-cols-3">
+        <div class="fields fields-card">
           <FormField
             id="logs-retention"
             label="Kept for (days)"

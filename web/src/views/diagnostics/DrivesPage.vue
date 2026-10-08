@@ -250,7 +250,7 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
       </template>
 
       <div class="space-y-4">
-        <div class="grid gap-x-8 gap-y-4 md:grid-cols-2">
+        <div class="fields">
           <dl class="kv">
             <dt>Health</dt>
             <dd>

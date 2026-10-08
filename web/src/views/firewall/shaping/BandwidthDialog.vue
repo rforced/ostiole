@@ -154,7 +154,7 @@ function save() {
         </select>
       </FormField>
 
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="bw-down" label="Download" :hint="downloadHint">
           <div class="flex gap-2">
             <input

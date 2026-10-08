@@ -80,7 +80,7 @@ const daysHint = computed(() => {
     <div class="space-y-4">
       <slot />
       <template v-if="!off">
-        <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
+        <div class="fields fields-card">
           <FormField
             :id="`${log}-entries`"
             label="Entries"

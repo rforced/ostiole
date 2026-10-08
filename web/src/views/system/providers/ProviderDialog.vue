@@ -121,7 +121,7 @@ const sees = computed(() => {
 <template>
   <AppDialog v-model:open="open" :title="provider ? `Provider ${provider.id}` : 'Add DNS provider'">
     <form class="space-y-4" @submit.prevent="save">
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="prov-id" label="Name">
           <input
             id="prov-id"

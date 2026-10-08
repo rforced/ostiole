@@ -57,7 +57,7 @@ const stale = computed(() => config.dirty)
       intro="Names this router answers for itself are never blocked, whatever a list says."
       :locked="auth.readOnly"
     >
-      <div class="grid max-w-4xl gap-4 sm:grid-cols-2">
+      <div class="fields fields-card">
         <FormField
           id="block-allow"
           label="Allow"

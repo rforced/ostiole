@@ -96,7 +96,7 @@ function upPowerTone(p) {
     </SectionCard>
 
     <template v-if="status">
-      <div class="grid gap-5 md:grid-cols-2">
+      <div class="fields">
         <SectionCard :title="`${status.vendor} ${status.model}`">
           <dl class="kv">
             <dt>Firmware</dt>

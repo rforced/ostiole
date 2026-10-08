@@ -126,7 +126,7 @@ function save() {
     :title="certificate ? `Certificate ${certificate.id}` : 'Add certificate'"
   >
     <form class="space-y-4" @submit.prevent="save">
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField
           id="cert-id"
           label="Name"
@@ -199,7 +199,7 @@ function save() {
           </div>
         </FormField>
 
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="fields">
           <FormField
             id="cert-challenge"
             label="Challenge"
@@ -242,7 +242,7 @@ function save() {
           </select>
         </FormField>
 
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="fields">
           <FormField id="cert-keytype" label="Key type">
             <select id="cert-keytype" v-model="form.keyType" class="input">
               <option v-for="k in KEY_TYPES" :key="k" :value="k">{{ k }}</option>

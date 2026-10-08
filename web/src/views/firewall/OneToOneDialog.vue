@@ -59,7 +59,7 @@ function save() {
       <FormField id="one-desc" label="Description">
         <input id="one-desc" v-model="form.description" class="input" />
       </FormField>
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="one-zone" label="External zone">
           <select id="one-zone" v-model="form.zone" class="input" required>
             <option v-for="z in externalZones" :key="z.name" :value="z.name">{{ z.name }}</option>

@@ -154,7 +154,7 @@ const targetStates = computed(() =>
             label="Send mail"
             @update:model-value="set({ enabled: $event }, 'email')"
           />
-          <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
+          <div class="fields fields-card">
             <FormField
               id="nt-server"
               label="Mail server"
@@ -228,7 +228,7 @@ const targetStates = computed(() =>
             label="Post to a webhook"
             @update:model-value="set({ enabled: $event }, 'webhook')"
           />
-          <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
+          <div class="fields fields-card">
             <FormField id="nt-url" label="URL" hint="https only.">
               <input
                 id="nt-url"
@@ -273,7 +273,7 @@ const targetStates = computed(() =>
     </SectionCard>
 
     <SectionCard title="What to send">
-      <fieldset class="grid min-w-0 gap-x-8 gap-y-5 sm:grid-cols-2" :disabled="locked">
+      <fieldset class="fields fields-card min-w-0" :disabled="locked">
         <div v-for="g in KINDS" :key="g.group" class="space-y-1.5">
           <p class="group-title">{{ g.group }}</p>
           <ToggleRow

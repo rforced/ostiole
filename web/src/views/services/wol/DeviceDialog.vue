@@ -73,7 +73,7 @@ function save() {
 <template>
   <AppDialog v-model:open="open" :title="device ? `Device ${deviceName(device)}` : 'Add device'">
     <form class="space-y-4" @submit.prevent="save">
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="wol-desc" label="Description">
           <input id="wol-desc" v-model="form.description" class="input" placeholder="Office NAS" />
         </FormField>

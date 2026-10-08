@@ -216,7 +216,7 @@ function save() {
     description="Renaming it updates every rule that names it."
   >
     <form class="space-y-4" @submit.prevent="save">
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="alias-name" label="Name">
           <input
             id="alias-name"

@@ -45,7 +45,7 @@ function save() {
 <template>
   <AppDialog v-model:open="open" :title="lease ? `Static lease ${lease.mac}` : 'Add static lease'">
     <form class="space-y-4" @submit.prevent="save">
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField
           id="sl-mac"
           label="MAC address"

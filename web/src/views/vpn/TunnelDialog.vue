@@ -178,7 +178,7 @@ async function save() {
     description="Its zone decides which rules apply to what comes out of it."
   >
     <form class="space-y-4" @submit.prevent="save">
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="wg-name" label="Interface name">
           <input
             id="wg-name"

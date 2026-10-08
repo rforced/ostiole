@@ -149,7 +149,7 @@ function delay(us) {
         This link is not up yet, so nothing is queued on it.
       </AppNotice>
 
-      <div class="grid gap-6 sm:grid-cols-2">
+      <div class="fields">
         <div v-for="d in directions(iface)" :key="d.name" class="space-y-2">
           <div class="text-ink-muted">{{ d.label }}</div>
           <div class="text-2xl leading-tight tabular-nums">

@@ -78,7 +78,7 @@ function save() {
       <FormField id="pf-desc" label="Description">
         <input id="pf-desc" v-model="form.description" class="input" />
       </FormField>
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="pf-zone" label="Arriving in zone">
           <select id="pf-zone" v-model="form.zone" class="input" required>
             <option v-for="z in config.zones" :key="z.name" :value="z.name">{{ z.name }}</option>

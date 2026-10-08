@@ -73,7 +73,7 @@ function save() {
     description="The lowest tier that is up carries the traffic. Gateways in the same tier share it."
   >
     <form class="space-y-4" @submit.prevent="save">
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="gg-name" label="Name" hint="Lower case, e.g. failover.">
           <input
             id="gg-name"

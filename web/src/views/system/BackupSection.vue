@@ -77,7 +77,7 @@ async function loadIntoDraft() {
         <ErrorLine v-if="download.error.value">
           {{ download.error.value }}
         </ErrorLine>
-        <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
+        <div class="fields fields-card">
           <FormField id="bk-note" label="Description" hint="Stored in the file.">
             <input id="bk-note" v-model="note" class="input" placeholder="before the VLAN change" />
           </FormField>
@@ -125,7 +125,7 @@ async function loadIntoDraft() {
     <SectionCard v-if="!auth.readOnly" title="Restore">
       <div class="space-y-4">
         <ErrorLine v-if="restore.error.value">{{ restore.error.value }}</ErrorLine>
-        <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
+        <div class="fields fields-card">
           <FormField
             id="bk-restore-passphrase"
             label="Passphrase"

@@ -96,7 +96,7 @@ function save() {
 <template>
   <AppDialog v-model:open="open" :title="title">
     <form class="space-y-4" @submit.prevent="save">
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="ho-name" label="Hostname">
           <input
             id="ho-name"

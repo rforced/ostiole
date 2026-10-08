@@ -46,7 +46,7 @@ function save() {
       <FormField id="rt-desc" label="Description">
         <input id="rt-desc" v-model="form.description" class="input" />
       </FormField>
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="rt-dest" label="Destination network">
           <input
             id="rt-dest"

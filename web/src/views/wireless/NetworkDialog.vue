@@ -168,7 +168,7 @@ function save() {
   >
     <form class="space-y-4" @submit.prevent="save">
       <p v-if="!config.radios.length" class="text-sm text-ink-muted">Configure a radio first.</p>
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="net-radio" label="Radio">
           <select id="net-radio" v-model="form.radio" class="input font-mono" required>
             <option v-for="r in config.radios" :key="r.name" :value="r.name">{{ r.name }}</option>

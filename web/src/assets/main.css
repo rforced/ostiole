@@ -394,6 +394,15 @@
   .form-row > :is(.btn-primary, .btn-secondary, .btn-danger) {
     @apply max-sm:min-h-11;
   }
+  /* Fields two to a line from sm up, on one gutter, so like fields line
+     up across the groups of a card. In a card they keep to a width a form
+     reads at. */
+  .fields {
+    @apply grid gap-4 sm:grid-cols-2;
+  }
+  .fields-card {
+    @apply max-w-2xl;
+  }
   .badge {
     @apply inline-block rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-2;
   }

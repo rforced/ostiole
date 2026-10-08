@@ -100,7 +100,7 @@ function save() {
     description="One port passed through, whole or by the name a TLS client asks for."
   >
     <form class="space-y-4" @submit.prevent="save">
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="route-id" label="Name">
           <input
             id="route-id"
@@ -156,7 +156,7 @@ function save() {
         ></textarea>
       </FormField>
 
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="route-policy" label="Balancing">
           <select id="route-policy" v-model="form.policy" class="input">
             <option value="">round_robin</option>

@@ -129,7 +129,7 @@ function save() {
         </p>
       </FormField>
 
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField id="bl-name" label="Name">
           <input
             id="bl-name"
@@ -174,7 +174,7 @@ function save() {
         />
       </FormField>
 
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="fields">
         <FormField
           v-if="form.url"
           id="bl-refresh"

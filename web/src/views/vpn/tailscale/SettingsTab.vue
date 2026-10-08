@@ -120,7 +120,7 @@ function addZone(zone) {
       <div class="space-y-5">
         <fieldset class="space-y-3">
           <legend class="group-title">Network</legend>
-          <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
+          <div class="fields fields-card">
             <FormField
               id="ts-zone"
               label="Zone"
@@ -183,7 +183,7 @@ function addZone(zone) {
         <AppDisclosure>
           <fieldset class="space-y-3">
             <legend class="group-title">Identity</legend>
-            <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
+            <div class="fields fields-card">
               <FormField id="ts-hostname" label="Hostname" hint="The router's name.">
                 <input id="ts-hostname" v-model="hostname" type="text" class="input font-mono" />
               </FormField>

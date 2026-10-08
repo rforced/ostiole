@@ -213,7 +213,7 @@ function toggleInterface(name, on) {
       :locked="auth.readOnly"
     >
       <div class="space-y-4">
-        <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
+        <div class="fields fields-card">
           <FormField id="dns-resolver" label="Resolver" :hint="resolverHints[resolver]">
             <select id="dns-resolver" v-model="resolver" class="input">
               <option value="forward">Forward: ask the upstream resolvers below</option>
@@ -306,7 +306,7 @@ function toggleInterface(name, on) {
         </div>
 
         <AppDisclosure>
-          <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
+          <div class="fields fields-card">
             <FormField
               id="dns-cache"
               label="Cache entries"
