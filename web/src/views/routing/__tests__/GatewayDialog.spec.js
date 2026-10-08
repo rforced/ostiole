@@ -13,10 +13,11 @@ const stubs = {
   },
 }
 
-function open(gateway = null) {
+function open(gateway = null, more = {}) {
   const config = useConfigStore()
   config.replaceDraft({
     version: 12,
+    ...more,
     zones: [
       { name: 'wan', external: true },
       { name: 'vpn', external: true },
@@ -84,5 +85,52 @@ describe('GatewayDialog', () => {
     await wrapper.find('#gw-addr').setValue('10.66.1.1')
     expect(wrapper.find('#gw-prio').exists()).toBe(true)
     expect(wrapper.find('#gw-monitor').attributes('required')).toBeUndefined()
+  })
+
+  // Empty is the next hop, said where the address would go; the one
+  // address offered is the DNS upstream, in a family the gateway probes.
+  it('says what an empty monitor probes, and offers the DNS upstream', async () => {
+    const { wrapper } = open(null, {
+      services: { dns: { enabled: true, upstreams: ['2001:db8::53', '192.0.2.53'] } },
+    })
+    await flushPromises()
+    const monitor = wrapper.find('#gw-monitor')
+    expect(monitor.attributes('placeholder')).toBe('the next hop')
+    expect(wrapper.text()).toContain('Empty probes the next hop, which says the line is up.')
+    const use = () => wrapper.findAll('button').find((b) => b.text().startsWith('Use '))
+    expect(use().text()).toBe('Use 2001:db8::53, the DNS upstream')
+    await wrapper.find('#gw-addr').setValue('198.51.100.1')
+    expect(use().text()).toBe('Use 192.0.2.53, the DNS upstream')
+    await use().trigger('click')
+    expect(monitor.element.value).toBe('192.0.2.53')
+    expect(use()).toBeUndefined()
+  })
+
+  it('offers no upstream to a router that looks names up itself', async () => {
+    const { wrapper } = open(null, {
+      services: { dns: { enabled: true, resolver: 'recursive', upstreams: ['192.0.2.53'] } },
+    })
+    await flushPromises()
+    expect(wrapper.findAll('button').some((b) => b.text().startsWith('Use '))).toBe(false)
+  })
+
+  it('offers the first DNS over TLS resolver, and an IPv4 one to a tunnel', async () => {
+    const { wrapper } = open(null, {
+      services: {
+        dns: {
+          enabled: true,
+          resolver: 'tls',
+          tlsUpstreams: [
+            { address: '2001:db8::9', hostname: 'dns.example' },
+            { address: '192.0.2.9', hostname: 'dns.example' },
+          ],
+        },
+      },
+    })
+    await flushPromises()
+    const use = () => wrapper.findAll('button').find((b) => b.text().startsWith('Use '))
+    expect(use().text()).toBe('Use 2001:db8::9, the DNS upstream')
+    await wrapper.find('#gw-if').setValue('wg1')
+    expect(use().text()).toBe('Use 192.0.2.9, the DNS upstream')
   })
 })

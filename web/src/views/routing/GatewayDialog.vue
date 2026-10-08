@@ -48,6 +48,27 @@ const onTunnel = computed(
 )
 const tunnelGateway = computed(() => onTunnel.value && !form.value.address.trim())
 
+/**
+ * The resolver's first upstream the gateway can probe, offered as its
+ * monitor since the router talks to it already. Recursive lookups have
+ * none.
+ */
+const upstream = computed(() => {
+  const dns = config.draft?.services?.dns ?? {}
+  let list = []
+  if (dns.resolver === 'tls') list = (dns.tlsUpstreams ?? []).map((u) => u.address)
+  else if (dns.resolver !== 'recursive')
+    list = dns.upstreams?.length ? dns.upstreams : (config.draft?.system?.dnsServers ?? [])
+  const v6 = (a) => a.includes(':')
+  const address = form.value.address.trim()
+  return (
+    list.find((a) => {
+      if (tunnelGateway.value) return !v6(a)
+      return !address || v6(address) === v6(a)
+    }) ?? ''
+  )
+})
+
 function save() {
   const f = form.value
   const out = {
@@ -114,7 +135,7 @@ function save() {
           :hint="
             tunnelGateway
               ? 'An IPv4 address beyond the tunnel. The provider\'s DNS server keeps the probe inside its network.'
-              : 'Probed to decide if the line works. Empty pings the gateway itself, which only proves the first hop.'
+              : 'Empty probes the next hop, which says the line is up. An address past your provider measures the path beyond it too.'
           "
         >
           <input
@@ -122,8 +143,17 @@ function save() {
             v-model="form.monitor"
             class="input font-mono"
             spellcheck="false"
+            :placeholder="tunnelGateway ? '' : 'the next hop'"
             :required="tunnelGateway"
           />
+          <button
+            v-if="upstream && form.monitor.trim() !== upstream"
+            type="button"
+            class="link mt-1 text-sm"
+            @click="form.monitor = upstream"
+          >
+            Use {{ upstream }}, the DNS upstream
+          </button>
         </FormField>
         <FormField
           v-if="!tunnelGateway"
