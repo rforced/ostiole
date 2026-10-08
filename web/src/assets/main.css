@@ -352,6 +352,11 @@
   .table td.actions > .icon-btn + .icon-btn {
     @apply ml-0;
   }
+  /* A figure, and the header over a column of them: digits of one width
+     at the right, so the column lines up. */
+  .num {
+    @apply text-right whitespace-nowrap tabular-nums;
+  }
   /* A row the draft adds or changes, until it is applied. */
   .table tbody tr.row-changed td:first-child {
     @apply shadow-[inset_3px_0_0_0_var(--warn)];
@@ -470,6 +475,11 @@
     }
     .table-stack tbody td:last-child > :is(button, a) {
       @apply my-0;
+    }
+    /* A figure in a block sits beside its label. */
+    .table-stack tbody td.num,
+    .table-flow tbody td.num {
+      @apply text-left;
     }
     .table-stack tbody tr.row-system {
       @apply bg-surface-2/40;

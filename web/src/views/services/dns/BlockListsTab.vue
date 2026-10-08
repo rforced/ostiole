@@ -268,8 +268,13 @@ const lists = sort.sorted
           <tr>
             <SortHeader by="name" :sort="sort">List</SortHeader>
             <th>On</th>
-            <SortHeader by="names" :sort="sort">Names</SortHeader>
-            <SortHeader by="blocked" :sort="sort" title="Counts need the query log.">
+            <SortHeader class="text-right" by="names" :sort="sort">Names</SortHeader>
+            <SortHeader
+              class="text-right"
+              by="blocked"
+              :sort="sort"
+              title="Counts need the query log."
+            >
               Blocked
             </SortHeader>
             <SortHeader by="source" :sort="sort">Source</SortHeader>
@@ -308,7 +313,7 @@ const lists = sort.sorted
                 />
               </label>
             </td>
-            <td class="font-mono text-code" data-label="Names">
+            <td class="num font-mono text-code" data-label="Names">
               <template v-if="fetched[l.name]?.fetchedAt">
                 <button
                   v-if="fetched[l.name].domains"
@@ -328,7 +333,7 @@ const lists = sort.sorted
               <span v-else-if="!applied.has(l.name)" class="text-ink-muted"> not applied yet </span>
               <span v-else class="text-ink-muted">not fetched yet</span>
             </td>
-            <td class="text-code" data-label="Blocked">
+            <td class="num text-code" data-label="Blocked">
               <template v-if="counts[l.name]">
                 {{ formatCount(counts[l.name].blocked) }}
                 <div v-if="counts[l.name].alone" class="text-xs text-ink-muted">

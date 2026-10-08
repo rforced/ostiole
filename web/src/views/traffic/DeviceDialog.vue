@@ -124,16 +124,16 @@ const windowLabel = computed(() => WINDOWS.find((w) => w.value === props.window)
             <tr>
               <th>Destination</th>
               <th>Service</th>
-              <th class="text-right">Down</th>
-              <th class="text-right">Up</th>
+              <th class="num">Down</th>
+              <th class="num">Up</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="r in top" :key="`${r.destination} ${r.protocol} ${r.port}`">
               <td class="max-w-56 truncate">{{ r.destination }}</td>
               <td>{{ serviceLabel(r) }}</td>
-              <td class="text-right tabular-nums">{{ formatBytes(r.down) }}</td>
-              <td class="text-right tabular-nums">{{ formatBytes(r.up) }}</td>
+              <td class="num">{{ formatBytes(r.down) }}</td>
+              <td class="num">{{ formatBytes(r.up) }}</td>
             </tr>
           </tbody>
         </table>

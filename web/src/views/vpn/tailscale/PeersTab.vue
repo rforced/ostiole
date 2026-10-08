@@ -90,7 +90,7 @@ const peers = sort.sorted
             <SortHeader by="seen" :sort="sort">Last seen</SortHeader>
             <th>Path</th>
             <th>Routes</th>
-            <th>Traffic</th>
+            <th class="num">Traffic</th>
           </tr>
         </thead>
         <tbody>
@@ -117,7 +117,7 @@ const peers = sort.sorted
             <td class="font-mono text-code" data-label="Routes">
               {{ p.routes.join(', ') || '—' }}
             </td>
-            <td class="text-code" data-label="Traffic">
+            <td class="num text-code" data-label="Traffic">
               <div>↓ {{ formatBytes(p.rxBytes ?? 0) }}</div>
               <div>↑ {{ formatBytes(p.txBytes ?? 0) }}</div>
             </td>

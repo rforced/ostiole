@@ -60,8 +60,8 @@ function rate(bits) {
           <tr>
             <th>Interface</th>
             <th>Zone</th>
-            <th>Download</th>
-            <th>Upload</th>
+            <th class="num">Download</th>
+            <th class="num">Upload</th>
             <th>Link type</th>
             <th></th>
           </tr>
@@ -79,8 +79,8 @@ function rate(bits) {
           >
             <td class="font-mono">{{ i.name }}</td>
             <td class="font-mono text-code">{{ i.zone || '—' }}</td>
-            <td class="font-mono text-code tabular-nums">{{ rate(i.shaping.download) }}</td>
-            <td class="font-mono text-code tabular-nums">{{ rate(i.shaping.upload) }}</td>
+            <td class="num font-mono text-code">{{ rate(i.shaping.download) }}</td>
+            <td class="num font-mono text-code">{{ rate(i.shaping.upload) }}</td>
             <td>{{ LINKS[i.shaping.link || 'ethernet'] }}</td>
             <td class="actions">
               <button type="button" class="link-action" @click="edit(i)">

@@ -107,10 +107,10 @@ const orDash = (v, unit = '') => (v == null ? '—' : `${formatCount(v)}${unit}`
           <th>Time</th>
           <th>Drive</th>
           <th>Health</th>
-          <th>Temperature</th>
-          <th>Wear</th>
-          <th>Bad sectors</th>
-          <th>Powered on</th>
+          <th class="num">Temperature</th>
+          <th class="num">Wear</th>
+          <th class="num">Bad sectors</th>
+          <th class="num">Powered on</th>
         </tr>
       </thead>
       <tbody>
@@ -130,10 +130,10 @@ const orDash = (v, unit = '') => (v == null ? '—' : `${formatCount(v)}${unit}`
               r.health
             }}</span>
           </td>
-          <td data-label="Temperature" class="tabular-nums">{{ orDash(r.temperature, ' °C') }}</td>
-          <td data-label="Wear" class="tabular-nums">{{ orDash(r.wear, '%') }}</td>
-          <td data-label="Bad sectors" class="tabular-nums">{{ orDash(r.bad) }}</td>
-          <td data-label="Powered on" class="tabular-nums">{{ orDash(r.powerOnHours, ' h') }}</td>
+          <td data-label="Temperature" class="num">{{ orDash(r.temperature, ' °C') }}</td>
+          <td data-label="Wear" class="num">{{ orDash(r.wear, '%') }}</td>
+          <td data-label="Bad sectors" class="num">{{ orDash(r.bad) }}</td>
+          <td data-label="Powered on" class="num">{{ orDash(r.powerOnHours, ' h') }}</td>
         </tr>
       </tbody>
     </table>

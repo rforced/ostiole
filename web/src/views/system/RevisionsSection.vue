@@ -130,7 +130,7 @@ defineExpose({ refresh: load.run })
         <tr>
           <th>Archived</th>
           <th>ID</th>
-          <th>Size</th>
+          <th class="num">Size</th>
           <th></th>
         </tr>
       </thead>
@@ -144,7 +144,7 @@ defineExpose({ refresh: load.run })
           <tr>
             <td data-label="">{{ new Date(r.time).toLocaleString() }}</td>
             <td class="font-mono text-code" data-label="ID">{{ r.id }}</td>
-            <td class="font-mono text-code" data-label="Size">{{ r.size }} B</td>
+            <td class="num font-mono text-code" data-label="Size">{{ r.size }} B</td>
             <td class="actions" data-label="">
               <button
                 type="button"

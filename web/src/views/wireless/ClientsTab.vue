@@ -81,10 +81,10 @@ const rows = sort.sorted
             <SortHeader by="client" :sort="sort">Client</SortHeader>
             <SortHeader by="address" :sort="sort">Address</SortHeader>
             <SortHeader by="network" :sort="sort">Network</SortHeader>
-            <SortHeader by="signal" :sort="sort">Signal</SortHeader>
+            <SortHeader class="text-right" by="signal" :sort="sort">Signal</SortHeader>
             <th>Rates</th>
-            <SortHeader by="connected" :sort="sort">Connected</SortHeader>
-            <SortHeader by="traffic" :sort="sort">Traffic</SortHeader>
+            <SortHeader class="text-right" by="connected" :sort="sort">Connected</SortHeader>
+            <SortHeader class="text-right" by="traffic" :sort="sort">Traffic</SortHeader>
           </tr>
         </thead>
         <tbody>
@@ -109,13 +109,13 @@ const rows = sort.sorted
               {{ ssidOf(c) }}
               <span class="text-xs text-ink-muted">{{ c.radio }}</span>
             </td>
-            <td class="font-mono text-code" data-label="Signal">{{ c.signalDbm }} dBm</td>
+            <td class="num font-mono text-code" data-label="Signal">{{ c.signalDbm }} dBm</td>
             <td class="text-code" data-label="Rates">
               <div>↓ {{ c.rxBitrate || '—' }}</div>
               <div>↑ {{ c.txBitrate || '—' }}</div>
             </td>
-            <td data-label="Connected">{{ formatDuration(c.connectedSeconds) }}</td>
-            <td class="text-code" data-label="Traffic">
+            <td class="num" data-label="Connected">{{ formatDuration(c.connectedSeconds) }}</td>
+            <td class="num text-code" data-label="Traffic">
               <div>↓ {{ formatBytes(c.rxBytes) }}</div>
               <div>↑ {{ formatBytes(c.txBytes) }}</div>
             </td>

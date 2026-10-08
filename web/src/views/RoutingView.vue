@@ -229,7 +229,7 @@ function edit(r) {
               <th>Interface</th>
               <th>Address</th>
               <th>Monitor</th>
-              <th>Priority</th>
+              <th class="num">Priority</th>
               <th>State</th>
               <th></th>
             </tr>
@@ -265,7 +265,7 @@ function edit(r) {
               <td class="font-mono text-code" data-label="Monitor">
                 {{ g.monitor || 'the next hop' }}
               </td>
-              <td class="font-mono text-code" data-label="Priority">
+              <td class="num font-mono text-code" data-label="Priority">
                 {{ g.tunnel ? '—' : (g.priority ?? 0) }}
               </td>
               <td class="whitespace-nowrap" data-label="State">
@@ -332,7 +332,7 @@ function edit(r) {
               <th>Next hop</th>
               <th>Interface</th>
               <th>Family</th>
-              <th>Metric</th>
+              <th class="num">Metric</th>
               <th>From</th>
               <th>Gateway</th>
               <th></th>
@@ -348,7 +348,7 @@ function edit(r) {
               <td class="font-mono text-code" data-label="">{{ d.address }}</td>
               <td class="font-mono text-code" data-label="Interface">{{ d.interface }}</td>
               <td data-label="Family">{{ d.family }}</td>
-              <td class="font-mono text-code" data-label="Metric">
+              <td class="num font-mono text-code" data-label="Metric">
                 {{ d.metric }}
                 <span v-if="d.demoted" class="badge badge-warn ml-1 font-sans">demoted</span>
               </td>
@@ -399,7 +399,7 @@ function edit(r) {
               <th>Group</th>
               <th>Members</th>
               <th>When all are down</th>
-              <th>Rules</th>
+              <th class="num">Rules</th>
               <th>Next hop</th>
               <th></th>
             </tr>
@@ -430,7 +430,7 @@ function edit(r) {
                 <span v-if="g.onDown === 'block'" class="badge badge-warn">drop</span>
                 <span v-else class="text-ink-muted">default route</span>
               </td>
-              <td class="font-mono text-code" data-label="Rules">{{ g.policy?.rules ?? 0 }}</td>
+              <td class="num font-mono text-code" data-label="Rules">{{ g.policy?.rules ?? 0 }}</td>
               <td class="font-mono text-code" data-label="Next hop">
                 <template v-if="g.policy?.nextHops?.length">
                   {{ g.policy.nextHops.join(', ') }}

@@ -291,8 +291,8 @@ const table = ref(false)
         <thead>
           <tr>
             <th>Time</th>
-            <th v-for="s in series" :key="s.index" class="text-right">{{ s.name }}</th>
-            <th v-for="b in bars" :key="b.index" class="text-right">{{ b.name }}</th>
+            <th v-for="s in series" :key="s.index" class="num">{{ s.name }}</th>
+            <th v-for="b in bars" :key="b.index" class="num">{{ b.name }}</th>
           </tr>
         </thead>
         <tbody>
@@ -306,13 +306,13 @@ const table = ref(false)
               {{ pointLabel(p[0], window) }}
             </td>
             <template v-for="s in series" :key="s.index">
-              <td v-if="s.band" class="text-right tabular-nums">
+              <td v-if="s.band" class="num">
                 {{ valueOf(p[s.index]) }}
                 <div v-if="range(p, s)" class="text-xs text-ink-muted">{{ range(p, s) }}</div>
               </td>
-              <td v-else class="text-right tabular-nums">{{ valueOf(p[s.index]) }}</td>
+              <td v-else class="num">{{ valueOf(p[s.index]) }}</td>
             </template>
-            <td v-for="b in bars" :key="b.index" class="text-right tabular-nums">
+            <td v-for="b in bars" :key="b.index" class="num">
               {{ p[b.index] == null ? '—' : share(p[b.index]) }}
             </td>
           </tr>

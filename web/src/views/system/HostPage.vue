@@ -165,7 +165,7 @@ async function flush(tables) {
         <thead>
           <tr>
             <th>Ruleset</th>
-            <th>Rules</th>
+            <th class="num">Rules</th>
             <th>Chains</th>
             <th class="w-0"></th>
           </tr>
@@ -180,7 +180,7 @@ async function flush(tables) {
             <td class="font-mono">
               {{ t.backend === 'legacy' ? 'legacy ' : '' }}{{ t.family }} {{ t.name }}
             </td>
-            <td>{{ t.rules || 0 }}</td>
+            <td class="num">{{ t.rules || 0 }}</td>
             <td class="font-mono text-code">
               {{ (t.chains ?? []).join(' ') || '—' }}
               <p v-if="t.owner" class="font-sans text-sm text-ink-muted">

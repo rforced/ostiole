@@ -30,8 +30,8 @@ const stripOf = (g) => props.strips?.find((s) => s.name === g.name) ?? null
         <tr>
           <th>Gateway</th>
           <th>State</th>
-          <th class="text-right">Latency</th>
-          <th class="text-right">Loss</th>
+          <th class="num">Latency</th>
+          <th class="num">Loss</th>
         </tr>
       </thead>
       <tbody v-if="!loaded">
@@ -43,8 +43,8 @@ const stripOf = (g) => props.strips?.find((s) => s.name === g.name) ?? null
               <div><span class="skeleton w-32"></span></div>
             </td>
             <td><span class="skeleton h-5 w-10 rounded-full"></span></td>
-            <td class="text-right"><span class="skeleton w-14"></span></td>
-            <td class="text-right"><span class="skeleton w-8"></span></td>
+            <td class="num"><span class="skeleton w-14"></span></td>
+            <td class="num"><span class="skeleton w-8"></span></td>
           </tr>
           <tr aria-hidden="true">
             <td colspan="4" class="pt-0"><GatewayStrip label="" skeleton /></td>
@@ -76,7 +76,7 @@ const stripOf = (g) => props.strips?.find((s) => s.name === g.name) ?? null
                 {{ neverHint({ monitor: stripOf(g)?.monitor }) }}
               </div>
             </td>
-            <td class="text-right font-mono text-code">
+            <td class="num font-mono text-code">
               <template v-if="g.families?.length > 1">
                 <div v-for="f in g.families" :key="f.family">
                   {{ f.family }} {{ f.latencyMs.toFixed(1) }} ms
@@ -84,7 +84,7 @@ const stripOf = (g) => props.strips?.find((s) => s.name === g.name) ?? null
               </template>
               <template v-else>{{ g.latencyMs.toFixed(1) }} ms</template>
             </td>
-            <td class="text-right font-mono text-code">
+            <td class="num font-mono text-code">
               <template v-if="g.families?.length > 1">
                 <div v-for="f in g.families" :key="f.family">
                   {{ f.family }} {{ f.lossPercent.toFixed(0) }}%
@@ -110,8 +110,8 @@ const stripOf = (g) => props.strips?.find((s) => s.name === g.name) ?? null
             <div class="font-mono text-code">{{ d.address }} · {{ d.protocol }}</div>
           </td>
           <td><span class="badge">not watched</span></td>
-          <td class="text-right">—</td>
-          <td class="text-right">—</td>
+          <td class="num">—</td>
+          <td class="num">—</td>
         </tr>
       </tbody>
     </table>

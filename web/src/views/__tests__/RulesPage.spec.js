@@ -194,7 +194,7 @@ describe('RulesPage system rules', () => {
     expect(bogons.text()).toContain('log')
     // A rule without a counter shows nothing rather than zero.
     const replies = systemRows(wrapper).find((tr) => tr.text().includes('Replies'))
-    expect(replies.find('td.tabular-nums').text()).toBe('')
+    expect(replies.find('td.num').text()).toBe('')
   })
 
   it('says how many a sampled log kept when it kept fewer than it counted', async () => {

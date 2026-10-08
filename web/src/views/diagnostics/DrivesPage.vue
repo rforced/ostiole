@@ -380,10 +380,10 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
                 <tr>
                   <th>ID</th>
                   <th>Attribute</th>
-                  <th>Value</th>
-                  <th>Worst</th>
-                  <th>Threshold</th>
-                  <th class="text-right">Raw</th>
+                  <th class="num">Value</th>
+                  <th class="num">Worst</th>
+                  <th class="num">Threshold</th>
+                  <th class="num">Raw</th>
                 </tr>
               </thead>
               <tbody>
@@ -399,10 +399,10 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
                     </span>
                     <span v-if="a.prefail" class="badge ml-1">pre-fail</span>
                   </td>
-                  <td class="font-mono text-code">{{ a.value }}</td>
-                  <td class="font-mono text-code">{{ a.worst }}</td>
-                  <td class="font-mono text-code">{{ a.threshold }}</td>
-                  <td class="text-right font-mono text-code" :class="rawTone(a)">
+                  <td class="num font-mono text-code">{{ a.value }}</td>
+                  <td class="num font-mono text-code">{{ a.worst }}</td>
+                  <td class="num font-mono text-code">{{ a.threshold }}</td>
+                  <td class="num font-mono text-code" :class="rawTone(a)">
                     {{ a.rawString }}
                   </td>
                 </tr>
@@ -418,8 +418,8 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
                 <tr>
                   <th>Test</th>
                   <th>Result</th>
-                  <th>Power-on hours</th>
-                  <th v-if="hasLBA(d)">LBA</th>
+                  <th class="num">Power-on hours</th>
+                  <th v-if="hasLBA(d)" class="num">LBA</th>
                 </tr>
               </thead>
               <tbody>
@@ -433,8 +433,8 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
                       {{ e.status }}
                     </span>
                   </td>
-                  <td class="font-mono text-code">{{ formatCount(e.hours) }}</td>
-                  <td v-if="hasLBA(d)" class="font-mono text-code">{{ e.lba ?? '—' }}</td>
+                  <td class="num font-mono text-code">{{ formatCount(e.hours) }}</td>
+                  <td v-if="hasLBA(d)" class="num font-mono text-code">{{ e.lba ?? '—' }}</td>
                 </tr>
               </tbody>
             </table>
@@ -447,7 +447,7 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
               <thead>
                 <tr>
                   <th>Number</th>
-                  <th>Power-on hours</th>
+                  <th class="num">Power-on hours</th>
                   <th>Description</th>
                 </tr>
               </thead>
@@ -457,7 +457,7 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
                 </tr>
                 <tr v-for="(e, i) in d.errors" :key="i">
                   <td class="font-mono text-code">{{ e.number }}</td>
-                  <td class="font-mono text-code">{{ formatCount(e.hours) }}</td>
+                  <td class="num font-mono text-code">{{ formatCount(e.hours) }}</td>
                   <td>{{ e.description }}</td>
                 </tr>
               </tbody>

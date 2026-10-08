@@ -48,8 +48,8 @@ function ssidOf(c) {
         <tr>
           <th>Client</th>
           <th>Network</th>
-          <th class="text-right">Signal</th>
-          <th class="text-right">Connected</th>
+          <th class="num">Signal</th>
+          <th class="num">Connected</th>
         </tr>
       </thead>
       <tbody v-if="!loaded">
@@ -65,8 +65,8 @@ function ssidOf(c) {
             <div><span class="skeleton w-32"></span></div>
           </td>
           <td><span class="skeleton w-16"></span></td>
-          <td class="text-right"><span class="skeleton w-14"></span></td>
-          <td class="text-right"><span class="skeleton w-14"></span></td>
+          <td class="num"><span class="skeleton w-14"></span></td>
+          <td class="num"><span class="skeleton w-14"></span></td>
         </tr>
       </tbody>
       <tbody v-else>
@@ -82,8 +82,8 @@ function ssidOf(c) {
             </div>
           </td>
           <td class="font-mono text-code">{{ ssidOf(c) }}</td>
-          <td class="text-right font-mono text-code">{{ c.signalDbm }} dBm</td>
-          <td class="text-right whitespace-nowrap">{{ formatDuration(c.connectedSeconds) }}</td>
+          <td class="num font-mono text-code">{{ c.signalDbm }} dBm</td>
+          <td class="num">{{ formatDuration(c.connectedSeconds) }}</td>
         </tr>
       </tbody>
     </table>

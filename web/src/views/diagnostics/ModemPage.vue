@@ -160,12 +160,12 @@ function upPowerTone(p) {
           <thead>
             <tr>
               <th>Channel</th>
-              <th>Frequency</th>
+              <th class="num">Frequency</th>
               <th>Modulation</th>
               <th>Power</th>
               <th>SNR</th>
-              <th class="text-right">Corrected</th>
-              <th class="text-right">Uncorrectable</th>
+              <th class="num">Corrected</th>
+              <th class="num">Uncorrectable</th>
             </tr>
           </thead>
           <tbody>
@@ -178,7 +178,7 @@ function upPowerTone(p) {
                 <span v-if="d.kind === 'ofdm'" class="badge ml-1">OFDM</span>
                 <span v-if="!d.locked" class="badge badge-bad ml-1">not locked</span>
               </td>
-              <td class="font-mono text-code">{{ mhz(d.frequency) }}</td>
+              <td class="num font-mono text-code">{{ mhz(d.frequency) }}</td>
               <td>{{ d.modulation || '—' }}</td>
               <td>
                 <span class="badge" :class="downPowerTone(d.power)">{{ dbmv(d.power) }}</span>
@@ -186,8 +186,8 @@ function upPowerTone(p) {
               <td>
                 <span class="badge" :class="snrTone(d.snr)">{{ db(d.snr) }}</span>
               </td>
-              <td class="text-right font-mono text-code">{{ count(d.corrected) }}</td>
-              <td class="text-right font-mono text-code">
+              <td class="num font-mono text-code">{{ count(d.corrected) }}</td>
+              <td class="num font-mono text-code">
                 <span :class="d.uncorrectable ? 'text-bad' : ''">
                   {{ count(d.uncorrectable) }}
                 </span>
@@ -207,8 +207,8 @@ function upPowerTone(p) {
           <thead>
             <tr>
               <th>Channel</th>
-              <th>Frequency</th>
-              <th>Width</th>
+              <th class="num">Frequency</th>
+              <th class="num">Width</th>
               <th>Modulation</th>
               <th>Power</th>
             </tr>
@@ -222,8 +222,8 @@ function upPowerTone(p) {
                 {{ u.channel }}
                 <span v-if="u.kind === 'ofdma'" class="badge ml-1">OFDMA</span>
               </td>
-              <td class="font-mono text-code">{{ mhz(u.frequency) }}</td>
-              <td class="font-mono text-code">{{ mhz(u.bandwidth) }}</td>
+              <td class="num font-mono text-code">{{ mhz(u.frequency) }}</td>
+              <td class="num font-mono text-code">{{ mhz(u.bandwidth) }}</td>
               <td>
                 {{ u.modulation || '—' }}
                 <span v-if="u.mode" class="text-ink-muted">{{ u.mode }}</span>

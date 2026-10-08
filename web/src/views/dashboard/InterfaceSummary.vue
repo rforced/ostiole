@@ -39,7 +39,7 @@ function pending(l) {
           <th>Zone</th>
           <th>Link</th>
           <th>Addresses</th>
-          <th class="text-right">Traffic</th>
+          <th class="num">Traffic</th>
         </tr>
       </thead>
       <tbody>
@@ -58,7 +58,7 @@ function pending(l) {
             <td data-label="Zone"><span class="skeleton w-10"></span></td>
             <td data-label="Link"><span class="skeleton h-5 w-9 rounded-full"></span></td>
             <td data-label="Addresses"><span class="skeleton w-28"></span></td>
-            <td class="text-right max-sm:text-left" data-label="Traffic">
+            <td class="num max-sm:text-left" data-label="Traffic">
               <div><span class="skeleton w-24"></span></div>
               <div><span class="skeleton w-24"></span></div>
             </td>
@@ -96,10 +96,7 @@ function pending(l) {
             </div>
             <span v-if="!l.addresses?.length && !pending(l).length" class="text-ink-muted">—</span>
           </td>
-          <td
-            class="text-right font-mono text-code whitespace-nowrap max-sm:text-left"
-            data-label="Traffic"
-          >
+          <td class="num font-mono text-code max-sm:text-left" data-label="Traffic">
             <div v-if="l.present">
               <ArrowDown class="inline size-3" aria-hidden="true" />
               <span class="sr-only">receiving</span>

@@ -197,9 +197,9 @@ const empty = computed(() => {
               <th>Destination</th>
               <th v-if="!device">Device</th>
               <th>Service</th>
-              <th class="text-right">Down</th>
-              <th class="text-right">Up</th>
-              <th class="text-right">Connections</th>
+              <th class="num">Down</th>
+              <th class="num">Up</th>
+              <th class="num">Connections</th>
               <th>Last seen</th>
             </tr>
           </thead>
@@ -225,17 +225,13 @@ const empty = computed(() => {
                 {{ r.device === 'router' ? 'This router' : r.deviceName || r.device }}
               </td>
               <td class="max-sm:order-3 max-sm:text-ink-muted">{{ serviceLabel(r) }}</td>
-              <td
-                class="text-right tabular-nums max-sm:order-5 max-sm:before:mr-1 max-sm:before:content-['↓']"
-              >
+              <td class="num max-sm:order-5 max-sm:before:mr-1 max-sm:before:content-['↓']">
                 {{ formatBytes(r.down) }}
               </td>
-              <td
-                class="text-right tabular-nums max-sm:order-6 max-sm:before:mr-1 max-sm:before:content-['↑']"
-              >
+              <td class="num max-sm:order-6 max-sm:before:mr-1 max-sm:before:content-['↑']">
                 {{ formatBytes(r.up) }}
               </td>
-              <td class="text-right tabular-nums max-sm:order-7">
+              <td class="num max-sm:order-7">
                 {{ formatCount(r.connections) }}
               </td>
               <td class="text-xs whitespace-nowrap max-sm:order-8">

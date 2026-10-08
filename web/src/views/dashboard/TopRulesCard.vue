@@ -21,8 +21,8 @@ defineProps({
         <tr>
           <th>Rule</th>
           <th>Zone</th>
-          <th class="text-right">Packets</th>
-          <th class="text-right">Bytes</th>
+          <th class="num">Packets</th>
+          <th class="num">Bytes</th>
         </tr>
       </thead>
       <tbody>
@@ -39,8 +39,8 @@ defineProps({
               <div><span class="skeleton h-5 w-12 rounded-full"></span></div>
             </td>
             <td><span class="skeleton w-10"></span></td>
-            <td class="text-right"><span class="skeleton w-12"></span></td>
-            <td class="text-right"><span class="skeleton w-14"></span></td>
+            <td class="num"><span class="skeleton w-12"></span></td>
+            <td class="num"><span class="skeleton w-14"></span></td>
           </tr>
         </template>
         <tr v-else-if="!rules.length">
@@ -57,8 +57,8 @@ defineProps({
             </div>
           </td>
           <td class="font-mono text-code">{{ r.zone }}</td>
-          <td class="text-right font-mono text-code">{{ formatCount(r.packets) }}</td>
-          <td class="text-right font-mono text-code">{{ formatBytes(r.bytes) }}</td>
+          <td class="num font-mono text-code">{{ formatCount(r.packets) }}</td>
+          <td class="num font-mono text-code">{{ formatBytes(r.bytes) }}</td>
         </tr>
       </tbody>
     </table>

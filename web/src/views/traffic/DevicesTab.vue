@@ -231,7 +231,7 @@ function show(d) {
                 </div>
               </td>
               <td
-                class="text-right tabular-nums max-sm:order-2 max-sm:text-left max-sm:before:mr-1 max-sm:before:content-['↓']"
+                class="num max-sm:order-2 max-sm:text-left max-sm:before:mr-1 max-sm:before:content-['↓']"
               >
                 {{ formatRate(d.down) }}
                 <div class="text-xs text-ink-muted max-sm:inline max-sm:ml-1">
@@ -239,7 +239,7 @@ function show(d) {
                 </div>
               </td>
               <td
-                class="text-right tabular-nums max-sm:order-3 max-sm:text-left max-sm:before:mr-1 max-sm:before:content-['↑']"
+                class="num max-sm:order-3 max-sm:text-left max-sm:before:mr-1 max-sm:before:content-['↑']"
               >
                 {{ formatRate(d.up) }}
                 <div class="text-xs text-ink-muted max-sm:inline max-sm:ml-1">

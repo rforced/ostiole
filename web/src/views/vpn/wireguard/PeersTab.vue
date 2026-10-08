@@ -119,7 +119,7 @@ function edit(r) {
             <th>Allowed addresses</th>
             <th>Endpoint</th>
             <SortHeader by="handshake" :sort="sort">Last handshake</SortHeader>
-            <th>Traffic</th>
+            <th class="num">Traffic</th>
             <th></th>
           </tr>
         </thead>
@@ -178,7 +178,7 @@ function edit(r) {
             <td class="text-xs whitespace-nowrap text-ink-muted" data-label="Last handshake">
               {{ handshake(r) }}
             </td>
-            <td class="text-code" data-label="Traffic">
+            <td class="num text-code" data-label="Traffic">
               <template v-if="seen(r)">
                 <div>↓ {{ formatBytes(seen(r).rxBytes) }}</div>
                 <div>↑ {{ formatBytes(seen(r).txBytes) }}</div>

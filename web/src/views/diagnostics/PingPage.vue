@@ -148,7 +148,7 @@ async function run(kind) {
             <th>Hop</th>
             <th>Address</th>
             <th>Name</th>
-            <th class="text-right">Round trip</th>
+            <th class="num">Round trip</th>
           </tr>
         </thead>
         <tbody>
@@ -159,7 +159,7 @@ async function run(kind) {
               <span v-if="h.final" class="badge badge-ok ml-1">target</span>
             </td>
             <td class="font-mono text-code">{{ h.name }}</td>
-            <td class="text-right font-mono text-code">
+            <td class="num font-mono text-code">
               {{ h.address ? `${h.rttMs.toFixed(1)} ms` : '' }}
             </td>
           </tr>

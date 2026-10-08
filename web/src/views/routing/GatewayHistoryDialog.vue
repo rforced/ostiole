@@ -179,7 +179,7 @@ const error = computed(() => read.error.value || streamError.value)
             <tr>
               <th>Time</th>
               <th>What</th>
-              <th>For</th>
+              <th class="num">For</th>
             </tr>
           </thead>
           <tbody>
@@ -191,7 +191,7 @@ const error = computed(() => read.error.value || streamError.value)
                 {{ eventText(e) }}
                 <div v-if="e.error" class="text-xs text-ink-muted">{{ e.error }}</div>
               </td>
-              <td class="tabular-nums">{{ eventFor(e) || '—' }}</td>
+              <td class="num">{{ eventFor(e) || '—' }}</td>
             </tr>
           </tbody>
         </table>

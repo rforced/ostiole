@@ -45,7 +45,7 @@ const auth = useAuthStore()
     </td>
     <td class="max-sm:hidden"></td>
     <td class="max-sm:order-1 max-sm:basis-full">{{ rule.description }}</td>
-    <td class="text-right font-mono text-code tabular-nums max-sm:hidden">
+    <td class="num font-mono text-code max-sm:hidden">
       {{ packets === '' ? '' : formatCount(packets) }}
       <div
         v-if="logged !== '' && packets !== '' && logged < packets"

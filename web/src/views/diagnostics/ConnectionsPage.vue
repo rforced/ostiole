@@ -189,8 +189,8 @@ function endpoint(address, port) {
             <SortHeader by="to" :sort="sort">To</SortHeader>
             <SortHeader by="leaves" :sort="sort">Leaves as</SortHeader>
             <SortHeader by="state" :sort="sort">State</SortHeader>
-            <SortHeader by="traffic" :sort="sort">Traffic</SortHeader>
-            <SortHeader by="expires" :sort="sort">Expires in</SortHeader>
+            <SortHeader class="text-right" by="traffic" :sort="sort">Traffic</SortHeader>
+            <SortHeader class="text-right" by="expires" :sort="sort">Expires in</SortHeader>
           </tr>
         </thead>
         <tbody>
@@ -232,11 +232,11 @@ function endpoint(address, port) {
                 routed
               </span>
             </td>
-            <td class="font-mono text-code whitespace-nowrap max-sm:order-7">
+            <td class="num font-mono text-code max-sm:order-7">
               {{ formatBytes(s.bytes) }} · {{ s.packets }}p
             </td>
             <td
-              class="font-mono text-code max-sm:order-8 max-sm:text-ink-muted max-sm:before:content-['expires_in_']"
+              class="num font-mono text-code max-sm:order-8 max-sm:text-ink-muted max-sm:before:content-['expires_in_']"
             >
               {{ s.ttl }}
             </td>

@@ -40,9 +40,9 @@ function edit(profile) {
           <tr>
             <th>Profile</th>
             <th>Mode</th>
-            <th>Paranoia</th>
+            <th class="num">Paranoia</th>
             <th>Applications</th>
-            <th>Exclusions</th>
+            <th class="num">Exclusions</th>
             <th></th>
           </tr>
         </thead>
@@ -64,12 +64,12 @@ function edit(profile) {
                 {{ w.mode === 'block' ? 'block' : 'detect only' }}
               </span>
             </td>
-            <td class="tabular-nums" data-label="Paranoia">{{ w.paranoia || 1 }}</td>
+            <td class="num" data-label="Paranoia">{{ w.paranoia || 1 }}</td>
             <td data-label="Applications">
               <span v-if="(w.applications ?? []).length">{{ w.applications.join(', ') }}</span>
               <span v-else class="text-ink-muted">none</span>
             </td>
-            <td class="tabular-nums" data-label="Exclusions">{{ (w.exclusions ?? []).length }}</td>
+            <td class="num" data-label="Exclusions">{{ (w.exclusions ?? []).length }}</td>
             <td class="actions" data-label="">
               <button type="button" class="link-action" @click="edit(w)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}

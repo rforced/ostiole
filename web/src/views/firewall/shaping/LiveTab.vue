@@ -181,9 +181,9 @@ function delay(us) {
               <thead>
                 <tr>
                   <th>Priority</th>
-                  <th class="text-right">Rate</th>
-                  <th class="text-right">Peak delay</th>
-                  <th class="text-right">Drops</th>
+                  <th class="num">Rate</th>
+                  <th class="num">Peak delay</th>
+                  <th class="num">Drops</th>
                 </tr>
               </thead>
               <tbody>
@@ -191,17 +191,17 @@ function delay(us) {
                   <td>
                     <span :class="tierBadge(t.tier)">{{ tierLabel(t.tier) }}</span>
                   </td>
-                  <td class="text-right font-mono text-code tabular-nums">
+                  <td class="num font-mono text-code">
                     {{
                       rateOf(`${iface.name}:${d.name}:${t.tier}`) === undefined
                         ? '—'
                         : formatRate(rateOf(`${iface.name}:${d.name}:${t.tier}`))
                     }}
                   </td>
-                  <td class="text-right font-mono text-code tabular-nums">
+                  <td class="num font-mono text-code">
                     {{ delay(t.peakDelayUs) }}
                   </td>
-                  <td class="text-right font-mono text-code tabular-nums">
+                  <td class="num font-mono text-code">
                     {{ formatCount(t.drops ?? 0) }}
                   </td>
                 </tr>

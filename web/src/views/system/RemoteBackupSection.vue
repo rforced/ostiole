@@ -406,7 +406,7 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
           <tr>
             <th>Name</th>
             <th>Taken</th>
-            <th>Size</th>
+            <th class="num">Size</th>
             <th></th>
           </tr>
         </thead>
@@ -421,7 +421,7 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
             <td class="text-xs whitespace-nowrap" data-label="Taken">
               {{ new Date(c.takenAt).toLocaleString() }}
             </td>
-            <td class="tabular-nums" data-label="Size">{{ formatBytes(c.size) }}</td>
+            <td class="num" data-label="Size">{{ formatBytes(c.size) }}</td>
             <td class="actions" data-label="">
               <input
                 v-if="asking === c.key"

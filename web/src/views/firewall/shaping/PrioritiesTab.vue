@@ -91,7 +91,7 @@ const entries = computed(() => [
         <thead>
           <tr>
             <th>Zone</th>
-            <th>Past</th>
+            <th class="num">Past</th>
             <th>Priority</th>
             <th></th>
           </tr>
@@ -109,7 +109,7 @@ const entries = computed(() => [
             :class="{ 'row-changed': config.isChanged('zones', z.name) }"
           >
             <td class="font-mono">{{ z.name }}</td>
-            <td class="font-mono text-code tabular-nums">
+            <td class="num font-mono text-code">
               {{ formatCount(z.busy.connections) }} connections
             </td>
             <td>

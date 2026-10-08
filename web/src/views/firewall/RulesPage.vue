@@ -239,7 +239,7 @@ onMounted(() => {
             <th>Destination</th>
             <th>Via</th>
             <th>Description</th>
-            <th class="text-right">Packets</th>
+            <th class="num">Packets</th>
             <th></th>
           </tr>
         </thead>
@@ -307,7 +307,7 @@ onMounted(() => {
               >
             </td>
             <td class="max-sm:order-1 max-sm:basis-full max-sm:font-medium">{{ r.description }}</td>
-            <td class="text-right font-mono text-code tabular-nums max-sm:hidden">
+            <td class="num font-mono text-code max-sm:hidden">
               {{ counters[r.id] ? formatCount(counters[r.id].packets) : '' }}
               <div v-if="ruleLogged(r) !== ''" class="font-sans text-xs text-ink-muted">
                 {{ formatCount(ruleLogged(r)) }} logged
