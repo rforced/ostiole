@@ -41,6 +41,18 @@ export function formatDuration(seconds) {
 }
 
 /**
+ * A round trip, e.g. 3.14 -> "3.1 ms", 312.4 -> "312 ms".
+ *
+ * @param {number} ms
+ * @returns {string}
+ */
+export function formatMs(ms) {
+  const v = Number(ms)
+  if (!Number.isFinite(v) || v < 0) return '—'
+  return `${v < 100 ? v.toFixed(1) : Math.round(v)} ms`
+}
+
+/**
  * Packet and lease counts with thousands separators.
  *
  * @param {number} n

@@ -13,12 +13,14 @@ export const WINDOW_LABELS = { '5m': '5 minutes', '24h': '24 hours', '31d': '31 
 /**
  * The top of the value axis and its step: a round step (1, 2, 2.5 or 5
  * of a power of ten) that divides the highest value into about four.
- * Nothing moving still gets an axis, of a kilobit a second.
- * @param {number} highest bits per second
+ * Nothing moving still gets an axis, of least: a kilobit a second unless
+ * said.
+ * @param {number} highest
+ * @param {number} [least]
  * @returns {{top: number, step: number}}
  */
-export function niceScale(highest) {
-  const high = Math.max(highest, 1000)
+export function niceScale(highest, least = 1000) {
+  const high = Math.max(highest, least)
   const rough = high / 4
   const power = 10 ** Math.floor(Math.log10(rough))
   const step = [1, 2, 2.5, 5, 10].map((f) => f * power).find((s) => s >= rough)
@@ -149,4 +151,69 @@ export function linePath(points, i, x, y) {
   let d = ''
   for (const p of points) d += `${d ? 'L' : 'M'}${x(p[0]).toFixed(1)},${y(p[i]).toFixed(1)}`
   return d
+}
+
+/**
+ * An SVG path through one value of every point that has it, broken where a
+ * value is null or the points are more than gap seconds apart. A point
+ * without the value at all (undefined) is passed over.
+ * @param {Array<Array<number|null>>} points
+ * @param {number} i the value's index in a point
+ * @param {(t: number) => number} x
+ * @param {(v: number) => number} y
+ * @param {number} [gap] seconds, 0 never breaks
+ */
+export function seriesPath(points, i, x, y, gap = 0) {
+  let d = ''
+  let prev = null
+  for (const p of points) {
+    if (p[i] === undefined) continue
+    if (p[i] === null) {
+      prev = null
+      continue
+    }
+    const move = !prev || (gap > 0 && p[0] - prev[0] > gap)
+    d += `${move ? 'M' : 'L'}${x(p[0]).toFixed(1)},${y(p[i]).toFixed(1)}`
+    prev = p
+  }
+  return d
+}
+
+/**
+ * An SVG area between two values of every point, in runs broken as
+ * seriesPath breaks.
+ * @param {Array<Array<number|null>>} points
+ * @param {number} lo the low value's index
+ * @param {number} hi the high value's index
+ * @param {(t: number) => number} x
+ * @param {(v: number) => number} y
+ * @param {number} [gap]
+ */
+export function bandPath(points, lo, hi, x, y, gap = 0) {
+  const runs = []
+  let run = null
+  for (const p of points) {
+    if (p[lo] === undefined) continue
+    if (p[lo] === null || p[hi] == null) {
+      run = null
+      continue
+    }
+    if (!run || (gap > 0 && p[0] - run.at(-1)[0] > gap)) {
+      run = []
+      runs.push(run)
+    }
+    run.push(p)
+  }
+  const at = (t, v) => `${x(t).toFixed(1)},${y(v).toFixed(1)}`
+  return runs
+    .map((r) => {
+      const top = r.map((p, k) => `${k ? 'L' : 'M'}${at(p[0], p[hi])}`).join('')
+      const bottom = r
+        .slice()
+        .reverse()
+        .map((p) => `L${at(p[0], p[lo])}`)
+        .join('')
+      return `${top}${bottom}Z`
+    })
+    .join('')
 }
