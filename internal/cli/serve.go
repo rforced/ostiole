@@ -454,7 +454,9 @@ at your own.`,
 				}
 			} else if g.fakeProbes != "" {
 				fake := &gateway.FakeProbes{Path: g.fakeProbes}
-				watchGateways(ctx, gateway.New(fake, fake, slog.Default()), eng, &deps, files, crons, log)
+				mon := gateway.New(fake, fake, slog.Default())
+				mon.Interval = time.Second
+				watchGateways(ctx, mon, eng, &deps, files, crons, log)
 			}
 			// What the WAF matched, fed from the proxy's journal: read back
 			// from its files at start while they are on, then from the

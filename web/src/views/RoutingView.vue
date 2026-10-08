@@ -2,16 +2,20 @@
 import { Plus } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 
+import ClearLogButton from '@/components/ClearLogButton.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { neverHint, stateOf } from '@/lib/gateways'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import GatewayDialog from '@/views/routing/GatewayDialog.vue'
+import GatewayEvents from '@/views/routing/GatewayEvents.vue'
 import GatewayGroupDialog from '@/views/routing/GatewayGroupDialog.vue'
+import GatewayHistoryDialog from '@/views/routing/GatewayHistoryDialog.vue'
 import StaticRouteDialog from '@/views/routing/StaticRouteDialog.vue'
 
 const auth = useAuthStore()
@@ -22,6 +26,8 @@ const gwOpen = ref(false)
 const gwEditing = ref(null)
 const groupOpen = ref(false)
 const groupEditing = ref(null)
+const historyOpen = ref(false)
+const historyOf = ref(null)
 const live = ref([])
 const policy = ref([])
 const replies = ref([])
@@ -85,10 +91,18 @@ const refresh = useAsync(
  * than after you apply.
  */
 function coveredBy(d) {
-  const g = config.gateways.find(
-    (g) => g.interface === d.interface && (!g.address || g.address === d.address),
-  )
+  const g = config.gateways.find((g) => g.enabled && claims(g, d))
   return g?.name ?? ''
+}
+
+/** A disabled gateway that would cover a detected route, which it then names. */
+function disabledFor(d) {
+  if (coveredBy(d)) return ''
+  return config.gateways.find((g) => !g.enabled && claims(g, d))?.name ?? ''
+}
+
+function claims(g, d) {
+  return g.interface === d.interface && (!g.address || g.address === d.address)
 }
 
 /** Adds a detected route as a gateway, ready to apply. */
@@ -115,12 +129,25 @@ function editGroup(g) {
 
 /** The kernel's default route that this gateway is claiming, if any. */
 function detectedFor(g) {
-  return (
-    detected.value.find(
-      (d) =>
-        d.configured === g.name ||
-        (d.interface === g.interface && (!g.address || g.address === d.address)),
-    ) ?? null
+  if (!g.enabled) return null
+  return detected.value.find((d) => d.configured === g.name || claims(g, d)) ?? null
+}
+
+function showHistory(g) {
+  historyOf.value = g
+  historyOpen.value = true
+}
+
+/** Empties every gateway's latency and loss, their files included. */
+const clearHistory = useAsync(() => api.gatewayHistory.clear())
+
+/** A gateway's figures, a line for each family when it has two. */
+function figureLines(live) {
+  const fams = live.families ?? []
+  const line = (f) => `${f.latencyMs.toFixed(1)}ms · ${f.lossPercent.toFixed(0)}% loss`
+  if (fams.length < 2) return [line(live)]
+  return fams.map((f) =>
+    f.online || f.unknown ? `${f.family} ${line(f)}` : `${f.family} ${stateOf(f)}`,
   )
 }
 
@@ -178,10 +205,23 @@ function edit(r) {
         flush
       >
         <template v-if="!auth.readOnly" #actions>
+          <ClearLogButton
+            name="gateway history"
+            :description="
+              config.saved?.system?.logging?.files?.enabled
+                ? 'Every gateway\'s latency and loss is dropped, and its files are deleted. The events stay.'
+                : 'Every gateway\'s latency and loss is dropped. The events stay.'
+            "
+            :busy="clearHistory.busy.value"
+            @confirm="clearHistory.run()"
+          />
           <button type="button" class="btn-secondary" @click="addGateway">
             <Plus class="size-4" aria-hidden="true" /> Add gateway
           </button>
         </template>
+        <p v-if="clearHistory.error.value" role="alert" class="card-strip text-sm text-bad">
+          {{ clearHistory.error.value }}
+        </p>
         <table class="table table-stack">
           <thead>
             <tr>
@@ -223,25 +263,41 @@ function edit(r) {
                 </div>
               </td>
               <td class="font-mono text-code" data-label="Monitor">
-                {{ g.monitor || 'the gateway' }}
+                {{ g.monitor || 'the next hop' }}
               </td>
               <td class="font-mono text-code" data-label="Priority">
                 {{ g.tunnel ? '—' : (g.priority ?? 0) }}
               </td>
               <td class="whitespace-nowrap" data-label="State">
                 <template v-if="g.live && !g.live.unknown">
-                  <span class="badge" :class="g.live.online ? 'badge-ok' : 'badge-warn'">
-                    {{ g.live.online ? 'up' : 'down' }}
+                  <span
+                    class="badge"
+                    :class="{ 'badge-ok': g.live.online, 'badge-warn': stateOf(g.live) === 'down' }"
+                  >
+                    {{ stateOf(g.live) }}
                   </span>
                   <span v-if="g.live.active" class="badge badge-ok ml-1">active</span>
-                  <div class="mt-1 font-mono text-xs text-ink-muted">
-                    {{ g.live.latencyMs.toFixed(1) }}ms · {{ g.live.lossPercent.toFixed(0) }}% loss
-                  </div>
+                  <template v-if="g.live.neverAnswered">
+                    <div class="mt-1 max-w-48 text-xs whitespace-normal text-ink-muted">
+                      {{ neverHint(g) }}
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div
+                      v-for="line in figureLines(g.live)"
+                      :key="line"
+                      class="mt-1 font-mono text-xs text-ink-muted"
+                    >
+                      {{ line }}
+                    </div>
+                  </template>
                 </template>
+                <span v-else-if="g.live" class="badge">probing</span>
                 <span v-else class="badge">not probed</span>
               </td>
               <td class="text-right whitespace-nowrap" data-label="">
-                <button type="button" class="link" @click="editGateway(g)">
+                <button type="button" class="link" @click="showHistory(g)">History</button>
+                <button type="button" class="link ml-3" @click="editGateway(g)">
                   {{ auth.readOnly ? 'View' : 'Edit' }}
                 </button>
                 <ConfirmButton
@@ -258,6 +314,8 @@ function edit(r) {
           </tbody>
         </table>
       </SectionCard>
+
+      <GatewayEvents />
 
       <SectionCard
         title="Detected routes"
@@ -296,11 +354,19 @@ function edit(r) {
                 <span v-if="coveredBy(d)" class="font-mono text-code text-ink-muted">
                   {{ coveredBy(d) }}
                 </span>
-                <span v-else class="badge">not watched</span>
+                <template v-else>
+                  <span class="badge">not watched</span>
+                  <div class="text-xs text-ink-muted">
+                    <span v-if="disabledFor(d)" class="font-mono text-code"
+                      >{{ disabledFor(d) }}, disabled.
+                    </span>
+                    Keeps no history.
+                  </div>
+                </template>
               </td>
               <td class="text-right whitespace-nowrap" data-label="">
                 <button
-                  v-if="!coveredBy(d) && d.suggested && !auth.readOnly"
+                  v-if="!coveredBy(d) && !disabledFor(d) && d.suggested && !auth.readOnly"
                   type="button"
                   class="link"
                   @click="adopt(d)"
@@ -475,6 +541,7 @@ function edit(r) {
     </template>
 
     <GatewayDialog v-model:open="gwOpen" :gateway="gwEditing" />
+    <GatewayHistoryDialog v-model:open="historyOpen" :gateway="historyOf" />
     <GatewayGroupDialog v-model:open="groupOpen" :group="groupEditing" />
 
     <StaticRouteDialog v-model:open="open" :route="editing" />

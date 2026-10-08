@@ -230,6 +230,16 @@ export const api = {
   gateways: () => get('/gateways'),
   /** Default routes the kernel already has, with the gateway each would become. */
   detectedGateways: () => get('/gateways/detected'),
+  /** What each gateway's probes found over a window, and what changed. */
+  gatewayHistory: {
+    read: (name, window) =>
+      get(`/gateways/${encodeURIComponent(name)}/history?window=${encodeURIComponent(window)}`),
+    /** A page of events: {gateway, q, before, limit}. */
+    events: (params = {}, signal) => get(withQuery('/gateways/events', params), signal),
+    /** Forgets every gateway's latency and loss; the events stay. */
+    clear: () => request('DELETE', '/gateways/history'),
+    clearEvents: () => request('DELETE', '/gateways/events'),
+  },
   policy: () => get('/policy'),
   policyReplies: () => get('/policy/replies'),
   /** Line speeds per interface and how the queues behind them are doing. */

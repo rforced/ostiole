@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { dhcpValues } from '@/lib/dhcpLog'
 import { readingValues } from '@/lib/driveHistory'
+import { eventValues as gatewayValues } from '@/lib/gateways'
 import { fwlogValues } from '@/lib/fwlog'
 import { peerValues } from '@/lib/peerLog'
 import { eventValues } from '@/lib/proxyEvents'
@@ -56,6 +57,11 @@ describe('what each log row shows', () => {
   for (const c of cases.drives) {
     it(`drives: ${c.why}`, () => {
       expect(shown(readingValues(c.entry))).toEqual(c.values)
+    })
+  }
+  for (const c of cases.gateways) {
+    it(`gateways: ${c.why}`, () => {
+      expect(shown(gatewayValues(c.entry))).toEqual(c.values)
     })
   }
 })

@@ -51,7 +51,9 @@
     },
     {
       "why": "a line of the proxy's access list",
-      "access": { "access-x1": "Sites from home" },
+      "access": {
+        "access-x1": "Sites from home"
+      },
       "entry": {
         "seq": 9,
         "time": "2026-09-26T14:02:02Z",
@@ -187,7 +189,10 @@
             "message": "XSS Attack Detected via libinjection",
             "severity": "critical"
           },
-          { "id": 949110, "message": "Inbound Anomaly Score Exceeded" }
+          {
+            "id": 949110,
+            "message": "Inbound Anomaly Score Exceeded"
+          }
         ]
       },
       "values": [
@@ -385,6 +390,53 @@
         "powerOnHours": 1234
       },
       "values": ["sda", "GENERIC 256GB SSD", "S1234", "passed", "41 °C"]
+    }
+  ],
+  "gateways": [
+    {
+      "why": "a gateway that never answered",
+      "entry": {
+        "seq": 1,
+        "time": "2026-10-08T14:00:00Z",
+        "gateway": "gw_eth0",
+        "kind": "never",
+        "error": "timeout"
+      },
+      "values": ["gw_eth0", "never answered", "timeout"]
+    },
+    {
+      "why": "a family that stopped answering",
+      "entry": {
+        "seq": 2,
+        "time": "2026-10-08T14:01:00Z",
+        "gateway": "lte",
+        "family": "IPv6",
+        "kind": "family-down",
+        "error": "timeout"
+      },
+      "values": ["lte", "IPv6", "stopped answering", "timeout"]
+    },
+    {
+      "why": "a changed monitor",
+      "entry": {
+        "seq": 3,
+        "time": "2026-10-08T14:02:00Z",
+        "gateway": "gw_eth0",
+        "kind": "monitor",
+        "monitor": "192.0.2.53"
+      },
+      "values": ["gw_eth0", "monitor changed", "192.0.2.53"]
+    },
+    {
+      "why": "a gateway back up",
+      "entry": {
+        "seq": 4,
+        "time": "2026-10-08T14:03:00Z",
+        "gateway": "gw_eth0",
+        "kind": "up",
+        "for": 240
+      },
+      "values": ["gw_eth0", "up again"]
     }
   ]
 }

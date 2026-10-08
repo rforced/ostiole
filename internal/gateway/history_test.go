@@ -13,6 +13,7 @@ import (
 
 	"ostiole/internal/logring"
 	"ostiole/internal/logsearch"
+	"ostiole/internal/logsearch/logsearchtest"
 	"ostiole/internal/model"
 	"ostiole/internal/netlink"
 	"ostiole/internal/netnstest"
@@ -353,5 +354,21 @@ func TestICMPProbeReachesALinkLocalNextHop(t *testing.T) {
 	}
 	if _, err := NewICMPProber().Probe(context.Background(), "fe80::1", "lo", 2*time.Second); err != nil {
 		t.Errorf("probe: %v", err)
+	}
+}
+
+// The router searches what the Gateway events card shows, value for value.
+func TestEventSearchValuesAreThePages(t *testing.T) {
+	t.Parallel()
+	for _, c := range logsearchtest.Cases(t, "gateways") {
+		var e Event
+		if err := json.Unmarshal(c.Entry, &e); err != nil {
+			t.Fatal(err)
+		}
+		var got logsearchtest.Recorder
+		e.Search(&got)
+		if !slices.Equal(got, c.Values) {
+			t.Errorf("%s: %q, want %q", c.Why, got, c.Values)
+		}
 	}
 }
