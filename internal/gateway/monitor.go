@@ -94,6 +94,10 @@ type Status struct {
 	LastError   string    `json:"lastError,omitempty"`
 	// Families are the addresses the gateway is probed at, a family each.
 	Families []FamilyStatus `json:"families,omitempty"`
+	// Slow and Lossy are the families whose last full minute was over the
+	// gateway's thresholds.
+	Slow  []Over `json:"slow,omitempty"`
+	Lossy []Over `json:"lossy,omitempty"`
 
 	// learned is set when the gateway takes its next hop from the network,
 	// so the router looks for its routes by metric as well as by address.
@@ -110,6 +114,16 @@ type FamilyStatus struct {
 	LatencyMS     float64 `json:"latencyMs"`
 	LossPercent   float64 `json:"lossPercent"`
 	LastError     string  `json:"lastError,omitempty"`
+}
+
+// Over is a family whose last full minute was over a threshold: its mean
+// round trip or the share it lost, the limit, and since when.
+type Over struct {
+	Family      string    `json:"family"`
+	LatencyMS   float64   `json:"latencyMs,omitempty"`
+	LossPercent float64   `json:"lossPercent,omitempty"`
+	Limit       int       `json:"limit"`
+	Since       time.Time `json:"since"`
 }
 
 // leg is one address a gateway is probed at: its next hop in a family,
@@ -180,6 +194,8 @@ type state struct {
 	never     bool
 	since     time.Time
 	lastError string
+	// slow and lossy are the families over a threshold, by family.
+	slow, lossy map[string]Over
 }
 
 func (st *state) leg(family string) *leg {
@@ -645,7 +661,88 @@ func (m *Monitor) mark(states []*state) {
 	for _, k := range marks {
 		m.History.Mark(k.name, k.state, k.monitor, now)
 	}
-	m.History.Advance(now)
+	m.judge(m.History.Advance(now))
+}
+
+type judged struct {
+	e   Event
+	msg string
+}
+
+// judge holds each minute that is over against its gateway's thresholds:
+// a family that answered is slow while the minute's mean round trip is
+// above one, lossy while the minute lost more of its probes than the
+// other. A minute the gateway was not up in ends both, without a word:
+// down says more.
+func (m *Monitor) judge(minutes []Minute) {
+	var out []judged
+	m.mu.Lock()
+	for _, mn := range minutes {
+		st := m.states[mn.Gateway]
+		if st == nil {
+			continue
+		}
+		if mn.State != StateUp {
+			st.slow, st.lossy = nil, nil
+			continue
+		}
+		slowAt, lossyAt := st.gw.SlowAbove(), st.gw.LossyAbove()
+		for _, f := range mn.Families {
+			if l := st.leg(f.Family); l == nil || !l.answered || f.Sent == 0 {
+				continue
+			}
+			loss := float64(f.Lost) / float64(f.Sent) * 100
+			out = st.cross(out, &st.slow, mn, f.Family,
+				slowAt > 0 && f.Sent > f.Lost && f.Mean > float64(slowAt),
+				Over{Family: f.Family, LatencyMS: f.Mean, Limit: slowAt}, EventSlow, EventSlowEnd)
+			out = st.cross(out, &st.lossy, mn, f.Family,
+				lossyAt > 0 && loss > float64(lossyAt),
+				Over{Family: f.Family, LossPercent: round(loss), Limit: lossyAt}, EventLossy, EventLossyEnd)
+		}
+	}
+	m.mu.Unlock()
+	for _, j := range out {
+		m.Log.Warn(j.msg, "gateway", j.e.Gateway, "family", j.e.Family, "latency_ms", j.e.LatencyMS,
+			"loss_percent", j.e.LossPercent, "limit", j.e.Limit, "for", time.Duration(j.e.For)*time.Second)
+		m.note(j.e)
+	}
+}
+
+// cross notes a family going over a threshold or back under it. The
+// caller holds m.mu.
+func (st *state) cross(out []judged, overs *map[string]Over, mn Minute, family string, over bool, now Over,
+	start, end string,
+) []judged {
+	was, had := (*overs)[family]
+	switch {
+	case over:
+		now.Since = mn.Start
+		if had {
+			now.Since = was.Since
+		}
+		if *overs == nil {
+			*overs = map[string]Over{}
+		}
+		(*overs)[family] = now
+		if !had {
+			msg := "gateway is slow"
+			if start == EventLossy {
+				msg = "gateway is losing packets"
+			}
+			out = append(out, judged{Event{Gateway: mn.Gateway, Family: family, Kind: start,
+				LatencyMS: now.LatencyMS, LossPercent: now.LossPercent, Limit: now.Limit}, msg})
+		}
+	case had:
+		delete(*overs, family)
+		msg := "gateway is no longer slow"
+		if end == EventLossyEnd {
+			msg = "gateway no longer loses packets"
+		}
+		took := mn.Start.Add(time.Minute).Sub(was.Since).Round(time.Second)
+		out = append(out, judged{Event{Gateway: mn.Gateway, Family: family, Kind: end,
+			For: int64(took / time.Second)}, msg})
+	}
+	return out
 }
 
 // applyRoutes demotes dead gateways and restores the rest. A demoted route
@@ -802,5 +899,20 @@ func (m *Monitor) status(st *state, _ bool) Status {
 	} else if len(st.legs) > 0 && len(st.legs[0].results) > 0 {
 		s.LossPercent = 100
 	}
+	if st.online {
+		s.Slow, s.Lossy = overs(st.slow), overs(st.lossy)
+	}
 	return s
+}
+
+func overs(m map[string]Over) []Over {
+	out := make([]Over, 0, len(m))
+	for _, o := range m {
+		out = append(out, o)
+	}
+	slices.SortFunc(out, func(a, b Over) int { return cmp.Compare(a.Family, b.Family) })
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }

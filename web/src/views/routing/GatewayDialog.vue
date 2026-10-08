@@ -22,6 +22,8 @@ function blank() {
     address: '',
     monitor: '',
     priority: 0,
+    slow: '',
+    lossy: '',
   }
 }
 
@@ -29,7 +31,14 @@ watch(
   () => [open.value, props.gateway],
   () => {
     if (!open.value) return
-    form.value = props.gateway ? { ...blank(), ...props.gateway } : blank()
+    form.value = props.gateway
+      ? {
+          ...blank(),
+          ...props.gateway,
+          slow: props.gateway.slowAboveMs ?? '',
+          lossy: props.gateway.lossyAbovePercent ?? '',
+        }
+      : blank()
     if (!props.gateway) {
       const wan = config.interfaces.find((i) => {
         const zone = config.zones.find((z) => z.name === i.zone)
@@ -81,6 +90,9 @@ function save() {
   if (f.description) out.description = f.description
   if (f.address) out.address = f.address.trim()
   if (f.monitor) out.monitor = f.monitor.trim()
+  // Empty keeps the default; 0 turns the warning off.
+  if (f.slow !== '' && f.slow != null) out.slowAboveMs = Number(f.slow)
+  if (f.lossy !== '' && f.lossy != null) out.lossyAbovePercent = Number(f.lossy)
   config.upsertGateway(out, props.gateway?.name ?? out.name)
   open.value = false
 }
@@ -167,6 +179,36 @@ function save() {
             type="number"
             min="0"
             max="255"
+            class="input w-32 font-mono max-sm:w-full"
+          />
+        </FormField>
+        <FormField
+          id="gw-slow"
+          label="Slow above (ms)"
+          hint="A minute's mean round trip. 0 turns it off."
+        >
+          <input
+            id="gw-slow"
+            v-model="form.slow"
+            type="number"
+            min="0"
+            max="1999"
+            placeholder="200"
+            class="input w-32 font-mono max-sm:w-full"
+          />
+        </FormField>
+        <FormField
+          id="gw-lossy"
+          label="Losing packets above (%)"
+          hint="A minute's share of probes lost. 0 turns it off."
+        >
+          <input
+            id="gw-lossy"
+            v-model="form.lossy"
+            type="number"
+            min="0"
+            max="99"
+            placeholder="10"
             class="input w-32 font-mono max-sm:w-full"
           />
         </FormField>

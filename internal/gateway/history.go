@@ -67,6 +67,10 @@ const (
 	EventFamilyUp    = "family-up"
 	EventFamilyNever = "family-never"
 	EventMonitor     = "monitor"
+	EventSlow        = "slow"
+	EventSlowEnd     = "slow-end"
+	EventLossy       = "lossy"
+	EventLossyEnd    = "lossy-end"
 )
 
 // Event is something that changed on a gateway.
@@ -82,6 +86,10 @@ type Event struct {
 	// empty is the next hop.
 	Monitor string `json:"monitor,omitempty"`
 	Was     string `json:"was,omitempty"`
+	// LatencyMS and LossPercent are the minute's that crossed Limit.
+	LatencyMS   float64 `json:"latencyMs,omitempty"`
+	LossPercent float64 `json:"lossPercent,omitempty"`
+	Limit       int     `json:"limit,omitempty"`
 }
 
 // EventLog is the gateways' events.
@@ -96,6 +104,10 @@ var eventWords = map[string]string{
 	EventFamilyUp:    "answering again",
 	EventFamilyNever: "never answered",
 	EventMonitor:     "monitor changed",
+	EventSlow:        "slow",
+	EventSlowEnd:     "no longer slow",
+	EventLossy:       "losing packets",
+	EventLossyEnd:    "no longer losing packets",
 }
 
 // Search hands a the values the Events card shows for an event.

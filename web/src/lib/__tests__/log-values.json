@@ -437,6 +437,19 @@
         "for": 240
       },
       "values": ["gw_eth0", "up again"]
+    },
+    {
+      "why": "a slow family",
+      "entry": {
+        "seq": 5,
+        "time": "2026-10-08T14:04:00Z",
+        "gateway": "lte",
+        "family": "IPv4",
+        "kind": "slow",
+        "latencyMs": 312.4,
+        "limit": 200
+      },
+      "values": ["lte", "IPv4", "slow"]
     }
   ]
 }

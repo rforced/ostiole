@@ -137,3 +137,27 @@ func TestOnlyAGatewayThatAnsweredBeforeWarnsWhenDown(t *testing.T) {
 		t.Errorf("warnings = %v", titles)
 	}
 }
+
+// A gateway over its thresholds warns, a family a sentence, and those warnings
+// become notices as the others do.
+func TestASlowOrLossyGatewayWarns(t *testing.T) {
+	t.Parallel()
+	statuses := fakeStatuses{{Name: "wan", Interface: "eth0", Online: true,
+		Slow:  []gateway.Over{{Family: "IPv4", LatencyMS: 312.4, Limit: 200}},
+		Lossy: []gateway.Over{{Family: "IPv4", LossPercent: 25, Limit: 10}, {Family: "IPv6", LossPercent: 100, Limit: 10}},
+	}}
+	srv := newTestServerWith(t, func(d *Deps) { d.Gateways = statuses })
+	ov := getOverview(t, srv)
+	if w := warning(ov, "gateway-slow"); w == nil || w.Title != "Gateway wan is slow" ||
+		w.Detail != "IPv4 took 312 ms on average over the last minute, above 200 ms." {
+		t.Errorf("slow = %+v", w)
+	}
+	if w := warning(ov, "gateway-lossy"); w == nil || w.Title != "Gateway wan is losing packets" ||
+		w.Detail != "IPv4 lost 25% of its probes over the last minute, above 10%. "+
+			"IPv6 lost 100% of its probes over the last minute, above 10%." {
+		t.Errorf("lossy = %+v", w)
+	}
+	if w := warning(ov, "gateway-down"); w != nil {
+		t.Errorf("down = %+v", w)
+	}
+}

@@ -874,6 +874,30 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 			Detail: detail + ". Traffic uses the next gateway that answers.",
 		})
 	}
+	for _, g := range a.gatewayStatuses() {
+		if len(g.Slow) > 0 {
+			var parts []string
+			for _, o := range g.Slow {
+				parts = append(parts, fmt.Sprintf("%s took %.0f ms on average over the last minute, above %d ms.",
+					o.Family, o.LatencyMS, o.Limit))
+			}
+			out = append(out, Warning{
+				Kind: "gateway-slow", Level: "warn",
+				Title: "Gateway " + g.Name + " is slow", Detail: strings.Join(parts, " "),
+			})
+		}
+		if len(g.Lossy) > 0 {
+			var parts []string
+			for _, o := range g.Lossy {
+				parts = append(parts, fmt.Sprintf("%s lost %.0f%% of its probes over the last minute, above %d%%.",
+					o.Family, o.LossPercent, o.Limit))
+			}
+			out = append(out, Warning{
+				Kind: "gateway-lossy", Level: "warn",
+				Title: "Gateway " + g.Name + " is losing packets", Detail: strings.Join(parts, " "),
+			})
+		}
+	}
 	if routes(cfg) && !forwardingOn() {
 		out = append(out, Warning{
 			Kind: "forwarding-off", Level: "warn",

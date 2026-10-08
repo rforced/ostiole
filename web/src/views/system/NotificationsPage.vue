@@ -48,6 +48,8 @@ const KINDS = [
     group: 'Network',
     kinds: [
       { value: 'gateway-down', label: 'A gateway stops answering' },
+      { value: 'gateway-slow', label: 'A gateway is slow' },
+      { value: 'gateway-lossy', label: 'A gateway is losing packets' },
       { value: 'interface-missing', label: 'An interface goes missing' },
       { value: 'forwarding-off', label: 'IP forwarding is off' },
     ],

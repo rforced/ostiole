@@ -443,6 +443,12 @@ func (c *Config) Validate() error {
 		if g.Priority < 0 || g.Priority > 255 {
 			v.add(path+".priority", "%d must be 0-255", g.Priority)
 		}
+		if p := g.SlowAboveMS; p != nil && (*p < 0 || *p > MaxSlowAboveMS) {
+			v.add(path+".slowAboveMs", "%d must be 0-%d", *p, MaxSlowAboveMS)
+		}
+		if p := g.LossyAbovePercent; p != nil && (*p < 0 || *p > MaxLossyAbovePercent) {
+			v.add(path+".lossyAbovePercent", "%d must be 0-%d", *p, MaxLossyAbovePercent)
+		}
 	}
 
 	groups := map[string]bool{}

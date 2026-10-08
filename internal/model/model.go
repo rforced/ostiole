@@ -1477,6 +1477,37 @@ type Gateway struct {
 	// Empty means the gateway address itself, which only tells you the
 	// first hop is alive.
 	Monitor string `json:"monitor,omitempty"`
+	// SlowAboveMS warns while a minute's mean round trip is above it, and
+	// LossyAbovePercent while a minute loses more of its probes. Unset is
+	// the default, 0 is off.
+	SlowAboveMS       *int `json:"slowAboveMs,omitempty"`
+	LossyAbovePercent *int `json:"lossyAbovePercent,omitempty"`
+}
+
+// The thresholds a gateway warns over, and their bounds: a probe waits two
+// seconds, so a mean of two seconds never comes.
+const (
+	DefaultSlowAboveMS       = 200
+	DefaultLossyAbovePercent = 10
+	MaxSlowAboveMS           = 1999
+	MaxLossyAbovePercent     = 99
+)
+
+// SlowAbove is the mean round trip a gateway warns over, 0 for never.
+func (g Gateway) SlowAbove() int {
+	if g.SlowAboveMS == nil {
+		return DefaultSlowAboveMS
+	}
+	return *g.SlowAboveMS
+}
+
+// LossyAbove is the share of a minute's probes lost a gateway warns over,
+// 0 for never.
+func (g Gateway) LossyAbove() int {
+	if g.LossyAbovePercent == nil {
+		return DefaultLossyAbovePercent
+	}
+	return *g.LossyAbovePercent
 }
 
 // GatewayMetric turns a priority into a route metric. The gaps leave room

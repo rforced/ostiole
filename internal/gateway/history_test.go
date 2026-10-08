@@ -372,3 +372,107 @@ func TestEventSearchValuesAreThePages(t *testing.T) {
 		}
 	}
 }
+
+func judging(t *testing.T, gws ...model.Gateway) (*Monitor, *fakeProber, *bytes.Buffer) {
+	t.Helper()
+	var log bytes.Buffer
+	p := &fakeProber{fail: map[string]bool{}}
+	r := &fakeRouter{resolveTo: map[string]string{}, resolve6: map[string]string{}}
+	for _, g := range gws {
+		if g.Address == "" {
+			r.resolveTo[g.Name], r.resolve6[g.Name] = "192.0.2.1", "fe80::1"
+		}
+	}
+	m := watched(t, p, r, &log, gws...)
+	return m, p, &log
+}
+
+// minute is one of wan's minutes as the history closes it.
+func minute(m int, state string, families ...FamilyMinute) []Minute {
+	return []Minute{{Gateway: "wan", Start: at(m, 0), State: state, Families: families}}
+}
+
+// v4 is a minute of twelve IPv4 probes.
+func v4(lost int, mean float64) FamilyMinute {
+	return FamilyMinute{Family: FamilyIPv4, Sent: 12, Lost: lost, Mean: mean}
+}
+
+var wan = model.Gateway{Name: "wan", Enabled: true, Interface: "eth0", Address: "203.0.113.1"}
+
+func TestASlowMinuteWarnsUntilAMinuteIsNot(t *testing.T) {
+	t.Parallel()
+	m, _, log := judging(t, wan)
+	tick(m, RiseAfter)
+	m.judge(minute(0, StateUp, v4(0, 250)))
+	s := m.Statuses()[0]
+	if len(s.Slow) != 1 || s.Slow[0].LatencyMS != 250 || s.Slow[0].Limit != model.DefaultSlowAboveMS ||
+		!s.Slow[0].Since.Equal(at(0, 0)) || len(s.Lossy) != 0 {
+		t.Fatalf("after a slow minute: %+v", s)
+	}
+	m.judge(minute(1, StateUp, v4(0, 260)))
+	if s := m.Statuses()[0]; len(s.Slow) != 1 || s.Slow[0].LatencyMS != 260 || !s.Slow[0].Since.Equal(at(0, 0)) {
+		t.Fatalf("after a second: %+v", s.Slow)
+	}
+	m.judge(minute(2, StateUp, v4(0, 150)))
+	if s := m.Statuses()[0]; len(s.Slow) != 0 {
+		t.Fatalf("after a quick minute: %+v", s.Slow)
+	}
+	events := m.History.Events.Recent(0)
+	if len(events) != 2 || events[1].Kind != EventSlow || events[1].LatencyMS != 250 || events[1].Limit != 200 ||
+		events[0].Kind != EventSlowEnd || events[0].For != 180 {
+		t.Errorf("events = %+v", events)
+	}
+	if got := log.String(); !strings.Contains(got, "gateway is slow") || !strings.Contains(got, "gateway is no longer slow") {
+		t.Errorf("journal:\n%s", got)
+	}
+}
+
+func TestOneLostProbeInAMinuteIsNotLossy(t *testing.T) {
+	t.Parallel()
+	m, _, _ := judging(t, wan)
+	tick(m, RiseAfter)
+	m.judge(minute(0, StateUp, v4(1, 3)))
+	if s := m.Statuses()[0]; len(s.Lossy) != 0 {
+		t.Fatalf("one in twelve: %+v", s.Lossy)
+	}
+	m.judge(minute(1, StateUp, v4(2, 3)))
+	if s := m.Statuses()[0]; len(s.Lossy) != 1 || s.Lossy[0].LossPercent != 16.667 || s.Lossy[0].Limit != 10 {
+		t.Errorf("two in twelve: %+v", s.Lossy)
+	}
+}
+
+func TestAThresholdOfZeroIsOff(t *testing.T) {
+	t.Parallel()
+	off, five := 0, 5
+	g := wan
+	g.SlowAboveMS, g.LossyAbovePercent = &off, &five
+	m, _, _ := judging(t, g)
+	tick(m, RiseAfter)
+	m.judge(minute(0, StateUp, v4(1, 1500)))
+	if s := m.Statuses()[0]; len(s.Slow) != 0 || len(s.Lossy) != 1 {
+		t.Errorf("status = %+v", s)
+	}
+}
+
+func TestDownEndsSlowAndLossyWithoutAWord(t *testing.T) {
+	t.Parallel()
+	m, _, _ := judging(t, wan)
+	tick(m, RiseAfter)
+	m.judge(minute(0, StateUp, v4(3, 400)))
+	m.judge(minute(1, StateDown, v4(12, 0)))
+	m.judge(minute(2, StateUp, v4(0, 3)))
+	if got := kinds(m.History); !slices.Equal(got, []string{EventSlow + " IPv4", EventLossy + " IPv4"}) {
+		t.Errorf("events = %v", got)
+	}
+}
+
+func TestAFamilyThatNeverAnsweredIsNotJudged(t *testing.T) {
+	t.Parallel()
+	m, p, _ := judging(t, model.Gateway{Name: "wan", Enabled: true, Interface: "eth0"})
+	p.setFail("fe80::1", true)
+	tick(m, FailAfter)
+	m.judge(minute(0, StateUp, v4(0, 3), FamilyMinute{Family: FamilyIPv6, Sent: 12, Lost: 12}))
+	if s := m.Statuses()[0]; !s.Online || len(s.Lossy) != 0 {
+		t.Errorf("status = %+v", s)
+	}
+}

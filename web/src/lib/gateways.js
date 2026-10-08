@@ -1,5 +1,5 @@
 import { SPANS } from '@/lib/chart'
-import { formatDuration } from '@/lib/format'
+import { formatDuration, formatMs } from '@/lib/format'
 
 /** Seconds a point covers in each window: a probe, a minute, an hour. */
 export const STEPS = { '5m': 5, '24h': 60, '31d': 3600 }
@@ -20,6 +20,10 @@ export const EVENT_WORDS = {
   'family-up': 'answering again',
   'family-never': 'never answered',
   monitor: 'monitor changed',
+  slow: 'slow',
+  'slow-end': 'no longer slow',
+  lossy: 'losing packets',
+  'lossy-end': 'no longer losing packets',
 }
 
 /**
@@ -44,6 +48,14 @@ export function eventText(e) {
       return `${e.family} never answered`
     case 'monitor':
       return `Monitor changed to ${e.monitor || 'the next hop'}, was ${e.was || 'the next hop'}`
+    case 'slow':
+      return `${e.family} slow, ${formatMs(e.latencyMs)} on average, above ${e.limit} ms`
+    case 'slow-end':
+      return `${e.family} no longer slow`
+    case 'lossy':
+      return `${e.family} losing packets, ${Math.round(e.lossPercent)}% lost, above ${e.limit}%`
+    case 'lossy-end':
+      return `${e.family} no longer losing packets`
   }
   return e.kind
 }

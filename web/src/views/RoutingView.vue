@@ -277,6 +277,10 @@ function edit(r) {
                     {{ stateOf(g.live) }}
                   </span>
                   <span v-if="g.live.active" class="badge badge-ok ml-1">active</span>
+                  <span v-if="g.live.slow?.length" class="badge badge-warn ml-1">slow</span>
+                  <span v-if="g.live.lossy?.length" class="badge badge-warn ml-1">
+                    losing packets
+                  </span>
                   <template v-if="g.live.neverAnswered">
                     <div class="mt-1 max-w-48 text-xs whitespace-normal text-ink-muted">
                       {{ neverHint(g) }}

@@ -133,4 +133,28 @@ describe('GatewayDialog', () => {
     await wrapper.find('#gw-if').setValue('wg1')
     expect(use().text()).toBe('Use 192.0.2.9, the DNS upstream')
   })
+
+  // Empty keeps the default, which the placeholder shows; 0 is off and is
+  // kept as such.
+  it('keeps the thresholds a gateway warns over, unset unless given', async () => {
+    const { wrapper, config } = open({
+      name: 'wan',
+      enabled: true,
+      interface: 'eth0',
+      slowAboveMs: 0,
+    })
+    await flushPromises()
+    expect(wrapper.find('#gw-slow').element.value).toBe('0')
+    expect(wrapper.find('#gw-lossy').attributes('placeholder')).toBe('10')
+    await wrapper.find('form').trigger('submit')
+    expect(config.gateways[0].slowAboveMs).toBe(0)
+    expect('lossyAbovePercent' in config.gateways[0]).toBe(false)
+
+    const again = open({ name: 'wan', enabled: true, interface: 'eth0' })
+    await flushPromises()
+    await again.wrapper.find('#gw-lossy').setValue('5')
+    await again.wrapper.find('form').trigger('submit')
+    expect(again.config.gateways[0].lossyAbovePercent).toBe(5)
+    expect('slowAboveMs' in again.config.gateways[0]).toBe(false)
+  })
 })

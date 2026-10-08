@@ -102,6 +102,13 @@ describe('gateways', () => {
     expect(eventText({ kind: 'monitor', monitor: '192.0.2.53' })).toBe(
       'Monitor changed to 192.0.2.53, was the next hop',
     )
+    expect(eventText({ kind: 'slow', family: 'IPv4', latencyMs: 312.4, limit: 200 })).toBe(
+      'IPv4 slow, 312 ms on average, above 200 ms',
+    )
+    expect(eventText({ kind: 'lossy', family: 'IPv6', lossPercent: 16.667, limit: 10 })).toBe(
+      'IPv6 losing packets, 17% lost, above 10%',
+    )
+    expect(eventText({ kind: 'lossy-end', family: 'IPv6' })).toBe('IPv6 no longer losing packets')
     expect(eventFor({ for: 240 })).toBe('4m')
     expect(eventFor({})).toBe('')
   })

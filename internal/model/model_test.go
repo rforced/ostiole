@@ -2362,3 +2362,22 @@ func TestValidateConntrackMax(t *testing.T) {
 		}
 	}
 }
+
+func TestGatewayThresholds(t *testing.T) {
+	t.Parallel()
+	off, big, neg := 0, MaxSlowAboveMS+1, -1
+	g := Gateway{Name: "wan", Enabled: true, Interface: "eth0"}
+	if g.SlowAbove() != DefaultSlowAboveMS || g.LossyAbove() != DefaultLossyAbovePercent {
+		t.Errorf("unset = %d, %d", g.SlowAbove(), g.LossyAbove())
+	}
+	g.SlowAboveMS, g.LossyAbovePercent = &off, &off
+	if g.SlowAbove() != 0 || g.LossyAbove() != 0 {
+		t.Errorf("zero = %d, %d", g.SlowAbove(), g.LossyAbove())
+	}
+	cfg := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0"})
+	cfg.Gateways[0].SlowAboveMS, cfg.Gateways[0].LossyAbovePercent = &big, &neg
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "gateways[0].slowAboveMs") || !strings.Contains(err.Error(), "gateways[0].lossyAbovePercent") {
+		t.Errorf("validate = %v", err)
+	}
+}
