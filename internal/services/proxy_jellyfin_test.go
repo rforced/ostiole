@@ -364,6 +364,12 @@ func (g jf) requests(c jfClient) []jfRequest {
 // returns the status.
 func jfSend(t *testing.T, addr string, r jfRequest) int {
 	t.Helper()
+	return jfSendWith(t, addr, r, nil)
+}
+
+// jfSendWith is jfSend with headers added or replaced.
+func jfSendWith(t *testing.T, addr string, r jfRequest, headers map[string]string) int {
+	t.Helper()
 	tr := &http.Transport{DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
 		var d net.Dialer
 		return d.DialContext(ctx, network, addr)
@@ -384,6 +390,13 @@ func jfSend(t *testing.T, addr string, r jfRequest) int {
 	}
 	req.Header.Set("Authorization", r.client.auth)
 	req.Header.Set("User-Agent", r.client.userAgent)
+	if r.client.roku && strings.Contains(r.path, "/hls1/") {
+		_, query, _ := strings.Cut(r.path, "?")
+		req.Header.Set("Cmcd-Request", `mtp=81200,su,bl=0,nor="1.ts?`+query+`"`)
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
 	resp, err := (&http.Client{Transport: tr, Timeout: 10 * time.Second}).Do(req)
 	if err != nil {
 		t.Fatalf("%s %s: %v", r.method, r.path, err)
@@ -658,6 +671,15 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 			check(bare, attacks)
 			check(bareText, inText)
 			check(bareProse, inProse)
+			segment := jfRequest{"GET", "/videos/" + g.id() + "/hls1/main/1.ts?MediaSourceId=" + g.id(), "", "", false, roku}
+			// Only the header check reads this one.
+			command := map[string]string{"Cmcd-Request": `mtp=81200,su,bl=0,nor="1.ts?a=$(id)"`}
+			if jfSendWith(t, bare, segment, command) == http.StatusForbidden {
+				refused++
+				if status := jfSendWith(t, plain, segment, command); status != http.StatusForbidden {
+					t.Errorf("a command in a CMCD header: %d with the set, 403 without", status)
+				}
+			}
 			if total := len(attacks) + len(inText) + len(inProse); refused < total/2 {
 				t.Errorf("CRS alone refused only %d of %d attacks", refused, total)
 			}
