@@ -11,6 +11,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { ApiError, api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
+import { actionTone } from '@/lib/badge'
 import { formatWhen } from '@/lib/format'
 import { accessNames, endpoint, fwlogInfo, fwlogValues, matchedLabel } from '@/lib/fwlog'
 import { heldLine, useLog } from '@/lib/log'
@@ -80,15 +81,6 @@ const inFiles = computed(() => Boolean(config.saved?.system?.logging?.files?.ena
 
 const error = computed(() => log.error.value || clear.error.value || log.streamError.value)
 const label = (e) => matchedLabel(e, access.value)
-
-/** The verdict carries the colour: that a rule matched says nothing on
- *  its own about whether the packet got through. */
-function actionClass(action) {
-  if (action === 'accept') return 'badge-ok'
-  if (action === 'reject') return 'badge-warn'
-  if (action === 'drop') return 'badge-bad'
-  return ''
-}
 
 const empty = computed(() => {
   const q = query.value.trim()
@@ -163,7 +155,7 @@ const empty = computed(() => {
               {{ formatWhen(e.time) }}
             </td>
             <td class="max-sm:order-2">
-              <span class="badge" :class="actionClass(e.action)">{{ e.action || 'unknown' }}</span>
+              <span class="badge" :class="actionTone(e.action)">{{ e.action || 'unknown' }}</span>
             </td>
             <td class="max-sm:order-3">
               <span class="badge">{{ label(e) }}</span>

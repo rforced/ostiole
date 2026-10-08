@@ -259,9 +259,11 @@ async function reboot() {
         <tbody>
           <tr v-for="p in shown" :key="p.name">
             <td>
-              <span class="font-mono">{{ p.name }}</span>
-              <span v-if="p.security" class="badge badge-warn ml-2">security</span>
-              <span v-if="neverUpgrade(p)" class="badge ml-2">never upgrade</span>
+              <span class="inline-flex items-center gap-1.5">
+                <span class="font-mono">{{ p.name }}</span>
+                <span v-if="p.security" class="badge badge-warn">security</span>
+                <span v-if="neverUpgrade(p)" class="badge">never upgrade</span>
+              </span>
             </td>
             <td class="font-mono text-code">{{ p.from || '—' }}</td>
             <td class="font-mono text-code">{{ p.to || '—' }}</td>

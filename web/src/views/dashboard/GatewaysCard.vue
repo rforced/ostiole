@@ -1,5 +1,6 @@
 <script setup>
 import SectionCard from '@/components/SectionCard.vue'
+import { tone } from '@/lib/badge'
 import { neverHint, stateOf } from '@/lib/gateways'
 import GatewayStrip from '@/views/dashboard/GatewayStrip.vue'
 
@@ -55,9 +56,9 @@ const stripOf = (g) => props.strips?.find((s) => s.name === g.name) ?? null
         <template v-for="g in gateways" :key="g.name">
           <tr>
             <td>
-              <div>
+              <div class="flex items-center gap-1.5">
                 <span class="font-mono font-medium">{{ g.name }}</span>
-                <span v-if="g.active" class="badge badge-ok ml-1">active</span>
+                <span v-if="g.active" class="badge badge-ok">active</span>
               </div>
               <div class="font-mono text-code text-ink-muted">
                 {{ g.interface }}<span v-if="g.tunnel" class="font-sans"> · through the tunnel</span
@@ -65,13 +66,11 @@ const stripOf = (g) => props.strips?.find((s) => s.name === g.name) ?? null
               </div>
             </td>
             <td>
-              <span
-                class="badge"
-                :class="{ 'badge-ok': g.online, 'badge-warn': stateOf(g) === 'down' }"
-                >{{ stateOf(g) }}</span
-              >
-              <span v-if="g.slow?.length" class="badge badge-warn ml-1">slow</span>
-              <span v-if="g.lossy?.length" class="badge badge-warn ml-1">losing packets</span>
+              <span class="inline-flex items-center gap-1.5">
+                <span class="badge" :class="tone(stateOf(g))">{{ stateOf(g) }}</span>
+                <span v-if="g.slow?.length" class="badge badge-warn">slow</span>
+                <span v-if="g.lossy?.length" class="badge badge-warn">losing packets</span>
+              </span>
               <div v-if="g.neverAnswered" class="mt-1 text-xs text-ink-muted">
                 {{ neverHint({ monitor: stripOf(g)?.monitor }) }}
               </div>

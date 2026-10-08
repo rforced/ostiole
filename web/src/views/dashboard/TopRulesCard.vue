@@ -1,5 +1,6 @@
 <script setup>
 import SectionCard from '@/components/SectionCard.vue'
+import { actionTone } from '@/lib/badge'
 import { formatBytes, formatCount } from '@/lib/format'
 
 defineProps({
@@ -50,9 +51,7 @@ defineProps({
           <td>
             <div>{{ r.description || r.id }}</div>
             <div class="text-ink-muted">
-              <span class="badge" :class="r.action === 'accept' ? 'badge-ok' : 'badge-warn'">{{
-                r.action
-              }}</span>
+              <span class="badge" :class="actionTone(r.action)">{{ r.action }}</span>
               <span v-if="!r.enabled" class="ml-1">disabled</span>
             </div>
           </td>

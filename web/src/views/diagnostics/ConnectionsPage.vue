@@ -227,9 +227,9 @@ function endpoint(address, port) {
               <span v-else class="text-ink-muted">not translated</span>
             </td>
             <td class="font-mono text-code max-sm:order-6">
-              {{ s.state || '—'
-              }}<span v-if="s.mark" class="ml-1 badge" :title="`Packet mark ${s.mark}`">
-                routed
+              <span class="inline-flex items-center gap-1.5">
+                {{ s.state || '—'
+                }}<span v-if="s.mark" class="badge" :title="`Packet mark ${s.mark}`"> routed </span>
               </span>
             </td>
             <td class="num font-mono text-code max-sm:order-7">

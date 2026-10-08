@@ -152,8 +152,10 @@ async function run(kind) {
           <tr v-for="h in trace.hops" :key="h.ttl">
             <td class="font-mono text-code">{{ h.ttl }}</td>
             <td class="font-mono text-code">
-              {{ h.address || '*' }}
-              <span v-if="h.final" class="badge badge-ok ml-1">target</span>
+              <span class="inline-flex items-center gap-1.5">
+                {{ h.address || '*' }}
+                <span v-if="h.final" class="badge badge-ok">target</span>
+              </span>
             </td>
             <td class="font-mono text-code">{{ h.name }}</td>
             <td class="num font-mono text-code">

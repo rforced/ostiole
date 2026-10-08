@@ -8,6 +8,7 @@ import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { actionTone } from '@/lib/badge'
 import { useDraftRows } from '@/lib/draft'
 import { formatCount } from '@/lib/format'
 import { useReorder } from '@/lib/reorder'
@@ -279,13 +280,11 @@ onMounted(() => {
               </label>
             </td>
             <td class="max-sm:order-2">
-              <span
-                class="badge"
-                :class="{ 'badge-ok': r.action === 'accept', 'badge-warn': r.action !== 'accept' }"
-                >{{ r.action }}</span
-              >
-              <span v-if="r.log" class="badge ml-1">log</span>
-              <span v-if="r.schedule" class="badge ml-1">{{ r.schedule }}</span>
+              <span class="inline-flex items-center gap-1.5">
+                <span class="badge" :class="actionTone(r.action)">{{ r.action }}</span>
+                <span v-if="r.log" class="badge">log</span>
+                <span v-if="r.schedule" class="badge">{{ r.schedule }}</span>
+              </span>
             </td>
             <td class="font-mono text-code max-sm:order-3">{{ r.protocol }}</td>
             <td class="font-mono text-code max-sm:order-3">{{ describe(r.source, true) }}</td>
@@ -295,13 +294,15 @@ onMounted(() => {
               {{ describe(r.destination, true) }}
             </td>
             <td class="font-mono text-code max-sm:hidden">
-              <span v-if="r.gateway" class="badge" :title="`Routed through ${r.gateway}`"
-                >→ {{ r.gateway }}</span
-              >
-              <template v-else>{{ r.destZone ?? '' }}</template>
+              <span class="inline-flex items-center gap-1.5">
+                <span v-if="r.gateway" class="badge" :title="`Routed through ${r.gateway}`"
+                  >→ {{ r.gateway }}</span
+                >
+                <template v-else>{{ r.destZone ?? '' }}</template>
+              </span>
               <span
                 v-if="r.priority"
-                :class="[tierBadge(r.priority), r.gateway || r.destZone ? 'ml-1' : '']"
+                :class="tierBadge(r.priority)"
                 :title="`Priority ${tierLabel(r.priority)}`"
                 >{{ tierLabel(r.priority) }}</span
               >

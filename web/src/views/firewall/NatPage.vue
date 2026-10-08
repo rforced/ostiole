@@ -123,14 +123,16 @@ function editOb(r) {
               {{ pf.target }}<span v-if="pf.targetPort">:{{ pf.targetPort }}</span>
             </td>
             <td>
-              {{ pf.description }}
-              <span v-if="pf.reflection" class="badge ml-1">reflection</span>
-              <span
-                v-if="pf.priority"
-                :class="[tierBadge(pf.priority), 'ml-1']"
-                :title="`Priority ${tierLabel(pf.priority)}`"
-                >{{ tierLabel(pf.priority) }}</span
-              >
+              <span class="inline-flex items-center gap-1.5">
+                {{ pf.description }}
+                <span v-if="pf.reflection" class="badge">reflection</span>
+                <span
+                  v-if="pf.priority"
+                  :class="tierBadge(pf.priority)"
+                  :title="`Priority ${tierLabel(pf.priority)}`"
+                  >{{ tierLabel(pf.priority) }}</span
+                >
+              </span>
             </td>
             <td class="actions">
               <button type="button" class="link-action" @click="editPf(pf)">

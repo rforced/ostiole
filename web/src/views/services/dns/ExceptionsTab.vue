@@ -110,9 +110,9 @@ const stale = computed(() => config.dirty)
         </ErrorLine>
 
         <div v-if="finding" class="rounded-lg border border-line bg-page p-3">
-          <p>
+          <p class="flex items-center gap-1.5">
             <span class="font-mono">{{ finding.name }}</span>
-            <span class="badge ml-2" :class="finding.blocked ? 'badge-warn' : 'badge-ok'">{{
+            <span class="badge" :class="finding.blocked ? 'badge-warn' : 'badge-ok'">{{
               finding.blocked ? 'blocked' : 'not blocked'
             }}</span>
           </p>

@@ -71,12 +71,15 @@ function edit(d) {
         >
           <td data-label="">{{ deviceName(d) }}</td>
           <td class="font-mono text-code" data-label="MAC">
-            {{ d.mac }}
-            <RandomMacBadge :mac="d.mac" />
+            <span class="inline-flex items-center gap-1.5">
+              {{ d.mac }} <RandomMacBadge :mac="d.mac" />
+            </span>
           </td>
           <td class="font-mono" data-label="Interface">
-            {{ d.interface }}
-            <span v-if="off.has(d.interface)" class="badge ml-1">interface off</span>
+            <span class="inline-flex items-center gap-1.5">
+              {{ d.interface }}
+              <span v-if="off.has(d.interface)" class="badge">interface off</span>
+            </span>
           </td>
           <td class="actions" data-label="">
             <button

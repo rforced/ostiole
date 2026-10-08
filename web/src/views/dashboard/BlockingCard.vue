@@ -66,9 +66,9 @@ const blockedPct = computed(() => {
         </dd>
 
         <dt>Lists</dt>
-        <dd>
+        <dd class="flex items-center gap-1.5">
           {{ b.lists ?? 0 }} subscribed
-          <span v-if="b.stale" class="badge badge-warn ml-2">stale</span>
+          <span v-if="b.stale" class="badge badge-warn">stale</span>
         </dd>
 
         <dt>Last merge</dt>

@@ -131,12 +131,14 @@ function tone(state) {
             class="max-sm:after:order-3 max-sm:after:basis-full max-sm:after:content-['']"
           >
             <td class="font-mono text-code max-sm:order-1">
-              {{ n.address }}
-              <span v-if="n.router" class="badge ml-1">router</span>
+              <span class="inline-flex items-center gap-1.5">
+                {{ n.address }} <span v-if="n.router" class="badge">router</span>
+              </span>
             </td>
             <td class="font-mono text-code max-sm:order-4">
-              {{ n.mac || '—' }}
-              <RandomMacBadge :mac="n.mac" />
+              <span class="inline-flex items-center gap-1.5">
+                {{ n.mac || '—' }} <RandomMacBadge :mac="n.mac" />
+              </span>
               <span v-if="named[(n.mac ?? '').toLowerCase()]" class="ml-1 text-ink-muted">
                 {{ named[n.mac.toLowerCase()] }}
               </span>

@@ -223,7 +223,7 @@ function show(d) {
                 <button type="button" class="link font-medium" @click="show(d)">
                   {{ deviceLabel(d) }}
                 </button>
-                <div v-if="!d.router" class="text-xs text-ink-muted">
+                <div v-if="!d.router" class="flex items-center gap-1.5 text-xs text-ink-muted">
                   <template v-if="d.mac">
                     <span class="font-mono">{{ d.mac }}</span>
                     <RandomMacBadge :mac="d.mac" />

@@ -126,7 +126,7 @@ const empty = computed(() => {
             <td data-label="Client">
               <div v-if="e.device">{{ e.device }}</div>
               <div
-                class="flex items-center gap-1 font-mono"
+                class="flex items-center gap-1.5 font-mono"
                 :class="e.device ? 'text-xs text-ink-muted' : 'text-code'"
               >
                 {{ e.mac }} <RandomMacBadge :mac="e.mac" />

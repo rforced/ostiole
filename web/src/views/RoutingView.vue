@@ -10,6 +10,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
+import { tone } from '@/lib/badge'
 import { neverHint, stateOf } from '@/lib/gateways'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -271,16 +272,15 @@ function edit(r) {
               </td>
               <td class="whitespace-nowrap" data-label="State">
                 <template v-if="g.live && !g.live.unknown">
-                  <span
-                    class="badge"
-                    :class="{ 'badge-ok': g.live.online, 'badge-warn': stateOf(g.live) === 'down' }"
-                  >
-                    {{ stateOf(g.live) }}
-                  </span>
-                  <span v-if="g.live.active" class="badge badge-ok ml-1">active</span>
-                  <span v-if="g.live.slow?.length" class="badge badge-warn ml-1">slow</span>
-                  <span v-if="g.live.lossy?.length" class="badge badge-warn ml-1">
-                    losing packets
+                  <span class="inline-flex items-center gap-1.5">
+                    <span class="badge" :class="tone(stateOf(g.live))">
+                      {{ stateOf(g.live) }}
+                    </span>
+                    <span v-if="g.live.active" class="badge badge-ok">active</span>
+                    <span v-if="g.live.slow?.length" class="badge badge-warn">slow</span>
+                    <span v-if="g.live.lossy?.length" class="badge badge-warn">
+                      losing packets
+                    </span>
                   </span>
                   <template v-if="g.live.neverAnswered">
                     <div class="mt-1 max-w-48 text-xs whitespace-normal text-ink-muted">
@@ -350,8 +350,10 @@ function edit(r) {
               <td class="font-mono text-code" data-label="Interface">{{ d.interface }}</td>
               <td data-label="Family">{{ d.family }}</td>
               <td class="num font-mono text-code" data-label="Metric">
-                {{ d.metric }}
-                <span v-if="d.demoted" class="badge badge-warn ml-1 font-sans">demoted</span>
+                <span class="inline-flex items-center gap-1.5">
+                  {{ d.metric }}
+                  <span v-if="d.demoted" class="badge badge-warn font-sans">demoted</span>
+                </span>
               </td>
               <td data-label="From">{{ d.protocol }}</td>
               <td data-label="Gateway">

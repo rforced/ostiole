@@ -199,7 +199,7 @@ function editHost(h) {
                   n.site
                 }}</span>
               </div>
-              <div v-if="n.mac" class="whitespace-nowrap">
+              <div v-if="n.mac" class="flex items-center gap-1.5 whitespace-nowrap">
                 <span class="font-mono text-code">{{ n.mac }}</span>
                 <RandomMacBadge :mac="n.mac" />
               </div>

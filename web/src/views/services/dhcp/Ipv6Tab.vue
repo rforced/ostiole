@@ -71,9 +71,11 @@ function edit(s) {
             }"
           >
             <td class="font-mono" data-label="">
-              {{ s.interface }}
-              <span v-if="off.has(s.interface)" class="badge ml-1">interface off</span>
-              <span v-if="s.dnsRegistration" class="badge ml-1">DNS registration</span>
+              <span class="inline-flex items-center gap-1.5">
+                {{ s.interface }}
+                <span v-if="off.has(s.interface)" class="badge">interface off</span>
+                <span v-if="s.dnsRegistration" class="badge">DNS registration</span>
+              </span>
             </td>
             <td data-label="Mode">{{ MODES[s.mode] ?? s.mode }}</td>
             <td class="font-mono text-code" data-label="Range">

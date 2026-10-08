@@ -76,9 +76,11 @@ function pending(l) {
             </div>
           </td>
           <td data-label="Zone">
-            <span v-if="l.zone" class="font-mono text-code">{{ l.zone }}</span>
-            <span v-else class="text-xs text-ink-muted">unmanaged</span>
-            <span v-if="l.external" class="badge ml-1">WAN</span>
+            <span class="inline-flex items-center gap-1.5">
+              <span v-if="l.zone" class="font-mono text-code">{{ l.zone }}</span>
+              <span v-else class="text-xs text-ink-muted">unmanaged</span>
+              <span v-if="l.external" class="badge">WAN</span>
+            </span>
           </td>
           <td data-label="Link">
             <span v-if="!l.present" class="badge badge-warn">absent</span>

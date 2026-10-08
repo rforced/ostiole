@@ -7,6 +7,7 @@ import ConfirmButton from '@/components/ConfirmButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { api } from '@/lib/api'
 import { errorMessage, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
@@ -54,25 +55,19 @@ const canKeep = computed(() =>
 )
 const kindNames = computed(() => (page.value.kinds ?? []).map((k) => k.label).join(', '))
 
-const BADGES = {
-  current: { tone: 'badge-ok', label: 'current' },
-  pending: { tone: '', label: 'pending' },
-  updating: { tone: '', label: 'updating' },
-  failed: { tone: 'badge-bad', label: 'failed' },
-  'no-address': { tone: 'badge-warn', label: 'no address' },
-  off: { tone: '', label: 'off' },
-}
+/** What a record's state says, where its name is not a word. */
+const LABELS = { 'no-address': 'no address' }
 
 /** A row's Address lines, one per record type, from the applied record's status. */
 function lines(r) {
   const known = status.value[r.id]
   return [r.ipv4 && 'A', r.ipv6 && 'AAAA'].filter(Boolean).map((type) => {
     const st = known?.find((s) => s.type === type)
-    if (!st) return { type, address: '', badge: { tone: '', label: 'apply to start' } }
+    if (!st) return { type, address: '', state: 'apply to start' }
     return {
       type,
       address: st.address || (st.published ?? []).join(', '),
-      badge: BADGES[st.state] ?? { tone: '', label: st.state },
+      state: LABELS[st.state] ?? st.state,
       error: st.error,
     }
   })
@@ -197,11 +192,13 @@ function edit(r) {
             <td class="font-mono" data-label="Interface">{{ r.interface }}</td>
             <td data-label="Address">
               <div v-for="l in lines(r)" :key="l.type">
-                <span class="font-mono text-code">
-                  <span class="text-ink-muted">{{ l.type }}</span
-                  >&nbsp;{{ l.address || '—' }}
+                <span class="inline-flex items-center gap-1.5">
+                  <span class="font-mono text-code">
+                    <span class="text-ink-muted">{{ l.type }}</span
+                    >&nbsp;{{ l.address || '—' }}
+                  </span>
+                  <StatusBadge :state="l.state" />
                 </span>
-                <span class="badge ml-1" :class="l.badge.tone">{{ l.badge.label }}</span>
                 <div v-if="l.error" class="text-xs text-bad">{{ l.error }}</div>
               </div>
             </td>

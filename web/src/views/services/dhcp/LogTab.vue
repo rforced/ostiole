@@ -131,7 +131,7 @@ const empty = computed(() => {
               <div v-if="e.device">{{ e.device }}</div>
               <div
                 v-if="e.mac"
-                class="flex items-center gap-1 font-mono text-code"
+                class="flex items-center gap-1.5 font-mono text-code"
                 :class="{ 'text-xs text-ink-muted': e.device }"
               >
                 {{ e.mac }} <RandomMacBadge :mac="e.mac" />

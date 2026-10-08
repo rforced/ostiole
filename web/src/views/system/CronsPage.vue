@@ -7,6 +7,7 @@ import ConfirmButton from '@/components/ConfirmButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
@@ -151,19 +152,22 @@ function describe(c) {
                 </div>
               </td>
               <td class="font-mono text-code" data-label="Schedule">
-                {{ c.schedule }}
-                <span v-if="!c.enabled" class="badge ml-1">off</span>
+                <span class="inline-flex items-center gap-1.5">
+                  {{ c.schedule }} <span v-if="!c.enabled" class="badge">off</span>
+                </span>
               </td>
               <td class="when" data-label="Next">
                 {{ c.enabled ? formatWhen(c.status?.next, 'never') : '—' }}
               </td>
               <td data-label="Last run">
                 <template v-if="c.status?.running">
-                  <span class="badge">running</span>
+                  <StatusBadge state="running" />
                 </template>
                 <template v-else-if="c.status?.lastRun">
-                  <span class="when">{{ formatWhen(c.status.lastRun) }}</span>
-                  <span v-if="c.status.lastError" class="badge badge-warn ml-1">failed</span>
+                  <span class="inline-flex items-center gap-1.5">
+                    <span class="when">{{ formatWhen(c.status.lastRun) }}</span>
+                    <StatusBadge v-if="c.status.lastError" state="failed" />
+                  </span>
                   <div
                     v-if="c.status.lastError"
                     class="mt-1 font-mono text-code break-all text-bad"

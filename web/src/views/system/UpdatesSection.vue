@@ -228,8 +228,9 @@ onMounted(async () => {
 
       <div v-if="check?.available && check.release" class="rounded-md border border-line p-3">
         <p class="font-medium">
-          {{ check.release.tag
-          }}<span v-if="check.security" class="badge badge-warn ml-1">security release</span
+          <span class="inline-flex items-center gap-1.5">
+            {{ check.release.tag
+            }}<span v-if="check.security" class="badge badge-warn">security release</span> </span
           ><span class="font-normal text-ink-muted"
             >&nbsp;· {{ formatWhen(check.release.publishedAt) }}</span
           >

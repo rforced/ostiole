@@ -13,6 +13,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { emptyText, errorMessage, useAsync } from '@/lib/async'
+import { tone } from '@/lib/badge'
 import { formatWhen } from '@/lib/format'
 import { ADMIN_ONLY, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -69,16 +70,15 @@ function edit(cert) {
 /** What a row says it is doing, from its files and its last attempt. */
 function state(cert) {
   const st = status.value[cert.id]
-  if (!st)
-    return { tone: '', label: 'apply to issue', title: 'This certificate is only in the draft.' }
-  if (st.running) return { tone: '', label: 'issuing' }
-  if (st.expired) return { tone: 'badge-warn', label: 'expired' }
-  if (!st.issued && st.lastError)
-    return { tone: 'badge-warn', label: 'failed', title: st.lastError }
-  if (!st.issued) return { tone: '', label: 'not issued' }
-  if (st.expiresSoon) return { tone: 'badge-warn', label: 'expires soon', title: st.lastError }
-  if (st.lastError) return { tone: 'badge-warn', label: 'issued', title: st.lastError }
-  return { tone: 'badge-ok', label: 'issued' }
+  if (!st) return { label: 'apply to issue', title: 'This certificate is only in the draft.' }
+  if (st.running) return { label: 'issuing' }
+  if (st.expired) return { label: 'expired' }
+  if (!st.issued && st.lastError) return { label: 'failed', title: st.lastError }
+  if (!st.issued) return { label: 'not issued' }
+  if (st.expiresSoon) return { label: 'expires soon', title: st.lastError }
+  // Still served, but the last renewal failed.
+  if (st.lastError) return { label: 'issued', title: st.lastError, tone: 'badge-warn' }
+  return { label: 'issued' }
 }
 
 const expires = (cert) => {
@@ -268,7 +268,11 @@ function remove(cert) {
               {{ c.source === 'uploaded' ? 'uploaded' : c.challenge || 'acme' }}
             </td>
             <td data-label="Status">
-              <span class="badge" :class="state(c).tone" :title="state(c).title">
+              <span
+                class="badge"
+                :class="state(c).tone ?? tone(state(c).label)"
+                :title="state(c).title"
+              >
                 {{ state(c).label }}
               </span>
             </td>

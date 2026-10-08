@@ -96,11 +96,11 @@ const rows = sort.sorted
           </tr>
           <tr v-for="c in rows" :key="c.mac">
             <td data-label="">
-              <div class="font-medium">
+              <div class="flex items-center gap-1.5 font-medium">
                 {{ c.hostname || c.mac }}
                 <RandomMacBadge v-if="!c.hostname" :mac="c.mac" />
               </div>
-              <div v-if="c.hostname" class="text-xs text-ink-muted">
+              <div v-if="c.hostname" class="flex items-center gap-1.5 text-xs text-ink-muted">
                 {{ c.mac }}
                 <RandomMacBadge :mac="c.mac" />
               </div>

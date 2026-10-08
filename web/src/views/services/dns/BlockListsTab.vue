@@ -248,9 +248,11 @@ const lists = sort.sorted
             {{ formatCount(blocked) }} after merging, about {{ memoryMB }} MB of memory.
           </template>
           <template v-else>Nothing has been merged yet.</template>
-          <span v-if="overCeiling" class="badge badge-warn ml-1">
-            over the ceiling of {{ formatCount(ceiling) }}
-          </span>
+          <template v-if="overCeiling"
+            >&nbsp;<span class="badge badge-warn"
+              >over the ceiling of {{ formatCount(ceiling) }}</span
+            >
+          </template>
         </p>
         <ErrorLine v-if="refresh.error.value || load.error.value">
           {{ refresh.error.value || load.error.value }}
@@ -350,8 +352,10 @@ const lists = sort.sorted
                 {{ fetched[l.name].lastError }}
               </span>
               <template v-else>
-                <span class="when">{{ formatWhen(fetched[l.name]?.fetchedAt, 'never') }}</span>
-                <span v-if="fetched[l.name]?.stale" class="badge badge-warn ml-1">stale</span>
+                <span class="inline-flex items-center gap-1.5">
+                  <span class="when">{{ formatWhen(fetched[l.name]?.fetchedAt, 'never') }}</span>
+                  <span v-if="fetched[l.name]?.stale" class="badge badge-warn">stale</span>
+                </span>
               </template>
             </td>
             <td class="actions" data-label="">

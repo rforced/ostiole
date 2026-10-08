@@ -105,10 +105,12 @@ const peers = sort.sorted
           <tr v-for="p in peers" :key="p.dnsName || p.hostName">
             <td data-label="">
               <div class="font-mono">{{ name(p) }}</div>
-              <span v-if="p.online" class="badge badge-ok">online</span>
-              <span v-else class="badge">offline</span>
-              <span v-if="p.exitNode" class="badge ml-1">exit node</span>
-              <span v-if="p.expired" class="badge badge-warn ml-1">expired</span>
+              <span class="inline-flex items-center gap-1.5">
+                <span v-if="p.online" class="badge badge-ok">online</span>
+                <span v-else class="badge">offline</span>
+                <span v-if="p.exitNode" class="badge">exit node</span>
+                <span v-if="p.expired" class="badge badge-warn">expired</span>
+              </span>
             </td>
             <td class="font-mono text-code" data-label="Addresses">{{ p.ips.join(', ') }}</td>
             <td data-label="OS">{{ p.os || '—' }}</td>

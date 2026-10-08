@@ -66,8 +66,10 @@ function days(schedule) {
             <td class="font-mono font-medium" data-label="">{{ s.name }}</td>
             <td data-label="Days">{{ days(s) }}</td>
             <td class="font-mono text-code" data-label="Window">
-              {{ s.start }} – {{ s.end }}
-              <span v-if="s.end < s.start" class="badge ml-1">over midnight</span>
+              <span class="inline-flex items-center gap-1.5">
+                {{ s.start }} – {{ s.end }}
+                <span v-if="s.end < s.start" class="badge">over midnight</span>
+              </span>
             </td>
             <td data-label="Description">{{ s.description }}</td>
             <UsedByCell :names="config.scheduleReferences(s.name)" />

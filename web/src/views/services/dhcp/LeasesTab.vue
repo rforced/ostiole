@@ -150,19 +150,21 @@ const empty = computed(() =>
           <tr v-for="l in rows" :key="l.ip + (l.mac || l.clientId)">
             <td data-label="Address">
               <div class="font-mono text-code">{{ l.ip }}</div>
-              <div class="whitespace-nowrap">
+              <div class="flex items-center gap-1.5 whitespace-nowrap">
                 <span class="badge" :class="{ 'badge-ok': l.online }">
                   {{ l.online ? 'online' : 'offline' }}
                 </span>
-                <span v-if="l.static" class="badge ml-1">static</span>
-                <span v-if="l.family === 6" class="badge ml-1">v6</span>
+                <span v-if="l.static" class="badge">static</span>
+                <span v-if="l.family === 6" class="badge">IPv6</span>
               </div>
             </td>
             <!-- DHCPv6 identifies clients by DUID, so there is no MAC. A
                  DUID runs long, so it wraps rather than widen the table. -->
             <td class="max-w-48 max-sm:max-w-none" data-label="Client">
-              <span class="font-mono text-code break-all">{{ l.mac || l.clientId || '—' }}</span>
-              <RandomMacBadge :mac="l.mac" />
+              <span class="inline-flex items-center gap-1.5">
+                <span class="font-mono text-code break-all">{{ l.mac || l.clientId || '—' }}</span>
+                <RandomMacBadge :mac="l.mac" />
+              </span>
             </td>
             <td data-label="Hostname">
               <div class="font-mono text-code whitespace-nowrap">{{ l.hostname || '—' }}</div>

@@ -175,9 +175,11 @@ function upPowerTone(p) {
             </tr>
             <tr v-for="d in status.downstream" :key="`${d.kind}-${d.channel}`">
               <td class="font-mono text-code">
-                {{ d.channel }}
-                <span v-if="d.kind === 'ofdm'" class="badge ml-1">OFDM</span>
-                <span v-if="!d.locked" class="badge badge-bad ml-1">not locked</span>
+                <span class="inline-flex items-center gap-1.5">
+                  {{ d.channel }}
+                  <span v-if="d.kind === 'ofdm'" class="badge">OFDM</span>
+                  <span v-if="!d.locked" class="badge badge-bad">not locked</span>
+                </span>
               </td>
               <td class="num font-mono text-code">{{ mhz(d.frequency) }}</td>
               <td>{{ d.modulation || '—' }}</td>
@@ -220,8 +222,9 @@ function upPowerTone(p) {
             </tr>
             <tr v-for="u in status.upstream" :key="`${u.kind}-${u.channel}`">
               <td class="font-mono text-code">
-                {{ u.channel }}
-                <span v-if="u.kind === 'ofdma'" class="badge ml-1">OFDMA</span>
+                <span class="inline-flex items-center gap-1.5">
+                  {{ u.channel }} <span v-if="u.kind === 'ofdma'" class="badge">OFDMA</span>
+                </span>
               </td>
               <td class="num font-mono text-code">{{ mhz(u.frequency) }}</td>
               <td class="num font-mono text-code">{{ mhz(u.bandwidth) }}</td>

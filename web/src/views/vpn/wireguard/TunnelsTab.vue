@@ -5,6 +5,7 @@ import { computed, ref } from 'vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { connected, livePeer } from '@/lib/wgStatus'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -105,13 +106,11 @@ function edit(t) {
             <td data-label="">
               <div class="font-mono">{{ t.name }}</div>
               <div v-if="t.description" class="text-xs text-ink-muted">{{ t.description }}</div>
-              <span v-if="!t.enabled" class="badge badge-warn">disabled</span>
-              <span
+              <span v-if="!t.enabled" class="badge">disabled</span>
+              <StatusBadge
                 v-else-if="live.get(t.name)"
-                class="badge"
-                :class="live.get(t.name).up ? 'badge-ok' : 'badge-warn'"
-                >{{ live.get(t.name).up ? 'up' : 'down' }}</span
-              >
+                :state="live.get(t.name).up ? 'up' : 'down'"
+              />
             </td>
             <td class="font-mono text-code" data-label="Zone">{{ t.zone || 'unassigned' }}</td>
             <td class="font-mono text-code" data-label="Addresses">
@@ -131,14 +130,16 @@ function edit(t) {
             </td>
             <td class="whitespace-nowrap" data-label="Peers">{{ peers(t) }}</td>
             <td data-label="Gateway">
-              <div v-for="g in gatewaysOf(t)" :key="g.name" class="whitespace-nowrap">
+              <div
+                v-for="g in gatewaysOf(t)"
+                :key="g.name"
+                class="flex items-center gap-1.5 whitespace-nowrap"
+              >
                 <RouterLink to="/routing" class="link font-mono">{{ g.name }}</RouterLink>
-                <span
+                <StatusBadge
                   v-if="g.live && !g.live.unknown"
-                  class="badge ml-1"
-                  :class="g.live.online ? 'badge-ok' : 'badge-warn'"
-                  >{{ g.live.online ? 'up' : 'down' }}</span
-                >
+                  :state="g.live.online ? 'up' : 'down'"
+                />
               </div>
               <template v-if="!gatewaysOf(t).length">—</template>
             </td>

@@ -146,12 +146,14 @@ function edit(r) {
               <div v-if="r.peer.description" class="text-xs text-ink-muted">
                 {{ r.peer.description }}
               </div>
-              <span v-if="!r.peer.enabled" class="badge badge-warn">disabled</span>
-              <template v-else-if="read.updatedAt.value">
-                <span v-if="connected(seen(r), held?.at)" class="badge badge-ok">connected</span>
-                <span v-else class="badge">quiet</span>
-              </template>
-              <span v-if="r.peer.presharedKey" class="badge ml-1">PSK</span>
+              <span class="inline-flex items-center gap-1.5">
+                <span v-if="!r.peer.enabled" class="badge">disabled</span>
+                <template v-else-if="read.updatedAt.value">
+                  <span v-if="connected(seen(r), held?.at)" class="badge badge-ok">connected</span>
+                  <span v-else class="badge">quiet</span>
+                </template>
+                <span v-if="r.peer.presharedKey" class="badge">PSK</span>
+              </span>
             </td>
             <td class="font-mono text-code" data-label="Tunnel">{{ r.tunnel.name }}</td>
             <td class="font-mono text-code" data-label="Allowed">

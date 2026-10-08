@@ -118,7 +118,9 @@ function useDefaults() {
           :class="{ 'row-changed': !usingDefaults && config.isChanged('services.ntp.servers', i) }"
         >
           <td class="font-mono text-code" data-label="Server">
-            {{ s.host }}<span v-if="s.pool" class="badge ml-2">pool</span>
+            <span class="inline-flex items-center gap-1.5">
+              {{ s.host }}<span v-if="s.pool" class="badge">pool</span>
+            </span>
           </td>
           <td data-label="Answers">
             <StatusBadge v-if="failing(s)" state="failing" />

@@ -8,6 +8,7 @@ import ErrorLine from '@/components/ErrorLine.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { formatBytes, formatCount } from '@/lib/format'
@@ -132,11 +133,6 @@ function healthLabel(drive) {
   return drive.health === 'failed' ? 'failed' : 'no SMART'
 }
 
-function healthTone(drive) {
-  if (drive.health === 'passed') return 'badge-ok'
-  return drive.health === 'failed' ? 'badge-bad' : ''
-}
-
 function kindLabel(drive) {
   switch (drive.kind) {
     case 'ssd':
@@ -253,9 +249,9 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
         <div class="fields">
           <dl class="kv">
             <dt>Health</dt>
-            <dd>
-              <span class="badge" :class="healthTone(d)">{{ healthLabel(d) }}</span>
-              <span v-if="missingReadings(d)" class="badge badge-warn ml-2">
+            <dd class="flex items-center gap-1.5">
+              <StatusBadge :state="healthLabel(d)" />
+              <span v-if="missingReadings(d)" class="badge badge-warn">
                 some readings missing
               </span>
             </dd>
@@ -368,14 +364,16 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
                 <tr v-for="a in d.attributes" :key="a.id">
                   <td class="font-mono text-code">{{ a.id }}</td>
                   <td>
-                    {{ a.name }}
-                    <span v-if="a.whenFailed === 'now'" class="badge badge-bad ml-1">
-                      failing now
+                    <span class="inline-flex items-center gap-1.5">
+                      {{ a.name }}
+                      <span v-if="a.whenFailed === 'now'" class="badge badge-bad">
+                        failing now
+                      </span>
+                      <span v-else-if="a.whenFailed === 'past'" class="badge badge-warn">
+                        failed before
+                      </span>
+                      <span v-if="a.prefail" class="badge">pre-fail</span>
                     </span>
-                    <span v-else-if="a.whenFailed === 'past'" class="badge badge-warn ml-1">
-                      failed before
-                    </span>
-                    <span v-if="a.prefail" class="badge ml-1">pre-fail</span>
                   </td>
                   <td class="num font-mono text-code">{{ a.value }}</td>
                   <td class="num font-mono text-code">{{ a.worst }}</td>

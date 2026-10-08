@@ -12,10 +12,7 @@ defineProps({
 </script>
 
 <template>
-  <span
-    v-if="isRandomMAC(mac)"
-    class="badge ml-1 font-sans"
-    title="The device may change this address."
+  <span v-if="isRandomMAC(mac)" class="badge font-sans" title="The device may change this address."
     >random</span
   >
 </template>

@@ -97,7 +97,7 @@ const windowLabel = computed(() => WINDOWS.find((w) => w.value === props.window)
       <dl class="kv text-sm">
         <template v-if="device.mac">
           <dt>MAC</dt>
-          <dd>
+          <dd class="flex items-center gap-1.5">
             <span class="font-mono">{{ device.mac }}</span>
             <RandomMacBadge :mac="device.mac" />
           </dd>

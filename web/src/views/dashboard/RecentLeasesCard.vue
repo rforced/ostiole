@@ -59,7 +59,10 @@ function left(l) {
           <td class="font-mono text-code">{{ l.ip }}</td>
           <td>
             <div v-if="l.hostname" class="font-mono">{{ l.hostname }}</div>
-            <div class="font-mono text-code" :class="l.hostname ? 'text-ink-muted' : ''">
+            <div
+              class="flex items-center gap-1.5 font-mono text-code"
+              :class="l.hostname ? 'text-ink-muted' : ''"
+            >
               {{ l.mac || l.clientId || '—' }}
               <RandomMacBadge :mac="l.mac" />
             </div>

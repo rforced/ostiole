@@ -6,6 +6,7 @@ import ConfirmButton from '@/components/ConfirmButton.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import { actionTone } from '@/lib/badge'
 import { useReorder } from '@/lib/reorder'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -173,12 +174,10 @@ function label(a) {
             <td class="font-mono text-code" data-label="Ports">{{ ports(a) }}</td>
             <td class="font-mono text-code" data-label="Source">{{ source(a) }}</td>
             <td data-label="Action">
-              <span
-                class="badge"
-                :class="{ 'badge-ok': a.action === 'accept', 'badge-warn': a.action !== 'accept' }"
-                >{{ a.action }}</span
-              >
-              <span v-if="a.log" class="badge ml-1">log</span>
+              <span class="inline-flex items-center gap-1.5">
+                <span class="badge" :class="actionTone(a.action)">{{ a.action }}</span>
+                <span v-if="a.log" class="badge">log</span>
+              </span>
             </td>
             <td data-label="Description">{{ a.description }}</td>
             <td class="actions" data-label="">

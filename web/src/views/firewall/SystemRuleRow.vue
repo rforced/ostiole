@@ -1,6 +1,7 @@
 <script setup>
 import { Lock } from 'lucide-vue-next'
 
+import { actionTone } from '@/lib/badge'
 import { formatCount } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth'
 
@@ -31,12 +32,10 @@ const auth = useAuthStore()
       /></span>
     </td>
     <td class="max-sm:order-2">
-      <span
-        class="badge"
-        :class="{ 'badge-ok': rule.action === 'accept', 'badge-warn': rule.action === 'drop' }"
-        >{{ rule.action }}</span
-      >
-      <span v-if="rule.log" class="badge ml-1">log</span>
+      <span class="inline-flex items-center gap-1.5">
+        <span class="badge" :class="actionTone(rule.action)">{{ rule.action }}</span>
+        <span v-if="rule.log" class="badge">log</span>
+      </span>
     </td>
     <td class="font-mono text-code max-sm:order-3">{{ rule.protocol }}</td>
     <td class="font-mono text-code max-sm:order-3">{{ rule.source }}</td>

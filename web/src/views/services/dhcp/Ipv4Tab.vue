@@ -93,9 +93,11 @@ function editLease(l) {
             }"
           >
             <td class="font-mono" data-label="">
-              {{ s.interface }}
-              <span v-if="off.has(s.interface)" class="badge ml-1">interface off</span>
-              <span v-if="s.dnsRegistration" class="badge ml-1">DNS registration</span>
+              <span class="inline-flex items-center gap-1.5">
+                {{ s.interface }}
+                <span v-if="off.has(s.interface)" class="badge">interface off</span>
+                <span v-if="s.dnsRegistration" class="badge">DNS registration</span>
+              </span>
             </td>
             <td class="font-mono text-code" data-label="Range">
               {{ s.rangeStart }} – {{ s.rangeEnd }}
@@ -150,8 +152,9 @@ function editLease(l) {
             :class="{ 'row-changed': config.isChanged('services.dhcp.staticLeases', l.mac) }"
           >
             <td class="font-mono text-code" data-label="MAC">
-              {{ l.mac }}
-              <RandomMacBadge :mac="l.mac" />
+              <span class="inline-flex items-center gap-1.5">
+                {{ l.mac }} <RandomMacBadge :mac="l.mac" />
+              </span>
             </td>
             <td class="font-mono text-code" data-label="IPv4">{{ l.ip || '—' }}</td>
             <td class="font-mono text-code" data-label="IPv6">{{ l.ipv6 || '—' }}</td>

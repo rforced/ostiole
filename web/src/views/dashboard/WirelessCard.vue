@@ -76,7 +76,10 @@ function ssidOf(c) {
         <tr v-for="c in shown" :key="c.mac">
           <td>
             <div v-if="c.hostname" class="font-mono">{{ c.hostname }}</div>
-            <div class="font-mono text-code" :class="c.hostname ? 'text-ink-muted' : ''">
+            <div
+              class="flex items-center gap-1.5 font-mono text-code"
+              :class="c.hostname ? 'text-ink-muted' : ''"
+            >
               {{ c.address || c.mac }}
               <RandomMacBadge v-if="!c.address" :mac="c.mac" />
             </div>
