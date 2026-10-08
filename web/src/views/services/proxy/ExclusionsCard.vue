@@ -89,7 +89,7 @@ function edit(e) {
         <Plus class="size-4" aria-hidden="true" /> Add exclusion
       </button>
     </template>
-    <div class="card-strip flex flex-wrap items-center gap-3">
+    <div class="card-strip-row">
       <select
         v-if="profiles.length > 1"
         v-model="picked"

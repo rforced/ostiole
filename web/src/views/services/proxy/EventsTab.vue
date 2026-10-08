@@ -136,7 +136,7 @@ function halves(addr) {
       <div class="card-strip space-y-2">
         <div class="flex flex-wrap items-center gap-3">
           <select v-model="verdict" class="input w-40 max-sm:w-full" aria-label="Verdict">
-            <option value="">All</option>
+            <option value="">Any verdict</option>
             <option value="blocked">Blocked</option>
             <option value="would-block">Would block</option>
             <option value="matched">Matched</option>

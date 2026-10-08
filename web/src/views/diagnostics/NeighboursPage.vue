@@ -99,7 +99,7 @@ function tone(state) {
         <SortSelect :sort="sort" :columns="COLUMNS" />
         <LiveButton v-model="live" :failing="Boolean(load.error.value)" />
       </template>
-      <div class="card-strip flex flex-wrap items-center gap-3">
+      <div class="card-strip-row">
         <SearchBox
           v-model="query"
           placeholder="address, MAC, or interface"

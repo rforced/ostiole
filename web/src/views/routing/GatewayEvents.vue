@@ -59,7 +59,7 @@ const empty = computed(() => {
         @confirm="clear.run()"
       />
     </template>
-    <div class="card-strip space-y-3">
+    <div class="card-strip-row">
       <SearchBox v-model="query" placeholder="gateway, family, what happened, or error" />
       <ErrorLine v-if="error">{{ error }}</ErrorLine>
     </div>

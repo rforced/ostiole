@@ -48,7 +48,7 @@ onBeforeUnmount(() => observer?.disconnect())
 </script>
 
 <template>
-  <div ref="foot" class="card-strip flex flex-wrap items-center gap-3 border-t border-line">
+  <div ref="foot" class="card-strip-row border-t border-line">
     <button
       v-if="more"
       type="button"

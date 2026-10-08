@@ -189,7 +189,7 @@ function show(d) {
             @confirm="clear.run()"
           />
         </template>
-        <div class="card-strip flex flex-wrap items-center gap-3">
+        <div class="card-strip-row">
           <SearchBox
             v-model="query"
             placeholder="name, address, MAC, or interface"

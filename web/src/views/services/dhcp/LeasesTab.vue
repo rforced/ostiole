@@ -116,7 +116,7 @@ const empty = computed(() =>
         <SortSelect :sort="sort" :columns="COLUMNS" />
         <LiveButton v-model="live" :failing="Boolean(load.error.value)" />
       </template>
-      <div class="card-strip">
+      <div class="card-strip-row">
         <SearchBox
           v-model="query"
           placeholder="address, MAC, hostname, or interface"

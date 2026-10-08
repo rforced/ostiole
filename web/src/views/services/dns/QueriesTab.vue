@@ -205,28 +205,26 @@ function explain(name) {
           @confirm="clear.run()"
         />
       </template>
-      <div class="card-strip space-y-2">
-        <div class="flex flex-wrap items-center gap-3">
-          <select v-model="filter.status" class="input w-40 max-sm:w-full" aria-label="Status">
-            <option value="">Any status</option>
-            <option value="blocked">Blocked</option>
-            <option value="ok">Answered</option>
-            <option value="nxdomain">No such name</option>
-            <option value="nodata">No data</option>
-            <option value="servfail">Failed</option>
-          </select>
-          <select v-model="filter.list" class="input w-40 max-sm:w-full" aria-label="List">
-            <option value="">Any list</option>
-            <option v-for="l in lists" :key="l.name" :value="l.name">{{ l.name }}</option>
-          </select>
-          <select v-model="filter.type" class="input w-32 max-sm:w-full" aria-label="Type">
-            <option value="">Any type</option>
-            <option v-for="t in ['A', 'AAAA', 'HTTPS', 'PTR', 'SRV', 'TXT', 'MX']" :key="t">
-              {{ t }}
-            </option>
-          </select>
-          <SearchBox v-model="query" placeholder="name, client, device, or list" />
-        </div>
+      <div class="card-strip-row">
+        <select v-model="filter.status" class="input w-40 max-sm:w-full" aria-label="Status">
+          <option value="">Any status</option>
+          <option value="blocked">Blocked</option>
+          <option value="ok">Answered</option>
+          <option value="nxdomain">No such name</option>
+          <option value="nodata">No data</option>
+          <option value="servfail">Failed</option>
+        </select>
+        <select v-model="filter.list" class="input w-40 max-sm:w-full" aria-label="List">
+          <option value="">Any list</option>
+          <option v-for="l in lists" :key="l.name" :value="l.name">{{ l.name }}</option>
+        </select>
+        <select v-model="filter.type" class="input w-32 max-sm:w-full" aria-label="Type">
+          <option value="">Any type</option>
+          <option v-for="t in ['A', 'AAAA', 'HTTPS', 'PTR', 'SRV', 'TXT', 'MX']" :key="t">
+            {{ t }}
+          </option>
+        </select>
+        <SearchBox v-model="query" placeholder="name, client, device, or list" />
         <ErrorLine v-if="error">{{ error }}</ErrorLine>
       </div>
 

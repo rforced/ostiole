@@ -380,6 +380,11 @@
   .card-strip {
     @apply px-4 py-3;
   }
+  /* A strip of controls: a filter, a search, a toggle, on one line that
+     wraps. A strip stacks only when it really has two rows. */
+  .card-strip-row {
+    @apply flex flex-wrap items-center gap-3 px-4 py-3;
+  }
   /* A row of fields. Labels sit at the top, so the inputs line up whether
      or not a field has a hint under it, and anything in the row that is
      not a field (a button, a checkbox) is dropped to the input line. On a

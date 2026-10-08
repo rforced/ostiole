@@ -144,7 +144,7 @@ function editHost(h) {
           <Plus class="size-4" aria-hidden="true" /> Add host
         </button>
       </template>
-      <div class="card-strip">
+      <div class="card-strip-row">
         <SearchBox
           v-model="query"
           placeholder="name, address, MAC, or source"

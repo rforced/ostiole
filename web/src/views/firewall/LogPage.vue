@@ -124,9 +124,9 @@ const empty = computed(() => {
           @confirm="clear.run()"
         />
       </template>
-      <div class="card-strip flex flex-wrap items-center gap-3">
+      <div class="card-strip-row">
         <select v-model="show" class="input w-36 max-sm:w-full" aria-label="Show">
-          <option value="all">All</option>
+          <option value="all">All packets</option>
           <option value="blocked">Blocked</option>
           <option value="allowed">Allowed</option>
         </select>
