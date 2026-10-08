@@ -42,14 +42,37 @@ func TestParseKeepsOnlyRequests(t *testing.T) {
 	}
 }
 
+// A line says who answered: the site's server unless the WAF noted its
+// error, or the client got other than the server sent, or no server
+// answered at all. An older proxy's line says nothing.
+func TestParseReadsWhoAnswered(t *testing.T) {
+	t.Parallel()
+	head := `{"logger":"http.log.access.log0","request":{"remote_ip":"10.0.0.2","method":"GET","host":"a","uri":"/"},`
+	for tail, want := range map[string]string{
+		`"status":403,"upstream_status":403}`:                  BySite,
+		`"status":403,"upstream_status":null}`:                 ByProxy,
+		`"status":403,"upstream_status":null,"waf":"refused"}`: ByWAF,
+		`"status":403,"upstream_status":200}`:                  ByWAF,
+		`"status":403}`:                                        "",
+	} {
+		if r, ok := Parse(head + tail); !ok || r.By != want {
+			t.Errorf("%s: by %q, want %q", tail, r.By, want)
+		}
+	}
+}
+
 func TestASearchReadsWhatTheTabShows(t *testing.T) {
 	t.Parallel()
 	r, _ := Parse(line)
 	for q, want := range map[string]bool{
-		"vault hub": true, "203.0.113": true, "101": true, "bitwarden": true, "POST": false,
+		"vault hub": true, "203.0.113": true, "101": true, "bitwarden": true, "POST": false, "waf": false,
 	} {
 		if got := Matcher(logsearch.Parse(q))(&r); got != want {
 			t.Errorf("%q: %v", q, got)
 		}
+	}
+	r.By = ByWAF
+	if !Matcher(logsearch.Parse("waf 101"))(&r) {
+		t.Error("a request the WAF refused is not found by WAF")
 	}
 }

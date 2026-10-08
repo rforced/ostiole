@@ -245,26 +245,43 @@ func (p *Proxy) tlsApp(pr model.Proxy) *tlsApp {
 // upstream's included. Caddy sets its own before any handler runs, so
 // the removal is deferred to the moment the response is written. While
 // requests are logged, it puts the user agent on each request's line, the
-// one header the line keeps.
+// one header the line keeps, and what the server behind the proxy
+// answered, null when none did.
 func serverHeaderRoute(records bool) httpRoute {
 	handle := []jsonMap{{
 		"handler":  "headers",
 		"response": jsonMap{"deferred": true, "delete": []string{"Server"}},
 	}}
 	if records {
-		handle = append(handle, jsonMap{"handler": "log_append", "key": "user_agent", "value": "{http.request.header.User-Agent}"})
+		handle = append(handle,
+			jsonMap{"handler": "log_append", "key": "user_agent", "value": "{http.request.header.User-Agent}"},
+			jsonMap{"handler": "log_append", "key": "upstream_status", "value": "{http.reverse_proxy.status_code}"},
+		)
 	}
 	return httpRoute{Handle: handle}
 }
 
 // errorRoutes answer a handler's error, the WAF's 403 among them. An
 // error route has to write the response itself, and the header is taken
-// off before it does.
-func errorRoutes() *httpErrors {
-	return &httpErrors{Routes: []httpRoute{{Handle: []jsonMap{
+// off before it does. While requests are logged, an error the WAF made
+// is noted on the request's line: the WAF names its errors after its
+// transaction.
+func errorRoutes(records bool) *httpErrors {
+	var routes []httpRoute
+	if records {
+		routes = append(routes, httpRoute{
+			Match: []jsonMap{{
+				"vars": jsonMap{"{http.error.id}": []string{"{http.transaction_id}"}},
+				"not":  []jsonMap{{"vars": jsonMap{"{http.transaction_id}": []string{""}}}},
+			}},
+			Handle: []jsonMap{{"handler": "log_append", "key": "waf", "value": "refused"}},
+		})
+	}
+	routes = append(routes, httpRoute{Handle: []jsonMap{
 		{"handler": "headers", "response": jsonMap{"delete": []string{"Server"}}},
 		{"handler": "static_response", "status_code": "{http.error.status_code}"},
-	}}}}
+	}})
+	return &httpErrors{Routes: routes}
 }
 
 func (p *Proxy) httpApp(cfg *model.Config) *httpApp {
@@ -299,7 +316,7 @@ func (p *Proxy) httpApp(cfg *model.Config) *httpApp {
 	records := cfg.System.Logging.Records()
 	plain.Routes = append(plain.Routes, serverHeaderRoute(records))
 	secure.Routes = append(secure.Routes, serverHeaderRoute(records))
-	plain.Errors, secure.Errors = errorRoutes(), errorRoutes()
+	plain.Errors, secure.Errors = errorRoutes(records), errorRoutes(records)
 
 	// The challenge route comes next and always: with the proxy up, port
 	// 80 is its, and the solver listens on model.ChallengePort behind it.

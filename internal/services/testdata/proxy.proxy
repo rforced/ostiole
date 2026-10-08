@@ -92,6 +92,11 @@
                   "handler": "log_append",
                   "key": "user_agent",
                   "value": "{http.request.header.User-Agent}"
+                },
+                {
+                  "handler": "log_append",
+                  "key": "upstream_status",
+                  "value": "{http.reverse_proxy.status_code}"
                 }
               ]
             },
@@ -211,6 +216,33 @@
           "errors": {
             "routes": [
               {
+                "match": [
+                  {
+                    "not": [
+                      {
+                        "vars": {
+                          "{http.transaction_id}": [
+                            ""
+                          ]
+                        }
+                      }
+                    ],
+                    "vars": {
+                      "{http.error.id}": [
+                        "{http.transaction_id}"
+                      ]
+                    }
+                  }
+                ],
+                "handle": [
+                  {
+                    "handler": "log_append",
+                    "key": "waf",
+                    "value": "refused"
+                  }
+                ]
+              },
+              {
                 "handle": [
                   {
                     "handler": "headers",
@@ -325,6 +357,11 @@
                   "handler": "log_append",
                   "key": "user_agent",
                   "value": "{http.request.header.User-Agent}"
+                },
+                {
+                  "handler": "log_append",
+                  "key": "upstream_status",
+                  "value": "{http.reverse_proxy.status_code}"
                 }
               ]
             },
@@ -544,6 +581,33 @@
           ],
           "errors": {
             "routes": [
+              {
+                "match": [
+                  {
+                    "not": [
+                      {
+                        "vars": {
+                          "{http.transaction_id}": [
+                            ""
+                          ]
+                        }
+                      }
+                    ],
+                    "vars": {
+                      "{http.error.id}": [
+                        "{http.transaction_id}"
+                      ]
+                    }
+                  }
+                ],
+                "handle": [
+                  {
+                    "handler": "log_append",
+                    "key": "waf",
+                    "value": "refused"
+                  }
+                ]
+              },
               {
                 "handle": [
                   {

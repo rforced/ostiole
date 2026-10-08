@@ -81,6 +81,17 @@ describe('RequestsTab', () => {
 
   // Below Info the router keeps no line per request, and the tab says
   // where that is set.
+  it('marks the answers the WAF or the proxy gave', async () => {
+    const { wrapper } = await tab([
+      request({ seq: 3, status: 403, by: 'waf' }),
+      request({ seq: 2, status: 403, by: 'proxy', site: undefined }),
+      request({ status: 403, by: 'site' }),
+    ])
+    const badges = wrapper.findAll('tbody tr').map((r) => r.findAll('.badge').map((b) => b.text()))
+    expect(badges).toEqual([['WAF'], ['proxy'], []])
+    expect(wrapper.find('tbody .badge').attributes('title')).toBe('The WAF refused it.')
+  })
+
   it('says which log levels keep requests', async () => {
     let { wrapper } = await tab([], 'warning')
     expect(wrapper.text()).toContain('Requests are kept at the Info and Debug log levels')

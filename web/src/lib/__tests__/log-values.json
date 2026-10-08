@@ -233,7 +233,8 @@
         "status": 101,
         "bytes": 512,
         "duration": 0.0123,
-        "agent": "Bitwarden_Mobile/2026.9"
+        "agent": "Bitwarden_Mobile/2026.9",
+        "by": "site"
       },
       "values": [
         "vault",
@@ -256,9 +257,38 @@
         "path": "/",
         "status": 403,
         "bytes": 0,
-        "duration": 0.0001
+        "duration": 0.0001,
+        "by": "proxy"
       },
-      "values": ["198.51.100.7", "GET", "203.0.113.1", "/", "403"]
+      "values": ["198.51.100.7", "GET", "203.0.113.1", "/", "403", "proxy"]
+    },
+    {
+      "why": "a request the WAF refused",
+      "entry": {
+        "seq": 5,
+        "time": "2026-09-28T14:02:02Z",
+        "site": "watch",
+        "client": "198.51.100.7",
+        "method": "POST",
+        "host": "watch.example.com",
+        "path": "/Users/AuthenticateByName",
+        "proto": "HTTP/2.0",
+        "status": 403,
+        "bytes": 0,
+        "duration": 0.004,
+        "agent": "Mozilla/5.0",
+        "by": "waf"
+      },
+      "values": [
+        "watch",
+        "198.51.100.7",
+        "POST",
+        "watch.example.com",
+        "/Users/AuthenticateByName",
+        "403",
+        "WAF",
+        "Mozilla/5.0"
+      ]
     }
   ],
   "dhcp": [

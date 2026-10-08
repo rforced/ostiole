@@ -288,6 +288,87 @@ func TestProxyErrorLinesAreCutDown(t *testing.T) {
 	}
 }
 
+// A request's line says who answered it, so a 403 the WAF gave reads apart
+// from one the site's server gave: the WAF refusing the request or what
+// the server sent, the proxy refusing an address, a name or answering for
+// a server it could not reach, and the server itself, even past a WAF that
+// only detects.
+func TestRequestLinesSayWhoAnswered(t *testing.T) {
+	t.Parallel()
+	bin := sidecar(t)
+	forbidden := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	t.Cleanup(forbidden.Close)
+	leaky := answer(t, "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version")
+	gone := net.JoinHostPort("127.0.0.1", strconv.Itoa(int(freePort(t))))
+	const attack = "/?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E"
+	cases := []struct {
+		host, uri string
+		status    int
+		by        string
+	}{
+		{"app.example.com", "/", http.StatusForbidden, requestlog.BySite},
+		{"watch.example.com", attack, http.StatusForbidden, requestlog.BySite},
+		{"guard.example.com", attack, http.StatusForbidden, requestlog.ByWAF},
+		{"leak.example.com", "/", http.StatusForbidden, requestlog.ByWAF},
+		{"closed.example.com", "/", http.StatusForbidden, requestlog.ByProxy},
+		{"nobody.example.com", "/", http.StatusForbidden, requestlog.ByProxy},
+		{"gone.example.com", "/", http.StatusBadGateway, requestlog.ByProxy},
+	}
+	cfg := &model.Config{}
+	cfg.System.Logging.Level = model.LogInfo
+	site := func(id, pool, waf string) model.ProxySite {
+		return model.ProxySite{ID: id, Enabled: true, Hosts: []string{id + ".example.com"}, Pool: pool, PlainHTTP: true, WAF: waf}
+	}
+	closed := site("closed", "forbidden", "")
+	closed.AllowFrom = []string{"192.0.2.0/24"}
+	cfg.Services.Proxy = model.Proxy{
+		Enabled: true, HTTPPort: freePort(t), HTTPSPort: freePort(t),
+		Pools: []model.ProxyPool{
+			{ID: "forbidden", Upstreams: []model.ProxyUpstream{{Address: forbidden.Listener.Addr().String()}}},
+			{ID: "leaky", Upstreams: []model.ProxyUpstream{{Address: leaky}}},
+			{ID: "gone", Upstreams: []model.ProxyUpstream{{Address: gone}}},
+		},
+		Profiles: []model.WAFProfile{
+			{ID: "block", Mode: "block", InspectResponses: true},
+			{ID: "detect", Mode: "detect", InspectResponses: true},
+		},
+		Sites: []model.ProxySite{
+			site("app", "forbidden", ""), site("watch", "forbidden", "detect"), site("guard", "forbidden", "block"),
+			site("leak", "leaky", "block"), closed, site("gone", "gone", "block"),
+		},
+	}
+	plain, _, out := runSidecar(t, bin, cfg, "", map[string][]string{model.SelfCertificate: {"127.0.0.1"}})
+
+	for _, tc := range cases {
+		if status, _ := fetch(t, plain, "", "http://"+tc.host+tc.uri); status != tc.status {
+			t.Errorf("%s: the client got %d, want %d", tc.host, status, tc.status)
+		}
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		got := map[string]requestlog.Request{}
+		for l := range strings.SplitSeq(out.String(), "\n") {
+			if r, ok := requestlog.Parse(l); ok {
+				got[r.Host] = r
+			}
+		}
+		if len(got) >= len(cases) || time.Now().After(deadline) {
+			for _, tc := range cases {
+				r, ok := got[tc.host]
+				if !ok {
+					t.Errorf("%s: no request line:\n%s", tc.host, out)
+				} else if r.Status != tc.status || r.By != tc.by {
+					t.Errorf("%s: %d by %q, want %d by %q", tc.host, r.Status, r.By, tc.status, tc.by)
+				}
+			}
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 // A JSON body is read as JSON: a harmless one passes even at paranoia 4,
 // where read as a form its quotes and braces were an attack, and an attack
 // in one of its values is caught by that value's name, even where another

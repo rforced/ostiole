@@ -586,6 +586,7 @@ func TestProxyRenderShape(t *testing.T) {
 					} `json:"routes"`
 					Errors *struct {
 						Routes []struct {
+							Match  []map[string]any `json:"match"`
 							Handle []map[string]any `json:"handle"`
 						} `json:"routes"`
 					} `json:"errors"`
@@ -634,8 +635,12 @@ func TestProxyRenderShape(t *testing.T) {
 		if len(srv.Routes) == 0 || srv.Routes[0].Handle[0]["handler"] != "headers" {
 			t.Errorf("%s: the Server header is not taken off: %v", name, srv.Routes)
 		}
-		if srv.Errors == nil || len(srv.Errors.Routes) != 1 || len(srv.Errors.Routes[0].Handle) != 2 ||
-			srv.Errors.Routes[0].Handle[1]["handler"] != "static_response" {
+		if srv.Errors == nil || len(srv.Errors.Routes) == 0 {
+			t.Errorf("%s: no error routes", name)
+			continue
+		}
+		if last := srv.Errors.Routes[len(srv.Errors.Routes)-1]; len(last.Match) > 0 || len(last.Handle) != 2 ||
+			last.Handle[0]["handler"] != "headers" || last.Handle[1]["handler"] != "static_response" {
 			t.Errorf("%s: an error keeps the Server header: %+v", name, srv.Errors)
 		}
 	}
