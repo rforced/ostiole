@@ -20,10 +20,16 @@ manager() {
 # minutes, where run-systemd-test.sh waits four.
 dnf_ci() { dnf --setopt=timeout=10 --setopt=minrate=500k "$@"; }
 
+# UBUNTU_MIRROR is a list, tried in order: apt moves to the next on an error.
 ubuntu_mirror() {
 	sources=/etc/apt/sources.list.d/ubuntu.sources
 	[ -n "${UBUNTU_MIRROR:-}" ] && [ -f "$sources" ] || return 0
-	sed -i -E "s#http://(archive|security)\.ubuntu\.com/ubuntu/?#$UBUNTU_MIRROR#" "$sources"
+	n=0
+	for uri in $UBUNTU_MIRROR; do
+		n=$((n + 1))
+		printf '%s\tpriority:%s\n' "$uri" "$n"
+	done >/etc/apt/ci-mirrors.txt
+	sed -i -E "s#http://(archive|security)\.ubuntu\.com/ubuntu/?#mirror+file:/etc/apt/ci-mirrors.txt#" "$sources"
 }
 
 # apt waits minutes on a mirror that takes a request and sends nothing.

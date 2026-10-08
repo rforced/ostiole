@@ -310,9 +310,12 @@ jobs:
     env:
       IMAGE: ${{ matrix.image }}
       PORT: '18099'
-      # GitHub's own runners use this mirror. archive.ubuntu.com has hours
-      # where it takes a connection and sends nothing.
-      UBUNTU_MIRROR: http://azure.archive.ubuntu.com/ubuntu/
+      # The Azure mirror is a proxy for archive.ubuntu.com and fails with
+      # it; the full mirrors after it are copies of their own.
+      UBUNTU_MIRROR: >-
+        http://azure.archive.ubuntu.com/ubuntu/
+        http://mirrors.edge.kernel.org/ubuntu/
+        http://mirrors.mit.edu/ubuntu/
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
