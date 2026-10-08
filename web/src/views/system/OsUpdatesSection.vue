@@ -9,6 +9,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { errorMessage, useAsync } from '@/lib/async'
+import { formatWhen } from '@/lib/format'
 import { parseList } from '@/lib/lists'
 import { excluded } from '@/lib/packages'
 import { useAuthStore } from '@/stores/auth'
@@ -119,8 +120,6 @@ async function reboot() {
     actionError.value = errorMessage(e)
   }
 }
-
-const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
 </script>
 
 <template>
@@ -157,7 +156,7 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
           <dt>Package manager</dt>
           <dd class="font-mono">{{ status?.manager || 'none found' }}</dd>
           <dt>Last checked</dt>
-          <dd>{{ when(status?.lastCheck) }}</dd>
+          <dd>{{ formatWhen(status?.lastCheck, 'never') }}</dd>
         </dl>
 
         <!-- These are part of the page rather than announcements, so they are
@@ -223,7 +222,7 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
 
           <div v-if="status?.lastRun">
             <p class="text-ink-muted">
-              Last run {{ when(status.lastRun)
+              Last run {{ formatWhen(status.lastRun)
               }}<span v-if="status.lastMode"> ({{ status.lastMode }})</span>
             </p>
             <p v-if="status.lastError" role="alert" class="text-bad">

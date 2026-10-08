@@ -10,7 +10,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
-import { formatBytes, formatCount } from '@/lib/format'
+import { formatBytes, formatCount, formatWhen } from '@/lib/format'
 import { SETTLE_MS, heldLine, keptLine } from '@/lib/log'
 import { DESTINATION_WINDOWS, deviceLabel, serviceLabel, useTrafficStream } from '@/lib/traffic'
 import { useAuthStore } from '@/stores/auth'
@@ -234,8 +234,8 @@ const empty = computed(() => {
               <td class="num max-sm:order-7">
                 {{ formatCount(r.connections) }}
               </td>
-              <td class="text-xs whitespace-nowrap max-sm:order-8">
-                {{ new Date(r.lastSeen).toLocaleString() }}
+              <td class="when max-sm:order-8">
+                {{ formatWhen(r.lastSeen) }}
               </td>
             </tr>
           </tbody>

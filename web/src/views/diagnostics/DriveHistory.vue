@@ -10,7 +10,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { readingValues } from '@/lib/driveHistory'
-import { formatCount } from '@/lib/format'
+import { formatCount, formatWhen } from '@/lib/format'
 import { heldLine, useLog } from '@/lib/log'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -118,8 +118,8 @@ const orDash = (v, unit = '') => (v == null ? '—' : `${formatCount(v)}${unit}`
           <td colspan="7" class="text-ink-muted">{{ empty }}</td>
         </tr>
         <tr v-for="r in rows" :key="r.seq">
-          <td data-label="Time" class="text-xs whitespace-nowrap text-ink-muted tabular-nums">
-            {{ new Date(r.time).toLocaleString() }}
+          <td data-label="Time" class="when">
+            {{ formatWhen(r.time) }}
           </td>
           <td data-label="Drive">
             <span class="font-mono text-code">{{ r.drive }}</span>

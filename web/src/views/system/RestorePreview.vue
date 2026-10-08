@@ -1,6 +1,7 @@
 <script setup>
 import AppNotice from '@/components/AppNotice.vue'
 import ChangeList from '@/components/ChangeList.vue'
+import { formatWhen } from '@/lib/format'
 
 /**
  * What a backup holds and what restoring it would change. It is the same
@@ -24,7 +25,7 @@ function count(n, one, many = `${one}s`) {
     <p>
       Backup of
       <span class="font-mono">{{ pending.summary.hostname || 'an unnamed router' }}</span>
-      taken {{ new Date(pending.summary.createdAt).toLocaleString() }}
+      taken {{ formatWhen(pending.summary.createdAt) }}
       <template v-if="pending.summary.ostiole"> by Ostiole {{ pending.summary.ostiole }}</template
       >.
       <template v-if="pending.summary.note">“{{ pending.summary.note }}”</template>

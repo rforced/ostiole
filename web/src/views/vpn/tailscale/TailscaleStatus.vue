@@ -7,6 +7,7 @@ import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { formatWhen } from '@/lib/format'
 import { useTailscaleStatus } from '@/lib/tailscaleStatus'
 import { useAuthStore } from '@/stores/auth'
 
@@ -26,7 +27,7 @@ const expiring = computed(() => {
   const at = status.value?.keyExpiry
   if (!at) return ''
   const days = (new Date(at).getTime() - Date.now()) / 86400000
-  return days > 14 ? '' : new Date(at).toLocaleDateString()
+  return days > 14 ? '' : formatWhen(at)
 })
 
 const login = useAsync(async (key) => {

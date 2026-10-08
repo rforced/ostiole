@@ -5,7 +5,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import AppDialog from '@/components/AppDialog.vue'
 import SearchBox from '@/components/SearchBox.vue'
 import { useAsync } from '@/lib/async'
-import { formatCount } from '@/lib/format'
+import { formatCount, formatWhen } from '@/lib/format'
 
 /** Entries on a page. */
 const PAGE = 1000
@@ -137,9 +137,7 @@ const empty = computed(() => {
         <span v-if="items.length" class="text-sm text-ink-muted">
           {{ formatCount(at + 1) }}–{{ formatCount(at + items.length) }} of
           {{ formatCount(page.matches) }}.
-          <template v-if="page.fetchedAt">
-            Fetched {{ new Date(page.fetchedAt).toLocaleString() }}.
-          </template>
+          <template v-if="page.fetchedAt"> Fetched {{ formatWhen(page.fetchedAt) }}. </template>
         </span>
         <button type="button" class="btn-secondary ml-auto" @click="open = false">Close</button>
       </div>

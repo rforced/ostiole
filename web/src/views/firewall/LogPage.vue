@@ -10,6 +10,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { ApiError, api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { formatWhen } from '@/lib/format'
 import { accessNames, endpoint, fwlogInfo, fwlogValues, matchedLabel } from '@/lib/fwlog'
 import { heldLine, useLog } from '@/lib/log'
 import { useConfigStore } from '@/stores/config'
@@ -157,8 +158,8 @@ const empty = computed(() => {
             :key="e.seq"
             class="max-sm:before:order-4 max-sm:before:basis-full max-sm:before:content-[''] max-sm:after:order-8 max-sm:after:basis-full max-sm:after:content-['']"
           >
-            <td class="text-xs whitespace-nowrap text-ink-muted tabular-nums max-sm:order-1">
-              {{ new Date(e.time).toLocaleString() }}
+            <td class="when max-sm:order-1">
+              {{ formatWhen(e.time) }}
             </td>
             <td class="max-sm:order-2">
               <span class="badge" :class="actionClass(e.action)">{{ e.action || 'unknown' }}</span>

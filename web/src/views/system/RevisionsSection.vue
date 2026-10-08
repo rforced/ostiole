@@ -8,6 +8,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { errorMessage, useAsync } from '@/lib/async'
+import { formatWhen } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -142,7 +143,7 @@ defineExpose({ refresh: load.run })
         </tr>
         <template v-for="r in revisions" :key="r.id">
           <tr>
-            <td data-label="">{{ new Date(r.time).toLocaleString() }}</td>
+            <td data-label="">{{ formatWhen(r.time) }}</td>
             <td class="font-mono text-code" data-label="ID">{{ r.id }}</td>
             <td class="num font-mono text-code" data-label="Size">{{ r.size }} B</td>
             <td class="actions" data-label="">

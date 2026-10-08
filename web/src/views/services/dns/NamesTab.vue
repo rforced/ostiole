@@ -11,6 +11,7 @@ import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
 import { api } from '@/lib/api'
 import { useDraftRows } from '@/lib/draft'
+import { formatWhen } from '@/lib/format'
 import { overrideKey, overrideName } from '@/lib/hosts'
 import { useSearch } from '@/lib/search'
 import { byAddress, byText, useSort } from '@/lib/sort'
@@ -113,8 +114,6 @@ function holder(h) {
   }
 }
 
-const when = (t) => new Date(t).toLocaleString()
-
 const editing = ref(null)
 const open = ref(false)
 function addHost() {
@@ -205,9 +204,7 @@ function editHost(h) {
                 <RandomMacBadge :mac="n.mac" />
               </div>
               <div v-if="n.description" class="text-ink-muted">{{ n.description }}</div>
-              <div v-if="n.expires" class="text-xs whitespace-nowrap text-ink-muted">
-                Until {{ when(n.expires) }}
-              </div>
+              <div v-if="n.expires" class="when">Until {{ formatWhen(n.expires) }}</div>
               <div v-if="n.heldBy" class="text-sm text-warn">
                 Loses the name to {{ holder(n.heldBy) }}.
               </div>

@@ -9,6 +9,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { ApiError, api } from '@/lib/api'
 import { errorMessage, useAsync } from '@/lib/async'
+import { formatWhen } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth'
 import { useConfirmStore } from '@/stores/confirm'
 import AccountDialog from '@/views/system/accounts/AccountDialog.vue'
@@ -117,8 +118,6 @@ async function setPassword() {
 async function deleteUser(username) {
   await act(() => api.users.remove(username))
 }
-
-const when = (s, fallback) => (s ? new Date(s).toLocaleDateString() : fallback)
 </script>
 
 <template>
@@ -170,7 +169,7 @@ const when = (s, fallback) => (s ? new Date(s).toLocaleDateString() : fallback)
               Another admin has to change your role.
             </p>
           </td>
-          <td data-label="Created">{{ when(u.createdAt, '—') }}</td>
+          <td class="when" data-label="Created">{{ formatWhen(u.createdAt) }}</td>
           <td class="actions" data-label="">
             <button type="button" class="link-action" @click="openRename(u)">Rename</button>
             <button v-if="!isSelf(u)" type="button" class="link-action" @click="openPassword(u)">

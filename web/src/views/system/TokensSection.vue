@@ -8,6 +8,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { ApiError, api } from '@/lib/api'
 import { errorMessage, useAsync } from '@/lib/async'
+import { formatWhen } from '@/lib/format'
 import TokenDialog from '@/views/system/accounts/TokenDialog.vue'
 
 const tokens = ref([])
@@ -86,8 +87,6 @@ async function deleteToken(id) {
     actionError.value = errorMessage(e)
   }
 }
-
-const when = (s, fallback) => (s ? new Date(s).toLocaleDateString() : fallback)
 </script>
 
 <template>
@@ -154,9 +153,9 @@ const when = (s, fallback) => (s ? new Date(s).toLocaleDateString() : fallback)
             <template v-else-if="t.metrics">metrics only</template>
             <template v-else>{{ t.role }}</template>
           </td>
-          <td data-label="Created">{{ when(t.createdAt, '—') }}</td>
-          <td data-label="Expires">{{ when(t.expiresAt, 'never') }}</td>
-          <td data-label="Last used">{{ when(t.lastUsedAt, 'never') }}</td>
+          <td class="when" data-label="Created">{{ formatWhen(t.createdAt) }}</td>
+          <td class="when" data-label="Expires">{{ formatWhen(t.expiresAt, 'never') }}</td>
+          <td class="when" data-label="Last used">{{ formatWhen(t.lastUsedAt, 'never') }}</td>
           <td class="actions" data-label="">
             <ConfirmButton
               label="Delete"

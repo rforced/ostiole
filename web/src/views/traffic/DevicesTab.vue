@@ -11,7 +11,7 @@ import SortSelect from '@/components/SortSelect.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
-import { formatBytes, formatRate } from '@/lib/format'
+import { formatBytes, formatRate, formatWhen } from '@/lib/format'
 import { keptLine } from '@/lib/log'
 import { useSearch } from '@/lib/search'
 import { byNumber, byText, byTime, useSort } from '@/lib/sort'
@@ -249,8 +249,8 @@ function show(d) {
               <td class="font-mono text-code max-sm:order-5 max-sm:text-ink-muted">
                 {{ d.interface }}
               </td>
-              <td class="text-xs whitespace-nowrap max-sm:order-6">
-                {{ new Date(d.lastSeen).toLocaleString() }}
+              <td class="when max-sm:order-6">
+                {{ formatWhen(d.lastSeen) }}
               </td>
             </tr>
           </tbody>

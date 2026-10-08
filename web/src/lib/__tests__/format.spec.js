@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatBytes, formatCount, formatOffset, formatRate } from '@/lib/format'
+import { formatBytes, formatCount, formatOffset, formatRate, formatWhen } from '@/lib/format'
 
 describe('formatBytes', () => {
   it('uses decimal units and one decimal below 100', () => {
@@ -63,5 +63,19 @@ describe('formatRate', () => {
   it('refuses nonsense', () => {
     expect(formatRate(-1)).toBe('—')
     expect(formatRate(undefined)).toBe('—')
+  })
+})
+
+describe('formatWhen', () => {
+  it('gives the date and the time', () => {
+    const t = '2026-09-15T08:30:00Z'
+    expect(formatWhen(t)).toBe(new Date(t).toLocaleString())
+    expect(formatWhen(Date.parse(t))).toBe(new Date(t).toLocaleString())
+  })
+
+  it('says what no time means', () => {
+    expect(formatWhen('')).toBe('—')
+    expect(formatWhen(null, 'never')).toBe('never')
+    expect(formatWhen('not a time', 'never')).toBe('never')
   })
 })

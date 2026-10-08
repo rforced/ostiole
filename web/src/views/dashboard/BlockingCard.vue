@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 
 import SectionCard from '@/components/SectionCard.vue'
-import { formatCount } from '@/lib/format'
+import { formatCount, formatWhen } from '@/lib/format'
 
 /**
  * DNS blocking, as far as the dashboard can tell: what is loaded, what it
@@ -26,12 +26,8 @@ const READING = [
 ]
 
 const b = computed(() => props.blocking ?? {})
-const when = computed(() =>
-  b.value.mergedAt ? new Date(b.value.mergedAt).toLocaleString() : 'never',
-)
-const queriesSince = computed(() =>
-  b.value.queries?.since ? new Date(b.value.queries.since).toLocaleString() : '',
-)
+const merged = computed(() => formatWhen(b.value.mergedAt, 'never'))
+const queriesSince = computed(() => formatWhen(b.value.queries?.since, ''))
 const blockedPct = computed(() => {
   const q = b.value.queries
   if (!q?.total) return 0
@@ -76,7 +72,7 @@ const blockedPct = computed(() => {
         </dd>
 
         <dt>Last merge</dt>
-        <dd>{{ when }}</dd>
+        <dd>{{ merged }}</dd>
       </template>
 
       <template v-if="b.queries">

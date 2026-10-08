@@ -357,6 +357,10 @@
   .num {
     @apply text-right whitespace-nowrap tabular-nums;
   }
+  /* When something happened, in a table: chrome beside the row's facts. */
+  .when {
+    @apply text-xs whitespace-nowrap text-ink-muted tabular-nums;
+  }
   /* A row the draft adds or changes, until it is applied. */
   .table tbody tr.row-changed td:first-child {
     @apply shadow-[inset_3px_0_0_0_var(--warn)];

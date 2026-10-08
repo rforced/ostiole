@@ -9,6 +9,7 @@ import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { formatWhen } from '@/lib/format'
 import { useSearch } from '@/lib/search'
 import { byAddress, byText, byTime, useSort } from '@/lib/sort'
 import { useWake, wakeInterfaces } from '@/lib/wol'
@@ -99,9 +100,8 @@ const sort = useSort(
 )
 const rows = sort.sorted
 
-const when = (t) => (t ? new Date(t).toLocaleString() : '—')
 /** A time is worth showing for a client that is not there to speak for itself. */
-const seen = (l) => (l.online ? '—' : when(l.seen))
+const seen = (l) => (l.online ? '—' : formatWhen(l.seen))
 
 const empty = computed(() => {
   if (!load.updatedAt.value) return 'Reading…'
@@ -170,14 +170,14 @@ const empty = computed(() => {
               <div v-if="l.description" class="text-ink-muted">{{ l.description }}</div>
             </td>
             <td class="font-mono text-code" data-label="Interface">{{ l.interface || '—' }}</td>
-            <td class="text-xs whitespace-nowrap text-ink-muted" data-label="Last seen">
+            <td class="when" data-label="Last seen">
               {{ seen(l) }}
             </td>
-            <td class="text-xs whitespace-nowrap" data-label="Last renewed">
-              {{ when(l.renewed) }}
+            <td class="when" data-label="Last renewed">
+              {{ formatWhen(l.renewed) }}
             </td>
-            <td class="text-xs whitespace-nowrap" data-label="Expires">
-              {{ l.expires ? when(l.expires) : 'never' }}
+            <td class="when" data-label="Expires">
+              {{ formatWhen(l.expires, 'never') }}
             </td>
             <td class="actions" data-label="">
               <button

@@ -6,7 +6,7 @@ import SeriesChart from '@/components/SeriesChart.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { niceScale } from '@/lib/chart'
-import { formatDuration, formatMs } from '@/lib/format'
+import { formatDuration, formatMs, formatWhen } from '@/lib/format'
 import {
   STEPS,
   addProbe,
@@ -184,8 +184,8 @@ const error = computed(() => read.error.value || streamError.value)
           </thead>
           <tbody>
             <tr v-for="e in report.events" :key="e.seq">
-              <td class="text-xs whitespace-nowrap text-ink-muted tabular-nums">
-                {{ new Date(e.time).toLocaleString() }}
+              <td class="when">
+                {{ formatWhen(e.time) }}
               </td>
               <td>
                 {{ eventText(e) }}

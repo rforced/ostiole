@@ -7,6 +7,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { formatWhen } from '@/lib/format'
 import { deviceName } from '@/lib/wol'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -76,8 +77,6 @@ function edit(c) {
   editing.value = c
   open.value = true
 }
-
-const when = (s) => (s ? new Date(s).toLocaleString() : '—')
 
 /** What a cron does, in the words of whoever has to read the page. */
 function describe(c) {
@@ -153,15 +152,15 @@ function describe(c) {
                 {{ c.schedule }}
                 <span v-if="!c.enabled" class="badge ml-1">off</span>
               </td>
-              <td class="text-xs" data-label="Next">
-                {{ c.enabled ? when(c.status?.next) : '—' }}
+              <td class="when" data-label="Next">
+                {{ c.enabled ? formatWhen(c.status?.next, 'never') : '—' }}
               </td>
-              <td class="text-xs" data-label="Last run">
+              <td data-label="Last run">
                 <template v-if="c.status?.running">
                   <span class="badge">running</span>
                 </template>
                 <template v-else-if="c.status?.lastRun">
-                  {{ when(c.status.lastRun) }}
+                  <span class="when">{{ formatWhen(c.status.lastRun) }}</span>
                   <span v-if="c.status.lastError" class="badge badge-warn ml-1">failed</span>
                   <div
                     v-if="c.status.lastError"
@@ -176,7 +175,7 @@ function describe(c) {
                     {{ c.status.lastOutput }}
                   </div>
                 </template>
-                <span v-else class="text-ink-muted">never</span>
+                <span v-else class="when">never</span>
               </td>
               <td class="actions" data-label="">
                 <button
@@ -251,7 +250,7 @@ function describe(c) {
             <td class="font-mono text-code" data-label="How often">
               {{ s.enabled ? s.schedule : 'never' }}
             </td>
-            <td class="text-xs" data-label="Last seen">{{ when(s.lastRun) }}</td>
+            <td class="when" data-label="Last seen">{{ formatWhen(s.lastRun, 'never') }}</td>
           </tr>
         </tbody>
       </table>

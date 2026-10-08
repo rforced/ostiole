@@ -11,6 +11,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { dhcpValues } from '@/lib/dhcpLog'
+import { formatWhen } from '@/lib/format'
 import { heldLine, useLog } from '@/lib/log'
 import { records } from '@/lib/logs'
 import { useConfigStore } from '@/stores/config'
@@ -113,8 +114,8 @@ const empty = computed(() => {
             :key="e.seq"
             class="max-sm:after:order-4 max-sm:after:basis-full max-sm:after:content-['']"
           >
-            <td class="text-xs whitespace-nowrap text-ink-muted tabular-nums max-sm:order-1">
-              {{ new Date(e.time).toLocaleString() }}
+            <td class="when max-sm:order-1">
+              {{ formatWhen(e.time) }}
             </td>
             <td class="whitespace-nowrap max-sm:order-2">
               <span

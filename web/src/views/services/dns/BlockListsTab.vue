@@ -14,7 +14,7 @@ import SortSelect from '@/components/SortSelect.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
-import { formatCount } from '@/lib/format'
+import { formatCount, formatWhen } from '@/lib/format'
 import { byNumber, byText, byTime, useSort } from '@/lib/sort'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -153,11 +153,6 @@ async function readNames(q, offset, limit) {
 function source(l) {
   if (l.url) return l.url
   return 'loaded by hand'
-}
-
-function when(s) {
-  if (!s?.fetchedAt) return 'never'
-  return new Date(s.fetchedAt).toLocaleString()
 }
 
 /** In the order they were added until a header says otherwise. */
@@ -353,7 +348,7 @@ const lists = sort.sorted
                 {{ fetched[l.name].lastError }}
               </span>
               <template v-else>
-                {{ when(fetched[l.name]) }}
+                <span class="when">{{ formatWhen(fetched[l.name]?.fetchedAt, 'never') }}</span>
                 <span v-if="fetched[l.name]?.stale" class="badge badge-warn ml-1">stale</span>
               </template>
             </td>

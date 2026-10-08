@@ -7,7 +7,7 @@ import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
-import { formatBytes } from '@/lib/format'
+import { formatBytes, formatWhen } from '@/lib/format'
 import { byAddress, byText, byTime, useSort } from '@/lib/sort'
 
 /** How often Live reads the peers again. */
@@ -39,8 +39,7 @@ function name(peer) {
 
 /** A time is worth showing for a peer that is not there to speak for itself. */
 function seen(peer) {
-  if (peer.online || !peer.lastSeen) return '—'
-  return new Date(peer.lastSeen).toLocaleString()
+  return peer.online ? '—' : formatWhen(peer.lastSeen)
 }
 
 /**
@@ -112,7 +111,7 @@ const peers = sort.sorted
             </td>
             <td class="font-mono text-code" data-label="Addresses">{{ p.ips.join(', ') }}</td>
             <td data-label="OS">{{ p.os || '—' }}</td>
-            <td class="text-ink-muted" data-label="Last seen">{{ seen(p) }}</td>
+            <td class="when" data-label="Last seen">{{ seen(p) }}</td>
             <td class="font-mono text-code" data-label="Path">{{ path(p) }}</td>
             <td class="font-mono text-code" data-label="Routes">
               {{ p.routes.join(', ') || '—' }}

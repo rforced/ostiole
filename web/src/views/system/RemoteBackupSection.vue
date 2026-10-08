@@ -10,7 +10,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { ApiError, api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
-import { formatBytes } from '@/lib/format'
+import { formatBytes, formatWhen } from '@/lib/format'
 import { SCHEDULE_PRESETS, presetFor } from '@/lib/schedules'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -171,8 +171,6 @@ async function loadIntoDraft() {
   config.replaceDraft(pending.value.config)
   pending.value = null
 }
-
-const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
 </script>
 
 <template>
@@ -387,12 +385,12 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
       <div class="card-strip space-y-3">
         <dl class="kv max-w-xl">
           <dt>Last upload</dt>
-          <dd>{{ when(status?.lastRun) }}</dd>
+          <dd>{{ formatWhen(status?.lastRun, 'never') }}</dd>
           <dt>Result</dt>
           <dd v-if="status?.lastError" class="text-bad">{{ status.lastError }}</dd>
           <dd v-else>{{ status?.lastOutput || '—' }}</dd>
           <dt>Next</dt>
-          <dd>{{ when(status?.next) }}</dd>
+          <dd>{{ formatWhen(status?.next, 'never') }}</dd>
         </dl>
         <p v-if="shared" class="text-ink-muted">Copies from {{ sharers }} share this folder.</p>
         <p v-if="loadCopies.error.value" role="alert" class="text-bad">
@@ -418,8 +416,8 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
           </tr>
           <tr v-for="c in copies" :key="c.key">
             <td class="font-mono text-code break-all" data-label="">{{ c.name }}</td>
-            <td class="text-xs whitespace-nowrap" data-label="Taken">
-              {{ new Date(c.takenAt).toLocaleString() }}
+            <td class="when" data-label="Taken">
+              {{ formatWhen(c.takenAt) }}
             </td>
             <td class="num" data-label="Size">{{ formatBytes(c.size) }}</td>
             <td class="actions" data-label="">

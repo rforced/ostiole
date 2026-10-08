@@ -8,6 +8,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { ApiError, api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { formatWhen } from '@/lib/format'
 import { LEVELS } from '@/lib/meter'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -134,8 +135,6 @@ function reload() {
   window.location.reload()
 }
 
-const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
-
 onMounted(async () => {
   await loadVersion()
   try {
@@ -186,7 +185,7 @@ onMounted(async () => {
         <dt>Latest</dt>
         <dd class="font-mono">{{ check ? check.latest || 'none' : 'not checked' }}</dd>
         <dt>Last checked</dt>
-        <dd>{{ when(lastCheck) }}</dd>
+        <dd>{{ formatWhen(lastCheck, 'never') }}</dd>
       </dl>
 
       <p v-if="auth.isOperator" class="text-ink-muted">
@@ -233,7 +232,7 @@ onMounted(async () => {
           {{ check.release.tag
           }}<span v-if="check.security" class="badge badge-warn ml-1">security release</span
           ><span class="font-normal text-ink-muted"
-            >&nbsp;· {{ new Date(check.release.publishedAt).toLocaleDateString() }}</span
+            >&nbsp;· {{ formatWhen(check.release.publishedAt) }}</span
           >
           <a :href="check.release.url" target="_blank" rel="noopener" class="link ml-2"
             >release page</a

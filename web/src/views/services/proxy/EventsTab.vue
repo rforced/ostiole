@@ -9,7 +9,7 @@ import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
-import { formatCount, formatDuration } from '@/lib/format'
+import { formatCount, formatDuration, formatWhen } from '@/lib/format'
 import { heldLine, useLog } from '@/lib/log'
 import { VERDICTS, eventValues, openSeconds, ruleLines } from '@/lib/proxyEvents'
 import { useProxyStatus } from '@/lib/proxyStatus'
@@ -167,9 +167,9 @@ function halves(addr) {
             :key="e.seq"
             class="max-xl:after:order-4 max-xl:after:basis-full max-xl:after:content-['']"
           >
-            <td class="text-xs whitespace-nowrap text-ink-muted tabular-nums max-xl:order-1">
-              {{ new Date(e.logged).toLocaleString() }}
-              <div v-if="openSeconds(e)" :title="`Opened ${new Date(e.time).toLocaleString()}`">
+            <td class="when max-xl:order-1">
+              {{ formatWhen(e.logged) }}
+              <div v-if="openSeconds(e)" :title="`Opened ${formatWhen(e.time)}`">
                 open {{ formatDuration(openSeconds(e)) }}
               </div>
             </td>

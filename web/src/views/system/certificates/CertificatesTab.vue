@@ -11,6 +11,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { errorMessage, useAsync } from '@/lib/async'
+import { formatWhen } from '@/lib/format'
 import { ADMIN_ONLY, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -80,7 +81,7 @@ function state(cert) {
 
 const expires = (cert) => {
   const at = status.value[cert.id]?.notAfter
-  return at ? new Date(at).toLocaleDateString() : '—'
+  return formatWhen(at)
 }
 
 async function issue(cert) {
@@ -209,7 +210,7 @@ function remove(cert) {
               <dt>Issued by</dt>
               <dd>{{ page.builtIn.issuer }}</dd>
               <dt>Expires</dt>
-              <dd>{{ new Date(page.builtIn.notAfter).toLocaleString() }}</dd>
+              <dd>{{ formatWhen(page.builtIn.notAfter) }}</dd>
               <dt>Fingerprint</dt>
               <dd class="font-mono text-code break-all">{{ page.builtIn.fingerprint }}</dd>
             </dl>
@@ -276,7 +277,7 @@ function remove(cert) {
                 {{ state(c).label }}
               </span>
             </td>
-            <td class="whitespace-nowrap" data-label="Expires">{{ expires(c) }}</td>
+            <td class="when" data-label="Expires">{{ expires(c) }}</td>
             <td class="actions" data-label="">
               <button
                 v-if="c.source !== 'uploaded' && !auth.readOnly"

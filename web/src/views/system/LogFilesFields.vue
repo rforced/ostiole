@@ -6,7 +6,7 @@ import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
-import { formatBytes, formatCount } from '@/lib/format'
+import { formatBytes, formatCount, formatWhen } from '@/lib/format'
 import { FILE_DAYS, FILE_LOG_NAMES } from '@/lib/logs'
 import { useConfigStore } from '@/stores/config'
 
@@ -89,8 +89,7 @@ const line = computed(() => {
     .at(-1)
   if (!written) return 'Not written yet.'
   const bytes = logs.value.reduce((sum, l) => sum + (l.bytes ?? 0), 0)
-  const at = new Date(written).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  return `${formatBytes(bytes)} in ${s.dir}, last written ${at}.`
+  return `${formatBytes(bytes)} in ${s.dir}, last written ${formatWhen(written)}.`
 })
 
 /** What each log's files are short of, a sentence each. */

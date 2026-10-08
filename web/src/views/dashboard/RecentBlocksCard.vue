@@ -1,5 +1,6 @@
 <script setup>
 import SectionCard from '@/components/SectionCard.vue'
+import { formatWhen } from '@/lib/format'
 import { matchedLabel as by } from '@/lib/fwlog'
 
 defineProps({
@@ -61,8 +62,8 @@ function pieces(addr, port) {
           <td colspan="4" class="text-ink-muted">No blocks yet.</td>
         </tr>
         <tr v-for="e in blocks" :key="`${e.time}-${e.src}-${e.srcPort}-${e.dst}-${e.dstPort}`">
-          <td class="text-xs whitespace-nowrap text-ink-muted tabular-nums">
-            {{ new Date(e.time).toLocaleTimeString() }}
+          <td class="when">
+            {{ formatWhen(e.time) }}
           </td>
           <td class="font-mono text-code">
             <template v-for="(p, n) in pieces(e.src, e.srcPort)" :key="n"

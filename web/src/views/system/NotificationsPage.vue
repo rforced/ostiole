@@ -8,6 +8,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { formatWhen } from '@/lib/format'
 import { parseList } from '@/lib/lists'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -114,7 +115,6 @@ const testing = useAsync(async () => {
 })
 const canTest = computed(() => auth.isAdmin && (email.value.enabled || webhook.value.enabled))
 
-const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
 const headline = (e) => (e.level === 'ok' ? `Resolved: ${e.title}` : e.title)
 const targetStates = computed(() =>
   Object.entries(TARGETS)
@@ -319,7 +319,7 @@ const targetStates = computed(() =>
           <template v-for="t in targetStates" :key="t.key">
             <dt>{{ t.label }}</dt>
             <dd>
-              last sent {{ when(t.lastSent) }}
+              last sent {{ formatWhen(t.lastSent, 'never') }}
               <span v-if="t.lastError" class="block text-bad">{{ t.lastError }}</span>
             </dd>
           </template>
@@ -340,7 +340,7 @@ const targetStates = computed(() =>
             </td>
           </tr>
           <tr v-for="r in status.recent" :key="r.time">
-            <td class="text-xs whitespace-nowrap">{{ when(r.time) }}</td>
+            <td class="when">{{ formatWhen(r.time) }}</td>
             <td>
               <div v-for="(e, i) in r.events" :key="i">{{ headline(e) }}</div>
               <div v-if="r.dropped" class="text-ink-muted">and {{ r.dropped }} dropped</div>

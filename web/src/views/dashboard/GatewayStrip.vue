@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 
+import { timeLabel } from '@/lib/chart'
 import { formatDuration, formatMs } from '@/lib/format'
 import { measured } from '@/lib/gateways'
 
@@ -52,11 +53,7 @@ const cells = computed(() =>
 )
 
 function title(c) {
-  const when = new Date(c.start * 1000).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-  const parts = [`${when}: ${WHAT[c.kind] ?? 'no probes'}`]
+  const parts = [`${timeLabel(c.start, '24h')}: ${WHAT[c.kind] ?? 'no probes'}`]
   if (c.down) parts.push(`down ${formatDuration(c.down * 60)}`)
   if (c.latencyMs) parts.push(`worst ${formatMs(c.latencyMs)}`)
   if (c.lossPercent) parts.push(`${Math.round(c.lossPercent)}% lost`)

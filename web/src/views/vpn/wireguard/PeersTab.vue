@@ -7,7 +7,7 @@ import LiveButton from '@/components/LiveButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
-import { formatBytes } from '@/lib/format'
+import { formatBytes, formatWhen } from '@/lib/format'
 import { byText, byTime, useSort } from '@/lib/sort'
 import { connected, livePeer } from '@/lib/wgStatus'
 import { useAuthStore } from '@/stores/auth'
@@ -71,7 +71,7 @@ function handshake(r) {
   if (!props.read.updatedAt.value) return '…'
   const q = seen(r)
   if (!q) return '—'
-  return q.lastHandshake ? new Date(q.lastHandshake).toLocaleString() : 'never'
+  return formatWhen(q.lastHandshake, 'never')
 }
 
 /** The tunnel a new peer goes on first: one that takes calls, as devices need. */
@@ -175,7 +175,7 @@ function edit(r) {
                 set to {{ r.peer.endpoint }}
               </div>
             </td>
-            <td class="text-xs whitespace-nowrap text-ink-muted" data-label="Last handshake">
+            <td class="when" data-label="Last handshake">
               {{ handshake(r) }}
             </td>
             <td class="num text-code" data-label="Traffic">

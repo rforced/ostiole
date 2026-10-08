@@ -7,6 +7,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { errorMessage, useAsync } from '@/lib/async'
+import { formatWhen } from '@/lib/format'
 import { providerFor } from '@/lib/providers'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -82,7 +83,7 @@ function changed(r) {
     .filter(Boolean)
     .sort()
     .at(-1)
-  return at ? new Date(at).toLocaleString() : '—'
+  return formatWhen(at, 'never')
 }
 
 const updating = (r) => (status.value[r.id] ?? []).some((s) => s.state === 'updating')
@@ -202,7 +203,7 @@ function edit(r) {
                 <div v-if="l.error" class="text-xs text-bad">{{ l.error }}</div>
               </div>
             </td>
-            <td class="text-xs whitespace-nowrap" data-label="Changed">{{ changed(r) }}</td>
+            <td class="when" data-label="Changed">{{ changed(r) }}</td>
             <td class="actions" data-label="">
               <button
                 v-if="!auth.readOnly"

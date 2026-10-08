@@ -9,7 +9,7 @@ import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
-import { formatBytes } from '@/lib/format'
+import { formatBytes, formatWhen } from '@/lib/format'
 import { heldLine, useLog } from '@/lib/log'
 import { records } from '@/lib/logs'
 import { ANSWERED_BY, requestValues, tookText } from '@/lib/proxyRequests'
@@ -107,8 +107,8 @@ const empty = computed(() => {
             <td colspan="6" class="text-ink-muted">{{ empty }}</td>
           </tr>
           <tr v-for="r in rows" :key="r.seq">
-            <td class="text-xs whitespace-nowrap text-ink-muted tabular-nums">
-              {{ new Date(r.time).toLocaleString() }}
+            <td class="when">
+              {{ formatWhen(r.time) }}
             </td>
             <td class="font-mono text-code xl:whitespace-nowrap">{{ r.site || '—' }}</td>
             <td class="font-mono text-code">{{ r.client }}</td>

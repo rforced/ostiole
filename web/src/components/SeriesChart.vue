@@ -302,7 +302,7 @@ const table = ref(false)
             </td>
           </tr>
           <tr v-for="p in shown" :key="p[0]">
-            <td class="text-xs whitespace-nowrap text-ink-muted tabular-nums">
+            <td class="when">
               {{ pointLabel(p[0], window) }}
             </td>
             <template v-for="s in series" :key="s.index">

@@ -11,7 +11,7 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { exceptionToggles, sentence } from '@/lib/blocking'
-import { formatCount } from '@/lib/format'
+import { formatCount, formatWhen } from '@/lib/format'
 import { heldLine, keptLine, useLog } from '@/lib/log'
 import { queryValues } from '@/lib/queries'
 import { useAuthStore } from '@/stores/auth'
@@ -252,8 +252,8 @@ function explain(name) {
             </tr>
             <template v-for="e in rows" :key="e.seq">
               <tr class="max-sm:after:order-4 max-sm:after:basis-full max-sm:after:content-['']">
-                <td class="text-xs whitespace-nowrap text-ink-muted tabular-nums max-sm:order-1">
-                  {{ new Date(e.time).toLocaleString() }}
+                <td class="when max-sm:order-1">
+                  {{ formatWhen(e.time) }}
                 </td>
                 <td class="max-sm:order-5">
                   <template v-if="e.device">

@@ -6,6 +6,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import { formatWhen } from '@/lib/format'
 
 /** The units an Ostiole router runs, plus everything. */
 const UNITS = [
@@ -101,7 +102,7 @@ onMounted(load.run)
               'text-warn': e.priority === 4,
             }"
           >
-            <span class="text-ink-muted">{{ new Date(e.time).toLocaleTimeString() }}</span>
+            <span class="text-ink-muted">{{ formatWhen(e.time) }}</span>
             <span class="text-ink-muted"> {{ e.unit }}</span>
             <span v-if="e.priority <= 4"> [{{ LEVELS[e.priority] }}]</span>
             {{ e.message }}

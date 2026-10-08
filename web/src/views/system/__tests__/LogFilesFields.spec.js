@@ -90,7 +90,7 @@ describe('LogFilesFields', () => {
         ],
       },
     }))
-    const at = new Date(written).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    const at = new Date(written).toLocaleString()
     expect(wrapper.text()).toContain(`4.2 MB in /var/log/ostiole, last written ${at}.`)
     expect(wrapper.text()).toContain(
       'Firewall log: 12 entries left memory before they were written.',

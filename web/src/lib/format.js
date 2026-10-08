@@ -108,3 +108,18 @@ export function formatRate(bits) {
   const digits = v >= 100 ? 0 : v >= 10 ? 1 : 2
   return `${Number(v.toFixed(digits))} ${RATE_UNITS[i]}`
 }
+
+/**
+ * When something happened, in the browser's locale. No time is `empty`:
+ * "never" for one that has not happened yet, "—" for one that does not
+ * apply.
+ *
+ * @param {string | number | Date | null | undefined} t
+ * @param {string} [empty]
+ * @returns {string}
+ */
+export function formatWhen(t, empty = '—') {
+  if (!t) return empty
+  const d = new Date(t)
+  return Number.isNaN(d.getTime()) ? empty : d.toLocaleString()
+}
