@@ -1,7 +1,7 @@
 <script setup>
-import { LoaderCircle } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
+import ActionButton from '@/components/ActionButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import { ApiError, api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
@@ -122,26 +122,21 @@ async function revert() {
         >. Otherwise the previous configuration is restored automatically.
       </p>
       <div class="mt-3 flex gap-2">
-        <button
-          type="button"
-          class="btn-primary"
+        <ActionButton
+          kind="primary"
+          label="Confirm"
+          busy-label="Confirming…"
+          :busy="busy === 'confirm'"
           :disabled="busy !== ''"
-          :aria-busy="busy === 'confirm'"
           @click="confirm"
-        >
-          <LoaderCircle v-if="busy === 'confirm'" class="size-4 animate-spin" aria-hidden="true" />
-          {{ busy === 'confirm' ? 'Confirming…' : 'Confirm' }}
-        </button>
-        <button
-          type="button"
-          class="btn-secondary"
+        />
+        <ActionButton
+          label="Revert now"
+          busy-label="Reverting…"
+          :busy="busy === 'revert'"
           :disabled="busy !== ''"
-          :aria-busy="busy === 'revert'"
           @click="revert"
-        >
-          <LoaderCircle v-if="busy === 'revert'" class="size-4 animate-spin" aria-hidden="true" />
-          {{ busy === 'revert' ? 'Reverting…' : 'Revert now' }}
-        </button>
+        />
       </div>
     </template>
     <p v-else-if="outcome === 'confirmed'" class="font-medium text-ok">Confirmed and saved.</p>

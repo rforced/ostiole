@@ -1,7 +1,8 @@
 <script setup>
-import { LoaderCircle, Plus, RefreshCw } from 'lucide-vue-next'
+import { Plus, RefreshCw } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 
+import ActionButton from '@/components/ActionButton.vue'
 import AppDialog from '@/components/AppDialog.vue'
 import AppNotice from '@/components/AppNotice.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
@@ -169,23 +170,16 @@ function remove(cert) {
           :updated-at="load.updatedAt.value"
           @click="load.run"
         />
-        <button
+        <ActionButton
           v-if="page.builtIn && !auth.readOnly"
-          type="button"
-          class="btn-secondary"
-          :disabled="regenerate.busy.value || !auth.isAdmin"
+          label="Regenerate self-signed"
+          busy-label="Regenerating…"
+          :icon="RefreshCw"
+          :busy="regenerate.busy.value"
+          :disabled="!auth.isAdmin"
           :title="auth.isAdmin ? undefined : 'Only an admin can regenerate it.'"
-          :aria-busy="regenerate.busy.value"
           @click="askRegenerate"
-        >
-          <LoaderCircle
-            v-if="regenerate.busy.value"
-            class="size-4 animate-spin"
-            aria-hidden="true"
-          />
-          <RefreshCw v-else class="size-4" aria-hidden="true" />
-          {{ regenerate.busy.value ? 'Regenerating…' : 'Regenerate self-signed' }}
-        </button>
+        />
       </template>
 
       <div class="space-y-4">
@@ -280,22 +274,16 @@ function remove(cert) {
             </td>
             <td class="when" data-label="Expires">{{ expires(c) }}</td>
             <td class="actions" data-label="">
-              <button
+              <ActionButton
                 v-if="c.source !== 'uploaded' && !auth.readOnly"
-                type="button"
-                class="link-action"
-                :disabled="status[c.id]?.running || !auth.isAdmin"
+                kind="link"
+                label="Issue now"
+                busy-label="Issuing…"
+                :busy="status[c.id]?.running === true"
+                :disabled="!auth.isAdmin"
                 :title="auth.isAdmin ? undefined : 'Only an admin can order a certificate.'"
-                :aria-busy="status[c.id]?.running === true"
                 @click="issue(c)"
-              >
-                <LoaderCircle
-                  v-if="status[c.id]?.running"
-                  class="mr-1 inline size-4 animate-spin"
-                  aria-hidden="true"
-                />
-                {{ status[c.id]?.running ? 'Issuing…' : 'Issue now' }}
-              </button>
+              />
               <MenuButton v-if="issued(c) && auth.isAdmin" label="Download" :items="downloads(c)" />
               <button type="button" class="link-action" @click="edit(c)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}

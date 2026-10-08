@@ -3,6 +3,7 @@ import { Plus } from 'lucide-vue-next'
 import { TabsContent } from 'reka-ui'
 import { computed, onMounted, ref, watch } from 'vue'
 
+import ActionButton from '@/components/ActionButton.vue'
 import AppTabs from '@/components/AppTabs.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -314,14 +315,13 @@ function editZone(z) {
                 </td>
                 <td class="actions" data-label="">
                   <template v-if="row.live && dynamic(row.cfg) && !auth.readOnly">
-                    <button
-                      type="button"
-                      class="link-action"
-                      :disabled="renewing === row.cfg.name"
+                    <ActionButton
+                      kind="link"
+                      label="Renew"
+                      busy-label="Renewing…"
+                      :busy="renewing === row.cfg.name"
                       @click="renew(row, false)"
-                    >
-                      {{ renewing === row.cfg.name ? 'Renewing…' : 'Renew' }}
-                    </button>
+                    />
                     <ConfirmButton
                       label="Release"
                       :question="`Release the lease on ${row.cfg.name} and ask for a new one?`"

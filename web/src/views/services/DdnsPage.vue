@@ -1,7 +1,8 @@
 <script setup>
-import { LoaderCircle, Plus } from 'lucide-vue-next'
+import { Plus } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 
+import ActionButton from '@/components/ActionButton.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
@@ -206,21 +207,15 @@ function edit(r) {
             </td>
             <td class="when" data-label="Changed">{{ changed(r) }}</td>
             <td class="actions" data-label="">
-              <button
+              <ActionButton
                 v-if="!auth.readOnly"
-                type="button"
-                class="link-action"
-                :disabled="!status[r.id] || !r.enabled || updating(r)"
-                :aria-busy="updating(r)"
+                kind="link"
+                label="Update now"
+                busy-label="Updating…"
+                :busy="updating(r)"
+                :disabled="!status[r.id] || !r.enabled"
                 @click="updateNow(r)"
-              >
-                <LoaderCircle
-                  v-if="updating(r)"
-                  class="inline size-4 animate-spin"
-                  aria-hidden="true"
-                />
-                Update now
-              </button>
+              />
               <button type="button" class="link-action" @click="edit(r)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>

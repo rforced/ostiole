@@ -1,7 +1,8 @@
 <script setup>
-import { LoaderCircle, Send } from 'lucide-vue-next'
+import { Send } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 
+import ActionButton from '@/components/ActionButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
@@ -296,18 +297,15 @@ const targetStates = computed(() =>
           :updated-at="load.updatedAt.value"
           @click="load.run"
         />
-        <button
+        <ActionButton
           v-if="!auth.readOnly"
-          type="button"
-          class="btn-secondary"
-          :disabled="!canTest || testing.busy.value"
-          :aria-busy="testing.busy.value"
+          label="Send a test"
+          busy-label="Sending…"
+          :icon="Send"
+          :busy="testing.busy.value"
+          :disabled="!canTest"
           @click="testing.run"
-        >
-          <LoaderCircle v-if="testing.busy.value" class="size-4 animate-spin" aria-hidden="true" />
-          <Send v-else class="size-4" aria-hidden="true" />
-          {{ testing.busy.value ? 'Sending…' : 'Send a test' }}
-        </button>
+        />
       </template>
       <div v-if="testing.error.value || results.length" class="card-strip space-y-1">
         <ErrorLine v-if="testing.error.value">{{ testing.error.value }}</ErrorLine>

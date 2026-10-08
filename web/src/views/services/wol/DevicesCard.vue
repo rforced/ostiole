@@ -1,7 +1,8 @@
 <script setup>
-import { LoaderCircle, Plus } from 'lucide-vue-next'
+import { Plus } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
+import ActionButton from '@/components/ActionButton.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import RandomMacBadge from '@/components/RandomMacBadge.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -35,17 +36,14 @@ function edit(d) {
 <template>
   <SectionCard title="Devices" :count="devices.length" flush>
     <template v-if="!auth.readOnly" #actions>
-      <button
+      <ActionButton
         v-if="devices.length > 1"
-        type="button"
-        class="btn-secondary"
+        label="Wake all"
+        busy-label="Waking…"
+        :busy="busy === '*'"
         :disabled="busy !== ''"
-        :aria-busy="busy === '*'"
         @click="wakeAll(devices.filter((d) => !off.has(d.interface)))"
-      >
-        <LoaderCircle v-if="busy === '*'" class="size-4 animate-spin" aria-hidden="true" />
-        {{ busy === '*' ? 'Waking…' : 'Wake all' }}
-      </button>
+      />
       <button type="button" class="btn-secondary" @click="add">
         <Plus class="size-4" aria-hidden="true" /> Add device
       </button>

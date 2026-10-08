@@ -1,7 +1,7 @@
 <script setup>
-import { LoaderCircle } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
+import ActionButton from '@/components/ActionButton.vue'
 import AppNotice from '@/components/AppNotice.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -97,10 +97,9 @@ const install = useAsync(async () => {
 const busy = computed(() => check.busy.value || install.busy.value)
 const error = computed(() => actionError.value || check.error.value || install.error.value)
 const installing = computed(() => install.busy.value || running.value)
-const installLabel = computed(() => {
-  if (installing.value) return 'Installing…'
-  return installSecurityOnly.value ? 'Install security updates' : 'Install all updates'
-})
+const installLabel = computed(() =>
+  installSecurityOnly.value ? 'Install security updates' : 'Install all updates',
+)
 
 async function askInstall() {
   const n = installable.value.length
@@ -138,16 +137,14 @@ async function reboot() {
           busy-label="Checking…"
           @click="check.run"
         />
-        <button
-          type="button"
-          class="btn-primary"
+        <ActionButton
+          kind="primary"
+          :label="installLabel"
+          busy-label="Installing…"
+          :busy="installing"
           :disabled="busy || running || !status?.available || !installable.length || !auth.isAdmin"
-          :aria-busy="installing"
           @click="askInstall"
-        >
-          <LoaderCircle v-if="installing" class="size-4 animate-spin" aria-hidden="true" />
-          {{ installLabel }}
-        </button>
+        />
       </template>
       <div class="space-y-4">
         <p v-if="!poll.updatedAt.value" class="text-ink-muted">Reading…</p>

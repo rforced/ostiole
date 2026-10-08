@@ -1,7 +1,7 @@
 <script setup>
-import { LoaderCircle } from 'lucide-vue-next'
 import { computed, nextTick, ref, watch } from 'vue'
 
+import ActionButton from '@/components/ActionButton.vue'
 import AppDisclosure from '@/components/AppDisclosure.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -353,20 +353,12 @@ async function loadIntoDraft() {
           :updated-at="loadCopies.updatedAt.value"
           @click="loadCopies.run"
         />
-        <button
-          type="button"
-          class="btn-secondary"
-          :disabled="backUpNow.busy.value"
-          :aria-busy="backUpNow.busy.value"
+        <ActionButton
+          label="Back up now"
+          busy-label="Uploading…"
+          :busy="backUpNow.busy.value"
           @click="backUpNow.run"
-        >
-          <LoaderCircle
-            v-if="backUpNow.busy.value"
-            class="size-4 animate-spin"
-            aria-hidden="true"
-          />
-          {{ backUpNow.busy.value ? 'Uploading…' : 'Back up now' }}
-        </button>
+        />
         <ConfirmButton
           v-if="copies.length"
           label="Delete all"
@@ -432,20 +424,14 @@ async function loadIntoDraft() {
                 :aria-label="`Passphrase for ${c.name}`"
                 placeholder="Passphrase for this copy"
               />
-              <button
-                type="button"
-                class="link-action"
+              <ActionButton
+                kind="link"
+                label="Restore"
+                busy-label="Restoring…"
+                :busy="restoring === c.key"
                 :disabled="restore.busy.value"
-                :aria-busy="restoring === c.key"
                 @click="restoreCopy(c.key)"
-              >
-                <LoaderCircle
-                  v-if="restoring === c.key"
-                  class="mr-1 inline size-4 animate-spin"
-                  aria-hidden="true"
-                />
-                Restore
-              </button>
+              />
               <ConfirmButton
                 label="Delete"
                 :busy="deleting === c.key"

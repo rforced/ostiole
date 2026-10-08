@@ -1,7 +1,7 @@
 <script setup>
-import { LoaderCircle } from 'lucide-vue-next'
 import { ref } from 'vue'
 
+import ActionButton from '@/components/ActionButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -87,25 +87,21 @@ async function run(kind) {
             class="input w-24 font-mono max-sm:w-full"
           />
         </FormField>
-        <button
+        <ActionButton
           type="submit"
-          class="btn-primary"
+          kind="primary"
+          label="Ping"
+          busy-label="Pinging…"
+          :busy="busy === 'ping'"
           :disabled="busy !== ''"
-          :aria-busy="busy === 'ping'"
-        >
-          <LoaderCircle v-if="busy === 'ping'" class="size-4 animate-spin" aria-hidden="true" />
-          {{ busy === 'ping' ? 'Pinging…' : 'Ping' }}
-        </button>
-        <button
-          type="button"
-          class="btn-secondary"
+        />
+        <ActionButton
+          label="Traceroute"
+          busy-label="Tracing…"
+          :busy="busy === 'trace'"
           :disabled="busy !== ''"
-          :aria-busy="busy === 'trace'"
           @click="run('trace')"
-        >
-          <LoaderCircle v-if="busy === 'trace'" class="size-4 animate-spin" aria-hidden="true" />
-          {{ busy === 'trace' ? 'Tracing…' : 'Traceroute' }}
-        </button>
+        />
         <ToggleRow v-model="resolveNames" label="Resolve hop names" />
       </form>
       <ErrorLine v-if="job.error.value" class="mt-3">{{ job.error.value }}</ErrorLine>

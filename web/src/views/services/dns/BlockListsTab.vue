@@ -1,7 +1,8 @@
 <script setup>
-import { LoaderCircle, Plus } from 'lucide-vue-next'
+import { Plus } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 
+import ActionButton from '@/components/ActionButton.vue'
 import AppDisclosure from '@/components/AppDisclosure.vue'
 import AppNotice from '@/components/AppNotice.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
@@ -354,21 +355,15 @@ const lists = sort.sorted
               </template>
             </td>
             <td class="actions" data-label="">
-              <button
+              <ActionButton
                 v-if="l.url && applied.has(l.name) && !auth.readOnly"
-                type="button"
-                class="link-action"
+                kind="link"
+                label="Refresh"
+                busy-label="Refreshing…"
+                :busy="which === l.name"
                 :disabled="refresh.busy.value"
-                :aria-busy="which === l.name"
                 @click="refresh.run(l.name)"
-              >
-                <LoaderCircle
-                  v-if="which === l.name"
-                  class="mr-1 inline size-4 animate-spin"
-                  aria-hidden="true"
-                />
-                {{ which === l.name ? 'Refreshing…' : 'Refresh' }}
-              </button>
+              />
               <button
                 type="button"
                 class="link-action"

@@ -2,6 +2,7 @@
 import { LoaderCircle } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
+import ActionButton from '@/components/ActionButton.vue'
 import AppNotice from '@/components/AppNotice.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -107,16 +108,14 @@ const logout = useAsync(async () => {
         </p>
         <template v-else-if="stage === 'needs-login'">
           <form class="flex flex-wrap items-center gap-3" @submit.prevent="logIn(authKey)">
-            <button
-              type="button"
-              class="btn-primary"
+            <ActionButton
+              kind="primary"
+              label="Log in"
+              busy-label="Logging in…"
+              :busy="via === 'link'"
               :disabled="login.busy.value"
-              :aria-busy="via === 'link'"
               @click="logIn('')"
-            >
-              <LoaderCircle v-if="via === 'link'" class="size-4 animate-spin" aria-hidden="true" />
-              Log in
-            </button>
+            />
             <label for="ts-auth-key" class="text-ink-muted">or with an auth key</label>
             <input
               id="ts-auth-key"
@@ -126,15 +125,13 @@ const logout = useAsync(async () => {
               autocomplete="off"
               spellcheck="false"
             />
-            <button
+            <ActionButton
               type="submit"
-              class="btn-secondary"
+              label="Log in with key"
+              busy-label="Logging in…"
+              :busy="via === 'key'"
               :disabled="!authKey || login.busy.value"
-              :aria-busy="via === 'key'"
-            >
-              <LoaderCircle v-if="via === 'key'" class="size-4 animate-spin" aria-hidden="true" />
-              Log in with key
-            </button>
+            />
           </form>
           <p class="text-ink-muted">A key is used once and not kept.</p>
           <p v-if="authUrl">

@@ -1,7 +1,8 @@
 <script setup>
-import { LoaderCircle, Search } from 'lucide-vue-next'
+import { Search } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
+import ActionButton from '@/components/ActionButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -95,16 +96,13 @@ const stale = computed(() => config.dirty)
           <FormField id="lookup-name" label="Name" class="flex-1">
             <input id="lookup-name" v-model="query" class="input font-mono" spellcheck="false" />
           </FormField>
-          <button
+          <ActionButton
             type="submit"
-            class="btn-secondary"
-            :disabled="lookup.busy.value"
-            :aria-busy="lookup.busy.value"
-          >
-            <LoaderCircle v-if="lookup.busy.value" class="size-4 animate-spin" aria-hidden="true" />
-            <Search v-else class="size-4" aria-hidden="true" />
-            Look up
-          </button>
+            label="Look up"
+            busy-label="Looking up…"
+            :icon="Search"
+            :busy="lookup.busy.value"
+          />
         </form>
 
         <ErrorLine v-if="lookup.error.value">

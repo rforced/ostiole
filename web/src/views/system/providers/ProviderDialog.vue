@@ -1,7 +1,7 @@
 <script setup>
-import { LoaderCircle } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 
+import ActionButton from '@/components/ActionButton.vue'
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
@@ -196,17 +196,15 @@ const sees = computed(() => {
       <ErrorLine v-if="testError" class="text-sm">{{ testError }}</ErrorLine>
 
       <div class="flex justify-end gap-2 pt-2">
-        <button
+        <ActionButton
           v-if="testable && !auth.readOnly"
-          type="button"
-          class="btn-secondary mr-auto"
-          :disabled="!valid || testing"
-          :aria-busy="testing"
+          class="mr-auto"
+          label="Test"
+          busy-label="Testing…"
+          :busy="testing"
+          :disabled="!valid"
           @click="test"
-        >
-          <LoaderCircle v-if="testing" class="size-4 animate-spin" aria-hidden="true" />
-          {{ testing ? 'Testing…' : 'Test' }}
-        </button>
+        />
         <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
         <button type="submit" class="btn-primary" :disabled="!valid">Save to draft</button>
       </div>

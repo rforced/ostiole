@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import ActionButton from '@/components/ActionButton.vue'
 import AuthCard from '@/components/AuthCard.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
@@ -94,9 +95,15 @@ async function submit() {
         <p v-if="mismatch" class="text-sm text-bad">Passwords do not match.</p>
       </FormField>
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
-      <button type="submit" :disabled="busy || !valid" class="btn-primary w-full">
-        {{ busy ? 'Creating…' : 'Create account and sign in' }}
-      </button>
+      <ActionButton
+        type="submit"
+        kind="primary"
+        class="w-full"
+        label="Create account and sign in"
+        busy-label="Creating…"
+        :busy="busy"
+        :disabled="!valid"
+      />
     </form>
   </AuthCard>
 </template>

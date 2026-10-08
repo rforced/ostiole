@@ -1,8 +1,9 @@
 <script setup>
-import { AlertTriangle, LoaderCircle } from 'lucide-vue-next'
+import { AlertTriangle } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
+import ActionButton from '@/components/ActionButton.vue'
 import ApplyPending from '@/components/ApplyPending.vue'
 import ChangeList from '@/components/ChangeList.vue'
 import { ApiError, api } from '@/lib/api'
@@ -253,16 +254,14 @@ async function settle() {
                 >
                   Discard
                 </button>
-                <button
-                  type="button"
-                  class="btn-primary max-sm:flex-1"
-                  :disabled="busy"
-                  :aria-busy="busy"
+                <ActionButton
+                  kind="primary"
+                  class="max-sm:flex-1"
+                  :label="`Apply with ${CONFIRM_SECONDS}s confirmation`"
+                  busy-label="Applying…"
+                  :busy="busy"
                   @click="apply"
-                >
-                  <LoaderCircle v-if="busy" class="size-4 animate-spin" aria-hidden="true" />
-                  {{ busy ? 'Applying…' : `Apply with ${CONFIRM_SECONDS}s confirmation` }}
-                </button>
+                />
               </div>
             </div>
             <ChangeList

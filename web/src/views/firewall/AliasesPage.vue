@@ -3,6 +3,7 @@ import { Plus } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import ActionButton from '@/components/ActionButton.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import ListContentsDialog from '@/components/ListContentsDialog.vue'
@@ -228,15 +229,15 @@ async function readEntries(q, offset, limit) {
             <UsedByCell :names="config.aliasReferences(a.name)" />
             <td class="actions" data-label="">
               <template v-if="!auth.readOnly">
-                <button
+                <ActionButton
                   v-if="fetches(a)"
-                  type="button"
-                  class="link-action"
+                  kind="link"
+                  label="Refresh"
+                  busy-label="Refreshing…"
+                  :busy="refreshing === a.name"
                   :disabled="refresh.busy.value"
                   @click="refresh.run(a.name)"
-                >
-                  {{ refreshing === a.name ? 'Refreshing…' : 'Refresh' }}
-                </button>
+                />
                 <button v-if="ruleZone" type="button" class="link-action" @click="blockWith(a)">
                   Make a rule
                 </button>

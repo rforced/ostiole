@@ -1,7 +1,8 @@
 <script setup>
-import { LoaderCircle, Upload } from 'lucide-vue-next'
+import { Upload } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 
+import ActionButton from '@/components/ActionButton.vue'
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
@@ -252,10 +253,14 @@ async function save() {
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!ok || busy" :aria-busy="busy">
-          <LoaderCircle v-if="busy" class="size-4 animate-spin" aria-hidden="true" />
-          Save to draft
-        </button>
+        <ActionButton
+          type="submit"
+          kind="primary"
+          label="Save to draft"
+          busy-label="Saving…"
+          :busy="busy"
+          :disabled="!ok"
+        />
       </div>
     </form>
   </AppDialog>

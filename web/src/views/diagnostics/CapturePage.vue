@@ -1,7 +1,7 @@
 <script setup>
-import { LoaderCircle } from 'lucide-vue-next'
 import { ref, watch } from 'vue'
 
+import ActionButton from '@/components/ActionButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -108,15 +108,14 @@ const capture = useAsync(async () => {
             class="input w-28 font-mono max-sm:w-full"
           />
         </FormField>
-        <button
+        <ActionButton
           type="submit"
-          class="btn-primary"
-          :disabled="capture.busy.value || !iface"
-          :aria-busy="capture.busy.value"
-        >
-          <LoaderCircle v-if="capture.busy.value" class="size-4 animate-spin" aria-hidden="true" />
-          {{ capture.busy.value ? 'Capturing…' : 'Capture' }}
-        </button>
+          kind="primary"
+          label="Capture"
+          busy-label="Capturing…"
+          :busy="capture.busy.value"
+          :disabled="!iface"
+        />
       </form>
       <ErrorLine v-if="capture.error.value" class="mt-3">
         {{ capture.error.value }}

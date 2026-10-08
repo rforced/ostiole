@@ -1,7 +1,7 @@
 <script setup>
-import { LoaderCircle } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 
+import ActionButton from '@/components/ActionButton.vue'
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
@@ -203,17 +203,14 @@ function sentence(r) {
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
 
       <div class="flex justify-end gap-2 pt-2">
-        <button
+        <ActionButton
           v-if="!auth.readOnly"
-          type="button"
-          class="btn-secondary mr-auto"
-          :disabled="checking"
-          :aria-busy="checking"
+          class="mr-auto"
+          label="Check"
+          busy-label="Checking…"
+          :busy="checking"
           @click="check"
-        >
-          <LoaderCircle v-if="checking" class="size-4 animate-spin" aria-hidden="true" />
-          {{ checking ? 'Checking…' : 'Check' }}
-        </button>
+        />
         <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
         <button type="submit" class="btn-primary">Save to draft</button>
       </div>

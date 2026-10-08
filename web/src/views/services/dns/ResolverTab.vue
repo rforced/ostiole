@@ -1,7 +1,8 @@
 <script setup>
-import { LoaderCircle, Plus } from 'lucide-vue-next'
+import { Plus } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
+import ActionButton from '@/components/ActionButton.vue'
 import AppDisclosure from '@/components/AppDisclosure.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -339,20 +340,13 @@ function toggleInterface(name, on) {
             </FormField>
           </div>
           <div v-if="!auth.readOnly" class="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              class="btn-secondary"
-              :disabled="!dnsRunning || clearCache.busy.value"
-              :aria-busy="clearCache.busy.value"
+            <ActionButton
+              label="Clear cache"
+              busy-label="Clearing…"
+              :busy="clearCache.busy.value"
+              :disabled="!dnsRunning"
               @click="clearCache.run()"
-            >
-              <LoaderCircle
-                v-if="clearCache.busy.value"
-                class="size-4 animate-spin"
-                aria-hidden="true"
-              />
-              {{ clearCache.busy.value ? 'Clearing…' : 'Clear cache' }}
-            </button>
+            />
             <ErrorLine v-if="clearCache.error.value">
               {{ clearCache.error.value }}
             </ErrorLine>

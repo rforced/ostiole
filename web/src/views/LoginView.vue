@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import ActionButton from '@/components/ActionButton.vue'
 import AuthCard from '@/components/AuthCard.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
@@ -78,9 +79,14 @@ async function submit() {
         />
       </FormField>
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
-      <button type="submit" :disabled="busy" class="btn-primary w-full">
-        {{ busy ? 'Signing in…' : 'Sign in' }}
-      </button>
+      <ActionButton
+        type="submit"
+        kind="primary"
+        class="w-full"
+        label="Sign in"
+        busy-label="Signing in…"
+        :busy="busy"
+      />
     </form>
   </AuthCard>
 </template>

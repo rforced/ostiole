@@ -1,7 +1,7 @@
 <script setup>
-import { LoaderCircle } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 
+import ActionButton from '@/components/ActionButton.vue'
 import AppNotice from '@/components/AppNotice.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
@@ -167,17 +167,15 @@ onMounted(async () => {
         busy-label="Checking…"
         @click="checking.run"
       />
-      <button
+      <ActionButton
         v-if="check?.available && !restartedTo"
-        type="button"
-        class="btn-primary"
+        kind="primary"
+        :label="`Install ${check.latest}`"
+        busy-label="Installing…"
+        :busy="installing"
         :disabled="busy || running || !auth.isAdmin"
-        :aria-busy="installing"
         @click="askInstall"
-      >
-        <LoaderCircle v-if="installing" class="size-4 animate-spin" aria-hidden="true" />
-        {{ installing ? 'Installing…' : `Install ${check.latest}` }}
-      </button>
+      />
     </template>
     <div class="space-y-4">
       <dl class="kv max-w-md">

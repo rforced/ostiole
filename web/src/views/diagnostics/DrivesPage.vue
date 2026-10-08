@@ -1,7 +1,7 @@
 <script setup>
-import { LoaderCircle } from 'lucide-vue-next'
 import { computed, onMounted, ref, watch } from 'vue'
 
+import ActionButton from '@/components/ActionButton.vue'
 import AppDisclosure from '@/components/AppDisclosure.vue'
 import AppNotice from '@/components/AppNotice.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -206,70 +206,47 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
       </template>
       <template #actions>
         <template v-if="d.selfTest?.supported && !d.selfTest.running && !auth.readOnly">
-          <button
-            type="button"
-            class="btn-secondary"
+          <ActionButton
+            label="Short test"
+            busy-label="Starting…"
+            :busy="busyOn(d, 'short')"
             :disabled="action.busy.value"
             :title="minutes(d.selfTest.shortMinutes)"
-            :aria-busy="busyOn(d, 'short')"
             @click="start(d, 'short')"
-          >
-            <LoaderCircle
-              v-if="busyOn(d, 'short')"
-              class="size-4 animate-spin"
-              aria-hidden="true"
-            />
-            Short test
-          </button>
-          <button
-            type="button"
-            class="btn-secondary"
+          />
+          <ActionButton
+            label="Extended test"
+            busy-label="Starting…"
+            :busy="busyOn(d, 'long')"
             :disabled="action.busy.value"
             :title="minutes(d.selfTest.extendedMinutes)"
-            :aria-busy="busyOn(d, 'long')"
             @click="start(d, 'long')"
-          >
-            <LoaderCircle v-if="busyOn(d, 'long')" class="size-4 animate-spin" aria-hidden="true" />
-            Extended test
-          </button>
-          <button
+          />
+          <ActionButton
             v-if="d.selfTest.conveyance"
-            type="button"
-            class="btn-secondary"
+            label="Conveyance test"
+            busy-label="Starting…"
+            :busy="busyOn(d, 'conveyance')"
             :disabled="action.busy.value"
             :title="minutes(d.selfTest.conveyanceMinutes)"
-            :aria-busy="busyOn(d, 'conveyance')"
             @click="start(d, 'conveyance')"
-          >
-            <LoaderCircle
-              v-if="busyOn(d, 'conveyance')"
-              class="size-4 animate-spin"
-              aria-hidden="true"
-            />
-            Conveyance test
-          </button>
+          />
         </template>
-        <button
+        <ActionButton
           v-else-if="d.selfTest?.supported && !auth.readOnly"
-          type="button"
-          class="btn-secondary"
+          label="Abort"
+          busy-label="Aborting…"
+          :busy="busyOn(d, 'abort')"
           :disabled="action.busy.value"
-          :aria-busy="busyOn(d, 'abort')"
           @click="abort(d)"
-        >
-          <LoaderCircle v-if="busyOn(d, 'abort')" class="size-4 animate-spin" aria-hidden="true" />
-          Abort
-        </button>
-        <button
-          type="button"
-          class="btn-secondary"
+        />
+        <ActionButton
+          label="Full report"
+          busy-label="Reading…"
+          :busy="busyOn(d, 'report')"
           :disabled="action.busy.value"
-          :aria-busy="busyOn(d, 'report')"
           @click="report(d)"
-        >
-          <LoaderCircle v-if="busyOn(d, 'report')" class="size-4 animate-spin" aria-hidden="true" />
-          Full report
-        </button>
+        />
       </template>
 
       <div class="space-y-4">

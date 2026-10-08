@@ -1,7 +1,8 @@
 <script setup>
-import { LoaderCircle, Plus } from 'lucide-vue-next'
+import { Plus } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 
+import ActionButton from '@/components/ActionButton.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
@@ -179,25 +180,15 @@ function describe(c) {
                 <span v-else class="when">never</span>
               </td>
               <td class="actions" data-label="">
-                <button
+                <ActionButton
                   v-if="!auth.readOnly"
-                  type="button"
-                  class="link-action"
-                  :disabled="
-                    runner.busy.value ||
-                    c.status?.running ||
-                    (c.kind === 'command' && !auth.isAdmin)
-                  "
-                  :aria-busy="starting === c.id || c.status?.running === true"
+                  kind="link"
+                  label="Run now"
+                  busy-label="Running…"
+                  :busy="starting === c.id || c.status?.running === true"
+                  :disabled="runner.busy.value || (c.kind === 'command' && !auth.isAdmin)"
                   @click="runNow(c)"
-                >
-                  <LoaderCircle
-                    v-if="starting === c.id || c.status?.running"
-                    class="mr-1 inline size-4 animate-spin"
-                    aria-hidden="true"
-                  />
-                  Run now
-                </button>
+                />
                 <button
                   type="button"
                   class="link-action"

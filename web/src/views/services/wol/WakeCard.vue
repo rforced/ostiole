@@ -1,7 +1,7 @@
 <script setup>
-import { LoaderCircle } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 
+import ActionButton from '@/components/ActionButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -59,15 +59,14 @@ function send() {
           </option>
         </select>
       </FormField>
-      <button
+      <ActionButton
         type="submit"
-        class="btn-primary"
+        kind="primary"
+        label="Wake"
+        busy-label="Waking…"
+        :busy="busy === 'once'"
         :disabled="busy !== '' || !iface"
-        :aria-busy="busy === 'once'"
-      >
-        <LoaderCircle v-if="busy === 'once'" class="size-4 animate-spin" aria-hidden="true" />
-        {{ busy === 'once' ? 'Waking…' : 'Wake' }}
-      </button>
+      />
     </form>
     <ErrorLine v-if="errors.length" class="mt-3">{{ errors[0] }}</ErrorLine>
   </SectionCard>

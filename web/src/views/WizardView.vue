@@ -1,8 +1,8 @@
 <script setup>
-import { LoaderCircle } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import ActionButton from '@/components/ActionButton.vue'
 import ApplyPending from '@/components/ApplyPending.vue'
 import FormField from '@/components/FormField.vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -196,26 +196,23 @@ function reverted() {
       </div>
 
       <div class="flex items-center gap-3 max-sm:flex-wrap">
-        <button
+        <ActionButton
           type="submit"
-          class="btn-secondary"
+          label="Preview"
+          busy-label="Previewing…"
+          :busy="busy === 'preview'"
           :disabled="busy !== '' || !canPreview"
-          :aria-busy="busy === 'preview'"
-        >
-          <LoaderCircle v-if="busy === 'preview'" class="size-4 animate-spin" aria-hidden="true" />
-          Preview
-        </button>
-        <button
+        />
+        <ActionButton
           v-if="preview"
-          type="button"
-          class="btn-primary max-sm:flex-1"
+          kind="primary"
+          class="max-sm:flex-1"
+          :label="`Apply with ${CONFIRM_SECONDS}s confirmation`"
+          busy-label="Applying…"
+          :busy="busy === 'apply'"
           :disabled="busy !== ''"
-          :aria-busy="busy === 'apply'"
           @click="apply"
-        >
-          <LoaderCircle v-if="busy === 'apply'" class="size-4 animate-spin" aria-hidden="true" />
-          {{ busy === 'apply' ? 'Applying…' : `Apply with ${CONFIRM_SECONDS}s confirmation` }}
-        </button>
+        />
         <RouterLink
           to="/"
           class="ml-auto text-sm text-ink-muted underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
