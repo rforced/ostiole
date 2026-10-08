@@ -117,8 +117,8 @@ function save() {
         </FormField>
       </div>
 
-      <fieldset class="space-y-2">
-        <legend class="group-title">Mode</legend>
+      <fieldset class="field-group">
+        <legend>Mode</legend>
         <label class="flex items-center gap-2 text-sm">
           <input v-model="form.mode" type="radio" value="detect" class="size-4" />
           Detect only
@@ -189,8 +189,8 @@ function save() {
         hint="Only the part up to the limit is inspected, and the rest reaches the site unread. For a site that takes larger uploads."
       />
 
-      <fieldset class="space-y-2">
-        <legend class="group-title">Applications</legend>
+      <fieldset class="field-group">
+        <legend>Applications</legend>
         <div class="flex flex-wrap gap-4">
           <label v-for="a in APPLICATIONS" :key="a" class="flex items-center gap-2 text-sm">
             <input

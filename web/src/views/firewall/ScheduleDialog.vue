@@ -75,8 +75,8 @@ function save() {
           <input id="sch-end" v-model="form.end" type="time" class="input w-auto font-mono" />
         </FormField>
       </div>
-      <fieldset class="space-y-2 text-sm">
-        <legend class="group-title">Days</legend>
+      <fieldset class="field-group text-sm">
+        <legend>Days</legend>
         <p class="text-sm text-ink-muted">None selected means every day.</p>
         <div class="flex flex-wrap gap-4">
           <label v-for="d in DAYS" :key="d" class="flex items-center gap-2 capitalize">

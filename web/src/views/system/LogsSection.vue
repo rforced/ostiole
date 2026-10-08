@@ -88,10 +88,10 @@ const clearAll = useAsync(async () => {
     </template>
     <div class="space-y-4">
       <ErrorLine v-if="clearAll.error.value">{{ clearAll.error.value }}</ErrorLine>
-      <fieldset class="min-w-0 space-y-4">
-        <legend class="group-title mb-1">Journal</legend>
+      <fieldset class="field-group">
+        <legend>Journal</legend>
         <fieldset class="space-y-1.5">
-          <legend class="mb-1 block font-medium">Level</legend>
+          <legend class="group-title mb-1">Level</legend>
           <div v-for="l in LEVELS" :key="l.value" class="flex items-start gap-2">
             <input
               :id="`logs-level-${l.value}`"

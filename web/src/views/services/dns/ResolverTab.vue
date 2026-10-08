@@ -354,8 +354,8 @@ function toggleInterface(name, on) {
             <p v-else class="text-ink-muted">Names are looked up again on the running resolver.</p>
           </div>
 
-          <fieldset class="space-y-2">
-            <legend class="group-title mb-2">Listen on</legend>
+          <fieldset class="field-group">
+            <legend>Listen on</legend>
             <ToggleRow v-model="listenAll" label="Every interface outside external zones" />
             <ul v-if="listenAll" class="ml-6 flex flex-wrap gap-4" aria-label="Listening on">
               <li v-if="!defaultListen.length" class="text-ink-muted">

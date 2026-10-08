@@ -113,8 +113,8 @@ function edit(index) {
       :locked="auth.readOnly"
     >
       <div class="space-y-5">
-        <fieldset class="space-y-2">
-          <legend class="group-title">Protocols</legend>
+        <fieldset class="field-group">
+          <legend>Protocols</legend>
           <ToggleRow
             v-model="upnp.igd"
             label="UPnP IGD"
@@ -142,8 +142,8 @@ function edit(index) {
           </FormField>
         </div>
 
-        <fieldset class="space-y-2">
-          <legend class="group-title">Clients may ask from</legend>
+        <fieldset class="field-group">
+          <legend>Clients may ask from</legend>
           <ToggleRow
             v-model="listenAll"
             label="Every interface outside external zones"

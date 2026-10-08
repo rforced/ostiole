@@ -146,8 +146,8 @@ const targetStates = computed(() =>
       <div class="space-y-4">
         <p v-if="auth.isOperator" class="text-ink-muted">Only an admin can change these.</p>
 
-        <fieldset class="min-w-0 space-y-4" :disabled="locked">
-          <legend class="group-title mb-1">Mail</legend>
+        <fieldset class="field-group" :disabled="locked">
+          <legend>Mail</legend>
           <ToggleRow
             id="nt-email"
             :model-value="email.enabled === true"
@@ -220,8 +220,8 @@ const targetStates = computed(() =>
           </div>
         </fieldset>
 
-        <fieldset class="min-w-0 space-y-4" :disabled="locked">
-          <legend class="group-title mb-1">Webhook</legend>
+        <fieldset class="field-group" :disabled="locked">
+          <legend>Webhook</legend>
           <ToggleRow
             id="nt-webhook"
             :model-value="webhook.enabled === true"

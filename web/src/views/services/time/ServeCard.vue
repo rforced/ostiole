@@ -43,8 +43,8 @@ function toggleInterface(name, on) {
         hint="DHCP clients are given this router as their time server."
       />
       <AppDisclosure>
-        <fieldset class="space-y-2">
-          <legend class="group-title mb-2">Answer on</legend>
+        <fieldset class="field-group">
+          <legend>Answer on</legend>
           <ToggleRow v-model="answerAll" label="Every interface outside external zones" />
           <ul v-if="answerAll" class="ml-6 flex flex-wrap gap-4" aria-label="Answering on">
             <li v-if="!inside.length" class="text-ink-muted">

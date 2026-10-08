@@ -403,6 +403,21 @@
   .fields-card {
     @apply max-w-2xl;
   }
+  /* A group of settings in a card or a dialog: a fieldset under a group
+     title. Only a group inside a group is boxed. Not .group, which is
+     Tailwind's marker for group- variants. */
+  .field-group {
+    @apply min-w-0 space-y-3;
+  }
+  .field-group > legend {
+    @apply mb-1 text-xs font-medium tracking-wide text-ink-muted uppercase;
+  }
+  .field-group .field-group {
+    @apply rounded-md border border-line p-3;
+  }
+  .field-group .field-group > legend {
+    @apply px-1;
+  }
   .badge {
     @apply inline-block rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-2;
   }

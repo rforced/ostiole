@@ -80,8 +80,8 @@ function clientsOf(row, name) {
     <SectionCard v-else title="Radios" :count="rows.length">
       <div class="space-y-4">
         <fieldset v-for="row in rows" :key="row.name" class="space-y-1">
-          <legend class="mb-1 flex items-center gap-2 font-mono font-medium">
-            {{ row.name }}
+          <legend class="mb-1 flex items-center gap-2">
+            <span class="group-title">{{ row.name }}</span>
             <StatusBadge :state="row.state" />
           </legend>
           <dl class="kv">

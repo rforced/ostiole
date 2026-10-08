@@ -41,8 +41,8 @@ const label = computed(() => (props.side === 'source' ? 'Source' : 'Destination'
 </script>
 
 <template>
-  <fieldset class="space-y-3 rounded-md border border-line p-3">
-    <legend class="group-title px-1">{{ label }}</legend>
+  <fieldset class="field-group">
+    <legend>{{ label }}</legend>
     <FormField :id="id('mode')" label="Match">
       <select :id="id('mode')" v-model="model.mode" class="input">
         <option value="any">Any</option>

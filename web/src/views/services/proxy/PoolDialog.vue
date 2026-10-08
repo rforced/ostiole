@@ -177,8 +177,8 @@ function save() {
         </FormField>
       </div>
 
-      <fieldset class="space-y-3">
-        <legend class="group-title">Upstream TLS</legend>
+      <fieldset class="field-group">
+        <legend>Upstream TLS</legend>
         <label class="flex items-center gap-2 text-sm">
           <input v-model="form.tls" type="checkbox" class="size-4 rounded border-line-2" />
           HTTPS to the upstreams

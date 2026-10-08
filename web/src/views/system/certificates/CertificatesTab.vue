@@ -197,8 +197,8 @@ function remove(cert) {
             </select>
           </FormField>
 
-          <fieldset>
-            <legend class="group-title mb-1">Built-in self-signed</legend>
+          <fieldset class="field-group">
+            <legend>Built-in self-signed</legend>
             <dl class="kv">
               <dt>Valid for</dt>
               <dd class="font-mono">{{ page.builtIn.names.join(', ') || '—' }}</dd>

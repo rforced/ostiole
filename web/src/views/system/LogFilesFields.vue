@@ -112,8 +112,8 @@ const failures = computed(() => logs.value.filter((l) => l.error))
 </script>
 
 <template>
-  <fieldset class="min-w-0 space-y-4">
-    <legend class="group-title mb-1">Files</legend>
+  <fieldset class="field-group">
+    <legend>Files</legend>
     <ToggleRow
       v-model="enabled"
       label="Write logs to files"

@@ -183,8 +183,8 @@ function save() {
         <AllowFromAliases v-model="form.allowAliases" />
       </FormField>
 
-      <fieldset class="space-y-2">
-        <legend class="group-title">Paths to another pool</legend>
+      <fieldset class="field-group">
+        <legend>Paths to another pool</legend>
         <div v-for="(p, i) in form.paths" :key="i" class="flex items-center gap-2">
           <input
             v-model="p.prefix"

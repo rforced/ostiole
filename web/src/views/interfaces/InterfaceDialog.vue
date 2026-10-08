@@ -226,8 +226,8 @@ function save() {
         <RouterLink to="/wireless" class="underline">Wireless</RouterLink>.
       </p>
 
-      <fieldset v-if="!daemonOwned" class="space-y-3 rounded-md border border-line p-3">
-        <legend class="group-title px-1">IPv4</legend>
+      <fieldset v-if="!daemonOwned" class="field-group">
+        <legend>IPv4</legend>
         <FormField id="if-v4-mode" label="Mode">
           <select id="if-v4-mode" v-model="form.ipv4.mode" class="input">
             <option value="none">None</option>
@@ -263,8 +263,8 @@ function save() {
         />
       </fieldset>
 
-      <fieldset v-if="!daemonOwned" class="space-y-3 rounded-md border border-line p-3">
-        <legend class="group-title px-1">IPv6</legend>
+      <fieldset v-if="!daemonOwned" class="field-group">
+        <legend>IPv6</legend>
         <FormField id="if-v6-mode" label="Mode">
           <select id="if-v6-mode" v-model="form.ipv6.mode" class="input">
             <option value="none">None</option>
@@ -368,8 +368,8 @@ function save() {
         />
       </FormField>
 
-      <fieldset class="space-y-3 rounded-md border border-line p-3">
-        <legend class="group-title px-1">Traffic arriving here</legend>
+      <fieldset class="field-group">
+        <legend>Traffic arriving here</legend>
         <FormField
           id="if-logdrops"
           label="Log dropped packets"

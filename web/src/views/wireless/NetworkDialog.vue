@@ -232,8 +232,8 @@ function save() {
         </FormField>
       </div>
 
-      <fieldset class="space-y-2">
-        <legend class="group-title">Attach</legend>
+      <fieldset class="field-group">
+        <legend>Attach</legend>
         <label class="flex items-center gap-2 text-sm">
           <input
             v-model="form.attach"

@@ -259,8 +259,8 @@ function save() {
       />
       <EndpointFields v-model="form.destination" side="destination" :ports-allowed="portsAllowed" />
 
-      <fieldset class="space-y-3 rounded-lg border border-line p-3">
-        <legend class="group-title px-1">Rate limit</legend>
+      <fieldset class="field-group">
+        <legend>Rate limit</legend>
         <label class="flex items-center gap-2 text-sm">
           <input
             v-model="form.limited"

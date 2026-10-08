@@ -69,8 +69,8 @@ const installPreset = computed({
 
 <template>
   <div class="space-y-3">
-    <fieldset class="space-y-1.5">
-      <legend class="group-title mb-1 block">Mode</legend>
+    <fieldset class="field-group">
+      <legend>Mode</legend>
       <!-- The hint describes the choice rather than naming it, so each
            radio is called "Manual" and not "Manual, check on the…". -->
       <div

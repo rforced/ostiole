@@ -198,8 +198,8 @@ function save() {
         </FormField>
       </div>
 
-      <fieldset class="space-y-2">
-        <legend class="group-title">Interfaces</legend>
+      <fieldset class="field-group">
+        <legend>Interfaces</legend>
         <p v-if="!options.length" class="text-sm text-ink-muted">
           No interfaces are available to add.
         </p>

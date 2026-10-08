@@ -126,8 +126,8 @@ function save() {
         </FormField>
       </div>
 
-      <fieldset class="space-y-2">
-        <legend class="group-title">Ports</legend>
+      <fieldset class="field-group">
+        <legend>Ports</legend>
         <div class="flex flex-wrap gap-4">
           <label class="flex items-center gap-2">
             <input v-model="form.ports" type="checkbox" value="http" class="size-4 rounded" />

@@ -118,8 +118,8 @@ function addZone(zone) {
       </template>
 
       <div class="space-y-5">
-        <fieldset class="space-y-3">
-          <legend class="group-title">Network</legend>
+        <fieldset class="field-group">
+          <legend>Network</legend>
           <div class="fields fields-card">
             <FormField
               id="ts-zone"
@@ -145,8 +145,8 @@ function addZone(zone) {
           </div>
         </fieldset>
 
-        <fieldset class="space-y-3">
-          <legend class="group-title">Routes</legend>
+        <fieldset class="field-group">
+          <legend>Routes</legend>
           <div class="max-w-2xl space-y-2">
             <FormField
               id="ts-routes"
@@ -181,8 +181,8 @@ function addZone(zone) {
         </fieldset>
 
         <AppDisclosure>
-          <fieldset class="space-y-3">
-            <legend class="group-title">Identity</legend>
+          <fieldset class="field-group">
+            <legend>Identity</legend>
             <div class="fields fields-card">
               <FormField id="ts-hostname" label="Hostname" hint="The router's name.">
                 <input id="ts-hostname" v-model="hostname" type="text" class="input font-mono" />
@@ -202,8 +202,8 @@ function addZone(zone) {
             </div>
           </fieldset>
 
-          <fieldset class="space-y-3">
-            <legend class="group-title">Privacy</legend>
+          <fieldset class="field-group">
+            <legend>Privacy</legend>
             <ToggleRow
               v-model="ts.logUploads"
               label="Log uploads"

@@ -89,7 +89,7 @@ describe('LogsSection', () => {
   it('holds the journal and the files, each under its name', async () => {
     const { wrapper, config } = open({ logging: { level: 'info' } })
     await flushPromises()
-    const groups = wrapper.findAll('legend.group-title').map((l) => l.text())
+    const groups = wrapper.findAll('.field-group > legend').map((l) => l.text())
     expect(groups).toEqual(['Journal', 'Files'])
     await wrapper.get('input[type="checkbox"]').setValue(true)
     expect(config.draft.system.logging).toEqual({ level: 'info', files: { enabled: true } })
