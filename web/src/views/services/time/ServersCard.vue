@@ -5,6 +5,7 @@ import { computed, ref } from 'vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
+import { emptyText } from '@/lib/async'
 import { formatOffset } from '@/lib/format'
 import { SOURCE_WORDS, sourcesFor, useNtpStatus } from '@/lib/ntpStatus'
 import { useAuthStore } from '@/stores/auth'
@@ -13,7 +14,8 @@ import ServerDialog from '@/views/services/time/ServerDialog.vue'
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const { status } = useNtpStatus()
+const ntp = useNtpStatus()
+const { status } = ntp
 
 /** The router's own list. Empty means it asks the defaults. */
 const own = computed(() => config.ntp.servers ?? [])
@@ -108,7 +110,7 @@ function useDefaults() {
       </thead>
       <tbody>
         <tr v-if="!servers.length">
-          <td colspan="5" class="text-ink-muted">Reading…</td>
+          <td colspan="5" class="text-ink-muted">{{ emptyText(ntp, 'No time servers.') }}</td>
         </tr>
         <tr
           v-for="(s, i) in servers"

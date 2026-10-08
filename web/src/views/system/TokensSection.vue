@@ -7,7 +7,7 @@ import ConfirmButton from '@/components/ConfirmButton.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { ApiError, api } from '@/lib/api'
-import { errorMessage, useAsync } from '@/lib/async'
+import { emptyText, errorMessage, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import TokenDialog from '@/views/system/accounts/TokenDialog.vue'
 
@@ -138,7 +138,7 @@ async function deleteToken(id) {
       <tbody>
         <tr v-if="!tokens.length">
           <td colspan="6" class="text-ink-muted">
-            {{ load.updatedAt.value ? 'No tokens.' : 'Reading…' }}
+            {{ emptyText(load, 'No tokens.') }}
           </td>
         </tr>
         <tr v-for="t in tokens" :key="t.id">

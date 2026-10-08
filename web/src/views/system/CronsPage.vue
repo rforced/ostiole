@@ -6,7 +6,7 @@ import ConfirmButton from '@/components/ConfirmButton.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
-import { useAsync } from '@/lib/async'
+import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { deviceName } from '@/lib/wol'
 import { useAuthStore } from '@/stores/auth'
@@ -236,11 +236,7 @@ function describe(c) {
         <tbody>
           <tr v-if="!system.length">
             <td colspan="3" class="text-ink-muted">
-              {{
-                load.busy.value && !load.updatedAt.value
-                  ? 'Reading…'
-                  : 'Nothing is reporting. This needs the daemon.'
-              }}
+              {{ emptyText(load, 'Nothing is reporting. This needs the daemon.') }}
             </td>
           </tr>
           <tr v-for="s in system" :key="s.id">

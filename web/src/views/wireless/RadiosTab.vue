@@ -6,7 +6,7 @@ import FormField from '@/components/FormField.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
-import { useAsync } from '@/lib/async'
+import { emptyText, useAsync } from '@/lib/async'
 import { COUNTRIES } from '@/lib/countries'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -104,11 +104,10 @@ function edit(row) {
           </tr>
         </thead>
         <tbody>
-          <tr v-if="!loaded">
-            <td colspan="6" class="text-ink-muted">Reading…</td>
-          </tr>
-          <tr v-else-if="!rows.length">
-            <td colspan="6" class="text-ink-muted">No radios on this router.</td>
+          <tr v-if="!loaded || !rows.length">
+            <td colspan="6" class="text-ink-muted">
+              {{ emptyText(load, 'No radios on this router.') }}
+            </td>
           </tr>
           <tr v-for="row in rows" :key="row.card?.name ?? row.cfg.name">
             <td data-label="">

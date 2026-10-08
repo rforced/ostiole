@@ -10,7 +10,7 @@ import MenuButton from '@/components/MenuButton.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
-import { errorMessage, useAsync } from '@/lib/async'
+import { emptyText, errorMessage, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { ADMIN_ONLY, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -223,7 +223,7 @@ function remove(cert) {
           </AppNotice>
         </template>
         <p v-else class="text-ink-muted">
-          {{ load.updatedAt.value ? 'This server is not serving HTTPS.' : 'Reading…' }}
+          {{ emptyText(load, 'This server is not serving HTTPS.') }}
         </p>
       </div>
     </SectionCard>

@@ -8,6 +8,8 @@ const POLL_MS = 10000
 
 /** One read, shared by the page header and the cards under it. */
 const status = ref(null)
+/** When the read last landed, as useAsync keeps it. */
+const updatedAt = ref(0)
 let inflight = null
 
 /** Fetches once however many callers ask while it is in the air. */
@@ -17,6 +19,7 @@ function fetchStatus() {
       .status()
       .then((s) => {
         status.value = s
+        updatedAt.value = Date.now()
       })
       .finally(() => {
         inflight = null
@@ -86,5 +89,5 @@ export function useNtpStatus({ poll = false } = {}) {
     if (!s?.setUp || s.hostClock) return ''
     return s.running ? 'running' : 'stopped'
   })
-  return { status, state, read }
+  return { status, state, read, updatedAt }
 }

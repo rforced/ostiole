@@ -8,7 +8,7 @@ import FormField from '@/components/FormField.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { ApiError, api } from '@/lib/api'
-import { errorMessage, useAsync } from '@/lib/async'
+import { emptyText, errorMessage, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth'
 import { useConfirmStore } from '@/stores/confirm'
@@ -146,7 +146,7 @@ async function deleteUser(username) {
       <tbody>
         <tr v-if="!users.length">
           <td colspan="4" class="text-ink-muted">
-            {{ load.updatedAt.value ? 'No accounts.' : 'Reading…' }}
+            {{ emptyText(load, 'No accounts.') }}
           </td>
         </tr>
         <tr v-for="u in users" :key="u.username">

@@ -9,7 +9,7 @@ import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
-import { useAsync } from '@/lib/async'
+import { emptyText, useAsync } from '@/lib/async'
 import { exceptionToggles, sentence } from '@/lib/blocking'
 import { formatCount, formatWhen } from '@/lib/format'
 import { heldLine, keptLine, useLog } from '@/lib/log'
@@ -128,9 +128,10 @@ const blockedPct = computed(() => {
 })
 
 const empty = computed(() => {
-  if (!log.updatedAt.value) return 'Reading…'
-  if (query.value.trim()) return `Nothing matches "${query.value.trim()}".`
-  return Object.values(filter.value).some(Boolean) ? 'Nothing matches this view.' : 'No queries.'
+  const q = query.value.trim()
+  if (q) return emptyText(log, `Nothing matches "${q}".`)
+  const filtered = Object.values(filter.value).some(Boolean)
+  return emptyText(log, filtered ? 'Nothing matches this view.' : 'No queries.')
 })
 
 /** Asks the router why a name is blocked, and keeps the sentence. A

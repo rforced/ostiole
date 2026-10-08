@@ -6,7 +6,7 @@ import ConfirmButton from '@/components/ConfirmButton.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
-import { errorMessage, useAsync } from '@/lib/async'
+import { emptyText, errorMessage, useAsync } from '@/lib/async'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -173,7 +173,7 @@ async function flush(tables) {
         <tbody>
           <tr v-if="!legacy.length">
             <td colspan="4" class="text-ink-muted">
-              {{ report ? 'Nothing was left behind.' : 'Reading…' }}
+              {{ emptyText(refresh, 'Nothing was left behind.') }}
             </td>
           </tr>
           <tr v-for="t in legacy" :key="t.backend + (t.family ?? '') + t.name">

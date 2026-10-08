@@ -8,7 +8,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
 import { api } from '@/lib/api'
-import { useAsync } from '@/lib/async'
+import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { useSearch } from '@/lib/search'
 import { byAddress, byText, byTime, useSort } from '@/lib/sort'
@@ -103,11 +103,9 @@ const rows = sort.sorted
 /** A time is worth showing for a client that is not there to speak for itself. */
 const seen = (l) => (l.online ? '—' : formatWhen(l.seen))
 
-const empty = computed(() => {
-  if (!load.updatedAt.value) return 'Reading…'
-  if (!leases.value.length) return 'No leases.'
-  return `Nothing matches "${query.value.trim()}".`
-})
+const empty = computed(() =>
+  emptyText(load, leases.value.length ? `Nothing matches "${query.value.trim()}".` : 'No leases.'),
+)
 </script>
 
 <template>

@@ -5,7 +5,7 @@ import FormField from '@/components/FormField.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
-import { useAsync } from '@/lib/async'
+import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 
 /** The units an Ostiole router runs, plus everything. */
@@ -92,7 +92,7 @@ onMounted(load.run)
           class="max-h-[32rem] overflow-auto rounded-lg border border-line bg-page p-3 font-mono text-code"
         >
           <p v-if="!entries.length" class="text-ink-muted">
-            {{ load.busy.value ? 'Reading…' : 'Nothing in this window.' }}
+            {{ emptyText(load, 'Nothing in this window.') }}
           </p>
           <p
             v-for="(e, i) in entries"

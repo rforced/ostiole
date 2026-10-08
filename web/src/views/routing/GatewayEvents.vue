@@ -7,7 +7,7 @@ import LoadMore from '@/components/LoadMore.vue'
 import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
-import { useAsync } from '@/lib/async'
+import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { eventFor, eventText, eventValues } from '@/lib/gateways'
 import { heldLine, useLog } from '@/lib/log'
@@ -36,9 +36,8 @@ const error = computed(() => log.error.value || clear.error.value || log.streamE
 const inFiles = computed(() => Boolean(config.saved?.system?.logging?.files?.enabled))
 
 const empty = computed(() => {
-  if (!log.updatedAt.value) return log.reading.value ? 'Reading…' : 'No events yet.'
-  if (query.value.trim()) return `Nothing matches "${query.value.trim()}".`
-  return 'No events yet.'
+  const q = query.value.trim()
+  return emptyText(log, q ? `Nothing matches "${q}".` : 'No events yet.')
 })
 </script>
 

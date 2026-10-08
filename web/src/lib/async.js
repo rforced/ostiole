@@ -93,3 +93,18 @@ export function useAsync(fn, { interval = 0, immediate = false, autostart = true
 
   return { busy, error, updatedAt, run, start, stop }
 }
+
+/**
+ * What an empty list says: "Reading…" until its first read lands, so it
+ * never states a negative fact before it has looked, then `empty`. A read
+ * that failed has landed too: its error says why the list is empty, and
+ * "Reading…" would claim a read that is not happening. `load` is what
+ * useAsync or useLog returned.
+ *
+ * @param {{updatedAt: import('vue').Ref<number>, error?: import('vue').Ref<string>}} load
+ * @param {string} empty
+ * @returns {string}
+ */
+export function emptyText(load, empty) {
+  return load.updatedAt.value || load.error?.value ? empty : 'Reading…'
+}

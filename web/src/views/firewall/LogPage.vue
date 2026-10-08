@@ -9,7 +9,7 @@ import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { ApiError, api } from '@/lib/api'
-import { useAsync } from '@/lib/async'
+import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { accessNames, endpoint, fwlogInfo, fwlogValues, matchedLabel } from '@/lib/fwlog'
 import { heldLine, useLog } from '@/lib/log'
@@ -90,9 +90,9 @@ function actionClass(action) {
 }
 
 const empty = computed(() => {
-  if (!log.updatedAt.value) return log.reading.value ? 'Reading…' : 'No packets logged.'
-  if (query.value.trim()) return `Nothing matches "${query.value.trim()}".`
-  return show.value === 'all' ? 'No packets logged.' : 'Nothing matches this view.'
+  const q = query.value.trim()
+  if (q) return emptyText(log, `Nothing matches "${q}".`)
+  return emptyText(log, show.value === 'all' ? 'No packets logged.' : 'Nothing matches this view.')
 })
 </script>
 

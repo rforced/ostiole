@@ -6,7 +6,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
 import { api } from '@/lib/api'
-import { useAsync } from '@/lib/async'
+import { emptyText, useAsync } from '@/lib/async'
 import { formatBytes, formatWhen } from '@/lib/format'
 import { byAddress, byText, byTime, useSort } from '@/lib/sort'
 
@@ -95,7 +95,7 @@ const peers = sort.sorted
         <tbody>
           <tr v-if="!status?.running">
             <td colspan="7" class="text-ink-muted">
-              {{ load.updatedAt.value ? 'Tailscale is not running.' : 'Reading…' }}
+              {{ emptyText(load, 'Tailscale is not running.') }}
             </td>
           </tr>
           <tr v-else-if="!status.peers.length">

@@ -8,7 +8,7 @@ import LogRetention from '@/components/LogRetention.vue'
 import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
-import { useAsync } from '@/lib/async'
+import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { heldLine, useLog } from '@/lib/log'
 import { records } from '@/lib/logs'
@@ -92,9 +92,8 @@ const kept = computed(() => records(config.saved))
 const off = computed(() => !spec.on(config.saved))
 
 const empty = computed(() => {
-  if (!log.updatedAt.value) return log.reading.value ? 'Reading…' : 'No events.'
-  if (query.value.trim()) return `Nothing matches "${query.value.trim()}".`
-  return 'No events.'
+  const q = query.value.trim()
+  return emptyText(log, q ? `Nothing matches "${q}".` : 'No events.')
 })
 
 const QUIET = ['quiet', 'offline']

@@ -7,7 +7,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
-import { useAsync } from '@/lib/async'
+import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { parseList } from '@/lib/lists'
 import { useAuthStore } from '@/stores/auth'
@@ -336,7 +336,7 @@ const targetStates = computed(() =>
         <tbody>
           <tr v-if="!status.recent.length">
             <td colspan="3" class="text-ink-muted">
-              {{ load.updatedAt.value ? 'Nothing sent.' : 'Reading…' }}
+              {{ emptyText(load, 'Nothing sent.') }}
             </td>
           </tr>
           <tr v-for="r in status.recent" :key="r.time">

@@ -9,7 +9,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { ApiError, api } from '@/lib/api'
-import { useAsync } from '@/lib/async'
+import { emptyText, useAsync } from '@/lib/async'
 import { formatBytes, formatWhen } from '@/lib/format'
 import { SCHEDULE_PRESETS, presetFor } from '@/lib/schedules'
 import { useAuthStore } from '@/stores/auth'
@@ -411,7 +411,7 @@ async function loadIntoDraft() {
         <tbody>
           <tr v-if="!copies.length">
             <td colspan="4" class="text-ink-muted">
-              {{ loadCopies.updatedAt.value ? 'No copies.' : 'Reading…' }}
+              {{ emptyText(loadCopies, 'No copies.') }}
             </td>
           </tr>
           <tr v-for="c in copies" :key="c.key">

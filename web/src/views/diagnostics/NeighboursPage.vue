@@ -8,7 +8,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
 import { api } from '@/lib/api'
-import { useAsync } from '@/lib/async'
+import { emptyText, useAsync } from '@/lib/async'
 import { useSearch } from '@/lib/search'
 import { byAddress, byText, useSort } from '@/lib/sort'
 import { useConfigStore } from '@/stores/config'
@@ -71,11 +71,12 @@ const sort = useSort(
 )
 const sorted = sort.sorted
 
-const empty = computed(() => {
-  if (!load.updatedAt.value) return 'Reading…'
-  if (!rows.value.length) return 'No neighbours.'
-  return `Nothing matches "${query.value.trim()}".`
-})
+const empty = computed(() =>
+  emptyText(
+    load,
+    rows.value.length ? `Nothing matches "${query.value.trim()}".` : 'No neighbours.',
+  ),
+)
 
 /** REACHABLE is current; FAILED means the address answered nothing. */
 function tone(state) {

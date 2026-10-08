@@ -10,6 +10,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
 import { api } from '@/lib/api'
+import { emptyText } from '@/lib/async'
 import { useDraftRows } from '@/lib/draft'
 import { formatWhen } from '@/lib/format'
 import { overrideKey, overrideName } from '@/lib/hosts'
@@ -96,11 +97,9 @@ const sort = useSort(shown, {
 })
 const rows = sort.sorted
 
-const empty = computed(() => {
-  if (!derived.updatedAt.value && !names.value.length) return 'Reading…'
-  if (!names.value.length) return 'No names.'
-  return `Nothing matches "${query.value.trim()}".`
-})
+const empty = computed(() =>
+  names.value.length ? `Nothing matches "${query.value.trim()}".` : emptyText(derived, 'No names.'),
+)
 
 /** What answers a device's name instead of it. */
 function holder(h) {

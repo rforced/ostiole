@@ -6,7 +6,7 @@ import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import { api } from '@/lib/api'
-import { useAsync } from '@/lib/async'
+import { emptyText, useAsync } from '@/lib/async'
 import { useSearch } from '@/lib/search'
 import { byAddress, byNumber, byText, useSort } from '@/lib/sort'
 
@@ -36,11 +36,12 @@ const { query, shown } = useSearch(mappings, (m) => ({
   values: [m.protocol, m.externalPort, m.internal, m.internalPort],
 }))
 
-const empty = computed(() => {
-  if (!load.updatedAt.value) return 'Reading…'
-  if (!mappings.value.length) return 'No mappings.'
-  return `Nothing matches "${query.value.trim()}".`
-})
+const empty = computed(() =>
+  emptyText(
+    load,
+    mappings.value.length ? `Nothing matches "${query.value.trim()}".` : 'No mappings.',
+  ),
+)
 
 /** Ports read upwards, as a port list does. */
 const sort = useSort(shown, {

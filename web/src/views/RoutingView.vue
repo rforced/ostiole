@@ -8,7 +8,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
-import { useAsync } from '@/lib/async'
+import { emptyText, useAsync } from '@/lib/async'
 import { neverHint, stateOf } from '@/lib/gateways'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -341,7 +341,7 @@ function edit(r) {
           <tbody>
             <tr v-if="!detected.length">
               <td colspan="7" class="text-ink-muted">
-                {{ refresh.updatedAt.value ? 'No default routes.' : 'Reading…' }}
+                {{ emptyText(refresh, 'No default routes.') }}
               </td>
             </tr>
             <tr v-for="d in detected" :key="`${d.interface}-${d.address}-${d.family}-${d.metric}`">

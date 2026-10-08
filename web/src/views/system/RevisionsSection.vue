@@ -7,7 +7,7 @@ import FormField from '@/components/FormField.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
-import { errorMessage, useAsync } from '@/lib/async'
+import { emptyText, errorMessage, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -138,7 +138,7 @@ defineExpose({ refresh: load.run })
       <tbody>
         <tr v-if="revisions.length === 0">
           <td colspan="4" class="text-ink-muted">
-            {{ load.updatedAt.value ? 'No revisions.' : 'Reading…' }}
+            {{ emptyText(load, 'No revisions.') }}
           </td>
         </tr>
         <template v-for="r in revisions" :key="r.id">

@@ -9,7 +9,7 @@ import RandomMacBadge from '@/components/RandomMacBadge.vue'
 import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
-import { useAsync } from '@/lib/async'
+import { emptyText, useAsync } from '@/lib/async'
 import { dhcpValues } from '@/lib/dhcpLog'
 import { formatWhen } from '@/lib/format'
 import { heldLine, useLog } from '@/lib/log'
@@ -52,9 +52,8 @@ const kept = computed(() => records(config.saved))
 const off = computed(() => !config.saved?.services?.dhcp?.enabled)
 
 const empty = computed(() => {
-  if (!log.updatedAt.value) return log.reading.value ? 'Reading…' : 'No messages.'
-  if (query.value.trim()) return `Nothing matches "${query.value.trim()}".`
-  return 'No messages.'
+  const q = query.value.trim()
+  return emptyText(log, q ? `Nothing matches "${q}".` : 'No messages.')
 })
 </script>
 

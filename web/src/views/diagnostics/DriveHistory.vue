@@ -8,7 +8,7 @@ import LoadMore from '@/components/LoadMore.vue'
 import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
-import { useAsync } from '@/lib/async'
+import { emptyText, useAsync } from '@/lib/async'
 import { readingValues } from '@/lib/driveHistory'
 import { formatCount, formatWhen } from '@/lib/format'
 import { heldLine, useLog } from '@/lib/log'
@@ -56,9 +56,8 @@ const error = computed(() => log.error.value || clear.error.value || log.streamE
 const inFiles = computed(() => Boolean(config.saved?.system?.logging?.files?.enabled))
 
 const empty = computed(() => {
-  if (!log.updatedAt.value) return log.reading.value ? 'Reading…' : 'No readings yet.'
-  if (query.value.trim()) return `Nothing matches "${query.value.trim()}".`
-  return 'No readings yet.'
+  const q = query.value.trim()
+  return emptyText(log, q ? `Nothing matches "${q}".` : 'No readings yet.')
 })
 
 const orDash = (v, unit = '') => (v == null ? '—' : `${formatCount(v)}${unit}`)

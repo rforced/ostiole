@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+import { ref } from 'vue'
 
-import { errorMessage, useAsync } from '@/lib/async'
+import { emptyText, errorMessage, useAsync } from '@/lib/async'
 
 /** A promise whose fate the test decides. */
 function deferred() {
@@ -100,5 +101,22 @@ describe('errorMessage', () => {
   it('reads an Error and stringifies the rest', () => {
     expect(errorMessage(new Error('boom'))).toBe('boom')
     expect(errorMessage('plain')).toBe('plain')
+  })
+})
+
+describe('emptyText', () => {
+  it('reads until the first read lands, then says the list is empty', () => {
+    const load = { updatedAt: ref(0), error: ref('') }
+    expect(emptyText(load, 'No leases.')).toBe('Reading…')
+    load.updatedAt.value = Date.now()
+    expect(emptyText(load, 'No leases.')).toBe('No leases.')
+  })
+
+  // The error says why; Reading… would claim a read that is not happening.
+  it('stops reading once the first read fails', () => {
+    const load = { updatedAt: ref(0), error: ref('') }
+    load.error.value = 'The firewall log needs the daemon to run as root.'
+    expect(emptyText(load, 'No packets.')).toBe('No packets.')
+    expect(emptyText({ updatedAt: ref(0) }, 'No time servers.')).toBe('Reading…')
   })
 })

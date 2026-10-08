@@ -7,7 +7,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
 import { api } from '@/lib/api'
-import { useAsync } from '@/lib/async'
+import { emptyText, useAsync } from '@/lib/async'
 import { formatBytes, formatCount } from '@/lib/format'
 import { LEVELS, levelOf } from '@/lib/meter'
 import { byAddress, byNumber, byText, useSort } from '@/lib/sort'
@@ -197,11 +197,10 @@ function endpoint(address, port) {
           <tr v-if="!states.length">
             <td colspan="7" class="text-ink-muted">
               {{
-                load.busy.value && !result
-                  ? 'Reading…'
-                  : query.trim()
-                    ? `Nothing matches "${query.trim()}".`
-                    : 'No connections.'
+                emptyText(
+                  load,
+                  query.trim() ? `Nothing matches "${query.trim()}".` : 'No connections.',
+                )
               }}
             </td>
           </tr>
