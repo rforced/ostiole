@@ -240,6 +240,10 @@ function reverted() {
           Rule <span class="font-mono">{{ r.id }}</span
           >: {{ r.description }}
         </li>
+        <li v-for="g in preview.gateways ?? []" :key="g.name">
+          Gateway <span class="font-mono">{{ g.name }}</span
+          >: measured at its next hop
+        </li>
         <li>
           Everything else inbound is dropped. Management ports
           {{ preview.system.management.webPort }} and {{ preview.system.management.sshPort }} stay

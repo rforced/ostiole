@@ -29,3 +29,34 @@ func TestStarterManagementFromWANIsTheZoneSwitch(t *testing.T) {
 		t.Error("the wan zone got anti-lockout without being asked")
 	}
 }
+
+// A new router is measured from the start: its WAN gets a gateway that
+// learns its next hops, which with one WAN never moves a route.
+func TestStarterWatchesTheWAN(t *testing.T) {
+	t.Parallel()
+	cfg := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "enp2s0"})
+	if len(cfg.Gateways) != 1 {
+		t.Fatalf("gateways = %+v", cfg.Gateways)
+	}
+	if g := cfg.Gateways[0]; g.Name != "gw_enp2s0" || !g.Enabled || g.Interface != "enp2s0" || g.Address != "" || g.Monitor != "" {
+		t.Errorf("gateway = %+v", g)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("validate: %v", err)
+	}
+	if cfg.CanFailover() {
+		t.Error("one WAN fails over")
+	}
+	if lan := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24"}); len(lan.Gateways) != 0 {
+		t.Errorf("a router without a WAN got %+v", lan.Gateways)
+	}
+}
+
+func TestGatewayNameFor(t *testing.T) {
+	t.Parallel()
+	for in, want := range map[string]string{"eth0": "gw_eth0", "WAN.10": "gw_wan_10", "1x": "gw_gw", "": "gw_gw"} {
+		if got := GatewayNameFor(in); got != want {
+			t.Errorf("GatewayNameFor(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

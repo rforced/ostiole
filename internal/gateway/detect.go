@@ -150,7 +150,7 @@ func Suggest(cfg *model.Config, d Detected) model.Gateway {
 
 // suggestName picks a name that is free, based on the interface.
 func suggestName(cfg *model.Config, iface string) string {
-	base := "gw_" + sanitizeName(iface)
+	base := model.GatewayNameFor(iface)
 	if _, taken := cfg.Gateway(base); !taken {
 		return base
 	}
@@ -161,24 +161,4 @@ func suggestName(cfg *model.Config, iface string) string {
 		}
 	}
 	return base
-}
-
-// sanitizeName turns an interface name into something a gateway name
-// accepts: lower case letters, digits, and underscores.
-func sanitizeName(s string) string {
-	out := make([]rune, 0, len(s))
-	for _, r := range s {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-			out = append(out, r)
-		case r >= 'A' && r <= 'Z':
-			out = append(out, r+('a'-'A'))
-		default:
-			out = append(out, '_')
-		}
-	}
-	if len(out) == 0 || out[0] < 'a' || out[0] > 'z' {
-		return "gw"
-	}
-	return string(out)
 }

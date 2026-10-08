@@ -85,6 +85,7 @@ func Starter(o StarterOptions) *Config {
 			IPv4:    IPv4{Mode: AddrDHCP},
 			IPv6:    IPv6{Mode: AddrSLAAC},
 		})
+		cfg.Gateways = append(cfg.Gateways, Gateway{Name: GatewayNameFor(o.WAN), Enabled: true, Interface: o.WAN})
 	}
 	if o.Services && o.LAN != "" {
 		if start, end, ok := DefaultPool(o.LANAddress); ok {
@@ -140,4 +141,24 @@ func DefaultPool(cidr string) (start, end string, ok bool) {
 		return netip.AddrFrom4(b).String()
 	}
 	return toIP(lo), toIP(hi), true
+}
+
+// GatewayNameFor is the name a gateway on an interface is given: gw_ and
+// the interface's name in the letters a gateway name takes.
+func GatewayNameFor(iface string) string {
+	out := make([]rune, 0, len(iface))
+	for _, r := range iface {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			out = append(out, r)
+		case r >= 'A' && r <= 'Z':
+			out = append(out, r+('a'-'A'))
+		default:
+			out = append(out, '_')
+		}
+	}
+	if len(out) == 0 || out[0] < 'a' || out[0] > 'z' {
+		return "gw_gw"
+	}
+	return "gw_" + string(out)
 }

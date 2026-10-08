@@ -384,10 +384,10 @@ func wayOutConfig(t *testing.T) *Config {
 			}},
 		},
 	})
-	cfg.Gateways = append(cfg.Gateways,
-		Gateway{Name: "wan", Enabled: true, Interface: "eth0", Monitor: "9.9.9.9"},
-		Gateway{Name: "vpn", Enabled: true, Interface: "wg1", Monitor: "10.64.0.1"},
-	)
+	cfg.Gateways = []Gateway{
+		{Name: "wan", Enabled: true, Interface: "eth0", Monitor: "9.9.9.9"},
+		{Name: "vpn", Enabled: true, Interface: "wg1", Monitor: "10.64.0.1"},
+	}
 	return cfg
 }
 
@@ -532,6 +532,7 @@ func TestValidateLookupsThroughAGateway(t *testing.T) {
 func overlapConfig(t *testing.T) *Config {
 	t.Helper()
 	cfg := Starter(StarterOptions{Hostname: "fw", LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0"})
+	cfg.Gateways = nil
 	cfg.Zones = append(cfg.Zones, Zone{Name: "sites"})
 	cfg.Interfaces = append(cfg.Interfaces, Interface{
 		Name: "wg2", Zone: "sites", Enabled: true,
