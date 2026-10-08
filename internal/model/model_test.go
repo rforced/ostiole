@@ -103,7 +103,7 @@ func TestValidateCatchesEverything(t *testing.T) {
 	t.Parallel()
 	cfg := &Config{
 		Version: 99,
-		System:  System{Hostname: "bad host", DNSServers: []string{"nope"}, KeepRevisions: -1},
+		System:  System{Hostname: "bad host", DNSServers: []string{"nope"}, KeepRevisions: -1, KeepDriveReadings: -1},
 		Zones:   []Zone{{Name: "lan"}, {Name: "lan"}, {Name: "Bad-Zone"}},
 		Interfaces: []Interface{
 			{Name: "eth0", Zone: "nozone", IPv4: IPv4{Mode: AddrStatic}, IPv6: IPv6{Mode: "magic"}},
@@ -148,6 +148,7 @@ func TestValidateCatchesEverything(t *testing.T) {
 		"system.hostname",
 		"system.dnsServers[0]",
 		"system.keepRevisions",
+		"system.keepDriveReadings",
 		"zones[1].name",
 		"zones[2].name",
 		"interfaces[0].zone",

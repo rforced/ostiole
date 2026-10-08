@@ -444,10 +444,10 @@ at your own.`,
 				// Reading a drive needs the device, so the hourly verdict
 				// is root-only; the page itself is not.
 				if deps.Drives.Bin != "" {
-					// Each verdict's readings are kept too: a week in memory,
-					// more in the files while they are on.
+					// Each verdict's readings are kept too, as many as
+					// the configuration says.
 					history := smart.NewHistory()
-					drives := &smart.Monitor{Client: deps.Drives, History: history, Log: slog.Default()}
+					drives := &smart.Monitor{Client: deps.Drives, History: history, Source: eng.Effective, Log: slog.Default()}
 					drives.OnTick = func() { crons.Note("system:drives") }
 					deps.DriveHealth, deps.DriveHistory = drives, history
 					go afterReadBack(ctx, log, "drive history files", "drive monitor", func() {

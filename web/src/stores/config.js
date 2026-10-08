@@ -1497,6 +1497,7 @@ export const useConfigStore = defineStore('config', () => {
         return '/system/dns-providers'
       case 'system':
         if (path.startsWith('system.keepRevisions')) return '/system/configuration'
+        if (path.startsWith('system.keepDriveReadings')) return '/diagnostics/drives'
         if (path.startsWith('system.conntrackMax')) return '/firewall/protection'
         if (path.startsWith('system.management.certificate')) return '/system/certificates'
         if (

@@ -13,6 +13,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rforced/ostiole/internal/logring"
+	"github.com/rforced/ostiole/internal/model"
 )
 
 // The hourly poll keeps one verdict per drive: the one that failed is a
@@ -183,4 +186,24 @@ func healthDoc(h Health) []byte {
 	}
 	return []byte(`{"smartctl":{"version":[7,5],"exit_status":0},"model_name":"` + h.Model +
 		`","smart_status":{"passed":` + passed + `}}`)
+}
+
+// The history keeps what the configuration says, twenty by default, and follows a change.
+func TestMonitorSizesTheHistoryByTheConfiguration(t *testing.T) {
+	t.Parallel()
+	cfg := &model.Config{}
+	m := &Monitor{History: NewHistory(), Source: func() *model.Config { return cfg }}
+	m.follow()
+	start := time.Now().AddDate(-1, 0, 0)
+	for i := range 30 {
+		m.History.Add(Reading{Stamp: logring.Stamp{Time: start.Add(time.Duration(i) * time.Hour)}, Drive: "sda"})
+	}
+	if n, oldest := m.History.Held(); n != model.DefaultKeepDriveReadings || !oldest.Equal(start.Add(10*time.Hour)) {
+		t.Errorf("held %d back to %v", n, oldest)
+	}
+	cfg = &model.Config{System: model.System{KeepDriveReadings: 5}}
+	m.follow()
+	if n, oldest := m.History.Held(); n != 5 || !oldest.Equal(start.Add(25*time.Hour)) {
+		t.Errorf("held %d back to %v after the change", n, oldest)
+	}
 }

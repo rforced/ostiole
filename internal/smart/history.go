@@ -29,23 +29,20 @@ type Reading struct {
 	PowerOnHours *int    `json:"powerOnHours,omitempty"`
 }
 
-// History is the drives' readings in memory: a week of them, with no
-// setting, and more in the files while they are on.
+// History is the drives' newest readings, as many as the configuration keeps.
 type History = logring.Ring[Reading, *Reading]
 
-// historySize bounds the readings memory holds: an hour's for a hundred
-// drives for a week, well past what a router has.
-const historySize = 24 * 7 * 100
-
-// NewHistory returns an empty history.
+// NewHistory returns an empty history of the default size.
 func NewHistory() *History {
-	return logring.New[Reading, *Reading](historySize, model.DefaultLogDays*24*time.Hour)
+	return logring.New[Reading, *Reading](model.DefaultKeepDriveReadings, 0)
 }
 
-// HistorySettings is the history's size and days, the same in any
-// configuration.
-func HistorySettings(*model.Config) (int, time.Duration) {
-	return historySize, model.DefaultLogDays * 24 * time.Hour
+// HistorySettings sizes the history in a configuration, with no days.
+func HistorySettings(c *model.Config) (int, time.Duration) {
+	if c == nil {
+		return model.DefaultKeepDriveReadings, 0
+	}
+	return c.System.DriveReadingsKept(), 0
 }
 
 // The history's directory under logfile.Dir, and the format of its lines:
@@ -60,11 +57,6 @@ const (
 func HistoryFiles(h *History) logfile.Log {
 	return h.Files(HistoryFileName, HistoryFileVersion,
 		func(*model.Config) bool { return true }, func(*model.Config) int { return 0 })
-}
-
-// ParseHistoryLine reads a line of the history's files.
-func ParseHistoryLine(line []byte) (Reading, time.Time, error) {
-	return logring.Parse[Reading, *Reading](line)
 }
 
 // readingOf is what a check of a drive found, from what it said.
@@ -103,8 +95,7 @@ func (r *Reading) Search(a logsearch.Adder, buf []byte) []byte {
 	return buf
 }
 
-// HistoryMatcher is a search's test of a reading, the same for the files
-// as for memory.
+// HistoryMatcher is a search's test of a reading.
 func HistoryMatcher(q logsearch.Query) func(*Reading) bool {
 	row := q.Row()
 	var buf []byte

@@ -6,6 +6,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/rforced/ostiole/internal/model"
 )
 
 // checkTimeout bounds one drive's verdict. A drive that does not answer a
@@ -16,6 +18,9 @@ const checkTimeout = 30 * time.Second
 // the poll does not compete with everything else a boot is doing.
 const firstCheck = time.Minute
 
+// followEvery is how often History is sized again from the configuration.
+const followEvery = 5 * time.Second
+
 // Monitor asks every drive for its verdict on a timer and remembers the
 // answers, so a failing drive is a warning on the dashboard before anyone
 // opens Diagnostics. Each answer goes into History too, and a drive that
@@ -24,7 +29,9 @@ type Monitor struct {
 	Client *Client
 	// History keeps what each check read; nil keeps nothing.
 	History *History
-	Every   time.Duration // default time.Hour
+	// Source sizes History; nil keeps the default.
+	Source func() *model.Config
+	Every  time.Duration // default time.Hour
 	// OnTick, when set, is called after every pass, so the crons page can
 	// say when the router last asked.
 	OnTick func()
@@ -34,28 +41,36 @@ type Monitor struct {
 	last map[string]Health
 }
 
-// Run checks a minute after start-up and then on the interval, until the
-// context is cancelled.
+// Run checks a minute after start-up and then on the interval, and sizes
+// History as the configuration changes, until the context is cancelled.
 func (m *Monitor) Run(ctx context.Context) {
 	every := m.Every
 	if every <= 0 {
 		every = time.Hour
 	}
-	select {
-	case <-ctx.Done():
-		return
-	case <-time.After(firstCheck):
-	}
-	t := time.NewTicker(every)
-	defer t.Stop()
+	follow := time.NewTicker(followEvery)
+	defer follow.Stop()
+	check := time.NewTimer(firstCheck)
+	defer check.Stop()
 	for {
-		m.Check(ctx)
+		m.follow()
 		select {
 		case <-ctx.Done():
 			return
-		case <-t.C:
+		case <-follow.C:
+		case <-check.C:
+			check.Reset(every)
+			m.Check(ctx)
 		}
 	}
+}
+
+// follow sizes History by the configuration in force.
+func (m *Monitor) follow() {
+	if m.History == nil || m.Source == nil {
+		return
+	}
+	m.History.Configure(HistorySettings(m.Source()))
 }
 
 // Check asks every drive the scan finds whether it is failing. A drive

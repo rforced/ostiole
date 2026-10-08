@@ -466,6 +466,8 @@ type System struct {
 	// the configuration it replaced, and the oldest are deleted once there
 	// are more than this. Zero keeps DefaultKeepRevisions.
 	KeepRevisions int `json:"keepRevisions,omitempty"`
+	// KeepDriveReadings bounds the drive history; zero keeps DefaultKeepDriveReadings.
+	KeepDriveReadings int `json:"keepDriveReadings,omitempty"`
 	// GeoIPv4URL and GeoIPv6URL are where country address lists come from.
 	// "{country}" is replaced with the lower-case ISO code. They are
 	// settings so an air-gapped router can point at its own mirror; empty
@@ -584,6 +586,20 @@ func (s System) RevisionsKept() int {
 		return DefaultKeepRevisions
 	}
 	return s.KeepRevisions
+}
+
+// DefaultKeepDriveReadings is how many drive readings are kept when the setting says nothing.
+const DefaultKeepDriveReadings = 20
+
+// MaxKeepDriveReadings bounds the setting.
+const MaxKeepDriveReadings = 10000
+
+// DriveReadingsKept is how many drive readings to hold on to.
+func (s System) DriveReadingsKept() int {
+	if s.KeepDriveReadings <= 0 {
+		return DefaultKeepDriveReadings
+	}
+	return s.KeepDriveReadings
 }
 
 // Zone is the timezone the router runs in, UTC when the setting says nothing.

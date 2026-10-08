@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
+import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import DrivesPage from '@/views/diagnostics/DrivesPage.vue'
 
@@ -139,6 +140,23 @@ describe('DrivesPage', () => {
     expect(row.text()).toContain('52 °C')
     expect(row.text()).toContain('3%')
     expect(row.text()).toContain('1,234 h')
+  })
+
+  // The default and an empty field are left out of the draft.
+  it('writes the readings to keep into the draft', async () => {
+    const config = useConfigStore()
+    config.replaceDraft({ version: 12, system: {}, zones: [], interfaces: [], rules: [] })
+    const wrapper = mount(DrivesPage)
+    await flushPromises()
+    const keep = wrapper.get('#drive-keep')
+    expect(keep.element.value).toBe('20')
+    await keep.setValue(5)
+    expect(config.draft.system.keepDriveReadings).toBe(5)
+    await keep.setValue(20)
+    expect(config.draft.system.keepDriveReadings).toBeUndefined()
+    await keep.setValue(5)
+    await keep.setValue('')
+    expect(config.draft.system.keepDriveReadings).toBeUndefined()
   })
 
   // The verdict, the figures, and the attribute that has started counting.

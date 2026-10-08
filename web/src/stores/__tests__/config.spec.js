@@ -248,6 +248,7 @@ describe('config store draft changes', () => {
       { path: 'services.dhcp.servers[lan]', kind: 'added' },
       { path: 'interfaces[wg0].wireguard.peers[bob]', kind: 'added' },
       { path: 'system.keepRevisions', kind: 'changed' },
+      { path: 'system.keepDriveReadings', kind: 'changed' },
     ]
     expect(config.hasChanges('/firewall')).toBe(true)
     expect(config.hasChanges('/firewall/rules')).toBe(true)
@@ -260,6 +261,7 @@ describe('config store draft changes', () => {
     expect(config.hasChanges('/vpn/tailscale')).toBe(false)
     expect(config.hasChanges('/interfaces')).toBe(false)
     expect(config.hasChanges('/system/configuration')).toBe(true)
+    expect(config.hasChanges('/diagnostics/drives')).toBe(true)
     expect(config.hasChanges('/system/general')).toBe(false)
     expect(config.hasChanges('/')).toBe(false)
 

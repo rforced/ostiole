@@ -3075,6 +3075,10 @@ func (v *validator) system(s *System) {
 		v.add("system.keepRevisions", "%d must be 0-%d (0 keeps %d)",
 			s.KeepRevisions, MaxKeepRevisions, DefaultKeepRevisions)
 	}
+	if s.KeepDriveReadings < 0 || s.KeepDriveReadings > MaxKeepDriveReadings {
+		v.add("system.keepDriveReadings", "%d must be 0-%d (0 keeps %d)",
+			s.KeepDriveReadings, MaxKeepDriveReadings, DefaultKeepDriveReadings)
+	}
 	if n := s.Management.FirewallLog.Entries; n < 0 || n > MaxFirewallLogEntries {
 		v.add("system.management.firewallLog.entries", "%d must be 0-%d (0 means %d)",
 			n, MaxFirewallLogEntries, DefaultFirewallLogEntries)

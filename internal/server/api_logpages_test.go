@@ -343,9 +343,8 @@ func TestThePeerLogsAreServed(t *testing.T) {
 	}
 }
 
-// The drives' history reads on into its files, which keep the files' days
-// since it has none of its own.
-func TestTheDriveHistoryCarriesOnIntoItsFiles(t *testing.T) {
+// The drives' history stops at what memory holds, never reading its files.
+func TestTheDriveHistoryStopsAtWhatItKeeps(t *testing.T) {
 	t.Parallel()
 	history := smart.NewHistory()
 	srv, files := filesServer(t, filesOnConfig(), func(d *Deps) { d.DriveHistory = history })
@@ -357,12 +356,15 @@ func TestTheDriveHistoryCarriesOnIntoItsFiles(t *testing.T) {
 			Drive: "sda", Health: "passed", Temperature: &temp})
 	}
 	flush(t, files)
-	history.Configure(1, 0)
+	history.Configure(2, 0)
 	p := readPage[smart.Reading](t, srv, "/api/v1/diagnostics/drives/history")
-	if len(p.Entries) != 3 || *p.Entries[0].Temperature != 42 || *p.Entries[2].Temperature != 40 {
-		t.Errorf("read %+v", p.Entries)
+	if len(p.Entries) != 2 || p.More || *p.Entries[0].Temperature != 42 || *p.Entries[1].Temperature != 41 {
+		t.Errorf("read %+v", p)
 	}
 	if p := readPage[smart.Reading](t, srv, "/api/v1/diagnostics/drives/history?q=41"); len(p.Entries) != 1 {
 		t.Errorf("searched %+v", p.Entries)
+	}
+	if p := readPage[smart.Reading](t, srv, "/api/v1/diagnostics/drives/history?q=40"); len(p.Entries) != 0 || p.More {
+		t.Errorf("searched the files: %+v", p)
 	}
 }

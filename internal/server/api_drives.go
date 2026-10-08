@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logring"
 	"github.com/rforced/ostiole/internal/smart"
 )
 
@@ -168,7 +167,7 @@ func driveError(err error) error {
 var errNoDriveHistory = errors.New("the drives' history is not kept by this daemon (not running as root, or no smartctl?)")
 
 // driveHistoryList serves a page of the drives' hourly readings, newest
-// first and searched, from memory and on into the files.
+// first and searched, from memory alone.
 func (a *api) driveHistoryList(w http.ResponseWriter, r *http.Request) error {
 	if a.driveHistory == nil {
 		return &unavailable{errNoDriveHistory}
@@ -177,19 +176,12 @@ func (a *api) driveHistoryList(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	started := time.Now()
-	match := smart.HistoryMatcher(q)
-	page, err := a.driveHistory.Query(r.Context(), before, limit, match)
-	if err != nil {
-		return err
-	}
-	older, page, err := carryOn(r.Context(), a, smart.HistoryFiles(a.driveHistory), smart.HistoryFileVersion, page, before,
-		limit, started, smart.ParseHistoryLine, logring.Seq[smart.Reading, *smart.Reading], match)
+	page, err := a.driveHistory.Query(r.Context(), before, limit, smart.HistoryMatcher(q))
 	if err != nil {
 		return err
 	}
 	held, oldest := a.driveHistory.Held()
-	writeJSON(w, http.StatusOK, newLogPage(page, append(page.Entries, older...), held, oldest))
+	writeJSON(w, http.StatusOK, newLogPage(page, page.Entries, held, oldest))
 	return nil
 }
 
