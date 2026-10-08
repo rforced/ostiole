@@ -234,6 +234,8 @@ export const api = {
   gatewayHistory: {
     read: (name, window) =>
       get(`/gateways/${encodeURIComponent(name)}/history?window=${encodeURIComponent(window)}`),
+    /** Each watched gateway's last day in ten-minute cells. */
+    strips: () => get('/gateways/strips'),
     /** A page of events: {gateway, q, before, limit}. */
     events: (params = {}, signal) => get(withQuery('/gateways/events', params), signal),
     /** Forgets every gateway's latency and loss; the events stay. */

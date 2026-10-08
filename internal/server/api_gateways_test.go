@@ -161,3 +161,39 @@ func TestASlowOrLossyGatewayWarns(t *testing.T) {
 		t.Errorf("down = %+v", w)
 	}
 }
+
+// The dashboard's strips judge each gateway against its own thresholds.
+func TestEachWatchedGatewayHasAStrip(t *testing.T) {
+	t.Parallel()
+	h := gateway.NewHistory()
+	now := time.Now()
+	start := now.Add(-2 * time.Minute).Truncate(time.Minute)
+	for i := range 12 {
+		h.Probe("gw_eth0", gateway.FamilyIPv4, "", start.Add(time.Duration(i*5)*time.Second), 300*time.Millisecond, true)
+		h.Mark("gw_eth0", gateway.StateUp, "", start.Add(time.Duration(i*5)*time.Second))
+	}
+	h.Advance(now)
+	cfg := starter()
+	off := 0
+	cfg.Gateways[0].SlowAboveMS = &off
+	statuses := fakeStatuses{{Name: "gw_eth0", Interface: "eth0", Online: true,
+		Families: []gateway.FamilyStatus{{Family: gateway.FamilyIPv4}}}}
+	srv, _ := filesServer(t, cfg, func(d *Deps) { d.Gateways, d.GatewayHistory = statuses, h })
+	resp, raw := do(t, srv, http.MethodGet, "/api/v1/gateways/strips", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("strips: %d %s", resp.StatusCode, raw)
+	}
+	var strips []gatewayStrip
+	if err := json.Unmarshal(raw, &strips); err != nil {
+		t.Fatal(err)
+	}
+	if len(strips) != 1 || strips[0].Name != "gw_eth0" || strips[0].Families != 1 || len(strips[0].Cells) != gateway.StripCells ||
+		strips[0].WorstLatencyMS != 300 {
+		t.Fatalf("strips = %+v", strips)
+	}
+	for _, c := range strips[0].Cells {
+		if c.Kind == gateway.CellSlow {
+			t.Errorf("a gateway whose slow threshold is off drew a slow cell: %+v", c)
+		}
+	}
+}

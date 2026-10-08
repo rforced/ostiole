@@ -129,8 +129,61 @@ describe('GatewaysCard', () => {
     expect(row.text()).toContain('wan1')
     expect(row.text()).toContain('fe80::1 · ra')
     expect(row.text()).toContain('not watched')
-    expect(w.text()).toContain('cannot fail over')
+    expect(w.text()).toContain('keeps no history and cannot fail over')
     expect(w.findComponent(RouterLinkStub).props('to')).toBe('/routing')
+  })
+
+  // A day of ten-minute cells under each gateway, once the strips are read;
+  // none where the router keeps no history.
+  it("draws each gateway's day under it", () => {
+    const cells = Array.from({ length: 144 }, (_, i) => ({ start: 1_790_000_000 + i * 600 }))
+    cells[140] = { ...cells[140], kind: 'down', down: 4 }
+    cells[141] = { ...cells[141], kind: 'up', latencyMs: 12 }
+    const strip = {
+      name: 'gw_wan',
+      cells,
+      down: 240,
+      worstLatencyMs: 12,
+      worstLossPercent: 100,
+      families: 1,
+    }
+    let w = mount(GatewaysCard, {
+      props: { gateways: [watched], strips: [strip] },
+      global: { stubs },
+    })
+    expect(w.find('[data-strip]').text()).toContain(
+      'Down 4m · worst 12.0 ms · worst 100% lost · to the next hop',
+    )
+    expect(w.findAll('rect[data-kind]').map((r) => r.attributes('data-kind'))).toEqual([
+      'down',
+      'up',
+    ])
+    w = mount(GatewaysCard, { props: { gateways: [watched], strips: [] }, global: { stubs } })
+    expect(w.find('[data-strip]').exists()).toBe(false)
+  })
+
+  it("gives each family's figures a line of its own", () => {
+    const both = {
+      ...watched,
+      families: [
+        { family: 'IPv4', latencyMs: 12.34, lossPercent: 0 },
+        { family: 'IPv6', latencyMs: 15.5, lossPercent: 25 },
+      ],
+    }
+    const w = mount(GatewaysCard, { props: { gateways: [both] }, global: { stubs } })
+    const cells = w.findAll('tbody tr')[0].findAll('td')
+    expect(cells[2].findAll('div').map((d) => d.text())).toEqual(['IPv4 12.3 ms', 'IPv6 15.5 ms'])
+    expect(cells[3].findAll('div').map((d) => d.text())).toEqual(['IPv4 0%', 'IPv6 25%'])
+  })
+
+  it('says a gateway that never answered is not down, and what to do', () => {
+    const never = { ...watched, online: false, active: false, neverAnswered: true }
+    const w = mount(GatewaysCard, {
+      props: { gateways: [never], strips: [{ name: 'gw_wan', monitor: '192.0.2.53', cells: [] }] },
+      global: { stubs },
+    })
+    expect(w.find('.badge').text()).toBe('never answered')
+    expect(w.text()).toContain('Check the monitor address, or remove the gateway.')
   })
 })
 

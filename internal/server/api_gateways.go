@@ -9,11 +9,13 @@ import (
 	"time"
 
 	"ostiole/internal/gateway"
+	"ostiole/internal/model"
 )
 
 func (a *api) registerGateways(mux *router) {
 	mux.HandleFunc("GET /api/v1/gateways/{name}/history", a.readNoEngine(a.gatewayHistoryRead))
 	mux.HandleFunc("GET /api/v1/gateways/stream", a.readNoEngine(a.gatewayStream))
+	mux.HandleFunc("GET /api/v1/gateways/strips", a.readNoEngine(a.gatewayStrips))
 	mux.HandleFunc("GET /api/v1/gateways/events", a.readNoEngine(a.gatewayEvents))
 	mux.HandleFunc("GET /api/v1/gateways/events/stream", a.readNoEngine(a.gatewayEventStream))
 	mux.HandleFunc("DELETE /api/v1/gateways/history", a.admin(a.clearOne(gateway.HistoryFileName)))
@@ -77,6 +79,43 @@ func (a *api) gatewayHistoryRead(w http.ResponseWriter, r *http.Request) error {
 				break
 			}
 		}
+	}
+	writeJSON(w, http.StatusOK, out)
+	return nil
+}
+
+type gatewayStrip struct {
+	Name string `json:"name"`
+	gateway.Strip
+	// Monitor is what the gateway is probed at, empty for its next hops,
+	// and Families how many it is probed in.
+	Monitor  string `json:"monitor,omitempty"`
+	Families int    `json:"families"`
+}
+
+// gatewayStrips serves each watched gateway's last day as the dashboard
+// draws it, judged against its thresholds.
+func (a *api) gatewayStrips(w http.ResponseWriter, _ *http.Request) error {
+	if a.gatewayHistory == nil {
+		return &unavailable{errNoGatewayHistory}
+	}
+	var cfg *model.Config
+	if a.engine != nil {
+		cfg = a.engine.Effective()
+	}
+	now := time.Now()
+	out := []gatewayStrip{}
+	for _, s := range a.gatewayStatuses() {
+		var g model.Gateway
+		if cfg != nil {
+			if c, ok := cfg.Gateway(s.Name); ok {
+				g = *c
+			}
+		}
+		out = append(out, gatewayStrip{
+			Name: s.Name, Strip: a.gatewayHistory.Strip(s.Name, now, g.SlowAbove(), g.LossyAbove()),
+			Monitor: g.Monitor, Families: len(s.Families),
+		})
 	}
 	writeJSON(w, http.StatusOK, out)
 	return nil

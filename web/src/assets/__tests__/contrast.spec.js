@@ -124,6 +124,8 @@ function graphics(t) {
   add('knob', 'accent', t['on-fill'], t.accent)
   // Traffic's lines on the card they are drawn on.
   for (const line of ['chart-down', 'chart-up']) add(line, 'surface', t[line], t.surface)
+  // A gateway's strip: up, slow or losing packets, and down, on the card.
+  for (const fill of ['ok-fill', 'warn-fill', 'bad-fill']) add(fill, 'surface', t[fill], t.surface)
   return out
 }
 

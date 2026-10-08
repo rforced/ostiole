@@ -799,3 +799,145 @@ func (h *History) Read(gateway, window string, now time.Time) Report {
 	}
 	return r
 }
+
+// The kinds a strip's cell is, as the worst of its minutes, worst first.
+const (
+	CellDown  = "down"
+	CellLossy = "lossy"
+	CellSlow  = "slow"
+	CellUp    = "up"
+	CellNever = "never"
+)
+
+// StripCells is how many cells a day's strip has, and CellMinutes how
+// many minutes each covers.
+const (
+	StripCells  = 144
+	CellMinutes = 10
+)
+
+func cellRank(kind string) int {
+	switch kind {
+	case CellDown:
+		return 5
+	case CellLossy:
+		return 4
+	case CellSlow:
+		return 3
+	case CellUp:
+		return 2
+	case CellNever:
+		return 1
+	}
+	return 0
+}
+
+// Cell is ten minutes of a gateway as the dashboard's strip draws it: the
+// kind of its worst minute, how far past its threshold that went from 0 to
+// 1, the minutes down, and the worst minute's mean round trip and loss.
+type Cell struct {
+	Start       int64   `json:"start"`
+	Kind        string  `json:"kind,omitempty"`
+	Level       float64 `json:"level,omitempty"`
+	Down        int     `json:"down,omitempty"`
+	LatencyMS   float64 `json:"latencyMs,omitempty"`
+	LossPercent float64 `json:"lossPercent,omitempty"`
+}
+
+// Strip is a gateway's last day in ten-minute cells, oldest first, with the
+// day's time down in seconds and its worst minutes.
+type Strip struct {
+	Cells              []Cell  `json:"cells"`
+	Down               int64   `json:"down"`
+	WorstLatencyMS     float64 `json:"worstLatencyMs"`
+	WorstLatencyFamily string  `json:"worstLatencyFamily,omitempty"`
+	WorstLossPercent   float64 `json:"worstLossPercent"`
+	WorstLossFamily    string  `json:"worstLossFamily,omitempty"`
+}
+
+// minuteKind is what a minute was against the thresholds, and how far past.
+func minuteKind(b bucket, slowAt, lossyAt int) (string, float64) {
+	switch b.state {
+	case StateDown:
+		return CellDown, 0
+	case StateNever:
+		return CellNever, 0
+	}
+	kind, level := "", 0.0
+	for _, f := range b.fam {
+		if f.sent == 0 {
+			continue
+		}
+		if kind == "" && b.state == "" && f.answered() == 0 {
+			continue
+		}
+		if kind == "" {
+			kind = CellUp
+		}
+		if l := f.loss(); lossyAt > 0 && l > float64(lossyAt) {
+			lv := min(1, (l-float64(lossyAt))/float64(100-lossyAt))
+			if cellRank(kind) < cellRank(CellLossy) || lv > level {
+				kind, level = CellLossy, lv
+			}
+		}
+		if m := f.mean(); slowAt > 0 && f.answered() > 0 && m > float64(slowAt) && cellRank(kind) <= cellRank(CellSlow) {
+			kind, level = CellSlow, max(level, min(1, (m-float64(slowAt))/float64(slowAt)))
+		}
+	}
+	return kind, level
+}
+
+// Strip draws a gateway's last day ending at now, judged against its
+// thresholds as they are.
+func (h *History) Strip(gateway string, now time.Time, slowAt, lossyAt int) Strip {
+	const span = CellMinutes * 60
+	end := now.Unix() - now.Unix()%span + span
+	start := end - StripCells*span
+	out := Strip{Cells: make([]Cell, StripCells)}
+	for i := range out.Cells {
+		out.Cells[i].Start = start + int64(i*span)
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	s := h.series[gateway]
+	if s == nil {
+		return out
+	}
+	minutes := slices.Clone(s.minutes)
+	if s.cur != nil {
+		b := *s.cur
+		b.finish()
+		minutes = append(minutes, b)
+	}
+	for _, b := range minutes {
+		if b.start < start || b.start >= end {
+			continue
+		}
+		c := &out.Cells[(b.start-start)/span]
+		kind, level := minuteKind(b, slowAt, lossyAt)
+		if r := cellRank(kind); r > cellRank(c.Kind) || (r == cellRank(c.Kind) && level > c.Level) {
+			c.Kind, c.Level = kind, math.Round(level*100)/100
+		}
+		c.Down += b.down
+		out.Down += int64(b.down) * 60
+		for i, f := range b.fam {
+			if f.sent == 0 {
+				continue
+			}
+			loss := f.loss()
+			c.LossPercent = max(c.LossPercent, math.Round(loss*100)/100)
+			if loss > out.WorstLossPercent {
+				out.WorstLossPercent, out.WorstLossFamily = math.Round(loss*100)/100, familyName(i)
+			}
+			if f.answered() == 0 {
+				continue
+			}
+			m := round(f.mean())
+			c.LatencyMS = max(c.LatencyMS, m)
+			if m > out.WorstLatencyMS {
+				out.WorstLatencyMS, out.WorstLatencyFamily = m, familyName(i)
+			}
+		}
+	}
+	return out
+}

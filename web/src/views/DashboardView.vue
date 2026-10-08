@@ -72,6 +72,19 @@ const loadStats = useAsync(
   { interval: STATS_MS },
 )
 
+/** Each gateway's last day; empty where the router keeps none. */
+const strips = ref(null)
+const loadStrips = useAsync(
+  async () => {
+    try {
+      strips.value = await api.gatewayHistory.strips()
+    } catch {
+      strips.value = []
+    }
+  },
+  { interval: 60_000 },
+)
+
 const error = computed(() => healthError.value || load.error.value || system.error)
 /** Until the first overview arrives, an empty list means not read yet. */
 const loaded = computed(() => load.updatedAt.value > 0)
@@ -163,7 +176,7 @@ async function readUpdate() {
 // Nothing here needs another's answer, so all go at once; none throws. The
 // overview is the slow one, and the cards wait for it together.
 onMounted(async () => {
-  await Promise.all([readHealth(), load.run(), loadStats.run(), readUpdate()])
+  await Promise.all([readHealth(), load.run(), loadStats.run(), readUpdate(), loadStrips.run()])
   answered.value = true
 })
 </script>
@@ -217,6 +230,7 @@ onMounted(async () => {
         :style="hold('gateways')"
         :gateways="drawn?.gateways ?? []"
         :unwatched="drawn?.unwatchedGateways ?? []"
+        :strips="ready ? strips : null"
         :loaded="ready"
         :placeholders="shape.cards.gateways"
       />

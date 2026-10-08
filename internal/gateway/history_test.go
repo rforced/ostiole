@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"maps"
 	"net/netip"
 	"slices"
 	"strings"
@@ -474,5 +475,54 @@ func TestAFamilyThatNeverAnsweredIsNotJudged(t *testing.T) {
 	m.judge(minute(0, StateUp, v4(0, 3), FamilyMinute{Family: FamilyIPv6, Sent: 12, Lost: 12}))
 	if s := m.Statuses()[0]; !s.Online || len(s.Lossy) != 0 {
 		t.Errorf("status = %+v", s)
+	}
+}
+
+// A cell is its worst minute: down over losing packets over slow over up,
+// with how far past its threshold a slow or lossy one went.
+func TestTheStripDrawsTheWorstMinuteOfEachCell(t *testing.T) {
+	t.Parallel()
+	h := NewHistory()
+	probe := func(m, n, lost int, ms float64, state string) {
+		for i := range n {
+			at := at(m, i*5)
+			h.Probe("wan", FamilyIPv4, "", at, time.Duration(ms*float64(time.Millisecond)), i >= lost)
+			h.Mark("wan", state, "", at)
+		}
+	}
+	probe(0, 12, 0, 3, StateUp)
+	probe(10, 12, 0, 300, StateUp)
+	probe(20, 12, 2, 3, StateUp)
+	probe(21, 12, 0, 300, StateUp)
+	probe(30, 12, 12, 0, StateDown)
+	probe(31, 12, 0, 3, StateUp)
+	h.Advance(at(40, 0))
+	s := h.Strip("wan", at(40, 0), 200, 10)
+	if len(s.Cells) != StripCells {
+		t.Fatalf("%d cells", len(s.Cells))
+	}
+	cells := map[int64]Cell{}
+	for _, c := range s.Cells {
+		if c.Kind != "" {
+			cells[c.Start] = c
+		}
+	}
+	want := map[int64]Cell{
+		at(0, 0).Unix():  {Start: at(0, 0).Unix(), Kind: CellUp, LatencyMS: 3},
+		at(10, 0).Unix(): {Start: at(10, 0).Unix(), Kind: CellSlow, Level: 0.5, LatencyMS: 300},
+		at(20, 0).Unix(): {Start: at(20, 0).Unix(), Kind: CellLossy, Level: 0.07, LatencyMS: 300, LossPercent: 16.67},
+		at(30, 0).Unix(): {Start: at(30, 0).Unix(), Kind: CellDown, Down: 1, LatencyMS: 3, LossPercent: 100},
+	}
+	if !maps.Equal(cells, want) {
+		t.Errorf("cells = %+v\nwant %+v", cells, want)
+	}
+	if s.Down != 60 || s.WorstLatencyMS != 300 || s.WorstLatencyFamily != FamilyIPv4 || s.WorstLossPercent != 100 {
+		t.Errorf("strip = %+v", s)
+	}
+	if off := h.Strip("wan", at(40, 0), 0, 0); off.Cells[len(off.Cells)-2].Kind != CellDown {
+		t.Errorf("without thresholds: %+v", off.Cells[len(off.Cells)-3:])
+	}
+	if empty := h.Strip("nobody", at(40, 0), 200, 10); len(empty.Cells) != StripCells || empty.Cells[0].Kind != "" {
+		t.Errorf("an unknown gateway: %+v", empty.Cells[0])
 	}
 }

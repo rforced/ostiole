@@ -149,6 +149,7 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/gateways/detected":        {summary: "Default routes the kernel already has, and the gateway each would become.", role: auth.RoleViewer},
 	"GET /api/v1/gateways/{name}/history":  {summary: "A gateway's latency and loss over a window (5m, 24h or 31d) for each family it is probed in, with its events in the window.", role: auth.RoleViewer},
 	"GET /api/v1/gateways/stream":          {summary: "Every probe of every gateway as it lands (server-sent events).", role: auth.RoleViewer},
+	"GET /api/v1/gateways/strips":          {summary: "Each watched gateway's last day in ten-minute cells, judged against its thresholds, with the day's time down and worst minutes.", role: auth.RoleViewer},
 	"GET /api/v1/gateways/events":          {summary: "A page of what changed on the gateways, newest first, one gateway's with gateway, searched with q and read on from before.", role: auth.RoleViewer},
 	"GET /api/v1/gateways/events/stream":   {summary: "What changes on the gateways, as it happens (server-sent events).", role: auth.RoleViewer},
 	"DELETE /api/v1/gateways/history":      {summary: "Forget every gateway's latency and loss and delete their files. The events stay.", role: auth.RoleAdmin},
