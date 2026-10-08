@@ -59,7 +59,7 @@ const off = computed(() => !(config.saved?.wireless?.radios ?? []).some((r) => r
 
 const empty = computed(() => {
   const q = query.value.trim()
-  return emptyText(log, q ? `Nothing matches "${q}".` : 'No clients yet.')
+  return emptyText(log, q ? `Nothing matches "${q}".` : 'No clients.')
 })
 </script>
 

@@ -235,7 +235,7 @@ test('the log says what it needs to read the kernel', async ({ page }) => {
   )
   await expect(log.getByRole('button', { name: 'Live' })).toBeVisible()
   await expect(log.getByLabel('Show')).toHaveValue('all')
-  await expect(log.getByRole('cell', { name: 'No packets logged.' })).toBeVisible()
+  await expect(log.getByRole('cell', { name: 'No packets.' })).toBeVisible()
 })
 
 // How much of the log is kept, and what it costs, is set beside it.

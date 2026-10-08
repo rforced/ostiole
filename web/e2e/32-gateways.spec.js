@@ -118,7 +118,7 @@ test("the gateways' history and events clear", async ({ page }) => {
   const events = card(page, 'Gateway events')
   await events.getByRole('button', { name: 'Clear', exact: true }).click()
   await confirmDialog(page, { confirm: 'Clear' })
-  await expect(events).toContainText('No events yet.')
+  await expect(events).toContainText('No events.')
 })
 
 test('traffic per link clears', async ({ page }) => {

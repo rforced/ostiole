@@ -103,7 +103,7 @@ describe('NotificationsPage', () => {
     const text = wrapper.text()
     expect(text).toContain('Resolved: Gateway wan is down')
     expect(text).toContain('Webhook: refused')
-    expect(text).not.toContain('Nothing sent.')
+    expect(text).not.toContain('No notifications.')
   })
 
   // Where the router's news goes is an admin's to say; everyone else reads.

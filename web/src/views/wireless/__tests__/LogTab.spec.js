@@ -110,7 +110,7 @@ describe('Wireless log', () => {
       }),
     )
     expect(api.wireless.clearLog).toHaveBeenCalled()
-    expect(wrapper.text()).toContain('No clients yet.')
+    expect(wrapper.text()).toContain('No clients.')
     const { wrapper: warning } = await tab([], { level: 'warning' })
     expect(clearButton(warning)).toBeUndefined()
   })

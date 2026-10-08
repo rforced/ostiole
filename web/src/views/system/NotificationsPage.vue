@@ -335,7 +335,7 @@ const targetStates = computed(() =>
         <tbody>
           <tr v-if="!status.recent.length">
             <td colspan="3" class="text-ink-muted">
-              {{ emptyText(load, 'Nothing sent.') }}
+              {{ emptyText(load, 'No notifications.') }}
             </td>
           </tr>
           <tr v-for="r in status.recent" :key="r.time">

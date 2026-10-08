@@ -58,7 +58,7 @@ const inFiles = computed(() => Boolean(config.saved?.system?.logging?.files?.ena
 
 const empty = computed(() => {
   const q = query.value.trim()
-  return emptyText(log, q ? `Nothing matches "${q}".` : 'No readings yet.')
+  return emptyText(log, q ? `Nothing matches "${q}".` : 'No readings.')
 })
 
 const orDash = (v, unit = '') => (v == null ? '—' : `${formatCount(v)}${unit}`)

@@ -59,7 +59,7 @@ function pieces(addr, port) {
       </tbody>
       <tbody v-else>
         <tr v-if="!blocks.length">
-          <td colspan="4" class="text-ink-muted">No blocks yet.</td>
+          <td colspan="4" class="text-ink-muted">No blocks.</td>
         </tr>
         <tr v-for="e in blocks" :key="`${e.time}-${e.src}-${e.srcPort}-${e.dst}-${e.dstPort}`">
           <td class="when">

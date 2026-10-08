@@ -38,7 +38,7 @@ test('the log viewer answers a query without hanging or going blank', async ({ p
   await page.getByRole('button', { name: /Refresh|Reading/ }).click()
   // On a router without systemd the call fails cleanly rather than hanging.
   await expect(async () => {
-    const shown = await page.getByText('Nothing in this window.').isVisible()
+    const shown = await page.getByText('No entries.').isVisible()
     const failed = await page.getByRole('alert').isVisible()
     const lines = await page.locator('.font-mono.text-code p').count()
     expect(shown || failed || lines > 0).toBe(true)

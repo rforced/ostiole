@@ -44,7 +44,7 @@ defineProps({
           </tr>
         </template>
         <tr v-else-if="!rules.length">
-          <td colspan="4" class="text-ink-muted">No rules with counters yet.</td>
+          <td colspan="4" class="text-ink-muted">No rules with counters.</td>
         </tr>
         <tr v-for="r in rules" :key="r.id">
           <td>

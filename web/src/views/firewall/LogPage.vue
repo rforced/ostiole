@@ -93,7 +93,7 @@ function actionClass(action) {
 const empty = computed(() => {
   const q = query.value.trim()
   if (q) return emptyText(log, `Nothing matches "${q}".`)
-  return emptyText(log, show.value === 'all' ? 'No packets logged.' : 'Nothing matches this view.')
+  return emptyText(log, show.value === 'all' ? 'No packets.' : 'Nothing matches this view.')
 })
 </script>
 

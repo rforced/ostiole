@@ -53,7 +53,7 @@ function left(l) {
       </tbody>
       <tbody v-else>
         <tr v-if="!leases.length">
-          <td colspan="3" class="text-ink-muted">No leases yet.</td>
+          <td colspan="3" class="text-ink-muted">No leases.</td>
         </tr>
         <tr v-for="l in leases" :key="l.ip + (l.mac || l.clientId)">
           <td class="font-mono text-code">{{ l.ip }}</td>

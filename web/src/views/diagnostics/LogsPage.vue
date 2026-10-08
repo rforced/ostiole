@@ -93,7 +93,7 @@ onMounted(load.run)
           class="max-h-[32rem] overflow-auto rounded-lg border border-line bg-page p-3 font-mono text-code"
         >
           <p v-if="!entries.length" class="text-ink-muted">
-            {{ emptyText(load, 'Nothing in this window.') }}
+            {{ emptyText(load, 'No entries.') }}
           </p>
           <p
             v-for="(e, i) in entries"

@@ -106,7 +106,7 @@ test('a test mail arrives before anything is applied', async ({ page }) => {
   await expect(hook).toContainText('refused')
   await expect(hook).not.toContainText('T0PSECRET')
   // A test is not a notice, so nothing is listed as sent.
-  await expect(page.getByText('Nothing sent.')).toBeVisible()
+  await expect(page.getByText('No notifications.')).toBeVisible()
   await page.screenshot({ path: shot('130-notifications'), fullPage: true })
 
   await expect.poll(() => mails.length).toBe(1)

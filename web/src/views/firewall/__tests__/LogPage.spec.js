@@ -229,7 +229,7 @@ describe('LogPage', () => {
       expect.objectContaining({ question: 'Clear the firewall log?' }),
     )
     expect(api.log.clear).toHaveBeenCalled()
-    expect(rows(w)[0].text()).toContain('No packets logged.')
+    expect(rows(w)[0].text()).toContain('No packets.')
   })
 
   // A restart empties it unless the logs go to files as well.
