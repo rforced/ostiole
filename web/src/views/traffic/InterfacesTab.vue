@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+import ClearLogButton from '@/components/ClearLogButton.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import TrafficChart from '@/components/TrafficChart.vue'
@@ -8,6 +9,7 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { formatBytes } from '@/lib/format'
 import { WINDOWS, appendPoint, sinceLine, useTrafficStream } from '@/lib/traffic'
+import { useConfigStore } from '@/stores/config'
 
 /** How often a day's or a month's charts are read again while Live is on. */
 const REREAD_MS = 60_000
@@ -71,8 +73,17 @@ onMounted(() => {
 })
 onBeforeUnmount(() => clearInterval(timer))
 
+/** Empties what every link moved, its errors and files included, and reads again. */
+const clear = useAsync(async () => {
+  await api.traffic.clearInterfaces()
+  await read.run()
+})
+const config = useConfigStore()
+/** Kept in files as well, by the configuration the router runs. */
+const inFiles = computed(() => Boolean(config.saved?.system?.logging?.files?.enabled))
+
 const stale = computed(() => read.busy.value && links.value !== null)
-const error = computed(() => read.error.value || stream.error.value)
+const error = computed(() => read.error.value || stream.error.value || clear.error.value)
 </script>
 
 <template>
@@ -82,6 +93,16 @@ const error = computed(() => read.error.value || stream.error.value)
         <option v-for="w in WINDOWS" :key="w.value" :value="w.value">{{ w.label }}</option>
       </select>
       <LiveButton v-model="live" :failing="Boolean(error)" />
+      <ClearLogButton
+        name="traffic per link"
+        :description="
+          inFiles
+            ? 'What every link moved and its errors are dropped, files included. Counting carries on.'
+            : 'What every link moved and its errors are dropped. Counting carries on.'
+        "
+        :busy="clear.busy.value"
+        @confirm="clear.run()"
+      />
       <p v-if="error" role="alert" class="text-sm text-bad">{{ error }}</p>
     </div>
     <p v-if="!links" class="text-sm text-ink-muted">Reading…</p>

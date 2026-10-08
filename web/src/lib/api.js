@@ -340,6 +340,8 @@ export const api = {
     clear: () => request('DELETE', '/traffic'),
     /** Forgets every destination and leaves the devices. */
     clearDestinations: () => request('DELETE', '/traffic/destinations'),
+    /** Forgets what every link moved, and its errors. */
+    clearInterfaces: () => request('DELETE', '/traffic/interfaces'),
   },
   /** What the DNS server answered, while the query log is on. */
   queries: {

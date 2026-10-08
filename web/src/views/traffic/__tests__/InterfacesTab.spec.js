@@ -1,10 +1,15 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
+import { useConfirmStore } from '@/stores/confirm'
 import InterfacesTab from '@/views/traffic/InterfacesTab.vue'
 
-vi.mock('@/lib/api', () => ({ api: { traffic: { interfaces: vi.fn() } } }))
+vi.mock('@/lib/api', () => ({
+  api: { traffic: { interfaces: vi.fn(), clearInterfaces: vi.fn() } },
+}))
 
 let source = null
 class FakeSource {
@@ -46,6 +51,7 @@ function answer(window, points = [[NOW - 1, 1000, 2000]]) {
 
 describe('InterfacesTab', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
     vi.clearAllMocks()
     vi.stubGlobal('EventSource', FakeSource)
     api.traffic.interfaces.mockImplementation(async (w) => answer(w))
@@ -95,5 +101,28 @@ describe('InterfacesTab', () => {
     expect(w.get('svg[role="img"]').classes()).not.toContain('opacity-60')
     // Counting began an hour ago, inside a day.
     expect(w.text()).toMatch(/Since .+\./)
+  })
+
+  // Traffic per link clears as every other log does: asked first, an
+  // admin's, and read again after.
+  it('clears what every link moved, once asked', async () => {
+    useAuthStore().user = { username: 'root', role: 'admin' }
+    const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
+    const w = mount(InterfacesTab)
+    await flushPromises()
+    const reads = api.traffic.interfaces.mock.calls.length
+    await w
+      .findAll('button')
+      .find((b) => b.text() === 'Clear')
+      .trigger('click')
+    await flushPromises()
+    expect(ask).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        question: 'Clear the traffic per link?',
+        description: 'What every link moved and its errors are dropped. Counting carries on.',
+      }),
+    )
+    expect(api.traffic.clearInterfaces).toHaveBeenCalledOnce()
+    expect(api.traffic.interfaces.mock.calls.length).toBeGreaterThan(reads)
   })
 })
