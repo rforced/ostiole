@@ -445,7 +445,11 @@ func printDetected(cmd *cobra.Command, cfg *model.Config) {
 	fmt.Fprintln(w, "GATEWAY\tINTERFACE\tFAMILY\tMETRIC\tFROM\tCONFIGURED AS")
 	for _, d := range found {
 		as := d.Configured
-		if as == "" {
+		switch {
+		case as != "":
+		case d.Disabled != "":
+			as = d.Disabled + ", disabled"
+		default:
 			as = "not configured (" + gateway.Suggest(cfg, d).Name + " would cover it)"
 		}
 		fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\n", d.Address, d.Interface, d.Family, d.Metric, d.Protocol, as)

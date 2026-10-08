@@ -423,7 +423,7 @@ func (a *api) detectedGateways(w http.ResponseWriter, _ *http.Request) error {
 	out := make([]detected, 0, len(found))
 	for _, d := range found {
 		row := detected{Detected: d}
-		if d.Configured == "" && cfg != nil {
+		if d.Configured == "" && d.Disabled == "" && cfg != nil {
 			g := gateway.Suggest(cfg, d)
 			row.Suggested = &g
 		}

@@ -25,8 +25,10 @@ type Detected struct {
 	// Protocol says where the route came from: dhcp, ra, static, kernel.
 	Protocol string `json:"protocol"`
 	// Configured names the gateway in the configuration that covers this
-	// route, empty when nothing does.
+	// route, empty when nothing does. Disabled names a gateway that would
+	// cover it if it were on.
 	Configured string `json:"configured,omitempty"`
+	Disabled   string `json:"disabled,omitempty"`
 	// Demoted is a route the monitor moved below every other because its
 	// gateway stopped answering. Metric is still the kernel's.
 	Demoted bool `json:"demoted,omitempty"`
@@ -66,7 +68,7 @@ func Detect(cfg *model.Config) ([]Detected, error) {
 			if family == unix.AF_INET6 {
 				d.Family = "IPv6"
 			}
-			d.Configured = coveredBy(cfg, d)
+			d.Configured, d.Disabled = coveredBy(cfg, d)
 			out = append(out, d)
 		}
 	}
@@ -79,27 +81,26 @@ func Detect(cfg *model.Config) ([]Detected, error) {
 	return out, nil
 }
 
-// coveredBy finds the configured gateway that owns a detected route: one
-// on the same interface, with either the same address or none of its own
-// (which means "whatever the network gives us").
-func coveredBy(cfg *model.Config, d Detected) string {
+// coveredBy finds the enabled gateway that owns a detected route: one on
+// the same interface, with either the same address or none of its own
+// (which means "whatever the network gives us"); failing that, a disabled
+// one that would.
+func coveredBy(cfg *model.Config, d Detected) (enabled, disabled string) {
 	if cfg == nil {
-		return ""
+		return "", ""
 	}
 	for _, g := range cfg.Gateways {
-		if g.Interface != d.Interface {
+		if g.Interface != d.Interface || (g.Address != "" && g.Address != d.Address) {
 			continue
 		}
-		if g.Address == d.Address {
-			return g.Name
+		if g.Enabled {
+			return g.Name, ""
 		}
-		if g.Address == "" {
-			// A dynamic gateway covers whichever family it learns; without
-			// an address there is nothing more to compare.
-			return g.Name
+		if disabled == "" {
+			disabled = g.Name
 		}
 	}
-	return ""
+	return "", disabled
 }
 
 // routeProtocol names where a route came from, in the words people use

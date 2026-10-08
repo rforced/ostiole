@@ -23,25 +23,32 @@ func TestCoveredBy(t *testing.T) {
 	cfg := detectConfig(
 		model.Gateway{Name: "wan1", Enabled: true, Interface: "eth0"},
 		model.Gateway{Name: "backup", Enabled: true, Interface: "eth1", Address: "198.51.100.1"},
+		model.Gateway{Name: "spare", Interface: "eth2"},
+		model.Gateway{Name: "old", Interface: "eth3"},
+		model.Gateway{Name: "lte", Enabled: true, Interface: "eth3"},
 	)
 	cases := map[string]struct {
-		in   Detected
-		want string
+		in             Detected
+		want, disabled string
 	}{
 		"a dynamic gateway covers whatever it learns": {
-			Detected{Address: "203.0.113.1", Interface: "eth0"}, "wan1"},
+			Detected{Address: "203.0.113.1", Interface: "eth0"}, "wan1", ""},
 		"an address that matches": {
-			Detected{Address: "198.51.100.1", Interface: "eth1"}, "backup"},
+			Detected{Address: "198.51.100.1", Interface: "eth1"}, "backup", ""},
 		"the same address on another interface is another gateway": {
-			Detected{Address: "198.51.100.1", Interface: "eth9"}, ""},
+			Detected{Address: "198.51.100.1", Interface: "eth9"}, "", ""},
 		"an address the configured one does not claim": {
-			Detected{Address: "198.51.100.9", Interface: "eth1"}, ""},
+			Detected{Address: "198.51.100.9", Interface: "eth1"}, "", ""},
+		"a disabled gateway covers nothing": {
+			Detected{Address: "192.0.2.1", Interface: "eth2"}, "", "spare"},
+		"an enabled gateway wins over a disabled one": {
+			Detected{Address: "192.0.2.1", Interface: "eth3"}, "lte", ""},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			if got := coveredBy(cfg, tc.in); got != tc.want {
-				t.Errorf("coveredBy = %q, want %q", got, tc.want)
+			if got, disabled := coveredBy(cfg, tc.in); got != tc.want || disabled != tc.disabled {
+				t.Errorf("coveredBy = %q, %q, want %q, %q", got, disabled, tc.want, tc.disabled)
 			}
 		})
 	}
