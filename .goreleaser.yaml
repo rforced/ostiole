@@ -61,6 +61,8 @@ checksum:
 
 sboms:
   - artifacts: archive
+    # goreleaser's default adds --enrich all, which fetches modules online.
+    args: ["$artifact", "--output", "spdx-json=$document"]
 
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
