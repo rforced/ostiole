@@ -424,7 +424,7 @@ describe('EventsTab', () => {
       },
     })
     const { wrapper, store } = await events([event()], draft)
-    const links = wrapper.findAll('button.link')
+    const links = wrapper.findAll('button.link-action')
     await links[0].trigger('click')
     expect(store.proxy.wafProfiles[0].exclusions).toEqual([
       { rule: '941100', description: 'XSS Attack Detected' },

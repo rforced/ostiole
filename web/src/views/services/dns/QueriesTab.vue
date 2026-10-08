@@ -278,7 +278,7 @@ function explain(name) {
                   <button
                     v-if="e.status === 'blocked'"
                     type="button"
-                    class="link"
+                    class="link-action"
                     @click="explain(e.name)"
                   >
                     Why?

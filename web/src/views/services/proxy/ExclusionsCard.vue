@@ -135,12 +135,11 @@ function edit(e) {
             <span v-if="e.target" class="font-mono break-words text-code">{{ e.target }}</span>
             <span v-else class="text-ink-muted">every variable</span>
           </td>
-          <td class="text-right whitespace-nowrap" data-label="">
-            <button type="button" class="link" @click="edit(e)">
+          <td class="actions" data-label="">
+            <button type="button" class="link-action" @click="edit(e)">
               {{ auth.readOnly ? 'View' : 'Edit' }}
             </button>
             <ConfirmButton
-              class="ml-3"
               label="Delete"
               :question="`Delete the exclusion of ${exclusionText(e)}?`"
               :description="e.description"

@@ -217,7 +217,7 @@ function edit(index) {
             <td class="font-mono text-code" data-label="Client">{{ r.source }}</td>
             <td class="font-mono text-code" data-label="Internal">{{ r.internalPorts }}</td>
             <td data-label="Description">{{ r.description }}</td>
-            <td class="text-right whitespace-nowrap" data-label="">
+            <td class="actions" data-label="">
               <template v-if="!auth.readOnly">
                 <button
                   type="button"
@@ -238,11 +238,10 @@ function edit(index) {
                   <ArrowDown class="size-4" />
                 </button>
               </template>
-              <button type="button" class="link ml-2" @click="edit(i)">
+              <button type="button" class="link-action" @click="edit(i)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Delete the ${r.action} entry for ${r.source}?`"
                 :description="r.description"

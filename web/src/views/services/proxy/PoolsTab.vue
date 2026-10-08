@@ -68,12 +68,11 @@ function edit(pool) {
               </template>
               <span v-else class="text-ink-muted">none</span>
             </td>
-            <td class="text-right whitespace-nowrap" data-label="">
-              <button type="button" class="link" @click="edit(p)">
+            <td class="actions" data-label="">
+              <button type="button" class="link-action" @click="edit(p)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Delete pool ${p.id}?`"
                 :dependents="config.poolDependents(p.id)"

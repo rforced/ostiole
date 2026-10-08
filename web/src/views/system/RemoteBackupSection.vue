@@ -422,7 +422,7 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
               {{ new Date(c.takenAt).toLocaleString() }}
             </td>
             <td class="tabular-nums" data-label="Size">{{ formatBytes(c.size) }}</td>
-            <td class="text-right whitespace-nowrap" data-label="">
+            <td class="actions" data-label="">
               <input
                 v-if="asking === c.key"
                 :ref="(el) => (passphraseInput = el)"
@@ -435,7 +435,7 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
               />
               <button
                 type="button"
-                class="link"
+                class="link-action"
                 :disabled="restore.busy.value"
                 :aria-busy="restoring === c.key"
                 @click="restoreCopy(c.key)"
@@ -448,7 +448,6 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
                 Restore
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :busy="deleting === c.key"
                 :disabled="remove.busy.value"

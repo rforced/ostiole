@@ -352,11 +352,11 @@ const lists = sort.sorted
                 <span v-if="fetched[l.name]?.stale" class="badge badge-warn ml-1">stale</span>
               </template>
             </td>
-            <td class="text-right whitespace-nowrap" data-label="">
+            <td class="actions" data-label="">
               <button
                 v-if="l.url && applied.has(l.name) && !auth.readOnly"
                 type="button"
-                class="link mr-3"
+                class="link-action"
                 :disabled="refresh.busy.value"
                 :aria-busy="which === l.name"
                 @click="refresh.run(l.name)"
@@ -368,11 +368,15 @@ const lists = sort.sorted
                 />
                 {{ which === l.name ? 'Refreshing…' : 'Refresh' }}
               </button>
-              <button type="button" class="link" :disabled="refresh.busy.value" @click="edit(l)">
+              <button
+                type="button"
+                class="link-action"
+                :disabled="refresh.busy.value"
+                @click="edit(l)"
+              >
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 :disabled="refresh.busy.value"
                 label="Delete"
                 :question="`Delete list ${l.name}?`"

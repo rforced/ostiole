@@ -311,18 +311,17 @@ function editZone(z) {
                     <span v-for="g in guards(row.cfg)" :key="g" class="badge">{{ g }}</span>
                   </div>
                 </td>
-                <td class="text-right whitespace-nowrap" data-label="">
+                <td class="actions" data-label="">
                   <template v-if="row.live && dynamic(row.cfg) && !auth.readOnly">
                     <button
                       type="button"
-                      class="link mr-3"
+                      class="link-action"
                       :disabled="renewing === row.cfg.name"
                       @click="renew(row, false)"
                     >
                       {{ renewing === row.cfg.name ? 'Renewing…' : 'Renew' }}
                     </button>
                     <ConfirmButton
-                      class="mr-3"
                       label="Release"
                       :question="`Release the lease on ${row.cfg.name} and ask for a new one?`"
                       description="The address is gone until the server answers. A WAN is offline until then."
@@ -333,35 +332,35 @@ function editZone(z) {
                   <button
                     v-if="row.cfg?.bridge || row.cfg?.bond"
                     type="button"
-                    class="link mr-3"
+                    class="link-action"
                     @click="editAggregate(row.cfg)"
                   >
                     Members
                   </button>
-                  <RouterLink
-                    v-if="ownerPage(row.cfg)"
-                    :to="ownerPage(row.cfg).to"
-                    class="link mr-3"
-                  >
+                  <RouterLink v-if="ownerPage(row.cfg)" :to="ownerPage(row.cfg).to" class="link">
                     {{ ownerPage(row.cfg).label }}
                   </RouterLink>
                   <button
                     v-if="row.cfg?.pppoe"
                     type="button"
-                    class="link"
+                    class="link-action"
                     @click="editPppoe(row.cfg)"
                   >
                     {{ auth.readOnly ? 'View' : 'Edit' }}
                   </button>
-                  <button v-else-if="row.cfg" type="button" class="link" @click="edit(row)">
+                  <button v-else-if="row.cfg" type="button" class="link-action" @click="edit(row)">
                     {{ auth.readOnly ? 'View' : 'Edit' }}
                   </button>
-                  <button v-else-if="!auth.readOnly" type="button" class="link" @click="edit(row)">
+                  <button
+                    v-else-if="!auth.readOnly"
+                    type="button"
+                    class="link-action"
+                    @click="edit(row)"
+                  >
                     Edit
                   </button>
                   <ConfirmButton
                     v-if="row.cfg && !ownerPage(row.cfg)"
-                    class="ml-3"
                     label="Delete"
                     :question="`Delete ${row.cfg.name} from the configuration?`"
                     description="Its addresses, zone, and settings go on the next apply. The device itself stays."
@@ -420,12 +419,11 @@ function editZone(z) {
                   <span v-if="z.antiLockout" class="badge badge-ok">anti-lockout</span>
                   <span v-if="z.logDrops" class="badge">log drops</span>
                 </td>
-                <td class="text-right whitespace-nowrap" data-label="">
-                  <button type="button" class="link" @click="editZone(z)">
+                <td class="actions" data-label="">
+                  <button type="button" class="link-action" @click="editZone(z)">
                     {{ auth.readOnly ? 'View' : 'Edit' }}
                   </button>
                   <ConfirmButton
-                    class="ml-3"
                     label="Delete"
                     :question="`Delete zone ${z.name}?`"
                     :dependents="config.zoneDependents(z.name)"

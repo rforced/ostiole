@@ -313,9 +313,7 @@ onMounted(() => {
                 {{ formatCount(ruleLogged(r)) }} logged
               </div>
             </td>
-            <td
-              class="text-right whitespace-nowrap max-sm:order-4 max-sm:basis-full max-sm:text-left"
-            >
+            <td class="actions max-sm:order-4 max-sm:basis-full max-sm:text-left">
               <template v-if="!auth.readOnly">
                 <button
                   type="button"
@@ -336,11 +334,10 @@ onMounted(() => {
                   <ArrowDown class="size-4" />
                 </button>
               </template>
-              <button type="button" class="link ml-2" @click="edit(r)">
+              <button type="button" class="link-action" @click="edit(r)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Delete rule ${r.id}?`"
                 :description="r.description"

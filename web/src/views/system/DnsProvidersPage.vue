@@ -80,12 +80,11 @@ const labelOf = (kind) => kinds.value.find((k) => k.kind === kind)?.label ?? kin
               {{ p.domains?.join(', ') || '—' }}
             </td>
             <UsedByCell :names="config.providerDependents(p.id)" />
-            <td class="text-right whitespace-nowrap" data-label="">
-              <button type="button" class="link" @click="edit(p)">
+            <td class="actions" data-label="">
+              <button type="button" class="link-action" @click="edit(p)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Delete DNS provider ${p.id}?`"
                 description="The credentials go with it."

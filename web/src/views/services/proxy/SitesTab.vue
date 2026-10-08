@@ -77,12 +77,11 @@ function edit(site) {
               <span v-if="s.waf" class="font-mono text-code">{{ s.waf }}</span>
               <span v-else class="text-ink-muted">none</span>
             </td>
-            <td class="text-right whitespace-nowrap" data-label="">
-              <button type="button" class="link" @click="edit(s)">
+            <td class="actions" data-label="">
+              <button type="button" class="link-action" @click="edit(s)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Delete site ${s.id}?`"
                 :description="(s.hosts ?? []).join(', ')"

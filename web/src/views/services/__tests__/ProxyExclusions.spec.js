@@ -159,7 +159,7 @@ describe('ExclusionsCard', () => {
       { id: 'watch', exclusions: [{ rule: '942200' }, { rule: '941100', path: '/api' }] },
     ])
     // Sorted, the first row is the second exclusion.
-    await rows(wrapper)[0].get('button.link').trigger('click')
+    await rows(wrapper)[0].get('button.link-action').trigger('click')
     expect(wrapper.findComponent(ExclusionDialog).props()).toMatchObject({
       open: true,
       index: 1,
@@ -175,7 +175,7 @@ describe('ExclusionsCard', () => {
     useAuthStore().user = { name: 'eve', role: 'viewer' }
     const { wrapper } = await card([{ id: 'watch', exclusions: [{ rule: '942100' }] }])
     expect(wrapper.text()).not.toContain('Add exclusion')
-    expect(rows(wrapper)[0].get('button.link').text()).toBe('View')
+    expect(rows(wrapper)[0].get('button.link-action').text()).toBe('View')
   })
 })
 

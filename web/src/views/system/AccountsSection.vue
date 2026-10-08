@@ -171,7 +171,7 @@ const when = (s, fallback) => (s ? new Date(s).toLocaleDateString() : fallback)
             </p>
           </td>
           <td data-label="Created">{{ when(u.createdAt, '—') }}</td>
-          <td class="space-x-3 text-right whitespace-nowrap" data-label="">
+          <td class="actions" data-label="">
             <button type="button" class="link-action" @click="openRename(u)">Rename</button>
             <button v-if="!isSelf(u)" type="button" class="link-action" @click="openPassword(u)">
               Set password

@@ -185,12 +185,11 @@ function edit(r) {
               </template>
               <template v-else>{{ read.updatedAt.value ? '—' : '…' }}</template>
             </td>
-            <td class="text-right whitespace-nowrap" data-label="">
-              <button type="button" class="link" @click="edit(r)">
+            <td class="actions" data-label="">
+              <button type="button" class="link-action" @click="edit(r)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Delete peer ${r.peer.name}?`"
                 :dependents="config.peerDependents(r.tunnel.name, r.peer.name)"

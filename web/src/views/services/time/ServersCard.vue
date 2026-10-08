@@ -126,12 +126,11 @@ function useDefaults() {
             <StatusBadge v-if="stateOf(s)" :state="stateOf(s)" />
           </td>
           <td data-label="Offset">{{ offsetOf(s) }}</td>
-          <td class="text-right whitespace-nowrap" data-label="">
-            <button type="button" class="link" @click="edit(s)">
+          <td class="actions" data-label="">
+            <button type="button" class="link-action" @click="edit(s)">
               {{ auth.readOnly ? 'View' : 'Edit' }}
             </button>
             <ConfirmButton
-              class="ml-3"
               label="Delete"
               :question="`Delete the time server ${s.host}?`"
               @confirm="remove(s)"

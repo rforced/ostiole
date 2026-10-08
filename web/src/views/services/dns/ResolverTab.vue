@@ -422,12 +422,11 @@ function toggleInterface(name, on) {
             <td class="font-mono text-code">{{ d.domain }}</td>
             <td class="font-mono text-code">{{ (d.servers ?? []).join(', ') }}</td>
             <td>{{ d.description }}</td>
-            <td class="text-right whitespace-nowrap">
-              <button type="button" class="link" @click="editDomain(d)">
+            <td class="actions">
+              <button type="button" class="link-action" @click="editDomain(d)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Delete the override for ${d.domain}?`"
                 :description="d.description"

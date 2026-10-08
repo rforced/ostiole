@@ -128,18 +128,17 @@ function edit(row) {
                 >(disabled)</span
               >
             </td>
-            <td class="text-right whitespace-nowrap" data-label="">
+            <td class="actions" data-label="">
               <button
                 v-if="row.cfg || !auth.readOnly"
                 type="button"
-                class="link"
+                class="link-action"
                 @click="edit(row)"
               >
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
                 v-if="row.cfg"
-                class="ml-3"
                 label="Delete"
                 :question="`Delete radio ${row.cfg.name} from the configuration?`"
                 description="It stops transmitting on the next apply. The card itself stays."

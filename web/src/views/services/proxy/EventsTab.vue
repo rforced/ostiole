@@ -227,12 +227,16 @@ function halves(addr) {
                 <span v-else-if="!auth.readOnly" class="ml-auto flex shrink-0 gap-2">
                   <button
                     type="button"
-                    class="link whitespace-nowrap"
+                    class="link-action whitespace-nowrap"
                     @click="exclude(e, r, false)"
                   >
                     Exclude
                   </button>
-                  <button type="button" class="link whitespace-nowrap" @click="exclude(e, r, true)">
+                  <button
+                    type="button"
+                    class="link-action whitespace-nowrap"
+                    @click="exclude(e, r, true)"
+                  >
                     Exclude on this path
                   </button>
                 </span>

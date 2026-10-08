@@ -141,12 +141,11 @@ function edit(t) {
               </div>
               <template v-if="!gatewaysOf(t).length">—</template>
             </td>
-            <td class="text-right whitespace-nowrap" data-label="">
-              <button type="button" class="link" @click="edit(t)">
+            <td class="actions" data-label="">
+              <button type="button" class="link-action" @click="edit(t)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Delete tunnel ${t.name}?`"
                 description="Peers lose their way in once this is applied. The private key is not kept."

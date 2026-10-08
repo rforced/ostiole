@@ -92,12 +92,11 @@ function edit(route) {
               }}</span>
               <span v-else class="text-ink-muted">No rule opens it</span>
             </td>
-            <td class="text-right whitespace-nowrap" data-label="">
-              <button type="button" class="link" @click="edit(r)">
+            <td class="actions" data-label="">
+              <button type="button" class="link-action" @click="edit(r)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Delete route ${r.id}?`"
                 :description="dependents(r)"

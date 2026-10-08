@@ -145,10 +145,10 @@ defineExpose({ refresh: load.run })
             <td data-label="">{{ new Date(r.time).toLocaleString() }}</td>
             <td class="font-mono text-code" data-label="ID">{{ r.id }}</td>
             <td class="font-mono text-code" data-label="Size">{{ r.size }} B</td>
-            <td class="text-right whitespace-nowrap" data-label="">
+            <td class="actions" data-label="">
               <button
                 type="button"
-                class="link"
+                class="link-action"
                 :aria-expanded="comparing === r.id"
                 @click="compare(r.id)"
               >
@@ -157,7 +157,7 @@ defineExpose({ refresh: load.run })
               <button
                 v-if="!auth.readOnly"
                 type="button"
-                class="link ml-3"
+                class="link-action"
                 @click="loadIntoDraft(r.id)"
               >
                 Load into draft

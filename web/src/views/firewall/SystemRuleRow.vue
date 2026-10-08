@@ -54,8 +54,10 @@ const auth = useAuthStore()
         {{ formatCount(logged) }} logged
       </div>
     </td>
-    <td class="text-right whitespace-nowrap max-sm:order-4 max-sm:basis-full max-sm:text-left">
-      <RouterLink v-if="to" :to="to" class="link">{{ auth.readOnly ? 'View' : 'Edit' }}</RouterLink>
+    <td class="actions max-sm:order-4 max-sm:basis-full max-sm:text-left">
+      <RouterLink v-if="to" :to="to" class="link-action">{{
+        auth.readOnly ? 'View' : 'Edit'
+      }}</RouterLink>
     </td>
   </tr>
 </template>

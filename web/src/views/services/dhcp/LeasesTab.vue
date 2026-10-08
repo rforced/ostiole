@@ -179,11 +179,11 @@ const empty = computed(() => {
             <td class="text-xs whitespace-nowrap" data-label="Expires">
               {{ l.expires ? when(l.expires) : 'never' }}
             </td>
-            <td class="text-right whitespace-nowrap" data-label="">
+            <td class="actions" data-label="">
               <button
                 v-if="canWake(l) && !auth.readOnly"
                 type="button"
-                class="link"
+                class="link-action"
                 :disabled="waking.busy.value !== ''"
                 :aria-busy="waking.busy.value === l.mac"
                 @click="waking.wake(l, l.hostname || l.mac)"
@@ -193,7 +193,7 @@ const empty = computed(() => {
               <button
                 v-if="l.mac && !l.static && l.family !== 6 && !auth.readOnly"
                 type="button"
-                class="link"
+                class="link-action"
                 :class="{ 'ml-3': canWake(l) }"
                 @click="makeStatic(l)"
               >

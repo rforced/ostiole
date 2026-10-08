@@ -341,6 +341,17 @@
   .table tbody tr:last-child td {
     @apply border-b-0;
   }
+  /* A row's actions, its last cell: one line at the right, the same room
+     between each. A reorder's two arrows are one control. */
+  .table td.actions {
+    @apply text-right whitespace-nowrap;
+  }
+  .table td.actions > * + * {
+    @apply ml-3;
+  }
+  .table td.actions > .icon-btn + .icon-btn {
+    @apply ml-0;
+  }
   /* A row the draft adds or changes, until it is applied. */
   .table tbody tr.row-changed td:first-child {
     @apply shadow-[inset_3px_0_0_0_var(--warn)];

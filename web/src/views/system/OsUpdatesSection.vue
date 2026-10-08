@@ -273,7 +273,7 @@ const when = (s) => (s ? new Date(s).toLocaleString() : 'never')
         </tbody>
       </table>
       <div v-if="waiting.length > SHOWN" class="card-strip border-t border-line">
-        <button type="button" class="link" @click="showAll = !showAll">
+        <button type="button" class="link-action" @click="showAll = !showAll">
           {{ showAll ? 'Show fewer' : `Show all ${waiting.length}` }}
         </button>
       </div>

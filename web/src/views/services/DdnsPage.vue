@@ -203,11 +203,11 @@ function edit(r) {
               </div>
             </td>
             <td class="text-xs whitespace-nowrap" data-label="Changed">{{ changed(r) }}</td>
-            <td class="text-right whitespace-nowrap" data-label="">
+            <td class="actions" data-label="">
               <button
                 v-if="!auth.readOnly"
                 type="button"
-                class="link"
+                class="link-action"
                 :disabled="!status[r.id] || !r.enabled || updating(r)"
                 :aria-busy="updating(r)"
                 @click="updateNow(r)"
@@ -219,11 +219,10 @@ function edit(r) {
                 />
                 Update now
               </button>
-              <button type="button" class="link ml-3" @click="edit(r)">
+              <button type="button" class="link-action" @click="edit(r)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Delete dynamic DNS record ${r.name}?`"
                 :description="`The record at ${where(r)} stays as it is.`"

@@ -84,12 +84,11 @@ function edit(s) {
             <td class="font-mono text-code" data-label="DNS">
               {{ s.dns?.join(', ') || 'this router' }}
             </td>
-            <td class="text-right whitespace-nowrap" data-label="">
-              <button type="button" class="link" @click="edit(s)">
+            <td class="actions" data-label="">
+              <button type="button" class="link-action" @click="edit(s)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Stop advertising IPv6 on ${s.interface}?`"
                 confirm-label="Stop"

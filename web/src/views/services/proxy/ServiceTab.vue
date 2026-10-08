@@ -181,7 +181,7 @@ function label(a) {
               <span v-if="a.log" class="badge ml-1">log</span>
             </td>
             <td data-label="Description">{{ a.description }}</td>
-            <td class="text-right whitespace-nowrap" data-label="">
+            <td class="actions" data-label="">
               <template v-if="!auth.readOnly">
                 <button
                   type="button"
@@ -202,11 +202,10 @@ function label(a) {
                   <ArrowDown class="size-4" />
                 </button>
               </template>
-              <button type="button" class="link ml-2" @click="edit(a)">
+              <button type="button" class="link-action" @click="edit(a)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Delete the ${a.action} rule for ${ports(a)} on ${a.zone}?`"
                 :description="a.description"

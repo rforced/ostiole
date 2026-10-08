@@ -299,13 +299,12 @@ function edit(r) {
                 <span v-else-if="g.live" class="badge">probing</span>
                 <span v-else class="badge">not probed</span>
               </td>
-              <td class="text-right whitespace-nowrap" data-label="">
-                <button type="button" class="link" @click="showHistory(g)">History</button>
-                <button type="button" class="link ml-3" @click="editGateway(g)">
+              <td class="actions" data-label="">
+                <button type="button" class="link-action" @click="showHistory(g)">History</button>
+                <button type="button" class="link-action" @click="editGateway(g)">
                   {{ auth.readOnly ? 'View' : 'Edit' }}
                 </button>
                 <ConfirmButton
-                  class="ml-3"
                   label="Delete"
                   :question="`Delete gateway ${g.name}?`"
                   :description="g.description"
@@ -368,11 +367,11 @@ function edit(r) {
                   </div>
                 </template>
               </td>
-              <td class="text-right whitespace-nowrap" data-label="">
+              <td class="actions" data-label="">
                 <button
                   v-if="!coveredBy(d) && !disabledFor(d) && d.suggested && !auth.readOnly"
                   type="button"
-                  class="link"
+                  class="link-action"
                   @click="adopt(d)"
                 >
                   Add as {{ d.suggested.name }}
@@ -441,12 +440,11 @@ function edit(r) {
                 >
                 <span v-else class="text-ink-muted">default route</span>
               </td>
-              <td class="text-right whitespace-nowrap" data-label="">
-                <button type="button" class="link" @click="editGroup(g)">
+              <td class="actions" data-label="">
+                <button type="button" class="link-action" @click="editGroup(g)">
                   {{ auth.readOnly ? 'View' : 'Edit' }}
                 </button>
                 <ConfirmButton
-                  class="ml-3"
                   label="Delete"
                   :question="`Delete group ${g.name}?`"
                   :description="g.description"
@@ -526,12 +524,11 @@ function edit(r) {
               <td class="font-mono text-code">{{ r.gateway }}</td>
               <td class="font-mono text-code">{{ r.interface ?? 'auto' }}</td>
               <td>{{ r.description }}</td>
-              <td class="text-right whitespace-nowrap">
-                <button type="button" class="link" @click="edit(r)">
+              <td class="actions">
+                <button type="button" class="link-action" @click="edit(r)">
                   {{ auth.readOnly ? 'View' : 'Edit' }}
                 </button>
                 <ConfirmButton
-                  class="ml-3"
                   label="Delete"
                   :question="`Delete route ${r.id}?`"
                   :description="r.description"

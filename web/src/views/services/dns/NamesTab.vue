@@ -212,13 +212,12 @@ function editHost(h) {
                 Loses the name to {{ holder(n.heldBy) }}.
               </div>
             </td>
-            <td class="text-right whitespace-nowrap" data-label="">
+            <td class="actions" data-label="">
               <template v-if="n.override">
-                <button type="button" class="link" @click="editHost(n.override)">
+                <button type="button" class="link-action" @click="editHost(n.override)">
                   {{ auth.readOnly ? 'View' : 'Edit' }}
                 </button>
                 <ConfirmButton
-                  class="ml-3"
                   label="Delete"
                   :question="`Delete the host override for ${n.name}?`"
                   :description="n.description"

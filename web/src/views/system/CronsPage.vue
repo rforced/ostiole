@@ -178,11 +178,11 @@ function describe(c) {
                 </template>
                 <span v-else class="text-ink-muted">never</span>
               </td>
-              <td class="text-right whitespace-nowrap" data-label="">
+              <td class="actions" data-label="">
                 <button
                   v-if="!auth.readOnly"
                   type="button"
-                  class="link mr-3"
+                  class="link-action"
                   :disabled="
                     runner.busy.value ||
                     c.status?.running ||
@@ -200,14 +200,13 @@ function describe(c) {
                 </button>
                 <button
                   type="button"
-                  class="link"
+                  class="link-action"
                   :disabled="locked(c) && !auth.readOnly"
                   @click="edit(c)"
                 >
                   {{ auth.readOnly ? 'View' : 'Edit' }}
                 </button>
                 <ConfirmButton
-                  class="ml-3"
                   label="Delete"
                   :question="`Delete cron ${c.description || c.id}?`"
                   :disabled="locked(c)"

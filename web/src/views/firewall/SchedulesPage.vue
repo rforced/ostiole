@@ -71,12 +71,11 @@ function days(schedule) {
             </td>
             <td data-label="Description">{{ s.description }}</td>
             <UsedByCell :names="config.scheduleReferences(s.name)" />
-            <td class="text-right whitespace-nowrap" data-label="">
-              <button type="button" class="link" @click="edit(s)">
+            <td class="actions" data-label="">
+              <button type="button" class="link-action" @click="edit(s)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Delete schedule ${s.name}?`"
                 :description="s.description"

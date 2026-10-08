@@ -65,12 +65,11 @@ function edit(account) {
             <td data-label="Email">{{ a.email || '—' }}</td>
             <td data-label="EAB">{{ a.eabKeyId ? 'yes' : 'no' }}</td>
             <UsedByCell :names="config.accountDependents(a.id)" />
-            <td class="text-right whitespace-nowrap" data-label="">
-              <button type="button" class="link" @click="edit(a)">
+            <td class="actions" data-label="">
+              <button type="button" class="link-action" @click="edit(a)">
                 {{ auth.isAdmin ? 'Edit' : 'View' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Delete ACME account ${a.id}?`"
                 description="Nothing is deleted at the CA."

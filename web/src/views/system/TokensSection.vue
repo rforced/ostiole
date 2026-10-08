@@ -157,7 +157,7 @@ const when = (s, fallback) => (s ? new Date(s).toLocaleDateString() : fallback)
           <td data-label="Created">{{ when(t.createdAt, '—') }}</td>
           <td data-label="Expires">{{ when(t.expiresAt, 'never') }}</td>
           <td data-label="Last used">{{ when(t.lastUsedAt, 'never') }}</td>
-          <td class="text-right" data-label="">
+          <td class="actions" data-label="">
             <ConfirmButton
               label="Delete"
               :question="`Delete token ${t.name}?`"

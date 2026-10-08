@@ -82,12 +82,11 @@ function rate(bits) {
             <td class="font-mono text-code tabular-nums">{{ rate(i.shaping.download) }}</td>
             <td class="font-mono text-code tabular-nums">{{ rate(i.shaping.upload) }}</td>
             <td>{{ LINKS[i.shaping.link || 'ethernet'] }}</td>
-            <td class="text-right whitespace-nowrap">
-              <button type="button" class="link" @click="edit(i)">
+            <td class="actions">
+              <button type="button" class="link-action" @click="edit(i)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Stop shaping ${i.name}?`"
                 description="The queue goes back to whatever the kernel does on its own."

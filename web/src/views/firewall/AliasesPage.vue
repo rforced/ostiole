@@ -225,26 +225,25 @@ async function readEntries(q, offset, limit) {
               </div>
             </td>
             <UsedByCell :names="config.aliasReferences(a.name)" />
-            <td class="text-right whitespace-nowrap" data-label="">
+            <td class="actions" data-label="">
               <template v-if="!auth.readOnly">
                 <button
                   v-if="fetches(a)"
                   type="button"
-                  class="link mr-3"
+                  class="link-action"
                   :disabled="refresh.busy.value"
                   @click="refresh.run(a.name)"
                 >
                   {{ refreshing === a.name ? 'Refreshing…' : 'Refresh' }}
                 </button>
-                <button v-if="ruleZone" type="button" class="link mr-3" @click="blockWith(a)">
+                <button v-if="ruleZone" type="button" class="link-action" @click="blockWith(a)">
                   Make a rule
                 </button>
               </template>
-              <button type="button" class="link" @click="edit(a)">
+              <button type="button" class="link-action" @click="edit(a)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Delete alias ${a.name}?`"
                 :description="a.description"

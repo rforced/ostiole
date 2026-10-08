@@ -115,12 +115,11 @@ const entries = computed(() => [
             <td>
               <span :class="tierBadge(z.busy.priority)">{{ tierLabel(z.busy.priority) }}</span>
             </td>
-            <td class="text-right whitespace-nowrap">
-              <button type="button" class="link" @click="editBusy(z)">
+            <td class="actions">
+              <button type="button" class="link-action" @click="editBusy(z)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Stop holding back busy devices on ${z.name}?`"
                 description="Every device on the zone goes back to an equal share whatever it is doing."

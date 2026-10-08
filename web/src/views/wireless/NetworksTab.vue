@@ -91,12 +91,11 @@ function edit(iface) {
               {{ row.iface.name
               }}<span v-if="!row.iface.enabled" class="ml-1 text-ink-muted">(disabled)</span>
             </td>
-            <td class="text-right whitespace-nowrap" data-label="">
-              <button type="button" class="link" @click="edit(row.iface)">
+            <td class="actions" data-label="">
+              <button type="button" class="link-action" @click="edit(row.iface)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Delete ${row.iface.wireless.ssid} from the configuration?`"
                 description="It stops being served on the next apply."

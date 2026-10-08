@@ -277,11 +277,11 @@ function remove(cert) {
               </span>
             </td>
             <td class="whitespace-nowrap" data-label="Expires">{{ expires(c) }}</td>
-            <td class="text-right whitespace-nowrap" data-label="">
+            <td class="actions" data-label="">
               <button
                 v-if="c.source !== 'uploaded' && !auth.readOnly"
                 type="button"
-                class="link"
+                class="link-action"
                 :disabled="status[c.id]?.running || !auth.isAdmin"
                 :title="auth.isAdmin ? undefined : 'Only an admin can order a certificate.'"
                 :aria-busy="status[c.id]?.running === true"
@@ -294,17 +294,11 @@ function remove(cert) {
                 />
                 {{ status[c.id]?.running ? 'Issuing…' : 'Issue now' }}
               </button>
-              <MenuButton
-                v-if="issued(c) && auth.isAdmin"
-                class="ml-3"
-                label="Download"
-                :items="downloads(c)"
-              />
-              <button type="button" class="link ml-3" @click="edit(c)">
+              <MenuButton v-if="issued(c) && auth.isAdmin" label="Download" :items="downloads(c)" />
+              <button type="button" class="link-action" @click="edit(c)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Delete certificate ${c.id}?`"
                 description="Its files are deleted within a few seconds of the apply."

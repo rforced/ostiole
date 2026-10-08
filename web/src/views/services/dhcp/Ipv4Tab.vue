@@ -107,12 +107,11 @@ function editLease(l) {
             <td class="font-mono text-code" data-label="DNS">
               {{ s.dns?.join(', ') || 'this router' }}
             </td>
-            <td class="text-right whitespace-nowrap" data-label="">
-              <button type="button" class="link" @click="editServer(s)">
+            <td class="actions" data-label="">
+              <button type="button" class="link-action" @click="editServer(s)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Delete the DHCP server on ${s.interface}?`"
                 @confirm="config.removeServer(s.interface)"
@@ -158,12 +157,11 @@ function editLease(l) {
             <td class="font-mono text-code" data-label="IPv6">{{ l.ipv6 || '—' }}</td>
             <td class="font-mono text-code" data-label="Hostname">{{ l.hostname }}</td>
             <td data-label="Description">{{ l.description }}</td>
-            <td class="text-right whitespace-nowrap" data-label="">
-              <button type="button" class="link" @click="editLease(l)">
+            <td class="actions" data-label="">
+              <button type="button" class="link-action" @click="editLease(l)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Delete the static lease for ${l.mac}?`"
                 :description="l.description"

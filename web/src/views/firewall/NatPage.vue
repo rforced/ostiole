@@ -132,12 +132,11 @@ function editOb(r) {
                 >{{ tierLabel(pf.priority) }}</span
               >
             </td>
-            <td class="text-right whitespace-nowrap">
-              <button type="button" class="link" @click="editPf(pf)">
+            <td class="actions">
+              <button type="button" class="link-action" @click="editPf(pf)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Delete port forward ${pf.id}?`"
                 :description="pf.description"
@@ -181,12 +180,11 @@ function editOb(r) {
             <td class="font-mono text-code">{{ o.external }}</td>
             <td class="font-mono text-code">{{ o.internal }}</td>
             <td>{{ o.description }}</td>
-            <td class="text-right whitespace-nowrap">
-              <button type="button" class="link" @click="editOne(o)">
+            <td class="actions">
+              <button type="button" class="link-action" @click="editOne(o)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
               <ConfirmButton
-                class="ml-3"
                 label="Delete"
                 :question="`Delete 1:1 NAT ${o.id}?`"
                 :description="o.description"
@@ -257,12 +255,11 @@ function editOb(r) {
                 <span v-else class="text-ink-muted">the interface address</span>
               </td>
               <td>{{ r.description }}</td>
-              <td class="text-right whitespace-nowrap">
-                <button type="button" class="link" @click="editOb(r)">
+              <td class="actions">
+                <button type="button" class="link-action" @click="editOb(r)">
                   {{ auth.readOnly ? 'View' : 'Edit' }}
                 </button>
                 <ConfirmButton
-                  class="ml-3"
                   label="Delete"
                   :question="`Delete outbound rule ${r.id}?`"
                   :description="r.description"

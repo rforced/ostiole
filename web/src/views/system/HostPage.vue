@@ -187,7 +187,7 @@ async function flush(tables) {
                 Belongs to {{ t.owner }}, so it is left alone.
               </p>
             </td>
-            <td>
+            <td class="actions">
               <ConfirmButton
                 v-if="root && t.owner"
                 label="Clear anyway"

@@ -47,7 +47,7 @@ function closed(event) {
       <button
         ref="trigger"
         type="button"
-        class="link inline-flex items-center gap-0.5 aria-expanded:underline"
+        class="link-action inline-flex items-center gap-0.5 aria-expanded:underline"
         v-bind="$attrs"
       >
         {{ label }}<ChevronDown class="size-4" aria-hidden="true" />

@@ -80,22 +80,21 @@ function edit(d) {
             {{ d.interface }}
             <span v-if="off.has(d.interface)" class="badge ml-1">interface off</span>
           </td>
-          <td class="text-right whitespace-nowrap" data-label="">
+          <td class="actions" data-label="">
             <button
               v-if="!auth.readOnly"
               type="button"
-              class="link"
+              class="link-action"
               :disabled="busy !== '' || off.has(d.interface)"
               :aria-busy="busy === d.id"
               @click="wake(d, deviceName(d), d.id)"
             >
               Wake
             </button>
-            <button type="button" class="link ml-3" @click="edit(d)">
+            <button type="button" class="link-action" @click="edit(d)">
               {{ auth.readOnly ? 'View' : 'Edit' }}
             </button>
             <ConfirmButton
-              class="ml-3"
               label="Delete"
               :question="`Delete ${deviceName(d)}?`"
               :dependents="config.wolDeviceDependents(d.id)"
