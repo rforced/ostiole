@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import RandomMacBadge from '@/components/RandomMacBadge.vue'
 import SearchBox from '@/components/SearchBox.vue'
@@ -195,7 +196,7 @@ function show(d) {
             :shown="shown.length"
             :total="rows.length"
           />
-          <p v-if="error" role="alert" class="text-bad">{{ error }}</p>
+          <ErrorLine v-if="error">{{ error }}</ErrorLine>
         </div>
         <!-- On a phone a device is three lines: who, what it moves, and
              where and when. The row's ::before breaks them. -->

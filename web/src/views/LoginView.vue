@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AuthCard from '@/components/AuthCard.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import { ApiError, api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
@@ -76,7 +77,7 @@ async function submit() {
           class="input"
         />
       </FormField>
-      <p v-if="error" role="alert" class="text-sm text-bad">{{ error }}</p>
+      <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
       <button type="submit" :disabled="busy" class="btn-primary w-full">
         {{ busy ? 'Signing in…' : 'Sign in' }}
       </button>

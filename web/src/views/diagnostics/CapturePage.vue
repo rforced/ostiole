@@ -2,6 +2,7 @@
 import { LoaderCircle } from 'lucide-vue-next'
 import { ref, watch } from 'vue'
 
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
@@ -117,9 +118,9 @@ const capture = useAsync(async () => {
           {{ capture.busy.value ? 'Capturing…' : 'Capture' }}
         </button>
       </form>
-      <p v-if="capture.error.value" role="alert" class="mt-3 text-bad">
+      <ErrorLine v-if="capture.error.value" class="mt-3">
         {{ capture.error.value }}
-      </p>
+      </ErrorLine>
     </SectionCard>
   </div>
 </template>

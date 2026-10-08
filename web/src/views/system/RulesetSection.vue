@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 
+import ErrorLine from '@/components/ErrorLine.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { ApiError, api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
@@ -89,7 +90,7 @@ const render = useAsync(async (what) => {
       </template>
     </template>
     <div class="space-y-3">
-      <p v-if="render.error.value" role="alert" class="text-bad">{{ render.error.value }}</p>
+      <ErrorLine v-if="render.error.value">{{ render.error.value }}</ErrorLine>
       <!-- The one black block in the product: a terminal is what this is. -->
       <pre
         v-if="text"

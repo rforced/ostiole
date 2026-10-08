@@ -4,6 +4,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 
 import AppDisclosure from '@/components/AppDisclosure.vue'
 import AppNotice from '@/components/AppNotice.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -183,9 +184,9 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
       />
     </PageHeader>
 
-    <p v-if="load.error.value || action.error.value" role="alert" class="text-sm text-bad">
+    <ErrorLine v-if="load.error.value || action.error.value" class="text-sm">
       {{ load.error.value || action.error.value }}
-    </p>
+    </ErrorLine>
 
     <template v-if="status && !drives.length">
       <AppNotice v-if="!status.tool">

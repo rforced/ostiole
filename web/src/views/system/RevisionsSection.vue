@@ -3,6 +3,7 @@ import { onMounted, ref, watch } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
 import ChangeList from '@/components/ChangeList.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -118,9 +119,9 @@ defineExpose({ refresh: load.run })
           :disabled="auth.readOnly"
         />
       </FormField>
-      <p v-if="actionError || load.error.value" role="alert" class="text-bad">
+      <ErrorLine v-if="actionError || load.error.value">
         {{ actionError || load.error.value }}
-      </p>
+      </ErrorLine>
       <AppNotice v-if="loadedId" role="status">
         Revision <span class="font-mono">{{ loadedId }}</span> is now the draft. Apply it to roll
         back, or discard.

@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -188,9 +189,9 @@ function edit(r) {
         @click="refresh.run"
       />
     </PageHeader>
-    <p v-if="config.error" role="alert" class="text-sm text-bad">
+    <ErrorLine v-if="config.error" class="text-sm">
       {{ config.error }}
-    </p>
+    </ErrorLine>
     <p v-if="config.loaded && !config.draft" class="text-sm text-ink-muted">
       No configuration yet.
       <template v-if="!auth.readOnly">
@@ -219,9 +220,9 @@ function edit(r) {
             <Plus class="size-4" aria-hidden="true" /> Add gateway
           </button>
         </template>
-        <p v-if="clearHistory.error.value" role="alert" class="card-strip text-sm text-bad">
+        <ErrorLine v-if="clearHistory.error.value" class="card-strip">
           {{ clearHistory.error.value }}
-        </p>
+        </ErrorLine>
         <table class="table table-stack">
           <thead>
             <tr>

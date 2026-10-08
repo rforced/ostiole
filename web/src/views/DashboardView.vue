@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import { api } from '@/lib/api'
@@ -186,9 +187,9 @@ onMounted(async () => {
     <PageHeader title="Dashboard">
       <RefreshButton :busy="load.busy.value" :updated-at="load.updatedAt.value" @click="load.run" />
     </PageHeader>
-    <p v-if="error" role="alert" class="text-sm text-bad">
+    <ErrorLine v-if="error" class="text-sm">
       {{ error }}
-    </p>
+    </ErrorLine>
 
     <AppNotice v-if="status && !status.configured" kind="info">
       This firewall has no configuration yet.

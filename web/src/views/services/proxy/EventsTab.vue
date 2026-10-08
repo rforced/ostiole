@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import LoadMore from '@/components/LoadMore.vue'
 import LogRetention from '@/components/LogRetention.vue'
@@ -143,7 +144,7 @@ function halves(addr) {
           <SearchBox v-model="query" placeholder="site, client, request, verdict, or rule" />
         </div>
         <p v-if="idle" class="text-ink-muted">The proxy is off, so no new events arrive.</p>
-        <p v-if="error" role="alert" class="text-bad">{{ error }}</p>
+        <ErrorLine v-if="error">{{ error }}</ErrorLine>
       </div>
       <!-- Below 1280 px an event is a block of lines: when, the verdict and
            the site; who asked for what; the rules it matched. -->

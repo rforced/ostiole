@@ -3,6 +3,7 @@ import { Plus } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
@@ -109,7 +110,7 @@ function edit(r) {
         </button>
       </template>
       <div v-if="read.error.value" class="card-strip">
-        <p role="alert" class="text-bad">The tunnels could not be read: {{ read.error.value }}</p>
+        <ErrorLine>The tunnels could not be read: {{ read.error.value }}</ErrorLine>
       </div>
       <table class="table table-stack">
         <thead>

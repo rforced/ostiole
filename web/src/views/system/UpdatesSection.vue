@@ -3,6 +3,7 @@ import { LoaderCircle } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -275,8 +276,8 @@ onMounted(async () => {
       <AppNotice v-if="status?.state === 'failed'" kind="bad">
         Update failed: {{ status.message }}
       </AppNotice>
-      <p v-if="checkError" role="alert" class="text-bad">The last check failed: {{ checkError }}</p>
-      <p v-if="error" role="alert" class="text-bad">{{ error }}</p>
+      <ErrorLine v-if="checkError">The last check failed: {{ checkError }}</ErrorLine>
+      <ErrorLine v-if="error">{{ error }}</ErrorLine>
     </div>
   </SectionCard>
 </template>

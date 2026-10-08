@@ -3,6 +3,7 @@ import { onMounted } from 'vue'
 import { TabsContent } from 'reka-ui'
 
 import AppTabs from '@/components/AppTabs.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { usePageTabs } from '@/lib/tabs'
 import { useAuthStore } from '@/stores/auth'
@@ -23,9 +24,9 @@ onMounted(() => config.load())
 <template>
   <div class="space-y-5">
     <PageHeader title="Wireless" />
-    <p v-if="config.error" role="alert" class="text-sm text-bad">
+    <ErrorLine v-if="config.error" class="text-sm">
       {{ config.error }}
-    </p>
+    </ErrorLine>
     <p v-if="config.loaded && !config.draft" class="text-sm text-ink-muted">
       No configuration yet.
       <template v-if="!auth.readOnly">

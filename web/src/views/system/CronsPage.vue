@@ -3,6 +3,7 @@ import { LoaderCircle, Plus } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
@@ -118,7 +119,7 @@ function describe(c) {
           </button>
         </template>
         <div v-if="error" class="card-strip">
-          <p role="alert" class="text-bad">{{ error }}</p>
+          <ErrorLine>{{ error }}</ErrorLine>
         </div>
         <table class="table table-stack">
           <thead>

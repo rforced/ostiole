@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { ApiError, api } from '@/lib/api'
@@ -68,7 +69,7 @@ async function submit() {
           required
         />
       </FormField>
-      <p v-if="error" role="alert" class="text-bad">{{ error }}</p>
+      <ErrorLine v-if="error">{{ error }}</ErrorLine>
       <p v-if="done" role="status" class="text-ok">Password changed.</p>
       <button type="submit" class="btn-primary" :disabled="busy || !valid">Change password</button>
     </form>

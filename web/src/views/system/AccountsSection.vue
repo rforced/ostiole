@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -131,7 +132,7 @@ async function deleteUser(username) {
     </template>
 
     <div v-if="error" class="card-strip">
-      <p role="alert" class="text-bad">{{ error }}</p>
+      <ErrorLine>{{ error }}</ErrorLine>
     </div>
 
     <table class="table table-stack">

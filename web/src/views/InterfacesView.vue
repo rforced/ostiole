@@ -5,6 +5,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 
 import AppTabs from '@/components/AppTabs.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import LinkErrors from '@/components/LinkErrors.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
@@ -221,9 +222,9 @@ function editZone(z) {
 <template>
   <div class="space-y-5">
     <PageHeader title="Interfaces" />
-    <p v-if="config.error || live.error.value || renewError" role="alert" class="text-sm text-bad">
+    <ErrorLine v-if="config.error || live.error.value || renewError" class="text-sm">
       {{ config.error || live.error.value || renewError }}
-    </p>
+    </ErrorLine>
     <p v-if="config.loaded && !config.draft" class="text-sm text-ink-muted">
       No configuration yet.
       <template v-if="!auth.readOnly">

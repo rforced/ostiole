@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
@@ -179,9 +180,9 @@ function save() {
 
       <p class="text-sm text-ink-muted">Saving agrees to the CA's terms.</p>
 
-      <p v-if="key.error.value" role="alert" class="text-sm text-bad">
+      <ErrorLine v-if="key.error.value" class="text-sm">
         {{ key.error.value }}
-      </p>
+      </ErrorLine>
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
         <button type="submit" class="btn-primary" :disabled="!valid || key.busy.value">

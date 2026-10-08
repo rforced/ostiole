@@ -2,6 +2,7 @@
 import { LoaderCircle } from 'lucide-vue-next'
 import { ref } from 'vue'
 
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
@@ -107,7 +108,7 @@ async function run(kind) {
         </button>
         <ToggleRow v-model="resolveNames" label="Resolve hop names" />
       </form>
-      <p v-if="job.error.value" role="alert" class="mt-3 text-bad">{{ job.error.value }}</p>
+      <ErrorLine v-if="job.error.value" class="mt-3">{{ job.error.value }}</ErrorLine>
     </SectionCard>
 
     <SectionCard v-if="ping">

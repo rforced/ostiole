@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import { sameExclusion } from '@/lib/exclusions'
 import { useConfigStore } from '@/stores/config'
@@ -126,7 +127,7 @@ function save() {
       <FormField id="exc-desc" label="Description">
         <input id="exc-desc" v-model="form.description" class="input" />
       </FormField>
-      <p v-if="problem" role="alert" class="text-sm text-bad">{{ problem }}</p>
+      <ErrorLine v-if="problem" class="text-sm">{{ problem }}</ErrorLine>
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
         <button type="submit" class="btn-primary" :disabled="!entry.rule || Boolean(problem)">

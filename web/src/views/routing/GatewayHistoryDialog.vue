@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import SeriesChart from '@/components/SeriesChart.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
@@ -153,7 +154,7 @@ const error = computed(() => read.error.value || streamError.value)
         empty="No probes in this window."
         :stale="read.busy.value && rows !== null"
       />
-      <p v-if="error" role="alert" class="text-sm text-bad">{{ error }}</p>
+      <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
       <dl v-if="report" class="kv text-sm">
         <template v-for="f in figures" :key="f.family">
           <dt>{{ f.family }}</dt>

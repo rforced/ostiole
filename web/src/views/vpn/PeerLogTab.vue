@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import LoadMore from '@/components/LoadMore.vue'
 import LogRetention from '@/components/LogRetention.vue'
@@ -125,7 +126,7 @@ const QUIET = ['quiet', 'offline']
           The {{ spec.title }} is kept at the Info and Debug log levels, under System, General.
         </p>
         <p v-else-if="off" class="text-ink-muted">{{ spec.off }}</p>
-        <p v-if="error" role="alert" class="text-bad">{{ error }}</p>
+        <ErrorLine v-if="error">{{ error }}</ErrorLine>
       </div>
       <table class="table table-stack">
         <thead>

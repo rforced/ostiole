@@ -3,6 +3,7 @@ import { LoaderCircle } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import SearchBox from '@/components/SearchBox.vue'
 import { useAsync } from '@/lib/async'
 import { formatCount, formatWhen } from '@/lib/format'
@@ -97,7 +98,7 @@ const empty = computed(() => {
         :shown="page?.matches ?? 0"
         :total="page ? page.total : null"
       />
-      <p v-if="load.error.value" role="alert" class="text-sm text-bad">{{ load.error.value }}</p>
+      <ErrorLine v-if="load.error.value" class="text-sm">{{ load.error.value }}</ErrorLine>
       <ul
         v-if="items.length"
         ref="list"

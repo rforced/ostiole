@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 
+import ErrorLine from '@/components/ErrorLine.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -71,7 +72,7 @@ const rows = sort.sorted
           :shown="shown.length"
           :total="mappings.length"
         />
-        <p v-if="load.error.value" role="alert" class="text-bad">{{ load.error.value }}</p>
+        <ErrorLine v-if="load.error.value">{{ load.error.value }}</ErrorLine>
       </div>
       <table class="table">
         <thead>

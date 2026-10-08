@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
@@ -131,10 +132,10 @@ async function flush(tables) {
           the previous manager comes back on its own.
         </AppNotice>
 
-        <p v-if="actionError" role="alert" class="text-bad">{{ actionError }}</p>
-        <p v-else-if="refresh.error.value" role="alert" class="text-bad">
+        <ErrorLine v-if="actionError">{{ actionError }}</ErrorLine>
+        <ErrorLine v-else-if="refresh.error.value">
           {{ refresh.error.value }}
-        </p>
+        </ErrorLine>
         <pre
           v-if="output"
           class="max-h-64 overflow-auto rounded bg-page p-2 font-mono text-code whitespace-pre-wrap text-ink-2"

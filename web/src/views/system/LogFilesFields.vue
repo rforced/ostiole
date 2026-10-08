@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
@@ -167,6 +168,6 @@ const failures = computed(() => logs.value.filter((l) => l.error))
       {{ name(l) }}: {{ l.error }}
     </AppNotice>
     <p v-for="n in notes" :key="n" class="text-ink-muted">{{ n }}</p>
-    <p v-if="status.error.value" role="alert" class="text-bad">{{ status.error.value }}</p>
+    <ErrorLine v-if="status.error.value" class="text-sm">{{ status.error.value }}</ErrorLine>
   </fieldset>
 </template>

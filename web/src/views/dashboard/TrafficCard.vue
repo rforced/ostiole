@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 
+import ErrorLine from '@/components/ErrorLine.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import TrafficChart from '@/components/TrafficChart.vue'
 import { api } from '@/lib/api'
@@ -62,7 +63,7 @@ const shown = computed(() =>
 <template>
   <SectionCard title="Traffic" flush :aria-busy="loaded ? undefined : 'true'">
     <div class="space-y-4 p-4">
-      <p v-if="read.error.value" role="alert" class="text-bad">{{ read.error.value }}</p>
+      <ErrorLine v-if="read.error.value">{{ read.error.value }}</ErrorLine>
       <template v-if="!loaded">
         <p class="sr-only">Reading…</p>
         <div

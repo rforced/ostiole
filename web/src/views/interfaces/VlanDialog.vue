@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import { useConfigStore } from '@/stores/config'
 
@@ -67,7 +68,7 @@ function create() {
           required
         />
       </FormField>
-      <p v-if="error" role="alert" class="text-sm text-bad">{{ error }}</p>
+      <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
         <button type="submit" class="btn-primary">Save to draft</button>

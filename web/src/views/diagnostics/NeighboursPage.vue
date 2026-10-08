@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 
+import ErrorLine from '@/components/ErrorLine.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import RandomMacBadge from '@/components/RandomMacBadge.vue'
 import SearchBox from '@/components/SearchBox.vue'
@@ -105,7 +106,7 @@ function tone(state) {
           :shown="shown.length"
           :total="rows.length"
         />
-        <p v-if="load.error.value" role="alert" class="text-bad">{{ load.error.value }}</p>
+        <ErrorLine v-if="load.error.value">{{ load.error.value }}</ErrorLine>
       </div>
 
       <!-- On a phone a neighbour is two lines: the address and its state; the

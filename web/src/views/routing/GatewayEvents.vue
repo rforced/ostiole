@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import LoadMore from '@/components/LoadMore.vue'
 import SearchBox from '@/components/SearchBox.vue'
@@ -60,7 +61,7 @@ const empty = computed(() => {
     </template>
     <div class="card-strip space-y-3">
       <SearchBox v-model="query" placeholder="gateway, family, what happened, or error" />
-      <p v-if="error" role="alert" class="text-bad">{{ error }}</p>
+      <ErrorLine v-if="error">{{ error }}</ErrorLine>
     </div>
     <table class="table table-stack">
       <thead>

@@ -3,6 +3,7 @@ import { LoaderCircle } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
@@ -192,7 +193,7 @@ const sees = computed(() => {
           <span class="font-mono">{{ d.domain }}:</span>&nbsp;{{ d.error || 'found.' }}
         </li>
       </ul>
-      <p v-if="testError" role="alert" class="text-sm text-bad">{{ testError }}</p>
+      <ErrorLine v-if="testError" class="text-sm">{{ testError }}</ErrorLine>
 
       <div class="flex justify-end gap-2 pt-2">
         <button

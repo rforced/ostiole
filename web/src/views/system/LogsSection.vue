@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
@@ -86,7 +87,7 @@ const clearAll = useAsync(async () => {
       />
     </template>
     <div class="space-y-4">
-      <p v-if="clearAll.error.value" role="alert" class="text-bad">{{ clearAll.error.value }}</p>
+      <ErrorLine v-if="clearAll.error.value">{{ clearAll.error.value }}</ErrorLine>
       <fieldset class="min-w-0 space-y-4">
         <legend class="group-title mb-1">Journal</legend>
         <fieldset class="space-y-1.5">

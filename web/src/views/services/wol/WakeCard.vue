@@ -2,6 +2,7 @@
 import { LoaderCircle } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { interfaceLabel } from '@/lib/interfaces'
@@ -68,6 +69,6 @@ function send() {
         {{ busy === 'once' ? 'Waking…' : 'Wake' }}
       </button>
     </form>
-    <p v-if="errors.length" role="alert" class="mt-3 text-bad">{{ errors[0] }}</p>
+    <ErrorLine v-if="errors.length" class="mt-3">{{ errors[0] }}</ErrorLine>
   </SectionCard>
 </template>

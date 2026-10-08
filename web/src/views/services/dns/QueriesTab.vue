@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import LoadMore from '@/components/LoadMore.vue'
 import LogRetention from '@/components/LogRetention.vue'
@@ -175,9 +176,9 @@ function explain(name) {
     </LogRetention>
 
     <p v-if="!dnsOn" class="text-sm text-ink-muted">The DNS server is off.</p>
-    <p v-else-if="unreadable" role="alert" class="text-sm text-bad">
+    <ErrorLine v-else-if="unreadable" class="text-sm">
       {{ log.error.value }}
-    </p>
+    </ErrorLine>
     <SectionCard v-else ref="card" title="Queries" flush>
       <template #intro>
         <template v-if="log.held.value">
@@ -226,7 +227,7 @@ function explain(name) {
           </select>
           <SearchBox v-model="query" placeholder="name, client, device, or list" />
         </div>
-        <p v-if="error" role="alert" class="text-bad">{{ error }}</p>
+        <ErrorLine v-if="error">{{ error }}</ErrorLine>
       </div>
 
       <p v-if="log.page.value && !running" class="card-strip border-t border-line text-ink-muted">

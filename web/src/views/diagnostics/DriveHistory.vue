@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import LoadMore from '@/components/LoadMore.vue'
@@ -98,7 +99,7 @@ const orDash = (v, unit = '') => (v == null ? '—' : `${formatCount(v)}${unit}`
         />
       </FormField>
       <SearchBox v-model="query" placeholder="drive, model, serial, health, or temperature" />
-      <p v-if="error" role="alert" class="text-bad">{{ error }}</p>
+      <ErrorLine v-if="error">{{ error }}</ErrorLine>
     </div>
     <table class="table table-stack">
       <thead>

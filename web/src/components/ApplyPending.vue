@@ -2,6 +2,7 @@
 import { LoaderCircle } from 'lucide-vue-next'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
+import ErrorLine from '@/components/ErrorLine.vue'
 import { ApiError, api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { useSystemStore } from '@/stores/system'
@@ -150,6 +151,6 @@ async function revert() {
     <p v-else class="font-medium">
       Not confirmed in time. The previous configuration was restored.
     </p>
-    <p v-if="error" role="alert" class="mt-2 text-bad">{{ error }}</p>
+    <ErrorLine v-if="error" class="mt-2">{{ error }}</ErrorLine>
   </div>
 </template>

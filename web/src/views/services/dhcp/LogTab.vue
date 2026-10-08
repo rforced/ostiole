@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import LoadMore from '@/components/LoadMore.vue'
 import LogRetention from '@/components/LogRetention.vue'
@@ -89,7 +90,7 @@ const empty = computed(() => {
           The DHCP log is kept at the Info and Debug log levels, under System, General.
         </p>
         <p v-else-if="off" class="text-ink-muted">DHCP is off, so no new messages arrive.</p>
-        <p v-if="error" role="alert" class="text-bad">{{ error }}</p>
+        <ErrorLine v-if="error">{{ error }}</ErrorLine>
       </div>
       <!-- On a phone a message is two lines: when, what and where; the
            client and what it said. -->

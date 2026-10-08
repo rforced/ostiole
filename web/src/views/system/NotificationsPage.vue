@@ -2,6 +2,7 @@
 import { LoaderCircle, Send } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -309,7 +310,7 @@ const targetStates = computed(() =>
         </button>
       </template>
       <div v-if="testing.error.value || results.length" class="card-strip space-y-1">
-        <p v-if="testing.error.value" role="alert" class="text-bad">{{ testing.error.value }}</p>
+        <ErrorLine v-if="testing.error.value">{{ testing.error.value }}</ErrorLine>
         <p v-for="r in results" :key="r.target" :class="r.error ? 'text-bad' : 'text-ok'">
           {{ TARGETS[r.target] }}: {{ r.error || 'sent. Check that it arrived.' }}
         </p>

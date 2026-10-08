@@ -2,6 +2,7 @@
 import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 
+import ErrorLine from '@/components/ErrorLine.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -19,9 +20,9 @@ onMounted(() => config.load())
 <template>
   <div class="space-y-5">
     <PageHeader v-if="!route.meta.ownHeader" />
-    <p v-if="config.error" role="alert" class="text-sm text-bad">
+    <ErrorLine v-if="config.error" class="text-sm">
       {{ config.error }}
-    </p>
+    </ErrorLine>
     <p v-if="blocked" class="text-sm text-ink-muted">
       No configuration yet.
       <template v-if="!auth.readOnly">

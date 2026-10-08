@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -225,19 +226,19 @@ async function reboot() {
               Last run {{ formatWhen(status.lastRun)
               }}<span v-if="status.lastMode"> ({{ status.lastMode }})</span>
             </p>
-            <p v-if="status.lastError" role="alert" class="text-bad">
+            <ErrorLine v-if="status.lastError">
               {{ status.lastError }}
-            </p>
+            </ErrorLine>
             <pre
               v-if="status.lastOutput"
               class="mt-1 max-h-48 overflow-auto rounded bg-page p-2 font-mono text-code whitespace-pre-wrap text-ink-2"
               >{{ status.lastOutput }}</pre>
           </div>
 
-          <p v-if="status?.checkError" role="alert" class="text-bad">
+          <ErrorLine v-if="status?.checkError">
             The last check failed: {{ status.checkError }}
-          </p>
-          <p v-if="error" role="alert" class="text-bad">{{ error }}</p>
+          </ErrorLine>
+          <ErrorLine v-if="error">{{ error }}</ErrorLine>
         </template>
       </div>
     </SectionCard>

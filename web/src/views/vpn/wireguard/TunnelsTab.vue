@@ -3,6 +3,7 @@ import { FileUp, Plus } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { connected, livePeer } from '@/lib/wgStatus'
 import { useAuthStore } from '@/stores/auth'
@@ -74,7 +75,7 @@ function edit(t) {
         </button>
       </template>
       <div v-if="read.error.value" class="card-strip">
-        <p role="alert" class="text-bad">The tunnels could not be read: {{ read.error.value }}</p>
+        <ErrorLine>The tunnels could not be read: {{ read.error.value }}</ErrorLine>
       </div>
       <table class="table table-stack">
         <thead>

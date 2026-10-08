@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -126,7 +127,7 @@ export const NEW_ZONE = '+new'
       label="External"
       hint="IPv4 leaving it is masqueraded when outbound NAT is automatic."
     />
-    <p v-if="error" role="alert" class="text-sm text-bad">{{ error }}</p>
+    <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
   </div>
   <p v-else-if="mates.length" class="text-sm text-ink-muted sm:col-span-2">
     Shares zone <span class="font-mono">{{ zone }}</span> with

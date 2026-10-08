@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import LoadMore from '@/components/LoadMore.vue'
 import LogRetention from '@/components/LogRetention.vue'
@@ -88,7 +89,7 @@ const empty = computed(() => {
           Requests are kept at the Info and Debug log levels, under System, General.
         </p>
         <p v-else-if="idle" class="text-ink-muted">The proxy is off, so no new requests arrive.</p>
-        <p v-if="error" role="alert" class="text-bad">{{ error }}</p>
+        <ErrorLine v-if="error">{{ error }}</ErrorLine>
       </div>
       <table class="table table-flow-xl">
         <thead>

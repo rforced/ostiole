@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import AuthCard from '@/components/AuthCard.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import { ApiError } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
@@ -92,7 +93,7 @@ async function submit() {
         />
         <p v-if="mismatch" class="text-sm text-bad">Passwords do not match.</p>
       </FormField>
-      <p v-if="error" role="alert" class="text-sm text-bad">{{ error }}</p>
+      <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
       <button type="submit" :disabled="busy || !valid" class="btn-primary w-full">
         {{ busy ? 'Creating…' : 'Create account and sign in' }}
       </button>

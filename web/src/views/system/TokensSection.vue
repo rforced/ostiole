@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { ApiError, api } from '@/lib/api'
@@ -102,7 +103,7 @@ async function deleteToken(id) {
     </template>
 
     <div v-if="minted || error" class="card-strip space-y-3">
-      <p v-if="error" role="alert" class="text-bad">{{ error }}</p>
+      <ErrorLine v-if="error">{{ error }}</ErrorLine>
       <AppNotice
         v-if="minted"
         :title="`Copy ${minted.name} now. It is not stored and cannot be shown again.`"

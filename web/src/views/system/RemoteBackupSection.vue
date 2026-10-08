@@ -4,6 +4,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 
 import AppDisclosure from '@/components/AppDisclosure.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -193,7 +194,7 @@ async function loadIntoDraft() {
       </template>
 
       <div class="space-y-4">
-        <p v-if="error" role="alert" class="text-bad">{{ error }}</p>
+        <ErrorLine v-if="error">{{ error }}</ErrorLine>
         <p v-if="auth.isOperator" class="text-ink-muted">Only an admin can change these.</p>
 
         <template v-if="config.draft">
@@ -393,10 +394,10 @@ async function loadIntoDraft() {
           <dd>{{ formatWhen(status?.next, 'never') }}</dd>
         </dl>
         <p v-if="shared" class="text-ink-muted">Copies from {{ sharers }} share this folder.</p>
-        <p v-if="loadCopies.error.value" role="alert" class="text-bad">
+        <ErrorLine v-if="loadCopies.error.value">
           {{ loadCopies.error.value }}
-        </p>
-        <p v-if="remove.error.value" role="alert" class="text-bad">{{ remove.error.value }}</p>
+        </ErrorLine>
+        <ErrorLine v-if="remove.error.value">{{ remove.error.value }}</ErrorLine>
       </div>
 
       <table v-if="!auth.readOnly" class="table table-stack">

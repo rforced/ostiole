@@ -3,6 +3,7 @@ import { Plus } from 'lucide-vue-next'
 import { ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import UsedByCell from '@/components/UsedByCell.vue'
 import { api } from '@/lib/api'
@@ -50,7 +51,7 @@ const labelOf = (kind) => kinds.value.find((k) => k.kind === kind)?.label ?? kin
         </button>
       </template>
       <div v-if="load.error.value" class="card-strip">
-        <p role="alert" class="text-bad">{{ load.error.value }}</p>
+        <ErrorLine>{{ load.error.value }}</ErrorLine>
       </div>
       <table class="table table-stack">
         <thead>

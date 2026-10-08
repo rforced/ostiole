@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 
 import AppDisclosure from '@/components/AppDisclosure.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import InterfaceLabel from '@/components/InterfaceLabel.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -352,9 +353,9 @@ function toggleInterface(name, on) {
               />
               {{ clearCache.busy.value ? 'Clearing…' : 'Clear cache' }}
             </button>
-            <p v-if="clearCache.error.value" role="alert" class="text-bad">
+            <ErrorLine v-if="clearCache.error.value">
               {{ clearCache.error.value }}
-            </p>
+            </ErrorLine>
             <p v-else-if="cleared" role="status" class="text-ink-muted">{{ cleared }}</p>
             <p v-else class="text-ink-muted">Names are looked up again on the running resolver.</p>
           </div>

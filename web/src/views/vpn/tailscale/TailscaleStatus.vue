@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
@@ -144,7 +145,7 @@ const logout = useAsync(async () => {
               the login.
             </span>
           </p>
-          <p v-if="login.error.value" role="alert" class="text-bad">{{ login.error.value }}</p>
+          <ErrorLine v-if="login.error.value">{{ login.error.value }}</ErrorLine>
         </template>
       </div>
     </SectionCard>

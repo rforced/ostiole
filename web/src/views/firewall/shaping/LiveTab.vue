@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
@@ -122,7 +123,7 @@ function delay(us) {
         <LiveButton v-model="live" :failing="Boolean(load.error.value)" />
       </template>
       <div class="space-y-3">
-        <AppNotice v-if="load.error.value" kind="bad">{{ load.error.value }}</AppNotice>
+        <ErrorLine v-if="load.error.value">{{ load.error.value }}</ErrorLine>
         <AppNotice v-else-if="report && !report.available" data-testid="shaping-unavailable">
           {{ report.reason }}
         </AppNotice>

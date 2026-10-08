@@ -2,6 +2,7 @@
 import { LoaderCircle, Search } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
@@ -106,9 +107,9 @@ const stale = computed(() => config.dirty)
           </button>
         </form>
 
-        <p v-if="lookup.error.value" role="alert" class="text-bad">
+        <ErrorLine v-if="lookup.error.value">
           {{ lookup.error.value }}
-        </p>
+        </ErrorLine>
 
         <div v-if="finding" class="rounded-lg border border-line bg-page p-3">
           <p>

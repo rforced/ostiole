@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import LoadMore from '@/components/LoadMore.vue'
 import LogRetention from '@/components/LogRetention.vue'
@@ -188,7 +189,7 @@ const empty = computed(() => {
         </template>
         <div class="card-strip flex flex-wrap items-center gap-3">
           <SearchBox v-model="query" placeholder="name, address, service, or device" />
-          <p v-if="error" role="alert" class="text-bad">{{ error }}</p>
+          <ErrorLine v-if="error">{{ error }}</ErrorLine>
         </div>
         <!-- On a phone a destination is two lines: what, and how much. -->
         <table class="table table-flow">

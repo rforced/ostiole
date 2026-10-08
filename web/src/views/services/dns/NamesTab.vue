@@ -3,6 +3,7 @@ import { Plus } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import RandomMacBadge from '@/components/RandomMacBadge.vue'
 import SearchBox from '@/components/SearchBox.vue'
@@ -152,7 +153,7 @@ function editHost(h) {
         />
       </div>
       <div v-if="derived.error.value" class="card-strip">
-        <p role="alert" class="text-bad">{{ derived.error.value }}</p>
+        <ErrorLine>{{ derived.error.value }}</ErrorLine>
       </div>
       <table class="table table-stack">
         <thead>

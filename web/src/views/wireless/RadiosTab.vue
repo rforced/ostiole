@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -90,7 +91,7 @@ function edit(row) {
             </option>
           </select>
         </FormField>
-        <p v-if="load.error.value" role="alert" class="text-bad">{{ load.error.value }}</p>
+        <ErrorLine v-if="load.error.value">{{ load.error.value }}</ErrorLine>
       </div>
       <table class="table table-stack">
         <thead>

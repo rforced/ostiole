@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import TrafficChart from '@/components/TrafficChart.vue'
@@ -103,7 +104,7 @@ const error = computed(() => read.error.value || stream.error.value || clear.err
         :busy="clear.busy.value"
         @confirm="clear.run()"
       />
-      <p v-if="error" role="alert" class="text-sm text-bad">{{ error }}</p>
+      <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
     </div>
     <p v-if="!links" class="text-sm text-ink-muted">Reading…</p>
     <p v-else-if="!links.length" class="text-sm text-ink-muted">No links.</p>

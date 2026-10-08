@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 
+import ErrorLine from '@/components/ErrorLine.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import RandomMacBadge from '@/components/RandomMacBadge.vue'
 import SearchBox from '@/components/SearchBox.vue'
@@ -124,10 +125,10 @@ const empty = computed(() =>
         />
       </div>
       <div v-if="load.error.value" class="card-strip">
-        <p role="alert" class="text-bad">{{ load.error.value }}</p>
+        <ErrorLine>{{ load.error.value }}</ErrorLine>
       </div>
       <div v-if="waking.errors.value.length" class="card-strip">
-        <p role="alert" class="text-bad">{{ waking.errors.value[0] }}</p>
+        <ErrorLine>{{ waking.errors.value[0] }}</ErrorLine>
       </div>
       <table class="table table-stack">
         <thead>

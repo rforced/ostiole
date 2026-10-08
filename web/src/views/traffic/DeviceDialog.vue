@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import RandomMacBadge from '@/components/RandomMacBadge.vue'
 import TrafficChart from '@/components/TrafficChart.vue'
 import { api } from '@/lib/api'
@@ -92,7 +93,7 @@ const windowLabel = computed(() => WINDOWS.find((w) => w.value === props.window)
         :now="data ? { down: data.down, up: data.up } : null"
         :stale="read.busy.value && data !== null"
       />
-      <p v-if="read.error.value" role="alert" class="text-sm text-bad">{{ read.error.value }}</p>
+      <ErrorLine v-if="read.error.value" class="text-sm">{{ read.error.value }}</ErrorLine>
       <dl class="kv text-sm">
         <template v-if="device.mac">
           <dt>MAC</dt>

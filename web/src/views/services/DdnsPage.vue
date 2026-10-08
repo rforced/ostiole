@@ -3,6 +3,7 @@ import { LoaderCircle, Plus } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
@@ -151,7 +152,7 @@ function edit(r) {
         </button>
       </template>
       <div v-if="error" class="card-strip">
-        <p role="alert" class="text-bad">{{ error }}</p>
+        <ErrorLine>{{ error }}</ErrorLine>
       </div>
       <div v-if="load.updatedAt.value && !canKeep" class="card-strip">
         <p class="text-sm">

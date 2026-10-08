@@ -5,6 +5,7 @@ import { computed, onMounted, ref } from 'vue'
 import AppDisclosure from '@/components/AppDisclosure.vue'
 import AppNotice from '@/components/AppNotice.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ListContentsDialog from '@/components/ListContentsDialog.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
@@ -250,9 +251,9 @@ const lists = sort.sorted
             over the ceiling of {{ formatCount(ceiling) }}
           </span>
         </p>
-        <p v-if="refresh.error.value || load.error.value" role="alert" class="text-bad">
+        <ErrorLine v-if="refresh.error.value || load.error.value">
           {{ refresh.error.value || load.error.value }}
-        </p>
+        </ErrorLine>
         <p v-else-if="which === 'all'" aria-live="polite" class="text-ink-muted">
           Fetching every list. Nothing is installed until they are all in.
         </p>

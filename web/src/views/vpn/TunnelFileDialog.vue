@@ -3,6 +3,7 @@ import { LoaderCircle, Upload } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
@@ -248,7 +249,7 @@ async function save() {
         </template>
       </template>
 
-      <p v-if="error" role="alert" class="text-sm text-bad">{{ error }}</p>
+      <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
         <button type="submit" class="btn-primary" :disabled="!ok || busy" :aria-busy="busy">

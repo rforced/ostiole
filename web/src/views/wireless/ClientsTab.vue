@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 
+import ErrorLine from '@/components/ErrorLine.vue'
 import LiveButton from '@/components/LiveButton.vue'
 import RandomMacBadge from '@/components/RandomMacBadge.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -73,7 +74,7 @@ const rows = sort.sorted
         <LiveButton v-model="live" :failing="Boolean(load.error.value)" />
       </template>
       <div v-if="load.error.value" class="card-strip">
-        <p role="alert" class="text-bad">{{ load.error.value }}</p>
+        <ErrorLine>{{ load.error.value }}</ErrorLine>
       </div>
       <table class="table table-stack">
         <thead>

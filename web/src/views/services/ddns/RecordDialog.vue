@@ -3,6 +3,7 @@ import { LoaderCircle } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
@@ -198,8 +199,8 @@ function sentence(r) {
           <span class="font-mono">{{ r.type }}:</span>&nbsp;{{ sentence(r) }}
         </li>
       </ul>
-      <p v-if="checkError" role="alert" class="text-sm text-bad">{{ checkError }}</p>
-      <p v-if="error" role="alert" class="text-sm text-bad">{{ error }}</p>
+      <ErrorLine v-if="checkError" class="text-sm">{{ checkError }}</ErrorLine>
+      <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
 
       <div class="flex justify-end gap-2 pt-2">
         <button

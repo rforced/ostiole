@@ -2,6 +2,7 @@
 import { Download, LoaderCircle, Upload } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
@@ -72,9 +73,9 @@ async function loadIntoDraft() {
     <SectionCard v-if="!auth.readOnly" title="Download" :locked="!auth.isAdmin">
       <div class="space-y-4">
         <p v-if="auth.isOperator" class="text-ink-muted">Only an admin can download a backup.</p>
-        <p v-if="download.error.value" role="alert" class="text-bad">
+        <ErrorLine v-if="download.error.value">
           {{ download.error.value }}
-        </p>
+        </ErrorLine>
         <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
           <FormField id="bk-note" label="Description" hint="Stored in the file.">
             <input id="bk-note" v-model="note" class="input" placeholder="before the VLAN change" />
@@ -128,7 +129,7 @@ async function loadIntoDraft() {
 
     <SectionCard v-if="!auth.readOnly" title="Restore">
       <div class="space-y-4">
-        <p v-if="restore.error.value" role="alert" class="text-bad">{{ restore.error.value }}</p>
+        <ErrorLine v-if="restore.error.value">{{ restore.error.value }}</ErrorLine>
         <div class="grid max-w-2xl gap-4 sm:grid-cols-2">
           <FormField
             id="bk-restore-passphrase"

@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 
@@ -78,7 +79,7 @@ function save() {
         hint="The server's certificate is checked against its name."
       />
       <ToggleRow v-model="form.pool" label="Pool" hint="Up to four of its servers are asked." />
-      <p v-if="problem" role="alert" class="text-sm text-bad">{{ problem }}</p>
+      <ErrorLine v-if="problem" class="text-sm">{{ problem }}</ErrorLine>
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
         <button type="submit" class="btn-primary" :disabled="!host || Boolean(problem)">

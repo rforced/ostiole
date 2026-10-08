@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import ListContentsDialog from '@/components/ListContentsDialog.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -165,7 +166,7 @@ async function readEntries(q, offset, limit) {
         </template>
       </template>
       <div v-if="refresh.error.value" class="card-strip">
-        <p role="alert" class="text-bad">{{ refresh.error.value }}</p>
+        <ErrorLine>{{ refresh.error.value }}</ErrorLine>
       </div>
       <table class="table table-stack">
         <thead>

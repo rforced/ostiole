@@ -5,6 +5,7 @@ import { computed, ref, watch } from 'vue'
 import AppDialog from '@/components/AppDialog.vue'
 import AppNotice from '@/components/AppNotice.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import MenuButton from '@/components/MenuButton.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
@@ -188,7 +189,7 @@ function remove(cert) {
       </template>
 
       <div class="space-y-4">
-        <p v-if="error" role="alert" class="text-bad">{{ error }}</p>
+        <ErrorLine v-if="error">{{ error }}</ErrorLine>
 
         <template v-if="page.builtIn">
           <FormField
@@ -324,9 +325,9 @@ function remove(cert) {
       @update:open="pkcs12For = null"
     >
       <form class="space-y-4" @submit.prevent="downloadPKCS12.run">
-        <p v-if="downloadPKCS12.error.value" role="alert" class="text-bad">
+        <ErrorLine v-if="downloadPKCS12.error.value" class="text-sm">
           {{ downloadPKCS12.error.value }}
-        </p>
+        </ErrorLine>
         <FormField id="p12-password" label="Password" hint="Asked for when the file is opened.">
           <input
             id="p12-password"

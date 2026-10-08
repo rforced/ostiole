@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 
+import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -86,7 +87,7 @@ onMounted(load.run)
           </FormField>
         </form>
 
-        <p v-if="load.error.value" role="alert" class="text-bad">{{ load.error.value }}</p>
+        <ErrorLine v-if="load.error.value">{{ load.error.value }}</ErrorLine>
 
         <div
           class="max-h-[32rem] overflow-auto rounded-lg border border-line bg-page p-3 font-mono text-code"
