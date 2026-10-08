@@ -168,6 +168,7 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/traffic/stream":           {summary: "Every link's rate each second, and every device's after each read of the connection table (server-sent events).", role: auth.RoleViewer},
 	"GET /api/v1/traffic/destinations":     {summary: "What each device moved with each destination over a window (1h, 24h or 7d), the most first, searched with q, narrowed to a device, and paged with offset.", role: auth.RoleViewer},
 	"DELETE /api/v1/traffic/destinations":  {summary: "Forget every destination and delete their files. The devices stay.", role: auth.RoleAdmin},
+	"DELETE /api/v1/traffic/interfaces":    {summary: "Forget what every link moved and its errors, and delete their files. Counting carries on.", role: auth.RoleAdmin},
 	"DELETE /api/v1/traffic":               {summary: "Forget every device and what it moved, and every destination, and delete their files.", role: auth.RoleAdmin},
 	"GET /api/v1/diagnostics/journal":      {summary: "Read the system journal, newest entry first. A viewer reads Ostiole's own units only.", role: auth.RoleViewer},
 	"GET /api/v1/diagnostics/states":       {summary: "The connections the kernel is tracking.", role: auth.RoleViewer},

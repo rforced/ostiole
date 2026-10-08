@@ -238,6 +238,18 @@ func (c *Counter) Clear() {
 	c.since = c.now()
 }
 
+// ClearLinks forgets what every link moved and its errors. Counting
+// carries on from the counters as they are.
+func (c *Counter) ClearLinks() {
+	now := c.now()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, l := range c.links {
+		l.series = newSeries(now)
+		l.errs, l.errMinutes = nil, nil
+	}
+}
+
 // ClearDestinations forgets every destination and leaves the devices.
 func (c *Counter) ClearDestinations() {
 	c.mu.Lock()

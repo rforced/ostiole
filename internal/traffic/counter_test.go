@@ -523,3 +523,33 @@ func TestALinkMadeAgainStartsItsErrorsOver(t *testing.T) {
 		t.Errorf("after the link came back = %+v", got)
 	}
 }
+
+// Clearing traffic per link forgets what each link moved and its errors,
+// and counting goes on from where each counter stands.
+func TestClearingTheLinksKeepsCounting(t *testing.T) {
+	t.Parallel()
+	r := newRouter(t)
+	r.c.follow(r.now)
+	r.step(0)
+	r.links[1].RXBytes, r.links[1].RXErrors = 1000, 2
+	r.step(time.Second)
+	if e := r.c.LinkErrors(); e["eth0"].RX != 2 {
+		t.Fatalf("errors = %+v", e)
+	}
+	r.c.ClearLinks()
+	if e := r.c.LinkErrors(); len(e) != 0 {
+		t.Errorf("errors after the clear = %+v", e)
+	}
+	for _, l := range r.c.LinkReports(Window24h) {
+		if l.Totals != (Totals{}) {
+			t.Errorf("%s after the clear = %+v", l.Name, l)
+		}
+	}
+	r.links[1].RXBytes = 1500
+	r.step(time.Second)
+	for _, l := range r.c.LinkReports(Window5m) {
+		if l.Name == "eth0" && l.Totals.Down != 500 {
+			t.Errorf("after the clear eth0 moved %+v, want 500 down", l.Totals)
+		}
+	}
+}

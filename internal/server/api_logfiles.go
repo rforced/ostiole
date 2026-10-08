@@ -69,9 +69,8 @@ type clearable struct {
 	empty func()
 }
 
-// clearables are the logs this daemon keeps that a Clear takes, in the
-// order logFileNames has them. Traffic per link and the journal are not
-// among them.
+// clearables are the logs this daemon keeps that a Clear takes. The
+// journal is not among them.
 func (a *api) clearables() []clearable {
 	var out []clearable
 	add := func(name string, empty func()) { out = append(out, clearable{name, empty}) }
@@ -103,6 +102,7 @@ func (a *api) clearables() []clearable {
 		add(smart.HistoryFileName, a.driveHistory.Clear)
 	}
 	if a.traffic != nil {
+		add(traffic.LinksFile, a.traffic.ClearLinks)
 		add(traffic.DevicesFile, a.traffic.Clear)
 		add(traffic.DestinationsFile, a.traffic.ClearDestinations)
 	}

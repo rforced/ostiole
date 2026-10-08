@@ -52,13 +52,8 @@ function numberField(key) {
 const retention = numberField('retentionDays')
 const maxUse = numberField('maxUseGB')
 
-/**
- * What Clear every log takes: every log a page clears, so all but traffic
- * per link, whose minutes hold the month a data cap is read against.
- */
-const CLEARED = Object.entries(FILE_LOG_NAMES)
-  .filter(([log]) => log !== 'links')
-  .map(([, name]) => name)
+/** What Clear every log takes: every log a page clears. */
+const CLEARED = Object.values(FILE_LOG_NAMES)
 
 /** Kept in files as well, by the configuration the router runs. */
 const inFiles = computed(() => Boolean(config.saved?.system?.logging?.files?.enabled))
@@ -79,8 +74,8 @@ const clearAll = useAsync(async () => {
         question="Clear every log?"
         :description="
           inFiles
-            ? 'Each is emptied, and its files are deleted. The journal and traffic per link are kept.'
-            : 'Each is emptied. The journal and traffic per link are kept.'
+            ? 'Each is emptied, and its files are deleted. The journal is kept.'
+            : 'Each is emptied. The journal is kept.'
         "
         :dependents="CLEARED"
         dependents-label="Cleared"

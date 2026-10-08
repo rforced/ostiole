@@ -26,6 +26,7 @@ func (a *api) registerTraffic(mux *router) {
 	mux.HandleFunc("GET /api/v1/traffic/destinations", a.readNoEngine(a.trafficDestinations))
 	mux.HandleFunc("DELETE /api/v1/traffic", a.admin(a.trafficClear))
 	mux.HandleFunc("DELETE /api/v1/traffic/destinations", a.admin(a.clearOne(traffic.DestinationsFile)))
+	mux.HandleFunc("DELETE /api/v1/traffic/interfaces", a.admin(a.clearOne(traffic.LinksFile)))
 }
 
 var errNoTraffic = errors.New("traffic is not counted by this daemon")

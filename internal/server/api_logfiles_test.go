@@ -171,13 +171,14 @@ var clearPaths = map[string]string{
 	peerlog.Tailscale.Name:   "/api/v1/tailscale/log",
 	smart.HistoryFileName:    "/api/v1/diagnostics/drives/history",
 	traffic.DestinationsFile: "/api/v1/traffic/destinations",
+	traffic.LinksFile:        "/api/v1/traffic/interfaces",
 	gateway.HistoryFileName:  "/api/v1/gateways/history",
 	gateway.EventsFileName:   "/api/v1/gateways/events",
 }
 
 // keepEveryLog puts an entry in every log a Clear takes, and gives each a
-// directory of files under dir, beside the links' files, which no Clear
-// takes. What each log holds is counted by its directory's name.
+// directory of files under dir. What each log holds is counted by its
+// directory's name.
 func keepEveryLog(t *testing.T, d *Deps, dir string) map[string]func() int {
 	t.Helper()
 	now := time.Now()
@@ -234,6 +235,13 @@ func keepEveryLog(t *testing.T, d *Deps, dir string) map[string]func() int {
 			_, n, _ := c.Destinations(time.Hour, "")
 			return n
 		},
+		traffic.LinksFile: func() int {
+			n := 0
+			for _, l := range c.LinkReports(traffic.Window24h) {
+				n += int(l.Totals.Down + l.Totals.Up)
+			}
+			return n
+		},
 		gateway.HistoryFileName: func() int {
 			return len(d.GatewayHistory.Read("wan", gateway.Window24h, time.Now()).Families)
 		},
@@ -244,7 +252,7 @@ func keepEveryLog(t *testing.T, d *Deps, dir string) map[string]func() int {
 			t.Fatalf("the %s holds nothing to clear", name)
 		}
 	}
-	for _, name := range append(slices.Collect(maps.Keys(logs)), traffic.LinksFile) {
+	for name := range logs {
 		day := filepath.Join(dir, name, "2026-09-29.jsonl.gz")
 		if err := os.MkdirAll(filepath.Dir(day), 0o700); err != nil {
 			t.Fatal(err)
@@ -329,8 +337,7 @@ func TestClearingALogNotKeptIsUnavailable(t *testing.T) {
 	}
 }
 
-// Clear every log takes every log a page can clear, and leaves the links'
-// files. Only an admin may.
+// Clear every log takes every log a page can clear. Only an admin may.
 func TestClearingEveryLog(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -346,8 +353,8 @@ func TestClearingEveryLog(t *testing.T) {
 		}
 	}
 	left, err := os.ReadDir(dir)
-	if err != nil || len(left) != 1 || left[0].Name() != traffic.LinksFile {
-		t.Errorf("left %v (%v), want the links' files alone", left, err)
+	if err != nil || len(left) != 0 {
+		t.Errorf("left %v (%v), want nothing", left, err)
 	}
 }
 
