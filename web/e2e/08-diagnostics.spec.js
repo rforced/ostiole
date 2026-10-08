@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures.js'
-import { login, shot, sidebar } from './helpers.js'
+import { applyAndConfirm, login, shot, sidebar } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -97,4 +97,20 @@ test('the drives page reads the drive and offers a self-test', async ({ page }) 
   await expect(main.locator('table').first().locator('tbody tr')).toHaveCount(30)
   await expect(page.getByRole('button', { name: 'Short test' })).toBeEnabled()
   await page.screenshot({ path: shot('47-drives'), fullPage: true })
+})
+
+test('the drives page sets how many readings the history keeps', async ({ page }) => {
+  await login(page)
+  await page.goto('/diagnostics/drives')
+  const keep = page
+    .getByRole('region', { name: 'History', exact: true })
+    .getByLabel('Readings to keep')
+  await expect(keep).toHaveValue('20')
+  await keep.fill('5')
+  await applyAndConfirm(page)
+
+  await page.reload()
+  await expect(keep).toHaveValue('5')
+  const { system } = await (await page.request.get('/api/v1/config')).json()
+  expect(system.keepDriveReadings).toBe(5)
 })
