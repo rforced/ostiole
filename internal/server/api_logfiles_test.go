@@ -20,6 +20,7 @@ import (
 	"ostiole/internal/dnsblock"
 	"ostiole/internal/dnslog"
 	"ostiole/internal/fwlog"
+	"ostiole/internal/gateway"
 	"ostiole/internal/logfile"
 	"ostiole/internal/logging"
 	"ostiole/internal/logring"
@@ -170,6 +171,8 @@ var clearPaths = map[string]string{
 	peerlog.Tailscale.Name:   "/api/v1/tailscale/log",
 	smart.HistoryFileName:    "/api/v1/diagnostics/drives/history",
 	traffic.DestinationsFile: "/api/v1/traffic/destinations",
+	gateway.HistoryFileName:  "/api/v1/gateways/history",
+	gateway.EventsFileName:   "/api/v1/gateways/events",
 }
 
 // keepEveryLog puts an entry in every log a Clear takes, and gives each a
@@ -205,6 +208,10 @@ func keepEveryLog(t *testing.T, d *Deps, dir string) map[string]func() int {
 	step(0, 1000)
 	step(5*time.Second, 51000)
 	d.Traffic = c
+	d.GatewayHistory = gateway.NewHistory()
+	d.GatewayHistory.Probe("wan", gateway.FamilyIPv4, "", now.Add(-2*time.Minute), time.Millisecond, true)
+	d.GatewayHistory.Advance(now)
+	d.GatewayHistory.Note(gateway.Event{Stamp: stamp, Gateway: "wan", Kind: gateway.EventDown})
 	d.LogFiles = &logfile.Writer{Dir: dir, Source: filesOn, Log: slog.New(slog.DiscardHandler)}
 	held := func(of func() (int, time.Time)) func() int {
 		return func() int {
@@ -227,6 +234,10 @@ func keepEveryLog(t *testing.T, d *Deps, dir string) map[string]func() int {
 			_, n, _ := c.Destinations(time.Hour, "")
 			return n
 		},
+		gateway.HistoryFileName: func() int {
+			return len(d.GatewayHistory.Read("wan", gateway.Window24h, time.Now()).Families)
+		},
+		gateway.EventsFileName: held(d.GatewayHistory.Events.Held),
 	}
 	for name := range logs {
 		if logs[name]() == 0 {

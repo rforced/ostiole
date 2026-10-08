@@ -861,7 +861,7 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 		}
 	}
 	for _, g := range a.gatewayStatuses() {
-		if g.Unknown || g.Online {
+		if g.Unknown || g.Online || g.NeverAnswered {
 			continue
 		}
 		detail := fmt.Sprintf("%s on %s stopped answering", g.Monitor, g.Interface)

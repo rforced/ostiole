@@ -134,6 +134,8 @@ describe('LogsSection', () => {
           'Drive history',
           'Traffic per device',
           'Destinations',
+          'Gateway history',
+          'Gateway events',
         ],
       }),
     )

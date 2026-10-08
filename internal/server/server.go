@@ -27,6 +27,7 @@ import (
 	"ostiole/internal/engine"
 	"ostiole/internal/feeds"
 	"ostiole/internal/fwlog"
+	"ostiole/internal/gateway"
 	"ostiole/internal/host"
 	"ostiole/internal/install"
 	"ostiole/internal/logfile"
@@ -160,6 +161,9 @@ type Deps struct {
 	Dial services.Dialer
 	// Gateways reports multi-WAN health; nil means nothing is watching.
 	Gateways GatewayStatuser
+	// GatewayHistory keeps what the gateways' probes found and what
+	// changed; nil answers 503.
+	GatewayHistory *gateway.History
 	// Tables lists the nftables tables on the router for the dashboard's
 	// foreign-ruleset warning; nil skips that check.
 	Tables TableLister
@@ -251,6 +255,7 @@ func build(d Deps) (http.Handler, *api) {
 		host:         hostDeps(d),
 		notifier:     d.Notify,
 	}
+	api.gatewayHistory = d.GatewayHistory
 	if d.Engine != nil {
 		api.tracker = &notify.Tracker{State: d.Engine.Store(), Log: slog.Default()}
 	}

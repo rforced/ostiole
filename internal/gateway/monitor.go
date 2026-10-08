@@ -3,6 +3,7 @@
 package gateway
 
 import (
+	"cmp"
 	"context"
 	"log/slog"
 	"slices"
@@ -47,9 +48,9 @@ type Router interface {
 	Restore(g Status) (bool, error)
 	// Forget clears up after a gateway nothing watches any more.
 	Forget(g Status) error
-	// Resolve fills in the next hop of a gateway that takes its address
-	// from the network, and reports whether one exists yet.
-	Resolve(g Status) (string, bool)
+	// Resolve finds a gateway's next hop in each family, empty where it
+	// has none yet.
+	Resolve(g Status) (v4, v6 string)
 	// Carriers names the gateways whose default routes the kernel uses.
 	Carriers(gs []Status) ([]string, error)
 }
@@ -77,9 +78,11 @@ type Status struct {
 	Monitor  string `json:"monitor,omitempty"`
 	Priority int    `json:"priority"`
 	Metric   int    `json:"metric"`
-	// Online is the monitor's verdict; Unknown means it has not probed yet.
-	Online  bool `json:"online"`
-	Unknown bool `json:"unknown"`
+	// Online is the monitor's verdict; Unknown means it has not probed yet,
+	// and NeverAnswered that it has failed without ever answering.
+	Online        bool `json:"online"`
+	Unknown       bool `json:"unknown"`
+	NeverAnswered bool `json:"neverAnswered,omitempty"`
 	// Active marks the gateway currently carrying the default route.
 	Active bool `json:"active"`
 	// Tunnel is a tunnel gateway: it sends rule traffic into its tunnel
@@ -89,26 +92,138 @@ type Status struct {
 	LossPercent float64   `json:"lossPercent"`
 	Since       time.Time `json:"since,omitzero"`
 	LastError   string    `json:"lastError,omitempty"`
+	// Families are the addresses the gateway is probed at, a family each.
+	Families []FamilyStatus `json:"families,omitempty"`
 
 	// learned is set when the gateway takes its next hop from the network,
 	// so the router looks for its routes by metric as well as by address.
 	learned bool
 }
 
-type state struct {
-	gw model.Gateway
-	// tunnel is fixed for the state's life: a gateway that stops or starts
-	// being a tunnel gateway gets a new one.
-	tunnel    bool
-	address   string
-	online    bool
+// FamilyStatus is a gateway as the probes of one family find it.
+type FamilyStatus struct {
+	Family        string  `json:"family"`
+	Address       string  `json:"address,omitempty"`
+	Online        bool    `json:"online"`
+	Unknown       bool    `json:"unknown"`
+	NeverAnswered bool    `json:"neverAnswered,omitempty"`
+	LatencyMS     float64 `json:"latencyMs"`
+	LossPercent   float64 `json:"lossPercent"`
+	LastError     string  `json:"lastError,omitempty"`
+}
+
+// leg is one address a gateway is probed at: its next hop in a family,
+// or its monitor.
+type leg struct {
+	family string
+	hop    string
+	online bool
+	// unknown is a leg not judged yet; never one that failed before it
+	// ever came up; answered one that came up since its state began.
 	unknown   bool
+	never     bool
+	answered  bool
 	fails     int
 	rises     int
 	results   []bool
 	latency   time.Duration
 	since     time.Time
 	lastError string
+}
+
+func (l *leg) record(rtt time.Duration, err error, now time.Time) {
+	l.results = append(l.results, err == nil)
+	if len(l.results) > history {
+		l.results = l.results[len(l.results)-history:]
+	}
+	if err != nil {
+		l.lastError = err.Error()
+		l.fails++
+		l.rises = 0
+		if (l.online || l.unknown) && l.fails >= FailAfter {
+			l.online, l.unknown, l.never, l.since = false, false, !l.answered, now
+		}
+		return
+	}
+	l.lastError = ""
+	l.latency = rtt
+	l.rises++
+	l.fails = 0
+	if (!l.online || l.unknown) && l.rises >= RiseAfter {
+		l.online, l.unknown, l.never, l.answered, l.since = true, false, false, true, now
+	}
+}
+
+func (l *leg) state() string {
+	switch {
+	case l.online:
+		return StateUp
+	case l.unknown:
+		return ""
+	case l.never:
+		return StateNever
+	}
+	return StateDown
+}
+
+type state struct {
+	gw model.Gateway
+	// tunnel is fixed for the state's life: a gateway that stops or starts
+	// being a tunnel gateway gets a new one.
+	tunnel bool
+	// address is the next hop policy routing uses: the gateway's own, or
+	// the IPv4 one it learned.
+	address   string
+	legs      []*leg
+	online    bool
+	unknown   bool
+	never     bool
+	since     time.Time
+	lastError string
+}
+
+func (st *state) leg(family string) *leg {
+	for _, l := range st.legs {
+		if l.family == family {
+			return l
+		}
+	}
+	return nil
+}
+
+// verdict is the gateway's state from its legs: up while one answers,
+// down while one that answered before does not, never answered while
+// none ever has.
+func (st *state) verdict() string {
+	worst := ""
+	for _, l := range st.legs {
+		switch s := l.state(); {
+		case s == StateUp:
+			return StateUp
+		case s == StateDown:
+			worst = StateDown
+		case s == StateNever && worst == "":
+			worst = StateNever
+		}
+	}
+	return worst
+}
+
+func (st *state) set(verdict string, now time.Time) {
+	st.online, st.unknown, st.never = verdict == StateUp, verdict == "", verdict == StateNever
+	st.since = now
+}
+
+func (st *state) current() string {
+	switch {
+	case st.online:
+		return StateUp
+	case st.unknown:
+		return ""
+	case st.never:
+		return StateNever
+	}
+	return StateDown
 }
 
 // Monitor probes every gateway and moves the default route when one dies.
@@ -136,6 +251,8 @@ type Monitor struct {
 	// the kernel. networkd does when it reconfigures a link, which an apply
 	// makes it do; the tables go back at once instead of at the next probe.
 	Removed func(ctx context.Context) (<-chan struct{}, error)
+	// History, when set, keeps what the probes find and what changed.
+	History *History
 
 	mu     sync.Mutex
 	states map[string]*state
@@ -156,16 +273,32 @@ func New(p Prober, r Router, log *slog.Logger) *Monitor {
 // Configure replaces the watched set with cfg's gateways, keeping the
 // state of those that are still there. It is called after every apply.
 func (m *Monitor) Configure(cfg *model.Config) {
+	var changed []Event
+	names := make([]string, 0, len(cfg.Gateways))
+	defer func() {
+		if m.History == nil {
+			return
+		}
+		m.History.Keep(names)
+		for _, e := range changed {
+			m.Log.Info("gateway monitor changed", "gateway", e.Gateway, "monitor", e.Monitor, "was", e.Was)
+			m.History.Note(e)
+		}
+	}()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	next := make(map[string]*state, len(cfg.Gateways))
 	order := make([]string, 0, len(cfg.Gateways))
 	for _, g := range cfg.Gateways {
+		names = append(names, g.Name)
 		if !g.Enabled {
 			continue
 		}
 		tunnel := cfg.TunnelGateway(g)
 		st, ok := m.states[g.Name]
+		if ok && st.gw.Monitor != g.Monitor {
+			changed = append(changed, Event{Gateway: g.Name, Kind: EventMonitor, Monitor: g.Monitor, Was: st.gw.Monitor})
+		}
 		if !ok || st.gw.Interface != g.Interface || st.gw.Address != g.Address || st.gw.Monitor != g.Monitor ||
 			st.tunnel != tunnel {
 			st = &state{gw: g, tunnel: tunnel, unknown: true, since: time.Now()}
@@ -269,6 +402,7 @@ func (m *Monitor) Tick(ctx context.Context) {
 	for _, st := range states {
 		m.probe(ctx, st, timeout)
 	}
+	m.mark(states)
 	m.applyRoutes(states)
 	m.findCarriers(states)
 	m.syncPolicy(cfg, states)
@@ -319,65 +453,199 @@ func (m *Monitor) syncPolicy(cfg *model.Config, states []*state) {
 	}
 }
 
-func (m *Monitor) probe(ctx context.Context, st *state, timeout time.Duration) {
+// target is an address a gateway is probed at, in a family; an empty
+// family is a gateway with nothing to probe yet.
+type target struct {
+	family string
+	hop    string
+	addr   string
+}
+
+func familyOf(address string) string {
+	if a, err := model.ParseIP(address); err == nil && !a.Is4() {
+		return FamilyIPv6
+	}
+	return FamilyIPv4
+}
+
+// targets are what a gateway is probed at this tick, and the next hop
+// policy routing takes. A tunnel's probe goes to the monitor beyond it; a
+// gateway with an address or a monitor is probed there alone; one that
+// learns its next hops is probed at each, and keeps probing a family
+// whose next hop went.
+func (m *Monitor) targets(st *state) (model.Gateway, []target, string) {
 	m.mu.Lock()
-	target := st.gw.Monitor
-	addr := st.address
+	gw, tunnel := st.gw, st.tunnel
+	var have []string
+	for _, l := range st.legs {
+		have = append(have, l.family)
+	}
 	m.mu.Unlock()
-
-	// A tunnel has no next hop to find: the probe goes into the tunnel,
-	// to the monitor beyond it.
-	if st.tunnel {
-		addr = ""
-	} else if resolved, ok := m.Router.Resolve(Status{Name: st.gw.Name, Interface: st.gw.Interface, Address: st.gw.Address}); ok {
-		addr = resolved
-	} else if st.gw.Address != "" {
-		addr = st.gw.Address
+	if tunnel {
+		return gw, []target{{family: familyOf(gw.Monitor), addr: gw.Monitor}}, ""
 	}
-	if target == "" {
-		target = addr
-	}
-
-	var rtt time.Duration
-	var err error
-	if target == "" {
-		err = errNoAddress
-	} else {
-		rtt, err = m.Prober.Probe(ctx, target, st.gw.Interface, timeout)
-	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	st.address = addr
-	st.results = append(st.results, err == nil)
-	if len(st.results) > history {
-		st.results = st.results[len(st.results)-history:]
-	}
-	if err != nil {
-		st.lastError = err.Error()
-		st.fails++
-		st.rises = 0
-		if (st.online || st.unknown) && st.fails >= FailAfter {
-			st.online, st.unknown, st.since = false, false, time.Now()
-			m.Log.Warn("gateway is down", "gateway", st.gw.Name, "monitor", target, "err", err)
+	v4, v6 := m.Router.Resolve(Status{
+		Name: gw.Name, Interface: gw.Interface, Address: gw.Address, Metric: gw.GatewayMetric(), learned: gw.Address == "",
+	})
+	switch {
+	case gw.Address != "":
+		return gw, []target{{family: familyOf(gw.Address), hop: gw.Address, addr: cmp.Or(gw.Monitor, gw.Address)}}, gw.Address
+	case gw.Monitor != "":
+		family, hop := familyOf(gw.Monitor), v4
+		if family == FamilyIPv6 {
+			hop = v6
 		}
-		return
+		return gw, []target{{family: family, hop: hop, addr: gw.Monitor}}, v4
+	}
+	var out []target
+	if v4 != "" || slices.Contains(have, FamilyIPv4) {
+		out = append(out, target{family: FamilyIPv4, hop: v4, addr: v4})
+	}
+	if v6 != "" || slices.Contains(have, FamilyIPv6) {
+		out = append(out, target{family: FamilyIPv6, hop: v6, addr: v6})
+	}
+	if len(out) == 0 {
+		out = []target{{}}
+	}
+	return gw, out, v4
+}
+
+type result struct {
+	target
+	rtt time.Duration
+	err error
+	at  time.Time
+}
+
+type legChange struct {
+	family, was, now string
+	since            time.Time
+	err              string
+}
+
+func (m *Monitor) probe(ctx context.Context, st *state, timeout time.Duration) {
+	gw, targets, hop := m.targets(st)
+	results := make([]result, 0, len(targets))
+	for _, t := range targets {
+		var rtt time.Duration
+		err := errNoAddress
+		if t.addr != "" {
+			rtt, err = m.Prober.Probe(ctx, t.addr, gw.Interface, timeout)
+		}
+		results = append(results, result{target: t, rtt: rtt, err: err, at: time.Now()})
+	}
+	if m.History != nil {
+		for _, r := range results {
+			if r.family != "" {
+				m.History.Probe(gw.Name, r.family, gw.Monitor, r.at, r.rtt, r.err == nil)
+			}
+		}
+	}
+
+	now := time.Now()
+	m.mu.Lock()
+	st.address = hop
+	if targets[0].family != "" {
+		st.legs = slices.DeleteFunc(st.legs, func(l *leg) bool { return l.family == "" })
+	}
+	var changes []legChange
+	for _, r := range results {
+		l := st.leg(r.family)
+		if l == nil {
+			l = &leg{family: r.family, unknown: true, since: now}
+			if r.family != "" && m.History != nil {
+				l.answered = m.History.Answered(gw.Name, r.family, gw.Monitor)
+			}
+			st.legs = append(st.legs, l)
+			slices.SortStableFunc(st.legs, func(a, b *leg) int { return cmp.Compare(a.family, b.family) })
+		}
+		l.hop = r.hop
+		was, since := l.state(), l.since
+		l.record(r.rtt, r.err, now)
+		if l.state() != was {
+			changes = append(changes, legChange{family: r.family, was: was, now: l.state(), since: since, err: l.lastError})
+		}
+	}
+	prev, prevSince := st.current(), st.since
+	verdict := st.verdict()
+	if verdict != prev {
+		st.set(verdict, now)
 	}
 	st.lastError = ""
-	st.latency = rtt
-	st.rises++
-	st.fails = 0
-	if (!st.online || st.unknown) && st.rises >= RiseAfter {
+	for _, l := range st.legs {
+		if l.lastError != "" {
+			st.lastError = l.lastError
+			break
+		}
+	}
+	legs := len(st.legs)
+	lastError := st.lastError
+	m.mu.Unlock()
+
+	monitor := cmp.Or(gw.Monitor, results[0].addr)
+	took := now.Sub(prevSince).Round(time.Second)
+	switch {
+	case verdict == prev:
+	case verdict == StateUp && prev == StateDown:
 		// Coming back is logged at the level going down was, so a journal
 		// that keeps only warnings still says when the gateway returned.
-		if !st.unknown {
-			m.Log.Warn("gateway is up again", "gateway", st.gw.Name, "monitor", target, "rtt", rtt,
-				"down", time.Since(st.since).Round(time.Second))
-		} else {
-			m.Log.Info("gateway is up", "gateway", st.gw.Name, "monitor", target, "rtt", rtt)
-		}
-		st.online, st.unknown, st.since = true, false, time.Now()
+		m.Log.Warn("gateway is up again", "gateway", gw.Name, "monitor", monitor, "down", took)
+		m.note(Event{Gateway: gw.Name, Kind: EventUp, For: int64(took / time.Second)})
+	case verdict == StateUp && prev == StateNever:
+		m.Log.Warn("gateway answered", "gateway", gw.Name, "monitor", monitor, "after", took)
+		m.note(Event{Gateway: gw.Name, Kind: EventAnswered, For: int64(took / time.Second)})
+	case verdict == StateUp:
+		m.Log.Info("gateway is up", "gateway", gw.Name, "monitor", monitor)
+	case verdict == StateDown:
+		m.Log.Warn("gateway is down", "gateway", gw.Name, "monitor", monitor, "err", lastError)
+		m.note(Event{Gateway: gw.Name, Kind: EventDown, Error: lastError})
+	case verdict == StateNever:
+		m.Log.Warn("gateway has not answered", "gateway", gw.Name, "monitor", monitor, "err", lastError)
+		m.note(Event{Gateway: gw.Name, Kind: EventNever, Error: lastError})
 	}
+	if verdict != StateUp || prev == StateDown || prev == StateNever || legs < 2 {
+		return
+	}
+	for _, c := range changes {
+		after := now.Sub(c.since).Round(time.Second)
+		switch {
+		case c.now == StateDown:
+			m.Log.Warn("gateway stopped answering in a family", "gateway", gw.Name, "family", c.family, "err", c.err)
+			m.note(Event{Gateway: gw.Name, Family: c.family, Kind: EventFamilyDown, Error: c.err})
+		case c.now == StateNever:
+			m.Log.Warn("gateway has not answered in a family", "gateway", gw.Name, "family", c.family, "err", c.err)
+			m.note(Event{Gateway: gw.Name, Family: c.family, Kind: EventFamilyNever, Error: c.err})
+		case c.now == StateUp && c.was != "":
+			m.Log.Warn("gateway answers in a family again", "gateway", gw.Name, "family", c.family, "after", after)
+			m.note(Event{Gateway: gw.Name, Family: c.family, Kind: EventFamilyUp, For: int64(after / time.Second)})
+		}
+	}
+}
+
+func (m *Monitor) note(e Event) {
+	if m.History != nil {
+		m.History.Note(e)
+	}
+}
+
+// mark records each gateway's state in the history, and closes the
+// minutes that are over.
+func (m *Monitor) mark(states []*state) {
+	if m.History == nil {
+		return
+	}
+	now := time.Now()
+	type mark struct{ name, state, monitor string }
+	marks := make([]mark, 0, len(states))
+	m.mu.Lock()
+	for _, st := range states {
+		marks = append(marks, mark{st.gw.Name, st.current(), st.gw.Monitor})
+	}
+	m.mu.Unlock()
+	for _, k := range marks {
+		m.History.Mark(k.name, k.state, k.monitor, now)
+	}
+	m.History.Advance(now)
 }
 
 // applyRoutes demotes dead gateways and restores the rest. A demoted route
@@ -407,8 +675,8 @@ func (m *Monitor) applyRoutes(states []*state) {
 	for _, st := range states {
 		m.mu.Lock()
 		st2 := *st
+		g := m.status(st, true)
 		m.mu.Unlock()
-		g := m.status(&st2, false)
 		switch {
 		case !st2.online && !st2.unknown && anyOnline:
 			moved, err := m.Router.Demote(g)
@@ -487,18 +755,19 @@ func (m *Monitor) Statuses() []Status {
 // is true.
 func (m *Monitor) status(st *state, _ bool) Status {
 	s := Status{
-		Name:      st.gw.Name,
-		Interface: st.gw.Interface,
-		Address:   st.address,
-		Monitor:   st.gw.Monitor,
-		Priority:  st.gw.Priority,
-		Metric:    st.gw.GatewayMetric(),
-		Online:    st.online,
-		Unknown:   st.unknown,
-		Since:     st.since,
-		LastError: st.lastError,
-		Tunnel:    st.tunnel,
-		learned:   st.gw.Address == "",
+		Name:          st.gw.Name,
+		Interface:     st.gw.Interface,
+		Address:       st.address,
+		Monitor:       st.gw.Monitor,
+		Priority:      st.gw.Priority,
+		Metric:        st.gw.GatewayMetric(),
+		Online:        st.online,
+		Unknown:       st.unknown,
+		NeverAnswered: st.never,
+		Since:         st.since,
+		LastError:     st.lastError,
+		Tunnel:        st.tunnel,
+		learned:       st.gw.Address == "",
 	}
 	if s.Address == "" {
 		s.Address = st.gw.Address
@@ -506,17 +775,32 @@ func (m *Monitor) status(st *state, _ bool) Status {
 	if s.Monitor == "" {
 		s.Monitor = s.Address
 	}
-	if st.latency > 0 {
-		s.LatencyMS = float64(st.latency.Microseconds()) / 1000
-	}
-	if n := len(st.results); n > 0 {
-		lost := 0
-		for _, ok := range st.results {
-			if !ok {
-				lost++
-			}
+	for _, l := range st.legs {
+		if l.family == "" {
+			continue
 		}
-		s.LossPercent = float64(lost) / float64(n) * 100
+		f := FamilyStatus{
+			Family: l.family, Address: l.hop, Online: l.online, Unknown: l.unknown, NeverAnswered: l.never,
+			LastError: l.lastError,
+		}
+		if l.latency > 0 {
+			f.LatencyMS = float64(l.latency.Microseconds()) / 1000
+		}
+		if n := len(l.results); n > 0 {
+			lost := 0
+			for _, ok := range l.results {
+				if !ok {
+					lost++
+				}
+			}
+			f.LossPercent = float64(lost) / float64(n) * 100
+		}
+		s.Families = append(s.Families, f)
+	}
+	if len(s.Families) > 0 {
+		s.LatencyMS, s.LossPercent = s.Families[0].LatencyMS, s.Families[0].LossPercent
+	} else if len(st.legs) > 0 && len(st.legs[0].results) > 0 {
+		s.LossPercent = 100
 	}
 	return s
 }

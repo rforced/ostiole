@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -11,7 +11,8 @@ import { startServer } from './server.js'
  * Makes the router every file but 01-first-run.spec.js starts from, with
  * the requests the wizard makes there: an admin, then edge with the first
  * wired link as LAN and the second as WAN. The fixtures copy its directory
- * for each file; it goes when the run ends.
+ * for each file; it goes when the run ends. The WAN's gateway answers at
+ * a made-up next hop, through the probes file serve.sh hands the server.
  */
 export default async function globalSetup() {
   const dir = mkdtempSync(join(tmpdir(), 'ostiole-e2e-seed-'))
@@ -19,7 +20,11 @@ export default async function globalSetup() {
   try {
     const server = await startServer({ port: 18099, dir })
     try {
-      await configure(server.url)
+      const wan = await configure(server.url)
+      writeFileSync(
+        join(dir, 'probes.json'),
+        JSON.stringify({ hops: { [wan]: { ipv4: '192.0.2.1' } } }),
+      )
     } finally {
       await server.stop()
     }
@@ -58,4 +63,5 @@ async function configure(baseURL) {
   await call('POST', '/apply', { config, confirmTimeoutSeconds: 90 })
   await call('POST', '/apply/confirm')
   await api.dispose()
+  return wired[1].name
 }

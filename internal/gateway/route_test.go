@@ -155,9 +155,9 @@ func TestADynamicGatewayKeepsItsLeaseRoutesWhileDemoted(t *testing.T) {
 	addDefault(t, wan0, "fe80::9", 30, unix.RTPROT_STATIC)
 
 	r := NewNetlinkRouter()
-	addr, ok := r.Resolve(Status{Name: "wan", Interface: "wan0"})
-	if !ok || addr != "203.0.113.1" {
-		t.Fatalf("resolved %q, %v, want the lease's next hop", addr, ok)
+	addr, v6 := r.Resolve(Status{Name: "wan", Interface: "wan0", Metric: 10, learned: true})
+	if addr != "203.0.113.1" || v6 != "fe80::1" {
+		t.Fatalf("resolved %q and %q, want the lease's next hop and the advertised one at the gateway's metric", addr, v6)
 	}
 	// The monitor hands the router the address it resolved and the metric
 	// networkd was told to give the gateway's routes.

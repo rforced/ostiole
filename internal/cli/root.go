@@ -68,6 +68,9 @@ type globals struct {
 	// cloudflareAPI is where dynamic DNS writes Cloudflare records;
 	// empty is Cloudflare's API.
 	cloudflareAPI string
+	// fakeProbes has a daemon that is not root watch its gateways through
+	// the file named, for the end-to-end tests.
+	fakeProbes string
 	// backupDir is where backup crons write, backup.Dir unless a test
 	// says otherwise.
 	backupDir string
@@ -257,6 +260,8 @@ func newRootCmd() *cobra.Command {
 	// otherwise never reads from.
 	pf.BoolVar(&g.listsOnLoopback, "lists-on-loopback", false, "read lists served on the loopback as if from inside the network")
 	_ = pf.MarkHidden("lists-on-loopback")
+	pf.StringVar(&g.fakeProbes, "fake-probes", "", "watch the gateways through this file's next hops and answers when not root")
+	_ = pf.MarkHidden("fake-probes")
 	cmd.AddCommand(
 		newInterfacesCmd(g),
 		newServeCmd(g),

@@ -393,9 +393,7 @@ at your own.`,
 				// The same tick puts back a queue whose link has only just
 				// come up, which is the boot and redial case.
 				mon.Shaping = g.shaper()
-				mon.OnTick = func() { crons.Note("system:gateways") }
-				deps.Gateways = mon
-				go panics.Loop(ctx, log, "gateway monitor", mon.Run)
+				watchGateways(ctx, mon, eng, &deps, files, crons, log)
 				// Daylight saving, or a zone set at start that differs from
 				// the one the ruleset was loaded in, moves the offset a
 				// schedule's hours were converted at, so its scheduled chains
@@ -454,6 +452,9 @@ at your own.`,
 						readRing(eng.Effective(), history, smart.HistoryFiles(history), smart.HistorySettings, files, log)
 					}, drives.Run)
 				}
+			} else if g.fakeProbes != "" {
+				fake := &gateway.FakeProbes{Path: g.fakeProbes}
+				watchGateways(ctx, gateway.New(fake, fake, slog.Default()), eng, &deps, files, crons, log)
 			}
 			// What the WAF matched, fed from the proxy's journal: read back
 			// from its files at start while they are on, then from the
@@ -691,6 +692,43 @@ func readRing[T any, P logring.Entry[T]](cfg *model.Config, ring *logring.Ring[T
 		log.Info("read a log back from its files", "log", l.Name, "entries", len(entries), "took", time.Since(started))
 	}
 	files.Add(l, st)
+}
+
+// watchGateways runs the gateway monitor once its history is read back
+// from the files.
+func watchGateways(ctx context.Context, mon *gateway.Monitor, eng *engine.Engine, deps *server.Deps,
+	files *logfile.Writer, crons *cron.Runner, log *slog.Logger,
+) {
+	// The monitor follows the engine rather than the store, so a gateway
+	// change is probed and routed during its confirmation window and undone
+	// when the window expires.
+	mon.Source = eng.Effective
+	mon.OnTick = func() { crons.Note("system:gateways") }
+	mon.History = gateway.NewHistory()
+	deps.Gateways, deps.GatewayHistory = mon, mon.History
+	go afterReadBack(ctx, log, "gateway files", "gateway monitor", func() {
+		readGateways(eng.Effective(), mon.History, files, log)
+	}, mon.Run)
+}
+
+// readGateways rebuilds the gateways' minutes and events from their files
+// while the configuration writes them, and hands both logs to the writer.
+func readGateways(cfg *model.Config, h *gateway.History, files *logfile.Writer, log *slog.Logger) {
+	logs := h.FileLogs()
+	var st logfile.ReadStats
+	if cfg != nil && cfg.System.Logging.Files.Enabled {
+		started := time.Now()
+		stats, err := logfile.ReadEach(files.Dir, gateway.HistoryFileName, gateway.FileVersion,
+			started.Add(-logs[0].Kept(cfg)), gateway.ParseMinute, func(m gateway.MinuteLine) { h.RestoreMinute(m, started) })
+		if err != nil {
+			log.Warn("could not read all of the gateways' history back", "err", err)
+		}
+		st = stats
+		h.EndRestore(logfile.NewestSeq(files.Dir, gateway.HistoryFileName))
+		log.Info("read the gateways' history back from its files", "took", time.Since(started))
+	}
+	files.Add(logs[0], st)
+	readRing(cfg, h.Events, logs[1], gateway.EventSettings, files, log)
 }
 
 // readTraffic rebuilds what traffic counted from its files while the

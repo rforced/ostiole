@@ -50,6 +50,7 @@ type fakeRouter struct {
 	restored  []string
 	forgotten []string
 	resolveTo map[string]string
+	resolve6  map[string]string
 	// foreign is the metric of a default route no gateway owns, 0 for none.
 	foreign int
 }
@@ -95,13 +96,16 @@ func (f *fakeRouter) putBack(name string) {
 	delete(f.down, name)
 }
 
-func (f *fakeRouter) Resolve(g Status) (string, bool) {
+func (f *fakeRouter) Resolve(g Status) (string, string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if a, ok := f.resolveTo[g.Name]; ok {
-		return a, true
+	if g.Address != "" {
+		if familyOf(g.Address) == FamilyIPv6 {
+			return "", g.Address
+		}
+		return g.Address, ""
 	}
-	return g.Address, g.Address != ""
+	return f.resolveTo[g.Name], f.resolve6[g.Name]
 }
 
 // Carriers picks by metric as the kernel does. A demoted gateway's is its

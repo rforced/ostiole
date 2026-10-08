@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"ostiole/internal/fwlog"
+	"ostiole/internal/gateway"
 	"ostiole/internal/journalfeed"
 	"ostiole/internal/logfile"
 	"ostiole/internal/model"
@@ -160,5 +161,52 @@ func TestClearedWAFEventsStayClearedAfterARestart(t *testing.T) {
 	<-done
 	if n, _ := events.Held(); n != 0 {
 		t.Errorf("the start read back %d events the Clear took", n)
+	}
+}
+
+// The gateways' minutes and events come back from their files after a
+// restart, as they were before it, and say the gateway answered.
+func TestTheGatewaysHistoryComesBackFromItsFiles(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfg := &model.Config{}
+	cfg.System.Logging.Files.Enabled = true
+	log := slog.New(slog.DiscardHandler)
+	writer := func() *logfile.Writer {
+		return &logfile.Writer{Dir: dir, Source: func() *model.Config { return cfg }, Log: log,
+			Statfs: func(string) (uint64, uint64, error) { return 1, 2, nil }}
+	}
+	files := writer()
+	before := gateway.NewHistory()
+	readGateways(cfg, before, files, log)
+	start := time.Now().Add(-10 * time.Minute).Truncate(time.Minute)
+	for m := range 3 {
+		for i := range 12 {
+			at := start.Add(time.Duration(m)*time.Minute + time.Duration(i*5)*time.Second)
+			before.Probe("wan", gateway.FamilyIPv4, "", at, time.Duration(3+m)*time.Millisecond, i != 0)
+			before.Mark("wan", gateway.StateUp, "", at)
+		}
+	}
+	before.Advance(time.Now())
+	before.Note(gateway.Event{Gateway: "wan", Kind: gateway.EventDown, Error: "timeout"})
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	files.Run(ctx)
+
+	after := gateway.NewHistory()
+	readGateways(cfg, after, writer(), log)
+	now := time.Now()
+	for _, w := range []string{gateway.Window24h, gateway.Window31d} {
+		want, got := before.Read("wan", w, now), after.Read("wan", w, now)
+		if len(got.Families) != 1 || len(got.Families[0].Points) != len(want.Families[0].Points) ||
+			got.Families[0].Sent != want.Families[0].Sent || got.Families[0].Mean != want.Families[0].Mean {
+			t.Errorf("%s read back %+v, want %+v", w, got, want)
+		}
+	}
+	if !after.Answered("wan", gateway.FamilyIPv4, "") {
+		t.Error("the files did not say the gateway answered")
+	}
+	if events := after.Events.Recent(0); len(events) != 1 || events[0].Kind != gateway.EventDown || events[0].Seq != 1 {
+		t.Errorf("events read back %+v", events)
 	}
 }

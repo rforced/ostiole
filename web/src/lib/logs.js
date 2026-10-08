@@ -51,6 +51,8 @@ export const FILE_LOG_NAMES = {
   links: 'Traffic per link',
   devices: 'Traffic per device',
   destinations: 'Destinations',
+  gateways: 'Gateway history',
+  'gateway-events': 'Gateway events',
 }
 
 /**

@@ -10,6 +10,7 @@ import (
 	"ostiole/internal/dhcplog"
 	"ostiole/internal/dnslog"
 	"ostiole/internal/fwlog"
+	"ostiole/internal/gateway"
 	"ostiole/internal/logfile"
 	"ostiole/internal/logging"
 	"ostiole/internal/model"
@@ -105,6 +106,10 @@ func (a *api) clearables() []clearable {
 		add(traffic.DevicesFile, a.traffic.Clear)
 		add(traffic.DestinationsFile, a.traffic.ClearDestinations)
 	}
+	if a.gatewayHistory != nil {
+		add(gateway.HistoryFileName, a.gatewayHistory.ClearHistory)
+		add(gateway.EventsFileName, a.gatewayHistory.Events.Clear)
+	}
 	return out
 }
 
@@ -171,6 +176,8 @@ var logFileNames = map[string]string{
 	traffic.LinksFile:        "traffic per link",
 	traffic.DevicesFile:      "traffic per device",
 	traffic.DestinationsFile: "list of destinations",
+	gateway.HistoryFileName:  "gateway history",
+	gateway.EventsFileName:   "gateway events",
 }
 
 // logFileWarnings are the dashboard's say on the files: writing waits for

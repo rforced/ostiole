@@ -527,8 +527,8 @@ func policyHops(_ context.Context, cfg *model.Config) map[string]policy.Hop {
 			continue
 		}
 		addr := gw.Address
-		if resolved, ok := router.Resolve(gateway.Status{Name: gw.Name, Interface: gw.Interface, Address: gw.Address}); ok {
-			addr = resolved
+		if v4, _ := router.Resolve(gateway.Status{Name: gw.Name, Interface: gw.Interface, Address: gw.Address}); v4 != "" {
+			addr = v4
 		}
 		hops[gw.Name] = policy.NewHop(cfg, gw, addr, true)
 	}
@@ -629,6 +629,19 @@ func formatBits(bits int64) string {
 	return fmt.Sprintf("%d bit/s", bits)
 }
 
+// gatewayState names what the monitor made of a gateway.
+func gatewayState(online, unknown, never bool) string {
+	switch {
+	case unknown:
+		return "unknown"
+	case online:
+		return "up"
+	case never:
+		return "never answered"
+	}
+	return "down"
+}
+
 func newGatewaysCmd(g *globals) *cobra.Command {
 	var count int
 	cmd := &cobra.Command{
@@ -657,20 +670,27 @@ moves the default route off a gateway that stops answering.`,
 				mon.Tick(cmd.Context())
 			}
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "NAME\tINTERFACE\tGATEWAY\tMONITOR\tSTATE\tRTT\tLOSS")
+			fmt.Fprintln(w, "NAME\tINTERFACE\tFAMILY\tGATEWAY\tMONITOR\tSTATE\tRTT\tLOSS")
 			for _, s := range mon.Statuses() {
-				state := "down"
-				switch {
-				case s.Unknown:
-					state = "unknown"
-				case s.Online:
-					state = "up"
+				families := s.Families
+				if len(families) == 0 {
+					families = []gateway.FamilyStatus{{
+						Family: "-", Address: s.Address, Online: s.Online, Unknown: s.Unknown,
+						NeverAnswered: s.NeverAnswered, LatencyMS: s.LatencyMS, LossPercent: s.LossPercent,
+					}}
 				}
-				if s.Active {
-					state += " (active)"
+				for _, f := range families {
+					state := gatewayState(f.Online, f.Unknown, f.NeverAnswered)
+					if s.Active {
+						state += " (active)"
+					}
+					monitor := s.Monitor
+					if len(s.Families) > 1 {
+						monitor = f.Address
+					}
+					fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%.1fms\t%.0f%%\n",
+						s.Name, s.Interface, f.Family, f.Address, monitor, state, f.LatencyMS, f.LossPercent)
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%.1fms\t%.0f%%\n",
-					s.Name, s.Interface, s.Address, s.Monitor, state, s.LatencyMS, s.LossPercent)
 			}
 			return w.Flush()
 		},

@@ -27,33 +27,38 @@ type NetlinkRouter struct{}
 // NewNetlinkRouter returns a router backed by the kernel.
 func NewNetlinkRouter() *NetlinkRouter { return &NetlinkRouter{} }
 
-// Resolve reports the next hop currently installed for a gateway. A
-// gateway with a configured address answers with it; a dynamic one is
-// looked up in the routing table of its interface.
-func (r *NetlinkRouter) Resolve(g Status) (string, bool) {
+// Resolve reports a gateway's next hop in each family. A gateway with an
+// address answers with it; one that learns its next hops finds them in its
+// interface's default routes.
+func (r *NetlinkRouter) Resolve(g Status) (v4, v6 string) {
 	if g.Address != "" {
-		return g.Address, true
+		if familyOf(g.Address) == FamilyIPv6 {
+			return "", g.Address
+		}
+		return g.Address, ""
 	}
 	routes, err := r.defaultRoutes(g)
 	if err != nil {
-		return "", false
+		return "", ""
 	}
 	for _, route := range routes {
-		if route.Family == unix.AF_INET {
-			return route.Gw.String(), true
+		switch {
+		case route.Family == unix.AF_INET && v4 == "":
+			v4 = route.Gw.String()
+		case route.Family == unix.AF_INET6 && v6 == "":
+			v6 = route.Gw.String()
 		}
 	}
-	return "", false
+	return v4, v6
 }
 
 // Demote moves every default route through a dead gateway below the rest.
 // It reports whether anything moved, so a route that came back at its own
 // metric since, networkd renewing a lease for one, is moved again.
 func (r *NetlinkRouter) Demote(g Status) (bool, error) {
-	// A gateway that learns its next hop and has none yet was never probed,
-	// only found without an IPv4 route, which says nothing about its IPv6
-	// ones.
-	if g.learned && g.Address == "" {
+	// A gateway that learns its next hops and has none yet was never
+	// probed.
+	if g.learned && g.Address == "" && !slices.ContainsFunc(g.Families, func(f FamilyStatus) bool { return f.Address != "" }) {
 		return false, nil
 	}
 	routes, err := r.defaultRoutes(g)
@@ -246,7 +251,7 @@ func isDefault(n *net.IPNet) bool {
 type ReadOnlyRouter struct{ Router *NetlinkRouter }
 
 // Resolve implements Router.
-func (r ReadOnlyRouter) Resolve(g Status) (string, bool) { return r.Router.Resolve(g) }
+func (r ReadOnlyRouter) Resolve(g Status) (v4, v6 string) { return r.Router.Resolve(g) }
 
 // Demote implements Router and does nothing.
 func (ReadOnlyRouter) Demote(Status) (bool, error) { return false, nil }

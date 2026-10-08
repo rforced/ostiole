@@ -77,8 +77,12 @@ func (p *ICMPProber) Probe(ctx context.Context, address, iface string, timeout t
 	if err := conn.SetDeadline(deadline); err != nil {
 		return 0, err
 	}
+	dst := &net.IPAddr{IP: ip}
+	if ip.IsLinkLocalUnicast() {
+		dst.Zone = iface
+	}
 	start := time.Now()
-	if _, err := conn.WriteTo(raw, &net.IPAddr{IP: ip}); err != nil {
+	if _, err := conn.WriteTo(raw, dst); err != nil {
 		return 0, err
 	}
 
@@ -88,7 +92,7 @@ func (p *ICMPProber) Probe(ctx context.Context, address, iface string, timeout t
 		if err != nil {
 			return 0, err
 		}
-		if peer.String() != ip.String() {
+		if from, ok := peer.(*net.IPAddr); !ok || !from.IP.Equal(ip) {
 			continue
 		}
 		payload := buf[:n]

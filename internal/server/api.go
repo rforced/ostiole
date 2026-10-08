@@ -156,6 +156,9 @@ type api struct {
 	// host is how the operating system underneath is reported on and prepared.
 	host     host.Deps
 	gateways GatewayStatuser
+	// gatewayHistory keeps what the gateways' probes found; nil answers
+	// 503.
+	gatewayHistory *gateway.History
 	// shaping reports the live traffic queues; nil hides the live figures
 	// and leaves the page showing what is configured.
 	shaping Shaper
@@ -198,6 +201,7 @@ func (a *api) register(mux *router) {
 	a.registerQueryLog(mux)
 	a.registerLogFiles(mux)
 	a.registerTraffic(mux)
+	a.registerGateways(mux)
 	a.registerCrons(mux)
 	a.registerSysUpdate(mux)
 	a.registerHost(mux)

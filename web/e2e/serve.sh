@@ -21,6 +21,8 @@ fi
 # one 29-ddns.spec.js runs, never to Cloudflare. Backups and log files go
 # beside the configuration, since the server may not write /var. Lists come
 # from servers the specs run on the loopback, which a router never reads.
+# Gateways answer as probes.json in the directory says, since the server
+# cannot probe.
 "$BIN" --config-dir "$DIR" --nft "$PWD/e2e/nft-stub.sh" --tc "$PWD/e2e/tc-stub.sh" \
   --smartctl "$PWD/e2e/smartctl-stub.sh" \
   --network-backend none \
@@ -28,6 +30,7 @@ fi
   --update-api http://127.0.0.1:18096 \
   --cloudflare-api http://127.0.0.1:18097 \
   --lists-on-loopback \
+  --fake-probes "$DIR/probes.json" \
   --backup-dir "$DIR/backups" \
   --log-dir "$DIR/log" \
   serve --listen "127.0.0.1:${E2E_PORT:-18090}" --log-level warn &

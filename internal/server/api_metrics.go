@@ -77,9 +77,28 @@ func (a *api) metrics(w http.ResponseWriter, r *http.Request) error {
 			m.help("ostiole_gateway_active", "1 for the gateway currently carrying the default route.", "gauge")
 			for _, g := range statuses {
 				m.sample("ostiole_gateway_up", boolValue(g.Online), "gateway", g.Name, "interface", g.Interface)
-				m.sample("ostiole_gateway_latency_seconds", g.LatencyMS/1000, "gateway", g.Name, "interface", g.Interface)
-				m.sample("ostiole_gateway_loss_ratio", g.LossPercent/100, "gateway", g.Name, "interface", g.Interface)
+				for _, f := range g.Families {
+					m.sample("ostiole_gateway_latency_seconds", f.LatencyMS/1000,
+						"gateway", g.Name, "interface", g.Interface, "family", f.Family)
+					m.sample("ostiole_gateway_loss_ratio", f.LossPercent/100,
+						"gateway", g.Name, "interface", g.Interface, "family", f.Family)
+				}
 				m.sample("ostiole_gateway_active", boolValue(g.Active), "gateway", g.Name, "interface", g.Interface)
+			}
+			if a.gatewayHistory != nil {
+				m.help("ostiole_gateway_probes_total", "Probes sent to the gateway's monitor, by family and whether they were answered.", "counter")
+				for _, g := range statuses {
+					for _, f := range g.Families {
+						answered, lost, ok := a.gatewayHistory.Probes(g.Name, f.Family)
+						if !ok {
+							continue
+						}
+						m.sample("ostiole_gateway_probes_total", float64(answered),
+							"gateway", g.Name, "interface", g.Interface, "family", f.Family, "result", "answered")
+						m.sample("ostiole_gateway_probes_total", float64(lost),
+							"gateway", g.Name, "interface", g.Interface, "family", f.Family, "result", "lost")
+					}
+				}
 			}
 		}
 	}
