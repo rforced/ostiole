@@ -20,14 +20,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
-	"github.com/rforced/ostiole/internal/backup"
-	"github.com/rforced/ostiole/internal/logfile"
-	"github.com/rforced/ostiole/internal/logging"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/sysctl"
-	"github.com/rforced/ostiole/internal/timezone"
+	"ostiole/internal/atomicfile"
+	"ostiole/internal/backup"
+	"ostiole/internal/logfile"
+	"ostiole/internal/logging"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
+	"ostiole/internal/sysctl"
+	"ostiole/internal/timezone"
 )
 
 // LogDropInDirs are the unit drop-in directories the level cap is

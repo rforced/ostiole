@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 func starter(hostname string) *model.Config {

@@ -10,8 +10,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netlink"
+	"ostiole/internal/model"
+	"ostiole/internal/netlink"
 )
 
 // Link is the live state of one network interface.

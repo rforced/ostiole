@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/engine"
-	"github.com/rforced/ostiole/internal/nft/nfttest"
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/auth"
+	"ostiole/internal/engine"
+	"ostiole/internal/nft/nfttest"
+	"ostiole/internal/store"
 )
 
 // The policy promises "self only": no directive may name another origin,

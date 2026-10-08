@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // script writes a program that records its arguments in a file, one per

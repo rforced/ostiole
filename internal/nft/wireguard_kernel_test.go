@@ -16,12 +16,12 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/rforced/ostiole/internal/gateway"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netlink"
-	"github.com/rforced/ostiole/internal/netnstest"
-	"github.com/rforced/ostiole/internal/policy"
-	"github.com/rforced/ostiole/internal/testenv"
+	"ostiole/internal/gateway"
+	"ostiole/internal/model"
+	"ostiole/internal/netlink"
+	"ostiole/internal/netnstest"
+	"ostiole/internal/policy"
+	"ostiole/internal/testenv"
 )
 
 // wgKernel skips a test that needs the wireguard module where it is not

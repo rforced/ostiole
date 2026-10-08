@@ -10,10 +10,10 @@ import (
 
 	"software.sslmate.com/src/go-pkcs12"
 
-	"github.com/rforced/ostiole/internal/acme"
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/certs"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/acme"
+	"ostiole/internal/auth"
+	"ostiole/internal/certs"
+	"ostiole/internal/model"
 )
 
 func (a *api) registerCerts(mux *router) {

@@ -5,8 +5,8 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
 )
 
 // A router is handed to systemd-networkd at install time, before anybody

@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/version"
+	"ostiole/internal/network"
+	"ostiole/internal/version"
 )
 
 func (a *api) registerMetrics(mux *router) {

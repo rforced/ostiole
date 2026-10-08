@@ -1,6 +1,6 @@
 package dnsblock
 
-import "github.com/rforced/ostiole/internal/model"
+import "ostiole/internal/model"
 
 // CatalogEntry is a published list Ostiole offers to subscribe to. The
 // catalogue is a convenience, not a dependency: every entry is an ordinary

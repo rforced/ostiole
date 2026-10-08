@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
+	"ostiole/internal/atomicfile"
 )
 
 // Login rate limiting: after MaxFailures failed attempts from one address

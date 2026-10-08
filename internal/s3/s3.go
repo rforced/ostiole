@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/sigv4"
-	"github.com/rforced/ostiole/internal/version"
+	"ostiole/internal/sigv4"
+	"ostiole/internal/version"
 )
 
 // DefaultTimeout bounds one request. A backup is a few tens of kilobytes;

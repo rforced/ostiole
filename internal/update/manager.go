@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/panics"
+	"ostiole/internal/panics"
 )
 
 // State of an update run.

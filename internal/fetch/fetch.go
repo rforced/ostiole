@@ -22,7 +22,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // Reach is where a request may connect.

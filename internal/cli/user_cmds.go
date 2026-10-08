@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/rforced/ostiole/internal/auth"
+	"ostiole/internal/auth"
 )
 
 func newResetPasswordCmd(g *globals) *cobra.Command {

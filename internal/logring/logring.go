@@ -14,10 +14,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/journalfeed"
-	"github.com/rforced/ostiole/internal/logfile"
-	"github.com/rforced/ostiole/internal/logsearch"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/journalfeed"
+	"ostiole/internal/logfile"
+	"ostiole/internal/logsearch"
+	"ostiole/internal/model"
 )
 
 // Stamp is what the ring keeps of every entry: its number, which only

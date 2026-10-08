@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // testCache writes two overlapping lists, the way two real subscriptions

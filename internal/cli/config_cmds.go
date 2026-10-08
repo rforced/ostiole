@@ -16,15 +16,15 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/rforced/ostiole/internal/engine"
-	"github.com/rforced/ostiole/internal/gateway"
-	"github.com/rforced/ostiole/internal/install"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/nft"
-	"github.com/rforced/ostiole/internal/policy"
-	"github.com/rforced/ostiole/internal/shaping"
-	"github.com/rforced/ostiole/internal/sshd"
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/engine"
+	"ostiole/internal/gateway"
+	"ostiole/internal/install"
+	"ostiole/internal/model"
+	"ostiole/internal/nft"
+	"ostiole/internal/policy"
+	"ostiole/internal/shaping"
+	"ostiole/internal/sshd"
+	"ostiole/internal/store"
 )
 
 // configSource selects where a command reads its configuration from.

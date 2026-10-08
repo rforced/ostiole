@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logfile"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/logfile"
+	"ostiole/internal/model"
 )
 
 // The WAF events' directory under logfile.Dir, and the format of its

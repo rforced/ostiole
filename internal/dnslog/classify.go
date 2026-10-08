@@ -5,8 +5,8 @@ import (
 
 	"golang.org/x/net/dns/dnsmessage"
 
-	"github.com/rforced/ostiole/internal/dnsblock"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/dnsblock"
+	"ostiole/internal/model"
 )
 
 // reply is what a parsed answer comes to before the lists have their say.

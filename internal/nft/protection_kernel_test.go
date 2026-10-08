@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/netlink"
-	"github.com/rforced/ostiole/internal/netnstest"
+	"ostiole/internal/netlink"
+	"ostiole/internal/netnstest"
 )
 
 // A scan is refused TCP and UDP. Pings are not one: a monitor that pings

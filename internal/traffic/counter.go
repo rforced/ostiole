@@ -15,9 +15,9 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netlink"
-	"github.com/rforced/ostiole/internal/network"
+	"ostiole/internal/model"
+	"ostiole/internal/netlink"
+	"ostiole/internal/network"
 )
 
 const (

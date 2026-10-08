@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/fetch"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/fetch"
+	"ostiole/internal/model"
 )
 
 // testFetcher reads from servers on the loopback as if they were lists

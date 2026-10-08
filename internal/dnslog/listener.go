@@ -8,9 +8,9 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/rforced/ostiole/internal/netlink"
-	"github.com/rforced/ostiole/internal/nft"
-	"github.com/rforced/ostiole/internal/panics"
+	"ostiole/internal/netlink"
+	"ostiole/internal/nft"
+	"ostiole/internal/panics"
 )
 
 // Listener reads the nflog group the resolver's answers are copied to and

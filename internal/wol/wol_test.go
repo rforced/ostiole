@@ -11,8 +11,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/rforced/ostiole/internal/netlink"
-	"github.com/rforced/ostiole/internal/netnstest"
+	"ostiole/internal/netlink"
+	"ostiole/internal/netnstest"
 )
 
 func TestPacket(t *testing.T) {

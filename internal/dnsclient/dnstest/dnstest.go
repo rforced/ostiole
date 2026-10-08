@@ -16,7 +16,7 @@ import (
 
 	"golang.org/x/net/dns/dnsmessage"
 
-	"github.com/rforced/ostiole/internal/dnsclient/tsig"
+	"ostiole/internal/dnsclient/tsig"
 )
 
 // Server is one DNS server. It follows CNAMEs among its own records, as a

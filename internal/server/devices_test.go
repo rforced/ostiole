@@ -3,7 +3,7 @@ package server
 import (
 	"testing"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // A device is called by the name that resolves to it: the bare label in

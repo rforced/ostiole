@@ -29,7 +29,7 @@ web/                Vue 3, Tailwind v4, Reka UI
 - Web tooling is bun only. Commit `web/bun.lock`.
 - Frontend is plain JavaScript with JSDoc where a type helps. No TypeScript unless a dependency
   forces it.
-- Go: `gofmt`, `goimports` with local prefix `github.com/rforced/ostiole`, `CGO_ENABLED=0`,
+- Go: `gofmt`, `goimports` with local prefix `ostiole`, `CGO_ENABLED=0`,
   pure-Go dependencies only.
 - Ostiole owns `table inet ostiole` and nothing else. Anything that can lock an admin out of a
   remote router goes through the commit-confirmed flow.

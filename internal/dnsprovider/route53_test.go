@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/sigv4"
+	"ostiole/internal/model"
+	"ostiole/internal/sigv4"
 )
 
 const (

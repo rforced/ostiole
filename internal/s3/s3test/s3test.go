@@ -23,8 +23,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/s3"
-	"github.com/rforced/ostiole/internal/sigv4"
+	"ostiole/internal/s3"
+	"ostiole/internal/sigv4"
 )
 
 // pageSize is deliberately small, so a listing of a handful of objects

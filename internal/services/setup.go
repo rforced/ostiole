@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/install"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/tailscale"
+	"ostiole/internal/install"
+	"ostiole/internal/model"
+	"ostiole/internal/tailscale"
 )
 
 // Runner runs commands (systemctl); swapped for a fake in tests.

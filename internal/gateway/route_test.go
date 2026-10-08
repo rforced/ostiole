@@ -13,9 +13,9 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netlink"
-	"github.com/rforced/ostiole/internal/netnstest"
+	"ostiole/internal/model"
+	"ostiole/internal/netlink"
+	"ostiole/internal/netnstest"
 )
 
 // addDefault installs a default route the way a network manager does.

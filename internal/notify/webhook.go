@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // discordLimit is the most a Discord message may hold, in characters;

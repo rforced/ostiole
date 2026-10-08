@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/wafevent"
+	"ostiole/internal/model"
+	"ostiole/internal/wafevent"
 )
 
 // The Core Rule Set application exclusion plugins, pinned in

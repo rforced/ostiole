@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/store"
 )
 
 // FallbackStatus says the kernel runs the fallback ruleset, since when, and

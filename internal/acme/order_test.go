@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/certs"
-	"github.com/rforced/ostiole/internal/dnsclient/dnstest"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/certs"
+	"ostiole/internal/dnsclient/dnstest"
+	"ostiole/internal/model"
 )
 
 func fakeAccount(t *testing.T, f *fakeCA) model.ACMEAccount {

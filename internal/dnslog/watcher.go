@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/rforced/ostiole/internal/dnsblock"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/dnsblock"
+	"ostiole/internal/model"
 )
 
 // DefaultWatch is how often the log is put back in step with the

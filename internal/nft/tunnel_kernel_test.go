@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/netlink"
-	"github.com/rforced/ostiole/internal/netnstest"
-	"github.com/rforced/ostiole/internal/policy"
+	"ostiole/internal/netlink"
+	"ostiole/internal/netnstest"
+	"ostiole/internal/policy"
 )
 
 // A tunnel gateway holds what its rule sends it before the daemon has

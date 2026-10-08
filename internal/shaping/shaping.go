@@ -13,7 +13,7 @@ package shaping
 import (
 	"fmt"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // Handle is the major number of the queue Ostiole installs, written the

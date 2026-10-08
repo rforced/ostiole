@@ -16,7 +16,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
+	"ostiole/internal/atomicfile"
 )
 
 // ConfFile is the drop-in Ostiole writes. journald reads every file in

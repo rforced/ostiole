@@ -10,9 +10,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rforced/ostiole/internal/dnsblock"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/services"
+	"ostiole/internal/dnsblock"
+	"ostiole/internal/model"
+	"ostiole/internal/services"
 )
 
 func newDNSBlockCmd(g *globals) *cobra.Command {

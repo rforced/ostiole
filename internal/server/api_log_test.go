@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/dnslog"
-	"github.com/rforced/ostiole/internal/fwlog"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/waflog"
+	"ostiole/internal/auth"
+	"ostiole/internal/dnslog"
+	"ostiole/internal/fwlog"
+	"ostiole/internal/model"
+	"ostiole/internal/waflog"
 )
 
 // A log stream stays open for hours, so the session or token that opened

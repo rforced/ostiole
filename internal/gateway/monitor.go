@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/policy"
+	"ostiole/internal/model"
+	"ostiole/internal/policy"
 )
 
 // Defaults for the probe loop. They are deliberately unhurried: a router

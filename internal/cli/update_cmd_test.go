@@ -22,7 +22,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rforced/ostiole/internal/update"
+	"ostiole/internal/update"
 )
 
 // The probe turns certificate verification off, so which hosts count as

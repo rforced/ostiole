@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/sysctl"
+	"ostiole/internal/sysctl"
 )
 
 func TestStarterValidates(t *testing.T) {

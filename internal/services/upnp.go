@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/nft"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
+	"ostiole/internal/nft"
 )
 
 // miniupnpd paths and names.

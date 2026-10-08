@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/version"
+	"ostiole/internal/auth"
+	"ostiole/internal/version"
 )
 
 // router records every route as it is registered, so the OpenAPI

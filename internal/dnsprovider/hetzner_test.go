@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // fakeHetzner keeps rrsets as Hetzner's Cloud API does: values are added

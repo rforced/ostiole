@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
+	"ostiole/internal/atomicfile"
 )
 
 // persisted is one cron's last attempt as it is kept on disk.

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/chrony"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/chrony"
+	"ostiole/internal/model"
 )
 
 // Reading the clock is a viewer's business, like every other status.

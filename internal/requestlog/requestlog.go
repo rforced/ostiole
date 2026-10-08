@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logfile"
-	"github.com/rforced/ostiole/internal/logring"
-	"github.com/rforced/ostiole/internal/logsearch"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/logfile"
+	"ostiole/internal/logring"
+	"ostiole/internal/logsearch"
+	"ostiole/internal/model"
 )
 
 // Request is one request the proxy answered.

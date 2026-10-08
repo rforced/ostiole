@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/atomicfile"
+	"ostiole/internal/model"
 )
 
 // account finds the account the key belongs to, or creates it, and signs

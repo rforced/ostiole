@@ -4,7 +4,7 @@ package main
 import (
 	"os"
 
-	"github.com/rforced/ostiole/internal/cli"
+	"ostiole/internal/cli"
 )
 
 func main() {

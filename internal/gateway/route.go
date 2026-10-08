@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/rforced/ostiole/internal/netlink"
+	"ostiole/internal/netlink"
 )
 
 // DemoteMetric is added to the metric of every default route through a

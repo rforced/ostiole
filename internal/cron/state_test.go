@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // errNope is how a cron fails, for the tests that care that it did.

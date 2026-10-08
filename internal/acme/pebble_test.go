@@ -18,8 +18,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/certs"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/certs"
+	"ostiole/internal/model"
 )
 
 func pebbleClient(t *testing.T) (*Client, model.ACMEAccount) {

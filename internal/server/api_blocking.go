@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/rforced/ostiole/internal/dnsblock"
-	"github.com/rforced/ostiole/internal/dnslog"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/dnsblock"
+	"ostiole/internal/dnslog"
+	"ostiole/internal/model"
 )
 
 // BlocklistRefresher fetches the DNS blocklists and installs the result.

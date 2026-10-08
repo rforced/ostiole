@@ -8,17 +8,17 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/cron"
-	"github.com/rforced/ostiole/internal/dnsblock"
-	"github.com/rforced/ostiole/internal/feeds"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/nft"
-	"github.com/rforced/ostiole/internal/services"
-	"github.com/rforced/ostiole/internal/sysupdate"
-	"github.com/rforced/ostiole/internal/update"
-	"github.com/rforced/ostiole/internal/version"
-	"github.com/rforced/ostiole/internal/wol"
+	"ostiole/internal/auth"
+	"ostiole/internal/cron"
+	"ostiole/internal/dnsblock"
+	"ostiole/internal/feeds"
+	"ostiole/internal/model"
+	"ostiole/internal/nft"
+	"ostiole/internal/services"
+	"ostiole/internal/sysupdate"
+	"ostiole/internal/update"
+	"ostiole/internal/version"
+	"ostiole/internal/wol"
 )
 
 func newCronsCmd(g *globals) *cobra.Command {

@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/s3"
-	"github.com/rforced/ostiole/internal/s3/s3test"
+	"ostiole/internal/s3"
+	"ostiole/internal/s3/s3test"
 )
 
 func TestPutAndGetRoundTrip(t *testing.T) {

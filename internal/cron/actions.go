@@ -13,10 +13,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/backup"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/atomicfile"
+	"ostiole/internal/auth"
+	"ostiole/internal/backup"
+	"ostiole/internal/model"
 )
 
 // DefaultCommandTimeout bounds a command cron that names no timeout of

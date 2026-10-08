@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/nft"
-	"github.com/rforced/ostiole/internal/store"
-	"github.com/rforced/ostiole/internal/timezone"
+	"ostiole/internal/nft"
+	"ostiole/internal/store"
+	"ostiole/internal/timezone"
 )
 
 // nft converts a schedule's hours to UTC as it reads a ruleset, at the

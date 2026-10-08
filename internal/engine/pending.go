@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/store"
-	"github.com/rforced/ostiole/internal/sysctl"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
+	"ostiole/internal/store"
+	"ostiole/internal/sysctl"
 )
 
 // record is written before an apply changes anything and removed once it

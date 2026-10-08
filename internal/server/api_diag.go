@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/diag"
-	"github.com/rforced/ostiole/internal/modem"
+	"ostiole/internal/auth"
+	"ostiole/internal/diag"
+	"ostiole/internal/modem"
 )
 
 // Diagnostics are root-only: they need raw sockets and the journal.

@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/network"
+	"ostiole/internal/network"
 )
 
 // events records what the fakes were asked to do, in order, so a test can

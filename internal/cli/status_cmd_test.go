@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/engine"
+	"ostiole/internal/engine"
 )
 
 // `ostiole status --changes` lists the lines as the apply bar does, and

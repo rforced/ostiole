@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // tunnelWay is a tunnel that a tunnel gateway sends rule traffic into, and

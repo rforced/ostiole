@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/cron"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/auth"
+	"ostiole/internal/cron"
+	"ostiole/internal/model"
 )
 
 // CronRunner reports and runs the scheduled work.

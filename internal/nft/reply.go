@@ -3,7 +3,7 @@ package nft
 import (
 	"fmt"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // replyChains answer a connection out of the line it came in on,

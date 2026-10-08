@@ -15,10 +15,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rforced/ostiole/internal/install"
-	"github.com/rforced/ostiole/internal/services"
-	"github.com/rforced/ostiole/internal/update"
-	"github.com/rforced/ostiole/internal/version"
+	"ostiole/internal/install"
+	"ostiole/internal/services"
+	"ostiole/internal/update"
+	"ostiole/internal/version"
 )
 
 // updateDeps are what `ostiole update` reaches outside its own process:

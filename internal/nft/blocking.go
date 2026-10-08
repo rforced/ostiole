@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // BlockChain holds the rules that keep clients on this router's resolver. It

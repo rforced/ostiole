@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/journalfeed"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/wafevent"
+	"ostiole/internal/journalfeed"
+	"ostiole/internal/model"
+	"ostiole/internal/wafevent"
 )
 
 // fakeJournal is the proxy's journal: records in the order they were

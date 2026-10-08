@@ -14,8 +14,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/rforced/ostiole/internal/netlink"
-	"github.com/rforced/ostiole/internal/testenv"
+	"ostiole/internal/netlink"
+	"ostiole/internal/testenv"
 )
 
 // env marks the copy of the test binary that runs inside the namespace.

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/netlink"
-	"github.com/rforced/ostiole/internal/netnstest"
+	"ostiole/internal/netlink"
+	"ostiole/internal/netnstest"
 )
 
 type fakePinger struct {

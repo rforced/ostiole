@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logfile"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/logfile"
+	"ostiole/internal/model"
 )
 
 // The writer reads on from the last entry it wrote, across a ring that has

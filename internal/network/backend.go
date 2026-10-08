@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // Files is a set of configuration files keyed by name relative to the

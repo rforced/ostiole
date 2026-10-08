@@ -26,7 +26,7 @@ import (
 
 	"golang.org/x/mod/semver"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
+	"ostiole/internal/atomicfile"
 )
 
 // DefaultRepo is the GitHub repository releases come from.

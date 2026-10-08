@@ -16,16 +16,16 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rforced/ostiole/internal/journald"
-	"github.com/rforced/ostiole/internal/logging"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/nft"
-	"github.com/rforced/ostiole/internal/notify"
-	"github.com/rforced/ostiole/internal/sshd"
-	"github.com/rforced/ostiole/internal/store"
-	"github.com/rforced/ostiole/internal/sysctl"
-	"github.com/rforced/ostiole/internal/timezone"
+	"ostiole/internal/journald"
+	"ostiole/internal/logging"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
+	"ostiole/internal/nft"
+	"ostiole/internal/notify"
+	"ostiole/internal/sshd"
+	"ostiole/internal/store"
+	"ostiole/internal/sysctl"
+	"ostiole/internal/timezone"
 )
 
 // Errors returned by the engine.

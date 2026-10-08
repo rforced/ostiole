@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/chrony"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/testenv"
+	"ostiole/internal/chrony"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
+	"ostiole/internal/testenv"
 )
 
 var (

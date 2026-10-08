@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/certs"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/panics"
+	"ostiole/internal/certs"
+	"ostiole/internal/model"
+	"ostiole/internal/panics"
 )
 
 // failureBackoff is how long a certificate waits after the CA refused it.

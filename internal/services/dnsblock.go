@@ -13,10 +13,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
-	"github.com/rforced/ostiole/internal/dnsblock"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
+	"ostiole/internal/atomicfile"
+	"ostiole/internal/dnsblock"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
 )
 
 // Names of the two files this backend owns, both in dnsmasq's own

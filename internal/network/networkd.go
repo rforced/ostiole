@@ -14,9 +14,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netlink"
+	"ostiole/internal/atomicfile"
+	"ostiole/internal/model"
+	"ostiole/internal/netlink"
 )
 
 // Networkd renders systemd-networkd units. Ostiole owns every file in Dir

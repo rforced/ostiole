@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"syscall"
 
-	"github.com/rforced/ostiole/internal/wol"
+	"ostiole/internal/wol"
 )
 
 func (a *api) registerWoL(mux *router) {

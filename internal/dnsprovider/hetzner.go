@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // hetznerAPI is the root of Hetzner's Cloud API, which holds DNS zones

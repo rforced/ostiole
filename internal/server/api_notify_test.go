@@ -12,15 +12,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/engine"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/nft/nfttest"
-	"github.com/rforced/ostiole/internal/notify"
-	"github.com/rforced/ostiole/internal/store"
-	"github.com/rforced/ostiole/internal/sysupdate"
-	"github.com/rforced/ostiole/internal/wafevent"
-	"github.com/rforced/ostiole/internal/waflog"
+	"ostiole/internal/auth"
+	"ostiole/internal/engine"
+	"ostiole/internal/model"
+	"ostiole/internal/nft/nfttest"
+	"ostiole/internal/notify"
+	"ostiole/internal/store"
+	"ostiole/internal/sysupdate"
+	"ostiole/internal/wafevent"
+	"ostiole/internal/waflog"
 )
 
 // outbox is a sender that keeps what it is given, and refuses the

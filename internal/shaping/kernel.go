@@ -6,8 +6,8 @@ import (
 	"net"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netlink"
+	"ostiole/internal/model"
+	"ostiole/internal/netlink"
 )
 
 // Where a qdisc hangs and what handle it carries, as the kernel writes

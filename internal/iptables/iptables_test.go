@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/nft"
+	"ostiole/internal/nft"
 )
 
 // fakeRunner answers commands from a table keyed by the whole command

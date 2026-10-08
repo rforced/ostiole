@@ -13,7 +13,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // Choice is one way a JSON list can be narrowed: a field and the values it

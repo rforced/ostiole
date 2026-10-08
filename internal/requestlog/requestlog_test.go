@@ -3,7 +3,7 @@ package requestlog
 import (
 	"testing"
 
-	"github.com/rforced/ostiole/internal/logsearch"
+	"ostiole/internal/logsearch"
 )
 
 // line is a request as the proxy writes it at Info, cut down.

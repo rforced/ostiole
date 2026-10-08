@@ -6,8 +6,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/wireless"
+	"ostiole/internal/model"
+	"ostiole/internal/wireless"
 )
 
 // wirelessRadios is what the Radios tab shows: the cards this router has,

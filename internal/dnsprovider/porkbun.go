@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // porkbunAPI is the root of Porkbun's v3 JSON API.

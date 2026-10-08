@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/fetch"
+	"ostiole/internal/fetch"
 )
 
 // A URL on the router itself is refused before anything connects to it,

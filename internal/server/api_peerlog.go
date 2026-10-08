@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logring"
-	"github.com/rforced/ostiole/internal/peerlog"
+	"ostiole/internal/logring"
+	"ostiole/internal/peerlog"
 )
 
 func (a *api) registerPeerLogs(mux *router) {

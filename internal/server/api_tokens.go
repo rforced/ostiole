@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/rforced/ostiole/internal/auth"
+	"ostiole/internal/auth"
 )
 
 func (a *api) registerTokens(mux *router) {

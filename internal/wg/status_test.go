@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/netlink"
+	"ostiole/internal/netlink"
 )
 
 // Each tunnel is read by name: one with no device is down, a peer is named

@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/backup"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/auth"
+	"ostiole/internal/backup"
+	"ostiole/internal/model"
 )
 
 func config(crons ...model.Cron) *model.Config {

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")

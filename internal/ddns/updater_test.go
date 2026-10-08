@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/dnsprovider"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/dnsprovider"
+	"ostiole/internal/model"
+	"ostiole/internal/store"
 )
 
 // fakeProvider holds records in memory and counts what it is asked.

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/rforced/ostiole/internal/network"
+	"ostiole/internal/network"
 )
 
 // leasesName is the rewritten lease file on its way into place.

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/rforced/ostiole/internal/smart"
+	"ostiole/internal/smart"
 )
 
 // Reading a drive is a viewer's business; starting a self-test is an

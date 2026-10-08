@@ -18,9 +18,9 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/rforced/ostiole/internal/netlink"
-	"github.com/rforced/ostiole/internal/netnstest"
-	"github.com/rforced/ostiole/internal/testenv"
+	"ostiole/internal/netlink"
+	"ostiole/internal/netnstest"
+	"ostiole/internal/testenv"
 )
 
 // isDefault reports whether a route read from the kernel is a default one.

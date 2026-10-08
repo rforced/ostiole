@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/auth"
+	"ostiole/internal/model"
 )
 
 func cfg() *model.Config {

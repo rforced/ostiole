@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/chrony"
+	"ostiole/internal/chrony"
 )
 
 // Source is one server the daemon follows.

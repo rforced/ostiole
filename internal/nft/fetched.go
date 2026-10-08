@@ -3,7 +3,7 @@ package nft
 import (
 	"strings"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // WithoutFetched is a ruleset rendered from cfg less the elements of the

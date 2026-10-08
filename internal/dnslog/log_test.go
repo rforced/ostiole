@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/dnsblock"
-	"github.com/rforced/ostiole/internal/logsearch"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/dnsblock"
+	"ostiole/internal/logsearch"
+	"ostiole/internal/model"
 )
 
 // onLog returns a log switched on with the given bounds and no index: the

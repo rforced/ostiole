@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
+	"ostiole/internal/atomicfile"
 )
 
 // NewestSeq is the highest number an entry in a log's files carries, zero

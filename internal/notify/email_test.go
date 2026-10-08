@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // testCert is a certificate for 127.0.0.1 and the pool that trusts it.

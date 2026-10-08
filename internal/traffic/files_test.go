@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logfile"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netlink"
+	"ostiole/internal/logfile"
+	"ostiole/internal/model"
+	"ostiole/internal/netlink"
 )
 
 // lines is what waits in a record ring, oldest first.

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/sysupdate"
+	"ostiole/internal/model"
+	"ostiole/internal/sysupdate"
 )
 
 func (a *api) registerSysUpdate(mux *router) {

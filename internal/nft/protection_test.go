@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // protectedConfig is a router with the whole edge defence on, and one

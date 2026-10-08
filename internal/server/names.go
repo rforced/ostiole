@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/services"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
+	"ostiole/internal/services"
 )
 
 // dnsName is a name the DNS service answers on its own account rather than

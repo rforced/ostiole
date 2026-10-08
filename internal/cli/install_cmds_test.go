@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/install"
-	"github.com/rforced/ostiole/internal/journald"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/timezone"
+	"ostiole/internal/install"
+	"ostiole/internal/journald"
+	"ostiole/internal/model"
+	"ostiole/internal/timezone"
 )
 
 // recordingSystemctl answers every call and keeps what was asked.

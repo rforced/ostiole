@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logfile"
+	"ostiole/internal/logfile"
 )
 
 // initialRing is how many places a ring starts with; it doubles from there

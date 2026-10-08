@@ -3,8 +3,8 @@ package dnslog
 import (
 	"testing"
 
-	"github.com/rforced/ostiole/internal/dnsblock"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/dnsblock"
+	"ostiole/internal/model"
 )
 
 // testCache writes two small lists with nested and overlapping entries.

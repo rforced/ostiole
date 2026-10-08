@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/engine"
-	"github.com/rforced/ostiole/internal/nft/nfttest"
-	"github.com/rforced/ostiole/internal/store"
-	"github.com/rforced/ostiole/internal/update"
+	"ostiole/internal/auth"
+	"ostiole/internal/engine"
+	"ostiole/internal/nft/nfttest"
+	"ostiole/internal/store"
+	"ostiole/internal/update"
 )
 
 // updaterServer serves the updater built for its directory behind an

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/auth"
+	"ostiole/internal/auth"
 )
 
 // Every route the server registers has to be described, or the OpenAPI

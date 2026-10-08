@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // The fixture is what tc really printed on the test VM after a batch this

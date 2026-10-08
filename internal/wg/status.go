@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rforced/ostiole/internal/netlink"
+	"ostiole/internal/netlink"
 )
 
 // Tunnel is what the kernel says of one configured tunnel.

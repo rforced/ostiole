@@ -9,11 +9,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/engine"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/nft/nfttest"
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/auth"
+	"ostiole/internal/engine"
+	"ostiole/internal/network"
+	"ostiole/internal/nft/nfttest"
+	"ostiole/internal/store"
 )
 
 // renewingNet is a network backend that records the leases it was asked

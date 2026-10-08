@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/dnsblock"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/dnsblock"
+	"ostiole/internal/model"
 )
 
 func blockingConfig() *model.Config {

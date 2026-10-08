@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rforced/ostiole/internal/feeds"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/nft"
+	"ostiole/internal/feeds"
+	"ostiole/internal/model"
+	"ostiole/internal/nft"
 )
 
 func newAliasesCmd(g *globals) *cobra.Command {

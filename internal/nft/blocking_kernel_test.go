@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/netlink"
-	"github.com/rforced/ostiole/internal/netnstest"
+	"ostiole/internal/netlink"
+	"ostiole/internal/netnstest"
 )
 
 // The kernel runs the ruleset of a router whose DNS server listens on the

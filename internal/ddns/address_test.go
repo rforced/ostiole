@@ -6,8 +6,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/rforced/ostiole/internal/dnsprovider"
-	"github.com/rforced/ostiole/internal/netnstest"
+	"ostiole/internal/dnsprovider"
+	"ostiole/internal/netnstest"
 )
 
 func TestPickPublishesAStablePublicAddress(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/net/dns/dnsmessage"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // answer is one reply to build, in the shapes the live router was seen to

@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/netlink"
-	"github.com/rforced/ostiole/internal/panics"
+	"ostiole/internal/netlink"
+	"ostiole/internal/panics"
 )
 
 // Group is the nflog group the renderer sends log statements to.

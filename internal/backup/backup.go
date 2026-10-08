@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/auth"
+	"ostiole/internal/model"
 )
 
 // Kind identifies the file, so restoring the wrong JSON says so plainly

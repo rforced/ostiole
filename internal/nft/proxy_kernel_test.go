@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/netlink"
-	"github.com/rforced/ostiole/internal/netnstest"
+	"ostiole/internal/netlink"
+	"ostiole/internal/netnstest"
 )
 
 // The proxy's access list in the kernel: SYNs to 443 on the WAN from an

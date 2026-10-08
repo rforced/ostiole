@@ -5,9 +5,9 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/rforced/ostiole/internal/dnsprovider"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netlink"
+	"ostiole/internal/dnsprovider"
+	"ostiole/internal/model"
+	"ostiole/internal/netlink"
 )
 
 // Addr is one address on an interface, with the kernel's IFA_F_* flags.

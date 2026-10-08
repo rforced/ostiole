@@ -16,8 +16,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/atomicfile"
+	"ostiole/internal/model"
 )
 
 // File names inside the store directory.

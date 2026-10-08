@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/diag"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/services"
+	"ostiole/internal/diag"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
+	"ostiole/internal/services"
 )
 
 // lease is a DHCP lease with what dnsmasq's file leaves out, from the

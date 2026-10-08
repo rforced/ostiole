@@ -10,12 +10,12 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/backup"
-	"github.com/rforced/ostiole/internal/diff"
-	"github.com/rforced/ostiole/internal/engine"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/version"
+	"ostiole/internal/auth"
+	"ostiole/internal/backup"
+	"ostiole/internal/diff"
+	"ostiole/internal/engine"
+	"ostiole/internal/model"
+	"ostiole/internal/version"
 )
 
 func newBackupCmd(g *globals) *cobra.Command {

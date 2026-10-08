@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/atomicfile"
+	"ostiole/internal/model"
 )
 
 // Cache keeps what each list last gave us: the names in one plain text file

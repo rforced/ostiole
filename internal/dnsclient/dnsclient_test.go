@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/net/dns/dnsmessage"
 
-	"github.com/rforced/ostiole/internal/dnsclient/dnstest"
+	"ostiole/internal/dnsclient/dnstest"
 )
 
 // A truncated answer over UDP is asked again over TCP, where the whole of

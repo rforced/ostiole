@@ -1,4 +1,4 @@
-module github.com/rforced/ostiole
+module ostiole
 
 go 1.27.1
 

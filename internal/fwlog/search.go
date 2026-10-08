@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logsearch"
+	"ostiole/internal/logsearch"
 )
 
 // kindLabels are what the Logs page calls what matched, for the kinds that

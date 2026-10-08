@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rforced/ostiole/internal/nft"
-	"github.com/rforced/ostiole/internal/services"
+	"ostiole/internal/nft"
+	"ostiole/internal/services"
 )
 
 func newServicesCmd(g *globals) *cobra.Command {

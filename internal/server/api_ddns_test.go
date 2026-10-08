@@ -10,9 +10,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/ddns"
-	"github.com/rforced/ostiole/internal/dnsprovider"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/ddns"
+	"ostiole/internal/dnsprovider"
+	"ostiole/internal/model"
 )
 
 // stubProvider holds records in memory, or refuses everything.

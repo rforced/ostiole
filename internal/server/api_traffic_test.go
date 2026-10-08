@@ -15,12 +15,12 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/logfile"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netlink"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/traffic"
+	"ostiole/internal/auth"
+	"ostiole/internal/logfile"
+	"ostiole/internal/model"
+	"ostiole/internal/netlink"
+	"ostiole/internal/network"
+	"ostiole/internal/traffic"
 )
 
 // countingRouter is a counter over a router with one LAN device busy on

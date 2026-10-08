@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/rforced/ostiole/internal/netlink"
+	"ostiole/internal/netlink"
 )
 
 // StaleRouteWait is how long a sweep waits for the restored manager to

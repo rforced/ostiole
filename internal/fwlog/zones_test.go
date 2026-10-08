@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netlink"
+	"ostiole/internal/model"
+	"ostiole/internal/netlink"
 )
 
 // Ostiole's own drops log no zone in their prefix, so the listener names

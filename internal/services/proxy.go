@@ -17,10 +17,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/certs"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/certs"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
+	"ostiole/internal/store"
 )
 
 // The sidecar's paths and names.

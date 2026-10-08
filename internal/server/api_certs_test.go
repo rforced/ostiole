@@ -10,12 +10,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/acme"
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/certs"
-	"github.com/rforced/ostiole/internal/engine"
-	"github.com/rforced/ostiole/internal/nft/nfttest"
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/acme"
+	"ostiole/internal/auth"
+	"ostiole/internal/certs"
+	"ostiole/internal/engine"
+	"ostiole/internal/nft/nfttest"
+	"ostiole/internal/store"
 )
 
 // certServer is a logged-in server with a certificate manager and a

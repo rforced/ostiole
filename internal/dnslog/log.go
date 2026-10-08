@@ -14,11 +14,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rforced/ostiole/internal/dnsblock"
-	"github.com/rforced/ostiole/internal/logfile"
-	"github.com/rforced/ostiole/internal/logsearch"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/panics"
+	"ostiole/internal/dnsblock"
+	"ostiole/internal/logfile"
+	"ostiole/internal/logsearch"
+	"ostiole/internal/model"
+	"ostiole/internal/panics"
 )
 
 // MaxLists is how many list names can be attributed to. Eight bytes an

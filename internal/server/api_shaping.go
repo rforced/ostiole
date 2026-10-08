@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/shaping"
+	"ostiole/internal/model"
+	"ostiole/internal/shaping"
 )
 
 // Shaper reports the live state of the traffic queues. It is an interface

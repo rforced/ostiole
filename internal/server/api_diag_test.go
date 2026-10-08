@@ -19,14 +19,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/diag"
-	"github.com/rforced/ostiole/internal/engine"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/modem"
-	"github.com/rforced/ostiole/internal/nft/nfttest"
-	"github.com/rforced/ostiole/internal/services"
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/auth"
+	"ostiole/internal/diag"
+	"ostiole/internal/engine"
+	"ostiole/internal/model"
+	"ostiole/internal/modem"
+	"ostiole/internal/nft/nfttest"
+	"ostiole/internal/services"
+	"ostiole/internal/store"
 )
 
 // The modem page reads through the cache: a bad address is the caller's

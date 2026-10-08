@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/store"
 )
 
 // Condition is a state the router is in, such as a dashboard warning or a

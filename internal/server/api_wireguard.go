@@ -3,7 +3,7 @@ package server
 import (
 	"net/http"
 
-	"github.com/rforced/ostiole/internal/wg"
+	"ostiole/internal/wg"
 )
 
 // wireguardStatus reads each enabled tunnel of the running configuration

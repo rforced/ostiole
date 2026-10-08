@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/rforced/ostiole/internal/fwlog"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/fwlog"
+	"ostiole/internal/model"
 )
 
 func (a *api) registerLog(mux *router) {

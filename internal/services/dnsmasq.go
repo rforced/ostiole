@@ -17,10 +17,10 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/nft"
+	"ostiole/internal/atomicfile"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
+	"ostiole/internal/nft"
 )
 
 // Paths and names.

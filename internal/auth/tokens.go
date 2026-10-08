@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
+	"ostiole/internal/atomicfile"
 )
 
 // Role decides what an account or a token may do. There are three

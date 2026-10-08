@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rforced/ostiole/internal/panics"
+	"ostiole/internal/panics"
 )
 
 // ErrBusy means an update is already running.

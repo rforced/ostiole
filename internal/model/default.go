@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"net/netip"
 
-	"github.com/rforced/ostiole/internal/timezone"
+	"ostiole/internal/timezone"
 )
 
 // DefaultWebPort is where the web UI listens unless told otherwise. It

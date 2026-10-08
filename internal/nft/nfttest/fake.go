@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/rforced/ostiole/internal/nft"
+	"ostiole/internal/nft"
 )
 
 // Fake records applied rulesets and can be told to fail.

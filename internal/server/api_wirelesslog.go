@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logring"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/wirelesslog"
+	"ostiole/internal/logring"
+	"ostiole/internal/model"
+	"ostiole/internal/wirelesslog"
 )
 
 func (a *api) registerWirelessLog(mux *router) {

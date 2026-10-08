@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logfile"
-	"github.com/rforced/ostiole/internal/logsearch"
+	"ostiole/internal/logfile"
+	"ostiole/internal/logsearch"
 )
 
 // The rows one read of a log returns: 200 unless asked, 1000 at most.

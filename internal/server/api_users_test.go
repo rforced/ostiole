@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/auth"
+	"ostiole/internal/auth"
 )
 
 // login swaps the test client's session for another account's.

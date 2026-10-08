@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 func testConfig() *model.Config {

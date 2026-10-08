@@ -12,10 +12,10 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/services"
-	"github.com/rforced/ostiole/internal/wol"
+	"ostiole/internal/auth"
+	"ostiole/internal/model"
+	"ostiole/internal/services"
+	"ostiole/internal/wol"
 )
 
 // A wake goes to a machine on an inside interface of the configuration in

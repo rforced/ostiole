@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // Table is the only nftables table Ostiole manages.

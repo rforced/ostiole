@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"net/netip"
 
-	"github.com/rforced/ostiole/internal/dnsprovider"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/dnsprovider"
+	"ostiole/internal/model"
 )
 
 // Types are the record types a record keeps, A first.

@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // The edge defence, and the per-rule limits that use the same machinery.

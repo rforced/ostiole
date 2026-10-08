@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
+	"ostiole/internal/atomicfile"
 )
 
 // Forwarding settings a router needs. Keys are /proc/sys paths relative

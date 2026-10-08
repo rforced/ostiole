@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // jf makes what Jellyfin's clients send, from a seed: the web client, the

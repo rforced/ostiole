@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/diag"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/services"
+	"ostiole/internal/diag"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
+	"ostiole/internal/services"
 )
 
 func leaseConfig() *model.Config {

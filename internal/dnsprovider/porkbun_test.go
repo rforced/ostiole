@@ -12,7 +12,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // fakePorkbun keeps a record each, as Porkbun's API does: every call a

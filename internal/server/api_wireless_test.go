@@ -12,13 +12,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/engine"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/nft/nfttest"
-	"github.com/rforced/ostiole/internal/services"
-	"github.com/rforced/ostiole/internal/store"
-	"github.com/rforced/ostiole/internal/wireless"
+	"ostiole/internal/auth"
+	"ostiole/internal/engine"
+	"ostiole/internal/model"
+	"ostiole/internal/nft/nfttest"
+	"ostiole/internal/services"
+	"ostiole/internal/store"
+	"ostiole/internal/wireless"
 )
 
 // wifiCmd answers the systemctl and iw calls the wireless routes make.

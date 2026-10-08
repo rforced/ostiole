@@ -8,9 +8,9 @@ import (
 	"net/url"
 	"slices"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/feeds"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/auth"
+	"ostiole/internal/feeds"
+	"ostiole/internal/model"
 )
 
 // FeedRefresher fetches the aliases whose contents come from elsewhere.

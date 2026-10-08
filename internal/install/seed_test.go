@@ -4,8 +4,8 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
 )
 
 // An address the kernel marks permanent came from a file and becomes a

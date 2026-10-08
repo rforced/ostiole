@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/net/dns/dnsmessage"
 
-	"github.com/rforced/ostiole/internal/dnsclient/dnstest"
+	"ostiole/internal/dnsclient/dnstest"
 )
 
 func resolver(servers ...*dnstest.Server) Resolver {

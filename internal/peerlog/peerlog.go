@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logfile"
-	"github.com/rforced/ostiole/internal/logring"
-	"github.com/rforced/ostiole/internal/logsearch"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/tailscale"
-	"github.com/rforced/ostiole/internal/wg"
+	"ostiole/internal/logfile"
+	"ostiole/internal/logring"
+	"ostiole/internal/logsearch"
+	"ostiole/internal/model"
+	"ostiole/internal/tailscale"
+	"ostiole/internal/wg"
 )
 
 // What a peer did, as the Log tabs write it. A WireGuard peer connects when

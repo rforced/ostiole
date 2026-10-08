@@ -11,9 +11,9 @@ import (
 
 	"golang.org/x/net/dns/dnsmessage"
 
-	"github.com/rforced/ostiole/internal/dnsclient/dnstest"
-	"github.com/rforced/ostiole/internal/dnsclient/tsig"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/dnsclient/dnstest"
+	"ostiole/internal/dnsclient/tsig"
+	"ostiole/internal/model"
 )
 
 const testSecret = "b3N0aW9sZS10c2lnLXRlc3Qtc2VjcmV0LTMyYnl0ZXM="

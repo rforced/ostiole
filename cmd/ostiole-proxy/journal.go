@@ -7,7 +7,7 @@ import (
 
 	"github.com/caddyserver/caddy/v2"
 
-	"github.com/rforced/ostiole/internal/journald"
+	"ostiole/internal/journald"
 )
 
 // The proxy logs to stderr through journalWriter, which puts each line's

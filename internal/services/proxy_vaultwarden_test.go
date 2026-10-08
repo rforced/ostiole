@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/wafevent"
+	"ostiole/internal/model"
+	"ostiole/internal/wafevent"
 )
 
 // vw makes what Vaultwarden's clients send, from a seed, so a failure

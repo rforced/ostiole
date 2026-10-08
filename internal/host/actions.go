@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rforced/ostiole/internal/iptables"
+	"ostiole/internal/iptables"
 )
 
 // ErrNotRoot means the daemon cannot change the router it is running on.

@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/dnsblock"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
+	"ostiole/internal/dnsblock"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
 )
 
 // Bundle applies several service backends as one, so the engine keeps a

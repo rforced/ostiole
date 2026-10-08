@@ -12,7 +12,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/dnsblock"
+	"ostiole/internal/dnsblock"
 )
 
 // Index answers "which list holds this name" from memory: one sorted slice

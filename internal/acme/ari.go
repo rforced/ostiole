@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // certID names a certificate to the CA's renewal information (RFC 9773

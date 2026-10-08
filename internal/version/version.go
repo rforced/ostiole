@@ -3,7 +3,7 @@ package version
 
 import "fmt"
 
-// These are overridden via -ldflags "-X github.com/rforced/ostiole/internal/version.Version=...".
+// These are overridden via -ldflags "-X ostiole/internal/version.Version=...".
 var (
 	Version = "dev"
 	Commit  = "none"

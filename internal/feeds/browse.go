@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // Page is one page of what an alias fetched.

@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/panics"
+	"ostiole/internal/model"
+	"ostiole/internal/panics"
 )
 
 // Origin separates the crons Ostiole runs on its own account from the

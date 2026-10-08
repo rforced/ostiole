@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/journald"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
+	"ostiole/internal/journald"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
 )
 
 // The proxy's own JSON, in structs of ours rather than Caddy's: the

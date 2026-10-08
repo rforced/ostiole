@@ -14,12 +14,12 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/engine"
-	"github.com/rforced/ostiole/internal/host"
-	"github.com/rforced/ostiole/internal/nft"
-	"github.com/rforced/ostiole/internal/nft/nfttest"
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/auth"
+	"ostiole/internal/engine"
+	"ostiole/internal/host"
+	"ostiole/internal/nft"
+	"ostiole/internal/nft/nfttest"
+	"ostiole/internal/store"
 )
 
 // quietRunner is a router on which every command prints nothing, so the

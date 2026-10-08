@@ -6,8 +6,8 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/rforced/ostiole/internal/dhcplog"
-	"github.com/rforced/ostiole/internal/logring"
+	"ostiole/internal/dhcplog"
+	"ostiole/internal/logring"
 )
 
 func (a *api) registerDHCPLog(mux *router) {

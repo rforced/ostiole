@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logfile"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/logfile"
+	"ostiole/internal/model"
 )
 
 // What traffic keeps in files while System, General writes the logs to

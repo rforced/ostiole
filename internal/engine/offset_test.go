@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/nft"
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/model"
+	"ostiole/internal/nft"
+	"ostiole/internal/store"
 )
 
 // offsetClock is the router's clock as the engine sees it: a zone to set,

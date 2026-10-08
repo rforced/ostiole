@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/auth"
+	"ostiole/internal/auth"
 )
 
 // Principal is whoever made a request: an operator with a browser

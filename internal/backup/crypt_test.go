@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/auth"
+	"ostiole/internal/model"
 )
 
 // Most tests here, and in backup_test, encrypt a file or two.

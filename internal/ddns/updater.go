@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/dnsprovider"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netlink"
+	"ostiole/internal/dnsprovider"
+	"ostiole/internal/model"
+	"ostiole/internal/netlink"
 )
 
 // Every is how often a pass runs by itself: to retry, to put back a hand

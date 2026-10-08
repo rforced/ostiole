@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netnstest"
-	"github.com/rforced/ostiole/internal/testenv"
+	"ostiole/internal/model"
+	"ostiole/internal/netnstest"
+	"ostiole/internal/testenv"
 )
 
 // namespaced returns an Exec that runs nft inside a fresh unprivileged user

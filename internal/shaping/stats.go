@@ -7,7 +7,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // CakeStats is one queue as the kernel reports it. Every counter is

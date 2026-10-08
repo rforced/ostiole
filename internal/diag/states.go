@@ -11,9 +11,9 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/rforced/ostiole/internal/logsearch"
-	"github.com/rforced/ostiole/internal/netlink"
-	"github.com/rforced/ostiole/internal/sysctl"
+	"ostiole/internal/logsearch"
+	"ostiole/internal/netlink"
+	"ostiole/internal/sysctl"
 )
 
 // State is one connection the kernel is tracking. It is what the

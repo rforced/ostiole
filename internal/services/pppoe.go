@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
 )
 
 // PPPoE paths and names.

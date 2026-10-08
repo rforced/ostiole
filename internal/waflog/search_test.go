@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/logsearch/logsearchtest"
+	"ostiole/internal/logsearch/logsearchtest"
 )
 
 // The router searches what the Events tab shows, value for value.

@@ -6,8 +6,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netlink"
+	"ostiole/internal/model"
+	"ostiole/internal/netlink"
 )
 
 // Detected is a default route the kernel already has. Most routers get one

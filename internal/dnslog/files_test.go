@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // A line names the lists, and reading it back interns them again, so the

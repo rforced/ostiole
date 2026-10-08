@@ -10,10 +10,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rforced/ostiole/internal/host"
-	"github.com/rforced/ostiole/internal/install"
-	"github.com/rforced/ostiole/internal/iptables"
-	"github.com/rforced/ostiole/internal/nft"
+	"ostiole/internal/host"
+	"ostiole/internal/install"
+	"ostiole/internal/iptables"
+	"ostiole/internal/nft"
 )
 
 // hostDeps builds the host dependencies for a command. The same

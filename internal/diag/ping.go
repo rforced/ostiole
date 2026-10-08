@@ -9,7 +9,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/rforced/ostiole/internal/gateway"
+	"ostiole/internal/gateway"
 )
 
 // PingOptions parameterise a ping run.

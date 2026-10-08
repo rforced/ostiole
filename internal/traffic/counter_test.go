@@ -12,9 +12,9 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netlink"
-	"github.com/rforced/ostiole/internal/network"
+	"ostiole/internal/model"
+	"ostiole/internal/netlink"
+	"ostiole/internal/network"
 )
 
 // router is a test's router: eth0 on the internet at 203.0.113.2, eth1 a

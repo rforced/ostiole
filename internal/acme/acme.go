@@ -24,10 +24,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/dnsclient"
-	"github.com/rforced/ostiole/internal/dnsprovider"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/version"
+	"ostiole/internal/dnsclient"
+	"ostiole/internal/dnsprovider"
+	"ostiole/internal/model"
+	"ostiole/internal/version"
 )
 
 // ErrNoARI says the CA does not publish renewal windows, so the renewer

@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // Delivery sends for real: mail through an SMTP server, webhooks over

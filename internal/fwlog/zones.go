@@ -3,7 +3,7 @@ package fwlog
 import (
 	"sync/atomic"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // Zones names the zone each interface is in, as the configuration the

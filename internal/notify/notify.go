@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // Levels a notice has.

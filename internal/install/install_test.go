@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/network"
+	"ostiole/internal/network"
 )
 
 type fakeSystemctl struct {

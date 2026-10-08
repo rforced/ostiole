@@ -11,7 +11,7 @@ import (
 	"github.com/corazawaf/coraza/v3/experimental/plugins/plugintypes"
 	"github.com/corazawaf/coraza/v3/types"
 
-	"github.com/rforced/ostiole/internal/wafevent"
+	"ostiole/internal/wafevent"
 )
 
 // The WAF writes its audit log as the lines the daemon reads back for the

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // A dns-01 order on a router with nothing to resolve with is refused

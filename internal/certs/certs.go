@@ -26,7 +26,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
+	"ostiole/internal/atomicfile"
 )
 
 // SelfSignedYears is how long a generated certificate lasts. Nobody

@@ -10,14 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/backup"
-	"github.com/rforced/ostiole/internal/engine"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/nft/nfttest"
-	"github.com/rforced/ostiole/internal/s3"
-	"github.com/rforced/ostiole/internal/s3/s3test"
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/auth"
+	"ostiole/internal/backup"
+	"ostiole/internal/engine"
+	"ostiole/internal/model"
+	"ostiole/internal/nft/nfttest"
+	"ostiole/internal/s3"
+	"ostiole/internal/s3/s3test"
+	"ostiole/internal/store"
 )
 
 // The backup tests encrypt and decrypt, each at a cost of seconds under

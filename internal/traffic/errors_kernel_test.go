@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netlink"
-	"github.com/rforced/ostiole/internal/netnstest"
-	"github.com/rforced/ostiole/internal/testenv"
+	"ostiole/internal/model"
+	"ostiole/internal/netlink"
+	"ostiole/internal/netnstest"
+	"ostiole/internal/testenv"
 )
 
 // A WireGuard link refuses a packet no peer is for, an error each with

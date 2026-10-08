@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netlink"
-	"github.com/rforced/ostiole/internal/netnstest"
+	"ostiole/internal/model"
+	"ostiole/internal/netlink"
+	"ostiole/internal/netnstest"
 )
 
 // dnsmasq itself runs what is rendered for it, with devices asking for

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 func config(aliases ...model.Alias) *model.Config {

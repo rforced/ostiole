@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // ripestat is RIPEstat's announced-prefixes answer, cut down to what is

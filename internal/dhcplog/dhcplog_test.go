@@ -3,7 +3,7 @@ package dhcplog
 import (
 	"testing"
 
-	"github.com/rforced/ostiole/internal/logsearch"
+	"ostiole/internal/logsearch"
 )
 
 // Lines as dnsmasq wrote them in podman on the six images (2.85 to 2.93,

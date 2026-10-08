@@ -9,8 +9,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/dnsclient"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/dnsclient"
+	"ostiole/internal/model"
 )
 
 // program writes records by running the operator's own program, as root.

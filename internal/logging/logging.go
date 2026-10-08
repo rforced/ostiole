@@ -23,8 +23,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/atomicfile"
+	"ostiole/internal/model"
 )
 
 // DropInName is the file written under each unit's drop-in directory.

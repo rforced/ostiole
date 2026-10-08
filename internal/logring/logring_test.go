@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/journalfeed"
-	"github.com/rforced/ostiole/internal/logfile"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/journalfeed"
+	"ostiole/internal/logfile"
+	"ostiole/internal/model"
 )
 
 // word is an entry as a test logs it.

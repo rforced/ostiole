@@ -3,7 +3,7 @@ package server
 import (
 	"net/http"
 
-	"github.com/rforced/ostiole/internal/host"
+	"ostiole/internal/host"
 )
 
 func (a *api) registerHost(mux *router) {

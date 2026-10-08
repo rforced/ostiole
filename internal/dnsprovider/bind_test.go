@@ -16,8 +16,8 @@ import (
 
 	"golang.org/x/net/dns/dnsmessage"
 
-	"github.com/rforced/ostiole/internal/dnsclient"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/dnsclient"
+	"ostiole/internal/model"
 )
 
 func bindClient(t *testing.T, key, secret string) Client {

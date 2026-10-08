@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // A preference the model does not mention is still written, because

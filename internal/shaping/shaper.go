@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
+	"ostiole/internal/atomicfile"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
 )
 
 // DirName is where the rendered batches live under the configuration

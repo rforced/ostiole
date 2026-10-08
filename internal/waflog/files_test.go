@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logfile"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/logfile"
+	"ostiole/internal/model"
 )
 
 // Written by the writer and read back, an event is what it was, its number

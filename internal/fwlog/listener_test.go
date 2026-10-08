@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/netnstest"
+	"ostiole/internal/netnstest"
 )
 
 // lockedBuffer takes log lines from the listener's goroutines while the

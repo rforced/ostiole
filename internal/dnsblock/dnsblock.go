@@ -12,7 +12,7 @@ package dnsblock
 import (
 	"strings"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // Limits on what a list may be. These are larger than the address-list

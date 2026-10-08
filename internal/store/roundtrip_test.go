@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/diff"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/diff"
+	"ostiole/internal/model"
 )
 
 // A configuration with one of everything survives a save and a load

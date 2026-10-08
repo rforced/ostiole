@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rforced/ostiole/internal/server"
+	"ostiole/internal/server"
 )
 
 func newOpenAPICmd() *cobra.Command {

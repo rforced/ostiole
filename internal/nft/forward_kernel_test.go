@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netlink"
-	"github.com/rforced/ostiole/internal/netnstest"
-	"github.com/rforced/ostiole/internal/policy"
+	"ostiole/internal/model"
+	"ostiole/internal/netlink"
+	"ostiole/internal/netnstest"
+	"ostiole/internal/policy"
 )
 
 // A port forward is no way around the zone it arrives on. The kernel runs

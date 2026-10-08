@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/dnslog"
-	"github.com/rforced/ostiole/internal/logsearch"
+	"ostiole/internal/dnslog"
+	"ostiole/internal/logsearch"
 )
 
 func (a *api) registerQueryLog(mux *router) {

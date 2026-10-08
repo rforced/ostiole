@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // DefaultWatch is how often the ring is put back in step with the

@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/dnsclient"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/sigv4"
+	"ostiole/internal/dnsclient"
+	"ostiole/internal/model"
+	"ostiole/internal/sigv4"
 )
 
 // route53API is Route 53's global endpoint. China and GovCloud have their

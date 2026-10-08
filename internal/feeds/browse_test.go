@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 func browsed(t *testing.T, entries ...string) *Cache {

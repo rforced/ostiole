@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
+	"ostiole/internal/atomicfile"
 )
 
 // Session lifetimes. A tab in the background stops polling, so a day idle

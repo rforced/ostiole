@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/fwlog"
-	"github.com/rforced/ostiole/internal/journalfeed"
-	"github.com/rforced/ostiole/internal/logfile"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/wafevent"
-	"github.com/rforced/ostiole/internal/waflog"
+	"ostiole/internal/fwlog"
+	"ostiole/internal/journalfeed"
+	"ostiole/internal/logfile"
+	"ostiole/internal/model"
+	"ostiole/internal/wafevent"
+	"ostiole/internal/waflog"
 )
 
 // A day of the firewall log as 1.8.0 wrote it, before lines kept their

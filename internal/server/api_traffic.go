@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logsearch"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/traffic"
+	"ostiole/internal/logsearch"
+	"ostiole/internal/model"
+	"ostiole/internal/traffic"
 )
 
 func (a *api) registerTraffic(mux *router) {

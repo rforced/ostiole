@@ -25,11 +25,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
-	"github.com/rforced/ostiole/internal/fetch"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/nft"
-	"github.com/rforced/ostiole/internal/version"
+	"ostiole/internal/atomicfile"
+	"ostiole/internal/fetch"
+	"ostiole/internal/model"
+	"ostiole/internal/nft"
+	"ostiole/internal/version"
 )
 
 // Limits on what a feed may be. A blocklist with a million entries is

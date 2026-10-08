@@ -4,9 +4,9 @@ import (
 	"net"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netnstest"
-	"github.com/rforced/ostiole/internal/testenv"
+	"ostiole/internal/model"
+	"ostiole/internal/netnstest"
+	"ostiole/internal/testenv"
 )
 
 // The production Kernel against a real one: the helper device is made

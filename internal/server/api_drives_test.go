@@ -14,12 +14,12 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/engine"
-	"github.com/rforced/ostiole/internal/host"
-	"github.com/rforced/ostiole/internal/nft/nfttest"
-	"github.com/rforced/ostiole/internal/smart"
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/auth"
+	"ostiole/internal/engine"
+	"ostiole/internal/host"
+	"ostiole/internal/nft/nfttest"
+	"ostiole/internal/smart"
+	"ostiole/internal/store"
 )
 
 // smartStub answers like the smartctl on the router did, from the

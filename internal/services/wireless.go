@@ -13,10 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/store"
-	"github.com/rforced/ostiole/internal/wireless"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
+	"ostiole/internal/store"
+	"ostiole/internal/wireless"
 )
 
 // hostapd paths and names.

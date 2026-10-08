@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // Only the chains that match on the hour go in again, whole and in the

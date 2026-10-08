@@ -16,14 +16,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/engine"
-	"github.com/rforced/ostiole/internal/fwlog"
-	"github.com/rforced/ostiole/internal/logging"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/nft"
-	"github.com/rforced/ostiole/internal/nft/nfttest"
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/auth"
+	"ostiole/internal/engine"
+	"ostiole/internal/fwlog"
+	"ostiole/internal/logging"
+	"ostiole/internal/model"
+	"ostiole/internal/nft"
+	"ostiole/internal/nft/nfttest"
+	"ostiole/internal/store"
 )
 
 const testPassword = "correct horse battery"

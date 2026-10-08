@@ -8,7 +8,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/rforced/ostiole/internal/tailscale"
+	"ostiole/internal/tailscale"
 )
 
 // tailscaleStatus is what the page shows. A router that has not joined a

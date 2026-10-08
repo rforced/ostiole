@@ -5,8 +5,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/logsearch"
-	"github.com/rforced/ostiole/internal/logsearch/logsearchtest"
+	"ostiole/internal/logsearch"
+	"ostiole/internal/logsearch/logsearchtest"
 )
 
 func TestParseReadsAClientsComingAndGoing(t *testing.T) {

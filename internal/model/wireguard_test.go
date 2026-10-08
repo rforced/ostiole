@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/wg"
+	"ostiole/internal/wg"
 )
 
 // newKey is a fresh WireGuard key. A peer's public key only has to have the

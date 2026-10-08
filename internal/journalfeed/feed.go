@@ -12,8 +12,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/panics"
+	"ostiole/internal/model"
+	"ostiole/internal/panics"
 )
 
 // DefaultWatch is how often the feed is put back in step with the

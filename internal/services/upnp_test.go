@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/nft"
+	"ostiole/internal/network"
+	"ostiole/internal/nft"
 )
 
 // The miniupnpd configuration is golden-tested on the inputs that ask for

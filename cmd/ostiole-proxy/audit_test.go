@@ -10,7 +10,7 @@ import (
 
 	"github.com/corazawaf/coraza/v3"
 
-	"github.com/rforced/ostiole/internal/wafevent"
+	"ostiole/internal/wafevent"
 )
 
 // wafWriting is a WAF that writes its audit log to a file, set up the way

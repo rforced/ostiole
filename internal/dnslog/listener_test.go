@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/dnsblock"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netnstest"
-	"github.com/rforced/ostiole/internal/nft"
+	"ostiole/internal/dnsblock"
+	"ostiole/internal/model"
+	"ostiole/internal/netnstest"
+	"ostiole/internal/nft"
 )
 
 // lockedBuffer takes log lines from the listener's goroutines while the

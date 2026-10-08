@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logring"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/logring"
+	"ostiole/internal/model"
 )
 
 // The hourly poll keeps one verdict per drive: the one that failed is a

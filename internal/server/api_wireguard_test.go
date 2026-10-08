@@ -12,13 +12,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/engine"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netlink"
-	"github.com/rforced/ostiole/internal/nft/nfttest"
-	"github.com/rforced/ostiole/internal/store"
-	"github.com/rforced/ostiole/internal/wg"
+	"ostiole/internal/auth"
+	"ostiole/internal/engine"
+	"ostiole/internal/model"
+	"ostiole/internal/netlink"
+	"ostiole/internal/nft/nfttest"
+	"ostiole/internal/store"
+	"ostiole/internal/wg"
 )
 
 func newWireGuardServer(t *testing.T, cfg *model.Config, dev wg.Device) *httptest.Server {

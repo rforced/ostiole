@@ -25,10 +25,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/requestlog"
-	"github.com/rforced/ostiole/internal/testenv"
-	"github.com/rforced/ostiole/internal/wafevent"
+	"ostiole/internal/model"
+	"ostiole/internal/requestlog"
+	"ostiole/internal/testenv"
+	"ostiole/internal/wafevent"
 )
 
 // A name no site claims gets nothing from the proxy: a 403 over HTTP, and

@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/chrony"
-	"github.com/rforced/ostiole/internal/chrony/chronytest"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/services"
+	"ostiole/internal/chrony"
+	"ostiole/internal/chrony/chronytest"
+	"ostiole/internal/model"
+	"ostiole/internal/services"
 )
 
 // ntpUnit answers systemctl about ostiole-chronyd. Tests change it

@@ -11,8 +11,8 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netlink"
+	"ostiole/internal/model"
+	"ostiole/internal/netlink"
 )
 
 // Installer keeps the kernel's policy routing in step with a plan. Sync is

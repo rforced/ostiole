@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // DefaultWatch is how often the store is put back in step with the

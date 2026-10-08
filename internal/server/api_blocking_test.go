@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/dnsblock"
-	"github.com/rforced/ostiole/internal/engine"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/nft/nfttest"
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/auth"
+	"ostiole/internal/dnsblock"
+	"ostiole/internal/engine"
+	"ostiole/internal/model"
+	"ostiole/internal/nft/nfttest"
+	"ostiole/internal/store"
 )
 
 // The names a list holds can be read a page at a time, and a search for a

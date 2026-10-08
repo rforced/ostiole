@@ -9,10 +9,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/backup"
-	"github.com/rforced/ostiole/internal/diff"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/version"
+	"ostiole/internal/backup"
+	"ostiole/internal/diff"
+	"ostiole/internal/model"
+	"ostiole/internal/version"
 )
 
 func (a *api) registerBackup(mux *router) {

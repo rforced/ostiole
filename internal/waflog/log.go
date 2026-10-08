@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/journalfeed"
-	"github.com/rforced/ostiole/internal/logfile"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/wafevent"
+	"ostiole/internal/journalfeed"
+	"ostiole/internal/logfile"
+	"ostiole/internal/model"
+	"ostiole/internal/wafevent"
 )
 
 // Entry is one event and its place in the log. Seq only grows, so a page

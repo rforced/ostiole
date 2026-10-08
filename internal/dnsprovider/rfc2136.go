@@ -12,9 +12,9 @@ import (
 
 	"golang.org/x/net/dns/dnsmessage"
 
-	"github.com/rforced/ostiole/internal/dnsclient"
-	"github.com/rforced/ostiole/internal/dnsclient/tsig"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/dnsclient"
+	"ostiole/internal/dnsclient/tsig"
+	"ostiole/internal/model"
 )
 
 // rfc2136TTL is what a challenge record is written with.

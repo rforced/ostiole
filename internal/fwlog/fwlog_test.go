@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logsearch"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/logsearch"
+	"ostiole/internal/model"
 )
 
 func ipv4Packet(proto byte, src, dst [4]byte, l4 []byte) []byte {

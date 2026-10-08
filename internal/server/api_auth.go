@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/logging"
+	"ostiole/internal/auth"
+	"ostiole/internal/logging"
 )
 
 // SessionCookie is the session cookie name.

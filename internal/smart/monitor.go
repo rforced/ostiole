@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // checkTimeout bounds one drive's verdict. A drive that does not answer a

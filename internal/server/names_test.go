@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/services"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
+	"ostiole/internal/services"
 )
 
 // The router of the watch.jd diagnosis: a site the proxy serves on the

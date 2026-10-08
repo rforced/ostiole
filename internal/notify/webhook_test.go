@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // hook is a receiver that records what it was sent and answers as told.

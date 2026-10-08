@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
+	"ostiole/internal/atomicfile"
 )
 
 // indexSuffix ends the name of a day's index, beside its file.

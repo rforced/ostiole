@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/install"
-	"github.com/rforced/ostiole/internal/kernel"
-	"github.com/rforced/ostiole/internal/nft"
+	"ostiole/internal/install"
+	"ostiole/internal/kernel"
+	"ostiole/internal/nft"
 )
 
 // fakeUnits is a systemd that answers from a table: what is enabled, what

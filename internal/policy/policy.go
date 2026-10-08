@@ -10,7 +10,7 @@ import (
 	"slices"
 	"sort"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // RulePriorityBase is where Ostiole's ip rules start. Each target uses two

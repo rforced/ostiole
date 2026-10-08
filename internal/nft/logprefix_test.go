@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/fwlog"
+	"ostiole/internal/fwlog"
 )
 
 var logPrefixRe = regexp.MustCompile(`log prefix "([^"]+)"`)

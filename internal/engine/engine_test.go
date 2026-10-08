@@ -13,13 +13,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/nft"
-	"github.com/rforced/ostiole/internal/notify"
-	"github.com/rforced/ostiole/internal/services"
-	"github.com/rforced/ostiole/internal/shaping"
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
+	"ostiole/internal/nft"
+	"ostiole/internal/notify"
+	"ostiole/internal/services"
+	"ostiole/internal/shaping"
+	"ostiole/internal/store"
 )
 
 // fakeNet is an in-memory backend; render picks network or services output.

@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/store"
-	"github.com/rforced/ostiole/internal/sysctl"
+	"ostiole/internal/model"
+	"ostiole/internal/store"
+	"ostiole/internal/sysctl"
 )
 
 // hostCalls is what the engine asked of the router's own settings, and of

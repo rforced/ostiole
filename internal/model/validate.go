@@ -16,10 +16,10 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/rforced/ostiole/internal/journald"
-	"github.com/rforced/ostiole/internal/sysctl"
-	"github.com/rforced/ostiole/internal/timezone"
-	"github.com/rforced/ostiole/internal/wg"
+	"ostiole/internal/journald"
+	"ostiole/internal/sysctl"
+	"ostiole/internal/timezone"
+	"ostiole/internal/wg"
 )
 
 // Issue is one validation problem, located by a JSON-ish path.

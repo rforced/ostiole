@@ -2,7 +2,7 @@
 version: '3'
 
 vars:
-  MODULE: github.com/rforced/ostiole
+  MODULE: ostiole
   BIN: bin/ostiole
   BIN_PROXY: bin/ostiole-proxy
   VERSION:

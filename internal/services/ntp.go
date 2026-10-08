@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/chrony"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
+	"ostiole/internal/chrony"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
 )
 
 // Time service paths and names.

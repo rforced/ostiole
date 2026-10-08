@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
+	"ostiole/internal/atomicfile"
 )
 
 // Snapshot is what the router last learned about its own updates. It is

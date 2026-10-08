@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // cloudflareAPI is the root of Cloudflare's v4 API.

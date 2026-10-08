@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/wafevent"
+	"ostiole/internal/wafevent"
 )
 
 func event(id string, at time.Time) wafevent.Event {

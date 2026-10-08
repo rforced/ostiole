@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
 )
 
 // The policy is read back from what Render wrote, so the two cannot drift:

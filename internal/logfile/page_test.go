@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logsearch"
+	"ostiole/internal/logsearch"
 )
 
 // words is what a page holds, newest first.

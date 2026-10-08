@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/nft"
-	"github.com/rforced/ostiole/internal/store"
-	"github.com/rforced/ostiole/internal/tailscale"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
+	"ostiole/internal/nft"
+	"ostiole/internal/store"
+	"ostiole/internal/tailscale"
 )
 
 // tailscaled paths and names.

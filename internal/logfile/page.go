@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logsearch"
+	"ostiole/internal/logsearch"
 )
 
 // Page reads a log's files the way logsearch.Walk reads its memory: newest

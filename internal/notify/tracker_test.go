@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/store"
 )
 
 // memState is a store directory in memory.

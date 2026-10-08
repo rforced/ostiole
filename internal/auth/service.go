@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rforced/ostiole/internal/atomicfile"
+	"ostiole/internal/atomicfile"
 )
 
 // UsersFile is the account database inside the config directory. It is

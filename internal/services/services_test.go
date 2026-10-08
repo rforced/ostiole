@@ -15,10 +15,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/certs"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/nft"
+	"ostiole/internal/certs"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
+	"ostiole/internal/nft"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")

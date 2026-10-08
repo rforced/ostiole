@@ -10,12 +10,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/auth"
-	"github.com/rforced/ostiole/internal/engine"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/nft/nfttest"
-	"github.com/rforced/ostiole/internal/shaping"
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/auth"
+	"ostiole/internal/engine"
+	"ostiole/internal/model"
+	"ostiole/internal/nft/nfttest"
+	"ostiole/internal/shaping"
+	"ostiole/internal/store"
 )
 
 // fakeShaper answers with a fixed sample instead of reading the kernel.

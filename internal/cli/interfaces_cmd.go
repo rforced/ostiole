@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rforced/ostiole/internal/network"
+	"ostiole/internal/network"
 )
 
 func newInterfacesCmd(g *globals) *cobra.Command {

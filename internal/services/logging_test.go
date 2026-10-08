@@ -4,9 +4,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/journald"
-	"github.com/rforced/ostiole/internal/logging"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/journald"
+	"ostiole/internal/logging"
+	"ostiole/internal/model"
 )
 
 // internal/logging writes the unit names out rather than importing this

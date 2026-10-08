@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // SystemRule is a rule Ostiole writes on its own account: the baseline that

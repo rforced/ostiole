@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/netnstest"
+	"ostiole/internal/netnstest"
 )
 
 // One UDP and one TCP mapping in the chain the daemon writes into, next to

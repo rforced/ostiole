@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 type fakeRunner struct {

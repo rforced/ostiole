@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/wireless"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
+	"ostiole/internal/wireless"
 )
 
 // ax210 is the card the parser's fixture came from: one access point at a

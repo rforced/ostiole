@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/rforced/ostiole/internal/ddns"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/ddns"
+	"ostiole/internal/model"
 )
 
 func (a *api) registerDDNS(mux *router) {

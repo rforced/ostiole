@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/logsearch"
+	"ostiole/internal/logsearch"
 )
 
 // Search hands a the values the Queries tab shows for the entry, as it

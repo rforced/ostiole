@@ -30,7 +30,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/nft"
+	"ostiole/internal/nft"
 )
 
 // Backend is which implementation an iptables command talks to.

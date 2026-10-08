@@ -11,10 +11,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/rforced/ostiole/internal/linediff"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/nft"
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/linediff"
+	"ostiole/internal/network"
+	"ostiole/internal/nft"
+	"ostiole/internal/store"
 )
 
 // Drift is what applying the confirmed configuration again would change:

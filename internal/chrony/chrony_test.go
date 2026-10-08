@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/chrony"
-	"github.com/rforced/ostiole/internal/chrony/chronytest"
-	"github.com/rforced/ostiole/internal/testenv"
+	"ostiole/internal/chrony"
+	"ostiole/internal/chrony/chronytest"
+	"ostiole/internal/testenv"
 )
 
 var selected = chrony.Tracking{

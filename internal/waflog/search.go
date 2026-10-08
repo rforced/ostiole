@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logsearch"
-	"github.com/rforced/ostiole/internal/wafevent"
+	"ostiole/internal/logsearch"
+	"ostiole/internal/wafevent"
 )
 
 // verdictLabels are what the Events tab calls each verdict.

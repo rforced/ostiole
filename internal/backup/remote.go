@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/s3"
+	"ostiole/internal/model"
+	"ostiole/internal/s3"
 )
 
 // maxRemoteBytes bounds what a restore reads back out of the bucket. It

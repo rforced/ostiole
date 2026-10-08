@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // DefaultPort is what the unit falls back to when the model asks for none,

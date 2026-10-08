@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/testenv"
+	"ostiole/internal/model"
+	"ostiole/internal/testenv"
 )
 
 // inNamespace runs a shell script inside a fresh unprivileged user and

@@ -16,10 +16,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/install"
-	"github.com/rforced/ostiole/internal/iptables"
-	"github.com/rforced/ostiole/internal/kernel"
-	"github.com/rforced/ostiole/internal/sysupdate"
+	"ostiole/internal/install"
+	"ostiole/internal/iptables"
+	"ostiole/internal/kernel"
+	"ostiole/internal/sysupdate"
 )
 
 // Runner runs a command and returns its combined output.

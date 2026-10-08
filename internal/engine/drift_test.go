@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/services"
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
+	"ostiole/internal/services"
+	"ostiole/internal/store"
 )
 
 // releaseNet is a service whose render a test changes, the way a new

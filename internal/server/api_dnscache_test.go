@@ -11,8 +11,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/services"
+	"ostiole/internal/model"
+	"ostiole/internal/services"
 )
 
 // unitCmd answers systemctl for a unit that is there and running, and

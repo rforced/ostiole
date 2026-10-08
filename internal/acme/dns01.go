@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/dnsclient"
-	"github.com/rforced/ostiole/internal/dnsprovider"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/dnsclient"
+	"ostiole/internal/dnsprovider"
+	"ostiole/internal/model"
 )
 
 // challengeValue is the TXT value that answers a dns-01 challenge (RFC

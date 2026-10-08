@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/nft"
-	"github.com/rforced/ostiole/internal/tailscale"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
+	"ostiole/internal/nft"
+	"ostiole/internal/tailscale"
 )
 
 // The daemon's environment and the preference list are golden-tested on

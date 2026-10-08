@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // oracle is a cut of Oracle's public_ip_ranges.json as published: two

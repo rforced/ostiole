@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // Loader puts the rendered blocklist where the resolver reads it and makes

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/journald"
-	"github.com/rforced/ostiole/internal/timezone"
+	"ostiole/internal/journald"
+	"ostiole/internal/timezone"
 )
 
 // SchemaVersion is bumped when the on-disk JSON shape changes incompatibly.

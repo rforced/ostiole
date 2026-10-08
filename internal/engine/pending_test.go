@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/network"
+	"ostiole/internal/store"
 )
 
 // A daemon that dies inside the confirmation window starts again with no

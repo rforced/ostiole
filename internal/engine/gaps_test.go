@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/nft"
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/nft"
+	"ostiole/internal/store"
 )
 
 // An installed router runs the bootstrap ruleset (policy drop, the

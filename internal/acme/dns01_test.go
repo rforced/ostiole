@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/dnsclient"
-	"github.com/rforced/ostiole/internal/dnsclient/dnstest"
-	"github.com/rforced/ostiole/internal/dnsprovider"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/dnsclient"
+	"ostiole/internal/dnsclient/dnstest"
+	"ostiole/internal/dnsprovider"
+	"ostiole/internal/model"
 )
 
 // RFC 8555 §8.4: the base64url SHA-256 of the key authorization, without

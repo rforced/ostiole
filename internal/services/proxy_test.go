@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/certs"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
+	"ostiole/internal/certs"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
 )
 
 // The proxy's configuration is golden-tested on the inputs that enable

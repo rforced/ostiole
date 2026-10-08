@@ -7,8 +7,8 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logfile"
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/logfile"
+	"ostiole/internal/model"
 )
 
 // The query log's directory under logfile.Dir, and the format of its

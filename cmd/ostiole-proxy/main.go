@@ -13,7 +13,7 @@ import (
 	_ "github.com/corazawaf/coraza-caddy/v2"
 	_ "github.com/mholt/caddy-l4"
 
-	"github.com/rforced/ostiole/internal/version"
+	"ostiole/internal/version"
 )
 
 // `caddy version` reports Caddy's. The install script and the status page

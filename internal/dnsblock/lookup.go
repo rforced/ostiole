@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // Finding answers "why is this name blocked?" — the question every support

@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/backup"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/s3"
-	"github.com/rforced/ostiole/internal/s3/s3test"
+	"ostiole/internal/backup"
+	"ostiole/internal/model"
+	"ostiole/internal/s3"
+	"ostiole/internal/s3/s3test"
 )
 
 const passphrase = "correct horse battery staple"

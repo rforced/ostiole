@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/store"
+	"ostiole/internal/model"
+	"ostiole/internal/store"
 )
 
 // A name under a domain override is never blocked, and "why" has to say

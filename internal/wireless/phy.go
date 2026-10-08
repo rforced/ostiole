@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // Runner runs a command and returns its output.

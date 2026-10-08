@@ -10,7 +10,7 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
+	"ostiole/internal/model"
 )
 
 // Client writes challenge records in the zones one DNS provider holds.

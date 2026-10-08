@@ -10,8 +10,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/rforced/ostiole/internal/install"
-	"github.com/rforced/ostiole/internal/version"
+	"ostiole/internal/install"
+	"ostiole/internal/version"
 )
 
 func newRepairCmd(_ *globals) *cobra.Command {

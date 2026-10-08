@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rforced/ostiole/internal/feeds"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/network"
-	"github.com/rforced/ostiole/internal/notify"
-	"github.com/rforced/ostiole/internal/wafevent"
-	"github.com/rforced/ostiole/internal/waflog"
+	"ostiole/internal/feeds"
+	"ostiole/internal/model"
+	"ostiole/internal/network"
+	"ostiole/internal/notify"
+	"ostiole/internal/wafevent"
+	"ostiole/internal/waflog"
 )
 
 func (a *api) registerNotify(mux *router) {

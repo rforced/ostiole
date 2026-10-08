@@ -6,11 +6,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logring"
-	"github.com/rforced/ostiole/internal/requestlog"
-	"github.com/rforced/ostiole/internal/services"
-	"github.com/rforced/ostiole/internal/wafevent"
-	"github.com/rforced/ostiole/internal/waflog"
+	"ostiole/internal/logring"
+	"ostiole/internal/requestlog"
+	"ostiole/internal/services"
+	"ostiole/internal/wafevent"
+	"ostiole/internal/waflog"
 )
 
 // proxyStatus is what the page's strip shows. A router with no sidecar,

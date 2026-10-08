@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/logsearch/logsearchtest"
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/netlink"
-	"github.com/rforced/ostiole/internal/tailscale"
+	"ostiole/internal/logsearch/logsearchtest"
+	"ostiole/internal/model"
+	"ostiole/internal/netlink"
+	"ostiole/internal/tailscale"
 )
 
 // events is what a log holds, oldest first.

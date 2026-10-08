@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rforced/ostiole/internal/model"
-	"github.com/rforced/ostiole/internal/nft"
-	"github.com/rforced/ostiole/internal/testenv"
+	"ostiole/internal/model"
+	"ostiole/internal/nft"
+	"ostiole/internal/testenv"
 )
 
 // A refreshed list has to reach a ruleset that is already loaded, without
