@@ -341,6 +341,10 @@ func (g jf) requests(c jfClient) []jfRequest {
 			"ImageUrl": "https://cdn.example.org/images/main/" + strconv.Itoa(g.r.IntN(1e6)) + ".jpg", "SearchProviderName": "AniDB"}), false, c},
 		{"POST", "/Items/" + item + "/Refresh?Recursive=true&ImageRefreshMode=Default&MetadataRefreshMode=Default&ReplaceAllImages=false" +
 			"&RegenerateTrickplay=false&ReplaceAllMetadata=false", "", "", false, c},
+		// The dashboard's devices, named by the id each client sends.
+		{"GET", "/Devices/Info?id=" + c.deviceID, "", "", false, c},
+		{"GET", "/Devices/Options?id=" + c.deviceID, "", "", false, c},
+		{"DELETE", "/Devices?id=" + c.deviceID, "", "", false, c},
 	}
 	if c.prefs != "" {
 		rs = append(rs, jfRequest{"GET", "/DisplayPreferences/" + g.pick("default", "usersettings") + "?userId=" + g.uuid() + "&client=" + c.prefs, "", "", false, c})
@@ -627,6 +631,9 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 		{"GET", "/videos/" + g.id() + "/stream?static=false&VideoCodec=" + uriComponent("h264, hevc -f mp4 -y jellyfin.db"), "", "", false, roku},
 		{"GET", "/Items?fields=" + url.QueryEscape("char(65)"), "", "", false, c},
 		{"GET", "/Items?parentId=" + url.QueryEscape("a);(b"), "", "", false, c},
+		// Only an argument's name id is not taken for the command.
+		{"GET", "/Devices/Info?id=id", "", "", false, c},
+		{"GET", "/Devices/Info?id=" + c.deviceID + "&ls=1", "", "", false, c},
 		{"POST", "/Sessions/Playing/Progress", js, progress("PlaySessionId", "((((((((("), false, c},
 		{"POST", "/DisplayPreferences/usersettings?client=emby", js, vwJSON(map[string]any{"CustomPrefs": map[string]any{"x": `{"a":"1 or 1"}`}}), false, c},
 		// Outside the arguments the set knows, text is read as CRS reads it.
