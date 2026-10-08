@@ -5,7 +5,7 @@ go 1.27.1
 require (
 	filippo.io/age v1.3.2
 	github.com/caddyserver/caddy/v2 v2.11.7
-	github.com/corazawaf/coraza-caddy/v2 v2.6.1
+	github.com/corazawaf/coraza-caddy/v2 v2.6.2
 	github.com/corazawaf/coraza/v3 v3.8.1
 	github.com/mholt/caddy-l4 v0.1.2
 	github.com/spf13/cobra v1.10.2
