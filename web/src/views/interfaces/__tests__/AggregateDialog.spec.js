@@ -31,7 +31,7 @@ describe('AggregateDialog', () => {
   it('shows an existing bond as saved and leaves an untouched save alone', async () => {
     const config = useConfigStore()
     const port = { enabled: true, ipv4: { mode: 'none' }, ipv6: { mode: 'none' } }
-    config.replaceDraft({
+    const cfg = {
       version: 12,
       zones: [],
       rules: [],
@@ -40,8 +40,9 @@ describe('AggregateDialog', () => {
         { name: 'eth2', ...port },
         { name: 'bond0', ...port, bond: { members: ['eth1', 'eth2'], mode: 'active-backup' } },
       ],
-    })
-    const before = JSON.stringify(config.draft)
+    }
+    config.saved = cfg
+    config.replaceDraft(cfg)
     const wrapper = mount(AggregateDialog, {
       props: { open: true, kind: 'bond', candidates: [], iface: config.findInterface('bond0') },
       global: { stubs },
@@ -52,6 +53,6 @@ describe('AggregateDialog', () => {
       members: ['eth1', 'eth2'],
       mode: 'active-backup',
     })
-    expect(JSON.stringify(config.draft)).toBe(before)
+    expect(config.dirty).toBe(false)
   })
 })

@@ -985,3 +985,27 @@ describe('config store gateways', () => {
     expect(config.rules.find((r) => r.id === 'tv').gateway).toBeUndefined()
   })
 })
+
+describe('config store dirty', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('ignores the order a dialog rebuilt the keys in, not the order of a list', () => {
+    const config = useConfigStore()
+    config.saved = {
+      version: 3,
+      zones: [{ name: 'lan' }, { name: 'wan', external: true }],
+      interfaces: [{ name: 'eth0', zone: 'wan', enabled: true, mtu: 9000 }],
+    }
+    config.replaceDraft({
+      version: 3,
+      zones: [{ name: 'lan' }, { name: 'wan', external: true }],
+      interfaces: [{ name: 'eth0', enabled: true, mtu: 9000, zone: 'wan' }],
+    })
+    expect(config.dirty).toBe(false)
+    config.draft.zones.reverse()
+    expect(config.dirty).toBe(true)
+    config.draft.zones.reverse()
+    config.draft.interfaces[0].mtu = 1500
+    expect(config.dirty).toBe(true)
+  })
+})

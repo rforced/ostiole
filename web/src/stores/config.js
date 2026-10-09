@@ -11,6 +11,20 @@ import { useToastStore } from '@/stores/toast'
 
 const clone = (v) => (v === null || v === undefined ? v : JSON.parse(JSON.stringify(v)))
 
+/** JSON with object keys in one order: a dialog rebuilds what it saves. */
+function canonical(v) {
+  return JSON.stringify(v, (_, x) =>
+    x && typeof x === 'object' && !Array.isArray(x)
+      ? Object.fromEntries(
+          Object.keys(x)
+            .sort()
+            .map((k) => [k, x[k]]),
+        )
+      : x,
+  )
+}
+const same = (a, b) => canonical(a) === canonical(b)
+
 /** How long the diff waits after the last edit before asking the server. */
 const DIFF_DEBOUNCE_MS = 400
 /** How long Undo stays on offer after a delete. */
@@ -32,7 +46,7 @@ export const useConfigStore = defineStore('config', () => {
    */
   const applied = ref(0)
 
-  const dirty = computed(() => JSON.stringify(saved.value) !== JSON.stringify(draft.value))
+  const dirty = computed(() => !same(saved.value, draft.value))
   const zones = computed(() => draft.value?.zones ?? [])
   const interfaces = computed(() => draft.value?.interfaces ?? [])
   const aliases = computed(() => draft.value?.aliases ?? [])
@@ -100,9 +114,8 @@ export const useConfigStore = defineStore('config', () => {
       }
     }
     error.value = ''
-    if (JSON.stringify(next) === JSON.stringify(saved.value)) return false
-    const follow =
-      !dirty.value || (applied !== null && JSON.stringify(draft.value) === JSON.stringify(applied))
+    if (same(next, saved.value)) return false
+    const follow = !dirty.value || (applied !== null && same(draft.value, applied))
     saved.value = next
     if (follow) draft.value = clone(next)
     loaded.value = true
