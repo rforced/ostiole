@@ -2,29 +2,32 @@ package model
 
 import "time"
 
-// How long a log in memory keeps an entry, in days: the firewall log, the
-// DNS query log and the WAF events alike.
+// How many days an entry stays in memory, in every log kept there:
+// Logging.Days's default and ceiling.
 const (
 	DefaultLogDays = 7
 	MaxLogDays     = 365
 )
 
-// logDays is a log's days as a duration, filling in the default.
-func logDays(days int) time.Duration {
-	if days <= 0 {
-		days = DefaultLogDays
+// MemoryDays is how many days an entry stays in memory, the default when
+// the setting says nothing.
+func (l Logging) MemoryDays() int {
+	if l.Days <= 0 {
+		return DefaultLogDays
 	}
-	return time.Duration(days) * 24 * time.Hour
+	return l.Days
 }
 
-// LogKeep is how much of a log is kept in memory: the most entries and the
-// most days. The newer logs share it; each has its own default and ceiling
-// of entries.
+// MemoryKeep is how long an entry stays in memory.
+func (l Logging) MemoryKeep() time.Duration {
+	return time.Duration(l.MemoryDays()) * 24 * time.Hour
+}
+
+// LogKeep is how many entries of a log are kept in memory. The newer logs
+// share it; each has its own default and ceiling.
 type LogKeep struct {
 	// Entries is the most entries kept; zero keeps the log's default.
 	Entries int `json:"entries,omitempty"`
-	// Days is how long an entry is kept; zero keeps DefaultLogDays.
-	Days int `json:"days,omitempty"`
 }
 
 // Size is how many entries are kept, def when the setting says nothing.
@@ -35,9 +38,6 @@ func (k LogKeep) Size(def int) int {
 	return def
 }
 
-// Retention is how long an entry is kept, filling in the default.
-func (k LogKeep) Retention() time.Duration { return logDays(k.Days) }
-
 // LogFiles writes the logs Ostiole keeps in memory to files as well, and
 // reads them back when the daemon starts. Off by default: the files hold
 // client addresses.
@@ -46,18 +46,17 @@ type LogFiles struct {
 	// WriteMinutes is the longest an entry waits to be written; zero
 	// keeps DefaultWriteMinutes.
 	WriteMinutes int `json:"writeMinutes,omitempty"`
-	// RetentionDays is how long the files keep an entry, or the log's own
-	// days where those are fewer; zero keeps DefaultLogFileDays.
+	// RetentionDays is how long the files keep an entry, in every log and
+	// whatever memory keeps; zero keeps DefaultLogFileDays.
 	RetentionDays int `json:"retentionDays,omitempty"`
 	// MaxUseGB caps the files; zero keeps DefaultLogFilesGB.
 	MaxUseGB int `json:"maxUseGB,omitempty"`
 }
 
-// Log file defaults and bounds. A month is the longest window the
-// Traffic page shows.
+// Log file defaults and bounds: the files keep a month unless set.
 const (
 	DefaultWriteMinutes = 5
-	DefaultLogFileDays  = 31
+	DefaultLogFileDays  = 30
 	MaxLogFileDays      = 365
 	DefaultLogFilesGB   = 1
 	MaxLogFilesGB       = 1024
@@ -74,8 +73,8 @@ func (f LogFiles) Interval() time.Duration {
 	return time.Duration(f.WriteMinutes) * time.Minute
 }
 
-// Days is the longest the files keep an entry; a log that keeps fewer
-// days keeps fewer in its files too.
+// Days is how many days the files keep an entry, the default when the
+// setting says nothing.
 func (f LogFiles) Days() int {
 	if f.RetentionDays <= 0 {
 		return DefaultLogFileDays

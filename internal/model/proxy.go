@@ -4,7 +4,6 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"time"
 )
 
 // Proxy publishes what is behind the router. Sites are hostnames served
@@ -41,12 +40,10 @@ const (
 	RequestBytes          = 400
 )
 
-// ProxyEvents is how many of the WAF's events are kept, and for how long.
+// ProxyEvents is how many of the WAF's events are kept.
 type ProxyEvents struct {
 	// Entries is the most events kept; zero keeps DefaultProxyEventEntries.
 	Entries int `json:"entries,omitempty"`
-	// Days is how long an event is kept; zero keeps DefaultLogDays.
-	Days int `json:"days,omitempty"`
 }
 
 // WAF event defaults and bounds. An event costs ProxyEventBytes with the
@@ -66,11 +63,6 @@ func (e ProxyEvents) Size() int {
 		return e.Entries
 	}
 	return DefaultProxyEventEntries
-}
-
-// Retention is how long an event is kept, filling in the default.
-func (e ProxyEvents) Retention() time.Duration {
-	return logDays(e.Days)
 }
 
 // ProxyAccess is one line of the proxy's access list, read in order within

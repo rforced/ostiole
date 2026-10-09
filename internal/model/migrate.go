@@ -3,6 +3,7 @@ package model
 import (
 	"bytes"
 	"encoding/json"
+	"strconv"
 )
 
 // A configuration is read by every Ostiole that comes after the one that
@@ -76,7 +77,7 @@ var migrations = map[int]func(doc map[string]any){
 			proxy["access"] = access
 		}
 	},
-	// 10 gave the query log days, as every log in memory has, for hours:
+	// 10 gave the query log days, as every log in memory had, for hours:
 	// rounded up, so nothing kept before goes early.
 	9: func(doc map[string]any) {
 		q := object(doc, "services", "dns", "queryLog")
@@ -86,7 +87,7 @@ var migrations = map[int]func(doc map[string]any){
 		hours, _ := q["hours"].(json.Number)
 		delete(q, "hours")
 		if n, err := hours.Int64(); err == nil && n > 0 {
-			q["days"] = (n + 23) / 24
+			q["days"] = json.Number(strconv.FormatInt((n+23)/24, 10))
 		}
 	},
 	// 11 dropped a backup cron's directory: every one writes to the one
@@ -121,6 +122,37 @@ var migrations = map[int]func(doc map[string]any){
 				delete(profile, "applications")
 			} else {
 				profile["applications"] = kept
+			}
+		}
+	},
+	// 13 replaced each log's days in memory with one setting under logging
+	// for them all: the largest any log had.
+	12: func(doc map[string]any) {
+		var most int64
+		for _, keys := range [][]string{
+			{"system", "management", "firewallLog"},
+			{"services", "dns", "queryLog"},
+			{"services", "proxy", "events"},
+			{"services", "proxy", "requests"},
+			{"traffic", "destinations"},
+			{"services", "dhcp", "log"},
+			{"wireless", "log"},
+			{"vpn", "wireguardLog"},
+			{"vpn", "tailscaleLog"},
+		} {
+			l := object(doc, keys...)
+			if l == nil {
+				continue
+			}
+			days, _ := l["days"].(json.Number)
+			delete(l, "days")
+			if n, err := days.Int64(); err == nil && n > most {
+				most = n
+			}
+		}
+		if most > 0 && most != DefaultLogDays {
+			if logging := makeObject(doc, "system", "logging"); logging != nil {
+				logging["days"] = most
 			}
 		}
 	},
@@ -177,6 +209,24 @@ func object(doc map[string]any, keys ...string) map[string]any {
 			return nil
 		}
 		doc = next
+	}
+	return doc
+}
+
+// makeObject follows keys down doc as object does, making the objects that
+// are missing; nil when one of them is something else.
+func makeObject(doc map[string]any, keys ...string) map[string]any {
+	for _, k := range keys {
+		switch next := doc[k].(type) {
+		case map[string]any:
+			doc = next
+		case nil:
+			m := map[string]any{}
+			doc[k] = m
+			doc = m
+		default:
+			return nil
+		}
 	}
 	return doc
 }

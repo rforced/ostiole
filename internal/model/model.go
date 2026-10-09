@@ -22,10 +22,13 @@ import (
 // "recursive"; version 8 moved "acme.providers" to "dnsProviders";
 // version 9 replaced the proxy's "zones" with its "access" list; version
 // 10 made the query log's "hours" its "days"; version 11 dropped a
-// backup cron's "directory", since every one writes to the same place. A
-// bump adds a step to migrations, which brings a file from version 6 on
-// up to date as it is read; an older one needs each change made by hand.
-const SchemaVersion = 12
+// backup cron's "directory", since every one writes to the same place;
+// version 12 dropped the Drupal, phpMyAdmin, cPanel and DokuWiki
+// exclusion sets; version 13 replaced each log's "days" with one "days"
+// under "logging" for every log in memory. A bump adds a step to
+// migrations, which brings a file from version 6 on up to date as it is
+// read; an older one needs each change made by hand.
+const SchemaVersion = 13
 
 // Action is a rule verdict.
 type Action string
@@ -509,16 +512,20 @@ const (
 // LogLevels lists them quietest first.
 var LogLevels = []LogLevel{LogError, LogWarning, LogInfo, LogDebug}
 
-// Logging bounds the system journal and sets the level every daemon
-// Ostiole runs logs at.
+// Logging bounds the system journal and the logs kept in memory, and sets
+// the level every daemon Ostiole runs logs at.
 type Logging struct {
 	// Level is the most a daemon may write; empty is warning. Info records
 	// each lease and each wireless client. Debug never logs queries.
 	Level LogLevel `json:"level,omitempty"`
 	// MaxUseGB caps what the journal keeps on disk; zero keeps the default.
 	MaxUseGB int `json:"maxUseGB,omitempty"`
-	// RetentionDays is how long an entry is kept; zero keeps the default.
+	// RetentionDays is how long the journal keeps an entry; zero keeps the
+	// default.
 	RetentionDays int `json:"retentionDays,omitempty"`
+	// Days is how many days an entry stays in memory, in every log kept
+	// there; zero keeps DefaultLogDays.
+	Days int `json:"days,omitempty"`
 	// Files writes the logs kept in memory to files as well.
 	Files LogFiles `json:"files,omitzero"`
 }
@@ -557,8 +564,8 @@ func (l Logging) MaxUse() int {
 	return l.MaxUseGB
 }
 
-// Retention is how many days an entry is kept, the default when the
-// setting says nothing.
+// Retention is how many days the journal keeps an entry, the default when
+// the setting says nothing.
 func (l Logging) Retention() int {
 	if l.RetentionDays <= 0 {
 		return DefaultRetentionDays
@@ -662,14 +669,12 @@ type Management struct {
 	Certificate string `json:"certificate,omitempty"`
 }
 
-// FirewallLog is how many logged packets are kept, and for how long. The
-// log is a ring in memory, which a restart empties unless Logging.Files
-// writes it to files as well.
+// FirewallLog is how many logged packets are kept. The log is a ring in
+// memory, which a restart empties unless Logging.Files writes it to files
+// as well.
 type FirewallLog struct {
 	// Entries is the most packets kept; zero keeps DefaultFirewallLogEntries.
 	Entries int `json:"entries,omitempty"`
-	// Days is how long a packet is kept; zero keeps DefaultLogDays.
-	Days int `json:"days,omitempty"`
 }
 
 // Firewall log defaults and bounds. An entry costs FirewallLogBytes once
@@ -689,11 +694,6 @@ func (f FirewallLog) Size() int {
 		return f.Entries
 	}
 	return DefaultFirewallLogEntries
-}
-
-// Retention is how long a packet is kept, filling in the default.
-func (f FirewallLog) Retention() time.Duration {
-	return logDays(f.Days)
 }
 
 // Zone is a security zone: interfaces that share a rule list.
@@ -2139,14 +2139,12 @@ type DNSServer struct {
 	Via string `json:"via,omitempty"`
 }
 
-// QueryLog is how much of what the server answered is kept, and for how
-// long. Nothing is written to disk unless Logging.Files says so.
+// QueryLog is how much of what the server answered is kept. Nothing is
+// written to disk unless Logging.Files says so.
 type QueryLog struct {
 	Enabled bool `json:"enabled,omitempty"`
 	// Entries is the most answers kept; zero keeps DefaultQueryLogEntries.
 	Entries int `json:"entries,omitempty"`
-	// Days is how long an answer is kept; zero keeps DefaultLogDays.
-	Days int `json:"days,omitempty"`
 }
 
 // Query log defaults and bounds. An entry costs QueryLogBytes once its name
@@ -2165,11 +2163,6 @@ func (q QueryLog) Size() int {
 		return q.Entries
 	}
 	return DefaultQueryLogEntries
-}
-
-// Retention is how long an answer is kept, filling in the default.
-func (q QueryLog) Retention() time.Duration {
-	return logDays(q.Days)
 }
 
 // DNSRebind refuses upstream answers that carry private addresses, which

@@ -13,12 +13,38 @@ import (
 func TestProxyEventsDefaults(t *testing.T) {
 	t.Parallel()
 	var e ProxyEvents
-	if e.Size() != DefaultProxyEventEntries || e.Retention() != DefaultLogDays*24*time.Hour {
-		t.Errorf("defaults: %d events for %v", e.Size(), e.Retention())
+	if e.Size() != DefaultProxyEventEntries {
+		t.Errorf("defaults: %d events", e.Size())
 	}
-	e = ProxyEvents{Entries: 500, Days: 30}
-	if e.Size() != 500 || e.Retention() != 30*24*time.Hour {
-		t.Errorf("set: %d events for %v", e.Size(), e.Retention())
+	e = ProxyEvents{Entries: 500}
+	if e.Size() != 500 {
+		t.Errorf("set: %d events", e.Size())
+	}
+}
+
+// Every log in memory keeps an entry for the one setting under logging, a
+// week unless it says otherwise.
+func TestLoggingMemoryDays(t *testing.T) {
+	t.Parallel()
+	var l Logging
+	if l.MemoryDays() != 7 || l.MemoryKeep() != 7*24*time.Hour {
+		t.Errorf("defaults: %d days, %v", l.MemoryDays(), l.MemoryKeep())
+	}
+	l.Days = 30
+	if l.MemoryDays() != 30 || l.MemoryKeep() != 30*24*time.Hour {
+		t.Errorf("set: %d days, %v", l.MemoryDays(), l.MemoryKeep())
+	}
+	for _, days := range []int{-1, MaxLogDays + 1} {
+		cfg := proxyStarter()
+		cfg.System.Logging.Days = days
+		if !hasIssue(t, cfg, "system.logging.days") {
+			t.Errorf("%d days passed", days)
+		}
+	}
+	cfg := proxyStarter()
+	cfg.System.Logging.Days = MaxLogDays
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("the ceiling was refused: %v", err)
 	}
 }
 
@@ -30,8 +56,6 @@ func TestValidateProxyEvents(t *testing.T) {
 	}{
 		{ProxyEvents{Entries: -1}, "services.proxy.events.entries"},
 		{ProxyEvents{Entries: MaxProxyEventEntries + 1}, "services.proxy.events.entries"},
-		{ProxyEvents{Days: -1}, "services.proxy.events.days"},
-		{ProxyEvents{Days: MaxLogDays + 1}, "services.proxy.events.days"},
 	} {
 		cfg := proxyStarter()
 		cfg.Services.Proxy = workingProxy()
@@ -42,7 +66,7 @@ func TestValidateProxyEvents(t *testing.T) {
 	}
 	cfg := proxyStarter()
 	cfg.Services.Proxy = workingProxy()
-	cfg.Services.Proxy.Events = ProxyEvents{Entries: MaxProxyEventEntries, Days: MaxLogDays}
+	cfg.Services.Proxy.Events = ProxyEvents{Entries: MaxProxyEventEntries}
 	if err := cfg.Validate(); err != nil {
 		t.Errorf("the ceilings were refused: %v", err)
 	}
@@ -58,7 +82,6 @@ func TestValidateProxyRequests(t *testing.T) {
 	}{
 		{LogKeep{Entries: -1}, "services.proxy.requests.entries"},
 		{LogKeep{Entries: MaxRequestEntries + 1}, "services.proxy.requests.entries"},
-		{LogKeep{Days: MaxLogDays + 1}, "services.proxy.requests.days"},
 	} {
 		cfg := proxyStarter()
 		cfg.Services.Proxy = workingProxy()
@@ -72,17 +95,17 @@ func TestValidateProxyRequests(t *testing.T) {
 	if !hasIssue(t, cfg, "services.dhcp.log.entries") {
 		t.Error("a DHCP log past its ceiling passed")
 	}
-	cfg.Wireless.Log = LogKeep{Days: -1}
-	if !hasIssue(t, cfg, "wireless.log.days") {
-		t.Error("a wireless log with negative days passed")
+	cfg.Wireless.Log = LogKeep{Entries: -1}
+	if !hasIssue(t, cfg, "wireless.log.entries") {
+		t.Error("a wireless log with negative entries passed")
 	}
 	cfg.VPN.TailscaleLog = LogKeep{Entries: MaxPeerLogEntries + 1}
 	if !hasIssue(t, cfg, "vpn.tailscaleLog.entries") {
 		t.Error("a Tailscale log past its ceiling passed")
 	}
 	var k LogKeep
-	if k.Size(7) != 7 || k.Retention() != DefaultLogDays*24*time.Hour || (LogKeep{Entries: 3}).Size(7) != 3 {
-		t.Errorf("defaults: %d for %v", k.Size(7), k.Retention())
+	if k.Size(7) != 7 || (LogKeep{Entries: 3}).Size(7) != 3 {
+		t.Errorf("defaults: %d", k.Size(7))
 	}
 }
 
@@ -156,7 +179,7 @@ func TestTheLogsPageMirrorsTheModel(t *testing.T) {
 func TestLogFilesDefaults(t *testing.T) {
 	t.Parallel()
 	var f LogFiles
-	if f.Interval() != 5*time.Minute || f.Days() != 31 || f.MaxUse() != 1<<30 {
+	if f.Interval() != 5*time.Minute || f.Days() != 30 || f.MaxUse() != 1<<30 {
 		t.Errorf("defaults: every %v, %d days, %d bytes", f.Interval(), f.Days(), f.MaxUse())
 	}
 	f = LogFiles{WriteMinutes: 60, RetentionDays: 365, MaxUseGB: 3}
@@ -232,7 +255,6 @@ func TestValidateTrafficDestinations(t *testing.T) {
 		{Traffic{Destinations: TrafficDestinations{Enabled: true}}, "traffic.destinations.enabled"},
 		{Traffic{Devices: true, Destinations: TrafficDestinations{Entries: -1}}, "traffic.destinations.entries"},
 		{Traffic{Devices: true, Destinations: TrafficDestinations{Entries: MaxDestinationEntries + 1}}, "traffic.destinations.entries"},
-		{Traffic{Devices: true, Destinations: TrafficDestinations{Days: MaxLogDays + 1}}, "traffic.destinations.days"},
 	} {
 		cfg := proxyStarter()
 		cfg.Traffic = tc.traffic
@@ -241,7 +263,7 @@ func TestValidateTrafficDestinations(t *testing.T) {
 		}
 	}
 	cfg := proxyStarter()
-	cfg.Traffic = Traffic{Devices: true, Destinations: TrafficDestinations{Enabled: true, Entries: MaxDestinationEntries, Days: MaxLogDays}}
+	cfg.Traffic = Traffic{Devices: true, Destinations: TrafficDestinations{Enabled: true, Entries: MaxDestinationEntries}}
 	if err := cfg.Validate(); err != nil {
 		t.Errorf("the ceilings were refused: %v", err)
 	}

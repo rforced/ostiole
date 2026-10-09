@@ -858,7 +858,6 @@ func (v *validator) services(c *Config, ifaces, zones map[string]bool) {
 		v.add("services.dns.queryLog.entries", "%d must be 0-%d (0 means %d)",
 			n, MaxQueryLogEntries, DefaultQueryLogEntries)
 	}
-	v.logDays("services.dns.queryLog.days", dns.QueryLog.Days)
 	allowed := map[string]bool{}
 	for i, d := range dns.Rebind.Allow {
 		path := fmt.Sprintf("services.dns.rebind.allow[%d]", i)
@@ -1109,7 +1108,6 @@ func (v *validator) proxy(c *Config, zones map[string]bool) {
 		v.add("services.proxy.events.entries", "%d must be 0-%d (0 means %d)",
 			n, MaxProxyEventEntries, DefaultProxyEventEntries)
 	}
-	v.logDays("services.proxy.events.days", p.Events.Days)
 	v.logKeep("services.proxy.requests", p.Requests, MaxRequestEntries, DefaultRequestEntries)
 }
 
@@ -2488,7 +2486,6 @@ func (v *validator) traffic(t *Traffic) {
 		v.add("traffic.destinations.entries", "%d must be 0-%d (0 means %d)",
 			d.Entries, MaxDestinationEntries, DefaultDestinationEntries)
 	}
-	v.logDays("traffic.destinations.days", d.Days)
 }
 
 // crons checks the scheduled work. The schedule itself is parsed by the
@@ -3101,7 +3098,6 @@ func (v *validator) system(s *System) {
 		v.add("system.management.firewallLog.entries", "%d must be 0-%d (0 means %d)",
 			n, MaxFirewallLogEntries, DefaultFirewallLogEntries)
 	}
-	v.logDays("system.management.firewallLog.days", s.Management.FirewallLog.Days)
 	if s.Logging.MaxUseGB < 0 || s.Logging.MaxUseGB > journald.MaxMaxUseGB {
 		v.add("system.logging.maxUseGB", "%d must be 0-%d (0 keeps %d)",
 			s.Logging.MaxUseGB, journald.MaxMaxUseGB, journald.DefaultMaxUseGB)
@@ -3109,6 +3105,10 @@ func (v *validator) system(s *System) {
 	if s.Logging.RetentionDays < 0 || s.Logging.RetentionDays > MaxRetentionDays {
 		v.add("system.logging.retentionDays", "%d must be 0-%d (0 keeps %d)",
 			s.Logging.RetentionDays, MaxRetentionDays, DefaultRetentionDays)
+	}
+	if s.Logging.Days < 0 || s.Logging.Days > MaxLogDays {
+		v.add("system.logging.days", "%d must be 0-%d (0 keeps %d)",
+			s.Logging.Days, MaxLogDays, DefaultLogDays)
 	}
 	if f := s.Logging.Files; f.WriteMinutes != 0 && !slices.Contains(WriteEvery, f.WriteMinutes) {
 		v.add("system.logging.files.writeMinutes", "%d must be 1, 5, 15 or 60 minutes", f.WriteMinutes)
@@ -3135,20 +3135,12 @@ func (v *validator) system(s *System) {
 	}
 }
 
-// logDays checks how long a log in memory keeps an entry.
-func (v *validator) logDays(path string, days int) {
-	if days < 0 || days > MaxLogDays {
-		v.add(path, "%d must be 0-%d (0 means %d)", days, MaxLogDays, DefaultLogDays)
-	}
-}
-
 // logKeep checks one of the newer logs' settings: at most most entries,
 // def when none are set.
 func (v *validator) logKeep(path string, k LogKeep, most, def int) {
 	if k.Entries < 0 || k.Entries > most {
 		v.add(path+".entries", "%d must be 0-%d (0 means %d)", k.Entries, most, def)
 	}
-	v.logDays(path+".days", k.Days)
 }
 
 // proxyID is id for the proxy's four lists, which share one set of names

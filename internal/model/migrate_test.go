@@ -24,6 +24,22 @@ func older(t *testing.T, cfg *Config) []byte {
 		t.Fatal(err)
 	}
 	doc["version"] = oldestMigrated
+	// 13 put every log's days in memory under logging; each log had its own.
+	if logging := object(doc, "system", "logging"); logging != nil {
+		if days, ok := logging["days"]; ok {
+			delete(logging, "days")
+			for _, keys := range [][]string{
+				{"system", "management", "firewallLog"}, {"services", "dns", "queryLog"},
+				{"services", "proxy", "events"}, {"services", "proxy", "requests"},
+				{"traffic", "destinations"}, {"services", "dhcp", "log"}, {"wireless", "log"},
+				{"vpn", "wireguardLog"}, {"vpn", "tailscaleLog"},
+			} {
+				if l := object(doc, keys...); l != nil {
+					l["days"] = days
+				}
+			}
+		}
+	}
 	// 12 dropped four exclusion sets, which a profile could load.
 	if proxy := object(doc, "services", "proxy"); proxy != nil {
 		profiles, _ := proxy["wafProfiles"].([]any)
@@ -91,14 +107,15 @@ func TestParseConfigBringsAnOlderFileUpToDate(t *testing.T) {
 	want.DNSProviders = []DNSProvider{{ID: "cf", Kind: "cloudflare", Settings: map[string]string{"token": "t"}}}
 	want.System.Management.WebPort = 8443
 	want.Services.Proxy = workingProxy()
-	want.Services.DNS.QueryLog = QueryLog{Enabled: true, Entries: 5000, Days: 7}
+	want.Services.DNS.QueryLog = QueryLog{Enabled: true, Entries: 5000}
+	want.System.Logging.Days = 30
 	want.Crons = []Cron{{ID: "nightly", Enabled: true, Schedule: "@daily", Kind: CronBackup, Keep: 3}}
 	got, err := ParseConfig(older(t, want))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("migrated = %+v\nwant %+v", got.Services.DNS, want.Services.DNS)
+		t.Errorf("migrated = %+v %+v\nwant %+v %+v", got.Services.DNS, got.System.Logging, want.Services.DNS, want.System.Logging)
 	}
 	if err := got.Validate(); err != nil {
 		t.Errorf("validate: %v", err)
@@ -195,21 +212,24 @@ func TestMigrateTurnsProxyZonesIntoAccess(t *testing.T) {
 }
 
 // Hours become days rounded up, so the log keeps at least what it did: a
-// week of hours is a week, and a day and an hour is two days.
+// week of hours is a week, and a day and an hour is two days. Since 13
+// those days are every log's in memory, under logging, and none or a week
+// writes nothing there.
 func TestMigrateTurnsQueryLogHoursIntoDays(t *testing.T) {
 	t.Parallel()
-	for hours, want := range map[string]int{`168`: 7, `25`: 2, `1`: 1, `0`: 0, `"x"`: 0} {
+	for hours, want := range map[string]int{`168`: 7, `25`: 2, `1`: 1, `0`: 7, `"x"`: 7} {
 		raw := `{"version":9,"services":{"dns":{"queryLog":{"enabled":true,"hours":` + hours + `}}}}`
 		cfg, err := ParseConfig([]byte(raw))
 		if err != nil {
 			t.Fatalf("%s: %v", hours, err)
 		}
-		if got := cfg.Services.DNS.QueryLog; got.Days != want || !got.Enabled {
-			t.Errorf("%s hours = %+v, want %d days", hours, got, want)
+		if got := cfg.System.Logging.MemoryDays(); got != want || !cfg.Services.DNS.QueryLog.Enabled {
+			t.Errorf("%s hours = %d days in memory, query log %+v; want %d days", hours, got, cfg.Services.DNS.QueryLog, want)
 		}
 	}
-	if got := string(Migrate([]byte(`{"version":9,"services":{"dns":{"queryLog":{"hours":24}}}}`))); strings.Contains(got, "hours") {
-		t.Errorf("hours left behind: %s", got)
+	got := string(Migrate([]byte(`{"version":9,"services":{"dns":{"queryLog":{"hours":24}}}}`)))
+	if strings.Contains(got, "hours") || strings.Count(got, `"days"`) != 1 || !strings.Contains(got, `"logging":{"days":1}`) {
+		t.Errorf("Migrate = %s, want one day under logging and nothing on the query log", got)
 	}
 }
 
@@ -248,5 +268,44 @@ func TestMigrateDropsTheRetiredExclusionSets(t *testing.T) {
 	}
 	if got := string(Migrate([]byte(raw))); strings.Contains(got, `"applications":null`) || strings.Contains(got, `"applications":[]`) {
 		t.Errorf("an emptied list was left behind: %s", got)
+	}
+}
+
+// Every log's days in memory become one under logging, the largest any log
+// had; a log keeps nothing of its own. None, or none above a week, writes
+// nothing: zero keeps the week.
+func TestMigrateGathersTheLogDays(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		raw  string
+		want int
+	}{
+		{`{"version":12,"system":{"logging":{"level":"info"},"management":{"firewallLog":{"entries":1000,"days":3}}},` +
+			`"services":{"dns":{"queryLog":{"enabled":true,"days":30}},"proxy":{"requests":{"days":"x"}}},` +
+			`"vpn":{"tailscaleLog":{"days":14}}}`, 30},
+		{`{"version":12,"services":{"dns":{"queryLog":{"enabled":true}}},"wireless":{"log":{"entries":20}}}`, 0},
+		{`{"version":12,"services":{"proxy":{"events":{"days":2}}},"traffic":{"destinations":{"days":7}}}`, 0},
+	} {
+		got := Migrate([]byte(tc.raw))
+		dec := json.NewDecoder(bytes.NewReader(got))
+		dec.DisallowUnknownFields()
+		var cfg Config
+		if err := dec.Decode(&cfg); err != nil {
+			t.Errorf("%s: %v", got, err)
+			continue
+		}
+		if cfg.System.Logging.Days != tc.want {
+			t.Errorf("%s: days = %d, want %d", got, cfg.System.Logging.Days, tc.want)
+		}
+		if tc.want == 0 && strings.Contains(string(got), `"logging"`) {
+			t.Errorf("%s: nothing to write, but logging was", got)
+		}
+	}
+	cfg, err := ParseConfig([]byte(`{"version":12,"system":{"logging":{"level":"info"},` +
+		`"management":{"firewallLog":{"entries":1000,"days":3}}}}`))
+	if err != nil || cfg.System.Logging != (Logging{Level: LogInfo, Days: 3}) ||
+		cfg.System.Management.FirewallLog != (FirewallLog{Entries: 1000}) {
+		t.Errorf("logging %+v, firewall log %+v, %v; want the level kept beside 3 days and the entries kept",
+			cfg.System.Logging, cfg.System.Management.FirewallLog, err)
 	}
 }

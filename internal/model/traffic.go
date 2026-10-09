@@ -1,7 +1,5 @@
 package model
 
-import "time"
-
 // Traffic counts what crosses the router per device. Links are always
 // counted: they count links, not people.
 type Traffic struct {
@@ -19,8 +17,6 @@ type TrafficDestinations struct {
 	Enabled bool `json:"enabled,omitempty"`
 	// Entries is the most rows kept; zero keeps DefaultDestinationEntries.
 	Entries int `json:"entries,omitempty"`
-	// Days is how long a row is kept; zero keeps DefaultLogDays.
-	Days int `json:"days,omitempty"`
 }
 
 // Destination defaults and bounds. A row costs DestinationBytes with its
@@ -42,6 +38,3 @@ func (d TrafficDestinations) Size() int {
 	}
 	return DefaultDestinationEntries
 }
-
-// Retention is how long a row is kept, filling in the default.
-func (d TrafficDestinations) Retention() time.Duration { return logDays(d.Days) }
