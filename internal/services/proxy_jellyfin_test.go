@@ -199,15 +199,15 @@ var (
 // as DLNA did, "Type: TV" for its kind. The serial number is what follows
 // the model's name in the device's own, a tail that may begin with a
 // space.
-func (g jf) rokuProfile(name, model string) map[string]any {
+func (g jf) rokuProfile(name, modelName string) map[string]any {
 	cond := g.cond
 	number, vendor, description := g.pick("C210X", "4802X"), g.pick("Roku", "Brightwave"), "Type: "+g.pick("TV", "STB")
 	video := "h264,mpeg4 avc," + g.pick("", "vp9,") + "mpeg1,hevc,h265,mpeg4,av1"
 	return map[string]any{
 		"Name": "Official Roku Client", "Id": g.uuid(),
-		"Identification": map[string]any{"FriendlyName": name, "ModelNumber": number, "SerialNumber": "string", "ModelName": model,
+		"Identification": map[string]any{"FriendlyName": name, "ModelNumber": number, "SerialNumber": "string", "ModelName": modelName,
 			"ModelDescription": description, "Manufacturer": vendor},
-		"FriendlyName": name, "Manufacturer": vendor, "ModelName": model, "ModelDescription": description, "ModelNumber": number,
+		"FriendlyName": name, "Manufacturer": vendor, "ModelName": modelName, "ModelDescription": description, "ModelNumber": number,
 		"SerialNumber": name[g.r.IntN(len(name)+1):], "MaxStreamingBitrate": 120000000, "MaxStaticBitrate": 100000000,
 		"MusicStreamingTranscodingBitrate": 192000,
 		"DirectPlayProfiles": []any{
@@ -445,11 +445,11 @@ func TestTheJellyfinSetLetsItsClientsThrough(t *testing.T) {
 				}
 			}
 			for _, name := range jfRokuNames {
-				for _, model := range jfRokuModels {
+				for _, modelName := range jfRokuModels {
 					r := jfRequest{"POST", "/Sessions/Capabilities/Full", "application/json",
-						vwJSON(map[string]any{"DeviceProfile": g.rokuProfile(name, model)}), false, g.client(jfRoku)}
+						vwJSON(map[string]any{"DeviceProfile": g.rokuProfile(name, modelName)}), false, g.client(jfRoku)}
 					if status := jfSend(t, plain, r); status != http.StatusOK {
-						t.Errorf("a Roku device named %q, a %q: %d", name, model, status)
+						t.Errorf("a Roku device named %q, a %q: %d", name, modelName, status)
 					}
 				}
 			}

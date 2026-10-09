@@ -463,8 +463,8 @@ func (m *Monitor) tick(ctx context.Context, all bool) {
 	timeout := m.Timeout
 	dropped := m.dropped
 	m.dropped = nil
-	sync := all || len(due) > 0 || now.Sub(m.synced) >= syncEvery
-	if sync {
+	resync := all || len(due) > 0 || now.Sub(m.synced) >= syncEvery
+	if resync {
 		m.synced = now
 	}
 	m.mu.Unlock()
@@ -477,7 +477,7 @@ func (m *Monitor) tick(ctx context.Context, all bool) {
 		m.probe(ctx, st, timeout)
 	}
 	m.mark(states)
-	if !sync {
+	if !resync {
 		return
 	}
 	m.applyRoutes(states)
