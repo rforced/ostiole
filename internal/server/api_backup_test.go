@@ -42,7 +42,7 @@ func backupServer(t *testing.T) *httptest.Server {
 		IPv6:      model.IPv6{Mode: model.AddrNone},
 		WireGuard: &model.WireGuard{PrivateKey: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="}, // gitleaks:allow
 	})
-	resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)})
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(cfg)})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
@@ -165,7 +165,7 @@ func remoteServer(t *testing.T) (*httptest.Server, *s3test.Bucket, *auth.Service
 		Secret:     "not-a-real-key",
 		Passphrase: "correct horse",
 	}
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 	for _, when := range []time.Time{
@@ -212,7 +212,7 @@ func TestRemoteCopiesAreEmptyWhenTheCopiesAreOff(t *testing.T) {
 	t.Parallel()
 	srv, bucket, _ := remoteServer(t)
 	cfg := starter()
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 	before := len(bucket.Seen())
@@ -427,7 +427,7 @@ func TestARemoteDeleteNeedsTheCopiesOn(t *testing.T) {
 	t.Parallel()
 	srv, bucket, _ := remoteServer(t)
 	key := listedKeys(t, srv)[0]
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(starter())}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(starter())}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 	resp, raw := do(t, srv, http.MethodPost, "/api/v1/config/backup/remote/delete", map[string]any{"key": key})
@@ -487,7 +487,7 @@ func TestAViewersDiffCarriesNoSecret(t *testing.T) {
 	cfg.Backup.Remote = model.RemoteBackup{
 		Endpoint: "https://s3.example.net", Bucket: "router-backups", KeyID: "0055abc", Secret: "hunter2", Passphrase: "correct horse",
 	}
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 	if err := as.CreateUser("eyes", testPassword, auth.RoleViewer); err != nil {

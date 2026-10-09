@@ -128,3 +128,44 @@ func TestApplyOutlivesItsCaller(t *testing.T) {
 		t.Fatalf("revert whose caller left: %v", err)
 	}
 }
+
+// A draft read before another apply would undo that apply, so it is
+// refused, also when the other apply was `ostiole apply` in another
+// process.
+func TestApplyRefusesADraftOfAnOlderConfiguration(t *testing.T) {
+	t.Parallel()
+	e, fr, st := newEngine(t)
+	ctx := context.Background()
+	if _, err := e.Apply(ctx, cfg("first"), ApplyOptions{Base: store.NoSum}); err != nil {
+		t.Fatal(err)
+	}
+	_, read, err := st.LoadSum()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Apply(ctx, cfg("second"), ApplyOptions{Base: read}); err != nil {
+		t.Fatal(err)
+	}
+	applied := fr.count()
+	if _, err := e.Apply(ctx, cfg("stale"), ApplyOptions{Base: read}); !errors.Is(err, ErrStale) {
+		t.Fatalf("apply of a stale draft: %v", err)
+	}
+	if fr.count() != applied {
+		t.Error("a stale draft reached the kernel")
+	}
+	if saved, _ := st.Load(); saved.System.Hostname != "second" {
+		t.Errorf("saved hostname = %q, want second", saved.System.Hostname)
+	}
+
+	_, read, _ = st.LoadSum()
+	other := New(st, fr, nil, slog.New(slog.DiscardHandler))
+	if _, err := other.Apply(ctx, cfg("theirs"), ApplyOptions{Base: read}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Apply(ctx, cfg("mine"), ApplyOptions{Base: read}); !errors.Is(err, ErrStale) {
+		t.Fatalf("apply over another process's commit: %v", err)
+	}
+	if _, err := e.Apply(ctx, cfg("anyway"), ApplyOptions{}); err != nil {
+		t.Fatalf("apply with no base: %v", err)
+	}
+}

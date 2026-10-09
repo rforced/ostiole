@@ -56,26 +56,45 @@ export const useConfigStore = defineStore('config', () => {
    * table without anyone pressing reload.
    */
   const applied = ref(0)
+  /** The revision `saved` was read at; none before the first save. */
+  const revision = ref('')
+  /** The revision the draft was read from, which an apply names. */
+  const base = ref('')
 
   const dirty = computed(() => !same(saved.value, draft.value))
+  /**
+   * The saved configuration moved on under a draft with edits of its own,
+   * so the server would refuse to apply it.
+   */
+  const stale = computed(() => dirty.value && base.value !== revision.value)
   const zones = computed(() => draft.value?.zones ?? [])
   const interfaces = computed(() => draft.value?.interfaces ?? [])
   const aliases = computed(() => draft.value?.aliases ?? [])
   const rules = computed(() => draft.value?.rules ?? [])
   let undoing = false
 
+  async function readSaved() {
+    try {
+      return await api.config.get()
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return { config: null, revision: 'none' }
+      throw e
+    }
+  }
+
   async function load(force = false) {
     if (loaded.value && !force) return
     error.value = ''
+    let next
     try {
-      saved.value = await api.config.get()
+      next = await readSaved()
     } catch (e) {
-      if (e instanceof ApiError && e.status === 404) saved.value = null
-      else {
-        error.value = e instanceof Error ? e.message : String(e)
-        return
-      }
+      error.value = e instanceof Error ? e.message : String(e)
+      return
     }
+    saved.value = next.config
+    revision.value = next.revision
+    base.value = next.revision
     draft.value = clone(saved.value)
     loaded.value = true
   }
@@ -94,6 +113,7 @@ export const useConfigStore = defineStore('config', () => {
       return
     }
     const before = clone(draft.value)
+    const beforeBase = base.value
     undoing = true
     try {
       mutate()
@@ -105,13 +125,22 @@ export const useConfigStore = defineStore('config', () => {
     }
     useToastStore().show(message, {
       timeout: UNDO_MS,
-      action: { label: 'Undo', run: () => (draft.value = before) },
+      action: {
+        label: 'Undo',
+        run: () => {
+          draft.value = before
+          base.value = beforeBase
+        },
+      },
     })
   }
 
   function discard() {
     if (!dirty.value) return
-    undoable('Draft discarded.', () => (draft.value = clone(saved.value)))
+    undoable('Draft discarded.', () => {
+      draft.value = clone(saved.value)
+      base.value = revision.value
+    })
   }
 
   /** After a confirmed apply, what was applied becomes the saved state. */
@@ -123,27 +152,27 @@ export const useConfigStore = defineStore('config', () => {
    * Reads the saved configuration again after something else committed
    * one: a confirm from another tab or from before a reload, or the wizard.
    * A draft with no edits of its own follows it, and `applied`, the draft
-   * as this tab applied it, counts as no edits. Resolves true when the
-   * saved configuration changed.
+   * as this tab applied it, counts as no edits. A draft that does not
+   * follow keeps its base and turns stale. Resolves true when the saved
+   * configuration changed.
    *
    * @param {object | null} [applied]
    */
   async function resync(applied = null) {
     let next
     try {
-      next = await api.config.get()
+      next = await readSaved()
     } catch (e) {
-      if (e instanceof ApiError && e.status === 404) next = null
-      else {
-        error.value = e instanceof Error ? e.message : String(e)
-        return false
-      }
+      error.value = e instanceof Error ? e.message : String(e)
+      return false
     }
     error.value = ''
-    if (same(next, saved.value)) return false
     const follow = !dirty.value || (applied !== null && same(draft.value, applied))
-    saved.value = next
-    if (follow) draft.value = clone(next)
+    revision.value = next.revision
+    if (follow) base.value = next.revision
+    if (same(next.config, saved.value)) return false
+    saved.value = next.config
+    if (follow) draft.value = clone(next.config)
     loaded.value = true
     return true
   }
@@ -161,6 +190,8 @@ export const useConfigStore = defineStore('config', () => {
   function reset() {
     saved.value = null
     draft.value = null
+    revision.value = ''
+    base.value = ''
     loaded.value = false
   }
 
@@ -1737,6 +1768,8 @@ export const useConfigStore = defineStore('config', () => {
     groupDependents,
     saved,
     draft,
+    base,
+    stale,
     loaded,
     error,
     dirty,

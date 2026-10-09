@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 
 import { expect, test } from './fixtures.js'
-import { applyAndConfirm, login, shot, sidebar } from './helpers.js'
+import { applyAndConfirm, login, readConfig, shot, sidebar } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -178,12 +178,12 @@ test('an alias with two URL lines fetches both lists', async ({ page }) => {
 // page, as the GeoIP ones are: one call per AS, and one for the names.
 test('an AS alias fetches what each network announces', async ({ page }) => {
   await login(page)
-  const cfg = await (await page.request.get('/api/v1/config')).json()
+  const { config: cfg, baseRevision } = await readConfig(page.request)
   cfg.system.asnUrl = `${base}/announced-prefixes?resource=AS{asn}`
   cfg.system.asnNamesUrl = `${base}/as-names?resource={asns}`
   const headers = { 'X-Requested-With': 'ostiole' }
   const applied = await page.request.post('/api/v1/apply', {
-    data: { config: cfg, confirmTimeoutSeconds: 60 },
+    data: { config: cfg, confirmTimeoutSeconds: 60, baseRevision },
     headers,
   })
   expect(applied.ok()).toBe(true)

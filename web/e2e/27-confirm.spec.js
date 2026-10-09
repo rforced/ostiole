@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures.js'
-import { login, shot } from './helpers.js'
+import { login, readConfig, shot } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -56,11 +56,11 @@ test('Revert now puts the previous rules back and keeps the change to fix', asyn
 // the one place a window shorter than the UI's minute can be asked for.
 test('an apply nobody confirms is undone when its window runs out', async ({ page }) => {
   await login(page)
-  const before = await saved(page)
+  const { config: before, baseRevision } = await readConfig(page.request)
   const cfg = structuredClone(before)
   cfg.system.hostname = 'left-to-run-out'
   const applied = await page.request.post('/api/v1/apply', {
-    data: { config: cfg, confirmTimeoutSeconds: 10 },
+    data: { config: cfg, confirmTimeoutSeconds: 10, baseRevision },
     headers,
   })
   expect(applied.ok()).toBe(true)

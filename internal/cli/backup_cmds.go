@@ -168,7 +168,8 @@ which signs everyone out.`,
 				fmt.Fprintln(out, "secrets were left out of this backup; validation names each one it needs")
 			}
 
-			if current, err := g.store().Load(); err == nil {
+			current, base, err := g.store().LoadSum()
+			if err == nil {
 				changes, derr := diff.Compare(current, archive.Config)
 				if derr != nil {
 					return derr
@@ -202,7 +203,7 @@ which signs everyone out.`,
 			if err != nil {
 				return err
 			}
-			res, err := eng.Apply(cmd.Context(), archive.Config, engine.ApplyOptions{ConfirmTimeout: timeout})
+			res, err := eng.Apply(cmd.Context(), archive.Config, engine.ApplyOptions{ConfirmTimeout: timeout, Base: base})
 			if err != nil {
 				return err
 			}

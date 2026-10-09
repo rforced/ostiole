@@ -38,20 +38,24 @@ func (s *configSource) addFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&s.revision, "revision", "", "read an archived revision from the store")
 }
 
-func (s *configSource) load(st *store.Store) (*model.Config, error) {
+// load returns the configuration and, when it came from the store's
+// current one, the sum an apply of it is based on.
+func (s *configSource) load(st *store.Store) (*model.Config, string, error) {
 	switch {
 	case s.file != "" && s.revision != "":
-		return nil, errors.New("--file and --revision are mutually exclusive")
+		return nil, "", errors.New("--file and --revision are mutually exclusive")
 	case s.file != "":
-		return readConfigFile(s.file)
+		cfg, err := readConfigFile(s.file)
+		return cfg, "", err
 	case s.revision != "":
-		return st.LoadRevision(s.revision)
+		cfg, err := st.LoadRevision(s.revision)
+		return cfg, "", err
 	}
-	cfg, err := st.Load()
+	cfg, sum, err := st.LoadSum()
 	if errors.Is(err, store.ErrNotFound) {
-		return nil, fmt.Errorf("no configuration in %s (run `ostiole init` first)", st.Dir)
+		return nil, "", fmt.Errorf("no configuration in %s (run `ostiole init` first)", st.Dir)
 	}
-	return cfg, err
+	return cfg, sum, err
 }
 
 func readConfigFile(path string) (*model.Config, error) {
@@ -128,7 +132,7 @@ func newCheckCmd(g *globals) *cobra.Command {
 		Short: "Validate the configuration and dry-run the ruleset with nft",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, err := src.load(g.store())
+			cfg, _, err := src.load(g.store())
 			if err != nil {
 				return err
 			}
@@ -156,7 +160,7 @@ func newRenderCmd(g *globals) *cobra.Command {
 		Short: "Print the nftables ruleset for the configuration",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, err := src.load(g.store())
+			cfg, _, err := src.load(g.store())
 			if err != nil {
 				return err
 			}
@@ -184,7 +188,7 @@ within the timeout (for example because the change cut your session), the
 previous ruleset is restored automatically. Use --yes to commit immediately.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, err := src.load(g.store())
+			cfg, base, err := src.load(g.store())
 			if err != nil {
 				return err
 			}
@@ -199,7 +203,7 @@ previous ruleset is restored automatically. Use --yes to commit immediately.`,
 				return err
 			}
 			out := cmd.OutOrStdout()
-			res, err := eng.Apply(cmd.Context(), cfg, engine.ApplyOptions{ConfirmTimeout: timeout})
+			res, err := eng.Apply(cmd.Context(), cfg, engine.ApplyOptions{ConfirmTimeout: timeout, Base: base})
 			if err != nil {
 				return err
 			}

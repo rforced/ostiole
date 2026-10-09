@@ -40,7 +40,7 @@ func TestABlocklistsNamesCanBeRead(t *testing.T) {
 	}
 	cfg := starter()
 	cfg.Blocking.Lists = []model.BlockList{{Name: "ads", Enabled: true}, {Name: "empty", Enabled: true}}
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 	if err := cache.Save(dnsblock.Meta{Name: "ads", FetchedAt: time.Now()}, []string{"example.com", "tracker.net", "ads.example.org"}); err != nil {

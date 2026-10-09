@@ -33,6 +33,7 @@ import (
 var (
 	ErrPending        = errors.New("an apply is awaiting confirmation; confirm or revert it first")
 	ErrNothingPending = errors.New("no apply is awaiting confirmation")
+	ErrStale          = errors.New("the configuration changed since this draft was read")
 	ErrNoRuleset      = errors.New("no confirmed ruleset to load")
 	// ErrUnknownInterface says the name is not in the running configuration.
 	ErrUnknownInterface = errors.New("interface is not in the configuration")
@@ -405,6 +406,10 @@ type ApplyOptions struct {
 	// ConfirmTimeout is how long to wait for Confirm before reverting.
 	// Zero commits immediately with no safety window.
 	ConfirmTimeout time.Duration
+	// Base is the store's sum of the configuration the draft was read
+	// from; an apply over a different one fails with ErrStale. Empty
+	// skips the check.
+	Base string
 }
 
 // ApplyResult describes what Apply did.
@@ -437,7 +442,7 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 	if err != nil {
 		return nil, fmt.Errorf("load previous ruleset: %w", err)
 	}
-	rec, base, err := e.begin(cfg)
+	rec, base, err := e.begin(cfg, opts.Base)
 	if err != nil {
 		return nil, err
 	}
@@ -523,13 +528,16 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 // the store lock so that two processes cannot both find no record and both
 // apply. It returns the record, and the one an unfinished earlier apply
 // left, whose "before" this apply inherits.
-func (e *Engine) begin(cfg *model.Config) (rec, base *record, err error) {
+func (e *Engine) begin(cfg *model.Config, from string) (rec, base *record, err error) {
 	unlock, err := e.store.Lock()
 	if err != nil {
 		return nil, nil, err
 	}
 	defer unlock()
 	if base, err = e.leftover(); err != nil {
+		return nil, nil, err
+	}
+	if err = e.fresh(from); err != nil {
 		return nil, nil, err
 	}
 	rec = &record{ID: newID(), PID: os.Getpid(), Boot: bootID(), Since: time.Now(), Config: digest(cfg)}
@@ -543,6 +551,21 @@ func (e *Engine) begin(cfg *model.Config) (rec, base *record, err error) {
 		return nil, nil, fmt.Errorf("record the apply before making it: %w", err)
 	}
 	return rec, base, nil
+}
+
+// fresh refuses a draft read from another configuration than the saved one.
+func (e *Engine) fresh(from string) error {
+	if from == "" {
+		return nil
+	}
+	sum, err := e.store.Sum()
+	if err != nil {
+		return err
+	}
+	if sum != from {
+		return ErrStale
+	}
+	return nil
 }
 
 // Confirm commits the pending apply.

@@ -13,12 +13,14 @@ export class ApiError extends Error {
    * @param {number} status
    * @param {string} message
    * @param {Array<{path: string, message: string}>} [issues]
+   * @param {string} [code] what kind of refusal it is, e.g. "stale"
    */
-  constructor(status, message, issues = []) {
+  constructor(status, message, issues = [], code = '') {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.issues = issues
+    this.code = code
   }
 }
 
@@ -26,14 +28,13 @@ export class ApiError extends Error {
 const CREDENTIAL_PATHS = ['/auth/login', '/auth/password', '/setup']
 
 /**
- * @template T
  * @param {string} method
  * @param {string} path
  * @param {unknown} [body]
  * @param {AbortSignal} [signal] ends the request early
- * @returns {Promise<T>}
+ * @returns {Promise<Response>} a response that is ok
  */
-async function request(method, path, body, signal) {
+async function send(method, path, body, signal) {
   /** @type {Record<string, string>} */
   const headers = { Accept: 'application/json', 'X-Requested-With': 'ostiole' }
   /** @type {RequestInit} */
@@ -46,18 +47,20 @@ async function request(method, path, body, signal) {
   if (res.status === 401 && !CREDENTIAL_PATHS.includes(path)) {
     window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT, { detail: { path } }))
   }
-  if (!res.ok) {
-    let message = res.statusText || `HTTP ${res.status}`
-    let issues = []
-    try {
-      const err = await res.json()
-      if (err?.error) message = err.error
-      if (Array.isArray(err?.issues)) issues = err.issues
-    } catch {
-      /* non-JSON error body */
-    }
-    throw new ApiError(res.status, message, issues)
-  }
+  if (!res.ok) throw await apiError(res)
+  return res
+}
+
+/**
+ * @template T
+ * @param {string} method
+ * @param {string} path
+ * @param {unknown} [body]
+ * @param {AbortSignal} [signal] ends the request early
+ * @returns {Promise<T>}
+ */
+async function request(method, path, body, signal) {
+  const res = await send(method, path, body, signal)
   if (res.status === 204) return /** @type {T} */ (undefined)
   const type = res.headers.get('Content-Type') ?? ''
   if (type.startsWith('text/')) return /** @type {T} */ (await res.text())
@@ -88,14 +91,16 @@ function withQuery(path, params = {}) {
 async function apiError(res) {
   let message = res.statusText || `HTTP ${res.status}`
   let issues = []
+  let code = ''
   try {
     const err = await res.json()
     if (err?.error) message = err.error
     if (Array.isArray(err?.issues)) issues = err.issues
+    if (typeof err?.code === 'string') code = err.code
   } catch {
     /* non-JSON error body */
   }
-  return new ApiError(res.status, message, issues)
+  return new ApiError(res.status, message, issues, code)
 }
 
 /**
@@ -159,14 +164,24 @@ export const api = {
   /** Empties every log a page can clear and deletes its files. */
   clearLogs: () => request('DELETE', '/system/logs'),
   config: {
-    get: () => get('/config'),
+    /**
+     * The saved configuration and its revision, which an apply names as
+     * the one its draft was read from.
+     * @returns {Promise<{config: object, revision: string}>}
+     */
+    get: async () => {
+      const res = await send('GET', '/config')
+      const etag = res.headers.get('ETag') ?? ''
+      return { config: await res.json(), revision: etag.replace(/^(W\/)?"|"$/g, '') }
+    },
     /** Build (without saving) a first configuration from the wizard answers. */
     starter: (opts) => post('/config/starter', opts),
     revisions: () => get('/config/revisions'),
     revision: (id) => get(`/config/revisions/${encodeURIComponent(id)}`),
     check: (config) => post('/check', { config }),
-    apply: (config, confirmTimeoutSeconds = 60) =>
-      post('/apply', { config, confirmTimeoutSeconds }),
+    /** The server refuses it with a 409 and code "stale" once baseRevision is not the saved one. */
+    apply: (config, baseRevision, confirmTimeoutSeconds = 60) =>
+      post('/apply', { config, confirmTimeoutSeconds, baseRevision }),
     confirm: () => post('/apply/confirm'),
     revert: () => post('/apply/revert'),
     /**

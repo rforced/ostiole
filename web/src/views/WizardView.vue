@@ -88,7 +88,7 @@ async function apply() {
   error.value = ''
   busy.value = 'apply'
   try {
-    applied.value = await api.config.apply(preview.value, CONFIRM_SECONDS)
+    applied.value = await api.config.apply(preview.value, config.base || 'none', CONFIRM_SECONDS)
     await system.refresh()
   } catch (e) {
     if (e instanceof ApiError) {

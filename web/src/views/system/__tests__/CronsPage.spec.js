@@ -32,7 +32,7 @@ const config = {
 
 async function open(role) {
   useAuthStore().user = { username: role, role }
-  api.config.get.mockResolvedValue(structuredClone(config))
+  api.config.get.mockResolvedValue({ config: structuredClone(config), revision: 'r1' })
   api.crons.list.mockResolvedValue([])
   const wrapper = mount(CronsPage, { global: { stubs: { CronDialog: true } } })
   await flushPromises()

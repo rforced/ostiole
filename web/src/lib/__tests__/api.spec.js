@@ -36,6 +36,29 @@ describe('api', () => {
     expect(err.issues).toHaveLength(1)
   })
 
+  it('reads the revision of the saved configuration from its ETag', async () => {
+    mockFetch(200, { version: 3 }, { 'Content-Type': 'application/json', ETag: '"ab12"' })
+    expect(await api.config.get()).toEqual({ config: { version: 3 }, revision: 'ab12' })
+    mockFetch(200, { version: 3 }, { 'Content-Type': 'application/json', ETag: 'W/"ab12"' })
+    expect((await api.config.get()).revision).toBe('ab12')
+  })
+
+  it('applies a draft with the revision it was read from, and says when that is stale', async () => {
+    const fetch = mockFetch(409, {
+      error: 'the configuration changed since this draft was read',
+      code: 'stale',
+    })
+    const err = await api.config.apply({ version: 3 }, 'ab12', 60).catch((e) => e)
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+      config: { version: 3 },
+      confirmTimeoutSeconds: 60,
+      baseRevision: 'ab12',
+    })
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err.status).toBe(409)
+    expect(err.code).toBe('stale')
+  })
+
   it('dispatches the unauthorized event on 401, except for credential endpoints', async () => {
     mockFetch(401, { error: 'authentication required' })
     const handler = vi.fn()

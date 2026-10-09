@@ -270,3 +270,31 @@ func TestLockIsExclusive(t *testing.T) {
 		t.Fatal("second lock never acquired after release")
 	}
 }
+
+func TestLoadSumIsTheSumOfTheSavedBytes(t *testing.T) {
+	t.Parallel()
+	s := New(t.TempDir())
+	if _, sum, err := s.LoadSum(); !errors.Is(err, ErrNotFound) || sum != NoSum {
+		t.Fatalf("LoadSum with nothing saved = %q, %v", sum, err)
+	}
+	if sum, err := s.Sum(); err != nil || sum != NoSum {
+		t.Fatalf("Sum with nothing saved = %q, %v", sum, err)
+	}
+	for _, hostname := range []string{"first", "second"} {
+		if _, err := s.Save(starter(hostname), "ruleset\n"); err != nil {
+			t.Fatal(err)
+		}
+		raw, err := os.ReadFile(filepath.Join(s.Dir, ConfigFile))
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := sha256.Sum256(raw)
+		cfg, sum, err := s.LoadSum()
+		if err != nil || cfg.System.Hostname != hostname || sum != hex.EncodeToString(want[:]) {
+			t.Fatalf("LoadSum after saving %s = %q, %q, %v", hostname, cfg.System.Hostname, sum, err)
+		}
+		if again, err := s.Sum(); err != nil || again != sum {
+			t.Errorf("Sum = %q, %v; LoadSum gave %q", again, err, sum)
+		}
+	}
+}

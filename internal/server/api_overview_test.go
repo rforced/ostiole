@@ -207,7 +207,7 @@ func TestServicesStatusAsksSystemdTwiceAndListsOneChain(t *testing.T) {
 		d.PPPoE = &services.PPPoE{Cmd: noCommands{t}}
 		d.UPnP = &services.UPnP{Cmd: noCommands{t}}
 	})
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(starter())}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(starter())}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 	units.reset()
@@ -350,7 +350,7 @@ func TestOverviewAfterApply(t *testing.T) {
 		Hostname: "fw", LAN: "ost-lan0", LANAddress: "192.168.9.1/24", WAN: "ost-wan0",
 		Services: true, DNSUpstreams: []string{"9.9.9.9"},
 	})
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 
@@ -484,7 +484,7 @@ func TestOverviewNotesDHCPOnADisabledInterface(t *testing.T) {
 	cfg.Services.DHCP.Servers = append(cfg.Services.DHCP.Servers, model.DHCPServer{
 		Interface: "ost-ap0", Enabled: true, RangeStart: "192.168.10.100", RangeEnd: "192.168.10.199",
 	})
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 
@@ -549,7 +549,7 @@ func TestOverviewWarnsAboutAFailedRemoteBackup(t *testing.T) {
 		Enabled: true, Endpoint: "https://s3.us-west-004.backblazeb2.com", Bucket: "router-backups",
 		KeyID: "k", Secret: "s", Passphrase: "correct horse",
 	}
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 
@@ -576,7 +576,7 @@ func TestOverviewWarnsAboutAFailedRemoteBackup(t *testing.T) {
 
 	// Switched off, an old failure is not news.
 	cfg.Backup.Remote.Enabled = false
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 	if w := warning(getOverview(t, srv), "remote-backup-failed"); w != nil {
@@ -729,7 +729,7 @@ func TestOverviewWarnsAboutACertificateThatStoppedRenewing(t *testing.T) {
 		ID: "router", Enabled: true, Source: model.SourceACME, Account: "le",
 		Names: []string{"router.example.test"}, Challenge: model.ChallengeHTTP,
 	}}
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 
@@ -770,7 +770,7 @@ func TestOverviewWarnsWhenTheBuiltInCertificateMissesAName(t *testing.T) {
 		d.Certs = m
 		d.CertHosts = func() []string { return hosts }
 	})
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(starter())}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(starter())}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 
@@ -844,7 +844,7 @@ func TestOverviewWarnsAboutTheFallbackRuleset(t *testing.T) {
 	if w := warning(getOverview(t, srv), "fallback-ruleset"); w == nil || !strings.Contains(w.Detail, "nft refused it") {
 		t.Fatalf("want a fallback-ruleset warning, got %+v", w)
 	}
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(starter())}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(starter())}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 	if w := warning(getOverview(t, srv), "fallback-ruleset"); w != nil {
@@ -878,7 +878,7 @@ func TestOverviewWarnsWhenSSHDoesNotFollow(t *testing.T) {
 	srv := newTestServerWith(t, func(d *Deps) { d.Engine = d.Engine.WithSSH(sshRefuses{}) })
 	cfg := starter()
 	cfg.System.Management.SSHPasswords = false
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 	if w := warning(getOverview(t, srv), "ssh-settings"); w == nil || !strings.Contains(w.Detail, "still accepts passwords") {

@@ -86,9 +86,46 @@ func (s *Store) Exists() bool {
 	return err == nil
 }
 
+// NoSum is the sum when no configuration is saved.
+const NoSum = "none"
+
 // Load reads the current configuration.
 func (s *Store) Load() (*model.Config, error) {
-	return readConfig(filepath.Join(s.Dir, ConfigFile))
+	cfg, _, err := s.LoadSum()
+	return cfg, err
+}
+
+// LoadSum reads the current configuration and the sum of the bytes it was
+// parsed from, the hex SHA-256 of config.json as saved. With nothing saved
+// the sum is NoSum and the error ErrNotFound.
+func (s *Store) LoadSum() (*model.Config, string, error) {
+	path := filepath.Join(s.Dir, ConfigFile)
+	raw, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, NoSum, ErrNotFound
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	cfg, err := parseConfig(path, raw)
+	return cfg, sumOf(raw), err
+}
+
+// Sum is the hex SHA-256 of config.json as saved, or NoSum.
+func (s *Store) Sum() (string, error) {
+	raw, err := os.ReadFile(filepath.Join(s.Dir, ConfigFile))
+	if errors.Is(err, os.ErrNotExist) {
+		return NoSum, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return sumOf(raw), nil
+}
+
+func sumOf(raw []byte) string {
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
 }
 
 // LoadRuleset returns the last confirmed ruleset, ErrNotFound, or
@@ -111,7 +148,7 @@ func (s *Store) LoadRuleset() (string, error) {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return "", err
 	}
-	if sum := sha256.Sum256(cfg); hex.EncodeToString(sum[:]) != want {
+	if sumOf(cfg) != want {
 		return "", ErrStaleRuleset
 	}
 	return ruleset, nil
@@ -198,8 +235,7 @@ func (s *Store) Save(cfg *model.Config, ruleset string) (*Revision, error) {
 	// configuration it belongs to, so a crash between them leaves one that
 	// LoadRuleset refuses rather than one that loads under the wrong
 	// configuration.
-	sum := sha256.Sum256(raw)
-	note := rulesetNote + hex.EncodeToString(sum[:]) + "\n"
+	note := rulesetNote + sumOf(raw) + "\n"
 	if err := atomicfile.Write(filepath.Join(s.Dir, RulesetFile), []byte(note+ruleset), 0o600); err != nil {
 		return nil, err
 	}
@@ -325,6 +361,10 @@ func readConfig(path string) (*model.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	return parseConfig(path, raw)
+}
+
+func parseConfig(path string, raw []byte) (*model.Config, error) {
 	cfg, err := model.ParseConfig(raw)
 	if err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)

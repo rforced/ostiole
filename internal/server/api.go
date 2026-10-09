@@ -662,11 +662,15 @@ func (u *unavailable) Unwrap() error { return u.err }
 
 type errorResponse struct {
 	Error  string        `json:"error"`
+	Code   string        `json:"code,omitempty"`
 	Issues []model.Issue `json:"issues,omitempty"`
 }
 
 func writeError(w http.ResponseWriter, status int, err error) {
 	resp := errorResponse{Error: err.Error()}
+	if errors.Is(err, engine.ErrStale) {
+		resp.Code = "stale"
+	}
 	if ve, ok := errors.AsType[*model.ValidationError](err); ok {
 		resp.Error = "invalid configuration"
 		resp.Issues = ve.Issues
@@ -713,7 +717,7 @@ func statusFor(err error) int {
 		return http.StatusUnprocessableEntity
 	case errors.As(err, &ve), errors.As(err, &ne):
 		return http.StatusUnprocessableEntity
-	case errors.Is(err, engine.ErrPending), errors.Is(err, engine.ErrNothingPending):
+	case errors.Is(err, engine.ErrPending), errors.Is(err, engine.ErrNothingPending), errors.Is(err, engine.ErrStale):
 		return http.StatusConflict
 	case errors.Is(err, store.ErrNotFound), errors.Is(err, nft.ErrNoTable),
 		errors.Is(err, engine.ErrUnknownInterface), errors.Is(err, smart.ErrNoDevice),
@@ -826,7 +830,12 @@ func (a *api) timezones(w http.ResponseWriter, _ *http.Request) error {
 }
 
 func (a *api) getConfig(w http.ResponseWriter, r *http.Request) error {
-	cfg, err := a.engine.Store().Load()
+	cfg, sum, err := a.engine.Store().LoadSum()
+	// A viewer cannot apply, and the sum of the bytes behind their redacted
+	// copy would let them test guesses at the secrets left out of it.
+	if sum != "" && a.operator(r) {
+		w.Header().Set("ETag", `"`+sum+`"`)
+	}
 	if err != nil {
 		return err
 	}
@@ -1064,6 +1073,8 @@ type applyRequest struct {
 	Config *draftConfig `json:"config"`
 	// ConfirmTimeoutSeconds of zero commits immediately.
 	ConfirmTimeoutSeconds int `json:"confirmTimeoutSeconds"`
+	// BaseRevision is the ETag of the configuration the draft was read from.
+	BaseRevision string `json:"baseRevision"`
 }
 
 func (a *api) check(w http.ResponseWriter, r *http.Request) error {
@@ -1112,6 +1123,10 @@ func (a *api) apply(w http.ResponseWriter, r *http.Request) error {
 	if req.Config == nil {
 		return &badRequest{errors.New("config is required")}
 	}
+	base := strings.Trim(req.BaseRevision, `"`)
+	if base == "" {
+		return &badRequest{errors.New("baseRevision is required")}
+	}
 	if req.ConfirmTimeoutSeconds < 0 || req.ConfirmTimeoutSeconds > 3600 {
 		return &badRequest{errors.New("confirmTimeoutSeconds must be 0-3600")}
 	}
@@ -1120,6 +1135,7 @@ func (a *api) apply(w http.ResponseWriter, r *http.Request) error {
 	}
 	res, err := a.engine.Apply(r.Context(), req.Config.config(), engine.ApplyOptions{
 		ConfirmTimeout: time.Duration(req.ConfirmTimeoutSeconds) * time.Second,
+		Base:           base,
 	})
 	if err != nil {
 		return err

@@ -1,11 +1,12 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ApplyBar from '@/components/ApplyBar.vue'
-import { api } from '@/lib/api'
+import { ApiError, api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import { useConfirmStore } from '@/stores/confirm'
 import { useSystemStore } from '@/stores/system'
 
 const route = vi.hoisted(() => ({ name: 'rules' }))
@@ -23,11 +24,25 @@ vi.mock('@/lib/api', () => ({
       drift: vi.fn(),
     },
   },
-  ApiError: class ApiError extends Error {},
+  ApiError: class ApiError extends Error {
+    constructor(status, message, issues = [], code = '') {
+      super(message)
+      this.status = status
+      this.issues = issues
+      this.code = code
+    }
+  },
 }))
+
+enableAutoUnmount(afterEach)
 
 const OLD = { version: 3, system: { hostname: 'old' } }
 const NEW = { version: 3, system: { hostname: 'new' } }
+/** What GET /config answers: the saved configuration and its revision. */
+const AT_OLD = { config: OLD, revision: 'r1' }
+const AT_NEW = { config: NEW, revision: 'r2' }
+const STALE =
+  "This router's configuration changed since this draft was read. Reload to see what is saved; this draft is dropped."
 
 let pending
 
@@ -37,7 +52,7 @@ async function router({ applying = true } = {}) {
     since: new Date().toISOString(),
     deadline: new Date(Date.now() + 60_000).toISOString(),
   }
-  api.config.get.mockResolvedValue(OLD)
+  api.config.get.mockResolvedValue(AT_OLD)
   api.status.mockResolvedValue(applying ? { configured: true, pending } : { configured: true })
   await useConfigStore().load()
   await useSystemStore().refresh()
@@ -70,7 +85,7 @@ describe('ApplyBar', () => {
 
     api.config.confirm.mockResolvedValue({})
     api.status.mockResolvedValue({ configured: true })
-    api.config.get.mockResolvedValue(NEW)
+    api.config.get.mockResolvedValue(AT_NEW)
     await button(w, 'Confirm').trigger('click')
     await flushPromises()
 
@@ -88,7 +103,7 @@ describe('ApplyBar', () => {
     await flushPromises()
 
     api.status.mockResolvedValue({ configured: true })
-    api.config.get.mockResolvedValue(NEW)
+    api.config.get.mockResolvedValue(AT_NEW)
     await vi.advanceTimersByTimeAsync(2000)
     await flushPromises()
 
@@ -121,12 +136,108 @@ describe('ApplyBar', () => {
     expect(config.draft.system.hostname).toBe('mine')
   })
 
+  describe('a draft read before another save', () => {
+    /** A draft of OLD at r1 with an edit of its own. */
+    async function edited() {
+      await router({ applying: false })
+      const config = useConfigStore()
+      config.draft.system.hostname = 'mine'
+      return config
+    }
+
+    it('says so as soon as the saved configuration moves, and reloads behind a confirm', async () => {
+      const config = await edited()
+      const w = mount(ApplyBar)
+      await flushPromises()
+      expect(w.text()).toContain('Unapplied changes.')
+
+      api.config.get.mockResolvedValue(AT_NEW)
+      await config.resync()
+      await flushPromises()
+      expect(w.get('[role="alert"]').text()).toBe(STALE)
+      expect(button(w, 'Apply with 60s confirmation')).toBeUndefined()
+      expect(button(w, 'Discard')).toBeUndefined()
+
+      const confirm = useConfirmStore()
+      await button(w, 'Reload').trigger('click')
+      expect(confirm.request).toMatchObject({
+        question: 'Reload the saved configuration?',
+        description: 'This draft is dropped.',
+        confirmLabel: 'Reload',
+      })
+      confirm.settle(false)
+      await flushPromises()
+      expect(config.draft.system.hostname).toBe('mine')
+      expect(w.get('[role="alert"]').text()).toBe(STALE)
+
+      await button(w, 'Reload').trigger('click')
+      confirm.settle(true)
+      await flushPromises()
+      expect(config.draft).toEqual(NEW)
+      expect(config.base).toBe('r2')
+      expect(w.text()).toBe('')
+    })
+
+    it('says so when the server refuses the apply as stale', async () => {
+      const config = await edited()
+      const w = mount(ApplyBar)
+      await flushPromises()
+
+      api.config.check.mockResolvedValue({})
+      api.config.apply.mockRejectedValue(
+        new ApiError(409, 'the configuration changed since this draft was read', [], 'stale'),
+      )
+      api.config.get.mockResolvedValue(AT_NEW)
+      await button(w, 'Apply with 60s confirmation').trigger('click')
+      await flushPromises()
+
+      expect(api.config.apply).toHaveBeenCalledWith(
+        { ...OLD, system: { hostname: 'mine' } },
+        'r1',
+        60,
+      )
+      expect(w.findAll('[role="alert"]').map((a) => a.text())).toEqual([STALE])
+      expect(button(w, 'Reload')).toBeDefined()
+      expect(config.draft.system.hostname).toBe('mine')
+    })
+
+    it('keeps the line when the refusal comes before the save can be read', async () => {
+      await edited()
+      const w = mount(ApplyBar)
+      await flushPromises()
+
+      api.config.check.mockResolvedValue({})
+      api.config.apply.mockRejectedValue(
+        new ApiError(409, 'the configuration changed since this draft was read', [], 'stale'),
+      )
+      await button(w, 'Apply with 60s confirmation').trigger('click')
+      await flushPromises()
+      expect(w.get('[role="alert"]').text()).toBe(STALE)
+    })
+
+    it('shows another conflict as the server put it', async () => {
+      await edited()
+      const w = mount(ApplyBar)
+      await flushPromises()
+
+      api.config.check.mockResolvedValue({})
+      api.config.apply.mockRejectedValue(
+        new ApiError(409, 'another apply is awaiting confirmation'),
+      )
+      await button(w, 'Apply with 60s confirmation').trigger('click')
+      await flushPromises()
+      expect(w.get('[role="alert"]').text()).toBe('another apply is awaiting confirmation')
+      expect(button(w, 'Apply with 60s confirmation')).toBeDefined()
+      expect(button(w, 'Reload')).toBeUndefined()
+    })
+  })
+
   describe('what this version would apply differently', () => {
     const drift = { parts: ['Firewall', 'Reverse proxy'], changes: 3 }
 
     /** A router whose saved configuration this version renders differently. */
     async function updated() {
-      api.config.get.mockResolvedValue(OLD)
+      api.config.get.mockResolvedValue(AT_OLD)
       api.status.mockResolvedValue({ configured: true, drift })
       api.config.drift.mockResolvedValue({
         parts: drift.parts,
@@ -191,7 +302,7 @@ describe('ApplyBar', () => {
       api.status.mockResolvedValue({ configured: true, pending: waiting })
       await button(w, 'Apply with 60s confirmation').trigger('click')
       await flushPromises()
-      expect(api.config.apply).toHaveBeenCalledWith(OLD, 60)
+      expect(api.config.apply).toHaveBeenCalledWith(OLD, 'r1', 60)
       expect(w.text()).toContain('awaiting confirmation')
 
       // Confirmed in another tab: the saved configuration is as it was, and

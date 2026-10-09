@@ -204,7 +204,7 @@ func logServer(t *testing.T) *httptest.Server {
 	cfg := starter()
 	cfg.Services.Proxy = model.Proxy{Access: []model.ProxyAccess{{ID: "access-x1", Zone: "wan",
 		Action: model.ActionDrop, Ports: []string{model.ProxyPortHTTPS}, Description: "Scanners"}}}
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 	for i, e := range []fwlog.Entry{

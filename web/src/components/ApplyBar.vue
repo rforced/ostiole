@@ -10,6 +10,7 @@ import { ApiError, api } from '@/lib/api'
 import { useNarrow } from '@/lib/media'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import { useConfirmStore } from '@/stores/confirm'
 import { useSystemStore } from '@/stores/system'
 
 const CONFIRM_SECONDS = 60
@@ -21,10 +22,15 @@ const LINGER_MS = 2500
 
 const auth = useAuthStore()
 const config = useConfigStore()
+const confirm = useConfirmStore()
 const system = useSystemStore()
 const route = useRoute()
 
 const busy = ref(false)
+const reloading = ref(false)
+/** The server refused the draft's apply: it was read before another save. */
+const refused = ref(false)
+const stale = computed(() => config.stale || refused.value)
 const error = ref('')
 const issues = ref([])
 const showChanges = ref(false)
@@ -114,6 +120,7 @@ watch(
   (dirty) => {
     error.value = ''
     issues.value = []
+    refused.value = false
     if (!dirty) showChanges.value = false
   },
 )
@@ -152,7 +159,7 @@ async function apply() {
   try {
     const draft = JSON.parse(JSON.stringify(config.draft))
     await api.config.check(draft)
-    const res = await api.config.apply(draft, CONFIRM_SECONDS)
+    const res = await api.config.apply(draft, config.base, CONFIRM_SECONDS)
     applied = draft
     driftApplied = drift.value !== null
     pending.value = { deadline: res.deadline }
@@ -161,13 +168,30 @@ async function apply() {
     config.markApplied()
     await system.refresh()
   } catch (e) {
-    if (e instanceof ApiError) {
+    if (e instanceof ApiError && e.status === 409 && e.code === 'stale') {
+      await config.resync()
+      if (config.dirty) refused.value = true
+      else error.value = e.message
+    } else if (e instanceof ApiError) {
       error.value = e.message
       issues.value = e.issues
     } else error.value = String(e)
   } finally {
     busy.value = false
   }
+}
+
+async function reload() {
+  const ok = await confirm.ask({
+    question: 'Reload the saved configuration?',
+    description: 'This draft is dropped.',
+    confirmLabel: 'Reload',
+  })
+  if (!ok) return
+  reloading.value = true
+  await config.load(true)
+  reloading.value = false
+  if (config.error) error.value = config.error
 }
 
 function linger() {
@@ -230,7 +254,11 @@ async function settle() {
           <div v-else class="space-y-2">
             <div class="flex flex-wrap items-center gap-3 text-sm">
               <AlertTriangle class="size-4 text-warn" aria-hidden="true" />
-              <span v-if="drift" class="font-medium"
+              <span v-if="stale" role="alert" class="font-medium"
+                >This router's configuration changed since this draft was read. Reload to see what
+                is saved; this draft is dropped.</span
+              >
+              <span v-else-if="drift" class="font-medium"
                 >Not applied with this version: {{ drift.parts.join(', ') }}.</span
               >
               <span v-else class="font-medium">Unapplied changes.</span>
@@ -245,23 +273,34 @@ async function settle() {
                 {{ count === 1 ? 'change' : 'changes' }}
               </button>
               <div class="ml-auto flex gap-2 max-sm:ml-0 max-sm:w-full">
-                <button
-                  v-if="!drift"
-                  type="button"
-                  class="btn-secondary"
-                  :disabled="busy"
-                  @click="config.discard()"
-                >
-                  Discard
-                </button>
                 <ActionButton
+                  v-if="stale"
                   kind="primary"
                   class="max-sm:flex-1"
-                  :label="`Apply with ${CONFIRM_SECONDS}s confirmation`"
-                  busy-label="Applying…"
-                  :busy="busy"
-                  @click="apply"
+                  label="Reload"
+                  busy-label="Reloading…"
+                  :busy="reloading"
+                  @click="reload"
                 />
+                <template v-else>
+                  <button
+                    v-if="!drift"
+                    type="button"
+                    class="btn-secondary"
+                    :disabled="busy"
+                    @click="config.discard()"
+                  >
+                    Discard
+                  </button>
+                  <ActionButton
+                    kind="primary"
+                    class="max-sm:flex-1"
+                    :label="`Apply with ${CONFIRM_SECONDS}s confirmation`"
+                    busy-label="Applying…"
+                    :busy="busy"
+                    @click="apply"
+                  />
+                </template>
               </div>
             </div>
             <ChangeList

@@ -60,7 +60,7 @@ async function configure(baseURL) {
     managementFromWan: true,
     services: true,
   })
-  await call('POST', '/apply', { config, confirmTimeoutSeconds: 90 })
+  await call('POST', '/apply', { config, confirmTimeoutSeconds: 90, baseRevision: 'none' })
   await call('POST', '/apply/confirm')
   await api.dispose()
   return wired[1].name

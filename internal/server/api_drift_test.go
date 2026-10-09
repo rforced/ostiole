@@ -33,7 +33,7 @@ func TestDriftThroughTheAPI(t *testing.T) {
 	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/setup", credentials{Username: "admin", Password: testPassword}); resp.StatusCode != http.StatusCreated {
 		t.Fatalf("setup: %d %s", resp.StatusCode, raw)
 	}
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", map[string]any{"config": starter()}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", map[string]any{"config": starter(), "baseRevision": revision(t, srv)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 

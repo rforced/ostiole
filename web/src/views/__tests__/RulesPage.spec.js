@@ -106,7 +106,7 @@ const system = [
 ]
 
 async function mountPage(path = '/firewall/rules', extraStubs = {}, cfg = config) {
-  api.config.get.mockResolvedValue(structuredClone(cfg))
+  api.config.get.mockResolvedValue({ config: structuredClone(cfg), revision: 'r1' })
   await useConfigStore().load()
   const router = createRouter({
     history: createMemoryHistory(),

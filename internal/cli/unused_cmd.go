@@ -28,7 +28,7 @@ through the same confirmation window as a normal apply. A zone takes the
 rules and NAT written against it. What is switched off is kept.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, err := (&configSource{}).load(g.store())
+			cfg, base, err := (&configSource{}).load(g.store())
 			if err != nil {
 				return err
 			}
@@ -93,7 +93,7 @@ rules and NAT written against it. What is switched off is kept.`,
 			if err != nil {
 				return err
 			}
-			res, err := eng.Apply(cmd.Context(), &next, engine.ApplyOptions{ConfirmTimeout: timeout})
+			res, err := eng.Apply(cmd.Context(), &next, engine.ApplyOptions{ConfirmTimeout: timeout, Base: base})
 			if err != nil {
 				return err
 			}

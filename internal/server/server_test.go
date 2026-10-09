@@ -80,6 +80,21 @@ func do(t *testing.T, srv *httptest.Server, method, path string, body any) (*htt
 	return resp, raw
 }
 
+// revision is the configuration's revision as GET /api/v1/config gives it
+// in the ETag, the base an apply of a draft read now sends.
+func revision(t *testing.T, srv *httptest.Server) string {
+	t.Helper()
+	resp, raw := do(t, srv, http.MethodGet, "/api/v1/config", nil)
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("read config: %d %s", resp.StatusCode, raw)
+	}
+	rev, err := strconv.Unquote(resp.Header.Get("ETag"))
+	if err != nil || rev == "" {
+		t.Fatalf("ETag %q: %v", resp.Header.Get("ETag"), err)
+	}
+	return rev
+}
+
 func starter() *model.Config {
 	return model.Starter(model.StarterOptions{Hostname: "fw", LAN: "eth1", LANAddress: "10.0.0.1/24", WAN: "eth0"})
 }
@@ -400,7 +415,7 @@ func TestApplyImmediateFlow(t *testing.T) {
 		t.Fatalf("config before apply: %d, want 404", resp.StatusCode)
 	}
 
-	resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(starter())})
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(starter())})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
@@ -437,16 +452,16 @@ func TestApplyImmediateFlow(t *testing.T) {
 func TestApplyConfirmAndRevertFlow(t *testing.T) {
 	t.Parallel()
 	srv, fake := newTestServer(t)
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(starter())}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(starter())}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("first apply: %d %s", resp.StatusCode, raw)
 	}
 	second := starter()
 	second.System.Hostname = "second"
-	resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(second), ConfirmTimeoutSeconds: 60})
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(second), ConfirmTimeoutSeconds: 60})
 	if resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), `"pending":true`) {
 		t.Fatalf("pending apply: %d %s", resp.StatusCode, raw)
 	}
-	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(second)}); resp.StatusCode != http.StatusConflict {
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(second)}); resp.StatusCode != http.StatusConflict {
 		t.Errorf("apply while pending: %d, want 409", resp.StatusCode)
 	}
 	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply/confirm", nil); resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), `"archived"`) {
@@ -467,7 +482,7 @@ func TestApplyConfirmAndRevertFlow(t *testing.T) {
 
 	third := starter()
 	third.System.Hostname = "third"
-	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(third), ConfirmTimeoutSeconds: 60}); resp.StatusCode != http.StatusOK {
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(third), ConfirmTimeoutSeconds: 60}); resp.StatusCode != http.StatusOK {
 		t.Fatal("third apply")
 	}
 	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/apply/revert", nil); resp.StatusCode != http.StatusNoContent {
@@ -486,7 +501,7 @@ func TestApplyValidationAndBadRequests(t *testing.T) {
 	t.Parallel()
 	srv, _ := newTestServer(t)
 
-	resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(&model.Config{Version: model.SchemaVersion})})
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(&model.Config{Version: model.SchemaVersion})})
 	if resp.StatusCode != http.StatusUnprocessableEntity {
 		t.Fatalf("invalid config: %d %s", resp.StatusCode, raw)
 	}
@@ -495,7 +510,7 @@ func TestApplyValidationAndBadRequests(t *testing.T) {
 		t.Fatalf("error body = %s", raw)
 	}
 
-	for _, body := range []string{`{}`, `not json`, `{"config":{},"bogus":1}`, `{"config":{"version":1},"confirmTimeoutSeconds":-1}`} {
+	for _, body := range []string{`{}`, `not json`, `{"config":{},"bogus":1}`, `{"config":{"version":1},"baseRevision":"none","confirmTimeoutSeconds":-1}`} {
 		req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/v1/apply", strings.NewReader(body))
 		req.Header.Set(RequestHeader, RequestHeaderValue)
 		resp, err := srv.Client().Do(req)
@@ -511,6 +526,83 @@ func TestApplyValidationAndBadRequests(t *testing.T) {
 	resp, raw = do(t, srv, http.MethodPost, "/api/v1/check", configRequest{Config: (*draftConfig)(starter())})
 	if resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), "table inet ostiole") {
 		t.Fatalf("check: %d %s", resp.StatusCode, raw)
+	}
+}
+
+// An apply names the revision its draft was read from. A draft read
+// before somebody else's apply would undo it, so it is refused, in a way
+// a client can tell from an apply awaiting confirmation.
+func TestApplyRefusesAStaleDraft(t *testing.T) {
+	t.Parallel()
+	srv, _ := newTestServer(t)
+	apply := func(base, hostname string, confirm int) (int, errorResponse) {
+		t.Helper()
+		c := starter()
+		c.System.Hostname = hostname
+		resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply",
+			applyRequest{BaseRevision: base, Config: (*draftConfig)(c), ConfirmTimeoutSeconds: confirm})
+		var er errorResponse
+		if resp.StatusCode != http.StatusOK {
+			if err := json.Unmarshal(raw, &er); err != nil {
+				t.Fatalf("error body %s: %v", raw, err)
+			}
+		}
+		return resp.StatusCode, er
+	}
+
+	if status, er := apply("", "fw", 0); status != http.StatusBadRequest {
+		t.Fatalf("apply with no base: %d %+v", status, er)
+	}
+	first := revision(t, srv)
+	if first != store.NoSum {
+		t.Fatalf("revision with nothing saved = %q, want %q", first, store.NoSum)
+	}
+	if status, er := apply(first, "fw", 0); status != http.StatusOK {
+		t.Fatalf("first apply: %d %+v", status, er)
+	}
+	read := revision(t, srv)
+	if read == first {
+		t.Fatal("the revision did not change with the apply")
+	}
+	if status, er := apply(read, "theirs", 0); status != http.StatusOK {
+		t.Fatalf("their apply: %d %+v", status, er)
+	}
+	if status, er := apply(read, "mine", 0); status != http.StatusConflict || er.Code != "stale" {
+		t.Fatalf("apply of a stale draft: %d %+v", status, er)
+	}
+	_, raw := do(t, srv, http.MethodGet, "/api/v1/config", nil)
+	var saved model.Config
+	if err := json.Unmarshal(raw, &saved); err != nil || saved.System.Hostname != "theirs" {
+		t.Fatalf("saved after a stale draft = %q, %v", saved.System.Hostname, err)
+	}
+
+	if status, er := apply(`"`+revision(t, srv)+`"`, "pending", 60); status != http.StatusOK {
+		t.Fatalf("apply with the ETag as sent: %d %+v", status, er)
+	}
+	if status, er := apply(revision(t, srv), "mine", 0); status != http.StatusConflict || er.Code != "" {
+		t.Fatalf("apply while one awaits confirmation: %d %+v", status, er)
+	}
+}
+
+// The revision hashes the secrets a viewer's copy leaves out, and a viewer
+// cannot apply, so a viewer is not given it.
+func TestConfigRevisionIsForOperators(t *testing.T) {
+	t.Parallel()
+	srv, _, _ := roleServer(t)
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(starter())}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
+	}
+	viewer := mintToken(t, srv, "dashboard", "viewer")
+	resp, raw := withToken(t, srv, http.MethodGet, "/api/v1/config", viewer)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("viewer config: %d %s", resp.StatusCode, raw)
+	}
+	if etag := resp.Header.Get("ETag"); etag != "" {
+		t.Errorf("viewer ETag = %q, want none", etag)
+	}
+	operator := mintToken(t, srv, "editor", "operator")
+	if resp, _ := withToken(t, srv, http.MethodGet, "/api/v1/config", operator); resp.Header.Get("ETag") == "" {
+		t.Error("an operator is not given the revision")
 	}
 }
 

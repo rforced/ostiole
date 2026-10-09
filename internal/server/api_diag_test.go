@@ -209,7 +209,7 @@ func TestServicesStatusNamesUnreachableTLSUpstreams(t *testing.T) {
 	cfg := starter()
 	cfg.Services.DNS.Enabled = true
 	cfg.Services.DNS.Upstreams = []string{"1.1.1.1"}
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 	status := func() servicesStatus {
@@ -233,7 +233,7 @@ func TestServicesStatusNamesUnreachableTLSUpstreams(t *testing.T) {
 		{Address: "1.1.1.1", Hostname: "cloudflare-dns.com"},
 		{Address: "9.9.9.9", Hostname: "dns.quad9.net"},
 	}
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply tls: %d %s", resp.StatusCode, raw)
 	}
 	if st := status(); !reflect.DeepEqual(st.ResolverUnreachable, []string{"9.9.9.9"}) {

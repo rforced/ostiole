@@ -104,7 +104,7 @@ func TestDDNSEndpoints(t *testing.T) {
 		t.Errorf("check without a record: %d %s", resp.StatusCode, raw)
 	}
 
-	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(ddnsDraft())}); resp.StatusCode != http.StatusOK {
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(ddnsDraft())}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
 	up.Pass(context.Background())

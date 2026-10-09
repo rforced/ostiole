@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useConfigStore } from '@/stores/config'
 import { useToastStore } from '@/stores/toast'
@@ -1472,6 +1472,139 @@ describe('config store dirty', () => {
     config.draft.zones.reverse()
     config.draft.interfaces[0].mtu = 1500
     expect(config.dirty).toBe(true)
+  })
+})
+
+describe('config store base revision', () => {
+  const OLD = { version: 3, system: { hostname: 'old' } }
+  const NEW = { version: 3, system: { hostname: 'new' } }
+
+  /** Serves each [configuration, revision] in turn as the saved one. */
+  function serve(...reads) {
+    const fetch = vi.fn()
+    for (const [config, revision] of reads) {
+      fetch.mockResolvedValueOnce(
+        new Response(JSON.stringify(config), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', ETag: `"${revision}"` },
+        }),
+      )
+    }
+    vi.stubGlobal('fetch', fetch)
+  }
+
+  /** A draft of OLD at r1 with an edit of its own, after NEW was saved at r2. */
+  async function overtaken(...more) {
+    serve([OLD, 'r1'], [NEW, 'r2'], ...more)
+    const config = useConfigStore()
+    await config.load()
+    config.draft.system.hostname = 'mine'
+    expect(await config.resync()).toBe(true)
+    return config
+  }
+
+  beforeEach(() => setActivePinia(createPinia()))
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('is the revision the draft was loaded at', async () => {
+    serve([OLD, 'r1'])
+    const config = useConfigStore()
+    await config.load()
+    expect(config.draft).toEqual(OLD)
+    expect(config.base).toBe('r1')
+    expect(config.stale).toBe(false)
+  })
+
+  it('is none before the first save', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: 'no configuration' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    )
+    const config = useConfigStore()
+    await config.load()
+    expect(config.saved).toBeNull()
+    expect(config.base).toBe('none')
+  })
+
+  it('follows a save when the draft has no edits of its own', async () => {
+    serve([OLD, 'r1'], [NEW, 'r2'])
+    const config = useConfigStore()
+    await config.load()
+    expect(await config.resync()).toBe(true)
+    expect(config.draft).toEqual(NEW)
+    expect(config.base).toBe('r2')
+    expect(config.stale).toBe(false)
+  })
+
+  it('follows a save of the draft this tab applied', async () => {
+    serve([OLD, 'r1'], [NEW, 'r2'])
+    const config = useConfigStore()
+    await config.load()
+    config.draft.system.hostname = 'new'
+    expect(await config.resync(structuredClone(NEW))).toBe(true)
+    expect(config.base).toBe('r2')
+    expect(config.stale).toBe(false)
+  })
+
+  it('keeps an edited draft on its base, stale, when another save moves on', async () => {
+    const config = await overtaken()
+    expect(config.saved).toEqual(NEW)
+    expect(config.draft.system.hostname).toBe('mine')
+    expect(config.base).toBe('r1')
+    expect(config.stale).toBe(true)
+  })
+
+  it('takes the saved revision on discard, and Undo puts the old one back', async () => {
+    const config = await overtaken()
+    const toast = useToastStore()
+    config.discard()
+    expect(config.draft).toEqual(NEW)
+    expect(config.base).toBe('r2')
+    expect(config.stale).toBe(false)
+
+    toast.act(toast.toasts.at(-1).id)
+    expect(config.draft.system.hostname).toBe('mine')
+    expect(config.base).toBe('r1')
+    expect(config.stale).toBe(true)
+  })
+
+  it('never marks a draft stale when the server gives no revision, as for a viewer', async () => {
+    const plain = (config) =>
+      new Response(JSON.stringify(config), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce(plain(OLD)).mockResolvedValueOnce(plain(NEW)),
+    )
+    const config = useConfigStore()
+    await config.load()
+    config.draft.system.hostname = 'mine'
+    expect(await config.resync()).toBe(true)
+    expect(config.base).toBe('')
+    expect(config.stale).toBe(false)
+  })
+
+  it('stays put when the draft is replaced', async () => {
+    serve([OLD, 'r1'])
+    const config = useConfigStore()
+    await config.load()
+    config.replaceDraft(NEW)
+    expect(config.base).toBe('r1')
+  })
+
+  it('is no longer stale once the saved configuration is loaded again', async () => {
+    const config = await overtaken([NEW, 'r2'])
+    await config.load(true)
+    expect(config.draft).toEqual(NEW)
+    expect(config.base).toBe('r2')
+    expect(config.stale).toBe(false)
   })
 })
 

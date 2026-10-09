@@ -43,7 +43,10 @@ describe('InterfacesView', () => {
     vi.clearAllMocks()
     api.interfaces.live.mockResolvedValue([])
     api.services.status.mockResolvedValue({ pppoeSetUp: true })
-    api.config.get.mockResolvedValue({ version: 3, interfaces: [], zones: [] })
+    api.config.get.mockResolvedValue({
+      config: { version: 3, interfaces: [], zones: [] },
+      revision: 'r1',
+    })
   })
 
   // An apply creates and destroys real devices. Without this the table

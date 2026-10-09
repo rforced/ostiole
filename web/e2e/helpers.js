@@ -44,6 +44,19 @@ export async function applyAndConfirm(page) {
 }
 
 /**
+ * The saved configuration and its revision, which an apply sends back as
+ * baseRevision.
+ *
+ * @param {import('@playwright/test').APIRequestContext} api signed in
+ */
+export async function readConfig(api) {
+  const res = await api.get('/api/v1/config')
+  expect(res.ok(), await res.text()).toBe(true)
+  const baseRevision = (res.headers().etag ?? '').replace(/^(W\/)?"|"$/g, '')
+  return { config: await res.json(), baseRevision }
+}
+
+/**
  * Changes the running configuration through the API, applied and
  * confirmed, for what a file needs in place before its pages are opened.
  *
@@ -53,10 +66,10 @@ export async function applyAndConfirm(page) {
  */
 export async function reconfigure(api, change) {
   const headers = { 'X-Requested-With': 'ostiole' }
-  const config = await (await api.get('/api/v1/config')).json()
+  const { config, baseRevision } = await readConfig(api)
   change(config)
   const applied = await api.post('/api/v1/apply', {
-    data: { config, confirmTimeoutSeconds: 60 },
+    data: { config, confirmTimeoutSeconds: 60, baseRevision },
     headers,
   })
   expect(applied.ok(), await applied.text()).toBe(true)

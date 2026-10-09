@@ -106,7 +106,7 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/system/stats":             {summary: "CPU, memory, swap, load, disk space and the connection table on this router.", role: auth.RoleViewer},
 	"GET /api/v1/system/timezones":         {summary: "The timezones this router can be set to, and the one its clock reads now.", role: auth.RoleViewer},
 	"GET /api/v1/overview":                 {summary: "Everything the dashboard shows, in one request.", role: auth.RoleViewer},
-	"GET /api/v1/config":                   {summary: "The saved configuration. A viewer gets it without its secrets.", role: auth.RoleViewer},
+	"GET /api/v1/config":                   {summary: "The saved configuration. A viewer gets it without its secrets. For an operator the ETag header is its revision, the SHA-256 of the saved bytes, or none when nothing is saved.", role: auth.RoleViewer},
 	"GET /api/v1/config/revisions":         {summary: "List archived configurations.", role: auth.RoleViewer},
 	"GET /api/v1/config/revisions/{id}":    {summary: "Read one archived configuration. A viewer gets it without its secrets.", role: auth.RoleViewer},
 	"GET /api/v1/ruleset":                  {summary: "The nftables ruleset that is loaded.", role: auth.RoleViewer},
@@ -191,7 +191,7 @@ var routeDocs = map[string]routeDoc{
 
 	"POST /api/v1/config/starter":               {summary: "Build a first configuration from the wizard's answers.", role: auth.RoleOperator},
 	"POST /api/v1/check":                        {summary: "Validate a configuration and render it without applying. Changes only an administrator may apply are refused.", role: auth.RoleOperator},
-	"POST /api/v1/apply":                        {summary: "Apply a configuration, optionally with a confirmation window. Command crons, backups that carry accounts, updates, the remote backup, notifications, management access and anti-lockout need an administrator.", role: auth.RoleOperator},
+	"POST /api/v1/apply":                        {summary: "Apply a configuration, optionally with a confirmation window. baseRevision is required: the ETag from GET /api/v1/config the draft was read from, with or without its quotes. When the configuration has changed since, the reply is 409 with code stale. Command crons, backups that carry accounts, updates, the remote backup, notifications, management access and anti-lockout need an administrator.", role: auth.RoleOperator},
 	"POST /api/v1/apply/confirm":                {summary: "Confirm the pending apply.", role: auth.RoleOperator},
 	"POST /api/v1/apply/revert":                 {summary: "Undo the pending apply.", role: auth.RoleOperator},
 	"GET /api/v1/apply/drift":                   {summary: "What applying the saved configuration again would change: this release's render of it against what the last apply rendered, line by line.", role: auth.RoleOperator},
