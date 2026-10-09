@@ -11,6 +11,17 @@ import { useToastStore } from '@/stores/toast'
 
 const clone = (v) => (v === null || v === undefined ? v : JSON.parse(JSON.stringify(v)))
 
+/** Swaps the item with the next one of its zone, delta -1 up or +1 down. */
+function moveInZone(list, id, delta) {
+  const from = list.findIndex((r) => r.id === id)
+  if (from === -1) return
+  const zone = list[from].zone
+  let to = from + delta
+  while (to >= 0 && to < list.length && list[to].zone !== zone) to += delta
+  if (to < 0 || to >= list.length) return
+  ;[list[from], list[to]] = [list[to], list[from]]
+}
+
 /** JSON with object keys in one order: a dialog rebuilds what it saves. */
 function canonical(v) {
   return JSON.stringify(v, (_, x) =>
@@ -569,14 +580,7 @@ export const useConfigStore = defineStore('config', () => {
 
   /** Moves a rule up (-1) or down (+1) among the rules of its zone. */
   function moveRule(id, delta) {
-    const list = draft.value.rules
-    const from = list.findIndex((r) => r.id === id)
-    if (from === -1) return
-    const zone = list[from].zone
-    let to = from + delta
-    while (to >= 0 && to < list.length && list[to].zone !== zone) to += delta
-    if (to < 0 || to >= list.length) return
-    ;[list[from], list[to]] = [list[to], list[from]]
+    moveInZone(draft.value.rules, id, delta)
   }
 
   // ---- aliases ---------------------------------------------------------
@@ -1032,14 +1036,7 @@ export const useConfigStore = defineStore('config', () => {
 
   /** Moves an access rule up (-1) or down (+1) among the rules of its zone. */
   function moveProxyAccess(id, delta) {
-    const list = ensureProxy().access ?? []
-    const from = list.findIndex((a) => a.id === id)
-    if (from === -1) return
-    const zone = list[from].zone
-    let to = from + delta
-    while (to >= 0 && to < list.length && list[to].zone !== zone) to += delta
-    if (to < 0 || to >= list.length) return
-    ;[list[from], list[to]] = [list[to], list[from]]
+    moveInZone(ensureProxy().access ?? [], id, delta)
   }
 
   /** The draft's profile, to change. */
