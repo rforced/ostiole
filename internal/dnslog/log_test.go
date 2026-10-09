@@ -19,7 +19,7 @@ func onLog(t *testing.T, entries, days int) *Log {
 	t.Helper()
 	l := New()
 	l.Slog = slog.New(slog.DiscardHandler)
-	l.Configure(model.QueryLog{Enabled: true, Entries: entries, Days: days}, dnsblock.Options{}, nil)
+	l.Configure(model.QueryLog{Enabled: true, Entries: entries}, time.Duration(days)*24*time.Hour, dnsblock.Options{}, nil)
 	return l
 }
 
@@ -281,7 +281,7 @@ func TestConfigureOffClearsAndGatesAdd(t *testing.T) {
 	t.Parallel()
 	l := onLog(t, 10, 24)
 	at(l, time.Now(), "ads.example.com", StatusBlocked, "10.0.0.1", "one")
-	l.Configure(model.QueryLog{}, dnsblock.Options{}, nil)
+	l.Configure(model.QueryLog{}, 0, dnsblock.Options{}, nil)
 	if l.Enabled() {
 		t.Fatal("still on")
 	}
@@ -306,12 +306,12 @@ func TestConfigureResizes(t *testing.T) {
 	for i := range 6 {
 		at(l, now.Add(time.Duration(i)*time.Second), fmt.Sprintf("n%d.example", i), StatusOK, "10.0.0.1")
 	}
-	l.Configure(model.QueryLog{Enabled: true, Entries: 3, Days: 1}, dnsblock.Options{}, nil)
+	l.Configure(model.QueryLog{Enabled: true, Entries: 3}, 24*time.Hour, dnsblock.Options{}, nil)
 	got, total := query(t, l, Filter{})
 	if total != 3 || got[0].Name != "n5.example" || got[2].Name != "n3.example" {
 		t.Fatalf("after shrinking: %+v, total %d", got, total)
 	}
-	l.Configure(model.QueryLog{Enabled: true, Entries: 20, Days: 1}, dnsblock.Options{}, nil)
+	l.Configure(model.QueryLog{Enabled: true, Entries: 20}, 24*time.Hour, dnsblock.Options{}, nil)
 	if _, total := query(t, l, Filter{}); total != 3 {
 		t.Errorf("after growing: total %d", total)
 	}
@@ -474,7 +474,7 @@ func TestRingGrowsOnDemandAndKeepsTotals(t *testing.T) {
 		}
 	}
 	// Shrinking keeps the newest and the counts follow.
-	l.Configure(model.QueryLog{Enabled: true, Entries: 10, Days: 1}, dnsblock.Options{}, nil)
+	l.Configure(model.QueryLog{Enabled: true, Entries: 10}, 24*time.Hour, dnsblock.Options{}, nil)
 	if total, blocked, _ := l.Totals(); total != 10 || blocked != 0 {
 		t.Errorf("after shrinking: %d/%d", total, blocked)
 	}

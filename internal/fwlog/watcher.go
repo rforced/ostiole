@@ -48,11 +48,12 @@ func (w *Watcher) Run(ctx context.Context) {
 
 func (w *Watcher) tick() {
 	var f model.FirewallLog
+	var l model.Logging
 	cfg := w.Source()
 	if cfg != nil {
-		f = cfg.System.Management.FirewallLog
+		f, l = cfg.System.Management.FirewallLog, cfg.System.Logging
 	}
-	w.Ring.Configure(f.Size(), f.Retention())
+	w.Ring.Configure(f.Size(), l.MemoryKeep())
 	if w.Zones != nil {
 		w.Zones.Set(cfg)
 	}

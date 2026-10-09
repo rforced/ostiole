@@ -39,10 +39,7 @@ type fileRow struct {
 func (l *Log) Files() logfile.Log {
 	return logfile.Log{
 		Name: FileName, Version: FileVersion,
-		On: func(c *model.Config) bool { return c.Services.DNS.QueryLog.Enabled },
-		Days: func(c *model.Config) int {
-			return int(c.Services.DNS.QueryLog.Retention() / (24 * time.Hour))
-		},
+		On:     func(c *model.Config) bool { return c.Services.DNS.QueryLog.Enabled },
 		Newest: l.Newest,
 		Size:   l.Size,
 		Lines: logfile.Lines(l.After, func(e *Entry) uint64 { return e.Seq }, func(e *Entry) time.Time { return e.Time },

@@ -399,11 +399,10 @@ func At[T any, P Entry[T]](e *T) time.Time { return stamp[T, P](e).Time }
 
 // Files describes the ring to the writer that keeps it in files, under
 // name in format version: an entry's line is its JSON, number included.
-// on says whether the log is kept in a configuration, and days how many
-// days it keeps there.
-func (r *Ring[T, P]) Files(name string, version int, on func(*model.Config) bool, days func(*model.Config) int) logfile.Log {
+// on says whether the log is kept in a configuration.
+func (r *Ring[T, P]) Files(name string, version int, on func(*model.Config) bool) logfile.Log {
 	return logfile.Log{
-		Name: name, Version: version, On: on, Days: days,
+		Name: name, Version: version, On: on,
 		Newest: r.Newest, Size: r.Size,
 		Lines: logfile.Lines(r.After, Seq[T, P], At[T, P], func() func([]byte, *T) []byte {
 			return func(buf []byte, e *T) []byte {

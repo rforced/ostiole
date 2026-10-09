@@ -52,7 +52,7 @@ func TestClearingALogDeletesItsFiles(t *testing.T) {
 	ring := fwlog.NewRing(16)
 	qlog := dnslog.New()
 	qlog.Slog = slog.New(slog.DiscardHandler)
-	qlog.Configure(cfg.Services.DNS.QueryLog, dnsblock.Options{}, nil)
+	qlog.Configure(cfg.Services.DNS.QueryLog, cfg.System.Logging.MemoryKeep(), dnsblock.Options{}, nil)
 	files := &logfile.Writer{
 		Dir: t.TempDir(), Source: func() *model.Config { return cfg }, Log: slog.New(slog.DiscardHandler),
 		Statfs: func(string) (uint64, uint64, error) { return 50, 100, nil },
@@ -187,7 +187,7 @@ func keepEveryLog(t *testing.T, d *Deps, dir string) map[string]func() int {
 	d.Log.Add(fwlog.Entry{Time: now, Src: "192.0.2.1"})
 	d.QueryLog = dnslog.New()
 	d.QueryLog.Slog = slog.New(slog.DiscardHandler)
-	d.QueryLog.Configure(filesOn().Services.DNS.QueryLog, dnsblock.Options{}, nil)
+	d.QueryLog.Configure(filesOn().Services.DNS.QueryLog, model.Logging{}.MemoryKeep(), dnsblock.Options{}, nil)
 	d.QueryLog.Add(dnslog.Entry{Time: now, Name: "a.example", Type: 1, Status: dnslog.StatusOK,
 		Client: netip.MustParseAddr("10.0.0.2")}, nil)
 	d.WAFLog = waflog.New()

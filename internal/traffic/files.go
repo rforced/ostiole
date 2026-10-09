@@ -137,8 +137,8 @@ func ParseHour(line []byte) (HourLine, time.Time, error) {
 
 // FileLogs describe what traffic keeps in files to the writer: the links
 // always, the devices while they are counted, and the destinations while
-// they are recorded. The minute lines keep the files' days, at most a
-// month; the destinations keep theirs as the other logs do.
+// they are recorded. Each keeps the files' days, the minute lines at most
+// a month.
 func (c *Counter) FileLogs() []logfile.Log {
 	minutes := func(r *records[MinuteLine]) func(uint64, int, func(uint64, time.Time, []byte)) bool {
 		return logfile.Lines(r.after, recordSeq[MinuteLine], recordTime[MinuteLine],
@@ -148,23 +148,18 @@ func (c *Counter) FileLogs() []logfile.Log {
 		{
 			Name: LinksFile, Version: FileVersion, MaxDays: MinuteDays,
 			On:     func(*model.Config) bool { return true },
-			Days:   func(*model.Config) int { return 0 },
 			Newest: c.linkRecs.newest, Size: recordsSize,
 			Lines: minutes(&c.linkRecs),
 		},
 		{
 			Name: DevicesFile, Version: FileVersion, MaxDays: MinuteDays,
 			On:     func(cfg *model.Config) bool { return cfg.Traffic.Devices },
-			Days:   func(*model.Config) int { return 0 },
 			Newest: c.deviceRecs.newest, Size: recordsSize,
 			Lines: minutes(&c.deviceRecs),
 		},
 		{
 			Name: DestinationsFile, Version: FileVersion,
-			On: func(cfg *model.Config) bool { return cfg.Traffic.DestinationsOn() },
-			Days: func(cfg *model.Config) int {
-				return int(cfg.Traffic.Destinations.Retention() / (24 * time.Hour))
-			},
+			On:     func(cfg *model.Config) bool { return cfg.Traffic.DestinationsOn() },
 			Newest: c.destRecs.newest, Size: recordsSize,
 			Lines: logfile.Lines(c.destRecs.after, recordSeq[HourLine], recordTime[HourLine],
 				func() func([]byte, *record[HourLine]) []byte { return appendJSON[HourLine] }),

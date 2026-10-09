@@ -38,10 +38,8 @@ type Log struct {
 	Name string
 	// Version is the format of its lines, named in each member's header.
 	Version int
-	// On says whether the log is on in a configuration, and Days how many
-	// days it keeps there, zero for a log with no days of its own.
-	On   func(*model.Config) bool
-	Days func(*model.Config) int
+	// On says whether the log is on in a configuration.
+	On func(*model.Config) bool
 	// MaxDays caps the days its files keep, however many the files'
 	// setting says; zero is no cap.
 	MaxDays int
@@ -57,18 +55,13 @@ type Log struct {
 }
 
 // Kept is how long the log's files keep an entry in cfg: the files' days,
-// or the log's own where those are fewer, and never more than MaxDays.
+// never more than MaxDays.
 func (l Log) Kept(cfg *model.Config) time.Duration {
 	var files model.LogFiles
 	if cfg != nil {
 		files = cfg.System.Logging.Files
 	}
 	days := files.Days()
-	if cfg != nil {
-		if own := l.Days(cfg); own > 0 {
-			days = min(days, own)
-		}
-	}
 	if l.MaxDays > 0 {
 		days = min(days, l.MaxDays)
 	}
@@ -563,11 +556,10 @@ func kernelStatfs(path string) (free, total uint64, err error) {
 	return st.Bavail * uint64(st.Bsize), st.Blocks * uint64(st.Bsize), nil //nolint:gosec // block size is positive
 }
 
-// prune deletes the days each log no longer keeps, the shorter of the
-// files' days and the log's own, then the oldest day of any log while
-// the files are over the cap. Today's files are never deleted: a log
-// whose file alone keeps the rest over the cap stops writing until
-// tomorrow.
+// prune deletes the days each log's files no longer keep, then the oldest
+// day of any log while the files are over the cap. Today's files are never
+// deleted: a log whose file alone keeps the rest over the cap stops
+// writing until tomorrow.
 func (w *Writer) prune(now time.Time) {
 	w.mu.Lock()
 	logs, files, cfg := slices.Clone(w.logs), w.files, w.cfg

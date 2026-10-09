@@ -86,7 +86,7 @@ func TestDestinationRowsRollByTheHourAndKeepTheirBounds(t *testing.T) {
 		t.Fatalf("rows = %+v, held %d", rows, held)
 	}
 	// Past the days kept, the old hours go.
-	r.cfg.Traffic.Destinations.Days = 1
+	r.cfg.System.Logging.Days = 1
 	r.c.follow(r.now)
 	r.step(26*time.Hour, tcp(1, "10.0.0.5", "198.51.100.7", 443, 30, 30))
 	if _, held, _ := r.c.Destinations(72*time.Hour, ""); held != 1 {

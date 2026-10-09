@@ -502,7 +502,7 @@ at your own.`,
 					&journalfeed.Tap[wafevent.Event]{
 						Log: wafLog, Parse: wafevent.Parse, Name: "the WAF events",
 						Settings: func(c *model.Config) (int, time.Duration) {
-							return c.Services.Proxy.Events.Size(), c.Services.Proxy.Events.Retention()
+							return c.Services.Proxy.Events.Size(), c.System.Logging.MemoryKeep()
 						},
 						On: func(c *model.Config) bool { return c.ProxyEnabled() },
 					},
@@ -678,16 +678,16 @@ func (r *readBacks) start(ctx context.Context, log *slog.Logger, files, loop str
 func (r *readBacks) wait() { r.wg.Wait() }
 
 // readFirewallLog fills the firewall log from its files while the
-// configuration writes them, as its own entries and days allow, and hands
-// it to the writer.
+// configuration writes them, as its entries and the memory days allow, and
+// hands it to the writer.
 func readFirewallLog(cfg *model.Config, ring *fwlog.Ring, files *logfile.Writer, skip bool, log *slog.Logger) {
 	var st logfile.ReadStats
 	if cfg != nil && cfg.System.Logging.Files.Enabled {
-		f := cfg.System.Management.FirewallLog
-		ring.Configure(f.Size(), f.Retention())
+		f, keep := cfg.System.Management.FirewallLog, cfg.System.Logging.MemoryKeep()
+		ring.Configure(f.Size(), keep)
 		started := time.Now()
 		upgradeFiles(files.Dir, fwlog.FileName, fwlog.FileVersion, log)
-		since := started.Add(-ring.Files().Kept(cfg))
+		since := readSince(started, ring.Files().Kept(cfg), keep)
 		count, err := logfile.Count(files.Dir, fwlog.FileName, since)
 		if err != nil {
 			log.Warn("could not count all of the firewall log's files", "err", err)
@@ -734,10 +734,10 @@ func upgradeFiles(dir, name string, version int, log *slog.Logger) {
 func readQueryLog(cfg *model.Config, qlog *dnslog.Log, files *logfile.Writer, skip bool, log *slog.Logger) {
 	var st logfile.ReadStats
 	if cfg != nil && cfg.System.Logging.Files.Enabled && cfg.Services.DNS.QueryLog.Enabled {
-		q := cfg.Services.DNS.QueryLog
+		q, keep := cfg.Services.DNS.QueryLog, cfg.System.Logging.MemoryKeep()
 		started := time.Now()
 		upgradeFiles(files.Dir, dnslog.FileName, dnslog.FileVersion, log)
-		since := started.Add(-qlog.Files().Kept(cfg))
+		since := readSince(started, qlog.Files().Kept(cfg), keep)
 		count, err := logfile.Count(files.Dir, dnslog.FileName, since)
 		if err != nil {
 			log.Warn("could not count all of the query log's answers in its files", "err", err)
@@ -746,7 +746,7 @@ func readQueryLog(cfg *model.Config, qlog *dnslog.Log, files *logfile.Writer, sk
 			count = 0
 		}
 		n := 0
-		rs, err := qlog.Restorer(q, count)
+		rs, err := qlog.Restorer(q, keep, count)
 		if err != nil {
 			log.Warn("could not put the query log's files back", "err", err)
 		} else {
@@ -772,10 +772,10 @@ func readQueryLog(cfg *model.Config, qlog *dnslog.Log, files *logfile.Writer, sk
 func readWAFEvents(cfg *model.Config, events *waflog.Log, files *logfile.Writer, skip bool, log *slog.Logger) {
 	var st logfile.ReadStats
 	if cfg != nil && cfg.System.Logging.Files.Enabled {
-		e := cfg.Services.Proxy.Events
-		events.Configure(e.Size(), e.Retention())
+		e, keep := cfg.Services.Proxy.Events, cfg.System.Logging.MemoryKeep()
+		events.Configure(e.Size(), keep)
 		started := time.Now()
-		since := started.Add(-events.Files().Kept(cfg))
+		since := readSince(started, events.Files().Kept(cfg), keep)
 		count, err := logfile.Count(files.Dir, waflog.FileName, since)
 		if err != nil {
 			log.Warn("could not count all of the WAF events' files", "err", err)
@@ -814,7 +814,7 @@ func readRing[T any, P logring.Entry[T]](cfg *model.Config, ring *logring.Ring[T
 		size, keep := settings(cfg)
 		ring.Configure(size, keep)
 		started := time.Now()
-		since := started.Add(-l.Kept(cfg))
+		since := readSince(started, l.Kept(cfg), keep)
 		count, err := logfile.Count(files.Dir, l.Name, since)
 		if err != nil {
 			log.Warn("could not count all of a log's files", "log", l.Name, "err", err)
@@ -841,6 +841,14 @@ func readRing[T any, P logring.Entry[T]](cfg *model.Config, ring *logring.Ring[T
 		}
 	}
 	files.Add(l, st)
+}
+
+// readSince is where a read-back starts: the shorter of kept and a set keep.
+func readSince(started time.Time, kept, keep time.Duration) time.Time {
+	if keep > 0 {
+		kept = min(kept, keep)
+	}
+	return started.Add(-kept)
 }
 
 // watchGateways runs the gateway monitor once its history is read back
@@ -886,7 +894,7 @@ func readGateways(cfg *model.Config, h *gateway.History, files *logfile.Writer, 
 // configuration writes them, before counting starts, and hands its logs to
 // the writer: the minutes of the links, and of the devices while they are
 // counted, as a day of minutes and a month of hours, and the destinations'
-// hours as their own entries and days allow.
+// hours as their entries and the memory days allow.
 func readTraffic(cfg *model.Config, counter *traffic.Counter, files *logfile.Writer, skip bool, log *slog.Logger) {
 	stats := map[string]logfile.ReadStats{}
 	logs := counter.FileLogs()
@@ -914,8 +922,9 @@ func readTraffic(cfg *model.Config, counter *traffic.Counter, files *logfile.Wri
 		}
 		if cfg.Traffic.DestinationsOn() && !skip {
 			d := cfg.Traffic.Destinations
+			since := readSince(started, kept(traffic.DestinationsFile), cfg.System.Logging.MemoryKeep())
 			st, err := logfile.Stream(files.Dir, traffic.DestinationsFile, traffic.FileVersion, d.Size(),
-				started.Add(-kept(traffic.DestinationsFile)), traffic.ParseHour, counter.RestoreHour)
+				since, traffic.ParseHour, counter.RestoreHour)
 			if err != nil {
 				log.Warn("could not read all of the destinations' files back", "err", err)
 			}

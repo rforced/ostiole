@@ -53,8 +53,7 @@ type Log struct {
 
 // New returns an empty log of the default size.
 func New() *Log {
-	d := model.ProxyEvents{}
-	return &Log{size: d.Size(), keep: d.Retention(), subs: map[chan Entry]struct{}{}}
+	return &Log{size: model.DefaultProxyEventEntries, keep: model.Logging{}.MemoryKeep(), subs: map[chan Entry]struct{}{}}
 }
 
 // Configure sets the ceiling and how long an event is kept, keeping the

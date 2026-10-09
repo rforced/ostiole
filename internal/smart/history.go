@@ -55,8 +55,7 @@ const (
 // HistoryFiles describes the history to the writer that keeps it in files,
 // for the files' days, since it has none of its own.
 func HistoryFiles(h *History) logfile.Log {
-	return h.Files(HistoryFileName, HistoryFileVersion,
-		func(*model.Config) bool { return true }, func(*model.Config) int { return 0 })
+	return h.Files(HistoryFileName, HistoryFileVersion, func(*model.Config) bool { return true })
 }
 
 // readingOf is what a check of a drive found, from what it said.

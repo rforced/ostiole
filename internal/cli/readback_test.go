@@ -116,7 +116,7 @@ func TestTheQueryLogComesBackFromItsFiles(t *testing.T) {
 		Statfs: func(string) (uint64, uint64, error) { return 1, 2, nil }}
 	before := dnslog.New()
 	before.Slog = log
-	before.Configure(model.QueryLog{Enabled: true}, dnsblock.Options{}, nil)
+	before.Configure(model.QueryLog{Enabled: true}, model.Logging{}.MemoryKeep(), dnsblock.Options{}, nil)
 	files.Add(before.Files(), logfile.ReadStats{})
 	now := time.Now()
 	for i := range 3 {
@@ -185,7 +185,7 @@ func TestClearedWAFEventsStayClearedAfterARestart(t *testing.T) {
 		Taps: []journalfeed.AnyTap{&journalfeed.Tap[wafevent.Event]{
 			Log: events, Parse: wafevent.Parse, Name: "the WAF events",
 			Settings: func(c *model.Config) (int, time.Duration) {
-				return c.Services.Proxy.Events.Size(), c.Services.Proxy.Events.Retention()
+				return c.Services.Proxy.Events.Size(), c.System.Logging.MemoryKeep()
 			},
 			On: func(*model.Config) bool { return true },
 		}},

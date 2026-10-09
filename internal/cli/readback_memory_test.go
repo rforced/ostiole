@@ -186,7 +186,6 @@ func writeMadeUp(dir string, l memLog) error {
 	files.Add(logfile.Log{
 		Name: l.name, Version: l.version,
 		On:     func(*model.Config) bool { return true },
-		Days:   func(*model.Config) int { return 0 },
 		Newest: func() uint64 { return newest },
 		Size:   func() int { return l.count },
 		Lines: func(after uint64, limit int, emit func(uint64, time.Time, []byte)) bool {

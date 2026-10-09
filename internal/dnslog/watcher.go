@@ -52,8 +52,8 @@ func (w *Watcher) Run(ctx context.Context) {
 func (w *Watcher) tick() {
 	cfg := w.Source()
 	if cfg == nil {
-		w.Log.Configure(model.QueryLog{}, dnsblock.Options{}, nil)
+		w.Log.Configure(model.QueryLog{}, 0, dnsblock.Options{}, nil)
 		return
 	}
-	w.Log.Configure(cfg.Services.DNS.QueryLog, dnsblock.OptionsFor(cfg), w.Cache)
+	w.Log.Configure(cfg.Services.DNS.QueryLog, cfg.System.Logging.MemoryKeep(), dnsblock.OptionsFor(cfg), w.Cache)
 }

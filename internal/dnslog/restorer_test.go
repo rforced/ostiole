@@ -16,11 +16,14 @@ func stored(seq uint64, when time.Time, name string, status Status, lists ...str
 		Client: netip.MustParseAddr("192.0.2.10")}, ListNames: lists}
 }
 
-func restorer(t *testing.T, q model.QueryLog, count int) (*Log, *Restorer) {
+// week is what memory keeps by default.
+const week = 7 * 24 * time.Hour
+
+func restorer(t *testing.T, q model.QueryLog, keep time.Duration, count int) (*Log, *Restorer) {
 	t.Helper()
 	l := New()
 	l.Slog = slog.New(slog.DiscardHandler)
-	r, err := l.Restorer(q, count)
+	r, err := l.Restorer(q, keep, count)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +52,7 @@ func rowNames(entries []Entry) []string {
 func TestRestorerDropsWhatDoesNotRiseOrHasAgedOut(t *testing.T) {
 	t.Parallel()
 	now := time.Now()
-	l, r := restorer(t, model.QueryLog{Enabled: true, Days: 1}, 6)
+	l, r := restorer(t, model.QueryLog{Enabled: true}, 24*time.Hour, 6)
 	r.Push(stored(2, now.Add(-time.Hour), "a.example.test", StatusOK))
 	r.Push(stored(2, now.Add(-time.Hour), "again.example.test", StatusOK))
 	r.Push(stored(1, now.Add(-time.Hour), "back.example.test", StatusOK))
@@ -73,7 +76,7 @@ func TestRestorerDropsWhatDoesNotRiseOrHasAgedOut(t *testing.T) {
 func TestRestorerKeepsTheNewestOfMoreThanItsSize(t *testing.T) {
 	t.Parallel()
 	now := time.Now()
-	l, r := restorer(t, model.QueryLog{Enabled: true, Entries: 3}, 3)
+	l, r := restorer(t, model.QueryLog{Enabled: true, Entries: 3}, week, 3)
 	for i := range 5 {
 		r.Push(stored(uint64(i+1), now.Add(time.Duration(i-5)*time.Minute), fmt.Sprintf("n%d.example.test", i),
 			StatusBlocked, "made-up-list-1"))
@@ -107,7 +110,7 @@ func TestRestorerKeepsTheNewestOfMoreThanItsSize(t *testing.T) {
 func TestRestorerGrowsPastAShortCount(t *testing.T) {
 	t.Parallel()
 	now := time.Now()
-	l, r := restorer(t, model.QueryLog{Enabled: true, Entries: 2500}, 2)
+	l, r := restorer(t, model.QueryLog{Enabled: true, Entries: 2500}, week, 2)
 	for i := range 3000 {
 		r.Push(stored(uint64(i+1), now.Add(time.Duration(i-3000)*time.Millisecond), fmt.Sprintf("n%d.example.test", i), StatusOK))
 	}
@@ -121,7 +124,7 @@ func TestRestorerGrowsPastAShortCount(t *testing.T) {
 		}
 	}
 
-	_, r = restorer(t, model.QueryLog{Enabled: true, Entries: 5000}, 0)
+	_, r = restorer(t, model.QueryLog{Enabled: true, Entries: 5000}, week, 0)
 	if r.ring != nil {
 		t.Fatalf("no count gave %d places before an answer", len(r.ring))
 	}
@@ -135,7 +138,7 @@ func TestRestorerGrowsPastAShortCount(t *testing.T) {
 func TestRestorerInternsAndCountsLists(t *testing.T) {
 	t.Parallel()
 	now := time.Now().Add(-time.Hour)
-	l, r := restorer(t, model.QueryLog{Enabled: true}, 4)
+	l, r := restorer(t, model.QueryLog{Enabled: true}, week, 4)
 	r.Push(stored(1, now, "a.example.test", StatusBlocked, "made-up-list-1"))
 	r.Push(stored(2, now.Add(time.Second), "b.example.test", StatusBlocked, "made-up-list-1", "made-up-list-2"))
 	r.Push(stored(3, now.Add(2*time.Second), "c.example.test", StatusOK))
@@ -166,17 +169,17 @@ func TestRestorerInternsAndCountsLists(t *testing.T) {
 func TestRestorerRefusesOnceTheLogMovedOn(t *testing.T) {
 	t.Parallel()
 	now := time.Now()
-	l, r := restorer(t, model.QueryLog{Enabled: true}, 1)
+	l, r := restorer(t, model.QueryLog{Enabled: true}, week, 1)
 	r.Push(stored(7, now.Add(-time.Minute), "a.example.test", StatusOK))
 	at(l, now, "new.example.test", StatusOK, "192.0.2.11")
 	if n, err := r.Done(7); err == nil || n != 0 {
 		t.Errorf("done after an answer: %d, %v", n, err)
 	}
-	if _, err := l.Restorer(model.QueryLog{Enabled: true}, 0); err == nil {
+	if _, err := l.Restorer(model.QueryLog{Enabled: true}, week, 0); err == nil {
 		t.Error("a restorer after an answer")
 	}
 
-	l, r = restorer(t, model.QueryLog{Enabled: true}, 1)
+	l, r = restorer(t, model.QueryLog{Enabled: true}, week, 1)
 	r.Push(stored(7, now.Add(-time.Minute), "a.example.test", StatusOK, "made-up-list-1"))
 	l.Clear()
 	if n, err := r.Done(5); err == nil || n != 0 {

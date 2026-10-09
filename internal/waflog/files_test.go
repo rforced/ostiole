@@ -49,13 +49,13 @@ func TestEventsComeBackFromTheFiles(t *testing.T) {
 	}
 }
 
-// The files keep the shorter of their days and the events' own.
-func TestTheFilesKeepTheEventsDays(t *testing.T) {
+// The files keep their own days, whatever memory keeps.
+func TestTheFilesKeepTheirDays(t *testing.T) {
 	t.Parallel()
 	cfg := &model.Config{}
 	cfg.System.Logging.Files = model.LogFiles{Enabled: true, RetentionDays: 30}
-	cfg.Services.Proxy.Events.Days = 3
-	if got := New().Files().Kept(cfg); got != 72*time.Hour {
+	cfg.System.Logging.Days = 3
+	if got := New().Files().Kept(cfg); got != 30*24*time.Hour {
 		t.Errorf("kept %v", got)
 	}
 }

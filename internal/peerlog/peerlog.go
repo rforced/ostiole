@@ -81,8 +81,7 @@ const FileVersion = 1
 
 // New returns an empty log of the default size.
 func New() *Log {
-	var k model.LogKeep
-	return logring.New[Event, *Event](k.Size(model.DefaultPeerLogEntries), k.Retention())
+	return logring.New[Event, *Event](model.DefaultPeerLogEntries, model.Logging{}.MemoryKeep())
 }
 
 // Kept says whether the configuration keeps the peers' logs at all: only
@@ -91,15 +90,12 @@ func Kept(c *model.Config) bool { return c.System.Logging.Records() }
 
 // Settings sizes a kind's log in a configuration.
 func (k Kind) Settings(c *model.Config) (int, time.Duration) {
-	keep := k.Keep(c)
-	return keep.Size(model.DefaultPeerLogEntries), keep.Retention()
+	return k.Keep(c).Size(model.DefaultPeerLogEntries), c.System.Logging.MemoryKeep()
 }
 
 // Files describes a kind's log to the writer that keeps it in files.
 func (k Kind) Files(l *Log) logfile.Log {
-	return l.Files(k.Name, FileVersion, Kept, func(c *model.Config) int {
-		return int(k.Keep(c).Retention() / (24 * time.Hour))
-	})
+	return l.Files(k.Name, FileVersion, Kept)
 }
 
 // ParseLine reads a line of a peer log's files.

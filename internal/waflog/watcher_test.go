@@ -227,7 +227,7 @@ func watchLog(t *testing.T, l *Log, j journalfeed.Journal, cfg *atomic.Pointer[m
 		Taps: []journalfeed.AnyTap{&journalfeed.Tap[wafevent.Event]{
 			Log: l, Parse: wafevent.Parse, Name: "the WAF events",
 			Settings: func(c *model.Config) (int, time.Duration) {
-				return c.Services.Proxy.Events.Size(), c.Services.Proxy.Events.Retention()
+				return c.Services.Proxy.Events.Size(), c.System.Logging.MemoryKeep()
 			},
 			On: func(c *model.Config) bool { return c.ProxyEnabled() },
 		}},
@@ -527,7 +527,8 @@ func TestTheReaderIdlesWhileTheProxyCannotLog(t *testing.T) {
 func TestTheLogFollowsTheConfiguredSize(t *testing.T) {
 	t.Parallel()
 	cfg := proxyOn()
-	cfg.Services.Proxy.Events = model.ProxyEvents{Entries: 42, Days: 3}
+	cfg.Services.Proxy.Events = model.ProxyEvents{Entries: 42}
+	cfg.System.Logging.Days = 3
 	l := watch(t, newFakeJournal(), on(cfg), false)
 	waitFor(t, "42 events for 3 days", func() bool {
 		size, keep := l.limits()

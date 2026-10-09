@@ -295,7 +295,7 @@ func (c *Counter) follow(now time.Time) bool {
 	dest := on && cfg.Traffic.DestinationsOn()
 	if dest {
 		c.destSize = cfg.Traffic.Destinations.Size()
-		c.destKeep = cfg.Traffic.Destinations.Retention()
+		c.destKeep = cfg.System.Logging.MemoryKeep()
 	}
 	if !dest {
 		c.open, c.closed = nil, nil

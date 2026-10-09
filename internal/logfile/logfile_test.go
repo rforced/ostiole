@@ -72,7 +72,6 @@ func (r *ring) desc(name string, on *bool) Log {
 	return Log{
 		Name: name, Version: 1,
 		On:     func(*model.Config) bool { return on == nil || *on },
-		Days:   func(*model.Config) int { return 7 },
 		Newest: r.Newest,
 		Size:   func() int { return r.size },
 		Lines: Lines(r.After, func(e *entry) uint64 { return e.Seq }, func(e *entry) time.Time { return e.Time },
@@ -268,12 +267,12 @@ func TestRepairsACutMemberBeforeAppending(t *testing.T) {
 	}
 }
 
-// Each log keeps the shorter of the files' days and its own, and the cap
-// takes the oldest day of any log first. Today's file stays.
+// Each log keeps the files' days, and the cap takes the oldest day of any
+// log first. Today's file stays.
 func TestPrunesByDaysThenByTheCap(t *testing.T) {
 	t.Parallel()
 	g := newRig(t, 100)
-	g.cfg.System.Logging.Files.RetentionDays = 30
+	g.cfg.System.Logging.Files.RetentionDays = 7
 	g.w.follow()
 	dir := filepath.Join(g.w.Dir, "test")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -295,8 +294,8 @@ func TestPrunesByDaysThenByTheCap(t *testing.T) {
 	for _, d := range days {
 		sized(d, 1024)
 	}
-	// The log keeps seven days, so its files do too, for all the files'
-	// thirty: the 20th is over at midnight, after the 20th at noon.
+	// The files keep seven days: the 20th is over at midnight, after the
+	// 20th at noon.
 	g.w.prune(g.clock.t)
 	files, _ := dayFiles(dir)
 	if got := names(files); !slices.Equal(got, days[2:]) {
@@ -345,25 +344,26 @@ func TestALogCapsItsDays(t *testing.T) {
 	}
 }
 
-// Files set to fewer days than a log keeps win, and a log with no days of
-// its own keeps the files' days.
-func TestTheShorterDaysWin(t *testing.T) {
+// The files' days alone decide what the files keep, whatever memory keeps,
+// unless a log caps its days below them.
+func TestTheFilesDaysDecide(t *testing.T) {
 	t.Parallel()
 	for name, tc := range map[string]struct {
-		own  int
+		most int
 		want []string
 	}{
-		"fewer in the files": {own: 7, want: []string{"2026-09-25", "2026-09-27"}},
-		"none of its own":    {own: 0, want: []string{"2026-09-25", "2026-09-27"}},
-		"fewer in the log":   {own: 1, want: []string{"2026-09-27"}},
+		"no cap":      {most: 0, want: []string{"2026-09-25", "2026-09-27"}},
+		"a cap above": {most: 7, want: []string{"2026-09-25", "2026-09-27"}},
+		"a cap below": {most: 1, want: []string{"2026-09-27"}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			g := newRig(t, 100)
 			g.cfg.System.Logging.Files.RetentionDays = 3
+			g.cfg.System.Logging.Days = 1
 			g.w.follow()
 			g.w.mu.Lock()
-			g.w.logs[0].Days = func(*model.Config) int { return tc.own }
+			g.w.logs[0].MaxDays = tc.most
 			g.w.mu.Unlock()
 			dir := filepath.Join(g.w.Dir, "test")
 			if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -383,26 +383,25 @@ func TestTheShorterDaysWin(t *testing.T) {
 	}
 }
 
-func TestKeptTakesTheFewestDays(t *testing.T) {
+func TestKeptIsTheFilesDaysUpToTheCap(t *testing.T) {
 	t.Parallel()
 	day := 24 * time.Hour
-	own := func(n int) func(*model.Config) int { return func(*model.Config) int { return n } }
 	cfg := &model.Config{}
-	cfg.System.Logging.Files.RetentionDays = 30
+	cfg.System.Logging.Files.RetentionDays = 45
+	cfg.System.Logging.Days = 7
 	for _, tc := range []struct {
 		log  Log
 		cfg  *model.Config
 		want time.Duration
 	}{
-		{Log{Days: own(7)}, cfg, 7 * day},
-		{Log{Days: own(90)}, cfg, 30 * day},
-		{Log{Days: own(0)}, cfg, 30 * day},
-		{Log{Days: own(0), MaxDays: 20}, cfg, 20 * day},
-		{Log{Days: own(90), MaxDays: 60}, &model.Config{}, time.Duration(model.DefaultLogFileDays) * day},
-		{Log{Days: own(7)}, nil, time.Duration(model.DefaultLogFileDays) * day},
+		{Log{}, cfg, 45 * day},
+		{Log{MaxDays: 20}, cfg, 20 * day},
+		{Log{MaxDays: 60}, cfg, 45 * day},
+		{Log{MaxDays: 60}, &model.Config{}, time.Duration(model.DefaultLogFileDays) * day},
+		{Log{}, nil, time.Duration(model.DefaultLogFileDays) * day},
 	} {
 		if got := tc.log.Kept(tc.cfg); got != tc.want {
-			t.Errorf("own %d, max %d: kept %v, want %v", tc.log.Days(cfg), tc.log.MaxDays, got, tc.want)
+			t.Errorf("max %d: kept %v, want %v", tc.log.MaxDays, got, tc.want)
 		}
 	}
 }

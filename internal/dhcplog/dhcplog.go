@@ -43,14 +43,12 @@ type Log = logring.Ring[Event, *Event]
 
 // New returns an empty log of the default size.
 func New() *Log {
-	var k model.LogKeep
-	return logring.New[Event, *Event](k.Size(model.DefaultDHCPLogEntries), k.Retention())
+	return logring.New[Event, *Event](model.DefaultDHCPLogEntries, model.Logging{}.MemoryKeep())
 }
 
 // Settings sizes the log in a configuration.
 func Settings(c *model.Config) (int, time.Duration) {
-	l := c.Services.DHCP.Log
-	return l.Size(model.DefaultDHCPLogEntries), l.Retention()
+	return c.Services.DHCP.Log.Size(model.DefaultDHCPLogEntries), c.System.Logging.MemoryKeep()
 }
 
 // Kept says whether the configuration keeps the log at all: only the
@@ -66,9 +64,7 @@ const (
 
 // Files describes the log to the writer that keeps it in files.
 func Files(l *Log) logfile.Log {
-	return l.Files(FileName, FileVersion, Kept, func(c *model.Config) int {
-		return int(c.Services.DHCP.Log.Retention() / (24 * time.Hour))
-	})
+	return l.Files(FileName, FileVersion, Kept)
 }
 
 // ParseLine reads a line of the log's files.

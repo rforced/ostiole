@@ -626,11 +626,10 @@ func (h *History) ClearHistory() {
 // FileLogs describe the history and the events to the writer that keeps
 // them in files.
 func (h *History) FileLogs() []logfile.Log {
-	minutes := h.minutes.Files(HistoryFileName, FileVersion,
-		func(*model.Config) bool { return true }, func(*model.Config) int { return 0 })
+	minutes := h.minutes.Files(HistoryFileName, FileVersion, func(*model.Config) bool { return true })
 	minutes.MaxDays = int(hourKept / (24 * time.Hour))
-	events := h.Events.Files(EventsFileName, FileVersion,
-		func(*model.Config) bool { return true }, func(*model.Config) int { return EventDays })
+	events := h.Events.Files(EventsFileName, FileVersion, func(*model.Config) bool { return true })
+	events.MaxDays = EventDays
 	return []logfile.Log{minutes, events}
 }
 

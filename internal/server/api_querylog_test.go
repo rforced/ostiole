@@ -45,7 +45,7 @@ func queryLogServer(t *testing.T) (*httptest.Server, *dnslog.Log) {
 	}
 	qlog := dnslog.New()
 	qlog.Slog = slog.New(slog.DiscardHandler)
-	qlog.Configure(model.QueryLog{Enabled: true}, dnsblock.Options{}, nil)
+	qlog.Configure(model.QueryLog{Enabled: true}, model.Logging{}.MemoryKeep(), dnsblock.Options{}, nil)
 
 	srv := httptest.NewServer(Handler(Deps{Engine: eng, Auth: as, QueryLog: qlog}))
 	jar, _ := cookiejar.New(nil)
@@ -84,7 +84,7 @@ func TestQueryLogOffAnswersEmpty(t *testing.T) {
 	t.Parallel()
 	srv, qlog := queryLogServer(t)
 	add(qlog, "ads.example.com", dnslog.StatusBlocked, "10.0.0.50", "one")
-	qlog.Configure(model.QueryLog{}, dnsblock.Options{}, nil)
+	qlog.Configure(model.QueryLog{}, 0, dnsblock.Options{}, nil)
 
 	resp, raw := do(t, srv, http.MethodGet, "/api/v1/dns/queries", nil)
 	if resp.StatusCode != http.StatusOK {
@@ -274,7 +274,7 @@ func TestOverviewCarriesQueryTotals(t *testing.T) {
 	if got.Queries == nil || got.Queries.Total != 2 || got.Queries.Blocked != 1 {
 		t.Fatalf("queries = %+v", got.Queries)
 	}
-	qlog.Configure(model.QueryLog{}, dnsblock.Options{}, nil)
+	qlog.Configure(model.QueryLog{}, 0, dnsblock.Options{}, nil)
 	if got := read(t); got.Queries != nil {
 		t.Errorf("queries = %+v while the log is off", got.Queries)
 	}

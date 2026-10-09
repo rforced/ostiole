@@ -54,14 +54,12 @@ type Log = logring.Ring[Request, *Request]
 
 // New returns an empty log of the default size.
 func New() *Log {
-	var k model.LogKeep
-	return logring.New[Request, *Request](k.Size(model.DefaultRequestEntries), k.Retention())
+	return logring.New[Request, *Request](model.DefaultRequestEntries, model.Logging{}.MemoryKeep())
 }
 
 // Settings sizes the log in a configuration.
 func Settings(c *model.Config) (int, time.Duration) {
-	r := c.Services.Proxy.Requests
-	return r.Size(model.DefaultRequestEntries), r.Retention()
+	return c.Services.Proxy.Requests.Size(model.DefaultRequestEntries), c.System.Logging.MemoryKeep()
 }
 
 // Kept says whether the configuration keeps the requests at all: only the
@@ -77,9 +75,7 @@ const (
 
 // Files describes the log to the writer that keeps it in files.
 func Files(l *Log) logfile.Log {
-	return l.Files(FileName, FileVersion, Kept, func(c *model.Config) int {
-		return int(c.Services.Proxy.Requests.Retention() / (24 * time.Hour))
-	})
+	return l.Files(FileName, FileVersion, Kept)
 }
 
 // ParseLine reads a line of the log's files.

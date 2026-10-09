@@ -45,7 +45,7 @@ func TestAnswersComeBackWithTheirListsByName(t *testing.T) {
 	}
 	fresh := New()
 	fresh.Slog = slog.New(slog.DiscardHandler)
-	if err := fresh.Restore(model.QueryLog{Enabled: true}, back, 5); err != nil {
+	if err := fresh.Restore(model.QueryLog{Enabled: true}, week, back, 5); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := query(t, fresh, Filter{})
@@ -61,7 +61,7 @@ func TestAnswersComeBackWithTheirListsByName(t *testing.T) {
 		counts["hagezi"] != (ListCount{Blocked: 1}) {
 		t.Errorf("totals %d %d %v, counts %v since %v", total, blocked, oldest, counts, since)
 	}
-	if err := fresh.Restore(model.QueryLog{Enabled: true}, back, 0); err == nil {
+	if err := fresh.Restore(model.QueryLog{Enabled: true}, week, back, 0); err == nil {
 		t.Error("restored over answers already taken")
 	}
 	// Numbering goes on after the highest number in the files.
@@ -84,7 +84,7 @@ func TestRestoreBeyondSixtyFourLists(t *testing.T) {
 	}
 	l := New()
 	l.Slog = slog.New(slog.DiscardHandler)
-	if err := l.Restore(model.QueryLog{Enabled: true}, back, 0); err != nil {
+	if err := l.Restore(model.QueryLog{Enabled: true}, week, back, 0); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := query(t, l, Filter{})

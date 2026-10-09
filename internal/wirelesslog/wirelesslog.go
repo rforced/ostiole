@@ -35,14 +35,12 @@ type Log = logring.Ring[Event, *Event]
 
 // New returns an empty log of the default size.
 func New() *Log {
-	var k model.LogKeep
-	return logring.New[Event, *Event](k.Size(model.DefaultWirelessLogEntries), k.Retention())
+	return logring.New[Event, *Event](model.DefaultWirelessLogEntries, model.Logging{}.MemoryKeep())
 }
 
 // Settings sizes the log in a configuration.
 func Settings(c *model.Config) (int, time.Duration) {
-	l := c.Wireless.Log
-	return l.Size(model.DefaultWirelessLogEntries), l.Retention()
+	return c.Wireless.Log.Size(model.DefaultWirelessLogEntries), c.System.Logging.MemoryKeep()
 }
 
 // Kept says whether the configuration keeps the log at all: only the
@@ -58,9 +56,7 @@ const (
 
 // Files describes the log to the writer that keeps it in files.
 func Files(l *Log) logfile.Log {
-	return l.Files(FileName, FileVersion, Kept, func(c *model.Config) int {
-		return int(c.Wireless.Log.Retention() / (24 * time.Hour))
-	})
+	return l.Files(FileName, FileVersion, Kept)
 }
 
 // ParseLine reads a line of the log's files.

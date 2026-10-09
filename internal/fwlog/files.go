@@ -21,10 +21,7 @@ const (
 func (r *Ring) Files() logfile.Log {
 	return logfile.Log{
 		Name: FileName, Version: FileVersion,
-		On: func(*model.Config) bool { return true },
-		Days: func(c *model.Config) int {
-			return int(c.System.Management.FirewallLog.Retention() / (24 * time.Hour))
-		},
+		On:     func(*model.Config) bool { return true },
 		Newest: r.Newest,
 		Size:   r.Size,
 		Lines: logfile.Lines(r.After, func(e *Entry) uint64 { return e.Seq }, func(e *Entry) time.Time { return e.Time },

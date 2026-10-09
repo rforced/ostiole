@@ -89,7 +89,7 @@ func TestAnAnswerReachesTheLog(t *testing.T) {
 	chain out { type filter hook output priority 0; oifname "lan0" udp sport 53 log group %d; }
 }`, nft.QueryLogGroup))
 	qlog := New()
-	qlog.Configure(model.QueryLog{Enabled: true, Entries: 10, Days: 1}, dnsblock.Options{}, nil)
+	qlog.Configure(model.QueryLog{Enabled: true, Entries: 10}, 24*time.Hour, dnsblock.Options{}, nil)
 	_, stop := start(t, qlog)
 	defer stop()
 

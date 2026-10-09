@@ -168,7 +168,7 @@ func TestTheQueryLogCarriesOnIntoItsFiles(t *testing.T) {
 	cfg.Services.DHCP.StaticLeases = []model.StaticLease{{MAC: "aa:bb:cc:dd:ee:ff", IP: "10.0.0.50", Hostname: "switch"}}
 	qlog := dnslog.New()
 	qlog.Slog = slog.New(slog.DiscardHandler)
-	qlog.Configure(model.QueryLog{Enabled: true}, dnsblock.Options{}, nil)
+	qlog.Configure(model.QueryLog{Enabled: true}, model.Logging{}.MemoryKeep(), dnsblock.Options{}, nil)
 	srv, files := filesServer(t, cfg, func(d *Deps) { d.QueryLog = qlog })
 	files.Add(qlog.Files(), logfile.ReadStats{})
 	qlog.Add(dnslog.Entry{Time: time.Now(), Name: "ads.example", Type: 1, Status: dnslog.StatusBlocked,
@@ -177,7 +177,7 @@ func TestTheQueryLogCarriesOnIntoItsFiles(t *testing.T) {
 		add(qlog, name, dnslog.StatusOK, "10.0.0.9")
 	}
 	flush(t, files)
-	qlog.Configure(model.QueryLog{Enabled: true, Entries: 2}, dnsblock.Options{}, nil)
+	qlog.Configure(model.QueryLog{Enabled: true, Entries: 2}, model.Logging{}.MemoryKeep(), dnsblock.Options{}, nil)
 
 	p := readPage[queryRow](t, srv, "/api/v1/dns/queries?limit=10")
 	if len(p.Entries) != 4 || p.More {

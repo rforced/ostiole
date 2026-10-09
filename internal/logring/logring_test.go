@@ -134,7 +134,7 @@ func TestEntriesGoThroughTheFiles(t *testing.T) {
 	cfg.System.Logging.Files.Enabled = true
 	files := &logfile.Writer{Dir: t.TempDir(), Source: func() *model.Config { return cfg }, Log: slog.New(slog.DiscardHandler),
 		Statfs: func(string) (uint64, uint64, error) { return 1, 2, nil }}
-	files.Add(r.Files("words", 1, func(*model.Config) bool { return true }, func(*model.Config) int { return 7 }), logfile.ReadStats{})
+	files.Add(r.Files("words", 1, func(*model.Config) bool { return true }), logfile.ReadStats{})
 	at := time.Now().UTC().Truncate(time.Second)
 	r.Add(w("a", at))
 	r.Add(w("b", at))

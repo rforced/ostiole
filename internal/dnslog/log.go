@@ -154,10 +154,10 @@ func (l *Log) log() *slog.Logger {
 	return slog.Default()
 }
 
-// Configure sizes the ring and the retention, clears everything when the
-// log is switched off, and rebuilds the index when the lists or the
-// exceptions changed.
-func (l *Log) Configure(q model.QueryLog, o dnsblock.Options, c *dnsblock.Cache) {
+// Configure sizes the ring, keeps an answer for keep, clears everything
+// when the log is switched off, and rebuilds the index when the lists or
+// the exceptions changed.
+func (l *Log) Configure(q model.QueryLog, keep time.Duration, o dnsblock.Options, c *dnsblock.Cache) {
 	l.mu.Lock()
 	if !q.Enabled {
 		wasOn := l.on
@@ -177,7 +177,7 @@ func (l *Log) Configure(q model.QueryLog, o dnsblock.Options, c *dnsblock.Cache)
 		l.on = true
 		l.since = time.Now()
 	}
-	l.keep = q.Retention()
+	l.keep = keep
 	l.resize(q.Size())
 	stale := l.stale(o)
 	l.mu.Unlock()
@@ -349,14 +349,14 @@ type Stored struct {
 var errTaken = errors.New("the query log has taken answers already")
 
 // Restore fills the log with answers read back from its files, oldest
-// first, with the numbers they were given, keeping what the settings' size
-// and age allow, and switches it on. Numbering goes on after the higher of
-// the last of them and newest, the highest number in the files, so none is
+// first, with the numbers they were given, keeping what q's size and keep
+// allow, and switches it on. Numbering goes on after the higher of the
+// last of them and newest, the highest number in the files, so none is
 // given twice. The totals and the counts per list are those of what came
 // back, and count from the oldest of it. It refuses once an answer has
 // been added: the numbers would go backwards.
-func (l *Log) Restore(q model.QueryLog, answers []Stored, newest uint64) error {
-	r, err := l.Restorer(q, len(answers))
+func (l *Log) Restore(q model.QueryLog, keep time.Duration, answers []Stored, newest uint64) error {
+	r, err := l.Restorer(q, keep, len(answers))
 	if err != nil {
 		return err
 	}
@@ -386,7 +386,7 @@ type Restorer struct {
 // what the answers are pushed into. count is how many the files hold, an
 // upper bound or a guess: the ring starts that long, up to the size, and
 // grows if more arrive. It refuses once an answer has been added.
-func (l *Log) Restorer(q model.QueryLog, count int) (*Restorer, error) {
+func (l *Log) Restorer(q model.QueryLog, keep time.Duration, count int) (*Restorer, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.seq > 0 {
@@ -396,7 +396,7 @@ func (l *Log) Restorer(q model.QueryLog, count int) (*Restorer, error) {
 		l.on = true
 		l.since = time.Now()
 	}
-	l.keep = q.Retention()
+	l.keep = keep
 	l.size = max(q.Size(), 1)
 	if len(l.ring) > l.size {
 		l.ring, l.start = nil, 0
