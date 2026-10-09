@@ -180,7 +180,7 @@ function reverted() {
         v-model="managementFromWan"
         label="Allow management from the WAN side too"
         hint="Turns anti-lockout on for the wan zone, for a router administered over its public
-          address. Untick it on the zone under Interfaces to take it away."
+          address. Untick it on the zone under Interfaces › Zones to take it away."
       />
 
       <ToggleRow

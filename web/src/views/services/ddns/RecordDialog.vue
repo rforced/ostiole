@@ -92,7 +92,7 @@ function problem() {
   if (!name.value) return 'A name is needed.'
   if (!f.ipv4 && !f.ipv6) return 'Keep the A record, the AAAA record or both.'
   if (!found.value) {
-    return `No DNS provider holds ${name.value}. Add its domain to one under System, DNS providers.`
+    return `No DNS provider holds ${name.value}. Add its domain to one under System › DNS providers.`
   }
   if (props.kinds.length && !kind.value) {
     return `${found.value.provider.id} cannot keep a dynamic DNS record.`

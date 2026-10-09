@@ -86,7 +86,8 @@ const empty = computed(() => {
       <div class="card-strip space-y-2">
         <SearchBox v-model="query" placeholder="site, client, request, status, or user agent" />
         <p v-if="!kept" class="text-ink-muted">
-          Requests are kept at the Info and Debug log levels, under System, General.
+          Requests are kept at the Info and Debug log levels, under
+          <RouterLink to="/system/general" class="link">System › General</RouterLink>.
         </p>
         <p v-else-if="idle" class="text-ink-muted">The proxy is off, so no new requests arrive.</p>
         <ErrorLine v-if="error">{{ error }}</ErrorLine>

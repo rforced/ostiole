@@ -123,7 +123,8 @@ const QUIET = ['quiet', 'offline']
       <div class="card-strip space-y-2">
         <SearchBox v-model="query" :placeholder="spec.placeholder" />
         <p v-if="!kept" class="text-ink-muted">
-          The {{ spec.title }} is kept at the Info and Debug log levels, under System, General.
+          The {{ spec.title }} is kept at the Info and Debug log levels, under
+          <RouterLink to="/system/general" class="link">System › General</RouterLink>.
         </p>
         <p v-else-if="off" class="text-ink-muted">{{ spec.off }}</p>
         <ErrorLine v-if="error">{{ error }}</ErrorLine>

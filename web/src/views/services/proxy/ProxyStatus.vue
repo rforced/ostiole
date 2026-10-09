@@ -17,7 +17,8 @@ const healthy = computed(() => (status.value?.upstreams ?? []).filter((u) => u.h
       Not on this router. Run <code class="font-mono">ostiole repair --proxy</code> as root once.
     </AppNotice>
     <AppNotice v-else-if="stage === 'port-clash'">
-      Port {{ clash }} is the web UI's. Change it under System, General first.
+      Port {{ clash }} is the web UI's. Change it under
+      <RouterLink to="/system/general" class="link">System › General</RouterLink> first.
     </AppNotice>
     <template v-else-if="stage === 'off'" />
     <p v-else-if="stage === 'unapplied'" class="text-sm text-ink-muted">

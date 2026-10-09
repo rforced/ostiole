@@ -118,7 +118,8 @@ describe('ProxyStatus', () => {
     })
     const wrapper = await strip(status(), { draft })
     expect(wrapper.text()).toContain('Port 443')
-    expect(wrapper.text()).toContain('System, General')
+    expect(wrapper.text()).toContain('Change it under')
+    expect(wrapper.html()).toContain('to="/system/general"')
   })
 
   // Switching it off is a draft edit until it is applied. The router is

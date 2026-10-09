@@ -162,8 +162,8 @@ function endpoint(address, port) {
             ></div>
           </div>
           <p v-if="level !== 'ok'" :class="level === 'critical' ? 'text-bad' : 'text-warn'">
-            The kernel drops packets once the table is full. The ceiling is set under Firewall,
-            Protection.
+            The kernel drops packets once the table is full. The ceiling is set under
+            <RouterLink to="/firewall/protection" class="link">Firewall › Protection</RouterLink>.
           </p>
         </div>
 

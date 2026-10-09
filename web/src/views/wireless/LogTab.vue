@@ -92,7 +92,8 @@ const empty = computed(() => {
       <div class="card-strip space-y-2">
         <SearchBox v-model="query" placeholder="event, network, device, or MAC" />
         <p v-if="!kept" class="text-ink-muted">
-          The wireless log is kept at the Info and Debug log levels, under System, General.
+          The wireless log is kept at the Info and Debug log levels, under
+          <RouterLink to="/system/general" class="link">System › General</RouterLink>.
         </p>
         <p v-else-if="off" class="text-ink-muted">No radio is on, so no clients arrive.</p>
         <ErrorLine v-if="error">{{ error }}</ErrorLine>

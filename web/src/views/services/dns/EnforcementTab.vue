@@ -39,7 +39,8 @@ const exemptAlias = aliasField('exemptAlias')
   <div class="space-y-5">
     <AppNotice v-if="!dnsOn">
       The DNS server is off, so plain DNS cannot be sent here and Firefox is not answered. Turn it
-      on under Resolver. Dropping encrypted DNS works either way.
+      on under <RouterLink to="/services/dns" class="link">DNS › Resolver</RouterLink>. Dropping
+      encrypted DNS works either way.
     </AppNotice>
 
     <SectionCard title="Keep clients here" :locked="auth.readOnly">
@@ -67,7 +68,7 @@ const exemptAlias = aliasField('exemptAlias')
         <FormField
           id="enf-doh"
           label="Drop traffic to DNS over HTTPS servers"
-          hint="Make a fetched host alias under Firewall, Aliases and name it here."
+          hint="Make a fetched host alias under Firewall › Aliases and name it here."
         >
           <select id="enf-doh" v-model="dohAlias" class="input">
             <option value="">Not blocked</option>

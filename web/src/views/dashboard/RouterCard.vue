@@ -44,7 +44,7 @@ const READING = [
         <dt>Update</dt>
         <dd>
           <span class="font-mono">{{ update.latest }}</span> available ·
-          <RouterLink to="/system/updates" class="link">install under System</RouterLink>
+          <RouterLink to="/system/updates" class="link">install under System › Updates</RouterLink>
         </dd>
       </template>
 
@@ -66,7 +66,9 @@ const READING = [
       <dt>Revisions</dt>
       <dd>
         {{ summary.revisions ?? 0 }} ·
-        <RouterLink to="/system/configuration" class="link">roll back under System</RouterLink>
+        <RouterLink to="/system/configuration" class="link"
+          >roll back under System › Configuration</RouterLink
+        >
       </dd>
     </dl>
     <template v-else>

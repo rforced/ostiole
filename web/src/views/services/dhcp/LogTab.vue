@@ -87,7 +87,8 @@ const empty = computed(() => {
       <div class="card-strip space-y-2">
         <SearchBox v-model="query" placeholder="message, interface, address, device, or MAC" />
         <p v-if="!kept" class="text-ink-muted">
-          The DHCP log is kept at the Info and Debug log levels, under System, General.
+          The DHCP log is kept at the Info and Debug log levels, under
+          <RouterLink to="/system/general" class="link">System › General</RouterLink>.
         </p>
         <p v-else-if="off" class="text-ink-muted">DHCP is off, so no new messages arrive.</p>
         <ErrorLine v-if="error">{{ error }}</ErrorLine>
