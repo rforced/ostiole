@@ -220,9 +220,9 @@ func (a *api) clockWarning(ctx context.Context, running bool) (Warning, bool) {
 	detail := "No time server answers. Check that the router reaches the internet and that udp/123 is not blocked on the way out."
 	switch failing := failingNTS(auth); {
 	case failing != "":
-		detail = "No server gave a signed answer, " + failing + ". Where tcp/4460 or large UDP packets are blocked on the way out NTS cannot work; list servers without it on the NTP page."
+		detail = "No server gave a signed answer, " + failing + ". Where tcp/4460 or large UDP packets are blocked on the way out NTS cannot work; list servers without it under Services › NTP."
 	case slices.ContainsFunc(sources, func(s chrony.Source) bool { return s.Reach != 0 }):
-		detail = "Servers answer, but not enough of them agree to set the clock. The NTP page says what each one is doing."
+		detail = "Servers answer, but not enough of them agree to set the clock. Services › NTP says what each one is doing."
 	}
 	if tr.Local {
 		detail += " Meanwhile the router answers the LAN from its own clock."
@@ -254,7 +254,7 @@ func unsignedWarning(auth []chrony.Auth, sources []chrony.Source) (Warning, bool
 			return Warning{}, false
 		}
 	}
-	detail := "No signed server can be used, so the unsigned ones set the clock until one can. The NTP page says what each one is doing."
+	detail := "No signed server can be used, so the unsigned ones set the clock until one can. Services › NTP says what each one is doing."
 	if failing := failingNTS(auth); failing != "" {
 		detail = "No server gave a signed answer, " + failing + ", so the unsigned ones set the clock. Where tcp/4460 or large UDP packets are blocked on the way out NTS cannot work."
 	}

@@ -527,7 +527,7 @@ func TestOverviewWarnsAboutAFailingDrive(t *testing.T) {
 	if !strings.Contains(w.Title, "sda") || !strings.Contains(w.Detail, "GENERIC 256GB SSD") {
 		t.Errorf("warning = %+v", w)
 	}
-	if !strings.Contains(w.Detail, "Diagnostics, Drives") {
+	if !strings.HasSuffix(w.Detail, ". Details under Diagnostics › Drives.") {
 		t.Errorf("warning does not say where to look: %+v", w)
 	}
 }
@@ -570,7 +570,7 @@ func TestOverviewWarnsAboutAFailedRemoteBackup(t *testing.T) {
 	if !strings.Contains(w.Detail, "the key may not upload") || !strings.Contains(w.Detail, "03:00") {
 		t.Errorf("warning = %+v", w)
 	}
-	if !strings.Contains(w.Detail, "System › Configuration") {
+	if !strings.HasSuffix(w.Detail, ". Details under System › Configuration › Remote backup.") {
 		t.Errorf("warning does not say where to look: %+v", w)
 	}
 
@@ -749,7 +749,8 @@ func TestOverviewWarnsAboutACertificateThatStoppedRenewing(t *testing.T) {
 	if w == nil {
 		t.Fatalf("want a certificate warning, got %+v", getOverview(t, srv).Warnings)
 	}
-	if !strings.HasPrefix(w.Title, "Certificate router expires") || !strings.Contains(w.Detail, "the CA said no") {
+	if !strings.HasPrefix(w.Title, "Certificate router expires") || !strings.Contains(w.Detail, "the CA said no") ||
+		!strings.HasSuffix(w.Detail, " Details under System › Certificates › Certificates.") {
 		t.Errorf("warning = %+v", w)
 	}
 }
@@ -777,7 +778,7 @@ func TestOverviewWarnsWhenTheBuiltInCertificateMissesAName(t *testing.T) {
 	if w == nil {
 		t.Fatalf("want a certificate-names warning, got %+v", getOverview(t, srv).Warnings)
 	}
-	if !strings.Contains(w.Detail, "cover fw, 10.0.0.1, so") || !strings.Contains(w.Detail, "System › Certificates") {
+	if !strings.Contains(w.Detail, "cover fw, 10.0.0.1, so") || !strings.HasSuffix(w.Detail, "Regenerate it under System › Certificates › Certificates.") {
 		t.Errorf("detail = %q, want the hostname and the LAN address, and where to regenerate", w.Detail)
 	}
 
@@ -986,7 +987,7 @@ func TestWarnsWhenCertificateChecksAreLimited(t *testing.T) {
 		ws := (&api{}).warnings(context.Background(), cfg, engine.Status{}, nil, nil, install.UnitStates{})
 		return warning(Overview{Warnings: ws}, "challenges-limited")
 	}
-	if w := find(); w == nil || !strings.Contains(w.Detail, "Services, Reverse proxy") {
+	if w := find(); w == nil || !strings.HasSuffix(w.Detail, ". Details under Services › Reverse proxy › Settings.") {
 		t.Errorf("warning = %+v", w)
 	}
 	cfg.Services.Proxy.Access[0].Source = model.Endpoint{}
@@ -1010,7 +1011,8 @@ func TestWarnsWhenTheLogsCouldOutgrowTheirMemory(t *testing.T) {
 	w := find(1_400_000_000)
 	if w == nil || w.Kind != "logs" || w.Title != "The logs could take more memory than this router has for them" ||
 		!strings.HasPrefix(w.Detail, "Full, the logs in memory take 897 MB. This router has 875 MB for them. Set fewer entries under Firewall › Log, ") ||
-		!strings.HasSuffix(w.Detail, "Wireless › Log or VPN › Logs.") {
+		!strings.HasSuffix(w.Detail, "Services › Reverse proxy › Events, Services › Reverse proxy › Requests, Services › DHCP › Log, "+
+			"Traffic › Destinations, Wireless › Log, VPN › WireGuard › Log or VPN › Tailscale › Log.") {
 		t.Errorf("warning = %+v", w)
 	}
 	if w := find(1_500_000_000); w != nil {

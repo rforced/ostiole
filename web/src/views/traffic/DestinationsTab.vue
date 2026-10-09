@@ -158,7 +158,7 @@ const empty = computed(() => {
         />
       </template>
       <p v-if="unapplied" class="text-ink-muted">Apply the draft to start it.</p>
-      <template v-if="!devicesOn" #off>Needs counting on the Devices tab.</template>
+      <template v-if="!devicesOn" #off>Needs counting under Traffic › Devices.</template>
     </LogRetention>
 
     <template v-if="running">

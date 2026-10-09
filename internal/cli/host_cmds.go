@@ -45,7 +45,7 @@ func newHostCmd(g *globals) *cobra.Command {
 		Short: "What this router is, and what an older firewall left behind",
 		Long: `Reports the distribution, the kernel, Ostiole's units, the daemons it
 drives, and who owns the addresses. The same facts are on the web UI under
-System, Host.
+System › Operating system.
 
 Packages and units are the install script's job: run "ostiole repair" to
 put them back.`,

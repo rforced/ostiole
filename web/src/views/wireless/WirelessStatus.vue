@@ -73,7 +73,7 @@ function clientsOf(row, name) {
       No radios on this router.
     </p>
     <p v-else-if="stage === 'no-country'" class="text-sm text-ink-muted">
-      Set the country on the Radios tab.
+      Set the country under Wireless › Radios.
     </p>
     <p v-else-if="!rows.length" class="text-sm text-ink-muted">No radio is configured.</p>
 

@@ -183,7 +183,7 @@ const lists = sort.sorted
       <div class="space-y-4">
         <AppNotice v-if="blocking.enabled && !dnsOn">
           The DNS server is off, so nothing is refused. Turn it on under
-          <RouterLink to="/services/dns" class="link">DNS › Resolver</RouterLink>.
+          <RouterLink to="/services/dns" class="link">Services › DNS › Resolver</RouterLink>.
         </AppNotice>
         <FormField
           id="block-mode"

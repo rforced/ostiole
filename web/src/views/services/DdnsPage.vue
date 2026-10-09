@@ -153,7 +153,8 @@ function edit(r) {
       <div v-if="load.updatedAt.value && !canKeep" class="card-strip">
         <p class="text-sm">
           No DNS provider can keep a record yet. Add a {{ kindNames }} provider with its domain
-          under <RouterLink to="/system/dns-providers" class="link">DNS providers</RouterLink>.
+          under
+          <RouterLink to="/system/dns-providers" class="link">System › DNS providers</RouterLink>.
         </p>
       </div>
       <table class="table table-stack">

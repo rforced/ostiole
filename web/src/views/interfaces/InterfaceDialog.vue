@@ -217,13 +217,13 @@ function save() {
       />
 
       <p v-if="daemonOwned" class="text-sm text-ink-muted">
-        The tailnet gives this interface its addresses and its MTU. Its settings are on
-        <RouterLink to="/vpn/tailscale" class="link">Tailscale</RouterLink>.
+        The tailnet gives this interface its addresses and its MTU. Its settings are under
+        <RouterLink to="/vpn/tailscale" class="link">VPN › Tailscale › Settings</RouterLink>.
       </p>
 
       <p v-if="form.wireless" class="text-sm text-ink-muted">
-        Its network and security are on
-        <RouterLink to="/wireless" class="link">Wireless</RouterLink>.
+        Its network and security are under
+        <RouterLink to="/wireless#networks" class="link">Wireless › Networks</RouterLink>.
       </p>
 
       <fieldset v-if="!daemonOwned" class="field-group">

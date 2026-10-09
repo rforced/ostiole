@@ -120,7 +120,7 @@ const stripOf = (g) => props.strips?.find((s) => s.name === g.name) ?? null
     <p v-else class="card-strip border-t border-line">
       <template v-if="unwatched.length">
         A route nobody watches keeps no history and cannot fail over.
-        <RouterLink to="/routing" class="link">Add it under Routing</RouterLink>
+        <RouterLink to="/routing" class="link">Add it under Routing › Gateways</RouterLink>
       </template>
       <RouterLink v-else to="/routing" class="link">Manage gateways</RouterLink>
     </p>

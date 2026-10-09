@@ -339,7 +339,8 @@ func TestOverviewWarnsAboutAnUnsynchronisedClock(t *testing.T) {
 		chronySource("2.pool.ntp.org", "172.233.177.198", "unusable", 2, 30*time.Second, nil),
 	)
 	w = warning(getOverview(t, srv), "clock-unsynchronised")
-	if w == nil || !strings.Contains(w.Detail, "Servers answer") {
+	if w == nil || !strings.HasPrefix(w.Detail, "Servers answer") ||
+		!strings.Contains(w.Detail, "Services › NTP says what each one is doing.") {
 		t.Fatalf("warning with only unsigned servers answering = %+v", w)
 	}
 
@@ -352,7 +353,8 @@ func TestOverviewWarnsAboutAnUnsynchronisedClock(t *testing.T) {
 	)
 	w = warning(getOverview(t, srv), "clock-unsynchronised")
 	if w == nil || !strings.Contains(w.Detail, "signed answer") || !strings.Contains(w.Detail, "tcp/4460") ||
-		!strings.Contains(w.Detail, "nts.netnod.se, nts.time.nl") {
+		!strings.Contains(w.Detail, "nts.netnod.se, nts.time.nl") ||
+		!strings.Contains(w.Detail, "list servers without it under Services › NTP.") {
 		t.Errorf("warning = %+v", w)
 	}
 
@@ -416,7 +418,7 @@ func TestOverviewSaysWhenTheClockFollowsUnsignedServers(t *testing.T) {
 		cf     chronytest.Source
 		detail string
 	}{
-		{"silent", chronySource("time.cloudflare.com", "162.159.200.123", "unusable", 0, -1, signed), "No signed server can be used"},
+		{"silent", chronySource("time.cloudflare.com", "162.159.200.123", "unusable", 0, -1, signed), "No signed server can be used, so the unsigned ones set the clock until one can. Services › NTP says what each one is doing."},
 		{"failing", chronySource("time.cloudflare.com", "162.159.200.123", "unusable", 0, -1, failing), "tcp/4460"},
 		{"standby", chronySource("time.cloudflare.com", "162.159.200.123", "excluded", 3, 30*time.Second, signed), ""},
 	} {

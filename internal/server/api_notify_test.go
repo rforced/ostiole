@@ -236,7 +236,7 @@ func TestWAFNotice(t *testing.T) {
 	c := wafCount{from: from, sites: map[string]int{"git.example.net": 7, "cloud.example.net": 30}}
 	e, ok := c.notice(time.UTC)
 	if !ok || e.Title != "The web application firewall blocked 37 requests" ||
-		!strings.HasPrefix(e.Detail, "Since 2026-09-23 09:00: 30 to cloud.example.net, 7 to git.example.net.") {
+		e.Detail != "Since 2026-09-23 09:00: 30 to cloud.example.net, 7 to git.example.net. The requests are under Services › Reverse proxy › Events." {
 		t.Errorf("notice = %+v", e)
 	}
 	c.capped = true

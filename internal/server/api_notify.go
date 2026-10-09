@@ -325,6 +325,6 @@ func (c wafCount) notice(loc *time.Location) (notify.Event, bool) {
 	return notify.Event{
 		Kind: notify.KindWAF, Level: notify.LevelInfo, Title: "The web application firewall blocked " + count,
 		Detail: "Since " + c.from.In(loc).Format("2006-01-02 15:04") + ": " + strings.Join(parts, ", ") +
-			". The requests are under Services, Proxy.",
+			". The requests are under Services › Reverse proxy › Events.",
 	}, true
 }

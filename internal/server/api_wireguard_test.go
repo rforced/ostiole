@@ -151,7 +151,8 @@ func TestOverviewNotesKeepaliveToAPeerThatCallsIn(t *testing.T) {
 	if w == nil || w.Level != "info" {
 		t.Fatalf("want an info warning, got %+v", w)
 	}
-	if !strings.Contains(w.Detail, "wg0/phone") || strings.Contains(w.Detail, "branch") {
+	if !strings.Contains(w.Detail, "wg0/phone") || strings.Contains(w.Detail, "branch") ||
+		!strings.HasSuffix(w.Detail, " under VPN › WireGuard › Peers.") {
 		t.Errorf("detail = %q, want wg0/phone named and not branch", w.Detail)
 	}
 

@@ -89,8 +89,9 @@ func logsMemoryWarnings(cfg *model.Config, b model.MemoryBudget) []Warning {
 			Title: "The logs could take more memory than this router has for them",
 			Detail: "Full, the logs in memory take " + formatBytes(peak) + ". This router has " +
 				formatBytes(float64(room)) + " for them. Set fewer entries under Firewall › Log, " +
-				"Services › DNS › Queries, Services › Reverse proxy › Events and Requests, Services › DHCP › Log, " +
-				"Traffic › Destinations, Wireless › Log or VPN › Logs.",
+				"Services › DNS › Queries, Services › Reverse proxy › Events, Services › Reverse proxy › Requests, " +
+				"Services › DHCP › Log, Traffic › Destinations, Wireless › Log, VPN › WireGuard › Log or " +
+				"VPN › Tailscale › Log.",
 		})
 	}
 	var clamped []string

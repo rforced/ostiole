@@ -248,7 +248,7 @@ func newRootCmd() *cobra.Command {
 	pf.StringVar(&g.configDir, "config-dir", store.DefaultDir, "configuration directory")
 	pf.StringVar(&g.nftBin, "nft", "nft", "path to the nft binary")
 	pf.StringVar(&g.tcBin, "tc", "tc", "path to the tc binary, which traffic shaping drives")
-	pf.StringVar(&g.smartctlBin, "smartctl", "smartctl", "path to the smartctl binary, which the drives page and the health poll read through")
+	pf.StringVar(&g.smartctlBin, "smartctl", "smartctl", "path to the smartctl binary, which Diagnostics › Drives and the health poll read through")
 	pf.StringVar(&g.netBackend, "network-backend", "auto", "network backend: auto (networkd when it is running), networkd, or none")
 	pf.StringVar(&g.packageManager, "package-manager", "", "package manager to drive for system updates (dnf, apt-get, pacman); empty detects one")
 	// The end-to-end tests point it at a stand-in for GitHub. A release

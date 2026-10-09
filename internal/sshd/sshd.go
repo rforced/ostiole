@@ -64,7 +64,7 @@ const (
 
 // dropInContent is what requiring keys writes.
 const dropInContent = `# Written by ostiole. Password logins over SSH are off on this router;
-# keys only. Allow passwords again from the General page to undo it.
+# keys only. Allow passwords again under System › General to undo it.
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 PermitRootLogin prohibit-password

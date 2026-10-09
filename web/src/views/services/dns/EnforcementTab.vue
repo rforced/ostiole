@@ -42,8 +42,8 @@ const exemptDestinations = aliasField('exemptDestinations')
   <div class="space-y-5">
     <AppNotice v-if="!dnsOn">
       The DNS server is off, so plain DNS cannot be sent here and Firefox is not answered. Turn it
-      on under <RouterLink to="/services/dns" class="link">DNS › Resolver</RouterLink>. Dropping
-      encrypted DNS works either way.
+      on under <RouterLink to="/services/dns" class="link">Services › DNS › Resolver</RouterLink>.
+      Dropping encrypted DNS works either way.
     </AppNotice>
 
     <SectionCard title="Keep clients here" :locked="auth.readOnly">

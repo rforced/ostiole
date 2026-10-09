@@ -121,7 +121,7 @@ func (a *api) certificateNamesWarning(cfg *model.Config) (Warning, bool) {
 		Kind: "certificate-names", Level: "warn",
 		Title: "The built-in certificate misses names this router answers to",
 		Detail: "It does not cover " + strings.Join(missing, ", ") + ", so browsers reaching the web UI by " +
-			"those names warn. Regenerate it under System › Certificates.",
+			"those names warn. Regenerate it under System › Certificates › Certificates.",
 	}, true
 }
 

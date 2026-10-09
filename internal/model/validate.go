@@ -1355,7 +1355,7 @@ func (v *validator) proxyAllowFrom(path string, from []string, c *Config) {
 				v.add(apath, "alias %q holds ports, not addresses", a)
 			case alias.Fetched():
 				v.add(apath, "alias %q is fetched and can run to thousands of networks; "+
-					"use the access list on the Settings tab for large lists", a)
+					"use the access list under Services › Reverse proxy › Settings for large lists", a)
 			}
 			continue
 		}

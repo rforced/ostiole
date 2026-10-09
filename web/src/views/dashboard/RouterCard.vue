@@ -69,7 +69,7 @@ const READING = [
       <dd>
         {{ summary.revisions ?? 0 }} ·
         <RouterLink to="/system/configuration" class="link"
-          >roll back under System › Configuration</RouterLink
+          >roll back under System › Configuration › History</RouterLink
         >
       </dd>
     </dl>

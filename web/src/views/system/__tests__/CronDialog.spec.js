@@ -47,9 +47,11 @@ describe('CronDialog', () => {
   it('says where devices come from when there are none', async () => {
     const { wrapper, config } = mountDialog(undefined)
     await wrapper.get('#cron-kind').setValue('wake')
-    expect(wrapper.get('#cron-device').text()).toBe('None on the Wake on LAN page')
+    expect(wrapper.get('#cron-device').text()).toBe('None under Services › Wake on LAN')
     await wrapper.get('form').trigger('submit')
-    expect(wrapper.get('[role="alert"]').text()).toBe('Add a device on the Wake on LAN page first.')
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      'Add a device under Services › Wake on LAN first.',
+    )
     expect(config.crons).toHaveLength(0)
   })
 

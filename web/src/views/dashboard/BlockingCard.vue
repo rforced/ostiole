@@ -95,7 +95,7 @@ const blockedPct = computed(() => {
     </dl>
     <p v-if="loaded && !b.enabled" class="mt-2 text-ink-muted">
       Block lists are off. Turn them on under
-      <RouterLink class="link" to="/services/dns#blocking">Services, DNS, Blocking</RouterLink>.
+      <RouterLink class="link" to="/services/dns#blocking">Services › DNS › Blocking</RouterLink>.
     </p>
   </SectionCard>
 </template>

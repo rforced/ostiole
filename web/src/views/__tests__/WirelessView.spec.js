@@ -100,7 +100,7 @@ describe('WirelessStatus', () => {
   it('asks for a country before anything can transmit', async () => {
     const draft = config({ wireless: { radios: config().wireless.radios } })
     const wrapper = await strip({ setUp: true, radios: [card()] }, draft)
-    expect(wrapper.text()).toBe('Set the country on the Radios tab.')
+    expect(wrapper.text()).toBe('Set the country under Wireless › Radios.')
   })
 
   // The page shows the channel hostapd settled on, not the one it was

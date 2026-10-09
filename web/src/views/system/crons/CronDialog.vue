@@ -89,7 +89,7 @@ function save() {
       break
     case 'wake':
       if (!f.device) {
-        error.value = 'Add a device on the Wake on LAN page first.'
+        error.value = 'Add a device under Services › Wake on LAN first.'
         return
       }
       out.device = f.device
@@ -213,7 +213,9 @@ function save() {
 
       <FormField v-if="form.kind === 'wake'" id="cron-device" label="Device">
         <select id="cron-device" v-model="form.device" class="input">
-          <option v-if="!config.wolDevices.length" value="">None on the Wake on LAN page</option>
+          <option v-if="!config.wolDevices.length" value="">
+            None under Services › Wake on LAN
+          </option>
           <option v-for="d in config.wolDevices" :key="d.id" :value="d.id">
             {{ deviceName(d) }}
           </option>

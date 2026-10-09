@@ -851,7 +851,7 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 				Kind: "keepalive-no-endpoint", Level: "info",
 				Title: "Keepalive is set on peers that call in",
 				Detail: "Once a peer that calls in leaves, the router keeps sending handshakes to its last address. " +
-					"Set Keepalive to 0 on " + strings.Join(peers, ", ") + " under VPN, WireGuard.",
+					"Set Keepalive to 0 on " + strings.Join(peers, ", ") + " under VPN › WireGuard › Peers.",
 			})
 		}
 		if alias, ok := exemptClientsOutside(cfg); ok {
@@ -872,7 +872,7 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 				Kind: "alias-empty", Level: "warn",
 				Title: "Alias " + e.alias + " has no entries yet",
 				Detail: e.users() + ". Until it is fetched, a rule that matches addresses in it matches none, and one " +
-					"that matches addresses not in it matches every address. Details under Firewall, Aliases.",
+					"that matches addresses not in it matches every address. Details under Firewall › Aliases.",
 			})
 		}
 	}
@@ -944,7 +944,7 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 				Kind: "drive-failing", Level: "warn",
 				Title: "Drive " + h.Name + " reports it is failing",
 				Detail: drive + " failed its own health check at " + h.Checked.Format("15:04") +
-					". Back up the configuration now and replace the drive. Details under Diagnostics, Drives.",
+					". Back up the configuration now and replace the drive. Details under Diagnostics › Drives.",
 			})
 		}
 	}
@@ -962,7 +962,7 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 			out = append(out, Warning{
 				Kind: "remote-backup-failed", Level: "warn",
 				Title:  "Remote backup did not complete",
-				Detail: detail + ". Details under System › Configuration.",
+				Detail: detail + ". Details under System › Configuration › Remote backup.",
 			})
 		}
 	}
@@ -985,7 +985,7 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 		out = append(out, Warning{
 			Kind: "certificate", Level: "warn", Key: c.ID,
 			Title:  title,
-			Detail: detail + " Details under System › Certificates.",
+			Detail: detail + " Details under System › Certificates › Certificates.",
 		})
 	}
 	// Renaming or renumbering the router leaves the built-in certificate
@@ -1004,7 +1004,7 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 			out = append(out, Warning{
 				Kind: "ddns", Level: "warn", Key: st.ID + " " + string(st.Type),
 				Title:  "Dynamic DNS record " + st.Name + " (" + string(st.Type) + ") is not updating",
-				Detail: st.Error + ". Details under Services, Dynamic DNS.",
+				Detail: st.Error + ". Details under Services › Dynamic DNS.",
 			})
 		}
 	}
@@ -1022,7 +1022,7 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 			Kind: "challenges-limited", Level: "warn",
 			Title: "Certificate checks may not reach the proxy",
 			Detail: "Every access rule that lets HTTP in from outside names its sources, and a CA checks " +
-				"http-01 certificates from several places, so a renewal can fail. Details under Services, Reverse proxy.",
+				"http-01 certificates from several places, so a renewal can fail. Details under Services › Reverse proxy › Settings.",
 		})
 	}
 	// A notice that did not arrive is only missed by somebody waiting for
