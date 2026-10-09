@@ -187,6 +187,7 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/update/status":                          {summary: "What the last check found about Ostiole's own releases, and the progress of an update that is running.", role: auth.RoleViewer},
 	"GET /api/v1/system/updates":                         {summary: "What the distro package manager has waiting, and whether a reboot is.", role: auth.RoleViewer},
 	"POST /api/v1/config/diff":                           {summary: "Compare two configurations.", role: auth.RoleViewer},
+	"POST /api/v1/config/unused":                         {summary: "List what a configuration leaves unused or switched off.", role: auth.RoleViewer},
 
 	"POST /api/v1/config/starter":               {summary: "Build a first configuration from the wizard's answers.", role: auth.RoleOperator},
 	"POST /api/v1/check":                        {summary: "Validate a configuration and render it without applying. Changes only an administrator may apply are refused.", role: auth.RoleOperator},

@@ -217,6 +217,7 @@ func (a *api) register(mux *router) {
 	mux.HandleFunc("GET /api/v1/config", a.read(a.getConfig))
 	mux.HandleFunc("GET /api/v1/config/revisions", a.read(a.revisions))
 	mux.HandleFunc("GET /api/v1/config/revisions/{id}", a.read(a.revision))
+	mux.HandleFunc("POST /api/v1/config/unused", a.read(a.unusedItems))
 	mux.HandleFunc("GET /api/v1/ruleset", a.read(a.ruleset))
 	mux.HandleFunc("GET /api/v1/counters", a.read(a.counters))
 	mux.HandleFunc("POST /api/v1/rules/system", a.read(a.systemRules))
