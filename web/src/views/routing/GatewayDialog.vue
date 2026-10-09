@@ -194,7 +194,7 @@ function save() {
         <FormField
           id="gw-every"
           label="Probe every (seconds)"
-          hint="A probe waits two seconds for its answer."
+          hint="30 is the default, 5 at least."
         >
           <input
             id="gw-every"
@@ -209,7 +209,7 @@ function save() {
         <FormField
           id="gw-down"
           label="Down after (lost probes)"
-          hint="Lost in a row before the gateway counts as down."
+          hint="3 in a row is the default, 20 at most."
         >
           <input
             id="gw-down"
@@ -224,7 +224,7 @@ function save() {
         <FormField
           id="gw-up"
           label="Up after (answered probes)"
-          hint="Answered in a row before it counts as up again."
+          hint="2 in a row is the default, 20 at most."
         >
           <input
             id="gw-up"

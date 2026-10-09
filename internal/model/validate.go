@@ -450,13 +450,16 @@ func (c *Config) Validate() error {
 			v.add(path+".lossyAbovePercent", "%d must be 0-%d", *p, MaxLossyAbovePercent)
 		}
 		if e := g.ProbeEverySeconds; e != 0 && (e < MinProbeSeconds || e > MaxProbeSeconds) {
-			v.add(path+".probeEverySeconds", "%d must be %d-%d", e, MinProbeSeconds, MaxProbeSeconds)
+			v.add(path+".probeEverySeconds", "%d must be %d-%d (0 keeps %d)",
+				e, MinProbeSeconds, MaxProbeSeconds, DefaultProbeSeconds)
 		}
 		if n := g.DownAfterProbes; n < 0 || n > MaxStateProbes {
-			v.add(path+".downAfterProbes", "%d must be 1-%d", n, MaxStateProbes)
+			v.add(path+".downAfterProbes", "%d must be 0-%d (0 keeps %d)",
+				n, MaxStateProbes, DefaultDownAfterProbes)
 		}
 		if n := g.UpAfterProbes; n < 0 || n > MaxStateProbes {
-			v.add(path+".upAfterProbes", "%d must be 1-%d", n, MaxStateProbes)
+			v.add(path+".upAfterProbes", "%d must be 0-%d (0 keeps %d)",
+				n, MaxStateProbes, DefaultUpAfterProbes)
 		}
 	}
 
