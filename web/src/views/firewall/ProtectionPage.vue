@@ -102,7 +102,7 @@ function rate(limit) {
             <input
               :id="`prot-zone-${z.name}`"
               type="checkbox"
-              class="size-4 rounded"
+              class="checkbox"
               :checked="defended.includes(z.name)"
               @change="toggleZone(z.name, $event.target.checked)"
             />

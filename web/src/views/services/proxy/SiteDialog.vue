@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { joinList, parseList } from '@/lib/lists'
 import { useConfigStore } from '@/stores/config'
 import AllowFromAliases, { splitAllowFrom } from '@/views/services/proxy/AllowFromAliases.vue'
@@ -215,15 +216,12 @@ function save() {
       </fieldset>
 
       <div class="space-y-2">
-        <label class="flex items-center gap-2 text-sm">
-          <input v-model="form.plainHttp" type="checkbox" class="size-4 rounded border-line-2" />
-          Serve on the HTTP port too
-          <span class="text-ink-muted">Otherwise redirected.</span>
-        </label>
-        <label class="flex items-center gap-2 text-sm">
-          <input v-model="form.enabled" type="checkbox" class="size-4 rounded border-line-2" />
-          Enabled
-        </label>
+        <ToggleRow
+          v-model="form.plainHttp"
+          label="Serve on the HTTP port too"
+          hint="Otherwise redirected."
+        />
+        <ToggleRow v-model="form.enabled" label="Enabled" />
       </div>
 
       <div class="flex justify-end gap-2 pt-2">

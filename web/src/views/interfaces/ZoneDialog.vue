@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { ADMIN_ONLY, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
@@ -80,51 +81,26 @@ function save() {
         </FormField>
       </div>
       <div class="space-y-2 text-sm">
-        <label class="flex items-start gap-2">
-          <input
-            v-model="form.external"
-            type="checkbox"
-            class="mt-0.5 size-4 rounded border-line-2"
-          />
-          <span>
-            External
-            <span class="block text-ink-muted">
-              IPv4 leaving it is masqueraded when outbound NAT is automatic.
-            </span>
-          </span>
-        </label>
-        <label class="flex items-start gap-2">
-          <input
-            v-model="form.antiLockout"
-            type="checkbox"
-            class="mt-0.5 size-4 rounded border-line-2"
-            :disabled="!auth.isAdmin"
-          />
-          <span :class="{ 'opacity-60': auth.isOperator }">
-            Anti-lockout
-            <span class="block text-ink-muted">
-              {{
-                auth.isOperator
-                  ? ADMIN_ONLY
-                  : 'The management ports are always reachable from this zone.'
-              }}
-            </span>
-          </span>
-        </label>
-        <label class="flex items-start gap-2">
-          <input
-            v-model="form.logDrops"
-            type="checkbox"
-            class="mt-0.5 size-4 rounded border-line-2"
-          />
-          <span>
-            Log drops
-            <span class="block text-ink-muted">
-              Every packet this firewall drops in this zone is logged: the ones no rule matched, and
-              the ones the firewall refused on its own.
-            </span>
-          </span>
-        </label>
+        <ToggleRow
+          v-model="form.external"
+          label="External"
+          hint="IPv4 leaving it is masqueraded when outbound NAT is automatic."
+        />
+        <ToggleRow
+          v-model="form.antiLockout"
+          label="Anti-lockout"
+          :hint="
+            auth.isOperator
+              ? ADMIN_ONLY
+              : 'The management ports are always reachable from this zone.'
+          "
+          :disabled="!auth.isAdmin"
+        />
+        <ToggleRow
+          v-model="form.logDrops"
+          label="Log drops"
+          hint="Every packet this firewall drops in this zone is logged: the ones no rule matched, and the ones the firewall refused on its own."
+        />
       </div>
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
       <div class="flex justify-end gap-2 pt-2">

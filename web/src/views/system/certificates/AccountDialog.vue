@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { useAuthStore } from '@/stores/auth'
@@ -140,10 +141,7 @@ function save() {
         <input id="acc-email" v-model="form.email" type="email" class="input" />
       </FormField>
 
-      <label class="flex items-center gap-2 text-sm">
-        <input v-model="showEAB" type="checkbox" class="size-4 rounded" />
-        This CA gave me account credentials
-      </label>
+      <ToggleRow v-model="showEAB" label="This CA gave me account credentials" />
       <div v-if="showEAB" class="fields">
         <FormField id="acc-eab-kid" label="EAB key ID">
           <input
@@ -164,10 +162,7 @@ function save() {
         </FormField>
       </div>
 
-      <label class="flex items-center gap-2 text-sm">
-        <input v-model="showCACert" type="checkbox" class="size-4 rounded" />
-        This CA has its own root
-      </label>
+      <ToggleRow v-model="showCACert" label="This CA has its own root" />
       <FormField v-if="showCACert" id="acc-cacert" label="CA certificate (PEM)">
         <textarea
           id="acc-cacert"

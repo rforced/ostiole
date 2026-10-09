@@ -87,12 +87,7 @@ function submit() {
       >
         <div id="tok-certs" class="flex flex-wrap gap-3">
           <label v-for="c in config.certificates" :key="c.id" class="flex items-center gap-2">
-            <input
-              v-model="form.certificates"
-              type="checkbox"
-              class="size-4 rounded"
-              :value="c.id"
-            />
+            <input v-model="form.certificates" type="checkbox" class="checkbox" :value="c.id" />
             <span class="font-mono text-code">{{ c.id }}</span>
           </label>
         </div>

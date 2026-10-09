@@ -149,7 +149,7 @@ const chosenTotal = computed(() =>
           >
             <input
               type="checkbox"
-              class="size-4 rounded border-line-2"
+              class="checkbox"
               :checked="chosen.has(c.code)"
               @change="set([c.code], $event.target.checked)"
             />

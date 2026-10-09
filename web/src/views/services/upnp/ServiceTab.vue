@@ -153,7 +153,7 @@ function edit(index) {
             <label v-for="i in insideChoices" :key="i.name" class="flex items-center gap-2">
               <input
                 type="checkbox"
-                class="size-4 rounded"
+                class="checkbox"
                 :checked="(upnp.interfaces ?? []).includes(i.name)"
                 @change="toggleInterface(i.name, $event.target.checked)"
               />

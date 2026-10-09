@@ -261,19 +261,13 @@ function save() {
 
       <fieldset class="field-group">
         <legend>Rate limit</legend>
-        <label class="flex items-center gap-2 text-sm">
-          <input
-            v-model="form.limited"
-            type="checkbox"
-            class="size-4 rounded border-line-2"
-            :disabled="!limitAllowed"
-          />
-          Hold this traffic to a rate
-        </label>
-        <p v-if="!limitAllowed" class="text-sm text-ink-muted">
-          Only an accept rule can hold traffic to a rate.
-        </p>
-        <div v-else-if="form.limited" class="flex flex-wrap items-start gap-4">
+        <ToggleRow
+          v-model="form.limited"
+          label="Hold this traffic to a rate"
+          :hint="limitAllowed ? '' : 'Only an accept rule can hold traffic to a rate.'"
+          :disabled="!limitAllowed"
+        />
+        <div v-if="limitAllowed && form.limited" class="flex flex-wrap items-start gap-4">
           <FormField id="rule-limit-rate" label="Allowed">
             <input
               id="rule-limit-rate"

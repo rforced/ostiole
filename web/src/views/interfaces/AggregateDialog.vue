@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
@@ -211,7 +212,7 @@ function save() {
         >
           <input
             type="checkbox"
-            class="size-4 rounded border-line-2"
+            class="checkbox"
             :checked="form.members.includes(o.name)"
             :disabled="!!o.takenBy && !form.members.includes(o.name)"
             @change="toggleMember(o.name)"
@@ -278,18 +279,11 @@ function save() {
       </template>
       <template v-else>
         <div class="flex flex-wrap gap-4 text-sm">
-          <label class="flex items-center gap-2">
-            <input v-model="form.stp" type="checkbox" class="size-4 rounded border-line-2" />
-            Spanning tree (guards against loops, delays each port coming up)
-          </label>
-          <label class="flex items-center gap-2">
-            <input
-              v-model="form.vlanFiltering"
-              type="checkbox"
-              class="size-4 rounded border-line-2"
-            />
-            VLAN filtering
-          </label>
+          <ToggleRow
+            v-model="form.stp"
+            label="Spanning tree (guards against loops, delays each port coming up)"
+          />
+          <ToggleRow v-model="form.vlanFiltering" label="VLAN filtering" />
         </div>
       </template>
 

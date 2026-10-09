@@ -302,6 +302,11 @@
   .icon-btn {
     @apply inline-flex rounded p-1 text-ink-muted hover:text-ink focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:opacity-30 max-sm:min-h-11 max-sm:min-w-11 max-sm:items-center max-sm:justify-center;
   }
+  /* A checkbox or a radio. In a row that aligns to the top it takes
+     mt-0.5, to sit on the first line of its label. */
+  .checkbox {
+    @apply size-4 shrink-0 rounded;
+  }
   /* A checkbox drawn as a switch, for the one flag that governs a card or a page. */
   .switch {
     @apply relative inline-block h-5 w-9 shrink-0 cursor-pointer appearance-none rounded-full bg-edge transition-colors checked:bg-accent focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50;

@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { joinList, parseList } from '@/lib/lists'
 import { useConfigStore } from '@/stores/config'
 
@@ -179,10 +180,7 @@ function save() {
 
       <fieldset class="field-group">
         <legend>Upstream TLS</legend>
-        <label class="flex items-center gap-2 text-sm">
-          <input v-model="form.tls" type="checkbox" class="size-4 rounded border-line-2" />
-          HTTPS to the upstreams
-        </label>
+        <ToggleRow v-model="form.tls" label="HTTPS to the upstreams" />
         <template v-if="form.tls">
           <FormField id="pool-sni" label="Server name" hint="The address when empty.">
             <input
@@ -200,15 +198,11 @@ function save() {
               spellcheck="false"
             ></textarea>
           </FormField>
-          <label class="flex items-center gap-2 text-sm">
-            <input
-              v-model="form.tlsInsecure"
-              type="checkbox"
-              class="size-4 rounded border-line-2"
-            />
-            Do not check the upstream's certificate
-            <span class="text-ink-muted">Trusts any certificate.</span>
-          </label>
+          <ToggleRow
+            v-model="form.tlsInsecure"
+            label="Do not check the upstream's certificate"
+            hint="Trusts any certificate."
+          />
         </template>
       </fieldset>
 

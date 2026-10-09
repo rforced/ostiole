@@ -163,7 +163,7 @@ function label(a) {
             <td data-label="">
               <input
                 type="checkbox"
-                class="size-4 rounded border-line-2"
+                class="checkbox"
                 :checked="a.enabled"
                 :disabled="auth.readOnly"
                 :aria-label="`Enable ${label(a)}`"

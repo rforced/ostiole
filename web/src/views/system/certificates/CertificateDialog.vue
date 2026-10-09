@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { parseList } from '@/lib/lists'
 import { certificateProvider } from '@/lib/providers'
 import { useConfigStore } from '@/stores/config'
@@ -146,10 +147,7 @@ function save() {
         </FormField>
       </div>
 
-      <label class="flex items-center gap-2 text-sm">
-        <input v-model="form.enabled" type="checkbox" class="size-4 rounded" />
-        Enabled
-      </label>
+      <ToggleRow v-model="form.enabled" label="Enabled" />
 
       <FormField id="cert-source" label="Source">
         <select
@@ -188,7 +186,7 @@ function save() {
               <input
                 v-model="form.interfaceAddresses"
                 type="checkbox"
-                class="size-4 rounded"
+                class="checkbox"
                 :value="i.name"
               />
               <span class="font-mono text-code">{{ i.name }}</span>

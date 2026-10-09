@@ -5,6 +5,7 @@ import ConfirmButton from '@/components/ConfirmButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { FILE_LOG_NAMES } from '@/lib/logs'
@@ -92,18 +93,17 @@ const clearAll = useAsync(async () => {
         <legend>Journal</legend>
         <fieldset class="space-y-1.5">
           <legend class="group-title mb-1">Level</legend>
-          <div v-for="l in LEVELS" :key="l.value" class="flex items-start gap-2">
-            <input
-              :id="`logs-level-${l.value}`"
-              type="radio"
-              class="mt-1"
-              name="logs-level"
-              :value="l.value"
-              :checked="level === l.value"
-              @change="setLevel(l.value)"
-            />
-            <label :for="`logs-level-${l.value}`">{{ l.label }}</label>
-          </div>
+          <ToggleRow
+            v-for="l in LEVELS"
+            :id="`logs-level-${l.value}`"
+            :key="l.value"
+            :model-value="level"
+            variant="radio"
+            name="logs-level"
+            :value="l.value"
+            :label="l.label"
+            @update:model-value="setLevel"
+          />
           <p class="text-ink-muted">
             Warning is the default. Info records each lease and each wireless client. Changing it
             reconnects wireless clients.

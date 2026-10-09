@@ -120,7 +120,7 @@ function set(conditions, on) {
           >
             <input
               type="checkbox"
-              class="size-4 rounded border-line-2"
+              class="checkbox"
               :checked="isChosen(i.condition)"
               @change="set([i.condition], $event.target.checked)"
             />

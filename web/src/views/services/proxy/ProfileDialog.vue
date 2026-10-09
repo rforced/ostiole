@@ -119,14 +119,8 @@ function save() {
 
       <fieldset class="field-group">
         <legend>Mode</legend>
-        <label class="flex items-center gap-2 text-sm">
-          <input v-model="form.mode" type="radio" value="detect" class="size-4" />
-          Detect only
-        </label>
-        <label class="flex items-center gap-2 text-sm">
-          <input v-model="form.mode" type="radio" value="block" class="size-4" />
-          Block
-        </label>
+        <ToggleRow v-model="form.mode" variant="radio" value="detect" label="Detect only" />
+        <ToggleRow v-model="form.mode" variant="radio" value="block" label="Block" />
         <p class="text-sm text-ink-muted">Detect only records what would have been blocked.</p>
       </fieldset>
 
@@ -195,7 +189,7 @@ function save() {
           <label v-for="a in APPLICATIONS" :key="a" class="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
-              class="size-4 rounded border-line-2"
+              class="checkbox"
               :checked="form.applications.includes(a)"
               @change="toggleApp(a, $event.target.checked)"
             />
@@ -204,14 +198,7 @@ function save() {
         </div>
       </fieldset>
 
-      <label class="flex items-center gap-2 text-sm">
-        <input
-          v-model="form.inspectResponses"
-          type="checkbox"
-          class="size-4 rounded border-line-2"
-        />
-        Inspect responses
-      </label>
+      <ToggleRow v-model="form.inspectResponses" label="Inspect responses" />
 
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" class="btn-secondary" @click="open = false">Cancel</button>

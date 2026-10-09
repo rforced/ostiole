@@ -371,7 +371,7 @@ function toggleInterface(name, on) {
               >
                 <input
                   type="checkbox"
-                  class="size-4 rounded"
+                  class="checkbox"
                   :checked="(dns.interfaces ?? []).includes(i.name)"
                   @change="toggleInterface(i.name, $event.target.checked)"
                 />

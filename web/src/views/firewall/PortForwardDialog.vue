@@ -132,17 +132,11 @@ function save() {
           </select>
         </FormField>
       </div>
-      <label class="flex items-start gap-2 text-sm">
-        <input
-          v-model="form.reflection"
-          type="checkbox"
-          class="mt-0.5 size-4 rounded border-line-2"
-        />
-        <span
-          ><span class="font-medium">NAT reflection</span>: inside hosts reach the target by the
-          outside address too.</span
-        >
-      </label>
+      <ToggleRow
+        v-model="form.reflection"
+        label="NAT reflection"
+        hint="Inside hosts reach the target by the outside address too."
+      />
       <ToggleRow v-model="form.enabled" label="Enabled" />
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" class="btn-secondary" @click="open = false">Cancel</button>

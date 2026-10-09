@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { newId } from '@/lib/ids'
 import { SCHEDULE_PRESETS, presetFor } from '@/lib/schedules'
 import { deviceName } from '@/lib/wol'
@@ -195,16 +196,12 @@ function save() {
           </FormField>
         </div>
         <div class="text-sm">
-          <label class="flex items-center gap-2" :class="{ 'opacity-60': auth.isOperator }">
-            <input
-              v-model="form.withUsers"
-              type="checkbox"
-              class="size-4 rounded border-line-2"
-              :disabled="!auth.isAdmin"
-            />
-            Include the administrator accounts and their password hashes
-          </label>
-          <p v-if="auth.isOperator" class="mt-1 text-ink-muted">{{ ADMIN_ONLY }}</p>
+          <ToggleRow
+            v-model="form.withUsers"
+            label="Include the administrator accounts and their password hashes"
+            :hint="auth.isOperator ? ADMIN_ONLY : ''"
+            :disabled="!auth.isAdmin"
+          />
         </div>
       </template>
 
@@ -263,10 +260,7 @@ function save() {
         </div>
       </template>
 
-      <label class="flex items-center gap-2 text-sm">
-        <input v-model="form.enabled" type="checkbox" class="size-4 rounded border-line-2" />
-        Enabled
-      </label>
+      <ToggleRow v-model="form.enabled" label="Enabled" />
 
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
       <div class="flex justify-end gap-2 pt-2">

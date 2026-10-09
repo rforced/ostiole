@@ -293,7 +293,7 @@ function explain(name) {
                   >
                     <input
                       type="checkbox"
-                      class="size-4 rounded"
+                      class="checkbox"
                       :checked="e.toggle.on"
                       :aria-label="`${EXCEPTIONS[e.toggle.key]} ${e.name}`"
                       @change="config.setException(e.name, e.toggle.key, $event.target.checked)"

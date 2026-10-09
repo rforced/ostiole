@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { SCHEDULE_PRESETS, presetFor } from '@/lib/schedules'
 
 /**
@@ -71,34 +72,19 @@ const installPreset = computed({
   <div class="space-y-3">
     <fieldset class="field-group">
       <legend>Mode</legend>
-      <!-- The hint describes the choice rather than naming it, so each
-           radio is called "Manual" and not "Manual, check on the…". -->
-      <div
+      <ToggleRow
         v-for="m in MODES"
+        :id="`${prefix}-mode-${m.value}`"
         :key="m.value"
-        class="flex items-start gap-2"
-        :class="{ 'opacity-50': m.value === 'security' && !securityCapable }"
-      >
-        <input
-          :id="`${prefix}-mode-${m.value}`"
-          type="radio"
-          class="mt-1"
-          :name="`${prefix}-mode`"
-          :value="m.value"
-          :checked="current === m.value"
-          :disabled="m.value === 'security' && !securityCapable"
-          :aria-describedby="`${prefix}-mode-${m.value}-hint`"
-          @change="emit('update:mode', m.value)"
-        />
-        <div>
-          <label :for="`${prefix}-mode-${m.value}`" class="block text-sm font-medium">
-            {{ m.label }}
-          </label>
-          <p :id="`${prefix}-mode-${m.value}-hint`" class="text-sm text-ink-muted">
-            {{ m.value === 'security' && !securityCapable ? securityNote : m.hint }}
-          </p>
-        </div>
-      </div>
+        :model-value="current"
+        variant="radio"
+        :name="`${prefix}-mode`"
+        :value="m.value"
+        :label="m.label"
+        :hint="m.value === 'security' && !securityCapable ? securityNote : m.hint"
+        :disabled="m.value === 'security' && !securityCapable"
+        @update:model-value="emit('update:mode', $event)"
+      />
     </fieldset>
 
     <!-- The check runs whatever the mode is, unless the mode is

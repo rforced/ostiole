@@ -50,7 +50,7 @@ export function splitAllowFrom(from = [], aliases = []) {
     <label v-for="a in aliases" :key="a.name" class="flex items-center gap-2">
       <input
         type="checkbox"
-        class="size-4 rounded"
+        class="checkbox"
         :checked="model.includes(a.name)"
         @change="toggle(a.name, $event.target.checked)"
       />

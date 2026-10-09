@@ -56,7 +56,7 @@ function toggleInterface(name, on) {
             <label v-for="i in inside" :key="i.name" class="flex items-center gap-2">
               <input
                 type="checkbox"
-                class="size-4 rounded"
+                class="checkbox"
                 :checked="(config.ntp.interfaces ?? []).includes(i.name)"
                 @change="toggleInterface(i.name, $event.target.checked)"
               />

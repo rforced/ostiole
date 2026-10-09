@@ -234,38 +234,38 @@ function save() {
 
       <fieldset class="field-group">
         <legend>Attach</legend>
-        <label class="flex items-center gap-2 text-sm">
-          <input
+        <div class="flex flex-wrap items-center gap-2.5">
+          <ToggleRow
             v-model="form.attach"
-            type="radio"
+            variant="radio"
             value="bridge"
-            class="size-4"
+            label="Bridge"
             :disabled="!bridges.length"
           />
-          Bridge
           <select
             v-model="form.bridge"
             class="input w-48 font-mono max-sm:w-full"
+            aria-label="Bridge to attach to"
             :disabled="form.attach !== 'bridge'"
           >
             <option v-for="b in bridges" :key="b.name" :value="b.name">{{ b.name }}</option>
           </select>
-          <span v-if="!bridges.length" class="text-ink-muted">
+          <span v-if="!bridges.length" class="text-sm text-ink-muted">
             None yet. To share a wired LAN, bridge it first.
           </span>
-        </label>
-        <label class="flex items-center gap-2 text-sm">
-          <input v-model="form.attach" type="radio" value="zone" class="size-4" />
-          Zone
+        </div>
+        <div class="flex flex-wrap items-center gap-2.5">
+          <ToggleRow v-model="form.attach" variant="radio" value="zone" label="Zone" />
           <select
             v-model="form.zone"
             class="input w-48 font-mono max-sm:w-full"
+            aria-label="Zone to attach to"
             :disabled="form.attach !== 'zone'"
           >
             <option value="">Unassigned</option>
             <option v-for="z in config.zones" :key="z.name" :value="z.name">{{ z.name }}</option>
           </select>
-        </label>
+        </div>
         <FormField
           v-if="form.attach === 'zone'"
           id="net-address"

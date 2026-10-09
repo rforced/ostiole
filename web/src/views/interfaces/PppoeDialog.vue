@@ -6,6 +6,7 @@ import AppDisclosure from '@/components/AppDisclosure.vue'
 import AppNotice from '@/components/AppNotice.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
@@ -261,10 +262,7 @@ function save() {
         </div>
       </AppDisclosure>
 
-      <label class="flex items-center gap-2 text-sm">
-        <input v-model="form.ipv6" type="checkbox" class="size-4 rounded border-line-2" />
-        Ask for IPv6 as well
-      </label>
+      <ToggleRow v-model="form.ipv6" label="Ask for IPv6 as well" />
 
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
       <div class="flex justify-end gap-2 pt-2">

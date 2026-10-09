@@ -271,7 +271,7 @@ onMounted(() => {
               <label class="max-sm:flex max-sm:size-11 max-sm:items-center max-sm:justify-center">
                 <input
                   type="checkbox"
-                  class="size-4 rounded border-line-2"
+                  class="checkbox"
                   :checked="r.enabled"
                   :disabled="auth.readOnly"
                   :aria-label="`Enable ${r.id}`"

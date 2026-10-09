@@ -304,7 +304,7 @@ const lists = sort.sorted
               >
                 <input
                   type="checkbox"
-                  class="size-4 rounded"
+                  class="checkbox"
                   :checked="l.enabled"
                   :disabled="auth.readOnly"
                   :aria-label="`${l.name} enabled`"

@@ -130,15 +130,15 @@ function save() {
         <legend>Ports</legend>
         <div class="flex flex-wrap gap-4">
           <label class="flex items-center gap-2">
-            <input v-model="form.ports" type="checkbox" value="http" class="size-4 rounded" />
+            <input v-model="form.ports" type="checkbox" value="http" class="checkbox" />
             HTTP <span class="font-mono text-ink-muted">{{ httpPort }}</span>
           </label>
           <label class="flex items-center gap-2">
-            <input v-model="form.ports" type="checkbox" value="https" class="size-4 rounded" />
+            <input v-model="form.ports" type="checkbox" value="https" class="checkbox" />
             HTTPS <span class="font-mono text-ink-muted">{{ httpsPort }}</span>
           </label>
           <label v-for="r in routes" :key="r.id" class="flex items-center gap-2">
-            <input v-model="form.routes" type="checkbox" :value="r.id" class="size-4 rounded" />
+            <input v-model="form.routes" type="checkbox" :value="r.id" class="checkbox" />
             <span class="font-mono">{{ r.id }}</span>
             <span class="font-mono text-ink-muted">{{ r.protocol }}/{{ r.port }}</span>
           </label>

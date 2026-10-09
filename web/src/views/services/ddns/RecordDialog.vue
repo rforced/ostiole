@@ -5,6 +5,7 @@ import ActionButton from '@/components/ActionButton.vue'
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
 import { newId } from '@/lib/ids'
@@ -154,10 +155,7 @@ function sentence(r) {
     description="Anyone can look this name up."
   >
     <form class="space-y-4" @submit.prevent="save">
-      <label class="flex items-center gap-2 text-sm">
-        <input v-model="form.enabled" type="checkbox" class="size-4 rounded border-line-2" />
-        Enabled
-      </label>
+      <ToggleRow v-model="form.enabled" label="Enabled" />
       <div class="fields">
         <FormField id="ddns-name" label="Name" :hint="providerLine">
           <input
@@ -182,16 +180,8 @@ function sentence(r) {
         </FormField>
       </div>
       <div class="space-y-2">
-        <label class="flex items-center gap-2 text-sm">
-          <input v-model="form.ipv4" type="checkbox" class="size-4 rounded border-line-2" />
-          A record
-          <span class="text-ink-muted">IPv4</span>
-        </label>
-        <label class="flex items-center gap-2 text-sm">
-          <input v-model="form.ipv6" type="checkbox" class="size-4 rounded border-line-2" />
-          AAAA record
-          <span class="text-ink-muted">IPv6</span>
-        </label>
+        <ToggleRow v-model="form.ipv4" label="A record" hint="The IPv4 address." />
+        <ToggleRow v-model="form.ipv6" label="AAAA record" hint="The IPv6 address." />
       </div>
 
       <ul v-if="checked" class="space-y-1 text-sm" role="status">

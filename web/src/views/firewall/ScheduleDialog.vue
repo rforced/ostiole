@@ -82,7 +82,7 @@ function save() {
           <label v-for="d in DAYS" :key="d" class="flex items-center gap-2 capitalize">
             <input
               type="checkbox"
-              class="size-4 rounded border-line-2"
+              class="checkbox"
               :checked="form.days.includes(d)"
               @change="toggleDay(d, $event.target.checked)"
             />

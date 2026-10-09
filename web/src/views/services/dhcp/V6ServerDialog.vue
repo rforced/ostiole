@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { parseList } from '@/lib/lists'
 import { interfaceLabel } from '@/lib/interfaces'
 import { useConfigStore } from '@/stores/config'
@@ -160,19 +161,13 @@ function save() {
         </FormField>
       </div>
       <div class="space-y-2">
-        <label v-if="form.mode !== 'slaac'" class="flex items-center gap-2 text-sm">
-          <input
-            v-model="form.dnsRegistration"
-            type="checkbox"
-            class="size-4 rounded border-line-2"
-          />
-          DNS registration
-          <span class="text-ink-muted">{{ registration }}</span>
-        </label>
-        <label class="flex items-center gap-2 text-sm">
-          <input v-model="form.enabled" type="checkbox" class="size-4 rounded border-line-2" />
-          Enabled
-        </label>
+        <ToggleRow
+          v-if="form.mode !== 'slaac'"
+          v-model="form.dnsRegistration"
+          label="DNS registration"
+          :hint="registration"
+        />
+        <ToggleRow v-model="form.enabled" label="Enabled" />
       </div>
       <div class="flex justify-end gap-2 pt-2">
         <button type="button" class="btn-secondary" @click="open = false">Cancel</button>

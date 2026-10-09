@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 
 import FormField from '@/components/FormField.vue'
+import ToggleRow from '@/components/ToggleRow.vue'
 import { useConfigStore } from '@/stores/config'
 
 /**
@@ -77,18 +78,16 @@ const label = computed(() => (props.side === 'source' ? 'Source' : 'Destination'
         <option v-for="p in peers" :key="p.ref" :value="p.ref">{{ p.label }}</option>
       </select>
     </FormField>
-    <label v-if="model.mode !== 'any'" class="flex items-start gap-2 text-sm">
-      <input
-        :id="id('not')"
-        v-model="model.notAddresses"
-        type="checkbox"
-        class="mt-0.5 size-4 rounded border-line-2"
-      />
-      <span>
-        <span class="font-medium">Invert</span>: match everything <em>except</em> this, IPv6
-        included when the list is IPv4 only.
-      </span>
-    </label>
+    <ToggleRow
+      v-if="model.mode !== 'any'"
+      :id="id('not')"
+      v-model="model.notAddresses"
+      label="Invert"
+    >
+      <template #hint>
+        Match everything <em>except</em> this, IPv6 included when the list is IPv4 only.
+      </template>
+    </ToggleRow>
     <template v-if="portsAllowed">
       <FormField :id="id('portmode')" label="Ports">
         <select :id="id('portmode')" v-model="model.portMode" class="input">
@@ -116,17 +115,14 @@ const label = computed(() => (props.side === 'source' ? 'Source' : 'Destination'
           <option v-for="a in portAliases" :key="a.name" :value="a.name">{{ a.name }}</option>
         </select>
       </FormField>
-      <label v-if="model.portMode !== 'any'" class="flex items-start gap-2 text-sm">
-        <input
-          :id="id('notports')"
-          v-model="model.notPorts"
-          type="checkbox"
-          class="mt-0.5 size-4 rounded border-line-2"
-        />
-        <span>
-          <span class="font-medium">Invert ports</span>: match every port <em>except</em> these.
-        </span>
-      </label>
+      <ToggleRow
+        v-if="model.portMode !== 'any'"
+        :id="id('notports')"
+        v-model="model.notPorts"
+        label="Invert ports"
+      >
+        <template #hint>Match every port <em>except</em> these.</template>
+      </ToggleRow>
     </template>
   </fieldset>
 </template>
