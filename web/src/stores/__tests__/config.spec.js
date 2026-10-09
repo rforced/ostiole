@@ -557,6 +557,44 @@ describe('config store reverse proxy', () => {
     expect(config.proxy.pools.map((p) => p.id)).toEqual(['web', 'api'])
   })
 
+  it('leaves the sites a deleted profile inspected uninspected', () => {
+    const config = useConfigStore()
+    config.replaceDraft(proxied())
+    config.removeProfile('strict')
+    expect(config.proxy.wafProfiles).toEqual([])
+    expect(config.proxy.sites[0].waf).toBeUndefined()
+    expect(config.proxy.sites[0].pool).toBe('web')
+    useToastStore().toasts[0].action.run()
+    expect(config.proxy.sites[0].waf).toBe('strict')
+  })
+
+  // A site without a certificate serves the built-in one, as the web UI does.
+  it('puts the sites a deleted certificate served back on the built-in one', () => {
+    const config = useConfigStore()
+    const d = proxied()
+    d.system = { management: { certificate: 'edge' } }
+    d.certificates = [
+      { id: 'edge', enabled: true, source: 'acme', names: ['shop.example.com'] },
+      { id: 'other', enabled: true, source: 'acme', names: ['blog.example.com'] },
+    ]
+    d.services.proxy.sites[0].certificate = 'edge'
+    d.services.proxy.sites.push({
+      id: 'blog',
+      enabled: true,
+      hosts: ['blog.example.com'],
+      pool: 'web',
+      certificate: 'other',
+    })
+    config.replaceDraft(d)
+    expect(config.certificateDependents('edge')).toEqual(['the web UI', 'site shop'])
+    expect(config.certificateDependents('other')).toEqual(['site blog'])
+
+    config.removeCertificate('edge')
+    expect(config.certificates.map((c) => c.id)).toEqual(['other'])
+    expect(config.draft.system.management.certificate).toBeUndefined()
+    expect(config.proxy.sites.map((s) => s.certificate)).toEqual([undefined, 'other'])
+  })
+
   it('renames a site in place', () => {
     const config = useConfigStore()
     config.replaceDraft(proxied())

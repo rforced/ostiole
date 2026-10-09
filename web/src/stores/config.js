@@ -863,7 +863,14 @@ export const useConfigStore = defineStore('config', () => {
 
   const removePool = (id) => removeFrom('pools', id, `Deleted pool ${id}.`)
   const removeSite = (id) => removeFrom('sites', id, `Deleted site ${id}.`)
-  const removeProfile = (id) => removeFrom('wafProfiles', id, `Deleted WAF profile ${id}.`)
+  /** A deleted profile leaves the sites that named it uninspected. */
+  function removeProfile(id) {
+    undoable(`Deleted WAF profile ${id}.`, () => {
+      const p = ensureProxy()
+      p.wafProfiles = (p.wafProfiles ?? []).filter((w) => w.id !== id)
+      for (const s of p.sites ?? []) if (s.waf === id) delete s.waf
+    })
+  }
   /**
    * A deleted route leaves the access rules that name it, and a rule left
    * naming nothing goes with it.
@@ -1276,18 +1283,23 @@ export const useConfigStore = defineStore('config', () => {
     else list[idx] = clone(cert)
   }
 
-  function removeCertificate(id) {
-    undoable(`Deleted certificate ${id}.`, () => {
-      draft.value.certificates = certificates.value.filter((c) => c.id !== id)
-      if (draft.value.system?.management?.certificate === id) {
-        delete draft.value.system.management.certificate
-      }
-    })
+  /** The mutation behind removeCertificate, in the order certificateDependents lists it. */
+  function dropCertificate(id) {
+    const d = draft.value
+    d.certificates = certificates.value.filter((c) => c.id !== id)
+    if (d.system?.management?.certificate === id) delete d.system.management.certificate
+    for (const s of d.services?.proxy?.sites ?? []) if (s.certificate === id) delete s.certificate
   }
 
-  /** What stops working when this certificate goes. */
+  function removeCertificate(id) {
+    undoable(`Deleted certificate ${id}.`, () => dropCertificate(id))
+  }
+
+  /** What goes back to the built-in certificate when this one goes. */
   function certificateDependents(id) {
-    return draft.value?.system?.management?.certificate === id ? ['the web UI'] : []
+    const out = draft.value?.system?.management?.certificate === id ? ['the web UI'] : []
+    for (const s of proxy.value.sites ?? []) if (s.certificate === id) out.push(`site ${s.id}`)
+    return out
   }
 
   function upsertAcmeAccount(account, was) {

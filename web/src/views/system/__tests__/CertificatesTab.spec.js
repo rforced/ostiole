@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import { useConfirmStore } from '@/stores/confirm'
 import CertificatesTab from '@/views/system/certificates/CertificatesTab.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -159,6 +160,22 @@ describe('CertificatesTab', () => {
     const { wrapper } = await open({ builtIn: null })
     expect(wrapper.text()).toContain('This server is not serving HTTPS.')
     expect(wrapper.find('#served-by').exists()).toBe(false)
+  })
+
+  it('names the sites that go back to the built-in certificate with it', async () => {
+    const { wrapper, config } = await open()
+    config.setManagementCertificate('router')
+    config.upsertSite({
+      id: 'shop',
+      hosts: ['shop.example.test'],
+      pool: 'web',
+      certificate: 'router',
+    })
+    await flushPromises()
+    await button(row(wrapper, 'router'), 'Delete').trigger('click')
+    const asked = useConfirmStore().request
+    expect(asked.dependentsLabel).toBe('Goes back to the built-in certificate')
+    expect(asked.dependents).toEqual(['the web UI', 'site shop'])
   })
 
   it('picks what the web UI serves', async () => {
