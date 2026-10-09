@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,6 +23,7 @@ import (
 
 	"ostiole/internal/atomicfile"
 	"ostiole/internal/backup"
+	"ostiole/internal/journald"
 	"ostiole/internal/logfile"
 	"ostiole/internal/logging"
 	"ostiole/internal/model"
@@ -54,12 +56,70 @@ type Layout struct {
 	// NetworkdConfDir takes the drop-in that keeps networkd off the policy
 	// routing rules; empty writes none.
 	NetworkdConfDir string
+	Leftovers       Leftovers
+}
+
+// Leftovers is what Ostiole puts on the host outside its own directories.
+// Units are the services' units, a template ending in "@.service"; Files
+// are globs every uninstall removes; Unmask are the distribution's units
+// Ostiole masked to run its own, unmasked and not started; Resolv is the
+// resolv.conf dnsmasq took over. State, Binaries beside the ostiole
+// binary and User go with a purge.
+type Leftovers struct {
+	Units    []string
+	Files    []string
+	Unmask   []string
+	Resolv   string
+	State    []string
+	Binaries []string
+	User     string
+}
+
+// DefaultLeftovers names them on a router.
+func DefaultLeftovers() Leftovers {
+	return Leftovers{
+		Units: []string{"ostiole-dnsmasq.service", "ostiole-unbound.service", "ostiole-chronyd.service",
+			"ostiole-miniupnpd.service", "ostiole-proxy.service", "ostiole-hostapd@.service",
+			"ostiole-pppoe@.service", "ostiole-tailscaled.service"},
+		Files: []string{"/etc/dnsmasq.d/ostiole.*", "/etc/unbound/ostiole.conf", "/etc/chrony/ostiole.conf",
+			"/etc/chrony/.ostiole-check.conf", "/etc/miniupnpd/ostiole.conf", "/etc/ppp/peers/ostiole-*",
+			"/etc/sysusers.d/ostiole-proxy.conf", sysctl.ConfFile, BluetoothConfFile, journald.ConfFile},
+		Unmask: slices.Concat([]string{"dnsmasq.service", "systemd-resolved.service", "unbound.service",
+			"miniupnpd.service", "tailscaled.service", "hostapd.service", "bluetooth.service",
+			"chronyd.service", "chrony.service", "chronyd-restricted.service", "systemd-timesyncd.service",
+			"ntpd.service", "ntpsec.service", "openntpd.service", "ntpd-rs.service"}, ScriptMaskOnly()),
+		Resolv: "/etc/resolv.conf",
+		State: []string{"/var/lib/ostiole-proxy", "/var/lib/tailscale", "/var/cache/tailscale",
+			"/var/lib/dnsmasq/ostiole.leases"},
+		Binaries: []string{"ostiole-proxy"},
+		User:     "ostiole-proxy",
+	}
+}
+
+// ScriptMaskOnly lists the units install.sh masks for Ostiole's own
+// updates and drive checks, every package manager's line together.
+func ScriptMaskOnly() []string {
+	var out []string
+	for line := range strings.SplitSeq(Script, "\n") {
+		_, rest, ok := strings.Cut(line, `MASK_ONLY="`)
+		if !ok {
+			continue
+		}
+		units, _, _ := strings.Cut(rest, `"`)
+		for _, u := range strings.Fields(units) {
+			if !slices.Contains(out, u) {
+				out = append(out, u)
+			}
+		}
+	}
+	return out
 }
 
 // DefaultLayout is the production layout.
 func DefaultLayout() Layout {
 	return Layout{BinDir: "/usr/local/bin", UnitDir: "/etc/systemd/system", ConfigDir: "/etc/ostiole",
-		BackupDir: backup.Dir, LogDir: logfile.Dir, NetworkdConfDir: "/etc/systemd/networkd.conf.d"}
+		BackupDir: backup.Dir, LogDir: logfile.Dir, NetworkdConfDir: "/etc/systemd/networkd.conf.d",
+		Leftovers: DefaultLeftovers()}
 }
 
 // NetworkdConfFile is the drop-in's name in NetworkdConfDir.
@@ -611,21 +671,52 @@ func UnitName(name string) string {
 	return name + ".service"
 }
 
-// Uninstall stops and removes the units. With purge it also removes the
-// configuration directory, the log files and the binary; the backups
-// stay. It does not restore competitors.
-func Uninstall(ctx context.Context, sc Systemctl, lay Layout, purge bool, log *slog.Logger) error {
-	for _, unit := range []string{DaemonUnit, FirewallUnit} {
-		_, _ = sc.Run(ctx, "disable", "--now", unit)
-		path := filepath.Join(lay.UnitDir, unit)
-		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
+// Uninstall stops and removes the daemon's and the firewall's units and
+// those of the services the daemon runs, with the files they read outside
+// the configuration directory. With purge it also removes that directory,
+// the log files, the binaries, the services' state and the proxy's
+// account; the backups stay. It does not restore competitors.
+func Uninstall(ctx context.Context, sc Systemctl, run Runner, lay Layout, purge bool, log *slog.Logger) error {
+	if run == nil {
+		run = ExecRunner{}
+	}
+	left := lay.Leftovers
+	_, _ = sc.Run(ctx, "disable", "--now", DaemonUnit)
+	for _, unit := range left.Units {
+		if pattern := instances(unit); pattern != unit {
+			_, _ = sc.Run(ctx, "disable", unit)
+			_, _ = sc.Run(ctx, "stop", pattern)
+			continue
 		}
+		_, _ = sc.Run(ctx, "disable", "--now", unit)
+	}
+	_, _ = sc.Run(ctx, "disable", "--now", FirewallUnit)
+	for _, unit := range slices.Concat([]string{DaemonUnit, FirewallUnit}, left.Units) {
+		links, _ := filepath.Glob(filepath.Join(lay.UnitDir, "*.wants", instances(unit)))
+		for _, path := range slices.Concat([]string{filepath.Join(lay.UnitDir, unit), filepath.Join(lay.UnitDir, unit+".d")}, links) {
+			if err := os.RemoveAll(path); err != nil {
+				return err
+			}
+		}
+	}
+	if err := removeGlobs(left.Files); err != nil {
+		return err
 	}
 	if _, err := sc.Run(ctx, "daemon-reload"); err != nil {
 		return fmt.Errorf("systemctl daemon-reload: %w", err)
 	}
 	log.Info("units removed")
+	for _, unit := range left.Unmask {
+		_, _ = sc.Run(ctx, "unmask", unit)
+	}
+	if len(left.Unmask) > 0 {
+		log.Info("the distribution's units Ostiole had masked are unmasked, not started", "units", strings.Join(left.Unmask, " "))
+	}
+	if left.Resolv != "" {
+		if raw, err := os.ReadFile(left.Resolv); err == nil && loopbackOnly(string(raw)) {
+			log.Warn("resolv.conf points at the removed dnsmasq; enable a resolver, systemd-resolved for example", "path", left.Resolv)
+		}
+	}
 	if owned, _ := filepath.Glob(filepath.Join(NetworkdUnitDir, network.NetworkdPrefix+"*")); len(owned) > 0 {
 		for _, f := range owned {
 			_ = os.Remove(f)
@@ -646,10 +737,65 @@ func Uninstall(ctx context.Context, sc Systemctl, lay Layout, purge bool, log *s
 				return err
 			}
 		}
-		if err := os.Remove(lay.Binary()); err != nil && !errors.Is(err, os.ErrNotExist) {
+		if err := removeGlobs(left.State); err != nil {
 			return err
 		}
-		log.Info("configuration, log files and binary removed")
+		for _, bin := range slices.Concat([]string{lay.Binary()}, binariesIn(lay.BinDir, left.Binaries)) {
+			if err := os.Remove(bin); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+		}
+		if left.User != "" {
+			if _, err := run.Run(ctx, "getent", "passwd", left.User); err == nil {
+				if out, err := run.Run(ctx, "userdel", left.User); err != nil {
+					log.Warn("could not remove the account", "user", left.User, "err", err, "out", tail(out))
+				}
+			}
+		}
+		log.Info("configuration, log files, state, binaries and the proxy's account removed")
+	}
+	return nil
+}
+
+func instances(unit string) string {
+	return strings.Replace(unit, "@.", "@*.", 1)
+}
+
+func loopbackOnly(resolv string) bool {
+	found := false
+	for line := range strings.SplitSeq(resolv, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 || fields[0] != "nameserver" {
+			continue
+		}
+		addr, err := netip.ParseAddr(fields[1])
+		if err != nil || !addr.IsLoopback() {
+			return false
+		}
+		found = true
+	}
+	return found
+}
+
+func binariesIn(dir string, names []string) []string {
+	out := make([]string, 0, len(names))
+	for _, n := range names {
+		out = append(out, filepath.Join(dir, n))
+	}
+	return out
+}
+
+func removeGlobs(patterns []string) error {
+	for _, pattern := range patterns {
+		paths, err := filepath.Glob(pattern)
+		if err != nil {
+			return err
+		}
+		for _, path := range paths {
+			if err := os.RemoveAll(path); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

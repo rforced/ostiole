@@ -10,9 +10,11 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -884,11 +886,18 @@ func newUninstallCmd(g *globals) *cobra.Command {
 	var purge, yes bool
 	cmd := &cobra.Command{
 		Use:   "uninstall",
-		Short: "Stop the service, remove the units, and delete the Ostiole nftables table",
-		Long: `Reverses install. With --purge the configuration directory, the log files
-and the binary are removed too; the backups in /var/backups/ostiole stay.
-Competing services that takeover masked are not restored; run for example
-"systemctl unmask firewalld && systemctl enable --now firewalld".`,
+		Short: "Stop the services, remove their units and files, and delete the Ostiole nftables table",
+		Long: `Reverses install: stops and removes ostiole.service, ostiole-firewall.service
+and every service unit the daemon writes, with their drop-ins and the
+configuration they read under /etc, the sysctl, modprobe, journald and
+sysusers drop-ins and the networkd units, and unmasks the distribution's
+units Ostiole masked to run its own (its resolver, unbound, miniupnpd,
+tailscaled, hostapd, time services, bluetooth and update timers) without
+starting them. With --purge the configuration directory, the log files,
+the services' state, the ostiole and ostiole-proxy binaries and the
+ostiole-proxy account are removed too; the backups in /var/backups/ostiole
+stay. Competitors the install removed or masked are not restored; run for
+example "systemctl unmask firewalld && systemctl enable --now firewalld".`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := requireRoot(); err != nil {
@@ -899,6 +908,9 @@ Competing services that takeover masked are not restored; run for example
 					return err
 				}
 			}
+			// Stopping tailscaled, pppoe or hostapd can drop the session this
+			// runs in; the removal finishes anyway.
+			signal.Ignore(syscall.SIGHUP)
 			lay := install.DefaultLayout()
 			lay.ConfigDir = g.configDir
 			// Undo a network takeover first, detached, so the router keeps its
@@ -910,7 +922,7 @@ Competing services that takeover masked are not restored; run for example
 				}
 				_ = os.Remove(filepath.Join(g.configDir, install.TakeoverRecordFile))
 			}
-			if err := install.Uninstall(cmd.Context(), install.ExecSystemctl{}, lay, purge, slog.Default()); err != nil {
+			if err := install.Uninstall(cmd.Context(), install.ExecSystemctl{}, install.ExecRunner{}, lay, purge, slog.Default()); err != nil {
 				return err
 			}
 			// The queues and ip rules come off before the table does: they
@@ -929,7 +941,7 @@ Competing services that takeover masked are not restored; run for example
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&purge, "purge", false, "also remove the configuration directory, the log files and the binary, keeping the backups")
+	cmd.Flags().BoolVar(&purge, "purge", false, "also remove the configuration directory, the log files, the services' state, the binaries and the proxy's account, keeping the backups")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask for confirmation")
 	return cmd
 }

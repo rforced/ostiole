@@ -180,8 +180,16 @@ The same binary is the command line:
 - `ostiole update`: check for and install a newer release.
 - `ostiole repair`: rerun the install script with the binary in place, for a router whose packages
   were changed by hand or an install whose session dropped.
-- `ostiole uninstall`: stop the service and remove the units and the `inet ostiole` table. It does
-  not put back what the script removed.
+- `ostiole uninstall`: stop and remove Ostiole's units (the daemon, the firewall and every service
+  it runs) with their drop-ins, the configuration they read under /etc, the sysctl, modprobe,
+  journald and sysusers files, the networkd units, shaping, policy routing and the `inet ostiole`
+  table; hand the network back if the old manager is still installed; and unmask the
+  distribution's units Ostiole masked to run its own (its resolver, unbound, miniupnpd, tailscaled,
+  hostapd, time services, bluetooth and update timers) without starting them. `--purge` also
+  removes /etc/ostiole, the log files, the services' state (proxy certificates, Tailscale's node,
+  DHCP leases), the `ostiole` and `ostiole-proxy` binaries and the `ostiole-proxy` account. The
+  backups in /var/backups/ostiole stay. Packages the script removed are not reinstalled, and
+  competitors it masked stay masked.
 
 `ostiole --help` lists the rest.
 

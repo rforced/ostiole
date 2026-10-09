@@ -184,7 +184,7 @@ func TestInstallAndUninstall(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(lay.LogDir, "firewall"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := Uninstall(context.Background(), sc, lay, true, log); err != nil {
+	if err := Uninstall(context.Background(), sc, &fakeRunner{}, lay, true, log); err != nil {
 		t.Fatal(err)
 	}
 	for _, p := range []string{filepath.Join(lay.UnitDir, DaemonUnit), filepath.Join(lay.UnitDir, FirewallUnit), lay.Binary(), lay.ConfigDir, lay.LogDir,
@@ -199,6 +199,149 @@ func TestInstallAndUninstall(t *testing.T) {
 	}
 	if !sc.has("disable", "--now", DaemonUnit) {
 		t.Errorf("daemon not disabled: %v", sc.calls)
+	}
+}
+
+func TestUninstallLeftovers(t *testing.T) {
+	t.Parallel()
+	for _, purge := range []bool{false, true} {
+		lay := tempLayout(t)
+		host := t.TempDir()
+		at := func(p ...string) string { return filepath.Join(append([]string{host}, p...)...) }
+		lay.Leftovers = Leftovers{
+			Units:    []string{"ostiole-quokka.service", "ostiole-wombat@.service"},
+			Files:    []string{at("quokka.d", "ostiole.*"), at("sysctl.d", "99-ostiole.conf")},
+			Unmask:   []string{"quokka.service", "numbat-timesyncd.service"},
+			Resolv:   at("resolv.conf"),
+			State:    []string{at("lib", "ostiole-wombat"), at("lib", "quokka", "ostiole.leases")},
+			Binaries: []string{"ostiole-wombat"},
+			User:     "ostiole-wombat",
+		}
+		if err := os.WriteFile(at("resolv.conf"), []byte("nameserver 127.0.0.1\nnameserver ::1\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		plain := []string{at("quokka.d", "ostiole.conf"), at("quokka.d", "ostiole.hosts"), at("sysctl.d", "99-ostiole.conf")}
+		state := []string{at("lib", "ostiole-wombat", "certificates", "site.example.crt"), at("lib", "quokka", "ostiole.leases"),
+			lay.Binary(), filepath.Join(lay.BinDir, "ostiole-wombat"), filepath.Join(lay.ConfigDir, "config.json")}
+		units := []string{DaemonUnit, FirewallUnit, "ostiole-quokka.service", "ostiole-wombat@.service",
+			"ostiole-quokka.service.d/10-level.conf", "ostiole-wombat@.service.d/10-level.conf"}
+		links := []string{"multi-user.target.wants/ostiole-quokka.service", "multi-user.target.wants/ostiole-wombat@radio0.service"}
+		var unitPaths []string
+		for _, u := range slices.Concat(units, links) {
+			unitPaths = append(unitPaths, filepath.Join(lay.UnitDir, u))
+		}
+		kept := []string{at("quokka.d", "distro.conf"), at("lib", "quokka", "distro.leases"),
+			filepath.Join(lay.BinDir, "other-tool"), filepath.Join(lay.UnitDir, "multi-user.target.wants", "other.service")}
+		for _, p := range slices.Concat(plain, state, unitPaths, kept) {
+			if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(p, []byte("x\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		sc := &fakeSystemctl{}
+		run := &fakeRunner{}
+		var logged strings.Builder
+		if err := Uninstall(context.Background(), sc, run, lay, purge, slog.New(slog.NewTextHandler(&logged, nil))); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(logged.String(), "resolv.conf points at the removed dnsmasq") {
+			t.Errorf("purge=%v: no warning about resolv.conf in %q", purge, logged.String())
+		}
+		gone := slices.Concat(plain, unitPaths, []string{filepath.Join(lay.UnitDir, "ostiole-quokka.service.d")})
+		if purge {
+			gone = append(gone, state...)
+			gone = append(gone, at("lib", "ostiole-wombat"))
+		} else {
+			kept = append(kept, state...)
+		}
+		for _, p := range gone {
+			if _, err := os.Stat(p); err == nil {
+				t.Errorf("purge=%v: %s is still there", purge, p)
+			}
+		}
+		for _, p := range kept {
+			if _, err := os.Stat(p); err != nil {
+				t.Errorf("purge=%v: %s went: %v", purge, p, err)
+			}
+		}
+		for _, want := range [][]string{{"disable", "--now", DaemonUnit}, {"disable", "--now", "ostiole-quokka.service"},
+			{"disable", "ostiole-wombat@.service"}, {"stop", "ostiole-wombat@*.service"},
+			{"disable", "--now", FirewallUnit}, {"daemon-reload"}, {"unmask", "quokka.service"}, {"unmask", "numbat-timesyncd.service"}} {
+			if !sc.has(want...) {
+				t.Errorf("purge=%v: no systemctl %v in %v", purge, want, sc.calls)
+			}
+		}
+		reload := slices.IndexFunc(sc.calls, func(c []string) bool { return c[0] == "daemon-reload" })
+		unmask := slices.IndexFunc(sc.calls, func(c []string) bool { return c[0] == "unmask" })
+		if unmask < reload {
+			t.Errorf("purge=%v: unmasked before the units were gone: %v", purge, sc.calls)
+		}
+		daemon := slices.IndexFunc(sc.calls, func(c []string) bool { return slices.Contains(c, DaemonUnit) })
+		service := slices.IndexFunc(sc.calls, func(c []string) bool { return slices.Contains(c, "ostiole-quokka.service") })
+		if daemon < 0 || service < daemon {
+			t.Errorf("purge=%v: the daemon is not stopped first: %v", purge, sc.calls)
+		}
+		if run.ran("userdel", "ostiole-wombat") != purge {
+			t.Errorf("purge=%v: commands run = %v", purge, run.calls)
+		}
+	}
+}
+
+func TestDefaultLeftovers(t *testing.T) {
+	t.Parallel()
+	left := DefaultLayout().Leftovers
+	for _, f := range []string{"/etc/sysctl.d/99-ostiole.conf", BluetoothConfFile, "/etc/sysusers.d/ostiole-proxy.conf"} {
+		if !slices.Contains(left.Files, f) {
+			t.Errorf("Files lacks %s: %v", f, left.Files)
+		}
+	}
+	for _, u := range []string{"ostiole-hostapd@.service", "ostiole-pppoe@.service", "ostiole-tailscaled.service", "ostiole-proxy.service"} {
+		if !slices.Contains(left.Units, u) {
+			t.Errorf("Units lacks %s: %v", u, left.Units)
+		}
+	}
+	for _, s := range []string{"/var/lib/ostiole-proxy", "/var/lib/tailscale"} {
+		if slices.Contains(left.Files, s) || !slices.Contains(left.State, s) {
+			t.Errorf("%s is not state alone: files %v, state %v", s, left.Files, left.State)
+		}
+	}
+	for _, u := range []string{"systemd-resolved.service", "chronyd.service", "systemd-timesyncd.service", "bluetooth.service",
+		"apt-daily.timer", "dnf-makecache.timer", "smartd.service", "smartmontools.service"} {
+		if !slices.Contains(left.Unmask, u) {
+			t.Errorf("Unmask lacks %s: %v", u, left.Unmask)
+		}
+	}
+	if left.Resolv != "/etc/resolv.conf" {
+		t.Errorf("Resolv = %q", left.Resolv)
+	}
+}
+
+func TestScriptMaskOnly(t *testing.T) {
+	t.Parallel()
+	units := ScriptMaskOnly()
+	if len(units) < 3 || !slices.Contains(units, "apt-daily.timer") || !slices.Contains(units, "smartd.service") {
+		t.Errorf("ScriptMaskOnly() = %v", units)
+	}
+	if len(slices.Compact(slices.Sorted(slices.Values(units)))) != len(units) {
+		t.Errorf("repeats in %v", units)
+	}
+}
+
+func TestLoopbackOnly(t *testing.T) {
+	t.Parallel()
+	for in, want := range map[string]bool{
+		"nameserver 127.0.0.1\nnameserver ::1\n":     true,
+		"# by Ostiole\nnameserver 127.0.0.53\n":      true,
+		"nameserver 127.0.0.1\nnameserver 9.9.9.9\n": false,
+		"search lan.example\n":                       false,
+		"nameserver fe80::1%eth0\n":                  false,
+		"":                                           false,
+	} {
+		if got := loopbackOnly(in); got != want {
+			t.Errorf("loopbackOnly(%q) = %v", in, got)
+		}
 	}
 }
 
