@@ -195,7 +195,6 @@ async function loadIntoDraft() {
 
       <div class="space-y-4">
         <ErrorLine v-if="error">{{ error }}</ErrorLine>
-        <p v-if="auth.isOperator" class="text-ink-muted">{{ ADMIN_ONLY }}</p>
 
         <template v-if="config.draft">
           <!-- A disabled fieldset greys out every field in it; the fold's
@@ -336,6 +335,7 @@ async function loadIntoDraft() {
           </p>
         </template>
       </div>
+      <template v-if="auth.isOperator" #footer>{{ ADMIN_ONLY }}</template>
     </SectionCard>
 
     <SectionCard

@@ -144,8 +144,6 @@ const targetStates = computed(() =>
       </template>
 
       <div class="space-y-4">
-        <p v-if="auth.isOperator" class="text-ink-muted">{{ ADMIN_ONLY }}</p>
-
         <fieldset class="field-group" :disabled="locked">
           <legend>Mail</legend>
           <ToggleRow
@@ -272,6 +270,7 @@ const targetStates = computed(() =>
           </div>
         </fieldset>
       </div>
+      <template v-if="auth.isOperator" #footer>{{ ADMIN_ONLY }}</template>
     </SectionCard>
 
     <SectionCard title="What to send">

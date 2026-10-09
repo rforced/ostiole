@@ -211,12 +211,9 @@ function describe(c) {
             </tr>
           </tbody>
         </table>
-        <div
-          v-if="auth.isOperator && rows.some(locked)"
-          class="card-strip border-t border-line text-ink-muted"
-        >
+        <template v-if="auth.isOperator && rows.some(locked)" #footer>
           {{ adminOnly('change', 'cron jobs that run a command or back up accounts') }}
-        </div>
+        </template>
       </SectionCard>
     </template>
 

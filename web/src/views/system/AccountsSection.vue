@@ -189,10 +189,10 @@ async function deleteUser(username) {
       </tbody>
     </table>
 
-    <div class="card-strip border-t border-line text-ink-muted">
+    <template #footer>
       You cannot change your own role or delete your own account. A forgotten password is fixed from
       the console with <span class="font-mono">ostiole reset-password</span>.
-    </div>
+    </template>
 
     <AccountDialog v-model:open="adding" @create="createUser" />
 

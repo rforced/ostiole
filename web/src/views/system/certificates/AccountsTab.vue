@@ -81,9 +81,9 @@ function edit(account) {
           </tr>
         </tbody>
       </table>
-      <div v-if="auth.isOperator" class="card-strip border-t border-line text-ink-muted">
+      <template v-if="auth.isOperator" #footer>
         {{ adminOnly('change', 'ACME accounts') }}
-      </div>
+      </template>
     </SectionCard>
 
     <AccountDialog v-model:open="open" :account="editing" />

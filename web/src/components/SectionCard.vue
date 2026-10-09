@@ -7,7 +7,8 @@ import { provideLocked } from '@/lib/locked'
  * One card of a page. The header is the title, a count, an intro under
  * it, and the actions slot on the right. The body is a table that runs
  * to the edges (flush), fields, or a key-value list. A card with nothing
- * to head has no header.
+ * to head has no header. The footer is a note on the whole card, such as
+ * who may change it.
  */
 const props = defineProps({
   title: { type: String, default: '' },
@@ -73,6 +74,9 @@ provideLocked(() => props.locked)
         <slot />
       </fieldset>
       <slot v-else />
+    </div>
+    <div v-if="$slots.footer" class="card-strip border-t border-line text-ink-muted">
+      <slot name="footer" />
     </div>
   </component>
 </template>

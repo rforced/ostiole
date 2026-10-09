@@ -97,9 +97,9 @@ const labelOf = (kind) => kinds.value.find((k) => k.kind === kind)?.label ?? kin
           </tr>
         </tbody>
       </table>
-      <div v-if="auth.isOperator" class="card-strip border-t border-line text-ink-muted">
+      <template v-if="auth.isOperator" #footer>
         {{ adminOnly('add or delete', 'DNS providers, or change their kind and credentials') }}
-      </div>
+      </template>
     </SectionCard>
 
     <ProviderDialog v-model:open="open" :provider="editing" :kinds="kinds" />

@@ -73,7 +73,6 @@ async function loadIntoDraft() {
   <div class="space-y-5">
     <SectionCard v-if="!auth.readOnly" title="Download" :locked="!auth.isAdmin">
       <div class="space-y-4">
-        <p v-if="auth.isOperator" class="text-ink-muted">{{ adminOnly('download', 'a backup') }}</p>
         <ErrorLine v-if="download.error.value">
           {{ download.error.value }}
         </ErrorLine>
@@ -120,6 +119,7 @@ async function loadIntoDraft() {
           />
         </div>
       </div>
+      <template v-if="auth.isOperator" #footer>{{ adminOnly('download', 'a backup') }}</template>
     </SectionCard>
 
     <SectionCard v-if="!auth.readOnly" title="Restore">
