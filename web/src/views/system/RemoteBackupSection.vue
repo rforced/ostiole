@@ -13,7 +13,7 @@ import { ApiError, api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { formatBytes, formatWhen } from '@/lib/format'
 import { SCHEDULE_PRESETS, presetFor } from '@/lib/schedules'
-import { useAuthStore } from '@/stores/auth'
+import { ADMIN_ONLY, adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import RestorePreview from '@/views/system/RestorePreview.vue'
@@ -195,7 +195,7 @@ async function loadIntoDraft() {
 
       <div class="space-y-4">
         <ErrorLine v-if="error">{{ error }}</ErrorLine>
-        <p v-if="auth.isOperator" class="text-ink-muted">Only an admin can change these.</p>
+        <p v-if="auth.isOperator" class="text-ink-muted">{{ ADMIN_ONLY }}</p>
 
         <template v-if="config.draft">
           <!-- A disabled fieldset greys out every field in it; the fold's
@@ -363,7 +363,7 @@ async function loadIntoDraft() {
           busy-label="Deleting…"
           :busy="deleting === ALL"
           :disabled="!auth.isAdmin || remove.busy.value"
-          :title="auth.isAdmin ? undefined : 'Only an admin can delete all copies.'"
+          :title="auth.isAdmin ? undefined : adminOnly('delete', 'all copies')"
           :question="copies.length === 1 ? 'Delete 1 copy?' : `Delete all ${copies.length} copies?`"
           description="Hidden copies in the folder go too. None can be restored after this."
           :typed="config.saved.backup.remote.bucket"

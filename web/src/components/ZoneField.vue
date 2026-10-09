@@ -4,7 +4,7 @@ import { computed, ref, watch } from 'vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
-import { useAuthStore } from '@/stores/auth'
+import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
 /**
@@ -55,7 +55,7 @@ const pinned = computed(() => auth.isOperator && guarded(current.value))
 const barred = (name) => auth.isOperator && guarded(name) && name !== current.value
 const hint = computed(() =>
   auth.isOperator && config.zones.some((z) => z.antiLockout)
-    ? 'Firewall rules match on zones. Only an admin moves an interface into or out of one with anti-lockout.'
+    ? `Firewall rules match on zones. ${adminOnly('move', 'an interface into or out of a zone with anti-lockout')}`
     : 'Firewall rules match on zones. Interfaces in the same zone share one rule list.',
 )
 const mates = computed(() =>

@@ -5,8 +5,17 @@ import { ApiError, api } from '@/lib/api'
 import { useConfigStore } from '@/stores/config'
 import { useSystemStore } from '@/stores/system'
 
+/**
+ * The one sentence for what only an admin may do, said to an operator:
+ * adminOnly('clear', 'it') is "Only an admin can clear it."
+ * @param {string} verb
+ * @param {string} [object]
+ */
+export const adminOnly = (verb, object = '') =>
+  `Only an admin can ${[verb, object].filter(Boolean).join(' ')}.`
+
 /** Beside a setting only an admin may change, for everyone else. */
-export const ADMIN_ONLY = 'Only an admin can change this.'
+export const ADMIN_ONLY = adminOnly('change', 'this')
 
 /** What each role is called where the account is shown. */
 export const ROLE_LABELS = { admin: 'Admin', operator: 'Operator', viewer: 'Viewer, read only' }

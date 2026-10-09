@@ -11,7 +11,7 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { useTailscaleStatus } from '@/lib/tailscaleStatus'
-import { useAuthStore } from '@/stores/auth'
+import { adminOnly, useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
 
@@ -69,7 +69,7 @@ const logout = useAsync(async () => {
         <ConfirmButton
           label="Log out"
           :disabled="!auth.isAdmin"
-          :title="auth.isAdmin ? undefined : 'Only an admin can log the router out.'"
+          :title="auth.isAdmin ? undefined : adminOnly('log', 'the router out')"
           question="Log this router out of its tailnet?"
           description="The node stays in the admin console, so logging in again puts it back."
           @confirm="logout.run()"

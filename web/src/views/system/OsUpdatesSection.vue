@@ -13,7 +13,7 @@ import { errorMessage, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { parseList } from '@/lib/lists'
 import { excluded } from '@/lib/packages'
-import { useAuthStore } from '@/stores/auth'
+import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import UpdateModeFields from '@/views/system/UpdateModeFields.vue'
@@ -169,7 +169,7 @@ async function reboot() {
             prefix="os-upd"
             :hint="
               auth.isOperator
-                ? 'Only an admin can install updates, reboot, or change how updates run.'
+                ? adminOnly('install updates, reboot, or change', 'how updates run')
                 : ''
             "
             :mode="settings.mode ?? ''"

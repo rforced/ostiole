@@ -9,7 +9,7 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { FILE_LOG_NAMES } from '@/lib/logs'
-import { useAuthStore } from '@/stores/auth'
+import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useToastStore } from '@/stores/toast'
 import LogFilesFields from '@/views/system/LogFilesFields.vue'
@@ -83,7 +83,7 @@ const clearAll = useAsync(async () => {
         dependents-label="Cleared"
         :busy="clearAll.busy.value"
         :disabled="!auth.isAdmin"
-        :title="auth.isAdmin ? undefined : 'Only an admin can clear them.'"
+        :title="auth.isAdmin ? undefined : adminOnly('clear', 'them')"
         @confirm="clearAll.run()"
       />
     </template>

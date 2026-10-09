@@ -5,7 +5,7 @@ import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
-import { ADMIN_ONLY, useAuthStore } from '@/stores/auth'
+import { ADMIN_ONLY, adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
@@ -61,9 +61,7 @@ function save() {
           id="zone-name"
           label="Name"
           :hint="
-            nameLocked && auth.isOperator
-              ? 'Only an admin can rename a zone with anti-lockout.'
-              : ''
+            nameLocked && auth.isOperator ? adminOnly('rename', 'a zone with anti-lockout') : ''
           "
         >
           <input

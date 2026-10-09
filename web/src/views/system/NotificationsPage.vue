@@ -12,7 +12,7 @@ import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { parseList } from '@/lib/lists'
-import { useAuthStore } from '@/stores/auth'
+import { ADMIN_ONLY, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
 const REFRESH_MS = 15_000
@@ -144,7 +144,7 @@ const targetStates = computed(() =>
       </template>
 
       <div class="space-y-4">
-        <p v-if="auth.isOperator" class="text-ink-muted">Only an admin can change these.</p>
+        <p v-if="auth.isOperator" class="text-ink-muted">{{ ADMIN_ONLY }}</p>
 
         <fieldset class="field-group" :disabled="locked">
           <legend>Mail</legend>

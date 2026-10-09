@@ -11,7 +11,7 @@ import { ApiError, api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { LEVELS } from '@/lib/meter'
-import { useAuthStore } from '@/stores/auth'
+import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import UpdateModeFields from '@/views/system/UpdateModeFields.vue'
@@ -190,9 +190,7 @@ onMounted(async () => {
       <fieldset v-if="config.draft" class="space-y-4" :disabled="!auth.isAdmin">
         <UpdateModeFields
           prefix="ostiole-upd"
-          :hint="
-            auth.isOperator ? 'Only an admin can check, install or change how updates run.' : ''
-          "
+          :hint="auth.isOperator ? adminOnly('check, install or change', 'how updates run') : ''"
           :mode="settings.mode ?? ''"
           :check-schedule="settings.checkSchedule ?? ''"
           :install-schedule="settings.installSchedule ?? ''"

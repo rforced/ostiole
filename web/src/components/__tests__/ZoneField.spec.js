@@ -33,7 +33,7 @@ describe('ZoneField and anti-lockout', () => {
     expect(option(w, 'dmz').attributes('disabled')).toBeUndefined()
     expect(w.get('select').attributes('disabled')).toBeUndefined()
     expect(w.text()).toContain(
-      'Only an admin moves an interface into or out of one with anti-lockout.',
+      'Only an admin can move an interface into or out of a zone with anti-lockout.',
     )
   })
 

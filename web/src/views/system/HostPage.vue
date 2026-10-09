@@ -8,7 +8,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { emptyText, errorMessage, useAsync } from '@/lib/async'
-import { useAuthStore } from '@/stores/auth'
+import { adminOnly, useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
 
@@ -155,7 +155,7 @@ async function flush(tables) {
         <ConfirmButton
           label="Clear leftovers"
           :disabled="!auth.isAdmin"
-          :title="auth.isAdmin ? undefined : 'Only an admin can clear them.'"
+          :title="auth.isAdmin ? undefined : adminOnly('clear', 'them')"
           :question="`Clear ${sweepable.length} leftover ruleset${sweepable.length === 1 ? '' : 's'}?`"
           description="Legacy tables are emptied and set to accept. The others are deleted. Ostiole's own table is not touched."
           confirm-label="Clear"
@@ -193,7 +193,7 @@ async function flush(tables) {
                 v-if="root && t.owner"
                 label="Clear anyway"
                 :disabled="!auth.isAdmin"
-                :title="auth.isAdmin ? undefined : 'Only an admin can clear it.'"
+                :title="auth.isAdmin ? undefined : adminOnly('clear', 'it')"
                 :question="`Clear ${t.family} ${t.name}?`"
                 :description="`This ruleset belongs to ${t.owner}. Clearing it breaks whatever is using it until that is restarted.`"
                 confirm-label="Clear"

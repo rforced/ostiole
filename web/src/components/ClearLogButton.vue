@@ -2,13 +2,13 @@
 import { computed } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
-import { useAuthStore } from '@/stores/auth'
+import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
 /**
  * The one Clear for a log, which empties the router's log and deletes its
- * files once the shared dialog says yes. Only an admin clears: an operator
- * sees it greyed, a viewer not at all.
+ * files once the shared dialog says yes. Only an admin can clear it: an
+ * operator sees it greyed, a viewer not at all.
  */
 const props = defineProps({
   /** What a sentence calls the log: "DHCP log". */
@@ -43,7 +43,7 @@ const text = computed(() => {
     :description="text"
     :busy="busy"
     :disabled="!auth.isAdmin"
-    :title="auth.isAdmin ? undefined : 'Only an admin can clear it.'"
+    :title="auth.isAdmin ? undefined : adminOnly('clear', 'it')"
     @confirm="emit('confirm')"
   />
 </template>

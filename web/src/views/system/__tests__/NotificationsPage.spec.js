@@ -109,7 +109,7 @@ describe('NotificationsPage', () => {
   // Where the router's news goes is an admin's to say; everyone else reads.
   it('keeps the settings from an operator', async () => {
     const { wrapper } = await open({ enabled: true }, 'operator')
-    expect(wrapper.text()).toContain('Only an admin can change these.')
+    expect(wrapper.text()).toContain('Only an admin can change this.')
     expect(wrapper.get('#nt-enabled').attributes('disabled')).toBeDefined()
     for (const f of wrapper.findAll('fieldset')) expect(f.attributes('disabled')).toBeDefined()
     expect(button(wrapper, 'Send a test').attributes('disabled')).toBeDefined()

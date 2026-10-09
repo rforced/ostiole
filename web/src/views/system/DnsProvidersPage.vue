@@ -8,7 +8,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import UsedByCell from '@/components/UsedByCell.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
-import { useAuthStore } from '@/stores/auth'
+import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ProviderDialog from '@/views/system/providers/ProviderDialog.vue'
 
@@ -98,7 +98,7 @@ const labelOf = (kind) => kinds.value.find((k) => k.kind === kind)?.label ?? kin
         </tbody>
       </table>
       <div v-if="auth.isOperator" class="card-strip border-t border-line text-ink-muted">
-        Only an admin can add or delete DNS providers, or change their kind and credentials.
+        {{ adminOnly('add or delete', 'DNS providers, or change their kind and credentials') }}
       </div>
     </SectionCard>
 

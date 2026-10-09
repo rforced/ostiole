@@ -15,7 +15,7 @@ import { api } from '@/lib/api'
 import { emptyText, errorMessage, useAsync } from '@/lib/async'
 import { tone } from '@/lib/badge'
 import { formatWhen } from '@/lib/format'
-import { ADMIN_ONLY, useAuthStore } from '@/stores/auth'
+import { ADMIN_ONLY, adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import { useToastStore } from '@/stores/toast'
@@ -177,7 +177,7 @@ function remove(cert) {
           :icon="RefreshCw"
           :busy="regenerate.busy.value"
           :disabled="!auth.isAdmin"
-          :title="auth.isAdmin ? undefined : 'Only an admin can regenerate it.'"
+          :title="auth.isAdmin ? undefined : adminOnly('regenerate', 'it')"
           @click="askRegenerate"
         />
       </template>
@@ -285,7 +285,7 @@ function remove(cert) {
                 busy-label="Issuing…"
                 :busy="status[c.id]?.running === true"
                 :disabled="!auth.isAdmin"
-                :title="auth.isAdmin ? undefined : 'Only an admin can order a certificate.'"
+                :title="auth.isAdmin ? undefined : adminOnly('order', 'a certificate')"
                 @click="issue(c)"
               />
               <MenuButton v-if="issued(c) && auth.isAdmin" label="Download" :items="downloads(c)" />

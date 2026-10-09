@@ -8,7 +8,7 @@ import FormField from '@/components/FormField.vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
 import { joinList, parseList } from '@/lib/lists'
-import { useAuthStore } from '@/stores/auth'
+import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
@@ -140,7 +140,7 @@ const sees = computed(() => {
       <FormField
         id="prov-kind"
         label="Kind"
-        :hint="auth.isOperator ? 'Only an admin can change the kind and credentials.' : undefined"
+        :hint="auth.isOperator ? adminOnly('change', 'the kind and credentials') : undefined"
       >
         <select id="prov-kind" v-model="form.kind" class="input" :disabled="!auth.isAdmin">
           <option v-for="k in kinds" :key="k.kind" :value="k.kind">{{ k.label }}</option>

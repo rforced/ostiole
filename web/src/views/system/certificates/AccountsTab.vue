@@ -5,7 +5,7 @@ import { ref } from 'vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import UsedByCell from '@/components/UsedByCell.vue'
-import { useAuthStore } from '@/stores/auth'
+import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import AccountDialog from '@/views/system/certificates/AccountDialog.vue'
 
@@ -82,7 +82,7 @@ function edit(account) {
         </tbody>
       </table>
       <div v-if="auth.isOperator" class="card-strip border-t border-line text-ink-muted">
-        Only an admin can change ACME accounts.
+        {{ adminOnly('change', 'ACME accounts') }}
       </div>
     </SectionCard>
 

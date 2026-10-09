@@ -8,7 +8,7 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import { newId } from '@/lib/ids'
 import { SCHEDULE_PRESETS, presetFor } from '@/lib/schedules'
 import { deviceName } from '@/lib/wol'
-import { ADMIN_ONLY, useAuthStore } from '@/stores/auth'
+import { ADMIN_ONLY, adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { BACKUP_DIR } from '@/views/system/crons/backup'
 import { SERVICES } from '@/views/system/crons/services'
@@ -128,7 +128,7 @@ function save() {
         <FormField
           id="cron-kind"
           label="What it does"
-          :hint="auth.isOperator ? 'Only an admin can add one that runs a command.' : ''"
+          :hint="auth.isOperator ? adminOnly('add', 'one that runs a command') : ''"
         >
           <select id="cron-kind" v-model="form.kind" class="input">
             <option

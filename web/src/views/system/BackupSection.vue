@@ -9,7 +9,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
-import { useAuthStore } from '@/stores/auth'
+import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import RestorePreview from '@/views/system/RestorePreview.vue'
@@ -73,7 +73,7 @@ async function loadIntoDraft() {
   <div class="space-y-5">
     <SectionCard v-if="!auth.readOnly" title="Download" :locked="!auth.isAdmin">
       <div class="space-y-4">
-        <p v-if="auth.isOperator" class="text-ink-muted">Only an admin can download a backup.</p>
+        <p v-if="auth.isOperator" class="text-ink-muted">{{ adminOnly('download', 'a backup') }}</p>
         <ErrorLine v-if="download.error.value">
           {{ download.error.value }}
         </ErrorLine>

@@ -121,7 +121,7 @@ describe('RemoteBackupSection', () => {
   it('keeps the settings from an operator', async () => {
     const { wrapper } = await open({ remote }, 'operator')
     expect(wrapper.get('#rb-enabled').attributes('disabled')).toBeDefined()
-    expect(wrapper.text()).toContain('Only an admin can change these.')
+    expect(wrapper.text()).toContain('Only an admin can change this.')
     await openAdvanced(wrapper)
     const fieldsets = wrapper.findAll('fieldset')
     expect(fieldsets).toHaveLength(2)

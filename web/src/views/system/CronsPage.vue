@@ -12,7 +12,7 @@ import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { deviceName } from '@/lib/wol'
-import { useAuthStore } from '@/stores/auth'
+import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import { BACKUP_DIR } from '@/views/system/crons/backup'
@@ -38,8 +38,8 @@ const load = useAsync(
 onMounted(() => Promise.all([config.load(), load.run()]))
 
 /** A cron only an admin may change: it runs as root, or writes password hashes out. */
-const adminOnly = (c) => c.kind === 'command' || c.withUsers === true
-const locked = (c) => !auth.isAdmin && adminOnly(c)
+const needsAdmin = (c) => c.kind === 'command' || c.withUsers === true
+const locked = (c) => !auth.isAdmin && needsAdmin(c)
 
 const byID = computed(() => Object.fromEntries(statuses.value.map((s) => [s.id, s])))
 const system = computed(() => statuses.value.filter((s) => s.origin === 'system'))
@@ -215,7 +215,7 @@ function describe(c) {
           v-if="auth.isOperator && rows.some(locked)"
           class="card-strip border-t border-line text-ink-muted"
         >
-          Only an admin can change cron jobs that run a command or back up accounts.
+          {{ adminOnly('change', 'cron jobs that run a command or back up accounts') }}
         </div>
       </SectionCard>
     </template>
