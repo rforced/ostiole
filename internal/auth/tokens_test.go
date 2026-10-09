@@ -99,6 +99,92 @@ func TestTokenExpiry(t *testing.T) {
 	if _, err := tk.Authenticate(secret); !errors.Is(err, ErrTokenExpired) {
 		t.Errorf("after expiry = %v, want ErrTokenExpired", err)
 	}
+	// Refused, but kept a while: a clock ahead at boot must not prune it.
+	if _, _, err := tk.Create("later", RoleViewer, 0, "", Limits{}); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(tk.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tk.List()) != 2 || !strings.Contains(string(raw), `"short"`) {
+		t.Errorf("a token expired an hour ago was pruned:\n%s", raw)
+	}
+}
+
+// A token expired for longer than pruneAfter goes from the list at once
+// and from the file at the next save, whether it ran out while the store
+// was open or before it was read. Reading never writes the file.
+func TestExpiredTokensArePruned(t *testing.T) {
+	t.Parallel()
+	names := func(list []Token) []string {
+		var out []string
+		for _, tok := range list {
+			out = append(out, tok.Name)
+		}
+		return out
+	}
+	read := func(t *testing.T, path string) string {
+		t.Helper()
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(raw)
+	}
+	open := func(t *testing.T, dir string, at time.Time) *Tokens {
+		t.Helper()
+		tk, err := NewTokens(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tk.now = func() time.Time { return at }
+		if _, _, err := tk.Create("nightly-report", RoleViewer, 24*time.Hour, "", Limits{}); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := tk.Create("wall-display", RoleViewer, 0, "", Limits{}); err != nil {
+			t.Fatal(err)
+		}
+		return tk
+	}
+	pruned := func(t *testing.T, tk *Tokens) {
+		t.Helper()
+		before := read(t, tk.path)
+		if got := names(tk.List()); !slices.Equal(got, []string{"wall-display"}) {
+			t.Errorf("listed %v, want only the live token", got)
+		}
+		if read(t, tk.path) != before {
+			t.Error("listing wrote the file")
+		}
+		if _, _, err := tk.Create("door-sensor", RoleViewer, 0, "", Limits{}); err != nil {
+			t.Fatal(err)
+		}
+		if raw := read(t, tk.path); strings.Contains(raw, `"nightly-report"`) || !strings.Contains(raw, `"wall-display"`) {
+			t.Errorf("the save kept the expired token, or lost the live one:\n%s", raw)
+		}
+	}
+
+	t.Run("while open", func(t *testing.T) {
+		t.Parallel()
+		now := time.Now()
+		tk := open(t, t.TempDir(), now)
+		tk.now = func() time.Time { return now.Add(60 * 24 * time.Hour) }
+		pruned(t, tk)
+	})
+
+	t.Run("when read", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		before := read(t, open(t, dir, time.Now().Add(-61*24*time.Hour)).path)
+		tk, err := NewTokens(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if read(t, tk.path) != before {
+			t.Error("reading the file wrote it")
+		}
+		pruned(t, tk)
+	})
 }
 
 func TestTokenNamesAreUniqueAndChecked(t *testing.T) {

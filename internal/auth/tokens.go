@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -142,10 +143,23 @@ func (t *Tokens) load() error {
 	for _, tok := range f.Tokens {
 		t.tokens[tok.ID] = tok
 	}
+	t.sweep(t.now())
 	if info, err := os.Stat(t.path); err == nil {
 		t.loadedAt, t.loadedSz = info.ModTime(), info.Size()
 	}
 	return nil
+}
+
+// pruneAfter is how long an expired token stays in the file. It is
+// refused from the moment it expires; the wait is for a clock that is
+// ahead at boot, before chrony steps it, which would prune live tokens.
+const pruneAfter = 30 * 24 * time.Hour
+
+// sweep drops tokens expired for longer than pruneAfter; called with the
+// lock held. Only save takes that to the file: a read that wrote could put
+// back a token another process had just deleted.
+func (t *Tokens) sweep(now time.Time) {
+	maps.DeleteFunc(t.tokens, func(_ string, tok Token) bool { return tok.Expired(now.Add(-pruneAfter)) })
 }
 
 // refresh re-reads the file when something else has changed it, so the
@@ -164,6 +178,7 @@ func (t *Tokens) refresh() {
 }
 
 func (t *Tokens) save() error {
+	t.sweep(t.now())
 	f := tokensFile{Version: 1}
 	for _, tok := range t.tokens {
 		f.Tokens = append(f.Tokens, tok)
@@ -188,12 +203,14 @@ func (t *Tokens) save() error {
 	return nil
 }
 
-// List reports every token, oldest first. The hashes are cleared: nothing
-// outside this package needs them.
+// List reports the tokens, oldest first, less those expired for longer
+// than pruneAfter. The hashes are cleared: nothing outside this package
+// needs them.
 func (t *Tokens) List() []Token {
 	t.refresh()
-	t.mu.RLock()
-	defer t.mu.RUnlock()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.sweep(t.now())
 	out := make([]Token, 0, len(t.tokens))
 	for _, tok := range t.tokens {
 		tok.Hash = ""
