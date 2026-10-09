@@ -142,7 +142,7 @@ const entries = computed(() => [
         <thead>
           <tr>
             <th>Priority</th>
-            <th>Where</th>
+            <th>Rule</th>
             <th>Zone</th>
             <th>Match</th>
             <th>Description</th>

@@ -240,7 +240,7 @@ function remove(cert) {
             <th>Name</th>
             <th>Covers</th>
             <th>Source</th>
-            <th>Status</th>
+            <th>State</th>
             <th>Expires</th>
             <th></th>
           </tr>
@@ -267,7 +267,7 @@ function remove(cert) {
             <td data-label="Source">
               {{ c.source === 'uploaded' ? 'uploaded' : c.challenge || 'acme' }}
             </td>
-            <td data-label="Status">
+            <td data-label="State">
               <span
                 class="badge"
                 :class="state(c).tone ?? tone(state(c).label)"

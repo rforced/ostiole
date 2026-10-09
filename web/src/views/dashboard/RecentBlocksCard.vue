@@ -35,7 +35,7 @@ function pieces(addr, port) {
           <th>Time</th>
           <th>Source</th>
           <th>Destination</th>
-          <th>By</th>
+          <th>Rule</th>
         </tr>
       </thead>
       <tbody v-if="!loaded">

@@ -60,7 +60,7 @@ const empty = computed(() => {
       />
     </template>
     <div class="card-strip-row">
-      <SearchBox v-model="query" placeholder="gateway, family, what happened, or error" />
+      <SearchBox v-model="query" placeholder="gateway, family, event, or error" />
       <ErrorLine v-if="error">{{ error }}</ErrorLine>
     </div>
     <table class="table table-stack">
@@ -68,7 +68,7 @@ const empty = computed(() => {
         <tr>
           <th>Time</th>
           <th>Gateway</th>
-          <th>What</th>
+          <th>Event</th>
           <th class="num">For</th>
         </tr>
       </thead>
@@ -81,7 +81,7 @@ const empty = computed(() => {
             {{ formatWhen(e.time) }}
           </td>
           <td data-label="Gateway" class="font-mono text-code">{{ e.gateway }}</td>
-          <td data-label="What">
+          <td data-label="Event">
             {{ eventText(e) }}
             <div v-if="e.error" class="text-xs text-ink-muted">{{ e.error }}</div>
           </td>

@@ -224,7 +224,7 @@ function describe(c) {
       <table class="table table-stack">
         <thead>
           <tr>
-            <th>Work</th>
+            <th>Job</th>
             <th>How often</th>
             <th>Last seen</th>
           </tr>

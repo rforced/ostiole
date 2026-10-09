@@ -136,7 +136,7 @@ const empty = computed(() => {
             <th>Matched</th>
             <th>In</th>
             <th>Out</th>
-            <th>Proto</th>
+            <th>Protocol</th>
             <th>Source</th>
             <th>Destination</th>
             <th>Info</th>
