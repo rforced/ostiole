@@ -24,6 +24,7 @@ vi.mock('@/lib/api', () => ({
     proxy: { status: vi.fn(), events: vi.fn(), clearEvents: vi.fn() },
     systemStats: vi.fn(),
     logFiles: vi.fn(),
+    logLimits: vi.fn(),
   },
   ApiError: class ApiError extends Error {},
 }))
@@ -196,6 +197,7 @@ async function events(list, draft = config(), memTotal = 8_000_000_000) {
   }))
   api.systemStats.mockResolvedValue({ memTotal })
   api.logFiles.mockResolvedValue({ enabled: false, logs: [] })
+  api.logLimits.mockResolvedValue({ memTotal: 0, ceilings: {} })
   const store = useConfigStore()
   store.draft = draft
   store.saved = structuredClone(draft)

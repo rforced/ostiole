@@ -13,6 +13,7 @@ vi.mock('@/lib/api', () => ({
     proxy: { status: vi.fn(), requests: vi.fn(), clearRequests: vi.fn() },
     systemStats: vi.fn(),
     logFiles: vi.fn(),
+    logLimits: vi.fn(),
   },
   ApiError: class ApiError extends Error {},
 }))
@@ -45,6 +46,7 @@ async function tab(list, level = 'info') {
   api.proxy.status.mockResolvedValue({ setUp: true, running: true, ports: {}, upstreams: [] })
   api.systemStats.mockResolvedValue({ memTotal: 8_000_000_000 })
   api.logFiles.mockResolvedValue({ enabled: false, logs: [] })
+  api.logLimits.mockResolvedValue({ memTotal: 0, ceilings: {} })
   const store = useConfigStore()
   const draft = {
     version: 11,

@@ -9,7 +9,12 @@ import { useConfirmStore } from '@/stores/confirm'
 import LogTab from '@/views/wireless/LogTab.vue'
 
 vi.mock('@/lib/api', () => ({
-  api: { wireless: { log: vi.fn(), clearLog: vi.fn() }, systemStats: vi.fn(), logFiles: vi.fn() },
+  api: {
+    wireless: { log: vi.fn(), clearLog: vi.fn() },
+    systemStats: vi.fn(),
+    logFiles: vi.fn(),
+    logLimits: vi.fn(),
+  },
   ApiError: class ApiError extends Error {},
 }))
 
@@ -23,6 +28,7 @@ async function tab(list, { level = 'info', radio = true } = {}) {
   api.wireless.log.mockResolvedValue({ entries: list, held: list.length, kept: level === 'info' })
   api.systemStats.mockResolvedValue({ memTotal: 8_000_000_000 })
   api.logFiles.mockResolvedValue({ enabled: false, logs: [] })
+  api.logLimits.mockResolvedValue({ memTotal: 0, ceilings: {} })
   const store = useConfigStore()
   const draft = { version: 11, system: { logging: { level } } }
   if (radio) draft.wireless = { country: 'US', radios: [{ name: 'wlp3s0', enabled: true }] }

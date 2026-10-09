@@ -151,6 +151,11 @@ export const api = {
   timezones: () => get('/system/timezones'),
   /** Whether the logs are written to files, what the files hold, and how writing goes. */
   logFiles: () => get('/system/log-files'),
+  /**
+   * What this router's memory allows the logs: their budget at their
+   * largest, the peak factor, and the most entries each log may keep.
+   */
+  logLimits: () => get('/logs/limits'),
   /** Empties every log a page can clear and deletes its files. */
   clearLogs: () => request('DELETE', '/system/logs'),
   config: {

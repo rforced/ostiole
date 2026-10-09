@@ -14,7 +14,7 @@ import { useConfigStore } from '@/stores/config'
 /**
  * How much of one log is kept: the most entries, which is what it costs in
  * memory, and how many days back. It says what the log costs full, and what
- * every log that is on costs together against this router's memory.
+ * every log that is on costs together against what this router has for them.
  */
 const props = defineProps({
   /** A key of LOGS: firewall, queries or events. */
@@ -50,6 +50,11 @@ const memory = ref(0)
 const stats = useAsync(async () => {
   memory.value = (await api.systemStats()).memTotal ?? 0
 })
+/** The budget and ceilings this router's memory sets, null until the daemon says. */
+const limits = ref(null)
+const limitsLoad = useAsync(async () => {
+  limits.value = await api.logLimits()
+})
 /** What this log's files hold, while System → General writes them. */
 const inFiles = ref(null)
 const files = useAsync(async () => {
@@ -58,12 +63,35 @@ const files = useAsync(async () => {
 })
 onMounted(() => {
   stats.run()
+  limitsLoad.run()
   if (FILE_LOGS.includes(props.log)) files.run()
 })
 
 const cost = computed(() => formatBytes(fullBytes(props.log, entries.value)))
+/** The most entries this log may keep here. */
+const ceiling = computed(() => limits.value?.ceilings?.[props.log] || spec.value.max)
+const entriesHint = computed(() => {
+  const base = `${formatCount(spec.value.entries)} is the default. About ${cost.value} of memory when full.`
+  return ceiling.value < spec.value.max
+    ? `${base} This router allows up to ${formatCount(ceiling.value)}.`
+    : base
+})
 const total = computed(() => totalBytes(config.draft))
-const heavy = computed(() => memory.value > 0 && total.value > memory.value / 2)
+/** What the logs may cost at their largest here, null while unknown. */
+const budget = computed(() => {
+  const l = limits.value
+  return l?.memTotal > 0 && Number.isFinite(l.budget) ? l.budget : null
+})
+const outOf = computed(() => {
+  if (budget.value !== null) return ` of the ${formatBytes(budget.value)} this router has for them`
+  return memory.value ? ` of ${formatBytes(memory.value)}` : ''
+})
+const over = computed(
+  () => budget.value !== null && total.value * (limits.value.peakFactor || 1) > budget.value,
+)
+const heavy = computed(
+  () => budget.value === null && memory.value > 0 && total.value > memory.value / 2,
+)
 /** How many days the files keep this log, 0 while they are off. */
 const kept = computed(() => fileDays(config.draft, props.log, days.value))
 const daysHint = computed(() => {
@@ -81,17 +109,13 @@ const daysHint = computed(() => {
       <slot />
       <template v-if="!off">
         <div class="fields fields-card">
-          <FormField
-            :id="`${log}-entries`"
-            label="Entries"
-            :hint="`${formatCount(spec.entries)} is the default. About ${cost} of memory when full.`"
-          >
+          <FormField :id="`${log}-entries`" label="Entries" :hint="entriesHint">
             <input
               :id="`${log}-entries`"
               v-model.number="entries"
               type="number"
               min="0"
-              :max="spec.max"
+              :max="ceiling"
               :placeholder="String(spec.entries)"
               class="input w-32 max-sm:w-full"
             />
@@ -108,12 +132,10 @@ const daysHint = computed(() => {
             />
           </FormField>
         </div>
-        <p class="text-ink-muted">
-          All logs: {{ formatBytes(total)
-          }}<template v-if="memory"> of {{ formatBytes(memory) }}</template> when full.
-        </p>
+        <p class="text-ink-muted">All logs: {{ formatBytes(total) }}{{ outOf }} when full.</p>
         <p v-if="inFiles" class="text-ink-muted">In files: {{ formatBytes(inFiles.bytes) }}.</p>
-        <AppNotice v-if="heavy">That is more than half of this router's memory.</AppNotice>
+        <AppNotice v-if="over">That is more than this router has for them.</AppNotice>
+        <AppNotice v-else-if="heavy">That is more than half of this router's memory.</AppNotice>
       </template>
       <p v-else class="text-ink-muted"><slot name="off">Off.</slot></p>
     </div>

@@ -14,6 +14,7 @@ vi.mock('@/lib/api', () => ({
     traffic: { destinations: vi.fn(), devices: vi.fn(), clearDestinations: vi.fn() },
     systemStats: vi.fn(() => Promise.resolve({ memTotal: 0 })),
     logFiles: vi.fn(() => Promise.resolve({ enabled: false, logs: [] })),
+    logLimits: vi.fn(() => Promise.resolve({ memTotal: 0, ceilings: {} })),
   },
 }))
 

@@ -14,6 +14,7 @@ vi.mock('@/lib/api', () => ({
     tailscale: { log: vi.fn(), clearLog: vi.fn() },
     systemStats: vi.fn(),
     logFiles: vi.fn(),
+    logLimits: vi.fn(),
   },
   ApiError: class ApiError extends Error {},
 }))
@@ -28,6 +29,7 @@ async function tab(kind, list, { level = 'info', on = true } = {}) {
   api[kind].log.mockResolvedValue({ entries: list, held: list.length, kept: level === 'info' })
   api.systemStats.mockResolvedValue({ memTotal: 8_000_000_000 })
   api.logFiles.mockResolvedValue({ enabled: false, logs: [] })
+  api.logLimits.mockResolvedValue({ memTotal: 0, ceilings: {} })
   const store = useConfigStore()
   const draft = { version: 11, system: { logging: { level } }, interfaces: [] }
   if (on)

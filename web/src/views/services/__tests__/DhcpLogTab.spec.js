@@ -13,6 +13,7 @@ vi.mock('@/lib/api', () => ({
     services: { dhcpLog: vi.fn(), clearDhcpLog: vi.fn() },
     systemStats: vi.fn(),
     logFiles: vi.fn(),
+    logLimits: vi.fn(),
   },
   ApiError: class ApiError extends Error {},
 }))
@@ -31,6 +32,7 @@ async function tab(list, { level = 'info', dhcp = true } = {}) {
   })
   api.systemStats.mockResolvedValue({ memTotal: 8_000_000_000 })
   api.logFiles.mockResolvedValue({ enabled: false, logs: [] })
+  api.logLimits.mockResolvedValue({ memTotal: 0, ceilings: {} })
   const store = useConfigStore()
   const draft = {
     version: 11,

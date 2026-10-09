@@ -7,17 +7,43 @@ import LogRetention from '@/components/LogRetention.vue'
 import { api } from '@/lib/api'
 import { useConfigStore } from '@/stores/config'
 
-vi.mock('@/lib/api', () => ({ api: { systemStats: vi.fn(), logFiles: vi.fn() } }))
+vi.mock('@/lib/api', () => ({
+  api: { systemStats: vi.fn(), logFiles: vi.fn(), logLimits: vi.fn() },
+}))
 
+// What a router of 4 GB answers: 3,475 MB for the logs at their largest,
+// the firewall log and the requests held below the model's most.
+const LIMITS = {
+  memTotal: 4_000_000_000,
+  reserve: 525_000_000,
+  budget: 3_475_000_000,
+  peakFactor: 1.5,
+  ceilings: {
+    firewall: 6_619_047,
+    queries: 10_000_000,
+    events: 1_000_000,
+    destinations: 10_000_000,
+    requests: 5_791_666,
+    dhcp: 1_000_000,
+    wireless: 1_000_000,
+    wireguard: 1_000_000,
+    tailscale: 1_000_000,
+  },
+}
+
+/** limits null is a daemon that does not answer them. */
 async function card({
   settings = {},
   memTotal = 8_000_000_000,
+  limits = null,
   draft = {},
   off = false,
   log = 'events',
   files = { enabled: false, logs: [] },
 } = {}) {
   api.systemStats.mockResolvedValue({ memTotal })
+  if (limits) api.logLimits.mockResolvedValue(limits)
+  else api.logLimits.mockRejectedValue(new Error('Not Found'))
   api.logFiles.mockResolvedValue(files)
   const store = useConfigStore()
   store.draft = { version: 11, system: {}, services: {}, ...draft }
@@ -70,6 +96,62 @@ describe('LogRetention', () => {
     const { wrapper } = await card({ draft, memTotal: 600_000_000 })
     expect(wrapper.text()).toContain('All logs: 350 MB of 600 MB when full.')
     expect(wrapper.text()).toContain("That is more than half of this router's memory.")
+  })
+
+  it("keeps the model's most and the memory when the limits fail", async () => {
+    const { wrapper } = await card()
+    expect(api.logLimits).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('#events-entries').attributes('max')).toBe('1000000')
+    expect(wrapper.text()).not.toContain('This router allows')
+    expect(wrapper.text()).toContain('All logs: 17.5 MB of 8.0 GB when full.')
+  })
+
+  it('caps the entries at what this router allows', async () => {
+    const { wrapper } = await card({ log: 'firewall', memTotal: 4_000_000_000, limits: LIMITS })
+    expect(wrapper.find('#firewall-entries').attributes('max')).toBe('6619047')
+    expect(wrapper.text()).toContain(
+      '50,000 is the default. About 17.5 MB of memory when full. This router allows up to 6,619,047.',
+    )
+  })
+
+  it("says nothing more where this router allows the model's most", async () => {
+    const { wrapper } = await card({ memTotal: 4_000_000_000, limits: LIMITS })
+    expect(wrapper.find('#events-entries').attributes('max')).toBe('1000000')
+    expect(wrapper.text()).toContain('10,000 is the default. About 15.4 MB of memory when full.')
+    expect(wrapper.text()).not.toContain('This router allows')
+  })
+
+  it('sets every log against what this router has for them', async () => {
+    let { wrapper } = await card({ memTotal: 4_000_000_000, limits: LIMITS })
+    expect(wrapper.text()).toContain(
+      'All logs: 17.5 MB of the 3.5 GB this router has for them when full.',
+    )
+    expect(wrapper.text()).not.toContain('That is more')
+    // 2.1 GB is past half of the memory, but 3.15 GB at their largest fits.
+    const firewallLog = (entries) => ({ system: { management: { firewallLog: { entries } } } })
+    ;({ wrapper } = await card({
+      memTotal: 4_000_000_000,
+      limits: LIMITS,
+      draft: firewallLog(6_000_000),
+    }))
+    expect(wrapper.text()).toContain(
+      'All logs: 2.1 GB of the 3.5 GB this router has for them when full.',
+    )
+    expect(wrapper.text()).not.toContain('That is more')
+    // Each log within its ceiling, together past 3,475 MB at their largest.
+    ;({ wrapper } = await card({
+      memTotal: 4_000_000_000,
+      limits: LIMITS,
+      draft: {
+        ...firewallLog(6_619_047),
+        services: { dns: { enabled: true, queryLog: { enabled: true } } },
+      },
+    }))
+    expect(wrapper.text()).toContain(
+      'All logs: 2.3 GB of the 3.5 GB this router has for them when full.',
+    )
+    expect(wrapper.text()).toContain('That is more than this router has for them.')
+    expect(wrapper.text()).not.toContain('half')
   })
 
   // While System → General writes the logs to files, the card says what

@@ -17,6 +17,7 @@ vi.mock('@/lib/api', () => ({
     log: { entries: vi.fn(), clear: vi.fn() },
     systemStats: vi.fn(() => Promise.resolve({ memTotal: 0 })),
     logFiles: vi.fn(() => Promise.resolve({ enabled: false, logs: [] })),
+    logLimits: vi.fn(() => Promise.resolve({ memTotal: 0, ceilings: {} })),
   },
 }))
 
