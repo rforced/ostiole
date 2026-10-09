@@ -183,11 +183,13 @@ function sentence(r) {
         <ToggleRow v-model="form.ipv6" label="AAAA record" hint="The IPv6 address." />
       </div>
 
-      <ul v-if="checked" class="space-y-1 text-sm" role="status">
-        <li v-for="r in checked" :key="r.type" :class="{ 'text-bad': r.error }">
-          <span class="font-mono">{{ r.type }}:</span>&nbsp;{{ sentence(r) }}
-        </li>
-      </ul>
+      <div v-if="checked" role="status">
+        <ul class="space-y-1 text-sm">
+          <li v-for="r in checked" :key="r.type" :class="{ 'text-bad': r.error }">
+            <span class="font-mono">{{ r.type }}:</span>&nbsp;{{ sentence(r) }}
+          </li>
+        </ul>
+      </div>
       <ErrorLine v-if="checkError" class="text-sm">{{ checkError }}</ErrorLine>
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
     </form>

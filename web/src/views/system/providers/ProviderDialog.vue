@@ -188,12 +188,14 @@ const sees = computed(() => {
         />
       </FormField>
 
-      <ul v-if="tested" class="space-y-1 text-sm" role="status">
-        <li>{{ sees }}</li>
-        <li v-for="d in tested.domains" :key="d.domain" :class="{ 'text-bad': d.error }">
-          <span class="font-mono">{{ d.domain }}:</span>&nbsp;{{ d.error || 'found.' }}
-        </li>
-      </ul>
+      <div v-if="tested" role="status">
+        <ul class="space-y-1 text-sm">
+          <li>{{ sees }}</li>
+          <li v-for="d in tested.domains" :key="d.domain" :class="{ 'text-bad': d.error }">
+            <span class="font-mono">{{ d.domain }}:</span>&nbsp;{{ d.error || 'found.' }}
+          </li>
+        </ul>
+      </div>
       <ErrorLine v-if="testError" class="text-sm">{{ testError }}</ErrorLine>
     </form>
     <template #footer>

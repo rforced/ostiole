@@ -167,11 +167,13 @@ async function save() {
         />
       </div>
 
-      <ul v-if="parsed?.errors.length" role="alert" class="space-y-1 text-sm text-bad">
-        <li v-for="e in parsed.errors" :key="`${e.line}-${e.message}`">
-          {{ e.line ? `Line ${e.line}: ${e.message}.` : `${sentence(e.message)}.` }}
-        </li>
-      </ul>
+      <div v-if="parsed?.errors.length" role="alert">
+        <ul class="space-y-1 text-sm text-bad">
+          <li v-for="e in parsed.errors" :key="`${e.line}-${e.message}`">
+            {{ e.line ? `Line ${e.line}: ${e.message}.` : `${sentence(e.message)}.` }}
+          </li>
+        </ul>
+      </div>
 
       <template v-if="ok">
         <div class="fields">
