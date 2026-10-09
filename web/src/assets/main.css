@@ -10,12 +10,16 @@
  *
  * A page is a stack of cards. A card is a list (a table), a form (fields
  * that edit the draft), or facts (a key-value list). Its header is the
- * title, a count, an intro under it, and actions on the right; a button
- * never sits anywhere else. A form with more than about eight fields folds
- * the rest under Advanced. A card whose contents one flag governs carries
- * that flag as a switch in its header; a service with one flag carries it
- * in the page header. Whatever else a list card holds — a filter row, a
- * toggle, a count, an error — is a .card-strip above or below the table.
+ * title, a count, an intro under it, and actions on the right, a one-shot
+ * action among them. A form ends in a row of its buttons on the right, as
+ * a dialog does. A form with more than about eight fields folds the rest
+ * under Advanced. A card whose contents one flag governs carries that flag
+ * as a switch in its header; a service with one flag carries it in the
+ * page header. A service with one daemon has its StatusBadge beside the
+ * page title. Wireless and WireGuard, with a state per radio or per tunnel,
+ * show it in each row instead. Whatever else a list card holds — a filter
+ * row, a toggle, a count, an error — is a .card-strip above or below the
+ * table.
  *
  * Three heading sizes: .page-title, .card-title, .group-title. Prose is
  * text-sm. text-xs is chrome only: table headers, badges, timestamps,
