@@ -1541,14 +1541,44 @@ func (r *renderer) ruleAs(rule *model.Rule, comment, prefix string) {
 	case model.ActionDrop:
 		verdict = append(verdict, "drop")
 	case model.ActionReject:
-		if rule.Protocol == model.ProtocolTCP {
-			verdict = append(verdict, "reject with tcp reset")
-		} else {
-			verdict = append(verdict, "reject")
-		}
+		r.reject(rule, m, verdict, comment)
+		return
 	}
 	verdict = append(verdict, fmt.Sprintf("comment %q", comment))
 	r.emit(rule.ID, m, verdict)
+}
+
+// A reject answers TCP with a reset, since some clients ignore ICMP while
+// they connect, and anything else with administratively prohibited: icmpx,
+// because the table is inet and a packet may be of either family.
+const (
+	rejectTCP   = "reject with tcp reset"
+	rejectOther = "reject with icmpx type admin-prohibited"
+)
+
+// reject writes a reject rule's verdict. A rule that can match TCP and
+// other protocols too is written twice under the one comment, the TCP half
+// first, so its counter sums both.
+func (r *renderer) reject(rule *model.Rule, m match, verdict []string, comment string) {
+	tail := fmt.Sprintf("comment %q", comment)
+	rest := m
+	switch rule.Protocol {
+	case model.ProtocolTCP:
+		r.emit(rule.ID, m, slices.Concat(verdict, []string{rejectTCP, tail}))
+		return
+	case model.ProtocolTCPUDP:
+		tcp, udp := *rule, *rule
+		tcp.Protocol, udp.Protocol = model.ProtocolTCP, model.ProtocolUDP
+		half := m
+		half.l4 = r.l4(&tcp)
+		r.emit(rule.ID, half, slices.Concat(verdict, []string{rejectTCP, tail}))
+		rest.l4 = r.l4(&udp)
+	case model.ProtocolAny:
+		half := m
+		half.l4 = "meta l4proto tcp"
+		r.emit(rule.ID, half, slices.Concat(verdict, []string{rejectTCP, tail}))
+	}
+	r.emit(rule.ID, rest, slices.Concat(verdict, []string{rejectOther, tail}))
 }
 
 // logComment is the comment on a rule's sampled log, so its counter is

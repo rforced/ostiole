@@ -73,7 +73,7 @@ table inet ostiole {
 		# rule v6-only-dest skipped: source and destination cannot match the same address family (empty alias, or IPv4 on one side and IPv6 on the other)
 		# rule empty-alias skipped: source and destination cannot match the same address family (empty alias, or IPv4 on one side and IPv6 on the other)
 		# rule to-guest skipped: destination zone "guest" has no enabled interfaces
-		meta l4proto udp counter reject comment "id:reject-udp"
+		meta l4proto udp counter reject with icmpx type admin-prohibited comment "id:reject-udp"
 		ct status dnat fib daddr type != local counter accept comment "port-forwards"
 		limit rate 10/second counter log prefix "ostiole:z:lan:drop: " group 1 comment "log:zone-default"
 		counter drop comment "zone-default"

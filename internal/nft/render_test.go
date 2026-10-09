@@ -772,8 +772,40 @@ func TestBogonListFillsTheSets(t *testing.T) {
 	}
 }
 
-// Enforcement does not wait for the lists, and the drops do not wait for the
-// DNS server either: only the redirect needs a resolver here to send
+// A reject that can match TCP and more is written twice under its one
+// comment, a reset for TCP first and admin-prohibited for the rest, behind
+// one sampled log.
+func TestRejectAnswersTCPWithAReset(t *testing.T) {
+	t.Parallel()
+	cfg := loadConfig(t, "testdata/full.json")
+	i := slices.IndexFunc(cfg.Rules, func(r model.Rule) bool { return r.ID == "reject-udp" })
+	if i < 0 {
+		t.Fatal("full.json has no reject-udp rule")
+	}
+	cfg.Rules[i].Protocol = model.ProtocolAny
+	cfg.Rules[i].Log = true
+	got, err := Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lines []string
+	for line := range strings.SplitSeq(got, "\n") {
+		if strings.Contains(line, `comment "id:reject-udp"`) || strings.Contains(line, `comment "id:log:reject-udp"`) {
+			lines = append(lines, strings.TrimSpace(line))
+		}
+	}
+	want := []string{
+		`limit rate ` + LogRate + ` counter log prefix "ostiole:r:reject-udp:reject: " group 1 comment "id:log:reject-udp"`,
+		`meta l4proto tcp counter reject with tcp reset comment "id:reject-udp"`,
+		`counter reject with icmpx type admin-prohibited comment "id:reject-udp"`,
+	}
+	if !slices.Equal(lines, want) {
+		t.Errorf("got:\n%s\nwant:\n%s", strings.Join(lines, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// Enforcement does not wait for the lists, and the blocks do not wait for
+// the DNS server either: only the redirect needs a resolver here to send
 // clients to, and validation refuses it without one.
 func TestDNSEnforcementWithoutListsOrServer(t *testing.T) {
 	t.Parallel()

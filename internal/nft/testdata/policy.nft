@@ -48,7 +48,7 @@ table inet ostiole {
 		fib daddr type local udp dport 53 counter accept comment "id:lan-dns"
 		meta hour != "06:00"-"22:00" ip saddr @alias_torrents_v4 counter accept comment "id:torrents-out-backup"
 		counter accept comment "id:lan-default"
-		meta l4proto udp counter reject comment "id:lan-tail"
+		meta l4proto udp counter reject with icmpx type admin-prohibited comment "id:lan-tail"
 		counter comment "zone-unmatched"
 	}
 	chain zone_guest {
