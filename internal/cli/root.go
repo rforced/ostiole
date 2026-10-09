@@ -93,6 +93,9 @@ type globals struct {
 	// before the engine is built, so a site on the built-in certificate
 	// reads the same files.
 	tlsCert, tlsKey string
+	// eng is the engine the commands drive, built from the flags unless a
+	// test has built its own.
+	eng *engine.Engine
 }
 
 func (g *globals) certStore() *certs.Store {
@@ -188,6 +191,9 @@ func (g *globals) engine() (*engine.Engine, error) { return g.engineWith(false) 
 // command that printed less than --log-level asked for would be
 // surprising.
 func (g *globals) engineWith(ownLevel bool) (*engine.Engine, error) {
+	if g.eng != nil {
+		return g.eng, nil
+	}
 	net, err := g.network()
 	if err != nil {
 		return nil, err
@@ -284,6 +290,7 @@ func newRootCmd() *cobra.Command {
 		newBackupCmd(g),
 		newRestoreCmd(g),
 		newDiffCmd(g),
+		newUnusedCmd(g),
 		newResetPasswordCmd(g),
 		newUsersCmd(g),
 		newTokensCmd(g),
