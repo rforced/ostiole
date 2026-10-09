@@ -959,24 +959,79 @@ func TestWarnsWhenCertificateChecksAreLimited(t *testing.T) {
 
 // Full, the logs could crowd out the router, and each is sized on its own
 // page, so the dashboard is where the total shows.
-func TestWarnsWhenTheLogsCouldFillHalfTheMemory(t *testing.T) {
+func TestWarnsWhenTheLogsCouldOutgrowTheirMemory(t *testing.T) {
 	t.Parallel()
 	cfg := starter()
-	cfg.System.Management.FirewallLog.Entries = 2_000_000 // 700 MB
+	cfg.System.Management.FirewallLog.Entries = 1_800_000 // 630 MB, 945 MB at the peak
 	find := func(mem uint64) *Warning {
 		a := &api{memTotal: func() uint64 { return mem }}
-		return warning(Overview{Warnings: a.warnings(context.Background(), cfg, engine.Status{}, nil, nil, install.UnitStates{})}, "logs")
+		return warningKeyed(a.warnings(context.Background(), cfg, engine.Status{}, nil, nil, install.UnitStates{}), "logs-memory")
 	}
-	w := find(1_000_000_000)
-	if w == nil || w.Key != "logs-memory" || !strings.Contains(w.Detail, "700 MB of 1.0 GB") {
+	w := find(1_400_000_000)
+	if w == nil || w.Kind != "logs" || w.Title != "The logs could take more memory than this router has for them" ||
+		!strings.HasPrefix(w.Detail, "Full, the logs in memory take 945 MB; this router has 875 MB for them. Set fewer entries under Firewall › Log, ") ||
+		!strings.HasSuffix(w.Detail, "Wireless › Log or VPN › Logs.") {
 		t.Errorf("warning = %+v", w)
 	}
-	if w := find(2_000_000_000); w != nil {
-		t.Errorf("700 MB of 2 GB warned: %+v", w)
+	if w := find(1_500_000_000); w != nil {
+		t.Errorf("945 MB in 975 MB warned: %+v", w)
 	}
 	// Memory it cannot read says nothing.
 	if w := find(0); w != nil {
 		t.Errorf("unknown memory warned: %+v", w)
+	}
+}
+
+// A log set above what the memory holds keeps fewer entries, and the page
+// it is set on does not say so.
+func TestWarnsWhenALogKeepsFewerThanSet(t *testing.T) {
+	t.Parallel()
+	cfg := starter()
+	cfg.Services.DNS.Enabled = true
+	cfg.Services.DNS.QueryLog.Enabled = true
+	cfg.Services.DNS.QueryLog.Entries = 5_000_000
+	find := func(mem uint64) *Warning {
+		a := &api{memTotal: func() uint64 { return mem }}
+		return warningKeyed(a.warnings(context.Background(), cfg, engine.Status{}, nil, nil, install.UnitStates{}), "logs-clamped")
+	}
+	w := find(950_000_000)
+	if w == nil || w.Kind != "logs" || w.Title != "A log keeps fewer entries than set" ||
+		w.Detail != "The query log keeps 1,888,888 of the 5,000,000 set. This router has memory for that many." {
+		t.Errorf("warning = %+v", w)
+	}
+	cfg.System.Management.FirewallLog.Entries = 1_000_000
+	cfg.Services.Proxy = model.Proxy{Enabled: true, Sites: []model.ProxySite{{ID: "shop", Enabled: true}}, Events: model.ProxyEvents{Entries: 500_000}}
+	if w := find(950_000_000); w == nil || w.Detail != "The firewall log keeps 577,142 of the 1,000,000 set; the query log keeps 1,346,666 of the 5,000,000 set; "+
+		"the WAF events keep 131,510 of the 500,000 set. This router has memory for that many." {
+		t.Errorf("warning = %+v", w)
+	}
+	// A log that is off keeps nothing, whatever it is set to.
+	cfg.Services.DNS.QueryLog.Enabled = false
+	cfg.System.Management.FirewallLog.Entries = 0
+	cfg.Services.Proxy = model.Proxy{}
+	if w := find(950_000_000); w != nil {
+		t.Errorf("a log that is off warned: %+v", w)
+	}
+	if w := find(0); w != nil {
+		t.Errorf("unknown memory warned: %+v", w)
+	}
+}
+
+func warningKeyed(ws []Warning, key string) *Warning {
+	for i := range ws {
+		if ws[i].Key == key {
+			return &ws[i]
+		}
+	}
+	return nil
+}
+
+func TestGroupDigits(t *testing.T) {
+	t.Parallel()
+	for n, want := range map[int]string{0: "0", 999: "999", 1000: "1,000", 480_000: "480,000", 1_888_888: "1,888,888", -12_345: "-12,345"} {
+		if got := groupDigits(n); got != want {
+			t.Errorf("groupDigits(%d) = %q, want %q", n, got, want)
+		}
 	}
 }
 

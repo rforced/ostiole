@@ -198,6 +198,7 @@ func (a *api) register(mux *router) {
 	a.registerUsers(mux)
 	a.registerFeeds(mux)
 	a.registerBlocking(mux)
+	a.registerLogLimits(mux)
 	a.registerQueryLog(mux)
 	a.registerLogFiles(mux)
 	a.registerTraffic(mux)

@@ -995,16 +995,7 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 	// Full, the logs kept in memory could crowd out what the router runs.
 	// Each is sized on its own page, so the warning names them all.
 	if cfg != nil {
-		full, mem := float64(cfg.LogsFullBytes()), float64(a.memory())
-		if mem > 0 && full > mem/2 {
-			out = append(out, Warning{
-				Kind: "logs", Level: "warn", Key: "logs-memory",
-				Title: "The logs could take more than half the memory",
-				Detail: "Full, the logs in memory take " + formatBytes(full) + " of " + formatBytes(mem) +
-					". Set fewer entries under Firewall › Log, Services › DNS › Queries or Services › " +
-					"Reverse proxy › Events.",
-			})
-		}
+		out = append(out, logsMemoryWarnings(cfg, a.budget())...)
 	}
 	out = append(out, a.logFileWarnings(cfg)...)
 	// A CA checks an http-01 certificate from several places at once, so a

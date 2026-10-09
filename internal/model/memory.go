@@ -202,3 +202,27 @@ func bytesText(n int64) string {
 	}
 	return fmt.Sprintf("%.1f %s", v, units[i])
 }
+
+// MemoryLog is a log kept in memory as MemoryLogs has it.
+type MemoryLog struct {
+	// Path is its entries setting's path.
+	Path string
+	// On is whether it is kept, as LogsFullBytes counts it.
+	On bool
+	// Size is the entries set, or the default.
+	Size int
+	// Ceiling is the most entries it may keep here.
+	Ceiling int
+	// Bytes is what an entry costs.
+	Bytes int64
+}
+
+// MemoryLogs are the logs kept in memory, each with its ceiling here.
+func (b MemoryBudget) MemoryLogs(c *Config) []MemoryLog {
+	logs := c.memoryLogs()
+	out := make([]MemoryLog, len(logs))
+	for i, l := range logs {
+		out[i] = MemoryLog{Path: l.path, On: l.on, Size: l.size, Ceiling: b.Ceiling(c, l.bytes, l.most), Bytes: l.bytes}
+	}
+	return out
+}

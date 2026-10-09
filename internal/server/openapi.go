@@ -246,6 +246,7 @@ var routeDocs = map[string]routeDoc{
 	"POST /api/v1/blocking/lists/{name}/refresh": {summary: "Fetch one DNS blocklist now.", role: auth.RoleOperator},
 	"POST /api/v1/blocking/lists/{name}/import":  {summary: "Load a DNS blocklist from the request body, for a router with no way out to the internet.", role: auth.RoleOperator},
 	"GET /api/v1/blocking/lists/{name}/names":    {summary: "A page of the names a DNS blocklist holds. q searches it, and a name finds the entry that blocks it. offset and limit page through it, 100 at a time unless limit says otherwise.", role: auth.RoleViewer},
+	"GET /api/v1/logs/limits":                    {summary: "What this router's memory allows the logs kept in memory: its total, what it runs besides them, what is left for them at their largest, and the most entries each may keep.", role: auth.RoleViewer},
 
 	"GET /api/v1/dns/queries":         {summary: "A page of what the DNS server answered, newest first, searched with q and read on from before, while the query log is on.", role: auth.RoleViewer},
 	"GET /api/v1/dns/queries/stream":  {summary: "Answers from the DNS server as they are given (server-sent events).", role: auth.RoleViewer},
