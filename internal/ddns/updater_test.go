@@ -369,8 +369,7 @@ func TestRunPassesWhenTheRecordsChange(t *testing.T) {
 	r.u.Watch = func(context.Context) (<-chan struct{}, error) { return nil, nil }
 	passes := make(chan struct{}, 10)
 	r.u.OnPass = func() { passes <- struct{}{} }
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go r.u.Run(ctx)
 
 	select {
@@ -429,8 +428,7 @@ func TestRunPassesWhenAnAddressChanges(t *testing.T) {
 	r.u.Watch = func(context.Context) (<-chan struct{}, error) { return changes, nil }
 	passes := make(chan struct{}, 10)
 	r.u.OnPass = func() { passes <- struct{}{} }
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go r.u.Run(ctx)
 	<-passes
 

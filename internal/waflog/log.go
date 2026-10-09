@@ -6,6 +6,7 @@ package waflog
 
 import (
 	"errors"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -134,8 +135,8 @@ func (l *Log) fill(entries []Entry) {
 	if len(entries) > 0 && len(entries) >= l.size {
 		l.let(entries[len(entries)-1].Logged)
 	}
-	for i := len(entries) - 1; i >= 0; i-- {
-		l.send(l.put(entries[i]))
+	for _, e := range slices.Backward(entries) {
+		l.send(l.put(e))
 	}
 }
 

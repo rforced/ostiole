@@ -484,8 +484,8 @@ func (b *Bucket) listVersions(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		vs := b.objects[k]
-		for i := len(vs) - 1; i >= 0; i-- {
-			entries = append(entries, entry{key: k, v: vs[i], latest: i == len(vs)-1})
+		for i, v := range slices.Backward(vs) {
+			entries = append(entries, entry{key: k, v: v, latest: i == len(vs)-1})
 		}
 	}
 	b.mu.Unlock()

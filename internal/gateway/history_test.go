@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"ostiole/internal/logring"
 	"ostiole/internal/logsearch"
 	"ostiole/internal/logsearch/logsearchtest"
 	"ostiole/internal/model"
@@ -82,7 +81,7 @@ func TestAnAnswerInTheFilesCountsAfterAStart(t *testing.T) {
 	h := NewHistory()
 	now := time.Now()
 	h.RestoreMinute(MinuteLine{
-		Stamp: logring.Stamp{Time: now.Add(-2 * time.Hour)}, Gateway: "wan", State: StateUp,
+		Time: now.Add(-2 * time.Hour), Gateway: "wan", State: StateUp,
 		Families: []FamilyMinute{{Family: FamilyIPv4, Sent: 12, Mean: 4}},
 	}, now)
 	h.EndRestore(0)

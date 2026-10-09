@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"ostiole/internal/gateway"
-	"ostiole/internal/logring"
 )
 
 type fakeStatuses []gateway.Status
@@ -22,7 +21,7 @@ func gatewayHistoryAt(now time.Time) *gateway.History {
 		h.Probe("gw_eth0", gateway.FamilyIPv4, "", start.Add(time.Duration(i*5)*time.Second), 4*time.Millisecond, i != 0)
 	}
 	h.Advance(now)
-	h.Note(gateway.Event{Stamp: logring.Stamp{Time: now.Add(-48 * time.Hour)}, Gateway: "gw_eth0", Kind: gateway.EventDown})
+	h.Note(gateway.Event{Time: now.Add(-48 * time.Hour), Gateway: "gw_eth0", Kind: gateway.EventDown})
 	h.Note(gateway.Event{Gateway: "gw_eth0", Kind: gateway.EventUp, For: 30})
 	h.Note(gateway.Event{Gateway: "lte", Kind: gateway.EventNever, Error: "timeout"})
 	return h

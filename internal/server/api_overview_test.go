@@ -190,11 +190,11 @@ func (l *listings) ListChainJSON(ctx context.Context, chain string) ([]byte, err
 // and the mappings' own chain answer it now.
 func TestServicesStatusAsksSystemdTwiceAndListsOneChain(t *testing.T) {
 	t.Parallel()
-	units := &countingUnits{fakeUnits: fakeUnits{state: map[string][2]string{
+	units := &countingUnits{state: map[string][2]string{
 		services.Unit:      {"active", "enabled"},
 		services.UPnPUnit:  {"active", "enabled"},
 		services.PPPoEUnit: {"", "static"},
-	}}}
+	}}
 	nftRules := &listings{Fake: &nfttest.Fake{TableJSON: `{"nftables":[
 		{"rule":{"chain":"zone_lan","comment":"id:allow-lan","expr":[{"counter":{"packets":1,"bytes":10}}]}},
 		{"rule":{"chain":"upnp_prerouting","expr":[
@@ -248,12 +248,12 @@ func (n noCommands) Run(_ context.Context, name string, args ...string) ([]byte,
 // the notification watcher's too.
 func TestOverviewAsksSystemdTwice(t *testing.T) {
 	t.Parallel()
-	units := &countingUnits{fakeUnits: fakeUnits{state: map[string][2]string{
+	units := &countingUnits{state: map[string][2]string{
 		services.Unit:              {"active", "enabled"},
 		services.UnboundUnit:       {"failed", "enabled"},
 		"firewalld.service":        {"active", "enabled"},
 		"systemd-networkd.service": {"active", "enabled"},
-	}}}
+	}}
 	srv := newTestServerWith(t, func(d *Deps) {
 		d.Units = units
 		d.Services = &services.Dnsmasq{Cmd: noCommands{t}, Leases: filepath.Join(t.TempDir(), "leases")}

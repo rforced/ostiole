@@ -79,7 +79,7 @@ func (a *api) queryLogList(w http.ResponseWriter, r *http.Request) error {
 	if a.querylog == nil {
 		return &unavailable{errors.New("query log not available (daemon not running as root?)")}
 	}
-	page := queryLogPage{Enabled: a.querylog.Enabled(), logPage: logPage[queryRow]{Entries: []queryRow{}}}
+	page := queryLogPage{Enabled: a.querylog.Enabled(), Entries: []queryRow{}}
 	if !page.Enabled {
 		writeJSON(w, http.StatusOK, page)
 		return nil

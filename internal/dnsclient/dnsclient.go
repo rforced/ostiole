@@ -46,7 +46,7 @@ func Query(name string, t dnsmessage.Type, recurse bool) (dnsmessage.Message, er
 		return dnsmessage.Message{}, err
 	}
 	return dnsmessage.Message{
-		Header:      dnsmessage.Header{ID: NewID(), RecursionDesired: recurse},
+		ID: NewID(), RecursionDesired: recurse,
 		Questions:   []dnsmessage.Question{{Name: n, Type: t, Class: dnsmessage.ClassINET}},
 		Additionals: []dnsmessage.Resource{{Header: opt, Body: &dnsmessage.OPTResource{}}},
 	}, nil

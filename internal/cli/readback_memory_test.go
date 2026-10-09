@@ -18,7 +18,6 @@ import (
 	"ostiole/internal/dnslog"
 	"ostiole/internal/fwlog"
 	"ostiole/internal/logfile"
-	"ostiole/internal/logring"
 	"ostiole/internal/model"
 	"ostiole/internal/requestlog"
 	"ostiole/internal/wafevent"
@@ -283,7 +282,7 @@ func madeUpPacket(i int, at time.Time) ([]byte, error) {
 }
 
 func madeUpEvent(i int, at time.Time) ([]byte, error) {
-	e := waflog.Entry{Seq: uint64(i + 1), Logged: at, Event: wafevent.Event{
+	e := waflog.Entry{Seq: uint64(i + 1), Logged: at,
 		Time: at.Add(-2 * time.Second), ID: strconv.FormatInt(int64(i)*104729+1e12, 36), Site: "made-up-site",
 		Client: "198.51.100." + strconv.Itoa(1+i%250), Method: "GET",
 		URI: "/made-up/path?id=" + strconv.Itoa(i%777) + "&q=1%27%20or%201%3d1", Status: 403,
@@ -292,8 +291,7 @@ func madeUpEvent(i int, at time.Time) ([]byte, error) {
 			{ID: 942100, Message: "SQL Injection Attack Detected via libinjection",
 				Data: "Matched Data: s&1 found within ARGS:q: 1' or 1=1", Severity: "critical"},
 			{ID: 949110, Message: "Inbound Anomaly Score Exceeded (Total Score: 5)", Severity: "critical"},
-		},
-	}}
+		}}
 	if i%2 == 0 {
 		e.Rules = append(e.Rules, wafevent.Hit{ID: 980170,
 			Message: "Anomaly Scores: (Inbound Scores: blocking=5, detection=5, per_pl=5-0-0-0, threshold=5)", Severity: "notice"})
@@ -304,7 +302,7 @@ func madeUpEvent(i int, at time.Time) ([]byte, error) {
 
 func madeUpRequest(i int, at time.Time) ([]byte, error) {
 	r := requestlog.Request{
-		Stamp: logring.Stamp{Seq: uint64(i + 1), Time: at}, Site: "made-up-site",
+		Seq: uint64(i + 1), Time: at, Site: "made-up-site",
 		Client: "192.0.2." + strconv.Itoa(2+i%250), Method: "GET", Host: "media.example.test",
 		Path:  "/made-up/path/" + strconv.FormatInt(int64(i*7919%100000), 16) + "/item.jpg",
 		Proto: "HTTP/2.0", Status: 200, Bytes: int64(1000 + i%50000), Duration: 0.012,

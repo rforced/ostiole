@@ -179,7 +179,7 @@ type stateSearch struct {
 func parseSearch(q string) *stateSearch {
 	s := &stateSearch{}
 	var words []string
-	for _, w := range strings.Fields(q) {
+	for w := range strings.FieldsSeq(q) {
 		if _, network, err := net.ParseCIDR(w); err == nil {
 			s.networks = append(s.networks, network)
 			continue

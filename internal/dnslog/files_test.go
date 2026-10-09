@@ -78,7 +78,7 @@ func TestRestoreBeyondSixtyFourLists(t *testing.T) {
 	now := time.Now()
 	for i := range MaxLists + 1 {
 		back = append(back, Stored{
-			Entry:     Entry{Seq: uint64(i + 1), Time: now, Name: "n.example", Type: 1, Status: StatusBlocked, Reason: ReasonList},
+			Seq: uint64(i + 1), Time: now, Name: "n.example", Type: 1, Status: StatusBlocked, Reason: ReasonList,
 			ListNames: []string{fmt.Sprintf("list%d", i)},
 		})
 	}

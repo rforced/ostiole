@@ -61,7 +61,7 @@ func HistoryFiles(h *History) logfile.Log {
 // readingOf is what a check of a drive found, from what it said.
 func readingOf(d *Drive, at time.Time) Reading {
 	r := Reading{
-		Stamp: logring.Stamp{Time: at}, Drive: d.Name, Model: d.Model, Serial: d.Serial, Health: d.Health,
+		Time: at, Drive: d.Name, Model: d.Model, Serial: d.Serial, Health: d.Health,
 		Temperature: d.Temperature, Wear: d.Wear, Spare: d.Spare, PowerOnHours: d.PowerOnHours,
 	}
 	switch {

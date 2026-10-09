@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -37,7 +38,7 @@ func newPorkbun(p model.DNSProvider, o Options) (Client, error) {
 		return nil, errors.New("the Porkbun provider needs its API key and its secret key")
 	}
 	return &porkbun{
-		api:    api{name: "Porkbun", base: porkbunAPI, http: o.client(), userAgent: o.UserAgent, detail: porkbunDetail},
+		name: "Porkbun", base: porkbunAPI, http: o.client(), userAgent: o.UserAgent, detail: porkbunDetail,
 		apiKey: apiKey, secretKey: secretKey,
 		ids: map[Record]string{},
 	}, nil
@@ -137,9 +138,7 @@ func (p *porkbun) find(ctx context.Context, r Record) ([]string, error) {
 // whose status says whether it worked.
 func (p *porkbun) call(ctx context.Context, path string, body map[string]any, out any, st *porkbunStatus) error {
 	req := map[string]any{"apikey": p.apiKey, "secretapikey": p.secretKey}
-	for k, v := range body {
-		req[k] = v
-	}
+	maps.Copy(req, body)
 	if _, err := p.do(ctx, http.MethodPost, path, req, out); err != nil {
 		return err
 	}

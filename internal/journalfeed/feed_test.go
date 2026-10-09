@@ -46,8 +46,8 @@ func (s *sink) AddAt(at time.Time, e string) {
 }
 
 func (s *sink) FillAt(items []Item[string]) {
-	for i := len(items) - 1; i >= 0; i-- {
-		s.AddAt(items[i].At, items[i].E)
+	for _, item := range slices.Backward(items) {
+		s.AddAt(item.At, item.E)
 	}
 }
 

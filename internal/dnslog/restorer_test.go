@@ -12,8 +12,8 @@ import (
 )
 
 func stored(seq uint64, when time.Time, name string, status Status, lists ...string) Stored {
-	return Stored{Entry: Entry{Seq: seq, Time: when, Name: name, Type: 1, Status: status,
-		Client: netip.MustParseAddr("192.0.2.10")}, ListNames: lists}
+	return Stored{Seq: seq, Time: when, Name: name, Type: 1, Status: status,
+		Client: netip.MustParseAddr("192.0.2.10"), ListNames: lists}
 }
 
 // week is what memory keeps by default.

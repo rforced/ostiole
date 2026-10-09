@@ -269,8 +269,7 @@ func (c *route53) send(ctx context.Context, method, path string, body []byte) (i
 	sigv4.Sign(req, c.keyID, c.secret, route53Region, "route53", sigv4.HashOf(body), c.now())
 	resp, err := c.http.Do(req)
 	if err != nil {
-		var ue *url.Error
-		if errors.As(err, &ue) {
+		if ue, ok := errors.AsType[*url.Error](err); ok {
 			err = ue.Err
 		}
 		return 0, nil, fmt.Errorf("could not reach Route 53: %w", err)

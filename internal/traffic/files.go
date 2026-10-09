@@ -280,8 +280,8 @@ func (c *Counter) RestoreHour(h HourLine) {
 		return
 	}
 	c.closed = append(c.closed, destRow{
-		destKey: destKey{device: h.Device, dest: h.Destination, proto: protocolNumber(h.Protocol), port: h.Port},
-		addr:    parseAddr(h.Address), hour: h.Time.Unix(), down: h.Down, up: h.Up,
+		device: h.Device, dest: h.Destination, proto: protocolNumber(h.Protocol), port: h.Port,
+		addr: parseAddr(h.Address), hour: h.Time.Unix(), down: h.Down, up: h.Up,
 		conns: uint32(min(max(h.Connections, 0), math.MaxUint32)), last: h.LastSeen.Unix(),
 	})
 }

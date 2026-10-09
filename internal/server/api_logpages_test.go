@@ -21,7 +21,6 @@ import (
 	"ostiole/internal/engine"
 	"ostiole/internal/fwlog"
 	"ostiole/internal/logfile"
-	"ostiole/internal/logring"
 	"ostiole/internal/model"
 	"ostiole/internal/nft/nfttest"
 	"ostiole/internal/peerlog"
@@ -227,7 +226,7 @@ func TestProxyRequestsCarryOnIntoTheirFiles(t *testing.T) {
 	files.Add(requestlog.Files(requests), logfile.ReadStats{})
 	now := time.Now()
 	for i := range 5 {
-		requests.Add(requestlog.Request{Stamp: logring.Stamp{Time: now.Add(time.Duration(i-5) * time.Minute)},
+		requests.Add(requestlog.Request{Time: now.Add(time.Duration(i-5) * time.Minute),
 			Site: "vault", Client: "203.0.113.9", Method: "GET", Host: "vault.example.com", Path: fmt.Sprintf("/p%d", i), Status: 200})
 	}
 	flush(t, files)
@@ -352,7 +351,7 @@ func TestTheDriveHistoryStopsAtWhatItKeeps(t *testing.T) {
 	now := time.Now()
 	for i := range 3 {
 		temp := 40 + i
-		history.Add(smart.Reading{Stamp: logring.Stamp{Time: now.Add(time.Duration(i-3) * time.Hour)},
+		history.Add(smart.Reading{Time: now.Add(time.Duration(i-3) * time.Hour),
 			Drive: "sda", Health: "passed", Temperature: &temp})
 	}
 	flush(t, files)

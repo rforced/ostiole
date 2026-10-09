@@ -188,7 +188,7 @@ func (p *Poller) Tick(ctx context.Context) {
 		}
 		events, keep := p.Changes(was, cur)
 		for _, ev := range events {
-			p.Log.Add(Event{Stamp: logring.Stamp{Time: now}, Event: ev, Tunnel: keep.Tunnel, Peer: keep.Name, Endpoint: keep.Endpoint})
+			p.Log.Add(Event{Time: now, Event: ev, Tunnel: keep.Tunnel, Peer: keep.Name, Endpoint: keep.Endpoint})
 		}
 		next[key] = keep
 	}

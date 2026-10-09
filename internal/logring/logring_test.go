@@ -19,7 +19,7 @@ type word struct {
 	Word string `json:"word"`
 }
 
-func w(s string, at time.Time) word { return word{Stamp: Stamp{Time: at}, Word: s} }
+func w(s string, at time.Time) word { return word{Time: at, Word: s} }
 
 func words(entries []word) string {
 	out := make([]string, len(entries))

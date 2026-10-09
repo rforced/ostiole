@@ -38,12 +38,10 @@ func newHetzner(p model.DNSProvider, o Options) (Client, error) {
 		return nil, errors.New("the Hetzner provider has no API token")
 	}
 	return &hetzner{
-		api: api{
-			name: "Hetzner", base: hetznerAPI, http: o.client(), userAgent: o.UserAgent,
-			auth:   func(h http.Header) { h.Set("Authorization", "Bearer "+token) },
-			detail: hetznerDetail,
-		},
-		poll: hetznerPoll,
+		name: "Hetzner", base: hetznerAPI, http: o.client(), userAgent: o.UserAgent,
+		auth:   func(h http.Header) { h.Set("Authorization", "Bearer "+token) },
+		detail: hetznerDetail,
+		poll:   hetznerPoll,
 	}, nil
 }
 

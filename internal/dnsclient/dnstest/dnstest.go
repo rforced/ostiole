@@ -191,9 +191,7 @@ func (s *Server) serveTCP() {
 			return
 		}
 		s.conns.Store(conn, true)
-		s.wg.Add(1)
-		go func() {
-			defer s.wg.Done()
+		s.wg.Go(func() {
 			defer s.conns.Delete(conn)
 			defer conn.Close()
 			for {
@@ -214,7 +212,7 @@ func (s *Server) serveTCP() {
 					return
 				}
 			}
-		}()
+		})
 	}
 }
 
@@ -237,10 +235,8 @@ func (s *Server) answer(proto string, query []byte) ([]byte, bool) {
 		return s.update(query, q), false
 	}
 	resp := dnsmessage.Message{
-		Header: dnsmessage.Header{
-			ID: q.ID, Response: true, OpCode: q.OpCode, Authoritative: true,
-			RecursionDesired: q.RecursionDesired, RecursionAvailable: q.RecursionDesired,
-		},
+		ID: q.ID, Response: true, OpCode: q.OpCode, Authoritative: true,
+		RecursionDesired: q.RecursionDesired, RecursionAvailable: q.RecursionDesired,
 		Questions: q.Questions,
 	}
 	code, ok := s.rcodes[strings.ToLower(name)]
@@ -364,7 +360,7 @@ const classNone = 254
 // or refused, every record inside the zone or none of them applied.
 // Called with s.mu held.
 func (s *Server) update(query []byte, q dnsmessage.Message) []byte {
-	resp := dnsmessage.Message{Header: dnsmessage.Header{ID: q.ID, Response: true, OpCode: q.OpCode}, Questions: q.Questions}
+	resp := dnsmessage.Message{ID: q.ID, Response: true, OpCode: q.OpCode, Questions: q.Questions}
 	raw := func(code dnsmessage.RCode) []byte {
 		resp.RCode = code
 		out, _ := resp.Pack()

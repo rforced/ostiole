@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -162,9 +163,7 @@ func (f *fakeRoute53) held(name string) []string {
 func route53Client(t *testing.T, srv *httptest.Server, settings map[string]string) *route53 {
 	t.Helper()
 	full := map[string]string{"accessKeyId": r53KeyID, "secretAccessKey": r53Secret}
-	for k, v := range settings {
-		full[k] = v
-	}
+	maps.Copy(full, settings)
 	c, err := Build(model.DNSProvider{ID: "r53", Kind: "route53", Settings: full}, Options{})
 	if err != nil {
 		t.Fatal(err)

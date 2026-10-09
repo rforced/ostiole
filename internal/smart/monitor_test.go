@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"ostiole/internal/logring"
 	"ostiole/internal/model"
 )
 
@@ -196,7 +195,7 @@ func TestMonitorSizesTheHistoryByTheConfiguration(t *testing.T) {
 	m.follow()
 	start := time.Now().AddDate(-1, 0, 0)
 	for i := range 30 {
-		m.History.Add(Reading{Stamp: logring.Stamp{Time: start.Add(time.Duration(i) * time.Hour)}, Drive: "sda"})
+		m.History.Add(Reading{Time: start.Add(time.Duration(i) * time.Hour), Drive: "sda"})
 	}
 	if n, oldest := m.History.Held(); n != model.DefaultKeepDriveReadings || !oldest.Equal(start.Add(10*time.Hour)) {
 		t.Errorf("held %d back to %v", n, oldest)

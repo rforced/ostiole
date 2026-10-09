@@ -2,6 +2,7 @@ package dnsprovider
 
 import (
 	"context"
+	"maps"
 	"net/netip"
 	"slices"
 	"strconv"
@@ -34,9 +35,7 @@ func primary(t *testing.T) *dnstest.Server {
 func rfc2136Client(t *testing.T, settings map[string]string, resolvers ...netip.AddrPort) Client {
 	t.Helper()
 	full := map[string]string{"tsigKey": "test-key", "tsigSecret": testSecret}
-	for k, v := range settings {
-		full[k] = v
-	}
+	maps.Copy(full, settings)
 	c, err := Build(model.DNSProvider{ID: "ns", Kind: "rfc2136", Settings: full}, Options{Resolvers: resolvers})
 	if err != nil {
 		t.Fatal(err)
@@ -117,9 +116,7 @@ func TestRFC2136SaysWhatWasRefused(t *testing.T) {
 		{"other zone", nil, Record{Zone: "other.test", Name: "_acme-challenge.other.test", Value: "v"}, ns + " answered NOTAUTH to the update of other.test"},
 	} {
 		settings := map[string]string{"nameserver": ns}
-		for k, v := range tc.settings {
-			settings[k] = v
-		}
+		maps.Copy(settings, tc.settings)
 		err := rfc2136Client(t, settings).AddTXT(context.Background(), tc.record)
 		if err == nil || err.Error() != tc.want {
 			t.Errorf("%s: err = %v, want %q", tc.name, err, tc.want)

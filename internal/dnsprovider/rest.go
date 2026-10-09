@@ -77,8 +77,7 @@ func (a *api) send(ctx context.Context, method, path string, body []byte) (int, 
 	}
 	resp, err := a.http.Do(req)
 	if err != nil {
-		var ue *url.Error
-		if errors.As(err, &ue) {
+		if ue, ok := errors.AsType[*url.Error](err); ok {
 			err = ue.Err
 		}
 		return 0, nil, nil, fmt.Errorf("could not reach %s: %w", a.name, err)

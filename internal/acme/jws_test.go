@@ -24,7 +24,7 @@ func TestThumbprintMatchesRFC7638(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	key := &rsa.PrivateKey{PublicKey: rsa.PublicKey{N: new(big.Int).SetBytes(n), E: 65537}}
+	key := &rsa.PrivateKey{N: new(big.Int).SetBytes(n), E: 65537}
 	s, err := newSigner(key)
 	if err != nil {
 		t.Fatal(err)

@@ -479,7 +479,7 @@ func (h *History) close(name string, s *series) {
 	s.add(b)
 	start := time.Unix(b.start, 0).UTC()
 	line := MinuteLine{
-		Stamp: logring.Stamp{Time: start}, Gateway: name, State: b.state, Monitor: b.monitor, Families: b.families(),
+		Time: start, Gateway: name, State: b.state, Monitor: b.monitor, Families: b.families(),
 	}
 	h.minutes.Add(line)
 	h.closed = append(h.closed, Minute{

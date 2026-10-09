@@ -20,8 +20,8 @@ import (
 func events(l *Log) string {
 	recent := l.Recent(0)
 	var out []string
-	for i := len(recent) - 1; i >= 0; i-- {
-		e := recent[i]
+	for _, e := range slices.Backward(recent) {
+
 		out = append(out, fmt.Sprintf("%s %s %s", e.Event, e.Peer, e.Endpoint))
 	}
 	return fmt.Sprint(out)

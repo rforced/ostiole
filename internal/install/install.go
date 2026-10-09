@@ -106,7 +106,7 @@ func ScriptMaskOnly() []string {
 			continue
 		}
 		units, _, _ := strings.Cut(rest, `"`)
-		for _, u := range strings.Fields(units) {
+		for u := range strings.FieldsSeq(units) {
 			if !slices.Contains(out, u) {
 				out = append(out, u)
 			}

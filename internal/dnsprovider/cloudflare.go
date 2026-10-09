@@ -315,8 +315,7 @@ func (c *cloudflare) send(ctx context.Context, token, zone, method, path string,
 	resp, err := c.http.Do(req)
 	if err != nil {
 		// The URL carries no secret, but the error is shorter without it.
-		var ue *url.Error
-		if errors.As(err, &ue) {
+		if ue, ok := errors.AsType[*url.Error](err); ok {
 			err = ue.Err
 		}
 		return cfResultInfo{}, fmt.Errorf("could not reach Cloudflare: %w", err)

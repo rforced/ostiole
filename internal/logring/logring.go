@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -157,9 +158,9 @@ func (r *Ring[T, P]) AddAt(at time.Time, e T) {
 func (r *Ring[T, P]) FillAt(items []journalfeed.Item[T]) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for i := len(items) - 1; i >= 0; i-- {
-		e := items[i].E
-		stamp[T, P](&e).Time = items[i].At
+	for _, item := range slices.Backward(items) {
+		e := item.E
+		stamp[T, P](&e).Time = item.At
 		r.send(r.put(e))
 	}
 }

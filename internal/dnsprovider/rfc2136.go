@@ -72,7 +72,7 @@ func (c *rfc2136) update(ctx context.Context, r Record, class dnsmessage.Class, 
 		return fmt.Errorf("%q is not a DNS name", r.Name)
 	}
 	msg := dnsmessage.Message{
-		Header:    dnsmessage.Header{ID: dnsclient.NewID(), OpCode: opUpdate},
+		ID: dnsclient.NewID(), OpCode: opUpdate,
 		Questions: []dnsmessage.Question{{Name: zone, Type: dnsmessage.TypeSOA, Class: dnsmessage.ClassINET}},
 		Authorities: []dnsmessage.Resource{{
 			Header: dnsmessage.ResourceHeader{Name: name, Type: dnsmessage.TypeTXT, Class: class, TTL: ttl},

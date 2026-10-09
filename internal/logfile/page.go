@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io/fs"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"ostiole/internal/logsearch"
@@ -63,14 +64,14 @@ func Page[E any](ctx context.Context, w *Writer, name string, version int, befor
 	started := time.Now()
 	for fi := len(files) - 1; fi >= 0 && dayEnd(files[fi].day).After(since); fi-- {
 		ms := index(fi)
-		for mi := len(ms) - 1; mi >= 0; mi-- {
-			if !wanted(ms[mi]) {
+		for mi, m := range slices.Backward(ms) {
+			if !wanted(m) {
 				continue
 			}
 			if err := ctx.Err(); err != nil {
 				return page, err
 			}
-			lines, err := readMember(files[fi].path, ms[mi])
+			lines, err := readMember(files[fi].path, m)
 			if err != nil {
 				// Pruned, or cut back by a repair, since its index was read.
 				continue
@@ -78,8 +79,8 @@ func Page[E any](ctx context.Context, w *Writer, name string, version int, befor
 			// A member's lines are in the order they were numbered, so
 			// once one is before the entry asked for, every one before it
 			// is too.
-			for li := len(lines) - 1; li >= 0; li-- {
-				e, at, err := parse(lines[li])
+			for li, line := range slices.Backward(lines) {
+				e, at, err := parse(line)
 				if err != nil {
 					continue
 				}
