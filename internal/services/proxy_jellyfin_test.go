@@ -9,12 +9,14 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"ostiole/internal/model"
+	"ostiole/internal/wafevent"
 )
 
 // jf makes what Jellyfin's clients send, from a seed: the web client, the
@@ -89,6 +91,9 @@ var jfSearches = []string{"the night ferry", "Kite-Girl: Beyond the Kite-Line", 
 	"ROV·R", "Rosémon", "B*R*I*G", "Who's Minding the Lighthouse?", "There Goes the Last Train!!", "Rollin' for a Stolen'"}
 
 func (g jf) search() string { return g.pick(jfSearches...) }
+
+// jfDeviceNames are names people give a device on the dashboard.
+var jfDeviceNames = []string{"Living room TV 2", "Sam's TV (2)", "Büro 3"}
 
 // jfNames are artists, genres, people and studios, which part of the API
 // names in the path. Each begins with a command's name, which CRS 4.30
@@ -526,6 +531,12 @@ func TestTheJellyfinSetLetsItsClientsThrough(t *testing.T) {
 						"ImageUrl": "https://image.example.org/t/p/original/7xdcg2lMLzgeonyLGcTJFiz4soC.jpg", "SearchProviderName": "TheMovieDb",
 						"Overview": overview, "Artists": []any{}}), false, web})
 			}
+			// The dashboard renames a device by the id its client sends.
+			for _, name := range jfDeviceNames {
+				for _, dev := range []jfClient{web, kt} {
+					rs = append(rs, jfRequest{"POST", "/Devices/Options?id=" + dev.deviceID, js, vwJSON(map[string]any{"CustomName": name}), false, web})
+				}
+			}
 			for _, r := range rs {
 				if status := jfSend(t, plain, r); status != http.StatusOK {
 					t.Errorf("%s %s %.80q (%s): %d", r.method, r.path, r.body, r.client.userAgent, status)
@@ -634,6 +645,8 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 		// Only an argument's name id is not taken for the command.
 		{"GET", "/Devices/Info?id=id", "", "", false, c},
 		{"GET", "/Devices/Info?id=" + c.deviceID + "&ls=1", "", "", false, c},
+		// A device's new name leaves its id to the check of shapes.
+		{"POST", "/Devices/Options?id=" + url.QueryEscape("a);(b"), js, vwJSON(map[string]any{"CustomName": "Living room TV 2"}), false, c},
 		{"POST", "/Sessions/Playing/Progress", js, progress("PlaySessionId", "((((((((("), false, c},
 		{"POST", "/DisplayPreferences/usersettings?client=emby", js, vwJSON(map[string]any{"CustomPrefs": map[string]any{"x": `{"a":"1 or 1"}`}}), false, c},
 		// Outside the arguments the set knows, text is read as CRS reads it.
@@ -686,6 +699,21 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 				if status := jfSendWith(t, plain, segment, command); status != http.StatusForbidden {
 					t.Errorf("a command in a CMCD header: %d with the set, 403 without", status)
 				}
+			}
+			// A device's new name is read by the rules the set leaves on
+			// text, the check for script among them.
+			rename := jfRequest{"POST", "/Devices/Options?id=" + kt.deviceID, js, vwJSON(map[string]any{"CustomName": "<img src=x onerror=alert(1)>"}), false, c}
+			if status := jfSend(t, plain, rename); status != http.StatusForbidden {
+				t.Errorf("markup in a device's new name: %d with the set", status)
+			}
+			var ev wafevent.Event
+			waitFor(t, "the rename's event", func() bool {
+				var ok bool
+				ev, ok = findEvent(out, func(e wafevent.Event) bool { return e.URI == rename.path })
+				return ok
+			})
+			if !slices.ContainsFunc(ev.Rules, func(h wafevent.Hit) bool { return h.ID == 941100 }) {
+				t.Errorf("markup in a device's new name tripped %v, not 941100", ev.Rules)
 			}
 			if total := len(attacks) + len(inText) + len(inProse); refused < total/2 {
 				t.Errorf("CRS alone refused only %d of %d attacks", refused, total)
