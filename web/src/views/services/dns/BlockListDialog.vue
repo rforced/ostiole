@@ -27,7 +27,7 @@ function blank() {
     description: '',
     url: '',
     format: '',
-    refreshHours: 24,
+    refreshHours: '',
     enabled: true,
   }
 }
@@ -49,7 +49,7 @@ watch(
     error.value = ''
     chosen.value = ''
     const l = props.list
-    form.value = l ? { ...blank(), ...l, refreshHours: l.refreshHours || 24 } : blank()
+    form.value = l ? { ...blank(), ...l } : blank()
     if (!catalog.value.length) {
       try {
         catalog.value = await api.blocking.catalog()
@@ -181,6 +181,7 @@ function save() {
             type="number"
             min="1"
             max="720"
+            placeholder="24"
             class="input w-32 font-mono max-sm:w-full"
           />
         </FormField>
