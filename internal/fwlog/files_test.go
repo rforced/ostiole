@@ -228,7 +228,8 @@ func TestEntriesComeBackFromTheFiles(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	w.Run(ctx)
-	got, st, err := logfile.Read(w.Dir, FileName, FileVersion, 10, time.Time{}, ParseLine)
+	var got []Entry
+	st, err := logfile.Stream(w.Dir, FileName, FileVersion, 10, time.Time{}, ParseLine, func(e Entry) { got = append(got, e) })
 	if err != nil || st.Skipped != 0 || len(got) != 1 {
 		t.Fatalf("read %+v, %+v, %v", got, st, err)
 	}

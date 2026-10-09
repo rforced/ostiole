@@ -39,7 +39,8 @@ func TestEventsComeBackFromTheFiles(t *testing.T) {
 	if st := w.Status(); len(st.Logs) != 1 || st.Logs[0].Oldest == nil || !st.Logs[0].Oldest.Equal(logged) {
 		t.Errorf("status %+v", st.Logs)
 	}
-	got, st, err := logfile.Read(w.Dir, FileName, FileVersion, 10, time.Time{}, ParseLine)
+	var got []Entry
+	st, err := logfile.Stream(w.Dir, FileName, FileVersion, 10, time.Time{}, ParseLine, func(e Entry) { got = append(got, e) })
 	if err != nil || st.Skipped != 0 || len(got) != 1 {
 		t.Fatalf("read %+v, %+v, %v", got, st, err)
 	}

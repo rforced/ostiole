@@ -45,7 +45,7 @@ func TestUpgradeNumbersTheOlderFormat(t *testing.T) {
 	if err != nil || n != 2 {
 		t.Fatalf("upgraded %d: %v", n, err)
 	}
-	got, st, err := Read(root, "test", 2, 100, time.Time{}, parse)
+	got, st, err := readAll(root, "test", 2, 100, time.Time{})
 	if err != nil || len(st.Unknown) != 1 {
 		t.Fatalf("read %+v, %+v (%v)", got, st, err)
 	}
@@ -81,7 +81,7 @@ func TestUpgradeCarriesOnWhereItStopped(t *testing.T) {
 	if _, err := Upgrade(root, "test", 1, 2, WithSeq); err != nil {
 		t.Fatal(err)
 	}
-	got, _, _ := Read(root, "test", 2, 100, time.Time{}, parse)
+	got, _, _ := readAll(root, "test", 2, 100, time.Time{})
 	if len(got) != 3 || got[2].Seq != 3 || got[2].Word != "c" {
 		t.Errorf("read %+v", got)
 	}

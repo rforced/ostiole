@@ -3,6 +3,7 @@ package traffic
 import (
 	"context"
 	"log/slog"
+	"math"
 	"net/netip"
 	"slices"
 	"testing"
@@ -97,17 +98,18 @@ func TestTrafficComesBackFromItsFiles(t *testing.T) {
 	fresh.now = r.now.Add(10 * time.Minute)
 	fresh.c.BeginRestore(fresh.now)
 	for _, name := range []string{LinksFile, DevicesFile} {
-		if _, err := logfile.ReadEach(w.Dir, name, FileVersion, fresh.now.Add(-31*24*time.Hour), ParseMinute,
+		if _, err := logfile.Stream(w.Dir, name, FileVersion, math.MaxInt, fresh.now.Add(-31*24*time.Hour), ParseMinute,
 			func(m MinuteLine) { fresh.c.RestoreMinute(name, m, fresh.now) }); err != nil {
 			t.Fatal(err)
 		}
 	}
-	hours, _, err := logfile.Read(w.Dir, DestinationsFile, FileVersion, 100, fresh.now.Add(-7*24*time.Hour), ParseHour)
-	if err != nil {
+	var hours []HourLine
+	if _, err := logfile.Stream(w.Dir, DestinationsFile, FileVersion, 100, fresh.now.Add(-7*24*time.Hour), ParseHour,
+		func(h HourLine) {
+			hours = append(hours, h)
+			fresh.c.RestoreHour(h)
+		}); err != nil {
 		t.Fatal(err)
-	}
-	for _, h := range hours {
-		fresh.c.RestoreHour(h)
 	}
 	fresh.c.EndRestore(fresh.now)
 

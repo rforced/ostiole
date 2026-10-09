@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -37,6 +38,16 @@ func streamWords(t *testing.T, root string, limit int, since time.Time) ([]strin
 	return got, st
 }
 
+// readAll is what Stream hands over, cut to the newest limit entries.
+func readAll(root, name string, version, limit int, since time.Time) ([]entry, ReadStats, error) {
+	var got []entry
+	st, err := Stream(root, name, version, limit, since, parse, func(e entry) { got = append(got, e) })
+	if limit >= 0 && len(got) > limit {
+		got = got[len(got)-limit:]
+	}
+	return got, st, err
+}
+
 // spoil breaks the gzip header of a day file's member i, leaving its index
 // as it was.
 func spoil(t *testing.T, path string, i int) {
@@ -64,9 +75,9 @@ func gzMember(comment, body string) []byte {
 	return buf.Bytes()
 }
 
-// What Stream hands over ends in what Read gives back, oldest first, and
-// runs over the limit by less than a member.
-func TestStreamMatchesRead(t *testing.T) {
+// What Stream hands over ends in the newest limit entries logged at or
+// after since, oldest first, and runs over the limit by less than a member.
+func TestStreamEndsInTheNewestEntries(t *testing.T) {
 	t.Parallel()
 	g := fiveDays(t)
 	sinces := []time.Time{
@@ -77,19 +88,47 @@ func TestStreamMatchesRead(t *testing.T) {
 		time.Date(2026, 9, 28, 0, 0, 0, 0, time.UTC),
 	}
 	for _, since := range sinces {
+		all := words(slices.DeleteFunc(slices.Clone(g.r.entries), func(e entry) bool { return e.Time.Before(since) }))
 		for limit := 1; limit <= 32; limit++ {
-			want, _, err := Read(g.w.Dir, "test", 1, limit, since, parse)
-			if err != nil {
-				t.Fatal(err)
-			}
+			want := all[max(0, len(all)-limit):]
 			got, st := streamWords(t, g.w.Dir, limit, since)
-			if !slices.Equal(got[max(0, len(got)-limit):], words(want)) || len(got) > limit+1 {
-				t.Errorf("since %v, limit %d: %v, want it to end in %v", since, limit, got, words(want))
+			if !slices.Equal(got[max(0, len(got)-limit):], want) || len(got) > limit+1 {
+				t.Errorf("since %v, limit %d: %v, want it to end in %v", since, limit, got, want)
 			}
 			if st.Skipped != 0 || st.Unknown != nil || st.Broken != nil {
 				t.Errorf("since %v, limit %d: stats %+v", since, limit, st)
 			}
 		}
+	}
+}
+
+// Cut to the limit, what Stream hands over is the newest entries within
+// the limit and the days, oldest first.
+func TestStreamKeepsTheNewestWithinTheLimitAndDays(t *testing.T) {
+	t.Parallel()
+	g := newRig(t, 1000)
+	for d := 20; d <= 27; d++ {
+		for h := range 3 {
+			g.r.add(time.Date(2026, 9, d, 8*h, 0, 0, 0, time.UTC), fmt.Sprintf("%d-%d", d, h))
+		}
+	}
+	g.w.writeDue(true)
+
+	got, st, err := readAll(g.w.Dir, "test", 1, 4, time.Time{})
+	if err != nil || st.Skipped != 0 {
+		t.Fatal(err, st)
+	}
+	if !slices.Equal(words(got), []string{"26-2", "27-0", "27-1", "27-2"}) {
+		t.Errorf("four entries = %v", words(got))
+	}
+	since := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
+	got, _, _ = readAll(g.w.Dir, "test", 1, 1000, since)
+	if !slices.Equal(words(got), []string{"25-2", "26-0", "26-1", "26-2", "27-0", "27-1", "27-2"}) {
+		t.Errorf("since the 25th at noon = %v", words(got))
+	}
+	// Nothing read, nothing there.
+	if got, _, err := readAll(g.w.Dir, "missing", 1, 10, time.Time{}); err != nil || len(got) != 0 {
+		t.Errorf("missing log = %v, %v", got, err)
 	}
 }
 
@@ -124,15 +163,12 @@ func TestStreamLeavesOlderMembersUnread(t *testing.T) {
 		t.Errorf("limit 7: %v, broken %v", got, st.Broken)
 	}
 	got, st := streamWords(t, g.w.Dir, 100, time.Time{})
-	want, rst, err := Read(g.w.Dir, "test", 1, 100, time.Time{}, parse)
-	if err != nil {
-		t.Fatal(err)
+	want := words(slices.DeleteFunc(slices.Clone(g.r.entries), func(e entry) bool { return e.Time.Day() == 26 }))
+	if !slices.Equal(got, want) || len(got) != 24 || slices.Contains(got, "26-5") || !slices.Contains(got, "27-5") {
+		t.Errorf("limit 100: %v, want %v", got, want)
 	}
-	if !slices.Equal(got, words(want)) || len(got) != 24 || slices.Contains(got, "26-5") || !slices.Contains(got, "27-5") {
-		t.Errorf("limit 100: %v, Read %v", got, words(want))
-	}
-	if !slices.Equal(st.Broken, []string{"2026-09-26" + suffix}) || !slices.Equal(rst.Broken, st.Broken) {
-		t.Errorf("broken %v, Read %v", st.Broken, rst.Broken)
+	if !slices.Equal(st.Broken, []string{"2026-09-26" + suffix}) {
+		t.Errorf("broken %v", st.Broken)
 	}
 }
 
@@ -170,6 +206,31 @@ func TestStreamPassesOverWhatItCannotRead(t *testing.T) {
 	}
 	if ms, built, err := readIndex(next); err != nil || built || len(ms) != 1 || ms[0].N != 1 {
 		t.Errorf("index of the 27th built %v: %+v, %v", built, ms, err)
+	}
+}
+
+// With no limit, as the daemon reads the traffic and gateway minutes,
+// Stream hands every entry since a time over, oldest first, file by file.
+func TestStreamWithoutALimitGoesOldestFirst(t *testing.T) {
+	t.Parallel()
+	g := newRig(t, 1000)
+	for d := 24; d <= 27; d++ {
+		for h := range 2 {
+			g.r.add(time.Date(2026, 9, d, 12*h, 0, 0, 0, time.UTC), fmt.Sprintf("%d-%d", d, h))
+		}
+	}
+	g.w.writeDue(true)
+	var got []string
+	st, err := Stream(g.w.Dir, "test", 1, math.MaxInt, time.Date(2026, 9, 25, 6, 0, 0, 0, time.UTC), parse,
+		func(e entry) { got = append(got, e.Word) })
+	if err != nil || st.Skipped != 0 {
+		t.Fatal(err, st)
+	}
+	if !slices.Equal(got, []string{"25-1", "26-0", "26-1", "27-0", "27-1"}) {
+		t.Errorf("entries = %v", got)
+	}
+	if _, err := Stream(g.w.Dir, "missing", 1, math.MaxInt, time.Time{}, parse, func(entry) { t.Error("read") }); err != nil {
+		t.Error(err)
 	}
 }
 

@@ -141,7 +141,8 @@ func TestEntriesGoThroughTheFiles(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	files.Run(ctx)
-	got, _, err := logfile.Read(files.Dir, "words", 1, 10, time.Time{}, Parse[word, *word])
+	var got []word
+	_, err := logfile.Stream(files.Dir, "words", 1, 10, time.Time{}, Parse[word, *word], func(e word) { got = append(got, e) })
 	if err != nil || words(got) != "[1a 2b]" || !got[0].Time.Equal(at) {
 		t.Fatalf("read %s (%v)", words(got), err)
 	}

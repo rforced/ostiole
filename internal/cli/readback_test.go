@@ -62,7 +62,9 @@ func TestTheFirewallLogComesBackNumberedFromAnOlderRelease(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	files.Run(ctx)
-	back, st, err := logfile.Read(dir, fwlog.FileName, fwlog.FileVersion, 10, time.Time{}, fwlog.ParseLine)
+	var back []fwlog.Entry
+	st, err := logfile.Stream(dir, fwlog.FileName, fwlog.FileVersion, 10, time.Time{}, fwlog.ParseLine,
+		func(e fwlog.Entry) { back = append(back, e) })
 	if err != nil || len(st.Unknown) != 0 || len(back) != 4 || back[3].Seq != 4 || back[0].Seq != 1 {
 		t.Errorf("files hold %+v, %+v (%v)", back, st, err)
 	}
