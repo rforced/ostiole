@@ -24,7 +24,7 @@ function left(l) {
 </script>
 
 <template>
-  <SectionCard title="Newest leases" flush :aria-busy="loaded ? undefined : 'true'">
+  <SectionCard title="Recent leases" flush :aria-busy="loaded ? undefined : 'true'">
     <table class="table">
       <thead>
         <tr>
