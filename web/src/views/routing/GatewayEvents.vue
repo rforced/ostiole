@@ -69,7 +69,7 @@ const empty = computed(() => {
           <th>Time</th>
           <th>Gateway</th>
           <th>Event</th>
-          <th class="num">For</th>
+          <th class="num">Lasted</th>
         </tr>
       </thead>
       <tbody>
@@ -85,7 +85,7 @@ const empty = computed(() => {
             {{ eventText(e) }}
             <div v-if="e.error" class="text-xs text-ink-muted">{{ e.error }}</div>
           </td>
-          <td data-label="For" class="num">{{ eventFor(e) || '—' }}</td>
+          <td data-label="Lasted" class="num">{{ eventFor(e) || '—' }}</td>
         </tr>
       </tbody>
     </table>
