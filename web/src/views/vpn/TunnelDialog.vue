@@ -192,10 +192,18 @@ async function save() {
         <FormField id="wg-desc" label="Description">
           <input id="wg-desc" v-model="form.description" class="input" />
         </FormField>
-        <FormField id="wg-v4" label="IPv4 address" hint="CIDR, e.g. 10.66.0.1/24.">
+        <FormField
+          id="wg-v4"
+          label="IPv4 address"
+          hint="Address and prefix length, like 10.66.0.1/24."
+        >
           <input id="wg-v4" v-model="form.ipv4" class="input font-mono" spellcheck="false" />
         </FormField>
-        <FormField id="wg-v6" label="IPv6 address" hint="CIDR, e.g. fd66::1/64.">
+        <FormField
+          id="wg-v6"
+          label="IPv6 address"
+          hint="Address and prefix length, like fd66::1/64."
+        >
           <input id="wg-v6" v-model="form.ipv6" class="input font-mono" spellcheck="false" />
         </FormField>
         <FormField id="wg-port" label="Listen port" hint="0 for a tunnel that only dials out.">

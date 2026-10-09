@@ -50,13 +50,7 @@ function submit() {
     <form class="space-y-4" @submit.prevent="submit">
       <div class="fields">
         <FormField id="tok-name" label="Name">
-          <input
-            id="tok-name"
-            v-model="form.name"
-            class="input"
-            required
-            placeholder="monitoring"
-          />
+          <input id="tok-name" v-model="form.name" class="input" required />
         </FormField>
         <FormField id="tok-days" label="Expires after (days)" hint="0 never expires.">
           <input

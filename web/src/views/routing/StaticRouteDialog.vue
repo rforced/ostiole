@@ -47,12 +47,15 @@ function save() {
         <input id="rt-desc" v-model="form.description" class="input" />
       </FormField>
       <div class="fields">
-        <FormField id="rt-dest" label="Destination network">
+        <FormField
+          id="rt-dest"
+          label="Destination network"
+          hint="A network and its prefix length, like 10.200.0.0/16."
+        >
           <input
             id="rt-dest"
             v-model="form.destination"
             class="input font-mono"
-            placeholder="10.200.0.0/16"
             required
             spellcheck="false"
           />
@@ -62,7 +65,6 @@ function save() {
             id="rt-gw"
             v-model="form.gateway"
             class="input font-mono"
-            placeholder="10.10.0.254"
             required
             spellcheck="false"
           />

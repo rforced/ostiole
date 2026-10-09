@@ -133,7 +133,6 @@ function save() {
           class="input font-mono"
           required
           spellcheck="false"
-          placeholder="https://acme.example.com/directory"
         />
       </FormField>
 
@@ -168,7 +167,6 @@ function save() {
           id="acc-cacert"
           v-model="form.caCert"
           class="input h-24 font-mono"
-          placeholder="-----BEGIN CERTIFICATE-----"
           spellcheck="false"
         />
       </FormField>

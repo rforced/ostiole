@@ -64,7 +64,7 @@ function save() {
         <FormField
           id="acl-source"
           label="Client"
-          hint="One address or a range, e.g. 192.168.1.0/24."
+          hint="One address or a range, like 192.168.1.0/24."
         >
           <input
             id="acl-source"
@@ -72,10 +72,9 @@ function save() {
             class="input font-mono"
             required
             spellcheck="false"
-            placeholder="192.168.1.0/24"
           />
         </FormField>
-        <FormField id="acl-ext" label="External ports" hint="A port or a range, e.g. 1024-65535.">
+        <FormField id="acl-ext" label="External ports" hint="A port or a range, like 1024-65535.">
           <input
             id="acl-ext"
             v-model="form.externalPorts"
@@ -84,7 +83,7 @@ function save() {
             spellcheck="false"
           />
         </FormField>
-        <FormField id="acl-int" label="Internal ports" hint="A port or a range, e.g. 1024-65535.">
+        <FormField id="acl-int" label="Internal ports" hint="A port or a range, like 1024-65535.">
           <input
             id="acl-int"
             v-model="form.internalPorts"

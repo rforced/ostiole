@@ -79,7 +79,7 @@ async function loadIntoDraft() {
         </ErrorLine>
         <div class="fields fields-card">
           <FormField id="bk-note" label="Description" hint="Stored in the file.">
-            <input id="bk-note" v-model="note" class="input" placeholder="before the VLAN change" />
+            <input id="bk-note" v-model="note" class="input" placeholder="optional" />
           </FormField>
           <FormField
             id="bk-passphrase"

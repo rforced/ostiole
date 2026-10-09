@@ -165,13 +165,7 @@ function save() {
         label="Fetch from"
         hint="Empty: a list loaded by hand. Plain http only from inside the network."
       >
-        <input
-          id="bl-url"
-          v-model="form.url"
-          class="input font-mono"
-          spellcheck="false"
-          placeholder="https://example.org/hosts.txt"
-        />
+        <input id="bl-url" v-model="form.url" class="input font-mono" spellcheck="false" />
       </FormField>
 
       <div class="fields">

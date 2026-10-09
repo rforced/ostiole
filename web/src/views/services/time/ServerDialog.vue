@@ -63,14 +63,13 @@ function save() {
     description="The clock follows the servers that agree with each other."
   >
     <form class="space-y-4" @submit.prevent="save">
-      <FormField id="ntp-host" label="Server" hint="A name or an address, e.g. time.example.com.">
+      <FormField id="ntp-host" label="Server" hint="A name or an address, like time.example.com.">
         <input
           id="ntp-host"
           v-model="form.host"
           class="input font-mono"
           required
           spellcheck="false"
-          placeholder="time.example.com"
         />
       </FormField>
       <ToggleRow

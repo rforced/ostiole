@@ -110,7 +110,7 @@ function save() {
   >
     <form class="space-y-4" @submit.prevent="save">
       <div class="fields">
-        <FormField id="gw-name" label="Name" hint="Lower case, e.g. wan1.">
+        <FormField id="gw-name" label="Name" hint="Lower case, like wan1.">
           <input
             id="gw-name"
             v-model="form.name"

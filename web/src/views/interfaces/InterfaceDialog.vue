@@ -202,7 +202,7 @@ function save() {
         <FormField
           id="if-desc"
           label="Description"
-          hint="Shown wherever this interface is picked, e.g. Office LAN."
+          hint="Shown wherever this interface is picked, like Office LAN."
         >
           <input id="if-desc" v-model="form.description" class="input" />
         </FormField>
@@ -236,14 +236,12 @@ function save() {
           </select>
         </FormField>
         <div v-if="form.ipv4.mode === 'static'" class="fields">
-          <FormField id="if-v4-addr" label="Address (CIDR)">
-            <input
-              id="if-v4-addr"
-              v-model="form.ipv4.address"
-              class="input font-mono"
-              placeholder="192.168.1.1/24"
-              required
-            />
+          <FormField
+            id="if-v4-addr"
+            label="Address (CIDR)"
+            hint="Address and prefix length, like 192.168.1.1/24."
+          >
+            <input id="if-v4-addr" v-model="form.ipv4.address" class="input font-mono" required />
           </FormField>
           <FormField id="if-v4-gw" label="Gateway" hint="Only for upstream links.">
             <input
@@ -280,13 +278,12 @@ function save() {
           v-if="form.ipv6.mode === 'dhcp'"
           id="if-v6-hint"
           label="Ask for a prefix"
-          hint="The prefix size to request upstream. Empty asks for nothing."
+          hint="The prefix size to request upstream, like ::/56. Empty asks for nothing."
         >
           <input
             id="if-v6-hint"
             v-model="form.ipv6.prefixHint"
             class="input font-mono"
-            placeholder="::/56"
             spellcheck="false"
           />
         </FormField>
@@ -315,14 +312,12 @@ function save() {
           </FormField>
         </div>
         <div v-if="form.ipv6.mode === 'static'" class="fields">
-          <FormField id="if-v6-addr" label="Address (CIDR)">
-            <input
-              id="if-v6-addr"
-              v-model="form.ipv6.address"
-              class="input font-mono"
-              placeholder="2001:db8::1/64"
-              required
-            />
+          <FormField
+            id="if-v6-addr"
+            label="Address (CIDR)"
+            hint="Address and prefix length, like 2001:db8::1/64."
+          >
+            <input id="if-v6-addr" v-model="form.ipv6.address" class="input font-mono" required />
           </FormField>
           <FormField id="if-v6-gw" label="Gateway">
             <input

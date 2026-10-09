@@ -8,7 +8,7 @@ import { useConfigStore } from '@/stores/config'
 const props = defineProps({
   /** The static lease being edited, or null to add one. */
   lease: { type: Object, default: null },
-  /** What a new one starts from, e.g. a lease the server handed out. */
+  /** What a new one starts from, such as a lease the server handed out. */
   prefill: { type: Object, default: null },
 })
 const open = defineModel('open', { type: Boolean, default: false })
@@ -55,7 +55,6 @@ function save() {
             id="sl-mac"
             v-model="form.mac"
             class="input font-mono"
-            placeholder="aa:bb:cc:dd:ee:ff"
             required
             spellcheck="false"
           />

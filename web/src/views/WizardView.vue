@@ -148,7 +148,11 @@ function reverted() {
         </select>
       </FormField>
 
-      <FormField id="lan-address" label="LAN address" hint="e.g. 192.168.1.1/24">
+      <FormField
+        id="lan-address"
+        label="LAN address"
+        hint="Address and prefix length, like 192.168.1.1/24."
+      >
         <input
           id="lan-address"
           v-model="lanAddress"

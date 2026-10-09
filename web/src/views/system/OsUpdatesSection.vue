@@ -187,12 +187,7 @@ async function reboot() {
             label="Never upgrade"
             hint="Package names or globs, comma separated: kernel* holds back every kernel package."
           >
-            <input
-              id="os-upd-exclude"
-              v-model="excludes"
-              class="input max-w-md font-mono"
-              placeholder="kernel*, nvidia*"
-            />
+            <input id="os-upd-exclude" v-model="excludes" class="input max-w-md font-mono" />
           </FormField>
         </fieldset>
 

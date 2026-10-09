@@ -86,7 +86,7 @@ function upPowerTone(p) {
               id="modem-address"
               v-model="address"
               class="input w-48 font-mono max-sm:w-full"
-              placeholder="192.168.100.1"
+              :placeholder="DEFAULT_ADDRESS"
               spellcheck="false"
             />
           </FormField>

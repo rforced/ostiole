@@ -123,12 +123,7 @@ function save() {
     <form class="space-y-4" @submit.prevent="save">
       <div class="fields">
         <FormField id="cron-desc" label="Description">
-          <input
-            id="cron-desc"
-            v-model="form.description"
-            class="input"
-            placeholder="Nightly backup"
-          />
+          <input id="cron-desc" v-model="form.description" class="input" placeholder="optional" />
         </FormField>
         <FormField
           id="cron-kind"
@@ -230,7 +225,6 @@ function save() {
             id="cron-command"
             v-model="form.command"
             class="input font-mono"
-            placeholder="/usr/bin/systemctl"
             spellcheck="false"
           />
         </FormField>

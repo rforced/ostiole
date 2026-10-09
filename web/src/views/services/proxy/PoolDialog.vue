@@ -139,12 +139,7 @@ function save() {
           </select>
         </FormField>
         <FormField id="pool-health" label="Health path" hint="Nothing is checked when empty.">
-          <input
-            id="pool-health"
-            v-model="form.healthPath"
-            class="input font-mono"
-            placeholder="/healthz"
-          />
+          <input id="pool-health" v-model="form.healthPath" class="input font-mono" />
         </FormField>
         <FormField
           id="pool-health-seconds"

@@ -40,14 +40,13 @@ function save() {
 <template>
   <AppDialog v-model:open="open" :title="title">
     <form class="space-y-4" @submit.prevent="save">
-      <FormField id="do-domain" label="Domain" hint="Subdomains follow it, e.g. ts.net.">
+      <FormField id="do-domain" label="Domain" hint="Subdomains follow it, like ts.net.">
         <input
           id="do-domain"
           v-model="form.domain"
           class="input font-mono"
           required
           spellcheck="false"
-          placeholder="ts.net"
         />
       </FormField>
       <FormField
@@ -61,7 +60,6 @@ function save() {
           class="input font-mono"
           required
           spellcheck="false"
-          placeholder="100.100.100.100"
         />
       </FormField>
       <FormField id="do-desc" label="Description">

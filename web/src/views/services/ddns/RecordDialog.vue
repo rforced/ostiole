@@ -162,7 +162,6 @@ function sentence(r) {
             id="ddns-name"
             v-model="form.name"
             class="input font-mono"
-            placeholder="home.example.com"
             required
             spellcheck="false"
             autocomplete="off"

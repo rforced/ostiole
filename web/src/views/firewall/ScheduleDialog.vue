@@ -53,7 +53,7 @@ function save() {
   >
     <form class="space-y-4" @submit.prevent="save">
       <div class="fields">
-        <FormField id="sch-name" label="Name" hint="Lower case, e.g. workday.">
+        <FormField id="sch-name" label="Name" hint="Lower case, like workday.">
           <input
             id="sch-name"
             v-model="form.name"

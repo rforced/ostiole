@@ -76,7 +76,6 @@ function save() {
             class="input font-mono"
             required
             spellcheck="false"
-            placeholder="203.0.113.10"
           />
         </FormField>
         <FormField id="one-int" label="Internal address">
@@ -86,7 +85,6 @@ function save() {
             class="input font-mono"
             required
             spellcheck="false"
-            placeholder="10.0.0.25"
           />
         </FormField>
       </div>

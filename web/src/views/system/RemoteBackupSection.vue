@@ -205,7 +205,6 @@ async function loadIntoDraft() {
               <input
                 id="rb-endpoint"
                 class="input"
-                placeholder="https://s3.us-west-004.backblazeb2.com"
                 :value="settings.endpoint ?? ''"
                 @change="set({ endpoint: $event.target.value.trim() })"
               />
@@ -272,7 +271,6 @@ async function loadIntoDraft() {
                 <input
                   id="rb-prefix"
                   class="input"
-                  placeholder="ostiole/"
                   :value="settings.prefix ?? ''"
                   @change="set({ prefix: $event.target.value.trim() })"
                 />

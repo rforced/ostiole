@@ -46,7 +46,6 @@ function send() {
           id="wol-once-mac"
           v-model="mac"
           class="input w-56 font-mono max-sm:w-full"
-          placeholder="aa:bb:cc:dd:ee:ff"
           required
           spellcheck="false"
         />

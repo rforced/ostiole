@@ -221,7 +221,7 @@ function toggleInterface(name, on) {
               <option value="tls">DNS over TLS: encrypted upstreams, check DNSSEC</option>
             </select>
           </FormField>
-          <FormField id="dns-domain" label="Local domain" hint="Hosts get this suffix, e.g. lan.">
+          <FormField id="dns-domain" label="Local domain" hint="Hosts get this suffix, like lan.">
             <input id="dns-domain" v-model="domain" class="input font-mono" spellcheck="false" />
           </FormField>
           <FormField
@@ -247,13 +247,7 @@ function toggleInterface(name, on) {
             hint="Comma separated. Empty: the system resolvers."
             class="sm:col-span-2"
           >
-            <input
-              id="dns-up"
-              v-model="upstreams"
-              class="input font-mono"
-              spellcheck="false"
-              placeholder="1.1.1.1, 9.9.9.9"
-            />
+            <input id="dns-up" v-model="upstreams" class="input font-mono" spellcheck="false" />
             <div
               v-if="!auth.readOnly"
               role="group"
@@ -284,7 +278,6 @@ function toggleInterface(name, on) {
               rows="4"
               class="input font-mono"
               spellcheck="false"
-              placeholder="9.9.9.9 dns.quad9.net"
             ></textarea>
             <div
               v-if="!auth.readOnly"
@@ -452,7 +445,6 @@ function toggleInterface(name, on) {
             v-model="rebindAllow"
             class="input max-w-2xl font-mono"
             spellcheck="false"
-            placeholder="home.example.com"
           />
         </FormField>
       </div>

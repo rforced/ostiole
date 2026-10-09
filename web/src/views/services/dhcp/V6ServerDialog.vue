@@ -117,7 +117,7 @@ function save() {
         </select>
       </FormField>
       <div v-if="managed" class="fields">
-        <FormField id="v6-start" label="Range start" hint="Host part, e.g. ::100">
+        <FormField id="v6-start" label="Range start" hint="The host part of the prefix: ::100.">
           <input
             id="v6-start"
             v-model="form.rangeStart"
@@ -126,7 +126,7 @@ function save() {
             spellcheck="false"
           />
         </FormField>
-        <FormField id="v6-end" label="Range end" hint="Host part, e.g. ::1ff">
+        <FormField id="v6-end" label="Range end" hint="The host part of the prefix: ::1ff.">
           <input
             id="v6-end"
             v-model="form.rangeEnd"

@@ -134,7 +134,7 @@ async function inspect() {
 const ENTRY_HINTS = {
   hosts:
     'One address or CIDR network per line. With a URL, these are kept alongside what is fetched.',
-  ports: 'One port or range per line, e.g. 8000-8100.',
+  ports: 'One port or range per line, like 8000-8100.',
   geoip: 'The addresses behind each country are fetched from the GeoIP source set under System.',
   asn: 'One AS number per line, like AS15169. The prefixes each one announces are fetched from the ASN source set under System.',
 }
@@ -249,7 +249,6 @@ function save() {
           id="alias-url"
           v-model="form.url"
           class="input font-mono"
-          placeholder="https://www.spamhaus.org/drop/drop.txt"
           spellcheck="false"
           @change="inspect"
         />

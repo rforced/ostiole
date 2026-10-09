@@ -110,7 +110,7 @@ export const NEW_ZONE = '+new'
     <FormField
       :id="`${id}-new`"
       label="New zone name"
-      hint="Lowercase letters, digits, and underscores, e.g. guest or iot."
+      hint="Lowercase letters, digits, and underscores, like guest or iot."
     >
       <input
         :id="`${id}-new`"

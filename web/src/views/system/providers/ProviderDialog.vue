@@ -153,7 +153,6 @@ const sees = computed(() => {
           v-model="form.domains"
           class="input h-20 font-mono"
           spellcheck="false"
-          placeholder="example.com"
         />
       </FormField>
 

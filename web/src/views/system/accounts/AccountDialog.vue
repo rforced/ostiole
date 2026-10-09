@@ -36,7 +36,6 @@ function submit() {
           class="input font-mono"
           autocomplete="off"
           required
-          placeholder="operator"
         />
       </FormField>
       <FormField id="user-password" label="Password" :hint="`At least ${MIN_PASSWORD} characters.`">

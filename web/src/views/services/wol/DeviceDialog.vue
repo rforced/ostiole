@@ -75,14 +75,13 @@ function save() {
     <form class="space-y-4" @submit.prevent="save">
       <div class="fields">
         <FormField id="wol-desc" label="Description">
-          <input id="wol-desc" v-model="form.description" class="input" placeholder="Office NAS" />
+          <input id="wol-desc" v-model="form.description" class="input" placeholder="optional" />
         </FormField>
         <FormField id="wol-mac" label="MAC address">
           <input
             id="wol-mac"
             v-model="form.mac"
             class="input font-mono"
-            placeholder="aa:bb:cc:dd:ee:ff"
             required
             spellcheck="false"
           />

@@ -74,7 +74,7 @@ function save() {
   >
     <form class="space-y-4" @submit.prevent="save">
       <div class="fields">
-        <FormField id="gg-name" label="Name" hint="Lower case, e.g. failover.">
+        <FormField id="gg-name" label="Name" hint="Lower case, like failover.">
           <input
             id="gg-name"
             v-model="form.name"

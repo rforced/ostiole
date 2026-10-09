@@ -91,7 +91,7 @@ function save() {
             <option value="tcp+udp">TCP + UDP</option>
           </select>
         </FormField>
-        <FormField id="pf-ports" label="Ports" hint="e.g. 443 or 27015-27020">
+        <FormField id="pf-ports" label="Ports" hint="One port or a range: 443, 27015-27020.">
           <input
             id="pf-ports"
             v-model="form.ports"
@@ -107,7 +107,6 @@ function save() {
             class="input font-mono"
             required
             spellcheck="false"
-            placeholder="10.0.0.5"
           />
         </FormField>
         <FormField id="pf-tport" label="Target port" hint="Empty keeps the original port.">

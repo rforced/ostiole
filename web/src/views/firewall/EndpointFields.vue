@@ -100,7 +100,7 @@ const label = computed(() => (props.side === 'source' ? 'Source' : 'Destination'
         v-if="model.portMode === 'ports'"
         :id="id('ports')"
         label="Port list"
-        hint="Comma or space separated, e.g. 80, 443, 8000-8100."
+        hint="Comma or space separated: 80, 443, 8000-8100."
       >
         <input
           :id="id('ports')"

@@ -172,7 +172,6 @@ function save() {
             v-model="form.names"
             class="input h-24 font-mono"
             spellcheck="false"
-            placeholder="router.example.com"
           />
         </FormField>
 
@@ -268,7 +267,6 @@ function save() {
             id="cert-pem"
             v-model="form.certPem"
             class="input h-32 font-mono"
-            placeholder="-----BEGIN CERTIFICATE-----"
             spellcheck="false"
             required
           />
@@ -278,7 +276,6 @@ function save() {
             id="cert-key"
             v-model="form.keyPem"
             class="input h-32 font-mono"
-            placeholder="-----BEGIN PRIVATE KEY-----"
             spellcheck="false"
             required
           />

@@ -163,7 +163,6 @@ const targetStates = computed(() =>
               <input
                 id="nt-server"
                 class="input font-mono"
-                placeholder="smtp.example.net"
                 spellcheck="false"
                 :value="email.server ?? ''"
                 @change="set({ server: $event.target.value.trim() }, 'email')"
@@ -205,11 +204,14 @@ const targetStates = computed(() =>
                 @change="set({ password: $event.target.value }, 'email')"
               />
             </FormField>
-            <FormField id="nt-from" label="From">
+            <FormField
+              id="nt-from"
+              label="From"
+              hint="An address, or a name and an address: Router <router@example.net>."
+            >
               <input
                 id="nt-from"
                 class="input"
-                placeholder="Router <router@example.net>"
                 :value="email.from ?? ''"
                 @change="set({ from: $event.target.value.trim() }, 'email')"
               />

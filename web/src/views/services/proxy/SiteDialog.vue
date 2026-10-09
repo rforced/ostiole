@@ -190,7 +190,6 @@ function save() {
           <input
             v-model="p.prefix"
             class="input font-mono"
-            placeholder="/api"
             spellcheck="false"
             :aria-label="`Path prefix ${i + 1}`"
           />

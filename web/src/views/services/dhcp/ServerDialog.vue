@@ -123,7 +123,11 @@ function save() {
             spellcheck="false"
           />
         </FormField>
-        <FormField id="sc-lease" label="Lease time" hint="e.g. 24h, 2d, infinite">
+        <FormField
+          id="sc-lease"
+          label="Lease time"
+          hint="A number and a unit: 24h, 2d. infinite never expires."
+        >
           <input
             id="sc-lease"
             v-model="form.leaseTime"

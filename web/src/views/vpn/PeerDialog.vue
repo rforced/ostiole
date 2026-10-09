@@ -468,7 +468,7 @@ async function copyFile() {
 
     <form v-else class="space-y-4" @submit.prevent="save">
       <div class="fields">
-        <FormField id="pe-name" label="Name" hint="Lower case, e.g. laptop.">
+        <FormField id="pe-name" label="Name" hint="Lower case, like laptop.">
           <input
             id="pe-name"
             v-model="form.name"

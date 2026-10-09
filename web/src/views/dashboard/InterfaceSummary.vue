@@ -16,7 +16,7 @@ defineProps({
   placeholders: { type: Number, default: 3 },
 })
 
-/** How the interface is addressed, e.g. "IPv4 static · IPv6 slaac". */
+/** How the interface is addressed: "IPv4 static · IPv6 slaac". */
 function addressing(l) {
   const parts = []
   if (l.ipv4Mode && l.ipv4Mode !== 'none') parts.push(`IPv4 ${l.ipv4Mode}`)
