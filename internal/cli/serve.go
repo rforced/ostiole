@@ -785,13 +785,10 @@ func readTraffic(cfg *model.Config, counter *traffic.Counter, files *logfile.Wri
 		}
 		if cfg.Traffic.DestinationsOn() {
 			d := cfg.Traffic.Destinations
-			hours, st, err := logfile.Read(files.Dir, traffic.DestinationsFile, traffic.FileVersion, d.Size(),
-				started.Add(-kept(traffic.DestinationsFile)), traffic.ParseHour)
+			st, err := logfile.Stream(files.Dir, traffic.DestinationsFile, traffic.FileVersion, d.Size(),
+				started.Add(-kept(traffic.DestinationsFile)), traffic.ParseHour, counter.RestoreHour)
 			if err != nil {
 				log.Warn("could not read all of the destinations' files back", "err", err)
-			}
-			for _, h := range hours {
-				counter.RestoreHour(h)
 			}
 			stats[traffic.DestinationsFile] = st
 		}
