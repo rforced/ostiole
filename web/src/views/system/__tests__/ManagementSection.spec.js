@@ -139,4 +139,14 @@ describe('ManagementSection host settings', () => {
     expect(wrapper.text()).not.toContain('Only an admin')
     expect(wrapper.text()).toContain('Kept open from anti-lockout zones.')
   })
+
+  it('drops a hostname typed and cleared again', async () => {
+    const { wrapper, config } = await open({ management: { webPort: 443, sshPort: 22 } })
+    config.saved = JSON.parse(JSON.stringify(config.draft))
+    const input = wrapper.get('#sys-hostname')
+    await input.setValue('router-01')
+    expect(config.dirty).toBe(true)
+    await input.setValue('')
+    expect(config.dirty).toBe(false)
+  })
 })

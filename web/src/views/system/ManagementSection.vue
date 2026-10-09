@@ -26,6 +26,13 @@ onMounted(loadClock.run)
 
 // A configuration that says nothing runs in UTC, so that is what the
 // picker shows.
+const hostname = computed({
+  get: () => system.value.hostname ?? '',
+  set: (v) => {
+    if (v) system.value.hostname = v
+    else delete system.value.hostname
+  },
+})
 const zone = computed({
   get: () => system.value.timezone || 'UTC',
   set: (v) => {
@@ -68,7 +75,7 @@ const dnsHint = computed(() => {
     <div class="space-y-4">
       <div class="fields fields-card">
         <FormField id="sys-hostname" label="Hostname">
-          <input id="sys-hostname" v-model="system.hostname" class="input" spellcheck="false" />
+          <input id="sys-hostname" v-model="hostname" class="input" spellcheck="false" />
         </FormField>
         <FormField id="sys-timezone" label="Timezone" :hint="zoneHint">
           <select id="sys-timezone" v-model="zone" class="input">
