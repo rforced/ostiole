@@ -777,8 +777,9 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 			if len(foreign) > 0 {
 				out = append(out, Warning{
 					Kind: "foreign-tables", Level: "warn",
-					Title:  "Other nftables rulesets are loaded",
-					Detail: "Ostiole only manages " + nft.Table + ". These tables filter traffic too: " + strings.Join(foreign, ", ") + ".",
+					Title: "Other nftables rulesets are loaded",
+					Detail: "Ostiole only manages " + nft.Table + ". These tables filter traffic too: " + strings.Join(foreign, ", ") +
+						". Details under Diagnostics › Ruleset.",
 				})
 			}
 		}

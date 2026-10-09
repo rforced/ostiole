@@ -211,6 +211,24 @@ describe('RouterCard', () => {
     expect(text).toContain('4 ·')
   })
 
+  it('sends the ruleset row to Diagnostics › Ruleset', () => {
+    const w = mount(RouterCard, {
+      props: {
+        status: { configured: true, tableLoaded: true, network: 'networkd' },
+        summary: { hostname: 'fw', rules: 3, zones: 2, revisions: 4 },
+        health: {},
+      },
+      global: { stubs },
+    })
+    const link = w
+      .findAllComponents(RouterLinkStub)
+      .find((l) => l.props('to') === '/diagnostics/ruleset')
+    expect(link?.text()).toBe('inspect under Diagnostics › Ruleset')
+    expect(w.findAllComponents(RouterLinkStub).map((l) => l.props('to'))).not.toContain(
+      '/firewall/rules',
+    )
+  })
+
   it('says when the ruleset is not in the kernel', () => {
     const w = mount(RouterCard, {
       props: { status: { configured: true, tableLoaded: false, network: 'none' }, health: {} },

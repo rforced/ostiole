@@ -6,13 +6,13 @@ import { api } from '@/lib/api'
 import HostPage from '@/views/system/HostPage.vue'
 
 vi.mock('@/lib/api', () => ({
-  api: { host: { status: vi.fn(), flushLegacy: vi.fn() } },
+  api: { host: { status: vi.fn() } },
   ApiError: class ApiError extends Error {},
 }))
 
-const stubs = { ConfirmButton: true, RefreshButton: true }
+const stubs = { RefreshButton: true }
 
-/** A Rocky router with everything in place and one leftover table. */
+/** A Rocky router with everything in place. */
 function report(over = {}) {
   return {
     root: true,
@@ -31,19 +31,6 @@ function report(over = {}) {
       networkd: 'inactive',
       owned: false,
       managers: ['NetworkManager'],
-    },
-    legacy: {
-      tables: [
-        { backend: 'nft', family: 'ip', name: 'filter', rules: 0, chains: ['INPUT'] },
-        {
-          backend: 'nft',
-          family: 'ip',
-          name: 'nat',
-          rules: 0,
-          chains: ['DOCKER'],
-          owner: 'Docker',
-        },
-      ],
     },
     firewalled: true,
     ...over,
@@ -106,31 +93,8 @@ describe('HostPage', () => {
     expect(wrapper.text()).toContain('ostiole takeover --network --confirm')
   })
 
-  it('clears the leftovers nothing else owns, and offers the owned one separately', async () => {
-    const wrapper = await page()
-    api.host.flushLegacy.mockResolvedValue({ output: 'cleared ip filter', status: report() })
-    const buttons = wrapper.findAllComponents({ name: 'ConfirmButton' })
-    // One sweep for the unowned table, one "clear anyway" for Docker's.
-    expect(buttons).toHaveLength(2)
-    expect(buttons[0].props('label')).toBe('Clear leftovers')
-    expect(buttons[1].props('typed')).toBe('nat')
-    buttons[0].vm.$emit('confirm')
-    await flushPromises()
-    expect(api.host.flushLegacy).toHaveBeenCalledWith([])
-    expect(wrapper.text()).toContain('cleared ip filter')
-  })
-
-  it('offers nothing to press on a daemon that is not root', async () => {
+  it('says when the daemon is not root', async () => {
     const wrapper = await page({ root: false })
     expect(wrapper.text()).toContain('not running as root')
-    expect(wrapper.findAllComponents({ name: 'ConfirmButton' })).toHaveLength(0)
-  })
-
-  it('shows why a flush failed', async () => {
-    const wrapper = await page()
-    api.host.flushLegacy.mockRejectedValue(new Error('not permitted'))
-    wrapper.findAllComponents({ name: 'ConfirmButton' })[0].vm.$emit('confirm')
-    await flushPromises()
-    expect(wrapper.find('[role="alert"]').text()).toContain('not permitted')
   })
 })

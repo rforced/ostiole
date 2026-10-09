@@ -319,9 +319,9 @@ test('choose how this router patches itself, and see why some of it is refused',
   await expect(row('Install configured Ostiole release')).toContainText('never')
 })
 
-// The page reports what is underneath Ostiole. From a daemon that is not
-// root it reports the same and offers nothing it could not do.
-test('the operating system page reports the host and changes nothing without root', async ({
+// The pages report what is underneath Ostiole. From a daemon that is not
+// root they report the same and offer nothing it could not do.
+test('the host and its leftover rules are reported, and nothing changes without root', async ({
   page,
 }) => {
   await login(page)
@@ -333,12 +333,14 @@ test('the operating system page reports the host and changes nothing without roo
   await expect(router).toContainText(
     'This daemon is not running as root, so it reports what it found and changes nothing.',
   )
+  await page.screenshot({ path: shot('43-operating-system'), fullPage: true })
+
   // The stand-in nft reports an iptables nat table beside Ostiole's own.
+  await sidebar(page, 'Diagnostics', 'Ruleset')
   const leftovers = page.getByRole('region', { name: 'Leftover rules' })
   await expect(leftovers.getByRole('row').filter({ hasText: 'ip nat' })).toContainText(
     'POSTROUTING',
   )
   await expect(leftovers.getByRole('row').filter({ hasText: 'inet ostiole' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /^Clear/ })).toHaveCount(0)
-  await page.screenshot({ path: shot('43-operating-system'), fullPage: true })
 })

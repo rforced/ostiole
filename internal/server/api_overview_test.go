@@ -331,7 +331,8 @@ func TestOverviewUnconfigured(t *testing.T) {
 	}
 	if w := warning(ov, "foreign-tables"); w == nil {
 		t.Errorf("want a foreign-tables warning, got %+v", ov.Warnings)
-	} else if !strings.Contains(w.Detail, "inet firewalld") || strings.Contains(w.Detail, nft.Table+",") {
+	} else if !strings.Contains(w.Detail, "inet firewalld") || strings.Contains(w.Detail, nft.Table+",") ||
+		!strings.HasSuffix(w.Detail, ". Details under Diagnostics › Ruleset.") {
 		t.Errorf("foreign table detail = %q", w.Detail)
 	}
 	if w := warning(ov, "conflicting-services"); w == nil || !strings.Contains(w.Detail, "firewalld") {

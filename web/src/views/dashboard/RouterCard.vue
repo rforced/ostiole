@@ -56,7 +56,9 @@ const READING = [
         <span class="ml-2">
           {{ summary.rules ?? 0 }} rule{{ (summary.rules ?? 0) === 1 ? '' : 's' }} in
           {{ summary.zones ?? 0 }} zone{{ (summary.zones ?? 0) === 1 ? '' : 's' }} ·
-          <RouterLink to="/firewall/rules" class="link">edit</RouterLink>
+          <RouterLink to="/diagnostics/ruleset" class="link"
+            >inspect under Diagnostics › Ruleset</RouterLink
+          >
         </span>
       </dd>
 
