@@ -101,3 +101,34 @@ describe('RuleDialog priority', () => {
     expect(open(true, rule).wrapper.get('#rule-priority').element.value).toBe('bulk')
   })
 })
+
+describe('RuleDialog limit', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('reopens a limited rule as saved and leaves an untouched save alone', async () => {
+    const config = useConfigStore()
+    const cfg = {
+      ...draft(false),
+      rules: [
+        {
+          id: 'r1',
+          enabled: true,
+          zone: 'lan',
+          action: 'accept',
+          protocol: 'any',
+          source: {},
+          destination: {},
+          limit: { rate: 20, unit: 'minute' },
+        },
+      ],
+    }
+    config.saved = cfg
+    config.replaceDraft(cfg)
+    const wrapper = mount(RuleDialog, {
+      props: { open: true, rule: config.rules[0], zone: 'lan' },
+      global: { stubs },
+    })
+    await wrapper.get('form').trigger('submit')
+    expect(config.dirty).toBe(false)
+  })
+})

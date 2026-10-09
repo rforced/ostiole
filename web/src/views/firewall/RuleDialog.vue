@@ -149,12 +149,9 @@ function save() {
   if (f.gateway && gatewayAllowed.value) out.gateway = f.gateway
   if (f.priority && priorityAllowed.value) out.priority = f.priority
   if (f.limited && limitAllowed.value) {
-    out.limit = {
-      rate: Number(f.limitRate) || 1,
-      unit: f.limitUnit,
-      perSource: f.limitPerSource,
-    }
+    out.limit = { rate: Number(f.limitRate) || 1, unit: f.limitUnit }
     if (Number(f.limitBurst) > 0) out.limit.burst = Number(f.limitBurst)
+    if (f.limitPerSource) out.limit.perSource = true
   }
   if (!out.description) delete out.description
   config.upsertRule(out)
