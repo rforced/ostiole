@@ -178,7 +178,7 @@ onMounted(async () => {
       />
     </template>
     <div class="space-y-4">
-      <dl class="kv max-w-md">
+      <dl class="kv">
         <dt>Installed</dt>
         <dd class="font-mono">{{ current || '…' }}</dd>
         <dt>Latest</dt>

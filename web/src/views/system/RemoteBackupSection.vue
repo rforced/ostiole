@@ -374,7 +374,7 @@ async function loadIntoDraft() {
       </template>
 
       <div class="card-strip space-y-3">
-        <dl class="kv max-w-xl">
+        <dl class="kv">
           <dt>Last upload</dt>
           <dd>{{ formatWhen(status?.lastRun, 'never') }}</dd>
           <dt>Result</dt>

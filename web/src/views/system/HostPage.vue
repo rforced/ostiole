@@ -89,7 +89,7 @@ async function flush(tables) {
       </template>
       <div class="space-y-4">
         <p v-if="!report" class="text-ink-muted">Reading…</p>
-        <dl v-else class="kv max-w-xl">
+        <dl v-else class="kv">
           <dt>Distribution</dt>
           <dd>{{ report?.distro || 'unknown' }}</dd>
           <dt>Package manager</dt>

@@ -148,7 +148,7 @@ async function reboot() {
       </template>
       <div class="space-y-4">
         <p v-if="!poll.updatedAt.value" class="text-ink-muted">Reading…</p>
-        <dl v-else class="kv max-w-md">
+        <dl v-else class="kv">
           <dt>System</dt>
           <dd>{{ status?.distro || 'unknown' }}</dd>
           <dt>Package manager</dt>
