@@ -92,7 +92,7 @@ export const NAV = [
         tabs: [
           { value: 'bandwidth', label: 'Bandwidth' },
           { value: 'priorities', label: 'Priorities' },
-          { value: 'live', label: 'Live' },
+          { value: 'live', label: 'Queues' },
         ],
       },
       { path: 'log', label: 'Log', view: () => import('@/views/firewall/LogPage.vue') },
