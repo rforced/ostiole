@@ -174,7 +174,7 @@ func TestARefreshedListIsNotADifference(t *testing.T) {
 	feeds := &fakeFeeds{entries: map[string][]string{"drop": {"192.0.2.0/24"}}}
 	e := New(st, &fakeRunner{}, nil, slog.New(slog.DiscardHandler)).WithFeeds(feeds)
 	c := cfg("a")
-	c.Aliases = append(c.Aliases, model.Alias{Name: "drop", Type: model.AliasHosts, URL: "https://lists.example.com/drop.txt"})
+	c.Aliases = append(c.Aliases, model.Alias{Name: "drop", Type: model.AliasHosts, Entries: []string{"https://lists.example.com/drop.txt"}})
 	if _, err := e.Apply(context.Background(), c, ApplyOptions{}); err != nil {
 		t.Fatal(err)
 	}

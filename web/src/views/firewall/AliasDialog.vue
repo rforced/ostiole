@@ -5,13 +5,13 @@ import { computed, ref, watch } from 'vue'
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
+import { fetches, takesURLs, urlsOf } from '@/lib/aliases'
 import { api } from '@/lib/api'
 import { parseAsnList } from '@/lib/asn'
 import { formatCount } from '@/lib/format'
 import { joinList, parseList } from '@/lib/lists'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
-import ChoicePicker from '@/views/firewall/ChoicePicker.vue'
 import CountryPicker from '@/views/firewall/CountryPicker.vue'
 
 const props = defineProps({
@@ -38,9 +38,7 @@ function blank() {
     description: '',
     entries: '',
     countries: [],
-    url: '',
     refreshHours: '',
-    select: [],
   }
 }
 
@@ -71,76 +69,73 @@ const asnParts = computed(() => {
 
 /** A country or AS alias holds keys, not addresses, and always fetches. */
 const keyed = computed(() => form.value.type === 'geoip' || form.value.type === 'asn')
-/** A host or port alias fetches when it has a URL. */
-const fetches = computed(() => keyed.value || form.value.url.trim() !== '')
-/** A host alias with a URL can keep part of a JSON list. */
-const selectable = computed(() => form.value.type === 'hosts' && form.value.url.trim() !== '')
+const lines = computed(() =>
+  form.value.type === 'geoip' ? form.value.countries : parseList(form.value.entries),
+)
+const fetching = computed(() => fetches({ type: form.value.type, entries: lines.value }))
+/** The lists a host alias fetches, each once. */
+const urls = computed(() => (takesURLs(form.value.type) ? [...new Set(urlsOf(lines.value))] : []))
 
-/**
- * What the last fetch of this alias found to narrow it by, while the URL
- * is still the one fetched; null when there is no such fetch.
- */
-const fetchedChoices = computed(() => {
+/** What the last fetch of this alias read from a URL, or null. */
+function fetchedPart(url) {
   const status = props.feeds.find((f) => f.alias === props.alias?.name)
-  const part = status?.parts?.find((p) => p.source === form.value.url.trim())
-  return part ? (part.choices ?? []) : null
-})
+  return status?.parts?.find((p) => p.source === url) ?? null
+}
 
-/** What the router found at a URL typed here, which nothing has fetched. */
-const inspected = ref({ url: '', choices: [], error: '', busy: false })
-const inspecting = computed(
-  () => inspected.value.busy && inspected.value.url === form.value.url.trim(),
-)
-const inspectError = computed(() =>
-  selectable.value && inspected.value.url === form.value.url.trim() ? inspected.value.error : '',
-)
-
-const choices = computed(() => {
-  if (!selectable.value) return []
-  if (fetchedChoices.value) return fetchedChoices.value
-  return inspected.value.url === form.value.url.trim() ? inspected.value.choices : []
-})
+/** What the router found at each URL typed here, which nothing has fetched. */
+const inspected = ref({})
 
 /**
- * The filter shows when the list has something to select, or the alias
- * already keeps part of one.
+ * Asks the router to read a URL typed here, so what it holds is known
+ * before anything is saved. Each URL is read once, and none that the last
+ * fetch of this alias read.
  */
-const showFilter = computed(
-  () => selectable.value && (choices.value.length > 0 || form.value.select.length > 0),
-)
-
-/**
- * Asks the router to read a URL typed here, so what the list can be
- * narrowed by is known before anything is saved. It reads only the URL
- * the operator typed, once.
- */
-async function inspect() {
-  const url = form.value.url.trim()
-  if (!selectable.value || auth.readOnly || !/^https?:\/\/\S+$/i.test(url)) return
-  if (fetchedChoices.value || (inspected.value.url === url && !inspected.value.error)) return
-  inspected.value = { url, choices: [], error: '', busy: true }
+async function inspect(url) {
+  if (auth.readOnly || !/^https?:\/\/\S+$/i.test(url)) return
+  const seen = inspected.value[url]
+  if (fetchedPart(url) || (seen && !seen.error)) return
+  inspected.value = { ...inspected.value, [url]: { busy: true, entries: null, error: '' } }
   try {
     const part = await api.aliases.inspect(url)
-    if (inspected.value.url === url) {
-      inspected.value = { url, choices: part.choices ?? [], error: '', busy: false }
-    }
+    const entries = part.entries ?? 0
+    inspected.value = { ...inspected.value, [url]: { busy: false, entries, error: '' } }
   } catch (e) {
-    if (inspected.value.url === url) {
-      inspected.value = { url, choices: [], error: e.message, busy: false }
+    inspected.value = {
+      ...inspected.value,
+      [url]: { busy: false, entries: null, error: e.message },
     }
   }
 }
 
+function inspectAll() {
+  for (const url of urls.value) inspect(url)
+}
+
+/** One line per URL that has been read or is being read. */
+const previews = computed(() =>
+  urls.value
+    .map((url) => {
+      const part = fetchedPart(url)
+      if (part) return { url, busy: false, entries: part.entries ?? 0, error: '' }
+      return { url, ...inspected.value[url] }
+    })
+    .filter((p) => p.busy || p.error || p.entries != null),
+)
+
 const ENTRY_HINTS = {
   hosts:
-    'One address or CIDR network per line. With a URL, these are kept alongside what is fetched.',
-  ports: 'One port or range per line, like 8000-8100.',
+    'One address, CIDR network or URL per line. A URL is a published list, plain text or JSON, fetched on a schedule and cached here. Plain http only from inside the network.',
+  ports: 'One port, range or URL per line, like 8000-8100.',
   geoip: 'The addresses behind each country, fetched from the GeoIP source.',
   asn: 'One AS number per line, like AS15169. The prefixes each one announces are fetched from the ASN source.',
 }
 
 function prefixCount(n) {
   return `${formatCount(n)} ${n === 1 ? 'prefix' : 'prefixes'}`
+}
+
+function addressCount(n) {
+  return `${formatCount(n)} ${n === 1 ? 'address' : 'addresses'}`
 }
 
 watch(
@@ -157,12 +152,10 @@ watch(
           description: a.description ?? '',
           entries: a.type === 'geoip' ? '' : joinList(a.entries),
           countries: a.type === 'geoip' ? [...(a.entries ?? [])] : [],
-          url: a.url ?? '',
           refreshHours: a.refreshHours ?? '',
-          select: [...(a.select ?? [])],
         }
       : blank()
-    inspect()
+    inspectAll()
   },
   { immediate: true },
 )
@@ -199,11 +192,9 @@ function save() {
   }
   const out = { name, type: form.value.type, entries }
   if (form.value.description) out.description = form.value.description
-  if (!keyed.value && form.value.url.trim()) out.url = form.value.url.trim()
-  if (fetches.value && Number(form.value.refreshHours) > 0) {
+  if (fetching.value && Number(form.value.refreshHours) > 0) {
     out.refreshHours = Number(form.value.refreshHours)
   }
-  if (selectable.value && form.value.select.length > 0) out.select = [...form.value.select]
   config.upsertAlias(out, previous)
   open.value = false
 }
@@ -228,7 +219,7 @@ function save() {
           />
         </FormField>
         <FormField id="alias-type" label="Type">
-          <select id="alias-type" v-model="form.type" class="input" @change="inspect">
+          <select id="alias-type" v-model="form.type" class="input" @change="inspectAll">
             <option value="hosts">Hosts and networks</option>
             <option value="ports">Ports</option>
             <option value="geoip">Countries (addresses fetched)</option>
@@ -240,39 +231,7 @@ function save() {
         <input id="alias-desc" v-model="form.description" class="input" />
       </FormField>
       <FormField
-        v-if="!keyed"
-        id="alias-url"
-        label="Fetch from"
-        hint="A published list, plain text or JSON, cached here and refetched on a schedule. Plain http only from inside the network."
-      >
-        <input
-          id="alias-url"
-          v-model="form.url"
-          class="input font-mono"
-          spellcheck="false"
-          @change="inspect"
-        />
-        <p
-          v-if="inspecting"
-          class="flex items-center gap-2 text-sm text-ink-muted"
-          aria-busy="true"
-        >
-          <LoaderCircle class="size-4 animate-spin" aria-hidden="true" />Reading the list…
-        </p>
-        <p v-else-if="inspectError" class="text-sm text-bad">
-          Could not read the list: {{ inspectError }}
-        </p>
-      </FormField>
-      <FormField
-        v-if="showFilter"
-        id="alias-select"
-        label="Keep only"
-        hint="Nothing ticked keeps every address. Ticks in two groups keep only what is in both."
-      >
-        <ChoicePicker v-model="form.select" :choices="choices" />
-      </FormField>
-      <FormField
-        v-if="fetches"
+        v-if="fetching"
         id="alias-refresh"
         label="Refresh every (hours)"
         hint="24 is the default, 1 at least."
@@ -301,7 +260,26 @@ function save() {
           v-model="form.entries"
           class="input h-32 font-mono"
           spellcheck="false"
+          @blur="inspectAll"
         ></textarea>
+        <ul v-if="previews.length > 0" class="mt-2 space-y-0.5 text-sm text-ink-muted">
+          <li
+            v-for="p in previews"
+            :key="p.url"
+            :class="{ 'text-bad': p.error }"
+            :aria-busy="p.busy || undefined"
+          >
+            <span class="font-mono break-all">{{ p.url }}</span
+            ><template v-if="p.busy">
+              ·
+              <LoaderCircle
+                class="inline size-4 animate-spin align-text-bottom"
+                aria-hidden="true"
+              />Reading the list…</template
+            ><template v-else-if="p.error"> · Could not read the list: {{ p.error }}</template
+            ><template v-else> · {{ addressCount(p.entries) }}</template>
+          </li>
+        </ul>
         <ul
           v-if="form.type === 'asn' && asnParts.length > 0"
           class="mt-2 space-y-0.5 text-sm text-ink-muted"

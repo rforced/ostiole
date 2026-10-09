@@ -66,7 +66,11 @@ func (c *Config) Redacted() *Config {
 	// A chat service's webhook URL is the key to its channel.
 	out.Notifications.Webhook.URL = ""
 	for i := range out.Aliases {
-		out.Aliases[i].URL = RedactURL(out.Aliases[i].URL)
+		for j, e := range out.Aliases[i].Entries {
+			if IsURLEntry(e) {
+				out.Aliases[i].Entries[j] = RedactURL(e)
+			}
+		}
 	}
 	for i := range out.Blocking.Lists {
 		out.Blocking.Lists[i].URL = RedactURL(out.Blocking.Lists[i].URL)

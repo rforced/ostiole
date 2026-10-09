@@ -43,7 +43,6 @@ describe('AliasDialog AS numbers', () => {
     const { wrapper, config } = open()
     await wrapper.get('#alias-name').setValue('google')
     await wrapper.get('#alias-type').setValue('asn')
-    expect(wrapper.find('#alias-url').exists()).toBe(false)
     expect(wrapper.find('#alias-refresh').exists()).toBe(true)
     await wrapper.get('#alias-entries').setValue('as15169\n15169, AS36040')
     await wrapper.get('form').trigger('submit')
@@ -85,118 +84,104 @@ describe('AliasDialog AS numbers', () => {
   })
 })
 
-// What Oracle's list offers, cut down.
-const ORACLE = 'https://docs.oracle.com/en-us/iaas/tools/public_ip_ranges.json'
-const oracleChoices = [
-  { field: 'region', values: ['eu-frankfurt-1', 'us-ashburn-1'] },
-  { field: 'tags', values: ['OBJECT_STORAGE', 'OCI', 'OSN'] },
-]
+const LIST = 'https://lists.example.net/drop.txt'
+const RANGES = 'https://ranges.example.net/public_ip_ranges.json'
 
-describe('AliasDialog JSON lists', () => {
+describe('AliasDialog URL lines', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.mocked(api.aliases.inspect).mockReset()
   })
 
-  /** Whether the filter is on show. */
-  const filterShown = (wrapper) => wrapper.text().includes('Keep only')
-
-  // A typed URL is read before anything is saved, and what it can be
-  // narrowed by is offered at once.
-  it('reads a typed URL and offers what it can be narrowed by', async () => {
-    vi.mocked(api.aliases.inspect).mockResolvedValue({
-      source: ORACLE,
-      entries: 1327,
-      choices: oracleChoices,
-    })
+  // Each URL line is read when the box is left, and what it holds shows
+  // under the box, one line per URL.
+  it('reads each URL line and says how much it holds', async () => {
+    const pending = []
+    vi.mocked(api.aliases.inspect).mockImplementation(
+      (url) =>
+        new Promise((resolve) =>
+          pending.push(() => resolve({ source: url, entries: url === LIST ? 1 : 1327 })),
+        ),
+    )
     const { wrapper, config } = open()
-    await wrapper.get('#alias-name').setValue('oracle')
-    expect(filterShown(wrapper)).toBe(false)
-    await wrapper.get('#alias-url').setValue(ORACLE)
-    await wrapper.get('#alias-url').trigger('change')
-    expect(api.aliases.inspect).toHaveBeenCalledWith(ORACLE)
+    await wrapper.get('#alias-name').setValue('cloud')
+    expect(wrapper.find('#alias-refresh').exists()).toBe(false)
+    await wrapper.get('#alias-entries').setValue(`203.0.113.9\n${LIST}\n${RANGES}`)
+    expect(wrapper.find('#alias-refresh').exists()).toBe(true)
+    await wrapper.get('#alias-entries').trigger('blur')
+    expect(api.aliases.inspect).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('Reading the list…')
+    pending.forEach((answer) => answer())
     await flushPromises()
-    expect(filterShown(wrapper)).toBe(true)
+    const lines = wrapper.findAll('li').map((l) => l.text())
+    expect(lines).toEqual([`${LIST} · 1 address`, `${RANGES} · 1,327 addresses`])
 
-    const tick = (value) =>
-      wrapper
-        .findAll('label')
-        .find((l) => l.text() === value)
-        .get('input')
-        .setValue(true)
-    await tick('us-ashburn-1')
-    await tick('OCI')
+    // Leaving the box again reads nothing twice.
+    await wrapper.get('#alias-entries').trigger('blur')
+    expect(api.aliases.inspect).toHaveBeenCalledTimes(2)
+
+    await wrapper.get('#alias-refresh').setValue(6)
     await wrapper.get('form').trigger('submit')
     expect(config.aliases).toEqual([
-      {
-        name: 'oracle',
-        type: 'hosts',
-        entries: [],
-        url: ORACLE,
-        select: ['region=us-ashburn-1', 'tags=OCI'],
-      },
+      { name: 'cloud', type: 'hosts', entries: ['203.0.113.9', LIST, RANGES], refreshHours: 6 },
     ])
-  })
-
-  it('stays hidden for a list with nothing to select', async () => {
-    vi.mocked(api.aliases.inspect).mockResolvedValue({ source: 'x', entries: 22, choices: [] })
-    const { wrapper } = open()
-    await wrapper.get('#alias-url').setValue('https://api.cloudflare.com/client/v4/ips')
-    await wrapper.get('#alias-url').trigger('change')
-    await flushPromises()
-    expect(filterShown(wrapper)).toBe(false)
   })
 
   it('says why it could not read a list', async () => {
     vi.mocked(api.aliases.inspect).mockRejectedValue(new ApiError(400, 'HTTP 404'))
     const { wrapper } = open()
-    await wrapper.get('#alias-url').setValue('https://example.test/gone.json')
-    await wrapper.get('#alias-url').trigger('change')
+    await wrapper.get('#alias-entries').setValue('https://example.test/gone.json')
+    await wrapper.get('#alias-entries').trigger('blur')
     await flushPromises()
     expect(wrapper.text()).toContain('Could not read the list: HTTP 404')
-    expect(filterShown(wrapper)).toBe(false)
   })
 
-  // An alias the router has fetched already says what it can be narrowed
-  // by in its status, so opening it asks the router for nothing.
-  it('uses the last fetch of a saved alias without reading the list again', () => {
-    const alias = { name: 'oracle', type: 'hosts', entries: [], url: ORACLE, select: ['tags=OCI'] }
+  // A URL may hold a comma, which would split any other line.
+  it('keeps a URL line whole, commas and all', async () => {
+    const url = 'https://lists.example.net/drop?families=v4,v6'
+    const { wrapper, config } = open()
+    await wrapper.get('#alias-name').setValue('drop')
+    await wrapper.get('#alias-entries').setValue(`${url}\n192.0.2.1, 192.0.2.2`)
+    await wrapper.get('form').trigger('submit')
+    expect(config.aliases).toEqual([
+      { name: 'drop', type: 'hosts', entries: [url, '192.0.2.1', '192.0.2.2'] },
+    ])
+  })
+
+  // The last fetch of a saved alias says what each URL held, so opening it
+  // asks the router for nothing.
+  it('uses the last fetch of a saved alias without reading the lists again', () => {
+    const alias = { name: 'cloud', type: 'hosts', entries: [LIST, RANGES] }
     const feeds = [
-      { alias: 'oracle', parts: [{ source: ORACLE, entries: 615, choices: oracleChoices }] },
+      {
+        alias: 'cloud',
+        parts: [
+          { source: LIST, entries: 3 },
+          { source: RANGES, entries: 615 },
+        ],
+      },
     ]
     const { wrapper } = open(alias, feeds)
     expect(api.aliases.inspect).not.toHaveBeenCalled()
-    expect(filterShown(wrapper)).toBe(true)
-    const oci = wrapper.findAll('label').find((l) => l.text() === 'OCI')
-    expect(oci.get('input').element.checked).toBe(true)
+    expect(wrapper.findAll('li').map((l) => l.text())).toEqual([
+      `${LIST} · 3 addresses`,
+      `${RANGES} · 615 addresses`,
+    ])
   })
 
-  // A saved selection stays on show when the list offers nothing, so it
-  // can be removed, and is dropped when the URL goes.
-  it('keeps a selection visible, and drops it with the URL', async () => {
-    const alias = {
-      name: 'oracle',
-      type: 'hosts',
-      entries: ['203.0.113.9'],
-      url: ORACLE,
-      select: ['region=us-*'],
-    }
-    const feeds = [{ alias: 'oracle', parts: [{ source: ORACLE, entries: 0 }] }]
-    const { wrapper, config } = open(alias, feeds)
-    expect(filterShown(wrapper)).toBe(true)
-    expect(wrapper.text()).toContain('region=us-*')
-
-    await wrapper.get('#alias-url').setValue('')
-    expect(filterShown(wrapper)).toBe(false)
-    await wrapper.get('form').trigger('submit')
-    expect(config.aliases).toEqual([{ name: 'oracle', type: 'hosts', entries: ['203.0.113.9'] }])
+  it('reads a saved URL line the router has not fetched yet', async () => {
+    vi.mocked(api.aliases.inspect).mockResolvedValue({ source: LIST, entries: 12 })
+    const { wrapper } = open({ name: 'cdn', type: 'hosts', entries: [LIST] })
+    expect(api.aliases.inspect).toHaveBeenCalledWith(LIST)
+    await flushPromises()
+    expect(wrapper.text()).toContain(`${LIST} · 12 addresses`)
   })
 
   it('reads nothing for somebody who cannot change the alias', async () => {
     const { wrapper } = open()
     useAuthStore().user = { username: 'v', role: 'viewer' }
-    await wrapper.get('#alias-url').setValue(ORACLE)
-    await wrapper.get('#alias-url').trigger('change')
+    await wrapper.get('#alias-entries').setValue(LIST)
+    await wrapper.get('#alias-entries').trigger('blur')
     expect(api.aliases.inspect).not.toHaveBeenCalled()
   })
 })
@@ -205,12 +190,11 @@ describe('AliasDialog round trip', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
   it('reopens a fetched alias as saved and leaves an untouched save alone', async () => {
-    vi.mocked(api.aliases.inspect).mockResolvedValue({ source: 'x', entries: 12, choices: [] })
+    vi.mocked(api.aliases.inspect).mockResolvedValue({ source: 'x', entries: 12 })
     const { wrapper, config } = open({
       name: 'cdn',
       type: 'hosts',
-      entries: [],
-      url: 'https://lists.example.net/cdn.txt',
+      entries: ['198.51.100.7', 'https://lists.example.net/cdn.txt?families=v4,v6'],
     })
     config.saved = JSON.parse(JSON.stringify(config.draft))
     expect(wrapper.get('#alias-refresh').element.value).toBe('')

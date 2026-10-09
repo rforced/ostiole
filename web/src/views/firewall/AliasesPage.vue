@@ -12,12 +12,12 @@ import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
 import UsedByCell from '@/components/UsedByCell.vue'
+import { fetches } from '@/lib/aliases'
 import { api } from '@/lib/api'
 import { canonicalAsn } from '@/lib/asn'
 import { useAsync } from '@/lib/async'
 import { COUNTRIES } from '@/lib/countries'
 import { formatCount } from '@/lib/format'
-import { someOf } from '@/lib/lists'
 import { byNumber, byText, useSort } from '@/lib/sort'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -53,10 +53,6 @@ const sort = useSort(() => config.aliases, {
 })
 const aliases = sort.sorted
 
-/** Whether the router fetches this alias: a URL, or a country or AS list. */
-function fetches(a) {
-  return Boolean(a.url) || a.type === 'geoip' || a.type === 'asn'
-}
 const anyFetched = computed(() => config.aliases.some(fetches))
 
 // A router that cannot say what it fetched just shows nothing against each alias.
@@ -194,10 +190,10 @@ async function readEntries(q, offset, limit) {
             <td class="font-mono text-code" data-label="Entries">
               <template v-if="a.type === 'geoip'">{{ countryNames(a.entries) }}</template>
               <template v-else-if="a.type === 'asn'">{{ asnNames(a) }}</template>
-              <template v-else>
+              <span v-else class="break-all">
                 {{ a.entries.slice(0, 4).join(', ')
                 }}<span v-if="a.entries.length > 4"> … ({{ a.entries.length }})</span>
-              </template>
+              </span>
               <div v-if="fetched[a.name]?.lastError" class="mt-1 font-sans text-sm text-bad">
                 {{ fetched[a.name].lastError }}
               </div>
@@ -217,14 +213,8 @@ async function readEntries(q, offset, limit) {
               </div>
               <div v-else-if="fetches(a)" class="mt-1 text-ink-muted">not fetched yet</div>
             </td>
-            <td data-label="Description" :class="{ 'max-sm:hidden': !a.description && !a.url }">
+            <td data-label="Description" :class="{ 'max-sm:hidden': !a.description }">
               {{ a.description }}
-              <div v-if="a.url" class="font-mono text-code break-all text-ink-muted">
-                {{ a.url }}
-              </div>
-              <div v-if="a.url && a.select?.length" class="text-sm text-ink-muted">
-                Keeps only <span class="font-mono">{{ someOf(a.select, 3) }}</span>
-              </div>
             </td>
             <UsedByCell :names="config.aliasReferences(a.name)" />
             <td class="actions" data-label="">

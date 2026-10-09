@@ -7,8 +7,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -115,7 +117,7 @@ func TestFetchAndCache(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config(model.Alias{Name: "drop", Type: model.AliasHosts, URL: srv.URL})
+	cfg := config(model.Alias{Name: "drop", Type: model.AliasHosts, Entries: []string{srv.URL}})
 	cache := NewCache(t.TempDir())
 	entries, sources, err := testFetcher().Fetch(context.Background(), cfg, cfg.Aliases[0])
 	if err != nil {
@@ -194,7 +196,7 @@ func TestRefreshOnlyWhenDue(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config(model.Alias{Name: "drop", Type: model.AliasHosts, URL: srv.URL, RefreshHours: 12})
+	cfg := config(model.Alias{Name: "drop", Type: model.AliasHosts, Entries: []string{srv.URL}, RefreshHours: 12})
 	r := &Refresher{
 		Cache:   NewCache(t.TempDir()),
 		Fetcher: testFetcher(),
@@ -214,7 +216,7 @@ func TestRefreshOnlyWhenDue(t *testing.T) {
 }
 
 // A list fetched for an alias as it was is not the list it asks for now: a
-// new URL or selection is fetched on the next pass, not a refresh period
+// changed or added URL is fetched on the next pass, not a refresh period
 // later, and until then the page calls the old list stale.
 func TestChangedAliasRefetches(t *testing.T) {
 	t.Parallel()
@@ -233,7 +235,7 @@ func TestChangedAliasRefetches(t *testing.T) {
 		return hits[path]
 	}
 
-	cfg := config(model.Alias{Name: "list", Type: model.AliasHosts, URL: srv.URL + "/one.json"})
+	cfg := config(model.Alias{Name: "list", Type: model.AliasHosts, Entries: []string{srv.URL + "/one.json"}})
 	r := &Refresher{
 		Cache:   NewCache(t.TempDir()),
 		Fetcher: testFetcher(),
@@ -247,7 +249,7 @@ func TestChangedAliasRefetches(t *testing.T) {
 		t.Fatalf("hits = %v, want one fetch while nothing changed", hits)
 	}
 
-	cfg.Aliases[0].URL = srv.URL + "/two.json"
+	cfg.Aliases[0].Entries = []string{srv.URL + "/two.json"}
 	if st := r.Cache.Statuses(cfg); !st[0].Stale {
 		t.Errorf("a list from the old URL is not stale: %+v", st[0])
 	}
@@ -256,16 +258,21 @@ func TestChangedAliasRefetches(t *testing.T) {
 		t.Fatalf("hits = %v, want the new URL fetched at once", hits)
 	}
 
-	cfg.Aliases[0].Select = []string{"region=b"}
+	cfg.Aliases[0].Entries = append(cfg.Aliases[0].Entries, "192.0.2.9", srv.URL+"/three.json")
 	r.Tick(ctx, false)
-	if count("/two.json") != 2 {
-		t.Fatalf("hits = %v, want a changed selection fetched at once", hits)
+	if count("/two.json") != 2 || count("/three.json") != 1 {
+		t.Fatalf("hits = %v, want an added URL fetched at once with the rest", hits)
 	}
-	if got := r.Cache.Entries()["list"]; strings.Join(got, ",") != "198.51.100.0/24" {
+	if got := r.Cache.Entries()["list"]; strings.Join(got, ",") != "192.0.2.0/24,198.51.100.0/24" {
 		t.Errorf("entries = %v", got)
 	}
+	cfg.Aliases[0].Entries = cfg.Aliases[0].Entries[:2]
 	r.Tick(ctx, false)
-	if count("/two.json") != 2 {
+	if count("/two.json") != 3 {
+		t.Fatalf("hits = %v, want a removed URL to refetch the rest", hits)
+	}
+	r.Tick(ctx, false)
+	if count("/two.json") != 3 {
 		t.Errorf("hits = %v, want nothing more once the cache matches", hits)
 	}
 	if st := r.Cache.Statuses(cfg); st[0].Stale {
@@ -300,7 +307,7 @@ func TestOldCacheIsRefetchedOnce(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "drop.json"), []byte(old), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cfg := config(model.Alias{Name: "drop", Type: model.AliasHosts, URL: srv.URL})
+	cfg := config(model.Alias{Name: "drop", Type: model.AliasHosts, Entries: []string{srv.URL}})
 	r := &Refresher{Cache: NewCache(dir), Fetcher: testFetcher(), Source: func() *model.Config { return cfg },
 		Log: slog.New(slog.DiscardHandler)}
 	r.Tick(context.Background(), false)
@@ -371,8 +378,8 @@ func TestPruneForgetsRemovedAliases(t *testing.T) {
 func TestStatusesReportStaleAndErrors(t *testing.T) {
 	t.Parallel()
 	cfg := config(
-		model.Alias{Name: "fresh", Type: model.AliasHosts, URL: "http://example.invalid/list"},
-		model.Alias{Name: "never", Type: model.AliasHosts, URL: "http://example.invalid/other"},
+		model.Alias{Name: "fresh", Type: model.AliasHosts, Entries: []string{"http://example.invalid/list"}},
+		model.Alias{Name: "never", Type: model.AliasHosts, Entries: []string{"http://example.invalid/other"}},
 		model.Alias{Name: "static", Type: model.AliasHosts, Entries: []string{"10.0.0.1"}},
 	)
 	cache := NewCache(t.TempDir())
@@ -409,8 +416,8 @@ func (s *setsFake) Apply(_ context.Context, fragment string) error {
 func TestPushLeavesAListTheCacheLacks(t *testing.T) {
 	t.Parallel()
 	cfg := config(
-		model.Alias{Name: "cached", Type: model.AliasHosts, URL: "http://example.invalid/a"},
-		model.Alias{Name: "lost", Type: model.AliasHosts, URL: "http://example.invalid/b"},
+		model.Alias{Name: "cached", Type: model.AliasHosts, Entries: []string{"http://example.invalid/a"}},
+		model.Alias{Name: "lost", Type: model.AliasHosts, Entries: []string{"http://example.invalid/b"}},
 	)
 	cache := NewCache(t.TempDir())
 	if err := cache.Save(cfg.Aliases[0], nil, []string{"192.0.2.0/24"}, time.Now()); err != nil {
@@ -430,7 +437,7 @@ func TestPushLeavesAListTheCacheLacks(t *testing.T) {
 func TestSetFragmentReplacesElements(t *testing.T) {
 	t.Parallel()
 	cfg := config(
-		model.Alias{Name: "drop", Type: model.AliasHosts, URL: "http://example.invalid/l", Entries: []string{"203.0.113.1"}},
+		model.Alias{Name: "drop", Type: model.AliasHosts, Entries: []string{"203.0.113.1", "http://example.invalid/l"}},
 		model.Alias{Name: "static", Type: model.AliasHosts, Entries: []string{"10.0.0.1"}},
 	)
 	got := SetFragment(cfg, map[string][]string{"drop": {"192.0.2.0/24", "2001:db8::/32"}})
@@ -448,6 +455,9 @@ func TestSetFragmentReplacesElements(t *testing.T) {
 	// A static alias is not touched: it was never fetched.
 	if strings.Contains(got, "alias_static") {
 		t.Errorf("a hand-written alias was in the fragment:\n%s", got)
+	}
+	if strings.Contains(got, "example.invalid") {
+		t.Errorf("a URL line reached a set:\n%s", got)
 	}
 }
 
@@ -585,5 +595,122 @@ func TestFetchReportsWhatEachCountryHeld(t *testing.T) {
 	}
 	if st[0].Entries != 3 {
 		t.Errorf("entries = %d, want the deduplicated total", st[0].Entries)
+	}
+}
+
+// A hosts alias fetches every URL line and keeps each address once; what
+// is written beside them is not a source.
+func TestFetchMergesEveryURLLine(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/drop.txt":
+			_, _ = w.Write([]byte("192.0.2.0/24 ; SBL1\n198.51.100.7\n"))
+		case "/edrop.txt":
+			_, _ = w.Write([]byte("198.51.100.7\n203.0.113.0/24\n"))
+		case "/ranges.json":
+			_, _ = w.Write([]byte(`{"prefixes": [{"ip_prefix": "203.0.113.0/24"}, {"ipv6_prefix": "2001:db8::/32"}]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	for name, tc := range map[string]struct {
+		second string
+		want   string
+	}{
+		"two text lists": {"/edrop.txt", "192.0.2.0/24,198.51.100.7,203.0.113.0/24"},
+		"text and JSON":  {"/ranges.json", "192.0.2.0/24,198.51.100.7,2001:db8::/32,203.0.113.0/24"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			cfg := config(model.Alias{Name: "drop", Type: model.AliasHosts,
+				Entries: []string{srv.URL + "/drop.txt", "203.0.113.9", srv.URL + tc.second}})
+			entries, parts, err := testFetcher().Fetch(context.Background(), cfg, cfg.Aliases[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Join(entries, ","); got != tc.want {
+				t.Errorf("entries = %s, want %s", got, tc.want)
+			}
+			want := []Part{{Source: srv.URL + "/drop.txt", Entries: 2}, {Source: srv.URL + tc.second, Entries: 2}}
+			if !slices.Equal(parts, want) {
+				t.Errorf("parts = %+v, want %+v", parts, want)
+			}
+		})
+	}
+}
+
+// One URL line failing fails the alias, which keeps the whole list it had.
+func TestOneFailingURLKeepsTheLastList(t *testing.T) {
+	t.Parallel()
+	var failing atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/edrop.txt" && failing.Load():
+			w.WriteHeader(http.StatusInternalServerError)
+		case r.URL.Path == "/edrop.txt":
+			_, _ = w.Write([]byte("198.51.100.0/24\n"))
+		default:
+			_, _ = w.Write([]byte("192.0.2.0/24\n"))
+		}
+	}))
+	defer srv.Close()
+
+	cfg := config(model.Alias{Name: "drop", Type: model.AliasHosts, Entries: []string{srv.URL + "/drop.txt", srv.URL + "/edrop.txt"}})
+	r := &Refresher{Cache: NewCache(t.TempDir()), Fetcher: testFetcher(), Source: func() *model.Config { return cfg },
+		Log: slog.New(slog.DiscardHandler)}
+	ctx := context.Background()
+	r.Tick(ctx, false)
+	const want = "192.0.2.0/24,198.51.100.0/24"
+	if got := strings.Join(r.Cache.Entries()["drop"], ","); got != want {
+		t.Fatalf("entries = %s, want %s", got, want)
+	}
+	failing.Store(true)
+	r.Tick(ctx, true)
+	if got := strings.Join(r.Cache.Entries()["drop"], ","); got != want {
+		t.Errorf("after a failed refresh entries = %s, want the last list %s", got, want)
+	}
+	st := r.Cache.Statuses(cfg)
+	if len(st) != 1 || !strings.Contains(st[0].LastError, "/edrop.txt: HTTP 500") {
+		t.Errorf("statuses = %+v", st)
+	}
+}
+
+// A list an older release kept part of by a selection is fetched again
+// whole, and then left to its schedule.
+func TestNarrowedCacheIsRefetched(t *testing.T) {
+	t.Parallel()
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		_, _ = w.Write([]byte(`{"regions": [{"region": "a", "ips": ["192.0.2.0/24"]}, {"region": "b", "ips": ["198.51.100.0/24"]}]}`))
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	source := srv.URL + "/ranges.json"
+	old := `{"alias": "cloud", "select": ["region=b"], "parts": [{"source": "` + source + `", "entries": 1}], "fetchedAt": "` +
+		time.Now().UTC().Format(time.RFC3339) + `", "entries": ["198.51.100.0/24"]}`
+	if err := os.WriteFile(filepath.Join(dir, "cloud.json"), []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config(model.Alias{Name: "cloud", Type: model.AliasHosts, Entries: []string{source}})
+	r := &Refresher{Cache: NewCache(dir), Fetcher: testFetcher(), Source: func() *model.Config { return cfg },
+		Log: slog.New(slog.DiscardHandler)}
+	if st := r.Cache.Statuses(cfg); !st[0].Stale {
+		t.Errorf("a narrowed list is not stale: %+v", st[0])
+	}
+	r.Tick(context.Background(), false)
+	r.Tick(context.Background(), false)
+	if n := hits.Load(); n != 1 {
+		t.Errorf("fetched %d times, want once", n)
+	}
+	if got := strings.Join(r.Cache.Entries()["cloud"], ","); got != "192.0.2.0/24,198.51.100.0/24" {
+		t.Errorf("entries = %s", got)
+	}
+	if !NewCache(dir).Current(cfg, cfg.Aliases[0]) {
+		t.Error("the list fetched whole still reads as narrowed")
 	}
 }

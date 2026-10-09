@@ -21,12 +21,14 @@ function toggle(name, on) {
 </script>
 
 <script>
+import { fetches } from '@/lib/aliases'
+
 /**
  * @param {object[]} aliases
  * @returns {object[]} the hosts aliases that are not fetched
  */
 export function smallAliases(aliases) {
-  return aliases.filter((a) => a.type === 'hosts' && !a.url)
+  return aliases.filter((a) => a.type === 'hosts' && !fetches(a))
 }
 
 /**

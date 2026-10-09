@@ -235,7 +235,7 @@ var routeDocs = map[string]routeDoc{
 
 	"GET /api/v1/aliases/feeds":           {summary: "When each fetched alias was last updated, and what went wrong if it did.", role: auth.RoleViewer},
 	"POST /api/v1/aliases/feeds/refresh":  {summary: "Fetch every address list, country list and AS list now.", role: auth.RoleOperator},
-	"POST /api/v1/aliases/inspect":        {summary: "Read a list before an alias names it: how many addresses it holds and what it can be narrowed by. An operator's URL has to be on a public address unless the router already fetches it.", role: auth.RoleOperator},
+	"POST /api/v1/aliases/inspect":        {summary: "Read a list before an alias names it: how many addresses it holds. An operator's URL has to be on a public address unless the router already fetches it.", role: auth.RoleOperator},
 	"POST /api/v1/aliases/{name}/refresh": {summary: "Fetch one alias now.", role: auth.RoleOperator},
 	"GET /api/v1/aliases/{name}/entries":  {summary: "A page of what a fetched alias holds, in address order. q searches it, and an address finds the networks that hold it. offset and limit page through it, 100 at a time unless limit says otherwise.", role: auth.RoleViewer},
 

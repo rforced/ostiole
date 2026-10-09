@@ -150,8 +150,9 @@ func splitFamilies(addrs []string) (v4, v6 []string) {
 }
 
 // entriesOf is what an alias puts in its set: what is written in the
-// configuration, or what was fetched for it. A country or AS alias holds
-// keys, never addresses, so only the fetched side counts.
+// configuration, less its URL lines, and what was fetched for it. A
+// country or AS alias holds keys, never addresses, so only the fetched
+// side counts.
 func (r *renderer) entriesOf(a model.Alias) []string {
 	if !a.Fetched() {
 		return a.Entries
@@ -160,7 +161,7 @@ func (r *renderer) entriesOf(a model.Alias) []string {
 	if a.Keyed() {
 		return fetched
 	}
-	return append(append([]string{}, a.Entries...), fetched...)
+	return append(a.Written(), fetched...)
 }
 
 func (r *renderer) sets() {

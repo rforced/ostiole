@@ -93,18 +93,13 @@ func TestInspectReadsAList(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("inspect: %d %s", resp.StatusCode, raw)
 	}
-	var part feeds.Part
-	if err := json.Unmarshal(raw, &part); err != nil {
-		t.Fatal(err)
-	}
-	if part.Entries != 3 || len(part.Choices) != 1 || part.Choices[0].Field != "region" ||
-		strings.Join(part.Choices[0].Values, ",") != "a,b" {
-		t.Errorf("JSON list = %s", raw)
+	if got, want := strings.TrimSpace(string(raw)), `{"source":"`+lists.URL+`/ranges.json","entries":3}`; got != want {
+		t.Errorf("JSON list = %s, want %s", got, want)
 	}
 
 	resp, raw = do(t, srv, http.MethodPost, "/api/v1/aliases/inspect", map[string]string{"url": lists.URL + "/drop.txt"})
-	if resp.StatusCode != http.StatusOK || !strings.Contains(string(raw), `"entries":2`) || strings.Contains(string(raw), "choices") {
-		t.Errorf("text list: %d %s", resp.StatusCode, raw)
+	if got, want := strings.TrimSpace(string(raw)), `{"source":"`+lists.URL+`/drop.txt","entries":2}`; resp.StatusCode != http.StatusOK || got != want {
+		t.Errorf("text list: %d %s, want %s", resp.StatusCode, got, want)
 	}
 
 	for _, u := range []string{"ftp://example.test/list", "not a url", lists.URL + "/gone"} {
@@ -145,7 +140,7 @@ func TestInspectKeepsAnOperatorToPublicAddresses(t *testing.T) {
 
 	login(t, srv, "admin")
 	cfg := starter()
-	cfg.Aliases = []model.Alias{{Name: "cloud", Type: model.AliasHosts, URL: source}}
+	cfg.Aliases = []model.Alias{{Name: "cloud", Type: model.AliasHosts, Entries: []string{lists.URL + "/drop.txt", "192.0.2.1", source}}}
 	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}
@@ -167,7 +162,7 @@ func TestAViewerReadsListURLsWithoutTheirKeys(t *testing.T) {
 	})
 	cfg := model.Starter(model.StarterOptions{Hostname: "fw", LAN: "eth1", LANAddress: "10.0.0.1/24", WAN: "eth0",
 		Services: true, DNSUpstreams: []string{"192.0.2.53"}})
-	cfg.Aliases = []model.Alias{{Name: "partners", Type: model.AliasHosts, URL: "https://lists.example.com/drop.txt?token=list-key-1"}}
+	cfg.Aliases = []model.Alias{{Name: "partners", Type: model.AliasHosts, Entries: []string{"192.0.2.1", "https://lists.example.com/drop.txt?token=list-key-1"}}}
 	cfg.Blocking.Enabled = true
 	cfg.Blocking.Lists = []model.BlockList{{Name: "private", Enabled: true, URL: "https://bob:list-pass-2@lists.example.com/block.txt"}}
 	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
@@ -202,7 +197,7 @@ func TestAViewerReadsListURLsWithoutTheirKeys(t *testing.T) {
 }
 
 // An apply or a revert has the refresher look at once, so an alias whose
-// URL or selection changed does not keep the old list until its next tick.
+// URLs changed does not keep the old list until its next tick.
 func TestApplyAndRevertWakeTheRefresher(t *testing.T) {
 	t.Parallel()
 	lists, hits := listServer(t)
@@ -222,7 +217,7 @@ func TestApplyAndRevertWakeTheRefresher(t *testing.T) {
 	wait("the first apply")
 
 	cfg := starter()
-	cfg.Aliases = []model.Alias{{Name: "cloud", Type: model.AliasHosts, URL: lists.URL + "/ranges.json", Select: []string{"region=b"}}}
+	cfg.Aliases = []model.Alias{{Name: "cloud", Type: model.AliasHosts, Entries: []string{lists.URL + "/ranges.json"}}}
 	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg), ConfirmTimeoutSeconds: 60}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply with the alias: %d %s", resp.StatusCode, raw)
 	}
@@ -232,7 +227,7 @@ func TestApplyAndRevertWakeTheRefresher(t *testing.T) {
 	}
 	_, raw := do(t, srv, http.MethodGet, "/api/v1/aliases/feeds", nil)
 	var st []feeds.Status
-	if err := json.Unmarshal(raw, &st); err != nil || len(st) != 1 || st[0].Entries != 2 || st[0].Stale || len(st[0].Parts[0].Choices) != 1 {
+	if err := json.Unmarshal(raw, &st); err != nil || len(st) != 1 || st[0].Entries != 3 || st[0].Stale || len(st[0].Parts) != 1 {
 		t.Fatalf("feeds = %s (%v)", raw, err)
 	}
 
@@ -249,7 +244,7 @@ func TestAFetchedAliasCanBeRead(t *testing.T) {
 	lists, _ := listServer(t)
 	srv, passes := newFeedServer(t)
 	cfg := starter()
-	cfg.Aliases = []model.Alias{{Name: "drop", Type: model.AliasHosts, URL: lists.URL + "/drop.txt"}}
+	cfg.Aliases = []model.Alias{{Name: "drop", Type: model.AliasHosts, Entries: []string{lists.URL + "/drop.txt"}}}
 	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
 	}

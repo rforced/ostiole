@@ -156,6 +156,30 @@ var migrations = map[int]func(doc map[string]any){
 			}
 		}
 	},
+	// 14 split DNS enforcement's exempt alias into clients and destinations;
+	// the one there was matched clients. An alias's URL became one of its
+	// entries, and the selection of a JSON list went.
+	13: func(doc map[string]any) {
+		if enforce := object(doc, "blocking", "enforce"); enforce != nil {
+			if name, ok := enforce["exemptAlias"]; ok {
+				enforce["exemptClients"] = name
+				delete(enforce, "exemptAlias")
+			}
+		}
+		aliases, _ := doc["aliases"].([]any)
+		for _, item := range aliases {
+			alias, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			if u, _ := alias["url"].(string); u != "" && (alias["type"] == "hosts" || alias["type"] == "ports") {
+				entries, _ := alias["entries"].([]any)
+				alias["entries"] = append(entries, u)
+			}
+			delete(alias, "url")
+			delete(alias, "select")
+		}
+	},
 }
 
 // Migrate brings a configuration written at an older version up to

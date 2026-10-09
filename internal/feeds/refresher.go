@@ -70,8 +70,8 @@ func (r *Refresher) Run(ctx context.Context) {
 }
 
 // Wake asks Run for a pass now rather than at the next tick. An apply
-// calls it, so an alias whose source or selection changed follows within
-// seconds. Two Wakes before the pass ask for one pass.
+// calls it, so an alias whose sources changed follows within seconds. Two
+// Wakes before the pass ask for one pass.
 func (r *Refresher) Wake() {
 	select {
 	case r.woken() <- struct{}{}:
@@ -167,8 +167,8 @@ func (r *Refresher) refresh(ctx context.Context, cfg *model.Config, a model.Alia
 }
 
 // due reports whether an alias has gone long enough without a fetch, or
-// has changed since the one it has: a new URL, country, number or
-// selection is fetched on the next pass, not a refresh period later.
+// has changed since the one it has: a new URL, country or number is
+// fetched on the next pass, not a refresh period later.
 func (r *Refresher) due(cfg *model.Config, a model.Alias) bool {
 	at, ok := r.Cache.FetchedAt(a.Name)
 	if !ok || !r.Cache.Current(cfg, a) {
@@ -230,7 +230,7 @@ func setFragment(cfg *model.Config, entries map[string][]string, cachedOnly bool
 			continue
 		}
 		if !a.Keyed() {
-			list = append(append([]string{}, a.Entries...), list...)
+			list = append(a.Written(), list...)
 		}
 		replace(nft.AliasSets(a, list))
 	}

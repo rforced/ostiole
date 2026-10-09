@@ -1,5 +1,5 @@
 {
-  "version": 13,
+  "version": 14,
   "system": { "hostname": "gateway", "management": { "webPort": 443, "sshPort": 22 } },
   "zones": [{ "name": "wan", "external": true }, { "name": "lan", "antiLockout": true }, { "name": "guest" }],
   "interfaces": [

@@ -1,5 +1,5 @@
 {
-  "version": 13,
+  "version": 14,
   "system": {
     "hostname": "blocker",
     "management": {
@@ -49,9 +49,10 @@
       "name": "doh_servers",
       "type": "hosts",
       "description": "Public DNS over HTTPS resolvers",
-      "url": "https://example.test/doh-ipv4.txt",
       "refreshHours": 24,
-      "entries": []
+      "entries": [
+        "https://example.test/doh-ipv4.txt"
+      ]
     },
     {
       "name": "resolver_exempt",
@@ -113,7 +114,7 @@
       "blockDot": true,
       "dohAlias": "doh_servers",
       "firefoxCanary": true,
-      "exemptAlias": "resolver_exempt"
+      "exemptClients": "resolver_exempt"
     }
   }
 }

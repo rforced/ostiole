@@ -65,7 +65,7 @@ func TestRedactedBlanksProviderSecrets(t *testing.T) {
 func TestRedactedHidesCredentialsInURLs(t *testing.T) {
 	t.Parallel()
 	const credentialed = "https://alice:hunter2@lists.example.com/{country}.txt?licence_key=abc123&api-token=def456&edition=lite"
-	cfg := &Config{}
+	cfg := &Config{Aliases: []Alias{{Name: "feed", Type: AliasHosts, Entries: []string{"192.0.2.1", credentialed}}}}
 	filled := walkURLs(reflect.ValueOf(cfg).Elem(), "", nil, credentialed)
 	if len(filled) < 8 {
 		t.Fatalf("filled %v; the walk is broken", filled)
@@ -74,8 +74,12 @@ func TestRedactedHidesCredentialsInURLs(t *testing.T) {
 	for _, path := range walkURLs(reflect.ValueOf(redacted).Elem(), "", nil, "") {
 		t.Errorf("Redacted() left a credential in %s", path)
 	}
-	if got, want := redacted.Aliases[0].URL, "https://lists.example.com/{country}.txt?licence_key=&api-token=&edition=lite"; got != want {
-		t.Errorf("alias URL = %q, want %q", got, want)
+	want := []string{"192.0.2.1", "https://lists.example.com/{country}.txt?licence_key=&api-token=&edition=lite"}
+	if got := redacted.Aliases[0].Entries; !slices.Equal(got, want) {
+		t.Errorf("alias entries = %q, want %q", got, want)
+	}
+	if cfg.Aliases[0].Entries[1] != credentialed {
+		t.Error("redacting changed the configuration it copied")
 	}
 }
 

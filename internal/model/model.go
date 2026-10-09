@@ -25,10 +25,12 @@ import (
 // backup cron's "directory", since every one writes to the same place;
 // version 12 dropped the Drupal, phpMyAdmin, cPanel and DokuWiki
 // exclusion sets; version 13 replaced each log's "days" with one "days"
-// under "logging" for every log in memory. A bump adds a step to
+// under "logging" for every log in memory; version 14 renamed DNS
+// enforcement's "exemptAlias" to "exemptClients" and moved an alias's
+// "url" into its entries, dropping "select". A bump adds a step to
 // migrations, which brings a file from version 6 on up to date as it is
 // read; an older one needs each change made by hand.
-const SchemaVersion = 13
+const SchemaVersion = 14
 
 // Action is a rule verdict.
 type Action string
@@ -1290,24 +1292,15 @@ type Alias struct {
 	Name        string    `json:"name"`
 	Type        AliasType `json:"type"`
 	Description string    `json:"description,omitempty"`
-	// Entries are the addresses or ports, written here. For a geoip alias
-	// they are ISO country codes and for an asn alias AS numbers instead,
-	// and for a URL alias they are extra entries kept alongside whatever
-	// is fetched.
+	// Entries are what the alias holds. A hosts alias lists addresses,
+	// networks and the URLs of published lists, which are fetched and
+	// cached on disk, so a router that boots without a working line still
+	// has the lists it had yesterday. A geoip alias lists ISO country codes
+	// and an asn alias AS numbers instead.
 	Entries []string `json:"entries"`
-	// URL fetches the entries from a published list. The result is cached
-	// on disk, so a router that boots without a working line still has the
-	// list it had yesterday.
-	URL string `json:"url,omitempty"`
 	// RefreshHours is how often to fetch; zero means once a day. Nothing
 	// is fetched more than once an hour.
 	RefreshHours int `json:"refreshHours,omitempty"`
-	// Select keeps part of a JSON list. "region=us-ashburn-1" keeps the
-	// addresses inside an object whose region is us-ashburn-1, and a bare
-	// name such as "hooks" those listed under that key. Conditions on the
-	// same field are alternatives; different fields must all hold. Case is
-	// ignored, and * in a value matches any run of characters.
-	Select []string `json:"select,omitempty"`
 }
 
 // Keyed reports whether the written entries are lookup keys, country
@@ -1316,11 +1309,33 @@ type Alias struct {
 func (a Alias) Keyed() bool { return a.Type == AliasGeoIP || a.Type == AliasASN }
 
 // Fetched reports whether this alias takes its contents from elsewhere.
-func (a Alias) Fetched() bool { return a.URL != "" || a.Keyed() }
+func (a Alias) Fetched() bool { return a.Keyed() || slices.ContainsFunc(a.Entries, IsURLEntry) }
 
-// Selectable reports whether Select applies: a hosts alias fetched from a
-// URL.
-func (a Alias) Selectable() bool { return a.Type == AliasHosts && a.URL != "" }
+// URLs are the entries that name a list to fetch.
+func (a Alias) URLs() []string {
+	var out []string
+	for _, e := range a.Entries {
+		if IsURLEntry(e) {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// Written are the entries that are not URLs.
+func (a Alias) Written() []string {
+	var out []string
+	for _, e := range a.Entries {
+		if !IsURLEntry(e) {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// IsURLEntry reports whether an alias entry is a URL rather than an
+// address, a port or a key.
+func IsURLEntry(e string) bool { return strings.Contains(e, "://") }
 
 // Rule is one firewall rule, evaluated within its zone in order.
 type Rule struct {

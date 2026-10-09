@@ -47,6 +47,18 @@ type validator struct {
 	issues []Issue
 }
 
+// urlEntry checks a list's URL line: http or https with a host, no spaces,
+// listed once.
+func (v *validator) urlEntry(at, e string, seen map[string]bool) {
+	u, err := url.Parse(e)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || strings.ContainsFunc(e, unicode.IsSpace) {
+		v.add(at, "%q must be an http or https URL", e)
+	} else if seen[e] {
+		v.add(at, "%s is listed twice", RedactURL(e))
+	}
+	seen[e] = true
+}
+
 func (v *validator) add(path, format string, args ...any) {
 	v.issues = append(v.issues, Issue{Path: path, Message: fmt.Sprintf(format, args...)})
 }
@@ -159,15 +171,23 @@ func (c *Config) Validate() error {
 		aliases[a.Name] = a.Type
 		switch a.Type {
 		case AliasHosts:
+			urls := map[string]bool{}
 			for j, e := range a.Entries {
-				if _, err := ParseAddress(e); err != nil {
-					v.add(fmt.Sprintf("%s.entries[%d]", path, j), "%v", err)
+				at := fmt.Sprintf("%s.entries[%d]", path, j)
+				if IsURLEntry(e) {
+					v.urlEntry(at, e, urls)
+				} else if _, err := ParseAddress(e); err != nil {
+					v.add(at, "%v", err)
 				}
 			}
 		case AliasPorts:
+			urls := map[string]bool{}
 			for j, e := range a.Entries {
-				if _, err := ParsePortRange(e); err != nil {
-					v.add(fmt.Sprintf("%s.entries[%d]", path, j), "%v", err)
+				at := fmt.Sprintf("%s.entries[%d]", path, j)
+				if IsURLEntry(e) {
+					v.urlEntry(at, e, urls)
+				} else if _, err := ParsePortRange(e); err != nil {
+					v.add(at, "%v", err)
 				}
 			}
 		case AliasGeoIP:
@@ -175,12 +195,12 @@ func (c *Config) Validate() error {
 				v.add(path+".entries", "list the countries as two-letter codes, like de or fr")
 			}
 			for j, e := range a.Entries {
-				if !countryRe.MatchString(e) {
-					v.add(fmt.Sprintf("%s.entries[%d]", path, j), "%q is not a two-letter country code", e)
+				at := fmt.Sprintf("%s.entries[%d]", path, j)
+				if IsURLEntry(e) {
+					v.add(at, "a country alias fetches from the GeoIP source")
+				} else if !countryRe.MatchString(e) {
+					v.add(at, "%q is not a two-letter country code", e)
 				}
-			}
-			if a.URL != "" {
-				v.add(path+".url", "a country alias fetches from the GeoIP source")
 			}
 		case AliasASN:
 			if len(a.Entries) == 0 {
@@ -188,29 +208,25 @@ func (c *Config) Validate() error {
 			}
 			numbers := map[uint32]bool{}
 			for j, e := range a.Entries {
+				at := fmt.Sprintf("%s.entries[%d]", path, j)
+				if IsURLEntry(e) {
+					v.add(at, "an AS alias fetches from the ASN source")
+					continue
+				}
 				n, err := ParseASN(e)
 				if err != nil {
-					v.add(fmt.Sprintf("%s.entries[%d]", path, j), "%v", err)
+					v.add(at, "%v", err)
 				} else if numbers[n] {
-					v.add(fmt.Sprintf("%s.entries[%d]", path, j), "%s is listed twice", FormatASN(n))
+					v.add(at, "%s is listed twice", FormatASN(n))
 				}
 				numbers[n] = true
-			}
-			if a.URL != "" {
-				v.add(path+".url", "an AS alias fetches from the ASN source")
 			}
 		default:
 			v.add(path+".type", "unknown alias type %q", a.Type)
 		}
-		if a.URL != "" {
-			if u, err := url.Parse(a.URL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
-				v.add(path+".url", "%q must be an http or https URL", a.URL)
-			}
-		}
 		if a.RefreshHours < 0 || a.RefreshHours > 24*30 {
 			v.add(path+".refreshHours", "%d must be 0-720 (0 means once a day)", a.RefreshHours)
 		}
-		v.aliasSelect(path, a)
 	}
 
 	schedules := map[string]bool{}
@@ -629,7 +645,8 @@ func (v *validator) blocking(c *Config, aliases map[string]AliasType) {
 
 	for _, ref := range []struct{ field, name string }{
 		{"dohAlias", b.Enforce.DoHAlias},
-		{"exemptAlias", b.Enforce.ExemptAlias},
+		{"exemptClients", b.Enforce.ExemptClients},
+		{"exemptDestinations", b.Enforce.ExemptDestinations},
 	} {
 		if ref.name == "" {
 			continue
@@ -2996,39 +3013,6 @@ func joinLogLevels() string {
 		out = append(out, string(l))
 	}
 	return strings.Join(out, ", ")
-}
-
-// aliasSelect checks the conditions that keep part of a fetched JSON list.
-func (v *validator) aliasSelect(path string, a Alias) {
-	if len(a.Select) == 0 {
-		return
-	}
-	if !a.Selectable() {
-		v.add(path+".select", "only a hosts alias with a URL can keep part of what it fetches")
-		return
-	}
-	if len(a.Select) > MaxSelect {
-		v.add(path+".select", "at most %d conditions", MaxSelect)
-	}
-	seen := map[string]bool{}
-	fields := map[string]bool{}
-	for j, s := range a.Select {
-		at := fmt.Sprintf("%s.select[%d]", path, j)
-		c, err := ParseCondition(s)
-		if err != nil {
-			v.add(at, "%v", err)
-			continue
-		}
-		key := strings.ToLower(c.String())
-		if seen[key] {
-			v.add(at, "%s is listed twice", c)
-		}
-		seen[key] = true
-		fields[strings.ToLower(c.Field)] = true
-	}
-	if len(fields) > MaxSelectFields {
-		v.add(path+".select", "conditions on at most %d different fields", MaxSelectFields)
-	}
 }
 
 // dnsmasqTimeRe is anything dnsmasq reads as a lease time: seconds, or a

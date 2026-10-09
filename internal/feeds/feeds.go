@@ -65,7 +65,7 @@ type Status struct {
 	LastTriedAt *time.Time `json:"lastTriedAt,omitempty"`
 	// Stale is true when the cache is older than the refresh period, which
 	// usually means the router cannot reach the publisher, or was fetched
-	// before the alias's source or selection changed.
+	// before the alias's sources changed.
 	Stale bool `json:"stale"`
 }
 
@@ -81,18 +81,14 @@ type Part struct {
 	// Holder is who that AS belongs to, when the names lookup answered.
 	Holder  string `json:"holder,omitempty"`
 	Entries int    `json:"entries"`
-	// Choices is what a JSON list can be narrowed by, for an alias that
-	// can select.
-	Choices []Choice `json:"choices,omitempty"`
 }
 
 // cached is the on-disk form. It is a cache: a file written by an older
 // version simply has no breakdown until the next refresh fills one in.
 type cached struct {
 	Alias string `json:"alias"`
-	// Select is the selection the entries were kept by. With the sources
-	// in Parts, it tells a list fetched for the alias as it is now from
-	// one fetched before it changed.
+	// Select is the part of a JSON list an older release kept. A list
+	// kept by one is fetched again whole.
 	Select    []string  `json:"select,omitempty"`
 	Parts     []Part    `json:"parts,omitempty"`
 	FetchedAt time.Time `json:"fetchedAt"`
@@ -100,10 +96,10 @@ type cached struct {
 }
 
 // fetchedFor reports whether a cached list is what the alias asks for now:
-// fetched from the same sources and kept by the same selection. One fetched
-// before its URL, countries, numbers or selection changed is not.
+// fetched whole from the same sources. One fetched before its URLs,
+// countries or numbers changed is not.
 func (f cached) fetchedFor(cfg *model.Config, a model.Alias) bool {
-	if !slices.Equal(f.Select, a.Select) {
+	if len(f.Select) > 0 {
 		return false
 	}
 	want := Sources(cfg, a)
@@ -180,10 +176,10 @@ func (c *Cache) path(alias string) string {
 	return filepath.Join(c.Dir, safeName(alias)+".json")
 }
 
-// Save records what an alias fetched: the entries, what each source
-// contributed, and the selection they were kept by.
+// Save records what an alias fetched: the entries and what each source
+// contributed.
 func (c *Cache) Save(a model.Alias, parts []Part, entries []string, when time.Time) error {
-	f := cached{Alias: a.Name, Select: a.Select, Parts: parts, FetchedAt: when.UTC().Truncate(time.Second), Entries: entries}
+	f := cached{Alias: a.Name, Parts: parts, FetchedAt: when.UTC().Truncate(time.Second), Entries: entries}
 	raw, err := json.Marshal(f)
 	if err != nil {
 		return err
@@ -330,7 +326,7 @@ func RefreshPeriod(a model.Alias) time.Duration {
 	return d
 }
 
-// Sources lists the URLs an alias is built from: its own, one per
+// Sources lists the URLs an alias is built from: its URL lines, one per
 // country and address family for a GeoIP alias, or one per number for an
 // AS alias.
 func Sources(cfg *model.Config, a model.Alias) []string {
@@ -374,10 +370,11 @@ func SourceParts(cfg *model.Config, a model.Alias) []Part {
 		return out
 	}
 	if a.Type != model.AliasGeoIP {
-		if a.URL == "" {
-			return nil
+		var out []Part
+		for _, u := range a.URLs() {
+			out = append(out, Part{Source: u})
 		}
-		return []Part{{Source: a.URL}}
+		return out
 	}
 	v4, v6 := cfg.System.GeoIPTemplates()
 	var out []Part
@@ -430,7 +427,7 @@ func (f *Fetcher) Fetch(ctx context.Context, cfg *model.Config, a model.Alias) (
 	seen := map[string]bool{}
 	var out []string
 	for i := range parts {
-		entries, choices, err := f.one(ctx, parts[i].Source, a)
+		entries, err := f.one(ctx, parts[i].Source, a.Type)
 		if err != nil {
 			return nil, parts, fmt.Errorf("%s: %w", model.RedactURL(parts[i].Source), err)
 		}
@@ -438,9 +435,6 @@ func (f *Fetcher) Fetch(ctx context.Context, cfg *model.Config, a model.Alias) (
 		// first: the question is how big this country is, not how much of
 		// it arrived here first.
 		parts[i].Entries = len(entries)
-		if a.Selectable() {
-			parts[i].Choices = choices
-		}
 		for _, e := range entries {
 			if seen[e] {
 				continue
@@ -459,17 +453,17 @@ func (f *Fetcher) Fetch(ctx context.Context, cfg *model.Config, a model.Alias) (
 	return out, parts, nil
 }
 
-func (f *Fetcher) one(ctx context.Context, url string, a model.Alias) ([]string, []Choice, error) {
+func (f *Fetcher) one(ctx context.Context, url string, typ model.AliasType) ([]string, error) {
 	raw, err := f.get(ctx, url, fetch.Named)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return read(raw, a)
+	return read(raw, typ)
 }
 
-// Inspect reads a list without keeping it: how many addresses it holds
-// and what it can be narrowed by. The alias dialog asks as soon as a URL
-// is typed, so the selection can be offered before anything is saved.
+// Inspect reads a list without keeping it, to say how many addresses it
+// holds. The alias dialog asks as soon as a URL line is typed, before
+// anything is saved.
 // With publicOnly, it connects only to public addresses that are not this
 // router's own; without, wherever an applied alias would.
 func (f *Fetcher) Inspect(ctx context.Context, url string, publicOnly bool) (Part, error) {
@@ -488,29 +482,25 @@ func (f *Fetcher) Inspect(ctx context.Context, url string, publicOnly bool) (Par
 	if err != nil {
 		return Part{}, err
 	}
-	entries, choices, err := read(raw, model.Alias{Type: model.AliasHosts, URL: url})
+	entries, err := read(raw, model.AliasHosts)
 	if err != nil {
 		return Part{}, err
 	}
-	return Part{Source: url, Entries: len(entries), Choices: choices}, nil
+	return Part{Source: url, Entries: len(entries)}, nil
 }
 
 // read picks the parser by what came back. The default AS source answers
 // in JSON of its own, and a mirror serving a plain list of prefixes reads
 // like any other list. Any other JSON is searched for addresses.
-func read(raw []byte, a model.Alias) ([]string, []Choice, error) {
+func read(raw []byte, typ model.AliasType) ([]string, error) {
 	raw = bytes.TrimPrefix(raw, bom)
 	switch {
-	case a.Type == model.AliasASN && bytes.HasPrefix(bytes.TrimSpace(raw), []byte("{")):
-		entries, err := parseAnnounced(raw)
-		return entries, nil, err
-	case a.Type.HoldsAddresses() && isJSON(raw):
-		return ParseJSON(raw, a.Select)
-	case len(a.Select) > 0:
-		return nil, nil, errors.New("this list is plain text, so there is nothing in it to select")
+	case typ == model.AliasASN && bytes.HasPrefix(bytes.TrimSpace(raw), []byte("{")):
+		return parseAnnounced(raw)
+	case typ.HoldsAddresses() && isJSON(raw):
+		return ParseJSON(raw)
 	}
-	entries, err := Parse(string(raw), a.Type)
-	return entries, nil, err
+	return Parse(string(raw), typ)
 }
 
 // get downloads one URL from where reach allows, bounded by the timeout

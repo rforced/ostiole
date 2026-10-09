@@ -1,5 +1,5 @@
 {
-  "version": 13,
+  "version": 14,
   "system": {
     "hostname": "logger",
     "management": {
@@ -51,9 +51,10 @@
       "name": "doh_servers",
       "type": "hosts",
       "description": "Public DNS over HTTPS resolvers",
-      "url": "https://example.test/doh-ipv4.txt",
       "refreshHours": 24,
-      "entries": []
+      "entries": [
+        "https://example.test/doh-ipv4.txt"
+      ]
     }
   ],
   "protection": {

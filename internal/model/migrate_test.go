@@ -24,6 +24,30 @@ func older(t *testing.T, cfg *Config) []byte {
 		t.Fatal(err)
 	}
 	doc["version"] = oldestMigrated
+	// 14 split the exempt alias in two; the one there was matched clients.
+	// An alias's one URL was a field of its own, beside a selection.
+	if enforce := object(doc, "blocking", "enforce"); enforce != nil {
+		if name, ok := enforce["exemptClients"]; ok {
+			enforce["exemptAlias"] = name
+			delete(enforce, "exemptClients")
+		}
+	}
+	if aliases, ok := doc["aliases"].([]any); ok {
+		for _, item := range aliases {
+			alias := item.(map[string]any)
+			entries, _ := alias["entries"].([]any)
+			kept := []any{}
+			for _, e := range entries {
+				if s, _ := e.(string); IsURLEntry(s) {
+					alias["url"] = s
+					alias["select"] = []any{"region=us-east-1"}
+				} else {
+					kept = append(kept, e)
+				}
+			}
+			alias["entries"] = kept
+		}
+	}
 	// 13 put every log's days in memory under logging; each log had its own.
 	if logging := object(doc, "system", "logging"); logging != nil {
 		if days, ok := logging["days"]; ok {
@@ -110,6 +134,9 @@ func TestParseConfigBringsAnOlderFileUpToDate(t *testing.T) {
 	want.Services.DNS.QueryLog = QueryLog{Enabled: true, Entries: 5000}
 	want.System.Logging.Days = 30
 	want.Crons = []Cron{{ID: "nightly", Enabled: true, Schedule: "@daily", Kind: CronBackup, Keep: 3}}
+	want.Aliases = append(want.Aliases, Alias{Name: "resolver_exempt", Type: AliasHosts, Entries: []string{"192.168.1.9"}},
+		Alias{Name: "drop", Type: AliasHosts, Entries: []string{"198.51.100.7", "https://lists.example.net/drop.txt"}, RefreshHours: 12})
+	want.Blocking.Enforce.ExemptClients = "resolver_exempt"
 	got, err := ParseConfig(older(t, want))
 	if err != nil {
 		t.Fatal(err)
@@ -307,5 +334,50 @@ func TestMigrateGathersTheLogDays(t *testing.T) {
 		cfg.System.Management.FirewallLog != (FirewallLog{Entries: 1000}) {
 		t.Errorf("logging %+v, firewall log %+v, %v; want the level kept beside 3 days and the entries kept",
 			cfg.System.Logging, cfg.System.Management.FirewallLog, err)
+	}
+}
+
+// The one exempt alias there was matched clients, so it becomes the clients
+// one, and a strict decode of the result finds nothing it does not know.
+func TestMigrateRenamesTheExemptAlias(t *testing.T) {
+	t.Parallel()
+	raw := `{"version":13,"blocking":{"enforce":{"blockDot":true,"exemptAlias":"resolver_exempt"}}}`
+	dec := json.NewDecoder(bytes.NewReader(Migrate([]byte(raw))))
+	dec.DisallowUnknownFields()
+	var cfg Config
+	if err := dec.Decode(&cfg); err != nil {
+		t.Fatal(err)
+	}
+	want := DNSEnforce{BlockDoT: true, ExemptClients: "resolver_exempt"}
+	if cfg.Blocking.Enforce != want {
+		t.Errorf("enforce = %+v, want %+v", cfg.Blocking.Enforce, want)
+	}
+}
+
+// An alias's URL becomes its last entry and a selection goes, so a strict
+// decode of the result finds nothing it does not know.
+func TestMigrateMovesAliasURLsIntoEntries(t *testing.T) {
+	t.Parallel()
+	raw := `{"version":13,"aliases":[
+		{"name":"drop","type":"hosts","entries":["192.0.2.1"],"url":"https://lists.example.net/drop.txt","refreshHours":12},
+		{"name":"cloud","type":"hosts","entries":null,"url":"https://lists.example.net/ranges.json","select":["region=us-east-1"]},
+		{"name":"feed","type":"hosts","url":"https://lists.example.net/feed.txt"},
+		{"name":"office","type":"hosts","entries":["198.51.100.0/24"],"url":""},
+		{"name":"games","type":"ports","entries":["27015"],"url":"https://lists.example.net/ports.txt"}]}`
+	dec := json.NewDecoder(bytes.NewReader(Migrate([]byte(raw))))
+	dec.DisallowUnknownFields()
+	var cfg Config
+	if err := dec.Decode(&cfg); err != nil {
+		t.Fatal(err)
+	}
+	want := []Alias{
+		{Name: "drop", Type: AliasHosts, Entries: []string{"192.0.2.1", "https://lists.example.net/drop.txt"}, RefreshHours: 12},
+		{Name: "cloud", Type: AliasHosts, Entries: []string{"https://lists.example.net/ranges.json"}},
+		{Name: "feed", Type: AliasHosts, Entries: []string{"https://lists.example.net/feed.txt"}},
+		{Name: "office", Type: AliasHosts, Entries: []string{"198.51.100.0/24"}},
+		{Name: "games", Type: AliasPorts, Entries: []string{"27015", "https://lists.example.net/ports.txt"}},
+	}
+	if !reflect.DeepEqual(cfg.Aliases, want) {
+		t.Errorf("aliases = %+v\nwant %+v", cfg.Aliases, want)
 	}
 }

@@ -783,7 +783,7 @@ describe('Allow from', () => {
     const draft = config({
       aliases: [
         { name: 'office', type: 'hosts', entries: ['198.51.100.0/24'] },
-        { name: 'feed', type: 'hosts', url: 'https://example.com/list' },
+        { name: 'feed', type: 'hosts', entries: ['https://example.com/list'] },
         { name: 'us', type: 'geoip', entries: ['us'] },
       ],
       services: { proxy: proxy({ routes: [route] }) },

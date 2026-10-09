@@ -26,7 +26,7 @@ func TestRefreshedListReachesTheKernel(t *testing.T) {
 
 	cfg := config(model.Alias{
 		Name: "drop", Type: model.AliasHosts,
-		URL: "http://example.invalid/list", Entries: []string{"203.0.113.1"},
+		Entries: []string{"203.0.113.1", "http://example.invalid/list"},
 	})
 	cfg.Rules = []model.Rule{{
 		ID: "drop-listed", Enabled: true, Zone: "wan", Action: model.ActionDrop,

@@ -106,7 +106,7 @@ func (a *api) refreshFeed(w http.ResponseWriter, r *http.Request) error {
 }
 
 // inspectFeed reads a list before an alias names it, so the alias dialog
-// can offer what the list can be narrowed by as soon as a URL is typed. It
+// can say how many addresses a URL line holds as soon as it is typed. It
 // fetches the one URL it is given, the way a refresh would.
 func (a *api) inspectFeed(w http.ResponseWriter, r *http.Request) error {
 	if a.feeds == nil {
@@ -152,7 +152,7 @@ func (a *api) fetches(source string) bool {
 }
 
 // wakeFeeds has the refresher look at the configuration now: an apply or
-// a revert may have changed where a list comes from or what it keeps.
+// a revert may have changed where a list comes from.
 func (a *api) wakeFeeds() {
 	if a.feeds != nil {
 		a.feeds.Wake()

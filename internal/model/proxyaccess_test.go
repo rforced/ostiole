@@ -64,7 +64,7 @@ func TestValidateAllowFromTakesSmallAliases(t *testing.T) {
 	cfg := proxyStarter()
 	cfg.Aliases = []Alias{
 		{Name: "office", Type: AliasHosts, Entries: []string{"198.51.100.0/24", "2001:db8::5"}},
-		{Name: "feed", Type: AliasHosts, URL: "https://example.com/list.txt"},
+		{Name: "feed", Type: AliasHosts, Entries: []string{"198.51.100.9", "https://example.com/list.txt"}},
 		{Name: "us", Type: AliasGeoIP, Entries: []string{"us"}},
 		{Name: "isp", Type: AliasASN, Entries: []string{"AS64500"}},
 		{Name: "web", Type: AliasPorts, Entries: []string{"443"}},

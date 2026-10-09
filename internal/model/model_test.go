@@ -2429,3 +2429,56 @@ func TestGatewayStateProbes(t *testing.T) {
 		t.Errorf("in bounds: %v", err)
 	}
 }
+
+// A hosts alias lists addresses, networks and the URLs it fetches; no
+// other kind fetches from a URL, and a URL is fetched once.
+func TestAliasURLLines(t *testing.T) {
+	t.Parallel()
+	drop := Alias{Name: "drop", Type: AliasHosts, Entries: []string{
+		"192.0.2.1", "https://lists.example.net/drop.txt", "198.51.100.0/24", "http://lists.example.net/ranges.json",
+	}}
+	if got := drop.URLs(); !slices.Equal(got, []string{"https://lists.example.net/drop.txt", "http://lists.example.net/ranges.json"}) {
+		t.Errorf("URLs = %q", got)
+	}
+	if got := drop.Written(); !slices.Equal(got, []string{"192.0.2.1", "198.51.100.0/24"}) {
+		t.Errorf("Written = %q", got)
+	}
+	if !drop.Fetched() {
+		t.Error("an alias with URL lines is not fetched")
+	}
+	written := Alias{Name: "office", Type: AliasHosts, Entries: []string{"192.0.2.1"}}
+	if written.Fetched() || written.URLs() != nil || !slices.Equal(written.Written(), written.Entries) {
+		t.Errorf("an alias without URL lines: fetched %v, URLs %q, written %q", written.Fetched(), written.URLs(), written.Written())
+	}
+	c := starterForBlocking()
+	c.Aliases = []Alias{drop, {Name: "games", Type: AliasPorts, Entries: []string{"27015", "https://lists.example.net/ports.txt"}}}
+	if got := issues(t, c); len(got) != 0 {
+		t.Fatalf("URL lines in a hosts or ports alias were refused: %v", got)
+	}
+
+	for name, tc := range map[string]struct {
+		alias Alias
+		want  string
+	}{
+		"space": {Alias{Name: "x", Type: AliasHosts, Entries: []string{"https://lists.example.net/drop.txt 192.0.2.1"}},
+			`aliases[0].entries[0]: "https://lists.example.net/drop.txt 192.0.2.1" must be an http or https URL`},
+		"geoip": {Alias{Name: "x", Type: AliasGeoIP, Entries: []string{"de", "https://lists.example.net/de.zone"}},
+			"aliases[0].entries[1]: a country alias fetches from the GeoIP source"},
+		"not http": {Alias{Name: "x", Type: AliasHosts, Entries: []string{"ftp://lists.example.net/drop.txt"}},
+			`aliases[0].entries[0]: "ftp://lists.example.net/drop.txt" must be an http or https URL`},
+		"no host": {Alias{Name: "x", Type: AliasHosts, Entries: []string{"https:///drop.txt"}},
+			`aliases[0].entries[0]: "https:///drop.txt" must be an http or https URL`},
+		"twice": {Alias{Name: "x", Type: AliasHosts, Entries: []string{
+			"https://lists.example.net/drop.txt?key=k1", "192.0.2.1", "https://lists.example.net/drop.txt?key=k1"}},
+			"aliases[0].entries[2]: https://lists.example.net/drop.txt?key= is listed twice"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			c := starterForBlocking()
+			c.Aliases = []Alias{tc.alias}
+			if got := issues(t, c); len(got) != 1 || got[0] != tc.want {
+				t.Errorf("issues = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

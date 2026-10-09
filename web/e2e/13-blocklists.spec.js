@@ -12,6 +12,7 @@ let lists
 let base
 let listURL
 let rangesURL
+let extraURL
 let served = 0
 
 // What two documentation AS numbers announce, and who holds them. The
@@ -65,12 +66,17 @@ test.beforeAll(async () => {
       return
     }
     res.writeHead(200, { 'Content-Type': 'text/plain' })
+    if (req.url === '/extra.txt') {
+      res.end('2001:db8:b::/48\n2001:db8:c::1\n')
+      return
+    }
     res.end('# a list\n192.0.2.0/24 ; note\n198.51.100.7\n2001:db8:dead::/48\n')
   })
   await new Promise((resolve) => lists.listen(0, '127.0.0.1', resolve))
   base = `http://127.0.0.1:${lists.address().port}`
   listURL = `${base}/drop.txt`
   rangesURL = `${base}/public_ip_ranges.json`
+  extraURL = `${base}/extra.txt`
 })
 
 test.afterAll(() => lists?.close())
@@ -84,9 +90,11 @@ test('a blocklist alias fetches, lands in the ruleset, and refreshes', async ({ 
   const dialog = page.getByRole('dialog')
   await dialog.getByLabel('Name').fill('blocklist')
   await dialog.getByLabel('Description').fill('A list from somewhere')
-  await dialog.getByLabel('Fetch from').fill(listURL)
+  await expect(dialog.getByLabel('Refresh every (hours)')).toHaveCount(0)
+  await dialog.getByLabel('Entries').fill(`203.0.113.9\n${listURL}`)
+  await dialog.getByLabel('Entries').blur()
+  await expect(dialog).toContainText(`${listURL} · 3 addresses`)
   await dialog.getByLabel('Refresh every (hours)').fill('12')
-  await dialog.getByLabel('Entries').fill('203.0.113.9')
   await page.screenshot({ path: shot('98-blocklist'), fullPage: true })
   await dialog.getByRole('button', { name: 'Save to draft' }).click()
 
@@ -126,9 +134,9 @@ test('a blocklist alias fetches, lands in the ruleset, and refreshes', async ({ 
   await page.screenshot({ path: shot('99-blocklist-fetched'), fullPage: true })
 })
 
-// The router reads a JSON list as soon as its URL is typed, offers what it
-// can be narrowed by, and keeps only what was ticked.
-test('a JSON list is narrowed to one region', async ({ page }) => {
+// Two URL lines in one alias are fetched together, a JSON list and a text
+// one, and every address in either is kept.
+test('an alias with two URL lines fetches both lists', async ({ page }) => {
   await login(page)
   await page.goto('/firewall')
   await sidebar(page, 'Aliases')
@@ -136,31 +144,32 @@ test('a JSON list is narrowed to one region', async ({ page }) => {
   await page.getByRole('button', { name: 'Add alias' }).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByLabel('Name', { exact: true }).fill('cloud')
-  await expect(dialog.getByText('Keep only')).toHaveCount(0)
-  await dialog.getByLabel('Fetch from').fill(rangesURL)
-  await dialog.getByLabel('Fetch from').blur()
-  await dialog.getByRole('checkbox', { name: 'us-ashburn-1' }).check()
-  await expect(dialog).toContainText('1 ticked: region=us-ashburn-1')
-  await page.screenshot({ path: shot('99-json-list'), fullPage: true })
+  await dialog.getByLabel('Entries').fill(`${rangesURL}\n${extraURL}`)
+  await dialog.getByLabel('Entries').blur()
+  await expect(dialog).toContainText(`${rangesURL} · 4 addresses`)
+  await expect(dialog).toContainText(`${extraURL} · 2 addresses`)
+  await page.screenshot({ path: shot('99-two-lists'), fullPage: true })
   await dialog.getByRole('button', { name: 'Save to draft' }).click()
 
   const row = page.getByRole('row').filter({ hasText: 'cloud' })
-  await expect(row).toContainText('Keeps only region=us-ashburn-1')
+  await expect(row).toContainText(rangesURL)
+  await expect(row).toContainText('not fetched yet')
   await applyAndConfirm(page)
 
-  // One prefix of each family from that region, of the four in the list.
   await row.getByRole('button', { name: 'Refresh' }).click()
-  await expect(row).toContainText('2 fetched')
+  await expect(row).toContainText('6 fetched')
 
   // What it fetched can be read, and an address finds the network holding it.
-  await row.getByRole('button', { name: '2 fetched for cloud' }).click()
+  await row.getByRole('button', { name: '6 fetched for cloud' }).click()
   const fetched = page.getByRole('dialog', { name: 'Entries fetched for cloud' })
   const entries = fetched.getByRole('list', { name: 'Entries' })
-  await expect(entries.getByRole('listitem')).toHaveText(['192.0.2.0/24', '2001:db8:a::/48'])
+  await expect(entries.getByRole('listitem')).toHaveCount(6)
+  await fetched.getByLabel('Search').fill('2001:db8:c::1')
+  await expect(entries.getByRole('listitem')).toHaveText(['2001:db8:c::1'])
   await fetched.getByLabel('Search').fill('192.0.2.77')
   await expect(entries.getByRole('listitem')).toHaveText(['192.0.2.0/24'])
-  await expect(fetched).toContainText('1 of 2')
-  await page.screenshot({ path: shot('99-json-list-entries'), fullPage: true })
+  await expect(fetched).toContainText('1 of 6')
+  await page.screenshot({ path: shot('99-two-lists-entries'), fullPage: true })
   await fetched.getByRole('button', { name: 'Close' }).last().click()
   await expect(fetched).toHaveCount(0)
 })
@@ -186,7 +195,6 @@ test('an AS alias fetches what each network announces', async ({ page }) => {
   const dialog = page.getByRole('dialog')
   await dialog.getByLabel('Name', { exact: true }).fill('carriers')
   await dialog.getByLabel('Type').selectOption('asn')
-  await expect(dialog.getByLabel('Fetch from')).toHaveCount(0)
   await dialog.getByLabel('Entries').fill('as64500, transit')
   await dialog.getByRole('button', { name: 'Save to draft' }).click()
   await expect(dialog.getByRole('alert')).toHaveText('transit is not an AS number.')
@@ -223,7 +231,7 @@ test('a country alias is picked by name, and a preset picks a whole bloc', async
   await dialog.getByLabel('Name', { exact: true }).fill('countries')
   await dialog.getByLabel('Type').selectOption('geoip')
   // There is no URL to give: the source is a system setting.
-  await expect(dialog.getByLabel('Fetch from')).toHaveCount(0)
+  await expect(dialog.getByLabel('Entries')).toHaveCount(0)
 
   // Countries are chosen by name; the codes are what gets stored.
   await dialog.getByLabel('Search', { exact: true }).fill('german')

@@ -1,5 +1,5 @@
 {
-  "version": 13,
+  "version": 14,
   "system": {
     "hostname": "blocklists",
     "management": {
@@ -49,10 +49,10 @@
       "name": "drop",
       "type": "hosts",
       "description": "Spamhaus DROP",
-      "url": "https://www.spamhaus.org/drop/drop.txt",
       "refreshHours": 12,
       "entries": [
-        "203.0.113.66"
+        "203.0.113.66",
+        "https://www.spamhaus.org/drop/drop.txt"
       ]
     },
     {

@@ -72,7 +72,7 @@ func TestASAliasValidation(t *testing.T) {
 		"empty":     {Alias{Name: "x", Type: AliasASN}, "aliases[0].entries: list the AS numbers"},
 		"junk":      {Alias{Name: "x", Type: AliasASN, Entries: []string{"AS15169", "google"}}, `aliases[0].entries[1]: invalid AS number "google"`},
 		"duplicate": {Alias{Name: "x", Type: AliasASN, Entries: []string{"15169", "AS15169"}}, "aliases[0].entries[1]: AS15169 is listed twice"},
-		"url":       {Alias{Name: "x", Type: AliasASN, Entries: []string{"AS15169"}, URL: "https://example.test/l"}, "aliases[0].url: an AS alias fetches from the ASN source"},
+		"url":       {Alias{Name: "x", Type: AliasASN, Entries: []string{"AS15169", "https://example.test/l"}}, "aliases[0].entries[1]: an AS alias fetches from the ASN source"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			c := starterForBlocking()

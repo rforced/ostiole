@@ -11,7 +11,7 @@ import (
 func browsed(t *testing.T, entries ...string) *Cache {
 	t.Helper()
 	c := NewCache(t.TempDir())
-	if err := c.Save(model.Alias{Name: "list", Type: model.AliasHosts, URL: "https://example.test/list"}, nil, entries, time.Now()); err != nil {
+	if err := c.Save(model.Alias{Name: "list", Type: model.AliasHosts, Entries: []string{"https://example.test/list"}}, nil, entries, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	return c
