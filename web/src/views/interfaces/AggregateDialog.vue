@@ -118,7 +118,7 @@ watch(
       stp: i.bridge?.stp ?? false,
       vlanFiltering: i.bridge?.vlanFiltering ?? false,
       mode: i.bond?.mode ?? 'active-backup',
-      miiMonitorMs: i.bond?.miiMonitorMs ?? 100,
+      miiMonitorMs: i.bond?.miiMonitorMs ?? 0,
       transmitHashPolicy: i.bond?.transmitHashPolicy ?? '',
       primary: i.bond?.primary ?? '',
       lacpRate: i.bond?.lacpRate ?? '',

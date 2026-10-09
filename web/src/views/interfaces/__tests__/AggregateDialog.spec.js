@@ -27,4 +27,29 @@ describe('AggregateDialog', () => {
     expect(wrapper.text()).toContain('100 is the default.')
     expect(wrapper.text()).not.toContain('0 turns the check off.')
   })
+
+  it('shows an existing bond as saved and leaves an untouched save alone', async () => {
+    const config = useConfigStore()
+    const port = { enabled: true, ipv4: { mode: 'none' }, ipv6: { mode: 'none' } }
+    config.replaceDraft({
+      version: 12,
+      zones: [],
+      rules: [],
+      interfaces: [
+        { name: 'eth1', ...port },
+        { name: 'eth2', ...port },
+        { name: 'bond0', ...port, bond: { members: ['eth1', 'eth2'], mode: 'active-backup' } },
+      ],
+    })
+    const wrapper = mount(AggregateDialog, {
+      props: { open: true, kind: 'bond', candidates: [], iface: config.findInterface('bond0') },
+      global: { stubs },
+    })
+    expect(wrapper.get('#agg-mii').element.value).toBe('0')
+    await wrapper.get('form').trigger('submit')
+    expect(config.findInterface('bond0').bond).toEqual({
+      members: ['eth1', 'eth2'],
+      mode: 'active-backup',
+    })
+  })
 })
