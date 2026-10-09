@@ -27,9 +27,9 @@ const (
 	// are put back between probes.
 	syncEvery = 5 * time.Second
 	// FailAfter consecutive losses take a gateway offline, RiseAfter
-	// consecutive answers bring it back.
-	FailAfter = 3
-	RiseAfter = 2
+	// consecutive answers bring it back, unless the gateway says otherwise.
+	FailAfter = model.DefaultDownAfterProbes
+	RiseAfter = model.DefaultUpAfterProbes
 	// history is how many probes the loss figure covers.
 	history = 20
 	// settle is how long a removed policy route waits before the tables
@@ -137,8 +137,8 @@ type leg struct {
 	family string
 	hop    string
 	online bool
-	// unknown is a leg not judged yet; never one that failed before it
-	// ever came up; answered one that came up since its state began.
+	// unknown is a leg not judged yet; never one that failed before any
+	// probe was answered; answered one with an answer since its state began.
 	unknown   bool
 	never     bool
 	answered  bool
@@ -150,7 +150,7 @@ type leg struct {
 	lastError string
 }
 
-func (l *leg) record(rtt time.Duration, err error, now time.Time) {
+func (l *leg) record(rtt time.Duration, err error, now time.Time, failAfter, riseAfter int) {
 	l.results = append(l.results, err == nil)
 	if len(l.results) > history {
 		l.results = l.results[len(l.results)-history:]
@@ -159,7 +159,7 @@ func (l *leg) record(rtt time.Duration, err error, now time.Time) {
 		l.lastError = err.Error()
 		l.fails++
 		l.rises = 0
-		if (l.online || l.unknown) && l.fails >= FailAfter {
+		if (l.online || l.unknown) && l.fails >= failAfter {
 			l.online, l.unknown, l.never, l.since = false, false, !l.answered, now
 		}
 		return
@@ -168,8 +168,9 @@ func (l *leg) record(rtt time.Duration, err error, now time.Time) {
 	l.latency = rtt
 	l.rises++
 	l.fails = 0
-	if (!l.online || l.unknown) && l.rises >= RiseAfter {
-		l.online, l.unknown, l.never, l.answered, l.since = true, false, false, true, now
+	l.answered = true
+	if (!l.online || l.unknown) && l.rises >= riseAfter {
+		l.online, l.unknown, l.never, l.since = true, false, false, now
 	}
 }
 
@@ -626,7 +627,7 @@ func (m *Monitor) probe(ctx context.Context, st *state, timeout time.Duration) {
 		}
 		l.hop = r.hop
 		was, since := l.state(), l.since
-		l.record(r.rtt, r.err, now)
+		l.record(r.rtt, r.err, now, gw.DownAfter(), gw.UpAfter())
 		if l.state() != was {
 			changes = append(changes, legChange{family: r.family, was: was, now: l.state(), since: since, err: l.lastError})
 		}

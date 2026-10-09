@@ -25,6 +25,8 @@ function blank() {
     slow: '',
     lossy: '',
     every: '',
+    down: '',
+    up: '',
   }
 }
 
@@ -39,6 +41,8 @@ watch(
           slow: props.gateway.slowAboveMs ?? '',
           lossy: props.gateway.lossyAbovePercent ?? '',
           every: props.gateway.probeEverySeconds ?? '',
+          down: props.gateway.downAfterProbes ?? '',
+          up: props.gateway.upAfterProbes ?? '',
         }
       : blank()
     if (!props.gateway) {
@@ -96,6 +100,8 @@ function save() {
   if (f.slow !== '' && f.slow != null) out.slowAboveMs = Number(f.slow)
   if (f.lossy !== '' && f.lossy != null) out.lossyAbovePercent = Number(f.lossy)
   if (f.every !== '' && f.every != null) out.probeEverySeconds = Number(f.every)
+  if (f.down !== '' && f.down != null) out.downAfterProbes = Number(f.down)
+  if (f.up !== '' && f.up != null) out.upAfterProbes = Number(f.up)
   config.upsertGateway(out, props.gateway?.name ?? out.name)
   open.value = false
 }
@@ -188,7 +194,7 @@ function save() {
         <FormField
           id="gw-every"
           label="Probe every (seconds)"
-          hint="Three lost probes in a row take the gateway down."
+          hint="A probe waits two seconds for its answer."
         >
           <input
             id="gw-every"
@@ -197,6 +203,36 @@ function save() {
             min="5"
             max="300"
             placeholder="30"
+            class="input w-32 font-mono max-sm:w-full"
+          />
+        </FormField>
+        <FormField
+          id="gw-down"
+          label="Down after (lost probes)"
+          hint="Lost in a row before the gateway counts as down."
+        >
+          <input
+            id="gw-down"
+            v-model="form.down"
+            type="number"
+            min="1"
+            max="20"
+            placeholder="3"
+            class="input w-32 font-mono max-sm:w-full"
+          />
+        </FormField>
+        <FormField
+          id="gw-up"
+          label="Up after (answered probes)"
+          hint="Answered in a row before it counts as up again."
+        >
+          <input
+            id="gw-up"
+            v-model="form.up"
+            type="number"
+            min="1"
+            max="20"
+            placeholder="2"
             class="input w-32 font-mono max-sm:w-full"
           />
         </FormField>

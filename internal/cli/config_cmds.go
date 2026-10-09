@@ -696,6 +696,6 @@ moves the default route off a gateway that stops answering.`,
 		},
 	}
 	cmd.Flags().IntVar(&count, "probes", gateway.RiseAfter,
-		"how many probes to send before reporting; the daemon needs three losses to call a gateway down")
+		"how many probes to send before reporting; the daemon needs three losses, or the gateway's own count, to call it down")
 	return cmd
 }

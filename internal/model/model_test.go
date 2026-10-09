@@ -2407,3 +2407,25 @@ func TestGatewayProbeInterval(t *testing.T) {
 		}
 	}
 }
+
+func TestGatewayStateProbes(t *testing.T) {
+	t.Parallel()
+	g := Gateway{Name: "wan", Enabled: true, Interface: "eth0"}
+	if g.DownAfter() != 3 || g.UpAfter() != 2 {
+		t.Errorf("defaults = %d, %d", g.DownAfter(), g.UpAfter())
+	}
+	g.DownAfterProbes, g.UpAfterProbes = 1, 5
+	if g.DownAfter() != 1 || g.UpAfter() != 5 {
+		t.Errorf("set = %d, %d", g.DownAfter(), g.UpAfter())
+	}
+	cfg := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0"})
+	cfg.Gateways[0].DownAfterProbes, cfg.Gateways[0].UpAfterProbes = 21, -1
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "gateways[0].downAfterProbes") || !strings.Contains(err.Error(), "gateways[0].upAfterProbes") {
+		t.Errorf("validate = %v", err)
+	}
+	cfg.Gateways[0].DownAfterProbes, cfg.Gateways[0].UpAfterProbes = 20, 1
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("in bounds: %v", err)
+	}
+}

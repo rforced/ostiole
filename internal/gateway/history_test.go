@@ -581,3 +581,38 @@ func TestGatewaysAreProbedAsOftenAsTheySay(t *testing.T) {
 		t.Fatalf("overridden, probed %d over two seconds, want both twice", n-6)
 	}
 }
+
+// A gateway says how many lost probes take it down and how many answers
+// bring it back.
+func TestAGatewaySaysHowManyProbesDecideIt(t *testing.T) {
+	t.Parallel()
+	var log bytes.Buffer
+	p := &fakeProber{fail: map[string]bool{}}
+	m := watched(t, p, &fakeRouter{resolveTo: map[string]string{}}, &log,
+		model.Gateway{Name: "wan", Enabled: true, Interface: "eth0", Address: "203.0.113.1", DownAfterProbes: 1, UpAfterProbes: 1},
+		model.Gateway{Name: "lte", Enabled: true, Interface: "eth1", Address: "198.51.100.1", Priority: 1, DownAfterProbes: 5})
+	tick(m, 1)
+	if s := m.Statuses(); !s[0].Online || !s[1].Unknown {
+		t.Fatalf("after one answer: %+v", s)
+	}
+	p.setFail("203.0.113.1", true)
+	p.setFail("198.51.100.1", true)
+	tick(m, 1)
+	s := m.Statuses()
+	if s[0].Online || s[0].NeverAnswered {
+		t.Errorf("wan after one loss: %+v, want down", s[0])
+	}
+	tick(m, 3)
+	if s := m.Statuses()[1]; !s.Unknown {
+		t.Errorf("lte after four losses: %+v, want still unknown", s)
+	}
+	tick(m, 1)
+	if s := m.Statuses()[1]; s.Unknown || s.Online || s.NeverAnswered {
+		t.Errorf("lte after five losses: %+v, want down, since it answered once", s)
+	}
+	p.setFail("203.0.113.1", false)
+	tick(m, 1)
+	if s := m.Statuses()[0]; !s.Online {
+		t.Errorf("wan after one answer: %+v, want up again", s)
+	}
+}

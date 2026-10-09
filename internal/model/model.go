@@ -1485,6 +1485,11 @@ type Gateway struct {
 	// ProbeEverySeconds is how often the gateway is probed; zero keeps
 	// DefaultProbeSeconds.
 	ProbeEverySeconds int `json:"probeEverySeconds,omitempty"`
+	// DownAfterProbes is how many probes lost in a row take the gateway
+	// down, and UpAfterProbes how many answered in a row bring it back;
+	// zero keeps the default.
+	DownAfterProbes int `json:"downAfterProbes,omitempty"`
+	UpAfterProbes   int `json:"upAfterProbes,omitempty"`
 }
 
 // The thresholds a gateway warns over, and their bounds: a probe waits two
@@ -1502,6 +1507,29 @@ const (
 	MinProbeSeconds     = 5
 	MaxProbeSeconds     = 300
 )
+
+// How many probes in a row decide a gateway's state, and the bound.
+const (
+	DefaultDownAfterProbes = 3
+	DefaultUpAfterProbes   = 2
+	MaxStateProbes         = 20
+)
+
+// DownAfter is how many probes lost in a row take the gateway down.
+func (g Gateway) DownAfter() int {
+	if g.DownAfterProbes <= 0 {
+		return DefaultDownAfterProbes
+	}
+	return g.DownAfterProbes
+}
+
+// UpAfter is how many probes answered in a row bring the gateway back.
+func (g Gateway) UpAfter() int {
+	if g.UpAfterProbes <= 0 {
+		return DefaultUpAfterProbes
+	}
+	return g.UpAfterProbes
+}
 
 // ProbeInterval is how often the gateway is probed.
 func (g Gateway) ProbeInterval() time.Duration {

@@ -452,6 +452,12 @@ func (c *Config) Validate() error {
 		if e := g.ProbeEverySeconds; e != 0 && (e < MinProbeSeconds || e > MaxProbeSeconds) {
 			v.add(path+".probeEverySeconds", "%d must be %d-%d", e, MinProbeSeconds, MaxProbeSeconds)
 		}
+		if n := g.DownAfterProbes; n < 0 || n > MaxStateProbes {
+			v.add(path+".downAfterProbes", "%d must be 1-%d", n, MaxStateProbes)
+		}
+		if n := g.UpAfterProbes; n < 0 || n > MaxStateProbes {
+			v.add(path+".upAfterProbes", "%d must be 1-%d", n, MaxStateProbes)
+		}
 	}
 
 	groups := map[string]bool{}
