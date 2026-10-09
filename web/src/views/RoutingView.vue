@@ -196,7 +196,7 @@ function edit(r) {
     <p v-if="config.loaded && !config.draft" class="text-sm text-ink-muted">
       No configuration yet.
       <template v-if="!auth.readOnly">
-        <RouterLink to="/wizard" class="underline">Run the setup wizard</RouterLink> first.
+        <RouterLink to="/wizard" class="link">Run the setup wizard</RouterLink> first.
       </template>
     </p>
     <template v-else-if="config.draft">

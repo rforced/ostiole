@@ -26,7 +26,7 @@ onMounted(() => config.load())
     <p v-if="blocked" class="text-sm text-ink-muted">
       No configuration yet.
       <template v-if="!auth.readOnly">
-        <RouterLink to="/wizard" class="underline">Run the setup wizard</RouterLink> first.
+        <RouterLink to="/wizard" class="link">Run the setup wizard</RouterLink> first.
       </template>
     </p>
     <RouterView v-else-if="!route.meta.needsConfig || config.draft" />
