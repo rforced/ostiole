@@ -229,6 +229,134 @@ describe('config store interfaces', () => {
     expect(config.findInterface('bond0')).toBeNull()
   })
 
+  it('takes an interface out of UPnP and the certificates that cover its address', () => {
+    const config = useConfigStore()
+    const d = wired()
+    d.interfaces.push({ name: 'eth6', zone: 'wan' })
+    d.services.upnp = {
+      enabled: true,
+      igd: true,
+      externalInterface: 'eth0',
+      interfaces: ['eth1', 'br0'],
+    }
+    d.system = { management: { certificate: 'edge' } }
+    d.certificates = [
+      { id: 'edge', enabled: true, source: 'acme', interfaceAddresses: ['eth0'] },
+      { id: 'both', enabled: true, source: 'acme', interfaceAddresses: ['eth0', 'eth6'] },
+      {
+        id: 'named',
+        enabled: true,
+        source: 'acme',
+        names: ['router.example.test'],
+        interfaceAddresses: ['eth0'],
+      },
+    ]
+    config.replaceDraft(d)
+    expect(config.interfaceDependents('eth0')).toEqual([
+      'eth1 loses its delegated IPv6 prefix',
+      'UPnP, switched off without its external interface',
+      'certificate edge, which covers only eth0',
+      'the web UI goes back to the built-in certificate',
+      'certificate both loses the address of eth0',
+      'certificate named loses the address of eth0',
+      'gateway wan-gw',
+      'rule r1 loses its gateway',
+      'group failover loses member wan-gw',
+      'group solo, its only member',
+      'route rt1',
+    ])
+    expect(config.interfaceDependents('br0')).toEqual(['UPnP clients on br0'])
+
+    config.removeInterface('eth0')
+    // UPnP cannot run without the interface it opens ports on.
+    expect(config.draft.services.upnp).toEqual({
+      enabled: false,
+      igd: true,
+      interfaces: ['eth1', 'br0'],
+    })
+    expect(config.certificates.map((c) => c.id)).toEqual(['both', 'named'])
+    expect(config.certificates[0].interfaceAddresses).toEqual(['eth6'])
+    expect(config.certificates[1].interfaceAddresses).toBeUndefined()
+    expect(config.draft.system.management.certificate).toBeUndefined()
+  })
+
+  // An empty list means every inside interface, which is not for a delete
+  // to decide.
+  it('switches UPnP off with the only interface clients ask from', () => {
+    const config = useConfigStore()
+    const d = wired()
+    d.services.upnp = { enabled: true, pcp: true, externalInterface: 'eth0', interfaces: ['br0'] }
+    config.replaceDraft(d)
+    expect(config.interfaceDependents('br0')).toEqual([
+      'UPnP, switched off rather than answer every inside interface',
+    ])
+    config.removeInterface('br0')
+    expect(config.draft.services.upnp).toEqual({
+      enabled: false,
+      pcp: true,
+      externalInterface: 'eth0',
+    })
+
+    // Off already, it only loses the name.
+    d.services.upnp = { enabled: false, externalInterface: 'eth0', interfaces: ['br0'] }
+    config.replaceDraft(d)
+    expect(config.interfaceDependents('br0')).toEqual(['UPnP clients on br0'])
+    config.removeInterface('eth0')
+    expect(config.draft.services.upnp).toEqual({ enabled: false, interfaces: ['br0'] })
+  })
+
+  // Either VLAN alone would leave UPnP and the certificate the other one.
+  it('weighs UPnP and certificates against every interface a delete takes', () => {
+    const config = useConfigStore()
+    const d = wired()
+    d.interfaces.push({ name: 'eth1.20', zone: 'lan', vlan: { id: 20, parent: 'eth1' } })
+    d.services.upnp = {
+      enabled: true,
+      externalInterface: 'eth0',
+      interfaces: ['eth1.10', 'eth1.20'],
+    }
+    d.certificates = [
+      { id: 'inside', enabled: true, source: 'acme', interfaceAddresses: ['eth1.10', 'eth1.20'] },
+      {
+        id: 'named',
+        enabled: true,
+        source: 'acme',
+        names: ['router.example.test'],
+        interfaceAddresses: ['eth0', 'eth1.10', 'eth1.20'],
+      },
+    ]
+    config.replaceDraft(d)
+    expect(config.interfaceDependents('eth1')).toEqual([
+      'VLAN eth1.10',
+      'DHCP server on eth1.10',
+      'DNS listener on eth1.10',
+      'VLAN eth1.20',
+      'DHCP server on eth1',
+      'IPv6 advertisement on eth1',
+      'DNS listener on eth1',
+      'time served on eth1',
+      'UPnP, switched off rather than answer every inside interface',
+      'certificate inside, which covers only eth1.10 and eth1.20',
+      'certificate named loses the address of eth1.10',
+      'certificate named loses the address of eth1.20',
+    ])
+    config.removeInterface('eth1')
+    expect(config.draft.services.upnp).toEqual({ enabled: false, externalInterface: 'eth0' })
+    expect(config.certificates.map((c) => c.id)).toEqual(['named'])
+    expect(config.certificates[0].interfaceAddresses).toEqual(['eth0'])
+
+    // A bridge of the two goes with them, and UPnP with the bridge.
+    d.interfaces.push({ name: 'br9', zone: 'lan', bridge: { members: ['eth1.10', 'eth1.20'] } })
+    d.services.upnp.interfaces = ['br9']
+    config.replaceDraft(d)
+    expect(config.interfaceDependents('eth1')).toContain(
+      'UPnP, switched off rather than answer every inside interface',
+    )
+    config.removeInterface('eth1')
+    expect(config.findInterface('br9')).toBeNull()
+    expect(config.draft.services.upnp).toEqual({ enabled: false, externalInterface: 'eth0' })
+  })
+
   it('offers undo for a delete and for discard', () => {
     const config = useConfigStore()
     const toast = useToastStore()

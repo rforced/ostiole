@@ -157,22 +157,25 @@ export const useConfigStore = defineStore('config', () => {
    * server, a gateway, a route, a DNS listener. A VLAN or PPPoE session on
    * top of it cannot exist without it. A bridge or bond carries on one
    * member short unless that was its only one, and an interface delegated
-   * a prefix from it falls back to no IPv6.
+   * a prefix from it falls back to no IPv6. UPnP and certificate addresses
+   * are weighed once, against every interface the delete takes.
    */
-  function interfaceDependents(name) {
+  function interfaceDependents(name, going = null) {
     const out = []
     const d = draft.value
     if (!d) return out
+    const top = !going
+    going ??= interfacesGoing(name)
     if (findInterface(name)?.wireguard) out.push(...peerDependents(name))
     for (const i of interfaces.value) {
       if (i.vlan?.parent === name || i.pppoe?.parent === name) {
-        out.push(`${i.vlan ? 'VLAN' : 'PPPoE'} ${i.name}`, ...interfaceDependents(i.name))
+        out.push(`${i.vlan ? 'VLAN' : 'PPPoE'} ${i.name}`, ...interfaceDependents(i.name, going))
       }
       const agg = i.bridge ?? i.bond
       if (agg?.members?.includes(name)) {
         if (agg.members.length === 1) {
           out.push(`${i.bridge ? 'bridge' : 'bond'} ${i.name}, its only member`)
-          out.push(...interfaceDependents(i.name))
+          out.push(...interfaceDependents(i.name, going))
         } else out.push(`${i.name} loses member ${name}`)
       }
       if (i.ipv6?.delegatedFrom === name) out.push(`${i.name} loses its delegated IPv6 prefix`)
@@ -184,6 +187,7 @@ export const useConfigStore = defineStore('config', () => {
     }
     if ((d.services?.dns?.interfaces ?? []).includes(name)) out.push(`DNS listener on ${name}`)
     if ((d.services?.ntp?.interfaces ?? []).includes(name)) out.push(`time served on ${name}`)
+    if (top) out.push(...addressDependents(going))
     for (const w of wolDevices.value) {
       if (w.interface === name) {
         out.push(`Wake on LAN device ${deviceName(w)}`, ...wolDeviceDependents(w.id))
@@ -199,15 +203,107 @@ export const useConfigStore = defineStore('config', () => {
     return out
   }
 
+  /**
+   * The interfaces a delete takes: the interface, what is stacked on it,
+   * and a bridge or bond left without members.
+   */
+  function interfacesGoing(name) {
+    const going = new Set([name])
+    for (const n of going) {
+      for (const i of interfaces.value) {
+        const members = (i.bridge ?? i.bond)?.members ?? []
+        if (
+          i.vlan?.parent === n ||
+          i.pppoe?.parent === n ||
+          (members.includes(n) && members.every((m) => going.has(m)))
+        )
+          going.add(i.name)
+      }
+    }
+    return going
+  }
+
+  /** What UPnP and the certificates lose with the interfaces going. */
+  function addressDependents(going) {
+    const out = []
+    const upnp = draft.value.services?.upnp
+    if (upnpStopsWith(going)) {
+      out.push(
+        going.has(upnp.externalInterface)
+          ? 'UPnP, switched off without its external interface'
+          : 'UPnP, switched off rather than answer every inside interface',
+      )
+    } else {
+      for (const n of upnp?.interfaces ?? []) if (going.has(n)) out.push(`UPnP clients on ${n}`)
+    }
+    for (const c of certificates.value) {
+      const lost = (c.interfaceAddresses ?? []).filter((n) => going.has(n))
+      if (!lost.length) continue
+      if (coversOnly(c, going)) {
+        const only =
+          lost.length > 1 ? `${lost.slice(0, -1).join(', ')} and ${lost.at(-1)}` : lost[0]
+        out.push(`certificate ${c.id}, which covers only ${only}`)
+        for (const x of certificateDependents(c.id)) {
+          out.push(`${x} goes back to the built-in certificate`)
+        }
+      } else for (const n of lost) out.push(`certificate ${c.id} loses the address of ${n}`)
+    }
+    return out
+  }
+
+  /**
+   * Whether UPnP has to stop with the interfaces going: it opens ports on
+   * one of them, or it answers clients on them alone and an empty list
+   * would mean every inside interface.
+   */
+  function upnpStopsWith(going) {
+    const u = draft.value?.services?.upnp
+    if (!u?.enabled) return false
+    if (going.has(u.externalInterface)) return true
+    return u.interfaces?.length > 0 && u.interfaces.every((n) => going.has(n))
+  }
+
+  /** An ordered certificate with nothing to cover once the interfaces go. */
+  function coversOnly(cert, going) {
+    return (
+      cert.source === 'acme' &&
+      !cert.names?.length &&
+      (cert.interfaceAddresses ?? []).every((n) => going.has(n))
+    )
+  }
+
+  /** The mutation behind addressDependents. */
+  function dropAddresses(going) {
+    const upnp = draft.value.services?.upnp
+    if (upnp) {
+      if (upnpStopsWith(going)) upnp.enabled = false
+      if (going.has(upnp.externalInterface)) delete upnp.externalInterface
+      if (upnp.interfaces) {
+        upnp.interfaces = upnp.interfaces.filter((n) => !going.has(n))
+        if (!upnp.interfaces.length) delete upnp.interfaces
+      }
+    }
+    for (const c of [...certificates.value]) {
+      if (!c.interfaceAddresses?.some((n) => going.has(n))) continue
+      if (coversOnly(c, going)) dropCertificate(c.id)
+      else {
+        c.interfaceAddresses = c.interfaceAddresses.filter((n) => !going.has(n))
+        if (!c.interfaceAddresses.length) delete c.interfaceAddresses
+      }
+    }
+  }
+
   /** The mutation behind removeInterface, in the order interfaceDependents lists it. */
-  function dropInterface(name) {
+  function dropInterface(name, going = null) {
     const d = draft.value
+    const top = !going
+    going ??= interfacesGoing(name)
     if (findInterface(name)?.wireguard) dropPeerReferences(name)
     for (const i of [...interfaces.value]) {
-      if (i.vlan?.parent === name || i.pppoe?.parent === name) dropInterface(i.name)
+      if (i.vlan?.parent === name || i.pppoe?.parent === name) dropInterface(i.name, going)
       const agg = i.bridge ?? i.bond
       if (agg?.members?.includes(name)) {
-        if (agg.members.length === 1) dropInterface(i.name)
+        if (agg.members.length === 1) dropInterface(i.name, going)
         else {
           agg.members = agg.members.filter((m) => m !== name)
           if (agg.primary === name) delete agg.primary
@@ -222,6 +318,7 @@ export const useConfigStore = defineStore('config', () => {
     if (dns?.interfaces) dns.interfaces = dns.interfaces.filter((n) => n !== name)
     const served = d.services?.ntp?.interfaces
     if (served) setNTP({ interfaces: served.filter((n) => n !== name) })
+    if (top) dropAddresses(going)
     for (const w of [...wolDevices.value]) if (w.interface === name) dropWoLDevice(w.id)
     for (const r of [...ddnsRecords.value]) if (r.interface === name) dropDdnsRecord(r.id)
     for (const g of [...gateways.value]) if (g.interface === name) dropGateway(g.name)
