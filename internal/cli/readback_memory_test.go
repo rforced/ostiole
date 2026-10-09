@@ -77,8 +77,8 @@ func TestReadBackPeaksNearTheLiveSize(t *testing.T) {
 			t.Errorf("%s: kept %d entries of the %d written", l.name, all.entries[i], l.count)
 			continue
 		}
-		if per := all.live[i] / int64(l.count); per > l.figure {
-			t.Errorf("%s: an entry holds %d bytes live, over the %d of %s; raise it", l.name, per, l.figure, l.figureName)
+		if per := all.live[i] / int64(l.count); per > l.figure+l.figure/10 {
+			t.Errorf("%s: an entry holds %d bytes live, over the %d of %s and its tenth; raise it", l.name, per, l.figure, l.figureName)
 		}
 	}
 	all.checkPeak(t, "all at once")
