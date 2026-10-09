@@ -1,6 +1,9 @@
 package model
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // What the router runs besides its logs, in bytes; a megabyte here is
 // 1,000,000 bytes.
@@ -138,6 +141,52 @@ func (b MemoryBudget) Sizes(c *Config) LogSizes {
 		WireGuardLog: min(c.VPN.WireGuardLog.Size(DefaultPeerLogEntries), ce.PeerLog),
 		TailscaleLog: min(c.VPN.TailscaleLog.Size(DefaultPeerLogEntries), ce.PeerLog),
 	}
+}
+
+// Sized is the configuration with every log setting above its ceiling
+// lowered to it, or c itself when none is.
+func (b MemoryBudget) Sized(c *Config) *Config {
+	if c == nil || b.Total <= 0 {
+		return c
+	}
+	s := b.Sizes(c)
+	q, p := c.Services.DNS.QueryLog, c.Services.Proxy
+	set := []struct {
+		have int
+		want int
+		into func(*Config, int)
+	}{
+		{q.Size(), s.QueryLog, func(c *Config, n int) { c.Services.DNS.QueryLog.Entries = n }},
+		{c.System.Management.FirewallLog.Size(), s.FirewallLog, func(c *Config, n int) { c.System.Management.FirewallLog.Entries = n }},
+		{p.Events.Size(), s.ProxyEvents, func(c *Config, n int) { c.Services.Proxy.Events.Entries = n }},
+		{p.Requests.Size(DefaultRequestEntries), s.Requests, func(c *Config, n int) { c.Services.Proxy.Requests.Entries = n }},
+		{c.Traffic.Destinations.Size(), s.Destinations, func(c *Config, n int) { c.Traffic.Destinations.Entries = n }},
+		{c.Services.DHCP.Log.Size(DefaultDHCPLogEntries), s.DHCPLog, func(c *Config, n int) { c.Services.DHCP.Log.Entries = n }},
+		{c.Wireless.Log.Size(DefaultWirelessLogEntries), s.WirelessLog, func(c *Config, n int) { c.Wireless.Log.Entries = n }},
+		{c.VPN.WireGuardLog.Size(DefaultPeerLogEntries), s.WireGuardLog, func(c *Config, n int) { c.VPN.WireGuardLog.Entries = n }},
+		{c.VPN.TailscaleLog.Size(DefaultPeerLogEntries), s.TailscaleLog, func(c *Config, n int) { c.VPN.TailscaleLog.Entries = n }},
+	}
+	var out *Config
+	for _, l := range set {
+		if l.want >= l.have {
+			continue
+		}
+		if out == nil {
+			raw, err := json.Marshal(c)
+			if err != nil {
+				return c
+			}
+			out = &Config{}
+			if err := json.Unmarshal(raw, out); err != nil {
+				return c
+			}
+		}
+		l.into(out, l.want)
+	}
+	if out == nil {
+		return c
+	}
+	return out
 }
 
 // LogsFullBytes is what the logs that are on cost full at the sizes this machine keeps.
