@@ -71,7 +71,11 @@ async function submit() {
       </FormField>
       <ErrorLine v-if="error">{{ error }}</ErrorLine>
       <p v-if="done" role="status" class="text-ok">Password changed.</p>
-      <button type="submit" class="btn-primary" :disabled="busy || !valid">Change password</button>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="submit" class="btn-primary" :disabled="busy || !valid">
+          Change password
+        </button>
+      </div>
     </form>
   </SectionCard>
 </template>

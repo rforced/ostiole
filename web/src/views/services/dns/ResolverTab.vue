@@ -217,7 +217,23 @@ function toggleInterface(name, on) {
       intro="This router looks names up here too."
       :locked="auth.readOnly"
     >
+      <template v-if="!auth.readOnly" #actions>
+        <ActionButton
+          label="Clear cache"
+          busy-label="Clearing…"
+          :busy="clearCache.busy.value"
+          :disabled="!dnsRunning"
+          @click="clearCache.run()"
+        />
+      </template>
       <div class="space-y-4">
+        <template v-if="!auth.readOnly">
+          <ErrorLine v-if="clearCache.error.value">{{ clearCache.error.value }}</ErrorLine>
+          <p v-else-if="cleared" role="status" class="text-ink-muted">{{ cleared }}</p>
+          <p v-else class="text-ink-muted">
+            Clear cache: names are looked up again on the running resolver.
+          </p>
+        </template>
         <div class="fields fields-card">
           <FormField id="dns-resolver" label="Resolver" :hint="resolverHints[resolver]">
             <select id="dns-resolver" v-model="resolver" class="input">
@@ -336,20 +352,6 @@ function toggleInterface(name, on) {
                 class="input w-32 max-sm:w-full"
               />
             </FormField>
-          </div>
-          <div v-if="!auth.readOnly" class="flex flex-wrap items-center gap-3">
-            <ActionButton
-              label="Clear cache"
-              busy-label="Clearing…"
-              :busy="clearCache.busy.value"
-              :disabled="!dnsRunning"
-              @click="clearCache.run()"
-            />
-            <ErrorLine v-if="clearCache.error.value">
-              {{ clearCache.error.value }}
-            </ErrorLine>
-            <p v-else-if="cleared" role="status" class="text-ink-muted">{{ cleared }}</p>
-            <p v-else class="text-ink-muted">Names are looked up again on the running resolver.</p>
           </div>
 
           <fieldset class="field-group">

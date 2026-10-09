@@ -108,7 +108,7 @@ async function loadIntoDraft() {
           label="Include administrator accounts"
           hint="Their password hashes go in the file."
         />
-        <div>
+        <div class="flex max-w-2xl justify-end gap-2 pt-2">
           <ActionButton
             kind="primary"
             label="Download backup"
@@ -140,7 +140,7 @@ async function loadIntoDraft() {
             />
           </FormField>
         </div>
-        <div>
+        <div class="flex max-w-2xl justify-end gap-2 pt-2">
           <ActionButton
             label="Restore from file"
             busy-label="Restoring…"

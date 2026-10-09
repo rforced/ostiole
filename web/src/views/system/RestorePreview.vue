@@ -52,9 +52,9 @@ function count(n, one, many = `${one}s`) {
         empty-label="Nothing: this backup matches the saved configuration."
       />
     </div>
-    <div class="flex gap-2 pt-1">
-      <button type="button" class="btn-primary" @click="$emit('load')">Load into draft</button>
+    <div class="flex justify-end gap-2 pt-2">
       <button type="button" class="btn-secondary" @click="$emit('cancel')">Cancel</button>
+      <button type="button" class="btn-primary" @click="$emit('load')">Load into draft</button>
     </div>
   </AppNotice>
 </template>
