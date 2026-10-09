@@ -82,13 +82,10 @@ const budget = computed(() => {
   const l = limits.value
   return l?.memTotal > 0 && Number.isFinite(l.budget) ? l.budget : null
 })
-const outOf = computed(() => {
-  if (budget.value !== null) return ` of the ${formatBytes(budget.value)} this router has for them`
-  return memory.value ? ` of ${formatBytes(memory.value)}` : ''
-})
-const over = computed(
-  () => budget.value !== null && total.value * (limits.value.peakFactor || 1) > budget.value,
-)
+const outOf = computed(() => (memory.value ? ` of ${formatBytes(memory.value)}` : ''))
+/** What the logs cost at their largest, which is what the daemon checks. */
+const peak = computed(() => total.value * (limits.value?.peakFactor || 1))
+const over = computed(() => budget.value !== null && peak.value > budget.value)
 const heavy = computed(
   () => budget.value === null && memory.value > 0 && total.value > memory.value / 2,
 )
@@ -132,7 +129,13 @@ const daysHint = computed(() => {
             />
           </FormField>
         </div>
-        <p class="text-ink-muted">All logs: {{ formatBytes(total) }}{{ outOf }} when full.</p>
+        <p v-if="budget !== null" class="text-ink-muted">
+          All logs: {{ formatBytes(peak) }} at their largest. This router has
+          {{ formatBytes(budget) }} for them.
+        </p>
+        <p v-else class="text-ink-muted">
+          All logs: {{ formatBytes(total) }}{{ outOf }} when full.
+        </p>
         <p v-if="inFiles" class="text-ink-muted">In files: {{ formatBytes(inFiles.bytes) }}.</p>
         <AppNotice v-if="over">That is more than this router has for them.</AppNotice>
         <AppNotice v-else-if="heavy">That is more than half of this router's memory.</AppNotice>

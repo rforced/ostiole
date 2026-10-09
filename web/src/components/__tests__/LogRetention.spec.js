@@ -124,7 +124,7 @@ describe('LogRetention', () => {
   it('sets every log against what this router has for them', async () => {
     let { wrapper } = await card({ memTotal: 4_000_000_000, limits: LIMITS })
     expect(wrapper.text()).toContain(
-      'All logs: 17.5 MB of the 3.5 GB this router has for them when full.',
+      'All logs: 26.3 MB at their largest. This router has 3.5 GB for them.',
     )
     expect(wrapper.text()).not.toContain('That is more')
     // 2.1 GB is past half of the memory, but 3.15 GB at their largest fits.
@@ -135,7 +135,7 @@ describe('LogRetention', () => {
       draft: firewallLog(6_000_000),
     }))
     expect(wrapper.text()).toContain(
-      'All logs: 2.1 GB of the 3.5 GB this router has for them when full.',
+      'All logs: 3.1 GB at their largest. This router has 3.5 GB for them.',
     )
     expect(wrapper.text()).not.toContain('That is more')
     // Each log within its ceiling, together past 3,475 MB at their largest.
@@ -148,7 +148,7 @@ describe('LogRetention', () => {
       },
     }))
     expect(wrapper.text()).toContain(
-      'All logs: 2.3 GB of the 3.5 GB this router has for them when full.',
+      'All logs: 3.5 GB at their largest. This router has 3.5 GB for them.',
     )
     expect(wrapper.text()).toContain('That is more than this router has for them.')
     expect(wrapper.text()).not.toContain('half')
