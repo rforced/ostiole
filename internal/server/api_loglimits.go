@@ -82,7 +82,7 @@ func (a *api) budget() model.MemoryBudget {
 
 func logsMemoryWarnings(cfg *model.Config, b model.MemoryBudget) []Warning {
 	var out []Warning
-	peak, room := float64(cfg.LogsFullBytes())*model.PeakFactor, b.Logs(cfg)
+	peak, room := float64(b.LogsFullBytes(cfg))*model.PeakFactor, b.Logs(cfg)
 	if b.Total > 0 && peak > float64(room) {
 		out = append(out, Warning{
 			Kind: "logs", Level: "warn", Key: "logs-memory",

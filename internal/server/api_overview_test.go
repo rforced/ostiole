@@ -962,19 +962,26 @@ func TestWarnsWhenCertificateChecksAreLimited(t *testing.T) {
 func TestWarnsWhenTheLogsCouldOutgrowTheirMemory(t *testing.T) {
 	t.Parallel()
 	cfg := starter()
-	cfg.System.Management.FirewallLog.Entries = 1_800_000 // 630 MB, 945 MB at the peak
+	cfg.System.Management.FirewallLog.Entries = 1_800_000 // held to 1,666,666 at 1.4 GB: 583 MB
+	cfg.Services.DNS.Enabled = true
+	cfg.Services.DNS.QueryLog.Enabled = true // 15 MB more, so the two outgrow 875 MB at the peak
 	find := func(mem uint64) *Warning {
 		a := &api{memTotal: func() uint64 { return mem }}
 		return warningKeyed(a.warnings(context.Background(), cfg, engine.Status{}, nil, nil, install.UnitStates{}), "logs-memory")
 	}
 	w := find(1_400_000_000)
 	if w == nil || w.Kind != "logs" || w.Title != "The logs could take more memory than this router has for them" ||
-		!strings.HasPrefix(w.Detail, "Full, the logs in memory take 945 MB. This router has 875 MB for them. Set fewer entries under Firewall › Log, ") ||
+		!strings.HasPrefix(w.Detail, "Full, the logs in memory take 897 MB. This router has 875 MB for them. Set fewer entries under Firewall › Log, ") ||
 		!strings.HasSuffix(w.Detail, "Wireless › Log or VPN › Logs.") {
 		t.Errorf("warning = %+v", w)
 	}
 	if w := find(1_500_000_000); w != nil {
-		t.Errorf("945 MB in 975 MB warned: %+v", w)
+		t.Errorf("968 MB in 975 MB warned: %+v", w)
+	}
+	// A log held to its ceiling alone never outgrows the memory.
+	cfg.Services.DNS.QueryLog.Enabled = false
+	if w := find(1_400_000_000); w != nil {
+		t.Errorf("one log at its ceiling warned: %+v", w)
 	}
 	// Memory it cannot read says nothing.
 	if w := find(0); w != nil {
