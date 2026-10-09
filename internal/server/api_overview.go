@@ -946,7 +946,7 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 			out = append(out, Warning{
 				Kind: "remote-backup-failed", Level: "warn",
 				Title:  "Remote backup did not complete",
-				Detail: detail + ". Details under System, Configuration.",
+				Detail: detail + ". Details under System › Configuration.",
 			})
 		}
 	}
@@ -969,7 +969,7 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 		out = append(out, Warning{
 			Kind: "certificate", Level: "warn", Key: c.ID,
 			Title:  title,
-			Detail: detail + " Details under System, Certificates.",
+			Detail: detail + " Details under System › Certificates.",
 		})
 	}
 	// Renaming or renumbering the router leaves the built-in certificate
@@ -1031,7 +1031,7 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 			out = append(out, Warning{
 				Kind: kindNotifyFailed, Level: "warn",
 				Title:  "Notifications are not getting through",
-				Detail: strings.Join(failed, ". ") + ". Details under System, Notifications.",
+				Detail: strings.Join(failed, ". ") + ". Details under System › Notifications.",
 			})
 		}
 	}

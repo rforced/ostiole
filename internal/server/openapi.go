@@ -215,7 +215,7 @@ var routeDocs = map[string]routeDoc{
 	"POST /api/v1/config/backup":                   {summary: "Download the configuration as a backup file.", role: auth.RoleAdmin},
 	"POST /api/v1/config/backup/remote/delete-all": {summary: "Delete every copy in the folder, hidden ones included.", role: auth.RoleAdmin},
 	"POST /api/v1/certificates/self-signed":        {summary: "Generate a new built-in self-signed certificate.", role: auth.RoleAdmin},
-	"POST /api/v1/certificates/{id}/issue":         {summary: "Order a certificate now rather than waiting for the renewal cron.", role: auth.RoleAdmin},
+	"POST /api/v1/certificates/{id}/issue":         {summary: "Order a certificate now rather than waiting for the renewal cron job.", role: auth.RoleAdmin},
 	"GET /api/v1/certificates/{id}/files":          {summary: "The certificate, its chain and its key. Also open to a token restricted to this certificate.", role: auth.RoleAdmin},
 	"GET /api/v1/certificates/{id}/files/{name}":   {summary: "One PEM file of a certificate, as a download.", role: auth.RoleAdmin},
 	"POST /api/v1/certificates/{id}/pkcs12":        {summary: "The certificate and its key as a password-protected PKCS#12 file.", role: auth.RoleAdmin},

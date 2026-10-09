@@ -250,13 +250,13 @@ func (r *Runner) start(ctx context.Context, c model.Cron) {
 	r.mu.Lock()
 	if res := r.results[c.ID]; res != nil && res.running {
 		r.mu.Unlock()
-		r.Log.Warn("skipping a scheduled cron because the last run has not finished", "cron", c.ID)
+		r.Log.Warn("skipping a scheduled cron job because the last run has not finished", "cron", c.ID)
 		return
 	}
 	r.mu.Unlock()
 	go func() {
 		if err := r.run(context.WithoutCancel(ctx), c); err != nil {
-			r.Log.Warn("a scheduled cron failed", "cron", c.ID, "err", err)
+			r.Log.Warn("a scheduled cron job failed", "cron", c.ID, "err", err)
 		}
 	}()
 }

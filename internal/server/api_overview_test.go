@@ -569,7 +569,7 @@ func TestOverviewWarnsAboutAFailedRemoteBackup(t *testing.T) {
 	if !strings.Contains(w.Detail, "the key may not upload") || !strings.Contains(w.Detail, "03:00") {
 		t.Errorf("warning = %+v", w)
 	}
-	if !strings.Contains(w.Detail, "System, Configuration") {
+	if !strings.Contains(w.Detail, "System › Configuration") {
 		t.Errorf("warning does not say where to look: %+v", w)
 	}
 
@@ -776,7 +776,7 @@ func TestOverviewWarnsWhenTheBuiltInCertificateMissesAName(t *testing.T) {
 	if w == nil {
 		t.Fatalf("want a certificate-names warning, got %+v", getOverview(t, srv).Warnings)
 	}
-	if !strings.Contains(w.Detail, "cover fw, 10.0.0.1, so") || !strings.Contains(w.Detail, "System, Certificates") {
+	if !strings.Contains(w.Detail, "cover fw, 10.0.0.1, so") || !strings.Contains(w.Detail, "System › Certificates") {
 		t.Errorf("detail = %q, want the hostname and the LAN address, and where to regenerate", w.Detail)
 	}
 

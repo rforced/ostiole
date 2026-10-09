@@ -194,7 +194,7 @@ func (a *api) logFileWarnings(cfg *model.Config) []Warning {
 			Kind: "log-files", Level: "warn", Key: "room",
 			Title: "Logs are waiting in memory",
 			Detail: "The disk holding " + st.Dir + " has less than 5% free, so nothing is written to the log files. " +
-				"Details under System, General.",
+				"Details under System › General.",
 		})
 	}
 	for _, l := range st.Logs {
@@ -208,7 +208,7 @@ func (a *api) logFileWarnings(cfg *model.Config) []Warning {
 		out = append(out, Warning{
 			Kind: "log-files", Level: "warn", Key: l.Name,
 			Title:  "The " + name + " is not being written to its files",
-			Detail: l.Error + ". Details under System, General.",
+			Detail: l.Error + ". Details under System › General.",
 		})
 	}
 	return out
