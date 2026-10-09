@@ -62,7 +62,7 @@ test('the logs are written to files once switched on, and cleared', async ({ pag
   const dialog = page.getByRole('dialog')
   await expect(dialog).toContainText('Clear every log?')
   await expect(dialog).toContainText('Traffic per device')
-  await expect(dialog).toContainText('Traffic per link')
+  await expect(dialog).toContainText('Traffic per interface')
   await expect(dialog).toContainText(
     'Each is emptied, and its files are deleted. The journal is kept.',
   )
