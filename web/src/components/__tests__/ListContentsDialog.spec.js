@@ -57,7 +57,7 @@ describe('ListContentsDialog', () => {
     expect(read).toHaveBeenCalledWith('', 0, 1000)
     expect(rows()).toHaveLength(1000)
     expect(rows()[0]).toBe('10.0.0.0')
-    expect(document.body.textContent).toContain('2,500 of 2,500')
+    expect(document.body.textContent).not.toContain('2,500 of 2,500')
     expect(document.body.textContent).toContain('1–1,000 of 2,500.')
     expect(button('Previous')).toBeUndefined()
   })

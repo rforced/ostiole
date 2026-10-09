@@ -19,10 +19,20 @@ describe('SearchBox', () => {
     expect(wrapper.props('modelValue')).toBe('printer')
   })
 
-  it('counts the rows left when it knows how many there are', async () => {
-    const wrapper = mount(SearchBox, { props: { placeholder: 'x', shown: 2, total: 5 } })
+  it('counts the rows left while it searches, when it knows how many there are', async () => {
+    const wrapper = mount(SearchBox, {
+      props: { modelValue: 'lap', placeholder: 'x', shown: 2, total: 5 },
+    })
     expect(wrapper.text()).toContain('2 of 5')
     await wrapper.setProps({ total: null })
+    expect(wrapper.text()).not.toContain('of')
+  })
+
+  // With nothing typed the card's own count says how many there are.
+  it('says nothing while it holds no query', async () => {
+    const wrapper = mount(SearchBox, {
+      props: { modelValue: ' ', placeholder: 'x', shown: 5, total: 5 },
+    })
     expect(wrapper.text()).not.toContain('of')
   })
 })

@@ -7,7 +7,7 @@ import { formatCount } from '@/lib/format'
 /**
  * The one search box: the list narrows as you type, whether the page holds
  * it or the router searches it. Given a total, it says how many rows are
- * left.
+ * left while it holds a query; the card's count says it otherwise.
  */
 defineProps({
   /** What it matches, e.g. "address, MAC, or interface". */
@@ -39,7 +39,7 @@ const id = useId()
         autocomplete="off"
       />
     </div>
-    <span v-if="total !== null" class="text-ink-muted tabular-nums"
+    <span v-if="total !== null && query.trim()" class="text-ink-muted tabular-nums"
       >{{ formatCount(shown) }} of {{ formatCount(total) }}</span
     >
   </div>
