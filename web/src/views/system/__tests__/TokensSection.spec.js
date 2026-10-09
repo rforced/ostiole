@@ -39,7 +39,7 @@ describe('TokensSection', () => {
   })
 
   it('copies the secret with the clipboard where the page may use it', async () => {
-    const writeText = vi.fn().mockResolvedValue()
+    const writeText = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('isSecureContext', true)
     vi.stubGlobal('navigator', { clipboard: { writeText } })
     const wrapper = await minted()

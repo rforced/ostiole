@@ -172,7 +172,7 @@ describe('ExclusionsCard', () => {
   })
 
   it('lets a viewer read them and change nothing', async () => {
-    useAuthStore().user = { name: 'eve', role: 'viewer' }
+    useAuthStore().user = { username: 'eve', role: 'viewer' }
     const { wrapper } = await card([{ id: 'watch', exclusions: [{ rule: '942100' }] }])
     expect(wrapper.text()).not.toContain('Add exclusion')
     expect(rows(wrapper)[0].get('button.link-action').text()).toBe('View')

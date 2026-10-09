@@ -52,6 +52,7 @@ export function formatAddress({ value, bits }) {
   if (bits === 32) {
     return [24n, 16n, 8n, 0n].map((shift) => Number((value >> shift) & 0xffn)).join('.')
   }
+  /** @type {number[]} */
   const groups = []
   for (let shift = 112n; shift >= 0n; shift -= 16n) groups.push(Number((value >> shift) & 0xffffn))
   let best = { at: -1, len: 1 }

@@ -75,10 +75,11 @@ const log = useLog({
   },
   keep: (row) => {
     const f = filter.value
-    if (f.status && row.status !== f.status) return false
-    if (f.type && row.type !== f.type) return false
-    if (f.list && !(row.lists ?? []).includes(f.list)) return false
-    return true
+    return (
+      (!f.status || row.status === f.status) &&
+      (!f.type || row.type === f.type) &&
+      (!f.list || (row.lists ?? []).includes(f.list))
+    )
   },
   values: queryValues,
   top: card,

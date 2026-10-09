@@ -7,9 +7,6 @@
 /** The windows a traffic chart spans, shortest first, in seconds. */
 export const SPANS = { '5m': 300, '24h': 86400, '30d': 30 * 86400 }
 
-/** What each window is called where it is chosen. */
-export const WINDOW_LABELS = { '5m': '5 minutes', '24h': '24 hours', '30d': '30 days' }
-
 /**
  * The top of the value axis and its step: a round step (1, 2, 2.5 or 5
  * of a power of ten) that divides the highest value into about four.
