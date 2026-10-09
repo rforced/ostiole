@@ -401,6 +401,9 @@ func TestProxyReadsJSONBodiesAsJSON(t *testing.T) {
 		// Both flatten to json.a.b, where Coraza 3.7 kept only the last.
 		{"/collision", "application/json", `{"a":{"b":"<script>alert(1)</script>"},"a.b":"x"}`, http.StatusForbidden},
 		{"/broken", "application/json", `{"name": `, http.StatusForbidden},
+		// A no-break space before the type: still read as JSON, as the form
+		// reader would, so the attack is found under its name.
+		{"/nbsp", "\u00a0application/json", `{"name":"<script>alert(1)</script>"}`, http.StatusForbidden},
 	} {
 		if got := post(t, plain, site+c.path, c.contentType, c.body); got != c.status {
 			t.Errorf("%s: status %d, want %d", c.path, got, c.status)
@@ -427,14 +430,17 @@ func TestProxyReadsJSONBodiesAsJSON(t *testing.T) {
 	}
 	waitFor(t, "the events", func() bool {
 		_, xss := event("/xss")()
+		_, nbsp := event("/nbsp")()
 		_, broken := event("/broken")()
 		_, deep := event("/deep")()
-		return xss && broken && deep
+		return xss && nbsp && broken && deep
 	})
-	if ev, _ := event("/xss")(); !slices.ContainsFunc(ev.Rules, func(h wafevent.Hit) bool {
-		return h.ID == 941100 && strings.Contains(h.Data, "found within ARGS:json.name:")
-	}) {
-		t.Errorf("the attack in a value was caught as %+v", ev.Rules)
+	for _, path := range []string{"/xss", "/nbsp"} {
+		if ev, _ := event(path)(); !slices.ContainsFunc(ev.Rules, func(h wafevent.Hit) bool {
+			return h.ID == 941100 && strings.Contains(h.Data, "found within ARGS:json.name:")
+		}) {
+			t.Errorf("%s: the attack in a value was caught as %+v", path, ev.Rules)
+		}
 	}
 	for _, path := range []string{"/broken", "/deep"} {
 		if ev, _ := event(path)(); ev.Status != http.StatusForbidden || !slices.ContainsFunc(ev.Rules, func(h wafevent.Hit) bool {

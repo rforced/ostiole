@@ -152,10 +152,13 @@ func wafDirectives(dir string, w model.WAFProfile, siteID string) string {
 	// all. The refusal is a 403 like any other, not the recommended 400: the
 	// audit line cannot see a rule's own status, and an event says what the
 	// client got.
+	// Leading Unicode spaces are passed over, as mime.ParseMediaType trims
+	// them for the form and multipart readers. No \x escape here: it puts
+	// Coraza's rx into its bytes-only matcher, which knows no \p{Z}.
 	id++
-	fmt.Fprintf(&b, "SecRule REQUEST_HEADERS:Content-Type \"@rx ^application/(?:[a-z0-9.-]+[+])?json\" \"id:%d,phase:1,t:none,t:lowercase,pass,nolog,ctl:requestBodyProcessor=JSON\"\n", id)
+	fmt.Fprintf(&b, "SecRule REQUEST_HEADERS:Content-Type \"@rx ^[\\s\\v\\p{Z}]*application/(?:[a-z0-9.-]+[+])?json\" \"id:%d,phase:1,t:none,t:lowercase,pass,nolog,ctl:requestBodyProcessor=JSON\"\n", id)
 	id++
-	fmt.Fprintf(&b, "SecRule REQUEST_HEADERS:Content-Type \"@rx ^(?:application/(?:[a-z0-9.-]+[+])?|text/)xml\" \"id:%d,phase:1,t:none,t:lowercase,pass,nolog,ctl:requestBodyProcessor=XML\"\n", id)
+	fmt.Fprintf(&b, "SecRule REQUEST_HEADERS:Content-Type \"@rx ^[\\s\\v\\p{Z}]*(?:application/(?:[a-z0-9.-]+[+])?|text/)xml\" \"id:%d,phase:1,t:none,t:lowercase,pass,nolog,ctl:requestBodyProcessor=XML\"\n", id)
 	// A body past the limit is read up to it and no further, so what an
 	// attacker puts after a limit's worth of padding no rule would see: it
 	// is refused, before a JSON one cut short reads as unparseable. Coraza's
