@@ -125,16 +125,19 @@ func TestMemoryCheckRefusesTheLogsTogether(t *testing.T) {
 	}
 }
 
-func TestMemoryCheckFallsBackToTheFirewallLog(t *testing.T) {
+func TestMemoryCheckLeavesTheDefaultsAlone(t *testing.T) {
 	t.Parallel()
 	c := &Config{}
 	c.System.Management.FirewallLog.Entries = 40_000
-	got := MemoryBudget{Total: 530_000_000}.Check(c)
+	if got := (MemoryBudget{Total: 530_000_000}).Check(c); got != nil {
+		t.Errorf("a setting under its default: %v", got)
+	}
+	c.System.Management.FirewallLog.Entries = 60_000
 	want := []Issue{
 		{Path: "system.management.firewallLog.entries", Message: "this router allows up to 9523"},
-		{Path: "system.management.firewallLog.entries", Message: "the logs come to 21.0 MB at their largest; this router has 5.0 MB for them"},
+		{Path: "system.management.firewallLog.entries", Message: "the logs come to 31.5 MB at their largest; this router has 5.0 MB for them"},
 	}
-	if !slices.Equal(got, want) {
+	if got := (MemoryBudget{Total: 530_000_000}).Check(c); !slices.Equal(got, want) {
 		t.Errorf("issues = %v", got)
 	}
 }

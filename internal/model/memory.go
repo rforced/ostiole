@@ -122,6 +122,9 @@ func (b MemoryBudget) Check(c *Config) []Issue {
 			continue
 		}
 		full += int64(l.size) * l.bytes
+		if l.size <= l.def {
+			continue
+		}
 		if most := b.Ceiling(c, l.bytes, l.most); l.size > most {
 			v.add(l.path, "this router allows up to %d", most)
 		}
@@ -132,15 +135,10 @@ func (b MemoryBudget) Check(c *Config) []Issue {
 	}
 	msg := fmt.Sprintf("the logs come to %s at their largest; this router has %s for them",
 		bytesText(peak), bytesText(room))
-	placed := false
 	for _, l := range logs {
 		if l.on && l.size > l.def {
 			v.add(l.path, "%s", msg)
-			placed = true
 		}
-	}
-	if !placed {
-		v.add(firewallLogEntries, "%s", msg)
 	}
 	return v.issues
 }
