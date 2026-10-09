@@ -49,7 +49,7 @@ function blank() {
     mode: 'slaac',
     rangeStart: '',
     rangeEnd: '',
-    leaseTime: '24h',
+    leaseTime: '',
     dns: '',
     domain: '',
     dnsRegistration: false,
@@ -137,10 +137,15 @@ function save() {
         </FormField>
       </div>
       <div class="fields">
-        <FormField id="v6-lease" label="Lease time" hint="Also the advertised prefix lifetime.">
+        <FormField
+          id="v6-lease"
+          label="Lease time"
+          hint="24h is the default, also the advertised prefix lifetime."
+        >
           <input
             id="v6-lease"
             v-model="form.leaseTime"
+            placeholder="24h"
             class="input w-32 font-mono max-sm:w-full"
             spellcheck="false"
           />

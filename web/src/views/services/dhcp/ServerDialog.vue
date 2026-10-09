@@ -30,7 +30,7 @@ function blank() {
     enabled: true,
     rangeStart: '',
     rangeEnd: '',
-    leaseTime: '24h',
+    leaseTime: '',
     gateway: '',
     dns: '',
     domain: '',
@@ -126,11 +126,12 @@ function save() {
         <FormField
           id="sc-lease"
           label="Lease time"
-          hint="A number and a unit: 24h, 2d. infinite never expires."
+          hint="24h is the default. 2d works too, and infinite never expires."
         >
           <input
             id="sc-lease"
             v-model="form.leaseTime"
+            placeholder="24h"
             class="input w-32 font-mono max-sm:w-full"
             spellcheck="false"
           />
