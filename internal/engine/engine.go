@@ -395,7 +395,7 @@ func (e *Engine) budget() model.MemoryBudget {
 	}
 	n := e.MemTotal()
 	if n > math.MaxInt64 {
-		n = math.MaxInt64
+		return model.MemoryBudget{Total: math.MaxInt64}
 	}
 	return model.MemoryBudget{Total: int64(n)}
 }

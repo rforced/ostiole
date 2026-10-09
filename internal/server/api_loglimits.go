@@ -75,7 +75,7 @@ func (a *api) logLimits(w http.ResponseWriter, _ *http.Request) error {
 func (a *api) budget() model.MemoryBudget {
 	n := a.memory()
 	if n > math.MaxInt64 {
-		n = math.MaxInt64
+		return model.MemoryBudget{Total: math.MaxInt64}
 	}
 	return model.MemoryBudget{Total: int64(n)}
 }
