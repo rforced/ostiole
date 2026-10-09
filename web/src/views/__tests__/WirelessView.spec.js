@@ -243,7 +243,7 @@ describe('NetworkDialog', () => {
     const store = useConfigStore()
     const net = store.findInterface('ap0')
     expect(net.wireless).toMatchObject({ radio: 'wlp3s0', ssid: 'ostiole-lan' })
-    expect(net.zone).toBe('')
+    expect(net.zone).toBeUndefined()
     // The bridge is what carries the segment, so the network joins it.
     expect(store.findInterface('br-lan').bridge.members).toContain('ap0')
   })

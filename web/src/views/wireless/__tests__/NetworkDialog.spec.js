@@ -79,3 +79,20 @@ describe('NetworkDialog Enhanced open', () => {
     expect(owe(w).text()).toBe('Enhanced open')
   })
 })
+
+describe('NetworkDialog round trip', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('reopens a network as saved and keeps what the Interfaces page set', async () => {
+    const network = { ...guest, description: 'Guests', logDrops: true }
+    const w = await open({ setUp: true, enhancedOpen: true, radios: [] }, network)
+    const config = useConfigStore()
+    config.saved = JSON.parse(JSON.stringify(config.draft))
+    await w.get('form').trigger('submit')
+    expect(config.findInterface('ap0')).toMatchObject({ description: 'Guests', logDrops: true })
+    expect(config.dirty).toBe(false)
+  })
+})

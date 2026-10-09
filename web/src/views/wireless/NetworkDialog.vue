@@ -124,22 +124,24 @@ function save() {
   const f = form.value
   const name = f.name.trim()
   const bridged = f.attach === 'bridge' && f.bridge
+  // What this dialog does not show, such as log drops set on the
+  // Interfaces page, stays as it was.
+  const was = f.previousName ? config.findInterface(f.previousName) : null
+  const existing = was ? JSON.parse(JSON.stringify(was)) : {}
   const iface = {
+    ...existing,
     name,
     enabled: f.enabled,
-    zone: bridged ? '' : f.zone,
     ipv4: !bridged && f.address ? { mode: 'static', address: f.address.trim() } : { mode: 'none' },
-    ipv6: { mode: 'none' },
-    wireless: {
-      radio: f.radio,
-      ssid: f.ssid.trim(),
-      security: f.security,
-      passphrase: needsPassphrase.value ? f.passphrase : '',
-      hidden: f.hidden,
-      isolate: f.isolate,
-      maxClients: Number(f.maxClients) || 0,
-    },
+    ipv6: existing.ipv6 ?? { mode: 'none' },
+    wireless: { radio: f.radio, ssid: f.ssid.trim(), security: f.security },
   }
+  if (bridged || !f.zone) delete iface.zone
+  else iface.zone = f.zone
+  if (needsPassphrase.value && f.passphrase) iface.wireless.passphrase = f.passphrase
+  if (f.hidden) iface.wireless.hidden = true
+  if (f.isolate) iface.wireless.isolate = true
+  if (Number(f.maxClients) > 0) iface.wireless.maxClients = Number(f.maxClients)
   // A renamed network leaves its old interface, and its old bridge
   // membership, behind.
   if (f.previousName && f.previousName !== name) config.removeInterface(f.previousName)
