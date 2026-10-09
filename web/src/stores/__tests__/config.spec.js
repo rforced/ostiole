@@ -1009,3 +1009,50 @@ describe('config store dirty', () => {
     expect(config.dirty).toBe(true)
   })
 })
+
+describe('config store put back', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  function seeded(extra = {}) {
+    const config = useConfigStore()
+    const d = { ...draft(), ...extra }
+    config.saved = JSON.parse(JSON.stringify(d))
+    config.replaceDraft(d)
+    return config
+  }
+
+  it('drops the wireless country, and the block, when it is set back to nothing', () => {
+    const config = seeded()
+    config.setWirelessCountry('US')
+    expect(config.dirty).toBe(true)
+    config.setWirelessCountry('')
+    expect(config.dirty).toBe(false)
+  })
+
+  it('drops a defence value set to nothing', () => {
+    const config = seeded()
+    config.setDefence('synFlood', { rate: 30, burst: 60 })
+    config.setDefence('synFlood', { burst: null })
+    expect(config.draft.protection.synFlood).toEqual({ rate: 30 })
+  })
+
+  it('drops remote backup fields cleared again, and the block with them', () => {
+    const config = seeded()
+    config.setRemoteBackup({ bucket: 'router-backups' })
+    config.setRemoteBackup({ enabled: true })
+    expect(config.draft.backup.remote).toEqual({ bucket: 'router-backups', enabled: true })
+    config.setRemoteBackup({ enabled: false })
+    expect(config.draft.backup.remote).toEqual({ bucket: 'router-backups', enabled: false })
+    config.setRemoteBackup({ bucket: '' })
+    expect(config.draft.backup).toBeUndefined()
+    expect(config.dirty).toBe(false)
+  })
+
+  it('drops update schedules and exclusions cleared again', () => {
+    const config = seeded({ updates: { system: {}, ostiole: {} } })
+    config.setUpdates('system', { checkSchedule: '0 3 * * *', exclude: ['kernel*'] })
+    expect(config.dirty).toBe(true)
+    config.setUpdates('system', { checkSchedule: '', exclude: [] })
+    expect(config.dirty).toBe(false)
+  })
+})

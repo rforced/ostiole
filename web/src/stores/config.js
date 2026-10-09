@@ -254,7 +254,9 @@ export const useConfigStore = defineStore('config', () => {
 
   function setWirelessCountry(code) {
     const w = draft.value.wireless ?? (draft.value.wireless = {})
-    w.country = code
+    if (code) w.country = code
+    else delete w.country
+    if (!Object.keys(w).length) delete draft.value.wireless
   }
 
   function upsertRadio(radio) {
@@ -1052,8 +1054,13 @@ export const useConfigStore = defineStore('config', () => {
    * @param {"system"|"ostiole"} which
    * @param {object} patch fields to change
    */
+  /** A field set to nothing is dropped, as the saved configuration has it. */
   function setUpdates(which, patch) {
-    Object.assign(ensureUpdates()[which], patch)
+    const block = ensureUpdates()[which]
+    for (const [k, v] of Object.entries(patch)) {
+      if (v === '' || v == null || (Array.isArray(v) && !v.length)) delete block[k]
+      else block[k] = v
+    }
   }
 
   // ---- backup -----------------------------------------------------------
@@ -1070,8 +1077,19 @@ export const useConfigStore = defineStore('config', () => {
   const remoteBackup = computed(() => draft.value?.backup?.remote ?? {})
 
   /** @param {object} patch fields to change */
+  /**
+   * A field set to nothing is dropped, and the block once nothing in it
+   * is on or set, as the saved configuration has it.
+   */
   function setRemoteBackup(patch) {
-    Object.assign(ensureBackup().remote, patch)
+    const backup = ensureBackup()
+    const remote = backup.remote
+    for (const [k, v] of Object.entries(patch)) {
+      if (k !== 'enabled' && (v === '' || v === 0 || v == null)) delete remote[k]
+      else remote[k] = v
+    }
+    if (!Object.keys(remote).some((k) => k !== 'enabled' || remote.enabled)) delete backup.remote
+    if (!Object.keys(backup).length) delete draft.value.backup
   }
 
   // ---- notifications ---------------------------------------------------
@@ -1122,7 +1140,12 @@ export const useConfigStore = defineStore('config', () => {
       delete p[which]
       return
     }
-    p[which] = { ...(p[which] ?? {}), ...clone(value) }
+    const next = { ...(p[which] ?? {}) }
+    for (const [k, v] of Object.entries(value)) {
+      if (v == null) delete next[k]
+      else next[k] = clone(v)
+    }
+    p[which] = next
   }
 
   /** The zones defended; an empty list means every external zone. */
