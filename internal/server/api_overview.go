@@ -1001,8 +1001,8 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 				Kind: "logs", Level: "warn", Key: "logs-memory",
 				Title: "The logs could take more than half the memory",
 				Detail: "Full, the logs in memory take " + formatBytes(full) + " of " + formatBytes(mem) +
-					". Set fewer entries on Firewall, Logs, on the Queries tab under DNS, or on the Events " +
-					"tab under Reverse proxy.",
+					". Set fewer entries under Firewall › Log, Services › DNS › Queries or Services › " +
+					"Reverse proxy › Events.",
 			})
 		}
 	}
@@ -1047,7 +1047,7 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 				Kind: "update-rolled-back", Level: "warn",
 				Title: "The update to " + rb.Release() + " was rolled back",
 				Detail: "It did not answer after the restart at " + at.Format("2 January 15:04") +
-					", so " + a.updater.Current + " was put back. Its log is under Diagnostics, Logs.",
+					", so " + a.updater.Current + " was put back. Its log is under Diagnostics › Logs.",
 			})
 		}
 	}

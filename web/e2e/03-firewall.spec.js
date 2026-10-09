@@ -229,7 +229,7 @@ test('flood and scan protection render into the ruleset', async ({ page }) => {
 test('the log says what it needs to read the kernel', async ({ page }) => {
   await login(page)
   await page.goto('/firewall/log')
-  const log = page.getByRole('region', { name: 'Logs' })
+  const log = page.getByRole('region', { name: 'Log', exact: true })
   await expect(log.getByRole('alert')).toHaveText(
     'The firewall log needs the daemon to run as root.',
   )
@@ -309,7 +309,7 @@ test('the log reads on as it scrolls, and searches on the router', async ({ page
   const asked = await standInLog(page)
   await login(page)
   await page.goto('/firewall/log')
-  const log = page.getByRole('region', { name: 'Logs' })
+  const log = page.getByRole('region', { name: 'Log', exact: true })
   const rows = log.locator('tbody tr')
   await expect(rows).toHaveCount(200)
   await expect(log).toContainText('1,000 entries back to')

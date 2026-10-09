@@ -101,7 +101,7 @@ const empty = computed(() => {
       />
     </LogRetention>
 
-    <SectionCard ref="card" title="Logs" flush>
+    <SectionCard ref="card" title="Log" flush>
       <template #intro>
         {{ log.updatedAt.value ? heldLine(log.held.value, log.oldest.value, inFiles) : '' }}
         <template v-if="inFiles">Older ones are read from the files.</template>

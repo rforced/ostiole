@@ -95,7 +95,7 @@ export const NAV = [
           { value: 'live', label: 'Live' },
         ],
       },
-      { path: 'log', label: 'Logs', view: () => import('@/views/firewall/LogPage.vue') },
+      { path: 'log', label: 'Log', view: () => import('@/views/firewall/LogPage.vue') },
     ],
   },
   {
@@ -146,7 +146,7 @@ export const NAV = [
         label: 'Reverse proxy',
         view: () => import('@/views/services/ProxyPage.vue'),
         tabs: [
-          { value: 'service', label: 'Service' },
+          { value: 'service', label: 'Settings' },
           { value: 'sites', label: 'Sites' },
           { value: 'pools', label: 'Pools' },
           { value: 'routes', label: 'Routes' },
@@ -161,7 +161,7 @@ export const NAV = [
         label: 'UPnP',
         view: () => import('@/views/services/UpnpPage.vue'),
         tabs: [
-          { value: 'service', label: 'Service' },
+          { value: 'service', label: 'Settings' },
           { value: 'mappings', label: 'Mappings' },
         ],
       },

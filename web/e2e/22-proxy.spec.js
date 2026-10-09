@@ -78,7 +78,7 @@ test('publish a site through a pool and apply it', async ({ page }) => {
 
   // HTTPS on wan from the admins alias, then HTTP and the route from
   // anywhere, moved above it.
-  await page.getByRole('tab', { name: 'Service' }).click()
+  await page.getByRole('tab', { name: 'Settings' }).click()
   await page.getByRole('button', { name: 'Add rule' }).click()
   dialog = page.getByRole('dialog')
   await dialog.getByLabel('Description').fill('Admins')
