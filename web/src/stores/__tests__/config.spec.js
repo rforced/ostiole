@@ -610,6 +610,50 @@ describe('config store traffic shaping', () => {
     expect(config.certificates.map((c) => c.id)).toEqual(['edge'])
   })
 
+  // A site or the web UI left on the old id would name nothing.
+  it('follows a renamed certificate in its sites and the management port', () => {
+    const config = useConfigStore()
+    const d = draft()
+    d.system = { management: { certificate: 'router' } }
+    d.certificates = [
+      { id: 'router', enabled: true, source: 'acme', names: ['router.example.test'] },
+    ]
+    d.services = {
+      proxy: {
+        enabled: true,
+        pools: [{ id: 'web', upstreams: [{ address: '10.0.0.2:80' }] }],
+        sites: [
+          {
+            id: 'shop',
+            enabled: true,
+            hosts: ['shop.example.com'],
+            pool: 'web',
+            certificate: 'router',
+          },
+          { id: 'blog', enabled: true, hosts: ['blog.example.com'], pool: 'web' },
+        ],
+      },
+    }
+    config.replaceDraft(d)
+    config.markSaved()
+
+    const renamed = { ...d.certificates[0], id: 'edge' }
+    config.upsertCertificate(renamed, 'router')
+    expect(config.certificates.map((c) => c.id)).toEqual(['edge'])
+    expect(config.draft.system.management.certificate).toBe('edge')
+    expect(config.proxy.sites.map((s) => s.certificate)).toEqual(['edge', undefined])
+
+    // An edit has no undo of its own; discarding the draft puts the old id
+    // back everywhere, and undoing that brings the rename back whole.
+    config.discard()
+    expect(config.certificates.map((c) => c.id)).toEqual(['router'])
+    expect(config.draft.system.management.certificate).toBe('router')
+    expect(config.proxy.sites.map((s) => s.certificate)).toEqual(['router', undefined])
+    useToastStore().toasts.at(-1).action.run()
+    expect(config.draft.system.management.certificate).toBe('edge')
+    expect(config.proxy.sites.map((s) => s.certificate)).toEqual(['edge', undefined])
+  })
+
   it('files certificate changes under the certificates page', () => {
     const config = useConfigStore()
     config.replaceDraft(draft())

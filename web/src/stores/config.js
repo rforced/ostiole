@@ -1383,11 +1383,17 @@ export const useConfigStore = defineStore('config', () => {
     return d.acme
   }
 
+  /** A renamed certificate keeps the sites and the web UI that serve it. */
   function upsertCertificate(cert, was) {
     const list = draft.value.certificates ?? (draft.value.certificates = [])
     const idx = list.findIndex((c) => c.id === (was ?? cert.id))
     if (idx === -1) list.push(clone(cert))
     else list[idx] = clone(cert)
+    if (!was || was === cert.id) return
+    const m = draft.value.system?.management
+    if (m?.certificate === was) m.certificate = cert.id
+    for (const s of draft.value.services?.proxy?.sites ?? [])
+      if (s.certificate === was) s.certificate = cert.id
   }
 
   /** The mutation behind removeCertificate, in the order certificateDependents lists it. */
