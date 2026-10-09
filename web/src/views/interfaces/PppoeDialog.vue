@@ -2,7 +2,6 @@
 import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
-import AppDisclosure from '@/components/AppDisclosure.vue'
 import AppNotice from '@/components/AppNotice.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
@@ -201,7 +200,8 @@ function save() {
         </FormField>
       </div>
 
-      <AppDisclosure>
+      <fieldset class="field-group">
+        <legend>Line</legend>
         <div class="fields">
           <FormField
             id="ppp-service"
@@ -231,11 +231,7 @@ function save() {
               class="input w-32 font-mono max-sm:w-full"
             />
           </FormField>
-          <FormField
-            id="ppp-lcp"
-            label="Echo every (seconds)"
-            hint="How often the line is checked."
-          >
+          <FormField id="ppp-lcp" label="Echo every (seconds)" hint="10 is the default.">
             <input
               id="ppp-lcp"
               v-model.number="form.lcpInterval"
@@ -248,7 +244,7 @@ function save() {
           <FormField
             id="ppp-fail"
             label="Redial after missed echoes"
-            hint="How many go unanswered before the session is dropped and redialled."
+            hint="5 in a row is the default."
           >
             <input
               id="ppp-fail"
@@ -260,7 +256,7 @@ function save() {
             />
           </FormField>
         </div>
-      </AppDisclosure>
+      </fieldset>
 
       <ToggleRow v-model="form.ipv6" label="Ask for IPv6 as well" />
 
