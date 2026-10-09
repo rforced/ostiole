@@ -853,6 +853,14 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 					"Set Keepalive to 0 on " + strings.Join(peers, ", ") + " under VPN, WireGuard.",
 			})
 		}
+		if alias, ok := exemptClientsOutside(cfg); ok {
+			out = append(out, Warning{
+				Kind: "enforce-exempt-outside", Level: "warn",
+				Title: "DNS enforcement exempts no client",
+				Detail: "Alias " + alias + " holds no address inside your networks. Except these clients matches the client's own " +
+					"address; to let a destination through, use Except these destinations.",
+			})
+		}
 	}
 	// A fetched alias with nothing in it turns the rules that use it inside
 	// out: "drop unless home country" drops everything until the first
@@ -1163,6 +1171,27 @@ func emptyRuleAliases(cfg *model.Config, statuses []feeds.Status) []emptyAlias {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].alias < out[j].alias })
 	return out
+}
+
+// exemptClientsOutside names the alias Except these clients uses when no
+// address written in it is inside the router's networks.
+func exemptClientsOutside(cfg *model.Config) (string, bool) {
+	e := cfg.Blocking.Enforce
+	enforced := e.BlockDoT || e.DoHAlias != "" || (e.RedirectDNS && cfg.Services.DNS.Enabled)
+	if !enforced {
+		return "", false
+	}
+	a, ok := cfg.Alias(e.ExemptClients)
+	if !ok {
+		return "", false
+	}
+	nets := cfg.InternalNetworks()
+	for _, e := range a.Entries {
+		if p, err := model.ParseAddress(e); err == nil && slices.ContainsFunc(nets, p.Overlaps) {
+			return "", false
+		}
+	}
+	return a.Name, true
 }
 
 func (a *api) gatewayStatuses() []gateway.Status {

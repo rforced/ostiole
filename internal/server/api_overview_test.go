@@ -929,6 +929,43 @@ func TestEmptyRuleAliases(t *testing.T) {
 	}
 }
 
+// Except these clients matches the client's own address, so an alias with
+// nothing written inside the router's networks exempts no one.
+func TestWarnsWhenEnforcementExemptsNoClient(t *testing.T) {
+	t.Parallel()
+	cfg := starter()
+	cfg.Blocking.Enforce.BlockDoT = true
+	cfg.Aliases = []model.Alias{
+		{Name: "cloud", Type: model.AliasHosts, Entries: []string{"192.0.2.10", "198.51.100.0/24"}},
+		{Name: "transit", Type: model.AliasASN, Entries: []string{"AS64500"}},
+		{Name: "list", Type: model.AliasHosts, Entries: []string{"https://lists.example.test/hosts.txt"}},
+		{Name: "feed", Type: model.AliasHosts, Entries: []string{"https://lists.example.test/hosts.txt", "10.0.0.30"}},
+		{Name: "desk", Type: model.AliasHosts, Entries: []string{"198.51.100.7", "10.0.0.20"}},
+		{Name: "office", Type: model.AliasHosts, Entries: []string{"10.0.0.0/16"}},
+	}
+	find := func(alias string) *Warning {
+		cfg.Blocking.Enforce.ExemptClients = alias
+		ws := (&api{}).warnings(context.Background(), cfg, engine.Status{}, nil, nil, install.UnitStates{})
+		return warning(Overview{Warnings: ws}, "enforce-exempt-outside")
+	}
+	for _, alias := range []string{"cloud", "transit", "list"} {
+		w := find(alias)
+		if w == nil || w.Level != "warn" || w.Title != "DNS enforcement exempts no client" ||
+			!strings.HasPrefix(w.Detail, "Alias "+alias+" holds no address inside your networks.") {
+			t.Errorf("%s: warning = %+v", alias, w)
+		}
+	}
+	for _, alias := range []string{"feed", "desk", "office", ""} {
+		if w := find(alias); w != nil {
+			t.Errorf("%q warned: %+v", alias, w)
+		}
+	}
+	cfg.Blocking.Enforce.BlockDoT = false
+	if w := find("cloud"); w != nil {
+		t.Errorf("nothing enforced warned: %+v", w)
+	}
+}
+
 // An http-01 certificate checked through a proxy whose port 80 is open to
 // some sources only is worth a line: the CA checks from several places.
 func TestWarnsWhenCertificateChecksAreLimited(t *testing.T) {
