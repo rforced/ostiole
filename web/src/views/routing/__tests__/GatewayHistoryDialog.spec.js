@@ -127,7 +127,7 @@ describe('GatewayHistoryDialog', () => {
     })
     await flushPromises()
     expect(w.get('dl').text()).toContain('6.0 ms mean, 8.0 ms worst, 33% lost')
-    await w.get('select').setValue('31d')
+    await w.get('select').setValue('30d')
     await flushPromises()
     expect(source).toBeNull()
   })

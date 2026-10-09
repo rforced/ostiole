@@ -11,7 +11,7 @@ export const DESTINATION_WINDOWS = [
 ]
 
 /** The Destinations window a Devices window reads a device's from. */
-export const DESTINATIONS_FOR = { '5m': '1h', '24h': '24h', '31d': '7d' }
+export const DESTINATIONS_FOR = { '5m': '1h', '24h': '24h', '30d': '7d' }
 
 /**
  * What a destination row's port is: its service where the router names
@@ -27,7 +27,7 @@ export function serviceLabel(r) {
 export const WINDOWS = [
   { value: '5m', label: '5 minutes' },
   { value: '24h', label: '24 hours' },
-  { value: '31d', label: '31 days' },
+  { value: '30d', label: '30 days' },
 ]
 
 /**
@@ -120,7 +120,7 @@ export function sinceLine(since, window, now) {
   if (!Number.isFinite(t) || t / 1000 <= now - SPANS[window]) return ''
   const d = new Date(t)
   const when =
-    window === '31d'
+    window === '30d'
       ? d.toLocaleString(undefined, {
           day: 'numeric',
           month: 'short',

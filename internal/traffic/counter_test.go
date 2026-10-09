@@ -440,7 +440,7 @@ func TestBucketsRollOverAndAgeOut(t *testing.T) {
 	if len(s.minutes) != 1 || len(s.hours) != 2 {
 		t.Errorf("after a day: %d minutes, %d hours", len(s.minutes), len(s.hours))
 	}
-	pts, tot = s.read(Window31d, later, loc)
+	pts, tot = s.read(Window30d, later, loc)
 	if tot != (Totals{Down: 1801, Up: 61}) || len(pts) != 26 {
 		t.Errorf("a month = %d points, %+v", len(pts), tot)
 	}

@@ -25,7 +25,7 @@ import {
 const props = defineProps({
   /** [seconds, ...values], oldest first; null until the first read. */
   points: { type: Array, default: null },
-  /** A key of SPANS: 5m, 24h or 31d. */
+  /** A key of SPANS: 5m, 24h or 30d. */
   window: { type: String, default: '5m' },
   /** The right edge in seconds; the last point's time when unset. */
   end: { type: Number, default: 0 },

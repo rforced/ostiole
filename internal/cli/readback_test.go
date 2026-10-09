@@ -243,7 +243,7 @@ func TestTheGatewaysHistoryComesBackFromItsFiles(t *testing.T) {
 	after := gateway.NewHistory()
 	readGateways(cfg, after, writer(), false, log)
 	now := time.Now()
-	for _, w := range []string{gateway.Window24h, gateway.Window31d} {
+	for _, w := range []string{gateway.Window24h, gateway.Window30d} {
 		want, got := before.Read("wan", w, now), after.Read("wan", w, now)
 		if len(got.Families) != 1 || len(got.Families[0].Points) != len(want.Families[0].Points) ||
 			got.Families[0].Sent != want.Families[0].Sent || got.Families[0].Mean != want.Families[0].Mean {

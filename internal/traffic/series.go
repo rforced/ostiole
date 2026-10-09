@@ -8,17 +8,17 @@ import (
 const (
 	Window5m  = "5m"
 	Window24h = "24h"
-	Window31d = "31d"
+	Window30d = "30d"
 )
 
 // Windows are the windows a page may ask for, shortest first.
-var Windows = []string{Window5m, Window24h, Window31d}
+var Windows = []string{Window5m, Window24h, Window30d}
 
 // How long each resolution is kept.
 const (
 	fineKept   = 5 * time.Minute
 	minuteKept = 24 * time.Hour
-	hourKept   = 31 * 24 * time.Hour
+	hourKept   = 30 * 24 * time.Hour
 )
 
 // sample is the bytes moved each way in the interval that ended at end.
@@ -121,10 +121,10 @@ func (s *series) read(window string, now time.Time, loc *time.Location) ([]Point
 	var pts []Point
 	var tot Totals
 	switch window {
-	case Window24h, Window31d:
+	case Window24h, Window30d:
 		step, bs, kept := time.Minute, s.minutes, minuteKept
 		start := func(t time.Time) time.Time { return t.Truncate(time.Minute) }
-		if window == Window31d {
+		if window == Window30d {
 			step, bs, kept = time.Hour, s.hours, hourKept
 			start = func(t time.Time) time.Time { return hourStart(t, loc) }
 		}

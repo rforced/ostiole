@@ -5,7 +5,7 @@ import { formatDuration, formatMs } from '@/lib/format'
 export const DEFAULT_PROBE_SECONDS = 30
 
 /** Seconds a point covers in a day's and a month's window: a minute, an hour. */
-export const STEPS = { '24h': 60, '31d': 3600 }
+export const STEPS = { '24h': 60, '30d': 3600 }
 
 /**
  * Seconds a point covers in a window: over five minutes, one probe.

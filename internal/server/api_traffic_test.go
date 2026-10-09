@@ -112,7 +112,7 @@ func TestTrafficReads(t *testing.T) {
 		devices.Devices[0].ID != "aa:bb:cc:00:00:05" || devices.Devices[0].Totals.Down != 50000 {
 		t.Errorf("devices = %s", raw)
 	}
-	resp, raw = do(t, srv, http.MethodGet, "/api/v1/traffic/devices/aa:bb:cc:00:00:05?window=31d", nil)
+	resp, raw = do(t, srv, http.MethodGet, "/api/v1/traffic/devices/aa:bb:cc:00:00:05?window=30d", nil)
 	var one trafficDevice
 	if resp.StatusCode != http.StatusOK || json.Unmarshal(raw, &one) != nil || len(one.Points) == 0 {
 		t.Errorf("one device: %d %s", resp.StatusCode, raw)
@@ -121,7 +121,7 @@ func TestTrafficReads(t *testing.T) {
 		t.Errorf("nobody: %d %s", resp.StatusCode, raw)
 	}
 	if resp, raw := do(t, srv, http.MethodGet, "/api/v1/traffic/interfaces?window=1y", nil); resp.StatusCode != http.StatusBadRequest ||
-		!strings.Contains(string(raw), "5m, 24h, 31d") {
+		!strings.Contains(string(raw), "5m, 24h, 30d") {
 		t.Errorf("a year: %d %s", resp.StatusCode, raw)
 	}
 }

@@ -44,7 +44,7 @@ test("a new router's WAN is measured from the start", async ({ page }) => {
   await expect(dialog).toContainText('IPv4 1.0 ms', { timeout: 15_000 })
   await expect(dialog.locator('dl')).toContainText('1.0 ms mean')
   await page.screenshot({ path: shot('72-gateway-history'), fullPage: true })
-  for (const w of ['24h', '31d']) {
+  for (const w of ['24h', '30d']) {
     await dialog.getByRole('combobox', { name: 'Window' }).selectOption(w)
     await expect(dialog.getByRole('img')).toBeVisible()
   }

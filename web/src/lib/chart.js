@@ -5,10 +5,10 @@
  */
 
 /** The windows a traffic chart spans, shortest first, in seconds. */
-export const SPANS = { '5m': 300, '24h': 86400, '31d': 31 * 86400 }
+export const SPANS = { '5m': 300, '24h': 86400, '30d': 30 * 86400 }
 
 /** What each window is called where it is chosen. */
-export const WINDOW_LABELS = { '5m': '5 minutes', '24h': '24 hours', '31d': '31 days' }
+export const WINDOW_LABELS = { '5m': '5 minutes', '24h': '24 hours', '30d': '30 days' }
 
 /**
  * The top of the value axis and its step: a round step (1, 2, 2.5 or 5
@@ -49,7 +49,7 @@ export function rateTicks({ top, step }) {
 export function timeTicks(start, end, window, narrow = false) {
   const d = new Date(start * 1000)
   const out = []
-  if (window === '31d') {
+  if (window === '30d') {
     const every = narrow ? 10 : 5
     d.setHours(0, 0, 0, 0)
     if (d.getTime() < start * 1000) d.setDate(d.getDate() + 1)
@@ -98,7 +98,7 @@ export function fittingTicks(ticks, xOf, labelOf, width) {
  */
 export function timeLabel(t, window) {
   const d = new Date(t * 1000)
-  if (window === '31d') return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+  if (window === '30d') return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
   return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 }
 

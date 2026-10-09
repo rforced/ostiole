@@ -98,7 +98,7 @@ func TestTrafficComesBackFromItsFiles(t *testing.T) {
 	fresh.now = r.now.Add(10 * time.Minute)
 	fresh.c.BeginRestore(fresh.now)
 	for _, name := range []string{LinksFile, DevicesFile} {
-		if _, err := logfile.Stream(w.Dir, name, FileVersion, math.MaxInt, fresh.now.Add(-31*24*time.Hour), ParseMinute,
+		if _, err := logfile.Stream(w.Dir, name, FileVersion, math.MaxInt, fresh.now.Add(-30*24*time.Hour), ParseMinute,
 			func(m MinuteLine) { fresh.c.RestoreMinute(name, m, fresh.now) }); err != nil {
 			t.Fatal(err)
 		}
@@ -121,7 +121,7 @@ func TestTrafficComesBackFromItsFiles(t *testing.T) {
 	if pts, _ := fresh.c.LinkReports(Window5m)[0], 0; len(pts.Points) != 0 {
 		t.Errorf("five minutes came back: %v", pts.Points)
 	}
-	d, ok := fresh.c.DeviceReport("10.0.0.5", Window31d)
+	d, ok := fresh.c.DeviceReport("10.0.0.5", Window30d)
 	if !ok || d.Totals.Up != 500 || d.Totals.Down != 5000 || !slices.Equal(d.Addresses, []string{"10.0.0.5"}) {
 		t.Errorf("device over a month = %+v, %v", d, ok)
 	}
@@ -146,14 +146,14 @@ func TestTheRestoreSkipsWhatIsTooOld(t *testing.T) {
 	r.c.RestoreMinute(LinksFile, MinuteLine{Time: now.Add(-2 * time.Hour).Truncate(time.Minute), ID: "eth0", Down: 7, Up: 8}, now)
 	r.c.RestoreMinute(DevicesFile, MinuteLine{Time: now.Add(-3 * 24 * time.Hour), ID: "a8:bb:cc:00:00:05", Down: 5, Up: 6}, now)
 	r.c.EndRestore(now)
-	l := r.c.LinkReports(Window31d)
+	l := r.c.LinkReports(Window30d)
 	if len(l) != 1 || l[0].Totals != (Totals{Down: 7, Up: 8}) {
 		t.Errorf("link = %+v", l)
 	}
 	if day := r.c.LinkReports(Window24h); day[0].Totals != (Totals{Down: 7, Up: 8}) {
 		t.Errorf("a day = %+v", day[0].Totals)
 	}
-	d, ok := r.c.DeviceReport("a8:bb:cc:00:00:05", Window31d)
+	d, ok := r.c.DeviceReport("a8:bb:cc:00:00:05", Window30d)
 	if !ok || d.MAC != "a8:bb:cc:00:00:05" || d.Totals != (Totals{Down: 5, Up: 6}) {
 		t.Errorf("device only the files knew = %+v, %v", d, ok)
 	}

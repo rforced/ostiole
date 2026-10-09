@@ -51,7 +51,7 @@ func TestAGatewaysHistoryIsReadOverAWindow(t *testing.T) {
 	if len(day.Events) != 1 || day.Events[0].Kind != gateway.EventUp {
 		t.Errorf("a day's events = %+v, want the one in the day", day.Events)
 	}
-	if month := read("31d"); len(month.Events) != 2 {
+	if month := read("30d"); len(month.Events) != 2 {
 		t.Errorf("a month's events = %+v", month.Events)
 	}
 	if resp, _ := do(t, srv, http.MethodGet, "/api/v1/gateways/gw_eth0/history?window=1y", nil); resp.StatusCode != http.StatusBadRequest {

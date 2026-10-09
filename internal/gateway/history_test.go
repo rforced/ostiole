@@ -208,7 +208,7 @@ func TestHistoryKeepsMinutesAndHours(t *testing.T) {
 		t.Errorf("report = %+v", r)
 	}
 
-	month := h.Read("wan", Window31d, at(3, 0))
+	month := h.Read("wan", Window30d, at(3, 0))
 	if p := month.Families[0].Points; len(p) != 1 || p[0].T != at(0, 0).Truncate(time.Hour).Unix() || p[0].Loss != 25 {
 		t.Errorf("month = %+v, want one hour with a quarter lost", month)
 	}
@@ -253,7 +253,7 @@ func TestHistoryReadsBackWhatItWrote(t *testing.T) {
 		back.RestoreMinute(m, at(4, 0))
 	}
 	back.EndRestore(lines[0].Seq)
-	for _, w := range []string{Window24h, Window31d} {
+	for _, w := range []string{Window24h, Window30d} {
 		want, _ := json.Marshal(h.Read("wan", w, at(4, 0)))
 		got, _ := json.Marshal(back.Read("wan", w, at(4, 0)))
 		if !bytes.Equal(got, want) {
@@ -276,13 +276,13 @@ func TestHistoryLetsOldMinutesGo(t *testing.T) {
 	if p := h.Read("wan", Window24h, end).Families[0].Points; len(p) != 1 {
 		t.Errorf("a day = %+v, want the old minute gone", p)
 	}
-	if p := h.Read("wan", Window31d, end).Families[0].Points; len(p) != 2 {
+	if p := h.Read("wan", Window30d, end).Families[0].Points; len(p) != 2 {
 		t.Errorf("a month = %+v, want both hours", p)
 	}
 	h.Probe("wan", FamilyIPv4, "", start.Add(60*24*time.Hour), time.Millisecond, true)
 	end = start.Add(60*24*time.Hour + time.Minute)
 	h.Advance(end)
-	if p := h.Read("wan", Window31d, end).Families[0].Points; len(p) != 1 {
+	if p := h.Read("wan", Window30d, end).Families[0].Points; len(p) != 1 {
 		t.Errorf("a month later = %+v, want the old hours gone", p)
 	}
 }

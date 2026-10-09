@@ -27,7 +27,7 @@ const (
 	FileVersion      = 1
 	// MinuteDays is the most days minute lines are kept: the longest
 	// window.
-	MinuteDays = 31
+	MinuteDays = 30
 	// recordsKept bounds what waits to be written, per log; the writer
 	// takes it once half is waiting.
 	recordsKept = 65536

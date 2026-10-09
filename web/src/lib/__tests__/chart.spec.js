@@ -36,7 +36,7 @@ describe('timeTicks', () => {
     const day = timeTicks(end - 86400, end, '24h')
     expect(day.every((t) => new Date(t * 1000).getHours() % 4 === 0)).toBe(true)
     expect(day).toHaveLength(6)
-    const month = timeTicks(end - 31 * 86400, end, '31d')
+    const month = timeTicks(end - 30 * 86400, end, '30d')
     expect(month.every((t) => new Date(t * 1000).getHours() === 0)).toBe(true)
     expect(month.length).toBeGreaterThanOrEqual(6)
     // A narrow chart takes every other stop.
@@ -48,7 +48,7 @@ describe('timeTicks', () => {
     expect(timeLabel(t, '24h')).toBe(
       new Date(t * 1000).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
     )
-    expect(timeLabel(t, '31d')).toBe(
+    expect(timeLabel(t, '30d')).toBe(
       new Date(t * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
     )
   })

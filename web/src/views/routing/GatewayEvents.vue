@@ -46,7 +46,7 @@ const empty = computed(() => {
   <SectionCard ref="card" title="Gateway events" flush>
     <template #intro>
       {{ log.updatedAt.value ? heldLine(log.held.value, log.oldest.value) : '' }}
-      Kept 31 days.
+      Kept 30 days.
       <template v-if="inFiles">The files keep them through a restart.</template>
       <template v-else>Kept in memory, so a restart empties it.</template>
     </template>

@@ -33,16 +33,16 @@ const (
 const (
 	Window5m  = "5m"
 	Window24h = "24h"
-	Window31d = "31d"
+	Window30d = "30d"
 )
 
 // Windows are the windows a page may ask for, shortest first.
-var Windows = []string{Window5m, Window24h, Window31d}
+var Windows = []string{Window5m, Window24h, Window30d}
 
 const (
 	fineKept   = 5 * time.Minute
 	minuteKept = 24 * time.Hour
-	hourKept   = 31 * 24 * time.Hour
+	hourKept   = 30 * 24 * time.Hour
 	// minuteLines bounds the minute lines waiting for the files.
 	minuteLines = 8192
 )
@@ -54,7 +54,7 @@ const (
 	FileVersion     = 1
 	// EventsKept and EventDays bound the events.
 	EventsKept = 1000
-	EventDays  = 31
+	EventDays  = 30
 )
 
 // What an event says happened.
@@ -819,7 +819,7 @@ func (h *History) Read(gateway, window string, now time.Time) Report {
 		}
 	default:
 		buckets, from := s.minutes, now.Add(-minuteKept).Unix()
-		if window == Window31d {
+		if window == Window30d {
 			buckets, from = s.hours, now.Add(-hourKept).Unix()
 		}
 		for _, b := range buckets {

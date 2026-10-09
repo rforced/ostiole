@@ -28,7 +28,7 @@ var errNoGatewayHistory = errors.New("the gateways' history is not kept by this 
 var windowSpans = map[string]time.Duration{
 	gateway.Window5m:  5 * time.Minute,
 	gateway.Window24h: 24 * time.Hour,
-	gateway.Window31d: 31 * 24 * time.Hour,
+	gateway.Window30d: 30 * 24 * time.Hour,
 }
 
 // gatewayEventsShown bounds the events a history read carries.
