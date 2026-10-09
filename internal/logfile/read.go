@@ -88,6 +88,7 @@ func readFile[E any](path, want string, since time.Time, parse func([]byte) (E, 
 	defer func() { _ = f.Close() }()
 	var staged []E
 	bad := 0
+	buf := make([]byte, 0, 64<<10)
 	each := func(comment string, data io.Reader) error {
 		staged, bad = staged[:0], 0
 		if comment != want {
@@ -95,7 +96,7 @@ func readFile[E any](path, want string, since time.Time, parse func([]byte) (E, 
 			return nil
 		}
 		sc := bufio.NewScanner(data)
-		sc.Buffer(make([]byte, 0, 64<<10), maxLine)
+		sc.Buffer(buf, maxLine)
 		for sc.Scan() {
 			if len(sc.Bytes()) == 0 {
 				continue
