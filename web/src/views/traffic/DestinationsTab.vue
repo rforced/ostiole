@@ -162,24 +162,12 @@ const empty = computed(() => {
     </LogRetention>
 
     <template v-if="running">
-      <div class="flex flex-wrap items-center gap-3">
-        <select v-model="win" class="input w-48 max-sm:w-full" aria-label="Window">
-          <option v-for="w in DESTINATION_WINDOWS" :key="w.value" :value="w.value">
-            {{ w.label }}
-          </option>
-        </select>
-        <select v-model="device" class="input w-48 max-sm:w-full" aria-label="Device">
-          <option value="">All devices</option>
-          <option v-for="d in devices" :key="d.id" :value="d.id">{{ deviceLabel(d) }}</option>
-        </select>
-        <LiveButton v-model="live" :failing="Boolean(error)" />
-      </div>
-
       <SectionCard title="Destinations" flush>
         <template #intro>
           {{ page ? heldLine(page.held, page.oldest) : '' }}
         </template>
         <template #actions>
+          <LiveButton v-model="live" :failing="Boolean(error)" />
           <ClearLogButton
             name="destinations"
             noun="destination"
@@ -188,6 +176,15 @@ const empty = computed(() => {
           />
         </template>
         <div class="card-strip-row">
+          <select v-model="win" class="input w-48 max-sm:w-full" aria-label="Window">
+            <option v-for="w in DESTINATION_WINDOWS" :key="w.value" :value="w.value">
+              {{ w.label }}
+            </option>
+          </select>
+          <select v-model="device" class="input w-48 max-sm:w-full" aria-label="Device">
+            <option value="">All devices</option>
+            <option v-for="d in devices" :key="d.id" :value="d.id">{{ deviceLabel(d) }}</option>
+          </select>
           <SearchBox v-model="query" placeholder="name, address, service, or device" />
           <ErrorLine v-if="error">{{ error }}</ErrorLine>
         </div>

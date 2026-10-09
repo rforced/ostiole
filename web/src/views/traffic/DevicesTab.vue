@@ -132,6 +132,12 @@ const now = computed(() => (state.value ? Date.parse(state.value.now) / 1000 : 0
 /** The count is read less often than every five seconds on a big table. */
 const stretched = computed(() => (state.value?.interval > 5 ? state.value.interval : 0))
 const since = computed(() => sinceLine(state.value?.since, win.value, now.value))
+/** How far back the table reaches, and how often a big one is read. */
+const reach = computed(() =>
+  [since.value, stretched.value ? `Devices every ${stretched.value} s.` : '']
+    .filter(Boolean)
+    .join(' '),
+)
 
 const empty = computed(() => {
   if (!state.value) return 'Reading…'
@@ -166,18 +172,10 @@ function show(d) {
     </SectionCard>
 
     <template v-if="state?.counting">
-      <div class="flex flex-wrap items-center gap-3">
-        <select v-model="win" class="input w-48 max-sm:w-full" aria-label="Window">
-          <option v-for="w in WINDOWS" :key="w.value" :value="w.value">{{ w.label }}</option>
-        </select>
-        <LiveButton v-model="live" :failing="Boolean(error)" />
-        <p v-if="stretched" class="text-sm text-ink-muted">Devices every {{ stretched }} s</p>
-        <p v-if="since" class="text-sm text-ink-muted">{{ since }}</p>
-      </div>
-
-      <SectionCard title="Devices" :count="rows.length" flush>
+      <SectionCard title="Devices" :count="rows.length" :intro="reach" flush>
         <template #actions>
           <SortSelect :sort="sort" :columns="COLUMNS" />
+          <LiveButton v-model="live" :failing="Boolean(error)" />
           <ClearLogButton
             name="traffic counts"
             :description="
@@ -190,6 +188,9 @@ function show(d) {
           />
         </template>
         <div class="card-strip-row">
+          <select v-model="win" class="input w-48 max-sm:w-full" aria-label="Window">
+            <option v-for="w in WINDOWS" :key="w.value" :value="w.value">{{ w.label }}</option>
+          </select>
           <SearchBox
             v-model="query"
             placeholder="name, address, MAC, or interface"

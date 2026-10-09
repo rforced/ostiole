@@ -89,53 +89,64 @@ const error = computed(() => read.error.value || stream.error.value || clear.err
 
 <template>
   <div class="space-y-5">
-    <div class="flex flex-wrap items-center gap-3">
-      <select v-model="win" class="input w-48 max-sm:w-full" aria-label="Window">
-        <option v-for="w in WINDOWS" :key="w.value" :value="w.value">{{ w.label }}</option>
-      </select>
-      <LiveButton v-model="live" :failing="Boolean(error)" />
-      <ClearLogButton
-        name="traffic per link"
-        :description="
-          inFiles
-            ? 'What every link moved and its errors are dropped, files included. Counting carries on.'
-            : 'What every link moved and its errors are dropped. Counting carries on.'
-        "
-        :busy="clear.busy.value"
-        @confirm="clear.run()"
-      />
-      <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
-    </div>
-    <p v-if="!links" class="text-sm text-ink-muted">Reading…</p>
-    <p v-else-if="!links.length" class="text-sm text-ink-muted">No links.</p>
-    <SectionCard v-for="l in links ?? []" :key="l.name">
-      <template #title>
-        <span class="font-mono">{{ l.name }}</span>
-        <span v-if="l.external" class="badge">WAN</span>
-        <span v-if="!l.configured" class="text-xs font-normal text-ink-muted">unmanaged</span>
-      </template>
-      <template v-if="l.description" #intro>{{ l.description }}</template>
-      <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_11rem]">
-        <TrafficChart
-          :points="l.points ?? []"
-          :window="win"
-          :end="end"
-          :label="l.name"
-          :now="{ down: l.down, up: l.up }"
-          :stale="stale"
+    <SectionCard title="Links" :count="links?.length" flush>
+      <template #actions>
+        <LiveButton v-model="live" :failing="Boolean(error)" />
+        <ClearLogButton
+          name="traffic per link"
+          :description="
+            inFiles
+              ? 'What every link moved and its errors are dropped, files included. Counting carries on.'
+              : 'What every link moved and its errors are dropped. Counting carries on.'
+          "
+          :busy="clear.busy.value"
+          @confirm="clear.run()"
         />
-        <div class="space-y-2">
-          <dl class="kv">
-            <dt>Down</dt>
-            <dd class="tabular-nums">{{ formatBytes(l.totals?.down ?? 0) }}</dd>
-            <dt>Up</dt>
-            <dd class="tabular-nums">{{ formatBytes(l.totals?.up ?? 0) }}</dd>
-          </dl>
-          <p v-if="sinceLine(l.since, win, end)" class="text-xs text-ink-muted">
-            {{ sinceLine(l.since, win, end) }}
-          </p>
-        </div>
+      </template>
+      <div class="card-strip-row">
+        <select v-model="win" class="input w-48 max-sm:w-full" aria-label="Window">
+          <option v-for="w in WINDOWS" :key="w.value" :value="w.value">{{ w.label }}</option>
+        </select>
+        <ErrorLine v-if="error">{{ error }}</ErrorLine>
       </div>
+      <p v-if="!links" class="card-strip border-t border-line text-ink-muted">Reading…</p>
+      <p v-else-if="!links.length" class="card-strip border-t border-line text-ink-muted">
+        No links.
+      </p>
+      <section
+        v-for="l in links ?? []"
+        :key="l.name"
+        class="border-t border-line px-4 pt-4 pb-4"
+        :aria-labelledby="`link-${l.name}`"
+      >
+        <h3 class="card-title flex items-center gap-2">
+          <span :id="`link-${l.name}`" class="font-mono">{{ l.name }}</span>
+          <span v-if="l.external" class="badge">WAN</span>
+          <span v-if="!l.configured" class="text-xs font-normal text-ink-muted">unmanaged</span>
+        </h3>
+        <p v-if="l.description" class="mt-0.5 max-w-3xl text-ink-muted">{{ l.description }}</p>
+        <div class="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_11rem]">
+          <TrafficChart
+            :points="l.points ?? []"
+            :window="win"
+            :end="end"
+            :label="l.name"
+            :now="{ down: l.down, up: l.up }"
+            :stale="stale"
+          />
+          <div class="space-y-2">
+            <dl class="kv">
+              <dt>Down</dt>
+              <dd class="tabular-nums">{{ formatBytes(l.totals?.down ?? 0) }}</dd>
+              <dt>Up</dt>
+              <dd class="tabular-nums">{{ formatBytes(l.totals?.up ?? 0) }}</dd>
+            </dl>
+            <p v-if="sinceLine(l.since, win, end)" class="text-xs text-ink-muted">
+              {{ sinceLine(l.since, win, end) }}
+            </p>
+          </div>
+        </div>
+      </section>
     </SectionCard>
   </div>
 </template>
