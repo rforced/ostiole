@@ -132,7 +132,8 @@ function save() {
   const out = {}
   if (download.value) out.download = download.value
   if (upload.value) out.upload = upload.value
-  if (form.value.link && form.value.link !== 'ethernet') out.link = form.value.link
+  const link = form.value.link
+  if (link && (link !== 'ethernet' || props.iface?.shaping?.link === link)) out.link = link
   config.setShaping(form.value.interface, out)
   open.value = false
 }

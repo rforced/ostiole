@@ -75,6 +75,12 @@ const redirectOnly = computed(
   () => form.value.ports.includes('http') && !form.value.ports.includes('https'),
 )
 
+/** The saved list when it holds the same items, so an untouched save keeps its order. */
+function keptOrder(was, now) {
+  const key = (list) => [...(list ?? [])].sort().join('\n')
+  return was && key(was) === key(now) ? [...was] : now
+}
+
 function save() {
   const f = form.value
   const source = {}
@@ -90,9 +96,15 @@ function save() {
     action: f.action,
   }
   // In the order the page lists them, whatever order they were ticked in.
-  const ports = ['http', 'https'].filter((p) => f.ports.includes(p))
+  const ports = keptOrder(
+    props.line?.ports,
+    ['http', 'https'].filter((p) => f.ports.includes(p)),
+  )
   if (ports.length) out.ports = ports
-  const chosen = routes.value.map((r) => r.id).filter((id) => f.routes.includes(id))
+  const chosen = keptOrder(
+    props.line?.routes,
+    routes.value.map((r) => r.id).filter((id) => f.routes.includes(id)),
+  )
   if (chosen.length) out.routes = chosen
   if (f.log) out.log = true
   if (f.description.trim()) out.description = f.description.trim()

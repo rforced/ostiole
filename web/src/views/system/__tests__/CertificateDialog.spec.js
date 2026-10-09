@@ -41,6 +41,22 @@ function open(certificate = null) {
   return { wrapper, config }
 }
 
+// Mounted closed and opened on a saved certificate, as the tab does.
+async function reopen(cert) {
+  setActivePinia(createPinia())
+  const config = useConfigStore()
+  const cfg = { ...draft(), certificates: [cert] }
+  config.saved = cfg
+  config.replaceDraft(cfg)
+  const wrapper = mount(CertificateDialog, {
+    props: { open: false, certificate: null },
+    global: { stubs: { AppDialog: AppDialogStub } },
+  })
+  await wrapper.setProps({ open: true, certificate: config.certificates[0] })
+  await flushPromises()
+  return { wrapper, config }
+}
+
 const save = (wrapper) => wrapper.findAll('button').find((b) => b.text() === 'Save to draft')
 
 describe('CertificateDialog', () => {
@@ -132,5 +148,40 @@ describe('CertificateDialog', () => {
     await wrapper.get('form').trigger('submit')
     expect(config.certificates[0]).toMatchObject({ id: 'mail', source: 'uploaded' })
     expect(config.certificates[0].account).toBeUndefined()
+  })
+
+  it.each([
+    ['omits the profile', {}],
+    ['names shortlived', { profile: 'shortlived' }],
+    ['names ec256 as its key', { keyType: 'ec256' }],
+  ])('leaves an untouched address certificate that %s alone', async (_, extra) => {
+    const { wrapper, config } = await reopen({
+      id: 'wan',
+      enabled: true,
+      source: 'acme',
+      names: ['198.51.100.4'],
+      account: 'le',
+      challenge: 'http-01',
+      ...extra,
+    })
+    expect(wrapper.get('#cert-profile').element.value).toBe('shortlived')
+    await wrapper.get('form').trigger('submit')
+    expect(config.dirty).toBe(false)
+  })
+
+  it('writes a profile the user picks', async () => {
+    const { wrapper, config } = await reopen({
+      id: 'router',
+      enabled: true,
+      source: 'acme',
+      names: ['router.example.test'],
+      account: 'le',
+      challenge: 'http-01',
+    })
+    expect(wrapper.get('#cert-profile').element.value).toBe('')
+    await wrapper.get('#cert-profile').setValue('tlsserver')
+    await wrapper.get('form').trigger('submit')
+    expect(config.dirty).toBe(true)
+    expect(config.certificates[0].profile).toBe('tlsserver')
   })
 })

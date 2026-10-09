@@ -836,3 +836,109 @@ describe('PoolsTab', () => {
     expect(deletes.map((b) => b.element.disabled)).toEqual([true, true, false])
   })
 })
+
+// Save on an item nobody touched leaves the draft as it was.
+describe('Untouched save', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  const office = { name: 'office', type: 'hosts', entries: ['198.51.100.0/24'] }
+  // An API-made config carries these, and the store adds them if missing.
+  const services = (over) => ({
+    dhcp: { enabled: false },
+    dns: { enabled: false },
+    proxy: proxy(over),
+  })
+
+  it('keeps a paranoia level the profile spells out', async () => {
+    const profile = { id: 'watch', paranoia: 1 }
+    const draft = config({ services: services({ wafProfiles: [profile] }) })
+    const { wrapper, store } = withDraft(ProfileDialog, draft, { open: true, profile })
+    await flushPromises()
+    expect(wrapper.get('#waf-paranoia').element.value).toBe('1')
+    await wrapper.get('form').trigger('submit')
+    expect(store.dirty).toBe(false)
+  })
+
+  it('writes a paranoia level the user picks', async () => {
+    const profile = { id: 'watch' }
+    const draft = config({ services: services({ wafProfiles: [profile] }) })
+    const { wrapper, store } = withDraft(ProfileDialog, draft, { open: true, profile })
+    await flushPromises()
+    await wrapper.get('#waf-paranoia').setValue('3')
+    await wrapper.get('form').trigger('submit')
+    expect(store.dirty).toBe(true)
+    expect(store.proxy.wafProfiles[0]).toEqual({ id: 'watch', paranoia: 3 })
+  })
+
+  it('keeps the order of a route allow list', async () => {
+    const route = {
+      id: 'imap',
+      enabled: true,
+      protocol: 'tcp',
+      port: 993,
+      upstreams: [{ address: '10.0.0.2:993' }],
+      allowFrom: ['office', '192.0.2.0/24'],
+    }
+    const draft = config({ aliases: [office], services: services({ routes: [route] }) })
+    const { wrapper, store } = withDraft(RouteDialog, draft, { open: true, route })
+    await flushPromises()
+    expect(wrapper.get('#route-allow').element.value).toBe('192.0.2.0/24')
+    await wrapper.get('form').trigger('submit')
+    expect(store.dirty).toBe(false)
+  })
+
+  it('writes a route allow list the user changes', async () => {
+    const route = {
+      id: 'imap',
+      enabled: true,
+      protocol: 'tcp',
+      port: 993,
+      upstreams: [{ address: '10.0.0.2:993' }],
+      allowFrom: ['office', '192.0.2.0/24'],
+    }
+    const draft = config({ aliases: [office], services: services({ routes: [route] }) })
+    const { wrapper, store } = withDraft(RouteDialog, draft, { open: true, route })
+    await flushPromises()
+    await wrapper.get('#route-allow').setValue('192.0.2.0/24\n203.0.113.0/24')
+    await wrapper.get('form').trigger('submit')
+    expect(store.dirty).toBe(true)
+    expect(store.draft.services.proxy.routes[0].allowFrom).toEqual([
+      '192.0.2.0/24',
+      '203.0.113.0/24',
+      'office',
+    ])
+  })
+
+  const routes = [
+    { id: 'imap', enabled: true, protocol: 'tcp', port: 993, upstreams: [] },
+    { id: 'smtp', enabled: true, protocol: 'tcp', port: 465, upstreams: [] },
+  ]
+
+  it('keeps the order of an access rule ports and routes', async () => {
+    const l = line({ ports: ['https', 'http'], routes: ['smtp', 'imap'] })
+    const draft = config({ services: services({ routes, access: [l] }) })
+    const { wrapper, store } = withDraft(AccessDialog, draft, { open: true, line: l })
+    await flushPromises()
+    expect(wrapper.get('input[value="http"]').element.checked).toBe(true)
+    expect(wrapper.get('input[value="smtp"]').element.checked).toBe(true)
+    await wrapper.get('form').trigger('submit')
+    expect(store.dirty).toBe(false)
+  })
+
+  it('writes access rule ports the user changes', async () => {
+    const l = line({ ports: ['https', 'http'], routes: ['smtp', 'imap'] })
+    const draft = config({ services: services({ routes, access: [l] }) })
+    const { wrapper, store } = withDraft(AccessDialog, draft, { open: true, line: l })
+    await flushPromises()
+    await wrapper.get('input[value="http"]').setValue(false)
+    await wrapper.get('form').trigger('submit')
+    expect(store.dirty).toBe(true)
+    expect(store.draft.services.proxy.access[0]).toMatchObject({
+      ports: ['https'],
+      routes: ['smtp', 'imap'],
+    })
+  })
+})

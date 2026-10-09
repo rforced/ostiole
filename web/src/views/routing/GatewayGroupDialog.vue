@@ -36,7 +36,12 @@ watch(
   () => {
     if (!open.value) return
     form.value = props.group
-      ? { ...blank(), ...props.group, members: (props.group.members ?? []).map((m) => ({ ...m })) }
+      ? {
+          ...blank(),
+          ...props.group,
+          onDown: props.group.onDown || 'fallback',
+          members: (props.group.members ?? []).map((m) => ({ ...m })),
+        }
       : blank()
   },
   { immediate: true },
@@ -57,13 +62,16 @@ function save() {
   const out = {
     name: f.name.trim(),
     enabled: f.enabled,
-    onDown: f.onDown,
     members: f.members.map((m) => ({
       gateway: m.gateway,
       ...(Number(m.tier) > 0 ? { tier: Number(m.tier) } : {}),
     })),
   }
   if (f.description) out.description = f.description
+  // Empty is fallback, so an unchanged choice keeps what was saved.
+  const was = props.group?.onDown
+  const onDown = props.group && f.onDown === (was || 'fallback') ? was : f.onDown
+  if (onDown !== undefined) out.onDown = onDown
   config.upsertGatewayGroup(out, props.group?.name ?? out.name)
   open.value = false
 }

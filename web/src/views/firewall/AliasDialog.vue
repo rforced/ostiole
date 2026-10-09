@@ -190,6 +190,7 @@ function save() {
       form.value.type === 'geoip' ? 'Choose at least one country.' : 'List at least one AS number.'
     return
   }
+  if (!entries.length && props.alias && props.alias.entries == null) entries = props.alias.entries
   const out = { name, type: form.value.type, entries }
   if (form.value.description) out.description = form.value.description
   if (fetching.value && Number(form.value.refreshHours) > 0) {

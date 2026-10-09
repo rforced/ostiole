@@ -201,4 +201,21 @@ describe('AliasDialog round trip', () => {
     await wrapper.get('form').trigger('submit')
     expect(config.dirty).toBe(false)
   })
+
+  it('keeps an empty list the API stored as null', async () => {
+    const { wrapper, config } = open({ name: 'spare', type: 'hosts', entries: null })
+    config.saved = JSON.parse(JSON.stringify(config.draft))
+    expect(wrapper.get('#alias-entries').element.value).toBe('')
+    await wrapper.get('form').trigger('submit')
+    expect(config.dirty).toBe(false)
+  })
+
+  it('writes what is typed into an alias stored with no entries', async () => {
+    const { wrapper, config } = open({ name: 'spare', type: 'hosts', entries: null })
+    config.saved = JSON.parse(JSON.stringify(config.draft))
+    await wrapper.get('#alias-entries').setValue('192.0.2.1')
+    await wrapper.get('form').trigger('submit')
+    expect(config.dirty).toBe(true)
+    expect(config.aliases[0].entries).toEqual(['192.0.2.1'])
+  })
 })

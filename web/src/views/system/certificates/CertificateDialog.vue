@@ -113,8 +113,11 @@ function save() {
     out.account = f.account
     out.challenge = f.challenge
     if (f.challenge === 'dns-01' && f.provider) out.provider = f.provider
-    if (f.keyType && f.keyType !== 'ec256') out.keyType = f.keyType
-    if (f.profile) out.profile = f.profile
+    if (f.keyType && (f.keyType !== 'ec256' || props.certificate?.keyType === 'ec256'))
+      out.keyType = f.keyType
+    // An address forces shortlived; an item saved without it stays without.
+    const forced = hasAddress.value && props.certificate && !props.certificate.profile
+    if (f.profile && !(forced && f.profile === 'shortlived')) out.profile = f.profile
   }
   config.upsertCertificate(out, props.certificate?.id)
   open.value = false

@@ -80,6 +80,12 @@ function removePath(index) {
   form.value.paths.splice(index, 1)
 }
 
+/** The saved list when it holds the same items, so an untouched save keeps its order. */
+function keptOrder(was, now) {
+  const key = (list) => [...(list ?? [])].sort().join('\n')
+  return was && key(was) === key(now) ? [...was] : now
+}
+
 function save() {
   const f = form.value
   const site = {
@@ -94,7 +100,7 @@ function save() {
   if (paths.length) site.paths = paths.map((p) => ({ prefix: p.prefix.trim(), pool: p.pool }))
   if (f.plainHttp) site.plainHttp = true
   if (f.hostHeader) site.hostHeader = f.hostHeader
-  const allow = [...parseList(f.allowFrom), ...f.allowAliases]
+  const allow = keptOrder(props.site?.allowFrom, [...parseList(f.allowFrom), ...f.allowAliases])
   if (allow.length) site.allowFrom = allow
   if (f.waf) site.waf = f.waf
   config.upsertSite(site, f.previousId || site.id)

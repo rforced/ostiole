@@ -80,7 +80,9 @@ function save() {
   const profile = { id: f.id.trim() }
   if (f.description.trim()) profile.description = f.description.trim()
   if (f.mode === 'block') profile.mode = 'block'
-  if (Number(f.paranoia) !== 1) profile.paranoia = Number(f.paranoia)
+  const was = props.profile?.paranoia
+  if (Number(f.paranoia) !== (was || 1)) profile.paranoia = Number(f.paranoia)
+  else if (was != null) profile.paranoia = was
   if (Number(f.inboundThreshold)) profile.inboundThreshold = Number(f.inboundThreshold)
   if (Number(f.outboundThreshold)) profile.outboundThreshold = Number(f.outboundThreshold)
   if (f.applications.length) profile.applications = [...f.applications]

@@ -39,7 +39,8 @@ function save() {
   const f = form.value
   const out = { name: f.name.trim(), start: f.start, end: f.end }
   if (f.description) out.description = f.description
-  if (f.days.length && f.days.length < DAYS.length) out.days = f.days
+  const every = f.days.length === DAYS.length && props.schedule?.days?.length !== DAYS.length
+  if (f.days.length && !every) out.days = f.days
   config.upsertSchedule(out, props.schedule?.name ?? out.name)
   open.value = false
 }

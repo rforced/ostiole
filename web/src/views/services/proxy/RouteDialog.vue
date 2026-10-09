@@ -70,6 +70,12 @@ watch(
 const isTCP = computed(() => form.value.protocol === 'tcp')
 const upstreams = computed(() => parseList(form.value.upstreams))
 
+/** The saved list when it holds the same items, so an untouched save keeps its order. */
+function keptOrder(was, now) {
+  const key = (list) => [...(list ?? [])].sort().join('\n')
+  return was && key(was) === key(now) ? [...was] : now
+}
+
 function save() {
   const f = form.value
   const route = {
@@ -87,7 +93,7 @@ function save() {
   }
   if (f.policy) route.policy = f.policy
   if (f.proxyProtocol) route.proxyProtocol = f.proxyProtocol
-  const allow = [...parseList(f.allowFrom), ...f.allowAliases]
+  const allow = keptOrder(props.route?.allowFrom, [...parseList(f.allowFrom), ...f.allowAliases])
   if (allow.length) route.allowFrom = allow
   config.upsertProxyRoute(route, f.previousId || route.id)
   open.value = false

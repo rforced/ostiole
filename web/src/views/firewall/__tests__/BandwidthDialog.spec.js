@@ -107,4 +107,40 @@ describe('BandwidthDialog', () => {
     await wrapper.get('#bw-if').setValue('eth1')
     expect(wrapper.text()).toContain('A cap for the hosts behind this interface.')
   })
+
+  describe('a link stored as ethernet', () => {
+    function stored() {
+      const shaping = { download: 100_000_000, link: 'ethernet' }
+      const cfg = {
+        ...draft(),
+        interfaces: draft().interfaces.map((i) => (i.name === 'eth0' ? { ...i, shaping } : i)),
+      }
+      const config = useConfigStore()
+      config.saved = JSON.parse(JSON.stringify(cfg))
+      config.replaceDraft(cfg)
+      const wrapper = mount(BandwidthDialog, {
+        props: { open: true, iface: config.findInterface('eth0') },
+        global: { stubs },
+      })
+      return { wrapper, config }
+    }
+
+    it('is kept on an untouched save', async () => {
+      const { wrapper, config } = stored()
+      expect(wrapper.get('#bw-link').element.value).toBe('ethernet')
+      await wrapper.get('form').trigger('submit')
+      expect(config.dirty).toBe(false)
+    })
+
+    it('changes when the operator picks another', async () => {
+      const { wrapper, config } = stored()
+      await wrapper.get('#bw-link').setValue('docsis')
+      await wrapper.get('form').trigger('submit')
+      expect(config.dirty).toBe(true)
+      expect(config.findInterface('eth0').shaping).toEqual({
+        download: 100_000_000,
+        link: 'docsis',
+      })
+    })
+  })
 })
