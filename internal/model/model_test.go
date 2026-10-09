@@ -1848,7 +1848,8 @@ func TestUpdateDefaults(t *testing.T) {
 	}
 	// The two defaults are different minutes on purpose: a check and an
 	// install that collide leave one of them reporting a busy router.
-	if DefaultUpdateCheckSchedule == DefaultUpdateSchedule {
+	check, install := strings.Fields(DefaultUpdateCheckSchedule), strings.Fields(DefaultUpdateSchedule)
+	if check[0] == install[0] && check[1] == install[1] {
 		t.Error("the check and the install would land in the same minute")
 	}
 	if got := u.OstioleChannel(); got != ChannelStable {
