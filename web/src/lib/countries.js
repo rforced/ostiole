@@ -6,7 +6,7 @@
  * public domain and change about as often as countries do.
  *
  * A country alias holds these codes; the addresses behind them are fetched
- * from the GeoIP source set under System.
+ * from the GeoIP source.
  */
 
 /** @typedef {{code: string, name: string, region: string}} Country */

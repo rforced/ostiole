@@ -180,7 +180,7 @@ func (c *Config) Validate() error {
 				}
 			}
 			if a.URL != "" {
-				v.add(path+".url", "a country alias fetches from the GeoIP source set under System")
+				v.add(path+".url", "a country alias fetches from the GeoIP source")
 			}
 		case AliasASN:
 			if len(a.Entries) == 0 {
@@ -197,7 +197,7 @@ func (c *Config) Validate() error {
 				numbers[n] = true
 			}
 			if a.URL != "" {
-				v.add(path+".url", "an AS alias fetches from the ASN source set under System")
+				v.add(path+".url", "an AS alias fetches from the ASN source")
 			}
 		default:
 			v.add(path+".type", "unknown alias type %q", a.Type)
@@ -1337,7 +1337,7 @@ func (v *validator) proxyAllowFrom(path string, from []string, c *Config) {
 				v.add(apath, "alias %q holds ports, not addresses", a)
 			case alias.Fetched():
 				v.add(apath, "alias %q is fetched and can run to thousands of networks; "+
-					"use the access list on the Service tab for large lists", a)
+					"use the access list on the Settings tab for large lists", a)
 			}
 			continue
 		}
