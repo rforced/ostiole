@@ -228,7 +228,7 @@ func (b MemoryBudget) Check(c *Config) []Issue {
 		return v.issues
 	}
 	msg := fmt.Sprintf("the logs come to %s at their largest; this router has %s for them",
-		bytesText(peak), bytesText(room))
+		FormatBytes(float64(peak)), FormatBytes(float64(room)))
 	for _, l := range logs {
 		if l.on && l.size > l.def {
 			v.add(l.path, "%s", msg)
@@ -237,11 +237,11 @@ func (b MemoryBudget) Check(c *Config) []Issue {
 	return v.issues
 }
 
-// bytesText writes a size the way the pages do: decimal units, with one
+// FormatBytes writes a size the way the pages do: decimal units, with one
 // decimal below 100.
-func bytesText(n int64) string {
+func FormatBytes(n float64) string {
 	units := []string{"B", "kB", "MB", "GB", "TB"}
-	v, i := float64(n), 0
+	v, i := n, 0
 	for v >= 1000 && i < len(units)-1 {
 		v /= 1000
 		i++

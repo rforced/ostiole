@@ -90,7 +90,7 @@ type Report struct {
 func (r Report) String() string {
 	var parts []string
 	if r.Key != "" {
-		parts = append(parts, fmt.Sprintf("uploaded %s (%s)", r.Key, humanSize(r.Bytes)))
+		parts = append(parts, fmt.Sprintf("uploaded %s (%s)", r.Key, model.FormatBytes(float64(r.Bytes))))
 	}
 	if r.Deleted > 0 {
 		parts = append(parts, fmt.Sprintf("deleted %d older %s", r.Deleted, plural(r.Deleted, "copy", "copies")))
@@ -493,21 +493,6 @@ func Upload(ctx context.Context, r model.RemoteBackup, hostname string, archive 
 	}
 	report, err := remote.Run(ctx, archive)
 	return report.String(), err
-}
-
-// humanSize writes a size the way the UI does: decimal units, with one
-// decimal place below 100.
-func humanSize(n int) string {
-	units := []string{"B", "kB", "MB", "GB", "TB"}
-	v, i := float64(n), 0
-	for v >= 1000 && i < len(units)-1 {
-		v /= 1000
-		i++
-	}
-	if i == 0 || v >= 100 {
-		return fmt.Sprintf("%.0f %s", v, units[i])
-	}
-	return fmt.Sprintf("%.1f %s", v, units[i])
 }
 
 func plural(n int, one, many string) string {

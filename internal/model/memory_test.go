@@ -190,3 +190,12 @@ func TestReserveCountsTheWirelessReader(t *testing.T) {
 		t.Errorf("reserve %d, want %d", got, before+ReserveJournalReader)
 	}
 }
+
+func TestFormatBytes(t *testing.T) {
+	t.Parallel()
+	for n, want := range map[float64]string{0: "0 B", 999: "999 B", 1536: "1.5 kB", 150_000: "150 kB", 2_500_000_000: "2.5 GB"} {
+		if got := FormatBytes(n); got != want {
+			t.Errorf("FormatBytes(%.0f) = %q, want %q", n, got, want)
+		}
+	}
+}

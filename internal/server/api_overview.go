@@ -1083,21 +1083,6 @@ func (a *api) memory() uint64 {
 	return a.sysstat.MemTotal()
 }
 
-// formatBytes writes a size the way the pages do: decimal units, with one
-// decimal below 100.
-func formatBytes(n float64) string {
-	units := []string{"B", "kB", "MB", "GB", "TB"}
-	v, i := n, 0
-	for v >= 1000 && i < len(units)-1 {
-		v /= 1000
-		i++
-	}
-	if i == 0 || v >= 100 {
-		return fmt.Sprintf("%.0f %s", v, units[i])
-	}
-	return fmt.Sprintf("%.1f %s", v, units[i])
-}
-
 type emptyAlias struct {
 	alias string
 	rules []string
