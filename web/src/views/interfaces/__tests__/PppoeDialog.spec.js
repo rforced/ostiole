@@ -28,4 +28,39 @@ describe('PppoeDialog', () => {
     }
     expect(wrapper.text()).not.toContain('Advanced')
   })
+
+  it('reopens a session as saved and leaves an untouched save alone', async () => {
+    const config = useConfigStore()
+    const cfg = {
+      version: 12,
+      zones: [{ name: 'wan', external: true }],
+      rules: [],
+      interfaces: [
+        { name: 'eth1', enabled: true, ipv4: { mode: 'none' }, ipv6: { mode: 'none' } },
+        {
+          name: 'ppp0',
+          zone: 'wan',
+          enabled: true,
+          ipv4: { mode: 'ppp' },
+          ipv6: { mode: 'none' },
+          pppoe: { parent: 'eth1', username: 'dsl-0421@example.net', password: 'not-a-real-one' },
+        },
+      ],
+    }
+    config.saved = cfg
+    config.replaceDraft(cfg)
+    const wrapper = mount(PppoeDialog, {
+      props: {
+        open: true,
+        candidates: [{ name: 'eth1', kind: 'ethernet' }],
+        iface: config.findInterface('ppp0'),
+      },
+      global: { stubs },
+    })
+    for (const id of ['ppp-mtu', 'ppp-lcp', 'ppp-fail']) {
+      expect(wrapper.get(`#${id}`).element.value).toBe('')
+    }
+    await wrapper.get('form').trigger('submit')
+    expect(config.dirty).toBe(false)
+  })
 })

@@ -33,9 +33,9 @@ function blank() {
     serviceName: '',
     acName: '',
     ipv6: false,
-    lcpInterval: 10,
-    lcpFailures: 5,
-    mtu: 1492,
+    lcpInterval: '',
+    lcpFailures: '',
+    mtu: '',
   }
 }
 
@@ -78,10 +78,8 @@ watch(
       name: i.name,
       description: i.description ?? '',
       zone: i.zone ?? '',
-      mtu: i.mtu || 1492,
+      mtu: i.mtu ?? '',
       ...i.pppoe,
-      lcpInterval: i.pppoe?.lcpInterval || 10,
-      lcpFailures: i.pppoe?.lcpFailures || 5,
     }
   },
   { immediate: true },
@@ -104,29 +102,22 @@ function save() {
     ...(props.iface ? { enabled: props.iface.enabled } : {}),
     ipv4: { mode: 'ppp' },
     ipv6: { mode: f.ipv6 ? 'ppp' : 'none' },
-    pppoe: {
-      parent: f.parent,
-      username: f.username.trim(),
-      password: f.password,
-      ipv6: f.ipv6,
-      lcpInterval: Number(f.lcpInterval) || 0,
-      lcpFailures: Number(f.lcpFailures) || 0,
-    },
+    pppoe: { parent: f.parent, username: f.username.trim(), password: f.password },
   }
   if (f.zone) iface.zone = f.zone
   if (f.description) iface.description = f.description
   if (f.serviceName) iface.pppoe.serviceName = f.serviceName.trim()
   if (f.acName) iface.pppoe.acName = f.acName.trim()
-  if (Number(f.mtu) && Number(f.mtu) !== 1492) iface.mtu = Number(f.mtu)
+  if (f.ipv6) iface.pppoe.ipv6 = true
+  if (Number(f.lcpInterval)) iface.pppoe.lcpInterval = Number(f.lcpInterval)
+  if (Number(f.lcpFailures)) iface.pppoe.lcpFailures = Number(f.lcpFailures)
+  if (Number(f.mtu)) iface.mtu = Number(f.mtu)
   // The Ethernet underneath becomes a port: the session holds the address.
   const parent = config.findInterface(f.parent)
   if (parent) {
-    config.upsertInterface({
-      ...parent,
-      zone: '',
-      ipv4: { mode: 'none' },
-      ipv6: { mode: 'none' },
-    })
+    const port = { ...parent, ipv4: { mode: 'none' }, ipv6: { mode: 'none' } }
+    delete port.zone
+    config.upsertInterface(port)
   }
   config.upsertInterface(iface)
   open.value = false
@@ -228,6 +219,7 @@ function save() {
               type="number"
               min="576"
               max="1500"
+              placeholder="1492"
               class="input w-32 font-mono max-sm:w-full"
             />
           </FormField>
@@ -236,8 +228,9 @@ function save() {
               id="ppp-lcp"
               v-model.number="form.lcpInterval"
               type="number"
-              min="0"
+              min="1"
               max="3600"
+              placeholder="10"
               class="input w-32 font-mono max-sm:w-full"
             />
           </FormField>
@@ -250,8 +243,9 @@ function save() {
               id="ppp-fail"
               v-model.number="form.lcpFailures"
               type="number"
-              min="0"
+              min="1"
               max="100"
+              placeholder="5"
               class="input w-32 font-mono max-sm:w-full"
             />
           </FormField>
