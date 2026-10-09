@@ -182,7 +182,7 @@ function save() {
   if (!out.zone) delete out.zone
   if (!out.description) delete out.description
   out.mtu = Number(out.mtu) || 0
-  if (!out.mtu || out.mtu === defaultMtu.value) delete out.mtu
+  if (!out.mtu || (out.mtu === defaultMtu.value && !props.iface?.mtu)) delete out.mtu
   out.macAddress = (out.macAddress || '').trim()
   if (!out.macAddress || !physical.value) delete out.macAddress
   if (out.ipv4.mode !== 'dhcp') delete out.ipv4.sendHostname

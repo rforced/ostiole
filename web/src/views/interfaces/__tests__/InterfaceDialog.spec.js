@@ -120,3 +120,30 @@ describe('InterfaceDialog anti-lockout', () => {
     expect(enabled('admin', 'lan').attributes('disabled')).toBeUndefined()
   })
 })
+
+describe('InterfaceDialog round trip', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('keeps a configured MTU that equals the default', async () => {
+    const config = useConfigStore()
+    const cfg = {
+      version: 3,
+      zones: [{ name: 'lan' }],
+      interfaces: [iface({ zone: 'lan', mtu: 1500 })],
+      rules: [],
+    }
+    config.saved = cfg
+    config.replaceDraft(cfg)
+    const wrapper = mount(InterfaceDialog, {
+      props: {
+        open: true,
+        iface: config.findInterface('eth1'),
+        links: [{ name: 'eth1', mtu: 1500 }],
+      },
+      global: { stubs },
+    })
+    await wrapper.get('form').trigger('submit')
+    expect(config.findInterface('eth1').mtu).toBe(1500)
+    expect(config.dirty).toBe(false)
+  })
+})
