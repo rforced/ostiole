@@ -19,7 +19,8 @@
  * page title. Wireless and WireGuard, with a state per radio or per tunnel,
  * show it in each row instead. Whatever else a list card holds — a filter
  * row, a toggle, a count, an error — is a .card-strip above or below the
- * table.
+ * table. A note on the whole card, such as what only an admin may change,
+ * is its footer (SectionCard's #footer), never a paragraph in the body.
  *
  * Three heading sizes: .page-title, .card-title, .group-title. Prose is
  * text-sm. text-xs is chrome only: table headers, badges, timestamps,

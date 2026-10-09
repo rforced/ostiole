@@ -289,6 +289,7 @@ const targetStates = computed(() =>
       <p class="mt-4 text-ink-muted">
         A warning goes out once it has held for a minute, and again when it ends.
       </p>
+      <template v-if="auth.isOperator" #footer>{{ ADMIN_ONLY }}</template>
     </SectionCard>
 
     <SectionCard title="Sent" :count="status.recent.length" flush>
