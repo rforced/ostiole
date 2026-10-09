@@ -115,7 +115,7 @@ test('an alias in use cannot be deleted; a rule can be disabled', async ({ page 
 
 test('add a static route', async ({ page }) => {
   await login(page)
-  await page.goto('/routing')
+  await page.goto('/routing#routes')
   await page.getByRole('button', { name: 'Add static route' }).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByLabel('Destination network').fill('10.200.0.0/16')

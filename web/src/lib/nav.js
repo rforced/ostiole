@@ -55,7 +55,17 @@ import DashboardView from '@/views/DashboardView.vue'
 /** @type {NavItem[]} */
 export const NAV = [
   { to: '/', label: 'Dashboard', icon: Activity, view: DashboardView },
-  { to: '/routing', label: 'Routing', icon: Route, view: () => import('@/views/RoutingView.vue') },
+  {
+    to: '/routing',
+    label: 'Routing',
+    icon: Route,
+    view: () => import('@/views/RoutingView.vue'),
+    tabs: [
+      { value: 'gateways', label: 'Gateways' },
+      { value: 'routes', label: 'Routes' },
+      { value: 'events', label: 'Events' },
+    ],
+  },
   {
     to: '/interfaces',
     label: 'Interfaces',

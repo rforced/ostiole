@@ -61,12 +61,16 @@ test('a gateway that stops answering goes down, and comes back', async ({ page, 
 
   answers(server, { '192.0.2.1': { silent: true } })
   await expect(badge).toHaveText('down', { timeout: 15_000 })
+  await page.getByRole('tab', { name: 'Events' }).click()
   await expect(events.getByRole('row').filter({ hasText: 'Down' })).toContainText(wan.name)
 
   answers(server, {})
-  await expect(badge).toHaveText('up', { timeout: 15_000 })
-  await expect(events.getByRole('row').filter({ hasText: 'Up again' })).toContainText(wan.name)
+  await expect(events.getByRole('row').filter({ hasText: 'Up again' })).toContainText(wan.name, {
+    timeout: 15_000,
+  })
   await page.screenshot({ path: shot('73-gateway-events'), fullPage: true })
+  await page.getByRole('tab', { name: 'Gateways' }).click()
+  await expect(badge).toHaveText('up', { timeout: 15_000 })
 })
 
 test('a gateway that never answered says so, until it has a monitor', async ({ page, server }) => {
@@ -86,9 +90,11 @@ test('a gateway that never answered says so, until it has a monitor', async ({ p
   const row = gatewayRow(page, 'lte')
   await expect(row.locator('.badge').first()).toHaveText('never answered', { timeout: 15_000 })
   await expect(row).toContainText('Set a monitor address, or remove the gateway.')
+  await page.getByRole('tab', { name: 'Events' }).click()
   const events = card(page, 'Gateway events')
   await expect(events.getByRole('row').filter({ hasText: 'Never answered' })).toContainText('lte')
 
+  await page.getByRole('tab', { name: 'Gateways' }).click()
   await row.getByRole('button', { name: 'Edit' }).click()
   const dialog = page.getByRole('dialog')
   const monitor = dialog.getByLabel('Monitor address')
@@ -99,6 +105,7 @@ test('a gateway that never answered says so, until it has a monitor', async ({ p
   await applyAndConfirm(page)
   await expect(row.locator('.badge').first()).toHaveText('up', { timeout: 15_000 })
   await expect(row).toContainText('9.9.9.9')
+  await page.getByRole('tab', { name: 'Events' }).click()
   await expect(
     events.getByRole('row').filter({ hasText: 'Monitor changed to 9.9.9.9, was the next hop' }),
   ).toContainText('lte')
@@ -115,6 +122,7 @@ test("the gateways' history and events clear", async ({ page }) => {
   await confirmDialog(page, { confirm: 'Clear' })
   expect((await cleared).status()).toBe(200)
 
+  await page.getByRole('tab', { name: 'Events' }).click()
   const events = card(page, 'Gateway events')
   await events.getByRole('button', { name: 'Clear', exact: true }).click()
   await confirmDialog(page, { confirm: 'Clear' })

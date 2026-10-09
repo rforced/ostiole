@@ -193,6 +193,7 @@ test('add a way out from a file and route a rule through it', async ({ page }) =
   await expect(
     page.getByRole('region', { name: 'Gateways' }).getByRole('row').filter({ hasText: 'wg0' }),
   ).toContainText('through the tunnel')
+  await page.getByRole('tab', { name: 'Routes' }).click()
   // The tunnel is external like the WAN, so each answers what comes in on
   // it. The test server installs no tables, so neither has a next hop.
   const replies = page.getByRole('region', { name: 'Replies' })

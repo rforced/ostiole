@@ -185,6 +185,26 @@ describe('RulesPage system rules', () => {
     expect(row.find('router-link-stub').attributes('to')).toBe('/routing')
   })
 
+  it('links a reply line to the Routes tab of Routing', async () => {
+    api.systemRules.mockResolvedValue([
+      ...system,
+      {
+        chain: 'reply_prerouting',
+        zones: ['wan'],
+        action: 'continue',
+        protocol: 'any',
+        source: 'in on eth0',
+        destination: 'any',
+        description: 'Answer what comes in on eth0 out of eth0',
+        keys: ['reply_prerouting/reply-back:eth0', 'reply_output/reply-back:eth0'],
+        setting: 'routing',
+      },
+    ])
+    const wrapper = await mountPage('/firewall/rules#wan')
+    const row = systemRows(wrapper).find((tr) => tr.text().includes('in on eth0'))
+    expect(row.find('router-link-stub').attributes('to')).toBe('/routing#routes')
+  })
+
   it('sums the counters of a rule both base chains carry', async () => {
     const wrapper = await mountPage('/firewall/rules#wan')
     await vi.waitFor(() => expect(api.counters).toHaveBeenCalled())

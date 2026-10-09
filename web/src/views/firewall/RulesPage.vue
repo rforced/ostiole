@@ -40,6 +40,8 @@ const SETTINGS = {
   certificates: '/system/certificates',
 }
 
+const pageOf = (s) => (s.chain === 'reply_prerouting' ? '/routing#routes' : SETTINGS[s.setting])
+
 const auth = useAuthStore()
 const config = useConfigStore()
 const route = useRoute()
@@ -256,7 +258,7 @@ onMounted(() => {
             :rule="s"
             :packets="packets(s)"
             :logged="logged(s)"
-            :to="SETTINGS[s.setting]"
+            :to="pageOf(s)"
           />
           <tr v-if="rules.length === 0" key="empty">
             <td colspan="9" class="text-ink-muted">No rules of your own in this zone.</td>
@@ -352,7 +354,7 @@ onMounted(() => {
             :rule="s"
             :packets="packets(s)"
             :logged="logged(s)"
-            :to="SETTINGS[s.setting]"
+            :to="pageOf(s)"
           />
         </TransitionGroup>
       </table>
