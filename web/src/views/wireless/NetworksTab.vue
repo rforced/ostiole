@@ -51,13 +51,16 @@ function edit(iface) {
   <div class="space-y-5">
     <SectionCard title="Networks" :count="rows.length" flush>
       <template v-if="!auth.readOnly" #actions>
-        <button type="button" class="btn-secondary" :disabled="!config.radios.length" @click="add">
+        <button
+          type="button"
+          class="btn-secondary"
+          :disabled="!config.radios.length"
+          :title="config.radios.length ? undefined : 'Configure a radio first.'"
+          @click="add"
+        >
           <Plus class="size-4" aria-hidden="true" /> Add network
         </button>
       </template>
-      <div v-if="!config.radios.length" class="card-strip text-ink-muted">
-        Configure a radio first.
-      </div>
       <table class="table table-stack">
         <thead>
           <tr>
@@ -71,7 +74,9 @@ function edit(iface) {
         </thead>
         <tbody>
           <tr v-if="!rows.length">
-            <td colspan="6" class="text-ink-muted">No networks.</td>
+            <td colspan="6" class="text-ink-muted">
+              {{ config.radios.length ? 'No networks.' : 'No networks. Configure a radio first.' }}
+            </td>
           </tr>
           <tr
             v-for="row in rows"

@@ -36,11 +36,16 @@ function edit(site) {
   <div class="space-y-5">
     <SectionCard title="Sites" :count="sites.length" flush>
       <template v-if="!auth.readOnly" #actions>
-        <button type="button" class="btn-secondary" :disabled="!pools.length" @click="add">
+        <button
+          type="button"
+          class="btn-secondary"
+          :disabled="!pools.length"
+          :title="pools.length ? undefined : 'Add a pool first.'"
+          @click="add"
+        >
           <Plus class="size-4" aria-hidden="true" /> Add site
         </button>
       </template>
-      <div v-if="!pools.length" class="card-strip text-ink-muted">Add a pool first.</div>
       <table class="table table-stack">
         <thead>
           <tr>
@@ -54,7 +59,9 @@ function edit(site) {
         </thead>
         <tbody>
           <tr v-if="!sites.length">
-            <td colspan="6" class="text-ink-muted">No sites.</td>
+            <td colspan="6" class="text-ink-muted">
+              {{ pools.length ? 'No sites.' : 'No sites. Add a pool first.' }}
+            </td>
           </tr>
           <tr
             v-for="s in sites"

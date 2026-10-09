@@ -15,8 +15,9 @@ test('wireless says what a router without a card has', async ({ page }) => {
   await page.screenshot({ path: shot('120-wireless'), fullPage: true })
 
   await page.getByRole('tab', { name: 'Networks' }).click()
-  await expect(page.getByRole('cell', { name: 'No networks.' })).toBeVisible()
-  await expect(page.getByText('Configure a radio first.')).toBeVisible()
+  await expect(
+    page.getByRole('cell', { name: 'No networks. Configure a radio first.' }),
+  ).toBeVisible()
 
   await page.getByRole('tab', { name: 'Clients' }).click()
   await expect(page.getByRole('cell', { name: 'No radio is running.' })).toBeVisible()

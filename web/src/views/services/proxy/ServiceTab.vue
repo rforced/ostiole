@@ -130,7 +130,13 @@ function label(a) {
       flush
     >
       <template v-if="!auth.readOnly" #actions>
-        <button type="button" class="btn-secondary" :disabled="!config.zones.length" @click="add">
+        <button
+          type="button"
+          class="btn-secondary"
+          :disabled="!config.zones.length"
+          :title="config.zones.length ? undefined : 'Add a zone first.'"
+          @click="add"
+        >
           <Plus class="size-4" aria-hidden="true" /> Add rule
         </button>
       </template>
@@ -149,7 +155,11 @@ function label(a) {
         <TransitionGroup tag="tbody" :css="false" :move-class="moveClass">
           <tr v-if="!access.length" key="empty">
             <td colspan="7" class="text-ink-muted">
-              Nothing reaches the proxy until a rule accepts it.
+              {{
+                config.zones.length
+                  ? 'Nothing reaches the proxy until a rule accepts it.'
+                  : 'No rules. Add a zone first.'
+              }}
             </td>
           </tr>
           <tr
