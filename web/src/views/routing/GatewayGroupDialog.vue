@@ -58,7 +58,10 @@ function save() {
     name: f.name.trim(),
     enabled: f.enabled,
     onDown: f.onDown,
-    members: f.members.map((m) => ({ gateway: m.gateway, tier: Number(m.tier) || 0 })),
+    members: f.members.map((m) => ({
+      gateway: m.gateway,
+      ...(Number(m.tier) > 0 ? { tier: Number(m.tier) } : {}),
+    })),
   }
   if (f.description) out.description = f.description
   config.upsertGatewayGroup(out, props.group?.name ?? out.name)
