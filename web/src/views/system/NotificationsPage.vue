@@ -326,7 +326,7 @@ const targetStates = computed(() =>
           </template>
         </dl>
       </div>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>Time</th>
@@ -341,12 +341,12 @@ const targetStates = computed(() =>
             </td>
           </tr>
           <tr v-for="r in status.recent" :key="r.time">
-            <td class="when">{{ formatWhen(r.time) }}</td>
-            <td>
+            <td class="when" data-label="Time">{{ formatWhen(r.time) }}</td>
+            <td data-label="Notices">
               <div v-for="(e, i) in r.events" :key="i">{{ headline(e) }}</div>
               <div v-if="r.dropped" class="text-ink-muted">and {{ r.dropped }} dropped</div>
             </td>
-            <td>
+            <td data-label="Went to">
               {{ r.sent.map((s) => TARGETS[s] ?? s).join(', ') || '—' }}
               <div v-for="(err, target) in r.failed ?? {}" :key="target" class="text-bad">
                 {{ TARGETS[target] ?? target }}: {{ err }}

@@ -10,6 +10,7 @@ import FormField from '@/components/FormField.vue'
 import InterfaceLabel from '@/components/InterfaceLabel.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
+import SortSelect from '@/components/SortSelect.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
@@ -32,6 +33,10 @@ const domainSort = useSort(domains, {
   description: byText((d) => d.description),
 })
 const domainRows = domainSort.sorted
+const DOMAIN_COLUMNS = [
+  ['domain', 'Domain'],
+  ['description', 'Description'],
+]
 const domainEditing = ref(null)
 const domainOpen = ref(false)
 function addDomain() {
@@ -382,12 +387,13 @@ function toggleInterface(name, on) {
       intro="A domain here goes to its own resolvers, and stops answering while they are unreachable."
       flush
     >
-      <template v-if="!auth.readOnly" #actions>
-        <button type="button" class="btn-secondary" @click="addDomain">
+      <template #actions>
+        <SortSelect :sort="domainSort" :columns="DOMAIN_COLUMNS" />
+        <button v-if="!auth.readOnly" type="button" class="btn-secondary" @click="addDomain">
           <Plus class="size-4" aria-hidden="true" /> Add domain
         </button>
       </template>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <SortHeader by="domain" :sort="domainSort">Domain</SortHeader>
@@ -407,10 +413,12 @@ function toggleInterface(name, on) {
             :key="d.domain"
             :class="{ 'row-changed': config.isChanged('services.dns.domainOverrides', d.domain) }"
           >
-            <td class="font-mono text-code">{{ d.domain }}</td>
-            <td class="font-mono text-code">{{ (d.servers ?? []).join(', ') }}</td>
-            <td>{{ d.description }}</td>
-            <td class="actions">
+            <td class="font-mono text-code" data-label="">{{ d.domain }}</td>
+            <td class="font-mono text-code" data-label="Resolvers">
+              {{ (d.servers ?? []).join(', ') }}
+            </td>
+            <td data-label="Description">{{ d.description }}</td>
+            <td class="actions" data-label="">
               <button type="button" class="link-action" @click="editDomain(d)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>

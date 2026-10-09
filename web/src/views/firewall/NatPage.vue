@@ -93,7 +93,9 @@ function editOb(r) {
           <Plus class="size-4" aria-hidden="true" /> Add port forward
         </button>
       </template>
-      <table class="table">
+      <!-- On a phone a row is three lines, as on Rules: its description;
+           what it matches and where it goes; its buttons. -->
+      <table class="table table-flow">
         <thead>
           <tr>
             <th>Zone</th>
@@ -116,13 +118,15 @@ function editOb(r) {
               'row-changed': config.isChanged('nat.portForwards', pf.id),
             }"
           >
-            <td class="font-mono">{{ pf.zone }}</td>
-            <td class="font-mono text-code">{{ pf.protocol }}</td>
-            <td class="font-mono text-code">{{ pf.ports.join(', ') }}</td>
-            <td class="font-mono text-code">
+            <td class="font-mono max-sm:order-2">{{ pf.zone }}</td>
+            <td class="font-mono text-code max-sm:order-2">{{ pf.protocol }}</td>
+            <td class="font-mono text-code max-sm:order-2">{{ pf.ports.join(', ') }}</td>
+            <td
+              class="font-mono text-code max-sm:order-2 max-sm:before:mr-2 max-sm:before:content-['→']"
+            >
               {{ pf.target }}<span v-if="pf.targetPort">:{{ pf.targetPort }}</span>
             </td>
-            <td>
+            <td class="max-sm:order-1 max-sm:basis-full max-sm:font-medium">
               <span class="inline-flex items-center gap-1.5">
                 {{ pf.description }}
                 <span v-if="pf.reflection" class="badge">reflection</span>
@@ -134,7 +138,7 @@ function editOb(r) {
                 >
               </span>
             </td>
-            <td class="actions">
+            <td class="actions max-sm:order-4 max-sm:basis-full max-sm:text-left">
               <button type="button" class="link-action" @click="editPf(pf)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
@@ -156,7 +160,7 @@ function editOb(r) {
           <Plus class="size-4" aria-hidden="true" /> Add 1:1 NAT
         </button>
       </template>
-      <table class="table">
+      <table class="table table-flow">
         <thead>
           <tr>
             <th>Zone</th>
@@ -178,11 +182,15 @@ function editOb(r) {
               'row-changed': config.isChanged('nat.oneToOne', o.id),
             }"
           >
-            <td class="font-mono">{{ o.zone }}</td>
-            <td class="font-mono text-code">{{ o.external }}</td>
-            <td class="font-mono text-code">{{ o.internal }}</td>
-            <td>{{ o.description }}</td>
-            <td class="actions">
+            <td class="font-mono max-sm:order-2">{{ o.zone }}</td>
+            <td class="font-mono text-code max-sm:order-2">{{ o.external }}</td>
+            <td
+              class="font-mono text-code max-sm:order-2 max-sm:before:mr-2 max-sm:before:content-['→']"
+            >
+              {{ o.internal }}
+            </td>
+            <td class="max-sm:order-1 max-sm:basis-full max-sm:font-medium">{{ o.description }}</td>
+            <td class="actions max-sm:order-4 max-sm:basis-full max-sm:text-left">
               <button type="button" class="link-action" @click="editOne(o)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
               </button>
@@ -219,7 +227,7 @@ function editOb(r) {
         </p>
       </div>
       <template v-if="mode === 'manual' || mode === 'hybrid'">
-        <table class="table">
+        <table class="table table-flow">
           <thead>
             <tr>
               <th>Zone</th>
@@ -248,16 +256,26 @@ function editOb(r) {
                 'row-changed': config.isChanged('nat.outbound.rules', r.id),
               }"
             >
-              <td class="font-mono">{{ r.zone }}</td>
-              <td class="font-mono text-code">{{ r.source?.join(', ') || 'anything' }}</td>
-              <td class="font-mono text-code">{{ r.destination?.join(', ') || 'anywhere' }}</td>
-              <td class="font-mono text-code">
+              <td class="font-mono max-sm:order-2">{{ r.zone }}</td>
+              <td class="font-mono text-code max-sm:order-2">
+                {{ r.source?.join(', ') || 'anything' }}
+              </td>
+              <td
+                class="font-mono text-code max-sm:order-2 max-sm:before:mr-2 max-sm:before:content-['→']"
+              >
+                {{ r.destination?.join(', ') || 'anywhere' }}
+              </td>
+              <td
+                class="font-mono text-code max-sm:order-2 max-sm:before:mr-1 max-sm:before:content-['as']"
+              >
                 <span v-if="r.noNat" class="badge">not translated</span>
                 <template v-else-if="r.address">{{ r.address }}</template>
                 <span v-else class="text-ink-muted">the interface address</span>
               </td>
-              <td>{{ r.description }}</td>
-              <td class="actions">
+              <td class="max-sm:order-1 max-sm:basis-full max-sm:font-medium">
+                {{ r.description }}
+              </td>
+              <td class="actions max-sm:order-4 max-sm:basis-full max-sm:text-left">
                 <button type="button" class="link-action" @click="editOb(r)">
                   {{ auth.readOnly ? 'View' : 'Edit' }}
                 </button>
@@ -275,7 +293,7 @@ function editOb(r) {
     </SectionCard>
 
     <SectionCard v-if="shownAutomatic.length" title="Automatic rules" flush>
-      <table class="table">
+      <table class="table table-flow">
         <thead>
           <tr>
             <th>Zone</th>
@@ -287,17 +305,23 @@ function editOb(r) {
         </thead>
         <tbody>
           <tr v-for="s in shownAutomatic" :key="s.keys?.[0] ?? s.zone">
-            <td class="font-mono">
+            <td class="font-mono max-sm:order-2">
               {{ s.zone }}
               <span class="ml-1 text-ink-muted">{{ (s.interfaces ?? []).join(', ') }}</span>
             </td>
-            <td class="font-mono text-code">{{ s.source }}</td>
-            <td class="font-mono text-code">{{ s.destination }}</td>
-            <td class="font-mono text-code">
+            <td class="font-mono text-code max-sm:order-2">{{ s.source }}</td>
+            <td
+              class="font-mono text-code max-sm:order-2 max-sm:before:mr-2 max-sm:before:content-['→']"
+            >
+              {{ s.destination }}
+            </td>
+            <td
+              class="font-mono text-code max-sm:order-2 max-sm:before:mr-1 max-sm:before:content-['as']"
+            >
               <template v-if="s.to">{{ s.to }}</template>
               <span v-else class="text-ink-muted">the interface address</span>
             </td>
-            <td class="text-right whitespace-nowrap">
+            <td class="actions max-sm:order-4 max-sm:basis-full max-sm:text-left">
               <span class="badge">locked</span>
             </td>
           </tr>

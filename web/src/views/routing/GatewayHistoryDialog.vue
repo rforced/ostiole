@@ -175,7 +175,7 @@ const error = computed(() => read.error.value || streamError.value)
       </dl>
       <div v-if="report?.events?.length" class="space-y-2">
         <h3 class="group-title">Events in {{ windowLabel }}</h3>
-        <table class="table">
+        <table class="table table-stack">
           <thead>
             <tr>
               <th>Time</th>
@@ -185,14 +185,14 @@ const error = computed(() => read.error.value || streamError.value)
           </thead>
           <tbody>
             <tr v-for="e in report.events" :key="e.seq">
-              <td class="when">
+              <td class="when" data-label="Time">
                 {{ formatWhen(e.time) }}
               </td>
-              <td>
+              <td data-label="What">
                 {{ eventText(e) }}
                 <div v-if="e.error" class="text-xs text-ink-muted">{{ e.error }}</div>
               </td>
-              <td class="num">{{ eventFor(e) || '—' }}</td>
+              <td class="num" data-label="For">{{ eventFor(e) || '—' }}</td>
             </tr>
           </tbody>
         </table>

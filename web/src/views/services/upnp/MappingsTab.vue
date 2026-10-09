@@ -6,6 +6,7 @@ import LiveButton from '@/components/LiveButton.vue'
 import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
+import SortSelect from '@/components/SortSelect.vue'
 import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { useSearch } from '@/lib/search'
@@ -52,6 +53,12 @@ const sort = useSort(shown, {
   internal: byNumber((m) => m.internalPort, 'asc'),
 })
 const rows = sort.sorted
+const COLUMNS = [
+  ['protocol', 'Protocol'],
+  ['external', 'External port'],
+  ['client', 'Client'],
+  ['internal', 'Internal port'],
+]
 </script>
 
 <template>
@@ -63,6 +70,7 @@ const rows = sort.sorted
       flush
     >
       <template #actions>
+        <SortSelect :sort="sort" :columns="COLUMNS" />
         <LiveButton v-model="live" :failing="Boolean(load.error.value)" />
       </template>
       <div class="card-strip-row">
@@ -74,7 +82,7 @@ const rows = sort.sorted
         />
         <ErrorLine v-if="load.error.value">{{ load.error.value }}</ErrorLine>
       </div>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <SortHeader by="protocol" :sort="sort">Protocol</SortHeader>
@@ -91,12 +99,12 @@ const rows = sort.sorted
             v-for="m in rows"
             :key="`${m.protocol}:${m.externalPort}:${m.internal}:${m.internalPort}`"
           >
-            <td>
+            <td data-label="Protocol">
               <span class="badge">{{ m.protocol }}</span>
             </td>
-            <td class="font-mono text-code">{{ m.externalPort }}</td>
-            <td class="font-mono text-code">{{ m.internal }}</td>
-            <td class="font-mono text-code">{{ m.internalPort }}</td>
+            <td class="font-mono text-code" data-label="External port">{{ m.externalPort }}</td>
+            <td class="font-mono text-code" data-label="Client">{{ m.internal }}</td>
+            <td class="font-mono text-code" data-label="Internal port">{{ m.internalPort }}</td>
           </tr>
         </tbody>
       </table>

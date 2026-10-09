@@ -120,7 +120,7 @@ const windowLabel = computed(() => WINDOWS.find((w) => w.value === props.window)
       </dl>
       <div v-if="top?.length" class="space-y-2">
         <h3 class="group-title">Top destinations</h3>
-        <table class="table">
+        <table class="table table-flow">
           <thead>
             <tr>
               <th>Destination</th>
@@ -131,10 +131,16 @@ const windowLabel = computed(() => WINDOWS.find((w) => w.value === props.window)
           </thead>
           <tbody>
             <tr v-for="r in top" :key="`${r.destination} ${r.protocol} ${r.port}`">
-              <td class="max-w-56 truncate">{{ r.destination }}</td>
-              <td>{{ serviceLabel(r) }}</td>
-              <td class="num">{{ formatBytes(r.down) }}</td>
-              <td class="num">{{ formatBytes(r.up) }}</td>
+              <td class="max-w-56 truncate max-sm:order-1 max-sm:max-w-none max-sm:basis-full">
+                {{ r.destination }}
+              </td>
+              <td class="max-sm:order-2 max-sm:text-ink-muted">{{ serviceLabel(r) }}</td>
+              <td class="num max-sm:order-3 max-sm:before:mr-1 max-sm:before:content-['↓']">
+                {{ formatBytes(r.down) }}
+              </td>
+              <td class="num max-sm:order-4 max-sm:before:mr-1 max-sm:before:content-['↑']">
+                {{ formatBytes(r.up) }}
+              </td>
             </tr>
           </tbody>
         </table>

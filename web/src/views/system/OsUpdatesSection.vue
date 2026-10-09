@@ -242,7 +242,7 @@ async function reboot() {
         </template>
         <template v-if="status?.pending?.note">{{ status.pending.note }}</template>
       </template>
-      <table class="table">
+      <table class="table table-stack">
         <thead>
           <tr>
             <th>Package</th>
@@ -253,16 +253,16 @@ async function reboot() {
         </thead>
         <tbody>
           <tr v-for="p in shown" :key="p.name">
-            <td>
+            <td data-label="">
               <span class="inline-flex items-center gap-1.5">
                 <span class="font-mono">{{ p.name }}</span>
                 <span v-if="p.security" class="badge badge-warn">security</span>
                 <span v-if="neverUpgrade(p)" class="badge">never upgrade</span>
               </span>
             </td>
-            <td class="font-mono text-code">{{ p.from || '—' }}</td>
-            <td class="font-mono text-code">{{ p.to || '—' }}</td>
-            <td class="text-ink-muted">{{ p.repo || '—' }}</td>
+            <td class="font-mono text-code" data-label="Installed">{{ p.from || '—' }}</td>
+            <td class="font-mono text-code" data-label="Available">{{ p.to || '—' }}</td>
+            <td class="text-ink-muted" data-label="From">{{ p.repo || '—' }}</td>
           </tr>
         </tbody>
       </table>
