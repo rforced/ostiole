@@ -125,13 +125,7 @@ async function save() {
     if (p.iface.listenPort) iface.wireguard.listenPort = p.iface.listenPort
     config.upsertInterface(iface)
     if (addGateway) {
-      config.upsertGateway({
-        name: n,
-        enabled: true,
-        interface: n,
-        priority: 0,
-        monitor: monitor.value.trim(),
-      })
+      config.upsertGateway({ name: n, enabled: true, interface: n, monitor: monitor.value.trim() })
     }
     open.value = false
   } catch (e) {

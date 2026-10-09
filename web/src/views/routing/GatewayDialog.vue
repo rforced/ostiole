@@ -86,13 +86,9 @@ const upstream = computed(() => {
 
 function save() {
   const f = form.value
-  const out = {
-    name: f.name.trim(),
-    enabled: f.enabled,
-    interface: f.interface,
-    // A tunnel gateway never carries the default route.
-    priority: tunnelGateway.value ? 0 : Number(f.priority) || 0,
-  }
+  const out = { name: f.name.trim(), enabled: f.enabled, interface: f.interface }
+  // A tunnel gateway never carries the default route.
+  if (!tunnelGateway.value && Number(f.priority) > 0) out.priority = Number(f.priority)
   if (f.description) out.description = f.description
   if (f.address) out.address = f.address.trim()
   if (f.monitor) out.monitor = f.monitor.trim()

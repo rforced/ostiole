@@ -75,7 +75,6 @@ describe('GatewayDialog', () => {
       name: 'vpn',
       enabled: true,
       interface: 'wg1',
-      priority: 0,
       monitor: '10.64.0.1',
     })
   })
@@ -186,5 +185,17 @@ describe('GatewayDialog', () => {
     await wrapper.find('form').trigger('submit')
     expect(config.gateways[0].downAfterProbes).toBe(5)
     expect(config.gateways[0].upAfterProbes).toBe(1)
+  })
+})
+
+describe('GatewayDialog round trip', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('reopens the first line as saved and leaves an untouched save alone', async () => {
+    const { wrapper, config } = open({ name: 'wan', enabled: true, interface: 'eth0' })
+    config.saved = JSON.parse(JSON.stringify(config.draft))
+    await flushPromises()
+    await wrapper.get('form').trigger('submit')
+    expect(config.dirty).toBe(false)
   })
 })

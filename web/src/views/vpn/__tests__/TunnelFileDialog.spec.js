@@ -99,7 +99,7 @@ describe('TunnelFileDialog', () => {
       },
     })
     expect(config.gateways).toEqual([
-      { name: 'wg1', enabled: true, interface: 'wg1', priority: 0, monitor: '10.64.0.1' },
+      { name: 'wg1', enabled: true, interface: 'wg1', monitor: '10.64.0.1' },
     ])
   })
 
