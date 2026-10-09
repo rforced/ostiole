@@ -77,8 +77,9 @@ configuration: systemd-networkd, dnsmasq, unbound, chrony, miniupnpd, pppd and h
 - **Linux 6.12 or newer** (the kernel of Debian 13 and Rocky Linux 10), x86-64 or arm64.
 - **systemd.** The install script installs the rest: nftables, systemd-networkd, dnsmasq, unbound,
   chrony, miniupnpd, ppp, tc and smartmontools.
-- **1 GB of RAM.** Large DNS block lists (about 100 MB per million names), the reverse proxy with
-  WAF profiles (about 100 MB) and bigger logs need more.
+- **1 GB of RAM.** Large DNS block lists (about 100 MB per million names) and the reverse proxy
+  with WAF profiles (about 100 MB) need more. The logs kept in memory are capped by what the
+  router has left, and each log's page says how many entries this router allows.
 - **A machine that is only the router.** Ostiole runs as root, takes over networking and the
   firewall, and removes what it replaces. Do not run it on your workstation.
 
