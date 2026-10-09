@@ -854,6 +854,56 @@ describe('config store reverse proxy', () => {
     expect(config.proxy.sites.map((s) => s.id)).toEqual(['store'])
   })
 
+  it('follows a renamed pool in the sites and paths that send to it', () => {
+    const config = useConfigStore()
+    const d = proxied()
+    d.services.proxy.sites.push({
+      id: 'blog',
+      enabled: true,
+      hosts: ['blog.example.com'],
+      pool: 'api',
+      paths: [{ prefix: '/media', pool: 'web' }],
+    })
+    config.replaceDraft(d)
+    config.markSaved()
+
+    config.upsertPool({ id: 'front', upstreams: [{ address: '10.0.0.2:80' }] }, 'web')
+    expect(config.proxy.pools.map((p) => p.id)).toEqual(['front', 'api'])
+    expect(config.proxy.sites.map((s) => s.pool)).toEqual(['front', 'api'])
+    expect(config.proxy.sites.map((s) => s.paths[0].pool)).toEqual(['api', 'front'])
+
+    config.discard()
+    expect(config.proxy.pools.map((p) => p.id)).toEqual(['web', 'api'])
+    expect(config.proxy.sites.map((s) => s.pool)).toEqual(['web', 'api'])
+    expect(config.proxy.sites.map((s) => s.paths[0].pool)).toEqual(['api', 'web'])
+    useToastStore().toasts.at(-1).action.run()
+    expect(config.proxy.sites.map((s) => s.pool)).toEqual(['front', 'api'])
+    expect(config.proxy.sites.map((s) => s.paths[0].pool)).toEqual(['api', 'front'])
+  })
+
+  it('follows a renamed WAF profile in the sites it inspects', () => {
+    const config = useConfigStore()
+    const d = proxied()
+    d.services.proxy.sites.push({
+      id: 'blog',
+      enabled: true,
+      hosts: ['blog.example.com'],
+      pool: 'web',
+    })
+    config.replaceDraft(d)
+    config.markSaved()
+
+    config.upsertProfile({ id: 'tight', mode: 'block' }, 'strict')
+    expect(config.proxy.wafProfiles.map((w) => w.id)).toEqual(['tight'])
+    expect(config.proxy.sites.map((s) => s.waf)).toEqual(['tight', undefined])
+
+    config.discard()
+    expect(config.proxy.wafProfiles.map((w) => w.id)).toEqual(['strict'])
+    expect(config.proxy.sites.map((s) => s.waf)).toEqual(['strict', undefined])
+    useToastStore().toasts.at(-1).action.run()
+    expect(config.proxy.sites.map((s) => s.waf)).toEqual(['tight', undefined])
+  })
+
   it('creates the proxy block on first use', () => {
     const config = useConfigStore()
     config.replaceDraft(draft())

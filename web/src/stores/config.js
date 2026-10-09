@@ -942,9 +942,20 @@ export const useConfigStore = defineStore('config', () => {
     })
   }
 
-  const upsertPool = (pool, previousId) => upsertIn('pools', pool, previousId)
+  function upsertPool(pool, previousId = pool.id) {
+    upsertIn('pools', pool, previousId)
+    if (previousId === pool.id) return
+    for (const s of ensureProxy().sites ?? []) {
+      if (s.pool === previousId) s.pool = pool.id
+      for (const p of s.paths ?? []) if (p.pool === previousId) p.pool = pool.id
+    }
+  }
   const upsertSite = (site, previousId) => upsertIn('sites', site, previousId)
-  const upsertProfile = (profile, previousId) => upsertIn('wafProfiles', profile, previousId)
+  function upsertProfile(profile, previousId = profile.id) {
+    upsertIn('wafProfiles', profile, previousId)
+    if (previousId === profile.id) return
+    for (const s of ensureProxy().sites ?? []) if (s.waf === previousId) s.waf = profile.id
+  }
   /** A route renamed keeps its place in the access list. */
   function upsertProxyRoute(route, previousId = route.id) {
     upsertIn('routes', route, previousId)
