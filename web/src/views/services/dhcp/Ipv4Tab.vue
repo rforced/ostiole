@@ -166,7 +166,7 @@ function editLease(l) {
               </button>
               <ConfirmButton
                 label="Delete"
-                :question="`Delete the static lease for ${l.mac}?`"
+                :question="`Delete static lease ${l.mac}?`"
                 :description="l.description"
                 @confirm="config.removeStaticLease(l.mac)"
               />

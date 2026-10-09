@@ -136,7 +136,7 @@ function useDefaults() {
             </button>
             <ConfirmButton
               label="Delete"
-              :question="`Delete the time server ${s.host}?`"
+              :question="`Delete time server ${s.host}?`"
               @confirm="remove(s)"
             />
           </td>

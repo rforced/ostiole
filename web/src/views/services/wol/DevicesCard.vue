@@ -97,7 +97,7 @@ function edit(d) {
             </button>
             <ConfirmButton
               label="Delete"
-              :question="`Delete ${deviceName(d)}?`"
+              :question="`Delete device ${deviceName(d)}?`"
               :dependents="config.wolDeviceDependents(d.id)"
               @confirm="config.removeWoLDevice(d)"
             />

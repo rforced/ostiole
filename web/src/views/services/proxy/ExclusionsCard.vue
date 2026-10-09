@@ -141,7 +141,7 @@ function edit(e) {
             </button>
             <ConfirmButton
               label="Delete"
-              :question="`Delete the exclusion of ${exclusionText(e)}?`"
+              :question="`Delete exclusion ${exclusionText(e)}?`"
               :description="e.description"
               @confirm="config.removeExclusion(profile.id, e.index)"
             />

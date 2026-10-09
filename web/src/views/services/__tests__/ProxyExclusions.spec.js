@@ -166,7 +166,7 @@ describe('ExclusionsCard', () => {
       exclusion: { rule: '941100', path: '/api' },
     })
     const del = wrapper.findAllComponents(ConfirmButton)[0]
-    expect(del.props('question')).toBe('Delete the exclusion of rule 941100 on /api?')
+    expect(del.props('question')).toBe('Delete exclusion rule 941100 on /api?')
     del.vm.$emit('confirm')
     expect(s.proxy.wafProfiles[0].exclusions).toEqual([{ rule: '942200' }])
   })

@@ -216,7 +216,7 @@ function editHost(h) {
                 </button>
                 <ConfirmButton
                   label="Delete"
-                  :question="`Delete the host override for ${n.name}?`"
+                  :question="`Delete host override ${n.name}?`"
                   :description="n.description"
                   @confirm="config.removeHostOverride(overrideKey(n.override))"
                 />

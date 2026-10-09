@@ -203,7 +203,7 @@ function describe(c) {
                 </button>
                 <ConfirmButton
                   label="Delete"
-                  :question="`Delete cron ${c.description || c.id}?`"
+                  :question="`Delete cron job ${c.description || c.id}?`"
                   :disabled="locked(c)"
                   @confirm="config.removeCron(c.id)"
                 />

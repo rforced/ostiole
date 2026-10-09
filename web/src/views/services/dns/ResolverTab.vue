@@ -426,7 +426,7 @@ function toggleInterface(name, on) {
               </button>
               <ConfirmButton
                 label="Delete"
-                :question="`Delete the override for ${d.domain}?`"
+                :question="`Delete override ${d.domain}?`"
                 :description="d.description"
                 @confirm="config.removeDomainOverride(d.domain)"
               />
