@@ -81,7 +81,9 @@ watch(
 watch(
   () => form.value.band,
   () => {
-    if (!channels.value.some((c) => c.number === form.value.channel)) form.value.channel = 0
+    if (band.value && !channels.value.some((c) => c.number === form.value.channel)) {
+      form.value.channel = 0
+    }
     if (!widths.value.includes(form.value.width)) form.value.width = widths.value.at(-1) ?? 20
     if (!standards.value.includes(form.value.standard)) form.value.standard = standards.value[0]
   },
@@ -89,15 +91,16 @@ watch(
 
 function save() {
   const f = form.value
-  config.upsertRadio({
+  const radio = {
     name: f.name.trim(),
     enabled: f.enabled,
     band: f.band,
-    channel: Number(f.channel) || 0,
     width: Number(f.width),
     standard: f.standard,
-    power: Number(f.power) || 0,
-  })
+  }
+  if (Number(f.channel) > 0) radio.channel = Number(f.channel)
+  if (Number(f.power) > 0) radio.power = Number(f.power)
+  config.upsertRadio(radio)
   open.value = false
 }
 </script>
