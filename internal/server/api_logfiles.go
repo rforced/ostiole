@@ -173,7 +173,7 @@ var logFileNames = map[string]string{
 	peerlog.WireGuard.Name:   "WireGuard log",
 	peerlog.Tailscale.Name:   "Tailscale log",
 	smart.HistoryFileName:    "drive history",
-	traffic.LinksFile:        "traffic per link",
+	traffic.LinksFile:        "traffic per interface",
 	traffic.DevicesFile:      "traffic per device",
 	traffic.DestinationsFile: "list of destinations",
 	gateway.HistoryFileName:  "gateway history",

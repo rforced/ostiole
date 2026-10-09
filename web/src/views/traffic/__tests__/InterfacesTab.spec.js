@@ -71,6 +71,12 @@ describe('InterfacesTab', () => {
     expect(w.findAll('path')[0].attributes('d').split('L')).toHaveLength(2)
   })
 
+  it('names its card after the tab', async () => {
+    const w = mount(InterfacesTab)
+    await flushPromises()
+    expect(w.get('h2 span').text()).toBe('Interfaces')
+  })
+
   // Off, the chart holds and the seconds wait; on again, they are drawn.
   it('holds the seconds while Live is off', async () => {
     const w = mount(InterfacesTab)
@@ -103,9 +109,9 @@ describe('InterfacesTab', () => {
     expect(w.text()).toMatch(/Since .+\./)
   })
 
-  // Traffic per link clears as every other log does: asked first, an
+  // Traffic per interface clears as every other log does: asked first, an
   // admin's, and read again after.
-  it('clears what every link moved, once asked', async () => {
+  it('clears what every interface moved, once asked', async () => {
     useAuthStore().user = { username: 'root', role: 'admin' }
     const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
     const w = mount(InterfacesTab)
@@ -118,8 +124,8 @@ describe('InterfacesTab', () => {
     await flushPromises()
     expect(ask).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        question: 'Clear the traffic per link?',
-        description: 'What every link moved and its errors are dropped. Counting carries on.',
+        question: 'Clear the traffic per interface?',
+        description: 'What every interface moved and its errors are dropped. Counting carries on.',
       }),
     )
     expect(api.traffic.clearInterfaces).toHaveBeenCalledOnce()

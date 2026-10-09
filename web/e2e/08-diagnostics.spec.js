@@ -74,7 +74,7 @@ test('the connections and neighbour pages explain themselves, and the filter emp
   await page.screenshot({ path: shot('45-states'), fullPage: true })
 
   await sidebar(page, 'ARP and NDP')
-  const neigh = page.getByRole('region', { name: 'Neighbours' })
+  const neigh = page.getByRole('region', { name: 'ARP and NDP' })
   await expect(neigh).not.toContainText('Reading…')
   // The kernel's table may be empty, as in a netns of dummy links, and an
   // empty table says so rather than that nothing matches.

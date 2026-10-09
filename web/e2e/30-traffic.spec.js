@@ -15,6 +15,7 @@ test('the links chart from the stream, and counting per device goes on', async (
   )
   await expect(page.getByLabel('Window')).toHaveValue('5m')
   const line = page
+    .getByRole('region', { name: 'Interfaces', exact: true })
     .getByRole('img', { name: /: down / })
     .first()
     .locator('path')

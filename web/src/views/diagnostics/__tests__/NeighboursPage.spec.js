@@ -67,6 +67,11 @@ describe('NeighboursPage', () => {
     expect(addresses(w)).toEqual(['10.0.0.3', '10.0.0.20', '192.0.2.1'])
   })
 
+  it('names its card after the page', async () => {
+    const w = await page()
+    expect(w.get('h2 span').text()).toBe('ARP and NDP')
+  })
+
   // A static lease names the MAC, so the name finds it too.
   it('searches addresses, MACs and the names static leases give them', async () => {
     const w = await page()

@@ -48,7 +48,7 @@ export const FILE_LOG_NAMES = {
   wireguard: 'WireGuard log',
   tailscale: 'Tailscale log',
   drives: 'Drive history',
-  links: 'Traffic per link',
+  links: 'Traffic per interface',
   devices: 'Traffic per device',
   destinations: 'Destinations',
   gateways: 'Gateway history',

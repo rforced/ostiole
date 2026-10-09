@@ -90,7 +90,7 @@ function tone(state) {
 <template>
   <div class="space-y-5">
     <SectionCard
-      title="Neighbours"
+      title="ARP and NDP"
       :count="rows.length"
       intro="The ARP and NDP tables: what this router has seen answer on each link."
       flush

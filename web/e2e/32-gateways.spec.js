@@ -121,7 +121,7 @@ test("the gateways' history and events clear", async ({ page }) => {
   await expect(events).toContainText('No events.')
 })
 
-test('traffic per link clears', async ({ page }) => {
+test('traffic per interface clears', async ({ page }) => {
   await login(page)
   await page.goto('/traffic')
   const cleared = page.waitForResponse(

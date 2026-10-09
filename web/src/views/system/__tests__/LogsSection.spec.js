@@ -150,7 +150,7 @@ describe('LogsSection', () => {
           'WireGuard log',
           'Tailscale log',
           'Drive history',
-          'Traffic per link',
+          'Traffic per interface',
           'Traffic per device',
           'Destinations',
           'Gateway history',

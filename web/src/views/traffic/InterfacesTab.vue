@@ -89,15 +89,15 @@ const error = computed(() => read.error.value || stream.error.value || clear.err
 
 <template>
   <div class="space-y-5">
-    <SectionCard title="Links" :count="links?.length" flush>
+    <SectionCard title="Interfaces" :count="links?.length" flush>
       <template #actions>
         <LiveButton v-model="live" :failing="Boolean(error)" />
         <ClearLogButton
-          name="traffic per link"
+          name="traffic per interface"
           :description="
             inFiles
-              ? 'What every link moved and its errors are dropped, files included. Counting carries on.'
-              : 'What every link moved and its errors are dropped. Counting carries on.'
+              ? 'What every interface moved and its errors are dropped, files included. Counting carries on.'
+              : 'What every interface moved and its errors are dropped. Counting carries on.'
           "
           :busy="clear.busy.value"
           @confirm="clear.run()"
@@ -111,7 +111,7 @@ const error = computed(() => read.error.value || stream.error.value || clear.err
       </div>
       <p v-if="!links" class="card-strip border-t border-line text-ink-muted">Reading…</p>
       <p v-else-if="!links.length" class="card-strip border-t border-line text-ink-muted">
-        No links.
+        No interfaces.
       </p>
       <section
         v-for="l in links ?? []"
