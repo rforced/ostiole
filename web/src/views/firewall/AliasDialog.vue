@@ -39,7 +39,7 @@ function blank() {
     entries: '',
     countries: [],
     url: '',
-    refreshHours: 24,
+    refreshHours: '',
     select: [],
   }
 }
@@ -158,7 +158,7 @@ watch(
           entries: a.type === 'geoip' ? '' : joinList(a.entries),
           countries: a.type === 'geoip' ? [...(a.entries ?? [])] : [],
           url: a.url ?? '',
-          refreshHours: a.refreshHours || 24,
+          refreshHours: a.refreshHours ?? '',
           select: [...(a.select ?? [])],
         }
       : blank()
@@ -275,7 +275,7 @@ function save() {
         v-if="fetches"
         id="alias-refresh"
         label="Refresh every (hours)"
-        hint="Publishers ask not to be fetched more than once an hour."
+        hint="24 is the default, 1 at least."
       >
         <input
           id="alias-refresh"
@@ -283,6 +283,7 @@ function save() {
           type="number"
           min="1"
           max="720"
+          placeholder="24"
           class="input w-32 font-mono max-sm:w-full"
         />
       </FormField>

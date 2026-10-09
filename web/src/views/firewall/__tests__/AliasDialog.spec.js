@@ -48,7 +48,7 @@ describe('AliasDialog AS numbers', () => {
     await wrapper.get('#alias-entries').setValue('as15169\n15169, AS36040')
     await wrapper.get('form').trigger('submit')
     expect(config.aliases).toEqual([
-      { name: 'google', type: 'asn', entries: ['AS15169', 'AS36040'], refreshHours: 24 },
+      { name: 'google', type: 'asn', entries: ['AS15169', 'AS36040'] },
     ])
   })
 
@@ -133,7 +133,6 @@ describe('AliasDialog JSON lists', () => {
         type: 'hosts',
         entries: [],
         url: ORACLE,
-        refreshHours: 24,
         select: ['region=us-ashburn-1', 'tags=OCI'],
       },
     ])
@@ -199,5 +198,23 @@ describe('AliasDialog JSON lists', () => {
     await wrapper.get('#alias-url').setValue(ORACLE)
     await wrapper.get('#alias-url').trigger('change')
     expect(api.aliases.inspect).not.toHaveBeenCalled()
+  })
+})
+
+describe('AliasDialog round trip', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('reopens a fetched alias as saved and leaves an untouched save alone', async () => {
+    vi.mocked(api.aliases.inspect).mockResolvedValue({ source: 'x', entries: 12, choices: [] })
+    const { wrapper, config } = open({
+      name: 'cdn',
+      type: 'hosts',
+      entries: [],
+      url: 'https://lists.example.net/cdn.txt',
+    })
+    config.saved = JSON.parse(JSON.stringify(config.draft))
+    expect(wrapper.get('#alias-refresh').element.value).toBe('')
+    await wrapper.get('form').trigger('submit')
+    expect(config.dirty).toBe(false)
   })
 })
