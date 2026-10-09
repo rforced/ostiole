@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -76,6 +77,7 @@ func NewCache(dir string) *Cache {
 }
 
 func (c *Cache) loadAll() {
+	c.sweep()
 	entries, err := os.ReadDir(c.Dir)
 	if err != nil {
 		return
@@ -241,7 +243,8 @@ func (c *Cache) Forget(name string) {
 	_ = os.Remove(c.metaPath(name))
 }
 
-// Prune removes cached lists the configuration no longer has.
+// Prune removes cached lists the configuration no longer has, and the
+// files no list can be read from.
 func (c *Cache) Prune(cfg *model.Config) {
 	keep := map[string]bool{}
 	for _, l := range cfg.Blocking.Lists {
@@ -257,6 +260,52 @@ func (c *Cache) Prune(cfg *model.Config) {
 	c.mu.RUnlock()
 	for _, name := range gone {
 		c.Forget(name)
+	}
+	c.sweep()
+}
+
+// sweep removes metadata that does not parse and names with no parseable
+// metadata beside them: nothing reads either, and Prune knows only the
+// lists that load. Save writes the names first, so names younger than a
+// minute may be a save still running and stay.
+func (c *Cache) sweep() {
+	entries, err := os.ReadDir(c.Dir)
+	if err != nil {
+		return
+	}
+	described := map[string]bool{}
+	var removed []string
+	for _, e := range entries {
+		base, ok := strings.CutSuffix(e.Name(), ".json")
+		if !ok || e.IsDir() || e.Name() == mergedName {
+			continue
+		}
+		path := filepath.Join(c.Dir, e.Name())
+		raw, err := os.ReadFile(path)
+		var m Meta
+		switch {
+		case err != nil:
+			described[base] = true // unread is not unparseable
+		case json.Unmarshal(raw, &m) == nil && m.Name != "":
+			described[base] = true
+		case os.Remove(path) == nil:
+			removed = append(removed, path)
+		}
+	}
+	for _, e := range entries {
+		base, ok := strings.CutSuffix(e.Name(), ".txt")
+		if !ok || e.IsDir() || described[base] {
+			continue
+		}
+		if info, err := e.Info(); err != nil || time.Since(info.ModTime()) < time.Minute {
+			continue
+		}
+		if path := filepath.Join(c.Dir, e.Name()); os.Remove(path) == nil {
+			removed = append(removed, path)
+		}
+	}
+	if len(removed) > 0 {
+		slog.Info("removed cached blocklist files that do not parse", "files", removed)
 	}
 }
 

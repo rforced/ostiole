@@ -146,12 +146,18 @@ func (c *Cache) loadAll() {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue
 		}
-		raw, err := os.ReadFile(filepath.Join(c.Dir, e.Name()))
+		path := filepath.Join(c.Dir, e.Name())
+		raw, err := os.ReadFile(path)
 		if err != nil {
 			continue
 		}
 		var f cached
 		if err := json.Unmarshal(raw, &f); err != nil || f.Alias == "" {
+			// Prune knows only the files that load, so nothing else would
+			// remove this one.
+			if os.Remove(path) == nil {
+				slog.Info("removed a cached feed that does not parse", "file", path)
+			}
 			continue
 		}
 		// A file written before default routes were refused may hold one.
