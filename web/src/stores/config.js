@@ -170,10 +170,11 @@ export const useConfigStore = defineStore('config', () => {
    * What goes with an interface when it is removed, in words, for the
    * dialog. Anything that names it means nothing without it: a DHCP
    * server, a gateway, a route, a DNS listener. A VLAN or PPPoE session on
-   * top of it cannot exist without it. A bridge or bond carries on one
-   * member short unless that was its only one, and an interface delegated
-   * a prefix from it falls back to no IPv6. UPnP and certificate addresses
-   * are weighed once, against every interface the delete takes.
+   * top of it cannot exist without it. A bridge or bond carries on without
+   * the members the delete takes, unless it takes them all, and an
+   * interface delegated a prefix from it falls back to no IPv6. UPnP and
+   * certificate addresses are weighed once, against every interface the
+   * delete takes.
    */
   function interfaceDependents(name, going = null) {
     const out = []
@@ -188,10 +189,12 @@ export const useConfigStore = defineStore('config', () => {
       }
       const agg = i.bridge ?? i.bond
       if (agg?.members?.includes(name)) {
-        if (agg.members.length === 1) {
-          out.push(`${i.bridge ? 'bridge' : 'bond'} ${i.name}, its only member`)
+        if (!going.has(i.name)) out.push(`${i.name} loses member ${name}`)
+        else if (agg.members.at(-1) === name) {
+          const why = agg.members.length === 1 ? 'its only member' : 'left without members'
+          out.push(`${i.bridge ? 'bridge' : 'bond'} ${i.name}, ${why}`)
           out.push(...interfaceDependents(i.name, going))
-        } else out.push(`${i.name} loses member ${name}`)
+        }
       }
       if (i.ipv6?.delegatedFrom === name) out.push(`${i.name} loses its delegated IPv6 prefix`)
     }
@@ -211,8 +214,9 @@ export const useConfigStore = defineStore('config', () => {
     for (const r of ddnsRecords.value) {
       if (r.interface === name) out.push(`dynamic DNS record ${r.name}`)
     }
+    const gone = new Set(gateways.value.filter((g) => going.has(g.interface)).map((g) => g.name))
     for (const g of gateways.value) {
-      if (g.interface === name) out.push(`gateway ${g.name}`, ...gatewayDependents(g.name))
+      if (g.interface === name) out.push(`gateway ${g.name}`, ...gatewayDependents(g.name, gone))
     }
     for (const r of routes.value) if (r.interface === name) out.push(`route ${r.id}`)
     return out
@@ -1114,10 +1118,10 @@ export const useConfigStore = defineStore('config', () => {
 
   /**
    * What changes when a gateway goes: rules routed through it fall back
-   * to the default route, groups carry on without it, and a group it was
-   * the only member of goes too.
+   * to the default route, groups carry on without it, and a group left
+   * without members goes too.
    */
-  function gatewayDependents(name) {
+  function gatewayDependents(name, going = new Set([name])) {
     const out = [
       ...rules.value.filter((r) => r.gateway === name).map((r) => `rule ${r.id} loses its gateway`),
       ...lookupsDependent(name),
@@ -1125,9 +1129,12 @@ export const useConfigStore = defineStore('config', () => {
     for (const g of gatewayGroups.value) {
       const members = g.members ?? []
       if (!members.some((m) => m.gateway === name)) continue
-      if (members.length === 1)
-        out.push(`group ${g.name}, its only member`, ...groupDependents(g.name))
-      else out.push(`group ${g.name} loses member ${name}`)
+      if (!members.every((m) => going.has(m.gateway)))
+        out.push(`group ${g.name} loses member ${name}`)
+      else if (members.at(-1).gateway === name) {
+        const why = members.length === 1 ? 'its only member' : 'left without members'
+        out.push(`group ${g.name}, ${why}`, ...groupDependents(g.name))
+      }
     }
     return out
   }

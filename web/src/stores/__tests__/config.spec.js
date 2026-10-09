@@ -229,6 +229,97 @@ describe('config store interfaces', () => {
     expect(config.findInterface('bond0')).toBeNull()
   })
 
+  it('takes a bridge of VLANs with their trunk, and what names the bridge', () => {
+    const config = useConfigStore()
+    const d = wired()
+    d.interfaces.push(
+      { name: 'eth1.20', zone: 'lan', vlan: { id: 20, parent: 'eth1' } },
+      { name: 'br1', zone: 'lan', bridge: { members: ['eth1.10', 'eth1.20'] } },
+    )
+    d.services.dhcp.servers.push({ interface: 'br1' })
+    d.gateways.push({ name: 'inside', interface: 'br1' })
+    d.routes.push({ id: 'rt2', interface: 'br1', destination: '192.0.2.0/24' })
+    config.replaceDraft(d)
+    expect(config.interfaceDependents('eth1')).toEqual([
+      'VLAN eth1.10',
+      'DHCP server on eth1.10',
+      'DNS listener on eth1.10',
+      'VLAN eth1.20',
+      'bridge br1, left without members',
+      'DHCP server on br1',
+      'gateway inside',
+      'route rt2',
+      'DHCP server on eth1',
+      'IPv6 advertisement on eth1',
+      'DNS listener on eth1',
+      'time served on eth1',
+    ])
+    config.removeInterface('eth1')
+    expect(config.interfaces.map((i) => i.name)).toEqual(['eth0', 'br0', 'bond0', 'wg0'])
+    expect(config.draft.services.dhcp.servers).toEqual([])
+    expect(config.gateways.map((g) => g.name)).toEqual(['wan-gw', 'other'])
+    expect(config.routes.map((r) => r.id)).toEqual(['rt1'])
+  })
+
+  it('keeps a bridge of VLANs that has another member', () => {
+    const config = useConfigStore()
+    const d = wired()
+    d.interfaces.push(
+      { name: 'eth1.20', zone: 'lan', vlan: { id: 20, parent: 'eth1' } },
+      { name: 'br1', zone: 'lan', bridge: { members: ['eth1.10', 'eth1.20', 'eth7'] } },
+    )
+    d.services.dhcp.servers.push({ interface: 'br1' })
+    config.replaceDraft(d)
+    expect(config.interfaceDependents('eth1')).toEqual([
+      'VLAN eth1.10',
+      'br1 loses member eth1.10',
+      'DHCP server on eth1.10',
+      'DNS listener on eth1.10',
+      'VLAN eth1.20',
+      'br1 loses member eth1.20',
+      'DHCP server on eth1',
+      'IPv6 advertisement on eth1',
+      'DNS listener on eth1',
+      'time served on eth1',
+    ])
+    config.removeInterface('eth1')
+    expect(config.findInterface('br1').bridge.members).toEqual(['eth7'])
+    expect(config.draft.services.dhcp.servers).toEqual([{ interface: 'br1' }])
+  })
+
+  it('takes a gateway group whose every gateway goes with the interface', () => {
+    const config = useConfigStore()
+    config.replaceDraft({
+      version: 3,
+      zones: [{ name: 'wan', external: true }],
+      interfaces: [{ name: 'eth0', zone: 'wan' }],
+      gateways: [
+        { name: 'v4', interface: 'eth0' },
+        { name: 'v6', interface: 'eth0' },
+      ],
+      gatewayGroups: [
+        {
+          name: 'both',
+          members: [
+            { gateway: 'v4', tier: 1 },
+            { gateway: 'v6', tier: 2 },
+          ],
+        },
+      ],
+      rules: [{ id: 'r1', zone: 'wan', gateway: 'both' }],
+    })
+    expect(config.interfaceDependents('eth0')).toEqual([
+      'gateway v4',
+      'gateway v6',
+      'group both, left without members',
+      'rule r1 loses its gateway',
+    ])
+    expect(config.gatewayDependents('v4')).toEqual(['group both loses member v4'])
+    config.removeInterface('eth0')
+    expect(config.gatewayGroups).toEqual([])
+    expect(config.rules[0].gateway).toBeUndefined()
+  })
+
   it('takes an interface out of UPnP and the certificates that cover its address', () => {
     const config = useConfigStore()
     const d = wired()
