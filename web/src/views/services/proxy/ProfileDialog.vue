@@ -80,6 +80,7 @@ function save() {
   const profile = { id: f.id.trim() }
   if (f.description.trim()) profile.description = f.description.trim()
   if (f.mode === 'block') profile.mode = 'block'
+  else if (props.profile?.mode === 'detect') profile.mode = 'detect'
   const was = props.profile?.paranoia
   if (Number(f.paranoia) !== (was || 1)) profile.paranoia = Number(f.paranoia)
   else if (was != null) profile.paranoia = was

@@ -193,9 +193,8 @@ function save() {
   if (!entries.length && props.alias && props.alias.entries == null) entries = props.alias.entries
   const out = { name, type: form.value.type, entries }
   if (form.value.description) out.description = form.value.description
-  if (fetching.value && Number(form.value.refreshHours) > 0) {
-    out.refreshHours = Number(form.value.refreshHours)
-  }
+  const hours = Number(form.value.refreshHours)
+  if (hours > 0 && (fetching.value || props.alias?.refreshHours)) out.refreshHours = hours
   config.upsertAlias(out, previous)
   open.value = false
 }

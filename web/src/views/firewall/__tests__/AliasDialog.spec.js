@@ -218,4 +218,33 @@ describe('AliasDialog round trip', () => {
     expect(config.dirty).toBe(true)
     expect(config.aliases[0].entries).toEqual(['192.0.2.1'])
   })
+
+  it('keeps a refresh period on an alias that fetches nothing', async () => {
+    const { wrapper, config } = open({
+      name: 'office',
+      type: 'hosts',
+      entries: ['198.51.100.7'],
+      refreshHours: 6,
+    })
+    config.saved = JSON.parse(JSON.stringify(config.draft))
+    expect(wrapper.find('#alias-refresh').exists()).toBe(false)
+    await wrapper.get('form').trigger('submit')
+    expect(config.dirty).toBe(false)
+  })
+
+  it('writes the refresh period the user changes', async () => {
+    vi.mocked(api.aliases.inspect).mockResolvedValue({ source: 'x', entries: 12 })
+    const { wrapper, config } = open({
+      name: 'cdn',
+      type: 'hosts',
+      entries: ['https://lists.example.net/cdn.txt'],
+      refreshHours: 6,
+    })
+    config.saved = JSON.parse(JSON.stringify(config.draft))
+    expect(wrapper.get('#alias-refresh').element.value).toBe('6')
+    await wrapper.get('#alias-refresh').setValue('12')
+    await wrapper.get('form').trigger('submit')
+    expect(config.dirty).toBe(true)
+    expect(config.aliases[0].refreshHours).toBe(12)
+  })
 })

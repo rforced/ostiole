@@ -873,6 +873,27 @@ describe('Untouched save', () => {
     expect(store.proxy.wafProfiles[0]).toEqual({ id: 'watch', paranoia: 3 })
   })
 
+  it('keeps a detect mode the profile spells out', async () => {
+    const profile = { id: 'watch', mode: 'detect' }
+    const draft = config({ services: services({ wafProfiles: [profile] }) })
+    const { wrapper, store } = withDraft(ProfileDialog, draft, { open: true, profile })
+    await flushPromises()
+    expect(wrapper.get('input[type="radio"][value="detect"]').element.checked).toBe(true)
+    await wrapper.get('form').trigger('submit')
+    expect(store.dirty).toBe(false)
+  })
+
+  it('writes block when the user picks it', async () => {
+    const profile = { id: 'watch', mode: 'detect' }
+    const draft = config({ services: services({ wafProfiles: [profile] }) })
+    const { wrapper, store } = withDraft(ProfileDialog, draft, { open: true, profile })
+    await flushPromises()
+    await wrapper.get('input[type="radio"][value="block"]').setValue(true)
+    await wrapper.get('form').trigger('submit')
+    expect(store.dirty).toBe(true)
+    expect(store.proxy.wafProfiles[0]).toEqual({ id: 'watch', mode: 'block' })
+  })
+
   it('keeps the order of a route allow list', async () => {
     const route = {
       id: 'imap',
