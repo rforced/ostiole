@@ -41,6 +41,7 @@ import (
 	"ostiole/internal/logfile"
 	"ostiole/internal/logging"
 	"ostiole/internal/logring"
+	"ostiole/internal/memlimit"
 	"ostiole/internal/model"
 	"ostiole/internal/network"
 	"ostiole/internal/nft"
@@ -330,11 +331,14 @@ at your own.`,
 			deps.LogFiles = files
 			var stopping sync.WaitGroup
 			stopping.Go(func() { panics.Loop(ctx, log, "log files", files.Run) })
+			limits := memlimit.New(eng.Effective, log)
+			limits.Apply()
+			reads := &readBacks{}
 			// What crosses the router: every link always, and every device
 			// while the configuration says so.
 			counter := &traffic.Counter{Source: eng.Effective, Log: log}
 			deps.Traffic = counter
-			go afterReadBack(ctx, log, "traffic files", "traffic", func() {
+			reads.start(ctx, log, "traffic files", "traffic", func() {
 				readTraffic(eng.Effective(), counter, files, log)
 			}, counter.Run)
 			go panics.Loop(ctx, log, "notifications", notifier.Run)
@@ -393,7 +397,7 @@ at your own.`,
 				// The same tick puts back a queue whose link has only just
 				// come up, which is the boot and redial case.
 				mon.Shaping = g.shaper()
-				watchGateways(ctx, mon, eng, &deps, files, crons, log)
+				watchGateways(ctx, mon, eng, &deps, files, crons, reads, log)
 				// Daylight saving, or a zone set at start that differs from
 				// the one the ruleset was loaded in, moves the offset a
 				// schedule's hours were converted at, so its scheduled chains
@@ -416,7 +420,7 @@ at your own.`,
 				deps.Log = ring
 				zones := &fwlog.Zones{}
 				go panics.Loop(ctx, log, "firewall log watcher", (&fwlog.Watcher{Ring: ring, Source: eng.Effective, Zones: zones}).Run)
-				go afterReadBack(ctx, log, "firewall log files", "firewall log listener", func() {
+				reads.start(ctx, log, "firewall log files", "firewall log listener", func() {
 					readFirewallLog(eng.Effective(), ring, files, log)
 				}, func(ctx context.Context) {
 					if err := (&fwlog.Listener{Ring: ring, Log: log, Zones: zones}).Run(ctx); err != nil {
@@ -432,7 +436,7 @@ at your own.`,
 				blocklists.Installed = func(o dnsblock.Options) { qlog.Reindex(o, g.blocklists()) }
 				go panics.Loop(ctx, log, "query log watcher",
 					(&dnslog.Watcher{Log: qlog, Source: eng.Effective, Cache: g.blocklists()}).Run)
-				go afterReadBack(ctx, log, "query log files", "query log listener", func() {
+				reads.start(ctx, log, "query log files", "query log listener", func() {
 					readQueryLog(eng.Effective(), qlog, files, log)
 				}, func(ctx context.Context) {
 					if err := (&dnslog.Listener{Log: qlog, Names: counter.Names(), Slog: log}).Run(ctx); err != nil {
@@ -448,7 +452,7 @@ at your own.`,
 					drives := &smart.Monitor{Client: deps.Drives, History: history, Source: eng.Effective, Log: slog.Default()}
 					drives.OnTick = func() { crons.Note("system:drives") }
 					deps.DriveHealth, deps.DriveHistory = drives, history
-					go afterReadBack(ctx, log, "drive history files", "drive monitor", func() {
+					reads.start(ctx, log, "drive history files", "drive monitor", func() {
 						readRing(eng.Effective(), history, smart.HistoryFiles(history), smart.HistorySettings, files, log)
 					}, drives.Run)
 				}
@@ -456,7 +460,7 @@ at your own.`,
 				fake := &gateway.FakeProbes{Path: g.fakeProbes}
 				mon := gateway.New(fake, fake, slog.Default())
 				mon.ProbeEvery = time.Second
-				watchGateways(ctx, mon, eng, &deps, files, crons, log)
+				watchGateways(ctx, mon, eng, &deps, files, crons, reads, log)
 			}
 			// What the WAF matched, fed from the proxy's journal: read back
 			// from its files at start while they are on, then from the
@@ -475,7 +479,7 @@ at your own.`,
 			if deps.Proxy != nil {
 				wafFeed.Installed = deps.Proxy.Installed
 			}
-			go afterReadBack(ctx, log, "WAF event files", "WAF events", func() {
+			reads.start(ctx, log, "WAF event files", "WAF events", func() {
 				readWAFEvents(eng.Effective(), wafLog, files, log)
 			}, wafFeed.Run)
 			// The proxy's requests, fed from the same journal while the
@@ -491,7 +495,7 @@ at your own.`,
 			if deps.Proxy != nil {
 				requestFeed.Installed = deps.Proxy.Installed
 			}
-			go afterReadBack(ctx, log, "proxy request files", "proxy requests", func() {
+			reads.start(ctx, log, "proxy request files", "proxy requests", func() {
 				readRing(eng.Effective(), requests, requestlog.Files(requests), requestlog.Settings, files, log)
 			}, requestFeed.Run)
 			// What the DHCP server says of its clients, fed from its journal
@@ -507,7 +511,7 @@ at your own.`,
 			if os.Geteuid() == 0 {
 				dhcpFeed.Installed = func(context.Context) bool { return true }
 			}
-			go afterReadBack(ctx, log, "DHCP log files", "DHCP log", func() {
+			reads.start(ctx, log, "DHCP log files", "DHCP log", func() {
 				readRing(eng.Effective(), dhcpLog, dhcplog.Files(dhcpLog), dhcplog.Settings, files, log)
 			}, dhcpFeed.Run)
 			// The wireless clients' coming and going, fed from every radio's
@@ -523,7 +527,7 @@ at your own.`,
 			if os.Geteuid() == 0 {
 				wirelessFeed.Installed = func(context.Context) bool { return true }
 			}
-			go afterReadBack(ctx, log, "wireless log files", "wireless log", func() {
+			reads.start(ctx, log, "wireless log files", "wireless log", func() {
 				readRing(eng.Effective(), wirelessLog, wirelesslog.Files(wirelessLog), wirelesslog.Settings, files, log)
 			}, wirelessFeed.Run)
 			// The VPN peers' coming and going, read every few seconds while
@@ -545,10 +549,17 @@ at your own.`,
 				if os.Geteuid() != 0 || poll.Read == nil {
 					run = func(ctx context.Context) { <-ctx.Done() }
 				}
-				go afterReadBack(ctx, log, kind.Name+" log files", kind.Name+" peers", func() {
+				reads.start(ctx, log, kind.Name+" log files", kind.Name+" peers", func() {
 					readRing(eng.Effective(), peers, kind.Files(peers), kind.Settings, files, log)
 				}, run)
 			}
+			go func() {
+				started := time.Now()
+				reads.wait()
+				limits.Settle()
+				log.Info("every log is read back", "took", time.Since(started))
+			}()
+			go panics.Loop(ctx, log, "memory limit", limits.Run)
 			err = server.Run(ctx, cfg, deps, slog.Default())
 			stop()
 			waitFor(&stopping, stopWait, log)
@@ -582,16 +593,25 @@ func waitFor(wg *sync.WaitGroup, limit time.Duration, log *slog.Logger) bool {
 	}
 }
 
-// afterReadBack reads a log's files back, and only then starts what
-// feeds it, so what comes back is in place before the first new entry. A
-// read back that panics still lets it start.
-func afterReadBack(ctx context.Context, log *slog.Logger, files, loop string, read func(), run func(context.Context)) {
-	func() {
-		defer panics.Recover(log, files)
-		read()
+// readBacks counts the logs still reading their files back.
+type readBacks struct{ wg sync.WaitGroup }
+
+// start reads a log's files back, and only then starts what feeds it, so
+// what comes back is in place before the first new entry. A read back that
+// panics still lets it start.
+func (r *readBacks) start(ctx context.Context, log *slog.Logger, files, loop string, read func(), run func(context.Context)) {
+	r.wg.Add(1)
+	go func() {
+		func() {
+			defer r.wg.Done()
+			defer panics.Recover(log, files)
+			read()
+		}()
+		panics.Loop(ctx, log, loop, run)
 	}()
-	panics.Loop(ctx, log, loop, run)
 }
+
+func (r *readBacks) wait() { r.wg.Wait() }
 
 // readFirewallLog fills the firewall log from its files while the
 // configuration writes them, as its own entries and days allow, and hands
@@ -699,7 +719,7 @@ func readRing[T any, P logring.Entry[T]](cfg *model.Config, ring *logring.Ring[T
 // watchGateways runs the gateway monitor once its history is read back
 // from the files.
 func watchGateways(ctx context.Context, mon *gateway.Monitor, eng *engine.Engine, deps *server.Deps,
-	files *logfile.Writer, crons *cron.Runner, log *slog.Logger,
+	files *logfile.Writer, crons *cron.Runner, reads *readBacks, log *slog.Logger,
 ) {
 	// The monitor follows the engine rather than the store, so a gateway
 	// change is probed and routed during its confirmation window and undone
@@ -708,7 +728,7 @@ func watchGateways(ctx context.Context, mon *gateway.Monitor, eng *engine.Engine
 	mon.OnTick = func() { crons.Note("system:gateways") }
 	mon.History = gateway.NewHistory()
 	deps.Gateways, deps.GatewayHistory = mon, mon.History
-	go afterReadBack(ctx, log, "gateway files", "gateway monitor", func() {
+	reads.start(ctx, log, "gateway files", "gateway monitor", func() {
 		readGateways(eng.Effective(), mon.History, files, log)
 	}, mon.Run)
 }
