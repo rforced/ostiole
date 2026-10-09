@@ -113,20 +113,20 @@ describe('QueriesTab', () => {
     api.blocking.status.mockResolvedValue({ lists: [] })
   })
 
-  // Entries and days sit beside the switch, and off hides them but keeps
-  // them for when it is on again.
-  it('keeps the entries and days beside the switch', async () => {
+  // The entries sit beside the switch, and off hides them but keeps them
+  // for when it is on again.
+  it('keeps the entries beside the switch', async () => {
     const config = saved()
     const wrapper = mount(QueriesTab)
     await flushPromises()
     expect(wrapper.text()).toContain('100,000 is the default. In memory, about 15.0 MB when full.')
-    await wrapper.get('#queries-days').setValue('30')
-    expect(config.draft.services.dns.queryLog).toEqual({ enabled: true, days: 30 })
+    await wrapper.get('#queries-entries').setValue('30000')
+    expect(config.draft.services.dns.queryLog).toEqual({ enabled: true, entries: 30000 })
     await toggle(wrapper, 'Query log enabled').setValue(false)
-    expect(config.draft.services.dns.queryLog).toEqual({ days: 30 })
-    expect(wrapper.find('#queries-days').exists()).toBe(false)
+    expect(config.draft.services.dns.queryLog).toEqual({ entries: 30000 })
+    expect(wrapper.find('#queries-entries').exists()).toBe(false)
     await toggle(wrapper, 'Query log enabled').setValue(true)
-    await wrapper.get('#queries-days').setValue('')
+    await wrapper.get('#queries-entries').setValue('')
     expect(config.dirty).toBe(false)
   })
 

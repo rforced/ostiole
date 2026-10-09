@@ -8,7 +8,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
-import { FILE_LOG_NAMES } from '@/lib/logs'
+import { DAYS, FILE_LOG_NAMES } from '@/lib/logs'
 import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useToastStore } from '@/stores/toast'
@@ -51,6 +51,7 @@ function numberField(key) {
     set: (v) => set(key, Number.isFinite(v) && v > 0 ? v : undefined),
   })
 }
+const memoryDays = numberField('days')
 const retention = numberField('retentionDays')
 const maxUse = numberField('maxUseGB')
 
@@ -89,6 +90,26 @@ const clearAll = useAsync(async () => {
     </template>
     <div class="space-y-4">
       <ErrorLine v-if="clearAll.error.value">{{ clearAll.error.value }}</ErrorLine>
+      <fieldset class="field-group">
+        <legend>Memory</legend>
+        <div class="fields fields-card">
+          <FormField
+            id="logs-memory-days"
+            label="Kept for (days)"
+            :hint="`${DAYS.default} is the default, ${DAYS.max} at most. Older entries leave memory.`"
+          >
+            <input
+              id="logs-memory-days"
+              v-model.number="memoryDays"
+              type="number"
+              min="0"
+              :max="DAYS.max"
+              :placeholder="String(DAYS.default)"
+              class="input w-32 max-sm:w-full"
+            />
+          </FormField>
+        </div>
+      </fieldset>
       <fieldset class="field-group">
         <legend>Journal</legend>
         <fieldset class="space-y-1.5">

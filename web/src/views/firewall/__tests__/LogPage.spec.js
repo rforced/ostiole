@@ -271,7 +271,7 @@ describe('LogPage settings', () => {
 
   // The log's own settings sit on its page, and leave the draft as saved
   // when put back.
-  it('keeps the entries, the days and dropped packets in the draft', async () => {
+  it('keeps the entries and dropped packets in the draft', async () => {
     const store = useConfigStore()
     const draft = { system: { management: { webPort: 9443, sshPort: 22 } }, services: {} }
     store.draft = draft
@@ -279,17 +279,15 @@ describe('LogPage settings', () => {
     const w = await open([])
     expect(w.text()).toContain('50,000 is the default. In memory, about 17.5 MB when full.')
     await w.get('#firewall-entries').setValue('200000')
-    await w.get('#firewall-days').setValue('3')
     const drops = w
       .findAll('input[type=checkbox]')
       .find((i) => i.element.closest('label, div')?.textContent.includes('Log dropped packets'))
     await drops.setValue(true)
     expect(store.draft.system.management).toMatchObject({
-      firewallLog: { entries: 200000, days: 3 },
+      firewallLog: { entries: 200000 },
       logDefaultDrops: true,
     })
     await w.get('#firewall-entries').setValue('')
-    await w.get('#firewall-days').setValue('')
     await drops.setValue(false)
     expect(store.dirty).toBe(false)
   })

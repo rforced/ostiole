@@ -85,9 +85,9 @@ describe('PeerLogTab', () => {
 
   it('keeps the vpn block out of the draft while it is empty', async () => {
     const { wrapper, store } = await tab('wireguard', [])
-    await wrapper.find('#wireguard-days').setValue('3')
-    expect(store.draft.vpn).toEqual({ wireguardLog: { days: 3 } })
-    await wrapper.find('#wireguard-days').setValue('')
+    await wrapper.find('#wireguard-entries').setValue('3000')
+    expect(store.draft.vpn).toEqual({ wireguardLog: { entries: 3000 } })
+    await wrapper.find('#wireguard-entries').setValue('')
     expect(store.draft.vpn).toBeUndefined()
   })
 

@@ -123,7 +123,7 @@ const failures = computed(() => logs.value.filter((l) => l.error))
       <FormField
         id="log-files-retention"
         label="Kept for (days)"
-        :hint="`${FILE_DAYS.default} is the default, ${FILE_DAYS.max} at most. A log set to fewer days keeps fewer.`"
+        :hint="`${FILE_DAYS.default} is the default, ${FILE_DAYS.max} at most.`"
       >
         <input
           id="log-files-retention"

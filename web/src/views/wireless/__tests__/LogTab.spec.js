@@ -86,9 +86,9 @@ describe('Wireless log', () => {
   it('keeps the wireless block out of the draft while it is empty', async () => {
     const { wrapper, store } = await tab([], { radio: false })
     expect(store.draft.wireless).toBeUndefined()
-    await wrapper.find('#wireless-days').setValue('3')
-    expect(store.draft.wireless).toEqual({ log: { days: 3 } })
-    await wrapper.find('#wireless-days').setValue('')
+    await wrapper.find('#wireless-entries').setValue('5000')
+    expect(store.draft.wireless).toEqual({ log: { entries: 5000 } })
+    await wrapper.find('#wireless-entries').setValue('')
     expect(store.draft.wireless).toBeUndefined()
   })
 

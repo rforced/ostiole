@@ -37,7 +37,7 @@ const enabled = computed({
     setQueryLog(q)
   },
 })
-/** Entries and days, beside the switch. */
+/** Entries, beside the switch. */
 const retention = computed({
   get: () => {
     const rest = { ...queryLog.value }

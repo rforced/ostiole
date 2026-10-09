@@ -68,6 +68,23 @@ describe('LogsSection', () => {
     expect(config.draft.system.logging?.level).toBeUndefined()
   })
 
+  // One figure for every log in memory, and emptied it leaves the draft as
+  // saved.
+  it('writes the days in memory and clears them when emptied', async () => {
+    const config = useConfigStore()
+    config.saved = draft()
+    const { wrapper } = open()
+    const days = wrapper.get('#logs-memory-days')
+    expect(days.attributes('placeholder')).toBe('7')
+    expect(days.attributes('max')).toBe('365')
+    expect(wrapper.text()).toContain('7 is the default, 365 at most. Older entries leave memory.')
+    await days.setValue('30')
+    expect(config.draft.system.logging).toEqual({ days: 30 })
+    await days.setValue('')
+    expect(config.draft.system.logging?.days).toBeUndefined()
+    expect(config.dirty).toBe(false)
+  })
+
   it('writes the retention and the ceiling and clears them when emptied', async () => {
     const { wrapper, config } = open()
     const days = wrapper.get('#logs-retention')
@@ -85,12 +102,13 @@ describe('LogsSection', () => {
     expect(config.draft.system.logging?.maxUseGB).toBeUndefined()
   })
 
-  // One card for the whole block: the journal's settings, then the files'.
-  it('holds the journal and the files, each under its name', async () => {
+  // One card for the whole block: the days in memory, the journal's
+  // settings, then the files'.
+  it('holds the memory, the journal and the files, each under its name', async () => {
     const { wrapper, config } = open({ logging: { level: 'info' } })
     await flushPromises()
     const groups = wrapper.findAll('.field-group > legend').map((l) => l.text())
-    expect(groups).toEqual(['Journal', 'Files'])
+    expect(groups).toEqual(['Memory', 'Journal', 'Files'])
     await wrapper.get('input[type="checkbox"]').setValue(true)
     expect(config.draft.system.logging).toEqual({ level: 'info', files: { enabled: true } })
   })

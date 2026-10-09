@@ -7,14 +7,14 @@ import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { formatBytes, formatCount } from '@/lib/format'
-import { DAYS, FILE_LOGS, LOGS, fileDays, fullBytes, totalBytes } from '@/lib/logs'
+import { FILE_LOGS, LOGS, fileDays, fullBytes, totalBytes } from '@/lib/logs'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
 /**
  * How much of one log is kept: the most entries, which is what it costs in
- * memory, and how many days back. It says what the log costs full, and what
- * every log that is on costs together against what this router has for them.
+ * memory. It says what the log costs full, and what every log that is on
+ * costs together against what this router has for them.
  */
 const props = defineProps({
   /** A key of LOGS: firewall, queries or events. */
@@ -24,7 +24,7 @@ const props = defineProps({
   /** The log is off, so there is nothing to size. The off slot can say why. */
   off: { type: Boolean, default: false },
 })
-/** {entries, days}, an empty field being the default. */
+/** {entries}, an empty field being the default. */
 const settings = defineModel({ type: Object, required: true })
 
 const auth = useAuthStore()
@@ -44,7 +44,6 @@ function field(key) {
   })
 }
 const entries = field('entries')
-const days = field('days')
 
 const memory = ref(0)
 const stats = useAsync(async () => {
@@ -70,10 +69,12 @@ onMounted(() => {
 const cost = computed(() => formatBytes(fullBytes(props.log, entries.value)))
 /** The most entries this log may keep here. */
 const ceiling = computed(() => limits.value?.ceilings?.[props.log] || spec.value.max)
-/** How many days the files keep this log, 0 while they are off. */
-const kept = computed(() => fileDays(config.draft, props.log, days.value))
+/** How many days the files keep an entry, 0 while they are off. */
+const kept = computed(() => fileDays(config.draft))
 const entriesHint = computed(() => {
-  const older = kept.value ? 'Older entries stay in the files.' : 'Older entries are dropped.'
+  const older = kept.value
+    ? `Older entries stay in the files for ${kept.value} days.`
+    : 'Older entries are dropped.'
   const base = `${formatCount(spec.value.entries)} is the default. In memory, about ${cost.value} when full. ${older}`
   return ceiling.value < spec.value.max
     ? `${base} This router allows up to ${formatCount(ceiling.value)}.`
@@ -92,10 +93,6 @@ const over = computed(() => budget.value !== null && peak.value > budget.value)
 const heavy = computed(
   () => budget.value === null && memory.value > 0 && total.value > memory.value / 2,
 )
-const daysHint = computed(() => {
-  const base = `${DAYS.default} is the default, ${DAYS.max} at most.`
-  return kept.value ? `${base} Files keep ${kept.value} days.` : base
-})
 </script>
 
 <template>
@@ -113,17 +110,6 @@ const daysHint = computed(() => {
               min="0"
               :max="ceiling"
               :placeholder="String(spec.entries)"
-              class="input w-32 max-sm:w-full"
-            />
-          </FormField>
-          <FormField :id="`${log}-days`" label="Days" :hint="daysHint">
-            <input
-              :id="`${log}-days`"
-              v-model.number="days"
-              type="number"
-              min="0"
-              :max="DAYS.max"
-              :placeholder="String(DAYS.default)"
               class="input w-32 max-sm:w-full"
             />
           </FormField>

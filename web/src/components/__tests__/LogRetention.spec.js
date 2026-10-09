@@ -74,19 +74,20 @@ describe('LogRetention', () => {
   it('quotes what the log costs full, and every log that is on against the memory', async () => {
     const { wrapper } = await card()
     expect(wrapper.text()).toContain('10,000 is the default. In memory, about 15.4 MB when full.')
-    expect(wrapper.text()).toContain('7 is the default, 365 at most.')
     // Only the firewall log is on in an empty draft: 50,000 of 350 bytes.
     expect(wrapper.text()).toContain('All logs in memory: 17.5 MB of 8.0 GB when full.')
     expect(wrapper.text()).not.toContain('more than half')
   })
 
-  it('writes the fields it is given, dropping an emptied one', async () => {
-    const { wrapper, model } = await card({ settings: { days: 3 } })
+  // The days in memory are System › General's, one figure for every log.
+  it('writes the entries, dropping them once emptied', async () => {
+    const { wrapper, model } = await card()
+    expect(wrapper.find('#events-days').exists()).toBe(false)
     await wrapper.find('#events-entries').setValue('500')
-    expect(model.value).toEqual({ days: 3, entries: 500 })
-    await wrapper.find('#events-days').setValue('')
     expect(model.value).toEqual({ entries: 500 })
     expect(wrapper.text()).toContain('In memory, about 768 kB when full.')
+    await wrapper.find('#events-entries').setValue('')
+    expect(model.value).toEqual({})
   })
 
   it('warns past half of the memory', async () => {
@@ -154,35 +155,44 @@ describe('LogRetention', () => {
     expect(wrapper.text()).not.toContain('half')
   })
 
-  // While System → General writes the logs to files, the card says what
-  // this log's files hold and how long they keep it: the shorter of the
-  // files' days and its own.
+  // While System › General writes the logs to files, the card says what
+  // this log's files hold and how long they keep it: the files' days.
   it('says what the files keep while the logs are written to them', async () => {
-    const draft = { system: { logging: { files: { enabled: true } } } }
+    const draft = (files) => ({ system: { logging: { files } } })
     const files = { enabled: true, logs: [{ name: 'firewall', bytes: 1_200_000 }] }
-    let { wrapper } = await card({ log: 'firewall', draft, files })
-    expect(wrapper.text()).toContain('7 is the default, 365 at most. Files keep 7 days.')
+    let { wrapper } = await card({ log: 'firewall', draft: draft({ enabled: true }), files })
+    expect(wrapper.text()).toContain(
+      'In memory, about 17.5 MB when full. Older entries stay in the files for 30 days.',
+    )
     expect(wrapper.text()).toContain('In files: 1.2 MB.')
-    ;({ wrapper } = await card({ log: 'firewall', draft, files, settings: { days: 20 } }))
-    expect(wrapper.text()).toContain('Files keep 20 days.')
-    ;({ wrapper } = await card({ log: 'firewall', draft, files, settings: { days: 90 } }))
-    expect(wrapper.text()).toContain('Files keep 31 days.')
+    ;({ wrapper } = await card({
+      log: 'firewall',
+      draft: draft({ enabled: true, retentionDays: 90 }),
+      files,
+    }))
+    expect(wrapper.text()).toContain('Older entries stay in the files for 90 days.')
     // Traffic's destinations and the WAF events are kept in files too.
     ;({ wrapper } = await card({
       log: 'destinations',
-      draft,
+      draft: draft({ enabled: true, retentionDays: 14 }),
       files: { enabled: true, logs: [{ name: 'destinations', bytes: 3_000_000 }] },
     }))
-    expect(wrapper.text()).toContain('Files keep 7 days.')
+    expect(wrapper.text()).toContain('Older entries stay in the files for 14 days.')
     expect(wrapper.text()).toContain('In files: 3.0 MB.')
     ;({ wrapper } = await card({
       log: 'events',
-      draft,
+      draft: draft({ enabled: true }),
       files: { enabled: true, logs: [{ name: 'events', bytes: 40_000 }] },
-      settings: { days: 14 },
     }))
-    expect(wrapper.text()).toContain('Files keep 14 days.')
+    expect(wrapper.text()).toContain('Older entries stay in the files for 30 days.')
     expect(wrapper.text()).toContain('In files: 40.0 kB.')
+    // Off, the files' days say nothing.
+    ;({ wrapper } = await card({ log: 'firewall', draft: draft({ retentionDays: 90 }) }))
+    expect(wrapper.text()).toContain(
+      'In memory, about 17.5 MB when full. Older entries are dropped.',
+    )
+    expect(wrapper.text()).not.toContain('in the files')
+    expect(wrapper.text()).not.toContain('In files:')
     expect(api.logFiles).toHaveBeenCalledTimes(5)
   })
 

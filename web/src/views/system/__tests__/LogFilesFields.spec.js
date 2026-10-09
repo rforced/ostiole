@@ -47,7 +47,9 @@ describe('LogFilesFields', () => {
     expect(config.draft.system.logging.files.writeMinutes).toBeUndefined()
 
     const days = wrapper.get('#log-files-retention')
-    expect(days.attributes('placeholder')).toBe('31')
+    expect(days.attributes('placeholder')).toBe('30')
+    expect(wrapper.text()).toContain('30 is the default, 365 at most.')
+    expect(wrapper.text()).not.toContain('A log set to fewer days')
     await days.setValue('90')
     expect(config.draft.system.logging.files.retentionDays).toBe(90)
     await days.setValue('')

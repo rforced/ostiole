@@ -102,11 +102,10 @@ describe('RequestsTab', () => {
     expect(wrapper.text()).not.toContain('Requests are kept at')
   })
 
-  it('keeps how many requests and days in the draft', async () => {
+  it('keeps how many requests in the draft', async () => {
     const { wrapper, store } = await tab([])
     await wrapper.find('#requests-entries').setValue('100000')
-    await wrapper.find('#requests-days').setValue('3')
-    expect(store.draft.services.proxy.requests).toEqual({ entries: 100000, days: 3 })
+    expect(store.draft.services.proxy.requests).toEqual({ entries: 100000 })
     expect(wrapper.text()).toContain('In memory, about 40.0 MB when full.')
   })
 

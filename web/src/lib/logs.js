@@ -18,13 +18,13 @@ export const LOGS = {
   tailscale: { entries: 10000, max: 1000000, bytes: 200 },
 }
 
-/** How many days a log keeps an entry: the default and the most. */
+/** How many days an entry stays in memory, System › General: the default and the most. */
 export const DAYS = { default: 7, max: 365 }
 
 /** How many days the log files keep an entry: the default and the most. */
-export const FILE_DAYS = { default: 31, max: 365 }
+export const FILE_DAYS = { default: 30, max: 365 }
 
-/** The logs with days of their own that System → General writes to files. */
+/** The logs in memory that System › General writes to files. */
 export const FILE_LOGS = [
   'firewall',
   'queries',
@@ -56,16 +56,12 @@ export const FILE_LOG_NAMES = {
 }
 
 /**
- * How many days a log's files keep, 0 while the files are off: the shorter
- * of the files' days and the log's own.
+ * How many days the log files keep an entry, 0 while they are off.
  * @param {object} [cfg]
- * @param {string} log a key of LOGS
- * @param {number} [days] the log's own days, empty being the default
  */
-export function fileDays(cfg, log, days) {
+export function fileDays(cfg) {
   const files = cfg?.system?.logging?.files
-  if (!files?.enabled || !FILE_LOGS.includes(log)) return 0
-  return Math.min(files.retentionDays || FILE_DAYS.default, days || DAYS.default)
+  return files?.enabled ? files.retentionDays || FILE_DAYS.default : 0
 }
 
 /**

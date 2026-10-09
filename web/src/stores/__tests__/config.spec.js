@@ -457,7 +457,7 @@ describe('config store traffic shaping', () => {
     const d = draft()
     config.replaceDraft(d)
     expect(config.sectionFor('vpn.wireguardLog.entries')).toBe('/vpn/wireguard')
-    expect(config.sectionFor('vpn.tailscaleLog.days')).toBe('/vpn/tailscale')
+    expect(config.sectionFor('vpn.tailscaleLog.entries')).toBe('/vpn/tailscale')
     d.vpn = { tailscaleLog: { entries: 1000 } }
     config.replaceDraft(d)
     expect(config.sectionFor('vpn')).toBe('/vpn/tailscale')

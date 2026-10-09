@@ -94,7 +94,7 @@ describe('DHCP log', () => {
     expect(wrapper.text()).toContain('No messages.')
   })
 
-  it('keeps how many messages and days in the draft', async () => {
+  it('keeps how many messages in the draft', async () => {
     const { wrapper, store } = await tab([])
     await wrapper.find('#dhcp-entries').setValue('5000')
     expect(store.draft.services.dhcp.log).toEqual({ entries: 5000 })

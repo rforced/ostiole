@@ -66,7 +66,7 @@ test('destinations go on beside the devices', async ({ page }) => {
   const record = page.getByRole('switch', { name: 'Recording enabled' })
   await expect(record).toBeEnabled()
   await record.check()
-  await expect(page.getByLabel('Days')).toHaveAttribute('placeholder', '7')
+  await expect(page.getByLabel('Entries')).toHaveAttribute('placeholder', '100000')
   await applyAndConfirm(page)
   const destinations = page.getByRole('region', { name: 'Destinations' })
   await expect(destinations).toContainText('No destinations.')

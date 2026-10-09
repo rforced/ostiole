@@ -46,7 +46,7 @@ const recording = (c) => Boolean(c?.traffic?.devices && c.traffic.destinations?.
 const unapplied = computed(() => recording(config.draft) && !recording(config.saved))
 /** Written to files as well, as the draft has it. */
 const filesOn = computed(() => Boolean(config.draft?.system?.logging?.files?.enabled))
-/** Entries and days, beside the switch. */
+/** Entries, beside the switch. */
 const retention = computed({
   get: () => {
     const rest = { ...destinations.value }

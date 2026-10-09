@@ -122,11 +122,11 @@ describe('DevicesTab', () => {
   // Destinations belong to devices: switching counting off takes them too.
   it('switches destinations off with the devices', async () => {
     const { w, config } = await open({
-      draft: { devices: true, destinations: { enabled: true, days: 3 } },
+      draft: { devices: true, destinations: { enabled: true, entries: 50000 } },
     })
     expect(w.text()).toContain('clears it. Destinations switch off with it.')
     await w.get('#devices-enabled').setValue(false)
-    expect(config.draft.traffic).toEqual({ destinations: { days: 3 } })
+    expect(config.draft.traffic).toEqual({ destinations: { entries: 50000 } })
     expect(w.text()).not.toContain('Destinations switch off with it.')
   })
 
