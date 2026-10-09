@@ -277,7 +277,7 @@ describe('LogPage settings', () => {
     store.draft = draft
     store.saved = structuredClone(draft)
     const w = await open([])
-    expect(w.text()).toContain('50,000 is the default. About 17.5 MB of memory when full.')
+    expect(w.text()).toContain('50,000 is the default. In memory, about 17.5 MB when full.')
     await w.get('#firewall-entries').setValue('200000')
     await w.get('#firewall-days').setValue('3')
     const drops = w

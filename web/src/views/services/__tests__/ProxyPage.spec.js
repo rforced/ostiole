@@ -303,11 +303,11 @@ describe('EventsTab', () => {
 
   it('keeps how many events and days in the draft, and what that costs', async () => {
     const { wrapper, store } = await events([])
-    expect(wrapper.text()).toContain('10,000 is the default. About 15.4 MB of memory when full.')
+    expect(wrapper.text()).toContain('10,000 is the default. In memory, about 15.4 MB when full.')
     await wrapper.find('#events-entries').setValue('100000')
     await wrapper.find('#events-days').setValue('30')
     expect(store.draft.services.proxy.events).toEqual({ entries: 100000, days: 30 })
-    expect(wrapper.text()).toContain('About 154 MB of memory when full.')
+    expect(wrapper.text()).toContain('In memory, about 154 MB when full.')
     // Emptied, the block leaves the draft rather than lingering empty.
     await wrapper.find('#events-entries').setValue('')
     await wrapper.find('#events-days').setValue('')

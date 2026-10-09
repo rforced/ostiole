@@ -244,7 +244,7 @@ test('the log keeps its own settings', async ({ page }) => {
   await page.goto('/firewall/log')
   const card = page.getByRole('region', { name: 'Firewall log' })
   await expect(card).toContainText('50,000 is the default.')
-  await expect(card).toContainText('All logs:')
+  await expect(card).toContainText('All logs in memory:')
   await card.getByLabel('Days').fill('3')
   await card.getByLabel('Log dropped packets').check()
   await applyAndConfirm(page)

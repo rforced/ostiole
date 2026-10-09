@@ -70,8 +70,11 @@ onMounted(() => {
 const cost = computed(() => formatBytes(fullBytes(props.log, entries.value)))
 /** The most entries this log may keep here. */
 const ceiling = computed(() => limits.value?.ceilings?.[props.log] || spec.value.max)
+/** How many days the files keep this log, 0 while they are off. */
+const kept = computed(() => fileDays(config.draft, props.log, days.value))
 const entriesHint = computed(() => {
-  const base = `${formatCount(spec.value.entries)} is the default. About ${cost.value} of memory when full.`
+  const older = kept.value ? 'Older entries stay in the files.' : 'Older entries are dropped.'
+  const base = `${formatCount(spec.value.entries)} is the default. In memory, about ${cost.value} when full. ${older}`
   return ceiling.value < spec.value.max
     ? `${base} This router allows up to ${formatCount(ceiling.value)}.`
     : base
@@ -89,13 +92,9 @@ const over = computed(() => budget.value !== null && peak.value > budget.value)
 const heavy = computed(
   () => budget.value === null && memory.value > 0 && total.value > memory.value / 2,
 )
-/** How many days the files keep this log, 0 while they are off. */
-const kept = computed(() => fileDays(config.draft, props.log, days.value))
 const daysHint = computed(() => {
   const base = `${DAYS.default} is the default, ${DAYS.max} at most.`
-  return kept.value
-    ? `${base} Files keep ${kept.value} days.`
-    : `${base} Older entries are dropped.`
+  return kept.value ? `${base} Files keep ${kept.value} days.` : base
 })
 </script>
 
@@ -130,11 +129,11 @@ const daysHint = computed(() => {
           </FormField>
         </div>
         <p v-if="budget !== null" class="text-ink-muted">
-          All logs: {{ formatBytes(peak) }} at their largest. This router has
+          All logs in memory: {{ formatBytes(peak) }} at their largest. This router has
           {{ formatBytes(budget) }} for them.
         </p>
         <p v-else class="text-ink-muted">
-          All logs: {{ formatBytes(total) }}{{ outOf }} when full.
+          All logs in memory: {{ formatBytes(total) }}{{ outOf }} when full.
         </p>
         <p v-if="inFiles" class="text-ink-muted">In files: {{ formatBytes(inFiles.bytes) }}.</p>
         <AppNotice v-if="over">That is more than this router has for them.</AppNotice>

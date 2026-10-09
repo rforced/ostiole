@@ -119,7 +119,7 @@ describe('QueriesTab', () => {
     const config = saved()
     const wrapper = mount(QueriesTab)
     await flushPromises()
-    expect(wrapper.text()).toContain('100,000 is the default. About 15.0 MB of memory when full.')
+    expect(wrapper.text()).toContain('100,000 is the default. In memory, about 15.0 MB when full.')
     await wrapper.get('#queries-days').setValue('30')
     expect(config.draft.services.dns.queryLog).toEqual({ enabled: true, days: 30 })
     await toggle(wrapper, 'Query log enabled').setValue(false)

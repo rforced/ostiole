@@ -107,7 +107,7 @@ describe('RequestsTab', () => {
     await wrapper.find('#requests-entries').setValue('100000')
     await wrapper.find('#requests-days').setValue('3')
     expect(store.draft.services.proxy.requests).toEqual({ entries: 100000, days: 3 })
-    expect(wrapper.text()).toContain('About 40.0 MB of memory when full.')
+    expect(wrapper.text()).toContain('In memory, about 40.0 MB when full.')
   })
 
   // Clear empties the router's log and reads it again. Below Info there is

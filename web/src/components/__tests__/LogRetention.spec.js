@@ -73,10 +73,10 @@ describe('LogRetention', () => {
 
   it('quotes what the log costs full, and every log that is on against the memory', async () => {
     const { wrapper } = await card()
-    expect(wrapper.text()).toContain('10,000 is the default. About 15.4 MB of memory when full.')
+    expect(wrapper.text()).toContain('10,000 is the default. In memory, about 15.4 MB when full.')
     expect(wrapper.text()).toContain('7 is the default, 365 at most.')
     // Only the firewall log is on in an empty draft: 50,000 of 350 bytes.
-    expect(wrapper.text()).toContain('All logs: 17.5 MB of 8.0 GB when full.')
+    expect(wrapper.text()).toContain('All logs in memory: 17.5 MB of 8.0 GB when full.')
     expect(wrapper.text()).not.toContain('more than half')
   })
 
@@ -86,7 +86,7 @@ describe('LogRetention', () => {
     expect(model.value).toEqual({ days: 3, entries: 500 })
     await wrapper.find('#events-days').setValue('')
     expect(model.value).toEqual({ entries: 500 })
-    expect(wrapper.text()).toContain('About 768 kB of memory when full.')
+    expect(wrapper.text()).toContain('In memory, about 768 kB when full.')
   })
 
   it('warns past half of the memory', async () => {
@@ -94,7 +94,7 @@ describe('LogRetention', () => {
       system: { management: { firewallLog: { entries: 1000000 } } },
     }
     const { wrapper } = await card({ draft, memTotal: 600_000_000 })
-    expect(wrapper.text()).toContain('All logs: 350 MB of 600 MB when full.')
+    expect(wrapper.text()).toContain('All logs in memory: 350 MB of 600 MB when full.')
     expect(wrapper.text()).toContain("That is more than half of this router's memory.")
   })
 
@@ -103,28 +103,28 @@ describe('LogRetention', () => {
     expect(api.logLimits).toHaveBeenCalledTimes(1)
     expect(wrapper.find('#events-entries').attributes('max')).toBe('1000000')
     expect(wrapper.text()).not.toContain('This router allows')
-    expect(wrapper.text()).toContain('All logs: 17.5 MB of 8.0 GB when full.')
+    expect(wrapper.text()).toContain('All logs in memory: 17.5 MB of 8.0 GB when full.')
   })
 
   it('caps the entries at what this router allows', async () => {
     const { wrapper } = await card({ log: 'firewall', memTotal: 4_000_000_000, limits: LIMITS })
     expect(wrapper.find('#firewall-entries').attributes('max')).toBe('6619047')
     expect(wrapper.text()).toContain(
-      '50,000 is the default. About 17.5 MB of memory when full. This router allows up to 6,619,047.',
+      'In memory, about 17.5 MB when full. Older entries are dropped. This router allows up to 6,619,047.',
     )
   })
 
   it("says nothing more where this router allows the model's most", async () => {
     const { wrapper } = await card({ memTotal: 4_000_000_000, limits: LIMITS })
     expect(wrapper.find('#events-entries').attributes('max')).toBe('1000000')
-    expect(wrapper.text()).toContain('10,000 is the default. About 15.4 MB of memory when full.')
+    expect(wrapper.text()).toContain('10,000 is the default. In memory, about 15.4 MB when full.')
     expect(wrapper.text()).not.toContain('This router allows')
   })
 
   it('sets every log against what this router has for them', async () => {
     let { wrapper } = await card({ memTotal: 4_000_000_000, limits: LIMITS })
     expect(wrapper.text()).toContain(
-      'All logs: 26.3 MB at their largest. This router has 3.5 GB for them.',
+      'All logs in memory: 26.3 MB at their largest. This router has 3.5 GB for them.',
     )
     expect(wrapper.text()).not.toContain('That is more')
     // 2.1 GB is past half of the memory, but 3.15 GB at their largest fits.
@@ -135,7 +135,7 @@ describe('LogRetention', () => {
       draft: firewallLog(6_000_000),
     }))
     expect(wrapper.text()).toContain(
-      'All logs: 3.1 GB at their largest. This router has 3.5 GB for them.',
+      'All logs in memory: 3.1 GB at their largest. This router has 3.5 GB for them.',
     )
     expect(wrapper.text()).not.toContain('That is more')
     // Each log within its ceiling, together past 3,475 MB at their largest.
@@ -148,7 +148,7 @@ describe('LogRetention', () => {
       },
     }))
     expect(wrapper.text()).toContain(
-      'All logs: 3.5 GB at their largest. This router has 3.5 GB for them.',
+      'All logs in memory: 3.5 GB at their largest. This router has 3.5 GB for them.',
     )
     expect(wrapper.text()).toContain('That is more than this router has for them.')
     expect(wrapper.text()).not.toContain('half')
