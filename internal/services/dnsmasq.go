@@ -4,7 +4,6 @@
 package services
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -601,8 +600,8 @@ func (d *Dnsmasq) Apply(ctx context.Context, files network.Files) error {
 	enabled := files[enabledName] != ""
 	if !enabled {
 		if current[enabledName] != "" {
-			if out, err := d.cmd().Run(ctx, "systemctl", "disable", "--now", Unit); err != nil {
-				return fmt.Errorf("stop %s: %w: %s", Unit, err, bytes.TrimSpace(out))
+			if err := systemctl(ctx, d.cmd(), "stop "+Unit, "disable", "--now", Unit); err != nil {
+				return err
 			}
 		}
 		return nil
@@ -616,8 +615,8 @@ func (d *Dnsmasq) Apply(ctx context.Context, files network.Files) error {
 	if err := os.MkdirAll(filepath.Dir(d.leases()), 0o755); err != nil { //nolint:gosec // dnsmasq writes here unprivileged
 		return err
 	}
-	if out, err := d.cmd().Run(ctx, "systemctl", "enable", Unit); err != nil {
-		return fmt.Errorf("enable %s: %w: %s", Unit, err, bytes.TrimSpace(out))
+	if err := systemctl(ctx, d.cmd(), "enable "+Unit, "enable", Unit); err != nil {
+		return err
 	}
 	return d.restart(ctx, files[confName])
 }
@@ -637,10 +636,7 @@ func (d *Dnsmasq) Active(ctx context.Context) bool {
 // Reload HUPs dnsmasq, which empties its cache and re-reads the hosts
 // files without dropping a query. Its configuration is not re-read.
 func (d *Dnsmasq) Reload(ctx context.Context) error {
-	if out, err := d.cmd().Run(ctx, "systemctl", "reload", Unit); err != nil {
-		return fmt.Errorf("reload %s: %w: %s", Unit, err, strings.TrimSpace(string(out)))
-	}
-	return nil
+	return systemctl(ctx, d.cmd(), "reload "+Unit, "reload", Unit)
 }
 
 // writeFile replaces path, atomically where the filesystem allows it.

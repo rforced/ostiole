@@ -388,8 +388,8 @@ func (w *Wireless) Apply(ctx context.Context, files network.Files) error {
 		if _, keep := files[radio+wirelessConfExt]; keep {
 			continue
 		}
-		if _, err := w.cmd().Run(ctx, "systemctl", "disable", "--now", WirelessUnitFor(radio)); err != nil {
-			return fmt.Errorf("stop the networks on %s: %w", radio, err)
+		if err := systemctl(ctx, w.cmd(), "stop the networks on "+radio, "disable", "--now", WirelessUnitFor(radio)); err != nil {
+			return err
 		}
 		for _, ext := range []string{wirelessConfExt, wirelessEnvExt} {
 			if err := os.Remove(w.path(radio + ext)); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -430,14 +430,14 @@ func (w *Wireless) Apply(ctx context.Context, files network.Files) error {
 		if !changed && active {
 			continue
 		}
-		if out, err := w.cmd().Run(ctx, "systemctl", "enable", "--now", unit); err != nil {
-			return fmt.Errorf("start the networks on %s: %w: %s", radio, err, strings.TrimSpace(string(out)))
+		if err := systemctl(ctx, w.cmd(), "start the networks on "+radio, "enable", "--now", unit); err != nil {
+			return err
 		}
 		// A fresh start has just read the files; an instance that was
 		// already running has not.
 		if changed && active {
-			if out, err := w.cmd().Run(ctx, "systemctl", "restart", unit); err != nil {
-				return fmt.Errorf("restart the networks on %s: %w: %s", radio, err, strings.TrimSpace(string(out)))
+			if err := systemctl(ctx, w.cmd(), "restart the networks on "+radio, "restart", unit); err != nil {
+				return err
 			}
 		}
 	}

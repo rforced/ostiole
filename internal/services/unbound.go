@@ -261,8 +261,8 @@ func (u *Unbound) Apply(ctx context.Context, files network.Files) error {
 		if len(current) == 0 {
 			return nil
 		}
-		if _, err := u.cmd().Run(ctx, "systemctl", "disable", "--now", UnboundUnit); err != nil {
-			return fmt.Errorf("stop %s: %w", UnboundUnit, err)
+		if err := systemctl(ctx, u.cmd(), "stop "+UnboundUnit, "disable", "--now", UnboundUnit); err != nil {
+			return err
 		}
 		return os.Remove(u.ConfPath())
 	}
@@ -278,13 +278,10 @@ func (u *Unbound) Apply(ctx context.Context, files network.Files) error {
 	if err := writeFile(u.ConfPath(), conf); err != nil {
 		return err
 	}
-	if out, err := u.cmd().Run(ctx, "systemctl", "enable", "--now", UnboundUnit); err != nil {
-		return fmt.Errorf("enable %s: %w: %s", UnboundUnit, err, strings.TrimSpace(string(out)))
+	if err := systemctl(ctx, u.cmd(), "enable "+UnboundUnit, "enable", "--now", UnboundUnit); err != nil {
+		return err
 	}
-	if out, err := u.cmd().Run(ctx, "systemctl", "restart", UnboundUnit); err != nil {
-		return fmt.Errorf("restart %s: %w: %s", UnboundUnit, err, strings.TrimSpace(string(out)))
-	}
-	return nil
+	return systemctl(ctx, u.cmd(), "restart "+UnboundUnit, "restart", UnboundUnit)
 }
 
 // Installed reports whether the ostiole-unbound unit exists.
@@ -303,10 +300,7 @@ func (u *Unbound) Active(ctx context.Context) bool {
 // configuration re-read. The process stays up, so the root zone and the
 // trust anchor are kept.
 func (u *Unbound) Reload(ctx context.Context) error {
-	if out, err := u.cmd().Run(ctx, "systemctl", "reload", UnboundUnit); err != nil {
-		return fmt.Errorf("reload %s: %w: %s", UnboundUnit, err, strings.TrimSpace(string(out)))
-	}
-	return nil
+	return systemctl(ctx, u.cmd(), "reload "+UnboundUnit, "reload", UnboundUnit)
 }
 
 // UnboundUnitContent renders the ostiole-unbound unit. dnsmasq waits for

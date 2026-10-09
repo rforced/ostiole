@@ -208,9 +208,9 @@ func (d *Dnsmasq) restart(ctx context.Context, conf string) error {
 		if err != nil {
 			return err
 		}
-		return d.systemctl(ctx, "restart")
+		return systemctl(ctx, d.cmd(), "restart "+Unit, "restart", Unit)
 	}
-	if err := d.systemctl(ctx, "stop"); err != nil {
+	if err := systemctl(ctx, d.cmd(), "stop "+Unit, "stop", Unit); err != nil {
 		return err
 	}
 	// Read again now that nothing writes the file: a lease handed out since
@@ -221,7 +221,7 @@ func (d *Dnsmasq) restart(ctx context.Context, conf string) error {
 	}
 	// A router without DHCP and DNS is worse than one still answering a
 	// name, so dnsmasq starts whatever the copy did.
-	if err := d.systemctl(ctx, "start"); err != nil {
+	if err := systemctl(ctx, d.cmd(), "start "+Unit, "start", Unit); err != nil {
 		return err
 	}
 	if copyErr != nil {
@@ -240,13 +240,6 @@ func (d *Dnsmasq) replaceLeases(ctx context.Context, content []byte) error {
 	if out, err := d.cmd().Run(ctx, "systemd-run", "--unit="+unit, "--wait", "--collect", "--quiet",
 		"--", "cp", "--", tmp, d.leases()); err != nil {
 		return fmt.Errorf("%w: %s", err, bytes.TrimSpace(out))
-	}
-	return nil
-}
-
-func (d *Dnsmasq) systemctl(ctx context.Context, verb string) error {
-	if out, err := d.cmd().Run(ctx, "systemctl", verb, Unit); err != nil {
-		return fmt.Errorf("%s %s: %w: %s", verb, Unit, err, bytes.TrimSpace(out))
 	}
 	return nil
 }

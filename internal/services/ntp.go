@@ -356,14 +356,14 @@ func (n *NTP) Apply(ctx context.Context, files network.Files) error {
 		return err
 	}
 	running := n.Active(ctx)
-	if out, err := n.cmd().Run(ctx, "systemctl", "enable", "--now", NTPUnit); err != nil {
-		return fmt.Errorf("enable %s: %w: %s", NTPUnit, err, strings.TrimSpace(string(out)))
+	if err := systemctl(ctx, n.cmd(), "enable "+NTPUnit, "enable", "--now", NTPUnit); err != nil {
+		return err
 	}
 	// chronyd reads its configuration once. A restart costs the LAN a
 	// second or two of answers, so only a change pays for one.
 	if changed && running {
-		if out, err := n.cmd().Run(ctx, "systemctl", "restart", NTPUnit); err != nil {
-			return fmt.Errorf("restart %s: %w: %s", NTPUnit, err, strings.TrimSpace(string(out)))
+		if err := systemctl(ctx, n.cmd(), "restart "+NTPUnit, "restart", NTPUnit); err != nil {
+			return err
 		}
 	}
 	n.keepRTCInUTC(ctx)

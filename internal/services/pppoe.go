@@ -226,8 +226,8 @@ func (p *PPPoE) Apply(ctx context.Context, files network.Files) error {
 			continue
 		}
 		iface := strings.TrimPrefix(name, PPPoEPrefix)
-		if _, err := p.cmd().Run(ctx, "systemctl", "disable", "--now", unitFor(iface)); err != nil {
-			return fmt.Errorf("stop the session on %s: %w", iface, err)
+		if err := systemctl(ctx, p.cmd(), "stop the session on "+iface, "disable", "--now", unitFor(iface)); err != nil {
+			return err
 		}
 		if err := os.Remove(filepath.Join(p.dir(), name)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
@@ -247,12 +247,12 @@ func (p *PPPoE) Apply(ctx context.Context, files network.Files) error {
 		if !changed && p.active(ctx, unit) {
 			continue
 		}
-		if out, err := p.cmd().Run(ctx, "systemctl", "enable", "--now", unit); err != nil {
-			return fmt.Errorf("start the session on %s: %w: %s", iface, err, strings.TrimSpace(string(out)))
+		if err := systemctl(ctx, p.cmd(), "start the session on "+iface, "enable", "--now", unit); err != nil {
+			return err
 		}
 		if changed {
-			if out, err := p.cmd().Run(ctx, "systemctl", "restart", unit); err != nil {
-				return fmt.Errorf("restart the session on %s: %w: %s", iface, err, strings.TrimSpace(string(out)))
+			if err := systemctl(ctx, p.cmd(), "restart the session on "+iface, "restart", unit); err != nil {
+				return err
 			}
 		}
 	}

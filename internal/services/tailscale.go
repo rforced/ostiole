@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -148,8 +147,8 @@ func (t *Tailscale) Apply(ctx context.Context, files network.Files) error {
 		if len(current) == 0 {
 			return nil
 		}
-		if _, err := t.cmd().Run(ctx, "systemctl", "disable", "--now", TailscaleUnit); err != nil {
-			return fmt.Errorf("stop %s: %w", TailscaleUnit, err)
+		if err := systemctl(ctx, t.cmd(), "stop "+TailscaleUnit, "disable", "--now", TailscaleUnit); err != nil {
+			return err
 		}
 		for _, name := range []string{tailscaleEnvName, tailscalePrefsName} {
 			if err := os.Remove(t.path(name)); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -172,14 +171,14 @@ func (t *Tailscale) Apply(ctx context.Context, files network.Files) error {
 			return err
 		}
 	}
-	if out, err := t.cmd().Run(ctx, "systemctl", "enable", "--now", TailscaleUnit); err != nil {
-		return fmt.Errorf("enable %s: %w: %s", TailscaleUnit, err, strings.TrimSpace(string(out)))
+	if err := systemctl(ctx, t.cmd(), "enable "+TailscaleUnit, "enable", "--now", TailscaleUnit); err != nil {
+		return err
 	}
 	// The port and the log flag are the unit's own arguments, so only a
 	// change to those is worth dropping the tunnel for.
 	if current[tailscaleEnvName] != env {
-		if out, err := t.cmd().Run(ctx, "systemctl", "restart", TailscaleUnit); err != nil {
-			return fmt.Errorf("restart %s: %w: %s", TailscaleUnit, err, strings.TrimSpace(string(out)))
+		if err := systemctl(ctx, t.cmd(), "restart "+TailscaleUnit, "restart", TailscaleUnit); err != nil {
+			return err
 		}
 	}
 	// `tailscale set` works before a login, so this does not wait for one.

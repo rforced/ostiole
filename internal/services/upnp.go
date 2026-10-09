@@ -247,8 +247,8 @@ func (u *UPnP) Apply(ctx context.Context, files network.Files) error {
 		if len(current) == 0 {
 			return nil
 		}
-		if _, err := u.cmd().Run(ctx, "systemctl", "disable", "--now", UPnPUnit); err != nil {
-			return fmt.Errorf("stop %s: %w", UPnPUnit, err)
+		if err := systemctl(ctx, u.cmd(), "stop "+UPnPUnit, "disable", "--now", UPnPUnit); err != nil {
+			return err
 		}
 		return os.Remove(u.ConfPath())
 	}
@@ -263,17 +263,14 @@ func (u *UPnP) Apply(ctx context.Context, files network.Files) error {
 			return err
 		}
 	}
-	if out, err := u.cmd().Run(ctx, "systemctl", "enable", "--now", UPnPUnit); err != nil {
-		return fmt.Errorf("enable %s: %w: %s", UPnPUnit, err, strings.TrimSpace(string(out)))
+	if err := systemctl(ctx, u.cmd(), "enable "+UPnPUnit, "enable", "--now", UPnPUnit); err != nil {
+		return err
 	}
 	// Restart even when the configuration has not changed. The apply that
 	// got here deleted and recreated `table inet ostiole`, so every rule
 	// miniupnpd had inserted went with it. With no lease file it starts
 	// over, and clients map again on their own schedule.
-	if out, err := u.cmd().Run(ctx, "systemctl", "restart", UPnPUnit); err != nil {
-		return fmt.Errorf("restart %s: %w: %s", UPnPUnit, err, strings.TrimSpace(string(out)))
-	}
-	return nil
+	return systemctl(ctx, u.cmd(), "restart "+UPnPUnit, "restart", UPnPUnit)
 }
 
 // Rebuild restarts a running miniupnpd after its table was loaded again
@@ -281,10 +278,7 @@ func (u *UPnP) Apply(ctx context.Context, files network.Files) error {
 // counts the mappings as made; started over, it takes them afresh as
 // clients ask again. One that is not running is left alone.
 func (u *UPnP) Rebuild(ctx context.Context) error {
-	if out, err := u.cmd().Run(ctx, "systemctl", "try-restart", UPnPUnit); err != nil {
-		return fmt.Errorf("restart %s: %w: %s", UPnPUnit, err, strings.TrimSpace(string(out)))
-	}
-	return nil
+	return systemctl(ctx, u.cmd(), "restart "+UPnPUnit, "try-restart", UPnPUnit)
 }
 
 // Installed reports whether the ostiole-miniupnpd unit exists.

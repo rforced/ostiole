@@ -11,7 +11,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"ostiole/internal/atomicfile"
 	"ostiole/internal/dnsblock"
@@ -193,10 +192,7 @@ func (d *DNSBlock) reload(ctx context.Context) error {
 	if !d.installed(ctx) {
 		return nil
 	}
-	if out, err := d.cmd().Run(ctx, "systemctl", "try-restart", Unit); err != nil {
-		return fmt.Errorf("restart %s: %w: %s", Unit, err, strings.TrimSpace(string(out)))
-	}
-	return nil
+	return systemctl(ctx, d.cmd(), "restart "+Unit, "try-restart", Unit)
 }
 
 func (d *DNSBlock) installed(ctx context.Context) bool {

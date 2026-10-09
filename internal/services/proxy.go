@@ -300,8 +300,8 @@ func (p *Proxy) remove(ctx context.Context, current network.Files) error {
 	if len(current) == 0 {
 		return nil
 	}
-	if out, err := p.cmd().Run(ctx, "systemctl", "disable", "--now", ProxyUnit); err != nil {
-		return fmt.Errorf("stop %s: %w: %s", ProxyUnit, err, strings.TrimSpace(string(out)))
+	if err := systemctl(ctx, p.cmd(), "stop "+ProxyUnit, "disable", "--now", ProxyUnit); err != nil {
+		return err
 	}
 	if err := os.RemoveAll(p.path(proxyCertsDir)); err != nil {
 		return err
@@ -318,8 +318,8 @@ func (p *Proxy) remove(ctx context.Context, current network.Files) error {
 // and fails the apply if it is not running afterwards.
 func (p *Proxy) start(ctx context.Context, changed bool) error {
 	if !p.Active(ctx) {
-		if out, err := p.cmd().Run(ctx, "systemctl", "enable", "--now", ProxyUnit); err != nil {
-			return fmt.Errorf("enable %s: %w: %s", ProxyUnit, err, strings.TrimSpace(string(out)))
+		if err := systemctl(ctx, p.cmd(), "enable "+ProxyUnit, "enable", "--now", ProxyUnit); err != nil {
+			return err
 		}
 	} else if changed {
 		if err := p.reload(ctx); err != nil {
