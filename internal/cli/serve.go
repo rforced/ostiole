@@ -721,15 +721,26 @@ func readRing[T any, P logring.Entry[T]](cfg *model.Config, ring *logring.Ring[T
 		size, keep := settings(cfg)
 		ring.Configure(size, keep)
 		started := time.Now()
-		entries, stats, err := logfile.Read(files.Dir, l.Name, l.Version, size, started.Add(-l.Kept(cfg)), logring.Parse[T, P])
+		since := started.Add(-l.Kept(cfg))
+		count, err := logfile.Count(files.Dir, l.Name, since)
 		if err != nil {
-			log.Warn("could not read all of a log's files back", "log", l.Name, "err", err)
+			log.Warn("could not count all of a log's files", "log", l.Name, "err", err)
 		}
-		st = stats
-		if err := ring.Restore(entries, logfile.NewestSeq(files.Dir, l.Name)); err != nil {
+		rs, err := ring.Restorer(count)
+		if err != nil {
 			log.Warn("could not put a log's files back", "log", l.Name, "err", err)
+		} else {
+			stats, err := logfile.Stream(files.Dir, l.Name, l.Version, size, since, logring.Parse[T, P], rs.Push)
+			if err != nil {
+				log.Warn("could not read all of a log's files back", "log", l.Name, "err", err)
+			}
+			st = stats
+			n, err := rs.Done(logfile.NewestSeq(files.Dir, l.Name))
+			if err != nil {
+				log.Warn("could not put a log's files back", "log", l.Name, "err", err)
+			}
+			log.Info("read a log back from its files", "log", l.Name, "entries", n, "took", time.Since(started))
 		}
-		log.Info("read a log back from its files", "log", l.Name, "entries", len(entries), "took", time.Since(started))
 	}
 	files.Add(l, st)
 }

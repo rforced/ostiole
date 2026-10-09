@@ -42,16 +42,47 @@ type Entry[T any] interface {
 // up to the ceiling as entries arrive.
 const initialRing = 256
 
+// slots hold entries in the order they were logged from start.
+type slots[T any] struct {
+	ring  []T
+	start int
+	n     int
+}
+
+// place stores e after the newest, in more places while there are fewer
+// than size, over the oldest once size are full.
+func (s *slots[T]) place(e T, size int) {
+	switch {
+	case s.n < len(s.ring):
+		s.ring[(s.start+s.n)%len(s.ring)] = e
+		s.n++
+	case len(s.ring) < size:
+		s.grow(size)
+		s.ring[s.n] = e
+		s.n++
+	default:
+		s.ring[s.start] = e
+		s.start = (s.start + 1) % len(s.ring)
+	}
+}
+
+// grow gives full slots more places, doubling up to size, and puts the
+// entries back in order from the front.
+func (s *slots[T]) grow(size int) {
+	next := make([]T, min(size, max(2*len(s.ring), initialRing)))
+	for i := range s.n {
+		next[i] = s.ring[(s.start+i)%len(s.ring)]
+	}
+	s.ring, s.start = next, 0
+}
+
 // Ring is a log in memory of T.
 type Ring[T any, P Entry[T]] struct {
 	mu   sync.Mutex
 	size int
 	keep time.Duration
-	// ring holds the entries in the order they were logged from start.
-	ring  []T
-	start int
-	n     int
-	seq   uint64
+	slots[T]
+	seq uint64
 
 	subs    map[chan T]struct{}
 	dropped uint64
@@ -79,11 +110,17 @@ func (r *Ring[T, P]) Configure(size int, keep time.Duration) {
 		return
 	}
 	r.size = size
-	if len(r.ring) <= size {
+	r.fit()
+}
+
+// fit keeps the newest entries that fit the ceiling. The caller holds the
+// lock.
+func (r *Ring[T, P]) fit() {
+	if len(r.ring) <= r.size {
 		return
 	}
-	held := min(r.n, size)
-	next := make([]T, min(size, max(held, initialRing)))
+	held := min(r.n, r.size)
+	next := make([]T, min(r.size, max(held, initialRing)))
 	for i := range held {
 		next[i] = r.ring[(r.start+r.n-held+i)%len(r.ring)]
 	}
@@ -132,18 +169,7 @@ func (r *Ring[T, P]) put(e T) T {
 	r.seq++
 	stamp[T, P](&e).Seq = r.seq
 	r.expire(time.Now())
-	switch {
-	case r.n < len(r.ring):
-		r.ring[(r.start+r.n)%len(r.ring)] = e
-		r.n++
-	case len(r.ring) < r.size:
-		r.grow()
-		r.ring[r.n] = e
-		r.n++
-	default:
-		r.ring[r.start] = e
-		r.start = (r.start + 1) % len(r.ring)
-	}
+	r.place(e, r.size)
 	return e
 }
 
@@ -157,16 +183,6 @@ func (r *Ring[T, P]) send(e T) {
 			r.dropped++
 		}
 	}
-}
-
-// grow gives a full ring more places, doubling up to the ceiling, and puts
-// the entries back in order from the front. The caller holds the lock.
-func (r *Ring[T, P]) grow() {
-	next := make([]T, min(r.size, max(2*len(r.ring), initialRing)))
-	for i := range r.n {
-		next[i] = r.ring[(r.start+i)%len(r.ring)]
-	}
-	r.ring, r.start = next, 0
 }
 
 // at is the entry i places from the oldest. The caller holds the lock.
@@ -255,23 +271,75 @@ func (r *Ring[T, P]) After(seq uint64, buf []T) (int, bool) {
 // newest, the highest number in the files, so none is given twice. It
 // refuses once an entry has been added: the numbers would go backwards.
 func (r *Ring[T, P]) Restore(entries []T, newest uint64) error {
+	s, err := r.Restorer(len(entries))
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		s.Push(e)
+	}
+	_, err = s.Done(newest)
+	return err
+}
+
+// errTaken is why a ring that has taken an entry is not restored.
+var errTaken = errors.New("the log has taken entries already")
+
+// Restorer fills a ring as its files are read back, oldest first, in
+// places of its own that the ring takes over when it is done, so a big log
+// is never held twice.
+type Restorer[T any, P Entry[T]] struct {
+	r    *Ring[T, P]
+	size int
+	last uint64
+	slots[T]
+}
+
+// Restorer starts restoring the ring from count entries at most, as the
+// files' indexes count them. It refuses once an entry has been added.
+func (r *Ring[T, P]) Restorer(count int) (*Restorer[T, P], error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.seq > 0 {
-		return errors.New("the log has taken entries already")
+		return nil, errTaken
 	}
-	entries = logfile.Ascending(entries, func(e *T) uint64 { return stamp[T, P](e).Seq })
-	if len(entries) > r.size {
-		entries = entries[len(entries)-r.size:]
+	s := &Restorer[T, P]{r: r, size: r.size}
+	if n := min(r.size, count); n > 0 {
+		s.ring = make([]T, n)
 	}
-	r.seq = newest
-	if len(entries) > 0 {
-		r.seq = max(r.seq, stamp[T, P](&entries[len(entries)-1]).Seq)
-		// The slice becomes the ring, so a big log is not held twice.
-		r.ring, r.start, r.n = entries[:len(entries):len(entries)], 0, len(entries)
+	return s, nil
+}
+
+// Push keeps the next entry read back with the number it was given, unless
+// that does not rise above the last one's; past the ring's size the oldest
+// goes.
+func (s *Restorer[T, P]) Push(e T) {
+	seq := stamp[T, P](&e).Seq
+	if seq <= s.last {
+		return
+	}
+	s.last = seq
+	s.place(e, s.size)
+}
+
+// Done hands the ring what was pushed, keeping what its size and age
+// allow, and says how many entries it holds. Numbering goes on after the
+// higher of the last number pushed and newest. It refuses once an entry
+// has been added.
+func (s *Restorer[T, P]) Done(newest uint64) (int, error) {
+	r := s.r
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.seq > 0 {
+		return 0, errTaken
+	}
+	r.seq = max(newest, s.last)
+	if s.n > 0 {
+		r.slots, s.slots = s.slots, slots[T]{}
+		r.fit()
 	}
 	r.expire(time.Now())
-	return nil
+	return r.n, nil
 }
 
 // Clear empties the ring. The numbers carry on, so what arrives next is

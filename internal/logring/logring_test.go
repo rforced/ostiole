@@ -149,3 +149,98 @@ func TestEntriesGoThroughTheFiles(t *testing.T) {
 		t.Errorf("parsed a bad line: %v", err)
 	}
 }
+
+// A restorer keeps the entries whose numbers rise, no more than the ring's
+// size however many the files counted, and numbering goes on after the
+// last of them when that is higher than the files' newest.
+func TestARestorerFillsTheRingAsTheFilesStream(t *testing.T) {
+	t.Parallel()
+	now := time.Now()
+	back := func(seq uint64, s string) word { return word{Stamp{Seq: seq, Time: now}, s} }
+	r := newRing(3, 0)
+	s, err := r.Restorer(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range []word{back(2, "a"), back(1, "early"), back(2, "again"), back(0, "none"), back(3, "b"), back(5, "c"), back(6, "d")} {
+		s.Push(e)
+	}
+	if n, err := s.Done(4); err != nil || n != 3 {
+		t.Fatalf("kept %d (%v)", n, err)
+	}
+	if got := words(r.Recent(0)); got != "[6d 5c 3b]" || r.Newest() != 6 {
+		t.Errorf("restored %s, newest %d", got, r.Newest())
+	}
+	r.Add(w("new", now))
+	if r.Newest() != 7 {
+		t.Errorf("numbered %d after the restore", r.Newest())
+	}
+
+	aged := newRing(5, 24*time.Hour)
+	s, _ = aged.Restorer(3)
+	s.Push(word{Stamp{Seq: 1, Time: now.Add(-25 * time.Hour)}, "old"})
+	s.Push(back(2, "a"))
+	s.Push(back(3, "b"))
+	if n, _ := s.Done(0); n != 2 || words(aged.Recent(0)) != "[3b 2a]" {
+		t.Errorf("kept %d past its days: %s", n, words(aged.Recent(0)))
+	}
+
+	shrunk := newRing(5, 0)
+	s, _ = shrunk.Restorer(5)
+	for _, e := range []word{back(1, "a"), back(2, "b"), back(3, "c")} {
+		s.Push(e)
+	}
+	shrunk.Configure(2, 0)
+	if n, _ := s.Done(0); n != 2 || words(shrunk.Recent(0)) != "[3c 2b]" {
+		t.Errorf("kept %d of a ring made smaller: %s", n, words(shrunk.Recent(0)))
+	}
+	shrunk.Add(w("d", now))
+	if got := words(shrunk.Recent(0)); got != "[4d 3c]" {
+		t.Errorf("the smaller ring holds %s", got)
+	}
+}
+
+// A count short of what the files hold, or none at all, grows the
+// restorer's places up to the ring's size, then the oldest go.
+func TestARestorerGrowsPastAShortCount(t *testing.T) {
+	t.Parallel()
+	now := time.Now()
+	for _, count := range []int{0, 2} {
+		r := newRing(1000, 0)
+		s, err := r.Restorer(count)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for seq := range uint64(1200) {
+			s.Push(word{Stamp{Seq: seq + 1, Time: now}, "x"})
+		}
+		n, err := s.Done(0)
+		got := r.Recent(0)
+		if err != nil || n != 1000 || len(got) != 1000 || got[0].Seq != 1200 || got[999].Seq != 201 {
+			t.Errorf("count %d: kept %d, %d from %d to %d (%v)", count, n, len(got), got[len(got)-1].Seq, got[0].Seq, err)
+		}
+	}
+}
+
+// Once an entry has been added, a restorer neither starts nor finishes:
+// the numbers would go backwards.
+func TestARestorerRefusesOnceAnEntryCame(t *testing.T) {
+	t.Parallel()
+	now := time.Now()
+	r := newRing(5, 0)
+	s, err := r.Restorer(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Push(word{Stamp{Seq: 8, Time: now}, "old"})
+	r.Add(w("live", now))
+	if _, err := s.Done(9); err == nil {
+		t.Error("finished after an entry came")
+	}
+	if _, err := r.Restorer(0); err == nil {
+		t.Error("started after an entry came")
+	}
+	if got := words(r.Recent(0)); got != "[1live]" || r.Newest() != 1 {
+		t.Errorf("holds %s, newest %d", got, r.Newest())
+	}
+}
