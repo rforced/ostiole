@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"ostiole/internal/journalfeed"
-	"ostiole/internal/logfile"
 	"ostiole/internal/model"
 	"ostiole/internal/wafevent"
 )
@@ -72,14 +71,19 @@ func (l *Log) Configure(size int, keep time.Duration) {
 		return
 	}
 	l.size = size
-	if len(l.ring) <= size {
+	l.fit()
+}
+
+// fit trims the ring to its ceiling, keeping the newest. The caller holds the lock.
+func (l *Log) fit() {
+	if len(l.ring) <= l.size {
 		return
 	}
-	held := min(l.n, size)
+	held := min(l.n, l.size)
 	if held < l.n {
 		l.let(l.at(l.n - held - 1).Logged)
 	}
-	next := make([]Entry, min(size, max(held, initialRing)))
+	next := make([]Entry, min(l.size, max(held, initialRing)))
 	for i := range held {
 		next[i] = l.ring[(l.start+l.n-held+i)%len(l.ring)]
 	}
@@ -188,24 +192,86 @@ func (l *Log) Newest() uint64 {
 // newest, the highest number in the files, so none is given twice. It
 // refuses once an entry has been added: the numbers would go backwards.
 func (l *Log) Restore(entries []Entry, newest uint64) error {
+	s, err := l.Restorer(len(entries))
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		s.Push(e)
+	}
+	_, err = s.Done(newest)
+	return err
+}
+
+var errTaken = errors.New("the WAF events have taken entries already")
+
+// Restorer fills a ring of its own from the files, for Done to hand the log whole.
+type Restorer struct {
+	l     *Log
+	ring  []Entry
+	start int
+	n     int
+	size  int
+	last  uint64
+	lost  time.Time
+}
+
+// Restorer starts a read-back sized for count entries; it refuses once an entry is added.
+func (l *Log) Restorer(count int) (*Restorer, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.seq > 0 {
-		return errors.New("the WAF events have taken entries already")
+		return nil, errTaken
 	}
-	entries = logfile.Ascending(entries, func(e *Entry) uint64 { return e.Seq })
-	if len(entries) > l.size {
-		l.let(entries[len(entries)-l.size-1].Logged)
-		entries = entries[len(entries)-l.size:]
+	return &Restorer{l: l, ring: make([]Entry, min(l.size, max(count, 0))), size: l.size}, nil
+}
+
+// Push adds e unless its number does not rise, the oldest giving way at the size.
+func (s *Restorer) Push(e Entry) {
+	if e.Seq <= s.last {
+		return
 	}
-	l.seq = newest
-	if len(entries) > 0 {
-		l.seq = max(l.seq, entries[len(entries)-1].Seq)
-		// The slice becomes the ring, so a big log is not held twice.
-		l.ring, l.start, l.n = entries[:len(entries):len(entries)], 0, len(entries)
+	s.last = e.Seq
+	switch {
+	case s.n < len(s.ring):
+		s.ring[(s.start+s.n)%len(s.ring)] = e
+		s.n++
+	case len(s.ring) < s.size:
+		s.grow()
+		s.ring[s.n] = e
+		s.n++
+	default:
+		if t := s.ring[s.start].Logged; t.After(s.lost) {
+			s.lost = t
+		}
+		s.ring[s.start] = e
+		s.start = (s.start + 1) % len(s.ring)
+	}
+}
+
+func (s *Restorer) grow() {
+	next := make([]Entry, min(s.size, max(2*len(s.ring), initialRing)))
+	n := copy(next, s.ring[s.start:])
+	copy(next[n:], s.ring[:s.start])
+	s.ring, s.start = next, 0
+}
+
+// Done hands the log what came back, as Restore does, and says how many it keeps.
+func (s *Restorer) Done(newest uint64) (int, error) {
+	l := s.l
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.seq > 0 {
+		return 0, errTaken
+	}
+	l.seq = max(newest, s.last)
+	l.let(s.lost)
+	if s.n > 0 {
+		l.ring, l.start, l.n = s.ring, s.start, s.n
+		l.fit()
 	}
 	l.expire(time.Now())
-	return nil
+	return l.n, nil
 }
 
 // put stores one entry, giving it the next place. The caller holds the

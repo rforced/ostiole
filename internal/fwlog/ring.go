@@ -5,8 +5,6 @@ import (
 	"sort"
 	"sync"
 	"time"
-
-	"ostiole/internal/logfile"
 )
 
 // initialRing is how many places a ring starts with; it doubles from there
@@ -53,11 +51,16 @@ func (r *Ring) Configure(size int, keep time.Duration) {
 		return
 	}
 	r.size = size
-	if r.ring != nil && len(r.ring) <= size {
+	r.fit()
+}
+
+// fit trims the ring to its ceiling, keeping the newest. The caller holds the lock.
+func (r *Ring) fit() {
+	if r.ring != nil && len(r.ring) <= r.size {
 		return
 	}
-	held := min(r.n, size)
-	next := make([]Entry, min(size, max(held, initialRing)))
+	held := min(r.n, r.size)
+	next := make([]Entry, min(r.size, max(held, initialRing)))
 	for i := range held {
 		next[i] = r.ring[(r.start+r.n-held+i)%len(r.ring)]
 	}
@@ -177,23 +180,81 @@ func (r *Ring) Newest() uint64 {
 // newest, the highest number in the files, so none is given twice. It
 // refuses once an entry has been added: the numbers would go backwards.
 func (r *Ring) Restore(entries []Entry, newest uint64) error {
+	s, err := r.Restorer(len(entries))
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		s.Push(e)
+	}
+	_, err = s.Done(newest)
+	return err
+}
+
+var errTaken = errors.New("the firewall log has taken entries already")
+
+// Restorer fills a ring of its own from the files, for Done to hand the ring whole.
+type Restorer struct {
+	r     *Ring
+	ring  []Entry
+	start int
+	n     int
+	size  int
+	last  uint64
+}
+
+// Restorer starts a read-back sized for count entries; it refuses once an entry is added.
+func (r *Ring) Restorer(count int) (*Restorer, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.seq > 0 {
-		return errors.New("the firewall log has taken entries already")
+		return nil, errTaken
 	}
-	entries = logfile.Ascending(entries, func(e *Entry) uint64 { return e.Seq })
-	if len(entries) > r.size {
-		entries = entries[len(entries)-r.size:]
+	return &Restorer{r: r, ring: make([]Entry, min(r.size, max(count, 0))), size: r.size}, nil
+}
+
+// Push adds e unless its number does not rise, the oldest giving way at the size.
+func (s *Restorer) Push(e Entry) {
+	if e.Seq <= s.last {
+		return
 	}
-	r.seq = newest
-	if len(entries) > 0 {
-		r.seq = max(r.seq, entries[len(entries)-1].Seq)
-		// The slice becomes the ring, so a big log is not held twice.
-		r.ring, r.start, r.n = entries[:len(entries):len(entries)], 0, len(entries)
+	s.last = e.Seq
+	switch {
+	case s.n < len(s.ring):
+		s.ring[(s.start+s.n)%len(s.ring)] = e
+		s.n++
+	case len(s.ring) < s.size:
+		s.grow()
+		s.ring[s.n] = e
+		s.n++
+	default:
+		s.ring[s.start] = e
+		s.start = (s.start + 1) % len(s.ring)
+	}
+}
+
+func (s *Restorer) grow() {
+	next := make([]Entry, min(s.size, max(2*len(s.ring), initialRing)))
+	n := copy(next, s.ring[s.start:])
+	copy(next[n:], s.ring[:s.start])
+	s.ring, s.start = next, 0
+}
+
+// Done hands the ring what came back, as Restore does, and says how many it keeps.
+func (s *Restorer) Done(newest uint64) (int, error) {
+	r := s.r
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.seq > 0 {
+		return 0, errTaken
+	}
+	r.seq = max(newest, s.last)
+	if s.n > 0 {
+		r.ring, r.start, r.n = s.ring, s.start, s.n
+		r.fit()
 	}
 	r.expire(time.Now())
-	return nil
+	return r.n, nil
 }
 
 // Clear empties the ring. The numbers carry on, so what arrives next is

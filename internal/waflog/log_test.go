@@ -143,6 +143,134 @@ func TestRestoreKeepsTheNumbers(t *testing.T) {
 	}
 }
 
+// pushHourly pushes an event an hour apart for each number, the last an
+// hour ago, into a restorer of l sized for count, and ends it.
+func pushHourly(t *testing.T, l *Log, count int, newest uint64, now time.Time, numbers ...uint64) int {
+	t.Helper()
+	rs, err := l.Restorer(count)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, seq := range numbers {
+		at := now.Add(time.Duration(i-len(numbers)) * time.Hour)
+		rs.Push(Entry{Seq: seq, Logged: at, Event: event(fmt.Sprint(i), at)})
+	}
+	n, err := rs.Done(newest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// A number that does not rise above the last one pushed is dropped.
+func TestARestorerDropsNumbersThatDoNotRise(t *testing.T) {
+	t.Parallel()
+	l := New()
+	l.Configure(10, 24*time.Hour)
+	if n := pushHourly(t, l, 5, 0, time.Now(), 4, 5, 5, 3, 6); n != 3 {
+		t.Errorf("kept %d", n)
+	}
+	if got := ids(l.Recent(0)); fmt.Sprint(got) != "[4 1 0]" || l.Newest() != 6 {
+		t.Errorf("restored %v, newest %d", got, l.Newest())
+	}
+}
+
+// Past the log's size the oldest give way, a count reaching back over them
+// is short, and numbering goes on after the last pushed when it is above
+// the newest the files gave.
+func TestARestorerOverwritesTheOldestAndSaysSo(t *testing.T) {
+	t.Parallel()
+	l := New()
+	l.Configure(3, 24*time.Hour)
+	now := time.Now()
+	if n := pushHourly(t, l, 10, 2, now, 1, 2, 3, 4, 5); n != 3 {
+		t.Errorf("kept %d", n)
+	}
+	if got := ids(l.Recent(0)); fmt.Sprint(got) != "[4 3 2]" || l.Newest() != 5 {
+		t.Errorf("restored %v, newest %d", got, l.Newest())
+	}
+	if l.Between(now.Add(-4*time.Hour), now, func(*Entry) {}) {
+		t.Error("the count reaches back over an event that gave way")
+	}
+	if !l.Between(now.Add(-4*time.Hour+time.Minute), now, func(*Entry) {}) {
+		t.Error("the count is short after the events that gave way")
+	}
+	l.Add(now, event("new", now))
+	if got := l.Recent(1); got[0].Seq != 6 {
+		t.Errorf("next %d", got[0].Seq)
+	}
+}
+
+// A count short of what comes back grows the ring up to its size.
+func TestARestorerGrowsPastAShortCount(t *testing.T) {
+	t.Parallel()
+	for _, count := range []int{0, 10} {
+		l := New()
+		l.Configure(600, 0)
+		all := make([]uint64, 800)
+		for i := range all {
+			all[i] = uint64(i + 1)
+		}
+		if n := pushHourly(t, l, count, 0, time.Now(), all...); n != 600 {
+			t.Errorf("count %d: kept %d", count, n)
+		}
+		for i, e := range l.Recent(0) {
+			if e.Seq != uint64(800-i) {
+				t.Fatalf("count %d: place %d holds %d", count, i, e.Seq)
+			}
+		}
+	}
+}
+
+// A size cut while the files are read holds when the log takes them, and
+// says what it let go of.
+func TestARestorerKeepsToASizeCutWhileReading(t *testing.T) {
+	t.Parallel()
+	l := New()
+	l.Configure(10, 24*time.Hour)
+	rs, err := l.Restorer(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	for i := range 8 {
+		at := now.Add(time.Duration(i-8) * time.Hour)
+		rs.Push(Entry{Seq: uint64(i + 1), Logged: at, Event: event(fmt.Sprint(i), at)})
+	}
+	l.Configure(3, 24*time.Hour)
+	if n, err := rs.Done(0); err != nil || n != 3 {
+		t.Fatalf("kept %d (%v)", n, err)
+	}
+	if got := ids(l.Recent(0)); fmt.Sprint(got) != "[7 6 5]" {
+		t.Errorf("restored %v", got)
+	}
+	if l.Between(now.Add(-4*time.Hour), now, func(*Entry) {}) {
+		t.Error("the count reaches back over an event that gave way")
+	}
+}
+
+// Once the log has numbered an event, a read-back neither starts nor ends.
+func TestARestorerRefusesOnceAnEventIsAdded(t *testing.T) {
+	t.Parallel()
+	l := New()
+	rs, err := l.Restorer(4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	rs.Push(Entry{Seq: 5, Logged: now, Event: event("old", now)})
+	l.Add(now, event("new", now))
+	if _, err := rs.Done(9); err == nil {
+		t.Error("done after an event was added")
+	}
+	if got := ids(l.Recent(0)); fmt.Sprint(got) != "[new]" || l.Newest() != 1 {
+		t.Errorf("log holds %v, newest %d", got, l.Newest())
+	}
+	if _, err := l.Restorer(0); err == nil {
+		t.Error("a restorer for a log that has numbered an event")
+	}
+}
+
 // The writer reads what came after the last entry it wrote, oldest first,
 // a buffer at a time.
 func TestAfterReadsOnFromASequence(t *testing.T) {

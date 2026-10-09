@@ -641,16 +641,26 @@ func readFirewallLog(cfg *model.Config, ring *fwlog.Ring, files *logfile.Writer,
 		ring.Configure(f.Size(), f.Retention())
 		started := time.Now()
 		upgradeFiles(files.Dir, fwlog.FileName, fwlog.FileVersion, log)
-		entries, stats, err := logfile.Read(files.Dir, fwlog.FileName, fwlog.FileVersion, f.Size(),
-			started.Add(-ring.Files().Kept(cfg)), fwlog.ParseLine)
+		since := started.Add(-ring.Files().Kept(cfg))
+		count, err := logfile.Count(files.Dir, fwlog.FileName, since)
 		if err != nil {
-			log.Warn("could not read all of the firewall log's files back", "err", err)
+			log.Warn("could not count all of the firewall log's files", "err", err)
 		}
-		st = stats
-		if err := ring.Restore(entries, logfile.NewestSeq(files.Dir, fwlog.FileName)); err != nil {
+		n := 0
+		rs, err := ring.Restorer(count)
+		if err != nil {
 			log.Warn("could not put the firewall log's files back", "err", err)
+		} else {
+			st, err = logfile.Stream(files.Dir, fwlog.FileName, fwlog.FileVersion, f.Size(), since,
+				fwlog.ParseLine, rs.Push)
+			if err != nil {
+				log.Warn("could not read all of the firewall log's files back", "err", err)
+			}
+			if n, err = rs.Done(logfile.NewestSeq(files.Dir, fwlog.FileName)); err != nil {
+				log.Warn("could not put the firewall log's files back", "err", err)
+			}
 		}
-		log.Info("read the firewall log back from its files", "entries", len(entries), "took", time.Since(started))
+		log.Info("read the firewall log back from its files", "entries", n, "took", time.Since(started))
 	}
 	files.Add(ring.Files(), st)
 }
@@ -709,16 +719,26 @@ func readWAFEvents(cfg *model.Config, events *waflog.Log, files *logfile.Writer,
 		e := cfg.Services.Proxy.Events
 		events.Configure(e.Size(), e.Retention())
 		started := time.Now()
-		entries, stats, err := logfile.Read(files.Dir, waflog.FileName, waflog.FileVersion, e.Size(),
-			started.Add(-events.Files().Kept(cfg)), waflog.ParseLine)
+		since := started.Add(-events.Files().Kept(cfg))
+		count, err := logfile.Count(files.Dir, waflog.FileName, since)
 		if err != nil {
-			log.Warn("could not read all of the WAF events' files back", "err", err)
+			log.Warn("could not count all of the WAF events' files", "err", err)
 		}
-		st = stats
-		if err := events.Restore(entries, logfile.NewestSeq(files.Dir, waflog.FileName)); err != nil {
+		n := 0
+		rs, err := events.Restorer(count)
+		if err != nil {
 			log.Warn("could not put the WAF events' files back", "err", err)
+		} else {
+			st, err = logfile.Stream(files.Dir, waflog.FileName, waflog.FileVersion, e.Size(), since,
+				waflog.ParseLine, rs.Push)
+			if err != nil {
+				log.Warn("could not read all of the WAF events' files back", "err", err)
+			}
+			if n, err = rs.Done(logfile.NewestSeq(files.Dir, waflog.FileName)); err != nil {
+				log.Warn("could not put the WAF events' files back", "err", err)
+			}
 		}
-		log.Info("read the WAF events back from their files", "events", len(entries), "took", time.Since(started))
+		log.Info("read the WAF events back from their files", "events", n, "took", time.Since(started))
 	}
 	files.Add(events.Files(), st)
 }
