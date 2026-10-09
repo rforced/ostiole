@@ -20,6 +20,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 type fakeRun struct {
@@ -218,6 +219,56 @@ func TestCheckDownloadInstall(t *testing.T) {
 	last := strings.Join(run.calls[len(run.calls)-1], " ")
 	if !strings.Contains(last, "systemd-run") || !strings.Contains(last, " install --units-only ") || !strings.Contains(last, "systemctl restart 'ostiole.service'") || !strings.Contains(last, "update --probe") || !strings.Contains(last, ".previous") {
 		t.Errorf("restart command = %q", last)
+	}
+}
+
+// What an update that did not finish left beside the binary, a tarball
+// or a binary it extracted, goes when the daemon starts and when the next
+// update does. One still being written stays, and so does everything else
+// in the directory.
+func TestSweepDownloadsRemovesWhatAnInterruptedUpdateLeft(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	write := func(name string, age time.Duration) string {
+		t.Helper()
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte("partial"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		at := time.Now().Add(-age)
+		if err := os.Chtimes(path, at, at); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	left := []string{write(".ostiole-update-1234567.tar.gz", 2*time.Hour), write(".ostiole.new", 2*time.Hour)}
+	others := []string{
+		write(".ostiole-update-7654321.tar.gz", time.Minute),
+		write(".ostiole-proxy.new", time.Minute),
+		write("ostiole", 2*time.Hour),
+		write("example-tool.tar.gz", 2*time.Hour),
+	}
+	if got := SweepDownloads(dir); !slices.Equal(got, left) {
+		t.Errorf("removed %v, want %v", got, left)
+	}
+	for _, path := range others {
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("%s went: %v", filepath.Base(path), err)
+		}
+	}
+
+	again := write(".ostiole-update-2345678.tar.gz", 2*time.Hour)
+	srv, pub := fakeGitHub(t, "0.2.0", false, "")
+	c := &Client{Repo: "rforced/ostiole", BaseURL: srv.URL, PublicKeys: []ed25519.PublicKey{pub}}
+	chk, err := c.Check(context.Background(), "0.1.0", Stable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Download(context.Background(), chk.Release, dir, false, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(again); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the next update left the old tarball: %v", err)
 	}
 }
 

@@ -348,6 +348,7 @@ func (c *Client) Download(ctx context.Context, rel *Release, dir string, withPro
 	if withProxy && proxy == nil {
 		return out, fmt.Errorf("release is missing %s, which this router runs", ProxyAssetName(rel.Version))
 	}
+	SweepDownloads(dir)
 
 	progress("verifying", 0, 0)
 	sumsRaw, err := c.fetchSmall(ctx, sums.URL, 1<<20)
@@ -387,7 +388,7 @@ func (c *Client) fetchBinary(ctx context.Context, a *Asset, sumsRaw []byte, dir,
 		return "", fmt.Errorf("%s is %d bytes, more than a release holds", a.Name, a.Size)
 	}
 	progress("downloading", 0, a.Size)
-	tmp, err := os.CreateTemp(dir, ".ostiole-update-*.tar.gz")
+	tmp, err := os.CreateTemp(dir, downloadPattern)
 	if err != nil {
 		if errors.Is(err, os.ErrPermission) || strings.Contains(err.Error(), "read-only") {
 			return "", fmt.Errorf("cannot write to %s from the service (unit lacks write access; run `ostiole install` once to refresh the unit, or update with `ostiole update` on the command line): %w", dir, err)
@@ -436,7 +437,7 @@ func (c *Client) fetchBinary(ctx context.Context, a *Asset, sumsRaw []byte, dir,
 		return "", fmt.Errorf("checksum mismatch for %s: got %s, want %s", a.Name, got, want)
 	}
 	progress("extracting", 0, 0)
-	out := filepath.Join(dir, "."+member+".new")
+	out := filepath.Join(dir, extractedName(member))
 	if err := extractBinary(tmpName, out, member); err != nil {
 		return "", err
 	}
@@ -447,6 +448,44 @@ func (c *Client) fetchBinary(ctx context.Context, a *Asset, sumsRaw []byte, dir,
 // before its checksum can say anything: a release's are tens of
 // megabytes.
 const maxTarball = 256 << 20
+
+// downloadPattern names a release tarball while it is downloaded beside
+// the binary. It is removed once extracted, unless the process is killed
+// first.
+const downloadPattern = ".ostiole-update-*.tar.gz"
+
+// extractedName is where a binary from a release waits beside the running
+// one until Install moves it over.
+func extractedName(member string) string { return "." + member + ".new" }
+
+// SweepDownloads removes from dir, the binary's, what updates that did not
+// finish left there: tarballs, and binaries extracted but never moved over
+// the running ones. It returns what it removed. One written to in the last
+// hour may be another update's, still running, and stays.
+func SweepDownloads(dir string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var removed []string
+	for _, e := range entries {
+		name := e.Name()
+		ours, _ := filepath.Match(downloadPattern, name)
+		ours = ours || name == extractedName("ostiole") || name == extractedName("ostiole-proxy")
+		if !ours || !e.Type().IsRegular() {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil || time.Since(info.ModTime()) < time.Hour {
+			continue
+		}
+		path := filepath.Join(dir, e.Name())
+		if os.Remove(path) == nil {
+			removed = append(removed, path)
+		}
+	}
+	return removed
+}
 
 func (c *Client) fetchSmall(ctx context.Context, url string, limit int64) ([]byte, error) {
 	resp, err := c.get(ctx, url, "application/octet-stream")

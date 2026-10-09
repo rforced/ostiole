@@ -91,6 +91,11 @@ at your own.`,
 			if removed := atomicfile.Sweep(g.configDir); len(removed) > 0 {
 				slog.Info("removed files an earlier run left half written", "files", removed)
 			}
+			if bin, err := install.ServiceBinary(install.DefaultLayout()); err == nil {
+				if removed := update.SweepDownloads(filepath.Dir(bin)); len(removed) > 0 {
+					slog.Info("removed the download an interrupted update left behind", "files", removed)
+				}
+			}
 			var certManager *certs.Manager
 			if useTLS {
 				if cfg.TLSCert == "" {
