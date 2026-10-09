@@ -7,18 +7,18 @@ import (
 	"encoding/binary"
 	"net/netip"
 	"strings"
-	"time"
+
+	"ostiole/internal/logring"
 )
 
 // Entry is one logged packet. Seq only grows, so a page asked for as
 // "before this one" stays put while packets arrive. Every entry the ring
-// holds has one; a line in a file has none.
+// holds has one, and its line in a file keeps it.
 type Entry struct {
-	Seq    uint64    `json:"seq,omitempty"`
-	Time   time.Time `json:"time"`
-	Prefix string    `json:"prefix"`
-	RuleID string    `json:"ruleId,omitempty"`
-	Zone   string    `json:"zone,omitempty"`
+	logring.Stamp
+	Prefix string `json:"prefix"`
+	RuleID string `json:"ruleId,omitempty"`
+	Zone   string `json:"zone,omitempty"`
 	// Kind is what matched: rule, proxy (a line of the proxy's access list,
 	// its ID in RuleID), zone-drop, default-drop, block-private,
 	// block-bogons, one of SystemKinds, or other. Action is what happened to

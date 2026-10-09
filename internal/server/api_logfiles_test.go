@@ -57,7 +57,7 @@ func TestClearingALogDeletesItsFiles(t *testing.T) {
 		Dir: t.TempDir(), Source: func() *model.Config { return cfg }, Log: slog.New(slog.DiscardHandler),
 		Statfs: func(string) (uint64, uint64, error) { return 50, 100, nil },
 	}
-	files.Add(ring.Files(), logfile.ReadStats{})
+	files.Add(fwlog.Files(ring), logfile.ReadStats{})
 	files.Add(qlog.Files(), logfile.ReadStats{})
 	ring.Add(fwlog.Entry{Time: time.Now(), Src: "192.0.2.1"})
 	qlog.Add(dnslog.Entry{Time: time.Now(), Name: "a.example", Type: 1, Status: dnslog.StatusOK,
@@ -124,7 +124,7 @@ func TestLogFileTroubleIsAWarning(t *testing.T) {
 		Statfs: func(string) (uint64, uint64, error) { return free, 100, nil },
 	}
 	ring := fwlog.NewRing(16)
-	files.Add(ring.Files(), logfile.ReadStats{})
+	files.Add(fwlog.Files(ring), logfile.ReadStats{})
 	ring.Add(fwlog.Entry{Time: time.Now()})
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()

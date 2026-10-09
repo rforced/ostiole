@@ -102,7 +102,7 @@ func TestTheFirewallLogCarriesOnIntoItsFiles(t *testing.T) {
 	t.Parallel()
 	ring := fwlog.NewRing(100)
 	srv, files := filesServer(t, filesOnConfig(), func(d *Deps) { d.Log = ring })
-	files.Add(ring.Files(), logfile.ReadStats{})
+	files.Add(fwlog.Files(ring), logfile.ReadStats{})
 	now := time.Now()
 	for i := range 10 {
 		ring.Add(fwlog.Entry{Time: now.Add(time.Duration(i-10) * time.Minute), Kind: "rule", RuleID: "web",
@@ -139,7 +139,7 @@ func TestAPageEndsWithMemoryWhileTheFilesAreOff(t *testing.T) {
 	ring := fwlog.NewRing(100)
 	cfg := filesOnConfig()
 	srv, files := filesServer(t, cfg, func(d *Deps) { d.Log = ring })
-	files.Add(ring.Files(), logfile.ReadStats{})
+	files.Add(fwlog.Files(ring), logfile.ReadStats{})
 	for i := range 5 {
 		ring.Add(fwlog.Entry{Time: time.Now(), Kind: "rule", RuleID: "web", Action: "drop", Src: fmt.Sprint(i)})
 	}

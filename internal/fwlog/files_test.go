@@ -203,6 +203,25 @@ func TestARestorerRefusesOnceAnEntryIsAdded(t *testing.T) {
 	}
 }
 
+// A restorer that is done no longer shares its places with the ring.
+func TestARestorerLetsGoOfTheRingWhenDone(t *testing.T) {
+	t.Parallel()
+	r := NewRing(10)
+	rs, err := r.Restorer(4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rs.Push(Entry{Seq: 1, Time: time.Now(), Src: "192.0.2.1"})
+	if _, err := rs.Done(0); err != nil {
+		t.Fatal(err)
+	}
+	r.Add(Entry{Time: time.Now(), Src: "192.0.2.3"})
+	rs.Push(Entry{Seq: 5, Time: time.Now(), Src: "192.0.2.2"})
+	if got := r.Recent(0); len(got) != 2 || got[0].Src != "192.0.2.3" || got[1].Src != "192.0.2.1" {
+		t.Errorf("ring holds %+v", got)
+	}
+}
+
 // Written by the writer and read back, an entry is what it was, its number
 // included.
 func TestEntriesComeBackFromTheFiles(t *testing.T) {
@@ -217,10 +236,10 @@ func TestEntriesComeBackFromTheFiles(t *testing.T) {
 	w := &logfile.Writer{Dir: t.TempDir(), Source: func() *model.Config { return cfg }, Log: slog.New(slog.DiscardHandler),
 		Statfs: func(string) (uint64, uint64, error) { return 1, 2, nil }}
 	// Registered before anything arrives, as serve does.
-	w.Add(r.Files(), logfile.ReadStats{})
+	w.Add(Files(r), logfile.ReadStats{})
 	r.Add(want)
 	var line []byte
-	r.Files().Lines(0, 1, func(_ uint64, _ time.Time, l []byte) { line = append(line, l...) })
+	Files(r).Lines(0, 1, func(_ uint64, _ time.Time, l []byte) { line = append(line, l...) })
 	if !strings.Contains(string(line), `"seq":1,`) {
 		t.Errorf("line = %s", line)
 	}

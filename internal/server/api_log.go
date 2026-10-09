@@ -43,11 +43,11 @@ func (a *api) logEntries(w http.ResponseWriter, r *http.Request) error {
 		return shows(show, e.Action)
 	}
 	access := func(id string) string { return names[id] }
-	page, err := a.fwlog.Query(r.Context(), q, before, limit, keep, access)
+	page, err := a.fwlog.Query(r.Context(), before, limit, fwlog.Matcher(q, keep, access))
 	if err != nil {
 		return err
 	}
-	older, page, err := carryOn(r.Context(), a, a.fwlog.Files(), fwlog.FileVersion, page, before, limit, started,
+	older, page, err := carryOn(r.Context(), a, fwlog.Files(a.fwlog), fwlog.FileVersion, page, before, limit, started,
 		fwlog.ParseLine, func(e *fwlog.Entry) uint64 { return e.Seq }, fwlog.Matcher(q, keep, access))
 	if err != nil {
 		return err

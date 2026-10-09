@@ -682,43 +682,13 @@ func (r *readBacks) start(ctx context.Context, log *slog.Logger, files, loop str
 
 func (r *readBacks) wait() { r.wg.Wait() }
 
-// readFirewallLog fills the firewall log from its files while the
-// configuration writes them, as its entries and the memory days allow, and
-// hands it to the writer.
+// readFirewallLog numbers the firewall log's files from before its lines
+// kept their numbers, then reads it back as readRing does.
 func readFirewallLog(cfg *model.Config, ring *fwlog.Ring, files *logfile.Writer, skip bool, log *slog.Logger) {
-	var st logfile.ReadStats
 	if cfg != nil && cfg.System.Logging.Files.Enabled {
-		f, keep := cfg.System.Management.FirewallLog, cfg.System.Logging.MemoryKeep()
-		ring.Configure(f.Size(), keep)
-		started := time.Now()
 		upgradeFiles(files.Dir, fwlog.FileName, fwlog.FileVersion, log)
-		since := readSince(started, ring.Files().Kept(cfg), keep)
-		count, err := logfile.Count(files.Dir, fwlog.FileName, since)
-		if err != nil {
-			log.Warn("could not count all of the firewall log's files", "err", err)
-		}
-		if skip {
-			count = 0
-		}
-		n := 0
-		rs, err := ring.Restorer(count)
-		if err != nil {
-			log.Warn("could not put the firewall log's files back", "err", err)
-		} else {
-			if !skip {
-				st, err = logfile.Stream(files.Dir, fwlog.FileName, fwlog.FileVersion, f.Size(), since,
-					fwlog.ParseLine, rs.Push)
-				if err != nil {
-					log.Warn("could not read all of the firewall log's files back", "err", err)
-				}
-			}
-			if n, err = rs.Done(logfile.NewestSeq(files.Dir, fwlog.FileName)); err != nil {
-				log.Warn("could not put the firewall log's files back", "err", err)
-			}
-		}
-		log.Info("read the firewall log back from its files", "entries", n, "took", time.Since(started))
 	}
-	files.Add(ring.Files(), st)
+	readRing(cfg, ring, fwlog.Files(ring), fwlog.Settings, files, skip, log)
 }
 
 // upgradeFiles numbers a log's files written before its lines kept their

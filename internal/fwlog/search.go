@@ -1,9 +1,7 @@
 package fwlog
 
 import (
-	"context"
 	"strconv"
-	"time"
 
 	"ostiole/internal/logsearch"
 )
@@ -95,21 +93,10 @@ func orDash(s string) string {
 	return s
 }
 
-// Query reads the ring newest first from the packet before: those keep
-// accepts whose row holds every word of q, a page of limit at most, within
-// the search budget. keep may fill in what the row shows, the verdict of a
-// packet whose prefix did not record it, before the words are looked for.
-func (r *Ring) Query(ctx context.Context, q logsearch.Query, before uint64, limit int,
-	keep func(*Entry) bool, access func(id string) string,
-) (logsearch.Page[Entry], error) {
-	return logsearch.Walk(ctx, r, before, limit, logsearch.DefaultBudget,
-		func(e *Entry) uint64 { return e.Seq },
-		func(e *Entry) time.Time { return e.Time },
-		Matcher(q, keep, access))
-}
-
-// Matcher is Query's test of an entry, the same for the log's files as for
-// its memory.
+// Matcher is a search's test of an entry, the same for the log's files as
+// for its memory: those keep accepts whose row holds every word of q. keep
+// may fill in what the row shows, the verdict of a packet whose prefix did
+// not record it, before the words are looked for.
 func Matcher(q logsearch.Query, keep func(*Entry) bool, access func(id string) string) func(*Entry) bool {
 	row := q.Row()
 	var buf []byte

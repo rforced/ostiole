@@ -1,10 +1,10 @@
 package fwlog
 
 import (
-	"encoding/json"
 	"time"
 
 	"ostiole/internal/logfile"
+	"ostiole/internal/logring"
 	"ostiole/internal/model"
 )
 
@@ -18,31 +18,16 @@ const (
 
 // Files describes the ring to the writer that keeps it in files. The
 // firewall log is always on.
-func (r *Ring) Files() logfile.Log {
-	return logfile.Log{
-		Name: FileName, Version: FileVersion,
-		On:     func(*model.Config) bool { return true },
-		Newest: r.Newest,
-		Size:   r.Size,
-		Lines: logfile.Lines(r.After, func(e *Entry) uint64 { return e.Seq }, func(e *Entry) time.Time { return e.Time },
-			func() func([]byte, *Entry) []byte { return appendLine }),
-	}
+func Files(r *Ring) logfile.Log {
+	return r.Files(FileName, FileVersion, func(*model.Config) bool { return true })
 }
 
-// appendLine appends an entry's line.
-func appendLine(buf []byte, e *Entry) []byte {
-	raw, err := json.Marshal(e)
-	if err != nil {
-		return buf
-	}
-	return append(buf, raw...)
+// Settings is the ring's ceiling and how long it keeps an entry under c.
+func Settings(c *model.Config) (int, time.Duration) {
+	return c.System.Management.FirewallLog.Size(), c.System.Logging.MemoryKeep()
 }
 
 // ParseLine reads a line of the firewall log's files.
 func ParseLine(line []byte) (Entry, time.Time, error) {
-	var e Entry
-	if err := json.Unmarshal(line, &e); err != nil {
-		return Entry{}, time.Time{}, err
-	}
-	return e, e.Time, nil
+	return logring.Parse[Entry, *Entry](line)
 }

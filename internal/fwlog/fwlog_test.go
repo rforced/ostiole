@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -242,32 +243,24 @@ func TestRingDropsWhatAgedOut(t *testing.T) {
 	}
 }
 
-// A big ceiling costs nothing until the packets arrive: the ring doubles
+// A big ceiling costs nothing until the packets arrive: the ring grows
 // into it. Allocating a million entries the moment one is configured would
 // cost 350 MB on a router that may never see them.
 func TestRingGrowsIntoItsCeiling(t *testing.T) {
-	t.Parallel()
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
 	r := NewRing(1_000_000)
-	if n := r.places(); n != initialRing {
-		t.Fatalf("a fresh ring holds %d places, want %d", n, initialRing)
-	}
-	for i := range initialRing + 1 {
+	r.Configure(1_000_000, 0)
+	for i := range 3000 {
 		r.Add(Entry{Length: i})
 	}
-	if n := r.places(); n != 2*initialRing {
-		t.Errorf("a full ring grew to %d places, want %d", n, 2*initialRing)
+	runtime.ReadMemStats(&after)
+	if grew := after.TotalAlloc - before.TotalAlloc; grew > 16<<20 {
+		t.Errorf("a ring of a million holding 3000 allocated %d bytes", grew)
 	}
-	if got := r.Recent(0); len(got) != initialRing+1 {
+	if got := r.Recent(0); len(got) != 3000 || got[0].Length != 2999 || got[2999].Length != 0 {
 		t.Errorf("growing lost entries: held %d", len(got))
 	}
-}
-
-// places is how many entries the ring has room for right now, which is not
-// its ceiling until it has filled.
-func (r *Ring) places() int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return len(r.ring)
 }
 
 func lengths(es []Entry) []int {
@@ -333,14 +326,14 @@ func TestRingQuery(t *testing.T) {
 			Proto: "tcp", Src: "203.0.113.9", SrcPort: uint16(40000 + i), Dst: "198.51.100.2", DstPort: 443})
 	}
 	blocked := func(e *Entry) bool { return e.Action != "accept" }
-	page, err := r.Query(context.Background(), logsearch.Parse(""), 0, 3, blocked, nil)
+	page, err := r.Query(context.Background(), 0, 3, Matcher(logsearch.Parse(""), blocked, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(page.Entries) != 3 || page.Entries[0].RuleID != "r9" || page.Entries[2].RuleID != "r5" || !page.More {
 		t.Fatalf("first page %+v", page)
 	}
-	rest, err := r.Query(context.Background(), logsearch.Parse(""), page.Next, 3, blocked, nil)
+	rest, err := r.Query(context.Background(), page.Next, 3, Matcher(logsearch.Parse(""), blocked, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -349,7 +342,7 @@ func TestRingQuery(t *testing.T) {
 	}
 	// The words are looked for in what the row shows: here a source with
 	// its port.
-	found, err := r.Query(context.Background(), logsearch.Parse("203.0.113.9:40004 accept"), 0, 10, nil, nil)
+	found, err := r.Query(context.Background(), 0, 10, Matcher(logsearch.Parse("203.0.113.9:40004 accept"), nil, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -375,7 +368,7 @@ func TestRingQueryWhilePacketsArrive(t *testing.T) {
 	}()
 	var before uint64
 	for {
-		page, err := r.Query(context.Background(), logsearch.Parse("drop"), before, 1000, nil, nil)
+		page, err := r.Query(context.Background(), before, 1000, Matcher(logsearch.Parse("drop"), nil, nil))
 		if err != nil {
 			t.Fatal(err)
 		}
