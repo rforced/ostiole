@@ -1,5 +1,5 @@
 <script setup>
-import { Plus } from 'lucide-vue-next'
+import { Plus } from '@lucide/vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 

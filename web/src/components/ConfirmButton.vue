@@ -1,5 +1,5 @@
 <script setup>
-import { LoaderCircle } from 'lucide-vue-next'
+import { LoaderCircle } from '@lucide/vue'
 
 import { useAuthStore } from '@/stores/auth'
 import { useConfirmStore } from '@/stores/confirm'

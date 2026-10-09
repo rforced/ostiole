@@ -1,5 +1,5 @@
 <script setup>
-import { ArrowDown, ArrowUp, Plus } from 'lucide-vue-next'
+import { ArrowDown, ArrowUp, Plus } from '@lucide/vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 

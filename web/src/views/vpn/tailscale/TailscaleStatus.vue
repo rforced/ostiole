@@ -1,5 +1,5 @@
 <script setup>
-import { LoaderCircle } from 'lucide-vue-next'
+import { LoaderCircle } from '@lucide/vue'
 import { computed, ref } from 'vue'
 
 import ActionButton from '@/components/ActionButton.vue'

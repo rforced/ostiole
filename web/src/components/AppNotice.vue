@@ -1,5 +1,5 @@
 <script setup>
-import { AlertTriangle, CircleCheck, CircleX, Info } from 'lucide-vue-next'
+import { AlertTriangle, CircleCheck, CircleX, Info } from '@lucide/vue'
 
 /** A boxed line the page wants read before anything under it. */
 defineProps({

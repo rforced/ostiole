@@ -1,5 +1,5 @@
 <script setup>
-import { Search } from 'lucide-vue-next'
+import { Search } from '@lucide/vue'
 import { useId } from 'vue'
 
 import { formatCount } from '@/lib/format'

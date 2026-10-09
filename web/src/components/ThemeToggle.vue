@@ -1,5 +1,5 @@
 <script setup>
-import { Monitor, Moon, Sun } from 'lucide-vue-next'
+import { Monitor, Moon, Sun } from '@lucide/vue'
 import { ToggleGroupItem, ToggleGroupRoot } from 'reka-ui'
 
 import { isThemePreference, useThemeStore } from '@/stores/theme'

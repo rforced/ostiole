@@ -1,5 +1,5 @@
 <script setup>
-import { ArrowDown, ArrowUp, Plus } from 'lucide-vue-next'
+import { ArrowDown, ArrowUp, Plus } from '@lucide/vue'
 import { computed, ref } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'

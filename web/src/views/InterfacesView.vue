@@ -1,5 +1,5 @@
 <script setup>
-import { Plus } from 'lucide-vue-next'
+import { Plus } from '@lucide/vue'
 import { TabsContent } from 'reka-ui'
 import { computed, onMounted, ref, watch } from 'vue'
 

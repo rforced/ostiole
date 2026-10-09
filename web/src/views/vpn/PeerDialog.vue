@@ -1,5 +1,5 @@
 <script setup>
-import { Check, Copy, Trash2 } from 'lucide-vue-next'
+import { Check, Copy, Trash2 } from '@lucide/vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import ActionButton from '@/components/ActionButton.vue'

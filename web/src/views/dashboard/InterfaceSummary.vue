@@ -1,5 +1,5 @@
 <script setup>
-import { ArrowDown, ArrowUp } from 'lucide-vue-next'
+import { ArrowDown, ArrowUp } from '@lucide/vue'
 
 import LinkErrors from '@/components/LinkErrors.vue'
 import SectionCard from '@/components/SectionCard.vue'

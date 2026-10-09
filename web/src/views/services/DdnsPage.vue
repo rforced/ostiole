@@ -1,5 +1,5 @@
 <script setup>
-import { Plus } from 'lucide-vue-next'
+import { Plus } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 
 import ActionButton from '@/components/ActionButton.vue'

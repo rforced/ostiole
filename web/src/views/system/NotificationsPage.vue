@@ -1,5 +1,5 @@
 <script setup>
-import { Send } from 'lucide-vue-next'
+import { Send } from '@lucide/vue'
 import { computed, onMounted, ref } from 'vue'
 
 import ActionButton from '@/components/ActionButton.vue'

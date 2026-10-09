@@ -1,5 +1,5 @@
 <script setup>
-import { Plus } from 'lucide-vue-next'
+import { Plus } from '@lucide/vue'
 import { ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'

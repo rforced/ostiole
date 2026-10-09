@@ -1,5 +1,5 @@
 <script setup>
-import { Trash2 } from 'lucide-vue-next'
+import { Trash2 } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'

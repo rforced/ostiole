@@ -1,5 +1,5 @@
 <script setup>
-import { Check, Copy, Plus } from 'lucide-vue-next'
+import { Check, Copy, Plus } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'

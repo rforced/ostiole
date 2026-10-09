@@ -1,5 +1,5 @@
 <script setup>
-import { Search } from 'lucide-vue-next'
+import { Search } from '@lucide/vue'
 import { computed, ref } from 'vue'
 
 import ActionButton from '@/components/ActionButton.vue'

@@ -1,5 +1,5 @@
 <script setup>
-import { LoaderCircle } from 'lucide-vue-next'
+import { LoaderCircle } from '@lucide/vue'
 
 /**
  * The button for an action that takes a while. Disabled while it runs,

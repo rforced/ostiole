@@ -1,5 +1,5 @@
 <script setup>
-import { LoaderCircle } from 'lucide-vue-next'
+import { LoaderCircle } from '@lucide/vue'
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { shortTime } from '@/lib/log'

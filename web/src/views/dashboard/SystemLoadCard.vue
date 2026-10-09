@@ -1,5 +1,5 @@
 <script setup>
-import { TriangleAlert } from 'lucide-vue-next'
+import { TriangleAlert } from '@lucide/vue'
 import { computed } from 'vue'
 
 import SectionCard from '@/components/SectionCard.vue'

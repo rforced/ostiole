@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { Plus } from 'lucide-vue-next'
+import { Plus } from '@lucide/vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'

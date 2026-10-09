@@ -1,5 +1,5 @@
 <script setup>
-import { Lock } from 'lucide-vue-next'
+import { Lock } from '@lucide/vue'
 
 import { actionTone } from '@/lib/badge'
 import { formatCount } from '@/lib/format'

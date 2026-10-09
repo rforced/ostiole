@@ -1,5 +1,5 @@
 <script setup>
-import { Upload } from 'lucide-vue-next'
+import { Upload } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 
 import ActionButton from '@/components/ActionButton.vue'

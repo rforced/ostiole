@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { Send } from 'lucide-vue-next'
+import { Send } from '@lucide/vue'
 import { describe, expect, it } from 'vitest'
 
 import ActionButton from '@/components/ActionButton.vue'

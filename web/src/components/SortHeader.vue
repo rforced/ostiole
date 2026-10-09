@@ -1,5 +1,5 @@
 <script setup>
-import { ChevronDown, ChevronUp } from 'lucide-vue-next'
+import { ChevronDown, ChevronUp } from '@lucide/vue'
 import { computed } from 'vue'
 
 /**

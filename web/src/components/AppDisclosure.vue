@@ -1,5 +1,5 @@
 <script setup>
-import { ChevronRight } from 'lucide-vue-next'
+import { ChevronRight } from '@lucide/vue'
 import { CollapsibleContent, CollapsibleRoot, CollapsibleTrigger } from 'reka-ui'
 import { computed } from 'vue'
 

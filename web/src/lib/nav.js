@@ -9,7 +9,7 @@ import {
   Shield,
   Stethoscope,
   Wifi,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 
 import DashboardView from '@/views/DashboardView.vue'
 

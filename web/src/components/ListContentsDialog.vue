@@ -1,5 +1,5 @@
 <script setup>
-import { LoaderCircle } from 'lucide-vue-next'
+import { LoaderCircle } from '@lucide/vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'

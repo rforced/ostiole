@@ -1,5 +1,5 @@
 <script setup>
-import { Shield } from 'lucide-vue-next'
+import { Shield } from '@lucide/vue'
 
 import ThemeToggle from '@/components/ThemeToggle.vue'
 

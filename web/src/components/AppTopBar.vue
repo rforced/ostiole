@@ -1,5 +1,5 @@
 <script setup>
-import { Menu, Shield, X } from 'lucide-vue-next'
+import { Menu, Shield, X } from '@lucide/vue'
 import {
   DialogClose,
   DialogContent,

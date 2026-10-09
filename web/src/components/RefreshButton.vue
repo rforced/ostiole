@@ -1,5 +1,5 @@
 <script setup>
-import { RefreshCw } from 'lucide-vue-next'
+import { RefreshCw } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 /**

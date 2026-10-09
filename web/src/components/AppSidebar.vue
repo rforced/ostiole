@@ -1,5 +1,5 @@
 <script setup>
-import { ChevronRight, LogOut, Shield } from 'lucide-vue-next'
+import { ChevronRight, LogOut, Shield } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 

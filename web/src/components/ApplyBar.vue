@@ -1,5 +1,5 @@
 <script setup>
-import { AlertTriangle } from 'lucide-vue-next'
+import { AlertTriangle } from '@lucide/vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
