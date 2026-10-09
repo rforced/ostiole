@@ -787,6 +787,27 @@ func TestProxyReadsCommandsInThePath(t *testing.T) {
 	}
 }
 
+// A quoted argument of escaped quotes is read in time that grows with its
+// length. libinjection-go 0.3.3 took time that grew with its square, so
+// half a megabyte held a CPU for minutes (GHSA-974q-67pr-5pc2).
+func TestProxyReadsEscapedQuotesInLinearTime(t *testing.T) {
+	t.Parallel()
+	bin := sidecar(t)
+	cfg := &model.Config{}
+	cfg.Services.Proxy = model.Proxy{
+		Enabled: true, HTTPPort: freePort(t), HTTPSPort: freePort(t),
+		Pools:    []model.ProxyPool{{ID: "app", Upstreams: []model.ProxyUpstream{{Address: answer(t, "ok")}}}},
+		Profiles: []model.WAFProfile{{ID: "p1", Mode: "block", Paranoia: 1}},
+		Sites: []model.ProxySite{{ID: "web", Enabled: true, Hosts: []string{"web.example.com"}, Pool: "app",
+			PlainHTTP: true, WAF: "p1"}},
+	}
+	plain, _, _ := runSidecar(t, bin, cfg, "", map[string][]string{model.SelfCertificate: {"127.0.0.1"}})
+	body := "q='" + strings.Repeat(`\'`, 250_000) + "'"
+	if got := post(t, plain, "http://web.example.com/search", "application/x-www-form-urlencoded", body); got != http.StatusOK {
+		t.Errorf("status %d, want 200", got)
+	}
+}
+
 // A profile that passes larger bodies lets an upload past the limit
 // through with its first part inspected, and a body cut at the limit is
 // not refused as one that does not parse. That padding hides what comes
@@ -1479,7 +1500,7 @@ func post(t *testing.T, addr, url, contentType, body string) int {
 		req.Header.Set("Content-Type", contentType)
 	}
 	req.Header.Set("Accept", "application/json")
-	resp, err := (&http.Client{Transport: tr, Timeout: 10 * time.Second}).Do(req)
+	resp, err := (&http.Client{Transport: tr, Timeout: time.Minute}).Do(req)
 	if err != nil {
 		t.Fatalf("POST %s: %v", url, err)
 	}

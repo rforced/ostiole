@@ -123,8 +123,8 @@ github.com/cloudflare/circl v1.6.5 h1:O64F26HEqNhznd/hrC5KZXVKYuKM2rx4deZDTc4ihQ
 github.com/cloudflare/circl v1.6.5/go.mod h1:h5LNyxAc5nTue9DS5jT+48en2PSDYt3zdGnz5OstK6c=
 github.com/corazawaf/coraza-caddy/v2 v2.6.2 h1:dh7KlLARAkZn3xOr/E0PxnerB9wxpfexhUv/Epo3VOc=
 github.com/corazawaf/coraza-caddy/v2 v2.6.2/go.mod h1:H91VfsJD/oxu3mIJnxZXwEn679Kaq0lq+HcqXYT+h/U=
-github.com/corazawaf/libinjection-go v0.3.3 h1:NhbXKRfRpqKzBMzv8zpCcnjyEw7BCVhBOv9IPuBl7Fc=
-github.com/corazawaf/libinjection-go v0.3.3/go.mod h1:Ik/+w3UmTWH9yn366RgS9D95K3y7Atb5m/H/gXzzPCk=
+github.com/corazawaf/libinjection-go v0.3.5 h1:Zj2AAAKnaRtoLCXYqmc/wzCVAVXxe81UpF5JblL4WQA=
+github.com/corazawaf/libinjection-go v0.3.5/go.mod h1:Ik/+w3UmTWH9yn366RgS9D95K3y7Atb5m/H/gXzzPCk=
 github.com/coreos/etcd v3.3.10+incompatible/go.mod h1:uF7uidLiAD3TWHmW31ZFd/JWoc32PjwdhPthX9715RE=
 github.com/coreos/go-etcd v2.0.0+incompatible/go.mod h1:Jez6KQU2B/sWsbdaef3ED8NzMklzPG4d5KIOhIy30Tk=
 github.com/coreos/go-oidc/v3 v3.21.0 h1:wZo4Q9Pum8dYEj0eMUPrqR+kvuGkeUplbLpNCkBqoWM=
