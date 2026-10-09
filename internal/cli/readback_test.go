@@ -52,7 +52,7 @@ func TestTheFirewallLogComesBackNumberedFromAnOlderRelease(t *testing.T) {
 	files := &logfile.Writer{Dir: dir, Source: func() *model.Config { return cfg }, Log: log,
 		Statfs: func(string) (uint64, uint64, error) { return 1, 2, nil }}
 	ring := fwlog.NewRing(100)
-	readFirewallLog(cfg, ring, files, log)
+	readFirewallLog(cfg, ring, files, false, log)
 
 	got := ring.Recent(10)
 	if len(got) != 3 || got[0].Seq != 3 || got[0].Src != "192.0.2.2" || got[2].Seq != 1 {
@@ -90,7 +90,7 @@ func TestWAFEventsComeBackFromTheirFiles(t *testing.T) {
 	files.Run(ctx)
 
 	after := waflog.New()
-	readWAFEvents(cfg, after, &logfile.Writer{Dir: dir, Source: func() *model.Config { return cfg }, Log: log}, log)
+	readWAFEvents(cfg, after, &logfile.Writer{Dir: dir, Source: func() *model.Config { return cfg }, Log: log}, false, log)
 	got := after.Recent(0)
 	if len(got) != 3 || got[0].ID != "2" || got[0].Seq != 3 {
 		t.Fatalf("read back %+v", got)
@@ -127,7 +127,7 @@ func TestTheQueryLogComesBackFromItsFiles(t *testing.T) {
 
 	after := dnslog.New()
 	after.Slog = log
-	readQueryLog(cfg, after, &logfile.Writer{Dir: dir, Source: func() *model.Config { return cfg }, Log: log}, log)
+	readQueryLog(cfg, after, &logfile.Writer{Dir: dir, Source: func() *model.Config { return cfg }, Log: log}, false, log)
 	total, blocked, oldest := after.Totals()
 	counts, _ := after.ListCounts()
 	if total != 2 || blocked != 2 || !oldest.Equal(now.Add(-2*time.Minute)) ||
@@ -190,7 +190,7 @@ func TestClearedWAFEventsStayClearedAfterARestart(t *testing.T) {
 		Source:    func() *model.Config { return cfg },
 		Installed: func(context.Context) bool { return true },
 	}
-	readWAFEvents(cfg, events, files, log)
+	readWAFEvents(cfg, events, files, false, log)
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
 	go func() {
@@ -223,7 +223,7 @@ func TestTheGatewaysHistoryComesBackFromItsFiles(t *testing.T) {
 	}
 	files := writer()
 	before := gateway.NewHistory()
-	readGateways(cfg, before, files, log)
+	readGateways(cfg, before, files, false, log)
 	start := time.Now().Add(-10 * time.Minute).Truncate(time.Minute)
 	for m := range 3 {
 		for i := range 12 {
@@ -239,7 +239,7 @@ func TestTheGatewaysHistoryComesBackFromItsFiles(t *testing.T) {
 	files.Run(ctx)
 
 	after := gateway.NewHistory()
-	readGateways(cfg, after, writer(), log)
+	readGateways(cfg, after, writer(), false, log)
 	now := time.Now()
 	for _, w := range []string{gateway.Window24h, gateway.Window31d} {
 		want, got := before.Read("wan", w, now), after.Read("wan", w, now)

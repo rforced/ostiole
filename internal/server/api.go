@@ -143,7 +143,8 @@ type api struct {
 	// nil answers 503.
 	wireguardLog, tailscaleLog *peerlog.Log
 	// logFiles keeps the logs in files; nil reports them off.
-	logFiles *logfile.Writer
+	logFiles        *logfile.Writer
+	readBackSkipped bool
 	// traffic counts what crosses the router; nil answers 503.
 	traffic *traffic.Counter
 	// memTotal is the router's memory in bytes; nil asks sysstat.

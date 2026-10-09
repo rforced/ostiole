@@ -1043,3 +1043,17 @@ func TestFormatBytes(t *testing.T) {
 		}
 	}
 }
+
+func TestWarnsWhenTheLogsWereNotReadBack(t *testing.T) {
+	t.Parallel()
+	cfg := starter()
+	a := &api{readBackSkipped: true}
+	w := warningKeyed(a.warnings(context.Background(), cfg, engine.Status{}, nil, nil, install.UnitStates{}), "logs-skipped")
+	if w == nil || w.Kind != "logs" || w.Title != "The logs were not read back" {
+		t.Errorf("warning = %+v", w)
+	}
+	a = &api{}
+	if w := warningKeyed(a.warnings(context.Background(), cfg, engine.Status{}, nil, nil, install.UnitStates{}), "logs-skipped"); w != nil {
+		t.Errorf("warned without a skipped read-back: %+v", w)
+	}
+}

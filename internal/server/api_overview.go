@@ -752,6 +752,13 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 			Detail: "Ostiole stopped or the router restarted before the apply from " + r.Since.Local().Format("2006-01-02 15:04") + " was confirmed. The configuration before it is back.",
 		})
 	}
+	if a.readBackSkipped {
+		out = append(out, Warning{
+			Kind: "logs", Level: "warn", Key: "logs-skipped",
+			Title:  "The logs were not read back",
+			Detail: "The last start did not finish reading the logs back from their files. What the files hold stays off the pages until the next restart.",
+		})
+	}
 	if st.SSH != "" {
 		out = append(out, Warning{
 			Kind: "ssh-settings", Level: "warn",

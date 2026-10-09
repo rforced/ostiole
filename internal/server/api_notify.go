@@ -134,7 +134,7 @@ func (a *api) conditions(ctx context.Context, cfg *model.Config) ([]notify.Condi
 			continue
 		}
 		// The undo is over by the time it is reported; its end says nothing.
-		out = append(out, notify.Condition{Kind: w.Kind, Key: w.Key, Title: w.Title, Detail: w.Detail, Once: w.Kind == "apply-undone"})
+		out = append(out, notify.Condition{Kind: w.Kind, Key: w.Key, Title: w.Title, Detail: w.Detail, Once: w.Kind == "apply-undone" || w.Key == "logs-skipped"})
 	}
 	if a.updater != nil {
 		if s := a.updater.Cached(); s.Available && s.Latest != "" {

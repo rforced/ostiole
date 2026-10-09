@@ -337,15 +337,33 @@ at your own.`,
 				memTotal = eng.MemTotal()
 			}
 			budget := model.MemoryBudget{Total: int64(min(memTotal, math.MaxInt64))}
+			sized := sizedSource(eng.Effective, budget)
 			limits := memlimit.New(eng.Effective, budget, log)
 			limits.Apply()
-			reads := &readBacks{}
+			skip := false
+			switch _, err := eng.Store().ReadState(store.ReadBackFile); {
+			case err == nil:
+				skip = true
+				log.Warn("the last start did not finish reading the logs back; they stay in their files until the next restart")
+			case !errors.Is(err, store.ErrNotFound):
+				log.Warn("could not read the read-back marker", "err", err)
+			}
+			if err := eng.Store().RemoveState(store.ReadBackFile); err != nil {
+				log.Warn("could not remove the read-back marker", "err", err)
+			}
+			if !skip {
+				if err := eng.Store().WriteState(store.ReadBackFile, []byte(time.Now().UTC().Format(time.RFC3339)+"\n")); err != nil {
+					log.Warn("could not write the read-back marker", "err", err)
+				}
+			}
+			deps.ReadBackSkipped = skip
+			reads := &readBacks{skip: skip, source: sized}
 			// What crosses the router: every link always, and every device
 			// while the configuration says so.
-			counter := &traffic.Counter{Source: eng.Effective, Log: log}
+			counter := &traffic.Counter{Source: sized, Log: log}
 			deps.Traffic = counter
 			reads.start(ctx, log, "traffic files", "traffic", func() {
-				readTraffic(eng.Effective(), counter, files, log)
+				readTraffic(reads.source(), counter, files, reads.skip, log)
 			}, counter.Run)
 			go panics.Loop(ctx, log, "notifications", notifier.Run)
 			go panics.Loop(ctx, log, "alias refresher", refresher.Run)
@@ -425,9 +443,9 @@ at your own.`,
 				ring := fwlog.NewRing(model.FirewallLog{}.Size())
 				deps.Log = ring
 				zones := &fwlog.Zones{}
-				go panics.Loop(ctx, log, "firewall log watcher", (&fwlog.Watcher{Ring: ring, Source: eng.Effective, Zones: zones}).Run)
+				go panics.Loop(ctx, log, "firewall log watcher", (&fwlog.Watcher{Ring: ring, Source: sized, Zones: zones}).Run)
 				reads.start(ctx, log, "firewall log files", "firewall log listener", func() {
-					readFirewallLog(eng.Effective(), ring, files, log)
+					readFirewallLog(reads.source(), ring, files, reads.skip, log)
 				}, func(ctx context.Context) {
 					if err := (&fwlog.Listener{Ring: ring, Log: log, Zones: zones}).Run(ctx); err != nil {
 						log.Warn("firewall log listener stopped", "err", err)
@@ -441,9 +459,9 @@ at your own.`,
 				deps.QueryLog = qlog
 				blocklists.Installed = func(o dnsblock.Options) { qlog.Reindex(o, g.blocklists()) }
 				go panics.Loop(ctx, log, "query log watcher",
-					(&dnslog.Watcher{Log: qlog, Source: eng.Effective, Cache: g.blocklists()}).Run)
+					(&dnslog.Watcher{Log: qlog, Source: sized, Cache: g.blocklists()}).Run)
 				reads.start(ctx, log, "query log files", "query log listener", func() {
-					readQueryLog(eng.Effective(), qlog, files, log)
+					readQueryLog(reads.source(), qlog, files, reads.skip, log)
 				}, func(ctx context.Context) {
 					if err := (&dnslog.Listener{Log: qlog, Names: counter.Names(), Slog: log}).Run(ctx); err != nil {
 						log.Warn("query log listener stopped", "err", err)
@@ -459,7 +477,7 @@ at your own.`,
 					drives.OnTick = func() { crons.Note("system:drives") }
 					deps.DriveHealth, deps.DriveHistory = drives, history
 					reads.start(ctx, log, "drive history files", "drive monitor", func() {
-						readRing(eng.Effective(), history, smart.HistoryFiles(history), smart.HistorySettings, files, log)
+						readRing(reads.source(), history, smart.HistoryFiles(history), smart.HistorySettings, files, reads.skip, log)
 					}, drives.Run)
 				}
 			} else if g.fakeProbes != "" {
@@ -479,7 +497,7 @@ at your own.`,
 			requests := requestlog.New()
 			deps.Requests = requests
 			proxyFeed := &journalfeed.Feed{
-				Journal: journalfeed.Journalctl{Unit: services.ProxyUnit}, Source: eng.Effective, Slog: log,
+				Journal: journalfeed.Journalctl{Unit: services.ProxyUnit}, Source: sized, Slog: log,
 				Taps: []journalfeed.AnyTap{
 					&journalfeed.Tap[wafevent.Event]{
 						Log: wafLog, Parse: wafevent.Parse, Name: "the WAF events",
@@ -502,21 +520,21 @@ at your own.`,
 			proxyFiles.Add(2)
 			reads.start(ctx, log, "WAF event files", "proxy journal", func() {
 				defer proxyFiles.Done()
-				readWAFEvents(eng.Effective(), wafLog, files, log)
+				readWAFEvents(reads.source(), wafLog, files, reads.skip, log)
 			}, func(ctx context.Context) {
 				proxyFiles.Wait()
 				proxyFeed.Run(ctx)
 			})
 			reads.start(ctx, log, "proxy request files", "proxy requests", func() {
 				defer proxyFiles.Done()
-				readRing(eng.Effective(), requests, requestlog.Files(requests), requestlog.Settings, files, log)
+				readRing(reads.source(), requests, requestlog.Files(requests), requestlog.Settings, files, reads.skip, log)
 			}, func(ctx context.Context) { <-ctx.Done() })
 			// What the DHCP server says of its clients, fed from its journal
 			// while the level keeps it.
 			dhcpLog := dhcplog.New()
 			deps.DHCPLog = dhcpLog
 			dhcpFeed := &journalfeed.Feed{
-				Journal: journalfeed.Journalctl{Unit: services.Unit}, Source: eng.Effective, Slog: log,
+				Journal: journalfeed.Journalctl{Unit: services.Unit}, Source: sized, Slog: log,
 				Taps: []journalfeed.AnyTap{&journalfeed.Tap[dhcplog.Event]{
 					Log: dhcpLog, Parse: dhcplog.Parse, Name: "the DHCP server's messages",
 					Settings: dhcplog.Settings, Kept: dhcplog.Kept,
@@ -527,7 +545,7 @@ at your own.`,
 				dhcpFeed.Installed = func(context.Context) bool { return true }
 			}
 			reads.start(ctx, log, "DHCP log files", "DHCP log", func() {
-				readRing(eng.Effective(), dhcpLog, dhcplog.Files(dhcpLog), dhcplog.Settings, files, log)
+				readRing(reads.source(), dhcpLog, dhcplog.Files(dhcpLog), dhcplog.Settings, files, reads.skip, log)
 			}, dhcpFeed.Run)
 			// The wireless clients' coming and going, fed from every radio's
 			// access point while the level keeps it.
@@ -535,7 +553,7 @@ at your own.`,
 			deps.WirelessLog = wirelessLog
 			wirelessFeed := &journalfeed.Feed{
 				Journal: journalfeed.Journalctl{Unit: strings.Replace(services.WirelessUnit, "@.", "@*.", 1)},
-				Source:  eng.Effective, Slog: log,
+				Source:  sized, Slog: log,
 				Taps: []journalfeed.AnyTap{&journalfeed.Tap[wirelesslog.Event]{
 					Log: wirelessLog, Parse: wirelesslog.Parse, Name: "the wireless clients",
 					Settings: wirelesslog.Settings, Kept: wirelesslog.Kept,
@@ -546,13 +564,13 @@ at your own.`,
 				wirelessFeed.Installed = func(context.Context) bool { return true }
 			}
 			reads.start(ctx, log, "wireless log files", "wireless log", func() {
-				readRing(eng.Effective(), wirelessLog, wirelesslog.Files(wirelessLog), wirelesslog.Settings, files, log)
+				readRing(reads.source(), wirelessLog, wirelesslog.Files(wirelessLog), wirelesslog.Settings, files, reads.skip, log)
 			}, wirelessFeed.Run)
 			// The VPN peers' coming and going, read every few seconds while
 			// the level keeps it. Reading them needs root.
 			for _, kind := range []peerlog.Kind{peerlog.WireGuard, peerlog.Tailscale} {
 				peers := peerlog.New()
-				poll := &peerlog.Poller{Log: peers, Kind: kind, Source: eng.Effective, Slog: log}
+				poll := &peerlog.Poller{Log: peers, Kind: kind, Source: sized, Slog: log}
 				if kind.Name == peerlog.WireGuard.Name {
 					deps.WireGuardLog = peers
 					poll.Read, poll.Changes = peerlog.ReadWireGuard(nil), peerlog.WireGuardChanges
@@ -568,12 +586,15 @@ at your own.`,
 					run = func(ctx context.Context) { <-ctx.Done() }
 				}
 				reads.start(ctx, log, kind.Name+" log files", kind.Name+" peers", func() {
-					readRing(eng.Effective(), peers, kind.Files(peers), kind.Settings, files, log)
+					readRing(reads.source(), peers, kind.Files(peers), kind.Settings, files, reads.skip, log)
 				}, run)
 			}
 			go func() {
 				started := time.Now()
 				reads.wait()
+				if err := eng.Store().RemoveState(store.ReadBackFile); err != nil {
+					log.Warn("could not remove the read-back marker", "err", err)
+				}
 				limits.Settle()
 				log.Info("every log is read back", "took", time.Since(started))
 			}()
@@ -581,6 +602,7 @@ at your own.`,
 			err = server.Run(ctx, cfg, deps, slog.Default())
 			stop()
 			waitFor(&stopping, stopWait, log)
+			_ = eng.Store().RemoveState(store.ReadBackFile)
 			return err
 		},
 	}
@@ -611,8 +633,32 @@ func waitFor(wg *sync.WaitGroup, limit time.Duration, log *slog.Logger) bool {
 	}
 }
 
-// readBacks counts the logs still reading their files back.
-type readBacks struct{ wg sync.WaitGroup }
+// readBacks counts the logs still reading their files back, and says
+// whether this start leaves them in their files.
+type readBacks struct {
+	wg     sync.WaitGroup
+	skip   bool
+	source func() *model.Config
+}
+
+// sizedSource gives the configuration with its log settings held to what
+// the budget allows, one copy per configuration.
+func sizedSource(source func() *model.Config, b model.MemoryBudget) func() *model.Config {
+	var mu sync.Mutex
+	var last, sized *model.Config
+	return func() *model.Config {
+		cfg := source()
+		if cfg == nil {
+			return nil
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if cfg != last {
+			last, sized = cfg, b.Sized(cfg)
+		}
+		return sized
+	}
+}
 
 // start reads a log's files back, and only then starts what feeds it, so
 // what comes back is in place before the first new entry. A read back that
@@ -634,7 +680,7 @@ func (r *readBacks) wait() { r.wg.Wait() }
 // readFirewallLog fills the firewall log from its files while the
 // configuration writes them, as its own entries and days allow, and hands
 // it to the writer.
-func readFirewallLog(cfg *model.Config, ring *fwlog.Ring, files *logfile.Writer, log *slog.Logger) {
+func readFirewallLog(cfg *model.Config, ring *fwlog.Ring, files *logfile.Writer, skip bool, log *slog.Logger) {
 	var st logfile.ReadStats
 	if cfg != nil && cfg.System.Logging.Files.Enabled {
 		f := cfg.System.Management.FirewallLog
@@ -646,15 +692,20 @@ func readFirewallLog(cfg *model.Config, ring *fwlog.Ring, files *logfile.Writer,
 		if err != nil {
 			log.Warn("could not count all of the firewall log's files", "err", err)
 		}
+		if skip {
+			count = 0
+		}
 		n := 0
 		rs, err := ring.Restorer(count)
 		if err != nil {
 			log.Warn("could not put the firewall log's files back", "err", err)
 		} else {
-			st, err = logfile.Stream(files.Dir, fwlog.FileName, fwlog.FileVersion, f.Size(), since,
-				fwlog.ParseLine, rs.Push)
-			if err != nil {
-				log.Warn("could not read all of the firewall log's files back", "err", err)
+			if !skip {
+				st, err = logfile.Stream(files.Dir, fwlog.FileName, fwlog.FileVersion, f.Size(), since,
+					fwlog.ParseLine, rs.Push)
+				if err != nil {
+					log.Warn("could not read all of the firewall log's files back", "err", err)
+				}
 			}
 			if n, err = rs.Done(logfile.NewestSeq(files.Dir, fwlog.FileName)); err != nil {
 				log.Warn("could not put the firewall log's files back", "err", err)
@@ -680,7 +731,7 @@ func upgradeFiles(dir, name string, version int, log *slog.Logger) {
 
 // readQueryLog does the same for the query log, while it is on, streaming
 // its answers into a ring sized from the files' indexes.
-func readQueryLog(cfg *model.Config, qlog *dnslog.Log, files *logfile.Writer, log *slog.Logger) {
+func readQueryLog(cfg *model.Config, qlog *dnslog.Log, files *logfile.Writer, skip bool, log *slog.Logger) {
 	var st logfile.ReadStats
 	if cfg != nil && cfg.System.Logging.Files.Enabled && cfg.Services.DNS.QueryLog.Enabled {
 		q := cfg.Services.DNS.QueryLog
@@ -691,17 +742,22 @@ func readQueryLog(cfg *model.Config, qlog *dnslog.Log, files *logfile.Writer, lo
 		if err != nil {
 			log.Warn("could not count all of the query log's answers in its files", "err", err)
 		}
+		if skip {
+			count = 0
+		}
 		n := 0
 		rs, err := qlog.Restorer(q, count)
 		if err != nil {
 			log.Warn("could not put the query log's files back", "err", err)
 		} else {
-			stats, err := logfile.Stream(files.Dir, dnslog.FileName, dnslog.FileVersion, q.Size(), since,
-				dnslog.ParseLine, rs.Push)
-			if err != nil {
-				log.Warn("could not read all of the query log's files back", "err", err)
+			if !skip {
+				stats, err := logfile.Stream(files.Dir, dnslog.FileName, dnslog.FileVersion, q.Size(), since,
+					dnslog.ParseLine, rs.Push)
+				if err != nil {
+					log.Warn("could not read all of the query log's files back", "err", err)
+				}
+				st = stats
 			}
-			st = stats
 			if n, err = rs.Done(logfile.NewestSeq(files.Dir, dnslog.FileName)); err != nil {
 				log.Warn("could not put the query log's files back", "err", err)
 			}
@@ -713,7 +769,7 @@ func readQueryLog(cfg *model.Config, qlog *dnslog.Log, files *logfile.Writer, lo
 
 // readWAFEvents does the same for the WAF events. Files that hold none,
 // as a Clear leaves them, start the log empty, as the files being off does.
-func readWAFEvents(cfg *model.Config, events *waflog.Log, files *logfile.Writer, log *slog.Logger) {
+func readWAFEvents(cfg *model.Config, events *waflog.Log, files *logfile.Writer, skip bool, log *slog.Logger) {
 	var st logfile.ReadStats
 	if cfg != nil && cfg.System.Logging.Files.Enabled {
 		e := cfg.Services.Proxy.Events
@@ -724,15 +780,20 @@ func readWAFEvents(cfg *model.Config, events *waflog.Log, files *logfile.Writer,
 		if err != nil {
 			log.Warn("could not count all of the WAF events' files", "err", err)
 		}
+		if skip {
+			count = 0
+		}
 		n := 0
 		rs, err := events.Restorer(count)
 		if err != nil {
 			log.Warn("could not put the WAF events' files back", "err", err)
 		} else {
-			st, err = logfile.Stream(files.Dir, waflog.FileName, waflog.FileVersion, e.Size(), since,
-				waflog.ParseLine, rs.Push)
-			if err != nil {
-				log.Warn("could not read all of the WAF events' files back", "err", err)
+			if !skip {
+				st, err = logfile.Stream(files.Dir, waflog.FileName, waflog.FileVersion, e.Size(), since,
+					waflog.ParseLine, rs.Push)
+				if err != nil {
+					log.Warn("could not read all of the WAF events' files back", "err", err)
+				}
 			}
 			if n, err = rs.Done(logfile.NewestSeq(files.Dir, waflog.FileName)); err != nil {
 				log.Warn("could not put the WAF events' files back", "err", err)
@@ -746,7 +807,7 @@ func readWAFEvents(cfg *model.Config, events *waflog.Log, files *logfile.Writer,
 // readRing does the same for one of the newer logs, while the
 // configuration keeps it.
 func readRing[T any, P logring.Entry[T]](cfg *model.Config, ring *logring.Ring[T, P], l logfile.Log,
-	settings func(*model.Config) (int, time.Duration), files *logfile.Writer, log *slog.Logger,
+	settings func(*model.Config) (int, time.Duration), files *logfile.Writer, skip bool, log *slog.Logger,
 ) {
 	var st logfile.ReadStats
 	if cfg != nil && cfg.System.Logging.Files.Enabled && l.On(cfg) {
@@ -758,15 +819,20 @@ func readRing[T any, P logring.Entry[T]](cfg *model.Config, ring *logring.Ring[T
 		if err != nil {
 			log.Warn("could not count all of a log's files", "log", l.Name, "err", err)
 		}
+		if skip {
+			count = 0
+		}
 		rs, err := ring.Restorer(count)
 		if err != nil {
 			log.Warn("could not put a log's files back", "log", l.Name, "err", err)
 		} else {
-			stats, err := logfile.Stream(files.Dir, l.Name, l.Version, size, since, logring.Parse[T, P], rs.Push)
-			if err != nil {
-				log.Warn("could not read all of a log's files back", "log", l.Name, "err", err)
+			if !skip {
+				stats, err := logfile.Stream(files.Dir, l.Name, l.Version, size, since, logring.Parse[T, P], rs.Push)
+				if err != nil {
+					log.Warn("could not read all of a log's files back", "log", l.Name, "err", err)
+				}
+				st = stats
 			}
-			st = stats
 			n, err := rs.Done(logfile.NewestSeq(files.Dir, l.Name))
 			if err != nil {
 				log.Warn("could not put a log's files back", "log", l.Name, "err", err)
@@ -790,28 +856,30 @@ func watchGateways(ctx context.Context, mon *gateway.Monitor, eng *engine.Engine
 	mon.History = gateway.NewHistory()
 	deps.Gateways, deps.GatewayHistory = mon, mon.History
 	reads.start(ctx, log, "gateway files", "gateway monitor", func() {
-		readGateways(eng.Effective(), mon.History, files, log)
+		readGateways(reads.source(), mon.History, files, reads.skip, log)
 	}, mon.Run)
 }
 
 // readGateways rebuilds the gateways' minutes and events from their files
 // while the configuration writes them, and hands both logs to the writer.
-func readGateways(cfg *model.Config, h *gateway.History, files *logfile.Writer, log *slog.Logger) {
+func readGateways(cfg *model.Config, h *gateway.History, files *logfile.Writer, skip bool, log *slog.Logger) {
 	logs := h.FileLogs()
 	var st logfile.ReadStats
 	if cfg != nil && cfg.System.Logging.Files.Enabled {
 		started := time.Now()
-		stats, err := logfile.ReadEach(files.Dir, gateway.HistoryFileName, gateway.FileVersion,
-			started.Add(-logs[0].Kept(cfg)), gateway.ParseMinute, func(m gateway.MinuteLine) { h.RestoreMinute(m, started) })
-		if err != nil {
-			log.Warn("could not read all of the gateways' history back", "err", err)
+		if !skip {
+			stats, err := logfile.Stream(files.Dir, gateway.HistoryFileName, gateway.FileVersion, math.MaxInt,
+				started.Add(-logs[0].Kept(cfg)), gateway.ParseMinute, func(m gateway.MinuteLine) { h.RestoreMinute(m, started) })
+			if err != nil {
+				log.Warn("could not read all of the gateways' history back", "err", err)
+			}
+			st = stats
 		}
-		st = stats
 		h.EndRestore(logfile.NewestSeq(files.Dir, gateway.HistoryFileName))
 		log.Info("read the gateways' history back from its files", "took", time.Since(started))
 	}
 	files.Add(logs[0], st)
-	readRing(cfg, h.Events, logs[1], gateway.EventSettings, files, log)
+	readRing(cfg, h.Events, logs[1], gateway.EventSettings, files, skip, log)
 }
 
 // readTraffic rebuilds what traffic counted from its files while the
@@ -819,7 +887,7 @@ func readGateways(cfg *model.Config, h *gateway.History, files *logfile.Writer, 
 // the writer: the minutes of the links, and of the devices while they are
 // counted, as a day of minutes and a month of hours, and the destinations'
 // hours as their own entries and days allow.
-func readTraffic(cfg *model.Config, counter *traffic.Counter, files *logfile.Writer, log *slog.Logger) {
+func readTraffic(cfg *model.Config, counter *traffic.Counter, files *logfile.Writer, skip bool, log *slog.Logger) {
 	stats := map[string]logfile.ReadStats{}
 	logs := counter.FileLogs()
 	kept := func(name string) time.Duration {
@@ -834,17 +902,17 @@ func readTraffic(cfg *model.Config, counter *traffic.Counter, files *logfile.Wri
 		started := time.Now()
 		counter.BeginRestore(started)
 		for _, name := range []string{traffic.LinksFile, traffic.DevicesFile} {
-			if name == traffic.DevicesFile && !cfg.Traffic.Devices {
+			if skip || name == traffic.DevicesFile && !cfg.Traffic.Devices {
 				continue
 			}
-			st, err := logfile.ReadEach(files.Dir, name, traffic.FileVersion, started.Add(-kept(name)), traffic.ParseMinute,
+			st, err := logfile.Stream(files.Dir, name, traffic.FileVersion, math.MaxInt, started.Add(-kept(name)), traffic.ParseMinute,
 				func(m traffic.MinuteLine) { counter.RestoreMinute(name, m, started) })
 			if err != nil {
 				log.Warn("could not read all of traffic's files back", "log", name, "err", err)
 			}
 			stats[name] = st
 		}
-		if cfg.Traffic.DestinationsOn() {
+		if cfg.Traffic.DestinationsOn() && !skip {
 			d := cfg.Traffic.Destinations
 			st, err := logfile.Stream(files.Dir, traffic.DestinationsFile, traffic.FileVersion, d.Size(),
 				started.Add(-kept(traffic.DestinationsFile)), traffic.ParseHour, counter.RestoreHour)

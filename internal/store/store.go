@@ -40,6 +40,9 @@ const (
 	// RenderedFile is what the last commit rendered for the network, the
 	// services and shaping, for setting a later release's render against.
 	RenderedFile = "rendered.json"
+	// ReadBackFile is there while the logs are read back from their files,
+	// so a start that finds it knows the last one did not get through.
+	ReadBackFile = "readback"
 )
 
 // DefaultDir is the production location.
