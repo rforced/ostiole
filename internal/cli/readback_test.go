@@ -136,13 +136,16 @@ func TestClearedWAFEventsStayClearedAfterARestart(t *testing.T) {
 	}
 	journal := &proxyJournal{line: string(line), following: make(chan struct{})}
 	events := waflog.New()
-	feed := &journalfeed.Feed[wafevent.Event]{
-		Log: events, Journal: journal, Parse: wafevent.Parse, Name: "the WAF events", Slog: log,
-		Source: func() *model.Config { return cfg },
-		Settings: func(c *model.Config) (int, time.Duration) {
-			return c.Services.Proxy.Events.Size(), c.Services.Proxy.Events.Retention()
-		},
-		On:        func(*model.Config) bool { return true },
+	feed := &journalfeed.Feed{
+		Journal: journal, Slog: log,
+		Taps: []journalfeed.AnyTap{&journalfeed.Tap[wafevent.Event]{
+			Log: events, Parse: wafevent.Parse, Name: "the WAF events",
+			Settings: func(c *model.Config) (int, time.Duration) {
+				return c.Services.Proxy.Events.Size(), c.Services.Proxy.Events.Retention()
+			},
+			On: func(*model.Config) bool { return true },
+		}},
+		Source:    func() *model.Config { return cfg },
 		Installed: func(context.Context) bool { return true },
 	}
 	readWAFEvents(cfg, events, files, log)

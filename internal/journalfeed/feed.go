@@ -1,8 +1,8 @@
-// Package journalfeed keeps a log in memory from what a unit writes to the
-// journal: each line of its kind as the unit writes it, and at start what
-// it wrote after the newest entry the log got back from its files, which
-// is what it wrote while the daemon was down. The log is the store; the
-// journal only feeds it.
+// Package journalfeed keeps logs in memory from what a unit writes to the
+// journal: each line of their kind as the unit writes it, and at start what
+// it wrote after the newest entry each log got back from its files, which
+// is what it wrote while the daemon was down. A log is the store; the
+// journal only feeds it, and one reader feeds every log of a unit.
 package journalfeed
 
 import (
@@ -10,6 +10,8 @@ import (
 	"errors"
 	"log/slog"
 	"sort"
+	"strings"
+	"sync"
 	"time"
 
 	"ostiole/internal/model"
@@ -52,25 +54,19 @@ type Item[E any] struct {
 	E  E
 }
 
-// Feed keeps Log from a unit's journal while the configuration says so.
-type Feed[E any] struct {
-	Log     Sink[E]
+// Feed keeps its taps' logs from a unit's journal while the configuration
+// says so, with one reader for all of them.
+type Feed struct {
 	Journal Journal
-	// Parse reads one line the unit wrote; false passes it over.
-	Parse func(message string) (E, bool)
+	// Taps are the logs fed from the journal.
+	Taps []AnyTap
 	// Source is the configuration the kernel is actually running.
 	Source func() *model.Config
-	// Settings sizes the log in a configuration.
-	Settings func(*model.Config) (size int, keep time.Duration)
-	// On says whether the unit is read in a configuration.
-	On func(*model.Config) bool
-	// Kept says whether the log is kept at all in a configuration; one that
-	// is not is emptied. Nil is always.
-	Kept func(*model.Config) bool
 	// Installed reports whether the unit is on this router; nil is never,
 	// which is what a daemon that is not root can say.
 	Installed func(context.Context) bool
-	// Name is what the daemon's own log calls what is read.
+	// Name is what the daemon's own log calls what is read; empty is the
+	// taps' names.
 	Name string
 	Slog *slog.Logger
 	// Interval is how often to look; zero means DefaultWatch.
@@ -79,19 +75,52 @@ type Feed[E any] struct {
 	Backoff time.Duration
 
 	reader reader
-	// emptied says Log was cleared for a configuration that does not keep
-	// it, and has taken nothing since.
-	emptied bool
 	// cursor is the last entry read that ended a line, of any kind, so a
 	// reader started again carries on after it. Only the reader touches
 	// it, and a new one starts once the old one has gone.
 	cursor string
 }
 
+// AnyTap is a Tap of any kind of entry.
+type AnyTap interface {
+	tick(cfg *model.Config) (on, cleared bool)
+	name() string
+	newest() (at time.Time, on bool)
+	backfill(ctx context.Context, j Journal, after time.Time) (string, error)
+	from(start time.Time)
+	take(line Record)
+}
+
+// Tap is one log a feed keeps from the journal.
+type Tap[E any] struct {
+	Log Sink[E]
+	// Parse reads one line the unit wrote; false passes it over.
+	Parse func(message string) (E, bool)
+	// Settings sizes the log in a configuration.
+	Settings func(*model.Config) (size int, keep time.Duration)
+	// On says whether the log is fed in a configuration.
+	On func(*model.Config) bool
+	// Kept says whether the log is kept at all in a configuration; one that
+	// is not is emptied, and fed only what is logged once it is kept
+	// again. Nil is always.
+	Kept func(*model.Config) bool
+	// Name is what the daemon's own log calls what is read.
+	Name string
+
+	mu sync.Mutex
+	on bool
+	// emptied says Log was cleared for a configuration that does not keep
+	// it, and has taken nothing since.
+	emptied bool
+	clears  int
+	// after passes over the lines logged up to it; zero takes every line.
+	after time.Time
+}
+
 // Run follows the configuration until ctx is done. The first pass happens
 // immediately, so the journal is read at boot rather than at the next
 // apply.
-func (f *Feed[E]) Run(ctx context.Context) {
+func (f *Feed) Run(ctx context.Context) {
 	interval := f.Interval
 	if interval <= 0 {
 		interval = DefaultWatch
@@ -109,24 +138,80 @@ func (f *Feed[E]) Run(ctx context.Context) {
 	}
 }
 
-func (f *Feed[E]) tick(ctx context.Context) {
+func (f *Feed) tick(ctx context.Context) {
 	cfg := f.Source()
 	if cfg == nil {
 		cfg = &model.Config{}
 	}
-	f.Log.Configure(f.Settings(cfg))
-	on := f.On(cfg)
+	on, cleared := false, false
+	for _, t := range f.Taps {
+		tapOn, tapCleared := t.tick(cfg)
+		on, cleared = on || tapOn, cleared || tapCleared
+	}
 	switch {
 	case on && !f.reader.running() && f.Installed != nil && f.Installed(ctx):
-		f.emptied = false
 		f.reader.start(ctx, f.follow)
 	case !on:
 		f.reader.halt()
+		// So the next reader starts from now, not through what was not kept.
+		if cleared {
+			f.cursor = ""
+		}
 	}
-	if f.Kept != nil && !f.Kept(cfg) && !f.emptied {
-		f.reader.halt()
-		f.Log.Clear()
-		f.cursor, f.emptied = "", true
+}
+
+func (t *Tap[E]) tick(cfg *model.Config) (on, cleared bool) {
+	t.Log.Configure(t.Settings(cfg))
+	kept := t.Kept == nil || t.Kept(cfg)
+	on = kept && t.On(cfg)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if !kept && !t.emptied {
+		t.Log.Clear()
+		t.emptied, cleared = true, true
+		t.clears++
+	}
+	if on && t.emptied {
+		t.emptied, t.after = false, time.Now()
+	}
+	t.on = on
+	return on, cleared
+}
+
+func (t *Tap[E]) name() string { return t.Name }
+
+func (t *Tap[E]) newest() (time.Time, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.Log.NewestAt(), t.on
+}
+
+// from passes over what the log holds, or what was logged before start
+// while it holds none; a zero start takes every line.
+func (t *Tap[E]) from(start time.Time) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.after = start
+	if newest := t.Log.NewestAt(); !start.IsZero() && !newest.IsZero() {
+		t.after = newest
+	}
+}
+
+func (t *Tap[E]) take(line Record) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if !t.on {
+		return
+	}
+	if !t.after.IsZero() {
+		if !line.Time.After(t.after) {
+			return
+		}
+		// Lines come in the order they were logged, so the rest are after.
+		t.after = time.Time{}
+	}
+	if e, ok := t.Parse(line.Message); ok {
+		t.Log.AddAt(line.Time, e)
 	}
 }
 
@@ -155,16 +240,27 @@ func (r *reader) halt() {
 	r.stop, r.done = nil, nil
 }
 
-func (f *Feed[E]) log() *slog.Logger {
+func (f *Feed) log() *slog.Logger {
 	if f.Slog != nil {
 		return f.Slog
 	}
 	return slog.Default()
 }
 
+func (f *Feed) name() string {
+	if f.Name != "" {
+		return f.Name
+	}
+	names := make([]string, len(f.Taps))
+	for i, t := range f.Taps {
+		names[i] = t.name()
+	}
+	return strings.Join(names, " and ")
+}
+
 // follow reads the journal until ctx is done, starting again after a wait
 // whenever journalctl fails or exits.
-func (f *Feed[E]) follow(ctx context.Context, done chan struct{}) {
+func (f *Feed) follow(ctx context.Context, done chan struct{}) {
 	defer close(done)
 	first := f.Backoff
 	if first <= 0 {
@@ -188,7 +284,7 @@ func (f *Feed[E]) follow(ctx context.Context, done chan struct{}) {
 		// Once, not every minute it goes on failing the same way.
 		if msg := err.Error(); msg != failed {
 			failed = msg
-			f.log().Warn("stopped reading "+f.Name+" from the journal; trying again", "err", err)
+			f.log().Warn("stopped reading "+f.name()+" from the journal; trying again", "err", err)
 		}
 		select {
 		case <-ctx.Done():
@@ -200,15 +296,15 @@ func (f *Feed[E]) follow(ctx context.Context, done chan struct{}) {
 }
 
 // read carries on after the last entry read when the journal still has it.
-// Otherwise it reads what the journal holds after the newest entry the log
-// has, which after a restart is what the unit logged while the daemon was
-// down, before following; a log with none follows from now, so a cleared
-// one stays cleared. What it parses came from the internet, so a panic
-// fails the read rather than the daemon.
-func (f *Feed[E]) read(ctx context.Context) (err error) {
-	defer panics.Into(&err, f.log(), f.Name+" reader")
+// Otherwise it reads what the journal holds after the newest entry each
+// log has, which after a restart is what the unit logged while the daemon
+// was down, before following; a log with none takes what is logged from
+// now, so a cleared one stays cleared. What it parses came from the
+// internet, so a panic fails the read rather than the daemon.
+func (f *Feed) read(ctx context.Context) (err error) {
+	defer panics.Into(&err, f.log(), f.name()+" reader")
 	if f.cursor != "" {
-		// An error reads as gone: reading again from the log's newest
+		// An error reads as gone: reading again from the logs' newest
 		// costs a moment, and following a cursor that is not there would
 		// skip an entry.
 		if held, err := f.Journal.Holds(ctx, f.cursor); err != nil || !held {
@@ -220,12 +316,8 @@ func (f *Feed[E]) read(ctx context.Context) (err error) {
 		// Following from the moment the back-fill began, when it found
 		// nothing, is what leaves no gap between the two.
 		since = time.Now()
-		if after := f.Log.NewestAt(); !after.IsZero() {
-			cursor, err := f.backfill(ctx, after)
-			if err != nil {
-				return err
-			}
-			f.cursor = cursor
+		if err := f.backfill(ctx, since); err != nil {
+			return err
 		}
 	}
 	var lines lines
@@ -235,18 +327,56 @@ func (f *Feed[E]) read(ctx context.Context) (err error) {
 			return
 		}
 		f.cursor = line.Cursor
-		if e, ok := f.Parse(line.Message); ok {
-			f.Log.AddAt(line.Time, e)
+		for _, t := range f.Taps {
+			t.take(line)
 		}
 	})
+}
+
+// backfill reads the journal back for each log fed that holds an entry,
+// the one furthest behind first. That first back-fill ended where the
+// journal did soonest, so the reader follows on from it, and every other
+// log passes over what it holds.
+func (f *Feed) backfill(ctx context.Context, since time.Time) error {
+	type fill struct {
+		tap   AnyTap
+		after time.Time
+	}
+	var fills []fill
+	for _, t := range f.Taps {
+		if after, on := t.newest(); on && !after.IsZero() {
+			fills = append(fills, fill{tap: t, after: after})
+		}
+	}
+	sort.SliceStable(fills, func(i, j int) bool { return fills[i].after.Before(fills[j].after) })
+	for i, fl := range fills {
+		cursor, err := fl.tap.backfill(ctx, f.Journal, fl.after)
+		if err != nil {
+			return err
+		}
+		if i == 0 {
+			f.cursor = cursor
+		}
+	}
+	for _, t := range f.Taps {
+		if len(fills) > 0 && t == fills[0].tap {
+			t.from(time.Time{})
+		} else {
+			t.from(since)
+		}
+	}
+	return nil
 }
 
 // backfill reads the journal newest first back to after, the newest entry
 // the log holds, or until the log is full, and hands back the cursor of the
 // newest entry that ends a line, empty when the journal had none. Following
 // from a piece would read the rest of its line without the start.
-func (f *Feed[E]) backfill(ctx context.Context, after time.Time) (string, error) {
-	size := f.Log.Size()
+func (t *Tap[E]) backfill(ctx context.Context, j Journal, after time.Time) (string, error) {
+	t.mu.Lock()
+	clears := t.clears
+	t.mu.Unlock()
+	size := t.Log.Size()
 	var cursor string
 	var items []Item[E]
 	var lines backLines
@@ -256,11 +386,11 @@ func (f *Feed[E]) backfill(ctx context.Context, after time.Time) (string, error)
 		if !line.Time.After(after) {
 			return
 		}
-		if e, ok := f.Parse(line.Message); ok {
+		if e, ok := t.Parse(line.Message); ok {
 			items = append(items, Item[E]{At: line.Time, E: e})
 		}
 	}
-	err := f.Journal.Back(ctx, after, func(r Record) bool {
+	err := j.Back(ctx, after, func(r Record) bool {
 		if cursor == "" && !r.Cut {
 			cursor = r.Cursor
 		}
@@ -283,6 +413,11 @@ func (f *Feed[E]) backfill(ctx context.Context, after time.Time) (string, error)
 	// entries come out of order where lines were cut: put them back in
 	// the order the follower would have added them.
 	sort.SliceStable(items, func(i, j int) bool { return items[i].At.After(items[j].At) })
-	f.Log.FillAt(items[:min(len(items), size)])
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	// A log cleared while it was read stays cleared.
+	if t.clears == clears {
+		t.Log.FillAt(items[:min(len(items), size)])
+	}
 	return cursor, nil
 }

@@ -222,13 +222,15 @@ func restored(t *testing.T, when time.Time, ids ...string) *Log {
 // watchLog runs a watcher feeding l, set as each of set says.
 func watchLog(t *testing.T, l *Log, j journalfeed.Journal, cfg *atomic.Pointer[model.Config], installed bool) *Log {
 	t.Helper()
-	w := &journalfeed.Feed[wafevent.Event]{
-		Log: l, Journal: j, Parse: wafevent.Parse, Source: cfg.Load, Slog: slog.New(slog.DiscardHandler),
-		Name: "the WAF events",
-		Settings: func(c *model.Config) (int, time.Duration) {
-			return c.Services.Proxy.Events.Size(), c.Services.Proxy.Events.Retention()
-		},
-		On:        func(c *model.Config) bool { return c.ProxyEnabled() },
+	w := &journalfeed.Feed{
+		Journal: j, Source: cfg.Load, Slog: slog.New(slog.DiscardHandler),
+		Taps: []journalfeed.AnyTap{&journalfeed.Tap[wafevent.Event]{
+			Log: l, Parse: wafevent.Parse, Name: "the WAF events",
+			Settings: func(c *model.Config) (int, time.Duration) {
+				return c.Services.Proxy.Events.Size(), c.Services.Proxy.Events.Retention()
+			},
+			On: func(c *model.Config) bool { return c.ProxyEnabled() },
+		}},
 		Installed: func(context.Context) bool { return installed },
 		Interval:  5 * time.Millisecond, Backoff: time.Millisecond,
 	}

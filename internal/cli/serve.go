@@ -468,45 +468,54 @@ at your own.`,
 			// is no proxy to read, and the log stays empty.
 			wafLog := waflog.New()
 			deps.WAFLog = wafLog
-			wafFeed := &journalfeed.Feed[wafevent.Event]{
-				Log: wafLog, Journal: journalfeed.Journalctl{Unit: services.ProxyUnit}, Parse: wafevent.Parse,
-				Source: eng.Effective, Name: "the WAF events", Slog: log,
-				Settings: func(c *model.Config) (int, time.Duration) {
-					return c.Services.Proxy.Events.Size(), c.Services.Proxy.Events.Retention()
-				},
-				On: func(c *model.Config) bool { return c.ProxyEnabled() },
-			}
-			if deps.Proxy != nil {
-				wafFeed.Installed = deps.Proxy.Installed
-			}
-			reads.start(ctx, log, "WAF event files", "WAF events", func() {
-				readWAFEvents(eng.Effective(), wafLog, files, log)
-			}, wafFeed.Run)
 			// The proxy's requests, fed from the same journal while the
 			// level keeps them.
 			requests := requestlog.New()
 			deps.Requests = requests
-			requestFeed := &journalfeed.Feed[requestlog.Request]{
-				Log: requests, Journal: journalfeed.Journalctl{Unit: services.ProxyUnit}, Parse: requestlog.Parse,
-				Source: eng.Effective, Name: "the proxy's requests", Slog: log,
-				Settings: requestlog.Settings, Kept: requestlog.Kept,
-				On: func(c *model.Config) bool { return c.ProxyEnabled() && requestlog.Kept(c) },
+			proxyFeed := &journalfeed.Feed{
+				Journal: journalfeed.Journalctl{Unit: services.ProxyUnit}, Source: eng.Effective, Slog: log,
+				Taps: []journalfeed.AnyTap{
+					&journalfeed.Tap[wafevent.Event]{
+						Log: wafLog, Parse: wafevent.Parse, Name: "the WAF events",
+						Settings: func(c *model.Config) (int, time.Duration) {
+							return c.Services.Proxy.Events.Size(), c.Services.Proxy.Events.Retention()
+						},
+						On: func(c *model.Config) bool { return c.ProxyEnabled() },
+					},
+					&journalfeed.Tap[requestlog.Request]{
+						Log: requests, Parse: requestlog.Parse, Name: "the proxy's requests",
+						Settings: requestlog.Settings, Kept: requestlog.Kept,
+						On: func(c *model.Config) bool { return c.ProxyEnabled() },
+					},
+				},
 			}
 			if deps.Proxy != nil {
-				requestFeed.Installed = deps.Proxy.Installed
+				proxyFeed.Installed = deps.Proxy.Installed
 			}
+			var proxyFiles sync.WaitGroup
+			proxyFiles.Add(2)
+			reads.start(ctx, log, "WAF event files", "proxy journal", func() {
+				defer proxyFiles.Done()
+				readWAFEvents(eng.Effective(), wafLog, files, log)
+			}, func(ctx context.Context) {
+				proxyFiles.Wait()
+				proxyFeed.Run(ctx)
+			})
 			reads.start(ctx, log, "proxy request files", "proxy requests", func() {
+				defer proxyFiles.Done()
 				readRing(eng.Effective(), requests, requestlog.Files(requests), requestlog.Settings, files, log)
-			}, requestFeed.Run)
+			}, func(ctx context.Context) { <-ctx.Done() })
 			// What the DHCP server says of its clients, fed from its journal
 			// while the level keeps it.
 			dhcpLog := dhcplog.New()
 			deps.DHCPLog = dhcpLog
-			dhcpFeed := &journalfeed.Feed[dhcplog.Event]{
-				Log: dhcpLog, Journal: journalfeed.Journalctl{Unit: services.Unit}, Parse: dhcplog.Parse,
-				Source: eng.Effective, Name: "the DHCP server's messages", Slog: log,
-				Settings: dhcplog.Settings, Kept: dhcplog.Kept,
-				On: func(c *model.Config) bool { return c.Services.DHCP.Enabled && dhcplog.Kept(c) },
+			dhcpFeed := &journalfeed.Feed{
+				Journal: journalfeed.Journalctl{Unit: services.Unit}, Source: eng.Effective, Slog: log,
+				Taps: []journalfeed.AnyTap{&journalfeed.Tap[dhcplog.Event]{
+					Log: dhcpLog, Parse: dhcplog.Parse, Name: "the DHCP server's messages",
+					Settings: dhcplog.Settings, Kept: dhcplog.Kept,
+					On: func(c *model.Config) bool { return c.Services.DHCP.Enabled },
+				}},
 			}
 			if os.Geteuid() == 0 {
 				dhcpFeed.Installed = func(context.Context) bool { return true }
@@ -518,11 +527,14 @@ at your own.`,
 			// access point while the level keeps it.
 			wirelessLog := wirelesslog.New()
 			deps.WirelessLog = wirelessLog
-			wirelessFeed := &journalfeed.Feed[wirelesslog.Event]{
-				Log: wirelessLog, Journal: journalfeed.Journalctl{Unit: strings.Replace(services.WirelessUnit, "@.", "@*.", 1)},
-				Parse: wirelesslog.Parse, Source: eng.Effective, Name: "the wireless clients", Slog: log,
-				Settings: wirelesslog.Settings, Kept: wirelesslog.Kept,
-				On: func(c *model.Config) bool { return c.WirelessEnabled() && wirelesslog.Kept(c) },
+			wirelessFeed := &journalfeed.Feed{
+				Journal: journalfeed.Journalctl{Unit: strings.Replace(services.WirelessUnit, "@.", "@*.", 1)},
+				Source:  eng.Effective, Slog: log,
+				Taps: []journalfeed.AnyTap{&journalfeed.Tap[wirelesslog.Event]{
+					Log: wirelessLog, Parse: wirelesslog.Parse, Name: "the wireless clients",
+					Settings: wirelesslog.Settings, Kept: wirelesslog.Kept,
+					On: func(c *model.Config) bool { return c.WirelessEnabled() },
+				}},
 			}
 			if os.Geteuid() == 0 {
 				wirelessFeed.Installed = func(context.Context) bool { return true }
