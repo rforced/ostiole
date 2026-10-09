@@ -24,6 +24,7 @@ function blank() {
     priority: 0,
     slow: '',
     lossy: '',
+    every: '',
   }
 }
 
@@ -37,6 +38,7 @@ watch(
           ...props.gateway,
           slow: props.gateway.slowAboveMs ?? '',
           lossy: props.gateway.lossyAbovePercent ?? '',
+          every: props.gateway.probeEverySeconds ?? '',
         }
       : blank()
     if (!props.gateway) {
@@ -93,6 +95,7 @@ function save() {
   // Empty keeps the default; 0 turns the warning off.
   if (f.slow !== '' && f.slow != null) out.slowAboveMs = Number(f.slow)
   if (f.lossy !== '' && f.lossy != null) out.lossyAbovePercent = Number(f.lossy)
+  if (f.every !== '' && f.every != null) out.probeEverySeconds = Number(f.every)
   config.upsertGateway(out, props.gateway?.name ?? out.name)
   open.value = false
 }
@@ -179,6 +182,21 @@ function save() {
             type="number"
             min="0"
             max="255"
+            class="input w-32 font-mono max-sm:w-full"
+          />
+        </FormField>
+        <FormField
+          id="gw-every"
+          label="Probe every (seconds)"
+          hint="Three lost probes in a row take the gateway down."
+        >
+          <input
+            id="gw-every"
+            v-model="form.every"
+            type="number"
+            min="5"
+            max="300"
+            placeholder="30"
             class="input w-32 font-mono max-sm:w-full"
           />
         </FormField>

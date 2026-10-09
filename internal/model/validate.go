@@ -449,6 +449,9 @@ func (c *Config) Validate() error {
 		if p := g.LossyAbovePercent; p != nil && (*p < 0 || *p > MaxLossyAbovePercent) {
 			v.add(path+".lossyAbovePercent", "%d must be 0-%d", *p, MaxLossyAbovePercent)
 		}
+		if e := g.ProbeEverySeconds; e != 0 && (e < MinProbeSeconds || e > MaxProbeSeconds) {
+			v.add(path+".probeEverySeconds", "%d must be %d-%d", e, MinProbeSeconds, MaxProbeSeconds)
+		}
 	}
 
 	groups := map[string]bool{}

@@ -526,3 +526,58 @@ func TestTheStripDrawsTheWorstMinuteOfEachCell(t *testing.T) {
 		t.Errorf("an unknown gateway: %+v", empty.Cells[0])
 	}
 }
+
+// Each gateway is probed as often as it says, 30 s unless told, and the
+// browser tests' override probes every one each second.
+func TestGatewaysAreProbedAsOftenAsTheySay(t *testing.T) {
+	t.Parallel()
+	p := &fakeProber{fail: map[string]bool{}}
+	m := New(p, &fakeRouter{resolveTo: map[string]string{}}, slog.New(slog.DiscardHandler))
+	clock := at(0, 0)
+	m.Now = func() time.Time { return clock }
+	cfg := &model.Config{Gateways: []model.Gateway{
+		{Name: "wan", Enabled: true, Interface: "eth0", Address: "203.0.113.1"},
+		{Name: "lte", Enabled: true, Interface: "eth1", Address: "198.51.100.1", ProbeEverySeconds: 5},
+	}}
+	m.Configure(cfg)
+	probes := func() int {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		return p.probes
+	}
+	ctx := context.Background()
+	m.tick(ctx, false)
+	if n := probes(); n != 2 {
+		t.Fatalf("first look probed %d, want both", n)
+	}
+	clock = at(0, 1)
+	m.tick(ctx, false)
+	if n := probes(); n != 2 {
+		t.Fatalf("a second later probed %d more", n-2)
+	}
+	clock = at(0, 5)
+	m.tick(ctx, false)
+	if n := probes(); n != 3 {
+		t.Fatalf("at five seconds probed %d, want lte alone", n-2)
+	}
+	clock = at(0, 30)
+	m.tick(ctx, false)
+	if n := probes(); n != 5 {
+		t.Fatalf("at thirty seconds probed %d, want both", n-3)
+	}
+	cfg.Gateways[0].ProbeEverySeconds = 5
+	clock = at(0, 31)
+	m.Configure(cfg)
+	m.tick(ctx, false)
+	if n := probes(); n != 6 {
+		t.Fatalf("after shortening wan's interval probed %d, want wan at once", n-5)
+	}
+	m.ProbeEvery = time.Second
+	clock = at(0, 36)
+	m.tick(ctx, false)
+	clock = at(0, 37)
+	m.tick(ctx, false)
+	if n := probes(); n != 10 {
+		t.Fatalf("overridden, probed %d over two seconds, want both twice", n-6)
+	}
+}

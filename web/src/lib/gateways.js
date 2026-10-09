@@ -1,8 +1,20 @@
 import { SPANS } from '@/lib/chart'
 import { formatDuration, formatMs } from '@/lib/format'
 
-/** Seconds a point covers in each window: a probe, a minute, an hour. */
-export const STEPS = { '5m': 5, '24h': 60, '31d': 3600 }
+/** How often a gateway is probed unless it says, in seconds (model.DefaultProbeSeconds). */
+export const DEFAULT_PROBE_SECONDS = 30
+
+/** Seconds a point covers in a day's and a month's window: a minute, an hour. */
+export const STEPS = { '24h': 60, '31d': 3600 }
+
+/**
+ * Seconds a point covers in a window: over five minutes, one probe.
+ * @param {string} window
+ * @param {number} [every] the gateway's seconds between probes
+ */
+export function stepOf(window, every) {
+  return window === '5m' ? every || DEFAULT_PROBE_SECONDS : STEPS[window]
+}
 
 /** The families a gateway is probed in, in the order they are charted. */
 export const FAMILIES = ['IPv4', 'IPv6']

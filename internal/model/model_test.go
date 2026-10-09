@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"ostiole/internal/sysctl"
 )
@@ -2379,5 +2380,30 @@ func TestGatewayThresholds(t *testing.T) {
 	err := cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "gateways[0].slowAboveMs") || !strings.Contains(err.Error(), "gateways[0].lossyAbovePercent") {
 		t.Errorf("validate = %v", err)
+	}
+}
+
+func TestGatewayProbeInterval(t *testing.T) {
+	t.Parallel()
+	g := Gateway{Name: "wan", Enabled: true, Interface: "eth0"}
+	if g.ProbeInterval() != 30*time.Second {
+		t.Errorf("default = %v", g.ProbeInterval())
+	}
+	g.ProbeEverySeconds = 5
+	if g.ProbeInterval() != 5*time.Second {
+		t.Errorf("five = %v", g.ProbeInterval())
+	}
+	cfg := Starter(StarterOptions{LAN: "eth1", LANAddress: "192.168.1.1/24", WAN: "eth0"})
+	for _, bad := range []int{4, 301, -1} {
+		cfg.Gateways[0].ProbeEverySeconds = bad
+		if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "gateways[0].probeEverySeconds") {
+			t.Errorf("%d: validate = %v", bad, err)
+		}
+	}
+	for _, ok := range []int{5, 300} {
+		cfg.Gateways[0].ProbeEverySeconds = ok
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("%d: %v", ok, err)
+		}
 	}
 }

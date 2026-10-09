@@ -9,7 +9,7 @@ import { useAsync } from '@/lib/async'
 import { niceScale } from '@/lib/chart'
 import { formatDuration, formatMs, formatWhen } from '@/lib/format'
 import {
-  STEPS,
+  stepOf,
   addProbe,
   eventFor,
   eventText,
@@ -111,6 +111,7 @@ onBeforeUnmount(() => {
 })
 
 const chart = computed(() => historySeries(families.value))
+const step = computed(() => stepOf(win.value, props.gateway?.probeEverySeconds))
 const scale = (highest) => niceScale(highest, 10)
 const figures = computed(() => {
   const r = report.value
@@ -149,8 +150,8 @@ const error = computed(() => read.error.value || streamError.value)
         :bars="chart.bars"
         :format="formatMs"
         :scale="scale"
-        :gap="STEPS[win] * 2.5"
-        :step="STEPS[win]"
+        :gap="step * 2.5"
+        :step="step"
         empty="No probes in this window."
         :stale="read.busy.value && rows !== null"
       />

@@ -1482,6 +1482,9 @@ type Gateway struct {
 	// the default, 0 is off.
 	SlowAboveMS       *int `json:"slowAboveMs,omitempty"`
 	LossyAbovePercent *int `json:"lossyAbovePercent,omitempty"`
+	// ProbeEverySeconds is how often the gateway is probed; zero keeps
+	// DefaultProbeSeconds.
+	ProbeEverySeconds int `json:"probeEverySeconds,omitempty"`
 }
 
 // The thresholds a gateway warns over, and their bounds: a probe waits two
@@ -1492,6 +1495,21 @@ const (
 	MaxSlowAboveMS           = 1999
 	MaxLossyAbovePercent     = 99
 )
+
+// How often a gateway is probed, in seconds, and the bounds.
+const (
+	DefaultProbeSeconds = 30
+	MinProbeSeconds     = 5
+	MaxProbeSeconds     = 300
+)
+
+// ProbeInterval is how often the gateway is probed.
+func (g Gateway) ProbeInterval() time.Duration {
+	if g.ProbeEverySeconds <= 0 {
+		return DefaultProbeSeconds * time.Second
+	}
+	return time.Duration(g.ProbeEverySeconds) * time.Second
+}
 
 // SlowAbove is the mean round trip a gateway warns over, 0 for never.
 func (g Gateway) SlowAbove() int {

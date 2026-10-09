@@ -15,12 +15,17 @@ import (
 	"ostiole/internal/policy"
 )
 
-// Defaults for the probe loop. They are deliberately unhurried: a router
-// that flaps its default route on one lost packet is worse than one that
-// takes twenty seconds to notice a dead line.
+// The probe loop's defaults. It is deliberately unhurried: a router that
+// flaps its default route on one lost packet is worse than one that takes
+// a minute and a half to notice a dead line.
 const (
-	DefaultInterval = 5 * time.Second
+	// DefaultInterval is how often the monitor looks for a gateway due its
+	// probe; each is probed as often as its configuration says.
+	DefaultInterval = time.Second
 	DefaultTimeout  = 2 * time.Second
+	// syncEvery is how often the routes, the policy tables and the queues
+	// are put back between probes.
+	syncEvery = 5 * time.Second
 	// FailAfter consecutive losses take a gateway offline, RiseAfter
 	// consecutive answers bring it back.
 	FailAfter = 3
@@ -187,7 +192,9 @@ type state struct {
 	tunnel bool
 	// address is the next hop policy routing uses: the gateway's own, or
 	// the IPv4 one it learned.
-	address   string
+	address string
+	// next is when the gateway is probed next; zero is now.
+	next      time.Time
 	legs      []*leg
 	online    bool
 	unknown   bool
@@ -269,6 +276,11 @@ type Monitor struct {
 	Removed func(ctx context.Context) (<-chan struct{}, error)
 	// History, when set, keeps what the probes find and what changed.
 	History *History
+	// ProbeEvery, when set, probes every gateway this often whatever its
+	// configuration says; the browser tests set it.
+	ProbeEvery time.Duration
+	// Now is the clock; nil is time.Now.
+	Now func() time.Time
 
 	mu     sync.Mutex
 	states map[string]*state
@@ -279,6 +291,22 @@ type Monitor struct {
 	// carriers are the gateways whose default routes the kernel used at
 	// the last tick.
 	carriers []string
+	synced   time.Time
+}
+
+func (m *Monitor) now() time.Time {
+	if m.Now != nil {
+		return m.Now()
+	}
+	return time.Now()
+}
+
+// interval is how often a gateway is probed.
+func (m *Monitor) interval(g model.Gateway) time.Duration {
+	if m.ProbeEvery > 0 {
+		return m.ProbeEvery
+	}
+	return g.ProbeInterval()
 }
 
 // New returns a monitor with production defaults.
@@ -317,8 +345,11 @@ func (m *Monitor) Configure(cfg *model.Config) {
 		}
 		if !ok || st.gw.Interface != g.Interface || st.gw.Address != g.Address || st.gw.Monitor != g.Monitor ||
 			st.tunnel != tunnel {
-			st = &state{gw: g, tunnel: tunnel, unknown: true, since: time.Now()}
+			st = &state{gw: g, tunnel: tunnel, unknown: true, since: m.now()}
 		} else {
+			if st.gw.ProbeEverySeconds != g.ProbeEverySeconds {
+				st.next = time.Time{}
+			}
 			st.gw = g
 		}
 		next[g.Name] = st
@@ -354,13 +385,13 @@ func (m *Monitor) Run(ctx context.Context) {
 		removed = ch
 	}
 	var settled <-chan time.Time
-	m.Tick(ctx)
+	m.tick(ctx, false)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			m.Tick(ctx)
+			m.tick(ctx, false)
 		case _, ok := <-removed:
 			if !ok {
 				removed = nil
@@ -394,36 +425,54 @@ func (m *Monitor) Resync() {
 }
 
 // Tick probes every gateway once and applies the routing decision.
-func (m *Monitor) Tick(ctx context.Context) {
+func (m *Monitor) Tick(ctx context.Context) { m.tick(ctx, true) }
+
+// tick probes the gateways that are due, or every one when all is set,
+// and keeps the routes in step: after a probe, and every syncEvery.
+func (m *Monitor) tick(ctx context.Context, all bool) {
 	var cfg *model.Config
 	if m.Source != nil {
 		if cfg = m.Source(); cfg != nil {
 			m.Configure(cfg)
 		}
 	}
+	now := m.now()
 	m.mu.Lock()
 	states := make([]*state, 0, len(m.order))
+	var due []*state
 	for _, name := range m.order {
-		states = append(states, m.states[name])
+		st := m.states[name]
+		states = append(states, st)
+		if all || st.next.IsZero() || !now.Before(st.next) {
+			due = append(due, st)
+			st.next = now.Add(m.interval(st.gw))
+		}
 	}
 	timeout := m.Timeout
 	dropped := m.dropped
 	m.dropped = nil
+	sync := all || len(due) > 0 || now.Sub(m.synced) >= syncEvery
+	if sync {
+		m.synced = now
+	}
 	m.mu.Unlock()
 	m.forget(dropped)
 	if timeout <= 0 {
 		timeout = DefaultTimeout
 	}
 
-	for _, st := range states {
+	for _, st := range due {
 		m.probe(ctx, st, timeout)
 	}
 	m.mark(states)
+	if !sync {
+		return
+	}
 	m.applyRoutes(states)
 	m.findCarriers(states)
 	m.syncPolicy(cfg, states)
 	m.syncShaping(cfg)
-	if m.OnTick != nil {
+	if m.OnTick != nil && len(due) > 0 {
 		m.OnTick()
 	}
 }
@@ -548,7 +597,7 @@ func (m *Monitor) probe(ctx context.Context, st *state, timeout time.Duration) {
 		if t.addr != "" {
 			rtt, err = m.Prober.Probe(ctx, t.addr, gw.Interface, timeout)
 		}
-		results = append(results, result{target: t, rtt: rtt, err: err, at: time.Now()})
+		results = append(results, result{target: t, rtt: rtt, err: err, at: m.now()})
 	}
 	if m.History != nil {
 		for _, r := range results {
@@ -558,7 +607,7 @@ func (m *Monitor) probe(ctx context.Context, st *state, timeout time.Duration) {
 		}
 	}
 
-	now := time.Now()
+	now := m.now()
 	m.mu.Lock()
 	st.address = hop
 	if targets[0].family != "" {
@@ -650,7 +699,7 @@ func (m *Monitor) mark(states []*state) {
 	if m.History == nil {
 		return
 	}
-	now := time.Now()
+	now := m.now()
 	type mark struct{ name, state, monitor string }
 	marks := make([]mark, 0, len(states))
 	m.mu.Lock()

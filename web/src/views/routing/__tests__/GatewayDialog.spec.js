@@ -158,4 +158,18 @@ describe('GatewayDialog', () => {
     expect(again.config.gateways[0].lossyAbovePercent).toBe(5)
     expect('slowAboveMs' in again.config.gateways[0]).toBe(false)
   })
+
+  it('probes every 30 seconds unless told, 5 at least', async () => {
+    const { wrapper, config } = open({ name: 'wan', enabled: true, interface: 'eth0' })
+    await flushPromises()
+    const every = wrapper.find('#gw-every')
+    expect(every.attributes('placeholder')).toBe('30')
+    expect(every.attributes('min')).toBe('5')
+    expect(every.attributes('max')).toBe('300')
+    await wrapper.find('form').trigger('submit')
+    expect('probeEverySeconds' in config.gateways[0]).toBe(false)
+    await every.setValue('60')
+    await wrapper.find('form').trigger('submit')
+    expect(config.gateways[0].probeEverySeconds).toBe(60)
+  })
 })
