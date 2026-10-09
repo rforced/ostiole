@@ -233,8 +233,11 @@ func TestMigrateTurnsProxyZonesIntoAccess(t *testing.T) {
 	}
 	// A proxy open nowhere stays open nowhere.
 	cfg, err = ParseConfig([]byte(`{"version":8,"services":{"proxy":{"enabled":true}}}`))
-	if err != nil || cfg.Services.Proxy.Access != nil {
-		t.Errorf("access = %+v, %v; want none", cfg.Services.Proxy.Access, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Services.Proxy.Access != nil {
+		t.Errorf("access = %+v, want none", cfg.Services.Proxy.Access)
 	}
 }
 
@@ -330,10 +333,13 @@ func TestMigrateGathersTheLogDays(t *testing.T) {
 	}
 	cfg, err := ParseConfig([]byte(`{"version":12,"system":{"logging":{"level":"info"},` +
 		`"management":{"firewallLog":{"entries":1000,"days":3}}}}`))
-	if err != nil || cfg.System.Logging != (Logging{Level: LogInfo, Days: 3}) ||
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.System.Logging != (Logging{Level: LogInfo, Days: 3}) ||
 		cfg.System.Management.FirewallLog != (FirewallLog{Entries: 1000}) {
-		t.Errorf("logging %+v, firewall log %+v, %v; want the level kept beside 3 days and the entries kept",
-			cfg.System.Logging, cfg.System.Management.FirewallLog, err)
+		t.Errorf("logging %+v, firewall log %+v; want the level kept beside 3 days and the entries kept",
+			cfg.System.Logging, cfg.System.Management.FirewallLog)
 	}
 }
 

@@ -254,8 +254,11 @@ func TestALongDriftIsCounted(t *testing.T) {
 	rel.release(network.Files{"caddy.json": b.String()})
 	e.drifted = nil
 	d := mustDrift(t, e)
+	if d == nil {
+		t.Fatal("no drift")
+	}
 	// Three lines go and 250 come, the final newline among them.
-	if d == nil || len(d.Changes) != maxDriftChanges || d.More != 3+maxDriftChanges+50-maxDriftChanges {
+	if len(d.Changes) != maxDriftChanges || d.More != 3+maxDriftChanges+50-maxDriftChanges {
 		t.Fatalf("changes %d, more %d", len(d.Changes), d.More)
 	}
 	if s := e.DriftStatus(); s.Changes != 3+maxDriftChanges+50 {

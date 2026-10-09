@@ -703,8 +703,12 @@ func TestInstallClosesTheConfigurationToOthers(t *testing.T) {
 	}
 	for path, want := range map[string]os.FileMode{dir: 0o750, filepath.Join(dir, "wireless"): 0o750,
 		filepath.Join(dir, "proxy"): 0o750, filepath.Join(dir, "certs"): 0o700, outside: 0o755} {
-		if info, err := os.Stat(path); err != nil || info.Mode().Perm() != want {
-			t.Errorf("%s: %v, %v, want %v", path, info.Mode().Perm(), err, want)
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != want {
+			t.Errorf("%s: %v, want %v", path, info.Mode().Perm(), want)
 		}
 	}
 }
