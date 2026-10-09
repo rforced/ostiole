@@ -157,7 +157,6 @@ async function save() {
       privateKey: f.privateKey.trim(),
       publicKey: f.publicKey.trim(),
       listenPort: Number(f.listenPort) || 0,
-      peers: props.tunnel?.wireguard?.peers ?? [],
     },
   })
   if (!iface.zone) delete iface.zone
