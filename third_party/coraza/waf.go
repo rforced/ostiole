@@ -28,10 +28,18 @@ type WAF interface {
 }
 
 // NewWAF creates a new WAF instance with the provided configuration.
-func NewWAF(config WAFConfig) (WAF, error) {
+func NewWAF(config WAFConfig) (_ WAF, err error) {
 	c := config.(*wafConfig)
 
 	waf := corazawaf.NewWAF()
+	// Changed by Ostiole: a WAF that fails to build owns every pattern its
+	// rules compiled into the shared memoize cache, and only Close releases
+	// an owner, so each failed reload kept them for the life of the process.
+	defer func() {
+		if err != nil {
+			_ = waf.Close()
+		}
+	}()
 
 	if environment.HasAccessToFS {
 		if err := environment.IsDirWritable(waf.TmpDir); err != nil {
