@@ -371,6 +371,8 @@ export const useConfigStore = defineStore('config', () => {
     for (const o of draft.value.nat?.outbound?.rules ?? []) if (o.zone === from) o.zone = to
     for (const o of draft.value.nat?.oneToOne ?? []) if (o.zone === from) o.zone = to
     for (const a of draft.value.services?.proxy?.access ?? []) if (a.zone === from) a.zone = to
+    const defended = draft.value.protection?.zones
+    if (defended) setProtectedZones(defended.map((z) => (z === from ? to : z)))
   }
 
   /**
@@ -391,12 +393,18 @@ export const useConfigStore = defineStore('config', () => {
     const refs = []
     for (const r of rules.value)
       if (r.zone === name || r.destZone === name) refs.push(`rule ${r.id}`)
-    for (const pf of draft.value.nat?.portForwards ?? [])
-      if (pf.zone === name) refs.push(`port forward ${pf.id}`)
     for (const o of draft.value.nat?.outbound?.rules ?? [])
       if (o.zone === name) refs.push(`outbound NAT ${o.id}`)
+    for (const pf of draft.value.nat?.portForwards ?? [])
+      if (pf.zone === name) refs.push(`port forward ${pf.id}`)
     for (const o of draft.value.nat?.oneToOne ?? [])
       if (o.zone === name) refs.push(`1:1 NAT ${o.id}`)
+    const defended = draft.value.protection?.zones ?? []
+    if (defended.includes(name)) {
+      refs.push(
+        defended.some((z) => z !== name) ? 'protection' : 'protection, back to every external zone',
+      )
+    }
     for (const a of draft.value.services?.proxy?.access ?? [])
       if (a.zone === name) refs.push(`proxy access rule ${a.description || a.id}`)
     return refs
@@ -414,6 +422,8 @@ export const useConfigStore = defineStore('config', () => {
       draft.value.rules = rules.value.filter((r) => r.zone !== name && r.destZone !== name)
       const proxy = draft.value.services?.proxy
       if (proxy?.access) proxy.access = proxy.access.filter((a) => a.zone !== name)
+      const defended = draft.value.protection?.zones
+      if (defended) setProtectedZones(defended.filter((z) => z !== name))
       const n = draft.value.nat
       if (!n) return
       if (n.portForwards) n.portForwards = n.portForwards.filter((pf) => pf.zone !== name)

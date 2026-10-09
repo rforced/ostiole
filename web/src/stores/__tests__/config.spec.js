@@ -45,8 +45,8 @@ describe('config store zones', () => {
     expect(config.zoneDependents('dmz')).toEqual([
       'rule r1',
       'rule r2',
-      'port forward pf1',
       'outbound NAT o1',
+      'port forward pf1',
     ])
   })
 
@@ -64,6 +64,46 @@ describe('config store zones', () => {
     // Nothing that belonged to another zone is touched.
     expect(config.draft.nat.oneToOne.map((o) => o.id)).toEqual(['n1'])
     expect(config.interfaces).toHaveLength(2)
+  })
+
+  it('keeps the defended zones in step with a rename and a delete', () => {
+    const config = useConfigStore()
+    const d = draft()
+    d.zones.push({ name: 'spare' })
+    d.protection = { zones: ['wan', 'dmz'], synFlood: { rate: 30, unit: 'second' } }
+    config.replaceDraft(d)
+
+    config.upsertZone({ name: 'guest' }, 'dmz')
+    expect(config.draft.protection.zones).toEqual(['wan', 'guest'])
+    config.removeZone('guest')
+    expect(config.draft.protection.zones).toEqual(['wan'])
+    // The last one named goes with the list: empty means every external zone.
+    config.setProtectedZones(['spare'])
+    config.removeZone('spare')
+    expect(config.draft.protection).toEqual({ synFlood: { rate: 30, unit: 'second' } })
+  })
+
+  it('says what protection goes back to when a zone goes', () => {
+    const config = useConfigStore()
+    const d = draft()
+    d.protection = { zones: ['wan', 'dmz'] }
+    d.services = { proxy: { access: [{ id: 'a1', zone: 'dmz', action: 'allow' }] } }
+    config.replaceDraft(d)
+    expect(config.zoneDependents('dmz')).toEqual([
+      'rule r1',
+      'rule r2',
+      'outbound NAT o1',
+      'port forward pf1',
+      'protection',
+      'proxy access rule a1',
+    ])
+    expect(config.zoneDependents('lan')).toEqual(['rule r2', 'rule r3'])
+
+    config.setProtectedZones(['dmz'])
+    expect(config.zoneDependents('dmz').slice(4)).toEqual([
+      'protection, back to every external zone',
+      'proxy access rule a1',
+    ])
   })
 
   it('deletes a zone nothing refers to', () => {
