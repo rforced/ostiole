@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/auth'
 import BackupSection from '@/views/system/BackupSection.vue'
 import RemoteBackupSection from '@/views/system/RemoteBackupSection.vue'
 import RevisionsSection from '@/views/system/RevisionsSection.vue'
+import UnusedSection from '@/views/system/UnusedSection.vue'
 
 const auth = useAuthStore()
 const all = useRoute().meta.tabs ?? []
@@ -22,5 +23,6 @@ const tab = useTabHash(() => tabs.value.map((t) => t.value))
     <TabsContent value="history"><RevisionsSection /></TabsContent>
     <TabsContent value="backup"><BackupSection /></TabsContent>
     <TabsContent value="remote"><RemoteBackupSection /></TabsContent>
+    <TabsContent value="unused"><UnusedSection /></TabsContent>
   </AppTabs>
 </template>

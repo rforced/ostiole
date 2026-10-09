@@ -377,6 +377,46 @@ describe('config store interfaces', () => {
     toast.act(toast.toasts.at(-1).id)
     expect(config.rules.map((r) => r.id)).toEqual(['r1'])
   })
+
+  // Removing several items at once is one change to take back, not one each.
+  it('folds removers run inside one undoable into it', () => {
+    const config = useConfigStore()
+    const toast = useToastStore()
+    config.replaceDraft(wired())
+    const before = JSON.parse(JSON.stringify(config.draft))
+
+    config.undoable('Removed 2 unused items.', () => {
+      config.removeRule('r1')
+      config.removeRule('r2')
+    })
+    expect(config.rules).toEqual([])
+    expect(toast.toasts.map((t) => t.message)).toEqual(['Removed 2 unused items.'])
+    toast.act(toast.toasts[0].id)
+    expect(config.draft).toEqual(before)
+
+    config.removeRule('r1')
+    expect(toast.toasts.at(-1).message).toBe('Deleted rule r1.')
+  })
+
+  // Half a bulk removal with no toast would have no way back.
+  it('puts the draft back when a run inside one undoable throws', () => {
+    const config = useConfigStore()
+    const toast = useToastStore()
+    config.replaceDraft(wired())
+    const before = JSON.parse(JSON.stringify(config.draft))
+
+    expect(() =>
+      config.undoable('Removed 2 unused items.', () => {
+        config.removeRule('r1')
+        throw new Error('no such rule')
+      }),
+    ).toThrow('no such rule')
+    expect(config.draft).toEqual(before)
+    expect(toast.toasts).toEqual([])
+
+    config.removeRule('r1')
+    expect(toast.toasts.map((t) => t.message)).toEqual(['Deleted rule r1.'])
+  })
 })
 
 describe('config store host overrides', () => {

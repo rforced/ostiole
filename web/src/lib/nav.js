@@ -270,6 +270,7 @@ export const NAV = [
           { value: 'history', label: 'History' },
           { value: 'backup', label: 'Backup' },
           { value: 'remote', label: 'Remote backup' },
+          { value: 'unused', label: 'Unused' },
         ],
       },
       {

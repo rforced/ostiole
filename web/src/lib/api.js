@@ -176,6 +176,8 @@ export const api = {
     drift: () => get('/apply/drift'),
     /** Compares two configurations; each side is a revision id, 'current', or inline. */
     diff: (body) => post('/config/diff', body),
+    /** What a configuration leaves unused or switched off. */
+    unused: (config) => post('/config/unused', config),
     /**
      * Downloads a backup; returns the file and the name the server chose.
      * It is a POST because a passphrase has no business in a URL.

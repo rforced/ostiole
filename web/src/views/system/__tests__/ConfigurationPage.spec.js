@@ -21,7 +21,12 @@ async function page(path, role) {
   const wrapper = mount(ConfigurationPage, {
     global: {
       plugins: [router],
-      stubs: { RevisionsSection: true, BackupSection: true, RemoteBackupSection: true },
+      stubs: {
+        RevisionsSection: true,
+        BackupSection: true,
+        RemoteBackupSection: true,
+        UnusedSection: true,
+      },
     },
   })
   await flushPromises()
@@ -35,7 +40,7 @@ describe('ConfigurationPage', () => {
 
   it('opens on the history', async () => {
     const wrapper = await page('/system/configuration', 'admin')
-    expect(tabNames(wrapper)).toEqual(['History', 'Backup', 'Remote backup'])
+    expect(tabNames(wrapper)).toEqual(['History', 'Backup', 'Remote backup', 'Unused'])
     expect(wrapper.find('revisions-section-stub').exists()).toBe(true)
   })
 
@@ -47,7 +52,7 @@ describe('ConfigurationPage', () => {
   // A viewer can neither download nor restore, so the tab would be empty.
   it('has no backup tab for a viewer, and a link to it opens the history', async () => {
     const wrapper = await page('/system/configuration#backup', 'viewer')
-    expect(tabNames(wrapper)).toEqual(['History', 'Remote backup'])
+    expect(tabNames(wrapper)).toEqual(['History', 'Remote backup', 'Unused'])
     expect(wrapper.find('backup-section-stub').exists()).toBe(false)
     expect(wrapper.find('revisions-section-stub').exists()).toBe(true)
   })

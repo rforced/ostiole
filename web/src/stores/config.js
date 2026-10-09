@@ -51,6 +51,7 @@ export const useConfigStore = defineStore('config', () => {
   const interfaces = computed(() => draft.value?.interfaces ?? [])
   const aliases = computed(() => draft.value?.aliases ?? [])
   const rules = computed(() => draft.value?.rules ?? [])
+  let undoing = false
 
   async function load(force = false) {
     if (loaded.value && !force) return
@@ -72,11 +73,25 @@ export const useConfigStore = defineStore('config', () => {
    * Runs a mutation and reports it with a way back. Undo puts the draft
    * back exactly as it was before the mutation, so an edit made in the
    * few seconds the offer stands goes with it. That is simpler to trust
-   * than a merge, and the toast says what it restores.
+   * than a merge, and the toast says what it restores. One run inside
+   * another is part of it: one toast, and Undo goes back past both. A run
+   * that throws leaves the draft as it was.
    */
   function undoable(message, mutate) {
+    if (undoing) {
+      mutate()
+      return
+    }
     const before = clone(draft.value)
-    mutate()
+    undoing = true
+    try {
+      mutate()
+    } catch (e) {
+      draft.value = before
+      throw e
+    } finally {
+      undoing = false
+    }
     useToastStore().show(message, {
       timeout: UNDO_MS,
       action: { label: 'Undo', run: () => (draft.value = before) },
