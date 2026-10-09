@@ -68,10 +68,7 @@ function upPowerTone(p) {
           @click="load.run(true)"
         />
       </template>
-      <p v-if="auth.readOnly" class="text-ink-muted">
-        Only an operator or an admin can read the modem.
-      </p>
-      <div v-else class="space-y-3">
+      <div class="space-y-3">
         <form
           class="form-row"
           @submit.prevent="load.run(true)"
@@ -80,11 +77,16 @@ function upPowerTone(p) {
           <FormField
             id="modem-address"
             label="Modem address"
-            hint="In 192.168.100.0/24, where cable modems answer."
+            :hint="
+              auth.readOnly
+                ? 'Only an operator or an admin can read the modem.'
+                : 'In 192.168.100.0/24, where cable modems answer.'
+            "
           >
             <input
               id="modem-address"
               v-model="address"
+              :disabled="auth.readOnly"
               class="input w-48 font-mono max-sm:w-full"
               :placeholder="DEFAULT_ADDRESS"
               spellcheck="false"

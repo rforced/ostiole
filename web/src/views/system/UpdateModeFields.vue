@@ -25,6 +25,8 @@ const props = defineProps({
   securityNote: { type: String, default: '' },
   /** What is left on disabled, shown in place of the schedules. */
   disabledNote: { type: String, default: 'Nothing happens on its own. Check now still works.' },
+  /** Under the mode, for whoever may not change it. */
+  hint: { type: String, default: '' },
   /** The schedules used when none is set, shown as the placeholders. */
   defaultCheckSchedule: { type: String, default: '0 4 * * *' },
   defaultInstallSchedule: { type: String, default: '30 4 * * 0' },
@@ -72,6 +74,7 @@ const installPreset = computed({
   <div class="space-y-3">
     <fieldset class="field-group">
       <legend>Mode</legend>
+      <p v-if="hint" class="text-sm text-ink-muted">{{ hint }}</p>
       <ToggleRow
         v-for="m in MODES"
         :id="`${prefix}-mode-${m.value}`"

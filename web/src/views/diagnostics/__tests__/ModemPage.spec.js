@@ -130,14 +130,14 @@ describe('ModemPage', () => {
   })
 
   // Reading the modem has the router reach out, which is an operator's to
-  // ask for, so a viewer is told as much and nothing is read.
+  // ask for, so a viewer is told as much, on the field, and nothing is read.
   it('reads nothing for a viewer', async () => {
     useAuthStore().user = { username: 'watcher', role: 'viewer' }
     const wrapper = mount(ModemPage)
     await flushPromises()
     expect(api.diagnostics.modem).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('Only an operator or an admin can read the modem.')
-    expect(wrapper.find('input').exists()).toBe(false)
+    expect(wrapper.get('input').element.disabled).toBe(true)
   })
 
   it('shows the error when nothing answers', async () => {

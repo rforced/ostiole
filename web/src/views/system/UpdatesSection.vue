@@ -187,13 +187,12 @@ onMounted(async () => {
         <dd>{{ formatWhen(lastCheck, 'never') }}</dd>
       </dl>
 
-      <p v-if="auth.isOperator" class="text-ink-muted">
-        Only an admin can check, install or change how updates run.
-      </p>
-
       <fieldset v-if="config.draft" class="space-y-4" :disabled="!auth.isAdmin">
         <UpdateModeFields
           prefix="ostiole-upd"
+          :hint="
+            auth.isOperator ? 'Only an admin can check, install or change how updates run.' : ''
+          "
           :mode="settings.mode ?? ''"
           :check-schedule="settings.checkSchedule ?? ''"
           :install-schedule="settings.installSchedule ?? ''"

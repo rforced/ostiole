@@ -88,6 +88,7 @@ describe('OsUpdatesSection', () => {
 
   // Installing is an admin's; an operator can still look.
   it('keeps the install from an operator', async () => {
+    draftWith('manual', [])
     const w = await mountWith(waiting, 'operator')
     expect(installButton(w).attributes('disabled')).toBeDefined()
     expect(w.text()).toContain('Only an admin can install updates')
