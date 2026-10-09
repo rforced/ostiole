@@ -57,7 +57,7 @@ test('create a WireGuard tunnel with a peer and apply it', async ({ page }) => {
   await page.goto('/vpn/wireguard#tunnels')
   await expect(tunnelRow(page, 'wg0')).toContainText('10.66.0.1/24')
   await expect(tunnelRow(page, 'wg0').locator('.badge-warn')).toHaveText('down')
-  await page.goto('/system/ruleset')
+  await page.goto('/diagnostics/ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   await expect(page.locator('pre')).toContainText('service:wireguard')
 })

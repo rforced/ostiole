@@ -81,9 +81,9 @@ test('build a bridge and a bond from the machine s own links', async ({ page }) 
   await dialog.getByRole('button', { name: 'Cancel' }).click()
 
   // The bridge is part of a draft the server accepts: rendering it is how
-  // the System page proves that. This test server manages no network
+  // the Ruleset page proves that. This test server manages no network
   // units, so it says so rather than showing an empty pane.
-  await sidebar(page, 'System', 'Ruleset')
+  await sidebar(page, 'Diagnostics', 'Ruleset')
   await page.getByRole('button', { name: 'Render the draft' }).click()
   await expect(page.locator('pre')).toContainText('table inet ostiole')
   await page.getByRole('button', { name: 'Render network units' }).click()
@@ -128,7 +128,7 @@ test('configure a PPPoE session over a spare link', async ({ page }) => {
   await expect(row).toContainText(`PPPoE over ${spare} as someone@isp.example`)
 
   // The draft is valid: the server renders it without complaint.
-  await sidebar(page, 'System', 'Ruleset')
+  await sidebar(page, 'Diagnostics', 'Ruleset')
   await page.getByRole('button', { name: 'Render the draft' }).click()
   await expect(page.locator('pre')).toContainText('table inet ostiole')
 

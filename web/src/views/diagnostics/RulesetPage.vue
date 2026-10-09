@@ -1,5 +1,5 @@
 <script setup>
-import RulesetSection from '@/views/system/RulesetSection.vue'
+import RulesetSection from '@/views/diagnostics/RulesetSection.vue'
 </script>
 
 <template>

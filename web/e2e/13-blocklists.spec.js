@@ -116,7 +116,7 @@ test('a blocklist alias fetches, lands in the ruleset, and refreshes', async ({ 
 
   // Both families are in the ruleset from the start, because tomorrow's
   // list may have addresses today's does not.
-  await page.goto('/system/ruleset')
+  await page.goto('/diagnostics/ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const ruleset = page.locator('pre')
   await expect(ruleset).toContainText('set alias_blocklist_v4')
@@ -305,7 +305,7 @@ test('hybrid outbound NAT puts your rules ahead of the automatic one', async ({ 
 
   // The rules land above the automatic masquerade, which is what makes
   // hybrid different from adding rules to automatic.
-  await page.goto('/system/ruleset')
+  await page.goto('/diagnostics/ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const text = await page.locator('pre').innerText()
   const mail = text.indexOf('snat ip to 203.0.113.25')

@@ -24,6 +24,7 @@ describe('moved pages', () => {
     ['/services/dhcp6', '/services/dhcp#v6'],
     ['/services/leases', '/services/dhcp#leases'],
     ['/crons', '/system/crons'],
+    ['/system/ruleset', '/diagnostics/ruleset'],
     ['/system/certificates#providers', '/system/dns-providers'],
   ])('%s lands on %s', async (from, to) => {
     const router = (await import('@/router')).default

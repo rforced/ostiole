@@ -56,7 +56,7 @@ test('add a server beside the defaults, narrow serving, and apply', async ({ pag
   await applyAndConfirm(page)
 
   // Time requests reach the router whatever the zone's own rules say.
-  await sidebar(page, 'System', 'Ruleset')
+  await sidebar(page, 'Diagnostics', 'Ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const ruleset = page.getByLabel('confirmed ruleset')
   await expect(ruleset).toContainText('udp dport 123')

@@ -47,8 +47,8 @@ configuration: systemd-networkd, dnsmasq, unbound, chrony, miniupnpd, pppd and h
   new one does not start. The reverse proxy takes the new release's configuration on its own. What
   else a release renders differently waits for an apply, which the UI offers. The distribution's
   packages update on a schedule you set, all of them or only security fixes.
-- **Diagnostics:** ping and traceroute, the connection table, ARP and NDP, packet capture, the
-  journal, drive health from SMART, and a Hitron cable modem's status.
+- **Diagnostics:** ping and traceroute, the connection table, ARP and NDP, the rendered ruleset,
+  packet capture, the journal, drive health from SMART, and a Hitron cable modem's status.
 - **Web UI:** a setup wizard, a dashboard, light and dark themes, and a layout for phones.
 
 <table>

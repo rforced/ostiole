@@ -145,7 +145,7 @@ test('per-interface drop logging and source blocking', async ({ page }) => {
   // fe80::/10, and IPv6 needs neighbour discovery to work at all) and
   // before anything else that accepts. The bogon sets exist whether or
   // not the list has been fetched.
-  await page.goto('/system/ruleset')
+  await page.goto('/diagnostics/ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const text = await page.locator('pre').innerText()
   expect(text).toContain('set private_v4')

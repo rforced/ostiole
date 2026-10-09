@@ -28,7 +28,7 @@ test('join a tailnet, advertise the LAN, and apply', async ({ page }) => {
   await applyAndConfirm(page)
 
   // The port peers dial is open, and the rest comes from the zone.
-  await sidebar(page, 'System', 'Ruleset')
+  await sidebar(page, 'Diagnostics', 'Ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   await expect(page.getByLabel('confirmed ruleset')).toContainText('service:tailscale')
 

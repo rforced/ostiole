@@ -65,7 +65,7 @@ test('switch on UPnP, write an access list, and apply', async ({ page }) => {
 
   // The chains the daemon is pointed at are in Ostiole's own table, and
   // clients can reach the ports it answers on.
-  await sidebar(page, 'System', 'Ruleset')
+  await sidebar(page, 'Diagnostics', 'Ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const ruleset = page.getByLabel('confirmed ruleset')
   await expect(ruleset).toContainText('chain upnp_prerouting')

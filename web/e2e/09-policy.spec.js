@@ -61,7 +61,7 @@ test('group two gateways and route a rule through them', async ({ page }) => {
   await applyAndConfirm(page)
 
   // The ruleset gains a marking chain that runs before the routing decision.
-  await page.goto('/system/ruleset')
+  await page.goto('/diagnostics/ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const ruleset = page.locator('pre')
   await expect(ruleset).toContainText('chain policy_prerouting')
@@ -208,7 +208,7 @@ test('add a way out from a file and route a rule through it', async ({ page }) =
   await dialog.getByRole('button', { name: 'Save to draft' }).click()
   await applyAndConfirm(page)
 
-  await page.goto('/system/ruleset')
+  await page.goto('/diagnostics/ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const ruleset = page.locator('pre')
   await expect(ruleset).toContainText('comment "tunnel-nat:wg0"')

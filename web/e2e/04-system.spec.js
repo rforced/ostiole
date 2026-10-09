@@ -16,11 +16,11 @@ test('system settings, ruleset view, and rollback via revisions', async ({ page 
 
   await page.getByLabel('Hostname').fill('edge2')
   await expect(page.getByText('Unapplied changes.')).toBeVisible()
+  await page.screenshot({ path: shot('30-system'), fullPage: true })
   // The draft renders on its own page; moving in-app keeps it.
-  await sidebar(page, 'Ruleset')
+  await sidebar(page, 'Diagnostics', 'Ruleset')
   await page.getByRole('button', { name: 'Render the draft' }).click()
   await expect(page.getByLabel('draft ruleset')).toContainText('table inet ostiole')
-  await page.screenshot({ path: shot('30-system'), fullPage: true })
   await applyAndConfirm(page)
 
   // Roll back to the previous revision through the draft.
@@ -37,7 +37,7 @@ test('system settings, ruleset view, and rollback via revisions', async ({ page 
   await page.getByRole('button', { name: 'Discard' }).click()
   await expect(page.getByLabel('Hostname')).toHaveValue('edge2')
 
-  await sidebar(page, 'Ruleset')
+  await sidebar(page, 'Diagnostics', 'Ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   await expect(page.getByLabel('confirmed ruleset')).toContainText('anti-lockout:lan')
 })

@@ -29,6 +29,7 @@ const MOVED = [
   { path: '/services/leases', redirect: { path: '/services/dhcp', hash: '#leases' } },
   { path: '/crons', redirect: '/system/crons' },
   { path: '/system/backup', redirect: '/system/configuration' },
+  { path: '/system/ruleset', redirect: '/diagnostics/ruleset' },
 ]
 
 /** Tabs that became pages of their own; a link to the old tab still lands. */

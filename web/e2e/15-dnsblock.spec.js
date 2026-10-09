@@ -124,7 +124,7 @@ test('enforcement renders firewall rules that keep clients on this resolver', as
 
   await applyAndConfirm(page)
 
-  await page.goto('/system/ruleset')
+  await page.goto('/diagnostics/ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const ruleset = page.locator('pre')
   await expect(ruleset).toContainText('chain block_dns')
@@ -158,7 +158,7 @@ test('a destination exception lets one address through the DoH block', async ({ 
   await applyAndConfirm(page)
 
   // The exception returns before the block, and before the redirect.
-  await page.goto('/system/ruleset')
+  await page.goto('/diagnostics/ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const ruleset = page.locator('pre')
   await expect(ruleset).toContainText(
@@ -224,7 +224,7 @@ test('turning the lists off leaves enforcement in force and says why a refresh f
 
   // Enforcement is its own setting: the rules the previous test put in
   // place are still there with the lists off.
-  await page.goto('/system/ruleset')
+  await page.goto('/diagnostics/ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const ruleset = page.locator('pre')
   await expect(ruleset).toContainText('chain block_dns')

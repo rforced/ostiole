@@ -280,7 +280,6 @@ export const NAV = [
         needsConfig: true,
       },
       { path: 'crons', label: 'Cron jobs', view: () => import('@/views/system/CronsPage.vue') },
-      { path: 'ruleset', label: 'Ruleset', view: () => import('@/views/system/RulesetPage.vue') },
     ],
   },
   {
@@ -302,6 +301,11 @@ export const NAV = [
         path: 'neighbours',
         label: 'ARP and NDP',
         view: () => import('@/views/diagnostics/NeighboursPage.vue'),
+      },
+      {
+        path: 'ruleset',
+        label: 'Ruleset',
+        view: () => import('@/views/diagnostics/RulesetPage.vue'),
       },
       {
         path: 'capture',

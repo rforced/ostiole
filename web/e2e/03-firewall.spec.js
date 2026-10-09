@@ -182,7 +182,7 @@ test('schedule a rule, reflect a port forward, and map an address 1:1', async ({
   await applyAndConfirm(page)
 
   // The rendered ruleset carries all three.
-  await page.goto('/system/ruleset')
+  await page.goto('/diagnostics/ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const ruleset = page.locator('pre')
   await expect(ruleset).toContainText('meta day { "Monday", "Tuesday" } meta hour "08:30"-"17:30"')
@@ -207,7 +207,7 @@ test('flood and scan protection render into the ruleset', async ({ page }) => {
   await page.screenshot({ path: shot('35-protection'), fullPage: true })
   await applyAndConfirm(page)
 
-  await page.goto('/system/ruleset')
+  await page.goto('/diagnostics/ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const ruleset = page.locator('pre')
   await expect(ruleset).toContainText('set synflood_wan_v4')

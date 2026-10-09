@@ -74,7 +74,7 @@ test('a line speed and a priority reach the kernel', async ({ page }) => {
 
   // The tier is set in the verdict of the rule that admits the flow, and
   // put back on every later packet of it from the connection.
-  await page.goto('/system/ruleset')
+  await page.goto('/diagnostics/ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const ruleset = page.locator('pre')
   await expect(ruleset).toContainText('meta mark set meta mark & 0xf8ffffff | 0x04000000')
