@@ -48,6 +48,20 @@ function optional(key) {
 const hostname = optional('hostname')
 const loginServer = optional('loginServer')
 
+/** A switch the model leaves out when it is off. */
+function flag(key) {
+  return computed({
+    get: () => Boolean(ts.value?.[key]),
+    set: (on) => {
+      if (on) ts.value[key] = true
+      else delete ts.value[key]
+    },
+  })
+}
+const advertiseExitNode = flag('advertiseExitNode')
+const acceptRoutes = flag('acceptRoutes')
+const logUploads = flag('logUploads')
+
 const port = computed({
   get: () => ts.value?.port ?? 0,
   set: (v) => {
@@ -168,13 +182,13 @@ function addZone(zone) {
             </div>
           </div>
           <ToggleRow
-            v-model="ts.advertiseExitNode"
+            v-model="advertiseExitNode"
             label="Advertise as exit node"
             hint="Tailnet devices reach the internet through this router. Needs a rule from its
               zone to an external zone."
           />
           <ToggleRow
-            v-model="ts.acceptRoutes"
+            v-model="acceptRoutes"
             label="Accept routes"
             hint="Other nodes' networks become routes on this router."
           />
@@ -205,7 +219,7 @@ function addZone(zone) {
           <fieldset class="field-group">
             <legend>Privacy</legend>
             <ToggleRow
-              v-model="ts.logUploads"
+              v-model="logUploads"
               label="Log uploads"
               hint="Off keeps the daemon's logs on this router. Tailscale support cannot help
                 without them."
