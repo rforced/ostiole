@@ -954,7 +954,7 @@ export const useConfigStore = defineStore('config', () => {
       for (const p of s.paths ?? []) if (p.pool === previousId) p.pool = pool.id
     }
   }
-  const upsertSite = (site, previousId) => upsertIn('sites', site, previousId)
+  const upsertSite = (site, previousId = site.id) => upsertIn('sites', site, previousId)
   function upsertProfile(profile, previousId = profile.id) {
     upsertIn('wafProfiles', profile, previousId)
     if (previousId === profile.id) return
@@ -1417,12 +1417,12 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   /** A renamed certificate keeps the sites and the web UI that serve it. */
-  function upsertCertificate(cert, was) {
+  function upsertCertificate(cert, was = cert.id) {
     const list = draft.value.certificates ?? (draft.value.certificates = [])
-    const idx = list.findIndex((c) => c.id === (was ?? cert.id))
+    const idx = list.findIndex((c) => c.id === was)
     if (idx === -1) list.push(clone(cert))
     else list[idx] = clone(cert)
-    if (!was || was === cert.id) return
+    if (was === cert.id) return
     const m = draft.value.system?.management
     if (m?.certificate === was) m.certificate = cert.id
     for (const s of draft.value.services?.proxy?.sites ?? [])
@@ -1448,10 +1448,10 @@ export const useConfigStore = defineStore('config', () => {
     return out
   }
 
-  function upsertAcmeAccount(account, was) {
+  function upsertAcmeAccount(account, was = account.id) {
     const acme = ensureACME()
     const list = acme.accounts ?? (acme.accounts = [])
-    const idx = list.findIndex((a) => a.id === (was ?? account.id))
+    const idx = list.findIndex((a) => a.id === was)
     if (idx === -1) list.push(clone(account))
     else list[idx] = clone(account)
   }
@@ -1467,9 +1467,9 @@ export const useConfigStore = defineStore('config', () => {
     return certificates.value.filter((c) => c.account === id).map((c) => c.id)
   }
 
-  function upsertDnsProvider(provider, was) {
+  function upsertDnsProvider(provider, was = provider.id) {
     const list = draft.value.dnsProviders ?? (draft.value.dnsProviders = [])
-    const idx = list.findIndex((p) => p.id === (was ?? provider.id))
+    const idx = list.findIndex((p) => p.id === was)
     if (idx === -1) list.push(clone(provider))
     else list[idx] = clone(provider)
   }
