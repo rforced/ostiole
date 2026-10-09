@@ -202,6 +202,15 @@ func TestSystemRulesDNSEnforcement(t *testing.T) {
 			t.Errorf("%s setting = %q", want, r.Setting)
 		}
 	}
+	for want, dest := range map[string]string{
+		"DNS over TLS":                       "not @resolver_allowed : 853",
+		"DNS over HTTPS servers":             "@doh_servers not @resolver_allowed",
+		"Forward DNS queries to this router": "not this router or @resolver_allowed : 53",
+	} {
+		if r, ok := findRow(rows, want); ok && r.Destination != dest {
+			t.Errorf("%s destination = %q, want %q", want, r.Destination, dest)
+		}
+	}
 }
 
 // Time is served on every enabled interface outside an external zone,

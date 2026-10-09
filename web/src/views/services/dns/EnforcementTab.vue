@@ -16,9 +16,11 @@ const dnsOn = computed(() => Boolean(config.draft?.services?.dns?.enabled))
 /** Aliases that hold addresses; port aliases are no use here. */
 const addressAliases = computed(() => config.aliases.filter((a) => a.type !== 'ports'))
 
-/** A published list of the addresses public DoH resolvers answer on. */
-const DOH_LIST_URL =
-  'https://raw.githubusercontent.com/dibdot/DoH-IP-blocklists/master/doh-ipv4.txt'
+/** Published lists of the addresses public DoH resolvers answer on, IPv4 and IPv6. */
+const DOH_LIST_URLS = [
+  'https://raw.githubusercontent.com/dibdot/DoH-IP-blocklists/refs/heads/master/doh-ipv4.txt',
+  'https://raw.githubusercontent.com/dibdot/DoH-IP-blocklists/refs/heads/master/doh-ipv6.txt',
+]
 
 /** Empty string in a select means "none", which the model wants absent. */
 function aliasField(key) {
@@ -32,7 +34,8 @@ function aliasField(key) {
 }
 
 const dohAlias = aliasField('dohAlias')
-const exemptAlias = aliasField('exemptAlias')
+const exemptClients = aliasField('exemptClients')
+const exemptDestinations = aliasField('exemptDestinations')
 </script>
 
 <template>
@@ -76,15 +79,27 @@ const exemptAlias = aliasField('exemptAlias')
           </select>
         </FormField>
         <p class="text-ink-muted">
-          A published list of those addresses:
-          <span class="font-mono break-all">{{ DOH_LIST_URL }}</span>
+          Published lists of those addresses:
+          <span v-for="url in DOH_LIST_URLS" :key="url" class="block font-mono break-all">{{
+            url
+          }}</span>
         </p>
         <FormField
-          id="enf-exempt"
+          id="enf-exempt-clients"
           label="Except these clients"
-          hint="Addresses in this alias are left alone by everything above, so nothing is blocked for them."
+          hint="Clients whose own address is in this alias are left alone by everything above. To let a blocked site through, use Except these destinations."
         >
-          <select id="enf-exempt" v-model="exemptAlias" class="input">
+          <select id="enf-exempt-clients" v-model="exemptClients" class="input">
+            <option value="">None</option>
+            <option v-for="a in addressAliases" :key="a.name" :value="a.name">{{ a.name }}</option>
+          </select>
+        </FormField>
+        <FormField
+          id="enf-exempt-destinations"
+          label="Except these destinations"
+          hint="Traffic to addresses in this alias is left alone by everything above. Keep it narrow: a cloud range lets every DoH server inside it through."
+        >
+          <select id="enf-exempt-destinations" v-model="exemptDestinations" class="input">
             <option value="">None</option>
             <option v-for="a in addressAliases" :key="a.name" :value="a.name">{{ a.name }}</option>
           </select>

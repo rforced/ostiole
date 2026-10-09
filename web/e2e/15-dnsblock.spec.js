@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 
 import { expect, test } from './fixtures.js'
-import { applyAndConfirm, login, shot } from './helpers.js'
+import { applyAndConfirm, login, reconfigure, shot } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -130,6 +130,47 @@ test('enforcement renders firewall rules that keep clients on this resolver', as
   await expect(ruleset).toContainText('chain block_dns')
   await expect(ruleset).toContainText('th dport 853 counter drop comment "block:dot"')
   await expect(ruleset).toContainText('redirect to :53 comment "block:dns-redirect"')
+})
+
+test('a destination exception lets one address through the DoH drop', async ({ page }) => {
+  await login(page)
+  // A site that shares a range with the DoH servers.
+  await reconfigure(page.request, (config) => {
+    config.aliases = [
+      ...(config.aliases ?? []),
+      { name: 'doh_servers', type: 'hosts', entries: ['198.51.100.0/24'] },
+      { name: 'work_site', type: 'hosts', entries: ['198.51.100.7'] },
+    ]
+  })
+  await page.goto('/services/dns#enforcement')
+
+  const doh = page.getByLabel('Drop traffic to DNS over HTTPS servers', { exact: true })
+  const destinations = page.getByLabel('Except these destinations', { exact: true })
+  await doh.selectOption('doh_servers')
+  await destinations.selectOption('work_site')
+  await expect(doh).toHaveValue('doh_servers')
+  await expect(destinations).toHaveValue('work_site')
+  await expect(page.getByLabel('Except these clients', { exact: true })).toHaveValue('')
+  await page.screenshot({ path: shot('52-dnsblock-exceptions'), fullPage: true })
+
+  await applyAndConfirm(page)
+
+  // The exception returns before the drop, and before the redirect.
+  await page.goto('/system/ruleset')
+  await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
+  const ruleset = page.locator('pre')
+  await expect(ruleset).toContainText(
+    /ip daddr @alias_work_site_v4 counter return comment "block:exempt-dst"[\s\S]*ip daddr @alias_doh_servers_v4 counter drop comment "block:doh"/,
+  )
+  await expect(ruleset).toContainText(
+    /ip daddr @alias_work_site_v4 counter return comment "block:dns-exempt-dst"[\s\S]*comment "block:dns-redirect"/,
+  )
+
+  await page.goto('/firewall/rules#lan')
+  const dohRow = page.getByRole('row').filter({ hasText: 'DNS over HTTPS servers' })
+  await expect(dohRow).toContainText('@doh_servers not @work_site')
+  const dotRow = page.getByRole('row').filter({ hasText: 'DNS over TLS' })
+  await expect(dotRow).toContainText('not @work_site : 853')
 })
 
 test('a refresh shows it is working and says what it did', async ({ page }) => {

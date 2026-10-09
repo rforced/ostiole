@@ -33,10 +33,9 @@ func (r *renderer) redirectsDNS() bool {
 	return r.cfg.Services.DNS.Enabled && r.cfg.Blocking.Enforce.RedirectDNS
 }
 
-// exemptMatches are the "this client is allowed to resolve for itself"
-// matches, one per address family the alias has.
-func (r *renderer) exemptMatches(dir string) []string {
-	name := r.cfg.Blocking.Enforce.ExemptAlias
+// exemptMatches match dir against the named exempt alias, one per address
+// family the alias has.
+func (r *renderer) exemptMatches(name, dir string) []string {
 	if name == "" {
 		return nil
 	}
@@ -65,7 +64,8 @@ func (r *renderer) chainBlockDNS() {
 	}
 	e := r.cfg.Blocking.Enforce
 	// The rows are scoped to where forward jumps here from; the exempt
-	// clients return first, so to the reader they are left out of the source.
+	// clients and destinations return first, so to the reader they are left
+	// out of the source and the destination.
 	internal := r.internalInterfaces()
 	// One chain serves every internal zone, so the log statement carries the
 	// interfaces whose zone logs its drops and the drop below it does not.
@@ -78,8 +78,11 @@ func (r *renderer) chainBlockDNS() {
 		loud = ifnameSet(logging)
 	}
 	r.block("chain "+BlockChain, func() {
-		for _, m := range r.exemptMatches("saddr") {
+		for _, m := range r.exemptMatches(e.ExemptClients, "saddr") {
 			r.line(fmt.Sprintf(`%s counter return comment "block:exempt"`, m))
+		}
+		for _, m := range r.exemptMatches(e.ExemptDestinations, "daddr") {
+			r.line(fmt.Sprintf(`%s counter return comment "block:exempt-dst"`, m))
 		}
 		if e.BlockDoT {
 			match := fmt.Sprintf("meta l4proto { tcp, udp } th dport %d", DoTPort)
@@ -89,7 +92,7 @@ func (r *renderer) chainBlockDNS() {
 			r.line(fmt.Sprintf(`%s counter drop comment "block:dot"`, match))
 			r.sysFor(internal, SystemRule{
 				Chain: BlockChain, Action: "drop", Protocol: string(model.ProtocolTCPUDP),
-				Source: r.exemptSource(), Destination: fmt.Sprintf("any : %d", DoTPort),
+				Source: r.exemptSource(), Destination: r.exemptDestination(fmt.Sprintf("any : %d", DoTPort)),
 				Description: "DNS over TLS", Log: logs,
 				Keys: []string{BlockChain + "/block:dot"}, LogKeys: logKeys(logs, BlockChain+"/log:block-dot"),
 				Setting: "enforcement",
@@ -117,7 +120,7 @@ func (r *renderer) chainBlockDNS() {
 				if emitted {
 					r.sysFor(internal, SystemRule{
 						Chain: BlockChain, Action: "drop", Protocol: string(model.ProtocolAny),
-						Source: r.exemptSource(), Destination: "@" + a.Name,
+						Source: r.exemptSource(), Destination: r.exemptDestination("@" + a.Name),
 						Description: "DNS over HTTPS servers", Log: logs,
 						Keys: []string{BlockChain + "/block:doh"}, LogKeys: logKeys(logs, BlockChain+"/log:block-doh"),
 						Setting: "enforcement",
@@ -159,15 +162,19 @@ func (r *renderer) dnsRedirect() {
 		return
 	}
 	set := ifnameSet(ifs)
-	for _, m := range r.exemptMatches("saddr") {
+	e := r.cfg.Blocking.Enforce
+	for _, m := range r.exemptMatches(e.ExemptClients, "saddr") {
 		r.line(fmt.Sprintf(`iifname %s %s counter return comment "block:dns-exempt"`, set, m))
+	}
+	for _, m := range r.exemptMatches(e.ExemptDestinations, "daddr") {
+		r.line(fmt.Sprintf(`iifname %s %s counter return comment "block:dns-exempt-dst"`, set, m))
 	}
 	r.line(fmt.Sprintf(
 		`iifname %s meta l4proto { tcp, udp } th dport 53 fib daddr type != local counter redirect to :53 comment "block:dns-redirect"`,
 		set))
 	r.sysFor(ifs, SystemRule{
 		Chain: "nat_prerouting", Action: "redirect", Protocol: string(model.ProtocolTCPUDP),
-		Source: r.exemptSource(), Destination: "not this router : 53",
+		Source: r.exemptSource(), Destination: r.exemptDestination("not this router : 53"),
 		Description: "Forward DNS queries to this router",
 		Keys:        []string{"nat_prerouting/block:dns-redirect"}, Setting: "enforcement",
 	})

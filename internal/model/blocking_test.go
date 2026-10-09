@@ -121,6 +121,34 @@ func TestRedirectNeedsTheDNSServer(t *testing.T) {
 	}
 }
 
+// Both exceptions name an alias of addresses, and one alias may be both: a
+// machine left to resolve for itself and the resolver it asks.
+func TestEnforcementExceptionsNameAddressAliases(t *testing.T) {
+	c := starterForBlocking()
+	c.Aliases = []Alias{
+		{Name: "resolver_allowed", Type: AliasHosts, Entries: []string{"192.168.1.9", "203.0.113.53"}},
+		{Name: "web_ports", Type: AliasPorts, Entries: []string{"443"}},
+	}
+	for _, tc := range []struct {
+		enforce DNSEnforce
+		want    string
+	}{
+		{DNSEnforce{ExemptClients: "missing"}, `blocking.enforce.exemptClients: unknown alias "missing"`},
+		{DNSEnforce{ExemptDestinations: "missing"}, `blocking.enforce.exemptDestinations: unknown alias "missing"`},
+		{DNSEnforce{ExemptClients: "web_ports"}, `blocking.enforce.exemptClients: alias "web_ports" holds ports, not addresses`},
+		{DNSEnforce{ExemptDestinations: "web_ports"}, `blocking.enforce.exemptDestinations: alias "web_ports" holds ports, not addresses`},
+	} {
+		c.Blocking.Enforce = tc.enforce
+		if err := c.Validate(); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%+v: %v, want %s", tc.enforce, err, tc.want)
+		}
+	}
+	c.Blocking.Enforce = DNSEnforce{ExemptClients: "resolver_allowed", ExemptDestinations: "resolver_allowed"}
+	if err := c.Validate(); err != nil {
+		t.Errorf("the same alias in both was refused: %v", err)
+	}
+}
+
 // starterForBlocking is the first configuration `ostiole init` writes, with
 // the DNS server on and blocking turned on over it.
 func starterForBlocking() *Config {

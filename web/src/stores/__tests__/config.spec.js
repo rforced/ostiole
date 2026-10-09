@@ -914,24 +914,58 @@ describe('config store WireGuard peers', () => {
 describe('config store aliases', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
-  it('renames an alias in the DNS blocking settings too', () => {
-    const config = useConfigStore()
-    config.replaceDraft({
-      version: 11,
+  function enforced() {
+    return {
+      version: 14,
       zones: [],
       interfaces: [],
       rules: [],
       aliases: [
         { name: 'doh', type: 'hosts', entries: ['9.9.9.9'] },
         { name: 'kids', type: 'hosts', entries: ['192.168.1.20'] },
+        { name: 'cloud', type: 'hosts', entries: ['198.51.100.0/24'] },
       ],
-      blocking: { enforce: { dohAlias: 'doh', exemptAlias: 'kids' } },
-    })
+      blocking: {
+        enforce: { dohAlias: 'doh', exemptClients: 'kids', exemptDestinations: 'cloud' },
+      },
+    }
+  }
+
+  it('renames an alias in the DNS blocking settings too', () => {
+    const config = useConfigStore()
+    config.replaceDraft(enforced())
     config.upsertAlias({ name: 'doh_servers', type: 'hosts', entries: ['9.9.9.9'] }, 'doh')
     config.upsertAlias({ name: 'grown_ups', type: 'hosts', entries: ['192.168.1.20'] }, 'kids')
+    config.upsertAlias({ name: 'work_cloud', type: 'hosts', entries: ['198.51.100.0/24'] }, 'cloud')
     expect(config.draft.blocking.enforce).toEqual({
       dohAlias: 'doh_servers',
-      exemptAlias: 'grown_ups',
+      exemptClients: 'grown_ups',
+      exemptDestinations: 'work_cloud',
+    })
+  })
+
+  it('names the DNS blocking setting that uses an alias', () => {
+    const config = useConfigStore()
+    config.replaceDraft(enforced())
+    expect(config.aliasReferences('doh')).toEqual(['DNS blocking: DoH servers'])
+    expect(config.aliasReferences('kids')).toEqual(['DNS blocking: exempt clients'])
+    expect(config.aliasReferences('cloud')).toEqual(['DNS blocking: exempt destinations'])
+  })
+
+  it('names both exceptions when one alias is in each', () => {
+    const config = useConfigStore()
+    const d = enforced()
+    d.blocking.enforce.exemptDestinations = 'kids'
+    config.replaceDraft(d)
+    expect(config.aliasReferences('kids')).toEqual([
+      'DNS blocking: exempt clients',
+      'DNS blocking: exempt destinations',
+    ])
+    config.upsertAlias({ name: 'grown_ups', type: 'hosts', entries: ['192.168.1.20'] }, 'kids')
+    expect(config.draft.blocking.enforce).toEqual({
+      dohAlias: 'doh',
+      exemptClients: 'grown_ups',
+      exemptDestinations: 'grown_ups',
     })
   })
 })

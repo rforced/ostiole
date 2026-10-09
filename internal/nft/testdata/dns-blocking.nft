@@ -28,6 +28,20 @@ table inet ostiole {
 		comment "The one machine allowed to resolve for itself"
 		elements = { 2001:db8:1::9 }
 	}
+	set alias_resolver_allowed_v4 {
+		type ipv4_addr
+		flags interval
+		auto-merge
+		comment "Resolvers clients may ask directly"
+		elements = { 203.0.113.0/24 }
+	}
+	set alias_resolver_allowed_v6 {
+		type ipv6_addr
+		flags interval
+		auto-merge
+		comment "Resolvers clients may ask directly"
+		elements = { 2001:db8:53::/64 }
+	}
 	chain input {
 		type filter hook input priority filter; policy drop;
 		iifname "lo" accept
@@ -66,6 +80,8 @@ table inet ostiole {
 	chain block_dns {
 		ip saddr @alias_resolver_exempt_v4 counter return comment "block:exempt"
 		ip6 saddr @alias_resolver_exempt_v6 counter return comment "block:exempt"
+		ip daddr @alias_resolver_allowed_v4 counter return comment "block:exempt-dst"
+		ip6 daddr @alias_resolver_allowed_v6 counter return comment "block:exempt-dst"
 		meta l4proto { tcp, udp } th dport 853 counter drop comment "block:dot"
 		ip daddr @alias_doh_servers_v4 counter drop comment "block:doh"
 		ip6 daddr @alias_doh_servers_v6 counter drop comment "block:doh"
@@ -74,6 +90,8 @@ table inet ostiole {
 		type nat hook prerouting priority dstnat; policy accept;
 		iifname "eth1" ip saddr @alias_resolver_exempt_v4 counter return comment "block:dns-exempt"
 		iifname "eth1" ip6 saddr @alias_resolver_exempt_v6 counter return comment "block:dns-exempt"
+		iifname "eth1" ip daddr @alias_resolver_allowed_v4 counter return comment "block:dns-exempt-dst"
+		iifname "eth1" ip6 daddr @alias_resolver_allowed_v6 counter return comment "block:dns-exempt-dst"
 		iifname "eth1" meta l4proto { tcp, udp } th dport 53 fib daddr type != local counter redirect to :53 comment "block:dns-redirect"
 	}
 	chain nat_postrouting {

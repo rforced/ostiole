@@ -113,9 +113,10 @@ type DNSEnforce struct {
 	// how Firefox is asked not to turn DoH on by itself. It is a dnsmasq
 	// entry, so it does nothing while the DNS server is off.
 	FirefoxCanary bool `json:"firefoxCanary,omitempty"`
-	// ExemptAlias names a host alias of clients left alone by all of the
-	// above: the one machine that is allowed to resolve for itself.
-	ExemptAlias string `json:"exemptAlias,omitempty"`
+	// ExemptClients names a host alias of clients left alone by all of the above.
+	ExemptClients string `json:"exemptClients,omitempty"`
+	// ExemptDestinations names a host alias of destinations left alone by all of the above.
+	ExemptDestinations string `json:"exemptDestinations,omitempty"`
 }
 
 // MaxBlockedDomains is the most the merged blocklist may ever come to,

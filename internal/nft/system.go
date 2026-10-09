@@ -181,10 +181,33 @@ func firewallDest(ports []string) string {
 // exemptSource is the source text of a DNS enforcement row: the exempt
 // clients return before the rule, so to the reader they are excluded.
 func (r *renderer) exemptSource() string {
-	if len(r.exemptMatches("saddr")) == 0 {
+	name := r.cfg.Blocking.Enforce.ExemptClients
+	if len(r.exemptMatches(name, "saddr")) == 0 {
 		return "any"
 	}
-	return "not @" + r.cfg.Blocking.Enforce.ExemptAlias
+	return "not @" + name
+}
+
+// exemptDestination is base, the destination text of a DNS enforcement row,
+// with the exempt destinations excluded: they return before the rule.
+func (r *renderer) exemptDestination(base string) string {
+	name := r.cfg.Blocking.Enforce.ExemptDestinations
+	if len(r.exemptMatches(name, "daddr")) == 0 {
+		return base
+	}
+	addr, ports, hasPorts := strings.Cut(base, " : ")
+	switch {
+	case addr == "any":
+		addr = "not @" + name
+	case strings.HasPrefix(addr, "not "):
+		addr += " or @" + name
+	default:
+		addr += " not @" + name
+	}
+	if hasPorts {
+		return addr + " : " + ports
+	}
+	return addr
 }
 
 // zoneLogsDrops reports whether a packet this firewall drops in the zone is

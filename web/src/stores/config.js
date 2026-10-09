@@ -474,7 +474,8 @@ export const useConfigStore = defineStore('config', () => {
         if (e.allowFrom) e.allowFrom = e.allowFrom.map((f) => (f === previousName ? alias.name : f))
       const enforce = draft.value.blocking?.enforce
       if (enforce?.dohAlias === previousName) enforce.dohAlias = alias.name
-      if (enforce?.exemptAlias === previousName) enforce.exemptAlias = alias.name
+      if (enforce?.exemptClients === previousName) enforce.exemptClients = alias.name
+      if (enforce?.exemptDestinations === previousName) enforce.exemptDestinations = alias.name
     }
   }
 
@@ -487,7 +488,8 @@ export const useConfigStore = defineStore('config', () => {
     }
     const enforce = draft.value?.blocking?.enforce ?? {}
     if (enforce.dohAlias === name) refs.push('DNS blocking: DoH servers')
-    if (enforce.exemptAlias === name) refs.push('DNS blocking: exempt clients')
+    if (enforce.exemptClients === name) refs.push('DNS blocking: exempt clients')
+    if (enforce.exemptDestinations === name) refs.push('DNS blocking: exempt destinations')
     const proxy = draft.value?.services?.proxy ?? {}
     for (const a of proxy.access ?? [])
       if (a.source?.alias === name) refs.push(`proxy access rule ${a.description || a.id}`)
