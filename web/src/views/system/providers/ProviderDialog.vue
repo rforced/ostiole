@@ -78,7 +78,9 @@ function built() {
   const domains = [...new Set(parseList(f.domains).map((d) => d.toLowerCase()))]
   if (domains.length) out.domains = domains
   // Only the chosen kind's fields go into the draft; a setting left over
-  // from another kind is refused by the server.
+  // from another kind is refused by the server. Until the kinds have
+  // loaded, what was stored stays.
+  if (!kind.value) out.settings = { ...f.settings }
   for (const field of fields.value) {
     const value = f.settings[field.key]
     if (value) out.settings[field.key] = value
