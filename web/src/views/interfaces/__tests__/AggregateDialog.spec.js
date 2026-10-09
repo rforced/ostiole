@@ -41,6 +41,7 @@ describe('AggregateDialog', () => {
         { name: 'bond0', ...port, bond: { members: ['eth1', 'eth2'], mode: 'active-backup' } },
       ],
     })
+    const before = JSON.stringify(config.draft)
     const wrapper = mount(AggregateDialog, {
       props: { open: true, kind: 'bond', candidates: [], iface: config.findInterface('bond0') },
       global: { stubs },
@@ -51,5 +52,6 @@ describe('AggregateDialog', () => {
       members: ['eth1', 'eth2'],
       mode: 'active-backup',
     })
+    expect(JSON.stringify(config.draft)).toBe(before)
   })
 })

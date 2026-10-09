@@ -167,12 +167,9 @@ function save() {
   for (const m of f.members) {
     const member = config.findInterface(m)
     if (!member) continue
-    config.upsertInterface({
-      ...member,
-      zone: '',
-      ipv4: { mode: 'none' },
-      ipv6: { mode: 'none' },
-    })
+    const port = { ...member, ipv4: { mode: 'none' }, ipv6: { mode: 'none' } }
+    delete port.zone
+    config.upsertInterface(port)
   }
   config.upsertInterface(iface)
   open.value = false
