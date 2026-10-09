@@ -131,7 +131,11 @@ function edit(index) {
         </fieldset>
 
         <div class="fields fields-card">
-          <FormField id="upnp-ext" label="External interface" hint="Where a mapped port is opened.">
+          <FormField
+            id="upnp-ext"
+            label="External interface"
+            hint="Required while UPnP is on. Only an interface in an external zone will do."
+          >
             <select id="upnp-ext" v-model="externalInterface" class="input font-mono">
               <option value="">Choose</option>
               <option v-if="stale" :value="stale.name">{{ stale.name }} ({{ stale.why }})</option>

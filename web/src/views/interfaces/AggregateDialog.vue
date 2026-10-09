@@ -52,6 +52,13 @@ const title = computed(() =>
   props.iface ? `${isBond.value ? 'Bond' : 'Bridge'} ${props.iface.name}` : `Add ${props.kind}`,
 )
 
+/** The kernel checks an 802.3ad or adaptive bond's members even at 0. */
+const miiHint = computed(() =>
+  ['802.3ad', 'balance-tlb', 'balance-alb'].includes(form.value.mode)
+    ? '100 is the default.'
+    : '100 is the default. 0 turns the check off.',
+)
+
 /** Links already claimed by another bridge or bond, or carrying addresses. */
 const taken = computed(() => {
   const out = new Map()
@@ -232,11 +239,7 @@ function save() {
           </select>
         </FormField>
         <div class="fields">
-          <FormField
-            id="agg-mii"
-            label="Link check interval (ms)"
-            hint="How often members are checked for carrier. 0 turns it off."
-          >
+          <FormField id="agg-mii" label="Link check interval (ms)" :hint="miiHint">
             <input
               id="agg-mii"
               v-model.number="form.miiMonitorMs"
@@ -261,7 +264,7 @@ function save() {
             v-if="['802.3ad', 'balance-xor', 'balance-tlb', 'balance-alb'].includes(form.mode)"
             id="agg-hash"
             label="Transmit hash policy"
-            hint="Which member a flow takes."
+            hint="The kernel default, layer2, keeps each neighbour on one member. layer3+4 spreads connections across them."
           >
             <select id="agg-hash" v-model="form.transmitHashPolicy" class="input">
               <option value="">Kernel default</option>

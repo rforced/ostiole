@@ -248,7 +248,7 @@ function save() {
           <FormField
             id="cert-profile"
             label="Profile"
-            hint="What the CA offers. Addresses need shortlived, six days."
+            hint="A certificate with an address is always shortlived, six days."
           >
             <select id="cert-profile" v-model="form.profile" class="input" :disabled="hasAddress">
               <option v-for="p in PROFILES" :key="p.value" :value="p.value">{{ p.label }}</option>

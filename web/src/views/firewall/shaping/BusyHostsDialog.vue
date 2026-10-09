@@ -111,7 +111,7 @@ function save() {
         <FormField
           id="busy-priority"
           label="Priority"
-          hint="Where the connections past the limit go. The ones already open keep what they had."
+          hint="Bulk is the default. Connections under the limit keep the priority they had."
         >
           <select id="busy-priority" v-model="form.priority" class="input" required>
             <option v-for="t in TIERS" :key="t.value" :value="t.value">

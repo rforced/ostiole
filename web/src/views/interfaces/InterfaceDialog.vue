@@ -299,7 +299,7 @@ function save() {
           <FormField
             id="if-v6-subnet"
             label="Subnet"
-            hint="Which /64 of that prefix this interface takes. Each one needs its own."
+            hint="0, the first /64 of the prefix, is the default. No two interfaces on one prefix take the same one."
           >
             <input
               id="if-v6-subnet"
