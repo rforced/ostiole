@@ -56,7 +56,7 @@ onMounted(load.run)
         <!-- No submit button, so Enter in a field is wired by hand. -->
         <form class="form-row" @submit.prevent="load.run()" @keydown.enter.prevent="load.run()">
           <FormField id="jr-unit" label="Unit">
-            <select id="jr-unit" v-model="unit" class="input w-56 max-sm:w-full">
+            <select id="jr-unit" v-model="unit" class="input w-48 max-sm:w-full">
               <option v-for="u in UNITS" :key="u.value" :value="u.value">{{ u.label }}</option>
             </select>
           </FormField>
@@ -68,12 +68,12 @@ onMounted(load.run)
             <input
               id="jr-since"
               v-model="since"
-              class="input w-40 font-mono max-sm:w-full"
+              class="input w-48 font-mono max-sm:w-full"
               spellcheck="false"
             />
           </FormField>
           <FormField id="jr-prio" label="Level">
-            <select id="jr-prio" v-model="priority" class="input w-40 max-sm:w-full">
+            <select id="jr-prio" v-model="priority" class="input w-48 max-sm:w-full">
               <option value="">Everything</option>
               <option value="4">Warnings and worse</option>
               <option value="3">Errors and worse</option>
@@ -86,7 +86,7 @@ onMounted(load.run)
               type="number"
               min="1"
               max="2000"
-              class="input w-28 font-mono max-sm:w-full"
+              class="input w-32 font-mono max-sm:w-full"
             />
           </FormField>
         </form>

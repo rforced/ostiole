@@ -206,7 +206,7 @@ function explain(name) {
         />
       </template>
       <div class="card-strip-row">
-        <select v-model="filter.status" class="input w-40 max-sm:w-full" aria-label="Status">
+        <select v-model="filter.status" class="input w-48 max-sm:w-full" aria-label="Status">
           <option value="">Any status</option>
           <option value="blocked">Blocked</option>
           <option value="ok">Answered</option>
@@ -214,7 +214,7 @@ function explain(name) {
           <option value="nodata">No data</option>
           <option value="servfail">Failed</option>
         </select>
-        <select v-model="filter.list" class="input w-40 max-sm:w-full" aria-label="List">
+        <select v-model="filter.list" class="input w-48 max-sm:w-full" aria-label="List">
           <option value="">Any list</option>
           <option v-for="l in lists" :key="l.name" :value="l.name">{{ l.name }}</option>
         </select>

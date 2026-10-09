@@ -163,12 +163,12 @@ const empty = computed(() => {
 
     <template v-if="running">
       <div class="flex flex-wrap items-center gap-3">
-        <select v-model="win" class="input w-36 max-sm:w-full" aria-label="Window">
+        <select v-model="win" class="input w-48 max-sm:w-full" aria-label="Window">
           <option v-for="w in DESTINATION_WINDOWS" :key="w.value" :value="w.value">
             {{ w.label }}
           </option>
         </select>
-        <select v-model="device" class="input w-56 max-sm:w-full" aria-label="Device">
+        <select v-model="device" class="input w-48 max-sm:w-full" aria-label="Device">
           <option value="">All devices</option>
           <option v-for="d in devices" :key="d.id" :value="d.id">{{ deviceLabel(d) }}</option>
         </select>

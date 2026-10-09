@@ -139,7 +139,7 @@ function rate(limit) {
         <FormField id="prot-syn-rate" label="Connections" hint="From one source.">
           <input
             id="prot-syn-rate"
-            class="input w-28 max-sm:w-full"
+            class="input w-32 max-sm:w-full"
             type="number"
             min="1"
             :value="protection.synFlood.rate"
@@ -149,7 +149,7 @@ function rate(limit) {
         <FormField id="prot-syn-unit" label="Period">
           <select
             id="prot-syn-unit"
-            class="input w-40 max-sm:w-full"
+            class="input w-48 max-sm:w-full"
             :value="protection.synFlood.unit || 'second'"
             @change="config.setDefence('synFlood', { unit: $event.target.value })"
           >
@@ -163,7 +163,7 @@ function rate(limit) {
         >
           <input
             id="prot-syn-burst"
-            class="input w-28 max-sm:w-full"
+            class="input w-32 max-sm:w-full"
             type="number"
             min="0"
             :value="protection.synFlood.burst ?? 0"
@@ -194,7 +194,7 @@ function rate(limit) {
         <FormField id="prot-icmp-rate" label="Pings" hint="From one source.">
           <input
             id="prot-icmp-rate"
-            class="input w-28 max-sm:w-full"
+            class="input w-32 max-sm:w-full"
             type="number"
             min="1"
             :value="protection.icmpFlood.rate"
@@ -204,7 +204,7 @@ function rate(limit) {
         <FormField id="prot-icmp-unit" label="Period">
           <select
             id="prot-icmp-unit"
-            class="input w-40 max-sm:w-full"
+            class="input w-48 max-sm:w-full"
             :value="protection.icmpFlood.unit || 'second'"
             @change="config.setDefence('icmpFlood', { unit: $event.target.value })"
           >
@@ -214,7 +214,7 @@ function rate(limit) {
         <FormField id="prot-icmp-burst" label="Burst" hint="A traceroute sends a handful.">
           <input
             id="prot-icmp-burst"
-            class="input w-28 max-sm:w-full"
+            class="input w-32 max-sm:w-full"
             type="number"
             min="0"
             :value="protection.icmpFlood.burst ?? 0"
@@ -251,7 +251,7 @@ function rate(limit) {
         >
           <input
             id="prot-scan-rate"
-            class="input w-28 max-sm:w-full"
+            class="input w-32 max-sm:w-full"
             type="number"
             min="1"
             :value="protection.portScan.rate"
@@ -261,7 +261,7 @@ function rate(limit) {
         <FormField id="prot-scan-unit" label="Period">
           <select
             id="prot-scan-unit"
-            class="input w-40 max-sm:w-full"
+            class="input w-48 max-sm:w-full"
             :value="protection.portScan.unit || 'minute'"
             @change="config.setDefence('portScan', { unit: $event.target.value })"
           >
@@ -275,7 +275,7 @@ function rate(limit) {
         >
           <input
             id="prot-scan-hold"
-            class="input w-28 font-mono max-sm:w-full"
+            class="input w-32 font-mono max-sm:w-full"
             :value="protection.portScan.hold || '10m'"
             @change="config.setDefence('portScan', { hold: $event.target.value })"
           />

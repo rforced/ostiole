@@ -157,7 +157,7 @@ async function deleteUser(username) {
           </td>
           <td data-label="Role">
             <select
-              class="input w-72 max-sm:w-full"
+              class="input w-48 max-sm:w-full"
               :value="u.role"
               :disabled="isSelf(u)"
               :aria-label="`Role for ${u.username}`"

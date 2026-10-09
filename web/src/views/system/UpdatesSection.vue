@@ -212,7 +212,7 @@ onMounted(async () => {
           <select
             id="upd-channel"
             :value="channel"
-            class="input w-40 max-sm:w-full"
+            class="input w-48 max-sm:w-full"
             :disabled="running || !auth.isAdmin"
             @change="setChannel($event.target.value)"
           >

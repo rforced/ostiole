@@ -121,7 +121,7 @@ const logout = useAsync(async () => {
               id="ts-auth-key"
               v-model="authKey"
               type="password"
-              class="input w-72 font-mono max-sm:w-full"
+              class="input w-48 font-mono max-sm:w-full"
               autocomplete="off"
               spellcheck="false"
             />

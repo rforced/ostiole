@@ -45,7 +45,7 @@ function send() {
         <input
           id="wol-once-mac"
           v-model="mac"
-          class="input w-56 font-mono max-sm:w-full"
+          class="input w-48 font-mono max-sm:w-full"
           required
           spellcheck="false"
         />

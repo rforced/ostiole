@@ -356,7 +356,7 @@ function save() {
         <input
           id="if-mac"
           v-model="form.macAddress"
-          class="input w-56 font-mono max-sm:w-full"
+          class="input w-48 font-mono max-sm:w-full"
           placeholder="optional"
           spellcheck="false"
           autocapitalize="none"

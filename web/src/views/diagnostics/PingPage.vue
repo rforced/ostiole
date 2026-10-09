@@ -64,7 +64,7 @@ async function run(kind) {
           <input
             id="dg-target"
             v-model="target"
-            class="input w-64 font-mono max-sm:w-full"
+            class="input w-48 font-mono max-sm:w-full"
             required
             spellcheck="false"
           />
@@ -84,7 +84,7 @@ async function run(kind) {
             type="number"
             min="1"
             max="20"
-            class="input w-24 font-mono max-sm:w-full"
+            class="input w-32 font-mono max-sm:w-full"
           />
         </FormField>
         <ActionButton

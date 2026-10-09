@@ -95,7 +95,7 @@ const installPreset = computed({
         <select
           :id="`${prefix}-check-preset`"
           v-model="checkPreset"
-          class="input w-64 max-sm:w-full"
+          class="input w-48 max-sm:w-full"
         >
           <option value="">Something else</option>
           <option v-for="p in SCHEDULE_PRESETS" :key="p.value" :value="p.value">
@@ -123,7 +123,7 @@ const installPreset = computed({
         <select
           :id="`${prefix}-install-preset`"
           v-model="installPreset"
-          class="input w-64 max-sm:w-full"
+          class="input w-48 max-sm:w-full"
         >
           <option value="">Something else</option>
           <option v-for="p in SCHEDULE_PRESETS" :key="p.value" :value="p.value">

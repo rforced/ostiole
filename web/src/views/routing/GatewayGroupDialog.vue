@@ -130,7 +130,7 @@ function save() {
                 type="number"
                 min="0"
                 max="255"
-                class="input w-24 font-mono max-sm:w-full"
+                class="input w-32 font-mono max-sm:w-full"
               />
             </FormField>
             <button

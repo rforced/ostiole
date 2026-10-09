@@ -117,7 +117,7 @@ const empty = computed(() => {
         />
       </template>
       <div class="card-strip-row">
-        <select v-model="show" class="input w-36 max-sm:w-full" aria-label="Show">
+        <select v-model="show" class="input w-48 max-sm:w-full" aria-label="Show">
           <option value="all">All packets</option>
           <option value="blocked">Blocked</option>
           <option value="allowed">Allowed</option>

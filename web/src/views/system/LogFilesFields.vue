@@ -155,7 +155,7 @@ const failures = computed(() => logs.value.filter((l) => l.error))
         label="Write every"
         hint="5 minutes is the default. A power cut loses what was not written yet."
       >
-        <select id="log-files-every" v-model.number="every" class="input w-36 max-sm:w-full">
+        <select id="log-files-every" v-model.number="every" class="input w-48 max-sm:w-full">
           <option v-for="w in WRITE_EVERY" :key="w.value" :value="w.value">{{ w.label }}</option>
         </select>
       </FormField>

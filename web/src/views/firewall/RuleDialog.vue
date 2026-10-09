@@ -272,13 +272,13 @@ function save() {
             <input
               id="rule-limit-rate"
               v-model="form.limitRate"
-              class="input w-24 max-sm:w-full"
+              class="input w-32 max-sm:w-full"
               type="number"
               min="1"
             />
           </FormField>
           <FormField id="rule-limit-unit" label="Period">
-            <select id="rule-limit-unit" v-model="form.limitUnit" class="input w-36 max-sm:w-full">
+            <select id="rule-limit-unit" v-model="form.limitUnit" class="input w-48 max-sm:w-full">
               <option value="second">per second</option>
               <option value="minute">per minute</option>
               <option value="hour">per hour</option>
@@ -292,7 +292,7 @@ function save() {
             <input
               id="rule-limit-burst"
               v-model="form.limitBurst"
-              class="input w-24 max-sm:w-full"
+              class="input w-32 max-sm:w-full"
               type="number"
               min="0"
             />

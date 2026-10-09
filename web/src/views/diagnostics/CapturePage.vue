@@ -73,7 +73,7 @@ const capture = useAsync(async () => {
             type="number"
             min="1"
             max="120"
-            class="input w-24 font-mono max-sm:w-full"
+            class="input w-32 font-mono max-sm:w-full"
           />
         </FormField>
         <FormField id="cp-count" label="Packets">
@@ -83,7 +83,7 @@ const capture = useAsync(async () => {
             type="number"
             min="1"
             max="5000"
-            class="input w-28 font-mono max-sm:w-full"
+            class="input w-32 font-mono max-sm:w-full"
           />
         </FormField>
         <FormField
@@ -94,7 +94,7 @@ const capture = useAsync(async () => {
           <input
             id="cp-addr"
             v-model="address"
-            class="input w-44 font-mono max-sm:w-full"
+            class="input w-48 font-mono max-sm:w-full"
             spellcheck="false"
           />
         </FormField>
@@ -105,7 +105,7 @@ const capture = useAsync(async () => {
             type="number"
             min="1"
             max="65535"
-            class="input w-28 font-mono max-sm:w-full"
+            class="input w-32 font-mono max-sm:w-full"
           />
         </FormField>
         <ActionButton

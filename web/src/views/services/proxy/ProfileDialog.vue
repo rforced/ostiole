@@ -130,7 +130,7 @@ function save() {
           label="Paranoia"
           hint="1 is the default. Higher levels block more of ordinary traffic."
         >
-          <select id="waf-paranoia" v-model.number="form.paranoia" class="input w-24 max-sm:w-full">
+          <select id="waf-paranoia" v-model.number="form.paranoia" class="input w-32 max-sm:w-full">
             <option v-for="n in 4" :key="n" :value="n">{{ n }}</option>
           </select>
         </FormField>

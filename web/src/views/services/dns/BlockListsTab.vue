@@ -209,7 +209,7 @@ const lists = sort.sorted
               min="1000"
               :max="limits.hardMax ?? 25000000"
               step="50000"
-              class="input w-40 font-mono max-sm:w-full"
+              class="input w-32 font-mono max-sm:w-full"
             />
           </FormField>
           <p class="max-w-2xl text-ink-muted">

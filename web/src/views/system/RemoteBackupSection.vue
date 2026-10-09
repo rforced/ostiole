@@ -280,7 +280,7 @@ async function loadIntoDraft() {
                 <FormField id="rb-preset" label="Take a copy">
                   <select
                     id="rb-preset"
-                    class="input w-64 max-sm:w-full"
+                    class="input w-48 max-sm:w-full"
                     :value="presetFor(schedule)"
                     @change="$event.target.value && set({ schedule: $event.target.value })"
                   >

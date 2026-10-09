@@ -132,7 +132,7 @@ const error = computed(() => read.error.value || streamError.value)
   <AppDialog v-model:open="open" :title="gateway?.name ?? ''" :read-only="false">
     <div v-if="gateway" class="space-y-4">
       <div class="flex flex-wrap items-center gap-3">
-        <select v-model="win" class="input w-36 max-sm:w-full" aria-label="Window">
+        <select v-model="win" class="input w-48 max-sm:w-full" aria-label="Window">
           <option v-for="w in WINDOWS" :key="w.value" :value="w.value">{{ w.label }}</option>
         </select>
         <p class="text-sm text-ink-muted">

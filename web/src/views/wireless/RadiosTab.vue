@@ -80,7 +80,7 @@ function edit(row) {
         <FormField id="wifi-country" label="Country" hint="Every radio follows it.">
           <select
             id="wifi-country"
-            class="input w-64 max-sm:w-full"
+            class="input w-48 max-sm:w-full"
             :value="country"
             :disabled="auth.readOnly"
             @change="config.setWirelessCountry($event.target.value)"
