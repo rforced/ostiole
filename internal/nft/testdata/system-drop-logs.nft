@@ -193,12 +193,15 @@ table inet ostiole {
 		counter drop comment "protect:icmpflood"
 	}
 	chain block_dns {
-		iifname "eth1" meta l4proto { tcp, udp } th dport 853 limit rate 10/second counter log prefix "ostiole:s:block-dot:drop: " group 1 comment "log:block-dot"
-		meta l4proto { tcp, udp } th dport 853 counter drop comment "block:dot"
-		iifname "eth1" ip daddr @alias_doh_servers_v4 limit rate 10/second counter log prefix "ostiole:s:block-doh:drop: " group 1 comment "log:block-doh"
-		ip daddr @alias_doh_servers_v4 counter drop comment "block:doh"
-		iifname "eth1" ip6 daddr @alias_doh_servers_v6 limit rate 10/second counter log prefix "ostiole:s:block-doh:drop: " group 1 comment "log:block-doh"
-		ip6 daddr @alias_doh_servers_v6 counter drop comment "block:doh"
+		iifname "eth1" meta l4proto { tcp, udp } th dport 853 limit rate 10/second counter log prefix "ostiole:s:block-dot:reject: " group 1 comment "log:block-dot"
+		tcp dport 853 counter reject with tcp reset comment "block:dot"
+		udp dport 853 counter reject with icmpx type admin-prohibited comment "block:dot"
+		iifname "eth1" ip daddr @alias_doh_servers_v4 limit rate 10/second counter log prefix "ostiole:s:block-doh:reject: " group 1 comment "log:block-doh"
+		ip daddr @alias_doh_servers_v4 meta l4proto tcp counter reject with tcp reset comment "block:doh"
+		ip daddr @alias_doh_servers_v4 counter reject with icmpx type admin-prohibited comment "block:doh"
+		iifname "eth1" ip6 daddr @alias_doh_servers_v6 limit rate 10/second counter log prefix "ostiole:s:block-doh:reject: " group 1 comment "log:block-doh"
+		ip6 daddr @alias_doh_servers_v6 meta l4proto tcp counter reject with tcp reset comment "block:doh"
+		ip6 daddr @alias_doh_servers_v6 counter reject with icmpx type admin-prohibited comment "block:doh"
 	}
 	chain nat_prerouting {
 		type nat hook prerouting priority dstnat; policy accept;

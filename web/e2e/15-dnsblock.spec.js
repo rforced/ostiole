@@ -118,7 +118,7 @@ test('enforcement renders firewall rules that keep clients on this resolver', as
   await page.goto('/services/dns#enforcement')
 
   await page.getByLabel(/Send all plain DNS to this router/).check()
-  await page.getByLabel(/Drop DNS over TLS/).check()
+  await page.getByLabel(/Block DNS over TLS/).check()
   await page.getByLabel(/Ask Firefox not to turn on DNS over HTTPS/).check()
   await page.screenshot({ path: shot('52-dnsblock-enforcement'), fullPage: true })
 
@@ -128,11 +128,13 @@ test('enforcement renders firewall rules that keep clients on this resolver', as
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const ruleset = page.locator('pre')
   await expect(ruleset).toContainText('chain block_dns')
-  await expect(ruleset).toContainText('th dport 853 counter drop comment "block:dot"')
+  await expect(ruleset).toContainText(
+    'tcp dport 853 counter reject with tcp reset comment "block:dot"',
+  )
   await expect(ruleset).toContainText('redirect to :53 comment "block:dns-redirect"')
 })
 
-test('a destination exception lets one address through the DoH drop', async ({ page }) => {
+test('a destination exception lets one address through the DoH block', async ({ page }) => {
   await login(page)
   // A site that shares a range with the DoH servers.
   await reconfigure(page.request, (config) => {
@@ -144,7 +146,7 @@ test('a destination exception lets one address through the DoH drop', async ({ p
   })
   await page.goto('/services/dns#enforcement')
 
-  const doh = page.getByLabel('Drop traffic to DNS over HTTPS servers', { exact: true })
+  const doh = page.getByLabel('Block traffic to DNS over HTTPS servers', { exact: true })
   const destinations = page.getByLabel('Except these destinations', { exact: true })
   await doh.selectOption('doh_servers')
   await destinations.selectOption('work_site')
@@ -155,12 +157,12 @@ test('a destination exception lets one address through the DoH drop', async ({ p
 
   await applyAndConfirm(page)
 
-  // The exception returns before the drop, and before the redirect.
+  // The exception returns before the block, and before the redirect.
   await page.goto('/system/ruleset')
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const ruleset = page.locator('pre')
   await expect(ruleset).toContainText(
-    /ip daddr @alias_work_site_v4 counter return comment "block:exempt-dst"[\s\S]*ip daddr @alias_doh_servers_v4 counter drop comment "block:doh"/,
+    /ip daddr @alias_work_site_v4 counter return comment "block:exempt-dst"[\s\S]*ip daddr @alias_doh_servers_v4 meta l4proto tcp counter reject with tcp reset comment "block:doh"/,
   )
   await expect(ruleset).toContainText(
     /ip daddr @alias_work_site_v4 counter return comment "block:dns-exempt-dst"[\s\S]*comment "block:dns-redirect"/,

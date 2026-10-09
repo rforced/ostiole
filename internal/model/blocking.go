@@ -93,7 +93,7 @@ type BlockList struct {
 
 // DNSEnforce keeps clients on this router's resolver. Without it, blocking is
 // advisory: anything that ships its own resolver address ignores it. It does
-// not wait for the lists. The drops apply whenever they are ticked; the
+// not wait for the lists. The blocks apply whenever they are ticked; the
 // redirect and the canary need the DNS server on, because both send clients
 // to a resolver here.
 type DNSEnforce struct {
@@ -102,11 +102,11 @@ type DNSEnforce struct {
 	// the DNS server on: redirected to a router that is not answering, every
 	// client would lose DNS.
 	RedirectDNS bool `json:"redirectDns,omitempty"`
-	// BlockDoT drops DNS over TLS on its own port, which is the easy half
+	// BlockDoT refuses DNS over TLS on its own port, which is the easy half
 	// of stopping encrypted DNS.
 	BlockDoT bool `json:"blockDot,omitempty"`
 	// DoHAlias names a host alias holding the addresses of DNS over HTTPS
-	// servers; traffic to them is dropped. DoH hides on port 443, so only
+	// servers; traffic to them is refused. DoH hides on port 443, so only
 	// an address list can catch it.
 	DoHAlias string `json:"dohAlias,omitempty"`
 	// FirefoxCanary answers use-application-dns.net with NXDOMAIN, which is

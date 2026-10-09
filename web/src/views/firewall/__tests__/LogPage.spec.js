@@ -114,7 +114,7 @@ describe('LogPage', () => {
   // own, which the zone's log-drops setting now reaches.
   it('names the drops the firewall makes on its own account', async () => {
     const w = await open([
-      entry({ kind: 'block-doh', action: 'drop', src: '1' }),
+      entry({ kind: 'block-doh', action: 'reject', src: '1' }),
       entry({ kind: 'protect-scanner', action: 'drop', src: '2' }),
       entry({ kind: 'protect-synflood', action: 'drop', src: '3' }),
     ])

@@ -65,9 +65,12 @@ table inet ostiole {
 	chain block_dns {
 		ip saddr @alias_resolver_exempt_v4 counter return comment "block:exempt"
 		ip6 saddr @alias_resolver_exempt_v6 counter return comment "block:exempt"
-		meta l4proto { tcp, udp } th dport 853 counter drop comment "block:dot"
-		ip daddr @alias_doh_servers_v4 counter drop comment "block:doh"
-		ip6 daddr @alias_doh_servers_v6 counter drop comment "block:doh"
+		tcp dport 853 counter reject with tcp reset comment "block:dot"
+		udp dport 853 counter reject with icmpx type admin-prohibited comment "block:dot"
+		ip daddr @alias_doh_servers_v4 meta l4proto tcp counter reject with tcp reset comment "block:doh"
+		ip daddr @alias_doh_servers_v4 counter reject with icmpx type admin-prohibited comment "block:doh"
+		ip6 daddr @alias_doh_servers_v6 meta l4proto tcp counter reject with tcp reset comment "block:doh"
+		ip6 daddr @alias_doh_servers_v6 counter reject with icmpx type admin-prohibited comment "block:doh"
 	}
 	chain nat_prerouting {
 		type nat hook prerouting priority dstnat; policy accept;

@@ -19,7 +19,7 @@ const BlockChain = "block_dns"
 const DoTPort = 853
 
 // enforcesDNS reports whether the forward chain needs the blocking chain at
-// all. The drops do not depend on the lists or on the DNS server: a client
+// all. The blocks do not depend on the lists or on the DNS server: a client
 // that must not use encrypted DNS must not use it whoever answers plain DNS.
 func (r *renderer) enforcesDNS() bool {
 	e := r.cfg.Blocking.Enforce
@@ -54,8 +54,8 @@ func (r *renderer) exemptMatches(name, dir string) []string {
 	return out
 }
 
-// chainBlockDNS drops the encrypted DNS a client would use to go around
-// this router. Plain DNS is not dropped here: it is redirected in
+// chainBlockDNS refuses the encrypted DNS a client would use to go around
+// this router. Plain DNS is not refused here: it is redirected in
 // nat_prerouting instead, so a client that insists on 8.8.8.8 still gets
 // answers, just this router's answers.
 func (r *renderer) chainBlockDNS() {
@@ -68,7 +68,7 @@ func (r *renderer) chainBlockDNS() {
 	// out of the source and the destination.
 	internal := r.internalInterfaces()
 	// One chain serves every internal zone, so the log statement carries the
-	// interfaces whose zone logs its drops and the drop below it does not.
+	// interfaces whose zone logs its drops and the rejects below it do not.
 	// When they all do — the usual router, with one internal zone — the set
 	// would match everything that can reach the chain, so it is left off.
 	logging := r.loggingInterfaces(internal)
@@ -87,11 +87,12 @@ func (r *renderer) chainBlockDNS() {
 		if e.BlockDoT {
 			match := fmt.Sprintf("meta l4proto { tcp, udp } th dport %d", DoTPort)
 			if logs {
-				r.line(systemLogLine(match, loud, "block-dot"))
+				r.line(systemLogLine(match, loud, "block-dot", "reject"))
 			}
-			r.line(fmt.Sprintf(`%s counter drop comment "block:dot"`, match))
+			r.line(fmt.Sprintf(`tcp dport %d counter %s comment "block:dot"`, DoTPort, rejectTCP))
+			r.line(fmt.Sprintf(`udp dport %d counter %s comment "block:dot"`, DoTPort, rejectOther))
 			r.sysFor(internal, SystemRule{
-				Chain: BlockChain, Action: "drop", Protocol: string(model.ProtocolTCPUDP),
+				Chain: BlockChain, Action: "reject", Protocol: string(model.ProtocolTCPUDP),
 				Source: r.exemptSource(), Destination: r.exemptDestination(fmt.Sprintf("any : %d", DoTPort)),
 				Description: "DNS over TLS", Log: logs,
 				Keys: []string{BlockChain + "/block:dot"}, LogKeys: logKeys(logs, BlockChain+"/log:block-dot"),
@@ -112,14 +113,15 @@ func (r *renderer) chainBlockDNS() {
 					}
 					match := fmt.Sprintf("%s daddr @%s", fam.prefix, aliasSet(a.Name, fam.n))
 					if logs {
-						r.line(systemLogLine(match, loud, "block-doh"))
+						r.line(systemLogLine(match, loud, "block-doh", "reject"))
 					}
-					r.line(fmt.Sprintf(`%s counter drop comment "block:doh"`, match))
+					r.line(fmt.Sprintf(`%s meta l4proto tcp counter %s comment "block:doh"`, match, rejectTCP))
+					r.line(fmt.Sprintf(`%s counter %s comment "block:doh"`, match, rejectOther))
 					emitted = true
 				}
 				if emitted {
 					r.sysFor(internal, SystemRule{
-						Chain: BlockChain, Action: "drop", Protocol: string(model.ProtocolAny),
+						Chain: BlockChain, Action: "reject", Protocol: string(model.ProtocolAny),
 						Source: r.exemptSource(), Destination: r.exemptDestination("@" + a.Name),
 						Description: "DNS over HTTPS servers", Log: logs,
 						Keys: []string{BlockChain + "/block:doh"}, LogKeys: logKeys(logs, BlockChain+"/log:block-doh"),

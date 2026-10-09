@@ -27,8 +27,8 @@ type SystemRule struct {
 	After bool `json:"after,omitempty"`
 	// Zones whose traffic the rule can match. Empty means every zone.
 	Zones []string `json:"zones,omitempty"`
-	// Action is accept, drop, redirect, or continue: the rule matched and
-	// evaluation carries on with the next one.
+	// Action is accept, drop, reject, redirect, or continue: the rule
+	// matched and evaluation carries on with the next one.
 	Action      string `json:"action"`
 	Protocol    string `json:"protocol"`
 	Source      string `json:"source"`
@@ -296,10 +296,11 @@ func logKeys(logs bool, keys ...string) []string {
 	return keys
 }
 
-// systemLogLine is the sampled log in front of one of Ostiole's own drops,
-// under the kind the log's "s" prefix names.
-func systemLogLine(match, iifnames, kind string) string {
-	return sampledLog(match, iifnames, "ostiole:s:"+kind+":drop: ", "log:"+kind)
+// systemLogLine is the sampled log in front of one of Ostiole's own drops
+// or rejects, under the kind the log's "s" prefix names and the verdict
+// that follows it.
+func systemLogLine(match, iifnames, kind, verdict string) string {
+	return sampledLog(match, iifnames, "ostiole:s:"+kind+":"+verdict+": ", "log:"+kind)
 }
 
 // forwardedZones lists the zones whose traffic can arrive already

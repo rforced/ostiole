@@ -152,7 +152,7 @@ func (r *renderer) protectZone(zone string) {
 		for _, fam := range families {
 			match := fmt.Sprintf("%s saddr @%s", fam.prefix, scanHoldSet(zone, fam.n))
 			if logs {
-				r.line(systemLogLine(match, "", "protect-scanner"))
+				r.line(systemLogLine(match, "", "protect-scanner", "drop"))
 			}
 			r.line(fmt.Sprintf(`%s counter drop comment "protect:scanner"`, match))
 		}
@@ -268,7 +268,7 @@ func (r *renderer) floodChains() {
 				continue
 			}
 			r.block("chain "+floodChain(zone, k.kind), func() {
-				r.line(systemLogLine("", "", "protect-"+k.kind))
+				r.line(systemLogLine("", "", "protect-"+k.kind, "drop"))
 				r.line(fmt.Sprintf(`counter drop comment "protect:%s"`, k.kind))
 			})
 		}

@@ -55,8 +55,8 @@ const exemptDestinations = aliasField('exemptDestinations')
         />
         <ToggleRow
           v-model="enforce.blockDot"
-          label="Drop DNS over TLS"
-          hint="Everything to port 853 is dropped."
+          label="Block DNS over TLS"
+          hint="Everything to port 853 is refused."
         />
         <ToggleRow
           v-model="enforce.firefoxCanary"
@@ -70,7 +70,7 @@ const exemptDestinations = aliasField('exemptDestinations')
       <div class="max-w-2xl space-y-4">
         <FormField
           id="enf-doh"
-          label="Drop traffic to DNS over HTTPS servers"
+          label="Block traffic to DNS over HTTPS servers"
           hint="Make a fetched host alias under Firewall › Aliases and name it here."
         >
           <select id="enf-doh" v-model="dohAlias" class="input">

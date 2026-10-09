@@ -84,9 +84,10 @@ func TestEveryLogPrefixIsReadable(t *testing.T) {
 	}
 }
 
-// The drops Ostiole makes on its own account obey the same setting as the
-// drop at the end of a zone's chain, and every one of them is sampled: a
-// held scanner sends as fast as it likes and the log has to stay readable.
+// The drops and rejects Ostiole makes on its own account obey the same
+// setting as the drop at the end of a zone's chain, and every one of them is
+// sampled: a held scanner sends as fast as it likes and the log has to stay
+// readable. Each log names the verdict that follows it.
 func TestSystemDropsLogWhereTheZoneSaysSo(t *testing.T) {
 	t.Parallel()
 	cfg := loadConfig(t, "testdata/system-drop-logs.json")
@@ -94,10 +95,13 @@ func TestSystemDropsLogWhereTheZoneSaysSo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, kind := range []string{"block-dot", "block-doh", "protect-scanner", "protect-synflood", "protect-icmpflood"} {
-		prefix := "ostiole:s:" + kind + ":drop: "
+	for kind, verdict := range map[string]string{
+		"block-dot": "reject", "block-doh": "reject",
+		"protect-scanner": "drop", "protect-synflood": "drop", "protect-icmpflood": "drop",
+	} {
+		prefix := "ostiole:s:" + kind + ":" + verdict + ": "
 		if !strings.Contains(out.Ruleset, prefix) {
-			t.Errorf("%s is never logged:\n%s", kind, out.Ruleset)
+			t.Errorf("%s is never logged as %s:\n%s", kind, verdict, out.Ruleset)
 		}
 	}
 	// Every log statement of a system drop is rate limited; the drop beside
@@ -118,14 +122,21 @@ func TestSystemDropsLogWhereTheZoneSaysSo(t *testing.T) {
 		}
 	}
 	// The guest zone logs nothing, so the chain both zones share has to tell
-	// them apart: the log statement carries the interface set, the drop does
-	// not.
+	// them apart: the log statement carries the interface set, the rejects
+	// do not.
+	if !strings.Contains(out.Ruleset, `iifname "eth1" meta l4proto { tcp, udp } th dport 853 limit rate`) {
+		t.Errorf("the DoT log is not scoped to eth1:\n%s", out.Ruleset)
+	}
+	lines := map[string]bool{}
+	for line := range strings.SplitSeq(out.Ruleset, "\n") {
+		lines[strings.TrimSpace(line)] = true
+	}
 	for _, want := range []string{
-		`iifname "eth1" meta l4proto { tcp, udp } th dport 853 limit rate`,
-		`meta l4proto { tcp, udp } th dport 853 counter drop comment "block:dot"`,
+		`tcp dport 853 counter reject with tcp reset comment "block:dot"`,
+		`udp dport 853 counter reject with icmpx type admin-prohibited comment "block:dot"`,
 	} {
-		if !strings.Contains(out.Ruleset, want) {
-			t.Errorf("missing %q in:\n%s", want, out.Ruleset)
+		if !lines[want] {
+			t.Errorf("missing the line %q in:\n%s", want, out.Ruleset)
 		}
 	}
 	if strings.Contains(out.Ruleset, `chain plog_guest_`) {
