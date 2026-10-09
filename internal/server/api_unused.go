@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"net/http"
 
 	"ostiole/internal/model"
@@ -27,26 +26,4 @@ func (a *api) unusedItems(w http.ResponseWriter, r *http.Request) error {
 		Disabled: append([]model.Disabled{}, disabled...),
 	})
 	return nil
-}
-
-// unusedWarning points at the Unused tab while the saved configuration
-// has anything nothing uses. What is switched off is kept on purpose and
-// never warns.
-func unusedWarning(cfg *model.Config) (Warning, bool) {
-	if cfg == nil {
-		return Warning{}, false
-	}
-	unused, _ := cfg.Unused()
-	if len(unused) == 0 {
-		return Warning{}, false
-	}
-	items := "items"
-	if len(unused) == 1 {
-		items = "item"
-	}
-	return Warning{
-		Kind: "unused", Level: "info", Key: "unused",
-		Title:  "Unused configuration",
-		Detail: fmt.Sprintf("Nothing uses %d %s. Details under System › Configuration › Unused.", len(unused), items),
-	}, true
 }

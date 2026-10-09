@@ -57,37 +57,3 @@ func TestUnusedListsWhatAConfigurationLeavesUnused(t *testing.T) {
 		t.Errorf("no credentials: %d", got)
 	}
 }
-
-// The dashboard says how much the saved configuration leaves unused, and
-// nothing once it is all used. What is switched off never warns.
-func TestOverviewPointsAtTheUnusedItems(t *testing.T) {
-	t.Parallel()
-	srv, _ := newTestServer(t)
-	apply := func(cfg *model.Config) {
-		t.Helper()
-		if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
-			t.Fatalf("apply: %d %s", resp.StatusCode, raw)
-		}
-	}
-
-	cfg := unusedDraft()
-	cfg.Schedules = []model.Schedule{{Name: "evenings", Start: "18:00", End: "23:00"}}
-	apply(cfg)
-	w := warning(getOverview(t, srv), "unused")
-	if w == nil || w.Level != "info" || w.Title != "Unused configuration" ||
-		w.Detail != "Nothing uses 2 items. Details under System › Configuration › Unused." {
-		t.Errorf("two unused: %+v", w)
-	}
-
-	apply(unusedDraft())
-	if w := warning(getOverview(t, srv), "unused"); w == nil || w.Detail != "Nothing uses 1 item. Details under System › Configuration › Unused." {
-		t.Errorf("one unused: %+v", w)
-	}
-
-	cfg = unusedDraft()
-	cfg.Aliases = nil
-	apply(cfg)
-	if w := warning(getOverview(t, srv), "unused"); w != nil {
-		t.Errorf("only a switched-off rule warned: %+v", w)
-	}
-}

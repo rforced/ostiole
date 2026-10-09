@@ -862,9 +862,6 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 			})
 		}
 	}
-	if w, ok := unusedWarning(cfg); ok {
-		out = append(out, w)
-	}
 	// A fetched alias with nothing in it turns the rules that use it inside
 	// out: "drop unless home country" drops everything until the first
 	// fetch, and "drop these networks" drops nothing.
