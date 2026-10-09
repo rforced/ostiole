@@ -6,12 +6,15 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
+	"ostiole/internal/dnsblock"
+	"ostiole/internal/dnslog"
 	"ostiole/internal/fwlog"
 	"ostiole/internal/gateway"
 	"ostiole/internal/journalfeed"
@@ -93,6 +96,45 @@ func TestWAFEventsComeBackFromTheirFiles(t *testing.T) {
 		t.Fatalf("read back %+v", got)
 	}
 	after.Add(now, wafevent.Event{Time: now, ID: "new", Rules: []wafevent.Hit{}})
+	if after.Newest() != 4 {
+		t.Errorf("newest %d", after.Newest())
+	}
+}
+
+// The query log's answers stream back from their files with their lists,
+// numbered as they were, and numbering carries on after them.
+func TestTheQueryLogComesBackFromItsFiles(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	cfg := &model.Config{}
+	cfg.System.Logging.Files.Enabled = true
+	cfg.Services.DNS.QueryLog = model.QueryLog{Enabled: true, Entries: 2}
+	log := slog.New(slog.DiscardHandler)
+	files := &logfile.Writer{Dir: dir, Source: func() *model.Config { return cfg }, Log: log,
+		Statfs: func(string) (uint64, uint64, error) { return 1, 2, nil }}
+	before := dnslog.New()
+	before.Slog = log
+	before.Configure(model.QueryLog{Enabled: true}, dnsblock.Options{}, nil)
+	files.Add(before.Files(), logfile.ReadStats{})
+	now := time.Now()
+	for i := range 3 {
+		before.Add(dnslog.Entry{Time: now.Add(time.Duration(i-3) * time.Minute), Name: fmt.Sprintf("n%d.example.test", i),
+			Type: 1, Status: dnslog.StatusBlocked, Client: netip.MustParseAddr("192.0.2.10")}, []string{"made-up-list-1"})
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	files.Run(ctx)
+
+	after := dnslog.New()
+	after.Slog = log
+	readQueryLog(cfg, after, &logfile.Writer{Dir: dir, Source: func() *model.Config { return cfg }, Log: log}, log)
+	total, blocked, oldest := after.Totals()
+	counts, _ := after.ListCounts()
+	if total != 2 || blocked != 2 || !oldest.Equal(now.Add(-2*time.Minute)) ||
+		counts["made-up-list-1"] != (dnslog.ListCount{Blocked: 2, Alone: 2}) {
+		t.Fatalf("read back %d/%d from %v, counts %v", total, blocked, oldest, counts)
+	}
+	after.Add(dnslog.Entry{Time: now, Name: "new.example.test", Type: 1, Client: netip.MustParseAddr("192.0.2.11")}, nil)
 	if after.Newest() != 4 {
 		t.Errorf("newest %d", after.Newest())
 	}

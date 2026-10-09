@@ -668,23 +668,35 @@ func upgradeFiles(dir, name string, version int, log *slog.Logger) {
 	}
 }
 
-// readQueryLog does the same for the query log, while it is on.
+// readQueryLog does the same for the query log, while it is on, streaming
+// its answers into a ring sized from the files' indexes.
 func readQueryLog(cfg *model.Config, qlog *dnslog.Log, files *logfile.Writer, log *slog.Logger) {
 	var st logfile.ReadStats
 	if cfg != nil && cfg.System.Logging.Files.Enabled && cfg.Services.DNS.QueryLog.Enabled {
 		q := cfg.Services.DNS.QueryLog
 		started := time.Now()
 		upgradeFiles(files.Dir, dnslog.FileName, dnslog.FileVersion, log)
-		answers, stats, err := logfile.Read(files.Dir, dnslog.FileName, dnslog.FileVersion, q.Size(),
-			started.Add(-qlog.Files().Kept(cfg)), dnslog.ParseLine)
+		since := started.Add(-qlog.Files().Kept(cfg))
+		count, err := logfile.Count(files.Dir, dnslog.FileName, since)
 		if err != nil {
-			log.Warn("could not read all of the query log's files back", "err", err)
+			log.Warn("could not count all of the query log's answers in its files", "err", err)
 		}
-		st = stats
-		if err := qlog.Restore(q, answers, logfile.NewestSeq(files.Dir, dnslog.FileName)); err != nil {
+		n := 0
+		rs, err := qlog.Restorer(q, count)
+		if err != nil {
 			log.Warn("could not put the query log's files back", "err", err)
+		} else {
+			stats, err := logfile.Stream(files.Dir, dnslog.FileName, dnslog.FileVersion, q.Size(), since,
+				dnslog.ParseLine, rs.Push)
+			if err != nil {
+				log.Warn("could not read all of the query log's files back", "err", err)
+			}
+			st = stats
+			if n, err = rs.Done(logfile.NewestSeq(files.Dir, dnslog.FileName)); err != nil {
+				log.Warn("could not put the query log's files back", "err", err)
+			}
 		}
-		log.Info("read the query log back from its files", "answers", len(answers), "took", time.Since(started))
+		log.Info("read the query log back from its files", "answers", n, "took", time.Since(started))
 	}
 	files.Add(qlog.Files(), st)
 }

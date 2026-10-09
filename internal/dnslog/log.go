@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"ostiole/internal/dnsblock"
-	"ostiole/internal/logfile"
 	"ostiole/internal/logsearch"
 	"ostiole/internal/model"
 	"ostiole/internal/panics"
@@ -65,6 +64,8 @@ type Log struct {
 
 	subs    map[chan Entry]struct{}
 	dropped uint64
+	// gen counts resets, so a Restorer begun before one keeps nothing.
+	gen uint64
 
 	// building is a rebuild in flight; want is the options it should use
 	// when it comes round again, so a second apply during a build is not a
@@ -315,20 +316,27 @@ func (l *Log) store(e Entry) {
 		l.ring[l.start] = e
 		l.start = (l.start + 1) % len(l.ring)
 	}
+	l.tally(e)
+}
+
+// tally counts e in the totals, and against each list that blocked it.
+// The caller holds the lock.
+func (l *Log) tally(e Entry) {
 	l.count(e)
-	if e.Status == StatusBlocked {
-		alone := e.Lists != 0 && e.Lists&(e.Lists-1) == 0
-		for i, name := range l.names {
-			if e.Lists&(1<<uint(i)) == 0 {
-				continue
-			}
-			c := l.counts[name]
-			c.Blocked++
-			if alone {
-				c.Alone++
-			}
-			l.counts[name] = c
+	if e.Status != StatusBlocked {
+		return
+	}
+	alone := e.Lists != 0 && e.Lists&(e.Lists-1) == 0
+	for i, name := range l.names {
+		if e.Lists&(1<<uint(i)) == 0 {
+			continue
 		}
+		c := l.counts[name]
+		c.Blocked++
+		if alone {
+			c.Alone++
+		}
+		l.counts[name] = c
 	}
 }
 
@@ -338,6 +346,8 @@ type Stored struct {
 	ListNames []string
 }
 
+var errTaken = errors.New("the query log has taken answers already")
+
 // Restore fills the log with answers read back from its files, oldest
 // first, with the numbers they were given, keeping what the settings' size
 // and age allow, and switches it on. Numbering goes on after the higher of
@@ -346,36 +356,128 @@ type Stored struct {
 // back, and count from the oldest of it. It refuses once an answer has
 // been added: the numbers would go backwards.
 func (l *Log) Restore(q model.QueryLog, answers []Stored, newest uint64) error {
+	r, err := l.Restorer(q, len(answers))
+	if err != nil {
+		return err
+	}
+	for _, a := range answers {
+		r.Push(a)
+	}
+	_, err = r.Done(newest)
+	return err
+}
+
+// Restorer is a Restore whose answers are pushed one at a time as the
+// files are read, into a ring of its own that Done swaps in: no slice of
+// them is built, and the log's lock is not held while they are read.
+type Restorer struct {
+	l      *Log
+	gen    uint64
+	size   int
+	cutoff time.Time
+	bits   map[string]uint64
+	ring   []Entry
+	start  int
+	n      int
+	last   uint64
+}
+
+// Restorer switches the log on and sizes it as Restore does, and returns
+// what the answers are pushed into. count is how many the files hold, an
+// upper bound or a guess: the ring starts that long, up to the size, and
+// grows if more arrive. It refuses once an answer has been added.
+func (l *Log) Restorer(q model.QueryLog, count int) (*Restorer, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.seq > 0 {
-		return errors.New("the query log has taken answers already")
+		return nil, errTaken
 	}
 	if !l.on {
 		l.on = true
 		l.since = time.Now()
 	}
 	l.keep = q.Retention()
-	l.resize(q.Size())
-	answers = logfile.Ascending(answers, func(a *Stored) uint64 { return a.Seq })
-	if len(answers) > l.size {
-		answers = answers[len(answers)-l.size:]
+	l.size = max(q.Size(), 1)
+	if len(l.ring) > l.size {
+		l.ring, l.start = nil, 0
 	}
-	l.seq = newest
-	cutoff := l.cutoff(time.Now())
-	for _, a := range answers {
-		l.seq = max(l.seq, a.Seq)
-		if a.Time.Before(cutoff) {
-			continue
+	r := &Restorer{l: l, gen: l.gen, size: l.size, cutoff: l.cutoff(time.Now()), bits: map[string]uint64{}}
+	if n := min(r.size, count); n > 0 {
+		r.ring = make([]Entry, n)
+	}
+	return r, nil
+}
+
+// Push takes the next answer, oldest first. One whose number does not
+// rise above the last, or that is older than the log keeps, is dropped;
+// once the ring holds the log's size, the oldest makes way.
+func (r *Restorer) Push(a Stored) {
+	if a.Seq <= r.last {
+		return
+	}
+	r.last = a.Seq
+	if a.Time.Before(r.cutoff) {
+		return
+	}
+	e := a.Entry
+	e.Lists = r.intern(a.ListNames)
+	switch {
+	case r.n < len(r.ring):
+		r.ring[(r.start+r.n)%len(r.ring)] = e
+		r.n++
+	case len(r.ring) < r.size:
+		r.ring, r.start = grown(r.ring, r.start, r.n, r.size), 0
+		r.ring[r.n] = e
+		r.n++
+	default:
+		r.ring[r.start] = e
+		r.start = (r.start + 1) % len(r.ring)
+	}
+}
+
+// intern is the log's intern through the names already seen, so the lock
+// is taken only for a new one.
+func (r *Restorer) intern(lists []string) uint64 {
+	var mask uint64
+	for _, name := range lists {
+		bit, ok := r.bits[name]
+		if !ok {
+			r.l.mu.Lock()
+			bit = r.l.intern([]string{name})
+			r.l.mu.Unlock()
+			r.bits[name] = bit
 		}
-		e := a.Entry
-		e.Lists = l.intern(a.ListNames)
-		l.store(e)
+		mask |= bit
 	}
+	return mask
+}
+
+// Done swaps in the answers pushed, counts them as Add would have, and
+// says how many the log holds. Numbering goes on after the higher of the
+// last pushed and newest. It refuses once an answer has been added, and
+// keeps nothing when the log was cleared or switched off meanwhile.
+func (r *Restorer) Done(newest uint64) (int, error) {
+	l := r.l
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.seq > 0 {
+		return 0, errTaken
+	}
+	l.seq = max(newest, r.last)
+	if l.gen != r.gen {
+		return 0, errors.New("the query log was cleared or switched off while its files were read back")
+	}
+	size := l.size
+	l.ring, l.start, l.n, l.size = r.ring, r.start, r.n, r.size
+	r.ring, r.start, r.n = nil, 0, 0
+	for i := range l.n {
+		l.tally(*l.at(i))
+	}
+	l.resize(size)
 	if l.n > 0 {
 		l.since = l.at(0).Time
 	}
-	return nil
+	return l.n, nil
 }
 
 // After copies the answers after seq into buf, oldest first, under the
@@ -683,6 +785,7 @@ func (l *Log) reset() {
 	l.counts = map[string]ListCount{}
 	l.since = time.Time{}
 	l.dropped = 0
+	l.gen++
 }
 
 // resize sets the ceiling to n and keeps the newest entries that fit. A
@@ -715,11 +818,17 @@ func (l *Log) resize(n int) {
 // entries it runs ten times; allocating the million up front would cost
 // its memory the moment the log was switched on. The caller holds the lock.
 func (l *Log) grow() {
-	next := make([]Entry, min(l.size, max(2*len(l.ring), initialRing)))
-	for i := range l.n {
-		next[i] = l.ring[(l.start+i)%len(l.ring)]
+	l.ring, l.start = grown(l.ring, l.start, l.n, l.size), 0
+}
+
+// grown is ring's n entries from start, in order from the front of a ring
+// twice as long, up to size.
+func grown(ring []Entry, start, n, size int) []Entry {
+	next := make([]Entry, min(size, max(2*len(ring), initialRing)))
+	for i := range n {
+		next[i] = ring[(start+i)%len(ring)]
 	}
-	l.ring, l.start = next, 0
+	return next
 }
 
 func (l *Log) count(e Entry) {
