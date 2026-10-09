@@ -32,6 +32,9 @@ const (
 	RiseAfter = model.DefaultUpAfterProbes
 	// history is how many probes the loss figure covers.
 	history = 20
+	// judgedProbes is how many probes, at least, slow and lossy are judged
+	// over.
+	judgedProbes = 10
 	// settle is how long a removed policy route waits before the tables
 	// are put back: networkd takes a link's routes out in a burst.
 	settle = 200 * time.Millisecond
@@ -99,10 +102,11 @@ type Status struct {
 	LastError   string    `json:"lastError,omitempty"`
 	// Families are the addresses the gateway is probed at, a family each.
 	Families []FamilyStatus `json:"families,omitempty"`
-	// Slow and Lossy are the families whose last full minute was over the
-	// gateway's thresholds.
+	// Slow and Lossy are the families over the gateway's thresholds in its
+	// last Span seconds of probes: the whole minutes that hold ten of them.
 	Slow  []Over `json:"slow,omitempty"`
 	Lossy []Over `json:"lossy,omitempty"`
+	Span  int64  `json:"span"`
 
 	// learned is set when the gateway takes its next hop from the network,
 	// so the router looks for its routes by metric as well as by address.
@@ -121,13 +125,14 @@ type FamilyStatus struct {
 	LastError     string  `json:"lastError,omitempty"`
 }
 
-// Over is a family whose last full minute was over a threshold: its mean
-// round trip or the share it lost, the limit, and since when.
+// Over is a family over a threshold in the last Span seconds of probes: its
+// mean round trip or the share it lost, the limit, and since when.
 type Over struct {
 	Family      string    `json:"family"`
 	LatencyMS   float64   `json:"latencyMs,omitempty"`
 	LossPercent float64   `json:"lossPercent,omitempty"`
 	Limit       int       `json:"limit"`
+	Span        int64     `json:"span"`
 	Since       time.Time `json:"since"`
 }
 
@@ -308,6 +313,12 @@ func (m *Monitor) interval(g model.Gateway) time.Duration {
 		return m.ProbeEvery
 	}
 	return g.ProbeInterval()
+}
+
+// judgedMinutes is how many whole minutes slow and lossy are judged over at
+// a probe interval: enough to hold judgedProbes.
+func judgedMinutes(interval time.Duration) int {
+	return max(1, int((judgedProbes*interval+time.Minute-1)/time.Minute))
 }
 
 // New returns a monitor with production defaults.
@@ -715,15 +726,17 @@ func (m *Monitor) mark(states []*state) {
 }
 
 type judged struct {
-	e   Event
-	msg string
+	e    Event
+	msg  string
+	span time.Duration
 }
 
-// judge holds each minute that is over against its gateway's thresholds:
-// a family that answered is slow while the minute's mean round trip is
-// above one, lossy while the minute lost more of its probes than the
-// other. A minute the gateway was not up in ends both, without a word:
-// down says more.
+// judge holds the window ending at each minute that is over against its
+// gateway's thresholds: a family that answered is slow while the window's
+// mean round trip is above one, lossy while the window lost more of its
+// probes than the other. A window that is not full judges nothing. A
+// minute the gateway was not up in ends both, without a word: down says
+// more.
 func (m *Monitor) judge(minutes []Minute) {
 	var out []judged
 	m.mu.Lock()
@@ -736,24 +749,30 @@ func (m *Monitor) judge(minutes []Minute) {
 			st.slow, st.lossy = nil, nil
 			continue
 		}
-		slowAt, lossyAt := st.gw.SlowAbove(), st.gw.LossyAbove()
-		for _, f := range mn.Families {
-			if l := st.leg(f.Family); l == nil || !l.answered || f.Sent == 0 {
+		w := judgedMinutes(m.interval(st.gw))
+		fam, full := m.History.window(mn.Gateway, mn.Start, w, st.gw.Monitor)
+		if !full {
+			continue
+		}
+		slowAt, lossyAt, span := st.gw.SlowAbove(), st.gw.LossyAbove(), int64(w)*60
+		for i, f := range fam {
+			family := familyName(i)
+			if l := st.leg(family); l == nil || !l.answered || f.sent == 0 {
 				continue
 			}
-			loss := float64(f.Lost) / float64(f.Sent) * 100
-			out = st.cross(out, &st.slow, mn, f.Family,
-				slowAt > 0 && f.Sent > f.Lost && f.Mean > float64(slowAt),
-				Over{Family: f.Family, LatencyMS: f.Mean, Limit: slowAt}, EventSlow, EventSlowEnd)
-			out = st.cross(out, &st.lossy, mn, f.Family,
-				lossyAt > 0 && loss > float64(lossyAt),
-				Over{Family: f.Family, LossPercent: round(loss), Limit: lossyAt}, EventLossy, EventLossyEnd)
+			_, slow := f.slow(slowAt)
+			_, lossy := f.lossy(lossyAt)
+			out = st.cross(out, &st.slow, mn, family, slow,
+				Over{Family: family, LatencyMS: round(f.mean()), Limit: slowAt, Span: span}, EventSlow, EventSlowEnd)
+			out = st.cross(out, &st.lossy, mn, family, lossy,
+				Over{Family: family, LossPercent: round(f.loss()), Limit: lossyAt, Span: span}, EventLossy, EventLossyEnd)
 		}
 	}
 	m.mu.Unlock()
 	for _, j := range out {
 		m.Log.Warn(j.msg, "gateway", j.e.Gateway, "family", j.e.Family, "latency_ms", j.e.LatencyMS,
-			"loss_percent", j.e.LossPercent, "limit", j.e.Limit, "for", time.Duration(j.e.For)*time.Second)
+			"loss_percent", j.e.LossPercent, "limit", j.e.Limit, "over", j.span,
+			"for", time.Duration(j.e.For)*time.Second)
 		m.note(j.e)
 	}
 }
@@ -764,6 +783,7 @@ func (st *state) cross(out []judged, overs *map[string]Over, mn Minute, family s
 	start, end string,
 ) []judged {
 	was, had := (*overs)[family]
+	span := time.Duration(now.Span) * time.Second
 	switch {
 	case over:
 		now.Since = mn.Start
@@ -780,7 +800,7 @@ func (st *state) cross(out []judged, overs *map[string]Over, mn Minute, family s
 				msg = "gateway is losing packets"
 			}
 			out = append(out, judged{Event{Gateway: mn.Gateway, Family: family, Kind: start,
-				LatencyMS: now.LatencyMS, LossPercent: now.LossPercent, Limit: now.Limit}, msg})
+				LatencyMS: now.LatencyMS, LossPercent: now.LossPercent, Limit: now.Limit, Span: now.Span}, msg, span})
 		}
 	case had:
 		delete(*overs, family)
@@ -790,7 +810,7 @@ func (st *state) cross(out []judged, overs *map[string]Over, mn Minute, family s
 		}
 		took := mn.Start.Add(time.Minute).Sub(was.Since).Round(time.Second)
 		out = append(out, judged{Event{Gateway: mn.Gateway, Family: family, Kind: end,
-			For: int64(took / time.Second)}, msg})
+			For: int64(took / time.Second)}, msg, span})
 	}
 	return out
 }
@@ -914,6 +934,7 @@ func (m *Monitor) status(st *state, _ bool) Status {
 		Since:         st.since,
 		LastError:     st.lastError,
 		Tunnel:        st.tunnel,
+		Span:          int64(judgedMinutes(m.interval(st.gw))) * 60,
 		learned:       st.gw.Address == "",
 	}
 	if s.Address == "" {

@@ -43,6 +43,7 @@ export const EVENT_WORDS = {
  * @param {object} e
  */
 export function eventText(e) {
+  const over = e.span ? ` over ${formatDuration(e.span)}` : ''
   switch (e.kind) {
     case 'down':
       return 'Down'
@@ -61,11 +62,11 @@ export function eventText(e) {
     case 'monitor':
       return `Monitor changed to ${e.monitor || 'the next hop'}, was ${e.was || 'the next hop'}`
     case 'slow':
-      return `${e.family} slow, ${formatMs(e.latencyMs)} on average, above ${e.limit} ms`
+      return `${e.family} slow, ${formatMs(e.latencyMs)} on average${over}, above ${e.limit} ms`
     case 'slow-end':
       return `${e.family} no longer slow`
     case 'lossy':
-      return `${e.family} losing packets, ${Math.round(e.lossPercent)}% lost, above ${e.limit}%`
+      return `${e.family} losing packets, ${Math.round(e.lossPercent)}% lost${over}, above ${e.limit}%`
     case 'lossy-end':
       return `${e.family} no longer losing packets`
   }

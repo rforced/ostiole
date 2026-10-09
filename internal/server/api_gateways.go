@@ -113,7 +113,7 @@ func (a *api) gatewayStrips(w http.ResponseWriter, _ *http.Request) error {
 			}
 		}
 		out = append(out, gatewayStrip{
-			Name: s.Name, Strip: a.gatewayHistory.Strip(s.Name, now, g.SlowAbove(), g.LossyAbove()),
+			Name: s.Name, Strip: a.gatewayHistory.Strip(s.Name, now, g.SlowAbove(), g.LossyAbove(), int(s.Span/60)),
 			Monitor: g.Monitor, Families: len(s.Families),
 		})
 	}

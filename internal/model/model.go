@@ -1477,9 +1477,10 @@ type Gateway struct {
 	// Empty means the gateway address itself, which only tells you the
 	// first hop is alive.
 	Monitor string `json:"monitor,omitempty"`
-	// SlowAboveMS warns while a minute's mean round trip is above it, and
-	// LossyAbovePercent while a minute loses more of its probes. Unset is
-	// the default, 0 is off.
+	// SlowAboveMS warns while the mean round trip is above it, and
+	// LossyAbovePercent while more of the probes are lost, both over the
+	// whole minutes that hold the last ten probes. Unset is the default, 0
+	// is off.
 	SlowAboveMS       *int `json:"slowAboveMs,omitempty"`
 	LossyAbovePercent *int `json:"lossyAbovePercent,omitempty"`
 	// ProbeEverySeconds is how often the gateway is probed; zero keeps
@@ -1547,8 +1548,8 @@ func (g Gateway) SlowAbove() int {
 	return *g.SlowAboveMS
 }
 
-// LossyAbove is the share of a minute's probes lost a gateway warns over,
-// 0 for never.
+// LossyAbove is the share of its probes lost a gateway warns over, 0 for
+// never.
 func (g Gateway) LossyAbove() int {
 	if g.LossyAbovePercent == nil {
 		return DefaultLossyAbovePercent

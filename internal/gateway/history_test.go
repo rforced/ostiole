@@ -385,45 +385,81 @@ func judging(t *testing.T, gws ...model.Gateway) (*Monitor, *fakeProber, *bytes.
 		}
 	}
 	m := watched(t, p, r, &log, gws...)
+	// An hour before the minutes a test plays, so the ticks' own minute is
+	// never in their window.
+	m.Now = func() time.Time { return at(0, 0).Add(-time.Hour) }
 	return m, p, &log
 }
 
-// minute is one of wan's minutes as the history closes it.
-func minute(m int, state string, families ...FamilyMinute) []Minute {
-	return []Minute{{Gateway: "wan", Start: at(m, 0), State: state, Families: families}}
+// play puts one of wan's minutes in the history as the monitor's probes and
+// marks would, each family's probes spread over it with the lost ones
+// first, and judges it once it is over.
+func play(m *Monitor, minute int, state string, families ...FamilyMinute) {
+	m.mu.Lock()
+	monitor := m.states["wan"].gw.Monitor
+	m.mu.Unlock()
+	for _, f := range families {
+		for i := range f.Sent {
+			m.History.Probe("wan", f.Family, monitor, at(minute, i*60/f.Sent),
+				time.Duration(f.Mean*float64(time.Millisecond)), i >= f.Lost)
+		}
+	}
+	m.History.Mark("wan", state, monitor, at(minute, 0))
+	m.judge(m.History.Advance(at(minute+1, 0)))
 }
 
-// v4 is a minute of twelve IPv4 probes.
+// v4 is a minute of twelve IPv4 probes, one every 5 s.
 func v4(lost int, mean float64) FamilyMinute {
 	return FamilyMinute{Family: FamilyIPv4, Sent: 12, Lost: lost, Mean: mean}
 }
 
-var wan = model.Gateway{Name: "wan", Enabled: true, Interface: "eth0", Address: "203.0.113.1"}
+// pair is a minute of two IPv4 probes, one every 30 s.
+func pair(lost int, mean float64) FamilyMinute {
+	return FamilyMinute{Family: FamilyIPv4, Sent: 2, Lost: lost, Mean: mean}
+}
+
+// wan is probed every 5 s, so a minute's twelve probes are judged alone;
+// wan30 every 30 s, the default, so over five minutes.
+var (
+	wan   = model.Gateway{Name: "wan", Enabled: true, Interface: "eth0", Address: "203.0.113.1", ProbeEverySeconds: 5}
+	wan30 = model.Gateway{Name: "wan", Enabled: true, Interface: "eth0", Address: "203.0.113.1"}
+)
+
+// logged reports whether the journal has a line saying msg with attr.
+func logged(journal, msg, attr string) bool {
+	for line := range strings.Lines(journal) {
+		if strings.Contains(line, `msg="`+msg+`"`) && strings.Contains(line, " "+attr+" ") {
+			return true
+		}
+	}
+	return false
+}
 
 func TestASlowMinuteWarnsUntilAMinuteIsNot(t *testing.T) {
 	t.Parallel()
 	m, _, log := judging(t, wan)
 	tick(m, RiseAfter)
-	m.judge(minute(0, StateUp, v4(0, 250)))
+	play(m, 0, StateUp, v4(0, 250))
 	s := m.Statuses()[0]
 	if len(s.Slow) != 1 || s.Slow[0].LatencyMS != 250 || s.Slow[0].Limit != model.DefaultSlowAboveMS ||
-		!s.Slow[0].Since.Equal(at(0, 0)) || len(s.Lossy) != 0 {
+		s.Slow[0].Span != 60 || !s.Slow[0].Since.Equal(at(0, 0)) || len(s.Lossy) != 0 {
 		t.Fatalf("after a slow minute: %+v", s)
 	}
-	m.judge(minute(1, StateUp, v4(0, 260)))
+	play(m, 1, StateUp, v4(0, 260))
 	if s := m.Statuses()[0]; len(s.Slow) != 1 || s.Slow[0].LatencyMS != 260 || !s.Slow[0].Since.Equal(at(0, 0)) {
 		t.Fatalf("after a second: %+v", s.Slow)
 	}
-	m.judge(minute(2, StateUp, v4(0, 150)))
+	play(m, 2, StateUp, v4(0, 150))
 	if s := m.Statuses()[0]; len(s.Slow) != 0 {
 		t.Fatalf("after a quick minute: %+v", s.Slow)
 	}
 	events := m.History.Events.Recent(0)
 	if len(events) != 2 || events[1].Kind != EventSlow || events[1].LatencyMS != 250 || events[1].Limit != 200 ||
-		events[0].Kind != EventSlowEnd || events[0].For != 180 {
+		events[1].Span != 60 || events[0].Kind != EventSlowEnd || events[0].For != 180 {
 		t.Errorf("events = %+v", events)
 	}
-	if got := log.String(); !strings.Contains(got, "gateway is slow") || !strings.Contains(got, "gateway is no longer slow") {
+	if got := log.String(); !logged(got, "gateway is slow", "over=1m0s") ||
+		!logged(got, "gateway is no longer slow", "over=1m0s") {
 		t.Errorf("journal:\n%s", got)
 	}
 }
@@ -432,11 +468,11 @@ func TestOneLostProbeInAMinuteIsNotLossy(t *testing.T) {
 	t.Parallel()
 	m, _, _ := judging(t, wan)
 	tick(m, RiseAfter)
-	m.judge(minute(0, StateUp, v4(1, 3)))
+	play(m, 0, StateUp, v4(1, 3))
 	if s := m.Statuses()[0]; len(s.Lossy) != 0 {
 		t.Fatalf("one in twelve: %+v", s.Lossy)
 	}
-	m.judge(minute(1, StateUp, v4(2, 3)))
+	play(m, 1, StateUp, v4(2, 3))
 	if s := m.Statuses()[0]; len(s.Lossy) != 1 || s.Lossy[0].LossPercent != 16.667 || s.Lossy[0].Limit != 10 {
 		t.Errorf("two in twelve: %+v", s.Lossy)
 	}
@@ -449,7 +485,7 @@ func TestAThresholdOfZeroIsOff(t *testing.T) {
 	g.SlowAboveMS, g.LossyAbovePercent = &off, &five
 	m, _, _ := judging(t, g)
 	tick(m, RiseAfter)
-	m.judge(minute(0, StateUp, v4(1, 1500)))
+	play(m, 0, StateUp, v4(1, 1500))
 	if s := m.Statuses()[0]; len(s.Slow) != 0 || len(s.Lossy) != 1 {
 		t.Errorf("status = %+v", s)
 	}
@@ -459,9 +495,9 @@ func TestDownEndsSlowAndLossyWithoutAWord(t *testing.T) {
 	t.Parallel()
 	m, _, _ := judging(t, wan)
 	tick(m, RiseAfter)
-	m.judge(minute(0, StateUp, v4(3, 400)))
-	m.judge(minute(1, StateDown, v4(12, 0)))
-	m.judge(minute(2, StateUp, v4(0, 3)))
+	play(m, 0, StateUp, v4(3, 400))
+	play(m, 1, StateDown, v4(12, 0))
+	play(m, 2, StateUp, v4(0, 3))
 	if got := kinds(m.History); !slices.Equal(got, []string{EventSlow + " IPv4", EventLossy + " IPv4"}) {
 		t.Errorf("events = %v", got)
 	}
@@ -469,12 +505,161 @@ func TestDownEndsSlowAndLossyWithoutAWord(t *testing.T) {
 
 func TestAFamilyThatNeverAnsweredIsNotJudged(t *testing.T) {
 	t.Parallel()
-	m, p, _ := judging(t, model.Gateway{Name: "wan", Enabled: true, Interface: "eth0"})
+	m, p, _ := judging(t, model.Gateway{Name: "wan", Enabled: true, Interface: "eth0", ProbeEverySeconds: 5})
 	p.setFail("fe80::1", true)
 	tick(m, FailAfter)
-	m.judge(minute(0, StateUp, v4(0, 3), FamilyMinute{Family: FamilyIPv6, Sent: 12, Lost: 12}))
+	play(m, 0, StateUp, v4(0, 3), FamilyMinute{Family: FamilyIPv6, Sent: 12, Lost: 12})
 	if s := m.Statuses()[0]; !s.Online || len(s.Lossy) != 0 {
 		t.Errorf("status = %+v", s)
+	}
+}
+
+// Slow and lossy are judged over the whole minutes that hold ten probes.
+func TestTheWindowHoldsTenProbes(t *testing.T) {
+	t.Parallel()
+	for every, want := range map[time.Duration]int{
+		5 * time.Second: 1, 6 * time.Second: 1, 10 * time.Second: 2, 30 * time.Second: 5,
+		time.Minute: 10, 5 * time.Minute: 50,
+	} {
+		if got := judgedMinutes(every); got != want {
+			t.Errorf("every %s: %d minutes, want %d", every, got, want)
+		}
+	}
+}
+
+// A status says how many seconds of probes it is judged over, the browser
+// tests' override included.
+func TestAStatusSaysWhatItIsJudgedOver(t *testing.T) {
+	t.Parallel()
+	m := New(&fakeProber{fail: map[string]bool{}}, &fakeRouter{resolveTo: map[string]string{}}, slog.New(slog.DiscardHandler))
+	m.Configure(&model.Config{Gateways: []model.Gateway{
+		wan30, {Name: "lte", Enabled: true, Interface: "eth1", Address: "198.51.100.1", Priority: 1, ProbeEverySeconds: 10},
+	}})
+	if s := m.Statuses(); s[0].Span != 300 || s[1].Span != 120 {
+		t.Errorf("spans = %d and %d, want 300 and 120", s[0].Span, s[1].Span)
+	}
+	m.ProbeEvery = time.Second
+	if s := m.Statuses(); s[0].Span != 60 || s[1].Span != 60 {
+		t.Errorf("overridden = %d and %d, want a minute each", s[0].Span, s[1].Span)
+	}
+}
+
+// At 30 s a minute holds two probes, so one lost is half of it; over the
+// five minutes that hold ten, one lost is not over 10 % and two are.
+func TestOneLostProbeInFiveMinutesIsNotLossy(t *testing.T) {
+	t.Parallel()
+	m, _, log := judging(t, wan30)
+	tick(m, RiseAfter)
+	for i, lost := range []int{0, 0, 1, 0, 0} {
+		play(m, i, StateUp, pair(lost, 3))
+	}
+	if s := m.Statuses()[0]; len(s.Lossy) != 0 {
+		t.Fatalf("one in ten: %+v", s.Lossy)
+	}
+	play(m, 5, StateUp, pair(1, 3))
+	if s := m.Statuses()[0]; len(s.Lossy) != 1 || s.Lossy[0].LossPercent != 20 || s.Lossy[0].Span != 300 ||
+		!s.Lossy[0].Since.Equal(at(5, 0)) {
+		t.Fatalf("two in ten: %+v", s.Lossy)
+	}
+	play(m, 6, StateUp, pair(0, 3))
+	play(m, 7, StateUp, pair(0, 3))
+	if s := m.Statuses()[0]; len(s.Lossy) != 0 {
+		t.Fatalf("once the first has left the window: %+v", s.Lossy)
+	}
+	events := m.History.Events.Recent(0)
+	if len(events) != 2 || events[1].Kind != EventLossy || events[1].LossPercent != 20 || events[1].Limit != 10 ||
+		events[1].Span != 300 || events[0].Kind != EventLossyEnd || events[0].For != 180 {
+		t.Errorf("events = %+v", events)
+	}
+	if got := log.String(); !logged(got, "gateway is losing packets", "over=5m0s") ||
+		!logged(got, "gateway no longer loses packets", "over=5m0s") {
+		t.Errorf("journal:\n%s", got)
+	}
+}
+
+// A window is judged once it is full: a gateway's first minutes in the
+// history say nothing however they went, and nor does a window with a
+// minute missing.
+func TestNothingIsJudgedUntilTheWindowIsFull(t *testing.T) {
+	t.Parallel()
+	m, _, _ := judging(t, wan30)
+	tick(m, RiseAfter)
+	m.History.ClearHistory()
+	for i, lost := range []int{1, 0, 0, 0} {
+		play(m, i, StateUp, pair(lost, 3))
+		if s := m.Statuses()[0]; len(s.Lossy) != 0 {
+			t.Fatalf("after minute %d: %+v", i, s.Lossy)
+		}
+	}
+	play(m, 4, StateUp, pair(1, 3))
+	if s := m.Statuses()[0]; len(s.Lossy) != 1 || s.Lossy[0].LossPercent != 20 || !s.Lossy[0].Since.Equal(at(4, 0)) {
+		t.Fatalf("after the fifth: %+v", s.Lossy)
+	}
+	for i := 6; i < 10; i++ {
+		play(m, i, StateUp, pair(0, 3))
+		if s := m.Statuses()[0]; len(s.Lossy) != 1 {
+			t.Fatalf("minute %d, with minute 5 missing from its window: %+v", i, s.Lossy)
+		}
+	}
+	play(m, 10, StateUp, pair(0, 3))
+	if s := m.Statuses()[0]; len(s.Lossy) != 0 {
+		t.Errorf("after five minutes in a row: %+v", s.Lossy)
+	}
+}
+
+// A minute the gateway was down or never answered in ends slow and lossy,
+// and nothing is judged again until a full window of minutes up follows.
+func TestAMinuteNotUpKeepsItsWindowsUnjudged(t *testing.T) {
+	t.Parallel()
+	for _, state := range []string{StateDown, StateNever} {
+		m, _, _ := judging(t, wan30)
+		tick(m, RiseAfter)
+		for i := range 5 {
+			play(m, i, StateUp, pair(1, 3))
+		}
+		play(m, 5, state, pair(2, 0))
+		if s := m.Statuses()[0]; len(s.Lossy) != 0 {
+			t.Fatalf("%s: after the minute %s: %+v", state, state, s.Lossy)
+		}
+		for i := 6; i < 10; i++ {
+			play(m, i, StateUp, pair(1, 3))
+			if s := m.Statuses()[0]; len(s.Lossy) != 0 {
+				t.Fatalf("%s: minute %d, with minute 5 in its window: %+v", state, i, s.Lossy)
+			}
+		}
+		play(m, 10, StateUp, pair(1, 3))
+		if s := m.Statuses()[0]; len(s.Lossy) != 1 || !s.Lossy[0].Since.Equal(at(10, 0)) {
+			t.Errorf("%s: after five minutes up: %+v", state, s.Lossy)
+		}
+		if got := kinds(m.History); !slices.Equal(got, []string{EventLossy + " IPv4", EventLossy + " IPv4"}) {
+			t.Errorf("%s: events = %v", state, got)
+		}
+	}
+}
+
+// Minutes probed at another address are not in the window: after the
+// monitor changes, it fills again from the first minute at the new one.
+func TestAChangedMonitorFillsTheWindowAgain(t *testing.T) {
+	t.Parallel()
+	m, _, _ := judging(t, wan30)
+	tick(m, RiseAfter)
+	for i := range 5 {
+		play(m, i, StateUp, pair(0, 3))
+	}
+	g := wan30
+	g.Monitor = "192.0.2.53"
+	m.Configure(&model.Config{Gateways: []model.Gateway{g}})
+	m.Now = func() time.Time { return at(5, 0) }
+	tick(m, RiseAfter)
+	for i := 6; i < 9; i++ {
+		play(m, i, StateUp, pair(1, 3))
+		if s := m.Statuses()[0]; len(s.Lossy) != 0 {
+			t.Fatalf("minute %d, with minutes at the old monitor in its window: %+v", i, s.Lossy)
+		}
+	}
+	play(m, 9, StateUp, pair(1, 3))
+	if s := m.Statuses()[0]; len(s.Lossy) != 1 || s.Lossy[0].LossPercent != 40 || !s.Lossy[0].Since.Equal(at(9, 0)) {
+		t.Errorf("after five minutes at the new monitor: %+v", s.Lossy)
 	}
 }
 
@@ -497,7 +682,7 @@ func TestTheStripDrawsTheWorstMinuteOfEachCell(t *testing.T) {
 	probe(30, 12, 12, 0, StateDown)
 	probe(31, 12, 0, 3, StateUp)
 	h.Advance(at(40, 0))
-	s := h.Strip("wan", at(40, 0), 200, 10)
+	s := h.Strip("wan", at(40, 0), 200, 10, 1)
 	if len(s.Cells) != StripCells {
 		t.Fatalf("%d cells", len(s.Cells))
 	}
@@ -519,11 +704,91 @@ func TestTheStripDrawsTheWorstMinuteOfEachCell(t *testing.T) {
 	if s.Down != 60 || s.WorstLatencyMS != 300 || s.WorstLatencyFamily != FamilyIPv4 || s.WorstLossPercent != 100 {
 		t.Errorf("strip = %+v", s)
 	}
-	if off := h.Strip("wan", at(40, 0), 0, 0); off.Cells[len(off.Cells)-2].Kind != CellDown {
+	if off := h.Strip("wan", at(40, 0), 0, 0, 1); off.Cells[len(off.Cells)-2].Kind != CellDown {
 		t.Errorf("without thresholds: %+v", off.Cells[len(off.Cells)-3:])
 	}
-	if empty := h.Strip("nobody", at(40, 0), 200, 10); len(empty.Cells) != StripCells || empty.Cells[0].Kind != "" {
+	if empty := h.Strip("nobody", at(40, 0), 200, 10, 1); len(empty.Cells) != StripCells || empty.Cells[0].Kind != "" {
 		t.Errorf("an unknown gateway: %+v", empty.Cells[0])
+	}
+	probe(41, 6, 0, 300, StateUp)
+	if now := h.Strip("wan", at(41, 30), 200, 10, 1); now.Cells[len(now.Cells)-1].Kind != CellUp {
+		t.Errorf("the minute under way: %+v, want up until it is judged", now.Cells[len(now.Cells)-1])
+	}
+}
+
+// At 30 s a strip's minute is the window ending with it, as the monitor
+// judged it: a minute half lost among good ones draws no amber cell, a
+// window over the threshold does.
+func TestTheStripJudgesAsTheMonitorDoes(t *testing.T) {
+	t.Parallel()
+	m, _, _ := judging(t, wan30)
+	tick(m, RiseAfter)
+	m.History.ClearHistory()
+	lost := map[int]int{3: 1, 12: 1, 14: 1}
+	judged := map[int64]string{}
+	for i := range 40 {
+		ms := 3.0
+		if i >= 30 && i < 35 {
+			ms = 250
+		}
+		play(m, i, StateUp, pair(lost[i], ms))
+		kind, s := CellUp, m.Statuses()[0]
+		switch {
+		case len(s.Lossy) > 0:
+			kind = CellLossy
+		case len(s.Slow) > 0:
+			kind = CellSlow
+		}
+		if cell := at(i-i%CellMinutes, 0).Unix(); cellRank(kind) > cellRank(judged[cell]) {
+			judged[cell] = kind
+		}
+	}
+	strip := m.History.Strip("wan", at(40, 0), model.DefaultSlowAboveMS, model.DefaultLossyAbovePercent,
+		int(m.Statuses()[0].Span/60))
+	drawn, cells := map[int64]string{}, map[int64]Cell{}
+	for _, c := range strip.Cells {
+		if c.Kind != "" {
+			drawn[c.Start], cells[c.Start] = c.Kind, c
+		}
+	}
+	want := map[int64]string{
+		at(0, 0).Unix(): CellUp, at(10, 0).Unix(): CellLossy, at(20, 0).Unix(): CellUp, at(30, 0).Unix(): CellSlow,
+	}
+	if !maps.Equal(drawn, want) || !maps.Equal(judged, want) {
+		t.Errorf("drawn %v, judged %v, want %v", drawn, judged, want)
+	}
+	if c := cells[at(10, 0).Unix()]; c.Level != 0.11 || c.LossPercent != 50 {
+		t.Errorf("the lossy cell = %+v, want the window's level and the worst minute's loss", c)
+	}
+	if c := cells[at(30, 0).Unix()]; c.Level != 0.25 || c.LatencyMS != 250 {
+		t.Errorf("the slow cell = %+v, want the window's level and the worst minute's latency", c)
+	}
+}
+
+// The strip judges a family once it has answered at the monitor, as the
+// monitor does: an IPv6 next hop that never answers paints nothing.
+func TestTheStripJudgesAFamilyOnceItHasAnswered(t *testing.T) {
+	t.Parallel()
+	h := NewHistory()
+	probe := func(m, answers int) {
+		for i := range 12 {
+			at := at(m, i*5)
+			h.Probe("wan", FamilyIPv4, "", at, 3*time.Millisecond, true)
+			h.Probe("wan", FamilyIPv6, "", at, 4*time.Millisecond, i < answers)
+			h.Mark("wan", StateUp, "", at)
+		}
+	}
+	probe(0, 0)
+	h.Advance(at(1, 0))
+	if s := h.Strip("wan", at(1, 0), 200, 10, 1); s.Cells[len(s.Cells)-1].Kind != CellUp {
+		t.Fatalf("IPv6 never answered: %+v, want up", s.Cells[len(s.Cells)-1])
+	}
+	probe(10, 1)
+	probe(20, 0)
+	h.Advance(at(21, 0))
+	if s := h.Strip("wan", at(21, 0), 200, 10, 1); s.Cells[len(s.Cells)-1].Kind != CellLossy ||
+		s.Cells[len(s.Cells)-1].Level != 1 {
+		t.Errorf("IPv6 lost again after answering once: %+v, want lossy", s.Cells[len(s.Cells)-1])
 	}
 }
 

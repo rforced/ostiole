@@ -138,31 +138,47 @@ func TestOnlyAGatewayThatAnsweredBeforeWarnsWhenDown(t *testing.T) {
 	}
 }
 
-// A gateway over its thresholds warns, a family a sentence, and those warnings
-// become notices as the others do.
+// A gateway over its thresholds warns, a family a sentence that says how long
+// it was judged over, and those warnings become notices as the others do.
 func TestASlowOrLossyGatewayWarns(t *testing.T) {
 	t.Parallel()
-	statuses := fakeStatuses{{Name: "wan", Interface: "eth0", Online: true,
-		Slow:  []gateway.Over{{Family: "IPv4", LatencyMS: 312.4, Limit: 200}},
-		Lossy: []gateway.Over{{Family: "IPv4", LossPercent: 25, Limit: 10}, {Family: "IPv6", LossPercent: 100, Limit: 10}},
-	}}
+	statuses := fakeStatuses{
+		{Name: "wan", Interface: "eth0", Online: true, Span: 300,
+			Slow: []gateway.Over{{Family: "IPv4", LatencyMS: 312.4, Limit: 200, Span: 300}},
+			Lossy: []gateway.Over{
+				{Family: "IPv4", LossPercent: 25, Limit: 10, Span: 300}, {Family: "IPv6", LossPercent: 100, Limit: 10, Span: 300},
+			},
+		},
+		{Name: "lte", Interface: "eth1", Online: true, Span: 60,
+			Slow: []gateway.Over{{Family: "IPv4", LatencyMS: 640, Limit: 500, Span: 60}}},
+	}
 	srv := newTestServerWith(t, func(d *Deps) { d.Gateways = statuses })
 	ov := getOverview(t, srv)
 	if w := warning(ov, "gateway-slow"); w == nil || w.Title != "Gateway wan is slow" ||
-		w.Detail != "IPv4 took 312 ms on average over the last minute, above 200 ms." {
+		w.Detail != "IPv4 took 312 ms on average over the last 5 minutes, above 200 ms." {
 		t.Errorf("slow = %+v", w)
 	}
 	if w := warning(ov, "gateway-lossy"); w == nil || w.Title != "Gateway wan is losing packets" ||
-		w.Detail != "IPv4 lost 25% of its probes over the last minute, above 10%. "+
-			"IPv6 lost 100% of its probes over the last minute, above 10%." {
+		w.Detail != "IPv4 lost 25% of its probes over the last 5 minutes, above 10%. "+
+			"IPv6 lost 100% of its probes over the last 5 minutes, above 10%." {
 		t.Errorf("lossy = %+v", w)
+	}
+	var lte *Warning
+	for i, w := range ov.Warnings {
+		if w.Title == "Gateway lte is slow" {
+			lte = &ov.Warnings[i]
+		}
+	}
+	if lte == nil || lte.Detail != "IPv4 took 640 ms on average over the last minute, above 500 ms." {
+		t.Errorf("slow over a minute = %+v", lte)
 	}
 	if w := warning(ov, "gateway-down"); w != nil {
 		t.Errorf("down = %+v", w)
 	}
 }
 
-// The dashboard's strips judge each gateway against its own thresholds.
+// The dashboard's strips judge each gateway against its own thresholds, over
+// the minutes its status says it is judged over.
 func TestEachWatchedGatewayHasAStrip(t *testing.T) {
 	t.Parallel()
 	h := gateway.NewHistory()
@@ -172,12 +188,23 @@ func TestEachWatchedGatewayHasAStrip(t *testing.T) {
 		h.Probe("gw_eth0", gateway.FamilyIPv4, "", start.Add(time.Duration(i*5)*time.Second), 300*time.Millisecond, true)
 		h.Mark("gw_eth0", gateway.StateUp, "", start.Add(time.Duration(i*5)*time.Second))
 	}
+	// A minute that lost one of its two probes is lossy alone, and not in a
+	// window of five.
+	for _, name := range []string{"gw_eth0", "lte"} {
+		for i := range 2 {
+			at := start.Add(time.Minute + time.Duration(i*30)*time.Second)
+			h.Probe(name, gateway.FamilyIPv4, "", at, 4*time.Millisecond, i == 1)
+			h.Mark(name, gateway.StateUp, "", at)
+		}
+	}
 	h.Advance(now)
 	cfg := starter()
 	off := 0
 	cfg.Gateways[0].SlowAboveMS = &off
-	statuses := fakeStatuses{{Name: "gw_eth0", Interface: "eth0", Online: true,
-		Families: []gateway.FamilyStatus{{Family: gateway.FamilyIPv4}}}}
+	statuses := fakeStatuses{
+		{Name: "gw_eth0", Interface: "eth0", Online: true, Span: 300, Families: []gateway.FamilyStatus{{Family: gateway.FamilyIPv4}}},
+		{Name: "lte", Interface: "eth1", Online: true, Span: 60, Families: []gateway.FamilyStatus{{Family: gateway.FamilyIPv4}}},
+	}
 	srv, _ := filesServer(t, cfg, func(d *Deps) { d.Gateways, d.GatewayHistory = statuses, h })
 	resp, raw := do(t, srv, http.MethodGet, "/api/v1/gateways/strips", nil)
 	if resp.StatusCode != http.StatusOK {
@@ -187,13 +214,22 @@ func TestEachWatchedGatewayHasAStrip(t *testing.T) {
 	if err := json.Unmarshal(raw, &strips); err != nil {
 		t.Fatal(err)
 	}
-	if len(strips) != 1 || strips[0].Name != "gw_eth0" || strips[0].Families != 1 || len(strips[0].Cells) != gateway.StripCells ||
+	if len(strips) != 2 || strips[0].Name != "gw_eth0" || strips[0].Families != 1 || len(strips[0].Cells) != gateway.StripCells ||
 		strips[0].WorstLatencyMS != 300 {
 		t.Fatalf("strips = %+v", strips)
 	}
 	for _, c := range strips[0].Cells {
-		if c.Kind == gateway.CellSlow {
-			t.Errorf("a gateway whose slow threshold is off drew a slow cell: %+v", c)
+		if c.Kind == gateway.CellSlow || c.Kind == gateway.CellLossy {
+			t.Errorf("gw_eth0, slow off and judged over five minutes, drew %+v", c)
 		}
+	}
+	lossy := 0
+	for _, c := range strips[1].Cells {
+		if c.Kind == gateway.CellLossy {
+			lossy++
+		}
+	}
+	if lossy != 1 {
+		t.Errorf("lte, judged a minute at a time, drew %d lossy cells, want 1", lossy)
 	}
 }

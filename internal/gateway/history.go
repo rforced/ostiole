@@ -86,10 +86,12 @@ type Event struct {
 	// empty is the next hop.
 	Monitor string `json:"monitor,omitempty"`
 	Was     string `json:"was,omitempty"`
-	// LatencyMS and LossPercent are the minute's that crossed Limit.
+	// LatencyMS and LossPercent are the figures that crossed Limit, over the
+	// last Span seconds of probes.
 	LatencyMS   float64 `json:"latencyMs,omitempty"`
 	LossPercent float64 `json:"lossPercent,omitempty"`
 	Limit       int     `json:"limit,omitempty"`
+	Span        int64   `json:"span,omitempty"`
 }
 
 // EventLog is the gateways' events.
@@ -235,6 +237,26 @@ func (f figures) loss() float64 {
 		return 0
 	}
 	return float64(f.lost) / float64(f.sent) * 100
+}
+
+// slow is how far past slowAt the mean round trip went, from 0 to 1, and
+// whether it did.
+func (f figures) slow(slowAt int) (float64, bool) {
+	m := f.mean()
+	if slowAt <= 0 || f.answered() == 0 || m <= float64(slowAt) {
+		return 0, false
+	}
+	return min(1, (m-float64(slowAt))/float64(slowAt)), true
+}
+
+// lossy is how far past lossyAt percent the share lost went, from 0 to 1,
+// and whether it did.
+func (f figures) lossy(lossyAt int) (float64, bool) {
+	l := f.loss()
+	if lossyAt <= 0 || l <= float64(lossyAt) {
+		return 0, false
+	}
+	return min(1, (l-float64(lossyAt))/float64(100-lossyAt)), true
 }
 
 // worst is the worst minute a bucket holds in a family.
@@ -504,6 +526,41 @@ func (h *History) Advance(now time.Time) []Minute {
 	out := h.closed
 	h.closed = nil
 	return out
+}
+
+// window adds up a gateway's w minutes ending with the one that started at
+// start, and reports whether they make a full window at monitor.
+func (h *History) window(gateway string, start time.Time, w int, monitor string) ([2]figures, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if s := h.series[gateway]; s != nil {
+		for i := len(s.minutes) - 1; i >= 0 && s.minutes[i].start >= start.Unix(); i-- {
+			if s.minutes[i].start == start.Unix() {
+				return windowAt(s.minutes, i, w, monitor)
+			}
+		}
+	}
+	return [2]figures{}, false
+}
+
+// windowAt adds up the w minutes ending with minutes[i], and reports whether
+// they make a full window: w minutes in a row, the gateway up in each and
+// probed at monitor.
+func windowAt(minutes []bucket, i, w int, monitor string) ([2]figures, bool) {
+	var sum [2]figures
+	if i+1 < w {
+		return sum, false
+	}
+	for k := i - w + 1; k <= i; k++ {
+		b := &minutes[k]
+		if b.start != minutes[i].start-int64(i-k)*60 || b.state != StateUp || b.monitor != monitor {
+			return [2]figures{}, false
+		}
+		for f := range sum {
+			sum[f].merge(b.fam[f])
+		}
+	}
+	return sum, true
 }
 
 // Keep forgets the gateways not named.
@@ -855,41 +912,42 @@ type Strip struct {
 	WorstLossFamily    string  `json:"worstLossFamily,omitempty"`
 }
 
-// minuteKind is what a minute was against the thresholds, and how far past.
-func minuteKind(b bucket, slowAt, lossyAt int) (string, float64) {
+// stateKind is what a minute was by its state alone.
+func stateKind(b bucket) string {
 	switch b.state {
 	case StateDown:
-		return CellDown, 0
+		return CellDown
 	case StateNever:
-		return CellNever, 0
+		return CellNever
 	}
-	kind, level := "", 0.0
 	for _, f := range b.fam {
-		if f.sent == 0 {
-			continue
+		if f.sent > 0 && (b.state != "" || f.answered() > 0) {
+			return CellUp
 		}
-		if kind == "" && b.state == "" && f.answered() == 0 {
-			continue
+	}
+	return ""
+}
+
+// overKind is what a full window was against the thresholds, lossy over
+// slow, and how far past; empty where it was neither.
+func overKind(fam [2]figures, slowAt, lossyAt int) (string, float64) {
+	kind, level := "", 0.0
+	for _, f := range fam {
+		if lv, ok := f.lossy(lossyAt); ok && (kind != CellLossy || lv > level) {
+			kind, level = CellLossy, lv
 		}
-		if kind == "" {
-			kind = CellUp
-		}
-		if l := f.loss(); lossyAt > 0 && l > float64(lossyAt) {
-			lv := min(1, (l-float64(lossyAt))/float64(100-lossyAt))
-			if cellRank(kind) < cellRank(CellLossy) || lv > level {
-				kind, level = CellLossy, lv
-			}
-		}
-		if m := f.mean(); slowAt > 0 && f.answered() > 0 && m > float64(slowAt) && cellRank(kind) <= cellRank(CellSlow) {
-			kind, level = CellSlow, max(level, min(1, (m-float64(slowAt))/float64(slowAt)))
+		if lv, ok := f.slow(slowAt); ok && kind != CellLossy {
+			kind, level = CellSlow, max(level, lv)
 		}
 	}
 	return kind, level
 }
 
 // Strip draws a gateway's last day ending at now, judged against its
-// thresholds as they are.
-func (h *History) Strip(gateway string, now time.Time, slowAt, lossyAt int) Strip {
+// thresholds as they are and as the monitor judges them: a closed minute
+// the gateway was up in is slow or lossy when the window minutes ending
+// with it are, in a family that has answered at its monitor.
+func (h *History) Strip(gateway string, now time.Time, slowAt, lossyAt, window int) Strip {
 	const span = CellMinutes * 60
 	end := now.Unix() - now.Unix()%span + span
 	start := end - StripCells*span
@@ -903,18 +961,32 @@ func (h *History) Strip(gateway string, now time.Time, slowAt, lossyAt int) Stri
 	if s == nil {
 		return out
 	}
+	window = max(window, 1)
+	answered := h.answered[gateway]
 	minutes := slices.Clone(s.minutes)
 	if s.cur != nil {
 		b := *s.cur
 		b.finish()
 		minutes = append(minutes, b)
 	}
-	for _, b := range minutes {
+	for i, b := range minutes {
 		if b.start < start || b.start >= end {
 			continue
 		}
 		c := &out.Cells[(b.start-start)/span]
-		kind, level := minuteKind(b, slowAt, lossyAt)
+		kind, level := stateKind(b), 0.0
+		if i < len(s.minutes) && b.state == StateUp {
+			if fam, full := windowAt(s.minutes, i, window, b.monitor); full {
+				for f := range fam {
+					if monitor, ok := answered[familyName(f)]; !ok || monitor != b.monitor {
+						fam[f] = figures{}
+					}
+				}
+				if k, lv := overKind(fam, slowAt, lossyAt); k != "" {
+					kind, level = k, lv
+				}
+			}
+		}
 		if r := cellRank(kind); r > cellRank(c.Kind) || (r == cellRank(c.Kind) && level > c.Level) {
 			c.Kind, c.Level = kind, math.Round(level*100)/100
 		}

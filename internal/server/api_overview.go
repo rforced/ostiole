@@ -878,8 +878,8 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 		if len(g.Slow) > 0 {
 			var parts []string
 			for _, o := range g.Slow {
-				parts = append(parts, fmt.Sprintf("%s took %.0f ms on average over the last minute, above %d ms.",
-					o.Family, o.LatencyMS, o.Limit))
+				parts = append(parts, fmt.Sprintf("%s took %.0f ms on average over %s, above %d ms.",
+					o.Family, o.LatencyMS, lastSpan(o.Span), o.Limit))
 			}
 			out = append(out, Warning{
 				Kind: "gateway-slow", Level: "warn",
@@ -889,8 +889,8 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 		if len(g.Lossy) > 0 {
 			var parts []string
 			for _, o := range g.Lossy {
-				parts = append(parts, fmt.Sprintf("%s lost %.0f%% of its probes over the last minute, above %d%%.",
-					o.Family, o.LossPercent, o.Limit))
+				parts = append(parts, fmt.Sprintf("%s lost %.0f%% of its probes over %s, above %d%%.",
+					o.Family, o.LossPercent, lastSpan(o.Span), o.Limit))
 			}
 			out = append(out, Warning{
 				Kind: "gateway-lossy", Level: "warn",
@@ -1163,6 +1163,14 @@ func (a *api) gatewayStatuses() []gateway.Status {
 		return nil
 	}
 	return a.gateways.Statuses()
+}
+
+// lastSpan says how far back a span of seconds reaches.
+func lastSpan(seconds int64) string {
+	if n := seconds / 60; n > 1 {
+		return fmt.Sprintf("the last %d minutes", n)
+	}
+	return "the last minute"
 }
 
 // routes reports whether the configuration expects traffic to be routed,

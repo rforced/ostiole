@@ -235,7 +235,7 @@ function save() {
         <FormField
           id="gw-slow"
           label="Slow above (ms)"
-          hint="A minute's mean round trip. 0 turns it off."
+          hint="The mean round trip over the minutes that hold the last ten probes. 0 turns it off."
         >
           <input
             id="gw-slow"
@@ -250,7 +250,7 @@ function save() {
         <FormField
           id="gw-lossy"
           label="Losing packets above (%)"
-          hint="A minute's share of probes lost. 0 turns it off."
+          hint="The share lost over the minutes that hold the last ten probes. 0 turns it off."
         >
           <input
             id="gw-lossy"
