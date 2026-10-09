@@ -625,6 +625,23 @@ func TestCheckSurfacesNetworkErrors(t *testing.T) {
 	}
 }
 
+func TestCheckRefusesLogsTheMemoryCannotHold(t *testing.T) {
+	t.Parallel()
+	e, _, _ := newEngine(t)
+	c := cfg("x")
+	c.System.Management.FirewallLog.Entries = 5_000_000
+	if _, err := e.Check(context.Background(), c); err != nil {
+		t.Fatalf("memory unknown: %v", err)
+	}
+	e.MemTotal = func() uint64 { return 950_000_000 }
+	_, err := e.Check(context.Background(), c)
+	var ve *model.ValidationError
+	if !errors.As(err, &ve) || len(ve.Issues) == 0 ||
+		ve.Issues[0] != (model.Issue{Path: "system.management.firewallLog.entries", Message: "this router allows up to 809523"}) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestServicesAppliedAndRevertedWithTheRest(t *testing.T) {
 	t.Parallel()
 	st := store.New(t.TempDir())

@@ -7,6 +7,14 @@ import (
 	"ostiole/internal/model"
 )
 
+func TestTheModelMirrorsTheCeilings(t *testing.T) {
+	t.Parallel()
+	if model.DefaultBlockedDomains != DefaultMaxDomains || model.MaxBlockedDomains != MaxDomains {
+		t.Errorf("model has %d and %d, dnsblock %d and %d",
+			model.DefaultBlockedDomains, model.MaxBlockedDomains, DefaultMaxDomains, MaxDomains)
+	}
+}
+
 func TestNormalize(t *testing.T) {
 	cases := []struct {
 		in   string

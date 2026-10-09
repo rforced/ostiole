@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
 	"strconv"
 	"sync"
@@ -75,6 +76,9 @@ type Engine struct {
 	// notifier hears of an apply undone because nobody confirmed it; nil
 	// tells nobody.
 	notifier Notifier
+	// MemTotal is the router's memory in bytes, which the logs' settings
+	// must fit; nil or 0 refuses nothing.
+	MemTotal func() uint64
 
 	mu      sync.Mutex
 	pending *pendingApply
@@ -332,9 +336,15 @@ type Plan struct {
 // Store exposes the underlying store for read-only callers.
 func (e *Engine) Store() *store.Store { return e.store }
 
-// Check validates cfg, renders the ruleset and network units, and has nft
-// dry-run the ruleset.
+// Check validates cfg, refuses logs the router's memory cannot hold,
+// renders the ruleset and network units, and has nft dry-run the ruleset.
 func (e *Engine) Check(ctx context.Context, cfg *model.Config) (*Plan, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	if issues := e.budget().Check(cfg); len(issues) > 0 {
+		return nil, &model.ValidationError{Issues: issues}
+	}
 	ruleset, err := nft.RenderWithFeeds(cfg, e.FeedEntries())
 	if err != nil {
 		return nil, err
@@ -375,6 +385,19 @@ func (e *Engine) Check(ctx context.Context, cfg *model.Config) (*Plan, error) {
 		return nil, err
 	}
 	return plan, nil
+}
+
+// budget is the router's memory as the logs see it, unknown without
+// MemTotal.
+func (e *Engine) budget() model.MemoryBudget {
+	if e.MemTotal == nil {
+		return model.MemoryBudget{}
+	}
+	n := e.MemTotal()
+	if n > math.MaxInt64 {
+		n = math.MaxInt64
+	}
+	return model.MemoryBudget{Total: int64(n)}
 }
 
 // ApplyOptions tunes Apply.

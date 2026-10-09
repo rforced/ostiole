@@ -94,35 +94,51 @@ func (f LogFiles) MaxUse() int64 {
 
 // LogsFullBytes is what the logs kept in memory cost once full, counting
 // only those that are on: the firewall log always, the query log while it
-// and the DNS server are on, the WAF events while the proxy serves,
-// Traffic's destinations while they are recorded, and the proxy's requests,
-// the DHCP log, the wireless clients and the VPN peers while their service
-// is on and the level keeps them.
+// is on and the DNS server or its files fill it, the WAF events while the
+// proxy serves, Traffic's destinations while they are recorded, and the
+// proxy's requests, the DHCP log, the wireless clients and the VPN peers
+// while their service is on and the level keeps them.
 func (c *Config) LogsFullBytes() int64 {
-	total := int64(c.System.Management.FirewallLog.Size()) * FirewallLogBytes
-	if q := c.Services.DNS.QueryLog; c.Services.DNS.Enabled && q.Enabled {
-		total += int64(q.Size()) * QueryLogBytes
-	}
-	if c.ProxyEnabled() {
-		total += int64(c.Services.Proxy.Events.Size()) * ProxyEventBytes
-	}
-	if c.Traffic.DestinationsOn() {
-		total += int64(c.Traffic.Destinations.Size()) * DestinationBytes
-	}
-	if c.ProxyEnabled() && c.System.Logging.Records() {
-		total += int64(c.Services.Proxy.Requests.Size(DefaultRequestEntries)) * RequestBytes
-	}
-	if c.Services.DHCP.Enabled && c.System.Logging.Records() {
-		total += int64(c.Services.DHCP.Log.Size(DefaultDHCPLogEntries)) * DHCPLogBytes
-	}
-	if c.WirelessEnabled() && c.System.Logging.Records() {
-		total += int64(c.Wireless.Log.Size(DefaultWirelessLogEntries)) * WirelessLogBytes
-	}
-	if c.WireGuardEnabled() && c.System.Logging.Records() {
-		total += int64(c.VPN.WireGuardLog.Size(DefaultPeerLogEntries)) * PeerLogBytes
-	}
-	if c.TailscaleEnabled() && c.System.Logging.Records() {
-		total += int64(c.VPN.TailscaleLog.Size(DefaultPeerLogEntries)) * PeerLogBytes
+	var total int64
+	for _, l := range c.memoryLogs() {
+		if l.on {
+			total += int64(l.size) * l.bytes
+		}
 	}
 	return total
+}
+
+// memoryLog is one log kept in memory: its setting's path, whether it is
+// on, its size and default, its ceiling and what an entry costs.
+type memoryLog struct {
+	path      string
+	on        bool
+	size, def int
+	most      int
+	bytes     int64
+}
+
+func (c *Config) memoryLogs() []memoryLog {
+	records := c.System.Logging.Records()
+	q, p := c.Services.DNS.QueryLog, c.Services.Proxy
+	return []memoryLog{
+		{firewallLogEntries, true, c.System.Management.FirewallLog.Size(),
+			DefaultFirewallLogEntries, MaxFirewallLogEntries, FirewallLogBytes},
+		{"services.dns.queryLog.entries", q.Enabled && (c.Services.DNS.Enabled || c.System.Logging.Files.Enabled),
+			q.Size(), DefaultQueryLogEntries, MaxQueryLogEntries, QueryLogBytes},
+		{"services.proxy.events.entries", c.ProxyEnabled(), p.Events.Size(),
+			DefaultProxyEventEntries, MaxProxyEventEntries, ProxyEventBytes},
+		{"traffic.destinations.entries", c.Traffic.DestinationsOn(), c.Traffic.Destinations.Size(),
+			DefaultDestinationEntries, MaxDestinationEntries, DestinationBytes},
+		{"services.proxy.requests.entries", c.ProxyEnabled() && records, p.Requests.Size(DefaultRequestEntries),
+			DefaultRequestEntries, MaxRequestEntries, RequestBytes},
+		{"services.dhcp.log.entries", c.Services.DHCP.Enabled && records, c.Services.DHCP.Log.Size(DefaultDHCPLogEntries),
+			DefaultDHCPLogEntries, MaxDHCPLogEntries, DHCPLogBytes},
+		{"wireless.log.entries", c.WirelessEnabled() && records, c.Wireless.Log.Size(DefaultWirelessLogEntries),
+			DefaultWirelessLogEntries, MaxWirelessLogEntries, WirelessLogBytes},
+		{"vpn.wireguardLog.entries", c.WireGuardEnabled() && records, c.VPN.WireGuardLog.Size(DefaultPeerLogEntries),
+			DefaultPeerLogEntries, MaxPeerLogEntries, PeerLogBytes},
+		{"vpn.tailscaleLog.entries", c.TailscaleEnabled() && records, c.VPN.TailscaleLog.Size(DefaultPeerLogEntries),
+			DefaultPeerLogEntries, MaxPeerLogEntries, PeerLogBytes},
+	}
 }

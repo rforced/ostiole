@@ -28,6 +28,7 @@ import (
 	"ostiole/internal/sshd"
 	"ostiole/internal/store"
 	"ostiole/internal/sysctl"
+	"ostiole/internal/sysstat"
 	"ostiole/internal/sysupdate"
 	"ostiole/internal/timezone"
 	"ostiole/internal/update"
@@ -192,6 +193,7 @@ func (g *globals) engineWith(ownLevel bool) (*engine.Engine, error) {
 		return nil, err
 	}
 	eng := engine.New(g.store(), &nft.Exec{Bin: g.nftBin}, net, slog.Default())
+	eng.MemTotal = sysstat.New(g.configDir).MemTotal
 	eng.WithFeeds(g.feeds())
 	if port := listenPortOf(installedListen()); port != 0 {
 		eng.WithDefaultPorts(port, 22)
