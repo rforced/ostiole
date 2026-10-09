@@ -545,7 +545,7 @@ describe('config store reverse proxy', () => {
     expect(config.sectionFor('services.dhcp.servers[0].interface')).toBe('/services/dhcp')
   })
 
-  it('names what a pool leaves behind', () => {
+  it('names the sites and paths that use a pool', () => {
     const config = useConfigStore()
     config.replaceDraft(proxied())
     expect(config.poolDependents('web')).toEqual(['site shop'])

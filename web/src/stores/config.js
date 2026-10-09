@@ -838,7 +838,10 @@ export const useConfigStore = defineStore('config', () => {
       .map((a) => a.description || a.id)
   }
 
-  /** Sites and paths that would lose their backends with a pool. */
+  /**
+   * Sites and paths that send to a pool. They stop it being deleted: a site
+   * cannot exist without its pool.
+   */
   function poolDependents(id) {
     const out = []
     for (const s of proxy.value.sites ?? []) {

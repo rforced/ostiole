@@ -8,11 +8,13 @@ import { api } from '@/lib/api'
 import { eventValues } from '@/lib/proxyEvents'
 import { matches } from '@/lib/search'
 import { useProxyStatus } from '@/lib/proxyStatus'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ProxyPage from '@/views/services/ProxyPage.vue'
 import AccessDialog from '@/views/services/proxy/AccessDialog.vue'
 import EventsTab from '@/views/services/proxy/EventsTab.vue'
 import ExclusionDialog from '@/views/services/proxy/ExclusionDialog.vue'
+import PoolsTab from '@/views/services/proxy/PoolsTab.vue'
 import ProfileDialog from '@/views/services/proxy/ProfileDialog.vue'
 import ProxyStatus from '@/views/services/proxy/ProxyStatus.vue'
 import RouteDialog from '@/views/services/proxy/RouteDialog.vue'
@@ -797,5 +799,40 @@ describe('Allow from', () => {
     await wrapper.get('#route-allow').setValue('192.168.0.0/16')
     await wrapper.get('form').trigger('submit')
     expect(store.draft.services.proxy.routes[0].allowFrom).toEqual(['192.168.0.0/16', 'office'])
+  })
+})
+
+// Delete stays in its place and is off; the Used by column says why.
+describe('PoolsTab', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('refuses to delete a pool a site or a path sends to', async () => {
+    useAuthStore().user = { username: 'admin', role: 'admin' }
+    const pools = [
+      { id: 'web', upstreams: [{ address: '192.168.1.20:80' }] },
+      { id: 'media', upstreams: [{ address: '192.168.1.30:80' }] },
+      { id: 'spare', upstreams: [{ address: '192.168.1.40:80' }] },
+    ]
+    const sites = [
+      {
+        id: 'shop',
+        enabled: true,
+        hosts: ['shop.example.com'],
+        pool: 'web',
+        paths: [{ prefix: '/media', pool: 'media' }],
+      },
+    ]
+    useConfigStore().replaceDraft(config({ services: { proxy: proxy({ pools, sites }) } }))
+    const wrapper = mount(PoolsTab, { global: { stubs: { RouterLink: true } } })
+    await flushPromises()
+
+    const rows = wrapper.findAll('tbody tr')
+    expect(rows.map((tr) => tr.get('td[data-label="Used by"]').text())).toEqual([
+      'site shop',
+      'site shop path /media',
+      '—',
+    ])
+    const deletes = rows.map((tr) => tr.findAll('button').find((b) => b.text() === 'Delete'))
+    expect(deletes.map((b) => b.element.disabled)).toEqual([true, true, false])
   })
 })

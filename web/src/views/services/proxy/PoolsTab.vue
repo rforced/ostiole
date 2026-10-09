@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import UsedByCell from '@/components/UsedByCell.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import PoolDialog from '@/views/services/proxy/PoolDialog.vue'
@@ -41,12 +42,13 @@ function edit(pool) {
             <th>Upstreams</th>
             <th>Balancing</th>
             <th>Health</th>
+            <th>Used by</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="!pools.length">
-            <td colspan="5" class="text-ink-muted">No pools.</td>
+            <td colspan="6" class="text-ink-muted">No pools.</td>
           </tr>
           <tr
             v-for="p in pools"
@@ -68,6 +70,7 @@ function edit(pool) {
               </template>
               <span v-else class="text-ink-muted">none</span>
             </td>
+            <UsedByCell :names="config.poolDependents(p.id)" />
             <td class="actions" data-label="">
               <button type="button" class="link-action" @click="edit(p)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}
@@ -75,9 +78,8 @@ function edit(pool) {
               <ConfirmButton
                 label="Delete"
                 :question="`Delete pool ${p.id}?`"
-                :dependents="config.poolDependents(p.id)"
-                dependents-label="Left without a pool"
                 :typed="p.id"
+                :disabled="config.poolDependents(p.id).length > 0"
                 @confirm="config.removePool(p.id)"
               />
             </td>
