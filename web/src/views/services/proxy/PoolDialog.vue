@@ -100,7 +100,7 @@ function save() {
     :title="pool ? `Pool ${pool.id}` : 'Add pool'"
     description="Where a site's requests go, and how they are shared out."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="pool-form" class="space-y-4" @submit.prevent="save">
       <div class="fields">
         <FormField id="pool-id" label="Name">
           <input
@@ -200,13 +200,12 @@ function save() {
           />
         </template>
       </fieldset>
-
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!upstreams.length">
-          Save to draft
-        </button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="pool-form" class="btn-primary" :disabled="!upstreams.length">
+        Save to draft
+      </button>
+    </template>
   </AppDialog>
 </template>

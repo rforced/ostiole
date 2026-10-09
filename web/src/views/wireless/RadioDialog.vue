@@ -108,7 +108,7 @@ function save() {
     :title="`Radio ${form.name}`"
     description="What this card transmits: where in the spectrum, how wide, and how loud."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="radio-form" class="space-y-4" @submit.prevent="save">
       <p v-if="card?.selfManaged" class="text-sm text-ink-muted">
         Takes its country from networks in range. With none in range, 5 GHz stays off.
       </p>
@@ -153,10 +153,12 @@ function save() {
       </div>
 
       <ToggleRow v-model="form.enabled" label="Enabled" />
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!form.name">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="radio-form" class="btn-primary" :disabled="!form.name">
+        Save to draft
+      </button>
+    </template>
   </AppDialog>
 </template>

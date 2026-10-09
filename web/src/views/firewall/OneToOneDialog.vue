@@ -55,7 +55,7 @@ function save() {
     :title="entry ? `1:1 NAT ${entry.id}` : 'Add 1:1 NAT'"
     description="One outside address stands in for one host inside."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="one-to-one-form" class="space-y-4" @submit.prevent="save">
       <FormField id="one-desc" label="Description">
         <input id="one-desc" v-model="form.description" class="input" />
       </FormField>
@@ -89,10 +89,12 @@ function save() {
         </FormField>
       </div>
       <ToggleRow v-model="form.enabled" label="Enabled" />
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!form.zone">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="one-to-one-form" class="btn-primary" :disabled="!form.zone">
+        Save to draft
+      </button>
+    </template>
   </AppDialog>
 </template>

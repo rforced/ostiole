@@ -50,7 +50,7 @@ function create() {
     title="Add VLAN"
     description="Creates an 802.1Q sub-interface on the parent."
   >
-    <form class="space-y-4" @submit.prevent="create">
+    <form id="vlan-form" class="space-y-4" @submit.prevent="create">
       <FormField id="vlan-parent" label="Parent interface">
         <select id="vlan-parent" v-model="parent" class="input" required>
           <option value="" disabled>Choose</option>
@@ -69,10 +69,10 @@ function create() {
         />
       </FormField>
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="vlan-form" class="btn-primary">Save to draft</button>
+    </template>
   </AppDialog>
 </template>

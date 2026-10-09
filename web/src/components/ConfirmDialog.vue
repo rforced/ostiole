@@ -49,7 +49,7 @@ function submit() {
     :read-only="false"
     topmost
   >
-    <form v-if="req" class="space-y-4" @submit.prevent="submit">
+    <form v-if="req" id="confirm-form" class="space-y-4" @submit.prevent="submit">
       <div v-if="req.dependents.length" class="text-sm">
         <p class="mb-1 text-ink-muted">{{ req.dependentsLabel }}</p>
         <ul class="list-disc pl-5">
@@ -67,14 +67,21 @@ function submit() {
           spellcheck="false"
         />
       </FormField>
-      <div class="flex justify-end gap-2">
+    </form>
+    <template #footer>
+      <template v-if="req">
         <button ref="cancel" type="button" class="btn-secondary" @click="confirm.settle(false)">
           Cancel
         </button>
-        <button type="submit" :class="req.danger ? 'btn-danger' : 'btn-primary'" :disabled="!ready">
+        <button
+          type="submit"
+          form="confirm-form"
+          :class="req.danger ? 'btn-danger' : 'btn-primary'"
+          :disabled="!ready"
+        >
           {{ req.confirmLabel }}
         </button>
-      </div>
-    </form>
+      </template>
+    </template>
   </AppDialog>
 </template>

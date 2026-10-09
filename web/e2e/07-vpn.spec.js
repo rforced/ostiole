@@ -90,7 +90,7 @@ test('make a device on the page and hand it its file', async ({ page }) => {
   expect(text).toContain(`[Peer]\nPublicKey = ${tunnelKey}\nPresharedKey = `)
   expect(text).toContain('Endpoint = vpn.example.com:51820')
   await page.screenshot({ path: shot('60-vpn-device'), fullPage: true })
-  await dialog.getByRole('button', { name: 'Done' }).click()
+  await dialog.getByRole('button', { name: 'Close' }).last().click()
 
   // Only the public key reached the draft.
   const peer = page.getByRole('row').filter({ hasText: 'phone' })
@@ -122,7 +122,7 @@ test('make new keys for a device and hand it the new file', async ({ page }) => 
   await expect(dialog.getByRole('img', { name: 'QR code of the file for phone' })).toBeVisible()
   await expect(dialog.locator('pre')).toContainText(/PrivateKey = [A-Za-z0-9+/]{43}=/)
   await expect(dialog.locator('pre')).toContainText('Address = 10.66.0.3/32')
-  await dialog.getByRole('button', { name: 'Done' }).click()
+  await dialog.getByRole('button', { name: 'Close' }).last().click()
 
   await expect(row).toContainText('PSK')
   await row.getByRole('button', { name: 'Edit' }).click()

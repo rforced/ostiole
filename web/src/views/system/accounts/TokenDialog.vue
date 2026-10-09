@@ -47,7 +47,7 @@ function submit() {
     title="Add token"
     description="The secret is shown once and never stored."
   >
-    <form class="space-y-4" @submit.prevent="submit">
+    <form id="token-form" class="space-y-4" @submit.prevent="submit">
       <div class="fields">
         <FormField id="tok-name" label="Name">
           <input id="tok-name" v-model="form.name" class="input" required />
@@ -86,10 +86,12 @@ function submit() {
           </label>
         </div>
       </FormField>
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!form.name">Create token</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="token-form" class="btn-primary" :disabled="!form.name">
+        Create token
+      </button>
+    </template>
   </AppDialog>
 </template>

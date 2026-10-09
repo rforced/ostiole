@@ -177,7 +177,7 @@ async function save() {
     :title="tunnel ? `Tunnel ${tunnel.name}` : 'Add WireGuard tunnel'"
     description="Its zone decides which rules apply to what comes out of it."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="tunnel-form" class="space-y-4" @submit.prevent="save">
       <div class="fields">
         <FormField id="wg-name" label="Interface name">
           <input
@@ -262,12 +262,12 @@ async function save() {
 
       <ToggleRow v-model="form.enabled" label="Enabled" />
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!form.privateKey">
-          Save to draft
-        </button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="tunnel-form" class="btn-primary" :disabled="!form.privateKey">
+        Save to draft
+      </button>
+    </template>
   </AppDialog>
 </template>

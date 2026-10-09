@@ -470,7 +470,7 @@ describe('ProfileDialog', () => {
     store.loaded = true
     const wrapper = mount(ProfileDialog, {
       props: { open: true, profile },
-      global: { stubs: { AppDialog: { template: '<div><slot /></div>' } } },
+      global: { stubs: { AppDialog: { template: '<div><slot /><slot name="footer" /></div>' } } },
     })
     await flushPromises()
     await wrapper.find('form').trigger('submit')
@@ -487,7 +487,7 @@ describe('ProfileDialog', () => {
     store.loaded = true
     const wrapper = mount(ProfileDialog, {
       props: { open: true, profile },
-      global: { stubs: { AppDialog: { template: '<div><slot /></div>' } } },
+      global: { stubs: { AppDialog: { template: '<div><slot /><slot name="footer" /></div>' } } },
     })
     await flushPromises()
     expect(wrapper.get('#waf-inbound').element.value).toBe('10')
@@ -511,7 +511,7 @@ describe('ProfileDialog', () => {
     store.loaded = true
     const wrapper = mount(ProfileDialog, {
       props: { open: true, profile },
-      global: { stubs: { AppDialog: { template: '<div><slot /></div>' } } },
+      global: { stubs: { AppDialog: { template: '<div><slot /><slot name="footer" /></div>' } } },
     })
     await flushPromises()
     expect(wrapper.text()).toContain('A larger one is refused, an upload too.')
@@ -611,7 +611,7 @@ function withDraft(component, draft, props = {}) {
     global: {
       stubs: {
         ...stubs,
-        AppDialog: { template: '<div><slot /></div>' },
+        AppDialog: { template: '<div><slot /><slot name="footer" /></div>' },
         'transition-group': false,
       },
     },

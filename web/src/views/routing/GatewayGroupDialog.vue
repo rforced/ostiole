@@ -72,7 +72,7 @@ function save() {
     :title="group ? `Group ${group.name}` : 'Add gateway group'"
     description="The lowest tier that is up carries the traffic. Gateways in the same tier share it."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="gateway-group-form" class="space-y-4" @submit.prevent="save">
       <div class="fields">
         <FormField id="gg-name" label="Name" hint="Lower case, like failover.">
           <input
@@ -153,12 +153,17 @@ function save() {
       </section>
 
       <ToggleRow v-model="form.enabled" label="Enabled" />
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!form.members.length">
-          Save to draft
-        </button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button
+        type="submit"
+        form="gateway-group-form"
+        class="btn-primary"
+        :disabled="!form.members.length"
+      >
+        Save to draft
+      </button>
+    </template>
   </AppDialog>
 </template>

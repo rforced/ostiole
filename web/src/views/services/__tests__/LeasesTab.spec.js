@@ -14,7 +14,10 @@ vi.mock('@/lib/api', () => ({
 }))
 
 const stubs = {
-  AppDialog: { props: ['open', 'title'], template: '<div v-if="open"><slot /></div>' },
+  AppDialog: {
+    props: ['open', 'title'],
+    template: '<div v-if="open"><slot /><slot name="footer" /></div>',
+  },
 }
 
 // Live reads from the start, so no tab outlives its test.

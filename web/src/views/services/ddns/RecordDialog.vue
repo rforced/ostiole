@@ -154,7 +154,7 @@ function sentence(r) {
     :title="record ? `Record ${record.name}` : 'Add record'"
     description="Anyone can look this name up."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="ddns-record-form" class="space-y-4" @submit.prevent="save">
       <ToggleRow v-model="form.enabled" label="Enabled" />
       <div class="fields">
         <FormField id="ddns-name" label="Name" :hint="providerLine">
@@ -190,19 +190,18 @@ function sentence(r) {
       </ul>
       <ErrorLine v-if="checkError" class="text-sm">{{ checkError }}</ErrorLine>
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
-
-      <div class="flex justify-end gap-2 pt-2">
-        <ActionButton
-          v-if="!auth.readOnly"
-          class="mr-auto"
-          label="Check"
-          busy-label="Checking…"
-          :busy="checking"
-          @click="check"
-        />
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <ActionButton
+        v-if="!auth.readOnly"
+        class="mr-auto"
+        label="Check"
+        busy-label="Checking…"
+        :busy="checking"
+        @click="check"
+      />
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="ddns-record-form" class="btn-primary">Save to draft</button>
+    </template>
   </AppDialog>
 </template>

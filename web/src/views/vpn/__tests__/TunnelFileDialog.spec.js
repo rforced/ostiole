@@ -13,7 +13,10 @@ vi.mock('@/lib/api', async (importOriginal) => {
 
 // The dialog itself teleports; the form inside it is what is under test.
 const stubs = {
-  AppDialog: { props: ['open', 'title', 'description'], template: '<div><slot /></div>' },
+  AppDialog: {
+    props: ['open', 'title', 'description'],
+    template: '<div><slot /><slot name="footer" /></div>',
+  },
 }
 
 // The wg(8) man page's example key pair, and a public key of the same shape.

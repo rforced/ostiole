@@ -74,7 +74,7 @@ function save() {
     :title="forward ? `Port forward ${forward.id}` : 'Add port forward'"
     description="Forwarded traffic is allowed without a rule of its own."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="port-forward-form" class="space-y-4" @submit.prevent="save">
       <FormField id="pf-desc" label="Description">
         <input id="pf-desc" v-model="form.description" class="input" />
       </FormField>
@@ -137,10 +137,10 @@ function save() {
         hint="Inside hosts reach the target by the outside address too."
       />
       <ToggleRow v-model="form.enabled" label="Enabled" />
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="port-forward-form" class="btn-primary">Save to draft</button>
+    </template>
   </AppDialog>
 </template>

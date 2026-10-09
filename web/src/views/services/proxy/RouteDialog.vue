@@ -100,7 +100,7 @@ function save() {
     :title="route ? `Route ${route.id}` : 'Add route'"
     description="One port passed through, whole or by the name a TLS client asks for."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="proxy-route-form" class="space-y-4" @submit.prevent="save">
       <div class="fields">
         <FormField id="route-id" label="Name">
           <input
@@ -197,13 +197,17 @@ function save() {
       </FormField>
 
       <ToggleRow v-model="form.enabled" label="Enabled" />
-
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!upstreams.length || !form.port">
-          Save to draft
-        </button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button
+        type="submit"
+        form="proxy-route-form"
+        class="btn-primary"
+        :disabled="!upstreams.length || !form.port"
+      >
+        Save to draft
+      </button>
+    </template>
   </AppDialog>
 </template>

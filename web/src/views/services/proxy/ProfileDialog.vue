@@ -101,7 +101,7 @@ function save() {
     :title="profile ? `Profile ${profile.id}` : 'Add WAF profile'"
     description="How requests to a site are inspected."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="profile-form" class="space-y-4" @submit.prevent="save">
       <div class="fields">
         <FormField id="waf-id" label="Name">
           <input
@@ -199,11 +199,10 @@ function save() {
       </fieldset>
 
       <ToggleRow v-model="form.inspectResponses" label="Inspect responses" />
-
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="profile-form" class="btn-primary">Save to draft</button>
+    </template>
   </AppDialog>
 </template>

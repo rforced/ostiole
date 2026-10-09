@@ -9,7 +9,7 @@ import CertificateDialog from '@/views/system/certificates/CertificateDialog.vue
 // place so a test can type into it.
 const AppDialogStub = {
   props: ['open', 'title', 'description'],
-  template: '<div v-if="open"><slot /></div>',
+  template: '<div v-if="open"><slot /><slot name="footer" /></div>',
 }
 
 function draft() {

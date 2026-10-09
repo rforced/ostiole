@@ -22,7 +22,10 @@ class FakeSource {
 }
 
 const stubs = {
-  AppDialog: { props: ['open', 'title'], template: '<div><h2>{{ title }}</h2><slot /></div>' },
+  AppDialog: {
+    props: ['open', 'title'],
+    template: '<div><h2>{{ title }}</h2><slot /><slot name="footer" /></div>',
+  },
 }
 
 const NOW = 1_790_000_000

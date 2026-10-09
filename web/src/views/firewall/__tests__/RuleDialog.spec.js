@@ -6,7 +6,10 @@ import { useConfigStore } from '@/stores/config'
 import RuleDialog from '@/views/firewall/RuleDialog.vue'
 
 const stubs = {
-  AppDialog: { props: ['open', 'title', 'description'], template: '<div><slot /></div>' },
+  AppDialog: {
+    props: ['open', 'title', 'description'],
+    template: '<div><slot /><slot name="footer" /></div>',
+  },
   EndpointFields: true,
 }
 

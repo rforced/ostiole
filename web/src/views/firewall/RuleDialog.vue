@@ -168,7 +168,7 @@ function save() {
     :title="rule?.id ? `Rule ${rule.id}` : `Add rule in ${zone}`"
     description="Rules match traffic entering the zone, whether it is for this firewall or forwarded through it."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="rule-form" class="space-y-4" @submit.prevent="save">
       <FormField id="rule-desc" label="Description">
         <input id="rule-desc" v-model="form.description" class="input" />
       </FormField>
@@ -326,11 +326,10 @@ function save() {
           :hint="form.action === 'accept' ? '' : 'Logs at most 10 packets a second.'"
         />
       </div>
-
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="rule-form" class="btn-primary">Save to draft</button>
+    </template>
   </AppDialog>
 </template>

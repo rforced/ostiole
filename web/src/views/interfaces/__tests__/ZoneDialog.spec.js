@@ -7,7 +7,10 @@ import { useConfigStore } from '@/stores/config'
 import ZoneDialog from '@/views/interfaces/ZoneDialog.vue'
 
 const stubs = {
-  AppDialog: { props: ['open', 'title', 'description'], template: '<div><slot /></div>' },
+  AppDialog: {
+    props: ['open', 'title', 'description'],
+    template: '<div><slot /><slot name="footer" /></div>',
+  },
 }
 
 function open(zone, role) {

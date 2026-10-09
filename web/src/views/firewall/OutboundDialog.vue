@@ -68,7 +68,7 @@ function save() {
     :title="rule ? `Outbound NAT ${rule.id}` : 'Add outbound rule'"
     description="With nothing else set it masquerades everything leaving the zone."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="outbound-form" class="space-y-4" @submit.prevent="save">
       <FormField id="nat-desc" label="Description">
         <input id="nat-desc" v-model="form.description" class="input" />
       </FormField>
@@ -119,10 +119,10 @@ function save() {
         />
       </FormField>
       <ToggleRow v-model="form.enabled" label="Enabled" />
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="outbound-form" class="btn-primary">Save to draft</button>
+    </template>
   </AppDialog>
 </template>

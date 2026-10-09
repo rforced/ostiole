@@ -20,7 +20,7 @@ const stubs = {
   RouterLink: { props: ['to'], template: '<a :href="to"><slot /></a>' },
   AppDialog: {
     props: ['open', 'title', 'description'],
-    template: '<div v-if="open" class="dialog"><slot /></div>',
+    template: '<div v-if="open" class="dialog"><slot /><slot name="footer" /></div>',
   },
 }
 

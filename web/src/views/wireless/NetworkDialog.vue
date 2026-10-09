@@ -166,7 +166,7 @@ function save() {
     :title="network ? `Network ${network.wireless.ssid}` : 'Add wireless network'"
     description="A network is an interface: put it on a bridge to join an existing segment, or in a zone of its own."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="network-form" class="space-y-4" @submit.prevent="save">
       <p v-if="!config.radios.length" class="text-sm text-ink-muted">Configure a radio first.</p>
       <div class="fields">
         <FormField id="net-radio" label="Radio">
@@ -290,11 +290,12 @@ function save() {
         />
         <ToggleRow v-model="form.enabled" label="Enabled" />
       </div>
-
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!form.radio">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="network-form" class="btn-primary" :disabled="!form.radio">
+        Save to draft
+      </button>
+    </template>
   </AppDialog>
 </template>

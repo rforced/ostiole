@@ -74,7 +74,10 @@ describe('RuleDialog with a peer', () => {
       props: { open: true, rule, zone: 'lan' },
       global: {
         stubs: {
-          AppDialog: { props: ['open', 'title', 'description'], template: '<div><slot /></div>' },
+          AppDialog: {
+            props: ['open', 'title', 'description'],
+            template: '<div><slot /><slot name="footer" /></div>',
+          },
         },
       },
     })

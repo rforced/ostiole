@@ -144,7 +144,7 @@ function save() {
     :title="iface ? `Speed of ${iface.name}` : 'Set a speed'"
     description="Give the speed the line really reaches. The router then holds the queue here instead of leaving it in the equipment at the other end."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="bandwidth-form" class="space-y-4" @submit.prevent="save">
       <FormField id="bw-if" label="Interface">
         <select id="bw-if" v-model="form.interface" class="input" required :disabled="!!iface">
           <option value="" disabled>Choose</option>
@@ -205,11 +205,12 @@ function save() {
           </select>
         </FormField>
       </div>
-
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!valid">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="bandwidth-form" class="btn-primary" :disabled="!valid">
+        Save to draft
+      </button>
+    </template>
   </AppDialog>
 </template>

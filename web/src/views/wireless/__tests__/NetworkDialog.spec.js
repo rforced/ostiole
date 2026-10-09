@@ -12,7 +12,10 @@ vi.mock('@/lib/api', async (importOriginal) => {
 })
 
 const stubs = {
-  AppDialog: { props: ['open', 'title', 'description'], template: '<div><slot /></div>' },
+  AppDialog: {
+    props: ['open', 'title', 'description'],
+    template: '<div><slot /><slot name="footer" /></div>',
+  },
 }
 
 const guest = {

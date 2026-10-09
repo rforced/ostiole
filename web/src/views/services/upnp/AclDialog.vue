@@ -53,7 +53,7 @@ function save() {
     :title="entry ? `Access list entry ${index + 1}` : 'Add access list entry'"
     description="The first entry that matches the request decides it."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="acl-form" class="space-y-4" @submit.prevent="save">
       <div class="fields">
         <FormField id="acl-action" label="Action">
           <select id="acl-action" v-model="form.action" class="input">
@@ -96,10 +96,12 @@ function save() {
           <input id="acl-desc" v-model="form.description" class="input" />
         </FormField>
       </div>
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!form.source">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="acl-form" class="btn-primary" :disabled="!form.source">
+        Save to draft
+      </button>
+    </template>
   </AppDialog>
 </template>

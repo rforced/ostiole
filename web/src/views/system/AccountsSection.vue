@@ -202,7 +202,7 @@ async function deleteUser(username) {
       description="Keeps the role, the password, and any open sessions."
       @update:open="renaming = null"
     >
-      <form class="space-y-4" @submit.prevent="renameUser">
+      <form id="rename-form" class="space-y-4" @submit.prevent="renameUser">
         <FormField id="rename-to" label="New username">
           <input
             id="rename-to"
@@ -212,11 +212,13 @@ async function deleteUser(username) {
             required
           />
         </FormField>
-        <div class="flex justify-end gap-2 pt-2">
-          <button type="button" class="btn-secondary" @click="renaming = null">Cancel</button>
-          <button type="submit" class="btn-primary" :disabled="!renameTo">Rename</button>
-        </div>
       </form>
+      <template #footer>
+        <button type="button" class="btn-secondary" @click="renaming = null">Cancel</button>
+        <button type="submit" form="rename-form" class="btn-primary" :disabled="!renameTo">
+          Rename
+        </button>
+      </template>
     </AppDialog>
 
     <AppDialog
@@ -225,7 +227,7 @@ async function deleteUser(username) {
       description="Signs them out of every session."
       @update:open="repassword = null"
     >
-      <form class="space-y-4" @submit.prevent="setPassword">
+      <form id="password-form" class="space-y-4" @submit.prevent="setPassword">
         <FormField
           id="reset-password"
           label="New password"
@@ -241,13 +243,18 @@ async function deleteUser(username) {
             required
           />
         </FormField>
-        <div class="flex justify-end gap-2 pt-2">
-          <button type="button" class="btn-secondary" @click="repassword = null">Cancel</button>
-          <button type="submit" class="btn-primary" :disabled="newPassword.length < MIN_PASSWORD">
-            Set password
-          </button>
-        </div>
       </form>
+      <template #footer>
+        <button type="button" class="btn-secondary" @click="repassword = null">Cancel</button>
+        <button
+          type="submit"
+          form="password-form"
+          class="btn-primary"
+          :disabled="newPassword.length < MIN_PASSWORD"
+        >
+          Set password
+        </button>
+      </template>
     </AppDialog>
   </SectionCard>
 </template>

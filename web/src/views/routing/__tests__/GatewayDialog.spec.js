@@ -9,7 +9,8 @@ import GatewayDialog from '@/views/routing/GatewayDialog.vue'
 const stubs = {
   AppDialog: {
     props: ['open', 'title', 'description'],
-    template: '<div><p class="description">{{ description }}</p><slot /></div>',
+    template:
+      '<div><p class="description">{{ description }}</p><slot /><slot name="footer" /></div>',
   },
 }
 

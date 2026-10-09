@@ -13,7 +13,10 @@ vi.mock('@/lib/api', async () => {
 })
 
 const stubs = {
-  AppDialog: { props: ['open', 'title', 'description'], template: '<div><slot /></div>' },
+  AppDialog: {
+    props: ['open', 'title', 'description'],
+    template: '<div><slot /><slot name="footer" /></div>',
+  },
   CountryPicker: true,
 }
 

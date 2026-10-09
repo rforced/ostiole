@@ -12,7 +12,7 @@ vi.mock('@/lib/api', () => ({
 }))
 
 const stubs = {
-  AppDialog: { props: ['open', 'title'], template: '<div><slot /></div>' },
+  AppDialog: { props: ['open', 'title'], template: '<div><slot /><slot name="footer" /></div>' },
 }
 
 async function open(override = null) {

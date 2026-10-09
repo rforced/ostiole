@@ -78,7 +78,7 @@ function save() {
     :title="zone ? `Busy hosts on ${zone.name}` : 'Hold back busy hosts'"
     description="A device with a lot of connections open at once is usually sharing files, whatever port it is doing it on. Its connections past the limit go in a lower priority until it settles down."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="busy-hosts-form" class="space-y-4" @submit.prevent="save">
       <FormField
         id="busy-zone"
         label="Zone"
@@ -120,11 +120,12 @@ function save() {
           </select>
         </FormField>
       </div>
-
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!valid">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="busy-hosts-form" class="btn-primary" :disabled="!valid">
+        Save to draft
+      </button>
+    </template>
   </AppDialog>
 </template>

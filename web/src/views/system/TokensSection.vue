@@ -121,7 +121,9 @@ async function deleteToken(id) {
         <span class="sr-only" aria-live="polite">{{
           copy === 'copied' ? 'Copied.' : copy === 'selected' ? 'Selected, copy it by hand.' : ''
         }}</span>
-        <button type="button" class="btn-secondary mt-2" @click="minted = null">Close</button>
+        <div class="mt-2 flex justify-end">
+          <button type="button" class="btn-secondary" @click="minted = null">Close</button>
+        </div>
       </AppNotice>
     </div>
 

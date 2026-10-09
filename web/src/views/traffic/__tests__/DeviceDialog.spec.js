@@ -10,7 +10,7 @@ vi.mock('@/lib/api', () => ({ api: { traffic: { device: vi.fn(), destinations: v
 const stubs = {
   AppDialog: {
     props: ['open', 'title'],
-    template: '<div v-if="open"><h2>{{ title }}</h2><slot /></div>',
+    template: '<div v-if="open"><h2>{{ title }}</h2><slot /><slot name="footer" /></div>',
   },
 }
 

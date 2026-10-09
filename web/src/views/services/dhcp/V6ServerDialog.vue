@@ -98,7 +98,7 @@ function save() {
     :title="server ? `IPv6 on ${server.interface}` : 'Add IPv6 advertisement'"
     description="The prefix comes from the interface itself, so SLAAC or a delegated prefix keeps working."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="v6-server-form" class="space-y-4" @submit.prevent="save">
       <FormField id="v6-if" label="Interface">
         <select id="v6-if" v-model="form.interface" class="input" required :disabled="!!server">
           <option value="" disabled>Choose</option>
@@ -169,10 +169,12 @@ function save() {
         />
         <ToggleRow v-model="form.enabled" label="Enabled" />
       </div>
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!form.interface">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="v6-server-form" class="btn-primary" :disabled="!form.interface">
+        Save to draft
+      </button>
+    </template>
   </AppDialog>
 </template>

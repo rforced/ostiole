@@ -29,4 +29,29 @@ describe('AppDialog', () => {
     const bare = await opened({})
     expect(bare.hasAttribute('aria-describedby')).toBe(false)
   })
+
+  // A dialog that only shows something closes with one button on the
+  // right; a form puts its own Cancel and submit there instead.
+  it('closes with Close unless a form gives its own buttons', async () => {
+    mount(AppDialog, {
+      props: { open: true, title: 'Events of wan_gw' },
+      slots: { default: '<p>Up again</p>' },
+      attachTo: document.body,
+    })
+    await flushPromises()
+    const texts = () => [...document.querySelectorAll('button')].map((b) => b.textContent.trim())
+    expect(texts()).toContain('Close')
+    document.body.innerHTML = ''
+
+    mount(AppDialog, {
+      props: { open: true, title: 'Rule 12' },
+      slots: {
+        default: '<form id="f"></form>',
+        footer: '<button type="button">Cancel</button><button type="submit" form="f">Save</button>',
+      },
+      attachTo: document.body,
+    })
+    await flushPromises()
+    expect(texts()).toEqual(['', 'Cancel', 'Save'])
+  })
 })

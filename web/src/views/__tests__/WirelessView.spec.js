@@ -159,7 +159,7 @@ describe('RadioDialog', () => {
     store.loaded = true
     return mount(RadioDialog, {
       props: { open: true, ...props },
-      global: { stubs: { AppDialog: { template: '<div><slot /></div>' } } },
+      global: { stubs: { AppDialog: { template: '<div><slot /><slot name="footer" /></div>' } } },
     })
   }
 
@@ -227,7 +227,7 @@ describe('NetworkDialog', () => {
     store.loaded = true
     return mount(NetworkDialog, {
       props: { open: true, network: null },
-      global: { stubs: { AppDialog: { template: '<div><slot /></div>' } } },
+      global: { stubs: { AppDialog: { template: '<div><slot /><slot name="footer" /></div>' } } },
     })
   }
 

@@ -120,7 +120,7 @@ const sees = computed(() => {
 
 <template>
   <AppDialog v-model:open="open" :title="provider ? `Provider ${provider.id}` : 'Add DNS provider'">
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="provider-form" class="space-y-4" @submit.prevent="save">
       <div class="fields">
         <FormField id="prov-id" label="Name">
           <input
@@ -193,20 +193,21 @@ const sees = computed(() => {
         </li>
       </ul>
       <ErrorLine v-if="testError" class="text-sm">{{ testError }}</ErrorLine>
-
-      <div class="flex justify-end gap-2 pt-2">
-        <ActionButton
-          v-if="testable && !auth.readOnly"
-          class="mr-auto"
-          label="Test"
-          busy-label="Testing…"
-          :busy="testing"
-          :disabled="!valid"
-          @click="test"
-        />
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!valid">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <ActionButton
+        v-if="testable && !auth.readOnly"
+        class="mr-auto"
+        label="Test"
+        busy-label="Testing…"
+        :busy="testing"
+        :disabled="!valid"
+        @click="test"
+      />
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="provider-form" class="btn-primary" :disabled="!valid">
+        Save to draft
+      </button>
+    </template>
   </AppDialog>
 </template>

@@ -197,7 +197,7 @@ function save() {
 
 <template>
   <AppDialog v-model:open="open" :title="title">
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="interface-form" class="space-y-4" @submit.prevent="save">
       <div class="fields">
         <FormField
           id="if-desc"
@@ -399,11 +399,10 @@ function save() {
           traffic.
         </AppNotice>
       </fieldset>
-
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="interface-form" class="btn-primary">Save to draft</button>
+    </template>
   </AppDialog>
 </template>

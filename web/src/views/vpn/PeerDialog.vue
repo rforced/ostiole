@@ -455,18 +455,9 @@ async function copyFile() {
       <span class="sr-only" aria-live="polite">{{
         copied === 'copied' ? 'Copied.' : copied === 'selected' ? 'Selected, copy it by hand.' : ''
       }}</span>
-      <div class="flex flex-wrap justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="copyFile">
-          <Check v-if="copied === 'copied'" class="size-4" aria-hidden="true" />
-          <Copy v-else class="size-4" aria-hidden="true" />
-          {{ copied === 'copied' ? 'Copied' : copied === 'selected' ? 'Selected' : 'Copy' }}
-        </button>
-        <button type="button" class="btn-secondary" @click="download">Download</button>
-        <button type="button" class="btn-primary" @click="open = false">Done</button>
-      </div>
     </div>
 
-    <form v-else class="space-y-4" @submit.prevent="save">
+    <form v-else id="peer-form" class="space-y-4" @submit.prevent="save">
       <div class="fields">
         <FormField id="pe-name" label="Name" hint="Lower case, like laptop.">
           <input
@@ -677,16 +668,28 @@ async function copyFile() {
       </section>
       <ToggleRow v-model="form.enabled" label="Enabled" />
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
-      <div class="flex justify-end gap-2 pt-2">
+    </form>
+    <template #footer>
+      <template v-if="device">
+        <button type="button" class="btn-secondary" @click="copyFile">
+          <Check v-if="copied === 'copied'" class="size-4" aria-hidden="true" />
+          <Copy v-else class="size-4" aria-hidden="true" />
+          {{ copied === 'copied' ? 'Copied' : copied === 'selected' ? 'Selected' : 'Copy' }}
+        </button>
+        <button type="button" class="btn-secondary" @click="download">Download</button>
+        <button type="button" class="btn-secondary" @click="open = false">Close</button>
+      </template>
+      <template v-else>
         <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
         <ActionButton
           type="submit"
+          form="peer-form"
           kind="primary"
           label="Save to draft"
           busy-label="Saving…"
           :busy="busy"
         />
-      </div>
-    </form>
+      </template>
+    </template>
   </AppDialog>
 </template>

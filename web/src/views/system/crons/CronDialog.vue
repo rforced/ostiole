@@ -120,7 +120,7 @@ function save() {
     :title="cron ? `Cron job ${cron.description || cron.id}` : 'Add cron job'"
     description="Runs on this router, as root, on the schedule you give."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="cron-form" class="space-y-4" @submit.prevent="save">
       <div class="fields">
         <FormField id="cron-desc" label="Description">
           <input id="cron-desc" v-model="form.description" class="input" placeholder="optional" />
@@ -257,10 +257,10 @@ function save() {
       <ToggleRow v-model="form.enabled" label="Enabled" />
 
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="cron-form" class="btn-primary">Save to draft</button>
+    </template>
   </AppDialog>
 </template>

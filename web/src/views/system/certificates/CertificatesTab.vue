@@ -316,7 +316,7 @@ function remove(cert) {
       description="Windows and Java read this one."
       @update:open="pkcs12For = null"
     >
-      <form class="space-y-4" @submit.prevent="downloadPKCS12.run">
+      <form id="pkcs12-form" class="space-y-4" @submit.prevent="downloadPKCS12.run">
         <ErrorLine v-if="downloadPKCS12.error.value" class="text-sm">
           {{ downloadPKCS12.error.value }}
         </ErrorLine>
@@ -329,13 +329,18 @@ function remove(cert) {
             autocomplete="new-password"
           />
         </FormField>
-        <div class="flex justify-end gap-2 pt-2">
-          <button type="button" class="btn-secondary" @click="pkcs12For = null">Cancel</button>
-          <button type="submit" class="btn-primary" :disabled="downloadPKCS12.busy.value">
-            Download
-          </button>
-        </div>
       </form>
+      <template #footer>
+        <button type="button" class="btn-secondary" @click="pkcs12For = null">Cancel</button>
+        <button
+          type="submit"
+          form="pkcs12-form"
+          class="btn-primary"
+          :disabled="downloadPKCS12.busy.value"
+        >
+          Download
+        </button>
+      </template>
     </AppDialog>
   </div>
 </template>

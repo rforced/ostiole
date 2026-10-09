@@ -7,7 +7,7 @@ import ServerDialog from '@/views/services/dhcp/ServerDialog.vue'
 import V6ServerDialog from '@/views/services/dhcp/V6ServerDialog.vue'
 
 const stubs = {
-  AppDialog: { props: ['open', 'title'], template: '<div><slot /></div>' },
+  AppDialog: { props: ['open', 'title'], template: '<div><slot /><slot name="footer" /></div>' },
 }
 
 function draft() {

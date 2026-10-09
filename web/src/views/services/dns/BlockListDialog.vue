@@ -109,7 +109,7 @@ function save() {
     :title="list ? `List ${list.name}` : 'Add block list'"
     description="Fetched on a schedule and cached on this router."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="block-list-form" class="space-y-4" @submit.prevent="save">
       <FormField
         v-if="!list"
         id="bl-catalog"
@@ -193,10 +193,10 @@ function save() {
       />
 
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="block-list-form" class="btn-primary">Save to draft</button>
+    </template>
   </AppDialog>
 </template>

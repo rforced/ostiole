@@ -107,7 +107,7 @@ function save() {
     :title="line ? 'Access rule' : 'Add access rule'"
     description="The first rule in a zone that matches a connection decides it."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="proxy-access-form" class="space-y-4" @submit.prevent="save">
       <FormField id="access-desc" label="Description">
         <input id="access-desc" v-model="form.description" class="input" />
       </FormField>
@@ -158,13 +158,17 @@ function save() {
           :hint="form.action === 'accept' ? '' : 'Logs at most 10 packets a second.'"
         />
       </div>
-
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!named || !form.zone">
-          Save to draft
-        </button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button
+        type="submit"
+        form="proxy-access-form"
+        class="btn-primary"
+        :disabled="!named || !form.zone"
+      >
+        Save to draft
+      </button>
+    </template>
   </AppDialog>
 </template>

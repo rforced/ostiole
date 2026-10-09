@@ -68,11 +68,20 @@ provideLocked(() => locked.value)
           <fieldset disabled class="read-only min-w-0">
             <slot />
           </fieldset>
-          <div class="mt-4 flex justify-end">
+          <div class="mt-4 flex justify-end gap-2 pt-2">
             <DialogClose class="btn-secondary">Close</DialogClose>
           </div>
         </template>
-        <slot v-else />
+        <template v-else>
+          <slot />
+          <!-- A dialog that saves puts its buttons here, its submit naming
+               its form, and one that only shows something gets Close. Under
+               a form with nothing in it, they keep to the title's gap. -->
+          <div class="mt-4 flex justify-end gap-2 pt-2 [:empty+&]:mt-0">
+            <slot v-if="$slots.footer" name="footer" />
+            <DialogClose v-else class="btn-secondary">Close</DialogClose>
+          </div>
+        </template>
       </DialogContent>
     </DialogPortal>
   </DialogRoot>

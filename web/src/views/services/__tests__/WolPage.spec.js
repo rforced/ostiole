@@ -15,7 +15,10 @@ vi.mock('@/lib/api', () => ({
 
 const stubs = {
   ConfirmButton: true,
-  AppDialog: { props: ['open', 'title'], template: '<div v-if="open"><slot /></div>' },
+  AppDialog: {
+    props: ['open', 'title'],
+    template: '<div v-if="open"><slot /><slot name="footer" /></div>',
+  },
 }
 
 function config() {

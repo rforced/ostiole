@@ -11,7 +11,7 @@ import ExclusionsCard from '@/views/services/proxy/ExclusionsCard.vue'
 
 vi.mock('@/lib/api', () => ({ api: {}, ApiError: class ApiError extends Error {} }))
 
-const dialogStub = { AppDialog: { template: '<div><slot /></div>' } }
+const dialogStub = { AppDialog: { template: '<div><slot /><slot name="footer" /></div>' } }
 
 function config(profiles) {
   return {

@@ -8,7 +8,10 @@ import InterfaceDialog from '@/views/interfaces/InterfaceDialog.vue'
 
 // The dialog itself teleports; the form inside it is what is under test.
 const stubs = {
-  AppDialog: { props: ['open', 'title', 'description'], template: '<div><slot /></div>' },
+  AppDialog: {
+    props: ['open', 'title', 'description'],
+    template: '<div><slot /><slot name="footer" /></div>',
+  },
   RouterLink: true,
 }
 

@@ -108,7 +108,7 @@ function save() {
     :title="site ? `Site ${site.id}` : 'Add site'"
     description="A set of hostnames served over HTTPS from a pool of backends."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="site-form" class="space-y-4" @submit.prevent="save">
       <div class="fields">
         <FormField id="site-id" label="Name">
           <input
@@ -222,13 +222,17 @@ function save() {
         />
         <ToggleRow v-model="form.enabled" label="Enabled" />
       </div>
-
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!hosts.length || !form.pool">
-          Save to draft
-        </button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button
+        type="submit"
+        form="site-form"
+        class="btn-primary"
+        :disabled="!hosts.length || !form.pool"
+      >
+        Save to draft
+      </button>
+    </template>
   </AppDialog>
 </template>

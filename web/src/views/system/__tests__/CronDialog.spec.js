@@ -9,7 +9,7 @@ import CronDialog from '@/views/system/crons/CronDialog.vue'
 const stubs = {
   AppDialog: {
     props: ['open', 'title', 'description'],
-    template: '<div v-if="open"><slot /></div>',
+    template: '<div v-if="open"><slot /><slot name="footer" /></div>',
   },
 }
 

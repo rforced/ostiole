@@ -108,7 +108,7 @@ function save() {
         : 'The lowest priority that answers its monitor carries the default route. The others wait.'
     "
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="gateway-form" class="space-y-4" @submit.prevent="save">
       <div class="fields">
         <FormField id="gw-name" label="Name" hint="Lower case, like wan1.">
           <input
@@ -214,10 +214,12 @@ function save() {
         </FormField>
       </div>
       <ToggleRow v-model="form.enabled" label="Enabled" />
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!form.interface">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="gateway-form" class="btn-primary" :disabled="!form.interface">
+        Save to draft
+      </button>
+    </template>
   </AppDialog>
 </template>

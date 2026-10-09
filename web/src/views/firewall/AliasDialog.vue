@@ -215,7 +215,7 @@ function save() {
     :title="alias ? `Alias ${alias.name}` : 'Add alias'"
     description="Renaming it updates every rule that names it."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="alias-form" class="space-y-4" @submit.prevent="save">
       <div class="fields">
         <FormField id="alias-name" label="Name">
           <input
@@ -312,10 +312,10 @@ function save() {
         </ul>
       </FormField>
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="alias-form" class="btn-primary">Save to draft</button>
+    </template>
   </AppDialog>
 </template>

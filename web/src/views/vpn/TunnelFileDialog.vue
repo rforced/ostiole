@@ -148,7 +148,7 @@ async function save() {
     title="Add tunnel from file"
     description="A wg-quick file, as a provider or another router hands it out."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="tunnel-file-form" class="space-y-4" @submit.prevent="save">
       <FormField id="tf-text" label="File" hint="Pasted, or chosen below. Nothing in it is run.">
         <textarea
           id="tf-text"
@@ -251,17 +251,18 @@ async function save() {
       </template>
 
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <ActionButton
-          type="submit"
-          kind="primary"
-          label="Save to draft"
-          busy-label="Saving…"
-          :busy="busy"
-          :disabled="!ok"
-        />
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <ActionButton
+        type="submit"
+        form="tunnel-file-form"
+        kind="primary"
+        label="Save to draft"
+        busy-label="Saving…"
+        :busy="busy"
+        :disabled="!ok"
+      />
+    </template>
   </AppDialog>
 </template>

@@ -126,7 +126,7 @@ function save() {
     v-model:open="open"
     :title="certificate ? `Certificate ${certificate.id}` : 'Add certificate'"
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="certificate-form" class="space-y-4" @submit.prevent="save">
       <div class="fields">
         <FormField
           id="cert-id"
@@ -281,11 +281,12 @@ function save() {
           />
         </FormField>
       </template>
-
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!valid">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="certificate-form" class="btn-primary" :disabled="!valid">
+        Save to draft
+      </button>
+    </template>
   </AppDialog>
 </template>

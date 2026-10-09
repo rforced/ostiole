@@ -17,7 +17,10 @@ vi.mock('@/lib/api', () => ({
 const stubs = {
   ConfirmButton: true,
   RouterLink: { props: ['to'], template: '<a :href="to"><slot /></a>' },
-  AppDialog: { props: ['open', 'title', 'description'], template: '<div><slot /></div>' },
+  AppDialog: {
+    props: ['open', 'title', 'description'],
+    template: '<div><slot /><slot name="footer" /></div>',
+  },
 }
 
 const DEFAULTS = [

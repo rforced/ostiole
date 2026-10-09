@@ -25,7 +25,7 @@ vi.mock('@/lib/api', () => ({
 // place so a test can type into them.
 const AppDialogStub = {
   props: ['open', 'title', 'description'],
-  template: '<div v-if="open"><slot /></div>',
+  template: '<div v-if="open"><slot /><slot name="footer" /></div>',
 }
 
 const account = (username, role) => ({

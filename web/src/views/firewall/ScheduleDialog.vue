@@ -51,7 +51,7 @@ function save() {
     :title="schedule ? `Schedule ${schedule.name}` : 'Add schedule'"
     description="Rules that name this schedule match only inside the window. An end before the start runs over midnight."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="schedule-form" class="space-y-4" @submit.prevent="save">
       <div class="fields">
         <FormField id="sch-name" label="Name" hint="Lower case, like workday.">
           <input
@@ -90,10 +90,12 @@ function save() {
           </label>
         </div>
       </fieldset>
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!form.name">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="schedule-form" class="btn-primary" :disabled="!form.name">
+        Save to draft
+      </button>
+    </template>
   </AppDialog>
 </template>

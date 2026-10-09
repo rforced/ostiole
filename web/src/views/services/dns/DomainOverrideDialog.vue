@@ -39,7 +39,7 @@ function save() {
 
 <template>
   <AppDialog v-model:open="open" :title="title">
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="domain-override-form" class="space-y-4" @submit.prevent="save">
       <FormField id="do-domain" label="Domain" hint="Subdomains follow it, like ts.net.">
         <input
           id="do-domain"
@@ -65,10 +65,10 @@ function save() {
       <FormField id="do-desc" label="Description">
         <input id="do-desc" v-model="form.description" class="input" />
       </FormField>
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="domain-override-form" class="btn-primary">Save to draft</button>
+    </template>
   </AppDialog>
 </template>

@@ -87,7 +87,7 @@ function save() {
 
 <template>
   <AppDialog v-model:open="open" :title="title" :description="`In WAF profile ${profile}.`">
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="exclusion-form" class="space-y-4" @submit.prevent="save">
       <FormField id="exc-rule" label="Rule" hint="One ID, or a range like 942100-942199.">
         <input
           id="exc-rule"
@@ -128,12 +128,17 @@ function save() {
         <input id="exc-desc" v-model="form.description" class="input" />
       </FormField>
       <ErrorLine v-if="problem" class="text-sm">{{ problem }}</ErrorLine>
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!entry.rule || Boolean(problem)">
-          Save to draft
-        </button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button
+        type="submit"
+        form="exclusion-form"
+        class="btn-primary"
+        :disabled="!entry.rule || Boolean(problem)"
+      >
+        Save to draft
+      </button>
+    </template>
   </AppDialog>
 </template>

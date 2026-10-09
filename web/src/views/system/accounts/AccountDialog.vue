@@ -28,7 +28,7 @@ function submit() {
 
 <template>
   <AppDialog v-model:open="open" title="Add account" description="They can sign in at once.">
-    <form class="space-y-4" @submit.prevent="submit">
+    <form id="user-form" class="space-y-4" @submit.prevent="submit">
       <FormField id="user-name" label="Username">
         <input
           id="user-name"
@@ -54,10 +54,12 @@ function submit() {
           <option v-for="r in ROLES" :key="r.value" :value="r.value">{{ r.label }}</option>
         </select>
       </FormField>
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!valid">Create account</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="user-form" class="btn-primary" :disabled="!valid">
+        Create account
+      </button>
+    </template>
   </AppDialog>
 </template>

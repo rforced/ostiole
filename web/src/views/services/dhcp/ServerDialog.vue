@@ -95,7 +95,7 @@ function save() {
     :title="server ? `DHCP on ${server.interface}` : 'Add DHCP server'"
     description="One pool per interface. The interface needs a static IPv4 address."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="dhcp-server-form" class="space-y-4" @submit.prevent="save">
       <FormField id="sc-if" label="Interface">
         <select id="sc-if" v-model="form.interface" class="input" required :disabled="!!server">
           <option value="" disabled>Choose</option>
@@ -153,10 +153,12 @@ function save() {
         <ToggleRow v-model="form.dnsRegistration" label="DNS registration" :hint="registration" />
         <ToggleRow v-model="form.enabled" label="Enabled" />
       </div>
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!form.interface">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="dhcp-server-form" class="btn-primary" :disabled="!form.interface">
+        Save to draft
+      </button>
+    </template>
   </AppDialog>
 </template>

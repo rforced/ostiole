@@ -62,7 +62,7 @@ function save() {
     :title="server ? server.host : 'Add time server'"
     description="The clock follows the servers that agree with each other."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="time-server-form" class="space-y-4" @submit.prevent="save">
       <FormField id="ntp-host" label="Server" hint="A name or an address, like time.example.com.">
         <input
           id="ntp-host"
@@ -79,12 +79,17 @@ function save() {
       />
       <ToggleRow v-model="form.pool" label="Pool" hint="Up to four of its servers are asked." />
       <ErrorLine v-if="problem" class="text-sm">{{ problem }}</ErrorLine>
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!host || Boolean(problem)">
-          Save to draft
-        </button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button
+        type="submit"
+        form="time-server-form"
+        class="btn-primary"
+        :disabled="!host || Boolean(problem)"
+      >
+        Save to draft
+      </button>
+    </template>
   </AppDialog>
 </template>

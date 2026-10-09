@@ -140,7 +140,7 @@ function save() {
     :title="iface ? `PPPoE ${iface.name}` : 'Add PPPoE session'"
     description="The address, the default route, and the DNS servers come from the other end."
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="pppoe-form" class="space-y-4" @submit.prevent="save">
       <AppNotice v-if="!ready">
         PPPoE is not set up on this router yet. Run
         <span class="font-mono">ostiole repair</span> once as root, or the apply will fail.
@@ -265,10 +265,10 @@ function save() {
       <ToggleRow v-model="form.ipv6" label="Ask for IPv6 as well" />
 
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="pppoe-form" class="btn-primary">Save to draft</button>
+    </template>
   </AppDialog>
 </template>

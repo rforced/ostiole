@@ -42,7 +42,7 @@ function save() {
 
 <template>
   <AppDialog v-model:open="open" :title="route ? `Route ${route.id}` : 'Add static route'">
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="static-route-form" class="space-y-4" @submit.prevent="save">
       <FormField id="rt-desc" label="Description">
         <input id="rt-desc" v-model="form.description" class="input" />
       </FormField>
@@ -79,10 +79,10 @@ function save() {
         </select>
       </FormField>
       <ToggleRow v-model="form.enabled" label="Enabled" />
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="static-route-form" class="btn-primary">Save to draft</button>
+    </template>
   </AppDialog>
 </template>

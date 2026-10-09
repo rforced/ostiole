@@ -182,7 +182,7 @@ function save() {
         : 'Members share one address and one set of rules.'
     "
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="aggregate-form" class="space-y-4" @submit.prevent="save">
       <div class="fields">
         <FormField id="agg-name" label="Name">
           <input
@@ -288,10 +288,10 @@ function save() {
       </template>
 
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary">Save to draft</button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button type="submit" form="aggregate-form" class="btn-primary">Save to draft</button>
+    </template>
   </AppDialog>
 </template>

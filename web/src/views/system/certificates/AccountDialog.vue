@@ -103,7 +103,7 @@ function save() {
     :title="account ? `Account ${account.id}` : 'Add ACME account'"
     :read-only="!auth.isAdmin"
   >
-    <form class="space-y-4" @submit.prevent="save">
+    <form id="acme-account-form" class="space-y-4" @submit.prevent="save">
       <div class="fields">
         <FormField id="acc-id" label="Name">
           <input
@@ -176,12 +176,17 @@ function save() {
       <ErrorLine v-if="key.error.value" class="text-sm">
         {{ key.error.value }}
       </ErrorLine>
-      <div class="flex justify-end gap-2 pt-2">
-        <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="!valid || key.busy.value">
-          Save to draft
-        </button>
-      </div>
     </form>
+    <template #footer>
+      <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
+      <button
+        type="submit"
+        form="acme-account-form"
+        class="btn-primary"
+        :disabled="!valid || key.busy.value"
+      >
+        Save to draft
+      </button>
+    </template>
   </AppDialog>
 </template>

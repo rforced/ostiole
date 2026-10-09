@@ -14,7 +14,7 @@ vi.mock('@/lib/api', () => ({
 
 const AppDialogStub = {
   props: ['open', 'title', 'description'],
-  template: '<div v-if="open"><slot /></div>',
+  template: '<div v-if="open"><slot /><slot name="footer" /></div>',
 }
 
 const KINDS = [

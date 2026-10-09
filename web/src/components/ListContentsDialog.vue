@@ -140,7 +140,6 @@ const empty = computed(() => {
           {{ formatCount(page.matches) }}.
           <template v-if="page.fetchedAt"> Fetched {{ formatWhen(page.fetchedAt) }}. </template>
         </span>
-        <button type="button" class="btn-secondary ml-auto" @click="open = false">Close</button>
       </div>
     </div>
   </AppDialog>
