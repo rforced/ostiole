@@ -38,14 +38,14 @@ function blank() {
     enabled: true,
     schedule: '0 4 * * *',
     kind: 'backup',
-    keep: 10,
+    keep: '',
     withUsers: false,
     passphrase: '',
     service: 'dnsmasq',
     device: config.wolDevices[0]?.id ?? '',
     command: '',
     args: '',
-    timeoutSeconds: 300,
+    timeoutSeconds: '',
   }
 }
 
@@ -170,13 +170,18 @@ function save() {
           <dd class="font-mono text-code">{{ BACKUP_DIR }}</dd>
         </dl>
         <div class="fields">
-          <FormField id="cron-keep" label="Keep" hint="Older backups beyond this are removed.">
+          <FormField
+            id="cron-keep"
+            label="Keep"
+            hint="10 is the default. Older backups beyond it are removed."
+          >
             <input
               id="cron-keep"
               v-model.number="form.keep"
               type="number"
               min="1"
               max="1000"
+              placeholder="10"
               class="input w-32 font-mono max-sm:w-full"
             />
           </FormField>
@@ -240,7 +245,7 @@ function save() {
           <FormField
             id="cron-timeout"
             label="Give up after (seconds)"
-            hint="A command that hangs is one that never runs again."
+            hint="300 is the default. A command that hangs is one that never runs again."
           >
             <input
               id="cron-timeout"
@@ -248,6 +253,7 @@ function save() {
               type="number"
               min="1"
               max="3600"
+              placeholder="300"
               class="input w-32 font-mono max-sm:w-full"
             />
           </FormField>
