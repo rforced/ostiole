@@ -56,11 +56,7 @@ async function run(kind) {
     <SectionCard title="Ping and traceroute">
       <p v-if="auth.readOnly" class="text-ink-muted">Only an operator or an admin can run these.</p>
       <form v-else class="form-row" @submit.prevent="run('ping')">
-        <FormField
-          id="dg-target"
-          label="Target"
-          hint="An address or a name this firewall resolves."
-        >
+        <FormField id="dg-target" label="Target" hint="An address or a name this router resolves.">
           <input
             id="dg-target"
             v-model="target"

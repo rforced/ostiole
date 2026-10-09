@@ -394,7 +394,7 @@ func (r *renderer) dhcpv6ClientRules() {
 	r.sysFor(ifs, SystemRule{
 		Chain: "input", Action: "accept", Protocol: string(model.ProtocolUDP),
 		Source: "link-local : 547", Destination: firewallDest([]string{"546"}),
-		Description: "DHCPv6 answers to this firewall's own requests",
+		Description: "DHCPv6 answers to this router's own requests",
 		Keys:        []string{"input/client:dhcpv6"}, Setting: "interface",
 	})
 }

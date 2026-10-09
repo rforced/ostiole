@@ -1146,7 +1146,7 @@ func (v *validator) proxyAccess(c *Config, zones map[string]bool) {
 			v.add(path+".source", "a source takes no ports: the line names the proxy's")
 		}
 		if src.Self {
-			v.add(path+".source.self", "this firewall is not a source")
+			v.add(path+".source.self", "this router is not a source")
 		}
 		v.endpoint(c, path+".source", Endpoint{Addresses: src.Addresses, Alias: src.Alias, Peer: src.Peer, NotAddresses: src.NotAddresses},
 			aliases, false, false)

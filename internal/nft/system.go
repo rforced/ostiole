@@ -173,9 +173,9 @@ func (r *renderer) zonesOf(ifs []string) []string {
 // matches, the packet is addressed to this router.
 func firewallDest(ports []string) string {
 	if len(ports) == 0 {
-		return "this firewall"
+		return "this router"
 	}
-	return "this firewall : " + strings.Join(ports, ", ")
+	return "this router : " + strings.Join(ports, ", ")
 }
 
 // exemptSource is the source text of a DNS enforcement row: the exempt

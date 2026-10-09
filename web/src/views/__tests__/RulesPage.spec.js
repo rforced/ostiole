@@ -61,7 +61,7 @@ const system = [
     action: 'accept',
     protocol: 'tcp',
     source: 'any',
-    destination: 'this firewall : 443, 22',
+    destination: 'this router : 443, 22',
     description: 'Anti-lockout, keeps the web UI and SSH reachable',
     keys: ['input/anti-lockout:lan'],
     setting: 'zone',

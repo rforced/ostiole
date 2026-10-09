@@ -139,7 +139,7 @@ func TestSystemRulesFull(t *testing.T) {
 	if got, want := strings.Join(lockout.Zones, ","), "lan"; got != want {
 		t.Errorf("anti-lockout zones = %q, want %q", got, want)
 	}
-	if lockout.Destination != "this firewall : 8443, 22" {
+	if lockout.Destination != "this router : 8443, 22" {
 		t.Errorf("anti-lockout destination = %q", lockout.Destination)
 	}
 	if lockout.Setting != "zone" {
@@ -186,7 +186,7 @@ func TestSystemRulesDNSEnforcement(t *testing.T) {
 	if rows[0].Action != "redirect" || rows[0].Chain != "nat_prerouting" {
 		t.Errorf("first row = %+v, want the DNS redirect", rows[0])
 	}
-	for _, want := range []string{"DNS over TLS", "DNS over HTTPS servers", "Forward DNS queries to this firewall"} {
+	for _, want := range []string{"DNS over TLS", "DNS over HTTPS servers", "Forward DNS queries to this router"} {
 		r, ok := findRow(rows, want)
 		if !ok {
 			t.Errorf("no %q row", want)
@@ -220,7 +220,7 @@ func TestSystemRulesNTP(t *testing.T) {
 	if got := strings.Join(r.Zones, ","); got != "lan,lab" {
 		t.Errorf("zones = %q, want lan,lab: not wan, which is external", got)
 	}
-	if r.Setting != "ntp" || r.Protocol != "udp" || r.Destination != "this firewall : 123" {
+	if r.Setting != "ntp" || r.Protocol != "udp" || r.Destination != "this router : 123" {
 		t.Errorf("row = %+v", r)
 	}
 

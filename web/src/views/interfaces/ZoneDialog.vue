@@ -97,7 +97,7 @@ function save() {
         <ToggleRow
           v-model="form.logDrops"
           label="Log drops"
-          hint="Every packet this firewall drops in this zone is logged: the ones no rule matched, and the ones the firewall refused on its own."
+          hint="Every packet this router drops in this zone is logged: the ones no rule matched, and the ones it refused on its own."
         />
       </div>
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>

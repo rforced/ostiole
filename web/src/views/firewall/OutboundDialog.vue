@@ -108,7 +108,7 @@ function save() {
         v-if="!form.noNat"
         id="nat-address"
         label="Leave as"
-        hint="An address this firewall answers to. Empty uses the interface address."
+        hint="An address this router answers to. Empty uses the interface address."
       >
         <input
           id="nat-address"

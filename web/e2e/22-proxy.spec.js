@@ -126,7 +126,7 @@ test('publish a site through a pool and apply it', async ({ page }) => {
   await page.goto('/firewall/rules#wan')
   const row = page.getByRole('row').filter({ hasText: 'Reverse proxy access: Admins' })
   await expect(row).toContainText('@admins')
-  await expect(row).toContainText('this firewall : 8443')
+  await expect(row).toContainText('this router : 8443')
   await row.getByRole('link', { name: 'Edit' }).click()
   await expect(page).toHaveURL(/\/services\/proxy#service$/)
 })

@@ -35,7 +35,7 @@ function days(schedule) {
     <SectionCard
       title="Schedules"
       :count="config.schedules.length"
-      intro="Times are this firewall's local time."
+      intro="Times are this router's local time."
       flush
     >
       <template v-if="!auth.readOnly" #actions>

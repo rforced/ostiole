@@ -192,7 +192,7 @@ onMounted(async () => {
     </ErrorLine>
 
     <AppNotice v-if="status && !status.configured" kind="info">
-      This firewall has no configuration yet.
+      This router has no configuration yet.
       <template v-if="!auth.readOnly">
         <RouterLink to="/wizard" class="link">Run the setup wizard</RouterLink>.
       </template>

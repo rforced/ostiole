@@ -166,7 +166,7 @@ function save() {
   <AppDialog
     v-model:open="open"
     :title="rule?.id ? `Rule ${rule.id}` : `Add rule in ${zone}`"
-    description="Rules match traffic entering the zone, whether it is for this firewall or forwarded through it."
+    description="Rules match traffic entering the zone, whether it is for this router or forwarded through it."
   >
     <form id="rule-form" class="space-y-4" @submit.prevent="save">
       <FormField id="rule-desc" label="Description">

@@ -68,7 +68,7 @@ function save() {
         <FormField
           id="one-ext"
           label="External address"
-          hint="A second address on the WAN, or one routed to this firewall."
+          hint="A second address on the WAN, or one routed to this router."
         >
           <input
             id="one-ext"

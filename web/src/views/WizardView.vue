@@ -117,7 +117,7 @@ function reverted() {
 <template>
   <div class="mx-auto max-w-2xl space-y-5">
     <PageHeader
-      title="Set up this firewall"
+      title="Set up this router"
       intro="Pick the interface facing your network and the one facing the internet."
     />
 

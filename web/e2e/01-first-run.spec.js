@@ -19,7 +19,7 @@ test('a fresh router asks for an admin account, then runs the wizard', async ({ 
   await page.getByRole('button', { name: 'Create account and sign in' }).click()
 
   await expect(page).toHaveURL(/\/wizard$/)
-  await expect(page.getByRole('heading', { name: 'Set up this firewall' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Set up this router' })).toBeVisible()
   await page.screenshot({ path: shot('02-wizard'), fullPage: true })
 
   await page.getByLabel('Hostname').fill('edge')

@@ -32,7 +32,7 @@ function editBusy(zone) {
  */
 function describe(ep, ports) {
   let who = 'any'
-  if (ep?.self) who = 'this firewall'
+  if (ep?.self) who = 'this router'
   else if (ep?.alias) who = `@${ep.alias}`
   else if (ep?.peer) who = ep.peer.replace(/^([^/]*)\/(.*)$/, '$2 on $1')
   else if (ep?.addresses?.length) who = ep.addresses.join(', ')

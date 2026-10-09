@@ -95,7 +95,7 @@ const empty = computed(() => {
       <ToggleRow
         v-model="logDrops"
         label="Log dropped packets"
-        hint="The default for every interface, covering the drops this firewall makes on its own.
+        hint="The default for every interface, covering the drops this router makes on its own.
           Any one interface can say otherwise under Interfaces, and any zone can under Zones. Each
           drop logs at most 10 packets a second, and the Rules page still counts every one."
       />

@@ -477,7 +477,7 @@ func TestProxyAccessSitsAtTheZoneTail(t *testing.T) {
 	}
 	row := proxy[0]
 	if !row.After || strings.Join(row.Zones, ",") != "wan" || row.Protocol != "tcp+udp" ||
-		row.Source != "any" || row.Destination != "this firewall : 80, 443, udp 443, 5353" ||
+		row.Source != "any" || row.Destination != "this router : 80, 443, udp 443, 5353" ||
 		!slices.Equal(row.Keys, []string{"zone_wan/proxy:wan"}) {
 		t.Errorf("row = %+v", row)
 	}
@@ -564,10 +564,10 @@ func TestProxyAccessLines(t *testing.T) {
 		}
 	}
 	if !slices.Equal(sources, []string{
-		"drop 203.0.113.0/24 this firewall : 443",
-		"accept @home this firewall : 443",
-		"reject not @home this firewall : 80",
-		"accept any this firewall : 5353",
+		"drop 203.0.113.0/24 this router : 443",
+		"accept @home this router : 443",
+		"reject not @home this router : 80",
+		"accept any this router : 5353",
 	}) {
 		t.Errorf("rows = %q", sources)
 	}

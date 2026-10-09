@@ -18,7 +18,7 @@ test('add an alias, a rule using it, and a port forward, then apply', async ({ p
   await dialog.getByRole('button', { name: 'Save to draft' }).click()
   await expect(page.getByRole('row').filter({ hasText: 'admins' })).toContainText('203.0.113.10')
 
-  // Rule on wan: allow tcp 443 from the alias to this firewall
+  // Rule on wan: allow tcp 443 from the alias to this router
   await sidebar(page, 'Rules')
   await page.getByRole('group', { name: 'Zone' }).getByRole('button', { name: 'wan' }).click()
   await page.getByRole('button', { name: 'Add rule' }).click()
@@ -35,7 +35,7 @@ test('add an alias, a rule using it, and a port forward, then apply', async ({ p
   await dialog.getByRole('button', { name: 'Save to draft' }).click()
   const rule = page.getByRole('row').filter({ hasText: 'Admin HTTPS' })
   await expect(rule).toContainText('@admins')
-  await expect(rule).toContainText('this firewall : 443')
+  await expect(rule).toContainText('this router : 443')
   await expect(rule).toContainText('log')
 
   // Second rule, then move it above the first
@@ -65,7 +65,7 @@ test('add an alias, a rule using it, and a port forward, then apply', async ({ p
 
   await page.getByRole('group', { name: 'Zone' }).getByRole('button', { name: 'lan' }).click()
   const lockout = page.getByRole('row').filter({ hasText: 'Anti-lockout' })
-  await expect(lockout).toContainText('this firewall : ')
+  await expect(lockout).toContainText('this router : ')
   await expect(lockout.getByRole('link', { name: 'Edit' })).toBeVisible()
   await expect(page.getByRole('row').filter({ hasText: 'DNS queries' })).toBeVisible()
 

@@ -50,7 +50,7 @@ const label = computed(() => (props.side === 'source' ? 'Source' : 'Destination'
         <option value="addresses">Addresses or networks</option>
         <option value="alias" :disabled="hostAliases.length === 0">Alias</option>
         <option value="peer" :disabled="peers.length === 0">WireGuard peer</option>
-        <option v-if="side === 'destination'" value="self">This firewall</option>
+        <option v-if="side === 'destination'" value="self">This router</option>
       </select>
     </FormField>
     <FormField

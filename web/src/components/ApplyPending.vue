@@ -116,7 +116,7 @@ async function revert() {
     <template v-else-if="!outcome">
       <p class="font-medium">Changes applied, awaiting confirmation.</p>
       <p class="mt-1">
-        If this page can still reach the firewall, confirm within
+        If this page can still reach this router, confirm within
         <span role="timer" aria-live="off" class="font-mono font-semibold tabular-nums"
           >{{ remaining }}s</span
         >. Otherwise the previous configuration is restored automatically.

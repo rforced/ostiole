@@ -205,7 +205,7 @@ async function reboot() {
             <ConfirmButton
               class="mt-1"
               label="Reboot now"
-              question="Reboot this firewall?"
+              question="Reboot this router?"
               description="Everything behind it loses its connection until it is back."
               confirm-label="Reboot"
               typed="reboot"
