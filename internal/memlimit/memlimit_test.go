@@ -9,10 +9,10 @@ import (
 )
 
 func TestDeriveFloorsAnEmptyConfiguration(t *testing.T) {
-	if got := Derive(nil); got != Floor {
-		t.Fatalf("Derive(nil) = %d, want %d", got, Floor)
+	if got := Derive(nil, model.MemoryBudget{}); got != Floor {
+		t.Fatalf("Derive(nil, model.MemoryBudget{}) = %d, want %d", got, Floor)
 	}
-	if got := Derive(&model.Config{}); got != Floor {
+	if got := Derive(&model.Config{}, model.MemoryBudget{}); got != Floor {
 		t.Fatalf("Derive(empty) = %d, want %d", got, Floor)
 	}
 }
@@ -23,12 +23,16 @@ func TestDeriveCountsTheLogsWithHeadroomAndTheIndex(t *testing.T) {
 	cfg.Blocking.Enabled = true
 	want := int64(Baseline) + int64(dnsblock.DefaultMaxDomains)*IndexBytes +
 		int64(float64(2_000_000*model.FirewallLogBytes)*headroom)
-	if got := Derive(cfg); got != want {
+	if got := Derive(cfg, model.MemoryBudget{}); got != want {
 		t.Fatalf("Derive = %d, want %d", got, want)
 	}
 	cfg.Blocking.MaxDomains = 5_000_000
-	if got := Derive(cfg); got != want+int64(4_000_000)*IndexBytes {
+	if got := Derive(cfg, model.MemoryBudget{}); got != want+int64(4_000_000)*IndexBytes {
 		t.Fatalf("Derive with a raised ceiling = %d, want %d", got, want+int64(4_000_000)*IndexBytes)
+	}
+	small := model.MemoryBudget{Total: 950_000_000}
+	if got := Derive(cfg, small); got >= want {
+		t.Fatalf("Derive on a small machine = %d, want under %d", got, want)
 	}
 }
 

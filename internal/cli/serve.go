@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net"
 	"net/netip"
 	"os"
@@ -331,7 +332,12 @@ at your own.`,
 			deps.LogFiles = files
 			var stopping sync.WaitGroup
 			stopping.Go(func() { panics.Loop(ctx, log, "log files", files.Run) })
-			limits := memlimit.New(eng.Effective, log)
+			var memTotal uint64
+			if eng.MemTotal != nil {
+				memTotal = eng.MemTotal()
+			}
+			budget := model.MemoryBudget{Total: int64(min(memTotal, math.MaxInt64))}
+			limits := memlimit.New(eng.Effective, budget, log)
 			limits.Apply()
 			reads := &readBacks{}
 			// What crosses the router: every link always, and every device

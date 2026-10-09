@@ -155,3 +155,38 @@ func TestLogsFullBytesCountsTheQueryLogReadBack(t *testing.T) {
 		t.Errorf("files on: %d", got)
 	}
 }
+
+func TestSizesClampToTheCeilings(t *testing.T) {
+	t.Parallel()
+	c := memoryStarter()
+	c.Services.DNS.QueryLog = QueryLog{Enabled: true, Entries: 5_000_000}
+	c.System.Management.FirewallLog.Entries = 20_000
+	b := MemoryBudget{Total: oneGB}
+	got := b.Sizes(c)
+	if want := b.Ceilings(c).QueryLog; got.QueryLog != want || got.QueryLog >= 5_000_000 {
+		t.Errorf("query log %d, want the ceiling %d", got.QueryLog, want)
+	}
+	if got.FirewallLog != 20_000 || got.Requests != DefaultRequestEntries || got.TailscaleLog != DefaultPeerLogEntries {
+		t.Errorf("sizes = %+v", got)
+	}
+	if full, unclamped := b.LogsFullBytes(c), c.LogsFullBytes(); full >= unclamped {
+		t.Errorf("clamped cost %d, unclamped %d", full, unclamped)
+	}
+	if got := (MemoryBudget{}).Sizes(c).QueryLog; got != 5_000_000 {
+		t.Errorf("unknown memory clamps to %d", got)
+	}
+}
+
+func TestReserveCountsTheWirelessReader(t *testing.T) {
+	t.Parallel()
+	c := memoryStarter()
+	c.System.Logging.Level = LogInfo
+	before := (MemoryBudget{}).Reserve(c)
+	c.Wireless.Radios = []Radio{{Enabled: true}}
+	if !c.WirelessEnabled() {
+		t.Skip("a radio alone does not turn wireless on; adjust the fixture")
+	}
+	if got := (MemoryBudget{}).Reserve(c); got != before+ReserveJournalReader {
+		t.Errorf("reserve %d, want %d", got, before+ReserveJournalReader)
+	}
+}

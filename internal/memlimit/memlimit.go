@@ -27,8 +27,9 @@ const (
 	interval   = time.Minute
 )
 
-// Derive is the heap the configuration needs: the daemon, the names index and the logs with headroom.
-func Derive(cfg *model.Config) int64 {
+// Derive is the heap the configuration needs on a machine with the budget:
+// the daemon, the names index and the logs at the sizes kept, with headroom.
+func Derive(cfg *model.Config, budget model.MemoryBudget) int64 {
 	if cfg == nil {
 		cfg = &model.Config{}
 	}
@@ -40,7 +41,7 @@ func Derive(cfg *model.Config) int64 {
 		}
 		n += int64(ceiling) * IndexBytes
 	}
-	n += int64(float64(cfg.LogsFullBytes()) * headroom)
+	n += int64(float64(budget.LogsFullBytes(cfg)) * headroom)
 	return max(n, Floor)
 }
 
@@ -58,6 +59,7 @@ func Live() int64 {
 // the live heap need. GOMEMLIMIT in the environment leaves it alone.
 type Limiter struct {
 	Source func() *model.Config
+	Budget model.MemoryBudget
 	Log    *slog.Logger
 
 	set  func(int64) int64
@@ -69,9 +71,9 @@ type Limiter struct {
 }
 
 // New makes a Limiter over the configuration.
-func New(source func() *model.Config, log *slog.Logger) *Limiter {
+func New(source func() *model.Config, budget model.MemoryBudget, log *slog.Logger) *Limiter {
 	return &Limiter{
-		Source: source, Log: log,
+		Source: source, Budget: budget, Log: log,
 		set:  debug.SetMemoryLimit,
 		live: Live,
 		env:  os.Getenv("GOMEMLIMIT") != "",
@@ -84,7 +86,7 @@ func (l *Limiter) Apply() int64 {
 	if l.env {
 		return 0
 	}
-	want := Derive(l.Source())
+	want := Derive(l.Source(), l.Budget)
 	live := l.live()
 	if float64(live) > within*float64(want) {
 		want = max(want, int64(float64(live)*headroom))

@@ -60,6 +60,9 @@ func (MemoryBudget) Reserve(c *Config) int64 {
 	if c.Services.DHCP.Enabled && c.System.Logging.Records() {
 		r += ReserveJournalReader
 	}
+	if c.WirelessEnabled() && c.System.Logging.Records() {
+		r += ReserveJournalReader
+	}
 	return r
 }
 
@@ -104,6 +107,48 @@ func (b MemoryBudget) Ceilings(c *Config) LogCeilings {
 		WirelessLog:  b.Ceiling(c, WirelessLogBytes, MaxWirelessLogEntries),
 		PeerLog:      b.Ceiling(c, PeerLogBytes, MaxPeerLogEntries),
 	}
+}
+
+// LogSizes is how many entries each log keeps on this machine: its
+// setting, or its ceiling when that is lower.
+type LogSizes struct {
+	QueryLog     int
+	FirewallLog  int
+	ProxyEvents  int
+	Requests     int
+	Destinations int
+	DHCPLog      int
+	WirelessLog  int
+	WireGuardLog int
+	TailscaleLog int
+}
+
+// Sizes clamps every log's setting to its ceiling.
+func (b MemoryBudget) Sizes(c *Config) LogSizes {
+	ce := b.Ceilings(c)
+	q, p := c.Services.DNS.QueryLog, c.Services.Proxy
+	return LogSizes{
+		QueryLog:     min(q.Size(), ce.QueryLog),
+		FirewallLog:  min(c.System.Management.FirewallLog.Size(), ce.FirewallLog),
+		ProxyEvents:  min(p.Events.Size(), ce.ProxyEvents),
+		Requests:     min(p.Requests.Size(DefaultRequestEntries), ce.Requests),
+		Destinations: min(c.Traffic.Destinations.Size(), ce.Destinations),
+		DHCPLog:      min(c.Services.DHCP.Log.Size(DefaultDHCPLogEntries), ce.DHCPLog),
+		WirelessLog:  min(c.Wireless.Log.Size(DefaultWirelessLogEntries), ce.WirelessLog),
+		WireGuardLog: min(c.VPN.WireGuardLog.Size(DefaultPeerLogEntries), ce.PeerLog),
+		TailscaleLog: min(c.VPN.TailscaleLog.Size(DefaultPeerLogEntries), ce.PeerLog),
+	}
+}
+
+// LogsFullBytes is what the logs that are on cost full at the sizes this machine keeps.
+func (b MemoryBudget) LogsFullBytes(c *Config) int64 {
+	var total int64
+	for _, l := range c.memoryLogs() {
+		if l.on {
+			total += int64(min(l.size, b.Ceiling(c, l.bytes, l.most))) * l.bytes
+		}
+	}
+	return total
 }
 
 // Check refuses the logs that are on where this router's memory cannot
