@@ -87,7 +87,7 @@ func logsMemoryWarnings(cfg *model.Config, b model.MemoryBudget) []Warning {
 		out = append(out, Warning{
 			Kind: "logs", Level: "warn", Key: "logs-memory",
 			Title: "The logs could take more memory than this router has for them",
-			Detail: "Full, the logs in memory take " + formatBytes(peak) + "; this router has " +
+			Detail: "Full, the logs in memory take " + formatBytes(peak) + ". This router has " +
 				formatBytes(float64(room)) + " for them. Set fewer entries under Firewall › Log, " +
 				"Services › DNS › Queries, Services › Reverse proxy › Events and Requests, Services › DHCP › Log, " +
 				"Traffic › Destinations, Wireless › Log or VPN › Logs.",
@@ -102,14 +102,13 @@ func logsMemoryWarnings(cfg *model.Config, b model.MemoryBudget) []Warning {
 		if l.plural {
 			verb = "keep"
 		}
-		clamped = append(clamped, fmt.Sprintf("the %s %s %s of the %s set", l.name, verb, groupDigits(l.Ceiling), groupDigits(l.Size)))
+		clamped = append(clamped, fmt.Sprintf("The %s %s %s of the %s set.", l.name, verb, groupDigits(l.Ceiling), groupDigits(l.Size)))
 	}
 	if len(clamped) > 0 {
-		detail := strings.Join(clamped, "; ")
 		out = append(out, Warning{
 			Kind: "logs", Level: "warn", Key: "logs-clamped",
 			Title:  "A log keeps fewer entries than set",
-			Detail: strings.ToUpper(detail[:1]) + detail[1:] + ". This router has memory for that many.",
+			Detail: strings.Join(clamped, " ") + " This router has memory for that many.",
 		})
 	}
 	return out

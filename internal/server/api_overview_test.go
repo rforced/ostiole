@@ -969,7 +969,7 @@ func TestWarnsWhenTheLogsCouldOutgrowTheirMemory(t *testing.T) {
 	}
 	w := find(1_400_000_000)
 	if w == nil || w.Kind != "logs" || w.Title != "The logs could take more memory than this router has for them" ||
-		!strings.HasPrefix(w.Detail, "Full, the logs in memory take 945 MB; this router has 875 MB for them. Set fewer entries under Firewall › Log, ") ||
+		!strings.HasPrefix(w.Detail, "Full, the logs in memory take 945 MB. This router has 875 MB for them. Set fewer entries under Firewall › Log, ") ||
 		!strings.HasSuffix(w.Detail, "Wireless › Log or VPN › Logs.") {
 		t.Errorf("warning = %+v", w)
 	}
@@ -1001,8 +1001,8 @@ func TestWarnsWhenALogKeepsFewerThanSet(t *testing.T) {
 	}
 	cfg.System.Management.FirewallLog.Entries = 1_000_000
 	cfg.Services.Proxy = model.Proxy{Enabled: true, Sites: []model.ProxySite{{ID: "shop", Enabled: true}}, Events: model.ProxyEvents{Entries: 500_000}}
-	if w := find(950_000_000); w == nil || w.Detail != "The firewall log keeps 577,142 of the 1,000,000 set; the query log keeps 1,346,666 of the 5,000,000 set; "+
-		"the WAF events keep 131,510 of the 500,000 set. This router has memory for that many." {
+	if w := find(950_000_000); w == nil || w.Detail != "The firewall log keeps 577,142 of the 1,000,000 set. The query log keeps 1,346,666 of the 5,000,000 set. "+
+		"The WAF events keep 131,510 of the 500,000 set. This router has memory for that many." {
 		t.Errorf("warning = %+v", w)
 	}
 	// A log that is off keeps nothing, whatever it is set to.
