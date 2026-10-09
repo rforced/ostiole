@@ -58,10 +58,13 @@ function toggleZone(name, on) {
   config.setProtectedZones(sameAsDefault ? [] : names)
 }
 
-/** A number field that keeps the model free of empty strings. */
+/**
+ * A number field that keeps the model free of empty strings. A burst of 0
+ * is left out, as the model has it.
+ */
 function setNumber(which, field, value) {
-  const n = Number.parseInt(value, 10)
-  config.setDefence(which, { [field]: Number.isNaN(n) ? 0 : n })
+  const n = Number.parseInt(value, 10) || 0
+  config.setDefence(which, { [field]: field === 'burst' && !n ? null : n })
 }
 
 const limited = computed(() => config.rules.filter((r) => r.limit))
