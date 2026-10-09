@@ -222,7 +222,14 @@ function editZone(z) {
 
 <template>
   <div class="space-y-5">
-    <PageHeader title="Interfaces" />
+    <PageHeader title="Interfaces">
+      <RefreshButton
+        v-if="config.draft"
+        :busy="live.busy.value"
+        :updated-at="live.updatedAt.value"
+        @click="refreshLive"
+      />
+    </PageHeader>
     <ErrorLine v-if="config.error || live.error.value || renewError" class="text-sm">
       {{ config.error || live.error.value || renewError }}
     </ErrorLine>
@@ -236,26 +243,19 @@ function editZone(z) {
     <AppTabs v-else-if="config.draft" v-model="tab" :tabs="tabs">
       <TabsContent value="interfaces">
         <SectionCard title="Interfaces" :count="rows.length" flush>
-          <template #actions>
-            <RefreshButton
-              :busy="live.busy.value"
-              :updated-at="live.updatedAt.value"
-              @click="refreshLive"
-            />
-            <template v-if="!auth.readOnly">
-              <button type="button" class="btn-secondary" @click="vlanOpen = true">
-                <Plus class="size-4" aria-hidden="true" /> Add VLAN
-              </button>
-              <button type="button" class="btn-secondary" @click="addAggregate('bridge')">
-                <Plus class="size-4" aria-hidden="true" /> Add bridge
-              </button>
-              <button type="button" class="btn-secondary" @click="addAggregate('bond')">
-                <Plus class="size-4" aria-hidden="true" /> Add bond
-              </button>
-              <button type="button" class="btn-secondary" @click="addPppoe">
-                <Plus class="size-4" aria-hidden="true" /> Add PPPoE
-              </button>
-            </template>
+          <template v-if="!auth.readOnly" #actions>
+            <button type="button" class="btn-secondary" @click="vlanOpen = true">
+              <Plus class="size-4" aria-hidden="true" /> Add VLAN
+            </button>
+            <button type="button" class="btn-secondary" @click="addAggregate('bridge')">
+              <Plus class="size-4" aria-hidden="true" /> Add bridge
+            </button>
+            <button type="button" class="btn-secondary" @click="addAggregate('bond')">
+              <Plus class="size-4" aria-hidden="true" /> Add bond
+            </button>
+            <button type="button" class="btn-secondary" @click="addPppoe">
+              <Plus class="size-4" aria-hidden="true" /> Add PPPoE
+            </button>
           </template>
           <table class="table table-stack">
             <thead>
