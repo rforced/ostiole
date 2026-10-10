@@ -1370,11 +1370,11 @@ export const useConfigStore = defineStore('config', () => {
    * @param {object|null} value the limit, or null to switch it off
    */
   function setDefence(which, value) {
-    const p = draft.value.protection ?? (draft.value.protection = {})
     if (value === null) {
-      delete p[which]
+      dropProtection(which)
       return
     }
+    const p = draft.value.protection ?? (draft.value.protection = {})
     const next = { ...(p[which] ?? {}) }
     for (const [k, v] of Object.entries(value)) {
       if (v == null) delete next[k]
@@ -1385,12 +1385,20 @@ export const useConfigStore = defineStore('config', () => {
 
   /** The zones defended; an empty list means every external zone. */
   function setProtectedZones(names) {
-    const p = draft.value.protection ?? (draft.value.protection = {})
     if (!names.length) {
-      delete p.zones
+      dropProtection('zones')
       return
     }
+    const p = draft.value.protection ?? (draft.value.protection = {})
     p.zones = [...names]
+  }
+
+  /** Go leaves an empty protection block out, so the draft does too. */
+  function dropProtection(key) {
+    const p = draft.value.protection
+    if (!p) return
+    delete p[key]
+    if (!Object.keys(p).length) delete draft.value.protection
   }
 
   // ---- crons -----------------------------------------------------------

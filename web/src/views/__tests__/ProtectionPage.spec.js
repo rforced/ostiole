@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -33,8 +33,60 @@ function page() {
   return { wrapper: mount(ProtectionPage, { global: { stubs } }), config }
 }
 
+/** Mounts the page on a saved configuration, so dirty means a change. */
+async function opened(cfg) {
+  const config = useConfigStore()
+  config.saved = JSON.parse(JSON.stringify(cfg))
+  config.replaceDraft(cfg)
+  config.loaded = true
+  const wrapper = mount(ProtectionPage, { global: { stubs } })
+  await flushPromises()
+  return { wrapper, config }
+}
+
+/** Each zone on offer, in order, and whether its box is ticked. */
+function boxes(wrapper) {
+  return wrapper
+    .findAll('input[id^="prot-zone-"]')
+    .map((b) => [b.attributes('id').slice('prot-zone-'.length), b.element.checked])
+}
+
 describe('ProtectionPage', () => {
   beforeEach(() => setActivePinia(createPinia()))
+
+  // None chosen means every external zone, so the last box unticked comes
+  // back ticked rather than showing a defended zone as off.
+  it('goes back to every external zone when the last one is unticked', async () => {
+    const cfg = draft()
+    cfg.zones.push({ name: 'dmz', external: true })
+    cfg.protection.zones = ['wan']
+    const { wrapper, config } = await opened(cfg)
+    expect(boxes(wrapper)).toEqual([
+      ['wan', true],
+      ['lan', false],
+      ['dmz', false],
+    ])
+    await wrapper.find('#prot-zone-wan').setValue(false)
+    expect(config.draft.protection?.zones).toBeUndefined()
+    expect(boxes(wrapper)).toEqual([
+      ['wan', true],
+      ['lan', false],
+      ['dmz', true],
+    ])
+  })
+
+  it('keeps the only external zone ticked and the draft as it was', async () => {
+    const cfg = draft()
+    delete cfg.protection
+    const { wrapper, config } = await opened(cfg)
+    await wrapper.find('#prot-zone-wan').setValue(false)
+    expect(boxes(wrapper)).toEqual([
+      ['wan', true],
+      ['lan', false],
+    ])
+    expect('protection' in config.draft).toBe(false)
+    expect(config.dirty).toBe(false)
+  })
 
   it('defends the zones that face the internet without being told', () => {
     const { wrapper } = page()
@@ -51,7 +103,7 @@ describe('ProtectionPage', () => {
     // Back to just the external zone, which is the default, so the list
     // goes away rather than being written out.
     await wrapper.find('#prot-zone-lan').setValue(false)
-    expect(config.draft.protection.zones).toBeUndefined()
+    expect(config.draft.protection?.zones).toBeUndefined()
   })
 
   it('switches a defence on with settings that do not fire on a quiet network', async () => {
@@ -74,7 +126,7 @@ describe('ProtectionPage', () => {
     await wrapper.find('#prot-scan').setValue(true)
     expect(config.draft.protection.portScan.hold).toBe('10m')
     await wrapper.find('#prot-scan').setValue(false)
-    expect(config.draft.protection.portScan).toBeUndefined()
+    expect(config.draft.protection?.portScan).toBeUndefined()
   })
 
   it('lists the rules that hold their traffic to a rate', () => {

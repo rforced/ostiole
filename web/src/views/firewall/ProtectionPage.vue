@@ -45,9 +45,9 @@ function toggleDefence(which, on) {
   config.setDefence(which, on ? DEFAULTS[which] : null)
 }
 
-function toggleZone(name, on) {
+function toggleZone(name, box) {
   const next = new Set(chosen.value.length ? chosen.value : external.value)
-  if (on) next.add(name)
+  if (box.checked) next.add(name)
   else next.delete(name)
   // Back to every external zone when the choice is the same as the
   // default, so the configuration does not carry a list that means
@@ -56,6 +56,8 @@ function toggleZone(name, on) {
   const sameAsDefault =
     names.length === external.value.length && names.every((n) => external.value.includes(n))
   config.setProtectedZones(sameAsDefault ? [] : names)
+  // Vue does not re-tick a box whose binding stayed true.
+  box.checked = defended.value.includes(name)
 }
 
 /**
@@ -107,7 +109,7 @@ function rate(limit) {
               type="checkbox"
               class="checkbox"
               :checked="defended.includes(z.name)"
-              @change="toggleZone(z.name, $event.target.checked)"
+              @change="toggleZone(z.name, $event.target)"
             />
             <label :for="`prot-zone-${z.name}`">
               {{ z.name }}
