@@ -1743,13 +1743,15 @@ export const useConfigStore = defineStore('config', () => {
       case 'routes':
         return '/routing'
       case 'services':
+        if (path.startsWith('services.dhcp')) return '/services/dhcp'
         if (path.startsWith('services.dns')) return '/services/dns'
         if (path.startsWith('services.upnp')) return '/services/upnp'
         if (path.startsWith('services.ntp')) return '/services/time'
         if (path.startsWith('services.wol')) return '/services/wol'
         if (path.startsWith('services.ddns')) return '/services/ddns'
         if (path.startsWith('services.proxy')) return '/services/proxy'
-        return '/services/dhcp'
+        if (path.startsWith('services.discovery')) return '/services/discovery'
+        return '/services'
       case 'blocking':
         return '/services/dns'
       case 'crons':

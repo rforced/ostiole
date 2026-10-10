@@ -580,6 +580,20 @@ describe('config store draft changes', () => {
     expect(config.hasChanges('/system/general')).toBe(false)
   })
 
+  it('sends a change to the discovery relay to its own page, not DHCP', () => {
+    const config = useConfigStore()
+    config.replaceDraft(wired())
+    for (const path of ['services.discovery.mdns', 'services.discovery']) {
+      config.changes = [{ path, kind: 'removed' }]
+      expect(config.hasChanges('/services/discovery')).toBe(true)
+      expect(config.hasChanges('/services/dhcp')).toBe(false)
+    }
+    // A block no page claims marks the section, never another page.
+    config.changes = [{ path: 'services.unknown', kind: 'added' }]
+    expect(config.hasChanges('/services')).toBe(true)
+    expect(config.hasChanges('/services/dhcp')).toBe(false)
+  })
+
   it('sends a change to the tailnet node to its own page', () => {
     const config = useConfigStore()
     config.replaceDraft(wired())
