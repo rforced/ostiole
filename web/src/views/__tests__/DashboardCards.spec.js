@@ -428,15 +428,14 @@ describe('WirelessCard', () => {
 
 describe('ServicesCard', () => {
   const stubs = { RouterLink: RouterLinkStub }
-  /** The DNS line, spaces as a reader hears them. */
-  function dnsLine(dns) {
-    const w = mount(ServicesCard, {
-      props: { dns: { enabled: true, domain: 'lan', ...dns } },
-      global: { stubs },
-    })
-    const dd = w.findAll('dt').find((dt) => dt.text() === 'DNS').element.nextElementSibling
+  /** The line under a term, spaces as a reader hears them. */
+  function line(term, props) {
+    const w = mount(ServicesCard, { props, global: { stubs } })
+    const dd = w.findAll('dt').find((dt) => dt.text() === term).element.nextElementSibling
     return dd.textContent.replace(/\s+/g, ' ').trim()
   }
+  const dnsLine = (dns) => line('DNS', { dns: { enabled: true, domain: 'lan', ...dns } })
+  const dhcpLine = (dhcp) => line('DHCP', { dhcp: { enabled: true, ...dhcp } })
 
   // Each resolver mode keeps the other's servers, so the line says where
   // the mode in use sends names and nothing else.
@@ -448,5 +447,12 @@ describe('ServicesCard', () => {
       'lan · DNS over TLS to dns.quad9.net',
     )
     expect(dnsLine({ resolver: 'recursive' })).toBe('lan · recursive')
+  })
+
+  it('says one lease and one host override in the singular', () => {
+    expect(dhcpLine({ leases: 1, servers: 1 })).toBe('1 lease · 1 server')
+    expect(dhcpLine({ leases: 1, capacity: 100, servers: 2 })).toBe('1 of 100 leases · 2 servers')
+    expect(dnsLine({ overrides: 1 })).toBe('lan · 1 host override')
+    expect(dnsLine({ overrides: 2 })).toBe('lan · 2 host overrides')
   })
 })

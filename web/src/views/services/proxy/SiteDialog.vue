@@ -5,7 +5,7 @@ import { computed, ref, watch } from 'vue'
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
-import { joinList, parseList } from '@/lib/lists'
+import { joinList, keptOrder, parseList } from '@/lib/lists'
 import { useConfigStore } from '@/stores/config'
 import AllowFromAliases, { splitAllowFrom } from '@/views/services/proxy/AllowFromAliases.vue'
 
@@ -78,12 +78,6 @@ function addPath() {
 
 function removePath(index) {
   form.value.paths.splice(index, 1)
-}
-
-/** The saved list when it holds the same items, so an untouched save keeps its order. */
-function keptOrder(was, now) {
-  const key = (list) => [...(list ?? [])].sort().join('\n')
-  return was && key(was) === key(now) ? [...was] : now
 }
 
 function save() {

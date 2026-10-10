@@ -55,8 +55,32 @@ describe('RadioDialog', () => {
       width: 20,
       standard: 'n',
     })
+    expect(wrapper.get('#radio-channel').element.value).toBe('6')
     await wrapper.get('form').trigger('submit')
     expect(config.radios[0].channel).toBe(6)
     expect(config.dirty).toBe(false)
+  })
+
+  it('shows a channel the card does not offer until another is picked', async () => {
+    const card = {
+      bands: {
+        '2g': {
+          channels: [
+            { number: 1, mhz: 2412 },
+            { number: 11, mhz: 2462 },
+          ],
+        },
+      },
+    }
+    const { wrapper, config } = open(
+      { name: 'wlp3s0', enabled: true, band: '2g', channel: 6, width: 20, standard: 'n' },
+      card,
+    )
+    const select = wrapper.get('#radio-channel')
+    expect(select.element.value).toBe('6')
+    await select.setValue('11')
+    expect(select.find('option[value="6"]').exists()).toBe(false)
+    await wrapper.get('form').trigger('submit')
+    expect(config.radios[0].channel).toBe(11)
   })
 })

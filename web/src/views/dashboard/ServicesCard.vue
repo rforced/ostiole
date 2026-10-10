@@ -54,7 +54,7 @@ function word(s) {
       <dd v-if="dhcp.enabled">
         {{ formatCount(dhcp.leases ?? 0) }}
         <template v-if="dhcp.capacity"> of {{ formatCount(dhcp.capacity) }}</template>
-        leases ·
+        lease{{ (dhcp.capacity || dhcp.leases) === 1 ? '' : 's' }} ·
         {{ dhcp.servers ?? 0 }} server{{ (dhcp.servers ?? 0) === 1 ? '' : 's' }}
         <template v-if="dhcp.static"> · {{ dhcp.static }} static</template>
       </dd>
@@ -69,7 +69,9 @@ function word(s) {
           · {{ dns.resolver === 'tls' ? 'DNS over TLS to' : 'forwards to' }}
           <span class="font-mono">{{ dns.upstreams.join(', ') }}</span>
         </template>
-        <template v-if="dns.overrides"> · {{ dns.overrides }} host overrides</template>
+        <template v-if="dns.overrides">
+          · {{ dns.overrides }} host override{{ dns.overrides === 1 ? '' : 's' }}
+        </template>
       </dd>
       <dd v-else class="text-ink-muted">off</dd>
     </dl>

@@ -207,32 +207,34 @@ const table = ref(false)
 
 <template>
   <div ref="box" class="min-w-0 space-y-2">
-    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-      <span v-for="(s, i) in series" :key="s.index" class="flex items-center gap-1.5">
-        <svg width="16" height="4" aria-hidden="true">
-          <line x1="0" y1="2" x2="16" y2="2" :stroke="s.color" stroke-width="2" />
-        </svg>
-        {{ s.name }}
-        <span v-if="skeleton" class="skeleton w-16"></span>
-        <span v-else class="font-medium tabular-nums">
-          {{ current ? valueOf(current[i]) : '—' }}
+    <div class="flex items-center gap-x-4 text-sm">
+      <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1">
+        <span v-for="(s, i) in series" :key="s.index" class="flex items-center gap-1.5">
+          <svg width="16" height="4" aria-hidden="true">
+            <line x1="0" y1="2" x2="16" y2="2" :stroke="s.color" stroke-width="2" />
+          </svg>
+          {{ s.name }}
+          <span v-if="skeleton" class="skeleton w-16"></span>
+          <span v-else class="font-medium tabular-nums">
+            {{ current ? valueOf(current[i]) : '—' }}
+          </span>
         </span>
-      </span>
-      <span v-for="b in bars" :key="b.index" class="flex items-center gap-1.5">
-        <svg width="10" height="10" aria-hidden="true">
-          <rect width="10" height="10" rx="2" :fill="b.color" />
-        </svg>
-        {{ b.name }}
-        <span v-if="skeleton" class="skeleton w-10"></span>
-        <span v-else class="font-medium tabular-nums">
-          {{ last && last[b.index] != null ? share(last[b.index]) : '—' }}
+        <span v-for="b in bars" :key="b.index" class="flex items-center gap-1.5">
+          <svg width="10" height="10" aria-hidden="true">
+            <rect width="10" height="10" rx="2" :fill="b.color" />
+          </svg>
+          {{ b.name }}
+          <span v-if="skeleton" class="skeleton w-10"></span>
+          <span v-else class="font-medium tabular-nums">
+            {{ last && last[b.index] != null ? share(last[b.index]) : '—' }}
+          </span>
         </span>
-      </span>
-      <span v-if="skeleton" class="skeleton ml-auto w-10"></span>
+      </div>
+      <span v-if="skeleton" class="skeleton w-10 shrink-0"></span>
       <button
         v-else
         type="button"
-        class="link ml-auto"
+        class="link shrink-0 self-start"
         :aria-pressed="table"
         @click="table = !table"
       >

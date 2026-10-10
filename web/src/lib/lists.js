@@ -20,6 +20,12 @@ export function joinList(items) {
   return (items ?? []).join('\n')
 }
 
+/** The saved list when it holds the same items, so an untouched save keeps its order. */
+export function keptOrder(was, now) {
+  const key = (list) => [...(list ?? [])].sort().join('\n')
+  return was && key(was) === key(now) ? [...was] : now
+}
+
 /**
  * The first few items of a list and how many more, for a table cell that
  * cannot hold them all: "rule r1, rule r2 and 3 more".

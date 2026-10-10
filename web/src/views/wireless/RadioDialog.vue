@@ -38,6 +38,11 @@ const band = computed(() => props.card?.bands?.[form.value.band] ?? null)
 /** Radar and disabled channels are left out: neither can be used here. */
 const channels = computed(() => (band.value?.channels ?? []).filter((c) => !c.radar && !c.disabled))
 
+/** A saved channel the card has not listed keeps an option, so the select shows it. */
+const kept = computed(
+  () => form.value.channel > 0 && !channels.value.some((c) => c.number === form.value.channel),
+)
+
 /**
  * What the card does, capped per band: 40 MHz on 2.4 GHz, and 80 MHz on
  * 5 GHz because every 160 MHz block there takes in radar channels, which
@@ -124,6 +129,7 @@ function save() {
         <FormField id="radio-channel" label="Channel">
           <select id="radio-channel" v-model.number="form.channel" class="input">
             <option :value="0">Automatic</option>
+            <option v-if="kept" :value="form.channel">{{ form.channel }}</option>
             <option v-for="c in channels" :key="c.number" :value="c.number">
               {{ c.number }} · {{ c.mhz }} MHz
             </option>

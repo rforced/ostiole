@@ -5,7 +5,7 @@ import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { newId } from '@/lib/ids'
-import { joinList, parseList } from '@/lib/lists'
+import { joinList, keptOrder, parseList } from '@/lib/lists'
 import { useConfigStore } from '@/stores/config'
 import EndpointFields from '@/views/firewall/EndpointFields.vue'
 
@@ -74,12 +74,6 @@ const named = computed(() => form.value.ports.length + form.value.routes.length 
 const redirectOnly = computed(
   () => form.value.ports.includes('http') && !form.value.ports.includes('https'),
 )
-
-/** The saved list when it holds the same items, so an untouched save keeps its order. */
-function keptOrder(was, now) {
-  const key = (list) => [...(list ?? [])].sort().join('\n')
-  return was && key(was) === key(now) ? [...was] : now
-}
 
 function save() {
   const f = form.value

@@ -449,7 +449,7 @@ async function copyFile() {
         </svg>
         <pre
           ref="fileEl"
-          class="min-w-0 flex-1 overflow-x-auto rounded-md bg-surface-2 p-3 font-mono text-code whitespace-pre select-all"
+          class="min-w-0 flex-1 rounded-md bg-surface-2 p-3 font-mono text-code whitespace-pre-wrap wrap-anywhere select-all"
           >{{ fileText }}</pre>
       </div>
       <span class="sr-only" aria-live="polite">{{
