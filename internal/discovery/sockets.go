@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"os"
 	"syscall"
 
 	"golang.org/x/net/ipv4"
@@ -133,9 +134,46 @@ func listen(network, address string, o sockOpts) (net.PacketConn, error) {
 	return pc, nil
 }
 
+// listenGroup4 binds a udp4 socket to a multicast group itself. net's
+// ListenPacket widens a group address to the wildcard, and a wildcard
+// socket on 1900 takes the unicast searches meant for a miniupnpd that
+// bound after it: the kernel hands unicast to the first reuseport group it
+// meets, not the best match.
+func listenGroup4(group netip.Addr, port int) (net.PacketConn, error) {
+	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_DGRAM|unix.SOCK_CLOEXEC|unix.SOCK_NONBLOCK, 0)
+	if err != nil {
+		return nil, fmt.Errorf("socket for %s: %w", group, err)
+	}
+	sa := &unix.SockaddrInet4{Port: port, Addr: group.As4()}
+	err = errors.Join(
+		unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_REUSEADDR, 1),
+		unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_REUSEPORT, 1),
+		unix.SetsockoptInt(fd, unix.IPPROTO_IP, unix.IP_MULTICAST_ALL, 0),
+		unix.Bind(fd, sa),
+	)
+	if err != nil {
+		_ = unix.Close(fd)
+		return nil, fmt.Errorf("bind %s:%d: %w", group, port, err)
+	}
+	f := os.NewFile(uintptr(fd), group.String())
+	defer func() { _ = f.Close() }()
+	pc, err := net.FilePacketConn(f)
+	if err != nil {
+		return nil, fmt.Errorf("bind %s:%d: %w", group, port, err)
+	}
+	return pc, nil
+}
+
 // listen4 binds a udp4 socket with packet info on, its multicast loopback off and the TTLs given.
+// A multicast address is bound as itself, not widened to the wildcard.
 func listen4(address string, o sockOpts, hops, mcastHops int) (conn4, error) {
-	pc, err := listen("udp4", address, o)
+	var pc net.PacketConn
+	var err error
+	if ap, perr := netip.ParseAddrPort(address); perr == nil && ap.Addr().Is4() && ap.Addr().IsMulticast() {
+		pc, err = listenGroup4(ap.Addr(), int(ap.Port()))
+	} else {
+		pc, err = listen("udp4", address, o)
+	}
 	if err != nil {
 		return conn4{}, err
 	}
