@@ -1,4 +1,4 @@
-/** The block a router without one reads as, which the store never writes. */
+/** The block a router without one reads as; a missing protocol is on, as the server reads it. */
 export const DISCOVERY_DEFAULT = Object.freeze({ enabled: false, mdns: true, ssdp: true })
 
 /**
@@ -9,7 +9,7 @@ export const DISCOVERY_DEFAULT = Object.freeze({ enabled: false, mdns: true, ssd
  */
 export function discoveryActive(cfg) {
   const d = cfg?.services?.discovery
-  if (!d?.enabled || !(d.mdns || d.ssdp)) return false
+  if (!d?.enabled || !((d.mdns ?? true) || (d.ssdp ?? true))) return false
   const on = new Set((cfg.interfaces ?? []).filter((i) => i.enabled).map((i) => i.name))
   const links = (d.interfaces ?? []).filter((l) => on.has(l.interface))
   return links.some((l) => l.asks) && links.some((l) => l.answers)

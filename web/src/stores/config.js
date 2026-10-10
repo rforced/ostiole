@@ -927,17 +927,18 @@ export const useConfigStore = defineStore('config', () => {
   // ---- discovery relay -------------------------------------------------
 
   /**
-   * The relay block as the draft has it, or the default a router without
+   * The relay block as the draft has it over the default a router without
    * one reads as. Reading never writes the draft: changes go through
    * setDiscovery, so an untouched page leaves the draft as it was.
    */
   function ensureDiscovery() {
-    return draft.value?.services?.discovery ?? { ...DISCOVERY_DEFAULT }
+    return { ...DISCOVERY_DEFAULT, ...draft.value?.services?.discovery }
   }
 
   /**
    * Change the relay block. Empty lists and a log at its default are
-   * dropped, and so is the block once it is the default again.
+   * dropped, and so is the block once it is the default again, unless the
+   * saved configuration has one: then the change reads as the fields moved.
    *
    * @param {object} patch fields to change, null to drop one
    */
@@ -954,7 +955,7 @@ export const useConfigStore = defineStore('config', () => {
     const isDefault =
       Object.keys(block).length === Object.keys(DISCOVERY_DEFAULT).length &&
       Object.entries(DISCOVERY_DEFAULT).every(([k, v]) => block[k] === v)
-    if (isDefault) delete services.discovery
+    if (isDefault && !saved.value?.services?.discovery) delete services.discovery
     else services.discovery = block
   }
 

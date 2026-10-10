@@ -84,6 +84,10 @@ async function page(discovery, role = 'admin') {
 
 const row = (w, name) => w.findAll('tbody tr').find((tr) => tr.text().includes(name))
 const box = (w, name, role) => w.get(`input[aria-label="${name} ${role}"]`)
+const toggle = (w, label) => {
+  const l = w.findAll('label').find((x) => x.text() === label)
+  return w.get(`input[id="${l.attributes('for')}"]`)
+}
 
 describe('DiscoveryPage', () => {
   beforeEach(() => {
@@ -133,6 +137,23 @@ describe('DiscoveryPage', () => {
     await box(wrapper, 'eth1', 'answers').setValue(false)
     expect(store.draft.services.discovery).toBeUndefined()
     expect(store.dirty).toBe(false)
+  })
+
+  it('keeps the protocols as ticked once a block is saved, defaults included', async () => {
+    const { wrapper, store } = await page({ enabled: false, mdns: true, ssdp: false })
+    await toggle(wrapper, 'mDNS').setValue(false)
+    expect(store.draft.services.discovery).toEqual({ enabled: false, mdns: false, ssdp: false })
+    await toggle(wrapper, 'mDNS').setValue(true)
+    await toggle(wrapper, 'SSDP').setValue(true)
+    expect(store.draft.services.discovery).toEqual({ enabled: false, mdns: true, ssdp: true })
+    await toggle(wrapper, 'SSDP').setValue(false)
+    expect(store.dirty).toBe(false)
+  })
+
+  it('reads a protocol the block leaves out as on, as the server does', async () => {
+    const { wrapper } = await page({ enabled: false, ssdp: false })
+    expect(toggle(wrapper, 'mDNS').element.checked).toBe(true)
+    expect(toggle(wrapper, 'SSDP').element.checked).toBe(false)
   })
 
   it('offers the inside networks a multicast reaches, off ones included', async () => {

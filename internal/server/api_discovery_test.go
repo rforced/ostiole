@@ -49,7 +49,7 @@ func discoveryAPIConfig() *model.Config {
 	cfg.Interfaces = append(cfg.Interfaces, model.Interface{Name: "eth1.30", Zone: "things", Enabled: true,
 		VLAN: &model.VLAN{Parent: "eth1", ID: 30},
 		IPv4: model.IPv4{Mode: model.AddrStatic, Address: "192.168.30.1/24"}, IPv6: model.IPv6{Mode: model.AddrNone}})
-	cfg.Services.Discovery = model.Discovery{Enabled: true, MDNS: true, SSDP: true, Interfaces: []model.DiscoveryInterface{
+	cfg.Services.Discovery = model.Discovery{Enabled: true, MDNS: new(true), SSDP: new(true), Interfaces: []model.DiscoveryInterface{
 		{Interface: "eth1", Asks: true}, {Interface: "eth1.30", Answers: true},
 	}}
 	return cfg

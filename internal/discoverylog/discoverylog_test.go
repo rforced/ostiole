@@ -16,7 +16,7 @@ func relayConfig() *model.Config {
 		model.Interface{Name: "eth1.30", Zone: "things", Enabled: true, VLAN: &model.VLAN{Parent: "eth1", ID: 30},
 			IPv4: model.IPv4{Mode: model.AddrStatic, Address: "192.168.30.1/24"}, IPv6: model.IPv6{Mode: model.AddrNone}},
 		model.Interface{Name: "eth2", Zone: "things", IPv4: model.IPv4{Mode: model.AddrNone}, IPv6: model.IPv6{Mode: model.AddrNone}})
-	cfg.Services.Discovery = model.Discovery{Enabled: true, MDNS: true, Services: []string{"_printer._tcp"},
+	cfg.Services.Discovery = model.Discovery{Enabled: true, MDNS: new(true), SSDP: new(false), Services: []string{"_printer._tcp"},
 		Interfaces: []model.DiscoveryInterface{
 			{Interface: "eth1", Asks: true},
 			{Interface: "eth2", Answers: true},
@@ -42,7 +42,7 @@ func TestRelayConfig(t *testing.T) {
 	}
 	for name, off := range map[string]func(*model.Config){
 		"disabled":        func(c *model.Config) { c.Services.Discovery.Enabled = false },
-		"no protocol":     func(c *model.Config) { c.Services.Discovery.MDNS = false },
+		"no protocol":     func(c *model.Config) { c.Services.Discovery.MDNS = new(false) },
 		"nothing asks":    func(c *model.Config) { c.Services.Discovery.Interfaces[0].Asks = false },
 		"answerer is off": func(c *model.Config) { c.Interfaces[len(c.Interfaces)-2].Enabled = false },
 	} {

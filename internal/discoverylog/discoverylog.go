@@ -84,7 +84,7 @@ func RelayConfig(c *model.Config) discovery.Config {
 	}
 	d := c.Services.Discovery
 	out := discovery.Config{
-		MDNS: d.MDNS, SSDP: d.SSDP, Services: d.Services,
+		MDNS: d.RelaysMDNS(), SSDP: d.RelaysSSDP(), Services: d.Services,
 		ReplyPorts: [2]int{model.DiscoveryReplyPortFirst, model.DiscoveryReplyPortLast},
 	}
 	for _, l := range c.DiscoveryLinks() {

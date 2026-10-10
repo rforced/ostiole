@@ -602,11 +602,11 @@ func (r *renderer) discoveryRules() {
 		}
 	}
 	var ports []string
-	if d.MDNS {
+	if d.RelaysMDNS() {
 		r.line(fmt.Sprintf(`iifname %s udp dport %d counter accept comment "service:discovery"`, ifnameSet(ifs), mdnsPort))
 		ports = append(ports, fmt.Sprint(mdnsPort))
 	}
-	if d.SSDP {
+	if d.RelaysSSDP() {
 		r.line(fmt.Sprintf(`iifname %s udp dport %d counter accept comment "service:discovery"`, ifnameSet(ifs), ssdpPort))
 		ports = append(ports, fmt.Sprint(ssdpPort))
 	}

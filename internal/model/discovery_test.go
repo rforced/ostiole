@@ -42,7 +42,7 @@ func discoveryConfig() *Config {
 		Interface{Name: "eth1.30", Zone: "things", Enabled: true, VLAN: &VLAN{Parent: "eth1", ID: 30},
 			IPv4: IPv4{Mode: AddrStatic, Address: "192.168.30.1/24"}, IPv6: IPv6{Mode: AddrNone}},
 		Interface{Name: "eth2", Zone: "things", IPv4: IPv4{Mode: AddrNone}, IPv6: IPv6{Mode: AddrNone}})
-	cfg.Services.Discovery = Discovery{Enabled: true, MDNS: true, SSDP: true, Interfaces: []DiscoveryInterface{
+	cfg.Services.Discovery = Discovery{Enabled: true, MDNS: new(true), SSDP: new(true), Interfaces: []DiscoveryInterface{
 		{Interface: "eth1", Asks: true},
 		{Interface: "eth1.30", Answers: true},
 	}}
@@ -64,7 +64,7 @@ func TestDiscoveryLinksAndActive(t *testing.T) {
 
 	for name, change := range map[string]func(*Discovery){
 		"off":          func(d *Discovery) { d.Enabled = false },
-		"no protocol":  func(d *Discovery) { d.MDNS, d.SSDP = false, false },
+		"no protocol":  func(d *Discovery) { d.MDNS, d.SSDP = new(false), new(false) },
 		"no asker":     func(d *Discovery) { d.Interfaces[0].Asks = false },
 		"no answerer":  func(d *Discovery) { d.Interfaces[1].Answers = false },
 		"answerer off": func(*Discovery) {},
@@ -120,7 +120,7 @@ func TestValidateDiscovery(t *testing.T) {
 		}, "services.discovery.interfaces"},
 		{"no asker", func(d *Discovery) { d.Interfaces[0] = DiscoveryInterface{Interface: "eth1", Answers: true} }, "services.discovery.interfaces"},
 		{"no answerer", func(d *Discovery) { d.Interfaces[1] = DiscoveryInterface{Interface: "eth1.30", Asks: true} }, "services.discovery.interfaces"},
-		{"no protocol", func(d *Discovery) { d.MDNS, d.SSDP = false, false }, "services.discovery.mdns"},
+		{"no protocol", func(d *Discovery) { d.MDNS, d.SSDP = new(false), new(false) }, "services.discovery.mdns"},
 		{"no underscore", func(d *Discovery) { d.Services = []string{"googlecast._tcp"} }, "services.discovery.services[0]"},
 		{"sctp", func(d *Discovery) { d.Services = []string{"_ok._tcp", "_x._sctp"} }, "services.discovery.services[1]"},
 		{"empty", func(d *Discovery) { d.Services = []string{""} }, "services.discovery.services[0]"},
@@ -146,5 +146,35 @@ func TestDiscoveryAbsentByDefault(t *testing.T) {
 	}
 	if strings.Contains(string(raw), "discovery") {
 		t.Errorf("an unset relay was written: %s", raw)
+	}
+}
+
+// A router without the block relays both protocols, as the page shows it,
+// and a protocol switched off is written, not dropped with the block.
+func TestDiscoveryProtocolsSurviveASave(t *testing.T) {
+	t.Parallel()
+	var none Services
+	if err := json.Unmarshal([]byte(`{}`), &none); err != nil {
+		t.Fatal(err)
+	}
+	if d := none.Discovery; !d.RelaysMDNS() || !d.RelaysSSDP() {
+		t.Errorf("without a block: mdns %v, ssdp %v, want both on", d.RelaysMDNS(), d.RelaysSSDP())
+	}
+	for _, c := range []struct{ in, want string }{
+		{`{"enabled":false,"mdns":false,"ssdp":false}`, `"discovery":{"enabled":false,"mdns":false,"ssdp":false}`},
+		{`{"enabled":false,"mdns":true,"ssdp":false}`, `"discovery":{"enabled":false,"mdns":true,"ssdp":false}`},
+		{`{"enabled":false,"mdns":true,"ssdp":true}`, `"discovery":{"enabled":false,"mdns":true,"ssdp":true}`},
+	} {
+		var s Services
+		if err := json.Unmarshal([]byte(`{"discovery":`+c.in+`}`), &s); err != nil {
+			t.Fatal(err)
+		}
+		raw, err := json.Marshal(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(raw), c.want) {
+			t.Errorf("%s was written as %s", c.in, raw)
+		}
 	}
 }

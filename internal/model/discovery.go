@@ -9,13 +9,20 @@ import (
 // Discovery relays mDNS and SSDP between the router's inside networks, so
 // a device on one can be found from another.
 type Discovery struct {
-	Enabled    bool                 `json:"enabled"`
-	MDNS       bool                 `json:"mdns"`
-	SSDP       bool                 `json:"ssdp"`
+	Enabled bool `json:"enabled"`
+	// Unset is on, so a false survives the block being left out.
+	MDNS       *bool                `json:"mdns,omitempty"`
+	SSDP       *bool                `json:"ssdp,omitempty"`
 	Interfaces []DiscoveryInterface `json:"interfaces,omitempty"`
 	Services   []string             `json:"services,omitempty"`
 	Log        LogKeep              `json:"log,omitzero"`
 }
+
+// RelaysMDNS reports whether mDNS is relayed when the relay runs.
+func (d Discovery) RelaysMDNS() bool { return d.MDNS == nil || *d.MDNS }
+
+// RelaysSSDP reports whether SSDP is relayed when the relay runs.
+func (d Discovery) RelaysSSDP() bool { return d.SSDP == nil || *d.SSDP }
 
 // DiscoveryInterface is one network in the relay and its roles.
 type DiscoveryInterface struct {
@@ -46,7 +53,7 @@ func (c *Config) CheckDiscoveryInterface(name string) error {
 // nil when the relay is off or relays neither protocol.
 func (c *Config) DiscoveryLinks() []DiscoveryInterface {
 	d := c.Services.Discovery
-	if !d.Enabled || !d.MDNS && !d.SSDP {
+	if !d.Enabled || !d.RelaysMDNS() && !d.RelaysSSDP() {
 		return nil
 	}
 	var out []DiscoveryInterface
@@ -100,7 +107,7 @@ func (v *validator) discovery(c *Config, ifaces map[string]bool) {
 		case !answers:
 			v.add("services.discovery.interfaces", "at least one interface must answer")
 		}
-		if !d.MDNS && !d.SSDP {
+		if !d.RelaysMDNS() && !d.RelaysSSDP() {
 			v.add("services.discovery.mdns", "turn on mDNS, SSDP or both")
 		}
 	}
