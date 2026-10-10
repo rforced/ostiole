@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/auth"
 	"ostiole/internal/logging"
 )
@@ -113,6 +114,7 @@ func (a *api) setup(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	a.recordAs(r, sess, audit.Setup)
 	setSessionCookie(w, r, sess)
 	writeJSON(w, http.StatusCreated, a.describe(sess))
 	return nil
@@ -162,9 +164,17 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) error {
 	if old, err := r.Cookie(SessionCookie); err == nil {
 		a.auth.Logout(old.Value)
 	}
+	a.recordAs(r, sess, audit.SignIn)
 	setSessionCookie(w, r, sess)
 	writeJSON(w, http.StatusOK, a.describe(sess))
 	return nil
+}
+
+// recordAs records what the account sess belongs to just did, for a
+// request that arrived with no session or one the action ended.
+func (a *api) recordAs(r *http.Request, sess *auth.Session, action string) {
+	p := Principal{Name: sess.Username, Role: a.auth.Role(sess.Username)}
+	a.audit.Add(audit.Event{Action: action, By: p.actor(remoteIP(r))})
 }
 
 func (a *api) logout(w http.ResponseWriter, r *http.Request) error {
@@ -215,6 +225,7 @@ func (a *api) changePassword(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	a.recordAs(r, fresh, audit.Password)
 	setSessionCookie(w, r, fresh)
 	writeJSON(w, http.StatusOK, a.describe(fresh))
 	return nil

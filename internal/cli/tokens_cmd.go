@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/auth"
 )
 
@@ -69,6 +70,7 @@ A token limited to certificates fetches those and can do nothing else.`,
 			if err != nil {
 				return err
 			}
+			g.audit().Add(audit.Event{Action: audit.TokenCreate, By: audit.ShellActor(), Target: tok.Name, Detail: tokenDetail(tok)})
 			// To stdout on its own so it can be piped; everything else to
 			// stderr, where it will not end up in a variable by accident.
 			fmt.Fprintf(cmd.ErrOrStderr(), "created %s (%s, role %s)\nthis is the only time the token is shown:\n",
@@ -91,15 +93,35 @@ A token limited to certificates fetches those and can do nothing else.`,
 			if err != nil {
 				return err
 			}
+			name := args[0]
+			for _, t := range tk.List() {
+				if t.ID == args[0] || strings.EqualFold(t.Name, args[0]) {
+					name = t.Name
+					break
+				}
+			}
 			if err := tk.Delete(args[0]); err != nil {
 				return err
 			}
+			g.audit().Add(audit.Event{Action: audit.TokenDelete, By: audit.ShellActor(), Target: name})
 			fmt.Fprintf(cmd.OutOrStdout(), "deleted %s\n", args[0])
 			return nil
 		},
 	}
 	cmd.AddCommand(create, del)
 	return cmd
+}
+
+// tokenDetail is a token's role as the audit log says it, or what it is
+// limited to.
+func tokenDetail(t auth.Token) string {
+	switch {
+	case len(t.Certificates) > 0:
+		return "certificates"
+	case t.Metrics:
+		return "metrics"
+	}
+	return string(t.Role)
 }
 
 func stamp(t *time.Time, empty string) string {

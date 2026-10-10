@@ -287,6 +287,7 @@ at your own.`,
 			dyn.OnPass = func() { crons.Note("system:ddns") }
 			deps := server.Deps{
 				Engine:     eng,
+				Audit:      g.audit(),
 				Auth:       as,
 				Updater:    updater,
 				Packages:   packages,

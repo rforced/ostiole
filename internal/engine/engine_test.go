@@ -340,7 +340,7 @@ func TestApplyConfirmCommits(t *testing.T) {
 	if status.Pending == nil || status.Pending.Remaining <= 0 {
 		t.Errorf("status.Pending = %+v", status.Pending)
 	}
-	archived, err := e.Confirm(context.Background())
+	archived, err := e.Confirm(context.Background(), tester)
 	if err != nil || archived == nil {
 		t.Fatalf("Confirm = %v, %v", archived, err)
 	}
@@ -351,7 +351,7 @@ func TestApplyConfirmCommits(t *testing.T) {
 	if fr.count() != 2 {
 		t.Errorf("applied %d rulesets, want 2 (no revert)", fr.count())
 	}
-	if _, err := e.Confirm(context.Background()); !errors.Is(err, ErrNothingPending) {
+	if _, err := e.Confirm(context.Background(), tester); !errors.Is(err, ErrNothingPending) {
 		t.Errorf("double confirm: %v", err)
 	}
 }
@@ -363,7 +363,7 @@ func TestApplyRevertRestoresPrevious(t *testing.T) {
 	if _, err := e.Apply(context.Background(), cfg("second"), ApplyOptions{ConfirmTimeout: time.Minute}); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.Revert(context.Background()); err != nil {
+	if err := e.Revert(context.Background(), tester); err != nil {
 		t.Fatal(err)
 	}
 	if fr.last() != first.Ruleset {
@@ -373,7 +373,7 @@ func TestApplyRevertRestoresPrevious(t *testing.T) {
 	if saved.System.Hostname != "first" {
 		t.Errorf("store changed on revert: %q", saved.System.Hostname)
 	}
-	if err := e.Revert(context.Background()); !errors.Is(err, ErrNothingPending) {
+	if err := e.Revert(context.Background(), tester); !errors.Is(err, ErrNothingPending) {
 		t.Errorf("double revert: %v", err)
 	}
 }
@@ -403,7 +403,7 @@ func TestApplyExpiresAndReverts(t *testing.T) {
 	if status.Pending != nil || !status.TableLoaded {
 		t.Errorf("status after expiry = %+v", status)
 	}
-	if _, err := e.Confirm(context.Background()); !errors.Is(err, ErrNothingPending) {
+	if _, err := e.Confirm(context.Background(), tester); !errors.Is(err, ErrNothingPending) {
 		t.Errorf("confirm after expiry: %v", err)
 	}
 }
@@ -575,7 +575,7 @@ func TestNetworkAppliedAndRevertedTogether(t *testing.T) {
 	if fn.current().String() == firstFiles.String() {
 		t.Fatal("second apply did not change network files")
 	}
-	if err := e.Revert(context.Background()); err != nil {
+	if err := e.Revert(context.Background(), tester); err != nil {
 		t.Fatal(err)
 	}
 	if fn.current().String() != firstFiles.String() {
@@ -665,7 +665,7 @@ func TestServicesAppliedAndRevertedWithTheRest(t *testing.T) {
 	if svc.current().String() == before {
 		t.Fatal("services files unchanged after second apply")
 	}
-	if err := e.Revert(context.Background()); err != nil {
+	if err := e.Revert(context.Background(), tester); err != nil {
 		t.Fatal(err)
 	}
 	if svc.current().String() != before {
@@ -704,7 +704,7 @@ func TestEffectiveFollowsThePendingApply(t *testing.T) {
 		t.Fatalf("Effective while pending = %+v, want the unconfirmed configuration", got)
 	}
 
-	if err := e.Revert(context.Background()); err != nil {
+	if err := e.Revert(context.Background(), tester); err != nil {
 		t.Fatal(err)
 	}
 	if got := e.Effective(); got == nil || got.System.Hostname != "saved" {
@@ -770,7 +770,7 @@ func TestShapingAppliedAndRevertedWithTheRest(t *testing.T) {
 	if !strings.Contains(sh.current().String(), "bandwidth 64000bit") {
 		t.Fatal("the second apply did not reach the shaper")
 	}
-	if err := e.Revert(context.Background()); err != nil {
+	if err := e.Revert(context.Background(), tester); err != nil {
 		t.Fatal(err)
 	}
 	if got := sh.current().String(); got != before {
@@ -893,7 +893,7 @@ func TestAnExpiredWindowIsToldWithoutTheLock(t *testing.T) {
 	if _, err := e.Apply(ctx, cfg("asked"), ApplyOptions{ConfirmTimeout: time.Hour}); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.Revert(ctx); err != nil {
+	if err := e.Revert(ctx, tester); err != nil {
 		t.Fatal(err)
 	}
 	if n.Status().Waiting != 0 {

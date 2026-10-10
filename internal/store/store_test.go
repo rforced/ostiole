@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/model"
 )
 
@@ -39,7 +40,7 @@ func TestSaveLoadAndRevisions(t *testing.T) {
 		t.Fatalf("LoadRuleset on empty store: %v, want ErrNotFound", err)
 	}
 
-	rev, err := s.Save(starter("one"), "ruleset-one\n")
+	rev, err := s.Save(starter("one"), "ruleset-one\n", Author{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +51,7 @@ func TestSaveLoadAndRevisions(t *testing.T) {
 		t.Fatal("store should exist after save")
 	}
 
-	rev, err = s.Save(starter("two"), "ruleset-two\n")
+	rev, err = s.Save(starter("two"), "ruleset-two\n", Author{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +100,7 @@ func TestSaveLoadAndRevisions(t *testing.T) {
 func TestLoadRulesetRefusesOneSavedWithAnotherConfiguration(t *testing.T) {
 	t.Parallel()
 	s := New(t.TempDir())
-	if _, err := s.Save(starter("one"), "ruleset-one\n"); err != nil {
+	if _, err := s.Save(starter("one"), "ruleset-one\n", Author{}); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(s.Dir, RulesetFile)
@@ -107,7 +108,7 @@ func TestLoadRulesetRefusesOneSavedWithAnotherConfiguration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Save(starter("two"), "ruleset-two\n"); err != nil {
+	if _, err := s.Save(starter("two"), "ruleset-two\n", Author{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(path, first, 0o600); err != nil {
@@ -180,7 +181,7 @@ func TestLoadBringsAnOlderFileUpToDate(t *testing.T) {
 func TestSaveRejectsInvalid(t *testing.T) {
 	t.Parallel()
 	s := New(t.TempDir())
-	if _, err := s.Save(&model.Config{}, ""); err == nil {
+	if _, err := s.Save(&model.Config{}, "", Author{}); err == nil {
 		t.Fatal("expected validation error")
 	}
 	if s.Exists() {
@@ -192,7 +193,7 @@ func TestPruneKeepsNewest(t *testing.T) {
 	t.Parallel()
 	s := New(t.TempDir())
 	for i := range 6 {
-		if _, err := s.Save(keeping("h"+string(rune('a'+i)), 3), "rs"); err != nil {
+		if _, err := s.Save(keeping("h"+string(rune('a'+i)), 3), "rs", Author{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -217,7 +218,7 @@ func TestPruneFollowsConfiguredLimit(t *testing.T) {
 	s := New(t.TempDir())
 	save := func(keep int) {
 		t.Helper()
-		if _, err := s.Save(keeping("h", keep), "rs"); err != nil {
+		if _, err := s.Save(keeping("h", keep), "rs", Author{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -281,7 +282,7 @@ func TestLoadSumIsTheSumOfTheSavedBytes(t *testing.T) {
 		t.Fatalf("Sum with nothing saved = %q, %v", sum, err)
 	}
 	for _, hostname := range []string{"first", "second"} {
-		if _, err := s.Save(starter(hostname), "ruleset\n"); err != nil {
+		if _, err := s.Save(starter(hostname), "ruleset\n", Author{}); err != nil {
 			t.Fatal(err)
 		}
 		raw, err := os.ReadFile(filepath.Join(s.Dir, ConfigFile))
@@ -297,4 +298,158 @@ func TestLoadSumIsTheSumOfTheSavedBytes(t *testing.T) {
 			t.Errorf("Sum = %q, %v; LoadSum gave %q", again, err, sum)
 		}
 	}
+}
+
+var (
+	alice = audit.Actor{Name: "alice", Kind: audit.Account, Role: "admin", Address: "192.0.2.5"}
+	bob   = audit.Actor{Name: "bob", Kind: audit.Account, Role: "operator", Address: "192.0.2.6"}
+	carol = audit.Actor{Name: "carol", Kind: audit.Shell}
+)
+
+func TestEachRevisionNamesWhoAppliedIt(t *testing.T) {
+	t.Parallel()
+	s := New(t.TempDir())
+	if _, err := s.Save(starter("one"), "rs", Author{By: alice}); err != nil {
+		t.Fatal(err)
+	}
+	archived, err := s.Save(starter("two"), "rs", Author{By: bob, ConfirmedBy: &carol})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if archived.Applied == nil || archived.Applied.By != alice {
+		t.Fatalf("the archived revision says %+v, want alice", archived.Applied)
+	}
+	revs, err := s.Revisions()
+	if err != nil || len(revs) != 1 || revs[0].Applied == nil || revs[0].Applied.By != alice {
+		t.Fatalf("Revisions = %+v, %v", revs, err)
+	}
+	now, err := s.Applied()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if now == nil || now.By != bob || now.ConfirmedBy == nil || *now.ConfirmedBy != carol || now.Outside {
+		t.Fatalf("the saved configuration says %+v, want bob confirmed by carol", now)
+	}
+	if !now.Time.After(revs[0].Applied.Time) {
+		t.Errorf("applied at %v, before the one it replaced at %v", now.Time, revs[0].Applied.Time)
+	}
+}
+
+func TestAnEditByHandReadsAsChangedOutside(t *testing.T) {
+	t.Parallel()
+	s := New(t.TempDir())
+	if _, err := s.Save(starter("one"), "rs", Author{By: alice}); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(s.Dir, ConfigFile)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, bytes.Replace(raw, []byte(`"one"`), []byte(`"edited"`), 1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	now, err := s.Applied()
+	if err != nil || now == nil || !now.Outside || now.By != (audit.Actor{}) {
+		t.Fatalf("after an edit by hand: %+v, %v", now, err)
+	}
+	archived, err := s.Save(starter("two"), "rs", Author{By: bob})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if archived.Applied == nil || !archived.Applied.Outside {
+		t.Errorf("the edited revision says %+v, want changed outside", archived.Applied)
+	}
+	if now, err := s.Applied(); err != nil || now == nil || now.By != bob {
+		t.Errorf("after the next save: %+v, %v", now, err)
+	}
+}
+
+func TestRevisionsFromBeforeTheRecordsNameNobody(t *testing.T) {
+	t.Parallel()
+	s := New(t.TempDir())
+	if _, err := s.Save(starter("one"), "rs", Author{By: alice}); err != nil {
+		t.Fatal(err)
+	}
+	// What a release that kept no records leaves.
+	if err := os.Remove(filepath.Join(s.Dir, AppliedFile)); err != nil {
+		t.Fatal(err)
+	}
+	if now, err := s.Applied(); err != nil || now != nil {
+		t.Fatalf("with no records: %+v, %v", now, err)
+	}
+	archived, err := s.Save(starter("two"), "rs", Author{By: bob})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if archived.Applied != nil {
+		t.Errorf("a revision from before the records says %+v", archived.Applied)
+	}
+	if now, err := s.Applied(); err != nil || now == nil || now.By != bob {
+		t.Errorf("the save after: %+v, %v", now, err)
+	}
+}
+
+// A crash after the records were written but before config.json leaves the
+// configuration before in place: it is still the one its author applied.
+func TestASaveCutShortKeepsWhoAppliedWhatIsInPlace(t *testing.T) {
+	t.Parallel()
+	s := New(t.TempDir())
+	if _, err := s.Save(starter("one"), "rs", Author{By: alice}); err != nil {
+		t.Fatal(err)
+	}
+	archived, err := s.Save(starter("two"), "rs", Author{By: bob})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(filepath.Join(s.Dir, RevisionsDir, archived.ID+".json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(s.Dir, ConfigFile), before, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if now, err := s.Applied(); err != nil || now == nil || now.By != alice || now.Outside {
+		t.Fatalf("after a save cut short: %+v, %v", now, err)
+	}
+	next, err := s.Save(starter("three"), "rs", Author{By: carol})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.Applied == nil || next.Applied.By != alice || next.Applied.Outside {
+		t.Errorf("the revision archived after it says %+v, want alice", next.Applied)
+	}
+}
+
+func TestRecordsGoWithTheirRevisions(t *testing.T) {
+	t.Parallel()
+	s := New(t.TempDir())
+	for i := range 5 {
+		if _, err := s.Save(keeping("h"+strconv.Itoa(i), 2), "rs", Author{By: alice}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	revs, err := s.Revisions()
+	if err != nil || len(revs) != 2 {
+		t.Fatalf("Revisions = %v, %v", revs, err)
+	}
+	raw, err := os.ReadFile(filepath.Join(s.Dir, AppliedFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var f appliedFile
+	if err := json.Unmarshal(raw, &f); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.Revisions) != 2 || f.Revisions[revs[0].ID] == nil || f.Revisions[revs[1].ID] == nil {
+		t.Errorf("records kept for %v, want %s and %s", keys(f.Revisions), revs[0].ID, revs[1].ID)
+	}
+}
+
+func keys(m map[string]*Applied) []string {
+	var out []string
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
 }

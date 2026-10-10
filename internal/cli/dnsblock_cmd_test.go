@@ -18,7 +18,7 @@ func TestWhyNamesTheDomainOverride(t *testing.T) {
 	cfg.Services.DNS.Domain = "lan"
 	cfg.Services.DNS.Upstreams = []string{"1.1.1.1"}
 	cfg.Services.DNS.DomainOverrides = []model.DomainOverride{{Domain: "corp.example", Servers: []string{"10.0.0.53"}}}
-	if _, err := store.New(dir).Save(cfg, ""); err != nil {
+	if _, err := store.New(dir).Save(cfg, "", store.Author{}); err != nil {
 		t.Fatal(err)
 	}
 

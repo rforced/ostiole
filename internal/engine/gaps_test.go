@@ -34,7 +34,7 @@ func TestFirstApplyRevertsToTheBootstrapRuleset(t *testing.T) {
 	if _, err := e.Apply(ctx, cfg("first"), ApplyOptions{ConfirmTimeout: time.Minute}); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.Revert(ctx); err != nil {
+	if err := e.Revert(ctx, tester); err != nil {
 		t.Fatal(err)
 	}
 	// The bootstrap starts with the same delete-and-recreate as every
@@ -68,7 +68,7 @@ func TestConfirmThatCannotSaveSaysSo(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(st.Dir, 0o755) })
-	_, err := e.Confirm(ctx)
+	_, err := e.Confirm(ctx, tester)
 	if err == nil || !strings.Contains(err.Error(), "not saved") {
 		t.Fatalf("confirm on a read-only store: err = %v", err)
 	}
@@ -102,7 +102,7 @@ func TestRevertThatCannotRestoreSaysSo(t *testing.T) {
 	fr.mu.Lock()
 	fr.applyErr = errors.New("nft: kernel says no")
 	fr.mu.Unlock()
-	err := e.Revert(ctx)
+	err := e.Revert(ctx, tester)
 	if err == nil || !strings.Contains(err.Error(), "revert:") || !strings.Contains(err.Error(), "kernel says no") {
 		t.Fatalf("revert with a failing restore: err = %v", err)
 	}
@@ -113,7 +113,7 @@ func TestRevertThatCannotRestoreSaysSo(t *testing.T) {
 	if status.Pending != nil {
 		t.Errorf("still pending after a failed revert: %+v", status.Pending)
 	}
-	if _, err := e.Confirm(ctx); !errors.Is(err, ErrNothingPending) {
+	if _, err := e.Confirm(ctx, tester); !errors.Is(err, ErrNothingPending) {
 		t.Errorf("confirm after a failed revert: %v", err)
 	}
 }

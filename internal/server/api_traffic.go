@@ -201,8 +201,8 @@ func (a *api) trafficClear(w http.ResponseWriter, r *http.Request) error {
 	}
 	err := errors.Join(a.clearLog(traffic.DevicesFile, a.traffic.Clear),
 		a.clearLog(traffic.DestinationsFile, func() {}))
-	a.noteCleared(r, "cleared a log", "log", traffic.DevicesFile)
-	a.noteCleared(r, "cleared a log", "log", traffic.DestinationsFile)
+	a.noteCleared(r, traffic.DevicesFile)
+	a.noteCleared(r, traffic.DestinationsFile)
 	if err != nil {
 		return errFilesStay(err)
 	}

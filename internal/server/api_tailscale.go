@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/tailscale"
 )
 
@@ -171,6 +172,7 @@ func (a *api) tailscaleLogin(w http.ResponseWriter, r *http.Request) error {
 		cancel()
 		return err
 	}
+	a.record(r, audit.TailscaleLogin, "", "")
 	prefs := tailscale.PrefArgs(*in.Tailscale)
 	go func() {
 		defer cancel()
@@ -210,6 +212,7 @@ func (a *api) tailscaleLogout(w http.ResponseWriter, r *http.Request) error {
 	if err := a.tsClient.Logout(r.Context()); err != nil {
 		return err
 	}
+	a.record(r, audit.TailscaleLogout, "", "")
 	writeJSON(w, http.StatusOK, a.readTailscale(r.Context()))
 	return nil
 }

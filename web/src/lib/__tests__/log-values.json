@@ -451,5 +451,74 @@
       },
       "values": ["lte", "IPv4", "slow"]
     }
+  ],
+  "audit": [
+    {
+      "why": "an apply with a confirm window",
+      "entry": {
+        "seq": 1,
+        "time": "2026-10-09T14:00:00Z",
+        "action": "apply",
+        "by": { "name": "alice", "kind": "account", "role": "admin", "address": "192.0.2.5" },
+        "detail": "300",
+        "text": "Applied the configuration, to be confirmed within 5 minutes"
+      },
+      "values": [
+        "Applied the configuration, to be confirmed within 5 minutes",
+        "alice",
+        "admin",
+        "192.0.2.5"
+      ]
+    },
+    {
+      "why": "a token confirming someone else's apply",
+      "entry": {
+        "seq": 2,
+        "time": "2026-10-09T14:01:00Z",
+        "action": "confirm",
+        "by": { "name": "deploy", "kind": "token", "role": "operator", "address": "198.51.100.4" },
+        "target": "alice",
+        "text": "Confirmed alice's apply"
+      },
+      "values": ["Confirmed alice's apply", "deploy", "token", "operator", "198.51.100.4"]
+    },
+    {
+      "why": "the router undoing an apply nobody confirmed",
+      "entry": {
+        "seq": 3,
+        "time": "2026-10-09T14:05:00Z",
+        "action": "expire",
+        "by": {},
+        "target": "alice",
+        "detail": "120",
+        "text": "Undid alice's apply, not confirmed within 2 minutes"
+      },
+      "values": ["Undid alice's apply, not confirmed within 2 minutes", "Router"]
+    },
+    {
+      "why": "someone at a shell over SSH",
+      "entry": {
+        "seq": 4,
+        "time": "2026-10-09T14:06:00Z",
+        "action": "account-role",
+        "by": { "name": "carol", "kind": "shell", "address": "192.0.2.7" },
+        "target": "bob",
+        "detail": "viewer",
+        "text": "Changed bob's role to viewer"
+      },
+      "values": ["Changed bob's role to viewer", "carol", "shell", "192.0.2.7"]
+    },
+    {
+      "why": "a Clear of the audit log",
+      "entry": {
+        "seq": 5,
+        "time": "2026-10-09T14:07:00Z",
+        "action": "log-clear",
+        "by": { "name": "alice", "kind": "account", "role": "admin", "address": "192.0.2.5" },
+        "target": "audit log",
+        "text": "Cleared the audit log"
+      },
+      "values": ["Cleared the audit log", "alice", "admin", "192.0.2.5"]
+    }
   ]
 }

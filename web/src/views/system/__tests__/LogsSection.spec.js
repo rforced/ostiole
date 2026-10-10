@@ -138,7 +138,8 @@ describe('LogsSection', () => {
     expect(ask).toHaveBeenLastCalledWith(
       expect.objectContaining({
         question: 'Clear every log?',
-        description: 'Each is emptied. The journal is kept.',
+        description:
+          'Each is emptied. The journal is kept, and the audit log keeps who cleared them.',
         dependentsLabel: 'Cleared',
         dependents: [
           'Firewall log',
@@ -156,6 +157,7 @@ describe('LogsSection', () => {
           'Destinations',
           'Gateway history',
           'Gateway events',
+          'Audit log',
         ],
       }),
     )
@@ -168,7 +170,8 @@ describe('LogsSection', () => {
     await clear().trigger('click')
     expect(ask).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        description: 'Each is emptied, and its files are deleted. The journal is kept.',
+        description:
+          'Each is emptied, and its files are deleted. The journal is kept, and the audit log keeps who cleared them.',
       }),
     )
   })

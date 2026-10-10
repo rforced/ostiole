@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/engine"
 	"ostiole/internal/gateway"
 	"ostiole/internal/install"
@@ -103,9 +104,11 @@ saved as the boot ruleset; run "ostiole apply" to load it now.`,
 			if err != nil {
 				return err
 			}
-			if _, err := st.Save(cfg, ruleset); err != nil {
+			by := audit.ShellActor()
+			if _, err := st.Save(cfg, ruleset, store.Author{By: by}); err != nil {
 				return err
 			}
+			g.audit().Add(audit.Event{Action: audit.Init, By: by})
 			fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\nnext: ostiole check && ostiole apply\n", st.Dir)
 			return nil
 		},
@@ -203,7 +206,8 @@ previous ruleset is restored automatically. Use --yes to commit immediately.`,
 				return err
 			}
 			out := cmd.OutOrStdout()
-			res, err := eng.Apply(cmd.Context(), cfg, engine.ApplyOptions{ConfirmTimeout: timeout, Base: base})
+			by := audit.ShellActor()
+			res, err := eng.Apply(cmd.Context(), cfg, engine.ApplyOptions{ConfirmTimeout: timeout, Base: base, By: by})
 			if err != nil {
 				return err
 			}
@@ -212,7 +216,7 @@ previous ruleset is restored automatically. Use --yes to commit immediately.`,
 				return nil
 			}
 			fmt.Fprintf(out, "applied; press Enter within %s to confirm, or it reverts\n", timeout.Truncate(time.Second))
-			return waitForConfirmation(cmd.Context(), eng, res.Deadline, os.Stdin, out)
+			return waitForConfirmation(cmd.Context(), eng, by, res.Deadline, os.Stdin, out)
 		},
 	}
 	src.addFlags(cmd)
@@ -224,7 +228,7 @@ previous ruleset is restored automatically. Use --yes to commit immediately.`,
 // waitForConfirmation blocks until Enter is pressed (confirm), the
 // deadline passes (the engine has already reverted), or ctx is cancelled
 // (revert now).
-func waitForConfirmation(ctx context.Context, eng *engine.Engine, deadline time.Time, in io.Reader, out io.Writer) error {
+func waitForConfirmation(ctx context.Context, eng *engine.Engine, by audit.Actor, deadline time.Time, in io.Reader, out io.Writer) error {
 	enter := make(chan error, 1)
 	go func() {
 		_, err := bufio.NewReader(in).ReadString('\n')
@@ -234,12 +238,12 @@ func waitForConfirmation(ctx context.Context, eng *engine.Engine, deadline time.
 	case err := <-enter:
 		if err != nil {
 			// stdin closed without a newline: the session is gone, revert.
-			if rerr := eng.Revert(context.Background()); rerr != nil && !errors.Is(rerr, engine.ErrNothingPending) {
+			if rerr := eng.Revert(context.Background(), by); rerr != nil && !errors.Is(rerr, engine.ErrNothingPending) {
 				return rerr
 			}
 			return errors.New("input closed before confirmation; reverted")
 		}
-		if _, err := eng.Confirm(ctx); err != nil {
+		if _, err := eng.Confirm(ctx, by); err != nil {
 			return err
 		}
 		fmt.Fprintln(out, "confirmed and committed")
@@ -247,7 +251,7 @@ func waitForConfirmation(ctx context.Context, eng *engine.Engine, deadline time.
 	case <-time.After(time.Until(deadline) + 500*time.Millisecond):
 		return errors.New("not confirmed in time; reverted to the previous ruleset")
 	case <-ctx.Done():
-		if err := eng.Revert(context.Background()); err != nil && !errors.Is(err, engine.ErrNothingPending) {
+		if err := eng.Revert(context.Background(), by); err != nil && !errors.Is(err, engine.ErrNothingPending) {
 			return err
 		}
 		return errors.New("interrupted; reverted to the previous ruleset")
@@ -391,18 +395,64 @@ func newRevisionsCmd(g *globals) *cobra.Command {
 		Short: "List archived configuration revisions, newest first",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			revs, err := g.store().Revisions()
+			st := g.store()
+			revs, err := st.Revisions()
 			if err != nil {
 				return err
 			}
-			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "ID\tTIME\tSIZE")
+			cur, err := st.Applied()
+			if err != nil {
+				return err
+			}
+			out := cmd.OutOrStdout()
+			switch {
+			case cur == nil:
+			case cur.Outside:
+				fmt.Fprintf(out, "changed outside Ostiole on %s\n\n", cur.Time.Local().Format(time.RFC3339))
+			default:
+				fmt.Fprintf(out, "in force since %s, applied by %s\n\n", cur.Time.Local().Format(time.RFC3339), appliedBy(cur))
+			}
+			w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "ID\tTIME\tSIZE\tAPPLIED BY")
 			for _, r := range revs {
-				fmt.Fprintf(w, "%s\t%s\t%d\n", r.ID, r.Time.Local().Format(time.RFC3339), r.Size)
+				by := "-"
+				switch {
+				case r.Applied == nil:
+				case r.Applied.Outside:
+					by = "changed outside Ostiole"
+				default:
+					by = appliedBy(r.Applied)
+				}
+				fmt.Fprintf(w, "%s\t%s\t%d\t%s\n", r.ID, r.Time.Local().Format(time.RFC3339), r.Size, by)
 			}
 			return w.Flush()
 		},
 	}
+}
+
+// appliedBy names who applied a configuration, where from, and who
+// confirmed it when that was someone else.
+func appliedBy(a *store.Applied) string {
+	s := actorText(a.By)
+	if a.By.Address != "" {
+		s += " from " + a.By.Address
+	}
+	if a.ConfirmedBy != nil {
+		s += ", confirmed by " + actorText(*a.ConfirmedBy)
+	}
+	return s
+}
+
+// actorText names an actor as the UI does: an account by its name, a
+// token or a shell user marked as one.
+func actorText(a audit.Actor) string {
+	switch a.Kind {
+	case audit.Token, audit.Shell:
+		if a.Name != "" {
+			return a.Name + " (" + a.Kind + ")"
+		}
+	}
+	return a.Who()
 }
 
 func newCountersCmd(g *globals) *cobra.Command {

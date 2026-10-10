@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/journald"
 	"ostiole/internal/logging"
 	"ostiole/internal/model"
@@ -77,6 +78,8 @@ type Engine struct {
 	// notifier hears of an apply undone because nobody confirmed it; nil
 	// tells nobody.
 	notifier Notifier
+	// audit keeps who applied, confirmed and reverted; nil keeps nothing.
+	audit *audit.Log
 	// MemTotal is the router's memory in bytes, which the logs' settings
 	// must fit; nil or 0 refuses nothing.
 	MemTotal func() uint64
@@ -116,6 +119,8 @@ type pendingApply struct {
 	since          time.Time
 	deadline       time.Time
 	timer          *time.Timer
+	// by is who applied it.
+	by audit.Actor
 }
 
 // New returns an engine over st and runner. net may be nil to leave
@@ -130,6 +135,13 @@ func New(st *store.Store, runner nft.Runner, net network.Backend, log *slog.Logg
 		store: st, nft: runner, net: net, log: log, revert: time.Minute,
 		defaultPorts: []uint16{model.DefaultWebPort, 22}, alive: ostioleRunning,
 	}
+}
+
+// WithAudit has applies, confirms and reverts recorded in l, and who
+// made them.
+func (e *Engine) WithAudit(l *audit.Log) *Engine {
+	e.audit = l
+	return e
 }
 
 // Notifier is told what the engine did that nobody asked it to.
@@ -410,6 +422,8 @@ type ApplyOptions struct {
 	// from; an apply over a different one fails with ErrStale. Empty
 	// skips the check.
 	Base string
+	// By is who asked for the apply.
+	By audit.Actor
 }
 
 // ApplyResult describes what Apply did.
@@ -442,7 +456,7 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 	if err != nil {
 		return nil, fmt.Errorf("load previous ruleset: %w", err)
 	}
-	rec, base, err := e.begin(cfg, opts.Base)
+	rec, base, err := e.begin(cfg, opts.Base, opts.By)
 	if err != nil {
 		return nil, err
 	}
@@ -495,13 +509,14 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 	e.log.Info("configuration applied", "rules", len(cfg.Rules), "networkUnits", len(plan.Network), "confirmTimeout", opts.ConfirmTimeout)
 
 	if opts.ConfirmTimeout <= 0 {
-		archived, err := e.commit(cfg, plan)
+		archived, err := e.commit(cfg, plan, store.Author{By: opts.By})
 		if err != nil {
 			// The record stays, so the next start puts the rest back to
 			// match the saved configuration, as a reboot does the firewall.
 			return nil, err
 		}
 		e.clearRecord()
+		e.audit.Add(audit.Event{Action: audit.Apply, By: opts.By})
 		return &ApplyResult{Plan: *plan, Archived: archived}, nil
 	}
 
@@ -517,10 +532,12 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 		previousKernel: rec.Kernel,
 		since:          now,
 		deadline:       now.Add(opts.ConfirmTimeout),
+		by:             opts.By,
 	}
 	id := p.id
 	p.timer = time.AfterFunc(opts.ConfirmTimeout, func() { e.expire(id) })
 	e.pending = p
+	e.audit.Add(audit.Event{Action: audit.Apply, By: opts.By, Detail: audit.Seconds(opts.ConfirmTimeout)})
 	return &ApplyResult{Plan: *plan, Pending: true, Deadline: p.deadline}, nil
 }
 
@@ -528,7 +545,7 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 // the store lock so that two processes cannot both find no record and both
 // apply. It returns the record, and the one an unfinished earlier apply
 // left, whose "before" this apply inherits.
-func (e *Engine) begin(cfg *model.Config, from string) (rec, base *record, err error) {
+func (e *Engine) begin(cfg *model.Config, from string, by audit.Actor) (rec, base *record, err error) {
 	unlock, err := e.store.Lock()
 	if err != nil {
 		return nil, nil, err
@@ -540,7 +557,7 @@ func (e *Engine) begin(cfg *model.Config, from string) (rec, base *record, err e
 	if err = e.fresh(from); err != nil {
 		return nil, nil, err
 	}
-	rec = &record{ID: newID(), PID: os.Getpid(), Boot: bootID(), Since: time.Now(), Config: digest(cfg)}
+	rec = &record{ID: newID(), PID: os.Getpid(), Boot: bootID(), Since: time.Now(), Config: digest(cfg), By: by}
 	if base != nil {
 		rec.Network, rec.Services, rec.Shaping, rec.Kernel = base.Network, base.Services, base.Shaping, base.Kernel
 	}
@@ -568,8 +585,8 @@ func (e *Engine) fresh(from string) error {
 	return nil
 }
 
-// Confirm commits the pending apply.
-func (e *Engine) Confirm(_ context.Context) (*store.Revision, error) {
+// Confirm commits the pending apply, confirmed by by.
+func (e *Engine) Confirm(_ context.Context, by audit.Actor) (*store.Revision, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	p := e.pending
@@ -578,7 +595,11 @@ func (e *Engine) Confirm(_ context.Context) (*store.Revision, error) {
 	}
 	p.timer.Stop()
 	e.pending = nil
-	archived, err := e.commit(p.cfg, p.plan)
+	author := store.Author{By: p.by}
+	if !by.Same(p.by) {
+		author.ConfirmedBy = &by
+	}
+	archived, err := e.commit(p.cfg, p.plan, author)
 	if err != nil {
 		// Kernel has the new ruleset but the store does not. Leave it: a
 		// reboot loads the old one and the record has the next start put
@@ -587,12 +608,13 @@ func (e *Engine) Confirm(_ context.Context) (*store.Revision, error) {
 	}
 	e.clearRecord()
 	e.log.Info("apply confirmed")
+	e.audit.Add(audit.Event{Action: audit.Confirm, By: by, Target: p.by.Name})
 	return archived, nil
 }
 
-// Revert cancels the pending apply and restores the previous ruleset. It
-// runs to the end even when the caller goes away.
-func (e *Engine) Revert(ctx context.Context) error {
+// Revert cancels the pending apply and restores the previous ruleset, at
+// the asking of by. It runs to the end even when the caller goes away.
+func (e *Engine) Revert(ctx context.Context, by audit.Actor) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	p := e.pending
@@ -605,6 +627,7 @@ func (e *Engine) Revert(ctx context.Context) error {
 		return fmt.Errorf("revert: %w", err)
 	}
 	e.log.Info("apply reverted by request")
+	e.audit.Add(audit.Event{Action: audit.Revert, By: by, Target: p.by.Name})
 	return nil
 }
 
@@ -706,6 +729,7 @@ func (e *Engine) undoExpired(id string) (notify.Event, bool) {
 		}, true
 	}
 	e.log.Warn("apply not confirmed in time; reverted to previous ruleset", "window", window)
+	e.audit.Add(audit.Event{Action: audit.Expire, Target: p.by.Name, Detail: audit.Seconds(window)})
 	return notify.Event{
 		Kind: notify.KindApplyReverted, Title: "An apply was not confirmed and was undone",
 		Detail: "Nobody confirmed it within " + minutes(window) + ". The configuration before it is back.",
@@ -730,13 +754,13 @@ func minutes(d time.Duration) string {
 	}
 }
 
-func (e *Engine) commit(cfg *model.Config, plan *Plan) (*store.Revision, error) {
+func (e *Engine) commit(cfg *model.Config, plan *Plan, author store.Author) (*store.Revision, error) {
 	unlock, err := e.store.Lock()
 	if err != nil {
 		return nil, err
 	}
 	defer unlock()
-	archived, err := e.store.Save(cfg, plan.Ruleset)
+	archived, err := e.store.Save(cfg, plan.Ruleset, author)
 	if err != nil {
 		return archived, err
 	}

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"ostiole/internal/acme"
+	"ostiole/internal/audit"
 	"ostiole/internal/auth"
 	"ostiole/internal/backup"
 	"ostiole/internal/certs"
@@ -115,6 +116,8 @@ type api struct {
 		bad []string
 	}
 	fwlog *fwlog.Ring
+	// audit keeps who did what; nil keeps nothing.
+	audit *audit.Log
 	// keepalive paces the log streams' keepalives and their checks.
 	keepalive time.Duration
 	// stopping closes when the server shuts down and ends the streams,
@@ -207,6 +210,7 @@ func (a *api) register(mux *router) {
 	a.registerLogLimits(mux)
 	a.registerQueryLog(mux)
 	a.registerLogFiles(mux)
+	a.registerAudit(mux)
 	a.registerTraffic(mux)
 	a.registerGateways(mux)
 	a.registerCrons(mux)
@@ -630,8 +634,19 @@ func (a *api) updateApply(w http.ResponseWriter, r *http.Request) error {
 	if err := a.updater.Start(ch); err != nil {
 		return err
 	}
+	a.record(r, audit.Update, "", a.updateVersion(ch))
 	writeJSON(w, http.StatusAccepted, a.updater.Status())
 	return nil
+}
+
+// updateVersion is the release an install on ch is about to fetch, as the
+// last check found it. The install finds its own a moment later, so this
+// is empty when the check was of another channel or found nothing newer.
+func (a *api) updateVersion(ch update.Channel) string {
+	if s := a.updater.Cached(); s.Available && s.Channel == ch {
+		return s.Latest
+	}
+	return ""
 }
 
 // upstream marks failures talking to something beyond this router: GitHub
@@ -874,13 +889,18 @@ func (a *api) operator(r *http.Request) bool {
 	return ok && p.Role.Allows(auth.RoleOperator)
 }
 
-func (a *api) revisions(w http.ResponseWriter, _ *http.Request) error {
+func (a *api) revisions(w http.ResponseWriter, r *http.Request) error {
 	revs, err := a.engine.Store().Revisions()
 	if err != nil {
 		return err
 	}
 	if revs == nil {
 		revs = []store.Revision{}
+	}
+	if !a.isAdmin(r) {
+		for i := range revs {
+			revs[i].Applied = nil
+		}
 	}
 	writeJSON(w, http.StatusOK, revs)
 	return nil
@@ -1150,26 +1170,28 @@ func (a *api) apply(w http.ResponseWriter, r *http.Request) error {
 	res, err := a.engine.Apply(r.Context(), req.Config.config(), engine.ApplyOptions{
 		ConfirmTimeout: time.Duration(req.ConfirmTimeoutSeconds) * time.Second,
 		Base:           base,
+		By:             a.actor(r),
 	})
 	if err != nil {
 		return err
 	}
 	a.wakeFeeds()
+	res.Archived = a.withoutAuthor(r, res.Archived)
 	writeJSON(w, http.StatusOK, res)
 	return nil
 }
 
 func (a *api) confirm(w http.ResponseWriter, r *http.Request) error {
-	archived, err := a.engine.Confirm(r.Context())
+	archived, err := a.engine.Confirm(r.Context(), a.actor(r))
 	if err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"archived": archived})
+	writeJSON(w, http.StatusOK, map[string]any{"archived": a.withoutAuthor(r, archived)})
 	return nil
 }
 
 func (a *api) revert(w http.ResponseWriter, r *http.Request) error {
-	if err := a.engine.Revert(r.Context()); err != nil {
+	if err := a.engine.Revert(r.Context(), a.actor(r)); err != nil {
 		return err
 	}
 	a.wakeFeeds()

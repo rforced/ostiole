@@ -178,6 +178,8 @@ export const api = {
     starter: (opts) => post('/config/starter', opts),
     revisions: () => get('/config/revisions'),
     revision: (id) => get(`/config/revisions/${encodeURIComponent(id)}`),
+    /** Who applied the configuration in force, or null when nothing recorded it. Admins only. */
+    applied: () => get('/config/applied'),
     check: (config) => post('/check', { config }),
     /** The server refuses it with a 409 and code "stale" once baseRevision is not the saved one. */
     apply: (config, baseRevision, confirmTimeoutSeconds = 60) =>
@@ -252,6 +254,13 @@ export const api = {
   gateways: () => get('/gateways'),
   /** Default routes the kernel already has, with the gateway each would become. */
   detectedGateways: () => get('/gateways/detected'),
+  /** Who did what on the router. Admins only. */
+  audit: {
+    /** A page of entries: {q, before, limit}. */
+    log: (params = {}, signal) => get(withQuery('/audit', params), signal),
+    /** Empties it but for one entry saying who cleared it. */
+    clear: () => request('DELETE', '/audit'),
+  },
   /** What each gateway's probes found over a window, and what changed. */
   gatewayHistory: {
     read: (name, window) =>

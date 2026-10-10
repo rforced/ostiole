@@ -19,7 +19,7 @@ func readLogLimits(t *testing.T, cfg *model.Config, mem uint64) (map[string]json
 	t.Helper()
 	dir := t.TempDir()
 	if cfg != nil {
-		if _, err := store.New(dir).Save(cfg, ""); err != nil {
+		if _, err := store.New(dir).Save(cfg, "", store.Author{}); err != nil {
 			t.Fatal(err)
 		}
 	}

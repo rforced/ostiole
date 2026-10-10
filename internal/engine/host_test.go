@@ -141,7 +141,7 @@ func TestUndoPutsTheRoutersOwnSettingsBack(t *testing.T) {
 				t.Fatal(err)
 			}
 			if how == "revert" {
-				if err := e.Revert(ctx); err != nil {
+				if err := e.Revert(ctx, tester); err != nil {
 					t.Fatal(err)
 				}
 			} else {
@@ -173,7 +173,7 @@ func TestUndoingTheFirstApplyLeavesTheDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls.take()
-	if err := e.Revert(ctx); err != nil {
+	if err := e.Revert(ctx, tester); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"nft", "conntrack 65536/65536", "zone UTC", "journal 10G 90d",
@@ -234,7 +234,7 @@ func TestUndoLeavesTheSettingsWhenTheStoreIsUnreadable(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(st.Dir, store.ConfigFile), []byte("{"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.Revert(ctx); err != nil {
+	if err := e.Revert(ctx, tester); err != nil {
 		t.Fatal(err)
 	}
 	if got := calls.take(); !reflect.DeepEqual(got, []string{"nft"}) {

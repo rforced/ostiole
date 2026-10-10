@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/model"
 	"ostiole/internal/sysupdate"
 )
@@ -97,6 +98,7 @@ func (a *api) systemUpdateApply(w http.ResponseWriter, r *http.Request) error {
 	if err := a.packages.Start(security, exclude); err != nil {
 		return &badRequest{err}
 	}
+	a.record(r, audit.OSUpdate, "", "")
 	writeJSON(w, http.StatusOK, a.systemUpdateStatus())
 	return nil
 }
@@ -110,6 +112,7 @@ func (a *api) systemReboot(w http.ResponseWriter, r *http.Request) error {
 	if err := a.packages.Reboot(r.Context()); err != nil {
 		return &badRequest{err}
 	}
+	a.record(r, audit.Reboot, "", "")
 	writeJSON(w, http.StatusOK, map[string]any{"rebooting": true})
 	return nil
 }

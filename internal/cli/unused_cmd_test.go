@@ -20,7 +20,7 @@ func unusedRouter(t *testing.T) *globals {
 	cfg := model.Starter(model.StarterOptions{Hostname: "gateway", LAN: "eth1", LANAddress: "192.0.2.1/24", WAN: "eth0"})
 	cfg.Aliases = []model.Alias{{Name: "spare_hosts", Type: model.AliasHosts, Entries: []string{"203.0.113.0/24"}}}
 	cfg.Rules = append(cfg.Rules, model.Rule{ID: "old-rule", Zone: "lan", Action: model.ActionDrop, Protocol: model.ProtocolAny})
-	if _, err := store.New(dir).Save(cfg, ""); err != nil {
+	if _, err := store.New(dir).Save(cfg, "", store.Author{}); err != nil {
 		t.Fatal(err)
 	}
 	return &globals{configDir: dir}
@@ -57,7 +57,7 @@ func TestUnusedHasNothingToDo(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	cfg := model.Starter(model.StarterOptions{Hostname: "gateway", LAN: "eth1", LANAddress: "192.0.2.1/24", WAN: "eth0"})
-	if _, err := store.New(dir).Save(cfg, ""); err != nil {
+	if _, err := store.New(dir).Save(cfg, "", store.Author{}); err != nil {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{nil, {"--remove", "-y"}} {

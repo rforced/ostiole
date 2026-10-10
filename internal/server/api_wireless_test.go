@@ -123,7 +123,7 @@ func newWirelessServer(t *testing.T, cmd wifiCmd, cfg *model.Config, withHandle 
 	dir := t.TempDir()
 	st := store.New(dir)
 	if cfg != nil {
-		if _, err := st.Save(cfg, "table inet ostiole {}\n"); err != nil {
+		if _, err := st.Save(cfg, "table inet ostiole {}\n", store.Author{}); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -275,6 +275,10 @@ export const NAV = [
         path: 'accounts',
         label: 'Accounts',
         view: () => import('@/views/system/AccountsPage.vue'),
+        tabs: [
+          { value: 'accounts', label: 'Accounts' },
+          { value: 'audit', label: 'Audit log' },
+        ],
       },
       {
         path: 'host',

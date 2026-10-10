@@ -154,7 +154,7 @@ func TestTheSavedRulesetIsTheFirewallsHalf(t *testing.T) {
 	// What an earlier release would have saved: the same ruleset bar a line.
 	older := strings.Replace(saved, "\n", "\n# an older release's line\n", 1)
 	time.Sleep(10 * time.Millisecond) // a new modification time on coarse clocks
-	if _, err := st.Save(c, older); err != nil {
+	if _, err := st.Save(c, older, store.Author{}); err != nil {
 		t.Fatal(err)
 	}
 	d := mustDrift(t, e)
@@ -206,7 +206,7 @@ func TestNothingIsListedWhileAnApplyWaits(t *testing.T) {
 	if d := mustDrift(t, e); d != nil {
 		t.Errorf("drift while pending: %+v", d)
 	}
-	if err := e.Revert(context.Background()); err != nil {
+	if err := e.Revert(context.Background(), tester); err != nil {
 		t.Fatal(err)
 	}
 	if d := mustDrift(t, e); d == nil {

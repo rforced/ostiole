@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/auth"
 	"ostiole/internal/diag"
 	"ostiole/internal/modem"
@@ -198,6 +199,7 @@ func (a *api) diagCapture(w http.ResponseWriter, r *http.Request) error {
 		// Nothing has been written yet, so a JSON error is still possible.
 		return diagError(err)
 	}
+	a.record(r, audit.Capture, req.Interface, "")
 	return nil
 }
 

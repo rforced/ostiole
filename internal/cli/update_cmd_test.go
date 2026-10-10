@@ -22,6 +22,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/update"
 )
 
@@ -271,6 +272,7 @@ func TestUpdateWithYesInstallsWithoutAsking(t *testing.T) {
 		t.Errorf("asked %q despite --yes", r.asked)
 	}
 	r.installed(t, "0.2.0")
+	auditWant(t, auditEvents(t, r.g.configDir), audit.Event{Action: audit.Update, Detail: "0.2.0"})
 }
 
 // Without --yes the console is asked first, naming the release and the
@@ -326,6 +328,9 @@ func TestUpdateThatCannotGoInFailsWithTheReason(t *testing.T) {
 		t.Errorf("systemd refusing the restart: err = %v", err)
 	}
 	r.kept(t)
+	if events := auditEvents(t, r.g.configDir); len(events) != 0 {
+		t.Errorf("a failed update recorded %+v", events)
+	}
 }
 
 // The channel decides which releases count: a prerelease is not offered on

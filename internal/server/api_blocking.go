@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/dnsblock"
 	"ostiole/internal/dnslog"
 	"ostiole/internal/model"
@@ -246,6 +247,7 @@ func (a *api) importBlocklist(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	a.record(r, audit.BlocklistImport, name, "")
 	writeJSON(w, http.StatusOK, map[string]any{"list": name, "domains": count, "format": format, "skipped": skipped})
 	return nil
 }

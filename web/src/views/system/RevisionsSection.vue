@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
 import ChangeList from '@/components/ChangeList.vue'
@@ -9,6 +9,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { emptyText, errorMessage, useAsync } from '@/lib/async'
+import { actorText } from '@/lib/audit'
 import { formatWhen } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -22,6 +23,9 @@ const actionError = ref('')
 const loadedId = ref('')
 const comparing = ref('')
 const changes = ref([])
+const inForce = ref(null)
+const inForceError = ref('')
+const columns = computed(() => (auth.isAdmin ? 5 : 4))
 
 /** Matches model.DefaultKeepRevisions, which is what an unset setting means. */
 const DEFAULT_KEEP = 20
@@ -51,9 +55,42 @@ watch(keep, (v) => {
   else config.draft.system.keepRevisions = n
 })
 
+/** Who applied the configuration in force. Admins only; a failure leaves the table alone. */
+async function readInForce() {
+  try {
+    inForce.value = await api.config.applied()
+    inForceError.value = ''
+  } catch (e) {
+    inForce.value = null
+    inForceError.value = errorMessage(e)
+  }
+}
+
 const load = useAsync(async () => {
+  const reading = auth.isAdmin ? readInForce() : null
   revisions.value = await api.config.revisions()
+  await reading
 })
+
+/** The line in the card strip for the configuration in force. */
+function inForceLine(a) {
+  if (a.outside) return `Changed outside Ostiole on ${formatWhen(a.time)}.`
+  const from = a.by?.address ? ` from ${a.by.address}` : ''
+  const confirmed = a.confirmedBy ? `, confirmed by ${actorText(a.confirmedBy)}` : ''
+  return `In force since ${formatWhen(a.time)}, applied by ${actorText(a.by)}${from}${confirmed}.`
+}
+
+/** The second line under who applied a revision. */
+function appliedDetail(a) {
+  return [
+    formatWhen(a.time),
+    a.by?.address,
+    a.confirmedBy && `confirmed by ${actorText(a.confirmedBy)}`,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
 onMounted(load.run)
 
 async function loadIntoDraft(id) {
@@ -119,8 +156,11 @@ defineExpose({ refresh: load.run })
           :disabled="auth.readOnly"
         />
       </FormField>
-      <ErrorLine v-if="actionError || load.error.value">
-        {{ actionError || load.error.value }}
+      <p v-if="auth.isAdmin && inForce" class="text-sm">
+        {{ inForceLine(inForce) }}
+      </p>
+      <ErrorLine v-if="actionError || load.error.value || inForceError">
+        {{ actionError || load.error.value || inForceError }}
       </ErrorLine>
       <AppNotice v-if="loadedId" role="status">
         Revision <span class="font-mono">{{ loadedId }}</span> is now the draft. Apply it to roll
@@ -133,12 +173,13 @@ defineExpose({ refresh: load.run })
           <th>Archived</th>
           <th>ID</th>
           <th class="num">Size</th>
+          <th v-if="auth.isAdmin">Applied by</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
         <tr v-if="revisions.length === 0">
-          <td colspan="4" class="text-ink-muted">
+          <td :colspan="columns" class="text-ink-muted">
             {{ emptyText(load, 'No revisions.') }}
           </td>
         </tr>
@@ -147,6 +188,17 @@ defineExpose({ refresh: load.run })
             <td data-label="">{{ formatWhen(r.time) }}</td>
             <td class="font-mono text-code" data-label="ID">{{ r.id }}</td>
             <td class="num font-mono text-code" data-label="Size">{{ r.size }} B</td>
+            <td v-if="auth.isAdmin" data-label="Applied by">
+              <template v-if="r.applied?.outside">
+                Changed outside Ostiole
+                <div class="text-xs text-ink-muted">{{ formatWhen(r.applied.time) }}</div>
+              </template>
+              <template v-else-if="r.applied">
+                {{ actorText(r.applied.by) }}
+                <div class="text-xs text-ink-muted">{{ appliedDetail(r.applied) }}</div>
+              </template>
+              <span v-else class="text-ink-muted">not recorded</span>
+            </td>
             <td class="actions" data-label="">
               <button
                 type="button"
@@ -170,7 +222,7 @@ defineExpose({ refresh: load.run })
                revision would share one, and opening another compare
                patched one row onto the other. -->
           <tr v-if="comparing === r.id">
-            <td colspan="4" class="bg-surface-2/40">
+            <td :colspan="columns" class="bg-surface-2/40">
               <ChangeList
                 :changes="changes"
                 empty-label="Nothing changed between this revision and the current configuration."

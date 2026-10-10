@@ -23,7 +23,7 @@ func TestFullConfigSurvivesSaveAndLoad(t *testing.T) {
 		t.Fatal(err)
 	}
 	st := New(t.TempDir())
-	if _, err := st.Save(&want, "table inet ostiole {}\n"); err != nil {
+	if _, err := st.Save(&want, "table inet ostiole {}\n", Author{}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := st.Load()

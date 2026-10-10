@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/auth"
 )
 
@@ -75,6 +76,7 @@ func (a *api) createUser(w http.ResponseWriter, r *http.Request) error {
 	if err := a.auth.CreateUser(req.Username, req.Password, role); err != nil {
 		return err
 	}
+	a.record(r, audit.AccountCreate, req.Username, string(role))
 	return a.users(w, http.StatusCreated)
 }
 
@@ -89,6 +91,7 @@ func (a *api) deleteUser(w http.ResponseWriter, r *http.Request) error {
 	if err := a.auth.DeleteUser(name); err != nil {
 		return err
 	}
+	a.record(r, audit.AccountDelete, name, "")
 	return a.users(w, http.StatusOK)
 }
 
@@ -110,8 +113,12 @@ func (a *api) setUserRole(w http.ResponseWriter, r *http.Request) error {
 	if a.self(r, name) {
 		return fmt.Errorf("%w: %w", errForbidden, errSelfAccount)
 	}
+	was := a.auth.Role(name)
 	if err := a.auth.SetRole(name, role); err != nil {
 		return err
+	}
+	if role != was {
+		a.record(r, audit.AccountRole, name, string(role))
 	}
 	return a.users(w, http.StatusOK)
 }
@@ -141,6 +148,7 @@ func (a *api) setUserPassword(w http.ResponseWriter, r *http.Request) error {
 	if err := a.auth.SetPassword(name, req.Password); err != nil {
 		return err
 	}
+	a.record(r, audit.AccountPassword, name, "")
 	w.WriteHeader(http.StatusNoContent)
 	return nil
 }
@@ -157,8 +165,12 @@ func (a *api) renameUser(w http.ResponseWriter, r *http.Request) error {
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}
-	if err := a.auth.Rename(r.PathValue("name"), req.Username); err != nil {
+	name := r.PathValue("name")
+	if err := a.auth.Rename(name, req.Username); err != nil {
 		return err
+	}
+	if req.Username != name {
+		a.record(r, audit.AccountRename, name, req.Username)
 	}
 	return a.users(w, http.StatusOK)
 }

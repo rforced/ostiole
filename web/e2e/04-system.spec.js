@@ -64,7 +64,7 @@ test('the logs are written to files once switched on, and cleared', async ({ pag
   await expect(dialog).toContainText('Traffic per device')
   await expect(dialog).toContainText('Traffic per interface')
   await expect(dialog).toContainText(
-    'Each is emptied, and its files are deleted. The journal is kept.',
+    'Each is emptied, and its files are deleted. The journal is kept, and the audit log keeps who cleared them.',
   )
   const cleared = page.waitForResponse(
     (r) => r.url().endsWith('/api/v1/system/logs') && r.request().method() === 'DELETE',

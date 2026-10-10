@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/dhcplog"
 	"ostiole/internal/discoverylog"
 	"ostiole/internal/dnslog"
@@ -114,6 +115,13 @@ func (a *api) clearables() []clearable {
 		add(gateway.HistoryFileName, a.gatewayHistory.ClearHistory)
 		add(gateway.EventsFileName, a.gatewayHistory.Events.Clear)
 	}
+	if a.audit != nil {
+		add(audit.Name, func() {
+			if err := a.audit.Clear(); err != nil {
+				slog.Warn("could not clear the audit log", "err", err)
+			}
+		})
+	}
 	return out
 }
 
@@ -125,7 +133,7 @@ func (a *api) clearOne(name string) func(http.ResponseWriter, *http.Request) err
 				continue
 			}
 			err := a.clearLog(c.name, c.empty)
-			a.noteCleared(r, "cleared a log", "log", name)
+			a.noteCleared(r, name)
 			if err != nil {
 				return errFilesStay(err)
 			}
@@ -147,7 +155,7 @@ func (a *api) logsClear(w http.ResponseWriter, r *http.Request) error {
 			errs = append(errs, err)
 		}
 	}
-	a.noteCleared(r, "cleared every log")
+	a.noteCleared(r, "")
 	if len(errs) > 0 {
 		return fmt.Errorf("every log is empty, but the files of the %s could not be deleted: %w",
 			strings.Join(names, ", "), errors.Join(errs...))
@@ -156,14 +164,19 @@ func (a *api) logsClear(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// noteCleared writes a Clear to the journal whatever the level, with who
-// asked for it and from where: nothing brings back what it took.
-func (a *api) noteCleared(r *http.Request, msg string, args ...any) {
-	user := ""
-	if p, ok := a.authenticate(r); ok {
-		user = p.Name
+// noteCleared writes a Clear of the log kept under name, or of every log
+// when name is empty, to the journal whatever the level, with who asked for
+// it and from where: nothing brings back what it took. It goes in the audit
+// log too, after the Clear, so a Clear of that log leaves this one entry.
+func (a *api) noteCleared(r *http.Request, name string) {
+	by := a.actor(r)
+	if name == "" {
+		slog.InfoContext(logging.Always(r.Context()), "cleared every log", "user", by.Name, "address", by.Address)
+		a.audit.Add(audit.Event{Action: audit.LogsClear, By: by})
+		return
 	}
-	slog.InfoContext(logging.Always(r.Context()), msg, append(args, "user", user, "address", remoteIP(r))...)
+	slog.InfoContext(logging.Always(r.Context()), "cleared a log", "log", name, "user", by.Name, "address", by.Address)
+	a.audit.Add(audit.Event{Action: audit.LogClear, By: by, Target: logFileNames[name]})
 }
 
 // logFileNames are what a sentence calls each log kept in files.
@@ -183,6 +196,7 @@ var logFileNames = map[string]string{
 	traffic.DestinationsFile: "list of destinations",
 	gateway.HistoryFileName:  "gateway history",
 	gateway.EventsFileName:   "gateway events",
+	audit.Name:               "audit log",
 }
 
 // logFileWarnings are the dashboard's say on the files: writing waits for

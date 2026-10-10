@@ -66,7 +66,7 @@ func TestDriftThroughTheAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.Save(cfg, strings.Replace(saved, "\n", "\n# an older release's line\n", 1)); err != nil {
+	if _, err := st.Save(cfg, strings.Replace(saved, "\n", "\n# an older release's line\n", 1), store.Author{}); err != nil {
 		t.Fatal(err)
 	}
 	if got := string(status()["drift"]); got != `{"parts":["Firewall"],"changes":1}` {

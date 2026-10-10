@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/host"
 	"ostiole/internal/install"
 	"ostiole/internal/iptables"
@@ -184,7 +185,11 @@ it would break whatever is using it.`,
 			if said != "" {
 				fmt.Fprintln(out, said)
 			}
-			return err
+			if err != nil {
+				return err
+			}
+			g.audit().Add(audit.Event{Action: audit.LeftoversClear, By: audit.ShellActor(), Detail: strings.Join(targets, ", ")})
+			return nil
 		},
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask for confirmation")

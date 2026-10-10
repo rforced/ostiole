@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/model"
 	"ostiole/internal/network"
 	"ostiole/internal/store"
@@ -45,6 +46,8 @@ type record struct {
 	// Kernel is the conntrack ceiling before the apply; nil when the
 	// kernel had none to read.
 	Kernel *sysctl.Settings `json:"kernel,omitempty"`
+	// By is who made the apply.
+	By audit.Actor `json:"by,omitzero"`
 }
 
 // Recovered describes an apply that Recover undid.
@@ -220,6 +223,7 @@ func (e *Engine) Recover(ctx context.Context) (bool, error) {
 	e.recovered = &Recovered{Since: r.Since, At: time.Now()}
 	e.log.Warn("undid an apply that was never confirmed; the process making it stopped or the router restarted",
 		"started", r.Since)
+	e.audit.Add(audit.Event{Action: audit.Recover, Target: r.By.Name})
 	return true, nil
 }
 

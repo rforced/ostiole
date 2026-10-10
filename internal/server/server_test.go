@@ -298,7 +298,7 @@ func TestLoginPageNamesTheRouter(t *testing.T) {
 	if got := hostname(srv); got != "" {
 		t.Errorf("no configuration: hostname = %q", got)
 	}
-	if _, err := eng.Store().Save(starter(), ""); err != nil {
+	if _, err := eng.Store().Save(starter(), "", store.Author{}); err != nil {
 		t.Fatal(err)
 	}
 	if got := hostname(srv); got != "fw" {
@@ -864,7 +864,7 @@ func TestFirewallLogEndpoints(t *testing.T) {
 		ID: "old-drop", Enabled: true, Zone: "wan", Action: model.ActionDrop,
 		Protocol: model.ProtocolAny, Log: true,
 	})
-	if _, err := eng.Store().Save(cfg, ""); err != nil {
+	if _, err := eng.Store().Save(cfg, "", store.Author{}); err != nil {
 		t.Fatal(err)
 	}
 	ring.Add(fwlog.Entry{Prefix: "ostiole:old-drop: ", Kind: "rule", RuleID: "old-drop", Proto: "tcp", Src: "203.0.113.9"})

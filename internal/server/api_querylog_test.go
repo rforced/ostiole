@@ -36,7 +36,7 @@ func queryLogServer(t *testing.T) (*httptest.Server, *dnslog.Log) {
 	if err := cfg.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.New(dir).Save(cfg, ""); err != nil {
+	if _, err := store.New(dir).Save(cfg, "", store.Author{}); err != nil {
 		t.Fatal(err)
 	}
 	as, err := auth.NewService(dir)

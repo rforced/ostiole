@@ -56,7 +56,7 @@ const retention = numberField('retentionDays')
 const maxUse = numberField('maxUseGB')
 
 /** What Clear every log takes: every log a page clears. */
-const CLEARED = Object.values(FILE_LOG_NAMES)
+const CLEARED = [...Object.values(FILE_LOG_NAMES), 'Audit log']
 
 /** Kept in files as well, by the configuration the router runs. */
 const inFiles = computed(() => Boolean(config.saved?.system?.logging?.files?.enabled))
@@ -77,8 +77,8 @@ const clearAll = useAsync(async () => {
         question="Clear every log?"
         :description="
           inFiles
-            ? 'Each is emptied, and its files are deleted. The journal is kept.'
-            : 'Each is emptied. The journal is kept.'
+            ? 'Each is emptied, and its files are deleted. The journal is kept, and the audit log keeps who cleared them.'
+            : 'Each is emptied. The journal is kept, and the audit log keeps who cleared them.'
         "
         :dependents="CLEARED"
         dependents-label="Cleared"

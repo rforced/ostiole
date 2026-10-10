@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/auth"
 	"ostiole/internal/backup"
 	"ostiole/internal/diff"
@@ -203,7 +204,8 @@ which signs everyone out.`,
 			if err != nil {
 				return err
 			}
-			res, err := eng.Apply(cmd.Context(), archive.Config, engine.ApplyOptions{ConfirmTimeout: timeout, Base: base})
+			by := audit.ShellActor()
+			res, err := eng.Apply(cmd.Context(), archive.Config, engine.ApplyOptions{ConfirmTimeout: timeout, Base: base, By: by})
 			if err != nil {
 				return err
 			}
@@ -212,7 +214,7 @@ which signs everyone out.`,
 				return nil
 			}
 			fmt.Fprintf(out, "restored; press Enter within %s to confirm, or it reverts\n", timeout.Truncate(time.Second))
-			return waitForConfirmation(cmd.Context(), eng, res.Deadline, os.Stdin, out)
+			return waitForConfirmation(cmd.Context(), eng, by, res.Deadline, os.Stdin, out)
 		},
 	}
 	cmd.Flags().BoolVar(&apply, "apply", false, "load the backup instead of only reporting on it")

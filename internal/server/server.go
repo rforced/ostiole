@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"ostiole/internal/acme"
+	"ostiole/internal/audit"
 	"ostiole/internal/auth"
 	"ostiole/internal/backup"
 	"ostiole/internal/certs"
@@ -199,6 +200,9 @@ type Deps struct {
 	// Notify sends notices off the router; nil sends none, and Run then
 	// watches for nothing to send.
 	Notify *notify.Notifier
+	// Audit keeps who did what; nil keeps nothing and answers 503 for the
+	// list. The engine records into the same log.
+	Audit *audit.Log
 }
 
 // Handler builds the full HTTP handler: API routes plus the SPA.
@@ -266,6 +270,7 @@ func build(d Deps) (http.Handler, *api) {
 		driveHistory:    d.DriveHistory,
 		host:            hostDeps(d),
 		notifier:        d.Notify,
+		audit:           d.Audit,
 	}
 	api.gatewayHistory = d.GatewayHistory
 	if d.Engine != nil {

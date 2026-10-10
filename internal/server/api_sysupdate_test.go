@@ -135,7 +135,7 @@ func TestSystemUpdatesReportsTheModeInForce(t *testing.T) {
 	cfg.Updates.System.Mode = model.UpdateManual
 	cfg.Updates.System.CheckSchedule = "0 2 * * *"
 	cfg.Updates.System.InstallSchedule = "0 3 * * 1"
-	if _, err := eng.Store().Save(cfg, ""); err != nil {
+	if _, err := eng.Store().Save(cfg, "", store.Author{}); err != nil {
 		t.Fatal(err)
 	}
 	_, raw = do(t, srv, http.MethodGet, "/api/v1/system/updates", nil)

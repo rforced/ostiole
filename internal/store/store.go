@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"ostiole/internal/atomicfile"
+	"ostiole/internal/audit"
 	"ostiole/internal/model"
 )
 
@@ -43,6 +44,9 @@ const (
 	// ReadBackFile is there while the logs are read back from their files,
 	// so a start that finds it knows the last one did not get through.
 	ReadBackFile = "readback"
+	// AppliedFile says who applied the saved configuration and each
+	// revision kept.
+	AppliedFile = "applied.json"
 )
 
 // DefaultDir is the production location.
@@ -202,45 +206,96 @@ type Revision struct {
 	ID   string    `json:"id"`
 	Time time.Time `json:"time"`
 	Size int64     `json:"size"`
+	// Applied is who applied it, when that was recorded.
+	Applied *Applied `json:"applied,omitempty"`
+}
+
+// Author is who a saved configuration is recorded as applied by.
+type Author struct {
+	By audit.Actor
+	// ConfirmedBy is who confirmed the apply, when someone else did.
+	ConfirmedBy *audit.Actor
+}
+
+// Applied says who applied a configuration and when it was saved.
+type Applied struct {
+	Time        time.Time    `json:"time"`
+	By          audit.Actor  `json:"by,omitzero"`
+	ConfirmedBy *audit.Actor `json:"confirmedBy,omitempty"`
+	// Outside says the file was changed after it was saved by something
+	// that records nobody, such as an edit by hand. Time is then when the
+	// file was last written.
+	Outside bool `json:"outside,omitempty"`
+	// Sum is the SHA-256 of the file as saved, which ties the record to it.
+	Sum string `json:"sum"`
+}
+
+// appliedFile is AppliedFile: the record of the saved configuration, and
+// those of the revisions by ID.
+type appliedFile struct {
+	Current   *Applied            `json:"current,omitempty"`
+	Revisions map[string]*Applied `json:"revisions,omitempty"`
 }
 
 // Save archives the current configuration as a revision, then atomically
-// writes cfg and ruleset as the new current state. The returned revision
-// is the archived previous config, or nil on first save.
-func (s *Store) Save(cfg *model.Config, ruleset string) (*Revision, error) {
+// writes cfg and ruleset as the new current state, recorded as applied by
+// author. The returned revision is the archived previous config, or nil on
+// first save.
+func (s *Store) Save(cfg *model.Config, ruleset string, author Author) (*Revision, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 	if err := s.Init(); err != nil {
 		return nil, err
 	}
-	var archived *Revision
-	current := filepath.Join(s.Dir, ConfigFile)
-	if prev, err := os.ReadFile(current); err == nil {
-		rev, err := s.archive(prev)
-		if err != nil {
-			return nil, err
-		}
-		archived = rev
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, err
-	}
-
 	raw, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return nil, err
 	}
 	raw = append(raw, '\n')
+	sum := sumOf(raw)
+
+	records := s.readApplied()
+	var archived *Revision
+	current := filepath.Join(s.Dir, ConfigFile)
+	if prev, err := os.ReadFile(current); err == nil {
+		newest := s.newestID()
+		info, err := os.Stat(current)
+		if err != nil {
+			return nil, err
+		}
+		rev, err := s.archive(prev)
+		if err != nil {
+			return nil, err
+		}
+		archived = rev
+		if r := records.whose(prev, info.ModTime(), newest); r != nil {
+			records.Revisions[rev.ID] = r
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	records.Current = &Applied{Time: time.Now().UTC(), By: author.By, ConfirmedBy: author.ConfirmedBy, Sum: sum}
+	records.keep(s.keptIDs(cfg.System.RevisionsKept()))
+	// Before the configuration: a crash between the two leaves a record
+	// no file matches, which whose passes over.
+	if err := s.writeApplied(records); err != nil {
+		return nil, err
+	}
+
 	// Two renames are not one. The ruleset goes first and names the
 	// configuration it belongs to, so a crash between them leaves one that
 	// LoadRuleset refuses rather than one that loads under the wrong
 	// configuration.
-	note := rulesetNote + sumOf(raw) + "\n"
+	note := rulesetNote + sum + "\n"
 	if err := atomicfile.Write(filepath.Join(s.Dir, RulesetFile), []byte(note+ruleset), 0o600); err != nil {
 		return nil, err
 	}
 	if err := atomicfile.Write(current, raw, 0o600); err != nil {
 		return nil, err
+	}
+	if archived != nil {
+		archived.Applied = records.Revisions[archived.ID]
 	}
 	if err := s.prune(cfg.System.RevisionsKept()); err != nil {
 		return archived, err
@@ -248,8 +303,111 @@ func (s *Store) Save(cfg *model.Config, ruleset string) (*Revision, error) {
 	return archived, nil
 }
 
-// Revisions lists archived configurations, newest first.
+// Applied says who applied the saved configuration: nil when nothing
+// recorded it, as for one saved before the records were kept.
+func (s *Store) Applied() (*Applied, error) {
+	path := filepath.Join(s.Dir, ConfigFile)
+	raw, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	return s.readApplied().whose(raw, info.ModTime(), s.newestID()), nil
+}
+
+// whose is the record of a configuration file that was saved as the
+// current one: that record while the file is still what was saved, a note
+// that something else wrote it when not, and nil when nothing has been
+// recorded at all. newest is the newest revision before it.
+func (f *appliedFile) whose(raw []byte, written time.Time, newest string) *Applied {
+	sum := sumOf(raw)
+	if f.Current != nil && f.Current.Sum == sum {
+		return f.Current
+	}
+	// A save cut short after the records were written left the
+	// configuration before it in place, and its record with the revision.
+	if r := f.Revisions[newest]; r != nil && r.Sum == sum {
+		return r
+	}
+	if f.Current == nil && len(f.Revisions) == 0 {
+		return nil
+	}
+	return &Applied{Time: written.UTC(), Outside: true, Sum: sum}
+}
+
+// keep drops the records of revisions not in ids.
+func (f *appliedFile) keep(ids map[string]bool) {
+	for id := range f.Revisions {
+		if !ids[id] {
+			delete(f.Revisions, id)
+		}
+	}
+}
+
+// readApplied reads the records. A file that cannot be read is as good as
+// none: who applied what is never a reason to refuse a save.
+func (s *Store) readApplied() *appliedFile {
+	f := &appliedFile{}
+	if raw, err := os.ReadFile(filepath.Join(s.Dir, AppliedFile)); err == nil {
+		_ = json.Unmarshal(raw, f)
+	}
+	if f.Revisions == nil {
+		f.Revisions = map[string]*Applied{}
+	}
+	return f
+}
+
+func (s *Store) writeApplied(f *appliedFile) error {
+	raw, err := json.MarshalIndent(f, "", "  ")
+	if err != nil {
+		return err
+	}
+	return atomicfile.Write(filepath.Join(s.Dir, AppliedFile), append(raw, '\n'), 0o600)
+}
+
+// newestID is the newest revision's ID, or empty.
+func (s *Store) newestID() string {
+	revs, err := s.revisions()
+	if err != nil || len(revs) == 0 {
+		return ""
+	}
+	return revs[0].ID
+}
+
+// keptIDs are the revisions that prune keeps.
+func (s *Store) keptIDs(keep int) map[string]bool {
+	if keep <= 0 {
+		keep = model.DefaultKeepRevisions
+	}
+	revs, _ := s.revisions()
+	ids := map[string]bool{}
+	for _, r := range revs[:min(keep, len(revs))] {
+		ids[r.ID] = true
+	}
+	return ids
+}
+
+// Revisions lists archived configurations, newest first, each with who
+// applied it when that was recorded.
 func (s *Store) Revisions() ([]Revision, error) {
+	revs, err := s.revisions()
+	if err != nil || len(revs) == 0 {
+		return revs, err
+	}
+	records := s.readApplied()
+	for i := range revs {
+		revs[i].Applied = records.Revisions[revs[i].ID]
+	}
+	return revs, nil
+}
+
+func (s *Store) revisions() ([]Revision, error) {
 	entries, err := os.ReadDir(filepath.Join(s.Dir, RevisionsDir))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
@@ -318,7 +476,7 @@ func parseRevisionTime(id string) (time.Time, error) {
 func (s *Store) archive(raw []byte) (*Revision, error) {
 	dir := filepath.Join(s.Dir, RevisionsDir)
 	ts := time.Now().UTC()
-	if latest, err := s.Revisions(); err == nil && len(latest) > 0 && !latest[0].Time.Before(ts) {
+	if latest, err := s.revisions(); err == nil && len(latest) > 0 && !latest[0].Time.Before(ts) {
 		ts = latest[0].Time.Add(time.Nanosecond)
 	}
 	var id string
@@ -341,7 +499,7 @@ func (s *Store) prune(keep int) error {
 	if keep <= 0 {
 		keep = model.DefaultKeepRevisions
 	}
-	revs, err := s.Revisions()
+	revs, err := s.revisions()
 	if err != nil {
 		return err
 	}

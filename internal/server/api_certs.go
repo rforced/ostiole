@@ -11,6 +11,7 @@ import (
 	"software.sslmate.com/src/go-pkcs12"
 
 	"ostiole/internal/acme"
+	"ostiole/internal/audit"
 	"ostiole/internal/auth"
 	"ostiole/internal/certs"
 	"ostiole/internal/model"
@@ -263,6 +264,7 @@ func (a *api) certificatePKCS12(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	a.record(r, audit.CertificateExport, r.PathValue("id"), "")
 	w.Header().Set("Content-Type", "application/x-pkcs12")
 	w.Header().Set("Content-Disposition", "attachment; filename=\""+r.PathValue("id")+".p12\"")
 	w.Header().Set("Cache-Control", "no-store")

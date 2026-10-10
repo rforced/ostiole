@@ -53,7 +53,7 @@ func newProxyServer(t *testing.T, unit proxyUnit, cfg *model.Config, events *waf
 	dir := t.TempDir()
 	st := store.New(dir)
 	if cfg != nil {
-		if _, err := st.Save(cfg, "table inet ostiole {}\n"); err != nil {
+		if _, err := st.Save(cfg, "table inet ostiole {}\n", store.Author{}); err != nil {
 			t.Fatal(err)
 		}
 	}

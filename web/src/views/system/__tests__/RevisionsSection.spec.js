@@ -4,11 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 
 import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import RevisionsSection from '@/views/system/RevisionsSection.vue'
 
 vi.mock('@/lib/api', () => ({
-  api: { config: { revisions: vi.fn(), revision: vi.fn(), diff: vi.fn() } },
+  api: { config: { revisions: vi.fn(), revision: vi.fn(), diff: vi.fn(), applied: vi.fn() } },
 }))
 
 const draft = (system = {}) => ({ version: 3, system, zones: [], interfaces: [], rules: [] })
@@ -111,5 +112,104 @@ describe('RevisionsSection compare', () => {
     expect(body(wrapper)).toEqual([a, b, 'changes', c])
     await toggle(b)
     expect(body(wrapper)).toEqual([a, b, c])
+  })
+})
+
+describe('RevisionsSection attribution', () => {
+  const alice = { name: 'alice', kind: 'account', role: 'admin', address: '192.0.2.10' }
+  const bob = { name: 'bob', kind: 'account', role: 'operator', address: '192.0.2.11' }
+  const revisions = [
+    {
+      id: '20261009T100000.000000000Z',
+      time: '2026-10-09T10:00:00Z',
+      size: 8000,
+      applied: { time: '2026-10-09T09:00:00Z', by: bob, confirmedBy: alice, sum: 'a' },
+    },
+    {
+      id: '20261009T090000.000000000Z',
+      time: '2026-10-09T09:00:00Z',
+      size: 7900,
+      applied: { time: '2026-10-09T08:00:00Z', by: {}, outside: true, sum: 'b' },
+    },
+    { id: '20261009T080000.000000000Z', time: '2026-10-09T08:00:00Z', size: 7800 },
+  ]
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    api.config.revisions.mockResolvedValue(revisions)
+    api.config.applied.mockResolvedValue({
+      time: '2026-10-09T11:00:00Z',
+      by: { name: 'deploy', kind: 'token', role: 'admin', address: '192.0.2.20' },
+      sum: 'c',
+    })
+  })
+
+  async function as(role) {
+    useAuthStore().user = { username: 'someone', role }
+    useConfigStore().replaceDraft(draft({}))
+    const wrapper = mount(RevisionsSection, { global: { stubs: { ChangeList: true } } })
+    await flushPromises()
+    return wrapper
+  }
+
+  const appliedCells = (wrapper) =>
+    wrapper.findAll('td[data-label="Applied by"]').map((td) => td.text())
+
+  it('shows an admin who applied each revision and the configuration in force', async () => {
+    const wrapper = await as('admin')
+    expect(wrapper.findAll('th').map((th) => th.text())).toContain('Applied by')
+    const [first, outside, none] = appliedCells(wrapper)
+    expect(first).toContain('bob')
+    expect(first).toContain('192.0.2.11')
+    expect(first).toContain('confirmed by alice')
+    expect(outside).toContain('Changed outside Ostiole')
+    expect(none).toContain('not recorded')
+    expect(api.config.applied).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).toContain('applied by deploy (token) from 192.0.2.20.')
+  })
+
+  it('reads the configuration in force again on Refresh', async () => {
+    const wrapper = await as('admin')
+    await wrapper.vm.refresh()
+    await flushPromises()
+    expect(api.config.applied).toHaveBeenCalledTimes(2)
+  })
+
+  it('says when the configuration in force was changed outside Ostiole', async () => {
+    api.config.applied.mockResolvedValue({ time: '2026-10-09T11:00:00Z', by: {}, outside: true })
+    const wrapper = await as('admin')
+    expect(wrapper.text()).toContain('Changed outside Ostiole on')
+    expect(wrapper.text()).not.toContain('In force since')
+  })
+
+  it('shows no in-force line when nothing recorded it', async () => {
+    api.config.applied.mockResolvedValue(null)
+    const wrapper = await as('admin')
+    expect(wrapper.text()).not.toContain('In force since')
+  })
+
+  it('keeps the table when the record cannot be read', async () => {
+    api.config.applied.mockRejectedValue(new Error('no record'))
+    const wrapper = await as('admin')
+    expect(appliedCells(wrapper)).toHaveLength(3)
+    expect(wrapper.text()).toContain('no record')
+  })
+
+  it('spans the compare row across the extra column', async () => {
+    api.config.diff.mockResolvedValue([])
+    const wrapper = await as('admin')
+    await wrapper.find('tbody tr button').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('td[colspan]').attributes('colspan')).toBe('5')
+  })
+
+  it.each(['operator', 'viewer'])('shows a %s neither', async (role) => {
+    const wrapper = await as(role)
+    expect(wrapper.findAll('th').map((th) => th.text())).not.toContain('Applied by')
+    expect(appliedCells(wrapper)).toHaveLength(0)
+    expect(wrapper.text()).not.toContain('In force since')
+    expect(wrapper.text()).not.toContain('not recorded')
+    expect(api.config.applied).not.toHaveBeenCalled()
   })
 })

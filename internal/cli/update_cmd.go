@@ -15,6 +15,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/install"
 	"ostiole/internal/services"
 	"ostiole/internal/update"
@@ -111,6 +112,7 @@ the service with a health check that rolls back on failure.`,
 			if err := inst.Install(cmd.Context(), got); err != nil {
 				return err
 			}
+			g.audit().Add(audit.Event{Action: audit.Update, By: audit.ShellActor(), Detail: chk.Latest})
 			fmt.Fprintf(out, "installed %s; the service restarts in a moment and rolls back if it fails its health check\n", chk.Latest)
 			return nil
 		},

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/auth"
 )
 
@@ -73,6 +74,47 @@ func (a *api) principal(r *http.Request, touch bool) (Principal, bool) {
 // routeRole is the context key for the role a route was let in with.
 type routeRole struct{}
 
+// routePrincipal is the context key for the caller a route let in.
+type routePrincipal struct{}
+
+// caller is the one the route let in, or whoever the request is signed in
+// as, without counting it as use of the session.
+func (a *api) caller(r *http.Request) (Principal, bool) {
+	if p, ok := r.Context().Value(routePrincipal{}).(Principal); ok {
+		return p, true
+	}
+	return a.principal(r, false)
+}
+
+// actor is the caller as the audit log names them.
+func (a *api) actor(r *http.Request) audit.Actor {
+	p, ok := a.caller(r)
+	if !ok {
+		return audit.Actor{Address: remoteIP(r)}
+	}
+	return p.actor(remoteIP(r))
+}
+
+// isAdmin reports whether the caller is an administrator.
+func (a *api) isAdmin(r *http.Request) bool {
+	p, ok := a.caller(r)
+	return ok && !p.limited() && p.Role.Allows(auth.RoleAdmin)
+}
+
+// actor names p as the audit log does, from address.
+func (p Principal) actor(address string) audit.Actor {
+	kind := audit.Account
+	if p.Token {
+		kind = audit.Token
+	}
+	return audit.Actor{Name: p.Name, Kind: kind, Role: string(p.Role), Address: address}
+}
+
+// record notes in the audit log what the caller just did.
+func (a *api) record(r *http.Request, action, target, detail string) {
+	a.audit.Add(audit.Event{Action: action, By: a.actor(r), Target: target, Detail: detail})
+}
+
 // stillAllowed checks, partway through a response that stays open, that
 // the caller could make the request now. A log stream runs for hours, and
 // meanwhile the session can end, the account go, the token be revoked.
@@ -107,7 +149,8 @@ func (a *api) requires(role auth.Role, h func(w http.ResponseWriter, r *http.Req
 		if p.limited() || !p.Role.Allows(role) {
 			return errForbidden
 		}
-		return h(w, r.WithContext(context.WithValue(r.Context(), routeRole{}, role)))
+		ctx := context.WithValue(r.Context(), routeRole{}, role)
+		return h(w, r.WithContext(context.WithValue(ctx, routePrincipal{}, p)))
 	})
 }
 

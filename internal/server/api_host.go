@@ -2,7 +2,9 @@ package server
 
 import (
 	"net/http"
+	"strings"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/host"
 )
 
@@ -37,6 +39,7 @@ func (a *api) hostFlushLegacy(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return &badRequest{err}
 	}
+	a.record(r, audit.LeftoversClear, "", strings.Join(body.Tables, ", "))
 	writeJSON(w, http.StatusOK, hostResult{Output: out, Status: host.Status(r.Context(), a.host)})
 	return nil
 }

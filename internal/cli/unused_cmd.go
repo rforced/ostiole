@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/diff"
 	"ostiole/internal/engine"
 	"ostiole/internal/model"
@@ -93,7 +94,8 @@ rules and NAT written against it. What is switched off is kept.`,
 			if err != nil {
 				return err
 			}
-			res, err := eng.Apply(cmd.Context(), &next, engine.ApplyOptions{ConfirmTimeout: timeout, Base: base})
+			by := audit.ShellActor()
+			res, err := eng.Apply(cmd.Context(), &next, engine.ApplyOptions{ConfirmTimeout: timeout, Base: base, By: by})
 			if err != nil {
 				return err
 			}
@@ -102,7 +104,7 @@ rules and NAT written against it. What is switched off is kept.`,
 				return nil
 			}
 			fmt.Fprintf(out, "removed; press Enter within %s to confirm, or it reverts\n", timeout.Truncate(time.Second))
-			return waitForConfirmation(cmd.Context(), eng, res.Deadline, os.Stdin, out)
+			return waitForConfirmation(cmd.Context(), eng, by, res.Deadline, os.Stdin, out)
 		},
 	}
 	cmd.Flags().BoolVar(&remove, "remove", false, "delete the unused items instead of only listing them")

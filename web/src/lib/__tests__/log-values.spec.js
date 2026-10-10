@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { auditValues } from '@/lib/audit'
 import { dhcpValues } from '@/lib/dhcpLog'
 import { readingValues } from '@/lib/driveHistory'
 import { eventValues as gatewayValues } from '@/lib/gateways'
@@ -62,6 +63,11 @@ describe('what each log row shows', () => {
   for (const c of cases.gateways) {
     it(`gateways: ${c.why}`, () => {
       expect(shown(gatewayValues(c.entry))).toEqual(c.values)
+    })
+  }
+  for (const c of cases.audit) {
+    it(`audit: ${c.why}`, () => {
+      expect(shown(auditValues(c.entry))).toEqual(c.values)
     })
   }
 })

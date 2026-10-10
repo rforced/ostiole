@@ -124,7 +124,7 @@ func TestApplyOutlivesItsCaller(t *testing.T) {
 		t.Error("the apply stopped when its caller did")
 	}
 	// Nor does a revert whose caller has already gone.
-	if err := e.Revert(ctx); err != nil {
+	if err := e.Revert(ctx, tester); err != nil {
 		t.Fatalf("revert whose caller left: %v", err)
 	}
 }

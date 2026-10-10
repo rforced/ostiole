@@ -110,7 +110,7 @@ func newTailscaleServer(t *testing.T, unit tsUnit, cli *tsCLI, cfg *model.Config
 	dir := t.TempDir()
 	st := store.New(dir)
 	if cfg != nil {
-		if _, err := st.Save(cfg, "table inet ostiole {}\n"); err != nil {
+		if _, err := st.Save(cfg, "table inet ostiole {}\n", store.Author{}); err != nil {
 			t.Fatal(err)
 		}
 	}

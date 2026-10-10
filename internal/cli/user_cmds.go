@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/auth"
 )
 
@@ -34,9 +35,20 @@ stdin with --password-stdin.`,
 			if err != nil {
 				return err
 			}
+			existed := false
+			for _, u := range svc.Accounts() {
+				if u.Username == username {
+					existed = true
+				}
+			}
 			if err := svc.SetPassword(username, password); err != nil {
 				return err
 			}
+			ev := audit.Event{Action: audit.AccountPassword, By: audit.ShellActor(), Target: username}
+			if !existed {
+				ev.Action, ev.Detail = audit.AccountCreate, string(auth.RoleAdmin)
+			}
+			g.audit().Add(ev)
 			fmt.Fprintf(cmd.OutOrStdout(), "password set for %s\n", username)
 			return nil
 		},
@@ -114,6 +126,7 @@ reset-password to change an existing account's password.`,
 			if err := svc.CreateUser(args[0], password, auth.Role(role)); err != nil {
 				return err
 			}
+			g.audit().Add(audit.Event{Action: audit.AccountCreate, By: audit.ShellActor(), Target: args[0], Detail: role})
 			fmt.Fprintf(cmd.OutOrStdout(), "created %s as %s\n", args[0], role)
 			return nil
 		},
@@ -133,6 +146,7 @@ reset-password to change an existing account's password.`,
 			if err := svc.Rename(args[0], args[1]); err != nil {
 				return err
 			}
+			g.audit().Add(audit.Event{Action: audit.AccountRename, By: audit.ShellActor(), Target: args[0], Detail: args[1]})
 			fmt.Fprintf(cmd.OutOrStdout(), "%s is now %s\n", args[0], args[1])
 			return nil
 		},
@@ -150,6 +164,7 @@ reset-password to change an existing account's password.`,
 			if err := svc.DeleteUser(args[0]); err != nil {
 				return err
 			}
+			g.audit().Add(audit.Event{Action: audit.AccountDelete, By: audit.ShellActor(), Target: args[0]})
 			fmt.Fprintf(cmd.OutOrStdout(), "deleted %s\n", args[0])
 			return nil
 		},
@@ -166,6 +181,7 @@ reset-password to change an existing account's password.`,
 			if err := svc.SetRole(args[0], auth.Role(args[1])); err != nil {
 				return err
 			}
+			g.audit().Add(audit.Event{Action: audit.AccountRole, By: audit.ShellActor(), Target: args[0], Detail: args[1]})
 			fmt.Fprintf(cmd.OutOrStdout(), "%s is now %s\n", args[0], args[1])
 			return nil
 		},

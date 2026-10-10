@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/auth"
 )
 
@@ -75,6 +77,14 @@ func (a *api) createToken(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return &badRequest{err}
 	}
+	detail := string(tok.Role)
+	switch {
+	case len(tok.Certificates) > 0:
+		detail = "certificates"
+	case tok.Metrics:
+		detail = "metrics"
+	}
+	a.record(r, audit.TokenCreate, tok.Name, detail)
 	writeJSON(w, http.StatusCreated, createdToken{Token: tok, Secret: secret})
 	return nil
 }
@@ -83,9 +93,18 @@ func (a *api) deleteToken(w http.ResponseWriter, r *http.Request) error {
 	if a.tokens == nil {
 		return &unavailable{errors.New("API tokens are not available")}
 	}
-	if err := a.tokens.Delete(r.PathValue("id")); err != nil {
+	ref := r.PathValue("id")
+	name := ref
+	for _, tok := range a.tokens.List() {
+		if tok.ID == ref || strings.EqualFold(tok.Name, ref) {
+			name = tok.Name
+			break
+		}
+	}
+	if err := a.tokens.Delete(ref); err != nil {
 		return err
 	}
+	a.record(r, audit.TokenDelete, name, "")
 	w.WriteHeader(http.StatusNoContent)
 	return nil
 }

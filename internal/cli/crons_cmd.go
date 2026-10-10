@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/auth"
 	"ostiole/internal/cron"
 	"ostiole/internal/dnsblock"
@@ -129,6 +130,8 @@ it works whether or not the daemon is up.`,
 			if out != "" {
 				fmt.Fprintln(cmd.OutOrStdout(), out)
 			}
+			// A job that ran and failed was run all the same.
+			g.audit().Add(audit.Event{Action: audit.CronRun, By: audit.ShellActor(), Target: c.ID})
 			return err
 		},
 	}

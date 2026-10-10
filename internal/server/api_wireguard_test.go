@@ -25,7 +25,7 @@ func newWireGuardServer(t *testing.T, cfg *model.Config, dev wg.Device) *httptes
 	t.Helper()
 	dir := t.TempDir()
 	st := store.New(dir)
-	if _, err := st.Save(cfg, "table inet ostiole {}\n"); err != nil {
+	if _, err := st.Save(cfg, "table inet ostiole {}\n", store.Author{}); err != nil {
 		t.Fatal(err)
 	}
 	as, err := auth.NewService(dir)

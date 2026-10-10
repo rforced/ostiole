@@ -300,7 +300,7 @@ func TestARevertAcrossAZoneReadsThePreviousSchedulesAgain(t *testing.T) {
 		t.Fatal(err)
 	}
 	loads := fr.count()
-	if err := e.Revert(ctx); err != nil {
+	if err := e.Revert(ctx, tester); err != nil {
 		t.Fatal(err)
 	}
 	if fr.count() != loads+2 || fr.last() != reloadOf(t, saved.Ruleset) {

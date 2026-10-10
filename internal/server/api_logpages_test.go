@@ -38,7 +38,7 @@ func filesServer(t *testing.T, cfg *model.Config, adjust func(*Deps)) (*httptest
 	t.Helper()
 	dir := t.TempDir()
 	eng := engine.New(store.New(dir), &nfttest.Fake{}, nil, slog.New(slog.DiscardHandler))
-	if _, err := eng.Store().Save(cfg, ""); err != nil {
+	if _, err := eng.Store().Save(cfg, "", store.Author{}); err != nil {
 		t.Fatal(err)
 	}
 	as, err := auth.NewService(dir)
@@ -148,7 +148,7 @@ func TestAPageEndsWithMemoryWhileTheFilesAreOff(t *testing.T) {
 	// A router rolled back to a configuration with the files off, before
 	// the writer has deleted them.
 	cfg.System.Logging.Files.Enabled = false
-	if _, err := store.New(filepath.Dir(files.Dir)).Save(cfg, ""); err != nil {
+	if _, err := store.New(filepath.Dir(files.Dir)).Save(cfg, "", store.Author{}); err != nil {
 		t.Fatal(err)
 	}
 	if p := readPage[fwlog.Entry](t, srv, "/api/v1/log/entries"); len(p.Entries) != 2 || p.More {

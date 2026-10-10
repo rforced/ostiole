@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/backup"
 	"ostiole/internal/certs"
 	"ostiole/internal/dnsblock"
@@ -96,6 +97,9 @@ type globals struct {
 	// eng is the engine the commands drive, built from the flags unless a
 	// test has built its own.
 	eng *engine.Engine
+	// auditLog is shared so the daemon's streams hear what its engine
+	// records.
+	auditLog *audit.Log
 }
 
 func (g *globals) certStore() *certs.Store {
@@ -107,6 +111,14 @@ func (g *globals) certStore() *certs.Store {
 
 func (g *globals) store() *store.Store {
 	return store.New(g.configDir)
+}
+
+// audit is the audit log beside the configuration.
+func (g *globals) audit() *audit.Log {
+	if g.auditLog == nil {
+		g.auditLog = audit.Open(g.configDir)
+	}
+	return g.auditLog
 }
 
 func (g *globals) network() (network.Backend, error) {
@@ -200,6 +212,7 @@ func (g *globals) engineWith(ownLevel bool) (*engine.Engine, error) {
 	}
 	eng := engine.New(g.store(), &nft.Exec{Bin: g.nftBin}, net, slog.Default())
 	eng.MemTotal = sysstat.New(g.configDir).MemTotal
+	eng.WithAudit(g.audit())
 	eng.WithFeeds(g.feeds())
 	if port := listenPortOf(installedListen()); port != 0 {
 		eng.WithDefaultPorts(port, 22)

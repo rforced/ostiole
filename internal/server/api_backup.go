@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/backup"
 	"ostiole/internal/diff"
 	"ostiole/internal/model"
@@ -71,6 +72,14 @@ func (a *api) downloadBackup(w http.ResponseWriter, r *http.Request) error {
 	if archive.Encrypted() {
 		contentType = "application/octet-stream"
 	}
+	detail := ""
+	switch {
+	case opts.Users != nil:
+		detail = "with accounts"
+	case opts.Redact:
+		detail = "without secrets"
+	}
+	a.record(r, audit.Backup, "", detail)
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", archive.Filename()))
 	w.Header().Set("Content-Length", fmt.Sprint(len(raw)))
@@ -245,7 +254,7 @@ func (a *api) deleteRemote(w http.ResponseWriter, r *http.Request) error {
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}
-	return a.removeRemote(w, r, func(remote *backup.Remote) (backup.Removed, error) {
+	return a.removeRemote(w, r, audit.RemoteDelete, req.Key, func(remote *backup.Remote) (backup.Removed, error) {
 		return remote.Delete(r.Context(), req.Key)
 	})
 }
@@ -255,7 +264,7 @@ func (a *api) deleteAllRemote(w http.ResponseWriter, r *http.Request) error {
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}
-	return a.removeRemote(w, r, func(remote *backup.Remote) (backup.Removed, error) {
+	return a.removeRemote(w, r, audit.RemoteDeleteAll, "", func(remote *backup.Remote) (backup.Removed, error) {
 		return remote.DeleteAll(r.Context(), req.Keys)
 	})
 }
@@ -263,7 +272,7 @@ func (a *api) deleteAllRemote(w http.ResponseWriter, r *http.Request) error {
 // removeRemote runs a delete against the bucket the saved configuration
 // names and says what went. Whatever went is logged, a delete cut short
 // by a refusal included: it cannot be undone.
-func (a *api) removeRemote(w http.ResponseWriter, r *http.Request, del func(*backup.Remote) (backup.Removed, error)) error {
+func (a *api) removeRemote(w http.ResponseWriter, r *http.Request, action, target string, del func(*backup.Remote) (backup.Removed, error)) error {
 	remote, _, err := a.remoteBucket()
 	if err != nil {
 		return err
@@ -286,6 +295,7 @@ func (a *api) removeRemote(w http.ResponseWriter, r *http.Request, del func(*bac
 	case err != nil:
 		return &upstream{err}
 	}
+	a.record(r, action, target, "")
 	writeJSON(w, http.StatusOK, removed)
 	return nil
 }

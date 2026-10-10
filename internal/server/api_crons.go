@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"ostiole/internal/audit"
 	"ostiole/internal/auth"
 	"ostiole/internal/cron"
 	"ostiole/internal/model"
@@ -41,7 +42,14 @@ func (a *api) runCron(w http.ResponseWriter, r *http.Request) error {
 	if err := a.mayRun(r, id); err != nil {
 		return err
 	}
-	if err := a.crons.RunNow(r.Context(), id); err != nil {
+	err := a.crons.RunNow(r.Context(), id)
+	// A job that ran and failed was run all the same.
+	if cfg := a.engine.Effective(); cfg != nil {
+		if _, ok := cfg.Cron(id); ok {
+			a.record(r, audit.CronRun, id, "")
+		}
+	}
+	if err != nil {
 		// The result is recorded either way, so the page shows what
 		// happened rather than only that it failed.
 		writeJSON(w, http.StatusOK, map[string]any{"id": id, "error": err.Error()})
