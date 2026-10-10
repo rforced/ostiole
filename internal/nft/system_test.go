@@ -116,6 +116,23 @@ func closesZone(row SystemRule) bool {
 	return false
 }
 
+// rowZones names the zone of each row with the description, in order. A
+// rule written per zone has rows that name one zone each.
+func rowZones(t *testing.T, rows []SystemRule, description string) string {
+	t.Helper()
+	var zones []string
+	for _, r := range rows {
+		if r.Description != description {
+			continue
+		}
+		if len(r.Zones) != 1 {
+			t.Errorf("%q is listed on %v, want one zone", description, r.Zones)
+		}
+		zones = append(zones, strings.Join(r.Zones, "+"))
+	}
+	return strings.Join(zones, ",")
+}
+
 func findRow(rows []SystemRule, description string) (SystemRule, bool) {
 	for _, r := range rows {
 		if r.Description == description {
@@ -147,12 +164,8 @@ func TestSystemRulesFull(t *testing.T) {
 	}
 
 	// The DNS service listens on every internal interface unless told
-	// otherwise, so the row is on every internal zone's tab.
-	dns, ok := findRow(rows, "DNS queries")
-	if !ok {
-		t.Fatal("no DNS row")
-	}
-	if got, want := strings.Join(dns.Zones, ","), "lan,dmz"; got != want {
+	// otherwise, so every internal zone's tab has a row of its own.
+	if got, want := rowZones(t, rows, "DNS queries"), "lan,dmz"; got != want {
 		t.Errorf("dns zones = %q, want %q", got, want)
 	}
 
@@ -214,7 +227,7 @@ func TestSystemRulesDNSEnforcement(t *testing.T) {
 }
 
 // Time is served on every enabled interface outside an external zone,
-// and the row says where, so the rules page can link to the NTP page.
+// and the rows say where, so the rules page can link to the NTP page.
 func TestSystemRulesNTP(t *testing.T) {
 	t.Parallel()
 	cfg := loadConfig(t, "testdata/ntp.json")
@@ -226,7 +239,7 @@ func TestSystemRulesNTP(t *testing.T) {
 	if !ok {
 		t.Fatal("no row for serving time")
 	}
-	if got := strings.Join(r.Zones, ","); got != "lan,lab" {
+	if got := rowZones(t, rows, "NTP requests"); got != "lan,lab" {
 		t.Errorf("zones = %q, want lan,lab: not wan, which is external", got)
 	}
 	if r.Setting != "ntp" || r.Protocol != "udp" || r.Destination != "this router : 123" {

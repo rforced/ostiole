@@ -9,12 +9,15 @@ table inet ostiole {
 		ct state invalid drop
 		iifname { "eth0", "eth1", "eth1.30" } icmp type { destination-unreachable, time-exceeded, parameter-problem } accept
 		iifname "eth0" icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit, nd-router-advert, destination-unreachable, packet-too-big, time-exceeded, parameter-problem, mld-listener-query, mld-listener-report, mld-listener-done } accept
-		iifname "eth0" ip6 saddr fe80::/10 ip6 daddr fe80::/10 udp sport 547 udp dport 546 counter accept comment "client:dhcpv6"
+		iifname "eth0" ip6 saddr fe80::/10 ip6 daddr fe80::/10 udp sport 547 udp dport 546 counter accept comment "client:dhcpv6:wan"
 		iifname "eth1" tcp dport { 443, 22 } counter accept comment "anti-lockout:lan"
-		iifname { "eth1", "eth1.30" } udp dport 5353 counter accept comment "service:discovery"
-		iifname { "eth1", "eth1.30" } udp dport 1900 counter accept comment "service:discovery"
-		iifname "eth1.30" udp dport 61900-61999 fib daddr type local counter accept comment "service:discovery"
-		iifname { "eth1", "eth1.30" } ip protocol igmp counter accept comment "service:discovery:igmp"
+		iifname "eth1" udp dport 5353 counter accept comment "service:discovery:lan"
+		iifname "eth1" udp dport 1900 counter accept comment "service:discovery:lan"
+		iifname "eth1" ip protocol igmp counter accept comment "service:discovery:igmp:lan"
+		iifname "eth1.30" udp dport 5353 counter accept comment "service:discovery:things"
+		iifname "eth1.30" udp dport 1900 counter accept comment "service:discovery:things"
+		iifname "eth1.30" udp dport 61900-61999 fib daddr type local counter accept comment "service:discovery:things"
+		iifname "eth1.30" ip protocol igmp counter accept comment "service:discovery:igmp:things"
 		iifname "eth0" jump zone_wan
 		iifname "eth1" jump zone_lan
 		iifname "eth1.30" jump zone_things

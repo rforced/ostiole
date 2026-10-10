@@ -11,7 +11,7 @@ import { useAuthStore } from '@/stores/auth'
  * goes to the setting that controls it.
  */
 defineProps({
-  /** @type {import('vue').PropType<{action: string, protocol: string, source: string, destination: string, description: string, log?: boolean}>} */
+  /** @type {import('vue').PropType<{action: string, protocol: string, source: string, destination: string, description: string, log?: boolean, zones?: string[]}>} */
   rule: { type: Object, required: true },
   /** The packet count, or an empty string when the rule keeps none. */
   packets: { type: [Number, String], default: '' },
@@ -35,6 +35,7 @@ const auth = useAuthStore()
       <span class="inline-flex items-center gap-1.5">
         <span class="badge" :class="actionTone(rule.action)">{{ rule.action }}</span>
         <span v-if="rule.log" class="badge">log</span>
+        <span v-if="!rule.zones?.length" class="badge">every zone</span>
       </span>
     </td>
     <td class="font-mono text-code max-sm:order-3">{{ rule.protocol }}</td>

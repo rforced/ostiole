@@ -261,7 +261,7 @@ func TestBlockedSourcesComeFirst(t *testing.T) {
 // own. One that cannot run it gets none.
 func TestDHCPv6ClientRule(t *testing.T) {
 	t.Parallel()
-	const rule = `iifname "eth0" ip6 saddr fe80::/10 ip6 daddr fe80::/10 udp sport 547 udp dport 546 counter accept comment "client:dhcpv6"`
+	const rule = `iifname "eth0" ip6 saddr fe80::/10 ip6 daddr fe80::/10 udp sport 547 udp dport 546 counter accept comment "client:dhcpv6:wan"`
 
 	// blocked-sources: eth0 is a WAN in slaac mode, and the only such interface.
 	got, err := Render(loadConfig(t, "testdata/blocked-sources.json"))
@@ -277,7 +277,7 @@ func TestDHCPv6ClientRule(t *testing.T) {
 	}
 	var found bool
 	for _, r := range rows {
-		if len(r.Keys) == 1 && r.Keys[0] == "input/client:dhcpv6" {
+		if len(r.Keys) == 1 && r.Keys[0] == "input/client:dhcpv6:wan" {
 			found = true
 			if got, want := strings.Join(r.Zones, ","), "wan"; got != want {
 				t.Errorf("DHCPv6 client row names zones %q, want %q", got, want)
@@ -321,7 +321,7 @@ func TestDHCPv6ClientRule(t *testing.T) {
 // rest of what it needs comes from the zone its interface is in.
 func TestTailscaleRuleFollowsThePort(t *testing.T) {
 	t.Parallel()
-	const rule = `iifname "eth0" udp dport 41641 counter accept comment "service:tailscale"`
+	const rule = `iifname "eth0" udp dport 41641 counter accept comment "service:tailscale:wan"`
 
 	cfg := loadConfig(t, "testdata/tailscale.json")
 	got, err := Render(cfg)
@@ -389,7 +389,7 @@ func TestUPnPLeavesTunnelsOut(t *testing.T) {
 
 func TestACMERuleFollowsTheChallenge(t *testing.T) {
 	t.Parallel()
-	const rule = `iifname "eth0" tcp dport 80 counter accept comment "service:acme"`
+	const rule = `iifname "eth0" tcp dport 80 counter accept comment "service:acme:wan"`
 
 	got, err := Render(loadConfig(t, "testdata/acme-http01.json"))
 	if err != nil {
@@ -652,11 +652,11 @@ func TestChallengesPassAProxyThatDoesNotAnswerThem(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !strings.Contains(sectionOf(got, "chain nat_prerouting"),
-				`iifname "eth0" tcp dport 80 counter redirect to :8402 comment "service:acme"`) {
+				`iifname "eth0" tcp dport 80 counter redirect to :8402 comment "service:acme:wan"`) {
 				t.Errorf("port 80 is not redirected to the solver:\n%s", got)
 			}
 			if !strings.Contains(sectionOf(got, "chain input"),
-				`iifname "eth0" tcp dport 8402 ct status dnat counter accept comment "service:acme"`) {
+				`iifname "eth0" tcp dport 8402 ct status dnat counter accept comment "service:acme:wan"`) {
 				t.Errorf("the redirected challenge is not let in:\n%s", got)
 			}
 			rows, err := SystemRules(cfg, nil)
@@ -669,7 +669,7 @@ func TestChallengesPassAProxyThatDoesNotAnswerThem(t *testing.T) {
 					keys = append(keys, row.Keys...)
 				}
 			}
-			if !slices.Equal(keys, []string{"nat_prerouting/service:acme", "input/service:acme"}) {
+			if !slices.Equal(keys, []string{"nat_prerouting/service:acme:wan", "input/service:acme:wan"}) {
 				t.Errorf("certificate rows = %q", keys)
 			}
 		})
@@ -927,8 +927,8 @@ func TestDNSEnforcementFollowsItsZones(t *testing.T) {
 		}
 	}
 	for line := range strings.SplitSeq(out.Ruleset, "\n") {
-		enforcing := strings.Contains(line, `"block:`) || strings.Contains(line, "jump block_dns")
-		if strings.Contains(line, `:vpn"`) || (enforcing && strings.Contains(line, `"eth2"`)) {
+		enforcing := strings.Contains(line, `"block:`) || strings.Contains(line, `"log:block-`) || strings.Contains(line, "jump block_dns")
+		if enforcing && (strings.Contains(line, `:vpn"`) || strings.Contains(line, `"eth2"`)) {
 			t.Errorf("lan alone, but vpn is enforced: %s", strings.TrimSpace(line))
 		}
 	}
@@ -983,6 +983,64 @@ func TestDNSEnforcementFollowsItsZones(t *testing.T) {
 	}
 }
 
+// A service rule is written per zone, so a zone's tab counts its own
+// packets and not the sum over every zone the service runs in. An
+// interface in no zone keeps a rule with the bare comment and gets no row.
+func TestServiceRowsFollowTheirZones(t *testing.T) {
+	t.Parallel()
+	cfg := withVPNZone(loadConfig(t, "testdata/dns-blocking.json"))
+	cfg.Services.DNS.QueryLog.Enabled = true
+	rowsOf := func(out *Rendered, description string) []string {
+		var got []string
+		for _, row := range out.System {
+			if row.Description == description {
+				got = append(got, strings.Join(row.Zones, ",")+" "+strings.Join(row.Keys, " "))
+			}
+		}
+		return got
+	}
+	check := func(out *Rendered, lines []string) {
+		t.Helper()
+		for _, want := range lines {
+			if !strings.Contains(out.Ruleset, want) {
+				t.Errorf("no %s in:\n%s", want, out.Ruleset)
+			}
+		}
+		if got, want := rowsOf(out, "DNS queries"), []string{"lan input/service:dns:lan", "vpn input/service:dns:vpn"}; !slices.Equal(got, want) {
+			t.Errorf("DNS rows = %q, want %q", got, want)
+		}
+		if got, want := rowsOf(out, "DNS query logger"), []string{"lan output/dns-log:lan", "vpn output/dns-log:vpn"}; !slices.Equal(got, want) {
+			t.Errorf("query log rows = %q, want %q", got, want)
+		}
+	}
+	out, err := Build(cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(out, []string{
+		`iifname "eth1" meta l4proto { tcp, udp } th dport 53 fib daddr type local counter accept comment "service:dns:lan"`,
+		`iifname "eth2" meta l4proto { tcp, udp } th dport 53 fib daddr type local counter accept comment "service:dns:vpn"`,
+		`oifname "eth1" meta l4proto { tcp, udp } th sport 53 counter log group 2 comment "dns-log:lan"`,
+		`oifname "eth2" meta l4proto { tcp, udp } th sport 53 counter log group 2 comment "dns-log:vpn"`,
+	})
+
+	cfg.Interfaces = append(cfg.Interfaces, model.Interface{
+		Name: "eth3", Enabled: true,
+		IPv4: model.IPv4{Mode: model.AddrStatic, Address: "192.168.3.1/24"},
+		IPv6: model.IPv6{Mode: model.AddrNone},
+	})
+	cfg.Services.DNS.Interfaces = []string{"eth1", "eth2", "eth3"}
+	if out, err = Build(cfg, nil); err != nil {
+		t.Fatal(err)
+	}
+	check(out, []string{
+		`comment "service:dns:lan"`,
+		`comment "service:dns:vpn"`,
+		`iifname "eth3" meta l4proto { tcp, udp } th dport 53 fib daddr type local counter accept comment "service:dns"`,
+		`oifname "eth3" meta l4proto { tcp, udp } th sport 53 counter log group 2 comment "dns-log"`,
+	})
+}
+
 // A NAT statement ends the chain, so a mapped host has to meet its 1:1
 // rule before the masquerade or an outbound rule can claim it. That holds
 // in every mode, as binat comes first in pf.
@@ -1034,7 +1092,7 @@ func TestOneToOneComesBeforeOutboundNAT(t *testing.T) {
 // A relay with one link left has nothing to relay to, so it opens nothing.
 func TestDiscoveryRulesNeedTwoLinks(t *testing.T) {
 	t.Parallel()
-	const igmp = `ip protocol igmp counter accept comment "service:discovery:igmp"`
+	const igmp = `iifname "eth1" ip protocol igmp counter accept comment "service:discovery:igmp:lan"`
 	cfg := loadConfig(t, "testdata/discovery.json")
 	cfg.Services.Discovery.Interfaces[0].Answers = true
 	got, err := Render(cfg)

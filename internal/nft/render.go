@@ -4,6 +4,7 @@ package nft
 
 import (
 	"fmt"
+	"iter"
 	"net/netip"
 	"slices"
 	"strconv"
@@ -387,17 +388,17 @@ func (r *renderer) dhcpv6ClientRules() {
 			ifs = append(ifs, in.Name)
 		}
 	}
-	if len(ifs) == 0 {
-		return
+	for zone, zoneIfs := range r.byZone(ifs) {
+		comment := zoned("client:dhcpv6", zone)
+		r.line(fmt.Sprintf(`iifname %s ip6 saddr fe80::/10 ip6 daddr fe80::/10 udp sport 547 udp dport 546 counter accept comment %q`,
+			ifnameSet(zoneIfs), comment))
+		r.sysFor(zoneIfs, SystemRule{
+			Chain: "input", Action: "accept", Protocol: string(model.ProtocolUDP),
+			Source: "link-local : 547", Destination: firewallDest([]string{"546"}),
+			Description: "DHCPv6 answers to this router's own requests",
+			Keys:        []string{"input/" + comment}, Setting: "interface",
+		})
 	}
-	r.line(fmt.Sprintf(`iifname %s ip6 saddr fe80::/10 ip6 daddr fe80::/10 udp sport 547 udp dport 546 counter accept comment "client:dhcpv6"`,
-		ifnameSet(ifs)))
-	r.sysFor(ifs, SystemRule{
-		Chain: "input", Action: "accept", Protocol: string(model.ProtocolUDP),
-		Source: "link-local : 547", Destination: firewallDest([]string{"546"}),
-		Description: "DHCPv6 answers to this router's own requests",
-		Keys:        []string{"input/client:dhcpv6"}, Setting: "interface",
-	})
 }
 
 // connectionState opens a base chain: replies to what was allowed pass,
@@ -430,12 +431,13 @@ func (r *renderer) serviceRules() {
 		for _, sc := range r.cfg.ActiveDHCP() {
 			ifs = append(ifs, sc.Interface)
 		}
-		if len(ifs) > 0 {
-			r.line(fmt.Sprintf(`iifname %s udp dport 67 counter accept comment "service:dhcp"`, ifnameSet(ifs)))
-			r.sysFor(ifs, SystemRule{
+		for zone, zoneIfs := range r.byZone(ifs) {
+			comment := zoned("service:dhcp", zone)
+			r.line(fmt.Sprintf(`iifname %s udp dport 67 counter accept comment %q`, ifnameSet(zoneIfs), comment))
+			r.sysFor(zoneIfs, SystemRule{
 				Chain: "input", Action: "accept", Protocol: string(model.ProtocolUDP),
 				Source: "any", Destination: firewallDest([]string{"67"}),
-				Description: "DHCP requests", Keys: []string{"input/service:dhcp"}, Setting: "dhcp",
+				Description: "DHCP requests", Keys: []string{"input/" + comment}, Setting: "dhcp",
 			})
 		}
 		// Router advertisements need no rule (ICMPv6 is in the baseline and
@@ -446,34 +448,37 @@ func (r *renderer) serviceRules() {
 				v6 = append(v6, sc.Interface)
 			}
 		}
-		if len(v6) > 0 {
-			r.line(fmt.Sprintf(`iifname %s udp dport 547 counter accept comment "service:dhcpv6"`, ifnameSet(v6)))
-			r.sysFor(v6, SystemRule{
+		for zone, zoneIfs := range r.byZone(v6) {
+			comment := zoned("service:dhcpv6", zone)
+			r.line(fmt.Sprintf(`iifname %s udp dport 547 counter accept comment %q`, ifnameSet(zoneIfs), comment))
+			r.sysFor(zoneIfs, SystemRule{
 				Chain: "input", Action: "accept", Protocol: string(model.ProtocolUDP),
 				Source: "any", Destination: firewallDest([]string{"547"}),
-				Description: "DHCPv6 requests", Keys: []string{"input/service:dhcpv6"}, Setting: "dhcp",
+				Description: "DHCPv6 requests", Keys: []string{"input/" + comment}, Setting: "dhcp",
 			})
 		}
 	}
 	if svc.DNS.Enabled {
-		ifs := DNSInterfaces(r.cfg)
-		if len(ifs) > 0 {
-			r.line(fmt.Sprintf(`iifname %s meta l4proto { tcp, udp } th dport 53 fib daddr type local counter accept comment "service:dns"`, ifnameSet(ifs)))
-			r.sysFor(ifs, SystemRule{
+		for zone, zoneIfs := range r.byZone(DNSInterfaces(r.cfg)) {
+			comment := zoned("service:dns", zone)
+			r.line(fmt.Sprintf(`iifname %s meta l4proto { tcp, udp } th dport 53 fib daddr type local counter accept comment %q`, ifnameSet(zoneIfs), comment))
+			r.sysFor(zoneIfs, SystemRule{
 				Chain: "input", Action: "accept", Protocol: string(model.ProtocolTCPUDP),
 				Source: "any", Destination: firewallDest([]string{"53"}),
-				Description: "DNS queries", Keys: []string{"input/service:dns"}, Setting: "dns",
+				Description: "DNS queries", Keys: []string{"input/" + comment}, Setting: "dns",
 			})
 		}
 	}
 	if r.cfg.NTPServing() {
-		ifs := r.cfg.NTPInterfaces()
-		r.line(fmt.Sprintf(`iifname %s udp dport 123 fib daddr type local counter accept comment "service:ntp"`, ifnameSet(ifs)))
-		r.sysFor(ifs, SystemRule{
-			Chain: "input", Action: "accept", Protocol: string(model.ProtocolUDP),
-			Source: "any", Destination: firewallDest([]string{"123"}),
-			Description: "NTP requests", Keys: []string{"input/service:ntp"}, Setting: "ntp",
-		})
+		for zone, zoneIfs := range r.byZone(r.cfg.NTPInterfaces()) {
+			comment := zoned("service:ntp", zone)
+			r.line(fmt.Sprintf(`iifname %s udp dport 123 fib daddr type local counter accept comment %q`, ifnameSet(zoneIfs), comment))
+			r.sysFor(zoneIfs, SystemRule{
+				Chain: "input", Action: "accept", Protocol: string(model.ProtocolUDP),
+				Source: "any", Destination: firewallDest([]string{"123"}),
+				Description: "NTP requests", Keys: []string{"input/" + comment}, Setting: "ntp",
+			})
+		}
 	}
 	r.wireguardRules()
 	r.tailscaleRules()
@@ -493,29 +498,32 @@ func (r *renderer) acmeRules() {
 		return
 	}
 	ifs := r.externalInterfaces()
-	if len(ifs) == 0 {
-		return
-	}
 	if !r.cfg.ProxyEnabled() {
-		r.line(fmt.Sprintf(`iifname %s tcp dport 80 counter accept comment "service:acme"`, ifnameSet(ifs)))
-		r.sysFor(ifs, SystemRule{
-			Chain: "input", Action: "accept", Protocol: string(model.ProtocolTCP),
-			Source: "any", Destination: firewallDest([]string{"80"}),
-			Description: "Certificate challenges", Keys: []string{"input/service:acme"}, Setting: "certificates",
-		})
+		for zone, zoneIfs := range r.byZone(ifs) {
+			comment := zoned("service:acme", zone)
+			r.line(fmt.Sprintf(`iifname %s tcp dport 80 counter accept comment %q`, ifnameSet(zoneIfs), comment))
+			r.sysFor(zoneIfs, SystemRule{
+				Chain: "input", Action: "accept", Protocol: string(model.ProtocolTCP),
+				Source: "any", Destination: firewallDest([]string{"80"}),
+				Description: "Certificate challenges", Keys: []string{"input/" + comment}, Setting: "certificates",
+			})
+		}
 		return
 	}
 	// With the proxy up, acmeRedirect sends port 80 from outside to the
 	// solver. Only what it redirected gets in: the port stays shut to a
 	// direct connection.
-	r.line(fmt.Sprintf(`iifname %s tcp dport %d ct status dnat counter accept comment "service:acme"`,
-		ifnameSet(ifs), model.ChallengePort))
-	r.sysFor(ifs, SystemRule{
-		Chain: "input", Action: "accept", Protocol: string(model.ProtocolTCP),
-		Source: "any", Destination: firewallDest([]string{strconv.Itoa(model.ChallengePort)}),
-		Description: "Certificate challenges redirected from port 80",
-		Keys:        []string{"input/service:acme"}, Setting: "certificates",
-	})
+	for zone, zoneIfs := range r.byZone(ifs) {
+		comment := zoned("service:acme", zone)
+		r.line(fmt.Sprintf(`iifname %s tcp dport %d ct status dnat counter accept comment %q`,
+			ifnameSet(zoneIfs), model.ChallengePort, comment))
+		r.sysFor(zoneIfs, SystemRule{
+			Chain: "input", Action: "accept", Protocol: string(model.ProtocolTCP),
+			Source: "any", Destination: firewallDest([]string{strconv.Itoa(model.ChallengePort)}),
+			Description: "Certificate challenges redirected from port 80",
+			Keys:        []string{"input/" + comment}, Setting: "certificates",
+		})
+	}
 }
 
 // acmeRedirect sends port 80 from outside to the http-01 solver while the
@@ -525,18 +533,17 @@ func (r *renderer) acmeRedirect() {
 	if !r.cfg.HTTP01Certificates() || !r.cfg.ProxyEnabled() || r.cfg.ProxyAnswersChallenges() {
 		return
 	}
-	ifs := r.externalInterfaces()
-	if len(ifs) == 0 {
-		return
+	for zone, zoneIfs := range r.byZone(r.externalInterfaces()) {
+		comment := zoned("service:acme", zone)
+		r.line(fmt.Sprintf(`iifname %s tcp dport 80 counter redirect to :%d comment %q`,
+			ifnameSet(zoneIfs), model.ChallengePort, comment))
+		r.sysFor(zoneIfs, SystemRule{
+			Chain: "nat_prerouting", Action: "redirect", Protocol: string(model.ProtocolTCP),
+			Source: "any", Destination: firewallDest([]string{"80"}),
+			Description: "Certificate challenges to the solver",
+			Keys:        []string{"nat_prerouting/" + comment}, Setting: "certificates",
+		})
 	}
-	r.line(fmt.Sprintf(`iifname %s tcp dport 80 counter redirect to :%d comment "service:acme"`,
-		ifnameSet(ifs), model.ChallengePort))
-	r.sysFor(ifs, SystemRule{
-		Chain: "nat_prerouting", Action: "redirect", Protocol: string(model.ProtocolTCP),
-		Source: "any", Destination: firewallDest([]string{"80"}),
-		Description: "Certificate challenges to the solver",
-		Keys:        []string{"nat_prerouting/service:acme"}, Setting: "certificates",
-	})
 }
 
 // externalInterfaces lists the interfaces in external zones.
@@ -558,10 +565,6 @@ func (r *renderer) upnpRules() {
 	if !UPnPEnabled(r.cfg) {
 		return
 	}
-	ifs := UPnPInterfaces(r.cfg)
-	if len(ifs) == 0 {
-		return
-	}
 	u := r.cfg.Services.UPnP
 	var udp []string
 	if u.IGD {
@@ -570,19 +573,24 @@ func (r *renderer) upnpRules() {
 	if u.PCP {
 		udp = append(udp, fmt.Sprint(pcpPort))
 	}
-	r.line(fmt.Sprintf(`iifname %s udp dport %s counter accept comment "service:upnp"`,
-		ifnameSet(ifs), setOrSingle(udp)))
 	ports, proto := udp, model.ProtocolUDP
 	if u.IGD {
-		r.line(fmt.Sprintf(`iifname %s tcp dport %d counter accept comment "service:upnp"`,
-			ifnameSet(ifs), upnpHTTPPort))
 		ports, proto = append(ports, fmt.Sprint(upnpHTTPPort)), model.ProtocolTCPUDP
 	}
-	r.sysFor(ifs, SystemRule{
-		Chain: "input", Action: "accept", Protocol: string(proto),
-		Source: "any", Destination: firewallDest(ports),
-		Description: "UPnP and NAT-PMP requests", Keys: []string{"input/service:upnp"}, Setting: "upnp",
-	})
+	for zone, zoneIfs := range r.byZone(UPnPInterfaces(r.cfg)) {
+		comment := zoned("service:upnp", zone)
+		r.line(fmt.Sprintf(`iifname %s udp dport %s counter accept comment %q`,
+			ifnameSet(zoneIfs), setOrSingle(udp), comment))
+		if u.IGD {
+			r.line(fmt.Sprintf(`iifname %s tcp dport %d counter accept comment %q`,
+				ifnameSet(zoneIfs), upnpHTTPPort, comment))
+		}
+		r.sysFor(zoneIfs, SystemRule{
+			Chain: "input", Action: "accept", Protocol: string(proto),
+			Source: "any", Destination: firewallDest(ports),
+			Description: "UPnP and NAT-PMP requests", Keys: []string{"input/" + comment}, Setting: "upnp",
+		})
+	}
 }
 
 // discoveryRules let the relay hear mDNS and SSDP on its interfaces, the
@@ -601,28 +609,39 @@ func (r *renderer) discoveryRules() {
 			answering = append(answering, l.Interface)
 		}
 	}
-	var ports []string
-	if d.RelaysMDNS() {
-		r.line(fmt.Sprintf(`iifname %s udp dport %d counter accept comment "service:discovery"`, ifnameSet(ifs), mdnsPort))
-		ports = append(ports, fmt.Sprint(mdnsPort))
-	}
-	if d.RelaysSSDP() {
-		r.line(fmt.Sprintf(`iifname %s udp dport %d counter accept comment "service:discovery"`, ifnameSet(ifs), ssdpPort))
-		ports = append(ports, fmt.Sprint(ssdpPort))
-	}
 	replies := fmt.Sprintf("%d-%d", model.DiscoveryReplyPortFirst, model.DiscoveryReplyPortLast)
-	r.line(fmt.Sprintf(`iifname %s udp dport %s fib daddr type local counter accept comment "service:discovery"`, ifnameSet(answering), replies))
-	r.sysFor(ifs, SystemRule{
-		Chain: "input", Action: "accept", Protocol: string(model.ProtocolUDP),
-		Source: "any", Destination: firewallDest(append(ports, replies)),
-		Description: "mDNS and SSDP for the discovery relay", Keys: []string{"input/service:discovery"}, Setting: "discovery",
-	})
-	r.line(fmt.Sprintf(`iifname %s ip protocol igmp counter accept comment "service:discovery:igmp"`, ifnameSet(ifs)))
-	r.sysFor(ifs, SystemRule{
-		Chain: "input", Action: "accept", Protocol: "igmp",
-		Source: "any", Destination: firewallDest(nil),
-		Description: "IGMP for the discovery relay", Keys: []string{"input/service:discovery:igmp"}, Setting: "discovery",
-	})
+	answers := map[string][]string{}
+	for zone, zoneIfs := range r.byZone(answering) {
+		answers[zone] = zoneIfs
+	}
+	for zone, zoneIfs := range r.byZone(ifs) {
+		comment := zoned("service:discovery", zone)
+		var ports []string
+		if d.RelaysMDNS() {
+			r.line(fmt.Sprintf(`iifname %s udp dport %d counter accept comment %q`, ifnameSet(zoneIfs), mdnsPort, comment))
+			ports = append(ports, fmt.Sprint(mdnsPort))
+		}
+		if d.RelaysSSDP() {
+			r.line(fmt.Sprintf(`iifname %s udp dport %d counter accept comment %q`, ifnameSet(zoneIfs), ssdpPort, comment))
+			ports = append(ports, fmt.Sprint(ssdpPort))
+		}
+		if a := answers[zone]; len(a) > 0 {
+			r.line(fmt.Sprintf(`iifname %s udp dport %s fib daddr type local counter accept comment %q`, ifnameSet(a), replies, comment))
+			ports = append(ports, replies)
+		}
+		r.sysFor(zoneIfs, SystemRule{
+			Chain: "input", Action: "accept", Protocol: string(model.ProtocolUDP),
+			Source: "any", Destination: firewallDest(ports),
+			Description: "mDNS and SSDP for the discovery relay", Keys: []string{"input/" + comment}, Setting: "discovery",
+		})
+		igmp := zoned("service:discovery:igmp", zone)
+		r.line(fmt.Sprintf(`iifname %s ip protocol igmp counter accept comment %q`, ifnameSet(zoneIfs), igmp))
+		r.sysFor(zoneIfs, SystemRule{
+			Chain: "input", Action: "accept", Protocol: "igmp",
+			Source: "any", Destination: firewallDest(nil),
+			Description: "IGMP for the discovery relay", Keys: []string{"input/" + igmp}, Setting: "discovery",
+		})
+	}
 }
 
 // wireguardRules open the listening ports of tunnels on external zones,
@@ -640,22 +659,16 @@ func (r *renderer) wireguardRules() {
 	if len(ports) == 0 {
 		return
 	}
-	var ifs []string
-	for _, z := range r.cfg.Zones {
-		if z.External {
-			ifs = append(ifs, r.cfg.ZoneInterfaces(z.Name)...)
-		}
+	for zone, zoneIfs := range r.byZone(r.externalInterfaces()) {
+		comment := zoned("service:wireguard", zone)
+		r.line(fmt.Sprintf(`iifname %s udp dport %s counter accept comment %q`,
+			ifnameSet(zoneIfs), setOrSingle(ports), comment))
+		r.sysFor(zoneIfs, SystemRule{
+			Chain: "input", Action: "accept", Protocol: string(model.ProtocolUDP),
+			Source: "any", Destination: firewallDest(ports),
+			Description: "WireGuard peers dialling in", Keys: []string{"input/" + comment}, Setting: "wireguard",
+		})
 	}
-	if len(ifs) == 0 {
-		return
-	}
-	r.line(fmt.Sprintf(`iifname %s udp dport %s counter accept comment "service:wireguard"`,
-		ifnameSet(ifs), setOrSingle(ports)))
-	r.sysFor(ifs, SystemRule{
-		Chain: "input", Action: "accept", Protocol: string(model.ProtocolUDP),
-		Source: "any", Destination: firewallDest(ports),
-		Description: "WireGuard peers dialling in", Keys: []string{"input/service:wireguard"}, Setting: "wireguard",
-	})
 }
 
 // tailscaleRules open the port peers dial directly on the external zones.
@@ -665,23 +678,17 @@ func (r *renderer) tailscaleRules() {
 	if !ok || !in.Enabled || in.Tailscale.Port == 0 {
 		return
 	}
-	var ifs []string
-	for _, z := range r.cfg.Zones {
-		if z.External {
-			ifs = append(ifs, r.cfg.ZoneInterfaces(z.Name)...)
-		}
-	}
-	if len(ifs) == 0 {
-		return
-	}
 	port := fmt.Sprint(in.Tailscale.Port)
-	r.line(fmt.Sprintf(`iifname %s udp dport %s counter accept comment "service:tailscale"`,
-		ifnameSet(ifs), port))
-	r.sysFor(ifs, SystemRule{
-		Chain: "input", Action: "accept", Protocol: string(model.ProtocolUDP),
-		Source: "any", Destination: firewallDest([]string{port}),
-		Description: "Tailscale peers dialling in", Keys: []string{"input/service:tailscale"}, Setting: "tailscale",
-	})
+	for zone, zoneIfs := range r.byZone(r.externalInterfaces()) {
+		comment := zoned("service:tailscale", zone)
+		r.line(fmt.Sprintf(`iifname %s udp dport %s counter accept comment %q`,
+			ifnameSet(zoneIfs), port, comment))
+		r.sysFor(zoneIfs, SystemRule{
+			Chain: "input", Action: "accept", Protocol: string(model.ProtocolUDP),
+			Source: "any", Destination: firewallDest([]string{port}),
+			Description: "Tailscale peers dialling in", Keys: []string{"input/" + comment}, Setting: "tailscale",
+		})
+	}
 }
 
 // TailscaleEnabled reports whether the configuration wants tailscaled.
@@ -881,18 +888,17 @@ func (r *renderer) queryLogRule() {
 	if !dns.Enabled || (!dns.QueryLog.Enabled && !r.cfg.Traffic.DestinationsOn()) {
 		return
 	}
-	ifs := DNSInterfaces(r.cfg)
-	if len(ifs) == 0 {
-		return
+	for zone, zoneIfs := range r.byZone(DNSInterfaces(r.cfg)) {
+		comment := zoned("dns-log", zone)
+		r.line(fmt.Sprintf(`oifname %s meta l4proto { tcp, udp } th sport 53 counter log group %d comment %q`,
+			ifnameSet(zoneIfs), QueryLogGroup, comment))
+		r.sysFor(zoneIfs, SystemRule{
+			Chain: "output", Action: "continue", Protocol: string(model.ProtocolTCPUDP),
+			Source: firewallDest([]string{"53"}), Destination: "any",
+			Description: "DNS query logger",
+			Keys:        []string{"output/" + comment}, Setting: "queryLog",
+		})
 	}
-	r.line(fmt.Sprintf(`oifname %s meta l4proto { tcp, udp } th sport 53 counter log group %d comment "dns-log"`,
-		ifnameSet(ifs), QueryLogGroup))
-	r.sysFor(ifs, SystemRule{
-		Chain: "output", Action: "continue", Protocol: string(model.ProtocolTCPUDP),
-		Source: firewallDest([]string{"53"}), Destination: "any",
-		Description: "DNS query logger",
-		Keys:        []string{"output/dns-log"}, Setting: "queryLog",
-	})
 }
 
 // ---- traffic shaping --------------------------------------------------
@@ -2278,6 +2284,45 @@ func setOrSingle(items []string) string {
 		return items[0]
 	}
 	return "{ " + strings.Join(items, ", ") + " }"
+}
+
+// byZone yields the interfaces of ifs zone by zone, in configuration order,
+// then those in no zone under the empty name. A counted rule is written once
+// for each zone, so a zone's tab counts its own packets and no others.
+func (r *renderer) byZone(ifs []string) iter.Seq2[string, []string] {
+	return func(yield func(string, []string) bool) {
+		placed := map[string]bool{}
+		for _, z := range r.cfg.Zones {
+			var group []string
+			for _, name := range ifs {
+				if in, ok := r.cfg.Interface(name); ok && in.Zone == z.Name {
+					group = append(group, name)
+					placed[name] = true
+				}
+			}
+			if len(group) > 0 && !yield(z.Name, group) {
+				return
+			}
+		}
+		var rest []string
+		for _, name := range ifs {
+			if !placed[name] {
+				rest = append(rest, name)
+			}
+		}
+		if len(rest) > 0 {
+			yield("", rest)
+		}
+	}
+}
+
+// zoned is the comment of a rule written for one zone: the zone appended,
+// or the comment alone for the interfaces in none.
+func zoned(comment, zone string) string {
+	if zone == "" {
+		return comment
+	}
+	return comment + ":" + zone
 }
 
 func sanitizeComment(s string) string {

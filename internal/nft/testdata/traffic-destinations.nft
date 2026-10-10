@@ -35,10 +35,10 @@ table inet ostiole {
 		ct state invalid drop
 		iifname { "eth0", "eth1" } icmp type { destination-unreachable, time-exceeded, parameter-problem } accept
 		iifname { "eth0", "eth1" } icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit, nd-router-advert, destination-unreachable, packet-too-big, time-exceeded, parameter-problem, mld-listener-query, mld-listener-report, mld-listener-done } accept
-		iifname "eth0" ip6 saddr fe80::/10 ip6 daddr fe80::/10 udp sport 547 udp dport 546 counter accept comment "client:dhcpv6"
+		iifname "eth0" ip6 saddr fe80::/10 ip6 daddr fe80::/10 udp sport 547 udp dport 546 counter accept comment "client:dhcpv6:wan"
 		iifname "eth0" tcp dport { 443, 22 } counter accept comment "anti-lockout:wan"
 		iifname "eth1" tcp dport { 443, 22 } counter accept comment "anti-lockout:lan"
-		iifname "eth1" meta l4proto { tcp, udp } th dport 53 fib daddr type local counter accept comment "service:dns"
+		iifname "eth1" meta l4proto { tcp, udp } th dport 53 fib daddr type local counter accept comment "service:dns:lan"
 		iifname "eth0" jump zone_wan
 		iifname "eth1" jump zone_lan
 		counter comment "default-drop"
@@ -54,7 +54,7 @@ table inet ostiole {
 	}
 	chain output {
 		type filter hook output priority filter; policy accept;
-		oifname "eth1" meta l4proto { tcp, udp } th sport 53 counter log group 2 comment "dns-log"
+		oifname "eth1" meta l4proto { tcp, udp } th sport 53 counter log group 2 comment "dns-log:lan"
 	}
 	chain zone_wan {
 		counter comment "zone-unmatched"

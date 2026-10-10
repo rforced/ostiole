@@ -35,7 +35,7 @@ table inet ostiole {
 		ct state invalid drop
 		iifname { "eth0", "eth1", "eth2" } icmp type { destination-unreachable, time-exceeded, parameter-problem } accept
 		iifname { "eth0", "eth1" } icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit, nd-router-advert, destination-unreachable, packet-too-big, time-exceeded, parameter-problem, mld-listener-query, mld-listener-report, mld-listener-done } accept
-		iifname "eth0" ip6 saddr fe80::/10 ip6 daddr fe80::/10 udp sport 547 udp dport 546 counter accept comment "client:dhcpv6"
+		iifname "eth0" ip6 saddr fe80::/10 ip6 daddr fe80::/10 udp sport 547 udp dport 546 counter accept comment "client:dhcpv6:wan"
 		iifname "eth0" ip saddr @private_v4 limit rate 10/second counter log prefix "ostiole:c:input:block-private: " group 1 comment "log:block-private"
 		iifname "eth0" ip saddr @private_v4 counter drop comment "block-private"
 		iifname "eth0" ip6 saddr @private_v6 limit rate 10/second counter log prefix "ostiole:c:input:block-private: " group 1 comment "log:block-private"

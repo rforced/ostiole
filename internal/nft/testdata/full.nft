@@ -35,12 +35,14 @@ table inet ostiole {
 		ct state invalid drop
 		iifname { "eth0", "eth1", "eth1.20", "eth2", "wg0" } icmp type { destination-unreachable, time-exceeded, parameter-problem } accept
 		iifname { "eth0", "eth1", "eth1.20" } icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-solicit, nd-router-advert, destination-unreachable, packet-too-big, time-exceeded, parameter-problem, mld-listener-query, mld-listener-report, mld-listener-done } accept
-		iifname { "eth0", "eth1.20" } ip6 saddr fe80::/10 ip6 daddr fe80::/10 udp sport 547 udp dport 546 counter accept comment "client:dhcpv6"
+		iifname "eth0" ip6 saddr fe80::/10 ip6 daddr fe80::/10 udp sport 547 udp dport 546 counter accept comment "client:dhcpv6:wan"
+		iifname "eth1.20" ip6 saddr fe80::/10 ip6 daddr fe80::/10 udp sport 547 udp dport 546 counter accept comment "client:dhcpv6:lan"
 		iifname { "eth1", "eth1.20", "wg0" } tcp dport { 8443, 22 } counter accept comment "anti-lockout:lan"
-		iifname "eth1" udp dport 67 counter accept comment "service:dhcp"
-		iifname "eth1" udp dport 547 counter accept comment "service:dhcpv6"
-		iifname { "eth1", "eth1.20", "eth2", "wg0" } meta l4proto { tcp, udp } th dport 53 fib daddr type local counter accept comment "service:dns"
-		iifname "eth0" udp dport 51820 counter accept comment "service:wireguard"
+		iifname "eth1" udp dport 67 counter accept comment "service:dhcp:lan"
+		iifname "eth1" udp dport 547 counter accept comment "service:dhcpv6:lan"
+		iifname { "eth1", "eth1.20", "wg0" } meta l4proto { tcp, udp } th dport 53 fib daddr type local counter accept comment "service:dns:lan"
+		iifname "eth2" meta l4proto { tcp, udp } th dport 53 fib daddr type local counter accept comment "service:dns:dmz"
+		iifname "eth0" udp dport 51820 counter accept comment "service:wireguard:wan"
 		iifname "eth0" jump zone_wan
 		iifname { "eth1", "eth1.20", "wg0" } jump zone_lan
 		iifname "eth2" jump zone_dmz

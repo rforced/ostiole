@@ -87,9 +87,9 @@ func TestChallengesReachTheSolverInKernel(t *testing.T) {
 	}
 
 	want := map[string]uint64{
-		"nat_prerouting/service:acme": 1,
-		"input/service:acme":          1,
-		"zone_wan/zone-unmatched":     1,
+		"nat_prerouting/service:acme:wan": 1,
+		"input/service:acme:wan":          1,
+		"zone_wan/zone-unmatched":         1,
 	}
 	var got Counters
 	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
@@ -100,7 +100,7 @@ func TestChallengesReachTheSolverInKernel(t *testing.T) {
 		if got, err = ParseCounters(raw); err != nil {
 			t.Fatal(err)
 		}
-		if got["input/service:acme"].Packets+got["zone_wan/zone-unmatched"].Packets >= 2 {
+		if got["input/service:acme:wan"].Packets+got["zone_wan/zone-unmatched"].Packets >= 2 {
 			break
 		}
 	}
