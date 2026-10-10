@@ -57,7 +57,7 @@ func TestLogLimitsFollowTheMemory(t *testing.T) {
 	}
 	want := map[string]int{
 		"firewall": 809_523, "queries": 1_888_888, "events": 184_461, "destinations": 1_416_666, "requests": 708_333,
-		"dhcp": 944_444, "wireless": 1_000_000, "wireguard": 1_000_000, "tailscale": 1_000_000,
+		"dhcp": 944_444, "wireless": 1_000_000, "wireguard": 1_000_000, "tailscale": 1_000_000, "discovery": 1_000_000,
 	}
 	if !maps.Equal(ceilings, want) {
 		t.Errorf("ceilings = %v, want %v", ceilings, want)
@@ -72,6 +72,7 @@ func TestLogLimitsWithoutTheMemory(t *testing.T) {
 		"firewall": model.MaxFirewallLogEntries, "queries": model.MaxQueryLogEntries, "events": model.MaxProxyEventEntries,
 		"destinations": model.MaxDestinationEntries, "requests": model.MaxRequestEntries, "dhcp": model.MaxDHCPLogEntries,
 		"wireless": model.MaxWirelessLogEntries, "wireguard": model.MaxPeerLogEntries, "tailscale": model.MaxPeerLogEntries,
+		"discovery": model.MaxDiscoveryLogEntries,
 	}
 	for name, cfg := range map[string]*model.Config{"saved": starter(), "none saved": nil} {
 		body, ceilings := readLogLimits(t, cfg, 0)

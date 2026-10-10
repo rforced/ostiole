@@ -22,6 +22,7 @@ import (
 	"ostiole/internal/ddns"
 	"ostiole/internal/dhcplog"
 	"ostiole/internal/diag"
+	"ostiole/internal/discoverylog"
 	"ostiole/internal/dnsblock"
 	"ostiole/internal/dnslog"
 	"ostiole/internal/engine"
@@ -139,6 +140,10 @@ type api struct {
 	// wirelesslog keeps the wireless clients' coming and going; nil
 	// answers 503.
 	wirelesslog *wirelesslog.Log
+	// discovery is the mDNS and SSDP relay; nil answers 503.
+	discovery DiscoveryRelay
+	// discoverylog keeps the packets the relay saw; nil answers 503.
+	discoverylog *discoverylog.Log
 	// wireguardLog and tailscaleLog keep the VPN peers' coming and going;
 	// nil answers 503.
 	wireguardLog, tailscaleLog *peerlog.Log
@@ -239,6 +244,7 @@ func (a *api) register(mux *router) {
 	a.registerTailscale(mux)
 	a.registerProxy(mux)
 	a.registerWireless(mux)
+	a.registerDiscovery(mux)
 	mux.HandleFunc("POST /api/v1/wireguard/keys", a.write(a.wireguardKeys))
 	mux.HandleFunc("GET /api/v1/wireguard/status", a.read(a.wireguardStatus))
 	a.registerPeerLogs(mux)
@@ -277,6 +283,10 @@ type servicesStatus struct {
 	// NTP is chronyd, which keeps the clock and answers the LAN.
 	NTPSetUp   bool `json:"ntpSetUp"`
 	NTPRunning bool `json:"ntpRunning"`
+	// Discovery is the relay that carries mDNS and SSDP between networks.
+	DiscoveryRunning    bool     `json:"discoveryRunning"`
+	DiscoveryInterfaces []string `json:"discoveryInterfaces,omitempty"`
+	DiscoveryProblem    string   `json:"discoveryProblem,omitempty"`
 	// ResolverUnreachable lists the DNS over TLS upstreams that do not
 	// answer on their port, when that is the resolver in use. Behind a
 	// network that blocks the port every name fails silently.
@@ -336,6 +346,10 @@ func (a *api) servicesStatus(w http.ResponseWriter, r *http.Request) error {
 	}
 	if a.ntp != nil {
 		st.NTPSetUp, st.NTPRunning = setUp(services.NTPUnit), units.Running(services.NTPUnit)
+	}
+	if a.discovery != nil {
+		d := a.discovery.Status()
+		st.DiscoveryRunning, st.DiscoveryInterfaces, st.DiscoveryProblem = d.Running, d.Interfaces, d.Problem
 	}
 	if a.engine != nil {
 		if cfg := a.engine.Effective(); cfg != nil && cfg.Services.DNS.Enabled && cfg.Services.DNS.Resolver == model.ResolverTLS {

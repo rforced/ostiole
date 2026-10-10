@@ -23,12 +23,15 @@ function fetchStatus() {
   return inflight
 }
 
+/** Which field says a service runs, where it is not the DHCP and DNS unit's. */
+const RUNNING = { upnp: 'upnpRunning', discovery: 'discoveryRunning' }
+
 /**
  * What a service is doing, for the badge in its page header: off when the
  * applied configuration leaves it off, otherwise running or stopped with
  * the unit. One unit answers both DHCP and DNS, so each reports its own.
  *
- * @param {'dhcp' | 'dns' | 'upnp'} service
+ * @param {'dhcp' | 'dns' | 'upnp' | 'discovery'} service
  * @param {{load?: boolean}} [opts] load: fetch on mount
  */
 export function useServicesStatus(service, { load = false } = {}) {
@@ -37,8 +40,7 @@ export function useServicesStatus(service, { load = false } = {}) {
   const state = computed(() => {
     if (!status.value || !config.loaded) return ''
     if (!config.saved?.services?.[service]?.enabled) return 'off'
-    const running = service === 'upnp' ? status.value.upnpRunning : status.value.running
-    return running ? 'running' : 'stopped'
+    return status.value[RUNNING[service] ?? 'running'] ? 'running' : 'stopped'
   })
   return { status, state, read }
 }

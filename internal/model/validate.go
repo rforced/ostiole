@@ -958,6 +958,7 @@ func (v *validator) services(c *Config, ifaces, zones map[string]bool) {
 	v.ntp(c, ifaces)
 	v.wol(c)
 	v.ddns(c, ifaces)
+	v.discovery(c, ifaces)
 	v.proxy(c, zones)
 }
 

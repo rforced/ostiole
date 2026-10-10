@@ -478,6 +478,7 @@ func (r *renderer) serviceRules() {
 	r.wireguardRules()
 	r.tailscaleRules()
 	r.upnpRules()
+	r.discoveryRules()
 	r.acmeRules()
 }
 
@@ -584,6 +585,46 @@ func (r *renderer) upnpRules() {
 	})
 }
 
+// discoveryRules let the relay hear mDNS and SSDP on its interfaces, the
+// replies to its own searches on the answering ones, and IGMP, without
+// which a snooping switch stops sending it the groups.
+func (r *renderer) discoveryRules() {
+	links := r.cfg.DiscoveryLinks()
+	if !r.cfg.DiscoveryActive() || len(links) < 2 {
+		return
+	}
+	d := r.cfg.Services.Discovery
+	var ifs, answering []string
+	for _, l := range links {
+		ifs = append(ifs, l.Interface)
+		if l.Answers {
+			answering = append(answering, l.Interface)
+		}
+	}
+	var ports []string
+	if d.MDNS {
+		r.line(fmt.Sprintf(`iifname %s udp dport %d counter accept comment "service:discovery"`, ifnameSet(ifs), mdnsPort))
+		ports = append(ports, fmt.Sprint(mdnsPort))
+	}
+	if d.SSDP {
+		r.line(fmt.Sprintf(`iifname %s udp dport %d counter accept comment "service:discovery"`, ifnameSet(ifs), ssdpPort))
+		ports = append(ports, fmt.Sprint(ssdpPort))
+	}
+	replies := fmt.Sprintf("%d-%d", model.DiscoveryReplyPortFirst, model.DiscoveryReplyPortLast)
+	r.line(fmt.Sprintf(`iifname %s udp dport %s fib daddr type local counter accept comment "service:discovery"`, ifnameSet(answering), replies))
+	r.sysFor(ifs, SystemRule{
+		Chain: "input", Action: "accept", Protocol: string(model.ProtocolUDP),
+		Source: "any", Destination: firewallDest(append(ports, replies)),
+		Description: "mDNS and SSDP for the discovery relay", Keys: []string{"input/service:discovery"}, Setting: "discovery",
+	})
+	r.line(fmt.Sprintf(`iifname %s ip protocol igmp counter accept comment "service:discovery:igmp"`, ifnameSet(ifs)))
+	r.sysFor(ifs, SystemRule{
+		Chain: "input", Action: "accept", Protocol: "igmp",
+		Source: "any", Destination: firewallDest(nil),
+		Description: "IGMP for the discovery relay", Keys: []string{"input/service:discovery:igmp"}, Setting: "discovery",
+	})
+}
+
 // wireguardRules open the listening ports of tunnels on external zones,
 // where peers dial in from. A tunnel nobody can reach is not a tunnel.
 func (r *renderer) wireguardRules() {
@@ -668,6 +709,7 @@ const (
 
 const (
 	ssdpPort     = 1900
+	mdnsPort     = 5353
 	pcpPort      = 5351
 	upnpHTTPPort = 2189
 )

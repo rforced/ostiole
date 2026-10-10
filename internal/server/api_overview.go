@@ -948,6 +948,7 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 			})
 		}
 	}
+	out = append(out, a.discoveryWarnings()...)
 	// A backup that is not reaching the bucket is only discovered when it
 	// is needed, which is the worst moment to discover it.
 	if cfg != nil && cfg.Backup.Remote.Enabled && a.crons != nil {

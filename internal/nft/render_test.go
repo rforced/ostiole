@@ -942,3 +942,35 @@ func TestOneToOneComesBeforeOutboundNAT(t *testing.T) {
 		})
 	}
 }
+
+// A relay with one link left has nothing to relay to, so it opens nothing.
+func TestDiscoveryRulesNeedTwoLinks(t *testing.T) {
+	t.Parallel()
+	const igmp = `ip protocol igmp counter accept comment "service:discovery:igmp"`
+	cfg := loadConfig(t, "testdata/discovery.json")
+	cfg.Services.Discovery.Interfaces[0].Answers = true
+	got, err := Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, igmp) || !strings.Contains(got, `udp dport 5353`) {
+		t.Errorf("two links, no relay rows:\n%s", got)
+	}
+	rows, err := SystemRules(cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, ok := findRow(rows, "mDNS and SSDP for the discovery relay"); !ok || r.Setting != "discovery" {
+		t.Errorf("relay row = %+v, %v", r, ok)
+	}
+
+	in, _ := cfg.Interface("eth1.30")
+	in.Enabled = false
+	got, err = Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(got, "service:discovery") {
+		t.Errorf("one link, relay rows:\n%s", got)
+	}
+}

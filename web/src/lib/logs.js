@@ -1,3 +1,4 @@
+import { discoveryActive } from '@/lib/discovery'
 import { proxyServes } from '@/lib/proxyStatus'
 
 /**
@@ -16,6 +17,7 @@ export const LOGS = {
   wireless: { entries: 20000, max: 1000000, bytes: 200 },
   wireguard: { entries: 10000, max: 1000000, bytes: 200 },
   tailscale: { entries: 10000, max: 1000000, bytes: 200 },
+  discovery: { entries: 10000, max: 1000000, bytes: 200 },
 }
 
 /** How many days an entry stays in memory, System › General: the default and the most. */
@@ -35,6 +37,7 @@ export const FILE_LOGS = [
   'wireless',
   'wireguard',
   'tailscale',
+  'discovery',
 ]
 
 /** What a sentence calls each log kept in files. */
@@ -47,6 +50,7 @@ export const FILE_LOG_NAMES = {
   wireless: 'Wireless log',
   wireguard: 'WireGuard log',
   tailscale: 'Tailscale log',
+  discovery: 'Discovery log',
   drives: 'Drive history',
   links: 'Traffic per interface',
   devices: 'Traffic per device',
@@ -79,7 +83,8 @@ export function records(cfg) {
  * firewall log always is; the query log while it and the DNS server are
  * on; the WAF events while the proxy has something to serve, and its
  * requests while the level keeps them too; the DHCP, wireless and VPN
- * peer logs while their service is on and the level keeps them.
+ * peer logs while their service is on and the level keeps them; the
+ * discovery log while the relay runs and the level keeps it.
  * @param {object} [cfg]
  * @returns {Record<string, {on: boolean, entries: number}>}
  */
@@ -118,6 +123,10 @@ export function logSettings(cfg) {
     tailscale: {
       on: (cfg?.interfaces ?? []).some((i) => i.enabled && i.tailscale) && records(cfg),
       entries: cfg?.vpn?.tailscaleLog?.entries || LOGS.tailscale.entries,
+    },
+    discovery: {
+      on: discoveryActive(cfg),
+      entries: cfg?.services?.discovery?.log?.entries || LOGS.discovery.entries,
     },
   }
 }

@@ -42,9 +42,9 @@ type SystemRule struct {
 	// count is the sampling at its limit.
 	LogKeys []string `json:"logKeys,omitempty"`
 	// Setting names what controls the rule, so the page can link to it:
-	// zone, interface, dhcp, dns, ntp, enforcement, upnp, proxy, wireguard,
-	// tailscale, nat, or routing. Empty for the baseline, which nothing turns
-	// off.
+	// zone, interface, dhcp, dns, ntp, enforcement, upnp, discovery, proxy,
+	// wireguard, tailscale, nat, or routing. Empty for the baseline, which
+	// nothing turns off.
 	Setting string `json:"setting,omitempty"`
 }
 

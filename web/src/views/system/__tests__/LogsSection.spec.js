@@ -149,6 +149,7 @@ describe('LogsSection', () => {
           'Wireless log',
           'WireGuard log',
           'Tailscale log',
+          'Discovery log',
           'Drive history',
           'Traffic per interface',
           'Traffic per device',

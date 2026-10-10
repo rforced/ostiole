@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"ostiole/internal/dhcplog"
+	"ostiole/internal/discoverylog"
 	"ostiole/internal/dnslog"
 	"ostiole/internal/fwlog"
 	"ostiole/internal/gateway"
@@ -92,6 +93,9 @@ func (a *api) clearables() []clearable {
 	if a.wirelesslog != nil {
 		add(wirelesslog.FileName, a.wirelesslog.Clear)
 	}
+	if a.discoverylog != nil {
+		add(discoverylog.FileName, a.discoverylog.Clear)
+	}
 	if a.wireguardLog != nil {
 		add(peerlog.WireGuard.Name, a.wireguardLog.Clear)
 	}
@@ -170,6 +174,7 @@ var logFileNames = map[string]string{
 	requestlog.FileName:      "proxy request log",
 	dhcplog.FileName:         "DHCP log",
 	wirelesslog.FileName:     "wireless log",
+	discoverylog.FileName:    "discovery log",
 	peerlog.WireGuard.Name:   "WireGuard log",
 	peerlog.Tailscale.Name:   "Tailscale log",
 	smart.HistoryFileName:    "drive history",

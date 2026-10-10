@@ -21,3 +21,25 @@ export function internalInterfaces(draft) {
 
 /** The interfaces the DNS server listens on when none are picked. */
 export const dnsListenInterfaces = internalInterfaces
+
+/**
+ * The interfaces a link-layer packet can go out on, read the way the
+ * server's CheckWake reads a configuration: in a zone that is not
+ * external, with Ethernet under them, and not a port of a bridge, a bond
+ * or a PPPoE session. Wake on LAN and the discovery relay both use it.
+ * Interfaces that are off are included; the caller decides about those.
+ *
+ * @param {object | null | undefined} cfg a configuration, draft or saved
+ */
+export function segmentInterfaces(cfg) {
+  if (!cfg) return []
+  const zones = new Set((cfg.zones ?? []).filter((z) => !z.external).map((z) => z.name))
+  const ports = new Set()
+  for (const i of cfg.interfaces ?? []) {
+    for (const m of (i.bridge ?? i.bond)?.members ?? []) ports.add(m)
+    if (i.pppoe?.parent) ports.add(i.pppoe.parent)
+  }
+  return (cfg.interfaces ?? []).filter(
+    (i) => !i.wireguard && !i.tailscale && !i.pppoe && !ports.has(i.name) && zones.has(i.zone),
+  )
+}

@@ -24,6 +24,7 @@ const SETTINGS = {
   zone: '/interfaces#zones',
   interface: '/interfaces',
   dhcp: '/services/dhcp',
+  discovery: '/services/discovery',
   shaping: '/firewall/shaping',
   dns: '/services/dns',
   enforcement: '/services/dns#enforcement',

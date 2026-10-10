@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 
 import { ApiError, api } from '@/lib/api'
 import { normalizeName } from '@/lib/blocking'
+import { DISCOVERY_DEFAULT } from '@/lib/discovery'
 import { exclusionText, sameExclusion } from '@/lib/exclusions'
 import { overrideKey } from '@/lib/hosts'
 import { certificateProvider, providerFor } from '@/lib/providers'
@@ -247,6 +248,9 @@ export const useConfigStore = defineStore('config', () => {
     }
     if ((d.services?.dns?.interfaces ?? []).includes(name)) out.push(`DNS listener on ${name}`)
     if ((d.services?.ntp?.interfaces ?? []).includes(name)) out.push(`time served on ${name}`)
+    if ((d.services?.discovery?.interfaces ?? []).some((l) => l.interface === name)) {
+      out.push(`discovery relay on ${name}`)
+    }
     if (top) out.push(...addressDependents(going))
     for (const w of wolDevices.value) {
       if (w.interface === name) {
@@ -379,6 +383,10 @@ export const useConfigStore = defineStore('config', () => {
     if (dns?.interfaces) dns.interfaces = dns.interfaces.filter((n) => n !== name)
     const served = d.services?.ntp?.interfaces
     if (served) setNTP({ interfaces: served.filter((n) => n !== name) })
+    const relayed = d.services?.discovery?.interfaces
+    if (relayed?.some((l) => l.interface === name)) {
+      setDiscovery({ interfaces: relayed.filter((l) => l.interface !== name) })
+    }
     if (top) dropAddresses(going)
     for (const w of [...wolDevices.value]) if (w.interface === name) dropWoLDevice(w.id)
     for (const r of [...ddnsRecords.value]) if (r.interface === name) dropDdnsRecord(r.id)
@@ -914,6 +922,40 @@ export const useConfigStore = defineStore('config', () => {
     const to = index + delta
     if (to < 0 || to >= list.length) return
     ;[list[index], list[to]] = [list[to], list[index]]
+  }
+
+  // ---- discovery relay -------------------------------------------------
+
+  /**
+   * The relay block as the draft has it, or the default a router without
+   * one reads as. Reading never writes the draft: changes go through
+   * setDiscovery, so an untouched page leaves the draft as it was.
+   */
+  function ensureDiscovery() {
+    return draft.value?.services?.discovery ?? { ...DISCOVERY_DEFAULT }
+  }
+
+  /**
+   * Change the relay block. Empty lists and a log at its default are
+   * dropped, and so is the block once it is the default again.
+   *
+   * @param {object} patch fields to change, null to drop one
+   */
+  function setDiscovery(patch) {
+    const services = ensureServices()
+    const block = { ...DISCOVERY_DEFAULT, ...services.discovery }
+    for (const [k, v] of Object.entries(patch)) {
+      if (v == null) delete block[k]
+      else block[k] = clone(v)
+    }
+    if (!block.interfaces?.length) delete block.interfaces
+    if (!block.services?.length) delete block.services
+    if (!block.log?.entries) delete block.log
+    const isDefault =
+      Object.keys(block).length === Object.keys(DISCOVERY_DEFAULT).length &&
+      Object.entries(DISCOVERY_DEFAULT).every(([k, v]) => block[k] === v)
+    if (isDefault) delete services.discovery
+    else services.discovery = block
   }
 
   // ---- time ------------------------------------------------------------
@@ -1778,6 +1820,8 @@ export const useConfigStore = defineStore('config', () => {
     interfaces,
     ntp,
     setNTP,
+    ensureDiscovery,
+    setDiscovery,
     aliases,
     rules,
     protection,

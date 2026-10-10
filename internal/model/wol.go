@@ -61,18 +61,31 @@ func ParseWakeMAC(s string) (net.HardwareAddr, error) {
 // Whether the interface is on is left to the caller, since a device on
 // one that is off stays saved for when it comes back.
 func (c *Config) CheckWake(name string) error {
+	return c.insideLink(name, linkWords{carry: "a wake", member: "wake on", inside: "a wake goes to the inside"})
+}
+
+// linkWords are what insideLink's refusals say the link was wanted for.
+type linkWords struct {
+	carry  string
+	member string
+	inside string
+}
+
+// insideLink is the rule Wake on LAN and the discovery relay share: a
+// known Ethernet link on the inside, not part of a bridge or bond.
+func (c *Config) insideLink(name string, w linkWords) error {
 	in, ok := c.Interface(name)
 	if !ok {
 		return fmt.Errorf("unknown interface %q", name)
 	}
 	switch in.Kind() {
 	case KindWireGuard, KindTailscale:
-		return fmt.Errorf("%q is a tunnel, with no Ethernet to carry a wake", name)
+		return fmt.Errorf("%q is a tunnel, with no Ethernet to carry %s", name, w.carry)
 	case KindPPPoE:
-		return fmt.Errorf("%q is a dialled session, with no Ethernet to carry a wake", name)
+		return fmt.Errorf("%q is a dialled session, with no Ethernet to carry %s", name, w.carry)
 	}
 	if master, ok := c.MasterOf()[name]; ok {
-		return fmt.Errorf("%q is part of %q, so wake on %q instead", name, master, master)
+		return fmt.Errorf("%q is part of %q, so %s %q instead", name, master, w.member, master)
 	}
 	if session, ok := c.PPPoEParents()[name]; ok {
 		return fmt.Errorf("%q carries the session %q, which faces the internet", name, session)
@@ -82,7 +95,7 @@ func (c *Config) CheckWake(name string) error {
 	case !ok:
 		return fmt.Errorf("interface %q has no zone, so it is not on the inside", name)
 	case z.External:
-		return fmt.Errorf("interface %q is in an external zone; a wake goes to the inside", name)
+		return fmt.Errorf("interface %q is in an external zone; %s", name, w.inside)
 	}
 	return nil
 }

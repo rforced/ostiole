@@ -30,6 +30,7 @@ var logNames = map[string]logName{
 	"wireless.log.entries":                  {key: "wireless", name: "wireless log"},
 	"vpn.wireguardLog.entries":              {key: "wireguard", name: "WireGuard log"},
 	"vpn.tailscaleLog.entries":              {key: "tailscale", name: "Tailscale log"},
+	"services.discovery.log.entries":        {key: "discovery", name: "discovery log"},
 }
 
 type logLimit struct {
@@ -90,7 +91,7 @@ func logsMemoryWarnings(cfg *model.Config, b model.MemoryBudget) []Warning {
 			Detail: "Full, the logs in memory take " + model.FormatBytes(peak) + ". This router has " +
 				model.FormatBytes(float64(room)) + " for them. Set fewer entries under Firewall › Log, " +
 				"Services › DNS › Queries, Services › Reverse proxy › Events, Services › Reverse proxy › Requests, " +
-				"Services › DHCP › Log, Traffic › Destinations, Wireless › Log, VPN › WireGuard › Log or " +
+				"Services › DHCP › Log, Services › Discovery › Log, Traffic › Destinations, Wireless › Log, VPN › WireGuard › Log or " +
 				"VPN › Tailscale › Log.",
 		})
 	}

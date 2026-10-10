@@ -449,6 +449,11 @@ export const api = {
     /** A page of what the DHCP server said of its clients, and whether the level keeps it. */
     dhcpLog: (params = {}, signal) => get(withQuery('/dhcp/log', params), signal),
     clearDhcpLog: () => request('DELETE', '/dhcp/log'),
+    /** A page of the packets the discovery relay saw, relayed or dropped. */
+    discoveryLog: (params = {}, signal) => get(withQuery('/discovery/log', params), signal),
+    clearDiscoveryLog: () => request('DELETE', '/discovery/log'),
+    /** @returns {Promise<{announcements: object[]}>} what devices said they offer */
+    discoveryAnnouncements: (signal) => get('/discovery/announcements', signal),
   },
   upnp: {
     mappings: () => get('/upnp/mappings'),

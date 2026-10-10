@@ -155,6 +155,7 @@ func TestTheLogsPageMirrorsTheModel(t *testing.T) {
 		"wireless":     {DefaultWirelessLogEntries, MaxWirelessLogEntries, WirelessLogBytes},
 		"wireguard":    {DefaultPeerLogEntries, MaxPeerLogEntries, PeerLogBytes},
 		"tailscale":    {DefaultPeerLogEntries, MaxPeerLogEntries, PeerLogBytes},
+		"discovery":    {DefaultDiscoveryLogEntries, MaxDiscoveryLogEntries, DiscoveryLogBytes},
 	} {
 		re := regexp.MustCompile(log + `: \{ entries: (\d+), max: (\d+), bytes: (\d+) \}`)
 		m := re.FindStringSubmatch(string(raw))

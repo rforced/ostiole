@@ -1931,6 +1931,8 @@ type Services struct {
 	// DDNS keeps names at a DNS provider pointed at this router, so they
 	// follow the WAN when it renumbers.
 	DDNS DDNS `json:"ddns,omitzero"`
+	// Discovery relays mDNS and SSDP between inside networks.
+	Discovery Discovery `json:"discovery,omitzero"`
 }
 
 // UPnP lets a client on the LAN open a hole through the firewall for

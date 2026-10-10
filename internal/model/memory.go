@@ -96,6 +96,7 @@ type LogCeilings struct {
 	DHCPLog      int `json:"dhcpLog"`
 	WirelessLog  int `json:"wirelessLog"`
 	PeerLog      int `json:"peerLog"`
+	DiscoveryLog int `json:"discoveryLog"`
 }
 
 // Ceilings are each log's ceiling here.
@@ -109,6 +110,7 @@ func (b MemoryBudget) Ceilings(c *Config) LogCeilings {
 		DHCPLog:      b.Ceiling(c, DHCPLogBytes, MaxDHCPLogEntries),
 		WirelessLog:  b.Ceiling(c, WirelessLogBytes, MaxWirelessLogEntries),
 		PeerLog:      b.Ceiling(c, PeerLogBytes, MaxPeerLogEntries),
+		DiscoveryLog: b.Ceiling(c, DiscoveryLogBytes, MaxDiscoveryLogEntries),
 	}
 }
 
@@ -124,6 +126,7 @@ type LogSizes struct {
 	WirelessLog  int
 	WireGuardLog int
 	TailscaleLog int
+	DiscoveryLog int
 }
 
 // Sizes clamps every log's setting to its ceiling.
@@ -140,6 +143,7 @@ func (b MemoryBudget) Sizes(c *Config) LogSizes {
 		WirelessLog:  min(c.Wireless.Log.Size(DefaultWirelessLogEntries), ce.WirelessLog),
 		WireGuardLog: min(c.VPN.WireGuardLog.Size(DefaultPeerLogEntries), ce.PeerLog),
 		TailscaleLog: min(c.VPN.TailscaleLog.Size(DefaultPeerLogEntries), ce.PeerLog),
+		DiscoveryLog: min(c.Services.Discovery.Log.Size(DefaultDiscoveryLogEntries), ce.DiscoveryLog),
 	}
 }
 
@@ -165,6 +169,7 @@ func (b MemoryBudget) Sized(c *Config) *Config {
 		{c.Wireless.Log.Size(DefaultWirelessLogEntries), s.WirelessLog, func(c *Config, n int) { c.Wireless.Log.Entries = n }},
 		{c.VPN.WireGuardLog.Size(DefaultPeerLogEntries), s.WireGuardLog, func(c *Config, n int) { c.VPN.WireGuardLog.Entries = n }},
 		{c.VPN.TailscaleLog.Size(DefaultPeerLogEntries), s.TailscaleLog, func(c *Config, n int) { c.VPN.TailscaleLog.Entries = n }},
+		{c.Services.Discovery.Log.Size(DefaultDiscoveryLogEntries), s.DiscoveryLog, func(c *Config, n int) { c.Services.Discovery.Log.Entries = n }},
 	}
 	var out *Config
 	for _, l := range set {

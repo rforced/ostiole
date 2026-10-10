@@ -3,11 +3,14 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"ostiole/internal/install"
+	"ostiole/internal/model"
 	"ostiole/internal/nft"
 	"ostiole/internal/services"
 )
@@ -33,6 +36,10 @@ func newServicesCmd(g *globals) *cobra.Command {
 			p := services.NewUPnP()
 			fmt.Fprintf(w, "upnp set up\t%v\n", p.Installed(ctx))
 			fmt.Fprintf(w, "upnp running\t%v\n", p.Active(ctx))
+			if cfg, err := g.store().Load(); err == nil {
+				state, _ := install.ExecSystemctl{}.Run(ctx, "is-active", install.DaemonUnit)
+				fmt.Fprintf(w, "discovery\t%s\n", discoveryState(cfg, state == "active"))
+			}
 			return w.Flush()
 		},
 	}
@@ -83,4 +90,20 @@ with the daemon and are not shown.`,
 	}
 	cmd.AddCommand(leases, mappings)
 	return cmd
+}
+
+// discoveryState is the relay's row: the networks it carries between, off,
+// or stopped while the daemon it runs in is not running.
+func discoveryState(cfg *model.Config, daemonUp bool) string {
+	if cfg == nil || !cfg.DiscoveryActive() {
+		return "off"
+	}
+	if !daemonUp {
+		return "stopped"
+	}
+	var names []string
+	for _, l := range cfg.DiscoveryLinks() {
+		names = append(names, l.Interface)
+	}
+	return "relaying on " + strings.Join(names, ", ")
 }

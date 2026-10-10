@@ -22,6 +22,7 @@ import (
 	"ostiole/internal/ddns"
 	"ostiole/internal/dhcplog"
 	"ostiole/internal/diag"
+	"ostiole/internal/discoverylog"
 	"ostiole/internal/dnsblock"
 	"ostiole/internal/dnslog"
 	"ostiole/internal/engine"
@@ -147,6 +148,11 @@ type Deps struct {
 	// WirelessLog keeps the wireless clients' coming and going; nil hides
 	// the log.
 	WirelessLog *wirelesslog.Log
+	// Discovery is the relay that carries mDNS and SSDP between networks;
+	// nil hides its status and announcements.
+	Discovery DiscoveryRelay
+	// DiscoveryLog keeps the packets the relay saw; nil hides the log.
+	DiscoveryLog *discoverylog.Log
 	// WireGuardLog and TailscaleLog keep the VPN peers' coming and going;
 	// nil hides them.
 	WireGuardLog, TailscaleLog *peerlog.Log
@@ -243,6 +249,8 @@ func build(d Deps) (http.Handler, *api) {
 		requests:        d.Requests,
 		dhcplog:         d.DHCPLog,
 		wirelesslog:     d.WirelessLog,
+		discovery:       d.Discovery,
+		discoverylog:    d.DiscoveryLog,
 		wireguardLog:    d.WireGuardLog,
 		tailscaleLog:    d.TailscaleLog,
 		logFiles:        d.LogFiles,

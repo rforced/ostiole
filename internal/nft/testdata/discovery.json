@@ -1,0 +1,106 @@
+{
+  "version": 14,
+  "system": {
+    "hostname": "discovery-fw",
+    "management": {
+      "webPort": 443,
+      "sshPort": 22
+    }
+  },
+  "zones": [
+    {
+      "name": "wan",
+      "external": true
+    },
+    {
+      "name": "lan",
+      "antiLockout": true
+    },
+    {
+      "name": "things"
+    }
+  ],
+  "interfaces": [
+    {
+      "name": "eth0",
+      "zone": "wan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "dhcp"
+      },
+      "ipv6": {
+        "mode": "slaac"
+      }
+    },
+    {
+      "name": "eth1",
+      "zone": "lan",
+      "enabled": true,
+      "ipv4": {
+        "mode": "static",
+        "address": "192.168.1.1/24"
+      },
+      "ipv6": {
+        "mode": "none"
+      }
+    },
+    {
+      "name": "eth1.30",
+      "zone": "things",
+      "enabled": true,
+      "vlan": {
+        "parent": "eth1",
+        "id": 30
+      },
+      "ipv4": {
+        "mode": "static",
+        "address": "192.168.30.1/24"
+      },
+      "ipv6": {
+        "mode": "none"
+      }
+    }
+  ],
+  "rules": [
+    {
+      "id": "lan-out",
+      "description": "Allow LAN to any",
+      "enabled": true,
+      "zone": "lan",
+      "action": "accept",
+      "protocol": "any",
+      "source": {},
+      "destination": {}
+    }
+  ],
+  "nat": {
+    "outbound": {
+      "mode": "automatic"
+    }
+  },
+  "services": {
+    "dhcp": {
+      "enabled": false
+    },
+    "dns": {
+      "enabled": false
+    },
+    "discovery": {
+      "enabled": true,
+      "mdns": true,
+      "ssdp": true,
+      "interfaces": [
+        {
+          "interface": "eth1",
+          "asks": true,
+          "answers": false
+        },
+        {
+          "interface": "eth1.30",
+          "asks": false,
+          "answers": true
+        }
+      ]
+    }
+  }
+}

@@ -1012,7 +1012,7 @@ func TestWarnsWhenTheLogsCouldOutgrowTheirMemory(t *testing.T) {
 	if w == nil || w.Kind != "logs" || w.Title != "The logs could take more memory than this router has for them" ||
 		!strings.HasPrefix(w.Detail, "Full, the logs in memory take 897 MB. This router has 875 MB for them. Set fewer entries under Firewall › Log, ") ||
 		!strings.HasSuffix(w.Detail, "Services › Reverse proxy › Events, Services › Reverse proxy › Requests, Services › DHCP › Log, "+
-			"Traffic › Destinations, Wireless › Log, VPN › WireGuard › Log or VPN › Tailscale › Log.") {
+			"Services › Discovery › Log, Traffic › Destinations, Wireless › Log, VPN › WireGuard › Log or VPN › Tailscale › Log.") {
 		t.Errorf("warning = %+v", w)
 	}
 	if w := find(1_500_000_000); w != nil {

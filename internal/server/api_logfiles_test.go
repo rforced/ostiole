@@ -17,6 +17,7 @@ import (
 
 	"ostiole/internal/auth"
 	"ostiole/internal/dhcplog"
+	"ostiole/internal/discoverylog"
 	"ostiole/internal/dnsblock"
 	"ostiole/internal/dnslog"
 	"ostiole/internal/fwlog"
@@ -151,7 +152,7 @@ func TestLogFileTroubleIsAWarning(t *testing.T) {
 func TestEveryLogInFilesHasAName(t *testing.T) {
 	t.Parallel()
 	for _, name := range []string{fwlog.FileName, dnslog.FileName, waflog.FileName, requestlog.FileName, dhcplog.FileName,
-		wirelesslog.FileName, peerlog.WireGuard.Name, peerlog.Tailscale.Name, smart.HistoryFileName,
+		wirelesslog.FileName, discoverylog.FileName, peerlog.WireGuard.Name, peerlog.Tailscale.Name, smart.HistoryFileName,
 		traffic.LinksFile, traffic.DevicesFile, traffic.DestinationsFile} {
 		if logFileNames[name] == "" {
 			t.Errorf("no name for %s", name)
@@ -167,6 +168,7 @@ var clearPaths = map[string]string{
 	requestlog.FileName:      "/api/v1/proxy/requests",
 	dhcplog.FileName:         "/api/v1/dhcp/log",
 	wirelesslog.FileName:     "/api/v1/wireless/log",
+	discoverylog.FileName:    "/api/v1/discovery/log",
 	peerlog.WireGuard.Name:   "/api/v1/wireguard/log",
 	peerlog.Tailscale.Name:   "/api/v1/tailscale/log",
 	smart.HistoryFileName:    "/api/v1/diagnostics/drives/history",
@@ -198,6 +200,8 @@ func keepEveryLog(t *testing.T, d *Deps, dir string) map[string]func() int {
 	d.DHCPLog.Add(dhcplog.Event{Stamp: stamp, Message: "ACK", Interface: "eth1", Address: "10.0.0.5"})
 	d.WirelessLog = wirelesslog.New()
 	d.WirelessLog.Add(wirelesslog.Event{Stamp: stamp, Event: "joined", Interface: "wlan0"})
+	d.DiscoveryLog = discoverylog.New()
+	d.DiscoveryLog.Add(discoverylog.Event{Stamp: stamp, Protocol: "mdns", From: "eth1", Source: "192.0.2.7"})
 	d.WireGuardLog, d.TailscaleLog = peerlog.New(), peerlog.New()
 	d.WireGuardLog.Add(peerlog.Event{Stamp: stamp, Event: "connected", Tunnel: "wg0", Peer: "phone"})
 	d.TailscaleLog.Add(peerlog.Event{Stamp: stamp, Event: "online", Peer: "laptop"})
@@ -227,6 +231,7 @@ func keepEveryLog(t *testing.T, d *Deps, dir string) map[string]func() int {
 		requestlog.FileName:    held(d.Requests.Held),
 		dhcplog.FileName:       held(d.DHCPLog.Held),
 		wirelesslog.FileName:   held(d.WirelessLog.Held),
+		discoverylog.FileName:  held(d.DiscoveryLog.Held),
 		peerlog.WireGuard.Name: held(d.WireGuardLog.Held),
 		peerlog.Tailscale.Name: held(d.TailscaleLog.Held),
 		smart.HistoryFileName:  held(d.DriveHistory.Held),

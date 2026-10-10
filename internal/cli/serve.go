@@ -29,6 +29,8 @@ import (
 	"ostiole/internal/cron"
 	"ostiole/internal/ddns"
 	"ostiole/internal/dhcplog"
+	"ostiole/internal/discovery"
+	"ostiole/internal/discoverylog"
 	"ostiole/internal/dnsblock"
 	"ostiole/internal/dnslog"
 	"ostiole/internal/dnsprovider"
@@ -571,6 +573,16 @@ at your own.`,
 			reads.start(ctx, log, "wireless log files", "wireless log", func() {
 				readRing(reads.source(), wirelessLog, wirelesslog.Files(wirelessLog), wirelesslog.Settings, files, reads.skip, log)
 			}, wirelessFeed.Run)
+			// The mDNS and SSDP relay needs no privilege, so it runs as any
+			// user. It idles until the follower hands it a configuration,
+			// which waits for the log to be read back.
+			discoveryLog := discoverylog.New()
+			relay := discovery.New(log, discoveryLog)
+			deps.Discovery, deps.DiscoveryLog = relay, discoveryLog
+			go panics.Loop(ctx, log, "discovery relay", relay.Run)
+			reads.start(ctx, log, "discovery log files", "discovery follower", func() {
+				readRing(reads.source(), discoveryLog, discoverylog.Files(discoveryLog), discoverylog.Settings, files, reads.skip, log)
+			}, (&discoverylog.Follower{Relay: relay, Log: discoveryLog, Source: sized}).Run)
 			// The VPN peers' coming and going, read every few seconds while
 			// the level keeps it. Reading them needs root.
 			for _, kind := range []peerlog.Kind{peerlog.WireGuard, peerlog.Tailscale} {

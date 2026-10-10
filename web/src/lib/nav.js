@@ -127,6 +127,17 @@ export const NAV = [
         ],
       },
       {
+        path: 'discovery',
+        ownHeader: true,
+        label: 'Discovery',
+        view: () => import('@/views/services/DiscoveryPage.vue'),
+        tabs: [
+          { value: 'settings', label: 'Settings' },
+          { value: 'log', label: 'Log' },
+          { value: 'announcements', label: 'Announcements' },
+        ],
+      },
+      {
         path: 'dns',
         ownHeader: true,
         label: 'DNS',

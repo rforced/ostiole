@@ -135,6 +135,8 @@ func (c *Config) memoryLogs() []memoryLog {
 			DefaultDHCPLogEntries, MaxDHCPLogEntries, DHCPLogBytes},
 		{"wireless.log.entries", c.WirelessEnabled() && records, c.Wireless.Log.Size(DefaultWirelessLogEntries),
 			DefaultWirelessLogEntries, MaxWirelessLogEntries, WirelessLogBytes},
+		{"services.discovery.log.entries", c.DiscoveryActive(), c.Services.Discovery.Log.Size(DefaultDiscoveryLogEntries),
+			DefaultDiscoveryLogEntries, MaxDiscoveryLogEntries, DiscoveryLogBytes},
 		{"vpn.wireguardLog.entries", c.WireGuardEnabled() && records, c.VPN.WireGuardLog.Size(DefaultPeerLogEntries),
 			DefaultPeerLogEntries, MaxPeerLogEntries, PeerLogBytes},
 		{"vpn.tailscaleLog.entries", c.TailscaleEnabled() && records, c.VPN.TailscaleLog.Size(DefaultPeerLogEntries),
