@@ -13,7 +13,10 @@ import (
 	"golang.org/x/net/ipv6"
 )
 
-var errNoAddress = errors.New("no gateway address yet")
+var (
+	errNoAddress   = errors.New("no gateway address yet")
+	errAddressLost = errors.New("gateway address lost")
+)
 
 // ICMPProber pings the monitor address. It needs a raw socket, which the
 // daemon has because it runs as root.

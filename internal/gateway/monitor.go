@@ -5,10 +5,13 @@ package gateway
 import (
 	"cmp"
 	"context"
+	"errors"
 	"log/slog"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"ostiole/internal/model"
@@ -457,7 +460,7 @@ func (m *Monitor) tick(ctx context.Context, all bool) {
 		states = append(states, st)
 		if all || st.next.IsZero() || !now.Before(st.next) {
 			due = append(due, st)
-			st.next = now.Add(m.interval(st.gw))
+			st.next = nextProbe(st.next, now, m.interval(st.gw))
 		}
 	}
 	timeout := m.Timeout
@@ -487,6 +490,17 @@ func (m *Monitor) tick(ctx context.Context, all bool) {
 	if m.OnTick != nil && len(due) > 0 {
 		m.OnTick()
 	}
+}
+
+// nextProbe follows the schedule rather than the tick that ran the probe,
+// so a second-long ticker does not make every probe a little later. One
+// that is more than an interval behind starts afresh from now instead of
+// firing the missed probes in a burst.
+func nextProbe(next, now time.Time, interval time.Duration) time.Time {
+	if !next.IsZero() && !now.Before(next) && now.Sub(next) < interval {
+		return next.Add(interval)
+	}
+	return now.Add(interval)
 }
 
 // syncShaping puts back anything the queues have lost. It warns rather
@@ -525,9 +539,50 @@ func (m *Monitor) syncPolicy(cfg *model.Config, states []*state) {
 	m.mu.Unlock()
 	targets := append(policy.Plan(cfg, hops), policy.Translations(cfg)...)
 	targets = append(targets, policy.Lines(cfg, func(iface string) bool { return up[iface] || !watched[iface] })...)
-	if err := m.Policy.Sync(targets); err != nil {
-		m.Log.Warn("could not update policy routing", "err", err)
+	err := m.Policy.Sync(targets)
+	if err == nil {
+		return
 	}
+	// The hop policy routing has is the last probe's, so a line that loses
+	// its carrier between probes has the kernel refuse it. That is the
+	// outage, not a fault.
+	if waiting := m.addressless(states); len(waiting) > 0 && unreachable(err) {
+		for _, gw := range waiting {
+			m.Log.Info("policy routing waits for an address", "gateway", gw.Name, "interface", gw.Interface, "err", err)
+		}
+		return
+	}
+	m.Log.Warn("could not update policy routing", "err", err)
+}
+
+// addressless are the gateways that learn their next hop and have none in
+// the kernel now.
+func (m *Monitor) addressless(states []*state) []model.Gateway {
+	if m.Router == nil {
+		return nil
+	}
+	var gws []model.Gateway
+	m.mu.Lock()
+	for _, st := range states {
+		if !st.tunnel && st.gw.Address == "" {
+			gws = append(gws, st.gw)
+		}
+	}
+	m.mu.Unlock()
+	return slices.DeleteFunc(gws, func(gw model.Gateway) bool {
+		v4, _ := m.Router.Resolve(Status{Name: gw.Name, Interface: gw.Interface, Metric: gw.GatewayMetric(), learned: true})
+		return v4 != ""
+	})
+}
+
+// unreachable reports whether every error in err is the kernel refusing a
+// next hop it has no route to.
+func unreachable(err error) bool {
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		errs := joined.Unwrap()
+		return len(errs) > 0 && !slices.ContainsFunc(errs, func(e error) bool { return !unreachable(e) })
+	}
+	return errors.Is(err, syscall.ENETUNREACH) || strings.Contains(err.Error(), "network is unreachable")
 }
 
 // target is an address a gateway is probed at, in a family; an empty
@@ -600,14 +655,27 @@ type legChange struct {
 	err              string
 }
 
+// missing is the error for a family with nothing to probe: lost while its
+// leg had a next hop, and until one comes back, otherwise not there yet.
+func (m *Monitor) missing(st *state, family string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if l := st.leg(family); l != nil && (l.hop != "" || l.lastError == errAddressLost.Error()) {
+		return errAddressLost
+	}
+	return errNoAddress
+}
+
 func (m *Monitor) probe(ctx context.Context, st *state, timeout time.Duration) {
 	gw, targets, hop := m.targets(st)
 	results := make([]result, 0, len(targets))
 	for _, t := range targets {
 		var rtt time.Duration
-		err := errNoAddress
+		var err error
 		if t.addr != "" {
 			rtt, err = m.Prober.Probe(ctx, t.addr, gw.Interface, timeout)
+		} else {
+			err = m.missing(st, t.family)
 		}
 		results = append(results, result{target: t, rtt: rtt, err: err, at: m.now()})
 	}

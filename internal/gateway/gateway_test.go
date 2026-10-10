@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math"
 	"net"
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -763,5 +765,111 @@ func TestARemovedPolicyRouteIsPutBackWithoutWaitingForAProbe(t *testing.T) {
 	defer prober.mu.Unlock()
 	if prober.probes != probes {
 		t.Errorf("putting the route back probed %d more times", prober.probes-probes)
+	}
+}
+
+// Probes keep to their schedule however late the ticker lands. Each probe
+// used to be scheduled from the tick that ran it, so the lateness added up.
+func TestProbesKeepToTheirScheduleOnALateTicker(t *testing.T) {
+	t.Parallel()
+	p := &fakeProber{fail: map[string]bool{}}
+	m := New(p, &fakeRouter{resolveTo: map[string]string{}}, slog.New(slog.DiscardHandler))
+	m.Configure(&model.Config{Gateways: []model.Gateway{
+		{Name: "wan", Enabled: true, Interface: "eth0", Address: "203.0.113.1", ProbeEverySeconds: 30},
+	}})
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	var clock time.Time
+	m.Now = func() time.Time { return clock }
+	for i := range 3600 {
+		clock = start.Add(time.Duration(i)*time.Second + time.Duration(i%7)*50*time.Millisecond)
+		m.tick(context.Background(), false)
+	}
+	if p.probes != 120 {
+		t.Errorf("probes in an hour = %d, want 120", p.probes)
+	}
+
+	// A monitor that fell behind starts afresh rather than catching up.
+	clock = clock.Add(10 * time.Minute)
+	m.tick(context.Background(), false)
+	clock = clock.Add(time.Second)
+	m.tick(context.Background(), false)
+	if p.probes != 121 {
+		t.Errorf("probes after a pause = %d, want one more", p.probes)
+	}
+}
+
+// A gateway whose address goes says so, not that it has none yet.
+func TestALostAddressIsNotOneNotYetGiven(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	r := &fakeRouter{resolveTo: map[string]string{"wan": "192.0.2.254"}}
+	m := New(&fakeProber{fail: map[string]bool{}}, r,
+		slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	m.Configure(&model.Config{Gateways: []model.Gateway{
+		{Name: "wan", Enabled: true, Interface: "eth0"},
+		{Name: "lte", Enabled: true, Interface: "eth1", Priority: 1},
+	}})
+	tick(m, RiseAfter)
+	r.mu.Lock()
+	delete(r.resolveTo, "wan")
+	r.mu.Unlock()
+	tick(m, FailAfter)
+	got := buf.String()
+	if !strings.Contains(got, `msg="gateway is down" gateway=wan`) || !strings.Contains(got, `err="gateway address lost"`) {
+		t.Errorf("the lost address logged:\n%s", got)
+	}
+	if !strings.Contains(got, `msg="gateway has not answered" gateway=lte`) || !strings.Contains(got, `err="no gateway address yet"`) {
+		t.Errorf("the address never given logged:\n%s", got)
+	}
+}
+
+type refusingPolicy struct{ err error }
+
+func (f refusingPolicy) Sync([]policy.Target) error { return f.err }
+
+// A line that loses its carrier between probes has the kernel refuse the
+// policy route through its old next hop. That is the outage, which the
+// probes report, so it stays out of the warnings; any other refusal does
+// not.
+func TestAnUnreachableNextHopWithoutAnAddressIsNoWarning(t *testing.T) {
+	t.Parallel()
+	refused := errors.Join(fmt.Errorf("install route in table 2201: %w", syscall.ENETUNREACH))
+	for _, tc := range []struct {
+		name string
+		lose bool
+		err  error
+		warn bool
+	}{
+		{"address lost", true, refused, false},
+		{"address still there", false, refused, true},
+		{"another refusal", true, errors.Join(refused, errors.New("list ip rules: permission denied")), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var buf bytes.Buffer
+			cfg := &model.Config{Version: model.SchemaVersion, Gateways: []model.Gateway{{Name: "wan", Enabled: true, Interface: "eth0"}}}
+			r := &fakeRouter{resolveTo: map[string]string{"wan": "192.0.2.254"}}
+			m := &Monitor{
+				Prober: &fakeProber{fail: map[string]bool{}}, Router: r, Policy: refusingPolicy{tc.err},
+				Log:    slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})),
+				Source: func() *model.Config { return cfg },
+			}
+			tick(m, RiseAfter)
+			buf.Reset()
+			if tc.lose {
+				r.mu.Lock()
+				delete(r.resolveTo, "wan")
+				r.mu.Unlock()
+			}
+			m.Resync()
+			tick(m, 1)
+			got := buf.String()
+			if warned := strings.Contains(got, "level=WARN"); warned != tc.warn {
+				t.Errorf("warned = %v, want %v:\n%s", warned, tc.warn, got)
+			}
+			if !tc.warn && !strings.Contains(got, `msg="policy routing waits for an address" gateway=wan interface=eth0`) {
+				t.Errorf("no word of the wait:\n%s", got)
+			}
+		})
 	}
 }
