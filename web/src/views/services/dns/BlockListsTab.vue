@@ -3,7 +3,6 @@ import { Plus } from '@lucide/vue'
 import { computed, onMounted, ref } from 'vue'
 
 import ActionButton from '@/components/ActionButton.vue'
-import AppDisclosure from '@/components/AppDisclosure.vue'
 import AppNotice from '@/components/AppNotice.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -196,28 +195,26 @@ const lists = sort.sorted
             <option value="null">0.0.0.0 and ::, a null address</option>
           </select>
         </FormField>
-        <AppDisclosure>
-          <FormField
+        <FormField
+          id="block-max"
+          label="Ceiling on merged names"
+          :hint="`About ${costMB(maxDomains)} MB of memory at that many. Default ${formatCount(limits.defaultMax ?? 1000000)}.`"
+          class="max-w-md"
+        >
+          <input
             id="block-max"
-            label="Ceiling on merged names"
-            :hint="`About ${costMB(maxDomains)} MB of memory at that many. Default ${formatCount(limits.defaultMax ?? 1000000)}.`"
-            class="max-w-md"
-          >
-            <input
-              id="block-max"
-              v-model.number="maxDomains"
-              type="number"
-              min="1000"
-              :max="limits.hardMax ?? 25000000"
-              step="50000"
-              class="input w-32 font-mono max-sm:w-full"
-            />
-          </FormField>
-          <p class="max-w-2xl text-ink-muted">
-            Overlapping lists merge down a long way. Raise this no further than the memory on this
-            router goes.
-          </p>
-        </AppDisclosure>
+            v-model.number="maxDomains"
+            type="number"
+            min="1000"
+            :max="limits.hardMax ?? 25000000"
+            step="50000"
+            class="input w-32 font-mono max-sm:w-full"
+          />
+        </FormField>
+        <p class="max-w-2xl text-ink-muted">
+          Overlapping lists merge down a long way. Raise this no further than the memory on this
+          router goes.
+        </p>
       </div>
     </SectionCard>
 

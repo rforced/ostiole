@@ -3,7 +3,6 @@ import { Plus } from '@lucide/vue'
 import { computed, ref } from 'vue'
 
 import ActionButton from '@/components/ActionButton.vue'
-import AppDisclosure from '@/components/AppDisclosure.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
@@ -319,67 +318,65 @@ function toggleInterface(name, on) {
           </FormField>
         </div>
 
-        <AppDisclosure>
-          <div class="fields fields-card">
-            <FormField
+        <div class="fields fields-card">
+          <FormField
+            id="dns-cache"
+            label="Cache entries"
+            hint="10000 is the default. Each is about 100 bytes."
+          >
+            <input
               id="dns-cache"
-              label="Cache entries"
-              hint="10000 is the default. Each is about 100 bytes."
-            >
-              <input
-                id="dns-cache"
-                v-model.number="cacheSize"
-                type="number"
-                min="0"
-                max="1000000"
-                placeholder="10000"
-                class="input w-32 max-sm:w-full"
-              />
-            </FormField>
-            <FormField
-              v-if="resolver !== 'forward'"
+              v-model.number="cacheSize"
+              type="number"
+              min="0"
+              max="1000000"
+              placeholder="10000"
+              class="input w-32 max-sm:w-full"
+            />
+          </FormField>
+          <FormField
+            v-if="resolver !== 'forward'"
+            id="dns-resolver-cache"
+            label="Resolver cache (MB)"
+            hint="10 is the default. Records take twice as much again."
+          >
+            <input
               id="dns-resolver-cache"
-              label="Resolver cache (MB)"
-              hint="10 is the default. Records take twice as much again."
+              v-model.number="resolverCacheMB"
+              type="number"
+              min="0"
+              max="512"
+              placeholder="10"
+              class="input w-32 max-sm:w-full"
+            />
+          </FormField>
+        </div>
+
+        <fieldset class="field-group">
+          <legend>Listen on</legend>
+          <ToggleRow v-model="listenAll" label="Every interface outside external zones" />
+          <ul v-if="listenAll" class="ml-6 flex flex-wrap gap-4" aria-label="Listening on">
+            <li v-if="!defaultListen.length" class="text-ink-muted">
+              No enabled interface is in an internal zone yet.
+            </li>
+            <li v-for="i in defaultListen" :key="i.name"><InterfaceLabel :iface="i" /></li>
+          </ul>
+          <div v-else class="ml-6 flex flex-wrap gap-4">
+            <label
+              v-for="i in config.interfaces.filter((x) => x.zone && x.enabled)"
+              :key="i.name"
+              class="flex items-center gap-2"
             >
               <input
-                id="dns-resolver-cache"
-                v-model.number="resolverCacheMB"
-                type="number"
-                min="0"
-                max="512"
-                placeholder="10"
-                class="input w-32 max-sm:w-full"
+                type="checkbox"
+                class="checkbox"
+                :checked="(dns.interfaces ?? []).includes(i.name)"
+                @change="toggleInterface(i.name, $event.target.checked)"
               />
-            </FormField>
+              <InterfaceLabel :iface="i" />
+            </label>
           </div>
-
-          <fieldset class="field-group">
-            <legend>Listen on</legend>
-            <ToggleRow v-model="listenAll" label="Every interface outside external zones" />
-            <ul v-if="listenAll" class="ml-6 flex flex-wrap gap-4" aria-label="Listening on">
-              <li v-if="!defaultListen.length" class="text-ink-muted">
-                No enabled interface is in an internal zone yet.
-              </li>
-              <li v-for="i in defaultListen" :key="i.name"><InterfaceLabel :iface="i" /></li>
-            </ul>
-            <div v-else class="ml-6 flex flex-wrap gap-4">
-              <label
-                v-for="i in config.interfaces.filter((x) => x.zone && x.enabled)"
-                :key="i.name"
-                class="flex items-center gap-2"
-              >
-                <input
-                  type="checkbox"
-                  class="checkbox"
-                  :checked="(dns.interfaces ?? []).includes(i.name)"
-                  @change="toggleInterface(i.name, $event.target.checked)"
-                />
-                <InterfaceLabel :iface="i" />
-              </label>
-            </div>
-          </fieldset>
-        </AppDisclosure>
+        </fieldset>
       </div>
     </SectionCard>
 

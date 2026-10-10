@@ -29,15 +29,6 @@ function draft() {
   }
 }
 
-/** The fields most routers leave alone sit behind the Advanced fold. */
-async function openAdvanced(wrapper) {
-  await wrapper
-    .findAll('button')
-    .find((b) => b.text().includes('Advanced'))
-    .trigger('click')
-  await flushPromises()
-}
-
 describe('ResolverTab', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
@@ -50,7 +41,6 @@ describe('ResolverTab', () => {
     config.loaded = true
     const wrapper = mount(ResolverTab)
     await flushPromises()
-    await openAdvanced(wrapper)
 
     const listed = wrapper.findAll('[aria-label="Listening on"] li').map((li) => li.text())
     expect(listed).toHaveLength(2)
@@ -141,7 +131,6 @@ describe('ResolverTab', () => {
     api.clearDnsCache.mockResolvedValue({ cleared: ['dnsmasq', 'unbound'] })
 
     const wrapper = mount(ResolverTab)
-    await openAdvanced(wrapper)
     config.draft.services.dns.domain = 'unsaved'
     const button = wrapper.findAll('button').find((b) => b.text().includes('Clear cache'))
     await button.trigger('click')
@@ -161,7 +150,6 @@ describe('ResolverTab', () => {
 
     const wrapper = mount(ResolverTab)
     await flushPromises()
-    await openAdvanced(wrapper)
     const button = wrapper.findAll('button').find((b) => b.text().includes('Clear cache'))
     expect(button.attributes('disabled')).toBeDefined()
   })
