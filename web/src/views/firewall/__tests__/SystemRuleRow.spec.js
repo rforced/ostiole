@@ -33,11 +33,11 @@ const badges = (rule) =>
 describe('SystemRuleRow zones', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
-  it('marks a row that names no zone as counting every zone', () => {
+  it('marks a row that names no zone as counting all of them', () => {
     const [, log, every] = badges({ ...replies, log: true })
-    expect(every.text()).toBe('every zone')
+    expect(every.text()).toBe('all')
     expect(every.classes()).toEqual(log.classes())
-    expect(badges({ ...replies, zones: [] }).map((b) => b.text())).toEqual(['accept', 'every zone'])
+    expect(badges({ ...replies, zones: [] }).map((b) => b.text())).toEqual(['accept', 'all'])
   })
 
   it('leaves the mark off a row that names its zones', () => {

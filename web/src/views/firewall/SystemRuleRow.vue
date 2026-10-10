@@ -35,7 +35,7 @@ const auth = useAuthStore()
       <span class="inline-flex items-center gap-1.5">
         <span class="badge" :class="actionTone(rule.action)">{{ rule.action }}</span>
         <span v-if="rule.log" class="badge">log</span>
-        <span v-if="!rule.zones?.length" class="badge">every zone</span>
+        <span v-if="!rule.zones?.length" class="badge">all</span>
       </span>
     </td>
     <td class="font-mono text-code max-sm:order-3">{{ rule.protocol }}</td>
