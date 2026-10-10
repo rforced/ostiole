@@ -182,7 +182,7 @@ func firewallDest(ports []string) string {
 // clients return before the rule, so to the reader they are excluded.
 func (r *renderer) exemptSource() string {
 	name := r.cfg.Blocking.Enforce.ExemptClients
-	if len(r.exemptMatches(name, "saddr")) == 0 {
+	if len(r.aliasMatches(name, "saddr")) == 0 {
 		return "any"
 	}
 	return "not @" + name
@@ -192,7 +192,7 @@ func (r *renderer) exemptSource() string {
 // with the exempt destinations excluded: they return before the rule.
 func (r *renderer) exemptDestination(base string) string {
 	name := r.cfg.Blocking.Enforce.ExemptDestinations
-	if len(r.exemptMatches(name, "daddr")) == 0 {
+	if len(r.aliasMatches(name, "daddr")) == 0 {
 		return base
 	}
 	addr, ports, hasPorts := strings.Cut(base, " : ")
@@ -243,19 +243,6 @@ func (r *renderer) zoneNamedLogsDrops(name string) bool {
 		return false
 	}
 	return r.zoneLogsDrops(*z)
-}
-
-// loggingInterfaces narrows ifs to those whose zone logs its drops, in the
-// order given. A chain several zones share cannot decide this per rule, so
-// the log statement carries the set and the drop beside it does not.
-func (r *renderer) loggingInterfaces(ifs []string) []string {
-	var out []string
-	for _, name := range ifs {
-		if in, ok := r.cfg.Interface(name); ok && r.zoneNamedLogsDrops(in.Zone) {
-			out = append(out, name)
-		}
-	}
-	return out
 }
 
 // LogRate is how often one logged drop may log. Every packet is still

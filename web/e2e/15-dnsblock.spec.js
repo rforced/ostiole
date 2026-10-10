@@ -120,6 +120,9 @@ test('enforcement renders firewall rules that keep clients on this resolver', as
   await page.getByLabel(/Send all plain DNS to this router/).check()
   await page.getByLabel(/Block DNS over TLS/).check()
   await page.getByLabel(/Ask Firefox not to turn on DNS over HTTPS/).check()
+  // Every zone that is not external is enforced until one is picked.
+  await expect(page.getByRole('checkbox', { name: 'lan', exact: true })).toBeChecked()
+  await expect(page.getByRole('checkbox', { name: 'wan', exact: true })).toHaveCount(0)
   await page.screenshot({ path: shot('52-dnsblock-enforcement'), fullPage: true })
 
   await applyAndConfirm(page)
@@ -129,9 +132,9 @@ test('enforcement renders firewall rules that keep clients on this resolver', as
   const ruleset = page.locator('pre')
   await expect(ruleset).toContainText('chain block_dns')
   await expect(ruleset).toContainText(
-    'tcp dport 853 counter reject with tcp reset comment "block:dot"',
+    'tcp dport 853 counter reject with tcp reset comment "block:dot:lan"',
   )
-  await expect(ruleset).toContainText('redirect to :53 comment "block:dns-redirect"')
+  await expect(ruleset).toContainText('redirect to :53 comment "block:dns-redirect:lan"')
 })
 
 test('a destination exception lets one address through the DoH block', async ({ page }) => {
@@ -162,10 +165,10 @@ test('a destination exception lets one address through the DoH block', async ({ 
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const ruleset = page.locator('pre')
   await expect(ruleset).toContainText(
-    /ip daddr @alias_work_site_v4 counter return comment "block:exempt-dst"[\s\S]*ip daddr @alias_doh_servers_v4 meta l4proto tcp counter reject with tcp reset comment "block:doh"/,
+    /ip daddr @alias_work_site_v4 counter return comment "block:exempt-dst"[\s\S]*ip daddr @alias_doh_servers_v4 meta l4proto tcp counter reject with tcp reset comment "block:doh:lan"/,
   )
   await expect(ruleset).toContainText(
-    /ip daddr @alias_work_site_v4 counter return comment "block:dns-exempt-dst"[\s\S]*comment "block:dns-redirect"/,
+    /ip daddr @alias_work_site_v4 counter return comment "block:dns-exempt-dst"[\s\S]*comment "block:dns-redirect:lan"/,
   )
 
   await page.goto('/firewall/rules#lan')
@@ -228,7 +231,7 @@ test('turning the lists off leaves enforcement in force and says why a refresh f
   await page.getByRole('button', { name: 'Show confirmed ruleset' }).click()
   const ruleset = page.locator('pre')
   await expect(ruleset).toContainText('chain block_dns')
-  await expect(ruleset).toContainText('redirect to :53 comment "block:dns-redirect"')
+  await expect(ruleset).toContainText('redirect to :53 comment "block:dns-redirect:lan"')
 
   // Put it back for anything that runs after this.
   await page.goto('/services/dns#blocking')

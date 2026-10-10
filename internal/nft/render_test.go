@@ -815,7 +815,7 @@ func TestDNSEnforcementWithoutListsOrServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"chain block_dns", `comment "block:dot"`, `comment "block:doh"`, `comment "block:dns-redirect"`} {
+	for _, want := range []string{"chain block_dns", `comment "block:dot:lan"`, `comment "block:doh:lan"`, `comment "block:dns-redirect:lan"`} {
 		if !strings.Contains(got, want) {
 			t.Errorf("lists off: no %s in:\n%s", want, got)
 		}
@@ -830,7 +830,7 @@ func TestDNSEnforcementWithoutListsOrServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"chain block_dns", `comment "block:dot"`, `comment "block:doh"`} {
+	for _, want := range []string{"chain block_dns", `comment "block:dot:lan"`, `comment "block:doh:lan"`} {
 		if !strings.Contains(got, want) {
 			t.Errorf("DNS server off: no %s in:\n%s", want, got)
 		}
@@ -868,21 +868,32 @@ func TestDNSIsRedirectedOnlyWhereTheServerListens(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		`iifname "eth1" meta l4proto { tcp, udp } th dport 53 fib daddr type != local counter redirect to :53 comment "block:dns-redirect"`,
+		`iifname "eth1" meta l4proto { tcp, udp } th dport 53 fib daddr type != local counter redirect to :53 comment "block:dns-redirect:lan"`,
 		`iifname { "eth1", "eth2" } jump block_dns`,
+		`iifname "eth2" tcp dport 853 counter reject with tcp reset comment "block:dot:vpn"`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("no %s in:\n%s", want, got)
 		}
 	}
+	if strings.Contains(got, "block:dns-redirect:vpn") {
+		t.Errorf("DNS does not listen on vpn but its plain DNS is redirected:\n%s", got)
+	}
 	rows, err := SystemRules(cfg, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	var redirects [][]string
 	for _, row := range rows {
-		if slices.Contains(row.Keys, "nat_prerouting/block:dns-redirect") && !slices.Equal(row.Zones, []string{"lan"}) {
-			t.Errorf("the redirect is listed on %v, want lan alone", row.Zones)
+		if row.Action == "redirect" && row.Setting == "enforcement" {
+			redirects = append(redirects, row.Keys)
+			if !slices.Equal(row.Zones, []string{"lan"}) {
+				t.Errorf("the redirect is listed on %v, want lan alone", row.Zones)
+			}
 		}
+	}
+	if len(redirects) != 1 || !slices.Equal(redirects[0], []string{"nat_prerouting/block:dns-redirect:lan"}) {
+		t.Errorf("redirect rows count under %v, want lan's alone", redirects)
 	}
 
 	// Listening on the WAN alone leaves no internal interface to redirect.
@@ -892,6 +903,83 @@ func TestDNSIsRedirectedOnlyWhereTheServerListens(t *testing.T) {
 	}
 	if strings.Contains(got, "block:dns-redirect") {
 		t.Errorf("DNS listens on no internal interface but plain DNS is redirected:\n%s", got)
+	}
+}
+
+// Enforcement covers the zones it names, or every internal zone when it
+// names none, and each zone gets rules of its own so its tab counts its own.
+func TestDNSEnforcementFollowsItsZones(t *testing.T) {
+	t.Parallel()
+	cfg := withVPNZone(loadConfig(t, "testdata/dns-blocking.json"))
+	cfg.Blocking.Enforce.Zones = []string{"lan"}
+	out, err := Build(cfg, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`iifname "eth1" jump block_dns`,
+		`iifname "eth1" tcp dport 853 counter reject with tcp reset comment "block:dot:lan"`,
+		`comment "block:doh:lan"`,
+		`iifname "eth1" meta l4proto { tcp, udp } th dport 53 fib daddr type != local counter redirect to :53 comment "block:dns-redirect:lan"`,
+	} {
+		if !strings.Contains(out.Ruleset, want) {
+			t.Errorf("lan alone: no %s in:\n%s", want, out.Ruleset)
+		}
+	}
+	for line := range strings.SplitSeq(out.Ruleset, "\n") {
+		enforcing := strings.Contains(line, `"block:`) || strings.Contains(line, "jump block_dns")
+		if strings.Contains(line, `:vpn"`) || (enforcing && strings.Contains(line, `"eth2"`)) {
+			t.Errorf("lan alone, but vpn is enforced: %s", strings.TrimSpace(line))
+		}
+	}
+	rows := 0
+	for _, row := range out.System {
+		if row.Setting != "enforcement" {
+			continue
+		}
+		rows++
+		if !slices.Equal(row.Zones, []string{"lan"}) {
+			t.Errorf("lan alone, but %q is listed on %v", row.Description, row.Zones)
+		}
+	}
+	if rows != 3 {
+		t.Errorf("lan alone: %d enforcement rows, want the redirect and the two blocks", rows)
+	}
+
+	cfg.Blocking.Enforce.Zones = nil
+	if out, err = Build(cfg, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.Ruleset, `iifname { "eth1", "eth2" } jump block_dns`) {
+		t.Errorf("every zone: the jump is not over both:\n%s", out.Ruleset)
+	}
+	descriptions := map[string][]string{}
+	for _, row := range out.System {
+		if row.Setting != "enforcement" {
+			continue
+		}
+		if len(row.Zones) != 1 {
+			t.Errorf("%q is listed on %v, want one zone", row.Description, row.Zones)
+			continue
+		}
+		zone := row.Zones[0]
+		for _, k := range row.Keys {
+			if !strings.HasSuffix(k, ":"+zone) {
+				t.Errorf("%q on %s counts under %s", row.Description, zone, k)
+			}
+		}
+		descriptions[zone] = append(descriptions[zone], row.Description)
+	}
+	for _, zone := range []string{"lan", "vpn"} {
+		for _, rule := range []string{"block:dot", "block:doh", "block:dns-redirect"} {
+			if want := `comment "` + rule + ":" + zone + `"`; !strings.Contains(out.Ruleset, want) {
+				t.Errorf("every zone: no %s in:\n%s", want, out.Ruleset)
+			}
+		}
+		want := []string{"Forward DNS queries to this router", "DNS over TLS", "DNS over HTTPS servers"}
+		if !slices.Equal(descriptions[zone], want) {
+			t.Errorf("every zone: %s rows = %q, want %q", zone, descriptions[zone], want)
+		}
 	}
 }
 

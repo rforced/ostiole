@@ -556,7 +556,7 @@ func (c *Config) Validate() error {
 	}
 
 	v.services(c, ifaces, zones)
-	v.blocking(c, aliases)
+	v.blocking(c, zones, aliases)
 	v.crons(c)
 	v.traffic(&c.Traffic)
 	v.updates(&c.Updates)
@@ -586,7 +586,7 @@ var (
 // them, and the rules that keep clients on this resolver. The lists are
 // checked whether they are on or not, so turning them on later does not
 // fail on something that was wrong all along.
-func (v *validator) blocking(c *Config, aliases map[string]AliasType) {
+func (v *validator) blocking(c *Config, zones map[string]bool, aliases map[string]AliasType) {
 	b := &c.Blocking
 	if b.Enabled && !c.Services.DNS.Enabled {
 		v.add("blocking.enabled", "block lists need the DNS server on: dnsmasq is what refuses the names")
@@ -657,6 +657,18 @@ func (v *validator) blocking(c *Config, aliases map[string]AliasType) {
 		} else if !t.HoldsAddresses() {
 			v.add(path, "alias %q holds ports, not addresses", ref.name)
 		}
+	}
+	enforced := map[string]bool{}
+	for i, name := range b.Enforce.Zones {
+		path := fmt.Sprintf("blocking.enforce.zones[%d]", i)
+		if !zones[name] {
+			v.add(path, "unknown zone %q", name)
+		} else if z, ok := c.Zone(name); ok && z.External {
+			v.add(path, "zone %q is external; DNS enforcement is for the zones behind this router", name)
+		} else if enforced[name] {
+			v.add(path, "duplicate zone %q", name)
+		}
+		enforced[name] = true
 	}
 	if b.MaxDomains < 0 || b.MaxDomains > MaxBlockedDomains {
 		v.add("blocking.maxDomains", "%d must be 0-%d (0 means the default); dnsmasq holds about 90 MB per million names",

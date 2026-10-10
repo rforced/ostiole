@@ -1,6 +1,9 @@
 package model
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // Blocking is DNS blocking, the job pfBlockerNG and Pi-hole do: subscribe to
 // published lists of names, refuse to resolve what is on them, and make it
@@ -117,6 +120,24 @@ type DNSEnforce struct {
 	ExemptClients string `json:"exemptClients,omitempty"`
 	// ExemptDestinations names a host alias of destinations left alone by all of the above.
 	ExemptDestinations string `json:"exemptDestinations,omitempty"`
+	// Zones the redirect and the blocks apply to. Empty means every zone
+	// that is not external.
+	Zones []string `json:"zones,omitempty"`
+}
+
+// EnforcedZones names the zones DNS enforcement covers, in configuration
+// order: those listed, or every zone that is not external.
+func (c *Config) EnforcedZones() []string {
+	var out []string
+	for _, z := range c.Zones {
+		if z.External {
+			continue
+		}
+		if len(c.Blocking.Enforce.Zones) == 0 || slices.Contains(c.Blocking.Enforce.Zones, z.Name) {
+			out = append(out, z.Name)
+		}
+	}
+	return out
 }
 
 // MaxBlockedDomains is the most the merged blocklist may ever come to,

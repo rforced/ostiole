@@ -236,8 +236,9 @@ func (c *Config) providersUsed() map[string]bool {
 // keptZones are the empty zones that cannot go without the rest failing
 // validation or changing what it means: all of them when no zone has an
 // interface, those whose access lines are the only ones letting anything
-// reach the proxy, and those protection names when none of its zones has
-// an interface, since an empty list means every external zone.
+// reach the proxy, and those protection or DNS enforcement names when none
+// of that list's zones has an interface: an empty list means every external
+// zone to protection and every internal one to enforcement.
 func (c *Config) keptZones(zoned map[string]bool) map[string]bool {
 	kept := map[string]bool{}
 	if !slices.ContainsFunc(c.Zones, func(z Zone) bool { return zoned[z.Name] }) {
@@ -254,9 +255,11 @@ func (c *Config) keptZones(zoned map[string]bool) map[string]bool {
 			}
 		}
 	}
-	if protected := c.Protection.Zones; !slices.ContainsFunc(protected, func(z string) bool { return zoned[z] }) {
-		for _, z := range protected {
-			kept[z] = true
+	for _, named := range [][]string{c.Protection.Zones, c.Blocking.Enforce.Zones} {
+		if !slices.ContainsFunc(named, func(z string) bool { return zoned[z] }) {
+			for _, z := range named {
+				kept[z] = true
+			}
 		}
 	}
 	return kept
@@ -287,6 +290,9 @@ func (c *Config) zoneTakes(zone string) []string {
 	}
 	if slices.Contains(c.Protection.Zones, zone) {
 		out = append(out, "protection")
+	}
+	if slices.Contains(c.Blocking.Enforce.Zones, zone) {
+		out = append(out, "DNS enforcement")
 	}
 	for _, a := range c.Services.Proxy.Access {
 		if a.Zone == zone {
@@ -438,6 +444,7 @@ func (c *Config) removeUnused(k UnusedKey) {
 		n.PortForwards = without(n.PortForwards, func(pf PortForward) bool { return pf.Zone == id })
 		n.OneToOne = without(n.OneToOne, func(o OneToOneNAT) bool { return o.Zone == id })
 		c.Protection.Zones = without(c.Protection.Zones, func(z string) bool { return z == id })
+		c.Blocking.Enforce.Zones = without(c.Blocking.Enforce.Zones, func(z string) bool { return z == id })
 		c.Services.Proxy.Access = without(c.Services.Proxy.Access, func(a ProxyAccess) bool { return a.Zone == id })
 	}
 }

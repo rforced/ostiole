@@ -539,6 +539,8 @@ export const useConfigStore = defineStore('config', () => {
     for (const a of draft.value.services?.proxy?.access ?? []) if (a.zone === from) a.zone = to
     const defended = draft.value.protection?.zones
     if (defended) setProtectedZones(defended.map((z) => (z === from ? to : z)))
+    const enforced = draft.value.blocking?.enforce?.zones
+    if (enforced) setEnforcedZones(enforced.map((z) => (z === from ? to : z)))
   }
 
   /**
@@ -571,6 +573,14 @@ export const useConfigStore = defineStore('config', () => {
         defended.some((z) => z !== name) ? 'protection' : 'protection, back to every external zone',
       )
     }
+    const enforced = draft.value.blocking?.enforce?.zones ?? []
+    if (enforced.includes(name)) {
+      refs.push(
+        enforced.some((z) => z !== name)
+          ? 'DNS enforcement'
+          : 'DNS enforcement, back to every zone that is not external',
+      )
+    }
     for (const a of draft.value.services?.proxy?.access ?? [])
       if (a.zone === name) refs.push(`proxy access rule ${a.description || a.id}`)
     return refs
@@ -590,6 +600,8 @@ export const useConfigStore = defineStore('config', () => {
       if (proxy?.access) proxy.access = proxy.access.filter((a) => a.zone !== name)
       const defended = draft.value.protection?.zones
       if (defended) setProtectedZones(defended.filter((z) => z !== name))
+      const enforced = draft.value.blocking?.enforce?.zones
+      if (enforced) setEnforcedZones(enforced.filter((z) => z !== name))
       const n = draft.value.nat
       if (!n) return
       if (n.portForwards) n.portForwards = n.portForwards.filter((pf) => pf.zone !== name)
@@ -1605,6 +1617,16 @@ export const useConfigStore = defineStore('config', () => {
     return d.blocking
   }
 
+  /** The zones DNS enforcement covers; an empty list means every zone that is not external. */
+  function setEnforcedZones(names) {
+    const e = ensureBlocking().enforce
+    if (!names.length) {
+      delete e.zones
+      return
+    }
+    e.zones = [...names]
+  }
+
   const blockLists = computed(() => draft.value?.blocking?.lists ?? [])
 
   function upsertBlockList(list, previousName = list.name) {
@@ -1884,6 +1906,7 @@ export const useConfigStore = defineStore('config', () => {
     removeSchedule,
     blocking,
     ensureBlocking,
+    setEnforcedZones,
     blockLists,
     upsertBlockList,
     removeBlockList,

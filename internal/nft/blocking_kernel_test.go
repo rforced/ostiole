@@ -50,7 +50,7 @@ func TestPlainDNSIsRedirectedOnlyWhereTheServerListensInKernel(t *testing.T) {
 
 	sendFrame(t, lanPeer, lan, synFrame(lan.HardwareAddr, lanPeer.HardwareAddr,
 		net.ParseIP("192.168.1.50"), resolver, 40001, 53))
-	if n := waitForCounter(ctx, t, x, "nat_prerouting/block:dns-redirect", 1); n != 1 {
+	if n := waitForCounter(ctx, t, x, "nat_prerouting/block:dns-redirect:lan", 1); n != 1 {
 		t.Errorf("the redirect counted %d packets, want the LAN's 1", n)
 	}
 	if s, ok := nextSegment(t, out, toResolver, 300*time.Millisecond); ok {

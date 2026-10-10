@@ -20,7 +20,7 @@
     },
     {
       "name": "guest",
-      "description": "Logs nothing, so the shared block_dns chain has to tell the two apart"
+      "description": "Logs nothing, so its block_dns rows carry no log line"
     }
   ],
   "interfaces": [

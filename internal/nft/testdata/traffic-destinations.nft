@@ -66,18 +66,18 @@ table inet ostiole {
 	chain block_dns {
 		ip saddr @alias_resolver_exempt_v4 counter return comment "block:exempt"
 		ip6 saddr @alias_resolver_exempt_v6 counter return comment "block:exempt"
-		tcp dport 853 counter reject with tcp reset comment "block:dot"
-		udp dport 853 counter reject with icmpx type admin-prohibited comment "block:dot"
-		ip daddr @alias_doh_servers_v4 meta l4proto tcp counter reject with tcp reset comment "block:doh"
-		ip daddr @alias_doh_servers_v4 counter reject with icmpx type admin-prohibited comment "block:doh"
-		ip6 daddr @alias_doh_servers_v6 meta l4proto tcp counter reject with tcp reset comment "block:doh"
-		ip6 daddr @alias_doh_servers_v6 counter reject with icmpx type admin-prohibited comment "block:doh"
+		iifname "eth1" tcp dport 853 counter reject with tcp reset comment "block:dot:lan"
+		iifname "eth1" udp dport 853 counter reject with icmpx type admin-prohibited comment "block:dot:lan"
+		iifname "eth1" ip daddr @alias_doh_servers_v4 meta l4proto tcp counter reject with tcp reset comment "block:doh:lan"
+		iifname "eth1" ip daddr @alias_doh_servers_v4 counter reject with icmpx type admin-prohibited comment "block:doh:lan"
+		iifname "eth1" ip6 daddr @alias_doh_servers_v6 meta l4proto tcp counter reject with tcp reset comment "block:doh:lan"
+		iifname "eth1" ip6 daddr @alias_doh_servers_v6 counter reject with icmpx type admin-prohibited comment "block:doh:lan"
 	}
 	chain nat_prerouting {
 		type nat hook prerouting priority dstnat; policy accept;
 		iifname "eth1" ip saddr @alias_resolver_exempt_v4 counter return comment "block:dns-exempt"
 		iifname "eth1" ip6 saddr @alias_resolver_exempt_v6 counter return comment "block:dns-exempt"
-		iifname "eth1" meta l4proto { tcp, udp } th dport 53 fib daddr type != local counter redirect to :53 comment "block:dns-redirect"
+		iifname "eth1" meta l4proto { tcp, udp } th dport 53 fib daddr type != local counter redirect to :53 comment "block:dns-redirect:lan"
 	}
 	chain nat_postrouting {
 		type nat hook postrouting priority srcnat; policy accept;

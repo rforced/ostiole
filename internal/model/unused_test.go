@@ -358,6 +358,68 @@ func TestTheLastZoneProtectionNamesIsKept(t *testing.T) {
 	}
 }
 
+// unusedZone is the zone listed unused by that name, if it is.
+func unusedZone(cfg *Config, name string) (Unused, bool) {
+	unused, _ := cfg.Unused()
+	i := slices.IndexFunc(unused, func(u Unused) bool { return u.Kind == "zone" && u.ID == name })
+	if i < 0 {
+		return Unused{}, false
+	}
+	return unused[i], true
+}
+
+func TestRemovingAZoneTakesItOffDNSEnforcement(t *testing.T) {
+	t.Parallel()
+	cfg := unusedConfig(t)
+	cfg.Zones = append(cfg.Zones, Zone{Name: "spare_lan"})
+	cfg.Blocking.Enforce.Zones = []string{"lan", "spare_lan"}
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if u, ok := unusedZone(cfg, "spare_lan"); !ok || !slices.Contains(u.Takes, "DNS enforcement") {
+		t.Errorf("beside lan, the empty zone is listed as %+v (%t), want it taking DNS enforcement", u, ok)
+	}
+	if err := cfg.RemoveUnused([]UnusedKey{{Kind: "zone", ID: "spare_lan"}}); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(cfg.Blocking.Enforce.Zones, []string{"lan"}) {
+		t.Errorf("enforced zones = %v, want [lan]", cfg.Blocking.Enforce.Zones)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("after removal: %v", err)
+	}
+}
+
+// An empty enforcement list means every zone that is not external, so the
+// zones it names are kept while none of them has an interface.
+func TestTheLastZoneDNSEnforcementNamesIsKept(t *testing.T) {
+	t.Parallel()
+	cfg := unusedConfig(t)
+	cfg.Zones = append(cfg.Zones, Zone{Name: "spare_lan"})
+	cfg.Blocking.Enforce.Zones = []string{"spare_lan"}
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if u, ok := unusedZone(cfg, "spare_lan"); ok {
+		t.Errorf("the only zone DNS enforcement names is listed: %+v", u)
+	}
+	err := cfg.RemoveUnused([]UnusedKey{{Kind: "zone", ID: "spare_lan"}})
+	if err == nil || !strings.Contains(err.Error(), "in use") {
+		t.Errorf("removing the only zone DNS enforcement names: %v, want it in use", err)
+	}
+
+	cfg.Zones = append(cfg.Zones, Zone{Name: "quiet_lan"})
+	cfg.Blocking.Enforce.Zones = []string{"spare_lan", "quiet_lan"}
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range cfg.Blocking.Enforce.Zones {
+		if u, ok := unusedZone(cfg, name); ok {
+			t.Errorf("removing it would empty DNS enforcement's zones: %+v", u)
+		}
+	}
+}
+
 func TestAnAliasDNSEnforcementExceptsIsUsed(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {

@@ -13,6 +13,27 @@ const config = useConfigStore()
 const enforce = computed(() => config.ensureBlocking().enforce)
 const dnsOn = computed(() => Boolean(config.draft?.services?.dns?.enabled))
 
+/** The zones on offer, and the ones enforced: those listed, or every one when none is. */
+const internal = computed(() => config.zones.filter((z) => !z.external).map((z) => z.name))
+const enforced = computed(() => {
+  const listed = enforce.value.zones ?? []
+  return listed.length ? internal.value.filter((n) => listed.includes(n)) : internal.value
+})
+
+function toggleZone(name, box) {
+  const next = new Set(enforced.value)
+  if (box.checked) next.add(name)
+  else next.delete(name)
+  // Back to every internal zone when the choice is the same as the
+  // default, so the configuration does not carry a list that means
+  // nothing.
+  const names = internal.value.filter((n) => next.has(n))
+  config.setEnforcedZones(names.length === internal.value.length ? [] : names)
+  // Unticking the last zone means every zone again, and Vue does not
+  // re-tick a box whose binding stayed true.
+  box.checked = enforced.value.includes(name)
+}
+
 /** Aliases that hold addresses; port aliases are no use here. */
 const addressAliases = computed(() => config.aliases.filter((a) => a.type !== 'ports'))
 
@@ -45,6 +66,30 @@ const exemptDestinations = aliasField('exemptDestinations')
       on under <RouterLink to="/services/dns" class="link">Services › DNS › Resolver</RouterLink>.
       Dropping encrypted DNS works either way.
     </AppNotice>
+
+    <SectionCard
+      title="Where"
+      intro="Enforced zones. None chosen means every zone that is not external. A zone left out keeps whatever DNS its devices use."
+      :locked="auth.readOnly"
+    >
+      <div class="space-y-4">
+        <ul v-if="internal.length" class="flex flex-wrap gap-4">
+          <li v-for="name in internal" :key="name" class="flex items-center gap-2">
+            <input
+              :id="`enf-zone-${name}`"
+              type="checkbox"
+              class="checkbox"
+              :checked="enforced.includes(name)"
+              @change="toggleZone(name, $event.target)"
+            />
+            <label :for="`enf-zone-${name}`">{{ name }}</label>
+          </li>
+        </ul>
+        <AppNotice v-if="!enforced.length">
+          Nothing is enforced: every zone here faces the internet.
+        </AppNotice>
+      </div>
+    </SectionCard>
 
     <SectionCard title="Keep clients here" :locked="auth.readOnly">
       <div class="space-y-3">

@@ -355,7 +355,7 @@ func TestMigrateRenamesTheExemptAlias(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := DNSEnforce{BlockDoT: true, ExemptClients: "resolver_exempt"}
-	if cfg.Blocking.Enforce != want {
+	if !reflect.DeepEqual(cfg.Blocking.Enforce, want) {
 		t.Errorf("enforce = %+v, want %+v", cfg.Blocking.Enforce, want)
 	}
 }

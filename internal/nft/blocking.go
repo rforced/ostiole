@@ -33,9 +33,9 @@ func (r *renderer) redirectsDNS() bool {
 	return r.cfg.Services.DNS.Enabled && r.cfg.Blocking.Enforce.RedirectDNS
 }
 
-// exemptMatches match dir against the named exempt alias, one per address
-// family the alias has.
-func (r *renderer) exemptMatches(name, dir string) []string {
+// aliasMatches match dir against the named alias, one per address family
+// the alias has.
+func (r *renderer) aliasMatches(name, dir string) []string {
 	if name == "" {
 		return nil
 	}
@@ -55,101 +55,99 @@ func (r *renderer) exemptMatches(name, dir string) []string {
 }
 
 // chainBlockDNS refuses the encrypted DNS a client would use to go around
-// this router. Plain DNS is not refused here: it is redirected in
-// nat_prerouting instead, so a client that insists on 8.8.8.8 still gets
-// answers, just this router's answers.
+// this router, with rules of its own for each enforced zone. Plain DNS is
+// not refused here: it is redirected in nat_prerouting instead, so a client
+// that insists on 8.8.8.8 still gets answers, just this router's answers.
 func (r *renderer) chainBlockDNS() {
 	if !r.enforcesDNS() {
 		return
 	}
 	e := r.cfg.Blocking.Enforce
-	// The rows are scoped to where forward jumps here from; the exempt
-	// clients and destinations return first, so to the reader they are left
-	// out of the source and the destination.
-	internal := r.internalInterfaces()
-	// One chain serves every internal zone, so the log statement carries the
-	// interfaces whose zone logs its drops and the rejects below it do not.
-	// When they all do — the usual router, with one internal zone — the set
-	// would match everything that can reach the chain, so it is left off.
-	logging := r.loggingInterfaces(internal)
-	logs := len(logging) > 0
-	loud := ""
-	if logs && len(logging) < len(internal) {
-		loud = ifnameSet(logging)
-	}
+	doh := r.aliasMatches(e.DoHAlias, "daddr")
 	r.block("chain "+BlockChain, func() {
-		for _, m := range r.exemptMatches(e.ExemptClients, "saddr") {
+		for _, m := range r.aliasMatches(e.ExemptClients, "saddr") {
 			r.line(fmt.Sprintf(`%s counter return comment "block:exempt"`, m))
 		}
-		for _, m := range r.exemptMatches(e.ExemptDestinations, "daddr") {
+		for _, m := range r.aliasMatches(e.ExemptDestinations, "daddr") {
 			r.line(fmt.Sprintf(`%s counter return comment "block:exempt-dst"`, m))
 		}
-		if e.BlockDoT {
-			match := fmt.Sprintf("meta l4proto { tcp, udp } th dport %d", DoTPort)
-			if logs {
-				r.line(systemLogLine(match, loud, "block-dot", "reject"))
-			}
-			r.line(fmt.Sprintf(`tcp dport %d counter %s comment "block:dot"`, DoTPort, rejectTCP))
-			r.line(fmt.Sprintf(`udp dport %d counter %s comment "block:dot"`, DoTPort, rejectOther))
-			r.sysFor(internal, SystemRule{
-				Chain: BlockChain, Action: "reject", Protocol: string(model.ProtocolTCPUDP),
-				Source: r.exemptSource(), Destination: r.exemptDestination(fmt.Sprintf("any : %d", DoTPort)),
-				Description: "DNS over TLS", Log: logs,
-				Keys: []string{BlockChain + "/block:dot"}, LogKeys: logKeys(logs, BlockChain+"/log:block-dot"),
-				Setting: "enforcement",
-			})
-		}
-		if e.DoHAlias != "" {
-			if a, ok := r.cfg.Alias(e.DoHAlias); ok {
-				v4, v6 := splitFamilies(r.entriesOf(*a))
-				emitted := false
-				for _, fam := range []struct {
-					prefix string
-					n      int
-					have   bool
-				}{{"ip", 4, len(v4) > 0}, {"ip6", 6, len(v6) > 0}} {
-					if !fam.have && !a.Fetched() {
-						continue
-					}
-					match := fmt.Sprintf("%s daddr @%s", fam.prefix, aliasSet(a.Name, fam.n))
-					if logs {
-						r.line(systemLogLine(match, loud, "block-doh", "reject"))
-					}
-					r.line(fmt.Sprintf(`%s meta l4proto tcp counter %s comment "block:doh"`, match, rejectTCP))
-					r.line(fmt.Sprintf(`%s counter %s comment "block:doh"`, match, rejectOther))
-					emitted = true
-				}
-				if emitted {
-					r.sysFor(internal, SystemRule{
-						Chain: BlockChain, Action: "reject", Protocol: string(model.ProtocolAny),
-						Source: r.exemptSource(), Destination: r.exemptDestination("@" + a.Name),
-						Description: "DNS over HTTPS servers", Log: logs,
-						Keys: []string{BlockChain + "/block:doh"}, LogKeys: logKeys(logs, BlockChain+"/log:block-doh"),
-						Setting: "enforcement",
-					})
-				}
+		for _, zone := range r.cfg.EnforcedZones() {
+			if ifs := r.cfg.ZoneInterfaces(zone); len(ifs) > 0 {
+				r.blockDNSZone(zone, ifs, doh)
 			}
 		}
 	})
 }
 
-// blockDNSJump sends traffic leaving internal zones through the blocking
-// chain. Traffic arriving from outside is not this feature's business.
+// blockDNSZone writes one zone's rejects, scoped to its interfaces, each
+// behind a sampled log when the zone logs its drops.
+func (r *renderer) blockDNSZone(zone string, ifs, doh []string) {
+	e := r.cfg.Blocking.Enforce
+	set := ifnameSet(ifs)
+	logs := r.zoneNamedLogsDrops(zone)
+	if e.BlockDoT {
+		if logs {
+			r.line(enforceLogLine(fmt.Sprintf("meta l4proto { tcp, udp } th dport %d", DoTPort), set, "block-dot", zone))
+		}
+		r.line(fmt.Sprintf(`iifname %s tcp dport %d counter %s comment "block:dot:%s"`, set, DoTPort, rejectTCP, zone))
+		r.line(fmt.Sprintf(`iifname %s udp dport %d counter %s comment "block:dot:%s"`, set, DoTPort, rejectOther, zone))
+		r.sysFor(ifs, SystemRule{
+			Chain: BlockChain, Action: "reject", Protocol: string(model.ProtocolTCPUDP),
+			Source: r.exemptSource(), Destination: r.exemptDestination(fmt.Sprintf("any : %d", DoTPort)),
+			Description: "DNS over TLS", Log: logs,
+			Keys:    []string{BlockChain + "/block:dot:" + zone},
+			LogKeys: logKeys(logs, BlockChain+"/log:block-dot:"+zone),
+			Setting: "enforcement",
+		})
+	}
+	if len(doh) == 0 {
+		return
+	}
+	for _, match := range doh {
+		if logs {
+			r.line(enforceLogLine(match, set, "block-doh", zone))
+		}
+		r.line(fmt.Sprintf(`iifname %s %s meta l4proto tcp counter %s comment "block:doh:%s"`, set, match, rejectTCP, zone))
+		r.line(fmt.Sprintf(`iifname %s %s counter %s comment "block:doh:%s"`, set, match, rejectOther, zone))
+	}
+	r.sysFor(ifs, SystemRule{
+		Chain: BlockChain, Action: "reject", Protocol: string(model.ProtocolAny),
+		Source: r.exemptSource(), Destination: r.exemptDestination("@" + e.DoHAlias),
+		Description: "DNS over HTTPS servers", Log: logs,
+		Keys:    []string{BlockChain + "/block:doh:" + zone},
+		LogKeys: logKeys(logs, BlockChain+"/log:block-doh:"+zone),
+		Setting: "enforcement",
+	})
+}
+
+// enforceLogLine is the sampled log in front of a zone's rejects. The prefix
+// names the kind alone, as the log reader parses it; the comment adds the
+// zone, so each zone counts its own.
+func enforceLogLine(match, set, kind, zone string) string {
+	return sampledLog(match, set, "ostiole:s:"+kind+":reject: ", "log:"+kind+":"+zone)
+}
+
+// blockDNSJump sends traffic leaving the enforced zones through the
+// blocking chain. Traffic arriving from outside is not this feature's
+// business.
 func (r *renderer) blockDNSJump() {
 	if !r.enforcesDNS() {
 		return
 	}
-	ifs := r.internalInterfaces()
+	var ifs []string
+	for _, zone := range r.cfg.EnforcedZones() {
+		ifs = append(ifs, r.cfg.ZoneInterfaces(zone)...)
+	}
 	if len(ifs) == 0 {
 		return
 	}
 	r.line(fmt.Sprintf("iifname %s jump %s", ifnameSet(ifs), BlockChain))
 }
 
-// dnsRedirect pulls plain DNS back to this router on the internal
-// interfaces it listens on, whoever the client meant to ask. It is the last
-// thing in nat_prerouting so that a port forward the operator wrote wins
-// over it.
+// dnsRedirect pulls plain DNS back to this router in each enforced zone, on
+// the interfaces it listens on, whoever the client meant to ask. It is the
+// last thing in nat_prerouting so that a port forward the operator wrote
+// wins over it.
 //
 // Only traffic addressed elsewhere is redirected: a query already sent to
 // this router needs no translation, and leaving it alone keeps the counter
@@ -158,37 +156,47 @@ func (r *renderer) dnsRedirect() {
 	if !r.redirectsDNS() {
 		return
 	}
-	ifs := r.redirectInterfaces()
-	if len(ifs) == 0 {
+	zones := r.cfg.EnforcedZones()
+	var all []string
+	for _, zone := range zones {
+		all = append(all, r.redirectInterfaces(zone)...)
+	}
+	if len(all) == 0 {
 		r.line("# DNS redirect skipped: DNS listens on no internal interface")
 		return
 	}
-	set := ifnameSet(ifs)
+	set := ifnameSet(all)
 	e := r.cfg.Blocking.Enforce
-	for _, m := range r.exemptMatches(e.ExemptClients, "saddr") {
+	for _, m := range r.aliasMatches(e.ExemptClients, "saddr") {
 		r.line(fmt.Sprintf(`iifname %s %s counter return comment "block:dns-exempt"`, set, m))
 	}
-	for _, m := range r.exemptMatches(e.ExemptDestinations, "daddr") {
+	for _, m := range r.aliasMatches(e.ExemptDestinations, "daddr") {
 		r.line(fmt.Sprintf(`iifname %s %s counter return comment "block:dns-exempt-dst"`, set, m))
 	}
-	r.line(fmt.Sprintf(
-		`iifname %s meta l4proto { tcp, udp } th dport 53 fib daddr type != local counter redirect to :53 comment "block:dns-redirect"`,
-		set))
-	r.sysFor(ifs, SystemRule{
-		Chain: "nat_prerouting", Action: "redirect", Protocol: string(model.ProtocolTCPUDP),
-		Source: r.exemptSource(), Destination: r.exemptDestination("not this router : 53"),
-		Description: "Forward DNS queries to this router",
-		Keys:        []string{"nat_prerouting/block:dns-redirect"}, Setting: "enforcement",
-	})
+	for _, zone := range zones {
+		ifs := r.redirectInterfaces(zone)
+		if len(ifs) == 0 {
+			continue
+		}
+		r.line(fmt.Sprintf(
+			`iifname %s meta l4proto { tcp, udp } th dport 53 fib daddr type != local counter redirect to :53 comment "block:dns-redirect:%s"`,
+			ifnameSet(ifs), zone))
+		r.sysFor(ifs, SystemRule{
+			Chain: "nat_prerouting", Action: "redirect", Protocol: string(model.ProtocolTCPUDP),
+			Source: r.exemptSource(), Destination: r.exemptDestination("not this router : 53"),
+			Description: "Forward DNS queries to this router",
+			Keys:        []string{"nat_prerouting/block:dns-redirect:" + zone}, Setting: "enforcement",
+		})
+	}
 }
 
-// redirectInterfaces are the internal interfaces the DNS server listens on.
-// A query redirected anywhere else reaches a port nothing answers on, and
-// the client loses the DNS it had.
-func (r *renderer) redirectInterfaces() []string {
+// redirectInterfaces are the zone's interfaces the DNS server listens on. A
+// query redirected anywhere else reaches a port nothing answers on, and the
+// client loses the DNS it had.
+func (r *renderer) redirectInterfaces(zone string) []string {
 	listens := DNSInterfaces(r.cfg)
 	var out []string
-	for _, name := range r.internalInterfaces() {
+	for _, name := range r.cfg.ZoneInterfaces(zone) {
 		if slices.Contains(listens, name) {
 			out = append(out, name)
 		}

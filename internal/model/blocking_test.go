@@ -149,6 +149,29 @@ func TestEnforcementExceptionsNameAddressAliases(t *testing.T) {
 	}
 }
 
+// Enforcement names zones behind the router, each once.
+func TestEnforcementZonesAreInternalOnes(t *testing.T) {
+	c := starterForBlocking()
+	c.Zones = append(c.Zones, Zone{Name: "guest"})
+	for _, tc := range []struct {
+		zones []string
+		want  string
+	}{
+		{[]string{"lan", "missing"}, `blocking.enforce.zones[1]: unknown zone "missing"`},
+		{[]string{"wan"}, `blocking.enforce.zones[0]: zone "wan" is external; DNS enforcement is for the zones behind this router`},
+		{[]string{"lan", "guest", "lan"}, `blocking.enforce.zones[2]: duplicate zone "lan"`},
+	} {
+		c.Blocking.Enforce.Zones = tc.zones
+		if err := c.Validate(); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%v: %v, want %s", tc.zones, err, tc.want)
+		}
+	}
+	c.Blocking.Enforce.Zones = []string{"guest", "lan"}
+	if err := c.Validate(); err != nil {
+		t.Errorf("two internal zones were refused: %v", err)
+	}
+}
+
 // starterForBlocking is the first configuration `ostiole init` writes, with
 // the DNS server on and blocking turned on over it.
 func starterForBlocking() *Config {

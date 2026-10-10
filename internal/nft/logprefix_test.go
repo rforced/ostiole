@@ -121,40 +121,46 @@ func TestSystemDropsLogWhereTheZoneSaysSo(t *testing.T) {
 			}
 		}
 	}
-	// The guest zone logs nothing, so the chain both zones share has to tell
-	// them apart: the log statement carries the interface set, the rejects
-	// do not.
-	if !strings.Contains(out.Ruleset, `iifname "eth1" meta l4proto { tcp, udp } th dport 853 limit rate`) {
-		t.Errorf("the DoT log is not scoped to eth1:\n%s", out.Ruleset)
-	}
+	// Each zone has rules of its own: lan's log is scoped to its interface,
+	// and guest, which logs nothing, has its rejects alone.
 	lines := map[string]bool{}
 	for line := range strings.SplitSeq(out.Ruleset, "\n") {
 		lines[strings.TrimSpace(line)] = true
 	}
 	for _, want := range []string{
-		`tcp dport 853 counter reject with tcp reset comment "block:dot"`,
-		`udp dport 853 counter reject with icmpx type admin-prohibited comment "block:dot"`,
+		`iifname "eth1" meta l4proto { tcp, udp } th dport 853 limit rate ` + LogRate +
+			` counter log prefix "ostiole:s:block-dot:reject: " group 1 comment "log:block-dot:lan"`,
+		`iifname "eth1" tcp dport 853 counter reject with tcp reset comment "block:dot:lan"`,
+		`iifname "eth2" tcp dport 853 counter reject with tcp reset comment "block:dot:guest"`,
+		`iifname "eth2" udp dport 853 counter reject with icmpx type admin-prohibited comment "block:dot:guest"`,
 	} {
 		if !lines[want] {
 			t.Errorf("missing the line %q in:\n%s", want, out.Ruleset)
+		}
+	}
+	for _, quiet := range []string{"log:block-dot:guest", "log:block-doh:guest"} {
+		if strings.Contains(out.Ruleset, quiet) {
+			t.Errorf("guest logs nothing but has %s:\n%s", quiet, out.Ruleset)
 		}
 	}
 	if strings.Contains(out.Ruleset, `chain plog_guest_`) {
 		t.Error("a zone that logs nothing got a log chain")
 	}
 	// The rows say which of them log, so the rules page is honest about it.
-	rows := map[string]bool{}
+	rows := map[string]SystemRule{}
 	for _, s := range out.System {
-		if s.Setting == "enforcement" || s.Setting == "protection" {
-			rows[s.Description] = s.Log
+		if s.Setting == "enforcement" && len(s.Zones) == 1 {
+			rows[s.Zones[0]+" "+s.Description] = s
 		}
 	}
-	for want, log := range map[string]bool{"DNS over TLS": true, "DNS over HTTPS servers": true} {
-		got, ok := rows[want]
-		if !ok {
-			t.Errorf("no system row for %q", want)
-		} else if got != log {
-			t.Errorf("row %q says log=%v, want %v", want, got, log)
+	for zone, logs := range map[string]bool{"lan": true, "guest": false} {
+		for _, d := range []string{"DNS over TLS", "DNS over HTTPS servers"} {
+			s, ok := rows[zone+" "+d]
+			if !ok {
+				t.Errorf("no %s row for %q", zone, d)
+			} else if s.Log != logs || (len(s.LogKeys) > 0) != logs {
+				t.Errorf("%s row %q says log=%v with log keys %v, want log=%v", zone, d, s.Log, s.LogKeys, logs)
+			}
 		}
 	}
 }
@@ -196,30 +202,6 @@ func TestSystemDropsStaySilentWithoutTheSetting(t *testing.T) {
 		if !found {
 			t.Errorf("no system row counts %s", want)
 		}
-	}
-}
-
-// With every internal zone logging — the usual router, one LAN — the log
-// statement needs no interface set: everything that reaches the shared
-// chain logs, so scoping it would match everything and cost a comparison
-// per packet for nothing.
-func TestSharedChainDropsTheSetWhenEveryZoneLogs(t *testing.T) {
-	t.Parallel()
-	cfg := loadConfig(t, "testdata/system-drop-logs.json")
-	for i := range cfg.Zones {
-		cfg.Zones[i].LogDrops = true
-	}
-	out, err := Build(cfg, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for line := range strings.SplitSeq(out.Ruleset, "\n") {
-		if strings.Contains(line, "ostiole:s:block-") && strings.Contains(line, "iifname") {
-			t.Errorf("the log statement is scoped when it need not be: %s", strings.TrimSpace(line))
-		}
-	}
-	if !strings.Contains(out.Ruleset, `th dport 853 limit rate`) {
-		t.Errorf("the unscoped log statement is missing:\n%s", out.Ruleset)
 	}
 }
 

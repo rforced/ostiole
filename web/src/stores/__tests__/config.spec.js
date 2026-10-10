@@ -106,6 +106,57 @@ describe('config store zones', () => {
     ])
   })
 
+  it('keeps the enforced zones in step with a rename and a delete', () => {
+    const config = useConfigStore()
+    const d = draft()
+    d.zones.push({ name: 'spare' })
+    d.blocking = { enabled: false, enforce: { zones: ['lan', 'dmz'], blockDot: true } }
+    config.replaceDraft(d)
+
+    config.upsertZone({ name: 'guest' }, 'dmz')
+    expect(config.draft.blocking.enforce.zones).toEqual(['lan', 'guest'])
+    config.removeZone('guest')
+    expect(config.draft.blocking.enforce.zones).toEqual(['lan'])
+    // The last one named goes with the list: empty means every zone that is not external.
+    config.setEnforcedZones(['spare'])
+    config.removeZone('spare')
+    expect(config.draft.blocking.enforce).toEqual({ blockDot: true })
+  })
+
+  it('says what DNS enforcement goes back to when a zone goes', () => {
+    const config = useConfigStore()
+    const d = draft()
+    d.protection = { zones: ['wan', 'dmz'] }
+    d.blocking = { enabled: false, enforce: { zones: ['lan', 'dmz'] } }
+    config.replaceDraft(d)
+    expect(config.zoneDependents('dmz').slice(4)).toEqual(['protection', 'DNS enforcement'])
+    expect(config.zoneDependents('lan')).toEqual(['rule r2', 'rule r3', 'DNS enforcement'])
+
+    config.setEnforcedZones(['dmz'])
+    expect(config.zoneDependents('dmz').slice(4)).toEqual([
+      'protection',
+      'DNS enforcement, back to every zone that is not external',
+    ])
+    expect(config.zoneDependents('lan')).toEqual(['rule r2', 'rule r3'])
+  })
+
+  it('drops the enforced zones once the list is set back to empty', () => {
+    const config = useConfigStore()
+    const d = draft()
+    d.blocking = { enabled: false, enforce: { redirectDns: true } }
+    config.saved = JSON.parse(JSON.stringify(d))
+    config.replaceDraft(d)
+
+    const names = ['lan']
+    config.setEnforcedZones(names)
+    names.push('dmz')
+    expect(config.draft.blocking.enforce.zones).toEqual(['lan'])
+    expect(config.dirty).toBe(true)
+    config.setEnforcedZones([])
+    expect('zones' in config.draft.blocking.enforce).toBe(false)
+    expect(config.dirty).toBe(false)
+  })
+
   it('deletes a zone nothing refers to', () => {
     const config = useConfigStore()
     const d = draft()
