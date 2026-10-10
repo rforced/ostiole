@@ -1,0 +1,14 @@
+--- a/internal/corazawaf/rule.go
++++ b/internal/corazawaf/rule.go
+@@ -243,6 +243,11 @@
+ 				continue
+ 			}
+ 			var values []types.MatchData
++			// Changed by Ostiole: v is a copy, but its Exceptions share the
++			// rule's backing array, and where that has room concurrent
++			// transactions appended their removals into the same slots.
++			// Capping the capacity makes the append below copy.
++			v.Exceptions = v.Exceptions[:len(v.Exceptions):len(v.Exceptions)]
+ 			for _, c := range ecol {
+ 				if c.Variable == v.Variable {
+ 					// TODO shall we check the pointer?

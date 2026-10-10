@@ -1,8 +1,8 @@
 # Coraza v3.8.1 from the Go module proxy, h1:dMV55FbMR2vOks/acrT43RShR+VkzU6jwp+XPdxay8o=,
 # without its tests, testdata, testing/ and http/e2e/ packages, docs, agent
-# guides, or dev and CI files. It is updated as soon as upstream releases:
-# copy the new release the same way and apply the changes below again, less
-# any upstream took.
+# guides, or dev and CI files. It is updated as soon as upstream releases,
+# by scripts/update-coraza.sh, which copies the release the same way and
+# applies the changes below from scripts/coraza/, less any upstream took.
 # govulncheck sees this copy without a version, so Coraza's advisories
 # (github.com/corazawaf/coraza/security/advisories) are checked by hand.
 #
@@ -13,9 +13,11 @@
 #   targets from one rule overwrote each other. The capacity is capped so
 #   the append copies. Upstream: issue #1723, open at v3.8.1; closed,
 #   unmerged PR #1509 had the same fix.
+#   Patch: scripts/coraza/exceptions-copy.patch.
 # - waf.go: NewWAF returned on a rule, audit log or Validate error without
 #   closing the WAF, so the patterns its rules had compiled stayed in the
 #   shared memoize cache with a dead owner for the life of the process, one
 #   more owner per failed reload. A deferred Close on error releases them.
-#   Upstream: reported 2026-10-09, open at v3.8.1.
+#   Upstream: issue #1738, reported 2026-10-09, open at v3.8.1.
+#   Patch: scripts/coraza/newwaf-close.patch.
 v3.8.1
