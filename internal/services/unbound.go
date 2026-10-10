@@ -142,6 +142,9 @@ func (u *Unbound) render(cfg *model.Config) string {
 	b.WriteString("    username: \"unbound\"\n")
 	fmt.Fprintf(&b, "    directory: %q\n", u.dir())
 	b.WriteString("    chroot: \"\"\n")
+	// The unit leaves /run read-only, and unbound writes a pid file even
+	// in the foreground unless told not to.
+	b.WriteString("    pidfile: \"\"\n")
 	b.WriteString("    hide-identity: yes\n    hide-version: yes\n    hide-trustanchor: yes\n")
 	b.WriteString("    harden-glue: yes\n    harden-dnssec-stripped: yes\n    harden-below-nxdomain: yes\n")
 	b.WriteString("    harden-algo-downgrade: yes\n    harden-large-queries: yes\n    harden-short-bufsize: yes\n")
@@ -304,7 +307,9 @@ func (u *Unbound) Reload(ctx context.Context) error {
 }
 
 // UnboundUnitContent renders the ostiole-unbound unit. dnsmasq waits for
-// it, so the resolver is up before anything forwards to it.
+// it, so the resolver is up before anything forwards to it. The anchor
+// belongs to unbound, so root needs CAP_DAC_OVERRIDE to update it before
+// the start.
 func UnboundUnitContent(binary, checkconf, anchorTool, conf, anchor string) string {
 	var pre strings.Builder
 	if anchorTool != "" {
@@ -327,13 +332,11 @@ Type=simple
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=2
-ProtectSystem=full
-ProtectHome=yes
-PrivateTmp=yes
-
+%[5]s
 [Install]
 WantedBy=multi-user.target
-`, pre.String(), binary, conf, Unit)
+`, pre.String(), binary, conf, Unit, sandbox("CAP_NET_BIND_SERVICE CAP_SETGID CAP_SETUID CAP_DAC_OVERRIDE",
+		"AF_UNIX AF_INET AF_INET6 AF_NETLINK", []string{filepath.Dir(anchor)}))
 }
 
 // Dialer is how a reachability probe opens a connection; swapped in tests.

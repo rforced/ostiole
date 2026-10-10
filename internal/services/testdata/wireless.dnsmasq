@@ -5,6 +5,7 @@ no-hosts
 no-poll
 bind-dynamic
 user=dnsmasq
+pid-file=
 addn-hosts=/etc/dnsmasq.d/ostiole.hosts
 dhcp-leasefile=/var/lib/dnsmasq/ostiole.leases
 interface=br-lan

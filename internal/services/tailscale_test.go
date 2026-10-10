@@ -78,6 +78,15 @@ func tailscaleBackend(t *testing.T) (*Tailscale, *fakeCmd, *setRunner) {
 	}, cmd, run
 }
 
+// tailscaled writes only its own directories and opens only the tun device.
+func TestTailscaleUnitIsSandboxed(t *testing.T) {
+	t.Parallel()
+	sandboxed(t, TailscaleUnitContent("/usr/sbin/tailscaled", "/etc/ostiole/tailscale"),
+		"CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE",
+		"RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK",
+		"DevicePolicy=closed", "DeviceAllow=/dev/net/tun rw", "StateDirectory=tailscale")
+}
+
 func TestTailscaleApplyStartsTheUnitAndPushesThePreferences(t *testing.T) {
 	t.Parallel()
 	ts, cmd, run := tailscaleBackend(t)

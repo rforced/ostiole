@@ -17,6 +17,7 @@ server:
     username: "unbound"
     directory: "/etc/unbound"
     chroot: ""
+    pidfile: ""
     hide-identity: yes
     hide-version: yes
     hide-trustanchor: yes

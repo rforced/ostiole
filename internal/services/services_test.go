@@ -882,6 +882,56 @@ func (failCmd) Run(context.Context, string, ...string) ([]byte, error) {
 	return []byte("Job failed"), errors.New("exit 1")
 }
 
+// sandboxed checks a unit Ostiole writes for a root daemon keeps its
+// sandbox, and never NoNewPrivileges, which under SELinux keeps the daemon
+// out of its own domain.
+func sandboxed(t *testing.T, unit string, want ...string) {
+	t.Helper()
+	for _, w := range append([]string{"ProtectSystem=strict", "SystemCallErrorNumber=EPERM"}, want...) {
+		if !strings.Contains(unit, "\n"+w+"\n") {
+			t.Errorf("unit lacks %q:\n%s", w, unit)
+		}
+	}
+	if strings.Contains(unit, "NoNewPrivileges") {
+		t.Errorf("unit sets NoNewPrivileges:\n%s", unit)
+	}
+}
+
+// dnsmasq keeps no pid file, which /run would refuse, and writes only
+// its leases.
+func TestDnsmasqUnitIsSandboxed(t *testing.T) {
+	t.Parallel()
+	sandboxed(t, UnitContent("/usr/sbin/dnsmasq", "/etc/dnsmasq.d/ostiole.conf", LeaseFile),
+		"CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SETGID CAP_SETUID",
+		"RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK AF_PACKET",
+		"PrivateDevices=yes", "ReadWritePaths=/var/lib/dnsmasq")
+	files, err := (&Dnsmasq{Dir: DefaultDir, Leases: LeaseFile}).Render(loadConfig(t, "testdata/full.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(files[confName], "\npid-file=\n") {
+		t.Errorf("dnsmasq writes a pid file:\n%s", files[confName])
+	}
+}
+
+// unbound updates its trust anchor, which root writes too before the
+// start, and keeps no pid file.
+func TestUnboundUnitIsSandboxed(t *testing.T) {
+	t.Parallel()
+	sandboxed(t, UnboundUnitContent("/usr/sbin/unbound", "/usr/sbin/unbound-checkconf", "/usr/sbin/unbound-anchor",
+		"/etc/unbound/ostiole.conf", "/var/lib/unbound/root.key"),
+		"CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_SETGID CAP_SETUID CAP_DAC_OVERRIDE",
+		"RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK",
+		"PrivateDevices=yes", "ReadWritePaths=/var/lib/unbound")
+	golden, err := os.ReadFile("testdata/resolver-recursive.unbound")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(golden), "\n    pidfile: \"\"\n") {
+		t.Errorf("unbound writes a pid file:\n%s", golden)
+	}
+}
+
 // Lookups through a gateway are marked by the account each resolver runs
 // as, so dnsmasq's configuration names its account rather than leave it
 // to the build, and unbound's names its own. It is the configuration and
@@ -899,7 +949,7 @@ func TestTheResolversRunAsTheAccountsTheRulesetMarks(t *testing.T) {
 			t.Errorf("%s: dnsmasq's configuration leaves its account to the build:\n%s", in, files[confName])
 		}
 	}
-	if unit := UnitContent("/usr/sbin/dnsmasq", "/etc/dnsmasq.d/ostiole.conf"); strings.Contains(unit, "--user") {
+	if unit := UnitContent("/usr/sbin/dnsmasq", "/etc/dnsmasq.d/ostiole.conf", LeaseFile); strings.Contains(unit, "--user") {
 		t.Errorf("the dnsmasq unit names an account, which an update would not start it under:\n%s", unit)
 	}
 	if !slices.Contains(nft.ResolverAccounts, User) || !slices.Contains(nft.ResolverAccounts, "unbound") {

@@ -207,7 +207,7 @@ func setupDnsmasq(ctx context.Context, d *Dnsmasq, o SetupOptions, run Runner, u
 	if err := os.MkdirAll(d.dir(), 0o755); err != nil { //nolint:gosec // dnsmasq reads these unprivileged
 		return "", err
 	}
-	if err := writeFile(filepath.Join(unitDir, Unit), UnitContent(bin, filepath.Join(d.dir(), confName))); err != nil {
+	if err := writeFile(filepath.Join(unitDir, Unit), UnitContent(bin, filepath.Join(d.dir(), confName), d.leases())); err != nil {
 		return "", err
 	}
 	return bin, nil
@@ -325,8 +325,52 @@ func lookPath(name string) string {
 	return ""
 }
 
-// UnitContent renders the ostiole-dnsmasq unit.
-func UnitContent(binary, conf string) string {
+// sandbox renders the confinement every unit Ostiole writes for a root
+// daemon shares, beside its capabilities, address families and the paths
+// it writes. With no devices the unit gets PrivateDevices; otherwise only
+// the devices listed. NoNewPrivileges stays out: under SELinux it keeps the
+// daemon in init_t, which may move only to unconfined_service_t under it,
+// and the daemon loses its files. It broke PPPoE on Fedora and Rocky.
+func sandbox(caps, families string, rw []string, devices ...string) string {
+	var b strings.Builder
+	b.WriteString(`ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=~@obsolete @cpu-emulation @debug @swap @reboot @raw-io @mount @clock @module
+SystemCallErrorNumber=EPERM
+`)
+	fmt.Fprintf(&b, "CapabilityBoundingSet=%s\n", caps)
+	fmt.Fprintf(&b, "RestrictAddressFamilies=%s\n", families)
+	if len(devices) == 0 {
+		b.WriteString("PrivateDevices=yes\n")
+	} else {
+		b.WriteString("DevicePolicy=closed\n")
+		for _, d := range devices {
+			fmt.Fprintf(&b, "DeviceAllow=%s\n", d)
+		}
+	}
+	if len(rw) > 0 {
+		fmt.Fprintf(&b, "ReadWritePaths=%s\n", strings.Join(rw, " "))
+	}
+	return b.String()
+}
+
+// UnitContent renders the ostiole-dnsmasq unit. dnsmasq starts as root
+// and drops to the account its configuration names.
+func UnitContent(binary, conf, leases string) string {
 	return fmt.Sprintf(`[Unit]
 Description=Ostiole DHCP and DNS (dnsmasq)
 Documentation=https://github.com/rforced/ostiole
@@ -340,13 +384,11 @@ ExecStart=%[1]s --keep-in-foreground --conf-file=%[2]s
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=2
-ProtectSystem=full
-ProtectHome=yes
-PrivateTmp=yes
-
+%[3]s
 [Install]
 WantedBy=multi-user.target
-`, binary, conf)
+`, binary, conf, sandbox("CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SETGID CAP_SETUID",
+		"AF_UNIX AF_INET AF_INET6 AF_NETLINK AF_PACKET", []string{filepath.Dir(leases)}))
 }
 
 // restartDaemon rebuilds the running daemon's mount namespace.
@@ -671,10 +713,11 @@ ExecStopPost=-%[2]s dev ${AP} del
 Restart=on-failure
 RestartSec=5
 RuntimeDirectory=hostapd/%%i
-
+%[5]s
 [Install]
 WantedBy=multi-user.target
-`, binary, iw, ipCmd, dir)
+`, binary, iw, ipCmd, dir, sandbox("CAP_NET_ADMIN CAP_NET_RAW",
+		"AF_UNIX AF_INET AF_INET6 AF_NETLINK AF_PACKET", nil, "/dev/rfkill r"))
 }
 
 // TailscaleUnitContent renders the ostiole-tailscaled unit. The daemon
@@ -703,10 +746,11 @@ StateDirectory=tailscale
 StateDirectoryMode=0700
 CacheDirectory=tailscale
 CacheDirectoryMode=0750
-
+%[5]s
 [Install]
 WantedBy=multi-user.target
-`, binary, dir, tailscale.DefaultPort, model.TailscaleDevice)
+`, binary, dir, tailscale.DefaultPort, model.TailscaleDevice, sandbox("CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE",
+		"AF_UNIX AF_INET AF_INET6 AF_NETLINK", nil, "/dev/net/tun rw"))
 }
 
 // nftablesBuild checks that the binary is the one that writes nftables.
@@ -737,7 +781,8 @@ func nftablesBuild(bin string) error {
 
 // UPnPUnitContent renders the ostiole-miniupnpd unit. -d is what keeps
 // the daemon in the foreground, and it is the flag that does so whether
-// or not the build was configured to fork at all.
+// or not the build was configured to fork at all. It writes a pid file
+// even so, and /run is read-only to it but for its own directory.
 func UPnPUnitContent(binary, conf string) string {
 	return fmt.Sprintf(`[Unit]
 Description=Ostiole UPnP IGD, PCP and NAT-PMP (miniupnpd)
@@ -747,14 +792,13 @@ Wants=ostiole-firewall.service
 
 [Service]
 Type=simple
-ExecStart=%s -d -f %s
+ExecStart=%[1]s -d -f %[2]s -P /run/miniupnpd/miniupnpd.pid
 Restart=on-failure
 RestartSec=2
-ProtectSystem=full
-ProtectHome=yes
-PrivateTmp=yes
-
+RuntimeDirectory=miniupnpd
+%[3]s
 [Install]
 WantedBy=multi-user.target
-`, binary, conf)
+`, binary, conf, sandbox("CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE",
+		"AF_UNIX AF_INET AF_INET6 AF_NETLINK", nil))
 }

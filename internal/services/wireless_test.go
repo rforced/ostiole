@@ -493,6 +493,9 @@ func TestWirelessUnitNamesTheInstance(t *testing.T) {
 			t.Errorf("missing %q:\n%s", want, unit)
 		}
 	}
+	sandboxed(t, unit, "CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW",
+		"RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK AF_PACKET",
+		"DevicePolicy=closed", "DeviceAllow=/dev/rfkill r")
 }
 
 // A self-managed card calls every 5 GHz channel no-IR until it has

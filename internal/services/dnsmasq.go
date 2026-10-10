@@ -147,6 +147,9 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 	// dnsmasq, so a router updated from a release that left the account
 	// to the build drops to this one at its next apply.
 	fmt.Fprintf(&b, "user=%s\n", User)
+	// The unit leaves /run read-only, and dnsmasq dies when it cannot
+	// write the pid file it keeps even in the foreground. Empty is none.
+	b.WriteString("pid-file=\n")
 	fmt.Fprintf(&b, "addn-hosts=%s\n", filepath.Join(d.dir(), hostsName))
 	fmt.Fprintf(&b, "dhcp-leasefile=%s\n", d.leases())
 

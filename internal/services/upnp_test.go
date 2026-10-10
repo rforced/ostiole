@@ -227,6 +227,9 @@ func TestUPnPUnitRunsInTheForeground(t *testing.T) {
 	if !strings.Contains(unit, "After=network.target ostiole-firewall.service") {
 		t.Errorf("unit does not wait for the ruleset:\n%s", unit)
 	}
+	sandboxed(t, unit, "CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE",
+		"RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK", "PrivateDevices=yes",
+		"RuntimeDirectory=miniupnpd", "ExecStart=/usr/sbin/miniupnpd -d -f /etc/miniupnpd/ostiole.conf -P /run/miniupnpd/miniupnpd.pid")
 }
 
 // Setting a service up creates the directory its daemon reads, and a
