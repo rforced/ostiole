@@ -780,8 +780,10 @@ func (v *validator) services(c *Config, ifaces, zones map[string]bool) {
 			}
 		}
 		for j, d := range sc.DNS {
-			if _, err := ParseIP(d); err != nil {
+			if ip, err := ParseIP(d); err != nil {
 				v.add(fmt.Sprintf("%s.dns[%d]", path, j), "%v", err)
+			} else if !ip.Is4() {
+				v.add(fmt.Sprintf("%s.dns[%d]", path, j), "%s is not an IPv4 address; IPv6 DNS servers go on the interface's IPv6 server", d)
 			}
 		}
 		if sc.Domain != "" && !domainRe.MatchString(sc.Domain) {

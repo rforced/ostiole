@@ -301,7 +301,7 @@ func TestValidateServices(t *testing.T) {
 	cfg.Services = Services{
 		DHCP: DHCPService{Enabled: true,
 			Servers: []DHCPServer{
-				{Interface: "eth1", Enabled: true, RangeStart: "192.168.2.10", RangeEnd: "192.168.1.5", LeaseTime: "soon", Gateway: "10.0.0.1", DNS: []string{"bad"}, Domain: "-x"},
+				{Interface: "eth1", Enabled: true, RangeStart: "192.168.2.10", RangeEnd: "192.168.1.5", LeaseTime: "soon", Gateway: "10.0.0.1", DNS: []string{"bad", "2001:db8::53", "192.168.1.53"}, Domain: "-x"},
 				{Interface: "eth0", Enabled: true, RangeStart: "1.1.1.1", RangeEnd: "1.1.1.2"},
 				{Interface: "ghost", Enabled: true},
 			},
@@ -324,7 +324,7 @@ func TestValidateServices(t *testing.T) {
 	}
 	for _, p := range []string{
 		"services.dhcp.servers[0].rangeStart", "services.dhcp.servers[0].leaseTime", "services.dhcp.servers[0].gateway",
-		"services.dhcp.servers[0].dns[0]", "services.dhcp.servers[0].domain",
+		"services.dhcp.servers[0].dns[0]", "services.dhcp.servers[0].dns[1]", "services.dhcp.servers[0].domain",
 		"services.dhcp.servers[1].interface", "services.dhcp.servers[2].interface",
 		"services.dhcp.staticLeases[0].mac", "services.dhcp.staticLeases[0].ip", "services.dhcp.staticLeases[0].hostname",
 		"services.dhcp.staticLeases[2].mac", "services.dhcp.staticLeases[3].hostname", "services.dhcp.staticLeases[4].hostname",
@@ -340,6 +340,9 @@ func TestValidateServices(t *testing.T) {
 		if got[p] {
 			t.Errorf("an ordinary name refused at %s", p)
 		}
+	}
+	if got["services.dhcp.servers[0].dns[2]"] {
+		t.Error("an IPv4 DNS server refused")
 	}
 	cfg.Services.DNS = DNSServer{Enabled: true}
 	cfg.Services.DHCP = DHCPService{}

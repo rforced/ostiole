@@ -262,9 +262,9 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 				case svc.DNS.Enabled:
 					dns = []string{prefix.Addr().String()}
 				case len(cfg.System.DNSServers) > 0:
-					dns = cfg.System.DNSServers
+					dns = ipv4Only(cfg.System.DNSServers)
 				default:
-					dns = svc.DNS.Upstreams
+					dns = ipv4Only(svc.DNS.Upstreams)
 				}
 			}
 			if len(dns) > 0 {
@@ -387,6 +387,18 @@ func hostPartOnly(ip netip.Addr) bool {
 		}
 	}
 	return true
+}
+
+// ipv4Only keeps the IPv4 addresses: dnsmasq refuses its whole
+// configuration over an IPv6 one in a DHCPv4 option.
+func ipv4Only(addrs []string) []string {
+	var out []string
+	for _, a := range addrs {
+		if ip, err := netip.ParseAddr(strings.TrimSpace(a)); err == nil && ip.Is4() {
+			out = append(out, ip.String())
+		}
+	}
+	return out
 }
 
 // listenInterfaces is every interface dnsmasq must bind: the DNS

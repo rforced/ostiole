@@ -416,6 +416,40 @@ func TestDisabledInterfaceServesNothing(t *testing.T) {
 	}
 }
 
+// With the DNS service off, a pool with no DNS servers of its own hands out
+// the system resolvers, and DHCPv4 carries only IPv4 ones: dnsmasq refuses
+// its whole configuration over an IPv6 address in that option.
+func TestPoolHandsOutOnlyIPv4SystemResolvers(t *testing.T) {
+	t.Parallel()
+	cfg := loadConfig(t, "testdata/dhcp-only.json")
+	cfg.Services.DHCP.Servers[0].DNS = nil
+	for _, c := range []struct {
+		servers []string
+		want    string
+	}{
+		{[]string{"2001:db8::53", "9.9.9.9"}, "dhcp-option=tag:s_eth1,option:dns-server,9.9.9.9\n"},
+		{[]string{"2001:db8::53"}, ""},
+	} {
+		cfg.System.DNSServers = c.servers
+		if err := cfg.Validate(); err != nil {
+			t.Fatal(err)
+		}
+		files, err := (&Dnsmasq{Dir: DefaultDir, Leases: LeaseFile}).Render(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := ""
+		for _, line := range strings.SplitAfter(files[confName], "\n") {
+			if strings.Contains(line, "option:dns-server") {
+				got += line
+			}
+		}
+		if got != c.want {
+			t.Errorf("system resolvers %v gave %q, want %q", c.servers, got, c.want)
+		}
+	}
+}
+
 func TestApplyStartsStopsAndReverts(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
