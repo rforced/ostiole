@@ -143,7 +143,7 @@ const QUIET = ['quiet', 'offline']
           <tr v-if="!rows.length">
             <td :colspan="kind === 'wireguard' ? 5 : 4" class="text-ink-muted">{{ empty }}</td>
           </tr>
-          <tr v-for="e in rows" :key="e.seq">
+          <tr v-for="e in rows" :key="e.seq" v-memo="[e]">
             <td data-label="Time" class="when">
               {{ formatWhen(e.time) }}
             </td>

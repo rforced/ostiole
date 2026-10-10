@@ -1,8 +1,8 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent, h, nextTick, ref } from 'vue'
+import { defineComponent, h, nextTick, ref, watch } from 'vue'
 
-import { MAX_ROWS, PAGE, SETTLE_MS, heldLine, useLog } from '@/lib/log'
+import { LAND_MS, MAX_ROWS, PAGE, SETTLE_MS, heldLine, useLog } from '@/lib/log'
 
 /** The stream the log opens; a test sends through the last one. */
 let source = null
@@ -17,6 +17,18 @@ class FakeSource {
   }
 }
 const send = (e) => source.onmessage({ data: JSON.stringify(e) })
+
+/** Lets what arrived land, as the next landing does. */
+async function land() {
+  vi.advanceTimersByTime(LAND_MS)
+  await flushPromises()
+}
+
+/** The tab hides or shows, as the browser says it. */
+function hide(hidden) {
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden })
+  document.dispatchEvent(new Event('visibilitychange'))
+}
 
 /** A log of n entries, newest first, served a page at a time like the router. */
 function router(n) {
@@ -50,9 +62,11 @@ const seqs = (log) => log.rows.value.map((e) => e.seq)
 describe('useLog', () => {
   beforeEach(() => {
     vi.stubGlobal('EventSource', FakeSource)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
   })
   afterEach(() => {
     vi.useRealTimers()
+    delete document.hidden
   })
 
   it('reads the newest page, and the next as asked', async () => {
@@ -79,11 +93,13 @@ describe('useLog', () => {
     await flushPromises()
     expect(log().live.value).toBe(true)
     send({ seq: 451, word: 'new' })
+    await land()
     expect(seqs(log())[0]).toBe(451)
 
     await log().loadMore()
     expect(log().live.value).toBe(false)
     send({ seq: 452, word: 'held' })
+    await land()
     expect(seqs(log())[0]).toBe(451)
     log().live.value = true
     await flushPromises()
@@ -143,10 +159,36 @@ describe('useLog', () => {
     send({ seq: 3, word: 'w3' })
     send({ seq: 4, word: 'hidden' })
     send({ seq: 5, word: 'shown' })
+    await land()
     expect(seqs(log())).toEqual([5, 3, 2, 1])
-    log().query.value = 'zzz'
+    log().query.value = 'w'
+    await nextTick()
+    vi.advanceTimersByTime(SETTLE_MS)
+    await flushPromises()
     send({ seq: 6, word: 'nope' })
-    expect(seqs(log())[0]).toBe(5)
+    send({ seq: 7, word: 'w7' })
+    await land()
+    expect(seqs(log())).toEqual([7, 3, 2, 1])
+  })
+
+  // Rows land together, so a busy log draws the table a few times a second
+  // rather than once an entry.
+  it('lands what arrives together', async () => {
+    const { log } = harness(router(3))
+    await flushPromises()
+    let draws = 0
+    watch(log().rows, () => draws++, { flush: 'sync' })
+    // After a quiet spell, at once.
+    send({ seq: 4, word: 'x' })
+    vi.advanceTimersByTime(0)
+    expect(seqs(log())[0]).toBe(4)
+    for (let seq = 5; seq <= 54; seq++) send({ seq, word: 'x' })
+    vi.advanceTimersByTime(LAND_MS - 1)
+    expect(seqs(log())[0]).toBe(4)
+    vi.advanceTimersByTime(1)
+    expect(seqs(log()).slice(0, 3)).toEqual([54, 53, 52])
+    expect(seqs(log())).toHaveLength(54)
+    expect(draws).toBe(2)
   })
 
   it('reads again when a select changes', async () => {
@@ -172,8 +214,67 @@ describe('useLog', () => {
     await flushPromises()
     expect(seqs(log())).toHaveLength(MAX_ROWS)
     send({ seq: MAX_ROWS + 1, word: 'x' })
+    await land()
     expect(seqs(log())).toHaveLength(MAX_ROWS)
     expect(log().more.value).toBe(true)
+    await log().loadMore()
+    expect(seqs(log()).at(-1)).toBe(1)
+  })
+
+  // More arrived while Live was off than wait for it: rather than land some
+  // of them over a gap, Live starts again from the newest page.
+  it('reads the newest page again when more arrived than wait', async () => {
+    const read = router(300)
+    const { log } = harness(read)
+    await flushPromises()
+    await log().loadMore()
+    expect(log().live.value).toBe(false)
+    const last = 300 + MAX_ROWS + 1
+    for (let seq = 301; seq <= last; seq++) send({ seq, word: 'x' })
+    read.mockImplementation(router(last))
+    log().live.value = true
+    await flushPromises()
+    expect(seqs(log())).toHaveLength(PAGE)
+    expect(seqs(log())[0]).toBe(last)
+    expect(log().more.value).toBe(true)
+  })
+
+  // A hidden tab holds no stream and draws nothing. Shown again, Live reads
+  // the newest page, since what came meanwhile never arrived.
+  it('closes the stream while the tab is hidden', async () => {
+    const read = router(300)
+    const { log } = harness(read)
+    await flushPromises()
+    const was = source
+    hide(true)
+    expect(was.closed).toBe(true)
+    hide(false)
+    expect(source).not.toBe(was)
+    source.onopen()
+    await flushPromises()
+    expect(read).toHaveBeenCalledTimes(2)
+    send({ seq: 301, word: 'x' })
+    await land()
+    expect(seqs(log())[0]).toBe(301)
+  })
+
+  // Reading back with Live off, the rows stay put through a hidden spell,
+  // and Live starts again from the newest page.
+  it('keeps what was read back through a hidden spell', async () => {
+    const read = router(300)
+    const { log } = harness(read)
+    await flushPromises()
+    await log().loadMore()
+    hide(true)
+    hide(false)
+    source.onopen()
+    await flushPromises()
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(seqs(log())).toHaveLength(300)
+    log().live.value = true
+    await flushPromises()
+    expect(read).toHaveBeenCalledTimes(3)
+    expect(seqs(log())).toHaveLength(PAGE)
   })
 
   // A restarted router numbers its entries from 1 again, so the page
@@ -186,6 +287,7 @@ describe('useLog', () => {
     await flushPromises()
     source.onopen()
     send({ seq: 501, word: 'before' })
+    await land()
     expect(seqs(l())[0]).toBe(501)
 
     // Dropped, and the browser retries.
@@ -198,6 +300,7 @@ describe('useLog', () => {
     expect(read).toHaveBeenCalledTimes(2)
     expect(seqs(l())).toEqual([3, 2, 1])
     send({ seq: 4, word: 'after' })
+    await land()
     expect(seqs(l())[0]).toBe(4)
   })
 

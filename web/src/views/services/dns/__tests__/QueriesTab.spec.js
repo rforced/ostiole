@@ -3,6 +3,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { sentence } from '@/lib/blocking'
+import { LAND_MS } from '@/lib/log'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -173,38 +175,45 @@ describe('QueriesTab', () => {
 
   // Live is on from the start. Off, what arrives waits; on, it lands on top.
   it('streams new answers on top while live', async () => {
-    const send = (seq) =>
-      source.onmessage({
-        data: JSON.stringify({
-          seq,
-          time: '2026-09-24T12:00:01Z',
-          client: '10.0.0.2',
-          name: `name${seq}.example`,
-          type: 'A',
-          status: 'ok',
-        }),
-      })
-    saved()
-    const wrapper = mount(QueriesTab)
-    await flushPromises()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const send = (seq) =>
+        source.onmessage({
+          data: JSON.stringify({
+            seq,
+            time: '2026-09-24T12:00:01Z',
+            client: '10.0.0.2',
+            name: `name${seq}.example`,
+            type: 'A',
+            status: 'ok',
+          }),
+        })
+      saved()
+      const wrapper = mount(QueriesTab)
+      await flushPromises()
 
-    const live = button(wrapper, 'Live')
-    expect(live.attributes('aria-pressed')).toBe('true')
-    send(450)
-    send(451)
-    await flushPromises()
-    expect(names(wrapper).slice(0, 3)).toEqual([
-      'name451.example',
-      'name450.example',
-      'name449.example',
-    ])
+      const live = button(wrapper, 'Live')
+      expect(live.attributes('aria-pressed')).toBe('true')
+      send(450)
+      send(451)
+      vi.advanceTimersByTime(LAND_MS)
+      await flushPromises()
+      expect(names(wrapper).slice(0, 3)).toEqual([
+        'name451.example',
+        'name450.example',
+        'name449.example',
+      ])
 
-    await live.trigger('click')
-    send(452)
-    await flushPromises()
-    expect(names(wrapper)[0]).toBe('name451.example')
-    await live.trigger('click')
-    expect(names(wrapper)[0]).toBe('name452.example')
+      await live.trigger('click')
+      send(452)
+      vi.advanceTimersByTime(LAND_MS)
+      await flushPromises()
+      expect(names(wrapper)[0]).toBe('name451.example')
+      await live.trigger('click')
+      expect(names(wrapper)[0]).toBe('name452.example')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   // The selects narrow on the router; the search goes to it once typing
@@ -260,6 +269,39 @@ describe('QueriesTab', () => {
     await block().setValue(false)
     expect(allow().element.checked).toBe(false)
     expect(config.dirty).toBe(false)
+  })
+
+  // A row is drawn once, yet its toggle follows the lists wherever they
+  // change.
+  it('follows the lists when they change elsewhere', async () => {
+    api.queries.list.mockResolvedValue(mixed())
+    const config = saved()
+    const wrapper = mount(QueriesTab)
+    await flushPromises()
+    expect(toggle(wrapper, 'Block example.com').element.checked).toBe(false)
+    config.setException('example.com', 'deny', true)
+    await flushPromises()
+    expect(toggle(wrapper, 'Block example.com').element.checked).toBe(true)
+    config.setException('example.com', 'allow', true)
+    await flushPromises()
+    expect(toggle(wrapper, 'Block example.com').exists()).toBe(false)
+    expect(toggle(wrapper, 'Allow example.com').element.checked).toBe(true)
+  })
+
+  it('says under a blocked row why, and puts it away again', async () => {
+    api.queries.list.mockResolvedValue(mixed())
+    const finding = { name: 'ads.example.com', reason: 'list', matched: 'ads.example.com' }
+    api.blocking.lookup.mockResolvedValue(finding)
+    saved()
+    const wrapper = mount(QueriesTab)
+    await flushPromises()
+    await button(wrapper, 'Why?').trigger('click')
+    await flushPromises()
+    expect(api.blocking.lookup).toHaveBeenCalledWith('ads.example.com')
+    expect(wrapper.text()).toContain(sentence(finding))
+    await button(wrapper, 'Why?').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).not.toContain(sentence(finding))
   })
 
   it('offers a viewer no toggles', async () => {

@@ -5,6 +5,7 @@ import { h } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
 import { api } from '@/lib/api'
+import { LAND_MS } from '@/lib/log'
 import { eventValues } from '@/lib/proxyEvents'
 import { matches } from '@/lib/search'
 import { useProxyStatus } from '@/lib/proxyStatus'
@@ -240,21 +241,28 @@ describe('EventsTab', () => {
   // Live is on from the start. Off holds what arrives until it is on again,
   // and an event the first read already holds does not land twice.
   it('lands new events on top while Live is on, and holds them while it is off', async () => {
-    const { wrapper } = await events([event({ seq: 7, client: '10.0.0.7' })])
-    send(event({ seq: 7, client: '10.0.0.7' }))
-    send(event({ seq: 8, client: '10.0.0.8' }))
-    await flushPromises()
-    expect(clients(wrapper)).toEqual(['10.0.0.8', '10.0.0.7'])
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const { wrapper } = await events([event({ seq: 7, client: '10.0.0.7' })])
+      send(event({ seq: 7, client: '10.0.0.7' }))
+      send(event({ seq: 8, client: '10.0.0.8' }))
+      vi.advanceTimersByTime(LAND_MS)
+      await flushPromises()
+      expect(clients(wrapper)).toEqual(['10.0.0.8', '10.0.0.7'])
 
-    const live = wrapper.findAll('button').find((b) => b.text() === 'Live')
-    expect(live.attributes('aria-pressed')).toBe('true')
-    await live.trigger('click')
-    send(event({ seq: 9, client: '10.0.0.9' }))
-    await flushPromises()
-    expect(clients(wrapper)).toEqual(['10.0.0.8', '10.0.0.7'])
+      const live = wrapper.findAll('button').find((b) => b.text() === 'Live')
+      expect(live.attributes('aria-pressed')).toBe('true')
+      await live.trigger('click')
+      send(event({ seq: 9, client: '10.0.0.9' }))
+      vi.advanceTimersByTime(LAND_MS)
+      await flushPromises()
+      expect(clients(wrapper)).toEqual(['10.0.0.8', '10.0.0.7'])
 
-    await live.trigger('click')
-    expect(clients(wrapper)).toEqual(['10.0.0.9', '10.0.0.8', '10.0.0.7'])
+      await live.trigger('click')
+      expect(clients(wrapper)).toEqual(['10.0.0.9', '10.0.0.8', '10.0.0.7'])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   // The router searches once typing rests, and narrows to a verdict.
@@ -409,10 +417,17 @@ describe('EventsTab', () => {
     expect(v4.findAll('span').map((s) => s.text())).toEqual(['192.168.1.55'])
   })
 
-  it('offers no exclusion when the site has no profile', async () => {
-    const { wrapper } = await events([event()])
+  // A row is drawn once, yet it follows the draft: a profile given to the
+  // site offers the exclusions.
+  it('offers no exclusion until the site has a profile', async () => {
+    const { wrapper, store } = await events([event()])
     expect(wrapper.text()).toContain('The site has no WAF profile.')
     expect(wrapper.text()).not.toContain('Exclude on this path')
+    store.proxy.wafProfiles = [{ id: 'strict' }]
+    store.proxy.sites[0].waf = 'strict'
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('The site has no WAF profile.')
+    expect(wrapper.text()).toContain('Exclude on this path')
   })
 
   it('adds a rule to the draft, and opens the dialog to add it on a path', async () => {

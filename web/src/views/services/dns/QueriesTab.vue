@@ -102,13 +102,20 @@ const loadLists = useAsync(
 /** The exception lists, as their toggles call them. */
 const EXCEPTIONS = { allow: 'Allow', deny: 'Block' }
 
-/** What each row offers to toggle, from the draft rather than the log. */
-const toggleFor = computed(() => exceptionToggles(config.draft))
-
-const rows = computed(() => {
-  const toggle = toggleFor.value
-  return log.rows.value.map((e) => ({ ...e, toggle: toggle(e) }))
+/**
+ * What each row offers to toggle, from the draft rather than the log. An
+ * entry's row is made once until the lists change, so it is drawn once.
+ */
+const withToggle = computed(() => {
+  const toggle = exceptionToggles(config.draft)
+  const made = new WeakMap()
+  return (e) => {
+    if (!made.has(e)) made.set(e, { ...e, toggle: toggle(e) })
+    return made.get(e)
+  }
 })
+
+const rows = computed(() => log.rows.value.map(withToggle.value))
 
 /** Written to files as well, as the draft has it. */
 const filesOn = computed(() => Boolean(config.draft?.system?.logging?.files?.enabled))
@@ -251,7 +258,8 @@ function explain(name) {
             <tr v-if="!rows.length">
               <td colspan="7" class="text-ink-muted">{{ empty }}</td>
             </tr>
-            <template v-for="e in rows" :key="e.seq">
+            <!-- eslint-disable-next-line vue/no-useless-template-attributes -->
+            <template v-for="e in rows" :key="e.seq" v-memo="[e, why[e.name], auth.readOnly]">
               <tr class="max-sm:after:order-4 max-sm:after:basis-full max-sm:after:content-['']">
                 <td class="when max-sm:order-1">
                   {{ formatWhen(e.time) }}

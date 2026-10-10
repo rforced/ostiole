@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import { fwlogValues } from '@/lib/fwlog'
-import { SETTLE_MS } from '@/lib/log'
+import { LAND_MS, SETTLE_MS } from '@/lib/log'
 import { matches } from '@/lib/search'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -132,7 +132,8 @@ describe('LogPage', () => {
     expect(badge(2).classes()).toContain('badge-warn')
   })
 
-  // A line of the proxy's access list is named as its page names it.
+  // A line of the proxy's access list is named as its page names it, and
+  // follows a rename there.
   it('names a proxy access rule by its description', async () => {
     const store = useConfigStore()
     store.draft.services = {
@@ -143,6 +144,9 @@ describe('LogPage', () => {
       entry({ kind: 'proxy', ruleId: 'gone', action: 'drop', src: '2' }),
     ])
     expect(matched(w)).toEqual(['proxy: Sites from home', 'proxy: gone'])
+    store.draft.services.proxy.access[0].description = 'Sites from the office'
+    await flushPromises()
+    expect(matched(w)[0]).toBe('proxy: Sites from the office')
   })
 
   it('names the source guards', async () => {
@@ -245,20 +249,27 @@ describe('LogPage', () => {
 
   // Off holds what arrives, so nothing is missed; on shows it.
   it('holds new packets while Live is off', async () => {
-    const w = await open(log)
-    send(entry({ ruleId: 'first', action: 'accept' }))
-    await flushPromises()
-    expect(matched(w)[0]).toBe('first')
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const w = await open(log)
+      send(entry({ ruleId: 'first', action: 'accept' }))
+      vi.advanceTimersByTime(LAND_MS)
+      await flushPromises()
+      expect(matched(w)[0]).toBe('first')
 
-    const live = w.findAll('button').find((b) => b.text() === 'Live')
-    expect(live.attributes('aria-pressed')).toBe('true')
-    await live.trigger('click')
-    send(entry({ ruleId: 'held', action: 'accept' }))
-    await flushPromises()
-    expect(matched(w)).not.toContain('held')
+      const live = w.findAll('button').find((b) => b.text() === 'Live')
+      expect(live.attributes('aria-pressed')).toBe('true')
+      await live.trigger('click')
+      send(entry({ ruleId: 'held', action: 'accept' }))
+      vi.advanceTimersByTime(LAND_MS)
+      await flushPromises()
+      expect(matched(w)).not.toContain('held')
 
-    await live.trigger('click')
-    expect(matched(w)[0]).toBe('held')
+      await live.trigger('click')
+      expect(matched(w)[0]).toBe('held')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

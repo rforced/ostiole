@@ -96,7 +96,7 @@ const empty = computed(() => {
           <tr v-if="!rows.length">
             <td colspan="8" class="text-ink-muted">{{ empty }}</td>
           </tr>
-          <tr v-for="e in rows" :key="e.seq">
+          <tr v-for="e in rows" :key="e.seq" v-memo="[e]">
             <td class="when" data-label="Time">{{ formatWhen(e.time) }}</td>
             <td data-label="Protocol">{{ e.protocol === 'ssdp' ? 'SSDP' : 'mDNS' }}</td>
             <td data-label="Kind">

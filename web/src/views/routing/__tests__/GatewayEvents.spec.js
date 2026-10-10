@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { LAND_MS } from '@/lib/log'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -57,12 +58,23 @@ describe('GatewayEvents', () => {
   })
 
   it('takes new events from the stream while Live is on', async () => {
-    const w = await card()
-    source.onmessage({
-      data: JSON.stringify({ seq: 4, time: '2026-10-08T14:12:00Z', gateway: 'lte', kind: 'never' }),
-    })
-    await flushPromises()
-    expect(w.findAll('tbody tr')[0].text()).toContain('Never answered')
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const w = await card()
+      source.onmessage({
+        data: JSON.stringify({
+          seq: 4,
+          time: '2026-10-08T14:12:00Z',
+          gateway: 'lte',
+          kind: 'never',
+        }),
+      })
+      vi.advanceTimersByTime(LAND_MS)
+      await flushPromises()
+      expect(w.findAll('tbody tr')[0].text()).toContain('Never answered')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('clears the events, once asked', async () => {

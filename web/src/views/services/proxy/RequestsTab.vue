@@ -107,7 +107,7 @@ const empty = computed(() => {
           <tr v-if="!rows.length">
             <td colspan="6" class="text-ink-muted">{{ empty }}</td>
           </tr>
-          <tr v-for="r in rows" :key="r.seq">
+          <tr v-for="r in rows" :key="r.seq" v-memo="[r]">
             <td class="when">
               {{ formatWhen(r.time) }}
             </td>

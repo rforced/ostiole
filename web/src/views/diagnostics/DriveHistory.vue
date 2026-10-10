@@ -117,7 +117,7 @@ const orDash = (v, unit = '') => (v == null ? '—' : `${formatCount(v)}${unit}`
         <tr v-if="!rows.length">
           <td colspan="7" class="text-ink-muted">{{ empty }}</td>
         </tr>
-        <tr v-for="r in rows" :key="r.seq">
+        <tr v-for="r in rows" :key="r.seq" v-memo="[r]">
           <td data-label="Time" class="when">
             {{ formatWhen(r.time) }}
           </td>

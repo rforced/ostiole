@@ -113,6 +113,7 @@ const empty = computed(() => {
           <tr
             v-for="e in rows"
             :key="e.seq"
+            v-memo="[e]"
             class="max-sm:after:order-4 max-sm:after:basis-full max-sm:after:content-['']"
           >
             <td class="when max-sm:order-1">

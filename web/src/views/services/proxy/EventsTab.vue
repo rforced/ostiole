@@ -166,6 +166,7 @@ function halves(addr) {
           <tr
             v-for="e in rows"
             :key="e.seq"
+            v-memo="[e, profileOf(e.site), auth.readOnly]"
             class="max-xl:after:order-4 max-xl:after:basis-full max-xl:after:content-['']"
           >
             <td class="when max-xl:order-1">

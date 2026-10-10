@@ -1,4 +1,4 @@
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 
 import { errorMessage } from '@/lib/async'
 import { formatCount } from '@/lib/format'
@@ -13,7 +13,9 @@ export const SETTLE_MS = 250
  * Rows the table keeps while Live adds to them. Past it the oldest go, and
  * scrolling reads them again.
  */
-export const MAX_ROWS = 10000
+export const MAX_ROWS = 1000
+/** How often Live adds what arrived, at most. */
+export const LAND_MS = 250
 
 /**
  * When an entry was logged, short: 25 Sep, 14:02.
@@ -59,9 +61,10 @@ export function keptLine(inFiles) {
 /**
  * The one way a page reads a log the router keeps: the newest page on
  * opening, the next as the table scrolls, the search asked of the router
- * once typing rests, and new rows over the stream while Live is on.
- * Scrolling past the first page turns Live off; what arrives meanwhile
- * waits, and lands when Live is on again.
+ * once typing rests, and new rows over the stream while Live is on, landing
+ * together at most every LAND_MS. Scrolling past the first page turns Live
+ * off; what arrives meanwhile waits, and lands when Live is on again. A
+ * hidden tab closes the stream.
  *
  * @param {object} o
  * @param {(params: object, signal: AbortSignal) => Promise<object>} o.read
@@ -74,7 +77,8 @@ export function keptLine(inFiles) {
  * @param {import('vue').Ref<any>} [o.top] brought into view when Live goes on
  */
 export function useLog({ read, stream, filters = () => ({}), keep = () => true, values, top }) {
-  const rows = ref([])
+  // Entries never change, so they are not made reactive one by one.
+  const rows = shallowRef([])
   const query = ref('')
   const live = ref(true)
   const more = ref(false)
@@ -90,14 +94,21 @@ export function useLog({ read, stream, filters = () => ({}), keep = () => true, 
   const updatedAt = ref(0)
 
   let next = 0
-  /** Arrivals while Live is off or a first page is read, newest first. */
+  /** Arrivals not in the table yet, oldest first. */
   let waiting = []
+  /**
+   * Arrivals were missed: the stream was closed, or more came than wait.
+   * The newest page is read again before any land.
+   */
+  let missed = false
   /** The newest entry seen, so none lands twice. */
   let newest = 0
   let first = null
   let later = null
   let source = null
   let settle = 0
+  let landing = 0
+  let landed = -Infinity
 
   function params(before) {
     const p = { ...filters(), limit: PAGE }
@@ -122,6 +133,7 @@ export function useLog({ read, stream, filters = () => ({}), keep = () => true, 
     const c = new AbortController()
     first = c
     reading.value = true
+    missed = false
     try {
       const p = await read(params(0), c.signal)
       page.value = p
@@ -134,7 +146,10 @@ export function useLog({ read, stream, filters = () => ({}), keep = () => true, 
       updatedAt.value = Date.now()
       if (live.value) release()
     } catch (e) {
-      if (e?.name !== 'AbortError') error.value = errorMessage(e)
+      if (e?.name !== 'AbortError') {
+        error.value = errorMessage(e)
+        missed = true
+      }
     } finally {
       if (first === c) {
         first = null
@@ -167,44 +182,67 @@ export function useLog({ read, stream, filters = () => ({}), keep = () => true, 
     }
   }
 
-  /** Puts streamed rows on top: those the view and the search keep. */
+  /** Puts streamed rows, newest first, on top: those the view and the search keep. */
   function add(list) {
     const shown = list.filter((e) => keep(e) && matches(query.value, values(e)))
     if (!shown.length) return
-    rows.value = [...shown, ...rows.value]
-    if (rows.value.length > MAX_ROWS) {
-      rows.value = rows.value.slice(0, MAX_ROWS)
-      next = rows.value[rows.value.length - 1].seq
+    const all = shown.concat(rows.value)
+    if (all.length > MAX_ROWS) {
+      all.length = MAX_ROWS
+      next = all[MAX_ROWS - 1].seq
       more.value = true
     }
+    rows.value = all
   }
 
   function release() {
-    const list = waiting
+    if (missed) {
+      reload()
+      return
+    }
+    const list = waiting.reverse()
     waiting = []
     add(list)
+  }
+
+  function land() {
+    landing = 0
+    landed = performance.now()
+    if (live.value && !reading.value) release()
+  }
+
+  /** At once after a quiet spell, then at most every LAND_MS. */
+  function schedule() {
+    if (landing) return
+    landing = window.setTimeout(land, Math.max(0, landed + LAND_MS - performance.now()))
   }
 
   function arrive(e) {
     if (!(e.seq > newest)) return
     newest = e.seq
-    if (live.value && !reading.value) add([e])
-    else waiting = [e, ...waiting].slice(0, MAX_ROWS)
+    waiting.push(e)
+    if (waiting.length > MAX_ROWS) {
+      waiting = []
+      missed = true
+    }
+    if (live.value) schedule()
   }
 
-  function connect() {
+  /** @param {boolean} [resumed] the tab shows again after the stream was closed */
+  function connect(resumed = false) {
     // EventSource sends the session cookie on same-origin requests.
     const es = new EventSource(stream)
     source = es
-    let opened = false
+    let opened = resumed
     es.onopen = () => {
       streamError.value = ''
-      // Reopened after a drop: a restarted router numbers its entries
-      // from 1 again, and what was sent meanwhile never arrives.
+      // Reopened: a restarted router numbers its entries from 1 again, and
+      // what was sent meanwhile never arrives.
       if (opened) {
         newest = 0
         waiting = []
-        reload()
+        if (live.value) reload()
+        else missed = true
       }
       opened = true
     }
@@ -220,10 +258,18 @@ export function useLog({ read, stream, filters = () => ({}), keep = () => true, 
     }
   }
 
+  function onVisibility() {
+    if (document.hidden) {
+      source?.close()
+      source = null
+    } else if (!source) connect(true)
+  }
+
   /** Empties the table; what arrives from now on lands in it. */
   function clear() {
     rows.value = []
     waiting = []
+    missed = false
     more.value = false
     searchedTo.value = ''
   }
@@ -241,14 +287,17 @@ export function useLog({ read, stream, filters = () => ({}), keep = () => true, 
   watch(filters, reload)
 
   onMounted(() => {
-    connect()
+    document.addEventListener('visibilitychange', onVisibility)
+    if (!document.hidden) connect()
     reload()
   })
   onBeforeUnmount(() => {
+    document.removeEventListener('visibilitychange', onVisibility)
     source?.close()
     first?.abort()
     later?.abort()
     window.clearTimeout(settle)
+    window.clearTimeout(landing)
   })
 
   return {
