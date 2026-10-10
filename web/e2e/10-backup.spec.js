@@ -90,8 +90,6 @@ test('the remote backup settings become a system cron', async ({ page }) => {
   await section.getByLabel('Key ID', { exact: true }).fill('0055abc')
   await section.getByLabel('Secret', { exact: true }).fill('not-a-real-key')
   await section.getByLabel('Passphrase', { exact: true }).fill(PASSWORD)
-  // Schedule, prefix and retention sit behind the fold.
-  await section.getByRole('button', { name: 'Advanced' }).click()
   await expect(section.getByLabel('Schedule', { exact: true })).toHaveValue('0 3 * * *')
   await section.getByLabel('Remote backup enabled').check()
   // Switched on with no prefix, the copies get a folder for this router.

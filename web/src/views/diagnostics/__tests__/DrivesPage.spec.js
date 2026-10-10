@@ -91,15 +91,6 @@ const status = (extra = {}) => ({ tool: '7.5', root: true, drives: [drive()], ..
 
 const button = (wrapper, label) => wrapper.findAll('button').find((b) => b.text() === label)
 
-/** Attributes and the logs sit behind folds, which unmount while closed. */
-async function openFold(wrapper, label) {
-  await wrapper
-    .findAll('button')
-    .find((b) => b.text().startsWith(label))
-    .trigger('click')
-  await flushPromises()
-}
-
 describe('DrivesPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -170,7 +161,6 @@ describe('DrivesPage', () => {
       'Last test: short offline, completed without error, at 57 hours.',
     )
 
-    await openFold(wrapper, 'Attributes')
     const pending = wrapper.findAll('tbody tr')[1]
     expect(pending.text()).toContain('failing now')
     expect(pending.find('.text-warn').text()).toBe('3')

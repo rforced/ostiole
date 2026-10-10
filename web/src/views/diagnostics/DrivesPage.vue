@@ -2,7 +2,6 @@
 import { computed, onMounted, ref, watch } from 'vue'
 
 import ActionButton from '@/components/ActionButton.vue'
-import AppDisclosure from '@/components/AppDisclosure.vue'
 import AppNotice from '@/components/AppNotice.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -346,7 +345,8 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
           </div>
         </div>
 
-        <AppDisclosure v-if="d.attributes?.length" :label="`Attributes · ${d.attributes.length}`">
+        <div v-if="d.attributes?.length" class="space-y-4">
+          <h3 class="group-title">Attributes · {{ d.attributes.length }}</h3>
           <p class="max-w-3xl text-ink-muted">{{ attributeSubtitle(d) }}</p>
           <div class="overflow-x-auto">
             <table class="table">
@@ -385,9 +385,10 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
               </tbody>
             </table>
           </div>
-        </AppDisclosure>
+        </div>
 
-        <AppDisclosure label="Self-test log">
+        <div class="space-y-4">
+          <h3 class="group-title">Self-test log</h3>
           <div class="overflow-x-auto">
             <table class="table">
               <thead>
@@ -415,9 +416,10 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
               </tbody>
             </table>
           </div>
-        </AppDisclosure>
+        </div>
 
-        <AppDisclosure :label="`Errors · ${formatCount(d.errorCount)} logged`">
+        <div class="space-y-4">
+          <h3 class="group-title">Errors · {{ formatCount(d.errorCount) }} logged</h3>
           <div class="overflow-x-auto">
             <table class="table">
               <thead>
@@ -439,7 +441,7 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
               </tbody>
             </table>
           </div>
-        </AppDisclosure>
+        </div>
       </div>
     </SectionCard>
 

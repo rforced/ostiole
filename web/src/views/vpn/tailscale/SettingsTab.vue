@@ -1,7 +1,6 @@
 <script setup>
 import { computed } from 'vue'
 
-import AppDisclosure from '@/components/AppDisclosure.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -194,38 +193,36 @@ function addZone(zone) {
           />
         </fieldset>
 
-        <AppDisclosure>
-          <fieldset class="field-group">
-            <legend>Identity</legend>
-            <div class="fields fields-card">
-              <FormField id="ts-hostname" label="Hostname" hint="The router's name.">
-                <input id="ts-hostname" v-model="hostname" type="text" class="input font-mono" />
-              </FormField>
-              <FormField
+        <fieldset class="field-group">
+          <legend>Identity</legend>
+          <div class="fields fields-card">
+            <FormField id="ts-hostname" label="Hostname" hint="The router's name.">
+              <input id="ts-hostname" v-model="hostname" type="text" class="input font-mono" />
+            </FormField>
+            <FormField
+              id="ts-login-server"
+              label="Login server"
+              hint="Tailscale's. Changing it needs a log out."
+            >
+              <input
                 id="ts-login-server"
-                label="Login server"
-                hint="Tailscale's. Changing it needs a log out."
-              >
-                <input
-                  id="ts-login-server"
-                  v-model="loginServer"
-                  type="text"
-                  class="input font-mono"
-                />
-              </FormField>
-            </div>
-          </fieldset>
+                v-model="loginServer"
+                type="text"
+                class="input font-mono"
+              />
+            </FormField>
+          </div>
+        </fieldset>
 
-          <fieldset class="field-group">
-            <legend>Privacy</legend>
-            <ToggleRow
-              v-model="logUploads"
-              label="Log uploads"
-              hint="Off keeps the daemon's logs on this router. Tailscale support cannot help
-                without them."
-            />
-          </fieldset>
-        </AppDisclosure>
+        <fieldset class="field-group">
+          <legend>Privacy</legend>
+          <ToggleRow
+            v-model="logUploads"
+            label="Log uploads"
+            hint="Off keeps the daemon's logs on this router. Tailscale support cannot help
+              without them."
+          />
+        </fieldset>
       </div>
     </SectionCard>
 

@@ -47,7 +47,6 @@ test('add a server beside the defaults, narrow serving, and apply', async ({ pag
   await expect(page.getByText("These follow Ostiole's defaults")).toHaveCount(0)
 
   // Serving on the LAN interface by name rather than on every inside one.
-  await page.getByRole('button', { name: 'Advanced' }).click()
   await page.getByLabel('Every interface outside external zones').uncheck()
   const picked = page.locator('fieldset').filter({ hasText: 'Answer on' }).getByRole('checkbox')
   await expect(picked.nth(1)).toBeChecked()
@@ -81,7 +80,6 @@ test('back to the defaults, served everywhere inside', async ({ page }) => {
     page.getByText("These follow Ostiole's defaults until you edit the list."),
   ).toBeVisible()
 
-  await page.getByRole('button', { name: 'Advanced' }).click()
   await page.getByLabel('Every interface outside external zones').check()
   await applyAndConfirm(page)
 })

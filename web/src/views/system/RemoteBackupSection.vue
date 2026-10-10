@@ -2,7 +2,6 @@
 import { computed, nextTick, ref, watch } from 'vue'
 
 import ActionButton from '@/components/ActionButton.vue'
-import AppDisclosure from '@/components/AppDisclosure.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
@@ -197,8 +196,6 @@ async function loadIntoDraft() {
         <ErrorLine v-if="error">{{ error }}</ErrorLine>
 
         <template v-if="config.draft">
-          <!-- A disabled fieldset greys out every field in it; the fold's
-               own button stays outside, so the settings can still be read. -->
           <fieldset class="fields fields-card min-w-0" :disabled="!auth.isAdmin">
             <FormField id="rb-endpoint" label="Endpoint" hint="HTTPS, no path.">
               <input
@@ -259,75 +256,73 @@ async function loadIntoDraft() {
             </FormField>
           </fieldset>
 
-          <AppDisclosure>
-            <fieldset class="min-w-0 space-y-4" :disabled="!auth.isAdmin">
-              <FormField
+          <fieldset class="min-w-0 space-y-4" :disabled="!auth.isAdmin">
+            <FormField
+              id="rb-prefix"
+              label="Prefix"
+              hint="One per router. Retention and Delete all touch only this folder."
+              class="max-w-md"
+            >
+              <input
                 id="rb-prefix"
-                label="Prefix"
-                hint="One per router. Retention and Delete all touch only this folder."
-                class="max-w-md"
-              >
+                class="input"
+                :value="settings.prefix ?? ''"
+                @change="set({ prefix: $event.target.value.trim() })"
+              />
+            </FormField>
+
+            <div class="form-row max-w-2xl">
+              <FormField id="rb-preset" label="Take a copy">
+                <select
+                  id="rb-preset"
+                  class="input w-48 max-sm:w-full"
+                  :value="presetFor(schedule)"
+                  @change="$event.target.value && set({ schedule: $event.target.value })"
+                >
+                  <option value="">Something else</option>
+                  <option v-for="p in SCHEDULE_PRESETS" :key="p.value" :value="p.value">
+                    {{ p.label }}
+                  </option>
+                </select>
+              </FormField>
+              <FormField id="rb-schedule" label="Schedule" hint="Router time.">
                 <input
-                  id="rb-prefix"
-                  class="input"
-                  :value="settings.prefix ?? ''"
-                  @change="set({ prefix: $event.target.value.trim() })"
+                  id="rb-schedule"
+                  class="input w-48 font-mono max-sm:w-full"
+                  :value="schedule"
+                  :placeholder="DEFAULT_SCHEDULE"
+                  @change="set({ schedule: $event.target.value })"
                 />
               </FormField>
+            </div>
 
-              <div class="form-row max-w-2xl">
-                <FormField id="rb-preset" label="Take a copy">
-                  <select
-                    id="rb-preset"
-                    class="input w-48 max-sm:w-full"
-                    :value="presetFor(schedule)"
-                    @change="$event.target.value && set({ schedule: $event.target.value })"
-                  >
-                    <option value="">Something else</option>
-                    <option v-for="p in SCHEDULE_PRESETS" :key="p.value" :value="p.value">
-                      {{ p.label }}
-                    </option>
-                  </select>
-                </FormField>
-                <FormField id="rb-schedule" label="Schedule" hint="Router time.">
-                  <input
-                    id="rb-schedule"
-                    class="input w-48 font-mono max-sm:w-full"
-                    :value="schedule"
-                    :placeholder="DEFAULT_SCHEDULE"
-                    @change="set({ schedule: $event.target.value })"
-                  />
-                </FormField>
-              </div>
-
-              <div class="form-row max-w-2xl">
-                <FormField id="rb-keep" label="Keep copies" hint="0 keeps every copy.">
-                  <input
-                    id="rb-keep"
-                    type="number"
-                    min="0"
-                    class="input w-32 max-sm:w-full"
-                    :value="settings.keep ?? 0"
-                    @change="set({ keep: Number($event.target.value) || 0 })"
-                  />
-                </FormField>
-                <FormField
+            <div class="form-row max-w-2xl">
+              <FormField id="rb-keep" label="Keep copies" hint="0 keeps every copy.">
+                <input
+                  id="rb-keep"
+                  type="number"
+                  min="0"
+                  class="input w-32 max-sm:w-full"
+                  :value="settings.keep ?? 0"
+                  @change="set({ keep: Number($event.target.value) || 0 })"
+                />
+              </FormField>
+              <FormField
+                id="rb-days"
+                label="Days"
+                hint="0 writes no rule. Written to the bucket on each run."
+              >
+                <input
                   id="rb-days"
-                  label="Days"
-                  hint="0 writes no rule. Written to the bucket on each run."
-                >
-                  <input
-                    id="rb-days"
-                    type="number"
-                    min="0"
-                    class="input w-32 max-sm:w-full"
-                    :value="settings.days ?? 0"
-                    @change="set({ days: Number($event.target.value) || 0 })"
-                  />
-                </FormField>
-              </div>
-            </fieldset>
-          </AppDisclosure>
+                  type="number"
+                  min="0"
+                  class="input w-32 max-sm:w-full"
+                  :value="settings.days ?? 0"
+                  @change="set({ days: Number($event.target.value) || 0 })"
+                />
+              </FormField>
+            </div>
+          </fieldset>
 
           <p class="max-w-3xl text-ink-muted">
             The key needs write access. Keep copies also needs list and delete, and deleting needs

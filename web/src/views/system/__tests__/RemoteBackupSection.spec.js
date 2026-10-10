@@ -71,15 +71,6 @@ const other = {
 /** A button by its text. */
 const button = (w, text) => w.findAll('button').find((b) => b.text() === text)
 
-/** The prefix, the schedule and retention sit behind the Advanced fold. */
-async function openAdvanced(wrapper) {
-  await wrapper
-    .findAll('button')
-    .find((b) => b.text().includes('Advanced'))
-    .trigger('click')
-  await flushPromises()
-}
-
 /** Mounts the section with the given block saved and in the draft. */
 async function open(backup = { remote }, role = 'admin') {
   useAuthStore().user = { username: role, role }
@@ -112,7 +103,6 @@ describe('RemoteBackupSection', () => {
     expect(wrapper.get('#rb-bucket').element.value).toBe('router-backups')
     expect(wrapper.get('#rb-enabled').element.checked).toBe(true)
     // An empty schedule shows the default rather than nothing.
-    await openAdvanced(wrapper)
     expect(wrapper.get('#rb-schedule').element.value).toBe('0 3 * * *')
   })
 
@@ -122,7 +112,6 @@ describe('RemoteBackupSection', () => {
     const { wrapper } = await open({ remote }, 'operator')
     expect(wrapper.get('#rb-enabled').attributes('disabled')).toBeDefined()
     expect(wrapper.text()).toContain('Only an admin can change this.')
-    await openAdvanced(wrapper)
     const fieldsets = wrapper.findAll('fieldset')
     expect(fieldsets).toHaveLength(2)
     for (const f of fieldsets) expect(f.attributes('disabled')).toBeDefined()
@@ -133,7 +122,6 @@ describe('RemoteBackupSection', () => {
     const { wrapper, store } = await open()
     await wrapper.get('#rb-endpoint').setValue('https://s3.us-east-005.backblazeb2.com')
     expect(store.draft.backup.remote.endpoint).toBe('https://s3.us-east-005.backblazeb2.com')
-    await openAdvanced(wrapper)
     await wrapper.get('#rb-keep').setValue('3')
     expect(store.draft.backup.remote.keep).toBe(3)
   })

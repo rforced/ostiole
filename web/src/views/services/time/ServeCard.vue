@@ -1,7 +1,6 @@
 <script setup>
 import { computed } from 'vue'
 
-import AppDisclosure from '@/components/AppDisclosure.vue'
 import InterfaceLabel from '@/components/InterfaceLabel.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
@@ -42,29 +41,27 @@ function toggleInterface(name, on) {
         label="Answer time requests"
         hint="DHCP clients are given this router as their time server."
       />
-      <AppDisclosure>
-        <fieldset class="field-group">
-          <legend>Answer on</legend>
-          <ToggleRow v-model="answerAll" label="Every interface outside external zones" />
-          <ul v-if="answerAll" class="ml-6 flex flex-wrap gap-4" aria-label="Answering on">
-            <li v-if="!inside.length" class="text-ink-muted">
-              No enabled interface is in an internal zone yet.
-            </li>
-            <li v-for="i in inside" :key="i.name"><InterfaceLabel :iface="i" /></li>
-          </ul>
-          <div v-else class="ml-6 flex flex-wrap gap-4">
-            <label v-for="i in inside" :key="i.name" class="flex items-center gap-2">
-              <input
-                type="checkbox"
-                class="checkbox"
-                :checked="(config.ntp.interfaces ?? []).includes(i.name)"
-                @change="toggleInterface(i.name, $event.target.checked)"
-              />
-              <InterfaceLabel :iface="i" />
-            </label>
-          </div>
-        </fieldset>
-      </AppDisclosure>
+      <fieldset class="field-group">
+        <legend>Answer on</legend>
+        <ToggleRow v-model="answerAll" label="Every interface outside external zones" />
+        <ul v-if="answerAll" class="ml-6 flex flex-wrap gap-4" aria-label="Answering on">
+          <li v-if="!inside.length" class="text-ink-muted">
+            No enabled interface is in an internal zone yet.
+          </li>
+          <li v-for="i in inside" :key="i.name"><InterfaceLabel :iface="i" /></li>
+        </ul>
+        <div v-else class="ml-6 flex flex-wrap gap-4">
+          <label v-for="i in inside" :key="i.name" class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              class="checkbox"
+              :checked="(config.ntp.interfaces ?? []).includes(i.name)"
+              @change="toggleInterface(i.name, $event.target.checked)"
+            />
+            <InterfaceLabel :iface="i" />
+          </label>
+        </div>
+      </fieldset>
     </div>
   </SectionCard>
 </template>

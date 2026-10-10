@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
-import AppDisclosure from '@/components/AppDisclosure.vue'
 import ApplyPending from '@/components/ApplyPending.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -19,7 +18,7 @@ function as(role) {
   useAuthStore().user = { username: role, role }
 }
 
-/** A settings card with a field, a fold and a header action. */
+/** A settings card with a field and a header action. */
 const Settings = defineComponent({
   props: { locked: Boolean },
   setup(props) {
@@ -29,10 +28,7 @@ const Settings = defineComponent({
         { title: 'Settings', locked: props.locked },
         {
           actions: () => h('button', { type: 'button', id: 'act' }, 'Refresh'),
-          default: () => [
-            h('input', { id: 'field' }),
-            h(AppDisclosure, null, { default: () => h('input', { id: 'folded' }) }),
-          ],
+          default: () => h('input', { id: 'field' }),
         },
       )
   },
@@ -44,20 +40,16 @@ describe('read only', () => {
     document.body.innerHTML = ''
   })
 
-  // A locked card shows its settings through a disabled fieldset, and what
-  // an Advanced fold holds is shown open: its trigger is disabled with the
-  // rest, and would otherwise keep those settings out of reach.
-  it('locks a card body but not its header, and opens its folds', async () => {
+  // A locked card shows its settings through a disabled fieldset.
+  it('locks a card body but not its header', async () => {
     const locked = mount(Settings, { props: { locked: true } })
     await flushPromises()
     expect(locked.find('fieldset[disabled] #field').exists()).toBe(true)
-    expect(locked.find('fieldset[disabled] #folded').exists()).toBe(true)
     expect(locked.find('fieldset #act').exists()).toBe(false)
 
     const open = mount(Settings, { props: { locked: false } })
     await flushPromises()
     expect(open.find('fieldset').exists()).toBe(false)
-    expect(open.find('#folded').exists()).toBe(false)
   })
 
   // Every dialog is read only for a viewer unless it says otherwise, so a

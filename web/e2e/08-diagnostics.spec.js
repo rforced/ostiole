@@ -91,8 +91,6 @@ test('the drives page reads the drive and offers a self-test', async ({ page }) 
   await expect(main).toContainText('GENERIC 256GB SSD')
   await expect(main.getByText('passed', { exact: true })).toBeVisible()
   // The whole attribute table, so a drive that is losing sectors shows it.
-  // It is folded away until asked for, like the two logs under it.
-  await page.getByRole('button', { name: /^Attributes/ }).click()
   await expect(page.locator('tbody tr').filter({ hasText: 'Reallocated_Sector_Ct' })).toHaveCount(1)
   await expect(main.locator('table').first().locator('tbody tr')).toHaveCount(30)
   await expect(page.getByRole('button', { name: 'Short test' })).toBeEnabled()

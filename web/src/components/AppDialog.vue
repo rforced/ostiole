@@ -11,7 +11,6 @@ import {
 } from 'reka-ui'
 import { computed } from 'vue'
 
-import { provideLocked } from '@/lib/locked'
 import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps({
@@ -34,7 +33,6 @@ const open = defineModel('open', { type: Boolean, default: false })
 
 const auth = useAuthStore()
 const locked = computed(() => props.readOnly ?? auth.readOnly)
-provideLocked(() => locked.value)
 </script>
 
 <template>

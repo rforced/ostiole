@@ -1,8 +1,6 @@
 <script setup>
 import { computed, useId, useSlots } from 'vue'
 
-import { provideLocked } from '@/lib/locked'
-
 /**
  * One card of a page. The header is the title, a count, an intro under
  * it, and the actions slot on the right. The body is a table that runs
@@ -26,7 +24,6 @@ const props = defineProps({
 const slots = useSlots()
 const id = useId()
 const headed = computed(() => Boolean(props.title || slots.title || slots.actions))
-provideLocked(() => props.locked)
 </script>
 
 <template>
