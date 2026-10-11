@@ -63,6 +63,7 @@ AGENTS.md
 .cursorignore
 .aider*
 .junie/
+.ai/
 .aiassistant/
 .continue/
 .windsurf/

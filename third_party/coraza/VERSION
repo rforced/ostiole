@@ -11,8 +11,8 @@
 #   ctl:ruleRemoveTargetById removals into the rule's shared exception
 #   list where that had room, so concurrent requests removing different
 #   targets from one rule overwrote each other. The capacity is capped so
-#   the append copies. Upstream: issue #1723, open at v3.8.1; closed,
-#   unmerged PR #1509 had the same fix.
+#   the append copies. Upstream: issue #1723, open at v3.8.1, and PR #1745
+#   (2026-10-11); closed, unmerged PR #1509 had the same fix.
 #   Patch: scripts/coraza/exceptions-copy.patch.
 # - waf.go: NewWAF returned on a rule, audit log or Validate error without
 #   closing the WAF, so the patterns its rules had compiled stayed in the
