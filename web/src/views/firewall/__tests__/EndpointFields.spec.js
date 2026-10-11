@@ -54,6 +54,54 @@ describe('EndpointFields peers', () => {
   })
 })
 
+describe('EndpointFields zone', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  const kinds = (w) =>
+    w.findAll(`#${w.props('side')}-mode option`).map((o) => o.attributes('value'))
+
+  // A zone is somewhere traffic goes, so only a destination can name one.
+  it('offers a zone to a destination, right after Any, and to a source never', () => {
+    expect(kinds(mountFields('destination', 'lan', []))).toEqual([
+      'any',
+      'zone',
+      'addresses',
+      'alias',
+      'peer',
+      'self',
+    ])
+    expect(kinds(mountFields('source', 'lan', []))).toEqual(['any', 'addresses', 'alias', 'peer'])
+  })
+
+  it('picks the zone by name, and has nothing to invert', async () => {
+    const w = mountFields('destination', 'lan', [])
+    await w.get('#destination-mode').setValue('addresses')
+    expect(w.find('#destination-not').exists()).toBe(true)
+    expect(w.find('#destination-zone').exists()).toBe(false)
+
+    await w.get('#destination-mode').setValue('zone')
+    const select = w.get('#destination-zone')
+    expect(select.attributes('required')).toBeDefined()
+    expect(select.findAll('option').map((o) => o.text())).toEqual(['lan', 'devices', 'sites'])
+    expect(w.get('label[for="destination-zone"]').text()).toBe('Zone')
+    expect(w.text()).toContain('Forwarded traffic headed into the zone, whichever networks it has.')
+    expect(w.find('#destination-not').exists()).toBe(false)
+
+    await select.setValue('sites')
+    expect(w.props('modelValue').zone).toBe('sites')
+  })
+
+  it('keeps the ports a zone can be asked for', () => {
+    useConfigStore().replaceDraft(draft([]))
+    const model = { mode: 'zone', zone: 'devices', notAddresses: false, portMode: 'any' }
+    const w = mount(EndpointFields, {
+      props: { side: 'destination', portsAllowed: true, modelValue: model },
+    })
+    expect(w.get('#destination-zone').element.value).toBe('devices')
+    expect(w.find('#destination-portmode').exists()).toBe(true)
+  })
+})
+
 describe('RuleDialog with a peer', () => {
   beforeEach(() => setActivePinia(createPinia()))
 

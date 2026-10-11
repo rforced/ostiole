@@ -7,7 +7,8 @@ import { useConfigStore } from '@/stores/config'
 
 /**
  * Source or destination editor: any / addresses / alias / WireGuard peer
- * (/ self for destinations), plus ports when the protocol carries them.
+ * (/ zone and self for destinations), plus ports when the protocol carries
+ * them.
  */
 const props = defineProps({
   side: { type: String, required: true }, // 'source' | 'destination'
@@ -47,10 +48,21 @@ const label = computed(() => (props.side === 'source' ? 'Source' : 'Destination'
     <FormField :id="id('mode')" label="Match">
       <select :id="id('mode')" v-model="model.mode" class="input">
         <option value="any">Any</option>
+        <option v-if="side === 'destination'" value="zone">Zone</option>
         <option value="addresses">Addresses or networks</option>
         <option value="alias" :disabled="hostAliases.length === 0">Alias</option>
         <option value="peer" :disabled="peers.length === 0">WireGuard peer</option>
         <option v-if="side === 'destination'" value="self">This router</option>
+      </select>
+    </FormField>
+    <FormField
+      v-if="model.mode === 'zone'"
+      :id="id('zone')"
+      label="Zone"
+      hint="Forwarded traffic headed into the zone, whichever networks it has."
+    >
+      <select :id="id('zone')" v-model="model.zone" class="input" required>
+        <option v-for="z in config.zones" :key="z.name" :value="z.name">{{ z.name }}</option>
       </select>
     </FormField>
     <FormField
@@ -79,7 +91,7 @@ const label = computed(() => (props.side === 'source' ? 'Source' : 'Destination'
       </select>
     </FormField>
     <ToggleRow
-      v-if="model.mode !== 'any'"
+      v-if="model.mode !== 'any' && model.mode !== 'zone'"
       :id="id('not')"
       v-model="model.notAddresses"
       label="Invert"

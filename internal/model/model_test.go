@@ -1210,6 +1210,52 @@ func TestValidateInvertedEndpoints(t *testing.T) {
 	}
 }
 
+// A destination zone stands for every address behind it, so it takes ports
+// and nothing else of the destination.
+func TestValidateDestinationZone(t *testing.T) {
+	t.Parallel()
+	cfg := policyConfig()
+	cfg.Aliases = []Alias{{Name: "office", Type: AliasHosts, Entries: []string{"203.0.113.0/24"}}}
+	cfg.Rules = []Rule{
+		{ID: "to-wan", Enabled: true, Zone: "lan", DestZone: "wan", Action: ActionAccept, Protocol: ProtocolAny},
+		{
+			ID: "no-smtp", Enabled: true, Zone: "lan", DestZone: "wan", Action: ActionReject, Protocol: ProtocolTCP,
+			Destination: Endpoint{Ports: []string{"25"}},
+		},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("a destination zone, alone or with ports, was rejected: %v", err)
+	}
+
+	dest := func(id string, e Endpoint) Rule {
+		return Rule{ID: id, Enabled: true, Zone: "lan", DestZone: "wan", Action: ActionAccept, Protocol: ProtocolAny, Destination: e}
+	}
+	cfg.Rules = []Rule{
+		dest("addresses", Endpoint{Addresses: []string{"203.0.113.7"}}),
+		dest("alias", Endpoint{Alias: "office"}),
+		dest("peer", Endpoint{Peer: "wg0/laptop"}),
+		dest("self", Endpoint{Self: true}),
+	}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("a destination zone beside a destination was accepted")
+	}
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("error type %T, want *ValidationError", err)
+	}
+	got := map[string]string{}
+	for _, i := range ve.Issues {
+		got[i.Path] = i.Message
+	}
+	for i := range cfg.Rules {
+		path := fmt.Sprintf("rules[%d].destZone", i)
+		if !strings.Contains(got[path], "cannot be combined with destination addresses") {
+			t.Errorf("%s: %q, want the combination refused", path, got[path])
+		}
+	}
+}
+
 func TestValidateAcceptsPolicyRouting(t *testing.T) {
 	t.Parallel()
 	cfg := policyConfig()

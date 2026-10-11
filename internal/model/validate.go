@@ -306,6 +306,10 @@ func (c *Config) Validate() error {
 		if r.DestZone != "" && !zones[r.DestZone] {
 			v.add(path+".destZone", "unknown zone %q", r.DestZone)
 		}
+		if d := r.Destination; r.DestZone != "" && (len(d.Addresses) > 0 || d.Alias != "" || d.Peer != "" || d.Self) {
+			v.add(path+".destZone", "a destination zone stands for every address in it, "+
+				"so it cannot be combined with destination addresses, an alias, a peer or self")
+		}
 		switch r.Action {
 		case ActionAccept, ActionDrop, ActionReject:
 		default:

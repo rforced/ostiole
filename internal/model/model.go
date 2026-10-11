@@ -27,10 +27,12 @@ import (
 // exclusion sets; version 13 replaced each log's "days" with one "days"
 // under "logging" for every log in memory; version 14 renamed DNS
 // enforcement's "exemptAlias" to "exemptClients" and moved an alias's
-// "url" into its entries, dropping "select". A bump adds a step to
+// "url" into its entries, dropping "select"; version 15 made a rule's
+// destination zone a destination match, so it no longer combines with
+// destination addresses, an alias, a peer or self. A bump adds a step to
 // migrations, which brings a file from version 6 on up to date as it is
 // read; an older one needs each change made by hand.
-const SchemaVersion = 14
+const SchemaVersion = 15
 
 // Action is a rule verdict.
 type Action string
@@ -1339,10 +1341,12 @@ func IsURLEntry(e string) bool { return strings.Contains(e, "://") }
 
 // Rule is one firewall rule, evaluated within its zone in order.
 type Rule struct {
-	ID          string   `json:"id"`
-	Description string   `json:"description,omitempty"`
-	Enabled     bool     `json:"enabled"`
-	Zone        string   `json:"zone"`
+	ID          string `json:"id"`
+	Description string `json:"description,omitempty"`
+	Enabled     bool   `json:"enabled"`
+	Zone        string `json:"zone"`
+	// DestZone makes the zone the destination: forwarded traffic leaving by
+	// its interfaces. It takes no destination addresses, alias, peer or self.
 	DestZone    string   `json:"destZone,omitempty"`
 	Action      Action   `json:"action"`
 	Protocol    Protocol `json:"protocol"`

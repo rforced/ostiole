@@ -19,7 +19,7 @@ const open = defineModel('open', { type: Boolean, default: false })
 const config = useConfigStore()
 const form = ref(blank())
 
-function endpointForm(ep = {}) {
+function endpointForm(ep = {}, destZone = '') {
   return {
     mode: ep.self
       ? 'self'
@@ -29,7 +29,10 @@ function endpointForm(ep = {}) {
           ? 'peer'
           : ep.addresses?.length
             ? 'addresses'
-            : 'any',
+            : destZone
+              ? 'zone'
+              : 'any',
+    zone: destZone,
     addresses: joinList(ep.addresses),
     alias: ep.alias ?? '',
     peer: ep.peer ?? '',
@@ -47,7 +50,6 @@ function blank() {
     description: '',
     enabled: true,
     zone: props.zone,
-    destZone: '',
     action: 'accept',
     protocol: 'any',
     log: false,
@@ -73,7 +75,6 @@ watch(
       ? {
           ...blank(),
           ...r,
-          destZone: r.destZone ?? '',
           gateway: r.gateway ?? '',
           priority: r.priority ?? '',
           limited: Boolean(r.limit),
@@ -82,7 +83,7 @@ watch(
           limitBurst: r.limit?.burst ?? 0,
           limitPerSource: r.limit ? Boolean(r.limit.perSource) : true,
           source: endpointForm(r.source),
-          destination: endpointForm(r.destination),
+          destination: endpointForm(r.destination, r.destZone ?? ''),
         }
       : blank()
   },
@@ -92,9 +93,11 @@ watch(
 const portsAllowed = computed(() => ['tcp', 'udp', 'tcp+udp'].includes(form.value.protocol))
 
 // A gateway decides where the traffic leaves, so it cannot be combined
-// with a rule that matches on the zone it leaves by, and only an accept
-// rule sends anything anywhere.
-const gatewayAllowed = computed(() => form.value.action === 'accept' && !form.value.destZone)
+// with a destination that is a zone, and only an accept rule sends
+// anything anywhere.
+const gatewayAllowed = computed(
+  () => form.value.action === 'accept' && form.value.destination.mode !== 'zone',
+)
 
 watch(gatewayAllowed, (ok) => {
   if (!ok) form.value.gateway = ''
@@ -126,7 +129,7 @@ function endpointOut(f, allowPorts) {
   if (allowPorts && f.portMode === 'alias') out.portAlias = f.portAlias
   // An inversion only travels with something to invert; "not anything" is
   // rejected by the server rather than silently meaning "everything".
-  if (f.notAddresses && f.mode !== 'any') out.notAddresses = true
+  if (f.notAddresses && f.mode !== 'any' && f.mode !== 'zone') out.notAddresses = true
   if (allowPorts && f.notPorts && f.portMode !== 'any') out.notPorts = true
   return out
 }
@@ -143,7 +146,7 @@ function save() {
     source: endpointOut(f.source, portsAllowed.value),
     destination: endpointOut(f.destination, portsAllowed.value),
   }
-  if (f.destZone) out.destZone = f.destZone
+  if (f.destination.mode === 'zone' && f.destination.zone) out.destZone = f.destination.zone
   if (f.log) out.log = true
   if (f.schedule) out.schedule = f.schedule
   if (f.gateway && gatewayAllowed.value) out.gateway = f.gateway
@@ -163,7 +166,7 @@ function save() {
   <AppDialog
     v-model:open="open"
     :title="rule?.id ? `Rule ${rule.id}` : `Add rule in ${zone}`"
-    description="Rules match traffic entering the zone, whether it is for this router or forwarded through it."
+    :description="`Traffic entering ${zone}, whether for this router or forwarded through it.`"
   >
     <form id="rule-form" class="space-y-4" @submit.prevent="save">
       <FormField id="rule-desc" label="Description">
@@ -186,12 +189,6 @@ function save() {
             <option value="icmp">ICMP / ICMPv6</option>
           </select>
         </FormField>
-        <FormField id="rule-destzone" label="Leaving via zone" hint="Forwarded traffic only.">
-          <select id="rule-destzone" v-model="form.destZone" class="input">
-            <option value="">Any</option>
-            <option v-for="z in config.zones" :key="z.name" :value="z.name">{{ z.name }}</option>
-          </select>
-        </FormField>
         <FormField
           v-if="config.schedules.length"
           id="rule-schedule"
@@ -212,7 +209,7 @@ function save() {
           :hint="
             gatewayAllowed
               ? 'Sends matching traffic out this gateway instead of the default route.'
-              : 'Only an accept rule that does not pick a leaving zone can choose a gateway.'
+              : 'Only an accept rule whose destination is not a zone can choose a gateway.'
           "
         >
           <select

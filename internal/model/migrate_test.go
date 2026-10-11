@@ -10,7 +10,8 @@ import (
 )
 
 // older writes cfg as the oldest version Migrate reads would have: the
-// reverse of every step, which a new step adds to.
+// reverse of every step, which a new step adds to. Step 15 has none: the
+// zone it dropped has nothing to come back to.
 func older(t *testing.T, cfg *Config) []byte {
 	t.Helper()
 	raw, err := json.Marshal(cfg)
@@ -385,5 +386,43 @@ func TestMigrateMovesAliasURLsIntoEntries(t *testing.T) {
 	}
 	if !reflect.DeepEqual(cfg.Aliases, want) {
 		t.Errorf("aliases = %+v\nwant %+v", cfg.Aliases, want)
+	}
+}
+
+// A destination zone that sits beside destination addresses, an alias, a
+// peer or self goes and the destination stays; beside self the rule is
+// disabled too, since it matched nothing. One alone, or with ports, is a
+// zone destination already, and a rule without a zone is not touched.
+func TestMigrateDropsADestinationZoneBesideADestination(t *testing.T) {
+	t.Parallel()
+	raw := `{"version":14,"rules":[
+		{"id":"addresses","enabled":true,"zone":"lan","destZone":"wan","action":"accept","protocol":"tcp",
+			"destination":{"addresses":["203.0.113.0/24"],"ports":["443"],"notAddresses":true}},
+		{"id":"alias","enabled":true,"zone":"lan","destZone":"wan","action":"accept","protocol":"any","destination":{"alias":"office"}},
+		{"id":"peer","enabled":true,"zone":"lan","destZone":"wan","action":"accept","protocol":"any","destination":{"peer":"wg0/laptop"}},
+		{"id":"self","enabled":true,"zone":"lan","destZone":"wan","action":"drop","protocol":"any","destination":{"self":true}},
+		{"id":"plain","enabled":true,"zone":"lan","destZone":"guest","action":"accept","protocol":"any","destination":{}},
+		{"id":"smtp","enabled":true,"zone":"lan","destZone":"wan","action":"reject","protocol":"tcp","destination":{"ports":["25"]}},
+		{"id":"office","enabled":true,"zone":"lan","action":"accept","protocol":"any","destination":{"addresses":["198.51.100.0/24"]}}]}`
+	dec := json.NewDecoder(bytes.NewReader(Migrate([]byte(raw))))
+	dec.DisallowUnknownFields()
+	var cfg Config
+	if err := dec.Decode(&cfg); err != nil {
+		t.Fatal(err)
+	}
+	want := []Rule{
+		{ID: "addresses", Enabled: true, Zone: "lan", Action: ActionAccept, Protocol: ProtocolTCP,
+			Destination: Endpoint{Addresses: []string{"203.0.113.0/24"}, Ports: []string{"443"}, NotAddresses: true}},
+		{ID: "alias", Enabled: true, Zone: "lan", Action: ActionAccept, Protocol: ProtocolAny, Destination: Endpoint{Alias: "office"}},
+		{ID: "peer", Enabled: true, Zone: "lan", Action: ActionAccept, Protocol: ProtocolAny, Destination: Endpoint{Peer: "wg0/laptop"}},
+		{ID: "self", Enabled: false, Zone: "lan", Action: ActionDrop, Protocol: ProtocolAny, Destination: Endpoint{Self: true}},
+		{ID: "plain", Enabled: true, Zone: "lan", DestZone: "guest", Action: ActionAccept, Protocol: ProtocolAny},
+		{ID: "smtp", Enabled: true, Zone: "lan", DestZone: "wan", Action: ActionReject, Protocol: ProtocolTCP,
+			Destination: Endpoint{Ports: []string{"25"}}},
+		{ID: "office", Enabled: true, Zone: "lan", Action: ActionAccept, Protocol: ProtocolAny,
+			Destination: Endpoint{Addresses: []string{"198.51.100.0/24"}}},
+	}
+	if !reflect.DeepEqual(cfg.Rules, want) {
+		t.Errorf("rules = %+v\nwant %+v", cfg.Rules, want)
 	}
 }

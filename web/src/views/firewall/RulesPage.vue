@@ -130,12 +130,13 @@ useAsync(
   { interval: 5000, immediate: true },
 )
 
-function describe(ep, ports) {
+function describe(ep, ports, destZone = '') {
   let who = 'any'
   if (ep?.self) who = 'this router'
   else if (ep?.alias) who = `@${ep.alias}`
   else if (ep?.peer) who = ep.peer.replace(/^([^/]*)\/(.*)$/, '$2 on $1')
   else if (ep?.addresses?.length) who = ep.addresses.join(', ')
+  else if (destZone) who = `zone ${destZone}`
   if (ep?.notAddresses) who = `not ${who}`
   let p = ''
   if (ep?.portAlias) p = `@${ep.portAlias}`
@@ -294,14 +295,13 @@ onMounted(() => {
             <td
               class="font-mono text-code max-sm:order-3 max-sm:before:mr-2 max-sm:before:content-['→']"
             >
-              {{ describe(r.destination, true) }}
+              {{ describe(r.destination, true, r.destZone) }}
             </td>
             <td class="font-mono text-code max-sm:hidden">
               <span class="inline-flex items-center gap-1.5">
                 <span v-if="r.gateway" class="badge" :title="`Routed through ${r.gateway}`"
                   >→ {{ r.gateway }}</span
                 >
-                <template v-else>{{ r.destZone ?? '' }}</template>
               </span>
               <span
                 v-if="r.priority"

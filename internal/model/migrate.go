@@ -180,6 +180,33 @@ var migrations = map[int]func(doc map[string]any){
 			delete(alias, "select")
 		}
 	},
+	// 15 made the destination zone a destination match, so it no longer
+	// combines with destination addresses, an alias, a peer or self; the
+	// zone goes, the addresses stay. Beside self the pair matched nothing,
+	// so that rule is disabled rather than made to match the router.
+	14: func(doc map[string]any) {
+		rules, _ := doc["rules"].([]any)
+		for _, item := range rules {
+			rule, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			if zone, _ := rule["destZone"].(string); zone == "" {
+				continue
+			}
+			dest, _ := rule["destination"].(map[string]any)
+			addresses, _ := dest["addresses"].([]any)
+			alias, _ := dest["alias"].(string)
+			peer, _ := dest["peer"].(string)
+			self, _ := dest["self"].(bool)
+			if self {
+				rule["enabled"] = false
+			}
+			if len(addresses) > 0 || alias != "" || peer != "" || self {
+				delete(rule, "destZone")
+			}
+		}
+	},
 }
 
 // Migrate brings a configuration written at an older version up to

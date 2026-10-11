@@ -374,4 +374,50 @@ describe('RulesPage system rules', () => {
     expect(api.systemRules).toHaveBeenLastCalledWith(store.draft)
     wrapper.unmount()
   })
+
+  // A destination zone is where the rule sends traffic, so it reads in the
+  // Destination column; Via keeps to the gateway.
+  it('shows a destination zone as the destination and not under Via', async () => {
+    const rule = (id, extra) => ({
+      id,
+      zone: 'lan',
+      enabled: true,
+      action: 'accept',
+      protocol: 'any',
+      source: {},
+      destination: {},
+      description: id,
+      ...extra,
+    })
+    const wrapper = await mountPage(
+      '/firewall/rules',
+      {},
+      {
+        ...config,
+        rules: [
+          rule('to-wan', { destZone: 'wan' }),
+          rule('no-mail', {
+            action: 'reject',
+            protocol: 'tcp',
+            destZone: 'wan',
+            destination: { ports: ['25', '465-587'] },
+          }),
+          rule('backup-line', { gateway: 'backup' }),
+        ],
+      },
+    )
+    const cells = (id) =>
+      wrapper
+        .findAll('tr')
+        .find((tr) => tr.text().includes(id))
+        .findAll('td')
+    const destination = (id) => cells(id)[4].text()
+    const via = (id) => cells(id)[5].text()
+    expect(destination('to-wan')).toBe('zone wan')
+    expect(via('to-wan')).toBe('')
+    expect(destination('no-mail')).toBe('zone wan : 25, 465-587')
+    expect(via('no-mail')).toBe('')
+    expect(destination('backup-line')).toBe('any')
+    expect(via('backup-line')).toBe('→ backup')
+  })
 })

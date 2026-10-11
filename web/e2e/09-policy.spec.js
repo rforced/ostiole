@@ -79,22 +79,24 @@ test('group two gateways and route a rule through them', async ({ page }) => {
   await page.screenshot({ path: shot('72-routing'), fullPage: true })
 })
 
-test('a gateway cannot be combined with a leaving zone', async ({ page }) => {
+test('a gateway cannot be combined with a destination zone', async ({ page }) => {
   await login(page)
   await page.goto('/firewall')
   await page.getByRole('group', { name: 'Zone' }).getByRole('button', { name: 'lan' }).click()
   await page.getByRole('button', { name: 'Add rule' }).click()
   const dialog = page.getByRole('dialog')
+  const destination = dialog.getByRole('group', { name: 'Destination' })
 
   const gateway = dialog.getByLabel('Route through')
   await gateway.selectOption('failover')
-  // Picking the zone the traffic leaves by takes the choice away: the
-  // outgoing interface is not known when the mark is set.
-  await dialog.getByLabel('Leaving via zone').selectOption('wan')
+  // A destination that is a zone takes the choice away: the outgoing
+  // interface is not known when the mark is set.
+  await destination.getByLabel('Match', { exact: true }).selectOption('zone')
+  await destination.getByLabel('Zone', { exact: true }).selectOption('wan')
   await expect(gateway).toBeDisabled()
   await expect(gateway).toHaveValue('')
 
-  await dialog.getByLabel('Leaving via zone').selectOption('')
+  await destination.getByLabel('Match', { exact: true }).selectOption('any')
   await expect(gateway).toBeEnabled()
   // A rule that drops traffic has nowhere to send it either.
   await dialog.getByLabel('Action').selectOption('drop')
