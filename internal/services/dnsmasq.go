@@ -273,8 +273,14 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 			if len(dns) > 0 {
 				fmt.Fprintf(&b, "dhcp-option=tag:%s,option:dns-server,%s\n", tag, strings.Join(dns, ","))
 			}
-			if timeFrom[sc.Interface] {
-				fmt.Fprintf(&b, "dhcp-option=tag:%s,option:ntp-server,%s\n", tag, prefix.Addr())
+			// Time servers named on the server are sent whether or not
+			// this router answers time requests, and replace its address.
+			ntp := ipv4Only(sc.NTP)
+			if len(ntp) == 0 && timeFrom[sc.Interface] {
+				ntp = []string{prefix.Addr().String()}
+			}
+			if len(ntp) > 0 {
+				fmt.Fprintf(&b, "dhcp-option=tag:%s,option:ntp-server,%s\n", tag, strings.Join(ntp, ","))
 			}
 			domain := sc.Domain
 			if domain == "" {
@@ -282,6 +288,25 @@ func (d *Dnsmasq) render(cfg *model.Config) (conf, hosts string, err error) {
 			}
 			if domain != "" {
 				fmt.Fprintf(&b, "dhcp-option=tag:%s,option:domain-name,%s\n", tag, domain)
+			}
+			if len(sc.SearchDomains) > 0 {
+				fmt.Fprintf(&b, "dhcp-option=tag:%s,option:domain-search,%s\n", tag, domainList(sc.SearchDomains))
+			}
+			if sc.BootServer != "" {
+				server, serr := model.ParseIP(sc.BootServer)
+				if serr != nil {
+					return "", "", fmt.Errorf("server %s: %w", sc.Interface, serr)
+				}
+				if sc.BootFile != "" {
+					// The first address is the server name, sent as text in
+					// the header and option 66; the second is next-server,
+					// where PXE firmware loads from.
+					fmt.Fprintf(&b, "dhcp-boot=tag:%s,%s,%s,%s\n", tag, sc.BootFile, server, server)
+				} else {
+					// Quoted, as dnsmasq's manual has it for option 66,
+					// so the address is sent as text.
+					fmt.Fprintf(&b, "dhcp-option=tag:%s,option:tftp-server,\"%s\"\n", tag, server)
+				}
 			}
 			if !sc.DNSRegistration {
 				fmt.Fprintf(&b, "dhcp-ignore-names=tag:%s\n", tag)
@@ -404,6 +429,17 @@ func ipv4Only(addrs []string) []string {
 	return out
 }
 
+// domainList writes search domains as a comma separated option value,
+// without the dots validation lets through at their ends: a leading one
+// would encode an empty label.
+func domainList(names []string) string {
+	out := make([]string, len(names))
+	for i, n := range names {
+		out[i] = model.NormalizeDomain(n)
+	}
+	return strings.Join(out, ",")
+}
+
 // listenInterfaces is every interface dnsmasq must bind: the DNS
 // interfaces plus any that hand out addresses or advertise IPv6.
 func listenInterfaces(cfg *model.Config) []string {
@@ -487,12 +523,26 @@ func renderV6(b *strings.Builder, cfg *model.Config) {
 		}
 		// A router advertisement has no option for a time server, so a
 		// SLAAC-only segment is told nothing; DHCPv6 carries it.
-		if timeFrom[sc.Interface] && sc.Mode != model.RASLAAC {
-			fmt.Fprintf(b, "dhcp-option=tag:%s,option6:ntp-server,[%s]\n", tag, routerV6(cfg, sc.Interface))
+		if sc.Mode != model.RASLAAC {
+			var ntp []string
+			for _, a := range sc.NTP {
+				if ip, err := model.ParseIP(a); err == nil {
+					ntp = append(ntp, "["+ip.String()+"]")
+				}
+			}
+			if len(ntp) == 0 && timeFrom[sc.Interface] {
+				ntp = []string{"[" + routerV6(cfg, sc.Interface) + "]"}
+			}
+			if len(ntp) > 0 {
+				fmt.Fprintf(b, "dhcp-option=tag:%s,option6:ntp-server,%s\n", tag, strings.Join(ntp, ","))
+			}
 		}
 		domain := sc.Domain
 		if domain == "" {
 			domain = svc.DNS.Domain
+		}
+		if len(sc.SearchDomains) > 0 {
+			domain = domainList(sc.SearchDomains)
 		}
 		if domain != "" {
 			fmt.Fprintf(b, "dhcp-option=tag:%s,option6:domain-search,%s\n", tag, domain)

@@ -461,6 +461,32 @@ func TestRenderPrefixDelegation(t *testing.T) {
 	}
 }
 
+// A WAN given a vendor class sends it as option 60 from its DHCP client,
+// and one given none sends nothing.
+func TestRenderVendorClass(t *testing.T) {
+	t.Parallel()
+	files, err := (&Networkd{}).Render(loadConfig(t, "testdata/wan-options.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wan := files["00-ostiole-eth0.network"]
+	_, dhcp4, ok := strings.Cut(wan, "[DHCPv4]")
+	if !ok {
+		t.Fatalf("eth0 unit has no [DHCPv4] section:\n%s", wan)
+	}
+	if section, _, _ := strings.Cut(dhcp4, "\n["); !strings.Contains(section, "VendorClassIdentifier=acme-router") {
+		t.Errorf("eth0 [DHCPv4] is missing the vendor class:\n%s", wan)
+	}
+
+	files, err = (&Networkd{}).Render(loadConfig(t, "testdata/minimal.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wan = files["00-ostiole-eth0.network"]; strings.Contains(wan, "VendorClassIdentifier=") {
+		t.Errorf("eth0 sends a vendor class nobody set:\n%s", wan)
+	}
+}
+
 // A dialled session's interface belongs to pppd; the Ethernet under it is
 // brought up and left bare.
 func TestRenderLeavesPPPoEToPppd(t *testing.T) {

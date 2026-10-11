@@ -706,6 +706,28 @@ func (v *validator) domainName(path, name string) {
 	}
 }
 
+// searchDomains checks a list of search domains. They go out as one option
+// of 255 bytes at most, every name written in full: a length byte before
+// each label and a zero byte after the last. dnsmasq compresses what it
+// can, but how much depends on the names, so the full size is the bound.
+func (v *validator) searchDomains(path string, names []string) {
+	size := 0
+	for j, d := range names {
+		n := strings.Trim(d, ".")
+		if n == "" || len(n) > 253 || !domainRe.MatchString(n) {
+			v.add(fmt.Sprintf("%s[%d]", path, j), "%q is not a valid domain", d)
+			continue
+		}
+		for _, label := range strings.Split(n, ".") {
+			size += 1 + len(label)
+		}
+		size++
+	}
+	if size > 255 {
+		v.add(path, "search domains exceed 255 bytes together")
+	}
+}
+
 // hostLabel checks one label of a host override: its hostname or one of
 // its aliases. The domain has a field of its own, so a dot here is worth
 // naming rather than refusing as a bad character.
@@ -804,6 +826,32 @@ func (v *validator) services(c *Config, ifaces, zones map[string]bool) {
 		}
 		if sc.Domain != "" && !domainRe.MatchString(sc.Domain) {
 			v.add(path+".domain", "%q is not a valid domain", sc.Domain)
+		}
+		v.searchDomains(path+".searchDomains", sc.SearchDomains)
+		for j, s := range sc.NTP {
+			if ip, err := ParseIP(s); err != nil {
+				v.add(fmt.Sprintf("%s.ntp[%d]", path, j), "%v", err)
+			} else if !ip.Is4() {
+				v.add(fmt.Sprintf("%s.ntp[%d]", path, j), "%s is not an IPv4 address", s)
+			}
+		}
+		if sc.BootServer != "" {
+			if ip, err := ParseIP(sc.BootServer); err != nil {
+				v.add(path+".bootServer", "%v", err)
+			} else if !ip.Is4() {
+				v.add(path+".bootServer", "%q is not an IPv4 address", sc.BootServer)
+			}
+		}
+		if sc.BootFile != "" {
+			unsafe := func(r rune) bool { return strings.ContainsRune(` ,"'`, r) || !unicode.IsPrint(r) }
+			switch {
+			case sc.BootServer == "":
+				v.add(path+".bootFile", "a boot file needs a boot server")
+			case strings.ContainsFunc(sc.BootFile, unsafe):
+				v.add(path+".bootFile", "the boot file cannot contain commas, quotes or spaces")
+			case len(sc.BootFile) > 128:
+				v.add(path+".bootFile", "a boot file is at most 128 bytes")
+			}
 		}
 	}
 	v.dhcpv6(c, ifaces)
@@ -1642,6 +1690,14 @@ func (v *validator) dhcpv6(c *Config, ifaces map[string]bool) {
 		}
 		if sc.Domain != "" && !domainRe.MatchString(sc.Domain) {
 			v.add(path+".domain", "%q is not a valid domain", sc.Domain)
+		}
+		v.searchDomains(path+".searchDomains", sc.SearchDomains)
+		for j, s := range sc.NTP {
+			if ip, err := ParseIP(s); err != nil {
+				v.add(fmt.Sprintf("%s.ntp[%d]", path, j), "%v", err)
+			} else if ip.Is4() {
+				v.add(fmt.Sprintf("%s.ntp[%d]", path, j), "%s is not an IPv6 address", s)
+			}
 		}
 	}
 }
@@ -3189,6 +3245,18 @@ func (v *validator) addr4(path string, a IPv4) {
 			v.add(path+".gateway", "%v", err)
 		} else if !ip.Is4() {
 			v.add(path+".gateway", "must be an IPv4 address")
+		}
+	}
+	if a.VendorClass != "" {
+		switch {
+		case a.Mode != AddrDHCP:
+			v.add(path+".vendorClass", "a vendor class belongs on a DHCP interface")
+		case !printableASCII(a.VendorClass):
+			v.add(path+".vendorClass", "%q is not printable ASCII", a.VendorClass)
+		case strings.ContainsAny(a.VendorClass, `"'\\`):
+			v.add(path+".vendorClass", "a vendor class cannot contain quotes or backslashes")
+		case len(a.VendorClass) > 255:
+			v.add(path+".vendorClass", "a vendor class is at most 255 characters")
 		}
 	}
 }

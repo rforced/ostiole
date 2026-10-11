@@ -52,6 +52,8 @@ function blank() {
     leaseTime: '',
     dns: '',
     domain: '',
+    searchDomains: '',
+    ntp: '',
     dnsRegistration: false,
   }
 }
@@ -61,7 +63,15 @@ watch(
   () => {
     if (!open.value) return
     const s = props.server
-    form.value = s ? { ...blank(), ...s, dns: (s.dns ?? []).join(', ') } : blank()
+    form.value = s
+      ? {
+          ...blank(),
+          ...s,
+          dns: (s.dns ?? []).join(', '),
+          searchDomains: (s.searchDomains ?? []).join(', '),
+          ntp: (s.ntp ?? []).join(', '),
+        }
+      : blank()
     if (!s && candidates.value.length === 1) form.value.interface = candidates.value[0].name
   },
   { immediate: true },
@@ -85,8 +95,12 @@ function save() {
   const dns = parseList(f.dns)
   if (dns.length) out.dns = dns
   if (f.domain) out.domain = f.domain.trim()
-  // SLAAC alone hands out nothing a device could put a name to.
+  const searchDomains = parseList(f.searchDomains)
+  if (searchDomains.length) out.searchDomains = searchDomains
+  // SLAAC alone hands out nothing a device could put a name to, and no time servers.
   if (f.dnsRegistration && f.mode !== 'slaac') out.dnsRegistration = true
+  const ntp = parseList(f.ntp)
+  if (ntp.length && f.mode !== 'slaac') out.ntp = ntp
   config.upsertV6Server(out)
   open.value = false
 }
@@ -163,6 +177,22 @@ function save() {
         </FormField>
         <FormField id="v6-domain" label="Domain" hint="Empty: the DNS service's domain.">
           <input id="v6-domain" v-model="form.domain" class="input font-mono" spellcheck="false" />
+        </FormField>
+        <FormField id="v6-search" label="Search domains" hint="Comma separated. Empty: the domain.">
+          <input
+            id="v6-search"
+            v-model="form.searchDomains"
+            class="input font-mono"
+            spellcheck="false"
+          />
+        </FormField>
+        <FormField
+          v-if="form.mode !== 'slaac'"
+          id="v6-time"
+          label="Time servers"
+          hint="Empty: this router when it answers time requests."
+        >
+          <input id="v6-time" v-model="form.ntp" class="input font-mono" spellcheck="false" />
         </FormField>
       </div>
       <div class="space-y-2">

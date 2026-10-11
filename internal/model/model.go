@@ -1205,7 +1205,8 @@ type IPv4 struct {
 	Gateway string   `json:"gateway,omitempty"`
 	// SendHostname sends the router's hostname with the DHCPv4 and DHCPv6
 	// requests. Off sends no name.
-	SendHostname bool `json:"sendHostname,omitempty"`
+	SendHostname bool   `json:"sendHostname,omitempty"`
+	VendorClass  string `json:"vendorClass,omitempty"` // option 60; empty sends none
 }
 
 // IPv6 addressing for an interface. Address is CIDR notation.
@@ -2022,9 +2023,11 @@ type DHCPv6Server struct {
 	RangeStart string `json:"rangeStart,omitempty"`
 	RangeEnd   string `json:"rangeEnd,omitempty"`
 	// LeaseTime is also the lifetime advertised in router advertisements.
-	LeaseTime string   `json:"leaseTime,omitempty"`
-	DNS       []string `json:"dns,omitempty"`
-	Domain    string   `json:"domain,omitempty"`
+	LeaseTime     string   `json:"leaseTime,omitempty"`
+	DNS           []string `json:"dns,omitempty"`
+	Domain        string   `json:"domain,omitempty"`
+	SearchDomains []string `json:"searchDomains,omitempty"` // option 24 and the RA DNSSL; empty: Domain, as today
+	NTP           []string `json:"ntp,omitempty"`           // option 56, IPv6 addresses; empty as today; never for slaac
 	// DNSRegistration answers the names devices send over DHCPv6, and the
 	// SLAAC addresses guessed from their IPv4 names, like DHCPServer's.
 	DNSRegistration bool `json:"dnsRegistration,omitempty"`
@@ -2040,14 +2043,18 @@ const DefaultLeaseTime = "24h"
 // interface (DNS only when the DNS service is enabled; otherwise the
 // system DNS servers).
 type DHCPServer struct {
-	Interface  string   `json:"interface"`
-	Enabled    bool     `json:"enabled"`
-	RangeStart string   `json:"rangeStart"`
-	RangeEnd   string   `json:"rangeEnd"`
-	LeaseTime  string   `json:"leaseTime,omitempty"` // dnsmasq syntax: 24h, 2d, infinite; empty means DefaultLeaseTime
-	Gateway    string   `json:"gateway,omitempty"`
-	DNS        []string `json:"dns,omitempty"`
-	Domain     string   `json:"domain,omitempty"`
+	Interface     string   `json:"interface"`
+	Enabled       bool     `json:"enabled"`
+	RangeStart    string   `json:"rangeStart"`
+	RangeEnd      string   `json:"rangeEnd"`
+	LeaseTime     string   `json:"leaseTime,omitempty"` // dnsmasq syntax: 24h, 2d, infinite; empty means DefaultLeaseTime
+	Gateway       string   `json:"gateway,omitempty"`
+	DNS           []string `json:"dns,omitempty"`
+	Domain        string   `json:"domain,omitempty"`
+	SearchDomains []string `json:"searchDomains,omitempty"` // option 119; empty sends none
+	NTP           []string `json:"ntp,omitempty"`           // option 42, IPv4 addresses; empty: this router when it serves time
+	BootServer    string   `json:"bootServer,omitempty"`    // IPv4 address of the TFTP server: next-server and option 66
+	BootFile      string   `json:"bootFile,omitempty"`      // the file to load: header file and option 67; needs BootServer
 	// DNSRegistration answers the name a device sends with its request,
 	// bare and under the local domain, while its lease lasts. Off, the name
 	// is ignored and not even kept on the lease; a static lease's hostname

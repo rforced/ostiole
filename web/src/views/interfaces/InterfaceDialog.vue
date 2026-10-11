@@ -38,7 +38,7 @@ function blank() {
     description: '',
     zone: '',
     enabled: true,
-    ipv4: { mode: 'none', address: '', gateway: '' },
+    ipv4: { mode: 'none', address: '', gateway: '', vendorClass: '' },
     ipv6: {
       mode: 'none',
       address: '',
@@ -187,6 +187,8 @@ function save() {
   if (!out.macAddress || !physical.value) delete out.macAddress
   if (out.ipv4.mode !== 'dhcp') delete out.ipv4.sendHostname
   else if (!out.ipv4.sendHostname) delete out.ipv4.sendHostname
+  out.ipv4.vendorClass = (out.ipv4.vendorClass || '').trim()
+  if (!out.ipv4.vendorClass || out.ipv4.mode !== 'dhcp') delete out.ipv4.vendorClass
   if (out.ipv6.mode !== 'slaac' && out.ipv6.mode !== 'dhcp') delete out.ipv6.temporaryAddresses
   else if (!out.ipv6.temporaryAddresses) delete out.ipv6.temporaryAddresses
   config.upsertInterface(out)
@@ -259,6 +261,21 @@ function save() {
           label="Send hostname"
           hint="Off sends no name to the provider."
         />
+        <FormField
+          v-if="form.ipv4.mode === 'dhcp'"
+          id="if-v4-vendor"
+          label="Vendor class"
+          hint="Only when the provider requires one. Empty sends none."
+        >
+          <input
+            id="if-v4-vendor"
+            v-model="form.ipv4.vendorClass"
+            class="input w-48 font-mono max-sm:w-full"
+            placeholder="optional"
+            spellcheck="false"
+            autocapitalize="none"
+          />
+        </FormField>
       </fieldset>
 
       <fieldset v-if="!daemonOwned" class="field-group">

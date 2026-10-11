@@ -1,0 +1,53 @@
+{
+  "version": 15,
+  "system": {
+    "hostname": "options-fw",
+    "management": {
+      "webPort": 443,
+      "sshPort": 22
+    }
+  },
+  "zones": [
+    {"name": "wan", "external": true},
+    {"name": "lan", "antiLockout": true},
+    {"name": "lab"}
+  ],
+  "interfaces": [
+    {"name": "eth0", "zone": "wan", "enabled": true, "ipv4": {"mode": "dhcp"}, "ipv6": {"mode": "slaac"}},
+    {"name": "eth1", "zone": "lan", "enabled": true,
+      "ipv4": {"mode": "static", "address": "192.168.1.1/24"},
+      "ipv6": {"mode": "static", "address": "2001:db8:1::1/64"}},
+    {"name": "eth2", "zone": "lab", "enabled": true,
+      "ipv4": {"mode": "static", "address": "192.168.2.1/24"},
+      "ipv6": {"mode": "slaac"}}
+  ],
+  "rules": [],
+  "nat": {"outbound": {"mode": "automatic"}},
+  "services": {
+    "dhcp": {
+      "enabled": true,
+      "servers": [
+        {"interface": "eth1", "enabled": true, "rangeStart": "192.168.1.100", "rangeEnd": "192.168.1.199",
+          "searchDomains": ["lab.example", "corp.example"], "ntp": ["192.0.2.10"],
+          "bootServer": "192.0.2.5", "bootFile": "pxelinux.0"},
+        {"interface": "eth2", "enabled": true, "rangeStart": "192.168.2.100", "rangeEnd": "192.168.2.150",
+          "bootServer": "192.0.2.6"}
+      ],
+      "v6": [
+        {"interface": "eth1", "enabled": true, "mode": "managed", "rangeStart": "::100", "rangeEnd": "::1ff",
+          "searchDomains": ["lab.example", "corp.example"], "ntp": ["2001:db8::10"]},
+        {"interface": "eth2", "enabled": true, "mode": "slaac",
+          "searchDomains": ["guest.example"], "ntp": ["2001:db8::10"]}
+      ]
+    },
+    "dns": {"enabled": true, "upstreams": ["9.9.9.9"], "domain": "lan"},
+    "upnp": {"enabled": false},
+    "ntp": {
+      "servers": [
+        {"host": "pool.ntp.org", "pool": true}
+      ],
+      "serve": true,
+      "interfaces": ["eth1"]
+    }
+  }
+}

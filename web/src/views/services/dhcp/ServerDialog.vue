@@ -34,6 +34,10 @@ function blank() {
     gateway: '',
     dns: '',
     domain: '',
+    searchDomains: '',
+    ntp: '',
+    bootServer: '',
+    bootFile: '',
     dnsRegistration: false,
   }
 }
@@ -43,7 +47,15 @@ watch(
   () => {
     if (!open.value) return
     const s = props.server
-    form.value = s ? { ...blank(), ...s, dns: (s.dns ?? []).join(', ') } : blank()
+    form.value = s
+      ? {
+          ...blank(),
+          ...s,
+          dns: (s.dns ?? []).join(', '),
+          searchDomains: (s.searchDomains ?? []).join(', '),
+          ntp: (s.ntp ?? []).join(', '),
+        }
+      : blank()
     if (!s && candidates.value.length === 1) form.value.interface = candidates.value[0].name
   },
   { immediate: true },
@@ -83,6 +95,12 @@ function save() {
   const dns = parseList(f.dns)
   if (dns.length) out.dns = dns
   if (f.domain) out.domain = f.domain.trim()
+  const searchDomains = parseList(f.searchDomains)
+  if (searchDomains.length) out.searchDomains = searchDomains
+  const ntp = parseList(f.ntp)
+  if (ntp.length) out.ntp = ntp
+  if (f.bootServer) out.bootServer = f.bootServer.trim()
+  if (f.bootFile) out.bootFile = f.bootFile.trim()
   if (f.dnsRegistration) out.dnsRegistration = true
   config.upsertServer(out)
   open.value = false
@@ -149,7 +167,56 @@ function save() {
         <FormField id="sc-domain" label="Domain" hint="Empty: the DNS service's domain.">
           <input id="sc-domain" v-model="form.domain" class="input font-mono" spellcheck="false" />
         </FormField>
+        <FormField
+          id="sc-search"
+          label="Search domains"
+          hint="Comma separated. Empty: the domain."
+          class="sm:col-span-2"
+        >
+          <input
+            id="sc-search"
+            v-model="form.searchDomains"
+            class="input font-mono"
+            spellcheck="false"
+          />
+        </FormField>
+        <FormField
+          id="sc-time"
+          label="Time servers"
+          hint="Empty: this router when it answers time requests."
+        >
+          <input id="sc-time" v-model="form.ntp" class="input font-mono" spellcheck="false" />
+        </FormField>
       </div>
+      <fieldset class="field-group">
+        <legend>Network boot</legend>
+        <div class="fields">
+          <FormField
+            id="sc-boot-server"
+            label="Boot server"
+            hint="The TFTP server's IPv4 address. Empty: no network boot."
+          >
+            <input
+              id="sc-boot-server"
+              v-model="form.bootServer"
+              class="input w-48 font-mono max-sm:w-full"
+              spellcheck="false"
+            />
+          </FormField>
+          <FormField
+            id="sc-boot-file"
+            label="Boot file"
+            hint="The file to load, like pxelinux.0. Needs a boot server."
+          >
+            <input
+              id="sc-boot-file"
+              v-model="form.bootFile"
+              class="input font-mono"
+              spellcheck="false"
+            />
+          </FormField>
+        </div>
+      </fieldset>
       <div class="space-y-2">
         <ToggleRow v-model="form.dnsRegistration" label="DNS registration" :hint="registration" />
         <ToggleRow v-model="form.enabled" label="Enabled" />

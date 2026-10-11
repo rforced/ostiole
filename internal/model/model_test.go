@@ -1872,6 +1872,131 @@ func TestValidateCatchesDelegationMistakes(t *testing.T) {
 	}
 }
 
+// dhcpOptionsConfig is a router with a pool and a managed IPv6 server on
+// lan0 and a DHCP WAN, with none of the new options set.
+func dhcpOptionsConfig() *Config {
+	cfg := Starter(StarterOptions{LAN: "lan0", LANAddress: "192.168.1.1/24", WAN: "wan0", Services: true})
+	cfg.Interfaces[0].IPv6 = IPv6{Mode: AddrStatic, Address: "2001:db8::1/64"}
+	cfg.Services.DHCP.V6 = []DHCPv6Server{{Interface: "lan0", Enabled: true, Mode: RAManaged, RangeStart: "::100", RangeEnd: "::1ff"}}
+	return cfg
+}
+
+func TestValidateAcceptsDHCPOptions(t *testing.T) {
+	t.Parallel()
+	cfg := dhcpOptionsConfig()
+	pool, v6 := &cfg.Services.DHCP.Servers[0], &cfg.Services.DHCP.V6[0]
+	pool.SearchDomains = []string{"lab.example", "corp.example."}
+	pool.NTP = []string{"192.0.2.123", "192.0.2.124"}
+	// The boot server is not on the pool's network.
+	pool.BootServer, pool.BootFile = "192.0.2.69", "boot/grub/x86_64-efi/core.efi"
+	v6.SearchDomains = []string{"lab.example"}
+	v6.NTP = []string{"2001:db8::123"}
+	cfg.Interfaces[1].IPv4.VendorClass = "acme 1.2"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("options rejected: %v", err)
+	}
+
+	// A boot server needs no file.
+	pool.BootFile = ""
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("a boot server alone rejected: %v", err)
+	}
+
+	// The most each may hold: 255 bytes of search domains once written
+	// out, 128 of boot file, 255 of vendor class.
+	label := strings.Repeat("a", 63)
+	full := []string{label + ".com", label + ".net", label + ".org", strings.Repeat("b", 46)}
+	pool.SearchDomains, v6.SearchDomains = full, full
+	pool.BootFile = strings.Repeat("f", 128)
+	cfg.Interfaces[1].IPv4.VendorClass = strings.Repeat("v", 255)
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("the longest values rejected: %v", err)
+	}
+}
+
+func TestValidateCatchesDHCPOptionMistakes(t *testing.T) {
+	t.Parallel()
+	pool := func(c *Config) *DHCPServer { return &c.Services.DHCP.Servers[0] }
+	v6 := func(c *Config) *DHCPv6Server { return &c.Services.DHCP.V6[0] }
+	wan := func(c *Config) *IPv4 { return &c.Interfaces[1].IPv4 }
+	boot := func(file string) func(*Config) {
+		return func(c *Config) { pool(c).BootServer, pool(c).BootFile = "192.0.2.69", file }
+	}
+	// One byte more than the 255 an option holds, written out in full.
+	label := strings.Repeat("a", 63)
+	over := []string{label + ".com", label + ".net", label + ".org", strings.Repeat("b", 47)}
+	for _, tc := range []struct {
+		name string
+		edit func(*Config)
+		want string // the path of the one issue
+		msg  string // part of what it says
+	}{
+		{"a search domain with a space in it", func(c *Config) { pool(c).SearchDomains = []string{"lab.example", "not a domain"} },
+			"services.dhcp.servers[0].searchDomains[1]", "not a valid domain"},
+		{"a search domain with a space around it", func(c *Config) { pool(c).SearchDomains = []string{" lab.example"} },
+			"services.dhcp.servers[0].searchDomains[0]", "not a valid domain"},
+		{"a search domain of only dots", func(c *Config) { pool(c).SearchDomains = []string{"lab.example", "."} },
+			"services.dhcp.servers[0].searchDomains[1]", "not a valid domain"},
+		{"a search domain longer than a name may be", func(c *Config) { pool(c).SearchDomains = []string{strings.Repeat("a.", 127) + "a"} },
+			"services.dhcp.servers[0].searchDomains[0]", "not a valid domain"},
+		{"search domains that do not fit an option", func(c *Config) { pool(c).SearchDomains = over },
+			"services.dhcp.servers[0].searchDomains", "255 bytes"},
+		{"a time server that is a name", func(c *Config) { pool(c).NTP = []string{"192.0.2.123", "pool.example"} },
+			"services.dhcp.servers[0].ntp[1]", "invalid IP address"},
+		{"an IPv6 time server", func(c *Config) { pool(c).NTP = []string{"2001:db8::123"} },
+			"services.dhcp.servers[0].ntp[0]", "not an IPv4 address"},
+		{"a boot server that is a name", func(c *Config) { pool(c).BootServer = "tftp.example" },
+			"services.dhcp.servers[0].bootServer", "invalid IP address"},
+		{"an IPv6 boot server", func(c *Config) { pool(c).BootServer = "2001:db8::69" },
+			"services.dhcp.servers[0].bootServer", "not an IPv4 address"},
+		{"a boot file without a boot server", func(c *Config) { pool(c).BootFile = "pxelinux.0" },
+			"services.dhcp.servers[0].bootFile", "needs a boot server"},
+		{"a comma in the boot file", boot("a,b"), "services.dhcp.servers[0].bootFile", "commas, quotes or spaces"},
+		{"a double quote in the boot file", boot(`a"b`), "services.dhcp.servers[0].bootFile", "commas, quotes or spaces"},
+		{"a single quote in the boot file", boot("a'b"), "services.dhcp.servers[0].bootFile", "commas, quotes or spaces"},
+		{"a space in the boot file", boot("boot dir/pxelinux.0"), "services.dhcp.servers[0].bootFile", "commas, quotes or spaces"},
+		{"a tab in the boot file", boot("a\tb"), "services.dhcp.servers[0].bootFile", "commas, quotes or spaces"},
+		{"a new line in the boot file", boot("a\nb"), "services.dhcp.servers[0].bootFile", "commas, quotes or spaces"},
+		{"a no-break space in the boot file", boot("a b"), "services.dhcp.servers[0].bootFile", "commas, quotes or spaces"},
+		{"a delete character in the boot file", boot("a\x7fb"), "services.dhcp.servers[0].bootFile", "commas, quotes or spaces"},
+		{"a boot file longer than the header holds", boot(strings.Repeat("f", 129)), "services.dhcp.servers[0].bootFile", "128 bytes"},
+
+		{"an IPv6 search domain with a space in it", func(c *Config) { v6(c).SearchDomains = []string{"not a domain"} },
+			"services.dhcp.v6[0].searchDomains[0]", "not a valid domain"},
+		{"IPv6 search domains that do not fit an option", func(c *Config) { v6(c).SearchDomains = over },
+			"services.dhcp.v6[0].searchDomains", "255 bytes"},
+		{"an IPv4 time server on IPv6", func(c *Config) { v6(c).NTP = []string{"192.0.2.123"} },
+			"services.dhcp.v6[0].ntp[0]", "not an IPv6 address"},
+		{"a time server on IPv6 that is a name", func(c *Config) { v6(c).NTP = []string{"pool.example"} },
+			"services.dhcp.v6[0].ntp[0]", "invalid IP address"},
+
+		{"a vendor class on a static interface", func(c *Config) { c.Interfaces[0].IPv4.VendorClass = "acme" },
+			"interfaces[0].ipv4.vendorClass", "belongs on a DHCP interface"},
+		{"a vendor class with a control character", func(c *Config) { wan(c).VendorClass = "acme\x00" },
+			"interfaces[1].ipv4.vendorClass", "not printable ASCII"},
+		{"a vendor class beyond ASCII", func(c *Config) { wan(c).VendorClass = "café" },
+			"interfaces[1].ipv4.vendorClass", "not printable ASCII"},
+		{"a vendor class with a backslash", func(c *Config) { wan(c).VendorClass = `acme\\` },
+			"interfaces[1].ipv4.vendorClass", "quotes or backslashes"},
+		{"a vendor class longer than an option holds", func(c *Config) { wan(c).VendorClass = strings.Repeat("v", 256) },
+			"interfaces[1].ipv4.vendorClass", "255 characters"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := dhcpOptionsConfig()
+			tc.edit(cfg)
+			err := cfg.Validate()
+			var ve *ValidationError
+			if !errors.As(err, &ve) || len(ve.Issues) != 1 || ve.Issues[0].Path != tc.want {
+				t.Fatalf("err = %v, want one issue at %s", err, tc.want)
+			}
+			if msg := ve.Issues[0].Message; !strings.Contains(msg, tc.msg) {
+				t.Errorf("message = %q, want it to hold %q", msg, tc.msg)
+			}
+		})
+	}
+}
+
 func TestUpdateDefaults(t *testing.T) {
 	t.Parallel()
 	// A configuration written before updates existed has to come out

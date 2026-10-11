@@ -132,6 +132,7 @@ test('per-interface drop logging and source blocking', async ({ page }) => {
   await dialog.getByLabel('Log dropped packets').selectOption('on')
   await dialog.getByLabel('Block private and loopback sources').check()
   await dialog.getByLabel('Block bogon sources').check()
+  await dialog.getByLabel('Vendor class').fill('acme-router')
   await page.screenshot({ path: shot('13-interface-guards'), fullPage: true })
   await dialog.getByRole('button', { name: 'Save to draft' }).click()
 
@@ -140,6 +141,12 @@ test('per-interface drop logging and source blocking', async ({ page }) => {
   await expect(wanRow).toContainText('logs drops')
 
   await applyAndConfirm(page)
+
+  await page.reload()
+  await wanRow.getByRole('button', { name: 'Edit' }).click()
+  dialog = page.getByRole('dialog')
+  await expect(dialog.getByLabel('Vendor class')).toHaveValue('acme-router')
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
 
   // The rules land after the link-local baseline (the bogon list contains
   // fe80::/10, and IPv6 needs neighbour discovery to work at all) and
@@ -165,6 +172,7 @@ test('per-interface drop logging and source blocking', async ({ page }) => {
   await dialog.getByLabel('Log dropped packets').selectOption('inherit')
   await dialog.getByLabel('Block private and loopback sources').uncheck()
   await dialog.getByLabel('Block bogon sources').uncheck()
+  await dialog.getByLabel('Vendor class').fill('')
   await dialog.getByRole('button', { name: 'Save to draft' }).click()
   await applyAndConfirm(page)
 })

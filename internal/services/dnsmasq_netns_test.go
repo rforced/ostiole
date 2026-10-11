@@ -30,22 +30,7 @@ func TestDnsmasqAnswersNamesAsRendered(t *testing.T) {
 	if !netnstest.Enter(t, "dnsmasq") {
 		return
 	}
-	bin, _ := exec.LookPath("dnsmasq")
-	lo, err := netlink.LinkByName("lo")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := netlink.SetLinkUp(lo.Index); err != nil {
-		t.Fatal(err)
-	}
-	veth(t, "v0", "v1", "10.99.0.1/24")
-	veth(t, "v2", "v3", "10.98.0.1/24")
-	for _, name := range []string{"all", "default", "v0", "v1", "v2", "v3"} {
-		// Both ends of each pair are in this namespace, and the kernel drops
-		// a packet from one of its own addresses unless told otherwise.
-		sysctl(t, "net/ipv4/conf/"+name+"/accept_local", "1")
-		sysctl(t, "net/ipv4/conf/"+name+"/rp_filter", "0")
-	}
+	bin := dhcpNetworks(t)
 
 	dir := t.TempDir()
 	d := &Dnsmasq{Dir: dir, Leases: filepath.Join(dir, "leases")}
@@ -58,7 +43,7 @@ func TestDnsmasqAnswersNamesAsRendered(t *testing.T) {
 		{"v1", "02:00:00:00:00:03", "10.99.0.151", "wpad"},
 		{"v1", "02:00:00:00:00:04", "10.99.0.152", "site"},
 	} {
-		if err := dhcpRequest(c.link, c.mac, c.ip, c.name); err != nil {
+		if _, err := dhcpRequest(c.link, c.mac, c.ip, c.name); err != nil {
 			t.Fatalf("%s asking for %s: %v", c.mac, c.name, err)
 		}
 	}
@@ -101,11 +86,100 @@ func TestDnsmasqAnswersNamesAsRendered(t *testing.T) {
 	if got := lookup(t, "laptop.lan"); got != "" {
 		t.Errorf("laptop.lan after the cleanup = %q, want no answer", got)
 	}
-	if err := dhcpRequest("v1", "02:00:00:00:00:01", "10.99.0.150", "laptop"); err != nil {
+	if _, err := dhcpRequest("v1", "02:00:00:00:00:01", "10.99.0.150", "laptop"); err != nil {
 		t.Fatal(err)
 	}
 	if got := lookup(t, "laptop.lan"); got != "" {
 		t.Errorf("laptop.lan after it renewed = %q, want no answer", got)
+	}
+}
+
+// dnsmasq sends the options a server is given the way clients read them: a
+// boot file with its server in the header, for firmware that reads that, and
+// in options 66 and 67 for a client that asks; a boot server alone as the
+// text of option 66; the search domains as one compressed list; the time
+// servers named instead of this router. A server given none sends none.
+func TestDnsmasqSendsDHCPOptions(t *testing.T) {
+	if !netnstest.Enter(t, "dnsmasq") {
+		return
+	}
+	bin := dhcpNetworks(t)
+
+	dir := t.TempDir()
+	d := &Dnsmasq{Dir: dir, Leases: filepath.Join(dir, "leases")}
+	cfg := namesRouter()
+	// Typed the way validation lets them through: capitals and dots at the
+	// ends of a name, space around an address.
+	boot := &cfg.Services.DHCP.Servers[0]
+	boot.SearchDomains = []string{"Lab.Example", ".corp.example."}
+	boot.NTP = []string{" 192.0.2.10 "}
+	boot.BootServer, boot.BootFile = " 192.0.2.5 ", "pxelinux.0"
+	cfg.Services.DHCP.Servers[1].BootServer = " 192.0.2.6 "
+	run := startDnsmasq(t, bin, d, cfg)
+
+	request := func(link, mac, ip string, ask ...byte) dhcpAck {
+		t.Helper()
+		ack, err := dhcpRequest(link, mac, ip, "device", ask...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ack
+	}
+	// The time servers, boot server, boot file and search list.
+	ask := []byte{42, 66, 67, 119}
+
+	ack := request("v1", "02:00:00:00:00:11", "10.99.0.150", ask...)
+	if ack.next != netip.MustParseAddr("192.0.2.5") {
+		t.Errorf("next server = %s, want the boot server", ack.next)
+	}
+	if got := fieldText(ack.options[66]); got != "192.0.2.5" {
+		t.Errorf("option 66 = %q, want the boot server as text", got)
+	}
+	if got := fieldText(ack.options[67]); got != "pxelinux.0" {
+		t.Errorf("option 67 = %q, want the boot file", got)
+	}
+	if got := searchList(t, ack.options[119]); !slices.Equal(got, []string{"lab.example", "corp.example"}) {
+		t.Errorf("option 119 = %q, want the two names", got)
+	}
+	// This router serves time on the network too, and the one named wins.
+	if got := net.IP(ack.options[42]); !got.Equal(net.IPv4(192, 0, 2, 10)) {
+		t.Errorf("option 42 = %v, want the time server named", got)
+	}
+	// Asked for nothing, a client gets the boot server and file in the header.
+	ack = request("v1", "02:00:00:00:00:11", "10.99.0.150")
+	if ack.next != netip.MustParseAddr("192.0.2.5") || ack.server != "192.0.2.5" || ack.file != "pxelinux.0" {
+		t.Errorf("header = next server %s, server %q, file %q; want the boot server, as text, and the boot file",
+			ack.next, ack.server, ack.file)
+	}
+
+	// A boot server alone has no file, and the empty fields send nothing
+	// new: this router stays the time server.
+	ack = request("v3", "02:00:00:00:00:12", "10.98.0.150", ask...)
+	if got := fieldText(ack.options[66]); got != "192.0.2.6" {
+		t.Errorf("option 66 of a boot server alone = %q, want it as text", got)
+	}
+	for _, code := range []byte{67, 119} {
+		if got, ok := ack.options[code]; ok {
+			t.Errorf("option %d = %q, which this server was not given", code, got)
+		}
+	}
+	if got := net.IP(ack.options[42]); !got.Equal(net.IPv4(10, 98, 0, 1)) {
+		t.Errorf("option 42 = %v, want this router", got)
+	}
+
+	// The loaders Windows boots from are named with backslashes, which have
+	// to reach the client as written.
+	const wds = `boot\x64\wdsnbp.com`
+	boot.BootFile = wds
+	run.stop()
+	startDnsmasq(t, bin, d, cfg)
+	ack = request("v1", "02:00:00:00:00:11", "10.99.0.150", ask...)
+	if got := fieldText(ack.options[67]); got != wds {
+		t.Errorf("option 67 = %q, want %q", got, wds)
+	}
+	ack = request("v1", "02:00:00:00:00:11", "10.99.0.150")
+	if ack.file != wds {
+		t.Errorf("header file = %q, want %q", ack.file, wds)
 	}
 }
 
@@ -213,6 +287,31 @@ func lookup(t *testing.T, name string) string {
 	return strings.Join(out, ",")
 }
 
+// dhcpNetworks brings up what the DHCP tests run on, inside their
+// namespace: loopback, where dnsmasq answers lookups, and two networks with
+// the router's address on one end of each pair and a device on the other.
+// It returns the dnsmasq to run.
+func dhcpNetworks(t *testing.T) string {
+	t.Helper()
+	bin, _ := exec.LookPath("dnsmasq")
+	lo, err := netlink.LinkByName("lo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := netlink.SetLinkUp(lo.Index); err != nil {
+		t.Fatal(err)
+	}
+	veth(t, "v0", "v1", "10.99.0.1/24")
+	veth(t, "v2", "v3", "10.98.0.1/24")
+	for _, name := range []string{"all", "default", "v0", "v1", "v2", "v3"} {
+		// Both ends of each pair are in this namespace, and the kernel drops
+		// a packet from one of its own addresses unless told otherwise.
+		sysctl(t, "net/ipv4/conf/"+name+"/accept_local", "1")
+		sysctl(t, "net/ipv4/conf/"+name+"/rp_filter", "0")
+	}
+	return bin
+}
+
 func veth(t *testing.T, name, peer, addr string) {
 	t.Helper()
 	if err := netlink.AddVeth(name, peer); err != nil {
@@ -239,13 +338,24 @@ func sysctl(t *testing.T, key, value string) {
 	}
 }
 
+// dhcpAck is what the tests read from an ACK: the header's next server,
+// server name and boot file, and each option by its code.
+type dhcpAck struct {
+	next    netip.Addr
+	server  string
+	file    string
+	options map[byte][]byte
+}
+
 // dhcpRequest asks for ip in INIT-REBOOT form, which an authoritative
 // server answers without an offer first, and waits for the ACK. The
-// broadcast flag brings the answer back without an address to send it to.
-func dhcpRequest(link, mac, ip, hostname string) error {
+// options in ask go into the parameter request list; dnsmasq sends some
+// only to a client that lists them. The broadcast flag brings the answer
+// back without an address to send it to.
+func dhcpRequest(link, mac, ip, hostname string, ask ...byte) (dhcpAck, error) {
 	hw, err := net.ParseMAC(mac)
 	if err != nil {
-		return err
+		return dhcpAck{}, err
 	}
 	xid := uint32(time.Now().UnixNano())
 	pkt := make([]byte, 240, 300)
@@ -258,6 +368,9 @@ func dhcpRequest(link, mac, ip, hostname string) error {
 	pkt = append(pkt, append([]byte{50, 4}, net.ParseIP(ip).To4()...)...) // requested address
 	pkt = append(pkt, append([]byte{12, byte(len(hostname))}, hostname...)...)
 	pkt = append(pkt, append([]byte{61, 7, 1}, hw...)...)
+	if len(ask) > 0 {
+		pkt = append(pkt, append([]byte{55, byte(len(ask))}, ask...)...) // parameter request list
+	}
 	pkt = append(pkt, 255)
 
 	lc := net.ListenConfig{Control: func(_, _ string, c syscall.RawConn) error {
@@ -278,34 +391,93 @@ func dhcpRequest(link, mac, ip, hostname string) error {
 	}}
 	conn, err := lc.ListenPacket(context.Background(), "udp4", "0.0.0.0:68")
 	if err != nil {
-		return err
+		return dhcpAck{}, err
 	}
 	defer func() { _ = conn.Close() }()
 	if _, err := conn.WriteTo(pkt, &net.UDPAddr{IP: net.IPv4bcast, Port: 67}); err != nil {
-		return err
+		return dhcpAck{}, err
 	}
 	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
 	buf := make([]byte, 1500)
 	for {
 		n, _, err := conn.ReadFrom(buf)
 		if err != nil {
-			return err
+			return dhcpAck{}, err
 		}
 		if n < 240 || binary.BigEndian.Uint32(buf[4:]) != xid {
 			continue
+		}
+		ack := dhcpAck{
+			next:    netip.AddrFrom4([4]byte(buf[20:24])),
+			server:  fieldText(buf[44:108]),
+			file:    fieldText(buf[108:236]),
+			options: map[byte][]byte{},
 		}
 		for i := 240; i+1 < n && buf[i] != 255; {
 			if buf[i] == 0 {
 				i++
 				continue
 			}
-			if buf[i] == 53 && i+2 < n {
-				if buf[i+2] != 5 {
-					return fmt.Errorf("answered with DHCP message type %d, not an ACK", buf[i+2])
-				}
-				return nil
+			end := i + 2 + int(buf[i+1])
+			if end > n {
+				break
 			}
-			i += 2 + int(buf[i+1])
+			ack.options[buf[i]] = buf[i+2 : end]
+			i = end
 		}
+		if typ := ack.options[53]; len(typ) != 1 || typ[0] != 5 {
+			return ack, fmt.Errorf("answered with DHCP message type %v, not an ACK", typ)
+		}
+		return ack, nil
 	}
+}
+
+// fieldText is the text in one of the header's fixed-size fields or in a
+// string option, which ends at the first zero byte.
+func fieldText(b []byte) string {
+	text, _, _ := strings.Cut(string(b), "\x00")
+	return text
+}
+
+// searchList reads option 119: each name is labels, each after its length,
+// ending in a zero byte, and a pointer back into the option stands for the
+// rest of a name.
+func searchList(t *testing.T, opt []byte) []string {
+	t.Helper()
+	var names []string
+	for i := 0; i < len(opt); {
+		var labels []string
+		pos, next := i, 0 // next is where the following name begins, once a pointer has been followed
+		for steps := 0; ; steps++ {
+			if pos >= len(opt) || steps > len(opt) {
+				t.Fatalf("option 119 is not a list of names: % x", opt)
+			}
+			n := int(opt[pos])
+			if n == 0 {
+				pos++
+				break
+			}
+			if n&0xc0 == 0xc0 {
+				if pos+1 >= len(opt) {
+					t.Fatalf("option 119 ends inside a pointer: % x", opt)
+				}
+				if next == 0 {
+					next = pos + 2
+				}
+				pos = (n&0x3f)<<8 | int(opt[pos+1])
+				continue
+			}
+			if pos+1+n > len(opt) {
+				t.Fatalf("option 119 ends inside a label: % x", opt)
+			}
+			labels = append(labels, string(opt[pos+1:pos+1+n]))
+			pos += 1 + n
+		}
+		if next == 0 {
+			next = pos
+		}
+		names = append(names, strings.Join(labels, "."))
+		i = next
+	}
+	return names
 }

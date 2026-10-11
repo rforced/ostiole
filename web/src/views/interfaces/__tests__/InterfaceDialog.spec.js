@@ -147,3 +147,73 @@ describe('InterfaceDialog round trip', () => {
     expect(config.dirty).toBe(false)
   })
 })
+
+describe('InterfaceDialog vendor class', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  // eth1 is in the saved configuration, so submitting is a change to it.
+  function edit(ipv4) {
+    const config = useConfigStore()
+    const cfg = {
+      version: 3,
+      zones: [{ name: 'lan' }],
+      interfaces: [iface({ zone: 'lan', ipv4 })],
+      rules: [],
+    }
+    config.saved = cfg
+    config.replaceDraft(cfg)
+    const wrapper = mount(InterfaceDialog, {
+      props: { open: true, iface: config.findInterface('eth1') },
+      global: { stubs },
+    })
+    return { wrapper, config }
+  }
+
+  it('is offered on a DHCP interface', () => {
+    const { wrapper } = edit({ mode: 'dhcp' })
+    expect(wrapper.get('label[for="if-v4-vendor"]').text()).toBe('Vendor class')
+    expect(wrapper.get('#if-v4-vendor').element.value).toBe('')
+  })
+
+  it.each(['none', 'static'])('is not offered in %s mode', (mode) => {
+    const { wrapper } = edit({ mode })
+    expect(wrapper.find('#if-v4-vendor').exists()).toBe(false)
+  })
+
+  it('is written trimmed', async () => {
+    const { wrapper, config } = edit({ mode: 'dhcp' })
+    await wrapper.get('#if-v4-vendor').setValue('  acme-router ')
+    await wrapper.get('form').trigger('submit')
+    expect(config.findInterface('eth1').ipv4.vendorClass).toBe('acme-router')
+  })
+
+  it.each(['', '   '])('is dropped when the field holds %j', async (value) => {
+    const { wrapper, config } = edit({ mode: 'dhcp', vendorClass: 'acme-router' })
+    await wrapper.get('#if-v4-vendor').setValue(value)
+    await wrapper.get('form').trigger('submit')
+    expect(config.findInterface('eth1').ipv4).not.toHaveProperty('vendorClass')
+  })
+
+  it('is dropped when the interface stops being a DHCP client', async () => {
+    const { wrapper, config } = edit({ mode: 'dhcp', vendorClass: 'acme-router' })
+    await wrapper.get('#if-v4-mode').setValue('static')
+    await wrapper.get('#if-v4-addr').setValue('192.0.2.1/24')
+    await wrapper.get('form').trigger('submit')
+    const { ipv4 } = config.findInterface('eth1')
+    expect(ipv4.mode).toBe('static')
+    expect(ipv4).not.toHaveProperty('vendorClass')
+  })
+
+  it('shows a saved one and leaves the draft clean when nothing is touched', async () => {
+    const { wrapper, config } = edit({ mode: 'dhcp', vendorClass: 'acme-router' })
+    expect(wrapper.get('#if-v4-vendor').element.value).toBe('acme-router')
+    await wrapper.get('form').trigger('submit')
+    expect(config.dirty).toBe(false)
+  })
+
+  it('adds none to a DHCP interface without one when nothing is touched', async () => {
+    const { wrapper, config } = edit({ mode: 'dhcp' })
+    await wrapper.get('form').trigger('submit')
+    expect(config.dirty).toBe(false)
+  })
+})

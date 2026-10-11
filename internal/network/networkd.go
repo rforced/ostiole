@@ -482,6 +482,10 @@ func delegationSections(in model.Interface, gateways []model.Gateway) string {
 			"SendHostname="+yesNo(in.IPv4.SendHostname),
 			"ClientIdentifier=mac",
 			"UseHostname=no")
+		// Option 60, for a provider that requires one.
+		if in.IPv4.VendorClass != "" {
+			dhcp4 = append(dhcp4, "VendorClassIdentifier="+in.IPv4.VendorClass)
+		}
 	}
 	if in.IPv6.Mode == model.AddrDHCP || in.IPv6.Mode == model.AddrSLAAC {
 		// The DHCPv6 client sends the hostname by default as well; the one
