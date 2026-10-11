@@ -6,7 +6,7 @@
 #   curl -fsSL … | sudo sh -s -- --yes      (agree to the plan in advance)
 #
 # Flags: --yes, --dry-run, --with-tailscale, --with-wireless, --with-proxy,
-#        --keep <package> (repeatable), --no-verify.
+#        --keep <package> (repeatable), --no-verify, --fresh.
 # Anything else is passed to `ostiole install` (--listen, --timezone).
 #
 # Environment: OSTIOLE_VERSION pins a version; OSTIOLE_BASE_URL downloads
@@ -72,6 +72,7 @@ TAILSCALE=0
 WIRELESS=0
 PROXY=0
 NO_VERIFY=0
+FRESH=0
 KEEP=""
 INSTALL_ARGS=""
 while [ $# -gt 0 ]; do
@@ -82,6 +83,7 @@ while [ $# -gt 0 ]; do
 	--with-wireless) WIRELESS=1 ;;
 	--with-proxy) PROXY=1 ;;
 	--no-verify) NO_VERIFY=1 ;;
+	--fresh) FRESH=1 ;;
 	--keep)
 		shift
 		[ $# -gt 0 ] || { echo "--keep needs a package name" >&2; exit 1; }
@@ -545,6 +547,48 @@ if [ -n "${OSTIOLE_REMOVE:-}" ]; then
 	exit 0
 fi
 
+### what the last uninstall kept
+
+# `ostiole uninstall` renames config.json, users.json and tokens.json to
+# .bak. Only the default directory is looked in: with --config-dir
+# nothing is offered.
+CONFIG_DIR=/etc/ostiole
+
+# kept_config names the kept configuration and its date, if there is no
+# other.
+kept_config() {
+	bak="$CONFIG_DIR/config.json.bak"
+	[ -f "$bak" ] || return 0
+	[ ! -e "$CONFIG_DIR/config.json" ] || return 0
+	on="$(date -r "$bak" +%Y-%m-%d 2>/dev/null)" || on=""
+	echo "config.json.bak${on:+, $on}"
+}
+
+# restore_kept moves the .bak files back, never over a file that is there.
+restore_kept() {
+	[ -f "$CONFIG_DIR/config.json.bak" ] || return 0
+	restored=""
+	for f in config.json users.json tokens.json; do
+		[ -f "$CONFIG_DIR/$f.bak" ] || continue
+		if [ -e "$CONFIG_DIR/$f" ]; then
+			echo "note: $CONFIG_DIR/$f is there already, so $f.bak stays as it is" >&2
+			[ "$f" != config.json ] || return 0
+			continue
+		fi
+		mv "$CONFIG_DIR/$f.bak" "$CONFIG_DIR/$f"
+		restored="$restored $f"
+	done
+	echo "restored what the last uninstall kept in $CONFIG_DIR:$restored"
+}
+
+KEPT=""
+case " $INSTALL_ARGS " in
+*" --config-dir"*) ;;
+*) KEPT="$(kept_config)" ;;
+esac
+RESTORE=0
+[ -z "$KEPT" ] || [ "$FRESH" -eq 1 ] || RESTORE=1
+
 ### the plan
 
 echo "Ostiole will:"
@@ -563,9 +607,14 @@ case "$REMOVE" in
 *) echo "  remove:   ${REMOVE:-nothing this router has that it has no use for}" ;;
 esac
 [ -z "$MASK_ONLY" ] || echo "  mask:     $MASK_ONLY"
+if [ "$RESTORE" -eq 1 ]; then
+	echo "  restore:  the configuration kept by the last uninstall ($KEPT)"
+elif [ -n "$KEPT" ]; then
+	echo "  leave:    the configuration kept by the last uninstall ($KEPT) alone, its ruleset renamed ruleset.nft.bak (--fresh)"
+fi
 echo "  hand addresses to systemd-networkd, keeping the ones this router has now"
 echo "  keep the time with chrony in place of the distribution's time service"
-echo "  bootstrap ruleset until the wizard: nothing is forwarded"
+[ "$RESTORE" -eq 1 ] || echo "  bootstrap ruleset until the wizard: nothing is forwarded"
 [ "$HAS_SYSTEMD" -eq 1 ] ||
 	echo "  none of it here: this router has no systemd, and an install would be refused"
 if [ "$DRY_RUN" -eq 1 ]; then
@@ -1106,6 +1155,13 @@ if [ "${OSTIOLE_NO_INSTALL:-}" = "1" ]; then
 fi
 ### units and ruleset
 
+if [ "$RESTORE" -eq 1 ]; then
+	restore_kept
+elif [ -n "$KEPT" ] && [ -f "$CONFIG_DIR/ruleset.nft" ]; then
+	# A kept ruleset would keep forwarding under a fresh install, which
+	# the plan said forwards nothing.
+	mv "$CONFIG_DIR/ruleset.nft" "$CONFIG_DIR/ruleset.nft.bak"
+fi
 # The network is handed over at the very end, below.
 # shellcheck disable=SC2086 # the extra arguments are meant to be split
 "$BIN_DIR/ostiole" install --yes --network-later $INSTALL_ARGS

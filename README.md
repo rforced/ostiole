@@ -140,6 +140,8 @@ Options:
 - `--with-proxy` installs the reverse proxy beside the binary.
 - `--no-verify` skips the signature check, for a mirror without `checksums.txt.sig` or a machine
   without OpenSSL 3. The checksum is still checked.
+- `--fresh` starts without the configuration a previous uninstall kept and leaves its `.bak` files
+  alone.
 - `--listen :8443` serves the web UI on another port. The default is 9443.
 - `--timezone Europe/Berlin` sets the time zone. The default is UTC. `--timezone -` leaves it as
   it is.
@@ -147,7 +149,8 @@ Options:
 
 Then open `https://<host>:9443/` and create the admin account right away: until one exists,
 anyone who reaches the port can create it. Run the wizard to pick the WAN and LAN. The router
-forwards nothing until that first apply is confirmed.
+forwards nothing until that first apply is confirmed. If a previous `ostiole uninstall` kept the
+configuration, the plan offers it back with its accounts, and none of this is needed.
 
 Two steps can cut off the session you install from:
 
@@ -180,16 +183,20 @@ The same binary is the command line:
 - `ostiole update`: check for and install a newer release.
 - `ostiole repair`: rerun the install script with the binary in place, for a router whose packages
   were changed by hand or an install whose session dropped.
-- `ostiole uninstall`: stop and remove Ostiole's units (the daemon, the firewall and every service
-  it runs) with their drop-ins, the configuration they read under /etc, the sysctl, modprobe,
-  journald and sysusers files, the networkd units, shaping, policy routing and the `inet ostiole`
-  table; hand the network back if the old manager is still installed; and unmask the
-  distribution's units Ostiole masked to run its own (its resolver, unbound, miniupnpd, tailscaled,
-  hostapd, time services, bluetooth and update timers) without starting them. `--purge` also
-  removes /etc/ostiole, the log files, the services' state (proxy certificates, Tailscale's node,
-  DHCP leases), the `ostiole` and `ostiole-proxy` binaries and the `ostiole-proxy` account. The
-  backups in /var/backups/ostiole stay. Packages the script removed are not reinstalled, and
-  competitors it masked stay masked.
+- `ostiole uninstall`: remove the management and leave the router running as configured. The
+  daemon's unit and the binary go; the ruleset, the service units (dnsmasq, unbound, chrony,
+  miniupnpd, hostapd, tailscaled, the proxy) with the files they read, the networkd units and the
+  sysctls stay, and `ostiole-firewall.service` loads the ruleset with `nft -f` at boot. The
+  configuration and accounts stay as `config.json.bak`, `users.json.bak` and `tokens.json.bak`,
+  which the install script offers back. What stops with the daemon: policy routing and traffic
+  shaping at the next reboot, blocklist and feed refreshes, certificate renewals, dynamic DNS, OS
+  updates, monitoring, notifications, logs, backups and crons; the command lists them. `--purge`
+  removes everything instead: the units, the files under /etc, the networkd units, the `inet
+  ostiole` table, policy routing and shaping, /etc/ostiole, the log files, the services' state
+  (proxy certificates, Tailscale's node, DHCP leases), the binaries and the `ostiole-proxy`
+  account, unmasks the distribution's units Ostiole had masked and enables a resolver and a clock
+  service. The backups in /var/backups/ostiole stay. Packages the script removed are not
+  reinstalled.
 
 `ostiole --help` lists the rest.
 

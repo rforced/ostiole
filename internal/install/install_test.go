@@ -100,8 +100,9 @@ func TestInstallAndUninstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	sc := &fakeSystemctl{
-		enabled: map[string]string{"firewalld.service": "enabled", "NetworkManager.service": "enabled", "ufw.service": "masked"},
-		active:  map[string]string{"firewalld.service": "active", "NetworkManager.service": "active", "ufw.service": "inactive"},
+		enabled: map[string]string{"firewalld.service": "enabled", "NetworkManager.service": "enabled", "ufw.service": "masked",
+			resolvedUnit: "disabled", "systemd-timesyncd.service": "disabled", "chronyd.service": "disabled"},
+		active: map[string]string{"firewalld.service": "active", "NetworkManager.service": "active", "ufw.service": "inactive"},
 	}
 	log := slog.New(slog.DiscardHandler)
 
@@ -184,7 +185,11 @@ func TestInstallAndUninstall(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(lay.LogDir, "firewall"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := Uninstall(context.Background(), sc, &fakeRunner{}, lay, true, log); err != nil {
+	lay.Leftovers.Resolv = filepath.Join(t.TempDir(), "resolv.conf")
+	if err := os.WriteFile(lay.Leftovers.Resolv, []byte("nameserver 127.0.0.1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := Uninstall(context.Background(), sc, &fakeRunner{}, lay, UninstallOptions{Purge: true}, log); err != nil {
 		t.Fatal(err)
 	}
 	for _, p := range []string{filepath.Join(lay.UnitDir, DaemonUnit), filepath.Join(lay.UnitDir, FirewallUnit), lay.Binary(), lay.ConfigDir, lay.LogDir,
@@ -200,6 +205,15 @@ func TestInstallAndUninstall(t *testing.T) {
 	if !sc.has("disable", "--now", DaemonUnit) {
 		t.Errorf("daemon not disabled: %v", sc.calls)
 	}
+	// A purged box still resolves names and keeps time: systemd-resolved
+	// behind resolv.conf, and timesyncd ahead of chrony.
+	if !sc.has("enable", "--now", resolvedUnit) || !sc.has("enable", "--now", "systemd-timesyncd.service") ||
+		sc.has("enable", "--now", "chronyd.service") {
+		t.Errorf("systemctl calls = %v", sc.calls)
+	}
+	if target, err := os.Readlink(lay.Leftovers.Resolv); err != nil || target != "../run/systemd/resolve/stub-resolv.conf" {
+		t.Errorf("resolv.conf links to %q, %v", target, err)
+	}
 }
 
 func TestUninstallLeftovers(t *testing.T) {
@@ -208,6 +222,7 @@ func TestUninstallLeftovers(t *testing.T) {
 		lay := tempLayout(t)
 		host := t.TempDir()
 		at := func(p ...string) string { return filepath.Join(append([]string{host}, p...)...) }
+		cfg := func(name string) string { return filepath.Join(lay.ConfigDir, name) }
 		lay.Leftovers = Leftovers{
 			Units:    []string{"ostiole-quokka.service", "ostiole-wombat@.service"},
 			Files:    []string{at("quokka.d", "ostiole.*"), at("sysctl.d", "99-ostiole.conf")},
@@ -217,47 +232,55 @@ func TestUninstallLeftovers(t *testing.T) {
 			Binaries: []string{"ostiole-wombat"},
 			User:     "ostiole-wombat",
 		}
-		if err := os.WriteFile(at("resolv.conf"), []byte("nameserver 127.0.0.1\nnameserver ::1\n"), 0o600); err != nil {
+		resolv := "nameserver 127.0.0.1\nnameserver ::1\n"
+		if err := os.WriteFile(at("resolv.conf"), []byte(resolv), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		plain := []string{at("quokka.d", "ostiole.conf"), at("quokka.d", "ostiole.hosts"), at("sysctl.d", "99-ostiole.conf")}
+		files := []string{at("quokka.d", "ostiole.conf"), at("quokka.d", "ostiole.hosts"), at("sysctl.d", "99-ostiole.conf"),
+			filepath.Join(lay.NetworkdConfDir, NetworkdConfFile)}
 		state := []string{at("lib", "ostiole-wombat", "certificates", "site.example.crt"), at("lib", "quokka", "ostiole.leases"),
-			lay.Binary(), filepath.Join(lay.BinDir, "ostiole-wombat"), filepath.Join(lay.ConfigDir, "config.json")}
-		units := []string{DaemonUnit, FirewallUnit, "ostiole-quokka.service", "ostiole-wombat@.service",
-			"ostiole-quokka.service.d/10-level.conf", "ostiole-wombat@.service.d/10-level.conf"}
-		links := []string{"multi-user.target.wants/ostiole-quokka.service", "multi-user.target.wants/ostiole-wombat@radio0.service"}
-		var unitPaths []string
-		for _, u := range slices.Concat(units, links) {
-			unitPaths = append(unitPaths, filepath.Join(lay.UnitDir, u))
+			filepath.Join(lay.BinDir, "ostiole-wombat"), cfg("ruleset.nft"), cfg("audit.jsonl")}
+		var units []string
+		for _, u := range []string{"ostiole-quokka.service", "ostiole-wombat@.service", "ostiole-quokka.service.d/10-level.conf",
+			"ostiole-wombat@.service.d/10-level.conf", "multi-user.target.wants/ostiole-quokka.service",
+			"multi-user.target.wants/ostiole-wombat@radio0.service"} {
+			units = append(units, filepath.Join(lay.UnitDir, u))
 		}
+		daemon := []string{lay.Binary(), cfg("config.json"), cfg("sessions.json"), filepath.Join(lay.UnitDir, DaemonUnit),
+			filepath.Join(lay.UnitDir, DaemonUnit+".d", "10-level.conf"), filepath.Join(lay.UnitDir, "multi-user.target.wants", DaemonUnit)}
+		firewall := filepath.Join(lay.UnitDir, FirewallUnit)
+		nft := at("sbin", "nft")
 		kept := []string{at("quokka.d", "distro.conf"), at("lib", "quokka", "distro.leases"),
 			filepath.Join(lay.BinDir, "other-tool"), filepath.Join(lay.UnitDir, "multi-user.target.wants", "other.service")}
-		for _, p := range slices.Concat(plain, state, unitPaths, kept) {
+		// Each file holds its own path, so a renamed one shows where it came from.
+		for _, p := range slices.Concat(files, state, units, daemon, kept, []string{firewall, nft, cfg("users.json"), cfg("users.json.bak")}) {
 			if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 				t.Fatal(err)
 			}
-			if err := os.WriteFile(p, []byte("x\n"), 0o600); err != nil {
+			if err := os.WriteFile(p, []byte(p+"\n"), 0o700); err != nil {
 				t.Fatal(err)
 			}
 		}
-		sc := &fakeSystemctl{}
+		// Debian names chrony's unit chrony.service, with chronyd.service an alias.
+		sc := &fakeSystemctl{enabled: map[string]string{"chronyd.service": "alias", "chrony.service": "disabled"}}
 		run := &fakeRunner{}
 		var logged strings.Builder
-		if err := Uninstall(context.Background(), sc, run, lay, purge, slog.New(slog.NewTextHandler(&logged, nil))); err != nil {
+		opts := UninstallOptions{Purge: purge, Nft: nft}
+		if err := Uninstall(context.Background(), sc, run, lay, opts, slog.New(slog.NewTextHandler(&logged, nil))); err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(logged.String(), "resolv.conf points at the removed dnsmasq") {
-			t.Errorf("purge=%v: no warning about resolv.conf in %q", purge, logged.String())
+		if warned := strings.Contains(logged.String(), "resolv.conf points at the removed dnsmasq"); warned != purge {
+			t.Errorf("purge=%v: resolv.conf warning is %v in %q", purge, warned, logged.String())
 		}
-		gone := slices.Concat(plain, unitPaths, []string{filepath.Join(lay.UnitDir, "ostiole-quokka.service.d")})
+		gone := slices.Concat(daemon, []string{filepath.Join(lay.UnitDir, DaemonUnit+".d")})
 		if purge {
-			gone = append(gone, state...)
-			gone = append(gone, at("lib", "ostiole-wombat"))
+			gone = slices.Concat(gone, files, units, state, []string{firewall, lay.ConfigDir, at("lib", "ostiole-wombat"),
+				filepath.Join(lay.UnitDir, "ostiole-quokka.service.d")})
 		} else {
-			kept = append(kept, state...)
+			kept = slices.Concat(kept, files, units, state, []string{firewall})
 		}
 		for _, p := range gone {
-			if _, err := os.Stat(p); err == nil {
+			if _, err := os.Lstat(p); err == nil {
 				t.Errorf("purge=%v: %s is still there", purge, p)
 			}
 		}
@@ -266,26 +289,95 @@ func TestUninstallLeftovers(t *testing.T) {
 				t.Errorf("purge=%v: %s went: %v", purge, p, err)
 			}
 		}
+		if !purge {
+			// The daemon goes and nothing else stops or comes back.
+			if want := [][]string{{"disable", "--now", DaemonUnit}, {"daemon-reload"}}; !slices.EqualFunc(sc.calls, want, slices.Equal) {
+				t.Errorf("systemctl calls = %q, want %q", sc.calls, want)
+			}
+			if len(run.calls) > 0 {
+				t.Errorf("commands run = %v", run.calls)
+			}
+			if raw, _ := os.ReadFile(firewall); string(raw) != FirewallUnitUnmanaged(nft, lay.ConfigDir) ||
+				!strings.Contains(string(raw), "\nExecStart="+nft+" -f "+cfg("ruleset.nft")+"\n") {
+				t.Errorf("firewall unit:\n%s", raw)
+			}
+			// An older .bak gives way, and a file that is not there leaves none.
+			for bak, was := range map[string]string{"config.json.bak": cfg("config.json"), "users.json.bak": cfg("users.json")} {
+				if raw, err := os.ReadFile(cfg(bak)); err != nil || string(raw) != was+"\n" {
+					t.Errorf("%s = %q, %v, want the bytes of %s", bak, raw, err, was)
+				}
+			}
+			if _, err := os.Stat(cfg("tokens.json.bak")); err == nil {
+				t.Error("a missing tokens.json left a .bak")
+			}
+			if raw, _ := os.ReadFile(at("resolv.conf")); string(raw) != resolv {
+				t.Errorf("resolv.conf = %q", raw)
+			}
+			continue
+		}
 		for _, want := range [][]string{{"disable", "--now", DaemonUnit}, {"disable", "--now", "ostiole-quokka.service"},
 			{"disable", "ostiole-wombat@.service"}, {"stop", "ostiole-wombat@*.service"},
-			{"disable", "--now", FirewallUnit}, {"daemon-reload"}, {"unmask", "quokka.service"}, {"unmask", "numbat-timesyncd.service"}} {
+			{"disable", "--now", FirewallUnit}, {"daemon-reload"}, {"unmask", "quokka.service"}, {"unmask", "numbat-timesyncd.service"},
+			{"enable", "--now", "chrony.service"}} {
 			if !sc.has(want...) {
-				t.Errorf("purge=%v: no systemctl %v in %v", purge, want, sc.calls)
+				t.Errorf("no systemctl %v in %v", want, sc.calls)
 			}
+		}
+		if sc.has("enable", "--now", "chronyd.service") || sc.has("enable", "--now", resolvedUnit) {
+			t.Errorf("started a unit the host has no file for: %v", sc.calls)
 		}
 		reload := slices.IndexFunc(sc.calls, func(c []string) bool { return c[0] == "daemon-reload" })
 		unmask := slices.IndexFunc(sc.calls, func(c []string) bool { return c[0] == "unmask" })
 		if unmask < reload {
-			t.Errorf("purge=%v: unmasked before the units were gone: %v", purge, sc.calls)
+			t.Errorf("unmasked before the units were gone: %v", sc.calls)
 		}
-		daemon := slices.IndexFunc(sc.calls, func(c []string) bool { return slices.Contains(c, DaemonUnit) })
+		// A masked unit lists a file even on a host that has none.
+		unmasked := slices.IndexFunc(sc.calls, func(c []string) bool { return slices.Equal(c, []string{"unmask", "numbat-timesyncd.service"}) })
+		looked := slices.IndexFunc(sc.calls, func(c []string) bool { return c[0] == "list-unit-files" })
+		if looked < unmasked {
+			t.Errorf("looked for a resolver and a clock before the unmask: %v", sc.calls)
+		}
+		daemonCall := slices.IndexFunc(sc.calls, func(c []string) bool { return slices.Contains(c, DaemonUnit) })
 		service := slices.IndexFunc(sc.calls, func(c []string) bool { return slices.Contains(c, "ostiole-quokka.service") })
-		if daemon < 0 || service < daemon {
-			t.Errorf("purge=%v: the daemon is not stopped first: %v", purge, sc.calls)
+		if daemonCall < 0 || service < daemonCall {
+			t.Errorf("the daemon is not stopped first: %v", sc.calls)
 		}
-		if run.ran("userdel", "ostiole-wombat") != purge {
-			t.Errorf("purge=%v: commands run = %v", purge, run.calls)
+		if !run.ran("userdel", "ostiole-wombat") {
+			t.Errorf("commands run = %v", run.calls)
 		}
+	}
+}
+
+// Once the daemon is gone the firewall unit loads the saved ruleset with
+// nft, in the same place in the boot, and needs no Ostiole binary.
+func TestFirewallUnitUnmanaged(t *testing.T) {
+	t.Parallel()
+	lay := DefaultLayout()
+	managed := Units(lay, Options{Listen: ":443"})[FirewallUnit]
+	u := FirewallUnitUnmanaged("/usr/sbin/nft", lay.ConfigDir)
+	for _, want := range []string{"\nType=oneshot\n", "\nRemainAfterExit=yes\n",
+		"\nExecStart=/usr/sbin/nft -f /etc/ostiole/ruleset.nft\n", "\nExecReload=/usr/sbin/nft -f /etc/ostiole/ruleset.nft\n"} {
+		if !strings.Contains(u, want) {
+			t.Errorf("unit lacks %q:\n%s", strings.TrimSpace(want), u)
+		}
+	}
+	if strings.Contains(u, lay.Binary()) {
+		t.Errorf("unit still runs the binary:\n%s", u)
+	}
+	unit := func(s string) string { head, _, _ := strings.Cut(s, "[Service]"); return head }
+	wanted := func(s string) string { _, foot, _ := strings.Cut(s, "[Install]"); return foot }
+	if unit(u) != unit(managed) || wanted(u) != wanted(managed) {
+		t.Errorf("[Unit] or [Install] differs from the managed unit:\n%s\nmanaged:\n%s", u, managed)
+	}
+	if got := nftPath("ostiole-no-such-nft"); got != "/usr/sbin/nft" {
+		t.Errorf("nftPath of a missing name = %q", got)
+	}
+	exe := filepath.Join(t.TempDir(), "nft")
+	if err := os.WriteFile(exe, []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if got := nftPath(exe); got != exe {
+		t.Errorf("nftPath(%q) = %q", exe, got)
 	}
 }
 

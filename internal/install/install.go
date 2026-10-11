@@ -6,6 +6,7 @@
 package install
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -22,12 +23,14 @@ import (
 	"time"
 
 	"ostiole/internal/atomicfile"
+	"ostiole/internal/auth"
 	"ostiole/internal/backup"
 	"ostiole/internal/journald"
 	"ostiole/internal/logfile"
 	"ostiole/internal/logging"
 	"ostiole/internal/model"
 	"ostiole/internal/network"
+	"ostiole/internal/store"
 	"ostiole/internal/sysctl"
 	"ostiole/internal/timezone"
 )
@@ -60,11 +63,12 @@ type Layout struct {
 }
 
 // Leftovers is what Ostiole puts on the host outside its own directories.
+// Only a purge removes it; a plain uninstall leaves all of it running.
 // Units are the services' units, a template ending in "@.service"; Files
-// are globs every uninstall removes; Unmask are the distribution's units
-// Ostiole masked to run its own, unmasked and not started; Resolv is the
-// resolv.conf dnsmasq took over. State, Binaries beside the ostiole
-// binary and User go with a purge.
+// are globs of the files they read; Unmask are the distribution's units
+// Ostiole masked to run its own; Resolv is the resolv.conf dnsmasq took
+// over. State, Binaries beside the ostiole binary and User are the
+// services' state, programs and account.
 type Leftovers struct {
 	Units    []string
 	Files    []string
@@ -441,25 +445,7 @@ func Units(lay Layout, opts Options) map[string]string {
 	if lay.BackupDir != "" {
 		rw += " -" + lay.BackupDir
 	}
-	firewall := fmt.Sprintf(`[Unit]
-Description=Ostiole firewall ruleset (loaded before networking)
-Documentation=https://github.com/rforced/ostiole
-DefaultDependencies=no
-RequiresMountsFor=%s
-After=local-fs.target systemd-sysctl.service
-Wants=network-pre.target
-Before=network-pre.target shutdown.target
-Conflicts=shutdown.target
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=%s --config-dir %s load
-ExecReload=%s --config-dir %s load
-
-[Install]
-WantedBy=multi-user.target
-`, cfg, bin, cfg, bin, cfg)
+	firewall := firewallUnit(cfg, bin+" --config-dir "+cfg+" load")
 
 	daemon := fmt.Sprintf(`[Unit]
 Description=Ostiole firewall management UI and API
@@ -498,6 +484,35 @@ WantedBy=multi-user.target
 `, FirewallUnit, FirewallUnit, bin, cfg, backend, opts.Listen, rw)
 
 	return map[string]string{FirewallUnit: firewall, DaemonUnit: daemon}
+}
+
+// FirewallUnitUnmanaged is the firewall's unit once the daemon is gone. It
+// loads the saved ruleset with nft, an absolute path, and needs no
+// Ostiole binary.
+func FirewallUnitUnmanaged(nft, configDir string) string {
+	return firewallUnit(configDir, nft+" -f "+filepath.Join(configDir, store.RulesetFile))
+}
+
+func firewallUnit(configDir, load string) string {
+	return fmt.Sprintf(`[Unit]
+Description=Ostiole firewall ruleset (loaded before networking)
+Documentation=https://github.com/rforced/ostiole
+DefaultDependencies=no
+RequiresMountsFor=%s
+After=local-fs.target systemd-sysctl.service
+Wants=network-pre.target
+Before=network-pre.target shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=%s
+ExecReload=%s
+
+[Install]
+WantedBy=multi-user.target
+`, configDir, load, load)
 }
 
 // Service is the state of a systemd unit that competes with Ostiole.
@@ -671,12 +686,83 @@ func UnitName(name string) string {
 	return name + ".service"
 }
 
-// Uninstall stops and removes the daemon's and the firewall's units and
-// those of the services the daemon runs, with the files they read outside
-// the configuration directory. With purge it also removes that directory,
-// the log files, the binaries, the services' state and the proxy's
-// account; the backups stay. It does not restore competitors.
-func Uninstall(ctx context.Context, sc Systemctl, run Runner, lay Layout, purge bool, log *slog.Logger) error {
+// UninstallOptions tunes Uninstall.
+type UninstallOptions struct {
+	// Purge removes everything Ostiole put on the host, not only its
+	// management.
+	Purge bool
+	// Nft is the nft binary the firewall unit runs once the daemon is
+	// gone: a name looked up in PATH, or a path. Empty means "nft".
+	Nft string
+}
+
+// StopsWithoutDaemon is what a plain uninstall ends, a line each.
+var StopsWithoutDaemon = []string{
+	"policy routing: multi-WAN failover, gateway groups, per-rule gateways, reply lines, the kill switch and DNS via a gateway stay in the kernel until the next reboot, then are gone",
+	"traffic shaping: the queues stay until the next reboot",
+	"DNS blocklists and URL, GeoIP and ASN feeds stay as they were at the last apply",
+	"certificate renewals stop (sites and the UI's certificate lapse within 90 days) and dynamic DNS stops",
+	"OS updates stop (the install removed the distribution's updater)",
+	"gateway monitoring, notifications, logs, backups and crons stop",
+	"schedules by weekday fall back to UTC after a reboot",
+}
+
+// ResumeHint says how to bring the management back.
+const ResumeHint = "to resume, run the install script again; it offers the kept configuration"
+
+// Uninstall takes Ostiole off the host. Without a purge only the
+// management goes and the router runs on as it was configured: the daemon
+// stops and its unit goes, the firewall unit loads the saved ruleset with
+// nft, config.json, users.json and tokens.json become .bak files, the
+// sessions go and so does the ostiole binary. StopsWithoutDaemon is what
+// that ends. A purge stops and removes the daemon's, the firewall's and
+// the services' units with the files they read outside the configuration
+// directory, that directory, the log files, the binaries, the services'
+// state and the proxy's account, then starts systemd-resolved and a time
+// service where the host has them. The backups stay, and neither restores
+// competitors.
+func Uninstall(ctx context.Context, sc Systemctl, run Runner, lay Layout, opts UninstallOptions, log *slog.Logger) error {
+	if opts.Purge {
+		return purge(ctx, sc, run, lay, log)
+	}
+	_, _ = sc.Run(ctx, "disable", "--now", DaemonUnit)
+	if err := removeUnits(lay.UnitDir, DaemonUnit); err != nil {
+		return err
+	}
+	log.Info("daemon stopped and its unit removed", "unit", DaemonUnit)
+	// The firewall unit is rewritten before the binary goes, so a failure
+	// here leaves a unit that still loads.
+	if fw := filepath.Join(lay.UnitDir, FirewallUnit); exists(fw) {
+		nft := nftPath(opts.Nft)
+		if err := atomicfile.Write(fw, []byte(FirewallUnitUnmanaged(nft, lay.ConfigDir)), 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", FirewallUnit, err)
+		}
+		log.Info("the firewall unit loads the saved ruleset with nft from now on", "unit", FirewallUnit, "nft", nft)
+	}
+	if _, err := sc.Run(ctx, "daemon-reload"); err != nil {
+		return fmt.Errorf("systemctl daemon-reload: %w", err)
+	}
+	var kept []string
+	for _, name := range []string{store.ConfigFile, auth.UsersFile, auth.TokensFile} {
+		path := filepath.Join(lay.ConfigDir, name)
+		if err := os.Rename(path, path+".bak"); err == nil {
+			kept = append(kept, name+".bak")
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	if err := os.Remove(filepath.Join(lay.ConfigDir, auth.SessionsFile)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	log.Info("configuration kept for a later install, sessions removed", "dir", lay.ConfigDir, "kept", strings.Join(kept, " "))
+	if err := os.Remove(lay.Binary()); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	log.Info("binary removed", "path", lay.Binary())
+	return nil
+}
+
+func purge(ctx context.Context, sc Systemctl, run Runner, lay Layout, log *slog.Logger) error {
 	if run == nil {
 		run = ExecRunner{}
 	}
@@ -691,13 +777,8 @@ func Uninstall(ctx context.Context, sc Systemctl, run Runner, lay Layout, purge 
 		_, _ = sc.Run(ctx, "disable", "--now", unit)
 	}
 	_, _ = sc.Run(ctx, "disable", "--now", FirewallUnit)
-	for _, unit := range slices.Concat([]string{DaemonUnit, FirewallUnit}, left.Units) {
-		links, _ := filepath.Glob(filepath.Join(lay.UnitDir, "*.wants", instances(unit)))
-		for _, path := range slices.Concat([]string{filepath.Join(lay.UnitDir, unit), filepath.Join(lay.UnitDir, unit+".d")}, links) {
-			if err := os.RemoveAll(path); err != nil {
-				return err
-			}
-		}
+	if err := removeUnits(lay.UnitDir, slices.Concat([]string{DaemonUnit, FirewallUnit}, left.Units)...); err != nil {
+		return err
 	}
 	if err := removeGlobs(left.Files); err != nil {
 		return err
@@ -710,9 +791,9 @@ func Uninstall(ctx context.Context, sc Systemctl, run Runner, lay Layout, purge 
 		_, _ = sc.Run(ctx, "unmask", unit)
 	}
 	if len(left.Unmask) > 0 {
-		log.Info("the distribution's units Ostiole had masked are unmasked, not started", "units", strings.Join(left.Unmask, " "))
+		log.Info("the distribution's units Ostiole had masked are unmasked", "units", strings.Join(left.Unmask, " "))
 	}
-	if left.Resolv != "" {
+	if !startResolverAndClock(ctx, sc, left.Resolv, log) && left.Resolv != "" {
 		if raw, err := os.ReadFile(left.Resolv); err == nil && loopbackOnly(string(raw)) {
 			log.Warn("resolv.conf points at the removed dnsmasq; enable a resolver, systemd-resolved for example", "path", left.Resolv)
 		}
@@ -728,33 +809,115 @@ func Uninstall(ctx context.Context, sc Systemctl, run Runner, lay Layout, purge 
 			return err
 		}
 	}
-	if purge {
-		if err := os.RemoveAll(lay.ConfigDir); err != nil {
+	if err := os.RemoveAll(lay.ConfigDir); err != nil {
+		return err
+	}
+	if lay.LogDir != "" {
+		if err := os.RemoveAll(lay.LogDir); err != nil {
 			return err
 		}
-		if lay.LogDir != "" {
-			if err := os.RemoveAll(lay.LogDir); err != nil {
+	}
+	if err := removeGlobs(left.State); err != nil {
+		return err
+	}
+	for _, bin := range slices.Concat([]string{lay.Binary()}, binariesIn(lay.BinDir, left.Binaries)) {
+		if err := os.Remove(bin); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	if left.User != "" {
+		if _, err := run.Run(ctx, "getent", "passwd", left.User); err == nil {
+			if out, err := run.Run(ctx, "userdel", left.User); err != nil {
+				log.Warn("could not remove the account", "user", left.User, "err", err, "out", tail(out))
+			}
+		}
+	}
+	log.Info("configuration, log files, state, binaries and the proxy's account removed")
+	return nil
+}
+
+// The resolver and the time services a purge starts in place of Ostiole's,
+// the first clock with a unit file winning.
+const resolvedUnit = "systemd-resolved.service"
+
+var clockUnits = []string{"systemd-timesyncd.service", "chronyd.service", "chrony.service"}
+
+// stubResolv is systemd-resolved's resolv.conf as /etc/resolv.conf links
+// to it.
+const stubResolv = "../run/systemd/resolve/stub-resolv.conf"
+
+// startResolverAndClock starts systemd-resolved, pointing resolv at it,
+// and a time service, each where the host has a unit file. It reports
+// whether the resolver started. It runs after the unmask: a masked unit
+// lists a file even on a host that has none.
+func startResolverAndClock(ctx context.Context, sc Systemctl, resolv string, log *slog.Logger) bool {
+	u := ReadUnits(ctx, sc, slices.Concat([]string{resolvedUnit}, clockUnits)...)
+	started := false
+	if _, ok := u.File(resolvedUnit); ok {
+		if out, err := sc.Run(ctx, "enable", "--now", resolvedUnit); err != nil {
+			log.Warn("could not start the resolver", "unit", resolvedUnit, "err", err, "out", out)
+		} else {
+			started = true
+			log.Info("resolver enabled and started", "unit", resolvedUnit)
+		}
+	}
+	if started && resolv != "" {
+		if err := linkStubResolv(resolv); err != nil {
+			log.Warn("could not point resolv.conf at systemd-resolved", "path", resolv, "err", err)
+		} else {
+			log.Info("resolv.conf points at systemd-resolved", "path", resolv, "target", stubResolv)
+		}
+	}
+	for _, unit := range clockUnits {
+		// Debian's chronyd.service is an alias, and systemctl will not
+		// enable a unit by an alias.
+		if state, ok := u.File(unit); !ok || state == "alias" {
+			continue
+		}
+		if out, err := sc.Run(ctx, "enable", "--now", unit); err != nil {
+			log.Warn("could not start the time service", "unit", unit, "err", err, "out", out)
+		} else {
+			log.Info("time service enabled and started", "unit", unit)
+		}
+		break
+	}
+	return started
+}
+
+func linkStubResolv(path string) error {
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return os.Symlink(stubResolv, path)
+}
+
+// removeUnits removes the units' files, drop-in directories and wants
+// links.
+func removeUnits(dir string, units ...string) error {
+	for _, unit := range units {
+		links, _ := filepath.Glob(filepath.Join(dir, "*.wants", instances(unit)))
+		for _, path := range slices.Concat([]string{filepath.Join(dir, unit), filepath.Join(dir, unit+".d")}, links) {
+			if err := os.RemoveAll(path); err != nil {
 				return err
 			}
 		}
-		if err := removeGlobs(left.State); err != nil {
-			return err
-		}
-		for _, bin := range slices.Concat([]string{lay.Binary()}, binariesIn(lay.BinDir, left.Binaries)) {
-			if err := os.Remove(bin); err != nil && !errors.Is(err, os.ErrNotExist) {
-				return err
-			}
-		}
-		if left.User != "" {
-			if _, err := run.Run(ctx, "getent", "passwd", left.User); err == nil {
-				if out, err := run.Run(ctx, "userdel", left.User); err != nil {
-					log.Warn("could not remove the account", "user", left.User, "err", err, "out", tail(out))
-				}
-			}
-		}
-		log.Info("configuration, log files, state, binaries and the proxy's account removed")
 	}
 	return nil
+}
+
+// nftPath is the nft binary as the absolute path a unit needs.
+func nftPath(name string) string {
+	if p, err := exec.LookPath(cmp.Or(name, "nft")); err == nil {
+		if abs, err := filepath.Abs(p); err == nil {
+			return abs
+		}
+	}
+	return "/usr/sbin/nft"
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func instances(unit string) string {

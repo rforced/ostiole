@@ -886,43 +886,77 @@ func newUninstallCmd(g *globals) *cobra.Command {
 	var purge, yes bool
 	cmd := &cobra.Command{
 		Use:   "uninstall",
-		Short: "Stop the services, remove their units and files, and delete the Ostiole nftables table",
-		Long: `Reverses install: stops and removes ostiole.service, ostiole-firewall.service
-and every service unit the daemon writes, with their drop-ins and the
-configuration they read under /etc, the sysctl, modprobe, journald and
-sysusers drop-ins and the networkd units, and unmasks the distribution's
-units Ostiole masked to run its own (its resolver, unbound, miniupnpd,
-tailscaled, hostapd, time services, bluetooth and update timers) without
-starting them. With --purge the configuration directory, the log files,
-the services' state, the ostiole and ostiole-proxy binaries and the
-ostiole-proxy account are removed too; the backups in /var/backups/ostiole
-stay. Competitors the install removed or masked are not restored; run for
-example "systemctl unmask firewalld && systemctl enable --now firewalld".`,
+		Short: "Remove Ostiole's daemon and leave the router running as configured, or with --purge remove everything",
+		Long: `Without --purge, removes Ostiole's management and leaves the router
+running as it was configured. ostiole.service stops and its unit goes,
+ostiole-firewall.service is rewritten to load the saved ruleset with nft,
+config.json, users.json and tokens.json in the configuration directory
+become .bak files, the sessions go, and so does the ostiole binary. The
+ruleset stays in the kernel, and the services the daemon runs, their
+files, the networkd units, the logs, the state and the backups all stay.
+What only the daemon does stops, and the command lists it. Running the
+install script again offers the kept configuration.
+
+With --purge, reverts the network takeover and stops and removes
+ostiole.service, ostiole-firewall.service and every service unit the
+daemon writes, with their drop-ins and the configuration they read under
+/etc, the sysctl, modprobe, journald and sysusers drop-ins and the
+networkd units. It clears traffic shaping and policy routing, deletes the
+Ostiole nftables table, unmasks the distribution's units Ostiole masked to
+run its own (its resolver, unbound, miniupnpd, tailscaled, hostapd, time
+services, bluetooth and update timers) and starts systemd-resolved and a
+time service where the host has them. The configuration directory, the
+log files, the services' state, the ostiole and ostiole-proxy binaries and
+the ostiole-proxy account are removed too; the backups in
+/var/backups/ostiole stay. Competitors the install removed or masked are
+not restored; run for example
+"systemctl unmask firewalld && systemctl enable --now firewalld".`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := requireRoot(); err != nil {
 				return err
 			}
+			question := "this removes Ostiole's daemon and leaves the router running as configured; proceed?"
+			if purge {
+				question = "this removes the Ostiole firewall from the kernel; proceed?"
+			}
 			if !yes {
-				if err := confirmPrompt(cmd, "this removes the Ostiole firewall from the kernel; proceed?"); err != nil {
+				if err := confirmPrompt(cmd, question); err != nil {
 					return err
 				}
 			}
-			// Stopping tailscaled, pppoe or hostapd can drop the session this
-			// runs in; the removal finishes anyway.
+			// A dropped session must not leave the removal half done, and
+			// stopping tailscaled, pppoe or hostapd in a purge can drop it.
 			signal.Ignore(syscall.SIGHUP)
 			lay := install.DefaultLayout()
 			lay.ConfigDir = g.configDir
+			opts := install.UninstallOptions{Purge: purge, Nft: g.nftBin}
+			out := cmd.OutOrStdout()
+			if !purge {
+				listen := install.Listen(lay)
+				if err := install.Uninstall(cmd.Context(), install.ExecSystemctl{}, install.ExecRunner{}, lay, opts, slog.Default()); err != nil {
+					return err
+				}
+				fmt.Fprintln(out, "uninstalled; the router runs on as configured")
+				for _, line := range install.StopsWithoutDaemon {
+					fmt.Fprintln(out, line)
+				}
+				fmt.Fprintln(out, install.ResumeHint)
+				if listen != "" && listen != install.DefaultListen {
+					fmt.Fprintf(out, "the UI listened on %s; pass --listen %s to the install script to keep that\n", listen, listen)
+				}
+				return nil
+			}
 			// Undo a network takeover first, detached, so the router keeps its
 			// addressing even if this session drops during the switch.
 			if rec, err := install.LoadTakeoverRecord(g.configDir); err == nil && rec != nil {
-				fmt.Fprintf(cmd.OutOrStdout(), "restoring %s in unit %s\n", strings.Join(rec.Managers, ", "), revertUnit)
+				fmt.Fprintf(out, "restoring %s in unit %s\n", strings.Join(rec.Managers, ", "), revertUnit)
 				if err := detach(cmd.Context(), g, revertUnit, "--revert"); err != nil {
 					return err
 				}
 				_ = os.Remove(filepath.Join(g.configDir, install.TakeoverRecordFile))
 			}
-			if err := install.Uninstall(cmd.Context(), install.ExecSystemctl{}, install.ExecRunner{}, lay, purge, slog.Default()); err != nil {
+			if err := install.Uninstall(cmd.Context(), install.ExecSystemctl{}, install.ExecRunner{}, lay, opts, slog.Default()); err != nil {
 				return err
 			}
 			// The queues and ip rules come off before the table does: they
@@ -937,11 +971,11 @@ example "systemctl unmask firewalld && systemctl enable --now firewalld".`,
 			if err := (&nft.Exec{Bin: g.nftBin}).Apply(cmd.Context(), nft.EmptyRuleset()); err != nil {
 				return fmt.Errorf("remove nftables table: %w", err)
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "uninstalled")
+			fmt.Fprintln(out, "uninstalled")
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&purge, "purge", false, "also remove the configuration directory, the log files, the services' state, the binaries and the proxy's account, keeping the backups")
+	cmd.Flags().BoolVar(&purge, "purge", false, "remove everything instead: the network takeover, the services, the nftables table, the configuration directory, the log files, the services' state, the binaries and the proxy's account, keeping the backups")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask for confirmation")
 	return cmd
 }
