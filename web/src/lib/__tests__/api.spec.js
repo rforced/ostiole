@@ -74,6 +74,75 @@ describe('api', () => {
     window.removeEventListener(UNAUTHORIZED_EVENT, handler)
   })
 
+  // A wrong code, an ended sign-in and a wrong password to turn the second
+  // factor off all answer 401 while the account is signed in or half way
+  // there: none of them is an expired session.
+  it('does not read a refused second factor as an expired session', async () => {
+    mockFetch(401, { error: 'invalid code' })
+    const handler = vi.fn()
+    window.addEventListener(UNAUTHORIZED_EVENT, handler)
+    await expect(api.auth.loginTOTP('tok', '000000')).rejects.toMatchObject({ status: 401 })
+    await expect(api.auth.passkeyLoginOptions('tok')).rejects.toMatchObject({ status: 401 })
+    await expect(api.auth.loginPasskey('tok', {})).rejects.toMatchObject({ status: 401 })
+    await expect(api.auth.secondFactorClear('wrong')).rejects.toMatchObject({ status: 401 })
+    expect(handler).not.toHaveBeenCalled()
+    await expect(api.auth.secondFactor()).rejects.toMatchObject({ status: 401 })
+    expect(handler).toHaveBeenCalledOnce()
+    window.removeEventListener(UNAUTHORIZED_EVENT, handler)
+  })
+
+  it('sends the second factor calls where the router expects them', async () => {
+    const fetch = mockFetch(200, {})
+    const cases = [
+      [
+        () => api.auth.loginTOTP('tok', '123456'),
+        'POST',
+        '/auth/login/totp',
+        { pending: 'tok', code: '123456' },
+      ],
+      [
+        () => api.auth.passkeyLoginOptions('tok'),
+        'POST',
+        '/auth/login/passkey/options',
+        { pending: 'tok' },
+      ],
+      [
+        () => api.auth.loginPasskey('tok', { id: 'c' }),
+        'POST',
+        '/auth/login/passkey',
+        { pending: 'tok', credential: { id: 'c' } },
+      ],
+      [() => api.auth.secondFactor(), 'GET', '/auth/second-factor'],
+      [() => api.auth.totpStart(), 'POST', '/auth/totp/start'],
+      [() => api.auth.totpConfirm('123456'), 'POST', '/auth/totp/confirm', { code: '123456' }],
+      [
+        () => api.auth.secondFactorClear('pw'),
+        'POST',
+        '/auth/second-factor/clear',
+        { password: 'pw' },
+      ],
+      [() => api.auth.passkeyOptions(), 'POST', '/auth/passkeys/options'],
+      [
+        () => api.auth.addPasskey('Laptop', { id: 'c' }),
+        'POST',
+        '/auth/passkeys',
+        { name: 'Laptop', credential: { id: 'c' } },
+      ],
+      [() => api.auth.removePasskey('a/b'), 'DELETE', '/auth/passkeys/a%2Fb'],
+      [() => api.users.clearSecondFactor('sam'), 'DELETE', '/users/sam/second-factor'],
+    ]
+    for (const [call, method, path, body] of cases) {
+      fetch.mockClear()
+      fetch.mockResolvedValue(
+        new Response('{}', { headers: { 'Content-Type': 'application/json' } }),
+      )
+      await call()
+      const [url, init] = fetch.mock.calls[0]
+      expect([init.method, url], path).toEqual([method, `/api/v1${path}`])
+      expect(init.body === undefined ? undefined : JSON.parse(init.body)).toEqual(body)
+    }
+  })
+
   it('returns undefined for 204 and text for text/plain', async () => {
     mockFetch(204, undefined, {})
     expect(await api.config.revert()).toBeUndefined()

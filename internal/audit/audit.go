@@ -102,6 +102,14 @@ const (
 	CertificateExport = "certificate-export" // Target: the certificate
 	LeftoversClear    = "leftovers-clear"    // Detail: the tables
 	BlocklistImport   = "blocklist-import"   // Target: the list
+
+	SecondFactorTOTP         = "second-factor-totp"
+	SecondFactorClear        = "second-factor-clear"
+	PasskeyAdd               = "passkey-add"                 // Target: the passkey's name
+	PasskeyRemove            = "passkey-remove"              // Target: the passkey's name
+	AccountSecondFactorClear = "account-second-factor-clear" // Target: the account
+	SecondFactorBypass       = "second-factor-bypass"        // Detail: how long, as a duration or in seconds
+	SecondFactorBypassEnd    = "second-factor-bypass-end"
 )
 
 // Event is one thing someone did.
@@ -220,6 +228,23 @@ func (e *Event) Sentence() string {
 		return "Cleared leftover rules: " + d
 	case BlocklistImport:
 		return "Imported the blocklist " + t
+	case SecondFactorTOTP:
+		return "Set up an authenticator app"
+	case SecondFactorClear:
+		return "Turned the second factor off"
+	case PasskeyAdd:
+		return "Added the passkey " + t
+	case PasskeyRemove:
+		return "Removed the passkey " + t
+	case AccountSecondFactorClear:
+		return "Turned off the second factor for " + t
+	case SecondFactorBypass:
+		if s := span(d); s != "" {
+			return "Bypassed the second factor for " + s
+		}
+		return "Bypassed the second factor"
+	case SecondFactorBypassEnd:
+		return "Ended the second factor bypass"
 	}
 	return e.Action
 }
@@ -254,6 +279,36 @@ func window(seconds string) string {
 		return "a minute"
 	}
 	return strconv.Itoa((n+30)/60) + " minutes"
+}
+
+// span says a duration the way a person would, from a Detail written as a
+// duration ("15m0s") or in seconds ("900"). Anything else comes back as it
+// is, and a span of nothing as an empty string.
+func span(detail string) string {
+	d, err := time.ParseDuration(detail)
+	if err != nil {
+		n, convErr := strconv.Atoi(detail)
+		if convErr != nil {
+			return detail
+		}
+		d = time.Duration(n) * time.Second
+	}
+	switch {
+	case d <= 0:
+		return ""
+	case d < time.Minute:
+		return units(int(d/time.Second), "second")
+	case d%time.Hour == 0:
+		return units(int(d/time.Hour), "hour")
+	}
+	return units(int((d+30*time.Second)/time.Minute), "minute")
+}
+
+func units(n int, unit string) string {
+	if n == 1 {
+		return "1 " + unit
+	}
+	return strconv.Itoa(n) + " " + unit + "s"
 }
 
 // Seconds writes a confirm window as an apply's Detail.

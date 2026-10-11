@@ -55,6 +55,10 @@ type User struct {
 	Role      Role      `json:"role,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
+	// ID is the WebAuthn user handle, made the first time an account needs it.
+	ID       string    `json:"id,omitempty"`
+	TOTP     *TOTP     `json:"totp,omitempty"`
+	Passkeys []Passkey `json:"passkeys,omitempty"`
 }
 
 // RoleOf returns the account's role, defaulting to administrator for an
@@ -89,6 +93,8 @@ type Service struct {
 	users    map[string]User
 	loadedAt time.Time // mtime of the file when last read
 	loadedSz int64
+
+	second *secondFactor
 }
 
 // NewService loads (or lazily creates) the users file in dir.
@@ -96,6 +102,7 @@ func NewService(dir string) (*Service, error) {
 	s := &Service{
 		path: filepath.Join(dir, UsersFile), now: time.Now, users: map[string]User{},
 		hashing: make(chan struct{}, hashSlots), hashWait: hashWait,
+		second: newSecondFactor(),
 	}
 	s.sessions = newSessionStore(dir, func() time.Time { return s.now() })
 	s.limiter = newLimiter(dir, func() time.Time { return s.now() })
@@ -218,8 +225,8 @@ func (s *Service) Role(username string) Role {
 	return u.RoleOf()
 }
 
-// Account looks one account up, without its password hash. The second
-// result is false when there is no such account, which is how a caller
+// Account looks one account up, without its password hash or second-factor
+// secrets. The second result is false when there is no such account, which is how a caller
 // tells a rename or a password reset for a name that does not exist from
 // one that does.
 func (s *Service) Account(username string) (User, bool) {
@@ -230,16 +237,17 @@ func (s *Service) Account(username string) (User, bool) {
 	if !ok {
 		return User{}, false
 	}
-	u.Hash = ""
+	u = u.withoutSecrets()
 	u.Role = u.RoleOf()
 	return u, true
 }
 
-// Accounts lists accounts with their roles, for the UI.
+// Accounts lists accounts with their roles, for the UI, without password
+// hashes or second-factor secrets.
 func (s *Service) Accounts() []User {
 	out := s.Users()
 	for i := range out {
-		out[i].Hash = ""
+		out[i] = out[i].withoutSecrets()
 		out[i].Role = out[i].RoleOf()
 	}
 	return out
@@ -258,8 +266,9 @@ func (s *Service) Usernames() []string {
 	return names
 }
 
-// Users returns every account, password hashes included, sorted by name.
-// It exists for backups; nothing that answers a request should use it.
+// Users returns every account, password hashes and second-factor secrets
+// included, sorted by name. It exists for backups; nothing that answers a
+// request should use it.
 func (s *Service) Users() []User {
 	s.refresh()
 	s.mu.RLock()
@@ -518,15 +527,16 @@ var dummyHash = func() string {
 	return h
 }()
 
-// Login checks credentials, applying per-address rate limiting, and
-// returns a new session on success. remote should be the client IP.
-func (s *Service) Login(username, password, remote string) (*Session, error) {
+// verify checks a password under the sign-in limiter. It counts a failure
+// against remote and leaves a success to the caller, which knows whether the
+// sign-in is done.
+func (s *Service) verify(username, password, remote string) (User, error) {
 	if s.limiter.blocked(remote) {
-		return nil, ErrRateLimited
+		return User{}, ErrRateLimited
 	}
 	done, err := s.turn()
 	if err != nil {
-		return nil, err
+		return User{}, err
 	}
 	// The slot goes back once this one is counted, so the next sign-in from
 	// the same address to get it sees the failure.
@@ -534,7 +544,7 @@ func (s *Service) Login(username, password, remote string) (*Session, error) {
 	// Failures from the same address may have landed while this waited,
 	// and a burst that all got past the first look must not all be tried.
 	if s.limiter.blocked(remote) {
-		return nil, ErrRateLimited
+		return User{}, ErrRateLimited
 	}
 	s.refresh()
 	s.mu.RLock()
@@ -547,7 +557,31 @@ func (s *Service) Login(username, password, remote string) (*Session, error) {
 	match, err := VerifyPassword(hash, password)
 	if err != nil || !match || !ok {
 		s.limiter.failure(remote)
-		return nil, ErrInvalidCredentials
+		return User{}, ErrInvalidCredentials
+	}
+	return u, nil
+}
+
+// Authenticate checks the password under the sign-in limiter and makes no
+// session. While the account still owes a second factor the address is not
+// forgiven its earlier failures: a stolen password would otherwise buy fresh
+// tries at the code each time it was entered.
+func (s *Service) Authenticate(username, password, remote string) error {
+	u, err := s.verify(username, password, remote)
+	if err != nil {
+		return err
+	}
+	if !s.secondFactorDue(u) {
+		s.limiter.success(remote)
+	}
+	return nil
+}
+
+// Login checks credentials, applying per-address rate limiting, and
+// returns a new session on success. remote should be the client IP.
+func (s *Service) Login(username, password, remote string) (*Session, error) {
+	if _, err := s.verify(username, password, remote); err != nil {
+		return nil, err
 	}
 	s.limiter.success(remote)
 	return s.sessions.create(username), nil

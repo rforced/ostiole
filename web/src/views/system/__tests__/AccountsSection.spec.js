@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
+import { useConfirmStore } from '@/stores/confirm'
 import AccountsSection from '@/views/system/AccountsSection.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -16,6 +17,7 @@ vi.mock('@/lib/api', () => ({
       setRole: vi.fn(),
       setPassword: vi.fn(),
       rename: vi.fn(),
+      clearSecondFactor: vi.fn(),
     },
     auth: { me: vi.fn() },
   },
@@ -28,9 +30,10 @@ const AppDialogStub = {
   template: '<div v-if="open"><slot /><slot name="footer" /></div>',
 }
 
-const account = (username, role) => ({
+const account = (username, role, secondFactor = false) => ({
   username,
   role,
+  secondFactor,
   createdAt: '2026-09-01T00:00:00Z',
   updatedAt: '2026-09-01T00:00:00Z',
 })
@@ -41,7 +44,9 @@ async function open(accounts = [account('admin', 'admin'), account('watcher', 'v
   api.users.list.mockResolvedValue(accounts)
   const auth = useAuthStore()
   auth.user = { username: 'admin', expires: '2099-01-01T00:00:00Z' }
-  const wrapper = mount(AccountsSection, { global: { stubs: { AppDialog: AppDialogStub } } })
+  const wrapper = mount(AccountsSection, {
+    global: { stubs: { AppDialog: AppDialogStub, SecondFactorCard: true } },
+  })
   await flushPromises()
   return wrapper
 }
@@ -134,5 +139,43 @@ describe('AccountsSection', () => {
     await flushPromises()
 
     expect(wrapper.get('[role="alert"]').text()).toContain('already exists')
+  })
+
+  it('marks the accounts that sign in with a second factor', async () => {
+    const wrapper = await open([account('admin', 'admin'), account('watcher', 'viewer', true)])
+    expect(row(wrapper, 'watcher').get('td').text()).toContain('2FA')
+    expect(row(wrapper, 'admin').get('td').text()).not.toContain('2FA')
+  })
+
+  it("clears another account's second factor once the confirm says yes", async () => {
+    const wrapper = await open([account('admin', 'admin'), account('watcher', 'viewer', true)])
+    const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
+    api.users.clearSecondFactor.mockResolvedValue(undefined)
+    api.users.list.mockResolvedValue([account('admin', 'admin'), account('watcher', 'viewer')])
+
+    await button(row(wrapper, 'watcher'), 'Clear second factor').trigger('click')
+    await flushPromises()
+
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({ question: 'Clear the second factor of watcher?' }),
+    )
+    expect(api.users.clearSecondFactor).toHaveBeenCalledWith('watcher')
+    expect(row(wrapper, 'watcher').get('td').text()).not.toContain('2FA')
+    expect(button(row(wrapper, 'watcher'), 'Clear second factor')).toBeUndefined()
+  })
+
+  it('leaves the second factor when the confirm is declined', async () => {
+    const wrapper = await open([account('admin', 'admin'), account('watcher', 'viewer', true)])
+    vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(false)
+    await button(row(wrapper, 'watcher'), 'Clear second factor').trigger('click')
+    await flushPromises()
+    expect(api.users.clearSecondFactor).not.toHaveBeenCalled()
+  })
+
+  // Your own is cleared from the Second factor card, on your password.
+  it('offers no clear on your own account, nor on one without a second factor', async () => {
+    const wrapper = await open([account('admin', 'admin', true), account('watcher', 'viewer')])
+    expect(button(row(wrapper, 'admin'), 'Clear second factor')).toBeUndefined()
+    expect(button(row(wrapper, 'watcher'), 'Clear second factor')).toBeUndefined()
   })
 })

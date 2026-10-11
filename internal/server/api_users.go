@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"ostiole/internal/audit"
 	"ostiole/internal/auth"
@@ -16,6 +17,7 @@ func (a *api) registerUsers(mux *router) {
 	mux.HandleFunc("POST /api/v1/users/{name}/role", a.admin(a.setUserRole))
 	mux.HandleFunc("POST /api/v1/users/{name}/password", a.admin(a.setUserPassword))
 	mux.HandleFunc("POST /api/v1/users/{name}/username", a.admin(a.renameUser))
+	mux.HandleFunc("DELETE /api/v1/users/{name}/second-factor", a.admin(a.clearUserSecondFactor))
 }
 
 // errSelfAccount refuses the two account changes that can leave a router
@@ -32,11 +34,29 @@ func (a *api) self(r *http.Request, username string) bool {
 	return ok && !p.Token && p.Name == username
 }
 
+// account is a row of the account list: no password hash, and of the
+// second factor only whether there is one.
+type account struct {
+	Username     string    `json:"username"`
+	Role         auth.Role `json:"role"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+	SecondFactor bool      `json:"secondFactor"`
+}
+
 // users answers with the whole account list, which is what every change
 // here returns: the table the UI redraws is never a guess about what the
 // server did.
 func (a *api) users(w http.ResponseWriter, status int) error {
-	writeJSON(w, status, a.auth.Accounts())
+	list := a.auth.Accounts()
+	out := make([]account, len(list))
+	for i, u := range list {
+		out[i] = account{
+			Username: u.Username, Role: u.Role, CreatedAt: u.CreatedAt, UpdatedAt: u.UpdatedAt,
+			SecondFactor: u.TOTP != nil || len(u.Passkeys) > 0,
+		}
+	}
+	writeJSON(w, status, out)
 	return nil
 }
 
@@ -171,6 +191,27 @@ func (a *api) renameUser(w http.ResponseWriter, r *http.Request) error {
 	}
 	if req.Username != name {
 		a.record(r, audit.AccountRename, name, req.Username)
+	}
+	return a.users(w, http.StatusOK)
+}
+
+// clearUserSecondFactor takes another account's authenticator app and
+// passkeys away, for somebody who lost their phone. Your own go through
+// POST /api/v1/auth/second-factor/clear, which asks for your password.
+func (a *api) clearUserSecondFactor(w http.ResponseWriter, r *http.Request) error {
+	if err := a.requireAuth(); err != nil {
+		return err
+	}
+	name := r.PathValue("name")
+	if a.self(r, name) {
+		return fmt.Errorf("%w: turn your own second factor off under Second factor, which asks for your password", errForbidden)
+	}
+	had := a.auth.HasSecondFactor(name)
+	if err := a.auth.ClearSecondFactor(name); err != nil {
+		return err
+	}
+	if had {
+		a.record(r, audit.AccountSecondFactorClear, name, "")
 	}
 	return a.users(w, http.StatusOK)
 }

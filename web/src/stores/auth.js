@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { ApiError, api } from '@/lib/api'
+import * as webauthn from '@/lib/webauthn'
 import { useConfigStore } from '@/stores/config'
 import { useSystemStore } from '@/stores/system'
 
@@ -29,6 +30,13 @@ export const useAuthStore = defineStore('auth', () => {
   /** @type {import('vue').Ref<boolean | null>} null until known */
   const setupNeeded = ref(null)
   const ready = ref(false)
+  /**
+   * A sign-in whose password was right and which waits for a second factor:
+   * the token the router gave it, what it accepts, and the name a passkey
+   * was made for. Null when no sign-in is waiting.
+   * @type {import('vue').Ref<{token: string, totp: boolean, passkeys: boolean, rpId: string} | null>}
+   */
+  const pending = ref(null)
 
   const loggedIn = computed(() => user.value !== null)
   /**
@@ -71,9 +79,42 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /** The session, or null when a second factor is still due: see `pending`. */
   async function login(username, password) {
-    user.value = await api.auth.login(username, password)
+    const res = await api.auth.login(username, password)
+    if (res.secondFactor?.pending) {
+      const { pending: token, totp, passkeys, rpId } = res.secondFactor
+      pending.value = { token, totp: Boolean(totp), passkeys: Boolean(passkeys), rpId: rpId ?? '' }
+      return null
+    }
+    return signedIn(res)
+  }
+
+  async function loginTOTP(code) {
+    return signedIn(await api.auth.loginTOTP(pending.value.token, code))
+  }
+
+  /** Asks the router for a challenge, the browser for the passkey, and the router to check it. */
+  async function loginPasskey() {
+    const token = pending.value.token
+    const { publicKey } = await api.auth.passkeyLoginOptions(token)
+    const credential = await webauthn.get(publicKey)
+    return signedIn(await api.auth.loginPasskey(token, credential))
+  }
+
+  /** Drops the waiting sign-in here. The router lets its token lapse by itself. */
+  function cancelPending() {
+    pending.value = null
+  }
+
+  /**
+   * Leaves `pending` alone: the sign-in page keeps its second step on
+   * screen while the next page loads, and the session's end clears it.
+   */
+  function signedIn(session) {
+    user.value = session
     setupNeeded.value = false
+    return session
   }
 
   async function setup(username, password) {
@@ -86,6 +127,7 @@ export const useAuthStore = defineStore('auth', () => {
       await api.auth.logout()
     } finally {
       user.value = null
+      pending.value = null
       useSystemStore().reset()
       useConfigStore().reset()
     }
@@ -94,6 +136,7 @@ export const useAuthStore = defineStore('auth', () => {
   /** Called when any request comes back 401. */
   function invalidate() {
     user.value = null
+    pending.value = null
     useSystemStore().reset()
     useConfigStore().reset()
   }
@@ -102,12 +145,16 @@ export const useAuthStore = defineStore('auth', () => {
     user,
     setupNeeded,
     ready,
+    pending,
     loggedIn,
     isAdmin,
     isOperator,
     readOnly,
     bootstrap,
     login,
+    loginTOTP,
+    loginPasskey,
+    cancelPending,
     setup,
     logout,
     invalidate,

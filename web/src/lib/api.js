@@ -25,7 +25,10 @@ export class ApiError extends Error {
 }
 
 /** Endpoints where a 401 means "wrong credentials", not "session expired". */
-const CREDENTIAL_PATHS = ['/auth/login', '/auth/password', '/setup']
+const CREDENTIAL_PATHS = ['/auth/password', '/auth/second-factor/clear', '/setup']
+
+/** The sign-in steps answer a wrong code or an ended sign-in with a 401 too. */
+const credentialPath = (path) => path.startsWith('/auth/login') || CREDENTIAL_PATHS.includes(path)
 
 /**
  * @param {string} method
@@ -44,7 +47,7 @@ async function send(method, path, body, signal) {
     init.body = JSON.stringify(body)
   }
   const res = await fetch(`/api/v1${path}`, init)
-  if (res.status === 401 && !CREDENTIAL_PATHS.includes(path)) {
+  if (res.status === 401 && !credentialPath(path)) {
     window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT, { detail: { path } }))
   }
   if (!res.ok) throw await apiError(res)
@@ -118,7 +121,10 @@ function base64(buf) {
 }
 
 /** @typedef {{ status: string, version: string, commit?: string }} Health */
-/** @typedef {{ username: string, role: 'admin' | 'operator' | 'viewer', created: string, lastSeen: string, expires: string }} Session */
+/** @typedef {{ username: string, role: 'admin' | 'operator' | 'viewer', created: string, lastSeen: string, expires: string, secondFactor?: boolean, bypassUntil?: string, bypassBy?: string }} Session */
+/** @typedef {{ pending: string, totp: boolean, passkeys: boolean, rpId: string }} PendingLogin what a sign-in still needs after the password */
+/** @typedef {{ id: string, name: string, rpId: string, createdAt: string, lastUsed?: string, transports?: string[] }} Passkey */
+/** @typedef {{ totp: boolean, passkeys: Passkey[], rpId: string, bypassUntil?: string, bypassBy?: string }} SecondFactor */
 /** @typedef {{ configured: boolean, tableLoaded: boolean, network: string, pending?: { since: string, deadline: string, remaining: number }, fallback?: { since: string, reason: string }, recovered?: { since: string, at: string }, ssh?: string, drift?: { parts: string[], changes: number } }} Status */
 /** @typedef {{ path: string, kind: 'added' | 'removed', before?: string, after?: string }} DriftChange */
 /** @typedef {{ parts: string[], changes: DriftChange[], more?: number }} Drift */
@@ -135,13 +141,36 @@ export const api = {
   auth: {
     /** @returns {Promise<{hostname?: string}>} what the sign-in page shows */
     loginPage: () => get('/auth/login'),
-    /** @returns {Promise<Session>} */
+    /** @returns {Promise<Session | {secondFactor: PendingLogin}>} */
     login: (username, password) => post('/auth/login', { username, password }),
+    /** @returns {Promise<Session>} */
+    loginTOTP: (pending, code) => post('/auth/login/totp', { pending, code }),
+    /** @returns {Promise<{publicKey: object}>} */
+    passkeyLoginOptions: (pending) => post('/auth/login/passkey/options', { pending }),
+    /** @returns {Promise<Session>} */
+    loginPasskey: (pending, credential) => post('/auth/login/passkey', { pending, credential }),
     logout: () => post('/auth/logout'),
     /** @returns {Promise<Session>} */
     me: () => get('/auth/me'),
     /** @returns {Promise<Session>} */
     changePassword: (current, next) => post('/auth/password', { current, new: next }),
+    /**
+     * What the signed-in account has for a second factor, never the secrets.
+     * @returns {Promise<SecondFactor>}
+     */
+    secondFactor: () => get('/auth/second-factor'),
+    /**
+     * A new authenticator secret, kept until a code from it is confirmed.
+     * @returns {Promise<{secret: string, uri: string}>}
+     */
+    totpStart: () => post('/auth/totp/start'),
+    totpConfirm: (code) => post('/auth/totp/confirm', { code }),
+    /** Removes the authenticator app and every passkey, on the password. */
+    secondFactorClear: (password) => post('/auth/second-factor/clear', { password }),
+    /** @returns {Promise<{publicKey: object}>} */
+    passkeyOptions: () => post('/auth/passkeys/options'),
+    addPasskey: (name, credential) => post('/auth/passkeys', { name, credential }),
+    removePasskey: (id) => request('DELETE', `/auth/passkeys/${encodeURIComponent(id)}`),
   },
   /** @returns {Promise<Status>} */
   status: () => get('/status'),
@@ -411,6 +440,9 @@ export const api = {
       post(`/users/${encodeURIComponent(username)}/password`, { password }),
     rename: (username, next) =>
       post(`/users/${encodeURIComponent(username)}/username`, { username: next }),
+    /** An admin takes another account's authenticator app and passkeys away. */
+    clearSecondFactor: (username) =>
+      request('DELETE', `/users/${encodeURIComponent(username)}/second-factor`),
   },
   tokens: {
     list: () => get('/tokens'),

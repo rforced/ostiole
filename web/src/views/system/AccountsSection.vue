@@ -119,6 +119,13 @@ async function setPassword() {
 async function deleteUser(username) {
   await act(() => api.users.remove(username))
 }
+
+async function clearSecondFactor(username) {
+  await act(async () => {
+    await api.users.clearSecondFactor(username)
+    return api.users.list()
+  })
+}
 </script>
 
 <template>
@@ -151,9 +158,14 @@ async function deleteUser(username) {
           </td>
         </tr>
         <tr v-for="u in users" :key="u.username">
-          <td class="font-mono" data-label="">
-            {{ u.username }}
-            <span v-if="isSelf(u)" class="ml-1 font-sans text-xs text-ink-muted">you</span>
+          <td data-label="">
+            <span class="inline-flex flex-wrap items-center gap-1.5">
+              <span class="font-mono">{{ u.username }}</span>
+              <span v-if="isSelf(u)" class="text-xs text-ink-muted">you</span>
+              <span v-if="u.secondFactor" class="badge" title="Signs in with a second factor.">
+                2FA
+              </span>
+            </span>
           </td>
           <td data-label="Role">
             <select
@@ -176,6 +188,13 @@ async function deleteUser(username) {
             <button v-if="!isSelf(u)" type="button" class="link-action" @click="openPassword(u)">
               Set password
             </button>
+            <ConfirmButton
+              v-if="!isSelf(u) && u.secondFactor"
+              label="Clear second factor"
+              :question="`Clear the second factor of ${u.username}?`"
+              description="Their authenticator app and passkeys are removed. They sign in with the password alone."
+              @confirm="clearSecondFactor(u.username)"
+            />
             <ConfirmButton
               v-if="!isSelf(u)"
               label="Delete"

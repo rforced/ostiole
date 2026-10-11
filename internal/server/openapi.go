@@ -102,6 +102,17 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/auth/me":        {summary: "Describe the current session and the role it acts with.", role: auth.RoleViewer, session: true},
 	"POST /api/v1/auth/password": {summary: "Change the signed-in account's password.", role: auth.RoleViewer, session: true},
 
+	"POST /api/v1/auth/login/totp":            {summary: "Finish a sign-in that asks for a second factor, with a code from the authenticator app, and receive a session cookie.", public: true},
+	"POST /api/v1/auth/login/passkey/options": {summary: "Start finishing a sign-in with a passkey: the challenge for the browser to sign. The request has to come to a host name, not an address.", public: true},
+	"POST /api/v1/auth/login/passkey":         {summary: "Finish a sign-in that asks for a second factor, with the passkey's signed answer, and receive a session cookie.", public: true},
+	"GET /api/v1/auth/second-factor":          {summary: "What the signed-in account has for a second factor: whether an authenticator app is set up, its passkeys, the host name a new passkey would be bound to, and any bypass started at the command line.", role: auth.RoleViewer, session: true},
+	"POST /api/v1/auth/second-factor/clear":   {summary: "Turn the signed-in account's second factor off, removing its authenticator app and every passkey, on its password.", role: auth.RoleViewer, session: true},
+	"POST /api/v1/auth/totp/start":            {summary: "Make a secret for an authenticator app, with the otpauth address that carries it. Nothing is enabled until a code from it is confirmed.", role: auth.RoleViewer, session: true},
+	"POST /api/v1/auth/totp/confirm":          {summary: "Turn the authenticator app on with a code the secret from the start gives, replacing any app the account had.", role: auth.RoleViewer, session: true},
+	"POST /api/v1/auth/passkeys/options":      {summary: "Start adding a passkey: the creation options for the browser. The account needs an authenticator app, and the request has to come to a host name, not an address.", role: auth.RoleViewer, session: true},
+	"POST /api/v1/auth/passkeys":              {summary: "Finish adding a passkey with the browser's answer and a name of 1 to 40 characters.", role: auth.RoleViewer, session: true},
+	"DELETE /api/v1/auth/passkeys/{id}":       {summary: "Remove one of the signed-in account's passkeys.", role: auth.RoleViewer, session: true},
+
 	"GET /api/v1/status":                   {summary: "Whether a configuration is saved, loaded, and confirmed, and which parts applying it again would change.", role: auth.RoleViewer},
 	"GET /api/v1/system/stats":             {summary: "CPU, memory, swap, load, disk space and the connection table on this router.", role: auth.RoleViewer},
 	"GET /api/v1/system/timezones":         {summary: "The timezones this router can be set to, and the one its clock reads now.", role: auth.RoleViewer},
@@ -237,6 +248,7 @@ var routeDocs = map[string]routeDoc{
 	"POST /api/v1/users/{name}/role":               {summary: "Change what an account may do; not your own.", role: auth.RoleAdmin},
 	"POST /api/v1/users/{name}/password":           {summary: "Set another account's password, ending its sessions.", role: auth.RoleAdmin},
 	"POST /api/v1/users/{name}/username":           {summary: "Rename an account, keeping its role and sessions.", role: auth.RoleAdmin},
+	"DELETE /api/v1/users/{name}/second-factor":    {summary: "Remove another account's authenticator app and passkeys; not your own. Answers with the account list.", role: auth.RoleAdmin},
 	"GET /api/v1/update/check":                     {summary: "Ask GitHub now whether a newer release exists, and cache the answer.", role: auth.RoleAdmin},
 	"POST /api/v1/update/apply":                    {summary: "Download and install a release.", role: auth.RoleAdmin},
 	"POST /api/v1/system/updates/apply":            {summary: "Install the distro packages the update mode allows. The body may ask for security fixes alone and name packages never to upgrade; without them the configuration decides.", role: auth.RoleAdmin},
@@ -348,8 +360,8 @@ func (a *api) openAPI(baseURL string) map[string]any {
 			"version": version.Version,
 			"description": "The API behind the Ostiole web UI. Every endpoint takes either the " +
 				"session cookie the UI uses or an API token in an Authorization header, " +
-				"except the three under /auth, which are about the session itself and take " +
-				"only the cookie. Roles are admin, operator, and viewer; each endpoint says " +
+				"except the ones under /auth about the session itself, which take only the " +
+				"cookie. Roles are admin, operator, and viewer; each endpoint says " +
 				"the least it needs.",
 			"license": map[string]any{"name": "AGPL-3.0-or-later"},
 		},
@@ -358,7 +370,8 @@ func (a *api) openAPI(baseURL string) map[string]any {
 			"securitySchemes": map[string]any{
 				"session": map[string]any{
 					"type": "apiKey", "in": "cookie", "name": SessionCookie,
-					"description": "Set by POST /api/v1/auth/login. Mutating requests with a " +
+					"description": "Set by POST /api/v1/auth/login, or by the second step it " +
+						"asks for when the account has a second factor. Mutating requests with a " +
 						"session also need the " + RequestHeader + " header.",
 				},
 				"token": map[string]any{

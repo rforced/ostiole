@@ -5,6 +5,9 @@ useDefault = true
 description = "Keys that are published, or made up for a fixture"
 regexTarget = "line"
 regexes = [
+  # RFC 6238's test secret ("12345678901234567890" in base32), which the
+  # TOTP tests use.
+  '''GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ''',
   # The wg(8) man page's example keypair and preshared key, which the
   # WireGuard fixtures use.
   '''yAnz5TF\+lXXJte14tji3zlMNq\+hd2rYUIgJBgB3fBmk=''',
