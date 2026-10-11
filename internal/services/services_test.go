@@ -411,7 +411,7 @@ func TestDisabledInterfaceServesNothing(t *testing.T) {
 			t.Errorf("disabled ap1 still serves (%q):\n%s", s, conf)
 		}
 	}
-	if !strings.Contains(conf, "dhcp-range=set:s_br_lan,") || !strings.Contains(conf, "interface=br-lan") {
+	if !strings.Contains(conf, "dhcp-range=set:s_br-lan,") || !strings.Contains(conf, "interface=br-lan") {
 		t.Errorf("the pool on the enabled interface went missing:\n%s", conf)
 	}
 }
@@ -419,6 +419,46 @@ func TestDisabledInterfaceServesNothing(t *testing.T) {
 // With the DNS service off, a pool with no DNS servers of its own hands out
 // the system resolvers, and DHCPv4 carries only IPv4 ones: dnsmasq refuses
 // its whole configuration over an IPv6 address in that option.
+// Two pools whose interfaces differ only in punctuation once shared a tag,
+// so one pool's options went to the other's clients.
+func TestPoolTagsNeverCollide(t *testing.T) {
+	t.Parallel()
+	cfg := loadConfig(t, "testdata/dhcp-only.json")
+	lan := cfg.Interfaces[1]
+	for _, name := range []string{"eth1.20", "eth1_20", "eth1-20"} {
+		in := lan
+		in.Name = name
+		in.IPv4.Address = "10." + strconv.Itoa(len(cfg.Interfaces)) + ".0.1/24"
+		cfg.Interfaces = append(cfg.Interfaces, in)
+		pool := cfg.Services.DHCP.Servers[0]
+		pool.Interface = name
+		pool.Gateway = ""
+		pool.RangeStart = "10." + strconv.Itoa(len(cfg.Interfaces)-1) + ".0.100"
+		pool.RangeEnd = "10." + strconv.Itoa(len(cfg.Interfaces)-1) + ".0.150"
+		cfg.Services.DHCP.Servers = append(cfg.Services.DHCP.Servers, pool)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	files, err := (&Dnsmasq{Dir: DefaultDir, Leases: LeaseFile}).Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, line := range strings.Split(files[confName], "\n") {
+		if tag, ok := strings.CutPrefix(line, "dhcp-range=set:"); ok {
+			tag, _, _ = strings.Cut(tag, ",")
+			if seen[tag] {
+				t.Errorf("tag %q is used by two pools", tag)
+			}
+			seen[tag] = true
+		}
+	}
+	if len(seen) != 4 {
+		t.Errorf("expected 4 pool tags, got %d: %v", len(seen), seen)
+	}
+}
+
 func TestPoolHandsOutOnlyIPv4SystemResolvers(t *testing.T) {
 	t.Parallel()
 	cfg := loadConfig(t, "testdata/dhcp-only.json")

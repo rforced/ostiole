@@ -598,13 +598,23 @@ func registersNames(cfg *model.Config) bool {
 	return false
 }
 
+// sanitizeTag makes a dnsmasq tag out of an interface name. Letters,
+// digits, dots and hyphens pass, as dnsmasq's own interface tags carry
+// them; an underscore doubles and anything else becomes its hex, so two
+// names never share a tag.
 func sanitizeTag(s string) string {
-	return strings.Map(func(r rune) rune {
-		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' {
-			return r
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '.', c == '-':
+			b.WriteByte(c)
+		case c == '_':
+			b.WriteString("__")
+		default:
+			fmt.Fprintf(&b, "_%02x", c)
 		}
-		return '_'
-	}, s)
+	}
+	return b.String()
 }
 
 // Snapshot implements network.Backend.
