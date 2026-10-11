@@ -19,6 +19,7 @@ UseHostname=no
 RouteMetric=10
 
 [DHCPv6]
+SendHostname=no
 DUIDType=link-layer
 
 [IPv6AcceptRA]

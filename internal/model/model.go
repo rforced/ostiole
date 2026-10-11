@@ -1203,8 +1203,8 @@ type IPv4 struct {
 	Mode    AddrMode `json:"mode"`
 	Address string   `json:"address,omitempty"`
 	Gateway string   `json:"gateway,omitempty"`
-	// SendHostname sends the router's hostname with the DHCP request. Off
-	// sends no name.
+	// SendHostname sends the router's hostname with the DHCPv4 and DHCPv6
+	// requests. Off sends no name.
 	SendHostname bool `json:"sendHostname,omitempty"`
 }
 

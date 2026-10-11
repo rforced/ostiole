@@ -707,3 +707,26 @@ func TestWriteFileKeepsKeysPrivate(t *testing.T) {
 		t.Errorf("temp files left behind: %v", leftovers)
 	}
 }
+
+// networkd's DHCPv6 client sends the hostname unless told not to, so the
+// one toggle has to reach both clients.
+func TestRenderSendsNoHostnameOverDHCPv6Unasked(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ fixture, unit, want string }{
+		{"testdata/minimal.json", "00-ostiole-eth0.network", "SendHostname=no"},
+		{"testdata/full.json", "00-ostiole-eth0.network", "SendHostname=yes"},
+	} {
+		files, err := (&Networkd{}).Render(loadConfig(t, tc.fixture))
+		if err != nil {
+			t.Fatal(err)
+		}
+		unit := files[tc.unit]
+		_, dhcp6, ok := strings.Cut(unit, "[DHCPv6]")
+		if !ok {
+			t.Fatalf("%s has no [DHCPv6] section:\n%s", tc.unit, unit)
+		}
+		if section, _, _ := strings.Cut(dhcp6, "\n["); !strings.Contains(section, tc.want) {
+			t.Errorf("%s [DHCPv6] is missing %s:\n%s", tc.unit, tc.want, unit)
+		}
+	}
+}

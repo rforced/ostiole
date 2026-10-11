@@ -69,6 +69,7 @@ UseHostname=no
 RouteMetric=10
 
 [DHCPv6]
+SendHostname=no
 DUIDType=link-layer
 RouteMetric=10
 PrefixDelegationHint=::/56

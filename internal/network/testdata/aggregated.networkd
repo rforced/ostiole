@@ -36,6 +36,7 @@ ClientIdentifier=mac
 UseHostname=no
 
 [DHCPv6]
+SendHostname=no
 DUIDType=link-layer
 
 [IPv6AcceptRA]

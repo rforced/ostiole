@@ -483,6 +483,11 @@ func delegationSections(in model.Interface, gateways []model.Gateway) string {
 			"ClientIdentifier=mac",
 			"UseHostname=no")
 	}
+	if in.IPv6.Mode == model.AddrDHCP || in.IPv6.Mode == model.AddrSLAAC {
+		// The DHCPv6 client sends the hostname by default as well; the one
+		// toggle governs both clients.
+		dhcp6 = append(dhcp6, "SendHostname="+yesNo(in.IPv4.SendHostname))
+	}
 	if (in.IPv6.Mode == model.AddrDHCP || in.IPv6.Mode == model.AddrSLAAC) && hasHardwareAddress(in) {
 		// A link-layer DUID is derived from the hardware address, so
 		// overriding that address changes every identifier the provider
