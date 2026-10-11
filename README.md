@@ -239,14 +239,14 @@ issue. [SECURITY.md](SECURITY.md) has the scope and how to verify a release.
 Ostiole is free and stays that way. If you are buying hardware for it, the links below are
 affiliate links: the same price for you, a small cut for me.
 
-- [BOSGAME E5 11 Pro](https://link.amazon/B02T4arYN): Ryzen 5300U, 8 GB, 256 GB, two 2.5 GbE
-  ports.
-- [VNOPN fanless appliance](https://link.amazon/B0aRrJ3Kl): J3710, 8 GB, 128 GB, four 2.5 GbE i226
-  ports.
-- [Sharevdi fanless appliance](https://link.amazon/B0eGjIZTm): N3700, 8 GB, 128 GB, six 2.5 GbE
+- [Consumer Appliance 2 port](https://link.amazon/B02T4arYN): Ryzen 5300U, 8 GB, 256 GB, two 2.5 GbE
+  ports. This is what I use.
+- [Industrial appliance 4 port](https://link.amazon/A0ddk5J4u): J3710, 8 GB, 128 GB, six 2.5 GbE
   i226-V ports.
 - [Intel AX210](https://link.amazon/B0ff4oIUy): M.2 wifi card, the one the wireless support is
   developed on. See [Wireless](#wireless).
+- [WAVLINK BE6500](https://link.amazon/B0a7Jn9EI): External wifi over usb when your system 
+  needs a bigger radio / doesn't have an internal wifi card / antenna.  See [Wireless](#wireless). 
 
 ## License
 
