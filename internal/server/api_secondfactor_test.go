@@ -261,6 +261,7 @@ func (s *factorSite) state(t *testing.T, host string) (factorState, []byte) {
 }
 
 // codeAt is the code an authenticator app shows steps 30 second steps from now.
+// A test sending a code twice keeps the first: a later call can fall in the next step.
 func codeAt(t *testing.T, secret string, steps int64) string {
 	t.Helper()
 	code, err := totp.Code(secret, totp.Step(time.Now())+steps)
@@ -307,7 +308,8 @@ func TestSignInWithAnAuthenticatorAppTakesTheCode(t *testing.T) {
 	if resp.StatusCode != http.StatusUnauthorized || errorOf(raw) != "invalid code" || sessionCookieOf(resp) != nil {
 		t.Fatalf("wrong code: %d %s", resp.StatusCode, raw)
 	}
-	resp, raw = s.codeSignIn(t, step.Pending, codeAt(t, secret, 0))
+	code := codeAt(t, secret, 0)
+	resp, raw = s.codeSignIn(t, step.Pending, code)
 	if resp.StatusCode != http.StatusOK || sessionCookieOf(resp) == nil {
 		t.Fatalf("right code: %d %s", resp.StatusCode, raw)
 	}
@@ -319,12 +321,12 @@ func TestSignInWithAnAuthenticatorAppTakesTheCode(t *testing.T) {
 		t.Errorf("sign-ins recorded = %+v, want admin's, once", got)
 	}
 	s.refused(t, http.StatusUnauthorized, "authentication required", "", http.MethodPost, "/api/v1/auth/login/totp",
-		map[string]string{"pending": step.Pending, "code": codeAt(t, secret, 0)})
+		map[string]string{"pending": step.Pending, "code": code})
 
 	// The code that signed in is spent for the rest of its half minute.
 	s.signOut(t)
 	again := s.asked(t, "")
-	resp, raw = s.codeSignIn(t, again.Pending, codeAt(t, secret, 0))
+	resp, raw = s.codeSignIn(t, again.Pending, code)
 	if resp.StatusCode != http.StatusUnauthorized || errorOf(raw) != auth.ErrCodeUsed.Error() || sessionCookieOf(resp) != nil {
 		t.Errorf("a code used twice: %d %s", resp.StatusCode, raw)
 	}
@@ -413,7 +415,8 @@ func TestSettingUpAnAuthenticatorApp(t *testing.T) {
 	if s.as.HasSecondFactor("admin") {
 		t.Fatal("a wrong code turned the app on")
 	}
-	s.expect(t, http.StatusNoContent, "", http.MethodPost, "/api/v1/auth/totp/confirm", map[string]string{"code": codeAt(t, made.Secret, 0)})
+	setup := codeAt(t, made.Secret, 0)
+	s.expect(t, http.StatusNoContent, "", http.MethodPost, "/api/v1/auth/totp/confirm", map[string]string{"code": setup})
 	state, raw := s.state(t, "")
 	if !state.TOTP || len(state.Passkeys) != 0 {
 		t.Errorf("second factor = %+v", state)
@@ -425,12 +428,12 @@ func TestSettingUpAnAuthenticatorApp(t *testing.T) {
 		t.Errorf("recorded %+v, want the app set up once by admin", got)
 	}
 	s.refused(t, http.StatusBadRequest, "the setup timed out; start it again", "", http.MethodPost, "/api/v1/auth/totp/confirm",
-		map[string]string{"code": codeAt(t, made.Secret, 0)})
+		map[string]string{"code": setup})
 
 	// The code that proved the setup is spent, the next one is not.
 	s.signOut(t)
 	step := s.asked(t, "")
-	if resp, raw := s.codeSignIn(t, step.Pending, codeAt(t, made.Secret, 0)); resp.StatusCode != http.StatusUnauthorized || errorOf(raw) != auth.ErrCodeUsed.Error() {
+	if resp, raw := s.codeSignIn(t, step.Pending, setup); resp.StatusCode != http.StatusUnauthorized || errorOf(raw) != auth.ErrCodeUsed.Error() {
 		t.Errorf("the setup's code signed in: %d %s", resp.StatusCode, raw)
 	}
 	if resp, raw := s.codeSignIn(t, step.Pending, codeAt(t, made.Secret, 1)); resp.StatusCode != http.StatusOK {
