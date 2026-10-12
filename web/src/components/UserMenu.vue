@@ -51,6 +51,10 @@ const trigger = ref(null)
 // as MenuButton does: the confirm returns focus to whatever had it.
 let chosen = null
 
+function choose(run) {
+  chosen = run
+}
+
 function closed(event) {
   if (!chosen) return
   event.preventDefault()
@@ -101,7 +105,7 @@ const ITEM =
         <DropdownMenuItem as-child @select="emit('navigate')">
           <RouterLink to="/account" :class="ITEM">Account</RouterLink>
         </DropdownMenuItem>
-        <DropdownMenuItem :class="ITEM" @select="chosen = logout">Sign out</DropdownMenuItem>
+        <DropdownMenuItem :class="ITEM" @select="choose(logout)">Sign out</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenuPortal>
   </DropdownMenuRoot>
