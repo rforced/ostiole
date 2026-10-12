@@ -33,7 +33,8 @@ const props = defineProps({
   label: { type: String, required: true },
   /**
    * The lines: {index, name, color, band?: [low index, high index], limit?}.
-   * A limit is drawn dashed in the line's colour, and the axis reaches it.
+   * A limit is drawn dashed in the line's colour where the axis reaches it.
+   * The axis stretches to one only once its line comes within NEAR of it.
    */
   series: { type: Array, required: true },
   /** The bars: {index, name, color}, a share from 0 to 100. */
@@ -61,6 +62,8 @@ const HEIGHT = 168
 /** The traffic a skeleton draws, as fractions of the plot's height. */
 const WAVE = [0.3, 0.42, 0.36, 0.5, 0.44, 0.58, 0.4, 0.48, 0.34, 0.46, 0.38]
 const SHARES = [0, 50, 100]
+/** How close to its limit a line must come before the axis gives up height to show it. */
+const NEAR = 0.75
 
 const PAD = computed(() => ({ top: 10, right: props.bars.length ? 48 : 12, bottom: 24, left: 76 }))
 const id = useId()
@@ -84,16 +87,23 @@ const startT = computed(() => endT.value - span.value)
 /** The points inside the window, oldest first. */
 const shown = computed(() => all.value.filter((p) => p[0] >= startT.value && p[0] <= endT.value))
 const scale = computed(() => {
-  const limit = Math.max(0, ...props.series.map((s) => s.limit ?? 0))
-  let highest = limit
+  let highest = 0
+  const peaks = props.series.map(() => 0)
   for (const p of shown.value) {
-    for (const s of props.series) highest = Math.max(highest, p[s.index] ?? 0, p[s.band?.[1]] ?? 0)
+    props.series.forEach((s, i) => {
+      peaks[i] = Math.max(peaks[i], p[s.index] ?? 0)
+      highest = Math.max(highest, peaks[i], p[s.band?.[1]] ?? 0)
+    })
   }
-  const out = props.scale(highest)
-  // A limit on the top line would read as the plot's edge.
-  return limit > 0 && out.top <= limit ? { top: out.top + out.step, step: out.step } : out
+  props.series.forEach((s, i) => {
+    if (s.limit > 0 && peaks[i] >= s.limit * NEAR) highest = Math.max(highest, s.limit)
+  })
+  return props.scale(highest)
 })
-const limits = computed(() => props.series.filter((s) => s.limit > 0))
+/** The limits the axis reaches, which are the ones drawn. */
+const limits = computed(() => props.series.filter((s) => s.limit > 0 && s.limit <= scale.value.top))
+/** Whether a gridline sits where a limit is drawn, which then takes its place. */
+const underLimit = (v) => limits.value.some((s) => Math.abs(s.limit - v) < scale.value.step / 1e6)
 
 const plotW = computed(() => width.value - PAD.value.left - PAD.value.right)
 const plotH = HEIGHT - 10 - 24
@@ -228,8 +238,25 @@ const table = ref(false)
           <span v-else class="font-medium tabular-nums">
             {{ current ? valueOf(current[i]) : '—' }}
           </span>
-          <span v-if="!skeleton && s.limit > 0" class="text-ink-muted tabular-nums">
-            of {{ valueOf(s.limit) }}
+          <span v-if="!skeleton && s.limit > 0" class="flex items-center gap-1.5 text-ink-muted">
+            <span class="tabular-nums">of {{ valueOf(s.limit) }}</span>
+            <svg
+              width="16"
+              height="4"
+              aria-hidden="true"
+              :class="{ invisible: !limits.includes(s) }"
+              data-limit-key
+            >
+              <line
+                x1="0"
+                y1="2"
+                x2="16"
+                y2="2"
+                :stroke="s.color"
+                stroke-width="1.5"
+                stroke-dasharray="4 3"
+              />
+            </svg>
           </span>
         </span>
         <span v-for="b in bars" :key="b.index" class="flex items-center gap-1.5">
@@ -359,6 +386,7 @@ const table = ref(false)
         <g aria-hidden="true">
           <template v-for="v in rates" :key="v">
             <line
+              v-if="!underLimit(v)"
               :x1="PAD.left"
               :x2="width - PAD.right"
               :y1="Math.round(y(v)) + 0.5"

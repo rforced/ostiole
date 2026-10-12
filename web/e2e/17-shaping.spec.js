@@ -84,12 +84,13 @@ test('a line speed and a priority reach the kernel', async ({ page }) => {
   await expect(ruleset).toContainText('flags dynamic')
   await expect(ruleset).toContainText('add @busy_lan_v4 { ip saddr ct count over 200 }')
 
-  // The link's chart carries the speed the router now shapes it to.
+  // The link's chart names the speed the router now shapes it to. The link
+  // is quiet, so the axis stays on its traffic and no speed is drawn.
   await page.goto('/traffic/usage')
   const link = page.getByRole('region', { name: wan, exact: true })
   await expect(link).toContainText('of 200 Mbit/s')
   await expect(link).toContainText('of 20 Mbit/s')
-  await expect(link.locator('[data-limit]')).toHaveCount(2)
+  await expect(link.locator('[data-limit]')).toHaveCount(0)
 
   // And the priorities tab now names the rule that did it.
   await page.goto('/traffic/shaping#priorities')

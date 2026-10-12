@@ -74,6 +74,9 @@ describe('InterfacesTab', () => {
 
   // The speed comes from what the router runs, never from the draft.
   it('draws the speed the router shapes a link to', async () => {
+    api.traffic.interfaces.mockImplementation(async (w) =>
+      answer(w, [[NOW - 1, 180_000_000, 2000]]),
+    )
     const config = useConfigStore()
     config.saved = {
       interfaces: [{ name: 'eth0', enabled: true, shaping: { download: 200_000_000 } }],
