@@ -344,7 +344,8 @@ func (m *Manager) Start(security bool, exclude []string) error {
 // daemon, falling back to a plain child where systemd cannot be reached.
 func (m *Manager) run(ctx context.Context, argv []string) (string, error) {
 	if !m.unit.supported() {
-		return runDirect(ctx, m.Run, argv, UpgradeTimeout)
+		// Not argv[0]: CodeQL taints the whole slice with the request's excludes.
+		return runDirect(ctx, m.Run, m.Driver.Name(), argv[1:], UpgradeTimeout)
 	}
 	if err := m.unit.start(ctx, argv, UpgradeTimeout); err != nil {
 		return "", err

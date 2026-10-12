@@ -350,6 +350,17 @@ func TestPacmanRefusesSecurity(t *testing.T) {
 	}
 }
 
+// runDirect runs the driver's name rather than argv[0].
+func TestUpgradeArgvStartsWithName(t *testing.T) {
+	t.Parallel()
+	pending := Pending{Packages: []Package{{Name: "bash"}}}
+	for _, d := range Drivers() {
+		if argv := d.UpgradeArgv(false, []string{"kernel*"}, pending); len(argv) == 0 || argv[0] != d.Name() {
+			t.Errorf("%s argv = %v, want it to start with %q", d.Name(), argv, d.Name())
+		}
+	}
+}
+
 // Not parallel: it swaps lookPath, which every parallel test that detects
 // a manager or locates a command reads.
 func TestPacmanCheck(t *testing.T) {

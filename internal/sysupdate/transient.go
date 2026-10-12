@@ -184,16 +184,16 @@ func (t transient) supported() bool {
 }
 
 // runDirect is the fallback: run the command as a child and wait.
-func runDirect(ctx context.Context, run Runner, argv []string, timeout time.Duration) (string, error) {
+func runDirect(ctx context.Context, run Runner, name string, args []string, timeout time.Duration) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	out, err := run.Run(ctx, argv[0], argv[1:]...)
+	out, err := run.Run(ctx, name, args...)
 	text := strings.TrimSpace(string(out))
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return text, fmt.Errorf("gave up after %s", timeout)
 	}
 	if err != nil {
-		return text, fmt.Errorf("%s: %w", argv[0], err)
+		return text, fmt.Errorf("%s: %w", name, err)
 	}
 	return text, nil
 }
