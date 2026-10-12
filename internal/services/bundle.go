@@ -26,12 +26,13 @@ var _ network.Backend = (*Bundle)(nil)
 // forwarder that reads the blocklist and points at the resolver. The time
 // service follows it, because it looks its servers up through it, then
 // Tailscale, because the forward for tailnet names has to be in place
-// first, and the proxy after that. The mapping service comes last, because
-// it restarts into a table that has just been rebuilt.
+// first, then the OpenVPN tunnels, which look their servers up too, and
+// the proxy after that. The mapping service comes last, because it
+// restarts into a table that has just been rebuilt.
 func NewBundle(blocklists *dnsblock.Cache, configDir string, store CertSource) *Bundle {
 	return &Bundle{backends: []network.Backend{
 		NewPPPoE(), NewWireless(configDir), NewUnbound(), NewDNSBlock(blocklists), New(), NewNTP(),
-		NewTailscale(configDir), NewProxy(configDir, store), NewUPnP(),
+		NewTailscale(configDir), NewOpenVPN(configDir), NewProxy(configDir, store), NewUPnP(),
 	}}
 }
 

@@ -5,8 +5,8 @@
 #   curl -fsSL https://github.com/rforced/ostiole/releases/latest/download/install.sh | sudo sh
 #   curl -fsSL … | sudo sh -s -- --yes      (agree to the plan in advance)
 #
-# Flags: --yes, --dry-run, --with-tailscale, --with-wireless, --with-proxy,
-#        --keep <package> (repeatable), --no-verify, --fresh.
+# Flags: --yes, --dry-run, --with-tailscale, --with-openvpn, --with-wireless,
+#        --with-proxy, --keep <package> (repeatable), --no-verify, --fresh.
 # Anything else is passed to `ostiole install` (--listen, --timezone).
 #
 # Environment: OSTIOLE_VERSION pins a version; OSTIOLE_BASE_URL downloads
@@ -69,6 +69,7 @@ BUILD_TOOLS=0
 YES=0
 DRY_RUN=0
 TAILSCALE=0
+OPENVPN=0
 WIRELESS=0
 PROXY=0
 NO_VERIFY=0
@@ -80,6 +81,7 @@ while [ $# -gt 0 ]; do
 	-y | --yes) YES=1 ;;
 	--dry-run) DRY_RUN=1 ;;
 	--with-tailscale) TAILSCALE=1 ;;
+	--with-openvpn) OPENVPN=1 ;;
 	--with-wireless) WIRELESS=1 ;;
 	--with-proxy) PROXY=1 ;;
 	--no-verify) NO_VERIFY=1 ;;
@@ -188,6 +190,11 @@ apt-get) TAILSCALE_NOTE="tailscale from pkgs.tailscale.com" ;;
 dnf) [ "$EL" -eq 1 ] && TAILSCALE_NOTE="tailscale from pkgs.tailscale.com" || TAILSCALE_NOTE="tailscale" ;;
 *) TAILSCALE_NOTE="tailscale" ;;
 esac
+# Enterprise Linux has OpenVPN in EPEL and its kernel data channel in
+# ELRepo; the rest package OpenVPN and leave the data channel to the kernel.
+OPENVPN_NOTE="openvpn"
+[ "$MANAGER" != dnf ] || [ "$EL" -eq 0 ] ||
+	OPENVPN_NOTE="openvpn from EPEL, kmod-ovpn from ELRepo unless Secure Boot is on"
 
 # Everything the router runs or reads is named, even what the image came
 # with: somebody may have taken it away, and only what is missing goes to
@@ -439,6 +446,7 @@ remove_packages() {
 # A router that already has Tailscale keeps it through a plain repair, so
 # its repository is left alone and the flag stays the only way in.
 [ -z "$(matching tailscale)" ] || TAILSCALE=1
+[ -z "$(matching openvpn)" ] || OPENVPN=1
 
 # The proxy is sticky the same way, on the binary rather than a package:
 # nothing packages this combination, so we are the only ones who put it
@@ -598,6 +606,7 @@ case "$UPNP_NOTE" in
 *) echo "  UPnP:     $UPNP_NOTE" ;;
 esac
 [ "$TAILSCALE" -eq 0 ] || echo "  tailscale: $TAILSCALE_NOTE"
+[ "$OPENVPN" -eq 0 ] || echo "  openvpn:  $OPENVPN_NOTE"
 [ "$WIRELESS" -eq 0 ] || echo "  wireless: hostapd iw wireless-regdb${WIRELESS_FW:+ $WIRELESS_FW}"
 [ "$PROXY" -eq 0 ] || echo "  proxy:    ostiole-proxy${OSTIOLE_VERSION:+ $OSTIOLE_VERSION} beside the binary"
 echo "  place:    $BIN_DIR/ostiole, write the units, and start the web UI (on 9443 unless it runs already)"
@@ -1015,6 +1024,54 @@ tailscale_fallback() {
 	esac
 }
 
+# OpenVPN, only when it was asked for, and nothing here is fatal either.
+# On Enterprise Linux ELRepo's kmod-ovpn gives it the kernel data channel;
+# a Secure Boot router would refuse the module, so it is skipped there and
+# a repair after Secure Boot is off installs it.
+openvpn_install() {
+	if ! command -v openvpn >/dev/null 2>&1; then
+		if [ "$MANAGER" = dnf ] && [ "$EL" -eq 1 ] && ! rpm -q epel-release >/dev/null 2>&1; then
+			pkg_install epel-release || { echo "warning: epel-release did not install; no OpenVPN" >&2; return 0; }
+		fi
+		pkg_install openvpn || { echo "warning: openvpn did not install; no OpenVPN" >&2; return 0; }
+	fi
+	pkg_explicit openvpn
+	[ "$MANAGER" = dnf ] && [ "$EL" -eq 1 ] || return 0
+	rpm -q kmod-ovpn >/dev/null 2>&1 && return 0
+	if secure_boot_on; then
+		echo "warning: Secure Boot is on, the kernel data channel module (kmod-ovpn) was skipped; turn it off and run ostiole repair --openvpn" >&2
+		return 0
+	fi
+	if ! rpm -q elrepo-release >/dev/null 2>&1; then
+		major="${OS_VERSION%%.*}"
+		case "$major" in
+		'' | *[!0-9]*) echo "warning: no ELRepo release for $OS_ID $OS_VERSION; no kmod-ovpn" >&2; return 0 ;;
+		esac
+		{ curl -fsSL --max-time 30 -o "$TMP/elrepo.key" https://www.elrepo.org/RPM-GPG-KEY-v2-elrepo.org &&
+			rpm --import "$TMP/elrepo.key"; } ||
+			{ echo "warning: could not import ELRepo's signing key; no kmod-ovpn" >&2; return 0; }
+		pkg_install "https://www.elrepo.org/elrepo-release-$major.el$major.elrepo.noarch.rpm" ||
+			{ echo "warning: elrepo-release did not install; no kmod-ovpn" >&2; return 0; }
+		pkg_explicit elrepo-release
+	fi
+	pkg_install kmod-ovpn || { echo "warning: kmod-ovpn did not install; OpenVPN runs its data channel in userspace" >&2; return 0; }
+	pkg_explicit kmod-ovpn
+}
+
+# secure_boot_on asks mokutil, or with no mokutil the firmware's own
+# variable, whose fifth byte is 1 while Secure Boot is enforced.
+secure_boot_on() {
+	if command -v mokutil >/dev/null 2>&1; then
+		mokutil --sb-state 2>/dev/null | grep -q 'SecureBoot enabled'
+		return
+	fi
+	for var in /sys/firmware/efi/efivars/SecureBoot-*; do
+		[ -r "$var" ] || continue
+		[ "$(od -An -tu1 -j4 -N1 "$var" 2>/dev/null | tr -d ' ')" = 1 ] && return 0
+	done
+	return 1
+}
+
 if [ "${OSTIOLE_NO_INSTALL:-}" != "1" ]; then
 	if [ "$FEDORA_UPNP" -ne 0 ]; then
 		fedora_miniupnpd
@@ -1022,6 +1079,7 @@ if [ "${OSTIOLE_NO_INSTALL:-}" != "1" ]; then
 		aur_miniupnpd
 	fi
 	[ "$TAILSCALE" -eq 0 ] || tailscale_install
+	[ "$OPENVPN" -eq 0 ] || openvpn_install
 fi
 
 ### the binary

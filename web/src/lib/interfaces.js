@@ -40,6 +40,12 @@ export function segmentInterfaces(cfg) {
     if (i.pppoe?.parent) ports.add(i.pppoe.parent)
   }
   return (cfg.interfaces ?? []).filter(
-    (i) => !i.wireguard && !i.tailscale && !i.pppoe && !ports.has(i.name) && zones.has(i.zone),
+    (i) =>
+      !i.wireguard &&
+      !i.openvpn &&
+      !i.tailscale &&
+      !i.pppoe &&
+      !ports.has(i.name) &&
+      zones.has(i.zone),
   )
 }

@@ -1,0 +1,62 @@
+{
+  "version": 15,
+  "system": {"dnsServers": ["9.9.9.9"], "management": {"webPort": 443, "sshPort": 22}},
+  "zones": [
+    {"name": "wan", "external": true},
+    {"name": "lan", "antiLockout": true},
+    {"name": "vpnout", "external": true},
+    {"name": "sites"}
+  ],
+  "interfaces": [
+    {"name": "eth0", "zone": "wan", "enabled": true, "ipv4": {"mode": "dhcp"}, "ipv6": {"mode": "none"}},
+    {"name": "eth1", "zone": "lan", "enabled": true, "ipv4": {"mode": "static", "address": "192.168.1.1/24"}, "ipv6": {"mode": "none"}},
+    {
+      "name": "ovpn0", "zone": "vpnout", "enabled": true, "ipv4": {"mode": "none"}, "ipv6": {"mode": "none"},
+      "openvpn": {
+        "remotes": [
+          {"host": "vpn.example", "port": 1194, "proto": "udp"},
+          {"host": "198.51.100.9", "port": 443, "proto": "tcp"}
+        ],
+        "caPem": "-----BEGIN CERTIFICATE-----\nbGFiIENBIGNlcnRpZmljYXRl\n-----END CERTIFICATE-----\n",
+        "certPem": "-----BEGIN CERTIFICATE-----\nbGFiIGNsaWVudCBjZXJ0aWZpY2F0ZQ==\n-----END CERTIFICATE-----\n",
+        "keyPem": "-----BEGIN PRIVATE KEY-----\nbGFiIGNsaWVudCBrZXk=\n-----END PRIVATE KEY-----\n",
+        "tlsCryptKeyPem": "-----BEGIN OpenVPN Static key V1-----\nbGFiIHRscy1jcnlwdCBrZXk=\n-----END OpenVPN Static key V1-----\n",
+        "username": "lab-user",
+        "password": "lab password",
+        "verifyName": "lab server",
+        "routes": ["10.8.0.0/24", "fd00:8::/64"]
+      }
+    },
+    {
+      "name": "ovpn1", "zone": "sites", "enabled": true, "mtu": 1400, "ipv4": {"mode": "none"}, "ipv6": {"mode": "none"},
+      "openvpn": {
+        "remotes": [
+          {"host": "acme-vpn.example", "port": 1194}
+        ],
+        "caPem": "-----BEGIN CERTIFICATE-----\nYWNtZSBDQSBjZXJ0aWZpY2F0ZQ==\n-----END CERTIFICATE-----\n",
+        "certPem": "-----BEGIN CERTIFICATE-----\nYWNtZSBjbGllbnQgY2VydGlmaWNhdGU=\n-----END CERTIFICATE-----\n",
+        "keyPem": "-----BEGIN PRIVATE KEY-----\nYWNtZSBjbGllbnQga2V5\n-----END PRIVATE KEY-----\n",
+        "tlsAuthKeyPem": "-----BEGIN OpenVPN Static key V1-----\nYWNtZSB0bHMtYXV0aCBrZXk=\n-----END OpenVPN Static key V1-----\n",
+        "keyDirection": 1,
+        "dataCiphers": ["CHACHA20-POLY1305", "AES-256-GCM"],
+        "keepalive": 20,
+        "pushedRoutes": true
+      }
+    },
+    {
+      "name": "ovpn2", "zone": "sites", "enabled": false, "ipv4": {"mode": "none"}, "ipv6": {"mode": "none"},
+      "openvpn": {
+        "remotes": [
+          {"host": "off.example", "port": 1194}
+        ],
+        "caPem": "-----BEGIN CERTIFICATE-----\nc3dpdGNoZWQgb2ZmIENB\n-----END CERTIFICATE-----\n"
+      }
+    }
+  ],
+  "rules": [],
+  "nat": {"outbound": {"mode": "automatic"}},
+  "services": {
+    "dhcp": {"enabled": false},
+    "dns": {"enabled": true, "interfaces": ["eth1"], "domain": "home.arpa"}
+  }
+}

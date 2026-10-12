@@ -158,6 +158,7 @@ function guards(c) {
  */
 function ownerPage(cfg) {
   if (cfg?.wireguard) return { to: '/vpn/wireguard', label: 'WireGuard' }
+  if (cfg?.openvpn) return { to: '/vpn/openvpn', label: 'OpenVPN' }
   if (cfg?.tailscale) return { to: '/vpn/tailscale', label: 'Tailscale' }
   if (cfg?.wireless) return { to: '/wireless', label: 'Wireless' }
   return null
@@ -173,6 +174,7 @@ function describeKind(row) {
   if (c?.wireless) return `network "${c.wireless.ssid}" on ${c.wireless.radio}`
   if (c?.tailscale) return 'tailscale'
   if (c?.wireguard) return 'wireguard'
+  if (c?.openvpn) return 'OpenVPN'
   const l = row.live
   if (!l) return 'not present on this system'
   if (l.wireless) return 'wireless'
@@ -183,6 +185,7 @@ function describeKind(row) {
 
 function describeAddressing(c) {
   if (!c) return '—'
+  if (c.openvpn) return 'from the server'
   const parts = []
   if (c.ipv4?.mode && c.ipv4.mode !== 'none')
     parts.push(c.ipv4.mode === 'static' ? c.ipv4.address : 'DHCP')

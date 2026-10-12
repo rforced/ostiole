@@ -115,10 +115,10 @@ func (n *Networkd) Render(cfg *model.Config) (Files, error) {
 
 	for _, in := range cfg.Interfaces {
 		switch in.Kind() {
-		case model.KindPPPoE, model.KindTailscale:
-			// pppd and tailscaled create the interface and put the address
-			// on it, so networkd is told to keep its hands off rather than
-			// given a unit that would strip what the daemon just configured.
+		case model.KindPPPoE, model.KindTailscale, model.KindOpenVPN:
+			// pppd, tailscaled and openvpn create the interface and put the
+			// address on it, so networkd is told to keep its hands off rather
+			// than given a unit that would strip what the daemon just configured.
 			continue
 		}
 		// A link that carries a bridge, a bond, or a dialled session is a

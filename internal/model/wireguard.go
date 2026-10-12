@@ -23,6 +23,9 @@ type TunnelRoute struct {
 // sending everything down a tunnel is a deliberate act, not a side effect
 // of adding a peer.
 func (i Interface) TunnelRoutes() []TunnelRoute {
+	if i.OpenVPN != nil {
+		return i.openvpnRoutes()
+	}
 	if i.WireGuard == nil {
 		return nil
 	}
@@ -130,7 +133,7 @@ func (c *Config) TunnelGateway(g Gateway) bool {
 		return false
 	}
 	in, ok := c.Interface(g.Interface)
-	return ok && in.WireGuard != nil
+	return ok && in.Tunnel()
 }
 
 // TunnelFamilies reports the families a tunnel gateway carries: those its
@@ -138,8 +141,11 @@ func (c *Config) TunnelGateway(g Gateway) bool {
 // of. Traffic of the other family is refused, never sent out elsewhere.
 func (c *Config) TunnelFamilies(g Gateway) (v4, v6 bool) {
 	in, ok := c.Interface(g.Interface)
-	if !ok || in.WireGuard == nil {
+	if !ok || !in.Tunnel() {
 		return false, false
+	}
+	if in.OpenVPN != nil {
+		return true, false
 	}
 	for _, p := range in.WireGuard.Peers {
 		if p.Enabled {

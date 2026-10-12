@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -69,7 +70,12 @@ type api struct {
 	upnp      *services.UPnP
 	tailscale *services.Tailscale
 	tsClient  *tailscale.Client
-	wireless  *services.Wireless
+	// ovpn reads the OpenVPN tunnels; nil reads this router's.
+	ovpn openvpnReader
+	// secureBootSkipped reports the kernel's data channel left out for
+	// Secure Boot; nil looks.
+	secureBootSkipped func() bool
+	wireless          *services.Wireless
 	// wgDevice reads a WireGuard device; nil asks the kernel.
 	wgDevice wg.Device
 	proxy    *services.Proxy
@@ -246,6 +252,7 @@ func (a *api) register(mux *router) {
 	a.registerDHCPLog(mux)
 	mux.HandleFunc("GET /api/v1/upnp/mappings", a.readNoEngine(a.upnpMappings))
 	a.registerTailscale(mux)
+	a.registerOpenVPN(mux)
 	a.registerProxy(mux)
 	a.registerWireless(mux)
 	a.registerDiscovery(mux)
@@ -279,6 +286,10 @@ type servicesStatus struct {
 	// Tailscale is tailscaled, which joins the tailnet.
 	TailscaleSetUp   bool `json:"tailscaleSetUp"`
 	TailscaleRunning bool `json:"tailscaleRunning"`
+	// OpenVPN is the templated unit that dials the tunnels; running is
+	// any of them.
+	OpenVPNSetUp   bool `json:"openvpnSetUp"`
+	OpenVPNRunning bool `json:"openvpnRunning"`
 	// Wireless is hostapd, which serves the networks a radio carries.
 	WirelessSetUp bool `json:"wirelessSetUp"`
 	// Proxy is the sidecar that publishes what is behind the router.
@@ -317,8 +328,18 @@ func (a *api) servicesStatus(w http.ResponseWriter, r *http.Request) error {
 	st := servicesStatus{}
 	// Every unit in two calls, as the dashboard asks.
 	var units install.UnitStates
+	var tunnels []string
+	if a.engine != nil {
+		if cfg := a.engine.Effective(); cfg != nil {
+			tunnels = openvpnNames(cfg)
+		}
+	}
 	if a.units != nil {
-		units = install.ReadUnits(r.Context(), a.units, serviceUnits...)
+		names := slices.Clone(serviceUnits)
+		for _, n := range tunnels {
+			names = append(names, services.OpenVPNUnitFor(n))
+		}
+		units = install.ReadUnits(r.Context(), a.units, names...)
 	}
 	setUp := func(unit string) bool {
 		_, ok := units.File(unit)
@@ -341,6 +362,10 @@ func (a *api) servicesStatus(w http.ResponseWriter, r *http.Request) error {
 	}
 	if a.tailscale != nil {
 		st.TailscaleSetUp, st.TailscaleRunning = setUp(services.TailscaleUnit), units.Running(services.TailscaleUnit)
+	}
+	st.OpenVPNSetUp = setUp(services.OpenVPNUnit)
+	for _, n := range tunnels {
+		st.OpenVPNRunning = st.OpenVPNRunning || units.Running(services.OpenVPNUnitFor(n))
 	}
 	if a.wireless != nil {
 		st.WirelessSetUp = setUp(services.WirelessUnit)

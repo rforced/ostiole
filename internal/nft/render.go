@@ -740,7 +740,7 @@ func UPnPInterfaces(cfg *model.Config) []string {
 	}
 	var ifs []string
 	for _, in := range cfg.Interfaces {
-		if !in.Enabled || in.Zone == "" || in.Name == u.ExternalInterface || in.WireGuard != nil || in.Tailscale != nil {
+		if !in.Enabled || in.Zone == "" || in.Name == u.ExternalInterface || in.WireGuard != nil || in.Tailscale != nil || in.OpenVPN != nil {
 			continue
 		}
 		if z, ok := cfg.Zone(in.Zone); ok && !z.External {

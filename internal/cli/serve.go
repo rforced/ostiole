@@ -1141,13 +1141,15 @@ func probeURL(listen string, tls bool) string {
 
 // restartService restarts one of the units Ostiole owns. The names the
 // UI offers are mapped here, so a configuration can never name a unit
-// that was not meant to be restartable.
+// that was not meant to be restartable. A template's name restarts every
+// running instance.
 func restartService(ctx context.Context, name string) error {
 	units := map[string]string{
 		"dnsmasq":       services.Unit,
 		"unbound":       services.UnboundUnit,
 		"miniupnpd":     services.UPnPUnit,
 		"tailscaled":    services.TailscaleUnit,
+		"openvpn":       services.OpenVPNUnitFor("*"),
 		"ostiole-proxy": services.ProxyUnit,
 		"chronyd":       services.NTPUnit,
 		"ostiole":       install.DaemonUnit,

@@ -1,0 +1,32 @@
+{
+  "version": 15,
+  "system": { "hostname": "fw", "management": { "webPort": 443, "sshPort": 22 } },
+  "zones": [
+    { "name": "wan", "external": true },
+    { "name": "lan", "antiLockout": true },
+    { "name": "vpnout", "external": true }
+  ],
+  "interfaces": [
+    { "name": "eth0", "zone": "wan", "enabled": true, "ipv4": { "mode": "dhcp" }, "ipv6": { "mode": "slaac" } },
+    { "name": "eth1", "zone": "lan", "enabled": true, "ipv4": { "mode": "static", "address": "192.168.1.1/24" }, "ipv6": { "mode": "none" } },
+    {
+      "name": "ovpn0", "zone": "vpnout", "enabled": true,
+      "ipv4": { "mode": "none" }, "ipv6": { "mode": "none" },
+      "openvpn": {
+        "remotes": [{ "host": "vpn.example", "port": 1194, "proto": "udp" }],
+        "caPem": "-----BEGIN CERTIFICATE-----\nTUFERS1VUCBDQQ==\n-----END CERTIFICATE-----\n",
+        "certPem": "-----BEGIN CERTIFICATE-----\nTUFERS1VUCBDTElFTlQ=\n-----END CERTIFICATE-----\n",
+        "keyPem": "-----BEGIN PRIVATE KEY-----\nTUFERS1VUCBLRVk=\n-----END PRIVATE KEY-----\n",
+        "routes": ["10.8.0.0/24"]
+      }
+    }
+  ],
+  "gateways": [
+    { "name": "wan", "enabled": true, "interface": "eth0", "monitor": "9.9.9.9" },
+    { "name": "gw_ovpn0", "enabled": true, "interface": "ovpn0", "monitor": "10.8.0.1" }
+  ],
+  "rules": [
+    { "id": "lan-out-vpn", "description": "LAN goes out the tunnel or nowhere", "enabled": true, "zone": "lan", "action": "accept", "protocol": "any", "source": {}, "destination": {}, "gateway": "gw_ovpn0" }
+  ],
+  "nat": { "outbound": { "mode": "automatic" } }
+}

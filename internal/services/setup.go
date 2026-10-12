@@ -69,8 +69,12 @@ type SetupOptions struct {
 	// TailscaleBinary overrides the tailscaled path (found on PATH
 	// otherwise).
 	TailscaleBinary string
-	// ConfigDir is where the Tailscale and wireless backends' files go;
-	// empty is the default configuration directory.
+	// OpenVPN writes the templated unit that dials a tunnel.
+	OpenVPN bool
+	// OpenVPNBinary overrides the openvpn path (found on PATH otherwise).
+	OpenVPNBinary string
+	// ConfigDir is where the Tailscale, OpenVPN and wireless backends'
+	// files go; empty is the default configuration directory.
 	ConfigDir string
 	// Wireless writes the templated unit that serves a radio's networks.
 	Wireless bool
@@ -137,6 +141,11 @@ func Setup(ctx context.Context, d *Dnsmasq, o SetupOptions, log *slog.Logger) er
 	}
 	if o.Tailscale {
 		if err := setupTailscale(ctx, run, o, unitDir, log); err != nil {
+			return err
+		}
+	}
+	if o.OpenVPN {
+		if err := setupOpenVPN(o, unitDir, log); err != nil {
 			return err
 		}
 	}
@@ -541,6 +550,54 @@ func setupTailscale(ctx context.Context, run Runner, o SetupOptions, unitDir str
 	}
 	log.Info("Tailscale ready", "unit", TailscaleUnit, "tailscaled", bin)
 	return nil
+}
+
+// setupOpenVPN writes the templated unit, one instance of which dials
+// each tunnel. The distribution's own units are templates nothing starts,
+// so they are left alone.
+func setupOpenVPN(o SetupOptions, unitDir string, log *slog.Logger) error {
+	bin := o.OpenVPNBinary
+	if bin == "" {
+		bin = lookPath("openvpn")
+	}
+	if bin == "" {
+		log.Info("no openvpn on this router; OpenVPN is not set up")
+		return nil
+	}
+	dir := OpenVPNDir(o.ConfigDir)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	if err := writeFile(filepath.Join(unitDir, OpenVPNUnit), OpenVPNUnitContent(bin, dir)); err != nil {
+		return err
+	}
+	log.Info("OpenVPN ready", "unit", OpenVPNUnit, "openvpn", bin)
+	return nil
+}
+
+// OpenVPNUnitContent renders the templated OpenVPN unit. The instance name
+// is the tunnel's interface, which is also its configuration's name. The
+// management sockets share the runtime directory, so it outlives any one
+// instance.
+func OpenVPNUnitContent(binary, dir string) string {
+	return fmt.Sprintf(`[Unit]
+Description=Ostiole OpenVPN tunnel %%i
+Documentation=https://github.com/rforced/ostiole
+After=network-online.target ostiole-firewall.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%[1]s --suppress-timestamps --nobind --config %[2]s/%%i.conf
+Restart=on-failure
+RestartSec=2
+RuntimeDirectory=ostiole-openvpn
+RuntimeDirectoryPreserve=yes
+%[3]s
+[Install]
+WantedBy=multi-user.target
+`, binary, dir, sandbox("CAP_NET_ADMIN CAP_NET_RAW CAP_SETPCAP",
+		"AF_UNIX AF_INET AF_INET6 AF_NETLINK", nil, "/dev/net/tun rw"))
 }
 
 // setupProxy creates the account the sidecar runs as and writes its unit.

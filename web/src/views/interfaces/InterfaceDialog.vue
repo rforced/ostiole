@@ -58,13 +58,22 @@ function blank() {
 /** What the kernel has for this interface, when it exists yet. */
 const live = computed(() => props.links.find((l) => l.name === form.value.name) ?? null)
 
-/** tailscaled addresses its own interface and sets its MTU from the tailnet. */
-const daemonOwned = computed(() => Boolean(form.value.tailscale))
+/** tailscaled addresses its own interface and sets its MTU from the tailnet; an OpenVPN server addresses its tunnel. */
+const daemonOwned = computed(() => Boolean(form.value.tailscale || form.value.openvpn))
 
 /** Only a card has a hardware address to answer to instead of its own. */
 const physical = computed(() => {
   const f = form.value
-  return !(f.vlan || f.bridge || f.bond || f.wireguard || f.pppoe || f.tailscale || f.wireless)
+  return !(
+    f.vlan ||
+    f.bridge ||
+    f.bond ||
+    f.wireguard ||
+    f.openvpn ||
+    f.pppoe ||
+    f.tailscale ||
+    f.wireless
+  )
 })
 
 /** Plain Ethernet, and what a WireGuard device leaves for its own header. */
@@ -218,7 +227,11 @@ function save() {
         :hint="enabledLocked ? ADMIN_ONLY : ''"
       />
 
-      <p v-if="daemonOwned" class="text-sm text-ink-muted">
+      <p v-if="form.openvpn" class="text-sm text-ink-muted">
+        The server gives this tunnel its addresses. Its settings and MTU are under
+        <RouterLink to="/vpn/openvpn" class="link">VPN › OpenVPN</RouterLink>.
+      </p>
+      <p v-else-if="daemonOwned" class="text-sm text-ink-muted">
         The tailnet gives this interface its addresses and its MTU. Its settings are under
         <RouterLink to="/vpn/tailscale" class="link">VPN › Tailscale › Settings</RouterLink>.
       </p>

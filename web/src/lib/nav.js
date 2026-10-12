@@ -217,6 +217,13 @@ export const NAV = [
           { value: 'log', label: 'Log' },
         ],
       },
+      {
+        path: 'openvpn',
+        ownHeader: true,
+        label: 'OpenVPN',
+        view: () => import('@/views/vpn/OpenvpnPage.vue'),
+        tabs: [{ value: 'tunnels', label: 'Tunnels' }],
+      },
     ],
   },
   {

@@ -84,7 +84,7 @@ func DefaultLeftovers() Leftovers {
 	return Leftovers{
 		Units: []string{"ostiole-dnsmasq.service", "ostiole-unbound.service", "ostiole-chronyd.service",
 			"ostiole-miniupnpd.service", "ostiole-proxy.service", "ostiole-hostapd@.service",
-			"ostiole-pppoe@.service", "ostiole-tailscaled.service"},
+			"ostiole-pppoe@.service", "ostiole-tailscaled.service", "ostiole-openvpn@.service"},
 		Files: []string{"/etc/dnsmasq.d/ostiole.*", "/etc/unbound/ostiole.conf", "/etc/chrony/ostiole.conf",
 			"/etc/chrony/.ostiole-check.conf", "/etc/miniupnpd/ostiole.conf", "/etc/ppp/peers/ostiole-*",
 			"/etc/sysusers.d/ostiole-proxy.conf", sysctl.ConfFile, BluetoothConfFile, journald.ConfFile},
@@ -94,7 +94,7 @@ func DefaultLeftovers() Leftovers {
 			"ntpd.service", "ntpsec.service", "openntpd.service", "ntpd-rs.service"}, ScriptMaskOnly()),
 		Resolv: "/etc/resolv.conf",
 		State: []string{"/var/lib/ostiole-proxy", "/var/lib/tailscale", "/var/cache/tailscale",
-			"/var/lib/dnsmasq/ostiole.leases"},
+			"/var/lib/dnsmasq/ostiole.leases", "/run/ostiole-openvpn"},
 		Binaries: []string{"ostiole-proxy"},
 		User:     "ostiole-proxy",
 	}

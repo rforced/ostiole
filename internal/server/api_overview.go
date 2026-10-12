@@ -316,7 +316,7 @@ func (a *api) overview(w http.ResponseWriter, r *http.Request) error {
 // serviceUnits are the units of the daemons Ostiole drives, a templated
 // one by the template's own name.
 var serviceUnits = []string{services.Unit, services.UnboundUnit, services.PPPoEUnit, services.UPnPUnit,
-	services.TailscaleUnit, services.ProxyUnit, services.NTPUnit, services.WirelessUnit}
+	services.TailscaleUnit, services.OpenVPNUnit, services.ProxyUnit, services.NTPUnit, services.WirelessUnit}
 
 // readUnits asks systemd about every unit the dashboard reports on at
 // once: the services' tiles, the network's and the competing services.
@@ -328,6 +328,9 @@ func (a *api) readUnits(ctx context.Context, cfg *model.Config) install.UnitStat
 	if cfg != nil {
 		for _, r := range cfg.ActiveRadios() {
 			names = append(names, services.WirelessUnitFor(r.Name))
+		}
+		for _, n := range openvpnNames(cfg) {
+			names = append(names, services.OpenVPNUnitFor(n))
 		}
 	}
 	return install.ReadUnits(ctx, a.units, append(names, install.CompetitorUnits()...)...)
@@ -654,6 +657,23 @@ func (a *api) serviceStates(ctx context.Context, cfg *model.Config, units instal
 		}
 	}
 
+	// One tile per configured tunnel, an instance of the templated unit
+	// each; a router with none is owed no line about OpenVPN.
+	var tunnels []ServiceState
+	if cfg != nil {
+		for _, n := range openvpnNames(cfg) {
+			in, _ := cfg.Interface(n)
+			tile := ServiceState{
+				Name:  "OpenVPN " + n,
+				Unit:  services.OpenVPNUnitFor(n),
+				State: stateUnknown,
+				Want:  in.Enabled,
+			}
+			fillTile(&tile, units, services.OpenVPNUnit, "OpenVPN is not on this router. Run `ostiole repair --openvpn` as root.")
+			tunnels = append(tunnels, tile)
+		}
+	}
+
 	netd := ServiceState{
 		Name:  "Network",
 		Unit:  install.NetworkdUnit,
@@ -685,6 +705,7 @@ func (a *api) serviceStates(ctx context.Context, cfg *model.Config, units instal
 	if tsConfigured {
 		states = append(states, ts)
 	}
+	states = append(states, tunnels...)
 	if proxyWant || proxy.State == stateActive {
 		states = append(states, proxy)
 	}
@@ -818,9 +839,10 @@ func (a *api) warnings(ctx context.Context, cfg *model.Config, st engine.Status,
 		if !l.Configured || !l.Enabled || l.Present {
 			continue
 		}
-		// tailscaled and hostapd create their own interfaces, so a missing
-		// one means the daemon is not running, which its tile already says.
-		if in, ok := cfg.Interface(l.Name); ok && (in.Kind() == model.KindTailscale || in.Kind() == model.KindWireless) {
+		// tailscaled, OpenVPN and hostapd create their own interfaces, so a
+		// missing one means the daemon is not running or not connected,
+		// which its tile and its page already say.
+		if in, ok := cfg.Interface(l.Name); ok && (in.Kind() == model.KindTailscale || in.Kind() == model.KindOpenVPN || in.Kind() == model.KindWireless) {
 			continue
 		}
 		missing = append(missing, l.Name)

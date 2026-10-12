@@ -95,9 +95,10 @@ func (u Unit) Pattern() string {
 //
 // tailscaled is not here: it prints everything at one priority, so a cap
 // would hide its errors along with the rest, and what it names is peers
-// rather than the people on the LAN. Neither is the reverse proxy, for
-// the same reason: its level is set in its own configuration instead, and
-// a cap would take its WAF events with the rest.
+// rather than the people on the LAN. OpenVPN is left out for the same
+// reason: one priority for every line, and what it names is its server.
+// Neither is the reverse proxy: its level is set in its own configuration
+// instead, and a cap would take its WAF events with the rest.
 var Units = []Unit{
 	{Name: "ostiole-dnsmasq.service"},
 	{Name: "ostiole-unbound.service"},

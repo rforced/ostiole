@@ -27,6 +27,12 @@ func (c *Config) Redacted() *Config {
 				in.WireGuard.Peers[j].PresharedKey = ""
 			}
 		}
+		if in.OpenVPN != nil {
+			in.OpenVPN.KeyPEM = ""
+			in.OpenVPN.TLSCryptKeyPEM = ""
+			in.OpenVPN.TLSAuthKeyPEM = ""
+			in.OpenVPN.Password = ""
+		}
 		if in.Wireless != nil {
 			in.Wireless.Passphrase = ""
 		}

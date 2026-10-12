@@ -191,6 +191,29 @@ assert_tailscale() {
 	esac
 }
 
+# assert_openvpn is the end state of the opt-in client: on the router,
+# with a unit template of ours, and on Enterprise Linux the kernel data
+# channel module, which a container (no Secure Boot) always takes.
+assert_openvpn() {
+	step "$1: openvpn is on this router"
+	bin=$(command -v openvpn || PATH="$PATH:/usr/sbin:/sbin" command -v openvpn) ||
+		fail "openvpn is not on this router"
+	# Some releases exit 1 from --version, so the banner is the answer.
+	"$bin" --version 2>&1 | grep -q '^OpenVPN ' ||
+		fail "openvpn --version did not run: $("$bin" --version 2>&1 | tail -5)"
+	echo "  $("$bin" --version 2>&1 | head -1)"
+	[ -f /etc/systemd/system/ostiole-openvpn@.service ] ||
+		fail "ostiole-openvpn@.service was not written"
+	case "$(distro_id)" in
+	rocky | rhel | almalinux | centos)
+		pkg_present kmod-ovpn || fail "kmod-ovpn was not installed"
+		;;
+	esac
+	# Connecting is an apply, not an install: nothing here starts one.
+	! systemctl list-units --state=active 'ostiole-openvpn@*' 2>/dev/null | grep -q ostiole-openvpn ||
+		fail "an ostiole-openvpn instance is running, and nothing asked it to"
+}
+
 # assert_wireless is the end state of the opt-in radio packages: on the
 # router, with a unit of ours, and nothing started it.
 assert_wireless() {
@@ -289,6 +312,21 @@ ostiole repair --yes >/tmp/repair3.log 2>&1 ||
 no_warnings /tmp/repair3.log
 
 assert_wireless "plain repair"
+
+step "ostiole repair --openvpn adds the VPN client"
+ostiole repair --yes --openvpn >/tmp/openvpn.log 2>&1 ||
+	{ cat /tmp/openvpn.log; fail "ostiole repair --openvpn failed"; }
+no_warnings /tmp/openvpn.log
+
+assert_openvpn "openvpn"
+assert_router "openvpn"
+
+step "a plain repair keeps OpenVPN"
+ostiole repair --yes >/tmp/repair5.log 2>&1 ||
+	{ cat /tmp/repair5.log; fail "the repair after --openvpn failed"; }
+no_warnings /tmp/repair5.log
+
+assert_openvpn "plain repair"
 
 step "ostiole repair --proxy adds the reverse proxy"
 # The script this runs is the one built into the binary, which trusts

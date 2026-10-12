@@ -42,8 +42,12 @@ func Enter(t *testing.T, needs ...string) bool {
 	if err == nil {
 		return false
 	}
-	if strings.Contains(string(out), "uid_map") || strings.Contains(string(out), "Operation not permitted") {
-		testenv.Unavailable(t, "unprivileged namespaces are not allowed here: %s", strings.TrimSpace(string(out)))
+	// Only unshare's own complaint means namespaces are refused; a test
+	// inside one may print the same words about something else.
+	for line := range strings.SplitSeq(string(out), "\n") {
+		if strings.HasPrefix(line, "unshare:") && (strings.Contains(line, "uid_map") || strings.Contains(line, "Operation not permitted")) {
+			testenv.Unavailable(t, "unprivileged namespaces are not allowed here: %s", strings.TrimSpace(line))
+		}
 	}
 	t.Fatalf("inside namespace: %v\n%s", err, out)
 	return false

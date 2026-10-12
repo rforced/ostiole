@@ -131,6 +131,9 @@ func (c *Config) Validate() error {
 			}
 			v.tailscale(path, in)
 		}
+		if in.OpenVPN != nil {
+			v.openvpn(path, in)
+		}
 		if in.Wireless != nil {
 			v.wirelessNetwork(path, in, c)
 		}
@@ -1787,6 +1790,10 @@ func (v *validator) sharedNetworks(c *Config) {
 					v.add(path, "%s is also behind %s/%s; renumber one side", r.Prefix, other.iface, other.peer)
 					continue
 				}
+				if in.OpenVPN != nil {
+					v.add(path, "%s is also on %s; renumber one side", r.Prefix, other.iface)
+					continue
+				}
 				// More often this router's own network, listed as what the
 				// peer may reach, than a far end numbered the same.
 				v.add(path, "%s is on %s; list only the peer's tunnel address and the networks behind it, "+
@@ -1838,6 +1845,14 @@ func (v *validator) sharedNetworks(c *Config) {
 // allowedPath is where a tunnel route was written: the first allowed
 // address of its peer that names it.
 func allowedPath(i int, in Interface, r TunnelRoute) string {
+	if in.OpenVPN != nil {
+		for k, a := range in.OpenVPN.Routes {
+			if pre, err := ParseAddress(a); err == nil && pre == r.Prefix {
+				return fmt.Sprintf("interfaces[%d].openvpn.routes[%d]", i, k)
+			}
+		}
+		return fmt.Sprintf("interfaces[%d].openvpn.routes", i)
+	}
 	for j, p := range in.WireGuard.Peers {
 		if p.Name != r.Peer {
 			continue
@@ -1869,6 +1884,9 @@ func builtFrom(in Interface) []string {
 	}
 	if in.Tailscale != nil {
 		kinds = append(kinds, "a Tailscale node")
+	}
+	if in.OpenVPN != nil {
+		kinds = append(kinds, "an OpenVPN tunnel")
 	}
 	if in.Wireless != nil {
 		kinds = append(kinds, "a wireless network")
@@ -1934,6 +1952,8 @@ func (v *validator) enslaved(c *Config, ifaces map[string]bool) map[string]strin
 				v.add(mpath, "a WireGuard tunnel carries routed traffic and cannot be a member")
 			case KindTailscale:
 				v.add(mpath, "a Tailscale node carries routed traffic and cannot be a member")
+			case KindOpenVPN:
+				v.add(mpath, "an OpenVPN tunnel carries routed traffic and cannot be a member")
 			}
 		}
 	}
@@ -2345,6 +2365,16 @@ func (v *validator) dnsVia(c *Config, via string) {
 			continue
 		}
 		in, _ := c.Interface(gw.Interface)
+		if in.OpenVPN != nil {
+			for _, r := range in.OpenVPN.Remotes {
+				if _, err := netip.ParseAddr(r.Host); err != nil {
+					v.add("services.dns.via", "%s dials %s by name, which could not be looked up once lookups need %s; give its address",
+						in.Name, r.Host, in.Name)
+					break
+				}
+			}
+			continue
+		}
 		for _, p := range in.WireGuard.Peers {
 			if !p.Enabled || p.Endpoint == "" {
 				continue
@@ -2374,7 +2404,9 @@ func (v *validator) tunnelGateway(c *Config, path string, g Gateway) {
 	if g.Priority != 0 {
 		v.add(path+".priority", "a tunnel gateway never carries the default route; leave it at 0")
 	}
-	takes := slices.ContainsFunc(in.WireGuard.Peers, func(p WireGuardPeer) bool {
+	// An OpenVPN server addresses its tunnel, so any of them can be a way
+	// out.
+	takes := in.OpenVPN != nil || slices.ContainsFunc(in.WireGuard.Peers, func(p WireGuardPeer) bool {
 		return p.Enabled && p.TakesDefaultRoute()
 	})
 	if v4, v6 := c.TunnelFamilies(g); !takes {

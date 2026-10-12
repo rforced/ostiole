@@ -11,7 +11,7 @@ import (
 func TestUninstallFindsWhatServicesWrite(t *testing.T) {
 	t.Parallel()
 	left := install.DefaultLeftovers()
-	for _, u := range []string{Unit, UnboundUnit, NTPUnit, UPnPUnit, TailscaleUnit, ProxyUnit, WirelessUnit, PPPoEUnit} {
+	for _, u := range []string{Unit, UnboundUnit, NTPUnit, UPnPUnit, TailscaleUnit, OpenVPNUnit, ProxyUnit, WirelessUnit, PPPoEUnit} {
 		if !slices.Contains(left.Units, u) {
 			t.Errorf("uninstall leaves %s: %v", u, left.Units)
 		}

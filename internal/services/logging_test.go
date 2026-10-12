@@ -24,10 +24,11 @@ func TestLoggingCapsEveryServiceUnit(t *testing.T) {
 			t.Errorf("%s writes to the journal uncapped; add it to logging.Units", name)
 		}
 	}
-	// tailscaled is deliberately absent: it prints at one priority, so a
-	// cap would hide its errors too. So is the proxy: its level is in its
-	// own configuration, and a cap would drop its WAF events.
-	for _, name := range []string{TailscaleUnit, ProxyUnit} {
+	// tailscaled and OpenVPN are deliberately absent: they print at one
+	// priority, so a cap would hide their errors too. So is the proxy: its
+	// level is in its own configuration, and a cap would drop its WAF
+	// events.
+	for _, name := range []string{TailscaleUnit, OpenVPNUnit, ProxyUnit} {
 		if slices.Contains(capped, name) {
 			t.Errorf("%s is capped, which would hide its errors", name)
 		}

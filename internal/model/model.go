@@ -739,6 +739,8 @@ type Interface struct {
 	// and some fibre services are delivered.
 	PPPoE     *PPPoE     `json:"pppoe,omitempty"`
 	Tailscale *Tailscale `json:"tailscale,omitempty"`
+	// OpenVPN dials a server as a client. The daemon creates the device.
+	OpenVPN *OpenVPN `json:"openvpn,omitempty"`
 	// Wireless makes this interface an SSID served by one of the radios.
 	Wireless *WirelessNetwork `json:"wireless,omitempty"`
 	MTU      int              `json:"mtu,omitempty"`
@@ -1082,6 +1084,7 @@ const (
 	KindWireGuard Kind = "wireguard"
 	KindPPPoE     Kind = "pppoe"
 	KindTailscale Kind = "tailscale"
+	KindOpenVPN   Kind = "openvpn"
 	KindWireless  Kind = "wireless"
 )
 
@@ -1100,6 +1103,8 @@ func (i Interface) Kind() Kind {
 		return KindPPPoE
 	case i.Tailscale != nil:
 		return KindTailscale
+	case i.OpenVPN != nil:
+		return KindOpenVPN
 	case i.Wireless != nil:
 		return KindWireless
 	}

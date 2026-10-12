@@ -143,7 +143,8 @@ jobs:
       # service to start. Shaping needs the ifb and CAKE modules, and the
       # WireGuard status test the wireguard one. The chronyd test starts
       # one, which Ubuntu's profile keeps out of a temporary directory. The
-      # sidecar validates the proxy's rendered configuration.
+      # sidecar validates the proxy's rendered configuration. OpenVPN
+      # connects a rendered client to a server in the next namespace.
       # TESTENV_REQUIRE fails a test the runner cannot run instead of
       # skipping it.
       - name: Give the tests what they need
@@ -151,7 +152,7 @@ jobs:
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           unshare -Urn true
           sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends dnsmasq-base
+          sudo apt-get install -y -qq --no-install-recommends dnsmasq-base openvpn
           if ! sudo modprobe -a ifb sch_cake wireguard; then
             sudo apt-get install -y -qq "linux-modules-extra-$(uname -r)"
             sudo modprobe -a ifb sch_cake wireguard

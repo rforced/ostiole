@@ -404,6 +404,9 @@ export const useConfigStore = defineStore('config', () => {
   /** Tunnels are interfaces with a wireguard block. */
   const tunnels = computed(() => interfaces.value.filter((i) => i.wireguard))
 
+  /** OpenVPN tunnels are interfaces with an openvpn block. */
+  const openvpnTunnels = computed(() => interfaces.value.filter((i) => i.openvpn))
+
   /** The tailnet node, if this router has one. There is at most one. */
   const tailscale = computed(() => interfaces.value.find((i) => i.tailscale) ?? null)
 
@@ -1737,6 +1740,7 @@ export const useConfigStore = defineStore('config', () => {
           interfaces.value.find((x) => x.name === id) ??
           saved.value?.interfaces?.find((x) => x.name === id)
         if (i?.wireguard) return '/vpn/wireguard'
+        if (i?.openvpn) return '/vpn/openvpn'
         if (i?.tailscale) return '/vpn/tailscale'
         if (i?.wireless) return '/wireless'
         return '/interfaces'
@@ -1872,6 +1876,7 @@ export const useConfigStore = defineStore('config', () => {
     upsertInterface,
     removeInterface,
     tunnels,
+    openvpnTunnels,
     tailscale,
     radios,
     wirelessNetworks,

@@ -129,7 +129,7 @@ func Lines(cfg *model.Config, up func(iface string) bool) []Target {
 		t := Target{Name: l.Interface, Line: l.Interface, Mark: l.Mark, Table: l.Table, Index: l.Index,
 			Up: up == nil || up(l.Interface)}
 		// WireGuard answers from a line under it, never from a tunnel.
-		if in, ok := cfg.Interface(l.Interface); ok && in.WireGuard == nil {
+		if in, ok := cfg.Interface(l.Interface); ok && !in.Tunnel() {
 			t.Ports = ports
 		}
 		for _, g := range cfg.Gateways {

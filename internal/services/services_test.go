@@ -740,6 +740,44 @@ func TestRenderPPPoEGolden(t *testing.T) {
 	}
 }
 
+// The OpenVPN configurations and credentials are golden-tested on the
+// inputs that dial a tunnel; the rest must produce none at all.
+func TestRenderOpenVPNGolden(t *testing.T) {
+	t.Parallel()
+	inputs, _ := filepath.Glob("testdata/*.json")
+	for _, in := range inputs {
+		name := strings.TrimSuffix(filepath.Base(in), ".json")
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			cfg := loadConfig(t, in)
+			files, err := (&OpenVPN{Dir: "/etc/ostiole/openvpn"}).Render(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			golden := strings.TrimSuffix(in, ".json") + ".openvpn"
+			if len(cfg.OpenVPNInterfaces()) == 0 {
+				if len(files) != 0 {
+					t.Fatalf("no tunnels configured but rendered %v", files.Names())
+				}
+				return
+			}
+			got := files.String()
+			if *update {
+				if err := os.WriteFile(golden, []byte(got), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			want, err := os.ReadFile(golden)
+			if err != nil {
+				t.Fatalf("missing golden (run with -update): %v", err)
+			}
+			if got != string(want) {
+				t.Errorf("mismatch (run with -update to accept)\n--- got ---\n%s", got)
+			}
+		})
+	}
+}
+
 // A password with a quote in it must not be able to end the option and
 // start another; pppd reads these files as shell-ish words.
 func TestPeerFileQuotesTheSecret(t *testing.T) {

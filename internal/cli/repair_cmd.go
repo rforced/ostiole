@@ -15,7 +15,7 @@ import (
 )
 
 func newRepairCmd(_ *globals) *cobra.Command {
-	var yes, dryRun, tailscale, wireless, proxy, noVerify bool
+	var yes, dryRun, tailscale, openvpn, wireless, proxy, noVerify bool
 	cmd := &cobra.Command{
 		Use:   "repair",
 		Short: "Reinstall packages and units the way install does",
@@ -26,7 +26,8 @@ and network handover are left alone.
 
 Run it on a router whose packages were changed by hand, or if the session
 dropped during the first install. --tailscale adds tailscaled and its unit;
---wireless adds hostapd, iw and the firmware for the card in this router;
+--openvpn adds OpenVPN, its unit and, where the kernel lacks it, the data
+channel module; --wireless adds hostapd, iw and the firmware for the card in this router;
 --proxy adds the reverse proxy sidecar, and --no-verify fetches it without
 checking the release signature.`,
 		Args: cobra.NoArgs,
@@ -44,6 +45,9 @@ checking the release signature.`,
 			if tailscale {
 				args = append(args, "--with-tailscale")
 			}
+			if openvpn {
+				args = append(args, "--with-openvpn")
+			}
 			if wireless {
 				args = append(args, "--with-wireless")
 			}
@@ -59,6 +63,7 @@ checking the release signature.`,
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask for confirmation")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the plan and change nothing")
 	cmd.Flags().BoolVar(&tailscale, "tailscale", false, "install Tailscale as well, from its own repository where a distribution packages none")
+	cmd.Flags().BoolVar(&openvpn, "openvpn", false, "install OpenVPN as well, with the kernel's data channel where the distribution has none")
 	cmd.Flags().BoolVar(&wireless, "wireless", false, "install what a wifi card needs as well, whether or not this router has one")
 	cmd.Flags().BoolVar(&proxy, "proxy", false, "install the reverse proxy as well")
 	cmd.Flags().BoolVar(&noVerify, "no-verify", false, "fetch the reverse proxy without checking the release signature (the checksum is still checked)")

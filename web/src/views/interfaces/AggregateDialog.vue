@@ -74,14 +74,15 @@ const taken = computed(() => {
 const options = computed(() => {
   const names = new Set()
   for (const c of props.candidates) {
-    if (c.name === form.value.name || c.kind === 'bridge' || c.kind === 'wireguard') continue
+    if (c.name === form.value.name || ['bridge', 'wireguard', 'ovpn'].includes(c.kind)) continue
+    if (config.findInterface(c.name)?.openvpn) continue
     if (isBond.value && c.kind === 'bond') continue
     names.add(c.name)
   }
   // A bond that so far exists only in the draft is a perfectly good
   // bridge member, so configured interfaces count too.
   for (const i of config.interfaces) {
-    if (i.name === form.value.name || i.vlan || i.wireguard || i.bridge) continue
+    if (i.name === form.value.name || i.vlan || i.wireguard || i.openvpn || i.bridge) continue
     if (isBond.value && i.bond) continue
     names.add(i.name)
   }

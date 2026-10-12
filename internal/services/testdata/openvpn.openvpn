@@ -1,0 +1,94 @@
+==> ovpn0.auth <==
+lab-user
+lab password
+==> ovpn0.conf <==
+client
+dev ovpn0
+dev-type tun
+remote vpn.example 1194 udp
+remote 198.51.100.9 443 tcp
+resolv-retry infinite
+nobind
+persist-tun
+remote-cert-tls server
+verify-x509-name "lab server" name
+tls-version-min 1.2
+data-ciphers AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305
+auth-user-pass /etc/ostiole/openvpn/ovpn0.auth
+auth-nocache
+keepalive 10 60
+pull-filter ignore "redirect-gateway"
+pull-filter ignore "dhcp-option"
+pull-filter ignore "dns "
+pull-filter ignore "block-outside-dns"
+pull-filter ignore "route "
+pull-filter ignore "route-ipv6 "
+route 10.8.0.0 255.255.255.0
+route-ipv6 fd00:8::/64
+management /run/ostiole-openvpn/ovpn0.sock unix
+management-client-user root
+verb 3
+<ca>
+-----BEGIN CERTIFICATE-----
+bGFiIENBIGNlcnRpZmljYXRl
+-----END CERTIFICATE-----
+</ca>
+<cert>
+-----BEGIN CERTIFICATE-----
+bGFiIGNsaWVudCBjZXJ0aWZpY2F0ZQ==
+-----END CERTIFICATE-----
+</cert>
+<key>
+-----BEGIN PRIVATE KEY-----
+bGFiIGNsaWVudCBrZXk=
+-----END PRIVATE KEY-----
+</key>
+<tls-crypt>
+-----BEGIN OpenVPN Static key V1-----
+bGFiIHRscy1jcnlwdCBrZXk=
+-----END OpenVPN Static key V1-----
+</tls-crypt>
+==> ovpn1.conf <==
+client
+dev ovpn1
+dev-type tun
+remote acme-vpn.example 1194 udp
+resolv-retry infinite
+nobind
+persist-tun
+remote-cert-tls server
+tls-version-min 1.2
+data-ciphers CHACHA20-POLY1305:AES-256-GCM
+auth-nocache
+keepalive 20 120
+explicit-exit-notify 1
+pull-filter ignore "redirect-gateway"
+pull-filter ignore "dhcp-option"
+pull-filter ignore "dns "
+pull-filter ignore "block-outside-dns"
+tun-mtu 1400
+pull-filter ignore "tun-mtu"
+management /run/ostiole-openvpn/ovpn1.sock unix
+management-client-user root
+verb 3
+key-direction 1
+<ca>
+-----BEGIN CERTIFICATE-----
+YWNtZSBDQSBjZXJ0aWZpY2F0ZQ==
+-----END CERTIFICATE-----
+</ca>
+<cert>
+-----BEGIN CERTIFICATE-----
+YWNtZSBjbGllbnQgY2VydGlmaWNhdGU=
+-----END CERTIFICATE-----
+</cert>
+<key>
+-----BEGIN PRIVATE KEY-----
+YWNtZSBjbGllbnQga2V5
+-----END PRIVATE KEY-----
+</key>
+<tls-auth>
+-----BEGIN OpenVPN Static key V1-----
+YWNtZSB0bHMtYXV0aCBrZXk=
+-----END OpenVPN Static key V1-----
+</tls-auth>

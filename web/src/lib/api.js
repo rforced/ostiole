@@ -570,6 +570,14 @@ export const api = {
     login: (authKey) => post('/tailscale/login', { authKey: authKey ?? '' }),
     logout: () => post('/tailscale/logout'),
   },
+  openvpn: {
+    /**
+     * Each configured tunnel as its daemon has it, and whether this router can run one.
+     *
+     * @returns {Promise<{tunnels: object[]}>}
+     */
+    status: () => get('/openvpn/status'),
+  },
   wireless: {
     /**
      * The radios this router has, what each can do, and what it is doing.
