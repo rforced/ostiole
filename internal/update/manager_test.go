@@ -137,7 +137,7 @@ func TestAFailedUpdateSaysWhyAndCanBeRetried(t *testing.T) {
 			run := &fakeRun{failOn: tc.failOn}
 			m := &Manager{
 				Client: &Client{Repo: DefaultRepo, BaseURL: srv.URL, HTTP: &http.Client{Transport: github},
-					PublicKeys: []ed25519.PublicKey{pub}},
+					RetryWait: time.Millisecond, PublicKeys: []ed25519.PublicKey{pub}},
 				Installer: &Installer{Binary: bin, Unit: "ostiole.service", HealthURL: "x", Run: run},
 				Current:   "0.1.0",
 				Log:       slog.New(slog.DiscardHandler),

@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -805,6 +806,37 @@ func TestCheckFindsSecurityReleasesSinceTheRunningVersion(t *testing.T) {
 	}
 	if chk.Available || chk.Security {
 		t.Errorf("check = %+v", chk)
+	}
+}
+
+// A check GitHub fails with a fault of its own asks again; a refusal, such
+// as a spent rate limit, stands.
+func TestACheckAsksAgainWhenGitHubErrs(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		code int
+		want int32
+	}{
+		"an error once": {code: http.StatusBadGateway, want: 2},
+		"refused":       {code: http.StatusForbidden, want: 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var hits atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				if hits.Add(1) == 1 {
+					w.WriteHeader(tc.code)
+					return
+				}
+				_ = json.NewEncoder(w).Encode([]map[string]any{release("v0.4.0", "")})
+			}))
+			t.Cleanup(srv.Close)
+			c := &Client{Repo: DefaultRepo, BaseURL: srv.URL, RetryWait: time.Millisecond}
+			chk, err := c.Check(t.Context(), "0.2.0", Stable)
+			if n := hits.Load(); n != tc.want || (err == nil) != (tc.want == 2) || (err == nil && chk.Latest != "0.4.0") {
+				t.Errorf("asked %d times, check = %+v, err = %v; want %d times", n, chk, err, tc.want)
+			}
+		})
 	}
 }
 

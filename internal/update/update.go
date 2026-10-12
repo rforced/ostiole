@@ -27,6 +27,7 @@ import (
 	"golang.org/x/mod/semver"
 
 	"ostiole/internal/atomicfile"
+	"ostiole/internal/retry"
 )
 
 // DefaultRepo is the GitHub repository releases come from.
@@ -105,6 +106,9 @@ type Client struct {
 	Repo    string
 	BaseURL string // default https://api.github.com
 	HTTP    *http.Client
+	// RetryWait is the first pause between attempts; zero is
+	// retry.DefaultWait.
+	RetryWait time.Duration
 	// PublicKeys are accepted signers of checksums.txt; any one of them
 	// verifying is enough, which is what makes rotation possible.
 	PublicKeys []ed25519.PublicKey
@@ -143,7 +147,18 @@ func (c *Client) http() *http.Client {
 	return c.HTTP
 }
 
+// get asks GitHub for url, again while it errs or does not answer in time.
+// The body is the caller's to read and close.
 func (c *Client) get(ctx context.Context, url string, accept string) (*http.Response, error) {
+	var resp *http.Response
+	err := retry.Do(ctx, c.RetryWait, retry.Transient, func() (err error) {
+		resp, err = c.getOnce(ctx, url, accept) //nolint:bodyclose // the caller closes it
+		return err
+	})
+	return resp, err
+}
+
+func (c *Client) getOnce(ctx context.Context, url string, accept string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -158,7 +173,7 @@ func (c *Client) get(ctx context.Context, url string, accept string) (*http.Resp
 	}
 	if resp.StatusCode != http.StatusOK {
 		_ = resp.Body.Close()
-		return nil, fmt.Errorf("GET %s: %s", url, resp.Status)
+		return nil, fmt.Errorf("GET %s: %w", url, retry.StatusError(resp.StatusCode))
 	}
 	return resp, nil
 }

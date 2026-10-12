@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // A check has to leave something behind: the page that asks "is there an
@@ -110,7 +111,7 @@ func TestAFailedCheckIsRecorded(t *testing.T) {
 		http.Error(w, "no", http.StatusBadGateway)
 	}))
 	t.Cleanup(srv.Close)
-	m := &Manager{Client: &Client{Repo: DefaultRepo, BaseURL: srv.URL}, Current: "0.2.0", Cache: NewCache(dir)}
+	m := &Manager{Client: &Client{Repo: DefaultRepo, BaseURL: srv.URL, RetryWait: time.Millisecond}, Current: "0.2.0", Cache: NewCache(dir)}
 
 	if _, err := m.Check(t.Context(), Stable); err == nil {
 		t.Fatal("a failing check reported success")
