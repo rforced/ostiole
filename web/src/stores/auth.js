@@ -31,7 +31,7 @@ export const useAuthStore = defineStore('auth', () => {
   const setupNeeded = ref(null)
   const ready = ref(false)
   /**
-   * A sign-in whose password was right and which waits for a second factor:
+   * A sign-in whose password was right and which waits for MFA:
    * the token the router gave it, what it accepts, and the name a passkey
    * was made for. Null when no sign-in is waiting.
    * @type {import('vue').Ref<{token: string, totp: boolean, passkeys: boolean, rpId: string} | null>}
@@ -79,15 +79,25 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  /** The session, or null when a second factor is still due: see `pending`. */
+  /** The session, or null when MFA is still due: see `pending`. */
   async function login(username, password) {
     const res = await api.auth.login(username, password)
-    if (res.secondFactor?.pending) {
-      const { pending: token, totp, passkeys, rpId } = res.secondFactor
+    if (res.pending?.token) {
+      const { token, totp, passkeys, rpId } = res.pending
       pending.value = { token, totp: Boolean(totp), passkeys: Boolean(passkeys), rpId: rpId ?? '' }
       return null
     }
     return signedIn(res)
+  }
+
+  /**
+   * The first step: whether the account signs in with a passkey alone on
+   * this host. The token and request options, or null.
+   * @returns {Promise<{token: string, publicKey: object} | null>}
+   */
+  async function start(username) {
+    const { passkey } = await api.auth.loginStart(username)
+    return passkey?.token ? { token: passkey.token, publicKey: passkey.publicKey } : null
   }
 
   async function loginTOTP(code) {
@@ -98,7 +108,19 @@ export const useAuthStore = defineStore('auth', () => {
   async function loginPasskey() {
     const token = pending.value.token
     const { publicKey } = await api.auth.passkeyLoginOptions(token)
-    const credential = await webauthn.get(publicKey)
+    return loginWithPasskey(token, publicKey)
+  }
+
+  /**
+   * Asks the browser for the passkey and the router to check it. An aborted
+   * signal stops it before anything is sent.
+   * @param {string} token
+   * @param {object} publicKey
+   * @param {AbortSignal} [signal]
+   */
+  async function loginWithPasskey(token, publicKey, signal) {
+    const credential = await webauthn.get(publicKey, { signal })
+    signal?.throwIfAborted()
     return signedIn(await api.auth.loginPasskey(token, credential))
   }
 
@@ -151,9 +173,11 @@ export const useAuthStore = defineStore('auth', () => {
     isOperator,
     readOnly,
     bootstrap,
+    start,
     login,
     loginTOTP,
     loginPasskey,
+    loginWithPasskey,
     cancelPending,
     setup,
     logout,

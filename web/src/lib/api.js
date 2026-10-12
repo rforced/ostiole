@@ -25,7 +25,13 @@ export class ApiError extends Error {
 }
 
 /** Endpoints where a 401 means "wrong credentials", not "session expired". */
-const CREDENTIAL_PATHS = ['/auth/password', '/auth/second-factor/clear', '/setup']
+const CREDENTIAL_PATHS = [
+  '/auth/password',
+  '/auth/mfa/clear',
+  '/auth/mfa/passkeys/options',
+  '/auth/mfa/passkey-login',
+  '/setup',
+]
 
 /** The sign-in steps answer a wrong code or an ended sign-in with a 401 too. */
 const credentialPath = (path) => path.startsWith('/auth/login') || CREDENTIAL_PATHS.includes(path)
@@ -121,10 +127,12 @@ function base64(buf) {
 }
 
 /** @typedef {{ status: string, version: string, commit?: string }} Health */
-/** @typedef {{ username: string, role: 'admin' | 'operator' | 'viewer', created: string, lastSeen: string, expires: string, secondFactor?: boolean, bypassUntil?: string, bypassBy?: string }} Session */
-/** @typedef {{ pending: string, totp: boolean, passkeys: boolean, rpId: string }} PendingLogin what a sign-in still needs after the password */
+/** @typedef {{ username: string, role: 'admin' | 'operator' | 'viewer', created: string, lastSeen: string, expires: string, mfa?: boolean, bypassUntil?: string, bypassBy?: string }} Session */
+/** @typedef {{ token: string, totp: boolean, passkeys: boolean, rpId: string }} PendingLogin what a sign-in still needs after the password */
 /** @typedef {{ id: string, name: string, rpId: string, createdAt: string, lastUsed?: string, transports?: string[] }} Passkey */
-/** @typedef {{ totp: boolean, passkeys: Passkey[], rpId: string, bypassUntil?: string, bypassBy?: string }} SecondFactor */
+/** @typedef {{ totp: { enabledAt: string, lastUsed?: string } | null, passkeys: Passkey[], passkeyLogin: boolean, rpId: string, bypassUntil?: string, bypassBy?: string }} Mfa */
+/** @typedef {{ id: string, created: string, lastSeen: string, expires: string, address: string, agent: string, current: boolean }} SessionRow a browser signed in as the account */
+/** @typedef {{ id: string, name: string, role: string, createdAt: string, createdBy?: string, owner?: string, expiresAt?: string, lastUsedAt?: string, certificates?: string[], metrics?: boolean }} Token */
 /** @typedef {{ configured: boolean, tableLoaded: boolean, network: string, pending?: { since: string, deadline: string, remaining: number }, fallback?: { since: string, reason: string }, recovered?: { since: string, at: string }, ssh?: string, drift?: { parts: string[], changes: number } }} Status */
 /** @typedef {{ path: string, kind: 'added' | 'removed', before?: string, after?: string }} DriftChange */
 /** @typedef {{ parts: string[], changes: DriftChange[], more?: number }} Drift */
@@ -141,7 +149,13 @@ export const api = {
   auth: {
     /** @returns {Promise<{hostname?: string}>} what the sign-in page shows */
     loginPage: () => get('/auth/login'),
-    /** @returns {Promise<Session | {secondFactor: PendingLogin}>} */
+    /**
+     * Whether the name may sign in with a passkey here: the challenge and
+     * its token when it may, null otherwise.
+     * @returns {Promise<{passkey: {token: string, publicKey: object} | null}>}
+     */
+    loginStart: (username) => post('/auth/login/start', { username }),
+    /** @returns {Promise<Session | {pending: PendingLogin}>} */
     login: (username, password) => post('/auth/login', { username, password }),
     /** @returns {Promise<Session>} */
     loginTOTP: (pending, code) => post('/auth/login/totp', { pending, code }),
@@ -155,22 +169,48 @@ export const api = {
     /** @returns {Promise<Session>} */
     changePassword: (current, next) => post('/auth/password', { current, new: next }),
     /**
-     * What the signed-in account has for a second factor, never the secrets.
-     * @returns {Promise<SecondFactor>}
+     * What the signed-in account has for multi-factor authentication, never the secrets.
+     * @returns {Promise<Mfa>}
      */
-    secondFactor: () => get('/auth/second-factor'),
+    mfa: () => get('/auth/mfa'),
     /**
      * A new authenticator secret, kept until a code from it is confirmed.
      * @returns {Promise<{secret: string, uri: string}>}
      */
-    totpStart: () => post('/auth/totp/start'),
-    totpConfirm: (code) => post('/auth/totp/confirm', { code }),
+    totpStart: () => post('/auth/mfa/totp/start'),
+    totpConfirm: (code) => post('/auth/mfa/totp/confirm', { code }),
     /** Removes the authenticator app and every passkey, on the password. */
-    secondFactorClear: (password) => post('/auth/second-factor/clear', { password }),
-    /** @returns {Promise<{publicKey: object}>} */
-    passkeyOptions: () => post('/auth/passkeys/options'),
-    addPasskey: (name, credential) => post('/auth/passkeys', { name, credential }),
-    removePasskey: (id) => request('DELETE', `/auth/passkeys/${encodeURIComponent(id)}`),
+    mfaClear: (password) => post('/auth/mfa/clear', { password }),
+    /**
+     * The challenge for a new passkey, on the password: a wrong one is
+     * refused before the browser's prompt.
+     * @returns {Promise<{publicKey: object}>}
+     */
+    passkeyOptions: (password) => post('/auth/mfa/passkeys/options', { password }),
+    /** @returns {Promise<Passkey>} */
+    addPasskey: (name, credential) => post('/auth/mfa/passkeys', { name, credential }),
+    /** @returns {Promise<Passkey>} */
+    renamePasskey: (id, name) =>
+      request('PATCH', `/auth/mfa/passkeys/${encodeURIComponent(id)}`, { name }),
+    removePasskey: (id) => request('DELETE', `/auth/mfa/passkeys/${encodeURIComponent(id)}`),
+    /**
+     * Lets a passkey sign in alone, on the password; turning it off needs none.
+     * @returns {Promise<Mfa>}
+     */
+    setPasskeyLogin: (on, password) =>
+      post('/auth/mfa/passkey-login', password === undefined ? { on } : { on, password }),
+    /** @returns {Promise<SessionRow[]>} */
+    sessions: () => get('/auth/sessions'),
+    endSession: (id) => request('DELETE', `/auth/sessions/${encodeURIComponent(id)}`),
+    endOtherSessions: () => post('/auth/sessions/end-others'),
+    /** The signed-in account's own API tokens. */
+    tokens: {
+      /** @returns {Promise<Token[]>} */
+      list: () => get('/auth/tokens'),
+      /** @returns {Promise<Token & {secret: string}>} */
+      create: (body) => post('/auth/tokens', body),
+      remove: (id) => request('DELETE', `/auth/tokens/${encodeURIComponent(id)}`),
+    },
   },
   /** @returns {Promise<Status>} */
   status: () => get('/status'),
@@ -441,12 +481,12 @@ export const api = {
     rename: (username, next) =>
       post(`/users/${encodeURIComponent(username)}/username`, { username: next }),
     /** An admin takes another account's authenticator app and passkeys away. */
-    clearSecondFactor: (username) =>
-      request('DELETE', `/users/${encodeURIComponent(username)}/second-factor`),
+    clearMFA: (username) => request('DELETE', `/users/${encodeURIComponent(username)}/mfa`),
   },
+  /** Every account's tokens and the router's, for an admin. New ones are made under auth.tokens. */
   tokens: {
+    /** @returns {Promise<Token[]>} */
     list: () => get('/tokens'),
-    create: (body) => post('/tokens', body),
     remove: (id) => request('DELETE', `/tokens/${encodeURIComponent(id)}`),
   },
   certificates: {

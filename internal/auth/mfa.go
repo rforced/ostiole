@@ -39,14 +39,15 @@ type Passkey struct {
 	Transports []string  `json:"transports,omitempty"`
 }
 
-// Errors the second factor can produce.
+// Errors MFA can produce.
 var (
-	ErrTOTPFirst      = errors.New("set up an authenticator app before adding a passkey")
-	ErrCodeUsed       = errors.New("that code was used already")
-	ErrNoSuchPasskey  = errors.New("no such passkey")
-	ErrNoSecondFactor = errors.New("this account has no second factor")
-	ErrPasskeyExists  = errors.New("that passkey is already registered")
-	ErrPendingGone    = errors.New("that sign-in timed out; enter the password again")
+	ErrTOTPFirst     = errors.New("set up an authenticator app before adding a passkey")
+	ErrCodeUsed      = errors.New("that code was used already")
+	ErrNoSuchPasskey = errors.New("no such passkey")
+	ErrNoMFA         = errors.New("this account has no multi-factor authentication")
+	ErrPasskeyExists = errors.New("that passkey is already registered")
+	ErrPendingGone   = errors.New("that sign-in timed out; enter the password again")
+	ErrNoPasskeys    = errors.New("add a passkey first")
 )
 
 var (
@@ -54,7 +55,7 @@ var (
 	errBadSecret = errors.New("the authenticator secret is not base32")
 )
 
-// How long a sign-in waits for its second factor, how many wrong codes it
+// How long a sign-in waits for its second step, how many wrong codes it
 // allows, and how long a challenge is kept. The secret behind a QR code is
 // kept under a "totp:" token and outlasts a challenge: installing an
 // authenticator app takes minutes.
@@ -64,12 +65,13 @@ const (
 	challengeLife   = 2 * time.Minute
 	totpSetupLife   = 10 * time.Minute
 	totpSetupPrefix = "totp:"
+	maxPasswordless = 1024
 )
 
-// secondFactor is what the second step of a sign-in keeps in memory: the
+// mfa is what the second step of a sign-in keeps in memory: the
 // sign-ins waiting for it and the challenges handed out. A restart loses
 // them, which costs a sign-in its second step and nothing more.
-type secondFactor struct {
+type mfa struct {
 	mu         sync.Mutex
 	pending    map[string]*pendingSignIn
 	challenges map[string]heldChallenge
@@ -79,6 +81,9 @@ type pendingSignIn struct {
 	username string
 	expires  time.Time
 	failures int
+	// passwordless is a sign-in a passkey finishes on its own, opened by
+	// a name and no password.
+	passwordless bool
 }
 
 type heldChallenge struct {
@@ -86,12 +91,12 @@ type heldChallenge struct {
 	expires time.Time
 }
 
-func newSecondFactor() *secondFactor {
-	return &secondFactor{pending: map[string]*pendingSignIn{}, challenges: map[string]heldChallenge{}}
+func newMFA() *mfa {
+	return &mfa{pending: map[string]*pendingSignIn{}, challenges: map[string]heldChallenge{}}
 }
 
 // sweep drops what has run out; called with the lock held.
-func (f *secondFactor) sweep(now time.Time) {
+func (f *mfa) sweep(now time.Time) {
 	for token, p := range f.pending {
 		if now.After(p.expires) {
 			delete(f.pending, token)
@@ -104,7 +109,7 @@ func (f *secondFactor) sweep(now time.Time) {
 	}
 }
 
-func hasSecondFactor(u User) bool { return u.TOTP != nil || len(u.Passkeys) > 0 }
+func hasMFA(u User) bool { return u.TOTP != nil || len(u.Passkeys) > 0 }
 
 // withoutSecrets is the account as a list shows it: no password hash, no
 // authenticator secret, no passkey public keys. Copies from Users share the
@@ -162,30 +167,32 @@ func (s *Service) edit(username string, fn func(u *User) error) error {
 	})
 }
 
-// secondFactorDue reports whether signing in as u still takes a second
-// factor: it has one and no bypass is running.
-func (s *Service) secondFactorDue(u User) bool {
-	if !hasSecondFactor(u) {
+// mfaDue reports whether signing in as u still takes MFA: it has it
+// and no bypass is running.
+func (s *Service) mfaDue(u User) bool {
+	if !hasMFA(u) {
 		return false
 	}
 	_, bypassed := s.Bypass()
 	return !bypassed
 }
 
-// HasSecondFactor reports whether the account has an authenticator app or
+// HasMFA reports whether the account has an authenticator app or
 // a passkey.
-func (s *Service) HasSecondFactor(username string) bool {
+func (s *Service) HasMFA(username string) bool {
 	u, ok := s.lookup(username)
-	return ok && hasSecondFactor(u)
+	return ok && hasMFA(u)
 }
 
-// SecondFactorOf lists what an account has, never the secrets.
-func (s *Service) SecondFactorOf(username string) (totp bool, passkeys []Passkey) {
+// MFAOf lists what an account has, never the secrets: its authenticator
+// app, its passkeys and whether a passkey signs in on its own.
+func (s *Service) MFAOf(username string) (totp *TOTP, passkeys []Passkey, passkeyLogin bool) {
 	u, ok := s.lookup(username)
 	if !ok {
-		return false, nil
+		return nil, nil, false
 	}
-	return u.TOTP != nil, u.withoutSecrets().Passkeys
+	u = u.withoutSecrets()
+	return u.TOTP, u.Passkeys, u.PasskeyLogin
 }
 
 // UserID returns the account's WebAuthn user handle, making and saving
@@ -236,7 +243,7 @@ func (s *Service) EnableTOTP(username, secret string, at time.Time) error {
 func (s *Service) UseTOTPStep(username string, step int64) error {
 	return s.edit(username, func(u *User) error {
 		if u.TOTP == nil {
-			return ErrNoSecondFactor
+			return ErrNoMFA
 		}
 		if step <= u.TOTP.LastStep {
 			return ErrCodeUsed
@@ -259,13 +266,16 @@ func (s *Service) TOTPSecret(username string) (string, bool) {
 }
 
 // AddPasskey adds a passkey; the account needs an authenticator app first.
+// A credential another account holds is refused too.
 func (s *Service) AddPasskey(username string, p Passkey) error {
 	return s.edit(username, func(u *User) error {
 		if u.TOTP == nil {
 			return ErrTOTPFirst
 		}
-		if slices.ContainsFunc(u.Passkeys, func(k Passkey) bool { return k.ID == p.ID }) {
-			return ErrPasskeyExists
+		for _, other := range s.users {
+			if slices.ContainsFunc(other.Passkeys, func(k Passkey) bool { return k.ID == p.ID }) {
+				return ErrPasskeyExists
+			}
 		}
 		if p.CreatedAt.IsZero() {
 			p.CreatedAt = s.now()
@@ -277,7 +287,8 @@ func (s *Service) AddPasskey(username string, p Passkey) error {
 	})
 }
 
-// RemovePasskey removes one of the account's passkeys.
+// RemovePasskey removes one of the account's passkeys. Passkey sign-in
+// turns off with the last one.
 func (s *Service) RemovePasskey(username, id string) error {
 	return s.edit(username, func(u *User) error {
 		i := slices.IndexFunc(u.Passkeys, func(k Passkey) bool { return k.ID == id })
@@ -285,7 +296,42 @@ func (s *Service) RemovePasskey(username, id string) error {
 			return ErrNoSuchPasskey
 		}
 		u.Passkeys = slices.Delete(slices.Clone(u.Passkeys), i, i+1)
+		if len(u.Passkeys) == 0 {
+			u.PasskeyLogin = false
+		}
 		u.UpdatedAt = s.now()
+		return nil
+	})
+}
+
+// RenamePasskey gives one of the account's passkeys a new name.
+func (s *Service) RenamePasskey(username, id, name string) error {
+	return s.edit(username, func(u *User) error {
+		i := slices.IndexFunc(u.Passkeys, func(k Passkey) bool { return k.ID == id })
+		if i < 0 {
+			return ErrNoSuchPasskey
+		}
+		if u.Passkeys[i].Name == name {
+			return errUnchanged
+		}
+		keys := copyPasskeys(u.Passkeys)
+		keys[i].Name = name
+		u.Passkeys, u.UpdatedAt = keys, s.now()
+		return nil
+	})
+}
+
+// SetPasskeyLogin turns on or off signing in with a passkey alone. Turning
+// it on needs a passkey.
+func (s *Service) SetPasskeyLogin(username string, on bool) error {
+	return s.edit(username, func(u *User) error {
+		if on && len(u.Passkeys) == 0 {
+			return ErrNoPasskeys
+		}
+		if u.PasskeyLogin == on {
+			return errUnchanged
+		}
+		u.PasskeyLogin, u.UpdatedAt = on, s.now()
 		return nil
 	})
 }
@@ -311,50 +357,91 @@ func (s *Service) PasskeyUsed(username, id string, signCount uint32, at time.Tim
 	})
 }
 
-// ClearSecondFactor removes the authenticator app and every passkey. Open
-// sessions stay; an account with nothing to clear is not an error.
-func (s *Service) ClearSecondFactor(username string) error {
+// ClearMFA removes the authenticator app and every passkey and turns
+// passkey sign-in off. Open sessions stay; an account with nothing to clear
+// is not an error.
+func (s *Service) ClearMFA(username string) error {
 	return s.edit(username, func(u *User) error {
-		if !hasSecondFactor(*u) {
+		if !hasMFA(*u) && !u.PasskeyLogin {
 			return errUnchanged
 		}
-		u.TOTP, u.Passkeys, u.UpdatedAt = nil, nil, s.now()
+		u.TOTP, u.Passkeys, u.PasskeyLogin, u.UpdatedAt = nil, nil, false, s.now()
 		return nil
 	})
 }
 
-// PendingLogin opens a pending sign-in for an account and returns its
-// token (32 random bytes, base64url). It lasts 5 minutes.
+// PendingLogin opens a pending sign-in for an account whose password was
+// right and returns its token (32 random bytes, base64url). It lasts 5
+// minutes.
 func (s *Service) PendingLogin(username string) string {
+	return s.openPending(username, false)
+}
+
+// StartPasskeyLogin opens a pending sign-in that a passkey finishes without
+// the password. At most 1024 are held; the oldest goes to make room.
+func (s *Service) StartPasskeyLogin(username string) string {
+	return s.openPending(username, true)
+}
+
+func (s *Service) openPending(username string, passwordless bool) string {
 	token, err := randomSecret()
 	if err != nil {
 		return ""
 	}
 	now := s.now()
-	f := s.second
+	f := s.mfa
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.sweep(now)
-	f.pending[token] = &pendingSignIn{username: username, expires: now.Add(pendingLife)}
+	if passwordless {
+		f.evictPasswordless(maxPasswordless - 1)
+	}
+	f.pending[token] = &pendingSignIn{username: username, expires: now.Add(pendingLife), passwordless: passwordless}
 	return token
 }
 
-// PendingUser names the account behind a live token.
-func (s *Service) PendingUser(token string) (string, bool) {
-	f := s.second
+// evictPasswordless drops the oldest passwordless sign-ins until at most
+// keep are left; called with the lock held.
+func (f *mfa) evictPasswordless(keep int) {
+	var held []string
+	for token, p := range f.pending {
+		if p.passwordless {
+			held = append(held, token)
+		}
+	}
+	if len(held) <= keep {
+		return
+	}
+	slices.SortFunc(held, func(a, b string) int { return f.pending[a].expires.Compare(f.pending[b].expires) })
+	for _, token := range held[:len(held)-keep] {
+		delete(f.pending, token)
+		delete(f.challenges, token)
+	}
+}
+
+// PendingUser names the account behind a live token, and says whether its
+// sign-in got past the password.
+func (s *Service) PendingUser(token string) (username string, passwordChecked bool, ok bool) {
+	f := s.mfa
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.sweep(s.now())
 	p, ok := f.pending[token]
 	if !ok {
-		return "", false
+		return "", false, false
 	}
-	return p.username, true
+	return p.username, !p.passwordless, true
 }
 
-// ResolvePending ends the pending sign-in with a session. The token works once.
-func (s *Service) ResolvePending(token string) (*Session, error) {
-	f := s.second
+// ResolvePending is ResolvePendingFrom for a client known by its address.
+func (s *Service) ResolvePending(token, remote string) (*Session, error) {
+	return s.ResolvePendingFrom(token, Client{Address: remote})
+}
+
+// ResolvePendingFrom ends the pending sign-in with a session and forgives
+// the address its failures. The token works once.
+func (s *Service) ResolvePendingFrom(token string, from Client) (*Session, error) {
+	f := s.mfa
 	f.mu.Lock()
 	f.sweep(s.now())
 	p, ok := f.pending[token]
@@ -363,10 +450,15 @@ func (s *Service) ResolvePending(token string) (*Session, error) {
 	if !ok {
 		return nil, ErrPendingGone
 	}
-	return s.SignIn(p.username)
+	sess, err := s.SignInFrom(p.username, from)
+	if err != nil {
+		return nil, err
+	}
+	s.limiter.success(from.Address)
+	return sess, nil
 }
 
-// FailPending counts a failed second-factor attempt against the remote
+// FailPending counts a failed MFA attempt against the remote
 // address like a bad password, and after 5 ends the pending sign-in. Once
 // the address is shut out the account's other pending sign-ins end too, so
 // a stolen password cannot be turned into many sign-ins, each with tries of
@@ -374,7 +466,7 @@ func (s *Service) ResolvePending(token string) (*Session, error) {
 func (s *Service) FailPending(token, remote string) {
 	s.limiter.failure(remote)
 	shut := s.limiter.blocked(remote)
-	f := s.second
+	f := s.mfa
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.sweep(s.now())
@@ -404,7 +496,7 @@ func (s *Service) SetChallenge(token string, challenge []byte) {
 	if strings.HasPrefix(token, totpSetupPrefix) {
 		life = totpSetupLife
 	}
-	f := s.second
+	f := s.mfa
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.sweep(now)
@@ -413,7 +505,7 @@ func (s *Service) SetChallenge(token string, challenge []byte) {
 
 // TakeChallenge returns the challenge kept against the token and forgets it.
 func (s *Service) TakeChallenge(token string) ([]byte, bool) {
-	f := s.second
+	f := s.mfa
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.sweep(s.now())
@@ -424,9 +516,9 @@ func (s *Service) TakeChallenge(token string) ([]byte, bool) {
 
 // BypassFile sits beside the users file. The command line writes it and the
 // daemon reads it at every sign-in.
-const BypassFile = "second-factor-bypass.json"
+const BypassFile = "mfa-bypass.json" //nolint:gosec // a file name, not a credential
 
-// Bypass is a stretch of time in which a sign-in skips the second factor,
+// Bypass is a stretch of time in which a sign-in skips MFA,
 // started from the command line to get back into a router.
 type Bypass struct {
 	Until time.Time `json:"until"`

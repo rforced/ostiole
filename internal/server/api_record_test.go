@@ -212,7 +212,7 @@ func TestRecordTokens(t *testing.T) {
 	s := recordServer(t)
 	mint := func(body map[string]any) (id, secret string) {
 		t.Helper()
-		rec := s.do(t, http.MethodPost, "/api/v1/tokens", body, "192.0.2.1", recordCookie(s.alice))
+		rec := s.do(t, http.MethodPost, "/api/v1/auth/tokens", body, "192.0.2.1", recordCookie(s.alice))
 		if rec.Code != http.StatusCreated {
 			t.Fatalf("create token: %d %s", rec.Code, rec.Body)
 		}

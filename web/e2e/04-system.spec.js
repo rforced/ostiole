@@ -1,5 +1,14 @@
 import { expect, test } from './fixtures.js'
-import { PASSWORD, applyAndConfirm, confirmDialog, login, shot, sidebar } from './helpers.js'
+import {
+  PASSWORD,
+  applyAndConfirm,
+  confirmDialog,
+  enterUsername,
+  login,
+  shot,
+  sidebar,
+  signOut,
+} from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -76,7 +85,7 @@ test('the logs are written to files once switched on, and cleared', async ({ pag
 
 test('change password and sign in with it', async ({ page }) => {
   await login(page)
-  await page.goto('/system/accounts')
+  await page.goto('/account')
   await page.getByLabel('Current password').fill('nope nope nope')
   await page.getByLabel('New password', { exact: true }).fill('a completely new one')
   await page.getByLabel('Repeat new password').fill('a completely new one')
@@ -93,14 +102,14 @@ test('change password and sign in with it', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Sign out' }).click()
-  await page.getByLabel('Username').fill('admin')
+  await signOut(page)
+  await enterUsername(page, 'admin')
   await page.getByLabel('Password', { exact: true }).fill('a completely new one')
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page).toHaveURL(/\/$/)
 
   // Restore the shared password for any later specs.
-  await page.goto('/system/accounts')
+  await page.goto('/account')
   await page.getByLabel('Current password').fill('a completely new one')
   await page.getByLabel('New password', { exact: true }).fill(PASSWORD)
   await page.getByLabel('Repeat new password').fill(PASSWORD)
@@ -110,14 +119,12 @@ test('change password and sign in with it', async ({ page }) => {
 
 test('mint an API token and use it to scrape metrics', async ({ page, request }) => {
   await login(page)
-  await page.goto('/system/accounts')
-  const accounts = page.getByRole('region', { name: 'Accounts' })
+  await page.goto('/account')
   const section = page.getByRole('region', { name: 'API tokens' })
-  await expect(accounts.getByRole('row').filter({ hasText: 'admin' })).toContainText('Admin')
 
   await section.getByRole('button', { name: 'Add token' }).click()
   const dialog = page.getByRole('dialog')
-  await dialog.getByLabel('Name').fill('monitoring')
+  await dialog.getByLabel('Name', { exact: true }).fill('monitoring')
   await dialog.getByLabel('Role', { exact: true }).selectOption('viewer')
   await dialog.getByRole('button', { name: 'Create token' }).click()
 
@@ -185,20 +192,21 @@ test('add an operator, rename it, prove what it may do, and remove it', async ({
 
   // The new account is real, and its role is the whole of what it may do:
   // an operator applies configuration but never sees this section.
-  await page.getByRole('button', { name: 'Sign out' }).click()
-  await page.getByLabel('Username').fill('ops')
+  await signOut(page)
+  await enterUsername(page, 'ops')
   await page.getByLabel('Password', { exact: true }).fill(OPERATOR_PASSWORD)
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page).toHaveURL(/\/$/)
   await page.goto('/system/accounts')
   await expect(page.getByRole('region', { name: 'Accounts' })).toHaveCount(0)
-  await expect(page.getByRole('heading', { name: 'Change password' })).toBeVisible()
+  await page.goto('/account')
+  await expect(page.getByRole('heading', { name: 'Password', exact: true })).toBeVisible()
   // What only an admin may apply is greyed out rather than refused later.
   await page.goto('/system/general')
   await expect(page.getByLabel('Web UI port', { exact: true })).toBeDisabled()
   await expect(page.getByLabel('Hostname', { exact: true })).toBeEnabled()
   await expect(page.getByRole('button', { name: 'Clear every log' })).toBeDisabled()
-  await page.getByRole('button', { name: 'Sign out' }).click()
+  await signOut(page)
 
   await login(page)
   await page.goto('/system/accounts')
@@ -220,9 +228,9 @@ test('a viewer reads everything and changes nothing', async ({ page }) => {
   await add.getByRole('button', { name: 'Create account' }).click()
   const roleOf = page.getByLabel('Role for watcher', { exact: true })
   await expect(roleOf).toHaveValue('viewer')
-  await page.getByRole('button', { name: 'Sign out' }).click()
+  await signOut(page)
 
-  await page.getByLabel('Username').fill('watcher')
+  await enterUsername(page, 'watcher')
   await page.getByLabel('Password', { exact: true }).fill(VIEWER_PASSWORD)
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page).toHaveURL(/\/$/)
@@ -250,7 +258,7 @@ test('a viewer reads everything and changes nothing', async ({ page }) => {
   await page.goto('/diagnostics/ping')
   await expect(page.getByRole('button', { name: 'Ping' })).toHaveCount(0)
   await expect(page.getByText('Only an operator or an admin can run these.')).toBeVisible()
-  await page.getByRole('button', { name: 'Sign out' }).click()
+  await signOut(page)
 
   await login(page)
   await page.goto('/system/accounts')

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import ActionButton from '@/components/ActionButton.vue'
@@ -24,6 +24,8 @@ onMounted(async () => {
   }
 })
 
+const TOO_MANY = 'Too many failed attempts. Try again in a few minutes.'
+
 const username = ref('')
 const password = ref('')
 const code = ref('')
@@ -31,48 +33,123 @@ const error = ref('')
 const busy = ref(false)
 /** Waiting on the browser's passkey prompt. */
 const prompting = ref(false)
+/** The username was given and the password is asked. */
+const entered = ref(false)
+/** What the first step said about a passkey alone: {token, publicKey} or null. */
+const offer = ref(null)
+const usernameEl = ref(null)
 const passwordEl = ref(null)
 const codeEl = ref(null)
+/** Closes a passkey prompt still open. */
+let prompt = null
 
+const step = computed(() => (auth.pending ? 3 : entered.value ? 2 : 1))
 const passkeys = computed(() => Boolean(auth.pending?.passkeys) && webauthn.available())
+const passkeyAlone = computed(() => offer.value !== null && webauthn.available())
 
-// The step that opens takes the focus: the code, or the password again.
+/** A prompt the user closed or the page aborted: nothing to say. */
+const cancelled = (e) => e?.name === 'NotAllowedError' || e?.name === 'AbortError'
+
+// The step that opens takes the focus.
 watch(
-  () => auth.pending !== null,
-  (second) => {
-    if (second) {
+  step,
+  (s) => {
+    if (s === 3) {
       code.value = ''
       codeEl.value?.focus()
-    } else passwordEl.value?.focus()
+    } else if (s === 2) passwordEl.value?.focus()
+    else usernameEl.value?.focus()
   },
   { flush: 'post' },
 )
+
+onBeforeUnmount(() => prompt?.abort())
 
 async function land() {
   const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
   await router.replace(/^\/(?![/\\])/.test(redirect) ? redirect : '/')
 }
 
+async function next() {
+  error.value = ''
+  const name = username.value.trim()
+  busy.value = true
+  try {
+    offer.value = await auth.start(name)
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 429) error.value = TOO_MANY
+    else error.value = e instanceof Error ? e.message : String(e)
+    return
+  } finally {
+    busy.value = false
+  }
+  username.value = name
+  entered.value = true
+  if (passkeyAlone.value) signInWithPasskey()
+}
+
+function change() {
+  prompt?.abort()
+  error.value = ''
+  password.value = ''
+  offer.value = null
+  entered.value = false
+}
+
 async function submit() {
+  prompt?.abort()
   error.value = ''
   busy.value = true
   try {
-    if (await auth.login(username.value.trim(), password.value)) await land()
+    if (await auth.login(username.value, password.value)) await land()
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) error.value = 'Invalid username or password.'
-    else if (e instanceof ApiError && e.status === 429)
-      error.value = 'Too many failed attempts. Try again in a few minutes.'
+    else if (e instanceof ApiError && e.status === 429) error.value = TOO_MANY
     else error.value = e instanceof Error ? e.message : String(e)
+    passwordEl.value?.focus()
   } finally {
     busy.value = false
     password.value = ''
   }
 }
 
+/** Signs in with the passkey the first step offered, no password. */
+async function signInWithPasskey() {
+  prompt?.abort()
+  const ctl = new AbortController()
+  prompt = ctl
+  error.value = ''
+  prompting.value = true
+  try {
+    await auth.loginWithPasskey(offer.value.token, offer.value.publicKey, ctl.signal)
+    await land()
+  } catch (e) {
+    if (ctl.signal.aborted || cancelled(e)) return
+    error.value = passkeyError(e)
+    // The router spent that token; the next try needs a fresh one.
+    offer.value = await auth.start(username.value).catch(() => null)
+  } finally {
+    if (prompt === ctl) {
+      prompt = null
+      prompting.value = false
+    }
+  }
+}
+
+/** Why a passkey alone did not sign in, with the password still there to type. */
+function passkeyError(e) {
+  if (!(e instanceof ApiError)) return e instanceof Error ? e.message : String(e)
+  if (e.status === 429) return TOO_MANY
+  if (/does not sign in with a passkey/i.test(e.message))
+    return 'Passkey sign-in is off for this account. Enter your password.'
+  if (e.status === 401) return 'The passkey was refused. Enter your password.'
+  return e.message
+}
+
 /** What the second step says went wrong. */
 function secondStepError(e) {
   if (!(e instanceof ApiError)) return e instanceof Error ? e.message : String(e)
-  if (e.status === 429) return 'Too many failed attempts. Try again in a few minutes.'
+  if (e.status === 429) return TOO_MANY
   if (/used already/i.test(e.message)) return 'That code was used already.'
   if (/invalid code/i.test(e.message)) return 'Invalid code.'
   if (/authentication required/i.test(e.message))
@@ -121,10 +198,11 @@ function back() {
       <!-- Held invisible while the server is asked, so the card does not move. -->
       <span v-else :class="{ invisible: hostname === null }">Ostiole firewall</span>
     </template>
-    <form v-if="!auth.pending" class="space-y-4" @submit.prevent="submit">
+    <form v-if="step === 1" class="space-y-4" @submit.prevent="next">
       <FormField id="username" label="Username">
         <input
           id="username"
+          ref="usernameEl"
           v-model="username"
           name="username"
           autocomplete="username"
@@ -134,6 +212,22 @@ function back() {
           class="input"
         />
       </FormField>
+      <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
+      <ActionButton
+        type="submit"
+        kind="primary"
+        class="w-full"
+        label="Continue"
+        busy-label="Continuing…"
+        :busy="busy"
+      />
+    </form>
+    <form v-else-if="step === 2" class="space-y-4" @submit.prevent="submit">
+      <input hidden name="username" autocomplete="username" :value="username" readonly />
+      <div class="flex items-center justify-between gap-2 text-sm">
+        <span class="truncate font-medium">{{ username }}</span>
+        <button type="button" class="link-action" :disabled="busy" @click="change">Change</button>
+      </div>
       <FormField id="password" label="Password">
         <input
           id="password"
@@ -147,14 +241,25 @@ function back() {
         />
       </FormField>
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
-      <ActionButton
-        type="submit"
-        kind="primary"
-        class="w-full"
-        label="Sign in"
-        busy-label="Signing in…"
-        :busy="busy"
-      />
+      <div class="flex gap-2">
+        <ActionButton
+          type="submit"
+          kind="primary"
+          class="flex-1"
+          label="Sign in"
+          busy-label="Signing in…"
+          :busy="busy"
+        />
+        <ActionButton
+          v-if="passkeyAlone"
+          class="flex-1"
+          label="Use a passkey"
+          busy-label="Waiting…"
+          :busy="prompting"
+          :disabled="busy"
+          @click="signInWithPasskey"
+        />
+      </div>
     </form>
     <form v-else class="space-y-4" @submit.prevent="submitCode">
       <FormField v-if="auth.pending.totp" id="code" label="Code from your authenticator app">

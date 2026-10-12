@@ -1,13 +1,13 @@
 <script setup>
-import { ChevronRight, LogOut, Shield } from '@lucide/vue'
+import { ChevronRight, Shield } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
 import ThemeToggle from '@/components/ThemeToggle.vue'
+import UserMenu from '@/components/UserMenu.vue'
 import { NAV } from '@/lib/nav'
-import { ROLE_LABELS, useAuthStore } from '@/stores/auth'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
-import { useConfirmStore } from '@/stores/confirm'
 
 /**
  * The brand, the nav tree and the account: a column beside the page on a
@@ -22,9 +22,14 @@ const emit = defineEmits(['navigate'])
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const confirm = useConfirmStore()
 const route = useRoute()
-const router = useRouter()
+
+/** The nav tree less the pages that are for admins, and any section left empty. */
+const nav = computed(() =>
+  NAV.map((item) =>
+    item.pages ? { ...item, pages: item.pages.filter((p) => !p.adminOnly || auth.isAdmin) } : item,
+  ).filter((item) => !item.pages || item.pages.length > 0),
+)
 
 const within = (item, path) => path === item.to || path.startsWith(`${item.to}/`)
 const inside = (item) => within(item, route.path)
@@ -34,7 +39,7 @@ const inside = (item) => within(item, route.path)
  * list instead of going anywhere, and closes any other; landing on a page
  * opens its own.
  */
-const sectionOf = (path) => NAV.find((item) => item.pages && within(item, path))?.to ?? null
+const sectionOf = (path) => nav.value.find((item) => item.pages && within(item, path))?.to ?? null
 const expanded = ref(sectionOf(route.path))
 watch(
   () => route.path,
@@ -52,29 +57,12 @@ const ROW =
 
 /** Which router this is, under the brand, from the applied configuration. */
 const hostname = computed(() => config.saved?.system?.hostname ?? '')
-const initial = computed(() => (auth.user?.username ?? '?').slice(0, 1))
 
 /**
  * A viewer changes nothing, so a draft that differs for one is a page
- * filling in a default, not an edit worth a dot or a question.
+ * filling in a default, not an edit worth a dot.
  */
-const dirty = computed(() => config.dirty && !auth.readOnly)
 const changed = (to) => !auth.readOnly && config.hasChanges(to)
-
-/** Signing out drops the draft, so a dirty one is worth a question. */
-async function logout() {
-  if (
-    dirty.value &&
-    !(await confirm.ask({
-      question: 'Sign out with unapplied changes?',
-      description: 'The draft is kept only in this tab. Signing out throws it away.',
-      confirmLabel: 'Sign out',
-    }))
-  )
-    return
-  await auth.logout()
-  router.push({ name: 'login' })
-}
 </script>
 
 <template>
@@ -99,7 +87,7 @@ async function logout() {
       <!-- The dot describes a link rather than renaming it, so "Interfaces"
            is still "Interfaces" to a screen reader and to the tests. -->
       <span id="nav-unapplied" class="sr-only">has unapplied changes</span>
-      <template v-for="item in NAV" :key="item.to">
+      <template v-for="item in nav" :key="item.to">
         <RouterLink
           v-if="!item.pages"
           :to="item.to"
@@ -168,29 +156,7 @@ async function logout() {
     <div
       class="space-y-2 border-t border-line p-3 max-lg:pb-[max(0.75rem,env(safe-area-inset-bottom))]"
     >
-      <div class="flex items-center gap-2.5 px-1">
-        <span
-          class="flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-2 text-xs font-semibold text-ink-2 uppercase"
-          aria-hidden="true"
-        >
-          {{ initial }}
-        </span>
-        <span v-if="auth.user" class="min-w-0 flex-1">
-          <span class="block truncate text-sm font-medium">{{ auth.user.username }}</span>
-          <span v-if="ROLE_LABELS[auth.user.role]" class="block truncate text-xs text-ink-muted">
-            {{ ROLE_LABELS[auth.user.role] }}
-          </span>
-        </span>
-        <button
-          type="button"
-          class="icon-btn max-lg:min-h-11 max-lg:min-w-11 max-lg:items-center max-lg:justify-center"
-          title="Sign out"
-          aria-label="Sign out"
-          @click="logout"
-        >
-          <LogOut class="size-4" aria-hidden="true" />
-        </button>
-      </div>
+      <UserMenu @navigate="emit('navigate')" />
       <ThemeToggle block />
     </div>
   </aside>

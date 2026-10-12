@@ -4,8 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 
 // A signed-in admin, so the guard reaches the questions this is about.
+const auth = vi.hoisted(() => ({ isAdmin: true }))
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({ bootstrap: vi.fn(), setupNeeded: false, loggedIn: true }),
+  useAuthStore: () => ({ bootstrap: vi.fn(), setupNeeded: false, loggedIn: true, ...auth }),
 }))
 
 vi.mock('@/lib/api', () => ({
@@ -22,6 +23,7 @@ describe('router guard', () => {
     sessionStorage.clear()
     vi.clearAllMocks()
     vi.resetModules()
+    auth.isAdmin = true
     router = (await import('@/router')).default
   })
 
@@ -45,5 +47,16 @@ describe('router guard', () => {
     expect(router.currentRoute.value.path).toBe('/firewall/rules')
     await router.push('/wizard')
     expect(router.currentRoute.value.name).toBe('dashboard')
+  })
+
+  it('sends anyone but an admin from an admin page to their account', async () => {
+    api.status.mockResolvedValue({ configured: true })
+    await router.push('/system/accounts')
+    expect(router.currentRoute.value.path).toBe('/system/accounts')
+    auth.isAdmin = false
+    await router.push('/system/general')
+    await router.push('/system/accounts')
+    expect(router.currentRoute.value.name).toBe('account')
+    expect(router.currentRoute.value.meta.title).toBe('Account')
   })
 })

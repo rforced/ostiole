@@ -6,10 +6,23 @@ export const shot = (name) => `e2e/screenshots/${name}.png`
 /** Signs in as the admin global-setup.js created, as 01-first-run.spec.js does. */
 export async function login(page) {
   await page.goto('/login')
-  await page.getByLabel('Username').fill('admin')
+  await enterUsername(page, 'admin')
   await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page).toHaveURL(/\/$/)
+}
+
+/** The first step of the sign-in page: the password is asked after it. */
+export async function enterUsername(page, username) {
+  await page.getByLabel('Username').fill(username)
+  await page.getByRole('button', { name: 'Continue' }).click()
+}
+
+/** Signs out from the account menu at the foot of the sidebar. */
+export async function signOut(page) {
+  await page.getByRole('button', { name: 'Account menu' }).click()
+  await page.getByRole('menuitem', { name: 'Sign out' }).click()
+  await expect(page.getByLabel('Username')).toBeVisible()
 }
 
 /**

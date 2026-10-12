@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures.js'
+import { enterUsername, signOut } from './helpers.js'
 
 const PASSWORD = 'correct horse battery'
 const shot = (name) => `e2e/screenshots/${name}.png`
@@ -61,7 +62,7 @@ test('a fresh router asks for an admin account, then runs the wizard', async ({ 
 test('sign out, wrong password, sign in again, deep link redirect', async ({ page }) => {
   await page.goto('/login')
   await expect(page.getByText('edge', { exact: true })).toBeVisible()
-  await page.getByLabel('Username').fill('admin')
+  await enterUsername(page, 'admin')
   await page.getByLabel('Password', { exact: true }).fill('definitely wrong!')
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page.getByRole('alert')).toContainText('Invalid username or password')
@@ -71,12 +72,12 @@ test('sign out, wrong password, sign in again, deep link redirect', async ({ pag
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page).toHaveURL(/\/$/)
 
-  await page.getByRole('button', { name: 'Sign out' }).click()
+  await signOut(page)
   await expect(page).toHaveURL(/\/login$/)
 
   await page.goto('/interfaces')
   await expect(page).toHaveURL(/\/login\?redirect=(%2F|\/)interfaces$/)
-  await page.getByLabel('Username').fill('admin')
+  await enterUsername(page, 'admin')
   await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page).toHaveURL(/\/interfaces$/)

@@ -19,6 +19,7 @@ const OK = new Set([
   'issued',
   'current',
   'passed',
+  'on',
 ])
 const WARN = new Set([
   'stopped',

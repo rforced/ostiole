@@ -1,15 +1,16 @@
 import { execFileSync } from 'node:child_process'
 import { createHmac } from 'node:crypto'
+import { mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { expect, test } from './fixtures.js'
-import { PASSWORD, confirmDialog, login } from './helpers.js'
+import { PASSWORD, confirmDialog, enterUsername, login, signOut } from './helpers.js'
 
 // After the password an account may be asked for a code from an
 // authenticator app, or for a passkey. The codes are worked out here from the
 // secret the dialog shows, as the app on a phone does. Every test leaves
-// the admin without a second factor, for the next.
+// the admin without MFA, for the next.
 
 const headers = { 'X-Requested-With': 'ostiole' }
 
@@ -41,19 +42,29 @@ const thisStep = () => Math.floor(Date.now() / 30_000)
  */
 const nextCode = (secret) => code(secret, thisStep() + 1)
 
-const card = (page) => page.getByRole('region', { name: 'Second factor', exact: true })
+const card = (page) =>
+  page.getByRole('region', { name: 'Multi-factor authentication', exact: true })
 
-/** Fills in the sign-in page; an account with a second factor is left at its code step. */
-async function signIn(page, username) {
-  await page.goto('/login')
-  await page.getByLabel('Username').fill(username)
-  await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
-  await page.getByRole('button', { name: 'Sign in' }).click()
+const loginSwitch = (page) => card(page).locator('#passkey-login')
+
+const OFF = 'Sign-in asks for your password alone.'
+const ON = 'Sign-in asks for a code from your authenticator app, or a passkey, after your password.'
+const ALONE =
+  'Sign-in asks for a code from your authenticator app after your password; a passkey signs in on its own.'
+
+// Pictures of the account page for a person to look over.
+const SHOTS = '/var/tmp/account-plan/shots'
+const review = (name) => {
+  mkdirSync(SHOTS, { recursive: true })
+  return `${SHOTS}/${name}.png`
 }
 
-async function signOut(page) {
-  await page.getByRole('button', { name: 'Sign out' }).click()
-  await expect(page.getByLabel('Username')).toBeVisible()
+/** Fills in the sign-in page; an account with MFA is left at its code step. */
+async function signIn(page, username) {
+  await page.goto('/login')
+  await enterUsername(page, username)
+  await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
+  await page.getByRole('button', { name: 'Sign in' }).click()
 }
 
 async function enterCode(page, digits) {
@@ -61,9 +72,9 @@ async function enterCode(page, digits) {
   await page.getByRole('button', { name: 'Sign in' }).click()
 }
 
-/** Sets up the authenticator app from the Accounts page, and returns its secret. */
+/** Sets up the authenticator app from the Account page, and returns its secret. */
 async function setUpAuthenticator(page) {
-  await page.goto('/system/accounts')
+  await page.goto('/account')
   await card(page).getByRole('button', { name: 'Set up authenticator app' }).click()
   const dialog = page.getByRole('dialog')
   await expect(dialog.getByRole('img', { name: 'QR code for the authenticator app' })).toBeVisible()
@@ -73,22 +84,31 @@ async function setUpAuthenticator(page) {
   await dialog.getByLabel('Code', { exact: true }).fill(code(secret, thisStep()))
   await dialog.getByRole('button', { name: 'Confirm' }).click()
   await expect(dialog).toHaveCount(0)
-  await expect(card(page)).toContainText('On. Sign-in asks for a code from your authenticator app')
+  await expect(card(page)).toContainText(ON)
   return secret
 }
 
-/** Opens Turn off, types the password and presses it. Returns the dialog. */
-async function turnOff(page, password) {
-  await card(page).getByRole('button', { name: 'Turn off', exact: true }).click()
-  const dialog = page.getByRole('dialog')
+/** Opens Remove for the authenticator app and types the password. Returns the dialog. */
+async function openRemoveApp(page, password) {
+  const app = card(page).getByRole('group', { name: 'Authenticator app' })
+  await app.getByRole('button', { name: 'Remove', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Remove the authenticator app' })
   await dialog.getByLabel('Password', { exact: true }).fill(password)
-  await dialog.getByRole('button', { name: 'Turn off', exact: true }).click()
   return dialog
 }
 
-/** Runs `ostiole second-factor` on the configuration directory the server uses. */
-const secondFactor = (server, ...args) =>
-  execFileSync(BIN, ['--config-dir', server.dir, 'second-factor', ...args], {
+/** Removes the authenticator app, and with it every passkey. */
+async function removeApp(page) {
+  const dialog = await openRemoveApp(page, PASSWORD)
+  await dialog.getByRole('button', { name: 'Remove', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(card(page)).toContainText(OFF)
+  await expect(card(page)).toContainText('Not set up.')
+}
+
+/** Runs `ostiole mfa` on the configuration directory the server uses. */
+const mfa = (server, ...args) =>
+  execFileSync(BIN, ['--config-dir', server.dir, 'mfa', ...args], {
     encoding: 'utf8',
     stdio: 'pipe',
   })
@@ -99,10 +119,21 @@ test('sign-in asks for the code of an authenticator app, and takes each code onc
   baseURL,
 }) => {
   await login(page)
+  await page.goto('/account')
+  await expect(card(page)).toContainText(OFF)
+  await expect(card(page).getByRole('button', { name: 'Add passkey' })).toBeDisabled()
+  await expect(card(page).locator('#passkey-block')).toHaveText(
+    'Set up an authenticator app first.',
+  )
+
   const secret = await setUpAuthenticator(page)
   // The address bar holds an IP address here, which no passkey can be made for.
-  await expect(card(page).getByRole('button', { name: 'Add a passkey' })).toBeDisabled()
-  await expect(card(page)).toContainText('Passkeys need a name in the address bar, not an address.')
+  await expect(card(page).getByRole('button', { name: 'Add passkey' })).toBeDisabled()
+  await expect(card(page).locator('#passkey-block')).toHaveText(
+    'Open the UI by its host name to add a passkey.',
+  )
+  await expect(loginSwitch(page)).toBeDisabled()
+  await expect(card(page)).toContainText('Add a passkey first.')
 
   await signOut(page)
   await signIn(page, 'admin')
@@ -121,30 +152,36 @@ test('sign-in asks for the code of an authenticator app, and takes each code onc
   await expect(other.getByRole('alert')).toContainText('That code was used already.')
   await context.close()
 
-  // Turning it off asks for the password, and a wrong one signs nobody out.
-  await page.goto('/system/accounts')
-  const dialog = await turnOff(page, 'not the password')
+  // Removing it asks for the password, and a wrong one changes nothing.
+  await page.goto('/account')
+  await expect(card(page)).toContainText(ON)
+  const dialog = await openRemoveApp(page, 'not the password')
+  await dialog.getByRole('button', { name: 'Remove', exact: true }).click()
   await expect(dialog.getByRole('alert')).toContainText('Password is wrong.')
   await dialog.getByLabel('Password', { exact: true }).fill(PASSWORD)
-  await dialog.getByRole('button', { name: 'Turn off', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Remove', exact: true }).click()
   await expect(dialog).toHaveCount(0)
-  await expect(card(page)).toContainText('Off. Sign-in asks for your password alone.')
+  await expect(card(page)).toContainText(OFF)
 
   await signOut(page)
   await signIn(page, 'admin')
   await expect(page).toHaveURL(/\/$/)
 })
 
-test('a passkey made at a host name signs in without a code, and can be removed', async ({
+test('a passkey made at a host name signs in as a second step, and alone when allowed', async ({
   browser,
   baseURL,
 }) => {
   // A passkey is made for a name, so this one is reached as localhost.
-  const context = await browser.newContext({ baseURL: baseURL.replace('127.0.0.1', 'localhost') })
+  const localhost = baseURL.replace('127.0.0.1', 'localhost')
+  const context = await browser.newContext({
+    baseURL: localhost,
+    viewport: { width: 1440, height: 900 },
+  })
   const page = await context.newPage()
   const cdp = await context.newCDPSession(page)
   await cdp.send('WebAuthn.enable')
-  await cdp.send('WebAuthn.addVirtualAuthenticator', {
+  const { authenticatorId } = await cdp.send('WebAuthn.addVirtualAuthenticator', {
     options: {
       protocol: 'ctap2',
       transport: 'internal',
@@ -153,17 +190,39 @@ test('a passkey made at a host name signs in without a code, and can be removed'
       isUserVerified: true,
     },
   })
+  const credentials = async () =>
+    (await cdp.send('WebAuthn.getCredentials', { authenticatorId })).credentials.length
 
   await login(page)
-  await setUpAuthenticator(page)
-  await card(page).getByRole('button', { name: 'Add a passkey' }).click()
-  const dialog = page.getByRole('dialog')
+  const secret = await setUpAuthenticator(page)
+  await expect(card(page)).toContainText('No passkeys.')
+  await expect(loginSwitch(page)).toBeDisabled()
+  await expect(card(page)).toContainText('Add a passkey first.')
+
+  // The password is checked before the browser is asked for a passkey.
+  await card(page).getByRole('button', { name: 'Add passkey' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Add passkey' })
+  await expect(dialog).toContainText('Made for localhost. It signs in only there.')
   await dialog.getByLabel('Name', { exact: true }).fill('laptop')
+  await dialog.getByLabel('Password', { exact: true }).fill('not the password')
+  await dialog.getByRole('button', { name: 'Add passkey' }).click()
+  await expect(dialog.getByRole('alert')).toContainText('Password is wrong.')
+  expect(await credentials()).toBe(0)
+  await dialog.getByLabel('Password', { exact: true }).fill(PASSWORD)
   await dialog.getByRole('button', { name: 'Add passkey' }).click()
   await expect(dialog).toHaveCount(0)
+  expect(await credentials()).toBe(1)
   const row = card(page).getByRole('row').filter({ hasText: 'laptop' })
   await expect(row).toContainText('localhost')
   await expect(row).toContainText('never')
+
+  await row.getByRole('button', { name: 'Rename' }).click()
+  const rename = page.getByRole('dialog', { name: 'Rename laptop' })
+  await rename.getByLabel('Name', { exact: true }).fill('desk laptop')
+  await rename.getByRole('button', { name: 'Rename' }).click()
+  await expect(rename).toHaveCount(0)
+  const renamed = card(page).getByRole('row').filter({ hasText: 'desk laptop' })
+  await expect(renamed).toContainText('localhost')
 
   // The passkey takes the place of the code. Twice, as its counter must rise.
   for (let i = 0; i < 2; i++) {
@@ -181,19 +240,121 @@ test('a passkey made at a host name signs in without a code, and can be removed'
   await expect(there.getByRole('button', { name: 'Use a passkey' })).toHaveCount(0)
   await byAddress.close()
 
-  await page.goto('/system/accounts')
-  await expect(row).toBeVisible()
-  await expect(row).not.toContainText('never')
-  await row.getByRole('button', { name: 'Remove' }).click()
+  await page.goto('/account')
+  await expect(renamed).not.toContainText('never')
+
+  // A passkey alone signs in once the switch is on, which asks the password.
+  await expect(loginSwitch(page)).toBeEnabled()
+  await loginSwitch(page).check()
+  const turnOn = page.getByRole('dialog', { name: 'Turn on passkey sign-in' })
+  await turnOn.getByLabel('Password', { exact: true }).fill('not the password')
+  await turnOn.getByRole('button', { name: 'Turn on' }).click()
+  await expect(turnOn.getByRole('alert')).toContainText('Password is wrong.')
+  await turnOn.getByLabel('Password', { exact: true }).fill(PASSWORD)
+  await turnOn.getByRole('button', { name: 'Turn on' }).click()
+  await expect(turnOn).toHaveCount(0)
+  await expect(loginSwitch(page)).toBeChecked()
+  await expect(card(page)).toContainText(ALONE)
+  await page.screenshot({ path: review('account-admin'), fullPage: true })
+
+  await signOut(page)
+  await enterUsername(page, 'admin')
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
+
+  // A device that cannot check who holds it fails in the browser, which
+  // sends the router nothing; the password then the passkey still sign in.
+  const sent = []
+  page.on('request', (r) => {
+    if (r.url().endsWith('/api/v1/auth/login/passkey')) sent.push(r.url())
+  })
+  await cdp.send('WebAuthn.setUserVerified', { authenticatorId, isUserVerified: false })
+  await signOut(page)
+  sent.length = 0
+  await enterUsername(page, 'admin')
+  const usePasskey = page.getByRole('button', { name: 'Use a passkey' })
+  await expect(usePasskey).toBeEnabled()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(page.getByLabel('Password', { exact: true })).toBeVisible()
+  expect(sent).toEqual([])
+  await page.screenshot({ path: review('login-step2'), fullPage: true })
+  await cdp.send('WebAuthn.setUserVerified', { authenticatorId, isUserVerified: true })
+  await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  await usePasskey.click()
+  await expect(page).toHaveURL(/\/$/)
+
+  // Turning the switch off asks nothing.
+  await page.goto('/account')
+  await expect(loginSwitch(page)).toBeChecked()
+  await loginSwitch(page).uncheck()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(loginSwitch(page)).not.toBeChecked()
+  await expect(card(page)).toContainText(ON)
+
+  // The router refuses a passkey alone once the switch is off, even for a
+  // sign-in that began while it was on. Another session turns it off while
+  // this one waits.
+  await loginSwitch(page).check()
+  await turnOn.getByLabel('Password', { exact: true }).fill(PASSWORD)
+  await turnOn.getByRole('button', { name: 'Turn on' }).click()
+  await expect(loginSwitch(page)).toBeChecked()
+  const other = await browser.newContext({ baseURL: localhost })
+  const elsewhere = other.request
+  const pending = await elsewhere.post('/api/v1/auth/login', {
+    data: { username: 'admin', password: PASSWORD },
+    headers,
+  })
+  expect(pending.ok(), await pending.text()).toBe(true)
+  const { token } = (await pending.json()).pending
+  const coded = await elsewhere.post('/api/v1/auth/login/totp', {
+    data: { pending: token, code: nextCode(secret) },
+    headers,
+  })
+  expect(coded.ok(), await coded.text()).toBe(true)
+  await page.route('**/api/v1/auth/login/passkey', async (route) => {
+    const off = await elsewhere.post('/api/v1/auth/mfa/passkey-login', {
+      data: { on: false },
+      headers,
+    })
+    expect(off.ok(), await off.text()).toBe(true)
+    await route.continue()
+  })
+  await signOut(page)
+  await enterUsername(page, 'admin')
+  await expect(page.getByRole('alert')).toHaveText(
+    'Passkey sign-in is off for this account. Enter your password.',
+  )
+  await expect(page).toHaveURL(/\/login$/)
+  await expect(page.getByLabel('Password', { exact: true })).toBeVisible()
+  await page.unroute('**/api/v1/auth/login/passkey')
+  await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  await usePasskey.click()
+  await expect(page).toHaveURL(/\/$/)
+  await other.close()
+  await page.goto('/account')
+  await expect(loginSwitch(page)).not.toBeChecked()
+
+  // Removing the app lists the passkeys that go with it.
+  const remove = await openRemoveApp(page, '')
+  await expect(remove).toContainText('Passkeys removed')
+  await expect(remove.getByRole('listitem')).toHaveText(['desk laptop'])
+  await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running'))
+  await page.screenshot({ path: review('remove-app'), fullPage: true })
+  await remove.getByRole('button', { name: 'Cancel' }).click()
+  await expect(remove).toHaveCount(0)
+
+  await renamed.getByRole('button', { name: 'Remove' }).click()
   await confirmDialog(page, { confirm: 'Remove' })
   await expect(card(page)).toContainText('No passkeys.')
+  await expect(loginSwitch(page)).toBeDisabled()
 
-  await turnOff(page, PASSWORD)
-  await expect(card(page)).toContainText('Off. Sign-in asks for your password alone.')
+  await removeApp(page)
   await context.close()
 })
 
-test('an admin clears the second factor of another account', async ({ page, browser, baseURL }) => {
+test('an admin clears MFA for another account', async ({ page, browser, baseURL }) => {
   await login(page)
   const created = await page.request.post('/api/v1/users', {
     data: { username: 'viewer2', password: PASSWORD, role: 'viewer' },
@@ -211,11 +372,11 @@ test('an admin clears the second factor of another account', async ({ page, brow
   await page.goto('/system/accounts')
   const accounts = page.getByRole('region', { name: 'Accounts', exact: true })
   const row = accounts.getByRole('row').filter({ hasText: 'viewer2' })
-  await expect(row.getByText('2FA')).toBeVisible()
-  await row.getByRole('button', { name: 'Clear second factor' }).click()
-  await confirmDialog(page, { confirm: 'Clear second factor' })
-  await expect(row.getByText('2FA')).toHaveCount(0)
-  await expect(row.getByRole('button', { name: 'Clear second factor' })).toHaveCount(0)
+  await expect(row.getByRole('cell', { name: 'App', exact: true })).toBeVisible()
+  await row.getByRole('button', { name: 'Clear MFA' }).click()
+  await confirmDialog(page, { confirm: 'Clear MFA' })
+  await expect(row.getByRole('cell', { name: 'Off', exact: true })).toBeVisible()
+  await expect(row.getByRole('button', { name: 'Clear MFA' })).toHaveCount(0)
 
   await signOut(other)
   await signIn(other, 'viewer2')
@@ -230,20 +391,20 @@ test('a bypass from the command line lets the password alone in until it ends', 
   await login(page)
   await setUpAuthenticator(page)
 
-  secondFactor(server, 'bypass', '--for', '1m')
+  mfa(server, 'bypass', '--for', '1m')
   await signOut(page)
   await signIn(page, 'admin')
   await expect(page).toHaveURL(/\/$/)
-  await page.goto('/system/accounts')
-  await expect(card(page)).toContainText(/bypassed until .* from the command line\./)
+  await expect(page.getByText(/^MFA is bypassed until .* from the command line\.$/)).toBeVisible()
 
-  secondFactor(server, 'bypass', '--end')
+  mfa(server, 'bypass', '--end')
+  await page.goto('/account')
   await signOut(page)
   await signIn(page, 'admin')
   await expect(page.getByLabel('Code from your authenticator app')).toBeVisible()
 
   // Reset is the way back in without a code, and leaves the admin as it was.
-  secondFactor(server, 'reset', 'admin')
+  mfa(server, 'reset', 'admin')
   await signIn(page, 'admin')
   await expect(page).toHaveURL(/\/$/)
 })

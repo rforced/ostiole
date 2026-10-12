@@ -24,7 +24,6 @@ async function page(path, role) {
       stubs: {
         AccountsSection: true,
         TokensSection: true,
-        PasswordSection: true,
         AuditLogSection: true,
       },
     },
@@ -35,9 +34,7 @@ async function page(path, role) {
 
 const tabNames = (wrapper) => wrapper.findAll('[role="tab"]').map((t) => t.text())
 const cards = (wrapper) =>
-  ['accounts-section-stub', 'tokens-section-stub', 'password-section-stub'].map((s) =>
-    wrapper.find(s).exists(),
-  )
+  ['accounts-section-stub', 'tokens-section-stub'].map((s) => wrapper.find(s).exists())
 
 describe('AccountsPage', () => {
   beforeEach(() => setActivePinia(createPinia()))
@@ -45,7 +42,7 @@ describe('AccountsPage', () => {
   it('gives an admin the accounts and the audit log', async () => {
     const wrapper = await page('/system/accounts', 'admin')
     expect(tabNames(wrapper)).toEqual(['Accounts', 'Audit log'])
-    expect(cards(wrapper)).toEqual([true, true, true])
+    expect(cards(wrapper)).toEqual([true, true])
     expect(wrapper.find('audit-log-section-stub').exists()).toBe(false)
   })
 
@@ -58,7 +55,7 @@ describe('AccountsPage', () => {
     for (const role of ['operator', 'viewer']) {
       const wrapper = await page('/system/accounts#audit', role)
       expect(tabNames(wrapper)).toEqual([])
-      expect(cards(wrapper)).toEqual([true, true, true])
+      expect(cards(wrapper)).toEqual([true, true])
       expect(wrapper.find('audit-log-section-stub').exists()).toBe(false)
     }
   })

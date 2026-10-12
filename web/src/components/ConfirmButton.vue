@@ -1,5 +1,6 @@
 <script setup>
 import { LoaderCircle } from '@lucide/vue'
+import { computed } from 'vue'
 
 import { useAuthStore } from '@/stores/auth'
 import { useConfirmStore } from '@/stores/confirm'
@@ -27,10 +28,13 @@ const props = defineProps({
   busyLabel: { type: String, default: '' },
   /** Off for a reason other than being busy, e.g. the role. */
   disabled: { type: Boolean, default: false },
+  /** Hidden from a viewer unless set false: an account's own things are its to delete. */
+  readOnly: { type: Boolean, default: undefined },
 })
 const emit = defineEmits(['confirm'])
 const auth = useAuthStore()
 const confirm = useConfirmStore()
+const locked = computed(() => props.readOnly ?? auth.readOnly)
 
 async function click() {
   const ok = await confirm.ask({
@@ -48,7 +52,7 @@ async function click() {
 
 <template>
   <button
-    v-if="!auth.readOnly"
+    v-if="!locked"
     type="button"
     class="link-action enabled:hover:text-bad"
     :disabled="busy || disabled"

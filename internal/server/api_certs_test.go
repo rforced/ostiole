@@ -226,7 +226,7 @@ func TestRestrictedTokenReachesOnlyItsCertificate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resp, raw := do(t, srv, http.MethodPost, "/api/v1/tokens", map[string]any{
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/auth/tokens", map[string]any{
 		"name": "proxy", "role": "admin", "certificates": []string{"web"},
 	})
 	if resp.StatusCode != http.StatusCreated {

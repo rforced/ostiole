@@ -66,6 +66,7 @@ function itemRoute(item) {
           tabs: p.tabs,
           ownHeader: p.ownHeader ?? false,
           needsConfig: p.needsConfig ?? item.needsConfig ?? false,
+          adminOnly: p.adminOnly ?? false,
         },
       })),
     ],
@@ -77,6 +78,12 @@ const router = createRouter({
   routes: [
     ...NAV.map(itemRoute),
     ...MOVED,
+    {
+      path: '/account',
+      name: 'account',
+      component: () => import('@/views/account/AccountPage.vue'),
+      meta: { title: 'Account' },
+    },
     { path: '/wizard', name: 'wizard', component: () => import('@/views/WizardView.vue') },
     {
       path: '/login',
@@ -110,6 +117,8 @@ router.beforeEach(async (to) => {
     return { name: 'login', query: to.fullPath === '/' ? {} : { redirect: to.fullPath } }
   }
   if (to.name === 'login' && auth.loggedIn) return { name: 'dashboard' }
+
+  if (auth.loggedIn && to.meta.adminOnly && !auth.isAdmin) return { name: 'account' }
 
   if (auth.loggedIn && !to.meta.public) {
     const system = useSystemStore()

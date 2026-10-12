@@ -11,6 +11,7 @@ vi.mock('@/lib/api', () => ({
   api: {
     auth: {
       loginPage: vi.fn(),
+      loginStart: vi.fn(),
       login: vi.fn(),
       loginTOTP: vi.fn(),
       passkeyLoginOptions: vi.fn(),
@@ -38,6 +39,21 @@ async function page(path = '/login', options = {}) {
 
 /** The line under the heading. */
 const subtitle = (wrapper) => wrapper.get('h1 + p')
+
+const button = (wrapper, text) => wrapper.findAll('button').find((b) => b.text() === text)
+
+/** Gives the username and goes on to the password. */
+async function continueAs(wrapper, name = 'sam') {
+  await wrapper.get('#username').setValue(name)
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+}
+
+async function typePassword(wrapper, pw) {
+  await wrapper.get('#password').setValue(pw)
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+}
 
 describe('LoginView', () => {
   beforeEach(() => {
@@ -68,6 +84,7 @@ describe('LoginView', () => {
 
   it('goes where it was sent only on this site', async () => {
     api.auth.loginPage.mockResolvedValue({})
+    api.auth.loginStart.mockResolvedValue({ passkey: null })
     api.auth.login.mockResolvedValue({ username: 'sam', role: 'admin' })
     for (const [redirect, want] of [
       ['/firewall/rules', '/firewall/rules'],
@@ -76,10 +93,8 @@ describe('LoginView', () => {
       ['https://evil.example/x', '/'],
     ]) {
       const { wrapper, router } = await page('/login?redirect=' + encodeURIComponent(redirect))
-      await wrapper.get('#username').setValue('sam')
-      await wrapper.get('#password').setValue('secret')
-      await wrapper.get('form').trigger('submit')
-      await flushPromises()
+      await continueAs(wrapper)
+      await typePassword(wrapper, 'secret')
       expect(router.currentRoute.value.fullPath, redirect).toBe(want)
     }
   })
@@ -94,7 +109,7 @@ describe('LoginView', () => {
 describe('LoginView second step', () => {
   const session = { username: 'sam', role: 'admin' }
   const due = (extra = {}) => ({
-    secondFactor: { pending: 'tok', totp: true, passkeys: false, rpId: '', ...extra },
+    pending: { token: 'tok', totp: true, passkeys: false, rpId: '', ...extra },
   })
   const refused = (status, message) => Object.assign(new ApiError(message), { status })
 
@@ -102,12 +117,11 @@ describe('LoginView second step', () => {
   async function afterPassword(answer = due(), path = '/login', options = {}) {
     setActivePinia(createPinia())
     api.auth.loginPage.mockResolvedValue({})
+    api.auth.loginStart.mockResolvedValue({ passkey: null })
     api.auth.login.mockResolvedValue(answer)
     const out = await page(path, options)
-    await out.wrapper.get('#username').setValue('sam')
-    await out.wrapper.get('#password').setValue('hunter2 hunter2')
-    await out.wrapper.get('form').trigger('submit')
-    await flushPromises()
+    await continueAs(out.wrapper)
+    await typePassword(out.wrapper, 'hunter2 hunter2')
     return out
   }
 
@@ -163,23 +177,24 @@ describe('LoginView second step', () => {
 
   it('goes back to the password with the username kept and nothing sent', async () => {
     const { wrapper } = await afterPassword()
-    const back = wrapper.findAll('button').find((b) => b.text() === 'Back')
-    await back.trigger('click')
+    await button(wrapper, 'Back').trigger('click')
     expect(wrapper.find('#code').exists()).toBe(false)
-    expect(wrapper.get('#username').element.value).toBe('sam')
+    expect(wrapper.find('#username').exists()).toBe(false)
+    expect(wrapper.text()).toContain('sam')
     expect(wrapper.get('#password').element.value).toBe('')
+    expect(webauthn.get).not.toHaveBeenCalled()
     expect(api.auth.loginTOTP).not.toHaveBeenCalled()
   })
 
   it('offers a passkey only when the account has one and the browser can use it', async () => {
-    const button = (wrapper) => wrapper.findAll('button').find((b) => b.text() === 'Use a passkey')
+    const offered = (wrapper) => button(wrapper, 'Use a passkey')
     let { wrapper } = await afterPassword(due({ passkeys: true, rpId: 'edge.example' }))
-    expect(button(wrapper)).toBeDefined()
+    expect(offered(wrapper)).toBeDefined()
     ;({ wrapper } = await afterPassword(due({ passkeys: false })))
-    expect(button(wrapper)).toBeUndefined()
+    expect(offered(wrapper)).toBeUndefined()
     webauthn.available.mockReturnValue(false)
     ;({ wrapper } = await afterPassword(due({ passkeys: true, rpId: 'edge.example' })))
-    expect(button(wrapper)).toBeUndefined()
+    expect(offered(wrapper)).toBeUndefined()
   })
 
   it('signs in with a passkey', async () => {
@@ -193,6 +208,7 @@ describe('LoginView second step', () => {
       .trigger('click')
     await flushPromises()
     expect(api.auth.passkeyLoginOptions).toHaveBeenCalledWith('tok')
+    expect(webauthn.get).toHaveBeenCalledWith({ challenge: 'c' }, { signal: undefined })
     expect(api.auth.loginPasskey).toHaveBeenCalledWith('tok', { id: 'cred' })
     expect(router.currentRoute.value.path).toBe('/')
   })
@@ -211,5 +227,174 @@ describe('LoginView second step', () => {
     )
     expect(wrapper.find('#code').exists()).toBe(true)
     expect(router.currentRoute.value.path).toBe('/login')
+  })
+})
+
+describe('LoginView steps', () => {
+  const session = { username: 'sam', role: 'admin' }
+  const offer = { passkey: { token: 'pk', publicKey: { challenge: 'c' } } }
+  const refused = (status, message) => Object.assign(new ApiError(message), { status })
+  const named = (name, message) => Object.assign(new Error(message), { name })
+  /** A prompt that stays open until its signal aborts it. */
+  const openPrompt = () =>
+    webauthn.get.mockImplementation(
+      (_, { signal }) =>
+        new Promise((_, reject) =>
+          signal.addEventListener('abort', () =>
+            reject(named('AbortError', 'The passkey prompt was cancelled.')),
+          ),
+        ),
+    )
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    api.auth.loginPage.mockResolvedValue({})
+    api.auth.loginStart.mockResolvedValue({ passkey: null })
+    webauthn.available.mockReturnValue(true)
+  })
+
+  it('asks the username first, then the password with the username kept as a line', async () => {
+    const { wrapper } = await page('/login', { attachTo: document.body })
+    expect(wrapper.find('#password').exists()).toBe(false)
+    expect(button(wrapper, 'Continue')).toBeDefined()
+    await continueAs(wrapper, '  sam ')
+    expect(api.auth.loginStart).toHaveBeenCalledWith('sam')
+    expect(wrapper.find('#username').exists()).toBe(false)
+    expect(wrapper.text()).toContain('sam')
+    expect(button(wrapper, 'Change')).toBeDefined()
+    expect(button(wrapper, 'Sign in')).toBeDefined()
+    expect(button(wrapper, 'Use a passkey')).toBeUndefined()
+    expect(document.activeElement).toBe(wrapper.get('#password').element)
+    expect(webauthn.get).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('signs in with the password on the second step', async () => {
+    api.auth.login.mockResolvedValue(session)
+    const { wrapper, router } = await page()
+    await continueAs(wrapper)
+    await typePassword(wrapper, 'secret')
+    expect(api.auth.login).toHaveBeenCalledWith('sam', 'secret')
+    expect(router.currentRoute.value.path).toBe('/')
+  })
+
+  it('says a wrong password and stays on the step', async () => {
+    api.auth.login.mockRejectedValue(refused(401, 'invalid credentials'))
+    const { wrapper, router } = await page()
+    await continueAs(wrapper)
+    await typePassword(wrapper, 'wrong')
+    expect(wrapper.get('[role="alert"]').text()).toBe('Invalid username or password.')
+    expect(wrapper.get('#password').element.value).toBe('')
+    expect(router.currentRoute.value.path).toBe('/login')
+  })
+
+  it('stays on the username when the router shuts the address out', async () => {
+    api.auth.loginStart.mockRejectedValue(refused(429, 'too many failed logins'))
+    const { wrapper } = await page()
+    await continueAs(wrapper)
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      'Too many failed attempts. Try again in a few minutes.',
+    )
+    expect(wrapper.find('#username').exists()).toBe(true)
+    expect(wrapper.find('#password').exists()).toBe(false)
+  })
+
+  it('opens the passkey prompt at once and signs in with no password', async () => {
+    api.auth.loginStart.mockResolvedValue(offer)
+    webauthn.get.mockResolvedValue({ id: 'cred' })
+    api.auth.loginPasskey.mockResolvedValue(session)
+    const { wrapper, router } = await page('/login?redirect=%2Ffirewall%2Frules')
+    await continueAs(wrapper)
+    expect(webauthn.get).toHaveBeenCalledWith(
+      { challenge: 'c' },
+      { signal: expect.any(AbortSignal) },
+    )
+    expect(api.auth.loginPasskey).toHaveBeenCalledWith('pk', { id: 'cred' })
+    expect(api.auth.login).not.toHaveBeenCalled()
+    expect(router.currentRoute.value.fullPath).toBe('/firewall/rules')
+  })
+
+  it('opens no prompt where the browser has no passkeys', async () => {
+    api.auth.loginStart.mockResolvedValue(offer)
+    webauthn.available.mockReturnValue(false)
+    const { wrapper } = await page()
+    await continueAs(wrapper)
+    expect(webauthn.get).not.toHaveBeenCalled()
+    expect(button(wrapper, 'Use a passkey')).toBeUndefined()
+    expect(wrapper.find('#password').exists()).toBe(true)
+  })
+
+  it('says nothing when the prompt is cancelled, and offers it again', async () => {
+    api.auth.loginStart.mockResolvedValue(offer)
+    webauthn.get.mockRejectedValueOnce(
+      named('NotAllowedError', 'The passkey prompt was cancelled or timed out.'),
+    )
+    const { wrapper, router } = await page()
+    await continueAs(wrapper)
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(api.auth.loginPasskey).not.toHaveBeenCalled()
+    expect(router.currentRoute.value.path).toBe('/login')
+
+    webauthn.get.mockResolvedValue({ id: 'cred' })
+    api.auth.loginPasskey.mockResolvedValue(session)
+    await button(wrapper, 'Use a passkey').trigger('click')
+    await flushPromises()
+    expect(webauthn.get).toHaveBeenCalledTimes(2)
+    expect(api.auth.loginPasskey).toHaveBeenCalledWith('pk', { id: 'cred' })
+    expect(router.currentRoute.value.path).toBe('/')
+  })
+
+  it('closes a prompt still open when the password is sent', async () => {
+    api.auth.loginStart.mockResolvedValue(offer)
+    openPrompt()
+    api.auth.login.mockResolvedValue(session)
+    const { wrapper, router } = await page()
+    await continueAs(wrapper)
+    expect(button(wrapper, 'Waiting…')).toBeDefined()
+    const { signal } = webauthn.get.mock.calls[0][1]
+    await typePassword(wrapper, 'secret')
+    expect(signal.aborted).toBe(true)
+    expect(api.auth.login).toHaveBeenCalledWith('sam', 'secret')
+    expect(api.auth.loginPasskey).not.toHaveBeenCalled()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(router.currentRoute.value.path).toBe('/')
+  })
+
+  it('says why the router refused the passkey and fetches a fresh one', async () => {
+    api.auth.loginStart.mockResolvedValue(offer)
+    webauthn.get.mockResolvedValue({ id: 'cred' })
+    api.auth.loginPasskey.mockRejectedValueOnce(refused(401, 'passkey not recognised'))
+    const { wrapper, router } = await page()
+    await continueAs(wrapper)
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      'The passkey was refused. Enter your password.',
+    )
+    expect(api.auth.loginStart).toHaveBeenCalledTimes(2)
+    expect(button(wrapper, 'Use a passkey')).toBeDefined()
+    expect(router.currentRoute.value.path).toBe('/login')
+
+    api.auth.loginPasskey.mockRejectedValueOnce(refused(429, 'too many failed logins'))
+    await button(wrapper, 'Use a passkey').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      'Too many failed attempts. Try again in a few minutes.',
+    )
+  })
+
+  it('goes back to the username on Change, closing an open prompt', async () => {
+    api.auth.loginStart.mockResolvedValue(offer)
+    openPrompt()
+    const { wrapper } = await page('/login', { attachTo: document.body })
+    await continueAs(wrapper)
+    const { signal } = webauthn.get.mock.calls[0][1]
+    await button(wrapper, 'Change').trigger('click')
+    await flushPromises()
+    expect(signal.aborted).toBe(true)
+    expect(wrapper.find('#password').exists()).toBe(false)
+    expect(wrapper.get('#username').element.value).toBe('sam')
+    expect(document.activeElement).toBe(wrapper.get('#username').element)
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    wrapper.unmount()
   })
 })

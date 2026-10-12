@@ -6,6 +6,7 @@ import AppSidebar from '@/components/AppSidebar.vue'
 import AppTopBar from '@/components/AppTopBar.vue'
 import ApplyBar from '@/components/ApplyBar.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import MfaBypassNotice from '@/components/MfaBypassNotice.vue'
 import ToastStack from '@/components/ToastStack.vue'
 import { useNarrow } from '@/lib/media'
 import { useAuthStore } from '@/stores/auth'
@@ -55,6 +56,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', keep))
 
     <div class="flex min-w-0 flex-1 flex-col">
       <ApplyBar />
+      <MfaBypassNotice />
       <!-- Below lg the apply bar is docked over the bottom of the page, and
            --dock is its height, so the end of the page scrolls clear of it. -->
       <main

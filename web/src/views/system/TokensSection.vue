@@ -1,83 +1,23 @@
 <script setup>
-import { Check, Copy, Plus } from '@lucide/vue'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
-import AppNotice from '@/components/AppNotice.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
-import { ApiError, api } from '@/lib/api'
+import { api } from '@/lib/api'
 import { emptyText, errorMessage, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
-import TokenDialog from '@/views/system/accounts/TokenDialog.vue'
 
 const tokens = ref([])
 const actionError = ref('')
-/** Only an admin may list tokens; for anybody else the card is not there. */
-const available = ref(true)
-const adding = ref(false)
-/** The one moment a new token's secret exists outside the server. */
-const minted = ref(null)
-const secret = ref(null)
-/** 'copied', 'selected' when only the fallback's selection worked, or ''. */
-const copy = ref('')
-let copyTimer = 0
-
-watch(minted, () => (copy.value = ''))
-onBeforeUnmount(() => window.clearTimeout(copyTimer))
-
-/**
- * The clipboard API needs HTTPS or localhost, which a router reached over
- * plain HTTP on its LAN is not, so that falls back to selecting the secret
- * and the older copy command. Either way the secret ends up selected.
- */
-async function copySecret() {
-  const range = document.createRange()
-  range.selectNodeContents(secret.value)
-  const selection = window.getSelection()
-  selection.removeAllRanges()
-  selection.addRange(range)
-  let ok
-  try {
-    if (window.isSecureContext && navigator.clipboard) {
-      await navigator.clipboard.writeText(minted.value.secret)
-      ok = true
-    } else ok = document.execCommand('copy')
-  } catch {
-    ok = false
-  }
-  copy.value = ok ? 'copied' : 'selected'
-  window.clearTimeout(copyTimer)
-  copyTimer = window.setTimeout(() => (copy.value = ''), 2000)
-}
 
 const load = useAsync(async () => {
-  try {
-    tokens.value = await api.tokens.list()
-    available.value = true
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 403) {
-      available.value = false
-      return
-    }
-    throw e
-  }
+  tokens.value = await api.tokens.list()
 })
 onMounted(load.run)
 
 const error = computed(() => actionError.value || load.error.value)
-
-async function createToken(token) {
-  actionError.value = ''
-  try {
-    minted.value = await api.tokens.create(token)
-    adding.value = false
-    await load.run()
-  } catch (e) {
-    actionError.value = errorMessage(e)
-  }
-}
 
 async function deleteToken(id) {
   actionError.value = ''
@@ -91,46 +31,21 @@ async function deleteToken(id) {
 </script>
 
 <template>
-  <SectionCard v-if="available" title="API tokens" :count="tokens.length" flush>
-    <template #intro>
-      Sent as <span class="font-mono">Authorization: Bearer ost_…</span>.
-    </template>
+  <SectionCard title="API tokens" :count="tokens.length" flush>
+    <template #intro>Every account's tokens. New ones are made on the Account page.</template>
     <template #actions>
       <RefreshButton :busy="load.busy.value" :updated-at="load.updatedAt.value" @click="load.run" />
-      <button type="button" class="btn-secondary" @click="adding = true">
-        <Plus class="size-4" aria-hidden="true" /> Add token
-      </button>
     </template>
 
-    <div v-if="minted || error" class="card-strip space-y-3">
-      <ErrorLine v-if="error">{{ error }}</ErrorLine>
-      <AppNotice
-        v-if="minted"
-        :title="`Copy ${minted.name} now. It is not stored and cannot be shown again.`"
-      >
-        <div class="flex items-start gap-2">
-          <code ref="secret" class="min-w-0 flex-1 font-mono text-code break-all select-all">{{
-            minted.secret
-          }}</code>
-          <button type="button" class="btn-secondary shrink-0" @click="copySecret">
-            <Check v-if="copy === 'copied'" class="size-4" aria-hidden="true" />
-            <Copy v-else class="size-4" aria-hidden="true" />
-            {{ copy === 'copied' ? 'Copied' : copy === 'selected' ? 'Selected' : 'Copy' }}
-          </button>
-        </div>
-        <span class="sr-only" aria-live="polite">{{
-          copy === 'copied' ? 'Copied.' : copy === 'selected' ? 'Selected, copy it by hand.' : ''
-        }}</span>
-        <div class="mt-2 flex justify-end">
-          <button type="button" class="btn-secondary" @click="minted = null">Close</button>
-        </div>
-      </AppNotice>
+    <div v-if="error" class="card-strip">
+      <ErrorLine>{{ error }}</ErrorLine>
     </div>
 
     <table class="table table-stack">
       <thead>
         <tr>
           <th>Token</th>
+          <th>Owner</th>
           <th>Role</th>
           <th>Created</th>
           <th>Expires</th>
@@ -140,7 +55,7 @@ async function deleteToken(id) {
       </thead>
       <tbody>
         <tr v-if="!tokens.length">
-          <td colspan="6" class="text-ink-muted">
+          <td colspan="7" class="text-ink-muted">
             {{ emptyText(load, 'No tokens.') }}
           </td>
         </tr>
@@ -148,6 +63,10 @@ async function deleteToken(id) {
           <td data-label="">
             <div class="font-medium">{{ t.name }}</div>
             <div class="font-mono text-code text-ink-muted">{{ t.id }}</div>
+          </td>
+          <td class="font-mono text-code" data-label="Owner">
+            <template v-if="t.owner">{{ t.owner }}</template>
+            <span v-else class="text-ink-muted">router</span>
           </td>
           <td class="font-mono text-code" data-label="Role">
             <template v-if="(t.certificates ?? []).length">
@@ -171,7 +90,5 @@ async function deleteToken(id) {
         </tr>
       </tbody>
     </table>
-
-    <TokenDialog v-model:open="adding" @create="createToken" />
   </SectionCard>
 </template>

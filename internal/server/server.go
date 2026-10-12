@@ -273,6 +273,11 @@ func build(d Deps) (http.Handler, *api) {
 		audit:           d.Audit,
 	}
 	api.gatewayHistory = d.GatewayHistory
+	if d.Tokens != nil && d.Auth != nil {
+		if err := d.Tokens.Adopt(func(name string) bool { _, ok := d.Auth.Account(name); return ok }); err != nil {
+			slog.Warn("give tokens their owners", "err", err)
+		}
+	}
 	if d.Engine != nil {
 		api.tracker = &notify.Tracker{State: d.Engine.Store(), Log: slog.Default()}
 	}

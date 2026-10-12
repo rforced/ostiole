@@ -28,6 +28,7 @@ func (a *api) registerAuth(mux *router) {
 	mux.HandleFunc("GET /api/v1/setup", a.public(a.setupStatus))
 	mux.HandleFunc("POST /api/v1/setup", a.public(a.setup))
 	mux.HandleFunc("GET /api/v1/auth/login", a.public(a.loginPage))
+	mux.HandleFunc("POST /api/v1/auth/login/start", a.public(a.loginStart))
 	mux.HandleFunc("POST /api/v1/auth/login", a.public(a.login))
 	mux.HandleFunc("POST /api/v1/auth/login/totp", a.public(a.loginTOTP))
 	mux.HandleFunc("POST /api/v1/auth/login/passkey/options", a.public(a.loginPasskeyOptions))
@@ -35,13 +36,16 @@ func (a *api) registerAuth(mux *router) {
 	mux.HandleFunc("POST /api/v1/auth/logout", a.protect(a.logout))
 	mux.HandleFunc("GET /api/v1/auth/me", a.protect(a.me))
 	mux.HandleFunc("POST /api/v1/auth/password", a.protect(a.changePassword))
-	mux.HandleFunc("GET /api/v1/auth/second-factor", a.protect(a.secondFactor))
-	mux.HandleFunc("POST /api/v1/auth/second-factor/clear", a.protect(a.clearSecondFactor))
-	mux.HandleFunc("POST /api/v1/auth/totp/start", a.protect(a.totpStart))
-	mux.HandleFunc("POST /api/v1/auth/totp/confirm", a.protect(a.totpConfirm))
-	mux.HandleFunc("POST /api/v1/auth/passkeys/options", a.protect(a.passkeyOptions))
-	mux.HandleFunc("POST /api/v1/auth/passkeys", a.protect(a.addPasskey))
-	mux.HandleFunc("DELETE /api/v1/auth/passkeys/{id}", a.protect(a.removePasskey))
+	mux.HandleFunc("GET /api/v1/auth/mfa", a.protect(a.mfa))
+	mux.HandleFunc("POST /api/v1/auth/mfa/clear", a.protect(a.clearMFA))
+	mux.HandleFunc("POST /api/v1/auth/mfa/totp/start", a.protect(a.totpStart))
+	mux.HandleFunc("POST /api/v1/auth/mfa/totp/confirm", a.protect(a.totpConfirm))
+	mux.HandleFunc("POST /api/v1/auth/mfa/passkeys/options", a.protect(a.passkeyOptions))
+	mux.HandleFunc("POST /api/v1/auth/mfa/passkeys", a.protect(a.addPasskey))
+	mux.HandleFunc("PATCH /api/v1/auth/mfa/passkeys/{id}", a.protect(a.renamePasskey))
+	mux.HandleFunc("DELETE /api/v1/auth/mfa/passkeys/{id}", a.protect(a.removePasskey))
+	mux.HandleFunc("POST /api/v1/auth/mfa/passkey-login", a.protect(a.setPasskeyLogin))
+	a.registerSessions(mux)
 }
 
 // session resolves the request's session cookie.
@@ -87,6 +91,11 @@ func remoteIP(r *http.Request) string {
 	return host
 }
 
+// clientOf is where a sign-in came from, as its session keeps it.
+func clientOf(r *http.Request) auth.Client {
+	return auth.Client{Address: remoteIP(r), Agent: r.UserAgent()}
+}
+
 type credentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -100,9 +109,9 @@ type sessionResponse struct {
 	Created  time.Time `json:"created"`
 	LastSeen time.Time `json:"lastSeen"`
 	Expires  time.Time `json:"expires"`
-	// SecondFactor says the account has an authenticator app or passkeys.
-	SecondFactor bool `json:"secondFactor"`
-	// BypassUntil and BypassBy tell of a bypass of the second factor,
+	// MFA says the account has an authenticator app or passkeys.
+	MFA bool `json:"mfa"`
+	// BypassUntil and BypassBy tell of a bypass of MFA,
 	// started at the command line, for as long as it runs.
 	BypassUntil time.Time `json:"bypassUntil,omitzero"`
 	BypassBy    string    `json:"bypassBy,omitempty"`
@@ -112,7 +121,7 @@ func (a *api) describe(sess *auth.Session) sessionResponse {
 	res := sessionResponse{
 		Username: sess.Username, Role: a.auth.Role(sess.Username),
 		Created: sess.Created, LastSeen: sess.LastSeen, Expires: sess.Expires,
-		SecondFactor: a.auth.HasSecondFactor(sess.Username),
+		MFA: a.auth.HasMFA(sess.Username),
 	}
 	if b, ok := a.auth.Bypass(); ok {
 		res.BypassUntil, res.BypassBy = b.Until, b.By
@@ -140,11 +149,11 @@ func (a *api) setup(w http.ResponseWriter, r *http.Request) error {
 	if err := a.auth.Setup(c.Username, c.Password); err != nil {
 		return err
 	}
-	sess, err := a.auth.SignIn(c.Username)
+	sess, err := a.auth.SignInFrom(c.Username, clientOf(r))
 	if err != nil {
 		return err
 	}
-	a.recordAs(r, sess, audit.Setup)
+	a.recordAs(r, sess, audit.Setup, "")
 	setSessionCookie(w, r, sess)
 	writeJSON(w, http.StatusCreated, a.describe(sess))
 	return nil
@@ -170,7 +179,7 @@ func (a *api) loginPage(w http.ResponseWriter, _ *http.Request) error {
 	return nil
 }
 
-// login checks the password. An account with a second factor gets a token
+// login checks the password. An account with MFA gets a token
 // for the second step instead of a session, unless a bypass is running.
 func (a *api) login(w http.ResponseWriter, r *http.Request) error {
 	if a.auth == nil {
@@ -183,14 +192,14 @@ func (a *api) login(w http.ResponseWriter, r *http.Request) error {
 	if err := a.auth.Authenticate(c.Username, c.Password, remoteIP(r)); err != nil {
 		return a.refused(r, c.Username, err)
 	}
-	if a.secondFactorDue(c.Username) {
-		return a.askForSecondFactor(w, r, c.Username)
+	if a.mfaDue(c.Username) {
+		return a.askForMFA(w, r, c.Username)
 	}
-	sess, err := a.auth.SignIn(c.Username)
+	sess, err := a.auth.SignInFrom(c.Username, clientOf(r))
 	if err != nil {
 		return err
 	}
-	a.startSession(w, r, sess)
+	a.startSession(w, r, sess, "")
 	return nil
 }
 
@@ -208,21 +217,22 @@ func (a *api) refused(r *http.Request, username string, err error) error {
 }
 
 // startSession ends a sign-in with the session: the cookie, the audit
-// entry, and the account as the UI reads it.
-func (a *api) startSession(w http.ResponseWriter, r *http.Request, sess *auth.Session) {
+// entry, and the account as the UI reads it. how is the audit entry's
+// detail: "passkey" for a passkey alone.
+func (a *api) startSession(w http.ResponseWriter, r *http.Request, sess *auth.Session, how string) {
 	slog.InfoContext(logging.Always(r.Context()), "signed in", "user", sess.Username, "address", remoteIP(r))
 	if old, err := r.Cookie(SessionCookie); err == nil {
 		a.auth.Logout(old.Value)
 	}
-	a.recordAs(r, sess, audit.SignIn)
+	a.recordAs(r, sess, audit.SignIn, how)
 	setSessionCookie(w, r, sess)
 	writeJSON(w, http.StatusOK, a.describe(sess))
 }
 
-// secondFactorDue reports whether signing in as username still takes a
+// mfaDue reports whether signing in as username still takes a
 // second step: the account has one and no bypass is running.
-func (a *api) secondFactorDue(username string) bool {
-	if !a.auth.HasSecondFactor(username) {
+func (a *api) mfaDue(username string) bool {
+	if !a.auth.HasMFA(username) {
 		return false
 	}
 	_, bypassed := a.auth.Bypass()
@@ -232,31 +242,31 @@ func (a *api) secondFactorDue(username string) bool {
 // pendingSignIn is what a sign-in that passed the password answers with: the
 // token for the second step and what the account can answer it with.
 type pendingSignIn struct {
-	Pending  string `json:"pending"`
+	Token    string `json:"token"`
 	TOTP     bool   `json:"totp"`
 	Passkeys bool   `json:"passkeys"`
 	RPID     string `json:"rpId"`
 }
 
-func (a *api) askForSecondFactor(w http.ResponseWriter, r *http.Request, username string) error {
-	hasTOTP, keys := a.auth.SecondFactorOf(username)
+func (a *api) askForMFA(w http.ResponseWriter, r *http.Request, username string) error {
+	app, keys, _ := a.auth.MFAOf(username)
 	rp := relyingParty(r)
 	token := a.auth.PendingLogin(username)
 	if token == "" {
 		return errors.New("could not start the second step of the sign-in")
 	}
-	slog.InfoContext(logging.Always(r.Context()), "second factor due", "user", username, "address", remoteIP(r))
-	writeJSON(w, http.StatusOK, map[string]pendingSignIn{"secondFactor": {
-		Pending: token, TOTP: hasTOTP, Passkeys: len(passkeysOn(keys, rp.ID)) > 0, RPID: rp.ID,
+	slog.InfoContext(logging.Always(r.Context()), "MFA due", "user", username, "address", remoteIP(r))
+	writeJSON(w, http.StatusOK, map[string]pendingSignIn{"pending": {
+		Token: token, TOTP: app != nil, Passkeys: len(passkeysOn(keys, rp.ID)) > 0, RPID: rp.ID,
 	}})
 	return nil
 }
 
 // recordAs records what the account sess belongs to just did, for a
 // request that arrived with no session or one the action ended.
-func (a *api) recordAs(r *http.Request, sess *auth.Session, action string) {
+func (a *api) recordAs(r *http.Request, sess *auth.Session, action, detail string) {
 	p := Principal{Name: sess.Username, Role: a.auth.Role(sess.Username)}
-	a.audit.Add(audit.Event{Action: action, By: p.actor(remoteIP(r))})
+	a.audit.Add(audit.Event{Action: action, By: p.actor(remoteIP(r)), Detail: detail})
 }
 
 func (a *api) logout(w http.ResponseWriter, r *http.Request) error {
@@ -295,7 +305,7 @@ func (a *api) changePassword(w http.ResponseWriter, r *http.Request) error {
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}
-	check, err := a.auth.Login(sess.Username, req.Current, remoteIP(r))
+	check, err := a.auth.LoginFrom(sess.Username, req.Current, clientOf(r))
 	if err != nil {
 		return err
 	}
@@ -303,11 +313,11 @@ func (a *api) changePassword(w http.ResponseWriter, r *http.Request) error {
 	if err := a.auth.SetPassword(sess.Username, req.New); err != nil {
 		return err
 	}
-	fresh, err := a.auth.SignIn(sess.Username)
+	fresh, err := a.auth.SignInFrom(sess.Username, clientOf(r))
 	if err != nil {
 		return err
 	}
-	a.recordAs(r, fresh, audit.Password)
+	a.recordAs(r, fresh, audit.Password, "")
 	setSessionCookie(w, r, fresh)
 	writeJSON(w, http.StatusOK, a.describe(fresh))
 	return nil
@@ -322,8 +332,11 @@ const maxPasskeyName = 40
 
 var (
 	// The sign-in page tells this error from the others by its words.
-	errInvalidCode = errors.New("invalid code")
-	errNeedsAName  = errors.New("passkeys need a name in the address bar, not an address")
+	errInvalidCode   = errors.New("invalid code")
+	errNeedsAName    = errors.New("passkeys need a name in the address bar, not an address")
+	errWrongPassword = errors.New("password is wrong")
+	errPasskeyOff    = errors.New("this account does not sign in with a passkey alone")
+	errNotVerified   = errors.New("the device did not check that it was you")
 )
 
 // refusal is a sign-in step turned down in its own words. It answers 401 as
@@ -404,17 +417,72 @@ func (a *api) current(r *http.Request) (*auth.Session, error) {
 	return sess, nil
 }
 
-// finishSignIn ends a pending sign-in whose second factor checked out.
-func (a *api) finishSignIn(w http.ResponseWriter, r *http.Request, pending string) error {
-	sess, err := a.auth.ResolvePending(pending)
+// finishSignIn ends a pending sign-in whose MFA checked out.
+func (a *api) finishSignIn(w http.ResponseWriter, r *http.Request, pending, how string) error {
+	sess, err := a.auth.ResolvePendingFrom(pending, clientOf(r))
 	if err != nil {
 		if errors.Is(err, auth.ErrPendingGone) {
 			return errUnauthorized
 		}
 		return err
 	}
-	a.startSession(w, r, sess)
+	a.startSession(w, r, sess, how)
 	return nil
+}
+
+// passkeyStart is a sign-in a passkey can finish on its own: the token and
+// the browser's request options.
+type passkeyStart struct {
+	Token     string         `json:"token"`
+	PublicKey map[string]any `json:"publicKey"`
+}
+
+// loginStart says whether the account signs in with a passkey alone on this
+// host name. Every other case answers null alike, and nothing is counted.
+func (a *api) loginStart(w http.ResponseWriter, r *http.Request) error {
+	if a.auth == nil {
+		return &unavailable{errors.New("authentication not available")}
+	}
+	var req struct {
+		Username string `json:"username"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		return err
+	}
+	if a.auth.Blocked(remoteIP(r)) {
+		return auth.ErrRateLimited
+	}
+	start, err := a.passkeyStartFor(r, req.Username)
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, map[string]*passkeyStart{"passkey": start})
+	return nil
+}
+
+func (a *api) passkeyStartFor(r *http.Request, username string) (*passkeyStart, error) {
+	rp := relyingParty(r)
+	if rp.ID == "" {
+		return nil, nil
+	}
+	_, keys, on := a.auth.MFAOf(username)
+	if !on {
+		return nil, nil
+	}
+	allow := credentialsOf(passkeysOn(keys, rp.ID))
+	if len(allow) == 0 {
+		return nil, nil
+	}
+	challenge, err := webauthn.NewChallenge()
+	if err != nil {
+		return nil, err
+	}
+	token := a.auth.StartPasskeyLogin(username)
+	if token == "" {
+		return nil, errors.New("could not start the sign-in")
+	}
+	a.auth.SetChallenge(token, challenge)
+	return &passkeyStart{Token: token, PublicKey: webauthn.RequestOptions(rp, allow, challenge, true)}, nil
 }
 
 // loginTOTP is the second step with a code from an authenticator app.
@@ -429,8 +497,8 @@ func (a *api) loginTOTP(w http.ResponseWriter, r *http.Request) error {
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}
-	user, ok := a.auth.PendingUser(req.Pending)
-	if !ok {
+	user, checked, ok := a.auth.PendingUser(req.Pending)
+	if !ok || !checked {
 		return errUnauthorized
 	}
 	secret, ok := a.auth.TOTPSecret(user)
@@ -449,12 +517,12 @@ func (a *api) loginTOTP(w http.ResponseWriter, r *http.Request) error {
 	case errors.Is(err, auth.ErrCodeUsed):
 		a.auth.FailPending(req.Pending, remoteIP(r))
 		return a.refused(r, user, &refusal{err})
-	case errors.Is(err, auth.ErrNoSecondFactor):
+	case errors.Is(err, auth.ErrNoMFA):
 		return errUnauthorized
 	case err != nil:
 		return err
 	}
-	return a.finishSignIn(w, r, req.Pending)
+	return a.finishSignIn(w, r, req.Pending, "")
 }
 
 // loginPasskeyOptions is the challenge for the second step with a passkey.
@@ -468,8 +536,8 @@ func (a *api) loginPasskeyOptions(w http.ResponseWriter, r *http.Request) error 
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}
-	user, ok := a.auth.PendingUser(req.Pending)
-	if !ok {
+	user, checked, ok := a.auth.PendingUser(req.Pending)
+	if !ok || !checked {
 		return errUnauthorized
 	}
 	rp := relyingParty(r)
@@ -485,11 +553,13 @@ func (a *api) loginPasskeyOptions(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 	a.auth.SetChallenge(req.Pending, challenge)
-	writeJSON(w, http.StatusOK, map[string]any{"publicKey": webauthn.RequestOptions(rp, allow, challenge)})
+	writeJSON(w, http.StatusOK, map[string]any{"publicKey": webauthn.RequestOptions(rp, allow, challenge, false)})
 	return nil
 }
 
-// loginPasskey is the second step with a passkey's signed answer.
+// loginPasskey is the second step with a passkey's signed answer, or the
+// whole sign-in for a token from loginStart: then the switch must still be
+// on and the device must have checked it was the user.
 func (a *api) loginPasskey(w http.ResponseWriter, r *http.Request) error {
 	if a.auth == nil {
 		return &unavailable{errors.New("authentication not available")}
@@ -501,13 +571,19 @@ func (a *api) loginPasskey(w http.ResponseWriter, r *http.Request) error {
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}
-	user, ok := a.auth.PendingUser(req.Pending)
+	user, checked, ok := a.auth.PendingUser(req.Pending)
 	if !ok {
 		return errUnauthorized
 	}
 	rp := relyingParty(r)
 	if rp.ID == "" {
 		return &badRequest{errNeedsAName}
+	}
+	if !checked {
+		if _, _, on := a.auth.MFAOf(user); !on {
+			a.auth.FailPending(req.Pending, remoteIP(r))
+			return a.refused(r, user, &refusal{errPasskeyOff})
+		}
 	}
 	challenge, ok := a.auth.TakeChallenge(req.Pending)
 	if !ok {
@@ -525,18 +601,25 @@ func (a *api) loginPasskey(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	count, err := webauthn.VerifyAssertion(req.Credential, cred, challenge, rp, originOf(r))
+	got, err := webauthn.VerifyAssertion(req.Credential, cred, challenge, rp, originOf(r))
+	if err == nil && !checked && !got.UserVerified {
+		err = errNotVerified
+	}
 	if err != nil {
 		a.auth.FailPending(req.Pending, remoteIP(r))
 		return a.refused(r, user, &refusal{fmt.Errorf("passkey refused: %w", err)})
 	}
-	if err := a.auth.PasskeyUsed(user, key.ID, count, time.Now()); err != nil {
+	if err := a.auth.PasskeyUsed(user, key.ID, got.SignCount, time.Now()); err != nil {
 		if errors.Is(err, auth.ErrNoSuchPasskey) {
 			return errUnauthorized
 		}
 		return err
 	}
-	return a.finishSignIn(w, r, req.Pending)
+	how := ""
+	if !checked {
+		how = "passkey"
+	}
+	return a.finishSignIn(w, r, req.Pending, how)
 }
 
 // passkeyView is a passkey as the account's own page lists it, with nothing
@@ -557,9 +640,16 @@ func viewOf(k auth.Passkey) passkeyView {
 	}
 }
 
-type secondFactorResponse struct {
-	TOTP     bool          `json:"totp"`
-	Passkeys []passkeyView `json:"passkeys"`
+// totpView is the authenticator app as the account's own page shows it.
+type totpView struct {
+	EnabledAt time.Time `json:"enabledAt"`
+	LastUsed  time.Time `json:"lastUsed,omitzero"`
+}
+
+type mfaResponse struct {
+	TOTP         *totpView     `json:"totp"`
+	Passkeys     []passkeyView `json:"passkeys"`
+	PasskeyLogin bool          `json:"passkeyLogin"`
 	// RPID is the host name a passkey made now would be bound to; empty when
 	// the page was reached by address.
 	RPID        string    `json:"rpId"`
@@ -567,27 +657,37 @@ type secondFactorResponse struct {
 	BypassBy    string    `json:"bypassBy,omitempty"`
 }
 
-// secondFactor says what the signed-in account has, never the secrets.
-func (a *api) secondFactor(w http.ResponseWriter, r *http.Request) error {
+// mfa says what the signed-in account has, never the secrets.
+func (a *api) mfa(w http.ResponseWriter, r *http.Request) error {
 	sess, err := a.current(r)
 	if err != nil {
 		return err
 	}
-	hasTOTP, keys := a.auth.SecondFactorOf(sess.Username)
-	res := secondFactorResponse{TOTP: hasTOTP, Passkeys: make([]passkeyView, 0, len(keys)), RPID: relyingParty(r).ID}
+	writeJSON(w, http.StatusOK, a.mfaOf(r, sess.Username))
+	return nil
+}
+
+func (a *api) mfaOf(r *http.Request, username string) mfaResponse {
+	app, keys, on := a.auth.MFAOf(username)
+	res := mfaResponse{Passkeys: make([]passkeyView, 0, len(keys)), PasskeyLogin: on, RPID: relyingParty(r).ID}
+	if app != nil {
+		res.TOTP = &totpView{EnabledAt: app.EnabledAt}
+		if app.LastStep > 0 {
+			res.TOTP.LastUsed = time.Unix(app.LastStep*30, 0).UTC()
+		}
+	}
 	for _, k := range keys {
 		res.Passkeys = append(res.Passkeys, viewOf(k))
 	}
 	if b, ok := a.auth.Bypass(); ok {
 		res.BypassUntil, res.BypassBy = b.Until, b.By
 	}
-	writeJSON(w, http.StatusOK, res)
-	return nil
+	return res
 }
 
-// clearSecondFactor turns the signed-in account's second factor off, on its
+// clearMFA turns the signed-in account's MFA off, on its
 // password.
-func (a *api) clearSecondFactor(w http.ResponseWriter, r *http.Request) error {
+func (a *api) clearMFA(w http.ResponseWriter, r *http.Request) error {
 	sess, err := a.current(r)
 	if err != nil {
 		return err
@@ -601,12 +701,12 @@ func (a *api) clearSecondFactor(w http.ResponseWriter, r *http.Request) error {
 	if err := a.auth.Authenticate(sess.Username, req.Password, remoteIP(r)); err != nil {
 		return err
 	}
-	had := a.auth.HasSecondFactor(sess.Username)
-	if err := a.auth.ClearSecondFactor(sess.Username); err != nil {
+	had := a.auth.HasMFA(sess.Username)
+	if err := a.auth.ClearMFA(sess.Username); err != nil {
 		return err
 	}
 	if had {
-		a.record(r, audit.SecondFactorClear, "", "")
+		a.record(r, audit.MFAClear, "", "")
 	}
 	w.WriteHeader(http.StatusNoContent)
 	return nil
@@ -668,24 +768,36 @@ func (a *api) totpConfirm(w http.ResponseWriter, r *http.Request) error {
 	if err := a.auth.UseTOTPStep(sess.Username, step); err != nil {
 		return err
 	}
-	a.record(r, audit.SecondFactorTOTP, "", "")
+	a.record(r, audit.MFATOTP, "", "")
 	w.WriteHeader(http.StatusNoContent)
 	return nil
 }
 
-// passkeyOptions is the challenge for making a passkey on this host name.
+// passkeyOptions is the challenge for making a passkey on this host name,
+// on the password: the browser's prompt comes after this, so a wrong
+// password is told before a device makes a passkey the router would refuse.
+// addPasskey needs the challenge, so it needs the password too.
 func (a *api) passkeyOptions(w http.ResponseWriter, r *http.Request) error {
 	sess, err := a.current(r)
 	if err != nil {
 		return err
 	}
-	hasTOTP, keys := a.auth.SecondFactorOf(sess.Username)
-	if !hasTOTP {
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		return err
+	}
+	app, keys, _ := a.auth.MFAOf(sess.Username)
+	if app == nil {
 		return &badRequest{auth.ErrTOTPFirst}
 	}
 	rp := relyingParty(r)
 	if rp.ID == "" {
 		return &badRequest{errNeedsAName}
+	}
+	if err := a.checkPassword(r, sess.Username, req.Password); err != nil {
+		return err
 	}
 	handle, err := a.auth.UserID(sess.Username)
 	if err != nil {
@@ -766,7 +878,7 @@ func (a *api) removePasskey(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	id := strings.TrimRight(r.PathValue("id"), "=")
-	_, keys := a.auth.SecondFactorOf(sess.Username)
+	_, keys, _ := a.auth.MFAOf(sess.Username)
 	i := slices.IndexFunc(keys, func(k auth.Passkey) bool { return k.ID == id })
 	if i < 0 {
 		return &notFound{auth.ErrNoSuchPasskey}
@@ -779,5 +891,89 @@ func (a *api) removePasskey(w http.ResponseWriter, r *http.Request) error {
 	}
 	a.record(r, audit.PasskeyRemove, keys[i].Name, "")
 	w.WriteHeader(http.StatusNoContent)
+	return nil
+}
+
+// checkPassword asks for the account's password again before a change that
+// lets a device sign in, rate limited as a sign-in is.
+func (a *api) checkPassword(r *http.Request, username, password string) error {
+	err := a.auth.Authenticate(username, password, remoteIP(r))
+	if errors.Is(err, auth.ErrInvalidCredentials) {
+		return &refusal{errWrongPassword}
+	}
+	return err
+}
+
+// renamePasskey gives one of the signed-in account's passkeys a new name.
+func (a *api) renamePasskey(w http.ResponseWriter, r *http.Request) error {
+	sess, err := a.current(r)
+	if err != nil {
+		return err
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		return err
+	}
+	name, err := passkeyName(req.Name)
+	if err != nil {
+		return err
+	}
+	id := strings.TrimRight(r.PathValue("id"), "=")
+	keys := a.auth.Passkeys(sess.Username)
+	i := slices.IndexFunc(keys, func(k auth.Passkey) bool { return k.ID == id })
+	if i < 0 {
+		return &notFound{auth.ErrNoSuchPasskey}
+	}
+	key := keys[i]
+	if err := a.auth.RenamePasskey(sess.Username, id, name); err != nil {
+		if errors.Is(err, auth.ErrNoSuchPasskey) {
+			return &notFound{err}
+		}
+		return err
+	}
+	if key.Name != name {
+		a.record(r, audit.PasskeyRename, key.Name, name)
+	}
+	key.Name = name
+	writeJSON(w, http.StatusOK, viewOf(key))
+	return nil
+}
+
+// setPasskeyLogin turns signing in with a passkey alone on, on the
+// password, or off, on nothing.
+func (a *api) setPasskeyLogin(w http.ResponseWriter, r *http.Request) error {
+	sess, err := a.current(r)
+	if err != nil {
+		return err
+	}
+	var req struct {
+		On       bool   `json:"on"`
+		Password string `json:"password"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		return err
+	}
+	if req.On {
+		if err := a.checkPassword(r, sess.Username, req.Password); err != nil {
+			return err
+		}
+	}
+	_, _, was := a.auth.MFAOf(sess.Username)
+	if err := a.auth.SetPasskeyLogin(sess.Username, req.On); err != nil {
+		if errors.Is(err, auth.ErrNoPasskeys) {
+			return &badRequest{err}
+		}
+		return err
+	}
+	if was != req.On {
+		detail := "off"
+		if req.On {
+			detail = "on"
+		}
+		a.record(r, audit.MFAPasskeyLogin, "", detail)
+	}
+	writeJSON(w, http.StatusOK, a.mfaOf(r, sess.Username))
 	return nil
 }

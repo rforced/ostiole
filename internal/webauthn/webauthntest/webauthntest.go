@@ -39,6 +39,9 @@ type Authenticator struct {
 	// signed and may change it or cut it short, to make what no good device
 	// would.
 	EditAuthData func([]byte) []byte
+	// UserVerified sets the user verified flag in what Register and Assert
+	// make. New sets it; clear it to answer as a device that skipped the PIN.
+	UserVerified bool
 
 	alg    int
 	key    crypto.Signer
@@ -48,7 +51,7 @@ type Authenticator struct {
 // New makes an authenticator with a new key of a kind: "es256", "rs256" or
 // "eddsa". It panics on any other kind.
 func New(kind string) *Authenticator {
-	a := &Authenticator{CredentialID: make([]byte, 16)}
+	a := &Authenticator{CredentialID: make([]byte, 16), UserVerified: true}
 	_, err := rand.Read(a.CredentialID)
 	must(err)
 	switch kind {
@@ -108,7 +111,7 @@ func (a *Authenticator) Register(opts map[string]any, origin string) webauthn.At
 	a.handle = o.User.ID
 
 	data := rpIDHash(o.RP.ID)
-	data = append(data, flagUP|flagUV|flagAT)
+	data = append(data, a.flags(flagUP|flagAT))
 	data = binary.BigEndian.AppendUint32(data, a.SignCount)
 	data = append(data, make([]byte, 16)...)
 	data = binary.BigEndian.AppendUint16(data, uint16(len(a.CredentialID)))
@@ -142,7 +145,7 @@ func (a *Authenticator) Assert(opts map[string]any, origin string) webauthn.Asse
 		panic("webauthntest: the options name no relying party")
 	}
 	data := rpIDHash(o.RPID)
-	data = append(data, flagUP|flagUV)
+	data = append(data, a.flags(flagUP))
 	data = binary.BigEndian.AppendUint32(data, a.SignCount)
 	if a.EditAuthData != nil {
 		data = a.EditAuthData(data)
@@ -158,6 +161,13 @@ func (a *Authenticator) Assert(opts map[string]any, origin string) webauthn.Asse
 	resp.Response.Signature = b64(a.sign(slices.Concat(data, hash[:])))
 	resp.Response.UserHandle = a.handle
 	return resp
+}
+
+func (a *Authenticator) flags(f byte) byte {
+	if a.UserVerified {
+		f |= flagUV
+	}
+	return f
 }
 
 func (a *Authenticator) allowed(o options) bool {

@@ -2,9 +2,9 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { api } from '@/lib/api'
+import { ApiError, api } from '@/lib/api'
 import * as webauthn from '@/lib/webauthn'
-import PasskeyDialog from '@/views/system/accounts/PasskeyDialog.vue'
+import PasskeyDialog from '@/views/account/PasskeyDialog.vue'
 
 vi.mock('@/lib/api', () => ({
   ApiError: class ApiError extends Error {},
@@ -31,11 +31,14 @@ describe('PasskeyDialog', () => {
     vi.clearAllMocks()
   })
 
-  it('asks for a name, then the browser, then the router', async () => {
+  it('asks for a name and the password, then the browser, then the router', async () => {
     const wrapper = open()
     expect(wrapper.text()).toContain('Made for edge.example. It signs in only there.')
     expect(addButton(wrapper).attributes('disabled')).toBeDefined()
     await wrapper.get('#passkey-name').setValue('  Laptop ')
+    expect(addButton(wrapper).attributes('disabled')).toBeDefined()
+    await wrapper.get('#passkey-password').setValue('pw pw pw pw pw')
+    expect(addButton(wrapper).attributes('disabled')).toBeUndefined()
     api.auth.passkeyOptions.mockResolvedValue({ publicKey: { challenge: 'c' } })
     webauthn.create.mockResolvedValue({ id: 'cred' })
     api.auth.addPasskey.mockResolvedValue(undefined)
@@ -44,6 +47,7 @@ describe('PasskeyDialog', () => {
     await flushPromises()
 
     expect(webauthn.create).toHaveBeenCalledWith({ challenge: 'c' })
+    expect(api.auth.passkeyOptions).toHaveBeenCalledWith('pw pw pw pw pw')
     expect(api.auth.addPasskey).toHaveBeenCalledWith('Laptop', { id: 'cred' })
     expect(wrapper.emitted('done')).toHaveLength(1)
     expect(wrapper.emitted('update:open')[0]).toEqual([false])
@@ -77,5 +81,22 @@ describe('PasskeyDialog', () => {
 
     expect(wrapper.get('[role="alert"]').text()).toContain('set up an authenticator app')
     expect(webauthn.create).not.toHaveBeenCalled()
+  })
+
+  it('says the password is wrong when the router refuses it', async () => {
+    const wrapper = open()
+    await wrapper.get('#passkey-name').setValue('Laptop')
+    await wrapper.get('#passkey-password').setValue('nope')
+    api.auth.passkeyOptions.mockRejectedValue(
+      Object.assign(new ApiError('password is wrong'), { status: 401 }),
+    )
+
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.get('[role="alert"]').text()).toBe('Password is wrong.')
+    expect(webauthn.create).not.toHaveBeenCalled()
+    expect(api.auth.addPasskey).not.toHaveBeenCalled()
+    expect(wrapper.emitted('done')).toBeUndefined()
   })
 })

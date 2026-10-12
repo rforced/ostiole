@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures.js'
-import { applyAndConfirm, confirmDialog, login, readConfig } from './helpers.js'
+import { applyAndConfirm, confirmDialog, enterUsername, login, readConfig } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -93,13 +93,14 @@ test('the audit log lists what each account did, and a Clear leaves who cleared 
 
 test('an operator sees neither the audit log nor who applied', async ({ page }) => {
   await page.goto('/login')
-  await page.getByLabel('Username').fill(OPERATOR.username)
+  await enterUsername(page, OPERATOR.username)
   await page.getByLabel('Password', { exact: true }).fill(OPERATOR.password)
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page).toHaveURL(/\/$/)
 
   await page.goto('/system/accounts')
-  await expect(page.getByRole('heading', { name: 'Change password' })).toBeVisible()
+  await expect(page).toHaveURL(/\/account$/)
+  await expect(page.getByRole('heading', { name: 'Password', exact: true })).toBeVisible()
   await expect(page.getByRole('tab', { name: 'Audit log' })).toHaveCount(0)
 
   await page.goto('/system/configuration')

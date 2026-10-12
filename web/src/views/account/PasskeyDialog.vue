@@ -5,7 +5,7 @@ import ActionButton from '@/components/ActionButton.vue'
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
-import { api } from '@/lib/api'
+import { ApiError, api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
 import * as webauthn from '@/lib/webauthn'
 
@@ -17,6 +17,7 @@ const open = defineModel('open', { type: Boolean, default: false })
 const emit = defineEmits(['done'])
 
 const name = ref('')
+const password = ref('')
 const error = ref('')
 const busy = ref(false)
 
@@ -25,23 +26,24 @@ watch(
   (on) => {
     if (!on) return
     name.value = ''
+    password.value = ''
     error.value = ''
   },
   { immediate: true },
 )
 
-/** The router's challenge, the browser's prompt, then the router's check. */
+/** The router's challenge, on the password, then the browser's prompt, then the router's check. */
 async function submit() {
   error.value = ''
   busy.value = true
   try {
-    const { publicKey } = await api.auth.passkeyOptions()
+    const { publicKey } = await api.auth.passkeyOptions(password.value)
     const credential = await webauthn.create(publicKey)
     await api.auth.addPasskey(name.value.trim(), credential)
     emit('done')
     open.value = false
   } catch (e) {
-    error.value = errorMessage(e)
+    error.value = e instanceof ApiError && e.status === 401 ? 'Password is wrong.' : errorMessage(e)
   } finally {
     busy.value = false
   }
@@ -52,7 +54,7 @@ async function submit() {
   <AppDialog
     v-model:open="open"
     :read-only="false"
-    title="Add a passkey"
+    title="Add passkey"
     :description="rpId ? `Made for ${rpId}. It signs in only there.` : ''"
   >
     <form id="passkey-form" class="space-y-4" @submit.prevent="submit">
@@ -62,6 +64,16 @@ async function submit() {
           v-model="name"
           maxlength="40"
           autocomplete="off"
+          required
+          class="input"
+        />
+      </FormField>
+      <FormField id="passkey-password" label="Password">
+        <input
+          id="passkey-password"
+          v-model="password"
+          type="password"
+          autocomplete="current-password"
           required
           class="input"
         />
@@ -80,7 +92,7 @@ async function submit() {
         label="Add passkey"
         busy-label="Adding…"
         :busy="busy"
-        :disabled="!name.trim()"
+        :disabled="!name.trim() || !password"
       />
     </template>
   </AppDialog>

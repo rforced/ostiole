@@ -63,12 +63,14 @@ var (
 // Token is an API credential. Only its hash is kept: the secret is shown
 // once, when it is created, and cannot be recovered afterwards.
 type Token struct {
-	ID          string     `json:"id"`
-	Name        string     `json:"name"`
-	Role        Role       `json:"role"`
-	Hash        string     `json:"hash"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	CreatedBy   string     `json:"createdBy,omitempty"`
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Role      Role      `json:"role"`
+	Hash      string    `json:"hash"`
+	CreatedAt time.Time `json:"createdAt"`
+	CreatedBy string    `json:"createdBy,omitempty"`
+	// Owner is the account the token belongs to; empty for a router token.
+	Owner       string     `json:"owner,omitempty"`
 	ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
 	LastUsedAt  *time.Time `json:"lastUsedAt,omitempty"`
 	Description string     `json:"description,omitempty"`
@@ -183,7 +185,7 @@ func (t *Tokens) save() error {
 	for _, tok := range t.tokens {
 		f.Tokens = append(f.Tokens, tok)
 	}
-	sort.Slice(f.Tokens, func(i, j int) bool { return f.Tokens[i].CreatedAt.Before(f.Tokens[j].CreatedAt) })
+	sort.Slice(f.Tokens, func(i, j int) bool { return earlier(f.Tokens[i], f.Tokens[j]) })
 	raw, err := json.MarshalIndent(f, "", "  ")
 	if err != nil {
 		return err
@@ -216,15 +218,23 @@ func (t *Tokens) List() []Token {
 		tok.Hash = ""
 		out = append(out, tok)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
+	sort.Slice(out, func(i, j int) bool { return earlier(out[i], out[j]) })
 	return out
+}
+
+// earlier orders tokens oldest first; two made in the same second by name.
+func earlier(a, b Token) bool {
+	if !a.CreatedAt.Equal(b.CreatedAt) {
+		return a.CreatedAt.Before(b.CreatedAt)
+	}
+	return a.Name < b.Name
 }
 
 // Create mints a token and returns it with the secret filled in. That is
 // the only time the secret exists outside the caller's hands. A token
 // given certificates fetches those and can do nothing else, whatever its
 // role says, and one limited to the metrics reads them and nothing else.
-func (t *Tokens) Create(name string, role Role, ttl time.Duration, createdBy string, limits Limits) (Token, string, error) {
+func (t *Tokens) Create(name string, role Role, ttl time.Duration, createdBy, owner string, limits Limits) (Token, string, error) {
 	certificates := limits.Certificates
 	if !tokenNameRe.MatchString(name) {
 		return Token{}, "", errors.New("a token name is 1-64 characters of letters, digits, spaces, dots, or dashes")
@@ -262,6 +272,7 @@ func (t *Tokens) Create(name string, role Role, ttl time.Duration, createdBy str
 		Hash:         hashToken(full),
 		CreatedAt:    t.now().UTC().Truncate(time.Second),
 		CreatedBy:    createdBy,
+		Owner:        owner,
 		Certificates: certificates,
 		Metrics:      limits.Metrics,
 	}
@@ -299,6 +310,86 @@ func (t *Tokens) Delete(ref string) error {
 		}
 	}
 	return ErrTokenNotFound
+}
+
+// ListOwned reports the owner's tokens as List does.
+func (t *Tokens) ListOwned(owner string) []Token {
+	out := []Token{}
+	for _, tok := range t.List() {
+		if owner != "" && tok.Owner == owner {
+			out = append(out, tok)
+		}
+	}
+	return out
+}
+
+// DeleteOf removes a token by id or by name when owner owns it.
+func (t *Tokens) DeleteOf(owner, ref string) error {
+	t.refresh()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for id, tok := range t.tokens {
+		if owner != "" && tok.Owner == owner && (id == ref || strings.EqualFold(tok.Name, ref)) {
+			delete(t.tokens, id)
+			return t.save()
+		}
+	}
+	return ErrTokenNotFound
+}
+
+// DeleteOwned removes every token the owner has.
+func (t *Tokens) DeleteOwned(owner string) error {
+	return t.change(func(tok *Token) bool { return owner != "" && tok.Owner == owner }, nil)
+}
+
+// Rename moves the owner's tokens to the account's new name.
+func (t *Tokens) Rename(owner, next string) error {
+	if owner == next {
+		return nil
+	}
+	return t.change(nil, func(tok *Token) bool {
+		if owner == "" || tok.Owner != owner {
+			return false
+		}
+		tok.Owner = next
+		return true
+	})
+}
+
+// Adopt gives a token made before owners existed to the account that made
+// it, when that account is still there.
+func (t *Tokens) Adopt(exists func(username string) bool) error {
+	return t.change(nil, func(tok *Token) bool {
+		if tok.Owner != "" || tok.CreatedBy == "" || tok.CreatedBy == "cli" || !exists(tok.CreatedBy) {
+			return false
+		}
+		tok.Owner = tok.CreatedBy
+		return true
+	})
+}
+
+// change drops the tokens drop reports and edits the rest with edit, and
+// saves only when either did something.
+func (t *Tokens) change(drop, edit func(tok *Token) bool) error {
+	t.refresh()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	changed := false
+	for id, tok := range t.tokens {
+		if drop != nil && drop(&tok) {
+			delete(t.tokens, id)
+			changed = true
+			continue
+		}
+		if edit != nil && edit(&tok) {
+			t.tokens[id] = tok
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return t.save()
 }
 
 // Authenticate checks a presented token and returns it. A token that is

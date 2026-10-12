@@ -9,6 +9,7 @@ vi.mock('@/lib/api', () => ({
   ApiError: class ApiError extends Error {},
   api: {
     auth: {
+      loginStart: vi.fn(),
       login: vi.fn(),
       loginTOTP: vi.fn(),
       passkeyLoginOptions: vi.fn(),
@@ -26,9 +27,9 @@ describe('adminOnly', () => {
   })
 })
 
-describe('signing in with a second factor', () => {
+describe('signing in with MFA', () => {
   const session = { username: 'sam', role: 'admin' }
-  const due = { secondFactor: { pending: 'tok', totp: true, passkeys: true, rpId: 'edge.example' } }
+  const due = { pending: { token: 'tok', totp: true, passkeys: true, rpId: 'edge.example' } }
 
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -44,13 +45,13 @@ describe('signing in with a second factor', () => {
   })
 
   it('signs in at once on a session that only says the account has one, as a bypass gives', async () => {
-    api.auth.login.mockResolvedValue({ ...session, secondFactor: true })
+    api.auth.login.mockResolvedValue({ ...session, mfa: true })
     const auth = useAuthStore()
-    expect(await auth.login('sam', 'pw')).toEqual({ ...session, secondFactor: true })
+    expect(await auth.login('sam', 'pw')).toEqual({ ...session, mfa: true })
     expect(auth.pending).toBeNull()
   })
 
-  it('waits for the second factor, and is not signed in until it comes', async () => {
+  it('waits for MFA, and is not signed in until it comes', async () => {
     api.auth.login.mockResolvedValue(due)
     const auth = useAuthStore()
     expect(await auth.login('sam', 'pw')).toBeNull()
@@ -72,7 +73,7 @@ describe('signing in with a second factor', () => {
     await auth.login('sam', 'pw')
     await auth.loginPasskey()
     expect(api.auth.passkeyLoginOptions).toHaveBeenCalledWith('tok')
-    expect(webauthn.get).toHaveBeenCalledWith({ challenge: 'c' })
+    expect(webauthn.get).toHaveBeenCalledWith({ challenge: 'c' }, { signal: undefined })
     expect(api.auth.loginPasskey).toHaveBeenCalledWith('tok', { id: 'cred' })
     expect(auth.user).toEqual(session)
   })
@@ -84,6 +85,42 @@ describe('signing in with a second factor', () => {
     const auth = useAuthStore()
     await auth.login('sam', 'pw')
     await expect(auth.loginPasskey()).rejects.toThrow('cancelled or timed out')
+    expect(api.auth.loginPasskey).not.toHaveBeenCalled()
+    expect(auth.loggedIn).toBe(false)
+  })
+
+  it('says whether the account signs in with a passkey alone', async () => {
+    const auth = useAuthStore()
+    api.auth.loginStart.mockResolvedValue({ passkey: null })
+    expect(await auth.start('sam')).toBeNull()
+    api.auth.loginStart.mockResolvedValue({
+      passkey: { token: 'pk', publicKey: { challenge: 'c' } },
+    })
+    expect(await auth.start('sam')).toEqual({ token: 'pk', publicKey: { challenge: 'c' } })
+    expect(api.auth.loginStart).toHaveBeenCalledWith('sam')
+  })
+
+  it('signs in with a passkey alone, with no pending sign-in', async () => {
+    webauthn.get.mockResolvedValue({ id: 'cred' })
+    api.auth.loginPasskey.mockResolvedValue(session)
+    const auth = useAuthStore()
+    const ctl = new AbortController()
+    await auth.loginWithPasskey('pk', { challenge: 'c' }, ctl.signal)
+    expect(webauthn.get).toHaveBeenCalledWith({ challenge: 'c' }, { signal: ctl.signal })
+    expect(api.auth.loginPasskey).toHaveBeenCalledWith('pk', { id: 'cred' })
+    expect(auth.user).toEqual(session)
+  })
+
+  it('sends nothing once the prompt was aborted', async () => {
+    const ctl = new AbortController()
+    webauthn.get.mockImplementation(async () => {
+      ctl.abort()
+      return { id: 'cred' }
+    })
+    const auth = useAuthStore()
+    await expect(auth.loginWithPasskey('pk', {}, ctl.signal)).rejects.toMatchObject({
+      name: 'AbortError',
+    })
     expect(api.auth.loginPasskey).not.toHaveBeenCalled()
     expect(auth.loggedIn).toBe(false)
   })

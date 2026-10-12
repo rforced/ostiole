@@ -87,7 +87,7 @@ func TestEveryRouteEnforcesItsDocumentedRole(t *testing.T) {
 		auth.RoleAdmin:    mintToken(t, srv, "own", string(auth.RoleAdmin)),
 	}
 	// A token for a scraper reads the metrics and is refused everywhere else.
-	resp, raw := do(t, srv, http.MethodPost, "/api/v1/tokens", map[string]any{"name": "scrape", "metrics": true})
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/auth/tokens", map[string]any{"name": "scrape", "metrics": true})
 	var scraper struct {
 		Secret string `json:"secret"`
 	}

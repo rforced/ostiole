@@ -116,13 +116,20 @@ async function setPassword() {
   if (ok) repassword.value = null
 }
 
+/** What an account signs in with besides its password. */
+function mfaText(mfa) {
+  if (!mfa?.totp) return 'Off'
+  if (!mfa.passkeys) return 'App'
+  return `App, ${mfa.passkeys} passkey${mfa.passkeys === 1 ? '' : 's'}`
+}
+
 async function deleteUser(username) {
   await act(() => api.users.remove(username))
 }
 
-async function clearSecondFactor(username) {
+async function clearMFA(username) {
   await act(async () => {
-    await api.users.clearSecondFactor(username)
+    await api.users.clearMFA(username)
     return api.users.list()
   })
 }
@@ -147,13 +154,14 @@ async function clearSecondFactor(username) {
         <tr>
           <th>Account</th>
           <th>Role</th>
+          <th>MFA</th>
           <th>Created</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
         <tr v-if="!users.length">
-          <td colspan="4" class="text-ink-muted">
+          <td colspan="5" class="text-ink-muted">
             {{ emptyText(load, 'No accounts.') }}
           </td>
         </tr>
@@ -162,9 +170,6 @@ async function clearSecondFactor(username) {
             <span class="inline-flex flex-wrap items-center gap-1.5">
               <span class="font-mono">{{ u.username }}</span>
               <span v-if="isSelf(u)" class="text-xs text-ink-muted">you</span>
-              <span v-if="u.secondFactor" class="badge" title="Signs in with a second factor.">
-                2FA
-              </span>
             </span>
           </td>
           <td data-label="Role">
@@ -182,6 +187,12 @@ async function clearSecondFactor(username) {
               Another admin has to change your role.
             </p>
           </td>
+          <td data-label="MFA">
+            <span :class="{ 'text-ink-muted': !u.mfa?.totp }">{{ mfaText(u.mfa) }}</span>
+            <span v-if="u.mfa?.passkeyLogin" class="block text-xs text-ink-muted">
+              Passkey sign-in on
+            </span>
+          </td>
           <td class="when" data-label="Created">{{ formatWhen(u.createdAt) }}</td>
           <td class="actions" data-label="">
             <button type="button" class="link-action" @click="openRename(u)">Rename</button>
@@ -189,11 +200,11 @@ async function clearSecondFactor(username) {
               Set password
             </button>
             <ConfirmButton
-              v-if="!isSelf(u) && u.secondFactor"
-              label="Clear second factor"
-              :question="`Clear the second factor of ${u.username}?`"
+              v-if="!isSelf(u) && u.mfa?.totp"
+              label="Clear MFA"
+              :question="`Clear MFA for ${u.username}?`"
               description="Their authenticator app and passkeys are removed. They sign in with the password alone."
-              @confirm="clearSecondFactor(u.username)"
+              @confirm="clearMFA(u.username)"
             />
             <ConfirmButton
               v-if="!isSelf(u)"

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 import AppSidebar from '@/components/AppSidebar.vue'
+import { useAuthStore } from '@/stores/auth'
 
 vi.mock('@/lib/api', () => ({ api: {}, ApiError: class ApiError extends Error {} }))
 
@@ -24,6 +25,10 @@ const section = (wrapper, name) => wrapper.findAll('nav button').find((b) => b.t
 const expanded = (wrapper, name) => section(wrapper, name).attributes('aria-expanded') === 'true'
 const pages = (wrapper, name) =>
   wrapper.get(`#${section(wrapper, name).attributes('aria-controls')}`)
+const pageNames = (wrapper, name) =>
+  pages(wrapper, name)
+    .findAll('a')
+    .map((a) => a.text())
 
 describe('AppSidebar', () => {
   beforeEach(() => setActivePinia(createPinia()))
@@ -73,5 +78,33 @@ describe('AppSidebar', () => {
     await flushPromises()
     expect(expanded(wrapper, 'Services')).toBe(true)
     expect(expanded(wrapper, 'System')).toBe(false)
+  })
+
+  // Accounts is for admins; anyone else has their own on the Account page.
+  it('lists System › Accounts for an admin only', async () => {
+    useAuthStore().user = { username: 'marlow', role: 'admin' }
+    let { wrapper } = await sidebar('/system/general')
+    expect(pageNames(wrapper, 'System')).toContain('Accounts')
+    wrapper.unmount()
+
+    useAuthStore().user = { username: 'tamsin', role: 'operator' }
+    ;({ wrapper } = await sidebar('/system/general'))
+    expect(pageNames(wrapper, 'System')).not.toContain('Accounts')
+    expect(pageNames(wrapper, 'System')).toContain('General')
+  })
+
+  // The phone drawer closes on navigate, so the menu's Account link says so too.
+  it('passes on navigate from the account menu', async () => {
+    useAuthStore().user = { username: 'marlow', role: 'admin' }
+    const { wrapper } = await sidebar('/')
+    expect(wrapper.find('button[aria-label="Sign out"]').exists()).toBe(false)
+    await wrapper.get('button[aria-label="Account menu"]').trigger('click')
+    await flushPromises()
+    const account = [...document.querySelectorAll('[role="menuitem"]')].find(
+      (e) => e.textContent.trim() === 'Account',
+    )
+    account.click()
+    await flushPromises()
+    expect(wrapper.emitted('navigate')).toHaveLength(1)
   })
 })

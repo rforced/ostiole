@@ -20,6 +20,9 @@ type Principal struct {
 	// the CSRF check knows it has nothing to protect: a token is never
 	// sent automatically by a browser.
 	Token bool
+	// Owner is the account a token belongs to; empty for a session or a
+	// router token.
+	Owner string
 	// Certificates restricts the caller to fetching those certificates.
 	// A principal with any is refused everywhere else, whatever its role.
 	Certificates []string
@@ -51,7 +54,19 @@ func (a *api) principal(r *http.Request, touch bool) (Principal, bool) {
 		if err != nil {
 			return Principal{}, false
 		}
-		return Principal{Name: tok.Name, Role: tok.Role, Token: true, Certificates: tok.Certificates, Metrics: tok.Metrics}, true
+		role := tok.Role
+		if tok.Owner != "" {
+			if a.auth == nil {
+				return Principal{}, false
+			}
+			if _, ok := a.auth.Account(tok.Owner); !ok {
+				return Principal{}, false
+			}
+			if owner := a.auth.Role(tok.Owner); !owner.Allows(role) {
+				role = owner
+			}
+		}
+		return Principal{Name: tok.Name, Role: role, Token: true, Owner: tok.Owner, Certificates: tok.Certificates, Metrics: tok.Metrics}, true
 	}
 	if a.auth == nil {
 		return Principal{}, false

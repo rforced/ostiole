@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"text/tabwriter"
@@ -33,7 +34,7 @@ A token limited to certificates fetches those and can do nothing else.`,
 				return nil
 			}
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "ID\tNAME\tROLE\tCREATED\tEXPIRES\tLAST USED")
+			fmt.Fprintln(w, "ID\tNAME\tOWNER\tROLE\tCREATED\tEXPIRES\tLAST USED")
 			for _, t := range list {
 				role := string(t.Role)
 				switch {
@@ -42,7 +43,11 @@ A token limited to certificates fetches those and can do nothing else.`,
 				case t.Metrics:
 					role = "metrics only"
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", t.ID, t.Name, role,
+				owner := t.Owner
+				if owner == "" {
+					owner = "-"
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", t.ID, t.Name, owner, role,
 					t.CreatedAt.Format(time.DateOnly), stamp(t.ExpiresAt, "never"), stamp(t.LastUsedAt, "never"))
 			}
 			return w.Flush()
@@ -53,11 +58,25 @@ A token limited to certificates fetches those and can do nothing else.`,
 	var days int
 	var certificates []string
 	var metrics bool
+	var owner string
 	create := &cobra.Command{
 		Use:   "create <name>",
 		Short: "Mint a token and print it once",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if owner != "" {
+				svc, err := auth.NewService(g.configDir)
+				if err != nil {
+					return err
+				}
+				u, ok := svc.Account(owner)
+				if !ok {
+					return fmt.Errorf("%w %q", auth.ErrNoSuchUser, owner)
+				}
+				if !u.Role.Allows(auth.Role(role)) {
+					return errors.New("a token cannot have more than its owner's role")
+				}
+			}
 			tk, err := auth.NewTokens(g.configDir)
 			if err != nil {
 				return err
@@ -66,7 +85,7 @@ A token limited to certificates fetches those and can do nothing else.`,
 			if days > 0 {
 				ttl = time.Duration(days) * 24 * time.Hour
 			}
-			tok, secret, err := tk.Create(args[0], auth.Role(role), ttl, "cli", auth.Limits{Certificates: certificates, Metrics: metrics})
+			tok, secret, err := tk.Create(args[0], auth.Role(role), ttl, "cli", owner, auth.Limits{Certificates: certificates, Metrics: metrics})
 			if err != nil {
 				return err
 			}
@@ -83,6 +102,7 @@ A token limited to certificates fetches those and can do nothing else.`,
 	create.Flags().IntVar(&days, "days", 0, "expire the token after this many days (0 never expires)")
 	create.Flags().StringSliceVar(&certificates, "certificates", nil, "limit the token to fetching these certificates, and nothing else")
 	create.Flags().BoolVar(&metrics, "metrics", false, "limit the token to reading /metrics, and nothing else")
+	create.Flags().StringVar(&owner, "owner", "", "the account the token belongs to; none makes a router token")
 
 	del := &cobra.Command{
 		Use:   "delete <id-or-name>",

@@ -12,8 +12,10 @@ import (
 )
 
 func (a *api) registerTokens(mux *router) {
+	mux.HandleFunc("GET /api/v1/auth/tokens", a.protect(a.listOwnTokens))
+	mux.HandleFunc("POST /api/v1/auth/tokens", a.protect(a.createToken))
+	mux.HandleFunc("DELETE /api/v1/auth/tokens/{id}", a.protect(a.deleteOwnToken))
 	mux.HandleFunc("GET /api/v1/tokens", a.admin(a.listTokens))
-	mux.HandleFunc("POST /api/v1/tokens", a.admin(a.createToken))
 	mux.HandleFunc("DELETE /api/v1/tokens/{id}", a.admin(a.deleteToken))
 }
 
@@ -37,9 +39,28 @@ type createdToken struct {
 	Secret string `json:"secret"`
 }
 
+// listOwnTokens answers the signed-in account's tokens.
+func (a *api) listOwnTokens(w http.ResponseWriter, r *http.Request) error {
+	if a.tokens == nil {
+		return &unavailable{errors.New("API tokens are not available")}
+	}
+	sess, err := a.current(r)
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, a.tokens.ListOwned(sess.Username))
+	return nil
+}
+
+// createToken mints a token for the signed-in account, with no more than
+// its role.
 func (a *api) createToken(w http.ResponseWriter, r *http.Request) error {
 	if a.tokens == nil {
 		return &unavailable{errors.New("API tokens are not available")}
+	}
+	sess, err := a.current(r)
+	if err != nil {
+		return err
 	}
 	var req struct {
 		Name string `json:"name"`
@@ -62,6 +83,13 @@ func (a *api) createToken(w http.ResponseWriter, r *http.Request) error {
 	if !role.Valid() {
 		return &badRequest{fmt.Errorf("unknown role %q", req.Role)}
 	}
+	mine := a.auth.Role(sess.Username)
+	if !mine.Allows(role) {
+		return &badRequest{errors.New("a token cannot have more than your role")}
+	}
+	if len(req.Certificates) > 0 && !mine.Allows(auth.RoleAdmin) {
+		return &badRequest{errors.New("only an admin can make a certificate token")}
+	}
 	if req.ExpiresInDays < 0 || req.ExpiresInDays > 3650 {
 		return &badRequest{errors.New("expiresInDays must be 0-3650")}
 	}
@@ -69,11 +97,7 @@ func (a *api) createToken(w http.ResponseWriter, r *http.Request) error {
 	if req.ExpiresInDays > 0 {
 		ttl = time.Duration(req.ExpiresInDays) * 24 * time.Hour
 	}
-	by := ""
-	if p, ok := a.authenticate(r); ok {
-		by = p.Name
-	}
-	tok, secret, err := a.tokens.Create(req.Name, role, ttl, by, auth.Limits{Certificates: req.Certificates, Metrics: req.Metrics})
+	tok, secret, err := a.tokens.Create(req.Name, role, ttl, sess.Username, sess.Username, auth.Limits{Certificates: req.Certificates, Metrics: req.Metrics})
 	if err != nil {
 		return &badRequest{err}
 	}
@@ -86,6 +110,31 @@ func (a *api) createToken(w http.ResponseWriter, r *http.Request) error {
 	}
 	a.record(r, audit.TokenCreate, tok.Name, detail)
 	writeJSON(w, http.StatusCreated, createdToken{Token: tok, Secret: secret})
+	return nil
+}
+
+// deleteOwnToken deletes one of the signed-in account's tokens.
+func (a *api) deleteOwnToken(w http.ResponseWriter, r *http.Request) error {
+	if a.tokens == nil {
+		return &unavailable{errors.New("API tokens are not available")}
+	}
+	sess, err := a.current(r)
+	if err != nil {
+		return err
+	}
+	ref := r.PathValue("id")
+	name := ref
+	for _, tok := range a.tokens.ListOwned(sess.Username) {
+		if tok.ID == ref || strings.EqualFold(tok.Name, ref) {
+			name = tok.Name
+			break
+		}
+	}
+	if err := a.tokens.DeleteOf(sess.Username, ref); err != nil {
+		return err
+	}
+	a.record(r, audit.TokenDelete, name, "")
+	w.WriteHeader(http.StatusNoContent)
 	return nil
 }
 

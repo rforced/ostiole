@@ -23,7 +23,7 @@ func TestTokenRoundTrip(t *testing.T) {
 	t.Parallel()
 	tk := tokens(t)
 
-	tok, secret, err := tk.Create("monitoring", RoleViewer, 0, "admin", Limits{})
+	tok, secret, err := tk.Create("monitoring", RoleViewer, 0, "admin", "", Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestTokenRoundTrip(t *testing.T) {
 func TestAuthenticateRejects(t *testing.T) {
 	t.Parallel()
 	tk := tokens(t)
-	_, secret, err := tk.Create("real", RoleAdmin, 0, "", Limits{})
+	_, secret, err := tk.Create("real", RoleAdmin, 0, "", "", Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestTokenExpiry(t *testing.T) {
 	now := time.Now()
 	tk.now = func() time.Time { return now }
 
-	_, secret, err := tk.Create("short", RoleViewer, 24*time.Hour, "", Limits{})
+	_, secret, err := tk.Create("short", RoleViewer, 24*time.Hour, "", "", Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestTokenExpiry(t *testing.T) {
 		t.Errorf("after expiry = %v, want ErrTokenExpired", err)
 	}
 	// Refused, but kept a while: a clock ahead at boot must not prune it.
-	if _, _, err := tk.Create("later", RoleViewer, 0, "", Limits{}); err != nil {
+	if _, _, err := tk.Create("later", RoleViewer, 0, "", "", Limits{}); err != nil {
 		t.Fatal(err)
 	}
 	raw, err := os.ReadFile(tk.path)
@@ -139,10 +139,10 @@ func TestExpiredTokensArePruned(t *testing.T) {
 			t.Fatal(err)
 		}
 		tk.now = func() time.Time { return at }
-		if _, _, err := tk.Create("nightly-report", RoleViewer, 24*time.Hour, "", Limits{}); err != nil {
+		if _, _, err := tk.Create("nightly-report", RoleViewer, 24*time.Hour, "", "", Limits{}); err != nil {
 			t.Fatal(err)
 		}
-		if _, _, err := tk.Create("wall-display", RoleViewer, 0, "", Limits{}); err != nil {
+		if _, _, err := tk.Create("wall-display", RoleViewer, 0, "", "", Limits{}); err != nil {
 			t.Fatal(err)
 		}
 		return tk
@@ -156,7 +156,7 @@ func TestExpiredTokensArePruned(t *testing.T) {
 		if read(t, tk.path) != before {
 			t.Error("listing wrote the file")
 		}
-		if _, _, err := tk.Create("door-sensor", RoleViewer, 0, "", Limits{}); err != nil {
+		if _, _, err := tk.Create("door-sensor", RoleViewer, 0, "", "", Limits{}); err != nil {
 			t.Fatal(err)
 		}
 		if raw := read(t, tk.path); strings.Contains(raw, `"nightly-report"`) || !strings.Contains(raw, `"wall-display"`) {
@@ -190,16 +190,16 @@ func TestExpiredTokensArePruned(t *testing.T) {
 func TestTokenNamesAreUniqueAndChecked(t *testing.T) {
 	t.Parallel()
 	tk := tokens(t)
-	if _, _, err := tk.Create("taken", RoleViewer, 0, "", Limits{}); err != nil {
+	if _, _, err := tk.Create("taken", RoleViewer, 0, "", "", Limits{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := tk.Create("TAKEN", RoleViewer, 0, "", Limits{}); err == nil {
+	if _, _, err := tk.Create("TAKEN", RoleViewer, 0, "", "", Limits{}); err == nil {
 		t.Error("a duplicate name was accepted")
 	}
-	if _, _, err := tk.Create("", RoleViewer, 0, "", Limits{}); err == nil {
+	if _, _, err := tk.Create("", RoleViewer, 0, "", "", Limits{}); err == nil {
 		t.Error("an empty name was accepted")
 	}
-	if _, _, err := tk.Create("fine", "wizard", 0, "", Limits{}); err == nil {
+	if _, _, err := tk.Create("fine", "wizard", 0, "", "", Limits{}); err == nil {
 		t.Error("an unknown role was accepted")
 	}
 }
@@ -207,7 +207,7 @@ func TestTokenNamesAreUniqueAndChecked(t *testing.T) {
 func TestRestrictedTokenCarriesItsCertificates(t *testing.T) {
 	t.Parallel()
 	tk := tokens(t)
-	tok, secret, err := tk.Create("proxy", RoleViewer, 0, "", Limits{Certificates: []string{"router", "mail"}})
+	tok, secret, err := tk.Create("proxy", RoleViewer, 0, "", "", Limits{Certificates: []string{"router", "mail"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,14 +221,14 @@ func TestRestrictedTokenCarriesItsCertificates(t *testing.T) {
 	if !slices.Equal(back.Certificates, tok.Certificates) {
 		t.Errorf("authenticated = %v, want %v", back.Certificates, tok.Certificates)
 	}
-	if _, _, err := tk.Create("bad", RoleViewer, 0, "", Limits{Certificates: []string{"Not A Name"}}); err == nil {
+	if _, _, err := tk.Create("bad", RoleViewer, 0, "", "", Limits{Certificates: []string{"Not A Name"}}); err == nil {
 		t.Error("a name no certificate could have was accepted")
 	}
 	too := make([]string, MaxTokenCertificates+1)
 	for i := range too {
 		too[i] = fmt.Sprintf("c%d", i)
 	}
-	if _, _, err := tk.Create("many", RoleViewer, 0, "", Limits{Certificates: too}); err == nil {
+	if _, _, err := tk.Create("many", RoleViewer, 0, "", "", Limits{Certificates: too}); err == nil {
 		t.Error("an unbounded list was accepted")
 	}
 }
@@ -238,17 +238,17 @@ func TestRestrictedTokenCarriesItsCertificates(t *testing.T) {
 func TestMetricsTokenIsAViewerAndNothingElse(t *testing.T) {
 	t.Parallel()
 	tk := tokens(t)
-	tok, secret, err := tk.Create("scraper", RoleViewer, 0, "", Limits{Metrics: true})
+	tok, secret, err := tk.Create("scraper", RoleViewer, 0, "", "", Limits{Metrics: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if back, err := tk.Authenticate(secret); err != nil || !back.Metrics || !tok.Metrics {
 		t.Errorf("authenticated = %+v, %v", back, err)
 	}
-	if _, _, err := tk.Create("loud", RoleAdmin, 0, "", Limits{Metrics: true}); err == nil {
+	if _, _, err := tk.Create("loud", RoleAdmin, 0, "", "", Limits{Metrics: true}); err == nil {
 		t.Error("an admin limited to the metrics was accepted")
 	}
-	if _, _, err := tk.Create("both", RoleViewer, 0, "", Limits{Metrics: true, Certificates: []string{"router"}}); err == nil {
+	if _, _, err := tk.Create("both", RoleViewer, 0, "", "", Limits{Metrics: true, Certificates: []string{"router"}}); err == nil {
 		t.Error("metrics and certificates together were accepted")
 	}
 }
@@ -256,8 +256,8 @@ func TestMetricsTokenIsAViewerAndNothingElse(t *testing.T) {
 func TestDeleteTokenByNameOrID(t *testing.T) {
 	t.Parallel()
 	tk := tokens(t)
-	byName, _, _ := tk.Create("by-name", RoleViewer, 0, "", Limits{})
-	byID, _, _ := tk.Create("by-id", RoleViewer, 0, "", Limits{})
+	byName, _, _ := tk.Create("by-name", RoleViewer, 0, "", "", Limits{})
+	byID, _, _ := tk.Create("by-id", RoleViewer, 0, "", "", Limits{})
 
 	if err := tk.Delete("BY-NAME"); err != nil {
 		t.Errorf("delete by name: %v", err)
@@ -286,7 +286,7 @@ func TestTokensFollowTheFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, secret, err := first.Create("shared", RoleOperator, 0, "", Limits{})
+	_, secret, err := first.Create("shared", RoleOperator, 0, "", "", Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,5 +308,114 @@ func TestRolesRank(t *testing.T) {
 	}
 	if Role("wizard").Valid() || Role("wizard").Allows(RoleViewer) {
 		t.Error("an unknown role should allow nothing")
+	}
+}
+
+func TestTokensBelongToAnOwner(t *testing.T) {
+	t.Parallel()
+	tk := tokens(t)
+	mint := func(name, owner string) Token {
+		t.Helper()
+		tok, _, err := tk.Create(name, RoleViewer, 0, owner, owner, Limits{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tok
+	}
+	first := mint("brindle-backup", "mira")
+	mint("brindle-scrape", "mira")
+	other := mint("otto-panel", "otto")
+	mint("router-wide", "")
+
+	if got := tk.ListOwned("mira"); len(got) != 2 || got[0].Name != "brindle-backup" || got[0].Owner != "mira" || got[0].Hash != "" {
+		t.Errorf("mira's = %+v", got)
+	}
+	if got := tk.ListOwned(""); len(got) != 0 {
+		t.Errorf("an empty owner lists %+v", got)
+	}
+
+	if err := tk.DeleteOf("mira", other.ID); !errors.Is(err, ErrTokenNotFound) {
+		t.Errorf("deleting another's token = %v", err)
+	}
+	if err := tk.DeleteOf("", "router-wide"); !errors.Is(err, ErrTokenNotFound) {
+		t.Errorf("deleting a router token as nobody = %v", err)
+	}
+	if err := tk.DeleteOf("mira", first.ID); err != nil {
+		t.Errorf("delete own by id: %v", err)
+	}
+	if err := tk.DeleteOf("mira", "BRINDLE-SCRAPE"); err != nil {
+		t.Errorf("delete own by name: %v", err)
+	}
+	if got := len(tk.List()); got != 2 {
+		t.Errorf("%d left, want 2", got)
+	}
+
+	if err := tk.Rename("otto", "otis"); err != nil {
+		t.Fatal(err)
+	}
+	if got := tk.ListOwned("otis"); len(got) != 1 || got[0].CreatedBy != "otto" {
+		t.Errorf("after rename = %+v", got)
+	}
+	if err := tk.DeleteOwned("otis"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tk.DeleteOwned("nobody"); err != nil {
+		t.Errorf("deleting none = %v", err)
+	}
+	if got := tk.List(); len(got) != 1 || got[0].Name != "router-wide" {
+		t.Errorf("left = %+v", got)
+	}
+}
+
+func TestAdoptGivesTokensToTheirMakers(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	tk, err := NewTokens(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, by := range map[string]string{"kept": "mira", "gone": "otto", "shell": "cli", "nobody": ""} {
+		if _, _, err := tk.Create(name, RoleViewer, 0, by, "", Limits{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, _, err := tk.Create("theirs", RoleViewer, 0, "mira", "otto", Limits{}); err != nil {
+		t.Fatal(err)
+	}
+	exists := func(name string) bool { return name == "mira" }
+	if err := tk.Adopt(exists); err != nil {
+		t.Fatal(err)
+	}
+	owners := map[string]string{}
+	for _, tok := range tk.List() {
+		owners[tok.Name] = tok.Owner
+	}
+	want := map[string]string{"kept": "mira", "gone": "", "shell": "", "nobody": "", "theirs": "otto"}
+	for name, owner := range want {
+		if owners[name] != owner {
+			t.Errorf("%s owned by %q, want %q", name, owners[name], owner)
+		}
+	}
+
+	info, err := os.Stat(tk.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tk.Adopt(exists); err != nil {
+		t.Fatal(err)
+	}
+	again, err := os.Stat(tk.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(info, again) {
+		t.Error("a second Adopt wrote the file")
+	}
+	reread, err := NewTokens(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reread.ListOwned("mira"); len(got) != 1 || got[0].Name != "kept" {
+		t.Errorf("after reload = %+v", got)
 	}
 }

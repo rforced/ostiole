@@ -1,63 +1,74 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import TokensSection from '@/views/system/TokensSection.vue'
 
 vi.mock('@/lib/api', () => ({
-  api: { tokens: { list: vi.fn(), create: vi.fn(), remove: vi.fn() } },
+  api: { tokens: { list: vi.fn(), remove: vi.fn() } },
   ApiError: class ApiError extends Error {},
 }))
 
 const stubs = {
-  ConfirmButton: true,
-  TokenDialog: { template: '<div />' },
+  ConfirmButton: { props: ['typed'], template: '<button type="button">Delete</button>' },
 }
 
-/** Mounts the card with a token just minted, the one moment its secret is shown. */
-async function minted() {
-  api.tokens.list.mockResolvedValue([])
-  api.tokens.create.mockResolvedValue({ name: 'ci', secret: 'ost_secret' })
-  const wrapper = mount(TokensSection, { global: { stubs }, attachTo: document.body })
-  await flushPromises()
-  wrapper.findComponent(stubs.TokenDialog).vm.$emit('create', { name: 'ci' })
+async function mounted() {
+  api.tokens.list.mockResolvedValue([
+    {
+      id: 'tk1',
+      name: 'grafite',
+      role: 'viewer',
+      owner: 'marlow',
+      createdAt: '2026-10-01T00:00:00Z',
+    },
+    { id: 'tk2', name: 'nightly', role: 'operator', createdAt: '2026-10-02T00:00:00Z' },
+  ])
+  const wrapper = mount(TokensSection, { global: { stubs } })
   await flushPromises()
   return wrapper
 }
 
-const copyButton = (w) => w.findAll('button').find((b) => /Cop|Selected/.test(b.text()))
+const cell = (w, row, label) => w.findAll('tbody tr')[row].find(`td[data-label="${label}"]`)
 
 describe('TokensSection', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
   })
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    document.body.innerHTML = ''
+
+  it('lists every token with its owner, a router token as router', async () => {
+    const w = await mounted()
+    expect(w.text()).toContain("Every account's tokens. New ones are made on the Account page.")
+    expect(w.findAll('th').map((t) => t.text())).toEqual([
+      'Token',
+      'Owner',
+      'Role',
+      'Created',
+      'Expires',
+      'Last used',
+      '',
+    ])
+    expect(cell(w, 0, 'Owner').text()).toBe('marlow')
+    const router = cell(w, 1, 'Owner').get('span')
+    expect(router.text()).toBe('router')
+    expect(router.classes()).toContain('text-ink-muted')
   })
 
-  it('copies the secret with the clipboard where the page may use it', async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined)
-    vi.stubGlobal('isSecureContext', true)
-    vi.stubGlobal('navigator', { clipboard: { writeText } })
-    const wrapper = await minted()
-    await copyButton(wrapper).trigger('click')
-    await flushPromises()
-    expect(writeText).toHaveBeenCalledWith('ost_secret')
-    expect(copyButton(wrapper).text()).toBe('Copied')
+  it('makes no tokens', async () => {
+    const w = await mounted()
+    expect(w.text()).not.toContain('Add token')
   })
 
-  // Plain HTTP on the LAN has no clipboard API; the old copy command does it.
-  it('falls back to the copy command over plain HTTP', async () => {
-    vi.stubGlobal('isSecureContext', false)
-    document.execCommand = vi.fn().mockReturnValue(true)
-    const wrapper = await minted()
-    await copyButton(wrapper).trigger('click')
+  it('deletes any token after the typed confirm', async () => {
+    api.tokens.remove.mockResolvedValue(undefined)
+    const w = await mounted()
+    const del = w.findAllComponents(stubs.ConfirmButton)[1]
+    expect(del.props('typed')).toBe('nightly')
+    del.vm.$emit('confirm')
     await flushPromises()
-    expect(document.execCommand).toHaveBeenCalledWith('copy')
-    expect(window.getSelection().toString()).toBe('ost_secret')
-    expect(copyButton(wrapper).text()).toBe('Copied')
+    expect(api.tokens.remove).toHaveBeenCalledWith('tk2')
+    expect(api.tokens.list).toHaveBeenCalledTimes(2)
   })
 })

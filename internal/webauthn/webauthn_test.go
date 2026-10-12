@@ -55,7 +55,7 @@ func creation(t testing.TB, c []byte) map[string]any {
 
 func request(t testing.TB, cred webauthn.Credential, c []byte) map[string]any {
 	t.Helper()
-	return served(t, webauthn.RequestOptions(rp, []webauthn.Credential{cred}, c))
+	return served(t, webauthn.RequestOptions(rp, []webauthn.Credential{cred}, c, false))
 }
 
 func register(t testing.TB, a *webauthntest.Authenticator) webauthn.Credential {
@@ -102,9 +102,9 @@ func TestEveryKindOfKey(t *testing.T) {
 
 			a.SignCount = 3
 			resp := a.Assert(opts, origin)
-			count, err := webauthn.VerifyAssertion(resp, cred, c, rp, origin)
-			if err != nil || count != 3 {
-				t.Fatalf("sign-in gave count %d and error %v", count, err)
+			got, err := webauthn.VerifyAssertion(resp, cred, c, rp, origin)
+			if err != nil || got.SignCount != 3 || !got.UserVerified {
+				t.Fatalf("sign-in gave %+v and error %v", got, err)
 			}
 
 			tampered := func(name string, change func(*webauthn.AssertionResponse)) {
@@ -284,10 +284,10 @@ func TestSignCount(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cred.SignCount, a.SignCount = tc.stored, tc.got
-			n, err := webauthn.VerifyAssertion(a.Assert(opts, origin), cred, c, rp, origin)
+			got, err := webauthn.VerifyAssertion(a.Assert(opts, origin), cred, c, rp, origin)
 			switch {
-			case tc.counter && (err != nil || n != tc.got):
-				t.Errorf("got count %d and error %v, want %d", n, err, tc.got)
+			case tc.counter && (err != nil || got.SignCount != tc.got):
+				t.Errorf("got count %d and error %v, want %d", got.SignCount, err, tc.got)
 			case !tc.counter && !errors.Is(err, webauthn.ErrCounter):
 				t.Errorf("got %v, want %v", err, webauthn.ErrCounter)
 			}
@@ -370,8 +370,28 @@ func TestOptionsAreReadyForABrowser(t *testing.T) {
 		t.Errorf("a passkey to exclude is not listed as a descriptor: %s", with)
 	}
 
-	get := asJSON(webauthn.RequestOptions(rp, nil, c))
-	if !strings.Contains(get, `"allowCredentials":[]`) || !strings.Contains(get, `"rpId":"router.example"`) {
+	get := asJSON(webauthn.RequestOptions(rp, nil, c, false))
+	if !strings.Contains(get, `"allowCredentials":[]`) || !strings.Contains(get, `"rpId":"router.example"`) ||
+		!strings.Contains(get, `"userVerification":"preferred"`) {
 		t.Errorf("request options: %s", get)
+	}
+	if required := asJSON(webauthn.RequestOptions(rp, nil, c, true)); !strings.Contains(required, `"userVerification":"required"`) {
+		t.Errorf("request options asking for verification: %s", required)
+	}
+}
+
+func TestUserVerified(t *testing.T) {
+	a := webauthntest.New("es256")
+	cred := register(t, a)
+	c := challenge(t)
+	opts := request(t, cred, c)
+	a.UserVerified = false
+	got, err := webauthn.VerifyAssertion(a.Assert(opts, origin), cred, c, rp, origin)
+	if err != nil || got.UserVerified {
+		t.Fatalf("a device that skipped the PIN gave %+v and error %v", got, err)
+	}
+	a.UserVerified, a.SignCount = true, 1
+	if got, err = webauthn.VerifyAssertion(a.Assert(opts, origin), cred, c, rp, origin); err != nil || !got.UserVerified {
+		t.Fatalf("a device that asked for the PIN gave %+v and error %v", got, err)
 	}
 }

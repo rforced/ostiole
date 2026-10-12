@@ -41,6 +41,7 @@ import DashboardView from '@/views/DashboardView.vue'
  * @property {Tab[]} [tabs] facets the page renders with AppTabs, first is the default
  * @property {boolean} [ownHeader] the page renders PageHeader itself, to fill its slots
  * @property {boolean} [needsConfig] the page edits the draft; without one it says so
+ * @property {boolean} [adminOnly] the page is for admins; others neither see nor reach it
  * @typedef {object} NavItem
  * @property {string} to path
  * @property {string} label sidebar row
@@ -282,6 +283,7 @@ export const NAV = [
         path: 'accounts',
         label: 'Accounts',
         view: () => import('@/views/system/AccountsPage.vue'),
+        adminOnly: true,
         tabs: [
           { value: 'accounts', label: 'Accounts' },
           { value: 'audit', label: 'Audit log' },

@@ -307,7 +307,7 @@ func newRootCmd() *cobra.Command {
 		newResetPasswordCmd(g),
 		newUsersCmd(g),
 		newTokensCmd(g),
-		newSecondFactorCmd(g),
+		newMFACmd(g),
 		newInstallCmd(g),
 		newRepairCmd(g),
 		newTakeoverCmd(g),

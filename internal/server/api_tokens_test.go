@@ -76,7 +76,7 @@ func withToken(t *testing.T, srv *httptest.Server, method, path, token string) (
 
 func mintToken(t *testing.T, srv *httptest.Server, name, role string) string {
 	t.Helper()
-	resp, raw := do(t, srv, http.MethodPost, "/api/v1/tokens",
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/auth/tokens",
 		map[string]any{"name": name, "role": role})
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create token: %d %s", resp.StatusCode, raw)
@@ -152,7 +152,7 @@ func TestTokensAreListedAndDeleted(t *testing.T) {
 	if err := json.Unmarshal(raw, &list); err != nil {
 		t.Fatal(err)
 	}
-	if len(list) != 1 || list[0].Name != "monitoring" || list[0].Role != auth.RoleViewer {
+	if len(list) != 1 || list[0].Name != "monitoring" || list[0].Role != auth.RoleViewer || list[0].Owner != "admin" {
 		t.Fatalf("list = %+v", list)
 	}
 	// The secret is never handed out again.
@@ -258,7 +258,7 @@ func TestOperatorCannotTakeWhatIsTheAdministrators(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, operator, err := tokens.Create("automation", auth.RoleOperator, 0, "admin", auth.Limits{})
+	_, operator, err := tokens.Create("automation", auth.RoleOperator, 0, "admin", "", auth.Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,4 +332,140 @@ func sendAs(t *testing.T, srv *httptest.Server, path, token string, body any) (*
 	defer resp.Body.Close()
 	out, _ := io.ReadAll(resp.Body)
 	return resp, out
+}
+
+// signedInAs makes an account with the role and answers its session cookie.
+func signedInAs(t *testing.T, as *auth.Service, name string, role auth.Role) *http.Cookie {
+	t.Helper()
+	if err := as.SetPassword(name, testPassword); err != nil {
+		t.Fatal(err)
+	}
+	if err := as.SetRole(name, role); err != nil {
+		t.Fatal(err)
+	}
+	sess, err := as.SignIn(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &http.Cookie{Name: SessionCookie, Value: sess.ID}
+}
+
+// doAs sends a request with the cookie alone, as the browser would.
+func doAs(t *testing.T, srv *httptest.Server, cookie *http.Cookie, method, path string, body any) (*http.Response, []byte) {
+	t.Helper()
+	var rdr io.Reader
+	if body != nil {
+		raw, err := json.Marshal(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rdr = bytes.NewReader(raw)
+	}
+	req, err := http.NewRequest(method, srv.URL+path, rdr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set(RequestHeader, RequestHeaderValue)
+	req.AddCookie(cookie)
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	return resp, raw
+}
+
+func TestTokenCannotOutrankItsMaker(t *testing.T) {
+	t.Parallel()
+	srv, as, _ := roleServer(t)
+	operator := signedInAs(t, as, "quill", auth.RoleOperator)
+
+	resp, raw := doAs(t, srv, operator, http.MethodPost, "/api/v1/auth/tokens", map[string]any{"name": "too-much", "role": "admin"})
+	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(raw), "more than your role") {
+		t.Errorf("operator minting admin: %d %s", resp.StatusCode, raw)
+	}
+	resp, raw = doAs(t, srv, operator, http.MethodPost, "/api/v1/auth/tokens", map[string]any{"name": "fetch", "role": "viewer", "certificates": []string{"web"}})
+	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(raw), "only an admin") {
+		t.Errorf("operator minting a certificate token: %d %s", resp.StatusCode, raw)
+	}
+	resp, raw = doAs(t, srv, operator, http.MethodPost, "/api/v1/auth/tokens", map[string]any{"name": "scrape", "metrics": true})
+	if resp.StatusCode != http.StatusCreated {
+		t.Errorf("operator minting a metrics token: %d %s", resp.StatusCode, raw)
+	}
+	resp, raw = doAs(t, srv, operator, http.MethodPost, "/api/v1/auth/tokens", map[string]any{"name": "deploy", "role": "operator"})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("operator minting operator: %d %s", resp.StatusCode, raw)
+	}
+	var tok auth.Token
+	if err := json.Unmarshal(raw, &tok); err != nil {
+		t.Fatal(err)
+	}
+	if tok.Owner != "quill" || tok.CreatedBy != "quill" || tok.Role != auth.RoleOperator {
+		t.Errorf("token = %+v", tok)
+	}
+
+	resp, raw = do(t, srv, http.MethodPost, "/api/v1/auth/tokens", map[string]any{"name": "fetch", "role": "viewer", "certificates": []string{"web"}})
+	if resp.StatusCode != http.StatusCreated {
+		t.Errorf("admin minting a certificate token: %d %s", resp.StatusCode, raw)
+	}
+	if resp, _ := do(t, srv, http.MethodPost, "/api/v1/tokens", map[string]any{"name": "old-way"}); resp.StatusCode != http.StatusMethodNotAllowed && resp.StatusCode != http.StatusNotFound {
+		t.Errorf("POST /api/v1/tokens = %d, want it gone", resp.StatusCode)
+	}
+}
+
+func TestOwnTokensAreListedAndDeleted(t *testing.T) {
+	t.Parallel()
+	srv, as, tokens := roleServer(t)
+	adminSecret := mintToken(t, srv, "admin-panel", "admin")
+	viewer := signedInAs(t, as, "wren", auth.RoleViewer)
+	resp, raw := doAs(t, srv, viewer, http.MethodPost, "/api/v1/auth/tokens", map[string]any{"name": "wren-display"})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("viewer mint: %d %s", resp.StatusCode, raw)
+	}
+
+	resp, raw = doAs(t, srv, viewer, http.MethodGet, "/api/v1/auth/tokens", nil)
+	var mine []auth.Token
+	if resp.StatusCode != http.StatusOK || json.Unmarshal(raw, &mine) != nil {
+		t.Fatalf("own list: %d %s", resp.StatusCode, raw)
+	}
+	if len(mine) != 1 || mine[0].Name != "wren-display" || mine[0].Owner != "wren" {
+		t.Errorf("own list = %+v", mine)
+	}
+	if resp, _ := doAs(t, srv, viewer, http.MethodGet, "/api/v1/tokens", nil); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("viewer listing every token = %d, want 403", resp.StatusCode)
+	}
+
+	resp, raw = do(t, srv, http.MethodGet, "/api/v1/tokens", nil)
+	var all []auth.Token
+	if resp.StatusCode != http.StatusOK || json.Unmarshal(raw, &all) != nil {
+		t.Fatalf("admin list: %d %s", resp.StatusCode, raw)
+	}
+	owners := map[string]string{}
+	for _, tok := range all {
+		owners[tok.Name] = tok.Owner
+	}
+	if len(all) != 2 || owners["admin-panel"] != "admin" || owners["wren-display"] != "wren" {
+		t.Errorf("admin list = %+v", all)
+	}
+
+	if resp, _ := doAs(t, srv, viewer, http.MethodDelete, "/api/v1/auth/tokens/admin-panel", nil); resp.StatusCode != http.StatusNotFound {
+		t.Errorf("viewer deleting the admin's token = %d, want 404", resp.StatusCode)
+	}
+	if resp, raw := doAs(t, srv, viewer, http.MethodDelete, "/api/v1/auth/tokens/WREN-DISPLAY", nil); resp.StatusCode != http.StatusNoContent {
+		t.Errorf("viewer deleting own: %d %s", resp.StatusCode, raw)
+	}
+	if got := tokens.List(); len(got) != 1 || got[0].Name != "admin-panel" {
+		t.Errorf("left = %+v", got)
+	}
+
+	// A token owns nothing, so it reaches none of the account's token routes.
+	for _, method := range []string{http.MethodGet, http.MethodPost} {
+		if resp, _ := withToken(t, srv, method, "/api/v1/auth/tokens", adminSecret); resp.StatusCode < 400 {
+			t.Errorf("token %s own tokens = %d", method, resp.StatusCode)
+		}
+	}
+	if resp, _ := withToken(t, srv, http.MethodGet, "/api/v1/tokens", adminSecret); resp.StatusCode != http.StatusOK {
+		t.Errorf("admin token listing every token = %d", resp.StatusCode)
+	}
 }

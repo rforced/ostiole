@@ -42,8 +42,8 @@ func testPasskey(name string) Passkey {
 func TestTOTPCodesWorkOnce(t *testing.T) {
 	t.Parallel()
 	s, now := withAccounts(t, "admin", "watcher")
-	if s.HasSecondFactor("admin") {
-		t.Fatal("a new account has a second factor")
+	if s.HasMFA("admin") {
+		t.Fatal("a new account has MFA")
 	}
 	if _, ok := s.TOTPSecret("admin"); ok {
 		t.Error("a secret for an account that never set one up")
@@ -51,15 +51,15 @@ func TestTOTPCodesWorkOnce(t *testing.T) {
 	if err := s.EnableTOTP("admin", testSecret, *now); err != nil {
 		t.Fatal(err)
 	}
-	if !s.HasSecondFactor("admin") || s.HasSecondFactor("watcher") || s.HasSecondFactor("ghost") {
-		t.Errorf("HasSecondFactor: admin %v, watcher %v, ghost %v",
-			s.HasSecondFactor("admin"), s.HasSecondFactor("watcher"), s.HasSecondFactor("ghost"))
+	if !s.HasMFA("admin") || s.HasMFA("watcher") || s.HasMFA("ghost") {
+		t.Errorf("HasMFA: admin %v, watcher %v, ghost %v",
+			s.HasMFA("admin"), s.HasMFA("watcher"), s.HasMFA("ghost"))
 	}
 	if secret, ok := s.TOTPSecret("admin"); !ok || secret != testSecret {
 		t.Errorf("TOTPSecret = %q, %v", secret, ok)
 	}
-	if totp, keys := s.SecondFactorOf("admin"); !totp || len(keys) != 0 {
-		t.Errorf("SecondFactorOf = %v, %v", totp, keys)
+	if totp, keys, alone := s.MFAOf("admin"); totp == nil || totp.Secret != "" || !totp.EnabledAt.Equal(*now) || len(keys) != 0 || alone {
+		t.Errorf("MFAOf = %+v, %v, %v", totp, keys, alone)
 	}
 
 	if err := s.UseTOTPStep("admin", 100); err != nil {
@@ -73,8 +73,11 @@ func TestTOTPCodesWorkOnce(t *testing.T) {
 	if err := s.UseTOTPStep("admin", 101); err != nil {
 		t.Errorf("the next step: %v", err)
 	}
-	if err := s.UseTOTPStep("watcher", 1); !errors.Is(err, ErrNoSecondFactor) {
-		t.Errorf("step for an account with no app: %v, want ErrNoSecondFactor", err)
+	if totp, _, _ := s.MFAOf("admin"); totp == nil || totp.LastStep != 101 {
+		t.Errorf("MFAOf after step 101 = %+v", totp)
+	}
+	if err := s.UseTOTPStep("watcher", 1); !errors.Is(err, ErrNoMFA) {
+		t.Errorf("step for an account with no app: %v, want ErrNoMFA", err)
 	}
 	if err := s.UseTOTPStep("ghost", 1); !errors.Is(err, ErrNoSuchUser) {
 		t.Errorf("step for an unknown account: %v, want ErrNoSuchUser", err)
@@ -136,7 +139,7 @@ func TestAPasskeyNeedsTheAuthenticatorAppFirst(t *testing.T) {
 	if err := s.AddPasskey("admin", testPasskey("desk")); !errors.Is(err, ErrTOTPFirst) {
 		t.Fatalf("passkey before the app: %v, want ErrTOTPFirst", err)
 	}
-	if s.HasSecondFactor("admin") {
+	if s.HasMFA("admin") {
 		t.Error("a refused passkey was kept")
 	}
 	if err := s.EnableTOTP("admin", testSecret, *now); err != nil {
@@ -166,13 +169,13 @@ func TestPasskeysAreAddedListedUsedAndRemoved(t *testing.T) {
 		t.Errorf("passkey for an unknown account: %v, want ErrNoSuchUser", err)
 	}
 
-	totp, listed := s.SecondFactorOf("admin")
-	if !totp || len(listed) != 2 || listed[0].Name != "desk" || listed[1].Name != "phone" {
-		t.Fatalf("SecondFactorOf = %v, %+v", totp, listed)
+	totp, listed, _ := s.MFAOf("admin")
+	if totp == nil || len(listed) != 2 || listed[0].Name != "desk" || listed[1].Name != "phone" {
+		t.Fatalf("MFAOf = %+v, %+v", totp, listed)
 	}
 	for _, k := range listed {
 		if k.PublicKey != "" {
-			t.Errorf("SecondFactorOf handed out the public key of %s", k.Name)
+			t.Errorf("MFAOf handed out the public key of %s", k.Name)
 		}
 	}
 	kept := s.Passkeys("admin")
@@ -214,7 +217,7 @@ func TestPasskeysAreAddedListedUsedAndRemoved(t *testing.T) {
 	if err := s.RemovePasskey("admin", desk.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, left := s.SecondFactorOf("admin"); len(left) != 1 || left[0].ID != phone.ID {
+	if _, left, _ := s.MFAOf("admin"); len(left) != 1 || left[0].ID != phone.ID {
 		t.Errorf("after removing the desk key: %+v", left)
 	}
 	if err := s.RemovePasskey("admin", desk.ID); !errors.Is(err, ErrNoSuchPasskey) {
@@ -223,18 +226,21 @@ func TestPasskeysAreAddedListedUsedAndRemoved(t *testing.T) {
 	if err := s.RemovePasskey("admin", phone.ID); err != nil {
 		t.Fatal(err)
 	}
-	if totp, left := s.SecondFactorOf("admin"); !totp || len(left) != 0 {
+	if totp, left, _ := s.MFAOf("admin"); totp == nil || len(left) != 0 {
 		t.Errorf("with every passkey gone: %v, %+v", totp, left)
 	}
 }
 
-func TestClearingTheSecondFactor(t *testing.T) {
+func TestClearingMFA(t *testing.T) {
 	t.Parallel()
 	s, now := withAccounts(t, "admin", "watcher")
 	if err := s.EnableTOTP("admin", testSecret, *now); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.AddPasskey("admin", testPasskey("desk")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetPasskeyLogin("admin", true); err != nil {
 		t.Fatal(err)
 	}
 	handle, err := s.UserID("admin")
@@ -246,17 +252,20 @@ func TestClearingTheSecondFactor(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := s.ClearSecondFactor("admin"); err != nil {
+	if err := s.ClearMFA("admin"); err != nil {
 		t.Fatal(err)
 	}
-	if s.HasSecondFactor("admin") {
-		t.Error("the account still has a second factor")
+	if s.HasMFA("admin") {
+		t.Error("the account still has MFA")
 	}
 	if _, ok := s.TOTPSecret("admin"); ok {
 		t.Error("the secret survived")
 	}
 	if keys := s.Passkeys("admin"); len(keys) != 0 {
 		t.Errorf("passkeys survived: %+v", keys)
+	}
+	if _, _, alone := s.MFAOf("admin"); alone {
+		t.Error("passkey sign-in stayed on")
 	}
 	if raw, err := os.ReadFile(filepath.Join(s.Dir(), UsersFile)); err != nil || strings.Contains(string(raw), testSecret) {
 		t.Errorf("the secret is still on disk (read error %v)", err)
@@ -265,22 +274,22 @@ func TestClearingTheSecondFactor(t *testing.T) {
 		t.Errorf("user handle after clearing = %q, %v; want %q", got, err, handle)
 	}
 	if _, ok := s.Session(sess.ID); !ok {
-		t.Error("clearing the second factor ended a session that was open")
+		t.Error("clearing MFA ended a session that was open")
 	}
 
-	if err := s.ClearSecondFactor("admin"); err != nil {
+	if err := s.ClearMFA("admin"); err != nil {
 		t.Errorf("clearing twice: %v", err)
 	}
-	if err := s.ClearSecondFactor("watcher"); err != nil {
+	if err := s.ClearMFA("watcher"); err != nil {
 		t.Errorf("clearing an account that has none: %v", err)
 	}
-	if err := s.ClearSecondFactor("ghost"); !errors.Is(err, ErrNoSuchUser) {
+	if err := s.ClearMFA("ghost"); !errors.Is(err, ErrNoSuchUser) {
 		t.Errorf("clearing an unknown account: %v, want ErrNoSuchUser", err)
 	}
 }
 
 // The command line resets an account while the daemon runs; the daemon must
-// not go on asking for a second factor the file no longer has.
+// not go on asking for MFA the file no longer has.
 func TestTheDaemonSeesAResetFromTheCommandLine(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -298,14 +307,14 @@ func TestTheDaemonSeesAResetFromTheCommandLine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !cli.HasSecondFactor("admin") {
+	if !cli.HasMFA("admin") {
 		t.Fatal("the command line does not see the app the daemon saved")
 	}
-	if err := cli.ClearSecondFactor("admin"); err != nil {
+	if err := cli.ClearMFA("admin"); err != nil {
 		t.Fatal(err)
 	}
-	if daemon.HasSecondFactor("admin") {
-		t.Error("the daemon still asks for a second factor after a reset")
+	if daemon.HasMFA("admin") {
+		t.Error("the daemon still asks for MFA after a reset")
 	}
 	if _, ok := daemon.TOTPSecret("admin"); ok {
 		t.Error("the daemon still holds the secret after a reset")
@@ -352,9 +361,9 @@ func TestAccountsCarryNoSecrets(t *testing.T) {
 	}
 }
 
-// A backup has to bring the second factor back with the accounts, or
+// A backup has to bring MFA back with the accounts, or
 // restoring one locks people out of an account they could not reset.
-func TestBackupKeepsTheSecondFactor(t *testing.T) {
+func TestBackupKeepsMFA(t *testing.T) {
 	t.Parallel()
 	s, now := withAccounts(t, "admin")
 	desk := testPasskey("desk")
@@ -490,29 +499,29 @@ func TestPendingSignInResolvesOnce(t *testing.T) {
 	if other := s.PendingLogin("admin"); other == token {
 		t.Error("two sign-ins share a token")
 	}
-	if user, ok := s.PendingUser(token); !ok || user != "admin" {
-		t.Errorf("PendingUser = %q, %v", user, ok)
+	if user, checked, ok := s.PendingUser(token); !ok || user != "admin" || !checked {
+		t.Errorf("PendingUser = %q, %v, %v", user, checked, ok)
 	}
 	for _, bogus := range []string{"", "nope"} {
-		if _, ok := s.PendingUser(bogus); ok {
+		if _, _, ok := s.PendingUser(bogus); ok {
 			t.Errorf("PendingUser(%q) found a sign-in", bogus)
 		}
 	}
 
-	sess, err := s.ResolvePending(token)
+	sess, err := s.ResolvePending(token, "192.0.2.1")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got, ok := s.Session(sess.ID); !ok || got.Username != "admin" {
 		t.Errorf("the session ResolvePending made: %+v, %v", got, ok)
 	}
-	if _, ok := s.PendingUser(token); ok {
+	if _, _, ok := s.PendingUser(token); ok {
 		t.Error("the sign-in outlived its session")
 	}
-	if _, err := s.ResolvePending(token); !errors.Is(err, ErrPendingGone) {
+	if _, err := s.ResolvePending(token, "192.0.2.1"); !errors.Is(err, ErrPendingGone) {
 		t.Errorf("resolving twice: %v, want ErrPendingGone", err)
 	}
-	if _, err := s.ResolvePending(""); !errors.Is(err, ErrPendingGone) {
+	if _, err := s.ResolvePending("", "192.0.2.1"); !errors.Is(err, ErrPendingGone) {
 		t.Errorf("resolving no token: %v, want ErrPendingGone", err)
 	}
 
@@ -521,7 +530,7 @@ func TestPendingSignInResolvesOnce(t *testing.T) {
 	if err := s.DeleteUser("temp"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.ResolvePending(gone); !errors.Is(err, ErrNoSuchUser) {
+	if _, err := s.ResolvePending(gone, "192.0.2.1"); !errors.Is(err, ErrNoSuchUser) {
 		t.Errorf("resolving for a deleted account: %v, want ErrNoSuchUser", err)
 	}
 }
@@ -534,17 +543,17 @@ func TestPendingSignInsExpire(t *testing.T) {
 	early = s.PendingLogin("admin")
 
 	*now = now.Add(pendingLife - time.Minute - time.Second)
-	if _, ok := s.PendingUser(late); !ok {
+	if _, _, ok := s.PendingUser(late); !ok {
 		t.Fatal("a sign-in ended before its five minutes were up")
 	}
 	*now = now.Add(2 * time.Second)
-	if _, ok := s.PendingUser(late); ok {
+	if _, _, ok := s.PendingUser(late); ok {
 		t.Error("a sign-in outlived its five minutes")
 	}
-	if _, err := s.ResolvePending(late); !errors.Is(err, ErrPendingGone) {
+	if _, err := s.ResolvePending(late, "192.0.2.1"); !errors.Is(err, ErrPendingGone) {
 		t.Errorf("resolving an expired sign-in: %v, want ErrPendingGone", err)
 	}
-	if _, ok := s.PendingUser(early); !ok {
+	if _, _, ok := s.PendingUser(early); !ok {
 		t.Error("expiry of one sign-in ended another")
 	}
 }
@@ -557,15 +566,15 @@ func TestFiveWrongCodesEndASignIn(t *testing.T) {
 
 	many := s.PendingLogin("admin")
 	for i := range pendingFailures {
-		if _, ok := s.PendingUser(many); !ok {
+		if _, _, ok := s.PendingUser(many); !ok {
 			t.Fatalf("sign-in ended after %d wrong codes", i)
 		}
 		s.FailPending(many, fmt.Sprintf("198.51.100.%d", i+1))
 	}
-	if _, ok := s.PendingUser(many); ok {
+	if _, _, ok := s.PendingUser(many); ok {
 		t.Error("sign-in still open after five wrong codes")
 	}
-	if _, err := s.ResolvePending(many); !errors.Is(err, ErrPendingGone) {
+	if _, err := s.ResolvePending(many, "192.0.2.1"); !errors.Is(err, ErrPendingGone) {
 		t.Errorf("resolving it: %v, want ErrPendingGone", err)
 	}
 	if s.limiter.blocked("198.51.100.1") {
@@ -575,12 +584,12 @@ func TestFiveWrongCodesEndASignIn(t *testing.T) {
 	const addr = "192.0.2.5"
 	one := s.PendingLogin("admin")
 	for i := range pendingFailures {
-		if _, ok := s.PendingUser(one); !ok {
+		if _, _, ok := s.PendingUser(one); !ok {
 			t.Fatalf("sign-in ended after %d wrong codes", i)
 		}
 		s.FailPending(one, addr)
 	}
-	if _, ok := s.PendingUser(one); ok {
+	if _, _, ok := s.PendingUser(one); ok {
 		t.Error("sign-in still open after five wrong codes from one address")
 	}
 	if err := s.Authenticate("admin", goodPassword, addr); !errors.Is(err, ErrRateLimited) {
@@ -605,22 +614,22 @@ func TestAShutOutAddressEndsTheAccountsSignIns(t *testing.T) {
 		s.FailPending(open[i%len(open)], addr)
 	}
 	for i, token := range open {
-		if _, ok := s.PendingUser(token); !ok {
+		if _, _, ok := s.PendingUser(token); !ok {
 			t.Fatalf("sign-in %d ended with tries left", i)
 		}
 	}
 	s.FailPending(open[0], addr)
 	for i, token := range open {
-		if _, ok := s.PendingUser(token); ok {
+		if _, _, ok := s.PendingUser(token); ok {
 			t.Errorf("sign-in %d outlived the shut-out address", i)
 		}
 	}
-	if _, ok := s.PendingUser(bystander); !ok {
+	if _, _, ok := s.PendingUser(bystander); !ok {
 		t.Error("another account's sign-in ended with it")
 	}
 }
 
-// The second factor has to hold against someone who knows the password.
+// MFA has to hold against someone who knows the password.
 // Were each password check to forgive the address its wrong codes, that
 // someone would get fresh tries every time, for ever.
 func TestAPasswordCheckDoesNotForgiveWrongCodes(t *testing.T) {
@@ -804,5 +813,251 @@ func TestTheServiceFollowsTheBypassFile(t *testing.T) {
 	}
 	if _, ok := s.Bypass(); ok {
 		t.Error("a bypass ended from the command line is still seen")
+	}
+}
+
+// A credential belongs to one account: were two to hold it, one device
+// would sign in as either.
+func TestAPasskeyBelongsToOneAccount(t *testing.T) {
+	t.Parallel()
+	s, now := withAccounts(t, "admin", "watcher")
+	for _, name := range []string{"admin", "watcher"} {
+		if err := s.EnableTOTP(name, testSecret, *now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	desk := testPasskey("desk")
+	if err := s.AddPasskey("admin", desk); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddPasskey("watcher", desk); !errors.Is(err, ErrPasskeyExists) {
+		t.Errorf("another account's passkey: %v, want ErrPasskeyExists", err)
+	}
+	if keys := s.Passkeys("watcher"); len(keys) != 0 {
+		t.Errorf("the refused passkey was kept: %+v", keys)
+	}
+}
+
+func TestRenamingAPasskey(t *testing.T) {
+	t.Parallel()
+	s, now := withAccounts(t, "admin", "watcher")
+	if err := s.EnableTOTP("admin", testSecret, *now); err != nil {
+		t.Fatal(err)
+	}
+	desk, phone := testPasskey("desk"), testPasskey("phone")
+	for _, k := range []Passkey{desk, phone} {
+		if err := s.AddPasskey("admin", k); err != nil {
+			t.Fatal(err)
+		}
+	}
+	held := s.Passkeys("admin")
+
+	*now = now.Add(time.Hour)
+	if err := s.RenamePasskey("admin", desk.ID, "office"); err != nil {
+		t.Fatal(err)
+	}
+	got := s.Passkeys("admin")
+	if got[0].Name != "office" || got[1].Name != "phone" || got[0].PublicKey != desk.PublicKey {
+		t.Errorf("after the rename: %+v", got)
+	}
+	if held[0].Name != "desk" {
+		t.Error("the rename changed a list handed out before it")
+	}
+	if u, _ := s.Account("admin"); !u.UpdatedAt.Equal(*now) {
+		t.Errorf("UpdatedAt = %v, want %v", u.UpdatedAt, *now)
+	}
+	if err := s.RenamePasskey("admin", desk.ID, "office"); err != nil {
+		t.Errorf("the same name again: %v", err)
+	}
+	if err := s.RenamePasskey("admin", "no-such", "x"); !errors.Is(err, ErrNoSuchPasskey) {
+		t.Errorf("an unknown passkey: %v, want ErrNoSuchPasskey", err)
+	}
+	if err := s.RenamePasskey("watcher", desk.ID, "x"); !errors.Is(err, ErrNoSuchPasskey) {
+		t.Errorf("another account's passkey: %v, want ErrNoSuchPasskey", err)
+	}
+	if err := s.RenamePasskey("ghost", desk.ID, "x"); !errors.Is(err, ErrNoSuchUser) {
+		t.Errorf("an unknown account: %v, want ErrNoSuchUser", err)
+	}
+
+	restarted, err := NewService(s.Dir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again := restarted.Passkeys("admin"); again[0].Name != "office" {
+		t.Errorf("after a restart: %+v", again)
+	}
+}
+
+func TestPasskeySignInSwitch(t *testing.T) {
+	t.Parallel()
+	s, now := withAccounts(t, "admin")
+	if err := s.SetPasskeyLogin("admin", true); !errors.Is(err, ErrNoPasskeys) {
+		t.Fatalf("on with no passkey: %v, want ErrNoPasskeys", err)
+	}
+	if err := s.SetPasskeyLogin("admin", false); err != nil {
+		t.Errorf("off when off: %v", err)
+	}
+	if err := s.SetPasskeyLogin("ghost", false); !errors.Is(err, ErrNoSuchUser) {
+		t.Errorf("an unknown account: %v, want ErrNoSuchUser", err)
+	}
+	if err := s.EnableTOTP("admin", testSecret, *now); err != nil {
+		t.Fatal(err)
+	}
+	desk, phone := testPasskey("desk"), testPasskey("phone")
+	for _, k := range []Passkey{desk, phone} {
+		if err := s.AddPasskey("admin", k); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.SetPasskeyLogin("admin", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, alone := s.MFAOf("admin"); !alone {
+		t.Error("MFAOf says the switch is off")
+	}
+	if u, _ := s.Account("admin"); !u.PasskeyLogin {
+		t.Error("Account says the switch is off")
+	}
+	restarted, err := NewService(s.Dir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, alone := restarted.MFAOf("admin"); !alone {
+		t.Error("the switch did not survive a restart")
+	}
+
+	if err := s.RemovePasskey("admin", desk.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, alone := s.MFAOf("admin"); !alone {
+		t.Error("removing one of two passkeys turned the switch off")
+	}
+	if err := s.RemovePasskey("admin", phone.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, alone := s.MFAOf("admin"); alone {
+		t.Error("the switch stayed on with no passkey left")
+	}
+
+	if err := s.AddPasskey("admin", desk); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetPasskeyLogin("admin", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetPasskeyLogin("admin", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, alone := s.MFAOf("admin"); alone {
+		t.Error("the switch did not turn off")
+	}
+}
+
+// A sign-in opened by a name alone has not passed the password, and the
+// routes that finish one need to tell.
+func TestPasswordlessSignIns(t *testing.T) {
+	t.Parallel()
+	s, _ := withAccounts(t, "admin")
+	token := s.StartPasskeyLogin("admin")
+	if raw, err := base64.RawURLEncoding.DecodeString(token); err != nil || len(raw) != 32 {
+		t.Fatalf("token %q is not 32 bytes of base64url (%v)", token, err)
+	}
+	if user, checked, ok := s.PendingUser(token); !ok || user != "admin" || checked {
+		t.Errorf("PendingUser = %q, %v, %v; want admin, not checked", user, checked, ok)
+	}
+	sess, err := s.ResolvePendingFrom(token, Client{Address: "192.0.2.9", Agent: "Testbrowser/1.0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sess.Address != "192.0.2.9" || sess.Agent != "Testbrowser/1.0" {
+		t.Errorf("the session keeps %q, %q", sess.Address, sess.Agent)
+	}
+	if _, err := s.ResolvePendingFrom(token, Client{}); !errors.Is(err, ErrPendingGone) {
+		t.Errorf("resolving twice: %v, want ErrPendingGone", err)
+	}
+}
+
+// Anyone can open a passwordless sign-in with a name, so how many are held
+// has a ceiling, and reaching it costs no sign-in after the password.
+func TestPasswordlessSignInsAreCapped(t *testing.T) {
+	t.Parallel()
+	s, now := withAccounts(t, "admin")
+	afterPassword := s.PendingLogin("admin")
+	first := s.StartPasskeyLogin("admin")
+	*now = now.Add(time.Second)
+	second := s.StartPasskeyLogin("admin")
+	*now = now.Add(time.Second)
+	for range maxPasswordless - 2 {
+		s.StartPasskeyLogin("admin")
+	}
+	if _, _, ok := s.PendingUser(first); !ok {
+		t.Fatal("a sign-in went before the ceiling was reached")
+	}
+	s.StartPasskeyLogin("admin")
+	if _, _, ok := s.PendingUser(first); ok {
+		t.Error("the oldest sign-in outlived the ceiling")
+	}
+	if _, _, ok := s.PendingUser(second); !ok {
+		t.Error("more than the oldest went")
+	}
+	if _, _, ok := s.PendingUser(afterPassword); !ok {
+		t.Error("a sign-in past the password went to make room")
+	}
+	held := 0
+	for _, p := range s.mfa.pending {
+		if p.passwordless {
+			held++
+		}
+	}
+	if held != maxPasswordless {
+		t.Errorf("%d passwordless sign-ins held, want %d", held, maxPasswordless)
+	}
+}
+
+// Finishing a sign-in forgives the address as a right password does.
+func TestResolvingASignInForgivesTheAddress(t *testing.T) {
+	t.Parallel()
+	s, _ := withAccounts(t, "admin")
+	const addr = "192.0.2.10"
+	for range MaxFailures - 1 {
+		s.limiter.failure(addr)
+	}
+	if _, err := s.ResolvePending(s.PendingLogin("admin"), addr); err != nil {
+		t.Fatal(err)
+	}
+	for range MaxFailures - 1 {
+		s.limiter.failure(addr)
+	}
+	if s.Blocked(addr) {
+		t.Error("failures from before the sign-in still count")
+	}
+	s.limiter.failure(addr)
+	if !s.Blocked(addr) || s.Blocked("192.0.2.11") {
+		t.Errorf("Blocked: %v for the address, %v for another", s.Blocked(addr), s.Blocked("192.0.2.11"))
+	}
+}
+
+func TestLoginKeepsTheClient(t *testing.T) {
+	t.Parallel()
+	s, _ := newService(t)
+	if err := s.Setup("admin", goodPassword); err != nil {
+		t.Fatal(err)
+	}
+	sess, err := s.LoginFrom("admin", goodPassword, Client{Address: "198.51.100.4", Agent: "Testbrowser/2.0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sess.Address != "198.51.100.4" || sess.Agent != "Testbrowser/2.0" {
+		t.Errorf("LoginFrom kept %q, %q", sess.Address, sess.Agent)
+	}
+	sess, err = s.Login("admin", goodPassword, "198.51.100.5")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sess.Address != "198.51.100.5" || sess.Agent != "" {
+		t.Errorf("Login kept %q, %q", sess.Address, sess.Agent)
+	}
+	if _, err := s.LoginFrom("admin", "wrong password here", Client{Address: "198.51.100.6"}); !errors.Is(err, ErrInvalidCredentials) {
+		t.Errorf("a wrong password: %v, want ErrInvalidCredentials", err)
 	}
 }

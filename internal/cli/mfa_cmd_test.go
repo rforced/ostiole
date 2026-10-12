@@ -13,9 +13,9 @@ import (
 	"ostiole/internal/auth"
 )
 
-func runSecondFactor(t *testing.T, dir string, args ...string) (string, error) {
+func runMFA(t *testing.T, dir string, args ...string) (string, error) {
 	t.Helper()
-	cmd := newSecondFactorCmd(&globals{configDir: dir})
+	cmd := newMFACmd(&globals{configDir: dir})
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -24,17 +24,17 @@ func runSecondFactor(t *testing.T, dir string, args ...string) (string, error) {
 	return out.String(), err
 }
 
-func mustSecondFactor(t *testing.T, dir string, args ...string) string {
+func mustMFA(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	out, err := runSecondFactor(t, dir, args...)
+	out, err := runMFA(t, dir, args...)
 	if err != nil {
 		t.Fatalf("%v: %v", args, err)
 	}
 	return out
 }
 
-// mfaAccounts makes alice, with an authenticator app and two passkeys, bob
-// with the app alone, and carol with neither.
+// mfaAccounts makes alice, with an authenticator app, two passkeys and
+// passkey sign-in, bob with the app alone, and carol with neither.
 func mfaAccounts(t *testing.T, dir string) {
 	t.Helper()
 	svc, err := auth.NewService(dir)
@@ -57,6 +57,9 @@ func mfaAccounts(t *testing.T, dir string) {
 			t.Fatal(err)
 		}
 	}
+	if err := svc.SetPasskeyLogin("alice", true); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestBypassLastsAsLongAsAsked(t *testing.T) {
@@ -75,7 +78,7 @@ func TestBypassLastsAsLongAsAsked(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
 			before := time.Now()
-			got := mustSecondFactor(t, dir, append([]string{"bypass"}, tc.args...)...)
+			got := mustMFA(t, dir, append([]string{"bypass"}, tc.args...)...)
 			b, ok := auth.ReadBypass(dir)
 			if !ok {
 				t.Fatalf("no bypass is running after\n%s", got)
@@ -86,7 +89,7 @@ func TestBypassLastsAsLongAsAsked(t *testing.T) {
 			if want := audit.ShellActor().Name; b.By != want {
 				t.Errorf("bypass started by %q, want %q", b.By, want)
 			}
-			if want := "second factor bypassed until " + b.Until.Local().Format(time.RFC3339) + " (" + tc.said + ")\n"; got != want {
+			if want := "MFA bypassed until " + b.Until.Local().Format(time.RFC3339) + " (" + tc.said + ")\n"; got != want {
 				t.Errorf("printed %q, want %q", got, want)
 			}
 		})
@@ -105,7 +108,7 @@ func TestBypassRefusesWhatIsOutOfRange(t *testing.T) {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
-			if _, err := runSecondFactor(t, dir, append([]string{"bypass"}, args...)...); err == nil {
+			if _, err := runMFA(t, dir, append([]string{"bypass"}, args...)...); err == nil {
 				t.Fatal("was accepted")
 			}
 			if _, ok := auth.ReadBypass(dir); ok {
@@ -121,8 +124,8 @@ func TestBypassRefusesWhatIsOutOfRange(t *testing.T) {
 func TestBypassEndStopsIt(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	mustSecondFactor(t, dir, "bypass", "--for", "1h")
-	if got, want := mustSecondFactor(t, dir, "bypass", "--end"), "second factor bypass ended\n"; got != want {
+	mustMFA(t, dir, "bypass", "--for", "1h")
+	if got, want := mustMFA(t, dir, "bypass", "--end"), "MFA bypass ended\n"; got != want {
 		t.Errorf("--end printed %q, want %q", got, want)
 	}
 	if _, ok := auth.ReadBypass(dir); ok {
@@ -133,21 +136,21 @@ func TestBypassEndStopsIt(t *testing.T) {
 	}
 
 	// With nothing running, and with one that ran out, there is nothing to end.
-	if got, want := mustSecondFactor(t, dir, "bypass", "--end"), "no bypass was active\n"; got != want {
+	if got, want := mustMFA(t, dir, "bypass", "--end"), "no bypass was active\n"; got != want {
 		t.Errorf("--end with none printed %q, want %q", got, want)
 	}
 	if err := auth.WriteBypass(dir, auth.Bypass{Until: time.Now().Add(-time.Minute)}); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := mustSecondFactor(t, dir, "bypass", "--end"), "no bypass was active\n"; got != want {
+	if got, want := mustMFA(t, dir, "bypass", "--end"), "no bypass was active\n"; got != want {
 		t.Errorf("--end after it ran out printed %q, want %q", got, want)
 	}
 	if _, err := os.Stat(filepath.Join(dir, auth.BypassFile)); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("the spent bypass file is still there: %v", err)
 	}
 	auditWant(t, auditEvents(t, dir),
-		audit.Event{Action: audit.SecondFactorBypass, Detail: "1h"},
-		audit.Event{Action: audit.SecondFactorBypassEnd},
+		audit.Event{Action: audit.MFABypass, Detail: "1h"},
+		audit.Event{Action: audit.MFABypassEnd},
 	)
 }
 
@@ -155,11 +158,13 @@ func TestStatusShowsTheBypassAndEachAccount(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	mfaAccounts(t, dir)
-	accounts := "alice  totp: yes  passkeys: 2\nbob  totp: yes  passkeys: 0\ncarol  totp: no  passkeys: 0\n"
+	accounts := "alice  totp: yes  passkeys: 2  passkey sign-in: yes\n" +
+		"bob  totp: yes  passkeys: 0  passkey sign-in: no\n" +
+		"carol  totp: no  passkeys: 0  passkey sign-in: no\n"
 
-	want := "second factor not bypassed\n\n" + accounts
+	want := "MFA not bypassed\n\n" + accounts
 	for _, args := range [][]string{{"status"}, nil} {
-		if got := mustSecondFactor(t, dir, args...); got != want {
+		if got := mustMFA(t, dir, args...); got != want {
 			t.Errorf("%v printed\n%s\nwant\n%s", args, got, want)
 		}
 	}
@@ -168,34 +173,34 @@ func TestStatusShowsTheBypassAndEachAccount(t *testing.T) {
 	if err := auth.WriteBypass(dir, auth.Bypass{Until: until, By: "dana"}); err != nil {
 		t.Fatal(err)
 	}
-	want = "second factor bypassed until " + until.Format(time.RFC3339) + ", started by dana\n\n" + accounts
-	if got := mustSecondFactor(t, dir, "status"); got != want {
+	want = "MFA bypassed until " + until.Format(time.RFC3339) + ", started by dana\n\n" + accounts
+	if got := mustMFA(t, dir, "status"); got != want {
 		t.Errorf("status with a bypass printed\n%s\nwant\n%s", got, want)
 	}
 }
 
-func TestResetRemovesTheSecondFactor(t *testing.T) {
+func TestResetRemovesMFA(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	mfaAccounts(t, dir)
-	if got, want := mustSecondFactor(t, dir, "reset", "alice"), "second factor removed from alice\n"; got != want {
+	if got, want := mustMFA(t, dir, "reset", "alice"), "MFA removed from alice\n"; got != want {
 		t.Errorf("reset printed %q, want %q", got, want)
 	}
 	svc, err := auth.NewService(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if totp, keys := svc.SecondFactorOf("alice"); totp || len(keys) != 0 {
-		t.Errorf("alice still has totp %v and %d passkeys", totp, len(keys))
+	if app, keys, on := svc.MFAOf("alice"); app != nil || len(keys) != 0 || on {
+		t.Errorf("alice still has totp %v, %d passkeys and passkey sign-in %v", app != nil, len(keys), on)
 	}
-	if !svc.HasSecondFactor("bob") {
-		t.Error("bob lost his second factor too")
+	if !svc.HasMFA("bob") {
+		t.Error("bob lost his MFA too")
 	}
 	if u, ok := svc.Account("alice"); !ok || u.Role != auth.RoleViewer {
 		t.Errorf("alice is %+v, %v after the reset", u, ok)
 	}
 	auditWant(t, auditEvents(t, dir),
-		audit.Event{Action: audit.AccountSecondFactorClear, Target: "alice"},
+		audit.Event{Action: audit.AccountMFAClear, Target: "alice"},
 	)
 }
 
@@ -203,10 +208,10 @@ func TestResetRefusesWhatHasNothingToRemove(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	mfaAccounts(t, dir)
-	if _, err := runSecondFactor(t, dir, "reset", "carol"); !errors.Is(err, auth.ErrNoSecondFactor) {
-		t.Errorf("reset of an account without one gave %v, want %v", err, auth.ErrNoSecondFactor)
+	if _, err := runMFA(t, dir, "reset", "carol"); !errors.Is(err, auth.ErrNoMFA) {
+		t.Errorf("reset of an account without one gave %v, want %v", err, auth.ErrNoMFA)
 	}
-	if _, err := runSecondFactor(t, dir, "reset", "nobody"); !errors.Is(err, auth.ErrNoSuchUser) {
+	if _, err := runMFA(t, dir, "reset", "nobody"); !errors.Is(err, auth.ErrNoSuchUser) {
 		t.Errorf("reset of an unknown account gave %v, want %v", err, auth.ErrNoSuchUser)
 	}
 	if events := auditEvents(t, dir); len(events) != 0 {
@@ -214,13 +219,12 @@ func TestResetRefusesWhatHasNothingToRemove(t *testing.T) {
 	}
 }
 
-func TestSecondFactorIsOnTheRootCommandAsMFA(t *testing.T) {
+func TestMFAIsOnTheRootCommand(t *testing.T) {
 	t.Parallel()
 	for path, want := range map[string]string{
-		"second-factor status": "ostiole second-factor status",
-		"mfa status":           "ostiole second-factor status",
-		"mfa bypass":           "ostiole second-factor bypass",
-		"mfa reset alice":      "ostiole second-factor reset",
+		"mfa status":      "ostiole mfa status",
+		"mfa bypass":      "ostiole mfa bypass",
+		"mfa reset alice": "ostiole mfa reset",
 	} {
 		cmd, _, err := newRootCmd().Find(strings.Fields(path))
 		if err != nil || cmd.CommandPath() != want {

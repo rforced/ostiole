@@ -116,9 +116,16 @@ function asserted(credential) {
   return out
 }
 
-/** An error from the browser as one the page can show. */
+/**
+ * An error from the browser as one the page can show. A cancelled or
+ * aborted prompt keeps its name so the page can tell it apart.
+ */
 function reason(e) {
-  return new Error(REASONS[e?.name] ?? (e instanceof Error ? e.message : String(e)), { cause: e })
+  const out = new Error(REASONS[e?.name] ?? (e instanceof Error ? e.message : String(e)), {
+    cause: e,
+  })
+  if (e?.name === 'NotAllowedError' || e?.name === 'AbortError') out.name = e.name
+  return out
 }
 
 /**
@@ -144,16 +151,19 @@ export async function create(options) {
 /**
  * Asks the browser to sign in with a passkey.
  * @param {object} options PublicKeyCredentialRequestOptions as the router sent them
+ * @param {{signal?: AbortSignal}} [opts] a signal that closes the prompt
  * @returns {Promise<object>} the assertion, as the router reads it
  */
-export async function get(options) {
+export async function get(options, { signal } = {}) {
   if (!available()) throw new Error(NO_SUPPORT)
   try {
     const publicKey =
       typeof PublicKeyCredential.parseRequestOptionsFromJSON === 'function'
         ? PublicKeyCredential.parseRequestOptionsFromJSON(options)
         : requestOptions(options)
-    const credential = await navigator.credentials.get({ publicKey })
+    const credential = await navigator.credentials.get(
+      signal ? { publicKey, signal } : { publicKey },
+    )
     if (!credential) throw new Error('No passkey was used.')
     return asserted(credential)
   } catch (e) {

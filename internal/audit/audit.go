@@ -77,7 +77,7 @@ const (
 	Expire            = "expire"  // Target: who applied; Detail: the window in seconds
 	Recover           = "recover" // Target: who applied
 	Init              = "init"
-	SignIn            = "sign-in"
+	SignIn            = "sign-in" // Detail: "passkey" for a sign-in with a passkey alone
 	Password          = "password"
 	Setup             = "setup"
 	AccountCreate     = "account-create" // Target: the account; Detail: its role
@@ -103,13 +103,15 @@ const (
 	LeftoversClear    = "leftovers-clear"    // Detail: the tables
 	BlocklistImport   = "blocklist-import"   // Target: the list
 
-	SecondFactorTOTP         = "second-factor-totp"
-	SecondFactorClear        = "second-factor-clear"
-	PasskeyAdd               = "passkey-add"                 // Target: the passkey's name
-	PasskeyRemove            = "passkey-remove"              // Target: the passkey's name
-	AccountSecondFactorClear = "account-second-factor-clear" // Target: the account
-	SecondFactorBypass       = "second-factor-bypass"        // Detail: how long, as a duration or in seconds
-	SecondFactorBypassEnd    = "second-factor-bypass-end"
+	MFATOTP         = "mfa-totp"
+	MFAClear        = "mfa-clear"
+	PasskeyAdd      = "passkey-add"       // Target: the passkey's name
+	PasskeyRemove   = "passkey-remove"    // Target: the passkey's name
+	PasskeyRename   = "passkey-rename"    // Target: the old name; Detail: the new one
+	MFAPasskeyLogin = "mfa-passkey-login" //nolint:gosec // an action name, not a credential; Detail: "on" or "off"
+	AccountMFAClear = "account-mfa-clear" // Target: the account
+	MFABypass       = "mfa-bypass"        // Detail: how long, as a duration or in seconds
+	MFABypassEnd    = "mfa-bypass-end"    //nolint:gosec // an action name, not a credential
 )
 
 // Event is one thing someone did.
@@ -164,6 +166,9 @@ func (e *Event) Sentence() string {
 	case Init:
 		return "Wrote a starter configuration"
 	case SignIn:
+		if d == "passkey" {
+			return "Signed in with a passkey"
+		}
 		return "Signed in"
 	case Password:
 		return "Changed their password"
@@ -228,23 +233,30 @@ func (e *Event) Sentence() string {
 		return "Cleared leftover rules: " + d
 	case BlocklistImport:
 		return "Imported the blocklist " + t
-	case SecondFactorTOTP:
+	case MFATOTP:
 		return "Set up an authenticator app"
-	case SecondFactorClear:
-		return "Turned the second factor off"
+	case MFAClear:
+		return "Turned off multi-factor authentication"
 	case PasskeyAdd:
 		return "Added the passkey " + t
 	case PasskeyRemove:
 		return "Removed the passkey " + t
-	case AccountSecondFactorClear:
-		return "Turned off the second factor for " + t
-	case SecondFactorBypass:
-		if s := span(d); s != "" {
-			return "Bypassed the second factor for " + s
+	case PasskeyRename:
+		return "Renamed the passkey " + t + " to " + d
+	case MFAPasskeyLogin:
+		if d == "on" {
+			return "Turned on passkey sign-in"
 		}
-		return "Bypassed the second factor"
-	case SecondFactorBypassEnd:
-		return "Ended the second factor bypass"
+		return "Turned off passkey sign-in"
+	case AccountMFAClear:
+		return "Turned off multi-factor authentication for " + t
+	case MFABypass:
+		if s := span(d); s != "" {
+			return "Bypassed MFA for " + s
+		}
+		return "Bypassed MFA"
+	case MFABypassEnd:
+		return "Ended the MFA bypass"
 	}
 	return e.Action
 }

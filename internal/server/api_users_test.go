@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -130,7 +131,7 @@ func TestTheLastAdministratorStays(t *testing.T) {
 	if err := as.CreateUser("watcher", testPassword, auth.RoleViewer); err != nil {
 		t.Fatal(err)
 	}
-	_, secret, err := tokens.Create("robot", auth.RoleAdmin, 0, "admin", auth.Limits{})
+	_, secret, err := tokens.Create("robot", auth.RoleAdmin, 0, "admin", "", auth.Limits{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,5 +271,38 @@ func TestSessionsSayTheirRole(t *testing.T) {
 	}
 	if resp, raw := do(t, srv, http.MethodGet, "/api/v1/auth/me", nil); resp.StatusCode != http.StatusOK || role(raw) != auth.RoleOperator {
 		t.Errorf("me as an operator: %d %s", resp.StatusCode, raw)
+	}
+}
+
+func TestAnAccountsTokensFollowItsNameAndGoWithIt(t *testing.T) {
+	t.Parallel()
+	srv, as, tokens := roleServer(t)
+	if err := as.CreateUser("watcher", testPassword, auth.RoleViewer); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ name, owner string }{{"porch-panel", "watcher"}, {"backup-job", ""}, {"admin-script", "admin"}} {
+		if _, _, err := tokens.Create(tc.name, auth.RoleViewer, 0, "cli", tc.owner, auth.Limits{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	owners := func() map[string]string {
+		out := map[string]string{}
+		for _, tok := range tokens.List() {
+			out[tok.Name] = tok.Owner
+		}
+		return out
+	}
+
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/users/watcher/username", map[string]string{"username": "lookout"}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("rename: %d %s", resp.StatusCode, raw)
+	}
+	if got, want := owners(), (map[string]string{"porch-panel": "lookout", "backup-job": "", "admin-script": "admin"}); !maps.Equal(got, want) {
+		t.Errorf("owners after the rename = %v, want %v", got, want)
+	}
+	if resp, raw := do(t, srv, http.MethodDelete, "/api/v1/users/lookout", nil); resp.StatusCode != http.StatusOK {
+		t.Fatalf("delete: %d %s", resp.StatusCode, raw)
+	}
+	if got, want := owners(), (map[string]string{"backup-job": "", "admin-script": "admin"}); !maps.Equal(got, want) {
+		t.Errorf("owners after the delete = %v, want %v", got, want)
 	}
 }

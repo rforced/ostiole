@@ -8,8 +8,6 @@ import { useTabHash } from '@/lib/tabs'
 import { useAuthStore } from '@/stores/auth'
 import AccountsSection from '@/views/system/AccountsSection.vue'
 import AuditLogSection from '@/views/system/AuditLogSection.vue'
-import PasswordSection from '@/views/system/PasswordSection.vue'
-import SecondFactorCard from '@/views/system/accounts/SecondFactorCard.vue'
 import TokensSection from '@/views/system/TokensSection.vue'
 
 const auth = useAuthStore()
@@ -24,15 +22,11 @@ const tab = useTabHash(() => tabs.value.map((t) => t.value))
     <TabsContent value="accounts" class="space-y-5">
       <AccountsSection />
       <TokensSection />
-      <SecondFactorCard />
-      <PasswordSection />
     </TabsContent>
     <TabsContent value="audit"><AuditLogSection /></TabsContent>
   </AppTabs>
   <div v-else class="space-y-5">
     <AccountsSection />
     <TokensSection />
-    <SecondFactorCard />
-    <PasswordSection />
   </div>
 </template>

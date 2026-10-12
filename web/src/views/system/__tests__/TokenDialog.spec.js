@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import TokenDialog from '@/views/system/accounts/TokenDialog.vue'
 
@@ -12,7 +13,8 @@ const stubs = {
   },
 }
 
-function open() {
+function open(role = 'admin') {
+  useAuthStore().user = { username: role, role }
   useConfigStore().replaceDraft({
     version: 12,
     zones: [],
@@ -56,5 +58,34 @@ describe('TokenDialog metrics only', () => {
     await w.get('#tok-name').setValue('ci')
     await w.get('form').trigger('submit')
     expect(w.emitted('create')[0][0]).not.toHaveProperty('metrics')
+  })
+})
+
+const roleOptions = (w) => w.findAll('#tok-role option').map((o) => o.element.value)
+
+// A token cannot have more than its owner's role, and only an admin makes
+// a certificate token.
+describe('TokenDialog roles', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('offers an admin every role and the certificates', () => {
+    const w = open('admin')
+    expect(roleOptions(w)).toEqual(['admin', 'operator', 'viewer'])
+    expect(w.find('#tok-certs').exists()).toBe(true)
+  })
+
+  it('offers an operator two roles and no certificates', () => {
+    const w = open('operator')
+    expect(roleOptions(w)).toEqual(['operator', 'viewer'])
+    expect(w.find('#tok-certs').exists()).toBe(false)
+  })
+
+  it('offers a viewer one role', async () => {
+    const w = open('viewer')
+    expect(roleOptions(w)).toEqual(['viewer'])
+    expect(w.find('#tok-certs').exists()).toBe(false)
+    await w.get('#tok-name').setValue('dash')
+    await w.get('form').trigger('submit')
+    expect(w.emitted('create')[0][0]).toMatchObject({ role: 'viewer', certificates: [] })
   })
 })

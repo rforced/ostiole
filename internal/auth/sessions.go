@@ -9,8 +9,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"ostiole/internal/atomicfile"
 )
@@ -33,6 +37,18 @@ const SessionsFile = "sessions.json"
 // lengthens it.
 const persistIdle = time.Minute
 
+// maxAgent is how much of a user agent a session keeps.
+const maxAgent = 200
+
+// refLen is how many hex characters of a session key name it in a listing.
+const refLen = 16
+
+// Client is where a sign-in came from.
+type Client struct {
+	Address string
+	Agent   string
+}
+
 // Session is a logged-in browser or API client.
 type Session struct {
 	ID       string    `json:"-"`
@@ -40,6 +56,18 @@ type Session struct {
 	Created  time.Time `json:"created"`
 	LastSeen time.Time `json:"lastSeen"`
 	Expires  time.Time `json:"expires"`
+	Address  string    `json:"address,omitempty"`
+	Agent    string    `json:"agent,omitempty"`
+}
+
+// SessionInfo describes a session without its ID. Ref names it safely.
+type SessionInfo struct {
+	Ref      string
+	Created  time.Time
+	LastSeen time.Time
+	Expires  time.Time
+	Address  string
+	Agent    string
 }
 
 // storedSession is a session on disk. The session ID itself is never
@@ -51,6 +79,8 @@ type storedSession struct {
 	Created  time.Time `json:"created"`
 	LastSeen time.Time `json:"lastSeen"`
 	Expires  time.Time `json:"expires"`
+	Address  string    `json:"address,omitempty"`
+	Agent    string    `json:"agent,omitempty"`
 }
 
 type sessionsFile struct {
@@ -87,7 +117,35 @@ func sessionKey(id string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+func sessionRef(key string) string {
+	if len(key) < refLen {
+		return key
+	}
+	return key[:refLen]
+}
+
+func cleanAgent(agent string) string {
+	agent = strings.TrimSpace(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, strings.ToValidUTF8(agent, "")))
+	if len(agent) <= maxAgent {
+		return agent
+	}
+	cut := maxAgent
+	for cut > 0 && !utf8.RuneStart(agent[cut]) {
+		cut--
+	}
+	return strings.TrimSpace(agent[:cut])
+}
+
 func (s *sessionStore) create(username string) *Session {
+	return s.createFrom(username, Client{})
+}
+
+func (s *sessionStore) createFrom(username string, from Client) *Session {
 	id := make([]byte, 32)
 	_, _ = rand.Read(id)
 	now := s.now()
@@ -97,6 +155,8 @@ func (s *sessionStore) create(username string) *Session {
 		Created:  now,
 		LastSeen: now,
 		Expires:  now.Add(SessionMaxLifetime),
+		Address:  from.Address,
+		Agent:    cleanAgent(from.Agent),
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -157,6 +217,79 @@ func (s *sessionStore) delete(id string) {
 	delete(s.sessions, key)
 	delete(s.persisted, key)
 	s.persist()
+}
+
+func sessionLive(sess *Session, now time.Time) bool {
+	return !now.After(sess.Expires) && now.Sub(sess.LastSeen) <= SessionIdleTimeout
+}
+
+// list returns the user's live sessions, most recently used first.
+func (s *sessionStore) list(username string) []SessionInfo {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.now()
+	var out []SessionInfo
+	for key, sess := range s.sessions {
+		if sess.Username != username || !sessionLive(sess, now) {
+			continue
+		}
+		out = append(out, SessionInfo{
+			Ref:      sessionRef(key),
+			Created:  sess.Created,
+			LastSeen: sess.LastSeen,
+			Expires:  sess.Expires,
+			Address:  sess.Address,
+			Agent:    sess.Agent,
+		})
+	}
+	slices.SortFunc(out, func(a, b SessionInfo) int {
+		if c := b.LastSeen.Compare(a.LastSeen); c != 0 {
+			return c
+		}
+		if c := b.Created.Compare(a.Created); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Ref, b.Ref)
+	})
+	return out
+}
+
+// deleteRef ends the user's live session named by ref, reporting whether
+// there was one.
+func (s *sessionStore) deleteRef(username, ref string) bool {
+	if len(ref) != refLen {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.now()
+	for key, sess := range s.sessions {
+		if sess.Username == username && sessionLive(sess, now) && sessionRef(key) == ref {
+			delete(s.sessions, key)
+			delete(s.persisted, key)
+			s.persist()
+			return true
+		}
+	}
+	return false
+}
+
+// deleteOthers ends every session of the user except the one with keepID.
+func (s *sessionStore) deleteOthers(username, keepID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	keep := sessionKey(keepID)
+	changed := false
+	for key, sess := range s.sessions {
+		if sess.Username == username && key != keep {
+			delete(s.sessions, key)
+			delete(s.persisted, key)
+			changed = true
+		}
+	}
+	if changed {
+		s.persist()
+	}
 }
 
 func (s *sessionStore) deleteUser(username string) {
@@ -246,6 +379,8 @@ func (s *sessionStore) load() error {
 			Created:  st.Created,
 			LastSeen: st.LastSeen,
 			Expires:  st.Expires,
+			Address:  st.Address,
+			Agent:    st.Agent,
 		}
 		s.persisted[st.Hash] = st.LastSeen
 	}
@@ -267,6 +402,8 @@ func (s *sessionStore) persist() {
 			Created:  sess.Created,
 			LastSeen: sess.LastSeen,
 			Expires:  sess.Expires,
+			Address:  sess.Address,
+			Agent:    sess.Agent,
 		})
 	}
 	raw, err := json.Marshal(f)

@@ -8,6 +8,10 @@ import FormField from '@/components/FormField.vue'
 import { ApiError, api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
 
+defineProps({
+  /** The names of the passkeys that go with the app. */
+  passkeys: { type: Array, default: () => [] },
+})
 const open = defineModel('open', { type: Boolean, default: false })
 const emit = defineEmits(['done'])
 
@@ -29,7 +33,7 @@ async function submit() {
   error.value = ''
   busy.value = true
   try {
-    await api.auth.secondFactorClear(password.value)
+    await api.auth.mfaClear(password.value)
     emit('done')
     open.value = false
   } catch (e) {
@@ -44,13 +48,19 @@ async function submit() {
   <AppDialog
     v-model:open="open"
     :read-only="false"
-    title="Turn off the second factor"
-    description="Removes the authenticator app and every passkey. Sign-in asks for the password alone."
+    title="Remove the authenticator app"
+    description="Passkeys go with it and passkey sign-in turns off. Sign-in asks for the password alone."
   >
-    <form id="second-factor-off-form" class="space-y-4" @submit.prevent="submit">
-      <FormField id="second-factor-password" label="Password">
+    <form id="remove-app-form" class="space-y-4" @submit.prevent="submit">
+      <div v-if="passkeys.length" class="space-y-1 text-sm">
+        <p class="font-medium">Passkeys removed</p>
+        <ul class="list-disc pl-5">
+          <li v-for="name in passkeys" :key="name">{{ name }}</li>
+        </ul>
+      </div>
+      <FormField id="remove-app-password" label="Password">
         <input
-          id="second-factor-password"
+          id="remove-app-password"
           v-model="password"
           type="password"
           autocomplete="current-password"
@@ -64,10 +74,10 @@ async function submit() {
       <button type="button" class="btn-secondary" @click="open = false">Cancel</button>
       <ActionButton
         type="submit"
-        form="second-factor-off-form"
+        form="remove-app-form"
         kind="danger"
-        label="Turn off"
-        busy-label="Turning off…"
+        label="Remove"
+        busy-label="Removing…"
         :busy="busy"
         :disabled="!password"
       />

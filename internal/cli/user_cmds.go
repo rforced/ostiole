@@ -136,14 +136,21 @@ reset-password to change an existing account's password.`,
 
 	rename := &cobra.Command{
 		Use:   "rename <username> <new-username>",
-		Short: "Rename an account, keeping its role, password, and sessions",
+		Short: "Rename an account, keeping its role, password, sessions, and tokens",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			svc, err := auth.NewService(g.configDir)
 			if err != nil {
 				return err
 			}
+			tk, err := auth.NewTokens(g.configDir)
+			if err != nil {
+				return err
+			}
 			if err := svc.Rename(args[0], args[1]); err != nil {
+				return err
+			}
+			if err := tk.Rename(args[0], args[1]); err != nil {
 				return err
 			}
 			g.audit().Add(audit.Event{Action: audit.AccountRename, By: audit.ShellActor(), Target: args[0], Detail: args[1]})
@@ -154,14 +161,21 @@ reset-password to change an existing account's password.`,
 
 	del := &cobra.Command{
 		Use:   "delete <username>",
-		Short: "Delete an account and end its sessions",
+		Short: "Delete an account, ending its sessions and deleting its tokens",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			svc, err := auth.NewService(g.configDir)
 			if err != nil {
 				return err
 			}
+			tk, err := auth.NewTokens(g.configDir)
+			if err != nil {
+				return err
+			}
 			if err := svc.DeleteUser(args[0]); err != nil {
+				return err
+			}
+			if err := tk.DeleteOwned(args[0]); err != nil {
 				return err
 			}
 			g.audit().Add(audit.Event{Action: audit.AccountDelete, By: audit.ShellActor(), Target: args[0]})

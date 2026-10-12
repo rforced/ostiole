@@ -129,7 +129,7 @@ test('a token limited to a certificate reaches that and nothing else', async ({
   request,
 }) => {
   await login(page)
-  await page.goto('/system/accounts')
+  await page.goto('/account')
   const section = page.getByRole('region', { name: 'API tokens' })
 
   await section.getByRole('button', { name: 'Add token' }).click()

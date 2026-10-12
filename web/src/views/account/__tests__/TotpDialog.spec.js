@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api } from '@/lib/api'
-import TotpDialog from '@/views/system/accounts/TotpDialog.vue'
+import TotpDialog from '@/views/account/TotpDialog.vue'
 
 vi.mock('@/lib/api', () => ({
   ApiError: class ApiError extends Error {},

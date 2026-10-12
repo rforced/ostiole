@@ -36,7 +36,7 @@ async function submit() {
 </script>
 
 <template>
-  <SectionCard title="Change password">
+  <SectionCard title="Password">
     <form class="max-w-sm space-y-3" @submit.prevent="submit">
       <FormField id="pw-current" label="Current password">
         <input

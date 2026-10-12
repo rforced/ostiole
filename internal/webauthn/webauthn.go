@@ -31,6 +31,7 @@ var (
 
 const (
 	flagUP = 1 << 0
+	flagUV = 1 << 2
 	flagAT = 1 << 6
 	flagED = 1 << 7
 
@@ -108,13 +109,18 @@ func CreationOptions(rp RelyingParty, userID []byte, username string, exclude []
 }
 
 // RequestOptions is the PublicKeyCredentialRequestOptions object, ready for
-// JSON, with bytes as base64url without padding.
-func RequestOptions(rp RelyingParty, allow []Credential, challenge []byte) map[string]any {
+// JSON, with bytes as base64url without padding. requireUV asks for the
+// device PIN or biometric rather than preferring it.
+func RequestOptions(rp RelyingParty, allow []Credential, challenge []byte, requireUV bool) map[string]any {
+	uv := "preferred"
+	if requireUV {
+		uv = "required"
+	}
 	return map[string]any{
 		"challenge":        b64(challenge),
 		"rpId":             rp.ID,
 		"allowCredentials": descriptors(allow),
-		"userVerification": "preferred",
+		"userVerification": uv,
 		"timeout":          timeoutMillis,
 	}
 }
@@ -185,38 +191,45 @@ func VerifyRegistration(resp AttestationResponse, challenge []byte, rp RelyingPa
 	}, nil
 }
 
+// Assertion is what a verified sign-in tells the server: the count to keep
+// and whether the device checked who was holding it.
+type Assertion struct {
+	SignCount    uint32
+	UserVerified bool
+}
+
 // VerifyAssertion checks type "webauthn.get", the challenge, the origin, the
 // relying party hash, the user present flag, the signature over the
 // authenticator data and the hash of the client data with the credential's
-// key, and the sign count. It returns the new count to keep.
-func VerifyAssertion(resp AssertionResponse, cred Credential, challenge []byte, rp RelyingParty, origin string) (uint32, error) {
+// key, and the sign count.
+func VerifyAssertion(resp AssertionResponse, cred Credential, challenge []byte, rp RelyingParty, origin string) (Assertion, error) {
 	hash, err := checkClientData(resp.Response.ClientDataJSON, "webauthn.get", challenge, origin)
 	if err != nil {
-		return 0, err
+		return Assertion{}, err
 	}
 	raw, err := b64Decode(resp.Response.AuthenticatorData)
 	if err != nil {
-		return 0, fmt.Errorf("%w: authenticator data: %w", ErrMalformed, err)
+		return Assertion{}, fmt.Errorf("%w: authenticator data: %w", ErrMalformed, err)
 	}
 	data, err := readAuthData(raw, rp)
 	if err != nil {
-		return 0, err
+		return Assertion{}, err
 	}
 	sig, err := b64Decode(resp.Response.Signature)
 	if err != nil {
-		return 0, fmt.Errorf("%w: signature: %w", ErrMalformed, err)
+		return Assertion{}, fmt.Errorf("%w: signature: %w", ErrMalformed, err)
 	}
 	key, err := parseCOSEKey(cred.PublicKey)
 	if err != nil {
-		return 0, err
+		return Assertion{}, err
 	}
 	if err := key.verify(slices.Concat(raw, hash[:]), sig); err != nil {
-		return 0, err
+		return Assertion{}, err
 	}
 	if (cred.SignCount != 0 || data.count != 0) && data.count <= cred.SignCount {
-		return 0, ErrCounter
+		return Assertion{}, ErrCounter
 	}
-	return data.count, nil
+	return Assertion{SignCount: data.count, UserVerified: data.flags&flagUV != 0}, nil
 }
 
 // checkClientData checks what the browser says about the ceremony and

@@ -121,6 +121,20 @@ describe('webauthn', () => {
     )
   })
 
+  it('hands the browser the signal, and an aborted prompt keeps its name', async () => {
+    const ctl = new AbortController()
+    calls.get.mockRejectedValue(new DOMException('aborted', 'AbortError'))
+    const err = await get({ challenge: 'AQID' }, { signal: ctl.signal }).catch((e) => e)
+    expect(calls.get.mock.calls[0][0].signal).toBe(ctl.signal)
+    expect(err.name).toBe('AbortError')
+    expect(err.message).toBe('The passkey prompt was cancelled.')
+
+    calls.get.mockRejectedValue(new DOMException('denied', 'NotAllowedError'))
+    expect((await get({ challenge: 'AQID' }).catch((e) => e)).name).toBe('NotAllowedError')
+    calls.get.mockRejectedValue(new DOMException('no', 'SecurityError'))
+    expect((await get({ challenge: 'AQID' }).catch((e) => e)).name).toBe('Error')
+  })
+
   it('does not reach for a browser that has no passkeys', async () => {
     vi.stubGlobal('PublicKeyCredential', undefined)
     await expect(get({ challenge: 'AQID' })).rejects.toThrow(

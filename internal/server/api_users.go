@@ -17,7 +17,7 @@ func (a *api) registerUsers(mux *router) {
 	mux.HandleFunc("POST /api/v1/users/{name}/role", a.admin(a.setUserRole))
 	mux.HandleFunc("POST /api/v1/users/{name}/password", a.admin(a.setUserPassword))
 	mux.HandleFunc("POST /api/v1/users/{name}/username", a.admin(a.renameUser))
-	mux.HandleFunc("DELETE /api/v1/users/{name}/second-factor", a.admin(a.clearUserSecondFactor))
+	mux.HandleFunc("DELETE /api/v1/users/{name}/mfa", a.admin(a.clearUserMFA))
 }
 
 // errSelfAccount refuses the two account changes that can leave a router
@@ -35,13 +35,20 @@ func (a *api) self(r *http.Request, username string) bool {
 }
 
 // account is a row of the account list: no password hash, and of the
-// second factor only whether there is one.
+// MFA only what there is.
 type account struct {
-	Username     string    `json:"username"`
-	Role         auth.Role `json:"role"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
-	SecondFactor bool      `json:"secondFactor"`
+	Username  string     `json:"username"`
+	Role      auth.Role  `json:"role"`
+	CreatedAt time.Time  `json:"createdAt"`
+	UpdatedAt time.Time  `json:"updatedAt"`
+	MFA       accountMFA `json:"mfa"`
+}
+
+// accountMFA is an account's MFA as the account list shows it.
+type accountMFA struct {
+	TOTP         bool `json:"totp"`
+	Passkeys     int  `json:"passkeys"`
+	PasskeyLogin bool `json:"passkeyLogin"`
 }
 
 // users answers with the whole account list, which is what every change
@@ -53,7 +60,7 @@ func (a *api) users(w http.ResponseWriter, status int) error {
 	for i, u := range list {
 		out[i] = account{
 			Username: u.Username, Role: u.Role, CreatedAt: u.CreatedAt, UpdatedAt: u.UpdatedAt,
-			SecondFactor: u.TOTP != nil || len(u.Passkeys) > 0,
+			MFA: accountMFA{TOTP: u.TOTP != nil, Passkeys: len(u.Passkeys), PasskeyLogin: u.PasskeyLogin},
 		}
 	}
 	writeJSON(w, status, out)
@@ -110,6 +117,11 @@ func (a *api) deleteUser(w http.ResponseWriter, r *http.Request) error {
 	}
 	if err := a.auth.DeleteUser(name); err != nil {
 		return err
+	}
+	if a.tokens != nil {
+		if err := a.tokens.DeleteOwned(name); err != nil {
+			return err
+		}
 	}
 	a.record(r, audit.AccountDelete, name, "")
 	return a.users(w, http.StatusOK)
@@ -189,29 +201,34 @@ func (a *api) renameUser(w http.ResponseWriter, r *http.Request) error {
 	if err := a.auth.Rename(name, req.Username); err != nil {
 		return err
 	}
+	if a.tokens != nil {
+		if err := a.tokens.Rename(name, req.Username); err != nil {
+			return err
+		}
+	}
 	if req.Username != name {
 		a.record(r, audit.AccountRename, name, req.Username)
 	}
 	return a.users(w, http.StatusOK)
 }
 
-// clearUserSecondFactor takes another account's authenticator app and
+// clearUserMFA takes another account's authenticator app and
 // passkeys away, for somebody who lost their phone. Your own go through
-// POST /api/v1/auth/second-factor/clear, which asks for your password.
-func (a *api) clearUserSecondFactor(w http.ResponseWriter, r *http.Request) error {
+// POST /api/v1/auth/mfa/clear, which asks for your password.
+func (a *api) clearUserMFA(w http.ResponseWriter, r *http.Request) error {
 	if err := a.requireAuth(); err != nil {
 		return err
 	}
 	name := r.PathValue("name")
 	if a.self(r, name) {
-		return fmt.Errorf("%w: turn your own second factor off under Second factor, which asks for your password", errForbidden)
+		return fmt.Errorf("%w: remove your own authenticator app on the Account page, which asks for your password", errForbidden)
 	}
-	had := a.auth.HasSecondFactor(name)
-	if err := a.auth.ClearSecondFactor(name); err != nil {
+	had := a.auth.HasMFA(name)
+	if err := a.auth.ClearMFA(name); err != nil {
 		return err
 	}
 	if had {
-		a.record(r, audit.AccountSecondFactorClear, name, "")
+		a.record(r, audit.AccountMFAClear, name, "")
 	}
 	return a.users(w, http.StatusOK)
 }

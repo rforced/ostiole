@@ -1,16 +1,23 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { ROLES } from '@/views/system/accounts/roles'
 
 const open = defineModel('open', { type: Boolean, default: false })
 const emit = defineEmits(['create'])
 
+const auth = useAuthStore()
 const config = useConfigStore()
+/** A token cannot have more than its owner's role. */
+const roles = computed(() => {
+  const at = ROLES.findIndex((r) => r.value === auth.user?.role)
+  return ROLES.slice(at < 0 ? -1 : at)
+})
 const blank = () => ({
   name: '',
   role: 'viewer',
@@ -44,6 +51,7 @@ function submit() {
 <template>
   <AppDialog
     v-model:open="open"
+    :read-only="false"
     title="Add token"
     description="The secret is shown once and never stored."
   >
@@ -65,7 +73,7 @@ function submit() {
       </div>
       <FormField id="tok-role" label="Role">
         <select id="tok-role" v-model="form.role" class="input" :disabled="form.metrics">
-          <option v-for="r in ROLES" :key="r.value" :value="r.value">{{ r.label }}</option>
+          <option v-for="r in roles" :key="r.value" :value="r.value">{{ r.label }}</option>
         </select>
       </FormField>
       <ToggleRow
@@ -74,7 +82,7 @@ function submit() {
         hint="For a monitoring system: the token reads /metrics and nothing else, the logs included."
       />
       <FormField
-        v-if="config.certificates.length && !form.metrics"
+        v-if="auth.isAdmin && config.certificates.length && !form.metrics"
         id="tok-certs"
         label="Limit to certificates"
         hint="The token fetches these and can do nothing else."

@@ -6,15 +6,17 @@ import { ApiError, api } from '@/lib/api'
 import * as webauthn from '@/lib/webauthn'
 import { useAuthStore } from '@/stores/auth'
 import { useConfirmStore } from '@/stores/confirm'
-import SecondFactorCard from '@/views/system/accounts/SecondFactorCard.vue'
+import MfaCard from '@/views/account/MfaCard.vue'
 
 vi.mock('@/lib/api', () => ({
   ApiError: class ApiError extends Error {},
   api: {
     auth: {
-      secondFactor: vi.fn(),
+      mfa: vi.fn(),
       removePasskey: vi.fn(),
-      secondFactorClear: vi.fn(),
+      renamePasskey: vi.fn(),
+      setPasskeyLogin: vi.fn(),
+      mfaClear: vi.fn(),
       me: vi.fn(),
       totpStart: vi.fn(),
     },
@@ -25,8 +27,11 @@ vi.mock('@/lib/webauthn', () => ({ available: vi.fn() }))
 // The dialogs live in a portal, which mount() cannot reach; open them in place.
 const AppDialogStub = {
   props: ['open', 'title', 'description'],
-  template: '<div v-if="open"><h2>{{ title }}</h2><slot /><slot name="footer" /></div>',
+  template:
+    '<div v-if="open" role="dialog"><h2>{{ title }}</h2><p>{{ description }}</p><slot /><slot name="footer" /></div>',
 }
+
+const APP = { enabledAt: '2026-09-20T10:00:00Z', lastUsed: '2026-10-09T10:00:00Z' }
 
 const passkey = (id, name) => ({
   id,
@@ -36,59 +41,141 @@ const passkey = (id, name) => ({
   lastUsed: '2026-10-05T10:00:00Z',
 })
 
+const mfa = (over = {}) => ({
+  totp: APP,
+  passkeys: [],
+  passkeyLogin: false,
+  rpId: 'edge.example',
+  ...over,
+})
+
 async function open(state, role = 'viewer') {
   setActivePinia(createPinia())
   vi.clearAllMocks()
   webauthn.available.mockReturnValue(true)
-  api.auth.secondFactor.mockResolvedValue(state)
+  api.auth.mfa.mockResolvedValue(state)
   api.auth.me.mockResolvedValue({ username: 'sam', role })
   useAuthStore().user = { username: 'sam', role }
-  const wrapper = mount(SecondFactorCard, { global: { stubs: { AppDialog: AppDialogStub } } })
+  const wrapper = mount(MfaCard, { global: { stubs: { AppDialog: AppDialogStub } } })
   await flushPromises()
   return wrapper
 }
 
 const button = (scope, text) => scope.findAll('button').find((b) => b.text() === text)
 const disabled = (b) => b.attributes('disabled') !== undefined
+const group = (wrapper, name) =>
+  wrapper.findAll('fieldset').find((f) => f.get('legend').text() === name)
+const badge = (wrapper) => wrapper.get('.badge').text()
+const intro = (wrapper) => wrapper.get('h2 + p').text()
+const toggle = (wrapper) => wrapper.get('#passkey-login')
+const dialog = (wrapper) => wrapper.find('[role="dialog"]')
 
-describe('SecondFactorCard', () => {
+describe('MfaCard', () => {
   it('starts with the authenticator app, and says why a passkey has to wait', async () => {
-    const wrapper = await open({ totp: false, passkeys: [], rpId: 'edge.example' })
-    expect(wrapper.text()).toContain('Off. Sign-in asks for your password alone.')
-    expect(disabled(button(wrapper, 'Set up authenticator app'))).toBe(false)
-    expect(disabled(button(wrapper, 'Add a passkey'))).toBe(true)
-    expect(wrapper.text()).toContain('Passkeys need an authenticator app first.')
-    expect(button(wrapper, 'Turn off')).toBeUndefined()
-    expect(wrapper.find('table').exists()).toBe(false)
+    const wrapper = await open(mfa({ totp: null }))
+    expect(badge(wrapper)).toBe('off')
+    expect(intro(wrapper)).toBe('Sign-in asks for your password alone.')
+    const app = group(wrapper, 'Authenticator app')
+    expect(app.text()).toContain('Not set up.')
+    expect(disabled(button(app, 'Set up authenticator app'))).toBe(false)
+    expect(button(app, 'Remove')).toBeUndefined()
+    const keys = group(wrapper, 'Passkeys')
+    expect(disabled(button(keys, 'Add passkey'))).toBe(true)
+    expect(keys.text()).toContain('Set up an authenticator app first.')
+    expect(keys.text()).toContain('No passkeys.')
+    expect(toggle(wrapper).attributes('disabled')).toBeDefined()
+    expect(keys.text()).toContain('Add a passkey first.')
+  })
+
+  it('shows when the app was set up and last used, with Replace and Remove', async () => {
+    const wrapper = await open(mfa())
+    expect(badge(wrapper)).toBe('on')
+    expect(intro(wrapper)).toBe(
+      'Sign-in asks for a code from your authenticator app, or a passkey, after your password.',
+    )
+    const app = group(wrapper, 'Authenticator app')
+    expect(app.text()).toContain('Set up')
+    expect(app.text()).toContain('Last used')
+    expect(app.text()).not.toContain('never')
+    expect(button(app, 'Replace')).toBeDefined()
+    expect(button(app, 'Remove')).toBeDefined()
+  })
+
+  it('says never for an app not used yet', async () => {
+    const wrapper = await open(mfa({ totp: { enabledAt: APP.enabledAt } }))
+    expect(group(wrapper, 'Authenticator app').text()).toContain('never')
+  })
+
+  it('replaces the app through the setup dialog', async () => {
+    const wrapper = await open(mfa())
+    await button(group(wrapper, 'Authenticator app'), 'Replace').trigger('click')
+    await flushPromises()
+    expect(dialog(wrapper).get('h2').text()).toBe('Replace authenticator app')
+    expect(api.auth.totpStart).toHaveBeenCalledOnce()
   })
 
   it('will not make a passkey for an address that is not a name', async () => {
-    const wrapper = await open({ totp: true, passkeys: [], rpId: '' })
-    expect(disabled(button(wrapper, 'Add a passkey'))).toBe(true)
-    expect(wrapper.text()).toContain('Passkeys need a name in the address bar, not an address.')
+    const wrapper = await open(mfa({ rpId: '' }))
+    const keys = group(wrapper, 'Passkeys')
+    expect(disabled(button(keys, 'Add passkey'))).toBe(true)
+    expect(keys.text()).toContain('Open the UI by its host name to add a passkey.')
+  })
+
+  it('will not make a passkey where the browser cannot', async () => {
+    setActivePinia(createPinia())
+    webauthn.available.mockReturnValue(false)
+    api.auth.mfa.mockResolvedValue(mfa())
+    const wrapper = mount(MfaCard, { global: { stubs: { AppDialog: AppDialogStub } } })
+    await flushPromises()
+    expect(group(wrapper, 'Passkeys').text()).toContain(
+      'This browser cannot make passkeys on this page.',
+    )
   })
 
   it('adds a passkey once the app is set up and the page has a name', async () => {
-    const wrapper = await open({ totp: true, passkeys: [], rpId: 'edge.example' })
-    expect(disabled(button(wrapper, 'Add a passkey'))).toBe(false)
-    expect(wrapper.text()).toContain('No passkeys.')
-    await button(wrapper, 'Add a passkey').trigger('click')
+    const wrapper = await open(mfa())
+    const keys = group(wrapper, 'Passkeys')
+    expect(disabled(button(keys, 'Add passkey'))).toBe(false)
+    await button(keys, 'Add passkey').trigger('click')
     expect(wrapper.find('#passkey-name').exists()).toBe(true)
+    expect(wrapper.find('#passkey-password').exists()).toBe(true)
+  })
+
+  it('lists passkeys with the host name they were made for', async () => {
+    const wrapper = await open(mfa({ passkeys: [passkey('a1', 'Laptop')] }))
+    const cells = wrapper.get('tbody tr').findAll('td')
+    expect(cells[0].text()).toBe('Laptop')
+    expect(cells[1].text()).toBe('edge.example')
+    expect(wrapper.findAll('thead th').map((th) => th.text())).toEqual([
+      'Passkey',
+      'Host name',
+      'Added',
+      'Last used',
+      '',
+    ])
+  })
+
+  it('renames a passkey and shows the new name', async () => {
+    const wrapper = await open(mfa({ passkeys: [passkey('a1', 'Laptop')] }))
+    await button(wrapper.get('tbody tr'), 'Rename').trigger('click')
+    expect(wrapper.get('#passkey-rename-name').element.value).toBe('Laptop')
+    await wrapper.get('#passkey-rename-name').setValue(' Desk ')
+    api.auth.renamePasskey.mockResolvedValue(passkey('a1', 'Desk'))
+    api.auth.mfa.mockResolvedValue(mfa({ passkeys: [passkey('a1', 'Desk')] }))
+
+    await wrapper.get('#passkey-rename-form').trigger('submit')
+    await flushPromises()
+
+    expect(api.auth.renamePasskey).toHaveBeenCalledWith('a1', 'Desk')
+    expect(wrapper.get('tbody tr td').text()).toBe('Desk')
+    expect(api.auth.me).toHaveBeenCalled()
   })
 
   it('removes a passkey once the confirm says yes, and lists what is left', async () => {
-    const wrapper = await open({
-      totp: true,
-      passkeys: [passkey('a1', 'Laptop'), passkey('b2', 'Phone')],
-      rpId: 'edge.example',
-    })
+    const wrapper = await open(mfa({ passkeys: [passkey('a1', 'Laptop'), passkey('b2', 'Phone')] }))
     const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
     api.auth.removePasskey.mockResolvedValue(undefined)
-    api.auth.secondFactor.mockResolvedValue({
-      totp: true,
-      passkeys: [passkey('b2', 'Phone')],
-      rpId: 'edge.example',
-    })
+    api.auth.mfa.mockResolvedValue(mfa({ passkeys: [passkey('b2', 'Phone')] }))
     const rows = () => wrapper.findAll('tbody tr')
     expect(rows().map((r) => r.get('td').text())).toEqual(['Laptop', 'Phone'])
 
@@ -103,69 +190,107 @@ describe('SecondFactorCard', () => {
   })
 
   it('keeps the passkey when the confirm is declined', async () => {
-    const wrapper = await open({
-      totp: true,
-      passkeys: [passkey('a1', 'Laptop')],
-      rpId: 'edge.example',
-    })
+    const wrapper = await open(mfa({ passkeys: [passkey('a1', 'Laptop')] }))
     vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(false)
     await button(wrapper.get('tbody tr'), 'Remove').trigger('click')
     await flushPromises()
     expect(api.auth.removePasskey).not.toHaveBeenCalled()
   })
 
-  it('turns the second factor off on the password, and shows it off', async () => {
-    const wrapper = await open({
-      totp: true,
-      passkeys: [passkey('a1', 'Laptop')],
-      rpId: 'e.example',
-    })
-    await button(wrapper, 'Turn off').trigger('click')
-    await wrapper.get('#second-factor-password').setValue('pw pw pw pw pw')
-    api.auth.secondFactorClear.mockResolvedValue(undefined)
-    api.auth.secondFactor.mockResolvedValue({ totp: false, passkeys: [], rpId: 'e.example' })
+  it('removes the app on the password, naming the passkeys that go with it', async () => {
+    const wrapper = await open(mfa({ passkeys: [passkey('a1', 'Laptop')] }))
+    await button(group(wrapper, 'Authenticator app'), 'Remove').trigger('click')
+    expect(dialog(wrapper).get('h2').text()).toBe('Remove the authenticator app')
+    expect(dialog(wrapper).get('li').text()).toBe('Laptop')
+    await wrapper.get('#remove-app-password').setValue('pw pw pw pw pw')
+    api.auth.mfaClear.mockResolvedValue(undefined)
+    api.auth.mfa.mockResolvedValue(mfa({ totp: null }))
 
-    await wrapper.get('#second-factor-off-form').trigger('submit')
+    await wrapper.get('#remove-app-form').trigger('submit')
     await flushPromises()
 
-    expect(api.auth.secondFactorClear).toHaveBeenCalledWith('pw pw pw pw pw')
-    expect(wrapper.text()).toContain('Off. Sign-in asks for your password alone.')
-    expect(wrapper.find('#second-factor-password').exists()).toBe(false)
+    expect(api.auth.mfaClear).toHaveBeenCalledWith('pw pw pw pw pw')
+    expect(badge(wrapper)).toBe('off')
+    expect(dialog(wrapper).exists()).toBe(false)
+    expect(api.auth.me).toHaveBeenCalled()
   })
 
-  it('keeps it on when the password is wrong', async () => {
-    const wrapper = await open({ totp: true, passkeys: [], rpId: 'e.example' })
-    await button(wrapper, 'Turn off').trigger('click')
-    await wrapper.get('#second-factor-password').setValue('nope')
-    api.auth.secondFactorClear.mockRejectedValue(
-      Object.assign(new ApiError('invalid username or password'), { status: 401 }),
+  it('keeps the app when the password is wrong', async () => {
+    const wrapper = await open(mfa())
+    await button(group(wrapper, 'Authenticator app'), 'Remove').trigger('click')
+    await wrapper.get('#remove-app-password').setValue('nope')
+    api.auth.mfaClear.mockRejectedValue(
+      Object.assign(new ApiError('password is wrong'), { status: 401 }),
     )
 
-    await wrapper.get('#second-factor-off-form').trigger('submit')
+    await wrapper.get('#remove-app-form').trigger('submit')
     await flushPromises()
 
     expect(wrapper.get('[role="alert"]').text()).toBe('Password is wrong.')
-    expect(wrapper.text()).toContain('On. Sign-in asks for a code from your authenticator app.')
+    expect(badge(wrapper)).toBe('on')
+  })
+
+  it('turns passkey sign-in on through the password dialog', async () => {
+    const wrapper = await open(mfa({ passkeys: [passkey('a1', 'Laptop')] }))
+    expect(toggle(wrapper).attributes('disabled')).toBeUndefined()
+    await toggle(wrapper).setValue(true)
+    expect(dialog(wrapper).get('h2').text()).toBe('Turn on passkey sign-in')
+    await wrapper.get('#passkey-login-password').setValue('pw pw pw pw pw')
+    const on = mfa({ passkeys: [passkey('a1', 'Laptop')], passkeyLogin: true })
+    api.auth.setPasskeyLogin.mockResolvedValue(on)
+    api.auth.mfa.mockResolvedValue(on)
+
+    await wrapper.get('#passkey-login-form').trigger('submit')
+    await flushPromises()
+
+    expect(api.auth.setPasskeyLogin).toHaveBeenCalledWith(true, 'pw pw pw pw pw')
+    expect(toggle(wrapper).element.checked).toBe(true)
+    expect(intro(wrapper)).toBe(
+      'Sign-in asks for a code from your authenticator app after your password; a passkey signs in on its own.',
+    )
+  })
+
+  it('says the password is wrong and leaves the switch off', async () => {
+    const wrapper = await open(mfa({ passkeys: [passkey('a1', 'Laptop')] }))
+    await toggle(wrapper).setValue(true)
+    await wrapper.get('#passkey-login-password').setValue('nope')
+    api.auth.setPasskeyLogin.mockRejectedValue(
+      Object.assign(new ApiError('password is wrong'), { status: 401 }),
+    )
+
+    await wrapper.get('#passkey-login-form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toBe('Password is wrong.')
+
+    await button(dialog(wrapper), 'Cancel').trigger('click')
+    await flushPromises()
+    expect(toggle(wrapper).element.checked).toBe(false)
+  })
+
+  it('turns passkey sign-in off without asking', async () => {
+    const wrapper = await open(mfa({ passkeys: [passkey('a1', 'Laptop')], passkeyLogin: true }))
+    expect(toggle(wrapper).element.checked).toBe(true)
+    const off = mfa({ passkeys: [passkey('a1', 'Laptop')] })
+    api.auth.setPasskeyLogin.mockResolvedValue(off)
+    api.auth.mfa.mockResolvedValue(off)
+
+    await toggle(wrapper).setValue(false)
+    await flushPromises()
+
+    expect(api.auth.setPasskeyLogin).toHaveBeenCalledWith(false)
+    expect(dialog(wrapper).exists()).toBe(false)
+    expect(toggle(wrapper).element.checked).toBe(false)
   })
 
   it('works the same for a viewer, whose own sign-in is theirs to change', async () => {
-    const wrapper = await open({ totp: false, passkeys: [], rpId: 'e.example' }, 'viewer')
+    const wrapper = await open(mfa({ totp: null }), 'viewer')
     await button(wrapper, 'Set up authenticator app').trigger('click')
     await flushPromises()
     expect(api.auth.totpStart).toHaveBeenCalledOnce()
   })
 
-  it('says when the command line has bypassed it', async () => {
-    const wrapper = await open({
-      totp: true,
-      passkeys: [],
-      rpId: 'e.example',
-      bypassUntil: '2099-10-10T12:00:00Z',
-      bypassBy: 'root',
-    })
-    const note = wrapper.get('[role="note"]').text()
-    expect(note).toMatch(
-      /^The second factor is bypassed until .+ by root, from the command line\.$/,
-    )
+  it('tells a locked-out account where to turn', async () => {
+    const wrapper = await open(mfa())
+    expect(wrapper.text()).toContain('Locked out? Run ostiole mfa bypass on the router.')
   })
 })

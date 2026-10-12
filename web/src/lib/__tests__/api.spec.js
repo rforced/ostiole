@@ -74,24 +74,24 @@ describe('api', () => {
     window.removeEventListener(UNAUTHORIZED_EVENT, handler)
   })
 
-  // A wrong code, an ended sign-in and a wrong password to turn the second
-  // factor off all answer 401 while the account is signed in or half way
+  // A wrong code, an ended sign-in and a wrong password to turn MFA off all
+  // answer 401 while the account is signed in or half way
   // there: none of them is an expired session.
-  it('does not read a refused second factor as an expired session', async () => {
+  it('does not read a refused MFA step as an expired session', async () => {
     mockFetch(401, { error: 'invalid code' })
     const handler = vi.fn()
     window.addEventListener(UNAUTHORIZED_EVENT, handler)
     await expect(api.auth.loginTOTP('tok', '000000')).rejects.toMatchObject({ status: 401 })
     await expect(api.auth.passkeyLoginOptions('tok')).rejects.toMatchObject({ status: 401 })
     await expect(api.auth.loginPasskey('tok', {})).rejects.toMatchObject({ status: 401 })
-    await expect(api.auth.secondFactorClear('wrong')).rejects.toMatchObject({ status: 401 })
+    await expect(api.auth.mfaClear('wrong')).rejects.toMatchObject({ status: 401 })
     expect(handler).not.toHaveBeenCalled()
-    await expect(api.auth.secondFactor()).rejects.toMatchObject({ status: 401 })
+    await expect(api.auth.mfa()).rejects.toMatchObject({ status: 401 })
     expect(handler).toHaveBeenCalledOnce()
     window.removeEventListener(UNAUTHORIZED_EVENT, handler)
   })
 
-  it('sends the second factor calls where the router expects them', async () => {
+  it('sends the MFA calls where the router expects them', async () => {
     const fetch = mockFetch(200, {})
     const cases = [
       [
@@ -112,24 +112,24 @@ describe('api', () => {
         '/auth/login/passkey',
         { pending: 'tok', credential: { id: 'c' } },
       ],
-      [() => api.auth.secondFactor(), 'GET', '/auth/second-factor'],
-      [() => api.auth.totpStart(), 'POST', '/auth/totp/start'],
-      [() => api.auth.totpConfirm('123456'), 'POST', '/auth/totp/confirm', { code: '123456' }],
+      [() => api.auth.mfa(), 'GET', '/auth/mfa'],
+      [() => api.auth.totpStart(), 'POST', '/auth/mfa/totp/start'],
+      [() => api.auth.totpConfirm('123456'), 'POST', '/auth/mfa/totp/confirm', { code: '123456' }],
+      [() => api.auth.mfaClear('pw'), 'POST', '/auth/mfa/clear', { password: 'pw' }],
       [
-        () => api.auth.secondFactorClear('pw'),
+        () => api.auth.passkeyOptions('pw'),
         'POST',
-        '/auth/second-factor/clear',
+        '/auth/mfa/passkeys/options',
         { password: 'pw' },
       ],
-      [() => api.auth.passkeyOptions(), 'POST', '/auth/passkeys/options'],
       [
         () => api.auth.addPasskey('Laptop', { id: 'c' }),
         'POST',
-        '/auth/passkeys',
+        '/auth/mfa/passkeys',
         { name: 'Laptop', credential: { id: 'c' } },
       ],
-      [() => api.auth.removePasskey('a/b'), 'DELETE', '/auth/passkeys/a%2Fb'],
-      [() => api.users.clearSecondFactor('sam'), 'DELETE', '/users/sam/second-factor'],
+      [() => api.auth.removePasskey('a/b'), 'DELETE', '/auth/mfa/passkeys/a%2Fb'],
+      [() => api.users.clearMFA('sam'), 'DELETE', '/users/sam/mfa'],
     ]
     for (const [call, method, path, body] of cases) {
       fetch.mockClear()

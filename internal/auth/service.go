@@ -59,6 +59,8 @@ type User struct {
 	ID       string    `json:"id,omitempty"`
 	TOTP     *TOTP     `json:"totp,omitempty"`
 	Passkeys []Passkey `json:"passkeys,omitempty"`
+	// PasskeyLogin lets a passkey sign in without the password.
+	PasskeyLogin bool `json:"passkeyLogin,omitempty"`
 }
 
 // RoleOf returns the account's role, defaulting to administrator for an
@@ -94,7 +96,7 @@ type Service struct {
 	loadedAt time.Time // mtime of the file when last read
 	loadedSz int64
 
-	second *secondFactor
+	mfa *mfa
 }
 
 // NewService loads (or lazily creates) the users file in dir.
@@ -102,7 +104,7 @@ func NewService(dir string) (*Service, error) {
 	s := &Service{
 		path: filepath.Join(dir, UsersFile), now: time.Now, users: map[string]User{},
 		hashing: make(chan struct{}, hashSlots), hashWait: hashWait,
-		second: newSecondFactor(),
+		mfa: newMFA(),
 	}
 	s.sessions = newSessionStore(dir, func() time.Time { return s.now() })
 	s.limiter = newLimiter(dir, func() time.Time { return s.now() })
@@ -225,7 +227,7 @@ func (s *Service) Role(username string) Role {
 	return u.RoleOf()
 }
 
-// Account looks one account up, without its password hash or second-factor
+// Account looks one account up, without its password hash or MFA
 // secrets. The second result is false when there is no such account, which is how a caller
 // tells a rename or a password reset for a name that does not exist from
 // one that does.
@@ -243,7 +245,7 @@ func (s *Service) Account(username string) (User, bool) {
 }
 
 // Accounts lists accounts with their roles, for the UI, without password
-// hashes or second-factor secrets.
+// hashes or MFA secrets.
 func (s *Service) Accounts() []User {
 	out := s.Users()
 	for i := range out {
@@ -266,7 +268,7 @@ func (s *Service) Usernames() []string {
 	return names
 }
 
-// Users returns every account, password hashes and second-factor secrets
+// Users returns every account, password hashes and MFA secrets
 // included, sorted by name. It exists for backups; nothing that answers a
 // request should use it.
 func (s *Service) Users() []User {
@@ -563,7 +565,7 @@ func (s *Service) verify(username, password, remote string) (User, error) {
 }
 
 // Authenticate checks the password under the sign-in limiter and makes no
-// session. While the account still owes a second factor the address is not
+// session. While the account still owes MFA the address is not
 // forgiven its earlier failures: a stolen password would otherwise buy fresh
 // tries at the code each time it was entered.
 func (s *Service) Authenticate(username, password, remote string) error {
@@ -571,7 +573,7 @@ func (s *Service) Authenticate(username, password, remote string) error {
 	if err != nil {
 		return err
 	}
-	if !s.secondFactorDue(u) {
+	if !s.mfaDue(u) {
 		s.limiter.success(remote)
 	}
 	return nil
@@ -580,12 +582,21 @@ func (s *Service) Authenticate(username, password, remote string) error {
 // Login checks credentials, applying per-address rate limiting, and
 // returns a new session on success. remote should be the client IP.
 func (s *Service) Login(username, password, remote string) (*Session, error) {
-	if _, err := s.verify(username, password, remote); err != nil {
+	return s.LoginFrom(username, password, Client{Address: remote})
+}
+
+// LoginFrom is Login for a client whose address and user agent the session
+// keeps.
+func (s *Service) LoginFrom(username, password string, from Client) (*Session, error) {
+	if _, err := s.verify(username, password, from.Address); err != nil {
 		return nil, err
 	}
-	s.limiter.success(remote)
-	return s.sessions.create(username), nil
+	s.limiter.success(from.Address)
+	return s.sessions.createFrom(username, from), nil
 }
+
+// Blocked reports whether the address is shut out of signing in for now.
+func (s *Service) Blocked(remote string) bool { return s.limiter.blocked(remote) }
 
 // Session resolves a session ID, refreshing its idle timer.
 func (s *Service) Session(id string) (*Session, bool) {
