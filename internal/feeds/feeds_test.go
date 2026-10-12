@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"ostiole/internal/model"
+	"ostiole/internal/retry"
 )
 
 func config(aliases ...model.Alias) *model.Config {
@@ -164,6 +165,71 @@ func TestFetchFailsWholesale(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "500") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+// A source that errs, is busy or does not answer in time is asked again;
+// one that answers no or asks to be left alone is not.
+func TestARefreshAsksAgainAfterAPassingFailure(t *testing.T) {
+	t.Parallel()
+	answer := func(code int) http.HandlerFunc {
+		return func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(code) }
+	}
+	hang := func(_ http.ResponseWriter, r *http.Request) { <-r.Context().Done() }
+	for name, tc := range map[string]struct {
+		fail     http.HandlerFunc
+		failures int32
+		want     int32
+		wantErr  string
+	}{
+		"an error once":       {fail: answer(http.StatusInternalServerError), failures: 1, want: 2},
+		"busy twice":          {fail: answer(http.StatusServiceUnavailable), failures: 2, want: 3},
+		"too many requests":   {fail: answer(http.StatusTooManyRequests), failures: 1, want: 1, wantErr: "HTTP 429"},
+		"no answer in time":   {fail: hang, failures: 1, want: 2},
+		"an error every time": {fail: answer(http.StatusBadGateway), failures: retry.Attempts, want: retry.Attempts, wantErr: "HTTP 502"},
+		"not found":           {fail: answer(http.StatusNotFound), failures: retry.Attempts, want: 1, wantErr: "HTTP 404"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var hits atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if hits.Add(1) <= tc.failures {
+					tc.fail(w, r)
+					return
+				}
+				_, _ = w.Write([]byte("192.0.2.0/24\n"))
+			}))
+			defer srv.Close()
+
+			cfg := config(model.Alias{Name: "drop", Type: model.AliasHosts, Entries: []string{srv.URL + "/drop.txt"}})
+			f := testFetcher()
+			f.Timeout = time.Second
+			entries, _, err := f.Fetch(context.Background(), cfg, cfg.Aliases[0])
+			switch {
+			case tc.wantErr == "" && (err != nil || len(entries) != 1):
+				t.Errorf("entries = %v, err = %v", entries, err)
+			case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+				t.Errorf("err = %v, want %s", err, tc.wantErr)
+			}
+			if n := hits.Load(); n != tc.want {
+				t.Errorf("asked %d times, want %d", n, tc.want)
+			}
+		})
+	}
+}
+
+// The alias dialog's look at a typed URL answers at once.
+func TestInspectAsksOnce(t *testing.T) {
+	t.Parallel()
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	if _, err := testFetcher().Inspect(context.Background(), srv.URL+"/drop.txt", false); err == nil || hits.Load() != 1 {
+		t.Errorf("err = %v after %d requests", err, hits.Load())
 	}
 }
 

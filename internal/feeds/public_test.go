@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"ostiole/internal/fetch"
 )
@@ -47,5 +48,9 @@ func TestInspectRefusesTheRouter(t *testing.T) {
 }
 
 // testFetcher reads from servers on the loopback as if they were lists
-// inside the network.
-func testFetcher() *Fetcher { return NewFetcher(fetch.Inside()) }
+// inside the network, and asks a failing one again at once.
+func testFetcher() *Fetcher {
+	f := NewFetcher(fetch.Inside())
+	f.RetryWait = time.Millisecond
+	return f
+}

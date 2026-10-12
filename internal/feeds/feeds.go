@@ -29,6 +29,7 @@ import (
 	"ostiole/internal/fetch"
 	"ostiole/internal/model"
 	"ostiole/internal/nft"
+	"ostiole/internal/retry"
 	"ostiole/internal/version"
 )
 
@@ -37,7 +38,7 @@ import (
 const (
 	MaxBytes   = 16 << 20
 	MaxEntries = 500_000
-	// DefaultTimeout is how long one fetch may take. Some of these lists
+	// DefaultTimeout is how long one request may take. Some of these lists
 	// are large and served slowly.
 	DefaultTimeout = 60 * time.Second
 	// MinRefresh is the shortest refresh anyone can ask for: these lists
@@ -404,6 +405,9 @@ type Fetcher struct {
 	// fetch.Inside for their loopback servers.
 	Getter  *fetch.Getter
 	Timeout time.Duration
+	// RetryWait is the first pause between attempts; zero is
+	// retry.DefaultWait.
+	RetryWait time.Duration
 	// UserAgent identifies this router to the publisher, several of whom ask
 	// for one.
 	UserAgent string
@@ -418,6 +422,7 @@ func NewFetcher(getter *fetch.Getter) *Fetcher {
 	return &Fetcher{
 		Getter:    getter,
 		Timeout:   DefaultTimeout,
+		RetryWait: retry.DefaultWait,
 		UserAgent: version.Agent,
 	}
 }
@@ -460,7 +465,7 @@ func (f *Fetcher) Fetch(ctx context.Context, cfg *model.Config, a model.Alias) (
 }
 
 func (f *Fetcher) one(ctx context.Context, url string, typ model.AliasType) ([]string, error) {
-	raw, err := f.get(ctx, url, fetch.Named)
+	raw, err := f.get(ctx, url)
 	if err != nil {
 		return nil, err
 	}
@@ -477,7 +482,7 @@ func (f *Fetcher) Inspect(ctx context.Context, url string, publicOnly bool) (Par
 	if publicOnly {
 		reach = fetch.Internet
 	}
-	raw, err := f.get(ctx, url, reach)
+	raw, err := f.getOnce(ctx, url, reach)
 	for _, refused := range []error{fetch.ErrNotPublic, fetch.ErrNotAllowed, fetch.ErrPlainHTTP} {
 		if errors.Is(err, refused) {
 			// The dial error around it names where a name or a redirect
@@ -509,9 +514,20 @@ func read(raw []byte, typ model.AliasType) ([]string, error) {
 	return Parse(string(raw), typ)
 }
 
-// get downloads one URL from where reach allows, bounded by the timeout
-// and MaxBytes.
-func (f *Fetcher) get(ctx context.Context, url string, reach fetch.Reach) ([]byte, error) {
+// get downloads one URL for a refresh, asking again while the source
+// errs, is busy or does not answer in time.
+func (f *Fetcher) get(ctx context.Context, url string) ([]byte, error) {
+	var raw []byte
+	err := retry.Do(ctx, f.RetryWait, retry.Transient, func() (err error) {
+		raw, err = f.getOnce(ctx, url, fetch.Named)
+		return err
+	})
+	return raw, err
+}
+
+// getOnce downloads one URL from where reach allows, bounded by the
+// timeout and MaxBytes.
+func (f *Fetcher) getOnce(ctx context.Context, url string, reach fetch.Reach) ([]byte, error) {
 	timeout := f.Timeout
 	if timeout <= 0 {
 		timeout = DefaultTimeout
@@ -524,7 +540,7 @@ func (f *Fetcher) get(ctx context.Context, url string, reach fetch.Reach) ([]byt
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+		return nil, retry.StatusError(resp.StatusCode)
 	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, MaxBytes+1))
 	if err != nil {
@@ -598,7 +614,7 @@ func (f *Fetcher) holders(ctx context.Context, cfg *model.Config, parts []Part) 
 			Names map[string]string `json:"names"`
 		} `json:"data"`
 	}
-	raw, err := f.get(ctx, strings.ReplaceAll(tmpl, "{asns}", strings.Join(numbers, ",")), fetch.Named)
+	raw, err := f.get(ctx, strings.ReplaceAll(tmpl, "{asns}", strings.Join(numbers, ",")))
 	if err == nil {
 		err = json.Unmarshal(raw, &ans)
 	}

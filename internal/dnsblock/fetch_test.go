@@ -6,15 +6,21 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"ostiole/internal/fetch"
 	"ostiole/internal/model"
 )
 
 // testFetcher reads from servers on the loopback as if they were lists
-// inside the network.
-func testFetcher() *Fetcher { return NewFetcher(fetch.Inside()) }
+// inside the network, and asks a failing one again at once.
+func testFetcher() *Fetcher {
+	f := NewFetcher(fetch.Inside())
+	f.RetryWait = time.Millisecond
+	return f
+}
 
 func serve(t *testing.T, body string) string {
 	t.Helper()
@@ -126,6 +132,44 @@ func TestFetchReportsHTTPFailures(t *testing.T) {
 	_, _, _, err := f.Fetch(context.Background(), model.BlockList{Name: "l", URL: srv.URL})
 	if err == nil || !strings.Contains(err.Error(), "503") {
 		t.Fatalf("err = %v; want one naming HTTP 503", err)
+	}
+}
+
+// A busy publisher is asked again. A list still arriving when the time runs
+// out is not downloaded again.
+func TestFetchAsksAgainAfterAPassingFailure(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		stall bool
+		want  int32
+	}{
+		"busy once":                     {want: 2},
+		"still arriving at the timeout": {stall: true, want: 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var hits atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				n := hits.Add(1)
+				switch {
+				case tc.stall:
+					_, _ = w.Write([]byte("ads.example.com\n"))
+					w.(http.Flusher).Flush()
+					<-r.Context().Done()
+				case n == 1:
+					w.WriteHeader(http.StatusServiceUnavailable)
+				default:
+					_, _ = w.Write([]byte("ads.example.com\n"))
+				}
+			}))
+			defer srv.Close()
+			f := testFetcher()
+			f.Timeout = time.Second
+			domains, _, _, err := f.Fetch(context.Background(), model.BlockList{Name: "l", URL: srv.URL})
+			if n := hits.Load(); n != tc.want || (err != nil) != tc.stall || (!tc.stall && len(domains) != 1) {
+				t.Errorf("asked %d times, domains = %v, err = %v; want %d times", n, domains, err, tc.want)
+			}
+		})
 	}
 }
 

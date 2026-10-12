@@ -11,10 +11,11 @@ import (
 
 	"ostiole/internal/fetch"
 	"ostiole/internal/model"
+	"ostiole/internal/retry"
 	"ostiole/internal/version"
 )
 
-// DefaultTimeout is how long one fetch may take. Some of these lists are
+// DefaultTimeout is how long one request may take. Some of these lists are
 // large and served slowly.
 const DefaultTimeout = 2 * time.Minute
 
@@ -32,6 +33,9 @@ type Fetcher struct {
 	// fetch.Inside for their loopback servers.
 	Getter  *fetch.Getter
 	Timeout time.Duration
+	// RetryWait is the first pause between attempts; zero is
+	// retry.DefaultWait.
+	RetryWait time.Duration
 	// UserAgent identifies this router to the publisher, several of whom ask
 	// for one.
 	UserAgent string
@@ -43,16 +47,31 @@ func NewFetcher(getter *fetch.Getter) *Fetcher {
 	return &Fetcher{
 		Getter:    getter,
 		Timeout:   DefaultTimeout,
+		RetryWait: retry.DefaultWait,
 		UserAgent: version.Agent,
 	}
 }
 
 // Fetch downloads one list and returns the names in it, how many lines held
-// nothing usable, and how the list turned out to be written.
+// nothing usable, and how the list turned out to be written. A source that
+// errs, is busy or does not answer in time is asked again.
 func (f *Fetcher) Fetch(ctx context.Context, l model.BlockList) ([]string, int, model.ListFormat, error) {
 	if l.URL == "" {
 		return nil, 0, "", ErrNoSource
 	}
+	var (
+		domains []string
+		skipped int
+		format  model.ListFormat
+	)
+	err := retry.Do(ctx, f.RetryWait, retry.Transient, func() (err error) {
+		domains, skipped, format, err = f.fetchOnce(ctx, l)
+		return err
+	})
+	return domains, skipped, format, err
+}
+
+func (f *Fetcher) fetchOnce(ctx context.Context, l model.BlockList) ([]string, int, model.ListFormat, error) {
 	timeout := f.Timeout
 	if timeout <= 0 {
 		timeout = DefaultTimeout
@@ -66,7 +85,7 @@ func (f *Fetcher) Fetch(ctx context.Context, l model.BlockList) ([]string, int, 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, 0, "", fmt.Errorf("HTTP %d", resp.StatusCode)
+		return nil, 0, "", retry.StatusError(resp.StatusCode)
 	}
 	return ParseStream(resp.Body, l.FormatOrAuto())
 }
