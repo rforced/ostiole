@@ -5,10 +5,10 @@ import { computed, ref } from 'vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { formatCount } from '@/lib/format'
+import { tierBadge, tierLabel } from '@/lib/tiers'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
-import BusyHostsDialog from '@/views/firewall/shaping/BusyHostsDialog.vue'
-import { tierBadge, tierLabel } from '@/views/firewall/shaping/tiers'
+import BusyHostsDialog from '@/views/traffic/shaping/BusyHostsDialog.vue'
 
 const auth = useAuthStore()
 const config = useConfigStore()

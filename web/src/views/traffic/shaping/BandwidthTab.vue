@@ -7,7 +7,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import { formatRate } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
-import BandwidthDialog from '@/views/firewall/shaping/BandwidthDialog.vue'
+import BandwidthDialog from '@/views/traffic/shaping/BandwidthDialog.vue'
 
 /** The label the dialog offers, so the table reads the same as the form. */
 const LINKS = {
@@ -46,8 +46,7 @@ function rate(bits) {
     <SectionCard
       title="Speeds"
       :count="shaped.length"
-      intro="Download and upload are read from this router's point of view, whichever way the
-        interface faces."
+      intro="Download is what your devices receive, whichever way the interface faces."
       flush
     >
       <template v-if="!auth.readOnly" #actions>

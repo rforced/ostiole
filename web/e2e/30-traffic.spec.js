@@ -7,8 +7,8 @@ test.describe.configure({ mode: 'serial' })
 // connection table, and says so once counting per device is on.
 test('the links chart from the stream, and counting per device goes on', async ({ page }) => {
   await login(page)
-  await sidebar(page, 'Traffic')
-  await expect(page.getByRole('heading', { name: 'Traffic', level: 1 })).toBeVisible()
+  await sidebar(page, 'Traffic', 'Usage')
+  await expect(page.getByRole('heading', { name: 'Usage', level: 1 })).toBeVisible()
   await expect(page.getByRole('tab', { name: 'Interfaces' })).toHaveAttribute(
     'aria-selected',
     'true',
@@ -63,7 +63,7 @@ test('the links chart from the stream, and counting per device goes on', async (
 // The server reads no connections, so it has none to name.
 test('destinations go on beside the devices', async ({ page }) => {
   await login(page)
-  await page.goto('/traffic#destinations')
+  await page.goto('/traffic/usage#destinations')
   const record = page.getByRole('switch', { name: 'Recording enabled' })
   await expect(record).toBeEnabled()
   await record.check()

@@ -2,7 +2,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
-import LiveTab from '@/views/firewall/shaping/LiveTab.vue'
+import LiveTab from '@/views/traffic/shaping/LiveTab.vue'
 
 vi.mock('@/lib/api', () => ({
   api: { shaping: vi.fn() },

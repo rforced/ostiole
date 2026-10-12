@@ -1735,7 +1735,7 @@ export const useConfigStore = defineStore('config', () => {
       case 'interfaces': {
         // A speed lives on the interface but is edited on its own page, so
         // the change is shown where it was made.
-        if (path.includes('.shaping')) return '/firewall/shaping'
+        if (path.includes('.shaping')) return '/traffic/shaping'
         const i =
           interfaces.value.find((x) => x.name === id) ??
           saved.value?.interfaces?.find((x) => x.name === id)
@@ -1757,11 +1757,11 @@ export const useConfigStore = defineStore('config', () => {
         return '/vpn'
       }
       case 'traffic':
-        return '/traffic'
+        return '/traffic/usage'
       case 'zones':
         // Holding back a busy host is a priority decision, so it is edited
         // and shown where the other priorities are.
-        return path.includes('.busy') ? '/firewall/shaping' : '/interfaces'
+        return path.includes('.busy') ? '/traffic/shaping' : '/interfaces'
       case 'protection':
         return '/firewall/protection'
       case 'rules':

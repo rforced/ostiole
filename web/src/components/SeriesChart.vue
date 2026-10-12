@@ -31,7 +31,10 @@ const props = defineProps({
   end: { type: Number, default: 0 },
   /** What is charted, as the page names it. */
   label: { type: String, required: true },
-  /** The lines: {index, name, color, band?: [low index, high index]}. */
+  /**
+   * The lines: {index, name, color, band?: [low index, high index], limit?}.
+   * A limit is drawn dashed in the line's colour, and the axis reaches it.
+   */
   series: { type: Array, required: true },
   /** The bars: {index, name, color}, a share from 0 to 100. */
   bars: { type: Array, default: () => [] },
@@ -81,12 +84,16 @@ const startT = computed(() => endT.value - span.value)
 /** The points inside the window, oldest first. */
 const shown = computed(() => all.value.filter((p) => p[0] >= startT.value && p[0] <= endT.value))
 const scale = computed(() => {
-  let highest = 0
+  const limit = Math.max(0, ...props.series.map((s) => s.limit ?? 0))
+  let highest = limit
   for (const p of shown.value) {
     for (const s of props.series) highest = Math.max(highest, p[s.index] ?? 0, p[s.band?.[1]] ?? 0)
   }
-  return props.scale(highest)
+  const out = props.scale(highest)
+  // A limit on the top line would read as the plot's edge.
+  return limit > 0 && out.top <= limit ? { top: out.top + out.step, step: out.step } : out
 })
+const limits = computed(() => props.series.filter((s) => s.limit > 0))
 
 const plotW = computed(() => width.value - PAD.value.left - PAD.value.right)
 const plotH = HEIGHT - 10 - 24
@@ -151,7 +158,10 @@ const wave = computed(() => {
 const summary = computed(() => {
   if (!props.points) return `${props.label}: reading`
   if (!current.value) return `${props.label}: ${props.empty.replace(/\.$/, '').toLowerCase()}`
-  const values = props.series.map((s, i) => `${s.name.toLowerCase()} ${valueOf(current.value[i])}`)
+  const values = props.series.map(
+    (s, i) =>
+      `${s.name.toLowerCase()} ${valueOf(current.value[i])}${s.limit > 0 ? ` of ${valueOf(s.limit)}` : ''}`,
+  )
   return `${props.label}: ${values.join(', ')}`
 })
 const caption = computed(() => {
@@ -217,6 +227,9 @@ const table = ref(false)
           <span v-if="skeleton" class="skeleton w-16"></span>
           <span v-else class="font-medium tabular-nums">
             {{ current ? valueOf(current[i]) : '—' }}
+          </span>
+          <span v-if="!skeleton && s.limit > 0" class="text-ink-muted tabular-nums">
+            of {{ valueOf(s.limit) }}
           </span>
         </span>
         <span v-for="b in bars" :key="b.index" class="flex items-center gap-1.5">
@@ -397,6 +410,18 @@ const table = ref(false)
               data-bar
             />
           </template>
+          <line
+            v-for="s in limits"
+            :key="`limit-${s.index}`"
+            :x1="PAD.left"
+            :x2="width - PAD.right"
+            :y1="Math.round(y(s.limit)) + 0.5"
+            :y2="Math.round(y(s.limit)) + 0.5"
+            :stroke="s.color"
+            stroke-width="1.5"
+            stroke-dasharray="6 4"
+            data-limit
+          />
           <template v-for="l in lines" :key="l.index">
             <path v-if="l.area" :d="l.area" :fill="l.color" fill-opacity="0.2" data-band />
             <path

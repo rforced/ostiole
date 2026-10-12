@@ -8,7 +8,8 @@ import (
 	"time"
 )
 
-// Rate is a link's or a device's rate now, in bits per second.
+// Rate is a link's or a device's rate now, in bits per second, down and up
+// as LinkReport and DeviceReport read them.
 type Rate struct {
 	ID   string  `json:"id"`
 	Down float64 `json:"down"`
@@ -57,7 +58,8 @@ func (c *Counter) publish(ev Event) {
 // LinkReport is one link over a window.
 type LinkReport struct {
 	Name string `json:"name"`
-	// Down and Up are what it is receiving and sending now.
+	// Down and Up are its rates now. Down is what arrives on a link facing
+	// the internet, and what leaves towards the hosts on any other.
 	Down   float64 `json:"down"`
 	Up     float64 `json:"up"`
 	Totals Totals  `json:"totals"`
@@ -75,7 +77,15 @@ func (c *Counter) LinkReports(window string) []LinkReport {
 	out := make([]LinkReport, 0, len(c.links))
 	for name, l := range c.links {
 		pts, tot := l.series.read(window, now, c.loc)
-		out = append(out, LinkReport{Name: name, Down: l.down, Up: l.up, Totals: tot, Since: l.series.since, Points: pts})
+		down, up := l.down, l.up
+		if c.hostSide[name] {
+			down, up = up, down
+			tot.Down, tot.Up = tot.Up, tot.Down
+			for i := range pts {
+				pts[i][1], pts[i][2] = pts[i][2], pts[i][1]
+			}
+		}
+		out = append(out, LinkReport{Name: name, Down: down, Up: up, Totals: tot, Since: l.series.since, Points: pts})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out

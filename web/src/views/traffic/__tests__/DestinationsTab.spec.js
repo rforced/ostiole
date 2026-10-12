@@ -96,7 +96,7 @@ describe('DestinationsTab', () => {
     expect(toggle.attributes('role')).toBe('switch')
     expect(toggle.attributes('aria-label')).toBe('Recording enabled')
     expect(toggle.attributes('disabled')).toBeDefined()
-    expect(w.text()).toContain('Needs counting under Traffic › Devices.')
+    expect(w.text()).toContain('Needs counting under Traffic › Usage › Devices.')
     expect(w.text()).not.toContain('Off.')
     let config
     ;({ w, config } = await open({ traffic: { devices: true }, enabled: false }))

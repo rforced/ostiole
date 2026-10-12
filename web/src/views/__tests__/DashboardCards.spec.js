@@ -1,7 +1,9 @@
 import { RouterLinkStub, mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
+import { formatRate } from '@/lib/format'
 import GatewaysCard from '@/views/dashboard/GatewaysCard.vue'
+import InterfaceSummary from '@/views/dashboard/InterfaceSummary.vue'
 import RecentBlocksCard from '@/views/dashboard/RecentBlocksCard.vue'
 import RecentLeasesCard from '@/views/dashboard/RecentLeasesCard.vue'
 import RouterCard from '@/views/dashboard/RouterCard.vue'
@@ -454,5 +456,42 @@ describe('ServicesCard', () => {
     expect(dhcpLine({ leases: 1, capacity: 100, servers: 2 })).toBe('1 of 100 leases · 2 servers')
     expect(dnsLine({ overrides: 1 })).toBe('lan · 1 host override')
     expect(dnsLine({ overrides: 2 })).toBe('lan · 2 host overrides')
+  })
+})
+
+describe('InterfaceSummary', () => {
+  // A LAN sends what its hosts receive, so its down is what it sends, as
+  // Traffic › Usage reads it. A WAN's down is what arrives.
+  it('reads down towards the hosts on a link facing them', () => {
+    const link = { configured: true, enabled: true, present: true, carrier: true, addresses: [] }
+    const w = mount(InterfaceSummary, {
+      props: {
+        interfaces: [
+          {
+            ...link,
+            name: 'eth0',
+            zone: 'wan',
+            external: true,
+            rxBytes: 9_000_000,
+            txBytes: 1_000,
+          },
+          {
+            ...link,
+            name: 'eth1',
+            zone: 'lan',
+            hostSide: true,
+            rxBytes: 1_000,
+            txBytes: 9_000_000,
+          },
+        ],
+        rates: { eth0: { rx: 8_000_000, tx: 1_000 }, eth1: { rx: 1_000, tx: 8_000_000 } },
+      },
+    })
+    const [wan, lan] = rows(w).map((r) =>
+      r.find('[data-label="Traffic"]').text().replace(/\s+/g, ' '),
+    )
+    expect(lan).toBe(wan)
+    const down = `down ${formatRate(8_000_000)}`
+    expect(wan.slice(0, down.length)).toBe(down)
   })
 })

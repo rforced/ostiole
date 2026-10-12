@@ -606,6 +606,27 @@ func TestSummarizeLinksPrefersKernelState(t *testing.T) {
 	if got[2].Name != "wg0" || got[2].Configured {
 		t.Errorf("wg0 = %+v, want live but unconfigured", got[2])
 	}
+	// Only the LAN's hosts are on its far side.
+	if !got[0].HostSide || got[1].HostSide || got[2].HostSide {
+		t.Errorf("host sides = %v %v %v, want only eth1", got[0].HostSide, got[1].HostSide, got[2].HostSide)
+	}
+}
+
+// A port the configuration names only as a bridge's member is read from
+// the bridge's side, as Traffic reads it.
+func TestAnUnlistedPortTakesItsBridgesSide(t *testing.T) {
+	t.Parallel()
+	cfg := model.Starter(model.StarterOptions{LAN: "br0", LANAddress: "10.0.0.1/24", WAN: "eth0"})
+	lan, _ := cfg.Interface("br0")
+	lan.Bridge = &model.Bridge{Members: []string{"eth1"}}
+	got := summarizeLinks(cfg, []network.Link{{Name: "eth1", Kind: "ethernet"}, {Name: "docker0", Kind: "bridge"}})
+	sides := map[string]bool{}
+	for _, l := range got {
+		sides[l.Name] = l.HostSide
+	}
+	if !sides["br0"] || !sides["eth1"] || sides["eth0"] || sides["docker0"] {
+		t.Errorf("host sides = %v, want br0 and its member eth1 only", sides)
+	}
 }
 
 // The dashboard and the Interfaces page show a link's errors of the last
@@ -1012,7 +1033,7 @@ func TestWarnsWhenTheLogsCouldOutgrowTheirMemory(t *testing.T) {
 	if w == nil || w.Kind != "logs" || w.Title != "The logs could take more memory than this router has for them" ||
 		!strings.HasPrefix(w.Detail, "Full, the logs in memory take 897 MB. This router has 875 MB for them. Set fewer entries under Firewall › Log, ") ||
 		!strings.HasSuffix(w.Detail, "Services › Reverse proxy › Events, Services › Reverse proxy › Requests, Services › DHCP › Log, "+
-			"Services › Discovery › Log, Traffic › Destinations, Wireless › Log, VPN › WireGuard › Log or VPN › Tailscale › Log.") {
+			"Services › Discovery › Log, Traffic › Usage › Destinations, Wireless › Log, VPN › WireGuard › Log or VPN › Tailscale › Log.") {
 		t.Errorf("warning = %+v", w)
 	}
 	if w := find(1_500_000_000); w != nil {

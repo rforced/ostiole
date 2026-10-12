@@ -82,6 +82,17 @@ const clear = useAsync(async () => {
 const config = useConfigStore()
 /** Kept in files as well, by the configuration the router runs. */
 const inFiles = computed(() => Boolean(config.saved?.system?.logging?.files?.enabled))
+/** The speed each link is shaped to, by the configuration the router runs. */
+const speeds = computed(() => {
+  const out = {}
+  for (const i of config.saved?.interfaces ?? []) {
+    const s = i.shaping
+    if (i.enabled && (s?.download || s?.upload)) {
+      out[i.name] = { down: s.download ?? 0, up: s.upload ?? 0 }
+    }
+  }
+  return out
+})
 
 const stale = computed(() => read.busy.value && links.value !== null)
 const error = computed(() => read.error.value || stream.error.value || clear.error.value)
@@ -133,6 +144,7 @@ const error = computed(() => read.error.value || stream.error.value || clear.err
             :label="l.name"
             :now="{ down: l.down, up: l.up }"
             :stale="stale"
+            :speed="speeds[l.name]"
           />
           <div class="space-y-2">
             <dl class="kv">

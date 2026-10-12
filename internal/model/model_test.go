@@ -1,8 +1,11 @@
 package model
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"os"
 	"slices"
 	"sort"
 	"strings"
@@ -1719,6 +1722,35 @@ func TestValidateAcceptsBridgesAndBonds(t *testing.T) {
 	}
 	if got := cfg.MasterOf(); got["eth2"] != "br0" || got["eth0"] != "bond0" {
 		t.Errorf("MasterOf = %v", got)
+	}
+}
+
+// A port with no zone of its own is read from the side of what it
+// carries, listed or not, so a bridge's members face its hosts and the
+// link a WAN session or VLAN runs over faces the internet. The page reads
+// the same cases (web/src/lib/__tests__/faces-internet.json).
+func TestFacesInternet(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile("../../web/src/lib/__tests__/faces-internet.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases struct {
+		Config        Config          `json:"config"`
+		FacesInternet map[string]bool `json:"facesInternet"`
+		HostSide      []string        `json:"hostSide"`
+	}
+	if err := json.Unmarshal(raw, &cases); err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range cases.FacesInternet {
+		if got := cases.Config.FacesInternet(name); got != want {
+			t.Errorf("FacesInternet(%q) = %v, want %v", name, got, want)
+		}
+	}
+	got := slices.Sorted(maps.Keys(cases.Config.HostSideLinks()))
+	if want := slices.Sorted(slices.Values(cases.HostSide)); !slices.Equal(got, want) {
+		t.Errorf("HostSideLinks = %v, want %v", got, want)
 	}
 }
 

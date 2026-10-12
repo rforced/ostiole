@@ -7,12 +7,12 @@ import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useDraftRows } from '@/lib/draft'
+import { tierBadge, tierLabel } from '@/lib/tiers'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import OneToOneDialog from '@/views/firewall/OneToOneDialog.vue'
 import OutboundDialog from '@/views/firewall/OutboundDialog.vue'
 import PortForwardDialog from '@/views/firewall/PortForwardDialog.vue'
-import { tierBadge, tierLabel } from '@/views/firewall/shaping/tiers'
 
 const auth = useAuthStore()
 const config = useConfigStore()

@@ -91,7 +91,7 @@ const shown = computed(() =>
       </template>
     </div>
     <p class="card-strip border-t border-line">
-      <RouterLink to="/traffic" class="link">All traffic</RouterLink>
+      <RouterLink to="/traffic/usage" class="link">All traffic</RouterLink>
     </p>
   </SectionCard>
 </template>

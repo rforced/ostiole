@@ -96,16 +96,6 @@ export const NAV = [
         label: 'Protection',
         view: () => import('@/views/firewall/ProtectionPage.vue'),
       },
-      {
-        path: 'shaping',
-        label: 'Traffic shaping',
-        view: () => import('@/views/firewall/ShapingPage.vue'),
-        tabs: [
-          { value: 'bandwidth', label: 'Bandwidth' },
-          { value: 'priorities', label: 'Priorities' },
-          { value: 'live', label: 'Queues' },
-        ],
-      },
       { path: 'log', label: 'Log', view: () => import('@/views/firewall/LogPage.vue') },
     ],
   },
@@ -245,11 +235,27 @@ export const NAV = [
     label: 'Traffic',
     icon: ChartLine,
     needsConfig: true,
-    view: () => import('@/views/TrafficView.vue'),
-    tabs: [
-      { value: 'interfaces', label: 'Interfaces' },
-      { value: 'devices', label: 'Devices' },
-      { value: 'destinations', label: 'Destinations' },
+    pages: [
+      {
+        path: 'usage',
+        label: 'Usage',
+        view: () => import('@/views/traffic/UsagePage.vue'),
+        tabs: [
+          { value: 'interfaces', label: 'Interfaces' },
+          { value: 'devices', label: 'Devices' },
+          { value: 'destinations', label: 'Destinations' },
+        ],
+      },
+      {
+        path: 'shaping',
+        label: 'Shaping',
+        view: () => import('@/views/traffic/ShapingPage.vue'),
+        tabs: [
+          { value: 'bandwidth', label: 'Bandwidth' },
+          { value: 'priorities', label: 'Priorities' },
+          { value: 'live', label: 'Queues' },
+        ],
+      },
     ],
   },
   {

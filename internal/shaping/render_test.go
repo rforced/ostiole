@@ -117,6 +117,25 @@ func TestDirectionFollowsWhereTheInterfaceFaces(t *testing.T) {
 	}
 }
 
+// A link with no zone of its own faces what it carries, so a speed on the
+// VLAN a WAN session runs over puts the download on what arrives.
+func TestAPortFacesWhatItCarries(t *testing.T) {
+	t.Parallel()
+	cfg := loadConfig(t, "testdata/full.json")
+	in, _ := cfg.Interface("eth2.7")
+	in.Shaping = &model.Shaping{Download: 100_000_000, Upload: 40_000_000}
+	for _, p := range Plans(cfg) {
+		if p.Interface != "eth2.7" {
+			continue
+		}
+		if !p.External || p.Ingress == nil || p.Ingress.Direction != Download || p.Ingress.Rate != 100_000_000 {
+			t.Errorf("eth2.7 = %+v", p)
+		}
+		return
+	}
+	t.Error("eth2.7 has no plan")
+}
+
 // A tagged frame carries four bytes the operator never sees, and a
 // dialled session over a tagged link carries them too.
 func TestVLANAddsItsOwnOverhead(t *testing.T) {

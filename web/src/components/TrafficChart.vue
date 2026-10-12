@@ -23,12 +23,14 @@ const props = defineProps({
   stale: { type: Boolean, default: false },
   /** Nothing is read yet, not even what is charted. */
   skeleton: { type: Boolean, default: false },
+  /** The speed the link is shaped to, {down, up} in bits per second, 0 where unshaped. */
+  speed: { type: Object, default: null },
 })
 
-const SERIES = [
-  { index: 1, name: 'Down', color: 'var(--chart-down)' },
-  { index: 2, name: 'Up', color: 'var(--chart-up)' },
-]
+const series = computed(() => [
+  { index: 1, name: 'Down', color: 'var(--chart-down)', limit: props.speed?.down ?? 0 },
+  { index: 2, name: 'Up', color: 'var(--chart-up)', limit: props.speed?.up ?? 0 },
+])
 const now = computed(() => (props.now ? [props.now.down, props.now.up] : null))
 </script>
 
@@ -38,7 +40,7 @@ const now = computed(() => (props.now ? [props.now.down, props.now.up] : null))
     :window="window"
     :end="end"
     :label="label"
-    :series="SERIES"
+    :series="series"
     :format="formatRate"
     :now="now"
     :stale="stale"

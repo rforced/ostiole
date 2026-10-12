@@ -12,7 +12,7 @@ async function wanInterface(select) {
 
 test('a line speed and a priority reach the kernel', async ({ page }) => {
   await login(page)
-  await page.goto('/firewall/shaping')
+  await page.goto('/traffic/shaping')
 
   // Nothing is shaped yet, and the page says what that means rather than
   // showing an empty table.
@@ -58,7 +58,7 @@ test('a line speed and a priority reach the kernel', async ({ page }) => {
 
   // In-app, because the speed is only in the draft and a page load would
   // discard it.
-  await sidebar(page, 'Rules')
+  await sidebar(page, 'Firewall', 'Rules')
   await page.getByRole('group', { name: 'Zone' }).getByRole('button', { name: 'lan' }).click()
   await page.getByRole('button', { name: 'Add rule' }).click()
   const rule = page.getByRole('dialog')
@@ -84,8 +84,15 @@ test('a line speed and a priority reach the kernel', async ({ page }) => {
   await expect(ruleset).toContainText('flags dynamic')
   await expect(ruleset).toContainText('add @busy_lan_v4 { ip saddr ct count over 200 }')
 
+  // The link's chart carries the speed the router now shapes it to.
+  await page.goto('/traffic/usage')
+  const link = page.getByRole('region', { name: wan, exact: true })
+  await expect(link).toContainText('of 200 Mbit/s')
+  await expect(link).toContainText('of 20 Mbit/s')
+  await expect(link.locator('[data-limit]')).toHaveCount(2)
+
   // And the priorities tab now names the rule that did it.
-  await page.goto('/firewall/shaping#priorities')
+  await page.goto('/traffic/shaping#priorities')
   const priority = page.getByRole('row').filter({ hasText: 'Calls go first' })
   await expect(priority).toContainText('Realtime')
   await expect(priority).toContainText('udp')
@@ -107,7 +114,7 @@ test('a line speed and a priority reach the kernel', async ({ page }) => {
 
 test('the live tab reports the queues', async ({ page }) => {
   await login(page)
-  await page.goto('/firewall/shaping#live')
+  await page.goto('/traffic/shaping#live')
 
   const card = page.getByRole('region').filter({ hasText: 'Upload' }).first()
   await expect(card).toContainText('of 20 Mbit/s')
@@ -137,7 +144,7 @@ test('removing the speed takes the priority field with it', async ({ page }) => 
   await expect(priority).toHaveValue('')
   await dialog.getByRole('button', { name: 'Cancel' }).click()
 
-  await page.goto('/firewall/shaping')
+  await page.goto('/traffic/shaping')
   await page
     .getByRole('row')
     .filter({ hasText: 'Mbit/s' })
@@ -148,7 +155,7 @@ test('removing the speed takes the priority field with it', async ({ page }) => 
 
   // With nothing shaped, offering a priority would be a choice with no
   // consequence, so the field goes away.
-  await sidebar(page, 'Rules')
+  await sidebar(page, 'Firewall', 'Rules')
   await page.getByRole('button', { name: 'Add rule' }).click()
   dialog = page.getByRole('dialog')
   await expect(dialog.getByLabel('Priority')).toHaveCount(0)

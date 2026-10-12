@@ -131,7 +131,7 @@ test("the gateways' history and events clear", async ({ page }) => {
 
 test('traffic per interface clears', async ({ page }) => {
   await login(page)
-  await page.goto('/traffic')
+  await page.goto('/traffic/usage')
   const cleared = page.waitForResponse(
     (r) => r.url().endsWith('/api/v1/traffic/interfaces') && r.request().method() === 'DELETE',
   )

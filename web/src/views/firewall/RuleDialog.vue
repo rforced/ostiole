@@ -6,9 +6,9 @@ import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { newId } from '@/lib/ids'
 import { joinList, parseList } from '@/lib/lists'
+import { PRIORITY_HINT, TIERS, UNSET_LABEL, tierOption } from '@/lib/tiers'
 import { useConfigStore } from '@/stores/config'
 import EndpointFields from '@/views/firewall/EndpointFields.vue'
-import { PRIORITY_HINT, TIERS, UNSET_LABEL, tierOption } from '@/views/firewall/shaping/tiers'
 
 const props = defineProps({
   rule: { type: Object, default: null },

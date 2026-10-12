@@ -706,7 +706,7 @@ describe('config store traffic shaping', () => {
   it('files a shaping change under the shaping page', () => {
     const config = useConfigStore()
     config.replaceDraft(shaped())
-    expect(config.sectionFor('interfaces[eth1].shaping.download')).toBe('/firewall/shaping')
+    expect(config.sectionFor('interfaces[eth1].shaping.download')).toBe('/traffic/shaping')
     expect(config.sectionFor('interfaces[eth1].ipv4.address')).toBe('/interfaces')
   })
 
@@ -726,7 +726,7 @@ describe('config store traffic shaping', () => {
   it('files a busy host change under the shaping page', () => {
     const config = useConfigStore()
     config.replaceDraft(draft())
-    expect(config.sectionFor('zones[lan].busy.connections')).toBe('/firewall/shaping')
+    expect(config.sectionFor('zones[lan].busy.connections')).toBe('/traffic/shaping')
     expect(config.sectionFor('zones[lan].antiLockout')).toBe('/interfaces')
   })
 

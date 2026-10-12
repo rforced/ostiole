@@ -3,9 +3,9 @@ import { TabsContent } from 'reka-ui'
 
 import AppTabs from '@/components/AppTabs.vue'
 import { usePageTabs } from '@/lib/tabs'
-import BandwidthTab from '@/views/firewall/shaping/BandwidthTab.vue'
-import LiveTab from '@/views/firewall/shaping/LiveTab.vue'
-import PrioritiesTab from '@/views/firewall/shaping/PrioritiesTab.vue'
+import BandwidthTab from '@/views/traffic/shaping/BandwidthTab.vue'
+import LiveTab from '@/views/traffic/shaping/LiveTab.vue'
+import PrioritiesTab from '@/views/traffic/shaping/PrioritiesTab.vue'
 
 const { tabs, tab } = usePageTabs()
 </script>

@@ -88,10 +88,7 @@ func Plans(cfg *model.Config) []Plan {
 	var out []Plan
 	for _, in := range cfg.ShapedInterfaces() {
 		s := *in.Shaping
-		p := Plan{Interface: in.Name, IFB: model.IFBName(in.Name)}
-		if z, ok := cfg.Zone(in.Zone); ok && z.External {
-			p.External = true
-		}
+		p := Plan{Interface: in.Name, IFB: model.IFBName(in.Name), External: cfg.FacesInternet(in.Name)}
 		over := overheadFor(s.LinkType(), tagged[in.Name])
 
 		// The kernel queues on the way out of a device, so the direction

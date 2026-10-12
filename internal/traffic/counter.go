@@ -67,6 +67,10 @@ type Counter struct {
 	mu    sync.Mutex
 	loc   *time.Location
 	links map[string]*link
+	// hostSide holds the links whose hosts are on the far side. Their
+	// series keep what the kernel counts, received as down, and are turned
+	// round when read, so down is what the hosts receive.
+	hostSide map[string]bool
 	// seen is the last read of the links, which the next dump works out
 	// the router's addresses and the inside networks from.
 	seen []network.Link
@@ -278,8 +282,10 @@ func (c *Counter) follow(now time.Time) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.loc = time.UTC
+	c.hostSide = nil
 	if cfg != nil {
 		c.loc = cfg.System.Location()
+		c.hostSide = cfg.HostSideLinks()
 	}
 	on := cfg != nil && cfg.Traffic.Devices
 	switch {
@@ -395,7 +401,11 @@ func (c *Counter) sampleLinks(now time.Time) {
 		}
 		s.rxErr, s.txErr = l.RXErrors, l.TXErrors
 		s.rx, s.tx, s.at, s.ok = l.RXBytes, l.TXBytes, now, true
-		ev.Links = append(ev.Links, Rate{ID: l.Name, Down: s.down, Up: s.up})
+		down, up := s.down, s.up
+		if c.hostSide[l.Name] {
+			down, up = up, down
+		}
+		ev.Links = append(ev.Links, Rate{ID: l.Name, Down: down, Up: up})
 	}
 	// A link that went away keeps its history but no longer has a rate.
 	for name, s := range c.links {

@@ -13,11 +13,11 @@ import { useDraftRows } from '@/lib/draft'
 import { formatCount } from '@/lib/format'
 import { useReorder } from '@/lib/reorder'
 import { useTabHash } from '@/lib/tabs'
+import { tierBadge, tierLabel } from '@/lib/tiers'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import RuleDialog from '@/views/firewall/RuleDialog.vue'
 import SystemRuleRow from '@/views/firewall/SystemRuleRow.vue'
-import { tierBadge, tierLabel } from '@/views/firewall/shaping/tiers'
 
 /** Where each system rule is controlled from, by the setting the server names. */
 const SETTINGS = {
@@ -25,7 +25,7 @@ const SETTINGS = {
   interface: '/interfaces',
   dhcp: '/services/dhcp',
   discovery: '/services/discovery',
-  shaping: '/firewall/shaping',
+  shaping: '/traffic/shaping',
   dns: '/services/dns',
   enforcement: '/services/dns#enforcement',
   queryLog: '/services/dns#queries',

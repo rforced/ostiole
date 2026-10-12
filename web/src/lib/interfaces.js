@@ -49,3 +49,30 @@ export function segmentInterfaces(cfg) {
       zones.has(i.zone),
   )
 }
+
+/**
+ * Whether a link is read from the internet's side, as the server's
+ * FacesInternet reads it: its zone is external, or it has no zone, listed
+ * or not, and something carried over it does. Shaping takes download from
+ * this.
+ *
+ * @param {object | null | undefined} cfg a configuration, draft or saved
+ * @param {string} name
+ */
+export function facesInternet(cfg, name) {
+  const all = cfg?.interfaces ?? []
+  const ports = (o) => [
+    ...((o.bridge ?? o.bond)?.members ?? []),
+    ...(o.pppoe?.parent ? [o.pppoe.parent] : []),
+    ...(o.vlan?.parent ? [o.vlan.parent] : []),
+  ]
+  const seen = new Set()
+  const faces = (n) => {
+    if (seen.has(n)) return false
+    seen.add(n)
+    const i = all.find((x) => x.name === n)
+    if (i?.zone) return Boolean(cfg.zones?.find((z) => z.name === i.zone)?.external)
+    return all.some((o) => ports(o).includes(n) && faces(o.name))
+  }
+  return faces(name)
+}

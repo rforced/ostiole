@@ -189,7 +189,7 @@ var routeDocs = map[string]routeDoc{
 	"GET /api/v1/audit/stream":             {summary: "What the audit log records, as it happens (server-sent events).", role: auth.RoleAdmin},
 	"DELETE /api/v1/audit":                 {summary: "Empty the audit log, leaving one entry saying who cleared it.", role: auth.RoleAdmin},
 	"DELETE /api/v1/system/logs":           {summary: "Empty every log a page can clear and delete their files. The journal is kept.", role: auth.RoleAdmin},
-	"GET /api/v1/traffic/interfaces":       {summary: "What each interface received and sent over a window (5m, 24h or 30d): its rate now, its totals and its points.", role: auth.RoleViewer},
+	"GET /api/v1/traffic/interfaces":       {summary: "What each interface moved each way over a window (5m, 24h or 30d): its rate now, its totals and its points. Down is towards the hosts: what arrives on a link facing the internet, what leaves on any other.", role: auth.RoleViewer},
 	"GET /api/v1/traffic/devices":          {summary: "What each device moved over a window, the busiest first, while counting per device is on.", role: auth.RoleViewer},
 	"GET /api/v1/traffic/devices/{id}":     {summary: "One device over a window, with its points. The id is its hardware address, its address, or router.", role: auth.RoleViewer},
 	"GET /api/v1/traffic/stream":           {summary: "Every interface's rate each second, and every device's after each read of the connection table (server-sent events).", role: auth.RoleViewer},

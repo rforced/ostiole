@@ -9,7 +9,7 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { formatCount, formatRate } from '@/lib/format'
 import { LEVELS } from '@/lib/meter'
-import { TIERS, tierBadge, tierLabel } from '@/views/firewall/shaping/tiers'
+import { TIERS, tierBadge, tierLabel } from '@/lib/tiers'
 
 /** How often the queues are sampled. Fast enough to watch a call start. */
 const INTERVAL_MS = 3000

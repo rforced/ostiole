@@ -331,6 +331,61 @@ func TestLinksCountEverySecond(t *testing.T) {
 	}
 }
 
+// A link facing hosts is read from their side: what it sends is what they
+// receive, so it is its down. A bridge's port takes the bridge's side. One
+// facing the internet, and one the configuration does not know, keep what
+// the kernel calls received.
+func TestALinkFacingHostsIsReadFromTheirSide(t *testing.T) {
+	t.Parallel()
+	r := newRouter(t)
+	r.cfg.Traffic.Devices = false
+	// eth3 is a port of a LAN bridge, named nowhere else.
+	r.cfg.Interfaces = append(r.cfg.Interfaces,
+		model.Interface{Name: "br1", Zone: "lan", Enabled: true, Bridge: &model.Bridge{Members: []string{"eth3"}}})
+	r.links = append(r.links,
+		network.Link{Name: "eth3", Index: 5, Kind: "ethernet"},
+		network.Link{Name: "docker0", Index: 6, Kind: "bridge"})
+	r.c.follow(r.now)
+	ch, cancel := r.c.Subscribe(8)
+	defer cancel()
+	set := func(rx, tx uint64) {
+		r.mu.Lock()
+		for i := range r.links {
+			r.links[i].RXBytes, r.links[i].TXBytes = rx, tx
+		}
+		r.mu.Unlock()
+	}
+	set(0, 0)
+	r.step(0)
+	set(125_000, 12_500)
+	r.step(time.Second)
+	<-ch
+	ev := <-ch
+	want := map[string]Rate{
+		"eth0":    {ID: "eth0", Down: 1_000_000, Up: 100_000},
+		"eth1":    {ID: "eth1", Down: 100_000, Up: 1_000_000},
+		"eth3":    {ID: "eth3", Down: 100_000, Up: 1_000_000},
+		"docker0": {ID: "docker0", Down: 1_000_000, Up: 100_000},
+	}
+	for _, l := range ev.Links {
+		if w, ok := want[l.ID]; ok && l != w {
+			t.Errorf("event %s = %+v, want %+v", l.ID, l, w)
+		}
+	}
+	for _, l := range r.c.LinkReports(Window5m) {
+		w, ok := want[l.Name]
+		if !ok {
+			continue
+		}
+		if l.Down != w.Down || l.Up != w.Up || len(l.Points) != 1 || l.Points[0][1] != w.Down || l.Points[0][2] != w.Up {
+			t.Errorf("report %s = %+v, want down %v and up %v", l.Name, l, w.Down, w.Up)
+		}
+		if tot := (Totals{Down: uint64(w.Down / 8), Up: uint64(w.Up / 8)}); l.Totals != tot {
+			t.Errorf("%s totals = %+v, want %+v", l.Name, l.Totals, tot)
+		}
+	}
+}
+
 // Switched off, what was counted per device goes; on again, it starts
 // from a new baseline.
 func TestSwitchingOffForgetsTheDevices(t *testing.T) {

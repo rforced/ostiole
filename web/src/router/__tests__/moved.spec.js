@@ -26,6 +26,8 @@ describe('moved pages', () => {
     ['/crons', '/system/crons'],
     ['/system/ruleset', '/diagnostics/ruleset'],
     ['/system/certificates#providers', '/system/dns-providers'],
+    ['/firewall/shaping#priorities', '/traffic/shaping#priorities'],
+    ['/traffic#devices', '/traffic/usage#devices'],
   ])('%s lands on %s', async (from, to) => {
     const router = (await import('@/router')).default
     await router.push(from)

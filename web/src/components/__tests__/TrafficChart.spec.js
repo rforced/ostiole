@@ -42,6 +42,24 @@ describe('TrafficChart', () => {
     expect(ticks.slice(0, 5)).toEqual(['0 bit/s', '1 Mbit/s', '2 Mbit/s', '3 Mbit/s', '4 Mbit/s'])
   })
 
+  // A shaped link's speed is a dashed line in its direction's colour, and
+  // the axis reaches past it however quiet the link is, so it never lies
+  // on the plot's edge.
+  it('draws the speed the link is shaped to', () => {
+    const w = chart({ speed: { down: 10_000_000, up: 0 } })
+    const limits = w.findAll('[data-limit]')
+    expect(limits).toHaveLength(1)
+    expect(limits[0].attributes('stroke')).toBe('var(--chart-down)')
+    const grid = w.findAll('line[stroke="var(--line)"]').map((l) => Number(l.attributes('y1')))
+    expect(Number(limits[0].attributes('y1'))).toBeGreaterThan(Math.min(...grid))
+    expect(w.text()).toContain('of 10 Mbit/s')
+    expect(w.get('svg[role="img"]').attributes('aria-label')).toBe(
+      'eth0: down 3 Mbit/s of 10 Mbit/s, up 4 Mbit/s',
+    )
+    expect(w.findAll('text').map((t) => t.text())).toContain('10 Mbit/s')
+    expect(chart().findAll('[data-limit]')).toHaveLength(0)
+  })
+
   // A window that ends on a whole minute has a stop at the right edge,
   // whose centred label would be cut in half.
   it('leaves out a time whose label would run off the end', () => {

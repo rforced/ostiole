@@ -214,9 +214,10 @@ func TestAMinuteOfErrorsIsWrittenAndReadBack(t *testing.T) {
 	if errs := fresh.c.LinkErrors(); len(errs) != 1 || errs["eth0"] != (Errors{RX: 3, TX: 2}) {
 		t.Errorf("errors read back = %+v", errs)
 	}
+	// eth2 faces hosts, so what it sent is read as its down.
 	reports := fresh.c.LinkReports(Window24h)
 	if i := slices.IndexFunc(reports, func(l LinkReport) bool { return l.Name == "eth2" }); i < 0 ||
-		reports[i].Totals != (Totals{Down: 7, Up: 8}) {
+		reports[i].Totals != (Totals{Down: 8, Up: 7}) {
 		t.Errorf("eth2 from a line without errors = %+v", reports)
 	}
 }

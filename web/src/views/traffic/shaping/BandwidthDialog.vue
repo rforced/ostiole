@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
+import { facesInternet } from '@/lib/interfaces'
 import { useConfigStore } from '@/stores/config'
 
 /**
@@ -102,12 +103,10 @@ watch(
   { immediate: true },
 )
 
-/** The zone the chosen interface is in, which decides how the hints read. */
-const internal = computed(() => {
-  const iface = config.findInterface(form.value.interface)
-  const zone = config.zones.find((z) => z.name === iface?.zone)
-  return Boolean(zone) && !zone.external
-})
+/** Whether the chosen interface faces hosts, which decides how the hints read. */
+const internal = computed(
+  () => Boolean(form.value.interface) && !facesInternet(config.draft, form.value.interface),
+)
 
 const downloadHint = computed(() =>
   internal.value

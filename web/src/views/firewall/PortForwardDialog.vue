@@ -6,8 +6,8 @@ import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { newId } from '@/lib/ids'
 import { parseList } from '@/lib/lists'
+import { PRIORITY_HINT, TIERS, UNSET_LABEL, tierOption } from '@/lib/tiers'
 import { useConfigStore } from '@/stores/config'
-import { PRIORITY_HINT, TIERS, UNSET_LABEL, tierOption } from '@/views/firewall/shaping/tiers'
 
 const props = defineProps({ forward: { type: Object, default: null } })
 const open = defineModel('open', { type: Boolean, default: false })

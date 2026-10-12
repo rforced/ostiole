@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
+import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import InterfacesTab from '@/views/traffic/InterfacesTab.vue'
 
@@ -69,6 +70,22 @@ describe('InterfacesTab', () => {
     await flushPromises()
     expect(w.text()).toContain('Down 8 Mbit/s')
     expect(w.findAll('path')[0].attributes('d').split('L')).toHaveLength(2)
+  })
+
+  // The speed comes from what the router runs, never from the draft.
+  it('draws the speed the router shapes a link to', async () => {
+    const config = useConfigStore()
+    config.saved = {
+      interfaces: [{ name: 'eth0', enabled: true, shaping: { download: 200_000_000 } }],
+    }
+    config.draft = {
+      interfaces: [{ name: 'eth0', enabled: true, shaping: { download: 50_000_000 } }],
+    }
+    const w = mount(InterfacesTab)
+    await flushPromises()
+    expect(w.findAll('[data-limit]')).toHaveLength(1)
+    expect(w.text()).toContain('of 200 Mbit/s')
+    expect(w.text()).not.toContain('of 50 Mbit/s')
   })
 
   it('names its card after the tab', async () => {

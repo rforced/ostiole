@@ -1,0 +1,52 @@
+{
+  "config": {
+    "zones": [{ "name": "wan", "external": true }, { "name": "lan" }, { "name": "guest" }],
+    "interfaces": [
+      { "name": "eth0", "zone": "wan" },
+      { "name": "br0", "zone": "lan", "bridge": { "members": ["bond0", "eth3"] } },
+      { "name": "bond0", "bond": { "members": ["eth1", "eth2"] } },
+      { "name": "eth4" },
+      { "name": "eth4.7", "vlan": { "parent": "eth4", "id": 7 } },
+      { "name": "dsl", "zone": "wan", "pppoe": { "parent": "eth4.7" } },
+      { "name": "eth5" },
+      { "name": "eth5.20", "zone": "lan", "vlan": { "parent": "eth5", "id": 20 } },
+      { "name": "eth5.30", "zone": "guest", "vlan": { "parent": "eth5", "id": 30 } },
+      { "name": "eth6" },
+      { "name": "eth7", "zone": "dmz" },
+      { "name": "ppp1", "zone": "wan", "pppoe": { "parent": "eth8" } },
+      { "name": "eth9.40", "zone": "lan", "vlan": { "parent": "eth9", "id": 40 } }
+    ]
+  },
+  "facesInternet": {
+    "eth0": true,
+    "br0": false,
+    "eth3": false,
+    "bond0": false,
+    "eth1": false,
+    "eth4": true,
+    "eth4.7": true,
+    "dsl": true,
+    "eth5": false,
+    "eth5.20": false,
+    "eth6": false,
+    "eth7": false,
+    "ppp1": true,
+    "eth8": true,
+    "eth9": false,
+    "docker0": false
+  },
+  "hostSide": [
+    "br0",
+    "bond0",
+    "eth1",
+    "eth2",
+    "eth3",
+    "eth5",
+    "eth5.20",
+    "eth5.30",
+    "eth6",
+    "eth7",
+    "eth9",
+    "eth9.40"
+  ]
+}

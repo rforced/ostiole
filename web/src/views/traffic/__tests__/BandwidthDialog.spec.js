@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { useConfigStore } from '@/stores/config'
-import BandwidthDialog from '@/views/firewall/shaping/BandwidthDialog.vue'
+import BandwidthDialog from '@/views/traffic/shaping/BandwidthDialog.vue'
 
 // The dialog itself teleports; the form inside it is what is under test.
 const stubs = {

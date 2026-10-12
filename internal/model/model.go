@@ -1203,6 +1203,58 @@ func (c *Config) MasterOf() map[string]string {
 	return out
 }
 
+// FacesInternet reports whether the link named is read from the
+// internet's side: its zone is external, or it has no zone, listed or
+// not, and something carried over it does. Shaping and traffic take
+// download from this.
+func (c *Config) FacesInternet(name string) bool {
+	return c.facesInternet(name, map[string]bool{})
+}
+
+func (c *Config) facesInternet(name string, seen map[string]bool) bool {
+	if seen[name] {
+		return false
+	}
+	seen[name] = true
+	if in, ok := c.Interface(name); ok && in.Zone != "" {
+		return c.externalZone(in.Zone)
+	}
+	for _, o := range c.Interfaces {
+		if slices.Contains(o.ports(), name) && c.facesInternet(o.Name, seen) {
+			return true
+		}
+	}
+	return false
+}
+
+// HostSideLinks are the links read from their hosts' side, what they send
+// being their hosts' download: every configured interface, and every port
+// under one whether listed or not, that does not face the internet.
+func (c *Config) HostSideLinks() map[string]bool {
+	out := map[string]bool{}
+	for _, in := range c.Interfaces {
+		for _, name := range append([]string{in.Name}, in.ports()...) {
+			if !c.FacesInternet(name) {
+				out[name] = true
+			}
+		}
+	}
+	return out
+}
+
+// ports are the links an interface runs over: a bridge's or a bond's
+// members, the link a session is dialled over, a VLAN's parent.
+func (i Interface) ports() []string {
+	out := slices.Clone(i.Members())
+	if i.PPPoE != nil && i.PPPoE.Parent != "" {
+		out = append(out, i.PPPoE.Parent)
+	}
+	if i.VLAN != nil && i.VLAN.Parent != "" {
+		out = append(out, i.VLAN.Parent)
+	}
+	return out
+}
+
 // IPv4 addressing for an interface. Address is CIDR notation.
 type IPv4 struct {
 	Mode    AddrMode `json:"mode"`

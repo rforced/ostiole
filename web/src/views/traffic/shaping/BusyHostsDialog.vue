@@ -3,8 +3,8 @@ import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
+import { TIERS, tierOption } from '@/lib/tiers'
 import { useConfigStore } from '@/stores/config'
-import { TIERS, tierOption } from '@/views/firewall/shaping/tiers'
 
 /** What the router will accept, and what it offers when asked first. */
 const MIN = 10

@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { useConfigStore } from '@/stores/config'
-import BusyHostsDialog from '@/views/firewall/shaping/BusyHostsDialog.vue'
+import BusyHostsDialog from '@/views/traffic/shaping/BusyHostsDialog.vue'
 
 const stubs = {
   AppDialog: {

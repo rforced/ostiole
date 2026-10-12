@@ -28,6 +28,11 @@ function addressing(l) {
 function pending(l) {
   return (l.configuredAddresses ?? []).filter((a) => !(l.addresses ?? []).includes(a))
 }
+
+/** Which counter is down: on a link facing hosts, what it sends, as Traffic reads it. */
+function way(l) {
+  return l.hostSide ? { down: 'tx', up: 'rx' } : { down: 'rx', up: 'tx' }
+}
 </script>
 
 <template>
@@ -101,15 +106,15 @@ function pending(l) {
           <td class="num font-mono text-code max-sm:text-left" data-label="Traffic">
             <div v-if="l.present">
               <ArrowDown class="inline size-3" aria-hidden="true" />
-              <span class="sr-only">receiving</span>
-              {{ rates[l.name] ? formatRate(rates[l.name].rx) : '—' }}
-              <span class="ml-1 text-ink-muted">{{ formatBytes(l.rxBytes) }}</span>
+              <span class="sr-only">down</span>
+              {{ rates[l.name] ? formatRate(rates[l.name][way(l).down]) : '—' }}
+              <span class="ml-1 text-ink-muted">{{ formatBytes(l[`${way(l).down}Bytes`]) }}</span>
             </div>
             <div v-if="l.present">
               <ArrowUp class="inline size-3" aria-hidden="true" />
-              <span class="sr-only">sending</span>
-              {{ rates[l.name] ? formatRate(rates[l.name].tx) : '—' }}
-              <span class="ml-1 text-ink-muted">{{ formatBytes(l.txBytes) }}</span>
+              <span class="sr-only">up</span>
+              {{ rates[l.name] ? formatRate(rates[l.name][way(l).up]) : '—' }}
+              <span class="ml-1 text-ink-muted">{{ formatBytes(l[`${way(l).up}Bytes`]) }}</span>
             </div>
             <span v-if="!l.present" class="text-ink-muted">—</span>
           </td>

@@ -94,6 +94,7 @@ type LinkSummary struct {
 	Up          bool   `json:"up"`
 	Carrier     bool   `json:"carrier"`
 	External    bool   `json:"external,omitempty"` // its zone is WAN-like
+	HostSide    bool   `json:"hostSide,omitempty"` // what it sends is its hosts' download
 	MTU         int    `json:"mtu,omitempty"`
 	MAC         string `json:"mac,omitempty"`
 	VLANID      int    `json:"vlanId,omitempty"`
@@ -346,7 +347,9 @@ func summarizeLinks(cfg *model.Config, links []network.Link) []LinkSummary {
 	}
 	out := []LinkSummary{}
 	seen := map[string]bool{}
+	var hostSide map[string]bool
 	if cfg != nil {
+		hostSide = cfg.HostSideLinks()
 		for _, in := range cfg.Interfaces {
 			s := LinkSummary{
 				Name:        in.Name,
@@ -371,6 +374,7 @@ func summarizeLinks(cfg *model.Config, links []network.Link) []LinkSummary {
 			if z, ok := cfg.Zone(in.Zone); ok {
 				s.External = z.External
 			}
+			s.HostSide = hostSide[in.Name]
 			l, present := live[in.Name]
 			out = append(out, withLive(s, l, present))
 			seen[in.Name] = true
@@ -380,7 +384,7 @@ func summarizeLinks(cfg *model.Config, links []network.Link) []LinkSummary {
 		if seen[l.Name] || l.Kind == "loopback" {
 			continue
 		}
-		out = append(out, withLive(LinkSummary{Name: l.Name, Addresses: []string{}}, l, true))
+		out = append(out, withLive(LinkSummary{Name: l.Name, HostSide: hostSide[l.Name], Addresses: []string{}}, l, true))
 	}
 	return out
 }
