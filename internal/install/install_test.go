@@ -825,3 +825,51 @@ func TestHandoverHoldsOnlyWithNetworkdAndNoOldManager(t *testing.T) {
 		}
 	}
 }
+
+// stateRunner answers is-active from a script and records what else ran.
+type stateRunner struct {
+	calls  [][]string
+	states []string
+}
+
+func (s *stateRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+	s.calls = append(s.calls, append([]string{name}, args...))
+	if name == "systemctl" && len(args) > 0 && args[0] == "is-active" {
+		state := s.states[0]
+		if len(s.states) > 1 {
+			s.states = s.states[1:]
+		}
+		return []byte(state + "\n"), nil
+	}
+	return nil, nil
+}
+
+func (s *stateRunner) started() bool {
+	for _, c := range s.calls {
+		if c[0] == "systemd-run" {
+			return true
+		}
+	}
+	return false
+}
+
+// The takeover's own confirm and a hand-run one once both started the
+// finish unit, and the second failed on "already loaded".
+func TestDetachedWaitsForAUnitAlreadyRunning(t *testing.T) {
+	t.Parallel()
+	run := &stateRunner{states: []string{"activating", "active", "inactive"}}
+	if err := Detached(context.Background(), run, FinishUnit, "x"); err != nil {
+		t.Fatal(err)
+	}
+	if run.started() {
+		t.Errorf("a running unit was started again:\n%v", run.calls)
+	}
+	failed := &stateRunner{states: []string{"active", "failed"}}
+	if err := Detached(context.Background(), failed, FinishUnit, "x"); err == nil {
+		t.Error("a unit that failed while awaited was not reported")
+	}
+	idle := &stateRunner{states: []string{"failed"}}
+	if err := Detached(context.Background(), idle, FinishUnit, "x"); err != nil || !idle.started() {
+		t.Errorf("an idle unit should be started: err=%v calls=%v", err, idle.calls)
+	}
+}

@@ -1271,6 +1271,11 @@ func RestoreCloudInitNetwork() error {
 // SSH session (a network manager switch) still runs to completion. Output
 // goes to the journal under the unit's name.
 func Detached(ctx context.Context, run Runner, unit string, argv ...string) error {
+	// The takeover's own confirm and a hand-run one race for the finish:
+	// the second finds the unit running and waits for it instead.
+	if waited, err := awaitUnit(ctx, run, unit); waited || err != nil {
+		return err
+	}
 	_, _ = run.Run(ctx, "systemctl", "reset-failed", unit+".service")
 	args := append([]string{"--unit=" + unit, "--wait", "--collect", "--quiet", "--"}, argv...)
 	out, err := run.Run(ctx, "systemd-run", args...)
@@ -1278,6 +1283,35 @@ func Detached(ctx context.Context, run Runner, unit string, argv ...string) erro
 		return fmt.Errorf("%s failed: %w: %s (see journalctl -u %s)", unit, err, tail(out), unit)
 	}
 	return nil
+}
+
+// awaitUnit waits for a unit that is already running to stop, reporting
+// whether it had to.
+func awaitUnit(ctx context.Context, run Runner, unit string) (bool, error) {
+	name := unit + ".service"
+	running := func() string {
+		out, _ := run.Run(ctx, "systemctl", "is-active", name)
+		return strings.TrimSpace(string(out))
+	}
+	waited := false
+	for {
+		switch running() {
+		case "active", "activating", "deactivating":
+			waited = true
+		case "failed":
+			if !waited {
+				return false, nil
+			}
+			return true, fmt.Errorf("%s failed (see journalctl -u %s)", unit, unit)
+		default:
+			return waited, nil
+		}
+		select {
+		case <-ctx.Done():
+			return true, ctx.Err()
+		case <-time.After(time.Second):
+		}
+	}
 }
 
 // SystemBinDirs are the places the install script puts the binary.
