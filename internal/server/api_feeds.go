@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"slices"
@@ -76,11 +77,19 @@ func (a *api) feedEntries(w http.ResponseWriter, r *http.Request) error {
 		return &unavailable{errors.New("nothing is refreshing aliases on this router")}
 	}
 	name := r.PathValue("name")
+	if err := a.knownFeed(name); err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, a.feedCache.Browse(name, r.URL.Query().Get("q"), offset, limit))
+	return nil
+}
+
+// knownFeed refuses a name the running configuration fetches nothing for.
+func (a *api) knownFeed(name string) error {
 	cfg := a.engine.Effective()
 	if cfg == nil || !slices.ContainsFunc(feeds.Wanted(cfg), func(al model.Alias) bool { return al.Name == name }) {
 		return &notFound{fmt.Errorf("nothing called %q is fetched from anywhere", name)}
 	}
-	writeJSON(w, http.StatusOK, a.feedCache.Browse(name, r.URL.Query().Get("q"), offset, limit))
 	return nil
 }
 
@@ -97,9 +106,13 @@ func (a *api) refreshFeed(w http.ResponseWriter, r *http.Request) error {
 		return &unavailable{errors.New("nothing is refreshing aliases on this router")}
 	}
 	name := r.PathValue("name")
+	if err := a.knownFeed(name); err != nil {
+		return err
+	}
 	count, err := a.feeds.RefreshOne(r.Context(), name)
 	if err != nil {
-		return &badRequest{fmt.Errorf("refresh %s: %w", name, err)}
+		slog.Warn("could not refresh an alias", "alias", name, "err", err)
+		return &upstream{fmt.Errorf("refresh %s: %w", name, err)}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"alias": name, "entries": count})
 	return nil

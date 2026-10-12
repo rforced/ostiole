@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -186,12 +187,19 @@ func (a *api) refreshBlocklist(w http.ResponseWriter, r *http.Request) error {
 	if a.blocklists == nil {
 		return &unavailable{errors.New("nothing is refreshing blocklists on this router")}
 	}
+	name := r.PathValue("name")
+	if err := a.knownList(name); err != nil {
+		return err
+	}
 	ctx, cancel := refreshContext(r)
 	defer cancel()
-	name := r.PathValue("name")
 	count, err := a.blocklists.RefreshOne(ctx, name)
-	if err != nil {
+	switch {
+	case errors.Is(err, dnsblock.ErrNoSource):
 		return &badRequest{fmt.Errorf("refresh %s: %w", name, err)}
+	case err != nil:
+		slog.Warn("could not refresh a blocklist", "list", name, "err", err)
+		return &upstream{fmt.Errorf("refresh %s: %w", name, err)}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"list": name, "domains": count})
 	return nil
@@ -208,6 +216,19 @@ func (a *api) blocklistNames(w http.ResponseWriter, r *http.Request) error {
 		return &unavailable{errors.New("nothing is holding blocklists on this router")}
 	}
 	name := r.PathValue("name")
+	if err := a.knownList(name); err != nil {
+		return err
+	}
+	page, err := a.blockCache.Browse(name, r.URL.Query().Get("q"), offset, limit)
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, page)
+	return nil
+}
+
+// knownList refuses a name the running configuration has no list for.
+func (a *api) knownList(name string) error {
 	cfg := a.engine.Effective()
 	if cfg == nil {
 		return &unavailable{errors.New("nothing is configured yet")}
@@ -215,11 +236,6 @@ func (a *api) blocklistNames(w http.ResponseWriter, r *http.Request) error {
 	if _, ok := cfg.Blocking.List(name); !ok {
 		return &notFound{fmt.Errorf("there is no list called %q", name)}
 	}
-	page, err := a.blockCache.Browse(name, r.URL.Query().Get("q"), offset, limit)
-	if err != nil {
-		return err
-	}
-	writeJSON(w, http.StatusOK, page)
 	return nil
 }
 

@@ -283,3 +283,30 @@ func TestAFetchedAliasCanBeRead(t *testing.T) {
 		}
 	}
 }
+
+// A refresh the publisher fails is a 502 and is logged as a scheduled one
+// is. Not parallel: it swaps the default logger.
+func TestARefreshThePublisherFailsIsLogged(t *testing.T) {
+	var buf safeBuffer
+	was := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(was) })
+	lists, _ := listServer(t)
+	srv, _ := newFeedServer(t)
+	cfg := starter()
+	cfg.Aliases = []model.Alias{{Name: "drop", Type: model.AliasHosts, Entries: []string{lists.URL + "/gone.txt"}}}
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
+	}
+
+	resp, raw := do(t, srv, http.MethodPost, "/api/v1/aliases/drop/refresh", nil)
+	if resp.StatusCode != http.StatusBadGateway || !strings.Contains(string(raw), "refresh drop: "+lists.URL+"/gone.txt: HTTP 404") {
+		t.Errorf("refresh: %d %s", resp.StatusCode, raw)
+	}
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/aliases/nothing/refresh", nil); resp.StatusCode != http.StatusNotFound {
+		t.Errorf("refresh of nothing: %d %s", resp.StatusCode, raw)
+	}
+	if got := buf.String(); !strings.Contains(got, `msg="could not refresh an alias" alias=drop`) || strings.Count(got, "could not refresh") != 1 {
+		t.Errorf("the log holds:\n%s", got)
+	}
+}
