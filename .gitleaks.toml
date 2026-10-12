@@ -24,4 +24,15 @@ regexes = [
   # release notes and SECURITY.md all print on purpose. Written as the
   # ed25519 public key prefix so a rotation does not come back here.
   '''MCowBQYDK2Vw[A-Za-z0-9+/]+=*''',
+  # The OpenVPN fixtures' made-up PEM bodies: base64 for "lab client key"
+  # (the Go fixture and golden) and "MADE-UP-client-key" (the web specs),
+  # and the counting hex standing in for a tls-crypt key.
+  '''bGFiIGNsaWVudCBrZXk=''',
+  '''TUFERS1VUC1jbGllbnQta2V5''',
+  '''00112233445566778899aabbccddeeff''',
+]
+# The rendered OpenVPN golden carries the same made-up key over several
+# lines, where a line regex cannot see the body.
+paths = [
+  '''internal/services/testdata/openvpn\.openvpn''',
 ]
