@@ -68,6 +68,10 @@ func TestRunEndsStreamsWhenItStops(t *testing.T) {
 	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(20 * time.Millisecond) {
 		resp, err := send(http.MethodPost, "/api/v1/setup", credentials{Username: "admin", Password: testPassword})
 		if err == nil {
+			// Read to the end so the stream reuses this connection: one
+			// dialled meanwhile would sit unused, and Shutdown waits five
+			// seconds for a connection that never sent a request.
+			_, _ = io.Copy(io.Discard, resp.Body)
 			_ = resp.Body.Close()
 			if resp.StatusCode != http.StatusCreated {
 				t.Fatalf("setup: %d", resp.StatusCode)
