@@ -38,7 +38,8 @@ func newPorkbun(p model.DNSProvider, o Options) (Client, error) {
 		return nil, errors.New("the Porkbun provider needs its API key and its secret key")
 	}
 	return &porkbun{
-		name: "Porkbun", base: porkbunAPI, http: o.client(), userAgent: o.UserAgent, detail: porkbunDetail,
+		name: "Porkbun", base: porkbunAPI, http: o.client(), userAgent: o.UserAgent, retryWait: o.RetryWait,
+		detail: porkbunDetail,
 		apiKey: apiKey, secretKey: secretKey,
 		ids: map[Record]string{},
 	}, nil

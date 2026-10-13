@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"ostiole/internal/model"
+	"ostiole/internal/retry"
 )
 
 // cloudflareAPI is the root of Cloudflare's v4 API.
@@ -49,6 +50,7 @@ type cloudflare struct {
 	zoneToken string
 	http      *http.Client
 	userAgent string
+	retryWait time.Duration
 
 	mu    sync.Mutex
 	zones map[string]string
@@ -73,6 +75,7 @@ func newCloudflare(p model.DNSProvider, o Options) (Client, error) {
 		zoneToken: zoneToken,
 		http:      o.client(),
 		userAgent: o.UserAgent,
+		retryWait: o.RetryWait,
 		zones:     map[string]string{},
 	}, nil
 }
@@ -292,6 +295,15 @@ func (c *cloudflare) doPaged(ctx context.Context, token, path string, out any) (
 }
 
 func (c *cloudflare) send(ctx context.Context, token, zone, method, path string, body, out any) (cfResultInfo, error) {
+	var info cfResultInfo
+	err := retry.Do(ctx, c.retryWait, again(method), func() (err error) {
+		info, err = c.sendOnce(ctx, token, zone, method, path, body, out)
+		return err
+	})
+	return info, err
+}
+
+func (c *cloudflare) sendOnce(ctx context.Context, token, zone, method, path string, body, out any) (cfResultInfo, error) {
 	var rd io.Reader
 	if body != nil {
 		raw, err := json.Marshal(body)
@@ -327,7 +339,7 @@ func (c *cloudflare) send(ctx context.Context, token, zone, method, path string,
 	}
 	var env cfEnvelope
 	if err := json.Unmarshal(raw, &env); err != nil {
-		return cfResultInfo{}, &Error{Message: fmt.Sprintf("Cloudflare answered %s with no API response", resp.Status)}
+		return cfResultInfo{}, &Error{Message: fmt.Sprintf("Cloudflare answered %s with no API response", resp.Status), status: resp.StatusCode}
 	}
 	if resp.StatusCode/100 != 2 || !env.Success {
 		return cfResultInfo{}, refusal(resp, env.Errors, zone)
@@ -366,11 +378,11 @@ func refusal(resp *http.Response, errs []cfError, zone string) error {
 		if s, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil && s > 0 {
 			wait = time.Duration(s) * time.Second
 		}
-		return &Error{Message: fmt.Sprintf("Cloudflare asked to wait %s (%s)", wait, detail), RetryAfter: wait, code: code}
+		return &Error{Message: fmt.Sprintf("Cloudflare asked to wait %s (%s)", wait, detail), RetryAfter: wait, code: code, status: resp.StatusCode}
 	case token && zone == "":
-		return &Error{Message: fmt.Sprintf("Cloudflare refused the token (%s)", detail), code: code}
+		return &Error{Message: fmt.Sprintf("Cloudflare refused the token (%s)", detail), code: code, status: resp.StatusCode}
 	case token:
-		return &Error{Message: fmt.Sprintf("Cloudflare refused the token for %s (%s)", zone, detail), code: code}
+		return &Error{Message: fmt.Sprintf("Cloudflare refused the token for %s (%s)", zone, detail), code: code, status: resp.StatusCode}
 	}
-	return &Error{Message: fmt.Sprintf("Cloudflare: %s", detail), code: code}
+	return &Error{Message: fmt.Sprintf("Cloudflare: %s", detail), code: code, status: resp.StatusCode}
 }

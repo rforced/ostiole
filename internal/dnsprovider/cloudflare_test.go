@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -453,5 +454,47 @@ func TestCloudflareTXTRefusalNamesTheZone(t *testing.T) {
 	err := cfClient(t, srv, map[string]string{"token": "wrong-secret-token"}).AddTXT(context.Background(), challenge)
 	if err == nil || !strings.Contains(err.Error(), "refused the token for example.com") || strings.Contains(err.Error(), "wrong-secret-token") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+// A read Cloudflare fails or does not answer in time goes again. A write
+// does not: it may have been made before the answer was lost.
+func TestCloudflareAsksAgainOnlyToRead(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		method, path string
+		hang, ok     bool
+		want         int32
+	}{
+		"a read it failed":                 {method: http.MethodGet, path: "/zones", ok: true, want: 2},
+		"a read it did not answer in time": {method: http.MethodGet, path: "/zones", hang: true, ok: true, want: 2},
+		"a write it failed":                {method: http.MethodPost, path: "/zones/zone1/dns_records", want: 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			f := &fakeCloudflare{t: t, token: "dns-token", zones: map[string]string{"example.com": "zone1"}, records: map[string]*fakeRecord{}}
+			var asked atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == tc.method && r.URL.Path == tc.path && asked.Add(1) == 1 {
+					if tc.hang {
+						<-r.Context().Done()
+						return
+					}
+					w.WriteHeader(http.StatusBadGateway)
+					return
+				}
+				f.ServeHTTP(w, r)
+			}))
+			t.Cleanup(srv.Close)
+			c, err := Build(model.DNSProvider{ID: "cf", Kind: "cloudflare", Settings: map[string]string{"token": "dns-token"}},
+				Options{HTTP: &http.Client{Timeout: time.Second}, CloudflareAPI: srv.URL, RetryWait: time.Millisecond})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = c.(*cloudflare).Set(context.Background(), "example.com", "home.example.com", TypeA, addr7)
+			if n := asked.Load(); n != tc.want || (err == nil) != tc.ok {
+				t.Errorf("asked %d times, err = %v; want %d times", n, err, tc.want)
+			}
+		})
 	}
 }

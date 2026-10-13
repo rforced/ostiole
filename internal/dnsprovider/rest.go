@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"ostiole/internal/retry"
 )
 
 // api is one provider's JSON API: where it is, how a request carries the
@@ -23,6 +25,7 @@ type api struct {
 	base      string
 	http      *http.Client
 	userAgent string
+	retryWait time.Duration
 	// auth puts the credentials on a request.
 	auth func(h http.Header)
 	// detail reads the provider's own message out of an error's body.
@@ -40,12 +43,20 @@ func (a *api) do(ctx context.Context, method, path string, body, out any) (int, 
 			return 0, err
 		}
 	}
-	status, header, answer, err := a.send(ctx, method, path, raw)
+	var (
+		status int
+		answer []byte
+	)
+	err := retry.Do(ctx, a.retryWait, again(method), func() error {
+		s, header, body, err := a.send(ctx, method, path, raw)
+		status, answer = s, body
+		if err == nil && s/100 != 2 {
+			err = a.refusal(s, header, body)
+		}
+		return err
+	})
 	if err != nil {
 		return status, err
-	}
-	if status/100 != 2 {
-		return status, a.refusal(status, header, answer)
 	}
 	if out == nil || len(bytes.TrimSpace(answer)) == 0 {
 		return status, nil
@@ -102,12 +113,12 @@ func (a *api) refusal(status int, header http.Header, body []byte) error {
 	switch status {
 	case http.StatusTooManyRequests, http.StatusServiceUnavailable:
 		if wait := retryAfter(header); wait > 0 {
-			return &Error{Message: fmt.Sprintf("%s asked to wait %s (%s)", a.name, wait, detail), RetryAfter: wait}
+			return &Error{Message: fmt.Sprintf("%s asked to wait %s (%s)", a.name, wait, detail), RetryAfter: wait, status: status}
 		}
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return &Error{Message: fmt.Sprintf("%s refused the credentials (%s)", a.name, detail)}
+		return &Error{Message: fmt.Sprintf("%s refused the credentials (%s)", a.name, detail), status: status}
 	}
-	return &Error{Message: fmt.Sprintf("%s: %s", a.name, detail)}
+	return &Error{Message: fmt.Sprintf("%s: %s", a.name, detail), status: status}
 }
 
 // retryAfter reads a Retry-After header in seconds; zero when there is

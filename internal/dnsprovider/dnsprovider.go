@@ -5,7 +5,9 @@ package dnsprovider
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/netip"
 	"time"
@@ -97,6 +99,9 @@ type Options struct {
 	// Resolvers look up a nameserver given by name. With none, only an
 	// address will do.
 	Resolvers []netip.AddrPort
+	// RetryWait is the first pause before a read is sent again; zero is
+	// retry.DefaultWait.
+	RetryWait time.Duration
 }
 
 // RequestTimeout bounds one request to a provider.
@@ -123,9 +128,27 @@ type Error struct {
 	RetryAfter time.Duration
 	// code is the provider's own number for the refusal, when it gave one.
 	code int
+	// status is the HTTP status the refusal came with.
+	status int
 }
 
 func (e *Error) Error() string { return e.Message }
+
+// again reports whether a failed request is worth sending again. Only a
+// read is: a write may have been made before its answer was lost. A wait
+// the provider asked for is left to whoever called.
+func again(method string) func(error) bool {
+	return func(err error) bool {
+		if method != http.MethodGet {
+			return false
+		}
+		if e, ok := errors.AsType[*Error](err); ok {
+			return e.status >= 500 && e.RetryAfter == 0
+		}
+		ne, ok := errors.AsType[net.Error](err)
+		return ok && ne.Timeout()
+	}
+}
 
 // RecordType is the kind of address record.
 type RecordType string
