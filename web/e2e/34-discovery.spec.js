@@ -118,7 +118,8 @@ test('a relay left with one network is refused', async ({ page }) => {
   await page.getByRole('button', { name: /Apply with \d+s confirmation/ }).click()
   await expect(page.getByRole('alert')).toContainText('the relay needs at least two interfaces')
 
+  // Putting the role back leaves the relay as applied: nothing to apply.
   await page.getByLabel(`${spare} answers`, { exact: true }).check()
   await page.getByLabel(`${spare} asks`, { exact: true }).uncheck()
-  await applyAndConfirm(page)
+  await expect(page.getByRole('button', { name: /Apply with \d+s confirmation/ })).toHaveCount(0)
 })
