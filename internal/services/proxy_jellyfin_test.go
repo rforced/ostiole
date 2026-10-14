@@ -134,6 +134,16 @@ var jfOverviews = []string{
 	`Leo and Priya's plan to save the bakery goes sideways when the inspector shows up early; meanwhile, Gran's "secret recipe" turns out to be anything but.`,
 }
 
+// jfProfiles are FFmpeg's names for a codec's profile that hold more than
+// letters, digits and dashes, as the server writes them into a stream's
+// address for a stream it copies: in lower case, the spaces taken out and
+// nothing encoded, so a plus reads as a space.
+var jfProfiles = []struct{ codec, profile string }{
+	{"eac3", "dolbydigitalplus+dolbyatmos"}, {"truehd", "dolbytruehd+dolbyatmos"}, {"dts", "dts-hdma+dts:x"}, {"dts", "dts-hdma+dts:ximax"},
+	{"dts", "dts96/24"}, {"h264", "high4:2:2"}, {"h264", "high4:2:2intra"}, {"h264", "high4:4:4"}, {"h264", "high4:4:4predictive"},
+	{"h264", "high4:4:4intra"}, {"h264", "cavlc4:4:4"}, {"mpeg2video", "4:2:2"},
+}
+
 // A subtitle file in the two common formats, and a song's timed lyrics, as
 // people upload them.
 const (
@@ -487,6 +497,35 @@ func TestTheJellyfinSetLetsItsClientsThrough(t *testing.T) {
 					}
 				}
 			}
+			// Each profile in a stream's address, asked for by the iOS app,
+			// the web client in a web view with an id of its own. They draw
+			// from a generator of their own, so the requests below are drawn
+			// as before.
+			s := jf{vw{rand.New(rand.NewPCG(uint64(pl), 4))}}
+			ios := s.client(0)
+			ios.deviceID = s.uuid()
+			ios.userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"
+			ios.auth = fmt.Sprintf(`MediaBrowser Client="Jellyfin%%20iOS", Device="Sam's%%20Phone", DeviceId="%s", Version="1.8.0", Token="%s"`, ios.deviceID, s.id())
+			for _, p := range jfProfiles {
+				item, query := s.uuid(), fmt.Sprintf("DeviceId=%s&MediaSourceId=%s&VideoCodec=av1,hevc,h264,vp9&AudioCodec=eac3&AudioStreamIndex=1"+
+					"&VideoBitrate=139232000&AudioBitrate=768000&AudioSampleRate=48000&MaxFramerate=24&SegmentContainer=mp4&MinSegments=2"+
+					"&PlaySessionId=%s&ApiKey=%s&TranscodingMaxAudioChannels=6&RequireAvc=false&EnableAudioVbrEncoding=true&Tag=%s"+
+					"&SubtitleMethod=Encode&hevc-level=120&hevc-videobitdepth=10&hevc-profile=main10&hevc-audiochannels=6&%s-profile=%s"+
+					"&av1-profile=main&av1-rangetype=SDR,HDR10,HDR10Plus,HLG,DOVI,DOVIWithHDR10,DOVIWithHLG,DOVIWithSDR,DOVIWithHDR10Plus"+
+					"&av1-level=18&vp9-rangetype=SDR,HDR10,HDR10Plus,HLG&hevc-rangetype=SDR,HDR10,HDR10Plus,HLG,DOVI&hevc-deinterlace=true"+
+					"&hevc-codectag=hvc1,dvh1&h264-rangetype=SDR&h264-level=52&h264-deinterlace=true"+
+					"&TranscodeReasons=ContainerNotSupported,VideoCodecTagNotSupported",
+					ios.deviceID, s.id(), s.id(), s.id(), s.id(), p.codec, p.profile)
+				for _, r := range []jfRequest{
+					{"GET", "/videos/" + item + "/master.m3u8?" + query, "", "", true, ios},
+					{"GET", "/videos/" + item + "/hls1/main/" + strconv.Itoa(s.r.IntN(900)) + ".mp4?" + query + "&runtimeTicks=" + s.ticks() +
+						"&actualSegmentLengthTicks=" + s.ticks(), "", "", true, ios},
+				} {
+					if status := jfSend(t, plain, r); status != http.StatusOK {
+						t.Errorf("%s %s-profile=%s: %d", r.method, p.codec, p.profile, status)
+					}
+				}
+			}
 			// What the web client's editors send: a picture, subtitles or
 			// lyrics from the computer, one picture past the profile's body
 			// limit, and Identify's search and the match it takes, with the
@@ -640,6 +679,10 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 		// A list takes a space after a comma and nowhere else, where
 		// FFmpeg's arguments would need one.
 		{"GET", "/videos/" + g.id() + "/stream?static=false&VideoCodec=" + uriComponent("h264, hevc -f mp4 -y jellyfin.db"), "", "", false, roku},
+		// A profile takes the one space a plus in FFmpeg's name leaves, and
+		// no option after it; its slashes are read for paths.
+		{"GET", "/videos/" + g.id() + "/master.m3u8?AudioCodec=eac3&eac3-profile=" + url.QueryEscape("dolbydigitalplus -f mp4 -y jellyfin.db"), "", "", false, c},
+		{"GET", "/videos/" + g.id() + "/master.m3u8?h264-profile=" + url.QueryEscape("high/../../../../etc/passwd"), "", "", false, c},
 		{"GET", "/Items?fields=" + url.QueryEscape("char(65)"), "", "", false, c},
 		{"GET", "/Items?parentId=" + url.QueryEscape("a);(b"), "", "", false, c},
 		// Only an argument's name id is not taken for the command.
