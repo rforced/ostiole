@@ -29,7 +29,6 @@ const CREDENTIAL_PATHS = [
   '/auth/password',
   '/auth/mfa/clear',
   '/auth/mfa/passkeys/options',
-  '/auth/mfa/passkey-login',
   '/setup',
 ]
 
@@ -130,7 +129,7 @@ function base64(buf) {
 /** @typedef {{ username: string, role: 'admin' | 'operator' | 'viewer', created: string, lastSeen: string, expires: string, mfa?: boolean, bypassUntil?: string, bypassBy?: string }} Session */
 /** @typedef {{ token: string, totp: boolean, passkeys: boolean, rpId: string }} PendingLogin what a sign-in still needs after the password */
 /** @typedef {{ id: string, name: string, rpId: string, createdAt: string, lastUsed?: string, transports?: string[] }} Passkey */
-/** @typedef {{ totp: { enabledAt: string, lastUsed?: string } | null, passkeys: Passkey[], passkeyLogin: boolean, rpId: string, bypassUntil?: string, bypassBy?: string }} Mfa */
+/** @typedef {{ totp: { enabledAt: string, lastUsed?: string } | null, passkeys: Passkey[], rpId: string, bypassUntil?: string, bypassBy?: string }} Mfa */
 /** @typedef {{ id: string, created: string, lastSeen: string, expires: string, address: string, agent: string, current: boolean }} SessionRow a browser signed in as the account */
 /** @typedef {{ id: string, name: string, role: string, createdAt: string, createdBy?: string, owner?: string, expiresAt?: string, lastUsedAt?: string, certificates?: string[], metrics?: boolean }} Token */
 /** @typedef {{ configured: boolean, tableLoaded: boolean, network: string, pending?: { since: string, deadline: string, remaining: number }, fallback?: { since: string, reason: string }, recovered?: { since: string, at: string }, ssh?: string, drift?: { parts: string[], changes: number } }} Status */
@@ -147,14 +146,18 @@ export const api = {
     create: (username, password) => post('/setup', { username, password }),
   },
   auth: {
-    /** @returns {Promise<{hostname?: string}>} what the sign-in page shows */
+    /**
+     * What the sign-in page shows: the router's hostname, and whether an
+     * account has a passkey made on this host name.
+     * @returns {Promise<{hostname?: string, passkeys?: boolean}>}
+     */
     loginPage: () => get('/auth/login'),
     /**
-     * Whether the name may sign in with a passkey here: the challenge and
-     * its token when it may, null otherwise.
-     * @returns {Promise<{passkey: {token: string, publicKey: object} | null}>}
+     * A sign-in with a passkey alone: its token and a request that names no
+     * account, so the browser offers each passkey it keeps for this host name.
+     * @returns {Promise<{token: string, publicKey: object}>}
      */
-    loginStart: (username) => post('/auth/login/start', { username }),
+    loginStart: () => post('/auth/login/start'),
     /** @returns {Promise<Session | {pending: PendingLogin}>} */
     login: (username, password) => post('/auth/login', { username, password }),
     /** @returns {Promise<Session>} */
@@ -193,12 +196,6 @@ export const api = {
     renamePasskey: (id, name) =>
       request('PATCH', `/auth/mfa/passkeys/${encodeURIComponent(id)}`, { name }),
     removePasskey: (id) => request('DELETE', `/auth/mfa/passkeys/${encodeURIComponent(id)}`),
-    /**
-     * Lets a passkey sign in alone, on the password; turning it off needs none.
-     * @returns {Promise<Mfa>}
-     */
-    setPasskeyLogin: (on, password) =>
-      post('/auth/mfa/passkey-login', password === undefined ? { on } : { on, password }),
     /** @returns {Promise<SessionRow[]>} */
     sessions: () => get('/auth/sessions'),
     endSession: (id) => request('DELETE', `/auth/sessions/${encodeURIComponent(id)}`),

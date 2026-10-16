@@ -1,13 +1,12 @@
 <script setup>
 import { Plus } from '@lucide/vue'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import ActionButton from '@/components/ActionButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
-import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { emptyText, errorMessage, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
@@ -15,7 +14,6 @@ import * as webauthn from '@/lib/webauthn'
 import { useAuthStore } from '@/stores/auth'
 import { useConfirmStore } from '@/stores/confirm'
 import PasskeyDialog from '@/views/account/PasskeyDialog.vue'
-import PasskeyLoginDialog from '@/views/account/PasskeyLoginDialog.vue'
 import PasskeyRenameDialog from '@/views/account/PasskeyRenameDialog.vue'
 import RemoveAppDialog from '@/views/account/RemoveAppDialog.vue'
 import TotpDialog from '@/views/account/TotpDialog.vue'
@@ -27,8 +25,6 @@ const actionError = ref('')
 const settingUp = ref(false)
 const adding = ref(false)
 const removingApp = ref(false)
-const turningOn = ref(false)
-const switching = ref(false)
 /** The passkey the rename dialog is acting on. */
 const renaming = ref(null)
 const renameOpen = ref(false)
@@ -43,15 +39,14 @@ onMounted(load.run)
 const error = computed(() => actionError.value || load.error.value)
 const totp = computed(() => state.value?.totp ?? null)
 const passkeys = computed(() => state.value?.passkeys ?? [])
-const passkeyLogin = computed(() => state.value?.passkeyLogin ?? false)
 const rpId = computed(() => state.value?.rpId ?? '')
 
 const intro = computed(() => {
   if (!state.value) return ''
   if (!totp.value) return 'Sign-in asks for your password alone.'
-  if (passkeyLogin.value)
-    return 'Sign-in asks for a code from your authenticator app after your password; a passkey signs in on its own.'
-  return 'Sign-in asks for a code from your authenticator app, or a passkey, after your password.'
+  if (passkeys.value.length)
+    return 'Sign-in takes a passkey on its own, or your password and then a code from your authenticator app or a passkey.'
+  return 'Sign-in asks for a code from your authenticator app after your password.'
 })
 
 /** Why a passkey cannot be added now, or empty when it can. */
@@ -63,28 +58,8 @@ const passkeyBlock = computed(() => {
   return ''
 })
 
-/** The switch turns on only with a passkey, but turns off without one. */
-const noLogin = computed(() => !passkeys.value.length && !passkeyLogin.value)
-const loginHint = computed(() =>
-  noLogin.value
-    ? 'Add a passkey first.'
-    : 'Asks for the device PIN or biometric instead of the password, on the host name the passkey was made for.',
-)
-
 /** A time never set may come as Go's zero time. */
 const used = (t) => (t?.startsWith('0001-') ? '' : t)
-
-/** The switch shows on while its dialog asks for the password. */
-const loginSwitch = ref(false)
-watch(passkeyLogin, (on) => (loginSwitch.value = on), { immediate: true })
-watch(loginSwitch, (on) => {
-  if (on === passkeyLogin.value) return
-  if (on) turningOn.value = true
-  else turnOffLogin()
-})
-watch(turningOn, (open) => {
-  if (!open) loginSwitch.value = passkeyLogin.value
-})
 
 /** What the card shows now, and the session's own copy of it. */
 async function changed() {
@@ -94,24 +69,6 @@ async function changed() {
     auth.user = await api.auth.me()
   } catch {
     /* the card already shows the new state */
-  }
-}
-
-function loginChanged(mfa) {
-  if (mfa) state.value = mfa
-  changed()
-}
-
-async function turnOffLogin() {
-  actionError.value = ''
-  switching.value = true
-  try {
-    loginChanged(await api.auth.setPasskeyLogin(false))
-  } catch (e) {
-    actionError.value = errorMessage(e)
-    loginSwitch.value = passkeyLogin.value
-  } finally {
-    switching.value = false
   }
 }
 
@@ -233,16 +190,6 @@ async function remove(p) {
             </tr>
           </tbody>
         </table>
-
-        <div class="card-strip">
-          <ToggleRow
-            id="passkey-login"
-            v-model="loginSwitch"
-            label="Sign in with a passkey alone"
-            :hint="loginHint"
-            :disabled="switching || noLogin"
-          />
-        </div>
       </fieldset>
     </template>
 
@@ -253,7 +200,6 @@ async function remove(p) {
     <TotpDialog v-model:open="settingUp" :replacing="Boolean(totp)" @done="changed" />
     <PasskeyDialog v-model:open="adding" :rp-id="rpId" @done="changed" />
     <PasskeyRenameDialog v-model:open="renameOpen" :passkey="renaming" @done="changed" />
-    <PasskeyLoginDialog v-model:open="turningOn" @done="loginChanged" />
     <RemoveAppDialog
       v-model:open="removingApp"
       :passkeys="passkeys.map((p) => p.name)"

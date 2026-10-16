@@ -46,9 +46,8 @@ type account struct {
 
 // accountMFA is an account's MFA as the account list shows it.
 type accountMFA struct {
-	TOTP         bool `json:"totp"`
-	Passkeys     int  `json:"passkeys"`
-	PasskeyLogin bool `json:"passkeyLogin"`
+	TOTP     bool `json:"totp"`
+	Passkeys int  `json:"passkeys"`
 }
 
 // users answers with the whole account list, which is what every change
@@ -60,7 +59,7 @@ func (a *api) users(w http.ResponseWriter, status int) error {
 	for i, u := range list {
 		out[i] = account{
 			Username: u.Username, Role: u.Role, CreatedAt: u.CreatedAt, UpdatedAt: u.UpdatedAt,
-			MFA: accountMFA{TOTP: u.TOTP != nil, Passkeys: len(u.Passkeys), PasskeyLogin: u.PasskeyLogin},
+			MFA: accountMFA{TOTP: u.TOTP != nil, Passkeys: len(u.Passkeys)},
 		}
 	}
 	writeJSON(w, status, out)

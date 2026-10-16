@@ -44,7 +44,6 @@ func (a *api) registerAuth(mux *router) {
 	mux.HandleFunc("POST /api/v1/auth/mfa/passkeys", a.protect(a.addPasskey))
 	mux.HandleFunc("PATCH /api/v1/auth/mfa/passkeys/{id}", a.protect(a.renamePasskey))
 	mux.HandleFunc("DELETE /api/v1/auth/mfa/passkeys/{id}", a.protect(a.removePasskey))
-	mux.HandleFunc("POST /api/v1/auth/mfa/passkey-login", a.protect(a.setPasskeyLogin))
 	a.registerSessions(mux)
 }
 
@@ -162,11 +161,14 @@ func (a *api) setup(w http.ResponseWriter, r *http.Request) error {
 // loginPageResponse is what the sign-in page shows before anyone signs in.
 type loginPageResponse struct {
 	Hostname string `json:"hostname,omitempty"`
+	// Passkeys says an account has a passkey made on the host name the page
+	// was opened at, so the page offers to sign in with one.
+	Passkeys bool `json:"passkeys,omitempty"`
 }
 
 // loginPage names the router on the sign-in page by the saved
 // configuration's hostname, the one the sidebar shows.
-func (a *api) loginPage(w http.ResponseWriter, _ *http.Request) error {
+func (a *api) loginPage(w http.ResponseWriter, r *http.Request) error {
 	var res loginPageResponse
 	// A configuration that cannot be read is reported after sign-in, not
 	// to whoever opens this page.
@@ -174,6 +176,9 @@ func (a *api) loginPage(w http.ResponseWriter, _ *http.Request) error {
 		if cfg, err := a.engine.Store().Load(); err == nil {
 			res.Hostname = cfg.System.Hostname
 		}
+	}
+	if a.auth != nil {
+		res.Passkeys = a.auth.PasskeysOn(relyingParty(r).ID)
 	}
 	writeJSON(w, http.StatusOK, res)
 	return nil
@@ -249,7 +254,7 @@ type pendingSignIn struct {
 }
 
 func (a *api) askForMFA(w http.ResponseWriter, r *http.Request, username string) error {
-	app, keys, _ := a.auth.MFAOf(username)
+	app, keys := a.auth.MFAOf(username)
 	rp := relyingParty(r)
 	token := a.auth.PendingLogin(username)
 	if token == "" {
@@ -335,8 +340,8 @@ var (
 	errInvalidCode   = errors.New("invalid code")
 	errNeedsAName    = errors.New("passkeys need a name in the address bar, not an address")
 	errWrongPassword = errors.New("password is wrong")
-	errPasskeyOff    = errors.New("this account does not sign in with a passkey alone")
 	errNotVerified   = errors.New("the device did not check that it was you")
+	errNotItsHandle  = errors.New("the passkey answered for another account")
 )
 
 // refusal is a sign-in step turned down in its own words. It answers 401 as
@@ -430,59 +435,38 @@ func (a *api) finishSignIn(w http.ResponseWriter, r *http.Request, pending, how 
 	return nil
 }
 
-// passkeyStart is a sign-in a passkey can finish on its own: the token and
+// passkeyStart is a sign-in a passkey finishes on its own: the token and
 // the browser's request options.
 type passkeyStart struct {
 	Token     string         `json:"token"`
 	PublicKey map[string]any `json:"publicKey"`
 }
 
-// loginStart says whether the account signs in with a passkey alone on this
-// host name. Every other case answers null alike, and nothing is counted.
+// loginStart opens a sign-in with a passkey alone. It names no account and
+// lists no passkey, so the browser offers every passkey it keeps for this
+// host name, and the one picked names the account.
 func (a *api) loginStart(w http.ResponseWriter, r *http.Request) error {
 	if a.auth == nil {
 		return &unavailable{errors.New("authentication not available")}
 	}
-	var req struct {
-		Username string `json:"username"`
-	}
-	if err := decodeJSON(r, &req); err != nil {
-		return err
+	rp := relyingParty(r)
+	if rp.ID == "" {
+		return &badRequest{errNeedsAName}
 	}
 	if a.auth.Blocked(remoteIP(r)) {
 		return auth.ErrRateLimited
 	}
-	start, err := a.passkeyStartFor(r, req.Username)
+	challenge, err := webauthn.NewChallenge()
 	if err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, map[string]*passkeyStart{"passkey": start})
-	return nil
-}
-
-func (a *api) passkeyStartFor(r *http.Request, username string) (*passkeyStart, error) {
-	rp := relyingParty(r)
-	if rp.ID == "" {
-		return nil, nil
-	}
-	_, keys, on := a.auth.MFAOf(username)
-	if !on {
-		return nil, nil
-	}
-	allow := credentialsOf(passkeysOn(keys, rp.ID))
-	if len(allow) == 0 {
-		return nil, nil
-	}
-	challenge, err := webauthn.NewChallenge()
-	if err != nil {
-		return nil, err
-	}
-	token := a.auth.StartPasskeyLogin(username)
+	token := a.auth.StartPasskeyLogin(remoteIP(r))
 	if token == "" {
-		return nil, errors.New("could not start the sign-in")
+		return errors.New("could not start the sign-in")
 	}
 	a.auth.SetChallenge(token, challenge)
-	return &passkeyStart{Token: token, PublicKey: webauthn.RequestOptions(rp, allow, challenge, true)}, nil
+	writeJSON(w, http.StatusOK, passkeyStart{Token: token, PublicKey: webauthn.RequestOptions(rp, nil, challenge, true)})
+	return nil
 }
 
 // loginTOTP is the second step with a code from an authenticator app.
@@ -558,8 +542,7 @@ func (a *api) loginPasskeyOptions(w http.ResponseWriter, r *http.Request) error 
 }
 
 // loginPasskey is the second step with a passkey's signed answer, or the
-// whole sign-in for a token from loginStart: then the switch must still be
-// on and the device must have checked it was the user.
+// whole sign-in for a token from loginStart.
 func (a *api) loginPasskey(w http.ResponseWriter, r *http.Request) error {
 	if a.auth == nil {
 		return &unavailable{errors.New("authentication not available")}
@@ -579,17 +562,14 @@ func (a *api) loginPasskey(w http.ResponseWriter, r *http.Request) error {
 	if rp.ID == "" {
 		return &badRequest{errNeedsAName}
 	}
-	if !checked {
-		if _, _, on := a.auth.MFAOf(user); !on {
-			a.auth.FailPending(req.Pending, remoteIP(r))
-			return a.refused(r, user, &refusal{errPasskeyOff})
-		}
-	}
 	challenge, ok := a.auth.TakeChallenge(req.Pending)
 	if !ok {
 		return &badRequest{errors.New("that passkey request timed out; try again")}
 	}
 	id := strings.TrimRight(cmp.Or(req.Credential.RawID, req.Credential.ID), "=")
+	if !checked {
+		return a.passkeyAlone(w, r, req.Pending, id, req.Credential, challenge)
+	}
 	keys := passkeysOn(a.auth.Passkeys(user), rp.ID)
 	i := slices.IndexFunc(keys, func(k auth.Passkey) bool { return k.ID == id })
 	if i < 0 {
@@ -602,9 +582,6 @@ func (a *api) loginPasskey(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	got, err := webauthn.VerifyAssertion(req.Credential, cred, challenge, rp, originOf(r))
-	if err == nil && !checked && !got.UserVerified {
-		err = errNotVerified
-	}
 	if err != nil {
 		a.auth.FailPending(req.Pending, remoteIP(r))
 		return a.refused(r, user, &refusal{fmt.Errorf("passkey refused: %w", err)})
@@ -615,11 +592,52 @@ func (a *api) loginPasskey(w http.ResponseWriter, r *http.Request) error {
 		}
 		return err
 	}
-	how := ""
-	if !checked {
-		how = "passkey"
+	return a.finishSignIn(w, r, req.Pending, "")
+}
+
+// passkeyAlone finishes a sign-in that named no account. The passkey names
+// it, and the user handle the device keeps with the passkey must be that
+// account's (WebAuthn's step for a user not named first). The device must
+// have checked it was the user, by PIN or biometric.
+func (a *api) passkeyAlone(w http.ResponseWriter, r *http.Request, pending, id string, resp webauthn.AssertionResponse, challenge []byte) error {
+	rp := relyingParty(r)
+	user, handle, key, ok := a.auth.PasskeyOwner(id)
+	if !ok || key.RPID != rp.ID {
+		a.auth.FailPending(pending, remoteIP(r))
+		return a.refused(r, "", &refusal{auth.ErrNoSuchPasskey})
 	}
-	return a.finishSignIn(w, r, req.Pending, how)
+	held, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(resp.Response.UserHandle, "="))
+	if err != nil || handle == "" || string(held) != handle {
+		a.auth.FailPending(pending, remoteIP(r))
+		return a.refused(r, user, &refusal{fmt.Errorf("passkey refused: %w", errNotItsHandle)})
+	}
+	cred, err := credentialOf(key)
+	if err != nil {
+		return err
+	}
+	got, err := webauthn.VerifyAssertion(resp, cred, challenge, rp, originOf(r))
+	if err == nil && !got.UserVerified {
+		err = errNotVerified
+	}
+	if err != nil {
+		a.auth.FailPending(pending, remoteIP(r))
+		return a.refused(r, user, &refusal{fmt.Errorf("passkey refused: %w", err)})
+	}
+	if err := a.auth.PasskeyUsed(user, key.ID, got.SignCount, time.Now()); err != nil {
+		if errors.Is(err, auth.ErrNoSuchPasskey) || errors.Is(err, auth.ErrNoSuchUser) {
+			return errUnauthorized
+		}
+		return err
+	}
+	sess, err := a.auth.ResolvePasskeyFrom(pending, user, clientOf(r))
+	if err != nil {
+		if errors.Is(err, auth.ErrPendingGone) || errors.Is(err, auth.ErrNoSuchUser) {
+			return errUnauthorized
+		}
+		return err
+	}
+	a.startSession(w, r, sess, "passkey")
+	return nil
 }
 
 // passkeyView is a passkey as the account's own page lists it, with nothing
@@ -647,9 +665,8 @@ type totpView struct {
 }
 
 type mfaResponse struct {
-	TOTP         *totpView     `json:"totp"`
-	Passkeys     []passkeyView `json:"passkeys"`
-	PasskeyLogin bool          `json:"passkeyLogin"`
+	TOTP     *totpView     `json:"totp"`
+	Passkeys []passkeyView `json:"passkeys"`
 	// RPID is the host name a passkey made now would be bound to; empty when
 	// the page was reached by address.
 	RPID        string    `json:"rpId"`
@@ -668,8 +685,8 @@ func (a *api) mfa(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (a *api) mfaOf(r *http.Request, username string) mfaResponse {
-	app, keys, on := a.auth.MFAOf(username)
-	res := mfaResponse{Passkeys: make([]passkeyView, 0, len(keys)), PasskeyLogin: on, RPID: relyingParty(r).ID}
+	app, keys := a.auth.MFAOf(username)
+	res := mfaResponse{Passkeys: make([]passkeyView, 0, len(keys)), RPID: relyingParty(r).ID}
 	if app != nil {
 		res.TOTP = &totpView{EnabledAt: app.EnabledAt}
 		if app.LastStep > 0 {
@@ -788,7 +805,7 @@ func (a *api) passkeyOptions(w http.ResponseWriter, r *http.Request) error {
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}
-	app, keys, _ := a.auth.MFAOf(sess.Username)
+	app, keys := a.auth.MFAOf(sess.Username)
 	if app == nil {
 		return &badRequest{auth.ErrTOTPFirst}
 	}
@@ -878,7 +895,7 @@ func (a *api) removePasskey(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	id := strings.TrimRight(r.PathValue("id"), "=")
-	_, keys, _ := a.auth.MFAOf(sess.Username)
+	_, keys := a.auth.MFAOf(sess.Username)
 	i := slices.IndexFunc(keys, func(k auth.Passkey) bool { return k.ID == id })
 	if i < 0 {
 		return &notFound{auth.ErrNoSuchPasskey}
@@ -938,42 +955,5 @@ func (a *api) renamePasskey(w http.ResponseWriter, r *http.Request) error {
 	}
 	key.Name = name
 	writeJSON(w, http.StatusOK, viewOf(key))
-	return nil
-}
-
-// setPasskeyLogin turns signing in with a passkey alone on, on the
-// password, or off, on nothing.
-func (a *api) setPasskeyLogin(w http.ResponseWriter, r *http.Request) error {
-	sess, err := a.current(r)
-	if err != nil {
-		return err
-	}
-	var req struct {
-		On       bool   `json:"on"`
-		Password string `json:"password"`
-	}
-	if err := decodeJSON(r, &req); err != nil {
-		return err
-	}
-	if req.On {
-		if err := a.checkPassword(r, sess.Username, req.Password); err != nil {
-			return err
-		}
-	}
-	_, _, was := a.auth.MFAOf(sess.Username)
-	if err := a.auth.SetPasskeyLogin(sess.Username, req.On); err != nil {
-		if errors.Is(err, auth.ErrNoPasskeys) {
-			return &badRequest{err}
-		}
-		return err
-	}
-	if was != req.On {
-		detail := "off"
-		if req.On {
-			detail = "on"
-		}
-		a.record(r, audit.MFAPasskeyLogin, "", detail)
-	}
-	writeJSON(w, http.StatusOK, a.mfaOf(r, sess.Username))
 	return nil
 }

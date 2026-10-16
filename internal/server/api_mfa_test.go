@@ -20,6 +20,7 @@ import (
 	"ostiole/internal/nft/nfttest"
 	"ostiole/internal/store"
 	"ostiole/internal/totp"
+	"ostiole/internal/webauthn"
 	"ostiole/internal/webauthn/webauthntest"
 )
 
@@ -255,8 +256,7 @@ type factorState struct {
 		EnabledAt time.Time `json:"enabledAt"`
 		LastUsed  time.Time `json:"lastUsed"`
 	} `json:"totp"`
-	PasskeyLogin bool `json:"passkeyLogin"`
-	Passkeys     []struct {
+	Passkeys []struct {
 		ID       string    `json:"id"`
 		Name     string    `json:"name"`
 		RPID     string    `json:"rpId"`
@@ -647,14 +647,10 @@ func TestAnAdminClearsAnotherAccountsMFA(t *testing.T) {
 	if err := s.as.AddPasskey("watcher", key); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.as.SetPasskeyLogin("watcher", true); err != nil {
-		t.Fatal(err)
-	}
 
 	type mfaRow struct {
-		TOTP         bool `json:"totp"`
-		Passkeys     int  `json:"passkeys"`
-		PasskeyLogin bool `json:"passkeyLogin"`
+		TOTP     bool `json:"totp"`
+		Passkeys int  `json:"passkeys"`
 	}
 	rows := func(raw []byte) map[string]mfaRow {
 		out := map[string]mfaRow{}
@@ -667,7 +663,7 @@ func TestAnAdminClearsAnotherAccountsMFA(t *testing.T) {
 		return out
 	}
 	raw := s.expect(t, http.StatusOK, "", http.MethodGet, "/api/v1/users", nil)
-	if got, want := rows(raw), (map[string]mfaRow{"admin": {TOTP: true}, "watcher": {TOTP: true, Passkeys: 1, PasskeyLogin: true}}); !maps.Equal(got, want) {
+	if got, want := rows(raw), (map[string]mfaRow{"admin": {TOTP: true}, "watcher": {TOTP: true, Passkeys: 1}}); !maps.Equal(got, want) {
 		t.Errorf("MFA in the account list = %+v, want %+v", got, want)
 	}
 	for _, leak := range []string{secret, key.ID, key.PublicKey, key.Name, "hash"} {
@@ -823,30 +819,22 @@ type passkeyAlone struct {
 	PublicKey map[string]any `json:"publicKey"`
 }
 
-// start asks login/start about admin at passkeyHost and gives what it
-// offers, nil for none.
-func (s *factorSite) start(t *testing.T) *passkeyAlone {
+// start opens a sign-in with a passkey alone at passkeyHost.
+func (s *factorSite) start(t *testing.T) passkeyAlone {
 	t.Helper()
-	raw := s.expect(t, http.StatusOK, passkeyHost, http.MethodPost, "/api/v1/auth/login/start", map[string]string{"username": "admin"})
-	return jsonOf[struct {
-		Passkey *passkeyAlone `json:"passkey"`
-	}](t, raw).Passkey
+	return jsonOf[passkeyAlone](t, s.expect(t, http.StatusOK, passkeyHost, http.MethodPost, "/api/v1/auth/login/start", nil))
 }
 
 // passkeyAloneSignIn answers what login/start offered as a browser at
 // passkeyHost would.
-func (s *factorSite) passkeyAloneSignIn(t *testing.T, offer *passkeyAlone, key *webauthntest.Authenticator) (*http.Response, []byte) {
+func (s *factorSite) passkeyAloneSignIn(t *testing.T, offer passkeyAlone, key *webauthntest.Authenticator) (*http.Response, []byte) {
 	t.Helper()
-	return s.call(t, passkeyHost, http.MethodPost, "/api/v1/auth/login/passkey", map[string]any{
-		"pending": offer.Token, "credential": key.Assert(map[string]any{"publicKey": offer.PublicKey}, passkeyOrigin),
-	})
+	return s.finishAlone(t, offer.Token, key.Assert(map[string]any{"publicKey": offer.PublicKey}, passkeyOrigin))
 }
 
-// passkeyLogin turns admin's passkey sign-in on, on the password.
-func (s *factorSite) passkeyLogin(t *testing.T) factorState {
+func (s *factorSite) finishAlone(t *testing.T, token string, credential webauthn.AssertionResponse) (*http.Response, []byte) {
 	t.Helper()
-	raw := s.expect(t, http.StatusOK, passkeyHost, http.MethodPost, "/api/v1/auth/mfa/passkey-login", map[string]any{"on": true, "password": testPassword})
-	return jsonOf[factorState](t, raw)
+	return s.call(t, passkeyHost, http.MethodPost, "/api/v1/auth/login/passkey", map[string]any{"pending": token, "credential": credential})
 }
 
 func TestSigningInWithAPasskeyAlone(t *testing.T) {
@@ -855,23 +843,18 @@ func TestSigningInWithAPasskeyAlone(t *testing.T) {
 	secret := s.enableTOTP(t, "admin")
 	key := webauthntest.New("es256")
 	added := s.addPasskey(t, "Work laptop", key)
-	if state := s.passkeyLogin(t); !state.PasskeyLogin || state.TOTP == nil || len(state.Passkeys) != 1 {
-		t.Errorf("MFA after turning passkey sign-in on = %+v", state)
-	}
-	if got := s.events(t, audit.MFAPasskeyLogin); len(got) != 1 || got[0].Detail != "on" || got[0].By.Name != "admin" {
-		t.Errorf("recorded %+v, want passkey sign-in turned on by admin", got)
-	}
 	s.signOut(t)
 
 	offer := s.start(t)
-	if offer == nil || offer.Token == "" {
-		t.Fatal("no passkey offered")
+	if offer.Token == "" || offer.PublicKey["rpId"] != passkeyHost {
+		t.Fatalf("offer = %+v", offer)
 	}
 	if uv := offer.PublicKey["userVerification"]; uv != "required" {
 		t.Errorf("userVerification = %v, want required", uv)
 	}
-	if allow, _ := offer.PublicKey["allowCredentials"].([]any); len(allow) != 1 {
-		t.Errorf("allowCredentials = %v, want the one passkey", offer.PublicKey["allowCredentials"])
+	// No passkey is named, so the browser offers each it keeps for the host name.
+	if allow, ok := offer.PublicKey["allowCredentials"].([]any); !ok || len(allow) != 0 {
+		t.Errorf("allowCredentials = %v, want an empty list", offer.PublicKey["allowCredentials"])
 	}
 	if n := len(s.events(t, audit.SignIn)); n != 0 {
 		t.Errorf("%d sign-ins recorded before the passkey answered", n)
@@ -894,7 +877,6 @@ func TestSigningInWithAPasskeyAlone(t *testing.T) {
 	}
 
 	// A token that has not passed the password finishes with a passkey or not at all.
-	s.signOut(t)
 	other := s.start(t)
 	s.refused(t, http.StatusUnauthorized, "authentication required", "", http.MethodPost, "/api/v1/auth/login/totp",
 		map[string]string{"pending": other.Token, "code": codeAt(t, secret, 0)})
@@ -903,39 +885,94 @@ func TestSigningInWithAPasskeyAlone(t *testing.T) {
 	if n := len(s.events(t, audit.SignIn)); n != 1 {
 		t.Errorf("%d sign-ins recorded, want the one", n)
 	}
+
+	// Removing the authenticator app takes the passkey with it.
+	s.expect(t, http.StatusNoContent, "", http.MethodPost, "/api/v1/auth/mfa/clear", withPassword)
+	s.signOut(t)
+	key.SignCount = 2
+	if resp, raw := s.passkeyAloneSignIn(t, s.start(t), key); resp.StatusCode != http.StatusUnauthorized || errorOf(raw) != auth.ErrNoSuchPasskey.Error() {
+		t.Errorf("the passkey after the clear: %d %s", resp.StatusCode, raw)
+	}
 }
 
-func TestLoginStartOffersNothingOtherwise(t *testing.T) {
+func TestEachAccountSignsInWithItsOwnPasskey(t *testing.T) {
 	t.Parallel()
 	s := newFactorSite(t)
 	s.enableTOTP(t, "admin")
-	s.addPasskey(t, "Work laptop", webauthntest.New("es256"))
+	desk := webauthntest.New("es256")
+	s.addPasskey(t, "Work laptop", desk)
 	if err := s.as.CreateUser("watcher", testPassword, auth.RoleViewer); err != nil {
 		t.Fatal(err)
 	}
+	s.signOut(t)
+	if resp, raw := s.signIn(t, "", "watcher"); resp.StatusCode != http.StatusOK {
+		t.Fatalf("sign in as watcher: %d %s", resp.StatusCode, raw)
+	}
+	s.enableTOTP(t, "watcher")
+	pocket := webauthntest.New("eddsa")
+	s.addPasskey(t, "Pocket key", pocket)
+	s.signOut(t)
 
-	// With the switch off, and for every other reason, the answer reads alike.
-	nothing := func(why, host, user string) {
+	for _, tc := range []struct {
+		key  *webauthntest.Authenticator
+		want string
+	}{{pocket, "watcher"}, {desk, "admin"}, {pocket, "watcher"}} {
+		tc.key.SignCount++
+		resp, raw := s.passkeyAloneSignIn(t, s.start(t), tc.key)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("sign-in as %s: %d %s", tc.want, resp.StatusCode, raw)
+		}
+		if me := jsonOf[sessionBody](t, raw); me.Username != tc.want {
+			t.Errorf("signed in as %q, want %q", me.Username, tc.want)
+		}
+		s.signOut(t)
+	}
+}
+
+func TestTheSignInPageSaysWhereAPasskeySignsIn(t *testing.T) {
+	t.Parallel()
+	s := newFactorSite(t)
+	offered := func(host string) bool {
 		t.Helper()
-		raw := s.expect(t, http.StatusOK, host, http.MethodPost, "/api/v1/auth/login/start", map[string]string{"username": user})
-		if got := strings.TrimSpace(string(raw)); got != `{"passkey":null}` {
-			t.Errorf("%s: %s", why, got)
+		return jsonOf[loginPageResponse](t, s.expect(t, http.StatusOK, host, http.MethodGet, "/api/v1/auth/login", nil)).Passkeys
+	}
+	if offered(passkeyHost) {
+		t.Error("a passkey is offered before there is one")
+	}
+	s.enableTOTP(t, "admin")
+	s.addPasskey(t, "Work laptop", webauthntest.New("es256"))
+	s.signOut(t)
+	if !offered(passkeyHost) {
+		t.Error("no passkey is offered where one was made")
+	}
+	for _, host := range []string{"", "192.0.2.1", "elsewhere.test"} {
+		if offered(host) {
+			t.Errorf("a passkey is offered at %q", host)
 		}
 	}
-	nothing("switch off", passkeyHost, "admin")
-	s.passkeyLogin(t)
-	if s.start(t) == nil {
-		t.Fatal("no passkey offered with the switch on")
-	}
-	nothing("unknown name", passkeyHost, "ghost")
-	nothing("no passkey", passkeyHost, "watcher")
-	nothing("by address", "", "admin")
-	nothing("by another address", "192.0.2.1", "admin")
-	nothing("on another host name", "elsewhere.test", "admin")
+}
 
-	// Asking is not counted against the address.
+func TestLoginStart(t *testing.T) {
+	t.Parallel()
+	s := newFactorSite(t)
+	if err := s.as.CreateUser("watcher", testPassword, auth.RoleViewer); err != nil {
+		t.Fatal(err)
+	}
+	s.signOut(t)
+
+	// WebAuthn has no use for an address.
+	for _, host := range []string{"", "192.0.2.1", "[2001:db8::1]:8443"} {
+		s.refused(t, http.StatusBadRequest, errNeedsAName.Error(), host, http.MethodPost, "/api/v1/auth/login/start", nil)
+	}
+
+	// Each start is its own sign-in, and asking is not counted against the
+	// address, though no account has a passkey.
+	first, second := s.start(t), s.start(t)
+	if first.Token == second.Token || first.PublicKey["challenge"] == second.PublicKey["challenge"] {
+		t.Errorf("two starts share a token or a challenge: %+v, %+v", first, second)
+	}
 	for range 2 * auth.MaxFailures {
-		nothing("unknown name, again", passkeyHost, "ghost")
+		s.start(t)
 	}
 	if resp, raw := s.signIn(t, "", "watcher"); resp.StatusCode != http.StatusOK {
 		t.Errorf("sign-in after many starts: %d %s", resp.StatusCode, raw)
@@ -948,8 +985,7 @@ func TestLoginStartOffersNothingOtherwise(t *testing.T) {
 	for range auth.MaxFailures {
 		s.call(t, "", http.MethodPost, "/api/v1/auth/login", credentials{Username: "watcher", Password: "not the password"})
 	}
-	s.refused(t, http.StatusTooManyRequests, auth.ErrRateLimited.Error(), passkeyHost, http.MethodPost, "/api/v1/auth/login/start",
-		map[string]string{"username": "admin"})
+	s.refused(t, http.StatusTooManyRequests, auth.ErrRateLimited.Error(), passkeyHost, http.MethodPost, "/api/v1/auth/login/start", nil)
 }
 
 func TestAPasskeyAloneNeedsTheDeviceToCheckTheUser(t *testing.T) {
@@ -958,7 +994,6 @@ func TestAPasskeyAloneNeedsTheDeviceToCheckTheUser(t *testing.T) {
 	s.enableTOTP(t, "admin")
 	key := webauthntest.New("es256")
 	s.addPasskey(t, "Work laptop", key)
-	s.passkeyLogin(t)
 	s.signOut(t)
 
 	// After the password a touch is enough.
@@ -979,26 +1014,68 @@ func TestAPasskeyAloneNeedsTheDeviceToCheckTheUser(t *testing.T) {
 	if n := len(s.events(t, audit.SignIn)); n != 1 {
 		t.Errorf("%d sign-ins recorded, want the one after the password", n)
 	}
-	s.refused(t, http.StatusTooManyRequests, auth.ErrRateLimited.Error(), passkeyHost, http.MethodPost, "/api/v1/auth/login/start",
-		map[string]string{"username": "admin"})
+	s.refused(t, http.StatusTooManyRequests, auth.ErrRateLimited.Error(), passkeyHost, http.MethodPost, "/api/v1/auth/login/start", nil)
 }
 
-func TestAPasskeyAloneStopsWhenTheSwitchGoesOff(t *testing.T) {
+// The passkey names the account, so it has to be one the account holds for
+// this host name, and the device has to keep it for that account.
+func TestAPasskeyAloneHasToBeTheAccounts(t *testing.T) {
 	t.Parallel()
 	s := newFactorSite(t)
 	s.enableTOTP(t, "admin")
 	key := webauthntest.New("es256")
 	s.addPasskey(t, "Work laptop", key)
-	s.passkeyLogin(t)
-	offer := s.start(t)
-	if err := s.as.SetPasskeyLogin("admin", false); err != nil {
+	// A passkey made on another host name is the account's, but not here.
+	elsewhere := webauthntest.New("es256")
+	raw := s.expect(t, http.StatusOK, "elsewhere.test", http.MethodPost, "/api/v1/auth/mfa/passkeys/options", withPassword)
+	s.expect(t, http.StatusCreated, "elsewhere.test", http.MethodPost, "/api/v1/auth/mfa/passkeys", map[string]any{
+		"name": "Old laptop", "credential": elsewhere.Register(jsonOf[map[string]any](t, raw), "http://elsewhere.test"),
+	})
+	if err := s.as.CreateUser("watcher", testPassword, auth.RoleViewer); err != nil {
 		t.Fatal(err)
 	}
-	s.session = ""
-	key.SignCount = 1
-	resp, raw := s.passkeyAloneSignIn(t, offer, key)
-	if resp.StatusCode != http.StatusUnauthorized || errorOf(raw) != errPasskeyOff.Error() || sessionCookieOf(resp) != nil {
-		t.Errorf("passkey alone after the switch went off: %d %s", resp.StatusCode, raw)
+	theirs, err := s.as.UserID("watcher")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.signOut(t)
+
+	answer := func(key *webauthntest.Authenticator, handle *string) (string, webauthn.AssertionResponse) {
+		offer := s.start(t)
+		key.SignCount++
+		cred := key.Assert(map[string]any{"publicKey": offer.PublicKey}, passkeyOrigin)
+		if handle != nil {
+			cred.Response.UserHandle = *handle
+		}
+		return offer.Token, cred
+	}
+	none, other := "", b64url([]byte(theirs))
+	for _, tc := range []struct {
+		why    string
+		key    *webauthntest.Authenticator
+		handle *string
+		want   string
+	}{
+		{"a passkey no account holds", webauthntest.New("es256"), nil, auth.ErrNoSuchPasskey.Error()},
+		{"a passkey made on another host name", elsewhere, nil, auth.ErrNoSuchPasskey.Error()},
+		{"no user handle", key, &none, "passkey refused: " + errNotItsHandle.Error()},
+		{"another account's user handle", key, &other, "passkey refused: " + errNotItsHandle.Error()},
+	} {
+		token, cred := answer(tc.key, tc.handle)
+		resp, raw := s.finishAlone(t, token, cred)
+		if resp.StatusCode != http.StatusUnauthorized || errorOf(raw) != tc.want || sessionCookieOf(resp) != nil {
+			t.Errorf("%s: %d %s, want 401 %q", tc.why, resp.StatusCode, raw, tc.want)
+		}
+		// One try a sign-in.
+		if resp, raw := s.finishAlone(t, token, cred); resp.StatusCode != http.StatusUnauthorized || errorOf(raw) != "authentication required" {
+			t.Errorf("%s, again: %d %s", tc.why, resp.StatusCode, raw)
+		}
+	}
+	if n := len(s.events(t, audit.SignIn)); n != 0 {
+		t.Errorf("%d sign-ins recorded, want none", n)
+	}
+	if resp, raw := s.passkeyAloneSignIn(t, s.start(t), key); resp.StatusCode != http.StatusOK {
+		t.Errorf("the right passkey after the wrong ones: %d %s", resp.StatusCode, raw)
 	}
 }
 
@@ -1012,7 +1089,7 @@ func TestAddingAPasskeyAsksForThePassword(t *testing.T) {
 	// No challenge was handed out, so nothing can be added.
 	s.refused(t, http.StatusBadRequest, "that passkey request timed out; try again", passkeyHost, http.MethodPost, "/api/v1/auth/mfa/passkeys",
 		map[string]any{"name": "Work laptop", "credential": map[string]any{}})
-	if _, keys, _ := s.as.MFAOf("admin"); len(keys) != 0 {
+	if _, keys := s.as.MFAOf("admin"); len(keys) != 0 {
 		t.Errorf("passkeys = %+v, want none", keys)
 	}
 	s.addPasskey(t, "Work laptop", webauthntest.New("es256"))
@@ -1045,48 +1122,6 @@ func TestRenamingAPasskey(t *testing.T) {
 	s.refused(t, http.StatusBadRequest, "the name must be 1 to 40 characters", "", http.MethodPatch, path, map[string]string{"name": " "})
 	s.refused(t, http.StatusBadRequest, "the name may not contain control characters", "", http.MethodPatch, path, map[string]string{"name": "desk\x07"})
 	s.refused(t, http.StatusNotFound, auth.ErrNoSuchPasskey.Error(), "", http.MethodPatch, "/api/v1/auth/mfa/passkeys/bm9uZQ", map[string]string{"name": "Spare"})
-}
-
-func TestThePasskeySignInSwitch(t *testing.T) {
-	t.Parallel()
-	s := newFactorSite(t)
-	s.enableTOTP(t, "admin")
-	const path = "/api/v1/auth/mfa/passkey-login"
-
-	// Turning it on needs a passkey, after the password.
-	s.refused(t, http.StatusBadRequest, auth.ErrNoPasskeys.Error(), passkeyHost, http.MethodPost, path, map[string]any{"on": true, "password": testPassword})
-	s.addPasskey(t, "Work laptop", webauthntest.New("es256"))
-	s.refused(t, http.StatusUnauthorized, errWrongPassword.Error(), passkeyHost, http.MethodPost, path, map[string]any{"on": true})
-	s.refused(t, http.StatusUnauthorized, errWrongPassword.Error(), passkeyHost, http.MethodPost, path, map[string]any{"on": true, "password": "not the password"})
-	if _, _, on := s.as.MFAOf("admin"); on {
-		t.Fatal("turned on without the password")
-	}
-	s.passkeyLogin(t)
-
-	// Off needs nothing.
-	state := jsonOf[factorState](t, s.expect(t, http.StatusOK, passkeyHost, http.MethodPost, path, map[string]any{"on": false}))
-	if state.PasskeyLogin || state.TOTP == nil || len(state.Passkeys) != 1 || state.RPID != passkeyHost {
-		t.Errorf("MFA after turning it off = %+v", state)
-	}
-	s.expect(t, http.StatusOK, passkeyHost, http.MethodPost, path, map[string]any{"on": false})
-	var details []string
-	for _, e := range s.events(t, audit.MFAPasskeyLogin) {
-		details = append(details, e.Detail)
-	}
-	if strings.Join(details, " ") != "on off" {
-		t.Errorf("recorded %q, want on then off", details)
-	}
-
-	// Removing the authenticator app turns it off with the rest.
-	s.passkeyLogin(t)
-	s.expect(t, http.StatusNoContent, "", http.MethodPost, "/api/v1/auth/mfa/clear", withPassword)
-	if state, _ := s.state(t, passkeyHost); state.PasskeyLogin || state.TOTP != nil || len(state.Passkeys) != 0 {
-		t.Errorf("MFA after the clear = %+v", state)
-	}
-	s.signOut(t)
-	if offer := s.start(t); offer != nil {
-		t.Errorf("a passkey is offered after the clear: %+v", offer)
-	}
 }
 
 func TestTheAppSaysWhenItWasSetUpAndLastUsed(t *testing.T) {

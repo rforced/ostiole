@@ -108,7 +108,7 @@ const (
 	PasskeyAdd      = "passkey-add"       // Target: the passkey's name
 	PasskeyRemove   = "passkey-remove"    // Target: the passkey's name
 	PasskeyRename   = "passkey-rename"    // Target: the old name; Detail: the new one
-	MFAPasskeyLogin = "mfa-passkey-login" //nolint:gosec // an action name, not a credential; Detail: "on" or "off"
+	MFAPasskeyLogin = "mfa-passkey-login" //nolint:gosec // an action name, not a credential; only in old logs, Detail: "on" or "off"
 	AccountMFAClear = "account-mfa-clear" // Target: the account
 	MFABypass       = "mfa-bypass"        // Detail: how long, as a duration or in seconds
 	MFABypassEnd    = "mfa-bypass-end"    //nolint:gosec // an action name, not a credential

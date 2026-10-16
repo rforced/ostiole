@@ -49,7 +49,7 @@ async function submit() {
     v-model:open="open"
     :read-only="false"
     title="Remove the authenticator app"
-    description="Passkeys go with it and passkey sign-in turns off. Sign-in asks for the password alone."
+    description="Passkeys go with it. Sign-in asks for the password alone."
   >
     <form id="remove-app-form" class="space-y-4" @submit.prevent="submit">
       <div v-if="passkeys.length" class="space-y-1 text-sm">

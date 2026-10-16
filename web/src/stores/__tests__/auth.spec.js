@@ -89,38 +89,41 @@ describe('signing in with MFA', () => {
     expect(auth.loggedIn).toBe(false)
   })
 
-  it('says whether the account signs in with a passkey alone', async () => {
-    const auth = useAuthStore()
-    api.auth.loginStart.mockResolvedValue({ passkey: null })
-    expect(await auth.start('sam')).toBeNull()
-    api.auth.loginStart.mockResolvedValue({
-      passkey: { token: 'pk', publicKey: { challenge: 'c' } },
-    })
-    expect(await auth.start('sam')).toEqual({ token: 'pk', publicKey: { challenge: 'c' } })
-    expect(api.auth.loginStart).toHaveBeenCalledWith('sam')
-  })
-
-  it('signs in with a passkey alone, with no pending sign-in', async () => {
+  it('signs in with a passkey alone: the start, the browser, then the router', async () => {
+    api.auth.loginStart.mockResolvedValue({ token: 'pk', publicKey: { challenge: 'c' } })
     webauthn.get.mockResolvedValue({ id: 'cred' })
     api.auth.loginPasskey.mockResolvedValue(session)
     const auth = useAuthStore()
     const ctl = new AbortController()
-    await auth.loginWithPasskey('pk', { challenge: 'c' }, ctl.signal)
+    await auth.loginPasskeyAlone(ctl.signal)
+    expect(api.auth.loginStart).toHaveBeenCalledWith()
     expect(webauthn.get).toHaveBeenCalledWith({ challenge: 'c' }, { signal: ctl.signal })
     expect(api.auth.loginPasskey).toHaveBeenCalledWith('pk', { id: 'cred' })
     expect(auth.user).toEqual(session)
+    expect(auth.pending).toBeNull()
+  })
+
+  it('opens no prompt once aborted while the router was asked', async () => {
+    const ctl = new AbortController()
+    api.auth.loginStart.mockImplementation(async () => {
+      ctl.abort()
+      return { token: 'pk', publicKey: {} }
+    })
+    const auth = useAuthStore()
+    await expect(auth.loginPasskeyAlone(ctl.signal)).rejects.toMatchObject({ name: 'AbortError' })
+    expect(webauthn.get).not.toHaveBeenCalled()
+    expect(auth.loggedIn).toBe(false)
   })
 
   it('sends nothing once the prompt was aborted', async () => {
     const ctl = new AbortController()
+    api.auth.loginStart.mockResolvedValue({ token: 'pk', publicKey: {} })
     webauthn.get.mockImplementation(async () => {
       ctl.abort()
       return { id: 'cred' }
     })
     const auth = useAuthStore()
-    await expect(auth.loginWithPasskey('pk', {}, ctl.signal)).rejects.toMatchObject({
-      name: 'AbortError',
-    })
+    await expect(auth.loginPasskeyAlone(ctl.signal)).rejects.toMatchObject({ name: 'AbortError' })
     expect(api.auth.loginPasskey).not.toHaveBeenCalled()
     expect(auth.loggedIn).toBe(false)
   })

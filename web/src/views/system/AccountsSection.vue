@@ -189,9 +189,6 @@ async function clearMFA(username) {
           </td>
           <td data-label="MFA">
             <span :class="{ 'text-ink-muted': !u.mfa?.totp }">{{ mfaText(u.mfa) }}</span>
-            <span v-if="u.mfa?.passkeyLogin" class="block text-xs text-ink-muted">
-              Passkey sign-in on
-            </span>
           </td>
           <td class="when" data-label="Created">{{ formatWhen(u.createdAt) }}</td>
           <td class="actions" data-label="">

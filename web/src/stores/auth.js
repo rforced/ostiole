@@ -90,16 +90,6 @@ export const useAuthStore = defineStore('auth', () => {
     return signedIn(res)
   }
 
-  /**
-   * The first step: whether the account signs in with a passkey alone on
-   * this host. The token and request options, or null.
-   * @returns {Promise<{token: string, publicKey: object} | null>}
-   */
-  async function start(username) {
-    const { passkey } = await api.auth.loginStart(username)
-    return passkey?.token ? { token: passkey.token, publicKey: passkey.publicKey } : null
-  }
-
   async function loginTOTP(code) {
     return signedIn(await api.auth.loginTOTP(pending.value.token, code))
   }
@@ -112,12 +102,18 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * Asks the browser for the passkey and the router to check it. An aborted
-   * signal stops it before anything is sent.
-   * @param {string} token
-   * @param {object} publicKey
+   * Signs in with a passkey and no password: the router's request names no
+   * account, and the passkey the browser gives names it. An aborted signal
+   * stops it before the passkey is sent.
    * @param {AbortSignal} [signal]
    */
+  async function loginPasskeyAlone(signal) {
+    const { token, publicKey } = await api.auth.loginStart()
+    signal?.throwIfAborted()
+    return loginWithPasskey(token, publicKey, signal)
+  }
+
+  /** Asks the browser for the passkey and the router to check it. */
   async function loginWithPasskey(token, publicKey, signal) {
     const credential = await webauthn.get(publicKey, { signal })
     signal?.throwIfAborted()
@@ -173,11 +169,10 @@ export const useAuthStore = defineStore('auth', () => {
     isOperator,
     readOnly,
     bootstrap,
-    start,
     login,
     loginTOTP,
     loginPasskey,
-    loginWithPasskey,
+    loginPasskeyAlone,
     cancelPending,
     setup,
     logout,

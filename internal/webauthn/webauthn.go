@@ -103,7 +103,7 @@ func CreationOptions(rp RelyingParty, userID []byte, username string, exclude []
 		},
 		"timeout":                timeoutMillis,
 		"attestation":            "none",
-		"authenticatorSelection": map[string]any{"residentKey": "preferred", "userVerification": "preferred"},
+		"authenticatorSelection": map[string]any{"residentKey": "required", "requireResidentKey": true, "userVerification": "preferred"},
 		"excludeCredentials":     descriptors(exclude),
 	}
 }

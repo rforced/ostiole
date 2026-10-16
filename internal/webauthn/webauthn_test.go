@@ -361,7 +361,11 @@ func TestOptionsAreReadyForABrowser(t *testing.T) {
 	if !strings.Contains(create, `"excludeCredentials":[]`) {
 		t.Errorf("no passkeys to exclude must be an empty list, not null: %s", create)
 	}
-	for _, want := range []string{`"challenge":"AQID"`, `"alg":-7`, `"alg":-8`, `"alg":-257`, `"attestation":"none"`, `"id":"router.example"`} {
+	for _, want := range []string{
+		`"challenge":"AQID"`, `"alg":-7`, `"alg":-8`, `"alg":-257`, `"attestation":"none"`, `"id":"router.example"`,
+		// A passkey that signs in on its own has to be one the device can find.
+		`"residentKey":"required"`, `"requireResidentKey":true`,
+	} {
 		if !strings.Contains(create, want) {
 			t.Errorf("creation options lack %s: %s", want, create)
 		}

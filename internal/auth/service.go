@@ -59,8 +59,6 @@ type User struct {
 	ID       string    `json:"id,omitempty"`
 	TOTP     *TOTP     `json:"totp,omitempty"`
 	Passkeys []Passkey `json:"passkeys,omitempty"`
-	// PasskeyLogin lets a passkey sign in without the password.
-	PasskeyLogin bool `json:"passkeyLogin,omitempty"`
 }
 
 // RoleOf returns the account's role, defaulting to administrator for an

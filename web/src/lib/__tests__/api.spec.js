@@ -94,6 +94,7 @@ describe('api', () => {
   it('sends the MFA calls where the router expects them', async () => {
     const fetch = mockFetch(200, {})
     const cases = [
+      [() => api.auth.loginStart(), 'POST', '/auth/login/start'],
       [
         () => api.auth.loginTOTP('tok', '123456'),
         'POST',

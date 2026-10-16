@@ -15,7 +15,6 @@ vi.mock('@/lib/api', () => ({
       mfa: vi.fn(),
       removePasskey: vi.fn(),
       renamePasskey: vi.fn(),
-      setPasskeyLogin: vi.fn(),
       mfaClear: vi.fn(),
       me: vi.fn(),
       totpStart: vi.fn(),
@@ -44,7 +43,6 @@ const passkey = (id, name) => ({
 const mfa = (over = {}) => ({
   totp: APP,
   passkeys: [],
-  passkeyLogin: false,
   rpId: 'edge.example',
   ...over,
 })
@@ -67,7 +65,6 @@ const group = (wrapper, name) =>
   wrapper.findAll('fieldset').find((f) => f.get('legend').text() === name)
 const badge = (wrapper) => wrapper.get('.badge').text()
 const intro = (wrapper) => wrapper.get('h2 + p').text()
-const toggle = (wrapper) => wrapper.get('#passkey-login')
 const dialog = (wrapper) => wrapper.find('[role="dialog"]')
 
 describe('MfaCard', () => {
@@ -83,15 +80,13 @@ describe('MfaCard', () => {
     expect(disabled(button(keys, 'Add passkey'))).toBe(true)
     expect(keys.text()).toContain('Set up an authenticator app first.')
     expect(keys.text()).toContain('No passkeys.')
-    expect(toggle(wrapper).attributes('disabled')).toBeDefined()
-    expect(keys.text()).toContain('Add a passkey first.')
   })
 
   it('shows when the app was set up and last used, with Replace and Remove', async () => {
     const wrapper = await open(mfa())
     expect(badge(wrapper)).toBe('on')
     expect(intro(wrapper)).toBe(
-      'Sign-in asks for a code from your authenticator app, or a passkey, after your password.',
+      'Sign-in asks for a code from your authenticator app after your password.',
     )
     const app = group(wrapper, 'Authenticator app')
     expect(app.text()).toContain('Set up')
@@ -143,6 +138,10 @@ describe('MfaCard', () => {
 
   it('lists passkeys with the host name they were made for', async () => {
     const wrapper = await open(mfa({ passkeys: [passkey('a1', 'Laptop')] }))
+    expect(intro(wrapper)).toBe(
+      'Sign-in takes a passkey on its own, or your password and then a code from your authenticator app or a passkey.',
+    )
+    expect(wrapper.find('input[type="checkbox"]').exists()).toBe(false)
     const cells = wrapper.get('tbody tr').findAll('td')
     expect(cells[0].text()).toBe('Laptop')
     expect(cells[1].text()).toBe('edge.example')
@@ -228,58 +227,6 @@ describe('MfaCard', () => {
 
     expect(wrapper.get('[role="alert"]').text()).toBe('Password is wrong.')
     expect(badge(wrapper)).toBe('on')
-  })
-
-  it('turns passkey sign-in on through the password dialog', async () => {
-    const wrapper = await open(mfa({ passkeys: [passkey('a1', 'Laptop')] }))
-    expect(toggle(wrapper).attributes('disabled')).toBeUndefined()
-    await toggle(wrapper).setValue(true)
-    expect(dialog(wrapper).get('h2').text()).toBe('Turn on passkey sign-in')
-    await wrapper.get('#passkey-login-password').setValue('pw pw pw pw pw')
-    const on = mfa({ passkeys: [passkey('a1', 'Laptop')], passkeyLogin: true })
-    api.auth.setPasskeyLogin.mockResolvedValue(on)
-    api.auth.mfa.mockResolvedValue(on)
-
-    await wrapper.get('#passkey-login-form').trigger('submit')
-    await flushPromises()
-
-    expect(api.auth.setPasskeyLogin).toHaveBeenCalledWith(true, 'pw pw pw pw pw')
-    expect(toggle(wrapper).element.checked).toBe(true)
-    expect(intro(wrapper)).toBe(
-      'Sign-in asks for a code from your authenticator app after your password; a passkey signs in on its own.',
-    )
-  })
-
-  it('says the password is wrong and leaves the switch off', async () => {
-    const wrapper = await open(mfa({ passkeys: [passkey('a1', 'Laptop')] }))
-    await toggle(wrapper).setValue(true)
-    await wrapper.get('#passkey-login-password').setValue('nope')
-    api.auth.setPasskeyLogin.mockRejectedValue(
-      Object.assign(new ApiError('password is wrong'), { status: 401 }),
-    )
-
-    await wrapper.get('#passkey-login-form').trigger('submit')
-    await flushPromises()
-    expect(wrapper.get('[role="alert"]').text()).toBe('Password is wrong.')
-
-    await button(dialog(wrapper), 'Cancel').trigger('click')
-    await flushPromises()
-    expect(toggle(wrapper).element.checked).toBe(false)
-  })
-
-  it('turns passkey sign-in off without asking', async () => {
-    const wrapper = await open(mfa({ passkeys: [passkey('a1', 'Laptop')], passkeyLogin: true }))
-    expect(toggle(wrapper).element.checked).toBe(true)
-    const off = mfa({ passkeys: [passkey('a1', 'Laptop')] })
-    api.auth.setPasskeyLogin.mockResolvedValue(off)
-    api.auth.mfa.mockResolvedValue(off)
-
-    await toggle(wrapper).setValue(false)
-    await flushPromises()
-
-    expect(api.auth.setPasskeyLogin).toHaveBeenCalledWith(false)
-    expect(dialog(wrapper).exists()).toBe(false)
-    expect(toggle(wrapper).element.checked).toBe(false)
   })
 
   it('works the same for a viewer, whose own sign-in is theirs to change', async () => {

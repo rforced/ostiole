@@ -37,9 +37,8 @@ func newMFACmd(g *globals) *cobra.Command {
 			fmt.Fprintln(out)
 		}
 		for _, u := range accounts {
-			app, passkeys, passkeyLogin := svc.MFAOf(u.Username)
-			fmt.Fprintf(out, "%s  totp: %s  passkeys: %d  passkey sign-in: %s\n",
-				u.Username, yesNo(app != nil), len(passkeys), yesNo(passkeyLogin))
+			app, passkeys := svc.MFAOf(u.Username)
+			fmt.Fprintf(out, "%s  totp: %s  passkeys: %d\n", u.Username, yesNo(app != nil), len(passkeys))
 		}
 		return nil
 	}
@@ -49,10 +48,9 @@ func newMFACmd(g *globals) *cobra.Command {
 		Short: "Bypass multi-factor authentication at sign-in, or take it off an account",
 		Long: `Accounts can be set to ask for a code from an authenticator app, or a
 passkey, after the password. These commands are the way back in when both
-are lost. A bypass lets every sign-in skip MFA for a while;
-a reset takes an account's authenticator app and passkeys away and turns
-passkey sign-in off. Sessions
-that are already open and API tokens are not affected.
+are lost. A bypass lets every sign-in skip MFA for a while; a reset takes an
+account's authenticator app and passkeys away. Sessions that are already
+open and API tokens are not affected.
 
 With no subcommand it shows the status.`,
 		Args: cobra.NoArgs,
@@ -112,9 +110,9 @@ otherwise, and 24 hours at most. --end stops a bypass early.`,
 	reset := &cobra.Command{
 		Use:   "reset <account>",
 		Short: "Remove the authenticator app and passkeys from an account",
-		Long: `Removes the account's authenticator app and every passkey and turns passkey
-sign-in off, so it signs in with its password alone until it sets them up
-again. An account without MFA is refused.`,
+		Long: `Removes the account's authenticator app and every passkey, so it signs in
+with its password alone until it sets them up again. An account without MFA
+is refused.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			svc, err := auth.NewService(g.configDir)

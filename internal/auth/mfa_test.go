@@ -58,8 +58,8 @@ func TestTOTPCodesWorkOnce(t *testing.T) {
 	if secret, ok := s.TOTPSecret("admin"); !ok || secret != testSecret {
 		t.Errorf("TOTPSecret = %q, %v", secret, ok)
 	}
-	if totp, keys, alone := s.MFAOf("admin"); totp == nil || totp.Secret != "" || !totp.EnabledAt.Equal(*now) || len(keys) != 0 || alone {
-		t.Errorf("MFAOf = %+v, %v, %v", totp, keys, alone)
+	if totp, keys := s.MFAOf("admin"); totp == nil || totp.Secret != "" || !totp.EnabledAt.Equal(*now) || len(keys) != 0 {
+		t.Errorf("MFAOf = %+v, %v", totp, keys)
 	}
 
 	if err := s.UseTOTPStep("admin", 100); err != nil {
@@ -73,7 +73,7 @@ func TestTOTPCodesWorkOnce(t *testing.T) {
 	if err := s.UseTOTPStep("admin", 101); err != nil {
 		t.Errorf("the next step: %v", err)
 	}
-	if totp, _, _ := s.MFAOf("admin"); totp == nil || totp.LastStep != 101 {
+	if totp, _ := s.MFAOf("admin"); totp == nil || totp.LastStep != 101 {
 		t.Errorf("MFAOf after step 101 = %+v", totp)
 	}
 	if err := s.UseTOTPStep("watcher", 1); !errors.Is(err, ErrNoMFA) {
@@ -169,7 +169,7 @@ func TestPasskeysAreAddedListedUsedAndRemoved(t *testing.T) {
 		t.Errorf("passkey for an unknown account: %v, want ErrNoSuchUser", err)
 	}
 
-	totp, listed, _ := s.MFAOf("admin")
+	totp, listed := s.MFAOf("admin")
 	if totp == nil || len(listed) != 2 || listed[0].Name != "desk" || listed[1].Name != "phone" {
 		t.Fatalf("MFAOf = %+v, %+v", totp, listed)
 	}
@@ -217,7 +217,7 @@ func TestPasskeysAreAddedListedUsedAndRemoved(t *testing.T) {
 	if err := s.RemovePasskey("admin", desk.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, left, _ := s.MFAOf("admin"); len(left) != 1 || left[0].ID != phone.ID {
+	if _, left := s.MFAOf("admin"); len(left) != 1 || left[0].ID != phone.ID {
 		t.Errorf("after removing the desk key: %+v", left)
 	}
 	if err := s.RemovePasskey("admin", desk.ID); !errors.Is(err, ErrNoSuchPasskey) {
@@ -226,7 +226,7 @@ func TestPasskeysAreAddedListedUsedAndRemoved(t *testing.T) {
 	if err := s.RemovePasskey("admin", phone.ID); err != nil {
 		t.Fatal(err)
 	}
-	if totp, left, _ := s.MFAOf("admin"); totp == nil || len(left) != 0 {
+	if totp, left := s.MFAOf("admin"); totp == nil || len(left) != 0 {
 		t.Errorf("with every passkey gone: %v, %+v", totp, left)
 	}
 }
@@ -238,9 +238,6 @@ func TestClearingMFA(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := s.AddPasskey("admin", testPasskey("desk")); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.SetPasskeyLogin("admin", true); err != nil {
 		t.Fatal(err)
 	}
 	handle, err := s.UserID("admin")
@@ -263,9 +260,6 @@ func TestClearingMFA(t *testing.T) {
 	}
 	if keys := s.Passkeys("admin"); len(keys) != 0 {
 		t.Errorf("passkeys survived: %+v", keys)
-	}
-	if _, _, alone := s.MFAOf("admin"); alone {
-		t.Error("passkey sign-in stayed on")
 	}
 	if raw, err := os.ReadFile(filepath.Join(s.Dir(), UsersFile)); err != nil || strings.Contains(string(raw), testSecret) {
 		t.Errorf("the secret is still on disk (read error %v)", err)
@@ -888,112 +882,179 @@ func TestRenamingAPasskey(t *testing.T) {
 	}
 }
 
-func TestPasskeySignInSwitch(t *testing.T) {
+// A sign-in that named no account learns it from the passkey, so a passkey
+// has to lead back to its account, under any name the account takes.
+func TestThePasskeyNamesItsAccount(t *testing.T) {
 	t.Parallel()
-	s, now := withAccounts(t, "admin")
-	if err := s.SetPasskeyLogin("admin", true); !errors.Is(err, ErrNoPasskeys) {
-		t.Fatalf("on with no passkey: %v, want ErrNoPasskeys", err)
-	}
-	if err := s.SetPasskeyLogin("admin", false); err != nil {
-		t.Errorf("off when off: %v", err)
-	}
-	if err := s.SetPasskeyLogin("ghost", false); !errors.Is(err, ErrNoSuchUser) {
-		t.Errorf("an unknown account: %v, want ErrNoSuchUser", err)
-	}
-	if err := s.EnableTOTP("admin", testSecret, *now); err != nil {
-		t.Fatal(err)
-	}
-	desk, phone := testPasskey("desk"), testPasskey("phone")
-	for _, k := range []Passkey{desk, phone} {
-		if err := s.AddPasskey("admin", k); err != nil {
+	s, now := withAccounts(t, "admin", "watcher")
+	for _, name := range []string{"admin", "watcher"} {
+		if err := s.EnableTOTP(name, testSecret, *now); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := s.SetPasskeyLogin("admin", true); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, alone := s.MFAOf("admin"); !alone {
-		t.Error("MFAOf says the switch is off")
-	}
-	if u, _ := s.Account("admin"); !u.PasskeyLogin {
-		t.Error("Account says the switch is off")
-	}
-	restarted, err := NewService(s.Dir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, _, alone := restarted.MFAOf("admin"); !alone {
-		t.Error("the switch did not survive a restart")
-	}
-
-	if err := s.RemovePasskey("admin", desk.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, alone := s.MFAOf("admin"); !alone {
-		t.Error("removing one of two passkeys turned the switch off")
-	}
-	if err := s.RemovePasskey("admin", phone.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, alone := s.MFAOf("admin"); alone {
-		t.Error("the switch stayed on with no passkey left")
-	}
-
+	desk, phone := testPasskey("desk"), testPasskey("phone")
+	phone.RPID = "elsewhere.example.test"
 	if err := s.AddPasskey("admin", desk); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetPasskeyLogin("admin", true); err != nil {
+	if err := s.AddPasskey("watcher", phone); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetPasskeyLogin("admin", false); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, alone := s.MFAOf("admin"); alone {
-		t.Error("the switch did not turn off")
-	}
-}
-
-// A sign-in opened by a name alone has not passed the password, and the
-// routes that finish one need to tell.
-func TestPasswordlessSignIns(t *testing.T) {
-	t.Parallel()
-	s, _ := withAccounts(t, "admin")
-	token := s.StartPasskeyLogin("admin")
-	if raw, err := base64.RawURLEncoding.DecodeString(token); err != nil || len(raw) != 32 {
-		t.Fatalf("token %q is not 32 bytes of base64url (%v)", token, err)
-	}
-	if user, checked, ok := s.PendingUser(token); !ok || user != "admin" || checked {
-		t.Errorf("PendingUser = %q, %v, %v; want admin, not checked", user, checked, ok)
-	}
-	sess, err := s.ResolvePendingFrom(token, Client{Address: "192.0.2.9", Agent: "Testbrowser/1.0"})
+	handle, err := s.UserID("admin")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sess.Address != "192.0.2.9" || sess.Agent != "Testbrowser/1.0" {
-		t.Errorf("the session keeps %q, %q", sess.Address, sess.Agent)
+
+	user, got, key, ok := s.PasskeyOwner(desk.ID)
+	if !ok || user != "admin" || got != handle || key.PublicKey != desk.PublicKey || key.RPID != desk.RPID {
+		t.Errorf("PasskeyOwner(desk) = %q, %q, %+v, %v", user, got, key, ok)
 	}
-	if _, err := s.ResolvePendingFrom(token, Client{}); !errors.Is(err, ErrPendingGone) {
-		t.Errorf("resolving twice: %v, want ErrPendingGone", err)
+	key.Transports[0] = "changed"
+	if s.Passkeys("admin")[0].Transports[0] != "internal" {
+		t.Error("editing what PasskeyOwner handed out changed the account")
+	}
+	if user, _, _, ok := s.PasskeyOwner(phone.ID); !ok || user != "watcher" {
+		t.Errorf("PasskeyOwner(phone) = %q, %v", user, ok)
+	}
+	if _, _, _, ok := s.PasskeyOwner("no-such"); ok {
+		t.Error("an unknown passkey has an owner")
+	}
+
+	if err := s.Rename("admin", "keeper"); err != nil {
+		t.Fatal(err)
+	}
+	if user, got, _, ok := s.PasskeyOwner(desk.ID); !ok || user != "keeper" || got != handle {
+		t.Errorf("after a rename, PasskeyOwner(desk) = %q, %q, %v", user, got, ok)
+	}
+
+	if !s.PasskeysOn(desk.RPID) || !s.PasskeysOn(phone.RPID) {
+		t.Error("a host name with a passkey has none")
+	}
+	if s.PasskeysOn("other.example.test") || s.PasskeysOn("") {
+		t.Error("a host name with no passkey has one")
+	}
+	if err := s.ClearMFA("keeper"); err != nil {
+		t.Fatal(err)
+	}
+	if s.PasskeysOn(desk.RPID) {
+		t.Error("the host name kept a passkey its account cleared")
 	}
 }
 
-// Anyone can open a passwordless sign-in with a name, so how many are held
-// has a ceiling, and reaching it costs no sign-in after the password.
+// A sign-in with a passkey alone names no account until the passkey answers,
+// and has not passed the password: the routes that finish one need to tell.
+func TestPasswordlessSignIns(t *testing.T) {
+	t.Parallel()
+	s, _ := withAccounts(t, "admin")
+	token := s.StartPasskeyLogin("192.0.2.9")
+	if raw, err := base64.RawURLEncoding.DecodeString(token); err != nil || len(raw) != 32 {
+		t.Fatalf("token %q is not 32 bytes of base64url (%v)", token, err)
+	}
+	if user, checked, ok := s.PendingUser(token); !ok || user != "" || checked {
+		t.Errorf("PendingUser = %q, %v, %v; want no name, not checked", user, checked, ok)
+	}
+
+	// Neither kind of sign-in finishes as the other.
+	afterPassword := s.PendingLogin("admin")
+	if _, err := s.ResolvePendingFrom(token, Client{}); !errors.Is(err, ErrPendingGone) {
+		t.Errorf("resolving it as a step after the password: %v, want ErrPendingGone", err)
+	}
+	if _, err := s.ResolvePasskeyFrom(afterPassword, "admin", Client{}); !errors.Is(err, ErrPendingGone) {
+		t.Errorf("resolving a step after the password as a passkey alone: %v, want ErrPendingGone", err)
+	}
+	if _, _, ok := s.PendingUser(afterPassword); !ok {
+		t.Error("resolving it as the wrong kind ended the sign-in")
+	}
+
+	sess, err := s.ResolvePasskeyFrom(token, "admin", Client{Address: "192.0.2.9", Agent: "Testbrowser/1.0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sess.Username != "admin" || sess.Address != "192.0.2.9" || sess.Agent != "Testbrowser/1.0" {
+		t.Errorf("the session is %q from %q, %q", sess.Username, sess.Address, sess.Agent)
+	}
+	if _, err := s.ResolvePasskeyFrom(token, "admin", Client{}); !errors.Is(err, ErrPendingGone) {
+		t.Errorf("resolving twice: %v, want ErrPendingGone", err)
+	}
+	if _, err := s.ResolvePasskeyFrom(s.StartPasskeyLogin("192.0.2.9"), "ghost", Client{}); !errors.Is(err, ErrNoSuchUser) {
+		t.Errorf("resolving for an account that is gone: %v, want ErrNoSuchUser", err)
+	}
+}
+
+// A passkey alone gets one try a sign-in, its challenge being spent either
+// way. The failure counts against the address and ends no other sign-in.
+func TestAPasswordlessSignInEndsAtItsFirstFailure(t *testing.T) {
+	t.Parallel()
+	s, _ := withAccounts(t, "admin")
+	const addr = "192.0.2.7"
+	failed, beside, elsewhere := s.StartPasskeyLogin(addr), s.StartPasskeyLogin(addr), s.StartPasskeyLogin("192.0.2.8")
+	afterPassword := s.PendingLogin("admin")
+
+	s.FailPending(failed, addr)
+	if _, _, ok := s.PendingUser(failed); ok {
+		t.Error("the sign-in outlived its failure")
+	}
+	for range MaxFailures - 1 {
+		s.FailPending(s.StartPasskeyLogin(addr), addr)
+	}
+	if !s.Blocked(addr) {
+		t.Error("failed passkeys did not shut the address out")
+	}
+	for name, token := range map[string]string{"one beside it": beside, "another address's": elsewhere, "one past the password": afterPassword} {
+		if _, _, ok := s.PendingUser(token); !ok {
+			t.Errorf("%s sign-in ended with it", name)
+		}
+	}
+}
+
+// Anyone can open a passwordless sign-in, so an address holds a few at most,
+// and reaching that costs other addresses nothing.
+func TestPasswordlessSignInsAreCappedForAnAddress(t *testing.T) {
+	t.Parallel()
+	s, now := withAccounts(t, "admin")
+	const addr = "2001:db8:0:1::1"
+	elsewhere := s.StartPasskeyLogin("192.0.2.1")
+	first := s.StartPasskeyLogin(addr)
+	*now = now.Add(time.Second)
+	// One host picks its addresses from a /64.
+	second := s.StartPasskeyLogin("2001:db8:0:1::2")
+	*now = now.Add(time.Second)
+	for range maxPasswordlessFrom - 2 {
+		s.StartPasskeyLogin(addr)
+	}
+	if _, _, ok := s.PendingUser(first); !ok {
+		t.Fatal("a sign-in went before the address reached its ceiling")
+	}
+	s.StartPasskeyLogin(addr)
+	if _, _, ok := s.PendingUser(first); ok {
+		t.Error("the address's oldest sign-in outlived the ceiling")
+	}
+	if _, _, ok := s.PendingUser(second); !ok {
+		t.Error("more than the oldest went")
+	}
+	if _, _, ok := s.PendingUser(elsewhere); !ok {
+		t.Error("another address's sign-in went to make room")
+	}
+}
+
+// Many addresses together have a ceiling too, and reaching it costs no
+// sign-in after the password.
 func TestPasswordlessSignInsAreCapped(t *testing.T) {
 	t.Parallel()
 	s, now := withAccounts(t, "admin")
+	from := func(i int) string { return fmt.Sprintf("2001:db8:%x::1", i) }
 	afterPassword := s.PendingLogin("admin")
-	first := s.StartPasskeyLogin("admin")
+	first := s.StartPasskeyLogin(from(0))
 	*now = now.Add(time.Second)
-	second := s.StartPasskeyLogin("admin")
+	second := s.StartPasskeyLogin(from(1))
 	*now = now.Add(time.Second)
-	for range maxPasswordless - 2 {
-		s.StartPasskeyLogin("admin")
+	for i := range maxPasswordless - 2 {
+		s.StartPasskeyLogin(from(i + 2))
 	}
 	if _, _, ok := s.PendingUser(first); !ok {
 		t.Fatal("a sign-in went before the ceiling was reached")
 	}
-	s.StartPasskeyLogin("admin")
+	s.StartPasskeyLogin(from(maxPasswordless))
 	if _, _, ok := s.PendingUser(first); ok {
 		t.Error("the oldest sign-in outlived the ceiling")
 	}

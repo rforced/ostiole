@@ -47,7 +47,6 @@ var (
 	ErrNoMFA         = errors.New("this account has no multi-factor authentication")
 	ErrPasskeyExists = errors.New("that passkey is already registered")
 	ErrPendingGone   = errors.New("that sign-in timed out; enter the password again")
-	ErrNoPasskeys    = errors.New("add a passkey first")
 )
 
 var (
@@ -58,14 +57,16 @@ var (
 // How long a sign-in waits for its second step, how many wrong codes it
 // allows, and how long a challenge is kept. The secret behind a QR code is
 // kept under a "totp:" token and outlasts a challenge: installing an
-// authenticator app takes minutes.
+// authenticator app takes minutes. Sign-ins with a passkey alone are held
+// up to 8 for an address and 1024 in all.
 const (
-	pendingLife     = 5 * time.Minute
-	pendingFailures = 5
-	challengeLife   = 2 * time.Minute
-	totpSetupLife   = 10 * time.Minute
-	totpSetupPrefix = "totp:"
-	maxPasswordless = 1024
+	pendingLife         = 5 * time.Minute
+	pendingFailures     = 5
+	challengeLife       = 2 * time.Minute
+	totpSetupLife       = 10 * time.Minute
+	totpSetupPrefix     = "totp:"
+	maxPasswordless     = 1024
+	maxPasswordlessFrom = 8
 )
 
 // mfa is what the second step of a sign-in keeps in memory: the
@@ -81,9 +82,10 @@ type pendingSignIn struct {
 	username string
 	expires  time.Time
 	failures int
-	// passwordless is a sign-in a passkey finishes on its own, opened by
-	// a name and no password.
+	// passwordless is a sign-in a passkey finishes on its own, opened with
+	// no name and no password from the address in from.
 	passwordless bool
+	from         string
 }
 
 type heldChallenge struct {
@@ -185,14 +187,14 @@ func (s *Service) HasMFA(username string) bool {
 }
 
 // MFAOf lists what an account has, never the secrets: its authenticator
-// app, its passkeys and whether a passkey signs in on its own.
-func (s *Service) MFAOf(username string) (totp *TOTP, passkeys []Passkey, passkeyLogin bool) {
+// app and its passkeys.
+func (s *Service) MFAOf(username string) (totp *TOTP, passkeys []Passkey) {
 	u, ok := s.lookup(username)
 	if !ok {
-		return nil, nil, false
+		return nil, nil
 	}
 	u = u.withoutSecrets()
-	return u.TOTP, u.Passkeys, u.PasskeyLogin
+	return u.TOTP, u.Passkeys
 }
 
 // UserID returns the account's WebAuthn user handle, making and saving
@@ -287,8 +289,7 @@ func (s *Service) AddPasskey(username string, p Passkey) error {
 	})
 }
 
-// RemovePasskey removes one of the account's passkeys. Passkey sign-in
-// turns off with the last one.
+// RemovePasskey removes one of the account's passkeys.
 func (s *Service) RemovePasskey(username, id string) error {
 	return s.edit(username, func(u *User) error {
 		i := slices.IndexFunc(u.Passkeys, func(k Passkey) bool { return k.ID == id })
@@ -296,9 +297,6 @@ func (s *Service) RemovePasskey(username, id string) error {
 			return ErrNoSuchPasskey
 		}
 		u.Passkeys = slices.Delete(slices.Clone(u.Passkeys), i, i+1)
-		if len(u.Passkeys) == 0 {
-			u.PasskeyLogin = false
-		}
 		u.UpdatedAt = s.now()
 		return nil
 	})
@@ -321,26 +319,44 @@ func (s *Service) RenamePasskey(username, id, name string) error {
 	})
 }
 
-// SetPasskeyLogin turns on or off signing in with a passkey alone. Turning
-// it on needs a passkey.
-func (s *Service) SetPasskeyLogin(username string, on bool) error {
-	return s.edit(username, func(u *User) error {
-		if on && len(u.Passkeys) == 0 {
-			return ErrNoPasskeys
-		}
-		if u.PasskeyLogin == on {
-			return errUnchanged
-		}
-		u.PasskeyLogin, u.UpdatedAt = on, s.now()
-		return nil
-	})
-}
-
 // Passkeys lists the account's passkeys with their public keys, for
 // checking a sign-in.
 func (s *Service) Passkeys(username string) []Passkey {
 	u, _ := s.lookup(username)
 	return copyPasskeys(u.Passkeys)
+}
+
+// PasskeyOwner finds the account holding the passkey with this credential
+// id, which no two accounts share: a sign-in that named no account learns it
+// from the passkey. It returns the account's name and WebAuthn user handle,
+// and the passkey with its public key.
+func (s *Service) PasskeyOwner(id string) (username, handle string, key Passkey, ok bool) {
+	s.refresh()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for name, u := range s.users {
+		if i := slices.IndexFunc(u.Passkeys, func(k Passkey) bool { return k.ID == id }); i >= 0 {
+			return name, u.ID, copyPasskeys(u.Passkeys[i : i+1])[0], true
+		}
+	}
+	return "", "", Passkey{}, false
+}
+
+// PasskeysOn reports whether any account has a passkey made on the host
+// name.
+func (s *Service) PasskeysOn(rpID string) bool {
+	if rpID == "" {
+		return false
+	}
+	s.refresh()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, u := range s.users {
+		if slices.ContainsFunc(u.Passkeys, func(k Passkey) bool { return k.RPID == rpID }) {
+			return true
+		}
+	}
+	return false
 }
 
 // PasskeyUsed records a sign-in with a passkey: its new sign count and when.
@@ -357,15 +373,14 @@ func (s *Service) PasskeyUsed(username, id string, signCount uint32, at time.Tim
 	})
 }
 
-// ClearMFA removes the authenticator app and every passkey and turns
-// passkey sign-in off. Open sessions stay; an account with nothing to clear
-// is not an error.
+// ClearMFA removes the authenticator app and every passkey. Open sessions
+// stay; an account with nothing to clear is not an error.
 func (s *Service) ClearMFA(username string) error {
 	return s.edit(username, func(u *User) error {
-		if !hasMFA(*u) && !u.PasskeyLogin {
+		if !hasMFA(*u) {
 			return errUnchanged
 		}
-		u.TOTP, u.Passkeys, u.PasskeyLogin, u.UpdatedAt = nil, nil, false, s.now()
+		u.TOTP, u.Passkeys, u.UpdatedAt = nil, nil, s.now()
 		return nil
 	})
 }
@@ -374,38 +389,42 @@ func (s *Service) ClearMFA(username string) error {
 // right and returns its token (32 random bytes, base64url). It lasts 5
 // minutes.
 func (s *Service) PendingLogin(username string) string {
-	return s.openPending(username, false)
+	return s.openPending(pendingSignIn{username: username})
 }
 
 // StartPasskeyLogin opens a pending sign-in that a passkey finishes without
-// the password. At most 1024 are held; the oldest goes to make room.
-func (s *Service) StartPasskeyLogin(username string) string {
-	return s.openPending(username, true)
+// the password, naming no account: the passkey tells whose it is. When the
+// address or all addresses hold as many as they may, their oldest goes to
+// make room.
+func (s *Service) StartPasskeyLogin(remote string) string {
+	return s.openPending(pendingSignIn{passwordless: true, from: limitKey(remote)})
 }
 
-func (s *Service) openPending(username string, passwordless bool) string {
+func (s *Service) openPending(p pendingSignIn) string {
 	token, err := randomSecret()
 	if err != nil {
 		return ""
 	}
 	now := s.now()
+	p.expires = now.Add(pendingLife)
 	f := s.mfa
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.sweep(now)
-	if passwordless {
-		f.evictPasswordless(maxPasswordless - 1)
+	if p.passwordless {
+		f.evictPasswordless(maxPasswordlessFrom-1, func(q *pendingSignIn) bool { return q.from == p.from })
+		f.evictPasswordless(maxPasswordless-1, func(*pendingSignIn) bool { return true })
 	}
-	f.pending[token] = &pendingSignIn{username: username, expires: now.Add(pendingLife), passwordless: passwordless}
+	f.pending[token] = &p
 	return token
 }
 
-// evictPasswordless drops the oldest passwordless sign-ins until at most
-// keep are left; called with the lock held.
-func (f *mfa) evictPasswordless(keep int) {
+// evictPasswordless drops the oldest passwordless sign-ins match picks until
+// at most keep of them are left; called with the lock held.
+func (f *mfa) evictPasswordless(keep int, match func(*pendingSignIn) bool) {
 	var held []string
 	for token, p := range f.pending {
-		if p.passwordless {
+		if p.passwordless && match(p) {
 			held = append(held, token)
 		}
 	}
@@ -438,19 +457,27 @@ func (s *Service) ResolvePending(token, remote string) (*Session, error) {
 	return s.ResolvePendingFrom(token, Client{Address: remote})
 }
 
-// ResolvePendingFrom ends the pending sign-in with a session and forgives
-// the address its failures. The token works once.
+// ResolvePendingFrom ends a pending sign-in that got past the password with
+// a session and forgives the address its failures. The token works once.
 func (s *Service) ResolvePendingFrom(token string, from Client) (*Session, error) {
-	f := s.mfa
-	f.mu.Lock()
-	f.sweep(s.now())
-	p, ok := f.pending[token]
-	delete(f.pending, token)
-	f.mu.Unlock()
+	p, ok := s.mfa.take(token, false, s.now())
 	if !ok {
 		return nil, ErrPendingGone
 	}
-	sess, err := s.SignInFrom(p.username, from)
+	return s.resolve(p.username, from)
+}
+
+// ResolvePasskeyFrom ends a sign-in from StartPasskeyLogin as the account
+// whose passkey answered it, as ResolvePendingFrom does.
+func (s *Service) ResolvePasskeyFrom(token, username string, from Client) (*Session, error) {
+	if _, ok := s.mfa.take(token, true, s.now()); !ok {
+		return nil, ErrPendingGone
+	}
+	return s.resolve(username, from)
+}
+
+func (s *Service) resolve(username string, from Client) (*Session, error) {
+	sess, err := s.SignInFrom(username, from)
 	if err != nil {
 		return nil, err
 	}
@@ -458,11 +485,25 @@ func (s *Service) ResolvePendingFrom(token string, from Client) (*Session, error
 	return sess, nil
 }
 
+// take removes the live pending sign-in behind token and returns it, when it
+// is passwordless or not as asked.
+func (f *mfa) take(token string, passwordless bool, now time.Time) (*pendingSignIn, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sweep(now)
+	p, ok := f.pending[token]
+	if !ok || p.passwordless != passwordless {
+		return nil, false
+	}
+	delete(f.pending, token)
+	return p, true
+}
+
 // FailPending counts a failed MFA attempt against the remote
 // address like a bad password, and after 5 ends the pending sign-in. Once
 // the address is shut out the account's other pending sign-ins end too, so
 // a stolen password cannot be turned into many sign-ins, each with tries of
-// its own.
+// its own. A sign-in with a passkey alone ends at its first failure.
 func (s *Service) FailPending(token, remote string) {
 	s.limiter.failure(remote)
 	shut := s.limiter.blocked(remote)
@@ -476,6 +517,8 @@ func (s *Service) FailPending(token, remote string) {
 	}
 	p.failures++
 	switch {
+	case p.passwordless:
+		delete(f.pending, token)
 	case shut:
 		for other, q := range f.pending {
 			if q.username == p.username {

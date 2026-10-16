@@ -30,8 +30,8 @@ const AppDialogStub = {
   template: '<div v-if="open"><slot /><slot name="footer" /></div>',
 }
 
-const OFF = { totp: false, passkeys: 0, passkeyLogin: false }
-const APP = { totp: true, passkeys: 0, passkeyLogin: false }
+const OFF = { totp: false, passkeys: 0 }
+const APP = { totp: true, passkeys: 0 }
 
 const account = (username, role, mfa = OFF) => ({
   username,
@@ -150,14 +150,14 @@ describe('AccountsSection', () => {
     const wrapper = await open([
       account('admin', 'admin'),
       account('watcher', 'viewer', APP),
-      account('lone', 'viewer', { totp: true, passkeys: 1, passkeyLogin: false }),
-      account('keys', 'operator', { totp: true, passkeys: 3, passkeyLogin: true }),
+      account('lone', 'viewer', { totp: true, passkeys: 1 }),
+      account('keys', 'operator', { totp: true, passkeys: 3 }),
     ])
     expect(mfaCell(wrapper, 'admin').text()).toBe('Off')
     expect(mfaCell(wrapper, 'admin').get('span').classes()).toContain('text-ink-muted')
     expect(mfaCell(wrapper, 'watcher').text()).toBe('App')
     expect(mfaCell(wrapper, 'lone').text()).toBe('App, 1 passkey')
-    expect(mfaCell(wrapper, 'keys').text()).toBe('App, 3 passkeys Passkey sign-in on')
+    expect(mfaCell(wrapper, 'keys').text()).toBe('App, 3 passkeys')
   })
 
   it("clears another account's MFA once the confirm says yes", async () => {

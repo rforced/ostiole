@@ -1,4 +1,5 @@
 <script setup>
+import { FingerprintPattern } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -16,9 +17,13 @@ const route = useRoute()
 
 /** The router's hostname: '' when it has none, null until the server says. */
 const hostname = ref(null)
+/** An account has a passkey made on this host name. */
+const passkeysHere = ref(false)
 onMounted(async () => {
   try {
-    hostname.value = (await api.auth.loginPage()).hostname ?? ''
+    const page = await api.auth.loginPage()
+    hostname.value = page.hostname ?? ''
+    passkeysHere.value = page.passkeys === true
   } catch {
     hostname.value = ''
   }
@@ -31,32 +36,37 @@ const password = ref('')
 const code = ref('')
 const error = ref('')
 const busy = ref(false)
+/** A code being checked: the password's busy is still set when its step opens. */
+const checking = ref(false)
 /** Waiting on the browser's passkey prompt. */
 const prompting = ref(false)
 /** The username was given and the password is asked. */
 const entered = ref(false)
-/** What the first step said about a passkey alone: {token, publicKey} or null. */
-const offer = ref(null)
 const usernameEl = ref(null)
 const passwordEl = ref(null)
 const codeEl = ref(null)
+const passkeyEl = ref(null)
 /** Closes a passkey prompt still open. */
 let prompt = null
 
 const step = computed(() => (auth.pending ? 3 : entered.value ? 2 : 1))
+/** A passkey can sign in here on its own, before any name is typed. */
+const passkeyAlone = computed(() => passkeysHere.value && webauthn.available())
+/** The account's passkey can be the step after the password. */
 const passkeys = computed(() => Boolean(auth.pending?.passkeys) && webauthn.available())
-const passkeyAlone = computed(() => offer.value !== null && webauthn.available())
 
 /** A prompt the user closed or the page aborted: nothing to say. */
 const cancelled = (e) => e?.name === 'NotAllowedError' || e?.name === 'AbortError'
 
-// The step that opens takes the focus.
+// The step that opens takes the focus, which on the third is the passkey's
+// when there is one.
 watch(
   step,
   (s) => {
     if (s === 3) {
       code.value = ''
-      codeEl.value?.focus()
+      if (passkeys.value) passkeyEl.value?.$el.focus()
+      else codeEl.value?.focus()
     } else if (s === 2) passwordEl.value?.focus()
     else usernameEl.value?.focus()
   },
@@ -70,29 +80,17 @@ async function land() {
   await router.replace(/^\/(?![/\\])/.test(redirect) ? redirect : '/')
 }
 
-async function next() {
+function next() {
+  prompt?.abort()
   error.value = ''
-  const name = username.value.trim()
-  busy.value = true
-  try {
-    offer.value = await auth.start(name)
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 429) error.value = TOO_MANY
-    else error.value = e instanceof Error ? e.message : String(e)
-    return
-  } finally {
-    busy.value = false
-  }
-  username.value = name
+  username.value = username.value.trim()
   entered.value = true
-  if (passkeyAlone.value) signInWithPasskey()
 }
 
 function change() {
   prompt?.abort()
   error.value = ''
   password.value = ''
-  offer.value = null
   entered.value = false
 }
 
@@ -113,7 +111,7 @@ async function submit() {
   }
 }
 
-/** Signs in with the passkey the first step offered, no password. */
+/** Signs in with a passkey and no password, as the account it belongs to. */
 async function signInWithPasskey() {
   prompt?.abort()
   const ctl = new AbortController()
@@ -121,13 +119,11 @@ async function signInWithPasskey() {
   error.value = ''
   prompting.value = true
   try {
-    await auth.loginWithPasskey(offer.value.token, offer.value.publicKey, ctl.signal)
+    await auth.loginPasskeyAlone(ctl.signal)
     await land()
   } catch (e) {
     if (ctl.signal.aborted || cancelled(e)) return
     error.value = passkeyError(e)
-    // The router spent that token; the next try needs a fresh one.
-    offer.value = await auth.start(username.value).catch(() => null)
   } finally {
     if (prompt === ctl) {
       prompt = null
@@ -136,13 +132,14 @@ async function signInWithPasskey() {
   }
 }
 
-/** Why a passkey alone did not sign in, with the password still there to type. */
+/** Why a passkey alone did not sign in. */
 function passkeyError(e) {
   if (!(e instanceof ApiError)) return e instanceof Error ? e.message : String(e)
   if (e.status === 429) return TOO_MANY
-  if (/does not sign in with a passkey/i.test(e.message))
-    return 'Passkey sign-in is off for this account. Enter your password.'
-  if (e.status === 401) return 'The passkey was refused. Enter your password.'
+  if (/no such passkey/i.test(e.message)) return 'That passkey is not registered here.'
+  if (/timed out/i.test(e.message)) return 'The passkey request timed out. Try again.'
+  if (/authentication required/i.test(e.message)) return 'That sign-in has ended. Try again.'
+  if (e.status === 401) return 'The passkey was refused.'
   return e.message
 }
 
@@ -159,7 +156,7 @@ function secondStepError(e) {
 
 async function submitCode() {
   error.value = ''
-  busy.value = true
+  checking.value = true
   try {
     await auth.loginTOTP(code.value.replace(/\s+/g, ''))
     await land()
@@ -168,7 +165,7 @@ async function submitCode() {
     codeEl.value?.focus()
     codeEl.value?.select()
   } finally {
-    busy.value = false
+    checking.value = false
   }
 }
 
@@ -213,13 +210,15 @@ function back() {
         />
       </FormField>
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
+      <ActionButton type="submit" kind="primary" class="w-full" label="Continue" />
       <ActionButton
-        type="submit"
-        kind="primary"
+        v-if="passkeyAlone"
         class="w-full"
-        label="Continue"
-        busy-label="Continuing…"
-        :busy="busy"
+        label="Sign in with a passkey"
+        busy-label="Waiting…"
+        :icon="FingerprintPattern"
+        :busy="prompting"
+        @click="signInWithPasskey"
       />
     </form>
     <form v-else-if="step === 2" class="space-y-4" @submit.prevent="submit">
@@ -241,27 +240,40 @@ function back() {
         />
       </FormField>
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
-      <div class="flex gap-2">
-        <ActionButton
-          type="submit"
-          kind="primary"
-          class="flex-1"
-          label="Sign in"
-          busy-label="Signing in…"
-          :busy="busy"
-        />
-        <ActionButton
-          v-if="passkeyAlone"
-          class="flex-1"
-          label="Use a passkey"
-          busy-label="Waiting…"
-          :busy="prompting"
-          :disabled="busy"
-          @click="signInWithPasskey"
-        />
-      </div>
+      <ActionButton
+        type="submit"
+        kind="primary"
+        class="w-full"
+        label="Sign in"
+        busy-label="Signing in…"
+        :busy="busy"
+      />
+      <ActionButton
+        v-if="passkeyAlone"
+        class="w-full"
+        label="Use a passkey"
+        busy-label="Waiting…"
+        :icon="FingerprintPattern"
+        :busy="prompting"
+        :disabled="busy"
+        @click="signInWithPasskey"
+      />
     </form>
     <form v-else class="space-y-4" @submit.prevent="submitCode">
+      <template v-if="passkeys">
+        <ActionButton
+          ref="passkeyEl"
+          kind="primary"
+          class="w-full"
+          label="Use a passkey"
+          busy-label="Waiting…"
+          :icon="FingerprintPattern"
+          :busy="prompting"
+          :disabled="checking"
+          @click="usePasskey"
+        />
+        <hr v-if="auth.pending.totp" class="border-line" />
+      </template>
       <FormField v-if="auth.pending.totp" id="code" label="Code from your authenticator app">
         <input
           id="code"
@@ -280,31 +292,17 @@ function back() {
       <ActionButton
         v-if="auth.pending.totp"
         type="submit"
-        kind="primary"
+        :kind="passkeys ? 'secondary' : 'primary'"
         class="w-full"
         label="Sign in"
         busy-label="Signing in…"
-        :busy="busy"
+        :busy="checking"
         :disabled="prompting"
       />
-      <div class="flex gap-2">
-        <button
-          type="button"
-          class="btn-secondary flex-1"
-          :disabled="busy || prompting"
-          @click="back"
-        >
+      <div class="text-center">
+        <button type="button" class="link-action" :disabled="checking || prompting" @click="back">
           Back
         </button>
-        <ActionButton
-          v-if="passkeys"
-          class="flex-1"
-          label="Use a passkey"
-          busy-label="Waiting…"
-          :busy="prompting"
-          :disabled="busy"
-          @click="usePasskey"
-        />
       </div>
     </form>
   </AuthCard>

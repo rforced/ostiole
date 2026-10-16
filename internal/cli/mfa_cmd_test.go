@@ -33,8 +33,8 @@ func mustMFA(t *testing.T, dir string, args ...string) string {
 	return out
 }
 
-// mfaAccounts makes alice, with an authenticator app, two passkeys and
-// passkey sign-in, bob with the app alone, and carol with neither.
+// mfaAccounts makes alice, with an authenticator app and two passkeys, bob
+// with the app alone, and carol with neither.
 func mfaAccounts(t *testing.T, dir string) {
 	t.Helper()
 	svc, err := auth.NewService(dir)
@@ -56,9 +56,6 @@ func mfaAccounts(t *testing.T, dir string) {
 		if err := svc.AddPasskey("alice", key); err != nil {
 			t.Fatal(err)
 		}
-	}
-	if err := svc.SetPasskeyLogin("alice", true); err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -158,9 +155,9 @@ func TestStatusShowsTheBypassAndEachAccount(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	mfaAccounts(t, dir)
-	accounts := "alice  totp: yes  passkeys: 2  passkey sign-in: yes\n" +
-		"bob  totp: yes  passkeys: 0  passkey sign-in: no\n" +
-		"carol  totp: no  passkeys: 0  passkey sign-in: no\n"
+	accounts := "alice  totp: yes  passkeys: 2\n" +
+		"bob  totp: yes  passkeys: 0\n" +
+		"carol  totp: no  passkeys: 0\n"
 
 	want := "MFA not bypassed\n\n" + accounts
 	for _, args := range [][]string{{"status"}, nil} {
@@ -190,8 +187,8 @@ func TestResetRemovesMFA(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if app, keys, on := svc.MFAOf("alice"); app != nil || len(keys) != 0 || on {
-		t.Errorf("alice still has totp %v, %d passkeys and passkey sign-in %v", app != nil, len(keys), on)
+	if app, keys := svc.MFAOf("alice"); app != nil || len(keys) != 0 {
+		t.Errorf("alice still has totp %v and %d passkeys", app != nil, len(keys))
 	}
 	if !svc.HasMFA("bob") {
 		t.Error("bob lost his MFA too")
