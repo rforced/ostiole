@@ -67,15 +67,17 @@ func (s *State) Snapshot() Snapshot {
 	return s.data
 }
 
-// Update applies a change and writes it out.
+// Update applies a change and writes it out. The write holds the lock, so
+// the disk never lags what Snapshot reports and a slower writer cannot
+// put an older snapshot over a newer one.
 func (s *State) Update(change func(*Snapshot)) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	change(&s.data)
 	if len(s.data.LastOutput) > maxOutput {
 		s.data.LastOutput = s.data.LastOutput[:maxOutput] + "\n… (truncated)"
 	}
 	raw, err := json.MarshalIndent(s.data, "", "  ")
-	s.mu.Unlock()
 	if err != nil || s.Dir == "" {
 		return
 	}
