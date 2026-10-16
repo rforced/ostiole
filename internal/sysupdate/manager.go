@@ -400,6 +400,31 @@ func (m *Manager) Reattach(ctx context.Context) {
 	}()
 }
 
+// RecheckReboot asks again whether the router wants a reboot when the last
+// answer said so. The daemon starting may follow the reboot it wanted, and
+// the answer on record would otherwise stand until the next check.
+func (m *Manager) RecheckReboot(ctx context.Context) {
+	if !m.Available() || !m.State.Snapshot().RebootRequired {
+		return
+	}
+	m.mu.Lock()
+	running := m.running
+	m.mu.Unlock()
+	if running {
+		// The re-check after the update answers it.
+		return
+	}
+	go func() {
+		defer panics.Recover(m.Log, "system update")
+		ctx, cancel := context.WithTimeout(ctx, CheckTimeout)
+		defer cancel()
+		need, why := m.Driver.RebootRequired(ctx, m.Run)
+		m.State.Update(func(s *Snapshot) {
+			s.RebootRequired, s.RebootReason = need, why
+		})
+	}()
+}
+
 // Reboot restarts the router. It is the one button on this page that is
 // worse to press by accident than to forget.
 func (m *Manager) Reboot(ctx context.Context) error {

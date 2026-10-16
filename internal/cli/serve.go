@@ -250,6 +250,7 @@ at your own.`,
 			// An update that upgraded Ostiole itself restarted this
 			// daemon; pick the transaction back up if it is still going.
 			packages.Reattach(ctx)
+			packages.RecheckReboot(ctx)
 			updater := newUpdater(cfg, g.updatesDir(), g.updateClient())
 			actions := &cron.Actions{
 				Config:            eng.Effective,

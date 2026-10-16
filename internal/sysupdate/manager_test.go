@@ -199,6 +199,35 @@ func TestManagerReattachesToARunningUpdate(t *testing.T) {
 	}
 }
 
+func TestTheRebootIsAskedAboutAgainAtStart(t *testing.T) {
+	dir := t.TempDir()
+	run := dnfRunner(t)
+	m := New(Options{PackageManager: "dnf", StateDir: dir, Run: run, Root: true, Log: discard()})
+	// Nothing on record wants a reboot, so nothing is asked.
+	m.RecheckReboot(t.Context())
+	if run.ranMatching("needs-restarting") {
+		t.Fatalf("asked with no reboot on record:\n%s", run.transcript())
+	}
+
+	if _, err := m.Check(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if !m.Status().RebootRequired {
+		t.Fatal("the check found no reboot wanted")
+	}
+	// The router rebooted, and the daemon starts again.
+	run.say("dnf --setopt=*.countme=0 needs-restarting -r", "No core libraries or services have been updated since boot-up.\nReboot should not be necessary.")
+	run.mu.Lock()
+	delete(run.code, "dnf --setopt=*.countme=0 needs-restarting -r")
+	run.mu.Unlock()
+	started := New(Options{PackageManager: "dnf", StateDir: dir, Run: run, Root: true, Log: discard()})
+	started.RecheckReboot(t.Context())
+	waitUntil(t, func() bool { return !started.Status().RebootRequired })
+	if st := NewState(dir).Snapshot(); st.RebootRequired || st.RebootReason != "" {
+		t.Errorf("state on disk still wants a reboot: %v %q", st.RebootRequired, st.RebootReason)
+	}
+}
+
 func TestDistroName(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "os-release")
