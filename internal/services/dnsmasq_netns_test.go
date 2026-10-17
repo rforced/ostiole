@@ -212,7 +212,7 @@ type dnsmasqRun struct {
 
 func (r dnsmasqRun) stop() {
 	_ = r.cmd.Process.Kill()
-	<-r.done
+	<-r.done //nolint:errcheck // killed
 }
 
 // startDnsmasq renders cfg into d's directory and runs dnsmasq on it until
