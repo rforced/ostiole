@@ -1260,6 +1260,22 @@ func findEvent(out *lockedBuffer, match func(wafevent.Event) bool) (wafevent.Eve
 	return wafevent.Event{}, false
 }
 
+// checkAttack checks an attack an exclusion set's test sends, with the set
+// at paranoia pl and CRS alone at level bare, no higher than pl. CRS alone
+// refuses it from level from up and never below, so a CRS update that
+// changes what it refuses fails here rather than leaving the attack
+// testing nothing; and where CRS alone refuses it, the set does too.
+// refused sends it, with the set or without, and says whether it was.
+func checkAttack(t *testing.T, pl, bare, from int, what string, refused func(set bool) bool) {
+	t.Helper()
+	switch alone := refused(false); {
+	case alone != (bare >= from):
+		t.Errorf("%s: refused %v by CRS alone at paranoia %d, which should refuse it from %d", what, alone, bare, from)
+	case alone && !refused(true):
+		t.Errorf("%s: let through with the set at paranoia %d, refused by CRS alone at %d", what, pl, bare)
+	}
+}
+
 // waitFor waits up to ten seconds for ok.
 func waitFor(t *testing.T, what string, ok func() bool) {
 	t.Helper()
