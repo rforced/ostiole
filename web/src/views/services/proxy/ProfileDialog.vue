@@ -16,7 +16,15 @@ const config = useConfigStore()
 const form = ref(blank())
 
 /** The application exclusion sets the sidecar carries. */
-const APPLICATIONS = ['wordpress', 'nextcloud', 'phpbb', 'xenforo', 'vaultwarden', 'jellyfin']
+const APPLICATIONS = [
+  'wordpress',
+  'nextcloud',
+  'phpbb',
+  'xenforo',
+  'vaultwarden',
+  'jellyfin',
+  'tendrils',
+]
 
 /** An empty number is the default, which its placeholder shows. */
 function blank() {

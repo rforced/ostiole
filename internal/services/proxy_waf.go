@@ -59,7 +59,7 @@ const cloudflareCookies = `^(?:__cf_bm|__cflb|__cfruid|__cfseq.*|__cfwaitingroom
 // The first rule ID Ostiole writes. CRS reserves 10000-99999 for local
 // rules, and everything below is a counter from here. Ostiole's own
 // exclusion sets take a thousand each from 20000: vaultwarden 20000-20999,
-// jellyfin 21000-21999.
+// jellyfin 21000-21999, tendrils 22000-22999.
 const wafRuleBase = 10000
 
 // wafDirectives is one site's rule configuration, as Coraza reads it.
