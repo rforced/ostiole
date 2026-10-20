@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/netip"
 	"slices"
 	"time"
 
@@ -90,6 +91,42 @@ func parseAddr(b []byte) (Addr, bool, error) {
 		return Addr{}, false, nil
 	}
 	return a, true, nil
+}
+
+// DeleteAddr takes an address off a device.
+func DeleteAddr(index int, p netip.Prefix) error {
+	return changeAddr(unix.RTM_DELADDR, 0, index, p, nil)
+}
+
+// changeAddr adds or deletes an address. life is the valid and preferred
+// lifetime in seconds, for an add that should expire; nil is forever.
+func changeAddr(typ, flags uint16, index int, p netip.Prefix, life *[2]uint32) error {
+	a := p.Addr().Unmap()
+	fam := unix.AF_INET6
+	if a.Is4() {
+		fam = unix.AF_INET
+	}
+	raw := a.AsSlice()
+	var e encoder
+	e.ifaddrmsg(fam, p.Bits(), index)
+	e.attr(unix.IFA_LOCAL, raw)
+	e.attr(unix.IFA_ADDRESS, raw)
+	if typ == unix.RTM_NEWADDR && a.Is4() && p.Bits() < 31 {
+		mask := net.CIDRMask(p.Bits(), 32)
+		brd := make([]byte, 4)
+		for i := range brd {
+			brd[i] = raw[i] | ^mask[i]
+		}
+		e.attr(unix.IFA_BROADCAST, brd)
+	}
+	if life != nil {
+		// struct ifa_cacheinfo: preferred, valid, then two stamps the
+		// kernel fills in itself.
+		info := native.AppendUint32(nil, life[1])
+		info = native.AppendUint32(info, life[0])
+		e.attr(unix.IFA_CACHEINFO, append(info, make([]byte, 8)...))
+	}
+	return request(typ, flags, &e, nil)
 }
 
 // WatchAddrs signals each time an address is added to, changed on or

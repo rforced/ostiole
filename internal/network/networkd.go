@@ -5,14 +5,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/netip"
 	"os"
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
+
+	"golang.org/x/sys/unix"
 
 	"ostiole/internal/atomicfile"
 	"ostiole/internal/model"
@@ -36,6 +40,13 @@ type Networkd struct {
 	// LinkExists reports whether the kernel has a device by this name;
 	// default uses netlink.
 	LinkExists func(name string) bool
+	// HeldAddrs lists a link's IPv6 addresses that expire, which on a
+	// link taking a delegated prefix are the ones the prefix gave it;
+	// default uses netlink.
+	HeldAddrs func(name string) ([]netip.Prefix, error)
+	// DelAddr takes an address off a link; default uses netlink. Taking
+	// one that is already gone is not an error.
+	DelAddr func(name string, p netip.Prefix) error
 }
 
 // Defaults for Networkd.
@@ -648,10 +659,16 @@ func (n *Networkd) Snapshot() (Files, error) {
 }
 
 // Apply implements Backend: write the files, delete stale owned files,
-// then reload networkd, reconfigure the affected links, and take down the
-// devices that are no longer configured.
+// then reload networkd, reconfigure the affected links, take off what a
+// delegated prefix left on a link that no longer takes one, and take down
+// the devices that are no longer configured.
 func (n *Networkd) Apply(ctx context.Context, files Files) error {
-	gone, err := n.staleDevices(files)
+	current, err := n.Snapshot()
+	if err != nil {
+		return err
+	}
+	gone := n.staleDevices(current, files)
+	delegated, err := n.leavingDelegation(current, files)
 	if err != nil {
 		return err
 	}
@@ -675,6 +692,9 @@ func (n *Networkd) Apply(ctx context.Context, files Files) error {
 	if err := n.Reload(ctx, links); err != nil {
 		return err
 	}
+	if err := n.dropDelegated(delegated); err != nil {
+		return err
+	}
 	// networkd creates the device a .netdev describes but never removes it
 	// again: delete the unit and the tunnel or VLAN keeps running, keeps its
 	// addresses, and comes back after a reboot as an interface nobody
@@ -690,11 +710,7 @@ func (n *Networkd) Apply(ctx context.Context, files Files) error {
 }
 
 // staleDevices names the virtual devices whose .netdev is about to go away.
-func (n *Networkd) staleDevices(files Files) ([]string, error) {
-	current, err := n.Snapshot()
-	if err != nil {
-		return nil, err
-	}
+func (n *Networkd) staleDevices(current, files Files) []string {
 	var gone []string
 	for name := range current {
 		if _, keep := files[name]; keep || !strings.HasSuffix(name, ".netdev") {
@@ -703,7 +719,113 @@ func (n *Networkd) staleDevices(files Files) ([]string, error) {
 		gone = append(gone, strings.TrimSuffix(strings.TrimPrefix(name, n.prefix()), ".netdev"))
 	}
 	sort.Strings(gone)
-	return gone, nil
+	return gone
+}
+
+// leavingDelegation lists, by link, the addresses each link that stops
+// taking a delegated prefix holds before it stops. networkd keeps them:
+// the branch meant to drop them when delegation is turned off returns at
+// once because delegation is off (systemd 257 to 259 at least). Left
+// alone they outlive the change by days, and the router goes on
+// advertising a prefix nothing routes.
+func (n *Networkd) leavingDelegation(current, files Files) (map[string][]netip.Prefix, error) {
+	held := map[string][]netip.Prefix{}
+	for name, unit := range current {
+		if !strings.HasSuffix(name, ".network") || !delegates(unit) || delegates(files[name]) {
+			continue
+		}
+		link := strings.TrimSuffix(strings.TrimPrefix(name, n.prefix()), ".network")
+		if !n.linkExists(link) {
+			continue
+		}
+		addrs, err := n.heldAddrs(link)
+		if err != nil {
+			return nil, fmt.Errorf("read the addresses on %s: %w", link, err)
+		}
+		if len(addrs) > 0 {
+			held[link] = addrs
+		}
+	}
+	return held, nil
+}
+
+// dropDelegated takes off the addresses leavingDelegation found that are
+// still there and still expire. One that networkd has since made static,
+// because the new unit asks for that very address, stays.
+func (n *Networkd) dropDelegated(held map[string][]netip.Prefix) error {
+	for _, link := range slices.Sorted(maps.Keys(held)) {
+		now, err := n.heldAddrs(link)
+		if err != nil {
+			return fmt.Errorf("read the addresses on %s: %w", link, err)
+		}
+		for _, p := range held[link] {
+			if !slices.Contains(now, p) {
+				continue
+			}
+			if err := n.delAddr(link, p); err != nil {
+				return fmt.Errorf("remove the delegated address %s from %s: %w", p, link, err)
+			}
+		}
+	}
+	return nil
+}
+
+// delegates reports whether a .network unit has its link take a piece of
+// a delegated prefix.
+func delegates(unit string) bool {
+	for line := range strings.Lines(unit) {
+		if strings.TrimSpace(line) == "DHCPPrefixDelegation=yes" {
+			return true
+		}
+	}
+	return false
+}
+
+func (n *Networkd) heldAddrs(name string) ([]netip.Prefix, error) {
+	if n.HeldAddrs != nil {
+		return n.HeldAddrs(name)
+	}
+	link, err := netlink.LinkByName(name)
+	if err != nil {
+		if errors.Is(err, netlink.ErrLinkNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	addrs, err := netlink.Addrs(unix.AF_INET6)
+	if err != nil {
+		return nil, err
+	}
+	var out []netip.Prefix
+	for _, a := range addrs {
+		if a.LinkIndex != link.Index || a.Flags&unix.IFA_F_PERMANENT != 0 || a.IPNet.IP.IsLinkLocalUnicast() {
+			continue
+		}
+		ip, ok := netip.AddrFromSlice(a.IPNet.IP)
+		if !ok {
+			continue
+		}
+		bits, _ := a.IPNet.Mask.Size()
+		out = append(out, netip.PrefixFrom(ip.Unmap(), bits))
+	}
+	return out, nil
+}
+
+func (n *Networkd) delAddr(name string, p netip.Prefix) error {
+	if n.DelAddr != nil {
+		return n.DelAddr(name, p)
+	}
+	link, err := netlink.LinkByName(name)
+	if err != nil {
+		if errors.Is(err, netlink.ErrLinkNotFound) {
+			return nil
+		}
+		return err
+	}
+	if err := netlink.DeleteAddr(link.Index, p); err != nil && !errors.Is(err, unix.EADDRNOTAVAIL) {
+		return err
+	}
+	return nil
 }
 
 func (n *Networkd) linkExists(name string) bool {

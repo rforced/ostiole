@@ -61,34 +61,14 @@ func SetLinkNamespace(index, ns int) error {
 // AddAddr puts an address on a device. An IPv4 one shorter than /31 gets
 // the broadcast address of its prefix, as `ip addr add … brd +` gives it.
 func AddAddr(index int, p netip.Prefix) error {
-	return changeAddr(unix.RTM_NEWADDR, unix.NLM_F_CREATE|unix.NLM_F_EXCL, index, p)
+	return changeAddr(unix.RTM_NEWADDR, unix.NLM_F_CREATE|unix.NLM_F_EXCL, index, p, nil)
 }
 
-// DeleteAddr takes an address off a device.
-func DeleteAddr(index int, p netip.Prefix) error {
-	return changeAddr(unix.RTM_DELADDR, 0, index, p)
-}
-
-func changeAddr(typ, flags uint16, index int, p netip.Prefix) error {
-	a := p.Addr().Unmap()
-	fam := unix.AF_INET6
-	if a.Is4() {
-		fam = unix.AF_INET
-	}
-	raw := a.AsSlice()
-	var e encoder
-	e.ifaddrmsg(fam, p.Bits(), index)
-	e.attr(unix.IFA_LOCAL, raw)
-	e.attr(unix.IFA_ADDRESS, raw)
-	if typ == unix.RTM_NEWADDR && a.Is4() && p.Bits() < 31 {
-		mask := net.CIDRMask(p.Bits(), 32)
-		brd := make([]byte, 4)
-		for i := range brd {
-			brd[i] = raw[i] | ^mask[i]
-		}
-		e.attr(unix.IFA_BROADCAST, brd)
-	}
-	return request(typ, flags, &e, nil)
+// AddDynamicAddr puts an address on a device that the kernel expires, as
+// a lease or a delegated prefix gives one. Lifetimes are whole seconds.
+func AddDynamicAddr(index int, p netip.Prefix, valid, preferred time.Duration) error {
+	life := &[2]uint32{uint32(valid / time.Second), uint32(preferred / time.Second)} //nolint:gosec // a test's lifetimes
+	return changeAddr(unix.RTM_NEWADDR, unix.NLM_F_CREATE|unix.NLM_F_EXCL, index, p, life)
 }
 
 // AddNeighbour adds an entry to the ARP or NDP table.

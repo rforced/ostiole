@@ -6,12 +6,16 @@ import (
 	"errors"
 	"flag"
 	"log/slog"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
+	"time"
+
+	"golang.org/x/sys/unix"
 
 	"ostiole/internal/model"
 	"ostiole/internal/netlink"
@@ -277,6 +281,139 @@ func TestApplyDeletesDevicesThatLostTheirNetdev(t *testing.T) {
 	}
 	if len(deleted) != 0 {
 		t.Errorf("deleted %v for a physical interface", deleted)
+	}
+}
+
+// reloadHook runs reload when networkd is told to reload, which is when
+// networkd would change the links.
+type reloadHook struct {
+	fakeCmd
+	reload func()
+}
+
+func (r *reloadHook) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	if name == "networkctl" && len(args) > 0 && args[0] == "reload" {
+		r.reload()
+	}
+	return r.fakeCmd.Run(ctx, name, args...)
+}
+
+// networkd keeps the addresses a link took from a delegated prefix once
+// the link stops taking one, so Apply takes them off: only on a link that
+// stopped, and not one networkd has since made static because the new
+// unit asks for that very address.
+func TestApplyTakesOffWhatADelegatedPrefixGave(t *testing.T) {
+	t.Parallel()
+	held := map[string][]netip.Prefix{
+		"wan0":    {netip.MustParsePrefix("2001:db8:ffff::2/128")},
+		"lan0":    {netip.MustParsePrefix("2001:db8:0:1::1/64")},
+		"lan0.20": {netip.MustParsePrefix("2001:db8:0:2::1/64")},
+	}
+	var deleted []string
+	cmd := &reloadHook{reload: func() {}}
+	n := &Networkd{
+		LinkExists: allLinks, Dir: t.TempDir(), Cmd: cmd,
+		HeldAddrs: func(name string) ([]netip.Prefix, error) { return held[name], nil },
+		DelAddr: func(name string, p netip.Prefix) error {
+			deleted = append(deleted, name+" "+p.String())
+			held[name] = slices.DeleteFunc(held[name], func(q netip.Prefix) bool { return q == p })
+			return nil
+		},
+	}
+	apply := func(cfg *model.Config) {
+		t.Helper()
+		files, err := n.Render(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := n.Apply(context.Background(), files); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg := loadConfig(t, "testdata/delegated.json")
+	apply(cfg)
+	if len(deleted) != 0 {
+		t.Fatalf("the first apply took off %v", deleted)
+	}
+
+	// lan0 goes static on its own prefix, and the uplink stops asking.
+	cfg.Interfaces[0].IPv6 = model.IPv6{Mode: model.AddrNone}
+	cfg.Interfaces[1].IPv6 = model.IPv6{Mode: model.AddrStatic, Address: "fd00:1::1/64"}
+	cfg.Interfaces[2].IPv6 = model.IPv6{Mode: model.AddrStatic, Address: "fd00:2::1/64"}
+	cmd.reload = func() {}
+	apply(cfg)
+	if got := strings.Join(deleted, ", "); got != "lan0 2001:db8:0:1::1/64, lan0.20 2001:db8:0:2::1/64" {
+		t.Fatalf("took off %q", got)
+	}
+
+	// Back to delegated, then static with the address the prefix gave.
+	// networkd makes that address its own while it reloads.
+	held["lan0"] = []netip.Prefix{netip.MustParsePrefix("2001:db8:0:1::1/64")}
+	cfg = loadConfig(t, "testdata/delegated.json")
+	apply(cfg)
+	deleted = nil
+	cfg.Interfaces[1].IPv6 = model.IPv6{Mode: model.AddrStatic, Address: "2001:db8:0:1::1/64"}
+	cmd.reload = func() { held["lan0"] = nil }
+	apply(cfg)
+	if len(deleted) != 0 {
+		t.Errorf("took off %v, which networkd had made static", deleted)
+	}
+}
+
+// The kernel's side: the address that expires goes and takes its prefix
+// route with it, while the static one and the link-local one stay.
+func TestApplyTakesOffADelegatedAddressInKernel(t *testing.T) {
+	if !netnstest.Enter(t) {
+		return
+	}
+	link := netnstest.Dummy(t, "lan0", "192.168.1.1/24")
+	delegated := netip.MustParsePrefix("2001:db8:0:1::1/64")
+	static := netip.MustParsePrefix("fd00:1::1/64")
+	if err := netlink.AddDynamicAddr(link.Index, delegated, time.Hour, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if err := netlink.AddAddr(link.Index, static); err != nil {
+		t.Fatal(err)
+	}
+	n := &Networkd{Dir: t.TempDir(), Cmd: &fakeCmd{}}
+	unit := n.networkFile("lan0")
+	if _, err := n.Write(Files{unit: "[Match]\nName=lan0\n\n[Network]\nDHCPPrefixDelegation=yes\n"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := n.Apply(context.Background(), Files{unit: "[Match]\nName=lan0\n\n[Network]\nAddress=fd00:1::1/64\n"}); err != nil {
+		t.Fatal(err)
+	}
+
+	addrs, err := netlink.Addrs(unix.AF_INET6)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var left []string
+	linkLocal := false
+	for _, a := range addrs {
+		if a.LinkIndex != link.Index {
+			continue
+		}
+		if a.IPNet.IP.IsLinkLocalUnicast() {
+			linkLocal = true
+			continue
+		}
+		left = append(left, a.IPNet.String())
+	}
+	if !slices.Equal(left, []string{static.String()}) {
+		t.Errorf("addresses left %v, want only %s", left, static)
+	}
+	if !linkLocal {
+		t.Error("the link-local address went too")
+	}
+	routes, err := netlink.Routes(unix.AF_INET6, netlink.RouteFilter{LinkIndex: link.Index})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range routes {
+		if r.Dst != nil && r.Dst.String() == "2001:db8:0:1::/64" {
+			t.Errorf("the delegated prefix's route stayed: %+v", r)
+		}
 	}
 }
 
