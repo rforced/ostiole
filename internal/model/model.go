@@ -1227,6 +1227,24 @@ func (c *Config) facesInternet(name string, seen map[string]bool) bool {
 	return false
 }
 
+// IPv6Out reports whether the router may reach the internet over IPv6:
+// an enabled interface facing it has IPv6 on, or is a tailnet, whose
+// families tailscaled decides. With nothing facing the internet it is not
+// known, and the answer is yes.
+func (c *Config) IPv6Out() bool {
+	facing := false
+	for _, in := range c.Interfaces {
+		if !in.Enabled || !c.FacesInternet(in.Name) {
+			continue
+		}
+		if in.IPv6.Mode != AddrNone || in.Tailscale != nil {
+			return true
+		}
+		facing = true
+	}
+	return !facing
+}
+
 // HostSideLinks are the links read from their hosts' side, what they send
 // being their hosts' download: every configured interface, and every port
 // under one whether listed or not, that does not face the internet.

@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -201,6 +202,10 @@ func TestServicesStatusNamesUnreachableTLSUpstreams(t *testing.T) {
 			if strings.HasPrefix(address, "9.9.9.9:") {
 				return nil, errors.New("connection timed out")
 			}
+			// No route in a family the router lacks blocks no port.
+			if strings.HasPrefix(address, "[") {
+				return nil, &net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connect", syscall.ENETUNREACH)}
+			}
 			a, b := net.Pipe()
 			go b.Close()
 			return a, nil
@@ -232,21 +237,22 @@ func TestServicesStatusNamesUnreachableTLSUpstreams(t *testing.T) {
 	cfg.Services.DNS.TLSUpstreams = []model.TLSUpstream{
 		{Address: "1.1.1.1", Hostname: "cloudflare-dns.com"},
 		{Address: "9.9.9.9", Hostname: "dns.quad9.net"},
+		{Address: "2001:db8::53", Hostname: "dns.example.com"},
 	}
 	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(cfg)}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("apply tls: %d %s", resp.StatusCode, raw)
 	}
-	if st := status(); !reflect.DeepEqual(st.ResolverUnreachable, []string{"9.9.9.9"}) {
-		t.Errorf("unreachable = %v, want [9.9.9.9]", st.ResolverUnreachable)
+	if st := status(); !reflect.DeepEqual(st.ResolverUnreachable, []string{"9.9.9.9"}) || st.ResolverNoneAnswer {
+		t.Errorf("unreachable = %v, none answer %v, want [9.9.9.9] and some", st.ResolverUnreachable, st.ResolverNoneAnswer)
 	}
 	got := seen()
 	sort.Strings(got)
-	if want := []string{"1.1.1.1:853", "9.9.9.9:853"}; !reflect.DeepEqual(got, want) {
+	if want := []string{"1.1.1.1:853", "9.9.9.9:853", "[2001:db8::53]:853"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("dials = %v, want %v", got, want)
 	}
 	// Within the minute the answer is remembered, not probed again.
 	status()
-	if got := seen(); len(got) != 2 {
+	if got := seen(); len(got) != 3 {
 		t.Errorf("dials after a second read = %v", got)
 	}
 }

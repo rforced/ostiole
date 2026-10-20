@@ -1725,6 +1725,30 @@ func TestValidateAcceptsBridgesAndBonds(t *testing.T) {
 	}
 }
 
+func TestIPv6Out(t *testing.T) {
+	t.Parallel()
+	zones := []Zone{{Name: "wan", External: true}, {Name: "lan"}}
+	lan := Interface{Name: "lan0", Zone: "lan", Enabled: true, IPv6: IPv6{Mode: AddrStatic, Address: "fd00::1/64"}}
+	wan := func(mode AddrMode, enabled bool) Interface {
+		return Interface{Name: "wan0", Zone: "wan", Enabled: enabled, IPv6: IPv6{Mode: mode}}
+	}
+	for name, c := range map[string]struct {
+		ifaces []Interface
+		want   bool
+	}{
+		"wan with SLAAC":             {[]Interface{wan(AddrSLAAC, true), lan}, true},
+		"wan with IPv6 off":          {[]Interface{wan(AddrNone, true), lan}, false},
+		"wan off, the other without": {[]Interface{wan(AddrSLAAC, false), {Name: "wan1", Zone: "wan", Enabled: true, IPv6: IPv6{Mode: AddrNone}}}, false},
+		"a tailnet facing it":        {[]Interface{wan(AddrNone, true), {Name: "ts0", Zone: "wan", Enabled: true, Tailscale: &Tailscale{}, IPv6: IPv6{Mode: AddrNone}}}, true},
+		"nothing facing it":          {[]Interface{lan}, true},
+	} {
+		cfg := &Config{Zones: zones, Interfaces: c.ifaces}
+		if got := cfg.IPv6Out(); got != c.want {
+			t.Errorf("%s: IPv6Out = %v, want %v", name, got, c.want)
+		}
+	}
+}
+
 // A port with no zone of its own is read from the side of what it
 // carries, listed or not, so a bridge's members face its hosts and the
 // link a WAN session or VLAN runs over faces the internet. The page reads

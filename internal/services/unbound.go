@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"ostiole/internal/model"
@@ -133,8 +134,11 @@ func (u *Unbound) render(cfg *model.Config) string {
 	b.WriteString("    log-queries: no\n    log-replies: no\n    log-servfail: no\n")
 	fmt.Fprintf(&b, "    interface: %s@%d\n", UnboundAddress, UnboundPort)
 	// It answers over IPv4 on the loopback but queries the internet over
-	// both families.
-	b.WriteString("    do-ip4: yes\n    do-ip6: yes\n    do-udp: yes\n    do-tcp: yes\n")
+	// both families, or over IPv4 alone where nothing facing the internet
+	// has IPv6, so an upstream it has no route to is not tried.
+	b.WriteString("    do-ip4: yes\n")
+	fmt.Fprintf(&b, "    do-ip6: %s\n", yesNo(cfg.IPv6Out()))
+	b.WriteString("    do-udp: yes\n    do-tcp: yes\n")
 	// Only dnsmasq talks to it; everyone else is refused.
 	b.WriteString("    access-control: 0.0.0.0/0 refuse\n")
 	b.WriteString("    access-control: 127.0.0.0/8 allow\n")
@@ -343,14 +347,16 @@ WantedBy=multi-user.target
 type Dialer func(ctx context.Context, network, address string) (net.Conn, error)
 
 // UnreachableTLS dials each DNS over TLS upstream on its port and lists
-// the ones that do not answer. A network that blocks port 853 makes every
-// name fail with nothing in unbound's own state to say why; this is the
-// line on the DNS page that says it.
-func UnreachableTLS(ctx context.Context, ups []model.TLSUpstream, dial Dialer) []string {
+// the ones that do not answer, and says whether none does. A network that
+// blocks port 853 makes every name fail with nothing in unbound's own state
+// to say why; this is the line on the DNS page that says it. While another
+// answers, one the router has no route to is left out: it is in a family
+// the router lacks, which blocks no port.
+func UnreachableTLS(ctx context.Context, ups []model.TLSUpstream, dial Dialer) (bad []string, none bool) {
 	if dial == nil {
 		dial = (&net.Dialer{Timeout: 3 * time.Second}).DialContext
 	}
-	bad := make([]string, len(ups))
+	failed := make([]error, len(ups))
 	var wg sync.WaitGroup
 	for i, up := range ups {
 		wg.Go(func() {
@@ -360,18 +366,26 @@ func UnreachableTLS(ctx context.Context, ups []model.TLSUpstream, dial Dialer) [
 			}
 			c, err := dial(ctx, "tcp", addr)
 			if err != nil {
-				bad[i] = up.Address
+				failed[i] = err
 				return
 			}
 			_ = c.Close()
 		})
 	}
 	wg.Wait()
-	out := []string{}
-	for _, b := range bad {
-		if b != "" {
-			out = append(out, b)
+	bad = []string{}
+	var all []string
+	for i, err := range failed {
+		if err == nil {
+			continue
+		}
+		all = append(all, ups[i].Address)
+		if !errors.Is(err, syscall.ENETUNREACH) {
+			bad = append(bad, ups[i].Address)
 		}
 	}
-	return out
+	if len(ups) > 0 && len(all) == len(ups) {
+		return all, true
+	}
+	return bad, false
 }

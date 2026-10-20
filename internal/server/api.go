@@ -116,10 +116,11 @@ type api struct {
 	// for a minute so the status strip is not a port scan.
 	dial services.Dialer
 	dot  struct {
-		mu  sync.Mutex
-		key string
-		at  time.Time
-		bad []string
+		mu   sync.Mutex
+		key  string
+		at   time.Time
+		bad  []string
+		none bool
 	}
 	fwlog *fwlog.Ring
 	// audit keeps who did what; nil keeps nothing.
@@ -305,12 +306,14 @@ type servicesStatus struct {
 	// ResolverUnreachable lists the DNS over TLS upstreams that do not
 	// answer on their port, when that is the resolver in use. Behind a
 	// network that blocks the port every name fails silently.
+	// ResolverNoneAnswer says not one of them answers.
 	ResolverUnreachable []string `json:"resolverUnreachable,omitempty"`
+	ResolverNoneAnswer  bool     `json:"resolverNoneAnswer,omitempty"`
 }
 
 // unreachableTLS probes the configured DNS over TLS upstreams, at most
 // once a minute for the same set.
-func (a *api) unreachableTLS(ctx context.Context, ups []model.TLSUpstream) []string {
+func (a *api) unreachableTLS(ctx context.Context, ups []model.TLSUpstream) ([]string, bool) {
 	key := ""
 	for _, u := range ups {
 		key += u.Address + ","
@@ -318,10 +321,11 @@ func (a *api) unreachableTLS(ctx context.Context, ups []model.TLSUpstream) []str
 	a.dot.mu.Lock()
 	defer a.dot.mu.Unlock()
 	if a.dot.key == key && time.Since(a.dot.at) < time.Minute {
-		return a.dot.bad
+		return a.dot.bad, a.dot.none
 	}
-	a.dot.key, a.dot.at, a.dot.bad = key, time.Now(), services.UnreachableTLS(ctx, ups, a.dial)
-	return a.dot.bad
+	a.dot.bad, a.dot.none = services.UnreachableTLS(ctx, ups, a.dial)
+	a.dot.key, a.dot.at = key, time.Now()
+	return a.dot.bad, a.dot.none
 }
 
 func (a *api) servicesStatus(w http.ResponseWriter, r *http.Request) error {
@@ -382,7 +386,7 @@ func (a *api) servicesStatus(w http.ResponseWriter, r *http.Request) error {
 	}
 	if a.engine != nil {
 		if cfg := a.engine.Effective(); cfg != nil && cfg.Services.DNS.Enabled && cfg.Services.DNS.Resolver == model.ResolverTLS {
-			st.ResolverUnreachable = a.unreachableTLS(r.Context(), cfg.Services.DNS.TLSUpstreams)
+			st.ResolverUnreachable, st.ResolverNoneAnswer = a.unreachableTLS(r.Context(), cfg.Services.DNS.TLSUpstreams)
 		}
 	}
 	// The mappings are in the ruleset, so a router with no table loaded

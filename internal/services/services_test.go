@@ -6,12 +6,14 @@ import (
 	"errors"
 	"flag"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -178,6 +180,55 @@ func TestRenderUnboundGolden(t *testing.T) {
 				t.Errorf("mismatch (run with -update to accept)\n--- got ---\n%s", got)
 			}
 		})
+	}
+}
+
+// With nothing facing the internet on IPv6, unbound is not left trying
+// upstreams it has no route to.
+func TestUnboundQueriesOverIPv4AloneWithoutIPv6Out(t *testing.T) {
+	t.Parallel()
+	cfg := loadConfig(t, "testdata/resolver-tls.json")
+	cfg.Interfaces[0].IPv6 = model.IPv6{Mode: model.AddrNone}
+	files, err := (&Unbound{Dir: UnboundDir, Anchor: UnboundAnchor}).Render(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := files.String(); !strings.Contains(got, "do-ip6: no\n") || !strings.Contains(got, "do-ip4: yes\n") {
+		t.Errorf("rendered:\n%s", got)
+	}
+}
+
+// An upstream the router has no route to is no blocked port while another
+// answers; with none answering, every one is named.
+func TestUnreachableTLSLeavesOutAFamilyWithNoRoute(t *testing.T) {
+	t.Parallel()
+	noRoute := &net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connect", syscall.ENETUNREACH)}
+	dial := func(answering ...string) Dialer {
+		return func(_ context.Context, _, address string) (net.Conn, error) {
+			host, _, _ := net.SplitHostPort(address)
+			switch {
+			case slices.Contains(answering, host):
+				a, b := net.Pipe()
+				_ = b.Close()
+				return a, nil
+			case strings.Contains(host, ":"):
+				return nil, noRoute
+			}
+			return nil, errors.New("i/o timeout")
+		}
+	}
+	ups := []model.TLSUpstream{{Address: "192.0.2.53"}, {Address: "198.51.100.53"}, {Address: "2001:db8::53"}}
+	if bad, none := UnreachableTLS(context.Background(), ups, dial("192.0.2.53")); !slices.Equal(bad, []string{"198.51.100.53"}) || none {
+		t.Errorf("one answering: %v, none %v", bad, none)
+	}
+	if bad, none := UnreachableTLS(context.Background(), ups, dial("192.0.2.53", "198.51.100.53")); len(bad) != 0 || bad == nil || none {
+		t.Errorf("IPv4 answering: %v, none %v", bad, none)
+	}
+	if bad, none := UnreachableTLS(context.Background(), ups, dial()); !slices.Equal(bad, []string{"192.0.2.53", "198.51.100.53", "2001:db8::53"}) || !none {
+		t.Errorf("none answering: %v, none %v", bad, none)
+	}
+	if bad, none := UnreachableTLS(context.Background(), nil, dial()); len(bad) != 0 || none {
+		t.Errorf("no upstreams: %v, none %v", bad, none)
 	}
 }
 

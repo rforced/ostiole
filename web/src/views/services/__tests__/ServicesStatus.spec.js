@@ -48,10 +48,26 @@ describe('ServicesStatus', () => {
       resolverSetUp: true,
       resolverRunning: true,
       resolverUnreachable: ['1.1.1.1', '9.9.9.9'],
+      resolverNoneAnswer: true,
     })
     const note = wrapper.find('[role=note]')
     expect(note.text()).toContain('No answer on port 853 from 1.1.1.1, 9.9.9.9')
     expect(note.text()).toContain('Validate or Forward')
+  })
+
+  it('says names still resolve while another upstream answers', async () => {
+    const wrapper = await strip({
+      setUp: true,
+      running: true,
+      resolverSetUp: true,
+      resolverRunning: true,
+      resolverUnreachable: ['9.9.9.9'],
+    })
+    const note = wrapper.find('[role=note]')
+    expect(note.text()).toContain(
+      'No answer on port 853 from 9.9.9.9. Names resolve over the others.',
+    )
+    expect(note.text()).not.toContain('every name fails')
   })
 
   it('says nothing about port 853 when every upstream answers', async () => {
