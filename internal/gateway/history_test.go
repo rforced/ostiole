@@ -513,6 +513,49 @@ func TestAFamilyThatNeverAnsweredIsNotJudged(t *testing.T) {
 	}
 }
 
+// An apply that switches IPv6 off on the gateway's interface takes the
+// family's next hop away: that is not an outage, and a reading already
+// over a threshold goes with it.
+func TestAFamilySwitchedOffIsNotProbed(t *testing.T) {
+	t.Parallel()
+	g := model.Gateway{Name: "wan", Enabled: true, Interface: "eth0", ProbeEverySeconds: 5}
+	m, p, log := judging(t, g)
+	tick(m, RiseAfter)
+	play(m, 0, StateUp, v4(0, 3), FamilyMinute{Family: FamilyIPv6, Sent: 12, Lost: 6, Mean: 3})
+	if s := m.Statuses()[0]; len(s.Lossy) != 1 || s.Lossy[0].Family != FamilyIPv6 {
+		t.Fatalf("before: %+v", s.Lossy)
+	}
+
+	r := m.Router.(*fakeRouter)
+	r.mu.Lock()
+	delete(r.resolve6, "wan")
+	r.mu.Unlock()
+	m.Configure(&model.Config{
+		Interfaces: []model.Interface{{Name: "eth0", IPv4: model.IPv4{Mode: model.AddrDHCP}, IPv6: model.IPv6{Mode: model.AddrNone}}},
+		Gateways:   []model.Gateway{g},
+	})
+	if s := m.Statuses()[0]; len(s.Lossy) != 0 || len(s.Families) != 1 {
+		t.Fatalf("after the apply: %+v", s)
+	}
+	tick(m, FailAfter)
+	s := m.Statuses()[0]
+	if !s.Online || len(s.Families) != 1 || s.Families[0].Family != FamilyIPv4 || len(s.Lossy) != 0 {
+		t.Errorf("status = %+v, want IPv4 alone", s)
+	}
+	p.mu.Lock()
+	probes := p.probes
+	p.mu.Unlock()
+	if want := 2*RiseAfter + FailAfter; probes != want {
+		t.Errorf("%d probes, want %d: IPv6 only before the apply", probes, want)
+	}
+	if got := kinds(m.History); !slices.Equal(got, []string{EventLossy + " IPv6"}) {
+		t.Errorf("events = %v", got)
+	}
+	if strings.Contains(log.String(), "stopped answering") {
+		t.Errorf("journal:\n%s", log)
+	}
+}
+
 // Slow and lossy are judged over the whole minutes that hold ten probes.
 func TestTheWindowHoldsTenProbes(t *testing.T) {
 	t.Parallel()

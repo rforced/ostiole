@@ -212,6 +212,41 @@ type state struct {
 	lastError string
 	// slow and lossy are the families over a threshold, by family.
 	slow, lossy map[string]Over
+	// off are the families a learning gateway's interface has switched
+	// off, which it is not probed in.
+	off []string
+}
+
+// offFamilies are the families a learning gateway's interface has switched
+// off. A family whose next hop went is probed on, so a lost lease reads as
+// an outage; one switched off is not lost.
+func offFamilies(cfg *model.Config, g model.Gateway, tunnel bool) []string {
+	if tunnel || g.Address != "" || g.Monitor != "" {
+		return nil
+	}
+	in, ok := cfg.Interface(g.Interface)
+	if !ok || in.Tailscale != nil {
+		return nil
+	}
+	var off []string
+	if in.IPv4.Mode == model.AddrNone {
+		off = append(off, FamilyIPv4)
+	}
+	if in.IPv6.Mode == model.AddrNone {
+		off = append(off, FamilyIPv6)
+	}
+	return off
+}
+
+// switchOff stops judging the families in off, without a word: their
+// legs and readings go. The caller holds m.mu.
+func (st *state) switchOff(off []string) {
+	st.off = off
+	st.legs = slices.DeleteFunc(st.legs, func(l *leg) bool { return slices.Contains(off, l.family) })
+	for _, f := range off {
+		delete(st.slow, f)
+		delete(st.lossy, f)
+	}
 }
 
 func (st *state) leg(family string) *leg {
@@ -367,6 +402,7 @@ func (m *Monitor) Configure(cfg *model.Config) {
 			}
 			st.gw = g
 		}
+		st.switchOff(offFamilies(cfg, g, tunnel))
 		next[g.Name] = st
 		order = append(order, g.Name)
 	}
@@ -604,10 +640,10 @@ func familyOf(address string) string {
 // policy routing takes. A tunnel's probe goes to the monitor beyond it; a
 // gateway with an address or a monitor is probed there alone; one that
 // learns its next hops is probed at each, and keeps probing a family
-// whose next hop went.
+// whose next hop went unless its interface switched the family off.
 func (m *Monitor) targets(st *state) (model.Gateway, []target, string) {
 	m.mu.Lock()
-	gw, tunnel := st.gw, st.tunnel
+	gw, tunnel, off := st.gw, st.tunnel, st.off
 	var have []string
 	for _, l := range st.legs {
 		have = append(have, l.family)
@@ -630,10 +666,10 @@ func (m *Monitor) targets(st *state) (model.Gateway, []target, string) {
 		return gw, []target{{family: family, hop: hop, addr: gw.Monitor}}, v4
 	}
 	var out []target
-	if v4 != "" || slices.Contains(have, FamilyIPv4) {
+	if (v4 != "" || slices.Contains(have, FamilyIPv4)) && !slices.Contains(off, FamilyIPv4) {
 		out = append(out, target{family: FamilyIPv4, hop: v4, addr: v4})
 	}
-	if v6 != "" || slices.Contains(have, FamilyIPv6) {
+	if (v6 != "" || slices.Contains(have, FamilyIPv6)) && !slices.Contains(off, FamilyIPv6) {
 		out = append(out, target{family: FamilyIPv6, hop: v6, addr: v6})
 	}
 	if len(out) == 0 {
