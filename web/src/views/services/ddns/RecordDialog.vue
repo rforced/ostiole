@@ -179,8 +179,16 @@ function sentence(r) {
         </FormField>
       </div>
       <div class="space-y-2">
-        <ToggleRow v-model="form.ipv4" label="A record" hint="The IPv4 address." />
-        <ToggleRow v-model="form.ipv6" label="AAAA record" hint="The IPv6 address." />
+        <ToggleRow
+          v-model="form.ipv4"
+          label="A record"
+          hint="Switched off, the IPv4 address Ostiole published is removed."
+        />
+        <ToggleRow
+          v-model="form.ipv6"
+          label="AAAA record"
+          hint="Switched off, the IPv6 address Ostiole published is removed."
+        />
       </div>
 
       <div v-if="checked" role="status">

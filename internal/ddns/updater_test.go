@@ -23,6 +23,7 @@ type fakeProvider struct {
 	held    map[string][]netip.Addr // "name type" → addresses
 	sets    int
 	lookups int
+	removes int
 	fail    error
 }
 
@@ -46,6 +47,18 @@ func (p *fakeProvider) Set(_ context.Context, _, name string, t dnsprovider.Reco
 	was := p.held[name+" "+string(t)]
 	p.held[name+" "+string(t)] = []netip.Addr{addr}
 	return was, nil
+}
+
+func (p *fakeProvider) Remove(_ context.Context, _, name string, t dnsprovider.RecordType, addrs []netip.Addr) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.removes++
+	if p.fail != nil {
+		return p.fail
+	}
+	key := name + " " + string(t)
+	p.held[key] = slices.DeleteFunc(p.held[key], func(a netip.Addr) bool { return slices.Contains(addrs, a) })
+	return nil
 }
 
 func (p *fakeProvider) Test(_ context.Context, domains []string) (*dnsprovider.TestResult, error) {
@@ -407,6 +420,58 @@ func TestUpdaterRereadsARecordSwitchedBackOn(t *testing.T) {
 	r.pass(t)
 	if got := r.p.held["home.example.com A"]; !slices.Equal(got, []netip.Addr{netip.MustParseAddr("203.0.113.7")}) {
 		t.Errorf("after switching back on the provider holds %v", got)
+	}
+}
+
+// A type a record stops keeping is taken back at the provider, and only
+// the address Ostiole published there.
+func TestARecordTakesBackATypeItNoLongerKeeps(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	r.pass(t)
+	theirs := netip.MustParseAddr("2001:db8::99")
+	r.p.held["home.example.com AAAA"] = append(r.p.held["home.example.com AAAA"], theirs)
+
+	r.cfg.Services.DDNS.Records[0].IPv6 = false
+	r.p.fail = errors.New("Cloudflare is down")
+	r.pass(t)
+	st := r.status(t, dnsprovider.TypeAAAA)
+	if st.State != StateFailed || !strings.Contains(st.Error, "removing the AAAA record it no longer keeps") ||
+		!st.NextTry.Equal(r.now.Add(time.Minute)) {
+		t.Fatalf("after a failed removal: %+v", st)
+	}
+
+	r.p.fail = nil
+	r.now = r.now.Add(time.Minute)
+	r.pass(t)
+	if got := r.p.held["home.example.com AAAA"]; !slices.Equal(got, []netip.Addr{theirs}) {
+		t.Errorf("the provider holds %v, want only the operator's own", got)
+	}
+	if got := r.u.Status(); len(got) != 1 || got[0].Type != dnsprovider.TypeA {
+		t.Errorf("status = %+v, want the A record alone", got)
+	}
+	if raw := string(r.state.files[StateFile]); strings.Contains(raw, "AAAA") {
+		t.Errorf("state still holds the AAAA record: %s", raw)
+	}
+	removes := r.p.removes
+	r.pass(t)
+	if r.p.removes != removes {
+		t.Errorf("removed again on the next pass")
+	}
+}
+
+// A record switched off or taken out leaves the provider as it is.
+func TestARecordOffOrGoneLeavesTheProviderAlone(t *testing.T) {
+	t.Parallel()
+	r := newRig(t)
+	r.pass(t)
+	r.cfg.Services.DDNS.Records[0].Enabled = false
+	r.cfg.Services.DDNS.Records[0].IPv6 = false
+	r.pass(t)
+	r.cfg.Services.DDNS.Records = nil
+	r.pass(t)
+	if r.p.removes != 0 || len(r.p.held["home.example.com AAAA"]) != 1 {
+		t.Errorf("%d removals, held %v", r.p.removes, r.p.held)
 	}
 }
 

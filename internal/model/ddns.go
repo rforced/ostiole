@@ -88,6 +88,16 @@ func (v *validator) ddns(c *Config, ifaces map[string]bool) {
 		if !r.IPv4 && !r.IPv6 {
 			v.add(path+".ipv4", "keep the A record, the AAAA record or both")
 		}
+		// A tunnel or tailnet takes its addresses from the far end, whatever
+		// its modes say.
+		if in, ok := c.Interface(r.Interface); ok && r.Enabled && !in.Tunnel() && in.Tailscale == nil {
+			if r.IPv4 && in.IPv4.Mode == AddrNone {
+				v.add(path+".ipv4", "%s has IPv4 switched off, so the A record would keep an old address", r.Interface)
+			}
+			if r.IPv6 && in.IPv6.Mode == AddrNone {
+				v.add(path+".ipv6", "%s has IPv6 switched off, so the AAAA record would keep an old address", r.Interface)
+			}
+		}
 		for _, f := range []struct {
 			family string
 			on     bool

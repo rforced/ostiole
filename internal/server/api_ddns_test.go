@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/netip"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -37,6 +38,17 @@ func (p *stubProvider) Set(_ context.Context, _, name string, t dnsprovider.Reco
 	was := p.held[name+" "+string(t)]
 	p.held[name+" "+string(t)] = []netip.Addr{addr}
 	return was, nil
+}
+
+func (p *stubProvider) Remove(_ context.Context, _, name string, t dnsprovider.RecordType, addrs []netip.Addr) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.fail != nil {
+		return p.fail
+	}
+	key := name + " " + string(t)
+	p.held[key] = slices.DeleteFunc(p.held[key], func(a netip.Addr) bool { return slices.Contains(addrs, a) })
+	return nil
 }
 
 func (p *stubProvider) Test(_ context.Context, domains []string) (*dnsprovider.TestResult, error) {

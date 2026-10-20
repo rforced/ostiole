@@ -61,7 +61,10 @@ const LABELS = { 'no-address': 'no address' }
 /** A row's Address lines, one per record type, from the applied record's status. */
 function lines(r) {
   const known = status.value[r.id]
-  return [r.ipv4 && 'A', r.ipv6 && 'AAAA'].filter(Boolean).map((type) => {
+  // A type no longer kept is listed while taking it back fails.
+  const removing = (known ?? []).filter((s) => s.state === 'failed').map((s) => s.type)
+  const types = new Set([r.ipv4 && 'A', r.ipv6 && 'AAAA', ...removing].filter(Boolean))
+  return [...types].map((type) => {
     const st = known?.find((s) => s.type === type)
     if (!st) return { type, address: '', state: 'apply to start' }
     return {

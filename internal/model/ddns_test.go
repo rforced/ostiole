@@ -22,7 +22,10 @@ func TestValidateAcceptsDDNSRecords(t *testing.T) {
 		// The same name's AAAA from the LAN, where the global address is.
 		{ID: "ddns-home6", Enabled: true, Name: "Home.Example.com.", Interface: "lan0", IPv6: true},
 		{ID: "ddns-apex", Name: "example.com", Interface: "wan0", IPv4: true, IPv6: true},
+		// Off, it publishes nothing, so an interface without IPv6 is no matter.
+		{ID: "ddns-lan6", Name: "lan.example.com", Interface: "lan0", IPv6: true},
 	}
+	cfg.Interfaces[1].IPv6 = IPv6{Mode: AddrStatic, Address: "2001:db8:1::1/64"}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("records rejected: %v", err)
 	}
@@ -42,7 +45,10 @@ func TestValidateCatchesDDNSMistakes(t *testing.T) {
 		{ID: "neither", Name: "b.example.com", Interface: "wan0"},
 		{ID: "first", Name: "c.example.com", Interface: "wan0", IPv4: true},
 		{ID: "second", Name: "C.example.com", Interface: "lan0", IPv4: true},
+		{ID: "nov6", Enabled: true, Name: "d.example.com", Interface: "lan0", IPv6: true},
+		{ID: "nov4", Enabled: true, Name: "e.example.com", Interface: "lan0", IPv4: true},
 	}
+	cfg.Interfaces[1].IPv4 = IPv4{Mode: AddrNone}
 	got := issuesByPath(t, cfg)
 	for path, want := range map[string]string{
 		"services.ddns.records[0].id":        "must match",
@@ -55,6 +61,8 @@ func TestValidateCatchesDDNSMistakes(t *testing.T) {
 		"services.ddns.records[6].interface": "unknown interface",
 		"services.ddns.records[7].ipv4":      "A record, the AAAA record or both",
 		"services.ddns.records[9].name":      "first already keeps the A record",
+		"services.ddns.records[10].ipv6":     "lan0 has IPv6 switched off",
+		"services.ddns.records[11].ipv4":     "lan0 has IPv4 switched off",
 	} {
 		if !strings.Contains(got[path], want) {
 			t.Errorf("%s = %q, want it to say %q", path, got[path], want)

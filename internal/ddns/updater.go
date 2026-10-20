@@ -310,6 +310,14 @@ func (u *Updater) Pass(ctx context.Context) {
 			u.entry(key).seen = ""
 			u.mu.Unlock()
 		}
+		if !r.Enabled {
+			continue
+		}
+		for _, t := range []dnsprovider.RecordType{dnsprovider.TypeA, dnsprovider.TypeAAAA} {
+			if key := entryKey(r.ID, t); !live[key] && !u.withdraw(ctx, cfg, r, t, key) {
+				live[key] = true
+			}
+		}
 	}
 	u.mu.Lock()
 	for key := range u.entries {
@@ -365,15 +373,7 @@ func (u *Updater) one(ctx context.Context, cfg *model.Config, r model.DDNSRecord
 	defer u.mu.Unlock()
 	e.updating, e.force = false, false
 	if err != nil {
-		e.failures++
-		e.err = err.Error()
-		wait := min(time.Minute<<min(e.failures-1, 10), maxBackoff)
-		if pe := (*dnsprovider.Error)(nil); errors.As(err, &pe) && pe.RetryAfter > wait {
-			wait = pe.RetryAfter
-		}
-		e.retryAt = now.Add(wait)
-		if e.logged != e.err {
-			e.logged = e.err
+		if e.fail(err, now) {
 			u.log().Warn("dynamic DNS record not updated", "name", name, "type", t, "err", err)
 		}
 		return
@@ -390,6 +390,78 @@ func (u *Updater) one(ctx context.Context, cfg *model.Config, r model.DDNSRecord
 		u.log().Info("dynamic DNS record updated", "name", name, "type", t, "address", addr, "was", was)
 		u.save()
 	}
+}
+
+// fail notes a failed request and when to try it again: in a minute,
+// doubling to maxBackoff, or as long as the provider asks. It reports
+// whether the journal has not had this error yet. Called with u.mu held.
+func (e *entry) fail(err error, now time.Time) bool {
+	e.failures++
+	e.err = err.Error()
+	wait := min(time.Minute<<min(e.failures-1, 10), maxBackoff)
+	if pe := (*dnsprovider.Error)(nil); errors.As(err, &pe) && pe.RetryAfter > wait {
+		wait = pe.RetryAfter
+	}
+	e.retryAt = now.Add(wait)
+	if e.logged == e.err {
+		return false
+	}
+	e.logged = e.err
+	return true
+}
+
+// withdraw takes back what an enabled record published for a type it no
+// longer keeps, so the name does not go on pointing at an address the
+// router gave up; a record of that type holding another address is the
+// operator's and stays. A removed or disabled record leaves the provider
+// alone. It reports whether nothing is left to take back.
+func (u *Updater) withdraw(ctx context.Context, cfg *model.Config, r model.DDNSRecord, t dnsprovider.RecordType, key string) bool {
+	now := u.now()
+	u.mu.Lock()
+	e := u.entries[key]
+	if e == nil || len(e.published) == 0 {
+		u.mu.Unlock()
+		return true
+	}
+	if now.Before(e.retryAt) {
+		u.mu.Unlock()
+		return false
+	}
+	published := slices.Clone(e.published)
+	u.mu.Unlock()
+
+	name := model.NormalizeDomain(r.Name)
+	p, zone, found := cfg.ProviderFor(r.Name)
+	var err error
+	if found {
+		err = u.remove(ctx, *p, zone, name, t, published)
+	}
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	switch {
+	case !found:
+		u.log().Warn("dynamic DNS record left at the provider: no DNS provider holds it now", "name", name, "type", t, "address", published)
+	case err != nil:
+		if e.fail(fmt.Errorf("removing the %s record it no longer keeps: %w", t, err), now) {
+			u.log().Warn("dynamic DNS record not removed", "name", name, "type", t, "err", err)
+		}
+		return false
+	default:
+		u.log().Info("dynamic DNS record removed", "name", name, "type", t, "was", published)
+	}
+	delete(u.entries, key)
+	u.save()
+	return true
+}
+
+func (u *Updater) remove(ctx context.Context, p model.DNSProvider, zone, name string, t dnsprovider.RecordType, addrs []netip.Addr) error {
+	c, err := u.client(p)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, dnsprovider.RequestTimeout)
+	defer cancel()
+	return c.Remove(ctx, zone, name, t, addrs)
 }
 
 // set asks the provider, bounded so one slow provider cannot hold up the
@@ -476,6 +548,19 @@ func (u *Updater) Status() []Status {
 				st.State = StateCurrent
 			default:
 				st.State = StatePending
+			}
+			out = append(out, st)
+		}
+		// A type it no longer keeps shows only while taking it back fails.
+		for _, t := range []dnsprovider.RecordType{dnsprovider.TypeA, dnsprovider.TypeAAAA} {
+			e := u.entries[entryKey(r.ID, t)]
+			if !r.Enabled || slices.Contains(Types(r), t) || e == nil || e.err == "" {
+				continue
+			}
+			st := Status{ID: r.ID, Name: r.Name, Type: t, Interface: r.Interface, Provider: provider,
+				State: StateFailed, Error: e.err, CheckedAt: e.readAt, ChangedAt: e.changedAt, NextTry: e.retryAt}
+			for _, a := range e.published {
+				st.Published = append(st.Published, a.String())
 			}
 			out = append(out, st)
 		}

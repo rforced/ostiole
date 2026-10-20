@@ -34,6 +34,9 @@ type Provider interface {
 	// Set points the name's one record of type t at addr, creating it
 	// when there is none, and returns what the provider held before.
 	Set(ctx context.Context, zone, name string, t dnsprovider.RecordType, addr netip.Addr) ([]netip.Addr, error)
+	// Remove deletes the name's records of type t that hold one of addrs,
+	// and leaves any other.
+	Remove(ctx context.Context, zone, name string, t dnsprovider.RecordType, addrs []netip.Addr) error
 	// Test tries the credentials and reads each domain's records,
 	// everything a record needs short of writing one.
 	Test(ctx context.Context, domains []string) (*dnsprovider.TestResult, error)

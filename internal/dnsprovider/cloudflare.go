@@ -180,6 +180,27 @@ func (c *cloudflare) Set(ctx context.Context, zone, name string, t RecordType, a
 	}
 }
 
+func (c *cloudflare) Remove(ctx context.Context, zone, name string, t RecordType, addrs []netip.Addr) error {
+	id, err := c.zone(ctx, zone)
+	if err != nil {
+		return err
+	}
+	records, err := c.records(ctx, zone, id, name, string(t))
+	if err != nil {
+		return err
+	}
+	for _, rec := range records {
+		if ip, err := netip.ParseAddr(rec.Content); err != nil || !slices.Contains(addrs, ip) {
+			continue
+		}
+		path := "/zones/" + url.PathEscape(id) + "/dns_records/" + url.PathEscape(rec.ID)
+		if err := c.do(ctx, c.token, zone, http.MethodDelete, path, nil, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // testPage is how many zones a test lists.
 const testPage = 50
 

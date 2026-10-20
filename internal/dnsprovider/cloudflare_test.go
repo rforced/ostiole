@@ -256,6 +256,25 @@ func TestCloudflareLeavesACurrentRecordAlone(t *testing.T) {
 	}
 }
 
+// Only the records holding an address named go; the operator's stay.
+func TestCloudflareRemovesTheAddressesNamed(t *testing.T) {
+	t.Parallel()
+	f, srv := newFakeCloudflare(t)
+	f.add("AAAA", "home.example.com", "2001:db8::7", 1, false, "")
+	f.add("AAAA", "home.example.com", "2001:db8::99", 1, false, "mine")
+	f.add("A", "home.example.com", "203.0.113.7", 1, false, "")
+	c := cfClient(t, srv, map[string]string{"token": "dns-token"})
+	if err := c.Remove(context.Background(), "example.com", "home.example.com", TypeAAAA, []netip.Addr{netip.MustParseAddr("2001:db8::7")}); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.record("AAAA", "home.example.com"); len(got) != 1 || got[0].Content != "2001:db8::99" {
+		t.Errorf("AAAA left = %+v", got)
+	}
+	if len(f.record("A", "home.example.com")) != 1 || len(f.deleted) != 1 {
+		t.Errorf("deleted %v", f.deleted)
+	}
+}
+
 func TestCloudflareWillNotPickBetweenTwoRecords(t *testing.T) {
 	t.Parallel()
 	f, srv := newFakeCloudflare(t)
