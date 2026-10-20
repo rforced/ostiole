@@ -9,6 +9,8 @@ import PageHeader from '@/components/PageHeader.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { ApiError, api } from '@/lib/api'
+import { applyWithConfirm } from '@/lib/apply'
+import { errorMessage } from '@/lib/async'
 import { useConfigStore } from '@/stores/config'
 import { useSystemStore } from '@/stores/system'
 
@@ -88,13 +90,13 @@ async function apply() {
   error.value = ''
   busy.value = 'apply'
   try {
-    applied.value = await api.config.apply(preview.value, config.base || 'none', CONFIRM_SECONDS)
+    applied.value = await applyWithConfirm(preview.value, config.base || 'none', CONFIRM_SECONDS)
     await system.refresh()
   } catch (e) {
     if (e instanceof ApiError) {
       error.value = e.message
       issues.value = e.issues
-    } else error.value = String(e)
+    } else error.value = errorMessage(e)
   } finally {
     busy.value = ''
   }

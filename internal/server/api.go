@@ -1134,7 +1134,12 @@ type applyRequest struct {
 	ConfirmTimeoutSeconds int `json:"confirmTimeoutSeconds"`
 	// BaseRevision is the ETag of the configuration the draft was read from.
 	BaseRevision string `json:"baseRevision"`
+	// Tag comes back in the status while the apply awaits confirmation.
+	Tag string `json:"tag,omitempty"`
 }
+
+// maxApplyTag bounds the tag, which every viewer's status repeats.
+const maxApplyTag = 64
 
 func (a *api) check(w http.ResponseWriter, r *http.Request) error {
 	var req configRequest
@@ -1189,6 +1194,9 @@ func (a *api) apply(w http.ResponseWriter, r *http.Request) error {
 	if req.ConfirmTimeoutSeconds < 0 || req.ConfirmTimeoutSeconds > 3600 {
 		return &badRequest{errors.New("confirmTimeoutSeconds must be 0-3600")}
 	}
+	if len(req.Tag) > maxApplyTag {
+		return &badRequest{fmt.Errorf("tag must be at most %d bytes", maxApplyTag)}
+	}
 	if err := a.mayChange(r, req.Config.config()); err != nil {
 		return err
 	}
@@ -1196,6 +1204,7 @@ func (a *api) apply(w http.ResponseWriter, r *http.Request) error {
 		ConfirmTimeout: time.Duration(req.ConfirmTimeoutSeconds) * time.Second,
 		Base:           base,
 		By:             a.actor(r),
+		Tag:            req.Tag,
 	})
 	if err != nil {
 		return err

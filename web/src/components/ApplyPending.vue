@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import ActionButton from '@/components/ActionButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import { ApiError, api } from '@/lib/api'
+import { errorMessage } from '@/lib/async'
 import { useAuthStore } from '@/stores/auth'
 import { useSystemStore } from '@/stores/system'
 
@@ -47,8 +48,20 @@ async function ended() {
   settling = true
   const result = props.settle ? await props.settle() : 'expired'
   if (outcome.value) return
+  error.value = ''
   outcome.value = result
   emit(result === 'confirmed' ? 'confirmed' : 'reverted')
+}
+
+/**
+ * A confirm or revert that got no reply may still have been made: a
+ * browser drops every request in flight when the computer's addresses
+ * change. The status says whether the apply still awaits confirmation.
+ */
+async function unanswered(e) {
+  const status = await system.refresh()
+  if (!system.error && !status?.pending) await ended()
+  else error.value = errorMessage(e)
 }
 
 onMounted(() => {
@@ -75,7 +88,8 @@ async function confirm() {
     emit('confirmed')
   } catch (e) {
     if (e instanceof ApiError && e.status === 409) await ended()
-    else error.value = e instanceof Error ? e.message : String(e)
+    else if (e instanceof ApiError) error.value = e.message
+    else await unanswered(e)
   } finally {
     busy.value = ''
   }
@@ -91,7 +105,8 @@ async function revert() {
     emit('reverted')
   } catch (e) {
     if (e instanceof ApiError && e.status === 409) await ended()
-    else error.value = e instanceof Error ? e.message : String(e)
+    else if (e instanceof ApiError) error.value = e.message
+    else await unanswered(e)
   } finally {
     busy.value = ''
   }

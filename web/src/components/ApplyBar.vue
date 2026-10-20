@@ -7,6 +7,8 @@ import ActionButton from '@/components/ActionButton.vue'
 import ApplyPending from '@/components/ApplyPending.vue'
 import ChangeList from '@/components/ChangeList.vue'
 import { ApiError, api } from '@/lib/api'
+import { applyWithConfirm } from '@/lib/apply'
+import { errorMessage } from '@/lib/async'
 import { useNarrow } from '@/lib/media'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -158,10 +160,11 @@ async function apply() {
   issues.value = []
   try {
     const draft = JSON.parse(JSON.stringify(config.draft))
+    const ofDrift = drift.value !== null
     await api.config.check(draft)
-    const res = await api.config.apply(draft, config.base, CONFIRM_SECONDS)
+    const res = await applyWithConfirm(draft, config.base, CONFIRM_SECONDS)
     applied = draft
-    driftApplied = drift.value !== null
+    driftApplied = ofDrift
     pending.value = { deadline: res.deadline }
     // The kernel changed the moment the apply returned, not when it is
     // confirmed, so anything showing live state is stale from here.
@@ -175,7 +178,11 @@ async function apply() {
     } else if (e instanceof ApiError) {
       error.value = e.message
       issues.value = e.issues
-    } else error.value = String(e)
+    } else {
+      error.value = errorMessage(e)
+      // An apply from somewhere else may be what awaits confirmation.
+      await system.refresh()
+    }
   } finally {
     busy.value = false
   }

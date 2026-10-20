@@ -132,7 +132,7 @@ function base64(buf) {
 /** @typedef {{ totp: { enabledAt: string, lastUsed?: string } | null, passkeys: Passkey[], rpId: string, bypassUntil?: string, bypassBy?: string }} Mfa */
 /** @typedef {{ id: string, created: string, lastSeen: string, expires: string, address: string, agent: string, current: boolean }} SessionRow a browser signed in as the account */
 /** @typedef {{ id: string, name: string, role: string, createdAt: string, createdBy?: string, owner?: string, expiresAt?: string, lastUsedAt?: string, certificates?: string[], metrics?: boolean }} Token */
-/** @typedef {{ configured: boolean, tableLoaded: boolean, network: string, pending?: { since: string, deadline: string, remaining: number }, fallback?: { since: string, reason: string }, recovered?: { since: string, at: string }, ssh?: string, drift?: { parts: string[], changes: number } }} Status */
+/** @typedef {{ configured: boolean, tableLoaded: boolean, network: string, pending?: { since: string, deadline: string, remaining: number, tag?: string }, fallback?: { since: string, reason: string }, recovered?: { since: string, at: string }, ssh?: string, drift?: { parts: string[], changes: number } }} Status */
 /** @typedef {{ path: string, kind: 'added' | 'removed', before?: string, after?: string }} DriftChange */
 /** @typedef {{ parts: string[], changes: DriftChange[], more?: number }} Drift */
 
@@ -247,9 +247,13 @@ export const api = {
     /** Who applied the configuration in force, or null when nothing recorded it. Admins only. */
     applied: () => get('/config/applied'),
     check: (config) => post('/check', { config }),
-    /** The server refuses it with a 409 and code "stale" once baseRevision is not the saved one. */
-    apply: (config, baseRevision, confirmTimeoutSeconds = 60) =>
-      post('/apply', { config, confirmTimeoutSeconds, baseRevision }),
+    /**
+     * The server refuses it with a 409 and code "stale" once baseRevision is
+     * not the saved one. The status repeats tag while the apply awaits
+     * confirmation.
+     */
+    apply: (config, baseRevision, confirmTimeoutSeconds = 60, tag = '') =>
+      post('/apply', { config, confirmTimeoutSeconds, baseRevision, ...(tag && { tag }) }),
     confirm: () => post('/apply/confirm'),
     revert: () => post('/apply/revert'),
     /**

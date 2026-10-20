@@ -136,6 +136,133 @@ describe('ApplyBar', () => {
     expect(config.draft.system.hostname).toBe('mine')
   })
 
+  // A browser drops every request in flight when the computer's addresses
+  // change, and an apply can change them. The status says whether the
+  // apply this tab sent is the one awaiting confirmation.
+  describe('an apply whose reply was lost', () => {
+    const lost = new TypeError('Failed to fetch')
+
+    /**
+     * A draft of NEW whose apply reaches the router, or not, and never
+     * answers. The status fails to answer `silent` times first.
+     */
+    async function sent({ made = true, silent = 0 } = {}) {
+      await router({ applying: false })
+      const config = useConfigStore()
+      config.draft.system.hostname = 'new'
+      api.config.check.mockResolvedValue({})
+      api.config.apply.mockImplementation(async (cfg, base, seconds, tag) => {
+        if (made) api.status.mockResolvedValue({ configured: true, pending: { ...pending, tag } })
+        for (let i = 0; i < silent; i++) api.status.mockRejectedValueOnce(lost)
+        throw lost
+      })
+      const w = mount(ApplyBar)
+      await flushPromises()
+      return { config, w }
+    }
+
+    it('offers the confirm, which saves the draft', async () => {
+      const { config, w } = await sent()
+      await button(w, 'Apply with 60s confirmation').trigger('click')
+      await flushPromises()
+      expect(w.text()).toContain('awaiting confirmation')
+      expect(w.find('[role="alert"]').exists()).toBe(false)
+
+      api.config.confirm.mockResolvedValue({})
+      api.config.get.mockResolvedValue(AT_NEW)
+      api.status.mockResolvedValue({ configured: true })
+      await button(w, 'Confirm').trigger('click')
+      await flushPromises()
+      expect(w.text()).toContain('Confirmed and saved.')
+      expect(config.dirty).toBe(false)
+    })
+
+    it('asks again until the router answers', async () => {
+      const { w } = await sent({ silent: 2 })
+      await button(w, 'Apply with 60s confirmation').trigger('click')
+      await flushPromises()
+      expect(w.text()).not.toContain('awaiting confirmation')
+      await vi.advanceTimersByTimeAsync(2000)
+      await flushPromises()
+      expect(w.text()).toContain('awaiting confirmation')
+    })
+
+    it('says nothing was applied when the router has no such apply', async () => {
+      const { config, w } = await sent({ made: false })
+      await button(w, 'Apply with 60s confirmation').trigger('click')
+      await flushPromises()
+      expect(w.get('[role="alert"]').text()).toBe('Nothing was applied: Failed to fetch.')
+      expect(button(w, 'Apply with 60s confirmation')).toBeDefined()
+      expect(config.draft.system.hostname).toBe('new')
+    })
+
+    it('says so when the router stays silent', async () => {
+      const { w } = await sent({ made: false })
+      api.status.mockRejectedValue(lost)
+      await button(w, 'Apply with 60s confirmation').trigger('click')
+      await vi.advanceTimersByTimeAsync(21_000)
+      await flushPromises()
+      expect(w.get('[role="alert"]').text()).toBe(
+        'The router did not answer: Failed to fetch. If it took the apply, the previous configuration comes back within 60s.',
+      )
+    })
+
+    // Another tab's apply was waiting, so this one was refused, and the
+    // refusal was lost. When that apply is confirmed, this draft has not
+    // been saved by it.
+    it("does not take another tab's apply for its own", async () => {
+      const { config, w } = await sent({ made: false })
+      config.draft.system.hostname = 'mine'
+      api.config.apply.mockImplementation(async () => {
+        api.status.mockResolvedValue({
+          configured: true,
+          pending: { ...pending, tag: 'apply-other' },
+        })
+        throw lost
+      })
+      await button(w, 'Apply with 60s confirmation').trigger('click')
+      await flushPromises()
+      expect(w.text()).toContain('awaiting confirmation')
+
+      api.status.mockResolvedValue({ configured: true })
+      api.config.get.mockResolvedValue(AT_NEW)
+      await vi.advanceTimersByTimeAsync(2000)
+      await flushPromises()
+      expect(w.text()).toContain('Confirmed and saved.')
+      await vi.advanceTimersByTimeAsync(3000)
+      expect(w.get('[role="alert"]').text()).toBe(STALE)
+      expect(config.draft.system.hostname).toBe('mine')
+    })
+  })
+
+  describe('a confirm whose reply was lost', () => {
+    const lost = new TypeError('Failed to fetch')
+
+    it('is confirmed when the router says so', async () => {
+      await router()
+      const w = mount(ApplyBar)
+      await flushPromises()
+      api.config.confirm.mockRejectedValue(lost)
+      api.status.mockResolvedValue({ configured: true })
+      api.config.get.mockResolvedValue(AT_NEW)
+      await button(w, 'Confirm').trigger('click')
+      await flushPromises()
+      expect(w.text()).toContain('Confirmed and saved.')
+      expect(w.text()).not.toContain('Failed to fetch')
+    })
+
+    it('can be sent again when it never arrived', async () => {
+      await router()
+      const w = mount(ApplyBar)
+      await flushPromises()
+      api.config.confirm.mockRejectedValue(lost)
+      await button(w, 'Confirm').trigger('click')
+      await flushPromises()
+      expect(w.text()).toContain('Failed to fetch')
+      expect(button(w, 'Confirm').attributes('disabled')).toBeUndefined()
+    })
+  })
+
   describe('a draft read before another save', () => {
     /** A draft of OLD at r1 with an edit of its own. */
     async function edited() {
@@ -195,6 +322,7 @@ describe('ApplyBar', () => {
         { ...OLD, system: { hostname: 'mine' } },
         'r1',
         60,
+        expect.any(String),
       )
       expect(w.findAll('[role="alert"]').map((a) => a.text())).toEqual([STALE])
       expect(button(w, 'Reload')).toBeDefined()
@@ -302,7 +430,7 @@ describe('ApplyBar', () => {
       api.status.mockResolvedValue({ configured: true, pending: waiting })
       await button(w, 'Apply with 60s confirmation').trigger('click')
       await flushPromises()
-      expect(api.config.apply).toHaveBeenCalledWith(OLD, 'r1', 60)
+      expect(api.config.apply).toHaveBeenCalledWith(OLD, 'r1', 60, expect.any(String))
       expect(w.text()).toContain('awaiting confirmation')
 
       // Confirmed in another tab: the saved configuration is as it was, and

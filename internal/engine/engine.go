@@ -121,6 +121,8 @@ type pendingApply struct {
 	timer          *time.Timer
 	// by is who applied it.
 	by audit.Actor
+	// tag is the caller's name for it.
+	tag string
 }
 
 // New returns an engine over st and runner. net may be nil to leave
@@ -424,6 +426,10 @@ type ApplyOptions struct {
 	Base string
 	// By is who asked for the apply.
 	By audit.Actor
+	// Tag is the caller's own name for the apply, which Status repeats
+	// while it awaits confirmation. A browser that lost the reply reads
+	// it there to learn whether its apply was made.
+	Tag string
 }
 
 // ApplyResult describes what Apply did.
@@ -533,6 +539,7 @@ func (e *Engine) Apply(ctx context.Context, cfg *model.Config, opts ApplyOptions
 		since:          now,
 		deadline:       now.Add(opts.ConfirmTimeout),
 		by:             opts.By,
+		tag:            opts.Tag,
 	}
 	id := p.id
 	p.timer = time.AfterFunc(opts.ConfirmTimeout, func() { e.expire(id) })
@@ -892,6 +899,7 @@ type PendingStatus struct {
 	Since     time.Time     `json:"since"`
 	Deadline  time.Time     `json:"deadline"`
 	Remaining time.Duration `json:"remaining"`
+	Tag       string        `json:"tag,omitempty"`
 }
 
 // Status is a point-in-time view of the engine and kernel.
@@ -917,7 +925,7 @@ func (e *Engine) Status(ctx context.Context) (Status, error) {
 	e.mu.Lock()
 	var pending *PendingStatus
 	if p := e.pending; p != nil {
-		pending = &PendingStatus{Since: p.since, Deadline: p.deadline, Remaining: time.Until(p.deadline).Truncate(time.Second)}
+		pending = &PendingStatus{Since: p.since, Deadline: p.deadline, Remaining: time.Until(p.deadline).Truncate(time.Second), Tag: p.tag}
 	}
 	recovered, sshErr := e.recovered, e.sshErr
 	e.mu.Unlock()

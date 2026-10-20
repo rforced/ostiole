@@ -59,6 +59,12 @@ describe('api', () => {
     expect(err.code).toBe('stale')
   })
 
+  it('sends the tag the status repeats while the apply awaits confirmation', async () => {
+    const fetch = mockFetch(200, { pending: true, deadline: '2026-10-19T23:13:27Z' })
+    await api.config.apply({ version: 3 }, 'ab12', 60, 'apply-x1')
+    expect(JSON.parse(fetch.mock.calls[0][1].body).tag).toBe('apply-x1')
+  })
+
   it('dispatches the unauthorized event on 401, except for credential endpoints', async () => {
     mockFetch(401, { error: 'authentication required' })
     const handler = vi.fn()

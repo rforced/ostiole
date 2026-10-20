@@ -84,3 +84,33 @@ test('an apply nobody confirms is undone when its window runs out', async ({ pag
   // Nothing was changed in this tab, so there is nothing left to apply.
   await expect(page.getByText('Unapplied changes.')).toHaveCount(0)
 })
+
+// A browser drops every request in flight when the computer's addresses
+// change, and an apply that renumbers the network changes them. Here the
+// router applies and the reply is lost on its way back: the page finds the
+// apply awaiting confirmation and confirms it.
+test('an apply whose reply was lost is still confirmed', async ({ page }) => {
+  await login(page)
+  await page.goto('/firewall')
+  await page.getByRole('group', { name: 'Zone' }).getByRole('button', { name: 'wan' }).click()
+  await page.getByRole('button', { name: 'Add rule' }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Description').fill('Kept after a lost reply')
+  await dialog.getByLabel('Protocol').selectOption('udp')
+  await dialog.getByRole('button', { name: 'Save to draft' }).click()
+  await expect(page.getByRole('row').filter({ hasText: 'Kept after a lost reply' })).toBeVisible()
+
+  await page.route('**/api/v1/apply', async (route) => {
+    await route.fetch()
+    await route.abort('connectionreset')
+  })
+  await page.getByRole('button', { name: /Apply with \d+s confirmation/ }).click()
+  const status = page.getByRole('status')
+  await expect(status).toContainText('awaiting confirmation')
+  expect(await pendingApply(page)).not.toBeNull()
+
+  await status.getByRole('button', { name: 'Confirm' }).click()
+  await expect(status).toContainText('Confirmed and saved.')
+  expect((await saved(page)).rules.map((r) => r.description)).toContain('Kept after a lost reply')
+  await expect(page.getByText('Unapplied changes.')).toHaveCount(0)
+})

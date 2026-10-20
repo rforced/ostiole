@@ -497,6 +497,45 @@ func TestApplyConfirmAndRevertFlow(t *testing.T) {
 	}
 }
 
+// A browser drops every request in flight when the computer's addresses
+// change, and an apply can change them. The status names the apply
+// awaiting confirmation, so the page that lost the reply can tell its own.
+func TestTheStatusNamesTheApplyAwaitingConfirmation(t *testing.T) {
+	t.Parallel()
+	srv, _ := newTestServer(t)
+	pending := func() *engine.PendingStatus {
+		t.Helper()
+		_, raw := do(t, srv, http.MethodGet, "/api/v1/status", nil)
+		var st engine.Status
+		if err := json.Unmarshal(raw, &st); err != nil {
+			t.Fatalf("status %s: %v", raw, err)
+		}
+		return st.Pending
+	}
+
+	long := applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(starter()), ConfirmTimeoutSeconds: 60, Tag: strings.Repeat("x", 65)}
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", long); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("a 65-byte tag: %d %s, want 400", resp.StatusCode, raw)
+	}
+	if p := pending(); p != nil {
+		t.Fatalf("a refused apply is pending: %+v", p)
+	}
+
+	tagged := applyRequest{BaseRevision: revision(t, srv), Config: (*draftConfig)(starter()), ConfirmTimeoutSeconds: 60, Tag: "tab-one"}
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply", tagged); resp.StatusCode != http.StatusOK {
+		t.Fatalf("apply: %d %s", resp.StatusCode, raw)
+	}
+	if p := pending(); p == nil || p.Tag != "tab-one" {
+		t.Fatalf("pending = %+v, want the tag tab-one", p)
+	}
+	if resp, raw := do(t, srv, http.MethodPost, "/api/v1/apply/confirm", nil); resp.StatusCode != http.StatusOK {
+		t.Fatalf("confirm: %d %s", resp.StatusCode, raw)
+	}
+	if p := pending(); p != nil {
+		t.Fatalf("pending after the confirm = %+v", p)
+	}
+}
+
 func TestApplyValidationAndBadRequests(t *testing.T) {
 	t.Parallel()
 	srv, _ := newTestServer(t)
