@@ -428,7 +428,7 @@ func (n *NTP) keepRTCInUTC(ctx context.Context) {
 	if local, _ := n.hardwareClock(); !local || !n.Active(ctx) {
 		return
 	}
-	if out, err := n.cmd().Run(ctx, "timedatectl", "set-local-rtc", "0"); err != nil {
+	if out, err := n.cmd().Run(ctx, "timedatectl", "--no-ask-password", "set-local-rtc", "0"); err != nil {
 		n.log().Warn("could not move the hardware clock to UTC; it keeps local time, which a boot after a change of daylight saving reads an hour out",
 			"err", err, "output", strings.TrimSpace(string(out)))
 		return

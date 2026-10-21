@@ -57,7 +57,7 @@ func TestApplyUsesTimedatectl(t *testing.T) {
 	if err := (System{Run: run}).Apply(context.Background(), "Europe/Berlin"); err != nil {
 		t.Fatal(err)
 	}
-	if len(run.calls) != 1 || strings.Join(run.calls[0], " ") != "timedatectl set-timezone Europe/Berlin" {
+	if len(run.calls) != 1 || strings.Join(run.calls[0], " ") != "timedatectl --no-ask-password set-timezone Europe/Berlin" {
 		t.Errorf("calls = %v", run.calls)
 	}
 	// An empty zone is the default rather than an error, so a caller can
@@ -66,7 +66,7 @@ func TestApplyUsesTimedatectl(t *testing.T) {
 	if err := (System{Run: run}).Apply(context.Background(), ""); err != nil {
 		t.Fatal(err)
 	}
-	if len(run.calls) != 1 || run.calls[0][2] != "UTC" {
+	if len(run.calls) != 1 || run.calls[0][3] != "UTC" {
 		t.Errorf("calls = %v", run.calls)
 	}
 }

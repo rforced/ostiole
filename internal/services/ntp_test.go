@@ -321,7 +321,7 @@ func TestNTPApplyTakesTheClockOver(t *testing.T) {
 	if !cmd.ran("systemctl", "enable", "--now", NTPUnit) {
 		t.Errorf("the time service was not started: %v", cmd.calls)
 	}
-	if cmd.at("timedatectl", "set-local-rtc", "0") >= 0 {
+	if cmd.at("timedatectl", "--no-ask-password", "set-local-rtc", "0") >= 0 {
 		t.Errorf("moved a hardware clock that keeps UTC: %v", cmd.calls)
 	}
 	// A unit that was not running has just been started on the new file.
@@ -465,7 +465,7 @@ func TestNTPSkippedInAContainer(t *testing.T) {
 	if n.Active(context.Background()) || !n.Skipped(context.Background()) {
 		t.Errorf("active %v, skipped %v", n.Active(context.Background()), n.Skipped(context.Background()))
 	}
-	if cmd.at("timedatectl", "set-local-rtc", "0") >= 0 {
+	if cmd.at("timedatectl", "--no-ask-password", "set-local-rtc", "0") >= 0 {
 		t.Errorf("moved the host's hardware clock: %v", cmd.calls)
 	}
 }
@@ -489,7 +489,7 @@ func TestNTPApplyMovesALocalHardwareClockToUTC(t *testing.T) {
 	if strings.Contains(string(raw), "rtcsync") || !strings.Contains(string(raw), "makestep 1.0 3\nleapseclist") {
 		t.Errorf("rtcsync not taken out cleanly:\n%s", raw)
 	}
-	restart, move := cmd.at("systemctl", "restart", NTPUnit), cmd.at("timedatectl", "set-local-rtc", "0")
+	restart, move := cmd.at("systemctl", "restart", NTPUnit), cmd.at("timedatectl", "--no-ask-password", "set-local-rtc", "0")
 	if restart < 0 || move < restart {
 		t.Fatalf("want a restart without rtcsync, then the move: %v", cmd.calls)
 	}
@@ -500,7 +500,7 @@ func TestNTPApplyMovesALocalHardwareClockToUTC(t *testing.T) {
 	if err := n.Apply(context.Background(), files); err != nil {
 		t.Fatal(err)
 	}
-	if cmd.count("restart") != 0 || cmd.at("timedatectl", "set-local-rtc", "0") >= 0 {
+	if cmd.count("restart") != 0 || cmd.at("timedatectl", "--no-ask-password", "set-local-rtc", "0") >= 0 {
 		t.Errorf("the same boot: %v", cmd.calls)
 	}
 

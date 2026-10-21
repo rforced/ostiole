@@ -122,7 +122,10 @@ func (s System) Apply(ctx context.Context, zone string) error {
 	if !Valid(zone) {
 		return fmt.Errorf("%q is not a timezone", zone)
 	}
-	out, err := s.run(ctx, "timedatectl", "set-timezone", zone)
+	// Real root needs no authorization. Anything less, such as uid 0 in a
+	// user namespace, is refused rather than asking the desktop's polkit
+	// agent for a password.
+	out, err := s.run(ctx, "timedatectl", "--no-ask-password", "set-timezone", zone)
 	if err == nil {
 		return nil
 	}

@@ -129,7 +129,7 @@ func TestInstallAndUninstall(t *testing.T) {
 	if rep.Timezone != "UTC" {
 		t.Errorf("Timezone = %q, want UTC", rep.Timezone)
 	}
-	if !run.ran("timedatectl", "set-timezone", "UTC") {
+	if !run.ran("timedatectl", "--no-ask-password", "set-timezone", "UTC") {
 		t.Errorf("commands run = %v", run.calls)
 	}
 	// networkd would drop policy routing's rules on every reconfigure.
