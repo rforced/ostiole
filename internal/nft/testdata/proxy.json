@@ -1,5 +1,5 @@
 {
-  "version": 15,
+  "version": 16,
   "system": {
     "hostname": "proxy-fw",
     "management": {
@@ -74,7 +74,6 @@
           "enabled": true,
           "zone": "wan",
           "ports": ["http", "https"],
-          "routes": ["mail", "resolver"],
           "source": {},
           "action": "accept"
         }
@@ -92,23 +91,6 @@
           "enabled": true,
           "hosts": ["shop.example.com"],
           "pool": "web"
-        }
-      ],
-      "routes": [
-        {
-          "id": "mail",
-          "enabled": true,
-          "protocol": "tcp",
-          "port": 443,
-          "sni": ["mail.example.com"],
-          "upstreams": [{ "address": "192.168.1.30:443" }]
-        },
-        {
-          "id": "resolver",
-          "enabled": true,
-          "protocol": "udp",
-          "port": 5353,
-          "upstreams": [{ "address": "192.168.1.40:53" }]
         }
       ]
     }

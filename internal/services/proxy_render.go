@@ -47,9 +47,8 @@ type (
 	}
 
 	caddyApps struct {
-		TLS    *tlsApp    `json:"tls,omitempty"`
-		HTTP   *httpApp   `json:"http,omitempty"`
-		Layer4 *layer4App `json:"layer4,omitempty"`
+		TLS  *tlsApp  `json:"tls,omitempty"`
+		HTTP *httpApp `json:"http,omitempty"`
 	}
 
 	tlsApp struct {
@@ -84,7 +83,6 @@ type (
 		ReadHeaderTimeout string       `json:"read_header_timeout"`
 		IdleTimeout       string       `json:"idle_timeout"`
 		MaxHeaderBytes    int          `json:"max_header_bytes"`
-		ListenerWrappers  []jsonMap    `json:"listener_wrappers,omitempty"`
 		TLSConnPolicies   []jsonMap    `json:"tls_connection_policies,omitempty"`
 		StrictSNIHost     bool         `json:"strict_sni_host,omitempty"`
 		Logs              *emptyObject `json:"logs,omitempty"`
@@ -107,20 +105,6 @@ type (
 		Match    []jsonMap `json:"match,omitempty"`
 		Handle   []jsonMap `json:"handle,omitempty"`
 		Terminal bool      `json:"terminal,omitempty"`
-	}
-
-	layer4App struct {
-		Servers map[string]*layer4Server `json:"servers"`
-	}
-
-	layer4Server struct {
-		Listen []string      `json:"listen"`
-		Routes []layer4Route `json:"routes,omitempty"`
-	}
-
-	layer4Route struct {
-		Match  []jsonMap `json:"match,omitempty"`
-		Handle []jsonMap `json:"handle,omitempty"`
 	}
 )
 
@@ -157,7 +141,6 @@ func (p *Proxy) render(cfg *model.Config) network.Files {
 	}
 	conf.Apps.TLS = p.tlsApp(pr)
 	conf.Apps.HTTP = p.httpApp(cfg)
-	conf.Apps.Layer4 = p.layer4App(cfg)
 
 	raw, err := json.MarshalIndent(conf, "", "  ")
 	if err != nil {
@@ -368,17 +351,8 @@ func (p *Proxy) httpApp(cfg *model.Config) *httpApp {
 	secure.Routes = append(secure.Routes, refuse)
 	// So is a handshake for one. Left to the loaded certificates, a client
 	// that names nothing gets any that lists the address it dialled, and the
-	// built-in pair lists all of the router's. Without a site this is the
-	// only policy, which keeps TLS on for the routes that share the port.
+	// built-in pair lists all of the router's.
 	secure.TLSConnPolicies = append(secure.TLSConnPolicies, jsonMap{"drop": true})
-	// A route on the HTTPS port is taken before TLS is terminated, so it
-	// wraps the listener rather than sitting in the layer4 app.
-	if routes := sniRoutes(cfg); len(routes) > 0 {
-		secure.ListenerWrappers = []jsonMap{
-			{"wrapper": "layer4", "routes": routes},
-			{"wrapper": "tls"},
-		}
-	}
 	return &httpApp{
 		Servers:     map[string]*httpServer{"http": plain, "https": secure},
 		GracePeriod: proxyGracePeriod,
@@ -477,100 +451,6 @@ func (p *Proxy) reverseProxy(pool model.ProxyPool, site model.ProxySite) jsonMap
 		h["headers"] = jsonMap{"request": jsonMap{
 			"set": jsonMap{"Host": []string{"{http.reverse_proxy.upstream.hostport}"}},
 		}}
-	}
-	return h
-}
-
-// sniRoutes are the layer 4 routes that share the HTTPS port with the
-// terminated sites, picked out by the name the client asks for.
-func sniRoutes(cfg *model.Config) []layer4Route {
-	pr := cfg.Services.Proxy
-	var out []layer4Route
-	for _, r := range pr.Routes {
-		if !r.Enabled || r.Protocol != "tcp" || r.Port != pr.HTTPSPortOr() {
-			continue
-		}
-		out = append(out, layer4Route{Match: routeMatch(cfg, r), Handle: []jsonMap{layer4Proxy(r)}})
-	}
-	return out
-}
-
-func (p *Proxy) layer4App(cfg *model.Config) *layer4App {
-	pr := cfg.Services.Proxy
-	servers := map[string]*layer4Server{}
-	whole := map[string]layer4Route{}
-	for _, r := range pr.Routes {
-		if !r.Enabled || (r.Protocol == "tcp" && r.Port == pr.HTTPSPortOr()) {
-			continue
-		}
-		name := fmt.Sprintf("%s-%d", r.Protocol, r.Port)
-		srv, ok := servers[name]
-		if !ok {
-			listen := fmt.Sprintf(":%d", r.Port)
-			if r.Protocol == "udp" {
-				listen = fmt.Sprintf("udp/:%d", r.Port)
-			}
-			srv = &layer4Server{Listen: []string{listen}}
-			servers[name] = srv
-		}
-		route := layer4Route{Match: routeMatch(cfg, r), Handle: []jsonMap{layer4Proxy(r)}}
-		if len(r.SNI) == 0 {
-			// The route that takes the whole port goes last, or it would
-			// swallow the connections a named route wanted.
-			whole[name] = route
-			continue
-		}
-		srv.Routes = append(srv.Routes, route)
-	}
-	if len(servers) == 0 {
-		return nil
-	}
-	for name, route := range whole {
-		servers[name].Routes = append(servers[name].Routes, route)
-	}
-	return &layer4App{Servers: servers}
-}
-
-func routeMatch(cfg *model.Config, r model.L4Route) []jsonMap {
-	m := jsonMap{}
-	if len(r.SNI) > 0 {
-		m["tls"] = jsonMap{"sni": r.SNI}
-	}
-	if len(r.AllowFrom) > 0 {
-		m["remote_ip"] = jsonMap{"ranges": cfg.AllowFromRanges(r.AllowFrom)}
-	}
-	if len(m) == 0 {
-		return nil
-	}
-	return []jsonMap{m}
-}
-
-func layer4Proxy(r model.L4Route) jsonMap {
-	// One upstream per address. An upstream with several addresses is
-	// dialled on all of them at once and the stream copied to each, which
-	// is a tee, not a pool.
-	ups := make([]jsonMap, 0, len(r.Upstreams))
-	for _, u := range r.Upstreams {
-		// A bare host:port is dialled over TCP, so a UDP route has to say
-		// so: without it the datagram goes to the upstream's TCP port and
-		// nothing ever answers.
-		addr := u.Address
-		if r.Protocol == "udp" {
-			addr = "udp/" + addr
-		}
-		ups = append(ups, jsonMap{"dial": []string{addr}})
-	}
-	h := jsonMap{"handler": "proxy", "upstreams": ups}
-	if r.Policy != "" {
-		h["load_balancing"] = jsonMap{"selection": jsonMap{"policy": r.Policy}}
-	}
-	if r.HealthSeconds > 0 {
-		h["health_checks"] = jsonMap{"active": jsonMap{
-			"interval": seconds(r.HealthSeconds), "timeout": proxyHealthTimeout,
-		}}
-	}
-	if r.ProxyProtocol != "" {
-		h["proxy_protocol"] = r.ProxyProtocol
 	}
 	return h
 }

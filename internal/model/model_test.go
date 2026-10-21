@@ -683,13 +683,13 @@ func proxyStarter() *Config {
 	return cfg
 }
 
-// A worked example: two pools, a site with paths and a WAF profile, and
-// three routes. Nothing in it is wrong.
+// A worked example: two pools and a site with paths and a WAF profile.
+// Nothing in it is wrong.
 func workingProxy() Proxy {
 	return Proxy{
 		Enabled: true,
 		Access: []ProxyAccess{{ID: "wan", Enabled: true, Zone: "wan", Action: ActionAccept,
-			Ports: []string{ProxyPortHTTP, ProxyPortHTTPS}, Routes: []string{"mail", "imap", "dns"}}},
+			Ports: []string{ProxyPortHTTP, ProxyPortHTTPS}}},
 		HTTP3: true,
 		Pools: []ProxyPool{
 			{ID: "web", Upstreams: []ProxyUpstream{{Address: "192.168.1.20:8080"}}, Policy: "least_conn",
@@ -702,14 +702,6 @@ func workingProxy() Proxy {
 		Sites: []ProxySite{{ID: "shop", Enabled: true, Hosts: []string{"shop.example.com", "*.shop.example.com"},
 			Pool: "web", Paths: []ProxyPath{{Prefix: "/api", Pool: "api"}}, HostHeader: "upstream",
 			AllowFrom: []string{"192.168.0.0/16"}, WAF: "strict"}},
-		Routes: []L4Route{
-			{ID: "mail", Enabled: true, Protocol: "tcp", Port: 443, SNI: []string{"mail.example.com"},
-				Upstreams: []ProxyUpstream{{Address: "192.168.1.30:443"}}, HealthSeconds: 30},
-			{ID: "imap", Enabled: true, Protocol: "tcp", Port: 993,
-				Upstreams: []ProxyUpstream{{Address: "192.168.1.30:993"}}, Policy: "random"},
-			{ID: "dns", Enabled: true, Protocol: "udp", Port: 5353,
-				Upstreams: []ProxyUpstream{{Address: "192.168.1.40:53"}}},
-		},
 	}
 }
 
@@ -745,9 +737,6 @@ func TestValidateProxyPortsBelongToTheProxy(t *testing.T) {
 		{"http is the web UI's", func(c *Config) { c.System.Management.WebPort = 80 }, "services.proxy.httpPort"},
 		{"https is SSH's", func(c *Config) { c.Services.Proxy.HTTPSPort = 22 }, "services.proxy.httpsPort"},
 		{"both the same", func(c *Config) { c.Services.Proxy.HTTPPort = 443 }, "services.proxy.httpsPort"},
-		{"a route on the web UI's port", func(c *Config) {
-			c.Services.Proxy.Routes[1].Port = 8443
-		}, "services.proxy.routes[1].port"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -914,87 +903,6 @@ func TestValidateProxyNamesAreShared(t *testing.T) {
 	t.Errorf("no issue at the site: %v", ve.Issues)
 }
 
-func TestHostsOverlap(t *testing.T) {
-	t.Parallel()
-	for _, tc := range []struct {
-		a, b string
-		want bool
-	}{
-		{"shop.example.com", "shop.example.com", true},
-		{"shop.example.com", "SHOP.example.com", true},
-		{"*.example.com", "shop.example.com", true},
-		{"shop.example.com", "*.example.com", true},
-		{"*.example.com", "*.example.com", true},
-		{"*.example.com", "a.b.example.com", false},
-		{"*.example.com", "*.b.example.com", false},
-		{"*.example.com", "example.com", false},
-		{"shop.example.com", "shop.example.org", false},
-	} {
-		if got := hostsOverlap(tc.a, tc.b); got != tc.want {
-			t.Errorf("hostsOverlap(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
-		}
-	}
-}
-
-func TestValidateL4Routes(t *testing.T) {
-	t.Parallel()
-	for _, tc := range []struct {
-		name string
-		edit func(*Proxy)
-		want string
-	}{
-		{"unknown protocol", func(p *Proxy) { p.Routes[0].Protocol = "sctp" }, "services.proxy.routes[0].protocol"},
-		{"on the plain HTTP port", func(p *Proxy) { p.Routes[1].Port = 80 }, "services.proxy.routes[1].port"},
-		{"on the HTTPS port without a name", func(p *Proxy) { p.Routes[0].SNI = nil }, "services.proxy.routes[0].sni"},
-		{"UDP on the HTTP/3 port", func(p *Proxy) { p.Routes[2].Port = 443 }, "services.proxy.routes[2].port"},
-		{"a name over UDP", func(p *Proxy) { p.Routes[2].SNI = []string{"dns.example.com"} }, "services.proxy.routes[2].sni"},
-		{"an address as a name", func(p *Proxy) { p.Routes[0].SNI = []string{"192.168.1.30"} }, "services.proxy.routes[0].sni[0]"},
-		{"a health check over UDP", func(p *Proxy) { p.Routes[2].HealthSeconds = 30 }, "services.proxy.routes[2].healthSeconds"},
-		{"two whole ports", func(p *Proxy) {
-			p.Routes = append(p.Routes, L4Route{ID: "imap2", Enabled: true, Protocol: "tcp", Port: 993,
-				Upstreams: []ProxyUpstream{{Address: "192.168.1.31:993"}}})
-		}, "services.proxy.routes[3].port"},
-		{"the same name twice", func(p *Proxy) {
-			p.Routes = append(p.Routes, L4Route{ID: "mail2", Enabled: true, Protocol: "tcp", Port: 443,
-				SNI: []string{"mail.example.com"}, Upstreams: []ProxyUpstream{{Address: "192.168.1.31:443"}}})
-		}, "services.proxy.routes[3].sni"},
-		{"unknown policy", func(p *Proxy) { p.Routes[1].Policy = "sticky" }, "services.proxy.routes[1].policy"},
-		{"a name a site serves", func(p *Proxy) {
-			p.Routes = append(p.Routes, L4Route{ID: "shop2", Enabled: true, Protocol: "tcp", Port: 443,
-				SNI: []string{"Shop.example.com"}, Upstreams: []ProxyUpstream{{Address: "192.168.1.31:443"}}})
-		}, "services.proxy.routes[3].sni[0]"},
-		{"a name under a site's wildcard", func(p *Proxy) {
-			p.Routes = append(p.Routes, L4Route{ID: "sub", Enabled: true, Protocol: "tcp", Port: 443,
-				SNI: []string{"api.shop.example.com"}, Upstreams: []ProxyUpstream{{Address: "192.168.1.31:443"}}})
-		}, "services.proxy.routes[3].sni[0]"},
-		{"the same name twice, in another case", func(p *Proxy) {
-			p.Routes = append(p.Routes, L4Route{ID: "mail2", Enabled: true, Protocol: "tcp", Port: 443,
-				SNI: []string{"MAIL.example.com"}, Upstreams: []ProxyUpstream{{Address: "192.168.1.31:443"}}})
-		}, "services.proxy.routes[3].sni"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			cfg := proxyStarter()
-			p := workingProxy()
-			tc.edit(&p)
-			cfg.Services.Proxy = p
-			if !hasIssue(t, cfg, tc.want) {
-				t.Errorf("no issue at %s", tc.want)
-			}
-		})
-	}
-
-	// Two names on one port is the whole point of SNI routing.
-	cfg := proxyStarter()
-	p := workingProxy()
-	p.Routes = append(p.Routes, L4Route{ID: "chat", Enabled: true, Protocol: "tcp", Port: 443,
-		SNI: []string{"chat.example.com"}, Upstreams: []ProxyUpstream{{Address: "192.168.1.31:443"}}})
-	cfg.Services.Proxy = p
-	if err := cfg.Validate(); err != nil {
-		t.Errorf("a second name on the HTTPS port was rejected: %v", err)
-	}
-}
-
 // An http-01 certificate does not need the proxy's sites on the WAN: the
 // firewall redirects port 80 from outside to the solver when the proxy is
 // inside only.
@@ -1047,9 +955,6 @@ func TestValidateProxyNeedsAnAccessRule(t *testing.T) {
 
 	p.Access = nil
 	p.Sites[0].Enabled = false
-	for i := range p.Routes {
-		p.Routes[i].Enabled = false
-	}
 	cfg.Services.Proxy = p
 	if hasIssue(t, cfg, "services.proxy.access") {
 		t.Error("a proxy with nothing enabled was made to write an access rule")

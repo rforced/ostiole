@@ -654,8 +654,8 @@ export const useConfigStore = defineStore('config', () => {
       const proxy = draft.value.services?.proxy
       for (const a of proxy?.access ?? [])
         if (a.source?.alias === previousName) a.source.alias = alias.name
-      for (const e of [...(proxy?.sites ?? []), ...(proxy?.routes ?? [])])
-        if (e.allowFrom) e.allowFrom = e.allowFrom.map((f) => (f === previousName ? alias.name : f))
+      for (const s of proxy?.sites ?? [])
+        if (s.allowFrom) s.allowFrom = s.allowFrom.map((f) => (f === previousName ? alias.name : f))
       const enforce = draft.value.blocking?.enforce
       if (enforce?.dohAlias === previousName) enforce.dohAlias = alias.name
       if (enforce?.exemptClients === previousName) enforce.exemptClients = alias.name
@@ -679,8 +679,6 @@ export const useConfigStore = defineStore('config', () => {
       if (a.source?.alias === name) refs.push(`proxy access rule ${a.description || a.id}`)
     for (const site of proxy.sites ?? [])
       if (site.allowFrom?.includes(name)) refs.push(`site ${site.id} allow from`)
-    for (const route of proxy.routes ?? [])
-      if (route.allowFrom?.includes(name)) refs.push(`route ${route.id} allow from`)
     return refs
   }
 
@@ -1053,21 +1051,6 @@ export const useConfigStore = defineStore('config', () => {
     if (previousId === profile.id) return
     for (const s of ensureProxy().sites ?? []) if (s.waf === previousId) s.waf = profile.id
   }
-  /** A route renamed keeps its place in the access list. */
-  function upsertProxyRoute(route, previousId = route.id) {
-    upsertIn('routes', route, previousId)
-    if (previousId === route.id) return
-    for (const a of ensureProxy().access ?? [])
-      if (a.routes) a.routes = a.routes.map((r) => (r === previousId ? route.id : r))
-  }
-
-  /** The access rules that name a route, by what the page calls them. */
-  function routeDependents(id) {
-    return (proxy.value.access ?? [])
-      .filter((a) => a.routes?.includes(id))
-      .map((a) => a.description || a.id)
-  }
-
   /**
    * Sites and paths that send to a pool. They stop it being deleted: a site
    * cannot exist without its pool.
@@ -1099,21 +1082,6 @@ export const useConfigStore = defineStore('config', () => {
       const p = ensureProxy()
       p.wafProfiles = (p.wafProfiles ?? []).filter((w) => w.id !== id)
       for (const s of p.sites ?? []) if (s.waf === id) delete s.waf
-    })
-  }
-  /**
-   * A deleted route leaves the access rules that name it, and a rule left
-   * naming nothing goes with it.
-   */
-  function removeProxyRoute(id) {
-    undoable(`Deleted route ${id}.`, () => {
-      const p = ensureProxy()
-      p.routes = (p.routes ?? []).filter((r) => r.id !== id)
-      if (!p.access) return
-      for (const a of p.access) if (a.routes) a.routes = a.routes.filter((r) => r !== id)
-      p.access = p.access.filter((a) => a.ports?.length || a.routes?.length)
-      for (const a of p.access) if (a.routes && !a.routes.length) delete a.routes
-      if (!p.access.length) delete p.access
     })
   }
 
@@ -1993,9 +1961,6 @@ export const useConfigStore = defineStore('config', () => {
     upsertProfile,
     removeProfile,
     profileDependents,
-    upsertProxyRoute,
-    removeProxyRoute,
-    routeDependents,
     upsertProxyAccess,
     removeProxyAccess,
     moveProxyAccess,

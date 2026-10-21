@@ -207,6 +207,38 @@ var migrations = map[int]func(doc map[string]any){
 			}
 		}
 	},
+	// 16 dropped the proxy's layer 4 routes and the access lines' names of
+	// them. A line that named only routes opened nothing else, so it goes.
+	15: func(doc map[string]any) {
+		proxy := object(doc, "services", "proxy")
+		if proxy == nil {
+			return
+		}
+		delete(proxy, "routes")
+		access, ok := proxy["access"].([]any)
+		if !ok {
+			return
+		}
+		kept := []any{}
+		for _, item := range access {
+			line, ok := item.(map[string]any)
+			if !ok {
+				kept = append(kept, item)
+				continue
+			}
+			_, named := line["routes"]
+			delete(line, "routes")
+			if ports, _ := line["ports"].([]any); named && len(ports) == 0 {
+				continue
+			}
+			kept = append(kept, line)
+		}
+		if len(kept) == 0 {
+			delete(proxy, "access")
+		} else {
+			proxy["access"] = kept
+		}
+	},
 }
 
 // Migrate brings a configuration written at an older version up to

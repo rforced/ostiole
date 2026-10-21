@@ -18,9 +18,8 @@ import ExclusionDialog from '@/views/services/proxy/ExclusionDialog.vue'
 import PoolsTab from '@/views/services/proxy/PoolsTab.vue'
 import ProfileDialog from '@/views/services/proxy/ProfileDialog.vue'
 import ProxyStatus from '@/views/services/proxy/ProxyStatus.vue'
-import RouteDialog from '@/views/services/proxy/RouteDialog.vue'
-import RoutesTab from '@/views/services/proxy/RoutesTab.vue'
 import ServiceTab from '@/views/services/proxy/ServiceTab.vue'
+import SiteDialog from '@/views/services/proxy/SiteDialog.vue'
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -696,18 +695,12 @@ describe('AccessDialog', () => {
   it('writes a rule: its zone, its ports by name, its source and its verdict', async () => {
     const draft = config({
       aliases: [{ name: 'us', type: 'geoip', entries: ['us'] }],
-      services: {
-        proxy: proxy({
-          routes: [{ id: 'imap', enabled: true, protocol: 'tcp', port: 993, upstreams: [] }],
-        }),
-      },
     })
     const { wrapper, store } = withDraft(AccessDialog, draft, { open: true, line: null })
     await flushPromises()
     // A new rule starts on the external zone, HTTPS from anywhere.
     expect(wrapper.get('#access-zone').element.value).toBe('wan')
     await wrapper.get('input[value="http"]').setValue(true)
-    await wrapper.get('input[value="imap"]').setValue(true)
     await wrapper.get('#source-mode').setValue('alias')
     await wrapper.get('#source-alias').setValue('us')
     await wrapper.get('#access-desc').setValue('Sites from the US')
@@ -717,7 +710,6 @@ describe('AccessDialog', () => {
       enabled: true,
       zone: 'wan',
       ports: ['http', 'https'],
-      routes: ['imap'],
       source: { alias: 'us' },
       action: 'accept',
       description: 'Sites from the US',
@@ -737,49 +729,6 @@ describe('AccessDialog', () => {
   })
 })
 
-describe('RoutesTab', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia())
-    vi.clearAllMocks()
-  })
-
-  it('says where each route is reachable', () => {
-    const draft = config({
-      services: {
-        proxy: proxy({
-          routes: [
-            { id: 'imap', enabled: true, protocol: 'tcp', port: 993, upstreams: [] },
-            { id: 'dns', enabled: true, protocol: 'udp', port: 53, upstreams: [] },
-          ],
-          access: [line({ routes: ['imap'] }), line({ id: 'd', routes: ['dns'], action: 'drop' })],
-        }),
-      },
-    })
-    const { wrapper } = withDraft(RoutesTab, draft)
-    const cells = wrapper.findAll('td[data-label="Access"]').map((c) => c.text())
-    expect(cells).toEqual(['wan', 'No rule opens it'])
-  })
-
-  // A route renamed or deleted takes its name out of the access list, and
-  // a rule left naming nothing goes with it.
-  it('keeps the access list in step with the routes', () => {
-    const draft = config({
-      services: {
-        proxy: proxy({
-          routes: [{ id: 'imap', enabled: true, protocol: 'tcp', port: 993, upstreams: [] }],
-          access: [line({ routes: ['imap'] }), line({ id: 'only', ports: [], routes: ['imap'] })],
-        }),
-      },
-    })
-    const { store } = withDraft(RoutesTab, draft)
-    store.upsertProxyRoute({ ...draft.services.proxy.routes[0], id: 'mail' }, 'imap')
-    expect(store.draft.services.proxy.access.map((a) => a.routes)).toEqual([['mail'], ['mail']])
-    expect(store.routeDependents('mail')).toEqual(['wan', 'only'])
-    store.removeProxyRoute('mail')
-    expect(store.draft.services.proxy.access).toEqual([line()])
-  })
-})
-
 describe('Allow from', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -789,12 +738,11 @@ describe('Allow from', () => {
   // A hosts alias with its entries written in it may stand beside the
   // prefixes; a fetched one stays in the text, where the check refuses it.
   it('offers the small aliases and keeps the rest as typed', async () => {
-    const route = {
-      id: 'imap',
+    const site = {
+      id: 'shop',
       enabled: true,
-      protocol: 'tcp',
-      port: 993,
-      upstreams: [{ address: '10.0.0.2:993' }],
+      hosts: ['shop.example.com'],
+      pool: 'web',
       allowFrom: ['office', '192.168.0.0/16', 'us'],
     }
     const draft = config({
@@ -803,17 +751,17 @@ describe('Allow from', () => {
         { name: 'feed', type: 'hosts', entries: ['https://example.com/list'] },
         { name: 'us', type: 'geoip', entries: ['us'] },
       ],
-      services: { proxy: proxy({ routes: [route] }) },
+      services: { proxy: proxy({ sites: [site] }) },
     })
-    const { wrapper, store } = withDraft(RouteDialog, draft, { open: true, route })
+    const { wrapper, store } = withDraft(SiteDialog, draft, { open: true, site })
     await flushPromises()
-    expect(wrapper.get('#route-allow').element.value).toBe('192.168.0.0/16\nus')
+    expect(wrapper.get('#site-allow').element.value).toBe('192.168.0.0/16\nus')
     const offered = wrapper.findAll('label').filter((l) => ['office', 'feed'].includes(l.text()))
     expect(offered.map((l) => l.text())).toEqual(['office'])
     expect(offered[0].get('input').element.checked).toBe(true)
-    await wrapper.get('#route-allow').setValue('192.168.0.0/16')
+    await wrapper.get('#site-allow').setValue('192.168.0.0/16')
     await wrapper.get('form').trigger('submit')
-    expect(store.draft.services.proxy.routes[0].allowFrom).toEqual(['192.168.0.0/16', 'office'])
+    expect(store.draft.services.proxy.sites[0].allowFrom).toEqual(['192.168.0.0/16', 'office'])
   })
 })
 
@@ -859,7 +807,6 @@ describe('Untouched save', () => {
     vi.clearAllMocks()
   })
 
-  const office = { name: 'office', type: 'hosts', entries: ['198.51.100.0/24'] }
   // An API-made config carries these, and the store adds them if missing.
   const services = (over) => ({
     dhcp: { enabled: false },
@@ -909,72 +856,24 @@ describe('Untouched save', () => {
     expect(store.proxy.wafProfiles[0]).toEqual({ id: 'watch', mode: 'block' })
   })
 
-  it('keeps the order of a route allow list', async () => {
-    const route = {
-      id: 'imap',
-      enabled: true,
-      protocol: 'tcp',
-      port: 993,
-      upstreams: [{ address: '10.0.0.2:993' }],
-      allowFrom: ['office', '192.0.2.0/24'],
-    }
-    const draft = config({ aliases: [office], services: services({ routes: [route] }) })
-    const { wrapper, store } = withDraft(RouteDialog, draft, { open: true, route })
-    await flushPromises()
-    expect(wrapper.get('#route-allow').element.value).toBe('192.0.2.0/24')
-    await wrapper.get('form').trigger('submit')
-    expect(store.dirty).toBe(false)
-  })
-
-  it('writes a route allow list the user changes', async () => {
-    const route = {
-      id: 'imap',
-      enabled: true,
-      protocol: 'tcp',
-      port: 993,
-      upstreams: [{ address: '10.0.0.2:993' }],
-      allowFrom: ['office', '192.0.2.0/24'],
-    }
-    const draft = config({ aliases: [office], services: services({ routes: [route] }) })
-    const { wrapper, store } = withDraft(RouteDialog, draft, { open: true, route })
-    await flushPromises()
-    await wrapper.get('#route-allow').setValue('192.0.2.0/24\n203.0.113.0/24')
-    await wrapper.get('form').trigger('submit')
-    expect(store.dirty).toBe(true)
-    expect(store.draft.services.proxy.routes[0].allowFrom).toEqual([
-      '192.0.2.0/24',
-      '203.0.113.0/24',
-      'office',
-    ])
-  })
-
-  const routes = [
-    { id: 'imap', enabled: true, protocol: 'tcp', port: 993, upstreams: [] },
-    { id: 'smtp', enabled: true, protocol: 'tcp', port: 465, upstreams: [] },
-  ]
-
-  it('keeps the order of an access rule ports and routes', async () => {
-    const l = line({ ports: ['https', 'http'], routes: ['smtp', 'imap'] })
-    const draft = config({ services: services({ routes, access: [l] }) })
+  it('keeps the order of an access rule ports', async () => {
+    const l = line({ ports: ['https', 'http'] })
+    const draft = config({ services: services({ access: [l] }) })
     const { wrapper, store } = withDraft(AccessDialog, draft, { open: true, line: l })
     await flushPromises()
     expect(wrapper.get('input[value="http"]').element.checked).toBe(true)
-    expect(wrapper.get('input[value="smtp"]').element.checked).toBe(true)
     await wrapper.get('form').trigger('submit')
     expect(store.dirty).toBe(false)
   })
 
   it('writes access rule ports the user changes', async () => {
-    const l = line({ ports: ['https', 'http'], routes: ['smtp', 'imap'] })
-    const draft = config({ services: services({ routes, access: [l] }) })
+    const l = line({ ports: ['https', 'http'] })
+    const draft = config({ services: services({ access: [l] }) })
     const { wrapper, store } = withDraft(AccessDialog, draft, { open: true, line: l })
     await flushPromises()
     await wrapper.get('input[value="http"]').setValue(false)
     await wrapper.get('form').trigger('submit')
     expect(store.dirty).toBe(true)
-    expect(store.draft.services.proxy.access[0]).toMatchObject({
-      ports: ['https'],
-      routes: ['smtp', 'imap'],
-    })
+    expect(store.draft.services.proxy.access[0]).toMatchObject({ ports: ['https'] })
   })
 })

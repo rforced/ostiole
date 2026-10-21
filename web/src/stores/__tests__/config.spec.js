@@ -930,15 +930,6 @@ describe('config store reverse proxy', () => {
             waf: 'strict',
           },
         ],
-        routes: [
-          {
-            id: 'mail',
-            enabled: true,
-            protocol: 'tcp',
-            port: 993,
-            upstreams: [{ address: 'm:993' }],
-          },
-        ],
       },
     }
     return d
@@ -1112,13 +1103,6 @@ describe('config store reverse proxy', () => {
     expect(config.proxy.wafProfiles[0]).not.toHaveProperty('exclusions')
     useToastStore().toasts.at(-1).action.run()
     expect(config.proxy.wafProfiles[0].exclusions).toEqual([{ rule: '941100', path: '/api/v2' }])
-  })
-
-  it('drops a route by id', () => {
-    const config = useConfigStore()
-    config.replaceDraft(proxied())
-    config.removeProxyRoute('mail')
-    expect(config.proxy.routes).toEqual([])
   })
 
   // An access rule belongs to its zone and names aliases, so it follows a

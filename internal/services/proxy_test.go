@@ -577,10 +577,9 @@ func TestProxyRenderShape(t *testing.T) {
 		Apps struct {
 			HTTP struct {
 				Servers map[string]struct {
-					Listen           []string         `json:"listen"`
-					Protocols        []string         `json:"protocols"`
-					ListenerWrappers []map[string]any `json:"listener_wrappers"`
-					Routes           []struct {
+					Listen    []string `json:"listen"`
+					Protocols []string `json:"protocols"`
+					Routes    []struct {
 						Match  []map[string]any `json:"match"`
 						Handle []map[string]any `json:"handle"`
 					} `json:"routes"`
@@ -595,18 +594,6 @@ func TestProxyRenderShape(t *testing.T) {
 			TLS struct {
 				DisableOCSPStapling bool `json:"disable_ocsp_stapling"`
 			} `json:"tls"`
-			Layer4 struct {
-				Servers map[string]struct {
-					Listen []string `json:"listen"`
-					Routes []struct {
-						Handle []struct {
-							Upstreams []struct {
-								Dial []string `json:"dial"`
-							} `json:"upstreams"`
-						} `json:"handle"`
-					} `json:"routes"`
-				} `json:"servers"`
-			} `json:"layer4"`
 		} `json:"apps"`
 	}
 	if err := json.Unmarshal([]byte(files[proxyConfName]), &conf); err != nil {
@@ -618,9 +605,6 @@ func TestProxyRenderShape(t *testing.T) {
 	https := conf.Apps.HTTP.Servers["https"]
 	if got, want := strings.Join(https.Protocols, ","), "h1,h2,h3"; got != want {
 		t.Errorf("protocols = %q, want %q", got, want)
-	}
-	if len(https.ListenerWrappers) != 2 {
-		t.Errorf("a route on the HTTPS port needs the layer4 and tls wrappers, got %v", https.ListenerWrappers)
 	}
 	// The challenge route comes first on the plain port, whatever else is
 	// served: the solver is behind it.
@@ -650,125 +634,42 @@ func TestProxyRenderShape(t *testing.T) {
 	if conf.Admin.Config.Persist {
 		t.Error("the proxy keeps a copy of its configuration it never reads")
 	}
-	for _, name := range []string{"tcp-993", "udp-5353"} {
-		if _, ok := conf.Apps.Layer4.Servers[name]; !ok {
-			t.Errorf("no layer4 server %q: %v", name, conf.Apps.Layer4.Servers)
-		}
-	}
-	if got := conf.Apps.Layer4.Servers["udp-5353"].Listen; len(got) != 1 || got[0] != "udp/:5353" {
-		t.Errorf("udp listener = %v", got)
-	}
-	// A bare host:port is dialled over TCP, so a UDP route names its
-	// network on the way out as well as on the way in.
-	if !strings.Contains(files[proxyConfName], `"udp/192.168.1.40:53"`) {
-		t.Error("the UDP route dials its upstream over TCP")
-	}
-	if strings.Contains(files[proxyConfName], `"udp/192.168.1.30:993"`) {
-		t.Error("a TCP route named a network it does not use")
-	}
-	if _, ok := conf.Apps.Layer4.Servers["tcp-443"]; ok {
-		t.Error("a route on the HTTPS port belongs in the listener wrapper, not its own server")
-	}
-	// Two upstreams are two entries, each dialled on its own: one entry
-	// with two addresses is dialled on both and the stream copied to each.
-	imap := conf.Apps.Layer4.Servers["tcp-993"].Routes
-	if len(imap) != 1 || len(imap[0].Handle) != 1 || len(imap[0].Handle[0].Upstreams) != 2 {
-		t.Fatalf("tcp-993 routes = %+v", imap)
-	}
-	for _, u := range imap[0].Handle[0].Upstreams {
-		if len(u.Dial) != 1 {
-			t.Errorf("an upstream dials %v; one address each", u.Dial)
-		}
-	}
 }
 
 // A name nothing claims ends at a 403 on both servers and a refused
-// handshake on the secure one, with or without a site.
+// handshake on the secure one.
 func TestProxyRefusalComesLast(t *testing.T) {
 	t.Parallel()
-	routesOnly := loadConfig(t, "testdata/proxy.json")
-	routesOnly.Services.Proxy.Sites = nil
-	for name, cfg := range map[string]*model.Config{
-		"sites and routes": loadConfig(t, "testdata/proxy.json"),
-		"routes only":      routesOnly,
-	} {
-		files, err := (&Proxy{Dir: "/etc/ostiole/proxy"}).Render(cfg)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var conf struct {
-			Apps struct {
-				HTTP struct {
-					Servers map[string]struct {
-						TLSConnPolicies []map[string]any `json:"tls_connection_policies"`
-						Routes          []struct {
-							Match  []map[string]any `json:"match"`
-							Handle []map[string]any `json:"handle"`
-						} `json:"routes"`
-					} `json:"servers"`
-				} `json:"http"`
-			} `json:"apps"`
-		}
-		if err := json.Unmarshal([]byte(files[proxyConfName]), &conf); err != nil {
-			t.Fatal(err)
-		}
-		for _, srv := range []string{"http", "https"} {
-			routes := conf.Apps.HTTP.Servers[srv].Routes
-			last := routes[len(routes)-1]
-			if len(last.Match) != 0 || len(last.Handle) != 1 || last.Handle[0]["status_code"] != 403.0 {
-				t.Errorf("%s, %s: the last route is %+v, want a 403 for anything", name, srv, last)
-			}
-		}
-		policies := conf.Apps.HTTP.Servers["https"].TLSConnPolicies
-		if n := len(policies); n == 0 || len(policies[n-1]) != 1 || policies[n-1]["drop"] != true {
-			t.Errorf("%s: TLS policies %v, want a drop for anything last", name, policies)
-		}
-	}
-}
-
-// Named routes keep their configuration order, and the one that takes
-// the whole port comes last whatever its position.
-func TestProxyLayer4RoutesKeepTheirOrder(t *testing.T) {
-	t.Parallel()
-	cfg := loadConfig(t, "testdata/proxy.json")
-	up := []model.ProxyUpstream{{Address: "192.168.1.50:8443"}}
-	cfg.Services.Proxy.Routes = []model.L4Route{
-		{ID: "all", Enabled: true, Protocol: "tcp", Port: 8443, Upstreams: up},
-		{ID: "one", Enabled: true, Protocol: "tcp", Port: 8443, SNI: []string{"a.example.com"}, Upstreams: up},
-		{ID: "any", Enabled: true, Protocol: "tcp", Port: 8443, SNI: []string{"*.example.com"}, Upstreams: up},
-	}
-	files, err := (&Proxy{Dir: "/etc/ostiole/proxy"}).Render(cfg)
+	files, err := (&Proxy{Dir: "/etc/ostiole/proxy"}).Render(loadConfig(t, "testdata/proxy.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	var conf struct {
 		Apps struct {
-			Layer4 struct {
+			HTTP struct {
 				Servers map[string]struct {
-					Routes []struct {
-						Match []struct {
-							TLS struct {
-								SNI []string `json:"sni"`
-							} `json:"tls"`
-						} `json:"match"`
+					TLSConnPolicies []map[string]any `json:"tls_connection_policies"`
+					Routes          []struct {
+						Match  []map[string]any `json:"match"`
+						Handle []map[string]any `json:"handle"`
 					} `json:"routes"`
 				} `json:"servers"`
-			} `json:"layer4"`
+			} `json:"http"`
 		} `json:"apps"`
 	}
 	if err := json.Unmarshal([]byte(files[proxyConfName]), &conf); err != nil {
 		t.Fatal(err)
 	}
-	var got []string
-	for _, r := range conf.Apps.Layer4.Servers["tcp-8443"].Routes {
-		if len(r.Match) == 0 {
-			got = append(got, "*")
-			continue
+	for _, srv := range []string{"http", "https"} {
+		routes := conf.Apps.HTTP.Servers[srv].Routes
+		last := routes[len(routes)-1]
+		if len(last.Match) != 0 || len(last.Handle) != 1 || last.Handle[0]["status_code"] != 403.0 {
+			t.Errorf("%s: the last route is %+v, want a 403 for anything", srv, last)
 		}
-		got = append(got, strings.Join(r.Match[0].TLS.SNI, ","))
 	}
-	if want := "a.example.com *.example.com *"; strings.Join(got, " ") != want {
-		t.Errorf("routes = %q, want %q", strings.Join(got, " "), want)
+	policies := conf.Apps.HTTP.Servers["https"].TLSConnPolicies
+	if n := len(policies); n == 0 || len(policies[n-1]) != 1 || policies[n-1]["drop"] != true {
+		t.Errorf("TLS policies %v, want a drop for anything last", policies)
 	}
 }
 
@@ -788,8 +689,6 @@ func TestProxyRedirectCarriesTheHTTPSPort(t *testing.T) {
 			t.Parallel()
 			cfg := loadConfig(t, "testdata/proxy.json")
 			cfg.Services.Proxy.HTTPSPort = tc.port
-			// The routes on 443 move with it, and a name is what they take.
-			cfg.Services.Proxy.Routes = nil
 			files, err := (&Proxy{Dir: "/etc/ostiole/proxy"}).Render(cfg)
 			if err != nil {
 				t.Fatal(err)

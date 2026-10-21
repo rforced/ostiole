@@ -14,7 +14,6 @@ import EventsTab from '@/views/services/proxy/EventsTab.vue'
 import PoolsTab from '@/views/services/proxy/PoolsTab.vue'
 import ProxyStatus from '@/views/services/proxy/ProxyStatus.vue'
 import RequestsTab from '@/views/services/proxy/RequestsTab.vue'
-import RoutesTab from '@/views/services/proxy/RoutesTab.vue'
 import ServiceTab from '@/views/services/proxy/ServiceTab.vue'
 import SitesTab from '@/views/services/proxy/SitesTab.vue'
 import WafTab from '@/views/services/proxy/WafTab.vue'
@@ -44,7 +43,6 @@ const { tabs, tab } = usePageTabs()
       <TabsContent value="service"><ServiceTab /></TabsContent>
       <TabsContent value="sites"><SitesTab /></TabsContent>
       <TabsContent value="pools"><PoolsTab /></TabsContent>
-      <TabsContent value="routes"><RoutesTab /></TabsContent>
       <TabsContent value="waf"><WafTab /></TabsContent>
       <TabsContent value="events"><EventsTab /></TabsContent>
       <TabsContent value="requests"><RequestsTab /></TabsContent>

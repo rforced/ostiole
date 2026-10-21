@@ -1,5 +1,5 @@
 {
-  "version": 15,
+  "version": 16,
   "system": { "management": { "webPort": 443, "sshPort": 443 } },
   "zones": [
     { "name": "wan", "external": true },

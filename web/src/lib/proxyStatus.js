@@ -32,10 +32,7 @@ function fetchStatus() {
  * @param {object} [p] services.proxy
  */
 export function proxyServes(p) {
-  return Boolean(
-    p?.enabled &&
-    ((p.sites ?? []).some((s) => s.enabled) || (p.routes ?? []).some((r) => r.enabled)),
-  )
+  return Boolean(p?.enabled && (p.sites ?? []).some((s) => s.enabled))
 }
 
 /**
@@ -61,7 +58,7 @@ export function useProxyStatus({ poll = false } = {}) {
     if (!draft.value.enabled || !web) return 0
     if (httpPort.value === web) return httpPort.value
     if (httpsPort.value === web) return httpsPort.value
-    return (draft.value.routes ?? []).find((r) => r.enabled && r.port === web)?.port ?? 0
+    return 0
   })
 
   const stage = computed(() => {

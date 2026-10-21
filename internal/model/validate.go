@@ -1186,11 +1186,6 @@ func (v *validator) proxy(c *Config, zones map[string]bool) {
 	for i := range p.Sites {
 		v.proxySite(fmt.Sprintf("services.proxy.sites[%d]", i), p.Sites[i], c, ids, hosts)
 	}
-	for i := range p.Routes {
-		v.l4Route(fmt.Sprintf("services.proxy.routes[%d]", i), p.Routes[i], c, ids)
-	}
-	v.l4RouteClashes(c)
-	v.routesShadowSites(c)
 	if n := p.Events.Entries; n < 0 || n > MaxProxyEventEntries {
 		v.add("services.proxy.events.entries", "%d must be 0-%d (0 means %d)",
 			n, MaxProxyEventEntries, DefaultProxyEventEntries)
@@ -1210,8 +1205,8 @@ func (v *validator) proxyAccess(c *Config, zones map[string]bool) {
 		if !zones[a.Zone] {
 			v.add(path+".zone", "unknown zone %q", a.Zone)
 		}
-		if len(a.Ports) == 0 && len(a.Routes) == 0 {
-			v.add(path+".ports", "name the HTTP or HTTPS port, or a route")
+		if len(a.Ports) == 0 {
+			v.add(path+".ports", "name the HTTP or HTTPS port")
 		}
 		named := map[string]bool{}
 		for j, name := range a.Ports {
@@ -1222,16 +1217,6 @@ func (v *validator) proxyAccess(c *Config, zones map[string]bool) {
 				v.add(fmt.Sprintf("%s.ports[%d]", path, j), "%s is named twice", name)
 			}
 			named[name] = true
-		}
-		routes := map[string]bool{}
-		for j, id := range a.Routes {
-			switch _, ok := p.Route(id); {
-			case !ok:
-				v.add(fmt.Sprintf("%s.routes[%d]", path, j), "unknown route %q", id)
-			case routes[id]:
-				v.add(fmt.Sprintf("%s.routes[%d]", path, j), "route %q is named twice", id)
-			}
-			routes[id] = true
 		}
 		switch a.Action {
 		case ActionAccept, ActionDrop, ActionReject:
@@ -1274,11 +1259,6 @@ func (v *validator) proxyPorts(c *Config) {
 	}
 	if p.HTTPPortOr() == p.HTTPSPortOr() {
 		v.add("services.proxy.httpsPort", "port %d is already the plain HTTP port", p.HTTPSPortOr())
-	}
-	for i, r := range p.Routes {
-		if r.Enabled {
-			v.proxyPort(fmt.Sprintf("services.proxy.routes[%d].port", i), r.Port, m)
-		}
 	}
 }
 
@@ -1410,7 +1390,7 @@ func (v *validator) proxySite(path string, s ProxySite, c *Config, ids map[strin
 	}
 }
 
-// proxyAllowFrom checks a site's or a route's Allow from. The proxy walks
+// proxyAllowFrom checks a site's Allow from. The proxy walks
 // every range for every request, so a hosts alias with written entries may
 // stand in for them, but not an alias that is fetched and can run to
 // thousands of networks.
@@ -1501,129 +1481,6 @@ func (v *validator) wafExclusion(path string, e WAFExclusion) {
 	if e.Target != "" && !wafTargetRe.MatchString(e.Target) {
 		v.add(path+".target", "%q must be a variable like ARGS or ARGS:password", e.Target)
 	}
-}
-
-func (v *validator) l4Route(path string, r L4Route, c *Config, ids map[string]string) {
-	p := c.Services.Proxy
-	v.proxyID(path+".id", r.ID, "route", ids)
-	if r.Protocol != "tcp" && r.Protocol != "udp" {
-		v.add(path+".protocol", "%q must be tcp or udp", r.Protocol)
-	}
-	switch {
-	case r.Port == 0:
-		v.add(path+".port", "port 0 is not a port")
-	case r.Port == p.HTTPPortOr():
-		v.add(path+".port", "port %d is the proxy's plain HTTP port", r.Port)
-	case r.Port == p.HTTPSPortOr() && r.Protocol == "tcp" && len(r.SNI) == 0:
-		v.add(path+".sni", "a route on the HTTPS port takes the connections that ask for a name, so it needs one")
-	case r.Port == p.HTTPSPortOr() && r.Protocol == "udp" && p.HTTP3:
-		v.add(path+".port", "port %d carries HTTP/3; switch that off or move the route", r.Port)
-	}
-	if r.Protocol == "udp" {
-		if len(r.SNI) > 0 {
-			v.add(path+".sni", "a server name is read from a TLS handshake, which UDP does not carry")
-		}
-		if r.HealthSeconds != 0 {
-			v.add(path+".healthSeconds", "a health check connects, which UDP does not do")
-		}
-	}
-	for i, name := range r.SNI {
-		if !validProxyHost(name) {
-			v.add(fmt.Sprintf("%s.sni[%d]", path, i), "%q is not a hostname or a wildcard like *.example.com", name)
-		}
-	}
-	v.proxyUpstreams(path, r.Upstreams)
-	if !slices.Contains(L4Policies, r.Policy) {
-		v.add(path+".policy", "%q is not a balancing policy", r.Policy)
-	}
-	if n := r.HealthSeconds; n != 0 && (n < 5 || n > 3600) {
-		v.add(path+".healthSeconds", "%d must be 0 or 5-3600", n)
-	}
-	if !slices.Contains(ProxyProtocols, r.ProxyProtocol) {
-		v.add(path+".proxyProtocol", "%q must be v1, v2 or empty", r.ProxyProtocol)
-	}
-	v.proxyAllowFrom(path, r.AllowFrom, c)
-}
-
-// l4RouteClashes checks the routes against each other: one listener per
-// port and protocol, shared only by routes that each pick a name.
-func (v *validator) l4RouteClashes(c *Config) {
-	type key struct {
-		proto string
-		port  uint16
-	}
-	seen := map[key][]int{}
-	routes := c.Services.Proxy.Routes
-	for i, r := range routes {
-		k := key{r.Protocol, r.Port}
-		for _, j := range seen[k] {
-			path := fmt.Sprintf("services.proxy.routes[%d]", i)
-			other := routes[j]
-			switch {
-			case len(r.SNI) == 0 || len(other.SNI) == 0:
-				v.add(path+".port", "route %q already has %s port %d; two routes on one port each need a server name",
-					other.ID, r.Protocol, r.Port)
-			default:
-				for _, name := range r.SNI {
-					if slices.ContainsFunc(other.SNI, func(o string) bool { return strings.EqualFold(o, name) }) {
-						v.add(path+".sni", "route %q already takes %q on %s port %d", other.ID, name, r.Protocol, r.Port)
-					}
-				}
-			}
-		}
-		seen[k] = append(seen[k], i)
-	}
-}
-
-// routesShadowSites refuses a named route on the HTTPS port for a name an
-// enabled site serves: the route takes the handshake before the site, its
-// certificate and its rules ever see it.
-func (v *validator) routesShadowSites(c *Config) {
-	p := c.Services.Proxy
-	for i, r := range p.Routes {
-		if !r.Enabled || r.Protocol != "tcp" || r.Port != p.HTTPSPortOr() {
-			continue
-		}
-		for j, name := range r.SNI {
-			if site, ok := siteServing(p, name); ok {
-				v.add(fmt.Sprintf("services.proxy.routes[%d].sni[%d]", i, j),
-					"%q is served by site %q, which the route would take the connections from", name, site)
-			}
-		}
-	}
-}
-
-// siteServing names the enabled site with a host that name can match.
-func siteServing(p Proxy, name string) (string, bool) {
-	for _, s := range p.Sites {
-		if !s.Enabled {
-			continue
-		}
-		for _, host := range s.Hosts {
-			if hostsOverlap(name, host) {
-				return s.ID, true
-			}
-		}
-	}
-	return "", false
-}
-
-// hostsOverlap reports whether two names, either a wildcard, can match one
-// server name. A wildcard stands for exactly one label, as it does in a
-// certificate.
-func hostsOverlap(a, b string) bool { return hostCovers(a, b) || hostCovers(b, a) }
-
-func hostCovers(pattern, name string) bool {
-	pattern, name = strings.ToLower(pattern), strings.ToLower(name)
-	if pattern == name {
-		return true
-	}
-	rest, ok := strings.CutPrefix(pattern, "*.")
-	if !ok {
-		return false
-	}
-	first, tail, found := strings.Cut(name, ".")
-	return found && first != "" && first != "*" && tail == rest
 }
 
 // validProxyHost accepts a hostname or a single leading wildcard label. A
@@ -3234,7 +3091,7 @@ func (v *validator) logKeep(path string, k LogKeep, most, def int) {
 	}
 }
 
-// proxyID is id for the proxy's four lists, which share one set of names
+// proxyID is id for the proxy's three lists, which share one set of names
 // so that an event can name what it hit without saying what kind of thing
 // it is. The refusal says which of them already has the name, because the
 // one being checked is not always the one that was just renamed.
@@ -3244,7 +3101,7 @@ func (v *validator) proxyID(path, id, kind string, seen map[string]string) {
 		return
 	}
 	if other, taken := seen[id]; taken {
-		v.add(path, "%q is already the %s's; pools, sites, profiles and routes share one set of names", id, other)
+		v.add(path, "%q is already the %s's; pools, sites and profiles share one set of names", id, other)
 		return
 	}
 	seen[id] = kind

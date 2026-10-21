@@ -440,11 +440,11 @@ func TestACMERuleFollowsTheChallenge(t *testing.T) {
 
 func TestProxyAccessSitsAtTheZoneTail(t *testing.T) {
 	t.Parallel()
-	// The fixture's one line: HTTP, HTTPS, HTTP/3 and both routes, from
-	// anywhere on wan, which is what "open on wan" used to be.
+	// The fixture's one line: HTTP, HTTPS and HTTP/3 from anywhere on wan,
+	// which is what "open on wan" used to be.
 	const (
 		tcp = `fib daddr type local tcp dport { 80, 443 } counter accept comment "proxy:wan"`
-		udp = `fib daddr type local udp dport { 443, 5353 } counter accept comment "proxy:wan"`
+		udp = `fib daddr type local udp dport 443 counter accept comment "proxy:wan"`
 	)
 
 	got, err := Render(loadConfig(t, "testdata/proxy.json"))
@@ -477,7 +477,7 @@ func TestProxyAccessSitsAtTheZoneTail(t *testing.T) {
 	}
 	row := proxy[0]
 	if !row.After || strings.Join(row.Zones, ",") != "wan" || row.Protocol != "tcp+udp" ||
-		row.Source != "any" || row.Destination != "this router : 80, 443, udp 443, 5353" ||
+		row.Source != "any" || row.Destination != "this router : 80, 443, udp 443" ||
 		!slices.Equal(row.Keys, []string{"zone_wan/proxy:wan"}) {
 		t.Errorf("row = %+v", row)
 	}
@@ -487,7 +487,7 @@ func TestProxyAccessSitsAtTheZoneTail(t *testing.T) {
 		edit func(*model.Proxy)
 	}{
 		{"disabled", func(p *model.Proxy) { p.Enabled = false }},
-		{"nothing to serve", func(p *model.Proxy) { p.Sites, p.Routes, p.Access[0].Routes = nil, nil, nil }},
+		{"nothing to serve", func(p *model.Proxy) { p.Sites = nil }},
 		{"another zone", func(p *model.Proxy) { p.Access[0].Zone = "lan" }},
 		{"line off", func(p *model.Proxy) {
 			p.Access[0].Enabled = false
@@ -526,7 +526,6 @@ func TestProxyAccessLines(t *testing.T) {
 			Ports: []string{model.ProxyPortHTTPS}, Source: model.Endpoint{Alias: "home"}},
 		{ID: "http-only", Enabled: true, Zone: "wan", Action: model.ActionReject, Ports: []string{model.ProxyPortHTTP},
 			Source: model.Endpoint{Alias: "home", NotAddresses: true}},
-		{ID: "resolver", Enabled: true, Zone: "wan", Action: model.ActionAccept, Routes: []string{"resolver"}},
 	}
 	got, err := Render(cfg)
 	if err != nil {
@@ -540,7 +539,6 @@ func TestProxyAccessLines(t *testing.T) {
 		`ip6 saddr @alias_home_v6 fib daddr type local tcp dport 443 counter accept comment "proxy:https-home"`,
 		`ip saddr != @alias_home_v4 fib daddr type local tcp dport 80 counter reject with tcp reset comment "proxy:http-only"`,
 		`ip6 saddr != @alias_home_v6 fib daddr type local tcp dport 80 counter reject with tcp reset comment "proxy:http-only"`,
-		`fib daddr type local udp dport 5353 counter accept comment "proxy:resolver"`,
 	}
 	at := -1
 	for _, line := range want {
@@ -567,7 +565,6 @@ func TestProxyAccessLines(t *testing.T) {
 		"drop 203.0.113.0/24 this router : 443",
 		"accept @home this router : 443",
 		"reject not @home this router : 80",
-		"accept any this router : 5353",
 	}) {
 		t.Errorf("rows = %q", sources)
 	}

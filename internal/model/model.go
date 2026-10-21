@@ -29,10 +29,11 @@ import (
 // enforcement's "exemptAlias" to "exemptClients" and moved an alias's
 // "url" into its entries, dropping "select"; version 15 made a rule's
 // destination zone a destination match, so it no longer combines with
-// destination addresses, an alias, a peer or self. A bump adds a step to
-// migrations, which brings a file from version 6 on up to date as it is
-// read; an older one needs each change made by hand.
-const SchemaVersion = 15
+// destination addresses, an alias, a peer or self; version 16 dropped the
+// proxy's layer 4 "routes". A bump adds a step to migrations, which brings
+// a file from version 6 on up to date as it is read; an older one needs
+// each change made by hand.
+const SchemaVersion = 16
 
 // Action is a rule verdict.
 type Action string
@@ -2001,8 +2002,7 @@ type Services struct {
 	DHCP DHCPService `json:"dhcp"`
 	DNS  DNSServer   `json:"dns"`
 	UPnP UPnP        `json:"upnp"`
-	// Proxy publishes what is behind the router: HTTP sites behind a WAF,
-	// and TCP or UDP ports passed through.
+	// Proxy publishes what is behind the router: HTTP sites behind a WAF.
 	Proxy Proxy `json:"proxy,omitzero"`
 	// NTP keeps the router's clock and can pass the time on to the LAN.
 	NTP NTP `json:"ntp,omitzero"`

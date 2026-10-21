@@ -63,21 +63,8 @@ test('publish a site through a pool and apply it', async ({ page }) => {
   await expect(site).toContainText('shop.example.com')
   await expect(site).toContainText('built-in')
 
-  await page.getByRole('tab', { name: 'Routes' }).click()
-  await page.getByRole('button', { name: 'Add route' }).click()
-  dialog = page.getByRole('dialog')
-  await dialog.getByLabel('Name', { exact: true }).fill('imap')
-  await dialog.getByRole('spinbutton', { name: 'Port' }).fill('993')
-  await dialog.getByRole('textbox', { name: 'Upstreams' }).fill('192.168.50.30:993')
-  await dialog.getByRole('button', { name: 'Save to draft' }).click()
-  const imap = page.getByRole('row').filter({ hasText: 'imap' })
-  await expect(imap).toContainText('tcp/993')
-  // A new route is reachable nowhere until an access rule names it.
-  await expect(imap).toContainText('No rule opens it')
-  await page.screenshot({ path: shot('110-proxy-routes'), fullPage: true })
-
-  // HTTPS on wan from the admins alias, then HTTP and the route from
-  // anywhere, moved above it.
+  // HTTPS on wan from the admins alias, then HTTP from anywhere, moved
+  // above it.
   await page.getByRole('tab', { name: 'Settings' }).click()
   await page.getByRole('button', { name: 'Add rule' }).click()
   dialog = page.getByRole('dialog')
@@ -88,23 +75,20 @@ test('publish a site through a pool and apply it', async ({ page }) => {
   await dialog.getByRole('button', { name: 'Save to draft' }).click()
   await page.getByRole('button', { name: 'Add rule' }).click()
   dialog = page.getByRole('dialog')
-  await dialog.getByLabel('Description').fill('Mail and redirects')
+  await dialog.getByLabel('Description').fill('Redirects')
   await dialog.getByRole('checkbox', { name: /^HTTPS / }).uncheck()
   await dialog.getByRole('checkbox', { name: /^HTTP / }).check()
   await expect(
     dialog.getByText('Sites send HTTP to HTTPS unless they serve plain HTTP.'),
   ).toBeVisible()
-  await dialog.getByRole('checkbox', { name: /^imap / }).check()
   await dialog.getByRole('button', { name: 'Save to draft' }).click()
   const access = page.getByRole('region', { name: 'Access' }).getByRole('row')
   await expect(access.nth(1)).toContainText('Admins')
   await expect(access.nth(1)).toContainText('@admins')
-  await expect(access.nth(2)).toContainText('HTTP, imap')
-  await page.getByRole('button', { name: 'Move Mail and redirects up' }).click()
-  await expect(access.nth(1)).toContainText('Mail and redirects')
+  await expect(access.nth(2).locator('td[data-label="Ports"]')).toHaveText('HTTP')
+  await page.getByRole('button', { name: 'Move Redirects up' }).click()
+  await expect(access.nth(1)).toContainText('Redirects')
   await page.screenshot({ path: shot('111-proxy-access'), fullPage: true })
-  await page.getByRole('tab', { name: 'Routes' }).click()
-  await expect(imap).toContainText('wan')
 
   await applyAndConfirm(page)
 
@@ -113,9 +97,7 @@ test('publish a site through a pool and apply it', async ({ page }) => {
     const res = await fetch('/api/v1/ruleset', { headers: { 'X-Requested-With': 'ostiole' } })
     return await res.text()
   })
-  const open = ruleset.indexOf(
-    'fib daddr type local tcp dport { 993, 8080 } counter accept comment "proxy:',
-  )
+  const open = ruleset.indexOf('fib daddr type local tcp dport 8080 counter accept comment "proxy:')
   const admins = ruleset.indexOf(
     'ip saddr @alias_admins_v4 fib daddr type local tcp dport 8443 counter accept comment "proxy:',
   )

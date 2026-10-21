@@ -25,6 +25,17 @@ func older(t *testing.T, cfg *Config) []byte {
 		t.Fatal(err)
 	}
 	doc["version"] = oldestMigrated
+	// 16 dropped the proxy's routes, which access lines named.
+	if proxy := object(doc, "services", "proxy"); proxy != nil {
+		proxy["routes"] = []any{map[string]any{"id": "imap", "enabled": true, "protocol": "tcp", "port": json.Number("993"),
+			"upstreams": []any{map[string]any{"address": "192.168.1.30:993"}}}}
+		access, _ := proxy["access"].([]any)
+		for _, item := range access {
+			item.(map[string]any)["routes"] = []any{"imap"}
+		}
+		proxy["access"] = append(access, map[string]any{"id": "mail", "enabled": true, "zone": "wan",
+			"routes": []any{"imap"}, "source": map[string]any{}, "action": "accept"})
+	}
 	// 14 split the exempt alias in two; the one there was matched clients.
 	// An alias's one URL was a field of its own, beside a selection.
 	if enforce := object(doc, "blocking", "enforce"); enforce != nil {
@@ -211,9 +222,9 @@ func TestEveryVersionHasAStep(t *testing.T) {
 	}
 }
 
-// Each zone the proxy was open on becomes one line opening what it did:
-// both listeners and every route, from anywhere. A zone written twice is
-// one line.
+// Each zone the proxy was open on becomes one line opening both listeners
+// from anywhere; the routes it opened as well went in version 16. A zone
+// written twice is one line.
 func TestMigrateTurnsProxyZonesIntoAccess(t *testing.T) {
 	t.Parallel()
 	raw := `{"version":8,"services":{"proxy":{"enabled":true,"zones":["wan","lan","wan"],` +
@@ -224,10 +235,8 @@ func TestMigrateTurnsProxyZonesIntoAccess(t *testing.T) {
 	}
 	p := cfg.Services.Proxy
 	want := []ProxyAccess{
-		{ID: "wan", Enabled: true, Zone: "wan", Action: ActionAccept,
-			Ports: []string{ProxyPortHTTP, ProxyPortHTTPS}, Routes: []string{"imap", "dns"}},
-		{ID: "lan", Enabled: true, Zone: "lan", Action: ActionAccept,
-			Ports: []string{ProxyPortHTTP, ProxyPortHTTPS}, Routes: []string{"imap", "dns"}},
+		{ID: "wan", Enabled: true, Zone: "wan", Action: ActionAccept, Ports: []string{ProxyPortHTTP, ProxyPortHTTPS}},
+		{ID: "lan", Enabled: true, Zone: "lan", Action: ActionAccept, Ports: []string{ProxyPortHTTP, ProxyPortHTTPS}},
 	}
 	if !reflect.DeepEqual(p.Access, want) {
 		t.Errorf("access = %+v\nwant %+v", p.Access, want)
@@ -424,5 +433,34 @@ func TestMigrateDropsADestinationZoneBesideADestination(t *testing.T) {
 	}
 	if !reflect.DeepEqual(cfg.Rules, want) {
 		t.Errorf("rules = %+v\nwant %+v", cfg.Rules, want)
+	}
+}
+
+// The routes go, and each access line's names of them; a line that named
+// only routes goes with them.
+func TestMigrateDropsTheProxyRoutes(t *testing.T) {
+	t.Parallel()
+	raw := `{"version":15,"services":{"proxy":{"enabled":true,
+		"routes":[{"id":"imap","enabled":true,"protocol":"tcp","port":993,"upstreams":[{"address":"192.168.1.30:993"}]}],
+		"access":[
+			{"id":"web","enabled":true,"zone":"wan","ports":["https"],"routes":["imap"],"source":{},"action":"accept"},
+			{"id":"mail","enabled":true,"zone":"wan","routes":["imap"],"source":{},"action":"accept"},
+			{"id":"plain","enabled":true,"zone":"lan","ports":["http"],"source":{},"action":"accept"}]}}}`
+	dec := json.NewDecoder(bytes.NewReader(Migrate([]byte(raw))))
+	dec.DisallowUnknownFields()
+	var cfg Config
+	if err := dec.Decode(&cfg); err != nil {
+		t.Fatal(err)
+	}
+	want := []ProxyAccess{
+		{ID: "web", Enabled: true, Zone: "wan", Ports: []string{ProxyPortHTTPS}, Action: ActionAccept},
+		{ID: "plain", Enabled: true, Zone: "lan", Ports: []string{ProxyPortHTTP}, Action: ActionAccept},
+	}
+	if !reflect.DeepEqual(cfg.Services.Proxy.Access, want) {
+		t.Errorf("access = %+v\nwant %+v", cfg.Services.Proxy.Access, want)
+	}
+	only := `{"version":15,"services":{"proxy":{"access":[{"id":"mail","enabled":true,"zone":"wan","routes":["imap"],"source":{},"action":"accept"}]}}}`
+	if got := string(Migrate([]byte(only))); strings.Contains(got, `"access"`) {
+		t.Errorf("an emptied access list was left behind: %s", got)
 	}
 }

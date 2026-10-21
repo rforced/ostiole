@@ -18,8 +18,8 @@ func TestValidateProxyAccess(t *testing.T) {
 		cfg.Services.Proxy.Access = append(cfg.Services.Proxy.Access,
 			ProxyAccess{ID: "us-https", Enabled: true, Zone: "wan", Action: ActionAccept,
 				Ports: []string{ProxyPortHTTPS}, Source: Endpoint{Alias: "us", NotAddresses: true}},
-			ProxyAccess{ID: "home-imap", Enabled: true, Zone: "lan", Action: ActionReject, Log: true,
-				Routes: []string{"imap"}, Source: Endpoint{Alias: "home"}},
+			ProxyAccess{ID: "home-http", Enabled: true, Zone: "lan", Action: ActionReject, Log: true,
+				Ports: []string{ProxyPortHTTP}, Source: Endpoint{Alias: "home"}},
 		)
 		return cfg
 	}
@@ -34,11 +34,9 @@ func TestValidateProxyAccess(t *testing.T) {
 		{"bad id", func(a *ProxyAccess) { a.ID = "has space" }, "services.proxy.access[1].id"},
 		{"duplicate id", func(a *ProxyAccess) { a.ID = "wan" }, "services.proxy.access[1].id"},
 		{"unknown zone", func(a *ProxyAccess) { a.Zone = "dmz" }, "services.proxy.access[1].zone"},
-		{"nothing named", func(a *ProxyAccess) { a.Ports, a.Routes = nil, nil }, "services.proxy.access[1].ports"},
+		{"nothing named", func(a *ProxyAccess) { a.Ports = nil }, "services.proxy.access[1].ports"},
 		{"unknown port", func(a *ProxyAccess) { a.Ports = []string{"8080"} }, "services.proxy.access[1].ports[0]"},
 		{"port twice", func(a *ProxyAccess) { a.Ports = []string{"https", "https"} }, "services.proxy.access[1].ports[1]"},
-		{"unknown route", func(a *ProxyAccess) { a.Routes = []string{"ghost"} }, "services.proxy.access[1].routes[0]"},
-		{"route twice", func(a *ProxyAccess) { a.Routes = []string{"imap", "imap"} }, "services.proxy.access[1].routes[1]"},
 		{"unknown action", func(a *ProxyAccess) { a.Action = "allow" }, "services.proxy.access[1].action"},
 		{"source ports", func(a *ProxyAccess) { a.Source.Ports = []string{"1024"} }, "services.proxy.access[1].source"},
 		{"source self", func(a *ProxyAccess) { a.Source = Endpoint{Self: true} }, "services.proxy.access[1].source.self"},
@@ -71,7 +69,6 @@ func TestValidateAllowFromTakesSmallAliases(t *testing.T) {
 	}
 	cfg.Services.Proxy = workingProxy()
 	cfg.Services.Proxy.Sites[0].AllowFrom = []string{"office", "192.168.0.0/16"}
-	cfg.Services.Proxy.Routes[1].AllowFrom = []string{"office"}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("a hosts alias was refused: %v", err)
 	}
@@ -104,23 +101,15 @@ func TestAccessPortsFollowTheListeners(t *testing.T) {
 	cfg.Services.Proxy = workingProxy()
 	p := &cfg.Services.Proxy
 	p.HTTPPort, p.HTTPSPort = 8080, 8443
-	tcp, udp := cfg.AccessPorts(ProxyAccess{Ports: []string{ProxyPortHTTP, ProxyPortHTTPS}, Routes: []string{"imap", "dns"}})
-	if !slices.Equal(tcp, []uint16{993, 8080, 8443}) || !slices.Equal(udp, []uint16{5353, 8443}) {
+	tcp, udp := cfg.AccessPorts(ProxyAccess{Ports: []string{ProxyPortHTTP, ProxyPortHTTPS}})
+	if !slices.Equal(tcp, []uint16{8080, 8443}) || !slices.Equal(udp, []uint16{8443}) {
 		t.Errorf("tcp %v udp %v", tcp, udp)
 	}
-	// A route that is off opens nothing, and HTTPS without HTTP/3 is TCP.
+	// HTTPS without HTTP/3 is TCP.
 	p.HTTP3 = false
-	p.Routes[1].Enabled = false
-	tcp, udp = cfg.AccessPorts(ProxyAccess{Ports: []string{ProxyPortHTTPS}, Routes: []string{"imap"}})
+	tcp, udp = cfg.AccessPorts(ProxyAccess{Ports: []string{ProxyPortHTTPS}})
 	if !slices.Equal(tcp, []uint16{8443}) || udp != nil {
 		t.Errorf("tcp %v udp %v", tcp, udp)
-	}
-	p.Access[0].Routes = []string{"imap", "dns"}
-	if got := p.RouteZones(cfg, "dns"); !slices.Equal(got, []string{"wan"}) {
-		t.Errorf("dns is reachable on %v", got)
-	}
-	if got := p.RouteZones(cfg, "mail"); got != nil {
-		t.Errorf("mail is reachable on %v, want nowhere", got)
 	}
 }
 

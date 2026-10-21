@@ -45,9 +45,9 @@ type CertSource interface {
 	Subscribe(fn func(id string))
 }
 
-// Proxy drives the ostiole-proxy sidecar: the sites and routes rendered
-// to its configuration, and the certificates the manager holds copied to
-// where it can read them (ADR-0022).
+// Proxy drives the ostiole-proxy sidecar: the sites rendered to its
+// configuration, and the certificates the manager holds copied to where
+// it can read them (ADR-0022).
 type Proxy struct {
 	// Dir holds the generated files, under the configuration directory.
 	Dir string

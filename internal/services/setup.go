@@ -602,7 +602,7 @@ WantedBy=multi-user.target
 
 // setupProxy creates the account the sidecar runs as and writes its unit.
 // Nothing is started: the proxy comes up on the apply that gives it a
-// site or a route to serve.
+// site to serve.
 func setupProxy(ctx context.Context, run Runner, o SetupOptions, unitDir string, log *slog.Logger) error {
 	bin := o.ProxyBinary
 	if bin == "" {

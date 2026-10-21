@@ -91,8 +91,6 @@ func unusedConfig(t *testing.T) *Config {
 				AllowFrom: []string{"trusted"}},
 			{ID: "old-site", Hosts: []string{"old.example.test"}, Pool: "web"},
 		},
-		Routes: []L4Route{{ID: "old-l4", Protocol: "tcp", Port: 2223,
-			Upstreams: []ProxyUpstream{{Address: "192.0.2.40:22"}}}},
 	}
 	cfg.ACME = ACME{Accounts: []ACMEAccount{
 		{ID: "le", Directory: ACMEDirectoryLetsEncryptStaging, PrivateKey: accountKey()},
@@ -169,7 +167,6 @@ func TestUnusedListsWhatIsSwitchedOff(t *testing.T) {
 		{Kind: "outbound-nat", ID: "old-spare-snat", Name: "old-spare-snat", Path: "nat.outbound.rules[old-spare-snat]"},
 		{Kind: "port-forward", ID: "old-fwd", Name: "old-fwd", Path: "nat.portForwards[old-fwd]"},
 		{Kind: "proxy-access", ID: "old-access", Name: "old-access", Path: "services.proxy.access[old-access]"},
-		{Kind: "proxy-route", ID: "old-l4", Name: "old-l4", Path: "services.proxy.routes[old-l4]"},
 		{Kind: "proxy-site", ID: "old-site", Name: "old-site", Path: "services.proxy.sites[old-site]"},
 		{Kind: "radio", ID: "wlan1", Name: "wlan1", Path: "wireless.radios[wlan1]"},
 		{Kind: "rule", ID: "old-rule", Name: "old-rule", Path: "rules[old-rule]"},

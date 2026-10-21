@@ -6,9 +6,8 @@ import (
 	"strings"
 )
 
-// Proxy publishes what is behind the router. Sites are hostnames served
-// over HTTPS with a certificate this router holds; routes pass a TCP or
-// UDP port through to a pool of backends.
+// Proxy publishes what is behind the router: hostnames served over HTTPS
+// with a certificate this router holds.
 type Proxy struct {
 	Enabled bool `json:"enabled"`
 	// Access opens the listeners, zone by zone, read in order within each
@@ -24,7 +23,6 @@ type Proxy struct {
 	Pools    []ProxyPool  `json:"pools,omitempty"`
 	Sites    []ProxySite  `json:"sites,omitempty"`
 	Profiles []WAFProfile `json:"wafProfiles,omitempty"`
-	Routes   []L4Route    `json:"routes,omitempty"`
 	// Events is how much of what the WAF matched is kept in memory.
 	Events ProxyEvents `json:"events,omitzero"`
 	// Requests is how much of the line per request the proxy writes at the
@@ -75,9 +73,6 @@ type ProxyAccess struct {
 	// Ports names the listeners, ProxyPortHTTP and ProxyPortHTTPS, so
 	// moving one changes no line. HTTPS covers HTTP/3's UDP port too.
 	Ports []string `json:"ports,omitempty"`
-	// Routes are passed-through ports, by route ID. A route no line names
-	// is reachable nowhere.
-	Routes []string `json:"routes,omitempty"`
 	// Source is addresses, an alias or a WireGuard peer, inverted with
 	// NotAddresses. Empty is anywhere.
 	Source      Endpoint `json:"source"`
@@ -196,25 +191,6 @@ type WAFExclusion struct {
 	Description string `json:"description,omitempty"`
 }
 
-// L4Route passes one port through to a pool, whole or by server name.
-type L4Route struct {
-	ID          string `json:"id"`
-	Description string `json:"description,omitempty"`
-	Enabled     bool   `json:"enabled"`
-	Protocol    string `json:"protocol"` // tcp | udp
-	Port        uint16 `json:"port"`
-	// SNI picks TLS connections by the name they ask for; empty takes
-	// the whole port. TCP only.
-	SNI       []string        `json:"sni,omitempty"`
-	Upstreams []ProxyUpstream `json:"upstreams"`
-	// Policy is round_robin (empty), least_conn, ip_hash, first or random.
-	Policy string `json:"policy,omitempty"`
-	// HealthSeconds connects to each upstream that often; 0 never. TCP only.
-	HealthSeconds int      `json:"healthSeconds,omitempty"`
-	ProxyProtocol string   `json:"proxyProtocol,omitempty"`
-	AllowFrom     []string `json:"allowFrom,omitempty"`
-}
-
 // The ports a proxy listens on when it names none.
 const (
 	ProxyHTTPPort  = 80
@@ -228,9 +204,6 @@ const SelfCertificate = "@self"
 
 // ProxyPolicies are how a site's requests are shared out over a pool.
 var ProxyPolicies = []string{"", "round_robin", "least_conn", "ip_hash", "cookie", "first"}
-
-// L4Policies are the same for a passed-through port.
-var L4Policies = []string{"", "round_robin", "least_conn", "ip_hash", "first", "random"}
 
 // WAFModes are what a profile does with a request that scores.
 var WAFModes = []string{"", "detect", "block"}
@@ -297,16 +270,6 @@ func (p *Proxy) Site(id string) (*ProxySite, bool) {
 	return nil, false
 }
 
-// Route returns the passed-through port with the given id.
-func (p *Proxy) Route(id string) (*L4Route, bool) {
-	for i := range p.Routes {
-		if p.Routes[i].ID == id {
-			return &p.Routes[i], true
-		}
-	}
-	return nil, false
-}
-
 // ProxyZones names the zones an enabled line of the access list accepts
 // something on, in configuration order. Nothing is opened until one does.
 func (p Proxy) ProxyZones(c *Config) []string {
@@ -320,8 +283,7 @@ func (p Proxy) ProxyZones(c *Config) []string {
 }
 
 // AccessPorts are the ports a line of the access list covers, by
-// protocol, sorted: the listeners it names, HTTP/3 with HTTPS, and the
-// routes it names that are enabled.
+// protocol, sorted: the listeners it names, HTTP/3 with HTTPS.
 func (c *Config) AccessPorts(a ProxyAccess) (tcp, udp []uint16) {
 	p := c.Services.Proxy
 	for _, name := range a.Ports {
@@ -335,31 +297,7 @@ func (c *Config) AccessPorts(a ProxyAccess) (tcp, udp []uint16) {
 			}
 		}
 	}
-	for _, id := range a.Routes {
-		r, ok := p.Route(id)
-		switch {
-		case !ok || !r.Enabled:
-		case r.Protocol == "udp":
-			udp = append(udp, r.Port)
-		default:
-			tcp = append(tcp, r.Port)
-		}
-	}
 	return sortPorts(tcp), sortPorts(udp)
-}
-
-// RouteZones names the zones where an enabled line accepts the route, in
-// configuration order.
-func (p Proxy) RouteZones(c *Config, route string) []string {
-	var out []string
-	for _, z := range c.Zones {
-		if slices.ContainsFunc(p.Access, func(a ProxyAccess) bool {
-			return a.Opens() && a.Zone == z.Name && slices.Contains(a.Routes, route)
-		}) {
-			out = append(out, z.Name)
-		}
-	}
-	return out
 }
 
 // ProxyEnabled reports whether the proxy has anything to serve. The daemon
@@ -371,11 +309,6 @@ func (c *Config) ProxyEnabled() bool {
 	}
 	for _, s := range p.Sites {
 		if s.Enabled {
-			return true
-		}
-	}
-	for _, r := range p.Routes {
-		if r.Enabled {
 			return true
 		}
 	}
@@ -415,7 +348,7 @@ func (c *Config) externalZone(name string) bool {
 	return ok && z.External
 }
 
-// AllowFromRanges is a site's or a route's Allow from as the proxy takes
+// AllowFromRanges is a site's Allow from as the proxy takes
 // it: prefixes, with each hosts alias it names written out.
 func (c *Config) AllowFromRanges(from []string) []string {
 	out := []string{}
@@ -450,16 +383,6 @@ func (c *Config) ProxyPorts() (tcp, udp []uint16) {
 	tcp = []uint16{p.HTTPPortOr(), p.HTTPSPortOr()}
 	if p.HTTP3 {
 		udp = append(udp, p.HTTPSPortOr())
-	}
-	for _, r := range p.Routes {
-		if !r.Enabled {
-			continue
-		}
-		if r.Protocol == "udp" {
-			udp = append(udp, r.Port)
-		} else {
-			tcp = append(tcp, r.Port)
-		}
 	}
 	return sortPorts(tcp), sortPorts(udp)
 }

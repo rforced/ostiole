@@ -51,13 +51,12 @@ table inet ostiole {
 		ip6 saddr @alias_home_v6 fib daddr type local udp dport 443 counter accept comment "proxy:https-home"
 		ip saddr != @alias_home_v4 fib daddr type local tcp dport 80 counter reject with tcp reset comment "proxy:http-rest"
 		ip6 saddr != @alias_home_v6 fib daddr type local tcp dport 80 counter reject with tcp reset comment "proxy:http-rest"
-		fib daddr type local udp dport 5353 counter accept comment "proxy:resolver"
 		counter comment "zone-unmatched"
 	}
 	chain zone_lan {
 		counter accept comment "id:lan-out"
 		fib daddr type local tcp dport { 80, 443 } counter accept comment "proxy:lan"
-		fib daddr type local udp dport { 443, 5353 } counter accept comment "proxy:lan"
+		fib daddr type local udp dport 443 counter accept comment "proxy:lan"
 		counter comment "zone-unmatched"
 	}
 	chain nat_prerouting {

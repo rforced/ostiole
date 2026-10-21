@@ -29,8 +29,7 @@ configuration: systemd-networkd, dnsmasq, unbound, chrony, miniupnpd, pppd and h
   optional, served to the LAN; dynamic DNS through Cloudflare; Wake on LAN.
 - **Reverse proxy:** Caddy and Coraza, installed with `--with-proxy`. It publishes sites behind the
   router by hostname, with the router's certificates, pools of health-checked backends, an access
-  list, and a web application firewall (OWASP Core Rule Set) that blocks or only detects. TCP and
-  UDP pass straight through by port, or by server name for TLS.
+  list, and a web application firewall (OWASP Core Rule Set) that blocks or only detects.
 - **Traffic shaping:** CAKE with a line speed per interface, priority by rule, and a lower priority
   for a host with too many connections. A live view of the queues.
 - **VPN:** WireGuard tunnels. Tailscale, with subnet routes, the router as an exit node, and your

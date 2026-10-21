@@ -192,14 +192,11 @@ func (c *Config) candidates() []candidate {
 	return out
 }
 
-// allowFroms are the proxy sites' and routes' Allow from lists.
+// allowFroms are the proxy sites' Allow from lists.
 func (c *Config) allowFroms() [][]string {
 	var out [][]string
 	for _, s := range c.Services.Proxy.Sites {
 		out = append(out, s.AllowFrom)
-	}
-	for _, r := range c.Services.Proxy.Routes {
-		out = append(out, r.AllowFrom)
 	}
 	return out
 }
@@ -386,9 +383,6 @@ func (c *Config) disabled() []Disabled {
 	}
 	for _, s := range p.Sites {
 		add(s.Enabled, "proxy-site", s.ID, s.ID, diffPath("services.proxy.sites", s.ID))
-	}
-	for _, r := range p.Routes {
-		add(r.Enabled, "proxy-route", r.ID, r.ID, diffPath("services.proxy.routes", r.ID))
 	}
 	for _, cert := range c.Certificates {
 		add(cert.Enabled, "certificate", cert.ID, cert.ID, diffPath("certificates", cert.ID))

@@ -67,10 +67,8 @@ function toggle(line) {
   config.upsertProxyAccess({ ...line, enabled: !line.enabled })
 }
 
-/** The ports a rule names: the listeners, then the routes. */
 function ports(a) {
-  const names = (a.ports ?? []).map((p) => (p === 'http' ? 'HTTP' : 'HTTPS'))
-  return [...names, ...(a.routes ?? [])].join(', ')
+  return (a.ports ?? []).map((p) => (p === 'http' ? 'HTTP' : 'HTTPS')).join(', ')
 }
 
 function source(a) {

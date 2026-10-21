@@ -88,33 +88,6 @@ func TestProxyRefusesNamesNoSiteClaims(t *testing.T) {
 	}
 }
 
-// With routes and no site the HTTPS port still speaks TLS: a route takes
-// its name and any other handshake is refused, rather than read as HTTP.
-func TestProxyRefusesNamesNoRouteClaims(t *testing.T) {
-	t.Parallel()
-	bin := sidecar(t)
-	mail := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = io.WriteString(w, "mail")
-	}))
-	t.Cleanup(mail.Close)
-	cfg := &model.Config{}
-	cfg.Services.Proxy = model.Proxy{Enabled: true, HTTPPort: freePort(t), HTTPSPort: freePort(t)}
-	cfg.Services.Proxy.Routes = []model.L4Route{{
-		ID: "mail", Enabled: true, Protocol: "tcp", Port: cfg.Services.Proxy.HTTPSPort,
-		SNI: []string{"mail.example.com"}, Upstreams: []model.ProxyUpstream{{Address: mail.Listener.Addr().String()}},
-	}}
-	_, secure, _ := runSidecar(t, bin, cfg, "", nil)
-
-	if status, body := fetch(t, secure, "mail.example.com", "https://mail.example.com/"); status != http.StatusOK || body != "mail" {
-		t.Errorf("the route: %d %q, want 200 %q", status, body, "mail")
-	}
-	for _, sni := range []string{"", "other.example.com"} {
-		if names, err := handshake(secure, sni); !refused(err) {
-			t.Errorf("a handshake naming %q got a certificate for %v (%v); want it refused", sni, names, err)
-		}
-	}
-}
-
 // An event says what the client got and why: the WAF's 403 to a request
 // or a response it stopped, and the site's own answer to one it only
 // flagged. The rules that inspect responses log like the rest.

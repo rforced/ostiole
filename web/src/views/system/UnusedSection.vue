@@ -45,7 +45,6 @@ const KINDS = {
   'static-route': ['static route', '/routing#routes'],
   'proxy-access': ['proxy access rule', '/services/proxy#service'],
   'proxy-site': ['site', '/services/proxy#sites'],
-  'proxy-route': ['route', '/services/proxy#routes'],
   'ddns-record': ['Dynamic DNS record', '/services/ddns'],
   'block-list': ['block list', '/services/dns#blocking'],
 }
@@ -325,10 +324,7 @@ const DELETES = {
   'proxy-access': (id, d) => {
     const a = byKey(d.services?.proxy?.access, 'id', id)
     if (!a) return null
-    const ports = [
-      ...(a.ports ?? []).map((p) => (p === 'http' ? 'HTTP' : 'HTTPS')),
-      ...(a.routes ?? []),
-    ].join(', ')
+    const ports = (a.ports ?? []).map((p) => (p === 'http' ? 'HTTP' : 'HTTPS')).join(', ')
     return {
       confirm: {
         question: `Delete the ${a.action} rule for ${ports} on ${a.zone}?`,
@@ -350,20 +346,6 @@ const DELETES = {
         run: () => config.removeSite(id),
       }
     )
-  },
-  'proxy-route': (id, d) => {
-    const r = byKey(d.services?.proxy?.routes, 'id', id)
-    if (!r) return null
-    const named = config.routeDependents(id)
-    const port = `${r.protocol} port ${r.port}`
-    return {
-      confirm: {
-        question: `Delete route ${id}?`,
-        description: named.length ? `${port}. Access rules naming it: ${named.join(', ')}.` : port,
-        typed: id,
-      },
-      run: () => config.removeProxyRoute(id),
-    }
   },
   'ddns-record': (id, d) => {
     const r = byKey(d.services?.ddns?.records, 'id', id)

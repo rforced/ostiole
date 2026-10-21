@@ -161,7 +161,6 @@ export const NAV = [
           { value: 'service', label: 'Settings' },
           { value: 'sites', label: 'Sites' },
           { value: 'pools', label: 'Pools' },
-          { value: 'routes', label: 'Routes' },
           { value: 'waf', label: 'WAF' },
           { value: 'events', label: 'Events' },
           { value: 'requests', label: 'Requests' },

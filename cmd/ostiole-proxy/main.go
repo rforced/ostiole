@@ -1,5 +1,5 @@
-// Package main is ostiole-proxy: Caddy with the Coraza and layer 4
-// modules compiled in, which is what xcaddy would have produced. Ostiole
+// Package main is ostiole-proxy: Caddy with the Coraza module compiled
+// in, which is what xcaddy would have produced. Ostiole
 // writes its configuration and drives its unit; nothing here is meant to
 // be run by hand.
 package main
@@ -11,7 +11,6 @@ import (
 
 	_ "github.com/caddyserver/caddy/v2/modules/standard"
 	_ "github.com/corazawaf/coraza-caddy/v2"
-	_ "github.com/mholt/caddy-l4"
 
 	"ostiole/internal/version"
 )

@@ -18,7 +18,6 @@ const open = defineModel('open', { type: Boolean, default: false })
 const config = useConfigStore()
 const form = ref(blank())
 
-const routes = computed(() => config.proxy.routes ?? [])
 const httpPort = computed(() => config.proxy.httpPort || 80)
 const httpsPort = computed(() => config.proxy.httpsPort || 443)
 
@@ -28,7 +27,6 @@ function blank() {
     enabled: true,
     zone: config.zones.find((z) => z.external)?.name ?? config.zones[0]?.name ?? '',
     ports: ['https'],
-    routes: [],
     source: { mode: 'any', addresses: '', alias: '', peer: '', notAddresses: false },
     action: 'accept',
     log: false,
@@ -52,7 +50,6 @@ watch(
       enabled: a.enabled !== false,
       zone: a.zone,
       ports: [...(a.ports ?? [])],
-      routes: [...(a.routes ?? [])],
       source: {
         mode: src.alias ? 'alias' : src.peer ? 'peer' : src.addresses?.length ? 'addresses' : 'any',
         addresses: joinList(src.addresses),
@@ -68,7 +65,7 @@ watch(
   { immediate: true },
 )
 
-const named = computed(() => form.value.ports.length + form.value.routes.length > 0)
+const named = computed(() => form.value.ports.length > 0)
 
 /** HTTP alone is mostly a redirect: a site answers it by sending the client to HTTPS. */
 const redirectOnly = computed(
@@ -95,11 +92,6 @@ function save() {
     ['http', 'https'].filter((p) => f.ports.includes(p)),
   )
   if (ports.length) out.ports = ports
-  const chosen = keptOrder(
-    props.line?.routes,
-    routes.value.map((r) => r.id).filter((id) => f.routes.includes(id)),
-  )
-  if (chosen.length) out.routes = chosen
   if (f.log) out.log = true
   if (f.description.trim()) out.description = f.description.trim()
   config.upsertProxyAccess(out)
@@ -142,11 +134,6 @@ function save() {
           <label class="flex items-center gap-2">
             <input v-model="form.ports" type="checkbox" value="https" class="checkbox" />
             HTTPS <span class="font-mono text-ink-muted">{{ httpsPort }}</span>
-          </label>
-          <label v-for="r in routes" :key="r.id" class="flex items-center gap-2">
-            <input v-model="form.routes" type="checkbox" :value="r.id" class="checkbox" />
-            <span class="font-mono">{{ r.id }}</span>
-            <span class="font-mono text-ink-muted">{{ r.protocol }}/{{ r.port }}</span>
           </label>
         </div>
         <p v-if="redirectOnly" class="text-sm text-ink-muted">

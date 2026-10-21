@@ -28,7 +28,7 @@ table inet ostiole {
 	}
 	chain zone_wan {
 		fib daddr type local tcp dport { 80, 443 } counter accept comment "proxy:wan"
-		fib daddr type local udp dport { 443, 5353 } counter accept comment "proxy:wan"
+		fib daddr type local udp dport 443 counter accept comment "proxy:wan"
 		counter comment "zone-unmatched"
 	}
 	chain zone_lan {
