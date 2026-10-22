@@ -2,8 +2,10 @@ package feeds
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -110,7 +112,7 @@ func (r *Refresher) Tick(ctx context.Context, force bool) {
 		changed = changed || updated
 	}
 	if changed {
-		r.push(ctx, SetFragment(cfg, r.Cache.Entries()))
+		r.push(ctx, SetFragment(cfg, r.Cache.For(cfg)))
 	}
 	if r.OnTick != nil {
 		r.OnTick()
@@ -137,18 +139,23 @@ func (r *Refresher) RefreshOne(ctx context.Context, name string) (int, error) {
 	if _, err := r.refresh(ctx, cfg, *want); err != nil {
 		return 0, err
 	}
-	r.push(ctx, SetFragment(cfg, r.Cache.Entries()))
+	r.push(ctx, SetFragment(cfg, r.Cache.For(cfg)))
 	return len(r.Cache.Entries()[name]), nil
 }
 
 func (r *Refresher) refresh(ctx context.Context, cfg *model.Config, a model.Alias) (bool, error) {
-	entries, parts, err := r.Fetcher.Fetch(ctx, cfg, a)
+	entries, parts, lists, err := r.Fetcher.fetch(ctx, cfg, a)
+	if err == nil && a.Type == model.AliasGeoIP {
+		if prev, ok := r.Cache.last(a.Name); ok {
+			err = emptied(prev, parts, entries)
+		}
+	}
 	if err != nil {
-		r.Cache.recordError(a.Name, err, time.Now())
+		r.Cache.recordError(a.Name, err, time.Now(), Sources(cfg, a))
 		return false, err
 	}
 	before := r.Cache.Entries()[a.Name]
-	if err := r.Cache.Save(a, parts, entries, time.Now()); err != nil {
+	if err := r.Cache.save(a, parts, entries, lists, time.Now()); err != nil {
 		return false, err
 	}
 	same := len(before) == len(entries)
@@ -168,8 +175,12 @@ func (r *Refresher) refresh(ctx context.Context, cfg *model.Config, a model.Alia
 
 // due reports whether an alias has gone long enough without a fetch, or
 // has changed since the one it has: a new URL, country or number is
-// fetched on the next pass, not a refresh period later.
+// fetched on the next pass, not a refresh period later. One that failed
+// from the same sources waits out its backoff.
 func (r *Refresher) due(cfg *model.Config, a model.Alias) bool {
+	if r.Cache.backingOff(cfg, a, time.Now()) {
+		return false
+	}
 	at, ok := r.Cache.FetchedAt(a.Name)
 	if !ok || !r.Cache.Current(cfg, a) {
 		return true
@@ -183,7 +194,7 @@ func (r *Refresher) due(cfg *model.Config, a model.Alias) bool {
 // left as the ruleset has it rather than emptied.
 func (r *Refresher) Push(ctx context.Context) {
 	if cfg := r.config(); cfg != nil {
-		r.push(ctx, setFragment(cfg, r.Cache.Entries(), true))
+		r.push(ctx, setFragment(cfg, r.Cache.For(cfg), true))
 	}
 }
 
@@ -256,4 +267,54 @@ func (r *Refresher) log() *slog.Logger {
 		return slog.Default()
 	}
 	return r.Log
+}
+
+// emptied refuses a country list that lost a country, or a family, since
+// the last fetch from the same sources. RIPEstat answers a code it has no
+// rows for just as it answers a territory with no addresses, so a gap in
+// its data would read as a real answer, and open a deny rule or shut an
+// allow rule until the next refresh. Yesterday's list is better.
+func emptied(prev cached, parts []Part, entries []string) error {
+	held := make(map[string]int, len(prev.Parts))
+	have := make([]string, 0, len(prev.Parts))
+	for _, p := range prev.Parts {
+		held[p.Source] = p.Entries
+		have = append(have, p.Source)
+	}
+	want := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p.Entries == 0 && held[p.Source] > 0 {
+			return fmt.Errorf("%s came back empty; it held %d at the last fetch", p.Country, held[p.Source])
+		}
+		want = append(want, p.Source)
+	}
+	slices.Sort(have)
+	slices.Sort(want)
+	if !slices.Equal(have, want) {
+		// A country taken out may have been the only one with IPv6.
+		return nil
+	}
+	v4, v6 := families(prev.Entries)
+	n4, n6 := families(entries)
+	switch {
+	case v4 && !n4:
+		return errors.New("no IPv4 addresses came back; the last fetch had some")
+	case v6 && !n6:
+		return errors.New("no IPv6 addresses came back; the last fetch had some")
+	}
+	return nil
+}
+
+func families(entries []string) (v4, v6 bool) {
+	for _, e := range entries {
+		if strings.Contains(e, ":") {
+			v6 = true
+		} else {
+			v4 = true
+		}
+		if v4 && v6 {
+			break
+		}
+	}
+	return v4, v6
 }

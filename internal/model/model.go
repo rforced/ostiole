@@ -478,8 +478,10 @@ type System struct {
 	KeepDriveReadings int `json:"keepDriveReadings,omitempty"`
 	// GeoIPv4URL and GeoIPv6URL are where country address lists come from.
 	// "{country}" is replaced with the lower-case ISO code. They are
-	// settings so an air-gapped router can point at its own mirror; empty
-	// uses the defaults.
+	// settings so an air-gapped router can point at its own mirror. With
+	// both empty the default is used, which answers both families at once;
+	// setting either replaces it, and a URL that answers both goes in
+	// GeoIPv4URL alone.
 	GeoIPv4URL string `json:"geoIPv4Url,omitempty"`
 	GeoIPv6URL string `json:"geoIPv6Url,omitempty"`
 	// ASNURL is where an AS number's announced prefixes come from; "{asn}"
@@ -578,11 +580,10 @@ func (l Logging) Retention() int {
 	return l.RetentionDays
 }
 
-// Default sources for country address lists.
-const (
-	DefaultGeoIPv4URL = "https://www.ipdeny.com/ipblocks/data/aggregated/{country}-aggregated.zone"
-	DefaultGeoIPv6URL = "https://www.ipdeny.com/ipv6/ipaddresses/aggregated/{country}-aggregated.zone"
-)
+// DefaultGeoIPURL is the default source for country address lists:
+// RIPEstat's country-resource-list, which reads all five registries'
+// delegations and answers both families in one call.
+const DefaultGeoIPURL = "https://stat.ripe.net/data/country-resource-list/data.json?resource={country}&v4_format=prefix&sourceapp=ostiole"
 
 // DefaultKeepRevisions is how much configuration history is kept when the
 // setting says nothing. Enough to roll back through an afternoon's work,
@@ -631,7 +632,7 @@ func (s System) Location() *time.Location { return timezone.Load(s.Zone()) }
 func (s System) GeoIPTemplates() (v4, v6 string) {
 	v4, v6 = s.GeoIPv4URL, s.GeoIPv6URL
 	if v4 == "" && v6 == "" {
-		return DefaultGeoIPv4URL, DefaultGeoIPv6URL
+		return DefaultGeoIPURL, ""
 	}
 	return v4, v6
 }

@@ -233,10 +233,18 @@ func TestInspectAsksOnce(t *testing.T) {
 	}
 }
 
-func TestGeoIPSourcesPerCountryAndFamily(t *testing.T) {
+// The default answers both families at once, so it is one source per
+// country; a mirror with a template per family is two.
+func TestGeoIPSourcesPerCountryAndTemplate(t *testing.T) {
 	t.Parallel()
 	cfg := config(model.Alias{Name: "countries", Type: model.AliasGeoIP, Entries: []string{"DE", "fr"}})
 	got := Sources(cfg, cfg.Aliases[0])
+	if len(got) != 2 || !strings.Contains(got[0], "resource=de&") || !strings.Contains(got[1], "resource=fr&") {
+		t.Fatalf("sources = %v, want one per country", got)
+	}
+	cfg.System.GeoIPv4URL = "https://mirror.example.com/v4/{country}-aggregated.zone"
+	cfg.System.GeoIPv6URL = "https://mirror.example.com/v6/{country}-aggregated.zone"
+	got = Sources(cfg, cfg.Aliases[0])
 	if len(got) != 4 {
 		t.Fatalf("sources = %v, want one per country and family", got)
 	}

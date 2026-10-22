@@ -51,8 +51,8 @@ const countryCounts = computed(() => {
   const out = {}
   for (const part of status?.parts ?? []) {
     if (!part.country) continue
-    // A country has one source per address family, and the ranges of both
-    // are what it costs.
+    // A mirror may give a country one source per address family, and the
+    // ranges of both are what it costs.
     out[part.country] = (out[part.country] ?? 0) + part.entries
   }
   return out

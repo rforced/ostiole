@@ -191,9 +191,9 @@ type Preflighter interface {
 }
 
 // FeedSource supplies the entries of aliases that are fetched rather than
-// written out.
+// written out, as cfg asks for them.
 type FeedSource interface {
-	Entries() map[string][]string
+	For(cfg *model.Config) map[string][]string
 }
 
 // WithFeeds supplies fetched alias contents to every render.
@@ -202,12 +202,12 @@ func (e *Engine) WithFeeds(f FeedSource) *Engine {
 	return e
 }
 
-// FeedEntries is what the renderer is given for fetched aliases.
-func (e *Engine) FeedEntries() map[string][]string {
+// FeedEntries is what the renderer is given for cfg's fetched aliases.
+func (e *Engine) FeedEntries(cfg *model.Config) map[string][]string {
 	if e.feeds == nil {
 		return nil
 	}
-	return e.feeds.Entries()
+	return e.feeds.For(cfg)
 }
 
 // WithSysctl makes every apply and load also turn on router kernel
@@ -360,7 +360,7 @@ func (e *Engine) Check(ctx context.Context, cfg *model.Config) (*Plan, error) {
 	if issues := e.budget().Check(cfg); len(issues) > 0 {
 		return nil, &model.ValidationError{Issues: issues}
 	}
-	ruleset, err := nft.RenderWithFeeds(cfg, e.FeedEntries())
+	ruleset, err := nft.RenderWithFeeds(cfg, e.FeedEntries(cfg))
 	if err != nil {
 		return nil, err
 	}
@@ -656,7 +656,7 @@ func (e *Engine) previousRuleset() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return nft.RenderWithFeeds(cfg, e.FeedEntries())
+		return nft.RenderWithFeeds(cfg, e.FeedEntries(cfg))
 	}
 	return ruleset, err
 }
@@ -867,7 +867,7 @@ func (e *Engine) Load(ctx context.Context) (LoadResult, error) {
 		}
 	}
 	if cfg != nil {
-		if rendered, err := nft.RenderWithFeeds(cfg, e.FeedEntries()); err == nil && rendered != ruleset {
+		if rendered, err := nft.RenderWithFeeds(cfg, e.FeedEntries(cfg)); err == nil && rendered != ruleset {
 			if err := e.load(ctx, rendered); err == nil {
 				return e.loaded(cfg, LoadResult{Source: LoadedRendered, Reason: why}), nil
 			}
@@ -959,13 +959,13 @@ func (e *Engine) Counters(ctx context.Context) (nft.Counters, error) {
 // next to the operator's. It only renders: nothing is checked or applied,
 // so it is cheap enough to call as the draft is edited.
 func (e *Engine) SystemRules(cfg *model.Config) ([]nft.SystemRule, error) {
-	return nft.SystemRules(cfg, e.FeedEntries())
+	return nft.SystemRules(cfg, e.FeedEntries(cfg))
 }
 
 // SystemNAT lists the outbound NAT rules cfg makes Ostiole write on its
 // own, as cheaply as SystemRules.
 func (e *Engine) SystemNAT(cfg *model.Config) ([]nft.SystemNAT, error) {
-	out, err := nft.Build(cfg, e.FeedEntries())
+	out, err := nft.Build(cfg, e.FeedEntries(cfg))
 	if err != nil {
 		return nil, err
 	}

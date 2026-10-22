@@ -257,7 +257,7 @@ func (e *Engine) inForce() (rulesets []string, skip bool, err error) {
 		return nil, false, err
 	}
 	if cfg, err := e.store.Load(); err == nil && cfg.Validate() == nil {
-		if rendered, err := nft.RenderWithFeeds(cfg, e.FeedEntries()); err == nil && rendered != saved {
+		if rendered, err := nft.RenderWithFeeds(cfg, e.FeedEntries(cfg)); err == nil && rendered != saved {
 			rulesets = append(rulesets, rendered)
 		}
 	}

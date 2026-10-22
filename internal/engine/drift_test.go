@@ -364,7 +364,7 @@ type fakeFeeds struct {
 	entries map[string][]string
 }
 
-func (f *fakeFeeds) Entries() map[string][]string {
+func (f *fakeFeeds) For(*model.Config) map[string][]string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.entries

@@ -52,7 +52,7 @@ const (
 type Status struct {
 	Alias string `json:"alias"`
 	// Sources are the URLs it is built from; a GeoIP alias has one per
-	// country and family, an AS alias one per number.
+	// country and template, an AS alias one per number.
 	Sources []string `json:"sources"`
 	// Parts is what each source contributed at the last fetch. For a
 	// country list it is the answer to "how much of this ruleset is
@@ -94,6 +94,17 @@ type cached struct {
 	Parts     []Part    `json:"parts,omitempty"`
 	FetchedAt time.Time `json:"fetchedAt"`
 	Entries   []string  `json:"entries"`
+	// Lists is what each source held, so a source taken out of the alias
+	// leaves the sets before the next fetch. Entries is still written, for
+	// an older release reading the file.
+	Lists map[string][]string `json:"lists,omitempty"`
+}
+
+// stored is how a file is read: with Lists there, Entries is rebuilt from
+// them rather than decoded, so each string is held once.
+type stored struct {
+	cached
+	Entries json.RawMessage `json:"entries"`
 }
 
 // fetchedFor reports whether a cached list is what the alias asks for now:
@@ -122,16 +133,29 @@ type Cache struct {
 	errs   map[string]feedError
 	// order is each browsed alias's entries in address order.
 	order map[string][]string
+	// narrowed is For's last answer for an alias that lost sources since
+	// its fetch, keyed by the sources it kept.
+	narrowed map[string]narrowing
+}
+
+type narrowing struct {
+	key     string
+	entries []string
 }
 
 type feedError struct {
 	message string
 	when    time.Time
+	// fails counts the failures in a row from sources, sorted, which is
+	// what the backoff reads.
+	fails   int
+	sources []string
 }
 
 // NewCache returns a cache over dir, reading whatever is already there.
 func NewCache(dir string) *Cache {
-	c := &Cache{Dir: dir, loaded: map[string]cached{}, errs: map[string]feedError{}, order: map[string][]string{}}
+	c := &Cache{Dir: dir, loaded: map[string]cached{}, errs: map[string]feedError{}, order: map[string][]string{},
+		narrowed: map[string]narrowing{}}
 	c.loadAll()
 	return c
 }
@@ -152,8 +176,21 @@ func (c *Cache) loadAll() {
 		if err != nil {
 			continue
 		}
-		var f cached
-		if err := json.Unmarshal(raw, &f); err != nil || f.Alias == "" {
+		var st stored
+		err = json.Unmarshal(raw, &st)
+		f := st.cached
+		switch {
+		case err != nil || f.Alias == "":
+		case f.Lists != nil:
+			lists := make([][]string, 0, len(f.Parts))
+			for _, p := range f.Parts {
+				lists = append(lists, f.Lists[p.Source])
+			}
+			f.Entries = merge(lists)
+		case len(st.Entries) > 0:
+			err = json.Unmarshal(st.Entries, &f.Entries)
+		}
+		if err != nil || f.Alias == "" {
 			// Prune knows only the files that load, so nothing else would
 			// remove this one.
 			if os.Remove(path) == nil {
@@ -163,6 +200,9 @@ func (c *Cache) loadAll() {
 		}
 		// A file written before default routes were refused may hold one.
 		f.Entries = slices.DeleteFunc(f.Entries, defaultRoute)
+		for source, list := range f.Lists {
+			f.Lists[source] = slices.DeleteFunc(list, defaultRoute)
+		}
 		c.loaded[f.Alias] = f
 	}
 }
@@ -179,6 +219,72 @@ func (c *Cache) Entries() map[string][]string {
 	return out
 }
 
+// For is Entries as cfg asks for them. A source taken out of an alias
+// since its fetch is left out at once where the cache knows what each
+// source held: otherwise an allow rule over a country just removed goes on
+// allowing it until a fetch succeeds. It only reads, so a draft may ask.
+func (c *Cache) For(cfg *model.Config) map[string][]string {
+	wanted := map[string]model.Alias{}
+	for _, a := range Wanted(cfg) {
+		wanted[a.Name] = a
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make(map[string][]string, len(c.loaded))
+	for name, f := range c.loaded {
+		out[name] = slices.Clone(c.kept(f, wanted[name], cfg))
+	}
+	return out
+}
+
+// kept is what of f the alias a still asks for. Holding c.mu.
+func (c *Cache) kept(f cached, a model.Alias, cfg *model.Config) []string {
+	if f.Lists == nil || a.Name == "" {
+		return f.Entries
+	}
+	want := map[string]bool{}
+	for _, s := range Sources(cfg, a) {
+		want[s] = true
+	}
+	var keep []string
+	for _, p := range f.Parts {
+		if want[p.Source] {
+			keep = append(keep, p.Source)
+		}
+	}
+	if len(keep) == len(f.Parts) {
+		return f.Entries
+	}
+	slices.Sort(keep)
+	key := strings.Join(keep, "\n")
+	if n, ok := c.narrowed[f.Alias]; ok && n.key == key {
+		return n.entries
+	}
+	lists := make([][]string, 0, len(keep))
+	for _, s := range keep {
+		lists = append(lists, f.Lists[s])
+	}
+	entries := merge(lists)
+	c.narrowed[f.Alias] = narrowing{key: key, entries: entries}
+	return entries
+}
+
+// merge is lists as one, each entry once, sorted as Fetch sorts.
+func merge(lists [][]string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, l := range lists {
+		for _, e := range l {
+			if !seen[e] {
+				seen[e] = true
+				out = append(out, e)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 func (c *Cache) path(alias string) string {
 	return filepath.Join(c.Dir, safeName(alias)+".json")
 }
@@ -186,7 +292,12 @@ func (c *Cache) path(alias string) string {
 // Save records what an alias fetched: the entries and what each source
 // contributed.
 func (c *Cache) Save(a model.Alias, parts []Part, entries []string, when time.Time) error {
-	f := cached{Alias: a.Name, Parts: parts, FetchedAt: when.UTC().Truncate(time.Second), Entries: entries}
+	return c.save(a, parts, entries, nil, when)
+}
+
+// save is Save with what each source held, when the fetch kept it.
+func (c *Cache) save(a model.Alias, parts []Part, entries []string, lists map[string][]string, when time.Time) error {
+	f := cached{Alias: a.Name, Parts: parts, FetchedAt: when.UTC().Truncate(time.Second), Entries: entries, Lists: lists}
 	raw, err := json.Marshal(f)
 	if err != nil {
 		return err
@@ -201,6 +312,7 @@ func (c *Cache) Save(a model.Alias, parts []Part, entries []string, when time.Ti
 	c.loaded[a.Name] = f
 	delete(c.errs, a.Name)
 	delete(c.order, a.Name)
+	delete(c.narrowed, a.Name)
 	c.mu.Unlock()
 	return nil
 }
@@ -212,6 +324,7 @@ func (c *Cache) Forget(alias string) {
 	delete(c.loaded, alias)
 	delete(c.errs, alias)
 	delete(c.order, alias)
+	delete(c.narrowed, alias)
 	c.mu.Unlock()
 	_ = os.Remove(c.path(alias))
 }
@@ -235,10 +348,43 @@ func (c *Cache) Prune(cfg *model.Config) {
 	}
 }
 
-func (c *Cache) recordError(alias string, err error, when time.Time) {
+func (c *Cache) recordError(alias string, err error, when time.Time, sources []string) {
+	slices.Sort(sources)
 	c.mu.Lock()
-	c.errs[alias] = feedError{message: err.Error(), when: when}
+	fails := 1
+	if prev, ok := c.errs[alias]; ok && slices.Equal(prev.sources, sources) {
+		fails = prev.fails + 1
+	}
+	c.errs[alias] = feedError{message: err.Error(), when: when, fails: fails, sources: sources}
 	c.mu.Unlock()
+}
+
+// backingOff reports whether an alias failed recently from the sources it
+// has now. The wait starts at MinRefresh and doubles with each failure in
+// a row, up to the alias's period, so a source having a bad day is not
+// asked every tick. Changed sources are fetched at once.
+func (c *Cache) backingOff(cfg *model.Config, a model.Alias, now time.Time) bool {
+	c.mu.RLock()
+	e, ok := c.errs[a.Name]
+	c.mu.RUnlock()
+	if !ok {
+		return false
+	}
+	sources := Sources(cfg, a)
+	slices.Sort(sources)
+	if !slices.Equal(e.sources, sources) {
+		return false
+	}
+	wait := min(MinRefresh<<min(e.fails-1, 8), RefreshPeriod(a))
+	return now.Sub(e.when) < wait
+}
+
+// last is what the cache holds for an alias.
+func (c *Cache) last(alias string) (cached, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	f, ok := c.loaded[alias]
+	return f, ok
 }
 
 // FetchedAt reports when an alias was last refreshed successfully.
@@ -334,8 +480,8 @@ func RefreshPeriod(a model.Alias) time.Duration {
 }
 
 // Sources lists the URLs an alias is built from: its URL lines, one per
-// country and address family for a GeoIP alias, or one per number for an
-// AS alias.
+// country and template for a GeoIP alias, or one per number for an AS
+// alias.
 func Sources(cfg *model.Config, a model.Alias) []string {
 	parts := SourceParts(cfg, a)
 	out := make([]string, 0, len(parts))
@@ -385,6 +531,10 @@ func SourceParts(cfg *model.Config, a model.Alias) []Part {
 	}
 	v4, v6 := cfg.System.GeoIPTemplates()
 	var out []Part
+	if v6 == v4 {
+		// One URL that answers both families is asked once.
+		v6 = ""
+	}
 	for _, code := range a.Entries {
 		code = strings.ToLower(strings.TrimSpace(code))
 		if code == "" {
@@ -431,21 +581,30 @@ func NewFetcher(getter *fetch.Getter) *Fetcher {
 // duplicates removed, and what each source held. One source failing fails
 // the whole alias: half a blocklist is worse than yesterday's whole one.
 func (f *Fetcher) Fetch(ctx context.Context, cfg *model.Config, a model.Alias) ([]string, []Part, error) {
+	entries, parts, _, err := f.fetch(ctx, cfg, a)
+	return entries, parts, err
+}
+
+// fetch is Fetch with each source's own entries, by source, which the
+// cache keeps so a source taken out leaves the sets at once.
+func (f *Fetcher) fetch(ctx context.Context, cfg *model.Config, a model.Alias) ([]string, []Part, map[string][]string, error) {
 	parts := SourceParts(cfg, a)
 	if len(parts) == 0 {
-		return nil, nil, errors.New("this alias has no source to fetch")
+		return nil, nil, nil, errors.New("this alias has no source to fetch")
 	}
 	seen := map[string]bool{}
 	var out []string
+	lists := make(map[string][]string, len(parts))
 	for i := range parts {
 		entries, err := f.one(ctx, parts[i].Source, a.Type)
 		if err != nil {
-			return nil, parts, fmt.Errorf("%s: %w", model.RedactURL(parts[i].Source), err)
+			return nil, parts, nil, fmt.Errorf("%s: %w", model.RedactURL(parts[i].Source), err)
 		}
 		// What this source held, whether or not another source had it
 		// first: the question is how big this country is, not how much of
 		// it arrived here first.
 		parts[i].Entries = len(entries)
+		lists[parts[i].Source] = entries
 		for _, e := range entries {
 			if seen[e] {
 				continue
@@ -453,15 +612,31 @@ func (f *Fetcher) Fetch(ctx context.Context, cfg *model.Config, a model.Alias) (
 			seen[e] = true
 			out = append(out, e)
 			if len(out) > MaxEntries {
-				return nil, parts, fmt.Errorf("more than %d entries", MaxEntries)
+				return nil, parts, nil, fmt.Errorf("more than %d entries", MaxEntries)
 			}
+		}
+	}
+	if a.Type == model.AliasGeoIP {
+		var empty []string
+		for _, p := range parts {
+			if p.Entries == 0 {
+				empty = append(empty, p.Country)
+			}
+		}
+		switch {
+		case len(out) == 0:
+			// One country can hold nothing, but every country empty at
+			// once is a source having a bad day, or codes it does not know.
+			return nil, parts, nil, fmt.Errorf("no country in this alias came back with any addresses (%s)", strings.Join(empty, ", "))
+		case len(empty) > 0:
+			f.log().Info("countries came back with no addresses", "alias", a.Name, "countries", strings.Join(empty, ", "))
 		}
 	}
 	sort.Strings(out)
 	if a.Type == model.AliasASN {
 		f.holders(ctx, cfg, parts)
 	}
-	return out, parts, nil
+	return out, parts, lists, nil
 }
 
 func (f *Fetcher) one(ctx context.Context, url string, typ model.AliasType) ([]string, error) {
@@ -500,14 +675,21 @@ func (f *Fetcher) Inspect(ctx context.Context, url string, publicOnly bool) (Par
 	return Part{Source: url, Entries: len(entries)}, nil
 }
 
-// read picks the parser by what came back. The default AS source answers
-// in JSON of its own, and a mirror serving a plain list of prefixes reads
-// like any other list. Any other JSON is searched for addresses.
+// read picks the parser by what came back. The default AS and country
+// sources answer in RIPEstat's JSON, and a mirror serving a plain list of
+// prefixes reads like any other list. Any other JSON is searched for
+// addresses.
 func read(raw []byte, typ model.AliasType) ([]string, error) {
 	raw = bytes.TrimPrefix(raw, bom)
 	switch {
 	case typ == model.AliasASN && bytes.HasPrefix(bytes.TrimSpace(raw), []byte("{")):
 		return parseAnnounced(raw)
+	case typ == model.AliasGeoIP && isJSON(raw):
+		var ans countryResources
+		if json.Unmarshal(raw, &ans) == nil && ans.Call == "country-resource-list" {
+			return ans.entries()
+		}
+		return ParseJSON(raw)
 	case typ.HoldsAddresses() && isJSON(raw):
 		return ParseJSON(raw)
 	}
@@ -573,23 +755,71 @@ func parseAnnounced(raw []byte) ([]string, error) {
 		return nil, fmt.Errorf("not a RIPEstat answer: %w", err)
 	}
 	if ans.Status != "" && ans.Status != "ok" {
-		return nil, fmt.Errorf("the source answered %q: %s", ans.Status, ans.errorText())
+		return nil, fmt.Errorf("the source answered %q: %s", ans.Status, errorText(ans.Messages))
 	}
+	prefixes := make([]string, 0, len(ans.Data.Prefixes))
+	for _, p := range ans.Data.Prefixes {
+		prefixes = append(prefixes, p.Prefix)
+	}
+	return normalizeAll(prefixes), nil
+}
+
+// countryResources is as much of RIPEstat's country-resource-list answer
+// as matters. Its messages are [level, text] pairs. The lists are pointers
+// so an answer missing one is told from an empty one.
+type countryResources struct {
+	Call     string     `json:"data_call_name"`
+	Status   string     `json:"status"`
+	Messages [][]string `json:"messages"`
+	Data     struct {
+		Resources struct {
+			IPv4 *[]string `json:"ipv4"`
+			IPv6 *[]string `json:"ipv6"`
+		} `json:"resources"`
+	} `json:"data"`
+}
+
+// entries reads both families out of the answer. A territory with no
+// addresses of its own is a real answer, so an empty list is not an error
+// here; Fetch refuses an alias that is empty whole, and the refresher a
+// country that held addresses last time.
+func (ans countryResources) entries() ([]string, error) {
+	if ans.Status != "ok" {
+		return nil, fmt.Errorf("the source answered %q: %s", ans.Status, errorText(ans.Messages))
+	}
+	res := ans.Data.Resources
+	if res.IPv4 == nil || res.IPv6 == nil {
+		return nil, errors.New("the answer holds no address lists")
+	}
+	all := append(slices.Clone(*res.IPv4), *res.IPv6...)
+	for _, e := range all {
+		// Without v4_format=prefix RIPEstat writes some blocks as ranges,
+		// which no set entry parses; dropping them would leave holes.
+		if strings.Contains(e, "-") {
+			return nil, fmt.Errorf("the answer holds address ranges such as %s; add v4_format=prefix to the URL", e)
+		}
+	}
+	return normalizeAll(all), nil
+}
+
+// normalizeAll normalizes a RIPEstat list, dropping repeats and anything
+// normalizeAddress refuses.
+func normalizeAll(in []string) []string {
 	out := []string{}
 	seen := map[string]bool{}
-	for _, p := range ans.Data.Prefixes {
-		norm, err := normalizeAddress(p.Prefix)
+	for _, s := range in {
+		norm, err := normalizeAddress(s)
 		if err != nil || seen[norm] {
 			continue
 		}
 		seen[norm] = true
 		out = append(out, norm)
 	}
-	return out, nil
+	return out
 }
 
-func (a announced) errorText() string {
-	for _, m := range a.Messages {
+func errorText(messages [][]string) string {
+	for _, m := range messages {
 		if len(m) == 2 && m[0] == "error" {
 			return m[1]
 		}
