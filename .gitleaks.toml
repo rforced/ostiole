@@ -30,6 +30,9 @@ regexes = [
   '''bGFiIGNsaWVudCBrZXk=''',
   '''TUFERS1VUC1jbGllbnQta2V5''',
   '''00112233445566778899aabbccddeeff''',
+  # The made-up MaxMind licence keys in the feeds tests and the Fetched
+  # aliases spec, each built around the counting run 0123456789.
+  '''[A-Za-z]*0123456789[A-Za-z_]*''',
 ]
 # The rendered OpenVPN golden carries the same made-up key over several
 # lines, where a line regex cannot see the body.
