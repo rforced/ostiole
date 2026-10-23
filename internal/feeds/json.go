@@ -8,6 +8,8 @@ import (
 	"io"
 	"slices"
 	"unicode"
+
+	"ostiole/internal/model"
 )
 
 // bom is what some publishers put before a JSON document. encoding/json
@@ -75,8 +77,8 @@ func (w *walker) walk(v any) error {
 		}
 		w.kept[norm] = true
 		w.out = append(w.out, norm)
-		if len(w.out) > MaxEntries {
-			return fmt.Errorf("more than %d entries", MaxEntries)
+		if len(w.out) > model.AliasEntriesCeiling {
+			return fmt.Errorf("more than %d entries", model.AliasEntriesCeiling)
 		}
 	}
 	return nil

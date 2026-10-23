@@ -261,10 +261,23 @@ func TestFailingAliasBacksOff(t *testing.T) {
 	now := time.Now()
 	for fails, wait := range map[int]time.Duration{1: time.Hour, 2: 2 * time.Hour, 5: 16 * time.Hour, 9: 24 * time.Hour} {
 		cache := NewCache(t.TempDir())
-		cache.errs[a.Name] = feedError{when: now, fails: fails, sources: Sources(c, a)}
-		if !cache.backingOff(c, a, now.Add(wait-time.Minute)) || cache.backingOff(c, a, now.Add(wait)) {
+		cache.errs[a.Name] = feedError{when: now, fails: fails, sources: Sources(c, a), limit: 1000}
+		if !cache.backingOff(c, a, now.Add(wait-time.Minute), 1000) || cache.backingOff(c, a, now.Add(wait), 1000) {
 			t.Errorf("after %d failures the wait is not %s", fails, wait)
 		}
+	}
+
+	// A limit raised after a failure is tried at once.
+	c.System.MaxAliasEntries = 1000
+	r.Tick(ctx, true)
+	before := hits.Load()
+	r.Tick(ctx, false)
+	c2 := geoConfig(srv, "de", "fr")
+	c2.System.MaxAliasEntries = 5000
+	cfg.Store(c2)
+	r.Tick(ctx, false)
+	if n := hits.Load(); n <= before {
+		t.Errorf("a raised limit waited out the backoff: %d requests, was %d", n, before)
 	}
 }
 

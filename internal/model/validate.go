@@ -200,7 +200,7 @@ func (c *Config) Validate() error {
 			for j, e := range a.Entries {
 				at := fmt.Sprintf("%s.entries[%d]", path, j)
 				if IsURLEntry(e) {
-					v.add(at, "a country alias fetches from the GeoIP source")
+					v.add(at, "a country alias holds country codes, not URLs")
 				} else if !countryRe.MatchString(e) {
 					v.add(at, "%q is not a two-letter country code", e)
 				}
@@ -2996,7 +2996,14 @@ func dhcpHostWord(name string) bool {
 	return err == nil || dnsmasqTimeRe.MatchString(name)
 }
 
+// maxMindKeyRe is what MaxMind issues: 16 characters for the older keys,
+// 40 ending in _mmk for the newer.
+var maxMindKeyRe = regexp.MustCompile(`^[A-Za-z0-9_]{16,64}$`)
+
 func (v *validator) system(s *System) {
+	if k := s.MaxMindLicenceKey; k != "" && !maxMindKeyRe.MatchString(k) {
+		v.add("system.maxmindLicenceKey", "a MaxMind licence key is 16 to 64 letters, digits and underscores")
+	}
 	for field, tmpl := range map[string]string{"geoIPv4Url": s.GeoIPv4URL, "geoIPv6Url": s.GeoIPv6URL} {
 		if tmpl == "" {
 			continue
@@ -3037,6 +3044,10 @@ func (v *validator) system(s *System) {
 	if s.KeepRevisions < 0 || s.KeepRevisions > MaxKeepRevisions {
 		v.add("system.keepRevisions", "%d must be 0-%d (0 keeps %d)",
 			s.KeepRevisions, MaxKeepRevisions, DefaultKeepRevisions)
+	}
+	if s.MaxAliasEntries != 0 && (s.MaxAliasEntries < 1000 || s.MaxAliasEntries > AliasEntriesCeiling) {
+		v.add("system.maxAliasEntries", "%d must be 1000-%d (0 keeps %d)",
+			s.MaxAliasEntries, AliasEntriesCeiling, DefaultMaxAliasEntries)
 	}
 	if s.KeepDriveReadings < 0 || s.KeepDriveReadings > MaxKeepDriveReadings {
 		v.add("system.keepDriveReadings", "%d must be 0-%d (0 keeps %d)",

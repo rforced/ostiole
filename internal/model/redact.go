@@ -82,6 +82,7 @@ func (c *Config) Redacted() *Config {
 		out.Blocking.Lists[i].URL = RedactURL(out.Blocking.Lists[i].URL)
 	}
 	s := &out.System
+	s.MaxMindLicenceKey = ""
 	for _, u := range []*string{&s.GeoIPv4URL, &s.GeoIPv6URL, &s.ASNURL, &s.ASNNamesURL, &s.BogonV4URL, &s.BogonV6URL} {
 		*u = RedactURL(*u)
 	}

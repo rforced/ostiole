@@ -484,6 +484,14 @@ type System struct {
 	// GeoIPv4URL alone.
 	GeoIPv4URL string `json:"geoIPv4Url,omitempty"`
 	GeoIPv6URL string `json:"geoIPv6Url,omitempty"`
+	// MaxMindLicenceKey, when set, has country lists read from MaxMind's
+	// GeoLite2 database instead of the GeoIP URLs: the country an address
+	// is used in rather than the one its holder registered it in.
+	MaxMindLicenceKey string `json:"maxmindLicenceKey,omitempty"`
+	// MaxAliasEntries is the most entries a fetched alias may hold once
+	// merged; zero keeps DefaultMaxAliasEntries. A memory budget: nft takes
+	// about half a kilobyte per entry while it loads the sets.
+	MaxAliasEntries int `json:"maxAliasEntries,omitempty"`
 	// ASNURL is where an AS number's announced prefixes come from; "{asn}"
 	// is replaced with the bare number. ASNNamesURL names them for the UI
 	// and is asked once per alias, with "{asns}" replaced by the list.
@@ -599,6 +607,22 @@ func (s System) RevisionsKept() int {
 		return DefaultKeepRevisions
 	}
 	return s.KeepRevisions
+}
+
+// DefaultMaxAliasEntries is the most entries a fetched alias may hold when
+// the setting says nothing: every network in MaxMind's country database,
+// unmerged, with room to spare.
+const DefaultMaxAliasEntries = 2_000_000
+
+// AliasEntriesCeiling bounds the setting, and what one source may hold.
+const AliasEntriesCeiling = 5_000_000
+
+// AliasEntryLimit is the most entries a fetched alias may hold.
+func (s System) AliasEntryLimit() int {
+	if s.MaxAliasEntries <= 0 {
+		return DefaultMaxAliasEntries
+	}
+	return s.MaxAliasEntries
 }
 
 // DefaultKeepDriveReadings is how many drive readings are kept when the setting says nothing.

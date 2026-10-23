@@ -35,7 +35,7 @@ func readLogLimits(t *testing.T, cfg *model.Config, mem uint64) (map[string]json
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if keys := slices.Sorted(maps.Keys(body)); !slices.Equal(keys, []string{"budget", "ceilings", "memTotal", "peakFactor", "reserve"}) {
+	if keys := slices.Sorted(maps.Keys(body)); !slices.Equal(keys, []string{"aliasEntries", "budget", "ceilings", "memTotal", "peakFactor", "reserve"}) {
 		t.Fatalf("fields = %v", keys)
 	}
 	var ceilings map[string]int

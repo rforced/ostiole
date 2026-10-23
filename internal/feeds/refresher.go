@@ -144,14 +144,14 @@ func (r *Refresher) RefreshOne(ctx context.Context, name string) (int, error) {
 }
 
 func (r *Refresher) refresh(ctx context.Context, cfg *model.Config, a model.Alias) (bool, error) {
-	entries, parts, lists, err := r.Fetcher.fetch(ctx, cfg, a)
+	entries, parts, lists, err := r.Fetcher.fetch(ctx, cfg, a, r.Cache.Dir)
 	if err == nil && a.Type == model.AliasGeoIP {
 		if prev, ok := r.Cache.last(a.Name); ok {
 			err = emptied(prev, parts, entries)
 		}
 	}
 	if err != nil {
-		r.Cache.recordError(a.Name, err, time.Now(), Sources(cfg, a))
+		r.Cache.recordError(a.Name, err, time.Now(), Sources(cfg, a), r.Fetcher.Budget.AliasEntries(cfg))
 		return false, err
 	}
 	before := r.Cache.Entries()[a.Name]
@@ -178,7 +178,7 @@ func (r *Refresher) refresh(ctx context.Context, cfg *model.Config, a model.Alia
 // fetched on the next pass, not a refresh period later. One that failed
 // from the same sources waits out its backoff.
 func (r *Refresher) due(cfg *model.Config, a model.Alias) bool {
-	if r.Cache.backingOff(cfg, a, time.Now()) {
+	if r.Cache.backingOff(cfg, a, time.Now(), r.Fetcher.Budget.AliasEntries(cfg)) {
 		return false
 	}
 	at, ok := r.Cache.FetchedAt(a.Name)

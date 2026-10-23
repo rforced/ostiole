@@ -11,7 +11,7 @@ import (
 // secretName is what a field holding a secret is called. A new field whose
 // name matches has to be blanked in Redacted or listed in redactExempt
 // with a reason, or TestRedactedBlanksEverySecret fails.
-var secretName = regexp.MustCompile(`(?i)(password|passphrase|privatekey|presharedkey|secret|authkey|hmac|keypem|token)$`)
+var secretName = regexp.MustCompile(`(?i)(password|passphrase|privatekey|presharedkey|secret|authkey|hmac|keypem|token|licencekey)$`)
 
 // redactExempt are the matching fields a shared backup may keep, and why.
 var redactExempt []string

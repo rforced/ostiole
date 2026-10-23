@@ -172,7 +172,7 @@ at your own.`,
 			// disturbs the rules that use them.
 			refresher := &feeds.Refresher{
 				Cache:   g.feeds(),
-				Fetcher: feeds.NewFetcher(g.listGetter()),
+				Fetcher: g.fetcher(),
 				Source:  eng.Effective,
 				Sets:    &nft.Exec{Bin: g.nftBin},
 				Log:     slog.Default(),

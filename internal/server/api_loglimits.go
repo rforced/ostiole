@@ -54,6 +54,8 @@ type logLimitsInfo struct {
 	Budget     int64          `json:"budget"`
 	PeakFactor float64        `json:"peakFactor"`
 	Ceilings   map[string]int `json:"ceilings"`
+	// AliasEntries is the most system.maxAliasEntries may ask for here.
+	AliasEntries int `json:"aliasEntries"`
 }
 
 func (a *api) logLimits(w http.ResponseWriter, _ *http.Request) error {
@@ -62,7 +64,7 @@ func (a *api) logLimits(w http.ResponseWriter, _ *http.Request) error {
 		cfg = &model.Config{}
 	}
 	b := a.budget()
-	out := logLimitsInfo{PeakFactor: model.PeakFactor, Ceilings: map[string]int{}}
+	out := logLimitsInfo{PeakFactor: model.PeakFactor, Ceilings: map[string]int{}, AliasEntries: b.AliasEntryCeiling(cfg)}
 	if b.Total > 0 {
 		out.MemTotal, out.Reserve, out.Budget = b.Total, b.Reserve(cfg), b.Logs(cfg)
 	}

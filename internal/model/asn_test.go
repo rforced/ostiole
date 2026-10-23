@@ -122,3 +122,37 @@ func TestASNSourceTemplates(t *testing.T) {
 		})
 	}
 }
+
+func TestMaxMindLicenceKeyIsValidated(t *testing.T) {
+	t.Parallel()
+	for key, ok := range map[string]bool{
+		"":                 true,
+		"AbCd0123EfGh4567": true,
+		"Ab0_Cd1_Ef2_Gh3_Ij4_Kl5_Mn6_Op7_Qr8__mmk": true,
+		"short":                    false,
+		"has space in the key 123": false,
+		"key&suffix=zip.sha256":    false,
+	} {
+		c := starterForBlocking()
+		c.System.MaxMindLicenceKey = key
+		got := issues(t, c)
+		if ok != (len(got) == 0) || (!ok && !strings.HasPrefix(got[0], "system.maxmindLicenceKey")) {
+			t.Errorf("key %q: issues = %v", key, got)
+		}
+	}
+}
+
+func TestMaxAliasEntriesIsBounded(t *testing.T) {
+	t.Parallel()
+	for n, ok := range map[int]bool{0: true, 1000: true, AliasEntriesCeiling: true, 999: false, -1: false, AliasEntriesCeiling + 1: false} {
+		c := starterForBlocking()
+		c.System.MaxAliasEntries = n
+		got := issues(t, c)
+		if ok != (len(got) == 0) || (!ok && !strings.HasPrefix(got[0], "system.maxAliasEntries")) {
+			t.Errorf("%d: issues = %v", n, got)
+		}
+	}
+	if got := (System{}).AliasEntryLimit(); got != DefaultMaxAliasEntries {
+		t.Errorf("unset limit = %d", got)
+	}
+}

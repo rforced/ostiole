@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 )
@@ -197,5 +198,37 @@ func TestFormatBytes(t *testing.T) {
 		if got := FormatBytes(n); got != want {
 			t.Errorf("FormatBytes(%.0f) = %q, want %q", n, got, want)
 		}
+	}
+}
+
+// The alias limit is what the memory beside the reserve loads: a set
+// limit above it is refused, and the default is lowered to it.
+func TestAliasEntryCeiling(t *testing.T) {
+	t.Parallel()
+	c := memoryStarter()
+	b := MemoryBudget{Total: oneGB}
+	most := int((b.Logs(c) - b.LogsFullBytes(c)) / AliasEntryBytes)
+	if got := b.AliasEntryCeiling(c); got != most || most >= DefaultMaxAliasEntries {
+		t.Fatalf("ceiling = %d, want %d", got, most)
+	}
+	if got := b.AliasEntries(c); got != most {
+		t.Errorf("default here = %d, want the ceiling %d", got, most)
+	}
+	if issues := b.Check(c); len(issues) != 0 {
+		t.Errorf("the default was refused: %v", issues)
+	}
+	c.System.MaxAliasEntries = most + 1
+	want := Issue{Path: "system.maxAliasEntries", Message: fmt.Sprintf("this router allows up to %d", most)}
+	if issues := b.Check(c); !slices.Contains(issues, want) {
+		t.Errorf("issues = %v", issues)
+	}
+	if got := (MemoryBudget{Total: ReserveSystem}).AliasEntryCeiling(c); got != MinAliasEntryCeiling {
+		t.Errorf("a router with nothing left: %d", got)
+	}
+	if got := (MemoryBudget{}).AliasEntries(c); got != most+1 {
+		t.Errorf("unknown memory: %d", got)
+	}
+	if got := (MemoryBudget{Total: 64_000_000_000}).AliasEntryCeiling(c); got != AliasEntriesCeiling {
+		t.Errorf("a large router: %d", got)
 	}
 }

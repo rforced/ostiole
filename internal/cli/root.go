@@ -4,6 +4,7 @@ package cli
 import (
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -138,6 +139,13 @@ func (g *globals) network() (network.Backend, error) {
 func (g *globals) feedsDir() string { return filepath.Join(g.configDir, "feeds") }
 
 func (g *globals) feeds() *feeds.Cache { return feeds.NewCache(g.feedsDir()) }
+
+// fetcher reads fetched aliases within this router's memory.
+func (g *globals) fetcher() *feeds.Fetcher {
+	f := feeds.NewFetcher(g.listGetter())
+	f.Budget = model.MemoryBudget{Total: int64(min(sysstat.New(g.configDir).MemTotal(), math.MaxInt64))}
+	return f
+}
 
 // listGetter reads the lists a configuration names: under the router's
 // own rules, or with --lists-on-loopback, from the tests' list servers.

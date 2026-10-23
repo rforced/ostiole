@@ -41,6 +41,16 @@ const MinLogCeiling = 1_000
 
 const firewallLogEntries = "system.management.firewallLog.entries"
 
+// AliasEntryBytes is what nft holds for each entry of a fetched alias
+// while a refresh flushes and refills the sets: 584 bytes measured in
+// 2026-10. It lasts only the load, but the load comes while everything
+// else runs.
+const AliasEntryBytes = 600
+
+// MinAliasEntryCeiling is the lowest the alias limit goes on a router
+// short of memory.
+const MinAliasEntryCeiling = 100_000
+
 // MemoryBudget shares a router's memory between what it runs and its logs.
 type MemoryBudget struct {
 	// Total is MemTotal in bytes; zero means unknown, and refuses nothing.
@@ -84,6 +94,24 @@ func (b MemoryBudget) Ceiling(c *Config, bytesPerEntry int64, most int) int {
 	}
 	fit := int(float64(b.Logs(c)) / (float64(bytesPerEntry) * PeakFactor))
 	return min(most, max(fit, MinLogCeiling))
+}
+
+// AliasEntryCeiling is the most entries a fetched alias may hold here:
+// what the memory left beside the reserve and the full logs loads, at most
+// AliasEntriesCeiling and at least MinAliasEntryCeiling. With Total
+// unknown it is AliasEntriesCeiling.
+func (b MemoryBudget) AliasEntryCeiling(c *Config) int {
+	if b.Total <= 0 {
+		return AliasEntriesCeiling
+	}
+	fit := int(max(b.Logs(c)-b.LogsFullBytes(c), 0) / AliasEntryBytes)
+	return min(AliasEntriesCeiling, max(fit, MinAliasEntryCeiling))
+}
+
+// AliasEntries is the limit a fetched alias obeys here: the setting, or
+// the ceiling when that is lower.
+func (b MemoryBudget) AliasEntries(c *Config) int {
+	return min(c.System.AliasEntryLimit(), b.AliasEntryCeiling(c))
 }
 
 // LogCeilings are the most entries each log setting may ask for here.
@@ -214,6 +242,11 @@ func (b MemoryBudget) Check(c *Config) []Issue {
 		return nil
 	}
 	v := &validator{}
+	if n := c.System.MaxAliasEntries; n > 0 {
+		if most := b.AliasEntryCeiling(c); n > most {
+			v.add("system.maxAliasEntries", "this router allows up to %d", most)
+		}
+	}
 	logs := c.memoryLogs()
 	var full int64
 	for _, l := range logs {

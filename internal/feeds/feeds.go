@@ -36,8 +36,7 @@ import (
 // Limits on what a feed may be. A blocklist with a million entries is
 // either a mistake or an attack on this router's memory.
 const (
-	MaxBytes   = 16 << 20
-	MaxEntries = 500_000
+	MaxBytes = 16 << 20
 	// DefaultTimeout is how long one request may take. Some of these lists
 	// are large and served slowly.
 	DefaultTimeout = 60 * time.Second
@@ -52,13 +51,15 @@ const (
 type Status struct {
 	Alias string `json:"alias"`
 	// Sources are the URLs it is built from; a GeoIP alias has one per
-	// country and template, an AS alias one per number.
+	// country and template, or one per country from MaxMind, an AS alias
+	// one per number.
 	Sources []string `json:"sources"`
 	// Parts is what each source contributed at the last fetch. For a
 	// country list it is the answer to "how much of this ruleset is
 	// China", which is the question somebody picking twelve countries is
 	// actually asking. The parts add up to more than Entries: a range
-	// published by two sources is counted by both and kept once.
+	// published by two sources is counted by both and kept once, and
+	// neighbouring networks are merged.
 	Parts       []Part     `json:"parts,omitempty"`
 	Entries     int        `json:"entries"`
 	FetchedAt   time.Time  `json:"fetchedAt,omitzero"`
@@ -146,10 +147,11 @@ type narrowing struct {
 type feedError struct {
 	message string
 	when    time.Time
-	// fails counts the failures in a row from sources, sorted, which is
-	// what the backoff reads.
+	// fails counts the failures in a row from sources, sorted, under
+	// limit, which is what the backoff reads.
 	fails   int
 	sources []string
+	limit   int
 }
 
 // NewCache returns a cache over dir, reading whatever is already there.
@@ -188,7 +190,10 @@ func (c *Cache) loadAll() {
 			}
 			f.Entries = merge(lists)
 		case len(st.Entries) > 0:
-			err = json.Unmarshal(st.Entries, &f.Entries)
+			// Written before lists were merged, perhaps.
+			if err = json.Unmarshal(st.Entries, &f.Entries); err == nil {
+				f.Entries = merge([][]string{f.Entries})
+			}
 		}
 		if err != nil || f.Alias == "" {
 			// Prune knows only the files that load, so nothing else would
@@ -243,12 +248,17 @@ func (c *Cache) kept(f cached, a model.Alias, cfg *model.Config) []string {
 		return f.Entries
 	}
 	want := map[string]bool{}
-	for _, s := range Sources(cfg, a) {
-		want[s] = true
+	for _, p := range SourceParts(cfg, a) {
+		want[p.Source] = true
+		if p.Country != "" {
+			want["country:"+p.Country] = true
+		}
 	}
 	var keep []string
 	for _, p := range f.Parts {
-		if want[p.Source] {
+		// A country still in the alias keeps its list while its source moves
+		// (a MaxMind key set or cleared, a mirror) until the new one answers.
+		if want[p.Source] || (p.Country != "" && want["country:"+p.Country]) {
 			keep = append(keep, p.Source)
 		}
 	}
@@ -267,22 +277,6 @@ func (c *Cache) kept(f cached, a model.Alias, cfg *model.Config) []string {
 	entries := merge(lists)
 	c.narrowed[f.Alias] = narrowing{key: key, entries: entries}
 	return entries
-}
-
-// merge is lists as one, each entry once, sorted as Fetch sorts.
-func merge(lists [][]string) []string {
-	seen := map[string]bool{}
-	var out []string
-	for _, l := range lists {
-		for _, e := range l {
-			if !seen[e] {
-				seen[e] = true
-				out = append(out, e)
-			}
-		}
-	}
-	sort.Strings(out)
-	return out
 }
 
 func (c *Cache) path(alias string) string {
@@ -346,24 +340,28 @@ func (c *Cache) Prune(cfg *model.Config) {
 	for _, name := range gone {
 		c.Forget(name)
 	}
+	if !usesMaxMind(cfg) {
+		_ = os.Remove(filepath.Join(c.Dir, maxMindFile))
+	}
 }
 
-func (c *Cache) recordError(alias string, err error, when time.Time, sources []string) {
+func (c *Cache) recordError(alias string, err error, when time.Time, sources []string, limit int) {
 	slices.Sort(sources)
 	c.mu.Lock()
 	fails := 1
-	if prev, ok := c.errs[alias]; ok && slices.Equal(prev.sources, sources) {
+	if prev, ok := c.errs[alias]; ok && slices.Equal(prev.sources, sources) && prev.limit == limit {
 		fails = prev.fails + 1
 	}
-	c.errs[alias] = feedError{message: err.Error(), when: when, fails: fails, sources: sources}
+	c.errs[alias] = feedError{message: err.Error(), when: when, fails: fails, sources: sources, limit: limit}
 	c.mu.Unlock()
 }
 
 // backingOff reports whether an alias failed recently from the sources it
 // has now. The wait starts at MinRefresh and doubles with each failure in
 // a row, up to the alias's period, so a source having a bad day is not
-// asked every tick. Changed sources are fetched at once.
-func (c *Cache) backingOff(cfg *model.Config, a model.Alias, now time.Time) bool {
+// asked every tick. Changed sources, or a changed limit, are fetched at
+// once.
+func (c *Cache) backingOff(cfg *model.Config, a model.Alias, now time.Time, limit int) bool {
 	c.mu.RLock()
 	e, ok := c.errs[a.Name]
 	c.mu.RUnlock()
@@ -372,7 +370,7 @@ func (c *Cache) backingOff(cfg *model.Config, a model.Alias, now time.Time) bool
 	}
 	sources := Sources(cfg, a)
 	slices.Sort(sources)
-	if !slices.Equal(e.sources, sources) {
+	if !slices.Equal(e.sources, sources) || e.limit != limit {
 		return false
 	}
 	wait := min(MinRefresh<<min(e.fails-1, 8), RefreshPeriod(a))
@@ -480,8 +478,8 @@ func RefreshPeriod(a model.Alias) time.Duration {
 }
 
 // Sources lists the URLs an alias is built from: its URL lines, one per
-// country and template for a GeoIP alias, or one per number for an AS
-// alias.
+// country and template for a GeoIP alias (one per country when MaxMind
+// answers), or one per number for an AS alias.
 func Sources(cfg *model.Config, a model.Alias) []string {
 	parts := SourceParts(cfg, a)
 	out := make([]string, 0, len(parts))
@@ -529,6 +527,15 @@ func SourceParts(cfg *model.Config, a model.Alias) []Part {
 		}
 		return out
 	}
+	if cfg.System.MaxMindLicenceKey != "" {
+		var out []Part
+		for _, code := range a.Entries {
+			if code = strings.ToLower(strings.TrimSpace(code)); code != "" {
+				out = append(out, Part{Source: MaxMindSource + code, Country: code})
+			}
+		}
+		return out
+	}
 	v4, v6 := cfg.System.GeoIPTemplates()
 	var out []Part
 	if v6 == v4 {
@@ -564,6 +571,14 @@ type Fetcher struct {
 	// Log is where a failure that does not fail the fetch is noted; nil
 	// uses the default logger.
 	Log *slog.Logger
+	// MaxMindURL is where MaxMind's country database is downloaded from;
+	// empty is DefaultMaxMindURL.
+	MaxMindURL string
+	// Budget is this router's memory, which lowers the alias limit; zero
+	// leaves the setting as it is.
+	Budget model.MemoryBudget
+
+	maxMindState maxMindState
 }
 
 // NewFetcher returns a fetcher with production defaults that reads
@@ -581,22 +596,33 @@ func NewFetcher(getter *fetch.Getter) *Fetcher {
 // duplicates removed, and what each source held. One source failing fails
 // the whole alias: half a blocklist is worse than yesterday's whole one.
 func (f *Fetcher) Fetch(ctx context.Context, cfg *model.Config, a model.Alias) ([]string, []Part, error) {
-	entries, parts, _, err := f.fetch(ctx, cfg, a)
+	entries, parts, _, err := f.fetch(ctx, cfg, a, "")
 	return entries, parts, err
 }
 
 // fetch is Fetch with each source's own entries, by source, which the
-// cache keeps so a source taken out leaves the sets at once.
-func (f *Fetcher) fetch(ctx context.Context, cfg *model.Config, a model.Alias) ([]string, []Part, map[string][]string, error) {
+// cache keeps so a source taken out leaves the sets at once. MaxMind's
+// database is kept in dir, or not at all when it is empty.
+func (f *Fetcher) fetch(ctx context.Context, cfg *model.Config, a model.Alias, dir string) ([]string, []Part, map[string][]string, error) {
 	parts := SourceParts(cfg, a)
 	if len(parts) == 0 {
 		return nil, nil, nil, errors.New("this alias has no source to fetch")
 	}
-	seen := map[string]bool{}
-	var out []string
 	lists := make(map[string][]string, len(parts))
+	ordered := make([][]string, 0, len(parts))
+	var geo map[string][]string
+	held, limit := 0, f.Budget.AliasEntries(cfg)
 	for i := range parts {
-		entries, err := f.one(ctx, parts[i].Source, a.Type)
+		var entries []string
+		var err error
+		if strings.HasPrefix(parts[i].Source, MaxMindSource) {
+			if geo == nil {
+				geo, err = f.maxMind(ctx, cfg.System.MaxMindLicenceKey, dir, parts)
+			}
+			entries = geo[parts[i].Country]
+		} else {
+			entries, err = f.one(ctx, parts[i].Source, a.Type)
+		}
 		if err != nil {
 			return nil, parts, nil, fmt.Errorf("%s: %w", model.RedactURL(parts[i].Source), err)
 		}
@@ -605,16 +631,16 @@ func (f *Fetcher) fetch(ctx context.Context, cfg *model.Config, a model.Alias) (
 		// it arrived here first.
 		parts[i].Entries = len(entries)
 		lists[parts[i].Source] = entries
-		for _, e := range entries {
-			if seen[e] {
-				continue
-			}
-			seen[e] = true
-			out = append(out, e)
-			if len(out) > MaxEntries {
-				return nil, parts, nil, fmt.Errorf("more than %d entries", MaxEntries)
-			}
+		ordered = append(ordered, entries)
+		// Counted before merging too, so a pile of sources cannot take
+		// the memory the limit keeps.
+		if held += len(entries); held > 2*limit {
+			return nil, parts, nil, fmt.Errorf("more than %d entries before merging, twice the %d allowed in System › General › Fetched aliases", 2*limit, limit)
 		}
+	}
+	out := merge(ordered)
+	if len(out) > limit {
+		return nil, parts, nil, fmt.Errorf("%d entries once merged, more than the %d allowed in System › General › Fetched aliases", len(out), limit)
 	}
 	if a.Type == model.AliasGeoIP {
 		var empty []string
@@ -632,7 +658,6 @@ func (f *Fetcher) fetch(ctx context.Context, cfg *model.Config, a model.Alias) (
 			f.log().Info("countries came back with no addresses", "alias", a.Name, "countries", strings.Join(empty, ", "))
 		}
 	}
-	sort.Strings(out)
 	if a.Type == model.AliasASN {
 		f.holders(ctx, cfg, parts)
 	}

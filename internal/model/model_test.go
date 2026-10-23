@@ -2599,7 +2599,7 @@ func TestAliasURLLines(t *testing.T) {
 		"space": {Alias{Name: "x", Type: AliasHosts, Entries: []string{"https://lists.example.net/drop.txt 192.0.2.1"}},
 			`aliases[0].entries[0]: "https://lists.example.net/drop.txt 192.0.2.1" must be an http or https URL`},
 		"geoip": {Alias{Name: "x", Type: AliasGeoIP, Entries: []string{"de", "https://lists.example.net/de.zone"}},
-			"aliases[0].entries[1]: a country alias fetches from the GeoIP source"},
+			"aliases[0].entries[1]: a country alias holds country codes, not URLs"},
 		"not http": {Alias{Name: "x", Type: AliasHosts, Entries: []string{"ftp://lists.example.net/drop.txt"}},
 			`aliases[0].entries[0]: "ftp://lists.example.net/drop.txt" must be an http or https URL`},
 		"no host": {Alias{Name: "x", Type: AliasHosts, Entries: []string{"https:///drop.txt"}},

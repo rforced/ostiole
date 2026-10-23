@@ -87,7 +87,7 @@ it works whether or not the daemon is up.`,
 				Refresh: func(ctx context.Context) error {
 					r := &feeds.Refresher{
 						Cache:   g.feeds(),
-						Fetcher: feeds.NewFetcher(g.listGetter()),
+						Fetcher: g.fetcher(),
 						Source:  source,
 						Sets:    &nft.Exec{Bin: g.nftBin},
 					}

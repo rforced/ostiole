@@ -126,7 +126,8 @@ const ENTRY_HINTS = {
   hosts:
     'One address, CIDR network or URL per line. A URL is a published list, plain text or JSON, fetched on a schedule and cached here. Plain http only from inside the network.',
   ports: 'One port, range or URL per line, like 8000-8100.',
-  geoip: 'The addresses behind each country, fetched from the GeoIP source.',
+  geoip:
+    'The addresses behind each country, from the source set in System › General › Fetched aliases.',
   asn: 'One AS number per line, like AS15169. The prefixes each one announces are fetched from the ASN source.',
 }
 
