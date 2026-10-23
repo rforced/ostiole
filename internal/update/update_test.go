@@ -8,6 +8,8 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -17,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -713,6 +716,53 @@ func TestTrustedKeysDecodesTheEmbeddedKey(t *testing.T) {
 	for i, k := range keys {
 		if len(k) != ed25519.PublicKeySize {
 			t.Errorf("key %d has %d bytes", i, len(k))
+		}
+	}
+}
+
+// The installer and the manual check in the docs carry the key as PEM text
+// a rotation has to update by hand.
+func TestPublishedKeysMatchTheEmbeddedKeys(t *testing.T) {
+	t.Parallel()
+	spki := regexp.MustCompile(`MCowBQYDK2VwAyEA[A-Za-z0-9+/]{43}=`)
+	published := func(path string) []string {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, m := range spki.FindAllString(string(raw), -1) {
+			der, err := base64.StdEncoding.DecodeString(m)
+			if err != nil {
+				t.Fatalf("%s: %v", path, err)
+			}
+			pub, err := x509.ParsePKIXPublicKey(der)
+			if err != nil {
+				t.Fatalf("%s: %v", path, err)
+			}
+			k, ok := pub.(ed25519.PublicKey)
+			if !ok {
+				t.Fatalf("%s: %T is not an ed25519 key", path, pub)
+			}
+			out = append(out, hex.EncodeToString(k))
+		}
+		if len(out) == 0 {
+			t.Fatalf("%s: no release key found", path)
+		}
+		return out
+	}
+
+	install := published(filepath.Join("..", "install", "install.sh"))
+	slices.Sort(install)
+	trusted := slices.Sorted(slices.Values(TrustedKeysHex))
+	if !slices.Equal(install, trusted) {
+		t.Errorf("install.sh trusts %v, the binary %v", install, trusted)
+	}
+	for _, doc := range []string{"SECURITY.md", ".goreleaser.yaml"} {
+		for _, k := range published(filepath.Join("..", "..", doc)) {
+			if !slices.Contains(TrustedKeysHex, k) {
+				t.Errorf("%s shows %s, which the binary does not trust", doc, k)
+			}
 		}
 	}
 }

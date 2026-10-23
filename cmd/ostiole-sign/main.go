@@ -1,7 +1,8 @@
 // Command ostiole-sign signs a file (checksums.txt) with the release
 // ed25519 key from $OSTIOLE_SIGNING_KEY (base64 of the 64-byte private
 // key) and writes a base64 signature. The updater verifies it with the
-// embedded public key.
+// embedded public key; -verify runs the same check before a release is
+// published.
 package main
 
 import (
@@ -23,6 +24,8 @@ func main() {
 	out := flag.String("out", "", "signature file to write")
 	genkey := flag.Bool("genkey", false, "generate a new release key pair and print both halves")
 	public := flag.Bool("public", false, "print the public half of $OSTIOLE_SIGNING_KEY")
+	check := flag.Bool("verify", false, "check -sig over -in against the keys this build trusts")
+	sigFile := flag.String("sig", "", "signature file to check with -verify")
 	flag.Parse()
 
 	if *genkey {
@@ -33,10 +36,24 @@ func main() {
 		printPublic()
 		return
 	}
+	if *check {
+		if *in == "" || *sigFile == "" {
+			usage()
+		}
+		keys := update.TrustedKeys()
+		if len(keys) != len(update.TrustedKeysHex) {
+			fmt.Fprintln(os.Stderr, "a key in update.TrustedKeysHex does not decode")
+			os.Exit(1)
+		}
+		if err := verify(keys, *in, *sigFile); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Println("signature verifies against a trusted key")
+		return
+	}
 	if *in == "" || *out == "" {
-		fmt.Fprintln(os.Stderr, "usage: ostiole-sign -in checksums.txt -out checksums.txt.sig")
-		fmt.Fprintln(os.Stderr, "       ostiole-sign -genkey | -public")
-		os.Exit(2)
+		usage()
 	}
 	key, err := signingKey()
 	if err != nil {
@@ -53,6 +70,25 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func usage() {
+	fmt.Fprintln(os.Stderr, "usage: ostiole-sign -in checksums.txt -out checksums.txt.sig")
+	fmt.Fprintln(os.Stderr, "       ostiole-sign -verify -in checksums.txt -sig checksums.txt.sig")
+	fmt.Fprintln(os.Stderr, "       ostiole-sign -genkey | -public")
+	os.Exit(2)
+}
+
+func verify(keys []ed25519.PublicKey, in, sigPath string) error {
+	data, err := os.ReadFile(in)
+	if err != nil {
+		return err
+	}
+	sig, err := os.ReadFile(sigPath)
+	if err != nil {
+		return err
+	}
+	return update.VerifyAny(keys, data, sig)
 }
 
 // generate prints a fresh key pair: the secret for the repository, the

@@ -82,8 +82,8 @@ jobs:
         run: '"$RUNNER_TEMP/ostiole-sign" -in dist/checksums.txt -out dist/checksums.txt.sig'
         env:
           OSTIOLE_SIGNING_KEY: ${{ secrets.OSTIOLE_SIGNING_KEY }}
-      # Every artifact checksums.txt names, by its digest there, and the
-      # file itself.
+      - name: Verify the signature
+        run: '"$RUNNER_TEMP/ostiole-sign" -verify -in dist/checksums.txt -sig dist/checksums.txt.sig'
       - name: Attest the artifacts
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
