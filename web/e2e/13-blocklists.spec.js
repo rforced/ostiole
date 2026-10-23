@@ -135,7 +135,8 @@ test('a blocklist alias fetches, lands in the ruleset, and refreshes', async ({ 
 })
 
 // Two URL lines in one alias are fetched together, a JSON list and a text
-// one, and every address in either is kept.
+// one, and every address in either is kept: the two /48s, one from each,
+// merge into a /47.
 test('an alias with two URL lines fetches both lists', async ({ page }) => {
   await login(page)
   await page.goto('/firewall')
@@ -157,18 +158,20 @@ test('an alias with two URL lines fetches both lists', async ({ page }) => {
   await applyAndConfirm(page)
 
   await row.getByRole('button', { name: 'Refresh' }).click()
-  await expect(row).toContainText('6 fetched')
+  await expect(row).toContainText('5 fetched')
 
   // What it fetched can be read, and an address finds the network holding it.
-  await row.getByRole('button', { name: '6 fetched for cloud' }).click()
+  await row.getByRole('button', { name: '5 fetched for cloud' }).click()
   const fetched = page.getByRole('dialog', { name: 'Entries fetched for cloud' })
   const entries = fetched.getByRole('list', { name: 'Entries' })
-  await expect(entries.getByRole('listitem')).toHaveCount(6)
+  await expect(entries.getByRole('listitem')).toHaveCount(5)
+  await fetched.getByLabel('Search').fill('2001:db8:b::1')
+  await expect(entries.getByRole('listitem')).toHaveText(['2001:db8:a::/47'])
   await fetched.getByLabel('Search').fill('2001:db8:c::1')
   await expect(entries.getByRole('listitem')).toHaveText(['2001:db8:c::1'])
   await fetched.getByLabel('Search').fill('192.0.2.77')
   await expect(entries.getByRole('listitem')).toHaveText(['192.0.2.0/24'])
-  await expect(fetched).toContainText('1 of 6')
+  await expect(fetched).toContainText('1 of 5')
   await page.screenshot({ path: shot('99-two-lists-entries'), fullPage: true })
   await fetched.getByRole('button', { name: 'Close' }).last().click()
   await expect(fetched).toHaveCount(0)

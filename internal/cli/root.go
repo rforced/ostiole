@@ -143,8 +143,16 @@ func (g *globals) feeds() *feeds.Cache { return feeds.NewCache(g.feedsDir()) }
 // fetcher reads fetched aliases within this router's memory.
 func (g *globals) fetcher() *feeds.Fetcher {
 	f := feeds.NewFetcher(g.listGetter())
-	f.Budget = model.MemoryBudget{Total: int64(min(sysstat.New(g.configDir).MemTotal(), math.MaxInt64))}
+	f.Budget = g.memoryBudget()
 	return f
+}
+
+func (g *globals) memoryBudget() model.MemoryBudget {
+	n := sysstat.New(g.configDir).MemTotal()
+	if n > math.MaxInt64 {
+		return model.MemoryBudget{Total: math.MaxInt64}
+	}
+	return model.MemoryBudget{Total: int64(n)}
 }
 
 // listGetter reads the lists a configuration names: under the router's
