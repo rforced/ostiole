@@ -123,7 +123,8 @@ func (g td) credential(register bool) map[string]any {
 
 func (g td) rule() string {
 	return g.pick("FREQ=DAILY", "FREQ=DAILY;INTERVAL=3", "FREQ=WEEKLY;BYDAY=MO", "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR;COUNT=5",
-		"FREQ=MONTHLY;BYMONTHDAY=-1", "FREQ=MONTHLY;INTERVAL=3;BYDAY=2TU;UNTIL=20271231", "FREQ=MONTHLY;BYDAY=-1FR", "FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=29")
+		"FREQ=MONTHLY;BYMONTHDAY=-1", "FREQ=MONTHLY;INTERVAL=3;BYDAY=2TU;UNTIL=20271231", "FREQ=MONTHLY;BYDAY=-1FR", "FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=29",
+		"FREQ=WEEKLY;BYDAY=SU", "FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1")
 }
 
 func (g td) when() map[string]any {
@@ -617,6 +618,10 @@ func TestTheTendrilsSetLetsItsClientThrough(t *testing.T) {
 			for _, tz := range tdZones {
 				send(tdGet("/api/v1/views/counts"+tdQuery("tz", tz)), "")
 			}
+			for _, rule := range []string{"FREQ=WEEKLY;BYDAY=SU", "FREQ=WEEKLY;INTERVAL=2;BYDAY=SA,SU", "FREQ=MONTHLY;BYSETPOS=1;BYDAY=SA,SU"} {
+				send(tdBody("POST", "/api/v1/recurrence/preview", map[string]any{"rule": rule, "mode": "schedule", "anchor": g.when(), "tz": "UTC", "count": 3}), "")
+				send(tdBody("PATCH", "/api/v1/tasks/"+g.id(), map[string]any{"recurrence": map[string]any{"rule": rule, "mode": "after_completion"}, "version": 3}), "")
+			}
 			for _, r := range g.routes() {
 				send(r, "")
 			}
@@ -738,6 +743,7 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		{1, tdBody("POST", api+"/tasks", map[string]any{"id": task, "space_id": space, "title": "x",
 			"recurrence": map[string]any{"rule": "FREQ=DAILY;INTERVAL=1' OR '1'='1", "mode": "schedule"}})},
 		{1, tdBody("POST", api+"/recurrence/preview", map[string]any{"rule": "FREQ=DAILY;X=$(id)", "mode": "schedule"})},
+		{1, tdBody("POST", api+"/recurrence/preview", map[string]any{"rule": "FREQ=WEEKLY;BYDAY=MO;X=1|su", "mode": "schedule"})},
 		// The push service's address is https on a host with a name, one of
 		// it, with URL characters and a base64 token's escapes only;
 		// elsewhere an address is read.
