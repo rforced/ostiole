@@ -19,7 +19,7 @@ export const FIRST_SHAPE = Object.freeze({
 })
 
 /** The cards that only exist when the overview has something for them. */
-const OPTIONAL = ['gateways', 'traffic', 'blocks', 'leases', 'wireless', 'blocking']
+export const OPTIONAL = ['gateways', 'traffic', 'blocks', 'leases', 'wireless', 'blocking']
 
 /** The blocks of the page, by the data-card name each carries. */
 const BLOCKS = ['warnings', 'interfaces', 'system', 'rules', 'services', 'router', ...OPTIONAL]

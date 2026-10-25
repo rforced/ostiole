@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import DashboardView from '@/views/DashboardView.vue'
+import { DEFAULT_ORDER, LAYOUT_KEY } from '@/views/dashboard/layout'
+import LayoutDialog from '@/views/dashboard/LayoutDialog.vue'
 import { SHAPE_KEY } from '@/views/dashboard/shape'
 
 vi.mock('@/lib/api', () => ({
@@ -254,5 +256,69 @@ describe('DashboardView', () => {
     expect(card(w, 'Router').attributes('aria-busy')).toBe('true')
     // A failed read teaches nothing: the next visit still draws the first one.
     expect(localStorage.getItem(SHAPE_KEY)).toBeNull()
+  })
+
+  describe('with a layout of its own', () => {
+    const keep = (layout) => localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout))
+
+    it('draws the cards in its order, without the hidden ones', async () => {
+      localStorage.setItem(SHAPE_KEY, JSON.stringify({ cards: { gateways: 1, leases: 0 } }))
+      keep({
+        order: ['router', 'leases', 'services', 'gateways', 'rules', 'system'],
+        hidden: ['gateways', 'rules'],
+      })
+      const w = await mountDashboard()
+      expect(titles(w)).toEqual(['Interfaces', 'Router', 'Recent leases', 'Services', 'System'])
+      answer({ ...overview, dhcp: { enabled: true } })
+      await flushPromises()
+      expect(titles(w)).toEqual(['Interfaces', 'Router', 'Recent leases', 'Services', 'System'])
+    })
+
+    it('reads no usage while the System card is hidden, and reads it once shown', async () => {
+      keep({ order: DEFAULT_ORDER, hidden: ['system'] })
+      const w = await mountDashboard()
+      answer(overview)
+      await flushPromises()
+      expect(titles(w)).not.toContain('System')
+      expect(api.systemStats).not.toHaveBeenCalled()
+
+      w.findComponent(LayoutDialog).vm.$emit('change', { order: [...DEFAULT_ORDER], hidden: [] })
+      await flushPromises()
+      expect(api.systemStats).toHaveBeenCalledTimes(1)
+      expect(card(w, 'System').text()).toContain('12%')
+      expect(JSON.parse(localStorage.getItem(LAYOUT_KEY))).toEqual({
+        order: [...DEFAULT_ORDER],
+        hidden: [],
+      })
+    })
+
+    it('fills the cards in without waiting on a hidden Traffic card', async () => {
+      localStorage.setItem(SHAPE_KEY, JSON.stringify({ cards: { traffic: 2 } }))
+      keep({ order: DEFAULT_ORDER, hidden: ['traffic'] })
+      api.traffic.interfaces.mockReturnValue(new Promise(() => {}))
+      const w = await mountDashboard()
+      answer({
+        ...overview,
+        interfaces: [
+          { name: 'eth0', zone: 'wan', external: true, present: true, configured: true },
+        ],
+      })
+      await flushPromises()
+      expect(titles(w)).not.toContain('Traffic')
+      expect(w.findAll('section[aria-busy="true"]')).toHaveLength(0)
+      expect(api.traffic.interfaces).not.toHaveBeenCalled()
+    })
+
+    it('moves a card when the dialog says so', async () => {
+      const w = await mountDashboard()
+      answer(overview)
+      await flushPromises()
+      w.findComponent(LayoutDialog).vm.$emit('change', {
+        order: ['router', ...DEFAULT_ORDER.filter((n) => n !== 'router')],
+        hidden: [],
+      })
+      await flushPromises()
+      expect(titles(w)).toEqual(['Interfaces', 'Router', 'System', 'Busiest rules', 'Services'])
+    })
   })
 })

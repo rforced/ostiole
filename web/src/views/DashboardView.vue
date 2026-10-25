@@ -1,4 +1,5 @@
 <script setup>
+import { LayoutGrid } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
@@ -12,7 +13,9 @@ import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useSystemStore } from '@/stores/system'
 import DashboardWarnings from '@/views/dashboard/DashboardWarnings.vue'
+import { loadLayout, saveLayout } from '@/views/dashboard/layout'
 import {
+  OPTIONAL,
   externalLinks,
   heightsIn,
   rememberedShape,
@@ -22,6 +25,7 @@ import {
 import BlockingCard from '@/views/dashboard/BlockingCard.vue'
 import GatewaysCard from '@/views/dashboard/GatewaysCard.vue'
 import InterfaceSummary from '@/views/dashboard/InterfaceSummary.vue'
+import LayoutDialog from '@/views/dashboard/LayoutDialog.vue'
 import RecentBlocksCard from '@/views/dashboard/RecentBlocksCard.vue'
 import RecentLeasesCard from '@/views/dashboard/RecentLeasesCard.vue'
 import RouterCard from '@/views/dashboard/RouterCard.vue'
@@ -70,7 +74,7 @@ const loadStats = useAsync(
       stats.value = null
     }
   },
-  { interval: STATS_MS },
+  { interval: STATS_MS, autostart: false },
 )
 
 /** Each gateway's last day; empty where the router keeps none. */
@@ -83,7 +87,7 @@ const loadStrips = useAsync(
       strips.value = []
     }
   },
-  { interval: 60_000 },
+  { interval: 60_000, autostart: false },
 )
 
 const error = computed(() => healthError.value || load.error.value || system.error)
@@ -104,8 +108,48 @@ const remembered = rememberedShape()
 const shape = computed(() =>
   overview.value ? { ...remembered, ...shapeOf(overview.value) } : remembered,
 )
-/** Whether a card that comes and goes is on the page. */
-const has = (card) => Object.hasOwn(shape.value.cards, card)
+/** The order of the grid's cards and which of them this browser hides. */
+const layout = ref(loadLayout())
+const layoutOpen = ref(false)
+
+function setLayout(next) {
+  layout.value = next
+  saveLayout(next)
+}
+
+const hidden = (card) => layout.value.hidden.includes(card)
+/**
+ * Whether the page draws a card. One that comes and goes needs the
+ * overview to have something for it.
+ */
+const shown = (card) =>
+  (!OPTIONAL.includes(card) || Object.hasOwn(shape.value.cards, card)) && !hidden(card)
+/** The grid's cards in this browser's order. */
+const grid = computed(() => layout.value.order.filter(shown))
+
+/**
+ * The polls of a card's own, which stop while the card is hidden. They go
+ * by the layout alone, so a first visit still reads the strips with the
+ * rest, before the overview says there are gateways.
+ */
+const polls = { system: loadStats, gateways: loadStrips }
+
+/** Reads a card's own data and polls it, unless the card is hidden. */
+function follow(card) {
+  const read = polls[card]
+  if (hidden(card)) {
+    read.stop()
+    return undefined
+  }
+  read.start()
+  return read.run()
+}
+for (const card of Object.keys(polls)) {
+  watch(
+    () => hidden(card),
+    () => follow(card),
+  )
+}
 
 /**
  * Every card holds its placeholder until all of them can be drawn, so the
@@ -116,7 +160,7 @@ const has = (card) => Object.hasOwn(shape.value.cards, card)
  */
 const ready = ref(false)
 watch(
-  () => answered.value && loaded.value && (trafficRead.value || !has('traffic')),
+  () => answered.value && loaded.value && (trafficRead.value || !shown('traffic')),
   (all) => {
     if (all) ready.value = true
   },
@@ -177,7 +221,7 @@ async function readUpdate() {
 // Nothing here needs another's answer, so all go at once; none throws. The
 // overview is the slow one, and the cards wait for it together.
 onMounted(async () => {
-  await Promise.all([readHealth(), load.run(), loadStats.run(), readUpdate(), loadStrips.run()])
+  await Promise.all([readHealth(), load.run(), follow('system'), readUpdate(), follow('gateways')])
   answered.value = true
 })
 </script>
@@ -185,6 +229,10 @@ onMounted(async () => {
 <template>
   <div ref="page" class="space-y-5">
     <PageHeader title="Dashboard">
+      <button type="button" class="btn-secondary" @click="layoutOpen = true">
+        <LayoutGrid class="size-4" aria-hidden="true" />
+        Layout
+      </button>
       <RefreshButton :busy="load.busy.value" :updated-at="load.updatedAt.value" @click="load.run" />
     </PageHeader>
     <ErrorLine v-if="error" class="text-sm">
@@ -215,93 +263,101 @@ onMounted(async () => {
       :placeholders="shape.interfaces"
     />
 
-    <!-- The cards every router has are always here. The rest exist when the
-         overview has something for them, and until it is in, when the last
-         one did. -->
+    <!-- The cards every router has are always here unless hidden. The rest
+         exist when the overview has something for them, and until it is
+         in, when the last one did. -->
     <div class="grid gap-4 lg:grid-cols-2">
-      <SystemLoadCard
-        data-card="system"
-        :style="hold('system')"
-        :stats="ready ? stats : null"
-        :loaded="ready"
-      />
-      <GatewaysCard
-        v-if="has('gateways')"
-        data-card="gateways"
-        :style="hold('gateways')"
-        :gateways="drawn?.gateways ?? []"
-        :unwatched="drawn?.unwatchedGateways ?? []"
-        :strips="ready ? strips : null"
-        :loaded="ready"
-        :placeholders="shape.cards.gateways"
-      />
-      <TrafficCard
-        v-if="has('traffic')"
-        data-card="traffic"
-        :style="hold('traffic')"
-        :links="drawn ? externalLinks(drawn) : []"
-        :loaded="ready"
-        :placeholders="shape.cards.traffic"
-        @read="trafficRead = true"
-      />
-      <TopRulesCard
-        data-card="rules"
-        :style="hold('rules')"
-        :rules="drawn?.topRules ?? []"
-        :blocked="drawn?.blocked"
-        :loaded="ready"
-        :placeholders="shape.rules"
-      />
-      <RecentBlocksCard
-        v-if="has('blocks')"
-        data-card="blocks"
-        :style="hold('blocks')"
-        :blocks="drawn?.recentBlocks ?? []"
-        :loaded="ready"
-        :placeholders="shape.cards.blocks"
-      />
-      <ServicesCard
-        data-card="services"
-        :style="hold('services')"
-        :services="drawn?.services ?? []"
-        :dhcp="drawn?.dhcp ?? {}"
-        :dns="drawn?.dns ?? {}"
-        :loaded="ready"
-        :placeholders="shape.services"
-      />
-      <RecentLeasesCard
-        v-if="has('leases')"
-        data-card="leases"
-        :style="hold('leases')"
-        :leases="drawn?.recentLeases ?? []"
-        :total="drawn?.dhcp?.leases ?? 0"
-        :loaded="ready"
-        :placeholders="shape.cards.leases"
-      />
-      <WirelessCard
-        v-if="has('wireless')"
-        data-card="wireless"
-        :style="hold('wireless')"
-        :wireless="drawn?.wireless"
-        :loaded="ready"
-        :placeholders="shape.cards.wireless"
-      />
-      <BlockingCard
-        v-if="has('blocking')"
-        data-card="blocking"
-        :style="hold('blocking')"
-        :blocking="drawn?.blocking"
-        :loaded="ready"
-      />
-      <RouterCard
-        data-card="router"
-        :style="hold('router')"
-        :status="status"
-        :summary="drawn?.status ?? {}"
-        :health="health"
-        :update="update"
-        :loaded="ready"
-      />
+      <template v-for="card in grid" :key="card">
+        <SystemLoadCard
+          v-if="card === 'system'"
+          data-card="system"
+          :style="hold('system')"
+          :stats="ready ? stats : null"
+          :loaded="ready"
+        />
+        <GatewaysCard
+          v-else-if="card === 'gateways'"
+          data-card="gateways"
+          :style="hold('gateways')"
+          :gateways="drawn?.gateways ?? []"
+          :unwatched="drawn?.unwatchedGateways ?? []"
+          :strips="ready ? strips : null"
+          :loaded="ready"
+          :placeholders="shape.cards.gateways"
+        />
+        <TrafficCard
+          v-else-if="card === 'traffic'"
+          data-card="traffic"
+          :style="hold('traffic')"
+          :links="drawn ? externalLinks(drawn) : []"
+          :loaded="ready"
+          :placeholders="shape.cards.traffic"
+          @read="trafficRead = true"
+        />
+        <TopRulesCard
+          v-else-if="card === 'rules'"
+          data-card="rules"
+          :style="hold('rules')"
+          :rules="drawn?.topRules ?? []"
+          :blocked="drawn?.blocked"
+          :loaded="ready"
+          :placeholders="shape.rules"
+        />
+        <RecentBlocksCard
+          v-else-if="card === 'blocks'"
+          data-card="blocks"
+          :style="hold('blocks')"
+          :blocks="drawn?.recentBlocks ?? []"
+          :loaded="ready"
+          :placeholders="shape.cards.blocks"
+        />
+        <ServicesCard
+          v-else-if="card === 'services'"
+          data-card="services"
+          :style="hold('services')"
+          :services="drawn?.services ?? []"
+          :dhcp="drawn?.dhcp ?? {}"
+          :dns="drawn?.dns ?? {}"
+          :loaded="ready"
+          :placeholders="shape.services"
+        />
+        <RecentLeasesCard
+          v-else-if="card === 'leases'"
+          data-card="leases"
+          :style="hold('leases')"
+          :leases="drawn?.recentLeases ?? []"
+          :total="drawn?.dhcp?.leases ?? 0"
+          :loaded="ready"
+          :placeholders="shape.cards.leases"
+        />
+        <WirelessCard
+          v-else-if="card === 'wireless'"
+          data-card="wireless"
+          :style="hold('wireless')"
+          :wireless="drawn?.wireless"
+          :loaded="ready"
+          :placeholders="shape.cards.wireless"
+        />
+        <BlockingCard
+          v-else-if="card === 'blocking'"
+          data-card="blocking"
+          :style="hold('blocking')"
+          :blocking="drawn?.blocking"
+          :loaded="ready"
+        />
+        <RouterCard
+          v-else-if="card === 'router'"
+          data-card="router"
+          :style="hold('router')"
+          :status="status"
+          :summary="drawn?.status ?? {}"
+          :health="health"
+          :update="update"
+          :loaded="ready"
+        />
+      </template>
     </div>
+
+    <LayoutDialog v-model:open="layoutOpen" :layout="layout" @change="setLayout" />
   </div>
 </template>
