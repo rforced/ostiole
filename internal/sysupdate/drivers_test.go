@@ -254,14 +254,14 @@ func TestDNFRebootRequired(t *testing.T) {
 	t.Parallel()
 	d := dnf{}
 	run := &fakeRunner{
-		out:  map[string]string{"dnf --setopt=*.countme=0 needs-restarting -r": "Core libraries or services have been updated since boot-up:\n  * systemd\n\nReboot is required to fully utilize these updates."},
-		code: map[string]int{"dnf --setopt=*.countme=0 needs-restarting -r": 1},
+		out:  map[string]string{"dnf --setopt=*.countme=0 --cacheonly needs-restarting -r": "Core libraries or services have been updated since boot-up:\n  * systemd\n\nReboot is required to fully utilize these updates."},
+		code: map[string]int{"dnf --setopt=*.countme=0 --cacheonly needs-restarting -r": 1},
 	}
 	if need, why := d.RebootRequired(t.Context(), run); !need || why == "" {
 		t.Errorf("RebootRequired = %v, %q", need, why)
 	}
 
-	clean := &fakeRunner{out: map[string]string{"dnf --setopt=*.countme=0 needs-restarting -r": "No core libraries or services have been updated since boot-up."}}
+	clean := &fakeRunner{out: map[string]string{"dnf --setopt=*.countme=0 --cacheonly needs-restarting -r": "No core libraries or services have been updated since boot-up."}}
 	if need, _ := d.RebootRequired(t.Context(), clean); need {
 		t.Error("reported a reboot when dnf said none was needed")
 	}
@@ -269,11 +269,26 @@ func TestDNFRebootRequired(t *testing.T) {
 	// A router without the plugin exits 1 as well, so the text is what
 	// keeps it from claiming every router needs rebooting.
 	missing := &fakeRunner{
-		out:  map[string]string{"dnf --setopt=*.countme=0 needs-restarting -r": "No such command: needs-restarting. Please use /usr/bin/dnf --help"},
-		code: map[string]int{"dnf --setopt=*.countme=0 needs-restarting -r": 1},
+		out:  map[string]string{"dnf --setopt=*.countme=0 --cacheonly needs-restarting -r": "No such command: needs-restarting. Please use /usr/bin/dnf --help"},
+		code: map[string]int{"dnf --setopt=*.countme=0 --cacheonly needs-restarting -r": 1},
 	}
 	if need, _ := d.RebootRequired(t.Context(), missing); need {
 		t.Error("a missing plugin was read as a reboot request")
+	}
+
+	// What dnf 5 said at boot before DNS was up, when it still loaded
+	// the repositories over the network.
+	offline := &fakeRunner{
+		out: map[string]string{"dnf --setopt=*.countme=0 --cacheonly needs-restarting -r": "Updating and loading repositories:\n" +
+			">>> Curl error (6): Could not resolve hostname for https://mirrors.fedoraproject.org/metalink?repo=updates-released-f44&arch=x86_64\n" +
+			"Failed to download metadata (metalink: \"https://mirrors.fedoraproject.org/metalink?repo=updates-released-f44&arch=x86_64\") for repository \"updates\""},
+		code: map[string]int{"dnf --setopt=*.countme=0 --cacheonly needs-restarting -r": 1},
+	}
+	if need, _ := d.RebootRequired(t.Context(), offline); need {
+		t.Error("a failed metadata load was read as a reboot request")
+	}
+	if !offline.ran("uname -r") {
+		t.Errorf("a failed check did not fall back to the kernel comparison:\n%s", offline.transcript())
 	}
 }
 

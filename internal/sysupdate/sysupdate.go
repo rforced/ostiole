@@ -133,7 +133,9 @@ func (h hostRunner) Run(ctx context.Context, name string, args ...string) ([]byt
 	// journald writes when it gets round to it, and the command has
 	// already exited, so ask it to catch up before reading.
 	_, _ = h.inner.Run(ctx, "journalctl", "--sync")
-	out, err := h.inner.Run(ctx, "journalctl", "-u", unit+".service",
+	// The pid in the unit name repeats across boots, so only this boot's
+	// journal is ours.
+	out, err := h.inner.Run(ctx, "journalctl", "-b", "-u", unit+".service",
 		"SYSLOG_IDENTIFIER="+commandTag, "-o", "cat", "--no-pager")
 	if err != nil || len(bytes.TrimSpace(out)) == 0 {
 		// It printed nothing, or the journal could not be read: whatever

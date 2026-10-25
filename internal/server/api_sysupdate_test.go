@@ -61,7 +61,7 @@ var dnfScript = scriptedRunner{out: map[string]string{
 	"dnf -q --setopt=*.countme=0 --refresh check-update":              "bash.x86_64 5.2.26-4.el10 baseos\nopenssl-libs.x86_64 1:3.2.2-12.el10 baseos\n",
 	"dnf -q --setopt=*.countme=0 --cacheonly check-update --security": "openssl-libs.x86_64 1:3.2.2-12.el10 baseos\n",
 	"rpm -q --qf %{NAME} %{EVR}\\n openssl-libs bash":                 "openssl-libs 1:3.2.2-11.el10\nbash 5.2.26-3.el10\n",
-	"dnf --setopt=*.countme=0 needs-restarting -r":                    "No core libraries or services have been updated since boot-up.",
+	"dnf --setopt=*.countme=0 --cacheonly needs-restarting -r":        "No core libraries or services have been updated since boot-up.",
 }}
 
 func updateServer(t *testing.T, root bool) (*httptest.Server, *engine.Engine, *auth.Service) {

@@ -24,12 +24,12 @@ func dnfRunner(t *testing.T) *fakeRunner {
 			"dnf -q --setopt=*.countme=0 --refresh check-update":                                             fixture(t, "dnf-check-update.txt"),
 			"dnf -q --setopt=*.countme=0 --cacheonly check-update --security":                                fixture(t, "dnf-check-update-security.txt"),
 			"rpm -q --qf %{NAME} %{EVR}\\n NetworkManager-libnm bash kernel kernel-core openssl-libs tzdata": fixture(t, "rpm-installed.txt"),
-			"dnf --setopt=*.countme=0 needs-restarting -r":                                                   "Reboot is required to fully utilize these updates.",
+			"dnf --setopt=*.countme=0 --cacheonly needs-restarting -r":                                       "Reboot is required to fully utilize these updates.",
 		},
 		code: map[string]int{
 			"dnf -q --setopt=*.countme=0 --refresh check-update":              dnfPending,
 			"dnf -q --setopt=*.countme=0 --cacheonly check-update --security": dnfPending,
-			"dnf --setopt=*.countme=0 needs-restarting -r":                    1,
+			"dnf --setopt=*.countme=0 --cacheonly needs-restarting -r":        1,
 		},
 	}
 }
@@ -216,9 +216,9 @@ func TestTheRebootIsAskedAboutAgainAtStart(t *testing.T) {
 		t.Fatal("the check found no reboot wanted")
 	}
 	// The router rebooted, and the daemon starts again.
-	run.say("dnf --setopt=*.countme=0 needs-restarting -r", "No core libraries or services have been updated since boot-up.\nReboot should not be necessary.")
+	run.say("dnf --setopt=*.countme=0 --cacheonly needs-restarting -r", "No core libraries or services have been updated since boot-up.\nReboot should not be necessary.")
 	run.mu.Lock()
-	delete(run.code, "dnf --setopt=*.countme=0 needs-restarting -r")
+	delete(run.code, "dnf --setopt=*.countme=0 --cacheonly needs-restarting -r")
 	run.mu.Unlock()
 	started := New(Options{PackageManager: "dnf", StateDir: dir, Run: run, Root: true, Log: discard()})
 	started.RecheckReboot(t.Context())
@@ -396,7 +396,7 @@ func TestPackageCommandsLeaveTheSandbox(t *testing.T) {
 	if _, err := m.Check(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"-- dnf -q --setopt=*.countme=0 --refresh check-update", "-- dnf --setopt=*.countme=0 needs-restarting -r"} {
+	for _, want := range []string{"-- dnf -q --setopt=*.countme=0 --refresh check-update", "-- dnf --setopt=*.countme=0 --cacheonly needs-restarting -r"} {
 		if !run.ranMatching("systemd-run --unit="+commandTag, "--wait", want) {
 			t.Errorf("%q ran inside the sandbox, where /var is read-only:\n%s", want, run.transcript())
 		}
@@ -406,6 +406,9 @@ func TestPackageCommandsLeaveTheSandbox(t *testing.T) {
 	// is the command's output and not systemd's commentary about it.
 	if !run.ranMatching("journalctl", "SYSLOG_IDENTIFIER="+commandTag, "-o", "cat") {
 		t.Errorf("the output was never read back:\n%s", run.transcript())
+	}
+	if !run.ranMatching("journalctl -b -u "+commandTag, "SYSLOG_IDENTIFIER="+commandTag) {
+		t.Errorf("the output was read from every boot, where the unit name may repeat:\n%s", run.transcript())
 	}
 	if !run.ranMatching("--property=SyslogIdentifier=" + commandTag) {
 		t.Errorf("the output was not tagged, so it cannot be told from systemd's:\n%s", run.transcript())

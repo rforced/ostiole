@@ -151,20 +151,16 @@ func (d dnf) UpgradeArgv(security bool, exclude []string, _ Pending) []string {
 }
 
 func (d dnf) RebootRequired(ctx context.Context, run Runner) (bool, string) {
-	out, err := run.Run(ctx, d.Name(), noCountme, "needs-restarting", "-r")
-	text := string(out)
-	// The plugin is not installed everywhere, and a missing subcommand
-	// exits with the same status as "yes, reboot", so the text decides.
-	missing := strings.Contains(text, "No such command") ||
-		strings.Contains(text, "Unknown argument") ||
-		strings.Contains(text, "not a valid command")
-	if !missing {
-		if strings.Contains(text, "Reboot is required") || (exitCode(err) == 1 && strings.TrimSpace(text) != "") {
-			return true, "dnf needs-restarting says core libraries or services were updated"
-		}
-		if exitCode(err) == 0 {
-			return false, ""
-		}
+	// dnf 5 loads the repositories before it answers. At boot the network
+	// is not up yet, so without --cacheonly the check fails on DNS.
+	out, err := run.Run(ctx, d.Name(), noCountme, "--cacheonly", "needs-restarting", "-r")
+	// "Reboot is required" exits 1, and so do a missing plugin and a
+	// failed metadata load, so only the text counts as a yes.
+	if strings.Contains(string(out), "Reboot is required") {
+		return true, "dnf needs-restarting says core libraries or services were updated"
+	}
+	if exitCode(err) == 0 {
+		return false, ""
 	}
 	return kernelRebootHint(ctx, run)
 }
