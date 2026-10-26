@@ -1,6 +1,5 @@
 import js from '@eslint/js'
 import { defineConfig } from 'eslint/config'
-import skipFormatting from '@vue/eslint-config-prettier/skip-formatting'
 import pluginVue from 'eslint-plugin-vue'
 import globals from 'globals'
 
@@ -59,5 +58,23 @@ export default defineConfig(
       ],
     },
   },
-  skipFormatting,
+  {
+    // bun fmt owns layout; these rules would fight it.
+    name: 'app/skip-formatting',
+    rules: {
+      'no-unexpected-multiline': 'off',
+      'vue/html-closing-bracket-newline': 'off',
+      'vue/html-closing-bracket-spacing': 'off',
+      'vue/html-end-tags': 'off',
+      'vue/html-indent': 'off',
+      'vue/html-quotes': 'off',
+      'vue/html-self-closing': 'off',
+      'vue/max-attributes-per-line': 'off',
+      'vue/multiline-html-element-content-newline': 'off',
+      'vue/mustache-interpolation-spacing': 'off',
+      'vue/no-multi-spaces': 'off',
+      'vue/no-spaces-around-equal-signs-in-attribute': 'off',
+      'vue/singleline-html-element-content-newline': 'off',
+    },
+  },
 )

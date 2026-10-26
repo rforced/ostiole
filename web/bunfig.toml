@@ -3,3 +3,8 @@ exact = true
 minimumReleaseAge = 259200
 auto = "disable"
 ignoreScripts = true
+
+[fmt]
+semi = false
+singleQuote = true
+printWidth = 100
