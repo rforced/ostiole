@@ -76,20 +76,19 @@ interface Provider {
  * Public resolvers a button fills in, both families. Over TLS each address
  * goes with the name on its certificate.
  */
-const PROVIDERS: Provider[] = [
-  {
-    name: 'Quad9',
-    hostname: 'dns.quad9.net',
-    v4: ['9.9.9.9', '149.112.112.112'],
-    v6: ['2620:fe::fe', '2620:fe::9'],
-  },
-  {
-    name: 'Cloudflare',
-    hostname: 'cloudflare-dns.com',
-    v4: ['1.1.1.1', '1.0.0.1'],
-    v6: ['2606:4700:4700::1111', '2606:4700:4700::1001'],
-  },
-]
+const QUAD9: Provider = {
+  name: 'Quad9',
+  hostname: 'dns.quad9.net',
+  v4: ['9.9.9.9', '149.112.112.112'],
+  v6: ['2620:fe::fe', '2620:fe::9'],
+}
+const CLOUDFLARE: Provider = {
+  name: 'Cloudflare',
+  hostname: 'cloudflare-dns.com',
+  v4: ['1.1.1.1', '1.0.0.1'],
+  v6: ['2606:4700:4700::1111', '2606:4700:4700::1001'],
+}
+const PROVIDERS: Provider[] = [QUAD9, CLOUDFLARE]
 
 const tlsServers = (p: Provider, addresses: string[]) =>
   addresses.map((address) => ({ address, hostname: p.hostname }))
@@ -103,7 +102,7 @@ const resolver = computed({
     // Unasked, only what every router can reach: Quad9 over IPv4, as a
     // new router forwards to (model.Quad9).
     if (v === 'tls' && !(dns.value.tlsUpstreams ?? []).length) {
-      dns.value.tlsUpstreams = tlsServers(PROVIDERS[0], PROVIDERS[0].v4)
+      dns.value.tlsUpstreams = tlsServers(QUAD9, QUAD9.v4)
     }
   },
 })
@@ -141,7 +140,7 @@ const tlsUpstreams = computed({
       .split('\n')
       .map((line) => line.trim().split(/[\s,]+/))
       .filter((parts) => parts[0])
-      .map(([address, hostname = '']) => ({ address, hostname }))
+      .map(([address = '', hostname = '']) => ({ address, hostname }))
     if (list.length) dns.value.tlsUpstreams = list
     else delete dns.value.tlsUpstreams
   },

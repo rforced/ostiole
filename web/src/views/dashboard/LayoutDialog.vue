@@ -59,7 +59,7 @@ const customized = computed(() => isCustomized(rows.value))
         <LayoutRow
           v-for="name in rows.order"
           :key="name"
-          :title="titles[name]"
+          :title="titles[name] ?? name"
           :shown="!rows.hidden.includes(name)"
           :dragging="dragging === name"
           @toggle="toggle(name)"

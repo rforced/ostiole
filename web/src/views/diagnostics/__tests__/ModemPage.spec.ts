@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import ModemPage from '@/views/diagnostics/ModemPage.vue'
-import { sessionOf } from '@/test/fixtures'
+import { must, sessionOf } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   api: { diagnostics: { modem: vi.fn() } },
@@ -104,14 +104,14 @@ describe('ModemPage', () => {
     expect(wrapper.text()).toContain('Stopped at DHCP')
 
     const rows = wrapper.findAll('tbody tr')
-    expect(rows[0].text()).toContain('399 MHz')
-    expect(rows[0].find('.badge-ok').exists()).toBe(true)
+    expect(must(rows[0]).text()).toContain('399 MHz')
+    expect(must(rows[0]).find('.badge-ok').exists()).toBe(true)
     // -8.5 dBmV is a look, 31 dB SNR is a look, and 12 uncorrectable is red.
-    expect(rows[1].text()).toContain('OFDM')
-    expect(rows[1].findAll('.badge-warn')).toHaveLength(2)
-    expect(rows[1].find('.text-bad').text()).toBe('12')
+    expect(must(rows[1]).text()).toContain('OFDM')
+    expect(must(rows[1]).findAll('.badge-warn')).toHaveLength(2)
+    expect(must(rows[1]).find('.text-bad').text()).toBe('12')
     // 52.5 dBmV upstream is past the 51 that is still just a look.
-    expect(rows[3].find('.badge-bad').exists()).toBe(true)
+    expect(must(rows[3]).find('.badge-bad').exists()).toBe(true)
   })
 
   // An address other than the DOCSIS default is remembered in this browser.

@@ -13,6 +13,7 @@ import {
   peerName,
   takesDefaultRoute,
 } from '@/lib/wgconf'
+import { must } from '@/test/fixtures'
 
 function addressOf(text: string) {
   const a = parseAddress(text)
@@ -147,7 +148,7 @@ Endpoint = 198.51.100.7:51820
       endpoint: '198.51.100.7:51820',
       keepalive: 0,
     })
-    expect(takesDefaultRoute(got.peers[0].allowedIps)).toBe(true)
+    expect(takesDefaultRoute(must(got.peers[0]).allowedIps)).toBe(true)
   })
 
   it('reads a site with a listen port, an MTU, its LAN and several peers', () => {
@@ -184,7 +185,7 @@ AllowedIPs = 10.77.0.3
       endpoint: '[2001:db8::7]:51820',
       keepalive: 25,
     })
-    expect(takesDefaultRoute(got.peers[0].allowedIps)).toBe(false)
+    expect(takesDefaultRoute(must(got.peers[0]).allowedIps)).toBe(false)
   })
 
   it('adds up a key given twice and drops comments', () => {
@@ -199,7 +200,7 @@ AllowedIPs = 172.16.0.0/12
 `)
     expect(got.errors).toEqual([])
     expect(got.iface).toMatchObject({ ipv4: '10.66.1.2/32', ipv6: 'fd66::2/128' })
-    expect(got.peers[0].allowedIps).toEqual(['10.0.0.0/8', '172.16.0.0/12'])
+    expect(must(got.peers[0]).allowedIps).toEqual(['10.0.0.0/8', '172.16.0.0/12'])
   })
 
   it('lists what it will not run or route by, with its line', () => {

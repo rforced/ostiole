@@ -114,7 +114,7 @@ describe('LoginView', () => {
       ['//evil.example/x', '/'],
       ['/\\evil.example/x', '/'],
       ['https://evil.example/x', '/'],
-    ]) {
+    ] satisfies [string, string][]) {
       const { wrapper, router } = await page('/login?redirect=' + encodeURIComponent(redirect))
       await continueAs(wrapper)
       await typePassword(wrapper, 'secret')
@@ -281,7 +281,7 @@ describe('LoginView steps', () => {
           ),
       )
   /** The signal the open prompt was given. */
-  const openedSignal = () => must(must(vi.mocked(webauthn.get).mock.calls[0][1]).signal)
+  const openedSignal = () => must(must(vi.mocked(webauthn.get).mock.calls[0]?.[1]).signal)
   const ALONE = 'Sign in with a passkey'
 
   beforeEach(() => {

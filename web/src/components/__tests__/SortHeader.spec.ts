@@ -6,6 +6,7 @@ import { defineComponent, ref } from 'vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
 import { byAddress, byNumber, byText, useSort } from '@/lib/sort'
+import { must } from '@/test/fixtures'
 
 /** A table of two columns. */
 const Host = defineComponent({
@@ -103,7 +104,7 @@ describe('SortHeader', () => {
   // longest one's width.
   it('moves between the figures of a cell, and reads the one it sorts by', async () => {
     const wrapper = mount(Usage)
-    const usage = wrapper.findAll('th')[1]
+    const usage = must(wrapper.findAll('th')[1])
     expect(usage.findAll('button > span > span')).toHaveLength(2)
     expect(reads(usage)).toEqual(['Down'])
     expect(usage.attributes('aria-sort')).toBeUndefined()
@@ -121,7 +122,7 @@ describe('SortHeader', () => {
     await usage.get('button').trigger('click')
     expect(reads(usage)).toEqual(['Down'])
 
-    await wrapper.findAll('th')[0].get('button').trigger('click')
+    await must(wrapper.findAll('th')[0]).get('button').trigger('click')
     expect(usage.attributes('aria-sort')).toBeUndefined()
     expect(reads(usage)).toEqual(['Down'])
   })

@@ -192,9 +192,9 @@ function edit(r: DDNSRecord) {
             </td>
             <td data-label="DNS provider">
               <template v-if="providers[r.id]">
-                <div class="font-mono text-code">{{ providers[r.id].id }}</div>
-                <div v-if="providers[r.id].kind" class="text-xs text-ink-muted">
-                  {{ providers[r.id].kind }}
+                <div class="font-mono text-code">{{ providers[r.id]?.id }}</div>
+                <div v-if="providers[r.id]?.kind" class="text-xs text-ink-muted">
+                  {{ providers[r.id]?.kind }}
                 </div>
               </template>
               <template v-else>—</template>

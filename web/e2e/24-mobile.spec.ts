@@ -426,7 +426,7 @@ test('the main pages in both themes', async ({ page }) => {
       ['dashboard', '/'],
       ['rules', '/firewall/rules'],
       ['leases', '/services/dhcp#leases'],
-    ]) {
+    ] as const) {
       await page.goto(path)
       await settle(page)
       await page.screenshot({ path: shot(`${name}-${theme}`), fullPage: true })

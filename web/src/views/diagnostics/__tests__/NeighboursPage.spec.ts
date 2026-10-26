@@ -114,7 +114,7 @@ describe('NeighboursPage', () => {
         state: 'STALE',
       },
     ])
-    const macs = w.findAll('tbody tr').map((r) => r.findAll('td')[1].text())
+    const macs = w.findAll('tbody tr').map((r) => must(r.findAll('td')[1]).text())
     expect(macs).toEqual(['02:00:5e:00:53:10 random', '00:00:5e:00:53:60'])
   })
 

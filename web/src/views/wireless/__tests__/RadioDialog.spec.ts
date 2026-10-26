@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { Radio, WirelessCard } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
-import { configOf, fixture } from '@/test/fixtures'
+import { configOf, fixture, must } from '@/test/fixtures'
 import RadioDialog from '@/views/wireless/RadioDialog.vue'
 
 // The dialog itself teleports; the form inside it is what is under test.
@@ -59,7 +59,7 @@ describe('RadioDialog', () => {
     })
     expect(wrapper.get<HTMLSelectElement>('#radio-channel').element.value).toBe('6')
     await wrapper.get('form').trigger('submit')
-    expect(config.radios[0].channel).toBe(6)
+    expect(must(config.radios[0]).channel).toBe(6)
     expect(config.dirty).toBe(false)
   })
 
@@ -83,6 +83,6 @@ describe('RadioDialog', () => {
     await select.setValue('11')
     expect(select.find('option[value="6"]').exists()).toBe(false)
     await wrapper.get('form').trigger('submit')
-    expect(config.radios[0].channel).toBe(11)
+    expect(must(config.radios[0]).channel).toBe(11)
   })
 })

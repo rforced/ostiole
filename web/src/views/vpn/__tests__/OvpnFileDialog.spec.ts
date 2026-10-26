@@ -138,7 +138,7 @@ describe('OvpnFileDialog', () => {
       .setValue(`<ca>\n${CA}\n</ca>\n<cert>\n${CERT}\n</cert>\n<key>\n${KEY}\n</key>\n`)
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
     await wrapper.find('form').trigger('submit')
-    expect(must(wrapper.emitted('blocks'))[0][0]).toEqual({
+    expect(must(must(wrapper.emitted('blocks'))[0])[0]).toEqual({
       caPem: `${CA}\n`,
       certPem: `${CERT}\n`,
       keyPem: `${KEY}\n`,

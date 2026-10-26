@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { useConfigStore } from '@/stores/config'
-import { emptyConfig, iface } from '@/test/fixtures'
+import { emptyConfig, iface, must } from '@/test/fixtures'
 import StaticRouteDialog from '@/views/routing/StaticRouteDialog.vue'
 
 // The dialog itself teleports; the form inside it is what is under test.
@@ -62,6 +62,6 @@ describe('StaticRouteDialog', () => {
     await wrapper.get('form').trigger('submit')
     expect(config.dirty).toBe(true)
     expect(config.routes.map((r) => r.id)).toEqual(['rt-lab', 'rt-spare'])
-    expect(config.routes[0].gateway).toBe('192.0.2.11')
+    expect(must(config.routes[0]).gateway).toBe('192.0.2.11')
   })
 })

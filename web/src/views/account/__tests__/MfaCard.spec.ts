@@ -7,7 +7,7 @@ import * as webauthn from '@/lib/webauthn'
 import { useAuthStore } from '@/stores/auth'
 import { useConfirmStore } from '@/stores/confirm'
 import MfaCard from '@/views/account/MfaCard.vue'
-import { sessionOf } from '@/test/fixtures'
+import { must, sessionOf } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   ApiError: class ApiError extends Error {
@@ -161,8 +161,8 @@ describe('MfaCard', () => {
     )
     expect(wrapper.find('input[type="checkbox"]').exists()).toBe(false)
     const cells = wrapper.get('tbody tr').findAll('td')
-    expect(cells[0].text()).toBe('Laptop')
-    expect(cells[1].text()).toBe('edge.example')
+    expect(must(cells[0]).text()).toBe('Laptop')
+    expect(must(cells[1]).text()).toBe('edge.example')
     expect(wrapper.findAll('thead th').map((th) => th.text())).toEqual([
       'Passkey',
       'Host name',
@@ -196,7 +196,7 @@ describe('MfaCard', () => {
     const rows = () => wrapper.findAll('tbody tr')
     expect(rows().map((r) => r.get('td').text())).toEqual(['Laptop', 'Phone'])
 
-    await button(rows()[0], 'Remove').trigger('click')
+    await button(must(rows()[0]), 'Remove').trigger('click')
     await flushPromises()
 
     expect(ask).toHaveBeenCalledWith(

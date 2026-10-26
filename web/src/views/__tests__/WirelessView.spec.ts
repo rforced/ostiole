@@ -199,14 +199,18 @@ describe('RadioDialog', () => {
   })
 
   it('lands a band it no longer offers on the first it does', async () => {
-    const radio: Radio = { ...must(must(config().wireless).radios)[0], band: '6g', channel: 0 }
+    const radio: Radio = {
+      ...must(must(must(config().wireless).radios)[0]),
+      band: '6g',
+      channel: 0,
+    }
     const wrapper = open({ card: card(), radio })
     await flushPromises()
     expect(wrapper.find<HTMLSelectElement>('#radio-band').element.value).toBe('2g')
   })
 
   it('lands a width it no longer offers on the widest it does', async () => {
-    const radio: Radio = { ...must(must(config().wireless).radios)[0], width: 160 }
+    const radio: Radio = { ...must(must(must(config().wireless).radios)[0]), width: 160 }
     const wrapper = open({ card: card(), radio })
     await flushPromises()
     expect(wrapper.find<HTMLSelectElement>('#radio-width').element.value).toBe('80')
@@ -259,7 +263,7 @@ describe('NetworkDialog', () => {
     await flushPromises()
     await wrapper.find('#net-ssid').setValue('ostiole-guest')
     await wrapper.find('#net-pass').setValue('correct horse battery')
-    await wrapper.findAll('input[type="radio"]')[1].setValue()
+    await must(wrapper.findAll('input[type="radio"]')[1]).setValue()
     await flushPromises()
     await wrapper.find('#net-address').setValue('10.99.0.1/24')
     await wrapper.find('form').trigger('submit')

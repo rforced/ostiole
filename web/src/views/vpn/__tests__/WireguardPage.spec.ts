@@ -183,7 +183,7 @@ describe('WireguardPage', () => {
     vi.mocked(api.wireguard.status).mockResolvedValue([])
     const config = useConfigStore()
     const wrapper = mountPage()
-    Object.assign(must(must(must(config.findInterface('wg0')).wireguard).peers)[1], {
+    Object.assign(must(must(must(must(config.findInterface('wg0')).wireguard).peers)[1]), {
       allowedIps: ['10.66.0.3/32', '192.168.1.0/24'],
       theirs: [{ network: '192.168.1.0/24', as: '10.201.1.0/24' }],
       ours: [{ network: '192.168.1.0/24', as: '10.200.1.0/24' }],

@@ -9,7 +9,7 @@ import type { LinkSummary } from '@/lib/types.gen'
 
 type Direction = 'rx' | 'tx'
 
-defineProps({
+const props = defineProps({
   /** Interface summaries from GET /overview. */
   interfaces: { type: Array as PropType<LinkSummary[]>, default: () => [] },
   /** Bits per second per interface, once two samples have been seen. */
@@ -39,6 +39,11 @@ function pending(l: LinkSummary) {
 /** Which counter is down: on a link facing hosts, what it sends, as Traffic reads it. */
 function way(l: LinkSummary): { down: Direction; up: Direction } {
   return l.hostSide ? { down: 'tx', up: 'rx' } : { down: 'rx', up: 'tx' }
+}
+
+function rateText(l: LinkSummary, d: Direction) {
+  const r = props.rates[l.name]?.[d]
+  return r === undefined ? '—' : formatRate(r)
 }
 
 function bytesOf(l: LinkSummary, d: Direction) {
@@ -118,13 +123,13 @@ function bytesOf(l: LinkSummary, d: Direction) {
             <div v-if="l.present">
               <ArrowDown class="inline size-3" aria-hidden="true" />
               <span class="sr-only">down</span>
-              {{ rates[l.name] ? formatRate(rates[l.name][way(l).down]) : '—' }}
+              {{ rateText(l, way(l).down) }}
               <span class="ml-1 text-ink-muted">{{ formatBytes(bytesOf(l, way(l).down)) }}</span>
             </div>
             <div v-if="l.present">
               <ArrowUp class="inline size-3" aria-hidden="true" />
               <span class="sr-only">up</span>
-              {{ rates[l.name] ? formatRate(rates[l.name][way(l).up]) : '—' }}
+              {{ rateText(l, way(l).up) }}
               <span class="ml-1 text-ink-muted">{{ formatBytes(bytesOf(l, way(l).up)) }}</span>
             </div>
             <span v-if="!l.present" class="text-ink-muted">—</span>

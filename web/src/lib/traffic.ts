@@ -100,9 +100,9 @@ export function useTrafficStream<L = unknown, D = unknown>({
  * window is a key of SPANS.
  */
 export function appendPoint(points: Point[], point: Point, window: string): Point[] {
-  const cut = point[0] - SPANS[window]
+  const cut = point[0] - (SPANS[window] ?? Infinity)
   let i = 0
-  while (i < points.length && points[i][0] < cut) i++
+  while (i < points.length && (points[i]?.[0] ?? Infinity) < cut) i++
   return [...points.slice(i), point]
 }
 
@@ -125,7 +125,7 @@ export function deviceLabel(d: {
 export function sinceLine(since: string, window: string, now: number): string {
   if (!since) return ''
   const t = Date.parse(since)
-  if (!Number.isFinite(t) || t / 1000 <= now - SPANS[window]) return ''
+  if (!Number.isFinite(t) || t / 1000 <= now - (SPANS[window] ?? Infinity)) return ''
   const d = new Date(t)
   const when =
     window === '30d'

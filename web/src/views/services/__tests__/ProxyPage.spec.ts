@@ -380,7 +380,8 @@ describe('EventsTab', () => {
       event({ seq: 2, uri: '/login', verdict: 'blocked', status: 403 }),
       event({ seq: 1, uri: '/login', status: undefined }),
     ])
-    const [blocked, older] = wrapper.findAll('tbody tr').map((tr) => tr.findAll('td')[4])
+    const [blocked, older] = wrapper.findAll('tbody tr').map((tr) => must(tr.findAll('td')[4]))
+    if (!blocked || !older) throw new Error('two rows expected')
     expect(blocked.text()).toMatch(/^blocked +· 403$/)
     expect(older.text()).toBe('would block')
     expect(wrapper.find('summary').text()).toBe('GET /login')
@@ -393,7 +394,8 @@ describe('EventsTab', () => {
       event({ seq: 2, time: '2026-09-20T13:14:00Z' }),
       event({ seq: 1, time: '2026-09-20T14:02:10Z' }),
     ])
-    const [socket, request] = wrapper.findAll('tbody tr').map((tr) => tr.findAll('td')[0])
+    const [socket, request] = wrapper.findAll('tbody tr').map((tr) => must(tr.findAll('td')[0]))
+    if (!socket || !request) throw new Error('two rows expected')
     const logged = new Date('2026-09-20T14:02:11Z').toLocaleString()
     expect(socket.text()).toContain(logged)
     const open = socket.get('div')
@@ -415,7 +417,7 @@ describe('EventsTab', () => {
     ])
     const chips = wrapper.findAll('.badge.font-mono')
     expect(chips).toHaveLength(1)
-    expect(chips[0].text()).toBe('942100')
+    expect(must(chips[0]).text()).toBe('942100')
     expect(wrapper.text()).toContain('×2')
   })
 
@@ -433,7 +435,8 @@ describe('EventsTab', () => {
       event({ seq: 2, client: '2001:db8:4f2a:1c00:9a3e:bd12:77c4:e09f' }),
       event({ seq: 1, client: '192.168.1.55' }),
     ])
-    const [v6, v4] = wrapper.findAll('tbody tr').map((tr) => tr.findAll('td')[2])
+    const [v6, v4] = wrapper.findAll('tbody tr').map((tr) => must(tr.findAll('td')[2]))
+    if (!v6 || !v4) throw new Error('two rows expected')
     expect(v6.findAll('span').map((s) => s.text())).toEqual([
       '2001:db8:4f2a:1c00:',
       '9a3e:bd12:77c4:e09f',
@@ -450,7 +453,7 @@ describe('EventsTab', () => {
     expect(wrapper.text()).toContain('The site has no WAF profile.')
     expect(wrapper.text()).not.toContain('Exclude on this path')
     store.proxy.wafProfiles = [{ id: 'strict' }]
-    must(store.proxy.sites)[0].waf = 'strict'
+    must(must(store.proxy.sites)[0]).waf = 'strict'
     await flushPromises()
     expect(wrapper.text()).not.toContain('The site has no WAF profile.')
     expect(wrapper.text()).toContain('Exclude on this path')
@@ -469,13 +472,13 @@ describe('EventsTab', () => {
     })
     const { wrapper, store } = await events([event()], draft)
     const links = wrapper.findAll('button.link-action')
-    await links[0].trigger('click')
-    expect(must(store.proxy.wafProfiles)[0].exclusions).toEqual([
+    await must(links[0]).trigger('click')
+    expect(must(must(store.proxy.wafProfiles)[0]).exclusions).toEqual([
       { rule: '941100', description: 'XSS Attack Detected' },
     ])
     // The path can be cut down first, so it waits for the dialog.
-    await links[1].trigger('click')
-    expect(must(store.proxy.wafProfiles)[0].exclusions).toHaveLength(1)
+    await must(links[1]).trigger('click')
+    expect(must(must(store.proxy.wafProfiles)[0]).exclusions).toHaveLength(1)
     expect(wrapper.findComponent(ExclusionDialog).props()).toMatchObject({
       open: true,
       profile: 'strict',
@@ -521,7 +524,7 @@ describe('ProfileDialog', () => {
     })
     await flushPromises()
     await wrapper.find('form').trigger('submit')
-    expect(must(store.proxy.wafProfiles)[0].exclusions).toEqual([
+    expect(must(must(store.proxy.wafProfiles)[0]).exclusions).toEqual([
       { rule: '941100', description: 'XSS Attack Detected' },
     ])
   })
@@ -541,7 +544,7 @@ describe('ProfileDialog', () => {
     for (const [id, fallback] of [
       ['#waf-outbound', '4'],
       ['#waf-body', '12'],
-    ]) {
+    ] as const) {
       expect(wrapper.get<HTMLInputElement>(id).element.value).toBe('')
       expect(wrapper.get(id).attributes('placeholder')).toBe(fallback)
     }
@@ -699,9 +702,9 @@ describe('ServiceTab access list', () => {
       },
     })
     const { wrapper, store } = withDraft(ServiceTab, draft)
-    const rows = () => wrapper.findAll('tbody tr').map((r) => r.findAll('td')[5].text())
+    const rows = () => wrapper.findAll('tbody tr').map((r) => must(r.findAll('td')[5]).text())
     expect(rows()).toEqual(['first', 'second', 'inside'])
-    expect(wrapper.findAll('tbody tr')[1].text()).toContain('not @us')
+    expect(must(wrapper.findAll('tbody tr')[1]).text()).toContain('not @us')
     await wrapper.get('button[aria-label="Move second up"]').trigger('click')
     expect(must(proxyOf(store).access).map((a) => a.id)).toEqual(['b', 'l', 'a'])
     expect(rows()).toEqual(['second', 'first', 'inside'])
@@ -714,7 +717,7 @@ describe('ServiceTab access list', () => {
     })
     const { wrapper, store } = withDraft(ServiceTab, draft)
     await wrapper.get('input[aria-label="Enable sites"]').setValue(false)
-    expect(must(proxyOf(store).access)[0].enabled).toBe(false)
+    expect(must(must(proxyOf(store).access)[0]).enabled).toBe(false)
   })
 })
 
@@ -737,7 +740,7 @@ describe('AccessDialog', () => {
     await wrapper.get('#source-alias').setValue('us')
     await wrapper.get('#access-desc').setValue('Sites from the US')
     await wrapper.get('form').trigger('submit')
-    const [saved] = must(proxyOf(store).access)
+    const saved = must(must(proxyOf(store).access)[0])
     expect(saved).toMatchObject({
       enabled: true,
       zone: 'wan',
@@ -790,10 +793,10 @@ describe('Allow from', () => {
     expect(wrapper.get<HTMLInputElement>('#site-allow').element.value).toBe('192.168.0.0/16\nus')
     const offered = wrapper.findAll('label').filter((l) => ['office', 'feed'].includes(l.text()))
     expect(offered.map((l) => l.text())).toEqual(['office'])
-    expect(offered[0].get('input').element.checked).toBe(true)
+    expect(must(offered[0]).get('input').element.checked).toBe(true)
     await wrapper.get('#site-allow').setValue('192.168.0.0/16')
     await wrapper.get('form').trigger('submit')
-    expect(must(proxyOf(store).sites)[0].allowFrom).toEqual(['192.168.0.0/16', 'office'])
+    expect(must(must(proxyOf(store).sites)[0]).allowFrom).toEqual(['192.168.0.0/16', 'office'])
   })
 })
 

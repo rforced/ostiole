@@ -157,13 +157,13 @@ export function historySeries(families: string[]) {
     series: families.map((f, k): ChartSeries => ({
       index: 1 + k * 3,
       name: f,
-      color: COLORS[f],
+      color: COLORS[f] ?? 'currentColor',
       band: [2 + k * 3, 3 + k * 3],
     })),
     bars: families.map((f, k) => ({
       index: 1 + families.length * 3 + k,
       name: `${f} lost`,
-      color: COLORS[f],
+      color: COLORS[f] ?? 'currentColor',
     })),
   }
 }
@@ -182,7 +182,9 @@ export function addProbe(
   if (k < 0) return rows
   const t = Math.round(Date.parse(p.time) / 1000)
   const ms = p.lost ? null : (p.latencyMs ?? 0)
-  const cut = t - SPANS[window]
+  const span = SPANS[window]
+  if (span === undefined) return rows
+  const cut = t - span
   const kept = rows.filter((r) => (r[0] ?? 0) >= cut)
   let row = kept.find((r) => r[0] === t)
   if (!row) {

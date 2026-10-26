@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import type { Token } from '@/lib/types.gen'
-import { fixture } from '@/test/fixtures'
+import { fixture, must } from '@/test/fixtures'
 import TokensSection from '@/views/system/TokensSection.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -38,7 +38,7 @@ async function mounted() {
 }
 
 const cell = (w: VueWrapper, row: number, label: string) =>
-  w.findAll('tbody tr')[row].find(`td[data-label="${label}"]`)
+  must(w.findAll('tbody tr')[row]).find(`td[data-label="${label}"]`)
 
 describe('TokensSection', () => {
   beforeEach(() => {
@@ -72,7 +72,7 @@ describe('TokensSection', () => {
   it('deletes any token after the typed confirm', async () => {
     vi.mocked(api.tokens.remove).mockResolvedValue(undefined)
     const w = await mounted()
-    const del = w.findAllComponents(stubs.ConfirmButton)[1]
+    const del = must(w.findAllComponents(stubs.ConfirmButton)[1])
     expect(del.props('typed')).toBe('nightly')
     del.vm.$emit('confirm')
     await flushPromises()

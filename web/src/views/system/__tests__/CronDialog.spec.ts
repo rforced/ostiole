@@ -6,7 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import type { WoLDevice } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import CronDialog from '@/views/system/crons/CronDialog.vue'
-import { configOf, sessionOf } from '@/test/fixtures'
+import { configOf, must, sessionOf } from '@/test/fixtures'
 
 const stubs = {
   AppDialog: {
@@ -76,6 +76,6 @@ describe('CronDialog', () => {
     await wrapper.get('#cron-command').setValue('/usr/local/bin/report')
     await wrapper.get('#cron-args').setValue('--subject=Nightly run\n\na,b')
     await wrapper.get('form').trigger('submit')
-    expect(config.crons[0].args).toEqual(['--subject=Nightly run', 'a,b'])
+    expect(must(config.crons[0]).args).toEqual(['--subject=Nightly run', 'a,b'])
   })
 })

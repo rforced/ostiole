@@ -60,7 +60,8 @@ watch(
           ntp: (s.ntp ?? []).join(', '),
         }
       : blank()
-    if (!s && candidates.value.length === 1) form.value.interface = candidates.value[0].name
+    const only = candidates.value[0]
+    if (!s && candidates.value.length === 1 && only) form.value.interface = only.name
   },
   { immediate: true },
 )
@@ -77,7 +78,7 @@ watch(
   (name) => {
     const iface = config.findInterface(name)
     if (!iface?.ipv4?.address || form.value.rangeStart) return
-    const [addr, bits] = iface.ipv4.address.split('/')
+    const [addr = '', bits] = iface.ipv4.address.split('/')
     if (Number(bits) > 24) return
     const octets = addr.split('.')
     if (octets.length !== 4) return

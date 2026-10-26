@@ -203,19 +203,19 @@ async function readEntries(q: string, offset: number, limit: number) {
                 >
               </span>
               <div v-if="fetched[a.name]?.lastError" class="mt-1 font-sans text-sm text-bad">
-                {{ fetched[a.name].lastError }}
+                {{ fetched[a.name]?.lastError }}
               </div>
               <div v-else-if="fetched[a.name]" class="mt-1 text-ink-muted">
                 <button
-                  v-if="fetched[a.name].entries"
+                  v-if="fetched[a.name]?.entries"
                   type="button"
                   class="link"
-                  :aria-label="`${formatCount(fetched[a.name].entries)} fetched for ${a.name}`"
+                  :aria-label="`${formatCount(fetched[a.name]?.entries ?? 0)} fetched for ${a.name}`"
                   @click="show(a)"
                 >
-                  {{ formatCount(fetched[a.name].entries) }} fetched</button
+                  {{ formatCount(fetched[a.name]?.entries ?? 0) }} fetched</button
                 ><template v-else>0 fetched</template
-                ><span v-if="fetched[a.name].stale">
+                ><span v-if="fetched[a.name]?.stale">
                   · <span class="badge badge-warn">stale</span></span
                 >
               </div>

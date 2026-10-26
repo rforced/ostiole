@@ -44,7 +44,7 @@ async function card() {
     entries: ENTRIES,
     more: false,
     held: 3,
-    oldest: ENTRIES[2].time,
+    oldest: must(ENTRIES[2]).time,
   })
   const wrapper = mount(AuditLogSection)
   await flushPromises()
@@ -61,12 +61,13 @@ describe('AuditLogSection', () => {
   it('shows who did each thing, and the sentence', async () => {
     const w = await card()
     const rows = w.findAll('tbody tr').map((r) => r.findAll('td'))
-    expect(rows[0][1].text()).toContain('mira')
-    expect(rows[0][1].get('div').text()).toBe('admin · 192.0.2.40')
-    expect(rows[0][2].text()).toBe('Created the token "deploy".')
-    expect(rows[1][1].get('div').text()).toBe('shell')
-    expect(rows[2][1].text()).toBe('Router')
-    expect(rows[2][1].find('div').exists()).toBe(false)
+    const cell = (row: number, col: number) => must(rows[row]?.[col])
+    expect(cell(0, 1).text()).toContain('mira')
+    expect(cell(0, 1).get('div').text()).toBe('admin · 192.0.2.40')
+    expect(cell(0, 2).text()).toBe('Created the token "deploy".')
+    expect(cell(1, 1).get('div').text()).toBe('shell')
+    expect(cell(2, 1).text()).toBe('Router')
+    expect(cell(2, 1).find('div').exists()).toBe(false)
     expect(w.text()).toContain('3 entries back to')
   })
 

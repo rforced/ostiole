@@ -168,7 +168,7 @@ describe('DrivesPage', () => {
       'Last test: short offline, completed without error, at 57 hours.',
     )
 
-    const pending = wrapper.findAll('tbody tr')[1]
+    const pending = must(wrapper.findAll('tbody tr')[1])
     expect(pending.text()).toContain('failing now')
     expect(pending.find('.text-warn').text()).toBe('3')
     // The drive is not in the database, so the unnamed attributes are explained.
@@ -248,7 +248,7 @@ describe('DrivesPage', () => {
     await must(button(wrapper, 'Extended test')).trigger('click')
     await flushPromises()
     expect(ask).toHaveBeenCalledTimes(1)
-    expect(ask.mock.calls[0][0].question).toContain('sda')
+    expect(must(ask.mock.calls[0])[0].question).toContain('sda')
     expect(api.diagnostics.selfTest).not.toHaveBeenCalled()
 
     ask.mockResolvedValue(true)

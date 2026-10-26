@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { formatRemotes, nextOvpnName, parseOvpn, parseRemotes } from '@/lib/ovpnconf'
+import { must } from '@/test/fixtures'
 
 // Shaped like PEM, made of nothing.
 const pem = (kind: string, body: string) =>
@@ -122,7 +123,9 @@ describe('parseOvpn', () => {
     ])
     expect(JSON.stringify(got.refused)).not.toContain('secret-thing')
     expect(JSON.stringify(got.refused)).not.toContain('ca.crt')
-    expect(got.refused[1].reason).toBe('names a file; put the file itself between <ca> and </ca>')
+    expect(must(got.refused[1]).reason).toBe(
+      'names a file; put the file itself between <ca> and </ca>',
+    )
   })
 
   it('refuses tap, static keys, proxies and an encrypted key', () => {
@@ -141,7 +144,9 @@ describe('parseOvpn', () => {
   it('takes allow-compression no and refuses any other', () => {
     const base = `remote vpn.example\nauth-user-pass\n<ca>\n${CA}\n</ca>\n`
     expect(parseOvpn(`allow-compression no\n${base}`).ok).toBe(true)
-    expect(parseOvpn(`allow-compression asym\n${base}`).refused[0].text).toBe('allow-compression')
+    expect(must(parseOvpn(`allow-compression asym\n${base}`).refused[0]).text).toBe(
+      'allow-compression',
+    )
   })
 
   it('folds ping into keepalive and takes the default port and proto', () => {

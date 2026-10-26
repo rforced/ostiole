@@ -317,7 +317,7 @@ describe('config store interfaces', () => {
     // r2 routes through the group, which still has a member.
     expect(must(config.rules.find((r) => r.id === 'r2')).gateway).toBe('failover')
     expect(config.gatewayGroups.map((g) => g.name)).toEqual(['failover'])
-    expect(must(config.gatewayGroups[0].members).map((m) => m.gateway)).toEqual(['other'])
+    expect(must(must(config.gatewayGroups[0]).members).map((m) => m.gateway)).toEqual(['other'])
     expect(config.routes).toEqual([])
   })
 
@@ -424,7 +424,7 @@ describe('config store interfaces', () => {
     expect(config.gatewayDependents('v4')).toEqual(['group both loses member v4'])
     config.removeInterface('eth0')
     expect(config.gatewayGroups).toEqual([])
-    expect(config.rules[0].gateway).toBeUndefined()
+    expect(must(config.rules[0]).gateway).toBeUndefined()
   })
 
   it('takes an interface out of UPnP and the certificates that cover its address', () => {
@@ -483,8 +483,8 @@ describe('config store interfaces', () => {
       interfaces: ['eth1', 'br0'],
     })
     expect(config.certificates.map((c) => c.id)).toEqual(['both', 'named'])
-    expect(config.certificates[0].interfaceAddresses).toEqual(['eth6'])
-    expect(config.certificates[1].interfaceAddresses).toBeUndefined()
+    expect(must(config.certificates[0]).interfaceAddresses).toEqual(['eth6'])
+    expect(must(config.certificates[1]).interfaceAddresses).toBeUndefined()
     expect(draftOf(config).system.management.certificate).toBeUndefined()
   })
 
@@ -575,7 +575,7 @@ describe('config store interfaces', () => {
       externalInterface: 'eth0',
     })
     expect(config.certificates.map((c) => c.id)).toEqual(['named'])
-    expect(config.certificates[0].interfaceAddresses).toEqual(['eth0'])
+    expect(must(config.certificates[0]).interfaceAddresses).toEqual(['eth0'])
 
     // A bridge of the two goes with them, and UPnP with the bridge.
     d.interfaces.push({
@@ -630,7 +630,7 @@ describe('config store interfaces', () => {
     })
     expect(config.rules).toEqual([])
     expect(toast.toasts.map((t) => t.message)).toEqual(['Removed 2 unused items.'])
-    toast.act(toast.toasts[0].id)
+    toast.act(must(toast.toasts[0]).id)
     expect(config.draft).toEqual(before)
 
     config.removeRule('r1')
@@ -679,8 +679,8 @@ describe('config store host overrides', () => {
 
     config.upsertHostOverride({ hostname: 'potato', domain: 'test', ip: '10.0.0.7' }, 'potato.test')
     expect(hosts()).toHaveLength(2)
-    expect(hosts()[1].ip).toBe('10.0.0.7')
-    expect(hosts()[0].ip).toBe('10.0.0.5')
+    expect(must(hosts()[1]).ip).toBe('10.0.0.7')
+    expect(must(hosts()[0]).ip).toBe('10.0.0.5')
 
     config.removeHostOverride('potato.test')
     expect(hosts()).toEqual([{ hostname: 'potato', ip: '10.0.0.5' }])
@@ -769,11 +769,11 @@ describe('config store traffic shaping', () => {
 
   function shaped(): DeepPartial<Config> {
     const d = draft()
-    d.interfaces[0].shaping = { download: 50_000_000 }
-    d.rules[2].priority = 'realtime'
-    d.rules[2].enabled = true
-    d.nat.portForwards[0].priority = 'high'
-    d.nat.portForwards[0].enabled = true
+    must(d.interfaces[0]).shaping = { download: 50_000_000 }
+    must(d.rules[2]).priority = 'realtime'
+    must(d.rules[2]).enabled = true
+    must(d.nat.portForwards[0]).priority = 'high'
+    must(d.nat.portForwards[0]).enabled = true
     return d
   }
 
@@ -819,7 +819,7 @@ describe('config store traffic shaping', () => {
     config.clearBusy('lan')
     expect(config.busyZones).toEqual([])
     toastAction(useToastStore().toasts[0]).run()
-    expect(must(config.busyZones[0].busy).connections).toBe(200)
+    expect(must(must(config.busyZones[0]).busy).connections).toBe(200)
   })
 
   // Holding a busy host back is a priority decision, so it is shown where
@@ -1092,10 +1092,10 @@ describe('config store reverse proxy', () => {
     config.replaceDraft(configOf(proxied()))
     config.removeProfile('strict')
     expect(config.proxy.wafProfiles).toEqual([])
-    expect(must(config.proxy.sites)[0].waf).toBeUndefined()
-    expect(must(config.proxy.sites)[0].pool).toBe('web')
+    expect(must(must(config.proxy.sites)[0]).waf).toBeUndefined()
+    expect(must(must(config.proxy.sites)[0]).pool).toBe('web')
     toastAction(useToastStore().toasts[0]).run()
-    expect(must(config.proxy.sites)[0].waf).toBe('strict')
+    expect(must(must(config.proxy.sites)[0]).waf).toBe('strict')
   })
 
   // A site without a certificate serves the built-in one, as the web UI does.
@@ -1117,7 +1117,7 @@ describe('config store reverse proxy', () => {
         names: ['blog.example.com'],
       },
     ]
-    d.services.proxy.sites[0].certificate = 'edge'
+    must(d.services.proxy.sites[0]).certificate = 'edge'
     d.services.proxy.sites.push({
       id: 'blog',
       enabled: true,
@@ -1158,15 +1158,21 @@ describe('config store reverse proxy', () => {
     config.upsertPool({ id: 'front', upstreams: [{ address: '10.0.0.2:80' }] }, 'web')
     expect(must(config.proxy.pools).map((p) => p.id)).toEqual(['front', 'api'])
     expect(must(config.proxy.sites).map((s) => s.pool)).toEqual(['front', 'api'])
-    expect(must(config.proxy.sites).map((s) => must(s.paths)[0].pool)).toEqual(['api', 'front'])
+    expect(must(config.proxy.sites).map((s) => must(must(s.paths)[0]).pool)).toEqual([
+      'api',
+      'front',
+    ])
 
     config.discard()
     expect(must(config.proxy.pools).map((p) => p.id)).toEqual(['web', 'api'])
     expect(must(config.proxy.sites).map((s) => s.pool)).toEqual(['web', 'api'])
-    expect(must(config.proxy.sites).map((s) => must(s.paths)[0].pool)).toEqual(['api', 'web'])
+    expect(must(config.proxy.sites).map((s) => must(must(s.paths)[0]).pool)).toEqual(['api', 'web'])
     toastAction(useToastStore().toasts.at(-1)).run()
     expect(must(config.proxy.sites).map((s) => s.pool)).toEqual(['front', 'api'])
-    expect(must(config.proxy.sites).map((s) => must(s.paths)[0].pool)).toEqual(['api', 'front'])
+    expect(must(config.proxy.sites).map((s) => must(must(s.paths)[0]).pool)).toEqual([
+      'api',
+      'front',
+    ])
   })
 
   it('follows a renamed WAF profile in the sites it inspects', () => {
@@ -1204,16 +1210,16 @@ describe('config store reverse proxy', () => {
     const config = useConfigStore()
     config.replaceDraft(configOf(proxied()))
     config.addExclusion('strict', { rule: '942100' })
-    expect(must(config.proxy.wafProfiles)[0].exclusions).toEqual([{ rule: '942100' }])
+    expect(must(must(config.proxy.wafProfiles)[0]).exclusions).toEqual([{ rule: '942100' }])
     // The same rule twice is the same exclusion.
     config.addExclusion('strict', { rule: '942100' })
-    expect(must(config.proxy.wafProfiles)[0].exclusions).toHaveLength(1)
+    expect(must(must(config.proxy.wafProfiles)[0]).exclusions).toHaveLength(1)
     // On a path it is a different one.
     config.addExclusion('strict', { rule: '942100', path: '/wp-admin' })
-    expect(must(config.proxy.wafProfiles)[0].exclusions).toHaveLength(2)
+    expect(must(must(config.proxy.wafProfiles)[0]).exclusions).toHaveLength(2)
     const toasts = useToastStore().toasts
     toastAction(toasts[toasts.length - 1]).run()
-    expect(must(config.proxy.wafProfiles)[0].exclusions).toEqual([{ rule: '942100' }])
+    expect(must(must(config.proxy.wafProfiles)[0]).exclusions).toEqual([{ rule: '942100' }])
   })
 
   it('says a rule is excluded already, and tells one variable from the whole rule', () => {
@@ -1221,13 +1227,13 @@ describe('config store reverse proxy', () => {
     config.replaceDraft(configOf(proxied()))
     config.addExclusion('strict', { rule: '942100', target: 'ARGS:q' })
     config.addExclusion('strict', { rule: '942100' })
-    expect(must(config.proxy.wafProfiles)[0].exclusions).toHaveLength(2)
+    expect(must(must(config.proxy.wafProfiles)[0]).exclusions).toHaveLength(2)
     config.addExclusion('strict', {
       rule: '942100',
       target: 'ARGS:q',
       description: 'Search',
     })
-    expect(must(config.proxy.wafProfiles)[0].exclusions).toHaveLength(2)
+    expect(must(must(config.proxy.wafProfiles)[0]).exclusions).toHaveLength(2)
     const last = must(useToastStore().toasts.at(-1))
     expect(last.message).toBe('Rule 942100 for ARGS:q is excluded already.')
     expect(last.action).toBeNull()
@@ -1239,12 +1245,12 @@ describe('config store reverse proxy', () => {
     config.addExclusion('strict', { rule: '942100' })
     config.addExclusion('strict', { rule: '941100', path: '/api' })
     config.updateExclusion('strict', 1, { rule: '941100', path: '/api/v2' })
-    expect(must(must(config.proxy.wafProfiles)[0].exclusions)[1]).toEqual({
+    expect(must(must(must(config.proxy.wafProfiles)[0]).exclusions)[1]).toEqual({
       rule: '941100',
       path: '/api/v2',
     })
     config.removeExclusion('strict', 0)
-    expect(must(config.proxy.wafProfiles)[0].exclusions).toEqual([
+    expect(must(must(config.proxy.wafProfiles)[0]).exclusions).toEqual([
       { rule: '941100', path: '/api/v2' },
     ])
     expect(must(useToastStore().toasts.at(-1)).message).toBe(
@@ -1254,7 +1260,7 @@ describe('config store reverse proxy', () => {
     config.removeExclusion('strict', 0)
     expect(must(config.proxy.wafProfiles)[0]).not.toHaveProperty('exclusions')
     toastAction(useToastStore().toasts.at(-1)).run()
-    expect(must(config.proxy.wafProfiles)[0].exclusions).toEqual([
+    expect(must(must(config.proxy.wafProfiles)[0]).exclusions).toEqual([
       { rule: '941100', path: '/api/v2' },
     ])
   })
@@ -1282,7 +1288,7 @@ describe('config store reverse proxy', () => {
         source: { alias: 'home' },
       },
     ]
-    d.services.proxy.sites[0].allowFrom = ['home', '10.0.0.0/8']
+    must(d.services.proxy.sites[0]).allowFrom = ['home', '10.0.0.0/8']
     const config = useConfigStore()
     config.replaceDraft(configOf(d))
     expect(config.zoneDependents('dmz')).toContain('proxy access rule a1')
@@ -1294,7 +1300,7 @@ describe('config store reverse proxy', () => {
       zone: 'outside',
       source: { alias: 'house' },
     })
-    expect(must(config.proxy.sites)[0].allowFrom).toEqual(['house', '10.0.0.0/8'])
+    expect(must(must(config.proxy.sites)[0]).allowFrom).toEqual(['house', '10.0.0.0/8'])
 
     config.removeZone('dmz')
     expect(must(config.proxy.access).map((a) => a.id)).toEqual(['a2'])
@@ -1425,7 +1431,7 @@ describe('config store wake on LAN', () => {
         description: 'NAS',
       },
     ])
-    config.removeWoLDevice(config.wolDevices[0])
+    config.removeWoLDevice(must(config.wolDevices[0]))
     expect(draftOf(config).services).not.toHaveProperty('wol')
     expect(config.dirty).toBe(false)
   })
@@ -1435,7 +1441,7 @@ describe('config store wake on LAN', () => {
     const toast = useToastStore()
     config.replaceDraft(configOf(sleepers()))
     expect(config.wolDeviceDependents('wol-nas')).toEqual(['cron job Morning NAS'])
-    config.removeWoLDevice(config.wolDevices[0])
+    config.removeWoLDevice(must(config.wolDevices[0]))
     expect(must(toast.toasts.at(-1)).message).toBe('Deleted NAS.')
     expect(config.wolDevices.map((d) => d.id)).toEqual(['wol-pc'])
     expect(config.crons.map((c) => c.id)).toEqual(['c2', 'c3'])
@@ -1521,7 +1527,7 @@ describe('config store dynamic DNS', () => {
     expect(config.sectionFor('services.ddns.records[ddns-a].name')).toBe('/services/ddns')
     config.upsertDdnsRecord({ ...r, description: 'Office' }, 'ddns-a')
     expect(config.ddnsRecords).toEqual([{ ...r, description: 'Office' }])
-    config.removeDdnsRecord(config.ddnsRecords[0])
+    config.removeDdnsRecord(must(config.ddnsRecords[0]))
     expect(draftOf(config).services).not.toHaveProperty('ddns')
     expect(config.dirty).toBe(false)
   })
@@ -1590,11 +1596,13 @@ describe('config store WireGuard peers', () => {
   it('renames a peer everywhere a rule names it', () => {
     const config = useConfigStore()
     config.replaceDraft(configOf(tunnelDraft()))
-    const laptop = must(must(must(config.findInterface('wg0')).wireguard).peers)[0]
+    const laptop = must(must(must(config.findInterface('wg0')).wireguard).peers?.[0])
     config.upsertPeer('wg0', { ...laptop, name: 'notebook' }, 'laptop')
-    expect(config.rules[0].source.peer).toBe('wg0/notebook')
-    expect(must(must(draftOf(config).services.proxy).access)[0].source.peer).toBe('wg0/notebook')
-    expect(config.rules[1].destination.peer).toBe('wg0/phone')
+    expect(must(config.rules[0]).source.peer).toBe('wg0/notebook')
+    expect(must(must(must(draftOf(config).services.proxy).access)[0]).source.peer).toBe(
+      'wg0/notebook',
+    )
+    expect(must(config.rules[1]).destination.peer).toBe('wg0/phone')
   })
 
   it('takes the rules that name a peer with it', () => {
@@ -1718,10 +1726,10 @@ describe('config store gateways', () => {
     config.replaceDraft(configOf(routed()))
     config.upsertGateway({ name: 'provider', enabled: true, interface: 'wg1' }, 'vpn')
     expect(must(config.rules.find((r) => r.id === 'tv')).gateway).toBe('provider')
-    expect(must(config.gatewayGroups[0].members)[0].gateway).toBe('provider')
+    expect(must(must(must(config.gatewayGroups[0]).members)[0]).gateway).toBe('provider')
     expect(draftOf(config).services.dns.via).toBe('provider')
 
-    config.upsertGatewayGroup({ ...config.gatewayGroups[0], name: 'hidden' }, 'private')
+    config.upsertGatewayGroup({ ...must(config.gatewayGroups[0]), name: 'hidden' }, 'private')
     expect(must(config.rules.find((r) => r.id === 'guests')).gateway).toBe('hidden')
   })
 
@@ -1758,7 +1766,7 @@ describe('config store dirty', () => {
     must(draftOf(config).zones).reverse()
     expect(config.dirty).toBe(true)
     must(draftOf(config).zones).reverse()
-    must(draftOf(config).interfaces)[0].mtu = 1500
+    must(must(draftOf(config).interfaces)[0]).mtu = 1500
     expect(config.dirty).toBe(true)
   })
 })

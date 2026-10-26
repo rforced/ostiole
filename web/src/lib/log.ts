@@ -213,7 +213,7 @@ export function useLog<Row extends LogRow, Page extends LogPage<Row> = LogPage<R
     const all = shown.concat(rows.value)
     if (all.length > MAX_ROWS) {
       all.length = MAX_ROWS
-      next = all[MAX_ROWS - 1].seq ?? 0
+      next = all[MAX_ROWS - 1]?.seq ?? 0
       more.value = true
     }
     rows.value = all

@@ -55,7 +55,10 @@ describe('CronsPage', () => {
   // from anyone but an admin, so the page does not offer one.
   it('keeps the crons only an admin may change from an operator', async () => {
     const w = await open('operator')
-    const [nightly, hashes, script] = rows(w)
+    const all = rows(w)
+    const nightly = must(all[0])
+    const hashes = must(all[1])
+    const script = must(all[2])
     expect(button(nightly, 'Edit').attributes('disabled')).toBeUndefined()
     expect(button(hashes, 'Edit').attributes('disabled')).toBeDefined()
     expect(button(hashes, 'Delete').attributes('disabled')).toBeDefined()
@@ -78,7 +81,7 @@ describe('CronsPage', () => {
 
   it('names the device a wake cron wakes', async () => {
     const w = await open('operator')
-    const morning = rows(w)[3]
+    const morning = must(rows(w)[3])
     expect(morning.text()).toContain('Wake NAS')
     expect(button(morning, 'Edit').attributes('disabled')).toBeUndefined()
   })

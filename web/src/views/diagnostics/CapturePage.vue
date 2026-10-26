@@ -22,7 +22,8 @@ const iface = ref('')
 watch(
   () => config.interfaces,
   (list) => {
-    if (!iface.value && list.length) iface.value = list[0].name
+    const first = list[0]
+    if (!iface.value && first) iface.value = first.name
   },
   { immediate: true },
 )

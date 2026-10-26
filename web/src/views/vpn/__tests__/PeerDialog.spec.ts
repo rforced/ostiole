@@ -64,7 +64,7 @@ describe('PeerDialog Translate', () => {
     expect(box.element.checked).toBe(false)
     await box.setValue(true)
     await wrapper.get('form').trigger('submit')
-    expect(peersOf(config, 'wg1')[0].masquerade).toBe(true)
+    expect(must(peersOf(config, 'wg1')[0]).masquerade).toBe(true)
   })
 
   it('leaves the field out of a peer that does not translate', async () => {
@@ -102,7 +102,7 @@ describe('PeerDialog keepalive', () => {
     await wrapper.get('#pe-pub').setValue(FRIEND)
     await wrapper.get('#pe-allowed').setValue('10.77.0.2/32')
     await wrapper.get('form').trigger('submit')
-    expect(peersOf(config, 'wg1')[0].keepalive).toBe(10)
+    expect(must(peersOf(config, 'wg1')[0]).keepalive).toBe(10)
   })
 
   it('leaves out the keepalive of a new peer that calls in', async () => {
@@ -151,10 +151,10 @@ describe('PeerDialog shown networks', () => {
     expect(wrapper.get<HTMLInputElement>('#pe-ours-as-0').element.value).toBe('10.200.1.0/24')
     await wrapper.get('#pe-theirs-as-0').setValue('10.202.1.0/24')
     const add = wrapper.findAll('button').filter((b) => b.text() === 'Add network')
-    await add[0].trigger('click')
+    await must(add[0]).trigger('click')
     expect(wrapper.find('#pe-theirs-1').exists()).toBe(true)
     await wrapper.get('form').trigger('submit')
-    const saved = peersOf(config, 'wg1')[0]
+    const saved = must(peersOf(config, 'wg1')[0])
     expect(saved.theirs).toEqual([{ network: '192.168.1.0/24', as: '10.202.1.0/24' }])
     expect(saved.ours).toEqual([{ network: '192.168.1.0/24', as: '10.200.1.0/24' }])
   })
@@ -164,7 +164,7 @@ describe('PeerDialog shown networks', () => {
     await wrapper.get('[aria-label="Remove 192.168.1.0/24"]').trigger('click')
     await wrapper.get('[aria-label="Remove 192.168.1.0/24"]').trigger('click')
     await wrapper.get('form').trigger('submit')
-    const saved = peersOf(config, 'wg1')[0]
+    const saved = must(peersOf(config, 'wg1')[0])
     expect(saved).not.toHaveProperty('theirs')
     expect(saved).not.toHaveProperty('ours')
   })
@@ -306,7 +306,7 @@ describe('PeerDialog device file', () => {
     await remake.trigger('click')
     await flushPromises()
     expect(ask).toHaveBeenCalledWith(expect.objectContaining({ typed: 'laptop' }))
-    expect(peersOf(config, 'wg0')[0].publicKey).toBe('DEVICE=')
+    expect(must(peersOf(config, 'wg0')[0]).publicKey).toBe('DEVICE=')
     expect(wrapper.get('pre').text()).toContain('Address = 10.66.0.2/32')
   })
 })

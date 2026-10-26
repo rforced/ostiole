@@ -59,7 +59,7 @@ describe('SiteDialog untouched save', () => {
     await wrapper.get('#site-allow').setValue('192.0.2.0/24\n203.0.113.0/24')
     await wrapper.get('form').trigger('submit')
     expect(config.dirty).toBe(true)
-    expect(draftOf(config).services?.proxy?.sites?.[0].allowFrom).toEqual([
+    expect(draftOf(config).services?.proxy?.sites?.[0]?.allowFrom).toEqual([
       '192.0.2.0/24',
       '203.0.113.0/24',
       'office',

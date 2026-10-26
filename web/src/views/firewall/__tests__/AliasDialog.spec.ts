@@ -6,7 +6,7 @@ import { ApiError, api, type Session } from '@/lib/api'
 import type { Alias, FeedsStatus } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
-import { emptyConfig, fixture } from '@/test/fixtures'
+import { emptyConfig, fixture, must } from '@/test/fixtures'
 import AliasDialog from '@/views/firewall/AliasDialog.vue'
 
 vi.mock('@/lib/api', async () => {
@@ -213,7 +213,7 @@ describe('AliasDialog round trip', () => {
     await wrapper.get('#alias-entries').setValue('192.0.2.1')
     await wrapper.get('form').trigger('submit')
     expect(config.dirty).toBe(true)
-    expect(config.aliases[0].entries).toEqual(['192.0.2.1'])
+    expect(must(config.aliases[0]).entries).toEqual(['192.0.2.1'])
   })
 
   it('keeps a refresh period on an alias that fetches nothing', async () => {
@@ -242,6 +242,6 @@ describe('AliasDialog round trip', () => {
     await wrapper.get('#alias-refresh').setValue('12')
     await wrapper.get('form').trigger('submit')
     expect(config.dirty).toBe(true)
-    expect(config.aliases[0].refreshHours).toBe(12)
+    expect(must(config.aliases[0]).refreshHours).toBe(12)
   })
 })

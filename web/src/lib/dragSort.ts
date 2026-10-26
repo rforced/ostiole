@@ -7,8 +7,13 @@ import { useReorder } from '@/lib/reorder'
  */
 export function nearest(y: number, centres: number[]) {
   let best = 0
+  let bestGap = Math.abs((centres[0] ?? 0) - y)
   for (let i = 1; i < centres.length; i++) {
-    if (Math.abs(centres[i] - y) < Math.abs(centres[best] - y)) best = i
+    const gap = Math.abs((centres[i] ?? 0) - y)
+    if (gap < bestGap) {
+      best = i
+      bestGap = gap
+    }
   }
   return best
 }
@@ -49,7 +54,7 @@ export function useDragSort(
       const r = row.getBoundingClientRect()
       return r.top + r.height / 2
     })
-    grabbedAt = event.clientY - centres[before.indexOf(id)]
+    grabbedAt = event.clientY - (centres[before.indexOf(id)] ?? 0)
     pointer = event.pointerId
     dragging.value = id
     captured = el

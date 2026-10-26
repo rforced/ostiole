@@ -7,7 +7,7 @@ import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ManagementSection from '@/views/system/ManagementSection.vue'
-import { configOf, sessionOf, draftOf } from '@/test/fixtures'
+import { configOf, sessionOf, draftOf, must } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({ api: { timezones: vi.fn() } }))
 
@@ -107,7 +107,7 @@ describe('ManagementSection host settings', () => {
   // checkbox writes the draft and the apply is what changes the router.
   it('writes the SSH password setting into the draft', async () => {
     const { wrapper, config } = await open({ management: { webPort: 443, sshPort: 22 } })
-    const box = wrapper.findAll<HTMLInputElement>('input[type="checkbox"]')[0]
+    const box = must(wrapper.findAll<HTMLInputElement>('input[type="checkbox"]')[0])
     expect(box.element.checked).toBe(false)
     await box.setValue(true)
     expect(draftOf(config).system.management.sshPasswords).toBe(true)
@@ -123,7 +123,7 @@ describe('ManagementSection host settings', () => {
     )
     expect(wrapper.get('#sys-web').attributes('disabled')).toBeDefined()
     expect(wrapper.get('#sys-ssh').attributes('disabled')).toBeDefined()
-    expect(wrapper.findAll('input[type="checkbox"]')[0].attributes('disabled')).toBeDefined()
+    expect(must(wrapper.findAll('input[type="checkbox"]')[0]).attributes('disabled')).toBeDefined()
     expect(wrapper.get('#sys-hostname').attributes('disabled')).toBeUndefined()
     expect(wrapper.text()).toContain('Only an admin can change this.')
   })

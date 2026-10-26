@@ -128,12 +128,13 @@ export function nearest(points: ArrayLike<number | null | undefined>[], t: numbe
   if (!points.length) return -1
   let lo = 0
   let hi = points.length - 1
+  const at = (k: number) => points[k]?.[0] ?? 0
   while (lo < hi) {
     const mid = (lo + hi) >> 1
-    if ((points[mid][0] ?? 0) < t) lo = mid + 1
+    if (at(mid) < t) lo = mid + 1
     else hi = mid
   }
-  if (lo > 0 && t - (points[lo - 1][0] ?? 0) < (points[lo][0] ?? 0) - t) return lo - 1
+  if (lo > 0 && t - at(lo - 1) < at(lo) - t) return lo - 1
   return lo
 }
 
@@ -143,7 +144,7 @@ export function nearest(points: ArrayLike<number | null | undefined>[], t: numbe
  */
 export function linePath(
   points: Point[],
-  i: number,
+  i: 1 | 2,
   x: (t: number) => number,
   y: (v: number) => number,
 ) {
@@ -208,7 +209,7 @@ export function bandPath(
       continue
     }
     const t = p[0] ?? 0
-    if (!run || (gap > 0 && t - run[run.length - 1][0] > gap)) {
+    if (!run || (gap > 0 && t - (run[run.length - 1]?.[0] ?? t) > gap)) {
       run = []
       runs.push(run)
     }

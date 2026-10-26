@@ -16,7 +16,7 @@ const plain = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 
 /** The eight groups of an IPv6 address as one hex string, or null. */
 function v6Key(ip: string) {
-  const halves = ip.split('%')[0].toLowerCase().split('::')
+  const halves = (ip.split('%')[0] ?? '').toLowerCase().split('::')
   if (halves.length > 2) return null
   const head = halves[0] ? halves[0].split(':') : []
   const tail = halves.length === 2 && halves[1] ? halves[1].split(':') : []
@@ -24,7 +24,7 @@ function v6Key(ip: string) {
   const last = halves.length === 2 ? tail : head
   const dotted = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(last.at(-1) ?? '')
   if (dotted) {
-    const [a, b, c, d] = dotted.slice(1).map(Number)
+    const [a = 0, b = 0, c = 0, d = 0] = dotted.slice(1).map(Number)
     last.splice(-1, 1, ((a << 8) | b).toString(16), ((c << 8) | d).toString(16))
   }
   const missing = 8 - head.length - tail.length
@@ -115,8 +115,14 @@ export function useSort<Row>(
   columns: Record<string, SortColumn<Row>>,
   { by = null, dir, tie }: { by?: string | null; dir?: SortDir; tie?: string } = {},
 ) {
+  function column(key: string) {
+    const col = columns[key]
+    if (!col) throw new TypeError(`no sort column ${key}`)
+    return col
+  }
+
   const chosen = ref<{ by: string | null; dir: SortDir | null }>(
-    by ? { by, dir: dir ?? columns[by].first ?? 'asc' } : { by: null, dir: null },
+    by ? { by, dir: dir ?? column(by).first ?? 'asc' } : { by: null, dir: null },
   )
   const order = computed(() => chosen.value)
 
@@ -129,7 +135,10 @@ export function useSort<Row>(
     const { by: current, dir: d } = chosen.value
     if (keys.length === 1 && current === keys[0])
       chosen.value = { by: current, dir: d === 'asc' ? 'desc' : 'asc' }
-    else choose(keys[(keys.indexOf(current ?? '') + 1) % keys.length])
+    else {
+      const next = keys[(keys.indexOf(current ?? '') + 1) % keys.length]
+      if (next !== undefined) choose(next)
+    }
   }
 
   /** The phone's select: a column in its own order. */
@@ -141,7 +150,7 @@ export function useSort<Row>(
   const sorted = computed(() => {
     const { by: key, dir: d } = order.value
     if (!key) return toValue(rows)
-    const col = columns[key]
+    const col = column(key)
     const tied = tie ? columns[tie] : null
     const sign = d === 'desc' ? -1 : 1
     return toValue(rows)

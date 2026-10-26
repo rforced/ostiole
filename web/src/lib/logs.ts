@@ -8,7 +8,21 @@ import { proxyServes } from '@/lib/proxyStatus'
  * model's constants, which TestTheLogsPageMirrorsTheModel checks, so a
  * page can say what a figure costs before it is applied.
  */
-export const LOGS: Record<string, { entries: number; max: number; bytes: number }> = {
+type LogSpec = { entries: number; max: number; bytes: number }
+type LogSetting = { on: boolean; entries: number }
+type LogName =
+  | 'firewall'
+  | 'queries'
+  | 'events'
+  | 'destinations'
+  | 'requests'
+  | 'dhcp'
+  | 'wireless'
+  | 'wireguard'
+  | 'tailscale'
+  | 'discovery'
+
+export const LOGS: Record<string, LogSpec> & Record<LogName, LogSpec> = {
   firewall: { entries: 50000, max: 10000000, bytes: 350 },
   queries: { entries: 100000, max: 10000000, bytes: 150 },
   events: { entries: 10000, max: 1000000, bytes: 1536 },
@@ -85,7 +99,9 @@ export function records(cfg?: Config | null): boolean {
  * peer logs while their service is on and the level keeps them; the
  * discovery log while the relay runs and the level keeps it.
  */
-export function logSettings(cfg?: Config | null): Record<string, { on: boolean; entries: number }> {
+export function logSettings(
+  cfg?: Config | null,
+): Record<string, LogSetting> & Record<LogName, LogSetting> {
   const firewall: Partial<FirewallLog> = cfg?.system?.management?.firewallLog ?? {}
   const dns: Partial<DNSServer> = cfg?.services?.dns ?? {}
   const proxy: Partial<Proxy> = cfg?.services?.proxy ?? {}
@@ -132,7 +148,9 @@ export function logSettings(cfg?: Config | null): Record<string, { on: boolean; 
  * What a log costs full. log is a key of LOGS; empty entries is the default.
  */
 export function fullBytes(log: string, entries?: number | ''): number {
-  return (entries || LOGS[log].entries) * LOGS[log].bytes
+  const spec = LOGS[log]
+  if (!spec) throw new TypeError(`unknown log ${log}`)
+  return (entries || spec.entries) * spec.bytes
 }
 
 /**

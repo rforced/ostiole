@@ -8,7 +8,7 @@ import type { WAFExclusion, WAFProfile } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useToastStore } from '@/stores/toast'
-import { configOf, type DeepPartial } from '@/test/fixtures'
+import { configOf, type DeepPartial, must } from '@/test/fixtures'
 import ExclusionDialog from '@/views/services/proxy/ExclusionDialog.vue'
 import ExclusionsCard from '@/views/services/proxy/ExclusionsCard.vue'
 
@@ -114,7 +114,7 @@ describe('ExclusionsCard', () => {
       ['/sessions', '920420'],
     ]) {
       await search.setValue(query)
-      expect(cells(wrapper).map((c) => c[0].slice(0, 6))).toEqual([rule])
+      expect(cells(wrapper).map((c) => must(c[0]).slice(0, 6))).toEqual([rule])
     }
     expect(wrapper.text()).toContain('1 of 3')
     await search.setValue('nothing')
@@ -164,13 +164,13 @@ describe('ExclusionsCard', () => {
       { id: 'watch', exclusions: [{ rule: '942200' }, { rule: '941100', path: '/api' }] },
     ])
     // Sorted, the first row is the second exclusion.
-    await rows(wrapper)[0].get('button.link-action').trigger('click')
+    await must(rows(wrapper)[0]).get('button.link-action').trigger('click')
     expect(wrapper.findComponent(ExclusionDialog).props()).toMatchObject({
       open: true,
       index: 1,
       exclusion: { rule: '941100', path: '/api' },
     })
-    const del = wrapper.findAllComponents(ConfirmButton)[0]
+    const del = must(wrapper.findAllComponents(ConfirmButton)[0])
     expect(del.props('question')).toBe('Delete exclusion rule 941100 on /api?')
     del.vm.$emit('confirm')
     expect(s.proxy.wafProfiles?.[0]?.exclusions).toEqual([{ rule: '942200' }])
@@ -180,7 +180,7 @@ describe('ExclusionsCard', () => {
     useAuthStore().user = { username: 'eve', role: 'viewer' } as Session
     const { wrapper } = await card([{ id: 'watch', exclusions: [{ rule: '942100' }] }])
     expect(wrapper.text()).not.toContain('Add exclusion')
-    expect(rows(wrapper)[0].get('button.link-action').text()).toBe('View')
+    expect(must(rows(wrapper)[0]).get('button.link-action').text()).toBe('View')
   })
 })
 

@@ -128,7 +128,7 @@ describe('DdnsPage', () => {
 
   it('names the DNS provider that writes each record', async () => {
     const draft = config()
-    must(draft.dnsProviders)[0].domains = ['home.example.com']
+    must(must(draft.dnsProviders)[0]).domains = ['home.example.com']
     must(draft.dnsProviders).push({
       id: 'cloudflare',
       kind: 'cloudflare',
@@ -162,7 +162,7 @@ describe('DdnsPage', () => {
 
   it('points at the providers page until one can keep a record', async () => {
     const draft = config()
-    must(draft.dnsProviders)[0].domains = []
+    must(must(draft.dnsProviders)[0]).domains = []
     const { wrapper } = await page('admin', draft)
     expect(wrapper.text()).toContain('No DNS provider can keep a record yet')
     expect(wrapper.find('a[href="/system/dns-providers"]').exists()).toBe(true)
@@ -202,7 +202,7 @@ describe('RecordDialog', () => {
     await wrapper.get('#ddns-name').setValue('NAS.Example.com.')
     expect(wrapper.text()).toContain('Written through cf (Cloudflare).')
     expect(wrapper.get<HTMLInputElement>('#ddns-if').element.value).toBe('eth0')
-    await wrapper.findAll('input[type="checkbox"]')[2].setValue(true)
+    await must(wrapper.findAll('input[type="checkbox"]')[2]).setValue(true)
     await save(wrapper)
     expect(store.ddnsRecords.at(-1)).toMatchObject({
       enabled: true,
@@ -227,7 +227,7 @@ describe('RecordDialog', () => {
       'Another record keeps the A record for home.example.com.',
     )
 
-    await wrapper.findAll('input[type="checkbox"]')[1].setValue(false)
+    await must(wrapper.findAll('input[type="checkbox"]')[1]).setValue(false)
     await save(wrapper)
     expect(wrapper.get('[role="alert"]').text()).toBe('Keep the A record, the AAAA record or both.')
     expect(store.ddnsRecords).toHaveLength(2)
@@ -236,14 +236,14 @@ describe('RecordDialog', () => {
   it('checks a record against the provider and says what an apply would do', async () => {
     const { wrapper } = dialog()
     await wrapper.get('#ddns-name').setValue('nas.example.com')
-    await wrapper.findAll('input[type="checkbox"]')[2].setValue(true)
+    await must(wrapper.findAll('input[type="checkbox"]')[2]).setValue(true)
     vi.mocked(api.ddns.check).mockResolvedValue([
       { type: 'A', address: '203.0.113.7', published: ['198.51.100.5'], action: 'change' },
       { type: 'AAAA', published: [], action: 'no-address' },
     ])
     await must(button(wrapper, 'Check')).trigger('click')
     await flushPromises()
-    const [, record] = vi.mocked(api.ddns.check).mock.calls[0]
+    const [, record] = must(vi.mocked(api.ddns.check).mock.calls[0])
     expect(record).toMatchObject({ name: 'nas.example.com', ipv4: true, ipv6: true })
     const status = plain(wrapper.get('[role="status"]'))
     expect(status).toContain(

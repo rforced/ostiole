@@ -72,7 +72,7 @@ describe('InterfacesTab', () => {
     second(NOW + 1, 8_000_000, 1_000_000)
     await flushPromises()
     expect(w.text()).toContain('Down 8 Mbit/s')
-    expect(must(w.findAll('path')[0].attributes('d')).split('L')).toHaveLength(2)
+    expect(must(must(w.findAll('path')[0]).attributes('d')).split('L')).toHaveLength(2)
   })
 
   // The speed comes from what the router runs, never from the draft.

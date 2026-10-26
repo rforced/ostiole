@@ -164,7 +164,7 @@ describe('DashboardView', () => {
     expect(reading(w, 'Busiest rules')).toHaveLength(1)
     // No leases last time: one line, as tall as the one that says so.
     expect(reading(w, 'Recent leases')).toHaveLength(1)
-    expect(reading(w, 'Recent leases')[0].find('td').attributes('colspan')).toBe('3')
+    expect(must(reading(w, 'Recent leases')[0]).find('td').attributes('colspan')).toBe('3')
   })
 
   it('fills the cards in where they stand, and remembers their shape', async () => {

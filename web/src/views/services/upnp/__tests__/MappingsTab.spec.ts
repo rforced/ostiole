@@ -28,7 +28,8 @@ describe('MappingsTab', () => {
     ])
     const wrapper = mount(MappingsTab)
     await flushPromises()
-    const column = (i: number) => wrapper.findAll('tbody tr').map((r) => r.findAll('td')[i].text())
+    const column = (i: number) =>
+      wrapper.findAll('tbody tr').map((r) => must(r.findAll('td')[i]).text())
     const sortBy = (name: string) =>
       must(wrapper.findAll('th').find((th) => th.text() === name))
         .get('button')

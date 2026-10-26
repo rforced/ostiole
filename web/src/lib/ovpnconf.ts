@@ -137,7 +137,7 @@ function words(s: string) {
   const out: string[] = []
   let i = 0
   while (i < s.length) {
-    while (i < s.length && /\s/.test(s[i])) i += 1
+    while (i < s.length && /\s/.test(s.charAt(i))) i += 1
     if (i >= s.length) break
     let w = ''
     if (s[i] === '"') {
@@ -153,7 +153,7 @@ function words(s: string) {
       while (i < s.length && s[i] !== "'") w += s[i++]
       i += 1
     } else {
-      while (i < s.length && !/\s/.test(s[i])) {
+      while (i < s.length && !/\s/.test(s.charAt(i))) {
         if (s[i] === '\\' && i + 1 < s.length) i += 1
         w += s[i]
         i += 1
@@ -237,10 +237,10 @@ export function parseOvpn(text: string): OvpnParse {
     if (!s || s.startsWith('#') || s.startsWith(';')) return
     const open = /^<([A-Za-z0-9-]+)>$/.exec(s)
     if (open) {
-      block = { name: open[1].toLowerCase(), line, lines: [] }
+      block = { name: (open[1] ?? '').toLowerCase(), line, lines: [] }
       return
     }
-    const [first, ...args] = words(s)
+    const [first = '', ...args] = words(s)
     const name = first.replace(/^--/, '').toLowerCase()
     directive(line, name, args)
   })
@@ -363,13 +363,14 @@ export function parseOvpn(text: string): OvpnParse {
       case 'route':
         return route(line, name, args)
       case 'route-ipv6': {
-        const [addr, len] = String(args[0] ?? '').split('/')
+        const network = String(args[0] ?? '')
+        const [addr, len] = network.split('/')
         const a = parseAddress(addr)
         const bits = Number(len)
         if (!a || a.bits !== 128 || !Number.isInteger(bits) || bits < 0 || bits > 128) {
           return refuse(line, name, 'needs an IPv6 network')
         }
-        ;(tunnel.routes ??= []).push(args[0])
+        ;(tunnel.routes ??= []).push(network)
         return
       }
       case 'redirect-gateway':
@@ -477,8 +478,8 @@ export function formatRemotes(remotes: OpenVPNRemote[] | null | undefined) {
 export function parseRemotes(text: string): { remotes: OpenVPNRemote[]; error: string } {
   const remotes: OpenVPNRemote[] = []
   const rows = String(text ?? '').split('\n')
-  for (let i = 0; i < rows.length; i += 1) {
-    const s = rows[i].trim()
+  for (const [i, row] of rows.entries()) {
+    const s = row.trim()
     if (!s) continue
     const [host = '', port = '1194', proto = 'udp', ...rest] = s.split(/\s+/)
     const n = Number(port)

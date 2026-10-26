@@ -150,13 +150,13 @@ describe('DevicesTab', () => {
     const { w } = await open()
     const rows = w.findAll('tbody tr')
     expect(rows).toHaveLength(3)
-    expect(rows[0].text()).toContain('laptop')
-    expect(rows[0].text()).toContain('a8:bb:cc:00:00:05')
-    expect(rows[0].text()).toContain('8 Mbit/s')
-    expect(rows[0].text()).toContain('3.0 GB')
-    expect(rows[1].text()).toContain('random')
-    expect(rows[0].text()).not.toContain('random')
-    expect(rows[2].text()).toContain('This router')
+    expect(must(rows[0]).text()).toContain('laptop')
+    expect(must(rows[0]).text()).toContain('a8:bb:cc:00:00:05')
+    expect(must(rows[0]).text()).toContain('8 Mbit/s')
+    expect(must(rows[0]).text()).toContain('3.0 GB')
+    expect(must(rows[1]).text()).toContain('random')
+    expect(must(rows[0]).text()).not.toContain('random')
+    expect(must(rows[2]).text()).toContain('This router')
     await w.get('input[type="search"]').setValue('laptop')
     expect(w.findAll('tbody tr')).toHaveLength(1)
     await w.get('input[type="search"]').setValue('nothing here')
@@ -170,7 +170,7 @@ describe('DevicesTab', () => {
     const busy = { ...devices[1], down: 5000, up: 5000 }
     const { w } = await open({ extra: { devices: [quiet, busy] } })
     const first = () => w.get('tbody tr').text()
-    const header = (i: number) => w.findAll('th')[i]
+    const header = (i: number) => must(w.findAll('th')[i])
     const reads = (th: ReturnType<VueWrapper['get']>) =>
       th
         .findAll('button > span > span')

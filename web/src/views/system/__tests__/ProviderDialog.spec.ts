@@ -110,7 +110,7 @@ describe('ProviderDialog', () => {
     await wrapper.get('#prov-program').setValue('/bin/true')
     await wrapper.get('form').trigger('submit')
 
-    expect(config.dnsProviders[0].settings).toEqual({ program: '/bin/true' })
+    expect(must(config.dnsProviders[0]).settings).toEqual({ program: '/bin/true' })
   })
 
   it('keeps the domains lower case, once each, and shows them again', async () => {
@@ -119,7 +119,7 @@ describe('ProviderDialog', () => {
     await wrapper.get('#prov-token').setValue('secret')
     await wrapper.get('#prov-domains').setValue('Example.com\nhome.example.net, example.com')
     await wrapper.get('form').trigger('submit')
-    expect(config.dnsProviders[0].domains).toEqual(['example.com', 'home.example.net'])
+    expect(must(config.dnsProviders[0]).domains).toEqual(['example.com', 'home.example.net'])
 
     const again = mount(ProviderDialog, {
       props: { open: true, provider: config.dnsProviders[0], kinds: KINDS },

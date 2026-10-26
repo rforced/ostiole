@@ -94,9 +94,9 @@ describe('PeerLogTab', () => {
       },
     ])
     const rows = wrapper.findAll('tbody tr')
-    expect(rows[0].find('.badge').classes()).toContain('badge-warn')
-    expect(rows[1].text()).toContain('wg0')
-    expect(rows[1].text()).toContain('203.0.113.5:51820')
+    expect(must(rows[0]).find('.badge').classes()).toContain('badge-warn')
+    expect(must(rows[1]).text()).toContain('wg0')
+    expect(must(rows[1]).text()).toContain('203.0.113.5:51820')
     expect(wrapper.text()).toContain('WireGuard log')
   })
 

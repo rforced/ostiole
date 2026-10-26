@@ -49,7 +49,9 @@ const SOURCES: Record<string, () => Promise<string>> = {
 const render = useAsync(async (what: string) => {
   rendering.value = what
   try {
-    text.value = await SOURCES[what]()
+    const source = SOURCES[what]
+    if (!source) throw new Error(`No source for ${what}.`)
+    text.value = await source()
     which.value = what
   } finally {
     rendering.value = ''

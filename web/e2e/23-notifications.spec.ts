@@ -113,7 +113,8 @@ test('a test mail arrives before anything is applied', async ({ page }) => {
   await page.screenshot({ path: shot('130-notifications'), fullPage: true })
 
   await expect.poll(() => mails.length).toBe(1)
-  const [mail] = mails
+  const mail = mails[0]
+  if (!mail) throw new Error('no mail arrived')
   const { system } = await (await page.request.get('/api/v1/config')).json()
   const name = system.hostname
   expect(mail.from).toBe('MAIL FROM:<router@example.net>')

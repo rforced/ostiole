@@ -51,7 +51,7 @@ function entry(over: DeepPartial<FwlogEntry> = {}) {
 
 /** Body rows; the test renderer stubs the transition group that wraps them. */
 const rows = (w: VueWrapper) => w.findAll('tr').filter((r) => r.find('td').exists())
-const matched = (w: VueWrapper) => rows(w).map((r) => r.findAll('td')[2].text())
+const matched = (w: VueWrapper) => rows(w).map((r) => must(r.findAll('td')[2]).text())
 
 /**
  * A router holding these packets, newest first: it narrows and searches
@@ -133,7 +133,7 @@ describe('LogPage', () => {
   // so the colour follows the verdict instead.
   it('colours the row by what happened, not by what matched', async () => {
     const w = await open(log)
-    const badge = (i: number) => rows(w)[i].findAll('td')[1].get('span')
+    const badge = (i: number) => must(must(rows(w)[i]).findAll('td')[1]).get('span')
     expect(badge(0).text()).toBe('accept')
     expect(badge(0).classes()).toContain('badge-ok')
     expect(badge(1).classes()).toContain('badge-bad')
@@ -152,7 +152,8 @@ describe('LogPage', () => {
       entry({ kind: 'proxy', ruleId: 'gone', action: 'drop', src: '2' }),
     ])
     expect(matched(w)).toEqual(['proxy: Sites from home', 'proxy: gone'])
-    must(must(must(draftOf(store).services).proxy).access)[0].description = 'Sites from the office'
+    must(must(must(must(draftOf(store).services).proxy).access)[0]).description =
+      'Sites from the office'
     await flushPromises()
     expect(matched(w)[0]).toBe('proxy: Sites from the office')
   })
@@ -168,7 +169,7 @@ describe('LogPage', () => {
   it('keeps a packet whose verdict was never recorded, whichever view is on', async () => {
     const w = await open([entry({ ruleId: 'old-rule' })])
     expect(matched(w)).toEqual(['old-rule'])
-    expect(rows(w)[0].findAll('td')[1].text()).toBe('unknown')
+    expect(must(must(rows(w)[0]).findAll('td')[1]).text()).toBe('unknown')
     await w.get('select').setValue('allowed')
     expect(matched(w)).toEqual(['old-rule'])
   })
@@ -191,7 +192,7 @@ describe('LogPage', () => {
       await w.get('input[type=search]').setValue('allow-web')
       vi.advanceTimersByTime(SETTLE_MS)
       await flushPromises()
-      expect(rows(w)[0].text()).toContain('Nothing matches "allow-web"')
+      expect(must(rows(w)[0]).text()).toContain('Nothing matches "allow-web"')
     } finally {
       vi.useRealTimers()
     }
@@ -244,7 +245,7 @@ describe('LogPage', () => {
       expect.objectContaining({ question: 'Clear the firewall log?' }),
     )
     expect(api.log.clear).toHaveBeenCalled()
-    expect(rows(w)[0].text()).toContain('No packets.')
+    expect(must(rows(w)[0]).text()).toContain('No packets.')
   })
 
   // A restart empties it unless the logs go to files as well.

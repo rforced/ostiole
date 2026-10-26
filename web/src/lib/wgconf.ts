@@ -55,8 +55,8 @@ export function parseAddress(text: unknown): Address | null {
   const halves = s.split('::')
   if (halves.length > 2) return null
   const groups = (h: string) => (h ? h.split(':') : [])
-  const head = groups(halves[0])
-  const tail = halves.length === 2 ? groups(halves[1]) : []
+  const head = groups(halves[0] ?? '')
+  const tail = halves.length === 2 ? groups(halves[1] ?? '') : []
   const missing = 8 - head.length - tail.length
   if ((halves.length === 2 && missing < 1) || (halves.length === 1 && missing !== 0)) return null
   const all = [...head, ...new Array(halves.length === 2 ? missing : 0).fill('0'), ...tail]
@@ -257,7 +257,8 @@ export function parseQuick(text: string) {
       if (!s) return
       const head = /^\[([^\]]*)\]$/.exec(s)
       if (head) {
-        section = head[1].trim().toLowerCase()
+        const name = (head[1] ?? '').trim()
+        section = name.toLowerCase()
         sectionLine = line
         if (section === 'interface') interfaces += 1
         else if (section === 'peer') {
@@ -270,7 +271,7 @@ export function parseQuick(text: string) {
             keepalive: 0,
           }
           peers.push(peer)
-        } else fail(line, `[${head[1].trim()}] is not a wg-quick section`)
+        } else fail(line, `[${name}] is not a wg-quick section`)
         return
       }
       const eq = s.indexOf('=')

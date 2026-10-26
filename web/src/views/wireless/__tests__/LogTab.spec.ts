@@ -14,7 +14,7 @@ import type {
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
-import { configOf, draftOf, fixture, sessionOf } from '@/test/fixtures'
+import { configOf, draftOf, fixture, must, sessionOf } from '@/test/fixtures'
 import LogTab from '@/views/wireless/LogTab.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -88,11 +88,11 @@ describe('Wireless log', () => {
       },
     ])
     const rows = wrapper.findAll('tbody tr')
-    expect(rows[0].find('.badge').classes()).toContain('badge-bad')
-    expect(rows[0].text()).toContain('ap1')
-    expect(rows[1].text()).toContain('Home')
-    expect(rows[1].text()).toContain('phone')
-    expect(rows[1].text()).toContain('12:34:56:78:9a:bc')
+    expect(must(rows[0]).find('.badge').classes()).toContain('badge-bad')
+    expect(must(rows[0]).text()).toContain('ap1')
+    expect(must(rows[1]).text()).toContain('Home')
+    expect(must(rows[1]).text()).toContain('phone')
+    expect(must(rows[1]).text()).toContain('12:34:56:78:9a:bc')
   })
 
   it('says which log levels keep it, and when no radio is on', async () => {

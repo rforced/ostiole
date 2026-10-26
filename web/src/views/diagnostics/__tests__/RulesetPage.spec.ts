@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import type { HostReport } from '@/lib/types.gen'
-import { type DeepPartial, fixture } from '@/test/fixtures'
+import { type DeepPartial, fixture, must } from '@/test/fixtures'
 import RulesetPage from '@/views/diagnostics/RulesetPage.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -66,9 +66,9 @@ describe('RulesetPage', () => {
     const buttons = wrapper.findAllComponents({ name: 'ConfirmButton' })
     // One sweep for the unowned table, one "clear anyway" for Docker's.
     expect(buttons).toHaveLength(2)
-    expect(buttons[0].props('label')).toBe('Clear leftovers')
-    expect(buttons[1].props('typed')).toBe('nat')
-    buttons[0].vm.$emit('confirm')
+    expect(must(buttons[0]).props('label')).toBe('Clear leftovers')
+    expect(must(buttons[1]).props('typed')).toBe('nat')
+    must(buttons[0]).vm.$emit('confirm')
     await flushPromises()
     expect(api.host.flushLegacy).toHaveBeenCalledWith([])
     expect(wrapper.text()).toContain('cleared ip filter')
@@ -83,7 +83,7 @@ describe('RulesetPage', () => {
   it('shows why a flush failed', async () => {
     const wrapper = await page()
     vi.mocked(api.host.flushLegacy).mockRejectedValue(new Error('not permitted'))
-    wrapper.findAllComponents({ name: 'ConfirmButton' })[0].vm.$emit('confirm')
+    must(wrapper.findAllComponents({ name: 'ConfirmButton' })[0]).vm.$emit('confirm')
     await flushPromises()
     expect(wrapper.find('[role="alert"]').text()).toContain('not permitted')
   })

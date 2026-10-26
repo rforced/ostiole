@@ -149,7 +149,7 @@ function edit(e: IndexedExclusion) {
               label="Delete"
               :question="`Delete exclusion ${exclusionText(e)}?`"
               :description="e.description"
-              @confirm="config.removeExclusion(profile.id, e.index)"
+              @confirm="config.removeExclusion(profile?.id ?? '', e.index)"
             />
           </td>
         </tr>

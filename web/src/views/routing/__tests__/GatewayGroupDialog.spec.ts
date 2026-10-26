@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { OnDownMode } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
-import { emptyConfig, iface } from '@/test/fixtures'
+import { emptyConfig, iface, must } from '@/test/fixtures'
 import GatewayGroupDialog from '@/views/routing/GatewayGroupDialog.vue'
 
 // The dialog itself teleports; the form inside it is what is under test.
@@ -80,6 +80,6 @@ describe('GatewayGroupDialog', () => {
     await wrapper.get('#gg-ondown').setValue('block')
     await wrapper.get('form').trigger('submit')
     expect(config.dirty).toBe(true)
-    expect(config.gatewayGroups[0].onDown).toBe('block')
+    expect(must(config.gatewayGroups[0]).onDown).toBe('block')
   })
 })

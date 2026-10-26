@@ -123,7 +123,7 @@ describe('InterfacesView', () => {
       ['wg0', 'WireGuard', '/vpn/wireguard'],
       ['tailscale0', 'Tailscale', '/vpn/tailscale'],
       ['ap0', 'Wireless', '/wireless'],
-    ]) {
+    ] satisfies [string, string, string][]) {
       const row = rowFor(wrapper, name)
       expect(row.findComponent({ name: 'ConfirmButton' }).exists()).toBe(false)
       const link = row.find('a')

@@ -20,6 +20,9 @@ const BLOCKS = [
 /** Level M's two format bits. */
 const LEVEL_M = 0b00
 
+/** A table entry by version; NaN outside the table, as an unchecked read would give. */
+const entry = (table: number[], version: number) => table[version] ?? Number.NaN
+
 /** The modules one version has for data and error correction, in bits. */
 function rawModules(version: number) {
   let n = (16 * version + 128) * version + 64
@@ -33,7 +36,9 @@ function rawModules(version: number) {
 
 /** Data codewords at level M. */
 export function dataCodewords(version: number) {
-  return Math.floor(rawModules(version) / 8) - ECC_PER_BLOCK[version] * BLOCKS[version]
+  return (
+    Math.floor(rawModules(version) / 8) - entry(ECC_PER_BLOCK, version) * entry(BLOCKS, version)
+  )
 }
 
 /** How many bytes a version holds in byte mode at level M. */
@@ -78,7 +83,7 @@ export function reedSolomon(data: number[], degree: number): number[] {
     const factor = b ^ (out.shift() as number)
     out.push(0)
     divisor.forEach((coef, i) => {
-      out[i] ^= gfMultiply(coef, factor)
+      out[i] = (out[i] ?? 0) ^ gfMultiply(coef, factor)
     })
   }
   return out
@@ -136,8 +141,8 @@ function encodeData(bytes: number[], version: number) {
 
 /** The data split into blocks, each with its error correction, interleaved. */
 function interleave(data: number[], version: number) {
-  const blocks = BLOCKS[version]
-  const ecc = ECC_PER_BLOCK[version]
+  const blocks = entry(BLOCKS, version)
+  const ecc = entry(ECC_PER_BLOCK, version)
   const raw = Math.floor(rawModules(version) / 8)
   const short = blocks - (raw % blocks)
   const shortLen = Math.floor(raw / blocks)
@@ -150,10 +155,10 @@ function interleave(data: number[], version: number) {
     all.push(block.concat(code))
   }
   const out: number[] = []
-  for (let i = 0; i < all[0].length; i += 1) {
+  for (let i = 0; i < (all[0]?.length ?? 0); i += 1) {
     all.forEach((block, j) => {
       // The short blocks' placeholder byte is not sent.
-      if (i !== shortLen - ecc || j >= short) out.push(block[i])
+      if (i !== shortLen - ecc || j >= short) out.push(block[i] ?? 0)
     })
   }
   return out
@@ -185,8 +190,22 @@ class Grid {
   }
 
   set(x: number, y: number, dark: boolean) {
-    this.dark[y][x] = dark
-    this.fixed[y][x] = true
+    this.put(x, y, dark)
+    const row = this.fixed[y]
+    if (row) row[x] = true
+  }
+
+  put(x: number, y: number, dark: boolean) {
+    const row = this.dark[y]
+    if (row) row[x] = dark
+  }
+
+  isDark(x: number, y: number) {
+    return this.dark[y]?.[x] ?? false
+  }
+
+  isFixed(x: number, y: number) {
+    return this.fixed[y]?.[x] ?? false
   }
 
   drawPatterns() {
@@ -195,11 +214,12 @@ class Grid {
       this.set(6, i, i % 2 === 0)
       this.set(i, 6, i % 2 === 0)
     }
-    for (const [cx, cy] of [
+    const finders: Array<[number, number]> = [
       [3, 3],
       [size - 4, 3],
       [3, size - 4],
-    ]) {
+    ]
+    for (const [cx, cy] of finders) {
       for (let dy = -4; dy <= 4; dy += 1) {
         for (let dx = -4; dx <= 4; dx += 1) {
           const x = cx + dx
@@ -261,8 +281,8 @@ class Grid {
           const x = right - j
           const up = ((right + 1) & 2) === 0
           const y = up ? size - 1 - vert : vert
-          if (!this.fixed[y][x] && i < codewords.length * 8) {
-            this.dark[y][x] = ((codewords[i >>> 3] >>> (7 - (i & 7))) & 1) === 1
+          if (!this.isFixed(x, y) && i < codewords.length * 8) {
+            this.put(x, y, (((codewords[i >>> 3] ?? 0) >>> (7 - (i & 7))) & 1) === 1)
             i += 1
           }
         }
@@ -272,16 +292,18 @@ class Grid {
 
   applyMask(mask: number) {
     const fn = MASKS[mask]
+    if (!fn) throw new RangeError(`no mask ${mask}`)
     for (let y = 0; y < this.size; y += 1) {
       for (let x = 0; x < this.size; x += 1) {
-        if (!this.fixed[y][x] && fn(x, y)) this.dark[y][x] = !this.dark[y][x]
+        if (!this.isFixed(x, y) && fn(x, y)) this.put(x, y, !this.isDark(x, y))
       }
     }
   }
 
   /** The standard's four penalties: runs, blocks, finder look-alikes, balance. */
   penalty() {
-    const { size, dark } = this
+    const { size } = this
+    const cell = (x: number, y: number) => this.isDark(x, y)
     let score = 0
     const line = (get: (i: number) => boolean) => {
       let color = false
@@ -294,13 +316,9 @@ class Grid {
         history.unshift(first ? length + size : length)
       }
       const finders = () => {
-        const n = history[1]
-        const core =
-          n > 0 && history[2] === n && history[3] === n * 3 && history[4] === n && history[5] === n
-        return (
-          (core && history[0] >= n * 4 && history[6] >= n ? 1 : 0) +
-          (core && history[6] >= n * 4 && history[0] >= n ? 1 : 0)
-        )
+        const [h0 = 0, n = 0, h2 = 0, h3 = 0, h4 = 0, h5 = 0, h6 = 0] = history
+        const core = n > 0 && h2 === n && h3 === n * 3 && h4 === n && h5 === n
+        return (core && h0 >= n * 4 && h6 >= n ? 1 : 0) + (core && h6 >= n * 4 && h0 >= n ? 1 : 0)
       }
       for (let i = 0; i < size; i += 1) {
         if (get(i) === color) {
@@ -321,15 +339,15 @@ class Grid {
       push(run + size)
       score += finders() * 40
     }
-    for (let y = 0; y < size; y += 1) line((x) => dark[y][x])
-    for (let x = 0; x < size; x += 1) line((y) => dark[y][x])
+    for (let y = 0; y < size; y += 1) line((x) => cell(x, y))
+    for (let x = 0; x < size; x += 1) line((y) => cell(x, y))
     for (let y = 0; y < size - 1; y += 1) {
       for (let x = 0; x < size - 1; x += 1) {
-        const c = dark[y][x]
-        if (c === dark[y][x + 1] && c === dark[y + 1][x] && c === dark[y + 1][x + 1]) score += 3
+        const c = cell(x, y)
+        if (c === cell(x + 1, y) && c === cell(x, y + 1) && c === cell(x + 1, y + 1)) score += 3
       }
     }
-    const darkCount = dark.reduce((sum, row) => sum + row.filter(Boolean).length, 0)
+    const darkCount = this.dark.reduce((sum, row) => sum + row.filter(Boolean).length, 0)
     const total = size * size
     score += (Math.ceil(Math.abs(darkCount * 20 - total * 10) / total) - 1) * 10
     return score

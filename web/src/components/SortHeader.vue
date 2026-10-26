@@ -20,7 +20,9 @@ const props = defineProps({
   /** What useSort returned. */
   sort: { type: Object as PropType<SortControl>, required: true },
 })
-const keys = computed(() => (props.columns ? props.columns.map(([key]) => key) : [props.by]))
+const keys = computed(() =>
+  props.columns ? props.columns.flatMap(([key]) => (key === undefined ? [] : [key])) : [props.by],
+)
 /** The key sorted by, if it is this header's. */
 const current = computed(() => {
   const by = props.sort.order.value.by

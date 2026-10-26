@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, UNAUTHORIZED_EVENT, api } from '@/lib/api'
 import type { AssertionResponse, AttestationResponse } from '@/lib/types.gen'
-import { configOf, fixture } from '@/test/fixtures'
+import { configOf, fixture, must } from '@/test/fixtures'
 
 function mockFetch(
   status: number,
@@ -34,7 +34,7 @@ describe('api', () => {
   it('sends the CSRF header, credentials, and JSON bodies', async () => {
     const fetch = mockFetch(200, { username: 'admin', expires: 'x' })
     await api.auth.login('admin', 'pw')
-    const [url, init] = fetch.mock.calls[0]
+    const [url, init] = must(fetch.mock.calls[0])
     expect(url).toBe('/api/v1/auth/login')
     expect(init.method).toBe('POST')
     expect(init.credentials).toBe('same-origin')
@@ -65,7 +65,7 @@ describe('api', () => {
       code: 'stale',
     })
     const err = await rejection(api.config.apply(configOf({ version: 3 }), 'ab12', 60))
-    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+    expect(JSON.parse(must(fetch.mock.calls[0])[1].body)).toEqual({
       config: { version: 3 },
       confirmTimeoutSeconds: 60,
       baseRevision: 'ab12',
@@ -78,7 +78,7 @@ describe('api', () => {
   it('sends the tag the status repeats while the apply awaits confirmation', async () => {
     const fetch = mockFetch(200, { pending: true, deadline: '2026-10-19T23:13:27Z' })
     await api.config.apply(configOf({ version: 3 }), 'ab12', 60, 'apply-x1')
-    expect(JSON.parse(fetch.mock.calls[0][1].body).tag).toBe('apply-x1')
+    expect(JSON.parse(must(fetch.mock.calls[0])[1].body).tag).toBe('apply-x1')
   })
 
   it('dispatches the unauthorized event on 401, except for credential endpoints', async () => {
@@ -162,7 +162,7 @@ describe('api', () => {
         new Response('{}', { headers: { 'Content-Type': 'application/json' } }),
       )
       await call()
-      const [url, init] = fetch.mock.calls[0]
+      const [url, init] = must(fetch.mock.calls[0])
       expect([init.method, url], path).toEqual([method, `/api/v1${path}`])
       expect(init.body === undefined ? undefined : JSON.parse(init.body)).toEqual(body)
     }

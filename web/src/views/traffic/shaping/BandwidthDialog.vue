@@ -97,7 +97,8 @@ watch(
     const i = props.iface
     if (!i) {
       form.value = blank()
-      if (candidates.value.length === 1) form.value.interface = candidates.value[0].name
+      const only = candidates.value[0]
+      if (candidates.value.length === 1 && only) form.value.interface = only.name
       return
     }
     const down = split(i.shaping?.download)

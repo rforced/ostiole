@@ -40,6 +40,8 @@ const SOURCES: Record<string, { label: string; to?: string }> = {
   device: { label: 'Device', to: '/services/dhcp#leases' },
 }
 
+const sourceOf = (key: string): { label: string; to?: string } => SOURCES[key] ?? { label: key }
+
 interface NameRow extends Partial<DnsName> {
   key: string
   source: string
@@ -99,7 +101,7 @@ const { query, shown } = useSearch(names, (n) => ({
     n.name,
     ...n.aliases,
     ...n.addresses,
-    SOURCES[n.source].label,
+    sourceOf(n.source).label,
     n.description,
     n.site,
     ...(n.interfaces ?? []),
@@ -111,7 +113,7 @@ const { query, shown } = useSearch(names, (n) => ({
 const sort = useSort<NameRow>(shown, {
   name: byText((n) => n.name),
   address: byAddress((n) => n.addresses[0]),
-  source: byText((n) => SOURCES[n.source].label),
+  source: byText((n) => sourceOf(n.source).label),
 })
 const rows = sort.sorted
 
@@ -209,13 +211,13 @@ function editHost(h: HostOverride) {
             <td data-label="Source">
               <div>
                 <RouterLink
-                  v-if="SOURCES[n.source].to"
-                  :to="SOURCES[n.source].to ?? ''"
+                  v-if="sourceOf(n.source).to"
+                  :to="sourceOf(n.source).to ?? ''"
                   class="link"
                 >
-                  {{ SOURCES[n.source].label }}
+                  {{ sourceOf(n.source).label }}
                 </RouterLink>
-                <template v-else>{{ SOURCES[n.source].label }}</template>
+                <template v-else>{{ sourceOf(n.source).label }}</template>
                 <span v-if="n.site" class="ml-1 font-mono text-code text-ink-muted">{{
                   n.site
                 }}</span>

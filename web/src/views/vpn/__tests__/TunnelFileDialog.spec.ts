@@ -124,7 +124,7 @@ describe('TunnelFileDialog', () => {
     await flushPromises()
     const wg1 = must(config.interfaces.find((i) => i.name === 'wg1'))
     expect(wg1.description).toBe('se-got-wg-001')
-    expect(must(must(wg1.wireguard).peers)[0].name).toBe('se_got_wg_001')
+    expect(must(must(must(wg1.wireguard).peers)[0]).name).toBe('se_got_wg_001')
   })
 
   it('says where a file goes wrong and saves nothing', async () => {

@@ -75,7 +75,7 @@ describe('DNS registration on a DHCP server', () => {
     expect(box.element.checked).toBe(false)
     await box.setValue(true)
     await w.get('form').trigger('submit')
-    expect(draftOf(config).services?.dhcp?.servers?.[0].dnsRegistration).toBe(true)
+    expect(draftOf(config).services?.dhcp?.servers?.[0]?.dnsRegistration).toBe(true)
   })
 
   it('is left out of an IPv6 server that hands out nothing to name', async () => {

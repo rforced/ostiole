@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { Config, Rule } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
-import { emptyConfig, iface } from '@/test/fixtures'
+import { emptyConfig, iface, must } from '@/test/fixtures'
 import RuleDialog from '@/views/firewall/RuleDialog.vue'
 
 const stubs = {
@@ -55,7 +55,7 @@ describe('RuleDialog priority', () => {
     const { wrapper, config } = open(true)
     await wrapper.get('#rule-priority').setValue('realtime')
     await wrapper.get('form').trigger('submit')
-    expect(config.rules[0].priority).toBe('realtime')
+    expect(must(config.rules[0]).priority).toBe('realtime')
   })
 
   // A dropped connection has no traffic to prioritise, so the field goes
@@ -70,7 +70,7 @@ describe('RuleDialog priority', () => {
     expect(select.element.value).toBe('')
     expect(wrapper.text()).toContain('Only an accept rule can set a priority.')
     await wrapper.get('form').trigger('submit')
-    expect(config.rules[0].priority).toBeUndefined()
+    expect(must(config.rules[0]).priority).toBeUndefined()
   })
 
   // Setting nothing and setting Normal are next to each other in the same
@@ -176,8 +176,8 @@ describe('RuleDialog destination zone', () => {
     await wrapper.get('#destination-mode').setValue('zone')
     await wrapper.get('#destination-zone').setValue('wan')
     await wrapper.get('form').trigger('submit')
-    expect(config.rules[0].destZone).toBe('wan')
-    expect(config.rules[0].destination).toEqual({})
+    expect(must(config.rules[0]).destZone).toBe('wan')
+    expect(must(config.rules[0]).destination).toEqual({})
   })
 
   it('keeps ports beside the zone', async () => {
@@ -188,8 +188,8 @@ describe('RuleDialog destination zone', () => {
     await wrapper.get('#destination-portmode').setValue('ports')
     await wrapper.get('#destination-ports').setValue('25')
     await wrapper.get('form').trigger('submit')
-    expect(config.rules[0].destZone).toBe('wan')
-    expect(config.rules[0].destination).toEqual({ ports: ['25'] })
+    expect(must(config.rules[0]).destZone).toBe('wan')
+    expect(must(config.rules[0]).destination).toEqual({ ports: ['25'] })
   })
 
   it('reads a saved zone back and leaves an untouched save alone', async () => {
@@ -249,7 +249,7 @@ describe('RuleDialog destination zone', () => {
     expect(gateway.attributes('disabled')).toBeUndefined()
     await gateway.setValue('wan1')
     await wrapper.get('form').trigger('submit')
-    expect(config.rules[0].gateway).toBe('wan1')
+    expect(must(config.rules[0]).gateway).toBe('wan1')
     expect(config.rules[0]).not.toHaveProperty('destZone')
   })
 })

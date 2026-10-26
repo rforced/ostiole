@@ -4,6 +4,7 @@ import { nextTick } from 'vue'
 
 import TrafficChart from '@/components/TrafficChart.vue'
 import { timeLabel } from '@/lib/chart'
+import { must } from '@/test/fixtures'
 
 const END = 1_790_000_000
 /** A minute of a link at 1 and 2 Mbit/s, then 3 and 4. */
@@ -33,7 +34,9 @@ describe('TrafficChart', () => {
     expect(w.get('svg[role="img"]').attributes('aria-label')).toBe(
       'eth0: down 3 Mbit/s, up 4 Mbit/s',
     )
-    const [down, up] = w.findAll('path')
+    const paths = w.findAll('path')
+    const down = must(paths[0])
+    const up = must(paths[1])
     expect(down.attributes('stroke')).toBe('var(--chart-down)')
     expect(up.attributes('stroke')).toBe('var(--chart-up)')
     expect(down.attributes('d')?.split('L')).toHaveLength(3)
@@ -61,9 +64,10 @@ describe('TrafficChart', () => {
     const w = chart({ speed: { down: 4_000_000, up: 0 } })
     const limits = w.findAll('[data-limit]')
     expect(limits).toHaveLength(1)
-    expect(limits[0].attributes('stroke')).toBe('var(--chart-down)')
+    const limit = must(limits[0])
+    expect(limit.attributes('stroke')).toBe('var(--chart-down)')
     const grid = w.findAll('line[stroke="var(--line)"]').map((l) => l.attributes('y1'))
-    expect(grid).not.toContain(limits[0].attributes('y1'))
+    expect(grid).not.toContain(limit.attributes('y1'))
     expect(w.get('[data-limit-key]').classes()).not.toContain('invisible')
     expect(w.get('svg[role="img"]').attributes('aria-label')).toBe(
       'eth0: down 3 Mbit/s of 4 Mbit/s, up 4 Mbit/s',
@@ -117,7 +121,7 @@ describe('TrafficChart', () => {
     expect(w.get('button').attributes('aria-pressed')).toBe('true')
     const rows = w.findAll('tbody tr')
     expect(rows).toHaveLength(3)
-    expect(rows[2].text()).toContain('3 Mbit/s')
+    expect(must(rows[2]).text()).toContain('3 Mbit/s')
     expect(w.find('svg[role="img"]').exists()).toBe(false)
   })
 

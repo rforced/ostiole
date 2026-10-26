@@ -52,17 +52,18 @@ async function configure(baseURL: string) {
   await call('POST', '/setup', { username: 'admin', password: PASSWORD })
   const links = (await call('GET', '/interfaces/live')) as LiveLink[]
   const wired = links.filter((l) => l.kind !== 'loopback' && !l.wireless)
-  if (wired.length < 2) throw new Error('the wizard needs two wired links, a LAN and a WAN')
+  const [lan, wan] = wired
+  if (!lan || !wan) throw new Error('the wizard needs two wired links, a LAN and a WAN')
   const config = await call('POST', '/config/starter', {
     hostname: 'edge',
-    lan: wired[0].name,
+    lan: lan.name,
     lanAddress: '192.168.50.1/24',
-    wan: wired[1].name,
+    wan: wan.name,
     managementFromWan: true,
     services: true,
   })
   await call('POST', '/apply', { config, confirmTimeoutSeconds: 90, baseRevision: 'none' })
   await call('POST', '/apply/confirm')
   await api.dispose()
-  return wired[1].name
+  return wan.name
 }

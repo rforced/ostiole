@@ -78,7 +78,8 @@ watch(
     if (props.radio) {
       form.value = { ...blank(), ...props.radio, name }
       // A band or width saved before the rule, or by hand, lands on what is offered.
-      if (!bands.value.includes(form.value.band)) form.value.band = bands.value[0]
+      const [firstBand] = bands.value
+      if (firstBand && !bands.value.includes(form.value.band)) form.value.band = firstBand
       if (!widths.value.includes(form.value.width)) form.value.width = widths.value.at(-1) ?? 20
       return
     }
@@ -99,7 +100,9 @@ watch(
       form.value.channel = 0
     }
     if (!widths.value.includes(form.value.width)) form.value.width = widths.value.at(-1) ?? 20
-    if (!standards.value.includes(form.value.standard)) form.value.standard = standards.value[0]
+    const [firstStandard] = standards.value
+    if (firstStandard !== undefined && !standards.value.includes(form.value.standard))
+      form.value.standard = firstStandard
   },
 )
 

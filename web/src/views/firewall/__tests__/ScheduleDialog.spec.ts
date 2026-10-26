@@ -52,9 +52,9 @@ describe('ScheduleDialog', () => {
       start: '08:00',
       end: '17:00',
     })
-    await wrapper.findAll<HTMLInputElement>('input[type=checkbox]')[6].setValue(false)
+    await must(wrapper.findAll<HTMLInputElement>('input[type=checkbox]')[6]).setValue(false)
     await wrapper.get('form').trigger('submit')
     expect(config.dirty).toBe(true)
-    expect(must(draftOf(config).schedules)[0].days).toEqual(DAYS.slice(0, 6))
+    expect(must(must(draftOf(config).schedules)[0]).days).toEqual(DAYS.slice(0, 6))
   })
 })

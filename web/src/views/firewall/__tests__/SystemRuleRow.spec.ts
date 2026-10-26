@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { SystemRule } from '@/lib/api'
+import { must } from '@/test/fixtures'
 import SystemRuleRow from '@/views/firewall/SystemRuleRow.vue'
 
 const replies = {
@@ -35,7 +36,9 @@ describe('SystemRuleRow zones', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
   it('marks a row that names no zone as counting all of them', () => {
-    const [, log, every] = badges({ ...replies, log: true })
+    const found = badges({ ...replies, log: true })
+    const log = must(found[1])
+    const every = must(found[2])
     expect(every.text()).toBe('all')
     expect(every.classes()).toEqual(log.classes())
     expect(badges({ ...replies, zones: [] }).map((b) => b.text())).toEqual(['accept', 'all'])

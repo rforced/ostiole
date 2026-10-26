@@ -123,7 +123,7 @@ const TEST_LABELS: Record<string, string> = {
 function testLine(drive: Drive) {
   const t: Partial<SelfTest> = drive.selfTest ?? {}
   if (t.running) {
-    const label = TEST_LABELS[started.value[drive.name]] ?? 'Self'
+    const label = TEST_LABELS[started.value[drive.name] ?? ''] ?? 'Self'
     return `${label} test running, ${t.remaining}% left.`
   }
   if (!t.supported) return 'This drive has no self-test.'

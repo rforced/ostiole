@@ -34,7 +34,7 @@ const EVENTS: GatewayEvent[] = [
 
 async function card(files = false) {
   vi.mocked(api.gatewayHistory.events).mockResolvedValue(
-    fixture<GatewayEventsPage>({ entries: EVENTS, held: 3, oldest: EVENTS[2].time }),
+    fixture<GatewayEventsPage>({ entries: EVENTS, held: 3, oldest: must(EVENTS[2]).time }),
   )
   const store = useConfigStore()
   const draft = { version: 12, system: { logging: { files: { enabled: files } } } } as Config
@@ -55,9 +55,9 @@ describe('GatewayEvents', () => {
   it('lists what changed, newest first, with how long it lasted', async () => {
     const w = await card()
     const rows = w.findAll('tbody tr').map((r) => r.findAll('td').map((c) => c.text()))
-    expect(rows[0].slice(1)).toEqual(['gw_eth0', 'Up again', '4m'])
-    expect(rows[1].slice(1)).toEqual(['gw_eth0', 'Down timeout', '—'])
-    expect(rows[2].slice(1)).toEqual(['lte', 'IPv6 never answered', '—'])
+    expect(must(rows[0]).slice(1)).toEqual(['gw_eth0', 'Up again', '4m'])
+    expect(must(rows[1]).slice(1)).toEqual(['gw_eth0', 'Down timeout', '—'])
+    expect(must(rows[2]).slice(1)).toEqual(['lte', 'IPv6 never answered', '—'])
     expect(w.text()).toContain('3 entries back to')
     expect(w.text()).toContain('Kept in memory, so a restart empties it.')
     expect((await card(true)).text()).toContain('The files keep them through a restart.')

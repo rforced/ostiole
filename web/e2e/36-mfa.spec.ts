@@ -32,7 +32,7 @@ function code(secret: string, step: number) {
   const counter = Buffer.alloc(8)
   counter.writeBigUInt64BE(BigInt(step))
   const mac = createHmac('sha1', key).update(counter).digest()
-  const at = mac[mac.length - 1] & 0x0f
+  const at = mac.readUInt8(mac.length - 1) & 0x0f
   return String((mac.readUInt32BE(at) & 0x7fffffff) % 1_000_000).padStart(6, '0')
 }
 
@@ -212,7 +212,7 @@ test('a passkey made at a host name signs in on its own, or after the password',
   // The device keeps it, so it can be offered before a name is typed.
   const made = await credentials()
   expect(made).toHaveLength(1)
-  expect(made[0].isResidentCredential).toBe(true)
+  expect(made[0]?.isResidentCredential).toBe(true)
   const row = card(page).getByRole('row').filter({ hasText: 'laptop' })
   await expect(row).toContainText('localhost')
   await expect(row).toContainText('never')

@@ -82,9 +82,10 @@ describe('RevisionsSection compare', () => {
   function body(wrapper: VueWrapper) {
     return wrapper.findAll('tbody tr').map((tr) => {
       const cells = tr.findAll('td')
-      if (cells.length === 1 && cells[0].attributes('colspan') === '4') return 'changes'
+      const first = cells[0]
+      if (cells.length === 1 && first?.attributes('colspan') === '4') return 'changes'
       const id = revisions.find((r) => tr.text().includes(r.id))?.id
-      return cells.length === 4 && !cells[0].attributes('colspan') ? id : `broken: ${tr.html()}`
+      return cells.length === 4 && !first?.attributes('colspan') ? id : `broken: ${tr.html()}`
     })
   }
 
@@ -98,7 +99,10 @@ describe('RevisionsSection compare', () => {
       global: { stubs: { ChangeList: true } },
     })
     await flushPromises()
-    const [a, b, c] = revisions.map((r) => r.id)
+    const ids = revisions.map((r) => r.id)
+    const a = must(ids[0])
+    const b = must(ids[1])
+    const c = must(ids[2])
     async function toggle(id: string) {
       const row = must(wrapper.findAll('tbody tr').find((tr) => tr.text().includes(id)))
       await row.find('button').trigger('click')

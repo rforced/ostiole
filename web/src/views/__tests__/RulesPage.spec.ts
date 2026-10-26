@@ -422,8 +422,8 @@ describe('RulesPage system rules', () => {
     )
     const cells = (id: string) =>
       must(wrapper.findAll('tr').find((tr) => tr.text().includes(id))).findAll('td')
-    const destination = (id: string) => cells(id)[4].text()
-    const via = (id: string) => cells(id)[5].text()
+    const destination = (id: string) => must(cells(id)[4]).text()
+    const via = (id: string) => must(cells(id)[5]).text()
     expect(destination('to-wan')).toBe('zone wan')
     expect(via('to-wan')).toBe('')
     expect(destination('no-mail')).toBe('zone wan : 25, 465-587')

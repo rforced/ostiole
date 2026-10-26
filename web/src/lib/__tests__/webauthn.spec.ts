@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { fixture } from '@/test/fixtures'
+import { fixture, must } from '@/test/fixtures'
 import { available, create, get } from '@/lib/webauthn'
 
 const buf = (...n: number[]) => Uint8Array.from(n).buffer
@@ -43,7 +43,7 @@ describe('webauthn', () => {
       }),
     )
 
-    const { publicKey } = calls.create.mock.calls[0][0]
+    const { publicKey } = must(calls.create.mock.calls[0])[0]
     expect([...new Uint8Array(publicKey.challenge)]).toEqual([1, 2, 3])
     expect([...new Uint8Array(publicKey.user.id)]).toEqual([4, 5])
     expect([...new Uint8Array(publicKey.excludeCredentials[0].id)]).toEqual([251, 255])
@@ -104,7 +104,7 @@ describe('webauthn', () => {
       challenge: 'AQID',
       allowCredentials: [{ type: 'public-key', id: 'BAU' }],
     })
-    const { publicKey } = calls.get.mock.calls[0][0]
+    const { publicKey } = must(calls.get.mock.calls[0])[0]
     expect([...new Uint8Array(publicKey.allowCredentials[0].id)]).toEqual([4, 5])
     expect(sent.response).toEqual({
       clientDataJSON: 'AQ',
@@ -132,7 +132,7 @@ describe('webauthn', () => {
     const ctl = new AbortController()
     calls.get.mockRejectedValue(new DOMException('aborted', 'AbortError'))
     const err = await get({ challenge: 'AQID' }, { signal: ctl.signal }).catch((e) => e)
-    expect(calls.get.mock.calls[0][0].signal).toBe(ctl.signal)
+    expect(must(calls.get.mock.calls[0])[0].signal).toBe(ctl.signal)
     expect(err.name).toBe('AbortError')
     expect(err.message).toBe('The passkey prompt was cancelled.')
 

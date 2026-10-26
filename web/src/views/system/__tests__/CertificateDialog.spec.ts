@@ -84,7 +84,7 @@ describe('CertificateDialog', () => {
       names: ['198.51.100.4'],
     })
     // An http-01 certificate names no DNS provider.
-    expect(config.certificates[0].provider).toBeUndefined()
+    expect(must(config.certificates[0]).provider).toBeUndefined()
   })
 
   it('locks a wildcard to dns-01', async () => {
@@ -150,7 +150,7 @@ describe('CertificateDialog', () => {
     expect(save(wrapper).attributes('disabled')).toBeUndefined()
     await wrapper.get('form').trigger('submit')
     expect(config.certificates[0]).toMatchObject({ id: 'mail', source: 'uploaded' })
-    expect(config.certificates[0].account).toBeUndefined()
+    expect(must(config.certificates[0]).account).toBeUndefined()
   })
 
   it.each([
@@ -185,6 +185,6 @@ describe('CertificateDialog', () => {
     await wrapper.get('#cert-profile').setValue('tlsserver')
     await wrapper.get('form').trigger('submit')
     expect(config.dirty).toBe(true)
-    expect(config.certificates[0].profile).toBe('tlsserver')
+    expect(must(config.certificates[0]).profile).toBe('tlsserver')
   })
 })

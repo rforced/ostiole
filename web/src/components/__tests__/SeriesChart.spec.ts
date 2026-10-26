@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import SeriesChart from '@/components/SeriesChart.vue'
 import { niceScale } from '@/lib/chart'
 import { formatMs } from '@/lib/format'
+import { must } from '@/test/fixtures'
 
 const END = 1_790_000_000
 /** A day of minutes: [t, mean, low, high, loss], one unanswered, one missing. */
@@ -47,8 +48,8 @@ describe('SeriesChart', () => {
     const w = chart()
     const bars = w.findAll('rect[data-bar]')
     expect(bars).toHaveLength(2)
-    expect(Number(bars[1].attributes('height'))).toBeGreaterThan(
-      Number(bars[0].attributes('height')),
+    expect(Number(must(bars[1]).attributes('height'))).toBeGreaterThan(
+      Number(must(bars[0]).attributes('height')),
     )
     const labels = w.findAll('text').map((t) => t.text())
     expect(labels).toEqual(expect.arrayContaining(['0%', '50%', '100%', '0.0 ms', '10.0 ms']))
@@ -77,8 +78,8 @@ describe('SeriesChart', () => {
     const w = chart()
     await w.get('button').trigger('click')
     const rows = w.findAll('tbody tr').map((r) => r.findAll('td').map((c) => c.text()))
-    expect(rows[1].slice(1)).toEqual(['4.0 ms 3.0 ms to 6.0 ms', '10%'])
-    expect(rows[2].slice(1)).toEqual(['—', '100%'])
+    expect(must(rows[1]).slice(1)).toEqual(['4.0 ms 3.0 ms to 6.0 ms', '10%'])
+    expect(must(rows[2]).slice(1)).toEqual(['—', '100%'])
     expect(w.get('caption').text()).toBe('gw_eth0, ipv4 and ipv4 lost')
   })
 

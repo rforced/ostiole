@@ -49,7 +49,7 @@ describe('TokenDialog metrics only', () => {
     expect(w.get('#tok-role').attributes('disabled')).toBeDefined()
     expect(w.find('#tok-certs').exists()).toBe(false)
     await w.get('form').trigger('submit')
-    expect(must(w.emitted('create'))[0][0]).toEqual({
+    expect(must(must(w.emitted('create'))[0])[0]).toEqual({
       name: 'scrape',
       role: 'viewer',
       expiresInDays: 0,
@@ -62,7 +62,7 @@ describe('TokenDialog metrics only', () => {
     const w = open()
     await w.get('#tok-name').setValue('ci')
     await w.get('form').trigger('submit')
-    expect(must(w.emitted('create'))[0][0]).not.toHaveProperty('metrics')
+    expect(must(must(w.emitted('create'))[0])[0]).not.toHaveProperty('metrics')
   })
 })
 
@@ -92,6 +92,9 @@ describe('TokenDialog roles', () => {
     expect(w.find('#tok-certs').exists()).toBe(false)
     await w.get('#tok-name').setValue('dash')
     await w.get('form').trigger('submit')
-    expect(must(w.emitted('create'))[0][0]).toMatchObject({ role: 'viewer', certificates: [] })
+    expect(must(must(w.emitted('create'))[0])[0]).toMatchObject({
+      role: 'viewer',
+      certificates: [],
+    })
   })
 })

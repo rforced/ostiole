@@ -48,12 +48,12 @@ function ratesBetween(before: ShapingStatus | null, after: ShapingStatus) {
   if (!(seconds > 0)) return out
   const was = counters(before)
   const now = counters(after)
-  for (const key of Object.keys(now)) {
+  for (const [key, value] of Object.entries(now)) {
     const had = was[key]
     // A queue that has just been reinstalled counts from zero again; a
     // difference that went backwards is that, not a negative rate.
-    if (had === undefined || now[key] < had) continue
-    out[key] = ((now[key] - had) * 8) / seconds
+    if (had === undefined || value < had) continue
+    out[key] = ((value - had) * 8) / seconds
   }
   return out
 }

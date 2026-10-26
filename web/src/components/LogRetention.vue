@@ -34,7 +34,11 @@ const settings = defineModel<LogSettings>({ type: Object, required: true })
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const spec = computed(() => LOGS[props.log])
+const spec = computed(() => {
+  const s = LOGS[props.log]
+  if (!s) throw new Error(`unknown log ${props.log}`)
+  return s
+})
 
 /** Empty means the default, which the placeholder shows. */
 function field(key: keyof LogSettings) {

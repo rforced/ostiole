@@ -2,12 +2,13 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import type { Cell, GatewayStrip as StripData } from '@/lib/types.gen'
+import { must } from '@/test/fixtures'
 import GatewayStrip from '@/views/dashboard/GatewayStrip.vue'
 
 const START = 1_790_000_000
 function strip(kinds: Omit<Cell, 'start'>[], over: Partial<StripData> = {}): StripData {
   const cells: Cell[] = Array.from({ length: 144 }, (_, i) => ({ start: START + i * 600 }))
-  kinds.forEach((c, i) => Object.assign(cells[i], c))
+  kinds.forEach((c, i) => Object.assign(must(cells[i]), c))
   return {
     name: 'gw_eth0',
     cells,

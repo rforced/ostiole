@@ -178,7 +178,7 @@ describe('OsUpdatesSection', () => {
   })
 
   it('says so when security has nothing to install', async () => {
-    const vim = must(waiting.pending.packages)[1]
+    const vim = must(must(waiting.pending.packages)[1])
     const w = await mountWith({
       ...waiting,
       mode: 'security',

@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { type SessionRow, api } from '@/lib/api'
+import { must } from '@/test/fixtures'
 import { useConfirmStore } from '@/stores/confirm'
 import SessionsCard from '@/views/account/SessionsCard.vue'
 
@@ -63,7 +64,7 @@ describe('SessionsCard', () => {
     expect(wrapper.text()).toContain('Sessions')
     expect(row(wrapper, 'Firefox on Linux').text()).toContain('192.0.2.10')
     expect(row(wrapper, 'Safari on iPhone').text()).toContain('198.51.100.7')
-    expect(row(wrapper, 'unknown').findAll('td')[1].text()).toBe('unknown')
+    expect(must(row(wrapper, 'unknown').findAll('td')[1]).text()).toBe('unknown')
   })
 
   // Signing this browser out is the user menu's job.

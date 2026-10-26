@@ -168,7 +168,7 @@ describe('UnusedSection', () => {
     expect(ask).toHaveBeenCalledWith(
       expect.objectContaining({ question: 'Delete zone attic?', typed: 'attic' }),
     )
-    expect(ask.mock.calls[0][0].dependents).toEqual(['rule r1', 'protection'])
+    expect(must(ask.mock.calls[0])[0].dependents).toEqual(['rule r1', 'protection'])
     expect(config.zones.map((z) => z.name)).toEqual(['lan'])
     expect(rowOf(wrapper, 'attic')).toBeUndefined()
     expect(useToastStore().toasts.map((t) => t.message)).toEqual(['Deleted zone attic.'])
@@ -184,7 +184,10 @@ describe('UnusedSection', () => {
     await button(wrapper, 'Remove 2 unused items').trigger('click')
     await flushPromises()
 
-    expect(ask.mock.calls[0][0].dependents).toEqual(['alias spare_hosts', 'schedule night_shift'])
+    expect(must(ask.mock.calls[0])[0].dependents).toEqual([
+      'alias spare_hosts',
+      'schedule night_shift',
+    ])
     expect(config.aliases).toEqual([])
     expect(draftOf(config).schedules).toEqual([])
     expect(config.zones.map((z) => z.name)).toEqual(['lan', 'attic'])

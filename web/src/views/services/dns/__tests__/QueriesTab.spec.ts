@@ -14,7 +14,7 @@ import type {
   QuerySummary,
   System,
 } from '@/lib/types.gen'
-import { type DeepPartial, draftOf, fixture } from '@/test/fixtures'
+import { type DeepPartial, draftOf, fixture, must } from '@/test/fixtures'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -43,7 +43,7 @@ function answers({ before }: { before?: number } = {}) {
   }))
   const from = before ? all.findIndex((e) => e.seq < before) : 0
   const entries = all.slice(from, from + 200)
-  const last = entries[entries.length - 1]
+  const last = must(entries[entries.length - 1])
   const more = last.seq > 1
   return fixture<QueryLogPage>({
     enabled: true,

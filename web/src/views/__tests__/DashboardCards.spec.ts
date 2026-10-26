@@ -149,8 +149,8 @@ describe('GatewaysCard', () => {
       { length: 144 },
       (_, i) => ({ start: 1_790_000_000 + i * 600 }),
     )
-    cells[140] = { ...cells[140], kind: 'down', down: 4 }
-    cells[141] = { ...cells[141], kind: 'up', latencyMs: 12 }
+    cells[140] = { ...must(cells[140]), kind: 'down', down: 4 }
+    cells[141] = { ...must(cells[141]), kind: 'up', latencyMs: 12 }
     const strip = {
       name: 'gw_wan',
       cells,
@@ -183,9 +183,17 @@ describe('GatewaysCard', () => {
       ],
     }
     const w = mount(GatewaysCard, { props: { gateways: [both] }, global: { stubs } })
-    const cells = w.findAll('tbody tr')[0].findAll('td')
-    expect(cells[2].findAll('div').map((d) => d.text())).toEqual(['IPv4 12.3 ms', 'IPv6 15.5 ms'])
-    expect(cells[3].findAll('div').map((d) => d.text())).toEqual(['IPv4 0%', 'IPv6 25%'])
+    const cells = must(w.findAll('tbody tr')[0]).findAll('td')
+    expect(
+      must(cells[2])
+        .findAll('div')
+        .map((d) => d.text()),
+    ).toEqual(['IPv4 12.3 ms', 'IPv6 15.5 ms'])
+    expect(
+      must(cells[3])
+        .findAll('div')
+        .map((d) => d.text()),
+    ).toEqual(['IPv4 0%', 'IPv6 25%'])
   })
 
   it('says a gateway that never answered is not down, and what to do', () => {
@@ -307,12 +315,12 @@ describe('RecentBlocksCard', () => {
     })
     const body = rows(w)
     expect(body).toHaveLength(2)
-    expect(body[0].text()).toContain('203.0.113.9:51000')
-    expect(body[0].text()).toContain('default drop')
-    expect(body[0].text()).toContain('drop · tcp · wan0')
-    expect(body[1].text()).toContain('block-iot')
+    expect(must(body[0]).text()).toContain('203.0.113.9:51000')
+    expect(must(body[0]).text()).toContain('default drop')
+    expect(must(body[0]).text()).toContain('drop · tcp · wan0')
+    expect(must(body[1]).text()).toContain('block-iot')
     // A reject answered the sender back; a drop did not, and the row says which.
-    expect(body[1].text()).toContain('reject · udp')
+    expect(must(body[1]).text()).toContain('reject · udp')
     expect(w.findComponent(RouterLinkStub).props('to')).toBe('/firewall/log')
   })
 
@@ -344,9 +352,9 @@ describe('RecentBlocksCard', () => {
       global: { stubs },
     })
     const body = rows(w)
-    expect(body[0].text()).toContain('bogon source')
-    expect(body[1].text()).toContain('guest default')
-    expect(body[1].text()).not.toContain('·')
+    expect(must(body[0]).text()).toContain('bogon source')
+    expect(must(body[1]).text()).toContain('guest default')
+    expect(must(body[1]).text()).not.toContain('·')
   })
 
   // Unbroken, a long IPv6 address squeezed By to a word a line.
@@ -372,7 +380,9 @@ describe('RecentBlocksCard', () => {
       },
       global: { stubs },
     })
-    const [, src, dst] = rows(w)[0].findAll('td')
+    const tds = must(rows(w)[0]).findAll('td')
+    const src = must(tds[1])
+    const dst = must(tds[2])
     expect(src.text()).toBe('2001:db8:beef::17:42249')
     expect(src.findAll('wbr')).toHaveLength(5)
     expect(dst.text()).toBe('192.0.2.10:8080')
@@ -416,11 +426,11 @@ describe('RecentLeasesCard', () => {
       global: { stubs },
     })
     const body = rows(w)
-    expect(body[0].text()).toContain('laptop')
-    expect(body[0].text()).toContain('2h 1m left')
-    expect(body[1].text()).toContain('11:22:33:44:55:66')
-    expect(body[1].text()).toContain('expired')
-    expect(body[2].text()).toContain('never')
+    expect(must(body[0]).text()).toContain('laptop')
+    expect(must(body[0]).text()).toContain('2h 1m left')
+    expect(must(body[1]).text()).toContain('11:22:33:44:55:66')
+    expect(must(body[1]).text()).toContain('expired')
+    expect(must(body[2]).text()).toContain('never')
     expect(w.text()).toContain('All 12 leases')
     expect(w.findComponent(RouterLinkStub).props('to')).toBe('/services/dhcp#leases')
   })
@@ -458,10 +468,10 @@ describe('WirelessCard', () => {
     expect(w.text()).toContain('0 clients')
     const body = rows(w)
     expect(body).toHaveLength(8)
-    expect(body[0].text()).toContain('phone')
-    expect(body[0].text()).toContain('10.0.0.20')
-    expect(body[0].text()).toContain('-51 dBm')
-    expect(body[0].text()).toContain('1h 1m')
+    expect(must(body[0]).text()).toContain('phone')
+    expect(must(body[0]).text()).toContain('10.0.0.20')
+    expect(must(body[0]).text()).toContain('-51 dBm')
+    expect(must(body[0]).text()).toContain('1h 1m')
     expect(w.text()).toContain('And 2 more')
     expect(w.findComponent(RouterLinkStub).props('to')).toBe('/wireless#clients')
   })
@@ -551,6 +561,6 @@ describe('InterfaceSummary', () => {
     )
     expect(lan).toBe(wan)
     const down = `down ${formatRate(8_000_000)}`
-    expect(wan.slice(0, down.length)).toBe(down)
+    expect(must(wan).slice(0, down.length)).toBe(down)
   })
 })

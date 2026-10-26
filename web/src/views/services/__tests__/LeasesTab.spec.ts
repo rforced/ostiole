@@ -7,7 +7,7 @@ import type { Lease } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useToastStore } from '@/stores/toast'
-import { configOf, draftOf } from '@/test/fixtures'
+import { configOf, draftOf, must } from '@/test/fixtures'
 import LeasesTab from '@/views/services/dhcp/LeasesTab.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -84,7 +84,7 @@ describe('LeasesTab', () => {
 
   it('pins a client to the address it has', async () => {
     const { wrapper, config } = await tab([printer])
-    await makeStatic(wrapper)[0].trigger('click')
+    await must(makeStatic(wrapper)[0]).trigger('click')
     expect(wrapper.get<HTMLInputElement>('#sl-mac').element.value).toBe('aa:bb:cc:dd:ee:01')
     expect(wrapper.get<HTMLInputElement>('#sl-ip').element.value).toBe('192.168.1.50')
 
@@ -116,7 +116,7 @@ describe('LeasesTab', () => {
     ])
     const wake = wrapper.findAll('button').filter((b) => b.text() === 'Wake')
     expect(wake).toHaveLength(1)
-    await wake[0].trigger('click')
+    await must(wake[0]).trigger('click')
     await flushPromises()
     expect(api.wol.wake).toHaveBeenCalledWith({ interface: 'eth1', mac: 'AA:BB:CC:DD:EE:01' })
     expect(useToastStore().toasts.at(-1)?.message).toBe('Sent a wake packet to printer.')
@@ -137,7 +137,7 @@ describe('LeasesTab', () => {
     await search.setValue('aa-bb-cc-dd-ee-01')
     expect(addresses(wrapper)).toEqual(['192.168.1.50'])
     await search.setValue('nobody')
-    expect(rows(wrapper)[0].text()).toBe('Nothing matches "nobody".')
+    expect(must(rows(wrapper)[0]).text()).toBe('Nothing matches "nobody".')
   })
 
   it('sorts by a column header', async () => {
@@ -163,18 +163,22 @@ describe('LeasesTab', () => {
     const forever = { ...printer, ip: '192.168.1.60', mac: 'aa:bb:cc:dd:ee:03', expires: undefined }
     const { wrapper } = await tab([pinned, laptop, forever])
     // By address: the laptop at .9, the printer at .50, then .60.
-    const [lap, pin, never] = rows(wrapper).map((r) => r.findAll('td'))
-    expect(lap[0].text()).toContain('offline')
-    expect(lap[1].text()).toContain('random')
-    expect(lap[2].text()).toContain('Work laptop')
-    expect(lap[4].text()).toBe(new Date(laptop.seen).toLocaleString())
-    expect(lap[5].text()).toBe(new Date(laptop.renewed).toLocaleString())
-    expect(pin[0].get('.badge-ok').text()).toBe('online')
-    expect(pin[0].text()).toContain('static')
-    expect(pin[1].text()).not.toContain('random')
-    expect(pin[4].text()).toBe('—')
-    expect(pin[5].text()).toBe('—')
-    expect(never[6].text()).toBe('never')
+    const cellsAt = (n: number) => {
+      const row = must(rows(wrapper)[n])
+      return (i: number) => must(row.findAll('td')[i])
+    }
+    const [lap, pin, never] = [cellsAt(0), cellsAt(1), cellsAt(2)] as const
+    expect(lap(0).text()).toContain('offline')
+    expect(lap(1).text()).toContain('random')
+    expect(lap(2).text()).toContain('Work laptop')
+    expect(lap(4).text()).toBe(new Date(laptop.seen).toLocaleString())
+    expect(lap(5).text()).toBe(new Date(laptop.renewed).toLocaleString())
+    expect(pin(0).get('.badge-ok').text()).toBe('online')
+    expect(pin(0).text()).toContain('static')
+    expect(pin(1).text()).not.toContain('random')
+    expect(pin(4).text()).toBe('—')
+    expect(pin(5).text()).toBe('—')
+    expect(never(6).text()).toBe('never')
   })
 
   describe('Live', () => {

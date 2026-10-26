@@ -80,6 +80,7 @@ let observer: ResizeObserver | null = null
 onMounted(() => {
   if (typeof ResizeObserver === 'undefined' || !box.value) return
   observer = new ResizeObserver(([entry]) => {
+    if (!entry) return
     width.value = Math.max(240, Math.round(entry.contentRect.width))
   })
   observer.observe(box.value)
@@ -90,7 +91,7 @@ type Row = [number, ...(number | null)[]]
 const isRow = (p: ChartPoint): p is Row => typeof p[0] === 'number'
 const limitOf = (s: ChartSeries) => s.limit ?? 0
 
-const span = computed(() => SPANS[props.window] ?? SPANS['5m'])
+const span = computed(() => SPANS[props.window] ?? 300)
 const all = computed(() => (props.points ?? []).filter(isRow))
 const endT = computed(() => props.end || all.value.at(-1)?.[0] || Date.now() / 1000)
 const startT = computed(() => endT.value - span.value)
@@ -101,13 +102,14 @@ const scale = computed(() => {
   const peaks = props.series.map(() => 0)
   for (const p of shown.value) {
     props.series.forEach((s, i) => {
-      peaks[i] = Math.max(peaks[i], p[s.index] ?? 0)
-      highest = Math.max(highest, peaks[i], (s.band ? p[s.band[1]] : null) ?? 0)
+      const peak = Math.max(peaks[i] ?? 0, p[s.index] ?? 0)
+      peaks[i] = peak
+      highest = Math.max(highest, peak, (s.band ? p[s.band[1]] : null) ?? 0)
     })
   }
   props.series.forEach((s, i) => {
     const limit = limitOf(s)
-    if (limit > 0 && peaks[i] >= limit * NEAR) highest = Math.max(highest, limit)
+    if (limit > 0 && (peaks[i] ?? 0) >= limit * NEAR) highest = Math.max(highest, limit)
   })
   return props.scale(highest)
 })
@@ -122,8 +124,9 @@ const underLimit = (v: number) =>
 const plotW = computed(() => width.value - PAD.value.left - PAD.value.right)
 const plotH = HEIGHT - 10 - 24
 const x = (t: number) => PAD.value.left + ((t - startT.value) / span.value) * plotW.value
-const y = (v: number | null) => PAD.value.top + plotH - ((v ?? 0) / scale.value.top) * plotH
-const yShare = (v: number | null) => PAD.value.top + plotH - ((v ?? 0) / 100) * plotH
+const y = (v: number | null | undefined) =>
+  PAD.value.top + plotH - ((v ?? 0) / scale.value.top) * plotH
+const yShare = (v: number | null | undefined) => PAD.value.top + plotH - ((v ?? 0) / 100) * plotH
 
 const lines = computed(() =>
   props.series.map((s) => ({
@@ -164,7 +167,7 @@ const current = computed(() => {
   const l = last.value
   return props.now ?? (l ? props.series.map((s) => l[s.index]) : null)
 })
-const share = (v: number | null) => (v == null ? '—' : `${Math.round(v)}%`)
+const share = (v: number | null | undefined) => (v == null ? '—' : `${Math.round(v)}%`)
 const valueOf = (v: number | null | undefined) => (v == null ? '—' : props.format(v))
 
 /** The skeleton's traffic: an area over the zero line, curved through WAVE. */
@@ -173,11 +176,16 @@ const wave = computed(() => {
   const step = plotW.value / (WAVE.length - 1)
   const p = WAVE.map((f, i): [number, number] => [PAD.value.left + i * step, base - f * plotH])
   const at = ([px, py]: [number, number]) => `${px.toFixed(1)},${py.toFixed(1)}`
-  let d = `M${at([PAD.value.left, base])}L${at(p[0])}`
-  for (let i = 1; i < p.length - 1; i++) {
-    d += `Q${at(p[i])} ${at([(p[i][0] + p[i + 1][0]) / 2, (p[i][1] + p[i + 1][1]) / 2])}`
-  }
+  const head = p[0]
   const tail = p[p.length - 1]
+  if (!head || !tail) return ''
+  let d = `M${at([PAD.value.left, base])}L${at(head)}`
+  for (let i = 1; i < p.length - 1; i++) {
+    const cur = p[i]
+    const next = p[i + 1]
+    if (!cur || !next) continue
+    d += `Q${at(cur)} ${at([(cur[0] + next[0]) / 2, (cur[1] + next[1]) / 2])}`
+  }
   return `${d}L${at(tail)}L${at([tail[0], base])}Z`
 })
 
@@ -218,9 +226,10 @@ function key(e: KeyboardEvent) {
     End: n - 1,
     Escape: -1,
   }
-  if (!(e.key in moves)) return
+  const to = moves[e.key]
+  if (to === undefined) return
   e.preventDefault()
-  at.value = moves[e.key]
+  at.value = to
 }
 
 /** The readout sits beside the crosshair, and inside the chart. */

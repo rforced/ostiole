@@ -57,8 +57,8 @@ function router(n: number) {
       .filter((e) => !q || e.word.includes(q))
       .slice(0, Number(params.limit))
     const last = found[found.length - 1]
-    const more = Boolean(last) && last.seq > 1
-    return { entries: found, more, next: more ? last.seq : undefined, held: n }
+    const more = last !== undefined && last.seq > 1
+    return { entries: found, more, next: more ? last?.seq : undefined, held: n }
   })
 }
 

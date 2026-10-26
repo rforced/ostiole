@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { useConfigStore } from '@/stores/config'
 import ProviderDialog from '@/views/system/providers/ProviderDialog.vue'
-import { configOf } from '@/test/fixtures'
+import { configOf, must } from '@/test/fixtures'
 
 // The dialog itself teleports; the form inside it is what is under test.
 const stubs = {
@@ -33,7 +33,7 @@ describe('ProviderDialog', () => {
       global: { stubs },
     })
     await wrapper.get('form').trigger('submit')
-    expect(config.dnsProviders[0].settings).toEqual({ token: 'not-a-real-token' })
+    expect(must(config.dnsProviders[0]).settings).toEqual({ token: 'not-a-real-token' })
     expect(config.dirty).toBe(false)
   })
 })

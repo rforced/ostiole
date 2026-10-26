@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { Zone } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import BusyHostsDialog from '@/views/traffic/shaping/BusyHostsDialog.vue'
-import { configOf } from '@/test/fixtures'
+import { configOf, must } from '@/test/fixtures'
 
 const stubs = {
   AppDialog: {
@@ -44,7 +44,7 @@ describe('BusyHostsDialog', () => {
     await wrapper.get<HTMLInputElement>('#busy-count').setValue('500')
     await wrapper.get<HTMLSelectElement>('#busy-priority').setValue('bulk')
     await wrapper.get('form').trigger('submit')
-    expect(config.busyZones[0].busy).toEqual({ connections: 500, priority: 'bulk' })
+    expect(must(config.busyZones[0]).busy).toEqual({ connections: 500, priority: 'bulk' })
   })
 
   // The tally is per source address, so a zone facing the internet would be

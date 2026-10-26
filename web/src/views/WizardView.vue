@@ -53,10 +53,10 @@ onMounted(async () => {
   // Sensible defaults: the interface holding the default route looks like WAN.
   const withAddr = candidates.value.filter((l) => (l.addresses?.length ?? 0) > 0)
   if (withAddr.length >= 2) {
-    wan.value = withAddr[0].name
-    lan.value = withAddr[1].name
+    wan.value = withAddr[0]?.name ?? wan.value
+    lan.value = withAddr[1]?.name ?? lan.value
   } else if (candidates.value.length >= 1) {
-    lan.value = candidates.value[0].name
+    lan.value = candidates.value[0]?.name ?? lan.value
   }
 })
 

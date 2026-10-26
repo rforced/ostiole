@@ -82,7 +82,8 @@ describe('ConnectionsPage', () => {
       matched: 3,
       byProtocol: { tcp: 3 },
     }
-    const from = (w: VueWrapper) => w.findAll('tbody tr').map((r) => r.findAll('td')[1].text())
+    const from = (w: VueWrapper) =>
+      w.findAll('tbody tr').map((r) => must(r.findAll('td')[1]).text())
     const header = (w: VueWrapper, name: string) =>
       must(w.findAll('th').find((th) => th.text() === name))
 

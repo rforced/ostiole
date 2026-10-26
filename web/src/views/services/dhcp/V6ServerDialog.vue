@@ -90,7 +90,8 @@ watch(
           ntp: (s.ntp ?? []).join(', '),
         }
       : blank()
-    if (!s && candidates.value.length === 1) form.value.interface = candidates.value[0].name
+    const only = candidates.value[0]
+    if (!s && candidates.value.length === 1 && only) form.value.interface = only.name
   },
   { immediate: true },
 )

@@ -223,10 +223,10 @@ describe('Tailscale PeersTab', () => {
     await flushPromises()
 
     const rows = bodyRows(wrapper)
-    expect(rows[0].text()).toContain('direct 203.0.113.9:41641')
-    expect(rows[1].text()).toContain('relay ord')
-    expect(rows[2].text()).toContain('idle')
-    expect(rows[2].text()).not.toContain('relay')
+    expect(must(rows[0]).text()).toContain('direct 203.0.113.9:41641')
+    expect(must(rows[1]).text()).toContain('relay ord')
+    expect(must(rows[2]).text()).toContain('idle')
+    expect(must(rows[2]).text()).not.toContain('relay')
   })
 
   // "online" and "last seen 20 minutes ago" cannot both be the answer.
@@ -244,8 +244,8 @@ describe('Tailscale PeersTab', () => {
     await flushPromises()
 
     const rows = bodyRows(wrapper)
-    expect(rows[0].findAll('td')[3].text()).toBe('—')
-    expect(rows[1].findAll('td')[3].text()).not.toBe('—')
+    expect(must(must(rows[0]).findAll('td')[3]).text()).toBe('—')
+    expect(must(must(rows[1]).findAll('td')[3]).text()).not.toBe('—')
   })
 })
 

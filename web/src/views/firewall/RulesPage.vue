@@ -315,7 +315,7 @@ onMounted(() => {
             </td>
             <td class="max-sm:order-1 max-sm:basis-full max-sm:font-medium">{{ r.description }}</td>
             <td class="num font-mono text-code max-sm:hidden">
-              {{ counters[r.id] ? formatCount(counters[r.id].packets) : '' }}
+              {{ counters[r.id] ? formatCount(counters[r.id]?.packets ?? 0) : '' }}
               <div v-if="ruleLogged(r) !== ''" class="font-sans text-xs text-ink-muted">
                 {{ formatCount(Number(ruleLogged(r))) }} logged
               </div>

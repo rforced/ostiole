@@ -25,6 +25,12 @@ type Tokens = Record<string, Colour>
 
 const palette: Record<string, string | Record<string, string>> = colors
 
+function at<T>(rec: Record<string, T>, key: string): T {
+  const value = rec[key]
+  if (value === undefined) throw new Error(`no entry ${key}`)
+  return value
+}
+
 function shade(name: string, level: string): string {
   const group = palette[name]
   const value = typeof group === 'object' ? group[level] : undefined
@@ -36,11 +42,9 @@ function shade(name: string, level: string): string {
 function oklch(l: number, c: number, h: number) {
   const a = c * Math.cos((h * Math.PI) / 180)
   const b = c * Math.sin((h * Math.PI) / 180)
-  const [x, y, z] = [
-    l + 0.3963377774 * a + 0.2158037573 * b,
-    l - 0.1055613458 * a - 0.0638541728 * b,
-    l - 0.0894841775 * a - 1.291485548 * b,
-  ].map((v) => v ** 3)
+  const x = (l + 0.3963377774 * a + 0.2158037573 * b) ** 3
+  const y = (l - 0.1055613458 * a - 0.0638541728 * b) ** 3
+  const z = (l - 0.0894841775 * a - 1.291485548 * b) ** 3
   return [
     4.0767416621 * x - 3.3077115913 * y + 0.2309699292 * z,
     -1.2684380046 * x + 2.6097574011 * y - 0.3413193965 * z,
@@ -53,12 +57,13 @@ function oklch(l: number, c: number, h: number) {
 
 /** A token's value as a colour and its alpha. */
 function parse(value: string): Colour {
-  let m: RegExpMatchArray | null
-  if ((m = value.match(/^var\(--color-(\w+)-(\d+)\)$/))) return parse(shade(m[1], m[2]))
-  if ((m = value.match(/^oklch\(([\d.]+)% ([\d.]+) ([\d.]+|none)\)$/)))
-    return { rgb: oklch(Number(m[1]) / 100, +m[2], m[3] === 'none' ? 0 : +m[3]), alpha: 1 }
-  if ((m = value.match(/^color-mix\(in oklab, (.+) (\d+)%, transparent\)$/)))
-    return { ...parse(m[1]), alpha: Number(m[2]) / 100 }
+  const named = value.match(/^var\(--color-(\w+)-(\d+)\)$/)
+  if (named?.[1] && named[2]) return parse(shade(named[1], named[2]))
+  const lch = value.match(/^oklch\(([\d.]+)% ([\d.]+) ([\d.]+|none)\)$/)
+  if (lch?.[1] && lch[2] && lch[3])
+    return { rgb: oklch(Number(lch[1]) / 100, +lch[2], lch[3] === 'none' ? 0 : +lch[3]), alpha: 1 }
+  const mix = value.match(/^color-mix\(in oklab, (.+) (\d+)%, transparent\)$/)
+  if (mix?.[1] && mix[2]) return { ...parse(mix[1]), alpha: Number(mix[2]) / 100 }
   if (value === '#fff') return { rgb: [1, 1, 1], alpha: 1 }
   throw new Error(`cannot read ${value}`)
 }
@@ -68,35 +73,37 @@ function tokens(selector: string): Tokens {
   const start = css.indexOf(`\n${selector} {`)
   const block = css.slice(start, css.indexOf('\n}', start))
   return Object.fromEntries(
-    [...block.matchAll(/--([\w-]+): ([^;]+);/g)].map(([, name, value]): [string, Colour] => [
-      name,
-      parse(value),
-    ]),
+    [...block.matchAll(/--([\w-]+): ([^;]+);/g)].map(
+      ([, name = '', value = '']): [string, Colour] => [name, parse(value)],
+    ),
   )
 }
 
 const over = (top: Colour, below: Colour): Colour => ({
-  rgb: top.rgb.map((v, i) => v * top.alpha + below.rgb[i] * (1 - top.alpha)),
+  rgb: top.rgb.map((v, i) => v * top.alpha + (below.rgb[i] ?? 0) * (1 - top.alpha)),
   alpha: 1,
 })
 
 function luminance({ rgb }: Colour) {
-  const [r, g, b] = rgb.map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+  const [r = 0, g = 0, b = 0] = rgb.map((v) =>
+    v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4,
+  )
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
 function contrast(a: Colour, b: Colour) {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+  const hi = Math.max(luminance(a), luminance(b))
+  const lo = Math.min(luminance(a), luminance(b))
   return (hi + 0.05) / (lo + 0.05)
 }
 
 /** Every text colour on every ground the views put it on, as [text, ground, ratio]. */
 function pairs(t: Tokens) {
   const on = (name: string, alpha = 1) =>
-    over({ ...t[name], alpha: t[name].alpha * alpha }, t.surface)
+    over({ ...at(t, name), alpha: at(t, name).alpha * alpha }, at(t, 'surface'))
   const grounds: Tokens = {
-    page: t.page,
-    surface: t.surface,
+    page: at(t, 'page'),
+    surface: at(t, 'surface'),
     'surface-2': on('surface-2'),
     // A table's header, and a rule Ostiole adds.
     'surface-2/60': on('surface-2', 0.6),
@@ -107,17 +114,18 @@ function pairs(t: Tokens) {
   const add = (text: string, ground: string, fg: Colour, bg: Colour) =>
     out.push([text, ground, contrast(over(fg, bg), bg)])
   for (const ink of ['ink', 'ink-2', 'ink-muted'])
-    for (const [ground, bg] of Object.entries(grounds)) add(ink, ground, t[ink], bg)
+    for (const [ground, bg] of Object.entries(grounds)) add(ink, ground, at(t, ink), bg)
   for (const text of ['accent-text', ...TONES])
     for (const ground of ['page', 'surface', 'surface-2/40'])
-      add(text, ground, t[text], grounds[ground])
+      add(text, ground, at(t, text), at(grounds, ground))
   // A notice holds links, and the confirm banner says Confirmed in ok.
-  for (const [ground, bg] of Object.entries(soft)) add('accent-text', ground, t['accent-text'], bg)
-  add('ok', 'warn-soft', t.ok, soft['warn-soft'])
-  for (const k of TONES) add(`${k}-ink`, `${k}-soft`, t[`${k}-ink`], soft[`${k}-soft`])
+  for (const [ground, bg] of Object.entries(soft))
+    add('accent-text', ground, at(t, 'accent-text'), bg)
+  add('ok', 'warn-soft', at(t, 'ok'), at(soft, 'warn-soft'))
+  for (const k of TONES) add(`${k}-ink`, `${k}-soft`, at(t, `${k}-ink`), at(soft, `${k}-soft`))
   // Button labels. The Delete button fades to 90% under the pointer.
-  for (const fill of ['accent', 'accent-hover']) add('on-fill', fill, t['on-fill'], on(fill))
-  add('on-danger', 'danger', t['on-danger'], on('danger'))
+  for (const fill of ['accent', 'accent-hover']) add('on-fill', fill, at(t, 'on-fill'), on(fill))
+  add('on-danger', 'danger', at(t, 'on-danger'), on('danger'))
   add('on-danger', 'danger at 90%', on('on-danger', 0.9), on('danger', 0.9))
   return out
 }
@@ -125,30 +133,31 @@ function pairs(t: Tokens) {
 /** Every edge and graphic on the grounds the views put it on, as [what, ground, ratio]. */
 function graphics(t: Tokens) {
   const on = (name: string, alpha = 1) =>
-    over({ ...t[name], alpha: t[name].alpha * alpha }, t.surface)
+    over({ ...at(t, name), alpha: at(t, name).alpha * alpha }, at(t, 'surface'))
   const white = { rgb: [1, 1, 1], alpha: 1 }
   const out: [string, string, number][] = []
   const add = (what: string, ground: string, fg: Colour, bg: Colour) =>
     out.push([what, ground, contrast(over(fg, bg), bg)])
   // A field's edge and a switch that is off, wherever a form sits.
   for (const [ground, bg] of Object.entries({
-    page: t.page,
-    surface: t.surface,
+    page: at(t, 'page'),
+    surface: at(t, 'surface'),
     'surface-2': on('surface-2'),
   }))
-    add('edge', ground, t.edge, bg)
+    add('edge', ground, at(t, 'edge'), bg)
   // A meter's fill on its own track, a fifth of its strength, and on the card.
   for (const fill of ['accent', 'warn-fill', 'bad-fill']) {
-    add(fill, `${fill}/20`, t[fill], on(fill, 0.2))
-    add(fill, 'surface', t[fill], t.surface)
+    add(fill, `${fill}/20`, at(t, fill), on(fill, 0.2))
+    add(fill, 'surface', at(t, fill), at(t, 'surface'))
   }
   // A switch's knob: white on its edge while off, on-fill on the accent while on.
-  add('knob', 'edge', white, t.edge)
-  add('knob', 'accent', t['on-fill'], t.accent)
+  add('knob', 'edge', white, at(t, 'edge'))
+  add('knob', 'accent', at(t, 'on-fill'), at(t, 'accent'))
   // Traffic's lines on the card they are drawn on.
-  for (const line of ['chart-down', 'chart-up']) add(line, 'surface', t[line], t.surface)
+  for (const line of ['chart-down', 'chart-up']) add(line, 'surface', at(t, line), at(t, 'surface'))
   // A gateway's strip: up, slow or losing packets, and down, on the card.
-  for (const fill of ['ok-fill', 'warn-fill', 'bad-fill']) add(fill, 'surface', t[fill], t.surface)
+  for (const fill of ['ok-fill', 'warn-fill', 'bad-fill'])
+    add(fill, 'surface', at(t, fill), at(t, 'surface'))
   return out
 }
 

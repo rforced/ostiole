@@ -100,11 +100,12 @@ function zonePrefixes(zone: string) {
 
 /** 192.168.1.1/24 is written down as the network it is on. */
 function maskPrefix(address: string) {
-  const [addr, bits] = address.split('/')
+  const [addr = '', bits] = address.split('/')
   const width = Number(bits)
   const parts = addr.split('.').map(Number)
   if (parts.length !== 4 || !Number.isInteger(width) || width < 0 || width > 32) return ''
-  const value = ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0
+  const [a = 0, b = 0, c = 0, d = 0] = parts
+  const value = ((a << 24) | (b << 16) | (c << 8) | d) >>> 0
   const mask = width === 0 ? 0 : (0xffffffff << (32 - width)) >>> 0
   const net = value & mask
   return `${(net >>> 24) & 255}.${(net >>> 16) & 255}.${(net >>> 8) & 255}.${net & 255}/${width}`

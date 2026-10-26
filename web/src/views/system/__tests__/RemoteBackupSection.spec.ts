@@ -136,8 +136,8 @@ describe('RemoteBackupSection', () => {
     const { wrapper } = await open()
     const rows = wrapper.findAll('tbody tr')
     expect(rows).toHaveLength(2)
-    expect(rows[0].text()).toContain('fw-20260920-030000.json.age')
-    expect(rows[0].text()).toContain('21.5 kB')
+    expect(must(rows[0]).text()).toContain('fw-20260920-030000.json.age')
+    expect(must(rows[0]).text()).toContain('21.5 kB')
     expect(wrapper.text()).toContain('uploaded ostiole/fw-20260920-030000.json.age')
   })
 
@@ -158,7 +158,7 @@ describe('RemoteBackupSection', () => {
       }),
     )
     const { wrapper } = await open()
-    await wrapper.findAll('tbody tr')[0].get('button').trigger('click')
+    await must(wrapper.findAll('tbody tr')[0]).get('button').trigger('click')
     await flushPromises()
     expect(api.config.restoreRemote).toHaveBeenCalledWith('ostiole/fw-20260920-030000.json.age', '')
     expect(wrapper.get('[role="note"]').text()).toContain('What it would change')
@@ -171,7 +171,7 @@ describe('RemoteBackupSection', () => {
       new ApiError(400, 'the passphrase does not open this backup'),
     )
     const { wrapper } = await open()
-    const row = () => wrapper.findAll('tbody tr')[0]
+    const row = () => must(wrapper.findAll('tbody tr')[0])
     await row().get('button').trigger('click')
     await flushPromises()
     const field = row().get('input[type="password"]')
@@ -227,7 +227,7 @@ describe('RemoteBackupSection', () => {
     const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
     vi.mocked(api.config.deleteRemote).mockResolvedValue({ copies: 1, versions: 1 })
     const { wrapper } = await open()
-    const row = wrapper.findAll('tbody tr')[0]
+    const row = must(wrapper.findAll('tbody tr')[0])
     // Restore is still the row's first button.
     expect(row.get('button').text()).toBe('Restore')
     await button(row, 'Delete').trigger('click')
@@ -245,7 +245,7 @@ describe('RemoteBackupSection', () => {
   it('sends nothing when the delete is not confirmed', async () => {
     vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(false)
     const { wrapper } = await open()
-    await button(wrapper.findAll('tbody tr')[0], 'Delete').trigger('click')
+    await button(must(wrapper.findAll('tbody tr')[0]), 'Delete').trigger('click')
     await button(wrapper, 'Delete all').trigger('click')
     await flushPromises()
     expect(api.config.deleteRemote).not.toHaveBeenCalled()
@@ -279,7 +279,7 @@ describe('RemoteBackupSection', () => {
     const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(false)
     const { wrapper } = await open()
     await button(wrapper, 'Delete all').trigger('click')
-    expect(ask.mock.calls[0][0].question).toBe('Delete 1 copy?')
+    expect(must(ask.mock.calls[0])[0].question).toBe('Delete 1 copy?')
   })
 
   it('spins the copy being deleted and holds every other Delete', async () => {
@@ -288,15 +288,15 @@ describe('RemoteBackupSection', () => {
     vi.mocked(api.config.deleteRemote).mockReturnValue(new Promise((resolve) => (done = resolve)))
     const { wrapper } = await open()
     const rows = () => wrapper.findAll('tbody tr')
-    await button(rows()[0], 'Delete').trigger('click')
+    await button(must(rows()[0]), 'Delete').trigger('click')
     await flushPromises()
-    expect(button(rows()[0], 'Delete').attributes('aria-busy')).toBe('true')
-    expect(button(rows()[1], 'Delete').attributes('disabled')).toBeDefined()
+    expect(button(must(rows()[0]), 'Delete').attributes('aria-busy')).toBe('true')
+    expect(button(must(rows()[1]), 'Delete').attributes('disabled')).toBeDefined()
     expect(button(wrapper, 'Delete all').attributes('disabled')).toBeDefined()
 
     done({ copies: 1, versions: 1 })
     await flushPromises()
-    expect(button(rows()[1], 'Delete').attributes('disabled')).toBeUndefined()
+    expect(button(must(rows()[1]), 'Delete').attributes('disabled')).toBeUndefined()
     expect(button(wrapper, 'Delete all').attributes('disabled')).toBeUndefined()
   })
 
@@ -319,7 +319,7 @@ describe('RemoteBackupSection', () => {
     const all = button(wrapper, 'Delete all')
     expect(all.attributes('disabled')).toBeDefined()
     expect(all.attributes('title')).toBe('Only an admin can delete all copies.')
-    await button(wrapper.findAll('tbody tr')[0], 'Delete').trigger('click')
+    await button(must(wrapper.findAll('tbody tr')[0]), 'Delete').trigger('click')
     await flushPromises()
     expect(api.config.deleteRemote).toHaveBeenCalledWith('ostiole/fw-20260920-030000.json.age')
   })

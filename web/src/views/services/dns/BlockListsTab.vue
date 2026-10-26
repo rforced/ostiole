@@ -328,18 +328,18 @@ const lists = sort.sorted
             <td class="num font-mono text-code" data-label="Names">
               <template v-if="fetched[l.name]?.fetchedAt">
                 <button
-                  v-if="fetched[l.name].domains"
+                  v-if="fetched[l.name]?.domains"
                   type="button"
                   class="link"
-                  :aria-label="`${formatCount(fetched[l.name].domains)} names on ${l.name}`"
+                  :aria-label="`${formatCount(fetched[l.name]?.domains ?? 0)} names on ${l.name}`"
                   @click="show(l)"
                 >
-                  {{ formatCount(fetched[l.name].domains) }}
+                  {{ formatCount(fetched[l.name]?.domains ?? 0) }}
                 </button>
                 <template v-else>0</template>
-                <div v-if="fetched[l.name].skipped" class="text-ink-muted">
-                  {{ formatCount(fetched[l.name].skipped ?? 0) }}
-                  {{ fetched[l.name].skipped === 1 ? 'line' : 'lines' }} skipped
+                <div v-if="fetched[l.name]?.skipped" class="text-ink-muted">
+                  {{ formatCount(fetched[l.name]?.skipped ?? 0) }}
+                  {{ fetched[l.name]?.skipped === 1 ? 'line' : 'lines' }} skipped
                 </div>
               </template>
               <span v-else-if="!applied.has(l.name)" class="text-ink-muted"> not applied yet </span>
@@ -347,9 +347,9 @@ const lists = sort.sorted
             </td>
             <td class="num text-code" data-label="Blocked">
               <template v-if="counts[l.name]">
-                {{ formatCount(counts[l.name].blocked) }}
-                <div v-if="counts[l.name].alone" class="text-xs text-ink-muted">
-                  {{ formatCount(counts[l.name].alone) }} only here
+                {{ formatCount(counts[l.name]?.blocked ?? 0) }}
+                <div v-if="counts[l.name]?.alone" class="text-xs text-ink-muted">
+                  {{ formatCount(counts[l.name]?.alone ?? 0) }} only here
                 </div>
               </template>
               <span v-else class="text-ink-muted">&mdash;</span>
@@ -357,12 +357,12 @@ const lists = sort.sorted
             <td class="max-w-xs max-sm:max-w-none" data-label="Source">
               <div class="font-mono text-code break-all text-ink-muted">{{ source(l) }}</div>
               <div v-if="fetched[l.name]?.format" class="text-xs text-ink-muted">
-                read as {{ fetched[l.name].format }}
+                read as {{ fetched[l.name]?.format }}
               </div>
             </td>
             <td class="text-code" data-label="Fetched">
               <span v-if="fetched[l.name]?.lastError" class="text-sm text-bad">
-                {{ fetched[l.name].lastError }}
+                {{ fetched[l.name]?.lastError }}
               </span>
               <template v-else>
                 <span class="inline-flex items-center gap-1.5">

@@ -78,15 +78,23 @@ const hasBlock =
   (i: Interface): i is WithBlock<K> =>
     Boolean(i[key])
 
+function swap<T>(list: T[], a: number, b: number) {
+  const x = list[a]
+  const y = list[b]
+  if (x === undefined || y === undefined) return
+  list[a] = y
+  list[b] = x
+}
+
 /** Swaps the item with the next one of its zone, delta -1 up or +1 down. */
 function moveInZone<T extends { id: string; zone?: string }>(list: T[], id: string, delta: number) {
   const from = list.findIndex((r) => r.id === id)
   if (from === -1) return
-  const zone = list[from].zone
+  const zone = list[from]?.zone
   let to = from + delta
-  while (to >= 0 && to < list.length && list[to].zone !== zone) to += delta
+  while (to >= 0 && to < list.length && list[to]?.zone !== zone) to += delta
   if (to < 0 || to >= list.length) return
-  ;[list[from], list[to]] = [list[to], list[from]]
+  swap(list, from, to)
 }
 
 /** JSON with object keys in one order: a dialog rebuilds what it saves. */
@@ -1018,7 +1026,7 @@ export const useConfigStore = defineStore('config', () => {
     const list = ensureUPnP().acl ?? []
     const to = index + delta
     if (to < 0 || to >= list.length) return
-    ;[list[index], list[to]] = [list[to], list[index]]
+    swap(list, index, to)
   }
 
   // ---- discovery relay -------------------------------------------------
@@ -1197,7 +1205,7 @@ export const useConfigStore = defineStore('config', () => {
     if (!profile) return
     const text = exclusionText(exclusion)
     if ((profile.exclusions ?? []).some((e) => sameExclusion(e, exclusion))) {
-      useToastStore().show(`${text[0].toUpperCase()}${text.slice(1)} is excluded already.`)
+      useToastStore().show(`${text.charAt(0).toUpperCase()}${text.slice(1)} is excluded already.`)
       return
     }
     undoable(`Excluded ${text} in the draft.`, () => {

@@ -48,7 +48,8 @@ watch(
     const z = props.zone
     if (!z) {
       form.value = blank()
-      if (candidates.value.length === 1) form.value.zone = candidates.value[0].name
+      const only = candidates.value[0]
+      if (candidates.value.length === 1 && only) form.value.zone = only.name
       return
     }
     form.value = {

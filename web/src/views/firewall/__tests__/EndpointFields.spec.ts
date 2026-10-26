@@ -137,7 +137,7 @@ describe('RuleDialog with a peer', () => {
     expect(wrapper.get<HTMLSelectElement>('#destination-mode').element.value).toBe('peer')
     expect(wrapper.get<HTMLSelectElement>('#destination-peer').element.value).toBe('wg1/friend')
     await wrapper.get('form').trigger('submit')
-    expect(config.rules[0].destination).toEqual({
+    expect(must(config.rules[0]).destination).toEqual({
       peer: 'wg1/friend',
       notAddresses: true,
       ports: ['22'],
