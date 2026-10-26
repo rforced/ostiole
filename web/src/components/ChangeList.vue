@@ -2,10 +2,16 @@
 import type { PropType } from 'vue'
 import { computed } from 'vue'
 
-import type { Change } from '@/lib/types.gen'
+/** A change as the list reads it: the kind only picks a mark and a tone. */
+interface ChangeLine {
+  path: string
+  kind: string
+  before?: unknown
+  after?: unknown
+}
 
 const props = defineProps({
-  changes: { type: Array as PropType<Change[]>, default: () => [] },
+  changes: { type: Array as PropType<ChangeLine[]>, default: () => [] },
   /** Shown when there is nothing to report. */
   emptyLabel: { type: String, default: 'No differences.' },
   /** Longer lists are cut off until the reader asks for the rest. */
@@ -37,7 +43,7 @@ function value(v: unknown) {
 }
 
 /** A line of a file, without the indent that only nests it. */
-function line(c: Change) {
+function line(c: ChangeLine) {
   return String((c.kind === 'removed' ? c.before : c.after) ?? '').trimStart()
 }
 

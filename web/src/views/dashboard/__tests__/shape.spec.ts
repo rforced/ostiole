@@ -14,7 +14,7 @@ describe('shapeOf', () => {
   it('counts the rows and names the cards an overview brings', () => {
     const shape = shapeOf({
       warnings: [{}, {}],
-      interfaces: [{}, {}, {}],
+      interfaces: [{ name: 'a' }, { name: 'b' }, { name: 'c' }],
       topRules: [{}],
       services: [{}, {}],
       gateways: [],
@@ -96,7 +96,7 @@ describe('rememberShape', () => {
 
   it('keeps a shape for the next visit', () => {
     const shape = {
-      ...shapeOf({ interfaces: [{}], dhcp: { enabled: true } }),
+      ...shapeOf({ interfaces: [{ name: 'a' }], dhcp: { enabled: true } }),
       heights: { leases: 187 },
     }
     rememberShape(shape)

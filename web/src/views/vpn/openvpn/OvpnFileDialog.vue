@@ -50,7 +50,8 @@ const refused = computed(() => {
   if (!props.blocksOnly) return all
   return all.filter((r) => r.text.startsWith('<') && r.text !== '<cert>')
 })
-const ok = computed(() => Boolean(parsed.value) && !refused.value.length)
+const ready = computed(() => (refused.value.length ? null : parsed.value))
+const ok = computed(() => ready.value !== null)
 
 watch(parsed, (p) => {
   if (!p) return
@@ -71,15 +72,24 @@ async function choose(e: Event) {
 }
 
 /** The blocks a tunnel is checked and known by, and nothing else. */
+const BLOCK_KEYS = [
+  'caPem',
+  'certPem',
+  'keyPem',
+  'tlsCryptKeyPem',
+  'tlsAuthKeyPem',
+  'keyDirection',
+] as const
+
 function blocks(t: OpenVPN) {
   const out: Partial<OpenVPN> = {}
-  for (const k of ['caPem', 'certPem', 'keyPem', 'tlsCryptKeyPem', 'tlsAuthKeyPem', 'keyDirection'])
-    if (t[k] !== undefined) out[k] = t[k]
+  for (const k of BLOCK_KEYS) if (t[k] !== undefined) Object.assign(out, { [k]: t[k] })
   return out
 }
 
 function save() {
   error.value = ''
+  if (!parsed.value) return
   const t = parsed.value.tunnel
   if (props.blocksOnly) {
     emit('blocks', blocks(t))
@@ -101,7 +111,7 @@ function save() {
     return
   }
   const creating = zone.value === NEW_ZONE
-  if (!zoneField.value.commit()) return
+  if (!zoneField.value?.commit()) return
   if (creating && wayOut.value) {
     const z = config.zones.find((x) => x.name === zone.value)
     if (z && !z.external) config.upsertZone({ ...z, external: true })
@@ -171,18 +181,18 @@ function save() {
         </ul>
       </div>
 
-      <template v-if="ok && !blocksOnly">
+      <template v-if="ready && !blocksOnly">
         <dl class="kv">
           <dt>Remotes</dt>
           <dd>
-            <div v-for="r in parsed.tunnel.remotes" :key="`${r.host}-${r.port}-${r.proto}`">
+            <div v-for="r in ready.tunnel.remotes" :key="`${r.host}-${r.port}-${r.proto}`">
               <span class="font-mono">{{ r.host }}:{{ r.port }}</span>
               <span class="text-ink-muted"> · {{ r.proto || 'udp' }}</span>
             </div>
           </dd>
-          <template v-if="parsed.tunnel.routes?.length">
+          <template v-if="ready.tunnel.routes?.length">
             <dt>Routes</dt>
-            <dd class="font-mono">{{ parsed.tunnel.routes.join(', ') }}</dd>
+            <dd class="font-mono">{{ ready.tunnel.routes.join(', ') }}</dd>
           </template>
         </dl>
         <div class="fields">
@@ -217,7 +227,7 @@ function save() {
             spellcheck="false"
           />
         </FormField>
-        <div v-if="parsed.needsCredentials" class="fields">
+        <div v-if="ready.needsCredentials" class="fields">
           <FormField id="ov-username" label="Username" hint="The file asks for a sign-in.">
             <input
               id="ov-username"

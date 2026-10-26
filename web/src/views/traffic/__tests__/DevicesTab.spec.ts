@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { type VueWrapper, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -8,7 +8,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import DevicesTab from '@/views/traffic/DevicesTab.vue'
-import { configOf, fixture, sessionOf } from '@/test/fixtures'
+import { configOf, draftOf, fixture, must, sessionOf } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   api: { traffic: { devices: vi.fn(), device: vi.fn(), clear: vi.fn() } },
@@ -105,10 +105,10 @@ describe('DevicesTab', () => {
     )
     expect(w.text()).not.toContain('Apply the draft to start it.')
     await toggle.setValue(true)
-    expect(config.draft.traffic).toEqual({ devices: true })
+    expect(draftOf(config).traffic).toEqual({ devices: true })
     expect(w.text()).toContain('Apply the draft to start it.')
     await toggle.setValue(false)
-    expect(config.draft.traffic).toBeUndefined()
+    expect(draftOf(config).traffic).toBeUndefined()
     expect(config.dirty).toBe(false)
   })
 
@@ -121,7 +121,7 @@ describe('DevicesTab', () => {
 
   it('says what the files keep, as the draft has them', async () => {
     const { w, config } = await open()
-    config.draft.system = fixture<System>({ logging: { files: { enabled: true } } })
+    draftOf(config).system = fixture<System>({ logging: { files: { enabled: true } } })
     await flushPromises()
     expect(w.text()).toContain(
       'Kept on this router only. Switching it off clears it, files included.',
@@ -135,7 +135,7 @@ describe('DevicesTab', () => {
     })
     expect(w.text()).toContain('clears it. Destinations switch off with it.')
     await w.get<HTMLInputElement>('#devices-enabled').setValue(false)
-    expect(config.draft.traffic).toEqual({ destinations: { entries: 50000 } })
+    expect(draftOf(config).traffic).toEqual({ destinations: { entries: 50000 } })
     expect(w.text()).not.toContain('Destinations switch off with it.')
   })
 
@@ -170,16 +170,17 @@ describe('DevicesTab', () => {
     const busy = { ...devices[1], down: 5000, up: 5000 }
     const { w } = await open({ extra: { devices: [quiet, busy] } })
     const first = () => w.get('tbody tr').text()
-    const header = (i) => w.findAll('th')[i]
-    const reads = (th) =>
+    const header = (i: number) => w.findAll('th')[i]
+    const reads = (th: ReturnType<VueWrapper['get']>) =>
       th
         .findAll('button > span > span')
         .filter((s) => !s.classes('invisible'))
         .map((s) => s.text())
-    for (const [i, name] of [
+    const columns: [number, string][] = [
       [1, 'Down'],
       [2, 'Up'],
-    ]) {
+    ]
+    for (const [i, name] of columns) {
       await header(i).get('button').trigger('click')
       expect(reads(header(i))).toEqual([name])
       expect(header(i).attributes('aria-sort')).toBe('descending')
@@ -220,7 +221,7 @@ describe('DevicesTab', () => {
   it('clears the counts, once asked', async () => {
     const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
     const { w, config } = await open()
-    const clear = () => w.findAll('button').find((b) => b.text() === 'Clear')
+    const clear = () => must(w.findAll('button').find((b) => b.text() === 'Clear'))
     const reads = vi.mocked(api.traffic.devices).mock.calls.length
     await clear().trigger('click')
     await flushPromises()
@@ -234,7 +235,7 @@ describe('DevicesTab', () => {
     expect(api.traffic.clear).toHaveBeenCalledOnce()
     expect(vi.mocked(api.traffic.devices).mock.calls.length).toBeGreaterThan(reads)
     config.saved = {
-      ...config.saved,
+      ...must(config.saved),
       system: fixture<System>({ logging: { files: { enabled: true } } }),
     }
     await flushPromises()
@@ -250,7 +251,7 @@ describe('DevicesTab', () => {
 
   it('greys Clear for an operator', async () => {
     const { w } = await open({ role: 'operator' })
-    const clear = w.findAll('button').find((b) => b.text() === 'Clear')
+    const clear = must(w.findAll('button').find((b) => b.text() === 'Clear'))
     expect(clear.attributes('disabled')).toBeDefined()
     expect(clear.attributes('title')).toBe('Only an admin can clear it.')
   })

@@ -6,25 +6,26 @@ import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import UsedByCell from '@/components/UsedByCell.vue'
 import { useAuthStore } from '@/stores/auth'
+import type { Schedule } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import ScheduleDialog from '@/views/firewall/ScheduleDialog.vue'
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const editing = ref(null)
+const editing = ref<Schedule | null>(null)
 const open = ref(false)
 
 function add() {
   editing.value = null
   open.value = true
 }
-function edit(s) {
+function edit(s: Schedule) {
   editing.value = s
   open.value = true
 }
 
 /** "Mon–Fri 08:30–17:30" style summary. */
-function days(schedule) {
+function days(schedule: Schedule) {
   if (!schedule.days?.length) return 'every day'
   return schedule.days.map((d) => d.slice(0, 3)).join(', ')
 }

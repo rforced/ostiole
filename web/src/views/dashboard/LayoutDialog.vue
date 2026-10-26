@@ -1,32 +1,32 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { type PropType, computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import { useDragSort } from '@/lib/dragSort'
-import { CARDS, firstLayout, isCustomized } from '@/views/dashboard/layout'
+import { CARDS, type Layout, firstLayout, isCustomized } from '@/views/dashboard/layout'
 import LayoutRow from '@/views/dashboard/LayoutRow.vue'
 
 const props = defineProps({
   /** The layout the dashboard draws, { order, hidden }. */
-  layout: { type: Object, required: true },
+  layout: { type: Object as PropType<Layout>, required: true },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 const emit = defineEmits(['change'])
 
-const copy = (layout) => ({ order: [...layout.order], hidden: [...layout.hidden] })
+const copy = (layout: Layout): Layout => ({ order: [...layout.order], hidden: [...layout.hidden] })
 
 /** The rows' own copy, so a drag moves rows before it saves. */
 const rows = ref(copy(props.layout))
 
-function save(next) {
+function save(next: Layout) {
   rows.value = next
   emit('change', copy(next))
 }
 
-const list = ref(null)
+const list = ref<HTMLElement | null>(null)
 const order = computed({
   get: () => rows.value.order,
-  set: (next) => (rows.value = { ...rows.value, order: next }),
+  set: (next: string[]) => (rows.value = { ...rows.value, order: next }),
 })
 const { dragging, moveClass, grab, stop } = useDragSort(list, order, () => save(rows.value))
 
@@ -35,7 +35,7 @@ watch(open, (on) => {
   if (on) rows.value = copy(props.layout)
 })
 
-function toggle(name) {
+function toggle(name: string) {
   const { hidden } = rows.value
   save({
     ...rows.value,

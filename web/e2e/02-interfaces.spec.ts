@@ -12,7 +12,9 @@ test('configure an unmanaged interface and apply it', async ({ page }) => {
   // The wizard configured the first link as LAN; take the first row the
   // configuration says nothing about yet.
   const candidate = page.getByRole('row').filter({ hasText: 'not managed' }).first()
-  const name = (await candidate.locator('td').first().locator('div').first().textContent()).trim()
+  const name = (
+    (await candidate.locator('td').first().locator('div').first().textContent()) ?? ''
+  ).trim()
   // Pin the row by name so it stays valid once it is managed.
   const row = page.getByRole('row').filter({ has: page.getByText(name, { exact: true }) })
   await row.getByRole('button', { name: 'Edit' }).click()

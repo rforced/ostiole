@@ -1,4 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia'
+import type { Router } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, type Status } from '@/lib/api'
@@ -17,7 +18,7 @@ vi.mock('@/lib/api', () => ({
 
 /** The one gate in front of a signed-in session: the setup wizard. */
 describe('router guard', () => {
-  let router
+  let router: Router
 
   beforeEach(async () => {
     setActivePinia(createPinia())

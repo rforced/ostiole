@@ -3,18 +3,36 @@
  * and the addresses that go in it.
  */
 
+/** What a device file holds. */
+export interface DeviceFile {
+  privateKey: string
+  addresses: string[]
+  dns?: string[]
+  peer: {
+    publicKey: string
+    presharedKey?: string
+    allowedIps: string[]
+    endpoint?: string
+    keepalive?: number
+  }
+}
+
+/** An address as a number and its width in bits. */
+export interface Address {
+  value: bigint
+  bits: number
+}
+
+/** An address with a prefix length. */
+export interface Prefix extends Address {
+  prefix: number
+}
+
 /**
  * The file: the device's own key and addresses, and this router as its
  * one peer.
- *
- * @param {{
- *   privateKey: string,
- *   addresses: string[],
- *   dns?: string[],
- *   peer: {publicKey: string, presharedKey?: string, allowedIps: string[], endpoint?: string, keepalive?: number},
- * }} file
  */
-export function deviceFile({ privateKey, addresses, dns = [], peer }): string {
+export function deviceFile({ privateKey, addresses, dns = [], peer }: DeviceFile): string {
   const lines = ['[Interface]', `PrivateKey = ${privateKey}`, `Address = ${addresses.join(', ')}`]
   if (dns.length) lines.push(`DNS = ${dns.join(', ')}`)
   lines.push('', '[Peer]', `PublicKey = ${peer.publicKey}`)
@@ -26,7 +44,7 @@ export function deviceFile({ privateKey, addresses, dns = [], peer }): string {
 }
 
 /** An address as a number and its width in bits, or null. */
-export function parseAddress(text) {
+export function parseAddress(text: unknown): Address | null {
   const s = String(text ?? '').trim()
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(s)) {
     const parts = s.split('.').map(Number)
@@ -36,7 +54,7 @@ export function parseAddress(text) {
   if (!/^[0-9a-f:]+$/i.test(s) || !s.includes(':')) return null
   const halves = s.split('::')
   if (halves.length > 2) return null
-  const groups = (h) => (h ? h.split(':') : [])
+  const groups = (h: string) => (h ? h.split(':') : [])
   const head = groups(halves[0])
   const tail = halves.length === 2 ? groups(halves[1]) : []
   const missing = 8 - head.length - tail.length
@@ -47,12 +65,11 @@ export function parseAddress(text) {
 }
 
 /** An address back as text, IPv6 with its longest run of zero groups folded. */
-export function formatAddress({ value, bits }) {
+export function formatAddress({ value, bits }: Address) {
   if (bits === 32) {
     return [24n, 16n, 8n, 0n].map((shift) => Number((value >> shift) & 0xffn)).join('.')
   }
-  /** @type {number[]} */
-  const groups = []
+  const groups: number[] = []
   for (let shift = 112n; shift >= 0n; shift -= 16n) groups.push(Number((value >> shift) & 0xffffn))
   let best = { at: -1, len: 1 }
   for (let i = 0; i < 8;) {
@@ -69,7 +86,7 @@ export function formatAddress({ value, bits }) {
 }
 
 /** "10.66.0.1/24" as its address and prefix length, or null. */
-export function parsePrefix(text) {
+export function parsePrefix(text: unknown): Prefix | null {
   const [addr, len] = String(text ?? '').split('/')
   const a = parseAddress(addr)
   if (!a) return null
@@ -79,11 +96,14 @@ export function parsePrefix(text) {
 }
 
 /** Whether an address lies in a prefix of the same family. */
-function contains(net, addr) {
+function contains(net: Prefix, addr: Address) {
   if (net.bits !== addr.bits) return false
   const shift = BigInt(net.bits - net.prefix)
   return net.value >> shift === addr.value >> shift
 }
+
+const prefixes = (list: string[]): Prefix[] =>
+  list.map((text) => parsePrefix(text)).filter((p): p is Prefix => p !== null)
 
 /**
  * The first host address in a tunnel's network that neither the tunnel nor
@@ -94,7 +114,7 @@ function contains(net, addr) {
 export function nextFree(tunnelAddress: string, taken: string[]) {
   const net = parsePrefix(tunnelAddress)
   if (!net) return ''
-  const used = [net, ...taken.map(parsePrefix).filter(Boolean)]
+  const used = [net, ...prefixes(taken)]
   const hostBits = BigInt(net.bits - net.prefix)
   const base = (net.value >> hostBits) << hostBits
   // IPv4 keeps its broadcast address; a /31 or /32 has no room for a peer.
@@ -117,7 +137,7 @@ export function nextFree(tunnelAddress: string, taken: string[]) {
  * @param tunnelAddresses the tunnel's own, e.g. "10.66.0.1/24"
  */
 export function deviceAddresses(allowedIps: string[], tunnelAddresses: string[]) {
-  const nets = tunnelAddresses.map(parsePrefix).filter(Boolean)
+  const nets = prefixes(tunnelAddresses)
   return allowedIps.filter((text) => {
     const a = parsePrefix(text)
     if (!a || a.prefix !== a.bits) return false
@@ -127,7 +147,7 @@ export function deviceAddresses(allowedIps: string[], tunnelAddresses: string[])
 }
 
 /** The network a prefix covers, as text: "10.66.0.1/24" gives "10.66.0.0/24". */
-export function networkOf(text) {
+export function networkOf(text: unknown) {
   const p = parsePrefix(text)
   if (!p) return ''
   const hostBits = BigInt(p.bits - p.prefix)
@@ -135,10 +155,13 @@ export function networkOf(text) {
 }
 
 /** Whether an address can be reached from the internet: not private, loopback or link-local. */
-export function isPublic(text) {
+export function isPublic(text: unknown) {
   const a = parseAddress(text)
   if (!a) return false
-  const inside = (net) => contains(parsePrefix(net), a)
+  const inside = (net: string) => {
+    const p = parsePrefix(net)
+    return p !== null && contains(p, a)
+  }
   if (a.bits === 32) {
     return ![
       '0.0.0.0/8',
@@ -154,7 +177,7 @@ export function isPublic(text) {
 }
 
 /** An endpoint for a host and port, bracketing an IPv6 address. */
-export function endpoint(host, port) {
+export function endpoint(host: string | null | undefined, port: number | string) {
   const h = String(host ?? '').trim()
   if (!h) return ''
   return h.includes(':') && !h.startsWith('[') ? `[${h}]:${port}` : `${h}:${port}`
@@ -167,16 +190,34 @@ const KEY_SHAPE = /^[A-Za-z0-9+/]{43}=$/
 const IGNORED = new Set(['preup', 'postup', 'predown', 'postdown', 'table', 'fwmark', 'saveconfig'])
 
 /** A list value: comma separated, blanks dropped. */
-const items = (v) =>
+const items = (v: string) =>
   v
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
 
 /** An address with its length, a host length when it has none; null when it is no address. */
-function withLength(text) {
+function withLength(text: string) {
   const p = parsePrefix(text)
   return p ? `${formatAddress(p)}/${p.prefix}` : null
+}
+
+interface QuickInterface {
+  privateKey: string
+  ipv4: string
+  ipv6: string
+  listenPort: number
+  mtu: number
+  dns: string[]
+}
+
+interface QuickPeer {
+  line: number
+  publicKey: string
+  presharedKey: string
+  allowedIps: string[]
+  endpoint: string
+  keepalive: number
 }
 
 /**
@@ -188,16 +229,25 @@ function withLength(text) {
  * never the value of a key.
  */
 export function parseQuick(text: string) {
-  const iface = { privateKey: '', ipv4: '', ipv6: '', listenPort: 0, mtu: 0, dns: [] }
-  const peers = []
-  const ignored = []
-  const errors = []
-  const notes = []
+  const iface: QuickInterface = {
+    privateKey: '',
+    ipv4: '',
+    ipv6: '',
+    listenPort: 0,
+    mtu: 0,
+    dns: [],
+  }
+  const peers: QuickPeer[] = []
+  const ignored: Array<{ line: number; key: string }> = []
+  const errors: Array<{ line: number; message: string }> = []
+  const notes: string[] = []
   let section = ''
   let sectionLine = 0
   let interfaces = 0
-  let peer = null
-  const fail = (line, message) => errors.push({ line, message })
+  let peer: QuickPeer | null = null
+  const fail = (line: number, message: string): void => {
+    errors.push({ line, message })
+  }
 
   String(text ?? '')
     .split(/\r?\n/)
@@ -230,12 +280,15 @@ export function parseQuick(text: string) {
       const v = s.slice(eq + 1).trim()
       if (!section) return fail(line, `${key} comes before any section`)
       if (section !== 'interface' && section !== 'peer') return
-      if (IGNORED.has(k)) return ignored.push({ line, key })
+      if (IGNORED.has(k)) {
+        ignored.push({ line, key })
+        return
+      }
       if (section === 'interface') readInterface(line, key, k, v)
       else readPeer(line, key, k, v)
     })
 
-  function readInterface(line, key, k, v) {
+  function readInterface(line: number, key: string, k: string, v: string) {
     switch (k) {
       case 'privatekey':
         if (!KEY_SHAPE.test(v)) return fail(line, 'PrivateKey is not a WireGuard key')
@@ -269,7 +322,7 @@ export function parseQuick(text: string) {
         return
       }
       case 'dns': {
-        const names = []
+        const names: string[] = []
         for (const d of items(v)) {
           if (parseAddress(d)) iface.dns.push(d)
           else names.push(d)
@@ -282,7 +335,8 @@ export function parseQuick(text: string) {
     }
   }
 
-  function readPeer(line, key, k, v) {
+  function readPeer(line: number, key: string, k: string, v: string) {
+    if (!peer) return
     switch (k) {
       case 'publickey':
         if (!KEY_SHAPE.test(v)) return fail(line, 'PublicKey is not a WireGuard key')
@@ -347,6 +401,6 @@ export function peerName(fileName: string) {
 }
 
 /** Whether a peer's allowed addresses send it everything in some family. */
-export function takesDefaultRoute(allowedIps) {
+export function takesDefaultRoute(allowedIps: string[]) {
   return allowedIps.some((a) => parsePrefix(a)?.prefix === 0)
 }

@@ -34,12 +34,14 @@ function join() {
 }
 
 /** A field the model leaves out when it is empty. */
-function optional(key) {
+function optional(key: 'hostname' | 'loginServer') {
   return computed({
     get: () => ts.value?.[key] ?? '',
-    set: (v) => {
-      if (v) ts.value[key] = v
-      else delete ts.value[key]
+    set: (v: string) => {
+      const t = ts.value
+      if (!t) return
+      if (v) t[key] = v
+      else delete t[key]
     },
   })
 }
@@ -48,12 +50,14 @@ const hostname = optional('hostname')
 const loginServer = optional('loginServer')
 
 /** A switch the model leaves out when it is off. */
-function flag(key) {
+function flag(key: 'advertiseExitNode' | 'acceptRoutes' | 'logUploads') {
   return computed({
     get: () => Boolean(ts.value?.[key]),
-    set: (on) => {
-      if (on) ts.value[key] = true
-      else delete ts.value[key]
+    set: (on: boolean) => {
+      const t = ts.value
+      if (!t) return
+      if (on) t[key] = true
+      else delete t[key]
     },
   })
 }
@@ -63,35 +67,39 @@ const logUploads = flag('logUploads')
 
 const port = computed({
   get: () => ts.value?.port ?? 0,
-  set: (v) => {
+  set: (v: number | string) => {
+    const t = ts.value
+    if (!t) return
     const n = Number(v)
-    if (n) ts.value.port = n
-    else delete ts.value.port
+    if (n) t.port = n
+    else delete t.port
   },
 })
 
 const routes = computed({
   get: () => (ts.value?.advertiseRoutes ?? []).join(', '),
-  set: (v) => {
+  set: (v: string) => {
+    const t = ts.value
+    if (!t) return
     const list = v
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean)
-    if (list.length) ts.value.advertiseRoutes = list
-    else delete ts.value.advertiseRoutes
+    if (list.length) t.advertiseRoutes = list
+    else delete t.advertiseRoutes
   },
 })
 
 /** The IPv4 networks a zone's interfaces hold, for the button per zone. */
-function zonePrefixes(zone) {
+function zonePrefixes(zone: string) {
   return config.interfaces
     .filter((i) => i.zone === zone && i.ipv4?.mode === 'static' && i.ipv4.address)
-    .map((i) => maskPrefix(i.ipv4.address))
+    .map((i) => maskPrefix(i.ipv4?.address ?? ''))
     .filter(Boolean)
 }
 
 /** 192.168.1.1/24 is written down as the network it is on. */
-function maskPrefix(address) {
+function maskPrefix(address: string) {
   const [addr, bits] = address.split('/')
   const width = Number(bits)
   const parts = addr.split('.').map(Number)
@@ -102,10 +110,12 @@ function maskPrefix(address) {
   return `${(net >>> 24) & 255}.${(net >>> 16) & 255}.${(net >>> 8) & 255}.${net & 255}/${width}`
 }
 
-function addZone(zone) {
-  const list = new Set(ts.value.advertiseRoutes ?? [])
+function addZone(zone: string) {
+  const t = ts.value
+  if (!t) return
+  const list = new Set(t.advertiseRoutes ?? [])
   for (const p of zonePrefixes(zone)) list.add(p)
-  ts.value.advertiseRoutes = [...list]
+  t.advertiseRoutes = [...list]
 }
 </script>
 

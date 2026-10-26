@@ -6,7 +6,7 @@ import { api } from '@/lib/api'
 import type { LogfileStatus } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import LogFilesFields from '@/views/system/LogFilesFields.vue'
-import { configOf, fixture } from '@/test/fixtures'
+import { configOf, fixture, draftOf, must } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({ api: { logFiles: vi.fn() } }))
 
@@ -46,30 +46,30 @@ describe('LogFilesFields', () => {
   it('writes the switch and the settings, and drops each back at its default', async () => {
     const { wrapper, config } = await open()
     await wrapper.get('input[type="checkbox"]').setValue(true)
-    expect(config.draft.system.logging).toEqual({ files: { enabled: true } })
+    expect(draftOf(config).system.logging).toEqual({ files: { enabled: true } })
     const every = wrapper.get<HTMLInputElement>('#log-files-every')
     expect(every.element.value).toBe('5')
     await every.setValue('15')
-    expect(config.draft.system.logging.files.writeMinutes).toBe(15)
+    expect(must(must(draftOf(config).system.logging).files).writeMinutes).toBe(15)
     await every.setValue('5')
-    expect(config.draft.system.logging.files.writeMinutes).toBeUndefined()
+    expect(must(must(draftOf(config).system.logging).files).writeMinutes).toBeUndefined()
 
     const days = wrapper.get('#log-files-retention')
     expect(days.attributes('placeholder')).toBe('30')
     expect(wrapper.text()).toContain('30 is the default, 365 at most.')
     expect(wrapper.text()).not.toContain('A log set to fewer days')
     await days.setValue('90')
-    expect(config.draft.system.logging.files.retentionDays).toBe(90)
+    expect(must(must(draftOf(config).system.logging).files).retentionDays).toBe(90)
     await days.setValue('')
     const gb = wrapper.get('#log-files-max-use')
     expect(gb.attributes('placeholder')).toBe('1')
     await gb.setValue('4')
-    expect(config.draft.system.logging.files.maxUseGB).toBe(4)
+    expect(must(must(draftOf(config).system.logging).files).maxUseGB).toBe(4)
     await gb.setValue('')
 
     // Off again with every value at its default: the draft is as saved.
     await wrapper.get('input[type="checkbox"]').setValue(false)
-    expect(config.draft.system.logging).toBeUndefined()
+    expect(draftOf(config).system.logging).toBeUndefined()
     expect(config.dirty).toBe(false)
   })
 
@@ -78,7 +78,7 @@ describe('LogFilesFields', () => {
     const { wrapper, config } = await open({ system: { logging: { level: 'info' } } })
     await wrapper.get('input[type="checkbox"]').setValue(true)
     await wrapper.get('input[type="checkbox"]').setValue(false)
-    expect(config.draft.system.logging).toEqual({ level: 'info' })
+    expect(draftOf(config).system.logging).toEqual({ level: 'info' })
   })
 
   it('says what the files hold once they are on', async () => {

@@ -10,4 +10,5 @@ export const SERVICES = [
 ]
 
 /** How a sentence names a service, or its key if it is new. */
-export const serviceName = (value) => SERVICES.find((s) => s.value === value)?.name ?? value
+export const serviceName = (value?: string) =>
+  SERVICES.find((s) => s.value === value)?.name ?? value

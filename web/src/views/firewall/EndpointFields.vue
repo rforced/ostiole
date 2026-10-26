@@ -33,12 +33,12 @@ const peers = computed(() =>
   config.tunnels
     .filter((t) => props.side !== 'source' || !props.zone || t.zone === props.zone)
     .flatMap((t) =>
-      (t.wireguard.peers ?? [])
+      (t.wireguard?.peers ?? [])
         .filter((p) => !(p.allowedIps ?? []).some((a) => /\/0$/.test(a.trim())))
         .map((p) => ({ ref: `${t.name}/${p.name}`, label: `${p.name} on ${t.name}` })),
     ),
 )
-const id = (name) => `${props.side}-${name}`
+const id = (name: string) => `${props.side}-${name}`
 const label = computed(() => (props.side === 'source' ? 'Source' : 'Destination'))
 </script>
 

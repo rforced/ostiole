@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { PropType } from 'vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import ActionButton from '@/components/ActionButton.vue'
@@ -22,7 +23,7 @@ const props = defineProps({
    * click here: 'confirmed', 'reverted' or 'expired'. Without it the apply
    * is taken to have run out.
    */
-  settle: { type: Function, default: null },
+  settle: { type: Function as PropType<(() => Promise<string>) | null>, default: null },
 })
 const emit = defineEmits(['confirmed', 'reverted'])
 
@@ -58,7 +59,7 @@ async function ended() {
  * browser drops every request in flight when the computer's addresses
  * change. The status says whether the apply still awaits confirmation.
  */
-async function unanswered(e) {
+async function unanswered(e: unknown) {
   const status = await system.refresh()
   if (!system.error && !status?.pending) await ended()
   else error.value = errorMessage(e)

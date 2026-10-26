@@ -1,3 +1,5 @@
+import type { Page } from '@playwright/test'
+
 import { expect, test } from './fixtures'
 import { PASSWORD, confirmDialog, enterUsername, signOut } from './helpers'
 
@@ -9,7 +11,7 @@ const headers = { 'X-Requested-With': 'ostiole' }
 const SHOTS = '/var/tmp/account-plan/shots'
 const WIDE = { width: 1440, height: 900 }
 
-async function signIn(page, username, password = PASSWORD) {
+async function signIn(page: Page, username: string, password = PASSWORD) {
   await page.goto('/login')
   await enterUsername(page, username)
   await page.getByLabel('Password', { exact: true }).fill(password)
@@ -17,7 +19,7 @@ async function signIn(page, username, password = PASSWORD) {
   await expect(page).toHaveURL(/\/$/)
 }
 
-const region = (page, name) => page.getByRole('region', { name, exact: true })
+const region = (page: Page, name: string) => page.getByRole('region', { name, exact: true })
 
 test('the account menu opens the Account page', async ({ page }) => {
   await page.setViewportSize(WIDE)
@@ -154,7 +156,7 @@ test('Sessions signs another browser out, one or all', async ({ page, browser, b
 
 test('the Password card changes the password', async ({ page }) => {
   const next = 'another long passphrase'
-  const change = async (from, to) => {
+  const change = async (from: string, to: string) => {
     await page.goto('/account')
     const card = region(page, 'Password')
     await card.getByLabel('Current password').fill(from)

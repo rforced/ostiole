@@ -58,11 +58,12 @@ describe('useWake', () => {
     const toast = useToastStore()
     const { busy, errors, wake } = useWake()
     vi.mocked(api.wol.wake).mockResolvedValueOnce(undefined)
-    const sending = wake({ interface: 'eth1', mac: 'aa:bb:cc:00:00:01', id: 'x' }, 'NAS', 'x')
+    const target = { interface: 'eth1', mac: 'aa:bb:cc:00:00:01', id: 'x' }
+    const sending = wake(target, 'NAS', 'x')
     expect(busy.value).toBe('x')
     await sending
     expect(api.wol.wake).toHaveBeenCalledWith({ interface: 'eth1', mac: 'aa:bb:cc:00:00:01' })
-    expect(toast.toasts.at(-1).message).toBe('Sent a wake packet to NAS.')
+    expect(toast.toasts.at(-1)?.message).toBe('Sent a wake packet to NAS.')
     expect(busy.value).toBe('')
 
     vi.mocked(api.wol.wake).mockRejectedValueOnce(new Error('interface "eth1" is off'))
@@ -84,7 +85,7 @@ describe('useWake', () => {
       { interface: 'eth1', mac: 'aa:bb:cc:00:00:03', description: 'Desktop' },
     ])
     expect(api.wol.wake).toHaveBeenCalledTimes(3)
-    expect(toast.toasts.at(-1).message).toBe('Sent wake packets to 2 devices.')
+    expect(toast.toasts.at(-1)?.message).toBe('Sent wake packets to 2 devices.')
     expect(errors.value).toEqual([
       'aa:bb:cc:00:00:02: sending a wake needs the daemon to run as root',
     ])

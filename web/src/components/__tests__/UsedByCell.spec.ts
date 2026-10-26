@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import UsedByCell from '@/components/UsedByCell.vue'
 
-const cell = (names) => mount(UsedByCell, { props: { names } })
+const cell = (names: string[]) => mount(UsedByCell, { props: { names } })
 
 describe('UsedByCell', () => {
   it('names the first and counts the rest, with all of them in the title', () => {

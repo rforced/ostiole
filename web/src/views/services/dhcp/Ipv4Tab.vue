@@ -38,8 +38,8 @@ const leaseSort = useSort(() => dhcp.value.staticLeases ?? [], {
   mac: byText((l) => l.mac),
   ip: byAddress((l) => l.ip),
   ipv6: byAddress((l) => l.ipv6),
-  hostname: byText((l) => l.hostname),
-  description: byText((l) => l.description),
+  hostname: byText((l) => l.hostname ?? ''),
+  description: byText((l) => l.description ?? ''),
 })
 const staticLeases = leaseSort.sorted
 

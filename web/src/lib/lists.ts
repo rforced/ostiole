@@ -1,5 +1,5 @@
 /** Whether a list item is an http or https URL. */
-export function isURL(item) {
+export function isURL(item: unknown) {
   return /^https?:\/\//i.test(String(item ?? '').trim())
 }
 
@@ -7,7 +7,7 @@ export function isURL(item) {
  * Splits a free-text list (newlines, commas, or spaces) into trimmed items.
  * A URL stays whole, since it may hold a comma.
  */
-export function parseList(text) {
+export function parseList(text: unknown) {
   return String(text ?? '')
     .split(/\s+/)
     .flatMap((item) => (isURL(item) ? [item] : item.split(',')))
@@ -16,13 +16,13 @@ export function parseList(text) {
 }
 
 /** One item per line, for textareas. */
-export function joinList(items) {
+export function joinList(items: string[] | null | undefined) {
   return (items ?? []).join('\n')
 }
 
 /** The saved list when it holds the same items, so an untouched save keeps its order. */
-export function keptOrder(was, now) {
-  const key = (list) => [...(list ?? [])].sort().join('\n')
+export function keptOrder(was: string[] | null | undefined, now: string[]) {
+  const key = (list: string[] | null | undefined) => [...(list ?? [])].sort().join('\n')
   return was && key(was) === key(now) ? [...was] : now
 }
 

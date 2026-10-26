@@ -3,8 +3,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
-import type { Config } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import { configOf } from '@/test/fixtures'
 import BlockListDialog from '@/views/services/dns/BlockListDialog.vue'
 
 vi.mock('@/lib/api', async () => {
@@ -31,7 +31,7 @@ describe('BlockListDialog', () => {
 
   it('reopens a list as saved and leaves an untouched save alone', async () => {
     const config = useConfigStore()
-    const cfg = {
+    const cfg = configOf({
       version: 12,
       zones: [],
       interfaces: [],
@@ -41,7 +41,7 @@ describe('BlockListDialog', () => {
         lists: [{ name: 'ads', enabled: true, url: 'https://lists.example.net/ads.txt' }],
         enforce: {},
       },
-    } as Config
+    })
     config.saved = cfg
     config.replaceDraft(cfg)
     const wrapper = mount(BlockListDialog, {

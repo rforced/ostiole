@@ -99,9 +99,10 @@ const WIREGUARD_MTU = 1420
 const defaultMtu = computed(() => {
   const f = form.value
   if (f.wireguard) return WIREGUARD_MTU
-  if (!f.vlan?.parent) return ETHERNET_MTU
-  const parent = config.interfaces.find((i) => i.name === f.vlan.parent)
-  return parent?.mtu || props.links.find((l) => l.name === f.vlan.parent)?.mtu || ETHERNET_MTU
+  const parentName = f.vlan?.parent
+  if (!parentName) return ETHERNET_MTU
+  const parent = config.interfaces.find((i) => i.name === parentName)
+  return parent?.mtu || props.links.find((l) => l.name === parentName)?.mtu || ETHERNET_MTU
 })
 
 const mtuHint = computed(() => {
@@ -134,15 +135,15 @@ watch(
       ...blank(),
       ...JSON.parse(JSON.stringify(src)),
       logDrops: src.logDrops === undefined ? 'inherit' : src.logDrops ? 'on' : 'off',
-      ipv4: { mode: 'none', address: '', gateway: '', ...src.ipv4 },
+      ipv4: { address: '', gateway: '', ...src.ipv4, mode: src.ipv4?.mode ?? 'none' },
       ipv6: {
-        mode: 'none',
         address: '',
         gateway: '',
         prefixHint: '',
         delegatedFrom: '',
         subnetId: 0,
         ...src.ipv6,
+        mode: src.ipv6?.mode ?? 'none',
       },
     }
     // An unset MTU is whatever the link is running at, which is a number
@@ -177,7 +178,7 @@ const upstreams = computed(() =>
 )
 
 function save() {
-  if (!zoneField.value.commit()) return
+  if (!zoneField.value?.commit()) return
   const out: Interface = JSON.parse(JSON.stringify(form.value))
   const logDrops = form.value.logDrops
   if (logDrops === 'inherit') delete out.logDrops
@@ -191,7 +192,7 @@ function save() {
     out.ipv6.delegatedFrom = ''
     out.ipv6.subnetId = 0
   }
-  for (const fam of ['ipv4', 'ipv6']) {
+  for (const fam of ['ipv4', 'ipv6'] as const) {
     if (!out[fam].address) delete out[fam].address
     if (!out[fam].gateway) delete out[fam].gateway
   }
@@ -389,7 +390,7 @@ function save() {
         />
       </FormField>
       <p v-if="pinsLiveMtu && !daemonOwned" class="text-sm text-ink-muted">
-        {{ form.name }} is running at {{ live.mtu }}, which nothing in the configuration asks for.
+        {{ form.name }} is running at {{ live?.mtu }}, which nothing in the configuration asks for.
         Saving this keeps it after a reboot.
       </p>
 

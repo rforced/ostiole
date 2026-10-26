@@ -328,7 +328,7 @@ function rate(limit: RateLimit | undefined) {
             </td>
             <td>{{ r.zone }}</td>
             <td class="font-mono text-code">{{ rate(r.limit) }}</td>
-            <td>{{ r.limit.perSource ? 'per source' : 'everybody together' }}</td>
+            <td>{{ r.limit?.perSource ? 'per source' : 'everybody together' }}</td>
           </tr>
         </tbody>
       </table>

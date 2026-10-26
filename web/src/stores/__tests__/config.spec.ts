@@ -1,13 +1,38 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { ACMEAccount, Certificate, Config, ProxyAccess } from '@/lib/types.gen'
-import { configOf, fixture, type DeepPartial } from '@/test/fixtures'
+import type {
+  ACMEAccount,
+  Blocking,
+  Certificate,
+  Config,
+  DHCPServer,
+  Gateway,
+  Interface,
+  PortForward,
+  ProxyAccess,
+  ProxySite,
+  Rule,
+  StaticRoute,
+  UPnP,
+  Zone,
+} from '@/lib/types.gen'
+import { configOf, draftOf, fixture, must, toastAction, type DeepPartial } from '@/test/fixtures'
 import { useConfigStore } from '@/stores/config'
 import { useToastStore } from '@/stores/toast'
 
+type Part<T> = DeepPartial<T>[]
+
+/** A draft whose lists exist, for a test to add to. */
+type Drawn = DeepPartial<Config> & {
+  zones: Part<Zone>
+  interfaces: Part<Interface>
+  rules: Part<Rule>
+  nat: { portForwards: Part<PortForward> }
+}
+
 /** A draft with a zone that everything else hangs off. */
-function draft(): DeepPartial<Config> {
+function draft(): Drawn {
   return {
     version: 3,
     zones: [{ name: 'lan' }, { name: 'dmz' }, { name: 'wan', external: true }],
@@ -61,10 +86,10 @@ describe('config store zones', () => {
     // r2 named dmz only as its destination; it goes too rather than
     // silently widening to every destination.
     expect(config.rules.map((r) => r.id)).toEqual(['r3'])
-    expect(config.draft.nat.portForwards).toEqual([])
-    expect(config.draft.nat.outbound.rules.map((o) => o.id)).toEqual(['o2'])
+    expect(draftOf(config).nat.portForwards).toEqual([])
+    expect(must(draftOf(config).nat.outbound.rules).map((o) => o.id)).toEqual(['o2'])
     // Nothing that belonged to another zone is touched.
-    expect(config.draft.nat.oneToOne.map((o) => o.id)).toEqual(['n1'])
+    expect(must(draftOf(config).nat.oneToOne).map((o) => o.id)).toEqual(['n1'])
     expect(config.interfaces).toHaveLength(2)
   })
 
@@ -72,24 +97,31 @@ describe('config store zones', () => {
     const config = useConfigStore()
     const d = draft()
     d.zones.push({ name: 'spare' })
-    d.protection = { zones: ['wan', 'dmz'], synFlood: { rate: 30, unit: 'second' } }
+    d.protection = {
+      zones: ['wan', 'dmz'],
+      synFlood: { rate: 30, unit: 'second' },
+    }
     config.replaceDraft(configOf(d))
 
     config.upsertZone({ name: 'guest' }, 'dmz')
-    expect(config.draft.protection.zones).toEqual(['wan', 'guest'])
+    expect(must(draftOf(config).protection).zones).toEqual(['wan', 'guest'])
     config.removeZone('guest')
-    expect(config.draft.protection.zones).toEqual(['wan'])
+    expect(must(draftOf(config).protection).zones).toEqual(['wan'])
     // The last one named goes with the list: empty means every external zone.
     config.setProtectedZones(['spare'])
     config.removeZone('spare')
-    expect(config.draft.protection).toEqual({ synFlood: { rate: 30, unit: 'second' } })
+    expect(draftOf(config).protection).toEqual({
+      synFlood: { rate: 30, unit: 'second' },
+    })
   })
 
   it('says what protection goes back to when a zone goes', () => {
     const config = useConfigStore()
     const d = draft()
     d.protection = { zones: ['wan', 'dmz'] }
-    d.services = { proxy: { access: [{ id: 'a1', zone: 'dmz', action: 'accept' }] } }
+    d.services = {
+      proxy: { access: [{ id: 'a1', zone: 'dmz', action: 'accept' }] },
+    }
     config.replaceDraft(configOf(d))
     expect(config.zoneDependents('dmz')).toEqual([
       'rule r1',
@@ -112,17 +144,20 @@ describe('config store zones', () => {
     const config = useConfigStore()
     const d = draft()
     d.zones.push({ name: 'spare' })
-    d.blocking = { enabled: false, enforce: { zones: ['lan', 'dmz'], blockDot: true } }
+    d.blocking = {
+      enabled: false,
+      enforce: { zones: ['lan', 'dmz'], blockDot: true },
+    }
     config.replaceDraft(configOf(d))
 
     config.upsertZone({ name: 'guest' }, 'dmz')
-    expect(config.draft.blocking.enforce.zones).toEqual(['lan', 'guest'])
+    expect(draftOf(config).blocking.enforce.zones).toEqual(['lan', 'guest'])
     config.removeZone('guest')
-    expect(config.draft.blocking.enforce.zones).toEqual(['lan'])
+    expect(draftOf(config).blocking.enforce.zones).toEqual(['lan'])
     // The last one named goes with the list: empty means every zone that is not external.
     config.setEnforcedZones(['spare'])
     config.removeZone('spare')
-    expect(config.draft.blocking.enforce).toEqual({ blockDot: true })
+    expect(draftOf(config).blocking.enforce).toEqual({ blockDot: true })
   })
 
   it('says what DNS enforcement goes back to when a zone goes', () => {
@@ -152,10 +187,10 @@ describe('config store zones', () => {
     const names = ['lan']
     config.setEnforcedZones(names)
     names.push('dmz')
-    expect(config.draft.blocking.enforce.zones).toEqual(['lan'])
+    expect(draftOf(config).blocking.enforce.zones).toEqual(['lan'])
     expect(config.dirty).toBe(true)
     config.setEnforcedZones([])
-    expect('zones' in config.draft.blocking.enforce).toBe(false)
+    expect('zones' in draftOf(config).blocking.enforce).toBe(false)
     expect(config.dirty).toBe(false)
   })
 
@@ -171,7 +206,12 @@ describe('config store zones', () => {
 })
 
 /** A draft where an interface is named by everything that can name one. */
-function wired(): DeepPartial<Config> {
+function wired(): DeepPartial<Config> & {
+  interfaces: Part<Interface>
+  gateways: Part<Gateway>
+  routes: Part<StaticRoute>
+  services: { dhcp: { servers: Part<DHCPServer> }; upnp?: DeepPartial<UPnP> }
+} {
   return {
     version: 3,
     zones: [{ name: 'lan' }, { name: 'wan', external: true }],
@@ -190,7 +230,10 @@ function wired(): DeepPartial<Config> {
       },
       { name: 'eth1.10', zone: 'lan', vlan: { id: 10, parent: 'eth1' } },
       { name: 'br0', zone: 'lan', bridge: { members: ['eth2', 'eth3'] } },
-      { name: 'bond0', bond: { mode: 'active-backup', members: ['eth4'], primary: 'eth4' } },
+      {
+        name: 'bond0',
+        bond: { mode: 'active-backup', members: ['eth4'], primary: 'eth4' },
+      },
       { name: 'wg0', zone: 'lan', wireguard: { peers: [{ name: 'alice' }] } },
     ],
     rules: [
@@ -256,25 +299,25 @@ describe('config store interfaces', () => {
     config.replaceDraft(configOf(wired()))
     config.removeInterface('eth1')
     expect(config.interfaces.map((i) => i.name)).toEqual(['eth0', 'br0', 'bond0', 'wg0'])
-    expect(config.draft.services.dhcp.servers).toEqual([])
-    expect(config.draft.services.dhcp.v6).toEqual([])
-    expect(config.draft.services.dns.interfaces).toEqual([])
+    expect(draftOf(config).services.dhcp.servers).toEqual([])
+    expect(draftOf(config).services.dhcp.v6).toEqual([])
+    expect(draftOf(config).services.dns.interfaces).toEqual([])
     // An empty list means every inside interface, so it goes rather than
     // staying behind empty.
-    expect(config.draft.services.ntp).toEqual({ serve: true })
+    expect(draftOf(config).services.ntp).toEqual({ serve: true })
   })
 
   it('drops gateways with their interface and clears what pointed at them', () => {
     const config = useConfigStore()
     config.replaceDraft(configOf(wired()))
     config.removeInterface('eth0')
-    expect(config.findInterface('eth1').ipv6).toEqual({ mode: 'none' })
+    expect(must(config.findInterface('eth1')).ipv6).toEqual({ mode: 'none' })
     expect(config.gateways.map((g) => g.name)).toEqual(['other'])
-    expect(config.rules.find((r) => r.id === 'r1').gateway).toBeUndefined()
+    expect(must(config.rules.find((r) => r.id === 'r1')).gateway).toBeUndefined()
     // r2 routes through the group, which still has a member.
-    expect(config.rules.find((r) => r.id === 'r2').gateway).toBe('failover')
+    expect(must(config.rules.find((r) => r.id === 'r2')).gateway).toBe('failover')
     expect(config.gatewayGroups.map((g) => g.name)).toEqual(['failover'])
-    expect(config.gatewayGroups[0].members.map((m) => m.gateway)).toEqual(['other'])
+    expect(must(config.gatewayGroups[0].members).map((m) => m.gateway)).toEqual(['other'])
     expect(config.routes).toEqual([])
   })
 
@@ -282,7 +325,7 @@ describe('config store interfaces', () => {
     const config = useConfigStore()
     config.replaceDraft(configOf(wired()))
     config.removeInterface('eth2')
-    expect(config.findInterface('br0').bridge.members).toEqual(['eth3'])
+    expect(must(must(config.findInterface('br0')).bridge).members).toEqual(['eth3'])
     config.removeInterface('eth4')
     expect(config.findInterface('bond0')).toBeNull()
   })
@@ -314,7 +357,7 @@ describe('config store interfaces', () => {
     ])
     config.removeInterface('eth1')
     expect(config.interfaces.map((i) => i.name)).toEqual(['eth0', 'br0', 'bond0', 'wg0'])
-    expect(config.draft.services.dhcp.servers).toEqual([])
+    expect(draftOf(config).services.dhcp.servers).toEqual([])
     expect(config.gateways.map((g) => g.name)).toEqual(['wan-gw', 'other'])
     expect(config.routes.map((r) => r.id)).toEqual(['rt1'])
   })
@@ -324,7 +367,11 @@ describe('config store interfaces', () => {
     const d = wired()
     d.interfaces.push(
       { name: 'eth1.20', zone: 'lan', vlan: { id: 20, parent: 'eth1' } },
-      { name: 'br1', zone: 'lan', bridge: { members: ['eth1.10', 'eth1.20', 'eth7'] } },
+      {
+        name: 'br1',
+        zone: 'lan',
+        bridge: { members: ['eth1.10', 'eth1.20', 'eth7'] },
+      },
     )
     d.services.dhcp.servers.push({ interface: 'br1' })
     config.replaceDraft(configOf(d))
@@ -341,8 +388,8 @@ describe('config store interfaces', () => {
       'time served on eth1',
     ])
     config.removeInterface('eth1')
-    expect(config.findInterface('br1').bridge.members).toEqual(['eth7'])
-    expect(config.draft.services.dhcp.servers).toEqual([{ interface: 'br1' }])
+    expect(must(must(config.findInterface('br1')).bridge).members).toEqual(['eth7'])
+    expect(draftOf(config).services.dhcp.servers).toEqual([{ interface: 'br1' }])
   })
 
   it('takes a gateway group whose every gateway goes with the interface', () => {
@@ -392,8 +439,18 @@ describe('config store interfaces', () => {
     }
     d.system = { management: { certificate: 'edge' } }
     d.certificates = [
-      { id: 'edge', enabled: true, source: 'acme', interfaceAddresses: ['eth0'] },
-      { id: 'both', enabled: true, source: 'acme', interfaceAddresses: ['eth0', 'eth6'] },
+      {
+        id: 'edge',
+        enabled: true,
+        source: 'acme',
+        interfaceAddresses: ['eth0'],
+      },
+      {
+        id: 'both',
+        enabled: true,
+        source: 'acme',
+        interfaceAddresses: ['eth0', 'eth6'],
+      },
       {
         id: 'named',
         enabled: true,
@@ -420,7 +477,7 @@ describe('config store interfaces', () => {
 
     config.removeInterface('eth0')
     // UPnP cannot run without the interface it opens ports on.
-    expect(config.draft.services.upnp).toEqual({
+    expect(draftOf(config).services.upnp).toEqual({
       enabled: false,
       igd: true,
       interfaces: ['eth1', 'br0'],
@@ -428,7 +485,7 @@ describe('config store interfaces', () => {
     expect(config.certificates.map((c) => c.id)).toEqual(['both', 'named'])
     expect(config.certificates[0].interfaceAddresses).toEqual(['eth6'])
     expect(config.certificates[1].interfaceAddresses).toBeUndefined()
-    expect(config.draft.system.management.certificate).toBeUndefined()
+    expect(draftOf(config).system.management.certificate).toBeUndefined()
   })
 
   // An empty list means every inside interface, which is not for a delete
@@ -436,38 +493,59 @@ describe('config store interfaces', () => {
   it('switches UPnP off with the only interface clients ask from', () => {
     const config = useConfigStore()
     const d = wired()
-    d.services.upnp = { enabled: true, pcp: true, externalInterface: 'eth0', interfaces: ['br0'] }
+    d.services.upnp = {
+      enabled: true,
+      pcp: true,
+      externalInterface: 'eth0',
+      interfaces: ['br0'],
+    }
     config.replaceDraft(configOf(d))
     expect(config.interfaceDependents('br0')).toEqual([
       'UPnP, switched off rather than answer every inside interface',
     ])
     config.removeInterface('br0')
-    expect(config.draft.services.upnp).toEqual({
+    expect(draftOf(config).services.upnp).toEqual({
       enabled: false,
       pcp: true,
       externalInterface: 'eth0',
     })
 
     // Off already, it only loses the name.
-    d.services.upnp = { enabled: false, externalInterface: 'eth0', interfaces: ['br0'] }
+    d.services.upnp = {
+      enabled: false,
+      externalInterface: 'eth0',
+      interfaces: ['br0'],
+    }
     config.replaceDraft(configOf(d))
     expect(config.interfaceDependents('br0')).toEqual(['UPnP clients on br0'])
     config.removeInterface('eth0')
-    expect(config.draft.services.upnp).toEqual({ enabled: false, interfaces: ['br0'] })
+    expect(draftOf(config).services.upnp).toEqual({
+      enabled: false,
+      interfaces: ['br0'],
+    })
   })
 
   // Either VLAN alone would leave UPnP and the certificate the other one.
   it('weighs UPnP and certificates against every interface a delete takes', () => {
     const config = useConfigStore()
     const d = wired()
-    d.interfaces.push({ name: 'eth1.20', zone: 'lan', vlan: { id: 20, parent: 'eth1' } })
+    d.interfaces.push({
+      name: 'eth1.20',
+      zone: 'lan',
+      vlan: { id: 20, parent: 'eth1' },
+    })
     d.services.upnp = {
       enabled: true,
       externalInterface: 'eth0',
       interfaces: ['eth1.10', 'eth1.20'],
     }
     d.certificates = [
-      { id: 'inside', enabled: true, source: 'acme', interfaceAddresses: ['eth1.10', 'eth1.20'] },
+      {
+        id: 'inside',
+        enabled: true,
+        source: 'acme',
+        interfaceAddresses: ['eth1.10', 'eth1.20'],
+      },
       {
         id: 'named',
         enabled: true,
@@ -492,12 +570,19 @@ describe('config store interfaces', () => {
       'certificate named loses the address of eth1.20',
     ])
     config.removeInterface('eth1')
-    expect(config.draft.services.upnp).toEqual({ enabled: false, externalInterface: 'eth0' })
+    expect(draftOf(config).services.upnp).toEqual({
+      enabled: false,
+      externalInterface: 'eth0',
+    })
     expect(config.certificates.map((c) => c.id)).toEqual(['named'])
     expect(config.certificates[0].interfaceAddresses).toEqual(['eth0'])
 
     // A bridge of the two goes with them, and UPnP with the bridge.
-    d.interfaces.push({ name: 'br9', zone: 'lan', bridge: { members: ['eth1.10', 'eth1.20'] } })
+    d.interfaces.push({
+      name: 'br9',
+      zone: 'lan',
+      bridge: { members: ['eth1.10', 'eth1.20'] },
+    })
     d.services.upnp.interfaces = ['br9']
     config.replaceDraft(configOf(d))
     expect(config.interfaceDependents('eth1')).toContain(
@@ -505,7 +590,10 @@ describe('config store interfaces', () => {
     )
     config.removeInterface('eth1')
     expect(config.findInterface('br9')).toBeNull()
-    expect(config.draft.services.upnp).toEqual({ enabled: false, externalInterface: 'eth0' })
+    expect(draftOf(config).services.upnp).toEqual({
+      enabled: false,
+      externalInterface: 'eth0',
+    })
   })
 
   it('offers undo for a delete and for discard', () => {
@@ -516,16 +604,16 @@ describe('config store interfaces', () => {
 
     config.removeRule('r1')
     expect(config.rules.map((r) => r.id)).toEqual(['r2'])
-    expect(toast.toasts.at(-1).message).toBe('Deleted rule r1.')
-    toast.act(toast.toasts.at(-1).id)
+    expect(must(toast.toasts.at(-1)).message).toBe('Deleted rule r1.')
+    toast.act(must(toast.toasts.at(-1)).id)
     expect(config.rules.map((r) => r.id)).toEqual(['r1', 'r2'])
     expect(config.dirty).toBe(false)
 
     config.removeRule('r2')
     config.discard()
     expect(config.dirty).toBe(false)
-    expect(toast.toasts.at(-1).message).toBe('Draft discarded.')
-    toast.act(toast.toasts.at(-1).id)
+    expect(must(toast.toasts.at(-1)).message).toBe('Draft discarded.')
+    toast.act(must(toast.toasts.at(-1)).id)
     expect(config.rules.map((r) => r.id)).toEqual(['r1'])
   })
 
@@ -546,7 +634,7 @@ describe('config store interfaces', () => {
     expect(config.draft).toEqual(before)
 
     config.removeRule('r1')
-    expect(toast.toasts.at(-1).message).toBe('Deleted rule r1.')
+    expect(must(toast.toasts.at(-1)).message).toBe('Deleted rule r1.')
   })
 
   // Half a bulk removal with no toast would have no way back.
@@ -580,9 +668,13 @@ describe('config store host overrides', () => {
     const toast = useToastStore()
     config.replaceDraft(configOf(draft()))
     config.upsertHostOverride({ hostname: 'potato', ip: '10.0.0.5' })
-    config.upsertHostOverride({ hostname: 'potato', domain: 'test', ip: '10.0.0.6' })
+    config.upsertHostOverride({
+      hostname: 'potato',
+      domain: 'test',
+      ip: '10.0.0.6',
+    })
 
-    const hosts = () => config.draft.services.dns.hostOverrides
+    const hosts = () => must(must(draftOf(config).services.dns).hostOverrides)
     expect(hosts()).toHaveLength(2)
 
     config.upsertHostOverride({ hostname: 'potato', domain: 'test', ip: '10.0.0.7' }, 'potato.test')
@@ -592,7 +684,7 @@ describe('config store host overrides', () => {
 
     config.removeHostOverride('potato.test')
     expect(hosts()).toEqual([{ hostname: 'potato', ip: '10.0.0.5' }])
-    expect(toast.toasts.at(-1).message).toBe('Deleted host override potato.test.')
+    expect(must(toast.toasts.at(-1)).message).toBe('Deleted host override potato.test.')
   })
 })
 
@@ -657,7 +749,7 @@ describe('config store draft changes', () => {
   it('sends a change to the tailnet node to its own page', () => {
     const config = useConfigStore()
     config.replaceDraft(configOf(wired()))
-    config.draft.interfaces.push({
+    must(draftOf(config).interfaces).push({
       name: 'tailscale0',
       zone: 'lan',
       enabled: true,
@@ -695,12 +787,12 @@ describe('config store traffic shaping', () => {
     const config = useConfigStore()
     config.replaceDraft(configOf(draft()))
     config.setShaping('eth0', { download: 200_000_000, upload: 20_000_000 })
-    expect(config.findInterface('eth0').shaping.download).toBe(200_000_000)
+    expect(must(must(config.findInterface('eth0')).shaping).download).toBe(200_000_000)
     config.clearShaping('eth0')
-    expect(config.findInterface('eth0').shaping).toBeUndefined()
+    expect(must(config.findInterface('eth0')).shaping).toBeUndefined()
     // Removing it is undoable, like every other delete.
-    useToastStore().toasts[0].action.run()
-    expect(config.findInterface('eth0').shaping.download).toBe(200_000_000)
+    toastAction(useToastStore().toasts[0]).run()
+    expect(must(must(config.findInterface('eth0')).shaping).download).toBe(200_000_000)
   })
 
   it('collects everything that has been given a priority', () => {
@@ -726,8 +818,8 @@ describe('config store traffic shaping', () => {
     expect(config.busyZones.map((z) => z.name)).toEqual(['lan'])
     config.clearBusy('lan')
     expect(config.busyZones).toEqual([])
-    useToastStore().toasts[0].action.run()
-    expect(config.busyZones[0].busy.connections).toBe(200)
+    toastAction(useToastStore().toasts[0]).run()
+    expect(must(config.busyZones[0].busy).connections).toBe(200)
   })
 
   // Holding a busy host back is a priority decision, so it is shown where
@@ -743,7 +835,10 @@ describe('config store traffic shaping', () => {
   it('files a radio and its networks under the wireless page', () => {
     const config = useConfigStore()
     const d = draft()
-    d.interfaces.push({ name: 'ap0', wireless: { radio: 'wlp3s0', ssid: 'lan' } })
+    d.interfaces.push({
+      name: 'ap0',
+      wireless: { radio: 'wlp3s0', ssid: 'lan' },
+    })
     d.wireless = { country: 'US', radios: [{ name: 'wlp3s0' }] }
     config.replaceDraft(configOf(d))
     expect(config.sectionFor('wireless.radios[0].channel')).toBe('/wireless')
@@ -755,7 +850,10 @@ describe('config store traffic shaping', () => {
   it("takes a radio's networks with it", () => {
     const config = useConfigStore()
     const d = draft()
-    d.interfaces.push({ name: 'ap0', wireless: { radio: 'wlp3s0', ssid: 'lan' } })
+    d.interfaces.push({
+      name: 'ap0',
+      wireless: { radio: 'wlp3s0', ssid: 'lan' },
+    })
     d.wireless = { country: 'US', radios: [{ name: 'wlp3s0' }] }
     config.replaceDraft(configOf(d))
     expect(config.radioDependents('wlp3s0')).toEqual(['network lan on ap0'])
@@ -772,7 +870,10 @@ describe('config store traffic shaping', () => {
     expect(config.remoteBackup).toEqual({})
     config.setRemoteBackup({ bucket: 'router-backups' })
     config.setRemoteBackup({ enabled: true })
-    expect(config.draft.backup.remote).toEqual({ bucket: 'router-backups', enabled: true })
+    expect(must(draftOf(config).backup).remote).toEqual({
+      bucket: 'router-backups',
+      enabled: true,
+    })
     expect(config.remoteBackup.bucket).toBe('router-backups')
   })
 
@@ -787,12 +888,17 @@ describe('config store traffic shaping', () => {
     config.upsertAcmeAccount(fixture<ACMEAccount>({ id: 'le', directory: 'https://ca.test/dir' }))
     config.upsertDnsProvider({ id: 'dns', kind: 'exec' })
     config.upsertCertificate(
-      fixture<Certificate>({ id: 'router', source: 'acme', account: 'le', provider: 'dns' }),
+      fixture<Certificate>({
+        id: 'router',
+        source: 'acme',
+        account: 'le',
+        provider: 'dns',
+      }),
     )
     config.setManagementCertificate('router')
 
-    expect(config.draft.acme.accounts).toHaveLength(1)
-    expect(config.draft.dnsProviders).toEqual([{ id: 'dns', kind: 'exec' }])
+    expect(must(draftOf(config).acme).accounts).toHaveLength(1)
+    expect(draftOf(config).dnsProviders).toEqual([{ id: 'dns', kind: 'exec' }])
     expect(config.accountDependents('le')).toEqual(['router'])
     expect(config.providerDependents('dns')).toEqual(['router'])
     expect(config.certificateDependents('router')).toEqual(['the web UI'])
@@ -801,7 +907,7 @@ describe('config store traffic shaping', () => {
     // one rather than leaving a name nothing answers to.
     config.removeCertificate('router')
     expect(config.certificates).toEqual([])
-    expect(config.draft.system.management.certificate).toBeUndefined()
+    expect(draftOf(config).system.management.certificate).toBeUndefined()
     expect(config.accountDependents('le')).toEqual([])
   })
 
@@ -823,7 +929,12 @@ describe('config store traffic shaping', () => {
     const d = draft()
     d.system = { management: { certificate: 'router' } }
     d.certificates = [
-      { id: 'router', enabled: true, source: 'acme', names: ['router.example.test'] },
+      {
+        id: 'router',
+        enabled: true,
+        source: 'acme',
+        names: ['router.example.test'],
+      },
     ]
     d.services = {
       proxy: {
@@ -837,7 +948,12 @@ describe('config store traffic shaping', () => {
             pool: 'web',
             certificate: 'router',
           },
-          { id: 'blog', enabled: true, hosts: ['blog.example.com'], pool: 'web' },
+          {
+            id: 'blog',
+            enabled: true,
+            hosts: ['blog.example.com'],
+            pool: 'web',
+          },
         ],
       },
     }
@@ -847,18 +963,18 @@ describe('config store traffic shaping', () => {
     const renamed = { ...d.certificates[0], id: 'edge' }
     config.upsertCertificate(fixture<Certificate>(renamed), 'router')
     expect(config.certificates.map((c) => c.id)).toEqual(['edge'])
-    expect(config.draft.system.management.certificate).toBe('edge')
-    expect(config.proxy.sites.map((s) => s.certificate)).toEqual(['edge', undefined])
+    expect(draftOf(config).system.management.certificate).toBe('edge')
+    expect(must(config.proxy.sites).map((s) => s.certificate)).toEqual(['edge', undefined])
 
     // An edit has no undo of its own; discarding the draft puts the old id
     // back everywhere, and undoing that brings the rename back whole.
     config.discard()
     expect(config.certificates.map((c) => c.id)).toEqual(['router'])
-    expect(config.draft.system.management.certificate).toBe('router')
-    expect(config.proxy.sites.map((s) => s.certificate)).toEqual(['router', undefined])
-    useToastStore().toasts.at(-1).action.run()
-    expect(config.draft.system.management.certificate).toBe('edge')
-    expect(config.proxy.sites.map((s) => s.certificate)).toEqual(['edge', undefined])
+    expect(draftOf(config).system.management.certificate).toBe('router')
+    expect(must(config.proxy.sites).map((s) => s.certificate)).toEqual(['router', undefined])
+    toastAction(useToastStore().toasts.at(-1)).run()
+    expect(draftOf(config).system.management.certificate).toBe('edge')
+    expect(must(config.proxy.sites).map((s) => s.certificate)).toEqual(['edge', undefined])
   })
 
   it('files certificate changes under the certificates page', () => {
@@ -912,7 +1028,7 @@ describe('config store traffic shaping', () => {
     config.setNTP({ interfaces: [] })
     expect(config.ntp).toEqual({ serve: true })
     config.setNTP({ serve: false })
-    expect(config.draft.services.ntp).toBeUndefined()
+    expect(draftOf(config).services.ntp).toBeUndefined()
     expect(config.ntp).toEqual({})
   })
 })
@@ -921,29 +1037,33 @@ describe('config store reverse proxy', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
   /** A draft with a pool, a site that uses it, and a profile. */
-  function proxied(): DeepPartial<Config> {
+  function proxied(): Drawn & {
+    services: { proxy: { sites: Part<ProxySite> } }
+  } {
     const d = draft()
-    d.services = {
-      proxy: {
-        enabled: true,
-        pools: [
-          { id: 'web', upstreams: [{ address: '10.0.0.2:80' }] },
-          { id: 'api', upstreams: [{ address: '10.0.0.3:80' }] },
-        ],
-        wafProfiles: [{ id: 'strict', mode: 'block' }],
-        sites: [
-          {
-            id: 'shop',
-            enabled: true,
-            hosts: ['shop.example.com'],
-            pool: 'web',
-            paths: [{ prefix: '/api', pool: 'api' }],
-            waf: 'strict',
-          },
-        ],
+    return {
+      ...d,
+      services: {
+        proxy: {
+          enabled: true,
+          pools: [
+            { id: 'web', upstreams: [{ address: '10.0.0.2:80' }] },
+            { id: 'api', upstreams: [{ address: '10.0.0.3:80' }] },
+          ],
+          wafProfiles: [{ id: 'strict', mode: 'block' }],
+          sites: [
+            {
+              id: 'shop',
+              enabled: true,
+              hosts: ['shop.example.com'],
+              pool: 'web',
+              paths: [{ prefix: '/api', pool: 'api' }],
+              waf: 'strict',
+            },
+          ],
+        },
       },
     }
-    return d
   }
 
   it('files proxy changes under the proxy page', () => {
@@ -962,9 +1082,9 @@ describe('config store reverse proxy', () => {
     expect(config.poolDependents('api')).toEqual(['site shop path /api'])
     expect(config.profileDependents('strict')).toEqual(['site shop'])
     config.removePool('web')
-    expect(config.proxy.pools.map((p) => p.id)).toEqual(['api'])
-    useToastStore().toasts[0].action.run()
-    expect(config.proxy.pools.map((p) => p.id)).toEqual(['web', 'api'])
+    expect(must(config.proxy.pools).map((p) => p.id)).toEqual(['api'])
+    toastAction(useToastStore().toasts[0]).run()
+    expect(must(config.proxy.pools).map((p) => p.id)).toEqual(['web', 'api'])
   })
 
   it('leaves the sites a deleted profile inspected uninspected', () => {
@@ -972,10 +1092,10 @@ describe('config store reverse proxy', () => {
     config.replaceDraft(configOf(proxied()))
     config.removeProfile('strict')
     expect(config.proxy.wafProfiles).toEqual([])
-    expect(config.proxy.sites[0].waf).toBeUndefined()
-    expect(config.proxy.sites[0].pool).toBe('web')
-    useToastStore().toasts[0].action.run()
-    expect(config.proxy.sites[0].waf).toBe('strict')
+    expect(must(config.proxy.sites)[0].waf).toBeUndefined()
+    expect(must(config.proxy.sites)[0].pool).toBe('web')
+    toastAction(useToastStore().toasts[0]).run()
+    expect(must(config.proxy.sites)[0].waf).toBe('strict')
   })
 
   // A site without a certificate serves the built-in one, as the web UI does.
@@ -984,8 +1104,18 @@ describe('config store reverse proxy', () => {
     const d = proxied()
     d.system = { management: { certificate: 'edge' } }
     d.certificates = [
-      { id: 'edge', enabled: true, source: 'acme', names: ['shop.example.com'] },
-      { id: 'other', enabled: true, source: 'acme', names: ['blog.example.com'] },
+      {
+        id: 'edge',
+        enabled: true,
+        source: 'acme',
+        names: ['shop.example.com'],
+      },
+      {
+        id: 'other',
+        enabled: true,
+        source: 'acme',
+        names: ['blog.example.com'],
+      },
     ]
     d.services.proxy.sites[0].certificate = 'edge'
     d.services.proxy.sites.push({
@@ -1001,15 +1131,15 @@ describe('config store reverse proxy', () => {
 
     config.removeCertificate('edge')
     expect(config.certificates.map((c) => c.id)).toEqual(['other'])
-    expect(config.draft.system.management.certificate).toBeUndefined()
-    expect(config.proxy.sites.map((s) => s.certificate)).toEqual([undefined, 'other'])
+    expect(draftOf(config).system.management.certificate).toBeUndefined()
+    expect(must(config.proxy.sites).map((s) => s.certificate)).toEqual([undefined, 'other'])
   })
 
   it('renames a site in place', () => {
     const config = useConfigStore()
     config.replaceDraft(configOf(proxied()))
     config.upsertSite({ id: 'store', enabled: true, hosts: ['s.example.com'], pool: 'web' }, 'shop')
-    expect(config.proxy.sites.map((s) => s.id)).toEqual(['store'])
+    expect(must(config.proxy.sites).map((s) => s.id)).toEqual(['store'])
   })
 
   it('follows a renamed pool in the sites and paths that send to it', () => {
@@ -1026,17 +1156,17 @@ describe('config store reverse proxy', () => {
     config.markSaved()
 
     config.upsertPool({ id: 'front', upstreams: [{ address: '10.0.0.2:80' }] }, 'web')
-    expect(config.proxy.pools.map((p) => p.id)).toEqual(['front', 'api'])
-    expect(config.proxy.sites.map((s) => s.pool)).toEqual(['front', 'api'])
-    expect(config.proxy.sites.map((s) => s.paths[0].pool)).toEqual(['api', 'front'])
+    expect(must(config.proxy.pools).map((p) => p.id)).toEqual(['front', 'api'])
+    expect(must(config.proxy.sites).map((s) => s.pool)).toEqual(['front', 'api'])
+    expect(must(config.proxy.sites).map((s) => must(s.paths)[0].pool)).toEqual(['api', 'front'])
 
     config.discard()
-    expect(config.proxy.pools.map((p) => p.id)).toEqual(['web', 'api'])
-    expect(config.proxy.sites.map((s) => s.pool)).toEqual(['web', 'api'])
-    expect(config.proxy.sites.map((s) => s.paths[0].pool)).toEqual(['api', 'web'])
-    useToastStore().toasts.at(-1).action.run()
-    expect(config.proxy.sites.map((s) => s.pool)).toEqual(['front', 'api'])
-    expect(config.proxy.sites.map((s) => s.paths[0].pool)).toEqual(['api', 'front'])
+    expect(must(config.proxy.pools).map((p) => p.id)).toEqual(['web', 'api'])
+    expect(must(config.proxy.sites).map((s) => s.pool)).toEqual(['web', 'api'])
+    expect(must(config.proxy.sites).map((s) => must(s.paths)[0].pool)).toEqual(['api', 'web'])
+    toastAction(useToastStore().toasts.at(-1)).run()
+    expect(must(config.proxy.sites).map((s) => s.pool)).toEqual(['front', 'api'])
+    expect(must(config.proxy.sites).map((s) => must(s.paths)[0].pool)).toEqual(['api', 'front'])
   })
 
   it('follows a renamed WAF profile in the sites it inspects', () => {
@@ -1052,14 +1182,14 @@ describe('config store reverse proxy', () => {
     config.markSaved()
 
     config.upsertProfile({ id: 'tight', mode: 'block' }, 'strict')
-    expect(config.proxy.wafProfiles.map((w) => w.id)).toEqual(['tight'])
-    expect(config.proxy.sites.map((s) => s.waf)).toEqual(['tight', undefined])
+    expect(must(config.proxy.wafProfiles).map((w) => w.id)).toEqual(['tight'])
+    expect(must(config.proxy.sites).map((s) => s.waf)).toEqual(['tight', undefined])
 
     config.discard()
-    expect(config.proxy.wafProfiles.map((w) => w.id)).toEqual(['strict'])
-    expect(config.proxy.sites.map((s) => s.waf)).toEqual(['strict', undefined])
-    useToastStore().toasts.at(-1).action.run()
-    expect(config.proxy.sites.map((s) => s.waf)).toEqual(['tight', undefined])
+    expect(must(config.proxy.wafProfiles).map((w) => w.id)).toEqual(['strict'])
+    expect(must(config.proxy.sites).map((s) => s.waf)).toEqual(['strict', undefined])
+    toastAction(useToastStore().toasts.at(-1)).run()
+    expect(must(config.proxy.sites).map((s) => s.waf)).toEqual(['tight', undefined])
   })
 
   it('creates the proxy block on first use', () => {
@@ -1074,16 +1204,16 @@ describe('config store reverse proxy', () => {
     const config = useConfigStore()
     config.replaceDraft(configOf(proxied()))
     config.addExclusion('strict', { rule: '942100' })
-    expect(config.proxy.wafProfiles[0].exclusions).toEqual([{ rule: '942100' }])
+    expect(must(config.proxy.wafProfiles)[0].exclusions).toEqual([{ rule: '942100' }])
     // The same rule twice is the same exclusion.
     config.addExclusion('strict', { rule: '942100' })
-    expect(config.proxy.wafProfiles[0].exclusions).toHaveLength(1)
+    expect(must(config.proxy.wafProfiles)[0].exclusions).toHaveLength(1)
     // On a path it is a different one.
     config.addExclusion('strict', { rule: '942100', path: '/wp-admin' })
-    expect(config.proxy.wafProfiles[0].exclusions).toHaveLength(2)
+    expect(must(config.proxy.wafProfiles)[0].exclusions).toHaveLength(2)
     const toasts = useToastStore().toasts
-    toasts[toasts.length - 1].action.run()
-    expect(config.proxy.wafProfiles[0].exclusions).toEqual([{ rule: '942100' }])
+    toastAction(toasts[toasts.length - 1]).run()
+    expect(must(config.proxy.wafProfiles)[0].exclusions).toEqual([{ rule: '942100' }])
   })
 
   it('says a rule is excluded already, and tells one variable from the whole rule', () => {
@@ -1091,10 +1221,14 @@ describe('config store reverse proxy', () => {
     config.replaceDraft(configOf(proxied()))
     config.addExclusion('strict', { rule: '942100', target: 'ARGS:q' })
     config.addExclusion('strict', { rule: '942100' })
-    expect(config.proxy.wafProfiles[0].exclusions).toHaveLength(2)
-    config.addExclusion('strict', { rule: '942100', target: 'ARGS:q', description: 'Search' })
-    expect(config.proxy.wafProfiles[0].exclusions).toHaveLength(2)
-    const last = useToastStore().toasts.at(-1)
+    expect(must(config.proxy.wafProfiles)[0].exclusions).toHaveLength(2)
+    config.addExclusion('strict', {
+      rule: '942100',
+      target: 'ARGS:q',
+      description: 'Search',
+    })
+    expect(must(config.proxy.wafProfiles)[0].exclusions).toHaveLength(2)
+    const last = must(useToastStore().toasts.at(-1))
     expect(last.message).toBe('Rule 942100 for ARGS:q is excluded already.')
     expect(last.action).toBeNull()
   })
@@ -1105,15 +1239,24 @@ describe('config store reverse proxy', () => {
     config.addExclusion('strict', { rule: '942100' })
     config.addExclusion('strict', { rule: '941100', path: '/api' })
     config.updateExclusion('strict', 1, { rule: '941100', path: '/api/v2' })
-    expect(config.proxy.wafProfiles[0].exclusions[1]).toEqual({ rule: '941100', path: '/api/v2' })
+    expect(must(must(config.proxy.wafProfiles)[0].exclusions)[1]).toEqual({
+      rule: '941100',
+      path: '/api/v2',
+    })
     config.removeExclusion('strict', 0)
-    expect(config.proxy.wafProfiles[0].exclusions).toEqual([{ rule: '941100', path: '/api/v2' }])
-    expect(useToastStore().toasts.at(-1).message).toBe('Deleted the exclusion of rule 942100.')
+    expect(must(config.proxy.wafProfiles)[0].exclusions).toEqual([
+      { rule: '941100', path: '/api/v2' },
+    ])
+    expect(must(useToastStore().toasts.at(-1)).message).toBe(
+      'Deleted the exclusion of rule 942100.',
+    )
     // The last one takes the list with it, as a saved profile has none.
     config.removeExclusion('strict', 0)
-    expect(config.proxy.wafProfiles[0]).not.toHaveProperty('exclusions')
-    useToastStore().toasts.at(-1).action.run()
-    expect(config.proxy.wafProfiles[0].exclusions).toEqual([{ rule: '941100', path: '/api/v2' }])
+    expect(must(config.proxy.wafProfiles)[0]).not.toHaveProperty('exclusions')
+    toastAction(useToastStore().toasts.at(-1)).run()
+    expect(must(config.proxy.wafProfiles)[0].exclusions).toEqual([
+      { rule: '941100', path: '/api/v2' },
+    ])
   })
 
   // An access rule belongs to its zone and names aliases, so it follows a
@@ -1122,7 +1265,14 @@ describe('config store reverse proxy', () => {
     const d = proxied()
     d.aliases = [{ name: 'home', type: 'hosts', entries: ['198.51.100.0/24'] }]
     d.services.proxy.access = [
-      { id: 'a1', enabled: true, zone: 'dmz', action: 'accept', ports: ['https'], source: {} },
+      {
+        id: 'a1',
+        enabled: true,
+        zone: 'dmz',
+        action: 'accept',
+        ports: ['https'],
+        source: {},
+      },
       {
         id: 'a2',
         enabled: true,
@@ -1140,11 +1290,14 @@ describe('config store reverse proxy', () => {
 
     config.upsertZone({ name: 'outside', external: true }, 'wan')
     config.upsertAlias({ name: 'house', type: 'hosts', entries: ['198.51.100.0/24'] }, 'home')
-    expect(config.proxy.access[1]).toMatchObject({ zone: 'outside', source: { alias: 'house' } })
-    expect(config.proxy.sites[0].allowFrom).toEqual(['house', '10.0.0.0/8'])
+    expect(must(config.proxy.access)[1]).toMatchObject({
+      zone: 'outside',
+      source: { alias: 'house' },
+    })
+    expect(must(config.proxy.sites)[0].allowFrom).toEqual(['house', '10.0.0.0/8'])
 
     config.removeZone('dmz')
-    expect(config.proxy.access.map((a) => a.id)).toEqual(['a2'])
+    expect(must(config.proxy.access).map((a) => a.id)).toEqual(['a2'])
   })
 
   it('moves an access rule among those of its zone', () => {
@@ -1160,12 +1313,12 @@ describe('config store reverse proxy', () => {
     const config = useConfigStore()
     config.replaceDraft(configOf(d))
     config.moveProxyAccess('c', -1)
-    expect(config.proxy.access.map((a) => a.id)).toEqual(['c', 'b', 'a'])
+    expect(must(config.proxy.access).map((a) => a.id)).toEqual(['c', 'b', 'a'])
     // The first of its zone goes nowhere.
     config.moveProxyAccess('c', -1)
-    expect(config.proxy.access.map((a) => a.id)).toEqual(['c', 'b', 'a'])
+    expect(must(config.proxy.access).map((a) => a.id)).toEqual(['c', 'b', 'a'])
     config.removeProxyAccess('b')
-    expect(config.proxy.access.map((a) => a.id)).toEqual(['c', 'a'])
+    expect(must(config.proxy.access).map((a) => a.id)).toEqual(['c', 'a'])
   })
 })
 
@@ -1188,7 +1341,7 @@ describe('config store DNS blocking exceptions', () => {
     config.setException('Ads.Example.com.', 'allow', true)
     expect(config.blocking.allow).toEqual(['ads.example.com'])
     config.setException('ads.example.com', 'allow', false)
-    expect(config.draft.blocking).not.toHaveProperty('allow')
+    expect(draftOf(config).blocking).not.toHaveProperty('allow')
     expect(config.dirty).toBe(false)
   })
 
@@ -1197,10 +1350,10 @@ describe('config store DNS blocking exceptions', () => {
     config.replaceDraft(configOf(blocked()))
     config.setException('Tracker.Example.net', 'allow', true)
     expect(config.blocking.allow).toEqual(['tracker.example.net'])
-    expect(config.draft.blocking).not.toHaveProperty('deny')
+    expect(draftOf(config).blocking).not.toHaveProperty('deny')
     config.setException('tracker.example.net', 'deny', true)
     expect(config.blocking.deny).toEqual(['tracker.example.net'])
-    expect(config.draft.blocking).not.toHaveProperty('allow')
+    expect(draftOf(config).blocking).not.toHaveProperty('allow')
   })
 })
 
@@ -1210,13 +1363,22 @@ describe('config store wake on LAN', () => {
   /** Two machines on the LAN, one on a VLAN of it, and a cron that wakes one. */
   function sleepers(): DeepPartial<Config> {
     const d = draft()
-    d.interfaces.push({ name: 'eth1.20', zone: 'lan', vlan: { parent: 'eth1', id: 20 } })
+    d.interfaces.push({
+      name: 'eth1.20',
+      zone: 'lan',
+      vlan: { parent: 'eth1', id: 20 },
+    })
     d.services = {
       dhcp: { enabled: false },
       dns: { enabled: false },
       wol: {
         devices: [
-          { id: 'wol-nas', interface: 'eth1', mac: 'aa:bb:cc:00:00:01', description: 'NAS' },
+          {
+            id: 'wol-nas',
+            interface: 'eth1',
+            mac: 'aa:bb:cc:00:00:01',
+            description: 'NAS',
+          },
           { id: 'wol-pc', interface: 'eth1.20', mac: 'aa:bb:cc:00:00:02' },
         ],
       },
@@ -1239,18 +1401,32 @@ describe('config store wake on LAN', () => {
       }),
     )
     config.markSaved()
-    config.upsertWoLDevice({ id: 'wol-a', interface: 'eth1', mac: 'aa:bb:cc:00:00:09' })
+    config.upsertWoLDevice({
+      id: 'wol-a',
+      interface: 'eth1',
+      mac: 'aa:bb:cc:00:00:09',
+    })
     expect(config.wolDevices).toHaveLength(1)
     expect(config.sectionFor('services.wol.devices[wol-a].mac')).toBe('/services/wol')
     config.upsertWoLDevice(
-      { id: 'wol-a', interface: 'eth1', mac: 'aa:bb:cc:00:00:09', description: 'NAS' },
+      {
+        id: 'wol-a',
+        interface: 'eth1',
+        mac: 'aa:bb:cc:00:00:09',
+        description: 'NAS',
+      },
       'wol-a',
     )
     expect(config.wolDevices).toEqual([
-      { id: 'wol-a', interface: 'eth1', mac: 'aa:bb:cc:00:00:09', description: 'NAS' },
+      {
+        id: 'wol-a',
+        interface: 'eth1',
+        mac: 'aa:bb:cc:00:00:09',
+        description: 'NAS',
+      },
     ])
     config.removeWoLDevice(config.wolDevices[0])
-    expect(config.draft.services).not.toHaveProperty('wol')
+    expect(draftOf(config).services).not.toHaveProperty('wol')
     expect(config.dirty).toBe(false)
   })
 
@@ -1260,7 +1436,7 @@ describe('config store wake on LAN', () => {
     config.replaceDraft(configOf(sleepers()))
     expect(config.wolDeviceDependents('wol-nas')).toEqual(['cron job Morning NAS'])
     config.removeWoLDevice(config.wolDevices[0])
-    expect(toast.toasts.at(-1).message).toBe('Deleted NAS.')
+    expect(must(toast.toasts.at(-1)).message).toBe('Deleted NAS.')
     expect(config.wolDevices.map((d) => d.id)).toEqual(['wol-pc'])
     expect(config.crons.map((c) => c.id)).toEqual(['c2', 'c3'])
   })
@@ -1276,7 +1452,7 @@ describe('config store wake on LAN', () => {
       'cron job Morning NAS',
     ])
     config.removeInterface('eth1')
-    expect(config.draft.services).not.toHaveProperty('wol')
+    expect(draftOf(config).services).not.toHaveProperty('wol')
     expect(config.crons.map((c) => c.id)).toEqual(['c3'])
   })
 })
@@ -1287,15 +1463,31 @@ describe('config store dynamic DNS', () => {
   function kept(): DeepPartial<Config> {
     const d = draft()
     d.dnsProviders = [
-      { id: 'cf', kind: 'cloudflare', settings: { token: 't' }, domains: ['example.com'] },
-      { id: 'home', kind: 'cloudflare', settings: { token: 't' }, domains: ['home.example.com'] },
+      {
+        id: 'cf',
+        kind: 'cloudflare',
+        settings: { token: 't' },
+        domains: ['example.com'],
+      },
+      {
+        id: 'home',
+        kind: 'cloudflare',
+        settings: { token: 't' },
+        domains: ['home.example.com'],
+      },
     ]
     d.services = {
       dhcp: { enabled: false },
       dns: { enabled: false },
       ddns: {
         records: [
-          { id: 'ddns-www', enabled: true, name: 'www.example.com', interface: 'eth0', ipv4: true },
+          {
+            id: 'ddns-www',
+            enabled: true,
+            name: 'www.example.com',
+            interface: 'eth0',
+            ipv4: true,
+          },
           {
             id: 'ddns-nas',
             enabled: true,
@@ -1318,13 +1510,19 @@ describe('config store dynamic DNS', () => {
       }),
     )
     config.markSaved()
-    const r = { id: 'ddns-a', enabled: true, name: 'a.example.com', interface: 'eth0', ipv4: true }
+    const r = {
+      id: 'ddns-a',
+      enabled: true,
+      name: 'a.example.com',
+      interface: 'eth0',
+      ipv4: true,
+    }
     config.upsertDdnsRecord(r)
     expect(config.sectionFor('services.ddns.records[ddns-a].name')).toBe('/services/ddns')
     config.upsertDdnsRecord({ ...r, description: 'Office' }, 'ddns-a')
     expect(config.ddnsRecords).toEqual([{ ...r, description: 'Office' }])
     config.removeDdnsRecord(config.ddnsRecords[0])
-    expect(config.draft.services).not.toHaveProperty('ddns')
+    expect(draftOf(config).services).not.toHaveProperty('ddns')
     expect(config.dirty).toBe(false)
   })
 
@@ -1364,12 +1562,24 @@ function tunnelDraft(): DeepPartial<Config> {
       },
     ],
     rules: [
-      { id: 'r-laptop', zone: 'wg0', source: { peer: 'wg0/laptop' }, destination: {} },
-      { id: 'r-to-phone', zone: 'lan', source: {}, destination: { peer: 'wg0/phone' } },
+      {
+        id: 'r-laptop',
+        zone: 'wg0',
+        source: { peer: 'wg0/laptop' },
+        destination: {},
+      },
+      {
+        id: 'r-to-phone',
+        zone: 'lan',
+        source: {},
+        destination: { peer: 'wg0/phone' },
+      },
       { id: 'r-lan', zone: 'lan', source: {}, destination: {} },
     ],
     services: {
-      proxy: { access: [{ id: 'a1', zone: 'wg0', source: { peer: 'wg0/laptop' } }] },
+      proxy: {
+        access: [{ id: 'a1', zone: 'wg0', source: { peer: 'wg0/laptop' } }],
+      },
     },
   }
 }
@@ -1380,10 +1590,10 @@ describe('config store WireGuard peers', () => {
   it('renames a peer everywhere a rule names it', () => {
     const config = useConfigStore()
     config.replaceDraft(configOf(tunnelDraft()))
-    const laptop = config.findInterface('wg0').wireguard.peers[0]
+    const laptop = must(must(must(config.findInterface('wg0')).wireguard).peers)[0]
     config.upsertPeer('wg0', { ...laptop, name: 'notebook' }, 'laptop')
     expect(config.rules[0].source.peer).toBe('wg0/notebook')
-    expect(config.draft.services.proxy.access[0].source.peer).toBe('wg0/notebook')
+    expect(must(must(draftOf(config).services.proxy).access)[0].source.peer).toBe('wg0/notebook')
     expect(config.rules[1].destination.peer).toBe('wg0/phone')
   })
 
@@ -1397,7 +1607,7 @@ describe('config store WireGuard peers', () => {
     config.removePeer('wg0', 'laptop')
     // A rule that lost its peer would match everyone, so it goes.
     expect(config.rules.map((r) => r.id)).toEqual(['r-to-phone', 'r-lan'])
-    expect(config.draft.services.proxy.access).toEqual([])
+    expect(must(must(draftOf(config).services.proxy).access)).toEqual([])
   })
 
   it('takes the rules that name any of its peers with a tunnel', () => {
@@ -1408,14 +1618,16 @@ describe('config store WireGuard peers', () => {
     )
     config.removeTunnel('wg0')
     expect(config.rules.map((r) => r.id)).toEqual(['r-lan'])
-    expect(config.draft.services.proxy.access).toEqual([])
+    expect(must(must(draftOf(config).services.proxy).access)).toEqual([])
   })
 })
 
 describe('config store aliases', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
-  function enforced(): DeepPartial<Config> {
+  function enforced(): DeepPartial<Config> & {
+    blocking: { enforce: DeepPartial<Blocking['enforce']> }
+  } {
     return {
       version: 14,
       zones: [],
@@ -1427,7 +1639,11 @@ describe('config store aliases', () => {
         { name: 'cloud', type: 'hosts', entries: ['198.51.100.0/24'] },
       ],
       blocking: {
-        enforce: { dohAlias: 'doh', exemptClients: 'kids', exemptDestinations: 'cloud' },
+        enforce: {
+          dohAlias: 'doh',
+          exemptClients: 'kids',
+          exemptDestinations: 'cloud',
+        },
       },
     }
   }
@@ -1438,7 +1654,7 @@ describe('config store aliases', () => {
     config.upsertAlias({ name: 'doh_servers', type: 'hosts', entries: ['9.9.9.9'] }, 'doh')
     config.upsertAlias({ name: 'grown_ups', type: 'hosts', entries: ['192.168.1.20'] }, 'kids')
     config.upsertAlias({ name: 'work_cloud', type: 'hosts', entries: ['198.51.100.0/24'] }, 'cloud')
-    expect(config.draft.blocking.enforce).toEqual({
+    expect(draftOf(config).blocking.enforce).toEqual({
       dohAlias: 'doh_servers',
       exemptClients: 'grown_ups',
       exemptDestinations: 'work_cloud',
@@ -1463,7 +1679,7 @@ describe('config store aliases', () => {
       'DNS blocking: exempt destinations',
     ])
     config.upsertAlias({ name: 'grown_ups', type: 'hosts', entries: ['192.168.1.20'] }, 'kids')
-    expect(config.draft.blocking.enforce).toEqual({
+    expect(draftOf(config).blocking.enforce).toEqual({
       dohAlias: 'doh',
       exemptClients: 'grown_ups',
       exemptDestinations: 'grown_ups',
@@ -1501,12 +1717,12 @@ describe('config store gateways', () => {
     const config = useConfigStore()
     config.replaceDraft(configOf(routed()))
     config.upsertGateway({ name: 'provider', enabled: true, interface: 'wg1' }, 'vpn')
-    expect(config.rules.find((r) => r.id === 'tv').gateway).toBe('provider')
-    expect(config.gatewayGroups[0].members[0].gateway).toBe('provider')
-    expect(config.draft.services.dns.via).toBe('provider')
+    expect(must(config.rules.find((r) => r.id === 'tv')).gateway).toBe('provider')
+    expect(must(config.gatewayGroups[0].members)[0].gateway).toBe('provider')
+    expect(draftOf(config).services.dns.via).toBe('provider')
 
     config.upsertGatewayGroup({ ...config.gatewayGroups[0], name: 'hidden' }, 'private')
-    expect(config.rules.find((r) => r.id === 'guests').gateway).toBe('hidden')
+    expect(must(config.rules.find((r) => r.id === 'guests')).gateway).toBe('hidden')
   })
 
   it("sends this router's lookups back to the default route with their gateway", () => {
@@ -1516,8 +1732,8 @@ describe('config store gateways', () => {
       "this router's lookups go back to the default route",
     )
     config.removeGateway('vpn')
-    expect('via' in config.draft.services.dns).toBe(false)
-    expect(config.rules.find((r) => r.id === 'tv').gateway).toBeUndefined()
+    expect('via' in draftOf(config).services.dns).toBe(false)
+    expect(must(config.rules.find((r) => r.id === 'tv')).gateway).toBeUndefined()
   })
 })
 
@@ -1539,10 +1755,10 @@ describe('config store dirty', () => {
       }),
     )
     expect(config.dirty).toBe(false)
-    config.draft.zones.reverse()
+    must(draftOf(config).zones).reverse()
     expect(config.dirty).toBe(true)
-    config.draft.zones.reverse()
-    config.draft.interfaces[0].mtu = 1500
+    must(draftOf(config).zones).reverse()
+    must(draftOf(config).interfaces)[0].mtu = 1500
     expect(config.dirty).toBe(true)
   })
 })
@@ -1558,7 +1774,10 @@ describe('config store base revision', () => {
       fetch.mockResolvedValueOnce(
         new Response(JSON.stringify(config), {
           status: 200,
-          headers: { 'Content-Type': 'application/json', ETag: `"${revision}"` },
+          headers: {
+            'Content-Type': 'application/json',
+            ETag: `"${revision}"`,
+          },
         }),
       )
     }
@@ -1570,7 +1789,7 @@ describe('config store base revision', () => {
     serve([OLD, 'r1'], [NEW, 'r2'], ...more)
     const config = useConfigStore()
     await config.load()
-    config.draft.system.hostname = 'mine'
+    draftOf(config).system.hostname = 'mine'
     expect(await config.resync()).toBe(true)
     return config
   }
@@ -1617,7 +1836,7 @@ describe('config store base revision', () => {
     serve([OLD, 'r1'], [NEW, 'r2'])
     const config = useConfigStore()
     await config.load()
-    config.draft.system.hostname = 'new'
+    draftOf(config).system.hostname = 'new'
     expect(await config.resync(configOf(structuredClone(NEW)))).toBe(true)
     expect(config.base).toBe('r2')
     expect(config.stale).toBe(false)
@@ -1626,7 +1845,7 @@ describe('config store base revision', () => {
   it('keeps an edited draft on its base, stale, when another save moves on', async () => {
     const config = await overtaken()
     expect(config.saved).toEqual(NEW)
-    expect(config.draft.system.hostname).toBe('mine')
+    expect(draftOf(config).system.hostname).toBe('mine')
     expect(config.base).toBe('r1')
     expect(config.stale).toBe(true)
   })
@@ -1639,14 +1858,14 @@ describe('config store base revision', () => {
     expect(config.base).toBe('r2')
     expect(config.stale).toBe(false)
 
-    toast.act(toast.toasts.at(-1).id)
-    expect(config.draft.system.hostname).toBe('mine')
+    toast.act(must(toast.toasts.at(-1)).id)
+    expect(draftOf(config).system.hostname).toBe('mine')
     expect(config.base).toBe('r1')
     expect(config.stale).toBe(true)
   })
 
   it('never marks a draft stale when the server gives no revision, as for a viewer', async () => {
-    const plain = (config) =>
+    const plain = (config: DeepPartial<Config>) =>
       new Response(JSON.stringify(config), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -1657,7 +1876,7 @@ describe('config store base revision', () => {
     )
     const config = useConfigStore()
     await config.load()
-    config.draft.system.hostname = 'mine'
+    draftOf(config).system.hostname = 'mine'
     expect(await config.resync()).toBe(true)
     expect(config.base).toBe('')
     expect(config.stale).toBe(false)
@@ -1703,24 +1922,33 @@ describe('config store put back', () => {
     const config = seeded()
     config.setDefence('synFlood', { rate: 30, burst: 60 })
     config.setDefence('synFlood', { burst: null })
-    expect(config.draft.protection.synFlood).toEqual({ rate: 30 })
+    expect(must(draftOf(config).protection).synFlood).toEqual({ rate: 30 })
   })
 
   it('drops remote backup fields cleared again, and the block with them', () => {
     const config = seeded()
     config.setRemoteBackup({ bucket: 'router-backups' })
     config.setRemoteBackup({ enabled: true })
-    expect(config.draft.backup.remote).toEqual({ bucket: 'router-backups', enabled: true })
+    expect(must(draftOf(config).backup).remote).toEqual({
+      bucket: 'router-backups',
+      enabled: true,
+    })
     config.setRemoteBackup({ enabled: false })
-    expect(config.draft.backup.remote).toEqual({ bucket: 'router-backups', enabled: false })
+    expect(must(draftOf(config).backup).remote).toEqual({
+      bucket: 'router-backups',
+      enabled: false,
+    })
     config.setRemoteBackup({ bucket: '' })
-    expect(config.draft.backup).toBeUndefined()
+    expect(draftOf(config).backup).toBeUndefined()
     expect(config.dirty).toBe(false)
   })
 
   it('drops update schedules and exclusions cleared again', () => {
     const config = seeded({ updates: { system: {}, ostiole: {} } })
-    config.setUpdates('system', { checkSchedule: '0 3 * * *', exclude: ['kernel*'] })
+    config.setUpdates('system', {
+      checkSchedule: '0 3 * * *',
+      exclude: ['kernel*'],
+    })
     expect(config.dirty).toBe(true)
     config.setUpdates('system', { checkSchedule: '', exclude: [] })
     expect(config.dirty).toBe(false)

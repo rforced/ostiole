@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import type { SystemRule } from '@/lib/api'
 import SystemRuleRow from '@/views/firewall/SystemRuleRow.vue'
 
 const replies = {
@@ -25,7 +26,7 @@ const lockout = {
   setting: 'zone',
 }
 
-const badges = (rule) =>
+const badges = (rule: SystemRule) =>
   mount(SystemRuleRow, { props: { rule }, global: { stubs: { RouterLink: true } } }).findAll(
     '.badge',
   )

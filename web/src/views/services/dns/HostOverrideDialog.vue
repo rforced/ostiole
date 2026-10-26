@@ -40,7 +40,7 @@ watch(open, async (on) => {
   }
 })
 
-const domainOf = (s) =>
+const domainOf = (s: string | undefined) =>
   (s ?? '')
     .trim()
     .replace(/^\.+|\.+$/g, '')
@@ -73,7 +73,7 @@ const taken = computed(() => {
     (l) =>
       l.hostname &&
       names.has(l.hostname.toLowerCase()) &&
-      !named.has(l.mac?.toLowerCase()) &&
+      !named.has(l.mac?.toLowerCase() ?? '') &&
       l.ip !== ip &&
       l.ip.includes(':') === ip.includes(':'),
   )

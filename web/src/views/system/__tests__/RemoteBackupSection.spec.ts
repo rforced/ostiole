@@ -1,14 +1,14 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api } from '@/lib/api'
-import type { CronStatus, RestoreResponse } from '@/lib/types.gen'
+import type { Config, CronStatus, Removed, RestoreResponse } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import RemoteBackupSection from '@/views/system/RemoteBackupSection.vue'
-import { configOf, fixture, sessionOf } from '@/test/fixtures'
+import { configOf, draftOf, fixture, must, sessionOf, type DeepPartial } from '@/test/fixtures'
 
 vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual('@/lib/api')
@@ -72,7 +72,8 @@ const other = {
 }
 
 /** A button by its text. */
-const button = (w, text) => w.findAll('button').find((b) => b.text() === text)
+const button = (w: VueWrapper | DOMWrapper<Element>, text: string) =>
+  must(w.findAll('button').find((b) => b.text() === text))
 
 /** Mounts the section with the given block saved and in the draft. */
 async function open(backup: object = { remote }, role = 'admin') {
@@ -124,9 +125,11 @@ describe('RemoteBackupSection', () => {
   it('writes a typed endpoint into the draft', async () => {
     const { wrapper, store } = await open()
     await wrapper.get('#rb-endpoint').setValue('https://s3.us-east-005.backblazeb2.com')
-    expect(store.draft.backup.remote.endpoint).toBe('https://s3.us-east-005.backblazeb2.com')
+    expect(must(must(draftOf(store).backup).remote).endpoint).toBe(
+      'https://s3.us-east-005.backblazeb2.com',
+    )
     await wrapper.get('#rb-keep').setValue('3')
-    expect(store.draft.backup.remote.keep).toBe(3)
+    expect(must(must(draftOf(store).backup).remote).keep).toBe(3)
   })
 
   it('lists the copies newest first with their sizes', async () => {
@@ -150,7 +153,7 @@ describe('RemoteBackupSection', () => {
           aliases: 0,
           gateways: 1,
         },
-        config: config(),
+        config: config() as DeepPartial<Config>,
         changes: [],
       }),
     )
@@ -185,7 +188,7 @@ describe('RemoteBackupSection', () => {
           aliases: 0,
           gateways: 1,
         },
-        config: config(),
+        config: config() as DeepPartial<Config>,
         changes: [],
       }),
     )
@@ -200,10 +203,9 @@ describe('RemoteBackupSection', () => {
 
   it('backs up now through the cron and reads the result back', async () => {
     const { wrapper } = await open()
-    await wrapper
-      .findAll('button')
-      .find((b) => b.text().includes('Back up now'))
-      .trigger('click')
+    await must(wrapper.findAll('button').find((b) => b.text().includes('Back up now'))).trigger(
+      'click',
+    )
     await flushPromises()
     expect(api.crons.run).toHaveBeenCalledWith('system:remote-backup')
     expect(api.crons.list).toHaveBeenCalledTimes(2)
@@ -282,7 +284,7 @@ describe('RemoteBackupSection', () => {
 
   it('spins the copy being deleted and holds every other Delete', async () => {
     vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
-    let done
+    let done: (removed: Removed) => void = () => undefined
     vi.mocked(api.config.deleteRemote).mockReturnValue(new Promise((resolve) => (done = resolve)))
     const { wrapper } = await open()
     const rows = () => wrapper.findAll('tbody tr')
@@ -348,7 +350,7 @@ describe('RemoteBackupSection', () => {
     vi.mocked(api.config.remoteCopies).mockResolvedValue({ enabled: true, copies: [] })
     const { wrapper } = await open()
     expect(wrapper.text()).toContain('No copies.')
-    expect(button(wrapper, 'Delete all')).toBeUndefined()
+    expect(wrapper.findAll('button').some((b) => b.text() === 'Delete all')).toBe(false)
   })
 
   // Filled in once, so a renamed router keeps its folder.
@@ -359,9 +361,9 @@ describe('RemoteBackupSection', () => {
     ]) {
       setActivePinia(createPinia())
       const { wrapper, store } = await open({ remote: { ...remote, enabled: false } })
-      store.draft.system.hostname = hostname
+      draftOf(store).system.hostname = hostname
       await wrapper.get('#rb-enabled').setValue(true)
-      expect(store.draft.backup.remote.prefix).toBe(want)
+      expect(must(must(draftOf(store).backup).remote).prefix).toBe(want)
       wrapper.unmount()
     }
   })
@@ -370,18 +372,18 @@ describe('RemoteBackupSection', () => {
     const { wrapper, store } = await open({
       remote: { ...remote, enabled: false, prefix: 'routers-fw/' },
     })
-    store.draft.system.hostname = 'fw'
+    draftOf(store).system.hostname = 'fw'
     await wrapper.get('#rb-enabled').setValue(true)
-    expect(store.draft.backup.remote.prefix).toBe('routers-fw/')
+    expect(must(must(draftOf(store).backup).remote).prefix).toBe('routers-fw/')
   })
 
   // An empty Prefix on a router already copying is ostiole/, where its
   // copies are; switching off and on again in the draft keeps it there.
   it('leaves the folder of a router already copying', async () => {
     const { wrapper, store } = await open()
-    store.draft.system.hostname = 'fw'
+    draftOf(store).system.hostname = 'fw'
     await wrapper.get('#rb-enabled').setValue(false)
     await wrapper.get('#rb-enabled').setValue(true)
-    expect(store.draft.backup.remote.prefix).toBeUndefined()
+    expect(must(must(draftOf(store).backup).remote).prefix).toBeUndefined()
   })
 })

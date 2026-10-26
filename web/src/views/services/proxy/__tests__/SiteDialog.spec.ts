@@ -2,8 +2,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { Config } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import { configOf, draftOf } from '@/test/fixtures'
 import SiteDialog from '@/views/services/proxy/SiteDialog.vue'
 
 const site = {
@@ -15,7 +15,7 @@ const site = {
 }
 
 function open() {
-  const cfg = {
+  const cfg = configOf({
     version: 11,
     zones: [{ name: 'wan', external: true }, { name: 'lan' }],
     interfaces: [],
@@ -30,13 +30,13 @@ function open() {
         sites: [structuredClone(site)],
       },
     },
-  } as Config
+  })
   const config = useConfigStore()
   config.saved = structuredClone(cfg)
   config.replaceDraft(cfg)
   config.loaded = true
   const wrapper = mount(SiteDialog, {
-    props: { open: true, site: config.draft.services.proxy.sites[0] },
+    props: { open: true, site: draftOf(config).services?.proxy?.sites?.[0] },
     global: { stubs: { AppDialog: { template: '<div><slot /><slot name="footer" /></div>' } } },
   })
   return { wrapper, config }
@@ -59,7 +59,7 @@ describe('SiteDialog untouched save', () => {
     await wrapper.get('#site-allow').setValue('192.0.2.0/24\n203.0.113.0/24')
     await wrapper.get('form').trigger('submit')
     expect(config.dirty).toBe(true)
-    expect(config.draft.services.proxy.sites[0].allowFrom).toEqual([
+    expect(draftOf(config).services?.proxy?.sites?.[0].allowFrom).toEqual([
       '192.0.2.0/24',
       '203.0.113.0/24',
       'office',

@@ -28,7 +28,7 @@ watch(
   () => [open.value, props.server],
   () => {
     if (!open.value) return
-    form.value = props.server ? { host: '', nts: false, pool: false, ...props.server } : blank()
+    form.value = props.server ? { nts: false, pool: false, ...props.server } : blank()
   },
   { immediate: true },
 )

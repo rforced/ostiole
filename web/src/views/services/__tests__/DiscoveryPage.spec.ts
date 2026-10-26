@@ -1,10 +1,10 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, type Role, type Session } from '@/lib/api'
-import type { Config, ServicesStatus } from '@/lib/types.gen'
-import { fixture } from '@/test/fixtures'
+import type { Discovery, ServicesStatus } from '@/lib/types.gen'
+import { configOf, draftOf, fixture, must } from '@/test/fixtures'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import DiscoveryPage from '@/views/services/DiscoveryPage.vue'
@@ -41,8 +41,8 @@ vi.mock('@/lib/tabs', async () => {
 
 const stubs = { ConfirmButton: true, RouterLink: { template: '<a><slot /></a>' } }
 
-function config(discovery) {
-  return {
+function config(discovery?: Discovery) {
+  return configOf({
     version: 11,
     zones: [{ name: 'wan', external: true }, { name: 'lan' }, { name: 'iot' }],
     interfaces: [
@@ -58,7 +58,7 @@ function config(discovery) {
       dns: { enabled: false },
       ...(discovery ? { discovery } : {}),
     },
-  } as Config
+  })
 }
 
 const relay = () => ({
@@ -73,7 +73,7 @@ const relay = () => ({
   log: { entries: 5000 },
 })
 
-async function page(discovery, role: Role = 'admin') {
+async function page(discovery: Discovery | undefined, role: Role = 'admin') {
   useAuthStore().user = { username: role, role } as Session
   const store = useConfigStore()
   store.saved = config(discovery)
@@ -84,11 +84,14 @@ async function page(discovery, role: Role = 'admin') {
   return { wrapper, store }
 }
 
-const row = (w, name) => w.findAll('tbody tr').find((tr) => tr.text().includes(name))
-const box = (w, name, role) => w.get(`input[aria-label="${name} ${role}"]`)
-const toggle = (w, label) => {
+const row = (w: VueWrapper, name: string) =>
+  w.findAll('tbody tr').find((tr) => tr.text().includes(name))
+const box = (w: VueWrapper, name: string, role: string) =>
+  w.get<HTMLInputElement>(`input[aria-label="${name} ${role}"]`)
+const toggle = (w: VueWrapper, label: string) => {
   const l = w.findAll('label').find((x) => x.text() === label)
-  return w.get(`input[id="${l.attributes('for')}"]`)
+  if (!l) throw new TypeError(`no ${label} label`)
+  return w.get<HTMLInputElement>(`input[id="${l.attributes('for')}"]`)
 }
 
 describe('DiscoveryPage', () => {
@@ -107,14 +110,14 @@ describe('DiscoveryPage', () => {
     const { wrapper, store } = await page(discovery)
     const before = JSON.stringify(store.saved)
     expect(box(wrapper, 'eth1', 'asks').element.checked).toBe(Boolean(discovery))
-    expect(JSON.stringify(store.draft)).toBe(before)
+    expect(JSON.stringify(draftOf(store))).toBe(before)
     expect(store.dirty).toBe(false)
   })
 
   it('adds a network in both roles at the first tick', async () => {
     const { wrapper, store } = await page(undefined, 'operator')
     await box(wrapper, 'eth2', 'asks').setValue(true)
-    expect(store.draft.services.discovery).toEqual({
+    expect(draftOf(store).services?.discovery).toEqual({
       enabled: false,
       mdns: true,
       ssdp: true,
@@ -126,12 +129,12 @@ describe('DiscoveryPage', () => {
   it('takes a network out when both roles are cleared', async () => {
     const { wrapper, store } = await page(relay())
     await box(wrapper, 'eth2', 'answers').setValue(false)
-    expect(store.draft.services.discovery.interfaces).toEqual([
+    expect(draftOf(store).services?.discovery?.interfaces).toEqual([
       { interface: 'eth1', asks: true, answers: true },
     ])
     await box(wrapper, 'eth1', 'asks').setValue(false)
     await box(wrapper, 'eth1', 'answers').setValue(false)
-    expect(store.draft.services.discovery.interfaces).toBeUndefined()
+    expect(must(draftOf(store).services?.discovery).interfaces).toBeUndefined()
   })
 
   it('drops the block once it is back to what a router without one reads as', async () => {
@@ -139,17 +142,17 @@ describe('DiscoveryPage', () => {
     await box(wrapper, 'eth1', 'asks').setValue(true)
     await box(wrapper, 'eth1', 'asks').setValue(false)
     await box(wrapper, 'eth1', 'answers').setValue(false)
-    expect(store.draft.services.discovery).toBeUndefined()
+    expect(must(draftOf(store).services).discovery).toBeUndefined()
     expect(store.dirty).toBe(false)
   })
 
   it('keeps the protocols as ticked once a block is saved, defaults included', async () => {
     const { wrapper, store } = await page({ enabled: false, mdns: true, ssdp: false })
     await toggle(wrapper, 'mDNS').setValue(false)
-    expect(store.draft.services.discovery).toEqual({ enabled: false, mdns: false, ssdp: false })
+    expect(draftOf(store).services?.discovery).toEqual({ enabled: false, mdns: false, ssdp: false })
     await toggle(wrapper, 'mDNS').setValue(true)
     await toggle(wrapper, 'SSDP').setValue(true)
-    expect(store.draft.services.discovery).toEqual({ enabled: false, mdns: true, ssdp: true })
+    expect(draftOf(store).services?.discovery).toEqual({ enabled: false, mdns: true, ssdp: true })
     await toggle(wrapper, 'SSDP').setValue(false)
     expect(store.dirty).toBe(false)
   })
@@ -169,17 +172,17 @@ describe('DiscoveryPage', () => {
 
   it('writes the service types one per line, trimmed', async () => {
     const { wrapper, store } = await page(relay())
-    const area = wrapper.get('textarea')
+    const area = wrapper.get<HTMLTextAreaElement>('textarea')
     expect(area.element.value).toBe('_googlecast._tcp\n_airplay._tcp')
     await area.setValue('  _googlecast._tcp \n\n_spotify-connect._tcp\n')
-    expect(store.draft.services.discovery.services).toEqual([
+    expect(draftOf(store).services?.discovery?.services).toEqual([
       '_googlecast._tcp',
       '_spotify-connect._tcp',
     ])
     // A new line being typed stays in the box.
     expect(area.element.value).toBe('  _googlecast._tcp \n\n_spotify-connect._tcp\n')
     await area.setValue('')
-    expect(store.draft.services.discovery.services).toBeUndefined()
+    expect(must(draftOf(store).services?.discovery).services).toBeUndefined()
   })
 
   it('shows a viewer the settings locked', async () => {
@@ -202,6 +205,8 @@ describe('deleting an interface in the relay', () => {
     store.loaded = true
     expect(store.interfaceDependents('eth2')).toContain('discovery relay on eth2')
     store.removeInterface('eth2')
-    expect(store.draft.services.discovery.interfaces.map((l) => l.interface)).toEqual(['eth1'])
+    expect(draftOf(store).services?.discovery?.interfaces?.map((l) => l.interface)).toEqual([
+      'eth1',
+    ])
   })
 })

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import type { ShapingStatus } from '@/lib/types.gen'
-import { fixture } from '@/test/fixtures'
+import { fixture, must } from '@/test/fixtures'
 import LiveTab from '@/views/traffic/shaping/LiveTab.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -40,7 +40,7 @@ describe('Shaping LiveTab', () => {
     const wrapper = mount(LiveTab)
     await flushPromises()
     const rate = () => wrapper.get('.text-2xl').text()
-    const live = wrapper.findAll('button').find((b) => b.text() === 'Live')
+    const live = must(wrapper.findAll('button').find((b) => b.text() === 'Live'))
     expect(live.attributes('aria-pressed')).toBe('true')
     expect(rate()).toMatch(/^— of 20 Mbit\/s/)
 

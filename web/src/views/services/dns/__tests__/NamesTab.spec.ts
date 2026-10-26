@@ -1,10 +1,10 @@
-import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
-import type { Config } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import { configOf, draftOf, must } from '@/test/fixtures'
 import NamesTab from '@/views/services/dns/NamesTab.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -22,7 +22,7 @@ const stubs = {
 }
 
 function draft() {
-  return {
+  return configOf({
     version: 11,
     zones: [{ name: 'lan' }],
     interfaces: [],
@@ -42,7 +42,7 @@ function draft() {
         staticLeases: [{ mac: 'aa:bb:cc:00:00:01', ip: '10.0.0.20', hostname: 'storage' }],
       },
     },
-  } as Config
+  })
 }
 
 const derived = [
@@ -72,7 +72,7 @@ const derived = [
   },
 ]
 
-function rowsOf(wrapper) {
+function rowsOf(wrapper: VueWrapper) {
   return wrapper.findAll('tbody tr')
 }
 
@@ -100,27 +100,27 @@ describe('NamesTab', () => {
 
     const rows = rowsOf(wrapper)
     const printer = rows.find((r) => r.text().includes('printer.lan'))
-    expect(printer.text()).toContain('10.0.0.30')
-    expect(printer.text()).toContain('print')
-    expect(printer.text()).toContain('Override')
-    expect(printer.find('button').text()).toBe('Edit')
-    expect(rows.find((r) => r.text().includes('potato.test')).text()).toContain('10.0.0.31')
+    expect(printer?.text()).toContain('10.0.0.30')
+    expect(printer?.text()).toContain('print')
+    expect(printer?.text()).toContain('Override')
+    expect(printer?.find('button').text()).toBe('Edit')
+    expect(rows.find((r) => r.text().includes('potato.test'))?.text()).toContain('10.0.0.31')
 
     const lease = rows.find((r) => r.text().includes('storage.lan'))
-    expect(lease.text()).toContain('aa:bb:cc:00:00:01')
-    expect(lease.text()).toContain('locked')
-    expect(lease.find('button').exists()).toBe(false)
-    expect(lease.find('a[href="/services/dhcp#v4"]').text()).toBe('Static lease')
+    expect(lease?.text()).toContain('aa:bb:cc:00:00:01')
+    expect(lease?.text()).toContain('locked')
+    expect(must(lease).find('button').exists()).toBe(false)
+    expect(lease?.find('a[href="/services/dhcp#v4"]').text()).toBe('Static lease')
 
     const site = rows.find(
       (r) => r.text().includes('watch.lan') && r.text().includes('Reverse proxy'),
     )
-    expect(site.text()).toContain('2001:db8:1::1')
-    expect(site.find('a[href="/services/proxy"]').exists()).toBe(true)
+    expect(site?.text()).toContain('2001:db8:1::1')
+    expect(site?.find('a[href="/services/proxy"]').exists()).toBe(true)
 
     const device = rows.find((r) => r.text().includes('Watch.lan'))
-    expect(device.text()).toContain('02:00:5e:00:53:85')
-    expect(device.text()).toContain('Loses the name to reverse proxy site watch.')
+    expect(device?.text()).toContain('02:00:5e:00:53:85')
+    expect(device?.text()).toContain('Loses the name to reverse proxy site watch.')
     expect(wrapper.text()).toContain('A name with no domain lives under')
   })
 
@@ -147,7 +147,8 @@ describe('NamesTab', () => {
     await flushPromises()
     expect(api.dnsNames).toHaveBeenCalledTimes(1)
 
-    config.draft.services.dhcp.staticLeases[0].hostname = 'desk'
+    const lease = draftOf(config).services?.dhcp?.staticLeases?.[0]
+    if (lease) lease.hostname = 'desk'
     await flushPromises()
     expect(api.dnsNames).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(300)

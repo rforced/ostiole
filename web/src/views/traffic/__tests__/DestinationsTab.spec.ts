@@ -9,7 +9,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import DestinationsTab from '@/views/traffic/DestinationsTab.vue'
-import { configOf, fixture, sessionOf } from '@/test/fixtures'
+import { configOf, draftOf, fixture, must, sessionOf } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -113,10 +113,10 @@ describe('DestinationsTab', () => {
     )
     expect(w.text()).not.toContain('Apply the draft to start it.')
     await w.get('#destinations-enabled').setValue(true)
-    expect(config.draft.traffic).toEqual({ devices: true, destinations: { enabled: true } })
+    expect(draftOf(config).traffic).toEqual({ devices: true, destinations: { enabled: true } })
     expect(w.text()).toContain('Apply the draft to start it.')
     await w.get('#destinations-entries').setValue('50000')
-    expect(config.draft.traffic.destinations).toEqual({ enabled: true, entries: 50000 })
+    expect(draftOf(config).traffic?.destinations).toEqual({ enabled: true, entries: 50000 })
     await w.get('#destinations-entries').setValue('')
     await w.get('#destinations-enabled').setValue(false)
     expect(config.dirty).toBe(false)
@@ -172,10 +172,7 @@ describe('DestinationsTab', () => {
     const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
     const { w } = await open()
     const reads = vi.mocked(api.traffic.destinations).mock.calls.length
-    await w
-      .findAll('button')
-      .find((b) => b.text() === 'Clear')
-      .trigger('click')
+    await must(w.findAll('button').find((b) => b.text() === 'Clear')).trigger('click')
     await flushPromises()
     expect(ask).toHaveBeenCalledWith(
       expect.objectContaining({

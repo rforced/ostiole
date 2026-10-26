@@ -7,17 +7,18 @@ import ConfirmButton from '@/components/ConfirmButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
-import { api } from '@/lib/api'
+import { api, type CreatedToken, type Token } from '@/lib/api'
 import { emptyText, errorMessage, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
+import type { CreateTokenRequest } from '@/lib/types.gen'
 import TokenDialog from '@/views/system/accounts/TokenDialog.vue'
 
-const tokens = ref([])
+const tokens = ref<Token[]>([])
 const actionError = ref('')
 const adding = ref(false)
 /** The one moment a new token's secret exists outside the server. */
-const minted = ref(null)
-const secret = ref(null)
+const minted = ref<CreatedToken | null>(null)
+const secret = ref<HTMLElement | null>(null)
 /** 'copied', 'selected' when only the fallback's selection worked, or ''. */
 const copy = ref('')
 let copyTimer = 0
@@ -31,9 +32,11 @@ onBeforeUnmount(() => window.clearTimeout(copyTimer))
  * and the older copy command. Either way the secret ends up selected.
  */
 async function copySecret() {
+  if (!secret.value || !minted.value) return
   const range = document.createRange()
   range.selectNodeContents(secret.value)
   const selection = window.getSelection()
+  if (!selection) return
   selection.removeAllRanges()
   selection.addRange(range)
   let ok
@@ -57,7 +60,7 @@ onMounted(load.run)
 
 const error = computed(() => actionError.value || load.error.value)
 
-async function createToken(token) {
+async function createToken(token: CreateTokenRequest) {
   actionError.value = ''
   try {
     minted.value = await api.auth.tokens.create(token)
@@ -68,7 +71,7 @@ async function createToken(token) {
   }
 }
 
-async function deleteToken(id) {
+async function deleteToken(id: string) {
   actionError.value = ''
   try {
     await api.auth.tokens.remove(id)
@@ -140,7 +143,7 @@ async function deleteToken(id) {
           </td>
           <td class="font-mono text-code" data-label="Role">
             <template v-if="(t.certificates ?? []).length">
-              certificates: {{ t.certificates.join(', ') }}
+              certificates: {{ (t.certificates ?? []).join(', ') }}
             </template>
             <template v-else-if="t.metrics">metrics only</template>
             <template v-else>{{ t.role }}</template>

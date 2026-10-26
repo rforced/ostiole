@@ -1,3 +1,5 @@
+import type { PlaywrightWorkerArgs } from '@playwright/test'
+
 import { expect, test } from './fixtures'
 import { applyAndConfirm, confirmDialog, enterUsername, login, readConfig } from './helpers'
 
@@ -10,7 +12,12 @@ const headers = { 'X-Requested-With': 'ostiole' }
 const OPERATOR = { username: 'bob', password: 'an operator of our own' }
 
 /** A session of its own for an account, through the API. */
-async function signedIn(playwright, baseURL, username, password) {
+async function signedIn(
+  playwright: PlaywrightWorkerArgs['playwright'],
+  baseURL: string | undefined,
+  username: string,
+  password: string,
+) {
   const api = await playwright.request.newContext({ baseURL })
   const res = await api.post('/api/v1/auth/login', { data: { username, password }, headers })
   expect(res.ok(), await res.text()).toBe(true)

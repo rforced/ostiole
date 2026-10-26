@@ -1,4 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -6,7 +7,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { ApiError, api } from '@/lib/api'
 import type { AssertionResponse } from '@/lib/types.gen'
 import * as webauthn from '@/lib/webauthn'
-import { fixture, sessionOf } from '@/test/fixtures'
+import { fixture, must, sessionOf } from '@/test/fixtures'
 import LoginView from '@/views/LoginView.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -60,18 +61,19 @@ async function page(path = '/login', options = {}) {
 }
 
 /** The line under the heading. */
-const subtitle = (wrapper) => wrapper.get('h1 + p')
+const subtitle = (wrapper: VueWrapper) => wrapper.get('h1 + p')
 
-const button = (wrapper, text) => wrapper.findAll('button').find((b) => b.text() === text)
+const button = (wrapper: VueWrapper, text: string) =>
+  wrapper.findAll('button').find((b) => b.text() === text)
 
 /** Gives the username and goes on to the password. */
-async function continueAs(wrapper, name = 'sam') {
+async function continueAs(wrapper: VueWrapper, name = 'sam') {
   await wrapper.get('#username').setValue(name)
   await wrapper.get('form').trigger('submit')
   await flushPromises()
 }
 
-async function typePassword(wrapper, pw) {
+async function typePassword(wrapper: VueWrapper, pw: string) {
   await wrapper.get('#password').setValue(pw)
   await wrapper.get('form').trigger('submit')
   await flushPromises()
@@ -144,7 +146,7 @@ describe('LoginView second step', () => {
     return out
   }
 
-  const typeCode = async (wrapper, code) => {
+  const typeCode = async (wrapper: VueWrapper, code: string) => {
     await wrapper.get('#code').setValue(code)
     await wrapper.get('form').trigger('submit')
     await flushPromises()
@@ -201,10 +203,10 @@ describe('LoginView second step', () => {
       '/login',
       { attachTo: document.body },
     )
-    const passkey = button(wrapper, 'Use a passkey')
+    const passkey = must(button(wrapper, 'Use a passkey'))
     expect(document.activeElement).toBe(passkey.element)
     expect(passkey.classes()).toContain('btn-primary')
-    expect(button(wrapper, 'Sign in').classes()).toContain('btn-secondary')
+    expect(must(button(wrapper, 'Sign in')).classes()).toContain('btn-secondary')
     const order = wrapper.findAll('button, input').map((e) => e.attributes('id') ?? e.text())
     expect(order.indexOf('Use a passkey')).toBeLessThan(order.indexOf('code'))
     expect(order.indexOf('code')).toBeLessThan(order.indexOf('Sign in'))
@@ -213,7 +215,7 @@ describe('LoginView second step', () => {
 
   it('goes back to the password with the username kept and nothing sent', async () => {
     const { wrapper } = await afterPassword()
-    await button(wrapper, 'Back').trigger('click')
+    await must(button(wrapper, 'Back')).trigger('click')
     expect(wrapper.find('#code').exists()).toBe(false)
     expect(wrapper.find('#username').exists()).toBe(false)
     expect(wrapper.text()).toContain('sam')
@@ -223,7 +225,7 @@ describe('LoginView second step', () => {
   })
 
   it('offers a passkey only when the account has one and the browser can use it', async () => {
-    const offered = (wrapper) => button(wrapper, 'Use a passkey')
+    const offered = (wrapper: VueWrapper) => button(wrapper, 'Use a passkey')
     let { wrapper } = await afterPassword(due({ passkeys: true, rpId: 'edge.example' }))
     expect(offered(wrapper)).toBeDefined()
     ;({ wrapper } = await afterPassword(due({ passkeys: false })))
@@ -238,10 +240,7 @@ describe('LoginView second step', () => {
     vi.mocked(api.auth.passkeyLoginOptions).mockResolvedValue({ publicKey: { challenge: 'c' } })
     vi.mocked(webauthn.get).mockResolvedValue(credential)
     vi.mocked(api.auth.loginPasskey).mockResolvedValue(session)
-    await wrapper
-      .findAll('button')
-      .find((b) => b.text() === 'Use a passkey')
-      .trigger('click')
+    await must(button(wrapper, 'Use a passkey')).trigger('click')
     await flushPromises()
     expect(api.auth.passkeyLoginOptions).toHaveBeenCalledWith('tok')
     expect(webauthn.get).toHaveBeenCalledWith({ challenge: 'c' }, { signal: undefined })
@@ -255,10 +254,7 @@ describe('LoginView second step', () => {
     vi.mocked(webauthn.get).mockRejectedValue(
       new Error('The passkey prompt was cancelled or timed out.'),
     )
-    await wrapper
-      .findAll('button')
-      .find((b) => b.text() === 'Use a passkey')
-      .trigger('click')
+    await must(button(wrapper, 'Use a passkey')).trigger('click')
     await flushPromises()
     expect(wrapper.get('[role="alert"]').text()).toBe(
       'The passkey prompt was cancelled or timed out.',
@@ -271,19 +267,21 @@ describe('LoginView second step', () => {
 describe('LoginView steps', () => {
   const offer = { token: 'pk', publicKey: { challenge: 'c' } }
   const refused = (status: number, message: string) => new ApiError(status, message)
-  const named = (name, message) => Object.assign(new Error(message), { name })
+  const named = (name: string, message: string) => Object.assign(new Error(message), { name })
   /** A prompt that stays open until its signal aborts it. */
   const openPrompt = () =>
     vi
       .mocked(webauthn.get)
       .mockImplementation(
-        (_, { signal }: { signal?: AbortSignal }) =>
+        (_, args) =>
           new Promise((_, reject) =>
-            signal.addEventListener('abort', () =>
+            must(must(args).signal).addEventListener('abort', () =>
               reject(named('AbortError', 'The passkey prompt was cancelled.')),
             ),
           ),
       )
+  /** The signal the open prompt was given. */
+  const openedSignal = () => must(must(vi.mocked(webauthn.get).mock.calls[0][1]).signal)
   const ALONE = 'Sign in with a passkey'
 
   beforeEach(() => {
@@ -356,7 +354,7 @@ describe('LoginView steps', () => {
     vi.mocked(webauthn.get).mockResolvedValue(credential)
     vi.mocked(api.auth.loginPasskey).mockResolvedValue(session)
     const { wrapper, router } = await page('/login?redirect=%2Ffirewall%2Frules')
-    await button(wrapper, ALONE).trigger('click')
+    await must(button(wrapper, ALONE)).trigger('click')
     await flushPromises()
     expect(api.auth.loginStart).toHaveBeenCalledWith()
     expect(webauthn.get).toHaveBeenCalledWith(
@@ -374,7 +372,7 @@ describe('LoginView steps', () => {
     vi.mocked(api.auth.loginPasskey).mockResolvedValue(session)
     const { wrapper, router } = await page()
     await continueAs(wrapper, 'someone')
-    await button(wrapper, 'Use a passkey').trigger('click')
+    await must(button(wrapper, 'Use a passkey')).trigger('click')
     await flushPromises()
     expect(api.auth.loginStart).toHaveBeenCalledWith()
     expect(api.auth.loginPasskey).toHaveBeenCalledWith('pk', credential)
@@ -387,7 +385,7 @@ describe('LoginView steps', () => {
       named('NotAllowedError', 'The passkey prompt was cancelled or timed out.'),
     )
     const { wrapper, router } = await page()
-    await button(wrapper, ALONE).trigger('click')
+    await must(button(wrapper, ALONE)).trigger('click')
     await flushPromises()
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
     expect(api.auth.loginPasskey).not.toHaveBeenCalled()
@@ -395,7 +393,7 @@ describe('LoginView steps', () => {
 
     vi.mocked(webauthn.get).mockResolvedValue(credential)
     vi.mocked(api.auth.loginPasskey).mockResolvedValue(session)
-    await button(wrapper, ALONE).trigger('click')
+    await must(button(wrapper, ALONE)).trigger('click')
     await flushPromises()
     expect(api.auth.loginStart).toHaveBeenCalledTimes(2)
     expect(api.auth.loginPasskey).toHaveBeenCalledWith('pk', credential)
@@ -424,7 +422,7 @@ describe('LoginView steps', () => {
     ]
     for (const [error, text] of cases) {
       vi.mocked(api.auth.loginPasskey).mockRejectedValueOnce(error)
-      await button(wrapper, ALONE).trigger('click')
+      await must(button(wrapper, ALONE)).trigger('click')
       await flushPromises()
       expect(wrapper.get('[role="alert"]').text(), text).toBe(text)
       expect(wrapper.find('#username').exists()).toBe(true)
@@ -436,7 +434,7 @@ describe('LoginView steps', () => {
     vi.mocked(api.auth.loginPage).mockResolvedValue({ passkeys: true })
     vi.mocked(api.auth.loginStart).mockRejectedValue(refused(429, 'too many failed logins'))
     const { wrapper } = await page()
-    await button(wrapper, ALONE).trigger('click')
+    await must(button(wrapper, ALONE)).trigger('click')
     await flushPromises()
     expect(wrapper.get('[role="alert"]').text()).toBe(
       'Too many failed attempts. Try again in a few minutes.',
@@ -448,14 +446,14 @@ describe('LoginView steps', () => {
     vi.mocked(api.auth.loginPage).mockResolvedValue({ passkeys: true })
     openPrompt()
     const { wrapper } = await page()
-    await button(wrapper, ALONE).trigger('click')
+    await must(button(wrapper, ALONE)).trigger('click')
     await flushPromises()
     expect(button(wrapper, 'Waiting…')).toBeDefined()
-    const { signal } = vi.mocked(webauthn.get).mock.calls[0][1]
+    const signal = openedSignal()
     await continueAs(wrapper)
     expect(signal.aborted).toBe(true)
     expect(wrapper.find('#password').exists()).toBe(true)
-    expect(button(wrapper, 'Use a passkey').attributes('disabled')).toBeUndefined()
+    expect(must(button(wrapper, 'Use a passkey')).attributes('disabled')).toBeUndefined()
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
   })
 
@@ -465,9 +463,9 @@ describe('LoginView steps', () => {
     vi.mocked(api.auth.login).mockResolvedValue(session)
     const { wrapper, router } = await page()
     await continueAs(wrapper)
-    await button(wrapper, 'Use a passkey').trigger('click')
+    await must(button(wrapper, 'Use a passkey')).trigger('click')
     await flushPromises()
-    const { signal } = vi.mocked(webauthn.get).mock.calls[0][1]
+    const signal = openedSignal()
     await typePassword(wrapper, 'secret')
     expect(signal.aborted).toBe(true)
     expect(api.auth.login).toHaveBeenCalledWith('sam', 'secret')
@@ -481,10 +479,10 @@ describe('LoginView steps', () => {
     openPrompt()
     const { wrapper } = await page('/login', { attachTo: document.body })
     await continueAs(wrapper)
-    await button(wrapper, 'Use a passkey').trigger('click')
+    await must(button(wrapper, 'Use a passkey')).trigger('click')
     await flushPromises()
-    const { signal } = vi.mocked(webauthn.get).mock.calls[0][1]
-    await button(wrapper, 'Change').trigger('click')
+    const signal = openedSignal()
+    await must(button(wrapper, 'Change')).trigger('click')
     await flushPromises()
     expect(signal.aborted).toBe(true)
     expect(wrapper.find('#password').exists()).toBe(false)

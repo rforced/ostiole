@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { AlertTriangle, CircleCheck, CircleX, Info } from '@lucide/vue'
+import type { Component } from 'vue'
 
 /** A boxed line the page wants read before anything under it. */
 defineProps({
@@ -17,8 +18,13 @@ defineProps({
   role: { type: String, default: '' },
 })
 
-const ICON = { info: Info, warn: AlertTriangle, bad: CircleX, ok: CircleCheck }
-const TONE = {
+const ICON: Record<string, Component> = {
+  info: Info,
+  warn: AlertTriangle,
+  bad: CircleX,
+  ok: CircleCheck,
+}
+const TONE: Record<string, string> = {
   info: 'border-info-line bg-info-soft text-info-ink [&>svg]:text-info',
   warn: 'border-warn-line bg-warn-soft text-warn-ink [&>svg]:text-warn',
   bad: 'border-bad-line bg-bad-soft text-bad-ink [&>svg]:text-bad',

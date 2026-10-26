@@ -1,7 +1,9 @@
-import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { type VueWrapper, enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import type { DiagState, StatesResult } from '@/lib/types.gen'
+import { fixture, must } from '@/test/fixtures'
 import ConnectionsPage from '@/views/diagnostics/ConnectionsPage.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -15,11 +17,11 @@ const stubs = { RouterLink: true }
 enableAutoUnmount(afterEach)
 
 /** A table with `total` of `max` entries in it and nothing else to say. */
-function table(total, max) {
+function table(total: number, max: number | undefined): StatesResult {
   return { states: [], total, matched: total, byProtocol: { tcp: total }, max }
 }
 
-async function page(result) {
+async function page(result: StatesResult) {
   vi.mocked(api.diagnostics.states).mockResolvedValue(result)
   const wrapper = mount(ConnectionsPage, { global: { stubs } })
   await flushPromises()
@@ -60,16 +62,17 @@ describe('ConnectionsPage', () => {
     beforeEach(() => vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] }))
     afterEach(() => vi.useRealTimers())
 
-    const row = (source, bytes, ttl) => ({
-      protocol: 'tcp',
-      source,
-      destination: '192.0.2.1',
-      bytes,
-      packets: 1,
-      ttl,
-      nat: false,
-    })
-    const busy = {
+    const row = (source: string, bytes: number, ttl: string) =>
+      fixture<DiagState>({
+        protocol: 'tcp',
+        source,
+        destination: '192.0.2.1',
+        bytes,
+        packets: 1,
+        ttl,
+        nat: false,
+      })
+    const busy: StatesResult = {
       states: [
         row('10.0.0.2', 500, '1h0m0s'),
         row('10.0.0.3', 50, '2m0s'),
@@ -79,8 +82,9 @@ describe('ConnectionsPage', () => {
       matched: 3,
       byProtocol: { tcp: 3 },
     }
-    const from = (w) => w.findAll('tbody tr').map((r) => r.findAll('td')[1].text())
-    const header = (w, name) => w.findAll('th').find((th) => th.text() === name)
+    const from = (w: VueWrapper) => w.findAll('tbody tr').map((r) => r.findAll('td')[1].text())
+    const header = (w: VueWrapper, name: string) =>
+      must(w.findAll('th').find((th) => th.text() === name))
 
     it('sorts by a column, reading how long each has left', async () => {
       const wrapper = await page(busy)
@@ -93,14 +97,14 @@ describe('ConnectionsPage', () => {
     // order the table is in. Off, the table holds still.
     it('keeps reading while live, in the order chosen', async () => {
       const wrapper = await page(busy)
-      const live = wrapper.findAll('button').find((b) => b.text() === 'Live')
+      const live = must(wrapper.findAll('button').find((b) => b.text() === 'Live'))
       expect(live.attributes('aria-pressed')).toBe('true')
       await header(wrapper, 'From').get('button').trigger('click')
       expect(from(wrapper)).toEqual(['10.0.0.1', '10.0.0.2', '10.0.0.3'])
 
       vi.mocked(api.diagnostics.states).mockResolvedValue({
         ...busy,
-        states: [row('10.0.0.4', 900, '10s'), ...busy.states],
+        states: [row('10.0.0.4', 900, '10s'), ...(busy.states ?? [])],
       })
       vi.advanceTimersByTime(5000)
       await flushPromises()

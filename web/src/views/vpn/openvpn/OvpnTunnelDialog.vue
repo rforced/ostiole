@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -7,11 +8,12 @@ import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import ZoneField from '@/components/ZoneField.vue'
 import { formatRemotes, parseRemotes } from '@/lib/ovpnconf'
+import type { Interface, OpenVPN } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import OvpnFileDialog from '@/views/vpn/openvpn/OvpnFileDialog.vue'
 
-const props = defineProps({ tunnel: { type: Object, default: null } })
+const props = defineProps({ tunnel: { type: Object as PropType<Interface | null>, default: null } })
 const open = defineModel('open', { type: Boolean, default: false })
 
 const auth = useAuthStore()
@@ -22,12 +24,34 @@ const showPassword = ref(false)
 const clearPassword = ref(false)
 const replacing = ref(false)
 /** Certificates and keys from Replace from file, until Save. */
-const blocks = ref(null)
-const zoneField = ref(null)
+const blocks = ref<Partial<OpenVPN> | null>(null)
+const zoneField = ref<InstanceType<typeof ZoneField> | null>(null)
 
-const BLOCK_KEYS = ['caPem', 'certPem', 'keyPem', 'tlsCryptKeyPem', 'tlsAuthKeyPem', 'keyDirection']
+const BLOCK_KEYS = [
+  'caPem',
+  'certPem',
+  'keyPem',
+  'tlsCryptKeyPem',
+  'tlsAuthKeyPem',
+  'keyDirection',
+] as const
 
-function blank() {
+interface TunnelForm {
+  description: string
+  remotes: string
+  random: boolean
+  username: string
+  password: string
+  verify: string
+  routes: string
+  pushed: boolean
+  keepalive: number | string
+  mtu: number | string
+  zone: string
+  enabled: boolean
+}
+
+function blank(): TunnelForm {
   return {
     description: '',
     remotes: '',
@@ -44,7 +68,7 @@ function blank() {
   }
 }
 
-const routesText = (o) => (o?.routes ?? []).join(', ')
+const routesText = (o?: OpenVPN) => (o?.routes ?? []).join(', ')
 
 watch(
   () => [open.value, props.tunnel],
@@ -56,6 +80,7 @@ watch(
     blocks.value = null
     const t = props.tunnel
     const o = t.openvpn
+    if (!o) return
     form.value = {
       description: t.description ?? '',
       remotes: formatRemotes(o.remotes),
@@ -75,16 +100,18 @@ watch(
 )
 
 /** The blocks as they will be saved: replaced ones, or the tunnel's own. */
-const held = computed(() => blocks.value ?? props.tunnel?.openvpn ?? {})
+const held = computed((): Partial<OpenVPN> => blocks.value ?? props.tunnel?.openvpn ?? {})
 const savedPassword = computed(() => Boolean(props.tunnel?.openvpn?.password))
 
 function save() {
   error.value = ''
   const f = form.value
   const t = props.tunnel
+  if (!t?.openvpn) return
   // What this dialog does not show stays as it was.
-  const iface = JSON.parse(JSON.stringify(t))
+  const iface: Interface = JSON.parse(JSON.stringify(t))
   const o = iface.openvpn
+  if (!o) return
   if (f.remotes !== formatRemotes(t.openvpn.remotes)) {
     const got = parseRemotes(f.remotes)
     if (got.error) {
@@ -101,7 +128,7 @@ function save() {
     if (routes.length) o.routes = routes
     else delete o.routes
   }
-  if (!zoneField.value.commit()) return
+  if (!zoneField.value?.commit()) return
   if (f.random) o.remoteRandom = true
   else delete o.remoteRandom
   if (f.pushed) o.pushedRoutes = true
@@ -119,7 +146,7 @@ function save() {
     delete o.password
   }
   if (blocks.value) {
-    for (const k of BLOCK_KEYS) delete o[k]
+    for (const k of BLOCK_KEYS) Reflect.deleteProperty(o, k)
     Object.assign(o, blocks.value)
   }
   if (f.description.trim()) iface.description = f.description.trim()

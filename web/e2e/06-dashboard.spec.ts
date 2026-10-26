@@ -36,7 +36,7 @@ test('the dashboard keeps the layout this browser gives it', async ({ page }) =>
   await expect(page.locator('section[aria-busy="true"]')).toHaveCount(0)
   const cards = () =>
     page.locator('[data-card]').evaluateAll((els) => els.map((el) => el.dataset.card))
-  const before = async (a, b) => {
+  const before = async (a: string | undefined, b: string | undefined) => {
     const order = await cards()
     return order.indexOf(a) < order.indexOf(b)
   }
@@ -55,6 +55,7 @@ test('the dashboard keeps the layout this browser gives it', async ({ page }) =>
     .locator('[data-handle]')
     .boundingBox()
   const target = await dialog.locator('li', { hasText: 'Busiest rules' }).boundingBox()
+  if (!handle || !target) throw new Error('the drag handle or its target is not on the page')
   await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2)
   await page.mouse.down()
   await page.mouse.move(handle.x + handle.width / 2, target.y + target.height / 2, { steps: 12 })

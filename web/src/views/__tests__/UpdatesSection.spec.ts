@@ -1,10 +1,12 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import type { Snapshot, UpdateStatusReply } from '@/lib/types.gen'
-import { fixture } from '@/test/fixtures'
+import { fixture, must } from '@/test/fixtures'
+import type { DeepPartial } from '@/test/fixtures'
 import UpdatesSection from '@/views/system/UpdatesSection.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -13,7 +15,7 @@ vi.mock('@/lib/api', () => ({
 }))
 
 /** What the last check left behind: 0.9.2 is waiting. */
-const waiting = fixture<Snapshot>({
+const waiting: DeepPartial<Snapshot> = {
   lastCheck: '2026-09-19T12:00:00Z',
   channel: 'stable',
   current: 'v0.9.1',
@@ -25,9 +27,10 @@ const waiting = fixture<Snapshot>({
     url: 'https://x.invalid',
     notes: '',
   },
-})
+}
 
-const installButton = (w) => w.findAll('button').find((b) => b.text().startsWith('Install'))
+const installButton = (w: VueWrapper) =>
+  w.findAll('button').find((b) => b.text().startsWith('Install'))
 
 /** Mounts the section on a router running 0.9.1 with 0.9.2 going in. */
 async function mountInstalling() {
@@ -48,7 +51,7 @@ async function mountInstalling() {
  * never sees the restarting state and the process that answers next has
  * never heard of the update.
  */
-async function restartsInto(version) {
+async function restartsInto(version: string) {
   vi.mocked(api.health).mockResolvedValue({ status: 'ok', version })
   vi.mocked(api.update.status).mockResolvedValue(
     fixture<UpdateStatusReply>({ status: { state: 'idle' }, check: waiting }),
@@ -110,7 +113,7 @@ describe('UpdatesSection', () => {
 
   it('says so on the button while the install runs', async () => {
     const w = await mountInstalling()
-    const button = installButton(w)
+    const button = must(installButton(w))
     expect(button.text()).toBe('Installing…')
     expect(button.attributes('disabled')).toBeDefined()
     expect(button.attributes('aria-busy')).toBe('true')

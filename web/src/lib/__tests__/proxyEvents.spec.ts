@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { openSeconds, ruleLines } from '@/lib/proxyEvents'
 
 describe('openSeconds', () => {
-  const open = (time, logged) => openSeconds({ time, logged })
+  const open = (time: string, logged: string | undefined) => openSeconds({ time, logged })
 
   it('says how long a request was open before the proxy logged it', () => {
     expect(open('2026-09-20T13:14:00Z', '2026-09-20T14:02:11Z')).toBe(2891)

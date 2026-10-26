@@ -22,7 +22,7 @@ const externalChoices = computed(() =>
   config.interfaces.filter((i) => i.enabled && isExternal(i.zone)),
 )
 
-function isExternal(zone) {
+function isExternal(zone?: string) {
   return Boolean(config.zones.find((z) => z.name === zone)?.external)
 }
 
@@ -68,7 +68,7 @@ const listenAll = computed({
   },
 })
 
-function toggleInterface(name, on) {
+function toggleInterface(name: string, on: boolean) {
   const list = new Set(upnp.value.interfaces ?? [])
   if (on) list.add(name)
   else list.delete(name)
@@ -80,14 +80,11 @@ const { moveClass, reorder } = useReorder()
 const editing = ref(-1)
 const open = ref(false)
 
-const keys = new WeakMap()
+const keys = new WeakMap<UPnPRule, number>()
 let lastKey = 0
 
-/**
- * @param {object} entry
- * @returns {number} a key that stays with this entry while it is in the draft
- */
-function keyOf(entry) {
+/** A key that stays with this entry while it is in the draft. */
+function keyOf(entry: UPnPRule) {
   let key = keys.get(entry)
   if (!key) {
     key = ++lastKey
@@ -100,7 +97,7 @@ function add() {
   editing.value = -1
   open.value = true
 }
-function edit(index) {
+function edit(index: number) {
   editing.value = index
   open.value = true
 }

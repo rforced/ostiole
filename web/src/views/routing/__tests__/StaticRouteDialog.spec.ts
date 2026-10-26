@@ -2,8 +2,8 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { Config } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import { emptyConfig, iface } from '@/test/fixtures'
 import StaticRouteDialog from '@/views/routing/StaticRouteDialog.vue'
 
 // The dialog itself teleports; the form inside it is what is under test.
@@ -14,13 +14,13 @@ const stubs = {
   },
 }
 
-function setup(index) {
+function setup(index: number) {
   const config = useConfigStore()
   const cfg = {
+    ...emptyConfig(),
     version: 12,
     zones: [{ name: 'lan' }],
-    interfaces: [{ name: 'eth1', zone: 'lan', enabled: true }],
-    rules: [],
+    interfaces: [iface({ name: 'eth1', zone: 'lan', enabled: true })],
     routes: [
       {
         id: 'rt-lab',
@@ -32,7 +32,7 @@ function setup(index) {
       },
       { id: 'rt-spare', enabled: false, destination: '203.0.113.0/24', gateway: '192.0.2.20' },
     ],
-  } as Config
+  }
   config.saved = cfg
   config.replaceDraft(cfg)
   const wrapper = mount(StaticRouteDialog, {

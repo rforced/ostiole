@@ -6,7 +6,7 @@ import ErrorLine from '@/components/ErrorLine.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
-import type { Disabled, Unused } from '@/lib/types.gen'
+import type { Config, Disabled, Interface, Unused } from '@/lib/types.gen'
 import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
@@ -23,7 +23,7 @@ const config = useConfigStore()
 const DEBOUNCE_MS = 400
 
 /** Each kind as a sentence names it, and the page it is edited on. */
-const KINDS = {
+const KINDS: Record<string, [string, string]> = {
   alias: ['alias', '/firewall/aliases'],
   schedule: ['schedule', '/firewall/schedules'],
   pool: ['pool', '/services/proxy#pools'],
@@ -50,14 +50,14 @@ const KINDS = {
   'block-list': ['block list', '/services/dns#blocking'],
 }
 
-const nounOf = (kind) => KINDS[kind]?.[0] ?? kind
-const labelOf = (kind) => nounOf(kind).charAt(0).toUpperCase() + nounOf(kind).slice(1)
+const nounOf = (kind: string) => KINDS[kind]?.[0] ?? kind
+const labelOf = (kind: string) => nounOf(kind).charAt(0).toUpperCase() + nounOf(kind).slice(1)
 
 /**
  * An interface is edited where its kind is: a tunnel under WireGuard, a
  * network under Wireless. A rule is on its zone's tab.
  */
-function pageOf(it) {
+function pageOf(it: Item) {
   if (it.kind === 'interface') {
     const i = config.findInterface(it.id)
     if (i?.wireguard) return '/vpn/wireguard#tunnels'
@@ -71,10 +71,32 @@ function pageOf(it) {
   return KINDS[it.kind]?.[1] ?? ''
 }
 
-const byKey = (list, key, id) => (list ?? []).find((x) => x[key] === id)
+function byKey<T extends object, K extends keyof T>(
+  list: T[] | null | undefined,
+  key: K,
+  id: string,
+): T | undefined {
+  return (list ?? []).find((x) => x[key] === id)
+}
+
+/** An unused or a disabled item, which the server names by kind and id. */
+type Item = Unused | Disabled
+
+/** What a Delete asks and does; the confirm fields go to ConfirmButton as they are. */
+interface Deletion {
+  confirm: {
+    question: string
+    description?: string
+    dependents?: string[]
+    dependentsLabel?: string
+    typed?: string
+    disabled?: boolean
+  }
+  run: () => void
+}
 
 /** An interface's own Delete, as the page it is deleted on has it. */
-function interfaceDelete(i) {
+function interfaceDelete(i: Interface): Deletion {
   const dependents = config.interfaceDependents(i.name)
   if (i.wireguard)
     return {
@@ -107,7 +129,7 @@ function interfaceDelete(i) {
  * it, the name typed back where that page asks for it, and the remover.
  * Each returns nothing once the draft no longer has the item.
  */
-const DELETES = {
+const DELETES: Record<string, (id: string, d: Partial<Config>) => Deletion | null | undefined> = {
   alias: (id, d) => {
     const a = byKey(d.aliases, 'name', id)
     return (
@@ -371,7 +393,7 @@ const DELETES = {
   },
 }
 
-const deletion = (it) => DELETES[it.kind]?.(it.id, config.draft ?? {}) || null
+const deletion = (it: Item) => DELETES[it.kind]?.(it.id, config.draft ?? {}) || null
 
 const unused = ref<Unused[]>([])
 const disabled = ref<Disabled[]>([])
@@ -383,6 +405,7 @@ const behind = ref(false)
 const load = useAsync(
   async () => {
     const seen = edits
+    if (!config.draft) return
     const out = await api.config.unused(config.draft)
     if (seen !== edits) return
     unused.value = out?.unused ?? []
@@ -405,7 +428,9 @@ watch(
 )
 onBeforeUnmount(() => window.clearTimeout(timer))
 
-const row = (it) => ({ ...it, page: pageOf(it), del: deletion(it) })
+/** An item with the page that edits it and its Delete. */
+type Row = Item & { why?: string; takes?: string[]; page: string; del: Deletion | null }
+const row = (it: Item): Row => ({ ...it, page: pageOf(it), del: deletion(it) })
 const groups = computed(() => [
   { title: 'Unused', empty: 'No unused items.', rows: unused.value.map(row) },
   { title: 'Disabled', empty: 'No disabled items.', rows: disabled.value.map(row) },
@@ -415,7 +440,7 @@ const groups = computed(() => [
 const removable = computed(() =>
   unused.value
     .map((it) => ({ it, del: deletion(it) }))
-    .filter(({ del }) => del && !del.confirm.disabled),
+    .filter((x): x is { it: Unused; del: Deletion } => x.del !== null && !x.del.confirm.disabled),
 )
 const removeLabel = computed(() => {
   const n = removable.value.length
@@ -426,16 +451,16 @@ const removedNames = computed(() =>
 )
 
 /** What the server keeps to an admin. */
-function needsAdmin(it) {
+function needsAdmin(it: Unused) {
   if (it.kind === 'dns-provider' || it.kind === 'acme-account') return true
   return it.kind === 'zone' && byKey(config.zones, 'name', it.id)?.antiLockout === true
 }
 const removeLocked = computed(() => !auth.isAdmin && unused.value.some(needsAdmin))
 
-const same = (a, b) => a.kind === b.kind && a.id === b.id
+const same = (a: Item, b: Item) => a.kind === b.kind && a.id === b.id
 
-function remove(r) {
-  r.del.run()
+function remove(r: Row) {
+  r.del?.run()
   unused.value = unused.value.filter((x) => !same(x, r))
   disabled.value = disabled.value.filter((x) => !same(x, r))
 }

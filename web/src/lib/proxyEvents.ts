@@ -43,8 +43,8 @@ export function eventValues(e: WafEvent): (string | number | undefined)[] {
  * under a minute. The proxy logs a request when it ends, so a WebSocket's
  * event comes when the socket closes.
  */
-export function openSeconds(e: Pick<WafEvent, 'time' | 'logged'>): number {
-  const seconds = (Date.parse(e.logged) - Date.parse(e.time)) / 1000
+export function openSeconds(e: Pick<WafEvent, 'time'> & { logged?: string }): number {
+  const seconds = (Date.parse(e.logged ?? '') - Date.parse(e.time)) / 1000
   return seconds >= 60 ? seconds : 0
 }
 

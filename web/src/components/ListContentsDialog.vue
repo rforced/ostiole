@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { LoaderCircle } from '@lucide/vue'
+import type { PropType } from 'vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
@@ -12,6 +13,14 @@ import { formatCount, formatWhen } from '@/lib/format'
 const PAGE = 1000
 /** How long typing rests before the router is asked. */
 const SETTLE_MS = 250
+
+interface ContentsPage {
+  items: string[]
+  total?: number
+  matches?: number
+  offset?: number
+  fetchedAt?: string
+}
 
 /**
  * What a list the router keeps holds, a page at a time: the addresses an
@@ -28,17 +37,20 @@ const props = defineProps({
    * Reads one page: (q, offset, limit) resolving to
    * {total, matches, offset, items, fetchedAt}.
    */
-  read: { type: Function, required: true },
+  read: {
+    type: Function as PropType<(q: string, offset: number, limit: number) => Promise<ContentsPage>>,
+    required: true,
+  },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
 const query = ref('')
-const page = ref(null)
+const page = ref<ContentsPage | null>(null)
 /** Which way the list is being paged, for its button's spinner. */
 const going = ref('')
-const list = ref(null)
+const list = ref<HTMLElement | null>(null)
 
-const load = useAsync(async (offset) => {
+const load = useAsync(async (offset: number) => {
   page.value = await props.read(query.value.trim(), offset, PAGE)
 })
 
@@ -76,7 +88,7 @@ const at = computed(() => page.value?.offset ?? 0)
 const hasPrevious = computed(() => at.value > 0)
 const hasNext = computed(() => at.value + items.value.length < (page.value?.matches ?? 0))
 
-async function turn(direction) {
+async function turn(direction: 'previous' | 'next') {
   going.value = direction
   await load.run(direction === 'next' ? at.value + PAGE : Math.max(0, at.value - PAGE))
   going.value = ''
@@ -96,7 +108,7 @@ const empty = computed(() => {
         v-model="query"
         :placeholder="placeholder"
         :shown="page?.matches ?? 0"
-        :total="page ? page.total : null"
+        :total="page ? (page.total ?? null) : null"
       />
       <ErrorLine v-if="load.error.value" class="text-sm">{{ load.error.value }}</ErrorLine>
       <ul
@@ -137,8 +149,8 @@ const empty = computed(() => {
         </button>
         <span v-if="items.length" class="text-sm text-ink-muted">
           {{ formatCount(at + 1) }}–{{ formatCount(at + items.length) }} of
-          {{ formatCount(page.matches) }}.
-          <template v-if="page.fetchedAt"> Fetched {{ formatWhen(page.fetchedAt) }}. </template>
+          {{ formatCount(page?.matches ?? 0) }}.
+          <template v-if="page?.fetchedAt"> Fetched {{ formatWhen(page.fetchedAt) }}. </template>
         </span>
       </div>
     </div>

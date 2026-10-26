@@ -1,22 +1,26 @@
 import { mount } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { Config, Rule } from '@/lib/types.gen'
+import type { Config, Interface, Rule, WireGuardPeer } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import { draftOf, emptyConfig, fixture, iface, must } from '@/test/fixtures'
+import type { DeepPartial } from '@/test/fixtures'
 import EndpointFields from '@/views/firewall/EndpointFields.vue'
 import RuleDialog from '@/views/firewall/RuleDialog.vue'
 
-const tunnel = (name, zone, peers) => ({ name, zone, enabled: true, wireguard: { peers } })
+type Fields = VueWrapper<InstanceType<typeof EndpointFields>>
 
-function draft(interfaces: unknown[]) {
+const tunnel = (name: string, zone: string, peers: DeepPartial<WireGuardPeer>[]) =>
+  fixture<Interface>({ name, zone, enabled: true, wireguard: { peers } })
+
+function draft(interfaces: Interface[]): Config {
   return {
-    version: 11,
+    ...emptyConfig(),
     zones: [{ name: 'lan' }, { name: 'devices' }, { name: 'sites' }],
-    interfaces: [{ name: 'eth1', zone: 'lan', enabled: true }, ...interfaces],
-    rules: [],
-    nat: { outbound: { mode: 'automatic' } },
-  } as Config
+    interfaces: [iface({ name: 'eth1', zone: 'lan', enabled: true }), ...interfaces],
+  }
 }
 
 const devices = tunnel('wg0', 'devices', [
@@ -25,14 +29,14 @@ const devices = tunnel('wg0', 'devices', [
 ])
 const sites = tunnel('wg1', 'sites', [{ name: 'friend', allowedIps: ['192.168.50.0/24'] }])
 
-function mountFields(side, zone, interfaces) {
+function mountFields(side: string, zone: string, interfaces: Interface[]) {
   useConfigStore().replaceDraft(draft(interfaces))
   const model = { mode: 'peer', peer: '', notAddresses: false, portMode: 'any' }
   return mount(EndpointFields, { props: { side, zone, modelValue: model } })
 }
 
-const peerOption = (w) => w.get(`#${w.props('side')}-mode`).find('option[value="peer"]')
-const peerChoices = (w) => w.findAll(`#${w.props('side')}-peer option`).map((o) => o.text())
+const peerOption = (w: Fields) => w.get(`#${w.props('side')}-mode`).find('option[value="peer"]')
+const peerChoices = (w: Fields) => w.findAll(`#${w.props('side')}-peer option`).map((o) => o.text())
 
 describe('EndpointFields peers', () => {
   beforeEach(() => setActivePinia(createPinia()))
@@ -58,7 +62,7 @@ describe('EndpointFields peers', () => {
 describe('EndpointFields zone', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
-  const kinds = (w) =>
+  const kinds = (w: Fields) =>
     w.findAll(`#${w.props('side')}-mode option`).map((o) => o.attributes('value'))
 
   // A zone is somewhere traffic goes, so only a destination can name one.
@@ -118,7 +122,7 @@ describe('RuleDialog with a peer', () => {
       source: {},
       destination: { peer: 'wg1/friend', notAddresses: true, ports: ['22'] },
     }
-    config.draft.rules.push(rule)
+    must(draftOf(config).rules).push(rule)
     const wrapper = mount(RuleDialog, {
       props: { open: true, rule, zone: 'lan' },
       global: {

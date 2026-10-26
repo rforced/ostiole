@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -37,7 +37,8 @@ async function mounted() {
   return wrapper
 }
 
-const cell = (w, row, label) => w.findAll('tbody tr')[row].find(`td[data-label="${label}"]`)
+const cell = (w: VueWrapper, row: number, label: string) =>
+  w.findAll('tbody tr')[row].find(`td[data-label="${label}"]`)
 
 describe('TokensSection', () => {
   beforeEach(() => {

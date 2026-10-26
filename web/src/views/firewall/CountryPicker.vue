@@ -155,7 +155,7 @@ const chosenTotal = computed(() =>
             <span class="font-mono text-code text-ink-muted">{{ c.code }}</span>
             <span class="truncate">{{ c.name }}</span>
             <span v-if="count(c.code) !== null" class="ml-auto font-mono text-code text-ink-muted">
-              {{ count(c.code).toLocaleString() }}
+              {{ (count(c.code) ?? 0).toLocaleString() }}
             </span>
           </label>
         </div>

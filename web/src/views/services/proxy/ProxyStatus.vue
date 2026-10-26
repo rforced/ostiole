@@ -37,7 +37,7 @@ const healthy = computed(() => (status.value?.upstreams ?? []).filter((u) => u.h
           }}<template v-if="status.ports.http3"> (+ UDP {{ status.ports.https }})</template>
         </dd>
         <dt>Upstreams</dt>
-        <dd>{{ healthy }} of {{ status.upstreams.length }} healthy</dd>
+        <dd>{{ healthy }} of {{ (status.upstreams ?? []).length }} healthy</dd>
       </dl>
       <p v-else class="text-ink-muted">Stopped.</p>
     </SectionCard>

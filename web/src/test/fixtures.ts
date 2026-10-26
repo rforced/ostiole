@@ -1,12 +1,13 @@
 import type { Session } from '@/lib/api'
+import type { Toast } from '@/stores/toast'
 import type { Config, Interface, Rule } from '@/lib/types.gen'
 
 /** A model value that holds only the parts a test reads. */
 export type DeepPartial<T> = {
-  [K in keyof T]?: T[K] extends (infer U)[] | null
-    ? DeepPartial<U>[]
-    : T[K] extends object | null
-      ? DeepPartial<NonNullable<T[K]>>
+  [K in keyof T]?: T[K] extends (infer U)[] | null | undefined
+    ? DeepPartial<U>[] | Extract<T[K], null>
+    : T[K] extends object | null | undefined
+      ? DeepPartial<NonNullable<T[K]>> | Extract<T[K], null>
       : T[K]
 }
 
@@ -51,4 +52,21 @@ export function rule(over: Partial<Rule> & { id: string }): Rule {
     destination: {},
     ...over,
   }
+}
+
+/** A store's draft, which the test has already loaded. */
+export function draftOf<T>(store: { draft: T | null }): T {
+  if (!store.draft) throw new TypeError('the store has no draft')
+  return store.draft
+}
+
+/** A value the test has already seen put in place. */
+export function must<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) throw new TypeError('the value is missing')
+  return value
+}
+
+/** The action of a toast the test expects to carry one. */
+export function toastAction(toast: Toast | undefined) {
+  return must(must(toast).action)
 }

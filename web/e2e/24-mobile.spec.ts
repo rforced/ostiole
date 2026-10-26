@@ -1,6 +1,8 @@
 import { createPrivateKey, createPublicKey } from 'node:crypto'
 
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
+
+import type { Config } from '../src/lib/types.gen'
 
 import { expect, test } from './fixtures'
 import { login, PASSWORD, reconfigure, sidebar } from './helpers'
@@ -8,17 +10,18 @@ import { login, PASSWORD, reconfigure, sidebar } from './helpers'
 // The phone layout, on a router filled with made-up rows (fill below).
 test.describe.configure({ mode: 'serial' })
 
-const shot = (name) => `e2e/screenshots/mobile/${name}.png`
+const shot = (name: string) => `e2e/screenshots/mobile/${name}.png`
 
 /** How far the page scrolls sideways, which on a phone it never should. */
-const overflow = (page) =>
+const overflow = (page: Page) =>
   page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
 
 /** Some pages stream and never go quiet; they get the cap. */
-const settle = (page) => page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {})
+const settle = (page: Page) =>
+  page.waitForLoadState('networkidle', { timeout: 2000 }).catch(() => {})
 
 /** Waits out whatever is sliding in; a spinner or a skeleton never ends. */
-const still = (page) =>
+const still = (page: Page) =>
   page.evaluate(() =>
     Promise.all(
       document
@@ -29,7 +32,7 @@ const still = (page) =>
   )
 
 /** Opens the drawer and follows it to a page, its section first. */
-async function drawer(page, ...names) {
+async function drawer(page: Page, ...names: string[]) {
   await page.getByRole('button', { name: 'Open navigation' }).click()
   await sidebar(page, ...names)
 }
@@ -54,7 +57,7 @@ async function pages(page: Page): Promise<string[]> {
 }
 
 /** A WireGuard key pair grown from one repeated byte: a key nobody holds. */
-function keyPair(byte) {
+function keyPair(byte: number) {
   const secret = Buffer.alloc(32, byte)
   const pkcs8 = Buffer.concat([Buffer.from('302e020100300506032b656e04220420', 'hex'), secret])
   const spki = createPublicKey(createPrivateKey({ key: pkcs8, format: 'der', type: 'pkcs8' }))
@@ -71,10 +74,17 @@ function keyPair(byte) {
  * (RFC 2606), MACs from the documentation block (RFC 7042), and nothing
  * here makes the router fetch or send anything.
  */
-function fill(config) {
-  const lan = config.interfaces.find((i) => i.zone === 'lan').name
-  const wan = config.interfaces.find((i) => i.zone === 'wan').name
+function fill(config: Config) {
+  const interfaceIn = (zone: string) => {
+    const found = (config.interfaces ?? []).find((i) => i.zone === zone)
+    if (!found) throw new Error(`no interface in the ${zone} zone`)
+    return found.name
+  }
+  const lan = interfaceIn('lan')
+  const wan = interfaceIn('wan')
   config.system.logging = { ...config.system.logging, files: { enabled: true } }
+  config.zones ??= []
+  config.interfaces ??= []
   config.zones.push({ name: 'vpn', description: 'Laptops and phones away from home' })
   config.interfaces.push({
     name: 'wg0',
@@ -193,7 +203,7 @@ function fill(config) {
       destination: {},
       gateway: 'failover',
     },
-    ...config.rules,
+    ...(config.rules ?? []),
   ]
   config.nat = {
     ...config.nat,
@@ -303,7 +313,8 @@ test('the drawer opens, takes you to a page, and closes', async ({ page }) => {
 
   // The section and the page you are on stand out from their neighbours.
   await page.getByRole('button', { name: 'Open navigation' }).click()
-  const style = (el, prop) => el.evaluate((e, p) => getComputedStyle(e)[p], prop)
+  const style = (el: Locator, prop: 'color' | 'borderLeftColor') =>
+    el.evaluate((e, p) => getComputedStyle(e)[p], prop)
   const firewall = nav.getByRole('button', { name: 'Firewall', exact: true })
   const services = nav.getByRole('button', { name: 'Services', exact: true })
   expect(await style(firewall, 'color')).not.toBe(await style(services, 'color'))
@@ -323,12 +334,15 @@ test('a dialog is a sheet with its submit in reach', async ({ page }) => {
   await still(page)
   const viewport = page.viewportSize()
   const box = await dialog.boundingBox()
+  if (!box || !viewport) throw new Error('the dialog or the viewport has no size')
   expect(box.x).toBe(0)
   expect(box.width).toBe(viewport.width)
   expect(Math.round(box.y + box.height)).toBe(viewport.height)
   const save = dialog.getByRole('button', { name: 'Save to draft' })
   await expect(save).toBeInViewport()
-  expect((await save.boundingBox()).height).toBeGreaterThanOrEqual(44)
+  const saveBox = await save.boundingBox()
+  if (!saveBox) throw new Error('the save button has no size')
+  expect(saveBox.height).toBeGreaterThanOrEqual(44)
   await page.screenshot({ path: shot('rule-dialog') })
   await dialog.getByRole('button', { name: 'Cancel' }).click()
   await expect(dialog).toHaveCount(0)
@@ -343,6 +357,7 @@ test('the log files settings stack', async ({ page }) => {
     .getByRole('group', { name: 'Files' })
   const days = await files.getByLabel('Kept for (days)').boundingBox()
   const every = await files.getByLabel('Write every').boundingBox()
+  if (!days || !every) throw new Error('the log file settings have no size')
   expect(every.y).toBeGreaterThanOrEqual(days.y + days.height)
   await files.scrollIntoViewIfNeeded()
   await page.screenshot({ path: shot('log-files') })
@@ -361,6 +376,7 @@ test('the apply bar docks at the bottom with its buttons in reach', async ({ pag
     for (const button of [apply, discard]) {
       await expect(button).toBeInViewport()
       const box = await button.boundingBox()
+      if (!box || !viewport) throw new Error('the button or the viewport has no size')
       expect(box.height).toBeGreaterThanOrEqual(44)
       expect(box.y).toBeGreaterThan(viewport.height / 2)
     }

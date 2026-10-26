@@ -47,7 +47,8 @@ const families = ref<string[]>([])
 const end = ref(0)
 
 const read = useAsync(async () => {
-  const name = props.gateway.name
+  const name = props.gateway?.name
+  if (!name) return
   const w = win.value
   const r = await api.gatewayHistory.read(name, w)
   if (name !== props.gateway?.name || w !== win.value) return
@@ -119,17 +120,18 @@ onBeforeUnmount(() => {
 
 const chart = computed(() => historySeries(families.value))
 const step = computed(() => stepOf(win.value, props.gateway?.probeEverySeconds))
-const scale = (highest) => niceScale(highest, 10)
+const scale = (highest: number) => niceScale(highest, 10)
 const figures = computed(() => {
   const r = report.value
   if (!r) return []
-  return families.value.map((family, k) => {
+  return families.value.flatMap((family, k) => {
     if (win.value === '5m' && rows.value) {
       const f = probeFigures(rows.value, k, families.value.length)
-      return { family, mean: f.mean, worst: f.worst, loss: f.loss, sent: f.sent }
+      return [{ family, mean: f.mean, worst: f.worst, loss: f.loss, sent: f.sent }]
     }
     const f = r.families.find((x) => x.family === family)
-    return { family, mean: f.mean, worst: f.worst, loss: f.loss, sent: f.sent }
+    if (!f) return []
+    return [{ family, mean: f.mean, worst: f.worst, loss: f.loss, sent: f.sent }]
   })
 })
 const windowLabel = computed(() => WINDOWS.find((w) => w.value === win.value)?.label ?? '')
@@ -152,7 +154,7 @@ const error = computed(() => read.error.value || streamError.value)
         :points="rows"
         :window="win"
         :end="end"
-        :label="gateway.name"
+        :label="gateway.name ?? ''"
         :series="chart.series"
         :bars="chart.bars"
         :format="formatMs"

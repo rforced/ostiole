@@ -16,10 +16,7 @@ import RadioDialog from '@/views/wireless/RadioDialog.vue'
 
 const auth = useAuthStore()
 const config = useConfigStore()
-interface Row {
-  card: WirelessCard | null
-  cfg: Radio | null
-}
+type Row = { card: WirelessCard; cfg: Radio | null } | { card: null; cfg: Radio }
 
 const live = ref<WirelessCard[]>([])
 const editing = ref<Row | null>(null)
@@ -116,9 +113,9 @@ function edit(row: Row) {
               {{ emptyText(load, 'No radios on this router.') }}
             </td>
           </tr>
-          <tr v-for="row in rows" :key="row.card?.name ?? row.cfg.name">
+          <tr v-for="row in rows" :key="row.card ? row.card.name : row.cfg.name">
             <td data-label="">
-              <div class="font-mono font-medium">{{ row.card?.name ?? row.cfg.name }}</div>
+              <div class="font-mono font-medium">{{ row.card ? row.card.name : row.cfg.name }}</div>
               <div v-if="row.card?.mac" class="text-xs text-ink-muted">{{ row.card.mac }}</div>
             </td>
             <td class="font-mono text-code" data-label="Driver">{{ row.card?.driver || '—' }}</td>

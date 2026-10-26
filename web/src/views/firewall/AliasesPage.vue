@@ -49,8 +49,8 @@ const COLUMNS: SortColumn[] = [
 const sort = useSort<Alias>(() => config.aliases, {
   name: byText((a) => a.name),
   type: byText((a) => a.type),
-  entries: byNumber((a) => fetched.value[a.name]?.entries ?? a.entries.length),
-  description: byText((a) => a.description),
+  entries: byNumber((a) => fetched.value[a.name]?.entries ?? (a.entries ?? []).length),
+  description: byText((a) => a.description ?? ''),
   usedBy: byNumber((a) => config.aliasReferences(a.name).length),
 })
 const aliases = sort.sorted
@@ -78,27 +78,30 @@ const refresh = useAsync(async (name?: string) => {
   }
 })
 
-const COUNTRY_NAMES = Object.fromEntries(COUNTRIES.map((c) => [c.code, c.name]))
+const COUNTRY_NAMES: Record<string, string> = Object.fromEntries(
+  COUNTRIES.map((c) => [c.code, c.name]),
+)
 
 /** Country aliases read better as names than as two-letter codes. */
-function countryNames(codes) {
+function countryNames(codes: string[]) {
   const shown = codes.slice(0, 4).map((c) => COUNTRY_NAMES[c] ?? c)
   if (codes.length <= 4) return shown.join(', ')
   return `${shown.join(', ')} … (${codes.length} countries)`
 }
 
 /** AS numbers read better with their holders, which the last fetch supplied. */
-function asnNames(a) {
-  const holders = {}
+function asnNames(a: Alias) {
+  const holders: Record<string, string> = {}
   for (const p of fetched.value[a.name]?.parts ?? []) {
     if (p.asn && p.holder) holders[p.asn] = p.holder
   }
-  const shown = a.entries.slice(0, 4).map((e) => {
+  const entries = a.entries ?? []
+  const shown = entries.slice(0, 4).map((e) => {
     const asn = canonicalAsn(e)
     return holders[asn] ? `${asn} ${holders[asn]}` : asn
   })
-  if (a.entries.length <= 4) return shown.join(', ')
-  return `${shown.join(', ')} … (${a.entries.length} networks)`
+  if (entries.length <= 4) return shown.join(', ')
+  return `${shown.join(', ')} … (${entries.length} networks)`
 }
 
 /**
@@ -115,7 +118,7 @@ const ruleZone = computed(
  * in: an address list becomes the source, a port list becomes the ports.
  * The rule is a draft like any other until it is applied.
  */
-function blockWith(a) {
+function blockWith(a: Alias) {
   router.push({ path: '/firewall/rules', query: { block: a.name }, hash: `#${ruleZone.value}` })
 }
 
@@ -123,23 +126,22 @@ function add() {
   editing.value = null
   open.value = true
 }
-function edit(a) {
+function edit(a: Alias) {
   editing.value = a
   open.value = true
 }
 
 /** The alias whose fetched entries are open. */
-const showing = ref(null)
+const showing = ref<Alias | null>(null)
 const showingOpen = ref(false)
-function show(a) {
+function show(a: Alias) {
   showing.value = a
   showingOpen.value = true
 }
 async function readEntries(q: string, offset: number, limit: number) {
-  const page = (await api.aliases.entries(showing.value.name, { q, offset, limit })) as {
-    entries: string[]
-  }
-  return { ...page, items: page.entries }
+  if (!showing.value) return { items: [] }
+  const page = await api.aliases.entries(showing.value.name, { q, offset, limit })
+  return { ...page, items: page.entries ?? [] }
 }
 </script>
 
@@ -192,11 +194,13 @@ async function readEntries(q: string, offset: number, limit: number) {
             <td class="font-mono font-medium" data-label="">{{ a.name }}</td>
             <td data-label="Type">{{ a.type }}</td>
             <td class="font-mono text-code" data-label="Entries">
-              <template v-if="a.type === 'geoip'">{{ countryNames(a.entries) }}</template>
+              <template v-if="a.type === 'geoip'">{{ countryNames(a.entries ?? []) }}</template>
               <template v-else-if="a.type === 'asn'">{{ asnNames(a) }}</template>
               <span v-else class="break-all">
-                {{ a.entries.slice(0, 4).join(', ')
-                }}<span v-if="a.entries.length > 4"> … ({{ a.entries.length }})</span>
+                {{ (a.entries ?? []).slice(0, 4).join(', ')
+                }}<span v-if="(a.entries ?? []).length > 4">
+                  … ({{ (a.entries ?? []).length }})</span
+                >
               </span>
               <div v-if="fetched[a.name]?.lastError" class="mt-1 font-sans text-sm text-bad">
                 {{ fetched[a.name].lastError }}

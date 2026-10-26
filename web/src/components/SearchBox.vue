@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Search } from '@lucide/vue'
+import type { PropType } from 'vue'
 import { useId } from 'vue'
 
 import { formatCount } from '@/lib/format'
@@ -15,7 +16,7 @@ defineProps({
   /** Rows left after the search. */
   shown: { type: Number, default: 0 },
   /** Rows in all; null hides the count. */
-  total: { type: Number, default: null },
+  total: { type: Number as PropType<number | null>, default: null },
 })
 const query = defineModel({ type: String, default: '' })
 const id = useId()

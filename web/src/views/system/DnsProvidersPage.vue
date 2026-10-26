@@ -8,7 +8,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import UsedByCell from '@/components/UsedByCell.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
-import type { ProviderKind } from '@/lib/types.gen'
+import type { DNSProvider, ProviderKind } from '@/lib/types.gen'
 import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ProviderDialog from '@/views/system/providers/ProviderDialog.vue'
@@ -23,19 +23,19 @@ const load = useAsync(
   { immediate: true },
 )
 
-const editing = ref(null)
+const editing = ref<DNSProvider | null>(null)
 const open = ref(false)
 
 function add() {
   editing.value = null
   open.value = true
 }
-function edit(provider) {
+function edit(provider: DNSProvider) {
   editing.value = provider
   open.value = true
 }
 
-const labelOf = (kind) => kinds.value.find((k) => k.kind === kind)?.label ?? kind
+const labelOf = (kind: string) => kinds.value.find((k) => k.kind === kind)?.label ?? kind
 </script>
 
 <template>

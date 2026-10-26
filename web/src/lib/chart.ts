@@ -20,15 +20,15 @@ export function niceScale(highest: number, least = 1000): { top: number; step: n
   const high = Math.max(highest, least)
   const rough = high / 4
   const power = 10 ** Math.floor(Math.log10(rough))
-  const step = [1, 2, 2.5, 5, 10].map((f) => f * power).find((s) => s >= rough)
+  const step = [1, 2, 2.5, 5, 10].map((f) => f * power).find((s) => s >= rough) ?? 10 * power
   return { top: Math.ceil(high / step) * step, step }
 }
 
 /**
  * The value axis's stops, from zero to the top.
  */
-export function rateTicks({ top, step }) {
-  const out = []
+export function rateTicks({ top, step }: { top: number; step: number }) {
+  const out: number[] = []
   for (let v = 0; v <= top + step / 1e6; v += step) out.push(v)
   return out
 }
@@ -43,7 +43,7 @@ export function rateTicks({ top, step }) {
  */
 export function timeTicks(start: number, end: number, window: string, narrow = false) {
   const d = new Date(start * 1000)
-  const out = []
+  const out: number[] = []
   if (window === '30d') {
     const every = narrow ? 10 : 5
     d.setHours(0, 0, 0, 0)
@@ -124,16 +124,16 @@ export function pointLabel(t: number, window: string) {
  * Points run oldest first.
  * @param t seconds
  */
-export function nearest(points: ArrayLike<number | null>[], t: number) {
+export function nearest(points: ArrayLike<number | null | undefined>[], t: number) {
   if (!points.length) return -1
   let lo = 0
   let hi = points.length - 1
   while (lo < hi) {
     const mid = (lo + hi) >> 1
-    if (points[mid][0] < t) lo = mid + 1
+    if ((points[mid][0] ?? 0) < t) lo = mid + 1
     else hi = mid
   }
-  if (lo > 0 && t - points[lo - 1][0] < points[lo][0] - t) return lo - 1
+  if (lo > 0 && t - (points[lo - 1][0] ?? 0) < (points[lo][0] ?? 0) - t) return lo - 1
   return lo
 }
 
@@ -160,22 +160,24 @@ export function linePath(
  * @param gap seconds, 0 never breaks
  */
 export function seriesPath(
-  points: Array<Array<number | null>>,
+  points: ArrayLike<number | null | undefined>[],
   i: number,
   x: (t: number) => number,
   y: (v: number) => number,
   gap = 0,
 ) {
   let d = ''
-  let prev = null
+  let prev: ArrayLike<number | null | undefined> | null = null
   for (const p of points) {
-    if (p[i] === undefined) continue
-    if (p[i] === null) {
+    const v = p[i]
+    if (v === undefined) continue
+    if (v === null) {
       prev = null
       continue
     }
-    const move = !prev || (gap > 0 && p[0] - prev[0] > gap)
-    d += `${move ? 'M' : 'L'}${x(p[0]).toFixed(1)},${y(p[i]).toFixed(1)}`
+    const t = p[0] ?? 0
+    const move = !prev || (gap > 0 && t - (prev[0] ?? 0) > gap)
+    d += `${move ? 'M' : 'L'}${x(t).toFixed(1)},${y(v).toFixed(1)}`
     prev = p
   }
   return d
@@ -188,35 +190,38 @@ export function seriesPath(
  * @param hi the high value's index
  */
 export function bandPath(
-  points: Array<Array<number | null>>,
+  points: ArrayLike<number | null | undefined>[],
   lo: number,
   hi: number,
   x: (t: number) => number,
   y: (v: number) => number,
   gap = 0,
 ) {
-  const runs = []
-  let run = null
+  const runs: Array<Array<[number, number, number]>> = []
+  let run: Array<[number, number, number]> | null = null
   for (const p of points) {
-    if (p[lo] === undefined) continue
-    if (p[lo] === null || p[hi] == null) {
+    const low = p[lo]
+    const high = p[hi]
+    if (low === undefined) continue
+    if (low === null || high == null) {
       run = null
       continue
     }
-    if (!run || (gap > 0 && p[0] - run.at(-1)[0] > gap)) {
+    const t = p[0] ?? 0
+    if (!run || (gap > 0 && t - run[run.length - 1][0] > gap)) {
       run = []
       runs.push(run)
     }
-    run.push(p)
+    run.push([t, low, high])
   }
-  const at = (t, v) => `${x(t).toFixed(1)},${y(v).toFixed(1)}`
+  const at = (t: number, v: number) => `${x(t).toFixed(1)},${y(v).toFixed(1)}`
   return runs
     .map((r) => {
-      const top = r.map((p, k) => `${k ? 'L' : 'M'}${at(p[0], p[hi])}`).join('')
+      const top = r.map(([t, , high], k) => `${k ? 'L' : 'M'}${at(t, high)}`).join('')
       const bottom = r
         .slice()
         .reverse()
-        .map((p) => `L${at(p[0], p[lo])}`)
+        .map(([t, low]) => `L${at(t, low)}`)
         .join('')
       return `${top}${bottom}Z`
     })

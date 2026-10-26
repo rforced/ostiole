@@ -43,7 +43,8 @@ const config = useConfigStore()
  */
 const counting = computed({
   get: () => Boolean(config.draft?.traffic?.devices),
-  set: (on) => {
+  set: (on: boolean) => {
+    if (!config.draft) return
     const t = { ...(config.draft.traffic ?? {}) }
     if (on) t.devices = true
     else {
@@ -109,7 +110,7 @@ watch(live, (on) => {
 const rows = computed(() => state.value?.devices ?? [])
 const { query, shown } = useSearch(rows, (d) => ({
   values: [deviceLabel(d), d.interface, ...(d.addresses ?? [])],
-  macs: [d.mac],
+  macs: d.mac ? [d.mac] : [],
 }))
 const sort = useSort(shown, {
   device: byText((d) => deviceLabel(d)),
@@ -132,8 +133,11 @@ const error = computed(
 )
 const now = computed(() => (state.value ? Date.parse(state.value.now) / 1000 : 0))
 /** The count is read less often than every five seconds on a big table. */
-const stretched = computed(() => (state.value?.interval > 5 ? state.value.interval : 0))
-const since = computed(() => sinceLine(state.value?.since, win.value, now.value))
+const stretched = computed(() => {
+  const interval = state.value?.interval ?? 0
+  return interval > 5 ? interval : 0
+})
+const since = computed(() => sinceLine(state.value?.since ?? '', win.value, now.value))
 /** How far back the table reaches, and how often a big one is read. */
 const reach = computed(() =>
   [since.value, stretched.value ? `Devices every ${stretched.value} s.` : '']
@@ -149,7 +153,7 @@ const empty = computed(() => {
 
 const chosen = ref<TrafficDevice | null>(null)
 const open = ref(false)
-function show(d) {
+function show(d: TrafficDevice) {
   chosen.value = d
   open.value = true
 }
@@ -231,7 +235,7 @@ function show(d) {
                     <span class="font-mono">{{ d.mac }}</span>
                     <RandomMacBadge :mac="d.mac" />
                   </template>
-                  <span v-else class="font-mono">{{ d.addresses[0] }}</span>
+                  <span v-else class="font-mono">{{ d.addresses?.[0] }}</span>
                 </div>
               </td>
               <td

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createRateTracker } from '@/lib/rates'
 
-const link = (name, rxBytes, txBytes) => ({ name, rxBytes, txBytes })
+const link = (name: string, rxBytes: number, txBytes: number) => ({ name, rxBytes, txBytes })
 
 describe('createRateTracker', () => {
   it('needs two samples before it has a rate', () => {

@@ -1,12 +1,12 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, type Role, type Session } from '@/lib/api'
-import type { Config } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useToastStore } from '@/stores/toast'
+import { configOf, must } from '@/test/fixtures'
 import WolPage from '@/views/services/WolPage.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -23,7 +23,7 @@ const stubs = {
 }
 
 function config() {
-  return {
+  return configOf({
     version: 11,
     zones: [{ name: 'wan', external: true }, { name: 'lan' }],
     interfaces: [
@@ -45,7 +45,7 @@ function config() {
         ],
       },
     },
-  } as Config
+  })
 }
 
 async function page(role: Role = 'admin') {
@@ -59,8 +59,10 @@ async function page(role: Role = 'admin') {
   return { wrapper, store }
 }
 
-const row = (w, text) => w.findAll('tbody tr').find((tr) => tr.text().includes(text))
-const button = (el, label) => el.findAll('button').find((b) => b.text() === label)
+const row = (w: VueWrapper, text: string) =>
+  must(w.findAll('tbody tr').find((tr) => tr.text().includes(text)))
+const button = (el: Pick<VueWrapper, 'findAll'>, label: string) =>
+  el.findAll('button').find((b) => b.text() === label)
 
 describe('WolPage', () => {
   beforeEach(() => {
@@ -76,23 +78,23 @@ describe('WolPage', () => {
     expect(row(wrapper, 'aa:bb:cc:00:00:02').find('td').text()).toBe('aa:bb:cc:00:00:02')
     const lab = row(wrapper, 'Lab')
     expect(lab.text()).toContain('interface off')
-    expect(button(lab, 'Wake').attributes('disabled')).toBeDefined()
-    expect(button(row(wrapper, 'NAS'), 'Wake').attributes('disabled')).toBeUndefined()
+    expect(must(button(lab, 'Wake')).attributes('disabled')).toBeDefined()
+    expect(must(button(row(wrapper, 'NAS'), 'Wake')).attributes('disabled')).toBeUndefined()
   })
 
   it('wakes a device and says it was sent, or why not', async () => {
     const { wrapper } = await page('operator')
     const toast = useToastStore()
     vi.mocked(api.wol.wake).mockResolvedValueOnce(undefined)
-    await button(row(wrapper, 'NAS'), 'Wake').trigger('click')
+    await must(button(row(wrapper, 'NAS'), 'Wake')).trigger('click')
     await flushPromises()
     expect(api.wol.wake).toHaveBeenCalledWith({ interface: 'eth1', mac: 'aa:bb:cc:00:00:01' })
-    expect(toast.toasts.at(-1).message).toBe('Sent a wake packet to NAS.')
+    expect(must(toast.toasts.at(-1)).message).toBe('Sent a wake packet to NAS.')
 
     vi.mocked(api.wol.wake).mockRejectedValueOnce(
       new Error('sending a wake needs the daemon to run as root'),
     )
-    await button(row(wrapper, 'NAS'), 'Wake').trigger('click')
+    await must(button(row(wrapper, 'NAS'), 'Wake')).trigger('click')
     await flushPromises()
     expect(wrapper.get('[role="alert"]').text()).toBe(
       'NAS: sending a wake needs the daemon to run as root',
@@ -102,13 +104,13 @@ describe('WolPage', () => {
   it('wakes all but the device whose interface is off', async () => {
     const { wrapper } = await page()
     vi.mocked(api.wol.wake).mockResolvedValue(undefined)
-    await button(wrapper, 'Wake all').trigger('click')
+    await must(button(wrapper, 'Wake all')).trigger('click')
     await flushPromises()
     expect(vi.mocked(api.wol.wake).mock.calls.map(([b]) => b.mac)).toEqual([
       'aa:bb:cc:00:00:01',
       'aa:bb:cc:00:00:02',
     ])
-    expect(useToastStore().toasts.at(-1).message).toBe('Sent wake packets to 2 devices.')
+    expect(must(useToastStore().toasts.at(-1)).message).toBe('Sent wake packets to 2 devices.')
   })
 
   it('shows a viewer the list and nothing that acts', async () => {
@@ -122,7 +124,7 @@ describe('WolPage', () => {
 
   it('adds a device to the draft, written the way the server wants it', async () => {
     const { wrapper, store } = await page()
-    await button(wrapper, 'Add device').trigger('click')
+    await must(button(wrapper, 'Add device')).trigger('click')
     // Inside interfaces with Ethernet under them, the one that is off
     // included, and nothing facing the internet or tunnelled.
     const options = wrapper.findAll<HTMLOptionElement>('#wol-if option').map((o) => o.element.value)
@@ -137,12 +139,12 @@ describe('WolPage', () => {
       mac: 'aa:bb:cc:00:00:04',
       description: 'Desktop',
     })
-    expect(added.id).toMatch(/^wol-[a-z0-9]{6}$/)
+    expect(must(added).id).toMatch(/^wol-[a-z0-9]{6}$/)
   })
 
   it('refuses an address that names no one machine, or one already listed', async () => {
     const { wrapper, store } = await page()
-    await button(wrapper, 'Add device').trigger('click')
+    await must(button(wrapper, 'Add device')).trigger('click')
     for (const [mac, want] of [
       ['aa:bb:cc', 'A MAC address looks like aa:bb:cc:dd:ee:ff.'],
       ['01:00:5e:00:00:fb', '01:00:5e:00:00:fb is a group address'],
@@ -163,10 +165,10 @@ describe('WolPage', () => {
     ).toEqual(['eth1'])
     vi.mocked(api.wol.wake).mockResolvedValueOnce(undefined)
     await wrapper.get('#wol-once-mac').setValue('AA-BB-CC-00-00-09')
-    await wrapper.findAll('form').at(-1).trigger('submit')
+    await must(wrapper.findAll('form').at(-1)).trigger('submit')
     await flushPromises()
     expect(api.wol.wake).toHaveBeenCalledWith({ interface: 'eth1', mac: 'aa:bb:cc:00:00:09' })
-    expect(useToastStore().toasts.at(-1).message).toBe(
+    expect(must(useToastStore().toasts.at(-1)).message).toBe(
       'Sent a wake packet to aa:bb:cc:00:00:09 on eth1.',
     )
   })

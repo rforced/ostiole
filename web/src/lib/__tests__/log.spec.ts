@@ -10,20 +10,28 @@ interface Row {
 }
 
 /** The stream the log opens; a test sends through the last one. */
-let source = null
+let latest: FakeSource | undefined
+const source = () => {
+  if (!latest) throw new Error('no stream was opened')
+  return latest
+}
 class FakeSource {
   static CLOSED = 2
   url: string
   closed = false
+  readyState = 1
+  onopen: () => void = () => {}
+  onmessage: (m: { data: string }) => void = () => {}
+  onerror: () => void = () => {}
   constructor(url: string) {
     this.url = url
-    source = this
+    latest = this
   }
   close() {
     this.closed = true
   }
 }
-const send = (e: Row) => source.onmessage({ data: JSON.stringify(e) })
+const send = (e: Row) => source().onmessage({ data: JSON.stringify(e) })
 
 /** Lets what arrived land, as the next landing does. */
 async function land() {
@@ -254,12 +262,12 @@ describe('useLog', () => {
     const read = router(300)
     const { log } = harness(read)
     await flushPromises()
-    const was = source
+    const was = source()
     hide(true)
     expect(was.closed).toBe(true)
     hide(false)
-    expect(source).not.toBe(was)
-    source.onopen()
+    expect(source()).not.toBe(was)
+    source().onopen()
     await flushPromises()
     expect(read).toHaveBeenCalledTimes(2)
     send({ seq: 301, word: 'x' })
@@ -276,7 +284,7 @@ describe('useLog', () => {
     await log().loadMore()
     hide(true)
     hide(false)
-    source.onopen()
+    source().onopen()
     await flushPromises()
     expect(read).toHaveBeenCalledTimes(2)
     expect(seqs(log())).toHaveLength(300)
@@ -294,17 +302,17 @@ describe('useLog', () => {
     const read = vi.fn((params: Record<string, unknown>) => log(params))
     const { log: l } = harness(read)
     await flushPromises()
-    source.onopen()
+    source().onopen()
     send({ seq: 501, word: 'before' })
     await land()
     expect(seqs(l())[0]).toBe(501)
 
     // Dropped, and the browser retries.
-    source.readyState = 0
-    source.onerror()
+    source().readyState = 0
+    source().onerror()
     expect(l().streamError.value).toBe('Stream disconnected, retrying…')
     log = router(3)
-    source.onopen()
+    source().onopen()
     await flushPromises()
     expect(read).toHaveBeenCalledTimes(2)
     expect(seqs(l())).toEqual([3, 2, 1])
@@ -319,7 +327,7 @@ describe('useLog', () => {
     await flushPromises()
     expect(log().error.value).toBe('not root')
     wrapper.unmount()
-    expect(source.closed).toBe(true)
+    expect(source().closed).toBe(true)
   })
 })
 

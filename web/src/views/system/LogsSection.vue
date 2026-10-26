@@ -9,6 +9,7 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { DAYS, FILE_LOG_NAMES } from '@/lib/logs'
+import type { LogLevel, Logging } from '@/lib/types.gen'
 import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useToastStore } from '@/stores/toast'
@@ -21,8 +22,9 @@ const toast = useToastStore()
  * Out of the draft while every value is the default, as the saved
  * configuration has it: opening the page must not make a change.
  */
-const logging = computed(() => config.draft.system.logging ?? {})
-function set(key, value) {
+const logging = computed<Logging>(() => config.draft?.system.logging ?? {})
+function set<K extends keyof Logging>(key: K, value: Logging[K]) {
+  if (!config.draft) return
   const next = { ...logging.value }
   if (value === undefined) delete next[key]
   else next[key] = value
@@ -30,7 +32,7 @@ function set(key, value) {
   else delete config.draft.system.logging
 }
 
-const LEVELS = [
+const LEVELS: { value: LogLevel; label: string }[] = [
   { value: 'error', label: 'Error' },
   { value: 'warning', label: 'Warning' },
   { value: 'info', label: 'Info' },
@@ -40,15 +42,16 @@ const LEVELS = [
 /** An unset level is the default rather than a fifth choice. */
 const level = computed(() => logging.value.level || 'warning')
 
-function setLevel(v) {
+function setLevel(v: LogLevel) {
   set('level', v === 'warning' ? undefined : v)
 }
 
 /** Empty means the default, which the placeholder shows. */
-function numberField(key) {
+function numberField(key: 'maxUseGB' | 'retentionDays' | 'days') {
   return computed({
     get: () => logging.value[key] || '',
-    set: (v) => set(key, Number.isFinite(v) && v > 0 ? v : undefined),
+    set: (v: number | '') =>
+      set(key, typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined),
   })
 }
 const memoryDays = numberField('days')
@@ -61,7 +64,7 @@ const CLEARED = [...Object.values(FILE_LOG_NAMES), 'Audit log']
 /** Kept in files as well, by the configuration the router runs. */
 const inFiles = computed(() => Boolean(config.saved?.system?.logging?.files?.enabled))
 
-const files = ref(null)
+const files = ref<InstanceType<typeof LogFilesFields> | null>(null)
 const clearAll = useAsync(async () => {
   await api.clearLogs()
   toast.show('Every log is cleared.')
@@ -123,7 +126,7 @@ const clearAll = useAsync(async () => {
             name="logs-level"
             :value="l.value"
             :label="l.label"
-            @update:model-value="setLevel"
+            @update:model-value="setLevel($event as LogLevel)"
           />
           <p class="text-ink-muted">
             Warning is the default. Info records each lease and each wireless client. Changing it

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { type PropType, computed } from 'vue'
 
 import { timeLabel } from '@/lib/chart'
 import { formatDuration, formatMs } from '@/lib/format'
 import { measured } from '@/lib/gateways'
+import type { Cell, GatewayStrip } from '@/lib/types.gen'
 
 /**
  * A gateway's last day as 144 cells of ten minutes, each its worst minute:
@@ -13,7 +14,7 @@ import { measured } from '@/lib/gateways'
  */
 const props = defineProps({
   /** One gateway of GET /gateways/strips. */
-  strip: { type: Object, default: null },
+  strip: { type: Object as PropType<GatewayStrip | null>, default: null },
   /** The gateway's name, for what the strip is said to be. */
   label: { type: String, required: true },
   /** Nothing is read yet: a grey strip and a grey line. */
@@ -21,13 +22,13 @@ const props = defineProps({
 })
 
 const HEIGHT = 24
-const FILLS = {
+const FILLS: Partial<Record<string, string>> = {
   up: 'var(--ok-fill)',
   slow: 'var(--warn-fill)',
   lossy: 'var(--warn-fill)',
   down: 'var(--bad-fill)',
 }
-const WHAT = {
+const WHAT: Partial<Record<string, string>> = {
   up: 'up',
   slow: 'slow',
   lossy: 'losing packets',
@@ -36,7 +37,7 @@ const WHAT = {
 }
 
 /** How tall a cell is, as a share of the strip: no bar where nothing answered. */
-function share(c) {
+function share(c: Cell) {
   if (c.kind === 'down') return 1
   if (c.kind === 'slow' || c.kind === 'lossy') return 0.5 + 0.25 * (c.level ?? 0)
   if (c.kind === 'up') return 0.25
@@ -48,12 +49,12 @@ const cells = computed(() =>
     ...c,
     i,
     h: share(c) * HEIGHT,
-    fill: FILLS[c.kind],
+    fill: FILLS[c.kind ?? ''],
   })),
 )
 
-function title(c) {
-  const parts = [`${timeLabel(c.start, '24h')}: ${WHAT[c.kind] ?? 'no probes'}`]
+function title(c: Cell) {
+  const parts = [`${timeLabel(c.start, '24h')}: ${WHAT[c.kind ?? ''] ?? 'no probes'}`]
   if (c.down) parts.push(`down ${formatDuration(c.down * 60)}`)
   if (c.latencyMs) parts.push(`worst ${formatMs(c.latencyMs)}`)
   if (c.lossPercent) parts.push(`${Math.round(c.lossPercent)}% lost`)
@@ -63,8 +64,8 @@ function title(c) {
 const line = computed(() => {
   const s = props.strip
   if (!s) return ''
-  if (!s.cells.some((c) => c.kind)) return 'No probes in 24 hours.'
-  const of = (family) => (s.families > 1 && family ? ` (${family})` : '')
+  if (!(s.cells ?? []).some((c) => c.kind)) return 'No probes in 24 hours.'
+  const of = (family: string | undefined) => (s.families > 1 && family ? ` (${family})` : '')
   const parts = [s.down ? `Down ${formatDuration(s.down)}` : 'Not down']
   if (s.worstLatencyMs) parts.push(`worst ${formatMs(s.worstLatencyMs)}${of(s.worstLatencyFamily)}`)
   parts.push(`worst ${Math.round(s.worstLossPercent)}% lost${of(s.worstLossFamily)}`)

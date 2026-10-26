@@ -1,3 +1,4 @@
+import type { VueWrapper } from '@vue/test-utils'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,7 +10,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import { useSystemStore } from '@/stores/system'
-import { configOf, fixture } from '@/test/fixtures'
+import { configOf, fixture, must } from '@/test/fixtures'
 
 const route = vi.hoisted(() => ({ name: 'rules' }))
 vi.mock('vue-router', () => ({ useRoute: () => route }))
@@ -67,7 +68,14 @@ async function router({ applying = true } = {}) {
   await useSystemStore().refresh()
 }
 
-const button = (w, name) => w.findAll('button').find((b) => b.text() === name)
+/** The draft, which every test here has loaded before it edits or reads it. */
+function draft() {
+  const d = useConfigStore().draft
+  if (!d) throw new Error('no draft')
+  return d
+}
+
+const button = (w: VueWrapper, name: string) => w.findAll('button').find((b) => b.text() === name)
 
 describe('ApplyBar', () => {
   beforeEach(() => {
@@ -95,12 +103,12 @@ describe('ApplyBar', () => {
     vi.mocked(api.config.confirm).mockResolvedValue(fixture<ConfirmReply>({}))
     statusIs({ configured: true })
     vi.mocked(api.config.get).mockResolvedValue(AT_NEW)
-    await button(w, 'Confirm').trigger('click')
+    await button(w, 'Confirm')?.trigger('click')
     await flushPromises()
 
     expect(w.text()).toContain('Confirmed and saved.')
     const config = useConfigStore()
-    expect(config.draft.system.hostname).toBe('new')
+    expect(draft().system.hostname).toBe('new')
     expect(config.dirty).toBe(false)
   })
 
@@ -117,20 +125,19 @@ describe('ApplyBar', () => {
     await flushPromises()
 
     expect(w.text()).toContain('Confirmed and saved.')
-    expect(useConfigStore().draft.system.hostname).toBe('new')
+    expect(draft().system.hostname).toBe('new')
   })
 
   it('keeps the draft of an apply that ran out, to try again', async () => {
     await router({ applying: false })
-    const config = useConfigStore()
-    config.draft.system.hostname = 'mine'
+    draft().system.hostname = 'mine'
     const w = mount(ApplyBar)
     await flushPromises()
 
     vi.mocked(api.config.check).mockResolvedValue(fixture<Plan>({}))
     vi.mocked(api.config.apply).mockResolvedValue(fixture<ApplyResult>(pending))
     statusIs({ configured: true, pending })
-    await button(w, 'Apply with 60s confirmation').trigger('click')
+    await button(w, 'Apply with 60s confirmation')?.trigger('click')
     await flushPromises()
     expect(w.text()).toContain('awaiting confirmation')
 
@@ -142,7 +149,7 @@ describe('ApplyBar', () => {
 
     await vi.advanceTimersByTimeAsync(3000)
     expect(w.text()).toContain('Unapplied changes.')
-    expect(config.draft.system.hostname).toBe('mine')
+    expect(draft().system.hostname).toBe('mine')
   })
 
   // A browser drops every request in flight when the computer's addresses
@@ -158,9 +165,9 @@ describe('ApplyBar', () => {
     async function sent({ made = true, silent = 0 } = {}) {
       await router({ applying: false })
       const config = useConfigStore()
-      config.draft.system.hostname = 'new'
+      draft().system.hostname = 'new'
       vi.mocked(api.config.check).mockResolvedValue(fixture<Plan>({}))
-      vi.mocked(api.config.apply).mockImplementation(async (cfg, base, seconds, tag) => {
+      vi.mocked(api.config.apply).mockImplementation(async (_cfg, _base, _seconds, tag) => {
         if (made)
           statusIs({
             configured: true,
@@ -176,7 +183,7 @@ describe('ApplyBar', () => {
 
     it('offers the confirm, which saves the draft', async () => {
       const { config, w } = await sent()
-      await button(w, 'Apply with 60s confirmation').trigger('click')
+      await button(w, 'Apply with 60s confirmation')?.trigger('click')
       await flushPromises()
       expect(w.text()).toContain('awaiting confirmation')
       expect(w.find('[role="alert"]').exists()).toBe(false)
@@ -184,7 +191,7 @@ describe('ApplyBar', () => {
       vi.mocked(api.config.confirm).mockResolvedValue(fixture<ConfirmReply>({}))
       vi.mocked(api.config.get).mockResolvedValue(AT_NEW)
       statusIs({ configured: true })
-      await button(w, 'Confirm').trigger('click')
+      await button(w, 'Confirm')?.trigger('click')
       await flushPromises()
       expect(w.text()).toContain('Confirmed and saved.')
       expect(config.dirty).toBe(false)
@@ -192,7 +199,7 @@ describe('ApplyBar', () => {
 
     it('asks again until the router answers', async () => {
       const { w } = await sent({ silent: 2 })
-      await button(w, 'Apply with 60s confirmation').trigger('click')
+      await button(w, 'Apply with 60s confirmation')?.trigger('click')
       await flushPromises()
       expect(w.text()).not.toContain('awaiting confirmation')
       await vi.advanceTimersByTimeAsync(2000)
@@ -201,18 +208,18 @@ describe('ApplyBar', () => {
     })
 
     it('says nothing was applied when the router has no such apply', async () => {
-      const { config, w } = await sent({ made: false })
-      await button(w, 'Apply with 60s confirmation').trigger('click')
+      const { w } = await sent({ made: false })
+      await button(w, 'Apply with 60s confirmation')?.trigger('click')
       await flushPromises()
       expect(w.get('[role="alert"]').text()).toBe('Nothing was applied: Failed to fetch.')
       expect(button(w, 'Apply with 60s confirmation')).toBeDefined()
-      expect(config.draft.system.hostname).toBe('new')
+      expect(draft().system.hostname).toBe('new')
     })
 
     it('says so when the router stays silent', async () => {
       const { w } = await sent({ made: false })
       vi.mocked(api.status).mockRejectedValue(lost)
-      await button(w, 'Apply with 60s confirmation').trigger('click')
+      await button(w, 'Apply with 60s confirmation')?.trigger('click')
       await vi.advanceTimersByTimeAsync(21_000)
       await flushPromises()
       expect(w.get('[role="alert"]').text()).toBe(
@@ -224,8 +231,8 @@ describe('ApplyBar', () => {
     // refusal was lost. When that apply is confirmed, this draft has not
     // been saved by it.
     it("does not take another tab's apply for its own", async () => {
-      const { config, w } = await sent({ made: false })
-      config.draft.system.hostname = 'mine'
+      const { w } = await sent({ made: false })
+      draft().system.hostname = 'mine'
       vi.mocked(api.config.apply).mockImplementation(async () => {
         statusIs({
           configured: true,
@@ -233,7 +240,7 @@ describe('ApplyBar', () => {
         })
         throw lost
       })
-      await button(w, 'Apply with 60s confirmation').trigger('click')
+      await button(w, 'Apply with 60s confirmation')?.trigger('click')
       await flushPromises()
       expect(w.text()).toContain('awaiting confirmation')
 
@@ -244,7 +251,7 @@ describe('ApplyBar', () => {
       expect(w.text()).toContain('Confirmed and saved.')
       await vi.advanceTimersByTimeAsync(3000)
       expect(w.get('[role="alert"]').text()).toBe(STALE)
-      expect(config.draft.system.hostname).toBe('mine')
+      expect(draft().system.hostname).toBe('mine')
     })
   })
 
@@ -258,7 +265,7 @@ describe('ApplyBar', () => {
       vi.mocked(api.config.confirm).mockRejectedValue(lost)
       statusIs({ configured: true })
       vi.mocked(api.config.get).mockResolvedValue(AT_NEW)
-      await button(w, 'Confirm').trigger('click')
+      await button(w, 'Confirm')?.trigger('click')
       await flushPromises()
       expect(w.text()).toContain('Confirmed and saved.')
       expect(w.text()).not.toContain('Failed to fetch')
@@ -269,10 +276,10 @@ describe('ApplyBar', () => {
       const w = mount(ApplyBar)
       await flushPromises()
       vi.mocked(api.config.confirm).mockRejectedValue(lost)
-      await button(w, 'Confirm').trigger('click')
+      await button(w, 'Confirm')?.trigger('click')
       await flushPromises()
       expect(w.text()).toContain('Failed to fetch')
-      expect(button(w, 'Confirm').attributes('disabled')).toBeUndefined()
+      expect(must(button(w, 'Confirm')).attributes('disabled')).toBeUndefined()
     })
   })
 
@@ -281,7 +288,7 @@ describe('ApplyBar', () => {
     async function edited() {
       await router({ applying: false })
       const config = useConfigStore()
-      config.draft.system.hostname = 'mine'
+      draft().system.hostname = 'mine'
       return config
     }
 
@@ -299,7 +306,7 @@ describe('ApplyBar', () => {
       expect(button(w, 'Discard')).toBeUndefined()
 
       const confirm = useConfirmStore()
-      await button(w, 'Reload').trigger('click')
+      await button(w, 'Reload')?.trigger('click')
       expect(confirm.request).toMatchObject({
         question: 'Reload the saved configuration?',
         description: 'This draft is dropped.',
@@ -307,10 +314,10 @@ describe('ApplyBar', () => {
       })
       confirm.settle(false)
       await flushPromises()
-      expect(config.draft.system.hostname).toBe('mine')
+      expect(draft().system.hostname).toBe('mine')
       expect(w.get('[role="alert"]').text()).toBe(STALE)
 
-      await button(w, 'Reload').trigger('click')
+      await button(w, 'Reload')?.trigger('click')
       confirm.settle(true)
       await flushPromises()
       expect(config.draft).toEqual(NEW)
@@ -319,7 +326,7 @@ describe('ApplyBar', () => {
     })
 
     it('says so when the server refuses the apply as stale', async () => {
-      const config = await edited()
+      await edited()
       const w = mount(ApplyBar)
       await flushPromises()
 
@@ -328,7 +335,7 @@ describe('ApplyBar', () => {
         new ApiError(409, 'the configuration changed since this draft was read', [], 'stale'),
       )
       vi.mocked(api.config.get).mockResolvedValue(AT_NEW)
-      await button(w, 'Apply with 60s confirmation').trigger('click')
+      await button(w, 'Apply with 60s confirmation')?.trigger('click')
       await flushPromises()
 
       expect(api.config.apply).toHaveBeenCalledWith(
@@ -339,7 +346,7 @@ describe('ApplyBar', () => {
       )
       expect(w.findAll('[role="alert"]').map((a) => a.text())).toEqual([STALE])
       expect(button(w, 'Reload')).toBeDefined()
-      expect(config.draft.system.hostname).toBe('mine')
+      expect(draft().system.hostname).toBe('mine')
     })
 
     it('keeps the line when the refusal comes before the save can be read', async () => {
@@ -351,7 +358,7 @@ describe('ApplyBar', () => {
       vi.mocked(api.config.apply).mockRejectedValue(
         new ApiError(409, 'the configuration changed since this draft was read', [], 'stale'),
       )
-      await button(w, 'Apply with 60s confirmation').trigger('click')
+      await button(w, 'Apply with 60s confirmation')?.trigger('click')
       await flushPromises()
       expect(w.get('[role="alert"]').text()).toBe(STALE)
     })
@@ -365,7 +372,7 @@ describe('ApplyBar', () => {
       vi.mocked(api.config.apply).mockRejectedValue(
         new ApiError(409, 'another apply is awaiting confirmation'),
       )
-      await button(w, 'Apply with 60s confirmation').trigger('click')
+      await button(w, 'Apply with 60s confirmation')?.trigger('click')
       await flushPromises()
       expect(w.get('[role="alert"]').text()).toBe('another apply is awaiting confirmation')
       expect(button(w, 'Apply with 60s confirmation')).toBeDefined()
@@ -400,7 +407,7 @@ describe('ApplyBar', () => {
       expect(button(w, 'Discard')).toBeUndefined()
       expect(api.config.drift).not.toHaveBeenCalled()
 
-      await button(w, 'Show 3 changes').trigger('click')
+      await button(w, 'Show 3 changes')?.trigger('click')
       await flushPromises()
       expect(api.config.drift).toHaveBeenCalledOnce()
       const lines = w.findAll('li').map((li) => li.text())
@@ -414,7 +421,7 @@ describe('ApplyBar', () => {
 
     it('leaves it to a draft, whose apply brings it in too', async () => {
       await updated()
-      useConfigStore().draft.system.hostname = 'mine'
+      draft().system.hostname = 'mine'
       const w = mount(ApplyBar)
       await flushPromises()
       expect(w.text()).toContain('Unapplied changes.')
@@ -443,7 +450,7 @@ describe('ApplyBar', () => {
         fixture<ApplyResult>({ pending: true, deadline: waiting.deadline }),
       )
       statusIs({ configured: true, pending: waiting })
-      await button(w, 'Apply with 60s confirmation').trigger('click')
+      await button(w, 'Apply with 60s confirmation')?.trigger('click')
       await flushPromises()
       expect(api.config.apply).toHaveBeenCalledWith(OLD, 'r1', 60, expect.any(String))
       expect(w.text()).toContain('awaiting confirmation')
@@ -496,12 +503,12 @@ describe('ApplyBar', () => {
       }
     })
     afterEach(() => {
-      delete window.ResizeObserver
-      delete window.matchMedia
+      Reflect.deleteProperty(window, 'ResizeObserver')
+      Reflect.deleteProperty(window, 'matchMedia')
       document.documentElement.style.removeProperty('--dock')
     })
 
-    async function dirty(narrow) {
+    async function dirty(narrow: boolean) {
       window.matchMedia = vi.fn(
         () =>
           ({
@@ -511,7 +518,7 @@ describe('ApplyBar', () => {
           }) as unknown as MediaQueryList,
       )
       await router({ applying: false })
-      useConfigStore().draft.system.hostname = 'mine'
+      draft().system.hostname = 'mine'
       const w = mount(ApplyBar)
       await flushPromises()
       return w

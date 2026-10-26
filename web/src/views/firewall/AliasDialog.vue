@@ -9,6 +9,7 @@ import FormField from '@/components/FormField.vue'
 import { fetches, takesURLs, urlsOf } from '@/lib/aliases'
 import { api } from '@/lib/api'
 import { parseAsnList } from '@/lib/asn'
+import { errorMessage } from '@/lib/async'
 import { formatCount } from '@/lib/format'
 import { joinList, parseList } from '@/lib/lists'
 import { useAuthStore } from '@/stores/auth'
@@ -119,7 +120,7 @@ async function inspect(url: string) {
   } catch (e) {
     inspected.value = {
       ...inspected.value,
-      [url]: { busy: false, entries: null, error: e.message },
+      [url]: { busy: false, entries: null, error: errorMessage(e) },
     }
   }
 }
@@ -139,7 +140,7 @@ const previews = computed(() =>
     .filter((p) => p.busy || p.error || p.entries != null),
 )
 
-const ENTRY_HINTS = {
+const ENTRY_HINTS: Record<string, string> = {
   hosts:
     'One address, CIDR network or URL per line. A URL is a published list, plain text or JSON, fetched on a schedule and cached here. Plain http only from inside the network.',
   ports: 'One port, range or URL per line, like 8000-8100.',
@@ -190,7 +191,7 @@ function save() {
     error.value = `Alias ${name} already exists.`
     return
   }
-  let entries: string[]
+  let entries: string[] | null
   if (form.value.type === 'geoip') {
     entries = [...form.value.countries]
   } else if (form.value.type === 'asn') {
@@ -295,7 +296,7 @@ function save() {
                 aria-hidden="true"
               />Reading the list…</template
             ><template v-else-if="p.error"> · Could not read the list: {{ p.error }}</template
-            ><template v-else> · {{ addressCount(p.entries) }}</template>
+            ><template v-else> · {{ addressCount(p.entries ?? 0) }}</template>
           </li>
         </ul>
         <ul

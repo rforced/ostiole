@@ -6,13 +6,13 @@ import ErrorLine from '@/components/ErrorLine.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { describe } from '@/lib/agent'
-import { api } from '@/lib/api'
+import { api, type SessionRow } from '@/lib/api'
 import { emptyText, errorMessage, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { useConfirmStore } from '@/stores/confirm'
 
 const confirm = useConfirmStore()
-const sessions = ref([])
+const sessions = ref<SessionRow[]>([])
 const actionError = ref('')
 /** The id of the session being signed out, '*' for the others, '' for none. */
 const ending = ref('')
@@ -25,7 +25,7 @@ onMounted(load.run)
 const error = computed(() => actionError.value || load.error.value)
 const others = computed(() => sessions.value.some((s) => !s.current))
 
-async function end(key, fn) {
+async function end(key: string, fn: () => Promise<unknown>) {
   actionError.value = ''
   ending.value = key
   try {
@@ -38,7 +38,7 @@ async function end(key, fn) {
   await load.run()
 }
 
-const endSession = (id) => end(id, () => api.auth.endSession(id))
+const endSession = (id: string) => end(id, () => api.auth.endSession(id))
 
 async function endOthers() {
   const ok = await confirm.ask({

@@ -8,7 +8,7 @@ import { useReorder } from '@/lib/reorder'
 const Host = defineComponent({
   setup() {
     const items = ref(['a', 'b'])
-    const seen = []
+    const seen: string[] = []
     const { moveClass, reorder } = useReorder()
     onUpdated(() => seen.push(`${items.value.join('')} ${moveClass.value}`))
     return { items, seen, moveClass, reorder }

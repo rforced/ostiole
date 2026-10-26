@@ -8,6 +8,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import { api } from '@/lib/api'
 import { errorMessage, useAsync } from '@/lib/async'
+import type { GatewayStrip, HealthResponse, Overview, Snapshot, Stats } from '@/lib/types.gen'
 import { createRateTracker } from '@/lib/rates'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -46,21 +47,21 @@ const STATS_MS = 3_000
 const auth = useAuthStore()
 const config = useConfigStore()
 const system = useSystemStore()
-const health = ref(null)
-const overview = ref(null)
-const stats = ref(null)
+const health = ref<HealthResponse>()
+const overview = ref<Overview>()
+const stats = ref<Stats>()
 const healthError = ref('')
-const update = ref(null)
+const update = ref<Snapshot>()
 const status = computed(() => system.status)
 /** Bits per second per interface, from the last two overviews. */
-const rates = ref({})
+const rates = ref<ReturnType<typeof sampleRates>>({})
 const sampleRates = createRateTracker()
 
 const load = useAsync(
   async () => {
     const [ov] = await Promise.all([api.overview(), system.refresh()])
     overview.value = ov
-    rates.value = sampleRates(overview.value.interfaces ?? [])
+    rates.value = sampleRates(ov.interfaces ?? [])
   },
   { interval: REFRESH_MS },
 )
@@ -71,14 +72,14 @@ const loadStats = useAsync(
     try {
       stats.value = await api.systemStats()
     } catch {
-      stats.value = null
+      stats.value = undefined
     }
   },
   { interval: STATS_MS, autostart: false },
 )
 
 /** Each gateway's last day; empty where the router keeps none. */
-const strips = ref(null)
+const strips = ref<GatewayStrip[]>()
 const loadStrips = useAsync(
   async () => {
     try {
@@ -112,17 +113,17 @@ const shape = computed(() =>
 const layout = ref(loadLayout())
 const layoutOpen = ref(false)
 
-function setLayout(next) {
+function setLayout(next: typeof layout.value) {
   layout.value = next
   saveLayout(next)
 }
 
-const hidden = (card) => layout.value.hidden.includes(card)
+const hidden = (card: string) => layout.value.hidden.includes(card)
 /**
  * Whether the page draws a card. One that comes and goes needs the
  * overview to have something for it.
  */
-const shown = (card) =>
+const shown = (card: string) =>
   (!OPTIONAL.includes(card) || Object.hasOwn(shape.value.cards, card)) && !hidden(card)
 /** The grid's cards in this browser's order. */
 const grid = computed(() => layout.value.order.filter(shown))
@@ -135,7 +136,7 @@ const grid = computed(() => layout.value.order.filter(shown))
 const polls = { system: loadStats, gateways: loadStrips }
 
 /** Reads a card's own data and polls it, unless the card is hidden. */
-function follow(card) {
+function follow(card: keyof typeof polls) {
   const read = polls[card]
   if (hidden(card)) {
     read.stop()
@@ -144,7 +145,7 @@ function follow(card) {
   read.start()
   return read.run()
 }
-for (const card of Object.keys(polls)) {
+for (const card of Object.keys(polls) as (keyof typeof polls)[]) {
   watch(
     () => hidden(card),
     () => follow(card),
@@ -166,24 +167,24 @@ watch(
   },
 )
 /** The overview the cards draw, none until then. */
-const drawn = computed(() => (ready.value ? overview.value : null))
+const drawn = computed(() => (ready.value ? overview.value : undefined))
 
 /**
  * A placeholder holds the room its card took last time, so a row with
  * more lines than a placeholder has, or a note that wraps, moves nothing
  * when it arrives.
  */
-function hold(card) {
-  const h = shape.value.heights[card]
+function hold(card: string) {
+  const h = shape.value.heights?.[card]
   return !ready.value && h ? { minHeight: `${h}px` } : undefined
 }
 
 // Each overview, once drawn, is the shape the next visit starts from.
-const page = ref(null)
+const page = ref<HTMLElement | null>(null)
 watch(
   [load.updatedAt, ready],
   () => {
-    if (ready.value && page.value) {
+    if (ready.value && page.value && overview.value) {
       rememberShape({ ...shapeOf(overview.value), heights: heightsIn(page.value) })
     }
   },
@@ -211,7 +212,7 @@ async function readHealth() {
  */
 async function readUpdate() {
   try {
-    const res = (await api.update.status()) as { check?: { available?: boolean } }
+    const res = await api.update.status()
     if (res.check?.available) update.value = res.check
   } catch {
     /* offline or updates unavailable */
@@ -272,7 +273,7 @@ onMounted(async () => {
           v-if="card === 'system'"
           data-card="system"
           :style="hold('system')"
-          :stats="ready ? stats : null"
+          :stats="ready ? stats : undefined"
           :loaded="ready"
         />
         <GatewaysCard
@@ -281,7 +282,7 @@ onMounted(async () => {
           :style="hold('gateways')"
           :gateways="drawn?.gateways ?? []"
           :unwatched="drawn?.unwatchedGateways ?? []"
-          :strips="ready ? strips : null"
+          :strips="ready ? (strips ?? null) : null"
           :loaded="ready"
           :placeholders="shape.cards.gateways"
         />
@@ -349,7 +350,7 @@ onMounted(async () => {
           v-else-if="card === 'router'"
           data-card="router"
           :style="hold('router')"
-          :status="status"
+          :status="status ?? undefined"
           :summary="drawn?.status ?? {}"
           :health="health"
           :update="update"

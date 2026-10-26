@@ -43,7 +43,7 @@ export function capacity(version: number) {
 }
 
 /** The product of two elements of GF(2^8) modulo x^8 + x^4 + x^3 + x^2 + 1. */
-function gfMultiply(x, y) {
+function gfMultiply(x: number, y: number) {
   let z = 0
   for (let i = 7; i >= 0; i -= 1) {
     z = (z << 1) ^ ((z >>> 7) * 0x11d)
@@ -53,7 +53,7 @@ function gfMultiply(x, y) {
 }
 
 /** The generator polynomial of a degree, highest term dropped, as coefficients. */
-function rsDivisor(degree) {
+function rsDivisor(degree: number) {
   const out = new Array(degree).fill(0)
   out[degree - 1] = 1
   let root = 1
@@ -135,13 +135,13 @@ function encodeData(bytes: number[], version: number) {
 }
 
 /** The data split into blocks, each with its error correction, interleaved. */
-function interleave(data, version) {
+function interleave(data: number[], version: number) {
   const blocks = BLOCKS[version]
   const ecc = ECC_PER_BLOCK[version]
   const raw = Math.floor(rawModules(version) / 8)
   const short = blocks - (raw % blocks)
   const shortLen = Math.floor(raw / blocks)
-  const all = []
+  const all: number[][] = []
   for (let i = 0, k = 0; i < blocks; i += 1) {
     const block = data.slice(k, k + shortLen - ecc + (i < short ? 0 : 1))
     k += block.length
@@ -149,7 +149,7 @@ function interleave(data, version) {
     if (i < short) block.push(0)
     all.push(block.concat(code))
   }
-  const out = []
+  const out: number[] = []
   for (let i = 0; i < all[0].length; i += 1) {
     all.forEach((block, j) => {
       // The short blocks' placeholder byte is not sent.
@@ -159,9 +159,9 @@ function interleave(data, version) {
   return out
 }
 
-const MASKS = [
+const MASKS: Array<(x: number, y: number) => boolean> = [
   (x, y) => (x + y) % 2 === 0,
-  (x, y) => y % 2 === 0,
+  (_x, y) => y % 2 === 0,
   (x) => x % 3 === 0,
   (x, y) => (x + y) % 3 === 0,
   (x, y) => (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0,
@@ -239,7 +239,7 @@ class Grid {
   drawFormat(mask: number) {
     const { size } = this
     const bits = formatBits(mask)
-    const bit = (i) => ((bits >>> i) & 1) === 1
+    const bit = (i: number) => ((bits >>> i) & 1) === 1
     for (let i = 0; i <= 5; i += 1) this.set(8, i, bit(i))
     this.set(8, 7, bit(6))
     this.set(8, 8, bit(7))
@@ -283,12 +283,12 @@ class Grid {
   penalty() {
     const { size, dark } = this
     let score = 0
-    const line = (get) => {
+    const line = (get: (i: number) => boolean) => {
       let color = false
       let run = 0
       const history = [0, 0, 0, 0, 0, 0, 0]
       // The first run of a line takes in the light border before it.
-      const push = (length) => {
+      const push = (length: number) => {
         const first = history[0] === 0
         history.pop()
         history.unshift(first ? length + size : length)
@@ -352,16 +352,15 @@ export function encode(text: string): QrCode {
   while (version <= 40 && capacity(version) < bytes.length) version += 1
   if (version > 40) throw new RangeError(`${bytes.length} bytes do not fit a QR code`)
   const codewords = interleave(encodeData(bytes, version), version)
-  let best: { score: number; mask: number; grid: Grid } | null = null
-  for (let mask = 0; mask < 8; mask += 1) {
+  const candidates = Array.from({ length: 8 }, (_, mask) => {
     const grid = new Grid(version)
     grid.drawPatterns()
     grid.drawCodewords(codewords)
     grid.applyMask(mask)
     grid.drawFormat(mask)
-    const score = grid.penalty()
-    if (!best || score < best.score) best = { score, mask, grid }
-  }
+    return { score: grid.penalty(), mask, grid }
+  })
+  const best = candidates.reduce((a, b) => (b.score < a.score ? b : a))
   return {
     version,
     size: best.grid.size,

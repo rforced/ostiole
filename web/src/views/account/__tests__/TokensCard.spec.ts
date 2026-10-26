@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { type VueWrapper, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -29,7 +29,11 @@ async function minted() {
   return wrapper
 }
 
-const copyButton = (w) => w.findAll('button').find((b) => /Cop|Selected/.test(b.text()))
+const copyButton = (w: VueWrapper) => {
+  const found = w.findAll('button').find((b) => /Cop|Selected/.test(b.text()))
+  if (!found) throw new Error('no copy button')
+  return found
+}
 
 describe('TokensCard', () => {
   beforeEach(() => {
@@ -60,7 +64,7 @@ describe('TokensCard', () => {
     await copyButton(wrapper).trigger('click')
     await flushPromises()
     expect(document.execCommand).toHaveBeenCalledWith('copy')
-    expect(window.getSelection().toString()).toBe('ost_secret')
+    expect(window.getSelection()?.toString()).toBe('ost_secret')
     expect(copyButton(wrapper).text()).toBe('Copied')
   })
 

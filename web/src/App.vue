@@ -35,7 +35,7 @@ watch(
 const dirty = computed(() => config.dirty && !auth.readOnly)
 
 // The browser asks before a reload or close would lose the draft.
-function keep(e) {
+function keep(e: BeforeUnloadEvent) {
   e.preventDefault()
 }
 watch(

@@ -1,12 +1,13 @@
-import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import type { Role } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfirmStore } from '@/stores/confirm'
 import AccountsSection from '@/views/system/AccountsSection.vue'
-import { sessionOf } from '@/test/fixtures'
+import { sessionOf, must } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   ApiError: class ApiError extends Error {},
@@ -34,7 +35,7 @@ const AppDialogStub = {
 const OFF = { totp: false, passkeys: 0 }
 const APP = { totp: true, passkeys: 0 }
 
-const account = (username, role, mfa = OFF) => ({
+const account = (username: string, role: Role, mfa = OFF) => ({
   username,
   role,
   mfa,
@@ -56,9 +57,12 @@ async function open(accounts = [account('admin', 'admin'), account('watcher', 'v
 }
 
 const row = (wrapper: VueWrapper, username: string) =>
-  wrapper.findAll('tbody tr').find((tr) => tr.get('td').text().startsWith(username))
+  must(wrapper.findAll('tbody tr').find((tr) => tr.get('td').text().startsWith(username)))
 
-const button = (scope, text) => scope.findAll('button').find((b) => b.text() === text)
+const findButton = (scope: VueWrapper | DOMWrapper<Element>, text: string) =>
+  scope.findAll('button').find((b) => b.text() === text)
+const button = (scope: VueWrapper | DOMWrapper<Element>, text: string) =>
+  must(findButton(scope, text))
 
 describe('AccountsSection', () => {
   beforeEach(() => {
@@ -100,9 +104,9 @@ describe('AccountsSection', () => {
       account('operator', 'operator'),
     ])
 
-    await wrapper
-      .get<HTMLInputElement>('#user-name')
-      .element.form.dispatchEvent(new Event('submit'))
+    await must(wrapper.get<HTMLInputElement>('#user-name').element.form).dispatchEvent(
+      new Event('submit'),
+    )
     await flushPromises()
 
     expect(api.users.create).toHaveBeenCalledWith({
@@ -136,13 +140,13 @@ describe('AccountsSection', () => {
 
     await button(row(wrapper, 'admin'), 'Rename').trigger('click')
     await wrapper.get('#rename-to').setValue('alice')
-    await wrapper
-      .get<HTMLInputElement>('#rename-to')
-      .element.form.dispatchEvent(new Event('submit'))
+    await must(wrapper.get<HTMLInputElement>('#rename-to').element.form).dispatchEvent(
+      new Event('submit'),
+    )
     await flushPromises()
 
     expect(api.users.rename).toHaveBeenCalledWith('admin', 'alice')
-    expect(auth.user.username).toBe('alice')
+    expect(must(auth.user).username).toBe('alice')
   })
 
   it('shows what the server said when a change is refused', async () => {
@@ -153,15 +157,16 @@ describe('AccountsSection', () => {
 
     await button(row(wrapper, 'watcher'), 'Rename').trigger('click')
     await wrapper.get('#rename-to').setValue('admin')
-    await wrapper
-      .get<HTMLInputElement>('#rename-to')
-      .element.form.dispatchEvent(new Event('submit'))
+    await must(wrapper.get<HTMLInputElement>('#rename-to').element.form).dispatchEvent(
+      new Event('submit'),
+    )
     await flushPromises()
 
     expect(wrapper.get('[role="alert"]').text()).toContain('already exists')
   })
 
-  const mfaCell = (wrapper, username) => row(wrapper, username).get('td[data-label="MFA"]')
+  const mfaCell = (wrapper: VueWrapper, username: string) =>
+    row(wrapper, username).get('td[data-label="MFA"]')
 
   it('says what each account signs in with', async () => {
     const wrapper = await open([
@@ -180,7 +185,7 @@ describe('AccountsSection', () => {
   it("clears another account's MFA once the confirm says yes", async () => {
     const wrapper = await open([account('admin', 'admin'), account('watcher', 'viewer', APP)])
     const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
-    vi.mocked(api.users.clearMFA).mockResolvedValue(undefined)
+    vi.mocked(api.users.clearMFA).mockResolvedValue([])
     vi.mocked(api.users.list).mockResolvedValue([
       account('admin', 'admin'),
       account('watcher', 'viewer'),
@@ -194,7 +199,7 @@ describe('AccountsSection', () => {
     )
     expect(api.users.clearMFA).toHaveBeenCalledWith('watcher')
     expect(mfaCell(wrapper, 'watcher').text()).toBe('Off')
-    expect(button(row(wrapper, 'watcher'), 'Clear MFA')).toBeUndefined()
+    expect(findButton(row(wrapper, 'watcher'), 'Clear MFA')).toBeUndefined()
   })
 
   it('leaves MFA when the confirm is declined', async () => {
@@ -208,7 +213,7 @@ describe('AccountsSection', () => {
   // Your own is cleared from the Multi-factor authentication card, on your password.
   it('offers no clear on your own account, nor on one without MFA', async () => {
     const wrapper = await open([account('admin', 'admin', APP), account('watcher', 'viewer')])
-    expect(button(row(wrapper, 'admin'), 'Clear MFA')).toBeUndefined()
-    expect(button(row(wrapper, 'watcher'), 'Clear MFA')).toBeUndefined()
+    expect(findButton(row(wrapper, 'admin'), 'Clear MFA')).toBeUndefined()
+    expect(findButton(row(wrapper, 'watcher'), 'Clear MFA')).toBeUndefined()
   })
 })

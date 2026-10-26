@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, type PropType } from 'vue'
 
 import { useConfigStore } from '@/stores/config'
 
@@ -8,12 +8,12 @@ import { useConfigStore } from '@/stores/config'
  * their entries written in them. The proxy checks every range on every
  * request, so a fetched list goes in the access list instead.
  */
-const model = defineModel({ type: Array, default: () => [] })
+const model = defineModel({ type: Array as PropType<string[]>, default: () => [] })
 
 const config = useConfigStore()
 const aliases = computed(() => smallAliases(config.aliases))
 
-function toggle(name, on) {
+function toggle(name: string, on: boolean) {
   const next = model.value.filter((n) => n !== name)
   if (on) next.push(name)
   model.value = next
@@ -22,12 +22,10 @@ function toggle(name, on) {
 
 <script lang="ts">
 import { fetches } from '@/lib/aliases'
+import type { Alias } from '@/lib/types.gen'
 
-/**
- * @param {object[]} aliases
- * @returns {object[]} the hosts aliases that are not fetched
- */
-export function smallAliases(aliases) {
+/** The hosts aliases that are not fetched. */
+export function smallAliases(aliases: Alias[]) {
   return aliases.filter((a) => a.type === 'hosts' && !fetches(a))
 }
 
@@ -35,10 +33,8 @@ export function smallAliases(aliases) {
  * Splits Allow from into the prefixes typed and the small aliases named.
  * Any other name stays with the prefixes, where the check will say why it
  * does not belong.
- * @param {string[]} [from]
- * @param {object[]} aliases
  */
-export function splitAllowFrom(from = [], aliases = []) {
+export function splitAllowFrom(from: string[] = [], aliases: Alias[] = []) {
   const small = new Set(smallAliases(aliases).map((a) => a.name))
   return {
     prefixes: from.filter((f) => !small.has(f)),

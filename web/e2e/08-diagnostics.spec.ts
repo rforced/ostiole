@@ -79,7 +79,9 @@ test('the connections and neighbour pages explain themselves, and the filter emp
   // The kernel's table may be empty, as in a netns of dummy links, and an
   // empty table says so rather than that nothing matches.
   await page.getByPlaceholder('address, MAC, or interface').fill('zzz-nothing')
-  const total = Number((await neigh.getByText(/^\d+ of \d+$/).textContent()).split(' of ')[1])
+  const total = Number(
+    ((await neigh.getByText(/^\d+ of \d+$/).textContent()) ?? '').split(' of ')[1],
+  )
   await expect(neigh).toContainText(total ? 'Nothing matches "zzz-nothing".' : 'No neighbours.')
   await page.screenshot({ path: shot('46-neighbours'), fullPage: true })
 })

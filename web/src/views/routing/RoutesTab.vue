@@ -5,19 +5,13 @@ import type { PropType } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
-import type { StaticRoute } from '@/lib/types.gen'
+import type { Reply, StaticRoute } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import StaticRouteDialog from '@/views/routing/StaticRouteDialog.vue'
 
-interface ReplyRoute {
-  interface: string
-  table: number
-  nextHops: string[]
-}
-
 defineProps({
-  replies: { type: Array as PropType<ReplyRoute[]>, required: true },
+  replies: { type: Array as PropType<Reply[]>, required: true },
 })
 
 const auth = useAuthStore()
@@ -102,7 +96,7 @@ function edit(r: StaticRoute) {
             <td class="font-mono text-code" data-label="">{{ r.interface }}</td>
             <td class="font-mono text-code" data-label="Table">{{ r.table }}</td>
             <td class="font-mono text-code" data-label="Next hop">
-              <template v-if="r.nextHops.length">{{ r.nextHops.join(', ') }}</template>
+              <template v-if="r.nextHops?.length">{{ r.nextHops.join(', ') }}</template>
               <span v-else class="font-sans text-ink-muted">default route</span>
             </td>
           </tr>

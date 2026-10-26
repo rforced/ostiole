@@ -36,14 +36,14 @@ const tunnels = computed(() => config.tunnels)
 /** Peers go with their tunnel, so the dialog lists them first. */
 function dependents(t: Interface) {
   return [
-    ...(t.wireguard.peers ?? []).map((p) => `peer ${p.name}`),
+    ...(t.wireguard?.peers ?? []).map((p) => `peer ${p.name}`),
     ...config.interfaceDependents(t.name),
   ]
 }
 
 /** How many of the tunnel's peers are sending now, out of those switched on. */
 function peers(t: Interface) {
-  const on = (t.wireguard.peers ?? []).filter((p) => p.enabled)
+  const on = (t.wireguard?.peers ?? []).filter((p) => p.enabled)
   if (!on.length) return 'none'
   if (!props.read.updatedAt.value) return '…'
   const now = Date.now()
@@ -113,7 +113,7 @@ function edit(t: Interface) {
               <span v-if="!t.enabled" class="badge">disabled</span>
               <StatusBadge
                 v-else-if="live.get(t.name)"
-                :state="live.get(t.name).up ? 'up' : 'down'"
+                :state="live.get(t.name)?.up ? 'up' : 'down'"
               />
             </td>
             <td class="font-mono text-code" data-label="Zone">{{ t.zone || 'unassigned' }}</td>
@@ -124,13 +124,13 @@ function edit(t: Interface) {
               <template v-if="!t.ipv4?.address && !t.ipv6?.address">—</template>
             </td>
             <td class="font-mono text-code" data-label="Listening on">
-              {{ t.wireguard.listenPort ? `udp/${t.wireguard.listenPort}` : 'only dials out' }}
+              {{ t.wireguard?.listenPort ? `udp/${t.wireguard?.listenPort}` : 'only dials out' }}
             </td>
             <td
               class="max-w-56 font-mono text-code break-all max-sm:max-w-none"
               data-label="Public key"
             >
-              {{ t.wireguard.publicKey || 'unknown' }}
+              {{ t.wireguard?.publicKey || 'unknown' }}
             </td>
             <td class="whitespace-nowrap" data-label="Peers">{{ peers(t) }}</td>
             <td data-label="Gateway">

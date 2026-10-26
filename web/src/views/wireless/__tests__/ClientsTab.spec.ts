@@ -36,12 +36,11 @@ describe('ClientsTab', () => {
     const wrapper = mount(ClientsTab)
     await flushPromises()
     const macs = () => wrapper.findAll('tbody tr').map((r) => r.find('.font-medium').text())
-    const sortBy = (name) =>
-      wrapper
-        .findAll('th')
-        .find((th) => th.text() === name)
-        .get('button')
-        .trigger('click')
+    const sortBy = (name: string) => {
+      const th = wrapper.findAll('th').find((th) => th.text() === name)
+      if (!th) throw new Error(`no column ${name}`)
+      return th.get('button').trigger('click')
+    }
 
     await sortBy('Signal')
     expect(macs()).toEqual(['00:11:22:00:00:02', '00:11:22:00:00:03', '00:11:22:00:00:01'])
@@ -57,6 +56,7 @@ describe('ClientsTab', () => {
       const wrapper = mount(ClientsTab)
       await flushPromises()
       const live = wrapper.findAll('button').find((b) => b.text() === 'Live')
+      if (!live) throw new Error('no Live button')
       expect(live.attributes('aria-pressed')).toBe('true')
       vi.advanceTimersByTime(5000)
       await flushPromises()

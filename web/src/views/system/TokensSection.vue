@@ -19,7 +19,7 @@ onMounted(load.run)
 
 const error = computed(() => actionError.value || load.error.value)
 
-async function deleteToken(id) {
+async function deleteToken(id: string) {
   actionError.value = ''
   try {
     await api.tokens.remove(id)
@@ -70,7 +70,7 @@ async function deleteToken(id) {
           </td>
           <td class="font-mono text-code" data-label="Role">
             <template v-if="(t.certificates ?? []).length">
-              certificates: {{ t.certificates.join(', ') }}
+              certificates: {{ (t.certificates ?? []).join(', ') }}
             </template>
             <template v-else-if="t.metrics">metrics only</template>
             <template v-else>{{ t.role }}</template>

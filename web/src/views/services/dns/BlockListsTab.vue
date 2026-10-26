@@ -154,7 +154,7 @@ function show(l: BlockList) {
   showingOpen.value = true
 }
 async function readNames(q: string, offset: number, limit: number) {
-  const page = (await api.blocking.names(showing.value.name, { q, offset, limit })) as {
+  const page = (await api.blocking.names(showing.value?.name ?? '', { q, offset, limit })) as {
     names: string[]
   }
   return { ...page, items: page.names }
@@ -338,7 +338,7 @@ const lists = sort.sorted
                 </button>
                 <template v-else>0</template>
                 <div v-if="fetched[l.name].skipped" class="text-ink-muted">
-                  {{ formatCount(fetched[l.name].skipped) }}
+                  {{ formatCount(fetched[l.name].skipped ?? 0) }}
                   {{ fetched[l.name].skipped === 1 ? 'line' : 'lines' }} skipped
                 </div>
               </template>

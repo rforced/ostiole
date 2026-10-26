@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { PropType } from 'vue'
 import { computed } from 'vue'
 
 import { formatCount } from '@/lib/format'
@@ -10,7 +11,10 @@ import { formatCount } from '@/lib/format'
  */
 const props = defineProps({
   /** A link from GET /overview or GET /interfaces/live; none when absent. */
-  link: { type: Object, default: null },
+  link: {
+    type: Object as PropType<{ rxErrors?: number; txErrors?: number } | null>,
+    default: null,
+  },
 })
 
 // "72 hours" stays on one line where the Link column is narrow.

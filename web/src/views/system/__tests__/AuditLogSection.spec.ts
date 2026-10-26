@@ -7,7 +7,7 @@ import type { AuditEvent } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfirmStore } from '@/stores/confirm'
 import AuditLogSection from '@/views/system/AuditLogSection.vue'
-import { sessionOf } from '@/test/fixtures'
+import { sessionOf, must } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   api: { audit: { log: vi.fn(), clear: vi.fn() } },
@@ -74,10 +74,7 @@ describe('AuditLogSection', () => {
     const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
     const w = await card()
     const reads = vi.mocked(api.audit.log).mock.calls.length
-    await w
-      .findAll('button')
-      .find((b) => b.text() === 'Clear')
-      .trigger('click')
+    await must(w.findAll('button').find((b) => b.text() === 'Clear')).trigger('click')
     await flushPromises()
     expect(ask).toHaveBeenLastCalledWith(
       expect.objectContaining({ question: 'Clear the audit log?' }),

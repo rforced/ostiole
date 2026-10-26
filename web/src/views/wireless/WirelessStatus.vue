@@ -7,13 +7,14 @@ import StatusBadge from '@/components/StatusBadge.vue'
 
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import type { WirelessRadios } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 /** How often the radios are asked what they are doing while the page is shown. */
 const POLL_MS = 5000
 
 const config = useConfigStore()
-const status = ref(null)
+const status = ref<WirelessRadios | null>(null)
 
 useAsync(
   async () => {
@@ -26,7 +27,7 @@ useAsync(
 const stage = computed(() => {
   if (!status.value) return 'loading'
   if (!status.value.setUp) return 'missing'
-  if (!status.value.radios.length) return 'no-radios'
+  if (!(status.value.radios ?? []).length) return 'no-radios'
   if (!config.wirelessCountry) return 'no-country'
   return 'ready'
 })
@@ -50,15 +51,17 @@ const rows = computed(() =>
   }),
 )
 
-const BANDS = { '2g': '2.4 GHz', '5g': '5 GHz', '6g': '6 GHz' }
+type Row = (typeof rows.value)[number]
+
+const BANDS: Partial<Record<string, string>> = { '2g': '2.4 GHz', '5g': '5 GHz', '6g': '6 GHz' }
 
 /** The channel a radio settled on, which is not always the one it was given. */
-function channelOf(row) {
+function channelOf(row: Row) {
   if (row.running) return `${row.running.channel} · ${row.running.width} MHz`
   return row.channel ? `${row.channel} · ${row.width} MHz` : `automatic · ${row.width} MHz`
 }
 
-function clientsOf(row, name) {
+function clientsOf(row: Row, name: string) {
   const live = row.running?.networks?.find((n) => n.interface === name)
   return live ? `${live.clients} client${live.clients === 1 ? '' : 's'}` : ''
 }

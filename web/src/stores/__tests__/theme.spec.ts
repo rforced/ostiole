@@ -3,11 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { THEME_STORAGE_KEY, useThemeStore } from '@/stores/theme'
 
-function mockMatchMedia(dark) {
+function mockMatchMedia(dark: boolean) {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     configurable: true,
-    value: vi.fn().mockImplementation((query) => ({
+    value: vi.fn().mockImplementation((query: string) => ({
       matches: dark,
       media: query,
       onchange: null,

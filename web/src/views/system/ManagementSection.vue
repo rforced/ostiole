@@ -7,15 +7,18 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { parseList } from '@/lib/lists'
+import type { System } from '@/lib/types.gen'
 import { ADMIN_ONLY, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
 const auth = useAuthStore()
 const config = useConfigStore()
 // Older drafts may lack the management block; create it once, outside any computed.
-if (!config.draft.system.management)
+if (config.draft && !config.draft.system.management)
   config.draft.system.management = { webPort: 9443, sshPort: 22, sshPasswords: false }
-const system = computed(() => config.draft.system)
+// The page is only routed to while a draft exists; the stand-in keeps the types honest.
+const NO_SYSTEM: System = { management: { webPort: 9443, sshPort: 22, sshPasswords: false } }
+const system = computed(() => config.draft?.system ?? NO_SYSTEM)
 const management = computed(() => system.value.management)
 
 /** The zones the router offers and the one its clock reads now. */
@@ -29,14 +32,14 @@ onMounted(loadClock.run)
 // picker shows.
 const hostname = computed({
   get: () => system.value.hostname ?? '',
-  set: (v) => {
+  set: (v: string) => {
     if (v) system.value.hostname = v
     else delete system.value.hostname
   },
 })
 const zone = computed({
   get: () => system.value.timezone || 'UTC',
-  set: (v) => {
+  set: (v: string) => {
     system.value.timezone = v
   },
 })
@@ -53,7 +56,7 @@ const zoneHint = computed(() =>
 )
 const dns = computed({
   get: () => (system.value.dnsServers ?? []).join(', '),
-  set: (v) => {
+  set: (v: string) => {
     const list = parseList(v)
     if (list.length) system.value.dnsServers = list
     else delete system.value.dnsServers
@@ -63,7 +66,7 @@ const dns = computed({
 // off. With it on the router asks dnsmasq like any client, and this field is
 // at most the fallback the forwarder uses when it has no upstreams of its own.
 const dnsHint = computed(() => {
-  const svc = config.draft.services?.dns
+  const svc = config.draft?.services?.dns
   if (!svc?.enabled) return 'Comma separated. This router resolves names here.'
   if ((svc.resolver || 'forward') === 'forward' && !(svc.upstreams ?? []).length)
     return 'Comma separated. The DNS service forwards here until it has upstreams of its own.'

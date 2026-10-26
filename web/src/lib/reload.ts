@@ -41,10 +41,13 @@ function rememberReload() {
 /**
  * Reload once when a lazy route chunk cannot be loaded.
  *
- * @param {EventTarget} [target] where the event lands; the window in the app.
- * @param {() => void} [reload] how to reload; injected so a test can watch it.
+ * @param target where the event lands; the window in the app.
+ * @param reload how to reload; injected so a test can watch it.
  */
-export function installChunkReload(target = window, reload = () => window.location.reload()) {
+export function installChunkReload(
+  target: EventTarget = window,
+  reload: () => void = () => window.location.reload(),
+) {
   let reloading = false
 
   target.addEventListener('vite:preloadError', (event) => {

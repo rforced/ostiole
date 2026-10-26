@@ -4,9 +4,10 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
-import type { Config } from '@/lib/types.gen'
+import type { WireGuardPeer } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
+import { emptyConfig, iface, must } from '@/test/fixtures'
 import PeerDialog from '@/views/vpn/PeerDialog.vue'
 
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -22,29 +23,33 @@ const stubs = {
 }
 const FRIEND = 'TrMvSoP4jYQlY6RIzBgbssQqY3vxI2Pi+y71lOWWXX0='
 
-function open(peer = null) {
+const peersOf = (config: ReturnType<typeof useConfigStore>, tunnel: string) =>
+  must(must(config.findInterface(tunnel)).wireguard).peers ?? []
+
+function open(peer: WireGuardPeer | null = null) {
   const config = useConfigStore()
   config.replaceDraft({
+    ...emptyConfig(),
     version: 11,
     zones: [{ name: 'sites' }],
     interfaces: [
-      {
+      iface({
         name: 'wg1',
         zone: 'sites',
         enabled: true,
         ipv4: { mode: 'static', address: '10.77.0.1/30' },
         ipv6: { mode: 'none' },
-        wireguard: { peers: peer ? [peer] : [] },
-      },
+        wireguard: { privateKey: 'x', peers: peer ? [peer] : [] },
+      }),
     ],
-    rules: [],
-  } as Config)
-  const tunnel = config.findInterface('wg1')
+  })
+  const tunnel = must(config.findInterface('wg1'))
   const wrapper = mount(PeerDialog, { props: { open: true, tunnel, peer }, global: { stubs } })
   return { wrapper, config }
 }
 
-const toggle = (wrapper, label) => wrapper.findAll('label').find((l) => l.text().startsWith(label))
+const toggle = (wrapper: VueWrapper, label: string) =>
+  must(wrapper.findAll('label').find((l) => l.text().startsWith(label)))
 
 describe('PeerDialog Translate', () => {
   beforeEach(() => setActivePinia(createPinia()))
@@ -59,14 +64,14 @@ describe('PeerDialog Translate', () => {
     expect(box.element.checked).toBe(false)
     await box.setValue(true)
     await wrapper.get('form').trigger('submit')
-    expect(config.findInterface('wg1').wireguard.peers[0].masquerade).toBe(true)
+    expect(peersOf(config, 'wg1')[0].masquerade).toBe(true)
   })
 
   it('leaves the field out of a peer that does not translate', async () => {
     const peer = { name: 'friend', enabled: true, publicKey: FRIEND, allowedIps: ['10.77.0.2/32'] }
     const { wrapper, config } = open(peer)
     await wrapper.get('form').trigger('submit')
-    expect(config.findInterface('wg1').wireguard.peers[0]).not.toHaveProperty('masquerade')
+    expect(peersOf(config, 'wg1')[0]).not.toHaveProperty('masquerade')
   })
 })
 
@@ -74,8 +79,8 @@ describe('PeerDialog keepalive', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
   const keepalive = (wrapper: VueWrapper) => wrapper.get<HTMLInputElement>('#pe-keep').element.value
-  const hint = (wrapper) =>
-    wrapper.get('#pe-keep').element.closest('.field').querySelector('p').textContent
+  const hint = (wrapper: VueWrapper) =>
+    must(must(wrapper.get('#pe-keep').element.closest('.field')).querySelector('p')).textContent
 
   it("follows a new peer's endpoint until a value is typed", async () => {
     const { wrapper, config } = open()
@@ -97,7 +102,7 @@ describe('PeerDialog keepalive', () => {
     await wrapper.get('#pe-pub').setValue(FRIEND)
     await wrapper.get('#pe-allowed').setValue('10.77.0.2/32')
     await wrapper.get('form').trigger('submit')
-    expect(config.findInterface('wg1').wireguard.peers[0].keepalive).toBe(10)
+    expect(peersOf(config, 'wg1')[0].keepalive).toBe(10)
   })
 
   it('leaves out the keepalive of a new peer that calls in', async () => {
@@ -106,7 +111,7 @@ describe('PeerDialog keepalive', () => {
     await wrapper.get('#pe-pub').setValue(FRIEND)
     await wrapper.get('#pe-allowed').setValue('10.77.0.2/32')
     await wrapper.get('form').trigger('submit')
-    expect(config.findInterface('wg1').wireguard.peers[0]).not.toHaveProperty('keepalive')
+    expect(peersOf(config, 'wg1')[0]).not.toHaveProperty('keepalive')
   })
 
   it('keeps what a saved peer has when its endpoint changes', async () => {
@@ -149,7 +154,7 @@ describe('PeerDialog shown networks', () => {
     await add[0].trigger('click')
     expect(wrapper.find('#pe-theirs-1').exists()).toBe(true)
     await wrapper.get('form').trigger('submit')
-    const saved = config.findInterface('wg1').wireguard.peers[0]
+    const saved = peersOf(config, 'wg1')[0]
     expect(saved.theirs).toEqual([{ network: '192.168.1.0/24', as: '10.202.1.0/24' }])
     expect(saved.ours).toEqual([{ network: '192.168.1.0/24', as: '10.200.1.0/24' }])
   })
@@ -159,7 +164,7 @@ describe('PeerDialog shown networks', () => {
     await wrapper.get('[aria-label="Remove 192.168.1.0/24"]').trigger('click')
     await wrapper.get('[aria-label="Remove 192.168.1.0/24"]').trigger('click')
     await wrapper.get('form').trigger('submit')
-    const saved = config.findInterface('wg1').wireguard.peers[0]
+    const saved = peersOf(config, 'wg1')[0]
     expect(saved).not.toHaveProperty('theirs')
     expect(saved).not.toHaveProperty('ours')
   })
@@ -171,44 +176,45 @@ describe('PeerDialog device file', () => {
     vi.clearAllMocks()
   })
 
-  function openDevice(peer = null) {
+  function openDevice(withPeer = false) {
     const config = useConfigStore()
     config.replaceDraft({
+      ...emptyConfig(),
       version: 11,
       zones: [{ name: 'lan' }, { name: 'wg0' }, { name: 'wan', external: true }],
       interfaces: [
-        {
+        iface({
           name: 'eth0',
           zone: 'wan',
           enabled: true,
           ipv4: { mode: 'dhcp' },
           ipv6: { mode: 'none' },
-        },
-        {
+        }),
+        iface({
           name: 'eth1',
           zone: 'lan',
           enabled: true,
           ipv4: { mode: 'static', address: '192.168.1.1/24' },
           ipv6: { mode: 'none' },
-        },
-        {
+        }),
+        iface({
           name: 'wg0',
           zone: 'wg0',
           enabled: true,
           ipv4: { mode: 'static', address: '10.66.0.1/24' },
           ipv6: { mode: 'static', address: 'fd66::1/64' },
           wireguard: {
+            privateKey: 'x',
             publicKey: 'ROUTER=',
             listenPort: 51820,
             peers: [
               { name: 'laptop', enabled: true, publicKey: FRIEND, allowedIps: ['10.66.0.2/32'] },
             ],
           },
-        },
+        }),
       ],
-      rules: [],
-      services: { dns: { enabled: true } },
-    } as Config)
+      services: { ...emptyConfig().services, dns: { enabled: true } },
+    })
     api.wireguard.keys = vi
       .fn()
       .mockResolvedValue({ privateKey: 'DEVICE-PRIVATE=', publicKey: 'DEVICE=' })
@@ -222,9 +228,9 @@ describe('PeerDialog device file', () => {
         { external: false, addresses: ['192.168.1.1/24'] },
       ],
     })
-    const tunnel = config.findInterface('wg0')
+    const tunnel = must(config.findInterface('wg0'))
     const wrapper = mount(PeerDialog, {
-      props: { open: true, tunnel, peer: peer && tunnel.wireguard.peers[0] },
+      props: { open: true, tunnel, peer: withPeer ? peersOf(config, 'wg0')[0] : null },
       global: { stubs },
     })
     return { wrapper, config }
@@ -242,7 +248,7 @@ describe('PeerDialog device file', () => {
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
-    const phone = config.findInterface('wg0').wireguard.peers.find((p) => p.name === 'phone')
+    const phone = peersOf(config, 'wg0').find((p) => p.name === 'phone')
     expect(phone).toMatchObject({ publicKey: 'DEVICE=', presharedKey: 'PSK=' })
     expect(phone).not.toHaveProperty('keepalive')
     expect(JSON.stringify(config.draft)).not.toContain('DEVICE-PRIVATE=')
@@ -289,18 +295,18 @@ describe('PeerDialog device file', () => {
       "Add the device's own address, such as 10.66.0.3/32.",
     )
     expect(api.wireguard.keys).not.toHaveBeenCalled()
-    expect(config.findInterface('wg0').wireguard.peers.map((p) => p.name)).toEqual(['laptop'])
+    expect(peersOf(config, 'wg0').map((p) => p.name)).toEqual(['laptop'])
   })
 
   it('makes new keys for a peer only once the name is typed', async () => {
     const { wrapper, config } = openDevice(true)
     const confirm = useConfirmStore()
     const ask = vi.spyOn(confirm, 'ask').mockResolvedValue(true)
-    const remake = wrapper.findAll('button').find((b) => b.text() === 'Make new keys')
+    const remake = must(wrapper.findAll('button').find((b) => b.text() === 'Make new keys'))
     await remake.trigger('click')
     await flushPromises()
     expect(ask).toHaveBeenCalledWith(expect.objectContaining({ typed: 'laptop' }))
-    expect(config.findInterface('wg0').wireguard.peers[0].publicKey).toBe('DEVICE=')
+    expect(peersOf(config, 'wg0')[0].publicKey).toBe('DEVICE=')
     expect(wrapper.get('pre').text()).toContain('Address = 10.66.0.2/32')
   })
 })

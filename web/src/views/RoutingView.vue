@@ -10,6 +10,7 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { usePageTabs } from '@/lib/tabs'
 import { useAuthStore } from '@/stores/auth'
+import type { DetectedGatewayReply, GatewayStatus, PolicyTarget, Reply } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import GatewayEvents from '@/views/routing/GatewayEvents.vue'
 import GatewaysTab from '@/views/routing/GatewaysTab.vue'
@@ -18,31 +19,31 @@ import RoutesTab from '@/views/routing/RoutesTab.vue'
 const auth = useAuthStore()
 const config = useConfigStore()
 const { tabs, tab } = usePageTabs()
-const live = ref([])
-const policy = ref([])
-const replies = ref([])
-const detected = ref([])
+const live = ref<GatewayStatus[]>([])
+const policy = ref<PolicyTarget[]>([])
+const replies = ref<Reply[]>([])
+const detected = ref<DetectedGatewayReply[]>([])
 
 /** Each read is on its own: a monitor that is down leaves only its column blank. */
 const refresh = useAsync(
   async () => {
     try {
-      live.value = (await api.gateways()) as unknown[]
+      live.value = await api.gateways()
     } catch {
       live.value = []
     }
     try {
-      policy.value = (await api.policy()) as unknown[]
+      policy.value = await api.policy()
     } catch {
       policy.value = []
     }
     try {
-      replies.value = (await api.policyReplies()) as unknown[]
+      replies.value = await api.policyReplies()
     } catch {
       replies.value = []
     }
     try {
-      detected.value = (await api.detectedGateways()) as unknown[]
+      detected.value = await api.detectedGateways()
     } catch {
       detected.value = []
     }

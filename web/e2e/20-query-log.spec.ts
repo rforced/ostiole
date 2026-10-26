@@ -72,7 +72,7 @@ test('the rules page links the log rule to the setting that made it', async ({ p
 // The answers need root to collect, so the router's are stood in for: the
 // search box and the selects go to it, and older answers are read on.
 test('the queries are searched and read on at the router', async ({ page }) => {
-  const asked = []
+  const asked: URLSearchParams[] = []
   await page.route('**/api/v1/dns/queries?*', async (route) => {
     const url = new URL(route.request().url())
     asked.push(url.searchParams)

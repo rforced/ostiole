@@ -19,10 +19,10 @@ const props = defineProps({
 })
 const emit = defineEmits(['load'])
 
-const foot = ref(null)
-let observer = null
+const foot = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
 
-function inView(entries) {
+function inView(entries: IntersectionObserverEntry[]) {
   if (entries.some((e) => e.isIntersecting) && props.more && !props.busy) emit('load')
 }
 

@@ -9,6 +9,7 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { formatBytes, formatCount, formatWhen } from '@/lib/format'
 import { FILE_DAYS, FILE_LOG_NAMES } from '@/lib/logs'
+import type { LogFiles, Logging, LogfileStatus, LogStatus } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 const config = useConfigStore()
@@ -19,9 +20,10 @@ const config = useConfigStore()
  * default, as the saved configuration has it: opening the page must not
  * make a change.
  */
-const logging = computed(() => config.draft.system.logging ?? {})
-const files = computed(() => logging.value.files ?? {})
-function set(key, value) {
+const logging = computed<Logging>(() => config.draft?.system.logging ?? {})
+const files = computed<LogFiles>(() => logging.value.files ?? {})
+function set<K extends keyof LogFiles>(key: K, value: LogFiles[K]) {
+  if (!config.draft) return
   const next = { ...files.value }
   if (value === undefined) delete next[key]
   else next[key] = value
@@ -34,7 +36,7 @@ function set(key, value) {
 
 const enabled = computed({
   get: () => Boolean(files.value.enabled),
-  set: (on) => set('enabled', on ? true : undefined),
+  set: (on: boolean) => set('enabled', on ? true : undefined),
 })
 
 const WRITE_EVERY = [
@@ -45,21 +47,22 @@ const WRITE_EVERY = [
 ]
 const every = computed({
   get: () => files.value.writeMinutes || 5,
-  set: (v) => set('writeMinutes', v === 5 ? undefined : v),
+  set: (v: number) => set('writeMinutes', v === 5 ? undefined : v),
 })
 
 /** Empty means the default, which the placeholder shows. */
-function numberField(key) {
+function numberField(key: 'retentionDays' | 'maxUseGB') {
   return computed({
     get: () => files.value[key] || '',
-    set: (v) => set(key, Number.isFinite(v) && v > 0 ? v : undefined),
+    set: (v: number | '') =>
+      set(key, typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined),
   })
 }
 const retention = numberField('retentionDays')
 const maxUse = numberField('maxUseGB')
 
 // What the files hold is the router's, read as they are written.
-const state = ref(null)
+const state = ref<LogfileStatus | null>(null)
 const status = useAsync(
   async () => {
     state.value = await api.logFiles()
@@ -77,7 +80,7 @@ watch(
 defineExpose({ refresh: status.run })
 
 const logs = computed(() => state.value?.logs ?? [])
-const name = (l) => FILE_LOG_NAMES[l.name] ?? l.name
+const name = (l: LogStatus) => FILE_LOG_NAMES[l.name] ?? l.name
 
 /** "4.2 MB in /var/log/ostiole, last written 17:45." */
 const line = computed(() => {
@@ -95,7 +98,7 @@ const line = computed(() => {
 
 /** What each log's files are short of, a sentence each. */
 const notes = computed(() => {
-  const out = []
+  const out: string[] = []
   for (const l of logs.value) {
     if (l.overCap)
       out.push(`${name(l)}: today's file is over the cap, so it is written again tomorrow.`)

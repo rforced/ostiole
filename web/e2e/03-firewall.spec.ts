@@ -1,3 +1,5 @@
+import type { Page } from '@playwright/test'
+
 import { expect, test } from './fixtures'
 import { applyAndConfirm, login, shot, sidebar } from './helpers'
 
@@ -59,7 +61,7 @@ test('add an alias, a rule using it, and a port forward, then apply', async ({ p
   await expect(everything).toBeVisible()
   await expect(everything.getByRole('checkbox')).toHaveCount(0)
   const order = await page.getByRole('row').allTextContents()
-  const at = (needle) => order.findIndex((t) => t.includes(needle))
+  const at = (needle: string) => order.findIndex((t) => t.includes(needle))
   expect(at('Replies and related traffic')).toBeLessThan(at('Ping'))
   expect(at('Everything else')).toBeGreaterThan(at('Admin HTTPS'))
 
@@ -264,7 +266,7 @@ test('the log keeps its own settings', async ({ page }) => {
  * own log stays empty. A thousand packets, read a page at a time and
  * searched on the "router", the way internal/fwlog answers.
  */
-async function standInLog(page) {
+async function standInLog(page: Page) {
   const held = Array.from({ length: 1000 }, (_, i) => ({
     seq: 1000 - i,
     time: new Date(Date.UTC(2026, 8, 26, 12, 0, 0) - i * 1000).toISOString(),
@@ -280,7 +282,7 @@ async function standInLog(page) {
     dstPort: 443,
     length: 60,
   }))
-  const asked = []
+  const asked: URLSearchParams[] = []
   await page.route('**/api/v1/log/entries?*', async (route) => {
     const url = new URL(route.request().url())
     asked.push(url.searchParams)
@@ -294,9 +296,9 @@ async function standInLog(page) {
       json: {
         entries,
         more,
-        next: more ? entries.at(-1).seq : undefined,
+        next: more ? entries.at(-1)?.seq : undefined,
         held: 1000,
-        oldest: held.at(-1).time,
+        oldest: held.at(-1)?.time,
       },
     })
   })
@@ -320,13 +322,13 @@ test('the log reads on as it scrolls, and searches on the router', async ({ page
   await log.getByRole('button', { name: 'Load more' }).scrollIntoViewIfNeeded()
   await expect(rows).toHaveCount(400)
   await expect(live).toHaveAttribute('aria-pressed', 'false')
-  expect(asked.at(-1).get('before')).toBe('801')
+  expect(asked.at(-1)?.get('before')).toBe('801')
 
   // The search goes to the router once typing rests.
   await log.getByRole('searchbox').fill('r7')
   await expect(rows).toHaveCount(1)
   await expect(rows.first()).toContainText('r7')
-  expect(asked.at(-1).get('q')).toBe('r7')
+  expect(asked.at(-1)?.get('q')).toBe('r7')
   await expect(log).toContainText('Start of the log.')
 
   // Cleared, it is the plain log again.

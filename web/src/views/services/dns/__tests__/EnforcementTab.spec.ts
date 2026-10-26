@@ -1,16 +1,16 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { Config } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import { configOf, draftOf } from '@/test/fixtures'
 import EnforcementTab from '@/views/services/dns/EnforcementTab.vue'
 
 const stubs = { RouterLink: true }
 
 /** Three zones behind the router and one outside it, saved the way Go writes them. */
 function draft() {
-  return {
+  return configOf({
     version: 11,
     zones: [{ name: 'lan' }, { name: 'wan', external: true }, { name: 'guest' }, { name: 'lab' }],
     interfaces: [
@@ -22,7 +22,7 @@ function draft() {
     rules: [],
     services: { dns: { enabled: true } },
     blocking: { enforce: { redirectDns: true, blockDot: true } },
-  } as Config
+  })
 }
 
 async function tab(cfg = draft()) {
@@ -36,10 +36,10 @@ async function tab(cfg = draft()) {
 }
 
 /** Each zone on offer, in order, and whether its box is ticked. */
-function boxes(wrapper) {
+function boxes(wrapper: VueWrapper) {
   return wrapper
-    .findAll('input[id^="enf-zone-"]')
-    .map((b) => [b.attributes('id').slice('enf-zone-'.length), b.element.checked])
+    .findAll<HTMLInputElement>('input[id^="enf-zone-"]')
+    .map((b) => [b.attributes('id')?.slice('enf-zone-'.length), b.element.checked])
 }
 
 describe('EnforcementTab', () => {
@@ -74,7 +74,7 @@ describe('EnforcementTab', () => {
   it('writes the zones left when one is unticked, and drops the list when it is ticked again', async () => {
     const { wrapper, config } = await tab()
     await wrapper.find('#enf-zone-lan').setValue(false)
-    expect(config.draft.blocking.enforce.zones).toEqual(['guest', 'lab'])
+    expect(draftOf(config).blocking.enforce.zones).toEqual(['guest', 'lab'])
     expect(boxes(wrapper)).toEqual([
       ['lan', false],
       ['guest', true],
@@ -82,7 +82,7 @@ describe('EnforcementTab', () => {
     ])
 
     await wrapper.find('#enf-zone-lan').setValue(true)
-    expect('zones' in config.draft.blocking.enforce).toBe(false)
+    expect('zones' in draftOf(config).blocking.enforce).toBe(false)
     expect(config.dirty).toBe(false)
   })
 
@@ -103,7 +103,7 @@ describe('EnforcementTab', () => {
     cfg.blocking.enforce.zones = ['lab']
     const { wrapper, config } = await tab(cfg)
     await wrapper.find('#enf-zone-lan').setValue(true)
-    expect(config.draft.blocking.enforce.zones).toEqual(['lan', 'lab'])
+    expect(draftOf(config).blocking.enforce.zones).toEqual(['lan', 'lab'])
   })
 
   // None chosen means every zone, so the last box unticked comes back
@@ -114,7 +114,7 @@ describe('EnforcementTab', () => {
     cfg.blocking.enforce.zones = ['lan']
     const { wrapper, config } = await tab(cfg)
     await wrapper.find('#enf-zone-lan').setValue(false)
-    expect('zones' in config.draft.blocking.enforce).toBe(false)
+    expect('zones' in draftOf(config).blocking.enforce).toBe(false)
     expect(boxes(wrapper)).toEqual([
       ['lan', true],
       ['guest', true],

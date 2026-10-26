@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { createServer } from 'node:http'
+import { createServer, type Server } from 'node:http'
 
 import { expect, test } from './fixtures'
 import { login, shot } from './helpers'
@@ -10,14 +10,15 @@ test.describe.configure({ mode: 'serial' })
 // It offers a release whose checksums carry a signature from nobody.
 const PORT = 18096
 const BASE = `http://127.0.0.1:${PORT}`
-const ARCH = { x64: 'amd64', arm64: 'arm64' }[process.arch] ?? process.arch
+const GO_ARCH: Record<string, string> = { x64: 'amd64', arm64: 'arm64' }
+const ARCH = GO_ARCH[process.arch] ?? process.arch
 const TARBALL = `ostiole_99.0.0_linux_${ARCH}.tar.gz`
-let api
-const asked = []
+let api: Server | undefined
+const asked: string[] = []
 
 test.beforeAll(async () => {
   const tarball = randomBytes(64)
-  const files = {
+  const files: Record<string, Buffer> = {
     [`/download/${TARBALL}`]: tarball,
     '/download/checksums.txt': Buffer.from(
       `${createHash('sha256').update(tarball).digest('hex')}  ${TARBALL}\n`,
@@ -37,8 +38,8 @@ test.beforeAll(async () => {
       size: body.length,
     })),
   }
-  api = createServer((req, res) => {
-    const path = new URL(req.url, BASE).pathname
+  const server = createServer((req, res) => {
+    const path = new URL(req.url ?? '', BASE).pathname
     asked.push(path)
     if (path === '/repos/rforced/ostiole/releases') {
       res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -49,7 +50,8 @@ test.beforeAll(async () => {
     res.writeHead(body ? 200 : 404, { 'Content-Type': 'application/octet-stream' })
     res.end(body)
   })
-  await new Promise((resolve) => api.listen(PORT, '127.0.0.1', resolve))
+  api = server
+  await new Promise<void>((resolve) => server.listen(PORT, '127.0.0.1', resolve))
 })
 
 test.afterAll(() => api?.close())
@@ -65,7 +67,7 @@ test('a release the key did not sign is refused before its binary is fetched', a
   // The field says … until the status arrives; read it after.
   const field = updates.locator('dt:text-is("Installed") + dd')
   await expect(field).not.toHaveText('…')
-  const installed = await field.textContent()
+  const installed = (await field.textContent()) ?? ''
 
   await updates.getByRole('button', { name: 'Check now' }).click()
   await expect(updates).toContainText('v99.0.0')

@@ -33,6 +33,7 @@ watch(
 )
 watch(keep, (v) => {
   const n = Number(v)
+  if (!config.draft) return
   if (!n || n === DEFAULT_KEEP) delete config.draft.system.keepDriveReadings
   else config.draft.system.keepDriveReadings = n
 })

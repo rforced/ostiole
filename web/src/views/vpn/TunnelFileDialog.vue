@@ -9,7 +9,7 @@ import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
-import type { Interface, WireGuardPeer, Zone } from '@/lib/types.gen'
+import type { Interface, WireGuard, WireGuardPeer, Zone } from '@/lib/types.gen'
 import { parseQuick, peerName, takesDefaultRoute } from '@/lib/wgconf'
 import { useConfigStore } from '@/stores/config'
 
@@ -45,10 +45,11 @@ function nextName() {
 }
 
 const parsed = computed(() => (text.value.trim() ? parseQuick(text.value) : null))
-const ok = computed(() => Boolean(parsed.value && !parsed.value.errors.length))
+const file = computed(() => (parsed.value && !parsed.value.errors.length ? parsed.value : null))
+const ok = computed(() => file.value !== null)
 /** A peer that takes a default route makes the tunnel a way out. */
 const wayOut = computed(
-  () => ok.value && parsed.value.peers.some((p) => takesDefaultRoute(p.allowedIps)),
+  () => file.value?.peers.some((p) => takesDefaultRoute(p.allowedIps)) ?? false,
 )
 const zoneExists = computed(() => config.zones.some((z) => z.name === name.value))
 
@@ -61,9 +62,10 @@ watch(parsed, (p) => {
 
 /** The peers as they will be saved, named after the file. */
 const peers = computed(() => {
-  if (!ok.value) return []
+  const quick = file.value
+  if (!quick) return []
   const base = peerName(fileName.value)
-  return parsed.value.peers.map((p, i) => {
+  return quick.peers.map((p, i) => {
     const out: WireGuardPeer = {
       name: i ? `${base.slice(0, 28)}_${i + 1}` : base,
       enabled: true,
@@ -106,6 +108,7 @@ async function save() {
     return
   }
   const p = parsed.value
+  if (!p) return
   busy.value = true
   try {
     const { publicKey } = (await api.wireguard.publicKey(p.iface.privateKey)) as {
@@ -116,17 +119,18 @@ async function save() {
       if (wayOut.value) zone.external = true
       config.upsertZone(zone)
     }
+    const wireguard: WireGuard = { privateKey: p.iface.privateKey, publicKey, peers: peers.value }
+    if (p.iface.listenPort) wireguard.listenPort = p.iface.listenPort
     const iface: Interface = {
       name: n,
       enabled: true,
       zone: n,
       ipv4: address(p.iface.ipv4),
       ipv6: address(p.iface.ipv6),
-      wireguard: { privateKey: p.iface.privateKey, publicKey, peers: peers.value },
+      wireguard,
     }
     if (description.value.trim()) iface.description = description.value.trim()
     if (p.iface.mtu) iface.mtu = p.iface.mtu
-    if (p.iface.listenPort) iface.wireguard.listenPort = p.iface.listenPort
     config.upsertInterface(iface)
     if (addGateway) {
       config.upsertGateway({ name: n, enabled: true, interface: n, monitor: monitor.value.trim() })
@@ -179,7 +183,7 @@ async function save() {
         </ul>
       </div>
 
-      <template v-if="ok">
+      <template v-if="file">
         <div class="fields">
           <FormField id="tf-name" label="Interface name">
             <input
@@ -197,15 +201,15 @@ async function save() {
         <dl class="kv">
           <dt>Addresses</dt>
           <dd class="font-mono">
-            {{ [parsed.iface.ipv4, parsed.iface.ipv6].filter(Boolean).join(', ') || '—' }}
+            {{ [file.iface.ipv4, file.iface.ipv6].filter(Boolean).join(', ') || '—' }}
           </dd>
           <dt>Listening on</dt>
           <dd class="font-mono">
-            {{ parsed.iface.listenPort ? `udp/${parsed.iface.listenPort}` : 'only dials out' }}
+            {{ file.iface.listenPort ? `udp/${file.iface.listenPort}` : 'only dials out' }}
           </dd>
-          <template v-if="parsed.iface.mtu">
+          <template v-if="file.iface.mtu">
             <dt>MTU</dt>
-            <dd class="font-mono">{{ parsed.iface.mtu }}</dd>
+            <dd class="font-mono">{{ file.iface.mtu }}</dd>
           </template>
           <dt>Zone</dt>
           <dd>
@@ -217,16 +221,16 @@ async function save() {
             <div v-for="p in peers" :key="p.name" class="font-mono">
               {{ p.name
               }}<span class="text-ink-muted">
-                · {{ p.endpoint || 'calls in' }} · {{ p.allowedIps.join(', ') }}</span
+                · {{ p.endpoint || 'calls in' }} · {{ (p.allowedIps ?? []).join(', ') }}</span
               >
             </div>
           </dd>
         </dl>
-        <p v-if="parsed.ignored.length" class="text-sm text-ink-muted">
+        <p v-if="file.ignored.length" class="text-sm text-ink-muted">
           Ignored:
-          {{ parsed.ignored.map((i) => `${i.key} on line ${i.line}`).join(', ') }}.
+          {{ file.ignored.map((i) => `${i.key} on line ${i.line}`).join(', ') }}.
         </p>
-        <p v-for="note in parsed.notes" :key="note" class="text-sm text-ink-muted">{{ note }}</p>
+        <p v-for="note in file.notes" :key="note" class="text-sm text-ink-muted">{{ note }}</p>
         <template v-if="wayOut">
           <ToggleRow
             v-model="gateway"

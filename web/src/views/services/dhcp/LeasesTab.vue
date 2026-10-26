@@ -16,7 +16,7 @@ import { useSearch } from '@/lib/search'
 import { byAddress, byText, byTime, useSort } from '@/lib/sort'
 import { useWake, wakeInterfaces } from '@/lib/wol'
 import { useAuthStore } from '@/stores/auth'
-import type { Lease, StaticLease } from '@/lib/types.gen'
+import type { Lease, StaticLease, WakeRequest } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import StaticLeaseDialog from '@/views/services/dhcp/StaticLeaseDialog.vue'
 
@@ -54,10 +54,12 @@ const wakeable = computed(
         .map((i) => i.name),
     ),
 )
-const canWake = (l: Lease) => Boolean(l.mac && l.family !== 6 && wakeable.value.has(l.interface))
+const canWake = (l: Lease): l is Lease & WakeRequest =>
+  Boolean(l.mac && l.family !== 6 && wakeable.value.has(l.interface ?? ''))
 
 /** Pins a client to the address it has. One already pinned in the draft opens as it is. */
 function makeStatic(l: Lease) {
+  if (!l.mac) return
   const mac = l.mac.toLowerCase()
   editing.value =
     (config.draft?.services?.dhcp?.staticLeases ?? []).find((s) => s.mac.toLowerCase() === mac) ??
@@ -84,7 +86,7 @@ watch(live, (on) => {
 
 const { query, shown } = useSearch(leases, (l) => ({
   values: [l.ip, l.clientId, l.hostname, l.interface, l.description],
-  macs: [l.mac],
+  macs: l.mac ? [l.mac] : [],
 }))
 
 /** Last renewed, newest first, shows leases as they are handed out. */
@@ -92,9 +94,9 @@ const sort = useSort<Lease>(
   shown,
   {
     address: byAddress((l) => l.ip),
-    client: byText((l) => l.mac || l.clientId),
-    hostname: byText((l) => l.hostname),
-    interface: byText((l) => l.interface),
+    client: byText((l) => l.mac || l.clientId || ''),
+    hostname: byText((l) => l.hostname ?? ''),
+    interface: byText((l) => l.interface ?? ''),
     seen: byTime((l) => l.seen),
     renewed: byTime((l) => l.renewed),
     expires: byTime((l) => l.expires, 'asc'),
@@ -149,7 +151,7 @@ const empty = computed(() =>
           <tr v-if="!rows.length">
             <td colspan="8" class="text-ink-muted">{{ empty }}</td>
           </tr>
-          <tr v-for="l in rows" :key="l.ip + (l.mac || l.clientId)">
+          <tr v-for="l in rows" :key="l.ip + (l.mac || l.clientId || '')">
             <td data-label="Address">
               <div class="font-mono text-code">{{ l.ip }}</div>
               <div class="flex items-center gap-1.5 whitespace-nowrap">

@@ -5,8 +5,9 @@ import { ref } from 'vue'
 
 import LogRetention from '@/components/LogRetention.vue'
 import { api } from '@/lib/api'
-import type { Config, LogfileStatus, Stats } from '@/lib/types.gen'
+import type { Config, LogfileStatus, LogLimitsInfo, Stats } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import type { DeepPartial } from '@/test/fixtures'
 import { fixture } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
@@ -15,7 +16,7 @@ vi.mock('@/lib/api', () => ({
 
 // What a router of 4 GB answers: 3,475 MB for the logs at their largest,
 // the firewall log and the requests held below the model's most.
-const LIMITS = {
+const LIMITS: LogLimitsInfo = {
   memTotal: 4_000_000_000,
   reserve: 525_000_000,
   budget: 3_475_000_000,
@@ -31,9 +32,20 @@ const LIMITS = {
     wireguard: 1_000_000,
     tailscale: 1_000_000,
   },
+  aliasEntries: 0,
 }
 
-/** limits null is a daemon that does not answer them. */
+interface CardOptions {
+  settings?: { entries?: number }
+  memTotal?: number
+  /** Null is a daemon that does not answer them. */
+  limits?: LogLimitsInfo | null
+  draft?: Record<string, unknown>
+  off?: boolean
+  log?: string
+  files?: DeepPartial<LogfileStatus>
+}
+
 async function card({
   settings = {},
   memTotal = 8_000_000_000,
@@ -42,7 +54,7 @@ async function card({
   off = false,
   log = 'events',
   files = { enabled: false, logs: [] },
-} = {}) {
+}: CardOptions = {}) {
   vi.mocked(api.systemStats).mockResolvedValue(fixture<Stats>({ memTotal }))
   if (limits) vi.mocked(api.logLimits).mockResolvedValue(limits)
   else vi.mocked(api.logLimits).mockRejectedValue(new Error('Not Found'))
@@ -57,7 +69,7 @@ async function card({
       title: 'WAF events',
       off,
       modelValue: model.value,
-      'onUpdate:modelValue': (v) => {
+      'onUpdate:modelValue': (v: { entries?: number }) => {
         model.value = v
         wrapper.setProps({ modelValue: v })
       },
@@ -131,7 +143,9 @@ describe('LogRetention', () => {
     )
     expect(wrapper.text()).not.toContain('That is more')
     // 2.1 GB is past half of the memory, but 3.15 GB at their largest fits.
-    const firewallLog = (entries) => ({ system: { management: { firewallLog: { entries } } } })
+    const firewallLog = (entries: number) => ({
+      system: { management: { firewallLog: { entries } } },
+    })
     ;({ wrapper } = await card({
       memTotal: 4_000_000_000,
       limits: LIMITS,
@@ -160,7 +174,7 @@ describe('LogRetention', () => {
   // While System › General writes the logs to files, the card says what
   // this log's files hold and how long they keep it: the files' days.
   it('says what the files keep while the logs are written to them', async () => {
-    const draft = (files) => ({ system: { logging: { files } } })
+    const draft = (files: Record<string, unknown>) => ({ system: { logging: { files } } })
     const files = { enabled: true, logs: [{ name: 'firewall', bytes: 1_200_000 }] }
     let { wrapper } = await card({ log: 'firewall', draft: draft({ enabled: true }), files })
     expect(wrapper.text()).toContain(

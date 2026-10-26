@@ -1,4 +1,6 @@
 import { expect, test } from './fixtures'
+import type { LiveLink } from '../src/lib/types.gen'
+
 import { login, reconfigure, shot, sidebar } from './helpers'
 
 test.describe.configure({ mode: 'serial' })
@@ -11,25 +13,33 @@ test('build a bridge and a bond from the machine s own links', async ({ page }) 
   // A spare link in the wan zone at 10.77.0.1/24, as 02-interfaces.spec.ts
   // makes one. Using it keeps the LAN, and the DHCP server on it, out of
   // this.
-  const live = await (await page.request.get('/api/v1/interfaces/live')).json()
+  const live = (await (await page.request.get('/api/v1/interfaces/live')).json()) as LiveLink[]
   await reconfigure(page.request, (config) => {
     const free = live.find(
       (l) =>
-        l.kind !== 'loopback' && !l.wireless && !config.interfaces.some((i) => i.name === l.name),
+        l.kind !== 'loopback' &&
+        !l.wireless &&
+        !(config.interfaces ?? []).some((i) => i.name === l.name),
     )
-    config.interfaces.push({
-      name: free.name,
-      zone: 'wan',
-      description: 'Servers',
-      enabled: true,
-      ipv4: { mode: 'static', address: '10.77.0.1/24' },
-      ipv6: { mode: 'none' },
-    })
+    if (!free) throw new Error('no spare link')
+    config.interfaces = [
+      ...(config.interfaces ?? []),
+      {
+        name: free.name,
+        zone: 'wan',
+        description: 'Servers',
+        enabled: true,
+        ipv4: { mode: 'static', address: '10.77.0.1/24' },
+        ipv6: { mode: 'none' },
+      },
+    ]
   })
   await page.goto('/interfaces')
 
   const addressed = page.getByRole('row').filter({ hasText: '10.77.0.1/24' })
-  const spare = (await addressed.locator('td').first().locator('div').first().textContent()).trim()
+  const spare = (
+    (await addressed.locator('td').first().locator('div').first().textContent()) ?? ''
+  ).trim()
   // Pin the row by name: the address is about to move to the bridge.
   const spareRow = page.getByRole('row').filter({ has: page.getByText(spare, { exact: true }) })
 
@@ -100,14 +110,14 @@ test('configure a PPPoE session over a spare link', async ({ page }) => {
   // The same spare link the bridge test used: it is in the wan zone with
   // nothing else hanging off it.
   const spare = (
-    await page
+    (await page
       .getByRole('row')
       .filter({ hasText: '10.77.0.1/24' })
       .locator('td')
       .first()
       .locator('div')
       .first()
-      .textContent()
+      .textContent()) ?? ''
   ).trim()
 
   await page.getByRole('button', { name: 'Add PPPoE' }).click()

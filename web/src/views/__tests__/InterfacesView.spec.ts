@@ -1,4 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, ref } from 'vue'
@@ -6,7 +7,7 @@ import { nextTick, ref } from 'vue'
 import { api } from '@/lib/api'
 import type { Interface, LiveLink, ServicesStatus } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
-import { configOf, emptyConfig, fixture, iface } from '@/test/fixtures'
+import { configOf, emptyConfig, fixture, iface, must } from '@/test/fixtures'
 import InterfacesView from '@/views/InterfacesView.vue'
 
 // The page only needs its tabs to exist; the router is not what is under
@@ -102,8 +103,10 @@ describe('InterfacesView', () => {
     return { ...emptyConfig(), zones: [{ name: 'lan' }, { name: 'tailnet' }], interfaces }
   }
 
-  function rowFor(wrapper, name) {
-    return wrapper.findAll('tr').find((r) => r.find('td')?.exists() && r.text().includes(name))
+  function rowFor(wrapper: VueWrapper, name: string) {
+    return must(
+      wrapper.findAll('tr').find((r) => r.find('td')?.exists() && r.text().includes(name)),
+    )
   }
 
   // A tunnel and a tailnet node are made on their own page and deleted
@@ -203,7 +206,7 @@ describe('InterfacesView', () => {
       const wrapper = mount(InterfacesView, { global: { stubs } })
       await flushPromises()
 
-      const renewOf = (name) =>
+      const renewOf = (name: string) =>
         rowFor(wrapper, name)
           .findAll('button')
           .find((b) => b.text() === 'Renew')
@@ -212,7 +215,7 @@ describe('InterfacesView', () => {
       const button = renewOf('eth0')
       expect(button).toBeDefined()
 
-      await button.trigger('click')
+      await must(button).trigger('click')
       expect(api.interfaces.renew).toHaveBeenCalledWith('eth0', false)
       expect(rowFor(wrapper, 'eth0').text()).toContain('Renewing…')
       expect(api.interfaces.live).toHaveBeenCalledTimes(1)

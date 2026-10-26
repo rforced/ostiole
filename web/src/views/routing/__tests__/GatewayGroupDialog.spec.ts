@@ -2,8 +2,9 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { Config } from '@/lib/types.gen'
+import type { OnDownMode } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import { emptyConfig, iface } from '@/test/fixtures'
 import GatewayGroupDialog from '@/views/routing/GatewayGroupDialog.vue'
 
 // The dialog itself teleports; the form inside it is what is under test.
@@ -14,20 +15,26 @@ const stubs = {
   },
 }
 
-function setup(extra) {
+// Go can send an empty onDown, which the type leaves out.
+interface Extra {
+  onDown?: OnDownMode | ''
+}
+
+function setup(extra: Extra) {
   const config = useConfigStore()
-  const line = (name) => ({
-    name,
-    zone: 'wan',
-    enabled: true,
-    ipv4: { mode: 'dhcp' },
-    ipv6: { mode: 'none' },
-  })
+  const line = (name: string) =>
+    iface({
+      name,
+      zone: 'wan',
+      enabled: true,
+      ipv4: { mode: 'dhcp' },
+      ipv6: { mode: 'none' },
+    })
   const cfg = {
+    ...emptyConfig(),
     version: 12,
     zones: [{ name: 'wan', external: true }],
     interfaces: [line('eth0'), line('wwan0')],
-    rules: [],
     gateways: [
       { name: 'wan', enabled: true, interface: 'eth0' },
       { name: 'lte', enabled: true, interface: 'wwan0', priority: 1 },
@@ -37,10 +44,10 @@ function setup(extra) {
         name: 'failover',
         enabled: true,
         members: [{ gateway: 'wan' }, { gateway: 'lte', tier: 1 }],
-        ...extra,
+        onDown: extra.onDown as OnDownMode | undefined,
       },
     ],
-  } as Config
+  }
   config.saved = cfg
   config.replaceDraft(cfg)
   const wrapper = mount(GatewayGroupDialog, {
@@ -53,7 +60,7 @@ function setup(extra) {
 describe('GatewayGroupDialog', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
-  it.each([
+  it.each<[string, Extra, string]>([
     ['fallback', { onDown: 'fallback' }, 'fallback'],
     ['block', { onDown: 'block' }, 'block'],
     ['omitted', {}, 'fallback'],

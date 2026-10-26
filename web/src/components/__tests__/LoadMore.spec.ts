@@ -5,14 +5,19 @@ import { nextTick } from 'vue'
 import LoadMore from '@/components/LoadMore.vue'
 
 /** An observer the test says the foot is in view through. */
-let observer: FakeObserver | null = null
+const observers: FakeObserver[] = []
+const observer = () => {
+  const last = observers.at(-1)
+  if (!last) throw new Error('no observer was made')
+  return last
+}
 class FakeObserver {
   callback: (entries: { isIntersecting: boolean }[]) => void
   observed: number
   constructor(callback: FakeObserver['callback']) {
     this.callback = callback
     this.observed = 0
-    observer = this
+    observers.push(this)
   }
   observe() {
     this.observed++
@@ -52,15 +57,15 @@ describe('LoadMore', () => {
   it('reads on as it comes into view', async () => {
     vi.stubGlobal('IntersectionObserver', FakeObserver)
     const w = mount(LoadMore, { props: { more: true, rows: 200 } })
-    observer.inView()
+    observer().inView()
     expect(w.emitted('load')).toHaveLength(1)
     await w.setProps({ busy: true })
-    observer.inView()
+    observer().inView()
     expect(w.emitted('load')).toHaveLength(1)
     await w.setProps({ busy: false })
     await nextTick()
-    expect(observer.observed).toBe(2)
-    observer.inView(false)
+    expect(observer().observed).toBe(2)
+    observer().inView(false)
     expect(w.emitted('load')).toHaveLength(1)
   })
 })

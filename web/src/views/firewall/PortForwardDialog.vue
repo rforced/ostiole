@@ -57,7 +57,7 @@ watch(
       ? {
           ...blank(),
           ...f,
-          ports: f.ports.join(', '),
+          ports: (f.ports ?? []).join(', '),
           targetPort: f.targetPort ?? '',
           priority: f.priority ?? '',
         }

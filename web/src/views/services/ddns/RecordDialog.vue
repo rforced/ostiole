@@ -13,7 +13,7 @@ import { newId } from '@/lib/ids'
 import { interfaceLabel } from '@/lib/interfaces'
 import { providerFor } from '@/lib/providers'
 import { useAuthStore } from '@/stores/auth'
-import type { DDNSRecord, ProviderKind } from '@/lib/types.gen'
+import type { CheckResult, DDNSRecord, ProviderKind } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
@@ -30,7 +30,9 @@ const error = ref('')
 /** The interface a new record starts on: the first in an external zone. */
 function wan() {
   const external = new Set((config.draft?.zones ?? []).filter((z) => z.external).map((z) => z.name))
-  return (config.interfaces.find((i) => external.has(i.zone)) ?? config.interfaces[0])?.name ?? ''
+  return (
+    (config.interfaces.find((i) => external.has(i.zone ?? '')) ?? config.interfaces[0])?.name ?? ''
+  )
 }
 
 const blank = () => ({
@@ -43,7 +45,7 @@ const blank = () => ({
 })
 const form = ref(blank())
 /** What Check found, one result per record type. */
-const checked = ref(null)
+const checked = ref<CheckResult[] | null>(null)
 const checking = ref(false)
 const checkError = ref('')
 
@@ -119,12 +121,14 @@ function save() {
 }
 
 async function check() {
+  const draft = config.draft
+  if (!draft) return
   checked.value = null
   checkError.value = problem()
   if (checkError.value) return
   checking.value = true
   try {
-    checked.value = await api.ddns.check(config.draft, built())
+    checked.value = await api.ddns.check(draft, built())
   } catch (e) {
     checkError.value = errorMessage(e)
   } finally {
@@ -132,10 +136,10 @@ async function check() {
   }
 }
 
-const FAMILY = { A: 'IPv4', AAAA: 'IPv6' }
+const FAMILY: Record<string, string> = { A: 'IPv4', AAAA: 'IPv6' }
 
 /** What the check found for one record type, as a sentence. */
-function sentence(r) {
+function sentence(r: CheckResult) {
   if (r.error) return r.error
   const holds = (r.published ?? []).join(', ')
   switch (r.action) {
@@ -148,7 +152,7 @@ function sentence(r) {
     case 'no-address':
       return `${form.value.interface} has no public ${FAMILY[r.type]} address, so ${where.value} keeps ${holds || 'nothing'}.`
     case 'several':
-      return `${where.value} holds ${r.published.length} ${r.type} records for this name. Keep one there first.`
+      return `${where.value} holds ${(r.published ?? []).length} ${r.type} records for this name. Keep one there first.`
   }
   return r.action
 }

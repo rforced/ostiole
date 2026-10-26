@@ -1,10 +1,19 @@
 import { RouterLinkStub, flushPromises, mount } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
-import type { Stats, TrafficLink, UpdateStatusReply } from '@/lib/types.gen'
-import { fixture } from '@/test/fixtures'
+import type {
+  HealthResponse,
+  Overview,
+  Stats,
+  TrafficLink,
+  TrafficLinks,
+  UpdateStatusReply,
+} from '@/lib/types.gen'
+import { fixture, must } from '@/test/fixtures'
+import type { DeepPartial } from '@/test/fixtures'
 import DashboardView from '@/views/DashboardView.vue'
 import { DEFAULT_ORDER, LAYOUT_KEY } from '@/views/dashboard/layout'
 import LayoutDialog from '@/views/dashboard/LayoutDialog.vue'
@@ -54,15 +63,15 @@ const overview = {
 }
 
 /** The card headed by title. */
-const card = (w, title) =>
-  w.findAll('section').find((s) => s.find('h2').exists() && s.find('h2').text() === title)
+const card = (w: VueWrapper, title: string) =>
+  must(w.findAll('section').find((s) => s.find('h2').exists() && s.find('h2').text() === title))
 /** Every card's title, in page order. */
-const titles = (w) => w.findAll('section h2').map((h) => h.text())
+const titles = (w: VueWrapper) => w.findAll('section h2').map((h) => h.text())
 /** A card's placeholder rows. */
-const reading = (w, title) => card(w, title).findAll('tr[data-reading]')
+const reading = (w: VueWrapper, title: string) => card(w, title).findAll('tr[data-reading]')
 
 describe('DashboardView', () => {
-  let answer: (value: object) => void
+  let answer: (value: DeepPartial<Overview>) => void
 
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -77,7 +86,9 @@ describe('DashboardView', () => {
     })
     vi.mocked(api.systemStats).mockResolvedValue(fixture<Stats>(stats))
     vi.mocked(api.update.status).mockResolvedValue(fixture<UpdateStatusReply>({}))
-    vi.mocked(api.overview).mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    vi.mocked(api.overview).mockReturnValue(
+      new Promise<Overview>((resolve) => (answer = (v) => resolve(fixture<Overview>(v)))),
+    )
     vi.mocked(api.traffic.interfaces).mockResolvedValue({
       window: '5m',
       now: new Date().toISOString(),
@@ -182,7 +193,7 @@ describe('DashboardView', () => {
     expect(card(w, 'Interfaces').text()).toContain('No interfaces.')
     expect(card(w, 'Busiest rules').text()).toContain('9 packets')
     expect(card(w, 'Router').text()).toContain('3 rules in 2 zones')
-    expect(JSON.parse(localStorage.getItem(SHAPE_KEY))).toEqual({
+    expect(JSON.parse(localStorage.getItem(SHAPE_KEY) ?? 'null')).toEqual({
       warnings: 0,
       interfaces: 0,
       rules: 0,
@@ -197,10 +208,14 @@ describe('DashboardView', () => {
   // own. Whichever answers last, every card fills in with it.
   it('fills every card in at once, when the last read answers', async () => {
     localStorage.setItem(SHAPE_KEY, JSON.stringify({ cards: { traffic: 2 } }))
-    let charts
-    vi.mocked(api.traffic.interfaces).mockReturnValue(new Promise((resolve) => (charts = resolve)))
-    let version
-    vi.mocked(api.health).mockReturnValue(new Promise((resolve) => (version = resolve)))
+    let charts: (value: TrafficLinks) => void = () => undefined
+    vi.mocked(api.traffic.interfaces).mockReturnValue(
+      new Promise<TrafficLinks>((resolve) => (charts = resolve)),
+    )
+    let version: (value: HealthResponse) => void = () => undefined
+    vi.mocked(api.health).mockReturnValue(
+      new Promise<HealthResponse>((resolve) => (version = resolve)),
+    )
     const w = await mountDashboard()
     expect(card(w, 'Traffic').attributes('aria-busy')).toBe('true')
     expect(card(w, 'Traffic').findAll('[data-reading]')).toHaveLength(2)
@@ -238,7 +253,7 @@ describe('DashboardView', () => {
       JSON.stringify({ cards: { gateways: 1 }, heights: { interfaces: 290, gateways: 334 } }),
     )
     const w = await mountDashboard()
-    const held = (title) => card(w, title).element.style.minHeight
+    const held = (title: string) => card(w, title).element.style.minHeight
     expect(held('Interfaces')).toBe('290px')
     expect(held('Gateways')).toBe('334px')
     expect(held('Router')).toBe('')
@@ -264,7 +279,7 @@ describe('DashboardView', () => {
   })
 
   describe('with a layout of its own', () => {
-    const keep = (layout) => localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout))
+    const keep = (layout: object) => localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout))
 
     it('draws the cards in its order, without the hidden ones', async () => {
       localStorage.setItem(SHAPE_KEY, JSON.stringify({ cards: { gateways: 1, leases: 0 } }))
@@ -291,7 +306,7 @@ describe('DashboardView', () => {
       await flushPromises()
       expect(api.systemStats).toHaveBeenCalledTimes(1)
       expect(card(w, 'System').text()).toContain('12%')
-      expect(JSON.parse(localStorage.getItem(LAYOUT_KEY))).toEqual({
+      expect(JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? 'null')).toEqual({
         order: [...DEFAULT_ORDER],
         hidden: [],
       })

@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, type GatewayHistoryReply } from '@/lib/api'
-import { fixture } from '@/test/fixtures'
+import { fixture, must } from '@/test/fixtures'
 import GatewayHistoryDialog from '@/views/routing/GatewayHistoryDialog.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -11,9 +11,10 @@ vi.mock('@/lib/api', () => ({
   ApiError: class ApiError extends Error {},
 }))
 
-let source = null
+let source: FakeSource | null = null
 class FakeSource {
   url: string
+  onmessage: (m: { data: string }) => void = () => {}
   constructor(url: string) {
     this.url = url
     source = this
@@ -124,12 +125,12 @@ describe('GatewayHistoryDialog', () => {
     await flushPromises()
     expect(api.gatewayHistory.read).toHaveBeenLastCalledWith('gw_eth0', '5m')
     expect(w.text()).toContain('Measured to 192.0.2.53.')
-    expect(source.url).toBe('/api/v1/gateways/stream')
+    expect(must(source).url).toBe('/api/v1/gateways/stream')
     expect(w.get('dl').text()).toContain('4.0 ms mean, 4.0 ms worst, 50% lost')
-    source.onmessage({
+    must(source).onmessage({
       data: JSON.stringify({ gateway: 'gw_eth0', family: 'IPv4', time: at(NOW), latencyMs: 8 }),
     })
-    source.onmessage({
+    must(source).onmessage({
       data: JSON.stringify({ gateway: 'lte', family: 'IPv4', time: at(NOW), latencyMs: 90 }),
     })
     await flushPromises()

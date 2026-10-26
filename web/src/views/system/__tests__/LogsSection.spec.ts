@@ -8,7 +8,7 @@ import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import { useToastStore } from '@/stores/toast'
 import LogsSection from '@/views/system/LogsSection.vue'
-import { configOf, sessionOf } from '@/test/fixtures'
+import { configOf, sessionOf, draftOf, must } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -59,7 +59,7 @@ describe('LogsSection', () => {
   it('writes a chosen level into the draft', async () => {
     const { wrapper, config } = open()
     await wrapper.get('#logs-level-info').setValue()
-    expect(config.draft.system.logging.level).toBe('info')
+    expect(must(draftOf(config).system.logging).level).toBe('info')
   })
 
   // The default is not a value: choosing it back takes the field out of
@@ -67,7 +67,7 @@ describe('LogsSection', () => {
   it('clears the level when warning is chosen again', async () => {
     const { wrapper, config } = open({ logging: { level: 'debug' } })
     await wrapper.get('#logs-level-warning').setValue()
-    expect(config.draft.system.logging?.level).toBeUndefined()
+    expect(draftOf(config).system.logging?.level).toBeUndefined()
   })
 
   // One figure for every log in memory, and emptied it leaves the draft as
@@ -81,9 +81,9 @@ describe('LogsSection', () => {
     expect(days.attributes('max')).toBe('365')
     expect(wrapper.text()).toContain('7 is the default, 365 at most. Older entries leave memory.')
     await days.setValue('30')
-    expect(config.draft.system.logging).toEqual({ days: 30 })
+    expect(draftOf(config).system.logging).toEqual({ days: 30 })
     await days.setValue('')
-    expect(config.draft.system.logging?.days).toBeUndefined()
+    expect(draftOf(config).system.logging?.days).toBeUndefined()
     expect(config.dirty).toBe(false)
   })
 
@@ -92,16 +92,16 @@ describe('LogsSection', () => {
     const days = wrapper.get('#logs-retention')
     expect(days.attributes('placeholder')).toBe('90')
     await days.setValue('30')
-    expect(config.draft.system.logging.retentionDays).toBe(30)
+    expect(must(draftOf(config).system.logging).retentionDays).toBe(30)
     await days.setValue('')
-    expect(config.draft.system.logging?.retentionDays).toBeUndefined()
+    expect(draftOf(config).system.logging?.retentionDays).toBeUndefined()
 
     const gb = wrapper.get('#logs-max-use')
     expect(gb.attributes('placeholder')).toBe('10')
     await gb.setValue('25')
-    expect(config.draft.system.logging.maxUseGB).toBe(25)
+    expect(must(draftOf(config).system.logging).maxUseGB).toBe(25)
     await gb.setValue('')
-    expect(config.draft.system.logging?.maxUseGB).toBeUndefined()
+    expect(draftOf(config).system.logging?.maxUseGB).toBeUndefined()
   })
 
   // One card for the whole block: the days in memory, the journal's
@@ -112,7 +112,7 @@ describe('LogsSection', () => {
     const groups = wrapper.findAll('.field-group > legend').map((l) => l.text())
     expect(groups).toEqual(['Memory', 'Journal', 'Files'])
     await wrapper.get('input[type="checkbox"]').setValue(true)
-    expect(config.draft.system.logging).toEqual({ level: 'info', files: { enabled: true } })
+    expect(draftOf(config).system.logging).toEqual({ level: 'info', files: { enabled: true } })
   })
 
   it('is an operator’s to change and locked for a viewer', async () => {
@@ -133,7 +133,7 @@ describe('LogsSection', () => {
     const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
     const { wrapper, config } = open()
     await flushPromises()
-    const clear = () => wrapper.findAll('button').find((b) => b.text() === 'Clear every log')
+    const clear = () => must(wrapper.findAll('button').find((b) => b.text() === 'Clear every log'))
     const reads = vi.mocked(api.logFiles).mock.calls.length
     await clear().trigger('click')
     await flushPromises()
@@ -181,7 +181,7 @@ describe('LogsSection', () => {
   it('greys Clear every log for an operator, and leaves it out for a viewer', () => {
     useAuthStore().user = sessionOf({ username: 'operator', role: 'operator' })
     let { wrapper } = open()
-    const clear = wrapper.findAll('button').find((b) => b.text() === 'Clear every log')
+    const clear = must(wrapper.findAll('button').find((b) => b.text() === 'Clear every log'))
     expect(clear.attributes('disabled')).toBeDefined()
     expect(clear.attributes('title')).toBe('Only an admin can clear them.')
     useAuthStore().user = sessionOf({ username: 'viewer', role: 'viewer' })

@@ -5,12 +5,13 @@ import { computed, ref } from 'vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { formatRate } from '@/lib/format'
+import type { Interface, LinkType } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import BandwidthDialog from '@/views/traffic/shaping/BandwidthDialog.vue'
 
 /** The label the dialog offers, so the table reads the same as the form. */
-const LINKS = {
+const LINKS: Record<LinkType, string> = {
   ethernet: 'Ethernet or fibre',
   docsis: 'Cable',
   'pppoe-ptm': 'VDSL with PPPoE',
@@ -21,7 +22,7 @@ const LINKS = {
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const editing = ref(null)
+const editing = ref<Interface | null>(null)
 const open = ref(false)
 
 const shaped = computed(() => config.shapedInterfaces)
@@ -31,12 +32,12 @@ function add() {
   open.value = true
 }
 
-function edit(iface) {
+function edit(iface: Interface) {
   editing.value = iface
   open.value = true
 }
 
-function rate(bits) {
+function rate(bits: number | undefined) {
   return bits ? formatRate(bits) : 'not shaped'
 }
 </script>
@@ -78,9 +79,9 @@ function rate(bits) {
           >
             <td class="font-mono">{{ i.name }}</td>
             <td class="font-mono text-code">{{ i.zone || '—' }}</td>
-            <td class="num font-mono text-code">{{ rate(i.shaping.download) }}</td>
-            <td class="num font-mono text-code">{{ rate(i.shaping.upload) }}</td>
-            <td>{{ LINKS[i.shaping.link || 'ethernet'] }}</td>
+            <td class="num font-mono text-code">{{ rate(i.shaping?.download) }}</td>
+            <td class="num font-mono text-code">{{ rate(i.shaping?.upload) }}</td>
+            <td>{{ LINKS[i.shaping?.link || 'ethernet'] }}</td>
             <td class="actions">
               <button type="button" class="link-action" @click="edit(i)">
                 {{ auth.readOnly ? 'View' : 'Edit' }}

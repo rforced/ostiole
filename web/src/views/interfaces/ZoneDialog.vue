@@ -1,26 +1,28 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import type { Zone } from '@/lib/types.gen'
 import { ADMIN_ONLY, adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
-  zone: { type: Object, default: null },
+  zone: { type: Object as PropType<Zone | null>, default: null },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const form = ref(blank())
+const form = ref<Zone>(blank())
 // Anti-lockout is kept by zone name, so renaming such a zone changes it.
 const nameLocked = computed(() => !auth.isAdmin && props.zone?.antiLockout === true)
 const error = ref('')
 
-function blank() {
+function blank(): Zone {
   return { name: '', description: '', external: false, antiLockout: false, logDrops: false }
 }
 
@@ -46,8 +48,8 @@ function save() {
     return
   }
   const out = { ...form.value, name }
-  for (const k of ['description']) if (!out[k]) delete out[k]
-  for (const k of ['external', 'antiLockout', 'logDrops']) if (!out[k]) delete out[k]
+  for (const k of ['description'] as const) if (!out[k]) delete out[k]
+  for (const k of ['external', 'antiLockout', 'logDrops'] as const) if (!out[k]) delete out[k]
   config.upsertZone(out, previous)
   open.value = false
 }

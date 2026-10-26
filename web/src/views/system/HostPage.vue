@@ -7,6 +7,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import type { HostReport, UnitState } from '@/lib/types.gen'
 
 /**
  * The router Ostiole runs on, as facts: the distribution, the units, the
@@ -14,7 +15,7 @@ import { useAsync } from '@/lib/async'
  * `ostiole repair` on the console.
  */
 
-const report = ref(null)
+const report = ref<HostReport | null>(null)
 
 const refresh = useAsync(
   async () => {
@@ -25,7 +26,7 @@ const refresh = useAsync(
 
 const root = computed(() => report.value?.root === true)
 const units = computed(() => report.value?.units ?? [])
-const network = computed(() => report.value?.network ?? {})
+const network = computed(() => report.value?.network)
 const present = computed(() => {
   const p = report.value?.present ?? {}
   return Object.keys(p)
@@ -39,8 +40,7 @@ const missing = computed(() => {
     .join(' ')
 })
 
-/** @param {{active?: string, enabled?: string}} u */
-function unitClass(u) {
+function unitClass(u: UnitState) {
   return u.active === 'active' || u.enabled === 'enabled' ? 'badge badge-ok' : 'badge badge-warn'
 }
 </script>
@@ -76,7 +76,9 @@ function unitClass(u) {
         <dt>Addresses</dt>
         <dd>
           {{
-            network.owned ? 'owned by Ostiole' : 'owned by ' + (network.managers?.join(', ') || '—')
+            network?.owned
+              ? 'owned by Ostiole'
+              : 'owned by ' + (network?.managers?.join(', ') || '—')
           }}
         </dd>
         <dt>Bluetooth</dt>
@@ -95,7 +97,7 @@ function unitClass(u) {
       <AppNotice v-if="report && !root">
         This daemon is not running as root, so it reports what it found and changes nothing.
       </AppNotice>
-      <AppNotice v-if="network.pending">
+      <AppNotice v-if="network?.pending">
         A handover is waiting. On the console:
         <code class="font-mono text-code">ostiole takeover --network --confirm</code> keeps it, or
         the previous manager comes back on its own.

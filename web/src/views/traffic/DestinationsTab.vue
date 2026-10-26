@@ -16,7 +16,13 @@ import { SETTLE_MS, heldLine, keptLine } from '@/lib/log'
 import { DESTINATION_WINDOWS, deviceLabel, serviceLabel, useTrafficStream } from '@/lib/traffic'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
-import type { DestinationRow, ServerTrafficDestinations, TrafficDevice } from '@/lib/types.gen'
+import type {
+  Config,
+  DestinationRow,
+  ModelTrafficDestinations,
+  ServerTrafficDestinations,
+  TrafficDevice,
+} from '@/lib/types.gen'
 
 const auth = useAuthStore()
 const config = useConfigStore()
@@ -25,7 +31,8 @@ const traffic = computed(() => config.draft?.traffic ?? {})
 const devicesOn = computed(() => Boolean(traffic.value.devices))
 const destinations = computed(() => traffic.value.destinations ?? {})
 /** Out of the draft while every value is the default. */
-function setDestinations(d) {
+function setDestinations(d: ModelTrafficDestinations) {
+  if (!config.draft) return
   const t = { ...traffic.value }
   if (Object.keys(d).length) t.destinations = d
   else delete t.destinations
@@ -42,7 +49,8 @@ const enabled = computed({
   },
 })
 /** Whether a configuration records destinations: on, with devices counted. */
-const recording = (c) => Boolean(c?.traffic?.devices && c.traffic.destinations?.enabled)
+const recording = (c: Config | null) =>
+  Boolean(c?.traffic?.devices && c.traffic.destinations?.enabled)
 /** On in the draft, not yet in what the router runs. */
 const unapplied = computed(() => recording(config.draft) && !recording(config.saved))
 /** Written to files as well, as the draft has it. */

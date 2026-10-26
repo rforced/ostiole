@@ -36,7 +36,7 @@ describe('TrafficChart', () => {
     const [down, up] = w.findAll('path')
     expect(down.attributes('stroke')).toBe('var(--chart-down)')
     expect(up.attributes('stroke')).toBe('var(--chart-up)')
-    expect(down.attributes('d').split('L')).toHaveLength(3)
+    expect(down.attributes('d')?.split('L')).toHaveLength(3)
     // Round rates up the axis, to the busiest point.
     const ticks = w.findAll('text').map((t) => t.text())
     expect(ticks.slice(0, 5)).toEqual(['0 bit/s', '1 Mbit/s', '2 Mbit/s', '3 Mbit/s', '4 Mbit/s'])

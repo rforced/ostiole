@@ -23,6 +23,10 @@ const config = useConfigStore()
 const confirm = useConfirmStore()
 const router = useRouter()
 
+const roleLabel = computed(() => {
+  const role = auth.user?.role
+  return role ? ROLE_LABELS[role] : ''
+})
 const initial = computed(() => (auth.user?.username ?? '?').slice(0, 1))
 
 /**
@@ -46,16 +50,16 @@ async function logout() {
   router.push({ name: 'login' })
 }
 
-const trigger = ref(null)
+const trigger = ref<HTMLElement | null>(null)
 // An action runs once the menu has closed, with focus back on the trigger,
 // as MenuButton does: the confirm returns focus to whatever had it.
-let chosen = null
+let chosen: (() => void) | null = null
 
-function choose(run) {
+function choose(run: () => void) {
   chosen = run
 }
 
-function closed(event) {
+function closed(event: Event) {
   if (!chosen) return
   event.preventDefault()
   trigger.value?.focus()
@@ -86,8 +90,8 @@ const ITEM =
         </span>
         <span v-if="auth.user" class="min-w-0 flex-1">
           <span class="block truncate text-sm font-medium">{{ auth.user.username }}</span>
-          <span v-if="ROLE_LABELS[auth.user.role]" class="block truncate text-xs text-ink-muted">
-            {{ ROLE_LABELS[auth.user.role] }}
+          <span v-if="roleLabel" class="block truncate text-xs text-ink-muted">
+            {{ roleLabel }}
           </span>
         </span>
         <ChevronUp class="ml-auto size-4 shrink-0 text-ink-muted" aria-hidden="true" />

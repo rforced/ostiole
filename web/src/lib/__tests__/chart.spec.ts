@@ -27,7 +27,8 @@ describe('niceScale', () => {
 })
 
 describe('timeTicks', () => {
-  const at = (y, mo, d, h, mi = 0, s = 0) => new Date(y, mo - 1, d, h, mi, s).getTime() / 1000
+  const at = (y: number, mo: number, d: number, h: number, mi = 0, s = 0) =>
+    new Date(y, mo - 1, d, h, mi, s).getTime() / 1000
 
   // Local minutes, hours and midnights: what a reader rounds to.
   it('stops at whole minutes, hours and midnights', () => {
@@ -60,7 +61,7 @@ describe('fittingTicks', () => {
   it('keeps the stops whose label fits inside the chart', () => {
     // Eight characters at 7 px: 28 px either side of the stop.
     const label = () => '02:57 AM'
-    const x = (t) => t
+    const x = (t: number) => t
     expect(fittingTicks([27, 28, 300, 612, 613], x, label, 640)).toEqual([28, 300, 612])
   })
 })

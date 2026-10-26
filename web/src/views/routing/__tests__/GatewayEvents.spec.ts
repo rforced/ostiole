@@ -6,7 +6,7 @@ import { api } from '@/lib/api'
 import type { Session } from '@/lib/api'
 import { LAND_MS } from '@/lib/log'
 import type { Config, GatewayEvent, GatewayEventsPage } from '@/lib/types.gen'
-import { fixture } from '@/test/fixtures'
+import { fixture, must } from '@/test/fixtures'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -17,8 +17,9 @@ vi.mock('@/lib/api', () => ({
   ApiError: class ApiError extends Error {},
 }))
 
-let source = null
+let source: FakeSource | null = null
 class FakeSource {
+  onmessage: (m: { data: string }) => void = () => {}
   constructor() {
     source = this
   }
@@ -66,7 +67,7 @@ describe('GatewayEvents', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     try {
       const w = await card()
-      source.onmessage({
+      must(source).onmessage({
         data: JSON.stringify({
           seq: 4,
           time: '2026-10-08T14:12:00Z',
@@ -76,7 +77,7 @@ describe('GatewayEvents', () => {
       })
       vi.advanceTimersByTime(LAND_MS)
       await flushPromises()
-      expect(w.findAll('tbody tr')[0].text()).toContain('Never answered')
+      expect(must(w.findAll('tbody tr')[0]).text()).toContain('Never answered')
     } finally {
       vi.useRealTimers()
     }
@@ -86,10 +87,7 @@ describe('GatewayEvents', () => {
     useAuthStore().user = { username: 'root', role: 'admin' } as Session
     const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
     const w = await card()
-    await w
-      .findAll('button')
-      .find((b) => b.text() === 'Clear')
-      .trigger('click')
+    await must(w.findAll('button').find((b) => b.text() === 'Clear')).trigger('click')
     await flushPromises()
     expect(ask).toHaveBeenLastCalledWith(
       expect.objectContaining({ question: 'Clear the gateway events?' }),

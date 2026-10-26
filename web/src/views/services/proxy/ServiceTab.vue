@@ -8,6 +8,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { actionTone } from '@/lib/badge'
 import { useReorder } from '@/lib/reorder'
+import type { Endpoint, ProxyAccess } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import AccessDialog from '@/views/services/proxy/AccessDialog.vue'
@@ -16,10 +17,10 @@ const auth = useAuthStore()
 const config = useConfigStore()
 const proxy = computed(() => config.proxy)
 
-function numberField(key, fallback) {
+function numberField(key: 'httpPort' | 'httpsPort', fallback: number) {
   return computed({
     get: () => proxy.value[key] || fallback,
-    set: (v) => {
+    set: (v: unknown) => {
       const n = Number(v)
       config.setProxy({ [key]: n && n !== fallback ? n : undefined })
     },
@@ -38,7 +39,7 @@ const access = computed(() => {
   const list = proxy.value.access ?? []
   const zones = config.zones.map((z) => z.name)
   const known = list.filter((a) => zones.includes(a.zone))
-  const out = []
+  const out: Array<{ line: ProxyAccess; first: boolean; last: boolean }> = []
   for (const zone of zones) {
     const own = known.filter((a) => a.zone === zone)
     own.forEach((a, i) => out.push({ line: a, first: i === 0, last: i === own.length - 1 }))
@@ -50,7 +51,7 @@ const access = computed(() => {
 })
 
 const { moveClass, reorder } = useReorder()
-const editing = ref(null)
+const editing = ref<ProxyAccess | null>(null)
 const open = ref(false)
 
 function add() {
@@ -58,28 +59,28 @@ function add() {
   open.value = true
 }
 
-function edit(line) {
+function edit(line: ProxyAccess) {
   editing.value = line
   open.value = true
 }
 
-function toggle(line) {
+function toggle(line: ProxyAccess) {
   config.upsertProxyAccess({ ...line, enabled: !line.enabled })
 }
 
-function ports(a) {
+function ports(a: ProxyAccess) {
   return (a.ports ?? []).map((p) => (p === 'http' ? 'HTTP' : 'HTTPS')).join(', ')
 }
 
-function source(a) {
-  const src = a.source ?? {}
+function source(a: ProxyAccess) {
+  const src: Endpoint = a.source ?? {}
   let who = 'any'
   if (src.alias) who = `@${src.alias}`
   else if (src.addresses?.length) who = src.addresses.join(', ')
   return src.notAddresses ? `not ${who}` : who
 }
 
-function label(a) {
+function label(a: ProxyAccess) {
   return a.description || a.id
 }
 </script>

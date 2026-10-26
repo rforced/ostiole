@@ -3,8 +3,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
-import type { Config } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import { configOf, must } from '@/test/fixtures'
 import TunnelFileDialog from '@/views/vpn/TunnelFileDialog.vue'
 
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -39,22 +39,30 @@ Endpoint = 198.51.100.7:51820
 
 async function open() {
   const config = useConfigStore()
-  config.replaceDraft({
-    version: 12,
-    zones: [{ name: 'wan', external: true }, { name: 'lan' }],
-    interfaces: [
-      { name: 'eth0', zone: 'wan', enabled: true, ipv4: { mode: 'dhcp' }, ipv6: { mode: 'none' } },
-      {
-        name: 'wg0',
-        zone: 'lan',
-        enabled: true,
-        ipv4: { mode: 'static', address: '10.66.0.1/24' },
-        ipv6: { mode: 'none' },
-        wireguard: { privateKey: 'x', peers: [] },
-      },
-    ],
-    rules: [],
-  } as Config)
+  config.replaceDraft(
+    configOf({
+      version: 12,
+      zones: [{ name: 'wan', external: true }, { name: 'lan' }],
+      interfaces: [
+        {
+          name: 'eth0',
+          zone: 'wan',
+          enabled: true,
+          ipv4: { mode: 'dhcp' },
+          ipv6: { mode: 'none' },
+        },
+        {
+          name: 'wg0',
+          zone: 'lan',
+          enabled: true,
+          ipv4: { mode: 'static', address: '10.66.0.1/24' },
+          ipv6: { mode: 'none' },
+          wireguard: { privateKey: 'x', peers: [] },
+        },
+      ],
+      rules: [],
+    }),
+  )
   const wrapper = mount(TunnelFileDialog, { props: { open: false }, global: { stubs } })
   await wrapper.setProps({ open: true })
   return { wrapper, config }
@@ -114,9 +122,9 @@ describe('TunnelFileDialog', () => {
     expect(wrapper.find<HTMLInputElement>('#tf-desc').element.value).toBe('se-got-wg-001')
     await wrapper.find('form').trigger('submit')
     await flushPromises()
-    const wg1 = config.interfaces.find((i) => i.name === 'wg1')
+    const wg1 = must(config.interfaces.find((i) => i.name === 'wg1'))
     expect(wg1.description).toBe('se-got-wg-001')
-    expect(wg1.wireguard.peers[0].name).toBe('se_got_wg_001')
+    expect(must(must(wg1.wireguard).peers)[0].name).toBe('se_got_wg_001')
   })
 
   it('says where a file goes wrong and saves nothing', async () => {

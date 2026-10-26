@@ -11,14 +11,16 @@ test('ask the ISP for a prefix and hand a subnet to the LAN', async ({ page }) =
   await page.goto('/interfaces')
 
   // Pick rows by their zone cell, which holds the zone name and nothing else.
-  const inZone = (zone) =>
+  const inZone = (zone: string) =>
     page
       .getByRole('row')
       .filter({ has: page.getByText(zone, { exact: true }) })
       .first()
   const wanRow = inZone('wan')
   const lanRow = inZone('lan')
-  const wan = (await wanRow.locator('td').first().locator('div').first().textContent()).trim()
+  const wan = (
+    (await wanRow.locator('td').first().locator('div').first().textContent()) ?? ''
+  ).trim()
 
   // Until something asks upstream for a prefix, nothing can be delegated.
   await lanRow.getByRole('button', { name: 'Edit' }).click()

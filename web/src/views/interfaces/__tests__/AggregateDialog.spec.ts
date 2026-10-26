@@ -2,8 +2,8 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { Config } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import { configOf, emptyConfig, iface, must } from '@/test/fixtures'
 import AggregateDialog from '@/views/interfaces/AggregateDialog.vue'
 
 // The dialog itself teleports; the form inside it is what is under test.
@@ -18,7 +18,7 @@ describe('AggregateDialog', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
   it('says 0 turns the link check off only where the kernel does not check anyway', async () => {
-    useConfigStore().replaceDraft({ version: 12, zones: [], interfaces: [], rules: [] } as Config)
+    useConfigStore().replaceDraft(configOf({ version: 12, zones: [], interfaces: [], rules: [] }))
     const wrapper = mount(AggregateDialog, {
       props: { open: true, kind: 'bond', candidates: [] },
       global: { stubs },
@@ -31,26 +31,34 @@ describe('AggregateDialog', () => {
 
   it('shows an existing bond as saved and leaves an untouched save alone', async () => {
     const config = useConfigStore()
-    const port = { enabled: true, ipv4: { mode: 'none' }, ipv6: { mode: 'none' } }
+    const port = { enabled: true, ipv4: { mode: 'none' }, ipv6: { mode: 'none' } } as const
     const cfg = {
+      ...emptyConfig(),
       version: 12,
-      zones: [],
-      rules: [],
       interfaces: [
-        { name: 'eth1', ...port },
-        { name: 'eth2', ...port },
-        { name: 'bond0', ...port, bond: { members: ['eth1', 'eth2'], mode: 'active-backup' } },
+        iface({ name: 'eth1', ...port }),
+        iface({ name: 'eth2', ...port }),
+        iface({
+          name: 'bond0',
+          ...port,
+          bond: { members: ['eth1', 'eth2'], mode: 'active-backup' },
+        }),
       ],
-    } as Config
+    }
     config.saved = cfg
     config.replaceDraft(cfg)
     const wrapper = mount(AggregateDialog, {
-      props: { open: true, kind: 'bond', candidates: [], iface: config.findInterface('bond0') },
+      props: {
+        open: true,
+        kind: 'bond',
+        candidates: [],
+        iface: must(config.findInterface('bond0')),
+      },
       global: { stubs },
     })
     expect(wrapper.get<HTMLInputElement>('#agg-mii').element.value).toBe('0')
     await wrapper.get('form').trigger('submit')
-    expect(config.findInterface('bond0').bond).toEqual({
+    expect(must(config.findInterface('bond0')).bond).toEqual({
       members: ['eth1', 'eth2'],
       mode: 'active-backup',
     })

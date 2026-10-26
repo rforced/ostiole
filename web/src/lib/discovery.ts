@@ -13,7 +13,7 @@ export const DISCOVERY_DEFAULT = Object.freeze({ enabled: false, mdns: true, ssd
 export function discoveryActive(cfg?: Config | null): boolean {
   const d = cfg?.services?.discovery
   if (!d?.enabled || !((d.mdns ?? true) || (d.ssdp ?? true))) return false
-  const on = new Set((cfg.interfaces ?? []).filter((i) => i.enabled).map((i) => i.name))
+  const on = new Set((cfg?.interfaces ?? []).filter((i) => i.enabled).map((i) => i.name))
   const links = (d.interfaces ?? []).filter((l) => on.has(l.interface))
   return links.some((l) => l.asks) && links.some((l) => l.answers)
 }

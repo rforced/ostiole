@@ -1,3 +1,7 @@
+import type { Page } from '@playwright/test'
+
+import type { LiveLink } from '../src/lib/types.gen'
+
 import { expect, test } from './fixtures'
 import { applyAndConfirm, confirmDialog, login, reconfigure, shot } from './helpers'
 
@@ -8,21 +12,28 @@ test.describe.configure({ mode: 'serial' })
 let lan = ''
 let spare = ''
 
-const header = (page) =>
+const header = (page: Page) =>
   page.locator('header', {
     has: page.getByRole('heading', { name: 'Discovery', exact: true, level: 1 }),
   })
 
 test('relay between two networks, apply, and read it back', async ({ page }) => {
   await login(page)
-  const live = await (await page.request.get('/api/v1/interfaces/live')).json()
+  const live = (await (await page.request.get('/api/v1/interfaces/live')).json()) as LiveLink[]
   await reconfigure(page.request, (config) => {
-    lan = config.interfaces.find((i) => i.zone === 'lan').name
+    const lanLink = (config.interfaces ?? []).find((i) => i.zone === 'lan')
+    if (!lanLink) throw new Error('the seed has no LAN interface')
+    lan = lanLink.name
     const free = live.find(
       (l) =>
-        l.kind !== 'loopback' && !l.wireless && !config.interfaces.some((i) => i.name === l.name),
+        l.kind !== 'loopback' &&
+        !l.wireless &&
+        !(config.interfaces ?? []).some((i) => i.name === l.name),
     )
+    if (!free) throw new Error('no spare link')
     spare = free.name
+    config.zones ??= []
+    config.interfaces ??= []
     config.zones.push({ name: 'gadgets', description: 'Speakers and screens' })
     config.interfaces.push({
       name: spare,

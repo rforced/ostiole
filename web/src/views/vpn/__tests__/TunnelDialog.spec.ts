@@ -3,8 +3,9 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
-import type { Config } from '@/lib/types.gen'
+import type { Interface, Zone } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import { emptyConfig, iface, must } from '@/test/fixtures'
 import TunnelDialog from '@/views/vpn/TunnelDialog.vue'
 
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -29,39 +30,43 @@ const EXAMPLE = 'yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk='
 const OTHER = 'FpCyhws9cxwWoV4xELtfJvjJN+zQVRPISllRWgeopVE='
 const EXAMPLE_PUBLIC = 'HIgo9xNzJMWLKASShiTqIybxZ0U3wGLiUeJ1PKf8ykw='
 
-const lan = {
+const lan = iface({
   name: 'eth1',
   zone: 'lan',
   enabled: true,
   ipv4: { mode: 'static', address: '192.168.1.1/24' },
   ipv6: { mode: 'none' },
-}
-
-const wg0 = () => ({
-  name: 'wg0',
-  zone: 'wg0',
-  enabled: true,
-  logDrops: true,
-  ipv4: { mode: 'static', address: '10.66.0.1/24' },
-  ipv6: { mode: 'static', address: 'fd66::1/64' },
-  wireguard: {
-    privateKey: EXAMPLE,
-    publicKey: EXAMPLE_PUBLIC,
-    listenPort: 51820,
-    peers: [{ name: 'laptop', enabled: true, publicKey: OTHER, allowedIps: ['10.66.0.2/32'] }],
-  },
 })
 
-function open({ tunnel = null, zones = [{ name: 'lan' }] } = {}) {
+const wg0 = () =>
+  iface({
+    name: 'wg0',
+    zone: 'wg0',
+    enabled: true,
+    logDrops: true,
+    ipv4: { mode: 'static', address: '10.66.0.1/24' },
+    ipv6: { mode: 'static', address: 'fd66::1/64' },
+    wireguard: {
+      privateKey: EXAMPLE,
+      publicKey: EXAMPLE_PUBLIC,
+      listenPort: 51820,
+      peers: [{ name: 'laptop', enabled: true, publicKey: OTHER, allowedIps: ['10.66.0.2/32'] }],
+    },
+  })
+
+function open({
+  tunnel = null,
+  zones = [{ name: 'lan' }],
+}: { tunnel?: Interface | null; zones?: Zone[] } = {}) {
   const config = useConfigStore()
   config.replaceDraft({
+    ...emptyConfig(),
     version: 11,
     zones,
     interfaces: tunnel ? [lan, tunnel] : [lan],
-    rules: [],
-  } as Config)
+  })
   const wrapper = mount(TunnelDialog, {
-    props: { open: true, tunnel: tunnel ? config.findInterface(tunnel.name) : null },
+    props: { open: true, tunnel: tunnel ? must(config.findInterface(tunnel.name)) : null },
     global: { stubs },
   })
   return { wrapper, config }
@@ -85,12 +90,12 @@ describe('TunnelDialog', () => {
     await wrapper.get('#wg-desc').setValue('Road warriors')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
-    const saved = config.findInterface('wg0')
+    const saved = must(config.findInterface('wg0'))
     expect(saved.ipv6).toEqual({ mode: 'static', address: 'fd66::1/64' })
     expect(saved.ipv4).toEqual({ mode: 'static', address: '10.66.0.1/24' })
     expect(saved.logDrops).toBe(true)
     expect(saved.description).toBe('Road warriors')
-    expect(saved.wireguard.peers.map((p) => p.name)).toEqual(['laptop'])
+    expect(must(saved.wireguard).peers?.map((p) => p.name)).toEqual(['laptop'])
     expect(api.wireguard.publicKey).not.toHaveBeenCalled()
   })
 
@@ -110,7 +115,7 @@ describe('TunnelDialog', () => {
 
     await wrapper.get('form').trigger('submit')
     await flushPromises()
-    expect(config.findInterface('wg0').wireguard).toMatchObject({
+    expect(must(config.findInterface('wg0')).wireguard).toMatchObject({
       privateKey: OTHER,
       publicKey: 'derived',
     })
@@ -125,7 +130,7 @@ describe('TunnelDialog', () => {
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(wrapper.get('[role="alert"]').text()).toContain('not a WireGuard key')
-    expect(config.findInterface('wg0').wireguard.privateKey).toBe(EXAMPLE)
+    expect(must(must(config.findInterface('wg0')).wireguard).privateKey).toBe(EXAMPLE)
   })
 
   // A tunnel in lan inherited "Allow LAN to any" and anti-lockout, so every
@@ -155,14 +160,16 @@ describe('TunnelDialog', () => {
     const { wrapper, config } = open()
     await flushPromises()
     await wrapper.get('#wg-zone-new').setValue('vpn')
-    const external = wrapper
-      .findAll('input[type="checkbox"]')
-      .find((i) => i.element.parentElement.textContent.includes('External'))
+    const external = must(
+      wrapper
+        .findAll('input[type="checkbox"]')
+        .find((i) => i.element.parentElement?.textContent?.includes('External')),
+    )
     await external.setValue(true)
     await wrapper.get('form').trigger('submit')
     await flushPromises()
     expect(config.zones.find((z) => z.name === 'vpn')).toEqual({ name: 'vpn', external: true })
-    expect(config.findInterface('wg0').zone).toBe('vpn')
+    expect(must(config.findInterface('wg0')).zone).toBe('vpn')
   })
 
   it('takes the zone a deleted tunnel of the same name left behind', async () => {
@@ -181,7 +188,7 @@ describe('TunnelDialog round trip', () => {
 
   it('reopens a tunnel with no peers as saved and leaves an untouched save alone', async () => {
     const tunnel = wg0()
-    delete tunnel.wireguard.peers
+    delete must(tunnel.wireguard).peers
     const { wrapper, config } = open({ tunnel, zones: [{ name: 'lan' }, { name: 'wg0' }] })
     config.saved = JSON.parse(JSON.stringify(config.draft))
     await wrapper.get('form').trigger('submit')

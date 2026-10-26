@@ -43,7 +43,7 @@ const nothingRunning = computed(
   () => !config.wirelessNetworks.some((i) => i.enabled) || !config.radios.some((r) => r.enabled),
 )
 
-function ssidOf(c) {
+function ssidOf(c: WirelessClient) {
   return c.ssid || c.interface
 }
 

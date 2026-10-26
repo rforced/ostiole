@@ -46,18 +46,15 @@ function setChannel(v: string) {
   checkError.value = ''
 }
 
-const running = computed(() =>
-  ['checking', 'downloading', 'verifying', 'installing', 'restarting'].includes(
-    status.value?.state,
-  ),
-)
+const RUNNING: string[] = ['checking', 'downloading', 'verifying', 'installing', 'restarting']
+const running = computed(() => RUNNING.includes(status.value?.state ?? ''))
 const percent = computed(() =>
-  status.value?.total ? Math.round((status.value.done / status.value.total) * 100) : null,
+  status.value?.total ? Math.round(((status.value.done ?? 0) / status.value.total) * 100) : null,
 )
 
 async function loadVersion() {
   try {
-    current.value = (await api.health()).version
+    current.value = (await api.health()).version ?? ''
     if (!loaded.value) loaded.value = current.value
   } catch {
     /* shown elsewhere */
@@ -125,6 +122,7 @@ const error = computed(() => checking.error.value || install.error.value)
 const installing = computed(() => install.busy.value || running.value)
 
 async function askInstall() {
+  if (!check.value) return
   const ok = await confirm.ask({
     question: `Install ${check.value.latest}?`,
     description: 'The service restarts once it is in place.',
@@ -244,7 +242,7 @@ onMounted(async () => {
 
       <div v-if="running" role="status" aria-live="polite">
         <p class="font-medium capitalize">
-          {{ status.state }}<span v-if="status.version">&nbsp;{{ status.version }}</span
+          {{ status?.state }}<span v-if="status?.version">&nbsp;{{ status.version }}</span
           ><span v-if="percent !== null" class="font-mono tabular-nums">&nbsp;{{ percent }}%</span>
         </p>
         <div
@@ -259,7 +257,7 @@ onMounted(async () => {
         >
           <div class="meter-fill" :class="LEVELS.ok.fill" :style="{ width: percent + '%' }"></div>
         </div>
-        <p v-if="status.state === 'restarting'" class="mt-1 text-ink-muted">
+        <p v-if="status?.state === 'restarting'" class="mt-1 text-ink-muted">
           Waiting for the new version to answer…
         </p>
       </div>

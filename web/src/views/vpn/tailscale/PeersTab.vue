@@ -67,7 +67,7 @@ const COLUMNS: SortColumn[] = [
 const sort = useSort(() => (status.value?.running ? (status.value.peers ?? []) : []), {
   node: byText(name),
   addresses: byAddress((p) => p.ips?.[0]),
-  os: byText((p) => p.os),
+  os: byText((p) => p.os ?? ''),
   seen: byTime((p) => (p.online ? Date.now() : p.lastSeen)),
 })
 const peers = sort.sorted

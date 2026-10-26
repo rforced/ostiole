@@ -52,6 +52,7 @@ watch(
 )
 
 watch(keep, (v) => {
+  if (!config.draft) return
   const n = Number(v)
   if (!n || n === DEFAULT_KEEP) delete config.draft.system.keepRevisions
   else config.draft.system.keepRevisions = n

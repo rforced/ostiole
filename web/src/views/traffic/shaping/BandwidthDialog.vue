@@ -62,7 +62,7 @@ function blank(): Form {
  * line entered as 20 Mbit/s comes back as 20 Mbit/s rather than 20000
  * kbit/s.
  */
-function split(bits) {
+function split(bits: number | undefined) {
   if (!bits) return { value: '', unit: 1e6 }
   for (const u of [...UNITS].reverse()) {
     if (bits >= u.value && bits % u.value === 0)
@@ -125,7 +125,7 @@ const downloadHint = computed(() =>
     : 'A little under what the line really delivers. Too high and the shaper has nothing to do.',
 )
 
-function bits(value, unit) {
+function bits(value: string, unit: number) {
   const n = Number(value)
   if (!Number.isFinite(n) || n <= 0) return 0
   return Math.round(n * unit)

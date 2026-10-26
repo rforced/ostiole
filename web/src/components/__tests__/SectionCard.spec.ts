@@ -4,7 +4,7 @@ import { h } from 'vue'
 
 import SectionCard from '@/components/SectionCard.vue'
 
-function card(props, footer) {
+function card(props: Record<string, unknown>, footer?: boolean) {
   return mount(SectionCard, {
     props: { title: 'Widgets', ...props },
     slots: {

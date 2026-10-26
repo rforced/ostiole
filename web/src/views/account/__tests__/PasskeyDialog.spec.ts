@@ -1,8 +1,8 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { type VueWrapper, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, api } from '@/lib/api'
+import { ApiError, type Passkey, api } from '@/lib/api'
 import * as webauthn from '@/lib/webauthn'
 import PasskeyDialog from '@/views/account/PasskeyDialog.vue'
 import { fixture } from '@/test/fixtures'
@@ -32,7 +32,11 @@ function open() {
   return mount(PasskeyDialog, { props: { open: true, rpId: 'edge.example' }, global: { stubs } })
 }
 
-const addButton = (wrapper) => wrapper.findAll('button').find((b) => b.text() === 'Add passkey')
+const addButton = (wrapper: VueWrapper) => {
+  const found = wrapper.findAll('button').find((b) => b.text() === 'Add passkey')
+  if (!found) throw new Error('no Add passkey button')
+  return found
+}
 
 describe('PasskeyDialog', () => {
   beforeEach(() => {
@@ -52,7 +56,7 @@ describe('PasskeyDialog', () => {
       publicKey: fixture<PublicKeyCredentialCreationOptionsJSON>({ challenge: 'c' }),
     })
     vi.mocked(webauthn.create).mockResolvedValue(fixture<Credential>({ id: 'cred' }))
-    vi.mocked(api.auth.addPasskey).mockResolvedValue(undefined)
+    vi.mocked(api.auth.addPasskey).mockResolvedValue(fixture<Passkey>({ id: 'p1' }))
 
     await wrapper.get('form').trigger('submit')
     await flushPromises()
@@ -61,7 +65,7 @@ describe('PasskeyDialog', () => {
     expect(api.auth.passkeyOptions).toHaveBeenCalledWith('pw pw pw pw pw')
     expect(api.auth.addPasskey).toHaveBeenCalledWith('Laptop', { id: 'cred' })
     expect(wrapper.emitted('done')).toHaveLength(1)
-    expect(wrapper.emitted('update:open')[0]).toEqual([false])
+    expect(wrapper.emitted('update:open')?.[0]).toEqual([false])
   })
 
   it('says a cancelled prompt in a sentence and adds nothing', async () => {

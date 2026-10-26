@@ -39,8 +39,8 @@ const load = useAsync(
 onMounted(() => Promise.all([config.load(), load.run()]))
 
 /** A cron only an admin may change: it runs as root, or writes password hashes out. */
-const needsAdmin = (c) => c.kind === 'command' || c.withUsers === true
-const locked = (c) => !auth.isAdmin && needsAdmin(c)
+const needsAdmin = (c: Cron) => c.kind === 'command' || c.withUsers === true
+const locked = (c: Cron) => !auth.isAdmin && needsAdmin(c)
 
 const byID = computed(() => Object.fromEntries(statuses.value.map((s) => [s.id, s])))
 const system = computed(() => statuses.value.filter((s) => s.origin === 'system'))
@@ -61,7 +61,7 @@ const error = computed(() => load.error.value || runner.error.value)
 /** The cron whose Run now is in flight. */
 const starting = ref('')
 
-async function runNow(c) {
+async function runNow(c: Cron) {
   const ok = await confirm.ask({
     question: `Run ${c.description || c.id} now?`,
     description: 'As root, with the saved configuration.',
@@ -77,13 +77,13 @@ function add() {
   editing.value = null
   open.value = true
 }
-function edit(c) {
+function edit(c: Cron) {
   editing.value = c
   open.value = true
 }
 
 /** What a cron does, in the words of whoever has to read the page. */
-function describe(c) {
+function describe(c: Cron) {
   switch (c.kind) {
     case 'backup':
       return `Back up the configuration to ${BACKUP_DIR}, keeping ${c.keep || 10}`

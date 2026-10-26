@@ -1,13 +1,14 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import type { Session } from '@/lib/api'
-import type { Config } from '@/lib/types.gen'
+import type { WAFExclusion, WAFProfile } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useToastStore } from '@/stores/toast'
+import { configOf, type DeepPartial } from '@/test/fixtures'
 import ExclusionDialog from '@/views/services/proxy/ExclusionDialog.vue'
 import ExclusionsCard from '@/views/services/proxy/ExclusionsCard.vue'
 
@@ -15,17 +16,19 @@ vi.mock('@/lib/api', () => ({ api: {}, ApiError: class ApiError extends Error {}
 
 const dialogStub = { AppDialog: { template: '<div><slot /><slot name="footer" /></div>' } }
 
-function config(profiles) {
-  return {
+type Profiles = Array<DeepPartial<WAFProfile>>
+
+function config(profiles: Profiles) {
+  return configOf({
     version: 11,
     zones: [],
     interfaces: [],
     rules: [],
     services: { proxy: { enabled: true, wafProfiles: profiles } },
-  } as Config
+  })
 }
 
-function store(profiles, saved = profiles) {
+function store(profiles: Profiles, saved = profiles) {
   const s = useConfigStore()
   s.draft = config(structuredClone(profiles))
   s.saved = config(structuredClone(saved))
@@ -33,7 +36,7 @@ function store(profiles, saved = profiles) {
   return s
 }
 
-async function card(profiles, saved?) {
+async function card(profiles: Profiles, saved?: Profiles) {
   const s = store(profiles, saved)
   const wrapper = mount(ExclusionsCard, {
     global: { stubs: { ConfirmButton: true, ExclusionDialog: true } },
@@ -42,8 +45,8 @@ async function card(profiles, saved?) {
   return { wrapper, store: s }
 }
 
-const rows = (w) => w.findAll('tbody tr')
-const cells = (w) => rows(w).map((r) => r.findAll('td').map((td) => td.text()))
+const rows = (w: VueWrapper) => w.findAll('tbody tr')
+const cells = (w: VueWrapper) => rows(w).map((r) => r.findAll('td').map((td) => td.text()))
 
 describe('ExclusionsCard', () => {
   beforeEach(() => setActivePinia(createPinia()))
@@ -170,7 +173,7 @@ describe('ExclusionsCard', () => {
     const del = wrapper.findAllComponents(ConfirmButton)[0]
     expect(del.props('question')).toBe('Delete exclusion rule 941100 on /api?')
     del.vm.$emit('confirm')
-    expect(s.proxy.wafProfiles[0].exclusions).toEqual([{ rule: '942200' }])
+    expect(s.proxy.wafProfiles?.[0]?.exclusions).toEqual([{ rule: '942200' }])
   })
 
   it('lets a viewer read them and change nothing', async () => {
@@ -181,7 +184,10 @@ describe('ExclusionsCard', () => {
   })
 })
 
-function dialog(props, profiles = [{ id: 'watch', exclusions: [] }]) {
+function dialog(
+  props: { exclusion?: WAFExclusion; index?: number },
+  profiles: Profiles = [{ id: 'watch', exclusions: [] }],
+) {
   const s = store(profiles)
   const wrapper = mount(ExclusionDialog, {
     props: { open: true, profile: 'watch', ...props },
@@ -190,7 +196,7 @@ function dialog(props, profiles = [{ id: 'watch', exclusions: [] }]) {
   return { wrapper, store: s }
 }
 
-const saveButton = (w) => w.get('button[type=submit]')
+const saveButton = (w: VueWrapper) => w.get('button[type=submit]')
 
 describe('ExclusionDialog', () => {
   beforeEach(() => setActivePinia(createPinia()))
@@ -210,10 +216,10 @@ describe('ExclusionDialog', () => {
     expect(wrapper.get('#exc-target').attributes('placeholder')).toBeUndefined()
     await wrapper.get('#exc-path').setValue(' /Items ')
     await wrapper.get('form').trigger('submit')
-    expect(s.proxy.wafProfiles[0].exclusions).toEqual([
+    expect(s.proxy.wafProfiles?.[0]?.exclusions).toEqual([
       { rule: '941100', path: '/Items', description: 'XSS' },
     ])
-    expect(useToastStore().toasts.at(-1).message).toBe(
+    expect(useToastStore().toasts.at(-1)?.message).toBe(
       'Excluded rule 941100 on /Items in the draft.',
     )
     expect(wrapper.emitted('update:open')).toEqual([[false]])
@@ -227,7 +233,7 @@ describe('ExclusionDialog', () => {
     expect(wrapper.text()).not.toContain('That exclusion is in the profile already.')
     await wrapper.get('#exc-target').setValue('ARGS:q')
     await wrapper.get('form').trigger('submit')
-    expect(s.proxy.wafProfiles[0].exclusions).toEqual([
+    expect(s.proxy.wafProfiles?.[0]?.exclusions).toEqual([
       { rule: '941100' },
       { rule: '942100', path: '/a', target: 'ARGS:q' },
     ])

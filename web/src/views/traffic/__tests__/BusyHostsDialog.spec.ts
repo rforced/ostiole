@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import type { Zone } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import BusyHostsDialog from '@/views/traffic/shaping/BusyHostsDialog.vue'
 import { configOf } from '@/test/fixtures'
@@ -27,7 +28,7 @@ function draft() {
   })
 }
 
-function open(zone = null) {
+function open(zone: Zone | null = null) {
   const config = useConfigStore()
   config.replaceDraft(draft())
   const wrapper = mount(BusyHostsDialog, { props: { open: true, zone }, global: { stubs } })

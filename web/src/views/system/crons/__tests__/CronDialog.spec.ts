@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import type { Cron } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import CronDialog from '@/views/system/crons/CronDialog.vue'
 import { configOf } from '@/test/fixtures'
@@ -14,7 +15,7 @@ const stubs = {
   },
 }
 
-function open(cron) {
+function open(cron: Cron) {
   const config = useConfigStore()
   const cfg = configOf({ version: 12, zones: [], interfaces: [], rules: [], crons: [cron] })
   config.saved = cfg

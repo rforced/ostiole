@@ -3,8 +3,9 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
-import type { Config } from '@/lib/types.gen'
+import type { HostOverride } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import { configOf } from '@/test/fixtures'
 import HostOverrideDialog from '@/views/services/dns/HostOverrideDialog.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -16,20 +17,22 @@ const stubs = {
   AppDialog: { props: ['open', 'title'], template: '<div><slot /><slot name="footer" /></div>' },
 }
 
-async function open(override = null) {
-  useConfigStore().replaceDraft({
-    version: 11,
-    zones: [{ name: 'lan' }],
-    interfaces: [],
-    rules: [],
-    services: {
-      dns: { enabled: true, domain: 'jd', hostOverrides: override ? [override] : [] },
-      dhcp: {
-        enabled: true,
-        staticLeases: [{ mac: 'aa:bb:cc:00:00:05', ip: '10.0.0.5', hostname: 'switch' }],
+async function open(override: HostOverride | null = null) {
+  useConfigStore().replaceDraft(
+    configOf({
+      version: 11,
+      zones: [{ name: 'lan' }],
+      interfaces: [],
+      rules: [],
+      services: {
+        dns: { enabled: true, domain: 'jd', hostOverrides: override ? [override] : [] },
+        dhcp: {
+          enabled: true,
+          staticLeases: [{ mac: 'aa:bb:cc:00:00:05', ip: '10.0.0.5', hostname: 'switch' }],
+        },
       },
-    },
-  } as Config)
+    }),
+  )
   const w = mount(HostOverrideDialog, { props: { open: false, override }, global: { stubs } })
   await w.setProps({ open: true })
   await flushPromises()

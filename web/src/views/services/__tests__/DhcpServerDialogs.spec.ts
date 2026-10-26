@@ -1,8 +1,10 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
+import type { Component } from 'vue'
 
-import type { Config } from '@/lib/types.gen'
+import type { DHCPServer, DHCPv6Server } from '@/lib/types.gen'
+import { configOf, draftOf, must } from '@/test/fixtures'
 import { useConfigStore } from '@/stores/config'
 import ServerDialog from '@/views/services/dhcp/ServerDialog.vue'
 import V6ServerDialog from '@/views/services/dhcp/V6ServerDialog.vue'
@@ -12,7 +14,7 @@ const stubs = {
 }
 
 function draft() {
-  return {
+  return configOf({
     version: 11,
     zones: [{ name: 'lan' }],
     interfaces: [
@@ -35,10 +37,10 @@ function draft() {
         v6: [{ interface: 'eth1', enabled: true, mode: 'stateless' }],
       },
     },
-  } as Config
+  })
 }
 
-async function mountDialog(component, server) {
+async function mountDialog(component: Component, server: DHCPServer | DHCPv6Server | undefined) {
   const w = mount(component, { props: { open: false, server }, global: { stubs } })
   await w.setProps({ open: true })
   await flushPromises()
@@ -46,9 +48,15 @@ async function mountDialog(component, server) {
 }
 
 /** The DNS registration row: its label, and the box the label is for. */
-function registration(w) {
+function registration(w: VueWrapper) {
   const label = w.findAll('label').find((l) => l.text().includes('DNS registration'))
-  return label && { label, box: w.get(`[id="${label.attributes('for')}"]`) }
+  return label && { label, box: w.get<HTMLInputElement>(`[id="${label.attributes('for')}"]`) }
+}
+
+function registered(w: VueWrapper) {
+  const row = registration(w)
+  if (!row) throw new TypeError('no DNS registration row')
+  return row
 }
 
 // Off by default: a device's own name is not answered until someone asks
@@ -61,22 +69,22 @@ describe('DNS registration on a DHCP server', () => {
 
   it('starts off and saves when ticked', async () => {
     const config = useConfigStore()
-    const w = await mountDialog(ServerDialog, config.draft.services.dhcp.servers[0])
-    const { label, box } = registration(w)
+    const w = await mountDialog(ServerDialog, draftOf(config).services?.dhcp?.servers?.[0])
+    const { label, box } = registered(w)
     expect(label.text()).toContain('Names devices send resolve under lan.')
     expect(box.element.checked).toBe(false)
     await box.setValue(true)
     await w.get('form').trigger('submit')
-    expect(config.draft.services.dhcp.servers[0].dnsRegistration).toBe(true)
+    expect(draftOf(config).services?.dhcp?.servers?.[0].dnsRegistration).toBe(true)
   })
 
   it('is left out of an IPv6 server that hands out nothing to name', async () => {
     const config = useConfigStore()
-    const w = await mountDialog(V6ServerDialog, config.draft.services.dhcp.v6[0])
-    await registration(w).box.setValue(true)
+    const w = await mountDialog(V6ServerDialog, draftOf(config).services?.dhcp?.v6?.[0])
+    await registered(w).box.setValue(true)
     await w.get('#v6-mode').setValue('slaac')
     expect(registration(w)).toBeUndefined()
     await w.get('form').trigger('submit')
-    expect(config.draft.services.dhcp.v6[0].dnsRegistration).toBeUndefined()
+    expect(must(draftOf(config).services?.dhcp?.v6?.[0]).dnsRegistration).toBeUndefined()
   })
 })

@@ -1,6 +1,7 @@
 import { onBeforeUnmount, ref, watch, type Ref } from 'vue'
 
 import { useAsync } from '@/lib/async'
+import type { Config } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 /** How long after the last edit the rows are read again. */
@@ -18,7 +19,7 @@ const DEBOUNCE_MS = 300
  * interval sets the period, the poll runs from mount, and stop() and
  * start() switch it, as Live does.
  */
-export function useDraftRows<T>(read: (draft: object) => Promise<T[]>, { interval = 0 } = {}) {
+export function useDraftRows<T>(read: (draft: Config) => Promise<T[]>, { interval = 0 } = {}) {
   const config = useConfigStore()
   const rows = ref<T[]>([]) as Ref<T[]>
   const state = useAsync(

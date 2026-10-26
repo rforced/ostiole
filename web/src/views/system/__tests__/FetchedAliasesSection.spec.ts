@@ -6,7 +6,7 @@ import { api } from '@/lib/api'
 import type { LogLimitsInfo } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import FetchedAliasesSection from '@/views/system/FetchedAliasesSection.vue'
-import { configOf, fixture } from '@/test/fixtures'
+import { configOf, fixture, draftOf } from '@/test/fixtures'
 
 const draft = (system = {}) =>
   configOf({ version: 16, system, zones: [], interfaces: [], rules: [] })
@@ -37,10 +37,10 @@ describe('FetchedAliasesSection', () => {
     const input = wrapper.get('#fa-maxmind-key')
     expect(wrapper.text()).not.toContain('GeoLite Data created by MaxMind')
     await input.setValue('  Abc0123456789xyz_mmk ')
-    expect(config.draft.system.maxmindLicenceKey).toBe('Abc0123456789xyz_mmk')
+    expect(draftOf(config).system.maxmindLicenceKey).toBe('Abc0123456789xyz_mmk')
     expect(wrapper.text()).toContain('GeoLite Data created by MaxMind')
     await input.setValue('   ')
-    expect('maxmindLicenceKey' in config.draft.system).toBe(false)
+    expect('maxmindLicenceKey' in draftOf(config).system).toBe(false)
     expect(config.dirty).toBe(false)
   })
 
@@ -52,10 +52,10 @@ describe('FetchedAliasesSection', () => {
     expect(wrapper.text()).toContain('About 1.2 GB of memory')
     expect(wrapper.text()).toContain('Default 2,000,000, at most 5,000,000 on this router.')
     await input.setValue(3000000)
-    expect(config.draft.system.maxAliasEntries).toBe(3000000)
+    expect(draftOf(config).system.maxAliasEntries).toBe(3000000)
     expect(wrapper.text()).toContain('About 1.8 GB')
     await input.setValue(2000000)
-    expect('maxAliasEntries' in config.draft.system).toBe(false)
+    expect('maxAliasEntries' in draftOf(config).system).toBe(false)
     await input.setValue('')
     expect(config.dirty).toBe(false)
   })

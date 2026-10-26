@@ -47,8 +47,9 @@ function blank(): BlockListForm {
 const grouped = computed(() => {
   const out = new Map<string, CatalogEntry[]>()
   for (const e of catalog.value) {
-    if (!out.has(e.category)) out.set(e.category, [])
-    out.get(e.category).push(e)
+    const group = out.get(e.category) ?? []
+    group.push(e)
+    out.set(e.category, group)
   }
   return [...out.entries()]
 })

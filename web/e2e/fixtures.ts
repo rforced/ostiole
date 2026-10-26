@@ -40,6 +40,7 @@ export const test = base.extend<{ seeded: boolean; server: RunningServer }, { wo
         })
         worker.file = testInfo.file
       }
+      if (!worker.server) throw new Error('no server started')
       await use(worker.server)
     },
     { auto: true },

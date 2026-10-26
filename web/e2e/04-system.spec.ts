@@ -178,8 +178,8 @@ test('add an operator, rename it, prove what it may do, and remove it', async ({
   await add.getByRole('button', { name: 'Create account' }).click()
   // 'ops' is a prefix of 'opsy', so rows are matched by their exact role
   // label: a row on its way out would otherwise answer for the new one.
-  const roleOf = (name) => page.getByLabel(`Role for ${name}`, { exact: true })
-  const rowOf = (name) => section.getByRole('row').filter({ has: roleOf(name) })
+  const roleOf = (name: string) => page.getByLabel(`Role for ${name}`, { exact: true })
+  const rowOf = (name: string) => section.getByRole('row').filter({ has: roleOf(name) })
   await expect(roleOf('opsy')).toHaveValue('operator')
   await page.screenshot({ path: shot('51-accounts'), fullPage: true })
 
@@ -320,7 +320,7 @@ test('choose how this router patches itself, and see why some of it is refused',
   // by itself, and the one the manual mode turned off says so.
   await page.goto('/system/crons')
   const system = page.getByRole('region', { name: "Ostiole's cron jobs" })
-  const row = (text) => system.getByRole('row').filter({ hasText: text })
+  const row = (text: string) => system.getByRole('row').filter({ hasText: text })
   await expect(row('Check for system updates')).toContainText('0 4 * * *')
   await expect(row('Install system updates')).toContainText('0 4 * * 0')
   await expect(row('Check for new Ostiole releases')).toContainText('0 4 * * *')

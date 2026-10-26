@@ -24,7 +24,7 @@ defineProps({
   icon: { type: [Object, Function] as PropType<Component>, default: null },
 })
 
-const CLASS = {
+const CLASS: Record<string, string> = {
   primary: 'btn-primary',
   secondary: 'btn-secondary',
   danger: 'btn-danger',

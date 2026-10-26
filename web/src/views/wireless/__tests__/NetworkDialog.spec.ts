@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 import { useConfigStore } from '@/stores/config'
 import NetworkDialog from '@/views/wireless/NetworkDialog.vue'
-import { configOf } from '@/test/fixtures'
+import type { Interface, WirelessRadios } from '@/lib/types.gen'
+import { type DeepPartial, configOf } from '@/test/fixtures'
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<typeof import('@/lib/api')>()
@@ -19,7 +20,9 @@ const stubs = {
   },
 }
 
-const guest = {
+type Network = DeepPartial<Interface> & { name: string }
+
+const guest: Network = {
   name: 'ap0',
   zone: 'lan',
   enabled: true,
@@ -28,7 +31,7 @@ const guest = {
   wireless: { radio: 'wlp3s0', ssid: 'guests', security: 'owe' },
 }
 
-async function open(radios, network = null) {
+async function open(radios: WirelessRadios, network: Network | null = null) {
   vi.mocked(api.wireless.radios).mockResolvedValue(radios)
   const config = useConfigStore()
   config.replaceDraft(
@@ -41,7 +44,10 @@ async function open(radios, network = null) {
     }),
   )
   const wrapper = mount(NetworkDialog, {
-    props: { open: true, network: network && config.findInterface(network.name) },
+    props: {
+      open: true,
+      network: network && (config.wirelessNetworks.find((i) => i.name === network.name) ?? null),
+    },
     global: { stubs },
   })
   await flushPromises()

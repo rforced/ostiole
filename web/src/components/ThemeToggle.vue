@@ -17,7 +17,7 @@ const options = [
   { value: 'dark', label: 'Dark', icon: Moon },
 ]
 
-function onChange(value) {
+function onChange(value: unknown) {
   // Single-select toggle groups emit undefined when the active item is clicked again; keep the current value.
   if (isThemePreference(value)) theme.set(value)
 }

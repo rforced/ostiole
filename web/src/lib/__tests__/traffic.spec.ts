@@ -4,14 +4,22 @@ import { defineComponent, h } from 'vue'
 
 import { appendPoint, deviceLabel, sinceLine, useTrafficStream, type Point } from '@/lib/traffic'
 
-let source = null
+let latest: FakeSource | undefined
+const source = () => {
+  if (!latest) throw new Error('no stream was opened')
+  return latest
+}
 class FakeSource {
   static CLOSED = 2
   url: string
   closed = false
+  readyState = 1
+  onopen: () => void = () => {}
+  onmessage: (m: { data: string }) => void = () => {}
+  onerror: () => void = () => {}
   constructor(url: string) {
     this.url = url
-    source = this
+    latest = this
   }
   close() {
     this.closed = true
@@ -48,8 +56,8 @@ describe('traffic helpers', () => {
 describe('useTrafficStream', () => {
   beforeEach(() => vi.stubGlobal('EventSource', FakeSource))
 
-  function harness(on) {
-    let out
+  function harness(on: Parameters<typeof useTrafficStream>[0]) {
+    let out: ReturnType<typeof useTrafficStream> | undefined
     const w = mount(
       defineComponent({
         setup() {
@@ -58,7 +66,13 @@ describe('useTrafficStream', () => {
         },
       }),
     )
-    return { w, out: () => out }
+    return {
+      w,
+      out: () => {
+        if (!out) throw new Error('the stream was not set up')
+        return out
+      },
+    }
   }
 
   // A stream that comes back after a drop means the page reads afresh:
@@ -68,21 +82,21 @@ describe('useTrafficStream', () => {
     const devices = vi.fn()
     const reopened = vi.fn()
     const { w, out } = harness({ links, devices, reopened })
-    expect(source.url).toBe('/api/v1/traffic/stream')
-    source.onopen()
-    source.onmessage({ data: JSON.stringify({ kind: 'links', links: [] }) })
-    source.onmessage({ data: JSON.stringify({ kind: 'devices', devices: [] }) })
-    source.onmessage({ data: 'garbage' })
+    expect(source().url).toBe('/api/v1/traffic/stream')
+    source().onopen()
+    source().onmessage({ data: JSON.stringify({ kind: 'links', links: [] }) })
+    source().onmessage({ data: JSON.stringify({ kind: 'devices', devices: [] }) })
+    source().onmessage({ data: 'garbage' })
     expect(links).toHaveBeenCalledTimes(1)
     expect(devices).toHaveBeenCalledTimes(1)
     expect(reopened).not.toHaveBeenCalled()
-    source.readyState = 0
-    source.onerror()
+    source().readyState = 0
+    source().onerror()
     expect(out().error.value).toBe('Stream disconnected, retrying…')
-    source.onopen()
+    source().onopen()
     expect(reopened).toHaveBeenCalledTimes(1)
     expect(out().error.value).toBe('')
     w.unmount()
-    expect(source.closed).toBe(true)
+    expect(source().closed).toBe(true)
   })
 })

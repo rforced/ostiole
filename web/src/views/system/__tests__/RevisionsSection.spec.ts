@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
@@ -8,7 +8,7 @@ import type { Applied } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import RevisionsSection from '@/views/system/RevisionsSection.vue'
-import { configOf, fixture, sessionOf } from '@/test/fixtures'
+import { configOf, draftOf, fixture, must, sessionOf } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   api: { config: { revisions: vi.fn(), revision: vi.fn(), diff: vi.fn(), applied: vi.fn() } },
@@ -17,7 +17,7 @@ vi.mock('@/lib/api', () => ({
 const draft = (system = {}) =>
   configOf({ version: 3, system, zones: [], interfaces: [], rules: [] })
 
-function open(system) {
+function open(system: object) {
   const config = useConfigStore()
   config.replaceDraft(draft(system))
   const wrapper = mount(RevisionsSection, { global: { stubs: { ChangeList: true } } })
@@ -38,7 +38,7 @@ describe('RevisionsSection retention', () => {
   it('writes a changed limit into the draft', async () => {
     const { config, keep } = open({})
     await keep.setValue(5)
-    expect(config.draft.system.keepRevisions).toBe(5)
+    expect(draftOf(config).system.keepRevisions).toBe(5)
   })
 
   // An empty field and the default mean the same thing, and neither belongs
@@ -46,10 +46,10 @@ describe('RevisionsSection retention', () => {
   it('leaves the setting out for the default or an empty field', async () => {
     const { config, keep } = open({ keepRevisions: 5 })
     await keep.setValue(20)
-    expect(config.draft.system.keepRevisions).toBeUndefined()
+    expect(draftOf(config).system.keepRevisions).toBeUndefined()
     await keep.setValue(5)
     await keep.setValue('')
-    expect(config.draft.system.keepRevisions).toBeUndefined()
+    expect(draftOf(config).system.keepRevisions).toBeUndefined()
   })
 
   // Loading a revision or a backup replaces the draft wholesale; the field
@@ -79,7 +79,7 @@ describe('RevisionsSection compare', () => {
 
   // The body as the reader sees it: a revision's id, or "changes" for the
   // row that spans the table, and a cell count that has to fit the header.
-  function body(wrapper) {
+  function body(wrapper: VueWrapper) {
     return wrapper.findAll('tbody tr').map((tr) => {
       const cells = tr.findAll('td')
       if (cells.length === 1 && cells[0].attributes('colspan') === '4') return 'changes'
@@ -99,8 +99,8 @@ describe('RevisionsSection compare', () => {
     })
     await flushPromises()
     const [a, b, c] = revisions.map((r) => r.id)
-    async function toggle(id) {
-      const row = wrapper.findAll('tbody tr').find((tr) => tr.text().includes(id))
+    async function toggle(id: string) {
+      const row = must(wrapper.findAll('tbody tr').find((tr) => tr.text().includes(id)))
       await row.find('button').trigger('click')
       await flushPromises()
     }
@@ -148,7 +148,7 @@ describe('RevisionsSection attribution', () => {
     })
   })
 
-  async function as(role) {
+  async function as(role: string) {
     useAuthStore().user = sessionOf({ username: 'someone', role })
     useConfigStore().replaceDraft(draft({}))
     const wrapper = mount(RevisionsSection, { global: { stubs: { ChangeList: true } } })
@@ -156,7 +156,7 @@ describe('RevisionsSection attribution', () => {
     return wrapper
   }
 
-  const appliedCells = (wrapper) =>
+  const appliedCells = (wrapper: VueWrapper) =>
     wrapper.findAll('td[data-label="Applied by"]').map((td) => td.text())
 
   it('shows an admin who applied each revision and the configuration in force', async () => {

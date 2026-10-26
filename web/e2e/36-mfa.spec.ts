@@ -4,8 +4,11 @@ import { mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import type { Page } from '@playwright/test'
+
 import { expect, test } from './fixtures'
 import { PASSWORD, confirmDialog, enterUsername, login, signOut } from './helpers'
+import type { RunningServer } from './server'
 
 // After the password an account may be asked for a code from an
 // authenticator app, or for a passkey. The codes are worked out here from the
@@ -23,9 +26,9 @@ const BIN = resolve(
 const BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
 
 /** The code an authenticator app shows for a base32 secret at a 30 second step (RFC 6238). */
-function code(secret, step) {
+function code(secret: string, step: number) {
   const bits = [...secret].map((c) => BASE32.indexOf(c).toString(2).padStart(5, '0')).join('')
-  const key = Buffer.from(bits.match(/.{8}/g).map((byte) => parseInt(byte, 2)))
+  const key = Buffer.from((bits.match(/.{8}/g) ?? []).map((byte) => parseInt(byte, 2)))
   const counter = Buffer.alloc(8)
   counter.writeBigUInt64BE(BigInt(step))
   const mac = createHmac('sha1', key).update(counter).digest()
@@ -40,9 +43,9 @@ const thisStep = () => Math.floor(Date.now() / 30_000)
  * code of its step, and the router allows a step of skew either way, so the
  * next step's code is good at once.
  */
-const nextCode = (secret) => code(secret, thisStep() + 1)
+const nextCode = (secret: string) => code(secret, thisStep() + 1)
 
-const card = (page) =>
+const card = (page: Page) =>
   page.getByRole('region', { name: 'Multi-factor authentication', exact: true })
 
 const OFF = 'Sign-in asks for your password alone.'
@@ -52,26 +55,26 @@ const KEYS =
 
 // Pictures of the account page for a person to look over.
 const SHOTS = '/var/tmp/account-plan/shots'
-const review = (name) => {
+const review = (name: string) => {
   mkdirSync(SHOTS, { recursive: true })
   return `${SHOTS}/${name}.png`
 }
 
 /** Fills in the sign-in page; an account with MFA is left at its code step. */
-async function signIn(page, username) {
+async function signIn(page: Page, username: string) {
   await page.goto('/login')
   await enterUsername(page, username)
   await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
   await page.getByRole('button', { name: 'Sign in' }).click()
 }
 
-async function enterCode(page, digits) {
+async function enterCode(page: Page, digits: string) {
   await page.getByLabel('Code from your authenticator app').fill(digits)
   await page.getByRole('button', { name: 'Sign in' }).click()
 }
 
 /** Sets up the authenticator app from the Account page, and returns its secret. */
-async function setUpAuthenticator(page) {
+async function setUpAuthenticator(page: Page) {
   await page.goto('/account')
   await card(page).getByRole('button', { name: 'Set up authenticator app' }).click()
   const dialog = page.getByRole('dialog')
@@ -87,7 +90,7 @@ async function setUpAuthenticator(page) {
 }
 
 /** Opens Remove for the authenticator app and types the password. Returns the dialog. */
-async function openRemoveApp(page, password) {
+async function openRemoveApp(page: Page, password: string) {
   const app = card(page).getByRole('group', { name: 'Authenticator app' })
   await app.getByRole('button', { name: 'Remove', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Remove the authenticator app' })
@@ -96,7 +99,7 @@ async function openRemoveApp(page, password) {
 }
 
 /** Removes the authenticator app, and with it every passkey. */
-async function removeApp(page) {
+async function removeApp(page: Page) {
   const dialog = await openRemoveApp(page, PASSWORD)
   await dialog.getByRole('button', { name: 'Remove', exact: true }).click()
   await expect(dialog).toHaveCount(0)
@@ -105,7 +108,7 @@ async function removeApp(page) {
 }
 
 /** Runs `ostiole mfa` on the configuration directory the server uses. */
-const mfa = (server, ...args) =>
+const mfa = (server: RunningServer, ...args: string[]) =>
   execFileSync(BIN, ['--config-dir', server.dir, 'mfa', ...args], {
     encoding: 'utf8',
     stdio: 'pipe',
@@ -169,6 +172,7 @@ test('a passkey made at a host name signs in on its own, or after the password',
   baseURL,
 }) => {
   // A passkey is made for a name, so this one is reached as localhost.
+  if (!baseURL) throw new Error('no base URL')
   const localhost = baseURL.replace('127.0.0.1', 'localhost')
   const context = await browser.newContext({
     baseURL: localhost,
@@ -270,7 +274,7 @@ test('a passkey made at a host name signs in on its own, or after the password',
 
   // A device that cannot check who holds it fails in the browser, which
   // sends the router nothing and says nothing.
-  const sent = []
+  const sent: string[] = []
   page.on('request', (r) => {
     if (r.url().endsWith('/api/v1/auth/login/passkey')) sent.push(r.url())
   })

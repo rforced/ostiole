@@ -61,7 +61,9 @@ const live = ref(true)
  * registers them. Read for the draft, like the system rules, so a change
  * shows before it is applied; Live follows the devices as they come.
  */
-const derived = useDraftRows(() => api.dnsNames(config.draft), { interval: LIVE_MS })
+const derived = useDraftRows((draft) => api.dnsNames(draft), {
+  interval: LIVE_MS,
+})
 watch(live, (on) => {
   if (on) {
     derived.run()
@@ -81,11 +83,15 @@ const names = computed<NameRow[]>(() => [
     description: h.description,
     override: h,
   })),
-  ...derived.rows.value.map((n) => ({
-    ...n,
-    key: `${n.source} ${n.name} ${n.mac ?? n.site ?? ''} ${n.addresses.join(' ')}`,
-    aliases: [],
-  })),
+  ...derived.rows.value.map((n) => {
+    const addresses = n.addresses ?? []
+    return {
+      ...n,
+      addresses,
+      key: `${n.source} ${n.name} ${n.mac ?? n.site ?? ''} ${addresses.join(' ')}`,
+      aliases: [],
+    }
+  }),
 ])
 
 const { query, shown } = useSearch(names, (n) => ({
@@ -98,7 +104,7 @@ const { query, shown } = useSearch(names, (n) => ({
     n.site,
     ...(n.interfaces ?? []),
   ],
-  macs: [n.mac],
+  macs: n.mac ? [n.mac] : [],
 }))
 
 // The list keeps the order it was written in until a header is clicked.
@@ -202,7 +208,11 @@ function editHost(h: HostOverride) {
             </td>
             <td data-label="Source">
               <div>
-                <RouterLink v-if="SOURCES[n.source].to" :to="SOURCES[n.source].to" class="link">
+                <RouterLink
+                  v-if="SOURCES[n.source].to"
+                  :to="SOURCES[n.source].to ?? ''"
+                  class="link"
+                >
                   {{ SOURCES[n.source].label }}
                 </RouterLink>
                 <template v-else>{{ SOURCES[n.source].label }}</template>

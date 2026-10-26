@@ -24,13 +24,15 @@ export function actorText(actor?: AuditActor): string {
  * not an account, their role and where they came from.
  */
 export function actorParts(actor?: AuditActor): string[] {
-  return [actor?.kind === 'account' ? '' : actor?.kind, actor?.role, actor?.address].filter(Boolean)
+  return [actor?.kind === 'account' ? '' : actor?.kind, actor?.role, actor?.address].filter(
+    (part): part is string => Boolean(part),
+  )
 }
 
 /**
  * What a row of the audit log shows, as the router searches it
  * (audit.Event.Search).
  */
-export function auditValues(e: AuditEvent): string[] {
+export function auditValues(e: AuditEvent): (string | undefined)[] {
   return [e.text, who(e.by), ...actorParts(e.by)]
 }

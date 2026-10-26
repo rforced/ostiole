@@ -24,6 +24,7 @@ async function confirmedRuleset() {
 }
 
 async function draftRuleset() {
+  if (!config.draft) throw new Error('No draft to render.')
   return (await api.config.check(config.draft)).ruleset
 }
 
@@ -32,6 +33,7 @@ async function draftRuleset() {
  * bridge not coming up" lives in these files, not in the ruleset.
  */
 async function networkUnits() {
+  if (!config.draft) throw new Error('No draft to render.')
   const files = (await api.config.check(config.draft)).network ?? {}
   const names = Object.keys(files).sort()
   if (!names.length) throw new Error('This build is managing no network units.')

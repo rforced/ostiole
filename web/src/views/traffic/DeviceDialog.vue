@@ -31,6 +31,7 @@ const open = defineModel('open', { type: Boolean, default: false })
 const data = ref<TrafficDevice | null>(null)
 const end = ref(0)
 const read = useAsync(async () => {
+  if (!props.device) return
   const id = props.device.id
   const r = await api.traffic.device(id, props.window)
   if (id !== props.device?.id) return
@@ -40,6 +41,7 @@ const read = useAsync(async () => {
 /** Its top destinations, null while they are not recorded. */
 const top = ref<DestinationRow[] | null>(null)
 const readTop = useAsync(async () => {
+  if (!props.device) return
   const id = props.device.id
   const r = await api.traffic.destinations({
     device: id,
@@ -67,14 +69,15 @@ watch(
   () => props.latest,
   (ev) => {
     if (!open.value || !ev || !data.value || props.window !== '5m' || !props.live) return
-    const r = ev.devices?.find((x) => x.id === data.value.id)
+    const current = data.value
+    const r = ev.devices?.find((x) => x.id === current.id)
     if (!r) return
     const t = Date.parse(ev.time) / 1000
     data.value = {
-      ...data.value,
+      ...current,
       down: r.down,
       up: r.up,
-      points: appendPoint(data.value.points ?? [], [t, r.down, r.up], '5m'),
+      points: appendPoint(current.points ?? [], [t, r.down, r.up], '5m'),
     }
     end.value = t
   },

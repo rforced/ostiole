@@ -1,4 +1,4 @@
-import { createServer } from 'node:http'
+import { createServer, type Server } from 'node:http'
 
 import { expect, test } from './fixtures'
 import { applyAndConfirm, login, reconfigure, shot } from './helpers'
@@ -8,14 +8,14 @@ test.describe.configure({ mode: 'serial' })
 // A local stand-in for a published blocklist, so the test never reaches out
 // to the internet. It is written as a hosts file, the commonest shape, with
 // the loopback entries a real one carries.
-let lists
-let listURL
+let lists: Server | undefined
+let listURL = ''
 let served = 0
 /** Held open on request, so the in-flight state can be looked at. */
 let delayMs = 0
 
 test.beforeAll(async () => {
-  lists = createServer(async (req, res) => {
+  const server = createServer(async (_req, res) => {
     served++
     if (delayMs) await new Promise((r) => setTimeout(r, delayMs))
     res.writeHead(200, { 'Content-Type': 'text/plain' })
@@ -27,8 +27,11 @@ test.beforeAll(async () => {
         '0.0.0.0 tracker.example.net\n',
     )
   })
-  await new Promise((resolve) => lists.listen(0, '127.0.0.1', resolve))
-  listURL = `http://127.0.0.1:${lists.address().port}/hosts.txt`
+  lists = server
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const address = server.address()
+  if (!address || typeof address === 'string') throw new Error('the stand-in has no port')
+  listURL = `http://127.0.0.1:${address.port}/hosts.txt`
 })
 
 test.afterAll(() => lists?.close())

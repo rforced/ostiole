@@ -1,12 +1,18 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import { api } from '@/lib/api'
-import type { Config, Tailscale, TailscaleLoginReply } from '@/lib/types.gen'
+import type {
+  Config,
+  Tailscale,
+  TailscaleLoginReply,
+  TailscaleStatus as TsStatus,
+} from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
-import { emptyConfig, fixture, iface } from '@/test/fixtures'
+import { emptyConfig, fixture, iface, must } from '@/test/fixtures'
 import PeersTab from '@/views/vpn/tailscale/PeersTab.vue'
 import SettingsTab from '@/views/vpn/tailscale/SettingsTab.vue'
 import TailscaleStatus from '@/views/vpn/tailscale/TailscaleStatus.vue'
@@ -46,12 +52,12 @@ function config(over: Partial<Config> = {}): Config {
   }
 }
 
-function status(over = {}) {
+function status(over: Partial<TsStatus> = {}): TsStatus {
   return { setUp: true, running: true, state: 'Running', ips: [], health: [], peers: [], ...over }
 }
 
 /** Mounts the strip with a saved and a draft configuration of our choosing. */
-async function strip(st, { draft = config(), saved = config() } = {}) {
+async function strip(st: TsStatus, { draft = config(), saved = config() } = {}) {
   vi.mocked(api.tailscale.status).mockResolvedValue(st)
   const store = useConfigStore()
   store.draft = draft
@@ -102,10 +108,7 @@ describe('TailscaleStatus', () => {
     vi.mocked(api.tailscale.login).mockResolvedValue(
       fixture<TailscaleLoginReply>({ authUrl: 'https://login.tailscale.com/a/abc' }),
     )
-    await wrapper
-      .findAll('button')
-      .find((b) => b.text() === 'Log in')
-      .trigger('click')
+    await must(wrapper.findAll('button').find((b) => b.text() === 'Log in')).trigger('click')
     await flushPromises()
     expect(api.tailscale.login).toHaveBeenCalledWith('')
     const link = wrapper.find('a')
@@ -184,7 +187,7 @@ describe('TailscaleStatus', () => {
   })
 })
 
-function bodyRows(wrapper) {
+function bodyRows(wrapper: VueWrapper) {
   return wrapper.findAll('tbody tr')
 }
 
@@ -271,18 +274,18 @@ describe('Tailscale SettingsTab', () => {
 
   it('offers a zone its networks as routes, masked', async () => {
     const store = useConfigStore()
-    store.draft = config({ interfaces: [...config().interfaces, node()] })
+    store.draft = config({ interfaces: [...(config().interfaces ?? []), node()] })
     store.loaded = true
     const wrapper = mount(SettingsTab, { global: { stubs } })
 
     const button = wrapper.findAll('button').find((b) => b.text() === "Add lan's networks")
-    await button.trigger('click')
-    expect(store.tailscale.tailscale.advertiseRoutes).toEqual(['192.168.1.0/24'])
+    await must(button).trigger('click')
+    expect(must(must(store.tailscale).tailscale).advertiseRoutes).toEqual(['192.168.1.0/24'])
   })
 
   it('removes the node through the typed confirmation', async () => {
     const store = useConfigStore()
-    store.draft = config({ interfaces: [...config().interfaces, node()] })
+    store.draft = config({ interfaces: [...(config().interfaces ?? []), node()] })
     store.loaded = true
     const wrapper = mount(SettingsTab, { global: { stubs } })
 
@@ -301,6 +304,6 @@ describe('Tailscale SettingsTab', () => {
     const wrapper = mount(SettingsTab, { global: { stubs } })
 
     await wrapper.find('#ts-hostname').setValue('')
-    expect('hostname' in store.tailscale.tailscale).toBe(false)
+    expect('hostname' in must(must(store.tailscale).tailscale)).toBe(false)
   })
 })

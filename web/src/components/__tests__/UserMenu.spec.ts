@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import type { MockInstance } from 'vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
@@ -32,16 +33,17 @@ async function menu() {
 
 const item = (name: string) =>
   [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
-    (e) => e.textContent.trim() === name,
+    (e) => e.textContent?.trim() === name,
   )
 
 describe('UserMenu', () => {
-  let auth
+  let auth: ReturnType<typeof useAuthStore>
+  let logout: MockInstance<ReturnType<typeof useAuthStore>['logout']>
   beforeEach(() => {
     setActivePinia(createPinia())
     auth = useAuthStore()
     auth.user = { username: 'marlow', role: 'operator' } as Session
-    vi.spyOn(auth, 'logout').mockResolvedValue(undefined)
+    logout = vi.spyOn(auth, 'logout').mockResolvedValue(undefined)
   })
   afterEach(() => {
     document.body.innerHTML = ''
@@ -56,7 +58,7 @@ describe('UserMenu', () => {
     expect(trigger.text()).toContain('marlow')
     expect(trigger.text()).toContain('Operator')
     const names = [...document.querySelectorAll('[role="menuitem"]')].map((e) =>
-      e.textContent.trim(),
+      e.textContent?.trim(),
     )
     expect(names).toEqual(['Account', 'Sign out'])
   })
@@ -64,8 +66,8 @@ describe('UserMenu', () => {
   // The drawer on a phone closes on navigate, as it does for a nav link.
   it('goes to the account page and says so', async () => {
     const { router, wrapper } = await menu()
-    expect(item('Account').getAttribute('href')).toBe('/account')
-    item('Account').click()
+    expect(item('Account')?.getAttribute('href')).toBe('/account')
+    item('Account')?.click()
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/account')
     expect(wrapper.emitted('navigate')).toHaveLength(1)
@@ -73,13 +75,13 @@ describe('UserMenu', () => {
 
   it('signs out from the trigger once the menu has closed', async () => {
     const { router, wrapper } = await menu()
-    let seen = null
-    auth.logout.mockImplementation(async () => {
+    let seen: Element | null = null
+    logout.mockImplementation(async () => {
       seen = document.activeElement
     })
-    item('Sign out').click()
+    item('Sign out')?.click()
     await flushPromises()
-    expect(auth.logout).toHaveBeenCalledOnce()
+    expect(logout).toHaveBeenCalledOnce()
     expect(seen).toBe(wrapper.get('button').element)
     expect(router.currentRoute.value.name).toBe('login')
   })
@@ -90,17 +92,17 @@ describe('UserMenu', () => {
     config.draft = { system: { hostname: 'birch' } } as Config
     const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(false)
     const { router } = await menu()
-    item('Sign out').click()
+    item('Sign out')?.click()
     await flushPromises()
     expect(ask).toHaveBeenCalledOnce()
-    expect(auth.logout).not.toHaveBeenCalled()
+    expect(logout).not.toHaveBeenCalled()
     expect(router.currentRoute.value.path).toBe('/firewall/rules')
 
     ask.mockResolvedValue(true)
     await menu()
-    item('Sign out').click()
+    item('Sign out')?.click()
     await flushPromises()
-    expect(auth.logout).toHaveBeenCalledOnce()
+    expect(logout).toHaveBeenCalledOnce()
   })
 
   // A viewer's draft differs only where a page filled in a default.
@@ -111,9 +113,9 @@ describe('UserMenu', () => {
     config.draft = { system: { hostname: 'birch' } } as Config
     const ask = vi.spyOn(useConfirmStore(), 'ask')
     await menu()
-    item('Sign out').click()
+    item('Sign out')?.click()
     await flushPromises()
     expect(ask).not.toHaveBeenCalled()
-    expect(auth.logout).toHaveBeenCalledOnce()
+    expect(logout).toHaveBeenCalledOnce()
   })
 })

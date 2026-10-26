@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { type PropType, computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
+import type { Bridge, Interface, Security, WirelessNetwork } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+
+type WirelessInterface = Interface & { wireless: WirelessNetwork }
 
 const props = defineProps({
   /** The interface being edited, or null for a new network. */
-  network: { type: Object, default: null },
+  network: { type: Object as PropType<WirelessInterface | null>, default: null },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
@@ -25,7 +28,24 @@ const SECURITY = [
   { value: 'open', label: 'Open', hint: 'No password. Traffic is not encrypted.' },
 ]
 
-function blank() {
+interface NetworkForm {
+  name: string
+  previousName: string
+  enabled: boolean
+  radio: string
+  ssid: string
+  security: Security | ''
+  passphrase: string
+  hidden: boolean
+  isolate: boolean
+  maxClients: number
+  attach: string
+  bridge: string
+  zone: string
+  address: string
+}
+
+function blank(): NetworkForm {
   return {
     name: '',
     previousName: '',
@@ -44,7 +64,9 @@ function blank() {
   }
 }
 
-const bridges = computed(() => config.interfaces.filter((i) => i.bridge))
+const bridges = computed(() =>
+  config.interfaces.filter((i): i is Interface & { bridge: Bridge } => Boolean(i.bridge)),
+)
 
 watch(
   () => [open.value, props.network],
@@ -97,13 +119,13 @@ const needsPassphrase = computed(() => ['wpa2-wpa3', 'wpa3', 'wpa2'].includes(fo
  * it was built without it, as Arch's is. The apply refuses it there, so the
  * option is greyed out, and a network already on it keeps it and is told.
  */
-const enhancedOpen = ref(null)
+const enhancedOpen = ref<boolean | null>(null)
 watch(
   open,
   async (isOpen) => {
     if (!isOpen) return
     try {
-      const r = (await api.wireless.radios()) as { setUp: boolean; enhancedOpen?: boolean }
+      const r = await api.wireless.radios()
       enhancedOpen.value = r.setUp ? r.enhancedOpen !== false : null
     } catch {
       enhancedOpen.value = null
@@ -127,8 +149,8 @@ function save() {
   // What this dialog does not show, such as log drops set on the
   // Interfaces page, stays as it was.
   const was = f.previousName ? config.findInterface(f.previousName) : null
-  const existing = was ? JSON.parse(JSON.stringify(was)) : {}
-  const iface = {
+  const existing: Partial<Interface> = was ? JSON.parse(JSON.stringify(was)) : {}
+  const iface: WirelessInterface = {
     ...existing,
     name,
     enabled: f.enabled,

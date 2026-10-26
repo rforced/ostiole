@@ -1,16 +1,17 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { Protection } from '@/lib/types.gen'
+import type { Config, Protection, Zone } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
-import { emptyConfig, iface, rule } from '@/test/fixtures'
+import { draftOf, emptyConfig, iface, must, rule } from '@/test/fixtures'
 import ProtectionPage from '@/views/firewall/ProtectionPage.vue'
 
 const stubs = { RouterLink: true }
 
 /** A draft with an outside, an inside, and one rule that is rationed. */
-function draft() {
+function draft(): Config & { zones: Zone[] } {
   const protection: Protection = {}
   return {
     ...emptyConfig(),
@@ -36,7 +37,7 @@ function page() {
 }
 
 /** Mounts the page on a saved configuration, so dirty means a change. */
-async function opened(cfg) {
+async function opened(cfg: Config) {
   const config = useConfigStore()
   config.saved = JSON.parse(JSON.stringify(cfg))
   config.replaceDraft(cfg)
@@ -47,11 +48,11 @@ async function opened(cfg) {
 }
 
 /** Each zone on offer, in order, and whether its box is ticked. */
-function boxes(wrapper) {
+function boxes(wrapper: VueWrapper) {
   return wrapper
     .findAll('input[id^="prot-zone-"]')
     .map((b) => [
-      b.attributes('id').slice('prot-zone-'.length),
+      must(b.attributes('id')).slice('prot-zone-'.length),
       (b.element as HTMLInputElement).checked,
     ])
 }
@@ -64,7 +65,7 @@ describe('ProtectionPage', () => {
   it('goes back to every external zone when the last one is unticked', async () => {
     const cfg = draft()
     cfg.zones.push({ name: 'dmz', external: true })
-    cfg.protection.zones = ['wan']
+    must(cfg.protection).zones = ['wan']
     const { wrapper, config } = await opened(cfg)
     expect(boxes(wrapper)).toEqual([
       ['wan', true],
@@ -72,7 +73,7 @@ describe('ProtectionPage', () => {
       ['dmz', false],
     ])
     await wrapper.find('#prot-zone-wan').setValue(false)
-    expect(config.draft.protection?.zones).toBeUndefined()
+    expect(draftOf(config).protection?.zones).toBeUndefined()
     expect(boxes(wrapper)).toEqual([
       ['wan', true],
       ['lan', false],
@@ -89,7 +90,7 @@ describe('ProtectionPage', () => {
       ['wan', true],
       ['lan', false],
     ])
-    expect('protection' in config.draft).toBe(false)
+    expect('protection' in draftOf(config)).toBe(false)
     expect(config.dirty).toBe(false)
   })
 
@@ -104,17 +105,17 @@ describe('ProtectionPage', () => {
   it('records a choice of zones, and forgets it when it matches the default', async () => {
     const { wrapper, config } = page()
     await wrapper.find('#prot-zone-lan').setValue(true)
-    expect(config.draft.protection.zones).toEqual(['wan', 'lan'])
+    expect(must(draftOf(config).protection).zones).toEqual(['wan', 'lan'])
     // Back to just the external zone, which is the default, so the list
     // goes away rather than being written out.
     await wrapper.find('#prot-zone-lan').setValue(false)
-    expect(config.draft.protection?.zones).toBeUndefined()
+    expect(draftOf(config).protection?.zones).toBeUndefined()
   })
 
   it('switches a defence on with settings that do not fire on a quiet network', async () => {
     const { wrapper, config } = page()
     await wrapper.find('#prot-syn').setValue(true)
-    expect(config.draft.protection.synFlood).toEqual({
+    expect(must(draftOf(config).protection).synFlood).toEqual({
       rate: 30,
       unit: 'second',
       burst: 60,
@@ -123,15 +124,15 @@ describe('ProtectionPage', () => {
     // The fields appear only once it is on.
     expect(wrapper.find('#prot-syn-rate').exists()).toBe(true)
     await wrapper.find('#prot-syn-rate').setValue('50')
-    expect(config.draft.protection.synFlood.rate).toBe(50)
+    expect(must(must(draftOf(config).protection).synFlood).rate).toBe(50)
   })
 
   it('removes a defence rather than leaving it switched off', async () => {
     const { wrapper, config } = page()
     await wrapper.find('#prot-scan').setValue(true)
-    expect(config.draft.protection.portScan.hold).toBe('10m')
+    expect(must(must(draftOf(config).protection).portScan).hold).toBe('10m')
     await wrapper.find('#prot-scan').setValue(false)
-    expect(config.draft.protection?.portScan).toBeUndefined()
+    expect(draftOf(config).protection?.portScan).toBeUndefined()
   })
 
   it('lists the rules that hold their traffic to a rate', () => {
@@ -149,10 +150,10 @@ describe('ProtectionPage', () => {
     expect(field.element.value).toBe('')
 
     await field.setValue(1000000)
-    expect(config.draft.system.conntrackMax).toBe(1000000)
+    expect(draftOf(config).system.conntrackMax).toBe(1000000)
 
     // Cleared is the kernel's own limit again, not a ceiling of zero.
     await field.setValue('')
-    expect(config.draft.system.conntrackMax).toBeUndefined()
+    expect(draftOf(config).system.conntrackMax).toBeUndefined()
   })
 })

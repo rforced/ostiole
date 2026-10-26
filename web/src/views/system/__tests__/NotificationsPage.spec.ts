@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -7,13 +7,13 @@ import type { NotifyStatus } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import NotificationsPage from '@/views/system/NotificationsPage.vue'
-import { configOf, fixture, sessionOf } from '@/test/fixtures'
+import { configOf, fixture, sessionOf, draftOf, must } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   api: { notifications: { status: vi.fn(), test: vi.fn() } },
 }))
 
-const config = (notifications) =>
+const config = (notifications?: object) =>
   configOf({
     version: 11,
     system: {},
@@ -33,9 +33,14 @@ async function open(notifications?: object, role = 'admin') {
   return { wrapper, store }
 }
 
-const button = (w, text) => w.findAll('button').find((b) => b.text().includes(text))
-const toggle = (w, label) =>
-  w.findAll('input[type="checkbox"]').find((i) => i.element.labels[0]?.textContent.includes(label))
+const button = (w: VueWrapper, text: string) =>
+  must(w.findAll('button').find((b) => b.text().includes(text)))
+const toggle = (w: VueWrapper, label: string) =>
+  must(
+    w
+      .findAll<HTMLInputElement>('input[type="checkbox"]')
+      .find((i) => i.element.labels?.[0]?.textContent?.includes(label)),
+  )
 
 describe('NotificationsPage', () => {
   beforeEach(() => {
@@ -52,7 +57,7 @@ describe('NotificationsPage', () => {
     await wrapper.get('#nt-server').setValue('smtp.example.net')
     await wrapper.get('#nt-security').setValue('tls')
     await wrapper.get('#nt-to').setValue('a@example.net, b@example.net')
-    expect(store.draft.notifications.email).toEqual({
+    expect(must(draftOf(store).notifications).email).toEqual({
       enabled: true,
       server: 'smtp.example.net',
       security: 'tls',
@@ -63,7 +68,7 @@ describe('NotificationsPage', () => {
     await wrapper.get('#nt-server').setValue('')
     await wrapper.get('#nt-security').setValue('starttls')
     await wrapper.get('#nt-to').setValue('')
-    expect(store.draft.notifications).toBeUndefined()
+    expect(draftOf(store).notifications).toBeUndefined()
     expect(store.dirty).toBe(false)
   })
 
@@ -72,9 +77,9 @@ describe('NotificationsPage', () => {
     const waf = toggle(wrapper, 'web application firewall')
     expect(waf.element.checked).toBe(true)
     await waf.setValue(false)
-    expect(store.draft.notifications.mute).toEqual(['waf'])
+    expect(must(draftOf(store).notifications).mute).toEqual(['waf'])
     await waf.setValue(true)
-    expect(store.draft.notifications.mute).toBeUndefined()
+    expect(must(draftOf(store).notifications).mute).toBeUndefined()
   })
 
   // The test goes to what the form says, before anything is applied.

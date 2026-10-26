@@ -24,7 +24,7 @@ const candidates = computed(() =>
     (i) =>
       i.ipv4?.mode === 'static' &&
       (props.server?.interface === i.name ||
-        !(config.draft.services?.dhcp?.servers ?? []).some((s) => s.interface === i.name)),
+        !(config.draft?.services?.dhcp?.servers ?? []).some((s) => s.interface === i.name)),
   ),
 )
 

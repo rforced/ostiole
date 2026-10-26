@@ -24,7 +24,7 @@ const keys = computed(() => (props.columns ? props.columns.map(([key]) => key) :
 /** The key sorted by, if it is this header's. */
 const current = computed(() => {
   const by = props.sort.order.value.by
-  return keys.value.includes(by) ? by : ''
+  return by !== null && keys.value.includes(by) ? by : ''
 })
 const dir = computed(() => (current.value ? props.sort.order.value.dir : ''))
 const shown = computed(() => current.value || keys.value[0])

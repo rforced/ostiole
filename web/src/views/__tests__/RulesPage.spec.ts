@@ -1,4 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
@@ -6,9 +7,10 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { api } from '@/lib/api'
 import { formatCount } from '@/lib/format'
-import type { Interface, Rule, Zone } from '@/lib/types.gen'
+import type { Interface, Rule, SystemRule, Zone } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
-import { configOf } from '@/test/fixtures'
+import { configOf, must } from '@/test/fixtures'
+import type { DeepPartial } from '@/test/fixtures'
 import RulesPage from '@/views/firewall/RulesPage.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -24,9 +26,9 @@ const stubs = { ConfirmButton: true, RuleDialog: true, RouterLink: true }
 
 const config: {
   version: number
-  zones: Partial<Zone>[]
-  interfaces: Partial<Interface>[]
-  rules: Partial<Rule>[]
+  zones: DeepPartial<Zone>[]
+  interfaces: DeepPartial<Interface>[]
+  rules: DeepPartial<Rule>[]
 } = {
   version: 3,
   zones: [
@@ -133,12 +135,12 @@ async function mountPage(path = '/firewall/rules', extraStubs = {}, cfg = config
 }
 
 // The body rows: the transition group is stubbed, so there is no tbody to ask.
-const rowsText = (wrapper) =>
+const rowsText = (wrapper: VueWrapper) =>
   wrapper
     .findAll('tr')
     .filter((tr) => tr.find('td').exists())
     .map((tr) => tr.text())
-const systemRows = (wrapper) => wrapper.findAll('tr[data-system]')
+const systemRows = (wrapper: VueWrapper) => wrapper.findAll('tr[data-system]')
 
 describe('RulesPage system rules', () => {
   beforeEach(() => {
@@ -166,12 +168,12 @@ describe('RulesPage system rules', () => {
 
   it('offers no editing on a system rule, only the setting behind it', async () => {
     const wrapper = await mountPage()
-    const lockout = systemRows(wrapper).find((tr) => tr.text().includes('Anti-lockout'))
+    const lockout = must(systemRows(wrapper).find((tr) => tr.text().includes('Anti-lockout')))
     expect(lockout.find('input[type=checkbox]').exists()).toBe(false)
     expect(lockout.find('button').exists()).toBe(false)
     expect(lockout.find('router-link-stub').attributes('to')).toBe('/interfaces#zones')
     // The baseline has no setting, so nothing to link to.
-    const replies = systemRows(wrapper).find((tr) => tr.text().includes('Replies'))
+    const replies = must(systemRows(wrapper).find((tr) => tr.text().includes('Replies')))
     expect(replies.find('router-link-stub').exists()).toBe(false)
   })
 
@@ -191,7 +193,7 @@ describe('RulesPage system rules', () => {
       },
     ])
     const wrapper = await mountPage()
-    const row = systemRows(wrapper).find((tr) => tr.text().includes('routed through vpn'))
+    const row = must(systemRows(wrapper).find((tr) => tr.text().includes('routed through vpn')))
     expect(row.find('router-link-stub').attributes('to')).toBe('/routing')
   })
 
@@ -211,7 +213,7 @@ describe('RulesPage system rules', () => {
       },
     ])
     const wrapper = await mountPage('/firewall/rules#wan')
-    const row = systemRows(wrapper).find((tr) => tr.text().includes('in on eth0'))
+    const row = must(systemRows(wrapper).find((tr) => tr.text().includes('in on eth0')))
     expect(row.find('router-link-stub').attributes('to')).toBe('/routing#routes')
   })
 
@@ -219,11 +221,11 @@ describe('RulesPage system rules', () => {
     const wrapper = await mountPage('/firewall/rules#wan')
     await vi.waitFor(() => expect(api.counters).toHaveBeenCalled())
     await nextTick()
-    const bogons = systemRows(wrapper).find((tr) => tr.text().includes('bogon'))
+    const bogons = must(systemRows(wrapper).find((tr) => tr.text().includes('bogon')))
     expect(bogons.text()).toContain('5')
     expect(bogons.text()).toContain('log')
     // A rule without a counter shows nothing rather than zero.
-    const replies = systemRows(wrapper).find((tr) => tr.text().includes('Replies'))
+    const replies = must(systemRows(wrapper).find((tr) => tr.text().includes('Replies')))
     expect(replies.find('td.num').text()).toBe('')
   })
 
@@ -265,7 +267,7 @@ describe('RulesPage system rules', () => {
     )
     await vi.waitFor(() => expect(api.counters).toHaveBeenCalled())
     await nextTick()
-    const bogons = systemRows(wrapper).find((tr) => tr.text().includes('bogon'))
+    const bogons = must(systemRows(wrapper).find((tr) => tr.text().includes('bogon')))
     expect(bogons.text()).toContain('2 logged')
     const rows = rowsText(wrapper)
     expect(rows.find((t) => t.includes('900'))).toContain('40 logged')
@@ -306,7 +308,7 @@ describe('RulesPage system rules', () => {
     )
     await vi.waitFor(() => expect(api.counters).toHaveBeenCalled())
     await nextTick()
-    const bogons = systemRows(wrapper).find((tr) => tr.text().includes('bogon'))
+    const bogons = must(systemRows(wrapper).find((tr) => tr.text().includes('bogon')))
     expect(bogons.text()).toContain(formatCount(3_412))
     expect(bogons.text()).toContain(`${formatCount(2_116)} logged`)
     const scanRow = rowsText(wrapper).find((t) => t.includes(formatCount(274_551)))
@@ -340,8 +342,10 @@ describe('RulesPage system rules', () => {
   })
 
   it('reads the system rules before showing any row', async () => {
-    let answer
-    vi.mocked(api.systemRules).mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    let answer: (rules: SystemRule[]) => void = () => undefined
+    vi.mocked(api.systemRules).mockReturnValue(
+      new Promise<SystemRule[]>((resolve) => (answer = resolve)),
+    )
     const wrapper = await mountPage()
     // The lan rule is in the draft already, but on its own it would be
     // pushed down by the rows that arrive above it.
@@ -388,7 +392,7 @@ describe('RulesPage system rules', () => {
   // A destination zone is where the rule sends traffic, so it reads in the
   // Destination column; Via keeps to the gateway.
   it('shows a destination zone as the destination and not under Via', async () => {
-    const rule = (id, extra) => ({
+    const rule = (id: string, extra: DeepPartial<Rule>): DeepPartial<Rule> => ({
       id,
       zone: 'lan',
       enabled: true,
@@ -416,13 +420,10 @@ describe('RulesPage system rules', () => {
         ],
       },
     )
-    const cells = (id) =>
-      wrapper
-        .findAll('tr')
-        .find((tr) => tr.text().includes(id))
-        .findAll('td')
-    const destination = (id) => cells(id)[4].text()
-    const via = (id) => cells(id)[5].text()
+    const cells = (id: string) =>
+      must(wrapper.findAll('tr').find((tr) => tr.text().includes(id))).findAll('td')
+    const destination = (id: string) => cells(id)[4].text()
+    const via = (id: string) => cells(id)[5].text()
     expect(destination('to-wan')).toBe('zone wan')
     expect(via('to-wan')).toBe('')
     expect(destination('no-mail')).toBe('zone wan : 25, 465-587')

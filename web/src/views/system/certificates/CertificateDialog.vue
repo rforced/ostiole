@@ -68,7 +68,7 @@ watch(
 /** The interfaces a CA could reach: the ones in an external zone. */
 const external = computed(() => {
   const zones = new Set(config.zones.filter((z) => z.external).map((z) => z.name))
-  return config.interfaces.filter((i) => zones.has(i.zone))
+  return config.interfaces.filter((i) => zones.has(i.zone ?? ''))
 })
 
 const names = computed(() => parseList(form.value.names))
@@ -78,7 +78,7 @@ const hasAddress = computed(
 )
 
 /** A literal address rather than a name; a CA only issues those over http-01. */
-function isAddress(name) {
+function isAddress(name: string) {
   return /^[0-9.]+$/.test(name) || name.includes(':')
 }
 

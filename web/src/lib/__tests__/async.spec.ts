@@ -4,9 +4,10 @@ import { ref } from 'vue'
 import { emptyText, errorMessage, useAsync } from '@/lib/async'
 
 /** A promise whose fate the test decides. */
-function deferred() {
-  let resolve, reject
-  const promise = new Promise((res, rej) => {
+function deferred<T = unknown>() {
+  let resolve: (value: T) => void = () => {}
+  let reject: (reason?: unknown) => void = () => {}
+  const promise = new Promise<T>((res, rej) => {
     resolve = res
     reject = rej
   })
@@ -85,7 +86,7 @@ describe('useAsync', () => {
 
   it('passes the latest arguments to the follow-up run', async () => {
     const fn = vi.fn()
-    const first = deferred()
+    const first = deferred<void>()
     fn.mockReturnValueOnce(first.promise).mockResolvedValue(undefined)
     const load = useAsync(fn)
     load.run('a')

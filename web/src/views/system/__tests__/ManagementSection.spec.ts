@@ -7,11 +7,11 @@ import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ManagementSection from '@/views/system/ManagementSection.vue'
-import { configOf, sessionOf } from '@/test/fixtures'
+import { configOf, sessionOf, draftOf } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({ api: { timezones: vi.fn() } }))
 
-const draft = (system = {}, services) =>
+const draft = (system = {}, services?: object) =>
   configOf({
     version: 3,
     system,
@@ -48,14 +48,14 @@ describe('ManagementSection timezone', () => {
   it('writes a chosen zone into the draft', async () => {
     const { config, zone } = await open({ timezone: 'UTC' })
     await zone.setValue('Europe/Berlin')
-    expect(config.draft.system.timezone).toBe('Europe/Berlin')
+    expect(draftOf(config).system.timezone).toBe('Europe/Berlin')
   })
 
   // Opening the page is not an edit: a draft that had no timezone still has
   // none until somebody picks one, so the apply bar stays quiet.
   it('does not touch a draft it only displays', async () => {
     const { config } = await open({})
-    expect(config.draft.system.timezone).toBeUndefined()
+    expect(draftOf(config).system.timezone).toBeUndefined()
   })
 
   // A configuration restored from a router with a bigger zone database must
@@ -110,7 +110,7 @@ describe('ManagementSection host settings', () => {
     const box = wrapper.findAll<HTMLInputElement>('input[type="checkbox"]')[0]
     expect(box.element.checked).toBe(false)
     await box.setValue(true)
-    expect(config.draft.system.management.sshPasswords).toBe(true)
+    expect(draftOf(config).system.management.sshPasswords).toBe(true)
   })
 
   // How the router is reached is an admin's to change, and the apply would

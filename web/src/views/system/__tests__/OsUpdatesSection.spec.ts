@@ -1,14 +1,14 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { UpdateMode } from '@/lib/types.gen'
+import type { SysupdateStatus, UpdateMode } from '@/lib/types.gen'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import OsUpdatesSection from '@/views/system/OsUpdatesSection.vue'
-import { configOf, sessionOf } from '@/test/fixtures'
+import { configOf, must, sessionOf } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -19,11 +19,11 @@ vi.mock('@/lib/api', () => ({
       reboot: vi.fn(),
     },
   },
-  errorMessage: (e) => String(e),
+  errorMessage: (e: unknown) => String(e),
 }))
 
 /** A Fedora router with two updates waiting, one of them a security fix. */
-const waiting = {
+const waiting: SysupdateStatus = {
   manager: 'dnf',
   distro: 'Fedora Linux 44',
   available: true,
@@ -40,10 +40,16 @@ const waiting = {
   },
 }
 
-const installButton = (w) => w.findAll('button').find((b) => b.text().startsWith('Install'))
-const checkButton = (w) => w.findAll('button').find((b) => b.text().startsWith('Check now'))
-const waitingCard = (w) => w.findAll('section').find((s) => s.text().startsWith('Waiting'))
-const waitingNames = (w) =>
+const findInstall = (w: VueWrapper) =>
+  w.findAll('button').find((b) => b.text().startsWith('Install'))
+const findCheck = (w: VueWrapper) =>
+  w.findAll('button').find((b) => b.text().startsWith('Check now'))
+const findWaiting = (w: VueWrapper) =>
+  w.findAll('section').find((s) => s.text().startsWith('Waiting'))
+const installButton = (w: VueWrapper) => must(findInstall(w))
+const checkButton = (w: VueWrapper) => must(findCheck(w))
+const waitingCard = (w: VueWrapper) => must(findWaiting(w))
+const waitingNames = (w: VueWrapper) =>
   waitingCard(w)
     .findAll('tbody span.font-mono')
     .map((n) => n.text())
@@ -61,7 +67,7 @@ function draftWith(mode: UpdateMode, exclude?: string[]) {
   )
 }
 
-async function mountWith(status, role = 'admin') {
+async function mountWith(status: SysupdateStatus, role = 'admin') {
   useAuthStore().user = sessionOf({ username: role, role })
   vi.mocked(api.systemUpdates.status).mockResolvedValue(status)
   const w = mount(OsUpdatesSection)
@@ -120,7 +126,7 @@ describe('OsUpdatesSection', () => {
     // apply returns as soon as the router is claimed, and the status it
     // answers with is the first thing that says so. Without install.busy
     // covering the request itself the button would sit there looking dead.
-    let claimed
+    let claimed: (status: SysupdateStatus) => void = () => undefined
     vi.mocked(api.systemUpdates.apply).mockReturnValue(
       new Promise((resolve) => {
         claimed = resolve
@@ -172,13 +178,13 @@ describe('OsUpdatesSection', () => {
   })
 
   it('says so when security has nothing to install', async () => {
-    const vim = waiting.pending.packages[1]
+    const vim = must(waiting.pending.packages)[1]
     const w = await mountWith({
       ...waiting,
       mode: 'security',
       pending: { security: 0, packages: [vim] },
     })
-    expect(waitingCard(w)).toBeUndefined()
+    expect(findWaiting(w)).toBeUndefined()
     expect(w.text()).toContain('No security updates are waiting.')
     expect(installButton(w).attributes('disabled')).toBeDefined()
   })
@@ -196,9 +202,9 @@ describe('OsUpdatesSection', () => {
       checkError: 'no route to the mirror',
     })
     expect(w.text()).toContain('Last checked')
-    expect(waitingCard(w)).toBeUndefined()
-    expect(checkButton(w)).toBeUndefined()
-    expect(installButton(w)).toBeUndefined()
+    expect(findWaiting(w)).toBeUndefined()
+    expect(findCheck(w)).toBeUndefined()
+    expect(findInstall(w)).toBeUndefined()
     for (const gone of ['wants a reboot', 'Last run', 'dnf upgrade failed', 'last check failed']) {
       expect(w.text()).not.toContain(gone)
     }
@@ -215,8 +221,8 @@ describe('OsUpdatesSection', () => {
     expect(installButton(w).text()).toBe('Install security updates')
 
     await w.get('#os-upd-mode-disabled').setValue(true)
-    expect(waitingCard(w)).toBeUndefined()
-    expect(checkButton(w)).toBeUndefined()
+    expect(findWaiting(w)).toBeUndefined()
+    expect(findCheck(w)).toBeUndefined()
     expect(w.text()).toContain('Nothing is checked or installed, on a schedule or by hand.')
 
     await w.get('#os-upd-mode-all').setValue(true)

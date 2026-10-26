@@ -1,17 +1,18 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, type Session } from '@/lib/api'
 import type {
-  Config,
   LogfileStatus,
+  LogLevel,
   LogLimitsInfo,
   ProxyStatus,
+  RequestlogRequest,
   RequestsPage,
   Stats,
 } from '@/lib/types.gen'
-import { fixture } from '@/test/fixtures'
+import { configOf, draftOf, fixture, must } from '@/test/fixtures'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -31,7 +32,7 @@ class FakeSource {
   close() {}
 }
 
-const clearButton = (w) => w.findAll('button').find((b) => b.text() === 'Clear')
+const clearButton = (w: VueWrapper) => w.findAll('button').find((b) => b.text() === 'Clear')
 
 function request(over = {}) {
   return {
@@ -50,7 +51,7 @@ function request(over = {}) {
   }
 }
 
-async function tab(list, level = 'info') {
+async function tab(list: Array<Partial<RequestlogRequest>>, level: LogLevel = 'info') {
   vi.mocked(api.proxy.requests).mockResolvedValue(
     fixture<RequestsPage>({ entries: list, held: list.length, kept: level === 'info' }),
   )
@@ -61,11 +62,11 @@ async function tab(list, level = 'info') {
   vi.mocked(api.logFiles).mockResolvedValue(fixture<LogfileStatus>({ enabled: false, logs: [] }))
   vi.mocked(api.logLimits).mockResolvedValue(fixture<LogLimitsInfo>({ memTotal: 0, ceilings: {} }))
   const store = useConfigStore()
-  const draft = {
+  const draft = configOf({
     version: 11,
     system: { logging: { level } },
     services: { proxy: { enabled: true, sites: [{ id: 'vault', enabled: true }] } },
-  } as Config
+  })
   store.draft = draft
   store.saved = structuredClone(draft)
   store.loaded = true
@@ -118,7 +119,7 @@ describe('RequestsTab', () => {
   it('keeps how many requests in the draft', async () => {
     const { wrapper, store } = await tab([])
     await wrapper.find('#requests-entries').setValue('100000')
-    expect(store.draft.services.proxy.requests).toEqual({ entries: 100000 })
+    expect(draftOf(store).services?.proxy?.requests).toEqual({ entries: 100000 })
     expect(wrapper.text()).toContain('In memory, about 40.0 MB when full.')
   })
 
@@ -131,7 +132,7 @@ describe('RequestsTab', () => {
     vi.mocked(api.proxy.requests).mockResolvedValue(
       fixture<RequestsPage>({ entries: [], held: 0, kept: true }),
     )
-    await clearButton(wrapper).trigger('click')
+    await must(clearButton(wrapper)).trigger('click')
     await flushPromises()
     expect(ask).toHaveBeenCalledWith(
       expect.objectContaining({

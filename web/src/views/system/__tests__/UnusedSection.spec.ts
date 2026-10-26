@@ -1,4 +1,4 @@
-import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
+import { DOMWrapper, flushPromises, mount, RouterLinkStub, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -9,7 +9,7 @@ import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import { useToastStore } from '@/stores/toast'
 import UnusedSection from '@/views/system/UnusedSection.vue'
-import { configOf, fixture, sessionOf } from '@/test/fixtures'
+import { configOf, draftOf, fixture, must, sessionOf, toastAction } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   ApiError: class ApiError extends Error {},
@@ -78,12 +78,14 @@ async function open({
   return { wrapper, config }
 }
 
-const nameOf = (tr) => {
+const nameOf = (tr: DOMWrapper<Element>) => {
   const td = tr.find('td[data-label="Name"]')
   return td.exists() ? td.text() : ''
 }
-const rowOf = (wrapper, name) => wrapper.findAll('tbody tr').find((tr) => nameOf(tr) === name)
-const button = (wrapper, label) => wrapper.findAll('button').find((b) => b.text() === label)
+const rowOf = (wrapper: VueWrapper, name: string) =>
+  wrapper.findAll('tbody tr').find((tr) => nameOf(tr) === name)
+const button = (wrapper: VueWrapper | DOMWrapper<Element>, label: string) =>
+  must(wrapper.findAll('button').find((b) => b.text() === label))
 
 describe('UnusedSection', () => {
   beforeEach(() => {
@@ -97,23 +99,25 @@ describe('UnusedSection', () => {
     const groups = wrapper.findAll('th[scope="rowgroup"]').map((th) => th.text())
     expect(groups).toEqual(['Unused', 'Disabled'])
 
-    const alias = rowOf(wrapper, 'spare_hosts')
+    const alias = must(rowOf(wrapper, 'spare_hosts'))
     expect(alias.get('td[data-label="Kind"]').text()).toBe('Alias')
     expect(alias.get('td[data-label="Why"]').text()).toBe('Nothing names it')
     expect(alias.getComponent(RouterLinkStub).props('to')).toBe('/firewall/aliases')
 
-    const zone = rowOf(wrapper, 'attic')
+    const zone = must(rowOf(wrapper, 'attic'))
     expect(zone.get('td[data-label="Kind"]').text()).toBe('Zone')
     expect(zone.get('td[data-label="Why"]').text()).toContain('Takes rule r1, protection')
     expect(zone.getComponent(RouterLinkStub).props('to')).toBe('/interfaces#zones')
 
-    const rule = wrapper.findAll('tbody tr').find((tr) => nameOf(tr).startsWith('Old printer'))
+    const rule = must(
+      wrapper.findAll('tbody tr').find((tr) => nameOf(tr).startsWith('Old printer')),
+    )
     expect(rule.get('td[data-label="Kind"]').text()).toBe('Rule')
     expect(rule.get('td[data-label="Name"]').text()).toContain('r2')
     expect(rule.get('td[data-label="Why"]').text()).toBe('Switched off')
     expect(rule.getComponent(RouterLinkStub).props('to')).toBe('/firewall/rules#lan')
 
-    const outbound = rowOf(wrapper, 'o1')
+    const outbound = must(rowOf(wrapper, 'o1'))
     expect(outbound.get('td[data-label="Kind"]').text()).toBe('Outbound rule')
     expect(outbound.getComponent(RouterLinkStub).props('to')).toBe('/firewall/nat')
   })
@@ -141,24 +145,24 @@ describe('UnusedSection', () => {
       }),
     )
     expect(config.aliases).toEqual([])
-    expect(config.draft.schedules).toEqual([])
+    expect(draftOf(config).schedules).toEqual([])
     expect(config.zones.map((z) => z.name)).toEqual(['lan'])
     expect(config.rules.map((r) => r.id)).toEqual(['r2'])
-    expect(config.draft.protection.zones).toEqual(['lan'])
+    expect(must(draftOf(config).protection).zones).toEqual(['lan'])
 
     const toasts = useToastStore().toasts
     expect(toasts.map((t) => t.message)).toEqual(['Removed 3 unused items.'])
     expect(rowOf(wrapper, 'spare_hosts')).toBeUndefined()
     expect(wrapper.text()).toContain('No unused items.')
 
-    toasts[0].action.run()
+    toastAction(toasts[0]).run()
     expect(config.draft).toEqual(draft())
   })
 
   it('deletes one item with its own question', async () => {
     const { wrapper, config } = await open()
     const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
-    const zone = rowOf(wrapper, 'attic')
+    const zone = must(rowOf(wrapper, 'attic'))
     await button(zone, 'Delete').trigger('click')
     await flushPromises()
     expect(ask).toHaveBeenCalledWith(
@@ -173,16 +177,16 @@ describe('UnusedSection', () => {
   // A list read before the draft changed can name what is in use by now.
   it('leaves out of the removal what its own Delete would refuse', async () => {
     const cfg = draft()
-    cfg.interfaces.push(fixture<Interface>({ name: 'eth2', zone: 'attic' }))
+    must(cfg.interfaces).push(fixture<Interface>({ name: 'eth2', zone: 'attic' }))
     const { wrapper, config } = await open({ cfg })
     const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
-    expect(button(rowOf(wrapper, 'attic'), 'Delete').attributes('disabled')).toBeDefined()
+    expect(button(must(rowOf(wrapper, 'attic')), 'Delete').attributes('disabled')).toBeDefined()
     await button(wrapper, 'Remove 2 unused items').trigger('click')
     await flushPromises()
 
     expect(ask.mock.calls[0][0].dependents).toEqual(['alias spare_hosts', 'schedule night_shift'])
     expect(config.aliases).toEqual([])
-    expect(config.draft.schedules).toEqual([])
+    expect(draftOf(config).schedules).toEqual([])
     expect(config.zones.map((z) => z.name)).toEqual(['lan', 'attic'])
     expect(config.rules.map((r) => r.id)).toEqual(['r1', 'r2'])
     expect(useToastStore().toasts.map((t) => t.message)).toEqual(['Removed 2 unused items.'])
@@ -196,7 +200,7 @@ describe('UnusedSection', () => {
       const remove = () => button(wrapper, 'Remove 3 unused items')
       expect(remove().attributes('disabled')).toBeUndefined()
 
-      let answer
+      let answer: (reply: UnusedResponse) => void = () => undefined
       vi.mocked(api.config.unused).mockReturnValue(new Promise((resolve) => (answer = resolve)))
       config.upsertRule(fixture<Rule>({ id: 'r3', zone: 'lan', action: 'accept' }))
       await flushPromises()

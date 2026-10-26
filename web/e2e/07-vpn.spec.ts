@@ -1,12 +1,14 @@
 import { readFileSync } from 'node:fs'
 
+import type { Locator, Page } from '@playwright/test'
+
 import { expect, test } from './fixtures'
 import { applyAndConfirm, login, shot } from './helpers'
 
 test.describe.configure({ mode: 'serial' })
 
 /** A tunnel's row on the Tunnels tab. */
-const tunnelRow = (page, name) =>
+const tunnelRow = (page: Page, name: string) =>
   page
     .getByRole('region', { name: 'Tunnels' })
     .getByRole('row')
@@ -67,7 +69,7 @@ test('make a device on the page and hand it its file', async ({ page }) => {
   await page.goto('/vpn/wireguard')
   const key = tunnelRow(page, 'wg0').locator('[data-label="Public key"]')
   await expect(key).not.toHaveText('')
-  const tunnelKey = (await key.textContent()).trim()
+  const tunnelKey = ((await key.textContent()) ?? '').trim()
   await page.getByRole('tab', { name: 'Peers' }).click()
   await page.getByRole('button', { name: 'Add peer' }).click()
   const dialog = page.getByRole('dialog')
@@ -113,7 +115,7 @@ test('make new keys for a device and hand it the new file', async ({ page }) => 
   // over it. A click reaches it either way, since the dialog underneath
   // takes no pointer events.
   const confirm = page.getByRole('dialog', { name: 'Make new keys for phone?' })
-  const z = (d) => d.evaluate((el) => Number(getComputedStyle(el).zIndex))
+  const z = (d: Locator) => d.evaluate((el) => Number(getComputedStyle(el).zIndex))
   expect(await z(confirm)).toBeGreaterThan(await z(peer))
   await confirm.getByLabel('Type phone to confirm').fill('phone')
   await confirm.getByRole('button', { name: 'Make new keys', exact: true }).click()

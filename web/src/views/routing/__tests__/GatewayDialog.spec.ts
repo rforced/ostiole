@@ -2,8 +2,10 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { Config } from '@/lib/types.gen'
+import type { Config, Gateway } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import type { DeepPartial } from '@/test/fixtures'
+import { configOf, must } from '@/test/fixtures'
 import GatewayDialog from '@/views/routing/GatewayDialog.vue'
 
 // The dialog itself teleports; the form inside it is what is under test.
@@ -15,29 +17,37 @@ const stubs = {
   },
 }
 
-function open(gateway = null, more = {}) {
+function open(gateway: Gateway | null = null, more: DeepPartial<Config> = {}) {
   const config = useConfigStore()
-  config.replaceDraft({
-    version: 12,
-    ...more,
-    zones: [
-      { name: 'wan', external: true },
-      { name: 'vpn', external: true },
-    ],
-    interfaces: [
-      { name: 'eth0', zone: 'wan', enabled: true, ipv4: { mode: 'dhcp' }, ipv6: { mode: 'none' } },
-      {
-        name: 'wg1',
-        zone: 'vpn',
-        enabled: true,
-        ipv4: { mode: 'static', address: '10.66.1.2/32' },
-        ipv6: { mode: 'none' },
-        wireguard: { privateKey: 'x', peers: [] },
-      },
-    ],
-    gateways: gateway ? [gateway] : [{ name: 'wan', enabled: true, interface: 'eth0' }],
-    rules: [],
-  } as Config)
+  config.replaceDraft(
+    configOf({
+      version: 12,
+      ...more,
+      zones: [
+        { name: 'wan', external: true },
+        { name: 'vpn', external: true },
+      ],
+      interfaces: [
+        {
+          name: 'eth0',
+          zone: 'wan',
+          enabled: true,
+          ipv4: { mode: 'dhcp' },
+          ipv6: { mode: 'none' },
+        },
+        {
+          name: 'wg1',
+          zone: 'vpn',
+          enabled: true,
+          ipv4: { mode: 'static', address: '10.66.1.2/32' },
+          ipv6: { mode: 'none' },
+          wireguard: { privateKey: 'x', peers: [] },
+        },
+      ],
+      gateways: gateway ? [gateway] : [{ name: 'wan', enabled: true, interface: 'eth0' }],
+      rules: [],
+    }),
+  )
   const wrapper = mount(GatewayDialog, {
     props: { open: true, gateway: gateway ? config.gateways[0] : null },
     global: { stubs },
@@ -98,13 +108,14 @@ describe('GatewayDialog', () => {
     const monitor = wrapper.find<HTMLInputElement>('#gw-monitor')
     expect(monitor.attributes('placeholder')).toBe('the next hop')
     expect(wrapper.text()).toContain('Empty probes the next hop, which says the line is up.')
-    const use = () => wrapper.findAll('button').find((b) => b.text().startsWith('Use '))
+    const find = () => wrapper.findAll('button').find((b) => b.text().startsWith('Use '))
+    const use = () => must(find())
     expect(use().text()).toBe('Use 2001:db8::53, the DNS upstream')
     await wrapper.find('#gw-addr').setValue('198.51.100.1')
     expect(use().text()).toBe('Use 192.0.2.53, the DNS upstream')
     await use().trigger('click')
     expect(monitor.element.value).toBe('192.0.2.53')
-    expect(use()).toBeUndefined()
+    expect(find()).toBeUndefined()
   })
 
   it('offers no upstream to a router that looks names up itself', async () => {
@@ -129,7 +140,7 @@ describe('GatewayDialog', () => {
       },
     })
     await flushPromises()
-    const use = () => wrapper.findAll('button').find((b) => b.text().startsWith('Use '))
+    const use = () => must(wrapper.findAll('button').find((b) => b.text().startsWith('Use ')))
     expect(use().text()).toBe('Use 2001:db8::9, the DNS upstream')
     await wrapper.find('#gw-if').setValue('wg1')
     expect(use().text()).toBe('Use 192.0.2.9, the DNS upstream')

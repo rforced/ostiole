@@ -12,7 +12,8 @@ import {
 } from '@/lib/sort'
 
 describe('addressKey', () => {
-  const order = (list) => [...list].sort((a, b) => (addressKey(a) < addressKey(b) ? -1 : 1))
+  const order = (list: string[]) =>
+    [...list].sort((a, b) => ((addressKey(a) ?? '') < (addressKey(b) ?? '') ? -1 : 1))
 
   it('orders addresses as numbers, IPv4 first', () => {
     expect(order(['10.0.0.100', '10.0.0.9', '2001:db8::1', '9.9.9.9', '10.0.0.20'])).toEqual([
@@ -38,8 +39,8 @@ describe('addressKey', () => {
 
   it('puts what is not an address after the addresses', () => {
     expect(addressKey('')).toBe(null)
-    expect(addressKey('printer') > addressKey('2001:db8::1')).toBe(true)
-    expect(addressKey('1::2::3').startsWith('9')).toBe(true)
+    expect((addressKey('printer') ?? '') > (addressKey('2001:db8::1') ?? '')).toBe(true)
+    expect(addressKey('1::2::3')?.startsWith('9')).toBe(true)
   })
 })
 

@@ -16,7 +16,7 @@ const Host = defineComponent({
   },
 })
 
-async function mountAt(path) {
+async function mountAt(path: string) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/firewall', component: Host }],
@@ -58,12 +58,12 @@ describe('useTabHash', () => {
   })
 
   it('honours the hash once a list the configuration supplies arrives', async () => {
-    const zones = ref([])
+    const zones = ref<string[]>([])
     const Late = {
       setup() {
         return { zone: useTabHash(() => zones.value) }
       },
-      render() {
+      render(this: { zone: string }) {
         return h('span', this.zone)
       },
     }
@@ -92,7 +92,7 @@ describe('usePageTabs', () => {
       setup() {
         return usePageTabs()
       },
-      render() {
+      render(this: { tabs: Array<{ label: string }>; tab: string }) {
         return h('span', `${this.tabs.map((t) => t.label).join(',')}:${this.tab}`)
       },
     }

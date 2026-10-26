@@ -25,7 +25,7 @@ const candidates = computed(() =>
       i.ipv6?.mode &&
       i.ipv6.mode !== 'none' &&
       (props.server?.interface === i.name ||
-        !(config.draft.services?.dhcp?.v6 ?? []).some((s) => s.interface === i.name)),
+        !(config.draft?.services?.dhcp?.v6 ?? []).some((s) => s.interface === i.name)),
   ),
 )
 

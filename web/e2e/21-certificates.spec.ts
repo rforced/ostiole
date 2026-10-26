@@ -9,7 +9,7 @@ import { applyAndConfirm, confirmDialog, login, shot, sidebar } from './helpers'
 test.describe.configure({ mode: 'serial' })
 
 /** A self-signed pair made for the test, so no key is ever committed. */
-function selfSigned(name) {
+function selfSigned(name: string) {
   const dir = mkdtempSync(join(tmpdir(), 'ostiole-e2e-'))
   try {
     // Piped, so its progress stays out of the report and in the error.

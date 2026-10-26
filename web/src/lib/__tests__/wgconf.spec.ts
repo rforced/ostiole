@@ -14,6 +14,12 @@ import {
   takesDefaultRoute,
 } from '@/lib/wgconf'
 
+function addressOf(text: string) {
+  const a = parseAddress(text)
+  if (!a) throw new Error(`${text} is not an address`)
+  return a
+}
+
 describe('wgconf', () => {
   it('writes the file a device takes', () => {
     expect(
@@ -58,11 +64,9 @@ describe('wgconf', () => {
 
   it('reads and writes both families', () => {
     for (const s of ['10.66.0.1', '::', '::1', 'fd66::2', '2001:db8:0:1:0:0:0:1', 'fe80::1:2']) {
-      expect(formatAddress(parseAddress(s))).toBe(
-        s === '2001:db8:0:1:0:0:0:1' ? '2001:db8:0:1::1' : s,
-      )
+      expect(formatAddress(addressOf(s))).toBe(s === '2001:db8:0:1:0:0:0:1' ? '2001:db8:0:1::1' : s)
     }
-    expect(formatAddress(parseAddress('1:0:0:2:0:0:0:3'))).toBe('1:0:0:2::3')
+    expect(formatAddress(addressOf('1:0:0:2:0:0:0:3'))).toBe('1:0:0:2::3')
     for (const bad of ['10.66.0.256', '1::2::3', 'nope', '1:2:3:4:5:6:7:8:9', '']) {
       expect(parseAddress(bad)).toBeNull()
     }

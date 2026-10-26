@@ -155,18 +155,21 @@ function suggestAddresses() {
 }
 
 /** The next free address in each family a tunnel has. */
-function suggestFor(t: Interface | null) {
+function suggestFor(t: Interface | null | undefined) {
   const taken = (t?.wireguard?.peers ?? []).flatMap((p) => p.allowedIps ?? [])
-  return [t?.ipv4?.address, t?.ipv6?.address]
-    .filter(Boolean)
+  return tunnelAddresses(t)
     .map((a) => nextFree(a, taken))
     .filter(Boolean)
+}
+
+function tunnelAddresses(t: Interface | null | undefined) {
+  return [t?.ipv4?.address, t?.ipv6?.address].filter((a): a is string => Boolean(a))
 }
 
 /** The addresses the device holds out of the ones listed for it. */
 function ownAddresses(allowed: string[]) {
   const t = current.value
-  return deviceAddresses(allowed, [t?.ipv4?.address, t?.ipv6?.address].filter(Boolean))
+  return deviceAddresses(allowed, tunnelAddresses(t))
 }
 
 /** Whether the device would hold an address, saying so when it would not. */
@@ -234,8 +237,10 @@ async function makeKeys() {
 
 async function save() {
   error.value = ''
+  const tunnel = current.value
+  if (!tunnel) return
   if (!making.value) {
-    config.upsertPeer(current.value.name, peerOut(), props.peer?.name ?? form.value.name.trim())
+    config.upsertPeer(tunnel.name, peerOut(), props.peer?.name ?? form.value.name.trim())
     open.value = false
     return
   }
@@ -244,7 +249,7 @@ async function save() {
   try {
     const made = await makeKeys()
     const out = { ...peerOut(), publicKey: made.publicKey, presharedKey: made.presharedKey }
-    config.upsertPeer(current.value.name, out, out.name)
+    config.upsertPeer(tunnel.name, out, out.name)
     showDevice(out, made.privateKey)
   } catch (e) {
     error.value = errorMessage(e)
@@ -255,6 +260,8 @@ async function save() {
 
 /** New keys for a peer that has some: the old file stops working. */
 async function remake() {
+  const tunnel = current.value
+  if (!props.peer || !tunnel) return
   const name = props.peer.name
   if (!holdsAddress()) return
   if (
@@ -271,7 +278,7 @@ async function remake() {
   try {
     const made = await makeKeys()
     const out = { ...peerOut(), publicKey: made.publicKey, presharedKey: made.presharedKey }
-    config.upsertPeer(current.value.name, out, name)
+    config.upsertPeer(tunnel.name, out, name)
     showDevice(out, made.privateKey)
   } catch (e) {
     error.value = errorMessage(e)
@@ -284,7 +291,7 @@ function showDevice(peer: WireGuardPeer, privateKey: string) {
   device.value = {
     name: peer.name,
     privateKey,
-    addresses: ownAddresses(peer.allowedIps),
+    addresses: ownAddresses(peer.allowedIps ?? []),
     presharedKey: peer.presharedKey,
   }
   deviceForm.value = { host: '', route: 'networks', keepalive: 0 }
@@ -311,7 +318,7 @@ async function loadCandidates() {
     for (const link of links ?? []) {
       if (!link.external) continue
       for (const a of link.addresses ?? []) {
-        const addr = a.split('/')[0]
+        const addr = a.split('/')[0] ?? ''
         if (isPublic(addr) && !addresses.includes(addr)) addresses.push(addr)
       }
     }
@@ -343,14 +350,14 @@ const routerNetworks = computed(() => {
  * The tunnel's addresses, when this router answers DNS on it: the DNS
  * page's interfaces, or with none named every one outside an external zone.
  */
-const dnsAddresses = computed(() => {
+const dnsAddresses = computed((): string[] => {
   const t = current.value
   const dns = config.draft?.services?.dns
   if (!t || !dns?.enabled) return []
   const named = dns.interfaces ?? []
-  const answers = named.length ? named.includes(t.name) : !external.value.has(t.zone)
+  const answers = named.length ? named.includes(t.name) : !external.value.has(t.zone ?? '')
   if (!answers) return []
-  return [t.ipv4?.address, t.ipv6?.address].filter(Boolean).map((a) => a.split('/')[0])
+  return tunnelAddresses(t).map((a) => a.split('/')[0] ?? '')
 })
 
 const fileText = computed(() => {
@@ -365,7 +372,7 @@ const fileText = computed(() => {
       publicKey: current.value?.wireguard?.publicKey ?? '',
       presharedKey: d.presharedKey,
       allowedIps: f.route === 'everything' ? ['0.0.0.0/0', '::/0'] : routerNetworks.value,
-      endpoint: endpoint(f.host, current.value?.wireguard?.listenPort),
+      endpoint: endpoint(f.host, current.value?.wireguard?.listenPort ?? ''),
       keepalive: Number(f.keepalive) || 0,
     },
   })
@@ -384,7 +391,7 @@ function download() {
   URL.revokeObjectURL(url)
 }
 
-const fileEl = ref(null)
+const fileEl = ref<HTMLElement | null>(null)
 /** 'copied', 'selected' when only the fallback's selection worked, or ''. */
 const copied = ref('')
 let copyTimer = 0
@@ -396,9 +403,11 @@ onBeforeUnmount(() => window.clearTimeout(copyTimer))
  * and the older copy command. Either way the file ends up selected.
  */
 async function copyFile() {
-  const range = document.createRange()
-  range.selectNodeContents(fileEl.value)
+  const el = fileEl.value
   const selection = window.getSelection()
+  if (!el || !selection) return
+  const range = document.createRange()
+  range.selectNodeContents(el)
   selection.removeAllRanges()
   selection.addRange(range)
   let ok

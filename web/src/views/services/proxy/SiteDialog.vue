@@ -7,7 +7,7 @@ import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { joinList, keptOrder, parseList } from '@/lib/lists'
-import type { ProxySite } from '@/lib/types.gen'
+import type { ProxyPath, ProxySite } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import AllowFromAliases, { splitAllowFrom } from '@/views/services/proxy/AllowFromAliases.vue'
 
@@ -21,7 +21,21 @@ const config = useConfigStore()
 const form = ref(blank())
 
 function blank() {
-  return {
+  const form: {
+    id: string
+    previousId: string
+    description: string
+    enabled: boolean
+    hosts: string
+    certificate: string
+    pool: string
+    paths: ProxyPath[]
+    plainHttp: boolean
+    hostHeader: string
+    allowFrom: string
+    allowAliases: string[]
+    waf: string
+  } = {
     id: '',
     previousId: '',
     description: '',
@@ -36,6 +50,7 @@ function blank() {
     allowAliases: [],
     waf: '',
   }
+  return form
 }
 
 const pools = computed(() => config.proxy.pools ?? [])
@@ -78,7 +93,7 @@ function addPath() {
   form.value.paths.push({ prefix: '', pool: pools.value[0]?.id ?? '' })
 }
 
-function removePath(index) {
+function removePath(index: number) {
   form.value.paths.splice(index, 1)
 }
 

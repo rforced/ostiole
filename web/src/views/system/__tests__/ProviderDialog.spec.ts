@@ -1,12 +1,13 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import type { DNSProvider } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ProviderDialog from '@/views/system/providers/ProviderDialog.vue'
-import { configOf, sessionOf } from '@/test/fixtures'
+import { configOf, must, sessionOf } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   api: { dnsProviders: { test: vi.fn() } },
@@ -38,7 +39,7 @@ const KINDS = [
   },
 ]
 
-function open(provider = null, role = 'admin') {
+function open(provider: DNSProvider | null = null, role = 'admin') {
   setActivePinia(createPinia())
   useAuthStore().user = sessionOf({ username: role, role })
   const config = useConfigStore()
@@ -52,7 +53,8 @@ function open(provider = null, role = 'admin') {
   return { wrapper, config }
 }
 
-const save = (wrapper) => wrapper.findAll('button').find((b) => b.text() === 'Save to draft')
+const save = (wrapper: VueWrapper) =>
+  must(wrapper.findAll('button').find((b) => b.text() === 'Save to draft'))
 
 describe('ProviderDialog', () => {
   beforeEach(() => setActivePinia(createPinia()))
@@ -138,7 +140,8 @@ describe('ProviderDialog', () => {
 
   it('tests the credentials as the form holds them, for a kind Ostiole can try', async () => {
     const { wrapper } = open()
-    const button = (label) => wrapper.findAll('button').find((b) => b.text() === label)
+    const findButton = (label: string) => wrapper.findAll('button').find((b) => b.text() === label)
+    const button = (label: string) => must(findButton(label))
     await wrapper.get('#prov-id').setValue('cf')
     await wrapper.get('#prov-token').setValue('secret')
     await wrapper.get('#prov-domains').setValue('example.com\nexample.org')
@@ -183,6 +186,6 @@ describe('ProviderDialog', () => {
 
     await wrapper.get('#prov-kind').setValue('exec')
     await flushPromises()
-    expect(button('Test')).toBeUndefined()
+    expect(findButton('Test')).toBeUndefined()
   })
 })

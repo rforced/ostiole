@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
 import { segmentInterfaces } from '@/lib/interfaces'
-import type { Config } from '@/lib/types.gen'
+import type { Config, WakeRequest } from '@/lib/types.gen'
 import { useToastStore } from '@/stores/toast'
 
 /**
@@ -28,15 +28,13 @@ export function useWake() {
   const toast = useToastStore()
   /** The key of the wake in flight, '*' for all of them, '' for none. */
   const busy = ref('')
-  /** @type {import('vue').Ref<string[]>} */
-  const errors = ref([])
+  const errors = ref<string[]>([])
 
   /**
-   * @param {{interface: string, mac: string}} target
-   * @param {string} name how the toast names the machine
-   * @param {string} [key] which button spins
+   * @param name how the toast names the machine
+   * @param key which button spins
    */
-  async function wake(target, name, key = target.mac) {
+  async function wake(target: WakeRequest, name: string, key = target.mac) {
     if (busy.value) return
     busy.value = key
     errors.value = []
@@ -51,11 +49,11 @@ export function useWake() {
   }
 
   /** Wakes each device in turn, then says how many went out and which did not. */
-  async function wakeAll(devices) {
+  async function wakeAll(devices: Array<WakeRequest & { description?: string }>) {
     if (busy.value) return
     busy.value = '*'
     errors.value = []
-    const failed = []
+    const failed: string[] = []
     let sent = 0
     for (const d of devices) {
       try {

@@ -7,6 +7,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import type { ModemStatus } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -15,7 +16,7 @@ const STORAGE_KEY = 'ostiole.modem.address'
 const DEFAULT_ADDRESS = '192.168.100.1'
 
 const address = ref(localStorage.getItem(STORAGE_KEY) || DEFAULT_ADDRESS)
-const status = ref(null)
+const status = ref<ModemStatus | null>(null)
 
 const load = useAsync(async (refresh: boolean = false) => {
   const target = address.value.trim() || DEFAULT_ADDRESS
@@ -29,26 +30,26 @@ onMounted(() => {
   if (!auth.readOnly) load.run(false)
 })
 
-const stuckAt = computed(() => status.value?.provisioning.find((s) => !s.ok) ?? null)
+const stuckAt = computed(() => status.value?.provisioning?.find((s) => !s.ok) ?? null)
 
-const mhz = (hz) => (hz ? `${(hz / 1e6).toFixed(hz % 1e6 ? 1 : 0)} MHz` : '—')
-const dbmv = (v) => `${v.toFixed(1)} dBmV`
-const db = (v) => `${v.toFixed(1)} dB`
-const count = (n) => n.toLocaleString()
+const mhz = (hz: number | undefined) => (hz ? `${(hz / 1e6).toFixed(hz % 1e6 ? 1 : 0)} MHz` : '—')
+const dbmv = (v: number) => `${v.toFixed(1)} dBmV`
+const db = (v: number) => `${v.toFixed(1)} dB`
+const count = (n: number) => n.toLocaleString()
 
 /**
  * DOCSIS levels as the cable industry quotes them: downstream within
  * ±7 dBmV and SNR of 33 dB or better for QAM256; upstream 35–49 dBmV.
  * A little outside is worth a look, further out is a fault.
  */
-function downPowerTone(p) {
+function downPowerTone(p: number) {
   const a = Math.abs(p)
   return a <= 7 ? 'badge-ok' : a <= 10 ? 'badge-warn' : 'badge-bad'
 }
-function snrTone(snr) {
+function snrTone(snr: number) {
   return snr >= 33 ? 'badge-ok' : snr >= 30 ? 'badge-warn' : 'badge-bad'
 }
-function upPowerTone(p) {
+function upPowerTone(p: number) {
   if (p >= 35 && p <= 49) return 'badge-ok'
   return p >= 30 && p <= 51 ? 'badge-warn' : 'badge-bad'
 }
@@ -134,7 +135,7 @@ function upPowerTone(p) {
               Stopped at <strong>{{ stuckAt.name }}</strong
               >: everything after it waits on that.
             </p>
-            <p v-else-if="status.provisioning.length" class="text-ink-muted">
+            <p v-else-if="status.provisioning?.length" class="text-ink-muted">
               Every step passed. If the WAN still has no address, the provider's DHCP is next to
               ask.
             </p>
@@ -155,7 +156,7 @@ function upPowerTone(p) {
 
       <SectionCard
         title="Downstream"
-        :count="status.downstream.length"
+        :count="status.downstream?.length"
         intro="A receive level within ±7 dBmV and an SNR of 33 dB or better is healthy."
         flush
       >
@@ -172,7 +173,7 @@ function upPowerTone(p) {
             </tr>
           </thead>
           <tbody>
-            <tr v-if="!status.downstream.length">
+            <tr v-if="!status.downstream?.length">
               <td colspan="7" class="text-ink-muted">No downstream channel is locked.</td>
             </tr>
             <tr v-for="d in status.downstream" :key="`${d.kind}-${d.channel}`">
@@ -204,7 +205,7 @@ function upPowerTone(p) {
 
       <SectionCard
         title="Upstream"
-        :count="status.upstream.length"
+        :count="status.upstream?.length"
         intro="A transmit level of 35 to 49 dBmV is healthy."
         flush
       >
@@ -219,7 +220,7 @@ function upPowerTone(p) {
             </tr>
           </thead>
           <tbody>
-            <tr v-if="!status.upstream.length">
+            <tr v-if="!status.upstream?.length">
               <td colspan="5" class="text-ink-muted">No upstream channel is ranged.</td>
             </tr>
             <tr v-for="u in status.upstream" :key="`${u.kind}-${u.channel}`">

@@ -32,7 +32,7 @@ describe('MenuButton', () => {
     expect(trigger.text()).toBe('Download')
     expect(trigger.classes()).toContain('ml-3')
     expect(trigger.attributes('aria-expanded')).toBe('true')
-    expect(document.querySelector('[role="menu"]').getAttribute('aria-labelledby')).toBe(
+    expect(document.querySelector('[role="menu"]')?.getAttribute('aria-labelledby')).toBe(
       trigger.attributes('id'),
     )
     const shown = entries().map((e) => [e.tagName, e.textContent.trim(), e.getAttribute('href')])
@@ -51,8 +51,8 @@ describe('MenuButton', () => {
     })
     const wrapper = await menu([...ITEMS, { label: 'PKCS#12', action }])
     const item = entries().at(-1)
-    expect(item.tagName).toBe('DIV')
-    item.click()
+    expect(item?.tagName).toBe('DIV')
+    item?.click()
     await flushPromises()
     expect(action).toHaveBeenCalledOnce()
     expect(seen).toBe(wrapper.get('button').element)

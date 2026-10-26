@@ -15,6 +15,7 @@ import {
   reedSolomon,
   svgPath,
   versionBits,
+  type QrCode,
 } from '@/lib/qr'
 
 describe('qr tables', () => {
@@ -73,7 +74,7 @@ describe('qr tables', () => {
 })
 
 /** The code as a plain PBM, four pixels a module, with its quiet zone. */
-function pbm(code) {
+function pbm(code: QrCode) {
   const scale = 4
   const width = (code.size + 8) * scale
   const rows = []

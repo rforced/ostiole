@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { type PropType, ref, watch } from 'vue'
 
 import ActionButton from '@/components/ActionButton.vue'
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
-import { api } from '@/lib/api'
+import { api, type Passkey } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
 
 const props = defineProps({
   /** The passkey being renamed. */
-  passkey: { type: Object, default: null },
+  passkey: { type: Object as PropType<Passkey | null>, default: null },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 const emit = defineEmits(['done'])
@@ -30,10 +30,12 @@ watch(
 )
 
 async function submit() {
+  const passkey = props.passkey
+  if (!passkey) return
   error.value = ''
   busy.value = true
   try {
-    await api.auth.renamePasskey(props.passkey.id, name.value.trim())
+    await api.auth.renamePasskey(passkey.id, name.value.trim())
     emit('done')
     open.value = false
   } catch (e) {

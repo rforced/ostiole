@@ -85,7 +85,7 @@ const config = useConfigStore()
 const inFiles = computed(() => Boolean(config.saved?.system?.logging?.files?.enabled))
 /** The speed each link is shaped to, by the configuration the router runs. */
 const speeds = computed(() => {
-  const out = {}
+  const out: Record<string, { down: number; up: number }> = {}
   for (const i of config.saved?.interfaces ?? []) {
     const s = i.shaping
     if (i.enabled && (s?.download || s?.upload)) {

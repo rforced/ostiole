@@ -1,8 +1,13 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import type { Page } from '@playwright/test'
+
+import type { Config } from '../src/lib/types.gen'
+
 import { expect, test } from './fixtures'
 import { applyAndConfirm, confirmDialog, login, reconfigure, shot } from './helpers'
+import type { RunningServer } from './server'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -11,20 +16,22 @@ test.describe.configure({ mode: 'serial' })
 // global-setup.ts gave the WAN a next hop that answers.
 
 /** Has addresses answer as said, beside the next hops the seed gave. */
-function answers(server, addresses) {
+function answers(server: RunningServer, addresses: Record<string, { silent: boolean }>) {
   const file = join(server.dir, 'probes.json')
   const { hops } = JSON.parse(readFileSync(file, 'utf8'))
   writeFileSync(file, JSON.stringify({ hops, addresses }))
 }
 
-const card = (page, name) => page.getByRole('region', { name, exact: true })
+const card = (page: Page, name: string) => page.getByRole('region', { name, exact: true })
 
-async function wanGateway(page) {
-  const config = await (await page.request.get('/api/v1/config')).json()
-  return config.gateways[0]
+async function wanGateway(page: Page) {
+  const config: Config = await (await page.request.get('/api/v1/config')).json()
+  const gateway = config.gateways?.[0]
+  if (!gateway) throw new Error('the seed has no gateway')
+  return gateway
 }
 
-function gatewayRow(page, name) {
+function gatewayRow(page: Page, name: string) {
   return card(page, 'Gateways').getByRole('row').filter({ hasText: name })
 }
 
@@ -77,15 +84,18 @@ test('a gateway that never answered says so, until it has a monitor', async ({ p
   await login(page)
   const wan = await wanGateway(page)
   answers(server, { '198.51.100.9': { silent: true } })
-  await reconfigure(page.request, (c) =>
-    c.gateways.push({
-      name: 'lte',
-      enabled: true,
-      interface: wan.interface,
-      address: '198.51.100.9',
-      priority: 1,
-    }),
-  )
+  await reconfigure(page.request, (c) => {
+    c.gateways = [
+      ...(c.gateways ?? []),
+      {
+        name: 'lte',
+        enabled: true,
+        interface: wan.interface,
+        address: '198.51.100.9',
+        priority: 1,
+      },
+    ]
+  })
   await page.goto('/routing')
   const row = gatewayRow(page, 'lte')
   await expect(row.locator('.badge').first()).toHaveText('never answered', { timeout: 15_000 })

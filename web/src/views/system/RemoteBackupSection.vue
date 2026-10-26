@@ -12,7 +12,7 @@ import { ApiError, api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { formatBytes, formatWhen } from '@/lib/format'
 import { SCHEDULE_PRESETS, presetFor } from '@/lib/schedules'
-import type { Copy, CronStatus, RemoteBackup } from '@/lib/types.gen'
+import type { Copy, CronStatus, RemoteBackup, RestoreResponse } from '@/lib/types.gen'
 import { ADMIN_ONLY, adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -27,7 +27,7 @@ const config = useConfigStore()
 const confirm = useConfirmStore()
 const status = ref<CronStatus | null>(null)
 const copies = ref<Copy[]>([])
-const pending = ref(null)
+const pending = ref<RestoreResponse | null>(null)
 /** The copy whose own passphrase is being asked for, and the answer. */
 const asking = ref('')
 const rowPassphrase = ref('')
@@ -56,7 +56,7 @@ function safeHostname(name = '') {
  * filled in once: one that followed the hostname would lose sight of the
  * copies after a rename. A router already copying keeps its folder.
  */
-function setEnabled(on) {
+function setEnabled(on: boolean) {
   const patch: Partial<RemoteBackup> = { enabled: on }
   if (on && !applied.value && !settings.value.prefix?.trim()) {
     patch.prefix = `ostiole-${safeHostname(config.draft?.system?.hostname)}/`
@@ -98,9 +98,13 @@ const restore = useAsync(async (key: string, passphrase?: string) => {
 
 /** The copy whose restore is being read, for its row's spinner. */
 const restoring = ref('')
-let passphraseInput = null
+let passphraseInput: HTMLInputElement | null = null
 
-async function restoreCopy(key) {
+function setPassphraseInput(el: unknown) {
+  passphraseInput = el instanceof HTMLInputElement ? el : null
+}
+
+async function restoreCopy(key: string) {
   restoring.value = key
   await restore.run(key, asking.value === key ? rowPassphrase.value : '')
   restoring.value = ''
@@ -125,17 +129,17 @@ const remove = useAsync(async (what: string) => {
   }
 })
 
-async function deleteCopies(what) {
+async function deleteCopies(what: string) {
   deleting.value = what
   await remove.run(what)
   deleting.value = ''
 }
 
-const countOf = (n) => `${n} ${n === 1 ? 'copy' : 'copies'}`
+const countOf = (n: number) => `${n} ${n === 1 ? 'copy' : 'copies'}`
 
 /** The routers with copies in the folder and how many each has. */
 const takers = computed(() => {
-  const n = new Map()
+  const n = new Map<string, number>()
   for (const c of copies.value) n.set(c.hostname, (n.get(c.hostname) ?? 0) + 1)
   return [...n]
 })
@@ -169,6 +173,7 @@ async function loadIntoDraft() {
     }))
   )
     return
+  if (!pending.value) return
   config.replaceDraft(pending.value.config)
   pending.value = null
 }
@@ -189,7 +194,7 @@ async function loadIntoDraft() {
           label="Enabled"
           aria-label="Remote backup enabled"
           :disabled="!auth.isAdmin"
-          @update:model-value="setEnabled"
+          @update:model-value="setEnabled($event as boolean)"
         />
       </template>
 
@@ -365,7 +370,7 @@ async function loadIntoDraft() {
           :title="auth.isAdmin ? undefined : adminOnly('delete', 'all copies')"
           :question="copies.length === 1 ? 'Delete 1 copy?' : `Delete all ${copies.length} copies?`"
           description="Hidden copies in the folder go too. None can be restored after this."
-          :typed="config.saved.backup.remote.bucket"
+          :typed="config.saved?.backup?.remote?.bucket"
           :dependents="shared ? takers.map(([host, n]) => `${host}, ${countOf(n)}`) : []"
           dependents-label="Taken by"
           @confirm="deleteCopies(ALL)"
@@ -413,7 +418,7 @@ async function loadIntoDraft() {
             <td class="actions" data-label="">
               <input
                 v-if="asking === c.key"
-                :ref="(el) => (passphraseInput = el)"
+                :ref="setPassphraseInput"
                 v-model="rowPassphrase"
                 type="password"
                 class="input mr-2 inline-block w-48 max-sm:w-full"

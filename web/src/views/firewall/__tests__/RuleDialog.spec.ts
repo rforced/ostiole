@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { Config, Rule } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import { emptyConfig, iface } from '@/test/fixtures'
 import RuleDialog from '@/views/firewall/RuleDialog.vue'
 
 const stubs = {
@@ -14,22 +15,20 @@ const stubs = {
   EndpointFields: true,
 }
 
-function draft(shaped: boolean) {
+function draft(shaped: boolean): Config {
   return {
-    version: 3,
+    ...emptyConfig(),
     zones: [{ name: 'lan' }, { name: 'wan', external: true }],
     interfaces: [
-      {
+      iface({
         name: 'eth0',
         zone: 'wan',
         enabled: true,
         ...(shaped ? { shaping: { download: 1e8 } } : {}),
-      },
-      { name: 'eth1', zone: 'lan', enabled: true },
+      }),
+      iface({ name: 'eth1', zone: 'lan', enabled: true }),
     ],
-    rules: [],
-    nat: { outbound: { mode: 'automatic' } },
-  } as Config
+  }
 }
 
 function open(shaped: boolean, rule: Rule | null = null) {

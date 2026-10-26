@@ -1,8 +1,8 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { type DOMWrapper, type VueWrapper, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
 
-import { ApiError, api } from '@/lib/api'
+import { ApiError, type Mfa, type Passkey, api } from '@/lib/api'
 import * as webauthn from '@/lib/webauthn'
 import { useAuthStore } from '@/stores/auth'
 import { useConfirmStore } from '@/stores/confirm'
@@ -39,7 +39,7 @@ const AppDialogStub = {
 
 const APP = { enabledAt: '2026-09-20T10:00:00Z', lastUsed: '2026-10-09T10:00:00Z' }
 
-const passkey = (id, name) => ({
+const passkey = (id: string, name: string): Passkey => ({
   id,
   name,
   rpId: 'edge.example',
@@ -47,14 +47,14 @@ const passkey = (id, name) => ({
   lastUsed: '2026-10-05T10:00:00Z',
 })
 
-const mfa = (over = {}) => ({
+const mfa = (over: Partial<Mfa> = {}): Mfa => ({
   totp: APP,
   passkeys: [],
   rpId: 'edge.example',
   ...over,
 })
 
-async function open(state, role = 'viewer') {
+async function open(state: Mfa, role = 'viewer') {
   setActivePinia(createPinia())
   vi.clearAllMocks()
   vi.mocked(webauthn.available).mockReturnValue(true)
@@ -66,13 +66,24 @@ async function open(state, role = 'viewer') {
   return wrapper
 }
 
-const button = (scope, text) => scope.findAll('button').find((b) => b.text() === text)
-const disabled = (b) => b.attributes('disabled') !== undefined
-const group = (wrapper, name) =>
-  wrapper.findAll('fieldset').find((f) => f.get('legend').text() === name)
-const badge = (wrapper) => wrapper.get('.badge').text()
-const intro = (wrapper) => wrapper.get('h2 + p').text()
-const dialog = (wrapper) => wrapper.find('[role="dialog"]')
+type Scope = Pick<DOMWrapper<Element>, 'findAll'>
+
+const findButton = (scope: Scope, text: string) =>
+  scope.findAll('button').find((b) => b.text() === text)
+const button = (scope: Scope, text: string) => {
+  const found = findButton(scope, text)
+  if (!found) throw new Error(`no button ${text}`)
+  return found
+}
+const disabled = (b: DOMWrapper<Element>) => b.attributes('disabled') !== undefined
+const group = (wrapper: VueWrapper, name: string) => {
+  const found = wrapper.findAll('fieldset').find((f) => f.get('legend').text() === name)
+  if (!found) throw new Error(`no group ${name}`)
+  return found
+}
+const badge = (wrapper: VueWrapper) => wrapper.get('.badge').text()
+const intro = (wrapper: VueWrapper) => wrapper.get('h2 + p').text()
+const dialog = (wrapper: VueWrapper) => wrapper.find('[role="dialog"]')
 
 describe('MfaCard', () => {
   it('starts with the authenticator app, and says why a passkey has to wait', async () => {
@@ -82,7 +93,7 @@ describe('MfaCard', () => {
     const app = group(wrapper, 'Authenticator app')
     expect(app.text()).toContain('Not set up.')
     expect(disabled(button(app, 'Set up authenticator app'))).toBe(false)
-    expect(button(app, 'Remove')).toBeUndefined()
+    expect(findButton(app, 'Remove')).toBeUndefined()
     const keys = group(wrapper, 'Passkeys')
     expect(disabled(button(keys, 'Add passkey'))).toBe(true)
     expect(keys.text()).toContain('Set up an authenticator app first.')

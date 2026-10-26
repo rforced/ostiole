@@ -5,6 +5,7 @@ import { RouterLink, useRoute } from 'vue-router'
 
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import UserMenu from '@/components/UserMenu.vue'
+import type { NavItem } from '@/lib/nav'
 import { NAV } from '@/lib/nav'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -31,22 +32,23 @@ const nav = computed(() =>
   ).filter((item) => !item.pages || item.pages.length > 0),
 )
 
-const within = (item, path) => path === item.to || path.startsWith(`${item.to}/`)
-const inside = (item) => within(item, route.path)
+const within = (item: NavItem, path: string) => path === item.to || path.startsWith(`${item.to}/`)
+const inside = (item: NavItem) => within(item, route.path)
 
 /**
  * The item whose pages are listed. Clicking an item with pages opens its
  * list instead of going anywhere, and closes any other; landing on a page
  * opens its own.
  */
-const sectionOf = (path) => nav.value.find((item) => item.pages && within(item, path))?.to ?? null
+const sectionOf = (path: string) =>
+  nav.value.find((item) => item.pages && within(item, path))?.to ?? null
 const expanded = ref(sectionOf(route.path))
 watch(
   () => route.path,
   (path) => (expanded.value = sectionOf(path)),
 )
-const toggle = (item) => (expanded.value = expanded.value === item.to ? null : item.to)
-const listId = (item) => `nav-${item.to.slice(1)}-pages`
+const toggle = (item: NavItem) => (expanded.value = expanded.value === item.to ? null : item.to)
+const listId = (item: NavItem) => `nav-${item.to.slice(1)}-pages`
 
 /**
  * A top-level row, link or section. The current one is styled through
@@ -62,7 +64,7 @@ const hostname = computed(() => config.saved?.system?.hostname ?? '')
  * A viewer changes nothing, so a draft that differs for one is a page
  * filling in a default, not an edit worth a dot.
  */
-const changed = (to) => !auth.readOnly && config.hasChanges(to)
+const changed = (to: string) => !auth.readOnly && config.hasChanges(to)
 </script>
 
 <template>

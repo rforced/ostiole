@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 import type { Config } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import { configOf, must } from '@/test/fixtures'
 import ResolverTab from '@/views/services/dns/ResolverTab.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -13,7 +14,7 @@ vi.mock('@/lib/api', () => ({
 }))
 
 function draft() {
-  return {
+  return configOf({
     version: 11,
     zones: [
       { name: 'lan', description: 'Home' },
@@ -27,7 +28,7 @@ function draft() {
     ],
     rules: [],
     services: { dns: { enabled: true } },
-  } as Config
+  })
 }
 
 describe('ResolverTab', () => {
@@ -54,7 +55,7 @@ describe('ResolverTab', () => {
 
     // Opting out lists the same interfaces as choices, plus the WAN.
     const everywhere = wrapper.findAll('label').find((l) => l.text().includes('Every interface'))
-    await wrapper.find(`[id="${everywhere.attributes('for')}"]`).setValue(false)
+    await wrapper.find(`[id="${everywhere?.attributes('for')}"]`).setValue(false)
     const choices = wrapper.findAll('label').filter((l) => l.find('input[type=checkbox]').exists())
     expect(choices.map((l) => l.text()).join(' ')).toContain('Cable')
   })
@@ -102,15 +103,15 @@ describe('ResolverTab', () => {
     config.loaded = true
     const wrapper = mount(ResolverTab)
     await flushPromises()
-    const provider = (name) =>
+    const provider = (name: string) =>
       wrapper.findAll('[aria-label="Fill in a provider"] button').find((b) => b.text() === name)
     const cloudflare = ['1.1.1.1', '1.0.0.1', '2606:4700:4700::1111', '2606:4700:4700::1001']
 
-    await provider('Cloudflare').trigger('click')
+    await must(provider('Cloudflare')).trigger('click')
     expect(wrapper.find<HTMLInputElement>('#dns-up').element.value).toBe(cloudflare.join(', '))
 
     await wrapper.find('#dns-resolver').setValue('tls')
-    await provider('Cloudflare').trigger('click')
+    await must(provider('Cloudflare')).trigger('click')
     expect(wrapper.find<HTMLInputElement>('#dns-tls').element.value).toBe(
       cloudflare.map((a) => `${a} cloudflare-dns.com`).join('\n'),
     )
@@ -134,7 +135,7 @@ describe('ResolverTab', () => {
     const wrapper = mount(ResolverTab)
     config.draft.services.dns.domain = 'unsaved'
     const button = wrapper.findAll('button').find((b) => b.text().includes('Clear cache'))
-    await button.trigger('click')
+    await must(button).trigger('click')
     await flushPromises()
 
     expect(api.clearDnsCache).toHaveBeenCalledOnce()
@@ -152,7 +153,7 @@ describe('ResolverTab', () => {
     const wrapper = mount(ResolverTab)
     await flushPromises()
     const button = wrapper.findAll('button').find((b) => b.text().includes('Clear cache'))
-    expect(button.attributes('disabled')).toBeDefined()
+    expect(button?.attributes('disabled')).toBeDefined()
   })
   // Domain overrides send a whole domain to resolvers of its own, so they
   // sit with the resolver, not with the names this router answers.
@@ -164,7 +165,7 @@ describe('ResolverTab', () => {
     const wrapper = mount(ResolverTab)
     await flushPromises()
     const row = wrapper.findAll('tr').find((r) => r.text().includes('ts.net'))
-    expect(row.text()).toContain('100.100.100.100')
+    expect(row?.text()).toContain('100.100.100.100')
     expect(wrapper.findAll('button').some((b) => b.text().includes('Add domain'))).toBe(true)
   })
 

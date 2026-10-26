@@ -57,7 +57,7 @@ describe('gateways', () => {
   })
 
   it('adds a probe to its second, and lets go of what left the window', () => {
-    let rows = [[800, 3, 3, 3, 0]]
+    let rows: Array<Array<number | null | undefined>> = [[800, 3, 3, 3, 0]]
     rows = addProbe(
       rows,
       ['IPv4'],

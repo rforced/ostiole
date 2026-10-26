@@ -86,8 +86,12 @@ onMounted(() => {
 })
 onBeforeUnmount(() => observer?.disconnect())
 
+type Row = [number, ...(number | null)[]]
+const isRow = (p: ChartPoint): p is Row => typeof p[0] === 'number'
+const limitOf = (s: ChartSeries) => s.limit ?? 0
+
 const span = computed(() => SPANS[props.window] ?? SPANS['5m'])
-const all = computed(() => props.points ?? [])
+const all = computed(() => (props.points ?? []).filter(isRow))
 const endT = computed(() => props.end || all.value.at(-1)?.[0] || Date.now() / 1000)
 const startT = computed(() => endT.value - span.value)
 /** The points inside the window, oldest first. */
@@ -98,25 +102,28 @@ const scale = computed(() => {
   for (const p of shown.value) {
     props.series.forEach((s, i) => {
       peaks[i] = Math.max(peaks[i], p[s.index] ?? 0)
-      highest = Math.max(highest, peaks[i], p[s.band?.[1]] ?? 0)
+      highest = Math.max(highest, peaks[i], (s.band ? p[s.band[1]] : null) ?? 0)
     })
   }
   props.series.forEach((s, i) => {
-    if (s.limit > 0 && peaks[i] >= s.limit * NEAR) highest = Math.max(highest, s.limit)
+    const limit = limitOf(s)
+    if (limit > 0 && peaks[i] >= limit * NEAR) highest = Math.max(highest, limit)
   })
   return props.scale(highest)
 })
 /** The limits the axis reaches, which are the ones drawn. */
-const limits = computed(() => props.series.filter((s) => s.limit > 0 && s.limit <= scale.value.top))
+const limits = computed(() =>
+  props.series.filter((s) => limitOf(s) > 0 && limitOf(s) <= scale.value.top),
+)
 /** Whether a gridline sits where a limit is drawn, which then takes its place. */
 const underLimit = (v: number) =>
-  limits.value.some((s) => Math.abs(s.limit - v) < scale.value.step / 1e6)
+  limits.value.some((s) => Math.abs(limitOf(s) - v) < scale.value.step / 1e6)
 
 const plotW = computed(() => width.value - PAD.value.left - PAD.value.right)
 const plotH = HEIGHT - 10 - 24
 const x = (t: number) => PAD.value.left + ((t - startT.value) / span.value) * plotW.value
-const y = (v: number) => PAD.value.top + plotH - (v / scale.value.top) * plotH
-const yShare = (v: number) => PAD.value.top + plotH - (v / 100) * plotH
+const y = (v: number | null) => PAD.value.top + plotH - ((v ?? 0) / scale.value.top) * plotH
+const yShare = (v: number | null) => PAD.value.top + plotH - ((v ?? 0) / 100) * plotH
 
 const lines = computed(() =>
   props.series.map((s) => ({
@@ -134,12 +141,12 @@ const columns = computed(() =>
   props.bars.map((b, k) => ({
     ...b,
     rects: shown.value
-      .filter((p) => p[b.index] > 0)
+      .filter((p) => (p[b.index] ?? 0) > 0)
       .map((p) => ({
         t: p[0],
         x: x(p[0]) + k * (barW.value + 1),
         y: yShare(p[b.index]),
-        h: (p[b.index] / 100) * plotH,
+        h: ((p[b.index] ?? 0) / 100) * plotH,
       })),
   })),
 )
@@ -153,10 +160,11 @@ const times = computed(() =>
   ),
 )
 const last = computed(() => shown.value.at(-1) ?? null)
-const current = computed(
-  () => props.now ?? (last.value ? props.series.map((s) => last.value[s.index]) : null),
-)
-const share = (v: number) => `${Math.round(v)}%`
+const current = computed(() => {
+  const l = last.value
+  return props.now ?? (l ? props.series.map((s) => l[s.index]) : null)
+})
+const share = (v: number | null) => (v == null ? '—' : `${Math.round(v)}%`)
 const valueOf = (v: number | null | undefined) => (v == null ? '—' : props.format(v))
 
 /** The skeleton's traffic: an area over the zero line, curved through WAVE. */
@@ -169,15 +177,17 @@ const wave = computed(() => {
   for (let i = 1; i < p.length - 1; i++) {
     d += `Q${at(p[i])} ${at([(p[i][0] + p[i + 1][0]) / 2, (p[i][1] + p[i + 1][1]) / 2])}`
   }
-  return `${d}L${at(p.at(-1))}L${at([p.at(-1)[0], base])}Z`
+  const tail = p[p.length - 1]
+  return `${d}L${at(tail)}L${at([tail[0], base])}Z`
 })
 
 const summary = computed(() => {
   if (!props.points) return `${props.label}: reading`
-  if (!current.value) return `${props.label}: ${props.empty.replace(/\.$/, '').toLowerCase()}`
+  const cur = current.value
+  if (!cur) return `${props.label}: ${props.empty.replace(/\.$/, '').toLowerCase()}`
   const values = props.series.map(
     (s, i) =>
-      `${s.name.toLowerCase()} ${valueOf(current.value[i])}${s.limit > 0 ? ` of ${valueOf(s.limit)}` : ''}`,
+      `${s.name.toLowerCase()} ${valueOf(cur[i])}${limitOf(s) > 0 ? ` of ${valueOf(s.limit)}` : ''}`,
   )
   return `${props.label}: ${values.join(', ')}`
 })
@@ -201,7 +211,7 @@ function key(e: KeyboardEvent) {
   const n = shown.value.length
   if (!n) return
   const from = at.value < 0 ? n : at.value
-  const moves = {
+  const moves: Record<string, number> = {
     ArrowLeft: Math.max(0, from - 1),
     ArrowRight: Math.min(n - 1, at.value < 0 ? n - 1 : from + 1),
     Home: 0,
@@ -224,9 +234,11 @@ const readoutStyle = computed(() => {
 
 /** A band's low and high at a point, as its readout and its row say them. */
 function range(p: ChartPoint, s: ChartSeries) {
-  if (!s.band || p[s.band[0]] == null || p[s.band[1]] == null) return ''
-  if (p[s.band[0]] === p[s.band[1]]) return ''
-  return `${props.format(p[s.band[0]])} to ${props.format(p[s.band[1]])}`
+  if (!s.band) return ''
+  const low = p[s.band[0]]
+  const high = p[s.band[1]]
+  if (low == null || high == null || low === high) return ''
+  return `${props.format(low)} to ${props.format(high)}`
 }
 
 const table = ref(false)
@@ -245,7 +257,7 @@ const table = ref(false)
           <span v-else class="font-medium tabular-nums">
             {{ current ? valueOf(current[i]) : '—' }}
           </span>
-          <span v-if="!skeleton && s.limit > 0" class="flex items-center gap-1.5 text-ink-muted">
+          <span v-if="!skeleton && limitOf(s) > 0" class="flex items-center gap-1.5 text-ink-muted">
             <span class="tabular-nums">of {{ valueOf(s.limit) }}</span>
             <svg
               width="16"
@@ -273,7 +285,7 @@ const table = ref(false)
           {{ b.name }}
           <span v-if="skeleton" class="skeleton w-10"></span>
           <span v-else class="font-medium tabular-nums">
-            {{ last && last[b.index] != null ? share(last[b.index]) : '—' }}
+            {{ last ? share(last[b.index]) : '—' }}
           </span>
         </span>
       </div>
@@ -362,7 +374,7 @@ const table = ref(false)
               <td v-else class="num">{{ valueOf(p[s.index]) }}</td>
             </template>
             <td v-for="b in bars" :key="b.index" class="num">
-              {{ p[b.index] == null ? '—' : share(p[b.index]) }}
+              {{ share(p[b.index]) }}
             </td>
           </tr>
         </tbody>
@@ -450,8 +462,8 @@ const table = ref(false)
             :key="`limit-${s.index}`"
             :x1="PAD.left"
             :x2="width - PAD.right"
-            :y1="Math.round(y(s.limit)) + 0.5"
-            :y2="Math.round(y(s.limit)) + 0.5"
+            :y1="Math.round(y(limitOf(s))) + 0.5"
+            :y2="Math.round(y(limitOf(s))) + 0.5"
             :stroke="s.color"
             stroke-width="1.5"
             stroke-dasharray="6 4"
@@ -532,7 +544,7 @@ const table = ref(false)
             <rect width="12" height="12" rx="2" :fill="b.color" />
           </svg>
           <span class="font-medium tabular-nums">
-            {{ point[b.index] == null ? '—' : share(point[b.index]) }}
+            {{ share(point[b.index]) }}
           </span>
           <span class="text-ink-muted">{{ b.name }}</span>
         </div>

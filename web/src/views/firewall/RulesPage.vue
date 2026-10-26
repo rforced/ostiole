@@ -15,12 +15,13 @@ import { useReorder } from '@/lib/reorder'
 import { useTabHash } from '@/lib/tabs'
 import { tierBadge, tierLabel } from '@/lib/tiers'
 import { useAuthStore } from '@/stores/auth'
+import type { Counters, Endpoint, Rule, SystemRule } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import RuleDialog from '@/views/firewall/RuleDialog.vue'
 import SystemRuleRow from '@/views/firewall/SystemRuleRow.vue'
 
 /** Where each system rule is controlled from, by the setting the server names. */
-const SETTINGS = {
+const SETTINGS: Record<string, string> = {
   zone: '/interfaces#zones',
   interface: '/interfaces',
   dhcp: '/services/dhcp',
@@ -41,15 +42,16 @@ const SETTINGS = {
   certificates: '/system/certificates',
 }
 
-const pageOf = (s) => (s.chain === 'reply_prerouting' ? '/routing#routes' : SETTINGS[s.setting])
+const pageOf = (s: SystemRule) =>
+  s.chain === 'reply_prerouting' ? '/routing#routes' : SETTINGS[s.setting ?? '']
 
 const auth = useAuthStore()
 const config = useConfigStore()
 const route = useRoute()
 const router = useRouter()
-const editing = ref(null)
+const editing = ref<Rule | null>(null)
 const open = ref(false)
-const counters = ref({})
+const counters = ref<Counters>({})
 
 /**
  * The zone lives in the URL hash, like the tabs of a page: a reload comes
@@ -71,7 +73,7 @@ const {
   rows: system,
   error: systemError,
   updatedAt: systemRead,
-} = useDraftRows(() => api.systemRules(config.draft))
+} = useDraftRows((draft) => api.systemRules(draft))
 
 /**
  * The table waits for the first read of the system rules. They land above
@@ -81,14 +83,14 @@ const {
  */
 const ready = computed(() => Boolean(systemRead.value || systemError.value))
 
-function inZone(row) {
+function inZone(row: SystemRule) {
   return !row.zones?.length || row.zones.includes(zone.value)
 }
 const before = computed(() => system.value.filter((s) => !s.after && inZone(s)))
 const after = computed(() => system.value.filter((s) => s.after && inZone(s)))
 
 /** A system rule may count under more than one kernel rule; they are summed. */
-function sum(keys) {
+function sum(keys: string[] | undefined) {
   let total = 0
   let counted = false
   for (const key of keys ?? []) {
@@ -99,15 +101,15 @@ function sum(keys) {
   }
   return counted ? total : ''
 }
-const packets = (row) => sum(row.keys)
+const packets = (row: SystemRule) => sum(row.keys)
 /** What a rule's sampled log kept, under the same keys its log rule counts by. */
-const logged = (row) => sum(row.logKeys)
+const logged = (row: SystemRule) => sum(row.logKeys)
 
 /**
  * What an operator rule's sampled log kept, when fewer than it counted: the
  * log sees at most ten a second of a rule that drops or rejects.
  */
-function ruleLogged(r) {
+function ruleLogged(r: Rule) {
   const kept = counters.value[`log:${r.id}`]?.packets
   const seen = counters.value[r.id]?.packets
   return kept !== undefined && seen !== undefined && kept < seen ? kept : ''
@@ -130,7 +132,7 @@ useAsync(
   { interval: 5000, immediate: true },
 )
 
-function describe(ep, ports, destZone = '') {
+function describe(ep: Endpoint | undefined, ports: boolean, destZone = '') {
   let who = 'any'
   if (ep?.self) who = 'this router'
   else if (ep?.alias) who = `@${ep.alias}`
@@ -150,12 +152,12 @@ function add() {
   open.value = true
 }
 
-function edit(rule) {
+function edit(rule: Rule) {
   editing.value = rule
   open.value = true
 }
 
-function toggle(rule) {
+function toggle(rule: Rule) {
   config.upsertRule({ ...rule, enabled: !rule.enabled })
 }
 
@@ -173,6 +175,7 @@ onMounted(() => {
   router.replace({ path: route.path, hash: route.hash })
   if (!alias) return
   editing.value = {
+    id: '',
     description: `Block ${name}`,
     enabled: true,
     zone: zone.value,
@@ -314,7 +317,7 @@ onMounted(() => {
             <td class="num font-mono text-code max-sm:hidden">
               {{ counters[r.id] ? formatCount(counters[r.id].packets) : '' }}
               <div v-if="ruleLogged(r) !== ''" class="font-sans text-xs text-ink-muted">
-                {{ formatCount(ruleLogged(r)) }} logged
+                {{ formatCount(Number(ruleLogged(r))) }} logged
               </div>
             </td>
             <td class="actions max-sm:order-4 max-sm:basis-full max-sm:text-left">

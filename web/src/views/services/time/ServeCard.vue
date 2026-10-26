@@ -24,7 +24,7 @@ const answerAll = computed({
   set: (all) => config.setNTP({ interfaces: all ? [] : inside.value.map((i) => i.name) }),
 })
 
-function toggleInterface(name, on) {
+function toggleInterface(name: string, on: boolean) {
   const list = new Set(config.ntp.interfaces ?? [])
   if (on) list.add(name)
   else list.delete(name)

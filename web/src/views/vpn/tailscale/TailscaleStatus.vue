@@ -81,9 +81,9 @@ const logout = useAsync(async () => {
           <dl class="kv">
             <dt>Name</dt>
             <dd class="font-mono">{{ name }}</dd>
-            <template v-if="status.ips.length">
+            <template v-if="status.ips?.length">
               <dt>Addresses</dt>
-              <dd class="font-mono">{{ status.ips.join(', ') }}</dd>
+              <dd class="font-mono">{{ (status.ips ?? []).join(', ') }}</dd>
             </template>
             <template v-if="status.tailnet">
               <dt>Tailnet</dt>

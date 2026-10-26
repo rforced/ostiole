@@ -1,3 +1,4 @@
+import type { VueWrapper } from '@vue/test-utils'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -6,12 +7,13 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import AppSidebar from '@/components/AppSidebar.vue'
 import type { Session } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
+import { must } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({ api: {}, ApiError: class ApiError extends Error {} }))
 
 const Page = { template: '<p>page</p>' }
 
-async function sidebar(path) {
+async function sidebar(path: string) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/:any(.*)*', component: Page }],
@@ -22,11 +24,13 @@ async function sidebar(path) {
   return { router, wrapper }
 }
 
-const section = (wrapper, name) => wrapper.findAll('nav button').find((b) => b.text() === name)
-const expanded = (wrapper, name) => section(wrapper, name).attributes('aria-expanded') === 'true'
-const pages = (wrapper, name) =>
+const section = (wrapper: VueWrapper, name: string) =>
+  must(wrapper.findAll('nav button').find((b) => b.text() === name))
+const expanded = (wrapper: VueWrapper, name: string) =>
+  section(wrapper, name).attributes('aria-expanded') === 'true'
+const pages = (wrapper: VueWrapper, name: string) =>
   wrapper.get(`#${section(wrapper, name).attributes('aria-controls')}`)
-const pageNames = (wrapper, name) =>
+const pageNames = (wrapper: VueWrapper, name: string) =>
   pages(wrapper, name)
     .findAll('a')
     .map((a) => a.text())
@@ -53,7 +57,7 @@ describe('AppSidebar', () => {
     const dns = pages(wrapper, 'Services')
       .findAll('a')
       .find((a) => a.text() === 'DNS')
-    expect(dns.attributes('aria-current')).toBe('page')
+    expect(dns?.attributes('aria-current')).toBe('page')
     await section(wrapper, 'Services').trigger('click')
     expect(section(wrapper, 'Services').attributes('aria-current')).toBe('true')
   })
@@ -102,9 +106,9 @@ describe('AppSidebar', () => {
     await wrapper.get('button[aria-label="Account menu"]').trigger('click')
     await flushPromises()
     const account = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
-      (e) => e.textContent.trim() === 'Account',
+      (e) => e.textContent?.trim() === 'Account',
     )
-    account.click()
+    account?.click()
     await flushPromises()
     expect(wrapper.emitted('navigate')).toHaveLength(1)
   })

@@ -122,11 +122,11 @@ const empty = computed(() => {
             <td class="whitespace-nowrap tabular-nums">
               {{ r.status }}
               <span
-                v-if="ANSWERED_BY[r.by]"
+                v-if="ANSWERED_BY[r.by ?? '']"
                 class="badge"
-                :class="ANSWERED_BY[r.by].tone"
-                :title="ANSWERED_BY[r.by].title"
-                >{{ ANSWERED_BY[r.by].label }}</span
+                :class="ANSWERED_BY[r.by ?? ''].tone"
+                :title="ANSWERED_BY[r.by ?? ''].title"
+                >{{ ANSWERED_BY[r.by ?? ''].label }}</span
               >
               <div class="text-xs text-ink-muted">
                 {{ formatBytes(r.bytes) }} · {{ tookText(r.duration) }}

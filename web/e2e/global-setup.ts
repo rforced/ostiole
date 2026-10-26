@@ -4,6 +4,8 @@ import { join } from 'node:path'
 
 import { request } from '@playwright/test'
 
+import type { LiveLink } from '../src/lib/types.gen'
+
 import { PASSWORD } from './helpers'
 import { startServer } from './server'
 
@@ -41,16 +43,15 @@ async function configure(baseURL: string) {
     baseURL,
     extraHTTPHeaders: { 'X-Requested-With': 'ostiole' },
   })
-  const call = async (method: string, path: string, data?: unknown) => {
+  const call = async (method: string, path: string, data?: unknown): Promise<unknown> => {
     const res = await api.fetch(`/api/v1${path}`, { method, data })
     if (!res.ok()) throw new Error(`${method} ${path}: ${res.status()} ${await res.text()}`)
     const body = await res.text()
     return body ? JSON.parse(body) : null
   }
   await call('POST', '/setup', { username: 'admin', password: PASSWORD })
-  const wired = (await call('GET', '/interfaces/live')).filter(
-    (l) => l.kind !== 'loopback' && !l.wireless,
-  )
+  const links = (await call('GET', '/interfaces/live')) as LiveLink[]
+  const wired = links.filter((l) => l.kind !== 'loopback' && !l.wireless)
   if (wired.length < 2) throw new Error('the wizard needs two wired links, a LAN and a WAN')
   const config = await call('POST', '/config/starter', {
     hostname: 'edge',

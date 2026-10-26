@@ -10,19 +10,18 @@ export const QUIET_AFTER_MS = 3 * 60 * 1000
  * @param live the tunnels by name
  */
 export function livePeer<P extends { publicKey: string }>(
-  live: Map<string, { peers: P[] }>,
+  live: Map<string, { peers: P[] | null }>,
   tunnel: string,
   publicKey: string,
 ) {
-  return live.get(tunnel)?.peers.find((q) => q.publicKey === publicKey)
+  return live.get(tunnel)?.peers?.find((q) => q.publicKey === publicKey)
 }
 
 /**
  * Whether a peer shook hands recently enough to be sending.
- * @param {{lastHandshake?: string} | undefined} q the peer as its device reports it
- * @param {number} [now]
+ * @param q the peer as its device reports it
  */
-export function connected(q, now = Date.now()) {
+export function connected(q: { lastHandshake?: string } | undefined, now = Date.now()) {
   if (!q?.lastHandshake) return false
   return now - new Date(q.lastHandshake).getTime() < QUIET_AFTER_MS
 }

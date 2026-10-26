@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { useConfigStore } from '@/stores/config'
+import { must } from '@/test/fixtures'
 import OvpnTunnelDialog from '@/views/vpn/openvpn/OvpnTunnelDialog.vue'
 
 const stubs = {
@@ -48,7 +49,7 @@ async function open() {
   }
   config.saved = JSON.parse(JSON.stringify(cfg))
   config.replaceDraft(JSON.parse(JSON.stringify(cfg)))
-  const tunnel = config.interfaces.find((i) => i.name === 'ovpn0')
+  const tunnel = must(config.interfaces.find((i) => i.name === 'ovpn0'))
   const wrapper = mount(OvpnTunnelDialog, {
     props: { open: false, tunnel },
     global: { stubs },
@@ -57,7 +58,8 @@ async function open() {
   return { wrapper, config }
 }
 
-const saved = (config) => config.interfaces.find((i) => i.name === 'ovpn0')
+const saved = (config: ReturnType<typeof useConfigStore>) =>
+  must(config.interfaces.find((i) => i.name === 'ovpn0'))
 
 describe('OvpnTunnelDialog', () => {
   beforeEach(() => setActivePinia(createPinia()))
@@ -93,12 +95,12 @@ describe('OvpnTunnelDialog', () => {
 
   it('clears the password only on purpose', async () => {
     const { wrapper, config } = await open()
-    const clear = wrapper.findAll('button').find((b) => b.text() === 'Clear')
+    const clear = must(wrapper.findAll('button').find((b) => b.text() === 'Clear'))
     await clear.trigger('click')
     await wrapper.find('form').trigger('submit')
     await flushPromises()
-    expect(saved(config).openvpn.password).toBeUndefined()
-    expect(saved(config).openvpn.username).toBe('acme')
+    expect(must(saved(config).openvpn).password).toBeUndefined()
+    expect(must(saved(config).openvpn).username).toBe('acme')
   })
 
   it('says which remote line will not do and saves nothing', async () => {

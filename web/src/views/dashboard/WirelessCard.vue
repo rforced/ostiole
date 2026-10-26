@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { type PropType, computed } from 'vue'
 
 import RandomMacBadge from '@/components/RandomMacBadge.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { formatDuration } from '@/lib/format'
+import type { WirelessClient, WirelessSummary } from '@/lib/types.gen'
 
 const props = defineProps({
   /** Networks on the air and the clients on them, from GET /overview. */
-  wireless: { type: Object, default: () => ({ networks: [], clients: [] }) },
+  wireless: {
+    type: Object as PropType<WirelessSummary | undefined>,
+    default: () => ({ networks: [], clients: [] }),
+  },
   /** False until the first overview arrives. */
   loaded: { type: Boolean, default: true },
   /** How many clients to hold room for until then. */
@@ -23,7 +27,7 @@ const shown = computed(() => clients.value.slice(0, SHOWN))
 const more = computed(() => clients.value.length - shown.value.length)
 const reading = computed(() => Math.min(props.placeholders, SHOWN))
 
-function ssidOf(c) {
+function ssidOf(c: WirelessClient) {
   return c.ssid || c.interface
 }
 </script>

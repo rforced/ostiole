@@ -2,6 +2,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import { must } from '@/test/fixtures'
 import MappingsTab from '@/views/services/upnp/MappingsTab.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -14,7 +15,7 @@ enableAutoUnmount(afterEach)
 
 describe('MappingsTab', () => {
   it('sorts ports as numbers and clients as addresses', async () => {
-    const mapping = (externalPort, internal) => ({
+    const mapping = (externalPort: number, internal: string) => ({
       protocol: 'udp',
       externalPort,
       internal,
@@ -27,11 +28,9 @@ describe('MappingsTab', () => {
     ])
     const wrapper = mount(MappingsTab)
     await flushPromises()
-    const column = (i) => wrapper.findAll('tbody tr').map((r) => r.findAll('td')[i].text())
-    const sortBy = (name) =>
-      wrapper
-        .findAll('th')
-        .find((th) => th.text() === name)
+    const column = (i: number) => wrapper.findAll('tbody tr').map((r) => r.findAll('td')[i].text())
+    const sortBy = (name: string) =>
+      must(wrapper.findAll('th').find((th) => th.text() === name))
         .get('button')
         .trigger('click')
 
@@ -64,7 +63,7 @@ describe('MappingsTab', () => {
     vi.mocked(api.upnp.mappings).mockResolvedValue([])
     const wrapper = mount(MappingsTab)
     await flushPromises()
-    const live = wrapper.findAll('button').find((b) => b.text() === 'Live')
+    const live = must(wrapper.findAll('button').find((b) => b.text() === 'Live'))
     expect(live.attributes('aria-pressed')).toBe('true')
     vi.advanceTimersByTime(2000)
     await flushPromises()

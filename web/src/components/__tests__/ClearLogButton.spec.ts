@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import type { MockInstance } from 'vitest'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
@@ -10,7 +11,7 @@ import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 
 describe('ClearLogButton', () => {
-  let ask
+  let ask: MockInstance<ReturnType<typeof useConfirmStore>['ask']>
   beforeEach(() => {
     setActivePinia(createPinia())
     useAuthStore().user = { username: 'root', role: 'admin' } as Session
@@ -18,7 +19,12 @@ describe('ClearLogButton', () => {
     ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
   })
 
-  async function click(props) {
+  async function click(props: {
+    name: string
+    noun?: string
+    journal?: boolean
+    description?: string
+  }) {
     const w = mount(ClearLogButton, { props })
     await w.get('button').trigger('click')
     await flushPromises()

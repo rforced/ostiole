@@ -79,7 +79,7 @@ const stripOf = (g: GatewayStatus) => props.strips?.find((s) => s.name === g.nam
               </div>
             </td>
             <td class="num font-mono text-code">
-              <template v-if="g.families?.length > 1">
+              <template v-if="(g.families?.length ?? 0) > 1">
                 <div v-for="f in g.families" :key="f.family">
                   {{ f.family }} {{ f.latencyMs.toFixed(1) }} ms
                 </div>
@@ -87,7 +87,7 @@ const stripOf = (g: GatewayStatus) => props.strips?.find((s) => s.name === g.nam
               <template v-else>{{ g.latencyMs.toFixed(1) }} ms</template>
             </td>
             <td class="num font-mono text-code">
-              <template v-if="g.families?.length > 1">
+              <template v-if="(g.families?.length ?? 0) > 1">
                 <div v-for="f in g.families" :key="f.family">
                   {{ f.family }} {{ f.lossPercent.toFixed(0) }}%
                 </div>

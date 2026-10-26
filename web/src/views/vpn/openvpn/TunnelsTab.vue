@@ -46,7 +46,7 @@ function state(t: Interface) {
 }
 
 function remote(t: Interface) {
-  const [first, ...rest] = t.openvpn.remotes ?? []
+  const [first, ...rest] = t.openvpn?.remotes ?? []
   if (!first) return '—'
   return `${first.host}:${first.port}${rest.length ? ` +${rest.length}` : ''}`
 }
@@ -118,7 +118,7 @@ function edit(t: Interface) {
                 <div class="font-mono">{{ t.name }}</div>
                 <div v-if="t.description" class="text-xs text-ink-muted">{{ t.description }}</div>
                 <span v-if="!t.enabled" class="badge">disabled</span>
-                <StatusBadge v-else-if="state(t)" :state="state(t)" />
+                <StatusBadge v-else-if="state(t)" :state="state(t) ?? ''" />
               </td>
               <td class="font-mono text-code" data-label="Zone">{{ t.zone || 'unassigned' }}</td>
               <td class="font-mono text-code" data-label="Remote">{{ remote(t) }}</td>
@@ -153,7 +153,7 @@ function edit(t: Interface) {
               </td>
             </tr>
             <tr v-if="live.get(t.name)?.note">
-              <td colspan="7" class="text-sm text-ink-muted">{{ live.get(t.name).note }}</td>
+              <td colspan="7" class="text-sm text-ink-muted">{{ live.get(t.name)?.note }}</td>
             </tr>
           </template>
         </tbody>

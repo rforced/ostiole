@@ -5,6 +5,7 @@ import { computed, ref } from 'vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { formatCount } from '@/lib/format'
+import type { Endpoint, Zone } from '@/lib/types.gen'
 import { tierBadge, tierLabel } from '@/lib/tiers'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -12,7 +13,7 @@ import BusyHostsDialog from '@/views/traffic/shaping/BusyHostsDialog.vue'
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const editing = ref(null)
+const editing = ref<Zone | null>(null)
 const open = ref(false)
 
 function addBusy() {
@@ -20,7 +21,7 @@ function addBusy() {
   open.value = true
 }
 
-function editBusy(zone) {
+function editBusy(zone: Zone) {
   editing.value = zone
   open.value = true
 }
@@ -30,7 +31,7 @@ function editBusy(zone) {
  * rather than edits: it is the one place to see everything that has been
  * classified, with a way back to the rule that did it.
  */
-function describe(ep, ports) {
+function describe(ep: Endpoint | undefined, ports: boolean) {
   let who = 'any'
   if (ep?.self) who = 'this router'
   else if (ep?.alias) who = `@${ep.alias}`
@@ -52,7 +53,7 @@ const entries = computed(() => [
     to: `/firewall/rules#${r.zone}`,
     zone: r.destZone ? `${r.zone} → ${r.destZone}` : r.zone,
     match: `${r.protocol} ${describe(r.source, true)} → ${describe(r.destination, true)}`,
-    priority: r.priority,
+    priority: r.priority ?? '',
     enabled: r.enabled,
     description: r.description,
   })),
@@ -65,7 +66,7 @@ const entries = computed(() => [
     match: `${pf.protocol} ${(pf.ports ?? []).join(', ')} → ${pf.target}${
       pf.targetPort ? `:${pf.targetPort}` : ''
     }`,
-    priority: pf.priority,
+    priority: pf.priority ?? '',
     enabled: pf.enabled,
     description: pf.description,
   })),
@@ -110,10 +111,12 @@ const entries = computed(() => [
           >
             <td class="font-mono">{{ z.name }}</td>
             <td class="num font-mono text-code">
-              {{ formatCount(z.busy.connections) }} connections
+              {{ formatCount(z.busy?.connections ?? 0) }} connections
             </td>
             <td>
-              <span :class="tierBadge(z.busy.priority)">{{ tierLabel(z.busy.priority) }}</span>
+              <span :class="tierBadge(z.busy?.priority ?? '')">{{
+                tierLabel(z.busy?.priority ?? '')
+              }}</span>
             </td>
             <td class="actions">
               <button type="button" class="link-action" @click="editBusy(z)">

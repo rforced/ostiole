@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import AppDialog from '@/components/AppDialog.vue'
 
-async function opened(props) {
+async function opened(props: Record<string, unknown>) {
   mount(AppDialog, { props: { open: true, title: 'Zone lan', ...props }, attachTo: document.body })
   await flushPromises()
   return document.querySelector('[role="dialog"]')
@@ -20,14 +20,14 @@ describe('AppDialog', () => {
   // one that names no element is invalid ARIA.
   it('is described by its description, and by nothing without one', async () => {
     const described = await opened({ description: 'Its interfaces stay where they are.' })
-    const id = described.getAttribute('aria-describedby')
-    expect(document.getElementById(id)?.textContent.trim()).toBe(
+    const id = described?.getAttribute('aria-describedby') ?? ''
+    expect(document.getElementById(id)?.textContent?.trim()).toBe(
       'Its interfaces stay where they are.',
     )
     document.body.innerHTML = ''
 
     const bare = await opened({})
-    expect(bare.hasAttribute('aria-describedby')).toBe(false)
+    expect(bare?.hasAttribute('aria-describedby')).toBe(false)
   })
 
   // A dialog that only shows something closes with one button on the

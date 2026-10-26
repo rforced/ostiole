@@ -2,15 +2,15 @@ import { computed, ref } from 'vue'
 
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
-import type { Proxy } from '@/lib/types.gen'
+import type { Proxy, ProxyStatus } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 /** How often the sidecar is asked what it is doing while the page is shown. */
 const POLL_MS = 5000
 
 /** One read of the proxy status, shared by the page header and its notices. */
-const status = ref(null)
-let inflight = null
+const status = ref<ProxyStatus | null>(null)
+let inflight: Promise<void> | null = null
 
 /** Fetches once however many callers ask while it is in the air. */
 function fetchStatus() {

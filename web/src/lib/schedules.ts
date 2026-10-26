@@ -16,5 +16,5 @@ export const SCHEDULE_PRESETS = [
 ]
 
 /** The preset matching an expression, or "" when it is written by hand. */
-export const presetFor = (schedule) =>
+export const presetFor = (schedule: string) =>
   SCHEDULE_PRESETS.some((p) => p.value === schedule) ? schedule : ''

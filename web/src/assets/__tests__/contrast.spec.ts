@@ -17,8 +17,23 @@ const NON_TEXT = 3
 
 const TONES = ['ok', 'warn', 'bad', 'info']
 
+interface Colour {
+  rgb: number[]
+  alpha: number
+}
+type Tokens = Record<string, Colour>
+
+const palette: Record<string, string | Record<string, string>> = colors
+
+function shade(name: string, level: string): string {
+  const group = palette[name]
+  const value = typeof group === 'object' ? group[level] : undefined
+  if (value === undefined) throw new Error(`no colour ${name}-${level}`)
+  return value
+}
+
 /** sRGB channels from 0 to 1, clipped to the gamut WCAG measures in. */
-function oklch(l, c, h) {
+function oklch(l: number, c: number, h: number) {
   const a = c * Math.cos((h * Math.PI) / 180)
   const b = c * Math.sin((h * Math.PI) / 180)
   const [x, y, z] = [
@@ -37,45 +52,49 @@ function oklch(l, c, h) {
 }
 
 /** A token's value as a colour and its alpha. */
-function parse(value) {
-  let m
-  if ((m = value.match(/^var\(--color-(\w+)-(\d+)\)$/))) return parse(colors[m[1]][m[2]])
+function parse(value: string): Colour {
+  let m: RegExpMatchArray | null
+  if ((m = value.match(/^var\(--color-(\w+)-(\d+)\)$/))) return parse(shade(m[1], m[2]))
   if ((m = value.match(/^oklch\(([\d.]+)% ([\d.]+) ([\d.]+|none)\)$/)))
-    return { rgb: oklch(m[1] / 100, +m[2], m[3] === 'none' ? 0 : +m[3]), alpha: 1 }
+    return { rgb: oklch(Number(m[1]) / 100, +m[2], m[3] === 'none' ? 0 : +m[3]), alpha: 1 }
   if ((m = value.match(/^color-mix\(in oklab, (.+) (\d+)%, transparent\)$/)))
-    return { ...parse(m[1]), alpha: m[2] / 100 }
+    return { ...parse(m[1]), alpha: Number(m[2]) / 100 }
   if (value === '#fff') return { rgb: [1, 1, 1], alpha: 1 }
   throw new Error(`cannot read ${value}`)
 }
 
 /** The tokens one of main.css's two blocks sets. */
-function tokens(selector) {
+function tokens(selector: string): Tokens {
   const start = css.indexOf(`\n${selector} {`)
   const block = css.slice(start, css.indexOf('\n}', start))
   return Object.fromEntries(
-    [...block.matchAll(/--([\w-]+): ([^;]+);/g)].map(([, name, value]) => [name, parse(value)]),
+    [...block.matchAll(/--([\w-]+): ([^;]+);/g)].map(([, name, value]): [string, Colour] => [
+      name,
+      parse(value),
+    ]),
   )
 }
 
-const over = (top, below) => ({
+const over = (top: Colour, below: Colour): Colour => ({
   rgb: top.rgb.map((v, i) => v * top.alpha + below.rgb[i] * (1 - top.alpha)),
   alpha: 1,
 })
 
-function luminance({ rgb }) {
+function luminance({ rgb }: Colour) {
   const [r, g, b] = rgb.map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
-function contrast(a, b) {
+function contrast(a: Colour, b: Colour) {
   const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
   return (hi + 0.05) / (lo + 0.05)
 }
 
 /** Every text colour on every ground the views put it on, as [text, ground, ratio]. */
-function pairs(t) {
-  const on = (name, alpha = 1) => over({ ...t[name], alpha: t[name].alpha * alpha }, t.surface)
-  const grounds = {
+function pairs(t: Tokens) {
+  const on = (name: string, alpha = 1) =>
+    over({ ...t[name], alpha: t[name].alpha * alpha }, t.surface)
+  const grounds: Tokens = {
     page: t.page,
     surface: t.surface,
     'surface-2': on('surface-2'),
@@ -84,8 +103,9 @@ function pairs(t) {
     'surface-2/40': on('surface-2', 0.4),
   }
   const soft = Object.fromEntries(TONES.map((k) => [`${k}-soft`, on(`${k}-soft`)]))
-  const out = []
-  const add = (text, ground, fg, bg) => out.push([text, ground, contrast(over(fg, bg), bg)])
+  const out: [string, string, number][] = []
+  const add = (text: string, ground: string, fg: Colour, bg: Colour) =>
+    out.push([text, ground, contrast(over(fg, bg), bg)])
   for (const ink of ['ink', 'ink-2', 'ink-muted'])
     for (const [ground, bg] of Object.entries(grounds)) add(ink, ground, t[ink], bg)
   for (const text of ['accent-text', ...TONES])
@@ -103,11 +123,13 @@ function pairs(t) {
 }
 
 /** Every edge and graphic on the grounds the views put it on, as [what, ground, ratio]. */
-function graphics(t) {
-  const on = (name, alpha = 1) => over({ ...t[name], alpha: t[name].alpha * alpha }, t.surface)
+function graphics(t: Tokens) {
+  const on = (name: string, alpha = 1) =>
+    over({ ...t[name], alpha: t[name].alpha * alpha }, t.surface)
   const white = { rgb: [1, 1, 1], alpha: 1 }
-  const out = []
-  const add = (what, ground, fg, bg) => out.push([what, ground, contrast(over(fg, bg), bg)])
+  const out: [string, string, number][] = []
+  const add = (what: string, ground: string, fg: Colour, bg: Colour) =>
+    out.push([what, ground, contrast(over(fg, bg), bg)])
   // A field's edge and a switch that is off, wherever a form sits.
   for (const [ground, bg] of Object.entries({
     page: t.page,

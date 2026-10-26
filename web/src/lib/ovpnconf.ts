@@ -197,6 +197,9 @@ export interface OvpnParse {
   wayOut: boolean
 }
 
+/** A null the compiler keeps typed as a T | null, for a value only closures assign. */
+const unset = <T>(): T | null => null
+
 /** Reads the text of an .ovpn file. */
 export function parseOvpn(text: string): OvpnParse {
   const tunnel: OpenVPN = { remotes: [], caPem: '' }
@@ -208,14 +211,18 @@ export function parseOvpn(text: string): OvpnParse {
   let defaultPort = 1194
   let needsCredentials = false
   let wayOut = false
-  let block: { name: string; line: number; lines: string[] } | null = null
+  let block = unset<{ name: string; line: number; lines: string[] }>()
   let ping = 0
-  let fallback: { line: number; cipher: string } | null = null
-  let ciphers: { line: number; list: string[] } | null = null
+  let fallback = unset<{ line: number; cipher: string }>()
+  let ciphers = unset<{ line: number; list: string[] }>()
   const lines = String(text ?? '').split(/\r?\n/)
 
-  const refuse = (line: number, name: string, reason: string) =>
+  const refuse = (line: number, name: string, reason: string): void => {
     refused.push({ line, text: name, reason })
+  }
+  const drop = (line: number, text: string): void => {
+    dropped.push({ line, text })
+  }
 
   lines.forEach((raw, idx) => {
     const line = idx + 1
@@ -241,7 +248,7 @@ export function parseOvpn(text: string): OvpnParse {
 
   function endBlock(b: { name: string; line: number; lines: string[] }) {
     const tag = `<${b.name}>`
-    if (DROPPED_BLOCKS.has(b.name)) return dropped.push({ line: b.line, text: tag })
+    if (DROPPED_BLOCKS.has(b.name)) return drop(b.line, tag)
     if (b.name === 'auth-user-pass') {
       const [user = '', pass = ''] = b.lines.map((l) => l.trim()).filter(Boolean)
       if (user) tunnel.username = user
@@ -269,7 +276,7 @@ export function parseOvpn(text: string): OvpnParse {
   function directive(line: number, name: string, args: string[]) {
     if (REFUSED.has(name)) return refuse(line, name, REFUSED.get(name) as string)
     if (name.startsWith('pkcs11-')) return refuse(line, name, KEY_ELSEWHERE)
-    if (name.startsWith('persist-') || DROPPED.has(name)) return dropped.push({ line, text: name })
+    if (name.startsWith('persist-') || DROPPED.has(name)) return drop(line, name)
     switch (name) {
       case 'client':
       case 'remote-random-hostname':
@@ -369,7 +376,7 @@ export function parseOvpn(text: string): OvpnParse {
         wayOut = true
         return
       case 'allow-compression':
-        if ((args[0] ?? '').toLowerCase() === 'no') return dropped.push({ line, text: name })
+        if ((args[0] ?? '').toLowerCase() === 'no') return drop(line, name)
         return refuse(line, name, COMPRESSION)
       case 'ca':
       case 'cert':

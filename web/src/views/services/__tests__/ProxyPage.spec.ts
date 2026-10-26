@@ -1,7 +1,7 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { h } from 'vue'
+import { h, type Component } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
 import { api, type Session } from '@/lib/api'
@@ -13,11 +13,15 @@ import type {
   Config,
   LogfileStatus,
   LogLimitsInfo,
+  Proxy,
+  ProxyAccess,
+  ProxyStatus as ProxyStatusReply,
   Stats,
   System,
+  WaflogEntry,
   WafEventsPage,
 } from '@/lib/types.gen'
-import { fixture } from '@/test/fixtures'
+import { configOf, draftOf, fixture, must, type DeepPartial } from '@/test/fixtures'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ProxyPage from '@/views/services/ProxyPage.vue'
@@ -41,14 +45,20 @@ vi.mock('@/lib/api', () => ({
 }))
 
 /** The stream the events tab opens; a test sends through the last one. */
-let source = null
+let source: FakeSource | null = null
 class FakeSource {
+  onmessage: ((e: { data: string }) => void) | null = null
   constructor() {
     source = this
   }
   close() {}
 }
-const send = (e) => source.onmessage({ data: JSON.stringify(e) })
+const send = (e: WaflogEntry) => must(must(source).onmessage)({ data: JSON.stringify(e) })
+
+type Store = ReturnType<typeof useConfigStore>
+
+/** The draft's proxy block, which the test has already seen put in place. */
+const proxyOf = (store: Store) => must(draftOf(store).services?.proxy)
 
 // The page takes its tabs from the route; there is no router here.
 vi.mock('@/lib/tabs', async () => {
@@ -58,7 +68,7 @@ vi.mock('@/lib/tabs', async () => {
 
 const stubs = { ConfirmButton: true, RouterLink: true }
 
-function proxy(over = {}) {
+function proxy(over: DeepPartial<Proxy> = {}): DeepPartial<Proxy> {
   return {
     enabled: true,
     pools: [{ id: 'web', upstreams: [{ address: '192.168.1.20:80' }] }],
@@ -67,8 +77,8 @@ function proxy(over = {}) {
   }
 }
 
-function config(over = {}) {
-  return {
+function config(over: DeepPartial<Config> = {}) {
+  return configOf({
     version: 11,
     system: { management: { webPort: 8443, sshPort: 22 } },
     zones: [{ name: 'wan', external: true }, { name: 'lan' }],
@@ -76,22 +86,25 @@ function config(over = {}) {
     rules: [],
     services: { proxy: proxy() },
     ...over,
-  } as Config
+  })
 }
 
-function status(over = {}) {
-  return {
+function status(over: DeepPartial<ProxyStatusReply> = {}) {
+  return fixture<ProxyStatusReply>({
     setUp: true,
     running: true,
     release: 'v1.2.3',
     ports: { http: 80, https: 443, http3: false },
     upstreams: [],
     ...over,
-  }
+  })
 }
 
 /** Mounts the strip with a saved and a draft configuration of our choosing. */
-async function strip(st, { draft = config(), saved = config() } = {}) {
+async function strip(
+  st: ProxyStatusReply,
+  { draft = config(), saved = config() }: { draft?: Config; saved?: Config } = {},
+) {
   vi.mocked(api.proxy.status).mockResolvedValue(st)
   const store = useConfigStore()
   store.draft = draft
@@ -177,8 +190,8 @@ describe('ProxyStatus', () => {
   })
 })
 
-function event(over = {}) {
-  return {
+function event(over: DeepPartial<WaflogEntry> = {}) {
+  return fixture<WaflogEntry>({
     seq: 1,
     logged: '2026-09-20T14:02:11Z',
     time: '2026-09-20T14:02:11Z',
@@ -192,21 +205,23 @@ function event(over = {}) {
     engine: 'DetectionOnly',
     rules: [{ id: 941100, message: 'XSS Attack Detected', severity: 'critical' }],
     ...over,
-  }
+  })
 }
 
-async function events(list, draft = config(), memTotal = 8_000_000_000) {
+async function events(list: WaflogEntry[], draft = config(), memTotal = 8_000_000_000) {
   // The router searches and narrows the way the page's values say: the Go
   // side is tested against the same values.
-  vi.mocked(api.proxy.events).mockImplementation(async (params: { verdict?: string; q?: string }) =>
-    fixture<WafEventsPage>({
-      entries: list.filter(
-        (e) =>
-          (!params.verdict || e.verdict === params.verdict) &&
-          matches(params.q ?? '', eventValues(e)),
-      ),
-      held: list.length,
-    }),
+  vi.mocked(api.proxy.events).mockImplementation(
+    async (params: { verdict?: string; q?: string } = {}) =>
+      ({
+        entries: list.filter(
+          (e) =>
+            (!params.verdict || e.verdict === params.verdict) &&
+            matches(params.q ?? '', eventValues(e)),
+        ),
+        held: list.length,
+        more: false,
+      }) satisfies WafEventsPage,
   )
   vi.mocked(api.systemStats).mockResolvedValue(fixture<Stats>({ memTotal }))
   vi.mocked(api.logFiles).mockResolvedValue(fixture<LogfileStatus>({ enabled: false, logs: [] }))
@@ -221,7 +236,7 @@ async function events(list, draft = config(), memTotal = 8_000_000_000) {
 }
 
 /** The client column of each row, top to bottom. */
-const clients = (w) => w.findAll('tbody tr').map((r) => r.findAll('td')[2]?.text())
+const clients = (w: VueWrapper) => w.findAll('tbody tr').map((r) => r.findAll('td')[2]?.text())
 
 describe('EventsTab', () => {
   beforeEach(() => {
@@ -261,14 +276,15 @@ describe('EventsTab', () => {
       expect(clients(wrapper)).toEqual(['10.0.0.8', '10.0.0.7'])
 
       const live = wrapper.findAll('button').find((b) => b.text() === 'Live')
-      expect(live.attributes('aria-pressed')).toBe('true')
-      await live.trigger('click')
+      const toggle = must(live)
+      expect(toggle.attributes('aria-pressed')).toBe('true')
+      await toggle.trigger('click')
       send(event({ seq: 9, client: '10.0.0.9' }))
       vi.advanceTimersByTime(LAND_MS)
       await flushPromises()
       expect(clients(wrapper)).toEqual(['10.0.0.8', '10.0.0.7'])
 
-      await live.trigger('click')
+      await toggle.trigger('click')
       expect(clients(wrapper)).toEqual(['10.0.0.9', '10.0.0.8', '10.0.0.7'])
     } finally {
       vi.useRealTimers()
@@ -288,7 +304,7 @@ describe('EventsTab', () => {
         }),
       ])
       const box = wrapper.find('input[type=search]')
-      const search = async (q) => {
+      const search = async (q: string) => {
         await box.setValue(q)
         vi.advanceTimersByTime(250)
         await flushPromises()
@@ -325,11 +341,11 @@ describe('EventsTab', () => {
     const { wrapper, store } = await events([])
     expect(wrapper.text()).toContain('10,000 is the default. In memory, about 15.4 MB when full.')
     await wrapper.find('#events-entries').setValue('100000')
-    expect(store.draft.services.proxy.events).toEqual({ entries: 100000 })
+    expect(proxyOf(store).events).toEqual({ entries: 100000 })
     expect(wrapper.text()).toContain('In memory, about 154 MB when full.')
     // Emptied, the block leaves the draft rather than lingering empty.
     await wrapper.find('#events-entries').setValue('')
-    expect(store.draft.services.proxy.events).toBeUndefined()
+    expect(proxyOf(store).events).toBeUndefined()
   })
 
   it('badges each verdict', async () => {
@@ -434,7 +450,7 @@ describe('EventsTab', () => {
     expect(wrapper.text()).toContain('The site has no WAF profile.')
     expect(wrapper.text()).not.toContain('Exclude on this path')
     store.proxy.wafProfiles = [{ id: 'strict' }]
-    store.proxy.sites[0].waf = 'strict'
+    must(store.proxy.sites)[0].waf = 'strict'
     await flushPromises()
     expect(wrapper.text()).not.toContain('The site has no WAF profile.')
     expect(wrapper.text()).toContain('Exclude on this path')
@@ -454,12 +470,12 @@ describe('EventsTab', () => {
     const { wrapper, store } = await events([event()], draft)
     const links = wrapper.findAll('button.link-action')
     await links[0].trigger('click')
-    expect(store.proxy.wafProfiles[0].exclusions).toEqual([
+    expect(must(store.proxy.wafProfiles)[0].exclusions).toEqual([
       { rule: '941100', description: 'XSS Attack Detected' },
     ])
     // The path can be cut down first, so it waits for the dialog.
     await links[1].trigger('click')
-    expect(store.proxy.wafProfiles[0].exclusions).toHaveLength(1)
+    expect(must(store.proxy.wafProfiles)[0].exclusions).toHaveLength(1)
     expect(wrapper.findComponent(ExclusionDialog).props()).toMatchObject({
       open: true,
       profile: 'strict',
@@ -505,7 +521,7 @@ describe('ProfileDialog', () => {
     })
     await flushPromises()
     await wrapper.find('form').trigger('submit')
-    expect(store.proxy.wafProfiles[0].exclusions).toEqual([
+    expect(must(store.proxy.wafProfiles)[0].exclusions).toEqual([
       { rule: '941100', description: 'XSS Attack Detected' },
     ])
   })
@@ -530,7 +546,7 @@ describe('ProfileDialog', () => {
       expect(wrapper.get(id).attributes('placeholder')).toBe(fallback)
     }
     await wrapper.find('form').trigger('submit')
-    expect(store.proxy.wafProfiles[0]).toEqual({ id: 'watch', inboundThreshold: 10 })
+    expect(must(store.proxy.wafProfiles)[0]).toEqual({ id: 'watch', inboundThreshold: 10 })
   })
 
   // A body past the limit is refused unless the profile lets it through,
@@ -548,12 +564,13 @@ describe('ProfileDialog', () => {
     expect(wrapper.text()).toContain('A larger one is refused, an upload too.')
     const pass = wrapper
       .findAll<HTMLInputElement>('input[type="checkbox"]')
-      .find((i) => i.element.parentElement.textContent.includes('Let larger bodies through'))
-    expect(pass.element.checked).toBe(false)
-    await pass.setValue(true)
+      .find((i) => i.element.parentElement?.textContent?.includes('Let larger bodies through'))
+    const switchOn = must(pass)
+    expect(switchOn.element.checked).toBe(false)
+    await switchOn.setValue(true)
     expect(wrapper.text()).toContain('Past it, a body goes through with the rest unread.')
     await wrapper.find('form').trigger('submit')
-    expect(store.proxy.wafProfiles[0]).toEqual({
+    expect(must(store.proxy.wafProfiles)[0]).toEqual({
       id: 'vault',
       bodyLimitMB: 64,
       passLargeBodies: true,
@@ -562,7 +579,8 @@ describe('ProfileDialog', () => {
 })
 
 /** Services as a saved configuration has them, with no proxy unless given. */
-const withProxy = (p?) => config({ services: { dhcp: {}, dns: {}, ...(p && { proxy: p }) } })
+const withProxy = (p?: DeepPartial<Proxy>) =>
+  config({ services: { dhcp: {}, dns: {}, ...(p && { proxy: p }) } })
 const bare = () => withProxy()
 
 function page({ draft = bare(), saved = bare() } = {}) {
@@ -590,18 +608,18 @@ describe('ProxyPage', () => {
 
     const on = wrapper.get('input[aria-label="Reverse proxy enabled"]')
     await on.setValue(true)
-    expect(store.draft.services.proxy).toEqual({ enabled: true })
+    expect(proxyOf(store)).toEqual({ enabled: true })
     await on.setValue(false)
     expect(store.dirty).toBe(false)
 
     const https = wrapper.get('#proxy-https')
     await https.setValue('8443')
-    expect(store.draft.services.proxy).toEqual({ enabled: false, httpsPort: 8443 })
+    expect(proxyOf(store)).toEqual({ enabled: false, httpsPort: 8443 })
     await https.setValue('443')
     expect(store.dirty).toBe(false)
 
     await wrapper.get('#proxy-http3').setValue(true)
-    expect(store.draft.services.proxy.http3).toBe(true)
+    expect(proxyOf(store).http3).toBe(true)
     await wrapper.get('#proxy-http3').setValue(false)
     expect(store.dirty).toBe(false)
   })
@@ -612,15 +630,15 @@ describe('ProxyPage', () => {
     const { wrapper, store } = page({ draft: withProxy(proxy()), saved: withProxy(proxy()) })
     const on = wrapper.get('input[aria-label="Reverse proxy enabled"]')
     await on.setValue(false)
-    expect(store.draft.services.proxy).toEqual({ ...proxy(), enabled: false })
+    expect(proxyOf(store)).toEqual({ ...proxy(), enabled: false })
     await on.setValue(true)
     expect(store.dirty).toBe(false)
   })
 })
 
 /** A line of the access list. */
-function line(over = {}) {
-  return {
+function line(over: DeepPartial<ProxyAccess> = {}) {
+  return fixture<ProxyAccess>({
     id: 'wan',
     enabled: true,
     zone: 'wan',
@@ -628,11 +646,11 @@ function line(over = {}) {
     ports: ['https'],
     source: {},
     ...over,
-  }
+  })
 }
 
 /** Mounts a component with the draft of our choosing, dialogs inline. */
-function withDraft(component, draft, props = {}) {
+function withDraft(component: Component, draft: Config, props: Record<string, unknown> = {}) {
   const store = useConfigStore()
   store.draft = draft
   store.saved = structuredClone(draft)
@@ -685,7 +703,7 @@ describe('ServiceTab access list', () => {
     expect(rows()).toEqual(['first', 'second', 'inside'])
     expect(wrapper.findAll('tbody tr')[1].text()).toContain('not @us')
     await wrapper.get('button[aria-label="Move second up"]').trigger('click')
-    expect(store.draft.services.proxy.access.map((a) => a.id)).toEqual(['b', 'l', 'a'])
+    expect(must(proxyOf(store).access).map((a) => a.id)).toEqual(['b', 'l', 'a'])
     expect(rows()).toEqual(['second', 'first', 'inside'])
     expect(wrapper.get('button[aria-label="Move inside up"]').attributes('disabled')).toBeDefined()
   })
@@ -696,7 +714,7 @@ describe('ServiceTab access list', () => {
     })
     const { wrapper, store } = withDraft(ServiceTab, draft)
     await wrapper.get('input[aria-label="Enable sites"]').setValue(false)
-    expect(store.draft.services.proxy.access[0].enabled).toBe(false)
+    expect(must(proxyOf(store).access)[0].enabled).toBe(false)
   })
 })
 
@@ -719,7 +737,7 @@ describe('AccessDialog', () => {
     await wrapper.get('#source-alias').setValue('us')
     await wrapper.get('#access-desc').setValue('Sites from the US')
     await wrapper.get('form').trigger('submit')
-    const [saved] = store.draft.services.proxy.access
+    const [saved] = must(proxyOf(store).access)
     expect(saved).toMatchObject({
       enabled: true,
       zone: 'wan',
@@ -775,7 +793,7 @@ describe('Allow from', () => {
     expect(offered[0].get('input').element.checked).toBe(true)
     await wrapper.get('#site-allow').setValue('192.168.0.0/16')
     await wrapper.get('form').trigger('submit')
-    expect(store.draft.services.proxy.sites[0].allowFrom).toEqual(['192.168.0.0/16', 'office'])
+    expect(must(proxyOf(store).sites)[0].allowFrom).toEqual(['192.168.0.0/16', 'office'])
   })
 })
 
@@ -810,7 +828,7 @@ describe('PoolsTab', () => {
       '—',
     ])
     const deletes = rows.map((tr) => tr.findAll('button').find((b) => b.text() === 'Delete'))
-    expect(deletes.map((b) => b.element.disabled)).toEqual([true, true, false])
+    expect(deletes.map((b) => must(b).element.disabled)).toEqual([true, true, false])
   })
 })
 
@@ -822,7 +840,7 @@ describe('Untouched save', () => {
   })
 
   // An API-made config carries these, and the store adds them if missing.
-  const services = (over) => ({
+  const services = (over: DeepPartial<Proxy>) => ({
     dhcp: { enabled: false },
     dns: { enabled: false },
     proxy: proxy(over),
@@ -846,7 +864,7 @@ describe('Untouched save', () => {
     await wrapper.get('#waf-paranoia').setValue('3')
     await wrapper.get('form').trigger('submit')
     expect(store.dirty).toBe(true)
-    expect(store.proxy.wafProfiles[0]).toEqual({ id: 'watch', paranoia: 3 })
+    expect(must(store.proxy.wafProfiles)[0]).toEqual({ id: 'watch', paranoia: 3 })
   })
 
   it('keeps a detect mode the profile spells out', async () => {
@@ -869,7 +887,7 @@ describe('Untouched save', () => {
     await wrapper.get('input[type="radio"][value="block"]').setValue(true)
     await wrapper.get('form').trigger('submit')
     expect(store.dirty).toBe(true)
-    expect(store.proxy.wafProfiles[0]).toEqual({ id: 'watch', mode: 'block' })
+    expect(must(store.proxy.wafProfiles)[0]).toEqual({ id: 'watch', mode: 'block' })
   })
 
   it('keeps the order of an access rule ports', async () => {
@@ -890,6 +908,6 @@ describe('Untouched save', () => {
     await wrapper.get('input[value="http"]').setValue(false)
     await wrapper.get('form').trigger('submit')
     expect(store.dirty).toBe(true)
-    expect(store.draft.services.proxy.access[0]).toMatchObject({ ports: ['https'] })
+    expect(must(proxyOf(store).access)[0]).toMatchObject({ ports: ['https'] })
   })
 })

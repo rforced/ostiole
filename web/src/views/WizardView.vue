@@ -9,8 +9,11 @@ import PageHeader from '@/components/PageHeader.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { ApiError, api } from '@/lib/api'
+import type { ApiIssue } from '@/lib/api'
 import { applyWithConfirm } from '@/lib/apply'
+import type { ApplyOutcome } from '@/lib/apply'
 import { errorMessage } from '@/lib/async'
+import type { Config, LiveLink } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import { useSystemStore } from '@/stores/system'
 
@@ -20,17 +23,17 @@ const router = useRouter()
 const config = useConfigStore()
 const system = useSystemStore()
 
-const links = ref([])
+const links = ref<LiveLink[]>([])
 const hostname = ref('')
 const lan = ref('')
 const lanAddress = ref('192.168.1.1/24')
 const wan = ref('')
 const managementFromWan = ref(false)
 const services = ref(true)
-const preview = ref(null)
-const applied = ref(null)
+const preview = ref<Config | null>(null)
+const applied = ref<ApplyOutcome | null>(null)
 const error = ref('')
-const issues = ref([])
+const issues = ref<ApiIssue[]>([])
 /** The request in flight: 'preview', 'apply' or ''. */
 const busy = ref('')
 /** Set once the apply is confirmed, while the status is re-read. */
@@ -43,12 +46,12 @@ const canPreview = computed(
 
 onMounted(async () => {
   try {
-    links.value = (await api.interfaces.live()) as unknown[]
+    links.value = await api.interfaces.live()
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
   }
   // Sensible defaults: the interface holding the default route looks like WAN.
-  const withAddr = candidates.value.filter((l) => l.addresses.length > 0)
+  const withAddr = candidates.value.filter((l) => (l.addresses?.length ?? 0) > 0)
   if (withAddr.length >= 2) {
     wan.value = withAddr[0].name
     lan.value = withAddr[1].name
@@ -57,8 +60,8 @@ onMounted(async () => {
   }
 })
 
-function describe(l) {
-  const addrs = l.addresses.length ? l.addresses.join(', ') : 'no address'
+function describe(l: LiveLink) {
+  const addrs = l.addresses?.length ? l.addresses.join(', ') : 'no address'
   return `${l.name} (${l.carrier ? 'up' : 'down'}${l.mac ? ', ' + l.mac : ''}, ${addrs})`
 }
 
@@ -87,6 +90,7 @@ async function buildPreview() {
 }
 
 async function apply() {
+  if (!preview.value) return
   error.value = ''
   busy.value = 'apply'
   try {
@@ -125,7 +129,7 @@ function reverted() {
 
     <p v-if="finishing" role="status" class="text-sm text-ink-muted">Confirmed.</p>
     <template v-else-if="applied">
-      <ApplyPending :deadline="applied.deadline" @confirmed="finish" @reverted="reverted" />
+      <ApplyPending :deadline="applied.deadline ?? ''" @confirmed="finish" @reverted="reverted" />
     </template>
 
     <form v-else-if="!finishing" class="space-y-5" @submit.prevent="buildPreview">

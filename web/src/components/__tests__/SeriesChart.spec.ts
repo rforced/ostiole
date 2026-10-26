@@ -24,7 +24,7 @@ function chart(props = {}) {
       series: [{ index: 1, name: 'IPv4', color: 'var(--chart-down)', band: [2, 3] }],
       bars: [{ index: 4, name: 'IPv4 lost', color: 'var(--chart-down)' }],
       format: formatMs,
-      scale: (h) => niceScale(h, 10),
+      scale: (h: number) => niceScale(h, 10),
       gap: 90,
       step: 60,
       empty: 'No probes yet.',
@@ -37,10 +37,10 @@ describe('SeriesChart', () => {
   it('breaks the line where nothing answered and where minutes are missing', () => {
     const w = chart()
     const line = w.findAll('path').find((p) => p.attributes('stroke') === 'var(--chart-down)')
-    expect(line.attributes('d').match(/M/g)).toHaveLength(2)
-    expect(line.attributes('d').match(/L/g)).toHaveLength(1)
+    expect(line?.attributes('d')?.match(/M/g)).toHaveLength(2)
+    expect(line?.attributes('d')?.match(/L/g)).toHaveLength(1)
     const band = w.get('path[data-band]')
-    expect(band.attributes('d').match(/Z/g)).toHaveLength(2)
+    expect(band.attributes('d')?.match(/Z/g)).toHaveLength(2)
   })
 
   it('draws a bar for each share lost, on its own axis', () => {

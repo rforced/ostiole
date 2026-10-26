@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import type { PropType } from 'vue'
+
 import AppNotice from '@/components/AppNotice.vue'
 import ChangeList from '@/components/ChangeList.vue'
+import type { RestoreResponse } from '@/lib/types.gen'
 import { formatWhen } from '@/lib/format'
 
 /**
@@ -9,13 +12,12 @@ import { formatWhen } from '@/lib/format'
  * nothing it shows has been applied.
  */
 defineProps({
-  /** @type {import('vue').PropType<{summary: object, changes: object[]}>} */
-  pending: { type: Object, required: true },
+  pending: { type: Object as PropType<RestoreResponse>, required: true },
 })
 defineEmits(['load', 'cancel'])
 
 /** "1 rule" or "3 rules"; pass the plural where an -s will not do. */
-function count(n, one, many = `${one}s`) {
+function count(n: number, one: string, many = `${one}s`) {
   return `${n} ${n === 1 ? one : many}`
 }
 </script>
@@ -47,7 +49,7 @@ function count(n, one, many = `${one}s`) {
     <div>
       <p class="mb-1 font-medium">What it would change:</p>
       <ChangeList
-        :changes="pending.changes"
+        :changes="pending.changes ?? []"
         :limit="12"
         empty-label="Nothing: this backup matches the saved configuration."
       />

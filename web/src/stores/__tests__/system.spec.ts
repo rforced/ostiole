@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import { useSystemStore } from '@/stores/system'
+import { must } from '@/test/fixtures'
 
 describe('system store', () => {
   beforeEach(() => {
@@ -19,7 +20,7 @@ describe('system store', () => {
     const system = useSystemStore()
     expect(system.status).toBe(null)
     await system.refresh()
-    expect(system.status.configured).toBe(true)
+    expect(must(system.status).configured).toBe(true)
     expect(system.error).toBe('')
   })
 
@@ -35,7 +36,7 @@ describe('system store', () => {
     await system.refresh()
     vi.spyOn(api, 'status').mockRejectedValue(new Error('403'))
     await system.refresh()
-    expect(system.status.configured).toBe(true)
+    expect(must(system.status).configured).toBe(true)
     expect(system.error).toBe('403')
   })
 

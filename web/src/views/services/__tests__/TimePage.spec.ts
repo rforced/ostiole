@@ -1,12 +1,13 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, type Role, type Session } from '@/lib/api'
 import { useNtpStatus } from '@/lib/ntpStatus'
-import type { Config } from '@/lib/types.gen'
+import type { NTP, NTPServer, NtpSource, NtpStatus } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import { configOf, draftOf, must } from '@/test/fixtures'
 import TimePage from '@/views/services/TimePage.vue'
 import ServerDialog from '@/views/services/time/ServerDialog.vue'
 
@@ -31,7 +32,7 @@ const DEFAULTS = [
   { host: 'nts.example.net', nts: true },
 ]
 
-function source(name, state, over = {}) {
+function source(name: string, state: string, over: Partial<NtpSource> = {}): NtpSource {
   return {
     name,
     address: '192.0.2.1',
@@ -47,7 +48,7 @@ function source(name, state, over = {}) {
   }
 }
 
-function status(over = {}) {
+function status(over: Partial<NtpStatus> = {}): NtpStatus {
   return {
     setUp: true,
     running: true,
@@ -68,8 +69,8 @@ function status(over = {}) {
   }
 }
 
-function config(ntp) {
-  return {
+function config(ntp?: NTP) {
+  return configOf({
     version: 11,
     system: { timezone: 'Europe/Berlin', management: { webPort: 9443, sshPort: 22 } },
     zones: [{ name: 'wan', external: true }, { name: 'lan' }],
@@ -85,11 +86,14 @@ function config(ntp) {
       upnp: { enabled: false },
       ...(ntp ? { ntp: structuredClone(ntp) } : {}),
     },
-  } as Config
+  })
 }
 
 /** Mounts the page on a status and a configuration of our choosing. */
-async function page(st, { ntp = undefined, role = 'admin' }: { ntp?: object; role?: Role } = {}) {
+async function page(
+  st: NtpStatus | Promise<NtpStatus>,
+  { ntp = undefined, role = 'admin' }: { ntp?: NTP; role?: Role } = {},
+) {
   if (st instanceof Promise) vi.mocked(api.ntp.status).mockReturnValue(st)
   else vi.mocked(api.ntp.status).mockResolvedValue(st)
   useAuthStore().user = { username: role, role } as Session
@@ -103,8 +107,8 @@ async function page(st, { ntp = undefined, role = 'admin' }: { ntp?: object; rol
 }
 
 /** The row of the servers table that names host. */
-function row(wrapper, host) {
-  return wrapper.findAll('tbody tr').find((r) => r.text().includes(host))
+function row(wrapper: VueWrapper, host: string) {
+  return must(wrapper.findAll('tbody tr').find((r) => r.text().includes(host)))
 }
 
 describe('TimePage', () => {
@@ -117,8 +121,8 @@ describe('TimePage', () => {
   })
 
   it('waits for the first read before saying anything', async () => {
-    let answer
-    const { wrapper } = await page(new Promise((resolve) => (answer = resolve)))
+    let answer: (value: NtpStatus) => void = () => undefined
+    const { wrapper } = await page(new Promise<NtpStatus>((resolve) => (answer = resolve)))
     expect(wrapper.text()).toContain('Reading…')
     expect(wrapper.find('tbody').text()).toContain('Reading…')
     expect(wrapper.text()).not.toContain('Default')
@@ -198,7 +202,7 @@ describe('TimePage', () => {
     const { wrapper, store } = await page(status())
     wrapper.findComponent(ServerDialog).vm.$emit('save', { host: 'gps.lan' }, '')
     await flushPromises()
-    const hosts = store.draft.services.ntp.servers.map((s) => s.host)
+    const hosts = must(draftOf(store).services?.ntp?.servers).map((s) => s.host)
     expect(hosts).toEqual([...DEFAULTS.map((s) => s.host), 'gps.lan'])
     expect(row(wrapper, 'gps.lan').text()).toContain('Unsigned')
     expect(wrapper.text()).not.toContain("These follow Ostiole's defaults")
@@ -206,9 +210,9 @@ describe('TimePage', () => {
 
   it('goes back to the defaults, and the block goes with its last field', async () => {
     const { wrapper, store } = await page(status(), { ntp: { servers: [{ host: 'gps.lan' }] } })
-    const button = wrapper.findAll('button').find((b) => b.text() === 'Use defaults')
+    const button = must(wrapper.findAll('button').find((b) => b.text() === 'Use defaults'))
     await button.trigger('click')
-    expect(store.draft.services.ntp).toBeUndefined()
+    expect(must(draftOf(store).services).ntp).toBeUndefined()
     expect(wrapper.findAll('tbody tr')).toHaveLength(4)
   })
 
@@ -217,9 +221,9 @@ describe('TimePage', () => {
     const serve = wrapper.get<HTMLInputElement>('#ntp-serve')
     expect(serve.element.checked).toBe(true)
     await serve.setValue(false)
-    expect(store.draft.services.ntp).toBeUndefined()
+    expect(must(draftOf(store).services).ntp).toBeUndefined()
     await serve.setValue(true)
-    expect(store.draft.services.ntp).toEqual({ serve: true })
+    expect(must(draftOf(store).services).ntp).toEqual({ serve: true })
     expect(store.dirty).toBe(false)
   })
 
@@ -234,7 +238,7 @@ describe('TimePage', () => {
 describe('ServerDialog', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
-  function dialog(props = {}) {
+  function dialog(props: { server?: NTPServer; hosts?: string[] } = {}) {
     return mount(ServerDialog, { props: { open: true, ...props }, global: { stubs } })
   }
 
@@ -255,6 +259,6 @@ describe('ServerDialog', () => {
     const wrapper = dialog({ server: { host: 'gps.lan' }, hosts: ['gps.lan'] })
     await wrapper.get('#ntp-host').setValue('gps2.lan')
     await wrapper.get('form').trigger('submit')
-    expect(wrapper.emitted('save')[0]).toEqual([{ host: 'gps2.lan' }, 'gps.lan'])
+    expect(must(wrapper.emitted('save'))[0]).toEqual([{ host: 'gps2.lan' }, 'gps.lan'])
   })
 })

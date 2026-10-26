@@ -5,13 +5,14 @@ import { computed, ref } from 'vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import UsedByCell from '@/components/UsedByCell.vue'
+import type { ProxyPool } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import PoolDialog from '@/views/services/proxy/PoolDialog.vue'
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const editing = ref(null)
+const editing = ref<ProxyPool | null>(null)
 const dialogOpen = ref(false)
 
 const pools = computed(() => config.proxy.pools ?? [])
@@ -21,7 +22,7 @@ function add() {
   dialogOpen.value = true
 }
 
-function edit(pool) {
+function edit(pool: ProxyPool) {
   editing.value = pool
   dialogOpen.value = true
 }

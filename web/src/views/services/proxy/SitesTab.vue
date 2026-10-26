@@ -4,19 +4,20 @@ import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import type { ProxySite } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import SiteDialog from '@/views/services/proxy/SiteDialog.vue'
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const editing = ref(null)
+const editing = ref<ProxySite | null>(null)
 const dialogOpen = ref(false)
 
 const sites = computed(() => config.proxy.sites ?? [])
 const pools = computed(() => config.proxy.pools ?? [])
 
-function certificateOf(site) {
+function certificateOf(site: ProxySite) {
   if (!site.certificate) return 'built-in'
   return site.certificate
 }
@@ -26,7 +27,7 @@ function add() {
   dialogOpen.value = true
 }
 
-function edit(site) {
+function edit(site: ProxySite) {
   editing.value = site
   dialogOpen.value = true
 }

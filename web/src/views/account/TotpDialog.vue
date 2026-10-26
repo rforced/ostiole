@@ -9,6 +9,7 @@ import FormField from '@/components/FormField.vue'
 import { ApiError, api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
 import { encode, svgPath } from '@/lib/qr'
+import type { TotpStartReply } from '@/lib/types.gen'
 
 defineProps({
   /** The account has an app already, and this one takes its place. */
@@ -18,13 +19,13 @@ const open = defineModel('open', { type: Boolean, default: false })
 const emit = defineEmits(['done'])
 
 /** The secret the router made and the otpauth address that carries it. */
-const setup = ref(null)
+const setup = ref<TotpStartReply | null>(null)
 const code = ref('')
 const error = ref('')
 const loading = ref(false)
 const busy = ref(false)
-const secretEl = ref(null)
-const codeEl = ref(null)
+const secretEl = ref<HTMLInputElement | null>(null)
+const codeEl = ref<HTMLInputElement | null>(null)
 /** 'copied', 'selected' when only the fallback's selection worked, or ''. */
 const copied = ref('')
 let copyTimer = 0
@@ -87,6 +88,7 @@ async function submit() {
  * and the older copy command. Either way the secret ends up selected.
  */
 async function copySecret() {
+  if (!secretEl.value || !setup.value) return
   secretEl.value.select()
   let ok
   try {

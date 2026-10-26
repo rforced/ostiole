@@ -7,7 +7,7 @@ import ErrorLine from '@/components/ErrorLine.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
-import { api } from '@/lib/api'
+import { api, type Mfa, type Passkey } from '@/lib/api'
 import { emptyText, errorMessage, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import * as webauthn from '@/lib/webauthn'
@@ -20,13 +20,13 @@ import TotpDialog from '@/views/account/TotpDialog.vue'
 
 const auth = useAuthStore()
 const confirm = useConfirmStore()
-const state = ref(null)
+const state = ref<Mfa | null>(null)
 const actionError = ref('')
 const settingUp = ref(false)
 const adding = ref(false)
 const removingApp = ref(false)
 /** The passkey the rename dialog is acting on. */
-const renaming = ref(null)
+const renaming = ref<Passkey | null>(null)
 const renameOpen = ref(false)
 /** The id of the passkey being removed. */
 const removing = ref('')
@@ -59,7 +59,7 @@ const passkeyBlock = computed(() => {
 })
 
 /** A time never set may come as Go's zero time. */
-const used = (t) => (t?.startsWith('0001-') ? '' : t)
+const used = (t: string | undefined) => (t?.startsWith('0001-') ? '' : t)
 
 /** What the card shows now, and the session's own copy of it. */
 async function changed() {
@@ -72,12 +72,12 @@ async function changed() {
   }
 }
 
-function openRename(p) {
+function openRename(p: Passkey) {
   renaming.value = p
   renameOpen.value = true
 }
 
-async function remove(p) {
+async function remove(p: Passkey) {
   const ok = await confirm.ask({
     question: `Remove the passkey ${p.name}?`,
     description: 'It can no longer be used to sign in.',

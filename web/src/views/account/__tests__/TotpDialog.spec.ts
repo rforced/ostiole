@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { type VueWrapper, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -34,7 +34,11 @@ async function open(props = {}) {
   return wrapper
 }
 
-const confirmButton = (wrapper) => wrapper.findAll('button').find((b) => b.text() === 'Confirm')
+const confirmButton = (wrapper: VueWrapper) => {
+  const found = wrapper.findAll('button').find((b) => b.text() === 'Confirm')
+  if (!found) throw new Error('no Confirm button')
+  return found
+}
 
 describe('TotpDialog', () => {
   beforeEach(() => {
@@ -68,7 +72,7 @@ describe('TotpDialog', () => {
 
     expect(api.auth.totpConfirm).toHaveBeenCalledWith('123456')
     expect(wrapper.emitted('done')).toHaveLength(1)
-    expect(wrapper.emitted('update:open')[0]).toEqual([false])
+    expect(wrapper.emitted('update:open')?.[0]).toEqual([false])
   })
 
   it('stays open with the reason when the code is wrong', async () => {

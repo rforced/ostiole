@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -6,12 +6,14 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { NAV } from '@/lib/nav'
 import { useAuthStore } from '@/stores/auth'
 import ConfigurationPage from '@/views/system/ConfigurationPage.vue'
-import { sessionOf } from '@/test/fixtures'
+import { sessionOf, must } from '@/test/fixtures'
 
-const { tabs } = NAV.find((i) => i.to === '/system').pages.find((p) => p.path === 'configuration')
+const { tabs } = must(
+  must(must(NAV.find((i) => i.to === '/system')).pages).find((p) => p.path === 'configuration'),
+)
 
 /** Mounts the page at a path for a role, with the sections stubbed. */
-async function page(path, role) {
+async function page(path: string, role: string) {
   useAuthStore().user = sessionOf({ username: role, role })
   const router = createRouter({
     history: createMemoryHistory(),
@@ -34,7 +36,7 @@ async function page(path, role) {
   return wrapper
 }
 
-const tabNames = (wrapper) => wrapper.findAll('[role="tab"]').map((t) => t.text())
+const tabNames = (wrapper: VueWrapper) => wrapper.findAll('[role="tab"]').map((t) => t.text())
 
 describe('ConfigurationPage', () => {
   beforeEach(() => setActivePinia(createPinia()))

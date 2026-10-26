@@ -1,12 +1,13 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Component } from 'vue'
 
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import AccountsTab from '@/views/system/certificates/AccountsTab.vue'
 import DnsProvidersPage from '@/views/system/DnsProvidersPage.vue'
-import { configOf, sessionOf } from '@/test/fixtures'
+import { configOf, sessionOf, must } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   ApiError: class ApiError extends Error {},
@@ -43,10 +44,14 @@ function draft() {
   })
 }
 
-const row = (wrapper, id) =>
-  wrapper.findAll('tr').find((tr) => tr.find('td').exists() && tr.get('td').text().startsWith(id))
+const row = (wrapper: VueWrapper, id: string) =>
+  must(
+    wrapper
+      .findAll('tr')
+      .find((tr) => tr.find('td').exists() && tr.get('td').text().startsWith(id)),
+  )
 
-async function open(component, role = 'admin') {
+async function open(component: Component, role = 'admin') {
   useAuthStore().user = sessionOf({ username: role, role })
   const config = useConfigStore()
   config.replaceDraft(draft())
@@ -55,8 +60,9 @@ async function open(component, role = 'admin') {
   return { wrapper, config }
 }
 
-const usedBy = (tr) => tr.get('td[data-label="Used by"]').text()
-const deleteOf = (tr) => tr.findAll('button').find((b) => b.text() === 'Delete').element
+const usedBy = (tr: DOMWrapper<Element>) => tr.get('td[data-label="Used by"]').text()
+const deleteOf = (tr: DOMWrapper<Element>) =>
+  must(tr.findAll('button').find((b) => b.text() === 'Delete')).element as HTMLButtonElement
 
 // Delete stays in its place and is off; the Used by column says why.
 describe('accounts and providers in use', () => {
@@ -90,7 +96,7 @@ describe('accounts and providers for an operator', () => {
 
   it('leaves the ACME accounts to an admin', async () => {
     const { wrapper } = await open(AccountsTab, 'operator')
-    const add = wrapper.findAll('button').find((b) => b.text().includes('Add account'))
+    const add = must(wrapper.findAll('button').find((b) => b.text().includes('Add account')))
     expect(add.element.disabled).toBe(true)
     expect(deleteOf(row(wrapper, 'spare')).disabled).toBe(true)
     expect(row(wrapper, 'spare').text()).toContain('View')
@@ -99,7 +105,7 @@ describe('accounts and providers for an operator', () => {
 
   it('leaves adding and deleting DNS providers to an admin', async () => {
     const { wrapper } = await open(DnsProvidersPage, 'operator')
-    const add = wrapper.findAll('button').find((b) => b.text().includes('Add provider'))
+    const add = must(wrapper.findAll('button').find((b) => b.text().includes('Add provider')))
     expect(add.element.disabled).toBe(true)
     expect(deleteOf(row(wrapper, 'unused')).disabled).toBe(true)
     expect(row(wrapper, 'unused').text()).toContain('Edit')

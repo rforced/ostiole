@@ -6,6 +6,7 @@ import { useRoute } from 'vue-router'
 import ActionButton from '@/components/ActionButton.vue'
 import ApplyPending from '@/components/ApplyPending.vue'
 import ChangeList from '@/components/ChangeList.vue'
+import type { ApiIssue, Config, Drift } from '@/lib/api'
 import { ApiError, api } from '@/lib/api'
 import { applyWithConfirm } from '@/lib/apply'
 import { errorMessage } from '@/lib/async'
@@ -34,17 +35,16 @@ const reloading = ref(false)
 const refused = ref(false)
 const stale = computed(() => config.stale || refused.value)
 const error = ref('')
-const issues = ref([])
+const issues = ref<ApiIssue[]>([])
 const showChanges = ref(false)
 /**
  * The apply awaiting confirmation: one this tab made, or the server's,
  * whichever tab made it and across a reload, so the countdown is on every
  * page. Kept a moment after it settles so the outcome can be read.
- * @type {import('vue').Ref<{deadline: string} | null>}
  */
-const pending = ref(null)
+const pending = ref<{ deadline: string } | null>(null)
 /** The draft as this tab applied it, until that apply settles. */
-let applied = null
+let applied: Config | null = null
 /** Whether that apply was of the saved configuration, to bring in a drift. */
 let driftApplied = false
 
@@ -71,9 +71,8 @@ const count = computed(() => (drift.value ? drift.value.changes : config.changes
 /**
  * The lines the drift is made of, read when the list is opened and again
  * whenever the status says the drift moved.
- * @type {import('vue').Ref<import('@/lib/api').Drift | null>}
  */
-const driftLines = ref(null)
+const driftLines = ref<Drift | null>(null)
 async function readDrift() {
   try {
     driftLines.value = await api.config.drift()
@@ -97,17 +96,17 @@ watch(showChanges, (open) => {
  * list opened for the drift or for a draft closes as the bar turns to the
  * other.
  */
-let poll = null
+let poll: number | null = null
 watch(
   () => drift.value !== null,
   (shown) => {
     showChanges.value = false
-    window.clearInterval(poll)
+    window.clearInterval(poll ?? undefined)
     poll = shown ? window.setInterval(() => system.refresh(), DRIFT_POLL_MS) : null
   },
   { immediate: true },
 )
-onBeforeUnmount(() => window.clearInterval(poll))
+onBeforeUnmount(() => window.clearInterval(poll ?? undefined))
 
 watch(
   [() => system.status?.pending?.deadline, onWizard],
@@ -132,9 +131,9 @@ watch(
  * much of the page it covers, so the page and the toasts can clear it.
  * Above lg nothing reads it, so nothing measures.
  */
-const bar = ref(null)
+const bar = ref<HTMLElement | null>(null)
 const narrow = useNarrow()
-let observer = null
+let observer: ResizeObserver | null = null
 function undock() {
   observer?.disconnect()
   observer = null
@@ -165,7 +164,7 @@ async function apply() {
     const res = await applyWithConfirm(draft, config.base, CONFIRM_SECONDS)
     applied = draft
     driftApplied = ofDrift
-    pending.value = { deadline: res.deadline }
+    pending.value = { deadline: res.deadline ?? '' }
     // The kernel changed the moment the apply returned, not when it is
     // confirmed, so anything showing live state is stale from here.
     config.markApplied()
@@ -266,7 +265,7 @@ async function settle() {
                 is saved; this draft is dropped.</span
               >
               <span v-else-if="drift" class="font-medium"
-                >Not applied with this version: {{ drift.parts.join(', ') }}.</span
+                >Not applied with this version: {{ (drift.parts ?? []).join(', ') }}.</span
               >
               <span v-else class="font-medium">Unapplied changes.</span>
               <button

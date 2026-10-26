@@ -82,7 +82,7 @@ const sort = useSort(
     from: byAddress((s) => s.source),
     to: byAddress((s) => s.destination),
     leaves: byAddress((s) => (s.nat ? s.replyDest : null)),
-    state: byText((s) => s.state),
+    state: byText((s) => s.state ?? ''),
     traffic: byNumber((s) => s.bytes),
     expires: byNumber((s) => seconds(s.ttl), 'asc'),
   },
@@ -134,7 +134,7 @@ function endpoint(address: string | undefined, port?: number) {
           v-model="query"
           placeholder="address, network, port, or state"
           :shown="result?.matched ?? 0"
-          :total="result ? result.total : null"
+          :total="result ? result.total : undefined"
         />
 
         <ErrorLine v-if="load.error.value">{{ load.error.value }}</ErrorLine>
@@ -145,7 +145,7 @@ function endpoint(address: string | undefined, port?: number) {
             <span>
               <span class="font-medium tabular-nums">{{ used.toFixed(0) }}%</span>
               <span class="ml-2 text-ink-muted tabular-nums">
-                {{ formatCount(result.total) }} of {{ formatCount(result.max) }}
+                {{ formatCount(result.total) }} of {{ formatCount(result.max ?? 0) }}
               </span>
             </span>
           </div>

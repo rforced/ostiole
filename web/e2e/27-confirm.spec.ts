@@ -1,3 +1,7 @@
+import type { Page } from '@playwright/test'
+
+import type { Config } from '../src/lib/types.gen'
+
 import { expect, test } from './fixtures'
 import { login, readConfig, shot } from './helpers'
 
@@ -11,11 +15,11 @@ test.describe.configure({ mode: 'serial' })
 const headers = { 'X-Requested-With': 'ostiole' }
 
 /** What the router has saved, which only a confirm changes. */
-async function saved(page) {
+async function saved(page: Page): Promise<Config> {
   return (await page.request.get('/api/v1/config')).json()
 }
 
-async function pendingApply(page) {
+async function pendingApply(page: Page) {
   return (await (await page.request.get('/api/v1/status')).json()).pending ?? null
 }
 
@@ -41,7 +45,7 @@ test('Revert now puts the previous rules back and keeps the change to fix', asyn
   await status.getByRole('button', { name: 'Revert now' }).click()
   await expect(status).toContainText('Reverted to the previous configuration.')
   expect(await pendingApply(page)).toBeNull()
-  expect((await saved(page)).rules.map((r) => r.description)).not.toContain('Not for keeps')
+  expect(((await saved(page)).rules ?? []).map((r) => r.description)).not.toContain('Not for keeps')
 
   // The draft still holds the rule, to fix and apply again.
   await expect(rule).toBeVisible()
@@ -69,7 +73,7 @@ test('an apply nobody confirms is undone when its window runs out', async ({ pag
   const status = page.getByRole('status')
   await expect(status).toContainText('awaiting confirmation')
   const timer = status.getByRole('timer')
-  const left = () => timer.textContent().then((t) => Number.parseInt(t, 10))
+  const left = () => timer.textContent().then((t) => Number.parseInt(t ?? '', 10))
   const first = await left()
   expect(first).toBeLessThanOrEqual(10)
   await expect.poll(left).toBeLessThan(first)
@@ -111,6 +115,8 @@ test('an apply whose reply was lost is still confirmed', async ({ page }) => {
 
   await status.getByRole('button', { name: 'Confirm' }).click()
   await expect(status).toContainText('Confirmed and saved.')
-  expect((await saved(page)).rules.map((r) => r.description)).toContain('Kept after a lost reply')
+  expect(((await saved(page)).rules ?? []).map((r) => r.description)).toContain(
+    'Kept after a lost reply',
+  )
   await expect(page.getByText('Unapplied changes.')).toHaveCount(0)
 })

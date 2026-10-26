@@ -2,8 +2,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { Config } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import { configOf, must } from '@/test/fixtures'
 import OvpnFileDialog from '@/views/vpn/openvpn/OvpnFileDialog.vue'
 
 // The dialog itself teleports; the form inside it is what is under test.
@@ -14,7 +14,8 @@ const stubs = {
   },
 }
 
-const pem = (kind, body) => `-----BEGIN ${kind}-----\n${body}\n-----END ${kind}-----`
+const pem = (kind: string, body: string) =>
+  `-----BEGIN ${kind}-----\n${body}\n-----END ${kind}-----`
 const CA = pem('CERTIFICATE', 'TUFERS1VUC1DQS1mb3ItYS10ZXN0')
 const CERT = pem('CERTIFICATE', 'TUFERS1VUC1jbGllbnQtY2VydA==')
 const KEY = pem('PRIVATE KEY', 'TUFERS1VUC1jbGllbnQta2V5')
@@ -44,16 +45,24 @@ ${KEY}
 </key>
 `
 
-async function open(props = {}) {
+async function open(props: { blocksOnly?: boolean } = {}) {
   const config = useConfigStore()
-  config.replaceDraft({
-    version: 12,
-    zones: [{ name: 'wan', external: true }, { name: 'lan' }],
-    interfaces: [
-      { name: 'eth0', zone: 'wan', enabled: true, ipv4: { mode: 'dhcp' }, ipv6: { mode: 'none' } },
-    ],
-    rules: [],
-  } as Config)
+  config.replaceDraft(
+    configOf({
+      version: 12,
+      zones: [{ name: 'wan', external: true }, { name: 'lan' }],
+      interfaces: [
+        {
+          name: 'eth0',
+          zone: 'wan',
+          enabled: true,
+          ipv4: { mode: 'dhcp' },
+          ipv6: { mode: 'none' },
+        },
+      ],
+      rules: [],
+    }),
+  )
   const wrapper = mount(OvpnFileDialog, { props: { open: false, ...props }, global: { stubs } })
   await wrapper.setProps({ open: true })
   return { wrapper, config }
@@ -91,7 +100,7 @@ describe('OvpnFileDialog', () => {
     expect(config.gateways).toEqual([
       { name: 'ovpn0', enabled: true, interface: 'ovpn0', monitor: '10.8.0.1' },
     ])
-    expect(wrapper.emitted('update:open').at(-1)).toEqual([false])
+    expect(must(wrapper.emitted('update:open')).at(-1)).toEqual([false])
   })
 
   it('adds a site tunnel with no gateway when the monitor is empty', async () => {
@@ -101,7 +110,7 @@ describe('OvpnFileDialog', () => {
     await wrapper.find('form').trigger('submit')
     await flushPromises()
     expect(config.zones.find((z) => z.name === 'ovpn0')).toEqual({ name: 'ovpn0' })
-    expect(config.interfaces.find((i) => i.name === 'ovpn0').openvpn).toEqual({
+    expect(must(config.interfaces.find((i) => i.name === 'ovpn0')).openvpn).toEqual({
       remotes: [{ host: 'lab-server.vpn.example', port: 1194 }],
       caPem: `${CA}\n`,
       certPem: `${CERT}\n`,
@@ -129,7 +138,7 @@ describe('OvpnFileDialog', () => {
       .setValue(`<ca>\n${CA}\n</ca>\n<cert>\n${CERT}\n</cert>\n<key>\n${KEY}\n</key>\n`)
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
     await wrapper.find('form').trigger('submit')
-    expect(wrapper.emitted('blocks')[0][0]).toEqual({
+    expect(must(wrapper.emitted('blocks'))[0][0]).toEqual({
       caPem: `${CA}\n`,
       certPem: `${CERT}\n`,
       keyPem: `${KEY}\n`,

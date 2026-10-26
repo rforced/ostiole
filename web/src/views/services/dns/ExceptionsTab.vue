@@ -10,6 +10,7 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { sentence } from '@/lib/blocking'
 import { joinList, parseList } from '@/lib/lists'
+import type { Finding } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
@@ -18,10 +19,10 @@ const config = useConfigStore()
 const blocking = computed(() => config.ensureBlocking())
 
 /** One name per line, kept out of the model when empty. */
-function listField(key) {
+function listField(key: 'allow' | 'deny') {
   return computed({
     get: () => joinList(blocking.value[key] ?? []),
-    set: (v) => {
+    set: (v: string) => {
       const list = parseList(v)
       if (list.length) blocking.value[key] = list
       else delete blocking.value[key]
@@ -33,7 +34,7 @@ const allow = listField('allow')
 const deny = listField('deny')
 
 const query = ref('')
-const finding = ref(null)
+const finding = ref<Finding | null>(null)
 
 /** Asks the router what it would do with a name, and why. */
 const lookup = useAsync(async () => {

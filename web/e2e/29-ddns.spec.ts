@@ -1,4 +1,4 @@
-import { createServer } from 'node:http'
+import { createServer, type Server, type ServerResponse } from 'node:http'
 
 import { expect, test } from './fixtures'
 import { applyAndConfirm, confirmDialog, login, shot, sidebar } from './helpers'
@@ -10,22 +10,32 @@ test.describe.configure({ mode: 'serial' })
 // an envelope around everything, an exact name filter that ignores case.
 const PORT = 18097
 const TOKEN = 'e2e-dns-token'
-const records = []
-const asked = []
-let api
+const records: Record<string, unknown>[] = []
+const asked: {
+  method: string | undefined
+  path: string
+  query: URLSearchParams
+  body: unknown
+}[] = []
+let api: Server | undefined
 
-function reply(res, status, result, errors = []) {
+function reply(
+  res: ServerResponse,
+  status: number,
+  result: unknown,
+  errors: { code: number; message: string }[] = [],
+) {
   res.writeHead(status, { 'Content-Type': 'application/json' })
   res.end(JSON.stringify({ success: status < 300, errors, messages: [], result }))
 }
 
 test.beforeAll(async () => {
-  api = createServer((req, res) => {
+  const server = createServer((req, res) => {
     let body = ''
     req.on('data', (chunk) => (body += chunk))
     req.on('end', () => {
-      const url = new URL(req.url, `http://127.0.0.1:${PORT}`)
-      const sent = body ? JSON.parse(body) : null
+      const url = new URL(req.url ?? '', `http://127.0.0.1:${PORT}`)
+      const sent: Record<string, unknown> | null = body ? JSON.parse(body) : null
       asked.push({ method: req.method, path: url.pathname, query: url.searchParams, body: sent })
       if (req.headers.authorization !== `Bearer ${TOKEN}`) {
         reply(res, 403, null, [
@@ -60,7 +70,8 @@ test.beforeAll(async () => {
       reply(res, 404, null, [{ code: 7003, message: 'Could not route to that path' }])
     })
   })
-  await new Promise((resolve) => api.listen(PORT, '127.0.0.1', resolve))
+  api = server
+  await new Promise<void>((resolve) => server.listen(PORT, '127.0.0.1', resolve))
 })
 
 test.afterAll(() => api?.close())
@@ -105,7 +116,7 @@ test('keep a record at the provider that holds its domain', async ({ page }) => 
   await dialog.getByRole('button', { name: 'Check' }).click()
   const found = dialog.getByRole('status')
   await expect(found).toContainText('Cloudflare')
-  const said = (await found.textContent()).replaceAll('\u00a0', ' ')
+  const said = ((await found.textContent()) ?? '').replaceAll('\u00a0', ' ')
   const created = /The apply creates it with (\S+)\./.exec(said)
   const address = created?.[1]
   if (!address) expect(said).toContain('has no public IPv4 address')

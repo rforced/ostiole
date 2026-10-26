@@ -5,6 +5,10 @@ import { formatCount } from '@/lib/format'
 import { matches } from '@/lib/search'
 import { streamLost } from '@/lib/stream'
 
+/** Whether a read was cancelled on purpose. */
+const aborted = (e: unknown) =>
+  typeof e === 'object' && e !== null && 'name' in e && e.name === 'AbortError'
+
 /** Rows one read asks for. */
 export const PAGE = 200
 /** How long typing rests before the router is asked. */
@@ -166,7 +170,7 @@ export function useLog<Row extends LogRow, Page extends LogPage<Row> = LogPage<R
       updatedAt.value = Date.now()
       if (live.value) release()
     } catch (e) {
-      if (e?.name !== 'AbortError') {
+      if (!aborted(e)) {
         error.value = errorMessage(e)
         missed = true
       }
@@ -193,7 +197,7 @@ export function useLog<Row extends LogRow, Page extends LogPage<Row> = LogPage<R
       take(p)
       error.value = ''
     } catch (e) {
-      if (e?.name !== 'AbortError') error.value = errorMessage(e)
+      if (!aborted(e)) error.value = errorMessage(e)
     } finally {
       if (later === c) {
         later = null
@@ -209,7 +213,7 @@ export function useLog<Row extends LogRow, Page extends LogPage<Row> = LogPage<R
     const all = shown.concat(rows.value)
     if (all.length > MAX_ROWS) {
       all.length = MAX_ROWS
-      next = all[MAX_ROWS - 1].seq
+      next = all[MAX_ROWS - 1].seq ?? 0
       more.value = true
     }
     rows.value = all

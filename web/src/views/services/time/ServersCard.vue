@@ -8,6 +8,7 @@ import StatusBadge from '@/components/StatusBadge.vue'
 import { emptyText } from '@/lib/async'
 import { formatOffset } from '@/lib/format'
 import { SOURCE_WORDS, sourcesFor, useNtpStatus } from '@/lib/ntpStatus'
+import type { NTPServer } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ServerDialog from '@/views/services/time/ServerDialog.vue'
@@ -23,23 +24,25 @@ const usingDefaults = computed(() => !own.value.length)
 /** The list the router asks, which is the defaults until it has its own. */
 const servers = computed(() => (usingDefaults.value ? (status.value?.defaults ?? []) : own.value))
 
-const same = (a, b) => a.toLowerCase() === b.toLowerCase()
+const WORDS: Record<string, string> = SOURCE_WORDS
+
+const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
 
 /** How the best source a server gave is doing, once the service was read. */
-function stateOf(server) {
+function stateOf(server: NTPServer) {
   if (!status.value?.read) return ''
   const best = sourcesFor(server.host, status.value.sources)[0]
-  return best ? (SOURCE_WORDS[best.state] ?? best.state) : 'no answer'
+  return best ? (WORDS[best.state] ?? best.state) : 'no answer'
 }
 
-function offsetOf(server) {
+function offsetOf(server: NTPServer) {
   if (!status.value?.read) return ''
   const best = sourcesFor(server.host, status.value.sources)[0]
   return best && best.lastSeconds >= 0 ? formatOffset(best.offsetSeconds) : ''
 }
 
 /** Whether a server asked to sign its answers is failing to. */
-function failing(server) {
+function failing(server: NTPServer) {
   return (
     server.nts && sourcesFor(server.host, status.value?.sources).some((s) => s.nts === 'failing')
   )
@@ -47,13 +50,13 @@ function failing(server) {
 
 const open = ref(false)
 /** The server the dialog edits; null adds one. */
-const editing = ref(null)
+const editing = ref<NTPServer | null>(null)
 
 function add() {
   editing.value = null
   open.value = true
 }
-function edit(server) {
+function edit(server: NTPServer) {
   editing.value = server
   open.value = true
 }
@@ -62,10 +65,9 @@ function edit(server) {
  * The defaults become the draft's own list at the first edit, so a server
  * added beside them keeps them.
  *
- * @param {{host: string, nts?: boolean, pool?: boolean}} server
- * @param {string} previousHost the host it was saved under, empty for a new one
+ * @param previousHost the host it was saved under, empty for a new one
  */
-function save(server, previousHost) {
+function save(server: NTPServer, previousHost: string) {
   const list = servers.value.map((s) => ({ ...s }))
   const idx = previousHost ? list.findIndex((s) => same(s.host, previousHost)) : -1
   if (idx === -1) list.push(server)
@@ -73,7 +75,7 @@ function save(server, previousHost) {
   config.setNTP({ servers: list })
 }
 
-function remove(server) {
+function remove(server: NTPServer) {
   const list = servers.value.filter((s) => !same(s.host, server.host))
   config.undoable(`Removed ${server.host}.`, () => config.setNTP({ servers: list }))
 }

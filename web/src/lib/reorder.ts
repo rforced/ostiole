@@ -18,7 +18,7 @@ export function useReorder(): {
   reorder: (change: () => void) => void
 } {
   const moveClass = ref(STILL)
-  function reorder(change) {
+  function reorder(change: () => void) {
     moveClass.value = MOVE
     change()
     // The group reads the class in the update this change causes; the

@@ -1,7 +1,7 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { type VueWrapper, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { DEFAULT_ORDER, firstLayout } from '@/views/dashboard/layout'
+import { DEFAULT_ORDER, type Layout, firstLayout } from '@/views/dashboard/layout'
 import LayoutDialog from '@/views/dashboard/LayoutDialog.vue'
 
 const stubs = {
@@ -12,14 +12,18 @@ const stubs = {
   'transition-group': false,
 }
 
-function open(layout = firstLayout()) {
+function open(layout: Layout = firstLayout()) {
   return mount(LayoutDialog, { props: { open: true, layout }, global: { stubs } })
 }
 
-const titles = (w) => w.findAll('li').map((li) => li.text())
-const row = (w, title) => w.findAll('li').find((li) => li.text() === title)
-const restore = (w) => w.findAll('button').find((b) => b.text() === 'Restore')
-const changes = (w) => (w.emitted('change') ?? []).map(([layout]) => layout)
+const titles = (w: VueWrapper) => w.findAll('li').map((li) => li.text())
+const row = (w: VueWrapper, title: string) => {
+  const found = w.findAll('li').find((li) => li.text() === title)
+  if (!found) throw new Error(`no row ${title}`)
+  return found
+}
+const restore = (w: VueWrapper) => w.findAll('button').find((b) => b.text() === 'Restore')
+const changes = (w: VueWrapper) => (w.emitted<[Layout]>('change') ?? []).map(([layout]) => layout)
 
 describe('LayoutDialog', () => {
   afterEach(() => {
@@ -30,8 +34,8 @@ describe('LayoutDialog', () => {
     const w = open({ order: ['router', ...DEFAULT_ORDER.slice(0, -1)], hidden: ['wireless'] })
     expect(titles(w)).toHaveLength(10)
     expect(titles(w).slice(0, 2)).toEqual(['Router', 'System'])
-    expect(row(w, 'Wireless').get('[role=switch]').element.checked).toBe(false)
-    expect(row(w, 'Services').get('[role=switch]').element.checked).toBe(true)
+    expect(row(w, 'Wireless').get<HTMLInputElement>('[role=switch]').element.checked).toBe(false)
+    expect(row(w, 'Services').get<HTMLInputElement>('[role=switch]').element.checked).toBe(true)
     expect(row(w, 'Services').get('[role=switch]').attributes('aria-label')).toBe('Show Services')
   })
 
@@ -49,29 +53,29 @@ describe('LayoutDialog', () => {
     const w = open()
     expect(restore(w)).toBeUndefined()
     await row(w, 'Router').get('[role=switch]').setValue(false)
-    await restore(w).trigger('click')
+    await restore(w)?.trigger('click')
     expect(changes(w).at(-1)).toEqual(firstLayout())
     expect(restore(w)).toBeUndefined()
   })
 
   describe('a drag', () => {
     /** Rows 40 pixels tall from the top, so their centres are 20, 60, 100… */
-    function layOut(w) {
+    function layOut(w: VueWrapper) {
       vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
         this: HTMLElement,
       ) {
-        const i = [...this.parentElement.children].indexOf(this)
+        const i = [...(this.parentElement?.children ?? [])].indexOf(this)
         return { top: i * 40, height: 40 } as DOMRect
       })
-      const list = w.get('ul').element
+      const list = w.get<HTMLElement>('ul').element
       list.setPointerCapture = vi.fn()
       list.hasPointerCapture = () => true
       list.releasePointerCapture = vi.fn()
       return list
     }
-    const pointer = (el, type, clientY, init = {}) =>
+    const pointer = (el: EventTarget, type: string, clientY: number, init: PointerEventInit = {}) =>
       el.dispatchEvent(new PointerEvent(type, { pointerId: 1, clientY, ...init }))
-    const grab = (w, title, clientY, pointerType = 'mouse') =>
+    const grab = (w: VueWrapper, title: string, clientY: number, pointerType = 'mouse') =>
       pointer(row(w, title).get('[data-handle]').element, 'pointerdown', clientY, {
         pointerType,
         button: 0,

@@ -15,6 +15,7 @@ import { formatWhen } from '@/lib/format'
 import { type LogRow, heldLine, useLog } from '@/lib/log'
 import { records } from '@/lib/logs'
 import { wirelessValues } from '@/lib/wirelessLog'
+import type { LogKeep } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 const config = useConfigStore()
@@ -24,13 +25,15 @@ const config = useConfigStore()
  * the wireless block itself goes when nothing is left in it.
  */
 const retention = computed({
-  get: () => config.draft?.wireless?.log ?? {},
-  set: (v) => {
-    const w = { ...(config.draft.wireless ?? {}) }
+  get: (): LogKeep => config.draft?.wireless?.log ?? {},
+  set: (v: LogKeep) => {
+    const draft = config.draft
+    if (!draft) return
+    const w = { ...(draft.wireless ?? {}) }
     if (Object.keys(v).length) w.log = v
     else delete w.log
-    if (Object.keys(w).length) config.draft.wireless = w
-    else delete config.draft.wireless
+    if (Object.keys(w).length) draft.wireless = w
+    else delete draft.wireless
   },
 })
 

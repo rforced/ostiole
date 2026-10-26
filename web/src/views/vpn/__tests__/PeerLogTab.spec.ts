@@ -1,14 +1,23 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
-import type { Session } from '@/lib/api'
-import type { Config, Interface, LogLimitsInfo, LogfileStatus, Stats } from '@/lib/types.gen'
+import type {
+  Interface,
+  LogLevel,
+  LogLimitsInfo,
+  LogfileStatus,
+  PeerLogPage,
+  PeerlogEvent,
+  Stats,
+} from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
-import { fixture } from '@/test/fixtures'
+import { draftOf, emptyConfig, fixture, must, sessionOf } from '@/test/fixtures'
+import type { DeepPartial } from '@/test/fixtures'
 import PeerLogTab from '@/views/vpn/PeerLogTab.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -26,21 +35,37 @@ class FakeSource {
   close() {}
 }
 
-const clearButton = (w) => w.findAll('button').find((b) => b.text() === 'Clear')
+type Kind = 'wireguard' | 'tailscale'
 
-async function tab(kind, list, { level = 'info', on = true } = {}) {
-  api[kind].log.mockResolvedValue({ entries: list, held: list.length, kept: level === 'info' })
+const clearButton = (w: VueWrapper) => w.findAll('button').find((b) => b.text() === 'Clear')
+
+async function tab(
+  kind: Kind,
+  list: DeepPartial<PeerlogEvent>[],
+  { level = 'info', on = true }: { level?: LogLevel; on?: boolean } = {},
+) {
+  vi.mocked(api[kind].log).mockResolvedValue(
+    fixture<PeerLogPage>({ entries: list, held: list.length, kept: level === 'info' }),
+  )
   vi.mocked(api.systemStats).mockResolvedValue(fixture<Stats>({ memTotal: 8_000_000_000 }))
   vi.mocked(api.logFiles).mockResolvedValue(fixture<LogfileStatus>({ enabled: false, logs: [] }))
   vi.mocked(api.logLimits).mockResolvedValue(fixture<LogLimitsInfo>({ memTotal: 0, ceilings: {} }))
   const store = useConfigStore()
-  const draft = { version: 11, system: { logging: { level } }, interfaces: [] } as Config
-  if (on)
-    draft.interfaces.push({
-      name: kind === 'wireguard' ? 'wg0' : 'ts0',
-      enabled: true,
-      [kind]: {},
-    } as unknown as Interface)
+  const base = emptyConfig()
+  const draft = {
+    ...base,
+    version: 11,
+    system: { ...base.system, logging: { level } },
+    interfaces: on
+      ? [
+          fixture<Interface>({
+            name: kind === 'wireguard' ? 'wg0' : 'ts0',
+            enabled: true,
+            [kind]: {},
+          }),
+        ]
+      : [],
+  }
   store.draft = draft
   store.saved = structuredClone(draft)
   store.loaded = true
@@ -93,25 +118,27 @@ describe('PeerLogTab', () => {
   it('keeps the vpn block out of the draft while it is empty', async () => {
     const { wrapper, store } = await tab('wireguard', [])
     await wrapper.find('#wireguard-entries').setValue('3000')
-    expect(store.draft.vpn).toEqual({ wireguardLog: { entries: 3000 } })
+    expect(draftOf(store).vpn).toEqual({ wireguardLog: { entries: 3000 } })
     await wrapper.find('#wireguard-entries').setValue('')
-    expect(store.draft.vpn).toBeUndefined()
+    expect(draftOf(store).vpn).toBeUndefined()
   })
 
   // Clear empties the router's log of that kind and reads it again. Below
   // Info there is nothing kept to clear.
   it('clears the router’s log, once asked', async () => {
-    useAuthStore().user = { username: 'root', role: 'admin' } as Session
+    useAuthStore().user = sessionOf({ username: 'root', role: 'admin' })
     const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
     for (const [kind, name] of [
       ['wireguard', 'WireGuard log'],
       ['tailscale', 'Tailscale log'],
-    ]) {
+    ] as const) {
       const { wrapper } = await tab(kind, [
         { seq: 1, time: '2026-09-28T14:02:00Z', event: 'connected', peer: 'phone' },
       ])
-      api[kind].log.mockResolvedValue({ entries: [], held: 0, kept: true })
-      await clearButton(wrapper).trigger('click')
+      vi.mocked(api[kind].log).mockResolvedValue(
+        fixture<PeerLogPage>({ entries: [], held: 0, kept: true }),
+      )
+      await must(clearButton(wrapper)).trigger('click')
       await flushPromises()
       expect(ask).toHaveBeenLastCalledWith(
         expect.objectContaining({

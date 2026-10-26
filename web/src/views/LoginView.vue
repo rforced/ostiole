@@ -16,7 +16,7 @@ const router = useRouter()
 const route = useRoute()
 
 /** The router's hostname: '' when it has none, null until the server says. */
-const hostname = ref(null)
+const hostname = ref<string | null>(null)
 /** An account has a passkey made on this host name. */
 const passkeysHere = ref(false)
 onMounted(async () => {
@@ -42,12 +42,12 @@ const checking = ref(false)
 const prompting = ref(false)
 /** The username was given and the password is asked. */
 const entered = ref(false)
-const usernameEl = ref(null)
-const passwordEl = ref(null)
-const codeEl = ref(null)
-const passkeyEl = ref(null)
+const usernameEl = ref<HTMLInputElement | null>(null)
+const passwordEl = ref<HTMLInputElement | null>(null)
+const codeEl = ref<HTMLInputElement | null>(null)
+const passkeyEl = ref<InstanceType<typeof ActionButton> | null>(null)
 /** Closes a passkey prompt still open. */
-let prompt = null
+let prompt: AbortController | null = null
 
 const step = computed(() => (auth.pending ? 3 : entered.value ? 2 : 1))
 /** A passkey can sign in here on its own, before any name is typed. */
@@ -56,7 +56,11 @@ const passkeyAlone = computed(() => passkeysHere.value && webauthn.available())
 const passkeys = computed(() => Boolean(auth.pending?.passkeys) && webauthn.available())
 
 /** A prompt the user closed or the page aborted: nothing to say. */
-const cancelled = (e) => e?.name === 'NotAllowedError' || e?.name === 'AbortError'
+const cancelled = (e: unknown) =>
+  typeof e === 'object' &&
+  e !== null &&
+  'name' in e &&
+  (e.name === 'NotAllowedError' || e.name === 'AbortError')
 
 // The step that opens takes the focus, which on the third is the passkey's
 // when there is one.
@@ -133,7 +137,7 @@ async function signInWithPasskey() {
 }
 
 /** Why a passkey alone did not sign in. */
-function passkeyError(e) {
+function passkeyError(e: unknown) {
   if (!(e instanceof ApiError)) return e instanceof Error ? e.message : String(e)
   if (e.status === 429) return TOO_MANY
   if (/no such passkey/i.test(e.message)) return 'That passkey is not registered here.'
@@ -144,7 +148,7 @@ function passkeyError(e) {
 }
 
 /** What the second step says went wrong. */
-function secondStepError(e) {
+function secondStepError(e: unknown) {
   if (!(e instanceof ApiError)) return e instanceof Error ? e.message : String(e)
   if (e.status === 429) return TOO_MANY
   if (/used already/i.test(e.message)) return 'That code was used already.'
@@ -272,9 +276,9 @@ function back() {
           :disabled="checking"
           @click="usePasskey"
         />
-        <hr v-if="auth.pending.totp" class="border-line" />
+        <hr v-if="auth.pending?.totp" class="border-line" />
       </template>
-      <FormField v-if="auth.pending.totp" id="code" label="Code from your authenticator app">
+      <FormField v-if="auth.pending?.totp" id="code" label="Code from your authenticator app">
         <input
           id="code"
           ref="codeEl"
@@ -290,7 +294,7 @@ function back() {
       </FormField>
       <ErrorLine v-if="error" class="text-sm">{{ error }}</ErrorLine>
       <ActionButton
-        v-if="auth.pending.totp"
+        v-if="auth.pending?.totp"
         type="submit"
         :kind="passkeys ? 'secondary' : 'primary'"
         class="w-full"

@@ -1,10 +1,11 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import type { Certificate } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import CertificateDialog from '@/views/system/certificates/CertificateDialog.vue'
-import { configOf } from '@/test/fixtures'
+import { configOf, must } from '@/test/fixtures'
 
 // The dialog lives in a portal, which mount() cannot reach; open it in
 // place so a test can type into it.
@@ -43,7 +44,7 @@ function open(certificate = null) {
 }
 
 // Mounted closed and opened on a saved certificate, as the tab does.
-async function reopen(cert) {
+async function reopen(cert: Certificate) {
   setActivePinia(createPinia())
   const config = useConfigStore()
   const cfg = { ...draft(), certificates: [cert] }
@@ -58,7 +59,8 @@ async function reopen(cert) {
   return { wrapper, config }
 }
 
-const save = (wrapper) => wrapper.findAll('button').find((b) => b.text() === 'Save to draft')
+const save = (wrapper: VueWrapper) =>
+  must(wrapper.findAll('button').find((b) => b.text() === 'Save to draft'))
 
 describe('CertificateDialog', () => {
   beforeEach(() => setActivePinia(createPinia()))

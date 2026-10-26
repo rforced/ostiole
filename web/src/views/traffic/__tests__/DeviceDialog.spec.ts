@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
-import { fixture } from '@/test/fixtures'
+import { fixture, must } from '@/test/fixtures'
 import DeviceDialog from '@/views/traffic/DeviceDialog.vue'
 import type { ServerTrafficDestinations, TrafficDevice, TrafficEvent } from '@/lib/types.gen'
 
@@ -99,9 +99,9 @@ describe('DeviceDialog', () => {
       devices: [{ id, down, up: 0 }],
     })
     await w.setProps({ latest: event('someone-else', 1) })
-    expect(w.findAll('path')[0].attributes('d').split('L')).toHaveLength(1)
+    expect(must(w.findAll('path')[0].attributes('d')).split('L')).toHaveLength(1)
     await w.setProps({ latest: event('a8:bb:cc:00:00:05', 2_000_000) })
-    expect(w.findAll('path')[0].attributes('d').split('L')).toHaveLength(2)
+    expect(must(w.findAll('path')[0].attributes('d')).split('L')).toHaveLength(2)
     expect(w.text()).toContain('Down 2 Mbit/s')
   })
 })

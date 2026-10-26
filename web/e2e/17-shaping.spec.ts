@@ -1,13 +1,15 @@
+import type { Locator } from '@playwright/test'
+
 import { expect, test } from './fixtures'
 import { applyAndConfirm, confirmDialog, login, shot, sidebar } from './helpers'
 
 test.describe.configure({ mode: 'serial' })
 
 /** The interface the wizard put in the wan zone, whatever it is called here. */
-async function wanInterface(select) {
+async function wanInterface(select: Locator) {
   const option = select.locator('option', { hasText: '(wan)' }).first()
   await expect(option).toHaveCount(1)
-  return option.getAttribute('value')
+  return (await option.getAttribute('value')) ?? ''
 }
 
 test('a line speed and a priority reach the kernel', async ({ page }) => {

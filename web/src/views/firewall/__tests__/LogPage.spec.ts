@@ -1,4 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -7,7 +8,7 @@ import { fwlogValues } from '@/lib/fwlog'
 import { LAND_MS, SETTLE_MS } from '@/lib/log'
 import type { Config, FwlogEntry, Services } from '@/lib/types.gen'
 import { matches } from '@/lib/search'
-import { fixture, type DeepPartial } from '@/test/fixtures'
+import { draftOf, fixture, must, type DeepPartial } from '@/test/fixtures'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -24,14 +25,15 @@ vi.mock('@/lib/api', () => ({
 }))
 
 /** The stream the page opens; a test sends through the last one. */
-let source = null
+let source: FakeSource | null = null
 class FakeSource {
+  onmessage: (e: { data: string }) => void = () => undefined
   constructor() {
     source = this
   }
   close() {}
 }
-const send = (e) => source.onmessage({ data: JSON.stringify(e) })
+const send = (e: object) => must(source).onmessage({ data: JSON.stringify(e) })
 
 let seq = 0
 function entry(over: DeepPartial<FwlogEntry> = {}) {
@@ -48,16 +50,17 @@ function entry(over: DeepPartial<FwlogEntry> = {}) {
 }
 
 /** Body rows; the test renderer stubs the transition group that wraps them. */
-const rows = (w) => w.findAll('tr').filter((r) => r.find('td').exists())
-const matched = (w) => rows(w).map((r) => r.findAll('td')[2].text())
+const rows = (w: VueWrapper) => w.findAll('tr').filter((r) => r.find('td').exists())
+const matched = (w: VueWrapper) => rows(w).map((r) => r.findAll('td')[2].text())
 
 /**
  * A router holding these packets, newest first: it narrows and searches
  * the way the Go side does, which internal/fwlog tests against the same
  * values.
  */
-function serve(held) {
-  vi.mocked(api.log.entries).mockImplementation(async (params: Record<string, unknown>) => {
+function serve(held: FwlogEntry[]) {
+  vi.mocked(api.log.entries).mockImplementation(async (query: object = {}) => {
+    const params: Record<string, unknown> = { ...query }
     const shown = held.filter((e) => {
       if (params.show && e.action) {
         if (params.show === 'blocked' ? e.action === 'accept' : e.action !== 'accept') return false
@@ -68,7 +71,7 @@ function serve(held) {
   })
 }
 
-async function open(held) {
+async function open(held: FwlogEntry[]) {
   serve(held)
   const w = mount(LogPage)
   await flushPromises()
@@ -130,7 +133,7 @@ describe('LogPage', () => {
   // so the colour follows the verdict instead.
   it('colours the row by what happened, not by what matched', async () => {
     const w = await open(log)
-    const badge = (i) => rows(w)[i].findAll('td')[1].get('span')
+    const badge = (i: number) => rows(w)[i].findAll('td')[1].get('span')
     expect(badge(0).text()).toBe('accept')
     expect(badge(0).classes()).toContain('badge-ok')
     expect(badge(1).classes()).toContain('badge-bad')
@@ -141,7 +144,7 @@ describe('LogPage', () => {
   // follows a rename there.
   it('names a proxy access rule by its description', async () => {
     const store = useConfigStore()
-    store.draft.services = {
+    draftOf(store).services = {
       proxy: { access: [{ id: 'access-x1', description: 'Sites from home' }] },
     } as Services
     const w = await open([
@@ -149,7 +152,7 @@ describe('LogPage', () => {
       entry({ kind: 'proxy', ruleId: 'gone', action: 'drop', src: '2' }),
     ])
     expect(matched(w)).toEqual(['proxy: Sites from home', 'proxy: gone'])
-    store.draft.services.proxy.access[0].description = 'Sites from the office'
+    must(must(must(draftOf(store).services).proxy).access)[0].description = 'Sites from the office'
     await flushPromises()
     expect(matched(w)[0]).toBe('proxy: Sites from the office')
   })
@@ -212,10 +215,7 @@ describe('LogPage', () => {
     const w = mount(LogPage)
     await flushPromises()
     serve(log)
-    await w
-      .findAll('button')
-      .find((b) => b.text() === 'Load more')
-      .trigger('click')
+    await must(w.findAll('button').find((b) => b.text() === 'Load more')).trigger('click')
     await flushPromises()
     expect(api.log.entries).toHaveBeenLastCalledWith(
       { limit: 200, before: 3 },
@@ -223,7 +223,7 @@ describe('LogPage', () => {
     )
     expect(matched(w).slice(200)).toEqual(['allow-web', 'block-iot', 'no-smb', 'guest default'])
     expect(w.text()).toContain('Start of the log.')
-    const live = w.findAll('button').find((b) => b.text() === 'Live')
+    const live = must(w.findAll('button').find((b) => b.text() === 'Live'))
     expect(live.attributes('aria-pressed')).toBe('false')
   })
 
@@ -238,10 +238,7 @@ describe('LogPage', () => {
       return { cleared: true }
     })
     const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
-    await w
-      .findAll('button')
-      .find((b) => b.text() === 'Clear')
-      .trigger('click')
+    await must(w.findAll('button').find((b) => b.text() === 'Clear')).trigger('click')
     await flushPromises()
     expect(ask).toHaveBeenCalledWith(
       expect.objectContaining({ question: 'Clear the firewall log?' }),
@@ -254,7 +251,7 @@ describe('LogPage', () => {
   it('says a restart empties it only while there are no files', async () => {
     let w = await open(log)
     expect(w.text()).toContain('Kept in memory, so a restart empties it.')
-    useConfigStore().saved.system.logging = { files: { enabled: true } }
+    must(useConfigStore().saved).system.logging = { files: { enabled: true } }
     w = await open(log)
     expect(w.text()).not.toContain('a restart empties it')
     expect(w.text()).toContain('Older ones are read from the files.')
@@ -270,7 +267,7 @@ describe('LogPage', () => {
       await flushPromises()
       expect(matched(w)[0]).toBe('first')
 
-      const live = w.findAll('button').find((b) => b.text() === 'Live')
+      const live = must(w.findAll('button').find((b) => b.text() === 'Live'))
       expect(live.attributes('aria-pressed')).toBe('true')
       await live.trigger('click')
       send(entry({ ruleId: 'held', action: 'accept' }))
@@ -306,11 +303,13 @@ describe('LogPage settings', () => {
     const w = await open([])
     expect(w.text()).toContain('50,000 is the default. In memory, about 17.5 MB when full.')
     await w.get('#firewall-entries').setValue('200000')
-    const drops = w
-      .findAll('input[type=checkbox]')
-      .find((i) => i.element.closest('label, div')?.textContent.includes('Log dropped packets'))
+    const drops = must(
+      w
+        .findAll('input[type=checkbox]')
+        .find((i) => i.element.closest('label, div')?.textContent?.includes('Log dropped packets')),
+    )
     await drops.setValue(true)
-    expect(store.draft.system.management).toMatchObject({
+    expect(draftOf(store).system.management).toMatchObject({
       firewallLog: { entries: 200000 },
       logDefaultDrops: true,
     })

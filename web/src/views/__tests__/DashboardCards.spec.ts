@@ -1,10 +1,11 @@
 import { RouterLinkStub, mount } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import { formatRate } from '@/lib/format'
 import GatewaysCard from '@/views/dashboard/GatewaysCard.vue'
-import type { GatewayStatus, GatewayStrip } from '@/lib/types.gen'
-import { fixture } from '@/test/fixtures'
+import type { GatewayStatus, GatewayStrip, WirelessClient } from '@/lib/types.gen'
+import { fixture, must } from '@/test/fixtures'
 import InterfaceSummary from '@/views/dashboard/InterfaceSummary.vue'
 import RecentBlocksCard from '@/views/dashboard/RecentBlocksCard.vue'
 import RecentLeasesCard from '@/views/dashboard/RecentLeasesCard.vue'
@@ -33,9 +34,9 @@ function reading(over = {}) {
   }
 }
 
-const meters = (w) => w.findAll('[role="meter"]').map((m) => m.attributes('aria-label'))
+const meters = (w: VueWrapper) => w.findAll('[role="meter"]').map((m) => m.attributes('aria-label'))
 /** Body rows; the test renderer stubs the transition group that would wrap them. */
-const rows = (w) => w.findAll('tr').filter((r) => r.find('td').exists())
+const rows = (w: VueWrapper) => w.findAll('tr').filter((r) => r.find('td').exists())
 
 describe('SystemLoadCard', () => {
   it('keeps its shape before the first reading', () => {
@@ -427,15 +428,16 @@ describe('RecentLeasesCard', () => {
 
 describe('WirelessCard', () => {
   const stubs = { RouterLink: RouterLinkStub }
-  const client = (i) => ({
-    mac: `00:00:00:00:00:${String(i).padStart(2, '0')}`,
-    interface: 'wlan0',
-    ssid: 'Home',
-    hostname: i === 1 ? 'phone' : '',
-    address: i === 1 ? '10.0.0.20' : '',
-    signalDbm: -50 - i,
-    connectedSeconds: 3700,
-  })
+  const client = (i: number) =>
+    fixture<WirelessClient>({
+      mac: `00:00:00:00:00:${String(i).padStart(2, '0')}`,
+      interface: 'wlan0',
+      ssid: 'Home',
+      hostname: i === 1 ? 'phone' : '',
+      address: i === 1 ? '10.0.0.20' : '',
+      signalDbm: -50 - i,
+      connectedSeconds: 3700,
+    })
 
   it('counts clients per network and shows the first few', () => {
     const w = mount(WirelessCard, {
@@ -479,13 +481,15 @@ describe('WirelessCard', () => {
 describe('ServicesCard', () => {
   const stubs = { RouterLink: RouterLinkStub }
   /** The line under a term, spaces as a reader hears them. */
-  function line(term, props) {
+  function line(term: string, props: Record<string, unknown>) {
     const w = mount(ServicesCard, { props, global: { stubs } })
-    const dd = w.findAll('dt').find((dt) => dt.text() === term).element.nextElementSibling
-    return dd.textContent.replace(/\s+/g, ' ').trim()
+    const dd = must(
+      must(w.findAll('dt').find((dt) => dt.text() === term)).element.nextElementSibling,
+    )
+    return (dd.textContent ?? '').replace(/\s+/g, ' ').trim()
   }
-  const dnsLine = (dns) => line('DNS', { dns: { enabled: true, domain: 'lan', ...dns } })
-  const dhcpLine = (dhcp) => line('DHCP', { dhcp: { enabled: true, ...dhcp } })
+  const dnsLine = (dns: object) => line('DNS', { dns: { enabled: true, domain: 'lan', ...dns } })
+  const dhcpLine = (dhcp: object) => line('DHCP', { dhcp: { enabled: true, ...dhcp } })
 
   // Each resolver mode keeps the other's servers, so the line says where
   // the mode in use sends names and nothing else.

@@ -64,7 +64,12 @@ function lines(r: DDNSRecord) {
   const known = status.value[r.id]
   // A type no longer kept is listed while taking it back fails.
   const removing = (known ?? []).filter((s) => s.state === 'failed').map((s) => s.type)
-  const types = new Set([r.ipv4 && 'A', r.ipv6 && 'AAAA', ...removing].filter(Boolean))
+  const types = new Set<string>([
+    ...(r.ipv4 ? ['A'] : []),
+    ...(r.ipv6 ? ['AAAA'] : []),
+    ...removing,
+  ])
+  types.delete('')
   return [...types].map((type) => {
     const st = known?.find((s) => s.type === type)
     if (!st) return { type, address: '', state: 'apply to start' }

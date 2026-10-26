@@ -68,7 +68,7 @@ export function eventText(e: GatewayEvent): string {
     case 'slow-end':
       return `${e.family} no longer slow`
     case 'lossy':
-      return `${e.family} losing packets, ${Math.round(e.lossPercent)}% lost${over}, above ${e.limit}%`
+      return `${e.family} losing packets, ${Math.round(e.lossPercent ?? 0)}% lost${over}, above ${e.limit}%`
     case 'lossy-end':
       return `${e.family} no longer losing packets`
   }
@@ -132,6 +132,7 @@ export function historyRows(report: {
   const rows = new Map()
   fams.forEach((family, k) => {
     const r = report.families.find((x) => x.family === family)
+    if (!r) return
     for (const [t, mean, low, high, loss] of r.points) {
       let row = rows.get(t)
       if (!row) {
@@ -182,7 +183,7 @@ export function addProbe(
   const t = Math.round(Date.parse(p.time) / 1000)
   const ms = p.lost ? null : (p.latencyMs ?? 0)
   const cut = t - SPANS[window]
-  const kept = rows.filter((r) => r[0] >= cut)
+  const kept = rows.filter((r) => (r[0] ?? 0) >= cut)
   let row = kept.find((r) => r[0] === t)
   if (!row) {
     row = Array(1 + families.length * 4).fill(undefined)

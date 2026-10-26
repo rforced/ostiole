@@ -11,52 +11,24 @@ import { api } from '@/lib/api'
 import { type AsyncLoad, emptyText, useAsync } from '@/lib/async'
 import { tone } from '@/lib/badge'
 import { neverHint, stateOf } from '@/lib/gateways'
-import type { Gateway, GatewayGroup } from '@/lib/types.gen'
+import type {
+  DetectedGatewayReply,
+  FamilyStatus,
+  Gateway,
+  GatewayGroup,
+  GatewayStatus,
+  PolicyTarget,
+} from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import GatewayDialog from '@/views/routing/GatewayDialog.vue'
 import GatewayGroupDialog from '@/views/routing/GatewayGroupDialog.vue'
 import GatewayHistoryDialog from '@/views/routing/GatewayHistoryDialog.vue'
 
-interface FamilyStatus {
-  family: string
-  online: boolean
-  unknown: boolean
-  latencyMs: number
-  lossPercent: number
-}
-
-interface LiveGateway extends FamilyStatus {
-  name: string
-  address?: string
-  active: boolean
-  neverAnswered?: boolean
-  families?: FamilyStatus[]
-  slow?: unknown[]
-  lossy?: unknown[]
-}
-
-interface PolicyTarget {
-  name: string
-  rules: number
-  nextHops: string[]
-}
-
-interface DetectedRoute {
-  address: string
-  interface: string
-  family: string
-  metric: number
-  protocol: string
-  configured?: string
-  demoted?: boolean
-  suggested?: Gateway
-}
-
 const props = defineProps({
-  live: { type: Array as PropType<LiveGateway[]>, required: true },
+  live: { type: Array as PropType<GatewayStatus[]>, required: true },
   policy: { type: Array as PropType<PolicyTarget[]>, required: true },
-  detected: { type: Array as PropType<DetectedRoute[]>, required: true },
+  detected: { type: Array as PropType<DetectedGatewayReply[]>, required: true },
   refresh: { type: Object as PropType<AsyncLoad>, required: true },
 })
 
@@ -99,24 +71,24 @@ const policyRules = computed(() => config.rules.filter((r) => r.gateway))
  * gateway you have just added stops being offered straight away, rather
  * than after you apply.
  */
-function coveredBy(d: DetectedRoute) {
+function coveredBy(d: DetectedGatewayReply) {
   const g = config.gateways.find((g) => g.enabled && claims(g, d))
   return g?.name ?? ''
 }
 
 /** A disabled gateway that would cover a detected route, which it then names. */
-function disabledFor(d: DetectedRoute) {
+function disabledFor(d: DetectedGatewayReply) {
   if (coveredBy(d)) return ''
   return config.gateways.find((g) => !g.enabled && claims(g, d))?.name ?? ''
 }
 
-function claims(g: Gateway, d: DetectedRoute) {
+function claims(g: Gateway, d: DetectedGatewayReply) {
   return g.interface === d.interface && (!g.address || g.address === d.address)
 }
 
 /** Adds a detected route as a gateway, ready to apply. */
-function adopt(d: DetectedRoute) {
-  config.upsertGateway(d.suggested)
+function adopt(d: DetectedGatewayReply) {
+  if (d.suggested) config.upsertGateway(d.suggested)
 }
 
 function addGateway() {
@@ -151,9 +123,9 @@ function showHistory(g: Gateway) {
 const clearHistory = useAsync(() => api.gatewayHistory.clear())
 
 /** A gateway's figures, a line for each family when it has two. */
-function figureLines(live: LiveGateway) {
+function figureLines(live: GatewayStatus) {
   const fams = live.families ?? []
-  const line = (f: FamilyStatus) =>
+  const line = (f: Pick<FamilyStatus, 'latencyMs' | 'lossPercent'>) =>
     `${f.latencyMs.toFixed(1)}ms · ${f.lossPercent.toFixed(0)}% loss`
   if (fams.length < 2) return [line(live)]
   return fams.map((f) =>
@@ -236,9 +208,9 @@ function tierSummary(group: GatewayGroup) {
               <span v-if="g.tunnel" class="font-sans">through the tunnel</span>
               <template v-else>{{ g.live?.address || g.address || 'from DHCP' }}</template>
               <div v-if="detectedFor(g)" class="text-xs text-ink-muted">
-                kernel: {{ detectedFor(g).address }} · metric {{ detectedFor(g).metric }} ·
-                {{ detectedFor(g).protocol
-                }}<template v-if="detectedFor(g).demoted"> · demoted</template>
+                kernel: {{ detectedFor(g)?.address }} · metric {{ detectedFor(g)?.metric }} ·
+                {{ detectedFor(g)?.protocol
+                }}<template v-if="detectedFor(g)?.demoted"> · demoted</template>
               </div>
             </td>
             <td class="font-mono text-code" data-label="Monitor">

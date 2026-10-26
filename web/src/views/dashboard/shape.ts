@@ -8,16 +8,16 @@
 
 /** What an overview has to hold for its shape to be read: rows are only counted. */
 export interface ShapeSource {
-  warnings?: unknown[]
-  interfaces?: { name?: string; external?: boolean; present?: boolean }[]
-  topRules?: unknown[]
-  services?: unknown[]
-  gateways?: unknown[]
-  unwatchedGateways?: unknown[]
-  recentBlocks?: unknown[]
-  recentLeases?: unknown[]
+  warnings?: unknown[] | null
+  interfaces?: { name: string; external?: boolean; present?: boolean }[] | null
+  topRules?: unknown[] | null
+  services?: unknown[] | null
+  gateways?: unknown[] | null
+  unwatchedGateways?: unknown[] | null
+  recentBlocks?: unknown[] | null
+  recentLeases?: unknown[] | null
   dhcp?: { enabled?: boolean }
-  wireless?: { clients?: unknown[] }
+  wireless?: { clients?: unknown[] | null }
   blocking?: { enabled?: boolean }
 }
 
@@ -89,7 +89,8 @@ export function heightsIn(root: Element) {
   const out: Record<string, number> = {}
   for (const el of root.querySelectorAll<HTMLElement>('[data-card]')) {
     const h = el.offsetHeight
-    if (h) out[el.dataset.card] = h
+    const card = el.dataset.card
+    if (h && card !== undefined) out[card] = h
   }
   return out
 }

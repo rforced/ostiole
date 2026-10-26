@@ -1,12 +1,13 @@
 import { mount } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { Session } from '@/lib/api'
-import type { Config } from '@/lib/types.gen'
+import type { Zone } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ZoneDialog from '@/views/interfaces/ZoneDialog.vue'
+import { configOf, must, sessionOf } from '@/test/fixtures'
 
 const stubs = {
   AppDialog: {
@@ -15,21 +16,25 @@ const stubs = {
   },
 }
 
-function open(zone, role) {
-  useAuthStore().user = { username: role, role } as Session
-  useConfigStore().replaceDraft({
-    version: 11,
-    zones: [{ name: 'lan', antiLockout: true }],
-    interfaces: [],
-    rules: [],
-  } as Config)
+function open(zone: Zone | null, role: string) {
+  useAuthStore().user = sessionOf({ username: role, role })
+  useConfigStore().replaceDraft(
+    configOf({
+      version: 11,
+      zones: [{ name: 'lan', antiLockout: true }],
+      interfaces: [],
+      rules: [],
+    }),
+  )
   return mount(ZoneDialog, { props: { open: true, zone }, global: { stubs } })
 }
 
-const antiLockout = (w) =>
-  w
-    .findAll('input[type="checkbox"]')
-    .find((i) => i.element.parentElement.textContent.includes('Anti-lockout'))
+const antiLockout = (w: VueWrapper) =>
+  must(
+    w
+      .findAll('input[type="checkbox"]')
+      .find((i) => i.element.parentElement?.textContent?.includes('Anti-lockout')),
+  )
 
 // Anti-lockout keeps the management ports open, so only an admin may move
 // it, and it is kept by zone name, so renaming such a zone moves it too.

@@ -1,10 +1,12 @@
+import type { Page } from '@playwright/test'
+
 import { expect, test } from './fixtures'
 import { applyAndConfirm, confirmDialog, login, shot, sidebar } from './helpers'
 
 test.describe.configure({ mode: 'serial' })
 
 /** A PEM block around a made-up body, which is all the import and the model check. */
-const pem = (type, body) =>
+const pem = (type: string, body: string) =>
   `-----BEGIN ${type}-----\n${Buffer.from(body).toString('base64')}\n-----END ${type}-----`
 
 /** A client file as a server hands it out, with everything inline. */
@@ -29,7 +31,7 @@ const FILE = [
 ].join('\n')
 
 /** A tunnel's row on the Tunnels tab. */
-const tunnelRow = (page, name) =>
+const tunnelRow = (page: Page, name: string) =>
   page
     .getByRole('region', { name: 'Tunnels' })
     .getByRole('row')

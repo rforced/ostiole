@@ -2,7 +2,7 @@ import { expect, test } from './fixtures'
 import { enterUsername, signOut } from './helpers'
 
 const PASSWORD = 'correct horse battery'
-const shot = (name) => `e2e/screenshots/${name}.png`
+const shot = (name: string) => `e2e/screenshots/${name}.png`
 
 test.describe.configure({ mode: 'serial' })
 // A router nobody has set up yet, where every other file starts from the

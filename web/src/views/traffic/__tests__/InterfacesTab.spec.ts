@@ -8,22 +8,23 @@ import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import InterfacesTab from '@/views/traffic/InterfacesTab.vue'
-import { configOf, sessionOf } from '@/test/fixtures'
+import { configOf, must, sessionOf } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   api: { traffic: { interfaces: vi.fn(), clearInterfaces: vi.fn() } },
 }))
 
-let source = null
+let source: FakeSource | null = null
 class FakeSource {
   static CLOSED = 2
+  onmessage: ((event: { data: string }) => void) | null = null
   constructor() {
     source = this
   }
   close() {}
 }
-const second = (t, down, up) =>
-  source.onmessage({
+const second = (t: number, down: number, up: number) =>
+  must(must(source).onmessage)({
     data: JSON.stringify({
       kind: 'links',
       time: new Date(t * 1000).toISOString(),
@@ -71,7 +72,7 @@ describe('InterfacesTab', () => {
     second(NOW + 1, 8_000_000, 1_000_000)
     await flushPromises()
     expect(w.text()).toContain('Down 8 Mbit/s')
-    expect(w.findAll('path')[0].attributes('d').split('L')).toHaveLength(2)
+    expect(must(w.findAll('path')[0].attributes('d')).split('L')).toHaveLength(2)
   })
 
   // The speed comes from what the router runs, never from the draft.
@@ -103,7 +104,7 @@ describe('InterfacesTab', () => {
   it('holds the seconds while Live is off', async () => {
     const w = mount(InterfacesTab)
     await flushPromises()
-    const live = w.findAll('button').find((b) => b.text() === 'Live')
+    const live = must(w.findAll('button').find((b) => b.text() === 'Live'))
     await live.trigger('click')
     second(NOW + 1, 8_000_000, 1_000_000)
     await flushPromises()
@@ -117,7 +118,7 @@ describe('InterfacesTab', () => {
   it('keeps the old frame while another window is read', async () => {
     const w = mount(InterfacesTab)
     await flushPromises()
-    let release
+    let release: () => void = () => undefined
     vi.mocked(api.traffic.interfaces).mockImplementation(
       (win) => new Promise((resolve) => (release = () => resolve(answer(win)))),
     )
@@ -139,10 +140,7 @@ describe('InterfacesTab', () => {
     const w = mount(InterfacesTab)
     await flushPromises()
     const reads = vi.mocked(api.traffic.interfaces).mock.calls.length
-    await w
-      .findAll('button')
-      .find((b) => b.text() === 'Clear')
-      .trigger('click')
+    await must(w.findAll('button').find((b) => b.text() === 'Clear')).trigger('click')
     await flushPromises()
     expect(ask).toHaveBeenLastCalledWith(
       expect.objectContaining({

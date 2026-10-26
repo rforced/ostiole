@@ -1,3 +1,4 @@
+import type { DOMWrapper, VueWrapper } from '@vue/test-utils'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import { defineComponent, ref } from 'vue'
@@ -69,10 +70,14 @@ const Usage = {
     </table>`,
 }
 
-const ips = (w) => w.findAll('td').map((td) => td.text())
-const header = (w, name) => w.findAll('th').find((th) => th.text() === name)
+const ips = (w: VueWrapper) => w.findAll('td').map((td) => td.text())
+const header = (w: VueWrapper, name: string) => {
+  const th = w.findAll('th').find((th) => th.text() === name)
+  if (!th) throw new Error(`no header ${name}`)
+  return th
+}
 /** What a header over several columns reads: its one visible label. */
-const reads = (th) =>
+const reads = (th: DOMWrapper<Element>) =>
   th
     .findAll('button > span > span')
     .filter((s) => !s.classes('invisible'))

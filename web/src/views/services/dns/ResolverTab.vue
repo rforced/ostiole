@@ -16,7 +16,7 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { dnsListenInterfaces } from '@/lib/interfaces'
 import { parseList } from '@/lib/lists'
-import type { DomainOverride } from '@/lib/types.gen'
+import type { DNSRebind, DomainOverride } from '@/lib/types.gen'
 import { byText, useSort } from '@/lib/sort'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -31,7 +31,7 @@ const dns = computed(() => config.ensureServices().dns)
 const domains = computed(() => dns.value.domainOverrides ?? [])
 const domainSort = useSort(domains, {
   domain: byText((d) => d.domain),
-  description: byText((d) => d.description),
+  description: byText((d) => d.description ?? ''),
 })
 const domainRows = domainSort.sorted
 const DOMAIN_COLUMNS: SortColumn[] = [
@@ -65,11 +65,18 @@ const domain = computed({
   },
 })
 
+interface Provider {
+  name: string
+  hostname: string
+  v4: string[]
+  v6: string[]
+}
+
 /**
  * Public resolvers a button fills in, both families. Over TLS each address
  * goes with the name on its certificate.
  */
-const PROVIDERS = [
+const PROVIDERS: Provider[] = [
   {
     name: 'Quad9',
     hostname: 'dns.quad9.net',
@@ -84,7 +91,8 @@ const PROVIDERS = [
   },
 ]
 
-const tlsServers = (p, addresses) => addresses.map((address) => ({ address, hostname: p.hostname }))
+const tlsServers = (p: Provider, addresses: string[]) =>
+  addresses.map((address) => ({ address, hostname: p.hostname }))
 
 /** forward (dnsmasq asks upstreams), recursive, or tls (both via unbound). */
 const resolver = computed({
@@ -101,7 +109,7 @@ const resolver = computed({
 })
 
 /** Fills in a provider the way the resolver in use takes it, replacing what was there. */
-function fillIn(p) {
+function fillIn(p: Provider) {
   const addresses = [...p.v4, ...p.v6]
   if (resolver.value === 'tls') dns.value.tlsUpstreams = tlsServers(p, addresses)
   else dns.value.upstreams = addresses
@@ -140,11 +148,11 @@ const tlsUpstreams = computed({
 })
 
 /** Empty means the default, which the placeholder shows. */
-function numberField(key) {
+function numberField(key: 'cacheSize' | 'resolverCacheMB') {
   return computed({
     get: () => dns.value[key] || '',
-    set: (v) => {
-      if (Number.isFinite(v) && v > 0) dns.value[key] = v
+    set: (v: number | string) => {
+      if (typeof v === 'number' && Number.isFinite(v) && v > 0) dns.value[key] = v
       else delete dns.value[key]
     },
   })
@@ -153,7 +161,7 @@ const cacheSize = numberField('cacheSize')
 const resolverCacheMB = numberField('resolverCacheMB')
 
 /** Writes the rebind block back, or drops it once nothing is left in it. */
-function setRebind(r) {
+function setRebind(r: DNSRebind) {
   if (Object.keys(r).length) dns.value.rebind = r
   else delete dns.value.rebind
 }
@@ -206,7 +214,7 @@ const listenAll = computed({
   },
 })
 
-function toggleInterface(name, on) {
+function toggleInterface(name: string, on: boolean) {
   const list = new Set(dns.value.interfaces ?? [])
   if (on) list.add(name)
   else list.delete(name)

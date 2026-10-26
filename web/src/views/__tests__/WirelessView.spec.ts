@@ -3,9 +3,9 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
-import type { Config } from '@/lib/types.gen'
+import type { Config, Radio, WirelessBand, WirelessCard, WirelessRadios } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
-import { emptyConfig, iface } from '@/test/fixtures'
+import { emptyConfig, fixture, iface, must } from '@/test/fixtures'
 import NetworkDialog from '@/views/wireless/NetworkDialog.vue'
 import RadioDialog from '@/views/wireless/RadioDialog.vue'
 import WirelessStatus from '@/views/wireless/WirelessStatus.vue'
@@ -18,7 +18,7 @@ vi.mock('@/lib/api', () => ({
 const stubs = { ConfirmButton: true, RouterLink: true }
 
 /** The AX210 as the API reports it: one network, no 6 GHz for this test. */
-function card(over = {}) {
+function card(over: Partial<WirelessCard> = {}): WirelessCard {
   return {
     name: 'wlp3s0',
     phy: 'phy0',
@@ -26,15 +26,15 @@ function card(over = {}) {
     selfManaged: true,
     maxNetworks: 1,
     bands: {
-      '2g': {
+      '2g': fixture<WirelessBand>({
         channels: [
           { number: 1, mhz: 2412 },
           { number: 6, mhz: 2437 },
         ],
         maxWidth: 40,
         standards: ['ax', 'n', 'legacy'],
-      },
-      '5g': {
+      }),
+      '5g': fixture<WirelessBand>({
         channels: [
           { number: 36, mhz: 5180 },
           { number: 52, mhz: 5260, radar: true },
@@ -42,7 +42,7 @@ function card(over = {}) {
         ],
         maxWidth: 160,
         standards: ['ax', 'ac', 'n', 'legacy'],
-      },
+      }),
     },
     ...over,
   }
@@ -78,7 +78,7 @@ describe('WirelessStatus', () => {
     vi.clearAllMocks()
   })
 
-  async function strip(radios, draft = config()) {
+  async function strip(radios: WirelessRadios, draft = config()) {
     vi.mocked(api.wireless.radios).mockResolvedValue(radios)
     const store = useConfigStore()
     store.draft = draft
@@ -100,7 +100,7 @@ describe('WirelessStatus', () => {
   })
 
   it('asks for a country before anything can transmit', async () => {
-    const draft = config({ wireless: { radios: config().wireless.radios } })
+    const draft = config({ wireless: { radios: must(config().wireless).radios } })
     const wrapper = await strip({ setUp: true, radios: [card()] }, draft)
     expect(wrapper.text()).toBe('Set the country under Wireless › Radios.')
   })
@@ -109,7 +109,7 @@ describe('WirelessStatus', () => {
   // given: it may swap the pair to match a neighbour.
   it('shows the live channel and the clients on each network', async () => {
     const draft = config()
-    draft.interfaces.push(
+    must(draft.interfaces).push(
       iface({
         name: 'ap0',
         enabled: true,
@@ -138,7 +138,7 @@ describe('WirelessStatus', () => {
   // gave up just before it does, and that line belongs on the card.
   it('says why a radio that should be on air is stopped', async () => {
     const draft = config()
-    draft.interfaces.push(
+    must(draft.interfaces).push(
       iface({
         name: 'ap0',
         enabled: true,
@@ -159,7 +159,7 @@ describe('RadioDialog', () => {
     vi.clearAllMocks()
   })
 
-  function open(props) {
+  function open(props: { card?: WirelessCard; radio?: Radio | null } = {}) {
     const store = useConfigStore()
     store.draft = config()
     store.loaded = true
@@ -186,7 +186,7 @@ describe('RadioDialog', () => {
 
   // The card has the band; the rules let nothing be started on it.
   it('leaves out a band the card may not transmit on', async () => {
-    const six = {
+    const six: WirelessBand = {
       channels: [{ number: 1, mhz: 5955 }],
       maxWidth: 160,
       standards: ['ax'],
@@ -199,14 +199,14 @@ describe('RadioDialog', () => {
   })
 
   it('lands a band it no longer offers on the first it does', async () => {
-    const radio = { ...config().wireless.radios[0], band: '6g', channel: 0 }
+    const radio: Radio = { ...must(must(config().wireless).radios)[0], band: '6g', channel: 0 }
     const wrapper = open({ card: card(), radio })
     await flushPromises()
     expect(wrapper.find<HTMLSelectElement>('#radio-band').element.value).toBe('2g')
   })
 
   it('lands a width it no longer offers on the widest it does', async () => {
-    const radio = { ...config().wireless.radios[0], width: 160 }
+    const radio: Radio = { ...must(must(config().wireless).radios)[0], width: 160 }
     const wrapper = open({ card: card(), radio })
     await flushPromises()
     expect(wrapper.find<HTMLSelectElement>('#radio-width').element.value).toBe('80')
@@ -247,11 +247,11 @@ describe('NetworkDialog', () => {
     await wrapper.find('form').trigger('submit')
 
     const store = useConfigStore()
-    const net = store.findInterface('ap0')
+    const net = must(store.findInterface('ap0'))
     expect(net.wireless).toMatchObject({ radio: 'wlp3s0', ssid: 'ostiole-lan' })
     expect(net.zone).toBeUndefined()
     // The bridge is what carries the segment, so the network joins it.
-    expect(store.findInterface('br-lan').bridge.members).toContain('ap0')
+    expect(must(must(store.findInterface('br-lan')).bridge).members).toContain('ap0')
   })
 
   it('gives a network in a zone an address of its own', async () => {
@@ -265,8 +265,8 @@ describe('NetworkDialog', () => {
     await wrapper.find('form').trigger('submit')
 
     const store = useConfigStore()
-    const net = store.findInterface('ap0')
+    const net = must(store.findInterface('ap0'))
     expect(net.ipv4).toEqual({ mode: 'static', address: '10.99.0.1/24' })
-    expect(store.findInterface('br-lan').bridge.members).not.toContain('ap0')
+    expect(must(must(store.findInterface('br-lan')).bridge).members).not.toContain('ap0')
   })
 })

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import type { TailscalePeer, TailscaleStatus } from '@/lib/types.gen'
-import { fixture } from '@/test/fixtures'
+import { type DeepPartial, fixture, must } from '@/test/fixtures'
 import PeersTab from '@/views/vpn/tailscale/PeersTab.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -14,7 +14,10 @@ vi.mock('@/lib/api', () => ({
 // Live reads from the start, so no tab outlives its test.
 enableAutoUnmount(afterEach)
 
-const peer = (hostName: string, over: Partial<TailscalePeer> = {}): TailscalePeer => ({
+const peer = (
+  hostName: string,
+  over: DeepPartial<TailscalePeer> = {},
+): DeepPartial<TailscalePeer> => ({
   hostName,
   dnsName: `${hostName}.tail.ts.net.`,
   ips: ['100.64.0.1'],
@@ -46,9 +49,7 @@ describe('PeersTab', () => {
     const nodes = () => wrapper.findAll('tbody tr').map((r) => r.find('.font-mono').text())
     expect(nodes()[0]).toBe('old.tail.ts.net')
 
-    await wrapper
-      .findAll('th')
-      .find((th) => th.text() === 'Last seen')
+    await must(wrapper.findAll('th').find((th) => th.text() === 'Last seen'))
       .get('button')
       .trigger('click')
     expect(nodes()).toEqual([
@@ -68,7 +69,7 @@ describe('PeersTab', () => {
       )
       const wrapper = mount(PeersTab)
       await flushPromises()
-      const live = wrapper.findAll('button').find((b) => b.text() === 'Live')
+      const live = must(wrapper.findAll('button').find((b) => b.text() === 'Live'))
       expect(live.attributes('aria-pressed')).toBe('true')
       vi.advanceTimersByTime(5000)
       await flushPromises()

@@ -1,11 +1,11 @@
-import { mount } from '@vue/test-utils'
+import { mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import TokenDialog from '@/views/system/accounts/TokenDialog.vue'
-import { configOf, sessionOf } from '@/test/fixtures'
+import { configOf, must, sessionOf } from '@/test/fixtures'
 
 const stubs = {
   AppDialog: {
@@ -28,10 +28,12 @@ function open(role = 'admin') {
   return mount(TokenDialog, { props: { open: true }, global: { stubs } })
 }
 
-const metricsOnly = (w) =>
-  w
-    .findAll('input[type="checkbox"]')
-    .find((i) => i.element.parentElement.textContent.includes('Metrics only'))
+const metricsOnly = (w: VueWrapper) =>
+  must(
+    w
+      .findAll<HTMLInputElement>('input[type="checkbox"]')
+      .find((i) => i.element.parentElement?.textContent.includes('Metrics only')),
+  )
 
 // A monitoring system's token reads the metrics and nothing else, so it
 // is a viewer and fetches no certificates.
@@ -47,7 +49,7 @@ describe('TokenDialog metrics only', () => {
     expect(w.get('#tok-role').attributes('disabled')).toBeDefined()
     expect(w.find('#tok-certs').exists()).toBe(false)
     await w.get('form').trigger('submit')
-    expect(w.emitted('create')[0][0]).toEqual({
+    expect(must(w.emitted('create'))[0][0]).toEqual({
       name: 'scrape',
       role: 'viewer',
       expiresInDays: 0,
@@ -60,11 +62,12 @@ describe('TokenDialog metrics only', () => {
     const w = open()
     await w.get('#tok-name').setValue('ci')
     await w.get('form').trigger('submit')
-    expect(w.emitted('create')[0][0]).not.toHaveProperty('metrics')
+    expect(must(w.emitted('create'))[0][0]).not.toHaveProperty('metrics')
   })
 })
 
-const roleOptions = (w) => w.findAll('#tok-role option').map((o) => o.element.value)
+const roleOptions = (w: VueWrapper) =>
+  w.findAll<HTMLOptionElement>('#tok-role option').map((o) => o.element.value)
 
 // A token cannot have more than its owner's role, and only an admin makes
 // a certificate token.
@@ -89,6 +92,6 @@ describe('TokenDialog roles', () => {
     expect(w.find('#tok-certs').exists()).toBe(false)
     await w.get('#tok-name').setValue('dash')
     await w.get('form').trigger('submit')
-    expect(w.emitted('create')[0][0]).toMatchObject({ role: 'viewer', certificates: [] })
+    expect(must(w.emitted('create'))[0][0]).toMatchObject({ role: 'viewer', certificates: [] })
   })
 })

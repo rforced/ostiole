@@ -1,4 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -6,6 +7,7 @@ import { api, type Session } from '@/lib/api'
 import type { Config, OutboundMode, OutboundRule } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import { draftOf, emptyConfig, must } from '@/test/fixtures'
 import NatPage from '@/views/firewall/NatPage.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -23,14 +25,12 @@ const masquerade = {
   keys: ['nat_postrouting/auto-nat:wan'],
 }
 
-function draft(mode: OutboundMode, rules: OutboundRule[] = []) {
+function draft(mode: OutboundMode, rules: OutboundRule[] = []): Config {
   return {
-    version: 11,
+    ...emptyConfig(),
     zones: [{ name: 'wan', external: true }, { name: 'lan' }],
-    interfaces: [],
-    rules: [],
     nat: { outbound: { mode, rules } },
-  } as Config
+  }
 }
 
 async function mountPage(d: Config) {
@@ -43,7 +43,7 @@ async function mountPage(d: Config) {
 }
 
 // The animated tables are stubbed, so their rows are not under a tbody here.
-const rows = (wrapper) => wrapper.findAll('tr').filter((r) => r.find('td').exists())
+const rows = (wrapper: VueWrapper) => wrapper.findAll('tr').filter((r) => r.find('td').exists())
 
 describe('NatPage automatic rules', () => {
   beforeEach(() => {
@@ -62,7 +62,7 @@ describe('NatPage automatic rules', () => {
     const { config, wrapper } = await mountPage(draft('automatic'))
     expect(api.systemNat).toHaveBeenCalledWith(config.draft)
     expect(wrapper.text()).toContain('Automatic rules')
-    const row = rows(wrapper).find((r) => r.text().includes('any IPv4'))
+    const row = must(rows(wrapper).find((r) => r.text().includes('any IPv4')))
     expect(row.text()).toContain('wan')
     expect(row.text()).toContain('eth0')
     expect(row.text()).toContain('anywhere')
@@ -120,7 +120,7 @@ describe('NatPage automatic rules', () => {
         },
       ])
       const { wrapper } = await mountPage(draft(mode))
-      const row = rows(wrapper).find((r) => r.text().includes('192.168.50.0/24'))
+      const row = must(rows(wrapper).find((r) => r.text().includes('192.168.50.0/24')))
       expect(row.text()).toContain('wg1')
       expect(row.text()).toContain('the interface address')
       expect(wrapper.text().includes('any IPv4')).toBe(mode === 'automatic')
@@ -133,8 +133,8 @@ describe('NatPage automatic rules', () => {
     expect(api.systemNat).toHaveBeenCalledTimes(1)
 
     vi.mocked(api.systemNat).mockRejectedValueOnce(new Error('invalid configuration'))
-    config.draft.zones.push({ name: 'dmz' })
-    config.draft.zones.push({ name: 'guest' })
+    must(draftOf(config).zones).push({ name: 'dmz' })
+    must(draftOf(config).zones).push({ name: 'guest' })
     await flushPromises()
     expect(api.systemNat).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(300)

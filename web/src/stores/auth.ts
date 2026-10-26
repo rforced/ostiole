@@ -79,6 +79,11 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  function waiting(): PendingLogin {
+    if (!pending.value) throw new Error('No sign-in is waiting for a second step.')
+    return pending.value
+  }
+
   /** The session, or null when MFA is still due: see `pending`. */
   async function login(username: string, password: string) {
     const res = await api.auth.login(username, password)
@@ -91,12 +96,12 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function loginTOTP(code: string) {
-    return signedIn(await api.auth.loginTOTP(pending.value.token, code))
+    return signedIn(await api.auth.loginTOTP(waiting().token, code))
   }
 
   /** Asks the router for a challenge, the browser for the passkey, and the router to check it. */
   async function loginPasskey() {
-    const token = pending.value.token
+    const { token } = waiting()
     const { publicKey } = await api.auth.passkeyLoginOptions(token)
     return loginWithPasskey(token, publicKey)
   }

@@ -3,9 +3,10 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
-import type { Config } from '@/lib/types.gen'
+import type { ResolverMode, ServicesStatus as Status } from '@/lib/types.gen'
 import type { ServiceName } from '@/lib/servicesStatus'
 import { useConfigStore } from '@/stores/config'
+import { configOf, type DeepPartial, fixture } from '@/test/fixtures'
 import ServicesStatus from '@/views/services/ServicesStatus.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -13,18 +14,18 @@ vi.mock('@/lib/api', () => ({
   ApiError: class ApiError extends Error {},
 }))
 
-function draft(resolver = 'tls') {
-  return {
+function draft(resolver: ResolverMode = 'tls') {
+  return configOf({
     version: 11,
     zones: [],
     interfaces: [],
     rules: [],
     services: { dns: { enabled: true, resolver }, dhcp: { enabled: false } },
-  } as Config
+  })
 }
 
-async function strip(status, service: ServiceName = 'dns') {
-  vi.mocked(api.services.status).mockResolvedValue(status)
+async function strip(status: DeepPartial<Status>, service: ServiceName = 'dns') {
+  vi.mocked(api.services.status).mockResolvedValue(fixture<Status>(status))
   const store = useConfigStore()
   store.draft = draft()
   store.saved = draft()

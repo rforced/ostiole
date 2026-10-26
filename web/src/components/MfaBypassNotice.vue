@@ -8,9 +8,10 @@ import { useAuthStore } from '@/stores/auth'
 const auth = useAuthStore()
 
 const text = computed(() => {
-  const until = auth.user?.bypassUntil
-  if (!until) return ''
-  const by = auth.user.bypassBy ? ` by ${auth.user.bypassBy}` : ''
+  const user = auth.user
+  const until = user?.bypassUntil
+  if (!user || !until) return ''
+  const by = user.bypassBy ? ` by ${user.bypassBy}` : ''
   return `MFA is bypassed until ${formatWhen(until)}${by}, from the command line.`
 })
 </script>

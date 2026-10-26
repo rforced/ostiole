@@ -1,19 +1,20 @@
 <script setup lang="ts">
 import { TriangleAlert } from '@lucide/vue'
-import { computed } from 'vue'
+import { type PropType, computed } from 'vue'
 
 import SectionCard from '@/components/SectionCard.vue'
 import { formatBytes, formatCount, formatDuration } from '@/lib/format'
 import { LEVELS, levelOf } from '@/lib/meter'
+import type { Stats } from '@/lib/types.gen'
 
 const props = defineProps({
   /** A reading from GET /system/stats, or null before the first one. */
-  stats: { type: Object, default: null },
+  stats: { type: Object as PropType<Stats | null>, default: null },
   /** False until every card has been read, this one's usage included. */
   loaded: { type: Boolean, default: true },
 })
 
-function plural(n, word) {
+function plural(n: number, word: string) {
   return `${n} ${word}${n === 1 ? '' : 's'}`
 }
 
@@ -23,19 +24,26 @@ function plural(n, word) {
  * the threads, the hardware is the cores. Without SMT the two are the same
  * number and saying it twice is noise.
  */
-function cpuDetail(cores, threads) {
+function cpuDetail(cores: number, threads: number) {
   if (cores && threads && cores !== threads) return `${cores} cores, ${threads} threads`
   if (cores) return plural(cores, 'core')
   if (threads) return plural(threads, 'thread')
   return '? cores'
 }
 
+interface Meter {
+  label: string
+  percent: number | null
+  detail: string
+  level: keyof typeof LEVELS
+}
+
 /** A meter with nothing to show yet, so the card keeps its shape. */
-function blank(label) {
+function blank(label: string): Meter {
   return { label, percent: null, detail: 'no reading yet', level: 'ok' }
 }
 
-function meter(label, percent, detail) {
+function meter(label: string, percent: number, detail: string): Meter {
   const pct = Math.max(0, Math.min(100, percent))
   return { label, percent: pct, detail, level: levelOf(pct) }
 }

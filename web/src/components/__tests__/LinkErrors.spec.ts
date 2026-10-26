@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest'
 
 import LinkErrors from '@/components/LinkErrors.vue'
 
-const line = (link) => mount(LinkErrors, { props: { link } })
+const line = (link: { name?: string; rxErrors?: number; txErrors?: number } | null) =>
+  mount(LinkErrors, { props: { link } })
 
 describe('LinkErrors', () => {
   it('counts both ways together, over the last 72 hours', () => {

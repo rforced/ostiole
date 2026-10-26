@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { formatRemotes, nextOvpnName, parseOvpn, parseRemotes } from '@/lib/ovpnconf'
 
 // Shaped like PEM, made of nothing.
-const pem = (kind, body) => `-----BEGIN ${kind}-----\n${body}\n-----END ${kind}-----`
+const pem = (kind: string, body: string) =>
+  `-----BEGIN ${kind}-----\n${body}\n-----END ${kind}-----`
 const CA = pem('CERTIFICATE', 'TUFERS1VUC1DQS1mb3ItYS10ZXN0')
 const CERT = pem('CERTIFICATE', 'TUFERS1VUC1jbGllbnQtY2VydA==')
 const KEY = pem('PRIVATE KEY', 'TUFERS1VUC1jbGllbnQta2V5')

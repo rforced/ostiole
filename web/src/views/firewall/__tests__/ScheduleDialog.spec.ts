@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { Config, Schedule } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import { draftOf, emptyConfig, must } from '@/test/fixtures'
 import ScheduleDialog from '@/views/firewall/ScheduleDialog.vue'
 
 const stubs = {
@@ -16,19 +17,12 @@ const stubs = {
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 
 function open(schedule: Schedule) {
-  const cfg = {
-    version: 11,
-    zones: [],
-    interfaces: [],
-    rules: [],
-    schedules: [schedule],
-    nat: { outbound: { mode: 'automatic' } },
-  } as Config
+  const cfg: Config = { ...emptyConfig(), schedules: [schedule] }
   const config = useConfigStore()
   config.saved = JSON.parse(JSON.stringify(cfg))
   config.replaceDraft(cfg)
   const wrapper = mount(ScheduleDialog, {
-    props: { open: true, schedule: config.draft.schedules[0] },
+    props: { open: true, schedule: must(draftOf(config).schedules)[0] },
     global: { stubs },
   })
   return { wrapper, config }
@@ -61,6 +55,6 @@ describe('ScheduleDialog', () => {
     await wrapper.findAll<HTMLInputElement>('input[type=checkbox]')[6].setValue(false)
     await wrapper.get('form').trigger('submit')
     expect(config.dirty).toBe(true)
-    expect(config.draft.schedules[0].days).toEqual(DAYS.slice(0, 6))
+    expect(must(draftOf(config).schedules)[0].days).toEqual(DAYS.slice(0, 6))
   })
 })

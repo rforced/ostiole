@@ -20,7 +20,7 @@ const enforced = computed(() => {
   return listed.length ? internal.value.filter((n) => listed.includes(n)) : internal.value
 })
 
-function toggleZone(name, box) {
+function toggleZone(name: string, box: HTMLInputElement) {
   const next = new Set(enforced.value)
   if (box.checked) next.add(name)
   else next.delete(name)
@@ -44,10 +44,10 @@ const DOH_LIST_URLS = [
 ]
 
 /** Empty string in a select means "none", which the model wants absent. */
-function aliasField(key) {
+function aliasField(key: 'dohAlias' | 'exemptClients' | 'exemptDestinations') {
   return computed({
     get: () => enforce.value[key] ?? '',
-    set: (v) => {
+    set: (v: string) => {
       if (v) enforce.value[key] = v
       else delete enforce.value[key]
     },
@@ -80,7 +80,7 @@ const exemptDestinations = aliasField('exemptDestinations')
               type="checkbox"
               class="checkbox"
               :checked="enforced.includes(name)"
-              @change="toggleZone(name, $event.target)"
+              @change="toggleZone(name, $event.target as HTMLInputElement)"
             />
             <label :for="`enf-zone-${name}`">{{ name }}</label>
           </li>

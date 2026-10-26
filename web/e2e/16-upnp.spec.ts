@@ -23,7 +23,7 @@ test('switch on UPnP, write an access list, and apply', async ({ page }) => {
   // Only interfaces in an external zone are offered: a port opened
   // anywhere else reaches nothing.
   const external = page.locator('#upnp-ext')
-  const wan = await external.locator('option').nth(1).getAttribute('value')
+  const wan = (await external.locator('option').nth(1).getAttribute('value')) ?? ''
   expect(wan).toBeTruthy()
   await external.selectOption(wan)
   // The external interface is never somewhere clients ask from.

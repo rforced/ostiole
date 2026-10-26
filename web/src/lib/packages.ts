@@ -8,9 +8,8 @@ export function excluded(name: string, exclude?: string[]) {
   return (exclude ?? []).some((e) => e === name || glob(e).test(name))
 }
 
-/** @param {string} pattern */
-function glob(pattern) {
-  const body = pattern.replace(/[.+^${}()|[\]\\*?]/g, (c) =>
+function glob(pattern: string) {
+  const body = pattern.replace(/[.+^${}()|[\]\\*?]/g, (c: string) =>
     c === '*' ? '.*' : c === '?' ? '.' : `\\${c}`,
   )
   return new RegExp(`^${body}$`)

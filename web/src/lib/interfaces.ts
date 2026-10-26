@@ -47,6 +47,7 @@ export function segmentInterfaces(cfg?: Config | null): Interface[] {
       !i.tailscale &&
       !i.pppoe &&
       !ports.has(i.name) &&
+      i.zone !== undefined &&
       zones.has(i.zone),
   )
 }
@@ -66,11 +67,12 @@ export function facesInternet(cfg: Config | null | undefined, name: string): boo
     ...(o.vlan?.parent ? [o.vlan.parent] : []),
   ]
   const seen = new Set<string>()
+  const zones = cfg?.zones ?? []
   const faces = (n: string): boolean => {
     if (seen.has(n)) return false
     seen.add(n)
     const i = all.find((x) => x.name === n)
-    if (i?.zone) return Boolean(cfg.zones?.find((z) => z.name === i.zone)?.external)
+    if (i?.zone) return Boolean(zones.find((z) => z.name === i.zone)?.external)
     return all.some((o) => ports(o).includes(n) && faces(o.name))
   }
   return faces(name)

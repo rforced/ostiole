@@ -20,7 +20,12 @@ const config = useConfigStore()
 const form = ref<Required<Radio>>(blank())
 
 const BANDS: Record<string, string> = { '2g': '2.4 GHz', '5g': '5 GHz', '6g': '6 GHz' }
-const STANDARDS = { ax: 'Wi-Fi 6 (ax)', ac: 'Wi-Fi 5 (ac)', n: 'Wi-Fi 4 (n)', legacy: 'Legacy' }
+const STANDARDS: Partial<Record<string, string>> = {
+  ax: 'Wi-Fi 6 (ax)',
+  ac: 'Wi-Fi 5 (ac)',
+  n: 'Wi-Fi 4 (n)',
+  legacy: 'Legacy',
+}
 const ALL_BANDS: Band[] = ['2g', '5g', '6g']
 const WIDTHS = [20, 40, 80, 160]
 

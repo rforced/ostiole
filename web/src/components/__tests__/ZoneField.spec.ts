@@ -1,28 +1,36 @@
+import type { VueWrapper } from '@vue/test-utils'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import ZoneField from '@/components/ZoneField.vue'
-import type { Session } from '@/lib/api'
+import type { Role, Session } from '@/lib/api'
 import type { Config } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import { fixture } from '@/test/fixtures'
 
-function field(iface, zone, role) {
+function field(iface: string, zone: string, role: Role) {
   useAuthStore().user = { username: role, role } as Session
-  useConfigStore().replaceDraft({
-    version: 12,
-    zones: [{ name: 'wan', external: true }, { name: 'lan', antiLockout: true }, { name: 'dmz' }],
-    interfaces: [
-      { name: 'eth0', zone: 'wan', enabled: true },
-      { name: 'eth1', zone: 'lan', enabled: true },
-    ],
-    rules: [],
-  } as Config)
+  useConfigStore().replaceDraft(
+    fixture<Config>({
+      version: 12,
+      zones: [{ name: 'wan', external: true }, { name: 'lan', antiLockout: true }, { name: 'dmz' }],
+      interfaces: [
+        { name: 'eth0', zone: 'wan', enabled: true },
+        { name: 'eth1', zone: 'lan', enabled: true },
+      ],
+      rules: [],
+    }),
+  )
   return mount(ZoneField, { props: { id: 'z', iface, modelValue: zone } })
 }
 
-const option = (w, name) => w.findAll('option').find((o) => o.element.value === name)
+const option = (w: VueWrapper, name: string) => {
+  const o = w.findAll<HTMLOptionElement>('option').find((o) => o.element.value === name)
+  if (!o) throw new Error(`no option ${name}`)
+  return o
+}
 
 // The interfaces in an anti-lockout zone are where the router is managed
 // from, which is an admin's call.

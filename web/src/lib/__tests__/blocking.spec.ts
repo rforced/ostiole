@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import { coversName, exceptionToggles, isDomainName, protectedNames } from '@/lib/blocking'
-import type { Blocking, Config, ProxyAccess } from '@/lib/types.gen'
+import type { Blocking, Config, DNSServer, ProxyAccess } from '@/lib/types.gen'
 import { configOf, type DeepPartial } from '@/test/fixtures'
 
 /** The router TestNeverBlockedCoversTheExpandedNames describes in Go. */
-function router(blocking: DeepPartial<Blocking> = {}): DeepPartial<Config> {
+function router(
+  blocking: DeepPartial<Blocking> = {},
+): DeepPartial<Config> & { services: { dns: DeepPartial<DNSServer> } } {
   return {
     system: { hostname: 'gateway' },
     services: {
@@ -121,8 +123,8 @@ describe('coversName', () => {
 })
 
 describe('exceptionToggles', () => {
-  const blocked = (name) => ({ name, status: 'blocked' })
-  const answered = (name) => ({ name, status: 'ok' })
+  const blocked = (name: string) => ({ name, status: 'blocked' })
+  const answered = (name: string) => ({ name, status: 'ok' })
 
   it('offers allow for a blocked answer and block for the rest', () => {
     const toggle = exceptionToggles(configOf(router()))

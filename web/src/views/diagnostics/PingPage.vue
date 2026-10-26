@@ -9,6 +9,7 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { interfaceLabel } from '@/lib/interfaces'
+import type { PingResult, TraceResult } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
@@ -20,11 +21,11 @@ const count = ref(4)
 const resolveNames = ref(true)
 /** Which of the two is running: 'ping', 'trace', or nothing. */
 const busy = ref('')
-const ping = ref(null)
-const trace = ref(null)
+const ping = ref<PingResult | null>(null)
+const trace = ref<TraceResult | null>(null)
 
 // One loader for both, so a trace clears a ping's error and the reverse.
-const job = useAsync(async (kind) => {
+const job = useAsync(async (kind: 'ping' | 'trace') => {
   if (kind === 'ping') {
     trace.value = null
     ping.value = await api.diagnostics.ping({
@@ -41,7 +42,7 @@ const job = useAsync(async (kind) => {
   }
 })
 
-async function run(kind) {
+async function run(kind: 'ping' | 'trace') {
   busy.value = kind
   try {
     await job.run(kind)
@@ -116,8 +117,8 @@ async function run(kind) {
         <template v-if="ping.received">
           <dt>Round trip</dt>
           <dd class="font-mono">
-            min {{ ping.minMs.toFixed(1) }} · avg {{ ping.avgMs.toFixed(1) }} · max
-            {{ ping.maxMs.toFixed(1) }} ms
+            min {{ ping.minMs?.toFixed(1) }} · avg {{ ping.avgMs?.toFixed(1) }} · max
+            {{ ping.maxMs?.toFixed(1) }} ms
           </dd>
         </template>
       </dl>
@@ -125,7 +126,7 @@ async function run(kind) {
         <li v-for="p in ping.probes" :key="p.seq">
           seq {{ p.seq }}:
           <span v-if="p.error" class="text-warn">{{ p.error }}</span>
-          <span v-else>{{ p.rttMs.toFixed(2) }} ms</span>
+          <span v-else>{{ p.rttMs?.toFixed(2) }} ms</span>
         </li>
       </ol>
     </SectionCard>
@@ -155,7 +156,7 @@ async function run(kind) {
             </td>
             <td class="font-mono text-code">{{ h.name }}</td>
             <td class="num font-mono text-code">
-              {{ h.address ? `${h.rttMs.toFixed(1)} ms` : '' }}
+              {{ h.address ? `${h.rttMs?.toFixed(1)} ms` : '' }}
             </td>
           </tr>
         </tbody>

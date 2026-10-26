@@ -2,8 +2,9 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { Config } from '@/lib/types.gen'
+import type { DHCPServer } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import { configOf, draftOf } from '@/test/fixtures'
 import ServerDialog from '@/views/services/dhcp/ServerDialog.vue'
 
 // The dialog itself teleports; the form inside it is what is under test.
@@ -29,9 +30,9 @@ const options = {
 }
 
 /** The pool as saved, and its dialog open on it. */
-function openPool(server) {
+function openPool(server: DHCPServer) {
   const config = useConfigStore()
-  const cfg = {
+  const cfg = configOf({
     version: 12,
     zones: [{ name: 'lan' }],
     interfaces: [
@@ -45,11 +46,11 @@ function openPool(server) {
     ],
     rules: [],
     services: { dhcp: { enabled: true, servers: [server] }, dns: { enabled: false } },
-  } as Config
+  })
   config.saved = cfg
   config.replaceDraft(cfg)
   const wrapper = mount(ServerDialog, {
-    props: { open: true, server: config.draft.services.dhcp.servers[0] },
+    props: { open: true, server: draftOf(config).services?.dhcp?.servers?.[0] },
     global: { stubs },
   })
   return { config, wrapper }
@@ -84,7 +85,7 @@ describe('DHCP ServerDialog', () => {
     await wrapper.get('#sc-boot-server').setValue('192.0.2.5')
     await wrapper.get('#sc-boot-file').setValue('pxelinux.0')
     await wrapper.get('form').trigger('submit')
-    expect(config.draft.services.dhcp.servers[0]).toStrictEqual({ ...pool, ...options })
+    expect(draftOf(config).services?.dhcp?.servers?.[0]).toStrictEqual({ ...pool, ...options })
   })
 
   it('drops the options when they are cleared', async () => {
@@ -93,6 +94,6 @@ describe('DHCP ServerDialog', () => {
       await wrapper.get(id).setValue('')
     }
     await wrapper.get('form').trigger('submit')
-    expect(config.draft.services.dhcp.servers[0]).toStrictEqual(pool)
+    expect(draftOf(config).services?.dhcp?.servers?.[0]).toStrictEqual(pool)
   })
 })

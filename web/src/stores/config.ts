@@ -64,6 +64,20 @@ import { useToastStore } from '@/stores/toast'
 
 const clone = <T>(v: T): T => (v === null || v === undefined ? v : JSON.parse(JSON.stringify(v)))
 
+/** Sets one field named at run time on a block whose keys the caller does not know. */
+const setField = (block: object, key: string, value: unknown) => {
+  Reflect.set(block, key, value)
+}
+const dropField = (block: object, key: string) => {
+  Reflect.deleteProperty(block, key)
+}
+
+type WithBlock<K extends keyof Interface> = Interface & { [P in K]-?: NonNullable<Interface[P]> }
+const hasBlock =
+  <K extends keyof Interface>(key: K) =>
+  (i: Interface): i is WithBlock<K> =>
+    Boolean(i[key])
+
 /** Swaps the item with the next one of its zone, delta -1 up or +1 down. */
 function moveInZone<T extends { id: string; zone?: string }>(list: T[], id: string, delta: number) {
   const from = list.findIndex((r) => r.id === id)
@@ -125,6 +139,12 @@ export const useConfigStore = defineStore('config', () => {
   const aliases = computed(() => draft.value?.aliases ?? [])
   const rules = computed(() => draft.value?.rules ?? [])
   let undoing = false
+
+  /** The draft to edit; an edit with nothing loaded is a mistake, as a null read always was. */
+  function editable(): Config {
+    if (!draft.value) throw new Error('No configuration is loaded.')
+    return draft.value
+  }
 
   async function readSaved() {
     try {
@@ -253,7 +273,8 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function upsertInterface(iface: Interface) {
-    const list = draft.value.interfaces ?? (draft.value.interfaces = [])
+    const d = editable()
+    const list = d.interfaces ?? (d.interfaces = [])
     const idx = list.findIndex((i) => i.name === iface.name)
     if (idx === -1) list.push(clone(iface))
     else list[idx] = clone(iface)
@@ -270,7 +291,7 @@ export const useConfigStore = defineStore('config', () => {
    * delete takes.
    */
   function interfaceDependents(name: string, going: Set<string> | null = null): string[] {
-    const out = []
+    const out: string[] = []
     const d = draft.value
     if (!d) return out
     const top = !going
@@ -340,11 +361,11 @@ export const useConfigStore = defineStore('config', () => {
 
   /** What UPnP and the certificates lose with the interfaces going. */
   function addressDependents(going: Set<string>) {
-    const out = []
-    const upnp = draft.value.services?.upnp
-    if (upnpStopsWith(going)) {
+    const out: string[] = []
+    const upnp = draft.value?.services?.upnp
+    if (upnp && upnpStopsWith(going)) {
       out.push(
-        going.has(upnp.externalInterface)
+        goes(going, upnp.externalInterface)
           ? 'UPnP, switched off without its external interface'
           : 'UPnP, switched off rather than answer every inside interface',
       )
@@ -374,9 +395,13 @@ export const useConfigStore = defineStore('config', () => {
   function upnpStopsWith(going: Set<string>) {
     const u = draft.value?.services?.upnp
     if (!u?.enabled) return false
-    if (going.has(u.externalInterface)) return true
-    return u.interfaces?.length > 0 && u.interfaces.every((n) => going.has(n))
+    if (goes(going, u.externalInterface)) return true
+    const served = u.interfaces ?? []
+    return served.length > 0 && served.every((n) => going.has(n))
   }
+
+  const goes = (going: Set<string>, name: string | undefined) =>
+    name !== undefined && going.has(name)
 
   /** An ordered certificate with nothing to cover once the interfaces go. */
   function coversOnly(cert: Certificate, going: Set<string>) {
@@ -389,10 +414,10 @@ export const useConfigStore = defineStore('config', () => {
 
   /** The mutation behind addressDependents. */
   function dropAddresses(going: Set<string>) {
-    const upnp = draft.value.services?.upnp
+    const upnp = editable().services?.upnp
     if (upnp) {
       if (upnpStopsWith(going)) upnp.enabled = false
-      if (going.has(upnp.externalInterface)) delete upnp.externalInterface
+      if (goes(going, upnp.externalInterface)) delete upnp.externalInterface
       if (upnp.interfaces) {
         upnp.interfaces = upnp.interfaces.filter((n) => !going.has(n))
         if (!upnp.interfaces.length) delete upnp.interfaces
@@ -410,7 +435,7 @@ export const useConfigStore = defineStore('config', () => {
 
   /** The mutation behind removeInterface, in the order interfaceDependents lists it. */
   function dropInterface(name: string, going: Set<string> | null = null) {
-    const d = draft.value
+    const d = editable()
     const top = !going
     going ??= interfacesGoing(name)
     if (findInterface(name)?.wireguard) dropPeerReferences(name)
@@ -452,13 +477,13 @@ export const useConfigStore = defineStore('config', () => {
   // ---- WireGuard -------------------------------------------------------
 
   /** Tunnels are interfaces with a wireguard block. */
-  const tunnels = computed(() => interfaces.value.filter((i) => i.wireguard))
+  const tunnels = computed(() => interfaces.value.filter(hasBlock('wireguard')))
 
   /** OpenVPN tunnels are interfaces with an openvpn block. */
-  const openvpnTunnels = computed(() => interfaces.value.filter((i) => i.openvpn))
+  const openvpnTunnels = computed(() => interfaces.value.filter(hasBlock('openvpn')))
 
   /** The tailnet node, if this router has one. There is at most one. */
-  const tailscale = computed(() => interfaces.value.find((i) => i.tailscale) ?? null)
+  const tailscale = computed(() => interfaces.value.find(hasBlock('tailscale')) ?? null)
 
   // ---- Wireless --------------------------------------------------------
 
@@ -466,20 +491,22 @@ export const useConfigStore = defineStore('config', () => {
   const radios = computed(() => draft.value?.wireless?.radios ?? [])
 
   /** Networks are interfaces with a wireless block. */
-  const wirelessNetworks = computed(() => interfaces.value.filter((i) => i.wireless))
+  const wirelessNetworks = computed(() => interfaces.value.filter(hasBlock('wireless')))
 
   /** The country every radio follows. */
   const wirelessCountry = computed(() => draft.value?.wireless?.country ?? '')
 
   function setWirelessCountry(code: string) {
-    const w = draft.value.wireless ?? (draft.value.wireless = {})
+    const d = editable()
+    const w = d.wireless ?? (d.wireless = {})
     if (code) w.country = code
     else delete w.country
-    if (!Object.keys(w).length) delete draft.value.wireless
+    if (!Object.keys(w).length) delete d.wireless
   }
 
   function upsertRadio(radio: Radio) {
-    const w = draft.value.wireless ?? (draft.value.wireless = {})
+    const d = editable()
+    const w = d.wireless ?? (d.wireless = {})
     const list = w.radios ?? (w.radios = [])
     const idx = list.findIndex((r) => r.name === radio.name)
     if (idx === -1) list.push(clone(radio))
@@ -497,7 +524,7 @@ export const useConfigStore = defineStore('config', () => {
     undoable(`Removed radio ${name}.`, () => {
       for (const i of [...wirelessNetworks.value])
         if (i.wireless.radio === name) dropInterface(i.name)
-      const w = draft.value.wireless
+      const w = editable().wireless
       if (w?.radios) w.radios = w.radios.filter((r) => r.name !== name)
     })
   }
@@ -518,7 +545,7 @@ export const useConfigStore = defineStore('config', () => {
     const to = `${tunnelName}/${peer.name}`
     for (const r of rules.value)
       for (const side of [r.source, r.destination]) if (side?.peer === from) side.peer = to
-    for (const a of draft.value.services?.proxy?.access ?? [])
+    for (const a of editable().services?.proxy?.access ?? [])
       if (a.source?.peer === from) a.source.peer = to
   }
 
@@ -534,7 +561,7 @@ export const useConfigStore = defineStore('config', () => {
    * lost its peer would match everyone.
    */
   function peerDependents(tunnelName: string, peerName?: string) {
-    const refs = []
+    const refs: string[] = []
     for (const r of rules.value)
       if (
         namesPeer(r.source, tunnelName, peerName) ||
@@ -549,7 +576,7 @@ export const useConfigStore = defineStore('config', () => {
 
   /** The mutation behind peerDependents. */
   function dropPeerReferences(tunnelName: string, peerName?: string) {
-    const d = draft.value
+    const d = editable()
     if (d.rules)
       d.rules = d.rules.filter(
         (r) =>
@@ -562,10 +589,10 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function removePeer(tunnelName: string, peerName: string) {
-    const t = findInterface(tunnelName)
-    if (!t?.wireguard) return
+    const wireguard = findInterface(tunnelName)?.wireguard
+    if (!wireguard) return
     undoable(`Deleted peer ${peerName}.`, () => {
-      t.wireguard.peers = (t.wireguard.peers ?? []).filter((p) => p.name !== peerName)
+      wireguard.peers = (wireguard.peers ?? []).filter((p) => p.name !== peerName)
       dropPeerReferences(tunnelName, peerName)
     })
   }
@@ -573,7 +600,8 @@ export const useConfigStore = defineStore('config', () => {
   // ---- zones -----------------------------------------------------------
 
   function upsertZone(zone: Zone, previousName = zone.name) {
-    const list = draft.value.zones ?? (draft.value.zones = [])
+    const d = editable()
+    const list = d.zones ?? (d.zones = [])
     const idx = list.findIndex((z) => z.name === previousName)
     if (idx === -1) list.push(clone(zone))
     else list[idx] = clone(zone)
@@ -586,13 +614,14 @@ export const useConfigStore = defineStore('config', () => {
       if (r.zone === from) r.zone = to
       if (r.destZone === from) r.destZone = to
     }
-    for (const pf of draft.value.nat?.portForwards ?? []) if (pf.zone === from) pf.zone = to
-    for (const o of draft.value.nat?.outbound?.rules ?? []) if (o.zone === from) o.zone = to
-    for (const o of draft.value.nat?.oneToOne ?? []) if (o.zone === from) o.zone = to
-    for (const a of draft.value.services?.proxy?.access ?? []) if (a.zone === from) a.zone = to
-    const defended = draft.value.protection?.zones
+    const d = editable()
+    for (const pf of d.nat?.portForwards ?? []) if (pf.zone === from) pf.zone = to
+    for (const o of d.nat?.outbound?.rules ?? []) if (o.zone === from) o.zone = to
+    for (const o of d.nat?.oneToOne ?? []) if (o.zone === from) o.zone = to
+    for (const a of d.services?.proxy?.access ?? []) if (a.zone === from) a.zone = to
+    const defended = d.protection?.zones
     if (defended) setProtectedZones(defended.map((z) => (z === from ? to : z)))
-    const enforced = draft.value.blocking?.enforce?.zones
+    const enforced = d.blocking?.enforce?.zones
     if (enforced) setEnforcedZones(enforced.map((z) => (z === from ? to : z)))
   }
 
@@ -611,22 +640,22 @@ export const useConfigStore = defineStore('config', () => {
    * left pointing at a zone that is gone fails validation.
    */
   function zoneDependents(name: string) {
-    const refs = []
+    const refs: string[] = []
+    const d = editable()
     for (const r of rules.value)
       if (r.zone === name || r.destZone === name) refs.push(`rule ${r.id}`)
-    for (const o of draft.value.nat?.outbound?.rules ?? [])
+    for (const o of d.nat?.outbound?.rules ?? [])
       if (o.zone === name) refs.push(`outbound NAT ${o.id}`)
-    for (const pf of draft.value.nat?.portForwards ?? [])
+    for (const pf of d.nat?.portForwards ?? [])
       if (pf.zone === name) refs.push(`port forward ${pf.id}`)
-    for (const o of draft.value.nat?.oneToOne ?? [])
-      if (o.zone === name) refs.push(`1:1 NAT ${o.id}`)
-    const defended = draft.value.protection?.zones ?? []
+    for (const o of d.nat?.oneToOne ?? []) if (o.zone === name) refs.push(`1:1 NAT ${o.id}`)
+    const defended = d.protection?.zones ?? []
     if (defended.includes(name)) {
       refs.push(
         defended.some((z) => z !== name) ? 'protection' : 'protection, back to every external zone',
       )
     }
-    const enforced = draft.value.blocking?.enforce?.zones ?? []
+    const enforced = d.blocking?.enforce?.zones ?? []
     if (enforced.includes(name)) {
       refs.push(
         enforced.some((z) => z !== name)
@@ -634,7 +663,7 @@ export const useConfigStore = defineStore('config', () => {
           : 'DNS enforcement, back to every zone that is not external',
       )
     }
-    for (const a of draft.value.services?.proxy?.access ?? [])
+    for (const a of d.services?.proxy?.access ?? [])
       if (a.zone === name) refs.push(`proxy access rule ${a.description || a.id}`)
     return refs
   }
@@ -647,15 +676,16 @@ export const useConfigStore = defineStore('config', () => {
    */
   function removeZone(name: string) {
     undoable(`Deleted zone ${name}.`, () => {
-      draft.value.zones = zones.value.filter((z) => z.name !== name)
-      draft.value.rules = rules.value.filter((r) => r.zone !== name && r.destZone !== name)
-      const proxy = draft.value.services?.proxy
+      const d = editable()
+      d.zones = zones.value.filter((z) => z.name !== name)
+      d.rules = rules.value.filter((r) => r.zone !== name && r.destZone !== name)
+      const proxy = d.services?.proxy
       if (proxy?.access) proxy.access = proxy.access.filter((a) => a.zone !== name)
-      const defended = draft.value.protection?.zones
+      const defended = d.protection?.zones
       if (defended) setProtectedZones(defended.filter((z) => z !== name))
-      const enforced = draft.value.blocking?.enforce?.zones
+      const enforced = d.blocking?.enforce?.zones
       if (enforced) setEnforcedZones(enforced.filter((z) => z !== name))
-      const n = draft.value.nat
+      const n = d.nat
       if (!n) return
       if (n.portForwards) n.portForwards = n.portForwards.filter((pf) => pf.zone !== name)
       if (n.outbound?.rules) n.outbound.rules = n.outbound.rules.filter((o) => o.zone !== name)
@@ -670,7 +700,8 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function upsertRule(rule: Rule) {
-    const list = draft.value.rules ?? (draft.value.rules = [])
+    const d = editable()
+    const list = d.rules ?? (d.rules = [])
     const idx = list.findIndex((r) => r.id === rule.id)
     if (idx === -1) list.push(clone(rule))
     else list[idx] = clone(rule)
@@ -678,19 +709,20 @@ export const useConfigStore = defineStore('config', () => {
 
   function removeRule(id: string) {
     undoable(`Deleted rule ${id}.`, () => {
-      draft.value.rules = rules.value.filter((r) => r.id !== id)
+      editable().rules = rules.value.filter((r) => r.id !== id)
     })
   }
 
   /** Moves a rule up (-1) or down (+1) among the rules of its zone. */
   function moveRule(id: string, delta: number) {
-    moveInZone(draft.value.rules, id, delta)
+    moveInZone(editable().rules ?? [], id, delta)
   }
 
   // ---- aliases ---------------------------------------------------------
 
   function upsertAlias(alias: Alias, previousName = alias.name) {
-    const list = draft.value.aliases ?? (draft.value.aliases = [])
+    const d = editable()
+    const list = d.aliases ?? (d.aliases = [])
     const idx = list.findIndex((a) => a.name === previousName)
     if (idx === -1) list.push(clone(alias))
     else list[idx] = clone(alias)
@@ -701,12 +733,12 @@ export const useConfigStore = defineStore('config', () => {
           if (side?.portAlias === previousName) side.portAlias = alias.name
         }
       }
-      const proxy = draft.value.services?.proxy
+      const proxy = d.services?.proxy
       for (const a of proxy?.access ?? [])
         if (a.source?.alias === previousName) a.source.alias = alias.name
       for (const s of proxy?.sites ?? [])
         if (s.allowFrom) s.allowFrom = s.allowFrom.map((f) => (f === previousName ? alias.name : f))
-      const enforce = draft.value.blocking?.enforce
+      const enforce = d.blocking?.enforce
       if (enforce?.dohAlias === previousName) enforce.dohAlias = alias.name
       if (enforce?.exemptClients === previousName) enforce.exemptClients = alias.name
       if (enforce?.exemptDestinations === previousName) enforce.exemptDestinations = alias.name
@@ -714,7 +746,7 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function aliasReferences(name: string) {
-    const refs = []
+    const refs: string[] = []
     for (const r of rules.value) {
       if (r.source?.alias === name || r.source?.portAlias === name) refs.push(`rule ${r.id} source`)
       if (r.destination?.alias === name || r.destination?.portAlias === name)
@@ -734,7 +766,7 @@ export const useConfigStore = defineStore('config', () => {
 
   function removeAlias(name: string) {
     undoable(`Deleted alias ${name}.`, () => {
-      draft.value.aliases = aliases.value.filter((a) => a.name !== name)
+      editable().aliases = aliases.value.filter((a) => a.name !== name)
     })
   }
 
@@ -743,9 +775,10 @@ export const useConfigStore = defineStore('config', () => {
   const nat = computed<NAT>(() => draft.value?.nat ?? { outbound: { mode: 'automatic' } })
 
   function ensureNat() {
-    if (!draft.value.nat) draft.value.nat = { outbound: { mode: 'automatic' } }
-    if (!draft.value.nat.outbound) draft.value.nat.outbound = { mode: 'automatic' }
-    return draft.value.nat
+    const d = editable()
+    if (!d.nat) d.nat = { outbound: { mode: 'automatic' } }
+    if (!d.nat.outbound) d.nat.outbound = { mode: 'automatic' }
+    return d.nat
   }
 
   function setOutboundMode(mode: OutboundMode) {
@@ -814,7 +847,7 @@ export const useConfigStore = defineStore('config', () => {
     const iface = findInterface(name)
     if (!iface?.shaping) return
     undoable(`Deleted the speed set on ${name}.`, () => {
-      delete findInterface(name).shaping
+      delete iface.shaping
     })
   }
 
@@ -831,7 +864,7 @@ export const useConfigStore = defineStore('config', () => {
     const z = zones.value.find((x) => x.name === zone)
     if (!z?.busy) return
     undoable(`Stopped holding back busy hosts on ${zone}.`, () => {
-      delete zones.value.find((x) => x.name === zone).busy
+      delete z.busy
     })
   }
 
@@ -844,7 +877,8 @@ export const useConfigStore = defineStore('config', () => {
   const schedules = computed(() => draft.value?.schedules ?? [])
 
   function upsertSchedule(schedule: Schedule, previousName = schedule.name) {
-    const list = draft.value.schedules ?? (draft.value.schedules = [])
+    const d = editable()
+    const list = d.schedules ?? (d.schedules = [])
     const idx = list.findIndex((s) => s.name === previousName)
     if (idx === -1) list.push(clone(schedule))
     else list[idx] = clone(schedule)
@@ -859,7 +893,7 @@ export const useConfigStore = defineStore('config', () => {
 
   function removeSchedule(name: string) {
     undoable(`Deleted schedule ${name}.`, () => {
-      draft.value.schedules = schedules.value.filter((s) => s.name !== name)
+      editable().schedules = schedules.value.filter((s) => s.name !== name)
     })
   }
 
@@ -867,7 +901,7 @@ export const useConfigStore = defineStore('config', () => {
 
   /** Returns the services block, creating defaults in the draft as needed. */
   function ensureServices() {
-    const d = draft.value
+    const d = editable()
     if (!d.services) d.services = { dhcp: { enabled: false }, dns: { enabled: false } } as Services
     if (!d.services.dhcp) d.services.dhcp = { enabled: false }
     if (!d.services.dns) d.services.dns = { enabled: false }
@@ -1008,15 +1042,15 @@ export const useConfigStore = defineStore('config', () => {
     const services = ensureServices()
     const block = { ...DISCOVERY_DEFAULT, ...services.discovery }
     for (const [k, v] of Object.entries(patch)) {
-      if (v == null) delete block[k]
-      else block[k] = clone(v)
+      if (v == null) dropField(block, k)
+      else setField(block, k, clone(v))
     }
     if (!block.interfaces?.length) delete block.interfaces
     if (!block.services?.length) delete block.services
     if (!block.log?.entries) delete block.log
     const isDefault =
       Object.keys(block).length === Object.keys(DISCOVERY_DEFAULT).length &&
-      Object.entries(DISCOVERY_DEFAULT).every(([k, v]) => block[k] === v)
+      Object.entries(DISCOVERY_DEFAULT).every(([k, v]) => Reflect.get(block, k) === v)
     if (isDefault && !saved.value?.services?.discovery) delete services.discovery
     else services.discovery = block
   }
@@ -1035,8 +1069,9 @@ export const useConfigStore = defineStore('config', () => {
     const services = ensureServices()
     const block = services.ntp ?? {}
     for (const [k, v] of Object.entries(patch)) {
-      if (v === '' || v === false || v == null || (Array.isArray(v) && !v.length)) delete block[k]
-      else block[k] = clone(v)
+      if (v === '' || v === false || v == null || (Array.isArray(v) && !v.length)) {
+        dropField(block, k)
+      } else setField(block, k, clone(v))
     }
     if (Object.keys(block).length) services.ntp = block
     else delete services.ntp
@@ -1058,40 +1093,37 @@ export const useConfigStore = defineStore('config', () => {
     for (const [k, v] of Object.entries(patch)) {
       // Always written while there is a block, so off stays in place.
       if (k === 'enabled') p.enabled = v === true
-      else if (v === '' || v === false || v == null || (Array.isArray(v) && !v.length)) delete p[k]
-      else p[k] = v
+      else if (v === '' || v === false || v == null || (Array.isArray(v) && !v.length)) {
+        dropField(p, k)
+      } else setField(p, k, v)
     }
     if (p.enabled || Object.keys(p).some((k) => k !== 'enabled')) services.proxy = p
     else delete services.proxy
   }
 
   /** upsert is the same shape for every list the proxy holds. */
-  function upsertIn(key, entry, previousId = entry.id) {
-    const p = ensureProxy()
-    const list = p[key] ?? (p[key] = [])
+  function upsertIn<T extends { id: string }>(list: T[], entry: T, previousId = entry.id) {
     const idx = list.findIndex((e) => e.id === previousId)
     if (idx === -1) list.push(clone(entry))
     else list[idx] = clone(entry)
   }
 
-  function removeFrom(key, id, message) {
-    undoable(message, () => {
-      const p = ensureProxy()
-      p[key] = (p[key] ?? []).filter((e) => e.id !== id)
-    })
-  }
-
   function upsertPool(pool: ProxyPool, previousId = pool.id) {
-    upsertIn('pools', pool, previousId)
+    const p = ensureProxy()
+    upsertIn(p.pools ?? (p.pools = []), pool, previousId)
     if (previousId === pool.id) return
     for (const s of ensureProxy().sites ?? []) {
       if (s.pool === previousId) s.pool = pool.id
       for (const p of s.paths ?? []) if (p.pool === previousId) p.pool = pool.id
     }
   }
-  const upsertSite = (site: ProxySite, previousId = site.id) => upsertIn('sites', site, previousId)
+  function upsertSite(site: ProxySite, previousId = site.id) {
+    const p = ensureProxy()
+    upsertIn(p.sites ?? (p.sites = []), site, previousId)
+  }
   function upsertProfile(profile: WAFProfile, previousId = profile.id) {
-    upsertIn('wafProfiles', profile, previousId)
+    const p = ensureProxy()
+    upsertIn(p.wafProfiles ?? (p.wafProfiles = []), profile, previousId)
     if (previousId === profile.id) return
     for (const s of ensureProxy().sites ?? []) if (s.waf === previousId) s.waf = profile.id
   }
@@ -1100,7 +1132,7 @@ export const useConfigStore = defineStore('config', () => {
    * cannot exist without its pool.
    */
   function poolDependents(id: string) {
-    const out = []
+    const out: string[] = []
     for (const s of proxy.value.sites ?? []) {
       if (s.pool === id) out.push(`site ${s.id}`)
       for (const p of s.paths ?? []) if (p.pool === id) out.push(`site ${s.id} path ${p.prefix}`)
@@ -1116,8 +1148,18 @@ export const useConfigStore = defineStore('config', () => {
   /** Present for symmetry with the other lists; nothing points at a site. */
   const siteDependents: (id: string) => string[] = () => []
 
-  const removePool = (id: string) => removeFrom('pools', id, `Deleted pool ${id}.`)
-  const removeSite = (id: string) => removeFrom('sites', id, `Deleted site ${id}.`)
+  function removePool(id: string) {
+    undoable(`Deleted pool ${id}.`, () => {
+      const p = ensureProxy()
+      p.pools = (p.pools ?? []).filter((e) => e.id !== id)
+    })
+  }
+  function removeSite(id: string) {
+    undoable(`Deleted site ${id}.`, () => {
+      const p = ensureProxy()
+      p.sites = (p.sites ?? []).filter((e) => e.id !== id)
+    })
+  }
   /** A deleted profile leaves the sites that named it uninspected. */
   function removeProfile(id: string) {
     undoable(`Deleted WAF profile ${id}.`, () => {
@@ -1130,8 +1172,16 @@ export const useConfigStore = defineStore('config', () => {
   // ---- reverse proxy access ---------------------------------------------
 
   /** Adds an access rule, or replaces the one with its id. */
-  const upsertProxyAccess = (line: ProxyAccess) => upsertIn('access', line)
-  const removeProxyAccess = (id: string) => removeFrom('access', id, 'Deleted the access rule.')
+  function upsertProxyAccess(line: ProxyAccess) {
+    const p = ensureProxy()
+    upsertIn(p.access ?? (p.access = []), line)
+  }
+  function removeProxyAccess(id: string) {
+    undoable('Deleted the access rule.', () => {
+      const p = ensureProxy()
+      p.access = (p.access ?? []).filter((e) => e.id !== id)
+    })
+  }
 
   /** Moves an access rule up (-1) or down (+1) among the rules of its zone. */
   function moveProxyAccess(id: string, delta: number) {
@@ -1152,6 +1202,7 @@ export const useConfigStore = defineStore('config', () => {
     }
     undoable(`Excluded ${text} in the draft.`, () => {
       const w = draftProfile(profileId)
+      if (!w) return
       const list = w.exclusions ?? (w.exclusions = [])
       list.push(clone(exclusion))
     })
@@ -1168,6 +1219,7 @@ export const useConfigStore = defineStore('config', () => {
     if (!e) return
     undoable(`Deleted the exclusion of ${exclusionText(e)}.`, () => {
       const w = draftProfile(profileId)
+      if (!w?.exclusions) return
       w.exclusions.splice(index, 1)
       if (!w.exclusions.length) delete w.exclusions
     })
@@ -1178,7 +1230,8 @@ export const useConfigStore = defineStore('config', () => {
   const gateways = computed(() => draft.value?.gateways ?? [])
 
   function upsertGateway(gateway: Gateway, previousName = gateway.name) {
-    const list = draft.value.gateways ?? (draft.value.gateways = [])
+    const d = editable()
+    const list = d.gateways ?? (d.gateways = [])
     const idx = list.findIndex((g) => g.name === previousName)
     if (idx === -1) list.push(clone(gateway))
     else list[idx] = clone(gateway)
@@ -1191,7 +1244,7 @@ export const useConfigStore = defineStore('config', () => {
   /** Rules and this router's lookups follow a gateway or group to its new name. */
   function renameRouteTarget(from: string, to: string) {
     for (const r of rules.value) if (r.gateway === from) r.gateway = to
-    const dns = draft.value.services?.dns
+    const dns = editable().services?.dns
     if (dns?.via === from) dns.via = to
   }
 
@@ -1227,7 +1280,7 @@ export const useConfigStore = defineStore('config', () => {
       if (!members.some((m) => m.gateway === name)) continue
       if (!members.every((m) => going.has(m.gateway)))
         out.push(`group ${g.name} loses member ${name}`)
-      else if (members.at(-1).gateway === name) {
+      else if (members.at(-1)?.gateway === name) {
         const why = members.length === 1 ? 'its only member' : 'left without members'
         out.push(`group ${g.name}, ${why}`, ...groupDependents(g.name))
       }
@@ -1238,13 +1291,13 @@ export const useConfigStore = defineStore('config', () => {
   /** Rules and this router's lookups routed through a gateway or group go back to the default route. */
   function dropRouteTarget(name: string) {
     for (const r of rules.value) if (r.gateway === name) delete r.gateway
-    const dns = draft.value.services?.dns
+    const dns = editable().services?.dns
     if (dns?.via === name) delete dns.via
   }
 
   function dropGatewayGroup(name: string) {
     dropRouteTarget(name)
-    draft.value.gatewayGroups = gatewayGroups.value.filter((g) => g.name !== name)
+    editable().gatewayGroups = gatewayGroups.value.filter((g) => g.name !== name)
   }
 
   function dropGateway(name: string) {
@@ -1255,7 +1308,7 @@ export const useConfigStore = defineStore('config', () => {
       if (members.length === 1) dropGatewayGroup(g.name)
       else g.members = members.filter((m) => m.gateway !== name)
     }
-    draft.value.gateways = gateways.value.filter((g) => g.name !== name)
+    editable().gateways = gateways.value.filter((g) => g.name !== name)
   }
 
   function removeGateway(name: string) {
@@ -1269,7 +1322,8 @@ export const useConfigStore = defineStore('config', () => {
   ])
 
   function upsertGatewayGroup(group: GatewayGroup, previousName = group.name) {
-    const list = draft.value.gatewayGroups ?? (draft.value.gatewayGroups = [])
+    const d = editable()
+    const list = d.gatewayGroups ?? (d.gatewayGroups = [])
     const idx = list.findIndex((g) => g.name === previousName)
     if (idx === -1) list.push(clone(group))
     else list[idx] = clone(group)
@@ -1287,7 +1341,7 @@ export const useConfigStore = defineStore('config', () => {
    * defaults, which the daemon fills in: security fixes, weekly.
    */
   function ensureUpdates() {
-    const d = draft.value
+    const d = editable()
     if (!d.updates) d.updates = {} as Updates
     if (!d.updates.system) d.updates.system = {}
     if (!d.updates.ostiole) d.updates.ostiole = {}
@@ -1302,8 +1356,8 @@ export const useConfigStore = defineStore('config', () => {
   function setUpdates(which: 'system' | 'ostiole', patch: Record<string, unknown>) {
     const block = ensureUpdates()[which]
     for (const [k, v] of Object.entries(patch)) {
-      if (v === '' || v == null || (Array.isArray(v) && !v.length)) delete block[k]
-      else block[k] = v
+      if (v === '' || v == null || (Array.isArray(v) && !v.length)) dropField(block, k)
+      else setField(block, k, v)
     }
   }
 
@@ -1311,7 +1365,7 @@ export const useConfigStore = defineStore('config', () => {
 
   /** The backup settings, created on first use. */
   function ensureBackup() {
-    const d = draft.value
+    const d = editable()
     if (!d.backup) d.backup = {}
     if (!d.backup.remote) d.backup.remote = {} as RemoteBackup
     return d.backup
@@ -1326,13 +1380,13 @@ export const useConfigStore = defineStore('config', () => {
    */
   function setRemoteBackup(patch: Record<string, unknown>) {
     const backup = ensureBackup()
-    const remote = backup.remote
+    const remote = backup.remote ?? (backup.remote = {} as RemoteBackup)
     for (const [k, v] of Object.entries(patch)) {
-      if (k !== 'enabled' && (v === '' || v === 0 || v == null)) delete remote[k]
-      else remote[k] = v
+      if (k !== 'enabled' && (v === '' || v === 0 || v == null)) dropField(remote, k)
+      else setField(remote, k, v)
     }
     if (!Object.keys(remote).some((k) => k !== 'enabled' || remote.enabled)) delete backup.remote
-    if (!Object.keys(backup).length) delete draft.value.backup
+    if (!Object.keys(backup).length) delete editable().backup
   }
 
   // ---- notifications ---------------------------------------------------
@@ -1346,12 +1400,13 @@ export const useConfigStore = defineStore('config', () => {
    * back the way it was matches the saved configuration again.
    */
   function setNotifications(patch: Record<string, unknown>, part?: 'email' | 'webhook') {
-    const d = draft.value
+    const d = editable()
     const block = d.notifications ?? {}
     const target = part ? (block[part] ?? {}) : block
     for (const [k, v] of Object.entries(patch)) {
-      if (v === '' || v === false || v == null || (Array.isArray(v) && !v.length)) delete target[k]
-      else target[k] = v
+      if (v === '' || v === false || v == null || (Array.isArray(v) && !v.length)) {
+        dropField(target, k)
+      } else setField(target, k, v)
     }
     if (part) {
       if (Object.keys(target).length) block[part] = target
@@ -1379,8 +1434,9 @@ export const useConfigStore = defineStore('config', () => {
       dropProtection(which)
       return
     }
-    const p = draft.value.protection ?? (draft.value.protection = {})
-    const next = { ...(p[which] ?? {}) }
+    const d = editable()
+    const p = d.protection ?? (d.protection = {})
+    const next: Record<string, unknown> = { ...(p[which] ?? {}) }
     for (const [k, v] of Object.entries(value)) {
       if (v == null) delete next[k]
       else next[k] = clone(v)
@@ -1394,16 +1450,18 @@ export const useConfigStore = defineStore('config', () => {
       dropProtection('zones')
       return
     }
-    const p = draft.value.protection ?? (draft.value.protection = {})
+    const d = editable()
+    const p = d.protection ?? (d.protection = {})
     p.zones = [...names]
   }
 
   /** Go leaves an empty protection block out, so the draft does too. */
   function dropProtection(key: keyof Protection) {
-    const p = draft.value.protection
+    const d = editable()
+    const p = d.protection
     if (!p) return
     delete p[key]
-    if (!Object.keys(p).length) delete draft.value.protection
+    if (!Object.keys(p).length) delete d.protection
   }
 
   // ---- crons -----------------------------------------------------------
@@ -1411,7 +1469,8 @@ export const useConfigStore = defineStore('config', () => {
   const crons = computed(() => draft.value?.crons ?? [])
 
   function upsertCron(cron: Cron) {
-    const list = draft.value.crons ?? (draft.value.crons = [])
+    const d = editable()
+    const list = d.crons ?? (d.crons = [])
     const idx = list.findIndex((c) => c.id === cron.id)
     if (idx === -1) list.push(clone(cron))
     else list[idx] = clone(cron)
@@ -1419,7 +1478,7 @@ export const useConfigStore = defineStore('config', () => {
 
   function removeCron(id: string) {
     undoable(`Deleted cron job ${id}.`, () => {
-      draft.value.crons = crons.value.filter((c) => c.id !== id)
+      editable().crons = crons.value.filter((c) => c.id !== id)
     })
   }
 
@@ -1458,7 +1517,7 @@ export const useConfigStore = defineStore('config', () => {
 
   function dropWoLDevice(id: string) {
     const kept = crons.value.filter((c) => !(c.kind === 'wake' && c.device === id))
-    if (kept.length !== crons.value.length) draft.value.crons = kept
+    if (kept.length !== crons.value.length) editable().crons = kept
     setWoLDevices(wolDevices.value.filter((d) => d.id !== id))
   }
 
@@ -1507,27 +1566,28 @@ export const useConfigStore = defineStore('config', () => {
   const dnsProviders = computed(() => draft.value?.dnsProviders ?? [])
 
   function ensureACME() {
-    const d = draft.value
+    const d = editable()
     if (!d.acme) d.acme = {}
     return d.acme
   }
 
   /** A renamed certificate keeps the sites and the web UI that serve it. */
   function upsertCertificate(cert: Certificate, was = cert.id) {
-    const list = draft.value.certificates ?? (draft.value.certificates = [])
+    const d = editable()
+    const list = d.certificates ?? (d.certificates = [])
     const idx = list.findIndex((c) => c.id === was)
     if (idx === -1) list.push(clone(cert))
     else list[idx] = clone(cert)
     if (was === cert.id) return
-    const m = draft.value.system?.management
+    const m = d.system?.management
     if (m?.certificate === was) m.certificate = cert.id
-    for (const s of draft.value.services?.proxy?.sites ?? [])
+    for (const s of d.services?.proxy?.sites ?? [])
       if (s.certificate === was) s.certificate = cert.id
   }
 
   /** The mutation behind removeCertificate, in the order certificateDependents lists it. */
   function dropCertificate(id: string) {
-    const d = draft.value
+    const d = editable()
     d.certificates = certificates.value.filter((c) => c.id !== id)
     if (d.system?.management?.certificate === id) delete d.system.management.certificate
     for (const s of d.services?.proxy?.sites ?? []) if (s.certificate === id) delete s.certificate
@@ -1539,7 +1599,7 @@ export const useConfigStore = defineStore('config', () => {
 
   /** What goes back to the built-in certificate when this one goes. */
   function certificateDependents(id: string) {
-    const out = draft.value?.system?.management?.certificate === id ? ['the web UI'] : []
+    const out: string[] = draft.value?.system?.management?.certificate === id ? ['the web UI'] : []
     for (const s of proxy.value.sites ?? []) if (s.certificate === id) out.push(`site ${s.id}`)
     return out
   }
@@ -1564,7 +1624,8 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function upsertDnsProvider(provider: DNSProvider, was = provider.id) {
-    const list = draft.value.dnsProviders ?? (draft.value.dnsProviders = [])
+    const d = editable()
+    const list = d.dnsProviders ?? (d.dnsProviders = [])
     const idx = list.findIndex((p) => p.id === was)
     if (idx === -1) list.push(clone(provider))
     else list[idx] = clone(provider)
@@ -1573,8 +1634,9 @@ export const useConfigStore = defineStore('config', () => {
   function removeDnsProvider(id: string) {
     undoable(`Deleted DNS provider ${id}.`, () => {
       const kept = dnsProviders.value.filter((p) => p.id !== id)
-      if (kept.length) draft.value.dnsProviders = kept
-      else delete draft.value.dnsProviders
+      const d = editable()
+      if (kept.length) d.dnsProviders = kept
+      else delete d.dnsProviders
     })
   }
 
@@ -1583,7 +1645,7 @@ export const useConfigStore = defineStore('config', () => {
    * or whose names it holds, and the dynamic DNS records under its domains.
    */
   function providerDependents(id: string) {
-    const automatic = (c) =>
+    const automatic = (c: Certificate) =>
       !c.provider &&
       c.source === 'acme' &&
       c.challenge === 'dns-01' &&
@@ -1597,7 +1659,8 @@ export const useConfigStore = defineStore('config', () => {
 
   /** Which certificate the web UI serves; empty is the built-in one. */
   function setManagementCertificate(id: string) {
-    const m = draft.value.system.management ?? (draft.value.system.management = {} as Management)
+    const sys = editable().system
+    const m = sys.management ?? (sys.management = {} as Management)
     if (id) m.certificate = id
     else delete m.certificate
   }
@@ -1607,7 +1670,8 @@ export const useConfigStore = defineStore('config', () => {
   const routes = computed(() => draft.value?.routes ?? [])
 
   function upsertRoute(route: StaticRoute) {
-    const list = draft.value.routes ?? (draft.value.routes = [])
+    const d = editable()
+    const list = d.routes ?? (d.routes = [])
     const idx = list.findIndex((r) => r.id === route.id)
     if (idx === -1) list.push(clone(route))
     else list[idx] = clone(route)
@@ -1615,7 +1679,7 @@ export const useConfigStore = defineStore('config', () => {
 
   function removeRoute(id: string) {
     undoable(`Deleted route ${id}.`, () => {
-      draft.value.routes = routes.value.filter((r) => r.id !== id)
+      editable().routes = routes.value.filter((r) => r.id !== id)
     })
   }
 
@@ -1624,7 +1688,7 @@ export const useConfigStore = defineStore('config', () => {
   const blocking = computed<Partial<Blocking>>(() => draft.value?.blocking ?? { enabled: false })
 
   function ensureBlocking() {
-    const d = draft.value
+    const d = editable()
     if (!d.blocking) d.blocking = { enabled: false } as Blocking
     if (!d.blocking.enforce) d.blocking.enforce = {}
     return d.blocking
@@ -1666,7 +1730,7 @@ export const useConfigStore = defineStore('config', () => {
   function setException(name: string, key: 'allow' | 'deny', on: boolean) {
     const b = ensureBlocking()
     const n = normalizeName(name)
-    const without = (k) => {
+    const without = (k: 'allow' | 'deny') => {
       const list = b[k] ?? []
       const kept = list.filter((e) => normalizeName(e) !== n)
       if (kept.length === list.length) return
@@ -1700,7 +1764,7 @@ export const useConfigStore = defineStore('config', () => {
     }
     const seq = ++diffSeq
     try {
-      const out = await api.config.diff({ from: 'current', toConfig: draft.value })
+      const out = await api.config.diff({ from: 'current', toConfig: draft.value ?? undefined })
       if (seq === diffSeq) changes.value = out
     } catch {
       /* see above */

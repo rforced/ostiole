@@ -1,12 +1,13 @@
-import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, type Role, type Session } from '@/lib/api'
-import type { Config } from '@/lib/types.gen'
+import type { Lease } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useToastStore } from '@/stores/toast'
+import { configOf, draftOf } from '@/test/fixtures'
 import LeasesTab from '@/views/services/dhcp/LeasesTab.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -33,29 +34,35 @@ const printer = {
   static: false,
 }
 
-async function tab(leases, { role = 'admin' }: { role?: Role } = {}) {
-  vi.mocked(api.services.leases).mockResolvedValue(leases)
+async function tab(leases: Array<Partial<Lease>>, { role = 'admin' }: { role?: Role } = {}) {
+  vi.mocked(api.services.leases).mockResolvedValue(leases as Lease[])
   useAuthStore().user = { username: role, role } as Session
   const config = useConfigStore()
-  config.replaceDraft({
-    version: 11,
-    zones: [{ name: 'wan', external: true }, { name: 'lan' }],
-    interfaces: [
-      { name: 'eth0', zone: 'wan', enabled: true },
-      { name: 'eth1', zone: 'lan', enabled: true },
-    ],
-    services: { dhcp: { enabled: true } },
-  } as Config)
+  config.replaceDraft(
+    configOf({
+      version: 11,
+      zones: [{ name: 'wan', external: true }, { name: 'lan' }],
+      interfaces: [
+        { name: 'eth0', zone: 'wan', enabled: true },
+        { name: 'eth1', zone: 'lan', enabled: true },
+      ],
+      services: { dhcp: { enabled: true } },
+    }),
+  )
   config.markSaved()
   const wrapper = mount(LeasesTab, { global: { stubs } })
   await flushPromises()
   return { wrapper, config }
 }
 
-const makeStatic = (w) => w.findAll('button').filter((b) => b.text() === 'Make static')
-const rows = (w) => w.findAll('tbody tr')
-const addresses = (w) => rows(w).map((r) => r.find('td .font-mono').text())
-const header = (w, name) => w.findAll('th').find((th) => th.text() === name)
+const makeStatic = (w: VueWrapper) => w.findAll('button').filter((b) => b.text() === 'Make static')
+const rows = (w: VueWrapper) => w.findAll('tbody tr')
+const addresses = (w: VueWrapper) => rows(w).map((r) => r.find('td .font-mono').text())
+const header = (w: VueWrapper, name: string) => {
+  const th = w.findAll('th').find((th) => th.text() === name)
+  if (!th) throw new TypeError(`no ${name} header`)
+  return th
+}
 
 const laptop = {
   ip: '192.168.1.9',
@@ -82,7 +89,7 @@ describe('LeasesTab', () => {
     expect(wrapper.get<HTMLInputElement>('#sl-ip').element.value).toBe('192.168.1.50')
 
     await wrapper.get('form').trigger('submit')
-    expect(config.draft.services.dhcp.staticLeases).toEqual([
+    expect(draftOf(config).services?.dhcp?.staticLeases).toEqual([
       { mac: 'aa:bb:cc:dd:ee:01', ip: '192.168.1.50', hostname: 'printer' },
     ])
   })
@@ -112,7 +119,7 @@ describe('LeasesTab', () => {
     await wake[0].trigger('click')
     await flushPromises()
     expect(api.wol.wake).toHaveBeenCalledWith({ interface: 'eth1', mac: 'AA:BB:CC:DD:EE:01' })
-    expect(useToastStore().toasts.at(-1).message).toBe('Sent a wake packet to printer.')
+    expect(useToastStore().toasts.at(-1)?.message).toBe('Sent a wake packet to printer.')
   })
 
   it('offers a viewer no wake', async () => {
@@ -180,6 +187,7 @@ describe('LeasesTab', () => {
     it('reads every two seconds, in the order chosen', async () => {
       const { wrapper } = await tab([newer, laptop])
       const live = wrapper.findAll('button').find((b) => b.text() === 'Live')
+      if (!live) throw new TypeError('no Live button')
       expect(live.attributes('aria-pressed')).toBe('true')
       expect(addresses(wrapper)).toEqual(['192.168.1.9', '192.168.1.50'])
       await header(wrapper, 'Last renewed').get('button').trigger('click')

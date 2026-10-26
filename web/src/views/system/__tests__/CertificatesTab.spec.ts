@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -8,7 +8,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import CertificatesTab from '@/views/system/certificates/CertificatesTab.vue'
-import { configOf, fixture, sessionOf } from '@/test/fixtures'
+import { configOf, fixture, sessionOf, draftOf, must } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   ApiError: class ApiError extends Error {},
@@ -18,7 +18,7 @@ vi.mock('@/lib/api', () => ({
       regenerate: vi.fn(),
       issue: vi.fn(),
       key: vi.fn(),
-      fileURL: (id, name) => `/api/v1/certificates/${id}/files/${name}`,
+      fileURL: (id: string, name: string) => `/api/v1/certificates/${id}/files/${name}`,
       pkcs12: vi.fn(),
     },
   },
@@ -75,10 +75,16 @@ async function open(page = {}, role = 'admin') {
   return { wrapper, config }
 }
 
-const row = (wrapper, id) =>
-  wrapper.findAll('tr').find((tr) => tr.find('td').exists() && tr.get('td').text().startsWith(id))
+const row = (wrapper: VueWrapper, id: string) =>
+  must(
+    wrapper
+      .findAll('tr')
+      .find((tr) => tr.find('td').exists() && tr.get('td').text().startsWith(id)),
+  )
 
-const button = (tr, name) => tr.findAll('button').find((b) => b.text() === name)
+const findButton = (tr: DOMWrapper<Element>, name: string) =>
+  tr.findAll('button').find((b) => b.text() === name)
+const button = (tr: DOMWrapper<Element>, name: string) => must(findButton(tr, name))
 
 describe('CertificatesTab', () => {
   beforeEach(() => setActivePinia(createPinia()))
@@ -113,10 +119,10 @@ describe('CertificatesTab', () => {
     const { wrapper } = await open({
       certificates: [{ id: 'router', source: 'acme', issued: true }],
     })
-    expect(button(row(wrapper, 'router'), 'Download')).toBeDefined()
-    expect(button(row(wrapper, 'draft-only'), 'Download')).toBeUndefined()
+    expect(findButton(row(wrapper, 'router'), 'Download')).toBeDefined()
+    expect(findButton(row(wrapper, 'draft-only'), 'Download')).toBeUndefined()
     // An uploaded certificate is not ordered, so there is nothing to press.
-    expect(button(row(wrapper, 'mail'), 'Issue now')).toBeUndefined()
+    expect(findButton(row(wrapper, 'mail'), 'Issue now')).toBeUndefined()
   })
 
   it('lists the files in the Download menu, then PKCS#12', async () => {
@@ -133,7 +139,7 @@ describe('CertificatesTab', () => {
       ['Private key', '/api/v1/certificates/router/files/key.pem'],
       ['PKCS#12', null],
     ])
-    items.at(-1).click()
+    must(items.at(-1)).click()
     await flushPromises()
     expect(wrapper.find('#p12-password').exists()).toBe(true)
   })
@@ -144,17 +150,14 @@ describe('CertificatesTab', () => {
       { certificates: [{ id: 'router', source: 'acme', issued: true }] },
       'operator',
     )
-    expect(button(row(wrapper, 'router'), 'Download')).toBeUndefined()
+    expect(findButton(row(wrapper, 'router'), 'Download')).toBeUndefined()
   })
 
   it('orders one now', async () => {
     const { wrapper } = await open({
       certificates: [{ id: 'router', source: 'acme', issued: false }],
     })
-    await row(wrapper, 'router')
-      .findAll('button')
-      .find((b) => b.text() === 'Issue now')
-      .trigger('click')
+    await button(row(wrapper, 'router'), 'Issue now').trigger('click')
     expect(api.certificates.issue).toHaveBeenCalledWith('router')
   })
 
@@ -177,7 +180,7 @@ describe('CertificatesTab', () => {
     )
     await flushPromises()
     await button(row(wrapper, 'router'), 'Delete').trigger('click')
-    const asked = useConfirmStore().request
+    const asked = must(useConfirmStore().request)
     expect(asked.dependentsLabel).toBe('Goes back to the built-in certificate')
     expect(asked.dependents).toEqual(['the web UI', 'site shop'])
   })
@@ -185,9 +188,9 @@ describe('CertificatesTab', () => {
   it('picks what the web UI serves', async () => {
     const { wrapper, config } = await open()
     await wrapper.get('#served-by').setValue('router')
-    expect(config.draft.system.management.certificate).toBe('router')
+    expect(draftOf(config).system.management.certificate).toBe('router')
     await wrapper.get('#served-by').setValue('')
-    expect(config.draft.system.management.certificate).toBeUndefined()
+    expect(draftOf(config).system.management.certificate).toBeUndefined()
   })
 
   // What the web UI serves is management access, which only an admin may
@@ -196,7 +199,7 @@ describe('CertificatesTab', () => {
     const { wrapper } = await open({}, 'operator')
     expect(wrapper.get('#served-by').attributes('disabled')).toBeDefined()
     expect(wrapper.text()).toContain('Only an admin can change this.')
-    const regenerate = wrapper.findAll('button').find((b) => b.text().includes('Regenerate'))
+    const regenerate = must(wrapper.findAll('button').find((b) => b.text().includes('Regenerate')))
     expect(regenerate.attributes('disabled')).toBeDefined()
   })
 })

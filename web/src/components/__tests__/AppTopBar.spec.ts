@@ -1,3 +1,4 @@
+import type { VueWrapper } from '@vue/test-utils'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -21,11 +22,12 @@ async function shell() {
 }
 
 const nav = () => document.querySelector('nav[aria-label="Main"]')
-const link = (name) => [...nav().querySelectorAll('a')].find((a) => a.textContent.trim() === name)
-const button = (name) =>
-  [...nav().querySelectorAll('button')].find((b) => b.textContent.trim() === name)
+const link = (name: string) =>
+  [...(nav()?.querySelectorAll('a') ?? [])].find((a) => a.textContent?.trim() === name)
+const button = (name: string) =>
+  [...(nav()?.querySelectorAll('button') ?? [])].find((b) => b.textContent?.trim() === name)
 
-async function open(wrapper) {
+async function open(wrapper: VueWrapper) {
   await wrapper.get('button[aria-label="Open navigation"]').trigger('click')
   await flushPromises()
 }
@@ -42,9 +44,9 @@ describe('AppTopBar', () => {
 
     await open(wrapper)
     expect(nav()).not.toBeNull()
-    expect(document.querySelector('[role="dialog"]').contains(document.activeElement)).toBe(true)
+    expect(document.querySelector('[role="dialog"]')?.contains(document.activeElement)).toBe(true)
 
-    link('Routing').click()
+    link('Routing')?.click()
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/routing')
     expect(nav()).toBeNull()
@@ -54,7 +56,7 @@ describe('AppTopBar', () => {
   it('closes when the current page is picked', async () => {
     const { wrapper } = await shell()
     await open(wrapper)
-    link('Dashboard').click()
+    link('Dashboard')?.click()
     await flushPromises()
     expect(nav()).toBeNull()
   })
@@ -63,12 +65,12 @@ describe('AppTopBar', () => {
   it('stays open when a section is tapped', async () => {
     const { router, wrapper } = await shell()
     await open(wrapper)
-    button('Firewall').click()
+    button('Firewall')?.click()
     await flushPromises()
     expect(nav()).not.toBeNull()
-    expect(button('Firewall').getAttribute('aria-expanded')).toBe('true')
+    expect(button('Firewall')?.getAttribute('aria-expanded')).toBe('true')
 
-    link('Rules').click()
+    link('Rules')?.click()
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/firewall/rules')
     expect(nav()).toBeNull()

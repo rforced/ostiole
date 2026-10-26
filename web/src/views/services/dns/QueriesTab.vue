@@ -71,7 +71,7 @@ const log = useLog<QueryRow, QueryLogPage>({
   filters: () => {
     const f = filter.value
     const out: Record<string, string> = {}
-    for (const key of ['status', 'list', 'type']) if (f[key]) out[key] = f[key]
+    for (const key of ['status', 'list', 'type'] as const) if (f[key]) out[key] = f[key]
     return out
   },
   keep: (row) => {

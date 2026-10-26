@@ -13,6 +13,7 @@ import { errorMessage, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { parseList } from '@/lib/lists'
 import { excluded } from '@/lib/packages'
+import type { Package, SysupdateStatus } from '@/lib/types.gen'
 import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -26,7 +27,7 @@ const POLL_MS = 3000
 const auth = useAuthStore()
 const config = useConfigStore()
 const confirm = useConfirmStore()
-const status = ref(null)
+const status = ref<SysupdateStatus | null>(null)
 const actionError = ref('')
 const showAll = ref(false)
 
@@ -49,7 +50,7 @@ const running = computed(() => status.value?.running === true)
 
 const excludes = computed({
   get: () => (settings.value.exclude ?? []).join(', '),
-  set: (v) => config.setUpdates('system', { exclude: parseList(v) }),
+  set: (v: string) => config.setUpdates('system', { exclude: parseList(v) }),
 })
 
 /** What the install button does, which follows the mode unless it cannot. */
@@ -64,7 +65,7 @@ const waiting = computed(() => {
 })
 const shown = computed(() => (showAll.value ? waiting.value : waiting.value.slice(0, SHOWN)))
 /** Whether a package is on Never upgrade: listed, but left alone by Install. */
-const neverUpgrade = (p) => excluded(p.name, settings.value.exclude)
+const neverUpgrade = (p: Package) => excluded(p.name, settings.value.exclude)
 /** What Install installs: the Waiting list less what is never upgraded. */
 const installable = computed(() => waiting.value.filter((p) => !neverUpgrade(p)))
 
@@ -115,7 +116,7 @@ async function reboot() {
   actionError.value = ''
   try {
     await api.systemUpdates.reboot()
-    status.value = { ...status.value, rebootReason: 'rebooting now…' }
+    if (status.value) status.value = { ...status.value, rebootReason: 'rebooting now…' }
   } catch (e) {
     actionError.value = errorMessage(e)
   }

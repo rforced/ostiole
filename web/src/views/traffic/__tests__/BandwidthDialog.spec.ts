@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { Config, Interface, Shaping } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import BandwidthDialog from '@/views/traffic/shaping/BandwidthDialog.vue'
-import { configOf, fixture } from '@/test/fixtures'
+import { configOf, fixture, must } from '@/test/fixtures'
 
 // The dialog itself teleports; the form inside it is what is under test.
 const stubs = {
@@ -48,7 +48,7 @@ describe('BandwidthDialog', () => {
     await wrapper.get<HTMLInputElement>('#bw-down').setValue('200')
     await wrapper.get<HTMLInputElement>('#bw-up').setValue('20')
     await wrapper.get('form').trigger('submit')
-    expect(config.findInterface('eth0').shaping).toEqual({
+    expect(must(config.findInterface('eth0')).shaping).toEqual({
       download: 200_000_000,
       upload: 20_000_000,
     })
@@ -61,7 +61,9 @@ describe('BandwidthDialog', () => {
     })
     const { wrapper } = open(iface, {
       ...draft(),
-      interfaces: draft().interfaces.map((i) => (i.name === 'eth0' ? { ...i, ...iface } : i)),
+      interfaces: (draft().interfaces ?? []).map((i) =>
+        i.name === 'eth0' ? { ...i, ...iface } : i,
+      ),
     })
     expect(wrapper.get<HTMLInputElement>('#bw-down').element.value).toBe('1')
     expect(wrapper.get<HTMLInputElement>('#bw-up').element.value).toBe('512')
@@ -73,7 +75,10 @@ describe('BandwidthDialog', () => {
     await wrapper.get<HTMLInputElement>('#bw-down').setValue('50')
     await wrapper.get<HTMLSelectElement>('#bw-link').setValue('docsis')
     await wrapper.get('form').trigger('submit')
-    expect(config.findInterface('eth0').shaping).toEqual({ download: 50_000_000, link: 'docsis' })
+    expect(must(config.findInterface('eth0')).shaping).toEqual({
+      download: 50_000_000,
+      link: 'docsis',
+    })
   })
 
   // Neither direction given is not a configuration, it is an interface
@@ -83,7 +88,7 @@ describe('BandwidthDialog', () => {
     await wrapper.get('#bw-if').setValue('eth0')
     expect(wrapper.get('button[type=submit]').attributes('disabled')).toBeDefined()
     await wrapper.get('form').trigger('submit')
-    expect(config.findInterface('eth0').shaping).toBeUndefined()
+    expect(must(config.findInterface('eth0')).shaping).toBeUndefined()
   })
 
   // A port carries its master's traffic, a disabled interface carries
@@ -120,7 +125,9 @@ describe('BandwidthDialog', () => {
       const shaping: Shaping = { download: 100_000_000, link: 'ethernet' }
       const cfg = {
         ...draft(),
-        interfaces: draft().interfaces.map((i) => (i.name === 'eth0' ? { ...i, shaping } : i)),
+        interfaces: (draft().interfaces ?? []).map((i) =>
+          i.name === 'eth0' ? { ...i, shaping } : i,
+        ),
       }
       const config = useConfigStore()
       config.saved = JSON.parse(JSON.stringify(cfg))
@@ -144,7 +151,7 @@ describe('BandwidthDialog', () => {
       await wrapper.get<HTMLSelectElement>('#bw-link').setValue('docsis')
       await wrapper.get('form').trigger('submit')
       expect(config.dirty).toBe(true)
-      expect(config.findInterface('eth0').shaping).toEqual({
+      expect(must(config.findInterface('eth0')).shaping).toEqual({
         download: 100_000_000,
         link: 'docsis',
       })

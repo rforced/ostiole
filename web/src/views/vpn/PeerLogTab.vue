@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import type { PropType } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -14,6 +15,8 @@ import { formatWhen } from '@/lib/format'
 import { heldLine, useLog } from '@/lib/log'
 import { records } from '@/lib/logs'
 import { type PeerEvent, peerValues } from '@/lib/peerLog'
+import type { PeerLogPage } from '@/lib/types.gen'
+import type { Config, LogKeep } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 /**
@@ -22,10 +25,24 @@ import { useConfigStore } from '@/stores/config'
  */
 const props = defineProps({
   /** wireguard or tailscale */
-  kind: { type: String, required: true },
+  kind: { type: String as PropType<Kind>, required: true },
 })
 
-const KINDS = {
+type Kind = 'wireguard' | 'tailscale'
+
+interface KindSpec {
+  title: string
+  setting: 'wireguardLog' | 'tailscaleLog'
+  intro: string
+  read: (params: Record<string, unknown>, signal: AbortSignal) => Promise<PeerLogPage>
+  clear: () => Promise<unknown>
+  on: (cfg: Config | null) => boolean
+  off: string
+  placeholder: string
+  where: string
+}
+
+const KINDS: Record<Kind, KindSpec> = {
   wireguard: {
     title: 'WireGuard log',
     setting: 'wireguardLog',
@@ -59,17 +76,19 @@ const config = useConfigStore()
  * the vpn block itself goes when nothing is left in it.
  */
 const retention = computed({
-  get: () => config.draft?.vpn?.[spec.setting] ?? {},
-  set: (v) => {
-    const vpn = { ...(config.draft.vpn ?? {}) }
+  get: (): LogKeep => config.draft?.vpn?.[spec.setting] ?? {},
+  set: (v: LogKeep) => {
+    const draft = config.draft
+    if (!draft) return
+    const vpn = { ...(draft.vpn ?? {}) }
     if (Object.keys(v).length) vpn[spec.setting] = v
     else delete vpn[spec.setting]
-    if (Object.keys(vpn).length) config.draft.vpn = vpn
-    else delete config.draft.vpn
+    if (Object.keys(vpn).length) draft.vpn = vpn
+    else delete draft.vpn
   },
 })
 
-const card = ref(null)
+const card = ref<InstanceType<typeof SectionCard> | null>(null)
 const log = useLog<PeerEvent>({
   read: spec.read,
   stream: `/api/v1/${props.kind}/log/stream`,

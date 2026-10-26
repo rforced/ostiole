@@ -1,3 +1,4 @@
+import type { VueWrapper } from '@vue/test-utils'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
@@ -6,11 +7,23 @@ import AppTabs from '@/components/AppTabs.vue'
 
 const TABS = ['a', 'b', 'c'].map((value) => ({ value, label: value.toUpperCase() }))
 
+const rect = (left: number, width: number): DOMRect => ({
+  left,
+  width,
+  x: left,
+  y: 0,
+  top: 0,
+  right: left + width,
+  bottom: 0,
+  height: 0,
+  toJSON: () => ({}),
+})
+
 /**
  * jsdom has no layout, so give the strip and its tabs the boxes a phone
  * would: three 100px tabs in a 100px strip, or a strip wide enough.
  */
-function lay(wrapper, width) {
+function lay(wrapper: VueWrapper, width: number) {
   const strip = wrapper.get('[role="tablist"]').element
   let left = 0
   Object.defineProperties(strip, {
@@ -24,19 +37,19 @@ function lay(wrapper, width) {
       configurable: true,
     },
   })
-  strip.getBoundingClientRect = () => ({ left: 0, width })
-  strip.querySelectorAll('[role="tab"]').forEach((tab, i) => {
-    tab.getBoundingClientRect = () => ({ left: i * 100 - left, width: 100 })
+  strip.getBoundingClientRect = () => rect(0, width)
+  strip.querySelectorAll('[role="tab"]').forEach((tab, i: number) => {
+    tab.getBoundingClientRect = () => rect(i * 100 - left, 100)
   })
   return strip
 }
 
-function tabs(modelValue) {
+function tabs(modelValue: string) {
   const wrapper = mount(AppTabs, {
     props: {
       tabs: TABS,
       modelValue,
-      'onUpdate:modelValue': (v) => wrapper.setProps({ modelValue: v }),
+      'onUpdate:modelValue': (v: string) => wrapper.setProps({ modelValue: v }),
     },
   })
   return wrapper

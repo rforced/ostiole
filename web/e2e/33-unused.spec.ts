@@ -34,7 +34,7 @@ test('lists an unused alias and a disabled rule, and removes the alias', async (
   await expect(off).toContainText('Rule')
   await expect(off).toContainText('Switched off')
   const rows = await page.getByRole('row').allTextContents()
-  const at = (needle) => rows.findIndex((t) => t.includes(needle))
+  const at = (needle: string) => rows.findIndex((t) => t.includes(needle))
   expect(at('spare_hosts')).toBeGreaterThan(at('Unused'))
   expect(at('Disabled')).toBeGreaterThan(at('spare_hosts'))
   expect(at('Old printer')).toBeGreaterThan(at('Disabled'))

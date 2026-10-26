@@ -6,7 +6,7 @@ const UNITS = ['B', 'kB', 'MB', 'GB', 'TB', 'PB']
  * Human-readable byte count, e.g. 1536 -> "1.5 kB". Decimal units, because
  * that is what network gear quotes.
  */
-export function formatBytes(n: number): string {
+export function formatBytes(n: number | null | undefined): string {
   const value = Number(n)
   if (!Number.isFinite(value) || value < 0) return '—'
   let i = 0
@@ -37,7 +37,7 @@ export function formatDuration(seconds: number): string {
 /**
  * A round trip, e.g. 3.14 -> "3.1 ms", 312.4 -> "312 ms".
  */
-export function formatMs(ms: number): string {
+export function formatMs(ms: number | null | undefined): string {
   const v = Number(ms)
   if (!Number.isFinite(v) || v < 0) return '—'
   return `${v < 100 ? v.toFixed(1) : Math.round(v)} ms`
@@ -57,7 +57,7 @@ export function formatCount(n: number): string {
  * Positive is ahead. Two significant figures: nobody reads a clock's
  * offset to the nanosecond.
  */
-export function formatOffset(seconds: number): string {
+export function formatOffset(seconds: number | null | undefined): string {
   const v = Number(seconds)
   if (!Number.isFinite(v)) return '—'
   const abs = Math.abs(v)
@@ -75,7 +75,7 @@ const RATE_UNITS = ['bit/s', 'kbit/s', 'Mbit/s', 'Gbit/s']
  * again, and bits rather than bytes, because that is what an operator was
  * quoted and what they will type back in.
  */
-export function formatRate(bits: number): string {
+export function formatRate(bits: number | null | undefined): string {
   const value = Number(bits)
   if (!Number.isFinite(value) || value < 0) return '—'
   if (value === 0) return '0 bit/s'

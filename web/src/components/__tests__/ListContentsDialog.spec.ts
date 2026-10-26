@@ -12,7 +12,7 @@ const ENTRIES = Array.from({ length: 2500 }, (_, i) => `10.0.${Math.floor(i / 10
 
 /** Stands in for the router: searches and pages the way it does. */
 function router() {
-  return vi.fn(async (q, offset, limit) => {
+  return vi.fn(async (q: string, offset: number, limit: number) => {
     const hits = ENTRIES.filter((e) => e.includes(q))
     return {
       total: ENTRIES.length,
@@ -24,7 +24,7 @@ function router() {
   })
 }
 
-async function opened(read) {
+async function opened(read: ReturnType<typeof router> | (() => Promise<never>)) {
   const wrapper = mount(ListContentsDialog, {
     props: {
       open: true,
@@ -43,9 +43,17 @@ const rows = () =>
   [...document.querySelectorAll('ul[aria-label="Entries"] li')].map((li) => li.textContent)
 const button = (name: string) =>
   [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-    (b) => b.textContent.trim() === name,
+    (b) => b.textContent?.trim() === name,
   )
 const search = () => document.querySelector<HTMLInputElement>('input[type=search]')
+
+/** Types into the search box the way a keystroke does. */
+function type(text: string) {
+  const input = search()
+  if (!input) throw new Error('no search box')
+  input.value = text
+  input.dispatchEvent(new Event('input'))
+}
 
 describe('ListContentsDialog', () => {
   beforeEach(() => setActivePinia(createPinia()))
@@ -68,25 +76,26 @@ describe('ListContentsDialog', () => {
   it('pages forward to the end and back', async () => {
     const read = router()
     await opened(read)
-    button('Next').click()
+    button('Next')?.click()
     await flushPromises()
     expect(read).toHaveBeenLastCalledWith('', 1000, 1000)
     expect(document.body.textContent).toContain('1,001–2,000 of 2,500.')
-    button('Next').click()
+    button('Next')?.click()
     await flushPromises()
     expect(rows()).toHaveLength(500)
     expect(document.body.textContent).toContain('2,001–2,500 of 2,500.')
     expect(button('Next')).toBeUndefined()
-    button('Previous').click()
+    button('Previous')?.click()
     await flushPromises()
     expect(read).toHaveBeenLastCalledWith('', 1000, 1000)
   })
 
   it('shows a new page from its top', async () => {
     await opened(router())
-    const list = document.querySelector('ul[aria-label="Entries"]')
+    const list = document.querySelector<HTMLElement>('ul[aria-label="Entries"]')
+    if (!list) throw new Error('no list')
     list.scrollTop = 5000
-    button('Next').click()
+    button('Next')?.click()
     await flushPromises()
     expect(list.scrollTop).toBe(0)
   })
@@ -95,10 +104,9 @@ describe('ListContentsDialog', () => {
     vi.useFakeTimers()
     const read = router()
     await opened(read)
-    button('Next').click()
+    button('Next')?.click()
     await flushPromises()
-    search().value = '10.0.1.'
-    search().dispatchEvent(new Event('input'))
+    type('10.0.1.')
     await flushPromises()
     expect(read).toHaveBeenCalledTimes(2)
     vi.advanceTimersByTime(250)
@@ -107,8 +115,7 @@ describe('ListContentsDialog', () => {
     expect(rows()).toHaveLength(100)
     expect(document.body.textContent).toContain('100 of 2,500')
 
-    search().value = 'nowhere'
-    search().dispatchEvent(new Event('input'))
+    type('nowhere')
     await flushPromises()
     vi.advanceTimersByTime(250)
     await flushPromises()
@@ -117,12 +124,12 @@ describe('ListContentsDialog', () => {
   })
 
   it('says Reading… until the first page is in, and why a read failed', async () => {
-    await opened(() => new Promise(() => {}))
+    await opened(() => new Promise<never>(() => {}))
     expect(document.body.textContent).toContain('Reading…')
     document.body.innerHTML = ''
 
     await opened(() => Promise.reject(new Error('nothing called "drop" is fetched from anywhere')))
-    expect(document.querySelector('[role=alert]').textContent).toContain('nothing called "drop"')
+    expect(document.querySelector('[role=alert]')?.textContent).toContain('nothing called "drop"')
   })
 
   // Nothing here changes the router, so a viewer searches and pages too.
@@ -130,7 +137,7 @@ describe('ListContentsDialog', () => {
     useAuthStore().user = { username: 'v', role: 'viewer' } as Session
     await opened(router())
     expect(document.querySelector('fieldset[disabled]')).toBeNull()
-    expect(search().disabled).toBe(false)
-    expect(button('Next').disabled).toBe(false)
+    expect(search()?.disabled).toBe(false)
+    expect(button('Next')?.disabled).toBe(false)
   })
 })

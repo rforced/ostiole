@@ -9,7 +9,7 @@ export function useMediaQuery(query: string): import('vue').Ref<boolean> {
   if (typeof window.matchMedia !== 'function') return matches
   const mql = window.matchMedia(query)
   matches.value = mql.matches
-  const update = (e) => (matches.value = e.matches)
+  const update = (e: MediaQueryListEvent) => (matches.value = e.matches)
   mql.addEventListener('change', update)
   if (getCurrentScope()) onScopeDispose(() => mql.removeEventListener('change', update))
   return matches

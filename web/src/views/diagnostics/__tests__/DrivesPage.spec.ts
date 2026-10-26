@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { type VueWrapper, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -8,7 +8,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import DrivesPage from '@/views/diagnostics/DrivesPage.vue'
-import { configOf, fixture, sessionOf } from '@/test/fixtures'
+import { configOf, draftOf, fixture, must, sessionOf } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -91,7 +91,8 @@ function drive(extra = {}) {
 
 const status = (extra = {}) => ({ tool: '7.5', root: true, drives: [drive()], ...extra })
 
-const button = (wrapper, label) => wrapper.findAll('button').find((b) => b.text() === label)
+const button = (wrapper: VueWrapper, label: string) =>
+  wrapper.findAll('button').find((b) => b.text() === label)
 
 describe('DrivesPage', () => {
   beforeEach(() => {
@@ -131,7 +132,7 @@ describe('DrivesPage', () => {
     )
     const wrapper = mount(DrivesPage)
     await flushPromises()
-    const history = wrapper.findAll('section').find((s) => s.text().includes('History'))
+    const history = must(wrapper.findAll('section').find((s) => s.text().includes('History')))
     const row = history.find('tbody tr')
     expect(row.find('.badge-bad').text()).toBe('failed')
     expect(row.text()).toContain('52 °C')
@@ -148,12 +149,12 @@ describe('DrivesPage', () => {
     const keep = wrapper.get<HTMLInputElement>('#drive-keep')
     expect(keep.element.value).toBe('20')
     await keep.setValue(5)
-    expect(config.draft.system.keepDriveReadings).toBe(5)
+    expect(draftOf(config).system.keepDriveReadings).toBe(5)
     await keep.setValue(20)
-    expect(config.draft.system.keepDriveReadings).toBeUndefined()
+    expect(draftOf(config).system.keepDriveReadings).toBeUndefined()
     await keep.setValue(5)
     await keep.setValue('')
-    expect(config.draft.system.keepDriveReadings).toBeUndefined()
+    expect(draftOf(config).system.keepDriveReadings).toBeUndefined()
   })
 
   // The verdict, the figures, and the attribute that has started counting.
@@ -230,7 +231,7 @@ describe('DrivesPage', () => {
     const wrapper = mount(DrivesPage)
     await flushPromises()
 
-    await button(wrapper, 'Short test').trigger('click')
+    await must(button(wrapper, 'Short test')).trigger('click')
     await flushPromises()
     expect(api.diagnostics.selfTest).toHaveBeenCalledWith('sda', 'short')
     expect(wrapper.find('.meter').exists()).toBe(true)
@@ -244,7 +245,7 @@ describe('DrivesPage', () => {
     const wrapper = mount(DrivesPage)
     await flushPromises()
 
-    await button(wrapper, 'Extended test').trigger('click')
+    await must(button(wrapper, 'Extended test')).trigger('click')
     await flushPromises()
     expect(ask).toHaveBeenCalledTimes(1)
     expect(ask.mock.calls[0][0].question).toContain('sda')
@@ -252,7 +253,7 @@ describe('DrivesPage', () => {
 
     ask.mockResolvedValue(true)
     vi.mocked(api.diagnostics.selfTest).mockResolvedValue(drive())
-    await button(wrapper, 'Extended test').trigger('click')
+    await must(button(wrapper, 'Extended test')).trigger('click')
     await flushPromises()
     expect(api.diagnostics.selfTest).toHaveBeenCalledWith('sda', 'long')
   })
@@ -261,7 +262,7 @@ describe('DrivesPage', () => {
     vi.mocked(api.diagnostics.selfTest).mockRejectedValue(new Error('forbidden'))
     const wrapper = mount(DrivesPage)
     await flushPromises()
-    await button(wrapper, 'Short test').trigger('click')
+    await must(button(wrapper, 'Short test')).trigger('click')
     await flushPromises()
     expect(wrapper.find('[role=alert]').text()).toContain('forbidden')
   })
@@ -272,12 +273,9 @@ describe('DrivesPage', () => {
     const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
     const wrapper = mount(DrivesPage)
     await flushPromises()
-    const history = wrapper.findAll('section').find((s) => s.text().includes('History'))
+    const history = must(wrapper.findAll('section').find((s) => s.text().includes('History')))
     const reads = vi.mocked(api.diagnostics.driveHistory).mock.calls.length
-    await history
-      .findAll('button')
-      .find((b) => b.text() === 'Clear')
-      .trigger('click')
+    await must(history.findAll('button').find((b) => b.text() === 'Clear')).trigger('click')
     await flushPromises()
     expect(ask).toHaveBeenCalledWith(
       expect.objectContaining({

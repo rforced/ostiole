@@ -1,11 +1,11 @@
-import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { type VueWrapper, enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import { useConfigStore } from '@/stores/config'
 import NeighboursPage from '@/views/diagnostics/NeighboursPage.vue'
-import { configOf } from '@/test/fixtures'
+import { configOf, must } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   api: { diagnostics: { neighbours: vi.fn() } },
@@ -53,7 +53,7 @@ async function page(rows = table) {
   return wrapper
 }
 
-const addresses = (w) =>
+const addresses = (w: VueWrapper) =>
   w
     .findAll('tbody tr')
     .map((r) => r.find('td').text())
@@ -90,7 +90,7 @@ describe('NeighboursPage', () => {
 
   it('sorts by a column header', async () => {
     const w = await page()
-    const state = w.findAll('th').find((th) => th.text() === 'State')
+    const state = must(w.findAll('th').find((th) => th.text() === 'State'))
     await state.get('button').trigger('click')
     expect(state.attributes('aria-sort')).toBe('ascending')
     expect(addresses(w)[2]).toBe('10.0.0.3')
@@ -123,7 +123,7 @@ describe('NeighboursPage', () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
     try {
       const w = await page()
-      const live = w.findAll('button').find((b) => b.text() === 'Live')
+      const live = must(w.findAll('button').find((b) => b.text() === 'Live'))
       expect(live.attributes('aria-pressed')).toBe('true')
       vi.advanceTimersByTime(2000)
       await flushPromises()

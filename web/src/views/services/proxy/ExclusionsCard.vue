@@ -52,8 +52,8 @@ const sort = useSort<IndexedExclusion>(
   shown,
   {
     rule: byNumber(firstRule, 'asc'),
-    path: byText((e) => e.path),
-    target: byText((e) => e.target),
+    path: byText((e) => e.path ?? ''),
+    target: byText((e) => e.target ?? ''),
   },
   { by: 'rule', tie: 'path' },
 )

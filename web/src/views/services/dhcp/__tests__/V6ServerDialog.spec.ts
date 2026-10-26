@@ -2,8 +2,9 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { Config } from '@/lib/types.gen'
+import type { DHCPv6Server } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import { configOf, draftOf } from '@/test/fixtures'
 import V6ServerDialog from '@/views/services/dhcp/V6ServerDialog.vue'
 
 // The dialog itself teleports; the form inside it is what is under test.
@@ -14,7 +15,7 @@ const stubs = {
   },
 }
 
-const advert = { interface: 'eth1', enabled: true, mode: 'stateless' }
+const advert: DHCPv6Server = { interface: 'eth1', enabled: true, mode: 'stateless' }
 
 const options = {
   searchDomains: ['lab.example', 'corp.example'],
@@ -22,9 +23,9 @@ const options = {
 }
 
 /** The advertisement as saved, and its dialog open on it. */
-function openAdvert(server) {
+function openAdvert(server: DHCPv6Server) {
   const config = useConfigStore()
-  const cfg = {
+  const cfg = configOf({
     version: 12,
     zones: [{ name: 'lan' }],
     interfaces: [
@@ -38,11 +39,11 @@ function openAdvert(server) {
     ],
     rules: [],
     services: { dhcp: { enabled: true, v6: [server] }, dns: { enabled: false } },
-  } as Config
+  })
   config.saved = cfg
   config.replaceDraft(cfg)
   const wrapper = mount(V6ServerDialog, {
-    props: { open: true, server: config.draft.services.dhcp.v6[0] },
+    props: { open: true, server: draftOf(config).services?.dhcp?.v6?.[0] },
     global: { stubs },
   })
   return { config, wrapper }
@@ -75,7 +76,7 @@ describe('DHCP V6ServerDialog', () => {
     await wrapper.get('#v6-search').setValue('lab.example, corp.example')
     await wrapper.get('#v6-time').setValue('2001:db8:1::123, 2001:db8:1::124')
     await wrapper.get('form').trigger('submit')
-    expect(config.draft.services.dhcp.v6[0]).toStrictEqual({ ...advert, ...options })
+    expect(draftOf(config).services?.dhcp?.v6?.[0]).toStrictEqual({ ...advert, ...options })
   })
 
   it('drops the options when they are cleared', async () => {
@@ -83,7 +84,7 @@ describe('DHCP V6ServerDialog', () => {
     await wrapper.get('#v6-search').setValue('')
     await wrapper.get('#v6-time').setValue('')
     await wrapper.get('form').trigger('submit')
-    expect(config.draft.services.dhcp.v6[0]).toStrictEqual(advert)
+    expect(draftOf(config).services?.dhcp?.v6?.[0]).toStrictEqual(advert)
   })
 
   // SLAAC sends no DHCPv6, so no time server; the search list still goes out in the RA.
@@ -92,7 +93,7 @@ describe('DHCP V6ServerDialog', () => {
     await wrapper.get('#v6-mode').setValue('slaac')
     expect(wrapper.find('#v6-time').exists()).toBe(false)
     await wrapper.get('form').trigger('submit')
-    expect(config.draft.services.dhcp.v6[0]).toStrictEqual({
+    expect(draftOf(config).services?.dhcp?.v6?.[0]).toStrictEqual({
       interface: 'eth1',
       enabled: true,
       mode: 'slaac',

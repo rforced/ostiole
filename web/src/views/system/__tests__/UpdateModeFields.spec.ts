@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import UpdateModeFields from '@/views/system/UpdateModeFields.vue'
+import { must } from '@/test/fixtures'
 
 const open = (props = {}) => mount(UpdateModeFields, { props: { prefix: 'upd', ...props } })
 
@@ -24,11 +25,11 @@ describe('UpdateModeFields', () => {
 
     await w.get('#upd-check-schedule').setValue('15 1 * * *')
     await w.get('#upd-check-schedule').trigger('change')
-    expect(w.emitted('update:checkSchedule').at(-1)).toEqual(['15 1 * * *'])
+    expect(must(w.emitted('update:checkSchedule')).at(-1)).toEqual(['15 1 * * *'])
     expect(w.emitted('update:installSchedule')).toBeUndefined()
 
     await w.get('#upd-install-preset').setValue('0 4 1 * *')
-    expect(w.emitted('update:installSchedule').at(-1)).toEqual(['0 4 1 * *'])
+    expect(must(w.emitted('update:installSchedule')).at(-1)).toEqual(['0 4 1 * *'])
   })
 
   // A router that installs by hand has nothing to schedule an install

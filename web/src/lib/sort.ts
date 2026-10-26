@@ -129,7 +129,7 @@ export function useSort<Row>(
     const { by: current, dir: d } = chosen.value
     if (keys.length === 1 && current === keys[0])
       chosen.value = { by: current, dir: d === 'asc' ? 'desc' : 'asc' }
-    else choose(keys[(keys.indexOf(current) + 1) % keys.length])
+    else choose(keys[(keys.indexOf(current ?? '') + 1) % keys.length])
   }
 
   /** The phone's select: a column in its own order. */

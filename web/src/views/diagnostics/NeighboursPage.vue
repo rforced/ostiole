@@ -58,14 +58,14 @@ const named = computed(() => {
 
 const { query, shown } = useSearch(rows, (n) => ({
   values: [n.address, n.interface, named.value[(n.mac ?? '').toLowerCase()]],
-  macs: [n.mac],
+  macs: n.mac ? [n.mac] : [],
 }))
 
 const sort = useSort(
   shown,
   {
     address: byAddress((n) => n.address),
-    mac: byText((n) => n.mac),
+    mac: byText((n) => n.mac ?? ''),
     interface: byText((n) => n.interface),
     family: byText((n) => n.family),
     state: byText((n) => n.state),
@@ -142,7 +142,7 @@ function tone(state: string) {
                 {{ n.mac || '—' }} <RandomMacBadge :mac="n.mac" />
               </span>
               <span v-if="named[(n.mac ?? '').toLowerCase()]" class="ml-1 text-ink-muted">
-                {{ named[n.mac.toLowerCase()] }}
+                {{ named[(n.mac ?? '').toLowerCase()] }}
               </span>
             </td>
             <td class="font-mono text-code max-sm:order-5">{{ n.interface }}</td>

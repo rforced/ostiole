@@ -6,6 +6,7 @@ import InterfaceLabel from '@/components/InterfaceLabel.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { segmentInterfaces } from '@/lib/interfaces'
+import type { DiscoveryInterface } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
@@ -14,17 +15,17 @@ const config = useConfigStore()
 const disc = computed(() => config.ensureDiscovery())
 
 /** A field of the block, written through the store so a default is never stored. */
-function field(key) {
+function field(key: 'mdns' | 'ssdp') {
   return computed({
     get: () => disc.value[key],
-    set: (v) => config.setDiscovery({ [key]: v }),
+    set: (v: boolean) => config.setDiscovery({ [key]: v }),
   })
 }
 const mdns = field('mdns')
 const ssdp = field('ssdp')
 
 const entries = computed(() => disc.value.interfaces ?? [])
-const entryOf = (name) => entries.value.find((l) => l.interface === name)
+const entryOf = (name: string) => entries.value.find((l) => l.interface === name)
 
 /**
  * The networks a packet can be relayed on, and any listed one that no
@@ -38,9 +39,9 @@ const rows = computed(() => {
 })
 
 /** A first tick adds the network in both roles; clearing both takes it out. */
-function setRole(name, role, on) {
+function setRole(name: string, role: 'asks' | 'answers', on: boolean) {
   const was = entryOf(name)
-  let list
+  let list: DiscoveryInterface[] | null
   if (!was) list = on ? [...entries.value, { interface: name, asks: true, answers: true }] : null
   else {
     const next = { ...was, [role]: on }
@@ -52,7 +53,7 @@ function setRole(name, role, on) {
   if (list) config.setDiscovery({ interfaces: list })
 }
 
-const parseTypes = (text) =>
+const parseTypes = (text: string) =>
   text
     .split('\n')
     .map((s) => s.trim())
@@ -67,7 +68,7 @@ watch(
     }
   },
 )
-function onTypes(text) {
+function onTypes(text: string) {
   typesText.value = text
   config.setDiscovery({ services: parseTypes(text) })
 }

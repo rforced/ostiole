@@ -3,9 +3,10 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api, type Session } from '@/lib/api'
-import type { Config } from '@/lib/types.gen'
+import type { Alias, FeedsStatus } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import { emptyConfig, fixture } from '@/test/fixtures'
 import AliasDialog from '@/views/firewall/AliasDialog.vue'
 
 vi.mock('@/lib/api', async () => {
@@ -21,16 +22,9 @@ const stubs = {
   CountryPicker: true,
 }
 
-function open(alias = null, feeds = []) {
+function open(alias: Alias | null = null, feeds: FeedsStatus[] = []) {
   const config = useConfigStore()
-  config.replaceDraft({
-    version: 11,
-    zones: [],
-    interfaces: [],
-    aliases: alias ? [alias] : [],
-    rules: [],
-    nat: { outbound: { mode: 'automatic' } },
-  } as Config)
+  config.replaceDraft({ ...emptyConfig(), aliases: alias ? [alias] : [] })
   const wrapper = mount(AliasDialog, { props: { open: true, alias, feeds }, global: { stubs } })
   return { wrapper, config }
 }
@@ -67,15 +61,15 @@ describe('AliasDialog AS numbers', () => {
   })
 
   it('shows what each number held at the last fetch', () => {
-    const alias = { name: 'google', type: 'asn', entries: ['AS15169', 'AS64512'] }
+    const alias: Alias = { name: 'google', type: 'asn', entries: ['AS15169', 'AS64512'] }
     const feeds = [
-      {
+      fixture<FeedsStatus>({
         alias: 'google',
         parts: [
           { source: 'x', asn: 'AS15169', holder: 'GOOGLE - Google LLC', entries: 1415 },
           { source: 'y', asn: 'AS64512', entries: 0 },
         ],
-      },
+      }),
     ]
     const { wrapper } = open(alias, feeds)
     expect(wrapper.get<HTMLTextAreaElement>('#alias-entries').element.value).toBe(
@@ -99,7 +93,7 @@ describe('AliasDialog URL lines', () => {
   // Each URL line is read when the box is left, and what it holds shows
   // under the box, one line per URL.
   it('reads each URL line and says how much it holds', async () => {
-    const pending = []
+    const pending: (() => void)[] = []
     vi.mocked(api.aliases.inspect).mockImplementation(
       (url) =>
         new Promise((resolve) =>
@@ -154,15 +148,15 @@ describe('AliasDialog URL lines', () => {
   // The last fetch of a saved alias says what each URL held, so opening it
   // asks the router for nothing.
   it('uses the last fetch of a saved alias without reading the lists again', () => {
-    const alias = { name: 'cloud', type: 'hosts', entries: [LIST, RANGES] }
+    const alias: Alias = { name: 'cloud', type: 'hosts', entries: [LIST, RANGES] }
     const feeds = [
-      {
+      fixture<FeedsStatus>({
         alias: 'cloud',
         parts: [
           { source: LIST, entries: 3 },
           { source: RANGES, entries: 615 },
         ],
-      },
+      }),
     ]
     const { wrapper } = open(alias, feeds)
     expect(api.aliases.inspect).not.toHaveBeenCalled()

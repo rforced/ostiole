@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { type VueWrapper, flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -14,7 +14,7 @@ import type {
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
-import { configOf, fixture, sessionOf } from '@/test/fixtures'
+import { configOf, draftOf, fixture, sessionOf } from '@/test/fixtures'
 import LogTab from '@/views/wireless/LogTab.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -31,7 +31,7 @@ class FakeSource {
   close() {}
 }
 
-const clearButton = (w) => w.findAll('button').find((b) => b.text() === 'Clear')
+const clearButton = (w: VueWrapper) => w.findAll('button').find((b) => b.text() === 'Clear')
 
 async function tab(
   list: WirelessRow[],
@@ -106,11 +106,11 @@ describe('Wireless log', () => {
   // last one does.
   it('keeps the wireless block out of the draft while it is empty', async () => {
     const { wrapper, store } = await tab([], { radio: false })
-    expect(store.draft.wireless).toBeUndefined()
+    expect(draftOf(store).wireless).toBeUndefined()
     await wrapper.find('#wireless-entries').setValue('5000')
-    expect(store.draft.wireless).toEqual({ log: { entries: 5000 } })
+    expect(store.draft?.wireless).toEqual({ log: { entries: 5000 } })
     await wrapper.find('#wireless-entries').setValue('')
-    expect(store.draft.wireless).toBeUndefined()
+    expect(draftOf(store).wireless).toBeUndefined()
   })
 
   // Clear empties the router's log and reads it again. Below Info there is
@@ -130,7 +130,7 @@ describe('Wireless log', () => {
     vi.mocked(api.wireless.log).mockResolvedValue(
       fixture<WirelessLogPage>({ entries: [], held: 0, kept: true }),
     )
-    await clearButton(wrapper).trigger('click')
+    await clearButton(wrapper)?.trigger('click')
     await flushPromises()
     expect(ask).toHaveBeenCalledWith(
       expect.objectContaining({

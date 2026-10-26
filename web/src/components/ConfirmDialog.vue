@@ -12,8 +12,8 @@ import { useConfirmStore } from '@/stores/confirm'
  */
 const confirm = useConfirmStore()
 const typed = ref('')
-const input = ref(null)
-const cancel = ref(null)
+const input = ref<HTMLInputElement | null>(null)
+const cancel = ref<HTMLButtonElement | null>(null)
 
 const SHOWN = 12
 

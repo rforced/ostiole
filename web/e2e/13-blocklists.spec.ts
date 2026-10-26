@@ -1,4 +1,4 @@
-import { createServer } from 'node:http'
+import { createServer, type Server, type ServerResponse } from 'node:http'
 
 import { expect, test } from './fixtures'
 import { applyAndConfirm, login, readConfig, shot, sidebar } from './helpers'
@@ -8,20 +8,23 @@ test.describe.configure({ mode: 'serial' })
 // A local stand-in for a published blocklist, for a cloud's address ranges
 // in JSON, shaped like Oracle's, and for RIPEstat, so the test never
 // reaches out to the internet.
-let lists
-let base
-let listURL
-let rangesURL
-let extraURL
+let lists: Server | undefined
+let base = ''
+let listURL = ''
+let rangesURL = ''
+let extraURL = ''
 let served = 0
 
 // What two documentation AS numbers announce, and who holds them. The
 // second announces nothing, which is an answer and not a failure.
-const announced = { 64500: ['203.0.113.0/25', '2001:db8:fe::/48'], 64501: [] }
-const holders = { 64500: 'Example Networks', 64501: 'Quiet Networks' }
+const announced: Record<string, string[]> = {
+  64500: ['203.0.113.0/25', '2001:db8:fe::/48'],
+  64501: [],
+}
+const holders: Record<string, string> = { 64500: 'Example Networks', 64501: 'Quiet Networks' }
 
 /** RIPEstat's answer: the data asked about, under "data". */
-function ripestat(res, data) {
+function ripestat(res: ServerResponse, data: unknown) {
   res.writeHead(200, { 'Content-Type': 'application/json' })
   res.end(JSON.stringify({ status: 'ok', data }))
 }
@@ -46,9 +49,9 @@ const ranges = {
 }
 
 test.beforeAll(async () => {
-  lists = createServer((req, res) => {
+  const server = createServer((req, res) => {
     served++
-    const url = new URL(req.url, base)
+    const url = new URL(req.url ?? '', base)
     const resource = url.searchParams.get('resource') ?? ''
     if (url.pathname === '/announced-prefixes') {
       const prefixes = announced[resource.replace(/^AS/, '')] ?? []
@@ -72,8 +75,11 @@ test.beforeAll(async () => {
     }
     res.end('# a list\n192.0.2.0/24 ; note\n198.51.100.7\n2001:db8:dead::/48\n')
   })
-  await new Promise((resolve) => lists.listen(0, '127.0.0.1', resolve))
-  base = `http://127.0.0.1:${lists.address().port}`
+  lists = server
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const address = server.address()
+  if (!address || typeof address === 'string') throw new Error('the stand-in has no port')
+  base = `http://127.0.0.1:${address.port}`
   listURL = `${base}/drop.txt`
   rangesURL = `${base}/public_ip_ranges.json`
   extraURL = `${base}/extra.txt`

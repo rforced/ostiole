@@ -1,4 +1,4 @@
-import { createServer, type AddressInfo } from 'node:net'
+import { createServer, type AddressInfo, type Server, type Socket } from 'node:net'
 
 import { expect, test } from './fixtures'
 import { applyAndConfirm, login, shot } from './helpers'
@@ -7,16 +7,17 @@ test.describe.configure({ mode: 'serial' })
 
 // A mail server on this machine that keeps what it is sent, so the test
 // mail is read here and nothing leaves for the internet.
-let smtp
-const mails = []
+let smtp: Server | undefined
+let smtpPort = 0
+const mails: { from: string; to: string[]; text: string }[] = []
 
 /** Speaks as much SMTP as a client needs to hand over a message. */
-function session(socket) {
+function session(socket: Socket) {
   socket.setEncoding('utf8')
   socket.on('error', () => {})
-  const reply = (line) => socket.write(`${line}\r\n`)
-  let mail = { from: '', to: [] }
-  let data = null
+  const reply = (line: string) => socket.write(`${line}\r\n`)
+  let mail: { from: string; to: string[] } = { from: '', to: [] }
+  let data: string[] | null = null
   let pending = ''
   reply('220 mail.example.test ESMTP')
   socket.on('data', (chunk) => {
@@ -73,8 +74,10 @@ async function closedPort() {
 }
 
 test.beforeAll(async () => {
-  smtp = createServer(session)
-  await new Promise((resolve) => smtp.listen(0, '127.0.0.1', resolve))
+  const server = createServer(session)
+  smtp = server
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  smtpPort = (server.address() as AddressInfo).port
 })
 
 test.afterAll(() => smtp?.close())
@@ -88,7 +91,7 @@ test('a test mail arrives before anything is applied', async ({ page }) => {
   const send = page.getByRole('button', { name: 'Send a test' })
   await expect(send).toBeDisabled()
 
-  const server = `127.0.0.1:${smtp.address().port}`
+  const server = `127.0.0.1:${smtpPort}`
   await page.getByLabel('Send mail').check()
   await page.getByLabel('Mail server').fill(server)
   await page.getByLabel('Security', { exact: true }).selectOption('none')

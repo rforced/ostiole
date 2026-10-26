@@ -9,7 +9,7 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import ZoneField, { NEW_ZONE } from '@/components/ZoneField.vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
-import type { Interface } from '@/lib/types.gen'
+import type { Interface, WireGuard } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 
@@ -58,10 +58,10 @@ watch(
         zone: t.zone ?? '',
         ipv4: t.ipv4?.address ?? '',
         ipv6: t.ipv6?.address ?? '',
-        listenPort: t.wireguard.listenPort ?? 0,
+        listenPort: t.wireguard?.listenPort ?? 0,
         mtu: t.mtu ?? 0,
-        privateKey: t.wireguard.privateKey,
-        publicKey: t.wireguard.publicKey ?? '',
+        privateKey: t.wireguard?.privateKey ?? '',
+        publicKey: t.wireguard?.publicKey ?? '',
       }
       return
     }
@@ -142,27 +142,28 @@ function address(cidr: string) {
 async function save() {
   const f = form.value
   if (!f.publicKey && !(await derive())) return
-  if (!zoneField.value.commit()) return
+  if (!zoneField.value?.commit()) return
   // What this dialog does not show, such as log drops set on the
   // Interfaces page, stays as it was.
   const iface: Interface = props.tunnel
     ? JSON.parse(JSON.stringify(props.tunnel))
     : { name: '', enabled: true, ipv4: { mode: '' }, ipv6: { mode: '' } }
+  const wireguard: WireGuard = {
+    ...iface.wireguard,
+    privateKey: f.privateKey.trim(),
+    publicKey: f.publicKey.trim(),
+    listenPort: Number(f.listenPort) || 0,
+  }
   Object.assign(iface, {
     name: f.name.trim(),
     enabled: f.enabled,
     zone: f.zone,
     ipv4: address(f.ipv4),
     ipv6: address(f.ipv6),
-    wireguard: {
-      ...iface.wireguard,
-      privateKey: f.privateKey.trim(),
-      publicKey: f.publicKey.trim(),
-      listenPort: Number(f.listenPort) || 0,
-    },
+    wireguard,
   })
   if (!iface.zone) delete iface.zone
-  if (!iface.wireguard.listenPort) delete iface.wireguard.listenPort
+  if (!wireguard.listenPort) delete wireguard.listenPort
   if (f.description) iface.description = f.description
   else delete iface.description
   if (Number(f.mtu)) iface.mtu = Number(f.mtu)

@@ -26,7 +26,8 @@ const management = computed<Partial<Management>>(() => config.draft?.system?.man
 const retention = computed({
   get: () => management.value.firewallLog ?? {},
   set: (v: FirewallLog) => {
-    const m = config.draft.system.management
+    const m = config.draft?.system.management
+    if (!m) return
     if (Object.keys(v).length) m.firewallLog = v
     else delete m.firewallLog
   },
@@ -34,14 +35,15 @@ const retention = computed({
 const logDrops = computed({
   get: () => Boolean(management.value.logDefaultDrops),
   set: (on: boolean) => {
-    const m = config.draft.system.management
+    const m = config.draft?.system.management
+    if (!m) return
     if (on) m.logDefaultDrops = true
     else delete m.logDefaultDrops
   },
 })
 
 const show = ref('all')
-const card = ref(null)
+const card = ref<HTMLElement | null>(null)
 
 /**
  * Blocked covers drop and reject. A packet logged by a ruleset written
@@ -81,7 +83,7 @@ const clear = useAsync(async () => {
 const inFiles = computed(() => Boolean(config.saved?.system?.logging?.files?.enabled))
 
 const error = computed(() => log.error.value || clear.error.value || log.streamError.value)
-const label = (e) => matchedLabel(e, access.value)
+const label = (e: FwlogEntry) => matchedLabel(e, access.value)
 
 const empty = computed(() => {
   const q = query.value.trim()
@@ -158,7 +160,9 @@ const empty = computed(() => {
               {{ formatWhen(e.time) }}
             </td>
             <td class="max-sm:order-2">
-              <span class="badge" :class="actionTone(e.action)">{{ e.action || 'unknown' }}</span>
+              <span class="badge" :class="actionTone(e.action ?? '')">{{
+                e.action || 'unknown'
+              }}</span>
             </td>
             <td class="max-sm:order-3">
               <span class="badge">{{ label(e) }}</span>

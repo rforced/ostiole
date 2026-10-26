@@ -2,13 +2,14 @@ import { computed, ref } from 'vue'
 
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import type { TailscaleStatus } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 /** How often the node is asked what it is doing while the page is shown. */
 const POLL_MS = 5000
 
 /** One read of the node's state, shared by the page header and the card. */
-const status = ref(null)
+const status = ref<TailscaleStatus | null>(null)
 /** The daemon's login link, kept while the login is in the air. */
 const authUrl = ref('')
 

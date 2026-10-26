@@ -7,7 +7,7 @@ import AppNotice from '@/components/AppNotice.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
-import type { Interface } from '@/lib/types.gen'
+import type { Interface, PPPoE } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 interface Link {
@@ -118,21 +118,22 @@ function save() {
     error.value = `${f.name} is already configured.`
     return
   }
+  const pppoe: PPPoE = { parent: f.parent, username: f.username.trim(), password: f.password }
   const iface: Interface = {
     name: f.name,
     enabled: true,
     ...(props.iface ? { enabled: props.iface.enabled } : {}),
     ipv4: { mode: 'ppp' },
     ipv6: { mode: f.ipv6 ? 'ppp' : 'none' },
-    pppoe: { parent: f.parent, username: f.username.trim(), password: f.password },
+    pppoe,
   }
   if (f.zone) iface.zone = f.zone
   if (f.description) iface.description = f.description
-  if (f.serviceName) iface.pppoe.serviceName = f.serviceName.trim()
-  if (f.acName) iface.pppoe.acName = f.acName.trim()
-  if (f.ipv6) iface.pppoe.ipv6 = true
-  if (Number(f.lcpInterval)) iface.pppoe.lcpInterval = Number(f.lcpInterval)
-  if (Number(f.lcpFailures)) iface.pppoe.lcpFailures = Number(f.lcpFailures)
+  if (f.serviceName) pppoe.serviceName = f.serviceName.trim()
+  if (f.acName) pppoe.acName = f.acName.trim()
+  if (f.ipv6) pppoe.ipv6 = true
+  if (Number(f.lcpInterval)) pppoe.lcpInterval = Number(f.lcpInterval)
+  if (Number(f.lcpFailures)) pppoe.lcpFailures = Number(f.lcpFailures)
   if (Number(f.mtu)) iface.mtu = Number(f.mtu)
   // The Ethernet underneath becomes a port: the session holds the address.
   const parent = config.findInterface(f.parent)

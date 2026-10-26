@@ -9,6 +9,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import type { RestoreResponse } from '@/lib/types.gen'
 import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -22,8 +23,8 @@ const withUsers = ref(false)
 const passphrase = ref('')
 const redact = ref(false)
 const restorePassphrase = ref('')
-const pending = ref(null)
-const fileInput = ref(null)
+const pending = ref<RestoreResponse | null>(null)
+const fileInput = ref<HTMLInputElement | null>(null)
 
 const download = useAsync(async () => {
   const { blob, name } = await api.config.backup({
@@ -47,8 +48,8 @@ const restore = useAsync(async (file: File) => {
 
 const busy = computed(() => download.busy.value || restore.busy.value)
 
-async function chooseFile(event) {
-  const file = event.target.files?.[0]
+async function chooseFile(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
   if (!file) return
   await restore.run(file)
   if (fileInput.value) fileInput.value.value = ''
@@ -64,6 +65,7 @@ async function loadIntoDraft() {
     }))
   )
     return
+  if (!pending.value) return
   config.replaceDraft(pending.value.config)
   pending.value = null
 }

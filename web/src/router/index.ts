@@ -55,7 +55,7 @@ const MOVED_TABS = [
  */
 function itemRoute(item: NavItem): RouteRecordRaw {
   const name = item.to === '/' ? 'dashboard' : item.to.slice(1)
-  if (!item.pages) {
+  if (!item.pages && item.view) {
     return { path: item.to, name, component: item.view, meta: { tabs: item.tabs } }
   }
   return {
@@ -64,7 +64,7 @@ function itemRoute(item: NavItem): RouteRecordRaw {
     meta: { section: item },
     children: [
       { path: '', redirect: sectionEntry(item) },
-      ...item.pages.map((p) => ({
+      ...(item.pages ?? []).map((p) => ({
         path: p.path,
         name: `${name}-${p.path}`,
         component: p.view,

@@ -69,7 +69,7 @@ function edit(cert: Certificate) {
 }
 
 /** What a row says it is doing, from its files and its last attempt. */
-function state(cert) {
+function state(cert: Certificate) {
   const st = status.value[cert.id]
   if (!st) return { label: 'apply to issue', title: 'This certificate is only in the draft.' }
   if (st.running) return { label: 'issuing' }
@@ -82,12 +82,12 @@ function state(cert) {
   return { label: 'issued' }
 }
 
-const expires = (cert) => {
+const expires = (cert: Certificate) => {
   const at = status.value[cert.id]?.notAfter
   return formatWhen(at)
 }
 
-async function issue(cert) {
+async function issue(cert: Certificate) {
   actionError.value = ''
   try {
     await api.certificates.issue(cert.id)
@@ -132,13 +132,13 @@ const DOWNLOADS = [
 
 const pkcs12For = ref<Certificate | null>(null)
 const pkcs12Password = ref('')
-function askPKCS12(cert) {
+function askPKCS12(cert: Certificate) {
   pkcs12For.value = cert
   pkcs12Password.value = ''
 }
 
 /** The Download menu: each file, then PKCS#12, which asks for a password first. */
-const downloads = (cert) => [
+const downloads = (cert: Certificate) => [
   ...DOWNLOADS.map((d) => ({ label: d.label, href: api.certificates.fileURL(cert.id, d.name) })),
   { label: 'PKCS#12', action: () => askPKCS12(cert) },
 ]
@@ -155,9 +155,9 @@ const downloadPKCS12 = useAsync(async () => {
 })
 
 /** Whether the files exist to download. */
-const issued = (cert) => Boolean(status.value[cert.id]?.issued)
+const issued = (cert: Certificate) => Boolean(status.value[cert.id]?.issued)
 
-function remove(cert) {
+function remove(cert: Certificate) {
   config.removeCertificate(cert.id)
 }
 </script>

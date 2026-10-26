@@ -6,6 +6,7 @@ import ActionButton from '@/components/ActionButton.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import RandomMacBadge from '@/components/RandomMacBadge.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import type { WoLDevice } from '@/lib/types.gen'
 import { deviceName, useWake } from '@/lib/wol'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -21,13 +22,13 @@ const off = computed(() => new Set(config.interfaces.filter((i) => !i.enabled).m
 
 const open = ref(false)
 /** The device the dialog edits; null adds one. */
-const editing = ref(null)
+const editing = ref<WoLDevice | null>(null)
 
 function add() {
   editing.value = null
   open.value = true
 }
-function edit(d) {
+function edit(d: WoLDevice) {
   editing.value = d
   open.value = true
 }

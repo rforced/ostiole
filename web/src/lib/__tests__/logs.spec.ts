@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { LOGS, fullBytes, logSettings, totalBytes } from '@/lib/logs'
-import type { Config } from '@/lib/types.gen'
+import type { Config, DNSServer, Proxy } from '@/lib/types.gen'
 import { configOf, type DeepPartial } from '@/test/fixtures'
 
 const serving = {
@@ -42,16 +42,18 @@ describe('logs', () => {
 
   // A query log or a proxy that is off costs nothing, whatever it is set to.
   it('counts only the logs that are on', () => {
+    const dns: DeepPartial<DNSServer> = {
+      enabled: true,
+      queryLog: { enabled: true, entries: 2000 },
+    }
+    const proxy: DeepPartial<Proxy> = { ...serving, events: { entries: 3000 } }
     const cfg: DeepPartial<Config> = {
       system: { management: { firewallLog: { entries: 1000 } } },
-      services: {
-        dns: { enabled: true, queryLog: { enabled: true, entries: 2000 } },
-        proxy: { ...serving, events: { entries: 3000 } },
-      },
+      services: { dns, proxy },
     }
     expect(totalBytes(configOf(cfg))).toBe(1000 * 350 + 2000 * 150 + 3000 * 1536)
-    cfg.services.dns.enabled = false
-    cfg.services.proxy.enabled = false
+    dns.enabled = false
+    proxy.enabled = false
     expect(totalBytes(configOf(cfg))).toBe(1000 * 350)
   })
 })

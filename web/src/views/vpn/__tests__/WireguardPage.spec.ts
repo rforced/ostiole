@@ -1,12 +1,14 @@
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 
 import { api } from '@/lib/api'
-import type { Config, GatewayStatus } from '@/lib/types.gen'
+import type { Gateway, GatewayStatus, Interface, Tunnel, WireGuardPeer } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
-import { fixture } from '@/test/fixtures'
+import { emptyConfig, fixture, must } from '@/test/fixtures'
+import type { DeepPartial } from '@/test/fixtures'
 import WireguardPage from '@/views/vpn/WireguardPage.vue'
 
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -34,18 +36,24 @@ const SITE = 'TrMvSoP4jYQlY6RIzBgbssQqY3vxI2Pi+y71lOWWXX0='
 const PHONE = 'gN65BkIKy1eCE9pP1wdc8ROUtkHLF2PfAqYdyYBz6EA='
 const PROVIDER = 'nKB29JG3cjuUIEOQMvYSmFDrx2lUT0LTwWyFmvu0jG8='
 
-const tunnel = (name, peers, extra = {}) => ({
-  name,
-  zone: name,
-  enabled: true,
-  ipv4: { mode: 'static', address: '10.66.0.1/24' },
-  ipv6: { mode: 'none' },
-  wireguard: { publicKey: 'x', listenPort: 51820, peers },
-  ...extra,
-})
+const tunnel = (
+  name: string,
+  peers: DeepPartial<WireGuardPeer>[],
+  extra: DeepPartial<Interface> = {},
+) =>
+  fixture<Interface>({
+    name,
+    zone: name,
+    enabled: true,
+    ipv4: { mode: 'static', address: '10.66.0.1/24' },
+    ipv6: { mode: 'none' },
+    wireguard: { publicKey: 'x', listenPort: 51820, peers },
+    ...extra,
+  })
 
 function mountPage() {
   useConfigStore().replaceDraft({
+    ...emptyConfig(),
     version: 12,
     zones: [{ name: 'wg0' }, { name: 'wg1', external: true }],
     interfaces: [
@@ -66,16 +74,18 @@ function mountPage() {
         { ipv4: { mode: 'static', address: '10.66.1.2/32' } },
       ),
     ],
-    gateways: [{ name: 'vpn', enabled: true, interface: 'wg1', monitor: '10.64.0.1' }],
-    rules: [],
-  } as Config)
+    gateways: [
+      fixture<Gateway>({ name: 'vpn', enabled: true, interface: 'wg1', monitor: '10.64.0.1' }),
+    ],
+  })
   return mount(WireguardPage, { global: { stubs } })
 }
 
-const row = (wrapper, name) => wrapper.findAll('tbody tr').find((tr) => tr.text().includes(name))
+const row = (wrapper: VueWrapper, name: string) =>
+  must(wrapper.findAll('tbody tr').find((tr) => tr.text().includes(name)))
 
 /** A handshake this long ago, as the device reports it. */
-const ago = (seconds) => new Date(Date.now() - seconds * 1000).toISOString()
+const ago = (seconds: number) => new Date(Date.now() - seconds * 1000).toISOString()
 
 describe('WireguardPage', () => {
   beforeEach(() => {
@@ -86,7 +96,7 @@ describe('WireguardPage', () => {
 
   it('shows each peer as its device has it', async () => {
     tab.value = 'peers'
-    let answer
+    let answer: ((tunnels: Tunnel[]) => void) | undefined
     vi.mocked(api.wireguard.status).mockReturnValue(new Promise((resolve) => (answer = resolve)))
     const wrapper = mountPage()
     await flushPromises()
@@ -94,7 +104,7 @@ describe('WireguardPage', () => {
     expect(row(wrapper, 'laptop').find('[data-label="Last handshake"]').text()).toBe('…')
     expect(wrapper.text()).not.toMatch(/connected|quiet/)
 
-    answer([
+    must(answer)([
       {
         name: 'wg0',
         up: true,
@@ -138,7 +148,7 @@ describe('WireguardPage', () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
     try {
       tab.value = 'peers'
-      const status = (rxBytes) => [
+      const status = (rxBytes: number): Tunnel[] => [
         {
           name: 'wg0',
           up: true,
@@ -150,7 +160,7 @@ describe('WireguardPage', () => {
       await flushPromises()
       const traffic = () => row(wrapper, 'laptop').find('[data-label="Traffic"]').text()
       expect(traffic()).toContain('↓ 1.5 kB')
-      const live = wrapper.findAll('button').find((b) => b.text() === 'Live')
+      const live = must(wrapper.findAll('button').find((b) => b.text() === 'Live'))
       expect(live.attributes('aria-pressed')).toBe('true')
 
       await live.trigger('click')
@@ -173,7 +183,7 @@ describe('WireguardPage', () => {
     vi.mocked(api.wireguard.status).mockResolvedValue([])
     const config = useConfigStore()
     const wrapper = mountPage()
-    Object.assign(config.findInterface('wg0').wireguard.peers[1], {
+    Object.assign(must(must(must(config.findInterface('wg0')).wireguard).peers)[1], {
       allowedIps: ['10.66.0.3/32', '192.168.1.0/24'],
       theirs: [{ network: '192.168.1.0/24', as: '10.201.1.0/24' }],
       ours: [{ network: '192.168.1.0/24', as: '10.200.1.0/24' }],

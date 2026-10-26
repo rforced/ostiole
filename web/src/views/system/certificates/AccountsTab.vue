@@ -5,20 +5,21 @@ import { ref } from 'vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import UsedByCell from '@/components/UsedByCell.vue'
+import type { ACMEAccount } from '@/lib/types.gen'
 import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import AccountDialog from '@/views/system/certificates/AccountDialog.vue'
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const editing = ref(null)
+const editing = ref<ACMEAccount | null>(null)
 const open = ref(false)
 
 function add() {
   editing.value = null
   open.value = true
 }
-function edit(account) {
+function edit(account: ACMEAccount) {
   editing.value = account
   open.value = true
 }

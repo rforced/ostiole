@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 
 import { RELOAD_KEY, RELOAD_WINDOW_MS, installChunkReload } from '@/lib/reload'
 
@@ -8,8 +8,8 @@ function preloadError() {
 }
 
 describe('installChunkReload', () => {
-  let target
-  let reload
+  let target: EventTarget
+  let reload: Mock
 
   beforeEach(() => {
     sessionStorage.clear()

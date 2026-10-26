@@ -1,10 +1,11 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, type Role, type Session } from '@/lib/api'
-import type { Config, DNSProvider, DdnsResponse } from '@/lib/types.gen'
-import { fixture } from '@/test/fixtures'
+import type { DDNSRecord, DNSProvider, DdnsResponse } from '@/lib/types.gen'
+import { configOf, fixture, must } from '@/test/fixtures'
+import ConfirmButton from '@/components/ConfirmButton.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import DdnsPage from '@/views/services/DdnsPage.vue'
@@ -34,7 +35,7 @@ const provider = (): DNSProvider => ({
 })
 
 function config() {
-  return {
+  return configOf({
     version: 11,
     zones: [{ name: 'wan', external: true }, { name: 'lan' }],
     interfaces: [
@@ -58,7 +59,7 @@ function config() {
         ],
       },
     },
-  } as Config
+  })
 }
 
 const STATUS = fixture<DdnsResponse>({
@@ -96,10 +97,12 @@ async function page(role: Role = 'admin', draft = config()) {
   return { wrapper, store }
 }
 
-const row = (w, text) => w.findAll('tbody tr').find((tr) => tr.text().includes(text))
+const row = (w: VueWrapper, text: string) =>
+  must(w.findAll('tbody tr').find((tr) => tr.text().includes(text)))
 /** Text with the non-breaking spaces that keep a type beside its value. */
-const plain = (el) => el.text().replaceAll('\u00a0', ' ')
-const button = (el, label) => el.findAll('button').find((b) => b.text().trim() === label)
+const plain = (el: Pick<VueWrapper, 'text'>) => el.text().replaceAll('\u00a0', ' ')
+const button = (el: Pick<VueWrapper, 'findAll'>, label: string) =>
+  el.findAll('button').find((b) => b.text().trim() === label)
 
 describe('DdnsPage', () => {
   beforeEach(() => {
@@ -117,22 +120,22 @@ describe('DdnsPage', () => {
     // Only in the draft: nothing has started it.
     expect(row(wrapper, 'new.example.com').text()).toContain('apply to start')
     expect(
-      button(row(wrapper, 'new.example.com'), 'Update now').attributes('disabled'),
+      button(row(wrapper, 'new.example.com'), 'Update now')?.attributes('disabled'),
     ).toBeDefined()
-    const confirm = row(wrapper, 'home.example.com').findComponent('.confirm')
+    const confirm = row(wrapper, 'home.example.com').findComponent<typeof ConfirmButton>('.confirm')
     expect(confirm.props('description')).toBe('The record at Cloudflare stays as it is.')
   })
 
   it('names the DNS provider that writes each record', async () => {
     const draft = config()
-    draft.dnsProviders[0].domains = ['home.example.com']
-    draft.dnsProviders.push({
+    must(draft.dnsProviders)[0].domains = ['home.example.com']
+    must(draft.dnsProviders).push({
       id: 'cloudflare',
       kind: 'cloudflare',
       settings: {},
       domains: ['new.example.com'],
     })
-    draft.services.ddns.records.push({
+    must(draft.services?.ddns?.records).push({
       id: 'ddns-www',
       enabled: true,
       name: 'www.example.net',
@@ -140,8 +143,8 @@ describe('DdnsPage', () => {
       ipv4: true,
     })
     const { wrapper } = await page('admin', draft)
-    const provider = (name) => row(wrapper, name).get('td[data-label="DNS provider"]')
-    const lines = (name) => provider(name).findAll('div')
+    const provider = (name: string) => row(wrapper, name).get('td[data-label="DNS provider"]')
+    const lines = (name: string) => provider(name).findAll('div')
     expect(lines('home.example.com').map((d) => d.text())).toEqual(['cf', 'Cloudflare'])
     // Named for its kind, so the kind is not said twice.
     expect(lines('new.example.com').map((d) => d.text())).toEqual(['cloudflare'])
@@ -151,7 +154,7 @@ describe('DdnsPage', () => {
   it('asks for an update now, and polls while the provider is asked', async () => {
     const { wrapper } = await page('operator')
     vi.mocked(api.ddns.update).mockResolvedValue({ id: 'ddns-home' })
-    await button(row(wrapper, 'home.example.com'), 'Update now').trigger('click')
+    await must(button(row(wrapper, 'home.example.com'), 'Update now')).trigger('click')
     await flushPromises()
     expect(api.ddns.update).toHaveBeenCalledWith('ddns-home')
     expect(api.ddns.status).toHaveBeenCalledTimes(2)
@@ -159,7 +162,7 @@ describe('DdnsPage', () => {
 
   it('points at the providers page until one can keep a record', async () => {
     const draft = config()
-    draft.dnsProviders[0].domains = []
+    must(draft.dnsProviders)[0].domains = []
     const { wrapper } = await page('admin', draft)
     expect(wrapper.text()).toContain('No DNS provider can keep a record yet')
     expect(wrapper.find('a[href="/system/dns-providers"]').exists()).toBe(true)
@@ -173,7 +176,7 @@ describe('DdnsPage', () => {
   })
 })
 
-function dialog(record = null, role: Role = 'admin') {
+function dialog(record: DDNSRecord | null = null, role: Role = 'admin') {
   useAuthStore().user = { username: role, role } as Session
   const store = useConfigStore()
   store.draft = config()
@@ -186,7 +189,7 @@ function dialog(record = null, role: Role = 'admin') {
   return { wrapper, store }
 }
 
-const save = (w) => w.get('form').trigger('submit')
+const save = (w: VueWrapper) => w.get('form').trigger('submit')
 
 describe('RecordDialog', () => {
   beforeEach(() => {
@@ -208,7 +211,7 @@ describe('RecordDialog', () => {
       ipv4: true,
       ipv6: true,
     })
-    expect(store.ddnsRecords.at(-1).id).toMatch(/^ddns-/)
+    expect(must(store.ddnsRecords.at(-1)).id).toMatch(/^ddns-/)
   })
 
   it('refuses a name no provider holds, a record with no type, and a type kept twice', async () => {
@@ -238,7 +241,7 @@ describe('RecordDialog', () => {
       { type: 'A', address: '203.0.113.7', published: ['198.51.100.5'], action: 'change' },
       { type: 'AAAA', published: [], action: 'no-address' },
     ])
-    await button(wrapper, 'Check').trigger('click')
+    await must(button(wrapper, 'Check')).trigger('click')
     await flushPromises()
     const [, record] = vi.mocked(api.ddns.check).mock.calls[0]
     expect(record).toMatchObject({ name: 'nas.example.com', ipv4: true, ipv6: true })

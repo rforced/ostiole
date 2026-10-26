@@ -14,7 +14,16 @@ export const ANSWERED_BY: Record<string, { label: string; tone: string; title: s
  * searches too (requestlog.Request.Search).
  */
 export function requestValues(r: ProxyRequest): (string | number | undefined)[] {
-  return [r.site, r.client, r.method, r.host, r.path, r.status, ANSWERED_BY[r.by]?.label, r.agent]
+  return [
+    r.site,
+    r.client,
+    r.method,
+    r.host,
+    r.path,
+    r.status,
+    ANSWERED_BY[r.by ?? '']?.label,
+    r.agent,
+  ]
 }
 
 /**

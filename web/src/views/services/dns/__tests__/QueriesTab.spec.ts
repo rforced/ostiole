@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -14,7 +14,7 @@ import type {
   QuerySummary,
   System,
 } from '@/lib/types.gen'
-import { type DeepPartial, fixture } from '@/test/fixtures'
+import { type DeepPartial, draftOf, fixture } from '@/test/fixtures'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -69,15 +69,17 @@ class FakeSource {
 }
 
 /** The names in the table, top to bottom. */
-function names(wrapper) {
+function names(wrapper: VueWrapper) {
   return wrapper
     .findAll('tbody tr')
     .map((tr) => tr.findAll('td')[2]?.text())
     .filter(Boolean)
 }
 
-function button(wrapper, label) {
-  return wrapper.findAll('button').find((b) => b.text() === label)
+function button(wrapper: VueWrapper, label: string) {
+  const found = wrapper.findAll('button').find((b) => b.text() === label)
+  if (!found) throw new TypeError(`no ${label} button`)
+  return found
 }
 
 /** A blocked answer, one answered, one the router answers for, and a service name. */
@@ -119,8 +121,8 @@ function saved() {
   return config
 }
 
-function toggle(wrapper, label) {
-  return wrapper.find(`input[aria-label="${label}"]`)
+function toggle(wrapper: VueWrapper, label: string) {
+  return wrapper.find<HTMLInputElement>(`input[aria-label="${label}"]`)
 }
 
 describe('QueriesTab', () => {
@@ -143,9 +145,9 @@ describe('QueriesTab', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('100,000 is the default. In memory, about 15.0 MB when full.')
     await wrapper.get('#queries-entries').setValue('30000')
-    expect(config.draft.services.dns.queryLog).toEqual({ enabled: true, entries: 30000 })
+    expect(draftOf(config).services?.dns?.queryLog).toEqual({ enabled: true, entries: 30000 })
     await toggle(wrapper, 'Query log enabled').setValue(false)
-    expect(config.draft.services.dns.queryLog).toEqual({ entries: 30000 })
+    expect(draftOf(config).services?.dns?.queryLog).toEqual({ entries: 30000 })
     expect(wrapper.find('#queries-entries').exists()).toBe(false)
     await toggle(wrapper, 'Query log enabled').setValue(true)
     await wrapper.get('#queries-entries').setValue('')
@@ -160,7 +162,7 @@ describe('QueriesTab', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('Switching it off, or a restart, clears it.')
     setActivePinia(createPinia())
-    saved().draft.system = { logging: { files: { enabled: true } } } as System
+    draftOf(saved()).system = { logging: { files: { enabled: true } } } as System
     wrapper = mount(QueriesTab)
     await flushPromises()
     expect(wrapper.text()).toContain(
@@ -189,7 +191,7 @@ describe('QueriesTab', () => {
     await button(wrapper, 'Load more').trigger('click')
     await flushPromises()
     expect(names(wrapper)).toHaveLength(450)
-    expect(button(wrapper, 'Load more')).toBeUndefined()
+    expect(wrapper.findAll('button').some((b) => b.text() === 'Load more')).toBe(false)
     expect(wrapper.text()).toContain('Start of the log.')
   })
 
@@ -197,8 +199,8 @@ describe('QueriesTab', () => {
   it('streams new answers on top while live', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     try {
-      const send = (seq) =>
-        source.onmessage({
+      const send = (seq: number) =>
+        source?.onmessage?.({
           data: JSON.stringify({
             seq,
             time: '2026-09-24T12:00:01Z',
@@ -278,10 +280,10 @@ describe('QueriesTab', () => {
     expect(toggle(wrapper, 'Block _dns.resolver.arpa').exists()).toBe(true)
 
     await allow().setValue(true)
-    expect(config.draft.blocking.allow).toEqual(['ads.example.com'])
+    expect(draftOf(config).blocking.allow).toEqual(['ads.example.com'])
     expect(allow().element.checked).toBe(true)
     await block().setValue(true)
-    expect(config.draft.blocking.deny).toEqual(['example.com'])
+    expect(draftOf(config).blocking.deny).toEqual(['example.com'])
     expect(block().element.checked).toBe(true)
 
     // Put back, the draft is what was saved.

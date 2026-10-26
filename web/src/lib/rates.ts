@@ -7,6 +7,9 @@
 /** Two samples closer than this measure jitter, not traffic. */
 const MIN_SECONDS = 1
 
+type Rate = { rx: number; tx: number }
+type Sample = Rate & { at: number; rate?: Rate }
+
 /**
  * Returns a sampler. Call it with each new list of links; it answers
  * with bits per second for every link it has now seen twice, keeping
@@ -15,15 +18,14 @@ const MIN_SECONDS = 1
 export function createRateTracker(): (
   links: Array<{ name: string; rxBytes: number; txBytes: number }>,
   now?: number,
-) => Record<string, { rx: number; tx: number }> {
-  /** @type {Map<string, {rx: number, tx: number, at: number, rate?: {rx: number, tx: number}}>} */
-  let last = new Map()
+) => Record<string, Rate> {
+  let last = new Map<string, Sample>()
   return function sample(links, now = Date.now()) {
-    const rates = {}
-    const next = new Map()
+    const rates: Record<string, Rate> = {}
+    const next = new Map<string, Sample>()
     for (const l of links) {
       const prev = last.get(l.name)
-      const entry = { rx: l.rxBytes ?? 0, tx: l.txBytes ?? 0, at: now, rate: prev?.rate }
+      const entry: Sample = { rx: l.rxBytes ?? 0, tx: l.txBytes ?? 0, at: now, rate: prev?.rate }
       if (prev) {
         const seconds = (now - prev.at) / 1000
         if (seconds < MIN_SECONDS) {

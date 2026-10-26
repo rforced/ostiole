@@ -1,5 +1,5 @@
-/** A time in seconds, then one value per column; a missing value is null. */
-export type ChartPoint = (number | null)[]
+/** A time in seconds, then one value per column; a missing value is null or undefined. */
+export type ChartPoint = (number | null | undefined)[]
 
 /** A line: the column it reads, and optionally a low to high band and a limit. */
 export interface ChartSeries {

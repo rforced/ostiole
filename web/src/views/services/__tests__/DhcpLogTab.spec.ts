@@ -1,10 +1,17 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, type Session } from '@/lib/api'
-import type { Config, DhcpLogPage, LogfileStatus, LogLimitsInfo, Stats } from '@/lib/types.gen'
-import { fixture } from '@/test/fixtures'
+import type {
+  DhcpLogPage,
+  DhcpRow,
+  LogLevel,
+  LogfileStatus,
+  LogLimitsInfo,
+  Stats,
+} from '@/lib/types.gen'
+import { configOf, draftOf, fixture, must } from '@/test/fixtures'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -24,21 +31,24 @@ class FakeSource {
   close() {}
 }
 
-const clearButton = (w) => w.findAll('button').find((b) => b.text() === 'Clear')
+const clearButton = (w: VueWrapper) => w.findAll('button').find((b) => b.text() === 'Clear')
 
-async function tab(list, { level = 'info', dhcp = true } = {}) {
+async function tab(
+  list: Array<Partial<DhcpRow>>,
+  { level = 'info', dhcp = true }: { level?: LogLevel; dhcp?: boolean } = {},
+) {
   vi.mocked(api.services.dhcpLog).mockResolvedValue(
-    fixture<DhcpLogPage>({ entries: list, held: list.length, kept: level === 'info' }),
+    fixture<DhcpLogPage>({ entries: list as DhcpRow[], held: list.length, kept: level === 'info' }),
   )
   vi.mocked(api.systemStats).mockResolvedValue(fixture<Stats>({ memTotal: 8_000_000_000 }))
   vi.mocked(api.logFiles).mockResolvedValue(fixture<LogfileStatus>({ enabled: false, logs: [] }))
   vi.mocked(api.logLimits).mockResolvedValue(fixture<LogLimitsInfo>({ memTotal: 0, ceilings: {} }))
   const store = useConfigStore()
-  const draft = {
+  const draft = configOf({
     version: 11,
     system: { logging: { level } },
     services: { dhcp: { enabled: dhcp }, dns: { enabled: false } },
-  } as Config
+  })
   store.draft = draft
   store.saved = structuredClone(draft)
   store.loaded = true
@@ -97,9 +107,9 @@ describe('DHCP log', () => {
   it('keeps how many messages in the draft', async () => {
     const { wrapper, store } = await tab([])
     await wrapper.find('#dhcp-entries').setValue('5000')
-    expect(store.draft.services.dhcp.log).toEqual({ entries: 5000 })
+    expect(draftOf(store).services?.dhcp?.log).toEqual({ entries: 5000 })
     await wrapper.find('#dhcp-entries').setValue('')
-    expect(store.draft.services.dhcp.log).toBeUndefined()
+    expect(must(draftOf(store).services?.dhcp).log).toBeUndefined()
   })
 
   // Clear empties the router's log and reads it again. Below Info there is
@@ -113,7 +123,7 @@ describe('DHCP log', () => {
     vi.mocked(api.services.dhcpLog).mockResolvedValue(
       fixture<DhcpLogPage>({ entries: [], held: 0, kept: true }),
     )
-    await clearButton(wrapper).trigger('click')
+    await must(clearButton(wrapper)).trigger('click')
     await flushPromises()
     expect(ask).toHaveBeenCalledWith(
       expect.objectContaining({

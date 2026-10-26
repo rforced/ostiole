@@ -10,15 +10,15 @@ import { useAsync } from '@/lib/async'
 import { formatCount, formatRate } from '@/lib/format'
 import { LEVELS } from '@/lib/meter'
 import { TIERS, tierBadge, tierLabel } from '@/lib/tiers'
-import type { DirectionStatus, TinStats } from '@/lib/types.gen'
+import type { DirectionStatus, InterfaceStatus, ShapingStatus, TinStats } from '@/lib/types.gen'
 
 /** How often the queues are sampled. Fast enough to watch a call start. */
 const INTERVAL_MS = 3000
 
-const report = ref(null)
-const rates = ref({})
+const report = ref<ShapingStatus | null>(null)
+const rates = ref<Record<string, number>>({})
 /** The previous sample, so a rate can be a difference rather than a total. */
-let previous = null
+let previous: ShapingStatus | null = null
 
 /**
  * The counters the router reports are cumulative, which is what makes them
@@ -26,10 +26,10 @@ let previous = null
  * between two samples, worked out here rather than kept as history on a
  * router nobody asked to keep any.
  */
-function counters(rep) {
-  const out = {}
+function counters(rep: ShapingStatus | null) {
+  const out: Record<string, number> = {}
   for (const i of rep?.interfaces ?? []) {
-    for (const dir of ['download', 'upload']) {
+    for (const dir of ['download', 'upload'] as const) {
       const stats = i[dir]?.stats
       if (!stats) continue
       out[`${i.name}:${dir}`] = stats.bytes
@@ -41,10 +41,10 @@ function counters(rep) {
   return out
 }
 
-function ratesBetween(before, after) {
-  const out = {}
+function ratesBetween(before: ShapingStatus | null, after: ShapingStatus) {
+  const out: Record<string, number> = {}
   if (!before) return out
-  const seconds = (Date.parse(after.sampledAt) - Date.parse(before.sampledAt)) / 1000
+  const seconds = (Date.parse(after.sampledAt ?? '') - Date.parse(before.sampledAt ?? '')) / 1000
   if (!(seconds > 0)) return out
   const was = counters(before)
   const now = counters(after)
@@ -85,19 +85,19 @@ watch(live, (on) => {
 const interfaces = computed(() => report.value?.interfaces ?? [])
 
 /** The directions of one interface that were given a figure at all. */
-function directions(iface) {
+function directions(iface: InterfaceStatus) {
   return [
     { name: 'download', label: 'Download', state: iface.download },
     { name: 'upload', label: 'Upload', state: iface.upload },
   ].filter((d) => d.state?.rate)
 }
 
-function rateOf(key) {
+function rateOf(key: string) {
   return rates.value[key]
 }
 
 /** How full the line is, as far as the meter is concerned. */
-function fill(key, ceiling) {
+function fill(key: string, ceiling: number) {
   const bits = rateOf(key)
   if (!bits || !ceiling) return 0
   return Math.max(0, Math.min(100, (bits / ceiling) * 100))
@@ -105,12 +105,14 @@ function fill(key, ceiling) {
 
 /** The tier rows of one direction, in the order the router names them. */
 function tins(state: DirectionStatus | undefined) {
-  const byTier = new Map<string, TinStats>((state?.stats?.tins ?? []).map((t) => [t.tier, t]))
+  const byTier = new Map<string | undefined, TinStats>(
+    (state?.stats?.tins ?? []).map((t) => [t.tier, t]),
+  )
   return TIERS.map((t) => ({ tier: t.value, ...(byTier.get(t.value) ?? {}) }))
 }
 
 /** Microseconds as the milliseconds an operator thinks in. */
-function delay(us) {
+function delay(us: number) {
   if (!us) return '0 ms'
   const ms = us / 1000
   return `${ms >= 10 ? ms.toFixed(0) : ms.toFixed(1)} ms`
@@ -201,7 +203,7 @@ function delay(us) {
                     }}
                   </td>
                   <td class="num font-mono text-code">
-                    {{ delay(t.peakDelayUs) }}
+                    {{ delay(t.peakDelayUs ?? 0) }}
                   </td>
                   <td class="num font-mono text-code">
                     {{ formatCount(t.drops ?? 0) }}

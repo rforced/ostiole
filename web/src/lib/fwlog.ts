@@ -27,7 +27,7 @@ export function matchedLabel(
   access: Record<string, string> = {},
 ): string {
   if (e.kind === 'rule') return e.ruleId || '—'
-  if (e.kind === 'proxy') return `proxy: ${access[e.ruleId] || e.ruleId}`
+  if (e.kind === 'proxy') return `proxy: ${(e.ruleId && access[e.ruleId]) || e.ruleId}`
   const kind = KINDS[e.kind]
   return kind ? kind(e) : e.prefix || '—'
 }

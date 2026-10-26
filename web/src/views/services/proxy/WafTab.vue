@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import type { WAFProfile } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ExclusionsCard from '@/views/services/proxy/ExclusionsCard.vue'
@@ -11,7 +12,7 @@ import ProfileDialog from '@/views/services/proxy/ProfileDialog.vue'
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const editing = ref(null)
+const editing = ref<WAFProfile | null>(null)
 const dialogOpen = ref(false)
 
 const profiles = computed(() => config.proxy.wafProfiles ?? [])
@@ -21,7 +22,7 @@ function add() {
   dialogOpen.value = true
 }
 
-function edit(profile) {
+function edit(profile: WAFProfile) {
   editing.value = profile
   dialogOpen.value = true
 }
@@ -66,7 +67,9 @@ function edit(profile) {
             </td>
             <td class="num" data-label="Paranoia">{{ w.paranoia || 1 }}</td>
             <td data-label="Applications">
-              <span v-if="(w.applications ?? []).length">{{ w.applications.join(', ') }}</span>
+              <span v-if="(w.applications ?? []).length">{{
+                (w.applications ?? []).join(', ')
+              }}</span>
               <span v-else class="text-ink-muted">none</span>
             </td>
             <td class="num" data-label="Exclusions">{{ (w.exclusions ?? []).length }}</td>

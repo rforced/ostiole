@@ -32,7 +32,9 @@ export function matches(
   const text = [...values, ...macs]
     .filter((v) => v !== null && v !== undefined && v !== '')
     .map((v) => String(v).toLowerCase())
-  const bare = macs.filter(Boolean).map((m) => m.toLowerCase().replace(/[:.-]/g, ''))
+  const bare = macs
+    .filter((m): m is string => Boolean(m))
+    .map((m) => m.toLowerCase().replace(/[:.-]/g, ''))
   return words.every((w) => {
     if (text.some((v) => v.includes(w))) return true
     const hex = macWord(w)

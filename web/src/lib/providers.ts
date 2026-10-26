@@ -1,5 +1,5 @@
 /** How two spellings of one name are compared: model.NormalizeDomain. */
-const canonical = (s) =>
+const canonical = (s: unknown) =>
   String(s ?? '')
     .trim()
     .replace(/^\.+|\.+$/g, '')

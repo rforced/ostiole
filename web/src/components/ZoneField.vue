@@ -49,10 +49,10 @@ const creating = computed(() => zone.value === NEW_ZONE)
  * managed from, which is an admin's call: an operator moves none into such
  * a zone or out of one, as the server would refuse at apply.
  */
-const guarded = (name) => config.zones.some((z) => z.name === name && z.antiLockout)
+const guarded = (name: string) => config.zones.some((z) => z.name === name && z.antiLockout)
 const current = computed(() => config.interfaces.find((i) => i.name === props.iface)?.zone ?? '')
 const pinned = computed(() => auth.isOperator && guarded(current.value))
-const barred = (name) => auth.isOperator && guarded(name) && name !== current.value
+const barred = (name: string) => auth.isOperator && guarded(name) && name !== current.value
 const hint = computed(() =>
   auth.isOperator && config.zones.some((z) => z.antiLockout)
     ? `Firewall rules match on zones. ${adminOnly('move', 'an interface into or out of a zone with anti-lockout')}`

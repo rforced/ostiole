@@ -7,7 +7,13 @@ import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useDraftRows } from '@/lib/draft'
-import type { OutboundMode } from '@/lib/types.gen'
+import type {
+  OneToOneNAT,
+  OutboundMode,
+  OutboundRule,
+  PortForward,
+  SystemNAT,
+} from '@/lib/types.gen'
 import { tierBadge, tierLabel } from '@/lib/tiers'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -17,18 +23,18 @@ import PortForwardDialog from '@/views/firewall/PortForwardDialog.vue'
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const pfEditing = ref(null)
+const pfEditing = ref<PortForward | null>(null)
 const pfOpen = ref(false)
-const obEditing = ref(null)
+const obEditing = ref<OutboundRule | null>(null)
 const obOpen = ref(false)
-const oneEditing = ref(null)
+const oneEditing = ref<OneToOneNAT | null>(null)
 const oneOpen = ref(false)
 
 const forwards = computed(() => config.nat.portForwards ?? [])
 const oneToOne = computed(() => config.nat.oneToOne ?? [])
 const outbound = computed(() => config.nat.outbound)
 
-const MODE_HINTS = {
+const MODE_HINTS: Record<string, string> = {
   automatic:
     "Masquerades IPv4 leaving every external zone, and IPv6 from a tunnel's private addresses. Nothing to configure.",
   hybrid: 'The rules below apply first, then the automatic masquerade.',
@@ -52,8 +58,9 @@ const unusedRules = computed(() =>
  * too, because a draft that does not validate keeps the rows of the last
  * one that did, which may have been in another mode.
  */
-const { rows: automatic } = useDraftRows(() => api.systemNat(config.draft))
-const isPeerRow = (s) => (s.keys ?? []).some((k) => k.startsWith('nat_postrouting/peer-nat:'))
+const { rows: automatic } = useDraftRows((draft) => api.systemNat(draft))
+const isPeerRow = (s: SystemNAT) =>
+  (s.keys ?? []).some((k) => k.startsWith('nat_postrouting/peer-nat:'))
 const shownAutomatic = computed(() =>
   mode.value === 'automatic' || mode.value === 'hybrid'
     ? automatic.value
@@ -64,7 +71,7 @@ function addPf() {
   pfEditing.value = null
   pfOpen.value = true
 }
-function editPf(pf) {
+function editPf(pf: PortForward) {
   pfEditing.value = pf
   pfOpen.value = true
 }
@@ -72,7 +79,7 @@ function addOne() {
   oneEditing.value = null
   oneOpen.value = true
 }
-function editOne(o) {
+function editOne(o: OneToOneNAT) {
   oneEditing.value = o
   oneOpen.value = true
 }
@@ -80,7 +87,7 @@ function addOb() {
   obEditing.value = null
   obOpen.value = true
 }
-function editOb(r) {
+function editOb(r: OutboundRule) {
   obEditing.value = r
   obOpen.value = true
 }
@@ -121,7 +128,7 @@ function editOb(r) {
           >
             <td class="font-mono max-sm:order-2">{{ pf.zone }}</td>
             <td class="font-mono text-code max-sm:order-2">{{ pf.protocol }}</td>
-            <td class="font-mono text-code max-sm:order-2">{{ pf.ports.join(', ') }}</td>
+            <td class="font-mono text-code max-sm:order-2">{{ (pf.ports ?? []).join(', ') }}</td>
             <td
               class="font-mono text-code max-sm:order-2 max-sm:before:mr-2 max-sm:before:content-['→']"
             >

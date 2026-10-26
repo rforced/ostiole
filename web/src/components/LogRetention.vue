@@ -89,7 +89,7 @@ const total = computed(() => totalBytes(config.draft))
 /** What the logs may cost at their largest here, null while unknown. */
 const budget = computed(() => {
   const l = limits.value
-  return l?.memTotal > 0 && Number.isFinite(l.budget) ? l.budget : null
+  return l && l.memTotal > 0 && Number.isFinite(l.budget) ? l.budget : null
 })
 const outOf = computed(() => (memory.value ? ` of ${formatBytes(memory.value)}` : ''))
 /** What the logs cost at their largest, which is what the daemon checks. */

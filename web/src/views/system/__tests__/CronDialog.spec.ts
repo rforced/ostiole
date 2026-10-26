@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { useAuthStore } from '@/stores/auth'
+import type { WoLDevice } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import CronDialog from '@/views/system/crons/CronDialog.vue'
 import { configOf, sessionOf } from '@/test/fixtures'
@@ -14,7 +15,7 @@ const stubs = {
   },
 }
 
-function mountDialog(devices, role = 'operator') {
+function mountDialog(devices: WoLDevice[] | undefined, role = 'operator') {
   useAuthStore().user = sessionOf({ username: role, role })
   const config = useConfigStore()
   config.replaceDraft(

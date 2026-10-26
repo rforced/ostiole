@@ -63,7 +63,7 @@ const empty = computed(() => {
 })
 
 /** The WAF profile a site is inspected by, which an exclusion goes into. */
-function profileOf(siteID: string) {
+function profileOf(siteID?: string) {
   return (config.proxy.sites ?? []).find((s) => s.id === siteID)?.waf ?? ''
 }
 
@@ -103,11 +103,11 @@ function hasQuery(uri?: string) {
  * An address as it may wrap: past 20 characters, which only IPv6 goes, in
  * two halves at a colon, each kept whole.
  */
-function halves(addr) {
+function halves(addr: string | undefined) {
   const s = String(addr ?? '')
   const colons = [...s.matchAll(/:/g)].map((m) => m.index)
   if (s.length <= 20 || !colons.length) return [s]
-  const near = (i) => Math.abs(i + 1 - s.length / 2)
+  const near = (i: number) => Math.abs(i + 1 - s.length / 2)
   const mid = colons.reduce((a, b) => (near(b) < near(a) ? b : a)) + 1
   return [s.slice(0, mid), s.slice(mid)]
 }

@@ -4,16 +4,17 @@ import { Plus } from '@lucide/vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import type { Interface } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import NetworkDialog from '@/views/wireless/NetworkDialog.vue'
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const editing = ref(null)
+const editing = ref<(typeof config.wirelessNetworks)[number] | null>(null)
 const dialogOpen = ref(false)
 
-const SECURITY = {
+const SECURITY: Partial<Record<string, string>> = {
   'wpa2-wpa3': 'WPA2 and WPA3',
   wpa3: 'WPA3',
   wpa2: 'WPA2',
@@ -29,7 +30,7 @@ const rows = computed(() =>
 )
 
 /** Where a network lands: a port on a bridge, or a zone of its own. */
-function attachment(iface) {
+function attachment(iface: Interface) {
   const master = config.interfaces.find((i) => i.bridge?.members?.includes(iface.name))
   if (master) return `port on ${master.name}`
   if (iface.zone) return `zone ${iface.zone}`
@@ -41,7 +42,7 @@ function add() {
   dialogOpen.value = true
 }
 
-function edit(iface) {
+function edit(iface: (typeof config.wirelessNetworks)[number]) {
   editing.value = iface
   dialogOpen.value = true
 }

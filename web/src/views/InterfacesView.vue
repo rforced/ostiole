@@ -12,7 +12,8 @@ import PageHeader from '@/components/PageHeader.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
-import { useAsync } from '@/lib/async'
+import { errorMessage, useAsync } from '@/lib/async'
+import type { Interface, LiveLink, Zone } from '@/lib/types.gen'
 import { usePageTabs } from '@/lib/tabs'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -25,22 +26,27 @@ import ZoneDialog from '@/views/interfaces/ZoneDialog.vue'
 const auth = useAuthStore()
 const config = useConfigStore()
 const { tabs, tab } = usePageTabs()
-const links = ref([])
+interface Row {
+  live: LiveLink | null
+  cfg: Interface | null
+}
 
-const editing = ref(null)
+const links = ref<LiveLink[]>([])
+
+const editing = ref<Interface | null>(null)
 const editOpen = ref(false)
 const vlanOpen = ref(false)
 const aggOpen = ref(false)
 const aggKind = ref('bridge')
-const aggEditing = ref(null)
+const aggEditing = ref<Interface | null>(null)
 const pppOpen = ref(false)
-const pppEditing = ref(null)
+const pppEditing = ref<Interface | null>(null)
 const pppoeReady = ref(true)
-const zoneEditing = ref(null)
+const zoneEditing = ref<Zone | null>(null)
 const zoneOpen = ref(false)
 
 const live = useAsync(async () => {
-  links.value = (await api.interfaces.live()) as unknown[]
+  links.value = await api.interfaces.live()
 })
 const refreshLive = () => live.run()
 
@@ -49,7 +55,7 @@ const renewing = ref('')
 const renewError = ref('')
 
 /** True when the interface holds a lease or a learned prefix rather than a configured address. */
-function dynamic(c) {
+function dynamic(c: Interface | null): c is Interface {
   return !!c && (c.ipv4?.mode === 'dhcp' || ['dhcp', 'slaac', 'delegated'].includes(c.ipv6?.mode))
 }
 
@@ -58,8 +64,8 @@ function dynamic(c) {
  * networkd has been asked, before the lease has changed, so the links
  * are read again after a moment rather than straight away.
  */
-async function renew(row, release) {
-  const name = row.cfg.name
+async function renew(cfg: Interface, release: boolean) {
+  const name = cfg.name
   renewing.value = name
   renewError.value = ''
   try {
@@ -67,7 +73,7 @@ async function renew(row, release) {
     await new Promise((resolve) => setTimeout(resolve, 1500))
     await refreshLive()
   } catch (e) {
-    renewError.value = `${name}: ${e.message}`
+    renewError.value = `${name}: ${errorMessage(e)}`
   } finally {
     renewing.value = ''
   }
@@ -99,7 +105,7 @@ onMounted(async () => {
 /** Live links (minus loopback) merged with draft config by name. */
 const rows = computed(() => {
   if (!ready.value) return []
-  const byName = new Map()
+  const byName = new Map<string, Row>()
   for (const l of links.value) if (l.kind !== 'loopback') byName.set(l.name, { live: l, cfg: null })
   for (const c of config.interfaces) {
     const row = byName.get(c.name)
@@ -116,7 +122,7 @@ const vlanParents = computed(() =>
 /** Every link that could be a bridge or bond member. */
 const aggCandidates = computed(() => links.value.filter((l) => l.kind !== 'loopback'))
 
-function addAggregate(kind) {
+function addAggregate(kind: string) {
   aggKind.value = kind
   aggEditing.value = null
   aggOpen.value = true
@@ -127,21 +133,21 @@ function addPppoe() {
   pppOpen.value = true
 }
 
-function editPppoe(cfg) {
+function editPppoe(cfg: Interface) {
   pppEditing.value = cfg
   pppOpen.value = true
 }
 
-function editAggregate(cfg) {
+function editAggregate(cfg: Interface) {
   aggKind.value = cfg.bond ? 'bond' : 'bridge'
   aggEditing.value = cfg
   aggOpen.value = true
 }
 
 /** The per-interface guards worth seeing at a glance. */
-function guards(c) {
+function guards(c: Interface | null) {
   if (!c) return []
-  const out = []
+  const out: string[] = []
   if (c.blockPrivate) out.push('blocks private')
   if (c.blockBogons) out.push('blocks bogons')
   if (c.logDrops === true) out.push('logs drops')
@@ -156,7 +162,7 @@ function guards(c) {
  * page knows what goes with it — a tunnel's peers and its private key, a
  * network's passphrase.
  */
-function ownerPage(cfg) {
+function ownerPage(cfg: Interface | null) {
   if (cfg?.wireguard) return { to: '/vpn/wireguard', label: 'WireGuard' }
   if (cfg?.openvpn) return { to: '/vpn/openvpn', label: 'OpenVPN' }
   if (cfg?.tailscale) return { to: '/vpn/tailscale', label: 'Tailscale' }
@@ -165,11 +171,11 @@ function ownerPage(cfg) {
 }
 
 /** A one-line description of what an interface is made of. */
-function describeKind(row) {
+function describeKind(row: Row) {
   const c = row.cfg
   if (c?.pppoe) return `PPPoE over ${c.pppoe.parent} as ${c.pppoe.username}`
-  if (c?.bridge) return `bridge of ${c.bridge.members.join(', ') || 'nothing yet'}`
-  if (c?.bond) return `${c.bond.mode} bond of ${c.bond.members.join(', ') || 'nothing yet'}`
+  if (c?.bridge) return `bridge of ${(c.bridge.members ?? []).join(', ') || 'nothing yet'}`
+  if (c?.bond) return `${c.bond.mode} bond of ${(c.bond.members ?? []).join(', ') || 'nothing yet'}`
   if (c?.vlan) return `VLAN ${c.vlan.id} on ${c.vlan.parent}`
   if (c?.wireless) return `network "${c.wireless.ssid}" on ${c.wireless.radio}`
   if (c?.tailscale) return 'tailscale'
@@ -183,7 +189,7 @@ function describeKind(row) {
   return l.kind
 }
 
-function describeAddressing(c) {
+function describeAddressing(c: Interface | null) {
   if (!c) return '—'
   if (c.openvpn) return 'from the server'
   const parts = []
@@ -207,17 +213,20 @@ function describeAddressing(c) {
   return parts.length ? parts.join(', ') : 'no address'
 }
 
-function edit(row) {
-  editing.value = row.cfg ?? {
+function edit(row: Row) {
+  const fresh = row.live && {
     name: row.live.name,
     enabled: true,
-    ipv4: { mode: 'none' },
-    ipv6: { mode: 'none' },
+    ipv4: { mode: 'none' as const },
+    ipv6: { mode: 'none' as const },
   }
+  const target = row.cfg ?? fresh
+  if (!target) return
+  editing.value = target
   editOpen.value = true
 }
 
-function editZone(z) {
+function editZone(z: Zone | null) {
   zoneEditing.value = z
   zoneOpen.value = true
 }
@@ -279,11 +288,11 @@ function editZone(z) {
               </tr>
               <tr
                 v-for="row in rows"
-                :key="row.live?.name ?? row.cfg.name"
-                :class="{ 'row-changed': config.isChanged('interfaces', row.cfg?.name) }"
+                :key="row.live?.name ?? row.cfg?.name"
+                :class="{ 'row-changed': config.isChanged('interfaces', row.cfg?.name ?? '') }"
               >
                 <td data-label="">
-                  <div class="font-mono font-medium">{{ row.live?.name ?? row.cfg.name }}</div>
+                  <div class="font-mono font-medium">{{ row.live?.name ?? row.cfg?.name }}</div>
                   <div class="text-xs text-ink-muted">
                     {{ describeKind(row) }}<span v-if="row.live?.mac"> · {{ row.live.mac }}</span
                     ><span v-else-if="row.cfg && !row.live"> · not present yet</span>
@@ -297,10 +306,10 @@ function editZone(z) {
                   <span v-else-if="row.live.up" class="badge badge-warn">no carrier</span>
                   <!-- Down is a fault on a link the router is meant to use. -->
                   <span v-else class="badge" :class="{ 'badge-warn': row.cfg?.enabled }">down</span>
-                  <LinkErrors :link="row.live" />
+                  <LinkErrors :link="row.live ?? undefined" />
                 </td>
                 <td class="font-mono text-code" data-label="Addresses">
-                  {{ row.live?.addresses.join(' ') || '—' }}
+                  {{ row.live?.addresses?.join(' ') || '—' }}
                 </td>
                 <td data-label="Zone">
                   <span v-if="row.cfg?.zone" class="font-mono">{{ row.cfg.zone }}</span>
@@ -323,14 +332,14 @@ function editZone(z) {
                       label="Renew"
                       busy-label="Renewing…"
                       :busy="renewing === row.cfg.name"
-                      @click="renew(row, false)"
+                      @click="renew(row.cfg, false)"
                     />
                     <ConfirmButton
                       label="Release"
                       :question="`Release the lease on ${row.cfg.name} and ask for a new one?`"
                       description="The address is gone until the server answers. A WAN is offline until then."
                       :danger="false"
-                      @confirm="renew(row, true)"
+                      @confirm="renew(row.cfg, true)"
                     />
                   </template>
                   <button
@@ -341,8 +350,12 @@ function editZone(z) {
                   >
                     Members
                   </button>
-                  <RouterLink v-if="ownerPage(row.cfg)" :to="ownerPage(row.cfg).to" class="link">
-                    {{ ownerPage(row.cfg).label }}
+                  <RouterLink
+                    v-if="ownerPage(row.cfg)"
+                    :to="ownerPage(row.cfg)?.to ?? ''"
+                    class="link"
+                  >
+                    {{ ownerPage(row.cfg)?.label }}
                   </RouterLink>
                   <button
                     v-if="row.cfg?.pppoe"

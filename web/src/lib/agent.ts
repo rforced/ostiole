@@ -2,7 +2,7 @@
 const RAW_LIMIT = 40
 
 // Order matters: Edge and Opera also say Chrome, Chrome also says Safari.
-const BROWSERS = [
+const BROWSERS: [RegExp, string][] = [
   [/\bEdg(?:e|A|iOS)?\//, 'Edge'],
   [/\b(?:OPR|Opera)\//, 'Opera'],
   [/\bSamsungBrowser\//, 'Samsung Internet'],
@@ -13,7 +13,7 @@ const BROWSERS = [
 ]
 
 // iPhone and iPad also say "like Mac OS X", Android also says Linux.
-const SYSTEMS = [
+const SYSTEMS: [RegExp, string][] = [
   [/\biPhone\b/, 'iPhone'],
   [/\biPad\b/, 'iPad'],
   [/\bAndroid\b/, 'Android'],
@@ -23,7 +23,7 @@ const SYSTEMS = [
   [/\bLinux\b/, 'Linux'],
 ]
 
-const match = (list, s) => list.find(([re]) => re.test(s))?.[1] ?? ''
+const match = (list: [RegExp, string][], s: string) => list.find(([re]) => re.test(s))?.[1] ?? ''
 
 /**
  * A browser's user agent in a few words: "Firefox on Linux". An agent it

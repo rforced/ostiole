@@ -16,7 +16,7 @@ import { connected, livePeer } from '@/lib/wgStatus'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import PeerDialog from '@/views/vpn/PeerDialog.vue'
-import type { Tunnel } from '@/lib/types.gen'
+import type { Interface, Tunnel, WireGuardPeer } from '@/lib/types.gen'
 
 const props = defineProps({
   /** Each tunnel of the running configuration as its device has it, by name. */
@@ -27,13 +27,20 @@ const props = defineProps({
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const tunnel = ref(null)
-const editing = ref(null)
+interface PeerRow {
+  tunnel: Interface
+  peer: WireGuardPeer
+}
+
+const tunnel = ref<Interface | null>(null)
+const editing = ref<WireGuardPeer | null>(null)
 const open = ref(false)
 
 /** Every tunnel's peers, in the order the configuration has them. */
 const rows = computed(() =>
-  config.tunnels.flatMap((t) => (t.wireguard.peers ?? []).map((p) => ({ tunnel: t, peer: p }))),
+  config.tunnels.flatMap((t) =>
+    (t.wireguard?.peers ?? []).map((p): PeerRow => ({ tunnel: t, peer: p })),
+  ),
 )
 
 /**
@@ -48,7 +55,8 @@ watch(following, (on) => {
 })
 
 /** A row's peer as its device reports it. */
-const seen = (r) => livePeer(held.value?.status ?? props.live, r.tunnel.name, r.peer.publicKey)
+const seen = (r: PeerRow) =>
+  livePeer(held.value?.status ?? props.live, r.tunnel.name, r.peer.publicKey)
 
 const COLUMNS: SortColumn[] = [
   ['peer', 'Peer'],
@@ -63,7 +71,7 @@ const sort = useSort(rows, {
 const peers = sort.sorted
 
 /** The peer's allowed addresses, a network it shows under another prefix with it. */
-function allowed(peer) {
+function allowed(peer: WireGuardPeer) {
   const shown = new Map((peer.theirs ?? []).map((m) => [m.network, m.as]))
   return (peer.allowedIps ?? [])
     .map((a) => (shown.has(a) ? `${a} as ${shown.get(a)}` : a))
@@ -71,7 +79,7 @@ function allowed(peer) {
 }
 
 /** When the peer last shook hands: "never" for one that has not. */
-function handshake(r) {
+function handshake(r: PeerRow) {
   if (!props.read.updatedAt.value) return '…'
   const q = seen(r)
   if (!q) return '—'
@@ -81,7 +89,7 @@ function handshake(r) {
 /** The tunnel a new peer goes on first: one that takes calls, as devices need. */
 function firstTunnel() {
   const on = config.tunnels.filter((t) => t.enabled)
-  return on.find((t) => t.wireguard.listenPort) ?? on[0] ?? config.tunnels[0] ?? null
+  return on.find((t) => t.wireguard?.listenPort) ?? on[0] ?? config.tunnels[0] ?? null
 }
 
 function add() {
@@ -89,7 +97,7 @@ function add() {
   editing.value = null
   open.value = true
 }
-function edit(r) {
+function edit(r: PeerRow) {
   tunnel.value = r.tunnel
   editing.value = r.peer
   open.value = true
@@ -175,7 +183,7 @@ function edit(r) {
                 · {{ r.peer.keepalive }}s</span
               >
               <div
-                v-if="r.peer.endpoint && seen(r)?.endpoint && seen(r).endpoint !== r.peer.endpoint"
+                v-if="r.peer.endpoint && seen(r)?.endpoint && seen(r)?.endpoint !== r.peer.endpoint"
                 class="font-sans text-xs text-ink-muted"
               >
                 set to {{ r.peer.endpoint }}
@@ -186,8 +194,8 @@ function edit(r) {
             </td>
             <td class="num text-code" data-label="Traffic">
               <template v-if="seen(r)">
-                <div>↓ {{ formatBytes(seen(r).rxBytes) }}</div>
-                <div>↑ {{ formatBytes(seen(r).txBytes) }}</div>
+                <div>↓ {{ formatBytes(seen(r)?.rxBytes ?? 0) }}</div>
+                <div>↑ {{ formatBytes(seen(r)?.txBytes ?? 0) }}</div>
               </template>
               <template v-else>{{ read.updatedAt.value ? '—' : '…' }}</template>
             </td>

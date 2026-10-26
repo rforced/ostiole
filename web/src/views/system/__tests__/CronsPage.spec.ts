@@ -1,11 +1,11 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { DOMWrapper, flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import CronsPage from '@/views/system/CronsPage.vue'
-import { configOf, sessionOf } from '@/test/fixtures'
+import { configOf, sessionOf, must } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   ApiError: class extends Error {},
@@ -31,7 +31,7 @@ const config = configOf({
   },
 })
 
-async function open(role) {
+async function open(role: string) {
   useAuthStore().user = sessionOf({ username: role, role })
   vi.mocked(api.config.get).mockResolvedValue({ config: structuredClone(config), revision: 'r1' })
   vi.mocked(api.crons.list).mockResolvedValue([])
@@ -40,8 +40,9 @@ async function open(role) {
   return wrapper
 }
 
-const rows = (w) => w.findAll('tbody tr').filter((tr) => tr.find('button').exists())
-const button = (tr, label) => tr.findAll('button').find((b) => b.text().includes(label))
+const rows = (w: VueWrapper) => w.findAll('tbody tr').filter((tr) => tr.find('button').exists())
+const button = (tr: DOMWrapper<Element>, label: string) =>
+  must(tr.findAll('button').find((b) => b.text().includes(label)))
 
 describe('CronsPage', () => {
   beforeEach(() => {

@@ -2,11 +2,12 @@ import { computed, ref } from 'vue'
 
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import type { ServicesStatus } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 /** One read of the services status, shared by a page's header and its notices. */
-const status = ref(null)
-let inflight = null
+const status = ref<ServicesStatus | null>(null)
+let inflight: Promise<void> | null = null
 
 /** Fetches once however many callers ask while it is in the air. */
 function fetchStatus() {
@@ -24,7 +25,10 @@ function fetchStatus() {
 }
 
 /** Which field says a service runs, where it is not the DHCP and DNS unit's. */
-const RUNNING = { upnp: 'upnpRunning', discovery: 'discoveryRunning' }
+const RUNNING: Partial<Record<ServiceName, keyof ServicesStatus>> = {
+  upnp: 'upnpRunning',
+  discovery: 'discoveryRunning',
+}
 
 /** The services whose badge the status covers. */
 export type ServiceName = 'dhcp' | 'dns' | 'upnp' | 'discovery'

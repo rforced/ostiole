@@ -33,17 +33,13 @@ export function useDragSort(
   const { moveClass, reorder } = useReorder()
   /** The id of the row being dragged, empty while none is. */
   const dragging = ref('')
-  /** @type {string[]} */
-  let before = []
-  /** @type {number[]} */
-  let centres = []
+  let before: string[] = []
+  let centres: number[] = []
   let grabbedAt = 0
   let pointer = -1
-  /** @type {HTMLElement | null} */
-  let captured = null
+  let captured: HTMLElement | null = null
 
-  /** @param {PointerEvent} event */
-  function grab(event, id) {
+  function grab(event: PointerEvent, id: string) {
     const el = list.value
     if (dragging.value || !el || (event.pointerType === 'mouse' && event.button !== 0)) return
     // A mouse would start selecting the titles it passes.
@@ -63,8 +59,7 @@ export function useDragSort(
     el.addEventListener('pointercancel', cancel)
   }
 
-  /** @param {PointerEvent} event */
-  function move(event) {
+  function move(event: PointerEvent) {
     if (event.pointerId !== pointer) return
     const id = dragging.value
     const to = nearest(event.clientY - grabbedAt, centres)
@@ -78,16 +73,14 @@ export function useDragSort(
 
   const moved = () => order.value.some((id, i) => id !== before[i])
 
-  /** @param {PointerEvent} event */
-  function release(event) {
+  function release(event: PointerEvent) {
     if (event.pointerId !== pointer) return
     const changed = moved()
     stop()
     if (changed) drop()
   }
 
-  /** @param {PointerEvent} event */
-  function cancel(event) {
+  function cancel(event: PointerEvent) {
     if (event.pointerId !== pointer) return
     if (moved()) reorder(() => (order.value = before))
     stop()

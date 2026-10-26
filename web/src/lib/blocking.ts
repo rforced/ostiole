@@ -106,13 +106,13 @@ function proxyNames(cfg: Config | null): string[] {
   if (!proxy?.enabled || !dns.enabled) return []
   const named = dns.interfaces ?? []
   const listening = named.length
-    ? (cfg.interfaces ?? []).filter((i) => i.enabled && named.includes(i.name))
+    ? (cfg?.interfaces ?? []).filter((i) => i.enabled && named.includes(i.name))
     : internalInterfaces(cfg)
   // The zones an enabled access rule opens the proxy on, as ProxyZones.
   const zones = new Set(
     (proxy.access ?? []).filter((a) => a.enabled && a.action === 'accept').map((a) => a.zone),
   )
-  if (!listening.some((i) => zones.has(i.zone))) return []
+  if (!listening.some((i) => i.zone !== undefined && zones.has(i.zone))) return []
   const domain = normalizeName(dns.domain)
   const out: string[] = []
   for (const site of proxy.sites ?? []) {

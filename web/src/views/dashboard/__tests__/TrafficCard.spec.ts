@@ -23,7 +23,7 @@ const link = (name: string): TrafficLink => ({
   points: [[NOW, 1_000_000, 500_000]],
 })
 
-function open(links, props = {}) {
+function open(links: string[], props = {}) {
   return mount(TrafficCard, {
     props: { links, ...props },
     global: { stubs: { RouterLink: RouterLinkStub } },

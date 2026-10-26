@@ -12,6 +12,7 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { formatBytes, formatCount } from '@/lib/format'
 import { LEVELS } from '@/lib/meter'
+import type { Attribute, Drive, DrivesResponse, SelfTest } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfirmStore } from '@/stores/confirm'
 import { useToastStore } from '@/stores/toast'
@@ -21,7 +22,7 @@ const auth = useAuthStore()
 const confirm = useConfirmStore()
 const toast = useToastStore()
 
-const status = ref(null)
+const status = ref<DrivesResponse | null>(null)
 const drives = computed(() => status.value?.drives ?? [])
 
 const load = useAsync(async () => {
@@ -31,22 +32,22 @@ onMounted(load.run)
 
 // Which test was asked for, by drive. The drive reports that a test is
 // running but not which one, and the page is the only thing that knows.
-const started = ref({})
+const started = ref<Record<string, string>>({})
 
 /** One place for what a button does, so its failure lands in one alert. */
 const action = useAsync((run: () => Promise<unknown>) => run())
 /** The button whose request is in flight, as drive:what. */
 const doing = ref('')
-const busyOn = (drive, what) => doing.value === `${drive.name}:${what}`
+const busyOn = (drive: Drive, what: string) => doing.value === `${drive.name}:${what}`
 
-async function act(drive, what, run) {
+async function act(drive: Drive, what: string, run: () => Promise<unknown>) {
   doing.value = `${drive.name}:${what}`
   await action.run(run)
   doing.value = ''
 }
 
-function replaceDrive(updated) {
-  if (!updated || !status.value) return
+function replaceDrive(updated: Drive) {
+  if (!updated || !status.value?.drives) return
   const i = status.value.drives.findIndex((d) => d.name === updated.name)
   if (i >= 0) status.value.drives[i] = updated
 }
@@ -67,7 +68,7 @@ watch(
   (n) => (n ? poll.start() : poll.stop()),
 )
 
-async function start(drive, kind) {
+async function start(drive: Drive, kind: string) {
   if (kind === 'long') {
     const hint = minutes(drive.selfTest?.extendedMinutes)
     const ok = await confirm.ask({
@@ -84,13 +85,13 @@ async function start(drive, kind) {
   })
 }
 
-function abort(drive) {
+function abort(drive: Drive) {
   act(drive, 'abort', async () => {
     replaceDrive(await api.diagnostics.abortSelfTest(drive.name))
   })
 }
 
-function report(drive) {
+function report(drive: Drive) {
   act(drive, 'report', async () => {
     const { blob, name } = await api.diagnostics.driveReport(drive.name)
     // The API is behind a CSRF header, so a plain link cannot fetch it.
@@ -105,18 +106,22 @@ function report(drive) {
 }
 
 /** How long a test takes, in the unit that reads at a glance. */
-function minutes(n) {
+function minutes(n: number | undefined) {
   if (!n) return ''
   if (n < 90) return `About ${n} minute${n === 1 ? '' : 's'}.`
   const hours = Math.round(n / 60)
   return `About ${hours} hour${hours === 1 ? '' : 's'}.`
 }
 
-const TEST_LABELS = { short: 'Short', long: 'Extended', conveyance: 'Conveyance' }
+const TEST_LABELS: Record<string, string> = {
+  short: 'Short',
+  long: 'Extended',
+  conveyance: 'Conveyance',
+}
 
 /** The one line over the buttons: what the drive is doing, or last did. */
-function testLine(drive) {
-  const t = drive.selfTest ?? {}
+function testLine(drive: Drive) {
+  const t: Partial<SelfTest> = drive.selfTest ?? {}
   if (t.running) {
     const label = TEST_LABELS[started.value[drive.name]] ?? 'Self'
     return `${label} test running, ${t.remaining}% left.`
@@ -127,12 +132,16 @@ function testLine(drive) {
   return `Last test: ${last.type.toLowerCase()}, ${last.status.toLowerCase()}, at ${last.hours} hours.`
 }
 
-function healthLabel(drive) {
+function donePercent(drive: Drive) {
+  return 100 - (drive.selfTest.remaining ?? 100)
+}
+
+function healthLabel(drive: Drive) {
   if (drive.health === 'passed') return 'passed'
   return drive.health === 'failed' ? 'failed' : 'no SMART'
 }
 
-function kindLabel(drive) {
+function kindLabel(drive: Drive) {
   switch (drive.kind) {
     case 'ssd':
       return 'SSD'
@@ -145,7 +154,7 @@ function kindLabel(drive) {
   }
 }
 
-function attributeSubtitle(drive) {
+function attributeSubtitle(drive: Drive) {
   const base = 'Reallocated, pending and uncorrectable sectors above zero are the ones that matter.'
   return drive.inDatabase
     ? base
@@ -157,16 +166,17 @@ function attributeSubtitle(drive) {
  * not news. It is worth a badge when the table the page is built on is
  * what went missing.
  */
-function missingReadings(drive) {
+function missingReadings(drive: Drive) {
   return drive.partial && !drive.attributes?.length && !drive.nvme
 }
 
 /** A critical attribute that has started counting is worth the ink. */
-function rawTone(a) {
+function rawTone(a: Attribute) {
   return a.critical && a.raw > 0 ? 'text-warn' : ''
 }
 
-const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined && e.lba !== null)
+const hasLBA = (drive: Drive) =>
+  (drive.testLog ?? []).some((e) => e.lba !== undefined && e.lba !== null)
 </script>
 
 <template>
@@ -333,14 +343,14 @@ const hasLBA = (drive) => (drive.testLog ?? []).some((e) => e.lba !== undefined 
             :class="LEVELS.ok.track"
             role="meter"
             :aria-label="`${d.name} self-test`"
-            :aria-valuenow="100 - d.selfTest.remaining"
+            :aria-valuenow="donePercent(d)"
             aria-valuemin="0"
             aria-valuemax="100"
           >
             <div
               class="meter-fill"
               :class="LEVELS.ok.fill"
-              :style="{ width: `${100 - d.selfTest.remaining}%` }"
+              :style="{ width: `${donePercent(d)}%` }"
             />
           </div>
         </div>

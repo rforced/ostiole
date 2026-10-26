@@ -7,15 +7,16 @@ import AppDialog from '@/components/AppDialog.vue'
 import ApplyPending from '@/components/ApplyPending.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
-import type { Session } from '@/lib/api'
+import type { Role, Session } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
+import { must } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   api: { status: vi.fn(), config: { confirm: vi.fn(), revert: vi.fn() } },
   ApiError: class ApiError extends Error {},
 }))
 
-function as(role) {
+function as(role: Role) {
   useAuthStore().user = { username: role, role } as Session
 }
 
@@ -67,10 +68,9 @@ describe('read only', () => {
     await flushPromises()
     const fieldset = document.querySelector<HTMLFieldSetElement>('fieldset.read-only')
     expect(fieldset?.disabled).toBe(true)
-    expect(fieldset.querySelector('#name')).not.toBeNull()
+    expect(must(fieldset).querySelector('#name')).not.toBeNull()
     const close = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Close')
-    expect(close).toBeDefined()
-    expect(fieldset.contains(close)).toBe(false)
+    expect(must(fieldset).contains(must(close))).toBe(false)
   })
 
   it('leaves a dialog alone for an operator, and one that says so for a viewer', async () => {

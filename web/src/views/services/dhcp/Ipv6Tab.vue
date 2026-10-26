@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import type { DHCPv6Server } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import V6ServerDialog from '@/views/services/dhcp/V6ServerDialog.vue'
@@ -13,10 +14,10 @@ const config = useConfigStore()
 const dhcp = computed(() => config.ensureServices().dhcp)
 /** Interfaces that are switched off. Nothing is advertised on one of them. */
 const off = computed(() => new Set(config.interfaces.filter((i) => !i.enabled).map((i) => i.name)))
-const editing = ref(null)
+const editing = ref<DHCPv6Server | null>(null)
 const open = ref(false)
 
-const MODES = {
+const MODES: Record<string, string> = {
   slaac: 'SLAAC only',
   stateless: 'Stateless DHCPv6',
   managed: 'Managed DHCPv6',
@@ -26,7 +27,7 @@ function add() {
   editing.value = null
   open.value = true
 }
-function edit(s) {
+function edit(s: DHCPv6Server) {
   editing.value = s
   open.value = true
 }
