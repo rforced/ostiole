@@ -3,7 +3,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, type Role, type Session } from '@/lib/api'
-import type { Config } from '@/lib/model.gen'
+import type { Config, ServicesStatus } from '@/lib/types.gen'
+import { fixture } from '@/test/fixtures'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import DiscoveryPage from '@/views/services/DiscoveryPage.vue'
@@ -94,7 +95,9 @@ describe('DiscoveryPage', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
-    vi.mocked(api.services.status).mockResolvedValue({ discoveryRunning: true })
+    vi.mocked(api.services.status).mockResolvedValue(
+      fixture<ServicesStatus>({ discoveryRunning: true }),
+    )
   })
 
   it.each([

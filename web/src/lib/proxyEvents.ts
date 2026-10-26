@@ -1,27 +1,10 @@
+import type { Hit, WaflogEntry } from '@/lib/types.gen'
+
 /** One rule an event matched; id is the rule's number. */
-export interface WafHit {
-  id: number
-  message?: string
-  data?: string
-  severity?: string
-}
+export type WafHit = Hit
 
 /** One request the WAF blocked, would have blocked or matched. */
-export interface WafEvent {
-  seq: number
-  time: string
-  logged: string
-  id: string
-  site?: string
-  client?: string
-  method?: string
-  uri?: string
-  status?: number
-  verdict: string
-  engine?: string
-  rules: WafHit[] | null
-  moreMatches?: number
-}
+export type WafEvent = WaflogEntry
 
 /** A matched rule as the tab lists it: once however often it matched. */
 export interface WafRuleLine {

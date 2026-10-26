@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"slices"
 	"strings"
+	"time"
 
 	"software.sslmate.com/src/go-pkcs12"
 
@@ -142,10 +143,7 @@ func (a *api) regenerateCertificate(w http.ResponseWriter, r *http.Request) erro
 	if a.certs == nil {
 		return &unavailable{errors.New("this server is not serving HTTPS")}
 	}
-	var req struct {
-		// Hosts overrides the detected names; empty uses them.
-		Hosts []string `json:"hosts,omitempty"`
-	}
+	var req selfSignedRequest
 	if r.ContentLength != 0 {
 		if err := decodeJSON(r, &req); err != nil {
 			return err
@@ -173,7 +171,7 @@ func (a *api) certificateKey(w http.ResponseWriter, _ *http.Request) error {
 	if err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"privateKey": string(key)})
+	writeJSON(w, http.StatusOK, certificateKeyReply{PrivateKey: string(key)})
 	return nil
 }
 
@@ -190,8 +188,33 @@ func (a *api) issueCertificate(w http.ResponseWriter, r *http.Request) error {
 	case err != nil:
 		return err
 	}
-	writeJSON(w, http.StatusAccepted, map[string]string{"id": id})
+	writeJSON(w, http.StatusAccepted, idReply{ID: id})
 	return nil
+}
+
+// certificateBundleReply is a certificate's files and when they lapse.
+type certificateBundleReply struct {
+	Certificate string    `json:"certificate"`
+	Chain       string    `json:"chain"`
+	Fingerprint string    `json:"fingerprint,omitempty"`
+	Key         string    `json:"key"`
+	NotAfter    time.Time `json:"notAfter"`
+}
+
+// certificateKeyReply carries a freshly minted ACME account key.
+type certificateKeyReply struct {
+	PrivateKey string `json:"privateKey"`
+}
+
+// selfSignedRequest may override the names a regenerated certificate covers.
+type selfSignedRequest struct {
+	// Hosts overrides the detected names; empty uses them.
+	Hosts []string `json:"hosts,omitempty"`
+}
+
+// pkcs12Request carries the password that protects the exported file.
+type pkcs12Request struct {
+	Password string `json:"password"`
 }
 
 // certificateBundle hands the files to whoever holds the certificate:
@@ -201,14 +224,14 @@ func (a *api) certificateBundle(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	out := map[string]any{
-		"certificate": string(f.FullChain),
-		"chain":       string(f.Chain),
-		"key":         string(f.Key),
-		"notAfter":    f.State.NotAfter,
+	out := certificateBundleReply{
+		Certificate: string(f.FullChain),
+		Chain:       string(f.Chain),
+		Key:         string(f.Key),
+		NotAfter:    f.State.NotAfter,
 	}
 	if info, err := certs.Describe(f.Cert); err == nil {
-		out["notAfter"], out["fingerprint"] = info.NotAfter, info.Fingerprint
+		out.NotAfter, out.Fingerprint = info.NotAfter, info.Fingerprint
 	}
 	writeJSON(w, http.StatusOK, out)
 	return nil
@@ -246,9 +269,7 @@ func (a *api) certificateFile(w http.ResponseWriter, r *http.Request) error {
 // certificatePKCS12 packs the certificate and its key into the one file
 // Windows and Java will read.
 func (a *api) certificatePKCS12(w http.ResponseWriter, r *http.Request) error {
-	var req struct {
-		Password string `json:"password"`
-	}
+	var req pkcs12Request
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}

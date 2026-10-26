@@ -4,11 +4,11 @@ import type { PropType } from 'vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { formatWhen } from '@/lib/format'
 import { matchedLabel as by } from '@/lib/fwlog'
-import type { BlockEntry } from '@/views/dashboard/overview'
+import type { FwlogEntry } from '@/lib/types.gen'
 
 defineProps({
   /** The newest refused packets from GET /overview, newest first. */
-  blocks: { type: Array as PropType<BlockEntry[]>, default: () => [] },
+  blocks: { type: Array as PropType<FwlogEntry[]>, default: () => [] },
   /** False until the first overview arrives. */
   loaded: { type: Boolean, default: true },
   /** How many rows to hold room for until then. */

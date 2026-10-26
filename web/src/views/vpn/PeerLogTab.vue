@@ -13,7 +13,7 @@ import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { heldLine, useLog } from '@/lib/log'
 import { records } from '@/lib/logs'
-import { peerValues } from '@/lib/peerLog'
+import { type PeerEvent, peerValues } from '@/lib/peerLog'
 import { useConfigStore } from '@/stores/config'
 
 /**
@@ -70,7 +70,7 @@ const retention = computed({
 })
 
 const card = ref(null)
-const log = useLog({
+const log = useLog<PeerEvent>({
   read: spec.read,
   stream: `/api/v1/${props.kind}/log/stream`,
   values: peerValues,

@@ -9,7 +9,7 @@ import { useAsync } from '@/lib/async'
 import { usePageTabs } from '@/lib/tabs'
 import PeerLogTab from '@/views/vpn/PeerLogTab.vue'
 import PeersTab from '@/views/vpn/wireguard/PeersTab.vue'
-import type { GatewayStatus, WgLive } from '@/views/vpn/types'
+import type { GatewayStatus, Tunnel } from '@/lib/types.gen'
 import TunnelsTab from '@/views/vpn/wireguard/TunnelsTab.vue'
 
 /** How often the tunnels are read while the page is shown. */
@@ -18,16 +18,16 @@ const POLL_MS = 5000
 const { tabs, tab } = usePageTabs()
 
 /** Each tunnel of the running configuration as its device has it, by name. */
-const live = ref(new Map<string, WgLive>())
+const live = ref(new Map<string, Tunnel>())
 /** The gateway monitor's word on each gateway, for the tunnels one sends traffic into. */
 const gateways = ref<GatewayStatus[]>([])
 const read = useAsync(
   async () => {
-    const got = (await api.wireguard.status()) as WgLive[]
+    const got = await api.wireguard.status()
     live.value = new Map(got.map((t) => [t.name, t]))
     // A monitor that is not running leaves only the gateway column bare.
     try {
-      gateways.value = (await api.gateways()) as GatewayStatus[]
+      gateways.value = await api.gateways()
     } catch {
       gateways.value = []
     }

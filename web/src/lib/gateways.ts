@@ -1,23 +1,9 @@
 import type { ChartSeries } from '@/components/chartTypes'
 import { SPANS } from '@/lib/chart'
 import { formatDuration, formatMs } from '@/lib/format'
+import type { GatewayEvent } from '@/lib/types.gen'
 
-/** One event of a gateway's history; for and span are in seconds. */
-export interface GatewayEvent {
-  seq: number
-  time: string
-  gateway: string
-  family?: string
-  kind: string
-  for?: number
-  error?: string
-  monitor?: string
-  was?: string
-  latencyMs?: number
-  lossPercent?: number
-  limit?: number
-  span?: number
-}
+export type { GatewayEvent }
 
 /** How often a gateway is probed unless it says, in seconds (model.DefaultProbeSeconds). */
 export const DEFAULT_PROBE_SECONDS = 30

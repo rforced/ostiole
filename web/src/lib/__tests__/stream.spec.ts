@@ -15,6 +15,7 @@ describe('streamLost', () => {
       created: '',
       lastSeen: '',
       expires: '',
+      mfa: false,
     })
   })
 

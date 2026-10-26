@@ -3,9 +3,10 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import type { LogfileStatus } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import LogFilesFields from '@/views/system/LogFilesFields.vue'
-import { configOf } from '@/test/fixtures'
+import { configOf, fixture } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({ api: { logFiles: vi.fn() } }))
 
@@ -16,7 +17,9 @@ async function open({
   system = {},
   status = { enabled: false, logs: [] },
 }: { system?: object; status?: object } = {}) {
-  vi.mocked(api.logFiles).mockResolvedValue({ dir: '/var/log/ostiole', ...status })
+  vi.mocked(api.logFiles).mockResolvedValue(
+    fixture<LogfileStatus>({ dir: '/var/log/ostiole', ...status }),
+  )
   const config = useConfigStore()
   config.saved = draft(system)
   config.replaceDraft(draft(system))

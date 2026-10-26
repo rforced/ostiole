@@ -1,16 +1,6 @@
-import type { Config } from '@/lib/model.gen'
+import type { Config, DiscoveryEvent } from '@/lib/types.gen'
 
-/** One packet the relay saw, relayed or dropped. */
-export interface DiscoveryEvent {
-  seq: number
-  protocol: string
-  kind: string
-  from: string
-  to?: string[]
-  name?: string
-  source: string
-  dropped?: string
-}
+export type { DiscoveryEvent }
 
 /** The block a router without one reads as; a missing protocol is on, as the server reads it. */
 export const DISCOVERY_DEFAULT = Object.freeze({ enabled: false, mdns: true, ssdp: true })

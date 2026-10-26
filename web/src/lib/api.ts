@@ -6,7 +6,165 @@
  * on window so the router can send the user to the login page.
  */
 
-import type { LogPage } from '@/lib/log'
+import type {
+  Account,
+  Actor,
+  AddPasskeyRequest,
+  Applied,
+  ApplyRequest,
+  ApplyResult,
+  AssertionResponse,
+  AttestationResponse,
+  AuditLogPage,
+  BackupRequest,
+  BlockingState,
+  BlocklistImportReply,
+  BlocklistRefreshReply,
+  CaptureRequest,
+  CatalogEntry,
+  CertificateKeyReply,
+  CertificateResponse,
+  CertificatesResponse,
+  Change,
+  CheckResult,
+  ClearedReply,
+  Config,
+  ConfigRequest,
+  ConfirmReply,
+  Counters,
+  CreateTokenRequest,
+  CreateUserRequest,
+  CreatedToken,
+  Credentials,
+  CronRunReply,
+  CronStatus,
+  DDNSRecord,
+  DNSProvider,
+  DdnsCheckRequest,
+  DdnsResponse,
+  DetectedGatewayReply,
+  DhcpLogPage,
+  DiffRequest,
+  DiscoveryAnnouncementsReply,
+  DiscoveryLogPage,
+  DnsCacheClearReply,
+  DnsName,
+  DnsblockPage,
+  DnsproviderTestResult,
+  Drift,
+  Drive,
+  DriveHistoryPage,
+  DrivesResponse,
+  FeedRefreshReply,
+  FeedsPage,
+  FeedsStatus,
+  Finding,
+  FlushLegacyRequest,
+  FwLogPage,
+  FwlogEntry,
+  GatewayEvent,
+  GatewayEventsPage,
+  GatewayStatus,
+  GatewayStrip,
+  HealthResponse,
+  HostReport,
+  HostResult,
+  IdReply,
+  InspectFeedRequest,
+  JournalEntry,
+  Lease,
+  LiveLink,
+  LogLimitsInfo,
+  LogfileStatus,
+  LoginPageResponse,
+  LoginPasskeyOptionsRequest,
+  LoginPasskeyRequest,
+  LoginTOTPRequest,
+  Mapping,
+  MfaResponse,
+  ModemStatus,
+  Neighbour,
+  Notifications,
+  NotifyStatus,
+  NtpStatus,
+  OpenvpnStatus,
+  Overview,
+  Part,
+  PasskeyView,
+  PasswordChange,
+  PasswordRequest,
+  PeerLogPage,
+  PendingSignIn,
+  PendingSignInReply,
+  PingRequest,
+  PingResult,
+  Pkcs12Request,
+  Plan,
+  PolicyTarget,
+  ProviderTestRequest,
+  ProxyStatus,
+  QueryLogPage,
+  QuerySummary,
+  RebootReply,
+  RemoteCopiesResponse,
+  RemoteDeleteAllRequest,
+  RemoteDeleteRequest,
+  RemoteRestoreRequest,
+  Removed,
+  RenamePasskeyRequest,
+  RenameUserRequest,
+  RenewRequest,
+  Reply,
+  RequestsPage,
+  RestoreRequest,
+  RestoreResponse,
+  Revision,
+  SelfSignedRequest,
+  SelfTestRequest,
+  ServerTestResult,
+  ServerTrafficDestinations,
+  ServicesStatus,
+  SessionResponse,
+  SessionRow,
+  SetUserPasswordRequest,
+  SetUserRoleRequest,
+  SetupStatusReply,
+  ShapingStatus,
+  StarterRequest,
+  StatesResult,
+  Stats,
+  StatusReply,
+  SystemNAT,
+  SystemRule,
+  SysupdateStatus,
+  TailscaleLoginReply,
+  TailscaleLoginRequest,
+  TailscaleStatus,
+  Timezones,
+  Token,
+  TotpConfirmRequest,
+  TotpStartReply,
+  TraceRequest,
+  TraceResult,
+  TrafficClearReply,
+  TrafficDevice,
+  TrafficDevices,
+  TrafficLinks,
+  Tunnel,
+  UnusedResponse,
+  UpdateApplyRequest,
+  SystemUpdateApplyRequest,
+  UpdateCheckReply,
+  UpdateStatus,
+  UpdateStatusReply,
+  WafEventsPage,
+  WakeRequest,
+  WireguardKeysReply,
+  WireguardKeysRequest,
+  WirelessClient,
+  WirelessLogPage,
+  WirelessRadios,
+} from './types.gen'
 
 export const UNAUTHORIZED_EVENT = 'ostiole:unauthorized'
 
@@ -88,7 +246,7 @@ const post = <T = unknown>(path: string, body?: unknown) => request<T>('POST', p
  * "any", and sending it would narrow the answer to rows with an empty
  * field.
  */
-function withQuery(path: string, params: Record<string, unknown> = {}) {
+function withQuery(path: string, params: object = {}) {
   const q = new URLSearchParams(
     Object.entries(params)
       .filter(([, v]) => v !== '' && v !== undefined && v !== null)
@@ -127,267 +285,216 @@ function base64(buf: ArrayBuffer) {
   return btoa(s)
 }
 
-/** A rule Ostiole writes on its own (nft.SystemRule). */
-export interface SystemRule {
-  chain: string
-  after?: boolean
-  zones?: string[]
-  action: string
-  protocol: string
-  source: string
-  destination: string
-  description: string
-  log?: boolean
-  keys?: string[]
-  logKeys?: string[]
-  setting?: string
+export type {
+  Account,
+  Actor,
+  ApplyResult,
+  Applied,
+  AuditEvent,
+  AuditLogPage,
+  Change,
+  Config,
+  CreatedToken,
+  Drift,
+  DriftChange,
+  MfaResponse,
+  PasskeyView,
+  PendingSignIn,
+  Plan,
+  Revision,
+  Role,
+  SessionResponse,
+  SessionRow,
+  StatusReply,
+  SystemNAT,
+  SystemRule,
+  Token,
+} from './types.gen'
+
+export type Session = SessionResponse
+export type Status = StatusReply
+export type PendingLogin = PendingSignIn
+export type AuditActor = Actor
+export type Mfa = MfaResponse
+export type Passkey = PasskeyView
+export type SystemNat = SystemNAT
+
+/** Filter parameters of a list read; the unset ones are left out. */
+type Query = object
+
+/** One probe set of a gateway's history: [seconds, mean, low, high, loss], the latency null where nothing answered (gateway.Point has a custom MarshalJSON). */
+export type GatewayHistoryPoint = [number, number | null, number | null, number | null, number]
+
+/** GET /gateways/{name}/history is untyped in the generated file because of GatewayHistoryPoint. */
+export interface GatewayHistoryReply {
+  window: string
+  now: string
+  families: {
+    family: string
+    points: GatewayHistoryPoint[]
+    mean: number
+    worst: number
+    loss: number
+    worstLoss: number
+    sent: number
+  }[]
+  down: number
+  never: number
+  monitor?: string
+  events: GatewayEvent[]
 }
 
-/** An outbound NAT rule Ostiole writes on its own (nft.SystemNAT). */
-export interface SystemNat {
-  zone: string
-  interfaces: string[]
-  source: string
-  destination: string
-  to?: string
-  keys?: string[]
-}
-
-export interface Health {
-  status: string
-  version: string
-  commit?: string
-}
-
-export type Role = 'admin' | 'operator' | 'viewer'
-
-export interface Session {
-  username: string
-  role: Role
-  created: string
-  lastSeen: string
-  expires: string
-  mfa?: boolean
-  bypassUntil?: string
-  bypassBy?: string
-}
-
-/** What a sign-in still needs after the password. */
-export interface PendingLogin {
+/** The `publicKey` map is open in the generated types; the browser's own JSON types describe it. */
+export interface PasskeyLoginStart {
   token: string
-  totp: boolean
-  passkeys: boolean
-  rpId: string
-}
-
-export interface Passkey {
-  id: string
-  name: string
-  rpId: string
-  createdAt: string
-  lastUsed?: string
-  transports?: string[]
-}
-
-export interface Mfa {
-  totp: { enabledAt: string; lastUsed?: string } | null
-  passkeys: Passkey[]
-  rpId: string
-  bypassUntil?: string
-  bypassBy?: string
-}
-
-/** A browser signed in as the account. */
-export interface SessionRow {
-  id: string
-  created: string
-  lastSeen: string
-  expires: string
-  address: string
-  agent: string
-  current: boolean
-}
-
-export interface Token {
-  id: string
-  name: string
-  role: string
-  createdAt: string
-  createdBy?: string
-  owner?: string
-  expiresAt?: string
-  lastUsedAt?: string
-  certificates?: string[]
-  metrics?: boolean
-}
-
-export interface Status {
-  configured: boolean
-  tableLoaded: boolean
-  network: string
-  pending?: { since: string; deadline: string; remaining: number; tag?: string }
-  fallback?: { since: string; reason: string }
-  recovered?: { since: string; at: string }
-  ssh?: string
-  drift?: { parts: string[]; changes: number }
-}
-
-export interface DriftChange {
-  path: string
-  kind: 'added' | 'removed'
-  before?: string
-  after?: string
-}
-
-export interface Drift {
-  parts: string[]
-  changes: DriftChange[]
-  more?: number
-}
-
-/** Who did a thing: an account, a token or a shell user. */
-export interface AuditActor {
-  name?: string
-  kind?: string
-  role?: string
-  address?: string
-}
-
-/** One entry of the audit log; text is the entry as a sentence. */
-export interface AuditEvent {
-  seq: number
-  time: string
-  action: string
-  by: AuditActor
-  target?: string
-  detail?: string
-  text?: string
+  publicKey: PublicKeyCredentialRequestOptionsJSON
 }
 
 export const api = {
-  health: () => get<Health>('/health'),
+  health: () => get<HealthResponse>('/health'),
   setup: {
-    status: () => get<{ needed: boolean }>('/setup'),
-    create: (username, password) => post<Session>('/setup', { username, password }),
+    status: () => get<SetupStatusReply>('/setup'),
+    create: (username: string, password: string) =>
+      post<SessionResponse>('/setup', { username, password } satisfies Credentials),
   },
   auth: {
     /**
      * What the sign-in page shows: the router's hostname, and whether an
      * account has a passkey made on this host name.
      */
-    loginPage: () => get<{ hostname?: string; passkeys?: boolean }>('/auth/login'),
+    loginPage: () => get<LoginPageResponse>('/auth/login'),
     /**
      * A sign-in with a passkey alone: its token and a request that names no
      * account, so the browser offers each passkey it keeps for this host name.
      */
-    loginStart: () =>
-      post<{ token: string; publicKey: PublicKeyCredentialRequestOptionsJSON }>(
-        '/auth/login/start',
-      ),
-    login: (username, password) =>
-      post<Session | { pending: PendingLogin }>('/auth/login', { username, password }),
-    loginTOTP: (pending, code) => post<Session>('/auth/login/totp', { pending, code }),
-    passkeyLoginOptions: (pending) =>
+    loginStart: () => post<PasskeyLoginStart>('/auth/login/start'),
+    login: (username: string, password: string) =>
+      post<SessionResponse | PendingSignInReply>('/auth/login', {
+        username,
+        password,
+      } satisfies Credentials),
+    loginTOTP: (pending: string, code: string) =>
+      post<SessionResponse>('/auth/login/totp', { pending, code } satisfies LoginTOTPRequest),
+    passkeyLoginOptions: (pending: string) =>
       post<{ publicKey: PublicKeyCredentialRequestOptionsJSON }>('/auth/login/passkey/options', {
         pending,
-      }),
-    loginPasskey: (pending, credential) =>
-      post<Session>('/auth/login/passkey', { pending, credential }),
-    logout: () => post('/auth/logout'),
-    me: () => get<Session>('/auth/me'),
-    changePassword: (current, next) => post<Session>('/auth/password', { current, new: next }),
+      } satisfies LoginPasskeyOptionsRequest),
+    loginPasskey: (pending: string, credential: AssertionResponse) =>
+      post<SessionResponse>('/auth/login/passkey', {
+        pending,
+        credential,
+      } satisfies LoginPasskeyRequest),
+    logout: () => post<void>('/auth/logout'),
+    me: () => get<SessionResponse>('/auth/me'),
+    changePassword: (current: string, next: string) =>
+      post<SessionResponse>('/auth/password', { current, new: next } satisfies PasswordChange),
     /**
      * What the signed-in account has for multi-factor authentication, never the secrets.
      */
-    mfa: () => get<Mfa>('/auth/mfa'),
+    mfa: () => get<MfaResponse>('/auth/mfa'),
     /**
      * A new authenticator secret, kept until a code from it is confirmed.
      */
-    totpStart: () => post<{ secret: string; uri: string }>('/auth/mfa/totp/start'),
-    totpConfirm: (code) => post('/auth/mfa/totp/confirm', { code }),
+    totpStart: () => post<TotpStartReply>('/auth/mfa/totp/start'),
+    totpConfirm: (code: string) =>
+      post<void>('/auth/mfa/totp/confirm', { code } satisfies TotpConfirmRequest),
     /** Removes the authenticator app and every passkey, on the password. */
-    mfaClear: (password) => post('/auth/mfa/clear', { password }),
+    mfaClear: (password: string) =>
+      post<void>('/auth/mfa/clear', { password } satisfies PasswordRequest),
     /**
      * The challenge for a new passkey, on the password: a wrong one is
      * refused before the browser's prompt.
      */
-    passkeyOptions: (password) =>
+    passkeyOptions: (password: string) =>
       post<{ publicKey: PublicKeyCredentialCreationOptionsJSON }>('/auth/mfa/passkeys/options', {
         password,
-      }),
-    addPasskey: (name, credential) => post<Passkey>('/auth/mfa/passkeys', { name, credential }),
-    renamePasskey: (id, name) =>
-      request<Passkey>('PATCH', `/auth/mfa/passkeys/${encodeURIComponent(id)}`, { name }),
-    removePasskey: (id) => request('DELETE', `/auth/mfa/passkeys/${encodeURIComponent(id)}`),
+      } satisfies PasswordRequest),
+    addPasskey: (name: string, credential: AttestationResponse) =>
+      post<PasskeyView>('/auth/mfa/passkeys', { name, credential } satisfies AddPasskeyRequest),
+    renamePasskey: (id: string, name: string) =>
+      request<PasskeyView>('PATCH', `/auth/mfa/passkeys/${encodeURIComponent(id)}`, {
+        name,
+      } satisfies RenamePasskeyRequest),
+    removePasskey: (id: string) =>
+      request<void>('DELETE', `/auth/mfa/passkeys/${encodeURIComponent(id)}`),
     sessions: () => get<SessionRow[]>('/auth/sessions'),
-    endSession: (id) => request('DELETE', `/auth/sessions/${encodeURIComponent(id)}`),
-    endOtherSessions: () => post('/auth/sessions/end-others'),
+    endSession: (id: string) => request<void>('DELETE', `/auth/sessions/${encodeURIComponent(id)}`),
+    endOtherSessions: () => post<void>('/auth/sessions/end-others'),
     /** The signed-in account's own API tokens. */
     tokens: {
       list: () => get<Token[]>('/auth/tokens'),
-      create: (body) => post<Token & { secret: string }>('/auth/tokens', body),
-      remove: (id) => request('DELETE', `/auth/tokens/${encodeURIComponent(id)}`),
+      create: (body: CreateTokenRequest) => post<CreatedToken>('/auth/tokens', body),
+      remove: (id: string) => request<void>('DELETE', `/auth/tokens/${encodeURIComponent(id)}`),
     },
   },
-  status: () => get<Status>('/status'),
+  status: () => get<StatusReply>('/status'),
   /** Everything the dashboard shows, in one request. */
-  overview: () => get('/overview'),
+  overview: () => get<Overview>('/overview'),
   /**
    * CPU, memory and disk. The CPU figure covers the time since the previous
    * request, so the first one after a restart has none.
    */
-  systemStats: () => get('/system/stats'),
+  systemStats: () => get<Stats>('/system/stats'),
   /** The zones this router can be set to, and the one its clock reads now. */
-  timezones: () => get('/system/timezones'),
+  timezones: () => get<Timezones>('/system/timezones'),
   /** Whether the logs are written to files, what the files hold, and how writing goes. */
-  logFiles: () => get('/system/log-files'),
+  logFiles: () => get<LogfileStatus>('/system/log-files'),
   /**
    * What this router's memory allows the logs: their budget at their
    * largest, the peak factor, and the most entries each log may keep.
    */
-  logLimits: () => get('/logs/limits'),
+  logLimits: () => get<LogLimitsInfo>('/logs/limits'),
   /** Empties every log a page can clear and deletes its files. */
-  clearLogs: () => request('DELETE', '/system/logs'),
+  clearLogs: () => request<ClearedReply>('DELETE', '/system/logs'),
   config: {
     /**
      * The saved configuration and its revision, which an apply names as
      * the one its draft was read from.
-     * @returns {Promise<{config: object, revision: string}>}
      */
-    get: async () => {
+    get: async (): Promise<{ config: Config; revision: string }> => {
       const res = await send('GET', '/config')
       const etag = res.headers.get('ETag') ?? ''
-      return { config: await res.json(), revision: etag.replace(/^(W\/)?"|"$/g, '') }
+      return { config: (await res.json()) as Config, revision: etag.replace(/^(W\/)?"|"$/g, '') }
     },
     /** Build (without saving) a first configuration from the wizard answers. */
-    starter: (opts) => post('/config/starter', opts),
-    revisions: () => get('/config/revisions'),
-    revision: (id) => get(`/config/revisions/${encodeURIComponent(id)}`),
+    starter: (opts: StarterRequest) => post<Config>('/config/starter', opts),
+    revisions: () => get<Revision[]>('/config/revisions'),
+    revision: (id: string) => get<Config>(`/config/revisions/${encodeURIComponent(id)}`),
     /** Who applied the configuration in force, or null when nothing recorded it. Admins only. */
-    applied: () => get('/config/applied'),
-    check: (config) => post('/check', { config }),
+    applied: () => get<Applied | null>('/config/applied'),
+    check: (config: Config) => post<Plan>('/check', { config } satisfies ConfigRequest),
     /**
      * The server refuses it with a 409 and code "stale" once baseRevision is
      * not the saved one. The status repeats tag while the apply awaits
      * confirmation.
      */
-    apply: (config, baseRevision, confirmTimeoutSeconds = 60, tag = '') =>
-      post('/apply', { config, confirmTimeoutSeconds, baseRevision, ...(tag && { tag }) }),
-    confirm: () => post('/apply/confirm'),
-    revert: () => post('/apply/revert'),
+    apply: (config: Config, baseRevision: string, confirmTimeoutSeconds = 60, tag = '') =>
+      post<ApplyResult>('/apply', {
+        config,
+        confirmTimeoutSeconds,
+        baseRevision,
+        ...(tag ? { tag } : {}),
+      } satisfies ApplyRequest),
+    confirm: () => post<ConfirmReply>('/apply/confirm'),
+    revert: () => post<void>('/apply/revert'),
     /**
      * The lines applying the saved configuration again would change.
      */
     drift: () => get<Drift>('/apply/drift'),
     /** Compares two configurations; each side is a revision id, 'current', or inline. */
-    diff: (body) => post('/config/diff', body),
+    diff: (body: DiffRequest) => post<Change[]>('/config/diff', body),
     /** What a configuration leaves unused or switched off. */
-    unused: (config) => post('/config/unused', config),
+    unused: (config: Config) => post<UnusedResponse>('/config/unused', config),
     /**
      * Downloads a backup; returns the file and the name the server chose.
      * It is a POST because a passphrase has no business in a URL.
      */
-    backup: async ({ users = false, note = '', passphrase = '', redact = false } = {}) => {
+    backup: async ({
+      users = false,
+      note = '',
+      passphrase = '',
+      redact = false,
+    }: BackupRequest = {}) => {
       const res = await fetch('/api/v1/config/backup', {
         method: 'POST',
         headers: { 'X-Requested-With': 'ostiole', 'Content-Type': 'application/json' },
@@ -401,97 +508,111 @@ export const api = {
       return { blob: await res.blob(), name }
     },
     /** The backups this router has in its bucket, newest first. */
-    remoteCopies: () => get('/config/backup/remote'),
+    remoteCopies: () => get<RemoteCopiesResponse>('/config/backup/remote'),
     /** Reads one backup out of the bucket and reports what it would change. */
-    restoreRemote: (key, passphrase = '') =>
-      post('/config/backup/remote/restore', { key, passphrase }),
+    restoreRemote: (key: string, passphrase = '') =>
+      post<RestoreResponse>('/config/backup/remote/restore', {
+        key,
+        passphrase,
+      } satisfies RemoteRestoreRequest),
     /** Deletes one copy from the bucket, every version of it. */
-    deleteRemote: (key) => post('/config/backup/remote/delete', { key }),
+    deleteRemote: (key: string) =>
+      post<Removed>('/config/backup/remote/delete', { key } satisfies RemoteDeleteRequest),
     /** Deletes those copies, and every hidden one in the folder. Admin only. */
-    deleteAllRemote: (keys) => post('/config/backup/remote/delete-all', { keys }),
+    deleteAllRemote: (keys: string[]) =>
+      post<Removed>('/config/backup/remote/delete-all', { keys } satisfies RemoteDeleteAllRequest),
     /** Parses an uploaded backup and reports what it would change. */
-    restore: async (file, passphrase = '') => {
+    restore: async (file: File, passphrase = ''): Promise<RestoreResponse> => {
       const data = base64(await file.arrayBuffer())
       const res = await fetch('/api/v1/config/restore', {
         method: 'POST',
         headers: { 'X-Requested-With': 'ostiole', 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ data, passphrase }),
+        body: JSON.stringify({ data, passphrase } satisfies RestoreRequest),
       })
       if (!res.ok) throw await apiError(res)
       return res.json()
     },
   },
-  ruleset: () => get('/ruleset'),
-  counters: () => get('/counters'),
+  ruleset: () => get<string>('/ruleset'),
+  counters: () => get<Counters>('/counters'),
   /** The rules Ostiole adds on its own for a configuration, in evaluation order. */
-  systemRules: (config) => post<SystemRule[]>('/rules/system', { config }),
+  systemRules: (config: Config) =>
+    post<SystemRule[]>('/rules/system', { config } satisfies ConfigRequest),
   /** The outbound NAT rules a configuration makes Ostiole write on its own: the automatic masquerade. */
-  systemNat: (config) => post<SystemNat[]>('/nat/system', { config }),
+  systemNat: (config: Config) =>
+    post<SystemNAT[]>('/nat/system', { config } satisfies ConfigRequest),
   /** The names a configuration makes the DNS server answer on its own: static leases with hostnames. */
-  dnsNames: (config) => post('/dns/names', { config }),
+  dnsNames: (config: Config) => post<DnsName[]>('/dns/names', { config } satisfies ConfigRequest),
   /** Empty the caches the router is running now. Answers with what it cleared. */
-  clearDnsCache: () => request('DELETE', '/dns/cache'),
+  clearDnsCache: () => request<DnsCacheClearReply>('DELETE', '/dns/cache'),
   interfaces: {
-    live: () => get('/interfaces/live'),
+    live: () => get<LiveLink[]>('/interfaces/live'),
     /** Ask for a fresh lease; release drops the current one first. */
-    renew: (name, release = false) =>
-      post(`/interfaces/${encodeURIComponent(name)}/renew`, { release }),
+    renew: (name: string, release = false) =>
+      post<void>(`/interfaces/${encodeURIComponent(name)}/renew`, {
+        release,
+      } satisfies RenewRequest),
   },
   /** Live gateway health from the multi-WAN monitor. */
-  gateways: () => get('/gateways'),
+  gateways: () => get<GatewayStatus[]>('/gateways'),
   /** Default routes the kernel already has, with the gateway each would become. */
-  detectedGateways: () => get('/gateways/detected'),
+  detectedGateways: () => get<DetectedGatewayReply[]>('/gateways/detected'),
   /** Who did what on the router. Admins only. */
   audit: {
     /** A page of entries: {q, before, limit}. */
-    log: (params: Record<string, unknown> = {}, signal?: AbortSignal) =>
-      get<LogPage<AuditEvent>>(withQuery('/audit', params), signal),
+    log: (params: Query = {}, signal?: AbortSignal) =>
+      get<AuditLogPage>(withQuery('/audit', params), signal),
     /** Empties it but for one entry saying who cleared it. */
-    clear: () => request('DELETE', '/audit'),
+    clear: () => request<ClearedReply>('DELETE', '/audit'),
   },
   /** What each gateway's probes found over a window, and what changed. */
   gatewayHistory: {
-    read: (name, window) =>
-      get(`/gateways/${encodeURIComponent(name)}/history?window=${encodeURIComponent(window)}`),
+    read: (name: string, window: string) =>
+      get<GatewayHistoryReply>(
+        `/gateways/${encodeURIComponent(name)}/history?window=${encodeURIComponent(window)}`,
+      ),
     /** Each watched gateway's last day in ten-minute cells. */
-    strips: () => get('/gateways/strips'),
+    strips: () => get<GatewayStrip[]>('/gateways/strips'),
     /** A page of events: {gateway, q, before, limit}. */
-    events: (params = {}, signal) => get(withQuery('/gateways/events', params), signal),
+    events: (params: Query = {}, signal?: AbortSignal) =>
+      get<GatewayEventsPage>(withQuery('/gateways/events', params), signal),
     /** Forgets every gateway's latency and loss; the events stay. */
-    clear: () => request('DELETE', '/gateways/history'),
-    clearEvents: () => request('DELETE', '/gateways/events'),
+    clear: () => request<ClearedReply>('DELETE', '/gateways/history'),
+    clearEvents: () => request<ClearedReply>('DELETE', '/gateways/events'),
   },
-  policy: () => get('/policy'),
-  policyReplies: () => get('/policy/replies'),
+  policy: () => get<PolicyTarget[]>('/policy'),
+  policyReplies: () => get<Reply[]>('/policy/replies'),
   /** Line speeds per interface and how the queues behind them are doing. */
-  shaping: () => get('/shaping'),
+  shaping: () => get<ShapingStatus>('/shaping'),
   diagnostics: {
-    ping: (body) => post('/diagnostics/ping', body),
-    traceroute: (body) => post('/diagnostics/traceroute', body),
-    journal: (params = {}) => get(withQuery('/diagnostics/journal', params)),
-    states: (params = {}) => get(withQuery('/diagnostics/states', params)),
-    neighbours: () => get('/diagnostics/neighbours'),
+    ping: (body: PingRequest) => post<PingResult>('/diagnostics/ping', body),
+    traceroute: (body: TraceRequest) => post<TraceResult>('/diagnostics/traceroute', body),
+    journal: (params: Query = {}) => get<JournalEntry[]>(withQuery('/diagnostics/journal', params)),
+    states: (params: Query = {}) => get<StatesResult>(withQuery('/diagnostics/states', params)),
+    neighbours: () => get<Neighbour[]>('/diagnostics/neighbours'),
     /** What the cable modem reports; refresh reads it again instead of the minute-old copy. */
-    modem: (address, refresh = false) => {
+    modem: (address: string, refresh = false) => {
       const q = new URLSearchParams({ address })
       if (refresh) q.set('refresh', '1')
-      return get(`/diagnostics/modem?${q}`)
+      return get<ModemStatus>(`/diagnostics/modem?${q}`)
     },
     /** Every drive in this router, with the tool's version and whether we are root. */
-    drives: () => get('/diagnostics/drives'),
+    drives: () => get<DrivesResponse>('/diagnostics/drives'),
     /** A page of what the hourly check read on each drive, as a log page is. */
-    driveHistory: (params = {}, signal) =>
-      get(withQuery('/diagnostics/drives/history', params), signal),
-    clearDriveHistory: () => request('DELETE', '/diagnostics/drives/history'),
-    drive: (name) => get(`/diagnostics/drives/${encodeURIComponent(name)}`),
+    driveHistory: (params: Query = {}, signal?: AbortSignal) =>
+      get<DriveHistoryPage>(withQuery('/diagnostics/drives/history', params), signal),
+    clearDriveHistory: () => request<ClearedReply>('DELETE', '/diagnostics/drives/history'),
+    drive: (name: string) => get<Drive>(`/diagnostics/drives/${encodeURIComponent(name)}`),
     /** Starts a self-test and answers with the drive as it reads afterwards. */
-    selfTest: (name, kind) =>
-      post(`/diagnostics/drives/${encodeURIComponent(name)}/self-test`, { kind }),
-    abortSelfTest: (name) =>
-      request('DELETE', `/diagnostics/drives/${encodeURIComponent(name)}/self-test`),
+    selfTest: (name: string, kind: string) =>
+      post<Drive>(`/diagnostics/drives/${encodeURIComponent(name)}/self-test`, {
+        kind,
+      } satisfies SelfTestRequest),
+    abortSelfTest: (name: string) =>
+      request<Drive>('DELETE', `/diagnostics/drives/${encodeURIComponent(name)}/self-test`),
     /** Downloads one drive's full report; returns the blob and the name the server chose. */
-    driveReport: async (name) => {
+    driveReport: async (name: string) => {
       const res = await fetch(`/api/v1/diagnostics/drives/${encodeURIComponent(name)}/report`, {
         headers: { 'X-Requested-With': 'ostiole' },
         credentials: 'same-origin',
@@ -511,7 +632,7 @@ export const api = {
       return { blob: await res.blob(), name: filename }
     },
     /** Downloads a pcap; returns the blob and the name the server chose. */
-    capture: async (body) => {
+    capture: async (body: CaptureRequest) => {
       const res = await fetch('/api/v1/diagnostics/capture', {
         method: 'POST',
         headers: { 'X-Requested-With': 'ostiole', 'Content-Type': 'application/json' },
@@ -534,95 +655,115 @@ export const api = {
     },
   },
   log: {
-    recent: (limit = 200) => get(`/log/recent?limit=${limit}`),
+    recent: (limit = 200) => get<FwlogEntry[]>(`/log/recent?limit=${limit}`),
     /** A page of the firewall log: {entries, next, more, searchedTo, held, oldest}. */
-    entries: (params = {}, signal) => get(withQuery('/log/entries', params), signal),
+    entries: (params: Query = {}, signal?: AbortSignal) =>
+      get<FwLogPage>(withQuery('/log/entries', params), signal),
     /** Empties the firewall log and deletes its files. */
-    clear: () => request('DELETE', '/log'),
+    clear: () => request<ClearedReply>('DELETE', '/log'),
   },
   aliases: {
-    feeds: () => get('/aliases/feeds'),
-    refresh: (name) => post(`/aliases/${encodeURIComponent(name)}/refresh`),
-    refreshAll: () => post('/aliases/feeds/refresh'),
+    feeds: () => get<FeedsStatus[]>('/aliases/feeds'),
+    refresh: (name: string) =>
+      post<FeedRefreshReply>(`/aliases/${encodeURIComponent(name)}/refresh`),
+    refreshAll: () => post<FeedsStatus[]>('/aliases/feeds/refresh'),
     /** Reads a list no alias names yet: its size and what it can be narrowed by. */
-    inspect: (url) => post('/aliases/inspect', { url }),
+    inspect: (url: string) => post<Part>('/aliases/inspect', { url } satisfies InspectFeedRequest),
     /** A page of what a fetched alias holds: q, offset and limit. */
-    entries: (name, params = {}) =>
-      get(withQuery(`/aliases/${encodeURIComponent(name)}/entries`, params)),
+    entries: (name: string, params: Query = {}) =>
+      get<FeedsPage>(withQuery(`/aliases/${encodeURIComponent(name)}/entries`, params)),
   },
   blocking: {
-    status: () => get('/blocking'),
-    catalog: () => get('/blocking/catalog'),
-    lookup: (name) => get(`/blocking/lookup?name=${encodeURIComponent(name)}`),
-    refresh: (name) => post(`/blocking/lists/${encodeURIComponent(name)}/refresh`),
-    refreshAll: () => post('/blocking/refresh'),
-    import: (name, body) => post(`/blocking/lists/${encodeURIComponent(name)}/import`, body),
+    status: () => get<BlockingState>('/blocking'),
+    catalog: () => get<CatalogEntry[]>('/blocking/catalog'),
+    lookup: (name: string) => get<Finding>(`/blocking/lookup?name=${encodeURIComponent(name)}`),
+    refresh: (name: string) =>
+      post<BlocklistRefreshReply>(`/blocking/lists/${encodeURIComponent(name)}/refresh`),
+    refreshAll: () => post<BlockingState>('/blocking/refresh'),
+    import: (name: string, body: string) =>
+      post<BlocklistImportReply>(`/blocking/lists/${encodeURIComponent(name)}/import`, body),
     /** A page of the names a list holds: q, offset and limit. */
-    names: (name, params = {}) =>
-      get(withQuery(`/blocking/lists/${encodeURIComponent(name)}/names`, params)),
+    names: (name: string, params: Query = {}) =>
+      get<DnsblockPage>(withQuery(`/blocking/lists/${encodeURIComponent(name)}/names`, params)),
   },
   /** What each link and, while counting is on, each device moved over a window. */
   traffic: {
-    interfaces: (window) => get(`/traffic/interfaces?window=${window}`),
-    devices: (window) => get(`/traffic/devices?window=${window}`),
-    device: (id, window) => get(`/traffic/devices/${encodeURIComponent(id)}?window=${window}`),
+    interfaces: (window: string) => get<TrafficLinks>(`/traffic/interfaces?window=${window}`),
+    devices: (window: string) => get<TrafficDevices>(`/traffic/devices?window=${window}`),
+    device: (id: string, window: string) =>
+      get<TrafficDevice>(`/traffic/devices/${encodeURIComponent(id)}?window=${window}`),
     /** A page of destinations: {window, device, q, offset, limit}. */
-    destinations: (params = {}) => get(withQuery('/traffic/destinations', params)),
+    destinations: (params: Query = {}) =>
+      get<ServerTrafficDestinations>(withQuery('/traffic/destinations', params)),
     /** Forgets every device and what it moved, and every destination. */
-    clear: () => request('DELETE', '/traffic'),
+    clear: () => request<TrafficClearReply>('DELETE', '/traffic'),
     /** Forgets every destination and leaves the devices. */
-    clearDestinations: () => request('DELETE', '/traffic/destinations'),
+    clearDestinations: () => request<ClearedReply>('DELETE', '/traffic/destinations'),
     /** Forgets what every link moved, and its errors. */
-    clearInterfaces: () => request('DELETE', '/traffic/interfaces'),
+    clearInterfaces: () => request<ClearedReply>('DELETE', '/traffic/interfaces'),
   },
   /** What the DNS server answered, while the query log is on. */
   queries: {
-    list: (params = {}, signal) => get(withQuery('/dns/queries', params), signal),
-    summary: () => get('/dns/queries/summary'),
-    clear: () => request('DELETE', '/dns/queries'),
+    list: (params: Query = {}, signal?: AbortSignal) =>
+      get<QueryLogPage>(withQuery('/dns/queries', params), signal),
+    summary: () => get<QuerySummary>('/dns/queries/summary'),
+    clear: () => request<ClearedReply>('DELETE', '/dns/queries'),
   },
   crons: {
-    list: () => get('/crons'),
-    run: (id) => post(`/crons/${encodeURIComponent(id)}/run`),
+    list: () => get<CronStatus[]>('/crons'),
+    run: (id: string) => post<CronRunReply>(`/crons/${encodeURIComponent(id)}/run`),
   },
   notifications: {
     /** How mail and the webhook have done, and what went out lately. */
-    status: () => get('/notifications'),
+    status: () => get<NotifyStatus>('/notifications'),
     /** Sends a test to the targets these settings switch on. */
-    test: (settings) => post('/notifications/test', settings),
+    test: (settings: Notifications) => post<ServerTestResult[]>('/notifications/test', settings),
   },
   users: {
-    list: () => get('/users'),
-    create: (body) => post('/users', body),
-    remove: (username) => request('DELETE', `/users/${encodeURIComponent(username)}`),
-    setRole: (username, role) => post(`/users/${encodeURIComponent(username)}/role`, { role }),
-    setPassword: (username, password) =>
-      post(`/users/${encodeURIComponent(username)}/password`, { password }),
-    rename: (username, next) =>
-      post(`/users/${encodeURIComponent(username)}/username`, { username: next }),
+    list: () => get<Account[]>('/users'),
+    create: (body: CreateUserRequest) => post<Account[]>('/users', body),
+    remove: (username: string) =>
+      request<Account[]>('DELETE', `/users/${encodeURIComponent(username)}`),
+    setRole: (username: string, role: string) =>
+      post<Account[]>(`/users/${encodeURIComponent(username)}/role`, {
+        role,
+      } satisfies SetUserRoleRequest),
+    setPassword: (username: string, password: string) =>
+      post<void>(`/users/${encodeURIComponent(username)}/password`, {
+        password,
+      } satisfies SetUserPasswordRequest),
+    rename: (username: string, next: string) =>
+      post<Account[]>(`/users/${encodeURIComponent(username)}/username`, {
+        username: next,
+      } satisfies RenameUserRequest),
     /** An admin takes another account's authenticator app and passkeys away. */
-    clearMFA: (username) => request('DELETE', `/users/${encodeURIComponent(username)}/mfa`),
+    clearMFA: (username: string) =>
+      request<Account[]>('DELETE', `/users/${encodeURIComponent(username)}/mfa`),
   },
   /** Every account's tokens and the router's, for an admin. New ones are made under auth.tokens. */
   tokens: {
     list: () => get<Token[]>('/tokens'),
-    remove: (id) => request('DELETE', `/tokens/${encodeURIComponent(id)}`),
+    remove: (id: string) => request<void>('DELETE', `/tokens/${encodeURIComponent(id)}`),
   },
   certificates: {
-    list: () => get('/certificates'),
-    regenerate: (hosts?: string[]) => post('/certificates/self-signed', hosts ? { hosts } : {}),
+    list: () => get<CertificatesResponse>('/certificates'),
+    regenerate: (hosts?: string[]) =>
+      post<CertificateResponse>(
+        '/certificates/self-signed',
+        (hosts ? { hosts } : {}) satisfies SelfSignedRequest,
+      ),
     /** A fresh account key, so one never has to be pasted in. */
-    key: () => post('/certificates/keys', {}),
-    issue: (id) => post(`/certificates/${encodeURIComponent(id)}/issue`, {}),
-    fileURL: (id, name) =>
+    key: () => post<CertificateKeyReply>('/certificates/keys', {}),
+    issue: (id: string) => post<IdReply>(`/certificates/${encodeURIComponent(id)}/issue`, {}),
+    fileURL: (id: string, name: string) =>
       `/api/v1/certificates/${encodeURIComponent(id)}/files/${encodeURIComponent(name)}`,
     /** Downloads a PKCS#12 bundle; returns the blob and the name the server chose. */
-    pkcs12: async (id, password) => {
+    pkcs12: async (id: string, password: string) => {
       const res = await fetch(`/api/v1/certificates/${encodeURIComponent(id)}/pkcs12`, {
         method: 'POST',
         headers: { 'X-Requested-With': 'ostiole', 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password } satisfies Pkcs12Request),
       })
       if (res.status === 401) {
         window.dispatchEvent(
@@ -644,156 +785,149 @@ export const api = {
     },
   },
   services: {
-    status: () => get('/services/status'),
-    leases: () => get('/dhcp/leases'),
+    status: () => get<ServicesStatus>('/services/status'),
+    leases: () => get<Lease[]>('/dhcp/leases'),
     /** A page of what the DHCP server said of its clients, and whether the level keeps it. */
-    dhcpLog: (params = {}, signal) => get(withQuery('/dhcp/log', params), signal),
-    clearDhcpLog: () => request('DELETE', '/dhcp/log'),
+    dhcpLog: (params: Query = {}, signal?: AbortSignal) =>
+      get<DhcpLogPage>(withQuery('/dhcp/log', params), signal),
+    clearDhcpLog: () => request<ClearedReply>('DELETE', '/dhcp/log'),
     /** A page of the packets the discovery relay saw, relayed or dropped. */
-    discoveryLog: (params = {}, signal) => get(withQuery('/discovery/log', params), signal),
-    clearDiscoveryLog: () => request('DELETE', '/discovery/log'),
-    /** @returns {Promise<{announcements: object[]}>} what devices said they offer */
-    discoveryAnnouncements: (signal?: AbortSignal) => get('/discovery/announcements', signal),
+    discoveryLog: (params: Query = {}, signal?: AbortSignal) =>
+      get<DiscoveryLogPage>(withQuery('/discovery/log', params), signal),
+    clearDiscoveryLog: () => request<ClearedReply>('DELETE', '/discovery/log'),
+    /** What devices said they offer. */
+    discoveryAnnouncements: (signal?: AbortSignal) =>
+      get<DiscoveryAnnouncementsReply>('/discovery/announcements', signal),
   },
   upnp: {
-    mappings: () => get('/upnp/mappings'),
+    mappings: () => get<Mapping[]>('/upnp/mappings'),
   },
   ntp: {
-    /** @returns {Promise<object>} whether the clock follows a server, the servers, and the defaults */
-    status: () => get('/ntp/status'),
+    /** Whether the clock follows a server, the servers, and the defaults. */
+    status: () => get<NtpStatus>('/ntp/status'),
   },
   wol: {
-    /** @param {{interface: string, mac: string}} body */
-    wake: (body) => post('/wol/wake', body),
+    wake: (body: WakeRequest) => post<void>('/wol/wake', body),
   },
   dnsProviders: {
     /**
      * Tries a provider's credentials as the dialog holds them and reads each
      * of its domains. Nothing is written.
-     * @returns {Promise<{zones: string[], more?: number, domains: {domain: string, error?: string}[]}>}
      */
-    test: (provider) => post('/dns-providers/test', { provider }),
+    test: (provider: DNSProvider) =>
+      post<DnsproviderTestResult>('/dns-providers/test', {
+        provider,
+      } satisfies ProviderTestRequest),
   },
   ddns: {
-    /** @returns {Promise<{records: object[], kinds: object[]}>} each record and type in force, and the provider kinds that can keep one */
-    status: () => get('/ddns'),
+    /** Each record and type in force, and the provider kinds that can keep one. */
+    status: () => get<DdnsResponse>('/ddns'),
     /** Asks the provider about a record now; the status shows how it went. */
-    update: (id) => post(`/ddns/${encodeURIComponent(id)}/update`, {}),
+    update: (id: string) => post<IdReply>(`/ddns/${encodeURIComponent(id)}/update`, {}),
     /**
      * What an apply would do with a record, read from the provider with the
-     * draft's credentials. Nothing is written.
-     * @returns {Promise<object[]>} one result per record type
+     * draft's credentials. Nothing is written. One result per record type.
      */
-    check: (config, record) => post('/ddns/check', { config, record }),
+    check: (config: Config, record: DDNSRecord) =>
+      post<CheckResult[]>('/ddns/check', { config, record } satisfies DdnsCheckRequest),
   },
   proxy: {
-    /** @returns {Promise<{setUp: boolean, running: boolean, release?: string, ports: object, upstreams: object[]}>} */
-    status: () => get('/proxy/status'),
+    status: () => get<ProxyStatus>('/proxy/status'),
     /** A page of what the web application firewall matched, as a log page is. */
-    events: (params = {}, signal) => get(withQuery('/proxy/events', params), signal),
-    clearEvents: () => request('DELETE', '/proxy/events'),
+    events: (params: Query = {}, signal?: AbortSignal) =>
+      get<WafEventsPage>(withQuery('/proxy/events', params), signal),
+    clearEvents: () => request<ClearedReply>('DELETE', '/proxy/events'),
     /** A page of what the proxy answered, as a log page is, and whether the level keeps them. */
-    requests: (params = {}, signal) => get(withQuery('/proxy/requests', params), signal),
-    clearRequests: () => request('DELETE', '/proxy/requests'),
+    requests: (params: Query = {}, signal?: AbortSignal) =>
+      get<RequestsPage>(withQuery('/proxy/requests', params), signal),
+    clearRequests: () => request<ClearedReply>('DELETE', '/proxy/requests'),
   },
   wireguard: {
-    /** @returns {Promise<{privateKey: string, publicKey: string}>} */
-    keys: () => post('/wireguard/keys', { kind: 'pair' }),
-    /** @returns {Promise<{presharedKey: string}>} */
-    psk: () => post('/wireguard/keys', { kind: 'psk' }),
-    /**
-     * @param {string} privateKey
-     * @returns {Promise<{publicKey: string}>}
-     */
-    publicKey: (privateKey) => post('/wireguard/keys', { kind: 'public', privateKey }),
-    /**
-     * Each tunnel of the running configuration as its device has it.
-     * @returns {Promise<{name: string, up: boolean, listenPort?: number, peers: {name?: string, publicKey: string, endpoint?: string, lastHandshake?: string, rxBytes: number, txBytes: number}[]}[]>}
-     */
-    status: () => get('/wireguard/status'),
+    keys: () =>
+      post<WireguardKeysReply>('/wireguard/keys', {
+        kind: 'pair',
+      } satisfies Partial<WireguardKeysRequest>),
+    psk: () =>
+      post<WireguardKeysReply>('/wireguard/keys', {
+        kind: 'psk',
+      } satisfies Partial<WireguardKeysRequest>),
+    publicKey: (privateKey: string) =>
+      post<WireguardKeysReply>('/wireguard/keys', {
+        kind: 'public',
+        privateKey,
+      } satisfies Partial<WireguardKeysRequest>),
+    /** Each tunnel of the running configuration as its device has it. */
+    status: () => get<Tunnel[]>('/wireguard/status'),
     /** A page of the peers connecting and going quiet, and whether the level keeps them. */
-    log: (params = {}, signal) => get(withQuery('/wireguard/log', params), signal),
-    clearLog: () => request('DELETE', '/wireguard/log'),
+    log: (params: Query = {}, signal?: AbortSignal) =>
+      get<PeerLogPage>(withQuery('/wireguard/log', params), signal),
+    clearLog: () => request<ClearedReply>('DELETE', '/wireguard/log'),
   },
   tailscale: {
-    status: () => get('/tailscale/status'),
+    status: () => get<TailscaleStatus>('/tailscale/status'),
     /** A page of the peers going online and offline, and whether the level keeps them. */
-    log: (params = {}, signal) => get(withQuery('/tailscale/log', params), signal),
-    clearLog: () => request('DELETE', '/tailscale/log'),
-    /**
-     * Start a login. Without a key the answer carries the URL to open.
-     *
-     * @param {string} [authKey]
-     * @returns {Promise<{authUrl?: string, state?: string}>}
-     */
-    login: (authKey) => post('/tailscale/login', { authKey: authKey ?? '' }),
-    logout: () => post('/tailscale/logout'),
+    log: (params: Query = {}, signal?: AbortSignal) =>
+      get<PeerLogPage>(withQuery('/tailscale/log', params), signal),
+    clearLog: () => request<ClearedReply>('DELETE', '/tailscale/log'),
+    /** Start a login. Without a key the answer carries the URL to open. */
+    login: (authKey?: string) =>
+      post<TailscaleLoginReply>('/tailscale/login', {
+        authKey: authKey ?? '',
+      } satisfies TailscaleLoginRequest),
+    logout: () => post<TailscaleStatus>('/tailscale/logout'),
   },
   openvpn: {
-    /**
-     * Each configured tunnel as its daemon has it, and whether this router can run one.
-     *
-     * @returns {Promise<{tunnels: object[]}>}
-     */
-    status: () => get('/openvpn/status'),
+    /** Each configured tunnel as its daemon has it, and whether this router can run one. */
+    status: () => get<OpenvpnStatus>('/openvpn/status'),
   },
   wireless: {
-    /**
-     * The radios this router has, what each can do, and what it is doing.
-     *
-     * @returns {Promise<{setUp: boolean, country?: string, radios: object[]}>}
-     */
-    radios: () => get('/wireless/radios'),
-    /** @returns {Promise<object[]>} */
-    clients: () => get('/wireless/clients'),
+    /** The radios this router has, what each can do, and what it is doing. */
+    radios: () => get<WirelessRadios>('/wireless/radios'),
+    clients: () => get<WirelessClient[]>('/wireless/clients'),
     /** A page of clients joining and leaving, and whether the level keeps them. */
-    log: (params = {}, signal) => get(withQuery('/wireless/log', params), signal),
-    clearLog: () => request('DELETE', '/wireless/log'),
+    log: (params: Query = {}, signal?: AbortSignal) =>
+      get<WirelessLogPage>(withQuery('/wireless/log', params), signal),
+    clearLog: () => request<ClearedReply>('DELETE', '/wireless/log'),
   },
   update: {
     /**
      * Ask GitHub now. Admin only, and slow enough that a page should
      * prefer status() unless somebody pressed the button.
-     *
-     * @returns {Promise<{check: object, status: object}>}
      */
-    check: (channel = 'stable') => get(`/update/check?channel=${encodeURIComponent(channel)}`),
+    check: (channel = 'stable') =>
+      get<UpdateCheckReply>(`/update/check?channel=${encodeURIComponent(channel)}`),
     /**
      * What the last scheduled check found, and any install running now.
      * Nothing here reaches GitHub.
-     *
-     * @returns {Promise<{check: object, status: object}>}
      */
-    status: () => get('/update/status'),
-    apply: (channel = 'stable') => post('/update/apply', { channel }),
+    status: () => get<UpdateStatusReply>('/update/status'),
+    apply: (channel = 'stable') =>
+      post<UpdateStatus>('/update/apply', { channel } satisfies UpdateApplyRequest),
   },
   /**
    * The router Ostiole runs on: what it is, which daemons it has, who
    * owns its addresses, and what an older firewall left in the kernel.
    */
   host: {
-    /** @returns {Promise<object>} */
-    status: () => get('/host'),
+    status: () => get<HostReport>('/host'),
     /**
      * Clear leftover rulesets. With no tables it sweeps everything with
-     * no recognisable owner.
-     *
-     * @param {string[]} [tables] table ids from the report
+     * no recognisable owner. Tables are ids from the report.
      */
-    flushLegacy: (tables = []) => post('/host/legacy/flush', { tables }),
+    flushLegacy: (tables: string[] = []) =>
+      post<HostResult>('/host/legacy/flush', { tables } satisfies FlushLegacyRequest),
   },
   systemUpdates: {
     /** What the distro package manager has waiting, and the mode in force. */
-    status: () => get('/system/updates'),
+    status: () => get<SysupdateStatus>('/system/updates'),
     /** Ask the package manager now; this refreshes metadata, so it is slow. */
-    check: () => post('/system/updates/check'),
-    /**
-     * Install what is waiting. Omit either to follow the configuration.
-     *
-     * @param {boolean} [security] install only the security fixes
-     * @param {string[]} [exclude] packages never to upgrade
-     */
-    apply: (security, exclude) => post('/system/updates/apply', { security, exclude }),
-    reboot: () => post('/system/reboot'),
+    check: () => post<SysupdateStatus>('/system/updates/check'),
+    /** Install what is waiting. Omit either to follow the configuration. */
+    apply: (security?: boolean, exclude?: string[]) =>
+      post<SysupdateStatus>('/system/updates/apply', {
+        security,
+        exclude,
+      } satisfies Partial<SystemUpdateApplyRequest>),
+    reboot: () => post<RebootReply>('/system/reboot'),
   },
 }

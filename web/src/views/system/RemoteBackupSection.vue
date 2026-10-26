@@ -11,13 +11,12 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import { ApiError, api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { formatBytes, formatWhen } from '@/lib/format'
-import type { RemoteBackup } from '@/lib/model.gen'
 import { SCHEDULE_PRESETS, presetFor } from '@/lib/schedules'
+import type { Copy, CronStatus, RemoteBackup } from '@/lib/types.gen'
 import { ADMIN_ONLY, adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import RestorePreview from '@/views/system/RestorePreview.vue'
-import type { CronRun, CronStatus } from '@/views/system/crons/status'
 
 /** The derived cron that takes the copy; matches model.CronIDRemoteBackup. */
 const CRON_ID = 'system:remote-backup'
@@ -27,14 +26,6 @@ const auth = useAuthStore()
 const config = useConfigStore()
 const confirm = useConfirmStore()
 const status = ref<CronStatus | null>(null)
-interface Copy {
-  key: string
-  name: string
-  hostname: string
-  takenAt: string
-  size: number
-}
-
 const copies = ref<Copy[]>([])
 const pending = ref(null)
 /** The copy whose own passphrase is being asked for, and the answer. */
@@ -74,16 +65,16 @@ function setEnabled(on) {
 }
 
 const loadStatus = useAsync(async () => {
-  const list = (await api.crons.list()) as CronStatus[]
+  const list = await api.crons.list()
   status.value = list.find((s) => s.id === CRON_ID) ?? null
 })
 
 const loadCopies = useAsync(async () => {
-  copies.value = ((await api.config.remoteCopies()) as { copies?: Copy[] }).copies ?? []
+  copies.value = (await api.config.remoteCopies()).copies ?? []
 })
 
 const backUpNow = useAsync(async () => {
-  const res = (await api.crons.run(CRON_ID)) as CronRun | undefined
+  const res = await api.crons.run(CRON_ID)
   if (res?.error) throw new Error(res.error)
   await loadStatus.run()
   await loadCopies.run()
@@ -125,7 +116,7 @@ const deleting = ref('')
 
 // The page sends the keys it shows, so a copy uploaded since the list
 // was read survives Delete all.
-const remove = useAsync(async (what) => {
+const remove = useAsync(async (what: string) => {
   try {
     if (what === ALL) await api.config.deleteAllRemote(copies.value.map((c) => c.key))
     else await api.config.deleteRemote(what)

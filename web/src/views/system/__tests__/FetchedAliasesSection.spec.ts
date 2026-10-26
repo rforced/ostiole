@@ -3,9 +3,10 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import type { LogLimitsInfo } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import FetchedAliasesSection from '@/views/system/FetchedAliasesSection.vue'
-import { configOf } from '@/test/fixtures'
+import { configOf, fixture } from '@/test/fixtures'
 
 const draft = (system = {}) =>
   configOf({ version: 16, system, zones: [], interfaces: [], rules: [] })
@@ -60,7 +61,7 @@ describe('FetchedAliasesSection', () => {
   })
 
   it('lowers the default to what a small router allows', async () => {
-    vi.mocked(api.logLimits).mockResolvedValueOnce({ aliasEntries: 791666 })
+    vi.mocked(api.logLimits).mockResolvedValueOnce(fixture<LogLimitsInfo>({ aliasEntries: 791666 }))
     const { wrapper } = open()
     await flushPromises()
     expect(wrapper.get('#fa-max-entries').attributes('placeholder')).toBe('791666')

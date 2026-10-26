@@ -17,6 +17,9 @@ func (a *api) registerAudit(mux *router) {
 
 var errNoAudit = errors.New("the audit log is not kept by this daemon")
 
+// auditLogPage is one page of the audit log.
+type auditLogPage logPage[audit.Event]
+
 // auditLog serves a page of who did what, newest first, searched.
 func (a *api) auditLog(w http.ResponseWriter, r *http.Request) error {
 	if a.audit == nil {
@@ -30,7 +33,7 @@ func (a *api) auditLog(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, newLogPage(page, page.Entries, held, oldest))
+	writeJSON(w, http.StatusOK, auditLogPage(newLogPage(page, page.Entries, held, oldest)))
 	return nil
 }
 

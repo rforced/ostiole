@@ -5,8 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, type Session } from '@/lib/api'
 import { fwlogValues } from '@/lib/fwlog'
 import { LAND_MS, SETTLE_MS } from '@/lib/log'
-import type { Config, Services } from '@/lib/model.gen'
+import type { Config, FwlogEntry, Services } from '@/lib/types.gen'
 import { matches } from '@/lib/search'
+import { fixture, type DeepPartial } from '@/test/fixtures'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -33,8 +34,8 @@ class FakeSource {
 const send = (e) => source.onmessage({ data: JSON.stringify(e) })
 
 let seq = 0
-function entry(over = {}) {
-  return {
+function entry(over: DeepPartial<FwlogEntry> = {}) {
+  return fixture<FwlogEntry>({
     seq: ++seq,
     time: '2026-09-19T12:00:00Z',
     kind: 'rule',
@@ -43,7 +44,7 @@ function entry(over = {}) {
     dst: '10.0.0.1',
     length: 60,
     ...over,
-  }
+  })
 }
 
 /** Body rows; the test renderer stubs the transition group that wraps them. */
@@ -232,7 +233,10 @@ describe('LogPage', () => {
     useAuthStore().user = { username: 'root', role: 'admin' } as Session
     const held = [...log]
     const w = await open(held)
-    vi.mocked(api.log.clear).mockImplementation(async () => held.splice(0))
+    vi.mocked(api.log.clear).mockImplementation(async () => {
+      held.splice(0)
+      return { cleared: true }
+    })
     const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
     await w
       .findAll('button')

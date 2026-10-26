@@ -13,6 +13,7 @@ import { emptyText, useAsync } from '@/lib/async'
 import { formatBytes, formatCount } from '@/lib/format'
 import { LEVELS, levelOf } from '@/lib/meter'
 import { byAddress, byNumber, byText, useSort } from '@/lib/sort'
+import type { StatesResult } from '@/lib/types.gen'
 
 const POLL_MS = 5000
 /** How long typing rests before the router is asked. */
@@ -34,30 +35,6 @@ const COLUMNS: SortColumn[] = [
   ['expires', 'Expires in'],
 ]
 
-interface State {
-  protocol: string
-  source: string
-  sourcePort?: number
-  destination: string
-  destPort?: number
-  replyDest?: string
-  replyDestPort?: number
-  nat: boolean
-  state?: string
-  ttl: string
-  packets: number
-  bytes: number
-  mark?: number
-}
-
-interface StatesResult {
-  states: State[]
-  total: number
-  matched: number
-  byProtocol: Record<string, number>
-  max?: number
-}
-
 const result = ref<StatesResult | null>(null)
 const live = ref(true)
 /**
@@ -69,7 +46,7 @@ const query = ref('')
 
 const load = useAsync(
   async () => {
-    result.value = (await api.diagnostics.states({ q: query.value.trim() })) as StatesResult
+    result.value = await api.diagnostics.states({ q: query.value.trim() })
   },
   // Live owns the poll, and starts on.
   { interval: POLL_MS, immediate: true },
@@ -118,7 +95,9 @@ const protocols = computed(() =>
   Object.entries(result.value?.byProtocol ?? {}).sort((a, b) => b[1] - a[1]),
 )
 
-const trimmed = computed(() => result.value && result.value.matched > result.value.states.length)
+const trimmed = computed(
+  () => result.value && result.value.matched > (result.value.states ?? []).length,
+)
 
 /**
  * How full the table is, or null on a kernel that will not say what its
@@ -194,7 +173,7 @@ function endpoint(address: string | undefined, port?: number) {
 
         <p v-if="result" class="text-ink-muted">
           {{ result.total }} connection(s) tracked<span v-if="trimmed">
-            · showing the {{ result.states.length }} busiest</span
+            · showing the {{ (result.states ?? []).length }} busiest</span
           >
           <template v-if="protocols.length">
             ·

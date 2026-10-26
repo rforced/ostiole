@@ -8,7 +8,7 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { usePageTabs } from '@/lib/tabs'
 import TunnelsTab from '@/views/vpn/openvpn/TunnelsTab.vue'
-import type { GatewayStatus, OvpnLive, OvpnStatus } from '@/views/vpn/types'
+import type { GatewayStatus, OpenvpnTunnel } from '@/lib/types.gen'
 
 /** How often the tunnels are read while the page is shown. */
 const POLL_MS = 5000
@@ -16,7 +16,7 @@ const POLL_MS = 5000
 const { tabs, tab } = usePageTabs()
 
 /** Each tunnel as its daemon has it, by name. */
-const live = ref(new Map<string, OvpnLive>())
+const live = ref(new Map<string, OpenvpnTunnel>())
 /** Whether this router has OpenVPN set up; assumed until the first read says otherwise. */
 const setUp = ref(true)
 /** Whether the kernel module was left out because Secure Boot is on. */
@@ -25,12 +25,12 @@ const secureBootSkipped = ref(false)
 const gateways = ref<GatewayStatus[]>([])
 const read = useAsync(
   async () => {
-    const got = (await api.openvpn.status()) as OvpnStatus
+    const got = await api.openvpn.status()
     live.value = new Map((got.tunnels ?? []).map((t) => [t.name, t]))
     setUp.value = got.setUp !== false
     secureBootSkipped.value = Boolean(got.secureBootSkipped)
     try {
-      gateways.value = (await api.gateways()) as GatewayStatus[]
+      gateways.value = await api.gateways()
     } catch {
       gateways.value = []
     }

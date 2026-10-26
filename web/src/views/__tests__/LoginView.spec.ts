@@ -3,8 +3,10 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import { ApiError, api, type Session } from '@/lib/api'
+import { ApiError, api } from '@/lib/api'
+import type { AssertionResponse } from '@/lib/types.gen'
 import * as webauthn from '@/lib/webauthn'
+import { fixture, sessionOf } from '@/test/fixtures'
 import LoginView from '@/views/LoginView.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -28,14 +30,19 @@ vi.mock('@/lib/api', () => ({
 }))
 vi.mock('@/lib/webauthn', () => ({ available: vi.fn(), get: vi.fn() }))
 
-const session: Session = {
+const session = sessionOf({
   username: 'sam',
   role: 'admin',
   created: '2026-09-19T12:00:00Z',
   lastSeen: '2026-09-19T12:00:00Z',
   expires: '2026-09-20T12:00:00Z',
-}
-const credential = { id: 'cred', rawId: '', type: 'public-key', response: { clientDataJSON: '' } }
+})
+const credential = fixture<AssertionResponse>({
+  id: 'cred',
+  rawId: '',
+  type: 'public-key',
+  response: { clientDataJSON: '' },
+})
 
 async function page(path = '/login', options = {}) {
   const router = createRouter({

@@ -4,8 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 
 import { api } from '@/lib/api'
-import type { Config } from '@/lib/model.gen'
+import type { Config, GatewayStatus } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import { fixture } from '@/test/fixtures'
 import WireguardPage from '@/views/vpn/WireguardPage.vue'
 
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -197,7 +198,7 @@ describe('WireguardPage', () => {
       { name: 'wg1', up: false, peers: [] },
     ])
     vi.mocked(api.gateways).mockResolvedValue([
-      { name: 'vpn', tunnel: true, online: false, unknown: false },
+      fixture<GatewayStatus>({ name: 'vpn', tunnel: true, online: false, unknown: false }),
     ])
     const wrapper = mountPage()
     await flushPromises()

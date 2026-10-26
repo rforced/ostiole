@@ -12,7 +12,7 @@ import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { readingValues } from '@/lib/driveHistory'
 import { formatCount, formatWhen } from '@/lib/format'
-import { type LogPage, type LogRow, heldLine, useLog } from '@/lib/log'
+import { type LogRow, heldLine, useLog } from '@/lib/log'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
@@ -52,8 +52,7 @@ interface Reading extends LogRow {
 
 const card = ref(null)
 const log = useLog<Reading>({
-  read: async (params, signal) =>
-    (await api.diagnostics.driveHistory(params, signal)) as LogPage<Reading>,
+  read: async (params, signal) => await api.diagnostics.driveHistory(params, signal),
   stream: '/api/v1/diagnostics/drives/history/stream',
   values: readingValues,
   top: card,

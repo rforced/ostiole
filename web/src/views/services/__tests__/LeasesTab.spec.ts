@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, type Role, type Session } from '@/lib/api'
-import type { Config } from '@/lib/model.gen'
+import type { Config } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useToastStore } from '@/stores/toast'
@@ -30,6 +30,7 @@ const printer = {
   hostname: 'printer',
   expires: '2026-09-24T12:00:00Z',
   family: 4,
+  static: false,
 }
 
 async function tab(leases, { role = 'admin' }: { role?: Role } = {}) {
@@ -65,6 +66,7 @@ const laptop = {
   renewed: '2026-09-24T06:00:00Z',
   seen: '2026-09-24T11:00:00Z',
   family: 4,
+  static: false,
 }
 
 describe('LeasesTab', () => {

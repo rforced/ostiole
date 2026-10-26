@@ -66,7 +66,12 @@ describe('TokensCard', () => {
 
   it("lists and deletes the account's own tokens", async () => {
     vi.mocked(api.auth.tokens.list).mockResolvedValue([
-      { id: 'tk1', name: 'grafite', role: 'viewer', createdAt: '2026-10-01T00:00:00Z' },
+      fixture<Token>({
+        id: 'tk1',
+        name: 'grafite',
+        role: 'viewer',
+        createdAt: '2026-10-01T00:00:00Z',
+      }),
     ])
     vi.mocked(api.auth.tokens.remove).mockResolvedValue(undefined)
     const wrapper = mount(TokensCard, { global: { stubs } })

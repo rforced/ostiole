@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import type { AuditEvent } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfirmStore } from '@/stores/confirm'
 import AuditLogSection from '@/views/system/AuditLogSection.vue'
@@ -19,7 +20,7 @@ class FakeSource {
 
 enableAutoUnmount(afterEach)
 
-const ENTRIES = [
+const ENTRIES: AuditEvent[] = [
   {
     seq: 3,
     time: '2026-10-09T10:05:00Z',
@@ -39,7 +40,12 @@ const ENTRIES = [
 
 async function card() {
   useAuthStore().user = sessionOf({ username: 'mira', role: 'admin' })
-  vi.mocked(api.audit.log).mockResolvedValue({ entries: ENTRIES, held: 3, oldest: ENTRIES[2].time })
+  vi.mocked(api.audit.log).mockResolvedValue({
+    entries: ENTRIES,
+    more: false,
+    held: 3,
+    oldest: ENTRIES[2].time,
+  })
   const wrapper = mount(AuditLogSection)
   await flushPromises()
   return wrapper

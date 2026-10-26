@@ -13,7 +13,14 @@ import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { parseList } from '@/lib/lists'
 import { ADMIN_ONLY, useAuthStore } from '@/stores/auth'
-import type { Notifications, NotifyEmail, NotifyWebhook } from '@/lib/model.gen'
+import type {
+  Notifications,
+  NotifyEmail,
+  NotifyEvent,
+  NotifyStatus,
+  NotifyWebhook,
+  ServerTestResult,
+} from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 const REFRESH_MS = 15_000
@@ -97,37 +104,11 @@ const recipients = computed({
   set: (v) => set({ to: parseList(v) }, 'email'),
 })
 
-interface NoticeEvent {
-  kind: string
-  level: string
-  title: string
-  detail?: string
-  time: string
-}
-interface TargetStatus {
-  lastSent?: string
-  lastError?: string
-  lastTried?: string
-}
-interface NoticeRecord {
-  time: string
-  events: NoticeEvent[]
-  sent: string[]
-  failed?: Record<string, string>
-  dropped?: number
-}
-interface TestResult {
-  target: string
-  error?: string
-}
-
-const status = ref<{ targets: Record<string, TargetStatus>; recent: NoticeRecord[] }>({
-  targets: {},
-  recent: [],
-})
+const status = ref<NotifyStatus>({ targets: {}, recent: [], waiting: 0 })
+const recent = computed(() => status.value.recent ?? [])
 const load = useAsync(
   async () => {
-    status.value = (await api.notifications.status()) as typeof status.value
+    status.value = await api.notifications.status()
   },
   { interval: REFRESH_MS },
 )
@@ -135,16 +116,16 @@ onMounted(load.run)
 
 const TARGETS: Record<string, string> = { email: 'Mail', webhook: 'Webhook' }
 /** What each target did with the last test, in the order the form has them. */
-const results = ref<TestResult[]>([])
+const results = ref<ServerTestResult[]>([])
 // The draft, not what is applied: the point is to find out before.
 const testing = useAsync(async () => {
   results.value = []
-  results.value = (await api.notifications.test(config.draft?.notifications ?? {})) as TestResult[]
+  results.value = await api.notifications.test(config.draft?.notifications ?? {})
   await load.run()
 })
 const canTest = computed(() => auth.isAdmin && (email.value.enabled || webhook.value.enabled))
 
-const headline = (e: NoticeEvent) => (e.level === 'ok' ? `Resolved: ${e.title}` : e.title)
+const headline = (e: NotifyEvent) => (e.level === 'ok' ? `Resolved: ${e.title}` : e.title)
 const targetStates = computed(() =>
   Object.entries(TARGETS)
     .map(([key, label]) => ({ key, label, ...(status.value.targets?.[key] ?? {}) }))
@@ -333,7 +314,7 @@ const targetStates = computed(() =>
       <template v-if="auth.isOperator" #footer>{{ ADMIN_ONLY }}</template>
     </SectionCard>
 
-    <SectionCard title="Sent" :count="status.recent.length" flush>
+    <SectionCard title="Sent" :count="recent.length" flush>
       <template #actions>
         <RefreshButton
           :busy="load.busy.value"
@@ -376,19 +357,19 @@ const targetStates = computed(() =>
           </tr>
         </thead>
         <tbody>
-          <tr v-if="!status.recent.length">
+          <tr v-if="!recent.length">
             <td colspan="3" class="text-ink-muted">
               {{ emptyText(load, 'No notifications.') }}
             </td>
           </tr>
-          <tr v-for="r in status.recent" :key="r.time">
+          <tr v-for="r in recent" :key="r.time">
             <td class="when" data-label="Time">{{ formatWhen(r.time) }}</td>
             <td data-label="Notices">
-              <div v-for="(e, i) in r.events" :key="i">{{ headline(e) }}</div>
+              <div v-for="(e, i) in r.events ?? []" :key="i">{{ headline(e) }}</div>
               <div v-if="r.dropped" class="text-ink-muted">and {{ r.dropped }} dropped</div>
             </td>
             <td data-label="Went to">
-              {{ r.sent.map((s) => TARGETS[s] ?? s).join(', ') || '—' }}
+              {{ (r.sent ?? []).map((s) => TARGETS[s] ?? s).join(', ') || '—' }}
               <div v-for="(err, target) in r.failed ?? {}" :key="target" class="text-bad">
                 {{ TARGETS[target] ?? target }}: {{ err }}
               </div>

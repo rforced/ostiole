@@ -5,7 +5,7 @@
  * refused with the line and the reason. Values never appear in either.
  */
 
-import type { OpenVPN, OpenVPNRemote } from '@/lib/model.gen'
+import type { OpenVPN, OpenVPNRemote } from '@/lib/types.gen'
 import { parseAddress } from '@/lib/wgconf'
 
 /** The data ciphers a tunnel offers when the file names none. */

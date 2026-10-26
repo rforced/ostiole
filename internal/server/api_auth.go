@@ -128,11 +128,16 @@ func (a *api) describe(sess *auth.Session) sessionResponse {
 	return res
 }
 
+// setupStatusReply says whether the first account is still to be made.
+type setupStatusReply struct {
+	Needed bool `json:"needed"`
+}
+
 func (a *api) setupStatus(w http.ResponseWriter, _ *http.Request) error {
 	if a.auth == nil {
 		return &unavailable{errors.New("authentication not available")}
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"needed": a.auth.NeedsSetup()})
+	writeJSON(w, http.StatusOK, setupStatusReply{Needed: a.auth.NeedsSetup()})
 	return nil
 }
 
@@ -253,6 +258,12 @@ type pendingSignIn struct {
 	RPID     string `json:"rpId"`
 }
 
+// pendingSignInReply wraps pendingSignIn under the key the sign-in page
+// looks for in place of a session.
+type pendingSignInReply struct {
+	Pending pendingSignIn `json:"pending"`
+}
+
 func (a *api) askForMFA(w http.ResponseWriter, r *http.Request, username string) error {
 	app, keys := a.auth.MFAOf(username)
 	rp := relyingParty(r)
@@ -261,7 +272,7 @@ func (a *api) askForMFA(w http.ResponseWriter, r *http.Request, username string)
 		return errors.New("could not start the second step of the sign-in")
 	}
 	slog.InfoContext(logging.Always(r.Context()), "MFA due", "user", username, "address", remoteIP(r))
-	writeJSON(w, http.StatusOK, map[string]pendingSignIn{"pending": {
+	writeJSON(w, http.StatusOK, pendingSignInReply{Pending: pendingSignIn{
 		Token: token, TOTP: app != nil, Passkeys: len(passkeysOn(keys, rp.ID)) > 0, RPID: rp.ID,
 	}})
 	return nil
@@ -469,15 +480,18 @@ func (a *api) loginStart(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// loginTOTPRequest is the second step with a code from an app.
+type loginTOTPRequest struct {
+	Pending string `json:"pending"`
+	Code    string `json:"code"`
+}
+
 // loginTOTP is the second step with a code from an authenticator app.
 func (a *api) loginTOTP(w http.ResponseWriter, r *http.Request) error {
 	if a.auth == nil {
 		return &unavailable{errors.New("authentication not available")}
 	}
-	var req struct {
-		Pending string `json:"pending"`
-		Code    string `json:"code"`
-	}
+	var req loginTOTPRequest
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}
@@ -509,14 +523,22 @@ func (a *api) loginTOTP(w http.ResponseWriter, r *http.Request) error {
 	return a.finishSignIn(w, r, req.Pending, "")
 }
 
+// loginPasskeyOptionsRequest names the sign-in a challenge is for.
+type loginPasskeyOptionsRequest struct {
+	Pending string `json:"pending"`
+}
+
+// passkeyOptionsReply is the browser's options for a passkey step.
+type passkeyOptionsReply struct {
+	PublicKey map[string]any `json:"publicKey"`
+}
+
 // loginPasskeyOptions is the challenge for the second step with a passkey.
 func (a *api) loginPasskeyOptions(w http.ResponseWriter, r *http.Request) error {
 	if a.auth == nil {
 		return &unavailable{errors.New("authentication not available")}
 	}
-	var req struct {
-		Pending string `json:"pending"`
-	}
+	var req loginPasskeyOptionsRequest
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}
@@ -537,8 +559,14 @@ func (a *api) loginPasskeyOptions(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 	a.auth.SetChallenge(req.Pending, challenge)
-	writeJSON(w, http.StatusOK, map[string]any{"publicKey": webauthn.RequestOptions(rp, allow, challenge, false)})
+	writeJSON(w, http.StatusOK, passkeyOptionsReply{PublicKey: webauthn.RequestOptions(rp, allow, challenge, false)})
 	return nil
+}
+
+// loginPasskeyRequest is a passkey's signed answer to a sign-in.
+type loginPasskeyRequest struct {
+	Pending    string                     `json:"pending"`
+	Credential webauthn.AssertionResponse `json:"credential"`
 }
 
 // loginPasskey is the second step with a passkey's signed answer, or the
@@ -547,10 +575,7 @@ func (a *api) loginPasskey(w http.ResponseWriter, r *http.Request) error {
 	if a.auth == nil {
 		return &unavailable{errors.New("authentication not available")}
 	}
-	var req struct {
-		Pending    string                     `json:"pending"`
-		Credential webauthn.AssertionResponse `json:"credential"`
-	}
+	var req loginPasskeyRequest
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}
@@ -702,6 +727,11 @@ func (a *api) mfaOf(r *http.Request, username string) mfaResponse {
 	return res
 }
 
+// passwordRequest is a password given to confirm a change.
+type passwordRequest struct {
+	Password string `json:"password"`
+}
+
 // clearMFA turns the signed-in account's MFA off, on its
 // password.
 func (a *api) clearMFA(w http.ResponseWriter, r *http.Request) error {
@@ -709,9 +739,7 @@ func (a *api) clearMFA(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	var req struct {
-		Password string `json:"password"`
-	}
+	var req passwordRequest
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}
@@ -734,6 +762,13 @@ func (a *api) clearMFA(w http.ResponseWriter, r *http.Request) error {
 // challenge gets.
 func totpSetupKey(sessionID string) string { return "totp:" + sessionID }
 
+// totpStartReply is the secret for an authenticator app and the address
+// that sets it up.
+type totpStartReply struct {
+	Secret string `json:"secret"`
+	URI    string `json:"uri"`
+}
+
 // totpStart makes a secret for an authenticator app. Nothing is enabled
 // until totpConfirm sees a code from it.
 func (a *api) totpStart(w http.ResponseWriter, r *http.Request) error {
@@ -746,8 +781,13 @@ func (a *api) totpStart(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	a.auth.SetChallenge(totpSetupKey(sess.ID), []byte(secret))
-	writeJSON(w, http.StatusOK, map[string]string{"secret": secret, "uri": totp.URI(secret, appName, sess.Username)})
+	writeJSON(w, http.StatusOK, totpStartReply{Secret: secret, URI: totp.URI(secret, appName, sess.Username)})
 	return nil
+}
+
+// totpConfirmRequest is a code from the new app.
+type totpConfirmRequest struct {
+	Code string `json:"code"`
 }
 
 // totpConfirm turns the authenticator app on once it shows a code the secret
@@ -758,9 +798,7 @@ func (a *api) totpConfirm(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	var req struct {
-		Code string `json:"code"`
-	}
+	var req totpConfirmRequest
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}
@@ -799,9 +837,7 @@ func (a *api) passkeyOptions(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	var req struct {
-		Password string `json:"password"`
-	}
+	var req passwordRequest
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}
@@ -826,7 +862,7 @@ func (a *api) passkeyOptions(w http.ResponseWriter, r *http.Request) error {
 	}
 	a.auth.SetChallenge(sess.ID, challenge)
 	options := webauthn.CreationOptions(rp, []byte(handle), sess.Username, credentialsOf(keys), challenge)
-	writeJSON(w, http.StatusOK, map[string]any{"publicKey": options})
+	writeJSON(w, http.StatusOK, passkeyOptionsReply{PublicKey: options})
 	return nil
 }
 
@@ -843,6 +879,12 @@ func passkeyName(raw string) (string, error) {
 	return name, nil
 }
 
+// addPasskeyRequest is the name and the browser's answer for a new passkey.
+type addPasskeyRequest struct {
+	Name       string                       `json:"name"`
+	Credential webauthn.AttestationResponse `json:"credential"`
+}
+
 // addPasskey checks the browser's answer to passkeyOptions and keeps the
 // passkey it made.
 func (a *api) addPasskey(w http.ResponseWriter, r *http.Request) error {
@@ -850,10 +892,7 @@ func (a *api) addPasskey(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	var req struct {
-		Name       string                       `json:"name"`
-		Credential webauthn.AttestationResponse `json:"credential"`
-	}
+	var req addPasskeyRequest
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}
@@ -921,15 +960,18 @@ func (a *api) checkPassword(r *http.Request, username, password string) error {
 	return err
 }
 
+// renamePasskeyRequest is the name a passkey takes.
+type renamePasskeyRequest struct {
+	Name string `json:"name"`
+}
+
 // renamePasskey gives one of the signed-in account's passkeys a new name.
 func (a *api) renamePasskey(w http.ResponseWriter, r *http.Request) error {
 	sess, err := a.current(r)
 	if err != nil {
 		return err
 	}
-	var req struct {
-		Name string `json:"name"`
-	}
+	var req renamePasskeyRequest
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}

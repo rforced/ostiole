@@ -18,6 +18,9 @@ func (a *api) registerLog(mux *router) {
 	mux.HandleFunc("DELETE /api/v1/log", a.admin(a.clearOne(fwlog.FileName)))
 }
 
+// fwLogPage is one page of the firewall log.
+type fwLogPage logPage[fwlog.Entry]
+
 // logEntries serves a page of the firewall log, newest first, searched and
 // narrowed to what was blocked or allowed as asked.
 func (a *api) logEntries(w http.ResponseWriter, r *http.Request) error {
@@ -53,7 +56,7 @@ func (a *api) logEntries(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	held, oldest := a.fwlog.Held()
-	writeJSON(w, http.StatusOK, newLogPage(page, append(page.Entries, older...), held, oldest))
+	writeJSON(w, http.StatusOK, fwLogPage(newLogPage(page, append(page.Entries, older...), held, oldest)))
 	return nil
 }
 

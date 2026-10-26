@@ -9,16 +9,16 @@ import ErrorLine from '@/components/ErrorLine.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { formatBytes } from '@/lib/format'
-import type { Interface } from '@/lib/model.gen'
+import type { Interface } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import OvpnFileDialog from '@/views/vpn/openvpn/OvpnFileDialog.vue'
 import OvpnTunnelDialog from '@/views/vpn/openvpn/OvpnTunnelDialog.vue'
-import type { GatewayStatus, OvpnLive } from '@/views/vpn/types'
+import type { GatewayStatus, OpenvpnTunnel } from '@/lib/types.gen'
 
 const props = defineProps({
   /** Each tunnel as its daemon has it, by name. */
-  live: { type: Map as PropType<Map<string, OvpnLive>>, required: true },
+  live: { type: Map as PropType<Map<string, OpenvpnTunnel>>, required: true },
   /** Whether this router can run a tunnel at all. */
   setUp: { type: Boolean, default: true },
   /** Whether the kernel data channel module was skipped because Secure Boot is on. */

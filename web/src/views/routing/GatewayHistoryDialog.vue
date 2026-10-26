@@ -6,11 +6,11 @@ import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import SeriesChart from '@/components/SeriesChart.vue'
 import { api } from '@/lib/api'
+import type { GatewayHistoryReply } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { niceScale } from '@/lib/chart'
 import { formatDuration, formatMs, formatWhen } from '@/lib/format'
 import {
-  type GatewayEvent,
   stepOf,
   addProbe,
   eventFor,
@@ -20,24 +20,9 @@ import {
   measured,
   probeFigures,
 } from '@/lib/gateways'
-import type { Gateway } from '@/lib/model.gen'
+import type { Gateway } from '@/lib/types.gen'
 import { streamLost } from '@/lib/stream'
 import { WINDOWS } from '@/lib/traffic'
-
-interface HistoryReport {
-  now: string
-  down: number
-  never: number
-  families: {
-    family: string
-    points: (number | null)[][]
-    mean: number
-    worst: number
-    loss: number
-    sent: number
-  }[]
-  events?: GatewayEvent[]
-}
 
 type GatewayRow = Partial<Gateway> & { live?: { families?: unknown[] } | null }
 
@@ -56,7 +41,7 @@ const open = defineModel('open', { type: Boolean, default: false })
 
 const REREAD_MS = 60_000
 const win = ref('24h')
-const report = ref<HistoryReport | null>(null)
+const report = ref<GatewayHistoryReply | null>(null)
 const rows = ref<HistoryRow[] | null>(null)
 const families = ref<string[]>([])
 const end = ref(0)
@@ -64,7 +49,7 @@ const end = ref(0)
 const read = useAsync(async () => {
   const name = props.gateway.name
   const w = win.value
-  const r = (await api.gatewayHistory.read(name, w)) as HistoryReport
+  const r = await api.gatewayHistory.read(name, w)
   if (name !== props.gateway?.name || w !== win.value) return
   const h = historyRows(r)
   report.value = r

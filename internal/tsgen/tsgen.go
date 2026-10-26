@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -51,6 +52,7 @@ type gen struct {
 	order   []reflect.Type
 	seen    map[reflect.Type]bool
 	names   map[reflect.Type]string
+	same    map[reflect.Type]reflect.Type
 	err     error
 }
 
@@ -63,7 +65,12 @@ type enum struct {
 // discovery order. srcDirs maps a package path to the directory whose
 // non-test files hold the const blocks of that package's named types.
 func Generate(roots []reflect.Type, srcDirs map[string]string) (Result, error) {
-	g := &gen{srcDirs: srcDirs, consts: map[string]map[string]*enum{}, seen: map[reflect.Type]bool{}}
+	g := &gen{
+		srcDirs: srcDirs,
+		consts:  map[string]map[string]*enum{},
+		seen:    map[reflect.Type]bool{},
+		same:    map[reflect.Type]reflect.Type{},
+	}
 	for _, r := range roots {
 		g.walk(r)
 	}
@@ -77,7 +84,10 @@ func Generate(roots []reflect.Type, srcDirs map[string]string) (Result, error) {
 	var res Result
 	for _, t := range g.order {
 		b.WriteString("\n")
-		if t.Kind() == reflect.Struct {
+		if u, ok := g.same[t]; ok {
+			res.Aliases++
+			fmt.Fprintf(&b, "export type %s = %s\n", g.names[t], g.names[u])
+		} else if t.Kind() == reflect.Struct {
 			res.Interfaces++
 			g.writeInterface(&b, t)
 		} else {
@@ -235,6 +245,12 @@ func (g *gen) walk(t reflect.Type) {
 		}
 		g.seen[t] = true
 		g.order = append(g.order, t)
+		for _, u := range g.order {
+			if u != t && u.Kind() == reflect.Struct && sameFields(t, u) {
+				g.same[t] = u
+				return
+			}
+		}
 		for _, f := range g.structFields(t) {
 			g.walk(f.typ)
 		}
@@ -254,16 +270,46 @@ func (g *gen) walk(t reflect.Type) {
 	}
 }
 
+// reserved holds TypeScript and DOM globals a generated name would shadow
+// in every module that imports it.
+var reserved = map[string]bool{
+	"Array": true, "Awaited": true, "Blob": true, "Boolean": true, "Cache": true, "Comment": true,
+	"Credential": true, "Date": true, "Document": true, "Element": true, "Error": true, "Event": true,
+	"Exclude": true, "Extract": true, "File": true, "Function": true, "Headers": true, "History": true,
+	"Image": true, "JSON": true, "Location": true, "Lock": true, "Map": true, "Math": true,
+	"Navigator": true, "Node": true, "NonNullable": true, "Notification": true, "Number": true,
+	"Object": true, "Omit": true, "Option": true, "Parameters": true, "Partial": true, "Pick": true,
+	"Promise": true, "Range": true, "Readonly": true, "Record": true, "RegExp": true, "Report": true,
+	"Request": true, "Required": true, "Response": true, "ReturnType": true, "Screen": true,
+	"Selection": true, "Set": true, "Storage": true, "String": true, "Symbol": true, "Text": true,
+	"URL": true, "Window": true, "Worker": true,
+}
+
+// sameFields reports two struct types with one wire shape, such as a type
+// defined from another only to decode it differently.
+func sameFields(t, u reflect.Type) bool {
+	if t.NumField() != u.NumField() {
+		return false
+	}
+	for i := range t.NumField() {
+		a, b := t.Field(i), u.Field(i)
+		if a.Name != b.Name || a.Type != b.Type || a.Tag != b.Tag || a.Anonymous != b.Anonymous {
+			return false
+		}
+	}
+	return true
+}
+
 func (g *gen) assignNames() {
 	count := map[string]int{}
 	for _, t := range g.order {
-		count[t.Name()]++
+		count[camel(t.Name())]++
 	}
 	g.names = map[reflect.Type]string{}
 	used := map[string]bool{}
 	for _, t := range g.order {
-		n := t.Name()
-		if count[n] > 1 {
+		n := camel(t.Name())
+		if count[n] > 1 || reserved[n] {
 			p := t.PkgPath()
 			p = p[strings.LastIndex(p, "/")+1:]
 			n = camel(p) + n
@@ -383,7 +429,11 @@ func (g *gen) kindExpr(t reflect.Type) (string, bool) {
 		}
 		return g.list(t.Elem()), true
 	case reflect.Array:
-		return g.list(t.Elem()), false
+		e, n := g.ref(t.Elem())
+		if n {
+			e += " | null"
+		}
+		return "[" + strings.Join(slices.Repeat([]string{e}, t.Len()), ", ") + "]", false
 	case reflect.Map:
 		k := t.Key()
 		if k.Kind() != reflect.String && !opaque(k) && !isInt(k.Kind()) {

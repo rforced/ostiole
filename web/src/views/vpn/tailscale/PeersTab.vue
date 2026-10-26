@@ -11,17 +11,17 @@ import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { formatBytes, formatWhen } from '@/lib/format'
 import { byAddress, byText, byTime, useSort } from '@/lib/sort'
-import type { TailscaleNodeStatus, TailscalePeer } from '@/views/vpn/types'
+import type { TailscalePeer, TailscaleStatus } from '@/lib/types.gen'
 
 /** How often Live reads the peers again. */
 const POLL_MS = 5000
 
-const status = ref<TailscaleNodeStatus | null>(null)
+const status = ref<TailscaleStatus | null>(null)
 const live = ref(true)
 
 const load = useAsync(
   async () => {
-    status.value = (await api.tailscale.status()) as TailscaleNodeStatus
+    status.value = await api.tailscale.status()
   },
   // Live owns the poll, and starts on.
   { interval: POLL_MS, immediate: true },
@@ -64,7 +64,7 @@ const COLUMNS: SortColumn[] = [
 ]
 
 /** A peer online now was last seen now. */
-const sort = useSort(() => (status.value?.running ? status.value.peers : []), {
+const sort = useSort(() => (status.value?.running ? (status.value.peers ?? []) : []), {
   node: byText(name),
   addresses: byAddress((p) => p.ips?.[0]),
   os: byText((p) => p.os),
@@ -75,7 +75,7 @@ const peers = sort.sorted
 
 <template>
   <div class="space-y-5">
-    <SectionCard title="Peers" :count="status?.running ? status.peers.length : 0" flush>
+    <SectionCard title="Peers" :count="status?.running ? (status.peers ?? []).length : 0" flush>
       <template #actions>
         <SortSelect :sort="sort" :columns="COLUMNS" />
         <LiveButton v-model="live" :failing="Boolean(load.error.value)" />
@@ -101,7 +101,7 @@ const peers = sort.sorted
               {{ emptyText(load, 'Tailscale is not running.') }}
             </td>
           </tr>
-          <tr v-else-if="!status.peers.length">
+          <tr v-else-if="!status.peers?.length">
             <td colspan="7" class="text-ink-muted">No peers.</td>
           </tr>
           <tr v-for="p in peers" :key="p.dnsName || p.hostName">
@@ -114,12 +114,14 @@ const peers = sort.sorted
                 <span v-if="p.expired" class="badge badge-warn">expired</span>
               </span>
             </td>
-            <td class="font-mono text-code" data-label="Addresses">{{ p.ips.join(', ') }}</td>
+            <td class="font-mono text-code" data-label="Addresses">
+              {{ (p.ips ?? []).join(', ') }}
+            </td>
             <td data-label="OS">{{ p.os || '—' }}</td>
             <td class="when" data-label="Last seen">{{ seen(p) }}</td>
             <td class="font-mono text-code" data-label="Path">{{ path(p) }}</td>
             <td class="font-mono text-code" data-label="Routes">
-              {{ p.routes.join(', ') || '—' }}
+              {{ (p.routes ?? []).join(', ') || '—' }}
             </td>
             <td class="num text-code" data-label="Traffic">
               <div>↓ {{ formatBytes(p.rxBytes ?? 0) }}</div>

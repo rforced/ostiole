@@ -6,7 +6,7 @@ import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { interfaceLabel } from '@/lib/interfaces'
-import type { Gateway } from '@/lib/model.gen'
+import type { Gateway } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 interface GatewayForm {

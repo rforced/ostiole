@@ -6,7 +6,7 @@ import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
-import type { BondMode, Interface } from '@/lib/model.gen'
+import type { BondMode, Interface } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 interface Link {

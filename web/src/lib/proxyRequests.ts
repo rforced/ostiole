@@ -1,19 +1,7 @@
+import type { RequestlogRequest } from '@/lib/types.gen'
+
 /** One request the proxy served. */
-export interface ProxyRequest {
-  seq: number
-  time: string
-  site?: string
-  client: string
-  method: string
-  host: string
-  path: string
-  proto?: string
-  status: number
-  bytes: number
-  duration: number
-  agent?: string
-  by?: string
-}
+export type ProxyRequest = RequestlogRequest
 
 /** Who answered, where it was not the site's server (requestlog.Request.By). */
 export const ANSWERED_BY: Record<string, { label: string; tone: string; title: string }> = {

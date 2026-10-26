@@ -12,14 +12,7 @@ import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { useSearch } from '@/lib/search'
 import { byAddress, byNumber, byText, useSort } from '@/lib/sort'
-
-/** One port a client asked the router to forward. */
-interface Mapping {
-  protocol: string
-  internal: string
-  externalPort: number
-  internalPort: number
-}
+import type { Mapping } from '@/lib/types.gen'
 
 /** How often Live reads the mappings again. */
 const LIVE_MS = 2000
@@ -29,7 +22,7 @@ const live = ref(true)
 
 const load = useAsync(
   async () => {
-    mappings.value = (await api.upnp.mappings()) as Mapping[]
+    mappings.value = await api.upnp.mappings()
   },
   // Live owns the poll, and starts on.
   { interval: LIVE_MS, immediate: true },

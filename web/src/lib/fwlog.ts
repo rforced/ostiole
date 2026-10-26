@@ -1,26 +1,6 @@
-import type { Proxy } from '@/lib/model.gen'
+import type { FwlogEntry, Proxy } from '@/lib/types.gen'
 
-/** One packet the firewall logged. */
-export interface FwlogEntry {
-  seq: number
-  time: string
-  prefix: string
-  ruleId?: string
-  zone?: string
-  kind: string
-  action?: string
-  in?: string
-  out?: string
-  family: string
-  proto: string
-  src?: string
-  dst?: string
-  srcPort?: number
-  dstPort?: number
-  icmpType?: number
-  tcpFlags?: string
-  length: number
-}
+export type { FwlogEntry }
 
 /** A drop the firewall makes on its own account, led by its zone when the router named one. */
 const zoned = (what: string) => (e: Omit<FwlogEntry, 'seq'>) =>

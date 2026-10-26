@@ -5,7 +5,7 @@ import type { PropType } from 'vue'
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
-import type { WAFProfile } from '@/lib/model.gen'
+import type { WAFProfile } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({

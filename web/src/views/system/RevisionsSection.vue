@@ -11,7 +11,7 @@ import { api } from '@/lib/api'
 import { emptyText, errorMessage, useAsync } from '@/lib/async'
 import { actorText } from '@/lib/audit'
 import { formatWhen } from '@/lib/format'
-import type { Config } from '@/lib/model.gen'
+import type { Applied, Change, Revision } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -19,30 +19,6 @@ import { useConfirmStore } from '@/stores/confirm'
 const auth = useAuthStore()
 const config = useConfigStore()
 const confirm = useConfirmStore()
-interface Actor {
-  name?: string
-  kind?: string
-  role?: string
-  address?: string
-}
-interface Applied {
-  time: string
-  by?: Actor
-  confirmedBy?: Actor
-  outside?: boolean
-}
-interface Revision {
-  id: string
-  time: string
-  size: number
-  applied?: Applied
-}
-interface Change {
-  path: string
-  kind: string
-  before?: unknown
-  after?: unknown
-}
 
 const revisions = ref<Revision[]>([])
 const actionError = ref('')
@@ -84,7 +60,7 @@ watch(keep, (v) => {
 /** Who applied the configuration in force. Admins only; a failure leaves the table alone. */
 async function readInForce() {
   try {
-    inForce.value = (await api.config.applied()) as Applied | null
+    inForce.value = await api.config.applied()
     inForceError.value = ''
   } catch (e) {
     inForce.value = null
@@ -94,7 +70,7 @@ async function readInForce() {
 
 const load = useAsync(async () => {
   const reading = auth.isAdmin ? readInForce() : null
-  revisions.value = (await api.config.revisions()) as Revision[]
+  revisions.value = await api.config.revisions()
   await reading
 })
 
@@ -119,7 +95,7 @@ function appliedDetail(a: Applied) {
 
 onMounted(load.run)
 
-async function loadIntoDraft(id) {
+async function loadIntoDraft(id: string) {
   if (
     config.dirty &&
     !(await confirm.ask({
@@ -131,7 +107,7 @@ async function loadIntoDraft(id) {
     return
   actionError.value = ''
   try {
-    config.replaceDraft((await api.config.revision(id)) as Config)
+    config.replaceDraft(await api.config.revision(id))
     loadedId.value = id
   } catch (e) {
     actionError.value = errorMessage(e)
@@ -139,14 +115,14 @@ async function loadIntoDraft(id) {
 }
 
 /** Shows what changed between a revision and the configuration in force. */
-async function compare(id) {
+async function compare(id: string) {
   actionError.value = ''
   if (comparing.value === id) {
     comparing.value = ''
     return
   }
   try {
-    changes.value = (await api.config.diff({ from: id, to: 'current' })) as Change[]
+    changes.value = await api.config.diff({ from: id, to: 'current' })
     comparing.value = id
   } catch (e) {
     actionError.value = errorMessage(e)

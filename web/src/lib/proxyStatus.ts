@@ -2,7 +2,7 @@ import { computed, ref } from 'vue'
 
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
-import type { Proxy } from '@/lib/model.gen'
+import type { Proxy } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 /** How often the sidecar is asked what it is doing while the page is shown. */

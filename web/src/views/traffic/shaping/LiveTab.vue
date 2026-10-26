@@ -10,17 +10,10 @@ import { useAsync } from '@/lib/async'
 import { formatCount, formatRate } from '@/lib/format'
 import { LEVELS } from '@/lib/meter'
 import { TIERS, tierBadge, tierLabel } from '@/lib/tiers'
+import type { DirectionStatus, TinStats } from '@/lib/types.gen'
 
 /** How often the queues are sampled. Fast enough to watch a call start. */
 const INTERVAL_MS = 3000
-
-/** One priority tier of one queue, as the router counts it. */
-interface Tin {
-  tier?: string
-  sentBytes?: number
-  drops?: number
-  peakDelayUs?: number
-}
 
 const report = ref(null)
 const rates = ref({})
@@ -111,8 +104,8 @@ function fill(key, ceiling) {
 }
 
 /** The tier rows of one direction, in the order the router names them. */
-function tins(state: { stats?: { tins?: Tin[] } } | undefined) {
-  const byTier = new Map((state?.stats?.tins ?? []).map((t) => [t.tier, t]))
+function tins(state: DirectionStatus | undefined) {
+  const byTier = new Map<string, TinStats>((state?.stats?.tins ?? []).map((t) => [t.tier, t]))
   return TIERS.map((t) => ({ tier: t.value, ...(byTier.get(t.value) ?? {}) }))
 }
 

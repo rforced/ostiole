@@ -15,13 +15,12 @@ import { api } from '@/lib/api'
 import { emptyText, errorMessage, useAsync } from '@/lib/async'
 import { tone } from '@/lib/badge'
 import { formatWhen } from '@/lib/format'
-import type { Certificate } from '@/lib/model.gen'
+import type { Certificate, CertificatesResponse } from '@/lib/types.gen'
 import { ADMIN_ONLY, adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import { useToastStore } from '@/stores/toast'
 import CertificateDialog from '@/views/system/certificates/CertificateDialog.vue'
-import type { ProviderKind } from '@/views/system/providers/kinds'
 
 /** How often the list is re-read while an order is running. */
 const ISSUING_POLL_MS = 5000
@@ -31,34 +30,11 @@ const config = useConfigStore()
 const confirm = useConfirmStore()
 const toast = useToastStore()
 
-interface CertificateStatus {
-  id: string
-  issued: boolean
-  running?: boolean
-  expired?: boolean
-  expiresSoon?: boolean
-  lastError?: string
-  notAfter?: string
-}
-interface BuiltIn {
-  names: string[] | null
-  hosts: string[] | null
-  issuer: string
-  notAfter: string
-  fingerprint: string
-  managed: boolean
-}
-interface CertificatesReply {
-  builtIn: BuiltIn | null
-  certificates: CertificateStatus[]
-  providerKinds: ProviderKind[]
-}
-
-const page = ref<CertificatesReply>({ builtIn: null, certificates: [], providerKinds: [] })
+const page = ref<CertificatesResponse>({ builtIn: null, certificates: [], providerKinds: [] })
 const actionError = ref('')
 const load = useAsync(
   async () => {
-    page.value = (await api.certificates.list()) as CertificatesReply
+    page.value = await api.certificates.list()
   },
   { immediate: true },
 )
@@ -125,7 +101,7 @@ async function issue(cert) {
 }
 
 const regenerate = useAsync(async () => {
-  page.value.builtIn = (await api.certificates.regenerate()) as BuiltIn
+  page.value.builtIn = await api.certificates.regenerate()
   toast.show('New self-signed certificate in place. Browsers warn about it once more.')
 })
 
@@ -226,7 +202,7 @@ function remove(cert) {
             <legend>Built-in self-signed</legend>
             <dl class="kv">
               <dt>Valid for</dt>
-              <dd class="font-mono">{{ page.builtIn.names.join(', ') || '—' }}</dd>
+              <dd class="font-mono">{{ (page.builtIn.names ?? []).join(', ') || '—' }}</dd>
               <dt>Issued by</dt>
               <dd>{{ page.builtIn.issuer }}</dd>
               <dt>Expires</dt>

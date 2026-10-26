@@ -7,7 +7,7 @@ import AppNotice from '@/components/AppNotice.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
-import type { Interface } from '@/lib/model.gen'
+import type { Interface } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 interface Link {

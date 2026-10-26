@@ -17,19 +17,14 @@ const rendering = ref('')
 
 async function confirmedRuleset() {
   try {
-    return (await api.ruleset()) as string
+    return await api.ruleset()
   } catch (e) {
     throw e instanceof ApiError && e.status === 404 ? new Error('Nothing confirmed yet.') : e
   }
 }
 
-interface Check {
-  ruleset: string
-  network?: Record<string, string>
-}
-
 async function draftRuleset() {
-  return ((await api.config.check(config.draft)) as Check).ruleset
+  return (await api.config.check(config.draft)).ruleset
 }
 
 /**
@@ -37,7 +32,7 @@ async function draftRuleset() {
  * bridge not coming up" lives in these files, not in the ruleset.
  */
 async function networkUnits() {
-  const files = ((await api.config.check(config.draft)) as Check).network ?? {}
+  const files = (await api.config.check(config.draft)).network ?? {}
   const names = Object.keys(files).sort()
   if (!names.length) throw new Error('This build is managing no network units.')
   return names.map((n) => `==> ${n} <==\n${files[n]}`).join('\n')

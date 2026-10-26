@@ -16,11 +16,11 @@ import { connected, livePeer } from '@/lib/wgStatus'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import PeerDialog from '@/views/vpn/PeerDialog.vue'
-import type { WgLive } from '@/views/vpn/types'
+import type { Tunnel } from '@/lib/types.gen'
 
 const props = defineProps({
   /** Each tunnel of the running configuration as its device has it, by name. */
-  live: { type: Map as PropType<Map<string, WgLive>>, required: true },
+  live: { type: Map as PropType<Map<string, Tunnel>>, required: true },
   /** The page's read of it, from useAsync. */
   read: { type: Object as PropType<AsyncLoad>, required: true },
 })
@@ -41,7 +41,7 @@ const rows = computed(() =>
  * holds what the devices said, and when, as it went off.
  */
 const following = ref(true)
-const held = ref<{ status: Map<string, WgLive>; at: number } | null>(null)
+const held = ref<{ status: Map<string, Tunnel>; at: number } | null>(null)
 watch(following, (on) => {
   held.value = on ? null : { status: props.live, at: Date.now() }
   if (on) props.read.run()

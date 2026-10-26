@@ -71,7 +71,7 @@ const {
   rows: system,
   error: systemError,
   updatedAt: systemRead,
-} = useDraftRows((draft) => api.systemRules(draft))
+} = useDraftRows(() => api.systemRules(config.draft))
 
 /**
  * The table waits for the first read of the system rules. They land above

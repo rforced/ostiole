@@ -6,7 +6,7 @@ import type { PropType } from 'vue'
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
-import type { GatewayGroup, GatewayMember, OnDownMode } from '@/lib/model.gen'
+import type { GatewayGroup, GatewayMember, OnDownMode } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 interface GroupForm {

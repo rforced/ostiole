@@ -2,7 +2,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { api } from '@/lib/api'
+import { api, type GatewayHistoryReply } from '@/lib/api'
+import { fixture } from '@/test/fixtures'
 import GatewayHistoryDialog from '@/views/routing/GatewayHistoryDialog.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -30,11 +31,11 @@ const stubs = {
 }
 
 const NOW = 1_790_000_000
-const at = (t) => new Date(t * 1000).toISOString()
+const at = (t: number) => new Date(t * 1000).toISOString()
 
-function answer(window) {
+function answer(window: string) {
   if (window === '5m') {
-    return {
+    return fixture<GatewayHistoryReply>({
       window,
       now: at(NOW),
       families: [
@@ -53,9 +54,9 @@ function answer(window) {
       down: 0,
       never: 0,
       events: [],
-    }
+    })
   }
-  return {
+  return fixture<GatewayHistoryReply>({
     window,
     now: at(NOW),
     families: [
@@ -79,7 +80,7 @@ function answer(window) {
     down: 240,
     never: 0,
     events: [{ seq: 2, time: at(NOW - 300), gateway: 'gw_eth0', kind: 'up', for: 240 }],
-  }
+  })
 }
 
 function dialog(

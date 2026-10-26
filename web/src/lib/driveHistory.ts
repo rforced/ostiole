@@ -1,17 +1,7 @@
+import type { Reading } from '@/lib/types.gen'
+
 /** One reading of a drive's health; the figures are null or absent when it gave none. */
-export interface DriveReading {
-  seq: number
-  time: string
-  drive: string
-  model?: string
-  serial?: string
-  health: string
-  temperature?: number | null
-  wear?: number | null
-  spare?: number | null
-  bad?: number | null
-  powerOnHours?: number | null
-}
+export type DriveReading = Reading
 
 /**
  * The values a reading's row in the drives' history shows, as it shows

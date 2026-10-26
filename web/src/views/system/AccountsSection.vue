@@ -11,6 +11,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import { ApiError, api } from '@/lib/api'
 import { emptyText, errorMessage, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
+import type { Account } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfirmStore } from '@/stores/confirm'
 import AccountDialog from '@/views/system/accounts/AccountDialog.vue'
@@ -18,14 +19,6 @@ import { ROLES } from '@/views/system/accounts/roles'
 
 /** The shortest password the server will take. */
 const MIN_PASSWORD = 12
-
-interface Account {
-  username: string
-  role: string
-  createdAt: string
-  updatedAt: string
-  mfa?: { totp?: boolean; passkeys?: number }
-}
 
 const auth = useAuthStore()
 const confirm = useConfirmStore()
@@ -43,7 +36,7 @@ const newPassword = ref('')
 
 const load = useAsync(async () => {
   try {
-    users.value = (await api.users.list()) as Account[]
+    users.value = await api.users.list()
     available.value = true
   } catch (e) {
     if (e instanceof ApiError && e.status === 403) {
@@ -65,10 +58,10 @@ const error = computed(() => actionError.value || load.error.value)
 const isSelf = (u: Account) => u.username === auth.user?.username
 
 /** Every account action redraws from the list the server sent back. */
-async function act(fn: () => Promise<unknown>) {
+async function act(fn: () => Promise<Account[]>) {
   actionError.value = ''
   try {
-    users.value = (await fn()) as Account[]
+    users.value = await fn()
     return true
   } catch (e) {
     actionError.value = errorMessage(e)

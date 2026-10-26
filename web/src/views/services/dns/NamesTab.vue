@@ -16,7 +16,7 @@ import { emptyText } from '@/lib/async'
 import { useDraftRows } from '@/lib/draft'
 import { formatWhen } from '@/lib/format'
 import { overrideKey, overrideName } from '@/lib/hosts'
-import type { HostOverride } from '@/lib/model.gen'
+import type { DnsName, HostOverride } from '@/lib/types.gen'
 import { useSearch } from '@/lib/search'
 import { byAddress, byText, useSort } from '@/lib/sort'
 import { useAuthStore } from '@/stores/auth'
@@ -40,21 +40,7 @@ const SOURCES: Record<string, { label: string; to?: string }> = {
   device: { label: 'Device', to: '/services/dhcp#leases' },
 }
 
-/** A name the router answers that is not a host override, as the names read gives it. */
-interface DerivedName {
-  name: string
-  bare?: string
-  addresses: string[]
-  source: string
-  mac?: string
-  description?: string
-  site?: string
-  interfaces?: string[]
-  expires?: string
-  heldBy?: { source: string; name: string }
-}
-
-interface NameRow extends Partial<DerivedName> {
+interface NameRow extends Partial<DnsName> {
   key: string
   source: string
   name: string
@@ -75,9 +61,7 @@ const live = ref(true)
  * registers them. Read for the draft, like the system rules, so a change
  * shows before it is applied; Live follows the devices as they come.
  */
-const derived = useDraftRows(async (draft) => (await api.dnsNames(draft)) as DerivedName[], {
-  interval: LIVE_MS,
-})
+const derived = useDraftRows(() => api.dnsNames(config.draft), { interval: LIVE_MS })
 watch(live, (on) => {
   if (on) {
     derived.run()

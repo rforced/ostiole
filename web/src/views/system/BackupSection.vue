@@ -40,7 +40,7 @@ const download = useAsync(async () => {
   URL.revokeObjectURL(url)
 })
 
-const restore = useAsync(async (file) => {
+const restore = useAsync(async (file: File) => {
   pending.value = null
   pending.value = await api.config.restore(file, restorePassphrase.value)
 })

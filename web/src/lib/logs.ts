@@ -1,5 +1,5 @@
 import { discoveryActive } from '@/lib/discovery'
-import type { Config, DNSServer, FirewallLog, Proxy, Traffic } from '@/lib/model.gen'
+import type { Config, DNSServer, FirewallLog, Proxy, Traffic } from '@/lib/types.gen'
 import { proxyServes } from '@/lib/proxyStatus'
 
 /**

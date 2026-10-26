@@ -5,7 +5,7 @@ import AppNotice from '@/components/AppNotice.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
-import type { RateLimit } from '@/lib/model.gen'
+import type { RateLimit } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 

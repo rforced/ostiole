@@ -9,7 +9,15 @@ import { LAND_MS } from '@/lib/log'
 import { eventValues } from '@/lib/proxyEvents'
 import { matches } from '@/lib/search'
 import { useProxyStatus } from '@/lib/proxyStatus'
-import type { Config, System } from '@/lib/model.gen'
+import type {
+  Config,
+  LogfileStatus,
+  LogLimitsInfo,
+  Stats,
+  System,
+  WafEventsPage,
+} from '@/lib/types.gen'
+import { fixture } from '@/test/fixtures'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ProxyPage from '@/views/services/ProxyPage.vue'
@@ -190,8 +198,8 @@ function event(over = {}) {
 async function events(list, draft = config(), memTotal = 8_000_000_000) {
   // The router searches and narrows the way the page's values say: the Go
   // side is tested against the same values.
-  vi.mocked(api.proxy.events).mockImplementation(
-    async (params: { verdict?: string; q?: string }) => ({
+  vi.mocked(api.proxy.events).mockImplementation(async (params: { verdict?: string; q?: string }) =>
+    fixture<WafEventsPage>({
       entries: list.filter(
         (e) =>
           (!params.verdict || e.verdict === params.verdict) &&
@@ -200,9 +208,9 @@ async function events(list, draft = config(), memTotal = 8_000_000_000) {
       held: list.length,
     }),
   )
-  vi.mocked(api.systemStats).mockResolvedValue({ memTotal })
-  vi.mocked(api.logFiles).mockResolvedValue({ enabled: false, logs: [] })
-  vi.mocked(api.logLimits).mockResolvedValue({ memTotal: 0, ceilings: {} })
+  vi.mocked(api.systemStats).mockResolvedValue(fixture<Stats>({ memTotal }))
+  vi.mocked(api.logFiles).mockResolvedValue(fixture<LogfileStatus>({ enabled: false, logs: [] }))
+  vi.mocked(api.logLimits).mockResolvedValue(fixture<LogLimitsInfo>({ memTotal: 0, ceilings: {} }))
   const store = useConfigStore()
   store.draft = draft
   store.saved = structuredClone(draft)
@@ -464,7 +472,10 @@ describe('EventsTab', () => {
   it('clears the router’s events', async () => {
     const held = [event()]
     const { wrapper } = await events(held)
-    vi.mocked(api.proxy.clearEvents).mockImplementation(async () => held.splice(0))
+    vi.mocked(api.proxy.clearEvents).mockImplementation(async () => {
+      held.splice(0)
+      return { cleared: true }
+    })
     const clear = wrapper.findComponent(ClearLogButton)
     expect(clear.props()).toMatchObject({ name: 'WAF events', noun: 'event', journal: true })
     clear.vm.$emit('confirm')

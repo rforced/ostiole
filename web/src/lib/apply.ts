@@ -1,10 +1,10 @@
 import { ApiError, api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
 import { newId } from '@/lib/ids'
-import type { Config } from '@/lib/model.gen'
+import type { ApplyResult, Config } from '@/lib/types.gen'
 
-/** What the router answers an apply with. */
-export type ApplyReply = { pending: boolean; deadline: string }
+/** What an apply answers with that matters here: whether it awaits confirmation, and until when. */
+export type ApplyOutcome = Pick<ApplyResult, 'pending' | 'deadline'>
 
 /** How long an apply whose reply was lost waits for the router to answer. */
 export const LOST_MS = 20_000
@@ -23,10 +23,10 @@ export async function applyWithConfirm(
   config: Config,
   baseRevision: string,
   seconds: number,
-): Promise<ApplyReply> {
+): Promise<ApplyOutcome> {
   const tag = newId('apply')
   try {
-    return (await api.config.apply(config, baseRevision, seconds, tag)) as ApplyReply
+    return await api.config.apply(config, baseRevision, seconds, tag)
   } catch (e) {
     if (e instanceof ApiError) throw e
     const why = errorMessage(e).replace(/\.$/, '')

@@ -6,7 +6,7 @@ import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { joinList, parseList } from '@/lib/lists'
-import type { ProxyPool } from '@/lib/model.gen'
+import type { ProxyPool } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({

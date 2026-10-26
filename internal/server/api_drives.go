@@ -166,6 +166,9 @@ func driveError(err error) error {
 
 var errNoDriveHistory = errors.New("the drives' history is not kept by this daemon (not running as root, or no smartctl?)")
 
+// driveHistoryPage is one page of the drives' readings.
+type driveHistoryPage logPage[smart.Reading]
+
 // driveHistoryList serves a page of the drives' hourly readings, newest
 // first and searched, from memory alone.
 func (a *api) driveHistoryList(w http.ResponseWriter, r *http.Request) error {
@@ -181,7 +184,7 @@ func (a *api) driveHistoryList(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	held, oldest := a.driveHistory.Held()
-	writeJSON(w, http.StatusOK, newLogPage(page, page.Entries, held, oldest))
+	writeJSON(w, http.StatusOK, driveHistoryPage(newLogPage(page, page.Entries, held, oldest)))
 	return nil
 }
 

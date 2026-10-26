@@ -1,4 +1,4 @@
-import type { Config, Interface } from '@/lib/model.gen'
+import type { Config, Interface } from '@/lib/types.gen'
 
 /**
  * What an interface is called wherever one is picked: the description when

@@ -12,7 +12,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
-import { type LogPage, type LogRow, heldLine, useLog } from '@/lib/log'
+import { type LogRow, heldLine, useLog } from '@/lib/log'
 import { records } from '@/lib/logs'
 import { wirelessValues } from '@/lib/wirelessLog'
 import { useConfigStore } from '@/stores/config'
@@ -45,8 +45,7 @@ interface WirelessEvent extends LogRow {
 
 const card = ref(null)
 const log = useLog<WirelessEvent>({
-  read: async (params, signal) =>
-    (await api.wireless.log(params, signal)) as LogPage<WirelessEvent>,
+  read: async (params, signal) => await api.wireless.log(params, signal),
   stream: '/api/v1/wireless/log/stream',
   values: wirelessValues,
   top: card,

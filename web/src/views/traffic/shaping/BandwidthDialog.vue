@@ -5,7 +5,7 @@ import { computed, ref, watch } from 'vue'
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import { facesInternet } from '@/lib/interfaces'
-import type { Interface, LinkType, Shaping } from '@/lib/model.gen'
+import type { Interface, LinkType, Shaping } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 /**

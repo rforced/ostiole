@@ -8,17 +8,17 @@ import ErrorLine from '@/components/ErrorLine.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import type { AsyncLoad } from '@/lib/async'
-import type { Interface } from '@/lib/model.gen'
+import type { Interface } from '@/lib/types.gen'
 import { connected, livePeer } from '@/lib/wgStatus'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import TunnelDialog from '@/views/vpn/TunnelDialog.vue'
 import TunnelFileDialog from '@/views/vpn/TunnelFileDialog.vue'
-import type { GatewayStatus, WgLive } from '@/views/vpn/types'
+import type { GatewayStatus, Tunnel } from '@/lib/types.gen'
 
 const props = defineProps({
   /** Each tunnel of the running configuration as its device has it, by name. */
-  live: { type: Map as PropType<Map<string, WgLive>>, required: true },
+  live: { type: Map as PropType<Map<string, Tunnel>>, required: true },
   /** What the gateway monitor says of each gateway. */
   gateways: { type: Array as PropType<GatewayStatus[]>, required: true },
   /** The page's read of both, from useAsync. */

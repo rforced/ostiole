@@ -5,7 +5,7 @@ import type { PropType } from 'vue'
 import LinkErrors from '@/components/LinkErrors.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { formatBytes, formatRate } from '@/lib/format'
-import type { LinkSummary } from '@/views/dashboard/overview'
+import type { LinkSummary } from '@/lib/types.gen'
 
 type Direction = 'rx' | 'tx'
 

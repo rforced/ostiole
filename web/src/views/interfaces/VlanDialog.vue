@@ -5,7 +5,7 @@ import type { PropType } from 'vue'
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
-import type { Interface } from '@/lib/model.gen'
+import type { Interface } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({

@@ -13,9 +13,8 @@ import { formatCount } from '@/lib/format'
 import { joinList, parseList } from '@/lib/lists'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
-import type { Alias, AliasType } from '@/lib/model.gen'
+import type { Alias, AliasType, FeedsStatus } from '@/lib/types.gen'
 import CountryPicker from '@/views/firewall/CountryPicker.vue'
-import type { FeedStatus } from '@/views/firewall/feeds'
 
 interface AliasForm {
   name: string
@@ -38,7 +37,7 @@ const props = defineProps({
    * The feed statuses the page has already read, so the country picker
    * can say how much each country held without fetching anything itself.
    */
-  feeds: { type: Array as PropType<FeedStatus[]>, default: () => [] },
+  feeds: { type: Array as PropType<FeedsStatus[]>, default: () => [] },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 

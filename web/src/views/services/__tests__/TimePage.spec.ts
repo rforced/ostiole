@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, type Role, type Session } from '@/lib/api'
 import { useNtpStatus } from '@/lib/ntpStatus'
-import type { Config } from '@/lib/model.gen'
+import type { Config } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import TimePage from '@/views/services/TimePage.vue'

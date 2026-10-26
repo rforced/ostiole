@@ -2,6 +2,8 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import type { TailscalePeer, TailscaleStatus } from '@/lib/types.gen'
+import { fixture } from '@/test/fixtures'
 import PeersTab from '@/views/vpn/tailscale/PeersTab.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -12,12 +14,13 @@ vi.mock('@/lib/api', () => ({
 // Live reads from the start, so no tab outlives its test.
 enableAutoUnmount(afterEach)
 
-const peer = (hostName, over = {}) => ({
+const peer = (hostName: string, over: Partial<TailscalePeer> = {}): TailscalePeer => ({
   hostName,
   dnsName: `${hostName}.tail.ts.net.`,
   ips: ['100.64.0.1'],
   os: 'linux',
   online: false,
+  active: false,
   routes: [],
   ...over,
 })
@@ -27,15 +30,17 @@ describe('PeersTab', () => {
 
   // Online now counts as seen now, so the peers that are up come first.
   it('sorts by when a peer was last seen, the ones online first', async () => {
-    vi.mocked(api.tailscale.status).mockResolvedValue({
-      running: true,
-      peers: [
-        peer('old', { lastSeen: '2026-09-20T12:00:00Z' }),
-        peer('up', { online: true }),
-        peer('never'),
-        peer('recent', { lastSeen: '2026-09-25T12:00:00Z' }),
-      ],
-    })
+    vi.mocked(api.tailscale.status).mockResolvedValue(
+      fixture<TailscaleStatus>({
+        running: true,
+        peers: [
+          peer('old', { lastSeen: '2026-09-20T12:00:00Z' }),
+          peer('up', { online: true }),
+          peer('never'),
+          peer('recent', { lastSeen: '2026-09-25T12:00:00Z' }),
+        ],
+      }),
+    )
     const wrapper = mount(PeersTab)
     await flushPromises()
     const nodes = () => wrapper.findAll('tbody tr').map((r) => r.find('.font-mono').text())
@@ -58,7 +63,9 @@ describe('PeersTab', () => {
   it('reads again while Live is on, from the start', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
     try {
-      vi.mocked(api.tailscale.status).mockResolvedValue({ running: true, peers: [peer('up')] })
+      vi.mocked(api.tailscale.status).mockResolvedValue(
+        fixture<TailscaleStatus>({ running: true, peers: [peer('up')] }),
+      )
       const wrapper = mount(PeersTab)
       await flushPromises()
       const live = wrapper.findAll('button').find((b) => b.text() === 'Live')

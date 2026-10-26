@@ -80,15 +80,33 @@ func (a *api) listUsers(w http.ResponseWriter, _ *http.Request) error {
 	return a.users(w, http.StatusOK)
 }
 
+// createUserRequest is a new account.
+type createUserRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Role     string `json:"role"`
+}
+
+// setUserRoleRequest is a role to give.
+type setUserRoleRequest struct {
+	Role string `json:"role"`
+}
+
+// setUserPasswordRequest is a password to set.
+type setUserPasswordRequest struct {
+	Password string `json:"password"`
+}
+
+// renameUserRequest is the name an account takes.
+type renameUserRequest struct {
+	Username string `json:"username"`
+}
+
 func (a *api) createUser(w http.ResponseWriter, r *http.Request) error {
 	if err := a.requireAuth(); err != nil {
 		return err
 	}
-	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-		Role     string `json:"role"`
-	}
+	var req createUserRequest
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}
@@ -130,9 +148,7 @@ func (a *api) setUserRole(w http.ResponseWriter, r *http.Request) error {
 	if err := a.requireAuth(); err != nil {
 		return err
 	}
-	var req struct {
-		Role string `json:"role"`
-	}
+	var req setUserRoleRequest
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}
@@ -163,9 +179,7 @@ func (a *api) setUserPassword(w http.ResponseWriter, r *http.Request) error {
 	if err := a.requireAuth(); err != nil {
 		return err
 	}
-	var req struct {
-		Password string `json:"password"`
-	}
+	var req setUserPasswordRequest
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}
@@ -190,9 +204,7 @@ func (a *api) renameUser(w http.ResponseWriter, r *http.Request) error {
 	if err := a.requireAuth(); err != nil {
 		return err
 	}
-	var req struct {
-		Username string `json:"username"`
-	}
+	var req renameUserRequest
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}

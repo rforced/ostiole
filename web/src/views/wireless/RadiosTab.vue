@@ -9,26 +9,25 @@ import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { COUNTRIES } from '@/lib/countries'
-import type { Radio } from '@/lib/model.gen'
+import type { Radio, WirelessCard } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
-import type { Card } from '@/views/wireless/card'
 import RadioDialog from '@/views/wireless/RadioDialog.vue'
 
 const auth = useAuthStore()
 const config = useConfigStore()
 interface Row {
-  card: Card | null
+  card: WirelessCard | null
   cfg: Radio | null
 }
 
-const live = ref<Card[]>([])
+const live = ref<WirelessCard[]>([])
 const editing = ref<Row | null>(null)
 const dialogOpen = ref(false)
 
 const load = useAsync(
   async () => {
-    live.value = ((await api.wireless.radios()) as { radios?: Card[] }).radios ?? []
+    live.value = (await api.wireless.radios()).radios ?? []
   },
   { immediate: true },
 )
@@ -53,7 +52,7 @@ const rows = computed(() => {
 const country = computed(() => config.wirelessCountry)
 
 /** The bands a network may be started on; a card's 6 GHz is often not one. */
-function bandsOf(card: Card | null) {
+function bandsOf(card: WirelessCard | null) {
   if (!card) return '—'
   return Object.entries(card.bands ?? {})
     .filter(([, b]) => b.serves !== false)

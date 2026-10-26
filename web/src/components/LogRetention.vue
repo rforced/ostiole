@@ -8,6 +8,7 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { formatBytes, formatCount } from '@/lib/format'
 import { FILE_LOGS, LOGS, fileDays, fullBytes, totalBytes } from '@/lib/logs'
+import type { LogLimitsInfo, LogStatus } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
@@ -18,16 +19,6 @@ import { useConfigStore } from '@/stores/config'
  */
 interface LogSettings {
   entries?: number
-}
-interface LogLimits {
-  memTotal: number
-  budget: number
-  peakFactor?: number
-  ceilings?: Record<string, number>
-}
-interface LogFile {
-  name: string
-  bytes: number
 }
 
 const props = defineProps({
@@ -61,17 +52,17 @@ const entries = field('entries')
 
 const memory = ref(0)
 const stats = useAsync(async () => {
-  memory.value = ((await api.systemStats()) as { memTotal?: number }).memTotal ?? 0
+  memory.value = (await api.systemStats()).memTotal
 })
 /** The budget and ceilings this router's memory sets, null until the daemon says. */
-const limits = ref<LogLimits | null>(null)
+const limits = ref<LogLimitsInfo | null>(null)
 const limitsLoad = useAsync(async () => {
-  limits.value = (await api.logLimits()) as LogLimits
+  limits.value = await api.logLimits()
 })
 /** What this log's files hold, while System → General writes them. */
-const inFiles = ref<LogFile | null>(null)
+const inFiles = ref<LogStatus | null>(null)
 const files = useAsync(async () => {
-  const st = (await api.logFiles()) as { enabled: boolean; logs?: LogFile[] }
+  const st = await api.logFiles()
   inFiles.value = st.enabled ? ((st.logs ?? []).find((l) => l.name === props.log) ?? null) : null
 })
 onMounted(() => {

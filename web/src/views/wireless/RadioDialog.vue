@@ -5,13 +5,12 @@ import { computed, ref, watch } from 'vue'
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
-import type { Band, Radio, Standard } from '@/lib/model.gen'
+import type { Band, Radio, Standard, WirelessCard } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
-import type { Card } from '@/views/wireless/card'
 
 const props = defineProps({
   /** The card as iw reports it, or null when this router has not got it. */
-  card: { type: Object as PropType<Card | null>, default: null },
+  card: { type: Object as PropType<WirelessCard | null>, default: null },
   /** The radio as it is configured, or null for one that is not. */
   radio: { type: Object as PropType<Radio | null>, default: null },
 })
@@ -62,7 +61,7 @@ const widths = computed(() => {
 
 const standards = computed<(Standard | '')[]>(() => {
   const have = band.value?.standards
-  if (have?.length) return have
+  if (have?.length) return have as Standard[]
   return form.value.band === '6g' ? ['ax'] : ['ax', 'n', 'legacy']
 })
 

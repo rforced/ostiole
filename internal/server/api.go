@@ -398,6 +398,10 @@ func (a *api) servicesStatus(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+type dnsCacheClearReply struct {
+	Cleared []string `json:"cleared"`
+}
+
 // clearDNSCache empties the caches the router is running now: dnsmasq
 // always, the validating resolver when it is on. Both clear on a HUP, so
 // nothing restarts. It reads the applied configuration, not a draft: a
@@ -427,7 +431,7 @@ func (a *api) clearDNSCache(w http.ResponseWriter, r *http.Request) error {
 		}
 		cleared = append(cleared, "unbound")
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"cleared": cleared})
+	writeJSON(w, http.StatusOK, dnsCacheClearReply{Cleared: cleared})
 	return nil
 }
 
@@ -458,6 +462,13 @@ func (a *api) gatewayStatus(w http.ResponseWriter, _ *http.Request) error {
 	return nil
 }
 
+type detectedGatewayReply struct {
+	gateway.Detected
+	// Suggested is the gateway this route would become, ready for the
+	// UI to put straight into the draft.
+	Suggested *model.Gateway `json:"suggested,omitempty"`
+}
+
 // detectedGateways reports the default routes the kernel already has.
 // Most routers get one from DHCP before anyone configures anything, and it
 // is the one carrying the traffic, so it belongs on the page whether or
@@ -468,15 +479,9 @@ func (a *api) detectedGateways(w http.ResponseWriter, _ *http.Request) error {
 	if err != nil {
 		return err
 	}
-	type detected struct {
-		gateway.Detected
-		// Suggested is the gateway this route would become, ready for the
-		// UI to put straight into the draft.
-		Suggested *model.Gateway `json:"suggested,omitempty"`
-	}
-	out := make([]detected, 0, len(found))
+	out := make([]detectedGatewayReply, 0, len(found))
 	for _, d := range found {
-		row := detected{Detected: d}
+		row := detectedGatewayReply{Detected: d}
 		if d.Configured == "" && d.Disabled == "" && cfg != nil {
 			g := gateway.Suggest(cfg, d)
 			row.Suggested = &g
@@ -561,16 +566,25 @@ func (a *api) policyReplies(w http.ResponseWriter, _ *http.Request) error {
 	return nil
 }
 
+type wireguardKeysRequest struct {
+	// Kind is "pair" (default), "psk", or "public" for the public key
+	// of PrivateKey.
+	Kind       string `json:"kind"`
+	PrivateKey string `json:"privateKey"`
+}
+
+// wireguardKeysReply carries the keys the kind asked for and no others.
+type wireguardKeysReply struct {
+	PrivateKey   string `json:"privateKey,omitempty"`
+	PublicKey    string `json:"publicKey,omitempty"`
+	PresharedKey string `json:"presharedKey,omitempty"`
+}
+
 // wireguardKeys mints a key pair for a new tunnel, or a preshared key for
 // a peer. Generating them here keeps the browser out of the crypto and
 // gives every router the same well-seeded source.
 func (a *api) wireguardKeys(w http.ResponseWriter, r *http.Request) error {
-	var req struct {
-		// Kind is "pair" (default), "psk", or "public" for the public key
-		// of PrivateKey.
-		Kind       string `json:"kind"`
-		PrivateKey string `json:"privateKey"`
-	}
+	var req wireguardKeysRequest
 	if r.ContentLength != 0 {
 		if err := decodeJSON(r, &req); err != nil {
 			return err
@@ -586,20 +600,20 @@ func (a *api) wireguardKeys(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			return err
 		}
-		writeJSON(w, http.StatusOK, map[string]string{"privateKey": priv, "publicKey": pub})
+		writeJSON(w, http.StatusOK, wireguardKeysReply{PrivateKey: priv, PublicKey: pub})
 	case "psk":
 		psk, err := wg.GeneratePSK()
 		if err != nil {
 			return err
 		}
-		writeJSON(w, http.StatusOK, map[string]string{"presharedKey": psk})
+		writeJSON(w, http.StatusOK, wireguardKeysReply{PresharedKey: psk})
 	case "public":
 		// The error never carries the key, which is a secret either way.
 		pub, err := wg.PublicKey(strings.TrimSpace(req.PrivateKey))
 		if err != nil {
 			return &badRequest{errors.New("not a WireGuard key: want 32 bytes, base64 encoded")}
 		}
-		writeJSON(w, http.StatusOK, map[string]string{"publicKey": pub})
+		writeJSON(w, http.StatusOK, wireguardKeysReply{PublicKey: pub})
 	default:
 		return &badRequest{fmt.Errorf("unknown kind %q", req.Kind)}
 	}
@@ -616,6 +630,16 @@ func channelFrom(s string) (update.Channel, error) {
 	return "", &badRequest{fmt.Errorf("unknown channel %q", s)}
 }
 
+type updateCheckReply struct {
+	Check  *update.Check `json:"check"`
+	Status update.Status `json:"status"`
+}
+
+type updateStatusReply struct {
+	Check  update.Snapshot `json:"check"`
+	Status update.Status   `json:"status"`
+}
+
 func (a *api) updateCheck(w http.ResponseWriter, r *http.Request) error {
 	if a.updater == nil {
 		return &unavailable{errors.New("updates not available")}
@@ -628,7 +652,7 @@ func (a *api) updateCheck(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return &upstream{err}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"check": chk, "status": a.updater.Status()})
+	writeJSON(w, http.StatusOK, updateCheckReply{Check: chk, Status: a.updater.Status()})
 	return nil
 }
 
@@ -640,17 +664,19 @@ func (a *api) updateStatus(w http.ResponseWriter, _ *http.Request) error {
 	if a.updater == nil {
 		return &unavailable{errors.New("updates not available")}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"check": a.updater.Cached(), "status": a.updater.Status()})
+	writeJSON(w, http.StatusOK, updateStatusReply{Check: a.updater.Cached(), Status: a.updater.Status()})
 	return nil
+}
+
+type updateApplyRequest struct {
+	Channel string `json:"channel"`
 }
 
 func (a *api) updateApply(w http.ResponseWriter, r *http.Request) error {
 	if a.updater == nil {
 		return &unavailable{errors.New("updates not available")}
 	}
-	var req struct {
-		Channel string `json:"channel"`
-	}
+	var req updateApplyRequest
 	if r.ContentLength != 0 {
 		if err := decodeJSON(r, &req); err != nil {
 			return err
@@ -1219,12 +1245,16 @@ func (a *api) apply(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+type confirmReply struct {
+	Archived *store.Revision `json:"archived"`
+}
+
 func (a *api) confirm(w http.ResponseWriter, r *http.Request) error {
 	archived, err := a.engine.Confirm(r.Context(), a.actor(r))
 	if err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"archived": a.withoutAuthor(r, archived)})
+	writeJSON(w, http.StatusOK, confirmReply{Archived: a.withoutAuthor(r, archived)})
 	return nil
 }
 

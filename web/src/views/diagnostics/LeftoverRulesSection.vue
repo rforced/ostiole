@@ -7,23 +7,10 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { emptyText, errorMessage, useAsync } from '@/lib/async'
+import type { HostReport } from '@/lib/types.gen'
 import { adminOnly, useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
-
-interface LegacyTable {
-  family?: string
-  name: string
-  backend: string
-  chains?: string[]
-  rules?: number
-  owner?: string
-}
-
-interface HostReport {
-  root: boolean
-  legacy?: { tables: LegacyTable[] }
-}
 
 const report = ref<HostReport | null>(null)
 const actionError = ref('')
@@ -32,7 +19,7 @@ const busy = ref(false)
 
 const refresh = useAsync(
   async () => {
-    report.value = (await api.host.status()) as HostReport
+    report.value = await api.host.status()
   },
   { immediate: true },
 )
@@ -46,7 +33,7 @@ async function flush(tables: string[]) {
   actionError.value = ''
   output.value = ''
   try {
-    const result = (await api.host.flushLegacy(tables)) as { output?: string; status?: HostReport }
+    const result = await api.host.flushLegacy(tables)
     output.value = result.output ?? ''
     if (result.status) report.value = result.status
   } catch (e) {

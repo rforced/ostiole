@@ -3,6 +3,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import type { HostReport } from '@/lib/types.gen'
+import { type DeepPartial, fixture } from '@/test/fixtures'
 import RulesetPage from '@/views/diagnostics/RulesetPage.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -13,8 +15,8 @@ vi.mock('@/lib/api', () => ({
 const stubs = { ConfirmButton: true, RefreshButton: true, RulesetSection: true }
 
 /** A router with one leftover table nothing owns and one that is Docker's. */
-function report(over = {}) {
-  return {
+function report(over: DeepPartial<HostReport> = {}) {
+  return fixture<HostReport>({
     root: true,
     legacy: {
       tables: [
@@ -30,10 +32,10 @@ function report(over = {}) {
       ],
     },
     ...over,
-  }
+  })
 }
 
-async function page(over = {}) {
+async function page(over: DeepPartial<HostReport> = {}) {
   vi.mocked(api.host.status).mockResolvedValue(report(over))
   const wrapper = mount(RulesetPage, { global: { stubs } })
   await flushPromises()

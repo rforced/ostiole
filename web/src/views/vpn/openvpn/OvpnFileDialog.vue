@@ -7,7 +7,7 @@ import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import ZoneField, { NEW_ZONE } from '@/components/ZoneField.vue'
-import type { Interface, OpenVPN } from '@/lib/model.gen'
+import type { Interface, OpenVPN } from '@/lib/types.gen'
 import { nextOvpnName, parseOvpn } from '@/lib/ovpnconf'
 import { useConfigStore } from '@/stores/config'
 

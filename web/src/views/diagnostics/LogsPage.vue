@@ -8,6 +8,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
+import type { JournalEntry } from '@/lib/types.gen'
 
 /** The units an Ostiole router runs, plus everything. */
 const UNITS = [
@@ -24,13 +25,6 @@ const unit = ref('ostiole.service')
 const lines = ref(200)
 const priority = ref('')
 const since = ref('-1h')
-interface JournalEntry {
-  time: string
-  unit: string
-  priority: number
-  message: string
-}
-
 const entries = ref<JournalEntry[]>([])
 
 const LEVELS = ['emerg', 'alert', 'crit', 'err', 'warning', 'notice', 'info', 'debug']
@@ -38,12 +32,12 @@ const LEVELS = ['emerg', 'alert', 'crit', 'err', 'warning', 'notice', 'info', 'd
 // The journal arrives newest first, the order every log in the UI reads
 // in, so the entries render as they come.
 const load = useAsync(async () => {
-  entries.value = (await api.diagnostics.journal({
+  entries.value = await api.diagnostics.journal({
     unit: unit.value,
     lines: Number(lines.value) || 200,
     priority: priority.value,
     since: since.value,
-  })) as JournalEntry[]
+  })
 })
 
 onMounted(load.run)

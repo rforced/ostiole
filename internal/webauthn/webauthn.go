@@ -128,28 +128,34 @@ func RequestOptions(rp RelyingParty, allow []Credential, challenge []byte, requi
 // AttestationResponse is what PublicKeyCredential.toJSON() gives for a
 // creation. The browser sends more than this, which is ignored.
 type AttestationResponse struct {
-	ID       string `json:"id"`
-	RawID    string `json:"rawId"`
-	Type     string `json:"type"`
-	Response struct {
-		ClientDataJSON    string   `json:"clientDataJSON"`
-		AttestationObject string   `json:"attestationObject"`
-		Transports        []string `json:"transports,omitempty"`
-	} `json:"response"`
+	ID       string          `json:"id"`
+	RawID    string          `json:"rawId"`
+	Type     string          `json:"type"`
+	Response AttestationBody `json:"response"`
+}
+
+// AttestationBody is the response member of an AttestationResponse.
+type AttestationBody struct {
+	ClientDataJSON    string   `json:"clientDataJSON"`
+	AttestationObject string   `json:"attestationObject"`
+	Transports        []string `json:"transports,omitempty"`
 }
 
 // AssertionResponse is what PublicKeyCredential.toJSON() gives for a
 // sign-in.
 type AssertionResponse struct {
-	ID       string `json:"id"`
-	RawID    string `json:"rawId"`
-	Type     string `json:"type"`
-	Response struct {
-		ClientDataJSON    string `json:"clientDataJSON"`
-		AuthenticatorData string `json:"authenticatorData"`
-		Signature         string `json:"signature"`
-		UserHandle        string `json:"userHandle,omitempty"`
-	} `json:"response"`
+	ID       string        `json:"id"`
+	RawID    string        `json:"rawId"`
+	Type     string        `json:"type"`
+	Response AssertionBody `json:"response"`
+}
+
+// AssertionBody is the response member of an AssertionResponse.
+type AssertionBody struct {
+	ClientDataJSON    string `json:"clientDataJSON"`
+	AuthenticatorData string `json:"authenticatorData"`
+	Signature         string `json:"signature"`
+	UserHandle        string `json:"userHandle,omitempty"`
 }
 
 // VerifyRegistration checks type "webauthn.create", the challenge, the

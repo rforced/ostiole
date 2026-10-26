@@ -7,7 +7,7 @@ import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { newId } from '@/lib/ids'
 import { joinList, parseList } from '@/lib/lists'
-import type { OutboundRule } from '@/lib/model.gen'
+import type { OutboundRule } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({

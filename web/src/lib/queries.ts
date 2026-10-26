@@ -1,16 +1,6 @@
-/** One answer of the query log. */
-export interface QueryRow {
-  seq: number
-  time: string
-  client: string
-  device?: string
-  name: string
-  type: string
-  status: string
-  reason?: string
-  lists?: string[]
-  answer?: string
-}
+import type { QueryRow } from '@/lib/types.gen'
+
+export type { QueryRow }
 
 /**
  * The values a query's row shows, as it shows them: what the router

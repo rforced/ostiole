@@ -3,6 +3,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import type { HostReport } from '@/lib/types.gen'
+import { fixture } from '@/test/fixtures'
 import HostPage from '@/views/system/HostPage.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -38,7 +40,7 @@ function report(over = {}) {
 }
 
 async function page(over = {}) {
-  vi.mocked(api.host.status).mockResolvedValue(report(over))
+  vi.mocked(api.host.status).mockResolvedValue(fixture<HostReport>(report(over)))
   const wrapper = mount(HostPage, { global: { stubs } })
   await flushPromises()
   return wrapper

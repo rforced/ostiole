@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
-import type { Config } from '@/lib/model.gen'
+import type { Config } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import HostOverrideDialog from '@/views/services/dns/HostOverrideDialog.vue'
 
@@ -43,8 +43,8 @@ describe('HostOverrideDialog', () => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
     vi.mocked(api.services.leases).mockResolvedValue([
-      { mac: '02:00:5e:00:53:49', ip: '10.0.0.249', hostname: 'Watch', family: 4 },
-      { mac: 'aa:bb:cc:00:00:05', ip: '10.0.0.5', hostname: 'switch', family: 4 },
+      { mac: '02:00:5e:00:53:49', ip: '10.0.0.249', hostname: 'Watch', family: 4, static: false },
+      { mac: 'aa:bb:cc:00:00:05', ip: '10.0.0.5', hostname: 'switch', family: 4, static: false },
     ])
   })
 

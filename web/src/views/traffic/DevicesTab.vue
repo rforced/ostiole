@@ -21,7 +21,7 @@ import { WINDOWS, deviceLabel, sinceLine, useTrafficStream } from '@/lib/traffic
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import DeviceDialog from '@/views/traffic/DeviceDialog.vue'
-import type { Device, Devices, TrafficEvent } from '@/views/traffic/types'
+import type { TrafficDevice, TrafficDevices, TrafficEvent } from '@/lib/types.gen'
 
 // Down and Up each sort by the rate, then by the window's total.
 const DOWN: SortColumn[] = [
@@ -74,11 +74,11 @@ const intro = computed(() => {
 const win = ref('5m')
 const live = ref(true)
 /** The last read: {devices, counting, since, interval, now}. */
-const state = ref<Devices | null>(null)
+const state = ref<TrafficDevices | null>(null)
 
 const read = useAsync(async () => {
   const w = win.value
-  const r = (await api.traffic.devices(w)) as Devices
+  const r = await api.traffic.devices(w)
   if (w !== win.value) return
   state.value = r
 })
@@ -147,7 +147,7 @@ const empty = computed(() => {
   return 'No devices.'
 })
 
-const chosen = ref<Device | null>(null)
+const chosen = ref<TrafficDevice | null>(null)
 const open = ref(false)
 function show(d) {
   chosen.value = d

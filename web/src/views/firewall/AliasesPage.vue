@@ -22,16 +22,15 @@ import { formatCount } from '@/lib/format'
 import { byNumber, byText, useSort } from '@/lib/sort'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
-import type { Alias } from '@/lib/model.gen'
+import type { Alias, FeedsStatus } from '@/lib/types.gen'
 import AliasDialog from '@/views/firewall/AliasDialog.vue'
-import type { FeedStatus } from '@/views/firewall/feeds'
 
 const auth = useAuthStore()
 const config = useConfigStore()
 const router = useRouter()
 const editing = ref<Alias | null>(null)
 const open = ref(false)
-const status = ref<FeedStatus[]>([])
+const status = ref<FeedsStatus[]>([])
 /** The alias being fetched right now, or 'all'; only its own link says so. */
 const refreshing = ref('')
 
@@ -61,7 +60,7 @@ const anyFetched = computed(() => config.aliases.some(fetches))
 // A router that cannot say what it fetched just shows nothing against each alias.
 const feeds = useAsync(async () => {
   try {
-    status.value = (await api.aliases.feeds()) as FeedStatus[]
+    status.value = await api.aliases.feeds()
   } catch {
     status.value = []
   }

@@ -6,7 +6,7 @@ import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { parseList } from '@/lib/lists'
-import type { Certificate } from '@/lib/model.gen'
+import type { Certificate } from '@/lib/types.gen'
 import { certificateProvider } from '@/lib/providers'
 import { useConfigStore } from '@/stores/config'
 

@@ -7,7 +7,7 @@ import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { interfaceLabel } from '@/lib/interfaces'
 import { parseList } from '@/lib/lists'
-import type { DHCPServer } from '@/lib/model.gen'
+import type { DHCPServer } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({

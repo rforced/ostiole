@@ -4,7 +4,7 @@ import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
-import type { Tier, Zone } from '@/lib/model.gen'
+import type { Tier, Zone } from '@/lib/types.gen'
 import { TIERS, tierOption } from '@/lib/tiers'
 import { useConfigStore } from '@/stores/config'
 

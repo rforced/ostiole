@@ -5,8 +5,9 @@ import { ref } from 'vue'
 
 import LogRetention from '@/components/LogRetention.vue'
 import { api } from '@/lib/api'
-import type { Config } from '@/lib/model.gen'
+import type { Config, LogfileStatus, Stats } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import { fixture } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   api: { systemStats: vi.fn(), logFiles: vi.fn(), logLimits: vi.fn() },
@@ -42,10 +43,10 @@ async function card({
   log = 'events',
   files = { enabled: false, logs: [] },
 } = {}) {
-  vi.mocked(api.systemStats).mockResolvedValue({ memTotal })
+  vi.mocked(api.systemStats).mockResolvedValue(fixture<Stats>({ memTotal }))
   if (limits) vi.mocked(api.logLimits).mockResolvedValue(limits)
   else vi.mocked(api.logLimits).mockRejectedValue(new Error('Not Found'))
-  vi.mocked(api.logFiles).mockResolvedValue(files)
+  vi.mocked(api.logFiles).mockResolvedValue(fixture<LogfileStatus>(files))
   const store = useConfigStore()
   store.draft = { version: 11, system: {}, services: {}, ...draft } as Config
   store.loaded = true

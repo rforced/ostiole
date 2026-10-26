@@ -8,7 +8,7 @@ import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
-import type { ACMEAccount } from '@/lib/model.gen'
+import type { ACMEAccount } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
@@ -49,7 +49,7 @@ const showCACert = ref(false)
 
 /** A new account gets a key from the router; it is never shown or pasted. */
 const key = useAsync(async () => {
-  const { privateKey } = (await api.certificates.key()) as { privateKey: string }
+  const { privateKey } = await api.certificates.key()
   form.value.privateKey = privateKey
 })
 

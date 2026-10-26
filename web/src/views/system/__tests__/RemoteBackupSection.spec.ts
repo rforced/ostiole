@@ -3,11 +3,12 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api } from '@/lib/api'
+import type { CronStatus, RestoreResponse } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import RemoteBackupSection from '@/views/system/RemoteBackupSection.vue'
-import { configOf, sessionOf } from '@/test/fixtures'
+import { configOf, fixture, sessionOf } from '@/test/fixtures'
 
 vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual('@/lib/api')
@@ -90,11 +91,11 @@ describe('RemoteBackupSection', () => {
     vi.clearAllMocks()
     vi.mocked(api.config.remoteCopies).mockResolvedValue({ enabled: true, copies })
     vi.mocked(api.crons.list).mockResolvedValue([
-      {
+      fixture<CronStatus>({
         id: 'system:remote-backup',
         lastRun: '2026-09-20T03:00:00Z',
         lastOutput: 'uploaded ostiole/fw-20260920-030000.json.age (21.5 kB)',
-      },
+      }),
     ])
     vi.mocked(api.crons.run).mockResolvedValue({ id: 'system:remote-backup' })
   })
@@ -138,19 +139,21 @@ describe('RemoteBackupSection', () => {
   })
 
   it('restores one copy and shows what it would change', async () => {
-    vi.mocked(api.config.restoreRemote).mockResolvedValue({
-      summary: {
-        hostname: 'fw',
-        createdAt: '2026-09-20T03:00:00Z',
-        zones: 2,
-        interfaces: 2,
-        rules: 3,
-        aliases: 0,
-        gateways: 1,
-      },
-      config: config(),
-      changes: [],
-    })
+    vi.mocked(api.config.restoreRemote).mockResolvedValue(
+      fixture<RestoreResponse>({
+        summary: {
+          hostname: 'fw',
+          createdAt: '2026-09-20T03:00:00Z',
+          zones: 2,
+          interfaces: 2,
+          rules: 3,
+          aliases: 0,
+          gateways: 1,
+        },
+        config: config(),
+        changes: [],
+      }),
+    )
     const { wrapper } = await open()
     await wrapper.findAll('tbody tr')[0].get('button').trigger('click')
     await flushPromises()
@@ -171,19 +174,21 @@ describe('RemoteBackupSection', () => {
     const field = row().get('input[type="password"]')
     expect(field.attributes('aria-label')).toContain('fw-20260920-030000.json.age')
 
-    vi.mocked(api.config.restoreRemote).mockResolvedValue({
-      summary: {
-        hostname: 'fw',
-        createdAt: '2026-09-20T03:00:00Z',
-        zones: 2,
-        interfaces: 2,
-        rules: 3,
-        aliases: 0,
-        gateways: 1,
-      },
-      config: config(),
-      changes: [],
-    })
+    vi.mocked(api.config.restoreRemote).mockResolvedValue(
+      fixture<RestoreResponse>({
+        summary: {
+          hostname: 'fw',
+          createdAt: '2026-09-20T03:00:00Z',
+          zones: 2,
+          interfaces: 2,
+          rules: 3,
+          aliases: 0,
+          gateways: 1,
+        },
+        config: config(),
+        changes: [],
+      }),
+    )
     await field.setValue('an older one')
     await row().get('button').trigger('click')
     await flushPromises()

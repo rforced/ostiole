@@ -9,10 +9,9 @@ import FormField from '@/components/FormField.vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
 import { joinList, parseList } from '@/lib/lists'
-import type { DNSProvider } from '@/lib/model.gen'
+import type { DnsproviderTestResult, DNSProvider, ProviderKind } from '@/lib/types.gen'
 import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
-import type { ProviderKind, ProviderTest } from '@/views/system/providers/kinds'
 
 const props = defineProps({
   /** The provider being edited, or null for a new one. */
@@ -45,7 +44,7 @@ const blank = (): Form => ({
 
 const form = ref(blank())
 /** What Test found; cleared when the form changes under it. */
-const tested = ref<ProviderTest | null>(null)
+const tested = ref<DnsproviderTestResult | null>(null)
 const testing = ref(false)
 const testError = ref('')
 
@@ -111,7 +110,7 @@ async function test() {
   testError.value = ''
   testing.value = true
   try {
-    tested.value = (await api.dnsProviders.test(built())) as ProviderTest
+    tested.value = await api.dnsProviders.test(built())
   } catch (e) {
     testError.value = errorMessage(e)
   } finally {

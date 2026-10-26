@@ -193,6 +193,11 @@ func (a *api) trafficStream(w http.ResponseWriter, r *http.Request) error {
 	return streamEvents(a, w, r, ch, func(e traffic.Event) any { return e }, nil)
 }
 
+type trafficClearReply struct {
+	Cleared bool      `json:"cleared"`
+	At      time.Time `json:"at"`
+}
+
 // trafficClear forgets every device and what it moved, and every
 // destination, their files included.
 func (a *api) trafficClear(w http.ResponseWriter, r *http.Request) error {
@@ -206,7 +211,7 @@ func (a *api) trafficClear(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return errFilesStay(err)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"cleared": true, "at": time.Now()})
+	writeJSON(w, http.StatusOK, trafficClearReply{Cleared: true, At: time.Now()})
 	return nil
 }
 

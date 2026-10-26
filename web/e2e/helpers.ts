@@ -1,6 +1,6 @@
 import { expect, type APIRequestContext, type Page } from '@playwright/test'
 
-import type { Config } from '../src/lib/model.gen'
+import type { Config } from '../src/lib/types.gen'
 
 export const PASSWORD = 'correct horse battery'
 export const shot = (name: string) => `e2e/screenshots/${name}.png`

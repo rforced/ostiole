@@ -4,9 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, ref } from 'vue'
 
 import { api } from '@/lib/api'
-import type { Interface } from '@/lib/model.gen'
+import type { Interface, LiveLink, ServicesStatus } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
-import { emptyConfig, iface } from '@/test/fixtures'
+import { configOf, emptyConfig, fixture, iface } from '@/test/fixtures'
 import InterfacesView from '@/views/InterfacesView.vue'
 
 // The page only needs its tabs to exist; the router is not what is under
@@ -44,9 +44,9 @@ describe('InterfacesView', () => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
     vi.mocked(api.interfaces.live).mockResolvedValue([])
-    vi.mocked(api.services.status).mockResolvedValue({ pppoeSetUp: true })
+    vi.mocked(api.services.status).mockResolvedValue(fixture<ServicesStatus>({ pppoeSetUp: true }))
     vi.mocked(api.config.get).mockResolvedValue({
-      config: { version: 3, interfaces: [], zones: [] },
+      config: configOf({ version: 3, interfaces: [], zones: [] }),
       revision: 'r1',
     })
   })
@@ -141,8 +141,15 @@ describe('InterfacesView', () => {
     config.draft = draft()
     config.loaded = true
     vi.mocked(api.interfaces.live).mockResolvedValue([
-      { name: 'eth1', index: 2, kind: 'ether', up: true, carrier: true, addresses: [] },
-      {
+      fixture<LiveLink>({
+        name: 'eth1',
+        index: 2,
+        kind: 'ether',
+        up: true,
+        carrier: true,
+        addresses: [],
+      }),
+      fixture<LiveLink>({
         name: 'wg0',
         index: 3,
         kind: 'wireguard',
@@ -151,7 +158,7 @@ describe('InterfacesView', () => {
         addresses: [],
         rxErrors: 2,
         txErrors: 1,
-      },
+      }),
     ])
     const wrapper = mount(InterfacesView, { global: { stubs } })
     await flushPromises()
@@ -175,8 +182,22 @@ describe('InterfacesView', () => {
       config.draft = d
       config.loaded = true
       vi.mocked(api.interfaces.live).mockResolvedValue([
-        { name: 'eth0', index: 2, kind: 'ether', up: true, carrier: true, addresses: [] },
-        { name: 'eth1', index: 3, kind: 'ether', up: true, carrier: true, addresses: [] },
+        fixture<LiveLink>({
+          name: 'eth0',
+          index: 2,
+          kind: 'ether',
+          up: true,
+          carrier: true,
+          addresses: [],
+        }),
+        fixture<LiveLink>({
+          name: 'eth1',
+          index: 3,
+          kind: 'ether',
+          up: true,
+          carrier: true,
+          addresses: [],
+        }),
       ])
       vi.mocked(api.interfaces.renew).mockResolvedValue(undefined)
       const wrapper = mount(InterfacesView, { global: { stubs } })

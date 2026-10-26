@@ -11,12 +11,11 @@ import StatusBadge from '@/components/StatusBadge.vue'
 import { api } from '@/lib/api'
 import { errorMessage, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
-import type { DDNSRecord } from '@/lib/model.gen'
+import type { DDNSRecord, DdnsResponse, DdnsStatus } from '@/lib/types.gen'
 import { providerFor } from '@/lib/providers'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import RecordDialog from '@/views/services/ddns/RecordDialog.vue'
-import type { DdnsKind, DdnsStatus } from '@/views/services/types'
 
 /** How often the status is read while a record is waiting on its provider. */
 const BUSY_POLL_MS = 2000
@@ -24,11 +23,11 @@ const BUSY_POLL_MS = 2000
 const auth = useAuthStore()
 const config = useConfigStore()
 
-const page = ref<{ records: DdnsStatus[]; kinds: DdnsKind[] }>({ records: [], kinds: [] })
+const page = ref<DdnsResponse>({ records: [], kinds: [] })
 const actionError = ref('')
 const load = useAsync(
   async () => {
-    page.value = (await api.ddns.status()) as { records: DdnsStatus[]; kinds: DdnsKind[] }
+    page.value = await api.ddns.status()
   },
   { immediate: true },
 )

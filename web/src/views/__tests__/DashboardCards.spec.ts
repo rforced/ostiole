@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest'
 
 import { formatRate } from '@/lib/format'
 import GatewaysCard from '@/views/dashboard/GatewaysCard.vue'
-import type { GatewayStatus } from '@/views/dashboard/overview'
+import type { GatewayStatus, GatewayStrip } from '@/lib/types.gen'
+import { fixture } from '@/test/fixtures'
 import InterfaceSummary from '@/views/dashboard/InterfaceSummary.vue'
 import RecentBlocksCard from '@/views/dashboard/RecentBlocksCard.vue'
 import RecentLeasesCard from '@/views/dashboard/RecentLeasesCard.vue'
@@ -188,7 +189,7 @@ describe('GatewaysCard', () => {
 
   it('says a gateway that never answered is not down, and what to do', () => {
     const never = { ...watched, online: false, active: false, neverAnswered: true }
-    const strip = { name: 'gw_wan', monitor: '192.0.2.53', cells: [] }
+    const strip = fixture<GatewayStrip>({ name: 'gw_wan', monitor: '192.0.2.53', cells: [] })
     const w = mount(GatewaysCard, {
       props: { gateways: [never], strips: [strip] },
       global: { stubs },

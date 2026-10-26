@@ -8,7 +8,7 @@ import FormField from '@/components/FormField.vue'
 import { newId } from '@/lib/ids'
 import { interfaceLabel } from '@/lib/interfaces'
 import { deviceName, wakeInterfaces } from '@/lib/wol'
-import type { WoLDevice } from '@/lib/model.gen'
+import type { WoLDevice } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({

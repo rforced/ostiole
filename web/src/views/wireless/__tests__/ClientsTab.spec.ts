@@ -3,6 +3,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import type { WirelessClient } from '@/lib/types.gen'
+import { fixture } from '@/test/fixtures'
 import ClientsTab from '@/views/wireless/ClientsTab.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -18,13 +20,14 @@ describe('ClientsTab', () => {
 
   // Connected is a time: the client that joined last comes first.
   it('sorts by signal, strongest first, and by who joined last', async () => {
-    const client = (mac, signalDbm, connectedSeconds) => ({
-      mac,
-      signalDbm,
-      connectedSeconds,
-      rxBytes: 0,
-      txBytes: 0,
-    })
+    const client = (mac: string, signalDbm: number, connectedSeconds: number) =>
+      fixture<WirelessClient>({
+        mac,
+        signalDbm,
+        connectedSeconds,
+        rxBytes: 0,
+        txBytes: 0,
+      })
     vi.mocked(api.wireless.clients).mockResolvedValue([
       client('00:11:22:00:00:01', -70, 60),
       client('00:11:22:00:00:02', -40, 7200),

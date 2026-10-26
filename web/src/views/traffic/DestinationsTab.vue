@@ -16,7 +16,7 @@ import { SETTLE_MS, heldLine, keptLine } from '@/lib/log'
 import { DESTINATION_WINDOWS, deviceLabel, serviceLabel, useTrafficStream } from '@/lib/traffic'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
-import type { Destination, Destinations, Device, Devices } from '@/views/traffic/types'
+import type { DestinationRow, ServerTrafficDestinations, TrafficDevice } from '@/lib/types.gen'
 
 const auth = useAuthStore()
 const config = useConfigStore()
@@ -62,10 +62,10 @@ const device = ref('')
 const query = ref('')
 const live = ref(true)
 /** The last first page. */
-const page = ref<Destinations | null>(null)
-const rows = ref<Destination[]>([])
+const page = ref<ServerTrafficDestinations | null>(null)
+const rows = ref<DestinationRow[]>([])
 /** The devices the filter offers. */
-const devices = ref<Device[]>([])
+const devices = ref<TrafficDevice[]>([])
 
 function params(offset = 0) {
   const p: { window: string; device?: string; q?: string; offset?: number } = {
@@ -78,7 +78,7 @@ function params(offset = 0) {
 }
 
 const read = useAsync(async () => {
-  const p = (await api.traffic.destinations(params())) as Destinations
+  const p = await api.traffic.destinations(params())
   page.value = p
   rows.value = p.entries ?? []
 })
@@ -86,12 +86,12 @@ const more = useAsync(async () => {
   if (!page.value?.more) return
   // Reading past the first page is reading history, so Live stops.
   live.value = false
-  const p = (await api.traffic.destinations(params(page.value.next))) as Destinations
+  const p = await api.traffic.destinations(params(page.value.next))
   page.value = { ...page.value, more: p.more, next: p.next }
   rows.value = [...rows.value, ...(p.entries ?? [])]
 })
 const readDevices = useAsync(async () => {
-  devices.value = ((await api.traffic.devices('24h')) as Devices).devices ?? []
+  devices.value = (await api.traffic.devices('24h')).devices ?? []
 })
 /** Empties the router's destinations, their files included, and reads again. */
 const clear = useAsync(async () => {

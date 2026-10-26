@@ -4,10 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ApplyBar from '@/components/ApplyBar.vue'
 import { ApiError, api, type Session, type Status } from '@/lib/api'
+import type { ApplyResult, ConfirmReply, Plan } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import { useSystemStore } from '@/stores/system'
+import { configOf, fixture } from '@/test/fixtures'
 
 const route = vi.hoisted(() => ({ name: 'rules' }))
 vi.mock('vue-router', () => ({ useRoute: () => route }))
@@ -39,8 +41,8 @@ vi.mock('@/lib/api', () => ({
 
 enableAutoUnmount(afterEach)
 
-const OLD = { version: 3, system: { hostname: 'old' } }
-const NEW = { version: 3, system: { hostname: 'new' } }
+const OLD = configOf({ version: 3, system: { hostname: 'old' } })
+const NEW = configOf({ version: 3, system: { hostname: 'new' } })
 /** What GET /config answers: the saved configuration and its revision. */
 const AT_OLD = { config: OLD, revision: 'r1' }
 const AT_NEW = { config: NEW, revision: 'r2' }
@@ -90,7 +92,7 @@ describe('ApplyBar', () => {
     const w = mount(ApplyBar)
     await flushPromises()
 
-    vi.mocked(api.config.confirm).mockResolvedValue({})
+    vi.mocked(api.config.confirm).mockResolvedValue(fixture<ConfirmReply>({}))
     statusIs({ configured: true })
     vi.mocked(api.config.get).mockResolvedValue(AT_NEW)
     await button(w, 'Confirm').trigger('click')
@@ -125,8 +127,8 @@ describe('ApplyBar', () => {
     const w = mount(ApplyBar)
     await flushPromises()
 
-    vi.mocked(api.config.check).mockResolvedValue({})
-    vi.mocked(api.config.apply).mockResolvedValue(pending)
+    vi.mocked(api.config.check).mockResolvedValue(fixture<Plan>({}))
+    vi.mocked(api.config.apply).mockResolvedValue(fixture<ApplyResult>(pending))
     statusIs({ configured: true, pending })
     await button(w, 'Apply with 60s confirmation').trigger('click')
     await flushPromises()
@@ -157,7 +159,7 @@ describe('ApplyBar', () => {
       await router({ applying: false })
       const config = useConfigStore()
       config.draft.system.hostname = 'new'
-      vi.mocked(api.config.check).mockResolvedValue({})
+      vi.mocked(api.config.check).mockResolvedValue(fixture<Plan>({}))
       vi.mocked(api.config.apply).mockImplementation(async (cfg, base, seconds, tag) => {
         if (made)
           statusIs({
@@ -179,7 +181,7 @@ describe('ApplyBar', () => {
       expect(w.text()).toContain('awaiting confirmation')
       expect(w.find('[role="alert"]').exists()).toBe(false)
 
-      vi.mocked(api.config.confirm).mockResolvedValue({})
+      vi.mocked(api.config.confirm).mockResolvedValue(fixture<ConfirmReply>({}))
       vi.mocked(api.config.get).mockResolvedValue(AT_NEW)
       statusIs({ configured: true })
       await button(w, 'Confirm').trigger('click')
@@ -321,7 +323,7 @@ describe('ApplyBar', () => {
       const w = mount(ApplyBar)
       await flushPromises()
 
-      vi.mocked(api.config.check).mockResolvedValue({})
+      vi.mocked(api.config.check).mockResolvedValue(fixture<Plan>({}))
       vi.mocked(api.config.apply).mockRejectedValue(
         new ApiError(409, 'the configuration changed since this draft was read', [], 'stale'),
       )
@@ -345,7 +347,7 @@ describe('ApplyBar', () => {
       const w = mount(ApplyBar)
       await flushPromises()
 
-      vi.mocked(api.config.check).mockResolvedValue({})
+      vi.mocked(api.config.check).mockResolvedValue(fixture<Plan>({}))
       vi.mocked(api.config.apply).mockRejectedValue(
         new ApiError(409, 'the configuration changed since this draft was read', [], 'stale'),
       )
@@ -359,7 +361,7 @@ describe('ApplyBar', () => {
       const w = mount(ApplyBar)
       await flushPromises()
 
-      vi.mocked(api.config.check).mockResolvedValue({})
+      vi.mocked(api.config.check).mockResolvedValue(fixture<Plan>({}))
       vi.mocked(api.config.apply).mockRejectedValue(
         new ApiError(409, 'another apply is awaiting confirmation'),
       )
@@ -436,8 +438,10 @@ describe('ApplyBar', () => {
         since: new Date().toISOString(),
         deadline: new Date(Date.now() + 60_000).toISOString(),
       }
-      vi.mocked(api.config.check).mockResolvedValue({})
-      vi.mocked(api.config.apply).mockResolvedValue({ pending: true, deadline: waiting.deadline })
+      vi.mocked(api.config.check).mockResolvedValue(fixture<Plan>({}))
+      vi.mocked(api.config.apply).mockResolvedValue(
+        fixture<ApplyResult>({ pending: true, deadline: waiting.deadline }),
+      )
       statusIs({ configured: true, pending: waiting })
       await button(w, 'Apply with 60s confirmation').trigger('click')
       await flushPromises()

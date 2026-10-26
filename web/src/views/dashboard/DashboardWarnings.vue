@@ -2,7 +2,7 @@
 import type { PropType } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
-import type { Warning } from '@/views/dashboard/overview'
+import type { Warning } from '@/lib/types.gen'
 
 defineProps({
   warnings: { type: Array as PropType<Warning[]>, default: () => [] },

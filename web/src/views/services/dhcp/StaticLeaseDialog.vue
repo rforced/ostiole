@@ -4,7 +4,7 @@ import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
-import type { StaticLease } from '@/lib/model.gen'
+import type { StaticLease } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({

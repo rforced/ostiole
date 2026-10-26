@@ -5,6 +5,8 @@
  * ones are done by hand here.
  */
 
+import type { AssertionResponse, AttestationResponse } from '@/lib/types.gen'
+
 const NO_SUPPORT = 'This browser cannot use passkeys on this page.'
 
 /** What a failed prompt means, said plainly. */
@@ -35,21 +37,6 @@ function text(buf: ArrayBuffer | ArrayBufferView) {
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-/** The router's wire form of one credential: the response's fields are base64url strings. */
-export interface CredentialJSON {
-  id: string
-  rawId: string
-  type: string
-  response: {
-    clientDataJSON: string
-    attestationObject?: string
-    transports?: string[]
-    authenticatorData?: string
-    signature?: string
-    userHandle?: string
-  }
-}
-
 function creationOptions(
   json: PublicKeyCredentialCreationOptionsJSON,
 ): PublicKeyCredentialCreationOptions {
@@ -75,11 +62,11 @@ function requestOptions(
  * A new credential as the router reads it. The router refuses a body with
  * a field it does not know, and toJSON() carries several, so only these go.
  */
-function created(credential: PublicKeyCredential): CredentialJSON {
+function created(credential: PublicKeyCredential): AttestationResponse {
   const r = credential.response as AuthenticatorAttestationResponse
-  const j: CredentialJSON =
+  const j: AttestationResponse =
     typeof credential.toJSON === 'function'
-      ? (credential.toJSON() as CredentialJSON)
+      ? (credential.toJSON() as AttestationResponse)
       : {
           id: credential.id,
           rawId: text(credential.rawId),
@@ -90,7 +77,7 @@ function created(credential: PublicKeyCredential): CredentialJSON {
             transports: r.getTransports?.() ?? [],
           },
         }
-  const out: CredentialJSON = {
+  const out: AttestationResponse = {
     id: j.id,
     rawId: j.rawId,
     type: j.type,
@@ -104,11 +91,11 @@ function created(credential: PublicKeyCredential): CredentialJSON {
 }
 
 /** A signed-in credential as the router reads it, for the same reason. */
-function asserted(credential: PublicKeyCredential): CredentialJSON {
+function asserted(credential: PublicKeyCredential): AssertionResponse {
   const r = credential.response as AuthenticatorAssertionResponse
-  const j: CredentialJSON =
+  const j: AssertionResponse =
     typeof credential.toJSON === 'function'
-      ? (credential.toJSON() as CredentialJSON)
+      ? (credential.toJSON() as AssertionResponse)
       : {
           id: credential.id,
           rawId: text(credential.rawId),
@@ -120,7 +107,7 @@ function asserted(credential: PublicKeyCredential): CredentialJSON {
             userHandle: r.userHandle ? text(r.userHandle) : undefined,
           },
         }
-  const out: CredentialJSON = {
+  const out: AssertionResponse = {
     id: j.id,
     rawId: j.rawId,
     type: j.type,
@@ -153,7 +140,7 @@ function reason(e: unknown) {
  */
 export async function create(
   options: PublicKeyCredentialCreationOptionsJSON,
-): Promise<CredentialJSON> {
+): Promise<AttestationResponse> {
   if (!available()) throw new Error(NO_SUPPORT)
   try {
     const publicKey =
@@ -178,7 +165,7 @@ export async function create(
 export async function get(
   options: PublicKeyCredentialRequestOptionsJSON,
   { signal }: { signal?: AbortSignal } = {},
-): Promise<CredentialJSON> {
+): Promise<AssertionResponse> {
   if (!available()) throw new Error(NO_SUPPORT)
   try {
     const publicKey =

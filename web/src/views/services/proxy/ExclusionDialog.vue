@@ -6,7 +6,7 @@ import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import { sameExclusion } from '@/lib/exclusions'
-import type { WAFExclusion } from '@/lib/model.gen'
+import type { WAFExclusion } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({

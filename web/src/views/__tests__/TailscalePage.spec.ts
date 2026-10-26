@@ -4,9 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import { api } from '@/lib/api'
-import type { Config, Tailscale } from '@/lib/model.gen'
+import type { Config, Tailscale, TailscaleLoginReply } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
-import { emptyConfig, iface } from '@/test/fixtures'
+import { emptyConfig, fixture, iface } from '@/test/fixtures'
 import PeersTab from '@/views/vpn/tailscale/PeersTab.vue'
 import SettingsTab from '@/views/vpn/tailscale/SettingsTab.vue'
 import TailscaleStatus from '@/views/vpn/tailscale/TailscaleStatus.vue'
@@ -99,9 +99,9 @@ describe('TailscaleStatus', () => {
     const wrapper = await strip(status({ state: 'NeedsLogin' }), { draft: both, saved: both })
     expect(wrapper.find('#ts-auth-key').exists()).toBe(true)
 
-    vi.mocked(api.tailscale.login).mockResolvedValue({
-      authUrl: 'https://login.tailscale.com/a/abc',
-    })
+    vi.mocked(api.tailscale.login).mockResolvedValue(
+      fixture<TailscaleLoginReply>({ authUrl: 'https://login.tailscale.com/a/abc' }),
+    )
     await wrapper
       .findAll('button')
       .find((b) => b.text() === 'Log in')
@@ -150,7 +150,9 @@ describe('TailscaleStatus', () => {
   it('logs in with a key and forgets it', async () => {
     const both = config({ interfaces: [node()] })
     const wrapper = await strip(status({ state: 'NeedsLogin' }), { draft: both, saved: both })
-    vi.mocked(api.tailscale.login).mockResolvedValue({ state: 'Running' })
+    vi.mocked(api.tailscale.login).mockResolvedValue(
+      fixture<TailscaleLoginReply>({ state: 'Running' }),
+    )
     await wrapper.find('#ts-auth-key').setValue('tskey-auth-abc')
     await wrapper.find('form').trigger('submit')
     await flushPromises()

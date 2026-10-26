@@ -32,8 +32,8 @@ const expiring = computed(() => {
   return days > 14 ? '' : formatWhen(at)
 })
 
-const login = useAsync(async (key) => {
-  const out = (await api.tailscale.login(key)) as { authUrl?: string }
+const login = useAsync(async (key?: string) => {
+  const out = await api.tailscale.login(key)
   authUrl.value = out.authUrl ?? ''
   authKey.value = ''
   await read.run()
@@ -41,7 +41,7 @@ const login = useAsync(async (key) => {
 /** Which way the login in flight went: 'link', 'key' or ''. */
 const via = ref('')
 
-async function logIn(key) {
+async function logIn(key?: string) {
   via.value = key ? 'key' : 'link'
   await login.run(key)
   via.value = ''

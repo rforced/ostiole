@@ -6,8 +6,9 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { api } from '@/lib/api'
 import { formatCount } from '@/lib/format'
-import type { Interface, Rule, Zone } from '@/lib/model.gen'
+import type { Interface, Rule, Zone } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
+import { configOf } from '@/test/fixtures'
 import RulesPage from '@/views/firewall/RulesPage.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -112,7 +113,10 @@ const system = [
 ]
 
 async function mountPage(path = '/firewall/rules', extraStubs = {}, cfg = config) {
-  vi.mocked(api.config.get).mockResolvedValue({ config: structuredClone(cfg), revision: 'r1' })
+  vi.mocked(api.config.get).mockResolvedValue({
+    config: configOf(structuredClone(cfg)),
+    revision: 'r1',
+  })
   await useConfigStore().load()
   const router = createRouter({
     history: createMemoryHistory(),

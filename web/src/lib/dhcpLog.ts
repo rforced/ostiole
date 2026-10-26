@@ -1,16 +1,7 @@
+import type { DhcpRow } from '@/lib/types.gen'
+
 /** One message of the DHCP log; device is the name the router knows the client by. */
-export interface DhcpEvent {
-  seq: number
-  time: string
-  message: string
-  interface: string
-  address?: string
-  device?: string
-  mac?: string
-  duid?: string
-  name?: string
-  detail?: string
-}
+export type DhcpEvent = DhcpRow
 
 /**
  * The values a DHCP log row shows, as it shows them: what the router

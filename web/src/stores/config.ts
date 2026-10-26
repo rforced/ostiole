@@ -9,6 +9,7 @@ import type {
   Blocking,
   BusyHosts,
   Certificate,
+  Change,
   Config,
   Cron,
   DDNSRecord,
@@ -52,7 +53,7 @@ import type {
   WireGuardPeer,
   WoLDevice,
   Zone,
-} from '@/lib/model.gen'
+} from '@/lib/types.gen'
 import { normalizeName } from '@/lib/blocking'
 import { DISCOVERY_DEFAULT } from '@/lib/discovery'
 import { exclusionText, sameExclusion } from '@/lib/exclusions'
@@ -62,14 +63,6 @@ import { deviceName } from '@/lib/wol'
 import { useToastStore } from '@/stores/toast'
 
 const clone = <T>(v: T): T => (v === null || v === undefined ? v : JSON.parse(JSON.stringify(v)))
-
-/** One difference between the draft and the saved configuration, as the server reports it. */
-export interface ConfigChange {
-  path: string
-  kind: string
-  before?: unknown
-  after?: unknown
-}
 
 /** Swaps the item with the next one of its zone, delta -1 up or +1 down. */
 function moveInZone<T extends { id: string; zone?: string }>(list: T[], id: string, delta: number) {
@@ -1696,7 +1689,7 @@ export const useConfigStore = defineStore('config', () => {
    * it. Refreshed a moment after the last edit. It is a nicety: the apply
    * bar works without it, so a failed diff is not an error anyone sees.
    */
-  const changes = ref<ConfigChange[]>([])
+  const changes = ref<Change[]>([])
   let diffTimer = 0
   let diffSeq = 0
 
@@ -1708,7 +1701,7 @@ export const useConfigStore = defineStore('config', () => {
     const seq = ++diffSeq
     try {
       const out = await api.config.diff({ from: 'current', toConfig: draft.value })
-      if (seq === diffSeq) changes.value = out as ConfigChange[]
+      if (seq === diffSeq) changes.value = out
     } catch {
       /* see above */
     }

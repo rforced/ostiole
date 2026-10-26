@@ -17,45 +17,17 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { formatCount, formatWhen } from '@/lib/format'
-import type { BlockList, ListFormat } from '@/lib/model.gen'
+import type {
+  BlockingLimitsInfo,
+  BlockingState,
+  BlockList,
+  DnsblockReport,
+  DnsblockStatus,
+} from '@/lib/types.gen'
 import { byNumber, byText, byTime, useSort } from '@/lib/sort'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import BlockListDialog from '@/views/services/dns/BlockListDialog.vue'
-
-/** What the router has fetched of one subscribed list. */
-interface ListStatus {
-  name: string
-  url?: string
-  format?: ListFormat
-  enabled: boolean
-  domains: number
-  skipped?: number
-  fetchedAt?: string
-  lastError?: string
-  lastTriedAt?: string
-  stale: boolean
-}
-
-interface RefreshReport {
-  fetched: string[] | null
-  unchanged: string[] | null
-  failed?: Record<string, string>
-  note?: string
-}
-
-interface BlockingStatus {
-  lists: ListStatus[]
-  totals?: { domains?: number; blocked?: number; estimatedMemoryMb?: number }
-  limits?: {
-    maxDomains?: number
-    hardMax?: number
-    defaultMax?: number
-    bytesPerName?: number
-  }
-  counts?: Record<string, { blocked: number; alone: number }>
-  report?: RefreshReport
-}
 
 const auth = useAuthStore()
 const config = useConfigStore()
@@ -73,13 +45,13 @@ const mode = computed({
 
 const editing = ref<BlockList | null>(null)
 const open = ref(false)
-const status = ref<BlockingStatus | null>(null)
+const status = ref<BlockingState | null>(null)
 /** Which refresh is in flight: 'all', a list name, or nothing. */
 const which = ref('')
 const note = ref('')
 
 /** What the router has actually fetched, keyed by list name. */
-const fetched = computed<Record<string, ListStatus>>(() =>
+const fetched = computed<Record<string, DnsblockStatus>>(() =>
   Object.fromEntries((status.value?.lists ?? []).map((s) => [s.name, s])),
 )
 
@@ -89,7 +61,7 @@ const fetched = computed<Record<string, ListStatus>>(() =>
  * not exist, so the row says so instead of offering the button.
  */
 const applied = computed(() => new Set((status.value?.lists ?? []).map((s) => s.name)))
-const limits = computed(() => status.value?.limits ?? {})
+const limits = computed<Partial<BlockingLimitsInfo>>(() => status.value?.limits ?? {})
 /** What each list has actually refused; empty while the query log is off. */
 const counts = computed(() => status.value?.counts ?? {})
 const ceiling = computed(() => limits.value.maxDomains ?? 1000000)
@@ -130,7 +102,7 @@ function costMB(n: number) {
 }
 
 const load = useAsync(async () => {
-  status.value = (await api.blocking.status()) as BlockingStatus
+  status.value = await api.blocking.status()
 })
 onMounted(load.run)
 
@@ -144,7 +116,7 @@ const refresh = useAsync(async (name: string) => {
     } else {
       // The refresh answers with the state it left behind, and a report of
       // what it did, so a pass that fetched nothing can say why.
-      status.value = (await api.blocking.refreshAll()) as BlockingStatus
+      status.value = await api.blocking.refreshAll()
       note.value = describe(status.value?.report)
     }
   } finally {
@@ -153,7 +125,7 @@ const refresh = useAsync(async (name: string) => {
 })
 
 /** Turns a refresh report into the sentence to show under the buttons. */
-function describe(report?: RefreshReport) {
+function describe(report?: DnsblockReport) {
   if (!report) return ''
   if (report.note) return report.note
   const parts = []

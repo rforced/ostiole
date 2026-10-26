@@ -34,12 +34,13 @@ describe('signing in with MFA', () => {
     created: '',
     lastSeen: '',
     expires: '',
+    mfa: false,
   }
   const credential = {
     id: 'cred',
     rawId: 'cred',
     type: 'public-key',
-    response: { clientDataJSON: '' },
+    response: { clientDataJSON: '', authenticatorData: '', signature: '' },
   }
   const due = { pending: { token: 'tok', totp: true, passkeys: true, rpId: 'edge.example' } }
 

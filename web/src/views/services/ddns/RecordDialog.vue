@@ -13,15 +13,14 @@ import { newId } from '@/lib/ids'
 import { interfaceLabel } from '@/lib/interfaces'
 import { providerFor } from '@/lib/providers'
 import { useAuthStore } from '@/stores/auth'
-import type { DDNSRecord } from '@/lib/model.gen'
+import type { DDNSRecord, ProviderKind } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
-import type { DdnsKind } from '@/views/services/types'
 
 const props = defineProps({
   /** The record being edited, or null to add one. */
   record: { type: Object as PropType<DDNSRecord | null>, default: null },
   /** The provider kinds that can keep a record, from the status. */
-  kinds: { type: Array as PropType<DdnsKind[]>, default: () => [] },
+  kinds: { type: Array as PropType<ProviderKind[]>, default: () => [] },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 const auth = useAuthStore()

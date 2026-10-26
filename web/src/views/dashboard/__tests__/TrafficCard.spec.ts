@@ -2,6 +2,7 @@ import { RouterLinkStub, flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import type { TrafficLink } from '@/lib/types.gen'
 import TrafficCard from '@/views/dashboard/TrafficCard.vue'
 
 vi.mock('@/lib/api', () => ({ api: { traffic: { interfaces: vi.fn() } } }))
@@ -12,11 +13,13 @@ class FakeSource {
 }
 
 const NOW = 1_790_000_000
-const link = (name) => ({
+const link = (name: string): TrafficLink => ({
   name,
   down: 1_000_000,
   up: 500_000,
   totals: { down: 0, up: 0 },
+  since: new Date(NOW * 1000).toISOString(),
+  configured: true,
   points: [[NOW, 1_000_000, 500_000]],
 })
 

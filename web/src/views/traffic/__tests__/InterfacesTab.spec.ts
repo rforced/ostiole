@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import type { Point, TrafficLinks } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -31,7 +32,7 @@ const second = (t, down, up) =>
   })
 
 const NOW = 1_790_000_000
-function answer(window, points = [[NOW - 1, 1000, 2000]]) {
+function answer(window: string, points: Point[] = [[NOW - 1, 1000, 2000]]): TrafficLinks {
   return {
     window,
     now: new Date(NOW * 1000).toISOString(),

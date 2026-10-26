@@ -1,5 +1,5 @@
 import type { Session } from '@/lib/api'
-import type { Config, Interface, Rule } from '@/lib/model.gen'
+import type { Config, Interface, Rule } from '@/lib/types.gen'
 
 /** A model value that holds only the parts a test reads. */
 export type DeepPartial<T> = {

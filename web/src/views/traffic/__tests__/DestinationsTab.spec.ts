@@ -4,12 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import { SETTLE_MS } from '@/lib/log'
-import type { Traffic } from '@/lib/model.gen'
+import type { Traffic, TrafficDevices } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import DestinationsTab from '@/views/traffic/DestinationsTab.vue'
-import { configOf, sessionOf } from '@/test/fixtures'
+import { configOf, fixture, sessionOf } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -78,9 +78,9 @@ async function open({
     held: 40,
     oldest: '2026-09-27T09:00:00Z',
   })
-  vi.mocked(api.traffic.devices).mockResolvedValue({
-    devices: [{ id: 'a8:bb:cc:00:00:05', name: 'laptop' }],
-  })
+  vi.mocked(api.traffic.devices).mockResolvedValue(
+    fixture<TrafficDevices>({ devices: [{ id: 'a8:bb:cc:00:00:05', name: 'laptop' }] }),
+  )
   const w = mount(DestinationsTab)
   await flushPromises()
   return { w, config }

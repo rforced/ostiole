@@ -11,7 +11,7 @@ import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { useSearch } from '@/lib/search'
 import { byText, byTime, useSort } from '@/lib/sort'
-import type { Announcement } from '@/views/services/types'
+import type { Announcement } from '@/lib/types.gen'
 
 /** How often Live reads the announcements again. */
 const LIVE_MS = 5000
@@ -21,9 +21,7 @@ const live = ref(true)
 
 const load = useAsync(
   async () => {
-    const page = (await api.services.discoveryAnnouncements()) as {
-      announcements?: Announcement[]
-    } | null
+    const page = await api.services.discoveryAnnouncements()
     list.value = page?.announcements ?? []
   },
   // Live owns the poll, and starts on.

@@ -13,11 +13,11 @@ import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { exceptionToggles, sentence } from '@/lib/blocking'
 import { formatCount, formatWhen } from '@/lib/format'
-import { heldLine, keptLine, useLog, type LogPage } from '@/lib/log'
+import { heldLine, keptLine, useLog } from '@/lib/log'
 import { queryValues } from '@/lib/queries'
+import type { QueryLogPage, QueryRow, QuerySummary } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
-import type { QueryRow } from '@/views/services/types'
 
 const auth = useAuthStore()
 const config = useConfigStore()
@@ -50,21 +50,13 @@ const retention = computed({
 
 // Below the card everything reads the router, not the draft: the log is
 // what has happened, and a setting that has not been applied has not.
-/** The line above the table. */
-interface QuerySummary {
-  total: number
-  blocked: number
-  clients: number
-  dropped: number
-}
-
 const summary = ref<QuerySummary | null>(null)
 const lists = ref<{ name: string }[]>([])
 const filter = ref({ status: '', list: '', type: '' })
 const why = ref<Record<string, string>>({})
 const card = ref(null)
 
-const log = useLog<QueryRow>({
+const log = useLog<QueryRow, QueryLogPage>({
   // The summary is read with the first page, so the line above the table
   // counts what the table starts from.
   read: async (params, signal) => {
@@ -72,8 +64,8 @@ const log = useLog<QueryRow>({
       api.queries.list(params, signal),
       params.before ? null : api.queries.summary(),
     ])
-    if (s) summary.value = s as QuerySummary
-    return page as LogPage<QueryRow>
+    if (s) summary.value = s
+    return page
   },
   stream: '/api/v1/dns/queries/stream',
   filters: () => {

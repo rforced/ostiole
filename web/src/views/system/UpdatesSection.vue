@@ -11,32 +11,11 @@ import { ApiError, api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { LEVELS } from '@/lib/meter'
+import type { Check, Snapshot, UpdateStatus } from '@/lib/types.gen'
 import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import UpdateModeFields from '@/views/system/UpdateModeFields.vue'
-
-interface UpdateCheck {
-  current: string
-  channel: string
-  latest?: string
-  available: boolean
-  release?: { tag: string; url: string; notes?: string; publishedAt?: string }
-  security: boolean
-  lastCheck?: string
-  checkError?: string
-}
-interface UpdateStatus {
-  state: string
-  version?: string
-  message?: string
-  done?: number
-  total?: number
-}
-interface UpdateReply {
-  check: UpdateCheck | null
-  status: UpdateStatus
-}
 
 /** How often a running update is looked at. */
 const POLL_MS = 1500
@@ -47,7 +26,7 @@ const confirm = useConfirmStore()
 const current = ref('')
 /** The version that served this page, which the script running it came from. */
 const loaded = ref('')
-const check = ref<UpdateCheck | null>(null)
+const check = ref<Check | Snapshot | null>(null)
 const status = ref<UpdateStatus | null>(null)
 const restartedTo = ref('')
 /** When the latest above was last asked about: by the cron, or by the button. */
@@ -89,7 +68,7 @@ async function loadVersion() {
 // draws itself from what the nightly check left behind.
 const checking = useAsync(async () => {
   try {
-    const res = (await api.update.check(channel.value)) as UpdateReply
+    const res = await api.update.check(channel.value)
     check.value = res.check
     status.value = res.status
     lastCheck.value = new Date().toISOString()
@@ -127,7 +106,7 @@ async function tick() {
     return // still restarting
   }
   try {
-    status.value = ((await api.update.status()) as UpdateReply).status
+    status.value = (await api.update.status()).status
     // Idle is the new process answering: an update that is running never
     // goes back to idle in the process that started it.
     if (['failed', 'idle'].includes(status.value.state)) poll.stop()
@@ -137,7 +116,7 @@ async function tick() {
 }
 
 const install = useAsync(async () => {
-  status.value = (await api.update.apply(channel.value)) as UpdateStatus
+  status.value = await api.update.apply(channel.value)
   poll.start()
 })
 
@@ -161,7 +140,7 @@ function reload() {
 onMounted(async () => {
   await loadVersion()
   try {
-    const res = (await api.update.status()) as UpdateReply
+    const res = await api.update.status()
     status.value = res.status
     // A router that has never checked, or whose last check failed, says
     // so rather than claiming to be up to date on an empty answer. A

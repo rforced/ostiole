@@ -52,6 +52,19 @@ func (a *api) listOwnTokens(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// createTokenRequest is what a new token is asked for.
+type createTokenRequest struct {
+	Name string `json:"name"`
+	Role string `json:"role"`
+	// ExpiresInDays ends the token automatically; 0 means never.
+	ExpiresInDays int `json:"expiresInDays,omitempty"`
+	// Certificates limits the token to fetching those, and nothing
+	// else on this API.
+	Certificates []string `json:"certificates,omitempty"`
+	// Metrics limits it to /metrics.
+	Metrics bool `json:"metrics,omitempty"`
+}
+
 // createToken mints a token for the signed-in account, with no more than
 // its role.
 func (a *api) createToken(w http.ResponseWriter, r *http.Request) error {
@@ -62,17 +75,7 @@ func (a *api) createToken(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	var req struct {
-		Name string `json:"name"`
-		Role string `json:"role"`
-		// ExpiresInDays ends the token automatically; 0 means never.
-		ExpiresInDays int `json:"expiresInDays,omitempty"`
-		// Certificates limits the token to fetching those, and nothing
-		// else on this API.
-		Certificates []string `json:"certificates,omitempty"`
-		// Metrics limits it to /metrics.
-		Metrics bool `json:"metrics,omitempty"`
-	}
+	var req createTokenRequest
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}

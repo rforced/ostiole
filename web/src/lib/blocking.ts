@@ -1,14 +1,9 @@
 import { internalInterfaces } from '@/lib/interfaces'
-import type { Config, DNSServer } from '@/lib/model.gen'
+import type { Config, DNSServer, Finding } from '@/lib/types.gen'
 
 /** What a blocking lookup comes to, in one sentence. */
 
-/** A lookup's verdict as the router gave it. */
-export interface Finding {
-  name?: string
-  matched?: string
-  reason?: string
-}
+export type { Finding }
 
 export function sentence(finding: Finding | null): string {
   const f = finding

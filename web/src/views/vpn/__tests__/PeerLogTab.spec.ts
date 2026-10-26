@@ -4,10 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import type { Session } from '@/lib/api'
-import type { Config, Interface } from '@/lib/model.gen'
+import type { Config, Interface, LogLimitsInfo, LogfileStatus, Stats } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
+import { fixture } from '@/test/fixtures'
 import PeerLogTab from '@/views/vpn/PeerLogTab.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -29,9 +30,9 @@ const clearButton = (w) => w.findAll('button').find((b) => b.text() === 'Clear')
 
 async function tab(kind, list, { level = 'info', on = true } = {}) {
   api[kind].log.mockResolvedValue({ entries: list, held: list.length, kept: level === 'info' })
-  vi.mocked(api.systemStats).mockResolvedValue({ memTotal: 8_000_000_000 })
-  vi.mocked(api.logFiles).mockResolvedValue({ enabled: false, logs: [] })
-  vi.mocked(api.logLimits).mockResolvedValue({ memTotal: 0, ceilings: {} })
+  vi.mocked(api.systemStats).mockResolvedValue(fixture<Stats>({ memTotal: 8_000_000_000 }))
+  vi.mocked(api.logFiles).mockResolvedValue(fixture<LogfileStatus>({ enabled: false, logs: [] }))
+  vi.mocked(api.logLimits).mockResolvedValue(fixture<LogLimitsInfo>({ memTotal: 0, ceilings: {} }))
   const store = useConfigStore()
   const draft = { version: 11, system: { logging: { level } }, interfaces: [] } as Config
   if (on)

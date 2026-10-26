@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { ACMEAccount, Certificate, Config, ProxyAccess } from '@/lib/model.gen'
+import type { ACMEAccount, Certificate, Config, ProxyAccess } from '@/lib/types.gen'
 import { configOf, fixture, type DeepPartial } from '@/test/fixtures'
 import { useConfigStore } from '@/stores/config'
 import { useToastStore } from '@/stores/toast'

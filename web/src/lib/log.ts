@@ -19,10 +19,10 @@ export const LAND_MS = 250
 
 /** One entry of a log the router keeps; seq numbers them in arrival order. */
 export interface LogRow {
-  seq: number
+  seq?: number
 }
 
-/** One page of a log; a log may add fields of its own. */
+/** One page of a log; a log's own page type may add fields. */
 export interface LogPage<Row extends LogRow = LogRow> {
   entries?: Row[] | null
   next?: number
@@ -30,7 +30,6 @@ export interface LogPage<Row extends LogRow = LogRow> {
   searchedTo?: string
   held?: number
   oldest?: string
-  [extra: string]: unknown
 }
 
 /** When an entry was logged, short: 25 Sep, 14:02. */
@@ -67,9 +66,9 @@ export function keptLine(inFiles: boolean) {
     : 'Kept in memory on this router only. Switching it off, or a restart, clears it.'
 }
 
-export interface UseLogOptions<Row extends LogRow> {
+export interface UseLogOptions<Row extends LogRow, Page extends LogPage<Row> = LogPage<Row>> {
   /** One page of the log. */
-  read: (params: Record<string, unknown>, signal: AbortSignal) => Promise<LogPage<Row>>
+  read: (params: Record<string, unknown>, signal: AbortSignal) => Promise<Page>
   /** The log's event stream. */
   stream: string
   /** The page's selects, as query parameters. */
@@ -90,14 +89,14 @@ export interface UseLogOptions<Row extends LogRow> {
  * off; what arrives meanwhile waits, and lands when Live is on again. A
  * hidden tab closes the stream.
  */
-export function useLog<Row extends LogRow>({
+export function useLog<Row extends LogRow, Page extends LogPage<Row> = LogPage<Row>>({
   read,
   stream,
   filters = () => ({}),
   keep = () => true,
   values,
   top,
-}: UseLogOptions<Row>) {
+}: UseLogOptions<Row, Page>) {
   // Entries never change, so they are not made reactive one by one.
   const rows = shallowRef<Row[]>([])
   const query = ref('')
@@ -107,7 +106,7 @@ export function useLog<Row extends LogRow>({
   const held = ref(0)
   const oldest = ref('')
   /** The last first page read, for what a log says beside its rows. */
-  const page = ref<LogPage<Row> | null>(null)
+  const page = ref(null) as Ref<Page | null>
   const reading = ref(false)
   const readingMore = ref(false)
   const error = ref('')
@@ -139,7 +138,7 @@ export function useLog<Row extends LogRow>({
     return p
   }
 
-  function take(p: LogPage<Row>) {
+  function take(p: Page) {
     more.value = Boolean(p.more)
     next = p.next ?? 0
     searchedTo.value = p.searchedTo ?? ''
@@ -162,7 +161,7 @@ export function useLog<Row extends LogRow>({
       take(p)
       const topSeq = rows.value[0]?.seq ?? 0
       newest = Math.max(newest, topSeq)
-      waiting = waiting.filter((e) => e.seq > topSeq)
+      waiting = waiting.filter((e) => (e.seq ?? 0) > topSeq)
       error.value = ''
       updatedAt.value = Date.now()
       if (live.value) release()
@@ -239,8 +238,8 @@ export function useLog<Row extends LogRow>({
   }
 
   function arrive(e: Row) {
-    if (!(e.seq > newest)) return
-    newest = e.seq
+    if (!((e.seq ?? 0) > newest)) return
+    newest = e.seq ?? 0
     waiting.push(e)
     if (waiting.length > MAX_ROWS) {
       waiting = []

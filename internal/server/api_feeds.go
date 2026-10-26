@@ -114,8 +114,19 @@ func (a *api) refreshFeed(w http.ResponseWriter, r *http.Request) error {
 		slog.Warn("could not refresh an alias", "alias", name, "err", err)
 		return &upstream{fmt.Errorf("refresh %s: %w", name, err)}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"alias": name, "entries": count})
+	writeJSON(w, http.StatusOK, feedRefreshReply{Alias: name, Entries: count})
 	return nil
+}
+
+// inspectFeedRequest names the list to read.
+type inspectFeedRequest struct {
+	URL string `json:"url"`
+}
+
+// feedRefreshReply is what a one-alias refresh reports.
+type feedRefreshReply struct {
+	Alias   string `json:"alias"`
+	Entries int    `json:"entries"`
 }
 
 // inspectFeed reads a list before an alias names it, so the alias dialog
@@ -125,9 +136,7 @@ func (a *api) inspectFeed(w http.ResponseWriter, r *http.Request) error {
 	if a.feeds == nil {
 		return &unavailable{errors.New("nothing is refreshing aliases on this router")}
 	}
-	var req struct {
-		URL string `json:"url"`
-	}
+	var req inspectFeedRequest
 	if err := decodeJSON(r, &req); err != nil {
 		return err
 	}

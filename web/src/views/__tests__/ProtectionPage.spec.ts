@@ -2,7 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { Protection } from '@/lib/model.gen'
+import type { Protection } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import { emptyConfig, iface, rule } from '@/test/fixtures'
 import ProtectionPage from '@/views/firewall/ProtectionPage.vue'

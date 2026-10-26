@@ -7,7 +7,7 @@ import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { newId } from '@/lib/ids'
 import { parseList } from '@/lib/lists'
-import type { PortForward, Protocol, Tier } from '@/lib/model.gen'
+import type { PortForward, Protocol, Tier } from '@/lib/types.gen'
 import { PRIORITY_HINT, TIERS, UNSET_LABEL, tierOption } from '@/lib/tiers'
 import { useConfigStore } from '@/stores/config'
 

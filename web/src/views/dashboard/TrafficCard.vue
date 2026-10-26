@@ -8,13 +8,7 @@ import TrafficChart from '@/components/TrafficChart.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { appendPoint, useTrafficStream } from '@/lib/traffic'
-
-interface Chart {
-  name: string
-  down: number
-  up: number
-  points?: [number, number, number][]
-}
+import type { TrafficLink } from '@/lib/types.gen'
 
 interface LinkSample {
   id: string
@@ -38,12 +32,12 @@ const emit = defineEmits(['read'])
  * the last visit left, before the overview names the links, and a read
  * kept to an empty list stayed empty until the stream reopened.
  */
-const charts = ref<Chart[] | null>(null)
+const charts = ref<TrafficLink[] | null>(null)
 const end = ref(0)
 
 const read = useAsync(async () => {
-  const ifs = (await api.traffic.interfaces('5m')) as { links: Chart[]; now: string }
-  charts.value = ifs.links
+  const ifs = await api.traffic.interfaces('5m')
+  charts.value = ifs.links ?? []
   end.value = Date.parse(ifs.now) / 1000
 })
 // The dashboard fills its cards in together, so it waits for the first

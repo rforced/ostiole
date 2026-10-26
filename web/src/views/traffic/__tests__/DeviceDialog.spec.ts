@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 import { fixture } from '@/test/fixtures'
 import DeviceDialog from '@/views/traffic/DeviceDialog.vue'
-import type { Device, TrafficEvent } from '@/views/traffic/types'
+import type { ServerTrafficDestinations, TrafficDevice, TrafficEvent } from '@/lib/types.gen'
 
 vi.mock('@/lib/api', () => ({ api: { traffic: { device: vi.fn(), destinations: vi.fn() } } }))
 
@@ -17,7 +17,7 @@ const stubs = {
 }
 
 const NOW = 1_790_000_000
-const device = fixture<Device>({
+const device = fixture<TrafficDevice>({
   id: 'a8:bb:cc:00:00:05',
   mac: 'a8:bb:cc:00:00:05',
   name: 'laptop',
@@ -51,19 +51,21 @@ describe('DeviceDialog', () => {
   // Its chart, how it is known, and its five busiest destinations over
   // the matching window while they are recorded.
   it('charts the device and names its top destinations', async () => {
-    vi.mocked(api.traffic.destinations).mockResolvedValue({
-      enabled: true,
-      entries: [
-        {
-          destination: 'example.com',
-          protocol: 'tcp',
-          port: 443,
-          service: 'HTTPS',
-          down: 4_000_000,
-          up: 1,
-        },
-      ],
-    })
+    vi.mocked(api.traffic.destinations).mockResolvedValue(
+      fixture<ServerTrafficDestinations>({
+        enabled: true,
+        entries: [
+          {
+            destination: 'example.com',
+            protocol: 'tcp',
+            port: 443,
+            service: 'HTTPS',
+            down: 4_000_000,
+            up: 1,
+          },
+        ],
+      }),
+    )
     const w = open()
     await flushPromises()
     expect(api.traffic.device).toHaveBeenCalledWith('a8:bb:cc:00:00:05', '5m')
@@ -85,7 +87,9 @@ describe('DeviceDialog', () => {
 
   // Over five minutes the chart takes each read of the table.
   it('takes a point from each devices event, and none for other devices', async () => {
-    vi.mocked(api.traffic.destinations).mockResolvedValue({ enabled: false, entries: [] })
+    vi.mocked(api.traffic.destinations).mockResolvedValue(
+      fixture<ServerTrafficDestinations>({ enabled: false, entries: [] }),
+    )
     const w = open()
     await flushPromises()
     expect(w.text()).not.toContain('Top destinations')

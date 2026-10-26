@@ -15,29 +15,8 @@ import { actionTone } from '@/lib/badge'
 import { formatWhen } from '@/lib/format'
 import { accessNames, endpoint, fwlogInfo, fwlogValues, matchedLabel } from '@/lib/fwlog'
 import { heldLine, useLog } from '@/lib/log'
-import type { LogPage, LogRow } from '@/lib/log'
-import type { FirewallLog, Management } from '@/lib/model.gen'
+import type { FirewallLog, FwlogEntry, Management } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
-
-interface FirewallEntry extends LogRow {
-  time: string
-  prefix: string
-  ruleId?: string
-  zone?: string
-  kind: string
-  action?: string
-  in?: string
-  out?: string
-  family: string
-  proto: string
-  src?: string
-  dst?: string
-  srcPort?: number
-  dstPort?: number
-  icmpType?: number
-  tcpFlags?: string
-  length: number
-}
 
 const config = useConfigStore()
 const access = computed(() => accessNames(config.proxy))
@@ -70,15 +49,15 @@ const card = ref(null)
  * shows either way rather than being hidden on a guess, as the router
  * reads it.
  */
-function chosen(e: FirewallEntry) {
+function chosen(e: FwlogEntry) {
   if (show.value === 'all' || !e.action) return true
   return show.value === 'blocked' ? e.action !== 'accept' : e.action === 'accept'
 }
 
-const log = useLog({
+const log = useLog<FwlogEntry>({
   read: async (params, signal) => {
     try {
-      return (await api.log.entries(params, signal)) as LogPage<FirewallEntry>
+      return await api.log.entries(params, signal)
     } catch (e) {
       if (e instanceof ApiError && e.status === 503)
         throw new Error('The firewall log needs the daemon to run as root.', { cause: e })

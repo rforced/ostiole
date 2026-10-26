@@ -9,7 +9,7 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import ZoneField, { NEW_ZONE } from '@/components/ZoneField.vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
-import type { Interface } from '@/lib/model.gen'
+import type { Interface } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 

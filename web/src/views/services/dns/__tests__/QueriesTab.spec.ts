@@ -5,7 +5,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, type Session } from '@/lib/api'
 import { sentence } from '@/lib/blocking'
 import { LAND_MS } from '@/lib/log'
-import type { Config, System } from '@/lib/model.gen'
+import type {
+  BlockingState,
+  Config,
+  Finding,
+  QueryLogPage,
+  QueryRow,
+  QuerySummary,
+  System,
+} from '@/lib/types.gen'
+import { type DeepPartial, fixture } from '@/test/fixtures'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -36,7 +45,13 @@ function answers({ before }: { before?: number } = {}) {
   const entries = all.slice(from, from + 200)
   const last = entries[entries.length - 1]
   const more = last.seq > 1
-  return { enabled: true, held: all.length, entries, more, next: more ? last.seq : undefined }
+  return fixture<QueryLogPage>({
+    enabled: true,
+    held: all.length,
+    entries,
+    more,
+    next: more ? last.seq : undefined,
+  })
 }
 
 /** The stream the tab opens; a test sends through the last one. */
@@ -67,7 +82,7 @@ function button(wrapper, label) {
 
 /** A blocked answer, one answered, one the router answers for, and a service name. */
 function mixed() {
-  const row = (seq, name, status, extra = {}) => ({
+  const row = (seq: number, name: string, status: string, extra: DeepPartial<QueryRow> = {}) => ({
     seq,
     time: '2026-09-24T12:00:00Z',
     client: '10.0.0.2',
@@ -76,7 +91,7 @@ function mixed() {
     status,
     ...extra,
   })
-  return {
+  return fixture<QueryLogPage>({
     enabled: true,
     held: 4,
     entries: [
@@ -85,7 +100,7 @@ function mixed() {
       row(2, 'nas.lan', 'ok', { answer: '10.0.0.5' }),
       row(1, '_dns.resolver.arpa', 'nodata'),
     ],
-  }
+  })
 }
 
 /** A saved router with the query log on and no exceptions yet. */
@@ -114,8 +129,10 @@ describe('QueriesTab', () => {
     vi.clearAllMocks()
     vi.stubGlobal('EventSource', FakeSource)
     vi.mocked(api.queries.list).mockImplementation(async (params) => answers(params))
-    vi.mocked(api.queries.summary).mockResolvedValue({ total: 450, blocked: 0, clients: 1 })
-    vi.mocked(api.blocking.status).mockResolvedValue({ lists: [] })
+    vi.mocked(api.queries.summary).mockResolvedValue(
+      fixture<QuerySummary>({ total: 450, blocked: 0, clients: 1 }),
+    )
+    vi.mocked(api.blocking.status).mockResolvedValue(fixture<BlockingState>({ lists: [] }))
   })
 
   // The entries sit beside the switch, and off hides them but keeps them
@@ -293,7 +310,11 @@ describe('QueriesTab', () => {
 
   it('says under a blocked row why, and puts it away again', async () => {
     vi.mocked(api.queries.list).mockResolvedValue(mixed())
-    const finding = { name: 'ads.example.com', reason: 'list', matched: 'ads.example.com' }
+    const finding = fixture<Finding>({
+      name: 'ads.example.com',
+      reason: 'list',
+      matched: 'ads.example.com',
+    })
     vi.mocked(api.blocking.lookup).mockResolvedValue(finding)
     saved()
     const wrapper = mount(QueriesTab)

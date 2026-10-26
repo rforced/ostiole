@@ -3,11 +3,12 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import type { DriveHistoryPage } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import DrivesPage from '@/views/diagnostics/DrivesPage.vue'
-import { configOf, sessionOf } from '@/test/fixtures'
+import { configOf, fixture, sessionOf } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -97,7 +98,9 @@ describe('DrivesPage', () => {
     vi.clearAllMocks()
     setActivePinia(createPinia())
     vi.mocked(api.diagnostics.drives).mockResolvedValue(status())
-    vi.mocked(api.diagnostics.driveHistory).mockResolvedValue({ entries: [], held: 0 })
+    vi.mocked(api.diagnostics.driveHistory).mockResolvedValue(
+      fixture<DriveHistoryPage>({ entries: [], held: 0 }),
+    )
     vi.stubGlobal(
       'EventSource',
       class {
@@ -108,22 +111,24 @@ describe('DrivesPage', () => {
 
   // Each drive once an hour, what the check read.
   it('shows the drives history', async () => {
-    vi.mocked(api.diagnostics.driveHistory).mockResolvedValue({
-      entries: [
-        {
-          seq: 2,
-          time: '2026-09-28T14:00:00Z',
-          drive: 'sda',
-          model: 'GENERIC 256GB SSD',
-          health: 'failed',
-          temperature: 52,
-          wear: 3,
-          bad: 8,
-          powerOnHours: 1234,
-        },
-      ],
-      held: 1,
-    })
+    vi.mocked(api.diagnostics.driveHistory).mockResolvedValue(
+      fixture<DriveHistoryPage>({
+        entries: [
+          {
+            seq: 2,
+            time: '2026-09-28T14:00:00Z',
+            drive: 'sda',
+            model: 'GENERIC 256GB SSD',
+            health: 'failed',
+            temperature: 52,
+            wear: 3,
+            bad: 8,
+            powerOnHours: 1234,
+          },
+        ],
+        held: 1,
+      }),
+    )
     const wrapper = mount(DrivesPage)
     await flushPromises()
     const history = wrapper.findAll('section').find((s) => s.text().includes('History'))

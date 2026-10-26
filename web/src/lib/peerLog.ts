@@ -1,12 +1,7 @@
+import type { PeerlogEvent } from '@/lib/types.gen'
+
 /** One event of a VPN peer's log. */
-export interface PeerEvent {
-  seq: number
-  time: string
-  event: string
-  tunnel?: string
-  peer: string
-  endpoint?: string
-}
+export type PeerEvent = PeerlogEvent
 
 /**
  * The values a VPN peer log row shows, as it shows them: what the router

@@ -5,7 +5,7 @@ import type { PropType } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
-import type { StaticRoute } from '@/lib/model.gen'
+import type { StaticRoute } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import StaticRouteDialog from '@/views/routing/StaticRouteDialog.vue'

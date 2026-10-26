@@ -162,9 +162,7 @@ async function apply() {
     const draft = JSON.parse(JSON.stringify(config.draft))
     const ofDrift = drift.value !== null
     await api.config.check(draft)
-    const res = (await applyWithConfirm(draft, config.base, CONFIRM_SECONDS)) as {
-      deadline: string
-    }
+    const res = await applyWithConfirm(draft, config.base, CONFIRM_SECONDS)
     applied = draft
     driftApplied = ofDrift
     pending.value = { deadline: res.deadline }

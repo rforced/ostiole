@@ -12,28 +12,15 @@ import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { eventFor, eventText, eventValues } from '@/lib/gateways'
 import { heldLine, useLog } from '@/lib/log'
-import type { LogPage, LogRow } from '@/lib/log'
+import type { GatewayEvent } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
-
-interface GatewayEvent extends LogRow {
-  time: string
-  gateway: string
-  family?: string
-  kind: string
-  for?: number
-  span?: number
-  error?: string
-  monitor?: string
-  was?: string
-}
 
 /** What changed on the gateways, newest first. */
 const config = useConfigStore()
 
 const card = ref(null)
 const log = useLog<GatewayEvent>({
-  read: async (params, signal) =>
-    (await api.gatewayHistory.events(params, signal)) as LogPage<GatewayEvent>,
+  read: (params, signal) => api.gatewayHistory.events(params, signal),
   stream: '/api/v1/gateways/events/stream',
   values: eventValues,
   top: card,

@@ -17,16 +17,22 @@ import (
 // or one that is stopped, answers with the flags false: "not set up" is a
 // state of the page, not an error.
 type proxyStatus struct {
-	SetUp   bool   `json:"setUp"`
-	Running bool   `json:"running"`
-	Release string `json:"release,omitempty"`
-	Ports   struct {
-		HTTP  uint16 `json:"http"`
-		HTTPS uint16 `json:"https"`
-		HTTP3 bool   `json:"http3"`
-	} `json:"ports"`
+	SetUp     bool                `json:"setUp"`
+	Running   bool                `json:"running"`
+	Release   string              `json:"release,omitempty"`
+	Ports     proxyPorts          `json:"ports"`
 	Upstreams []services.Upstream `json:"upstreams"`
 }
+
+// proxyPorts are the ports the proxy listens on.
+type proxyPorts struct {
+	HTTP  uint16 `json:"http"`
+	HTTPS uint16 `json:"https"`
+	HTTP3 bool   `json:"http3"`
+}
+
+// wafEventsPage is one page of what the WAF matched.
+type wafEventsPage logPage[waflog.Entry]
 
 func (a *api) registerProxy(mux *router) {
 	mux.HandleFunc("GET /api/v1/proxy/status", a.readNoEngine(a.proxyStatus))
@@ -92,7 +98,7 @@ func (a *api) proxyEvents(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	held, oldest := a.waflog.Held()
-	writeJSON(w, http.StatusOK, newLogPage(page, append(page.Entries, older...), held, oldest))
+	writeJSON(w, http.StatusOK, wafEventsPage(newLogPage(page, append(page.Entries, older...), held, oldest)))
 	return nil
 }
 

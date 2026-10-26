@@ -2,7 +2,7 @@ import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { Config, Interface, Rule } from '@/lib/model.gen'
+import type { Config, Interface, Rule, UnusedResponse } from '@/lib/types.gen'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -32,7 +32,7 @@ function draft() {
   })
 }
 
-const found = {
+const found: UnusedResponse = {
   unused: [
     {
       kind: 'alias',
@@ -67,7 +67,7 @@ async function open({
   role = 'admin',
   answer = found,
   cfg = draft(),
-}: { role?: string; answer?: unknown; cfg?: Config } = {}) {
+}: { role?: string; answer?: UnusedResponse | Error; cfg?: Config } = {}) {
   useAuthStore().user = sessionOf({ username: role, role })
   const config = useConfigStore()
   config.replaceDraft(cfg)

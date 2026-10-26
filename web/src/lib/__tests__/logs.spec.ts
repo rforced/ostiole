@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { LOGS, fullBytes, logSettings, totalBytes } from '@/lib/logs'
-import type { Config } from '@/lib/model.gen'
+import type { Config } from '@/lib/types.gen'
 import { configOf, type DeepPartial } from '@/test/fixtures'
 
 const serving = {

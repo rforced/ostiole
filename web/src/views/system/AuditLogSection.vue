@@ -16,7 +16,7 @@ import { heldLine, useLog } from '@/lib/log'
 /** Who changed what on the router, newest first. */
 const card = ref(null)
 const log = useLog({
-  read: (params, signal) => api.audit.log(params, signal),
+  read: async (params, signal) => ({ ...(await api.audit.log(params, signal)) }),
   stream: '/api/v1/audit/stream',
   values: auditValues,
   top: card,

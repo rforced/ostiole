@@ -13,18 +13,18 @@ import { useAsync } from '@/lib/async'
 import { formatBytes, formatDuration } from '@/lib/format'
 import { byAddress, byNumber, byText, useSort } from '@/lib/sort'
 import { useConfigStore } from '@/stores/config'
-import type { Client } from '@/views/wireless/card'
+import type { WirelessClient } from '@/lib/types.gen'
 
 /** How often Live reads the stations again. */
 const POLL_MS = 5000
 
 const config = useConfigStore()
-const clients = ref<Client[]>([])
+const clients = ref<WirelessClient[]>([])
 const live = ref(true)
 
 const load = useAsync(
   async () => {
-    clients.value = (await api.wireless.clients()) as Client[]
+    clients.value = await api.wireless.clients()
   },
   // Live owns the poll, and starts on.
   { interval: POLL_MS, immediate: true },

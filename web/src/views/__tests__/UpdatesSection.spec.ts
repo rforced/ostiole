@@ -3,6 +3,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import type { Snapshot, UpdateStatusReply } from '@/lib/types.gen'
+import { fixture } from '@/test/fixtures'
 import UpdatesSection from '@/views/system/UpdatesSection.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -11,7 +13,7 @@ vi.mock('@/lib/api', () => ({
 }))
 
 /** What the last check left behind: 0.9.2 is waiting. */
-const waiting = {
+const waiting = fixture<Snapshot>({
   lastCheck: '2026-09-19T12:00:00Z',
   channel: 'stable',
   current: 'v0.9.1',
@@ -23,17 +25,19 @@ const waiting = {
     url: 'https://x.invalid',
     notes: '',
   },
-}
+})
 
 const installButton = (w) => w.findAll('button').find((b) => b.text().startsWith('Install'))
 
 /** Mounts the section on a router running 0.9.1 with 0.9.2 going in. */
 async function mountInstalling() {
   vi.mocked(api.health).mockResolvedValue({ status: 'ok', version: 'v0.9.1' })
-  vi.mocked(api.update.status).mockResolvedValue({
-    status: { state: 'installing', version: 'v0.9.2' },
-    check: waiting,
-  })
+  vi.mocked(api.update.status).mockResolvedValue(
+    fixture<UpdateStatusReply>({
+      status: { state: 'installing', version: 'v0.9.2' },
+      check: waiting,
+    }),
+  )
   const w = mount(UpdatesSection)
   await flushPromises()
   return w
@@ -46,7 +50,9 @@ async function mountInstalling() {
  */
 async function restartsInto(version) {
   vi.mocked(api.health).mockResolvedValue({ status: 'ok', version })
-  vi.mocked(api.update.status).mockResolvedValue({ status: { state: 'idle' }, check: waiting })
+  vi.mocked(api.update.status).mockResolvedValue(
+    fixture<UpdateStatusReply>({ status: { state: 'idle' }, check: waiting }),
+  )
   await vi.advanceTimersByTimeAsync(1500)
   await flushPromises()
 }
@@ -94,7 +100,9 @@ describe('UpdatesSection', () => {
 
   it('offers the waiting release while the version is the one it loaded', async () => {
     vi.mocked(api.health).mockResolvedValue({ status: 'ok', version: 'v0.9.1' })
-    vi.mocked(api.update.status).mockResolvedValue({ status: { state: 'idle' }, check: waiting })
+    vi.mocked(api.update.status).mockResolvedValue(
+      fixture<UpdateStatusReply>({ status: { state: 'idle' }, check: waiting }),
+    )
     const w = mount(UpdatesSection)
     await flushPromises()
     expect(installButton(w)?.text()).toBe('Install v0.9.2')

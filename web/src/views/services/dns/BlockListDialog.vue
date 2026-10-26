@@ -9,7 +9,7 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
 import { formatCount } from '@/lib/format'
-import type { BlockList, ListFormat } from '@/lib/model.gen'
+import type { BlockList, CatalogEntry, ListFormat } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({ list: { type: Object as PropType<BlockList | null>, default: null } })
@@ -18,17 +18,6 @@ const open = defineModel('open', { type: Boolean, default: false })
 const config = useConfigStore()
 const form = ref(blank())
 const error = ref('')
-/** A published list on offer, as the catalogue sends it. */
-interface CatalogEntry {
-  name: string
-  title: string
-  description: string
-  url: string
-  format: ListFormat
-  category: string
-  names: number
-}
-
 interface BlockListForm {
   name: string
   description: string
@@ -74,7 +63,7 @@ watch(
     form.value = l ? { ...blank(), ...l } : blank()
     if (!catalog.value.length) {
       try {
-        catalog.value = (await api.blocking.catalog()) as CatalogEntry[]
+        catalog.value = await api.blocking.catalog()
         catalogError.value = ''
       } catch (e) {
         catalog.value = []

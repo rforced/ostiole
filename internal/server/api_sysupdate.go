@@ -63,6 +63,13 @@ func (a *api) systemUpdateCheck(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// systemUpdateApplyRequest narrows an update to security fixes and names
+// the packages to leave alone.
+type systemUpdateApplyRequest struct {
+	Security *bool    `json:"security"`
+	Exclude  []string `json:"exclude"`
+}
+
 // systemUpdateApply starts an update in the background. The body may ask
 // for security fixes alone and name the packages never to upgrade, as the
 // page shows them before they are applied. Without them the configuration
@@ -72,10 +79,7 @@ func (a *api) systemUpdateApply(w http.ResponseWriter, r *http.Request) error {
 	if a.packages == nil {
 		return &unavailable{errors.New("nothing on this router drives a package manager")}
 	}
-	var body struct {
-		Security *bool    `json:"security"`
-		Exclude  []string `json:"exclude"`
-	}
+	var body systemUpdateApplyRequest
 	if r.ContentLength != 0 {
 		if err := decodeJSON(r, &body); err != nil {
 			return err
@@ -103,6 +107,11 @@ func (a *api) systemUpdateApply(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// rebootReply says the router is going down.
+type rebootReply struct {
+	Rebooting bool `json:"rebooting"`
+}
+
 // systemReboot restarts the router, which is the only way to finish a
 // kernel update.
 func (a *api) systemReboot(w http.ResponseWriter, r *http.Request) error {
@@ -113,6 +122,6 @@ func (a *api) systemReboot(w http.ResponseWriter, r *http.Request) error {
 		return &badRequest{err}
 	}
 	a.record(r, audit.Reboot, "", "")
-	writeJSON(w, http.StatusOK, map[string]any{"rebooting": true})
+	writeJSON(w, http.StatusOK, rebootReply{Rebooting: true})
 	return nil
 }

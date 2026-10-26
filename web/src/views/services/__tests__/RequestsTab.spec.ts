@@ -3,7 +3,15 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, type Session } from '@/lib/api'
-import type { Config } from '@/lib/model.gen'
+import type {
+  Config,
+  LogfileStatus,
+  LogLimitsInfo,
+  ProxyStatus,
+  RequestsPage,
+  Stats,
+} from '@/lib/types.gen'
+import { fixture } from '@/test/fixtures'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -43,20 +51,15 @@ function request(over = {}) {
 }
 
 async function tab(list, level = 'info') {
-  vi.mocked(api.proxy.requests).mockResolvedValue({
-    entries: list,
-    held: list.length,
-    kept: level === 'info',
-  })
-  vi.mocked(api.proxy.status).mockResolvedValue({
-    setUp: true,
-    running: true,
-    ports: {},
-    upstreams: [],
-  })
-  vi.mocked(api.systemStats).mockResolvedValue({ memTotal: 8_000_000_000 })
-  vi.mocked(api.logFiles).mockResolvedValue({ enabled: false, logs: [] })
-  vi.mocked(api.logLimits).mockResolvedValue({ memTotal: 0, ceilings: {} })
+  vi.mocked(api.proxy.requests).mockResolvedValue(
+    fixture<RequestsPage>({ entries: list, held: list.length, kept: level === 'info' }),
+  )
+  vi.mocked(api.proxy.status).mockResolvedValue(
+    fixture<ProxyStatus>({ setUp: true, running: true, ports: {}, upstreams: [] }),
+  )
+  vi.mocked(api.systemStats).mockResolvedValue(fixture<Stats>({ memTotal: 8_000_000_000 }))
+  vi.mocked(api.logFiles).mockResolvedValue(fixture<LogfileStatus>({ enabled: false, logs: [] }))
+  vi.mocked(api.logLimits).mockResolvedValue(fixture<LogLimitsInfo>({ memTotal: 0, ceilings: {} }))
   const store = useConfigStore()
   const draft = {
     version: 11,
@@ -125,7 +128,9 @@ describe('RequestsTab', () => {
     useAuthStore().user = { username: 'root', role: 'admin' } as Session
     const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
     const { wrapper } = await tab([request()])
-    vi.mocked(api.proxy.requests).mockResolvedValue({ entries: [], held: 0, kept: true })
+    vi.mocked(api.proxy.requests).mockResolvedValue(
+      fixture<RequestsPage>({ entries: [], held: 0, kept: true }),
+    )
     await clearButton(wrapper).trigger('click')
     await flushPromises()
     expect(ask).toHaveBeenCalledWith(

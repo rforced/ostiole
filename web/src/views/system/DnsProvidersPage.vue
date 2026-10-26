@@ -8,9 +8,9 @@ import SectionCard from '@/components/SectionCard.vue'
 import UsedByCell from '@/components/UsedByCell.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import type { ProviderKind } from '@/lib/types.gen'
 import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
-import type { ProviderKind } from '@/views/system/providers/kinds'
 import ProviderDialog from '@/views/system/providers/ProviderDialog.vue'
 
 const auth = useAuthStore()
@@ -18,8 +18,7 @@ const config = useConfigStore()
 const kinds = ref<ProviderKind[]>([])
 const load = useAsync(
   async () => {
-    kinds.value =
-      ((await api.certificates.list()) as { providerKinds?: ProviderKind[] }).providerKinds ?? []
+    kinds.value = (await api.certificates.list()).providerKinds ?? []
   },
   { immediate: true },
 )

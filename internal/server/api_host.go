@@ -25,11 +25,14 @@ func (a *api) hostStatus(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// flushLegacyRequest names the tables to clear.
+type flushLegacyRequest struct {
+	Tables []string `json:"tables"`
+}
+
 // hostFlushLegacy clears what an older firewall left in the kernel.
 func (a *api) hostFlushLegacy(w http.ResponseWriter, r *http.Request) error {
-	var body struct {
-		Tables []string `json:"tables"`
-	}
+	var body flushLegacyRequest
 	if r.ContentLength != 0 {
 		if err := decodeJSON(r, &body); err != nil {
 			return err

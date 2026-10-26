@@ -4,10 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 
 import { api } from '@/lib/api'
+import type { Applied } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import RevisionsSection from '@/views/system/RevisionsSection.vue'
-import { configOf, sessionOf } from '@/test/fixtures'
+import { configOf, fixture, sessionOf } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   api: { config: { revisions: vi.fn(), revision: vi.fn(), diff: vi.fn(), applied: vi.fn() } },
@@ -179,11 +180,9 @@ describe('RevisionsSection attribution', () => {
   })
 
   it('says when the configuration in force was changed outside Ostiole', async () => {
-    vi.mocked(api.config.applied).mockResolvedValue({
-      time: '2026-10-09T11:00:00Z',
-      by: {},
-      outside: true,
-    })
+    vi.mocked(api.config.applied).mockResolvedValue(
+      fixture<Applied>({ time: '2026-10-09T11:00:00Z', by: {}, outside: true }),
+    )
     const wrapper = await as('admin')
     expect(wrapper.text()).toContain('Changed outside Ostiole on')
     expect(wrapper.text()).not.toContain('In force since')

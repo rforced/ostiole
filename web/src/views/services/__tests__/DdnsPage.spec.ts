@@ -3,7 +3,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, type Role, type Session } from '@/lib/api'
-import type { Config, DNSProvider } from '@/lib/model.gen'
+import type { Config, DNSProvider, DdnsResponse } from '@/lib/types.gen'
+import { fixture } from '@/test/fixtures'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import DdnsPage from '@/views/services/DdnsPage.vue'
@@ -60,7 +61,7 @@ function config() {
   } as Config
 }
 
-const STATUS = {
+const STATUS = fixture<DdnsResponse>({
   kinds: KINDS,
   records: [
     {
@@ -81,7 +82,7 @@ const STATUS = {
       error: 'Cloudflare refused the token for example.com (10000 Authentication error)',
     },
   ],
-}
+})
 
 async function page(role: Role = 'admin', draft = config()) {
   useAuthStore().user = { username: role, role } as Session

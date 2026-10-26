@@ -83,6 +83,20 @@ type blockingLimitsInfo struct {
 	BytesPerName int `json:"bytesPerName"`
 }
 
+// blocklistRefreshReply is what a one-list refresh reports.
+type blocklistRefreshReply struct {
+	List    string `json:"list"`
+	Domains int    `json:"domains"`
+}
+
+// blocklistImportReply is what an import reports.
+type blocklistImportReply struct {
+	Domains int              `json:"domains"`
+	Format  model.ListFormat `json:"format"`
+	List    string           `json:"list"`
+	Skipped int              `json:"skipped"`
+}
+
 func (a *api) blockingStatus(w http.ResponseWriter, r *http.Request) error {
 	st := a.blockingState()
 	if !a.operator(r) {
@@ -201,7 +215,7 @@ func (a *api) refreshBlocklist(w http.ResponseWriter, r *http.Request) error {
 		slog.Warn("could not refresh a blocklist", "list", name, "err", err)
 		return &upstream{fmt.Errorf("refresh %s: %w", name, err)}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"list": name, "domains": count})
+	writeJSON(w, http.StatusOK, blocklistRefreshReply{List: name, Domains: count})
 	return nil
 }
 
@@ -264,6 +278,6 @@ func (a *api) importBlocklist(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	a.record(r, audit.BlocklistImport, name, "")
-	writeJSON(w, http.StatusOK, map[string]any{"list": name, "domains": count, "format": format, "skipped": skipped})
+	writeJSON(w, http.StatusOK, blocklistImportReply{List: name, Domains: count, Format: format, Skipped: skipped})
 	return nil
 }

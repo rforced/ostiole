@@ -6,6 +6,7 @@ import ErrorLine from '@/components/ErrorLine.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
+import type { Disabled, Unused } from '@/lib/types.gen'
 import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
@@ -372,16 +373,8 @@ const DELETES = {
 
 const deletion = (it) => DELETES[it.kind]?.(it.id, config.draft ?? {}) || null
 
-interface Item {
-  kind: string
-  id: string
-  name: string
-  path: string
-  why?: string
-  takes?: string[]
-}
-const unused = ref<Item[]>([])
-const disabled = ref<Item[]>([])
+const unused = ref<Unused[]>([])
+const disabled = ref<Disabled[]>([])
 /** Bumped by every edit, so an answer about an older draft is dropped. */
 let edits = 0
 /** The draft has changed since the lists were read: from the edit until its answer lands. */
@@ -390,10 +383,7 @@ const behind = ref(false)
 const load = useAsync(
   async () => {
     const seen = edits
-    const out = (await api.config.unused(config.draft)) as {
-      unused?: Item[]
-      disabled?: Item[]
-    } | null
+    const out = await api.config.unused(config.draft)
     if (seen !== edits) return
     unused.value = out?.unused ?? []
     disabled.value = out?.disabled ?? []

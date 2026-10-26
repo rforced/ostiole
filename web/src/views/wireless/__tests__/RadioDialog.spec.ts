@@ -2,10 +2,9 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { Radio } from '@/lib/model.gen'
+import type { Radio, WirelessCard } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import { configOf, fixture } from '@/test/fixtures'
-import type { Card } from '@/views/wireless/card'
 import RadioDialog from '@/views/wireless/RadioDialog.vue'
 
 // The dialog itself teleports; the form inside it is what is under test.
@@ -16,7 +15,7 @@ const stubs = {
   },
 }
 
-function open(radio: Radio, card: Card | null = null) {
+function open(radio: Radio, card: WirelessCard | null = null) {
   const config = useConfigStore()
   const cfg = configOf({
     version: 12,
@@ -65,7 +64,7 @@ describe('RadioDialog', () => {
   })
 
   it('shows a channel the card does not offer until another is picked', async () => {
-    const card = fixture<Card>({
+    const card = fixture<WirelessCard>({
       bands: {
         '2g': {
           channels: [

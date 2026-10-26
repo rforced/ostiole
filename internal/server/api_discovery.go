@@ -78,6 +78,10 @@ func (a *api) discoveryLogStream(w http.ResponseWriter, r *http.Request) error {
 	return streamEvents(a, w, r, ch, func(e discoverylog.Event) any { return e }, nil)
 }
 
+type discoveryAnnouncementsReply struct {
+	Announcements []discovery.Announcement `json:"announcements"`
+}
+
 // discoveryAnnouncements lists what the relay has heard announced.
 func (a *api) discoveryAnnouncements(w http.ResponseWriter, _ *http.Request) error {
 	if a.discovery == nil {
@@ -87,7 +91,7 @@ func (a *api) discoveryAnnouncements(w http.ResponseWriter, _ *http.Request) err
 	if list == nil {
 		list = []discovery.Announcement{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"announcements": list})
+	writeJSON(w, http.StatusOK, discoveryAnnouncementsReply{Announcements: list})
 	return nil
 }
 

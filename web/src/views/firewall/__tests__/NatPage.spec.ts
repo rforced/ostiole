@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, type Session } from '@/lib/api'
-import type { Config, OutboundMode, OutboundRule } from '@/lib/model.gen'
+import type { Config, OutboundMode, OutboundRule } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import NatPage from '@/views/firewall/NatPage.vue'

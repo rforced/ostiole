@@ -142,13 +142,22 @@ func orEmpty(s []string) []string {
 	return s
 }
 
+// tailscaleLoginRequest carries the auth key, when there is one.
+type tailscaleLoginRequest struct {
+	AuthKey string `json:"authKey"`
+}
+
+// tailscaleLoginReply says whether a browser is needed to finish the login.
+type tailscaleLoginReply struct {
+	AuthURL string `json:"authUrl"`
+	State   string `json:"state"`
+}
+
 // tailscaleLogin starts a login and answers as soon as it knows whether a
 // browser is needed. The auth key, when there is one, is read from the body
 // so it never reaches a URL or the request log.
 func (a *api) tailscaleLogin(w http.ResponseWriter, r *http.Request) error {
-	var body struct {
-		AuthKey string `json:"authKey"`
-	}
+	var body tailscaleLoginRequest
 	if err := decodeJSON(r, &body); err != nil {
 		return err
 	}
@@ -186,7 +195,7 @@ func (a *api) tailscaleLogin(w http.ResponseWriter, r *http.Request) error {
 			slog.Warn("tailscale preferences after login", "err", err)
 		}
 	}()
-	writeJSON(w, http.StatusOK, map[string]string{"authUrl": url, "state": a.tsState(r.Context())})
+	writeJSON(w, http.StatusOK, tailscaleLoginReply{AuthURL: url, State: a.tsState(r.Context())})
 	return nil
 }
 

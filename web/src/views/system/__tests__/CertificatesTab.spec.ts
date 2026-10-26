@@ -2,7 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { ProxySite } from '@/lib/model.gen'
+import type { CertificateResponse, ProxySite } from '@/lib/types.gen'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -29,14 +29,14 @@ const AppDialogStub = {
   template: '<div v-if="open"><slot /><slot name="footer" /></div>',
 }
 
-const builtIn = {
+const builtIn = fixture<CertificateResponse>({
   names: ['fw.lan'],
   hosts: ['fw.lan', '10.0.0.1'],
   issuer: 'ostiole',
   notAfter: '2036-01-01T00:00:00Z',
   fingerprint: 'AA:BB',
   selfSigned: true,
-}
+})
 
 function draft() {
   return configOf({

@@ -2,12 +2,7 @@
 import type { PropType } from 'vue'
 import { computed } from 'vue'
 
-interface Change {
-  path: string
-  kind: string
-  before?: unknown
-  after?: unknown
-}
+import type { Change } from '@/lib/types.gen'
 
 const props = defineProps({
   changes: { type: Array as PropType<Change[]>, default: () => [] },

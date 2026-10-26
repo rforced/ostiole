@@ -131,6 +131,10 @@ func (a *api) gatewayStream(w http.ResponseWriter, r *http.Request) error {
 	return streamEvents(a, w, r, ch, func(p gateway.Probe) any { return p }, nil)
 }
 
+type gatewayEventsPage struct {
+	logPage[gateway.Event]
+}
+
 // gatewayEvents serves a page of the gateways' events, newest first,
 // searched, one gateway's when it is named.
 func (a *api) gatewayEvents(w http.ResponseWriter, r *http.Request) error {
@@ -150,7 +154,7 @@ func (a *api) gatewayEvents(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	held, oldest := a.gatewayHistory.Events.Held()
-	writeJSON(w, http.StatusOK, newLogPage(page, page.Entries, held, oldest))
+	writeJSON(w, http.StatusOK, gatewayEventsPage{newLogPage(page, page.Entries, held, oldest)})
 	return nil
 }
 

@@ -34,6 +34,12 @@ func (a *api) cronStatus(w http.ResponseWriter, _ *http.Request) error {
 	return nil
 }
 
+// cronRunReply says which job ran, and why it failed when it did.
+type cronRunReply struct {
+	ID    string `json:"id"`
+	Error string `json:"error,omitempty"`
+}
+
 func (a *api) runCron(w http.ResponseWriter, r *http.Request) error {
 	if a.crons == nil {
 		return &unavailable{errors.New("nothing is running scheduled crons on this router")}
@@ -52,10 +58,10 @@ func (a *api) runCron(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		// The result is recorded either way, so the page shows what
 		// happened rather than only that it failed.
-		writeJSON(w, http.StatusOK, map[string]any{"id": id, "error": err.Error()})
+		writeJSON(w, http.StatusOK, cronRunReply{ID: id, Error: err.Error()})
 		return nil
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": id})
+	writeJSON(w, http.StatusOK, cronRunReply{ID: id})
 	return nil
 }
 

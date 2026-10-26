@@ -4,7 +4,7 @@ import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
-import type { Schedule } from '@/lib/model.gen'
+import type { Schedule } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']

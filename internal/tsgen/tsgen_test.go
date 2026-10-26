@@ -2,6 +2,7 @@ package tsgen
 
 import (
 	"flag"
+	"io/fs"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -11,25 +12,42 @@ import (
 	"time"
 
 	"ostiole/internal/model"
+	"ostiole/internal/server"
 )
 
-var update = flag.Bool("update", false, "rewrite web/src/lib/model.gen.ts")
+var update = flag.Bool("update", false, "rewrite web/src/lib/types.gen.ts")
 
-const goldenPath = "../../web/src/lib/model.gen.ts"
+const goldenPath = "../../web/src/lib/types.gen.ts"
 
-func modelRoots(t *testing.T) (Result, error) {
+// apiRoots generates the config model and every API reply and request body,
+// reading string enums from any package under internal/.
+func apiRoots(t *testing.T) (Result, error) {
 	t.Helper()
-	dir, err := filepath.Abs("../model")
+	root, err := filepath.Abs("..")
 	if err != nil {
 		t.Fatal(err)
 	}
-	return Generate([]reflect.Type{reflect.TypeFor[model.Config]()}, map[string]string{
-		reflect.TypeFor[model.Config]().PkgPath(): dir,
+	dirs := map[string]string{}
+	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || !d.IsDir() {
+			return err
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		dirs["ostiole/internal/"+filepath.ToSlash(rel)] = path
+		return nil
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dirs["ostiole/internal"] = root
+	return Generate(append([]reflect.Type{reflect.TypeFor[model.Config]()}, server.APITypes()...), dirs)
 }
 
-func TestModelGolden(t *testing.T) {
-	res, err := modelRoots(t)
+func TestTypesGolden(t *testing.T) {
+	res, err := apiRoots(t)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +61,7 @@ func TestModelGolden(t *testing.T) {
 		t.Fatalf("missing %s (run: go test ./internal/tsgen -update): %v", goldenPath, err)
 	}
 	if string(want) != string(res.Source) {
-		t.Errorf("web/src/lib/model.gen.ts is stale: run `go test ./internal/tsgen -update` and commit it")
+		t.Errorf("web/src/lib/types.gen.ts is stale: run `go test ./internal/tsgen -update` and commit it")
 	}
 }
 
@@ -166,7 +184,7 @@ func TestMapping(t *testing.T) {
 		"  any: unknown\n",
 		"  nest: ((Inner | null)[] | null)[] | null\n",
 		"  count: string\n",
-		"  fixed: string[]\n",
+		"  fixed: [string, string]\n",
 		"  'a-b': string\n",
 		"  NoTag: number\n",
 		"  vals: Record<string, Inner | null> | null\n",
@@ -195,6 +213,61 @@ func TestEmbeddedPointerIsOptional(t *testing.T) {
 	}
 	if !strings.Contains(string(res.Source), "  n?: number\n") {
 		t.Errorf("got\n%s", res.Source)
+	}
+}
+
+type original struct {
+	A string `json:"a"`
+}
+
+type redefined original
+
+type Record struct {
+	N int `json:"n"`
+}
+
+type retagged struct {
+	A string `json:"b"`
+}
+
+func TestRedefinedStructIsAnAlias(t *testing.T) {
+	res, err := Generate([]reflect.Type{
+		reflect.TypeFor[original](), reflect.TypeFor[redefined](), reflect.TypeFor[retagged](),
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(res.Source)
+	if !strings.Contains(out, "export type Redefined = Original\n") || !strings.Contains(out, "export interface Retagged {") {
+		t.Errorf("got\n%s", out)
+	}
+}
+
+func TestArrayIsATuple(t *testing.T) {
+	type W struct {
+		P [3]float64 `json:"p"`
+	}
+	res, err := Generate([]reflect.Type{reflect.TypeFor[W]()}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(res.Source), "  p: [number, number, number]\n") {
+		t.Errorf("got\n%s", res.Source)
+	}
+}
+
+func TestGlobalNamesArePrefixed(t *testing.T) {
+	type W struct {
+		R Record            `json:"r"`
+		M map[string]string `json:"m"`
+	}
+	res, err := Generate([]reflect.Type{reflect.TypeFor[W]()}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(res.Source)
+	if !strings.Contains(out, "export interface TsgenRecord {") || !strings.Contains(out, "  r: TsgenRecord\n") {
+		t.Errorf("got\n%s", out)
 	}
 }
 

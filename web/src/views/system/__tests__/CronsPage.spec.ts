@@ -5,14 +5,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import CronsPage from '@/views/system/CronsPage.vue'
-import { sessionOf } from '@/test/fixtures'
+import { configOf, sessionOf } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   ApiError: class extends Error {},
   api: { config: { get: vi.fn() }, crons: { list: vi.fn(), run: vi.fn() } },
 }))
 
-const config = {
+const config = configOf({
   version: 11,
   zones: [],
   interfaces: [],
@@ -29,7 +29,7 @@ const config = {
       devices: [{ id: 'wol-nas', interface: 'eth1', mac: 'aa:bb:cc:00:00:01', description: 'NAS' }],
     },
   },
-}
+})
 
 async function open(role) {
   useAuthStore().user = sessionOf({ username: role, role })

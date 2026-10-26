@@ -125,6 +125,11 @@ func (a *api) clearables() []clearable {
 	return out
 }
 
+// clearedReply says a Clear took.
+type clearedReply struct {
+	Cleared bool `json:"cleared"`
+}
+
 // clearOne empties the log kept under name, and deletes its files.
 func (a *api) clearOne(name string) func(http.ResponseWriter, *http.Request) error {
 	return func(w http.ResponseWriter, r *http.Request) error {
@@ -137,7 +142,7 @@ func (a *api) clearOne(name string) func(http.ResponseWriter, *http.Request) err
 			if err != nil {
 				return errFilesStay(err)
 			}
-			writeJSON(w, http.StatusOK, map[string]any{"cleared": true})
+			writeJSON(w, http.StatusOK, clearedReply{Cleared: true})
 			return nil
 		}
 		return &unavailable{fmt.Errorf("the %s is not kept by this daemon", logFileNames[name])}
@@ -160,7 +165,7 @@ func (a *api) logsClear(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("every log is empty, but the files of the %s could not be deleted: %w",
 			strings.Join(names, ", "), errors.Join(errs...))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"cleared": true})
+	writeJSON(w, http.StatusOK, clearedReply{Cleared: true})
 	return nil
 }
 

@@ -16,10 +16,9 @@ import { useSearch } from '@/lib/search'
 import { byAddress, byText, byTime, useSort } from '@/lib/sort'
 import { useWake, wakeInterfaces } from '@/lib/wol'
 import { useAuthStore } from '@/stores/auth'
-import type { StaticLease } from '@/lib/model.gen'
+import type { Lease, StaticLease } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import StaticLeaseDialog from '@/views/services/dhcp/StaticLeaseDialog.vue'
-import type { Lease } from '@/views/services/types'
 
 /** How often Live reads the leases again. */
 const LIVE_MS = 2000
@@ -69,7 +68,7 @@ function makeStatic(l: Lease) {
 
 const load = useAsync(
   async () => {
-    leases.value = (await api.services.leases()) as Lease[]
+    leases.value = await api.services.leases()
   },
   // Live owns the poll, and starts on.
   { interval: LIVE_MS, immediate: true },

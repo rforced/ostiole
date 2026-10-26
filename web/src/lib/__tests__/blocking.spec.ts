@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { coversName, exceptionToggles, isDomainName, protectedNames } from '@/lib/blocking'
-import type { Blocking, Config, ProxyAccess } from '@/lib/model.gen'
+import type { Blocking, Config, ProxyAccess } from '@/lib/types.gen'
 import { configOf, type DeepPartial } from '@/test/fixtures'
 
 /** The router TestNeverBlockedCoversTheExpandedNames describes in Go. */

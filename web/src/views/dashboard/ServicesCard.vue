@@ -4,7 +4,7 @@ import type { PropType } from 'vue'
 import SectionCard from '@/components/SectionCard.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { formatCount } from '@/lib/format'
-import type { ServiceState } from '@/views/dashboard/overview'
+import type { ServiceState } from '@/lib/types.gen'
 
 defineProps({
   /** Unit states from GET /overview. */

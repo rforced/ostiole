@@ -2,6 +2,8 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import type { ShapingStatus } from '@/lib/types.gen'
+import { fixture } from '@/test/fixtures'
 import LiveTab from '@/views/traffic/shaping/LiveTab.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -13,8 +15,8 @@ vi.mock('@/lib/api', () => ({
 enableAutoUnmount(afterEach)
 
 /** One line's upload, `bytes` sent by `seconds` into the minute. */
-function sample(seconds, bytes) {
-  return {
+function sample(seconds: number, bytes: number) {
+  return fixture<ShapingStatus>({
     available: true,
     sampledAt: new Date(Date.UTC(2026, 8, 30, 12, 0, seconds)).toISOString(),
     interfaces: [
@@ -24,7 +26,7 @@ function sample(seconds, bytes) {
         upload: { rate: 20_000_000, installed: true, stats: { bytes, tins: [] } },
       },
     ],
-  }
+  })
 }
 
 describe('Shaping LiveTab', () => {

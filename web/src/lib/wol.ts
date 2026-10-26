@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
 import { segmentInterfaces } from '@/lib/interfaces'
-import type { Config } from '@/lib/model.gen'
+import type { Config } from '@/lib/types.gen'
 import { useToastStore } from '@/stores/toast'
 
 /**

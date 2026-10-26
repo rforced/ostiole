@@ -3,10 +3,11 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import type { NotifyStatus } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import NotificationsPage from '@/views/system/NotificationsPage.vue'
-import { configOf, sessionOf } from '@/test/fixtures'
+import { configOf, fixture, sessionOf } from '@/test/fixtures'
 
 vi.mock('@/lib/api', () => ({
   api: { notifications: { status: vi.fn(), test: vi.fn() } },
@@ -40,7 +41,9 @@ describe('NotificationsPage', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
-    vi.mocked(api.notifications.status).mockResolvedValue({ targets: {}, recent: [] })
+    vi.mocked(api.notifications.status).mockResolvedValue(
+      fixture<NotifyStatus>({ targets: {}, recent: [] }),
+    )
   })
 
   it('writes mail settings into the draft and takes them out again', async () => {
@@ -90,17 +93,19 @@ describe('NotificationsPage', () => {
   })
 
   it('lists what went out and where', async () => {
-    vi.mocked(api.notifications.status).mockResolvedValue({
-      targets: { email: { lastTried: '2026-09-24T13:04:00Z', lastSent: '2026-09-24T13:04:00Z' } },
-      recent: [
-        {
-          time: '2026-09-24T13:04:00Z',
-          events: [{ kind: 'gateway-down', level: 'ok', title: 'Gateway wan is down' }],
-          sent: ['email'],
-          failed: { webhook: 'refused' },
-        },
-      ],
-    })
+    vi.mocked(api.notifications.status).mockResolvedValue(
+      fixture<NotifyStatus>({
+        targets: { email: { lastTried: '2026-09-24T13:04:00Z', lastSent: '2026-09-24T13:04:00Z' } },
+        recent: [
+          {
+            time: '2026-09-24T13:04:00Z',
+            events: [{ kind: 'gateway-down', level: 'ok', title: 'Gateway wan is down' }],
+            sent: ['email'],
+            failed: { webhook: 'refused' },
+          },
+        ],
+      }),
+    )
     const { wrapper } = await open({ enabled: true })
     const text = wrapper.text()
     expect(text).toContain('Resolved: Gateway wan is down')

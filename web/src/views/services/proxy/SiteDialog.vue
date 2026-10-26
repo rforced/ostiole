@@ -7,7 +7,7 @@ import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { joinList, keptOrder, parseList } from '@/lib/lists'
-import type { ProxySite } from '@/lib/model.gen'
+import type { ProxySite } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import AllowFromAliases, { splitAllowFrom } from '@/views/services/proxy/AllowFromAliases.vue'
 

@@ -1,13 +1,7 @@
+import type { WirelessRow } from '@/lib/types.gen'
+
 /** One event of the wireless log; network is the one the interface serves. */
-export interface WirelessEvent {
-  seq: number
-  time: string
-  event: string
-  interface: string
-  mac: string
-  network?: string
-  device?: string
-}
+export type WirelessEvent = WirelessRow
 
 /**
  * The values a wireless log row shows, as it shows them: what the router

@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { Config, Interface, Shaping } from '@/lib/model.gen'
+import type { Config, Interface, Shaping } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import BandwidthDialog from '@/views/traffic/shaping/BandwidthDialog.vue'
 import { configOf, fixture } from '@/test/fixtures'

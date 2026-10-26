@@ -3,6 +3,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import type { Token } from '@/lib/types.gen'
+import { fixture } from '@/test/fixtures'
 import TokensSection from '@/views/system/TokensSection.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -16,14 +18,19 @@ const stubs = {
 
 async function mounted() {
   vi.mocked(api.tokens.list).mockResolvedValue([
-    {
+    fixture<Token>({
       id: 'tk1',
       name: 'grafite',
       role: 'viewer',
       owner: 'marlow',
       createdAt: '2026-10-01T00:00:00Z',
-    },
-    { id: 'tk2', name: 'nightly', role: 'operator', createdAt: '2026-10-02T00:00:00Z' },
+    }),
+    fixture<Token>({
+      id: 'tk2',
+      name: 'nightly',
+      role: 'operator',
+      createdAt: '2026-10-02T00:00:00Z',
+    }),
   ])
   const wrapper = mount(TokensSection, { global: { stubs } })
   await flushPromises()

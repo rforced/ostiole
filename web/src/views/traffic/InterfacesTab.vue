@@ -11,7 +11,7 @@ import { useAsync } from '@/lib/async'
 import { formatBytes } from '@/lib/format'
 import { WINDOWS, appendPoint, sinceLine, useTrafficStream } from '@/lib/traffic'
 import { useConfigStore } from '@/stores/config'
-import type { Link, Links, TrafficEvent } from '@/views/traffic/types'
+import type { TrafficEvent, TrafficLink } from '@/lib/types.gen'
 
 /** How often a day's or a month's charts are read again while Live is on. */
 const REREAD_MS = 60_000
@@ -19,7 +19,7 @@ const REREAD_MS = 60_000
 const win = ref('5m')
 const live = ref(true)
 /** The links over the window, null before the first read. */
-const links = ref<Link[] | null>(null)
+const links = ref<TrafficLink[] | null>(null)
 /** The router's clock at the window's end, in seconds. */
 const end = ref(0)
 /** Rates that arrived while Live was off, oldest first. */
@@ -27,7 +27,7 @@ let held: TrafficEvent[] = []
 
 const read = useAsync(async () => {
   const w = win.value
-  const r = (await api.traffic.interfaces(w)) as Links
+  const r = await api.traffic.interfaces(w)
   if (w !== win.value) return
   links.value = r.links
   end.value = Date.parse(r.now) / 1000

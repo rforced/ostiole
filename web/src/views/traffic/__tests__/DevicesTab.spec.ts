@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
-import type { System, Traffic } from '@/lib/model.gen'
+import type { System, Traffic, TrafficDevice } from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -20,7 +20,7 @@ class FakeSource {
 }
 
 const NOW = '2026-09-27T12:00:00Z'
-const devices = [
+const devices = fixture<TrafficDevice[]>([
   {
     id: 'a8:bb:cc:00:00:05',
     mac: 'a8:bb:cc:00:00:05',
@@ -51,7 +51,7 @@ const devices = [
     totals: { down: 5000, up: 6000 },
     lastSeen: NOW,
   },
-]
+])
 
 async function open({
   role = 'admin',

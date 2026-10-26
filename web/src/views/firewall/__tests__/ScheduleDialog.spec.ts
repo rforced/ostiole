@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { Config, Schedule } from '@/lib/model.gen'
+import type { Config, Schedule } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 import ScheduleDialog from '@/views/firewall/ScheduleDialog.vue'
 

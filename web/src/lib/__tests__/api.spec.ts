@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, UNAUTHORIZED_EVENT, api } from '@/lib/api'
+import type { AssertionResponse, AttestationResponse } from '@/lib/types.gen'
+import { configOf, fixture } from '@/test/fixtures'
 
 function mockFetch(
   status: number,
@@ -43,7 +45,7 @@ describe('api', () => {
 
   it('throws ApiError with server message and issues', async () => {
     mockFetch(422, { error: 'invalid configuration', issues: [{ path: 'zones', message: 'bad' }] })
-    const err = await rejection(api.config.check({}))
+    const err = await rejection(api.config.check(configOf({})))
     expect(err).toBeInstanceOf(ApiError)
     expect(err.status).toBe(422)
     expect(err.message).toBe('invalid configuration')
@@ -62,7 +64,7 @@ describe('api', () => {
       error: 'the configuration changed since this draft was read',
       code: 'stale',
     })
-    const err = await rejection(api.config.apply({ version: 3 }, 'ab12', 60))
+    const err = await rejection(api.config.apply(configOf({ version: 3 }), 'ab12', 60))
     expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
       config: { version: 3 },
       confirmTimeoutSeconds: 60,
@@ -75,7 +77,7 @@ describe('api', () => {
 
   it('sends the tag the status repeats while the apply awaits confirmation', async () => {
     const fetch = mockFetch(200, { pending: true, deadline: '2026-10-19T23:13:27Z' })
-    await api.config.apply({ version: 3 }, 'ab12', 60, 'apply-x1')
+    await api.config.apply(configOf({ version: 3 }), 'ab12', 60, 'apply-x1')
     expect(JSON.parse(fetch.mock.calls[0][1].body).tag).toBe('apply-x1')
   })
 
@@ -103,7 +105,9 @@ describe('api', () => {
     window.addEventListener(UNAUTHORIZED_EVENT, handler)
     await expect(api.auth.loginTOTP('tok', '000000')).rejects.toMatchObject({ status: 401 })
     await expect(api.auth.passkeyLoginOptions('tok')).rejects.toMatchObject({ status: 401 })
-    await expect(api.auth.loginPasskey('tok', {})).rejects.toMatchObject({ status: 401 })
+    await expect(
+      api.auth.loginPasskey('tok', fixture<AssertionResponse>({})),
+    ).rejects.toMatchObject({ status: 401 })
     await expect(api.auth.mfaClear('wrong')).rejects.toMatchObject({ status: 401 })
     expect(handler).not.toHaveBeenCalled()
     await expect(api.auth.mfa()).rejects.toMatchObject({ status: 401 })
@@ -128,7 +132,7 @@ describe('api', () => {
         { pending: 'tok' },
       ],
       [
-        () => api.auth.loginPasskey('tok', { id: 'c' }),
+        () => api.auth.loginPasskey('tok', fixture<AssertionResponse>({ id: 'c' })),
         'POST',
         '/auth/login/passkey',
         { pending: 'tok', credential: { id: 'c' } },
@@ -144,7 +148,7 @@ describe('api', () => {
         { password: 'pw' },
       ],
       [
-        () => api.auth.addPasskey('Laptop', { id: 'c' }),
+        () => api.auth.addPasskey('Laptop', fixture<AttestationResponse>({ id: 'c' })),
         'POST',
         '/auth/mfa/passkeys',
         { name: 'Laptop', credential: { id: 'c' } },

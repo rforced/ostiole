@@ -7,7 +7,7 @@ import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useDraftRows } from '@/lib/draft'
-import type { OutboundMode } from '@/lib/model.gen'
+import type { OutboundMode } from '@/lib/types.gen'
 import { tierBadge, tierLabel } from '@/lib/tiers'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -52,7 +52,7 @@ const unusedRules = computed(() =>
  * too, because a draft that does not validate keeps the rows of the last
  * one that did, which may have been in another mode.
  */
-const { rows: automatic } = useDraftRows((draft) => api.systemNat(draft))
+const { rows: automatic } = useDraftRows(() => api.systemNat(config.draft))
 const isPeerRow = (s) => (s.keys ?? []).some((k) => k.startsWith('nat_postrouting/peer-nat:'))
 const shownAutomatic = computed(() =>
   mode.value === 'automatic' || mode.value === 'hybrid'

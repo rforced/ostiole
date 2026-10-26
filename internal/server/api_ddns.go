@@ -57,8 +57,13 @@ func (a *api) ddnsUpdate(w http.ResponseWriter, r *http.Request) error {
 	case err != nil:
 		return err
 	}
-	writeJSON(w, http.StatusAccepted, map[string]string{"id": r.PathValue("id")})
+	writeJSON(w, http.StatusAccepted, idReply{ID: r.PathValue("id")})
 	return nil
+}
+
+// idReply names the record or certificate a background pass was started for.
+type idReply struct {
+	ID string `json:"id"`
 }
 
 type ddnsCheckRequest struct {

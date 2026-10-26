@@ -13,6 +13,7 @@ import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { useSearch } from '@/lib/search'
 import { byAddress, byText, useSort } from '@/lib/sort'
+import type { Neighbour } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 const COLUMNS: SortColumn[] = [
@@ -27,21 +28,12 @@ const COLUMNS: SortColumn[] = [
 const LIVE_MS = 2000
 
 const config = useConfigStore()
-interface Neighbour {
-  address: string
-  mac?: string
-  interface: string
-  family: string
-  state: string
-  router?: boolean
-}
-
 const rows = ref<Neighbour[]>([])
 const live = ref(true)
 
 const load = useAsync(
   async () => {
-    rows.value = (await api.diagnostics.neighbours()) as Neighbour[]
+    rows.value = await api.diagnostics.neighbours()
   },
   // Live owns the poll, and starts on.
   { interval: LIVE_MS, immediate: true },

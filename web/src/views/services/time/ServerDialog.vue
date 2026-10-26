@@ -6,7 +6,7 @@ import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
-import type { NTPServer } from '@/lib/model.gen'
+import type { NTPServer } from '@/lib/types.gen'
 
 const props = defineProps({
   /** The server being edited; null adds one. */

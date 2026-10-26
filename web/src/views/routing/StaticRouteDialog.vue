@@ -7,7 +7,7 @@ import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { newId } from '@/lib/ids'
 import { interfaceLabel } from '@/lib/interfaces'
-import type { StaticRoute } from '@/lib/model.gen'
+import type { StaticRoute } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({

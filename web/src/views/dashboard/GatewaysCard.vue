@@ -5,7 +5,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import { tone } from '@/lib/badge'
 import { neverHint, stateOf } from '@/lib/gateways'
 import GatewayStrip from '@/views/dashboard/GatewayStrip.vue'
-import type { DetectedGateway, GatewayStatus, GatewayStripData } from '@/views/dashboard/overview'
+import type { Detected, GatewayStatus, GatewayStrip as StripData } from '@/lib/types.gen'
 
 const props = defineProps({
   /** Gateway health from GET /overview. */
@@ -15,9 +15,9 @@ const props = defineProps({
    * traffic without anyone checking they still answer, which is worth
    * seeing next to the ones that are watched.
    */
-  unwatched: { type: Array as PropType<DetectedGateway[]>, default: () => [] },
+  unwatched: { type: Array as PropType<Detected[]>, default: () => [] },
   /** Each gateway's last day, from GET /gateways/strips; null until read, empty where none is kept. */
-  strips: { type: Array as PropType<GatewayStripData[] | null>, default: null },
+  strips: { type: Array as PropType<StripData[] | null>, default: null },
   /** False until the first overview arrives. */
   loaded: { type: Boolean, default: true },
   /** How many rows to hold room for until then. */

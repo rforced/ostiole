@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
-import type { Config } from '@/lib/model.gen'
+import type { Config } from '@/lib/types.gen'
 import type { ServiceName } from '@/lib/servicesStatus'
 import { useConfigStore } from '@/stores/config'
 import ServicesStatus from '@/views/services/ServicesStatus.vue'

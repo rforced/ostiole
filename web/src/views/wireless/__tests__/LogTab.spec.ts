@@ -3,11 +3,18 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
-import type { LogLevel } from '@/lib/model.gen'
+import type {
+  LogLevel,
+  LogLimitsInfo,
+  LogfileStatus,
+  Stats,
+  WirelessLogPage,
+  WirelessRow,
+} from '@/lib/types.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
-import { configOf, sessionOf } from '@/test/fixtures'
+import { configOf, fixture, sessionOf } from '@/test/fixtures'
 import LogTab from '@/views/wireless/LogTab.vue'
 
 vi.mock('@/lib/api', () => ({
@@ -27,17 +34,19 @@ class FakeSource {
 const clearButton = (w) => w.findAll('button').find((b) => b.text() === 'Clear')
 
 async function tab(
-  list: object[],
+  list: WirelessRow[],
   { level = 'info', radio = true }: { level?: LogLevel; radio?: boolean } = {},
 ) {
-  vi.mocked(api.wireless.log).mockResolvedValue({
-    entries: list,
-    held: list.length,
-    kept: level === 'info',
-  })
-  vi.mocked(api.systemStats).mockResolvedValue({ memTotal: 8_000_000_000 })
-  vi.mocked(api.logFiles).mockResolvedValue({ enabled: false, logs: [] })
-  vi.mocked(api.logLimits).mockResolvedValue({ memTotal: 0, ceilings: {} })
+  vi.mocked(api.wireless.log).mockResolvedValue(
+    fixture<WirelessLogPage>({
+      entries: list,
+      held: list.length,
+      kept: level === 'info',
+    }),
+  )
+  vi.mocked(api.systemStats).mockResolvedValue(fixture<Stats>({ memTotal: 8_000_000_000 }))
+  vi.mocked(api.logFiles).mockResolvedValue(fixture<LogfileStatus>({ enabled: false, logs: [] }))
+  vi.mocked(api.logLimits).mockResolvedValue(fixture<LogLimitsInfo>({ memTotal: 0, ceilings: {} }))
   const store = useConfigStore()
   const draft = configOf({
     version: 11,
@@ -118,7 +127,9 @@ describe('Wireless log', () => {
         mac: '12:34:56:78:9a:bc',
       },
     ])
-    vi.mocked(api.wireless.log).mockResolvedValue({ entries: [], held: 0, kept: true })
+    vi.mocked(api.wireless.log).mockResolvedValue(
+      fixture<WirelessLogPage>({ entries: [], held: 0, kept: true }),
+    )
     await clearButton(wrapper).trigger('click')
     await flushPromises()
     expect(ask).toHaveBeenCalledWith(

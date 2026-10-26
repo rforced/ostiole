@@ -2,15 +2,18 @@ import { computed, ref } from 'vue'
 
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import type { NtpSource, NtpStatus } from '@/lib/types.gen'
+
+export type { NtpSource }
 
 /** How often the time service is asked what it is doing while its page is shown. */
 const POLL_MS = 10000
 
 /** One read, shared by the page header and the cards under it. */
-const status = ref(null)
+const status = ref<NtpStatus | null>(null)
 /** When the read last landed, as useAsync keeps it. */
 const updatedAt = ref(0)
-let inflight = null
+let inflight: Promise<void> | null = null
 
 /** Fetches once however many callers ask while it is in the air. */
 function fetchStatus() {
@@ -60,20 +63,11 @@ const RANK = [
   'unusable',
 ]
 
-/** One source chronyd reports, as the server sends it. */
-export interface NtpSource {
-  name: string
-  state: string
-  lastSeconds: number
-  offsetSeconds: number
-  nts?: string
-}
-
 /**
  * The live sources that came from one configured server, best first: one
  * for a server, up to four for a pool. Names compare as DNS compares them.
  */
-export function sourcesFor(host: string, sources?: NtpSource[]) {
+export function sourcesFor(host: string, sources?: NtpSource[] | null) {
   const name = host.toLowerCase()
   return (sources ?? [])
     .filter((s) => s.name.toLowerCase() === name)

@@ -4,7 +4,7 @@ import type { PropType } from 'vue'
 import RandomMacBadge from '@/components/RandomMacBadge.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { formatCount, formatDuration } from '@/lib/format'
-import type { Lease } from '@/views/dashboard/overview'
+import type { Lease } from '@/lib/types.gen'
 
 defineProps({
   /** The leases handed out or renewed last, newest first. */

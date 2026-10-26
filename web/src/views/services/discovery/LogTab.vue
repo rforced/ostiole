@@ -12,9 +12,9 @@ import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { discoveryActive, discoveryValues } from '@/lib/discovery'
 import { formatWhen } from '@/lib/format'
-import { heldLine, useLog, type LogPage } from '@/lib/log'
+import { heldLine, useLog } from '@/lib/log'
+import type { DiscoveryEvent } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
-import type { DiscoveryEvent } from '@/views/services/types'
 
 const config = useConfigStore()
 
@@ -26,8 +26,7 @@ const retention = computed({
 
 const card = ref(null)
 const log = useLog<DiscoveryEvent>({
-  read: async (params, signal) =>
-    (await api.services.discoveryLog(params, signal)) as LogPage<DiscoveryEvent>,
+  read: (params, signal) => api.services.discoveryLog(params, signal),
   stream: '/api/v1/discovery/log/stream',
   values: discoveryValues,
   top: card,

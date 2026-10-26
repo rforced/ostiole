@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 import type { Session } from '@/lib/api'
 import { LAND_MS } from '@/lib/log'
-import type { Config } from '@/lib/model.gen'
+import type { Config, GatewayEvent, GatewayEventsPage } from '@/lib/types.gen'
+import { fixture } from '@/test/fixtures'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -24,18 +25,16 @@ class FakeSource {
   close() {}
 }
 
-const EVENTS = [
+const EVENTS: GatewayEvent[] = [
   { seq: 3, time: '2026-10-08T14:10:00Z', gateway: 'gw_eth0', kind: 'up', for: 240 },
   { seq: 2, time: '2026-10-08T14:06:00Z', gateway: 'gw_eth0', kind: 'down', error: 'timeout' },
   { seq: 1, time: '2026-10-08T14:01:00Z', gateway: 'lte', family: 'IPv6', kind: 'family-never' },
 ]
 
 async function card(files = false) {
-  vi.mocked(api.gatewayHistory.events).mockResolvedValue({
-    entries: EVENTS,
-    held: 3,
-    oldest: EVENTS[2].time,
-  })
+  vi.mocked(api.gatewayHistory.events).mockResolvedValue(
+    fixture<GatewayEventsPage>({ entries: EVENTS, held: 3, oldest: EVENTS[2].time }),
+  )
   const store = useConfigStore()
   const draft = { version: 12, system: { logging: { files: { enabled: files } } } } as Config
   store.draft = draft

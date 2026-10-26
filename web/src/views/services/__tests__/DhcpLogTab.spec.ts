@@ -3,7 +3,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, type Session } from '@/lib/api'
-import type { Config } from '@/lib/model.gen'
+import type { Config, DhcpLogPage, LogfileStatus, LogLimitsInfo, Stats } from '@/lib/types.gen'
+import { fixture } from '@/test/fixtures'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -26,14 +27,12 @@ class FakeSource {
 const clearButton = (w) => w.findAll('button').find((b) => b.text() === 'Clear')
 
 async function tab(list, { level = 'info', dhcp = true } = {}) {
-  vi.mocked(api.services.dhcpLog).mockResolvedValue({
-    entries: list,
-    held: list.length,
-    kept: level === 'info',
-  })
-  vi.mocked(api.systemStats).mockResolvedValue({ memTotal: 8_000_000_000 })
-  vi.mocked(api.logFiles).mockResolvedValue({ enabled: false, logs: [] })
-  vi.mocked(api.logLimits).mockResolvedValue({ memTotal: 0, ceilings: {} })
+  vi.mocked(api.services.dhcpLog).mockResolvedValue(
+    fixture<DhcpLogPage>({ entries: list, held: list.length, kept: level === 'info' }),
+  )
+  vi.mocked(api.systemStats).mockResolvedValue(fixture<Stats>({ memTotal: 8_000_000_000 }))
+  vi.mocked(api.logFiles).mockResolvedValue(fixture<LogfileStatus>({ enabled: false, logs: [] }))
+  vi.mocked(api.logLimits).mockResolvedValue(fixture<LogLimitsInfo>({ memTotal: 0, ceilings: {} }))
   const store = useConfigStore()
   const draft = {
     version: 11,
@@ -111,7 +110,9 @@ describe('DHCP log', () => {
     const { wrapper } = await tab([
       { seq: 1, time: '2026-09-28T14:02:00Z', message: 'ACK', interface: 'eth1' },
     ])
-    vi.mocked(api.services.dhcpLog).mockResolvedValue({ entries: [], held: 0, kept: true })
+    vi.mocked(api.services.dhcpLog).mockResolvedValue(
+      fixture<DhcpLogPage>({ entries: [], held: 0, kept: true }),
+    )
     await clearButton(wrapper).trigger('click')
     await flushPromises()
     expect(ask).toHaveBeenCalledWith(

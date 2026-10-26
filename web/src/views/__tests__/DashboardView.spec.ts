@@ -3,6 +3,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
+import type { Stats, TrafficLink, UpdateStatusReply } from '@/lib/types.gen'
+import { fixture } from '@/test/fixtures'
 import DashboardView from '@/views/DashboardView.vue'
 import { DEFAULT_ORDER, LAYOUT_KEY } from '@/views/dashboard/layout'
 import LayoutDialog from '@/views/dashboard/LayoutDialog.vue'
@@ -73,13 +75,13 @@ describe('DashboardView', () => {
       tableLoaded: true,
       network: 'networkd',
     })
-    vi.mocked(api.systemStats).mockResolvedValue(stats)
-    vi.mocked(api.update.status).mockResolvedValue({})
+    vi.mocked(api.systemStats).mockResolvedValue(fixture<Stats>(stats))
+    vi.mocked(api.update.status).mockResolvedValue(fixture<UpdateStatusReply>({}))
     vi.mocked(api.overview).mockReturnValue(new Promise((resolve) => (answer = resolve)))
     vi.mocked(api.traffic.interfaces).mockResolvedValue({
       window: '5m',
       now: new Date().toISOString(),
-      links: [{ name: 'eth0', down: 8000, up: 4000, points: [] }],
+      links: [fixture<TrafficLink>({ name: 'eth0', down: 8000, up: 4000, points: [] })],
     })
     vi.stubGlobal('EventSource', FakeSource)
   })
@@ -217,7 +219,7 @@ describe('DashboardView', () => {
     charts({
       window: '5m',
       now: new Date().toISOString(),
-      links: [{ name: 'eth0', down: 8000, up: 4000, points: [] }],
+      links: [fixture<TrafficLink>({ name: 'eth0', down: 8000, up: 4000, points: [] })],
     })
     await flushPromises()
 

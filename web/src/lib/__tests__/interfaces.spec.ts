@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { facesInternet } from '@/lib/interfaces'
-import type { Config } from '@/lib/model.gen'
+import type { Config } from '@/lib/types.gen'
 
 import cases from './faces-internet.json'
 

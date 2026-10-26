@@ -7,9 +7,8 @@ import FormField from '@/components/FormField.vue'
 import { api } from '@/lib/api'
 import { overrideKey, overrideName } from '@/lib/hosts'
 import { parseList } from '@/lib/lists'
-import type { HostOverride } from '@/lib/model.gen'
+import type { HostOverride, Lease } from '@/lib/types.gen'
 import { useConfigStore } from '@/stores/config'
-import type { Lease } from '@/views/services/types'
 
 const props = defineProps({
   /** The override being edited, or null for a new one. */
@@ -35,7 +34,7 @@ watch(open, async (on) => {
   }
   leases.value = []
   try {
-    leases.value = (await api.services.leases()) as Lease[]
+    leases.value = await api.services.leases()
   } catch {
     // Without them the dialog only loses the warning below.
   }

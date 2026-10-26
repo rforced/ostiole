@@ -4,7 +4,7 @@ import type { PropType } from 'vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { actionTone } from '@/lib/badge'
 import { formatBytes, formatCount } from '@/lib/format'
-import type { RuleCounter } from '@/views/dashboard/overview'
+import type { RuleCounter } from '@/lib/types.gen'
 
 defineProps({
   /** Busiest configured rules from GET /overview. */

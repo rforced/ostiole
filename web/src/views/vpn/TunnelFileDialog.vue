@@ -9,7 +9,7 @@ import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
-import type { Interface, WireGuardPeer, Zone } from '@/lib/model.gen'
+import type { Interface, WireGuardPeer, Zone } from '@/lib/types.gen'
 import { parseQuick, peerName, takesDefaultRoute } from '@/lib/wgconf'
 import { useConfigStore } from '@/stores/config'
 
