@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Plus } from '@lucide/vue'
 import { computed, ref } from 'vue'
 
@@ -7,6 +7,8 @@ import RandomMacBadge from '@/components/RandomMacBadge.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
+import type { SortColumn } from '@/components/sortTypes'
+import type { DHCPService, DHCPServer, StaticLease } from '@/lib/model.gen'
 import { byAddress, byText, useSort } from '@/lib/sort'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -15,15 +17,15 @@ import StaticLeaseDialog from '@/views/services/dhcp/StaticLeaseDialog.vue'
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const dhcp = computed(() => config.ensureServices().dhcp)
+const dhcp = computed<DHCPService>(() => config.ensureServices().dhcp)
 /** Interfaces that are switched off. A pool on one of them hands out nothing. */
 const off = computed(() => new Set(config.interfaces.filter((i) => !i.enabled).map((i) => i.name)))
-const serverEditing = ref(null)
+const serverEditing = ref<DHCPServer | null>(null)
 const serverOpen = ref(false)
-const leaseEditing = ref(null)
+const leaseEditing = ref<StaticLease | null>(null)
 const leaseOpen = ref(false)
 
-const LEASE_COLUMNS = [
+const LEASE_COLUMNS: SortColumn[] = [
   ['mac', 'MAC'],
   ['ip', 'IPv4'],
   ['ipv6', 'IPv6'],
@@ -45,7 +47,7 @@ function addServer() {
   serverEditing.value = null
   serverOpen.value = true
 }
-function editServer(s) {
+function editServer(s: DHCPServer) {
   serverEditing.value = s
   serverOpen.value = true
 }
@@ -53,7 +55,7 @@ function addLease() {
   leaseEditing.value = null
   leaseOpen.value = true
 }
-function editLease(l) {
+function editLease(l: StaticLease) {
   leaseEditing.value = l
   leaseOpen.value = true
 }

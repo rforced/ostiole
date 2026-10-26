@@ -1,14 +1,16 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import { parseList } from '@/lib/lists'
+import type { DomainOverride } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
   /** The override being edited, or null for a new one. */
-  override: { type: Object, default: null },
+  override: { type: Object as PropType<DomainOverride | null>, default: null },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
@@ -30,7 +32,10 @@ const title = computed(() =>
 )
 
 function save() {
-  const out = { domain: form.value.domain.trim(), servers: parseList(form.value.servers) }
+  const out: DomainOverride = {
+    domain: form.value.domain.trim(),
+    servers: parseList(form.value.servers),
+  }
   if (form.value.description) out.description = form.value.description
   config.upsertDomainOverride(out, props.override?.domain ?? out.domain)
   open.value = false

@@ -1,6 +1,7 @@
-<script setup>
+<script setup lang="ts">
 import { Check, Copy, Trash2 } from '@lucide/vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import ActionButton from '@/components/ActionButton.vue'
 import AppDialog from '@/components/AppDialog.vue'
@@ -10,14 +11,36 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
 import { parseList } from '@/lib/lists'
+import type { Interface, NetMap, WireGuardPeer } from '@/lib/model.gen'
 import { encode, svgPath } from '@/lib/qr'
 import { deviceAddresses, deviceFile, endpoint, isPublic, networkOf, nextFree } from '@/lib/wgconf'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 
+interface PeerForm {
+  name: string
+  description: string
+  enabled: boolean
+  publicKey: string
+  presharedKey: string
+  allowedIps: string
+  endpoint: string
+  keepalive: number
+  masquerade: boolean
+  theirs: NetMap[]
+  ours: NetMap[]
+}
+
+interface Device {
+  name: string
+  privateKey: string
+  addresses: string[]
+  presharedKey?: string
+}
+
 const props = defineProps({
-  tunnel: { type: Object, default: null },
-  peer: { type: Object, default: null },
+  tunnel: { type: Object as PropType<Interface | null>, default: null },
+  peer: { type: Object as PropType<WireGuardPeer | null>, default: null },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
@@ -29,7 +52,7 @@ const current = computed(() =>
   props.peer ? props.tunnel : (config.tunnels.find((t) => t.name === chosen.value) ?? props.tunnel),
 )
 const confirm = useConfirmStore()
-const form = ref(blank())
+const form = ref<PeerForm>(blank())
 const error = ref('')
 const showKey = ref(false)
 /** 'make' has the router make the device's keys; 'paste' takes its public key. */
@@ -40,13 +63,13 @@ const busy = ref(false)
  * it holds. The private key lives here until the dialog closes and is in
  * no request and no draft.
  */
-const device = ref(null)
+const device = ref<Device | null>(null)
 const deviceForm = ref({ host: '', route: 'networks', keepalive: 0 })
-const candidates = ref([])
+const candidates = ref<string[]>([])
 /** Whether the keepalive was typed, after which it no longer follows the endpoint. */
 const keepaliveTyped = ref(false)
 
-function blank() {
+function blank(): PeerForm {
   return {
     name: '',
     description: '',
@@ -63,10 +86,10 @@ function blank() {
 }
 
 /** A peer's maps as rows to edit, apart from the peer itself. */
-const rows = (maps) => (maps ?? []).map((m) => ({ network: m.network, as: m.as }))
+const rows = (maps?: NetMap[] | null) => (maps ?? []).map((m) => ({ network: m.network, as: m.as }))
 
 /** The rows filled in, as the model takes them. */
-const maps = (list) =>
+const maps = (list: NetMap[]) =>
   list.map((m) => ({ network: m.network.trim(), as: m.as.trim() })).filter((m) => m.network && m.as)
 
 watch(
@@ -132,7 +155,7 @@ function suggestAddresses() {
 }
 
 /** The next free address in each family a tunnel has. */
-function suggestFor(t) {
+function suggestFor(t: Interface | null) {
   const taken = (t?.wireguard?.peers ?? []).flatMap((p) => p.allowedIps ?? [])
   return [t?.ipv4?.address, t?.ipv6?.address]
     .filter(Boolean)
@@ -141,7 +164,7 @@ function suggestFor(t) {
 }
 
 /** The addresses the device holds out of the ones listed for it. */
-function ownAddresses(allowed) {
+function ownAddresses(allowed: string[]) {
   const t = current.value
   return deviceAddresses(allowed, [t?.ipv4?.address, t?.ipv6?.address].filter(Boolean))
 }
@@ -169,7 +192,7 @@ async function generatePSK() {
   )
     return
   try {
-    const res = await api.wireguard.psk()
+    const res = (await api.wireguard.psk()) as { presharedKey: string }
     form.value.presharedKey = res.presharedKey
     error.value = ''
   } catch (e) {
@@ -179,7 +202,7 @@ async function generatePSK() {
 
 function peerOut() {
   const f = form.value
-  const out = {
+  const out: WireGuardPeer = {
     name: f.name.trim(),
     enabled: f.enabled,
     publicKey: f.publicKey.trim(),
@@ -202,7 +225,10 @@ function peerOut() {
  * preshared key go into the peer; the private key only into the file.
  */
 async function makeKeys() {
-  const [pair, psk] = await Promise.all([api.wireguard.keys(), api.wireguard.psk()])
+  const [pair, psk] = (await Promise.all([api.wireguard.keys(), api.wireguard.psk()])) as [
+    { privateKey: string; publicKey: string },
+    { presharedKey: string },
+  ]
   return { privateKey: pair.privateKey, publicKey: pair.publicKey, presharedKey: psk.presharedKey }
 }
 
@@ -254,7 +280,7 @@ async function remake() {
   }
 }
 
-function showDevice(peer, privateKey) {
+function showDevice(peer: WireGuardPeer, privateKey: string) {
   device.value = {
     name: peer.name,
     privateKey,
@@ -271,15 +297,18 @@ function showDevice(peer, privateKey) {
  * empty, and the field takes anything typed.
  */
 async function loadCandidates() {
-  const names = []
-  const addresses = []
+  const names: string[] = []
+  const addresses: string[] = []
   const [ddns, overview] = await Promise.allSettled([api.ddns.status(), api.overview()])
   if (ddns.status === 'fulfilled') {
-    for (const r of ddns.value.records ?? [])
+    for (const r of (ddns.value as { records?: { name: string }[] }).records ?? [])
       if (r.name && !names.includes(r.name)) names.push(r.name)
   }
   if (overview.status === 'fulfilled') {
-    for (const link of overview.value.interfaces ?? []) {
+    const links = (
+      overview.value as { interfaces?: { external?: boolean; addresses?: string[] }[] }
+    ).interfaces
+    for (const link of links ?? []) {
       if (!link.external) continue
       for (const a of link.addresses ?? []) {
         const addr = a.split('/')[0]
@@ -296,7 +325,7 @@ const external = computed(() => new Set(config.zones.filter((z) => z.external).m
 
 /** This router's inside networks and the tunnel's own. */
 const routerNetworks = computed(() => {
-  const out = []
+  const out: string[] = []
   for (const i of config.interfaces) {
     const inside =
       i.name === current.value?.name || (i.enabled && i.zone && !external.value.has(i.zone))

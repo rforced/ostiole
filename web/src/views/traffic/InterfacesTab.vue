@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
@@ -11,6 +11,7 @@ import { useAsync } from '@/lib/async'
 import { formatBytes } from '@/lib/format'
 import { WINDOWS, appendPoint, sinceLine, useTrafficStream } from '@/lib/traffic'
 import { useConfigStore } from '@/stores/config'
+import type { Link, Links, TrafficEvent } from '@/views/traffic/types'
 
 /** How often a day's or a month's charts are read again while Live is on. */
 const REREAD_MS = 60_000
@@ -18,15 +19,15 @@ const REREAD_MS = 60_000
 const win = ref('5m')
 const live = ref(true)
 /** The links over the window, null before the first read. */
-const links = ref(null)
+const links = ref<Link[] | null>(null)
 /** The router's clock at the window's end, in seconds. */
 const end = ref(0)
 /** Rates that arrived while Live was off, oldest first. */
-let held = []
+let held: TrafficEvent[] = []
 
 const read = useAsync(async () => {
   const w = win.value
-  const r = await api.traffic.interfaces(w)
+  const r = (await api.traffic.interfaces(w)) as Links
   if (w !== win.value) return
   links.value = r.links
   end.value = Date.parse(r.now) / 1000
@@ -36,9 +37,9 @@ onMounted(read.run)
 watch(win, () => read.run())
 
 /** A second of every link: its rate now, and over five minutes a point. */
-function take(ev) {
+function take(ev: TrafficEvent) {
   const t = Date.parse(ev.time) / 1000
-  for (const r of ev.links) {
+  for (const r of ev.links ?? []) {
     const l = links.value?.find((x) => x.name === r.id)
     if (!l) continue
     l.down = r.down
@@ -48,7 +49,7 @@ function take(ev) {
   if (win.value === '5m') end.value = t
 }
 
-const stream = useTrafficStream({
+const stream = useTrafficStream<TrafficEvent>({
   links: (ev) => {
     if (live.value) take(ev)
     else held = [...held, ev].slice(-300)
@@ -68,11 +69,11 @@ watch(live, (on) => {
 // again each minute draws both.
 let timer = 0
 onMounted(() => {
-  timer = setInterval(() => {
+  timer = window.setInterval(() => {
     if (live.value && win.value !== '5m' && document.visibilityState !== 'hidden') read.run()
   }, REREAD_MS)
 })
-onBeforeUnmount(() => clearInterval(timer))
+onBeforeUnmount(() => window.clearInterval(timer))
 
 /** Empties what every link moved, its errors and files included, and reads again. */
 const clear = useAsync(async () => {

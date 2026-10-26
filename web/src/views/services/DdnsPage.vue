@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Plus } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 
@@ -11,10 +11,12 @@ import StatusBadge from '@/components/StatusBadge.vue'
 import { api } from '@/lib/api'
 import { errorMessage, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
+import type { DDNSRecord } from '@/lib/model.gen'
 import { providerFor } from '@/lib/providers'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import RecordDialog from '@/views/services/ddns/RecordDialog.vue'
+import type { DdnsKind, DdnsStatus } from '@/views/services/types'
 
 /** How often the status is read while a record is waiting on its provider. */
 const BUSY_POLL_MS = 2000
@@ -22,11 +24,11 @@ const BUSY_POLL_MS = 2000
 const auth = useAuthStore()
 const config = useConfigStore()
 
-const page = ref({ records: [], kinds: [] })
+const page = ref<{ records: DdnsStatus[]; kinds: DdnsKind[] }>({ records: [], kinds: [] })
 const actionError = ref('')
 const load = useAsync(
   async () => {
-    page.value = await api.ddns.status()
+    page.value = (await api.ddns.status()) as { records: DdnsStatus[]; kinds: DdnsKind[] }
   },
   { immediate: true },
 )
@@ -34,7 +36,7 @@ const error = computed(() => actionError.value || load.error.value)
 
 /** Each applied record's types, by record id. */
 const status = computed(() => {
-  const out = {}
+  const out: Record<string, DdnsStatus[]> = {}
   for (const st of page.value.records ?? []) (out[st.id] ??= []).push(st)
   return out
 })
@@ -56,10 +58,10 @@ const canKeep = computed(() =>
 const kindNames = computed(() => (page.value.kinds ?? []).map((k) => k.label).join(', '))
 
 /** What a record's state says, where its name is not a word. */
-const LABELS = { 'no-address': 'no address' }
+const LABELS: Record<string, string> = { 'no-address': 'no address' }
 
 /** A row's Address lines, one per record type, from the applied record's status. */
-function lines(r) {
+function lines(r: DDNSRecord) {
   const known = status.value[r.id]
   // A type no longer kept is listed while taking it back fails.
   const removing = (known ?? []).filter((s) => s.state === 'failed').map((s) => s.type)
@@ -77,7 +79,7 @@ function lines(r) {
 }
 
 /** When the router last changed any of the record's types at the provider. */
-function changed(r) {
+function changed(r: DDNSRecord) {
   const at = (status.value[r.id] ?? [])
     .map((s) => s.changedAt)
     .filter(Boolean)
@@ -86,9 +88,9 @@ function changed(r) {
   return formatWhen(at, 'never')
 }
 
-const updating = (r) => (status.value[r.id] ?? []).some((s) => s.state === 'updating')
+const updating = (r: DDNSRecord) => (status.value[r.id] ?? []).some((s) => s.state === 'updating')
 
-async function updateNow(r) {
+async function updateNow(r: DDNSRecord) {
   actionError.value = ''
   try {
     await api.ddns.update(r.id)
@@ -103,7 +105,7 @@ async function updateNow(r) {
  * id. Its kind is left out where the provider is named for it.
  */
 const providers = computed(() => {
-  const out = {}
+  const out: Record<string, { id: string; kind: string }> = {}
   for (const r of config.ddnsRecords) {
     const p = providerFor(config.dnsProviders, r.name)?.provider
     if (!p) continue
@@ -114,19 +116,19 @@ const providers = computed(() => {
 })
 
 /** The provider's own name, for what a delete leaves behind. */
-function where(r) {
+function where(r: DDNSRecord) {
   const p = providerFor(config.dnsProviders, r.name)?.provider
   return (page.value.kinds ?? []).find((k) => k.kind === p?.kind)?.label ?? 'the provider'
 }
 
 const open = ref(false)
 /** The record the dialog edits; null adds one. */
-const editing = ref(null)
+const editing = ref<DDNSRecord | null>(null)
 function add() {
   editing.value = null
   open.value = true
 }
-function edit(r) {
+function edit(r: DDNSRecord) {
   editing.value = r
   open.value = true
 }

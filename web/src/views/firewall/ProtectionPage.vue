@@ -1,10 +1,11 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import type { RateLimit } from '@/lib/model.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
@@ -25,6 +26,8 @@ const UNITS = [
   { value: 'hour', label: 'per hour' },
 ]
 
+type Defence = 'synFlood' | 'icmpFlood' | 'portScan'
+
 /** What each defence starts at when it is switched on. */
 const DEFAULTS = {
   synFlood: { rate: 30, unit: 'second', burst: 60, perSource: true },
@@ -41,11 +44,11 @@ const external = computed(() => config.zones.filter((z) => z.external).map((z) =
 const chosen = computed(() => protection.value.zones ?? [])
 const defended = computed(() => (chosen.value.length ? chosen.value : external.value))
 
-function toggleDefence(which, on) {
+function toggleDefence(which: Defence, on: boolean | string | number) {
   config.setDefence(which, on ? DEFAULTS[which] : null)
 }
 
-function toggleZone(name, box) {
+function toggleZone(name: string, box: HTMLInputElement) {
   const next = new Set(chosen.value.length ? chosen.value : external.value)
   if (box.checked) next.add(name)
   else next.delete(name)
@@ -64,7 +67,7 @@ function toggleZone(name, box) {
  * A number field that keeps the model free of empty strings. A burst of 0
  * is left out, as the model has it.
  */
-function setNumber(which, field, value) {
+function setNumber(which: Defence, field: string, value: string) {
   const n = Number.parseInt(value, 10) || 0
   config.setDefence(which, { [field]: field === 'burst' && !n ? null : n })
 }
@@ -78,16 +81,16 @@ const limited = computed(() => config.rules.filter((r) => r.limit))
  */
 const conntrackMax = computed({
   get: () => config.draft?.system?.conntrackMax || '',
-  set: (v) => {
+  set: (v: number | '') => {
     const system = config.draft?.system
     if (!system) return
-    if (Number.isFinite(v) && v > 0) system.conntrackMax = v
+    if (typeof v === 'number' && Number.isFinite(v) && v > 0) system.conntrackMax = v
     else delete system.conntrackMax
   },
 })
 
 /** How a limit reads in a sentence, the way the ruleset writes it. */
-function rate(limit) {
+function rate(limit: RateLimit | undefined) {
   if (!limit) return ''
   const burst = limit.burst ? ` burst ${limit.burst}` : ''
   return `${limit.rate}/${limit.unit || 'second'}${burst}`
@@ -109,7 +112,7 @@ function rate(limit) {
               type="checkbox"
               class="checkbox"
               :checked="defended.includes(z.name)"
-              @change="toggleZone(z.name, $event.target)"
+              @change="toggleZone(z.name, $event.target as HTMLInputElement)"
             />
             <label :for="`prot-zone-${z.name}`">
               {{ z.name }}
@@ -148,7 +151,7 @@ function rate(limit) {
             type="number"
             min="1"
             :value="protection.synFlood.rate"
-            @input="setNumber('synFlood', 'rate', $event.target.value)"
+            @input="setNumber('synFlood', 'rate', ($event.target as HTMLInputElement).value)"
           />
         </FormField>
         <FormField id="prot-syn-unit" label="Period">
@@ -156,7 +159,9 @@ function rate(limit) {
             id="prot-syn-unit"
             class="input w-48 max-sm:w-full"
             :value="protection.synFlood.unit || 'second'"
-            @change="config.setDefence('synFlood', { unit: $event.target.value })"
+            @change="
+              config.setDefence('synFlood', { unit: ($event.target as HTMLInputElement).value })
+            "
           >
             <option v-for="u in UNITS" :key="u.value" :value="u.value">{{ u.label }}</option>
           </select>
@@ -172,7 +177,7 @@ function rate(limit) {
             type="number"
             min="0"
             :value="protection.synFlood.burst ?? 0"
-            @input="setNumber('synFlood', 'burst', $event.target.value)"
+            @input="setNumber('synFlood', 'burst', ($event.target as HTMLInputElement).value)"
           />
         </FormField>
       </div>
@@ -203,7 +208,7 @@ function rate(limit) {
             type="number"
             min="1"
             :value="protection.icmpFlood.rate"
-            @input="setNumber('icmpFlood', 'rate', $event.target.value)"
+            @input="setNumber('icmpFlood', 'rate', ($event.target as HTMLInputElement).value)"
           />
         </FormField>
         <FormField id="prot-icmp-unit" label="Period">
@@ -211,7 +216,9 @@ function rate(limit) {
             id="prot-icmp-unit"
             class="input w-48 max-sm:w-full"
             :value="protection.icmpFlood.unit || 'second'"
-            @change="config.setDefence('icmpFlood', { unit: $event.target.value })"
+            @change="
+              config.setDefence('icmpFlood', { unit: ($event.target as HTMLInputElement).value })
+            "
           >
             <option v-for="u in UNITS" :key="u.value" :value="u.value">{{ u.label }}</option>
           </select>
@@ -223,7 +230,7 @@ function rate(limit) {
             type="number"
             min="0"
             :value="protection.icmpFlood.burst ?? 0"
-            @input="setNumber('icmpFlood', 'burst', $event.target.value)"
+            @input="setNumber('icmpFlood', 'burst', ($event.target as HTMLInputElement).value)"
           />
         </FormField>
       </div>
@@ -260,7 +267,7 @@ function rate(limit) {
             type="number"
             min="1"
             :value="protection.portScan.rate"
-            @input="setNumber('portScan', 'rate', $event.target.value)"
+            @input="setNumber('portScan', 'rate', ($event.target as HTMLInputElement).value)"
           />
         </FormField>
         <FormField id="prot-scan-unit" label="Period">
@@ -268,7 +275,9 @@ function rate(limit) {
             id="prot-scan-unit"
             class="input w-48 max-sm:w-full"
             :value="protection.portScan.unit || 'minute'"
-            @change="config.setDefence('portScan', { unit: $event.target.value })"
+            @change="
+              config.setDefence('portScan', { unit: ($event.target as HTMLInputElement).value })
+            "
           >
             <option v-for="u in UNITS" :key="u.value" :value="u.value">{{ u.label }}</option>
           </select>
@@ -282,7 +291,9 @@ function rate(limit) {
             id="prot-scan-hold"
             class="input w-32 font-mono max-sm:w-full"
             :value="protection.portScan.hold || '10m'"
-            @change="config.setDefence('portScan', { hold: $event.target.value })"
+            @change="
+              config.setDefence('portScan', { hold: ($event.target as HTMLInputElement).value })
+            "
           />
         </FormField>
       </div>

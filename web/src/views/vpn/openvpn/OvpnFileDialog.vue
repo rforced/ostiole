@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Upload } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 
@@ -7,6 +7,7 @@ import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import ZoneField, { NEW_ZONE } from '@/components/ZoneField.vue'
+import type { Interface, OpenVPN } from '@/lib/model.gen'
 import { nextOvpnName, parseOvpn } from '@/lib/ovpnconf'
 import { useConfigStore } from '@/stores/config'
 
@@ -26,8 +27,8 @@ const monitor = ref('')
 const username = ref('')
 const password = ref('')
 const error = ref('')
-const fileInput = ref(null)
-const zoneField = ref(null)
+const fileInput = ref<HTMLInputElement | null>(null)
+const zoneField = ref<InstanceType<typeof ZoneField> | null>(null)
 
 watch(open, (now) => {
   if (!now) return
@@ -59,18 +60,19 @@ watch(parsed, (p) => {
 })
 
 /** The first letter up, for a line that starts a message. */
-const sentence = (s) => s.charAt(0).toUpperCase() + s.slice(1)
+const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
-async function choose(e) {
-  const f = e.target.files?.[0]
-  e.target.value = ''
+async function choose(e: Event) {
+  const input = e.target as HTMLInputElement
+  const f = input.files?.[0]
+  input.value = ''
   if (!f) return
   text.value = await f.text()
 }
 
 /** The blocks a tunnel is checked and known by, and nothing else. */
-function blocks(t) {
-  const out = {}
+function blocks(t: OpenVPN) {
+  const out: Partial<OpenVPN> = {}
   for (const k of ['caPem', 'certPem', 'keyPem', 'tlsCryptKeyPem', 'tlsAuthKeyPem', 'keyDirection'])
     if (t[k] !== undefined) out[k] = t[k]
   return out
@@ -111,7 +113,7 @@ function save() {
     openvpn.username = username.value.trim()
     if (password.value) openvpn.password = password.value
   }
-  const iface = {
+  const iface: Interface = {
     name: n,
     enabled: true,
     ipv4: { mode: 'none' },

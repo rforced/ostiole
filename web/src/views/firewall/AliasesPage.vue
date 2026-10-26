@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Plus } from '@lucide/vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -11,6 +11,7 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
+import type { SortColumn } from '@/components/sortTypes'
 import UsedByCell from '@/components/UsedByCell.vue'
 import { fetches } from '@/lib/aliases'
 import { api } from '@/lib/api'
@@ -21,21 +22,23 @@ import { formatCount } from '@/lib/format'
 import { byNumber, byText, useSort } from '@/lib/sort'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import type { Alias } from '@/lib/model.gen'
 import AliasDialog from '@/views/firewall/AliasDialog.vue'
+import type { FeedStatus } from '@/views/firewall/feeds'
 
 const auth = useAuthStore()
 const config = useConfigStore()
 const router = useRouter()
-const editing = ref(null)
+const editing = ref<Alias | null>(null)
 const open = ref(false)
-const status = ref([])
+const status = ref<FeedStatus[]>([])
 /** The alias being fetched right now, or 'all'; only its own link says so. */
 const refreshing = ref('')
 
 /** What the router has actually fetched, keyed by alias. */
 const fetched = computed(() => Object.fromEntries(status.value.map((s) => [s.alias, s])))
 
-const COLUMNS = [
+const COLUMNS: SortColumn[] = [
   ['name', 'Alias'],
   ['type', 'Type'],
   ['entries', 'Entries'],
@@ -44,7 +47,7 @@ const COLUMNS = [
 ]
 
 /** A list that is fetched counts what it fetched. */
-const sort = useSort(() => config.aliases, {
+const sort = useSort<Alias>(() => config.aliases, {
   name: byText((a) => a.name),
   type: byText((a) => a.type),
   entries: byNumber((a) => fetched.value[a.name]?.entries ?? a.entries.length),
@@ -58,14 +61,14 @@ const anyFetched = computed(() => config.aliases.some(fetches))
 // A router that cannot say what it fetched just shows nothing against each alias.
 const feeds = useAsync(async () => {
   try {
-    status.value = await api.aliases.feeds()
+    status.value = (await api.aliases.feeds()) as FeedStatus[]
   } catch {
     status.value = []
   }
 })
 onMounted(feeds.run)
 
-const refresh = useAsync(async (name) => {
+const refresh = useAsync(async (name?: string) => {
   refreshing.value = name || 'all'
   try {
     if (name) await api.aliases.refresh(name)
@@ -133,8 +136,10 @@ function show(a) {
   showing.value = a
   showingOpen.value = true
 }
-async function readEntries(q, offset, limit) {
-  const page = await api.aliases.entries(showing.value.name, { q, offset, limit })
+async function readEntries(q: string, offset: number, limit: number) {
+  const page = (await api.aliases.entries(showing.value.name, { q, offset, limit })) as {
+    entries: string[]
+  }
   return { ...page, items: page.entries }
 }
 </script>

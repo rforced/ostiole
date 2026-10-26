@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Check, Copy } from '@lucide/vue'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
@@ -142,7 +142,7 @@ async function copySecret() {
                 autocomplete="off"
                 spellcheck="false"
                 class="input font-mono"
-                @focus="$event.target.select()"
+                @focus="($event.target as HTMLInputElement).select()"
               />
               <button
                 type="button"

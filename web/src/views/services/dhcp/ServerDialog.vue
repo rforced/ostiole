@@ -1,14 +1,18 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
-import { parseList } from '@/lib/lists'
 import { interfaceLabel } from '@/lib/interfaces'
+import { parseList } from '@/lib/lists'
+import type { DHCPServer } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 
-const props = defineProps({ server: { type: Object, default: null } })
+const props = defineProps({
+  server: { type: Object as PropType<DHCPServer | null>, default: null },
+})
 const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
@@ -84,7 +88,7 @@ watch(
 
 function save() {
   const f = form.value
-  const out = {
+  const out: DHCPServer = {
     interface: f.interface,
     enabled: f.enabled,
     rangeStart: f.rangeStart.trim(),

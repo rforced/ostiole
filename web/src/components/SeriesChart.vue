@@ -1,4 +1,5 @@
-<script setup>
+<script setup lang="ts">
+import type { PropType } from 'vue'
 import { computed, onBeforeUnmount, onMounted, ref, useId } from 'vue'
 
 import {
@@ -14,6 +15,8 @@ import {
   timeTicks,
 } from '@/lib/chart'
 
+import type { ChartBar, ChartPoint, ChartScale, ChartSeries } from './chartTypes'
+
 /**
  * Values over a window: lines on one axis, each with an optional low to
  * high band, and bars of a share on a second axis from 0 to 100. The
@@ -24,7 +27,7 @@ import {
  */
 const props = defineProps({
   /** [seconds, ...values], oldest first; null until the first read. */
-  points: { type: Array, default: null },
+  points: { type: Array as PropType<ChartPoint[] | null>, default: null },
   /** A key of SPANS: 5m, 24h or 30d. */
   window: { type: String, default: '5m' },
   /** The right edge in seconds; the last point's time when unset. */
@@ -36,15 +39,18 @@ const props = defineProps({
    * A limit is drawn dashed in the line's colour where the axis reaches it.
    * The axis stretches to one only once its line comes within NEAR of it.
    */
-  series: { type: Array, required: true },
+  series: { type: Array as PropType<ChartSeries[]>, required: true },
   /** The bars: {index, name, color}, a share from 0 to 100. */
-  bars: { type: Array, default: () => [] },
+  bars: { type: Array as PropType<ChartBar[]>, default: () => [] },
   /** How a value on the lines' axis reads. */
-  format: { type: Function, required: true },
+  format: { type: Function as PropType<(v: number) => string>, required: true },
   /** The lines' axis for the highest value shown. */
-  scale: { type: Function, default: (highest) => niceScale(highest) },
+  scale: {
+    type: Function as PropType<(highest: number) => ChartScale>,
+    default: (highest: number) => niceScale(highest),
+  },
   /** Each line's value now, in series order; the last point's when unset. */
-  now: { type: Array, default: null },
+  now: { type: Array as PropType<(number | null)[] | null>, default: null },
   /** Seconds between points beyond which a line breaks; 0 never breaks. */
   gap: { type: Number, default: 0 },
   /** Seconds a bar covers. */
@@ -67,10 +73,10 @@ const NEAR = 0.75
 
 const PAD = computed(() => ({ top: 10, right: props.bars.length ? 48 : 12, bottom: 24, left: 76 }))
 const id = useId()
-const box = ref(null)
-const svg = ref(null)
+const box = ref<HTMLElement | null>(null)
+const svg = ref<SVGSVGElement | null>(null)
 const width = ref(640)
-let observer = null
+let observer: ResizeObserver | null = null
 onMounted(() => {
   if (typeof ResizeObserver === 'undefined' || !box.value) return
   observer = new ResizeObserver(([entry]) => {
@@ -103,13 +109,14 @@ const scale = computed(() => {
 /** The limits the axis reaches, which are the ones drawn. */
 const limits = computed(() => props.series.filter((s) => s.limit > 0 && s.limit <= scale.value.top))
 /** Whether a gridline sits where a limit is drawn, which then takes its place. */
-const underLimit = (v) => limits.value.some((s) => Math.abs(s.limit - v) < scale.value.step / 1e6)
+const underLimit = (v: number) =>
+  limits.value.some((s) => Math.abs(s.limit - v) < scale.value.step / 1e6)
 
 const plotW = computed(() => width.value - PAD.value.left - PAD.value.right)
 const plotH = HEIGHT - 10 - 24
-const x = (t) => PAD.value.left + ((t - startT.value) / span.value) * plotW.value
-const y = (v) => PAD.value.top + plotH - (v / scale.value.top) * plotH
-const yShare = (v) => PAD.value.top + plotH - (v / 100) * plotH
+const x = (t: number) => PAD.value.left + ((t - startT.value) / span.value) * plotW.value
+const y = (v: number) => PAD.value.top + plotH - (v / scale.value.top) * plotH
+const yShare = (v: number) => PAD.value.top + plotH - (v / 100) * plotH
 
 const lines = computed(() =>
   props.series.map((s) => ({
@@ -149,15 +156,15 @@ const last = computed(() => shown.value.at(-1) ?? null)
 const current = computed(
   () => props.now ?? (last.value ? props.series.map((s) => last.value[s.index]) : null),
 )
-const share = (v) => `${Math.round(v)}%`
-const valueOf = (v) => (v == null ? '—' : props.format(v))
+const share = (v: number) => `${Math.round(v)}%`
+const valueOf = (v: number | null | undefined) => (v == null ? '—' : props.format(v))
 
 /** The skeleton's traffic: an area over the zero line, curved through WAVE. */
 const wave = computed(() => {
   const base = PAD.value.top + plotH
   const step = plotW.value / (WAVE.length - 1)
-  const p = WAVE.map((f, i) => [PAD.value.left + i * step, base - f * plotH])
-  const at = ([px, py]) => `${px.toFixed(1)},${py.toFixed(1)}`
+  const p = WAVE.map((f, i): [number, number] => [PAD.value.left + i * step, base - f * plotH])
+  const at = ([px, py]: [number, number]) => `${px.toFixed(1)},${py.toFixed(1)}`
   let d = `M${at([PAD.value.left, base])}L${at(p[0])}`
   for (let i = 1; i < p.length - 1; i++) {
     d += `Q${at(p[i])} ${at([(p[i][0] + p[i + 1][0]) / 2, (p[i][1] + p[i + 1][1]) / 2])}`
@@ -183,14 +190,14 @@ const caption = computed(() => {
 const at = ref(-1)
 const point = computed(() => (at.value >= 0 ? (shown.value[at.value] ?? null) : null))
 
-function pointer(e) {
+function pointer(e: PointerEvent) {
   const rect = svg.value?.getBoundingClientRect()
   if (!rect?.width || !shown.value.length) return
   const px = ((e.clientX - rect.left) / rect.width) * width.value
   at.value = nearest(shown.value, startT.value + ((px - PAD.value.left) / plotW.value) * span.value)
 }
 
-function key(e) {
+function key(e: KeyboardEvent) {
   const n = shown.value.length
   if (!n) return
   const from = at.value < 0 ? n : at.value
@@ -216,7 +223,7 @@ const readoutStyle = computed(() => {
 })
 
 /** A band's low and high at a point, as its readout and its row say them. */
-function range(p, s) {
+function range(p: ChartPoint, s: ChartSeries) {
   if (!s.band || p[s.band[0]] == null || p[s.band[1]] == null) return ''
   if (p[s.band[0]] === p[s.band[1]]) return ''
   return `${props.format(p[s.band[0]])} to ${props.format(p[s.band[1]])}`

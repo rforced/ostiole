@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
 import InterfaceLabel from '@/components/InterfaceLabel.vue'
@@ -56,7 +56,7 @@ function toggleInterface(name, on) {
               type="checkbox"
               class="checkbox"
               :checked="(config.ntp.interfaces ?? []).includes(i.name)"
-              @change="toggleInterface(i.name, $event.target.checked)"
+              @change="toggleInterface(i.name, ($event.target as HTMLInputElement).checked)"
             />
             <InterfaceLabel :iface="i" />
           </label>

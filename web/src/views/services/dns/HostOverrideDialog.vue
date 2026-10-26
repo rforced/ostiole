@@ -1,16 +1,19 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import { api } from '@/lib/api'
 import { overrideKey, overrideName } from '@/lib/hosts'
 import { parseList } from '@/lib/lists'
+import type { HostOverride } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
+import type { Lease } from '@/views/services/types'
 
 const props = defineProps({
   /** The override being edited, or null for a new one. */
-  override: { type: Object, default: null },
+  override: { type: Object as PropType<HostOverride | null>, default: null },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
@@ -19,7 +22,7 @@ const dns = computed(() => config.ensureServices().dns)
 
 const form = ref({ hostname: '', domain: '', ip: '', aliases: '', description: '' })
 /** The DHCP leases, read each time the dialog opens. */
-const leases = ref([])
+const leases = ref<Lease[]>([])
 watch(open, async (on) => {
   if (!on) return
   const h = props.override
@@ -32,7 +35,7 @@ watch(open, async (on) => {
   }
   leases.value = []
   try {
-    leases.value = await api.services.leases()
+    leases.value = (await api.services.leases()) as Lease[]
   } catch {
     // Without them the dialog only loses the warning below.
   }
@@ -82,7 +85,7 @@ const title = computed(() =>
 )
 
 function save() {
-  const out = { hostname: form.value.hostname.trim(), ip: form.value.ip.trim() }
+  const out: HostOverride = { hostname: form.value.hostname.trim(), ip: form.value.ip.trim() }
   const domain = form.value.domain.trim()
   if (domain) out.domain = domain
   const aliases = parseList(form.value.aliases)

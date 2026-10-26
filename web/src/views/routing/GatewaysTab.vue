@@ -1,36 +1,73 @@
-<script setup>
+<script setup lang="ts">
 import { Plus } from '@lucide/vue'
 import { computed, ref } from 'vue'
+import type { PropType } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
-import { emptyText, useAsync } from '@/lib/async'
+import { type AsyncLoad, emptyText, useAsync } from '@/lib/async'
 import { tone } from '@/lib/badge'
 import { neverHint, stateOf } from '@/lib/gateways'
+import type { Gateway, GatewayGroup } from '@/lib/model.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import GatewayDialog from '@/views/routing/GatewayDialog.vue'
 import GatewayGroupDialog from '@/views/routing/GatewayGroupDialog.vue'
 import GatewayHistoryDialog from '@/views/routing/GatewayHistoryDialog.vue'
 
+interface FamilyStatus {
+  family: string
+  online: boolean
+  unknown: boolean
+  latencyMs: number
+  lossPercent: number
+}
+
+interface LiveGateway extends FamilyStatus {
+  name: string
+  address?: string
+  active: boolean
+  neverAnswered?: boolean
+  families?: FamilyStatus[]
+  slow?: unknown[]
+  lossy?: unknown[]
+}
+
+interface PolicyTarget {
+  name: string
+  rules: number
+  nextHops: string[]
+}
+
+interface DetectedRoute {
+  address: string
+  interface: string
+  family: string
+  metric: number
+  protocol: string
+  configured?: string
+  demoted?: boolean
+  suggested?: Gateway
+}
+
 const props = defineProps({
-  live: { type: Array, required: true },
-  policy: { type: Array, required: true },
-  detected: { type: Array, required: true },
-  refresh: { type: Object, required: true },
+  live: { type: Array as PropType<LiveGateway[]>, required: true },
+  policy: { type: Array as PropType<PolicyTarget[]>, required: true },
+  detected: { type: Array as PropType<DetectedRoute[]>, required: true },
+  refresh: { type: Object as PropType<AsyncLoad>, required: true },
 })
 
 const auth = useAuthStore()
 const config = useConfigStore()
 const gwOpen = ref(false)
-const gwEditing = ref(null)
+const gwEditing = ref<Gateway | null>(null)
 const groupOpen = ref(false)
-const groupEditing = ref(null)
+const groupEditing = ref<GatewayGroup | null>(null)
 const historyOpen = ref(false)
-const historyOf = ref(null)
+const historyOf = ref<Gateway | null>(null)
 
 /** Configured gateways merged with what the monitor sees. */
 const gatewayRows = computed(() =>
@@ -62,23 +99,23 @@ const policyRules = computed(() => config.rules.filter((r) => r.gateway))
  * gateway you have just added stops being offered straight away, rather
  * than after you apply.
  */
-function coveredBy(d) {
+function coveredBy(d: DetectedRoute) {
   const g = config.gateways.find((g) => g.enabled && claims(g, d))
   return g?.name ?? ''
 }
 
 /** A disabled gateway that would cover a detected route, which it then names. */
-function disabledFor(d) {
+function disabledFor(d: DetectedRoute) {
   if (coveredBy(d)) return ''
   return config.gateways.find((g) => !g.enabled && claims(g, d))?.name ?? ''
 }
 
-function claims(g, d) {
+function claims(g: Gateway, d: DetectedRoute) {
   return g.interface === d.interface && (!g.address || g.address === d.address)
 }
 
 /** Adds a detected route as a gateway, ready to apply. */
-function adopt(d) {
+function adopt(d: DetectedRoute) {
   config.upsertGateway(d.suggested)
 }
 
@@ -86,7 +123,7 @@ function addGateway() {
   gwEditing.value = null
   gwOpen.value = true
 }
-function editGateway(g) {
+function editGateway(g: Gateway) {
   gwEditing.value = g
   gwOpen.value = true
 }
@@ -94,18 +131,18 @@ function addGroup() {
   groupEditing.value = null
   groupOpen.value = true
 }
-function editGroup(g) {
+function editGroup(g: GatewayGroup) {
   groupEditing.value = g
   groupOpen.value = true
 }
 
 /** The kernel's default route that this gateway is claiming, if any. */
-function detectedFor(g) {
+function detectedFor(g: Gateway) {
   if (!g.enabled) return null
   return props.detected.find((d) => d.configured === g.name || claims(g, d)) ?? null
 }
 
-function showHistory(g) {
+function showHistory(g: Gateway) {
   historyOf.value = g
   historyOpen.value = true
 }
@@ -114,9 +151,10 @@ function showHistory(g) {
 const clearHistory = useAsync(() => api.gatewayHistory.clear())
 
 /** A gateway's figures, a line for each family when it has two. */
-function figureLines(live) {
+function figureLines(live: LiveGateway) {
   const fams = live.families ?? []
-  const line = (f) => `${f.latencyMs.toFixed(1)}ms · ${f.lossPercent.toFixed(0)}% loss`
+  const line = (f: FamilyStatus) =>
+    `${f.latencyMs.toFixed(1)}ms · ${f.lossPercent.toFixed(0)}% loss`
   if (fams.length < 2) return [line(live)]
   return fams.map((f) =>
     f.online || f.unknown ? `${f.family} ${line(f)}` : `${f.family} ${stateOf(f)}`,
@@ -124,8 +162,8 @@ function figureLines(live) {
 }
 
 /** Summarises a group's members as the tiers they fail over through. */
-function tierSummary(group) {
-  const tiers = new Map()
+function tierSummary(group: GatewayGroup) {
+  const tiers = new Map<number, string[]>()
   for (const m of group.members ?? []) {
     const tier = m.tier ?? 0
     tiers.set(tier, [...(tiers.get(tier) ?? []), m.gateway])

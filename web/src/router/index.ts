@@ -1,0 +1,148 @@
+import { createRouter, createWebHistory, type RouteLocation, type RouteRecordRaw } from 'vue-router'
+
+import { NAV, type NavItem, type Tab } from '@/lib/nav'
+import { useAuthStore } from '@/stores/auth'
+import { useSystemStore } from '@/stores/system'
+
+declare module 'vue-router' {
+  interface RouteMeta {
+    title?: string
+    tabs?: Tab[]
+    section?: NavItem
+    ownHeader?: boolean
+    needsConfig?: boolean
+    adminOnly?: boolean
+    public?: boolean
+  }
+}
+
+/** Session-scoped flag so "Skip for now" is honoured until the tab closes. */
+const SKIP_WIZARD_KEY = 'ostiole.skipWizard'
+
+/**
+ * Entry point for an item that has pages: the bare path goes to the first
+ * page, and a link written for the old tab bar (`/firewall#aliases`) goes to
+ * the page that replaced that tab, so bookmarks still land.
+ */
+function sectionEntry(item: NavItem): (to: RouteLocation) => { path: string } {
+  const paths = (item.pages ?? []).map((p) => p.path)
+  return (to) => {
+    const want = to.hash.slice(1)
+    return { path: `${item.to}/${paths.includes(want) ? want : paths[0]}` }
+  }
+}
+
+/** Pages that moved under another item; their old links still land. */
+const MOVED = [
+  { path: '/services/dhcp6', redirect: { path: '/services/dhcp', hash: '#v6' } },
+  { path: '/services/leases', redirect: { path: '/services/dhcp', hash: '#leases' } },
+  { path: '/crons', redirect: '/system/crons' },
+  { path: '/system/backup', redirect: '/system/configuration' },
+  { path: '/system/ruleset', redirect: '/diagnostics/ruleset' },
+  { path: '/firewall/shaping', redirect: '/traffic/shaping' },
+]
+
+/** Tabs that became pages of their own; a link to the old tab still lands. */
+const MOVED_TABS = [
+  { path: '/system/certificates', hash: '#providers', redirect: '/system/dns-providers' },
+]
+
+/**
+ * The route for a sidebar item: the one page it is, or the section layout
+ * with its pages as children. Titles and tabs travel in the route meta so the
+ * layout can head a page and the page can find its tabs without either
+ * repeating the nav tree.
+ */
+function itemRoute(item: NavItem): RouteRecordRaw {
+  const name = item.to === '/' ? 'dashboard' : item.to.slice(1)
+  if (!item.pages) {
+    return { path: item.to, name, component: item.view, meta: { tabs: item.tabs } }
+  }
+  return {
+    path: item.to,
+    component: () => import('@/views/SectionView.vue'),
+    meta: { section: item },
+    children: [
+      { path: '', redirect: sectionEntry(item) },
+      ...item.pages.map((p) => ({
+        path: p.path,
+        name: `${name}-${p.path}`,
+        component: p.view,
+        meta: {
+          title: p.label,
+          tabs: p.tabs,
+          ownHeader: p.ownHeader ?? false,
+          needsConfig: p.needsConfig ?? item.needsConfig ?? false,
+          adminOnly: p.adminOnly ?? false,
+        },
+      })),
+    ],
+  }
+}
+
+const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes: [
+    ...NAV.map(itemRoute),
+    ...MOVED,
+    {
+      path: '/account',
+      name: 'account',
+      component: () => import('@/views/account/AccountPage.vue'),
+      meta: { title: 'Account' },
+    },
+    { path: '/wizard', name: 'wizard', component: () => import('@/views/WizardView.vue') },
+    {
+      path: '/login',
+      name: 'login',
+      component: () => import('@/views/LoginView.vue'),
+      meta: { public: true },
+    },
+    {
+      path: '/setup',
+      name: 'setup',
+      component: () => import('@/views/SetupView.vue'),
+      meta: { public: true },
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: () => import('@/views/NotFoundView.vue'),
+    },
+  ],
+})
+
+router.beforeEach(async (to) => {
+  const moved = MOVED_TABS.find((m) => m.path === to.path && m.hash === to.hash)
+  if (moved) return { path: moved.redirect }
+
+  const auth = useAuthStore()
+  await auth.bootstrap()
+  if (auth.setupNeeded && to.name !== 'setup') return { name: 'setup' }
+  if (!auth.setupNeeded && to.name === 'setup') return { name: 'login' }
+  if (!to.meta.public && !auth.loggedIn) {
+    return { name: 'login', query: to.fullPath === '/' ? {} : { redirect: to.fullPath } }
+  }
+  if (to.name === 'login' && auth.loggedIn) return { name: 'dashboard' }
+
+  if (auth.loggedIn && to.meta.adminOnly && !auth.isAdmin) return { name: 'account' }
+
+  if (auth.loggedIn && !to.meta.public) {
+    const system = useSystemStore()
+
+    // A configured-or-not check sends a fresh install to the wizard once.
+    // A viewer cannot save what the wizard builds, so is never sent there.
+    if (system.status === null) await system.refresh()
+    const unconfigured = system.status !== null && !system.status.configured && !auth.readOnly
+    if (to.name === 'wizard' && !unconfigured) return { name: 'dashboard' }
+    if (unconfigured && to.name !== 'wizard') {
+      if (to.name === 'dashboard' && to.redirectedFrom?.name === 'wizard') {
+        sessionStorage.setItem(SKIP_WIZARD_KEY, '1')
+      }
+      if (!sessionStorage.getItem(SKIP_WIZARD_KEY)) return { name: 'wizard' }
+    }
+  }
+  return true
+})
+
+export default router

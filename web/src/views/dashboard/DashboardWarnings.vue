@@ -1,9 +1,11 @@
-<script setup>
+<script setup lang="ts">
+import type { PropType } from 'vue'
+
 import AppNotice from '@/components/AppNotice.vue'
+import type { Warning } from '@/views/dashboard/overview'
 
 defineProps({
-  /** @type {import('vue').PropType<Array<{kind: string, level: string, title: string, detail?: string}>>} */
-  warnings: { type: Array, default: () => [] },
+  warnings: { type: Array as PropType<Warning[]>, default: () => [] },
   /** False until the first overview arrives. */
   loaded: { type: Boolean, default: true },
   /** How many warnings to hold room for until then. */

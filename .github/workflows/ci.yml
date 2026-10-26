@@ -89,6 +89,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run lint
       - run: bun run format:check
+      - run: bun run typecheck
       # The QR code test reads back what the encoder drew with zbarimg, a
       # decoder written by someone else. TESTENV_REQUIRE fails it rather
       # than skipping it when zbarimg is missing.

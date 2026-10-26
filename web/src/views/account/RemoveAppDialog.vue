@@ -1,4 +1,5 @@
-<script setup>
+<script setup lang="ts">
+import type { PropType } from 'vue'
 import { ref, watch } from 'vue'
 
 import ActionButton from '@/components/ActionButton.vue'
@@ -10,7 +11,7 @@ import { errorMessage } from '@/lib/async'
 
 defineProps({
   /** The names of the passkeys that go with the app. */
-  passkeys: { type: Array, default: () => [] },
+  passkeys: { type: Array as PropType<string[]>, default: () => [] },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 const emit = defineEmits(['done'])

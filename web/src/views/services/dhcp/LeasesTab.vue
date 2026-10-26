@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -8,6 +8,7 @@ import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
+import type { SortColumn } from '@/components/sortTypes'
 import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
@@ -15,13 +16,15 @@ import { useSearch } from '@/lib/search'
 import { byAddress, byText, byTime, useSort } from '@/lib/sort'
 import { useWake, wakeInterfaces } from '@/lib/wol'
 import { useAuthStore } from '@/stores/auth'
+import type { StaticLease } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 import StaticLeaseDialog from '@/views/services/dhcp/StaticLeaseDialog.vue'
+import type { Lease } from '@/views/services/types'
 
 /** How often Live reads the leases again. */
 const LIVE_MS = 2000
 
-const COLUMNS = [
+const COLUMNS: SortColumn[] = [
   ['address', 'Address'],
   ['client', 'Client'],
   ['hostname', 'Hostname'],
@@ -33,11 +36,11 @@ const COLUMNS = [
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const leases = ref([])
+const leases = ref<Lease[]>([])
 const live = ref(true)
 const open = ref(false)
-const editing = ref(null)
-const prefill = ref(null)
+const editing = ref<StaticLease | null>(null)
+const prefill = ref<Partial<StaticLease> | null>(null)
 const waking = useWake()
 
 /**
@@ -52,10 +55,10 @@ const wakeable = computed(
         .map((i) => i.name),
     ),
 )
-const canWake = (l) => Boolean(l.mac && l.family !== 6 && wakeable.value.has(l.interface))
+const canWake = (l: Lease) => Boolean(l.mac && l.family !== 6 && wakeable.value.has(l.interface))
 
 /** Pins a client to the address it has. One already pinned in the draft opens as it is. */
-function makeStatic(l) {
+function makeStatic(l: Lease) {
   const mac = l.mac.toLowerCase()
   editing.value =
     (config.draft?.services?.dhcp?.staticLeases ?? []).find((s) => s.mac.toLowerCase() === mac) ??
@@ -66,7 +69,7 @@ function makeStatic(l) {
 
 const load = useAsync(
   async () => {
-    leases.value = await api.services.leases()
+    leases.value = (await api.services.leases()) as Lease[]
   },
   // Live owns the poll, and starts on.
   { interval: LIVE_MS, immediate: true },
@@ -86,7 +89,7 @@ const { query, shown } = useSearch(leases, (l) => ({
 }))
 
 /** Last renewed, newest first, shows leases as they are handed out. */
-const sort = useSort(
+const sort = useSort<Lease>(
   shown,
   {
     address: byAddress((l) => l.ip),
@@ -102,7 +105,7 @@ const sort = useSort(
 const rows = sort.sorted
 
 /** A time is worth showing for a client that is not there to speak for itself. */
-const seen = (l) => (l.online ? '—' : formatWhen(l.seen))
+const seen = (l: Lease) => (l.online ? '—' : formatWhen(l.seen))
 
 const empty = computed(() =>
   emptyText(load, leases.value.length ? `Nothing matches "${query.value.trim()}".` : 'No leases.'),

@@ -1,11 +1,14 @@
-<script setup>
+<script setup lang="ts">
+import type { PropType } from 'vue'
+
 import RandomMacBadge from '@/components/RandomMacBadge.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { formatCount, formatDuration } from '@/lib/format'
+import type { Lease } from '@/views/dashboard/overview'
 
 defineProps({
   /** The leases handed out or renewed last, newest first. */
-  leases: { type: Array, default: () => [] },
+  leases: { type: Array as PropType<Lease[]>, default: () => [] },
   /** How many leases there are altogether. */
   total: { type: Number, default: 0 },
   /** False until the first overview arrives. */
@@ -15,7 +18,7 @@ defineProps({
 })
 
 /** How long a lease has left, as the dashboard is read. */
-function left(l) {
+function left(l: Lease) {
   if (!l.expires) return 'never'
   const seconds = (new Date(l.expires).getTime() - Date.now()) / 1000
   if (!Number.isFinite(seconds) || seconds <= 0) return 'expired'

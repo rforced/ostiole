@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { LoaderCircle } from '@lucide/vue'
 import { computed, ref } from 'vue'
 
@@ -33,7 +33,7 @@ const expiring = computed(() => {
 })
 
 const login = useAsync(async (key) => {
-  const out = await api.tailscale.login(key)
+  const out = (await api.tailscale.login(key)) as { authUrl?: string }
   authUrl.value = out.authUrl ?? ''
   authKey.value = ''
   await read.run()

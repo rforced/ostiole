@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
@@ -13,10 +13,11 @@ import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { exceptionToggles, sentence } from '@/lib/blocking'
 import { formatCount, formatWhen } from '@/lib/format'
-import { heldLine, keptLine, useLog } from '@/lib/log'
+import { heldLine, keptLine, useLog, type LogPage } from '@/lib/log'
 import { queryValues } from '@/lib/queries'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import type { QueryRow } from '@/views/services/types'
 
 const auth = useAuthStore()
 const config = useConfigStore()
@@ -24,7 +25,7 @@ const dns = computed(() => config.ensureServices().dns)
 
 /** The switch, kept out of the model when off. */
 const queryLog = computed(() => dns.value.queryLog ?? {})
-function setQueryLog(q) {
+function setQueryLog(q: Record<string, unknown>) {
   if (Object.keys(q).length) dns.value.queryLog = q
   else delete dns.value.queryLog
 }
@@ -49,13 +50,21 @@ const retention = computed({
 
 // Below the card everything reads the router, not the draft: the log is
 // what has happened, and a setting that has not been applied has not.
-const summary = ref(null)
-const lists = ref([])
+/** The line above the table. */
+interface QuerySummary {
+  total: number
+  blocked: number
+  clients: number
+  dropped: number
+}
+
+const summary = ref<QuerySummary | null>(null)
+const lists = ref<{ name: string }[]>([])
 const filter = ref({ status: '', list: '', type: '' })
-const why = ref({})
+const why = ref<Record<string, string>>({})
 const card = ref(null)
 
-const log = useLog({
+const log = useLog<QueryRow>({
   // The summary is read with the first page, so the line above the table
   // counts what the table starts from.
   read: async (params, signal) => {
@@ -63,13 +72,13 @@ const log = useLog({
       api.queries.list(params, signal),
       params.before ? null : api.queries.summary(),
     ])
-    if (s) summary.value = s
-    return page
+    if (s) summary.value = s as QuerySummary
+    return page as LogPage<QueryRow>
   },
   stream: '/api/v1/dns/queries/stream',
   filters: () => {
     const f = filter.value
-    const out = {}
+    const out: Record<string, string> = {}
     for (const key of ['status', 'list', 'type']) if (f[key]) out[key] = f[key]
     return out
   },
@@ -94,13 +103,13 @@ const clear = useAsync(async () => {
 /** The lists to offer in the filter, from what the router has applied. */
 const loadLists = useAsync(
   async () => {
-    lists.value = (await api.blocking.status()).lists ?? []
+    lists.value = ((await api.blocking.status()) as { lists?: { name: string }[] }).lists ?? []
   },
   { immediate: true },
 )
 
 /** The exception lists, as their toggles call them. */
-const EXCEPTIONS = { allow: 'Allow', deny: 'Block' }
+const EXCEPTIONS: Record<string, string> = { allow: 'Allow', deny: 'Block' }
 
 /**
  * What each row offers to toggle, from the draft rather than the log. An
@@ -109,7 +118,7 @@ const EXCEPTIONS = { allow: 'Allow', deny: 'Block' }
 const withToggle = computed(() => {
   const toggle = exceptionToggles(config.draft)
   const made = new WeakMap()
-  return (e) => {
+  return (e: QueryRow) => {
     if (!made.has(e)) made.set(e, { ...e, toggle: toggle(e) })
     return made.get(e)
   }
@@ -145,13 +154,13 @@ const empty = computed(() => {
 
 /** Asks the router why a name is blocked, and keeps the sentence. A
  * second click puts it away again. */
-const lookup = useAsync(async (name) => {
+const lookup = useAsync(async (name: string) => {
   why.value = { ...why.value, [name]: 'Looking…' }
   const finding = await api.blocking.lookup(name)
   why.value = { ...why.value, [name]: sentence(finding) }
 })
 
-function explain(name) {
+function explain(name: string) {
   if (why.value[name]) {
     const next = { ...why.value }
     delete next[name]
@@ -305,7 +314,13 @@ function explain(name) {
                       class="checkbox"
                       :checked="e.toggle.on"
                       :aria-label="`${EXCEPTIONS[e.toggle.key]} ${e.name}`"
-                      @change="config.setException(e.name, e.toggle.key, $event.target.checked)"
+                      @change="
+                        config.setException(
+                          e.name,
+                          e.toggle.key,
+                          ($event.target as HTMLInputElement).checked,
+                        )
+                      "
                     />
                     {{ EXCEPTIONS[e.toggle.key] }}
                   </label>

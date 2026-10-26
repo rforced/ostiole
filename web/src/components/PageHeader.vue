@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, inject } from 'vue'
 import { routeLocationKey } from 'vue-router'
 

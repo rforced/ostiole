@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { AlertTriangle } from '@lucide/vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -162,7 +162,9 @@ async function apply() {
     const draft = JSON.parse(JSON.stringify(config.draft))
     const ofDrift = drift.value !== null
     await api.config.check(draft)
-    const res = await applyWithConfirm(draft, config.base, CONFIRM_SECONDS)
+    const res = (await applyWithConfirm(draft, config.base, CONFIRM_SECONDS)) as {
+      deadline: string
+    }
     applied = draft
     driftApplied = ofDrift
     pending.value = { deadline: res.deadline }

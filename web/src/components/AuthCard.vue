@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Shield } from '@lucide/vue'
 
 import ThemeToggle from '@/components/ThemeToggle.vue'

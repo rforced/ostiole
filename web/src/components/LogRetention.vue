@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
@@ -16,6 +16,20 @@ import { useConfigStore } from '@/stores/config'
  * memory. It says what the log costs full, and what every log that is on
  * costs together against what this router has for them.
  */
+interface LogSettings {
+  entries?: number
+}
+interface LogLimits {
+  memTotal: number
+  budget: number
+  peakFactor?: number
+  ceilings?: Record<string, number>
+}
+interface LogFile {
+  name: string
+  bytes: number
+}
+
 const props = defineProps({
   /** A key of LOGS: firewall, queries or events. */
   log: { type: String, required: true },
@@ -25,19 +39,19 @@ const props = defineProps({
   off: { type: Boolean, default: false },
 })
 /** {entries}, an empty field being the default. */
-const settings = defineModel({ type: Object, required: true })
+const settings = defineModel<LogSettings>({ type: Object, required: true })
 
 const auth = useAuthStore()
 const config = useConfigStore()
 const spec = computed(() => LOGS[props.log])
 
 /** Empty means the default, which the placeholder shows. */
-function field(key) {
-  return computed({
+function field(key: keyof LogSettings) {
+  return computed<number | ''>({
     get: () => settings.value[key] || '',
     set: (v) => {
       const next = { ...settings.value }
-      if (Number.isFinite(v) && v > 0) next[key] = v
+      if (typeof v === 'number' && Number.isFinite(v) && v > 0) next[key] = v
       else delete next[key]
       settings.value = next
     },
@@ -47,18 +61,18 @@ const entries = field('entries')
 
 const memory = ref(0)
 const stats = useAsync(async () => {
-  memory.value = (await api.systemStats()).memTotal ?? 0
+  memory.value = ((await api.systemStats()) as { memTotal?: number }).memTotal ?? 0
 })
 /** The budget and ceilings this router's memory sets, null until the daemon says. */
-const limits = ref(null)
+const limits = ref<LogLimits | null>(null)
 const limitsLoad = useAsync(async () => {
-  limits.value = await api.logLimits()
+  limits.value = (await api.logLimits()) as LogLimits
 })
 /** What this log's files hold, while System → General writes them. */
-const inFiles = ref(null)
+const inFiles = ref<LogFile | null>(null)
 const files = useAsync(async () => {
-  const st = await api.logFiles()
-  inFiles.value = st.enabled ? (st.logs ?? []).find((l) => l.name === props.log) : null
+  const st = (await api.logFiles()) as { enabled: boolean; logs?: LogFile[] }
+  inFiles.value = st.enabled ? ((st.logs ?? []).find((l) => l.name === props.log) ?? null) : null
 })
 onMounted(() => {
   stats.run()

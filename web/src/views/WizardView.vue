@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -43,7 +43,7 @@ const canPreview = computed(
 
 onMounted(async () => {
   try {
-    links.value = await api.interfaces.live()
+    links.value = (await api.interfaces.live()) as unknown[]
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
   }

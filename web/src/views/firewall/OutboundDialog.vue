@@ -1,20 +1,35 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { newId } from '@/lib/ids'
 import { joinList, parseList } from '@/lib/lists'
+import type { OutboundRule } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 
-const props = defineProps({ rule: { type: Object, default: null } })
+const props = defineProps({
+  rule: { type: Object as PropType<OutboundRule | null>, default: null },
+})
 const open = defineModel('open', { type: Boolean, default: false })
 
-const config = useConfigStore()
-const form = ref(blank())
+interface OutboundForm {
+  id: string
+  description: string
+  enabled: boolean
+  zone: string
+  source: string
+  destination: string
+  address: string
+  noNat: boolean
+}
 
-function blank() {
+const config = useConfigStore()
+const form = ref<OutboundForm>(blank())
+
+function blank(): OutboundForm {
   const external = config.zones.find((z) => z.external)?.name ?? config.zones[0]?.name ?? ''
   return {
     id: '',
@@ -49,7 +64,7 @@ watch(
 
 function save() {
   const f = form.value
-  const out = { id: f.id || newId('nat'), enabled: f.enabled, zone: f.zone }
+  const out: OutboundRule = { id: f.id || newId('nat'), enabled: f.enabled, zone: f.zone }
   if (f.description) out.description = f.description
   const source = parseList(f.source)
   if (source.length) out.source = source

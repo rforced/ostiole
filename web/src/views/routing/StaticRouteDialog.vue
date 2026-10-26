@@ -1,18 +1,22 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { newId } from '@/lib/ids'
 import { interfaceLabel } from '@/lib/interfaces'
+import type { StaticRoute } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 
-const props = defineProps({ route: { type: Object, default: null } })
+const props = defineProps({
+  route: { type: Object as PropType<StaticRoute | null>, default: null },
+})
 const open = defineModel('open', { type: Boolean, default: false })
 const config = useConfigStore()
 
-function blank() {
+function blank(): StaticRoute {
   return { id: '', description: '', enabled: true, destination: '', gateway: '', interface: '' }
 }
 const form = ref(blank())
@@ -27,7 +31,7 @@ watch(
 
 function save() {
   const f = form.value
-  const out = {
+  const out: StaticRoute = {
     id: f.id || newId('rt'),
     enabled: f.enabled,
     destination: f.destination.trim(),

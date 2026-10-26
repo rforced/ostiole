@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Plus } from '@lucide/vue'
 import { ref } from 'vue'
 

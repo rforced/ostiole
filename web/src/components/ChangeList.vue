@@ -1,8 +1,16 @@
-<script setup>
+<script setup lang="ts">
+import type { PropType } from 'vue'
 import { computed } from 'vue'
 
+interface Change {
+  path: string
+  kind: string
+  before?: unknown
+  after?: unknown
+}
+
 const props = defineProps({
-  changes: { type: Array, default: () => [] },
+  changes: { type: Array as PropType<Change[]>, default: () => [] },
   /** Shown when there is nothing to report. */
   emptyLabel: { type: String, default: 'No differences.' },
   /** Longer lists are cut off until the reader asks for the rest. */
@@ -18,15 +26,15 @@ const shown = computed(() =>
 )
 const hidden = computed(() => props.changes.length - shown.value.length + props.more)
 
-const marks = { added: '+', removed: '−', changed: '~' }
-const tones = {
+const marks: Record<string, string> = { added: '+', removed: '−', changed: '~' }
+const tones: Record<string, string> = {
   added: 'text-ok',
   removed: 'text-bad',
   changed: 'text-warn',
 }
 
 /** Renders a value the way the API would have stored it. */
-function value(v) {
+function value(v: unknown) {
   if (v === undefined || v === null) return 'nothing'
   if (typeof v === 'string') return `"${v}"`
   if (typeof v === 'object') return JSON.stringify(v)
@@ -34,12 +42,12 @@ function value(v) {
 }
 
 /** A line of a file, without the indent that only nests it. */
-function line(c) {
-  return (c.kind === 'removed' ? c.before : c.after)?.trimStart() ?? ''
+function line(c: Change) {
+  return String((c.kind === 'removed' ? c.before : c.after) ?? '').trimStart()
 }
 
 /** A value cut after each comma, so a long one wraps between its fields. */
-function pieces(v) {
+function pieces(v: unknown) {
   return value(v).split(/(?<=,)/)
 }
 </script>

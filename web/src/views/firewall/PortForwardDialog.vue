@@ -1,21 +1,38 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { newId } from '@/lib/ids'
 import { parseList } from '@/lib/lists'
+import type { PortForward, Protocol, Tier } from '@/lib/model.gen'
 import { PRIORITY_HINT, TIERS, UNSET_LABEL, tierOption } from '@/lib/tiers'
 import { useConfigStore } from '@/stores/config'
 
-const props = defineProps({ forward: { type: Object, default: null } })
+const props = defineProps({
+  forward: { type: Object as PropType<PortForward | null>, default: null },
+})
 const open = defineModel('open', { type: Boolean, default: false })
 
-const config = useConfigStore()
-const form = ref(blank())
+interface ForwardForm {
+  id: string
+  description: string
+  enabled: boolean
+  zone: string
+  protocol: Protocol | ''
+  ports: string
+  target: string
+  targetPort: string
+  reflection: boolean
+  priority: Tier | ''
+}
 
-function blank() {
+const config = useConfigStore()
+const form = ref<ForwardForm>(blank())
+
+function blank(): ForwardForm {
   const external = config.zones.find((z) => z.external)?.name ?? config.zones[0]?.name ?? ''
   return {
     id: '',
@@ -51,7 +68,7 @@ watch(
 
 function save() {
   const f = form.value
-  const out = {
+  const out: PortForward = {
     id: f.id || newId('pf'),
     enabled: f.enabled,
     zone: f.zone,

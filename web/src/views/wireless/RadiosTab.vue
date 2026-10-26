@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
@@ -9,24 +9,31 @@ import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { COUNTRIES } from '@/lib/countries'
+import type { Radio } from '@/lib/model.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import type { Card } from '@/views/wireless/card'
 import RadioDialog from '@/views/wireless/RadioDialog.vue'
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const live = ref([])
-const editing = ref(null)
+interface Row {
+  card: Card | null
+  cfg: Radio | null
+}
+
+const live = ref<Card[]>([])
+const editing = ref<Row | null>(null)
 const dialogOpen = ref(false)
 
 const load = useAsync(
   async () => {
-    live.value = (await api.wireless.radios()).radios ?? []
+    live.value = ((await api.wireless.radios()) as { radios?: Card[] }).radios ?? []
   },
   { immediate: true },
 )
 
-const BANDS = { '2g': '2.4 GHz', '5g': '5 GHz', '6g': '6 GHz' }
+const BANDS: Record<string, string> = { '2g': '2.4 GHz', '5g': '5 GHz', '6g': '6 GHz' }
 
 /** The cards have answered once; before that a configured radio would show as absent. */
 const loaded = computed(() => load.updatedAt.value > 0 || Boolean(load.error.value))
@@ -34,7 +41,7 @@ const loaded = computed(() => load.updatedAt.value > 0 || Boolean(load.error.val
 /** Every radio this router has, whether or not it is configured. */
 const rows = computed(() => {
   const seen = new Set()
-  const out = live.value.map((card) => {
+  const out: Row[] = live.value.map((card) => {
     seen.add(card.name)
     return { card, cfg: config.radios.find((r) => r.name === card.name) ?? null }
   })
@@ -46,7 +53,7 @@ const rows = computed(() => {
 const country = computed(() => config.wirelessCountry)
 
 /** The bands a network may be started on; a card's 6 GHz is often not one. */
-function bandsOf(card) {
+function bandsOf(card: Card | null) {
   if (!card) return '—'
   return Object.entries(card.bands ?? {})
     .filter(([, b]) => b.serves !== false)
@@ -54,13 +61,13 @@ function bandsOf(card) {
     .join(', ')
 }
 
-function describe(row) {
+function describe(row: Row) {
   if (!row.cfg) return 'not configured'
   const ch = row.cfg.channel ? `channel ${row.cfg.channel}` : 'automatic channel'
   return `${BANDS[row.cfg.band] ?? row.cfg.band} · ${ch} · ${row.cfg.width} MHz · ${row.cfg.standard}`
 }
 
-function edit(row) {
+function edit(row: Row) {
   editing.value = row
   dialogOpen.value = true
 }
@@ -83,7 +90,7 @@ function edit(row) {
             class="input w-48 max-sm:w-full"
             :value="country"
             :disabled="auth.readOnly"
-            @change="config.setWirelessCountry($event.target.value)"
+            @change="config.setWirelessCountry(($event.target as HTMLSelectElement).value)"
           >
             <option value="">Not set</option>
             <option v-for="c in COUNTRIES" :key="c.code" :value="c.code.toUpperCase()">

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
@@ -11,14 +11,28 @@ import { adminOnly, useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
 
-const report = ref(null)
+interface LegacyTable {
+  family?: string
+  name: string
+  backend: string
+  chains?: string[]
+  rules?: number
+  owner?: string
+}
+
+interface HostReport {
+  root: boolean
+  legacy?: { tables: LegacyTable[] }
+}
+
+const report = ref<HostReport | null>(null)
 const actionError = ref('')
 const output = ref('')
 const busy = ref(false)
 
 const refresh = useAsync(
   async () => {
-    report.value = await api.host.status()
+    report.value = (await api.host.status()) as HostReport
   },
   { immediate: true },
 )
@@ -27,13 +41,12 @@ const root = computed(() => report.value?.root === true)
 const legacy = computed(() => report.value?.legacy?.tables ?? [])
 const sweepable = computed(() => legacy.value.filter((t) => !t.owner))
 
-/** @param {string[]} tables */
-async function flush(tables) {
+async function flush(tables: string[]) {
   busy.value = true
   actionError.value = ''
   output.value = ''
   try {
-    const result = await api.host.flushLegacy(tables)
+    const result = (await api.host.flushLegacy(tables)) as { output?: string; status?: HostReport }
     output.value = result.output ?? ''
     if (result.status) report.value = result.status
   } catch (e) {

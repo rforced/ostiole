@@ -1,36 +1,40 @@
-<script setup>
+<script setup lang="ts">
 import { FileUp, Plus } from '@lucide/vue'
 import { computed, ref } from 'vue'
+import type { PropType } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
+import type { AsyncLoad } from '@/lib/async'
+import type { Interface } from '@/lib/model.gen'
 import { connected, livePeer } from '@/lib/wgStatus'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import TunnelDialog from '@/views/vpn/TunnelDialog.vue'
 import TunnelFileDialog from '@/views/vpn/TunnelFileDialog.vue'
+import type { GatewayStatus, WgLive } from '@/views/vpn/types'
 
 const props = defineProps({
   /** Each tunnel of the running configuration as its device has it, by name. */
-  live: { type: Map, required: true },
+  live: { type: Map as PropType<Map<string, WgLive>>, required: true },
   /** What the gateway monitor says of each gateway. */
-  gateways: { type: Array, required: true },
+  gateways: { type: Array as PropType<GatewayStatus[]>, required: true },
   /** The page's read of both, from useAsync. */
-  read: { type: Object, required: true },
+  read: { type: Object as PropType<AsyncLoad>, required: true },
 })
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const editing = ref(null)
+const editing = ref<Interface | null>(null)
 const open = ref(false)
 const fromFile = ref(false)
 
 const tunnels = computed(() => config.tunnels)
 
 /** Peers go with their tunnel, so the dialog lists them first. */
-function dependents(t) {
+function dependents(t: Interface) {
   return [
     ...(t.wireguard.peers ?? []).map((p) => `peer ${p.name}`),
     ...config.interfaceDependents(t.name),
@@ -38,7 +42,7 @@ function dependents(t) {
 }
 
 /** How many of the tunnel's peers are sending now, out of those switched on. */
-function peers(t) {
+function peers(t: Interface) {
   const on = (t.wireguard.peers ?? []).filter((p) => p.enabled)
   if (!on.length) return 'none'
   if (!props.read.updatedAt.value) return '…'
@@ -48,7 +52,7 @@ function peers(t) {
 }
 
 /** The gateways that send rule traffic into the tunnel, with the monitor's word on each. */
-function gatewaysOf(t) {
+function gatewaysOf(t: Interface) {
   return config.gateways
     .filter((g) => g.enabled && g.interface === t.name && !g.address)
     .map((g) => ({ name: g.name, live: props.gateways.find((s) => s.name === g.name) ?? null }))
@@ -58,7 +62,7 @@ function add() {
   editing.value = null
   open.value = true
 }
-function edit(t) {
+function edit(t: Interface) {
   editing.value = t
   open.value = true
 }

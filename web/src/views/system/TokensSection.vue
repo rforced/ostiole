@@ -1,15 +1,15 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
-import { api } from '@/lib/api'
+import { type Token, api } from '@/lib/api'
 import { emptyText, errorMessage, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 
-const tokens = ref([])
+const tokens = ref<Token[]>([])
 const actionError = ref('')
 
 const load = useAsync(async () => {

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, useId, useSlots } from 'vue'
 
 /**

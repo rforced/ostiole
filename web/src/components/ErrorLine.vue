@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /** What went wrong, beside what it was about, read out as it appears. */
 </script>
 

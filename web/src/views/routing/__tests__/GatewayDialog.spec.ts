@@ -1,0 +1,202 @@
+import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
+import { beforeEach, describe, expect, it } from 'vitest'
+
+import type { Config } from '@/lib/model.gen'
+import { useConfigStore } from '@/stores/config'
+import GatewayDialog from '@/views/routing/GatewayDialog.vue'
+
+// The dialog itself teleports; the form inside it is what is under test.
+const stubs = {
+  AppDialog: {
+    props: ['open', 'title', 'description'],
+    template:
+      '<div><p class="description">{{ description }}</p><slot /><slot name="footer" /></div>',
+  },
+}
+
+function open(gateway = null, more = {}) {
+  const config = useConfigStore()
+  config.replaceDraft({
+    version: 12,
+    ...more,
+    zones: [
+      { name: 'wan', external: true },
+      { name: 'vpn', external: true },
+    ],
+    interfaces: [
+      { name: 'eth0', zone: 'wan', enabled: true, ipv4: { mode: 'dhcp' }, ipv6: { mode: 'none' } },
+      {
+        name: 'wg1',
+        zone: 'vpn',
+        enabled: true,
+        ipv4: { mode: 'static', address: '10.66.1.2/32' },
+        ipv6: { mode: 'none' },
+        wireguard: { privateKey: 'x', peers: [] },
+      },
+    ],
+    gateways: gateway ? [gateway] : [{ name: 'wan', enabled: true, interface: 'eth0' }],
+    rules: [],
+  } as Config)
+  const wrapper = mount(GatewayDialog, {
+    props: { open: true, gateway: gateway ? config.gateways[0] : null },
+    global: { stubs },
+  })
+  return { wrapper, config }
+}
+
+describe('GatewayDialog', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('asks a line for its priority', async () => {
+    const { wrapper } = open()
+    await flushPromises()
+    expect(wrapper.find<HTMLSelectElement>('#gw-if').element.value).toBe('eth0')
+    expect(wrapper.find('#gw-prio').exists()).toBe(true)
+    expect(wrapper.find('#gw-monitor').attributes('required')).toBeUndefined()
+  })
+
+  // No address on a tunnel sends rule traffic into it: it never carries the
+  // default route, so there is no priority to give, and nothing to ping but
+  // a monitor beyond the tunnel.
+  it('makes a tunnel with no address a tunnel gateway', async () => {
+    const { wrapper, config } = open()
+    await wrapper.find('#gw-if').setValue('wg1')
+    expect(wrapper.find('#gw-prio').exists()).toBe(false)
+    expect(wrapper.find('#gw-monitor').attributes('required')).toBeDefined()
+    expect(wrapper.find('.description').text()).toBe(
+      'With the tunnel down, its traffic is dropped.',
+    )
+    expect(wrapper.text()).toContain('Empty sends traffic from rules into the tunnel.')
+
+    await wrapper.find('#gw-name').setValue('vpn')
+    await wrapper.find('#gw-monitor').setValue('10.64.0.1')
+    await wrapper.find('form').trigger('submit')
+    expect(config.gateways.find((g) => g.name === 'vpn')).toEqual({
+      name: 'vpn',
+      enabled: true,
+      interface: 'wg1',
+      monitor: '10.64.0.1',
+    })
+  })
+
+  it('treats a tunnel given an address as a line', async () => {
+    const { wrapper } = open()
+    await wrapper.find('#gw-if').setValue('wg1')
+    await wrapper.find('#gw-addr').setValue('10.66.1.1')
+    expect(wrapper.find('#gw-prio').exists()).toBe(true)
+    expect(wrapper.find('#gw-monitor').attributes('required')).toBeUndefined()
+  })
+
+  // Empty is the next hop, said where the address would go; the one
+  // address offered is the DNS upstream, in a family the gateway probes.
+  it('says what an empty monitor probes, and offers the DNS upstream', async () => {
+    const { wrapper } = open(null, {
+      services: { dns: { enabled: true, upstreams: ['2001:db8::53', '192.0.2.53'] } },
+    })
+    await flushPromises()
+    const monitor = wrapper.find<HTMLInputElement>('#gw-monitor')
+    expect(monitor.attributes('placeholder')).toBe('the next hop')
+    expect(wrapper.text()).toContain('Empty probes the next hop, which says the line is up.')
+    const use = () => wrapper.findAll('button').find((b) => b.text().startsWith('Use '))
+    expect(use().text()).toBe('Use 2001:db8::53, the DNS upstream')
+    await wrapper.find('#gw-addr').setValue('198.51.100.1')
+    expect(use().text()).toBe('Use 192.0.2.53, the DNS upstream')
+    await use().trigger('click')
+    expect(monitor.element.value).toBe('192.0.2.53')
+    expect(use()).toBeUndefined()
+  })
+
+  it('offers no upstream to a router that looks names up itself', async () => {
+    const { wrapper } = open(null, {
+      services: { dns: { enabled: true, resolver: 'recursive', upstreams: ['192.0.2.53'] } },
+    })
+    await flushPromises()
+    expect(wrapper.findAll('button').some((b) => b.text().startsWith('Use '))).toBe(false)
+  })
+
+  it('offers the first DNS over TLS resolver, and an IPv4 one to a tunnel', async () => {
+    const { wrapper } = open(null, {
+      services: {
+        dns: {
+          enabled: true,
+          resolver: 'tls',
+          tlsUpstreams: [
+            { address: '2001:db8::9', hostname: 'dns.example' },
+            { address: '192.0.2.9', hostname: 'dns.example' },
+          ],
+        },
+      },
+    })
+    await flushPromises()
+    const use = () => wrapper.findAll('button').find((b) => b.text().startsWith('Use '))
+    expect(use().text()).toBe('Use 2001:db8::9, the DNS upstream')
+    await wrapper.find('#gw-if').setValue('wg1')
+    expect(use().text()).toBe('Use 192.0.2.9, the DNS upstream')
+  })
+
+  // Empty keeps the default, which the placeholder shows; 0 is off and is
+  // kept as such.
+  it('keeps the thresholds a gateway warns over, unset unless given', async () => {
+    const { wrapper, config } = open({
+      name: 'wan',
+      enabled: true,
+      interface: 'eth0',
+      slowAboveMs: 0,
+    })
+    await flushPromises()
+    expect(wrapper.find<HTMLInputElement>('#gw-slow').element.value).toBe('0')
+    expect(wrapper.find('#gw-lossy').attributes('placeholder')).toBe('10')
+    await wrapper.find('form').trigger('submit')
+    expect(config.gateways[0].slowAboveMs).toBe(0)
+    expect('lossyAbovePercent' in config.gateways[0]).toBe(false)
+
+    const again = open({ name: 'wan', enabled: true, interface: 'eth0' })
+    await flushPromises()
+    await again.wrapper.find('#gw-lossy').setValue('5')
+    await again.wrapper.find('form').trigger('submit')
+    expect(again.config.gateways[0].lossyAbovePercent).toBe(5)
+    expect('slowAboveMs' in again.config.gateways[0]).toBe(false)
+  })
+
+  it('probes every 30 seconds unless told, 5 at least', async () => {
+    const { wrapper, config } = open({ name: 'wan', enabled: true, interface: 'eth0' })
+    await flushPromises()
+    const every = wrapper.find('#gw-every')
+    expect(every.attributes('placeholder')).toBe('30')
+    expect(every.attributes('min')).toBe('5')
+    expect(every.attributes('max')).toBe('300')
+    await wrapper.find('form').trigger('submit')
+    expect('probeEverySeconds' in config.gateways[0]).toBe(false)
+    await every.setValue('60')
+    await wrapper.find('form').trigger('submit')
+    expect(config.gateways[0].probeEverySeconds).toBe(60)
+  })
+
+  it('takes how many probes decide a gateway, 3 down and 2 up unless told', async () => {
+    const { wrapper, config } = open({ name: 'wan', enabled: true, interface: 'eth0' })
+    await flushPromises()
+    expect(wrapper.find('#gw-down').attributes('placeholder')).toBe('3')
+    expect(wrapper.find('#gw-up').attributes('placeholder')).toBe('2')
+    await wrapper.find('form').trigger('submit')
+    expect('downAfterProbes' in config.gateways[0]).toBe(false)
+    expect('upAfterProbes' in config.gateways[0]).toBe(false)
+    await wrapper.find('#gw-down').setValue('5')
+    await wrapper.find('#gw-up').setValue('1')
+    await wrapper.find('form').trigger('submit')
+    expect(config.gateways[0].downAfterProbes).toBe(5)
+    expect(config.gateways[0].upAfterProbes).toBe(1)
+  })
+})
+
+describe('GatewayDialog round trip', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('reopens the first line as saved and leaves an untouched save alone', async () => {
+    const { wrapper, config } = open({ name: 'wan', enabled: true, interface: 'eth0' })
+    config.saved = JSON.parse(JSON.stringify(config.draft))
+    await flushPromises()
+    await wrapper.get('form').trigger('submit')
+    expect(config.dirty).toBe(false)
+  })
+})

@@ -1,14 +1,18 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
-import { parseList } from '@/lib/lists'
 import { interfaceLabel } from '@/lib/interfaces'
+import { parseList } from '@/lib/lists'
+import type { DHCPv6Server, RAMode } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 
-const props = defineProps({ server: { type: Object, default: null } })
+const props = defineProps({
+  server: { type: Object as PropType<DHCPv6Server | null>, default: null },
+})
 const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
@@ -42,7 +46,21 @@ const delegated = computed(
   () => config.findInterface(form.value.interface)?.ipv6?.mode === 'delegated',
 )
 
-function blank() {
+interface V6Form {
+  interface: string
+  enabled: boolean
+  mode: RAMode | ''
+  rangeStart: string
+  rangeEnd: string
+  leaseTime: string
+  dns: string
+  domain: string
+  searchDomains: string
+  ntp: string
+  dnsRegistration: boolean
+}
+
+function blank(): V6Form {
   return {
     interface: '',
     enabled: true,
@@ -86,7 +104,7 @@ watch(managed, (on) => {
 
 function save() {
   const f = form.value
-  const out = { interface: f.interface, enabled: f.enabled, mode: f.mode }
+  const out: DHCPv6Server = { interface: f.interface, enabled: f.enabled, mode: f.mode }
   if (f.mode === 'managed') {
     out.rangeStart = f.rangeStart.trim()
     out.rangeEnd = f.rangeEnd.trim()

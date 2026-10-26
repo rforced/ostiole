@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// searchCase is one line of the table matches() in web/src/lib/search.js is
+// searchCase is one line of the table matches() in web/src/lib/search.ts is
 // tested against as well.
 type searchCase struct {
 	Why    string   `json:"why"`

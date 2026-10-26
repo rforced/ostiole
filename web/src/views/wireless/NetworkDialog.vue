@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
@@ -103,7 +103,7 @@ watch(
   async (isOpen) => {
     if (!isOpen) return
     try {
-      const r = await api.wireless.radios()
+      const r = (await api.wireless.radios()) as { setUp: boolean; enhancedOpen?: boolean }
       enhancedOpen.value = r.setUp ? r.enhancedOpen !== false : null
     } catch {
       enhancedOpen.value = null

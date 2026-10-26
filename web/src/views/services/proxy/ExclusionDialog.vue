@@ -1,17 +1,19 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import { sameExclusion } from '@/lib/exclusions'
+import type { WAFExclusion } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
   /** The WAF profile the exclusion is in. */
   profile: { type: String, required: true },
   /** The exclusion being edited, or what a new one starts with. */
-  exclusion: { type: Object, default: null },
+  exclusion: { type: Object as PropType<WAFExclusion | null>, default: null },
   /** Its place in the profile's list; -1 adds it. */
   index: { type: Number, default: -1 },
 })
@@ -28,7 +30,7 @@ watch(
   () => [open.value, props.exclusion],
   () => {
     if (!open.value) return
-    const e = props.exclusion ?? {}
+    const e: Partial<WAFExclusion> = props.exclusion ?? {}
     form.value = {
       rule: e.rule ?? '',
       path: e.path ?? '',
@@ -75,7 +77,7 @@ const problem = computed(() => {
 
 function save() {
   const { rule, path, target, description } = entry.value
-  const out = { rule }
+  const out: WAFExclusion = { rule }
   if (path) out.path = path
   if (target) out.target = target
   if (description) out.description = description

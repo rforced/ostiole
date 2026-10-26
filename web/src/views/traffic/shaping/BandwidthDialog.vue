@@ -1,9 +1,11 @@
-<script setup>
+<script setup lang="ts">
+import type { PropType } from 'vue'
 import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import { facesInternet } from '@/lib/interfaces'
+import type { Interface, LinkType, Shaping } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 
 /**
@@ -28,14 +30,23 @@ const UNITS = [
 
 const props = defineProps({
   /** The interface being edited, or null for a new one. */
-  iface: { type: Object, default: null },
+  iface: { type: Object as PropType<Interface | null>, default: null },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
-const form = ref(blank())
+interface Form {
+  interface: string
+  download: string
+  downloadUnit: number
+  upload: string
+  uploadUnit: number
+  link: LinkType
+}
 
-function blank() {
+const form = ref<Form>(blank())
+
+function blank(): Form {
   return {
     interface: '',
     download: '',
@@ -128,7 +139,7 @@ const valid = computed(
 
 function save() {
   if (!valid.value) return
-  const out = {}
+  const out: Shaping = {}
   if (download.value) out.download = download.value
   if (upload.value) out.upload = upload.value
   const link = form.value.link

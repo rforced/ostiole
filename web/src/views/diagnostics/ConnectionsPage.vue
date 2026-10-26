@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -7,6 +7,7 @@ import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
+import type { SortColumn } from '@/components/sortTypes'
 import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { formatBytes, formatCount } from '@/lib/format'
@@ -23,7 +24,7 @@ const SETTLE_MS = 250
  * kernel is enforcing, on the same meter as the dashboard uses.
  */
 
-const COLUMNS = [
+const COLUMNS: SortColumn[] = [
   ['protocol', 'Protocol'],
   ['from', 'From'],
   ['to', 'To'],
@@ -33,7 +34,31 @@ const COLUMNS = [
   ['expires', 'Expires in'],
 ]
 
-const result = ref(null)
+interface State {
+  protocol: string
+  source: string
+  sourcePort?: number
+  destination: string
+  destPort?: number
+  replyDest?: string
+  replyDestPort?: number
+  nat: boolean
+  state?: string
+  ttl: string
+  packets: number
+  bytes: number
+  mark?: number
+}
+
+interface StatesResult {
+  states: State[]
+  total: number
+  matched: number
+  byProtocol: Record<string, number>
+  max?: number
+}
+
+const result = ref<StatesResult | null>(null)
 const live = ref(true)
 /**
  * The router filters, since the table runs to hundreds of thousands and
@@ -44,7 +69,7 @@ const query = ref('')
 
 const load = useAsync(
   async () => {
-    result.value = await api.diagnostics.states({ q: query.value.trim() })
+    result.value = (await api.diagnostics.states({ q: query.value.trim() })) as StatesResult
   },
   // Live owns the poll, and starts on.
   { interval: POLL_MS, immediate: true },
@@ -66,7 +91,7 @@ watch(live, (on) => {
 })
 
 /** Seconds in a Go duration as the server writes it: 1h2m3s. */
-function seconds(ttl) {
+function seconds(ttl: string | undefined) {
   const m = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+(?:\.\d+)?)s)?$/.exec(ttl ?? '')
   if (!m || !ttl) return null
   return Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0)
@@ -107,7 +132,7 @@ const used = computed(() => {
 
 const level = computed(() => levelOf(used.value))
 
-function endpoint(address, port) {
+function endpoint(address: string | undefined, port?: number) {
   if (!address) return '—'
   return port ? `${address}:${port}` : address
 }

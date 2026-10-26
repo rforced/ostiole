@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
@@ -9,6 +9,7 @@ import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
+import type { SortColumn } from '@/components/sortTypes'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
@@ -20,17 +21,18 @@ import { WINDOWS, deviceLabel, sinceLine, useTrafficStream } from '@/lib/traffic
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import DeviceDialog from '@/views/traffic/DeviceDialog.vue'
+import type { Device, Devices, TrafficEvent } from '@/views/traffic/types'
 
 // Down and Up each sort by the rate, then by the window's total.
-const DOWN = [
+const DOWN: SortColumn[] = [
   ['down', 'Down'],
   ['downTotal', 'Down total'],
 ]
-const UP = [
+const UP: SortColumn[] = [
   ['up', 'Up'],
   ['upTotal', 'Up total'],
 ]
-const COLUMNS = [['device', 'Device'], ...DOWN, ...UP, ['seen', 'Last seen']]
+const COLUMNS: SortColumn[] = [['device', 'Device'], ...DOWN, ...UP, ['seen', 'Last seen']]
 
 const auth = useAuthStore()
 const config = useConfigStore()
@@ -72,11 +74,11 @@ const intro = computed(() => {
 const win = ref('5m')
 const live = ref(true)
 /** The last read: {devices, counting, since, interval, now}. */
-const state = ref(null)
+const state = ref<Devices | null>(null)
 
 const read = useAsync(async () => {
   const w = win.value
-  const r = await api.traffic.devices(w)
+  const r = (await api.traffic.devices(w)) as Devices
   if (w !== win.value) return
   state.value = r
 })
@@ -89,8 +91,8 @@ watch(
 )
 
 /** The last devices event, which an open device's chart takes its point from. */
-const latest = ref(null)
-const stream = useTrafficStream({
+const latest = ref<TrafficEvent | null>(null)
+const stream = useTrafficStream<unknown, TrafficEvent>({
   // A device's totals move with every read of the connection table, so
   // the list is read again rather than patched.
   devices: (ev) => {
@@ -145,7 +147,7 @@ const empty = computed(() => {
   return 'No devices.'
 })
 
-const chosen = ref(null)
+const chosen = ref<Device | null>(null)
 const open = ref(false)
 function show(d) {
   chosen.value = d

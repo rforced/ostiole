@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
 import FormField from '@/components/FormField.vue'
@@ -13,14 +13,15 @@ import { useConfigStore } from '@/stores/config'
 const auth = useAuthStore()
 const config = useConfigStore()
 // Older drafts may lack the management block; create it once, outside any computed.
-if (!config.draft.system.management) config.draft.system.management = { webPort: 9443, sshPort: 22 }
+if (!config.draft.system.management)
+  config.draft.system.management = { webPort: 9443, sshPort: 22, sshPasswords: false }
 const system = computed(() => config.draft.system)
 const management = computed(() => system.value.management)
 
 /** The zones the router offers and the one its clock reads now. */
-const clock = ref({ zones: ['UTC'], current: 'UTC' })
+const clock = ref<{ zones: string[]; current: string }>({ zones: ['UTC'], current: 'UTC' })
 const loadClock = useAsync(async () => {
-  clock.value = await api.timezones()
+  clock.value = (await api.timezones()) as typeof clock.value
 })
 onMounted(loadClock.run)
 

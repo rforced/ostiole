@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ArrowDown, ArrowUp, Plus } from '@lucide/vue'
 import { computed, ref } from 'vue'
 

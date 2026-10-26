@@ -1,5 +1,6 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -9,6 +10,7 @@ import { useAsync } from '@/lib/async'
 import { niceScale } from '@/lib/chart'
 import { formatDuration, formatMs, formatWhen } from '@/lib/format'
 import {
+  type GatewayEvent,
   stepOf,
   addProbe,
   eventFor,
@@ -18,8 +20,28 @@ import {
   measured,
   probeFigures,
 } from '@/lib/gateways'
+import type { Gateway } from '@/lib/model.gen'
 import { streamLost } from '@/lib/stream'
 import { WINDOWS } from '@/lib/traffic'
+
+interface HistoryReport {
+  now: string
+  down: number
+  never: number
+  families: {
+    family: string
+    points: (number | null)[][]
+    mean: number
+    worst: number
+    loss: number
+    sent: number
+  }[]
+  events?: GatewayEvent[]
+}
+
+type GatewayRow = Partial<Gateway> & { live?: { families?: unknown[] } | null }
+
+type HistoryRow = (number | null | undefined)[]
 
 /**
  * One gateway's latency and loss over a window, a line and a band and a
@@ -28,21 +50,21 @@ import { WINDOWS } from '@/lib/traffic'
  */
 const props = defineProps({
   /** A row of the Gateways card: the configured gateway and what the monitor says. */
-  gateway: { type: Object, default: null },
+  gateway: { type: Object as PropType<GatewayRow | null>, default: null },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
 const REREAD_MS = 60_000
 const win = ref('24h')
-const report = ref(null)
-const rows = ref(null)
-const families = ref([])
+const report = ref<HistoryReport | null>(null)
+const rows = ref<HistoryRow[] | null>(null)
+const families = ref<string[]>([])
 const end = ref(0)
 
 const read = useAsync(async () => {
   const name = props.gateway.name
   const w = win.value
-  const r = await api.gatewayHistory.read(name, w)
+  const r = (await api.gatewayHistory.read(name, w)) as HistoryReport
   if (name !== props.gateway?.name || w !== win.value) return
   const h = historyRows(r)
   report.value = r
@@ -64,8 +86,8 @@ watch(
   { immediate: true },
 )
 
-let timer = 0
-let source = null
+let timer: ReturnType<typeof setInterval> | undefined
+let source: EventSource | null = null
 const streamError = ref('')
 function listen() {
   stop()

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
 import FormField from '@/components/FormField.vue'
@@ -116,7 +116,7 @@ const installPreset = computed({
           class="input w-48 font-mono max-sm:w-full"
           :value="checkSchedule || defaultCheckSchedule"
           :placeholder="defaultCheckSchedule"
-          @change="emit('update:checkSchedule', $event.target.value)"
+          @change="emit('update:checkSchedule', ($event.target as HTMLInputElement).value)"
         />
       </FormField>
     </div>
@@ -140,7 +140,7 @@ const installPreset = computed({
           class="input w-48 font-mono max-sm:w-full"
           :value="installSchedule || defaultInstallSchedule"
           :placeholder="defaultInstallSchedule"
-          @change="emit('update:installSchedule', $event.target.value)"
+          @change="emit('update:installSchedule', ($event.target as HTMLInputElement).value)"
         />
       </FormField>
     </div>

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { useAuthStore } from '@/stores/auth'
 import DevicesCard from '@/views/services/wol/DevicesCard.vue'
 import WakeCard from '@/views/services/wol/WakeCard.vue'

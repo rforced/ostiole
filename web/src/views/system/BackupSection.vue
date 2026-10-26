@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Download, Upload } from '@lucide/vue'
 import { computed, ref } from 'vue'
 

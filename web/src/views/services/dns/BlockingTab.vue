@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import BlockListsTab from '@/views/services/dns/BlockListsTab.vue'
 import ExceptionsTab from '@/views/services/dns/ExceptionsTab.vue'
 </script>

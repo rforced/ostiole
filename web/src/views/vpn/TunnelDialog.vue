@@ -1,5 +1,6 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -8,10 +9,13 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import ZoneField, { NEW_ZONE } from '@/components/ZoneField.vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
+import type { Interface } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 
-const props = defineProps({ tunnel: { type: Object, default: null } })
+const props = defineProps({
+  tunnel: { type: Object as PropType<Interface | null>, default: null },
+})
 const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
@@ -19,7 +23,7 @@ const confirm = useConfirmStore()
 const form = ref(blank())
 const error = ref('')
 const showKey = ref(false)
-const zoneField = ref(null)
+const zoneField = ref<InstanceType<typeof ZoneField> | null>(null)
 
 /** 32 bytes in base64, the shape of every WireGuard key. */
 const KEY_SHAPE = /^[A-Za-z0-9+/]{43}=$/
@@ -98,7 +102,7 @@ async function generate() {
   )
     return
   try {
-    const keys = await api.wireguard.keys()
+    const keys = (await api.wireguard.keys()) as { privateKey: string; publicKey: string }
     form.value.privateKey = keys.privateKey
     form.value.publicKey = keys.publicKey
     error.value = ''
@@ -107,16 +111,13 @@ async function generate() {
   }
 }
 
-/**
- * Asks the router for the public key of the private key in the field.
- * @returns {Promise<boolean>} whether the field holds a key
- */
-async function derive() {
+/** Asks the router for the public key of the private key in the field, and whether it holds a key. */
+async function derive(): Promise<boolean> {
   const key = form.value.privateKey.trim()
   form.value.publicKey = ''
   if (!key) return false
   try {
-    const res = await api.wireguard.publicKey(key)
+    const res = (await api.wireguard.publicKey(key)) as { publicKey: string }
     if (form.value.privateKey.trim() !== key) return false
     form.value.publicKey = res.publicKey
     error.value = ''
@@ -133,8 +134,7 @@ function keyChanged() {
   else form.value.publicKey = ''
 }
 
-/** @param {string} cidr */
-function address(cidr) {
+function address(cidr: string) {
   const a = cidr.trim()
   return a ? { mode: 'static', address: a } : { mode: 'none' }
 }
@@ -145,7 +145,9 @@ async function save() {
   if (!zoneField.value.commit()) return
   // What this dialog does not show, such as log drops set on the
   // Interfaces page, stays as it was.
-  const iface = props.tunnel ? JSON.parse(JSON.stringify(props.tunnel)) : {}
+  const iface: Interface = props.tunnel
+    ? JSON.parse(JSON.stringify(props.tunnel))
+    : { name: '', enabled: true, ipv4: { mode: '' }, ipv6: { mode: '' } }
   Object.assign(iface, {
     name: f.name.trim(),
     enabled: f.enabled,

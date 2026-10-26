@@ -1,27 +1,30 @@
-<script setup>
+<script setup lang="ts">
+import type { PropType } from 'vue'
+
 import SectionCard from '@/components/SectionCard.vue'
 import { tone } from '@/lib/badge'
 import { neverHint, stateOf } from '@/lib/gateways'
 import GatewayStrip from '@/views/dashboard/GatewayStrip.vue'
+import type { DetectedGateway, GatewayStatus, GatewayStripData } from '@/views/dashboard/overview'
 
 const props = defineProps({
   /** Gateway health from GET /overview. */
-  gateways: { type: Array, default: () => [] },
+  gateways: { type: Array as PropType<GatewayStatus[]>, default: () => [] },
   /**
    * Default routes the kernel has that no gateway covers. They carry
    * traffic without anyone checking they still answer, which is worth
    * seeing next to the ones that are watched.
    */
-  unwatched: { type: Array, default: () => [] },
+  unwatched: { type: Array as PropType<DetectedGateway[]>, default: () => [] },
   /** Each gateway's last day, from GET /gateways/strips; null until read, empty where none is kept. */
-  strips: { type: Array, default: null },
+  strips: { type: Array as PropType<GatewayStripData[] | null>, default: null },
   /** False until the first overview arrives. */
   loaded: { type: Boolean, default: true },
   /** How many rows to hold room for until then. */
   placeholders: { type: Number, default: 1 },
 })
 
-const stripOf = (g) => props.strips?.find((s) => s.name === g.name) ?? null
+const stripOf = (g: GatewayStatus) => props.strips?.find((s) => s.name === g.name) ?? null
 </script>
 
 <template>

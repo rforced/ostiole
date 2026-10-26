@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
@@ -13,6 +13,14 @@ import { TIERS, tierBadge, tierLabel } from '@/lib/tiers'
 
 /** How often the queues are sampled. Fast enough to watch a call start. */
 const INTERVAL_MS = 3000
+
+/** One priority tier of one queue, as the router counts it. */
+interface Tin {
+  tier?: string
+  sentBytes?: number
+  drops?: number
+  peakDelayUs?: number
+}
 
 const report = ref(null)
 const rates = ref({})
@@ -103,7 +111,7 @@ function fill(key, ceiling) {
 }
 
 /** The tier rows of one direction, in the order the router names them. */
-function tins(state) {
+function tins(state: { stats?: { tins?: Tin[] } } | undefined) {
   const byTier = new Map((state?.stats?.tins ?? []).map((t) => [t.tier, t]))
   return TIERS.map((t) => ({ tier: t.value, ...(byTier.get(t.value) ?? {}) }))
 }

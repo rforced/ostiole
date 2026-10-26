@@ -1,0 +1,98 @@
+import { computed, ref } from 'vue'
+
+import { api } from '@/lib/api'
+import { useAsync } from '@/lib/async'
+
+/** How often the time service is asked what it is doing while its page is shown. */
+const POLL_MS = 10000
+
+/** One read, shared by the page header and the cards under it. */
+const status = ref(null)
+/** When the read last landed, as useAsync keeps it. */
+const updatedAt = ref(0)
+let inflight = null
+
+/** Fetches once however many callers ask while it is in the air. */
+function fetchStatus() {
+  if (!inflight) {
+    inflight = api.ntp
+      .status()
+      .then((s) => {
+        status.value = s
+        updatedAt.value = Date.now()
+      })
+      .finally(() => {
+        inflight = null
+      })
+  }
+  return inflight
+}
+
+/** What each state the server reports a source in is called on the page. */
+export const SOURCE_WORDS = {
+  selected: 'in use',
+  combined: 'agrees',
+  excluded: 'standby',
+  untrusted: 'outside signed margin',
+  waiting: 'waiting',
+  sampling: 'too few answers',
+  unsynchronised: 'not synchronised',
+  distant: 'too far',
+  noselect: 'not used',
+  unusable: 'no answer',
+  falseticker: 'wrong time',
+  jittery: 'unsteady',
+}
+
+/** Best first: the source the clock follows, then the ones that count. */
+const RANK = [
+  'selected',
+  'combined',
+  'excluded',
+  'untrusted',
+  'waiting',
+  'sampling',
+  'jittery',
+  'distant',
+  'unsynchronised',
+  'noselect',
+  'falseticker',
+  'unusable',
+]
+
+/** One source chronyd reports, as the server sends it. */
+export interface NtpSource {
+  name: string
+  state: string
+  lastSeconds: number
+  offsetSeconds: number
+  nts?: string
+}
+
+/**
+ * The live sources that came from one configured server, best first: one
+ * for a server, up to four for a pool. Names compare as DNS compares them.
+ */
+export function sourcesFor(host: string, sources?: NtpSource[]) {
+  const name = host.toLowerCase()
+  return (sources ?? [])
+    .filter((s) => s.name.toLowerCase() === name)
+    .sort((a, b) => RANK.indexOf(a.state) - RANK.indexOf(b.state))
+}
+
+/**
+ * What the time service is doing. The badge is about the router: none
+ * before `ostiole repair` sets the service up or where the host keeps the
+ * clock, otherwise running or stopped. One caller polls and the rest read
+ * what it left behind.
+ * @param opts poll: own the read
+ */
+export function useNtpStatus({ poll = false } = {}) {
+  const read = poll ? useAsync(fetchStatus, { interval: POLL_MS, immediate: true }) : null
+  const state = computed(() => {
+    const s = status.value
+    if (!s?.setUp || s.hostClock) return ''
+    return s.running ? 'running' : 'stopped'
+  })
+  return { status, state, read, updatedAt }
+}

@@ -7,7 +7,7 @@ import (
 )
 
 // kindLabels are what the Logs page calls what matched, for the kinds that
-// are not a rule. matchedLabel in web/src/lib/fwlog.js is the other copy.
+// are not a rule. matchedLabel in web/src/lib/fwlog.ts is the other copy.
 var kindLabels = map[string]string{
 	"default-drop":      "default drop",
 	"block-private":     "private source",

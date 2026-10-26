@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ChevronDown } from '@lucide/vue'
 import {
   DropdownMenuContent,
@@ -7,7 +7,14 @@ import {
   DropdownMenuRoot,
   DropdownMenuTrigger,
 } from 'reka-ui'
+import type { PropType } from 'vue'
 import { ref } from 'vue'
+
+interface MenuItem {
+  label: string
+  href?: string
+  action?: () => void
+}
 
 /**
  * A row action that lists several of one kind when pressed, such as the
@@ -18,20 +25,20 @@ import { ref } from 'vue'
 defineOptions({ inheritAttrs: false })
 defineProps({
   label: { type: String, required: true },
-  items: { type: Array, required: true },
+  items: { type: Array as PropType<MenuItem[]>, required: true },
 })
 
-const trigger = ref(null)
+const trigger = ref<HTMLButtonElement | null>(null)
 // An action runs once the menu has closed, with focus back on the trigger.
 // A dialog it opens returns focus to whatever had it, and the item that
 // was clicked is gone by then.
-let chosen = null
+let chosen: (() => void) | null = null
 
-function choose(item) {
+function choose(item: MenuItem) {
   chosen = item.action ?? null
 }
 
-function closed(event) {
+function closed(event: Event) {
   if (!chosen) return
   event.preventDefault()
   trigger.value?.focus()

@@ -1,6 +1,8 @@
-<script setup>
+<script setup lang="ts">
 import { Lock } from '@lucide/vue'
+import type { PropType } from 'vue'
 
+import type { SystemRule } from '@/lib/api'
 import { actionTone } from '@/lib/badge'
 import { formatCount } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth'
@@ -11,12 +13,11 @@ import { useAuthStore } from '@/stores/auth'
  * goes to the setting that controls it.
  */
 defineProps({
-  /** @type {import('vue').PropType<{action: string, protocol: string, source: string, destination: string, description: string, log?: boolean, zones?: string[]}>} */
-  rule: { type: Object, required: true },
+  rule: { type: Object as PropType<SystemRule>, required: true },
   /** The packet count, or an empty string when the rule keeps none. */
-  packets: { type: [Number, String], default: '' },
+  packets: { type: [Number, String] as PropType<number | ''>, default: '' },
   /** What its sampled log kept, or an empty string when it logs nothing. */
-  logged: { type: [Number, String], default: '' },
+  logged: { type: [Number, String] as PropType<number | ''>, default: '' },
   /** Route of the page that controls the rule, if any. */
   to: { type: String, default: '' },
 })

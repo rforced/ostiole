@@ -1,5 +1,6 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -8,20 +9,41 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
 import { formatCount } from '@/lib/format'
+import type { BlockList, ListFormat } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 
-const props = defineProps({ list: { type: Object, default: null } })
+const props = defineProps({ list: { type: Object as PropType<BlockList | null>, default: null } })
 const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
 const form = ref(blank())
 const error = ref('')
-const catalog = ref([])
+/** A published list on offer, as the catalogue sends it. */
+interface CatalogEntry {
+  name: string
+  title: string
+  description: string
+  url: string
+  format: ListFormat
+  category: string
+  names: number
+}
+
+interface BlockListForm {
+  name: string
+  description: string
+  url: string
+  format: ListFormat | ''
+  refreshHours: number | ''
+  enabled: boolean
+}
+
+const catalog = ref<CatalogEntry[]>([])
 /** Why the published lists did not load; the form still works without them. */
 const catalogError = ref('')
 const chosen = ref('')
 
-function blank() {
+function blank(): BlockListForm {
   return {
     name: '',
     description: '',
@@ -34,7 +56,7 @@ function blank() {
 
 /** The published lists on offer, grouped so the menu reads sensibly. */
 const grouped = computed(() => {
-  const out = new Map()
+  const out = new Map<string, CatalogEntry[]>()
   for (const e of catalog.value) {
     if (!out.has(e.category)) out.set(e.category, [])
     out.get(e.category).push(e)
@@ -52,7 +74,7 @@ watch(
     form.value = l ? { ...blank(), ...l } : blank()
     if (!catalog.value.length) {
       try {
-        catalog.value = await api.blocking.catalog()
+        catalog.value = (await api.blocking.catalog()) as CatalogEntry[]
         catalogError.value = ''
       } catch (e) {
         catalog.value = []
@@ -64,7 +86,7 @@ watch(
 )
 
 /** Picking a published list fills the form in; everything stays editable. */
-function pick(name) {
+function pick(name: string) {
   const e = catalog.value.find((c) => c.name === name)
   if (!e) return
   form.value = {
@@ -93,7 +115,7 @@ function save() {
     error.value = 'The URL has to start with http:// or https://.'
     return
   }
-  const out = { name, enabled: form.value.enabled }
+  const out: BlockList = { name, enabled: form.value.enabled }
   if (form.value.description) out.description = form.value.description
   if (url) out.url = url
   if (form.value.format) out.format = form.value.format
@@ -116,7 +138,12 @@ function save() {
         label="Start from a published list"
         hint="Picking one fills the form in. Everything stays editable."
       >
-        <select id="bl-catalog" v-model="chosen" class="input" @change="pick($event.target.value)">
+        <select
+          id="bl-catalog"
+          v-model="chosen"
+          class="input"
+          @change="pick(($event.target as HTMLSelectElement).value)"
+        >
           <option value="">Choose</option>
           <optgroup v-for="[category, entries] in grouped" :key="category" :label="category">
             <option v-for="e in entries" :key="e.name" :value="e.name">

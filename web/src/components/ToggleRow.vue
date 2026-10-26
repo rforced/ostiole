@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, useId } from 'vue'
 
 /**
@@ -14,7 +14,7 @@ const props = defineProps({
   variant: {
     type: String,
     default: 'checkbox',
-    validator: (v) => ['checkbox', 'switch', 'radio'].includes(v),
+    validator: (v: string) => ['checkbox', 'switch', 'radio'].includes(v),
   },
   disabled: { type: Boolean, default: false },
   id: { type: String, default: '' },
@@ -24,7 +24,10 @@ const props = defineProps({
   name: { type: String, default: '' },
   value: { type: [String, Number], default: '' },
 })
-const model = defineModel({ type: [Boolean, String, Number], default: false })
+const model = defineModel<boolean | string | number>({
+  type: [Boolean, String, Number],
+  default: false,
+})
 
 const uid = useId()
 const inputId = computed(() => props.id || uid)

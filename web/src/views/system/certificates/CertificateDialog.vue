@@ -1,16 +1,18 @@
-<script setup>
+<script setup lang="ts">
+import type { PropType } from 'vue'
 import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { parseList } from '@/lib/lists'
+import type { Certificate } from '@/lib/model.gen'
 import { certificateProvider } from '@/lib/providers'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
   /** The certificate being edited, or null for a new one. */
-  certificate: { type: Object, default: null },
+  certificate: { type: Object as PropType<Certificate | null>, default: null },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
@@ -24,7 +26,9 @@ const PROFILES = [
   { value: 'shortlived', label: 'shortlived' },
 ]
 
-const blank = () => ({
+type Form = Required<Omit<Certificate, 'names'>> & { names: string }
+
+const blank = (): Form => ({
   id: '',
   description: '',
   enabled: true,
@@ -102,7 +106,7 @@ const valid = computed(() => {
 
 function save() {
   const f = form.value
-  const out = { id: f.id.trim(), enabled: f.enabled, source: f.source }
+  const out: Certificate = { id: f.id.trim(), enabled: f.enabled, source: f.source }
   if (f.description) out.description = f.description
   if (f.source === 'uploaded') {
     out.certPem = f.certPem

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
 
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -6,20 +6,22 @@ import LiveButton from '@/components/LiveButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
+import type { SortColumn } from '@/components/sortTypes'
 import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { formatBytes, formatWhen } from '@/lib/format'
 import { byAddress, byText, byTime, useSort } from '@/lib/sort'
+import type { TailscaleNodeStatus, TailscalePeer } from '@/views/vpn/types'
 
 /** How often Live reads the peers again. */
 const POLL_MS = 5000
 
-const status = ref(null)
+const status = ref<TailscaleNodeStatus | null>(null)
 const live = ref(true)
 
 const load = useAsync(
   async () => {
-    status.value = await api.tailscale.status()
+    status.value = (await api.tailscale.status()) as TailscaleNodeStatus
   },
   // Live owns the poll, and starts on.
   { interval: POLL_MS, immediate: true },
@@ -34,12 +36,12 @@ watch(live, (on) => {
 })
 
 /** A name with the tailnet suffix on it reads better without the dot. */
-function name(peer) {
+function name(peer: TailscalePeer) {
   return (peer.dnsName || peer.hostName).replace(/\.$/, '')
 }
 
 /** A time is worth showing for a peer that is not there to speak for itself. */
-function seen(peer) {
+function seen(peer: TailscalePeer) {
   return peer.online ? '—' : formatWhen(peer.lastSeen)
 }
 
@@ -49,12 +51,12 @@ function seen(peer) {
  * it, and the direct endpoint is cleared when the connection goes idle, so
  * neither says anything until traffic is flowing.
  */
-function path(peer) {
+function path(peer: TailscalePeer) {
   if (!peer.active) return 'idle'
   return peer.directAddr ? `direct ${peer.directAddr}` : `relay ${peer.relay}`
 }
 
-const COLUMNS = [
+const COLUMNS: SortColumn[] = [
   ['node', 'Node'],
   ['addresses', 'Addresses'],
   ['os', 'OS'],
@@ -66,7 +68,7 @@ const sort = useSort(() => (status.value?.running ? status.value.peers : []), {
   node: byText(name),
   addresses: byAddress((p) => p.ips?.[0]),
   os: byText((p) => p.os),
-  seen: byTime((p) => (p.online ? new Date() : p.lastSeen)),
+  seen: byTime((p) => (p.online ? Date.now() : p.lastSeen)),
 })
 const peers = sort.sorted
 </script>

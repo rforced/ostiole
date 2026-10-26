@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Search } from '@lucide/vue'
 import { computed, ref } from 'vue'
 

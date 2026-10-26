@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Send } from '@lucide/vue'
 import { computed, onMounted, ref } from 'vue'
 
@@ -13,23 +13,23 @@ import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { parseList } from '@/lib/lists'
 import { ADMIN_ONLY, useAuthStore } from '@/stores/auth'
+import type { Notifications, NotifyEmail, NotifyWebhook } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 
 const REFRESH_MS = 15_000
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const settings = computed(() => config.notifications)
-const email = computed(() => settings.value.email ?? {})
-const webhook = computed(() => settings.value.webhook ?? {})
+const settings = computed<Notifications>(() => config.notifications)
+const email = computed<NotifyEmail>(() => settings.value.email ?? {})
+const webhook = computed<NotifyWebhook>(() => settings.value.webhook ?? {})
 // Where the router's news goes is an admin's to say, as the apply enforces.
 const locked = computed(() => !auth.isAdmin)
 
-/**
- * @param {object} patch
- * @param {'email' | 'webhook'} [part]
- */
-const set = (patch, part) => config.setNotifications(patch, part)
+const set = (
+  patch: Partial<Notifications & NotifyEmail & NotifyWebhook>,
+  part?: 'email' | 'webhook',
+) => config.setNotifications(patch, part)
 
 /**
  * What a notice can be about, grouped the way the sidebar is. The values
@@ -83,9 +83,9 @@ const KINDS = [
   },
 ]
 
-const muted = (kind) => (settings.value.mute ?? []).includes(kind)
+const muted = (kind: string) => (settings.value.mute ?? []).includes(kind)
 
-function setKind(kind, on) {
+function setKind(kind: string, on: boolean) {
   const mute = new Set(settings.value.mute ?? [])
   if (on) mute.delete(kind)
   else mute.add(kind)
@@ -97,27 +97,54 @@ const recipients = computed({
   set: (v) => set({ to: parseList(v) }, 'email'),
 })
 
-const status = ref({ targets: {}, recent: [] })
+interface NoticeEvent {
+  kind: string
+  level: string
+  title: string
+  detail?: string
+  time: string
+}
+interface TargetStatus {
+  lastSent?: string
+  lastError?: string
+  lastTried?: string
+}
+interface NoticeRecord {
+  time: string
+  events: NoticeEvent[]
+  sent: string[]
+  failed?: Record<string, string>
+  dropped?: number
+}
+interface TestResult {
+  target: string
+  error?: string
+}
+
+const status = ref<{ targets: Record<string, TargetStatus>; recent: NoticeRecord[] }>({
+  targets: {},
+  recent: [],
+})
 const load = useAsync(
   async () => {
-    status.value = await api.notifications.status()
+    status.value = (await api.notifications.status()) as typeof status.value
   },
   { interval: REFRESH_MS },
 )
 onMounted(load.run)
 
-const TARGETS = { email: 'Mail', webhook: 'Webhook' }
+const TARGETS: Record<string, string> = { email: 'Mail', webhook: 'Webhook' }
 /** What each target did with the last test, in the order the form has them. */
-const results = ref([])
+const results = ref<TestResult[]>([])
 // The draft, not what is applied: the point is to find out before.
 const testing = useAsync(async () => {
   results.value = []
-  results.value = await api.notifications.test(config.draft?.notifications ?? {})
+  results.value = (await api.notifications.test(config.draft?.notifications ?? {})) as TestResult[]
   await load.run()
 })
 const canTest = computed(() => auth.isAdmin && (email.value.enabled || webhook.value.enabled))
 
-const headline = (e) => (e.level === 'ok' ? `Resolved: ${e.title}` : e.title)
+const headline = (e: NoticeEvent) => (e.level === 'ok' ? `Resolved: ${e.title}` : e.title)
 const targetStates = computed(() =>
   Object.entries(TARGETS)
     .map(([key, label]) => ({ key, label, ...(status.value.targets?.[key] ?? {}) }))
@@ -139,7 +166,7 @@ const targetStates = computed(() =>
           label="Enabled"
           aria-label="Notifications enabled"
           :disabled="locked"
-          @update:model-value="set({ enabled: $event })"
+          @update:model-value="set({ enabled: $event as boolean })"
         />
       </template>
 
@@ -150,7 +177,7 @@ const targetStates = computed(() =>
             id="nt-email"
             :model-value="email.enabled === true"
             label="Send mail"
-            @update:model-value="set({ enabled: $event }, 'email')"
+            @update:model-value="set({ enabled: $event as boolean }, 'email')"
           />
           <div class="fields fields-card">
             <FormField
@@ -163,7 +190,7 @@ const targetStates = computed(() =>
                 class="input font-mono"
                 spellcheck="false"
                 :value="email.server ?? ''"
-                @change="set({ server: $event.target.value.trim() }, 'email')"
+                @change="set({ server: ($event.target as HTMLInputElement).value.trim() }, 'email')"
               />
             </FormField>
             <FormField id="nt-security" label="Security">
@@ -173,7 +200,12 @@ const targetStates = computed(() =>
                 :value="email.security || 'starttls'"
                 @change="
                   set(
-                    { security: $event.target.value === 'starttls' ? '' : $event.target.value },
+                    {
+                      security:
+                        ($event.target as HTMLSelectElement).value === 'starttls'
+                          ? ''
+                          : ($event.target as HTMLSelectElement).value,
+                    },
                     'email',
                   )
                 "
@@ -189,7 +221,9 @@ const targetStates = computed(() =>
                 class="input"
                 autocomplete="off"
                 :value="email.username ?? ''"
-                @change="set({ username: $event.target.value.trim() }, 'email')"
+                @change="
+                  set({ username: ($event.target as HTMLInputElement).value.trim() }, 'email')
+                "
               />
             </FormField>
             <FormField id="nt-password" label="Password">
@@ -199,7 +233,7 @@ const targetStates = computed(() =>
                 class="input"
                 autocomplete="new-password"
                 :value="email.password ?? ''"
-                @change="set({ password: $event.target.value }, 'email')"
+                @change="set({ password: ($event.target as HTMLInputElement).value }, 'email')"
               />
             </FormField>
             <FormField
@@ -211,7 +245,7 @@ const targetStates = computed(() =>
                 id="nt-from"
                 class="input"
                 :value="email.from ?? ''"
-                @change="set({ from: $event.target.value.trim() }, 'email')"
+                @change="set({ from: ($event.target as HTMLInputElement).value.trim() }, 'email')"
               />
             </FormField>
             <FormField id="nt-to" label="To" hint="Comma separated.">
@@ -226,7 +260,7 @@ const targetStates = computed(() =>
             id="nt-webhook"
             :model-value="webhook.enabled === true"
             label="Post to a webhook"
-            @update:model-value="set({ enabled: $event }, 'webhook')"
+            @update:model-value="set({ enabled: $event as boolean }, 'webhook')"
           />
           <div class="fields fields-card">
             <FormField id="nt-url" label="URL" hint="https only.">
@@ -236,7 +270,7 @@ const targetStates = computed(() =>
                 spellcheck="false"
                 autocomplete="off"
                 :value="webhook.url ?? ''"
-                @change="set({ url: $event.target.value.trim() }, 'webhook')"
+                @change="set({ url: ($event.target as HTMLInputElement).value.trim() }, 'webhook')"
               />
             </FormField>
             <FormField id="nt-format" label="Format">
@@ -246,7 +280,12 @@ const targetStates = computed(() =>
                 :value="webhook.format || 'json'"
                 @change="
                   set(
-                    { format: $event.target.value === 'json' ? '' : $event.target.value },
+                    {
+                      format:
+                        ($event.target as HTMLSelectElement).value === 'json'
+                          ? ''
+                          : ($event.target as HTMLSelectElement).value,
+                    },
                     'webhook',
                   )
                 "
@@ -264,7 +303,9 @@ const targetStates = computed(() =>
                 class="input"
                 autocomplete="new-password"
                 :value="webhook.token ?? ''"
-                @change="set({ token: $event.target.value.trim() }, 'webhook')"
+                @change="
+                  set({ token: ($event.target as HTMLInputElement).value.trim() }, 'webhook')
+                "
               />
             </FormField>
           </div>
@@ -282,7 +323,7 @@ const targetStates = computed(() =>
             :key="k.value"
             :label="k.label"
             :model-value="!muted(k.value)"
-            @update:model-value="setKind(k.value, $event)"
+            @update:model-value="setKind(k.value, $event as boolean)"
           />
         </div>
       </fieldset>

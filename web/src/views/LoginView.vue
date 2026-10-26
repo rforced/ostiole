@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { FingerprintPattern } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'

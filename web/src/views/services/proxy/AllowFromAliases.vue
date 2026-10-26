@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
 import { useConfigStore } from '@/stores/config'
@@ -20,7 +20,7 @@ function toggle(name, on) {
 }
 </script>
 
-<script>
+<script lang="ts">
 import { fetches } from '@/lib/aliases'
 
 /**
@@ -54,7 +54,7 @@ export function splitAllowFrom(from = [], aliases = []) {
         type="checkbox"
         class="checkbox"
         :checked="model.includes(a.name)"
-        @change="toggle(a.name, $event.target.checked)"
+        @change="toggle(a.name, ($event.target as HTMLInputElement).checked)"
       />
       <span class="font-mono">{{ a.name }}</span>
     </label>

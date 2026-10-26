@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
@@ -13,9 +13,10 @@ import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { dhcpValues } from '@/lib/dhcpLog'
 import { formatWhen } from '@/lib/format'
-import { heldLine, useLog } from '@/lib/log'
+import { heldLine, useLog, type LogPage } from '@/lib/log'
 import { records } from '@/lib/logs'
 import { useConfigStore } from '@/stores/config'
+import type { DhcpEvent } from '@/views/services/types'
 
 const config = useConfigStore()
 const dhcp = computed(() => config.ensureServices().dhcp)
@@ -30,8 +31,9 @@ const retention = computed({
 })
 
 const card = ref(null)
-const log = useLog({
-  read: (params, signal) => api.services.dhcpLog(params, signal),
+const log = useLog<DhcpEvent>({
+  read: async (params, signal) =>
+    (await api.services.dhcpLog(params, signal)) as LogPage<DhcpEvent>,
   stream: '/api/v1/dhcp/log/stream',
   values: dhcpValues,
   top: card,

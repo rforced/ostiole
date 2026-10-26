@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Plus } from '@lucide/vue'
 import { computed, onMounted, ref } from 'vue'
 
@@ -12,14 +12,50 @@ import RefreshButton from '@/components/RefreshButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
+import type { SortColumn } from '@/components/sortTypes'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { formatCount, formatWhen } from '@/lib/format'
+import type { BlockList, ListFormat } from '@/lib/model.gen'
 import { byNumber, byText, byTime, useSort } from '@/lib/sort'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import BlockListDialog from '@/views/services/dns/BlockListDialog.vue'
+
+/** What the router has fetched of one subscribed list. */
+interface ListStatus {
+  name: string
+  url?: string
+  format?: ListFormat
+  enabled: boolean
+  domains: number
+  skipped?: number
+  fetchedAt?: string
+  lastError?: string
+  lastTriedAt?: string
+  stale: boolean
+}
+
+interface RefreshReport {
+  fetched: string[] | null
+  unchanged: string[] | null
+  failed?: Record<string, string>
+  note?: string
+}
+
+interface BlockingStatus {
+  lists: ListStatus[]
+  totals?: { domains?: number; blocked?: number; estimatedMemoryMb?: number }
+  limits?: {
+    maxDomains?: number
+    hardMax?: number
+    defaultMax?: number
+    bytesPerName?: number
+  }
+  counts?: Record<string, { blocked: number; alone: number }>
+  report?: RefreshReport
+}
 
 const auth = useAuthStore()
 const config = useConfigStore()
@@ -35,15 +71,15 @@ const mode = computed({
   },
 })
 
-const editing = ref(null)
+const editing = ref<BlockList | null>(null)
 const open = ref(false)
-const status = ref(null)
+const status = ref<BlockingStatus | null>(null)
 /** Which refresh is in flight: 'all', a list name, or nothing. */
 const which = ref('')
 const note = ref('')
 
 /** What the router has actually fetched, keyed by list name. */
-const fetched = computed(() =>
+const fetched = computed<Record<string, ListStatus>>(() =>
   Object.fromEntries((status.value?.lists ?? []).map((s) => [s.name, s])),
 )
 
@@ -63,7 +99,7 @@ const total = computed(() => status.value?.totals?.domains ?? 0)
 const blocked = computed(() => status.value?.totals?.blocked ?? 0)
 const memoryMB = computed(() => status.value?.totals?.estimatedMemoryMb ?? 0)
 
-const COLUMNS = [
+const COLUMNS: SortColumn[] = [
   ['name', 'List'],
   ['names', 'Names'],
   ['blocked', 'Blocked'],
@@ -89,16 +125,16 @@ const maxDomains = computed({
 })
 
 /** What a ceiling of n names would cost in memory, in whole MB. */
-function costMB(n) {
+function costMB(n: number) {
   return Math.round((n * (limits.value.bytesPerName ?? 90)) / (1024 * 1024))
 }
 
 const load = useAsync(async () => {
-  status.value = await api.blocking.status()
+  status.value = (await api.blocking.status()) as BlockingStatus
 })
 onMounted(load.run)
 
-const refresh = useAsync(async (name) => {
+const refresh = useAsync(async (name: string) => {
   which.value = name || 'all'
   note.value = ''
   try {
@@ -108,7 +144,7 @@ const refresh = useAsync(async (name) => {
     } else {
       // The refresh answers with the state it left behind, and a report of
       // what it did, so a pass that fetched nothing can say why.
-      status.value = await api.blocking.refreshAll()
+      status.value = (await api.blocking.refreshAll()) as BlockingStatus
       note.value = describe(status.value?.report)
     }
   } finally {
@@ -117,7 +153,7 @@ const refresh = useAsync(async (name) => {
 })
 
 /** Turns a refresh report into the sentence to show under the buttons. */
-function describe(report) {
+function describe(report?: RefreshReport) {
   if (!report) return ''
   if (report.note) return report.note
   const parts = []
@@ -133,25 +169,27 @@ function add() {
   editing.value = null
   open.value = true
 }
-function edit(l) {
+function edit(l: BlockList) {
   editing.value = l
   open.value = true
 }
 
 /** The list whose names are open. */
-const showing = ref(null)
+const showing = ref<BlockList | null>(null)
 const showingOpen = ref(false)
-function show(l) {
+function show(l: BlockList) {
   showing.value = l
   showingOpen.value = true
 }
-async function readNames(q, offset, limit) {
-  const page = await api.blocking.names(showing.value.name, { q, offset, limit })
+async function readNames(q: string, offset: number, limit: number) {
+  const page = (await api.blocking.names(showing.value.name, { q, offset, limit })) as {
+    names: string[]
+  }
   return { ...page, items: page.names }
 }
 
 /** Where a list's names come from, for the table. */
-function source(l) {
+function source(l: BlockList) {
   if (l.url) return l.url
   return 'loaded by hand'
 }
@@ -306,7 +344,12 @@ const lists = sort.sorted
                   :checked="l.enabled"
                   :disabled="auth.readOnly"
                   :aria-label="`${l.name} enabled`"
-                  @change="config.upsertBlockList({ ...l, enabled: $event.target.checked })"
+                  @change="
+                    config.upsertBlockList({
+                      ...l,
+                      enabled: ($event.target as HTMLInputElement).checked,
+                    })
+                  "
                 />
               </label>
             </td>

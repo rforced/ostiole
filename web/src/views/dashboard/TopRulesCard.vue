@@ -1,11 +1,14 @@
-<script setup>
+<script setup lang="ts">
+import type { PropType } from 'vue'
+
 import SectionCard from '@/components/SectionCard.vue'
 import { actionTone } from '@/lib/badge'
 import { formatBytes, formatCount } from '@/lib/format'
+import type { RuleCounter } from '@/views/dashboard/overview'
 
 defineProps({
   /** Busiest configured rules from GET /overview. */
-  rules: { type: Array, default: () => [] },
+  rules: { type: Array as PropType<RuleCounter[]>, default: () => [] },
   /** Packets that reached a default drop. */
   blocked: { type: Object, default: () => ({ packets: 0, bytes: 0 }) },
   /** False until the first overview arrives. */

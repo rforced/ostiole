@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
@@ -16,6 +16,7 @@ import { SETTLE_MS, heldLine, keptLine } from '@/lib/log'
 import { DESTINATION_WINDOWS, deviceLabel, serviceLabel, useTrafficStream } from '@/lib/traffic'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import type { Destination, Destinations, Device, Devices } from '@/views/traffic/types'
 
 const auth = useAuthStore()
 const config = useConfigStore()
@@ -60,14 +61,16 @@ const win = ref('24h')
 const device = ref('')
 const query = ref('')
 const live = ref(true)
-/** The last first page: {entries, more, next, held, oldest, enabled}. */
-const page = ref(null)
-const rows = ref([])
+/** The last first page. */
+const page = ref<Destinations | null>(null)
+const rows = ref<Destination[]>([])
 /** The devices the filter offers. */
-const devices = ref([])
+const devices = ref<Device[]>([])
 
 function params(offset = 0) {
-  const p = { window: win.value }
+  const p: { window: string; device?: string; q?: string; offset?: number } = {
+    window: win.value,
+  }
   if (device.value) p.device = device.value
   if (query.value.trim()) p.q = query.value.trim()
   if (offset) p.offset = offset
@@ -75,7 +78,7 @@ function params(offset = 0) {
 }
 
 const read = useAsync(async () => {
-  const p = await api.traffic.destinations(params())
+  const p = (await api.traffic.destinations(params())) as Destinations
   page.value = p
   rows.value = p.entries ?? []
 })
@@ -83,12 +86,12 @@ const more = useAsync(async () => {
   if (!page.value?.more) return
   // Reading past the first page is reading history, so Live stops.
   live.value = false
-  const p = await api.traffic.destinations(params(page.value.next))
+  const p = (await api.traffic.destinations(params(page.value.next))) as Destinations
   page.value = { ...page.value, more: p.more, next: p.next }
   rows.value = [...rows.value, ...(p.entries ?? [])]
 })
 const readDevices = useAsync(async () => {
-  devices.value = (await api.traffic.devices('24h')).devices ?? []
+  devices.value = ((await api.traffic.devices('24h')) as Devices).devices ?? []
 })
 /** Empties the router's destinations, their files included, and reads again. */
 const clear = useAsync(async () => {
@@ -102,8 +105,8 @@ onMounted(() => {
 watch([win, device], () => read.run())
 let settle = 0
 watch(query, () => {
-  clearTimeout(settle)
-  settle = setTimeout(() => read.run(), SETTLE_MS)
+  window.clearTimeout(settle)
+  settle = window.setTimeout(() => read.run(), SETTLE_MS)
 })
 watch(
   () => config.saved?.traffic?.destinations?.enabled,

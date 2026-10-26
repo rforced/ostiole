@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Plus } from '@lucide/vue'
 import { computed, onMounted, ref } from 'vue'
 
@@ -11,12 +11,14 @@ import StatusBadge from '@/components/StatusBadge.vue'
 import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
+import type { Cron } from '@/lib/model.gen'
 import { deviceName } from '@/lib/wol'
 import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import { BACKUP_DIR } from '@/views/system/crons/backup'
 import CronDialog from '@/views/system/crons/CronDialog.vue'
+import type { CronRun, CronStatus } from '@/views/system/crons/status'
 import { serviceName } from '@/views/system/crons/services'
 
 const REFRESH_MS = 10_000
@@ -24,13 +26,13 @@ const REFRESH_MS = 10_000
 const auth = useAuthStore()
 const config = useConfigStore()
 const confirm = useConfirmStore()
-const statuses = ref([])
+const statuses = ref<CronStatus[]>([])
 const open = ref(false)
-const editing = ref(null)
+const editing = ref<Cron | null>(null)
 
 const load = useAsync(
   async () => {
-    statuses.value = await api.crons.list()
+    statuses.value = (await api.crons.list()) as CronStatus[]
   },
   { interval: REFRESH_MS },
 )
@@ -50,8 +52,8 @@ const rows = computed(() =>
 )
 
 /** One at a time; the outcome lands in the row once the list is read again. */
-const runner = useAsync(async (c) => {
-  const res = await api.crons.run(c.id)
+const runner = useAsync(async (c: { id: string }) => {
+  const res = (await api.crons.run(c.id)) as CronRun | undefined
   if (res?.error) throw new Error(`${c.id}: ${res.error}`)
   await load.run()
 })

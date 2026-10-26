@@ -1,15 +1,17 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
+import type { StaticLease } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
   /** The static lease being edited, or null to add one. */
-  lease: { type: Object, default: null },
+  lease: { type: Object as PropType<StaticLease | null>, default: null },
   /** What a new one starts from, such as a lease the server handed out. */
-  prefill: { type: Object, default: null },
+  prefill: { type: Object as PropType<Partial<StaticLease> | null>, default: null },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 const config = useConfigStore()
@@ -32,7 +34,7 @@ watch(
 )
 
 function save() {
-  const out = { mac: form.value.mac.trim().toLowerCase() }
+  const out: StaticLease = { mac: form.value.mac.trim().toLowerCase() }
   if (form.value.ip) out.ip = form.value.ip.trim()
   if (form.value.ipv6) out.ipv6 = form.value.ipv6.trim()
   if (form.value.hostname) out.hostname = form.value.hostname.trim()

@@ -1,6 +1,7 @@
-<script setup>
+<script setup lang="ts">
 import { LoaderCircle } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -12,26 +13,41 @@ import { formatCount } from '@/lib/format'
 import { joinList, parseList } from '@/lib/lists'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import type { Alias, AliasType } from '@/lib/model.gen'
 import CountryPicker from '@/views/firewall/CountryPicker.vue'
+import type { FeedStatus } from '@/views/firewall/feeds'
+
+interface AliasForm {
+  name: string
+  type: AliasType | ''
+  description: string
+  entries: string
+  countries: string[]
+  refreshHours: number | ''
+}
+
+interface Inspected {
+  busy: boolean
+  entries: number | null
+  error: string
+}
 
 const props = defineProps({
-  alias: { type: Object, default: null },
+  alias: { type: Object as PropType<Alias | null>, default: null },
   /**
    * The feed statuses the page has already read, so the country picker
    * can say how much each country held without fetching anything itself.
-   *
-   * @type {import('vue').PropType<object[]>}
    */
-  feeds: { type: Array, default: () => [] },
+  feeds: { type: Array as PropType<FeedStatus[]>, default: () => [] },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
 const auth = useAuthStore()
-const form = ref(blank())
+const form = ref<AliasForm>(blank())
 const error = ref('')
 
-function blank() {
+function blank(): AliasForm {
   return {
     name: '',
     type: 'hosts',
@@ -48,7 +64,7 @@ function blank() {
  */
 const countryCounts = computed(() => {
   const status = props.feeds.find((f) => f.alias === props.alias?.name)
-  const out = {}
+  const out: Record<string, number> = {}
   for (const part of status?.parts ?? []) {
     if (!part.country) continue
     // A mirror may give a country one source per address family, and the
@@ -74,29 +90,31 @@ const lines = computed(() =>
 )
 const fetching = computed(() => fetches({ type: form.value.type, entries: lines.value }))
 /** The lists a host alias fetches, each once. */
-const urls = computed(() => (takesURLs(form.value.type) ? [...new Set(urlsOf(lines.value))] : []))
+const urls = computed(() =>
+  takesURLs(form.value.type) ? [...new Set<string>(urlsOf(lines.value))] : [],
+)
 
 /** What the last fetch of this alias read from a URL, or null. */
-function fetchedPart(url) {
+function fetchedPart(url: string) {
   const status = props.feeds.find((f) => f.alias === props.alias?.name)
   return status?.parts?.find((p) => p.source === url) ?? null
 }
 
 /** What the router found at each URL typed here, which nothing has fetched. */
-const inspected = ref({})
+const inspected = ref<Record<string, Inspected>>({})
 
 /**
  * Asks the router to read a URL typed here, so what it holds is known
  * before anything is saved. Each URL is read once, and none that the last
  * fetch of this alias read.
  */
-async function inspect(url) {
+async function inspect(url: string) {
   if (auth.readOnly || !/^https?:\/\/\S+$/i.test(url)) return
   const seen = inspected.value[url]
   if (fetchedPart(url) || (seen && !seen.error)) return
   inspected.value = { ...inspected.value, [url]: { busy: true, entries: null, error: '' } }
   try {
-    const part = await api.aliases.inspect(url)
+    const part = (await api.aliases.inspect(url)) as { entries?: number }
     const entries = part.entries ?? 0
     inspected.value = { ...inspected.value, [url]: { busy: false, entries, error: '' } }
   } catch (e) {
@@ -131,11 +149,11 @@ const ENTRY_HINTS = {
   asn: 'One AS number per line, like AS15169. The prefixes each one announces are fetched from the ASN source.',
 }
 
-function prefixCount(n) {
+function prefixCount(n: number) {
   return `${formatCount(n)} ${n === 1 ? 'prefix' : 'prefixes'}`
 }
 
-function addressCount(n) {
+function addressCount(n: number) {
   return `${formatCount(n)} ${n === 1 ? 'address' : 'addresses'}`
 }
 
@@ -173,7 +191,7 @@ function save() {
     error.value = `Alias ${name} already exists.`
     return
   }
-  let entries
+  let entries: string[]
   if (form.value.type === 'geoip') {
     entries = [...form.value.countries]
   } else if (form.value.type === 'asn') {
@@ -192,7 +210,7 @@ function save() {
     return
   }
   if (!entries.length && props.alias && props.alias.entries == null) entries = props.alias.entries
-  const out = { name, type: form.value.type, entries }
+  const out: Alias = { name, type: form.value.type, entries }
   if (form.value.description) out.description = form.value.description
   const hours = Number(form.value.refreshHours)
   if (hours > 0 && (fetching.value || props.alias?.refreshHours)) out.refreshHours = hours

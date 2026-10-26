@@ -1,6 +1,7 @@
-<script setup>
+<script setup lang="ts">
 import { FileUp } from '@lucide/vue'
 import { computed, ref } from 'vue'
+import type { PropType } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
 import ConfirmButton from '@/components/ConfirmButton.vue'
@@ -8,60 +9,62 @@ import ErrorLine from '@/components/ErrorLine.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { formatBytes } from '@/lib/format'
+import type { Interface } from '@/lib/model.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import OvpnFileDialog from '@/views/vpn/openvpn/OvpnFileDialog.vue'
 import OvpnTunnelDialog from '@/views/vpn/openvpn/OvpnTunnelDialog.vue'
+import type { GatewayStatus, OvpnLive } from '@/views/vpn/types'
 
 const props = defineProps({
   /** Each tunnel as its daemon has it, by name. */
-  live: { type: Map, required: true },
+  live: { type: Map as PropType<Map<string, OvpnLive>>, required: true },
   /** Whether this router can run a tunnel at all. */
   setUp: { type: Boolean, default: true },
   /** Whether the kernel data channel module was skipped because Secure Boot is on. */
   secureBootSkipped: { type: Boolean, default: false },
   /** What the gateway monitor says of each gateway. */
-  gateways: { type: Array, required: true },
+  gateways: { type: Array as PropType<GatewayStatus[]>, required: true },
   /** The page's read of both, from useAsync. */
   read: { type: Object, required: true },
 })
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const editing = ref(null)
+const editing = ref<Interface | null>(null)
 const open = ref(false)
 const fromFile = ref(false)
 
 const tunnels = computed(() => config.openvpnTunnels)
 
 /** connected, connecting while the daemon runs, down when it does not. */
-function state(t) {
+function state(t: Interface) {
   const l = props.live.get(t.name)
   if (!l) return null
   if (l.connected) return 'connected'
   return l.running ? 'connecting' : 'down'
 }
 
-function remote(t) {
+function remote(t: Interface) {
   const [first, ...rest] = t.openvpn.remotes ?? []
   if (!first) return '—'
   return `${first.host}:${first.port}${rest.length ? ` +${rest.length}` : ''}`
 }
 
-function traffic(t) {
+function traffic(t: Interface) {
   const l = props.live.get(t.name)
   if (!l?.running) return '—'
   return `${formatBytes(l.bytesIn ?? 0)} in / ${formatBytes(l.bytesOut ?? 0)} out`
 }
 
 /** The gateways that send rule traffic into the tunnel, with the monitor's word on each. */
-function gatewaysOf(t) {
+function gatewaysOf(t: Interface) {
   return config.gateways
     .filter((g) => g.enabled && g.interface === t.name && !g.address)
     .map((g) => ({ name: g.name, live: props.gateways.find((s) => s.name === g.name) ?? null }))
 }
 
-function edit(t) {
+function edit(t: Interface) {
   editing.value = t
   open.value = true
 }

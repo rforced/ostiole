@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
@@ -12,7 +12,7 @@ import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
-import { heldLine, useLog } from '@/lib/log'
+import { type LogPage, type LogRow, heldLine, useLog } from '@/lib/log'
 import { records } from '@/lib/logs'
 import { wirelessValues } from '@/lib/wirelessLog'
 import { useConfigStore } from '@/stores/config'
@@ -34,9 +34,19 @@ const retention = computed({
   },
 })
 
+interface WirelessEvent extends LogRow {
+  time: string
+  event: string
+  interface: string
+  mac: string
+  network?: string
+  device?: string
+}
+
 const card = ref(null)
-const log = useLog({
-  read: (params, signal) => api.wireless.log(params, signal),
+const log = useLog<WirelessEvent>({
+  read: async (params, signal) =>
+    (await api.wireless.log(params, signal)) as LogPage<WirelessEvent>,
   stream: '/api/v1/wireless/log/stream',
   values: wirelessValues,
   top: card,

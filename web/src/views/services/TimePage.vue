@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import AppNotice from '@/components/AppNotice.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import StatusBadge from '@/components/StatusBadge.vue'

@@ -1,4 +1,5 @@
-<script setup>
+<script setup lang="ts">
+import type { PropType } from 'vue'
 import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
@@ -6,6 +7,7 @@ import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { newId } from '@/lib/ids'
+import type { Cron } from '@/lib/model.gen'
 import { SCHEDULE_PRESETS, presetFor } from '@/lib/schedules'
 import { deviceName } from '@/lib/wol'
 import { ADMIN_ONLY, adminOnly, useAuthStore } from '@/stores/auth'
@@ -13,7 +15,7 @@ import { useConfigStore } from '@/stores/config'
 import { BACKUP_DIR } from '@/views/system/crons/backup'
 import { SERVICES } from '@/views/system/crons/services'
 
-const props = defineProps({ cron: { type: Object, default: null } })
+const props = defineProps({ cron: { type: Object as PropType<Cron | null>, default: null } })
 const open = defineModel('open', { type: Boolean, default: false })
 
 const auth = useAuthStore()
@@ -31,7 +33,13 @@ const KINDS = [
   { value: 'command', label: 'Run a command' },
 ]
 
-function blank() {
+type Form = Required<Omit<Cron, 'keep' | 'args' | 'timeoutSeconds'>> & {
+  keep: number | string
+  args: string
+  timeoutSeconds: number | string
+}
+
+function blank(): Form {
   return {
     id: '',
     description: '',
@@ -70,7 +78,7 @@ watch(
 function save() {
   error.value = ''
   const f = form.value
-  const out = {
+  const out: Cron = {
     id: f.id || newId('cron'),
     enabled: f.enabled,
     schedule: f.schedule.trim(),

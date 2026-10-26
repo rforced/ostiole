@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import LeftoverRulesSection from '@/views/diagnostics/LeftoverRulesSection.vue'
 import RulesetSection from '@/views/diagnostics/RulesetSection.vue'
 </script>

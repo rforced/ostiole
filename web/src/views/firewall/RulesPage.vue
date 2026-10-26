@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ArrowDown, ArrowUp, Plus } from '@lucide/vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'

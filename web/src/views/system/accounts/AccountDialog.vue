@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'

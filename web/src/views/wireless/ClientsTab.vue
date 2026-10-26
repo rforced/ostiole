@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -7,22 +7,24 @@ import RandomMacBadge from '@/components/RandomMacBadge.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
+import type { SortColumn } from '@/components/sortTypes'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { formatBytes, formatDuration } from '@/lib/format'
 import { byAddress, byNumber, byText, useSort } from '@/lib/sort'
 import { useConfigStore } from '@/stores/config'
+import type { Client } from '@/views/wireless/card'
 
 /** How often Live reads the stations again. */
 const POLL_MS = 5000
 
 const config = useConfigStore()
-const clients = ref([])
+const clients = ref<Client[]>([])
 const live = ref(true)
 
 const load = useAsync(
   async () => {
-    clients.value = await api.wireless.clients()
+    clients.value = (await api.wireless.clients()) as Client[]
   },
   // Live owns the poll, and starts on.
   { interval: POLL_MS, immediate: true },
@@ -45,7 +47,7 @@ function ssidOf(c) {
   return c.ssid || c.interface
 }
 
-const COLUMNS = [
+const COLUMNS: SortColumn[] = [
   ['client', 'Client'],
   ['address', 'Address'],
   ['network', 'Network'],

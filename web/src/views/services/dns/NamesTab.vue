@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Plus } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 
@@ -10,11 +10,13 @@ import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
+import type { SortColumn } from '@/components/sortTypes'
 import { api } from '@/lib/api'
 import { emptyText } from '@/lib/async'
 import { useDraftRows } from '@/lib/draft'
 import { formatWhen } from '@/lib/format'
 import { overrideKey, overrideName } from '@/lib/hosts'
+import type { HostOverride } from '@/lib/model.gen'
 import { useSearch } from '@/lib/search'
 import { byAddress, byText, useSort } from '@/lib/sort'
 import { useAuthStore } from '@/stores/auth'
@@ -24,18 +26,41 @@ import HostOverrideDialog from '@/views/services/dns/HostOverrideDialog.vue'
 /** How often Live reads the names again. */
 const LIVE_MS = 2000
 
-const COLUMNS = [
+const COLUMNS: SortColumn[] = [
   ['name', 'Name'],
   ['address', 'Address'],
   ['source', 'Source'],
 ]
 
 /** Where each kind of name comes from, and the page that changes it. */
-const SOURCES = {
+const SOURCES: Record<string, { label: string; to?: string }> = {
   override: { label: 'Override' },
   static: { label: 'Static lease', to: '/services/dhcp#v4' },
   proxy: { label: 'Reverse proxy', to: '/services/proxy' },
   device: { label: 'Device', to: '/services/dhcp#leases' },
+}
+
+/** A name the router answers that is not a host override, as the names read gives it. */
+interface DerivedName {
+  name: string
+  bare?: string
+  addresses: string[]
+  source: string
+  mac?: string
+  description?: string
+  site?: string
+  interfaces?: string[]
+  expires?: string
+  heldBy?: { source: string; name: string }
+}
+
+interface NameRow extends Partial<DerivedName> {
+  key: string
+  source: string
+  name: string
+  aliases: string[]
+  addresses: string[]
+  override?: HostOverride
 }
 
 const auth = useAuthStore()
@@ -50,7 +75,9 @@ const live = ref(true)
  * registers them. Read for the draft, like the system rules, so a change
  * shows before it is applied; Live follows the devices as they come.
  */
-const derived = useDraftRows((draft) => api.dnsNames(draft), { interval: LIVE_MS })
+const derived = useDraftRows(async (draft) => (await api.dnsNames(draft)) as DerivedName[], {
+  interval: LIVE_MS,
+})
 watch(live, (on) => {
   if (on) {
     derived.run()
@@ -60,7 +87,7 @@ watch(live, (on) => {
   }
 })
 
-const names = computed(() => [
+const names = computed<NameRow[]>(() => [
   ...hosts.value.map((h) => ({
     key: `override ${overrideKey(h)}`,
     source: 'override',
@@ -91,7 +118,7 @@ const { query, shown } = useSearch(names, (n) => ({
 }))
 
 // The list keeps the order it was written in until a header is clicked.
-const sort = useSort(shown, {
+const sort = useSort<NameRow>(shown, {
   name: byText((n) => n.name),
   address: byAddress((n) => n.addresses[0]),
   source: byText((n) => SOURCES[n.source].label),
@@ -103,7 +130,7 @@ const empty = computed(() =>
 )
 
 /** What answers a device's name instead of it. */
-function holder(h) {
+function holder(h: { source: string; name: string }) {
   switch (h.source) {
     case 'override':
       return `override ${h.name}`
@@ -114,13 +141,13 @@ function holder(h) {
   }
 }
 
-const editing = ref(null)
+const editing = ref<HostOverride | null>(null)
 const open = ref(false)
 function addHost() {
   editing.value = null
   open.value = true
 }
-function editHost(h) {
+function editHost(h: HostOverride) {
   editing.value = h
   open.value = true
 }

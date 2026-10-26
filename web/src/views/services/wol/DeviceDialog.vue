@@ -1,5 +1,6 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -7,11 +8,12 @@ import FormField from '@/components/FormField.vue'
 import { newId } from '@/lib/ids'
 import { interfaceLabel } from '@/lib/interfaces'
 import { deviceName, wakeInterfaces } from '@/lib/wol'
+import type { WoLDevice } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
   /** The device being edited, or null to add one. */
-  device: { type: Object, default: null },
+  device: { type: Object as PropType<WoLDevice | null>, default: null },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 const config = useConfigStore()
@@ -62,7 +64,11 @@ function save() {
     error.value = `${mac} is already listed.`
     return
   }
-  const out = { id: props.device?.id || newId('wol'), interface: form.value.interface, mac }
+  const out: WoLDevice = {
+    id: props.device?.id || newId('wol'),
+    interface: form.value.interface,
+    mac,
+  }
   const description = form.value.description.trim()
   if (description) out.description = description
   config.upsertWoLDevice(out, props.device?.id)

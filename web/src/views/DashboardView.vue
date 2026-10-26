@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { LayoutGrid } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 
@@ -60,7 +60,7 @@ const load = useAsync(
   async () => {
     const [ov] = await Promise.all([api.overview(), system.refresh()])
     overview.value = ov
-    rates.value = sampleRates(ov.interfaces ?? [])
+    rates.value = sampleRates(overview.value.interfaces ?? [])
   },
   { interval: REFRESH_MS },
 )
@@ -211,7 +211,7 @@ async function readHealth() {
  */
 async function readUpdate() {
   try {
-    const res = await api.update.status()
+    const res = (await api.update.status()) as { check?: { available?: boolean } }
     if (res.check?.available) update.value = res.check
   } catch {
     /* offline or updates unavailable */

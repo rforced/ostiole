@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
@@ -11,11 +11,12 @@ import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { formatBytes, formatWhen } from '@/lib/format'
-import { heldLine, useLog } from '@/lib/log'
+import { heldLine, useLog, type LogPage } from '@/lib/log'
 import { records } from '@/lib/logs'
 import { ANSWERED_BY, requestValues, tookText } from '@/lib/proxyRequests'
 import { useProxyStatus } from '@/lib/proxyStatus'
 import { useConfigStore } from '@/stores/config'
+import type { ProxyRequest } from '@/views/services/types'
 
 const config = useConfigStore()
 const { stage } = useProxyStatus()
@@ -27,8 +28,9 @@ const retention = computed({
 })
 
 const card = ref(null)
-const log = useLog({
-  read: (params, signal) => api.proxy.requests(params, signal),
+const log = useLog<ProxyRequest>({
+  read: async (params, signal) =>
+    (await api.proxy.requests(params, signal)) as LogPage<ProxyRequest>,
   stream: '/api/v1/proxy/requests/stream',
   values: requestValues,
   top: card,

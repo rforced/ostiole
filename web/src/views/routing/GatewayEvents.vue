@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
@@ -12,14 +12,28 @@ import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { eventFor, eventText, eventValues } from '@/lib/gateways'
 import { heldLine, useLog } from '@/lib/log'
+import type { LogPage, LogRow } from '@/lib/log'
 import { useConfigStore } from '@/stores/config'
+
+interface GatewayEvent extends LogRow {
+  time: string
+  gateway: string
+  family?: string
+  kind: string
+  for?: number
+  span?: number
+  error?: string
+  monitor?: string
+  was?: string
+}
 
 /** What changed on the gateways, newest first. */
 const config = useConfigStore()
 
 const card = ref(null)
-const log = useLog({
-  read: (params, signal) => api.gatewayHistory.events(params, signal),
+const log = useLog<GatewayEvent>({
+  read: async (params, signal) =>
+    (await api.gatewayHistory.events(params, signal)) as LogPage<GatewayEvent>,
   stream: '/api/v1/gateways/events/stream',
   values: eventValues,
   top: card,

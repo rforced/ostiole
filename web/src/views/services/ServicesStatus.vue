@@ -1,13 +1,13 @@
-<script setup>
-import { computed } from 'vue'
+<script setup lang="ts">
+import { computed, type PropType } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
-import { useServicesStatus } from '@/lib/servicesStatus'
+import { useServicesStatus, type ServiceName } from '@/lib/servicesStatus'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
   /** Which service the page is about: dhcp, dns, or upnp. */
-  service: { type: String, default: 'dhcp' },
+  service: { type: String as PropType<ServiceName>, default: 'dhcp' },
 })
 
 const config = useConfigStore()

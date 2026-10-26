@@ -1,15 +1,17 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { joinList, parseList } from '@/lib/lists'
+import type { ProxyPool } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
   /** The pool being edited, or null for a new one. */
-  pool: { type: Object, default: null },
+  pool: { type: Object as PropType<ProxyPool | null>, default: null },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
@@ -19,7 +21,23 @@ const form = ref(blank())
 const POLICIES = ['round_robin', 'least_conn', 'ip_hash', 'cookie', 'first']
 const PROXY_PROTOCOLS = ['', 'v1', 'v2']
 
-function blank() {
+interface PoolForm {
+  id: string
+  previousId: string
+  description: string
+  upstreams: string
+  policy: string
+  healthPath: string
+  healthSeconds: number | ''
+  failSeconds: number
+  tls: boolean
+  tlsServerName: string
+  tlsCaPem: string
+  tlsInsecure: boolean
+  proxyProtocol: string
+}
+
+function blank(): PoolForm {
   return {
     id: '',
     previousId: '',
@@ -71,7 +89,7 @@ const upstreams = computed(() => parseList(form.value.upstreams))
 
 function save() {
   const f = form.value
-  const pool = {
+  const pool: ProxyPool = {
     id: f.id.trim(),
     upstreams: upstreams.value.map((address) => ({ address })),
   }

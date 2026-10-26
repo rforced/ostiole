@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 
 import ActionButton from '@/components/ActionButton.vue'
@@ -34,7 +34,7 @@ onMounted(load.run)
 const started = ref({})
 
 /** One place for what a button does, so its failure lands in one alert. */
-const action = useAsync((run) => run())
+const action = useAsync((run: () => Promise<unknown>) => run())
 /** The button whose request is in flight, as drive:what. */
 const doing = ref('')
 const busyOn = (drive, what) => doing.value === `${drive.name}:${what}`

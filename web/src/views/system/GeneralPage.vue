@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import FetchedAliasesSection from '@/views/system/FetchedAliasesSection.vue'
 import LogsSection from '@/views/system/LogsSection.vue'
 import ManagementSection from '@/views/system/ManagementSection.vue'

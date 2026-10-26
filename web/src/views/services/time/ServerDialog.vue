@@ -1,16 +1,18 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import type { NTPServer } from '@/lib/model.gen'
 
 const props = defineProps({
   /** The server being edited; null adds one. */
-  server: { type: Object, default: null },
+  server: { type: Object as PropType<NTPServer | null>, default: null },
   /** Every host listed now, so the same one is not added twice. */
-  hosts: { type: Array, default: () => [] },
+  hosts: { type: Array as PropType<string[]>, default: () => [] },
 })
 const emit = defineEmits(['save'])
 const open = defineModel('open', { type: Boolean, default: false })
@@ -48,7 +50,7 @@ const problem = computed(() => {
 })
 
 function save() {
-  const out = { host: host.value }
+  const out: NTPServer = { host: host.value }
   if (form.value.nts) out.nts = true
   if (form.value.pool) out.pool = true
   emit('save', out, props.server?.host ?? '')

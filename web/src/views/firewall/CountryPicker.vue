@@ -1,22 +1,21 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
+import type { PropType } from 'vue'
 
 import SearchBox from '@/components/SearchBox.vue'
 import { COUNTRIES, PRESETS, REGIONS } from '@/lib/countries'
 import { matches as found } from '@/lib/search'
 
 /** The two-letter codes the alias holds. */
-const selected = defineModel({ type: Array, default: () => [] })
+const selected = defineModel<string[]>({ type: Array, default: () => [] })
 
 const props = defineProps({
   /**
    * What each country held at the last fetch, keyed by lower-case code.
    * Somebody picking twelve countries is asking how big the answer will
    * be, and this is the only place that can answer it.
-   *
-   * @type {import('vue').PropType<Record<string, number>>}
    */
-  counts: { type: Object, default: () => ({}) },
+  counts: { type: Object as PropType<Record<string, number>>, default: () => ({}) },
 })
 
 const filter = ref('')
@@ -44,7 +43,7 @@ const unknown = computed(() => {
 
 const names = computed(() => Object.fromEntries(COUNTRIES.map((c) => [c.code, c.name])))
 
-function set(codes, on) {
+function set(codes: string[], on: boolean) {
   const next = new Set(selected.value)
   for (const code of codes) {
     if (on) next.add(code)
@@ -59,7 +58,7 @@ function set(codes, on) {
 const allShown = computed(() => matches.value.every((c) => chosen.value.has(c.code)))
 
 /** How many ranges a country held, or null when nothing has been fetched. */
-function count(code) {
+function count(code: string) {
   const n = props.counts[code.toLowerCase()]
   return typeof n === 'number' ? n : null
 }
@@ -151,7 +150,7 @@ const chosenTotal = computed(() =>
               type="checkbox"
               class="checkbox"
               :checked="chosen.has(c.code)"
-              @change="set([c.code], $event.target.checked)"
+              @change="set([c.code], ($event.target as HTMLInputElement).checked)"
             />
             <span class="font-mono text-code text-ink-muted">{{ c.code }}</span>
             <span class="truncate">{{ c.name }}</span>

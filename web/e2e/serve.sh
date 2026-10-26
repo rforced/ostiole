@@ -17,8 +17,8 @@ fi
 # A named package manager rather than whatever the host happens to have,
 # so the updates card looks the same everywhere. The server is not root,
 # so nothing is ever run through it. Releases are asked of the stand-in
-# 28-updates.spec.js runs, never of GitHub, and dynamic DNS writes to the
-# one 29-ddns.spec.js runs, never to Cloudflare. Backups and log files go
+# 28-updates.spec.ts runs, never of GitHub, and dynamic DNS writes to the
+# one 29-ddns.spec.ts runs, never to Cloudflare. Backups and log files go
 # beside the configuration, since the server may not write /var. Lists come
 # from servers the specs run on the loopback, which a router never reads.
 # Gateways answer as probes.json in the directory says, since the server

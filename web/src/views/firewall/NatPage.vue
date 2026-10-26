@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Plus } from '@lucide/vue'
 import { computed, ref } from 'vue'
 
@@ -7,6 +7,7 @@ import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { useDraftRows } from '@/lib/draft'
+import type { OutboundMode } from '@/lib/model.gen'
 import { tierBadge, tierLabel } from '@/lib/tiers'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -36,7 +37,7 @@ const MODE_HINTS = {
 }
 const mode = computed({
   get: () => outbound.value.mode,
-  set: (v) => config.setOutboundMode(v),
+  set: (v: OutboundMode) => config.setOutboundMode(v),
 })
 
 /** Manual rules the mode leaves out: kept in the draft, not shown in the table. */

@@ -1,5 +1,6 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import type { PropType } from 'vue'
 
 import ErrorLine from '@/components/ErrorLine.vue'
 import SectionCard from '@/components/SectionCard.vue'
@@ -8,10 +9,23 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { appendPoint, useTrafficStream } from '@/lib/traffic'
 
+interface Chart {
+  name: string
+  down: number
+  up: number
+  points?: [number, number, number][]
+}
+
+interface LinkSample {
+  id: string
+  down: number
+  up: number
+}
+
 /** Links a dashboard card follows: the external ones, which the overview marks. */
 const props = defineProps({
   /** The names of the external links, from GET /overview. */
-  links: { type: Array, required: true },
+  links: { type: Array as PropType<string[]>, required: true },
   /** False until every card has been read, this one's charts included. */
   loaded: { type: Boolean, default: true },
   /** How many charts to hold room for until then. */
@@ -24,11 +38,11 @@ const emit = defineEmits(['read'])
  * the last visit left, before the overview names the links, and a read
  * kept to an empty list stayed empty until the stream reopened.
  */
-const charts = ref(null)
+const charts = ref<Chart[] | null>(null)
 const end = ref(0)
 
 const read = useAsync(async () => {
-  const ifs = await api.traffic.interfaces('5m')
+  const ifs = (await api.traffic.interfaces('5m')) as { links: Chart[]; now: string }
   charts.value = ifs.links
   end.value = Date.parse(ifs.now) / 1000
 })
@@ -40,7 +54,7 @@ onMounted(async () => {
 })
 
 useTrafficStream({
-  links: (ev) => {
+  links: (ev: { time: string; links: LinkSample[] }) => {
     const t = Date.parse(ev.time) / 1000
     for (const r of ev.links) {
       const l = charts.value?.find((x) => x.name === r.id)

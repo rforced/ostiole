@@ -1,17 +1,19 @@
-<script setup>
+<script setup lang="ts">
 import { Plus, X } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { joinList, keptOrder, parseList } from '@/lib/lists'
+import type { ProxySite } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 import AllowFromAliases, { splitAllowFrom } from '@/views/services/proxy/AllowFromAliases.vue'
 
 const props = defineProps({
   /** The site being edited, or null for a new one. */
-  site: { type: Object, default: null },
+  site: { type: Object as PropType<ProxySite | null>, default: null },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
@@ -82,7 +84,7 @@ function removePath(index) {
 
 function save() {
   const f = form.value
-  const site = {
+  const site: ProxySite = {
     id: f.id.trim(),
     enabled: f.enabled,
     hosts: hosts.value,

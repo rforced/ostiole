@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { LoaderCircle } from '@lucide/vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 

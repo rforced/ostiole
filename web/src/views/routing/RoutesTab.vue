@@ -1,27 +1,35 @@
-<script setup>
+<script setup lang="ts">
 import { Plus } from '@lucide/vue'
 import { ref } from 'vue'
+import type { PropType } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
+import type { StaticRoute } from '@/lib/model.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import StaticRouteDialog from '@/views/routing/StaticRouteDialog.vue'
 
+interface ReplyRoute {
+  interface: string
+  table: number
+  nextHops: string[]
+}
+
 defineProps({
-  replies: { type: Array, required: true },
+  replies: { type: Array as PropType<ReplyRoute[]>, required: true },
 })
 
 const auth = useAuthStore()
 const config = useConfigStore()
 const open = ref(false)
-const editing = ref(null)
+const editing = ref<StaticRoute | null>(null)
 
 function add() {
   editing.value = null
   open.value = true
 }
-function edit(r) {
+function edit(r: StaticRoute) {
   editing.value = r
   open.value = true
 }

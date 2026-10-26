@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -7,20 +7,29 @@ import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
+import type { SortColumn } from '@/components/sortTypes'
 import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { useSearch } from '@/lib/search'
 import { byAddress, byNumber, byText, useSort } from '@/lib/sort'
 
+/** One port a client asked the router to forward. */
+interface Mapping {
+  protocol: string
+  internal: string
+  externalPort: number
+  internalPort: number
+}
+
 /** How often Live reads the mappings again. */
 const LIVE_MS = 2000
 
-const mappings = ref([])
+const mappings = ref<Mapping[]>([])
 const live = ref(true)
 
 const load = useAsync(
   async () => {
-    mappings.value = await api.upnp.mappings()
+    mappings.value = (await api.upnp.mappings()) as Mapping[]
   },
   // Live owns the poll, and starts on.
   { interval: LIVE_MS, immediate: true },
@@ -46,14 +55,14 @@ const empty = computed(() =>
 )
 
 /** Ports read upwards, as a port list does. */
-const sort = useSort(shown, {
+const sort = useSort<Mapping>(shown, {
   protocol: byText((m) => m.protocol),
   external: byNumber((m) => m.externalPort, 'asc'),
   client: byAddress((m) => m.internal),
   internal: byNumber((m) => m.internalPort, 'asc'),
 })
 const rows = sort.sorted
-const COLUMNS = [
+const COLUMNS: SortColumn[] = [
   ['protocol', 'Protocol'],
   ['external', 'External port'],
   ['client', 'Client'],

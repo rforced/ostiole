@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
 import FormField from '@/components/FormField.vue'
@@ -107,7 +107,7 @@ function onTypes(text) {
                   class="checkbox"
                   :aria-label="`${i.name} asks`"
                   :checked="Boolean(entryOf(i.name)?.asks)"
-                  @change="setRole(i.name, 'asks', $event.target.checked)"
+                  @change="setRole(i.name, 'asks', ($event.target as HTMLInputElement).checked)"
                 />
               </td>
               <td>
@@ -116,7 +116,7 @@ function onTypes(text) {
                   class="checkbox"
                   :aria-label="`${i.name} answers`"
                   :checked="Boolean(entryOf(i.name)?.answers)"
-                  @change="setRole(i.name, 'answers', $event.target.checked)"
+                  @change="setRole(i.name, 'answers', ($event.target as HTMLInputElement).checked)"
                 />
               </td>
             </tr>
@@ -139,7 +139,7 @@ function onTypes(text) {
             :value="typesText"
             class="input h-32 font-mono"
             spellcheck="false"
-            @input="onTypes($event.target.value)"
+            @input="onTypes(($event.target as HTMLTextAreaElement).value)"
           ></textarea>
         </FormField>
       </div>

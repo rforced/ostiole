@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Upload } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 
@@ -9,6 +9,7 @@ import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
+import type { Interface, WireGuardPeer, Zone } from '@/lib/model.gen'
 import { parseQuick, peerName, takesDefaultRoute } from '@/lib/wgconf'
 import { useConfigStore } from '@/stores/config'
 
@@ -23,7 +24,7 @@ const gateway = ref(true)
 const monitor = ref('')
 const error = ref('')
 const busy = ref(false)
-const fileInput = ref(null)
+const fileInput = ref<HTMLInputElement | null>(null)
 
 watch(open, (now) => {
   if (!now) return
@@ -63,7 +64,7 @@ const peers = computed(() => {
   if (!ok.value) return []
   const base = peerName(fileName.value)
   return parsed.value.peers.map((p, i) => {
-    const out = {
+    const out: WireGuardPeer = {
       name: i ? `${base.slice(0, 28)}_${i + 1}` : base,
       enabled: true,
       publicKey: p.publicKey,
@@ -77,19 +78,20 @@ const peers = computed(() => {
 })
 
 /** The first letter up, for a line that starts a message. */
-const sentence = (s) => s.charAt(0).toUpperCase() + s.slice(1)
+const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
-async function choose(e) {
-  const f = e.target.files?.[0]
-  e.target.value = ''
+async function choose(e: Event) {
+  const input = e.target as HTMLInputElement
+  const f = input.files?.[0]
+  input.value = ''
   if (!f) return
   text.value = await f.text()
   fileName.value = f.name
   if (!description.value) description.value = f.name.replace(/\.conf$/i, '')
 }
 
-/** @param {string} cidr */
-const address = (cidr) => (cidr ? { mode: 'static', address: cidr } : { mode: 'none' })
+const address = (cidr: string): { mode: 'static' | 'none'; address?: string } =>
+  cidr ? { mode: 'static', address: cidr } : { mode: 'none' }
 
 async function save() {
   error.value = ''
@@ -106,13 +108,15 @@ async function save() {
   const p = parsed.value
   busy.value = true
   try {
-    const { publicKey } = await api.wireguard.publicKey(p.iface.privateKey)
+    const { publicKey } = (await api.wireguard.publicKey(p.iface.privateKey)) as {
+      publicKey: string
+    }
     if (!zoneExists.value) {
-      const zone = { name: n }
+      const zone: Zone = { name: n }
       if (wayOut.value) zone.external = true
       config.upsertZone(zone)
     }
-    const iface = {
+    const iface: Interface = {
       name: n,
       enabled: true,
       zone: n,

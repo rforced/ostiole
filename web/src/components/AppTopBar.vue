@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Menu, Shield, X } from '@lucide/vue'
 import {
   DialogClose,

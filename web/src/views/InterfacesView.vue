@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Plus } from '@lucide/vue'
 import { TabsContent } from 'reka-ui'
 import { computed, onMounted, ref, watch } from 'vue'
@@ -40,7 +40,7 @@ const zoneEditing = ref(null)
 const zoneOpen = ref(false)
 
 const live = useAsync(async () => {
-  links.value = await api.interfaces.live()
+  links.value = (await api.interfaces.live()) as unknown[]
 })
 const refreshLive = () => live.run()
 
@@ -90,7 +90,7 @@ onMounted(async () => {
   await Promise.all([config.load(), refreshLive()])
   ready.value = true
   try {
-    pppoeReady.value = (await api.services.status()).pppoeSetUp
+    pppoeReady.value = ((await api.services.status()) as { pppoeSetUp: boolean }).pppoeSetUp
   } catch {
     pppoeReady.value = true
   }

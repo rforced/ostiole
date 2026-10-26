@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { onMounted, ref } from 'vue'
 
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -24,19 +24,26 @@ const unit = ref('ostiole.service')
 const lines = ref(200)
 const priority = ref('')
 const since = ref('-1h')
-const entries = ref([])
+interface JournalEntry {
+  time: string
+  unit: string
+  priority: number
+  message: string
+}
+
+const entries = ref<JournalEntry[]>([])
 
 const LEVELS = ['emerg', 'alert', 'crit', 'err', 'warning', 'notice', 'info', 'debug']
 
 // The journal arrives newest first, the order every log in the UI reads
 // in, so the entries render as they come.
 const load = useAsync(async () => {
-  entries.value = await api.diagnostics.journal({
+  entries.value = (await api.diagnostics.journal({
     unit: unit.value,
     lines: Number(lines.value) || 200,
     priority: priority.value,
     since: since.value,
-  })
+  })) as JournalEntry[]
 })
 
 onMounted(load.run)

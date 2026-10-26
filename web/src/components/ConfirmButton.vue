@@ -1,5 +1,6 @@
-<script setup>
+<script setup lang="ts">
 import { LoaderCircle } from '@lucide/vue'
+import type { PropType } from 'vue'
 import { computed } from 'vue'
 
 import { useAuthStore } from '@/stores/auth'
@@ -18,7 +19,7 @@ const props = defineProps({
   /** The yes button; defaults to the label. */
   confirmLabel: { type: String, default: '' },
   /** What goes with it, listed in the dialog. */
-  dependents: { type: Array, default: () => [] },
+  dependents: { type: Array as PropType<string[]>, default: () => [] },
   dependentsLabel: { type: String, default: 'Also deleted' },
   /** A name the admin has to type back first. */
   typed: { type: String, default: '' },

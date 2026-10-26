@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Plus } from '@lucide/vue'
 import { computed, ref } from 'vue'
 
@@ -10,11 +10,13 @@ import InterfaceLabel from '@/components/InterfaceLabel.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
+import type { SortColumn } from '@/components/sortTypes'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { dnsListenInterfaces } from '@/lib/interfaces'
 import { parseList } from '@/lib/lists'
+import type { DomainOverride } from '@/lib/model.gen'
 import { byText, useSort } from '@/lib/sort'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -32,17 +34,17 @@ const domainSort = useSort(domains, {
   description: byText((d) => d.description),
 })
 const domainRows = domainSort.sorted
-const DOMAIN_COLUMNS = [
+const DOMAIN_COLUMNS: SortColumn[] = [
   ['domain', 'Domain'],
   ['description', 'Description'],
 ]
-const domainEditing = ref(null)
+const domainEditing = ref<DomainOverride | null>(null)
 const domainOpen = ref(false)
 function addDomain() {
   domainEditing.value = null
   domainOpen.value = true
 }
-function editDomain(d) {
+function editDomain(d: DomainOverride) {
   domainEditing.value = d
   domainOpen.value = true
 }
@@ -180,10 +182,13 @@ const rebindAllow = computed({
 // saved configuration and never touches the one being edited.
 const dnsRunning = computed(() => Boolean(config.saved?.services?.dns?.enabled))
 const cleared = ref('')
-const names = { dnsmasq: 'the DNS server', unbound: 'the validating resolver' }
+const names: Record<string, string> = {
+  dnsmasq: 'the DNS server',
+  unbound: 'the validating resolver',
+}
 const clearCache = useAsync(async () => {
   cleared.value = ''
-  const { cleared: what = [] } = await api.clearDnsCache()
+  const { cleared: what = [] } = (await api.clearDnsCache()) as { cleared?: string[] }
   cleared.value = what.length
     ? `Cleared ${what.map((n) => names[n] ?? n).join(' and ')}.`
     : 'Nothing was running to clear.'
@@ -371,7 +376,7 @@ function toggleInterface(name, on) {
                 type="checkbox"
                 class="checkbox"
                 :checked="(dns.interfaces ?? []).includes(i.name)"
-                @change="toggleInterface(i.name, $event.target.checked)"
+                @change="toggleInterface(i.name, ($event.target as HTMLInputElement).checked)"
               />
               <InterfaceLabel :iface="i" />
             </label>

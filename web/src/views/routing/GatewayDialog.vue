@@ -1,19 +1,38 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { interfaceLabel } from '@/lib/interfaces'
+import type { Gateway } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 
-const props = defineProps({ gateway: { type: Object, default: null } })
+interface GatewayForm {
+  name: string
+  description: string
+  enabled: boolean
+  interface: string
+  address: string
+  monitor: string
+  priority: number
+  slow: number | ''
+  lossy: number | ''
+  every: number | ''
+  down: number | ''
+  up: number | ''
+}
+
+const props = defineProps({
+  gateway: { type: Object as PropType<Gateway | null>, default: null },
+})
 const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
-const form = ref(blank())
+const form = ref<GatewayForm>(blank())
 
-function blank() {
+function blank(): GatewayForm {
   return {
     name: '',
     description: '',
@@ -69,12 +88,12 @@ const tunnelGateway = computed(() => onTunnel.value && !form.value.address.trim(
  * none.
  */
 const upstream = computed(() => {
-  const dns = config.draft?.services?.dns ?? {}
-  let list = []
-  if (dns.resolver === 'tls') list = (dns.tlsUpstreams ?? []).map((u) => u.address)
-  else if (dns.resolver !== 'recursive')
-    list = dns.upstreams?.length ? dns.upstreams : (config.draft?.system?.dnsServers ?? [])
-  const v6 = (a) => a.includes(':')
+  const dns = config.draft?.services?.dns
+  let list: string[] = []
+  if (dns?.resolver === 'tls') list = (dns.tlsUpstreams ?? []).map((u) => u.address)
+  else if (dns?.resolver !== 'recursive')
+    list = dns?.upstreams?.length ? dns.upstreams : (config.draft?.system?.dnsServers ?? [])
+  const v6 = (a: string) => a.includes(':')
   const address = form.value.address.trim()
   return (
     list.find((a) => {
@@ -86,7 +105,7 @@ const upstream = computed(() => {
 
 function save() {
   const f = form.value
-  const out = { name: f.name.trim(), enabled: f.enabled, interface: f.interface }
+  const out: Gateway = { name: f.name.trim(), enabled: f.enabled, interface: f.interface }
   // A tunnel gateway never carries the default route.
   if (!tunnelGateway.value && Number(f.priority) > 0) out.priority = Number(f.priority)
   if (f.description) out.description = f.description

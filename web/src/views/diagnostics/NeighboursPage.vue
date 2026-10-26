@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -8,13 +8,14 @@ import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
+import type { SortColumn } from '@/components/sortTypes'
 import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { useSearch } from '@/lib/search'
 import { byAddress, byText, useSort } from '@/lib/sort'
 import { useConfigStore } from '@/stores/config'
 
-const COLUMNS = [
+const COLUMNS: SortColumn[] = [
   ['address', 'Address'],
   ['mac', 'MAC'],
   ['interface', 'Interface'],
@@ -26,12 +27,21 @@ const COLUMNS = [
 const LIVE_MS = 2000
 
 const config = useConfigStore()
-const rows = ref([])
+interface Neighbour {
+  address: string
+  mac?: string
+  interface: string
+  family: string
+  state: string
+  router?: boolean
+}
+
+const rows = ref<Neighbour[]>([])
 const live = ref(true)
 
 const load = useAsync(
   async () => {
-    rows.value = await api.diagnostics.neighbours()
+    rows.value = (await api.diagnostics.neighbours()) as Neighbour[]
   },
   // Live owns the poll, and starts on.
   { interval: LIVE_MS, immediate: true },
@@ -47,7 +57,7 @@ watch(live, (on) => {
 
 /** A static lease turns a hardware address into a name we already know. */
 const named = computed(() => {
-  const out = {}
+  const out: Record<string, string> = {}
   for (const l of config.draft?.services?.dhcp?.staticLeases ?? []) {
     if (l.mac && l.hostname) out[l.mac.toLowerCase()] = l.hostname
   }
@@ -80,7 +90,7 @@ const empty = computed(() =>
 )
 
 /** REACHABLE is current; FAILED means the address answered nothing. */
-function tone(state) {
+function tone(state: string) {
   if (state.includes('REACHABLE') || state.includes('PERMANENT')) return 'badge-ok'
   if (state.includes('FAILED') || state.includes('INCOMPLETE')) return 'badge-warn'
   return ''

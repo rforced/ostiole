@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
@@ -372,8 +372,16 @@ const DELETES = {
 
 const deletion = (it) => DELETES[it.kind]?.(it.id, config.draft ?? {}) || null
 
-const unused = ref([])
-const disabled = ref([])
+interface Item {
+  kind: string
+  id: string
+  name: string
+  path: string
+  why?: string
+  takes?: string[]
+}
+const unused = ref<Item[]>([])
+const disabled = ref<Item[]>([])
 /** Bumped by every edit, so an answer about an older draft is dropped. */
 let edits = 0
 /** The draft has changed since the lists were read: from the edit until its answer lands. */
@@ -382,7 +390,10 @@ const behind = ref(false)
 const load = useAsync(
   async () => {
     const seen = edits
-    const out = await api.config.unused(config.draft)
+    const out = (await api.config.unused(config.draft)) as {
+      unused?: Item[]
+      disabled?: Item[]
+    } | null
     if (seen !== edits) return
     unused.value = out?.unused ?? []
     disabled.value = out?.disabled ?? []

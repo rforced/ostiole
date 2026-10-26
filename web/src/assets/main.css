@@ -5,7 +5,7 @@
  * accent, and four tones (ok, warn, bad, info). Light and dark are the two
  * blocks below; nothing else in the tree says dark:. In both, text holds
  * 7:1 against whatever it sits on (WCAG AAA), which
- * __tests__/contrast.spec.js checks. Only ink-faint, for disabled text and
+ * __tests__/contrast.spec.ts checks. Only ink-faint, for disabled text and
  * icons, is below it.
  *
  * A page is a stack of cards. A card is a list (a table), a form (fields
@@ -43,7 +43,7 @@
 @import 'tailwindcss';
 @import '@fontsource-variable/open-sans/wght.css';
 
-/* Class-based dark mode driven by the theme store (see stores/theme.js). */
+/* Class-based dark mode driven by the theme store (see stores/theme.ts). */
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
@@ -646,7 +646,7 @@
 /* Vue transition classes. Table rows change in the frame their data does:
    a row fading out keeps its place, so any fade shows two lists at once
    and then a jump. Only a reorder slides, so the eye can follow the row
-   that moved (lib/reorder.js). The bar above the page grows and shrinks
+   that moved (lib/reorder.ts). The bar above the page grows and shrinks
    rather than shoving the content under it. */
 .row-move {
   transition: transform 120ms ease-out;

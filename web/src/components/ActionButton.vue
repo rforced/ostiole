@@ -1,5 +1,6 @@
-<script setup>
+<script setup lang="ts">
 import { LoaderCircle } from '@lucide/vue'
+import type { Component, PropType } from 'vue'
 
 /**
  * The button for an action that takes a while. Disabled while it runs,
@@ -14,13 +15,13 @@ defineProps({
   kind: {
     type: String,
     default: 'secondary',
-    validator: (k) => ['primary', 'secondary', 'danger', 'link'].includes(k),
+    validator: (k: string) => ['primary', 'secondary', 'danger', 'link'].includes(k),
   },
-  type: { type: String, default: 'button' },
+  type: { type: String as PropType<'button' | 'submit' | 'reset'>, default: 'button' },
   /** Off for a reason other than being busy. */
   disabled: { type: Boolean, default: false },
   /** Shown before the label while not busy. */
-  icon: { type: [Object, Function], default: null },
+  icon: { type: [Object, Function] as PropType<Component>, default: null },
 })
 
 const CLASS = {

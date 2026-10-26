@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -11,16 +11,20 @@ import { emptyText, useAsync } from '@/lib/async'
 import { formatWhen } from '@/lib/format'
 import { useSearch } from '@/lib/search'
 import { byText, byTime, useSort } from '@/lib/sort'
+import type { Announcement } from '@/views/services/types'
 
 /** How often Live reads the announcements again. */
 const LIVE_MS = 5000
 
-const list = ref([])
+const list = ref<Announcement[]>([])
 const live = ref(true)
 
 const load = useAsync(
   async () => {
-    list.value = (await api.services.discoveryAnnouncements())?.announcements ?? []
+    const page = (await api.services.discoveryAnnouncements()) as {
+      announcements?: Announcement[]
+    } | null
+    list.value = page?.announcements ?? []
   },
   // Live owns the poll, and starts on.
   { interval: LIVE_MS, immediate: true },
@@ -38,7 +42,7 @@ const { query, shown } = useSearch(list, (a) => ({
   values: [a.name, a.type, a.host, ...(a.addresses ?? [])],
 }))
 
-const sort = useSort(
+const sort = useSort<Announcement>(
   shown,
   {
     type: byText((a) => a.type),

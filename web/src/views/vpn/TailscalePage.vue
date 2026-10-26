@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { TabsContent } from 'reka-ui'
 
 import AppTabs from '@/components/AppTabs.vue'

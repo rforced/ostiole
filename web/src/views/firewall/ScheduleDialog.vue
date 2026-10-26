@@ -1,19 +1,31 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
+import type { Schedule } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 
-const props = defineProps({ schedule: { type: Object, default: null } })
+const props = defineProps({
+  schedule: { type: Object as PropType<Schedule | null>, default: null },
+})
 const open = defineModel('open', { type: Boolean, default: false })
 
-const config = useConfigStore()
-const form = ref(blank())
+interface ScheduleForm {
+  name: string
+  description: string
+  days: string[]
+  start: string
+  end: string
+}
 
-function blank() {
+const config = useConfigStore()
+const form = ref<ScheduleForm>(blank())
+
+function blank(): ScheduleForm {
   return { name: '', description: '', days: [], start: '08:00', end: '17:00' }
 }
 
@@ -28,7 +40,7 @@ watch(
   { immediate: true },
 )
 
-function toggleDay(day, on) {
+function toggleDay(day: string, on: boolean) {
   const set = new Set(form.value.days)
   if (on) set.add(day)
   else set.delete(day)
@@ -37,7 +49,7 @@ function toggleDay(day, on) {
 
 function save() {
   const f = form.value
-  const out = { name: f.name.trim(), start: f.start, end: f.end }
+  const out: Schedule = { name: f.name.trim(), start: f.start, end: f.end }
   if (f.description) out.description = f.description
   const every = f.days.length === DAYS.length && props.schedule?.days?.length !== DAYS.length
   if (f.days.length && !every) out.days = f.days
@@ -85,7 +97,7 @@ function save() {
               type="checkbox"
               class="checkbox"
               :checked="form.days.includes(d)"
-              @change="toggleDay(d, $event.target.checked)"
+              @change="toggleDay(d, ($event.target as HTMLInputElement).checked)"
             />
             {{ d }}
           </label>

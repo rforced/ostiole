@@ -1,12 +1,14 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
+import type { UPnPRule } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
-  entry: { type: Object, default: null },
+  entry: { type: Object as PropType<UPnPRule | null>, default: null },
   /** Position in the list; below zero adds a new entry. */
   index: { type: Number, default: -1 },
 })
@@ -35,7 +37,7 @@ watch(
 
 function save() {
   const f = form.value
-  const out = {
+  const out: UPnPRule = {
     action: f.action,
     externalPorts: f.externalPorts.trim(),
     source: f.source.trim(),

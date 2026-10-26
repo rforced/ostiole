@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * An interface as a person knows it: the description first when there is
  * one, its zone, and the kernel name in mono so the two never get mixed up.

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import PageHeader from '@/components/PageHeader.vue'
 import MfaCard from '@/views/account/MfaCard.vue'
 import PasswordCard from '@/views/account/PasswordCard.vue'

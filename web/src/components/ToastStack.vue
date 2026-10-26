@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { X } from '@lucide/vue'
 
 import { useToastStore } from '@/stores/toast'

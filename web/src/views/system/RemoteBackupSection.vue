@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 
 import ActionButton from '@/components/ActionButton.vue'
@@ -11,11 +11,13 @@ import ToggleRow from '@/components/ToggleRow.vue'
 import { ApiError, api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { formatBytes, formatWhen } from '@/lib/format'
+import type { RemoteBackup } from '@/lib/model.gen'
 import { SCHEDULE_PRESETS, presetFor } from '@/lib/schedules'
 import { ADMIN_ONLY, adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import RestorePreview from '@/views/system/RestorePreview.vue'
+import type { CronRun, CronStatus } from '@/views/system/crons/status'
 
 /** The derived cron that takes the copy; matches model.CronIDRemoteBackup. */
 const CRON_ID = 'system:remote-backup'
@@ -24,20 +26,28 @@ const DEFAULT_SCHEDULE = '0 3 * * *'
 const auth = useAuthStore()
 const config = useConfigStore()
 const confirm = useConfirmStore()
-const status = ref(null)
-const copies = ref([])
+const status = ref<CronStatus | null>(null)
+interface Copy {
+  key: string
+  name: string
+  hostname: string
+  takenAt: string
+  size: number
+}
+
+const copies = ref<Copy[]>([])
 const pending = ref(null)
 /** The copy whose own passphrase is being asked for, and the answer. */
 const asking = ref('')
 const rowPassphrase = ref('')
 
-const settings = computed(() => config.remoteBackup)
+const settings = computed<Partial<RemoteBackup>>(() => config.remoteBackup)
 const schedule = computed(() => settings.value.schedule || DEFAULT_SCHEDULE)
 // The status and the copies follow the configuration that is applied:
 // the cron reads that one, and a draft reaches no bucket.
 const applied = computed(() => config.saved?.backup?.remote?.enabled === true)
 
-function set(patch) {
+function set(patch: Partial<RemoteBackup>) {
   config.setRemoteBackup(patch)
 }
 
@@ -56,7 +66,7 @@ function safeHostname(name = '') {
  * copies after a rename. A router already copying keeps its folder.
  */
 function setEnabled(on) {
-  const patch = { enabled: on }
+  const patch: Partial<RemoteBackup> = { enabled: on }
   if (on && !applied.value && !settings.value.prefix?.trim()) {
     patch.prefix = `ostiole-${safeHostname(config.draft?.system?.hostname)}/`
   }
@@ -64,22 +74,22 @@ function setEnabled(on) {
 }
 
 const loadStatus = useAsync(async () => {
-  const list = await api.crons.list()
+  const list = (await api.crons.list()) as CronStatus[]
   status.value = list.find((s) => s.id === CRON_ID) ?? null
 })
 
 const loadCopies = useAsync(async () => {
-  copies.value = (await api.config.remoteCopies()).copies ?? []
+  copies.value = ((await api.config.remoteCopies()) as { copies?: Copy[] }).copies ?? []
 })
 
 const backUpNow = useAsync(async () => {
-  const res = await api.crons.run(CRON_ID)
+  const res = (await api.crons.run(CRON_ID)) as CronRun | undefined
   if (res?.error) throw new Error(res.error)
   await loadStatus.run()
   await loadCopies.run()
 })
 
-const restore = useAsync(async (key, passphrase = '') => {
+const restore = useAsync(async (key: string, passphrase?: string) => {
   try {
     pending.value = await api.config.restoreRemote(key, passphrase)
     asking.value = ''
@@ -202,7 +212,7 @@ async function loadIntoDraft() {
                 id="rb-endpoint"
                 class="input"
                 :value="settings.endpoint ?? ''"
-                @change="set({ endpoint: $event.target.value.trim() })"
+                @change="set({ endpoint: ($event.target as HTMLInputElement).value.trim() })"
               />
             </FormField>
             <FormField id="rb-region" label="Region" hint="Empty reads it from the endpoint.">
@@ -210,7 +220,7 @@ async function loadIntoDraft() {
                 id="rb-region"
                 class="input"
                 :value="settings.region ?? ''"
-                @change="set({ region: $event.target.value.trim() })"
+                @change="set({ region: ($event.target as HTMLInputElement).value.trim() })"
               />
             </FormField>
             <FormField id="rb-bucket" label="Bucket">
@@ -218,7 +228,7 @@ async function loadIntoDraft() {
                 id="rb-bucket"
                 class="input"
                 :value="settings.bucket ?? ''"
-                @change="set({ bucket: $event.target.value.trim() })"
+                @change="set({ bucket: ($event.target as HTMLInputElement).value.trim() })"
               />
             </FormField>
             <FormField id="rb-key" label="Key ID">
@@ -227,7 +237,7 @@ async function loadIntoDraft() {
                 class="input"
                 autocomplete="off"
                 :value="settings.keyId ?? ''"
-                @change="set({ keyId: $event.target.value.trim() })"
+                @change="set({ keyId: ($event.target as HTMLInputElement).value.trim() })"
               />
             </FormField>
             <FormField id="rb-secret" label="Secret">
@@ -237,7 +247,7 @@ async function loadIntoDraft() {
                 class="input"
                 autocomplete="new-password"
                 :value="settings.secret ?? ''"
-                @change="set({ secret: $event.target.value })"
+                @change="set({ secret: ($event.target as HTMLInputElement).value })"
               />
             </FormField>
             <FormField
@@ -251,7 +261,7 @@ async function loadIntoDraft() {
                 class="input"
                 autocomplete="new-password"
                 :value="settings.passphrase ?? ''"
-                @change="set({ passphrase: $event.target.value })"
+                @change="set({ passphrase: ($event.target as HTMLInputElement).value })"
               />
             </FormField>
           </fieldset>
@@ -267,7 +277,7 @@ async function loadIntoDraft() {
                 id="rb-prefix"
                 class="input"
                 :value="settings.prefix ?? ''"
-                @change="set({ prefix: $event.target.value.trim() })"
+                @change="set({ prefix: ($event.target as HTMLInputElement).value.trim() })"
               />
             </FormField>
 
@@ -277,7 +287,10 @@ async function loadIntoDraft() {
                   id="rb-preset"
                   class="input w-48 max-sm:w-full"
                   :value="presetFor(schedule)"
-                  @change="$event.target.value && set({ schedule: $event.target.value })"
+                  @change="
+                    ($event.target as HTMLSelectElement).value &&
+                    set({ schedule: ($event.target as HTMLSelectElement).value })
+                  "
                 >
                   <option value="">Something else</option>
                   <option v-for="p in SCHEDULE_PRESETS" :key="p.value" :value="p.value">
@@ -291,7 +304,7 @@ async function loadIntoDraft() {
                   class="input w-48 font-mono max-sm:w-full"
                   :value="schedule"
                   :placeholder="DEFAULT_SCHEDULE"
-                  @change="set({ schedule: $event.target.value })"
+                  @change="set({ schedule: ($event.target as HTMLInputElement).value })"
                 />
               </FormField>
             </div>
@@ -304,7 +317,7 @@ async function loadIntoDraft() {
                   min="0"
                   class="input w-32 max-sm:w-full"
                   :value="settings.keep ?? 0"
-                  @change="set({ keep: Number($event.target.value) || 0 })"
+                  @change="set({ keep: Number(($event.target as HTMLInputElement).value) || 0 })"
                 />
               </FormField>
               <FormField
@@ -318,7 +331,7 @@ async function loadIntoDraft() {
                   min="0"
                   class="input w-32 max-sm:w-full"
                   :value="settings.days ?? 0"
-                  @change="set({ days: Number($event.target.value) || 0 })"
+                  @change="set({ days: Number(($event.target as HTMLInputElement).value) || 0 })"
                 />
               </FormField>
             </div>

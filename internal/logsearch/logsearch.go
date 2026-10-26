@@ -2,7 +2,7 @@
 // words of a query, each somewhere in what a row shows with case ignored,
 // and a walk from the newest entry back that stops at a page, at the start
 // of the log, or at its budget. The matching is matches() in
-// web/src/lib/search.js written again in Go; both read one table of cases,
+// web/src/lib/search.ts written again in Go; both read one table of cases,
 // so the two cannot drift apart.
 package logsearch
 

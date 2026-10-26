@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import AppNotice from '@/components/AppNotice.vue'
 import ChangeList from '@/components/ChangeList.vue'
 import { formatWhen } from '@/lib/format'

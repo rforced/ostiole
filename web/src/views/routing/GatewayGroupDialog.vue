@@ -1,19 +1,31 @@
-<script setup>
+<script setup lang="ts">
 import { Trash2 } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import type { GatewayGroup, GatewayMember, OnDownMode } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 
-const props = defineProps({ group: { type: Object, default: null } })
+interface GroupForm {
+  name: string
+  description: string
+  enabled: boolean
+  onDown: OnDownMode
+  members: GatewayMember[]
+}
+
+const props = defineProps({
+  group: { type: Object as PropType<GatewayGroup | null>, default: null },
+})
 const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
-const form = ref(blank())
+const form = ref<GroupForm>(blank())
 
-function blank() {
+function blank(): GroupForm {
   return { name: '', description: '', enabled: true, onDown: 'fallback', members: [] }
 }
 
@@ -23,7 +35,7 @@ const available = computed(() =>
 )
 
 const tiers = computed(() => {
-  const groups = new Map()
+  const groups = new Map<number, number>()
   for (const m of form.value.members) {
     const tier = Number(m.tier) || 0
     groups.set(tier, (groups.get(tier) ?? 0) + 1)
@@ -53,13 +65,13 @@ function addMember() {
   form.value.members.push({ gateway: next.name, tier: form.value.members.length })
 }
 
-function removeMember(index) {
+function removeMember(index: number) {
   form.value.members.splice(index, 1)
 }
 
 function save() {
   const f = form.value
-  const out = {
+  const out: GatewayGroup = {
     name: f.name.trim(),
     enabled: f.enabled,
     members: f.members.map((m) => ({

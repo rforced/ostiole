@@ -1,21 +1,25 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { newId } from '@/lib/ids'
+import type { OneToOneNAT } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 
-const props = defineProps({ entry: { type: Object, default: null } })
+const props = defineProps({
+  entry: { type: Object as PropType<OneToOneNAT | null>, default: null },
+})
 const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
 // Declared before form: blank() reads it while the ref is created.
 const externalZones = computed(() => config.zones.filter((z) => z.external))
-const form = ref(blank())
+const form = ref<Required<OneToOneNAT>>(blank())
 
-function blank() {
+function blank(): Required<OneToOneNAT> {
   return {
     id: '',
     description: '',
@@ -36,7 +40,7 @@ watch(
 
 function save() {
   const f = form.value
-  const out = {
+  const out: OneToOneNAT = {
     id: f.id || newId('one'),
     enabled: f.enabled,
     zone: f.zone,

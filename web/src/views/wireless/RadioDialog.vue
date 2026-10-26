@@ -1,36 +1,41 @@
-<script setup>
+<script setup lang="ts">
+import type { PropType } from 'vue'
 import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import type { Band, Radio, Standard } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
+import type { Card } from '@/views/wireless/card'
 
 const props = defineProps({
   /** The card as iw reports it, or null when this router has not got it. */
-  card: { type: Object, default: null },
+  card: { type: Object as PropType<Card | null>, default: null },
   /** The radio as it is configured, or null for one that is not. */
-  radio: { type: Object, default: null },
+  radio: { type: Object as PropType<Radio | null>, default: null },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
-const form = ref(blank())
+const form = ref<Required<Radio>>(blank())
 
-const BANDS = { '2g': '2.4 GHz', '5g': '5 GHz', '6g': '6 GHz' }
+const BANDS: Record<string, string> = { '2g': '2.4 GHz', '5g': '5 GHz', '6g': '6 GHz' }
 const STANDARDS = { ax: 'Wi-Fi 6 (ax)', ac: 'Wi-Fi 5 (ac)', n: 'Wi-Fi 4 (n)', legacy: 'Legacy' }
+const ALL_BANDS: Band[] = ['2g', '5g', '6g']
 const WIDTHS = [20, 40, 80, 160]
 
-function blank() {
+function blank(): Required<Radio> {
   return { name: '', enabled: true, band: '5g', channel: 0, width: 80, standard: 'ax', power: 0 }
 }
 
 /** The bands the card may transmit on; an unknown card offers all three. */
-const bands = computed(() => {
-  const have = Object.entries(props.card?.bands ?? {})
-    .filter(([, b]) => b.serves !== false)
-    .map(([name]) => name)
-  return have.length ? have : ['2g', '5g', '6g']
+const bands = computed<(Band | '')[]>(() => {
+  const have = ALL_BANDS.filter((b) => {
+    const served = props.card?.bands?.[b]
+    return served && served.serves !== false
+  })
+  return have.length ? have : ALL_BANDS
 })
 
 const band = computed(() => props.card?.bands?.[form.value.band] ?? null)
@@ -48,14 +53,14 @@ const kept = computed(
  * 5 GHz because every 160 MHz block there takes in radar channels, which
  * are not supported yet.
  */
-const BAND_CAP = { '2g': 40, '5g': 80, '6g': 160 }
+const BAND_CAP: Record<string, number> = { '2g': 40, '5g': 80, '6g': 160 }
 const widths = computed(() => {
   const cap = BAND_CAP[form.value.band] ?? 160
   const max = band.value?.maxWidth ?? cap
   return WIDTHS.filter((w) => w <= max && w <= cap)
 })
 
-const standards = computed(() => {
+const standards = computed<(Standard | '')[]>(() => {
   const have = band.value?.standards
   if (have?.length) return have
   return form.value.band === '6g' ? ['ax'] : ['ax', 'n', 'legacy']
@@ -96,7 +101,7 @@ watch(
 
 function save() {
   const f = form.value
-  const radio = {
+  const radio: Radio = {
     name: f.name.trim(),
     enabled: f.enabled,
     band: f.band,

@@ -1,18 +1,40 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import AppNotice from '@/components/AppNotice.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import type { Interface } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
+
+interface Link {
+  name: string
+  kind: string
+}
+
+interface PppoeForm {
+  name: string
+  description: string
+  zone: string
+  parent: string
+  username: string
+  password: string
+  serviceName: string
+  acName: string
+  ipv6: boolean
+  lcpInterval: number | ''
+  lcpFailures: number | ''
+  mtu: number | ''
+}
 
 const props = defineProps({
   /** Live links the session could run over. */
-  candidates: { type: Array, default: () => [] },
+  candidates: { type: Array as PropType<Link[]>, default: () => [] },
   /** The session being edited, or null for a new one. */
-  iface: { type: Object, default: null },
+  iface: { type: Object as PropType<Interface | null>, default: null },
   /** Whether pppd and its unit are installed on the router. */
   ready: { type: Boolean, default: true },
 })
@@ -20,9 +42,9 @@ const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
 const error = ref('')
-const form = ref(blank())
+const form = ref<PppoeForm>(blank())
 
-function blank() {
+function blank(): PppoeForm {
   return {
     name: '',
     description: '',
@@ -48,7 +70,7 @@ const suggestedName = computed(() => {
 
 /** Links that are free to carry a session. */
 const parents = computed(() => {
-  const taken = new Map()
+  const taken = new Map<string, string>()
   for (const i of config.interfaces) {
     if (i.name === form.value.name) continue
     if (i.pppoe?.parent) taken.set(i.pppoe.parent, i.name)
@@ -96,7 +118,7 @@ function save() {
     error.value = `${f.name} is already configured.`
     return
   }
-  const iface = {
+  const iface: Interface = {
     name: f.name,
     enabled: true,
     ...(props.iface ? { enabled: props.iface.enabled } : {}),
@@ -115,7 +137,7 @@ function save() {
   // The Ethernet underneath becomes a port: the session holds the address.
   const parent = config.findInterface(f.parent)
   if (parent) {
-    const port = { ...parent, ipv4: { mode: 'none' }, ipv6: { mode: 'none' } }
+    const port: Interface = { ...parent, ipv4: { mode: 'none' }, ipv6: { mode: 'none' } }
     delete port.zone
     config.upsertInterface(port)
   }

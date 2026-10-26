@@ -1,27 +1,47 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import type { BondMode, Interface } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
+
+interface Link {
+  name: string
+  kind: string
+}
+
+interface AggregateForm {
+  name: string
+  description: string
+  members: string[]
+  stp: boolean
+  vlanFiltering: boolean
+  mode: BondMode | ''
+  miiMonitorMs: number
+  transmitHashPolicy: string
+  primary: string
+  lacpRate: string
+}
 
 const props = defineProps({
   /** "bridge" or "bond". */
   kind: { type: String, default: 'bridge' },
   /** Live links that could be members. */
-  candidates: { type: Array, default: () => [] },
+  candidates: { type: Array as PropType<Link[]>, default: () => [] },
   /** The interface being edited, or null for a new one. */
-  iface: { type: Object, default: null },
+  iface: { type: Object as PropType<Interface | null>, default: null },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
 const error = ref('')
-const form = ref(blank())
+const form = ref<AggregateForm>(blank())
 
-const BOND_MODES = [
+const BOND_MODES: { value: BondMode; label: string }[] = [
   { value: 'active-backup', label: 'Active/backup (one link at a time, no switch setup)' },
   { value: '802.3ad', label: 'LACP 802.3ad (the switch must be configured to match)' },
   { value: 'balance-rr', label: 'Round robin (packets in turn)' },
@@ -32,7 +52,7 @@ const BOND_MODES = [
 ]
 const HASH_POLICIES = ['layer2', 'layer2+3', 'layer3+4', 'encap2+3', 'encap3+4']
 
-function blank() {
+function blank(): AggregateForm {
   return {
     name: '',
     description: '',
@@ -61,7 +81,7 @@ const miiHint = computed(() =>
 
 /** Links already claimed by another bridge or bond, or carrying addresses. */
 const taken = computed(() => {
-  const out = new Map()
+  const out = new Map<string, string>()
   for (const i of config.interfaces) {
     if (i.name === form.value.name) continue
     for (const m of i.bridge?.members ?? i.bond?.members ?? []) out.set(m, i.name)
@@ -72,7 +92,7 @@ const taken = computed(() => {
 // A bridge may contain a bond, which is how a resilient LAN is built, but
 // never another bridge or a tunnel. A bond takes plain links only.
 const options = computed(() => {
-  const names = new Set()
+  const names = new Set<string>()
   for (const c of props.candidates) {
     if (c.name === form.value.name || ['bridge', 'wireguard', 'ovpn'].includes(c.kind)) continue
     if (config.findInterface(c.name)?.openvpn) continue
@@ -128,7 +148,7 @@ watch(
   { immediate: true },
 )
 
-function toggleMember(name) {
+function toggleMember(name: string) {
   const at = form.value.members.indexOf(name)
   if (at === -1) form.value.members.push(name)
   else form.value.members.splice(at, 1)
@@ -147,7 +167,7 @@ function save() {
     return
   }
   const existing = props.iface ? config.findInterface(props.iface.name) : null
-  const iface = {
+  const iface: Interface = {
     ...(existing ?? { enabled: true, ipv4: { mode: 'none' }, ipv6: { mode: 'none' } }),
     name: f.name,
     description: f.description,
@@ -168,7 +188,7 @@ function save() {
   for (const m of f.members) {
     const member = config.findInterface(m)
     if (!member) continue
-    const port = { ...member, ipv4: { mode: 'none' }, ipv6: { mode: 'none' } }
+    const port: Interface = { ...member, ipv4: { mode: 'none' }, ipv6: { mode: 'none' } }
     delete port.zone
     config.upsertInterface(port)
   }

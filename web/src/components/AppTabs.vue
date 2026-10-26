@@ -1,10 +1,10 @@
-<script setup>
+<script setup lang="ts">
 import { TabsList, TabsRoot, TabsTrigger } from 'reka-ui'
+import type { PropType } from 'vue'
 import { nextTick, onMounted, ref, watch } from 'vue'
 
 defineProps({
-  /** @type {import('vue').PropType<{value: string, label: string}[]>} */
-  tabs: { type: Array, required: true },
+  tabs: { type: Array as PropType<{ value: string; label: string }[]>, required: true },
 })
 const active = defineModel({ type: String, required: true })
 
@@ -12,11 +12,11 @@ const active = defineModel({ type: String, required: true })
  * On a phone the strip scrolls sideways rather than wrap, runs to the
  * edges of the screen, and keeps the open tab in view.
  */
-const list = ref(null)
+const list = ref<InstanceType<typeof TabsList> | null>(null)
 function reveal() {
-  const strip = list.value?.$el
+  const strip = list.value?.$el as HTMLElement | undefined
   const tab = strip?.querySelector('[data-state="active"]')
-  if (!tab || strip.scrollWidth <= strip.clientWidth) return
+  if (!strip || !tab || strip.scrollWidth <= strip.clientWidth) return
   const a = strip.getBoundingClientRect()
   const b = tab.getBoundingClientRect()
   strip.scrollLeft += b.left - a.left - (a.width - b.width) / 2

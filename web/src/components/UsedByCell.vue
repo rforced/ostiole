@@ -1,4 +1,6 @@
-<script setup>
+<script setup lang="ts">
+import type { PropType } from 'vue'
+
 import { someOf } from '@/lib/lists'
 
 /**
@@ -6,7 +8,7 @@ import { someOf } from '@/lib/lists'
  * is off while this lists anything, so the reason sits beside it.
  */
 defineProps({
-  names: { type: Array, required: true },
+  names: { type: Array as PropType<string[]>, required: true },
 })
 </script>
 

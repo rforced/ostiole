@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
 import FormField from '@/components/FormField.vue'
@@ -66,7 +66,7 @@ const entriesHint = computed(() => {
           autocomplete="new-password"
           spellcheck="false"
           :value="config.draft.system.maxmindLicenceKey ?? ''"
-          @change="setKey($event.target.value)"
+          @change="setKey(($event.target as HTMLInputElement).value)"
         />
       </FormField>
       <FormField id="fa-max-entries" label="Most entries per alias" :hint="entriesHint">

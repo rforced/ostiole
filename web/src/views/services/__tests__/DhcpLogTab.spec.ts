@@ -1,0 +1,128 @@
+import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { api, type Session } from '@/lib/api'
+import type { Config } from '@/lib/model.gen'
+import { useAuthStore } from '@/stores/auth'
+import { useConfigStore } from '@/stores/config'
+import { useConfirmStore } from '@/stores/confirm'
+import LogTab from '@/views/services/dhcp/LogTab.vue'
+
+vi.mock('@/lib/api', () => ({
+  api: {
+    services: { dhcpLog: vi.fn(), clearDhcpLog: vi.fn() },
+    systemStats: vi.fn(),
+    logFiles: vi.fn(),
+    logLimits: vi.fn(),
+  },
+  ApiError: class ApiError extends Error {},
+}))
+
+class FakeSource {
+  close() {}
+}
+
+const clearButton = (w) => w.findAll('button').find((b) => b.text() === 'Clear')
+
+async function tab(list, { level = 'info', dhcp = true } = {}) {
+  vi.mocked(api.services.dhcpLog).mockResolvedValue({
+    entries: list,
+    held: list.length,
+    kept: level === 'info',
+  })
+  vi.mocked(api.systemStats).mockResolvedValue({ memTotal: 8_000_000_000 })
+  vi.mocked(api.logFiles).mockResolvedValue({ enabled: false, logs: [] })
+  vi.mocked(api.logLimits).mockResolvedValue({ memTotal: 0, ceilings: {} })
+  const store = useConfigStore()
+  const draft = {
+    version: 11,
+    system: { logging: { level } },
+    services: { dhcp: { enabled: dhcp }, dns: { enabled: false } },
+  } as Config
+  store.draft = draft
+  store.saved = structuredClone(draft)
+  store.loaded = true
+  const wrapper = mount(LogTab)
+  await flushPromises()
+  return { wrapper, store }
+}
+
+describe('DHCP log', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    vi.stubGlobal('EventSource', FakeSource)
+  })
+
+  it('shows what the server said of each client', async () => {
+    const { wrapper } = await tab([
+      {
+        seq: 2,
+        time: '2026-09-28T14:02:01Z',
+        message: 'NAK',
+        interface: 'eth1',
+        address: '10.0.0.9',
+        mac: 'aa:bb:cc:dd:ee:ff',
+        detail: 'wrong network',
+      },
+      {
+        seq: 1,
+        time: '2026-09-28T14:02:00Z',
+        message: 'ACK',
+        interface: 'eth1',
+        address: '10.0.0.50',
+        mac: 'aa:bb:cc:dd:ee:ff',
+        name: 'switch',
+        device: 'switch',
+      },
+    ])
+    const rows = wrapper.findAll('tbody tr')
+    expect(rows).toHaveLength(2)
+    expect(rows[0].find('.badge').classes()).toContain('badge-bad')
+    expect(rows[0].text()).toContain('wrong network')
+    expect(rows[1].text()).toContain('ACK')
+    expect(rows[1].text()).toContain('10.0.0.50')
+    expect(rows[1].text()).toContain('aa:bb:cc:dd:ee:ff')
+    expect(api.services.dhcpLog).toHaveBeenCalledWith({ limit: 200 }, expect.any(AbortSignal))
+  })
+
+  it('says which log levels keep it, and when DHCP is off', async () => {
+    let { wrapper } = await tab([], { level: 'warning' })
+    expect(wrapper.text()).toContain('The DHCP log is kept at the Info and Debug log levels')
+    ;({ wrapper } = await tab([], { dhcp: false }))
+    expect(wrapper.text()).toContain('DHCP is off, so no new messages arrive.')
+    expect(wrapper.text()).toContain('No messages.')
+  })
+
+  it('keeps how many messages in the draft', async () => {
+    const { wrapper, store } = await tab([])
+    await wrapper.find('#dhcp-entries').setValue('5000')
+    expect(store.draft.services.dhcp.log).toEqual({ entries: 5000 })
+    await wrapper.find('#dhcp-entries').setValue('')
+    expect(store.draft.services.dhcp.log).toBeUndefined()
+  })
+
+  // Clear empties the router's log and reads it again. Below Info there is
+  // nothing kept to clear.
+  it('clears the router’s log, once asked', async () => {
+    useAuthStore().user = { username: 'root', role: 'admin' } as Session
+    const ask = vi.spyOn(useConfirmStore(), 'ask').mockResolvedValue(true)
+    const { wrapper } = await tab([
+      { seq: 1, time: '2026-09-28T14:02:00Z', message: 'ACK', interface: 'eth1' },
+    ])
+    vi.mocked(api.services.dhcpLog).mockResolvedValue({ entries: [], held: 0, kept: true })
+    await clearButton(wrapper).trigger('click')
+    await flushPromises()
+    expect(ask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: 'Clear the DHCP log?',
+        description: 'Every message it holds is dropped. The journal keeps its own copy.',
+      }),
+    )
+    expect(api.services.clearDhcpLog).toHaveBeenCalled()
+    expect(wrapper.text()).toContain('No messages.')
+    const { wrapper: warning } = await tab([], { level: 'warning' })
+    expect(clearButton(warning)).toBeUndefined()
+  })
+})

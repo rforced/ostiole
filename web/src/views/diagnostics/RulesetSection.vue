@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -17,14 +17,19 @@ const rendering = ref('')
 
 async function confirmedRuleset() {
   try {
-    return await api.ruleset()
+    return (await api.ruleset()) as string
   } catch (e) {
     throw e instanceof ApiError && e.status === 404 ? new Error('Nothing confirmed yet.') : e
   }
 }
 
+interface Check {
+  ruleset: string
+  network?: Record<string, string>
+}
+
 async function draftRuleset() {
-  return (await api.config.check(config.draft)).ruleset
+  return ((await api.config.check(config.draft)) as Check).ruleset
 }
 
 /**
@@ -32,19 +37,19 @@ async function draftRuleset() {
  * bridge not coming up" lives in these files, not in the ruleset.
  */
 async function networkUnits() {
-  const files = (await api.config.check(config.draft)).network ?? {}
+  const files = ((await api.config.check(config.draft)) as Check).network ?? {}
   const names = Object.keys(files).sort()
   if (!names.length) throw new Error('This build is managing no network units.')
   return names.map((n) => `==> ${n} <==\n${files[n]}`).join('\n')
 }
 
-const SOURCES = {
+const SOURCES: Record<string, () => Promise<string>> = {
   'confirmed ruleset': confirmedRuleset,
   'draft ruleset': draftRuleset,
   'draft network units': networkUnits,
 }
 
-const render = useAsync(async (what) => {
+const render = useAsync(async (what: string) => {
   rendering.value = what
   try {
     text.value = await SOURCES[what]()

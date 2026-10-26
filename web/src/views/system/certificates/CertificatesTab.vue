@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Plus, RefreshCw } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 
@@ -15,11 +15,13 @@ import { api } from '@/lib/api'
 import { emptyText, errorMessage, useAsync } from '@/lib/async'
 import { tone } from '@/lib/badge'
 import { formatWhen } from '@/lib/format'
+import type { Certificate } from '@/lib/model.gen'
 import { ADMIN_ONLY, adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
 import { useToastStore } from '@/stores/toast'
 import CertificateDialog from '@/views/system/certificates/CertificateDialog.vue'
+import type { ProviderKind } from '@/views/system/providers/kinds'
 
 /** How often the list is re-read while an order is running. */
 const ISSUING_POLL_MS = 5000
@@ -29,11 +31,34 @@ const config = useConfigStore()
 const confirm = useConfirmStore()
 const toast = useToastStore()
 
-const page = ref({ builtIn: null, certificates: [], providerKinds: [] })
+interface CertificateStatus {
+  id: string
+  issued: boolean
+  running?: boolean
+  expired?: boolean
+  expiresSoon?: boolean
+  lastError?: string
+  notAfter?: string
+}
+interface BuiltIn {
+  names: string[] | null
+  hosts: string[] | null
+  issuer: string
+  notAfter: string
+  fingerprint: string
+  managed: boolean
+}
+interface CertificatesReply {
+  builtIn: BuiltIn | null
+  certificates: CertificateStatus[]
+  providerKinds: ProviderKind[]
+}
+
+const page = ref<CertificatesReply>({ builtIn: null, certificates: [], providerKinds: [] })
 const actionError = ref('')
 const load = useAsync(
   async () => {
-    page.value = await api.certificates.list()
+    page.value = (await api.certificates.list()) as CertificatesReply
   },
   { immediate: true },
 )
@@ -56,13 +81,13 @@ const served = computed({
   set: (id) => config.setManagementCertificate(id),
 })
 
-const editing = ref(null)
+const editing = ref<Certificate | null>(null)
 const dialogOpen = ref(false)
 function add() {
   editing.value = null
   dialogOpen.value = true
 }
-function edit(cert) {
+function edit(cert: Certificate) {
   editing.value = cert
   dialogOpen.value = true
 }
@@ -100,7 +125,7 @@ async function issue(cert) {
 }
 
 const regenerate = useAsync(async () => {
-  page.value.builtIn = await api.certificates.regenerate()
+  page.value.builtIn = (await api.certificates.regenerate()) as BuiltIn
   toast.show('New self-signed certificate in place. Browsers warn about it once more.')
 })
 
@@ -129,7 +154,7 @@ const DOWNLOADS = [
   { name: 'key.pem', label: 'Private key' },
 ]
 
-const pkcs12For = ref(null)
+const pkcs12For = ref<Certificate | null>(null)
 const pkcs12Password = ref('')
 function askPKCS12(cert) {
   pkcs12For.value = cert
@@ -143,7 +168,7 @@ const downloads = (cert) => [
 ]
 
 const downloadPKCS12 = useAsync(async () => {
-  const { blob, name } = await api.certificates.pkcs12(pkcs12For.value.id, pkcs12Password.value)
+  const { blob, name } = await api.certificates.pkcs12(pkcs12For.value!.id, pkcs12Password.value)
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

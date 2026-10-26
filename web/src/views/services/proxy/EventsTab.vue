@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
@@ -11,12 +11,14 @@ import SectionCard from '@/components/SectionCard.vue'
 import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { formatCount, formatDuration, formatWhen } from '@/lib/format'
-import { heldLine, useLog } from '@/lib/log'
+import { heldLine, useLog, type LogPage } from '@/lib/log'
+import type { WAFExclusion } from '@/lib/model.gen'
 import { VERDICTS, eventValues, openSeconds, ruleLines } from '@/lib/proxyEvents'
 import { useProxyStatus } from '@/lib/proxyStatus'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ExclusionDialog from '@/views/services/proxy/ExclusionDialog.vue'
+import type { WafEvent, WafHit } from '@/views/services/types'
 
 const auth = useAuthStore()
 const config = useConfigStore()
@@ -31,8 +33,8 @@ const retention = computed({
 const verdict = ref('')
 const card = ref(null)
 
-const log = useLog({
-  read: (params, signal) => api.proxy.events(params, signal),
+const log = useLog<WafEvent>({
+  read: async (params, signal) => (await api.proxy.events(params, signal)) as LogPage<WafEvent>,
   stream: '/api/v1/proxy/events/stream',
   filters: () => (verdict.value ? { verdict: verdict.value } : {}),
   keep: (e) => !verdict.value || e.verdict === verdict.value,
@@ -62,12 +64,12 @@ const empty = computed(() => {
 })
 
 /** The WAF profile a site is inspected by, which an exclusion goes into. */
-function profileOf(siteID) {
+function profileOf(siteID: string) {
   return (config.proxy.sites ?? []).find((s) => s.id === siteID)?.waf ?? ''
 }
 
 /** The exclusion the dialog starts from, and the profile it goes into. */
-const excluding = ref(null)
+const excluding = ref<{ profile: string; exclusion: WAFExclusion } | null>(null)
 const excludeOpen = ref(false)
 
 /**
@@ -75,10 +77,10 @@ const excludeOpen = ref(false)
  * the dialog first, where the path can be cut down to the part that
  * repeats: /Items rather than one item's path.
  */
-function exclude(event, rule, onPath) {
+function exclude(event: WafEvent, rule: WafHit, onPath: boolean) {
   const profile = profileOf(event.site)
   if (!profile) return
-  const exclusion = { rule: String(rule.id) }
+  const exclusion: WAFExclusion = { rule: String(rule.id) }
   if (onPath) exclusion.path = pathOf(event.uri)
   if (rule.message) exclusion.description = rule.message
   if (!onPath) {
@@ -90,11 +92,11 @@ function exclude(event, rule, onPath) {
 }
 
 /** The path a request asked for, without its query. */
-function pathOf(uri) {
+function pathOf(uri?: string) {
   return String(uri ?? '/').split('?')[0] || '/'
 }
 
-function hasQuery(uri) {
+function hasQuery(uri?: string) {
   return String(uri ?? '').includes('?')
 }
 

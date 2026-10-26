@@ -1,15 +1,22 @@
-<script setup>
+<script setup lang="ts">
 import { ArrowDown, ArrowUp } from '@lucide/vue'
+import type { PropType } from 'vue'
 
 import LinkErrors from '@/components/LinkErrors.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import { formatBytes, formatRate } from '@/lib/format'
+import type { LinkSummary } from '@/views/dashboard/overview'
+
+type Direction = 'rx' | 'tx'
 
 defineProps({
   /** Interface summaries from GET /overview. */
-  interfaces: { type: Array, default: () => [] },
+  interfaces: { type: Array as PropType<LinkSummary[]>, default: () => [] },
   /** Bits per second per interface, once two samples have been seen. */
-  rates: { type: Object, default: () => ({}) },
+  rates: {
+    type: Object as PropType<Record<string, Record<Direction, number>>>,
+    default: () => ({}),
+  },
   /** False until the first overview arrives. */
   loaded: { type: Boolean, default: true },
   /** How many rows to hold room for until then. */
@@ -17,21 +24,25 @@ defineProps({
 })
 
 /** How the interface is addressed: "IPv4 static · IPv6 slaac". */
-function addressing(l) {
-  const parts = []
+function addressing(l: LinkSummary) {
+  const parts: string[] = []
   if (l.ipv4Mode && l.ipv4Mode !== 'none') parts.push(`IPv4 ${l.ipv4Mode}`)
   if (l.ipv6Mode && l.ipv6Mode !== 'none') parts.push(`IPv6 ${l.ipv6Mode}`)
   return parts.join(' · ')
 }
 
 /** Static addresses the configuration asks for that the kernel does not have. */
-function pending(l) {
+function pending(l: LinkSummary) {
   return (l.configuredAddresses ?? []).filter((a) => !(l.addresses ?? []).includes(a))
 }
 
 /** Which counter is down: on a link facing hosts, what it sends, as Traffic reads it. */
-function way(l) {
+function way(l: LinkSummary): { down: Direction; up: Direction } {
   return l.hostSide ? { down: 'tx', up: 'rx' } : { down: 'rx', up: 'tx' }
+}
+
+function bytesOf(l: LinkSummary, d: Direction) {
+  return d === 'rx' ? l.rxBytes : l.txBytes
 }
 </script>
 
@@ -108,13 +119,13 @@ function way(l) {
               <ArrowDown class="inline size-3" aria-hidden="true" />
               <span class="sr-only">down</span>
               {{ rates[l.name] ? formatRate(rates[l.name][way(l).down]) : '—' }}
-              <span class="ml-1 text-ink-muted">{{ formatBytes(l[`${way(l).down}Bytes`]) }}</span>
+              <span class="ml-1 text-ink-muted">{{ formatBytes(bytesOf(l, way(l).down)) }}</span>
             </div>
             <div v-if="l.present">
               <ArrowUp class="inline size-3" aria-hidden="true" />
               <span class="sr-only">up</span>
               {{ rates[l.name] ? formatRate(rates[l.name][way(l).up]) : '—' }}
-              <span class="ml-1 text-ink-muted">{{ formatBytes(l[`${way(l).up}Bytes`]) }}</span>
+              <span class="ml-1 text-ink-muted">{{ formatBytes(bytesOf(l, way(l).up)) }}</span>
             </div>
             <span v-if="!l.present" class="text-ink-muted">—</span>
           </td>

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Plus } from '@lucide/vue'
 import { ref } from 'vue'
 
@@ -10,14 +10,16 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import type { ProviderKind } from '@/views/system/providers/kinds'
 import ProviderDialog from '@/views/system/providers/ProviderDialog.vue'
 
 const auth = useAuthStore()
 const config = useConfigStore()
-const kinds = ref([])
+const kinds = ref<ProviderKind[]>([])
 const load = useAsync(
   async () => {
-    kinds.value = (await api.certificates.list()).providerKinds ?? []
+    kinds.value =
+      ((await api.certificates.list()) as { providerKinds?: ProviderKind[] }).providerKinds ?? []
   },
   { immediate: true },
 )

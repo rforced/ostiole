@@ -1,4 +1,5 @@
-<script setup>
+<script setup lang="ts">
+import type { PropType } from 'vue'
 import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
@@ -7,12 +8,13 @@ import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
+import type { ACMEAccount } from '@/lib/model.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
   /** The account being edited, or null for a new one. */
-  account: { type: Object, default: null },
+  account: { type: Object as PropType<ACMEAccount | null>, default: null },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
@@ -27,7 +29,9 @@ const CAS = [
   { value: 'custom', label: 'Custom' },
 ]
 
-const blank = () => ({
+type Form = Required<ACMEAccount> & { ca: string }
+
+const blank = (): Form => ({
   id: '',
   description: '',
   ca: LETS_ENCRYPT,
@@ -45,7 +49,7 @@ const showCACert = ref(false)
 
 /** A new account gets a key from the router; it is never shown or pasted. */
 const key = useAsync(async () => {
-  const { privateKey } = await api.certificates.key()
+  const { privateKey } = (await api.certificates.key()) as { privateKey: string }
   form.value.privateKey = privateKey
 })
 
@@ -84,7 +88,11 @@ const valid = computed(
 
 function save() {
   const f = form.value
-  const out = { id: f.id.trim(), directory: f.directory.trim(), privateKey: f.privateKey }
+  const out: ACMEAccount = {
+    id: f.id.trim(),
+    directory: f.directory.trim(),
+    privateKey: f.privateKey,
+  }
   if (f.description) out.description = f.description
   if (f.email) out.email = f.email.trim()
   if (showEAB.value && f.eabKeyId) {

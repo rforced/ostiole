@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { RefreshCw } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 

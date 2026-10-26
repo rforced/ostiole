@@ -138,10 +138,10 @@ func TestLogsFullBytes(t *testing.T) {
 }
 
 // The pages quote what a log costs before it is applied, from a copy of
-// these figures in web/src/lib/logs.js. The two must agree.
+// these figures in web/src/lib/logs.ts. The two must agree.
 func TestTheLogsPageMirrorsTheModel(t *testing.T) {
 	t.Parallel()
-	raw, err := os.ReadFile("../../web/src/lib/logs.js")
+	raw, err := os.ReadFile("../../web/src/lib/logs.ts")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,20 +160,20 @@ func TestTheLogsPageMirrorsTheModel(t *testing.T) {
 		re := regexp.MustCompile(log + `: \{ entries: (\d+), max: (\d+), bytes: (\d+) \}`)
 		m := re.FindStringSubmatch(string(raw))
 		if m == nil {
-			t.Errorf("no %s line in logs.js", log)
+			t.Errorf("no %s line in logs.ts", log)
 			continue
 		}
 		if got := fmt.Sprintf("%s %s %s", m[1], m[2], m[3]); got != fmt.Sprintf("%d %d %d", want[0], want[1], want[2]) {
-			t.Errorf("%s: logs.js has %s, the model %v", log, got, want)
+			t.Errorf("%s: logs.ts has %s, the model %v", log, got, want)
 		}
 	}
 	days := fmt.Sprintf("DAYS = { default: %d, max: %d }", DefaultLogDays, MaxLogDays)
 	if !strings.Contains(string(raw), days) {
-		t.Errorf("logs.js does not say %s", days)
+		t.Errorf("logs.ts does not say %s", days)
 	}
 	files := fmt.Sprintf("FILE_DAYS = { default: %d, max: %d }", DefaultLogFileDays, MaxLogFileDays)
 	if !strings.Contains(string(raw), files) {
-		t.Errorf("logs.js does not say %s", files)
+		t.Errorf("logs.ts does not say %s", files)
 	}
 }
 

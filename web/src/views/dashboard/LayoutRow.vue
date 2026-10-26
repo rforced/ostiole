@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { GripVertical } from '@lucide/vue'
 
 import ToggleRow from '@/components/ToggleRow.vue'

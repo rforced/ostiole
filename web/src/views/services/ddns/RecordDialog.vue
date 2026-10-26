@@ -1,5 +1,6 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import ActionButton from '@/components/ActionButton.vue'
 import AppDialog from '@/components/AppDialog.vue'
@@ -12,13 +13,15 @@ import { newId } from '@/lib/ids'
 import { interfaceLabel } from '@/lib/interfaces'
 import { providerFor } from '@/lib/providers'
 import { useAuthStore } from '@/stores/auth'
+import type { DDNSRecord } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
+import type { DdnsKind } from '@/views/services/types'
 
 const props = defineProps({
   /** The record being edited, or null to add one. */
-  record: { type: Object, default: null },
+  record: { type: Object as PropType<DDNSRecord | null>, default: null },
   /** The provider kinds that can keep a record, from the status. */
-  kinds: { type: Array, default: () => [] },
+  kinds: { type: Array as PropType<DdnsKind[]>, default: () => [] },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 const auth = useAuthStore()
@@ -77,10 +80,14 @@ const providerLine = computed(() => {
 /** The record the form describes, as the draft keeps it. */
 function built() {
   const f = form.value
-  const out = { id: props.record?.id || newId('ddns'), enabled: f.enabled, name: name.value }
+  const out: DDNSRecord = {
+    id: props.record?.id || newId('ddns'),
+    enabled: f.enabled,
+    name: name.value,
+    interface: f.interface,
+  }
   const description = f.description.trim()
   if (description) out.description = description
-  out.interface = f.interface
   if (f.ipv4) out.ipv4 = true
   if (f.ipv6) out.ipv6 = true
   return out

@@ -1,14 +1,16 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
 import FormField from '@/components/FormField.vue'
+import type { Interface } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
   /** Live links usable as a VLAN parent. */
-  parents: { type: Array, required: true },
+  parents: { type: Array as PropType<{ name: string }[]>, required: true },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 const emit = defineEmits(['created'])
@@ -31,7 +33,7 @@ function create() {
     error.value = `${name.value} is already configured.`
     return
   }
-  const iface = {
+  const iface: Interface = {
     name: name.value,
     enabled: true,
     vlan: { parent: parent.value, id: id.value },

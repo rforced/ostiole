@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 
 import AppNotice from '@/components/AppNotice.vue'
@@ -11,6 +11,7 @@ import { api } from '@/lib/api'
 import { emptyText, errorMessage, useAsync } from '@/lib/async'
 import { actorText } from '@/lib/audit'
 import { formatWhen } from '@/lib/format'
+import type { Config } from '@/lib/model.gen'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import { useConfirmStore } from '@/stores/confirm'
@@ -18,12 +19,37 @@ import { useConfirmStore } from '@/stores/confirm'
 const auth = useAuthStore()
 const config = useConfigStore()
 const confirm = useConfirmStore()
-const revisions = ref([])
+interface Actor {
+  name?: string
+  kind?: string
+  role?: string
+  address?: string
+}
+interface Applied {
+  time: string
+  by?: Actor
+  confirmedBy?: Actor
+  outside?: boolean
+}
+interface Revision {
+  id: string
+  time: string
+  size: number
+  applied?: Applied
+}
+interface Change {
+  path: string
+  kind: string
+  before?: unknown
+  after?: unknown
+}
+
+const revisions = ref<Revision[]>([])
 const actionError = ref('')
 const loadedId = ref('')
 const comparing = ref('')
-const changes = ref([])
-const inForce = ref(null)
+const changes = ref<Change[]>([])
+const inForce = ref<Applied | null>(null)
 const inForceError = ref('')
 const columns = computed(() => (auth.isAdmin ? 5 : 4))
 
@@ -58,7 +84,7 @@ watch(keep, (v) => {
 /** Who applied the configuration in force. Admins only; a failure leaves the table alone. */
 async function readInForce() {
   try {
-    inForce.value = await api.config.applied()
+    inForce.value = (await api.config.applied()) as Applied | null
     inForceError.value = ''
   } catch (e) {
     inForce.value = null
@@ -68,12 +94,12 @@ async function readInForce() {
 
 const load = useAsync(async () => {
   const reading = auth.isAdmin ? readInForce() : null
-  revisions.value = await api.config.revisions()
+  revisions.value = (await api.config.revisions()) as Revision[]
   await reading
 })
 
 /** The line in the card strip for the configuration in force. */
-function inForceLine(a) {
+function inForceLine(a: Applied) {
   if (a.outside) return `Changed outside Ostiole on ${formatWhen(a.time)}.`
   const from = a.by?.address ? ` from ${a.by.address}` : ''
   const confirmed = a.confirmedBy ? `, confirmed by ${actorText(a.confirmedBy)}` : ''
@@ -81,7 +107,7 @@ function inForceLine(a) {
 }
 
 /** The second line under who applied a revision. */
-function appliedDetail(a) {
+function appliedDetail(a: Applied) {
   return [
     formatWhen(a.time),
     a.by?.address,
@@ -105,7 +131,7 @@ async function loadIntoDraft(id) {
     return
   actionError.value = ''
   try {
-    config.replaceDraft(await api.config.revision(id))
+    config.replaceDraft((await api.config.revision(id)) as Config)
     loadedId.value = id
   } catch (e) {
     actionError.value = errorMessage(e)
@@ -120,7 +146,7 @@ async function compare(id) {
     return
   }
   try {
-    changes.value = await api.config.diff({ from: id, to: 'current' })
+    changes.value = (await api.config.diff({ from: id, to: 'current' })) as Change[]
     comparing.value = id
   } catch (e) {
     actionError.value = errorMessage(e)

@@ -1,4 +1,5 @@
-<script setup>
+<script setup lang="ts">
+import type { PropType } from 'vue'
 import { computed, ref, watch } from 'vue'
 
 import ActionButton from '@/components/ActionButton.vue'
@@ -8,21 +9,32 @@ import FormField from '@/components/FormField.vue'
 import { api } from '@/lib/api'
 import { errorMessage } from '@/lib/async'
 import { joinList, parseList } from '@/lib/lists'
+import type { DNSProvider } from '@/lib/model.gen'
 import { adminOnly, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
+import type { ProviderKind, ProviderTest } from '@/views/system/providers/kinds'
 
 const props = defineProps({
   /** The provider being edited, or null for a new one. */
-  provider: { type: Object, default: null },
+  provider: { type: Object as PropType<DNSProvider | null>, default: null },
   /** The kinds this build can write to, with their fields. */
-  kinds: { type: Array, default: () => [] },
+  kinds: { type: Array as PropType<ProviderKind[]>, default: () => [] },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
 const auth = useAuthStore()
 const config = useConfigStore()
 
-const blank = () => ({
+interface Form {
+  id: string
+  description: string
+  kind: string
+  settings: Record<string, string>
+  domains: string
+  propagationSeconds: number
+}
+
+const blank = (): Form => ({
   id: '',
   description: '',
   kind: props.kinds[0]?.kind ?? '',
@@ -33,7 +45,7 @@ const blank = () => ({
 
 const form = ref(blank())
 /** What Test found; cleared when the form changes under it. */
-const tested = ref(null)
+const tested = ref<ProviderTest | null>(null)
 const testing = ref(false)
 const testError = ref('')
 
@@ -73,7 +85,7 @@ const valid = computed(
 /** The provider the form describes, as the draft keeps it. */
 function built() {
   const f = form.value
-  const out = { id: f.id.trim(), kind: f.kind, settings: {} }
+  const out: DNSProvider = { id: f.id.trim(), kind: f.kind, settings: {} }
   if (f.description) out.description = f.description
   const domains = [...new Set(parseList(f.domains).map((d) => d.toLowerCase()))]
   if (domains.length) out.domains = domains
@@ -99,7 +111,7 @@ async function test() {
   testError.value = ''
   testing.value = true
   try {
-    tested.value = await api.dnsProviders.test(built())
+    tested.value = (await api.dnsProviders.test(built())) as ProviderTest
   } catch (e) {
     testError.value = errorMessage(e)
   } finally {

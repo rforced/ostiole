@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Plus } from '@lucide/vue'
 import { computed, ref } from 'vue'
 
@@ -7,14 +7,18 @@ import SearchBox from '@/components/SearchBox.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
+import type { SortColumn } from '@/components/sortTypes'
 import { exclusionText, firstRule, sameExclusion } from '@/lib/exclusions'
+import type { WAFExclusion } from '@/lib/model.gen'
 import { useSearch } from '@/lib/search'
 import { byNumber, byText, useSort } from '@/lib/sort'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import ExclusionDialog from '@/views/services/proxy/ExclusionDialog.vue'
 
-const COLUMNS = [
+type IndexedExclusion = WAFExclusion & { index: number }
+
+const COLUMNS: SortColumn[] = [
   ['rule', 'Rule'],
   ['path', 'Path'],
   ['target', 'Variable'],
@@ -31,18 +35,20 @@ const profile = computed(
 )
 const picked = computed({
   get: () => profile.value?.id ?? '',
-  set: (id) => (chosen.value = id),
+  set: (id: string) => (chosen.value = id),
 })
 
 /** Each exclusion with its place in the profile's list, which edits go by. */
-const list = computed(() => (profile.value?.exclusions ?? []).map((e, index) => ({ ...e, index })))
+const list = computed<IndexedExclusion[]>(() =>
+  (profile.value?.exclusions ?? []).map((e, index) => ({ ...e, index })),
+)
 
 const { query, shown } = useSearch(list, (e) => ({
   values: [e.rule, e.path, e.target, e.description],
 }))
 
 // Rule order to start with, so one rule's paths sit together.
-const sort = useSort(
+const sort = useSort<IndexedExclusion>(
   shown,
   {
     rule: byNumber(firstRule, 'asc'),
@@ -63,19 +69,19 @@ const saved = computed(
     (config.saved?.services?.proxy?.wafProfiles ?? []).find((w) => w.id === profile.value?.id)
       ?.exclusions ?? [],
 )
-const changed = (e) =>
+const changed = (e: WAFExclusion) =>
   !saved.value.some((s) => sameExclusion(s, e) && (s.description ?? '') === (e.description ?? ''))
 
 /** A path in pieces that each start at a slash, where it may wrap. */
-const pieces = (path) => path.split(/(?=\/)/)
+const pieces = (path: string) => path.split(/(?=\/)/)
 
-const editing = ref(null)
+const editing = ref<IndexedExclusion | null>(null)
 const open = ref(false)
 function add() {
   editing.value = null
   open.value = true
 }
-function edit(e) {
+function edit(e: IndexedExclusion) {
   editing.value = e
   open.value = true
 }

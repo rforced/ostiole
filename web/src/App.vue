@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onBeforeUnmount, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 

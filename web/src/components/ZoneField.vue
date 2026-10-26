@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -88,7 +88,7 @@ function commit() {
 defineExpose({ commit })
 </script>
 
-<script>
+<script lang="ts">
 /**
  * The "New zone…" choice while it is still pending. A real zone name is
  * [a-z][a-z0-9_]*, so the plus can never collide with one.

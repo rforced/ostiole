@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
@@ -15,16 +15,38 @@ import { actionTone } from '@/lib/badge'
 import { formatWhen } from '@/lib/format'
 import { accessNames, endpoint, fwlogInfo, fwlogValues, matchedLabel } from '@/lib/fwlog'
 import { heldLine, useLog } from '@/lib/log'
+import type { LogPage, LogRow } from '@/lib/log'
+import type { FirewallLog, Management } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
+
+interface FirewallEntry extends LogRow {
+  time: string
+  prefix: string
+  ruleId?: string
+  zone?: string
+  kind: string
+  action?: string
+  in?: string
+  out?: string
+  family: string
+  proto: string
+  src?: string
+  dst?: string
+  srcPort?: number
+  dstPort?: number
+  icmpType?: number
+  tcpFlags?: string
+  length: number
+}
 
 const config = useConfigStore()
 const access = computed(() => accessNames(config.proxy))
 
-const management = computed(() => config.draft?.system?.management ?? {})
+const management = computed<Partial<Management>>(() => config.draft?.system?.management ?? {})
 /** The retention, kept out of the model while every field is the default. */
 const retention = computed({
   get: () => management.value.firewallLog ?? {},
-  set: (v) => {
+  set: (v: FirewallLog) => {
     const m = config.draft.system.management
     if (Object.keys(v).length) m.firewallLog = v
     else delete m.firewallLog
@@ -32,7 +54,7 @@ const retention = computed({
 })
 const logDrops = computed({
   get: () => Boolean(management.value.logDefaultDrops),
-  set: (on) => {
+  set: (on: boolean) => {
     const m = config.draft.system.management
     if (on) m.logDefaultDrops = true
     else delete m.logDefaultDrops
@@ -48,7 +70,7 @@ const card = ref(null)
  * shows either way rather than being hidden on a guess, as the router
  * reads it.
  */
-function chosen(e) {
+function chosen(e: FirewallEntry) {
   if (show.value === 'all' || !e.action) return true
   return show.value === 'blocked' ? e.action !== 'accept' : e.action === 'accept'
 }
@@ -56,7 +78,7 @@ function chosen(e) {
 const log = useLog({
   read: async (params, signal) => {
     try {
-      return await api.log.entries(params, signal)
+      return (await api.log.entries(params, signal)) as LogPage<FirewallEntry>
     } catch (e) {
       if (e instanceof ApiError && e.status === 503)
         throw new Error('The firewall log needs the daemon to run as root.', { cause: e })

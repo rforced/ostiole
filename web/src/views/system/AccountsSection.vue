@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { Plus } from '@lucide/vue'
 import { computed, onMounted, ref } from 'vue'
 
@@ -19,23 +19,31 @@ import { ROLES } from '@/views/system/accounts/roles'
 /** The shortest password the server will take. */
 const MIN_PASSWORD = 12
 
+interface Account {
+  username: string
+  role: string
+  createdAt: string
+  updatedAt: string
+  mfa?: { totp?: boolean; passkeys?: number }
+}
+
 const auth = useAuthStore()
 const confirm = useConfirmStore()
-const users = ref([])
+const users = ref<Account[]>([])
 const actionError = ref('')
 /** A viewer or an operator cannot see this card at all, which is the point. */
 const available = ref(true)
 
 const adding = ref(false)
 /** The account a dialog is acting on, and the value being typed into it. */
-const renaming = ref(null)
+const renaming = ref<Account | null>(null)
 const renameTo = ref('')
-const repassword = ref(null)
+const repassword = ref<Account | null>(null)
 const newPassword = ref('')
 
 const load = useAsync(async () => {
   try {
-    users.value = await api.users.list()
+    users.value = (await api.users.list()) as Account[]
     available.value = true
   } catch (e) {
     if (e instanceof ApiError && e.status === 403) {
@@ -54,13 +62,13 @@ const error = computed(() => actionError.value || load.error.value)
  * account change its own role or delete itself; the UI says so up front
  * rather than waiting for the error.
  */
-const isSelf = (u) => u.username === auth.user?.username
+const isSelf = (u: Account) => u.username === auth.user?.username
 
 /** Every account action redraws from the list the server sent back. */
-async function act(fn) {
+async function act(fn: () => Promise<unknown>) {
   actionError.value = ''
   try {
-    users.value = await fn()
+    users.value = (await fn()) as Account[]
     return true
   } catch (e) {
     actionError.value = errorMessage(e)
@@ -69,12 +77,13 @@ async function act(fn) {
   }
 }
 
-async function createUser(account) {
+async function createUser(account: { username: string; password: string; role: string }) {
   if (await act(() => api.users.create(account))) adding.value = false
 }
 
-async function changeRole(u, event) {
-  const role = event.target.value
+async function changeRole(u: Account, event: Event) {
+  const select = event.target as HTMLSelectElement
+  const role = select.value
   const noun = ROLES.find((r) => r.value === role)?.noun ?? role
   const ok = await confirm.ask({
     question: `Make ${u.username} ${noun}?`,
@@ -82,33 +91,33 @@ async function changeRole(u, event) {
     confirmLabel: 'Change role',
   })
   if (!ok) {
-    event.target.value = u.role
+    select.value = u.role
     return
   }
   await act(() => api.users.setRole(u.username, role))
 }
 
-function openRename(u) {
+function openRename(u: Account) {
   renaming.value = u
   renameTo.value = u.username
 }
 
 async function renameUser() {
-  const was = renaming.value.username
-  const self = isSelf(renaming.value)
+  const was = renaming.value!.username
+  const self = isSelf(renaming.value!)
   if (!(await act(() => api.users.rename(was, renameTo.value)))) return
   // A rename keeps the session, so the name in the header has to follow it.
   if (self) auth.user = await api.auth.me()
   renaming.value = null
 }
 
-function openPassword(u) {
+function openPassword(u: Account) {
   repassword.value = u
   newPassword.value = ''
 }
 
 async function setPassword() {
-  const name = repassword.value.username
+  const name = repassword.value!.username
   const ok = await act(async () => {
     await api.users.setPassword(name, newPassword.value)
     return api.users.list()
@@ -117,17 +126,17 @@ async function setPassword() {
 }
 
 /** What an account signs in with besides its password. */
-function mfaText(mfa) {
+function mfaText(mfa: Account['mfa']) {
   if (!mfa?.totp) return 'Off'
   if (!mfa.passkeys) return 'App'
   return `App, ${mfa.passkeys} passkey${mfa.passkeys === 1 ? '' : 's'}`
 }
 
-async function deleteUser(username) {
+async function deleteUser(username: string) {
   await act(() => api.users.remove(username))
 }
 
-async function clearMFA(username) {
+async function clearMFA(username: string) {
   await act(async () => {
     await api.users.clearMFA(username)
     return api.users.list()

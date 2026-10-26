@@ -1,6 +1,6 @@
-<script setup>
+<script setup lang="ts">
 import { Plus } from '@lucide/vue'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, type PropType } from 'vue'
 
 import ConfirmButton from '@/components/ConfirmButton.vue'
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -8,18 +8,21 @@ import LiveButton from '@/components/LiveButton.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import SortHeader from '@/components/SortHeader.vue'
 import SortSelect from '@/components/SortSelect.vue'
+import type { SortColumn } from '@/components/sortTypes'
+import type { AsyncLoad } from '@/lib/async'
 import { formatBytes, formatWhen } from '@/lib/format'
 import { byText, byTime, useSort } from '@/lib/sort'
 import { connected, livePeer } from '@/lib/wgStatus'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 import PeerDialog from '@/views/vpn/PeerDialog.vue'
+import type { WgLive } from '@/views/vpn/types'
 
 const props = defineProps({
   /** Each tunnel of the running configuration as its device has it, by name. */
-  live: { type: Map, required: true },
+  live: { type: Map as PropType<Map<string, WgLive>>, required: true },
   /** The page's read of it, from useAsync. */
-  read: { type: Object, required: true },
+  read: { type: Object as PropType<AsyncLoad>, required: true },
 })
 
 const auth = useAuthStore()
@@ -38,7 +41,7 @@ const rows = computed(() =>
  * holds what the devices said, and when, as it went off.
  */
 const following = ref(true)
-const held = ref(null)
+const held = ref<{ status: Map<string, WgLive>; at: number } | null>(null)
 watch(following, (on) => {
   held.value = on ? null : { status: props.live, at: Date.now() }
   if (on) props.read.run()
@@ -47,7 +50,7 @@ watch(following, (on) => {
 /** A row's peer as its device reports it. */
 const seen = (r) => livePeer(held.value?.status ?? props.live, r.tunnel.name, r.peer.publicKey)
 
-const COLUMNS = [
+const COLUMNS: SortColumn[] = [
   ['peer', 'Peer'],
   ['tunnel', 'Tunnel'],
   ['handshake', 'Last handshake'],

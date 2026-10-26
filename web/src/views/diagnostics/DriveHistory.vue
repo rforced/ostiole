@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
 import ClearLogButton from '@/components/ClearLogButton.vue'
@@ -12,7 +12,7 @@ import { api } from '@/lib/api'
 import { emptyText, useAsync } from '@/lib/async'
 import { readingValues } from '@/lib/driveHistory'
 import { formatCount, formatWhen } from '@/lib/format'
-import { heldLine, useLog } from '@/lib/log'
+import { type LogPage, type LogRow, heldLine, useLog } from '@/lib/log'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
@@ -37,9 +37,23 @@ watch(keep, (v) => {
   else config.draft.system.keepDriveReadings = n
 })
 
+interface Reading extends LogRow {
+  time: string
+  drive: string
+  model?: string
+  serial?: string
+  health: string
+  temperature?: number
+  wear?: number
+  spare?: number
+  bad?: number
+  powerOnHours?: number
+}
+
 const card = ref(null)
-const log = useLog({
-  read: (params, signal) => api.diagnostics.driveHistory(params, signal),
+const log = useLog<Reading>({
+  read: async (params, signal) =>
+    (await api.diagnostics.driveHistory(params, signal)) as LogPage<Reading>,
   stream: '/api/v1/diagnostics/drives/history/stream',
   values: readingValues,
   top: card,
@@ -61,7 +75,7 @@ const empty = computed(() => {
   return emptyText(log, q ? `Nothing matches "${q}".` : 'No readings.')
 })
 
-const orDash = (v, unit = '') => (v == null ? '—' : `${formatCount(v)}${unit}`)
+const orDash = (v: number | undefined, unit = '') => (v == null ? '—' : `${formatCount(v)}${unit}`)
 </script>
 
 <template>

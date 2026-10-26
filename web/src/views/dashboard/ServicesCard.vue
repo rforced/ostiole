@@ -1,11 +1,14 @@
-<script setup>
+<script setup lang="ts">
+import type { PropType } from 'vue'
+
 import SectionCard from '@/components/SectionCard.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { formatCount } from '@/lib/format'
+import type { ServiceState } from '@/views/dashboard/overview'
 
 defineProps({
   /** Unit states from GET /overview. */
-  services: { type: Array, default: () => [] },
+  services: { type: Array as PropType<ServiceState[]>, default: () => [] },
   dhcp: { type: Object, default: () => ({}) },
   dns: { type: Object, default: () => ({}) },
   /** False until the first overview arrives. */
@@ -15,7 +18,7 @@ defineProps({
 })
 
 /** The service pages' words: off when the configuration leaves it off. */
-function word(s) {
+function word(s: ServiceState) {
   if (s.state === 'active') return 'running'
   if (s.state === 'inactive') return s.want ? 'stopped' : 'off'
   return s.state

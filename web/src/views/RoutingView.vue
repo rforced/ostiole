@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { TabsContent } from 'reka-ui'
 import { onMounted, ref } from 'vue'
 
@@ -27,22 +27,22 @@ const detected = ref([])
 const refresh = useAsync(
   async () => {
     try {
-      live.value = await api.gateways()
+      live.value = (await api.gateways()) as unknown[]
     } catch {
       live.value = []
     }
     try {
-      policy.value = await api.policy()
+      policy.value = (await api.policy()) as unknown[]
     } catch {
       policy.value = []
     }
     try {
-      replies.value = await api.policyReplies()
+      replies.value = (await api.policyReplies()) as unknown[]
     } catch {
       replies.value = []
     }
     try {
-      detected.value = await api.detectedGateways()
+      detected.value = (await api.detectedGateways()) as unknown[]
     } catch {
       detected.value = []
     }

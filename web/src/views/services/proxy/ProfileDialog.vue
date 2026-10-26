@@ -1,14 +1,16 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import type { WAFProfile } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
   /** The profile being edited, or null for a new one. */
-  profile: { type: Object, default: null },
+  profile: { type: Object as PropType<WAFProfile | null>, default: null },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
@@ -27,7 +29,21 @@ const APPLICATIONS = [
 ]
 
 /** An empty number is the default, which its placeholder shows. */
-function blank() {
+interface ProfileForm {
+  id: string
+  previousId: string
+  description: string
+  mode: string
+  paranoia: number
+  inboundThreshold: number | ''
+  outboundThreshold: number | ''
+  applications: string[]
+  bodyLimitMB: number | ''
+  passLargeBodies: boolean
+  inspectResponses: boolean
+}
+
+function blank(): ProfileForm {
   return {
     id: '',
     previousId: '',
@@ -76,7 +92,7 @@ const bodyHint = computed(() =>
     : '12 MB is the default. A larger one is refused, an upload too.',
 )
 
-function toggleApp(name, on) {
+function toggleApp(name: string, on: boolean) {
   const list = new Set(form.value.applications)
   if (on) list.add(name)
   else list.delete(name)
@@ -85,7 +101,7 @@ function toggleApp(name, on) {
 
 function save() {
   const f = form.value
-  const profile = { id: f.id.trim() }
+  const profile: WAFProfile = { id: f.id.trim() }
   if (f.description.trim()) profile.description = f.description.trim()
   if (f.mode === 'block') profile.mode = 'block'
   else if (props.profile?.mode === 'detect') profile.mode = 'detect'
@@ -202,7 +218,7 @@ function save() {
               type="checkbox"
               class="checkbox"
               :checked="form.applications.includes(a)"
-              @change="toggleApp(a, $event.target.checked)"
+              @change="toggleApp(a, ($event.target as HTMLInputElement).checked)"
             />
             {{ a }}
           </label>

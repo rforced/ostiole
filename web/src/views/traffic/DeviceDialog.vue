@@ -1,4 +1,5 @@
-<script setup>
+<script setup lang="ts">
+import type { PropType } from 'vue'
 import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
@@ -9,6 +10,7 @@ import { api } from '@/lib/api'
 import { useAsync } from '@/lib/async'
 import { formatBytes } from '@/lib/format'
 import { DESTINATIONS_FOR, WINDOWS, appendPoint, deviceLabel, serviceLabel } from '@/lib/traffic'
+import type { Destination, Destinations, Device, TrafficEvent } from '@/views/traffic/types'
 
 /**
  * One device over the tab's window: its chart, how it is known, and while
@@ -18,32 +20,32 @@ import { DESTINATIONS_FOR, WINDOWS, appendPoint, deviceLabel, serviceLabel } fro
  */
 const props = defineProps({
   /** A row of the Devices tab. */
-  device: { type: Object, default: null },
+  device: { type: Object as PropType<Device | null>, default: null },
   window: { type: String, default: '5m' },
   /** The tab's last devices event. */
-  latest: { type: Object, default: null },
+  latest: { type: Object as PropType<TrafficEvent | null>, default: null },
   live: { type: Boolean, default: true },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
-const data = ref(null)
+const data = ref<Device | null>(null)
 const end = ref(0)
 const read = useAsync(async () => {
   const id = props.device.id
-  const r = await api.traffic.device(id, props.window)
+  const r = (await api.traffic.device(id, props.window)) as Device
   if (id !== props.device?.id) return
   data.value = r
   end.value = r.points?.at(-1)?.[0] ?? 0
 })
 /** Its top destinations, null while they are not recorded. */
-const top = ref(null)
+const top = ref<Destination[] | null>(null)
 const readTop = useAsync(async () => {
   const id = props.device.id
-  const r = await api.traffic.destinations({
+  const r = (await api.traffic.destinations({
     device: id,
     window: DESTINATIONS_FOR[props.window],
     limit: 5,
-  })
+  })) as Destinations
   if (id !== props.device?.id) return
   top.value = r.enabled ? (r.entries ?? []) : null
 })

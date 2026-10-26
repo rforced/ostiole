@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ChevronUp } from '@lucide/vue'
 import {
   DropdownMenuContent,

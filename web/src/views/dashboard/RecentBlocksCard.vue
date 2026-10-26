@@ -1,18 +1,21 @@
-<script setup>
+<script setup lang="ts">
+import type { PropType } from 'vue'
+
 import SectionCard from '@/components/SectionCard.vue'
 import { formatWhen } from '@/lib/format'
 import { matchedLabel as by } from '@/lib/fwlog'
+import type { BlockEntry } from '@/views/dashboard/overview'
 
 defineProps({
   /** The newest refused packets from GET /overview, newest first. */
-  blocks: { type: Array, default: () => [] },
+  blocks: { type: Array as PropType<BlockEntry[]>, default: () => [] },
   /** False until the first overview arrives. */
   loaded: { type: Boolean, default: true },
   /** How many rows to hold room for until then. */
   placeholders: { type: Number, default: 1 },
 })
 
-function endpoint(addr, port) {
+function endpoint(addr: string | undefined, port: number | undefined) {
   if (!addr) return '—'
   return port ? `${addr}:${port}` : addr
 }
@@ -22,7 +25,7 @@ function endpoint(addr, port) {
  * only before its port, an IPv6 one at every group. Unbroken, a long IPv6
  * address squeezes By to a word a line.
  */
-function pieces(addr, port) {
+function pieces(addr: string | undefined, port: number | undefined) {
   return endpoint(addr, port).split(/(?<=:)/)
 }
 </script>

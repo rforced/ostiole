@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { TriangleAlert } from '@lucide/vue'
 import { computed } from 'vue'
 

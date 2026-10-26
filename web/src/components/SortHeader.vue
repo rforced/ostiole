@@ -1,6 +1,9 @@
-<script setup>
+<script setup lang="ts">
 import { ChevronDown, ChevronUp } from '@lucide/vue'
+import type { PropType } from 'vue'
 import { computed } from 'vue'
+
+import type { SortColumn, SortControl } from './sortTypes'
 
 /**
  * A column header that sorts its table: a click sorts by it, a second
@@ -13,9 +16,9 @@ const props = defineProps({
   /** The column's key in the sort's columns. */
   by: { type: String, default: '' },
   /** Or the columns a click moves through, as [key, label] pairs. */
-  columns: { type: Array, default: null },
+  columns: { type: Array as PropType<SortColumn[] | null>, default: null },
   /** What useSort returned. */
-  sort: { type: Object, required: true },
+  sort: { type: Object as PropType<SortControl>, required: true },
 })
 const keys = computed(() => (props.columns ? props.columns.map(([key]) => key) : [props.by]))
 /** The key sorted by, if it is this header's. */

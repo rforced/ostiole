@@ -128,7 +128,7 @@ type Event struct {
 }
 
 // Search adds what the row shows, as a search of the log matches it: the
-// same values as auditValues in web/src/lib/audit.js.
+// same values as auditValues in web/src/lib/audit.ts.
 func (e *Event) Search(a logsearch.Adder) {
 	a.Add(e.Sentence())
 	a.Add(e.By.Who())

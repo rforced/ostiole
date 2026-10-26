@@ -191,7 +191,7 @@ func (l BlockList) FormatOrAuto() ListFormat {
 // NeverBlocked are the names this router refuses to block whatever a list says:
 // its own domain, its own hostname, and every name it answers for locally.
 // A list that blocked one of these would take the UI away from whoever is
-// using it by name. protectedNames in web/src/lib/blocking.js repeats this
+// using it by name. protectedNames in web/src/lib/blocking.ts repeats this
 // and DelegatedDomains for the query log's toggles.
 func (c *Config) NeverBlocked() []string {
 	seen := map[string]bool{}

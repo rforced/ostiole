@@ -42,7 +42,8 @@ tasks:
       - bun run build
     sources:
       - index.html
-      - vite.config.js
+      - vite.config.ts
+      - tsconfig*.json
       - package.json
       - src/**/*
       - public/**/*
@@ -57,12 +58,13 @@ tasks:
       - bun run dev
 
   web:lint:
-    desc: Lint and check formatting of the web app
+    desc: Lint, type-check and check formatting of the web app
     dir: web
     deps: [web:install]
     cmds:
       - bun run lint
       - bun run format:check
+      - bun run typecheck
 
   web:test:
     desc: Run web unit tests

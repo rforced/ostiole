@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { TabsContent } from 'reka-ui'
 import { ref } from 'vue'
 
@@ -9,6 +9,7 @@ import { useAsync } from '@/lib/async'
 import { usePageTabs } from '@/lib/tabs'
 import PeerLogTab from '@/views/vpn/PeerLogTab.vue'
 import PeersTab from '@/views/vpn/wireguard/PeersTab.vue'
+import type { GatewayStatus, WgLive } from '@/views/vpn/types'
 import TunnelsTab from '@/views/vpn/wireguard/TunnelsTab.vue'
 
 /** How often the tunnels are read while the page is shown. */
@@ -17,16 +18,16 @@ const POLL_MS = 5000
 const { tabs, tab } = usePageTabs()
 
 /** Each tunnel of the running configuration as its device has it, by name. */
-const live = ref(new Map())
+const live = ref(new Map<string, WgLive>())
 /** The gateway monitor's word on each gateway, for the tunnels one sends traffic into. */
-const gateways = ref([])
+const gateways = ref<GatewayStatus[]>([])
 const read = useAsync(
   async () => {
-    const got = await api.wireguard.status()
+    const got = (await api.wireguard.status()) as WgLive[]
     live.value = new Map(got.map((t) => [t.name, t]))
     // A monitor that is not running leaves only the gateway column bare.
     try {
-      gateways.value = await api.gateways()
+      gateways.value = (await api.gateways()) as GatewayStatus[]
     } catch {
       gateways.value = []
     }

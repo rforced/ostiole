@@ -1,8 +1,10 @@
-<script setup>
+<script setup lang="ts">
+import type { PropType } from 'vue'
 import { computed, ref, watch } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
+import type { Tier, Zone } from '@/lib/model.gen'
 import { TIERS, tierOption } from '@/lib/tiers'
 import { useConfigStore } from '@/stores/config'
 
@@ -13,14 +15,20 @@ const DEFAULT_CONNECTIONS = 200
 
 const props = defineProps({
   /** The zone being edited, or null for a new one. */
-  zone: { type: Object, default: null },
+  zone: { type: Object as PropType<Zone | null>, default: null },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
-const form = ref(blank())
+interface Form {
+  zone: string
+  connections: string
+  priority: Tier | ''
+}
 
-function blank() {
+const form = ref<Form>(blank())
+
+function blank(): Form {
   return { zone: '', connections: String(DEFAULT_CONNECTIONS), priority: 'bulk' }
 }
 

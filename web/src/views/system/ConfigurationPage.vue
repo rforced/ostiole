@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { TabsContent } from 'reka-ui'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'

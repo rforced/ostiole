@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 
 import ErrorLine from '@/components/ErrorLine.vue'
@@ -17,7 +17,7 @@ const DEFAULT_ADDRESS = '192.168.100.1'
 const address = ref(localStorage.getItem(STORAGE_KEY) || DEFAULT_ADDRESS)
 const status = ref(null)
 
-const load = useAsync(async (refresh = false) => {
+const load = useAsync(async (refresh: boolean = false) => {
   const target = address.value.trim() || DEFAULT_ADDRESS
   address.value = target
   if (target === DEFAULT_ADDRESS) localStorage.removeItem(STORAGE_KEY)

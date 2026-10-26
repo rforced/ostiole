@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import SectionCard from '@/components/SectionCard.vue'
 defineProps({
   /** Engine status from GET /status. */

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ArrowDown, ArrowUp, Plus } from '@lucide/vue'
 import { computed, ref } from 'vue'
 
@@ -7,6 +7,7 @@ import ConfirmButton from '@/components/ConfirmButton.vue'
 import FormField from '@/components/FormField.vue'
 import SectionCard from '@/components/SectionCard.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
+import type { UPnPRule } from '@/lib/model.gen'
 import { useReorder } from '@/lib/reorder'
 import { useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
@@ -74,7 +75,7 @@ function toggleInterface(name, on) {
   upnp.value.interfaces = [...list]
 }
 
-const acl = computed(() => upnp.value.acl ?? [])
+const acl = computed<UPnPRule[]>(() => upnp.value.acl ?? [])
 const { moveClass, reorder } = useReorder()
 const editing = ref(-1)
 const open = ref(false)
@@ -159,7 +160,7 @@ function edit(index) {
                 type="checkbox"
                 class="checkbox"
                 :checked="(upnp.interfaces ?? []).includes(i.name)"
-                @change="toggleInterface(i.name, $event.target.checked)"
+                @change="toggleInterface(i.name, ($event.target as HTMLInputElement).checked)"
               />
               <span class="font-mono">{{ i.name }}</span>
             </label>

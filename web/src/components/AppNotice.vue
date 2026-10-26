@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { AlertTriangle, CircleCheck, CircleX, Info } from '@lucide/vue'
 
 /** A boxed line the page wants read before anything under it. */
@@ -6,7 +6,7 @@ defineProps({
   kind: {
     type: String,
     default: 'warn',
-    validator: (k) => ['info', 'warn', 'bad', 'ok'].includes(k),
+    validator: (k: string) => ['info', 'warn', 'bad', 'ok'].includes(k),
   },
   title: { type: String, default: '' },
   /**

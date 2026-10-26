@@ -1,27 +1,37 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import AppNotice from '@/components/AppNotice.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import ZoneField from '@/components/ZoneField.vue'
+import type { Interface } from '@/lib/model.gen'
 import { ADMIN_ONLY, useAuthStore } from '@/stores/auth'
 import { useConfigStore } from '@/stores/config'
 
+interface Link {
+  name: string
+  mtu?: number
+}
+
+type LogDropsChoice = 'inherit' | 'on' | 'off'
+type InterfaceForm = Omit<Interface, 'logDrops'> & { logDrops: LogDropsChoice }
+
 const props = defineProps({
   /** Interface config being edited, or a fresh one for an unconfigured link. */
-  iface: { type: Object, default: null },
+  iface: { type: Object as PropType<Interface | null>, default: null },
   /** Live links from the kernel, for the MTU this interface is running at. */
-  links: { type: Array, default: () => [] },
+  links: { type: Array as PropType<Link[]>, default: () => [] },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 const emit = defineEmits(['saved'])
 
 const config = useConfigStore()
 const auth = useAuthStore()
-const form = ref(blank())
-const zoneField = ref(null)
+const form = ref<InterfaceForm>(blank())
+const zoneField = ref<InstanceType<typeof ZoneField> | null>(null)
 
 /**
  * Switching an interface on or off in a zone with anti-lockout changes
@@ -32,7 +42,7 @@ const enabledLocked = computed(() => {
   return auth.isOperator && config.zones.some((z) => z.name === zone && z.antiLockout)
 })
 
-function blank() {
+function blank(): InterfaceForm {
   return {
     name: '',
     description: '',
@@ -168,9 +178,10 @@ const upstreams = computed(() =>
 
 function save() {
   if (!zoneField.value.commit()) return
-  const out = JSON.parse(JSON.stringify(form.value))
-  if (out.logDrops === 'inherit') delete out.logDrops
-  else out.logDrops = out.logDrops === 'on'
+  const out: Interface = JSON.parse(JSON.stringify(form.value))
+  const logDrops = form.value.logDrops
+  if (logDrops === 'inherit') delete out.logDrops
+  else out.logDrops = logDrops === 'on'
   if (!out.blockPrivate) delete out.blockPrivate
   if (!out.blockBogons) delete out.blockBogons
   if (out.ipv4.mode !== 'static') out.ipv4.address = ''

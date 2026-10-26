@@ -1,17 +1,36 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { newId } from '@/lib/ids'
 import { joinList, keptOrder, parseList } from '@/lib/lists'
+import type { Action, Endpoint, ProxyAccess } from '@/lib/model.gen'
 import { useConfigStore } from '@/stores/config'
 import EndpointFields from '@/views/firewall/EndpointFields.vue'
 
+interface AccessForm {
+  id: string
+  enabled: boolean
+  zone: string
+  ports: string[]
+  source: {
+    mode: string
+    addresses: string
+    alias: string
+    peer: string
+    notAddresses: boolean
+  }
+  action: Action | ''
+  log: boolean
+  description: string
+}
+
 const props = defineProps({
   /** The access rule being edited, or null for a new one. */
-  line: { type: Object, default: null },
+  line: { type: Object as PropType<ProxyAccess | null>, default: null },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
@@ -21,7 +40,7 @@ const form = ref(blank())
 const httpPort = computed(() => config.proxy.httpPort || 80)
 const httpsPort = computed(() => config.proxy.httpsPort || 443)
 
-function blank() {
+function blank(): AccessForm {
   return {
     id: '',
     enabled: true,
@@ -43,7 +62,7 @@ watch(
       form.value = blank()
       return
     }
-    const src = a.source ?? {}
+    const src: Endpoint = a.source ?? {}
     form.value = {
       ...blank(),
       id: a.id,
@@ -74,12 +93,12 @@ const redirectOnly = computed(
 
 function save() {
   const f = form.value
-  const source = {}
+  const source: Endpoint = {}
   if (f.source.mode === 'addresses') source.addresses = parseList(f.source.addresses)
   if (f.source.mode === 'alias') source.alias = f.source.alias
   if (f.source.mode === 'peer') source.peer = f.source.peer
   if (f.source.notAddresses && f.source.mode !== 'any') source.notAddresses = true
-  const out = {
+  const out: ProxyAccess = {
     id: f.id || newId('access'),
     enabled: f.enabled,
     zone: f.zone,

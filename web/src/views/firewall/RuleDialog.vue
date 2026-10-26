@@ -1,25 +1,60 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 
 import AppDialog from '@/components/AppDialog.vue'
 import FormField from '@/components/FormField.vue'
 import ToggleRow from '@/components/ToggleRow.vue'
 import { newId } from '@/lib/ids'
 import { joinList, parseList } from '@/lib/lists'
+import type { Action, Endpoint, Protocol, RateUnit, Rule, Tier } from '@/lib/model.gen'
 import { PRIORITY_HINT, TIERS, UNSET_LABEL, tierOption } from '@/lib/tiers'
 import { useConfigStore } from '@/stores/config'
 import EndpointFields from '@/views/firewall/EndpointFields.vue'
 
+interface EndpointForm {
+  mode: 'any' | 'zone' | 'addresses' | 'alias' | 'peer' | 'self'
+  zone: string
+  addresses: string
+  alias: string
+  peer: string
+  notAddresses: boolean
+  portMode: 'any' | 'ports' | 'alias'
+  ports: string
+  portAlias: string
+  notPorts: boolean
+}
+
+interface RuleForm {
+  id: string
+  description: string
+  enabled: boolean
+  zone: string
+  action: Action | ''
+  protocol: Protocol | ''
+  log: boolean
+  schedule: string
+  gateway: string
+  priority: Tier | ''
+  limited: boolean
+  limitRate: number
+  limitUnit: RateUnit
+  limitBurst: number
+  limitPerSource: boolean
+  source: EndpointForm
+  destination: EndpointForm
+}
+
 const props = defineProps({
-  rule: { type: Object, default: null },
+  rule: { type: Object as PropType<Rule | null>, default: null },
   zone: { type: String, required: true },
 })
 const open = defineModel('open', { type: Boolean, default: false })
 
 const config = useConfigStore()
-const form = ref(blank())
+const form = ref<RuleForm>(blank())
 
-function endpointForm(ep = {}, destZone = '') {
+function endpointForm(ep: Endpoint = {}, destZone = ''): EndpointForm {
   return {
     mode: ep.self
       ? 'self'
@@ -44,7 +79,7 @@ function endpointForm(ep = {}, destZone = '') {
   }
 }
 
-function blank() {
+function blank(): RuleForm {
   return {
     id: '',
     description: '',
@@ -119,8 +154,8 @@ watch(limitAllowed, (ok) => {
   if (!ok) form.value.limited = false
 })
 
-function endpointOut(f, allowPorts) {
-  const out = {}
+function endpointOut(f: EndpointForm, allowPorts: boolean) {
+  const out: Endpoint = {}
   if (f.mode === 'addresses') out.addresses = parseList(f.addresses)
   if (f.mode === 'alias') out.alias = f.alias
   if (f.mode === 'peer') out.peer = f.peer
@@ -136,7 +171,7 @@ function endpointOut(f, allowPorts) {
 
 function save() {
   const f = form.value
-  const out = {
+  const out: Rule = {
     id: f.id || newId('r'),
     description: f.description,
     enabled: f.enabled,
