@@ -18,7 +18,6 @@ import type {
   AuditLogPage,
   BackupRequest,
   BlockingState,
-  BlocklistImportReply,
   BlocklistRefreshReply,
   CaptureRequest,
   CatalogEntry,
@@ -680,8 +679,6 @@ export const api = {
     refresh: (name: string) =>
       post<BlocklistRefreshReply>(`/blocking/lists/${encodeURIComponent(name)}/refresh`),
     refreshAll: () => post<BlockingState>('/blocking/refresh'),
-    import: (name: string, body: string) =>
-      post<BlocklistImportReply>(`/blocking/lists/${encodeURIComponent(name)}/import`, body),
     /** A page of the names a list holds: q, offset and limit. */
     names: (name: string, params: Query = {}) =>
       get<DnsblockPage>(withQuery(`/blocking/lists/${encodeURIComponent(name)}/names`, params)),
